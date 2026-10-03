@@ -81,6 +81,11 @@ def process_record(record):
     return result
 
 
+def spqr_ordering_unavailable_reason(stderr):
+    return next((line.strip() for line in stderr.splitlines()
+                 if 'spqr-ordering-unavailable:' in line), None)
+
+
 def synthetic_case(case):
     match = re.fullmatch(r'(chain|cube)-(\d+)', case)
     if not match:
@@ -166,9 +171,10 @@ def command_for_profile(args, case, output, build):
                 '--fixed-preconditioner', args.preconditioner,
                 *operator_policy_options(args)), args.svd_mode)
         if args.profile == 'search':
+            ordering = ('--spqr-ordering', args.spqr_ordering) if args.spqr_ordering else ()
             return sparse_command(sparse, case, 'fixed', output,
                                   ('--search', args.preconditioner, '--search-only',
-                                   *operator_policy_options(args)), args.svd_mode)
+                                   *operator_policy_options(args), *ordering), args.svd_mode)
         if args.profile == 'solve':
             return sparse_command(sparse, case, 'fixed', output,
                                   ('--search', args.preconditioner, *operator_policy_options(args)), args.svd_mode)
@@ -242,6 +248,7 @@ def solver_policy_metadata(args, backend):
         'operator_rank_budget_entries': args.operator_rank_work_entries,
         'operator_rank_budget_workspace_bytes': args.operator_rank_workspace_mib * 1024**2,
         'preconditioner': args.preconditioner,
+        'spqr_ordering': args.spqr_ordering.upper() if args.spqr_ordering else 'COLAMD',
         'schwarz_core_atoms': args.schwarz_core_atoms,
         'schwarz_overlap_hops': args.schwarz_overlap_hops,
         'schwarz_max_block_atoms': args.schwarz_max_block_atoms,
@@ -331,6 +338,9 @@ def normalize_result(profile, raw):
             'stop_reason': search.get('stop_reason'),
             'profile_evaluations': search.get('profile_evaluations'),
             'accepted_updates': search.get('accepted_updates'),
+            'accepted_objective': search.get('accepted_objective'),
+            'accepted_gradient_inf_norm': search.get('accepted_gradient_inf_norm'),
+            'returned_search_state': search.get('returned_search_state'),
             'search_seconds': raw.get('search_seconds'),
             'free_columns': raw.get('free_columns'),
             'design_nonzeros': raw.get('design_nonzeros'),
@@ -479,6 +489,12 @@ def execute_once(args, case, build, run_root, deadline):
     rss = max(record.get('sampled_tree_peak_rss_bytes') or 0,
               record.get('os_process_peak_rss_bytes') or 0)
     if record['status'] != 'completed':
+        stderr = (directory / 'stderr.txt').read_text(errors='replace') if (directory / 'stderr.txt').is_file() else ''
+        reason = spqr_ordering_unavailable_reason(stderr)
+        if reason:
+            return {'status': 'unavailable', 'reason': reason, 'elapsed_seconds': record.get('wall_seconds'),
+                    'process_wall_seconds': record.get('wall_seconds'), 'peak_rss_bytes': rss,
+                    'stages': results, 'raw': None}
         raw = partial_driver_json(args.profile, directory,
                                   driver_output if args.profile not in ('workflow', 'postprocess') else None)
         raw_peak = (raw.get('peak_rss_bytes') or raw.get('process_peak_rss_bytes') or 0) if raw else 0
@@ -509,6 +525,7 @@ def build_parser():
     parser.add_argument('--timeout', type=float, default=600)
     parser.add_argument('--rss-limit', type=int, default=4 * 1024**3)
     parser.add_argument('--preconditioner', choices=('legacy', 'identity', 'diagonal', 'schwarz'), default='schwarz')
+    parser.add_argument('--spqr-ordering', choices=('colamd', 'default', 'best', 'metis'))
     parser.add_argument('--operator-rank', choices=('auto', 'dense', 'spqr-bounds'), default='auto')
     parser.add_argument('--operator-rank-seconds', type=float, default=120)
     parser.add_argument('--operator-rank-work-entries', type=int, default=100_000_000)
@@ -541,6 +558,8 @@ def validate_args(parser, args):
         parser.error('fixed profile requires identity, diagonal, or schwarz preconditioner')
     if args.profile == 'search' and args.preconditioner == 'legacy':
         parser.error('search profile requires identity, diagonal, or schwarz preconditioner')
+    if args.spqr_ordering and args.profile != 'search':
+        parser.error('--spqr-ordering is supported by the benchmark-only search profile')
 
 
 def main(argv=None):

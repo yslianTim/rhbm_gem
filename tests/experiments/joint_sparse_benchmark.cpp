@@ -38,6 +38,8 @@ j::array svd_records;
 n::OperatorRankMode operator_rank_mode{n::OperatorRankMode::Auto};
 n::RankBudget operator_rank_budget{};
 n::SchwarzPolicy schwarz_policy{};
+n::SpqrOrdering spqr_ordering{n::SpqrOrdering::Colamd};
+bool spqr_ordering_requested{};
 j::value Read(const char * path,bool precise=false)
 {
     std::ifstream f(path); if(!f) throw std::runtime_error("Missing input");
@@ -86,6 +88,14 @@ n::OperatorRankMode ParseOperatorRankMode(const std::string & value)
     if(value=="dense") return n::OperatorRankMode::Dense;
     if(value=="spqr-bounds") return n::OperatorRankMode::SpqrBounds;
     throw std::invalid_argument("Expected --operator-rank auto|dense|spqr-bounds");
+}
+n::SpqrOrdering ParseSpqrOrdering(const std::string & value)
+{
+    if(value=="colamd") return n::SpqrOrdering::Colamd;
+    if(value=="default") return n::SpqrOrdering::Default;
+    if(value=="best") return n::SpqrOrdering::Best;
+    if(value=="metis") return n::SpqrOrdering::Metis;
+    throw std::invalid_argument("Expected --spqr-ordering colamd|default|best|metis");
 }
 void ConfigureSearchPolicy(n::SearchPolicy & policy)
 {
@@ -407,6 +417,10 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
     auto search=n::SearchProfile(domain,y,b,context);
     search_snapshot.Stop(); report["failure_stage"]=nullptr;
     report["search"]=second_stage_test::matched::runtime_json::Search(search,context,domain.rows);
+    auto & search_record=report["search"].as_object();
+    search_record["accepted_objective"]=search.accepted_objective ? j::value(*search.accepted_objective) : j::value(nullptr);
+    search_record["accepted_gradient_inf_norm"]=search.accepted_gradient_inf_norm ? j::value(*search.accepted_gradient_inf_norm) : j::value(nullptr);
+    search_record["returned_search_state"]=second_stage_test::matched::runtime_json::Values(search.eta);
     if(search_only) report["search"].as_object().erase("runtime_convergence");
 #ifndef PR23_BASELINE_DRIVER
     if(search_kind=="schwarz")
@@ -584,6 +598,8 @@ int main(int argc,char ** argv)
                 else if(option=="--schwarz-max-block-atoms" && k+1<end) schwarz_policy.max_block_atoms=ParseSize(argv[++k],false);
                 else if(option=="--schwarz-storage-mib" && k+1<end) schwarz_policy.storage_bytes=ParseMiB(argv[++k]);
                 else if(option=="--schwarz-scratch-mib" && k+1<end) schwarz_policy.scratch_bytes=ParseMiB(argv[++k]);
+                else if(option=="--spqr-ordering" && k+1<end)
+                {spqr_ordering=ParseSpqrOrdering(argv[++k]); spqr_ordering_requested=true;}
 #ifndef PR23_BASELINE_DRIVER
                 else if(option=="--fixed" && k+1<end) fixed_mode=argv[++k];
                 else if(option=="--fixed-preconditioner" && k+1<end) fixed_preconditioner=argv[++k];
@@ -596,6 +612,9 @@ int main(int argc,char ** argv)
         }
         if(schwarz_policy.max_block_atoms<schwarz_policy.core_atoms)
             throw std::invalid_argument("Schwarz max block atoms must be at least core atoms");
+        if(spqr_ordering_requested && !n::SpqrOrderingAvailable(spqr_ordering))
+            throw std::invalid_argument(std::string("spqr-ordering-unavailable: ")+n::SpqrOrderingName(spqr_ordering)+" is not provided by this SPQR build");
+        n::SpqrOrderingForTesting()=spqr_ordering;
         if(search_only && (search_kind.empty() || search_kind=="legacy"))
             throw std::invalid_argument("Search-only profile requires OperatorPcg");
         if(audit) n::CompactSvdCaptureForTesting()=Capture;

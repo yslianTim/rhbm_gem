@@ -473,3 +473,52 @@ TEST(JointOperatorSearchTest, ActiveSearchCheckpointKeepsTheInterruptedSubstage)
     EXPECT_EQ(capture.rows,200); EXPECT_EQ(capture.columns,16); EXPECT_EQ(capture.nonzeros,1200);
     resources={};
 }
+
+TEST(JointOperatorSearchTest, BenchmarkSpqrOrderingsPreserveSmallOperatorSearch)
+{
+    if(!n::SpqrOrderingAvailable(n::SpqrOrdering::Colamd)) GTEST_SKIP()<<"SPQR ordering controls unavailable";
+    Sample s; auto context=s.data.context; context.search.method=n::SearchMethod::OperatorPcg;
+    context.search.preconditioner=n::PreconditionerKind::Diagonal;
+    const double rank_threshold=context.rank.Relative(context.rank.width_columns);
+    struct Outcome
+    {
+        n::SearchResult result;
+        std::string rank_status;
+        n::FreeDesignRankCertificate rank_certificate{};
+        double pcg_residual{};
+    };
+    const auto run=[&](n::SpqrOrdering ordering) {
+        n::SpqrOrderingForTesting()=ordering;
+        n::SparseWorkForTesting()={}; n::SearchWorkForTesting()={}; n::OperatorWorkForTesting()={};
+        auto result=n::SearchProfile(s.data.domain,s.data.y,n::Vector::Constant(4,.55),context);
+        return Outcome{std::move(result),n::OperatorWorkForTesting().rank_status,
+            n::OperatorWorkForTesting().rank_certificate,n::SearchWorkForTesting().last_relative_residual};
+    };
+    const auto reference=run(n::SpqrOrdering::Colamd);
+    ASSERT_TRUE(reference.result.initial_accepted);
+    for(const auto ordering:{n::SpqrOrdering::Default,n::SpqrOrdering::Best,n::SpqrOrdering::Metis})
+    {
+        if(!n::SpqrOrderingAvailable(ordering)) continue;
+        const auto candidate=run(ordering);
+        EXPECT_EQ(candidate.result.stop_reason,reference.result.stop_reason)<<n::SpqrOrderingName(ordering);
+        EXPECT_EQ(candidate.result.evaluations,reference.result.evaluations)<<n::SpqrOrderingName(ordering);
+        EXPECT_EQ(candidate.result.accepted,reference.result.accepted)<<n::SpqrOrderingName(ordering);
+        EXPECT_LT((candidate.result.eta-reference.result.eta).norm(),1e-8*(1+reference.result.eta.norm())
+            )<<n::SpqrOrderingName(ordering);
+        ASSERT_EQ(candidate.result.accepted_objective.has_value(),reference.result.accepted_objective.has_value());
+        if(candidate.result.accepted_objective)
+            EXPECT_NEAR(*candidate.result.accepted_objective,*reference.result.accepted_objective,
+                1e-10*(1+std::abs(*reference.result.accepted_objective)))<<n::SpqrOrderingName(ordering);
+        ASSERT_EQ(candidate.result.accepted_gradient_inf_norm.has_value(),reference.result.accepted_gradient_inf_norm.has_value());
+        if(candidate.result.accepted_gradient_inf_norm)
+            EXPECT_NEAR(*candidate.result.accepted_gradient_inf_norm,*reference.result.accepted_gradient_inf_norm,
+                1e-10*(1+std::abs(*reference.result.accepted_gradient_inf_norm)))<<n::SpqrOrderingName(ordering);
+        EXPECT_EQ(candidate.rank_status,reference.rank_status)<<n::SpqrOrderingName(ordering);
+        EXPECT_EQ(candidate.rank_certificate,reference.rank_certificate)<<n::SpqrOrderingName(ordering);
+        EXPECT_LE(candidate.pcg_residual,1e-10)<<n::SpqrOrderingName(ordering);
+        EXPECT_NEAR(candidate.pcg_residual,reference.pcg_residual,1e-10)<<n::SpqrOrderingName(ordering);
+        EXPECT_DOUBLE_EQ(context.rank.Relative(context.rank.width_columns),rank_threshold);
+    }
+    EXPECT_EQ(n::SearchPolicy{}.method,n::SearchMethod::LegacyCompact);
+    n::SpqrOrderingForTesting()=n::SpqrOrdering::Colamd;
+}

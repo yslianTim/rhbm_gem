@@ -178,10 +178,43 @@ class JointBenchmarkContract(unittest.TestCase):
                                                   Path('fixed.json'), build)
             self.assertEqual(fixed[fixed.index('--schwarz-overlap-hops') + 1], '0')
             args.profile = 'search'
+            args.spqr_ordering = 'best'
             search = benchmark.command_for_profile(args, {'kind': 'synthetic', 'topology': 'chain', 'atoms': 8},
                                                    Path('search.json'), build)
             self.assertIn('--search-only', search)
             self.assertEqual(search[search.index('--search') + 1], 'schwarz')
+            self.assertEqual(search[search.index('--spqr-ordering') + 1], 'best')
+
+    def test_benchmark_ordering_candidates_and_unavailable_reason(self):
+        parser = benchmark.build_parser()
+        for ordering in ('colamd', 'default', 'best'):
+            args = parser.parse_args(['--profile', 'search', '--case', 'cube-512',
+                                      '--build-dir', 'build/debug', '--output', 'result.json',
+                                      '--preconditioner', 'diagonal', '--spqr-ordering', ordering])
+            benchmark.validate_args(parser, args)
+            self.assertEqual(benchmark.solver_policy_metadata(args, 'SPQR')['spqr_ordering'], ordering.upper())
+        args = parser.parse_args(['--profile', 'solve', '--case', 'cube-512',
+                                  '--build-dir', 'build/debug', '--output', 'result.json',
+                                  '--spqr-ordering', 'best'])
+        with redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                benchmark.validate_args(parser, args)
+        self.assertEqual(benchmark.spqr_ordering_unavailable_reason(
+            'spqr-ordering-unavailable: METIS is not provided by this SPQR build\n'),
+            'spqr-ordering-unavailable: METIS is not provided by this SPQR build')
+        self.assertIsNone(benchmark.spqr_ordering_unavailable_reason('another process error\n'))
+
+    def test_search_normalization_keeps_ordering_parity_fields(self):
+        result = benchmark.normalize_result('search', {
+            'search': {'execution_complete': True, 'stop_reason': 'operator-gradient-stop',
+                       'profile_evaluations': 5, 'accepted_updates': 4,
+                       'accepted_objective': 0.125, 'accepted_gradient_inf_norm': 1e-13,
+                       'returned_search_state': [0.1, 0.2]},
+        })
+        details = result['details']
+        self.assertEqual(details['accepted_objective'], 0.125)
+        self.assertEqual(details['accepted_gradient_inf_norm'], 1e-13)
+        self.assertEqual(details['returned_search_state'], [0.1, 0.2])
 
     def test_rank_profile_metadata_names_the_backend_it_executes(self):
         parser = benchmark.build_parser()
