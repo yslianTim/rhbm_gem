@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "campaign": "joint-operator-factor-frontier-r1",
+  "repository": {
+    "url": "https://github.com/yslianTim/rhbm_gem",
+    "branch": "develop",
+    "prototype_commit": "076db5aa"
+  },
+  "purpose": "Compare the current exported fixed operator factor with a benchmark-only native SuiteSparseQR factor state, separately from ordering effects.",
+  "case_selection_reason": "cube-512 and cube-1024 are the largest completed one-level Schwarz search points with current-COLAMD data; cube-1024 is near the fixed 4 GiB envelope and directly tests whether representation cost changes that frontier.",
+  "measurement": {
+    "profile": "search",
+    "measurement_scope": "search-only",
+    "cases": [
+      "cube-512",
+      "cube-1024",
+      "cube-2048 diagnostic"
+    ],
+    "orderings_by_case": {
+      "cube-512": [
+        "COLAMD"
+      ],
+      "cube-1024": [
+        "COLAMD",
+        "BEST"
+      ],
+      "cube-2048 diagnostic": [
+        "COLAMD (native only)",
+        "BEST"
+      ]
+    },
+    "representations": [
+      "exported-fixed",
+      "native-qr"
+    ],
+    "preconditioner": "Schwarz",
+    "operator_rank": "auto -> SpqrBounds",
+    "rank_certificate": "LocalSupport before native QR; exact existing Fixed plus bounded SPQR fallback when certification is unavailable",
+    "core_atoms": 128,
+    "overlap_hops": 1,
+    "max_block_atoms": 512,
+    "rank_work_entries": 100000000,
+    "rank_workspace_bytes": 268435456,
+    "rank_time_budget_seconds": 120,
+    "schwarz_storage_bytes": 536870912,
+    "schwarz_scratch_bytes": 268435456,
+    "warmup": 0,
+    "repeat": 1,
+    "timeout_seconds": 600,
+    "rss_limit_bytes": 4294967296,
+    "eigen_threads": 1,
+    "cube_2048_policy": "Diagnostic retries only after cube-1024 BEST/native reduced RSS with matched search parity; all retries retained the original 4 GiB / 600 s envelope.",
+    "status_semantics": "All requested runs produced a terminal completed or rss_limit record; a resource stop is retained as a failure, not a completed measurement."
+  },
+  "build": {
+    "directory": "build/joint-spqr",
+    "backend": "SPQR",
+    "build_jobs": 4,
+    "instrumentation": "test-only"
+  },
+  "status": "complete",
+  "outputs": {
+    "summary_csv": "factor-frontier-summary.csv",
+    "analysis_json": "factor-frontier-analysis.json",
+    "parity_json": "parity-analysis.json",
+    "individual_results_directory": "individual-results/"
+  },
+  "promotion_decision": {
+    "production_memory_optimization": "skipped",
+    "reason": "Native representation had matched discrete search behavior where paired completed runs existed, but COLAMD RSS margin remained within run variation and every cube-2048 retry exceeded 4 GiB before PCG. Candidate remains benchmark-only.",
+    "production_ordering": "COLAMD unchanged",
+    "production_factor_representation": "exported-fixed unchanged"
+  }
+}
