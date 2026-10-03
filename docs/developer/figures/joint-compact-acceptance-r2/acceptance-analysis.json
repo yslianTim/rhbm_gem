@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "campaign": "joint-compact-assessment-acceptance-r2",
+  "rank_boundary_safety": {
+    "status": "passed",
+    "safe_decision": "all singular values within one ULP of RankPolicy cutoff fall back to observation-scale TSQR",
+    "permanent_test": "JointComponentNumericsTest.CompactJacobianRankBoundariesRespectPolicyAndFallBackWithinOneUlp"
+  },
+  "small_fixture_full_assessment_parity": {
+    "status": "passed",
+    "test": "JointCompactAssessmentTest.FullAssessmentAndReturnedStateParityAcrossSmallLattices",
+    "cases": [
+      "chain-8",
+      "chain-32",
+      "cube-8",
+      "cube-32"
+    ]
+  },
+  "acceptance_size_full_assessment_and_returned_state_parity": {
+    "status": "passed",
+    "command": "build/joint-spqr/bin/RHBM-GEM-TEST --gtest_filter=JointCompactAssessmentTest.FullAssessmentAndReturnedStateParityAtAcceptanceSizes",
+    "result": "passed",
+    "cases": [
+      "chain-128",
+      "chain-256",
+      "cube-128",
+      "cube-256"
+    ],
+    "compared": [
+      "Assessment.primary",
+      "Assessment.reference",
+      "design/width/normalized-width/Jacobian spectra",
+      "weak-direction projector",
+      "correction",
+      "coefficient_difference",
+      "inner/gradient/local/identified/failure",
+      "AssessmentEvidence",
+      "ConvergenceStatus",
+      "search result",
+      "trusted_state",
+      "trusted_assessment",
+      "endpoint_trust"
+    ]
+  },
+  "repeated_result_parity": {
+    "status": "passed",
+    "checks": [
+      "rank",
+      "objective",
+      "runtime convergence",
+      "active atoms",
+      "stop reason",
+      "search completion",
+      "profile evaluations",
+      "accepted updates",
+      "endpoint validity",
+      "returned-state availability",
+      "PCG iteration trace"
+    ],
+    "all_repetitions_match": true
+  },
+  "performance": {
+    "status": "material improvement",
+    "assessment_speedups": {
+      "chain-128": 1.462251447999736,
+      "chain-256": 1.5737076063638178,
+      "cube-128": 1.409911630545365,
+      "cube-256": 1.5032363446698394
+    },
+    "current_route_median_assessment_seconds": {
+      "chain-128": 21.396341916,
+      "chain-256": 119.314096792,
+      "cube-128": 19.752932792,
+      "cube-256": 103.831769542
+    },
+    "compact_route_median_assessment_seconds": {
+      "chain-128": 14.632464167,
+      "chain-256": 75.817195208,
+      "cube-128": 14.01005025,
+      "cube-256": 69.072152167
+    },
+    "maximum_peak_rss_ratio_128_256": 1.034323194464466,
+    "rss_regression_assessment": "No material RSS regression in four 128/256 cases; maximum median increase about 3.4%."
+  },
+  "512_completion": {
+    "status": "passed",
+    "contract": "600 seconds and 4 GiB",
+    "current_route_baseline": "chain-512 and cube-512 timed out in assessment in joint-assessment-scaling-r1",
+    "compact_route": {
+      "chain-512": {
+        "assessment_seconds": 442.886719792,
+        "process_wall_seconds": 459.28660970786586,
+        "peak_rss_bytes": 569786368,
+        "runtime_convergence": "passed",
+        "compact_accepted": 1,
+        "fallbacks": 0
+      },
+      "cube-512": {
+        "assessment_seconds": 405.276745125,
+        "process_wall_seconds": 482.6323914581444,
+        "peak_rss_bytes": 2162851840,
+        "runtime_convergence": "passed",
+        "compact_accepted": 1,
+        "fallbacks": 0
+      }
+    },
+    "same_search_trace_as_current_baseline": true,
+    "full_512_endpoint_parity": "unavailable because current route times out before completing returned-state assessment"
+  },
+  "thresholds_changed": false,
+  "evidence_weakened": false,
+  "production_promotion": "eligible for conditional promotion; promotion not yet committed"
+}

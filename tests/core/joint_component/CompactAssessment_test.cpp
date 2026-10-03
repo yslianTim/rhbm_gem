@@ -195,6 +195,38 @@ TEST(JointCompactAssessmentTest, FullAssessmentAndReturnedStateParityAcrossSmall
     }
 }
 
+TEST(JointCompactAssessmentTest, FullAssessmentAndReturnedStateParityAtAcceptanceSizes)
+{
+    CompactMode mode;
+    EigenThreads threads;
+    for(const std::string topology:{"chain","cube"}) for(const int atoms:{128,256})
+    {
+        SCOPED_TRACE(topology+"-"+std::to_string(atoms));
+        const c::JointProblem problem(second_stage_test::OperatorWorkload(topology,atoms));
+        const auto & data=c::JointProblemAccess::Get(problem);
+        auto context=data.context;
+        context.search.method=n::SearchMethod::OperatorPcg;
+        context.search.preconditioner=n::PreconditionerKind::Schwarz;
+        context.search.operator_rank.mode=n::OperatorRankMode::Auto;
+        context.search.operator_rank.budget={120,100'000'000,256*1024*1024};
+        context.search.schwarz={128,1,512,512ULL*1024*1024,256ULL*1024*1024};
+        const auto search=n::SearchProfile(data.domain,data.y,n::Vector::Constant(atoms,.55),context);
+
+        n::JacobianReductionForTesting()=n::JacobianReductionKindForTesting::ObservationTsqr;
+        n::AssessmentWorkForTesting()={};
+        const auto current=n::AssessComponentSearch(data.domain,data.y,context,search);
+        n::JacobianReductionForTesting()=n::JacobianReductionKindForTesting::CompactStackQr;
+        n::AssessmentWorkForTesting()={};
+        const auto compact=n::AssessComponentSearch(data.domain,data.y,context,search);
+        CompareComponentResult(current,compact);
+        EXPECT_GT(n::AssessmentWorkForTesting().compact_attempts,0);
+        EXPECT_EQ(n::AssessmentWorkForTesting().compact_attempts,
+                  n::AssessmentWorkForTesting().compact_accepted+
+                  n::AssessmentWorkForTesting().compact_boundary_fallbacks+
+                  n::AssessmentWorkForTesting().compact_other_fallbacks);
+    }
+}
+
 TEST(JointCompactAssessmentTest, RankBoundaryAssessmentFallsBackForOneUlpBand)
 {
     CompactMode mode;
