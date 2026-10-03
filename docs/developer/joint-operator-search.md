@@ -125,13 +125,25 @@ rebuild cost. Incomplete comparisons cannot justify promotion. The production
 default remains LegacyCompact; the historical evidence index records why
 previous operator/Schwarz campaigns did not qualify.
 
-The bounded local-support rank certificate has removed the earlier rank-work
-budget blocker for the current campaign. Chain and cube cases at 128 and 256
-atoms completed search and returned-state assessment; cases at 512 and 1024
-completed rank certification and PCG search but timed out during returned-state
-assessment. Search completion alone is not runtime convergence or endpoint
-qualification. The current measurements do not provide enough formal
-multi-block search-only evidence to support a two-level Schwarz investigation.
-Rank-certificate continuation is not warranted by the measured rank share. See
-the [current campaign record](joint-benchmark.md#current-one-level-scaling-evidence)
-for policies, measurements, and retained artifacts.
+The rigorous bounded `LocalSupport` rank certificate has removed the rank-work
+blocker under the existing 120-second, 100,000,000-entry, 256-MiB budget.
+Rank certification, nonlinear search, and returned-state assessment now have
+separate measurement records. The `search` benchmark profile runs the actual
+`SearchProfile(...)` path and exits before `AssessComponentSearch(...)`; its
+`search-only` scope does not establish runtime convergence or endpoint
+qualification. In the formal search campaign, all five chain Schwarz sizes
+completed. Four cube sizes were eligible; cube-2048 hit the 4-GiB RSS limit
+during search. The chain multi-block gate is stable across four sizes. The cube
+multi-block gate has only three eligible sizes and is insufficient; the
+full-range growth gate includes the single-block to multi-block transition.
+Therefore current evidence does not warrant a two-level Schwarz investigation.
+
+The separate assessment attribution campaign completed chain and cube at 128
+and 256. At 512, rank and PCG search completed, then both cases timed out in
+returned-state assessment at `derivative-reduction`. This does not qualify
+either endpoint. Derivative reduction dominated the completed assessments; no
+exact redundant computation was identified, so no assessment optimization was
+made. Rank took 1.8%–11.7% of search time, with one rank check per each of five
+linearizations per measurement; rank-certificate continuation is not
+warranted. The [benchmark guide](joint-benchmark.md) links the current search
+and assessment machine-readable artifacts and their scope contracts.

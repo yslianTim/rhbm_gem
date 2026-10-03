@@ -27,6 +27,7 @@ python3 tests/integration/joint_benchmark.py \
 | `prepare` | Joint problem construction and fixed-state basis preparation | `joint_sparse_benchmark` |
 | `fixed` | Fixed-state operator preparation and one selected preconditioned step; the saved state is prepared in a separate, unmeasured process. Optional `--svd-mode legacy|values|auto` selects the compact-SVD path | `joint_sparse_benchmark` |
 | `solve` | Joint search and returned-state assessment, with explicit Operator-PCG rank and Schwarz policies | `joint_sparse_benchmark` |
+| `search` | Nonlinear Operator-PCG search only; no returned-state assessment or endpoint qualification | `joint_sparse_benchmark` |
 | `rank` | Bounded free-design rank evaluation; select `--rank-mode prototype` or `oracle` | `joint_sparse_benchmark` |
 | `workflow` | Prepare, estimate, postprocess, and persist | `joint_postprocessing_benchmark` |
 | `postprocess` | Uncertainty, peeling, summary, and persistence using the driver's fixed endpoint | `joint_postprocessing_benchmark` |
@@ -61,6 +62,22 @@ The `rank` profile records its actual `SpqrBounds` or dense-oracle path and
 accepts the same three budget controls for the bounded prototype. These options
 belong to the internal benchmark drivers and do not add production CLI
 switches.
+
+The `search` profile uses the same `SearchProfile(...)` path as the solve
+profile and stops before `AssessComponentSearch(...)`. It writes
+`measurement_scope: "search-only"`; returned assessment, runtime convergence,
+and endpoint qualification are `not-run` or absent. The result explains that
+the profile measures nonlinear Operator-PCG search only and does not establish
+runtime convergence or endpoint qualification. Permanent tests verify zero
+assessments and zero reference evaluations. For example:
+
+```sh
+python3 tests/integration/joint_benchmark.py \
+  --profile search --case chain-512 --preconditioner schwarz \
+  --operator-rank auto --schwarz-core-atoms 128 --schwarz-overlap-hops 1 \
+  --schwarz-max-block-atoms 512 --build-dir build/joint-spqr \
+  --output build/chain-512-search.json
+```
 
 For example, compare a small Schwarz core with core-only and one-hop overlap:
 
@@ -109,6 +126,16 @@ with block count, core and block size distributions, atom membership
 distribution, graph workspace, storage, and scratch bound. Rank counters show
 checks, time, entries, workspace, compact extraction count, and free-design
 SVD count, so the bounded SPQR route can be checked directly.
+
+When test instrumentation is enabled, solve results also include assessment
+stage calls, completed calls, rows, columns, and seconds for primary and
+reference evaluation, design spectrum, derivative preparation and reduction,
+projected and normalized width spectra, correction/Jacobian spectrum, and the
+total assessment. The benchmark snapshots the active and last completed stage
+when each stage begins or ends. If a run times out, its individual result keeps
+the last stage checkpoint and process resource observations; it remains a
+timeout and is not treated as a completed assessment. This observer is
+test/benchmark-only and is not part of the installed numerical API.
 
 ## Cost accounting
 
@@ -297,50 +324,97 @@ structural checks and falls back to SPQR interval reconstruction when the
 local test does not certify. These rank measurements do not establish PCG
 scaling or support a two-level Schwarz conclusion.
 
-### Current one-level PCG pilot
+### Current Operator-PCG search scaling
 
-The refreshed campaign is recorded under
-[`joint-schwarz-scaling-r5`](figures/joint-schwarz-scaling-r5/campaign-manifest.json).
-It uses the production-equivalent rank budget of 120 seconds, 100,000,000 work
-entries, and 256 MiB, with SPQR and rank mode `auto`. The fixed Schwarz policy
-uses 128 core atoms, one overlap hop, a 512-atom maximum block, 512 MiB storage,
-and 256 MiB scratch. The campaign requested chain and cube sizes 128, 256, 512,
-and 1024, with one warmup, three measurements, a 600-second per-run timeout,
-and a 4 GiB process-tree RSS ceiling. Identity controls cover 128 and 256.
+The formal search-only campaign is recorded under
+[`joint-search-scaling-r1`](figures/joint-search-scaling-r1/campaign-manifest.json).
+It used SPQR with `auto` resolving to `SpqrBounds`, the rigorous
+`LocalSupport` certificate, the production-equivalent rank budget of 120
+seconds, 100,000,000 work entries, and 256 MiB. The fixed Schwarz policy used
+128 core atoms, one overlap hop, a 512-atom maximum block, 512 MiB storage, and
+256 MiB scratch. It requested chain and cube sizes 128, 256, 512, 1024, and
+2048, one warmup and three measurements, one Eigen thread, a 600-second run
+limit, and a 4 GiB RSS ceiling.
 
-All chain and cube measurements at 128 and 256 completed with a rigorous
-`local-support` FullRank certificate and entered PCG. They used the resolved
-`SpqrBounds` backend; compact extractions and free-design SVDs were zero.
+The `search` profile calls the same `SearchProfile(...)` implementation as a
+full solve, then serializes its search result and telemetry and exits before
+assessment. Its JSON says `measurement_scope: "search-only"`; assessment and
+endpoint qualification are `not-run`, and runtime convergence is never
+reported as passed. The permanent test checks zero assessments and zero
+reference evaluations. Eighteen of 20 configurations were search-side
+eligible. Both cube-2048 preconditioners hit the RSS ceiling during search;
+those failures remain recorded and do not count as points. Search-side
+eligibility makes no endpoint-correctness claim.
 
-| Case | Preconditioner | Solves | PCG iterations/solve | Rank time | Search | Assessment | Peak RSS |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| chain-128 | diagonal | 27 | 5.89 | 0.392 s | 3.493 s | 21.527 s | 139.6 MiB |
-| chain-128 | Schwarz | 27 | 2.93 | 0.396 s | 3.377 s | 21.337 s | 144.0 MiB |
-| chain-256 | diagonal | 27 | 5.85 | 0.792 s | 6.973 s | 118.666 s | 212.4 MiB |
-| chain-256 | Schwarz | 27 | 3.96 | 0.791 s | 7.296 s | 118.387 s | 209.1 MiB |
-| cube-128 | diagonal | 27 | 7.89 | 0.314 s | 10.772 s | 19.614 s | 524.9 MiB |
-| cube-128 | Schwarz | 27 | 3.04 | 0.297 s | 7.282 s | 19.665 s | 529.3 MiB |
-| cube-256 | diagonal | 30 | 7.87 | 0.564 s | 30.935 s | 102.828 s | 984.0 MiB |
-| cube-256 | Schwarz | 30 | 5.67 | 0.564 s | 28.329 s | 103.199 s | 1120.8 MiB |
+The Schwarz measurements were:
 
-The 512 and 1024 configurations reached rank and PCG search, but their full
-solve profiles timed out during returned-state assessment. Those rows remain
-in the sweep output with their process limits and are excluded from the
-scaling analysis. Search-side observations are in
-[`partial-large-run-diagnostics.json`](figures/joint-schwarz-scaling-r5/partial-large-run-diagnostics.json).
-The Schwarz analyzer reports `insufficient-evidence` for both topologies:
-only two complete sizes are available. Chain iterations per solve changed from
-2.93 to 3.96; cube changed from 3.04 to 5.67. These two-point trends do not
-warrant a two-level Schwarz investigation.
+| Topology | Atoms | Blocks | PCG iters/solve | Rank s | Setup s | PCG s | Search s | Peak RSS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| chain | 128 | 1 | 3 | 0.393 | 1.355 | 0.841 | 3.376 | 146.5 MiB |
+| chain | 256 | 2 | 4 | 0.792 | 2.782 | 2.163 | 7.254 | 257.5 MiB |
+| chain | 512 | 4 | 4 | 1.591 | 5.757 | 4.381 | 14.917 | 476.0 MiB |
+| chain | 1024 | 8 | 4 | 3.188 | 12.111 | 8.776 | 30.563 | 631.0 MiB |
+| chain | 2048 | 17 | 4 | 6.401 | 26.612 | 17.616 | 62.961 | 1139.0 MiB |
+| cube | 128 | 1 | 3 | 0.294 | 1.454 | 3.371 | 7.273 | 331.8 MiB |
+| cube | 256 | 2 | 6 | 0.566 | 4.799 | 16.986 | 28.288 | 617.0 MiB |
+| cube | 512 | 4 | 6 | 1.097 | 13.852 | 45.579 | 75.673 | 1269.4 MiB |
+| cube | 1024 | 9 | 7 | 2.176 | 39.902 | 177.522 | 274.031 | 3301.2 MiB |
+| cube | 2048 | — | — | — | — | — | RSS limit | 4.02 GiB |
 
-Across completed points, rank work took 1.8%–11.7% of search time. Each of the
-five nonlinear linearizations performed one rank check. Repeated bounded-rank
-certification is not a material search bottleneck, so rank-certificate
-continuation is not warranted by these measurements.
+The full-range coarse gates are chain `stable` (5 points, slope 0.0830,
+endpoint growth 1.33) and cube `growth-observed` (4 points, slope 0.3667,
+endpoint growth 2.33). The cube full-range result includes the single-block
+128-to-multi-block-256 transition, so the separate actual-block-count gate is
+the basis for a coarse-space decision:
 
-The normalized points, raw repetitions, identity controls, process limits, and
-analyzer output are linked from the
-[`campaign manifest`](figures/joint-schwarz-scaling-r5/campaign-manifest.json).
+| Topology | Multi-block sizes | Actual block counts | Valid points | Slope | Growth ratio | Multi-block gate |
+| --- | --- | --- | ---: | ---: | ---: | --- |
+| chain | 256, 512, 1024, 2048 | 2, 4, 8, 17 | 4 | 0.0000 | 1.00 | stable |
+| cube | 256, 512, 1024 | 2, 4, 9 | 3 | 0.1112 | 1.17 | insufficient-evidence |
+
+The cube-2048 point failed the resource limit, leaving only three eligible
+multi-block points. The current multi-block evidence is therefore stable for
+chain and insufficient for cube. **No, current evidence does not warrant a
+two-level Schwarz investigation.** No coarse correction was implemented.
+
+Rank work was 1.8%–11.7% of search time on completed rows. Each of five
+nonlinear linearizations used one rank check per measurement; the rigorous
+local-support certificate removed the rank-work blocker without changing the
+rank budget. Rank-certificate continuation is not warranted. The full
+diagonal/Schwarz result set, eligibility records, failures, and both gates are
+in the machine-readable
+[`campaign artifacts`](figures/joint-search-scaling-r1/).
+
+### Returned-state assessment attribution
+
+Assessment has a separate measurement record in
+[`joint-assessment-scaling-r1`](figures/joint-assessment-scaling-r1/campaign-manifest.json).
+The stage times below are medians of measurement repetitions; derivative is
+preparation plus reduction. The 512 cases ran one measurement with no warmup.
+They completed rank and PCG search, then timed out during assessment. A timeout
+is an incomplete assessment, not a pass.
+
+| Case | Primary s | Reference s | Design spectrum s | Derivative s | Width s | Normalized s | Correction/Jacobian s | Total assessment s |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| chain-128 | 0.114 | 1.392 | 0.938 | 18.127 | 0.215 | 0.194 | 0.250 | 21.340 |
+| chain-256 | 0.236 | 6.684 | 4.134 | 104.090 | 0.998 | 0.866 | 1.199 | 118.334 |
+| chain-512 | 0.464 | 37.168 | 20.199 | 42.140 prep; reduction timed out | — | — | — | timeout |
+| cube-128 | 0.155 | 1.602 | 1.233 | 15.658 | 0.270 | 0.257 | 0.307 | 19.548 |
+| cube-256 | 0.361 | 7.171 | 4.631 | 86.834 | 1.073 | 0.961 | 1.264 | 102.458 |
+| cube-512 | 0.853 | 44.477 | 27.003 | 54.228 prep; reduction timed out | — | — | — | timeout |
+
+Derivative reduction dominated every completed assessment, accounting for
+66.5%–79.7% of total assessment time; it was also the active stage at both
+512 timeouts. Total assessment grew 5.55x for chain and 5.24x for cube from
+128 to 256. The 512 timeout rows retain the completed stages, active stage,
+stage dimensions, 600-second process wall, and peak RSS (610 MiB for chain;
+2.84 GiB for cube). Their stage checkpoints and per-run records are available
+in the assessment campaign JSON, CSV, analysis, and `individual-results/`.
+
+No exact duplicate recomputation or identity-safe reuse was demonstrated in
+the dominant derivative-reduction work. Removing or approximating that work
+would alter the assessment evidence, so no assessment optimization was
+implemented.
 
 The fixed-state compact-SVD, operator, rank, and action contracts remain owned
 by permanent tests such as `Numerics_test`, `ProfileOperator_test`, and
