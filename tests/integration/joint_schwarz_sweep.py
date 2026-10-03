@@ -34,6 +34,7 @@ def build_configurations(args):
                         'operator_rank_seconds': args.operator_rank_seconds,
                         'operator_rank_work_entries': args.operator_rank_work_entries,
                         'operator_rank_workspace_mib': args.operator_rank_workspace_mib,
+                        'assessment_reduction': args.assessment_reduction,
                         'profile': args.profile,
                         'measurement_scope': ('search-only' if args.profile == 'search' else
                                               'joint_search_and_returned_state_assessment'),
@@ -55,6 +56,7 @@ def configuration_key(config):
               config['storage_mib'], config['scratch_mib'],
               config['operator_rank'], config['operator_rank_seconds'],
               config['operator_rank_work_entries'], config['operator_rank_workspace_mib'],
+              config.get('assessment_reduction', 'observation-tsqr'),
               config.get('profile', 'solve'),
               f"r{config.get('repeat', 1)}", f"w{config.get('warmup', 0)}")
     return '-'.join(str(value) for value in fields if value is not None)
@@ -69,7 +71,8 @@ def benchmark_command(script, config, args, output):
                '--operator-rank', config['operator_rank'],
                '--operator-rank-seconds', str(config['operator_rank_seconds']),
                '--operator-rank-work-entries', str(config['operator_rank_work_entries']),
-               '--operator-rank-workspace-mib', str(config['operator_rank_workspace_mib'])]
+               '--operator-rank-workspace-mib', str(config['operator_rank_workspace_mib']),
+               '--assessment-reduction', config.get('assessment_reduction', 'observation-tsqr')]
     if config['preconditioner'] == 'schwarz':
         command.extend(['--schwarz-core-atoms', str(config['core_atoms']),
                         '--schwarz-overlap-hops', str(config['overlap_hops']),
@@ -480,6 +483,8 @@ def build_parser():
     parser.add_argument('--operator-rank-seconds', type=float, default=120)
     parser.add_argument('--operator-rank-work-entries', type=int, default=100_000_000)
     parser.add_argument('--operator-rank-workspace-mib', type=int, default=256)
+    parser.add_argument('--assessment-reduction', choices=('observation-tsqr', 'compact-stack-qr'),
+                        default='observation-tsqr')
     parser.add_argument('--max-block-atoms', type=int, default=512)
     parser.add_argument('--storage-mib', type=int, default=512)
     parser.add_argument('--scratch-mib', type=int, default=256)
@@ -502,6 +507,8 @@ def validate_args(parser, args):
         parser.error('atoms and cores must be positive; overlaps must be nonnegative')
     if (args.max_block_atoms <= 0 or args.storage_mib <= 0 or args.scratch_mib <= 0):
         parser.error('Schwarz block and memory limits must be positive')
+    if args.assessment_reduction != 'observation-tsqr' and args.profile != 'solve':
+        parser.error('compact assessment reduction requires the solve profile')
     for core in args.cores:
         if core > args.max_block_atoms:
             parser.error('max block atoms must cover every requested core')

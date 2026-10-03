@@ -32,6 +32,7 @@ using Clock=std::chrono::steady_clock;
 bool audit{};
 bool operator_audit{};
 std::string search_kind;
+std::string assessment_reduction{"observation-tsqr"};
 bool search_only{};
 std::filesystem::path capture;
 j::array svd_records;
@@ -333,7 +334,10 @@ j::object SearchWork()
 j::object AssessmentWork()
 {
     const auto & work=n::AssessmentWorkForTesting();
-    return {{"assessments",work.assessments},{"reference_evaluations",work.reference_evaluations}};
+    return {{"assessments",work.assessments},{"reference_evaluations",work.reference_evaluations},
+        {"compact_attempts",work.compact_attempts},{"compact_accepted",work.compact_accepted},
+        {"compact_boundary_fallbacks",work.compact_boundary_fallbacks},
+        {"compact_other_fallbacks",work.compact_other_fallbacks}};
 }
 j::object TiledQrTelemetry(const n::TiledQrTelemetry & work)
 {
@@ -366,18 +370,25 @@ j::object AssessmentTelemetry()
     const double rows_seconds=stage_seconds("derivative-rows");
     const double projected_seconds=stage_seconds("derivative-projected-qr");
     const double jacobian_seconds=stage_seconds("derivative-jacobian-qr");
+    const double compact_jacobian_seconds=stage_seconds("derivative-compact-jacobian-qr");
     const double norms_seconds=stage_seconds("derivative-norms");
     j::object derivative_reduction{{"active_micro_stage",optional_stage(
             work.active_stage=="derivative-rows" || work.active_stage=="derivative-projected-qr" ||
-            work.active_stage=="derivative-jacobian-qr" || work.active_stage=="derivative-norms" ? work.active_stage : std::string{})},
+            work.active_stage=="derivative-jacobian-qr" || work.active_stage=="derivative-compact-jacobian-qr" ||
+            work.active_stage=="derivative-norms" ? work.active_stage : std::string{})},
         {"reduction_inclusive_seconds",stage_seconds("derivative-reduction")},
         {"rows_seconds",rows_seconds},{"projected_qr_seconds",projected_seconds},
-        {"jacobian_qr_seconds",jacobian_seconds},{"norms_seconds",norms_seconds},
-        {"exclusive_substage_seconds",rows_seconds+projected_seconds+jacobian_seconds+norms_seconds},
+        {"jacobian_qr_seconds",jacobian_seconds},{"compact_jacobian_qr_seconds",compact_jacobian_seconds},
+        {"norms_seconds",norms_seconds},
+        {"exclusive_substage_seconds",rows_seconds+projected_seconds+jacobian_seconds+compact_jacobian_seconds+norms_seconds},
         {"tile_count",derivative.tile_count},{"tiled_qr",j::object{
             {"projected",TiledQrTelemetry(derivative.projected_qr)},
-            {"jacobian",TiledQrTelemetry(derivative.jacobian_qr)}}}};
+            {"jacobian",TiledQrTelemetry(derivative.jacobian_qr)},
+            {"compact_jacobian",TiledQrTelemetry(derivative.compact_jacobian_qr)}}}};
     return {{"assessments",work.assessments},{"reference_evaluations",work.reference_evaluations},
+        {"compact_attempts",work.compact_attempts},{"compact_accepted",work.compact_accepted},
+        {"compact_boundary_fallbacks",work.compact_boundary_fallbacks},
+        {"compact_other_fallbacks",work.compact_other_fallbacks},
         {"last_assessment_stage",optional_stage(work.last_stage)},
         {"active_assessment_stage",optional_stage(work.active_stage)},
         {"completed_assessment_stages",completed},{"completed_stage_seconds",seconds},
@@ -431,7 +442,8 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
 #endif
     ConfigureSearchPolicy(context);
     j::object report{{"stage","search"},{"search_kind",search_kind},{"atoms",b.size()},{"rows",domain.rows},
-        {"measurement_scope",search_only ? "search-only" : "joint_search_and_returned_state_assessment"}};
+        {"measurement_scope",search_only ? "search-only" : "joint_search_and_returned_state_assessment"},
+        {"assessment_reduction",assessment_reduction}};
     report["solver_policy"]=PolicyRecord(context.search);
     auto & resource=n::ResourceWorkForTesting(); const bool resources_enabled=resource.enabled;
     resource={}; resource.enabled=resources_enabled;
@@ -617,6 +629,15 @@ int main(int argc,char ** argv)
                 else if(option=="--operator") operator_audit=true;
                 else if(option=="--search" && k+1<end) search_kind=argv[++k];
                 else if(option=="--search-only") search_only=true;
+                else if(option=="--assessment-reduction" && k+1<end)
+                {
+                    assessment_reduction=argv[++k];
+                    if(assessment_reduction=="observation-tsqr")
+                        n::JacobianReductionForTesting()=n::JacobianReductionKindForTesting::ObservationTsqr;
+                    else if(assessment_reduction=="compact-stack-qr")
+                        n::JacobianReductionForTesting()=n::JacobianReductionKindForTesting::CompactStackQr;
+                    else throw std::invalid_argument("Expected --assessment-reduction observation-tsqr|compact-stack-qr");
+                }
                 else if(option=="--operator-rank" && k+1<end) operator_rank_mode=ParseOperatorRankMode(argv[++k]);
                 else if(option=="--operator-rank-seconds" && k+1<end) operator_rank_budget.seconds=ParseSeconds(argv[++k]);
                 else if(option=="--operator-rank-work-entries" && k+1<end) operator_rank_budget.entries=ParseSize(argv[++k],true);

@@ -180,6 +180,7 @@ struct AssessmentStageWork
 struct AssessmentWork
 {
     int assessments{},reference_evaluations{};
+    int compact_attempts{},compact_accepted{},compact_boundary_fallbacks{},compact_other_fallbacks{};
     std::string active_stage,last_stage;
     std::vector<std::string> stage_stack;
     std::vector<AssessmentStageWork> stages;

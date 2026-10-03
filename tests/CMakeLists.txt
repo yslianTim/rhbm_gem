@@ -182,6 +182,7 @@ set(JOINT_COMPONENT_TEST_SOURCES
     core/joint_component/FreeDesignRank_test.cpp
     core/joint_component/ProfileOperator_test.cpp
     core/joint_component/OperatorSearch_test.cpp
+    core/joint_component/CompactAssessment_test.cpp
     core/joint_component/Numerics_test.cpp
     core/joint_component/Search_test.cpp
     core/joint_component/Components_test.cpp

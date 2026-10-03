@@ -177,7 +177,8 @@ def command_for_profile(args, case, output, build):
                                    *operator_policy_options(args), *ordering), args.svd_mode)
         if args.profile == 'solve':
             return sparse_command(sparse, case, 'fixed', output,
-                                  ('--search', args.preconditioner, *operator_policy_options(args)), args.svd_mode)
+                                  ('--search', args.preconditioner, *operator_policy_options(args),
+                                   '--assessment-reduction', args.assessment_reduction), args.svd_mode)
         return sparse_command(sparse, case,
                               'rank' if args.rank_mode == 'prototype' else 'rank-oracle', output,
                               rank_budget_options(args), args.svd_mode)
@@ -539,6 +540,8 @@ def build_parser():
     parser.add_argument('--schwarz-scratch-mib', type=int, default=256)
     parser.add_argument('--fixed-action', choices=('composed', 'normal'), default='normal')
     parser.add_argument('--svd-mode', choices=('legacy', 'values', 'auto'))
+    parser.add_argument('--assessment-reduction', choices=('observation-tsqr', 'compact-stack-qr'),
+                        default='observation-tsqr')
     parser.add_argument('--rank-mode', choices=('prototype', 'oracle'), default='prototype')
     parser.add_argument('--cli', type=Path)
     parser.add_argument('--model', type=Path)
@@ -562,6 +565,8 @@ def validate_args(parser, args):
         parser.error('search profile requires identity, diagonal, or schwarz preconditioner')
     if args.spqr_ordering and args.profile != 'search':
         parser.error('--spqr-ordering is supported by the benchmark-only search profile')
+    if args.assessment_reduction != 'observation-tsqr' and args.profile != 'solve':
+        parser.error('--assessment-reduction is supported only by the benchmark-only solve profile')
 
 
 def main(argv=None):
@@ -579,6 +584,7 @@ def main(argv=None):
     except (OSError, subprocess.CalledProcessError, ValueError) as error:
         parser.error(str(error))
     metadata.update(commit=commit, profile=args.profile, case=args.case,
+                    assessment_reduction=args.assessment_reduction,
                     source_sha256=source_hash(ROOT), benchmark_sha256=sha(Path(__file__)))
     metadata['solver_policy'] = solver_policy_metadata(args, metadata['backend'])
     if args.profile in ('prepare', 'fixed', 'search', 'solve', 'rank'):

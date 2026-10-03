@@ -158,6 +158,7 @@ class JointBenchmarkContract(unittest.TestCase):
         self.assertEqual((args.operator_rank, args.schwarz_core_atoms, args.schwarz_overlap_hops,
                           args.schwarz_max_block_atoms, args.schwarz_storage_mib,
                           args.schwarz_scratch_mib), ('auto', 128, 1, 512, 512, 256))
+        self.assertEqual(args.assessment_reduction, 'observation-tsqr')
         policy = benchmark.solver_policy_metadata(args, 'EIGEN')
         self.assertEqual(policy['search_method'], 'OperatorPcg')
         self.assertEqual(policy['resolved_rank_backend'], 'Dense')
@@ -205,6 +206,24 @@ class JointBenchmarkContract(unittest.TestCase):
             self.assertIn('--search-only', search)
             self.assertEqual(search[search.index('--search') + 1], 'schwarz')
             self.assertEqual(search[search.index('--spqr-ordering') + 1], 'best')
+
+    def test_compact_assessment_route_is_benchmark_only(self):
+        parser = benchmark.build_parser()
+        args = parser.parse_args(['--profile', 'solve', '--case', 'chain-8',
+                                  '--build-dir', 'build/debug', '--output', 'result.json',
+                                  '--assessment-reduction', 'compact-stack-qr'])
+        benchmark.validate_args(parser, args)
+        with tempfile.TemporaryDirectory() as temporary:
+            build = Path(temporary)
+            driver = build / 'bin/joint_sparse_benchmark'
+            driver.parent.mkdir(); driver.touch()
+            command = benchmark.command_for_profile(args, {'kind': 'synthetic', 'topology': 'chain', 'atoms': 8},
+                                                    Path('result.json'), build)
+            self.assertEqual(command[command.index('--assessment-reduction') + 1], 'compact-stack-qr')
+        args.profile = 'search'
+        with redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                benchmark.validate_args(parser, args)
 
     def test_benchmark_ordering_candidates_and_unavailable_reason(self):
         parser = benchmark.build_parser()
@@ -343,20 +362,33 @@ class JointBenchmarkContract(unittest.TestCase):
         self.assertEqual(len({schwarz_sweep.configuration_key(item) for item in configurations}), 6)
 
     def test_sweep_command_passes_overlap_only_to_schwarz(self):
-        args = schwarz_sweep.build_parser().parse_args(['--build-dir', 'build/debug', '--output', 'sweep.json'])
+        args = schwarz_sweep.build_parser().parse_args(['--build-dir', 'build/debug', '--output', 'sweep.json',
+                                                         '--assessment-reduction', 'compact-stack-qr'])
+        schwarz_sweep.validate_args(schwarz_sweep.build_parser(), args)
         config = {'topology': 'chain', 'atoms': 8, 'preconditioner': 'identity',
                   'core_atoms': None, 'overlap_hops': None, 'max_block_atoms': None,
                   'storage_mib': None, 'scratch_mib': None, 'operator_rank': 'auto',
                   'operator_rank_seconds': 120, 'operator_rank_work_entries': 100_000_000,
-                  'operator_rank_workspace_mib': 256, 'repeat': 1}
+                  'operator_rank_workspace_mib': 256, 'assessment_reduction': 'compact-stack-qr', 'repeat': 1}
         command = schwarz_sweep.benchmark_command(Path('joint_benchmark.py'), config, args, Path('run.json'))
         self.assertNotIn('--schwarz-core-atoms', command)
         self.assertNotIn('--schwarz-overlap-hops', command)
         self.assertEqual(command[command.index('--warmup') + 1], '0')
         self.assertEqual(command[command.index('--operator-rank-work-entries') + 1], '100000000')
+        self.assertEqual(command[command.index('--assessment-reduction') + 1], 'compact-stack-qr')
         config['profile'] = 'search'
         search = schwarz_sweep.benchmark_command(Path('joint_benchmark.py'), config, args, Path('search.json'))
         self.assertEqual(search[search.index('--profile') + 1], 'search')
+
+    def test_compact_assessment_sweep_is_solve_only(self):
+        parser = schwarz_sweep.build_parser()
+        args = parser.parse_args(['--build-dir', 'build/debug', '--output', 'sweep.json',
+                                  '--assessment-reduction', 'compact-stack-qr'])
+        configs = schwarz_sweep.build_configurations(args)
+        self.assertEqual(configs[0]['assessment_reduction'], 'compact-stack-qr')
+        args.profile = 'search'
+        with self.assertRaises(SystemExit):
+            schwarz_sweep.validate_args(parser, args)
 
     def test_outer_sweep_timeout_counts_warmups_and_measurements(self):
         parser = schwarz_sweep.build_parser()
