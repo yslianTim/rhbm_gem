@@ -98,8 +98,7 @@ CompactSvdResult EvaluateRank(const Matrix & compact,const RankRequest & request
         out.rank=(out.singular_values.array()>out.threshold).count();
     return out;
 }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-bool CompactRankDecisionSafeForTesting(const CompactSvdResult & result)
+bool CompactRankDecisionSafe(const CompactSvdResult & result)
 {
     if(!result.valid || result.singular_values.size()==0 || !std::isfinite(result.threshold)) return false;
     const double lower=std::nextafter(result.threshold,0.);
@@ -108,6 +107,5 @@ bool CompactRankDecisionSafeForTesting(const CompactSvdResult & result)
         if(result.singular_values(k)>=lower && result.singular_values(k)<=upper) return false;
     return true;
 }
-#endif
 
 }

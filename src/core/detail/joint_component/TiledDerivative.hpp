@@ -23,7 +23,11 @@ struct ReducedDifferential
 };
 TiledDifferential PrepareDerivative(const Evaluation &,double,const EvaluationContext *,double=-1,
     Eigen::Index=derivative_tile_rows);
+TiledDifferential PrepareDerivativeCompact(const Evaluation &,double,const EvaluationContext *,double=-1,
+    Eigen::Index=derivative_tile_rows);
 ReducedDifferential ReduceDerivative(const TiledDifferential &,VectorRef,bool=true,Eigen::Index=derivative_tile_rows);
+ReducedDifferential ReduceDerivativeCompact(const TiledDifferential &,VectorRef,bool=true,
+    Eigen::Index=derivative_tile_rows);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 enum class JacobianReductionKindForTesting {ObservationTsqr,CompactStackQr};
 JacobianReductionKindForTesting & JacobianReductionForTesting();

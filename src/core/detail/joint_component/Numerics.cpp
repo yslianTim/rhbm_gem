@@ -485,23 +485,35 @@ Assessment AssessEvaluated(const Domain &,VectorRef y,const Evaluation & endpoin
     const auto reduction_kind=JacobianReductionForTesting();
     const bool compact_route=reduction_kind==JacobianReductionKindForTesting::CompactStackQr;
     if(compact_route) ++AssessmentWorkForTesting().compact_attempts;
-    const auto prepared=PrepareDerivativeForTesting(endpoint,scale,context,-1,derivative_tile_rows,compact_route);
 #else
-    const auto prepared=PrepareDerivative(endpoint,scale,context);
+    constexpr bool compact_route=true;
 #endif
+    const auto prepared=compact_route ?
+        PrepareDerivativeCompact(endpoint,scale,context) : PrepareDerivative(endpoint,scale,context);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     prepare_stage.Finish();
     AssessmentStageTimerForTesting reduce_stage("derivative-reduction",prepared.raw.rows(),prepared.raw.cols());
-    auto differential=compact_route && prepared.reference_order ? ReducedDifferential{} :
-        ReduceDerivativeForTesting(prepared,endpoint.residual,true,reduction_kind);
-    if(compact_route && (prepared.reference_order || !differential.valid))
-    {
-        ++AssessmentWorkForTesting().compact_other_fallbacks;
-        differential=ReduceDerivative(prepared,endpoint.residual);
-    }
-#else
-    const auto differential=ReduceDerivative(prepared,endpoint.residual);
 #endif
+    bool compact_differential=compact_route;
+    ReducedDifferential differential;
+    if(compact_differential && prepared.reference_order)
+    {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        ++AssessmentWorkForTesting().compact_other_fallbacks;
+#endif
+        differential=ReduceDerivative(prepared,endpoint.residual);
+        compact_differential=false;
+    }
+    else differential=compact_differential ? ReduceDerivativeCompact(prepared,endpoint.residual) :
+        ReduceDerivative(prepared,endpoint.residual);
+    if(compact_differential && !differential.valid)
+    {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        ++AssessmentWorkForTesting().compact_other_fallbacks;
+#endif
+        differential=ReduceDerivative(prepared,endpoint.residual);
+        compact_differential=false;
+    }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     reduce_stage.Finish();
 #endif
@@ -535,27 +547,38 @@ Assessment AssessEvaluated(const Domain &,VectorRef y,const Evaluation & endpoin
         out.weak_directions.col(k)=direction;
     }
     Vector response=-differential.response;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     CompactSvdResult correction_svd;
     {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
         AssessmentStageTimerForTesting correction_stage("correction-jacobian-spectrum",differential.jacobian.rows(),differential.jacobian.cols());
+#endif
         correction_svd=Decompose(differential.jacobian,context->rank.rows,CompactSvdVectors::None,&response);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
         correction_stage.Finish();
+#endif
     }
-    if(compact_route && !CompactRankDecisionSafeForTesting(correction_svd))
+    if(compact_differential && !CompactRankDecisionSafe(correction_svd))
     {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
         ++AssessmentWorkForTesting().compact_boundary_fallbacks;
+#endif
         differential=ReduceDerivative(prepared,endpoint.residual);
         if(!differential.valid) {out.failure=differential.reason; return out;}
         response=-differential.response;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
         AssessmentStageTimerForTesting fallback_stage("correction-jacobian-spectrum",differential.jacobian.rows(),differential.jacobian.cols());
-        correction_svd=Decompose(differential.jacobian,context->rank.rows,CompactSvdVectors::None,&response);
-        fallback_stage.Finish();
-    }
-    else if(compact_route) ++AssessmentWorkForTesting().compact_accepted;
-#else
-    const auto correction_svd=Decompose(differential.jacobian,context->rank.rows,CompactSvdVectors::None,&response);
 #endif
+        correction_svd=Decompose(differential.jacobian,context->rank.rows,CompactSvdVectors::None,&response);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        fallback_stage.Finish();
+#endif
+    }
+    else if(compact_differential)
+    {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        ++AssessmentWorkForTesting().compact_accepted;
+#endif
+    }
     if(!correction_svd.valid) {out.failure="spectrum-factorization-failed"; return out;}
     const Vector & correction=correction_svd.solution; out.correction=correction;
     out.jacobian=CompactSpectrum(correction_svd,context->rank.rows);

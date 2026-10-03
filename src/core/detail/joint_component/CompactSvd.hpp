@@ -31,8 +31,8 @@ CompactSvdResult CompactSvd(const Matrix &,double relative,double absolute=-1,co
     CompactSvdVectors=CompactSvdVectors::None);
 CompactSvdResult EvaluateRank(const Matrix &,const RankRequest &,const Vector * rhs=nullptr,
     CompactSvdVectors=CompactSvdVectors::None);
+bool CompactRankDecisionSafe(const CompactSvdResult &);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-bool CompactRankDecisionSafeForTesting(const CompactSvdResult &);
 enum class CompactSvdMode {Automatic,Legacy,ValuesOnly};
 CompactSvdMode & CompactSvdModeForTesting();
 using CompactSvdCapture=std::function<void(const Matrix &,double,double,const Vector *,const CompactSvdResult &)>;

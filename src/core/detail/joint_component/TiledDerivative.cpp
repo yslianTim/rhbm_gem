@@ -27,9 +27,6 @@ namespace {
 TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const EvaluationContext * context,
     double absolute,Eigen::Index tile,bool compact_jacobian)
 {
-#ifndef RHBM_GEM_TEST_INSTRUMENTATION
-    (void)compact_jacobian;
-#endif
     auto & work=SparseWorkForTesting(); ++work.derivative_preparations;
     ResourcePhase phase("derivative-prepare");
     WorkTimer preparation_timer(work.derivative_seconds);
@@ -97,15 +94,15 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
             const auto svd=EvaluateRank(compact,{{context ? context->rank.rows : n,2*m,m},p,absolute});
             if(!svd.valid) {out.reason="nonfinite-derivative"; return out;}
             if(svd.rank!=p) {out.reason="rank-deficient-free-design"; return out;}
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
             if(compact_jacobian)
             {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
                 AssessmentStageTimerForTesting projection_stage("compact-design-response",n,p);
+#endif
                 out.free_design_factor=compact;
                 const Matrix response=e.residual/scale;
                 out.free_design_response=(compact*factor->LeastSquares(response)).col(0);
             }
-#endif
             out.coefficients.resize(p,m); out.correction.resize(p,m);
             for(Eigen::Index first=0;first<m;first+=16)
             {
@@ -126,11 +123,7 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
     std::optional<WorkTimer> cancellation_timer;
     if(SparseBackendEnabled()) cancellation_timer.emplace(work.cancellation_seconds);
     const auto tiled_solve=[&]() {
-        const Eigen::Index response_count=m
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            +(compact_jacobian ? 1 : 0)
-#endif
-            ;
+        const Eigen::Index response_count=m+(compact_jacobian ? 1 : 0);
         TiledQR qr(p,response_count);
         {
             ++work.derivative_compacts; WorkTimer compact_timer(work.derivative_compact_seconds);
@@ -143,7 +136,6 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
                 tiles.maximum_reduction_rows=std::max(tiles.maximum_reduction_rows,count+qr.r.rows());
 #endif
                 const Matrix design(out.free_design.middleRows(first,count));
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
                 if(compact_jacobian)
                 {
                     Matrix response(count,m+1); response.leftCols(m)=Matrix(out.raw.middleRows(first,count));
@@ -151,20 +143,17 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
                     qr.Append(design,response,out.reference_order);
                 }
                 else
-#endif
                     qr.Append(design,Matrix(out.raw.middleRows(first,count)),out.reference_order);
             }
         }
         const auto svd=EvaluateRank(qr.r,{{context ? context->rank.rows : n,2*m,m},p,absolute});
         if(!svd.valid) {out.reason="nonfinite-derivative"; return false;}
         if(svd.rank!=p) {out.reason="rank-deficient-free-design"; return false;}
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(compact_jacobian)
         {
             out.free_design_factor=qr.r;
             out.free_design_response=qr.target.col(m);
         }
-#endif
         out.coefficients=qr.r.triangularView<Eigen::Upper>().solve(qr.target.leftCols(m));
         const Matrix adjoint=qr.r.transpose().triangularView<Eigen::Lower>().solve(t);
         out.correction=qr.r.triangularView<Eigen::Upper>().solve(adjoint);
@@ -183,10 +172,14 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
 TiledDifferential PrepareDerivative(const Evaluation & e,double scale,const EvaluationContext * context,
     double absolute,Eigen::Index tile)
 {return PrepareDerivativeImpl(e,scale,context,absolute,tile,false);}
+TiledDifferential PrepareDerivativeCompact(const Evaluation & e,double scale,const EvaluationContext * context,
+    double absolute,Eigen::Index tile)
+{return PrepareDerivativeImpl(e,scale,context,absolute,tile,true);}
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 TiledDifferential PrepareDerivativeForTesting(const Evaluation & e,double scale,const EvaluationContext * context,
     double absolute,Eigen::Index tile,bool compact_jacobian)
-{return PrepareDerivativeImpl(e,scale,context,absolute,tile,compact_jacobian);}
+{return compact_jacobian ? PrepareDerivativeCompact(e,scale,context,absolute,tile) :
+    PrepareDerivative(e,scale,context,absolute,tile);}
 #endif
 void TiledDifferential::Rows(Eigen::Index first,Eigen::Index count,Matrix & projected,Matrix & jacobian) const
 {
@@ -208,11 +201,7 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
     if(compact && !widths) {out.reason="compact-jacobian-requires-widths"; return out;}
     if(tile<=0) throw std::invalid_argument("Invalid derivative tile size.");
     const auto n=d.raw.rows(),m=d.raw.cols();
-    TiledQR projected(m,
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        compact ? 1 :
-#endif
-        0,"derivative-projected-qr"),jacobian(m,1,"derivative-jacobian-qr");
+    TiledQR projected(m,compact ? 1 : 0,"derivative-projected-qr"),jacobian(m,1,"derivative-jacobian-qr");
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     auto & work=DerivativeWorkForTesting(); const auto projected_base=work.projected_qr;
     const auto jacobian_base=work.jacobian_qr,compact_base=work.compact_jacobian_qr;
@@ -234,38 +223,41 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
         d.Rows(first,count,p,j);
 #endif
         if(!p.allFinite() || !j.allFinite()) {out.reason="nonfinite-derivative"; return out;}
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(widths)
         {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
             AssessmentStageTimerForTesting projected_stage("derivative-projected-qr",count,m);
+#endif
             if(compact)
             {
                 Matrix response(count,1); response.col(0)=residual.segment(first,count)/d.scale;
                 projected.Append(p,response);
             }
             else projected.Append(p,Matrix(count,0));
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
             work.projected_qr=AccumulateTiledQr(projected_base,projected.telemetry);
+#endif
         }
         if(!compact)
         {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
             AssessmentStageTimerForTesting jacobian_stage("derivative-jacobian-qr",count,m);
-            jacobian.Append(j,Matrix(residual.segment(first,count)/d.scale)); work.jacobian_qr=AccumulateTiledQr(jacobian_base,jacobian.telemetry);
+#endif
+            jacobian.Append(j,Matrix(residual.segment(first,count)/d.scale));
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            work.jacobian_qr=AccumulateTiledQr(jacobian_base,jacobian.telemetry);
+#endif
         }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
         {
             AssessmentStageTimerForTesting norms_stage("derivative-norms",count,m);
+#endif
             for(Eigen::Index k=0;k<m;++k)
             {
                 if(widths) out.projected_norms(k)=std::hypot(out.projected_norms(k),p.col(k).norm());
                 out.jacobian_norms(k)=std::hypot(out.jacobian_norms(k),j.col(k).blueNorm());
             }
-        }
-#else
-        if(widths) projected.Append(p,Matrix(count,0));
-        jacobian.Append(j,Matrix(residual.segment(first,count)/d.scale));
-        for(Eigen::Index k=0;k<m;++k)
-        {
-            if(widths) out.projected_norms(k)=std::hypot(out.projected_norms(k),p.col(k).norm());
-            out.jacobian_norms(k)=std::hypot(out.jacobian_norms(k),j.col(k).blueNorm());
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
         }
 #endif
     }
@@ -274,7 +266,6 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
     work.jacobian_qr=AccumulateTiledQr(jacobian_base,jacobian.telemetry);
 #endif
     out.projected=std::move(projected.r);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(compact)
     {
         const auto design_columns=d.free_design_factor.rows();
@@ -286,15 +277,18 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
         Vector response(stack.rows()); response.head(projected.target.rows())=projected.target.col(0);
         response.tail(design_columns)=d.free_design_response;
         TiledQR compact_jacobian(m,1,"derivative-compact-jacobian-qr");
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
         {
             AssessmentStageTimerForTesting compact_stage("derivative-compact-jacobian-qr",stack.rows(),m);
             compact_jacobian.Append(stack,response);
         }
         work.compact_jacobian_qr=AccumulateTiledQr(compact_base,compact_jacobian.telemetry);
+#else
+        compact_jacobian.Append(stack,response);
+#endif
         out.jacobian=std::move(compact_jacobian.r); out.response=compact_jacobian.target.col(0);
     }
     else
-#endif
     {
         out.jacobian=std::move(jacobian.r); out.response=jacobian.target.col(0);
     }
@@ -303,9 +297,12 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
 }
 ReducedDifferential ReduceDerivative(const TiledDifferential & d,VectorRef residual,bool widths,Eigen::Index tile)
 {return ReduceDerivativeImpl(d,residual,widths,tile,false);}
+ReducedDifferential ReduceDerivativeCompact(const TiledDifferential & d,VectorRef residual,bool widths,Eigen::Index tile)
+{return ReduceDerivativeImpl(d,residual,widths,tile,true);}
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 ReducedDifferential ReduceDerivativeForTesting(const TiledDifferential & d,VectorRef residual,bool widths,
     JacobianReductionKindForTesting kind,Eigen::Index tile)
-{return ReduceDerivativeImpl(d,residual,widths,tile,kind==JacobianReductionKindForTesting::CompactStackQr);}
+{return kind==JacobianReductionKindForTesting::CompactStackQr ?
+    ReduceDerivativeCompact(d,residual,widths,tile) : ReduceDerivative(d,residual,widths,tile);}
 #endif
 }

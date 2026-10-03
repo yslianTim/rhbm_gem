@@ -516,7 +516,7 @@ TEST(JointComponentNumericsTest, CompactJacobianRankBoundariesRespectPolicyAndFa
             const bool expected_near=std::string(label)=="just-below" || std::string(label)=="boundary" ||
                 std::string(label)=="just-above";
             EXPECT_EQ(near_boundary,expected_near);
-            const bool compact_safe=n::CompactRankDecisionSafeForTesting(candidate);
+            const bool compact_safe=n::CompactRankDecisionSafe(candidate);
             EXPECT_EQ(compact_safe,!expected_near);
             if(boundary_ambiguous) EXPECT_FALSE(compact_safe);
             const auto & selected=(compact_safe && !boundary_ambiguous) ? candidate : reference;
