@@ -91,6 +91,27 @@ class JointBenchmarkContract(unittest.TestCase):
         self.assertFalse(result['qualified'])
         self.assertEqual(result['scientific_status'], 'failed')
 
+    def test_solve_normalization_keeps_derivative_reduction_micro_attribution(self):
+        micro = {'active_micro_stage': 'derivative-jacobian-qr',
+                 'rows_seconds': .1, 'projected_qr_seconds': .2,
+                 'jacobian_qr_seconds': .3, 'norms_seconds': .04}
+        result = benchmark.normalize_result('solve', {
+            'assessment_telemetry': {'derivative_reduction_micro_attribution': micro},
+        })
+        self.assertEqual(result['details']['derivative_reduction_micro_attribution'], micro)
+
+    def test_interrupted_assessment_keeps_active_derivative_micro_stage(self):
+        micro = {'active_micro_stage': 'derivative-jacobian-qr',
+                 'tiled_qr': {'jacobian': {'append_calls': 4}}}
+        raw = {'assessment_execution': 'running',
+               'active_assessment_stage': 'derivative-jacobian-qr',
+               'assessment_telemetry': {
+                   'active_assessment_stage': 'derivative-jacobian-qr',
+                   'derivative_reduction_micro_attribution': micro}}
+        details = benchmark.normalize_result('solve', raw)['details']
+        self.assertEqual(details['active_assessment_stage'], 'derivative-jacobian-qr')
+        self.assertEqual(details['derivative_reduction_micro_attribution'], micro)
+
     def test_search_scope_never_reports_endpoint_qualification(self):
         result = benchmark.normalize_result('search', {
             'measurement_scope': 'search-only', 'assessment_execution': 'not-run',
@@ -271,7 +292,8 @@ class JointBenchmarkContract(unittest.TestCase):
         details = benchmark.normalize_result('solve', raw)['details']
         self.assertEqual(set(details), {'search_completed', 'stop_reason', 'profile_evaluations',
                                         'accepted_updates', 'endpoint_valid', 'assessment_execution',
-                                        'assessment_telemetry', 'assessment_stage', 'last_assessment_stage',
+                                        'assessment_telemetry', 'derivative_reduction_micro_attribution',
+                                        'assessment_stage', 'last_assessment_stage',
                                         'active_assessment_stage', 'completed_assessment_stages',
                                         'completed_stage_seconds', 'stage_dimensions'})
 

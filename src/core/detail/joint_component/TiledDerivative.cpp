@@ -7,6 +7,19 @@
 namespace rhbm_gem::core::joint_component {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 DerivativeWork & DerivativeWorkForTesting() {static thread_local DerivativeWork work; return work;}
+namespace {
+TiledQrTelemetry AccumulateTiledQr(const TiledQrTelemetry & accumulated,const TiledQrTelemetry & current)
+{
+    auto result=accumulated;
+    if(!current.role.empty()) result.role=current.role;
+    result.append_calls+=current.append_calls; result.rows_processed+=current.rows_processed;
+    result.columns=current.columns; result.responses=current.responses;
+    result.maximum_assembled_rows=std::max(result.maximum_assembled_rows,current.maximum_assembled_rows);
+    result.maximum_dense_design_bytes=std::max(result.maximum_dense_design_bytes,current.maximum_dense_design_bytes);
+    result.maximum_dense_response_bytes=std::max(result.maximum_dense_response_bytes,current.maximum_dense_response_bytes);
+    result.qr_seconds+=current.qr_seconds; return result;
+}
+}
 #endif
 TiledDifferential PrepareDerivative(const Evaluation & e,double scale,const EvaluationContext * context,
     double absolute,Eigen::Index tile)
@@ -147,17 +160,47 @@ ReducedDifferential ReduceDerivative(const TiledDifferential & d,VectorRef resid
     ReducedDifferential out; out.reason=d.reason; if(!d.valid) return out;
     if(tile<=0) throw std::invalid_argument("Invalid derivative tile size.");
     const auto n=d.raw.rows(),m=d.raw.cols();
-    TiledQR projected(m,0),jacobian(m,1);
+    TiledQR projected(m,0,"derivative-projected-qr"),jacobian(m,1,"derivative-jacobian-qr");
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    auto & work=DerivativeWorkForTesting();
+    const auto projected_base=work.projected_qr,jacobian_base=work.jacobian_qr;
+#endif
     out.projected_norms=Vector::Zero(m); out.jacobian_norms=Vector::Zero(m);
     Matrix p,j;
     for(Eigen::Index first=0;first<n;first+=tile)
     {
-        const auto count=std::min(tile,n-first); d.Rows(first,count,p,j);
+        const auto count=std::min(tile,n-first);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        auto & work=DerivativeWorkForTesting(); work.maximum_generated_rows=std::max(work.maximum_generated_rows,count);
-        work.maximum_reduction_rows=std::max(work.maximum_reduction_rows,count+jacobian.r.rows());
+        ++work.tile_count;
+        {
+            AssessmentStageTimerForTesting rows_stage("derivative-rows",count,m);
+            d.Rows(first,count,p,j);
+            work.maximum_generated_rows=std::max(work.maximum_generated_rows,count);
+            work.maximum_reduction_rows=std::max(work.maximum_reduction_rows,count+jacobian.r.rows());
+        }
+#else
+        d.Rows(first,count,p,j);
 #endif
         if(!p.allFinite() || !j.allFinite()) {out.reason="nonfinite-derivative"; return out;}
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(widths)
+        {
+            AssessmentStageTimerForTesting projected_stage("derivative-projected-qr",count,m);
+            projected.Append(p,Matrix(count,0)); work.projected_qr=AccumulateTiledQr(projected_base,projected.telemetry);
+        }
+        {
+            AssessmentStageTimerForTesting jacobian_stage("derivative-jacobian-qr",count,m);
+            jacobian.Append(j,Matrix(residual.segment(first,count)/d.scale)); work.jacobian_qr=AccumulateTiledQr(jacobian_base,jacobian.telemetry);
+        }
+        {
+            AssessmentStageTimerForTesting norms_stage("derivative-norms",count,m);
+            for(Eigen::Index k=0;k<m;++k)
+            {
+                if(widths) out.projected_norms(k)=std::hypot(out.projected_norms(k),p.col(k).norm());
+                out.jacobian_norms(k)=std::hypot(out.jacobian_norms(k),j.col(k).blueNorm());
+            }
+        }
+#else
         if(widths) projected.Append(p,Matrix(count,0));
         jacobian.Append(j,Matrix(residual.segment(first,count)/d.scale));
         for(Eigen::Index k=0;k<m;++k)
@@ -165,7 +208,12 @@ ReducedDifferential ReduceDerivative(const TiledDifferential & d,VectorRef resid
             if(widths) out.projected_norms(k)=std::hypot(out.projected_norms(k),p.col(k).norm());
             out.jacobian_norms(k)=std::hypot(out.jacobian_norms(k),j.col(k).blueNorm());
         }
+#endif
     }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    work.projected_qr=AccumulateTiledQr(projected_base,projected.telemetry);
+    work.jacobian_qr=AccumulateTiledQr(jacobian_base,jacobian.telemetry);
+#endif
     out.projected=std::move(projected.r); out.jacobian=std::move(jacobian.r);
     out.response=jacobian.target.col(0); out.valid=true; return out;
 }

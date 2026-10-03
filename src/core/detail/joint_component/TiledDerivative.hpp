@@ -23,7 +23,12 @@ TiledDifferential PrepareDerivative(const Evaluation &,double,const EvaluationCo
     Eigen::Index=derivative_tile_rows);
 ReducedDifferential ReduceDerivative(const TiledDifferential &,VectorRef,bool=true,Eigen::Index=derivative_tile_rows);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-struct DerivativeWork {Eigen::Index maximum_generated_rows{},maximum_reduction_rows{};};
+struct DerivativeWork
+{
+    Eigen::Index maximum_generated_rows{},maximum_reduction_rows{};
+    std::size_t tile_count{};
+    TiledQrTelemetry projected_qr,jacobian_qr;
+};
 DerivativeWork & DerivativeWorkForTesting();
 #endif
 }

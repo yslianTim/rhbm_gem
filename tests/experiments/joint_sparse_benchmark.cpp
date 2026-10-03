@@ -335,6 +335,13 @@ j::object AssessmentWork()
     const auto & work=n::AssessmentWorkForTesting();
     return {{"assessments",work.assessments},{"reference_evaluations",work.reference_evaluations}};
 }
+j::object TiledQrTelemetry(const n::TiledQrTelemetry & work)
+{
+    return {{"role",work.role},{"append_calls",work.append_calls},{"rows_processed",work.rows_processed},
+        {"columns",work.columns},{"responses",work.responses},{"maximum_assembled_rows",work.maximum_assembled_rows},
+        {"maximum_dense_design_bytes",work.maximum_dense_design_bytes},
+        {"maximum_dense_response_bytes",work.maximum_dense_response_bytes},{"qr_seconds",work.qr_seconds}};
+}
 j::object AssessmentTelemetry()
 {
     const auto & work=n::AssessmentWorkForTesting(); j::array stages,completed; j::object seconds,dimensions;
@@ -351,11 +358,31 @@ j::object AssessmentTelemetry()
     const auto optional_stage=[](const std::string & name)->j::value {
         return name.empty() ? j::value(nullptr) : j::value(name);
     };
+    const auto stage_seconds=[&](const std::string & name) {
+        const auto found=std::find_if(work.stages.begin(),work.stages.end(),[&](const auto & stage){return stage.name==name;});
+        return found==work.stages.end() ? 0. : found->seconds;
+    };
+    const auto & derivative=n::DerivativeWorkForTesting();
+    const double rows_seconds=stage_seconds("derivative-rows");
+    const double projected_seconds=stage_seconds("derivative-projected-qr");
+    const double jacobian_seconds=stage_seconds("derivative-jacobian-qr");
+    const double norms_seconds=stage_seconds("derivative-norms");
+    j::object derivative_reduction{{"active_micro_stage",optional_stage(
+            work.active_stage=="derivative-rows" || work.active_stage=="derivative-projected-qr" ||
+            work.active_stage=="derivative-jacobian-qr" || work.active_stage=="derivative-norms" ? work.active_stage : std::string{})},
+        {"reduction_inclusive_seconds",stage_seconds("derivative-reduction")},
+        {"rows_seconds",rows_seconds},{"projected_qr_seconds",projected_seconds},
+        {"jacobian_qr_seconds",jacobian_seconds},{"norms_seconds",norms_seconds},
+        {"exclusive_substage_seconds",rows_seconds+projected_seconds+jacobian_seconds+norms_seconds},
+        {"tile_count",derivative.tile_count},{"tiled_qr",j::object{
+            {"projected",TiledQrTelemetry(derivative.projected_qr)},
+            {"jacobian",TiledQrTelemetry(derivative.jacobian_qr)}}}};
     return {{"assessments",work.assessments},{"reference_evaluations",work.reference_evaluations},
         {"last_assessment_stage",optional_stage(work.last_stage)},
         {"active_assessment_stage",optional_stage(work.active_stage)},
         {"completed_assessment_stages",completed},{"completed_stage_seconds",seconds},
-        {"stage_dimensions",dimensions},{"stages",stages}};
+        {"stage_dimensions",dimensions},{"stages",stages},
+        {"derivative_reduction_micro_attribution",derivative_reduction}};
 }
 struct AssessmentSnapshotContext {const char * output{}; j::object * report{};};
 void AssessmentSnapshot(const n::AssessmentWork &,void * raw_context)
@@ -410,6 +437,7 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
     resource={}; resource.enabled=resources_enabled;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     n::AssessmentWorkForTesting()={};
+    n::DerivativeWorkForTesting()={};
 #endif
     n::SparseWorkForTesting()={}; n::SearchWorkForTesting()={}; n::OperatorWorkForTesting()={};
     Snapshot(output,report);

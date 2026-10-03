@@ -10,6 +10,7 @@
 #include "core/command/detail/MapSimulation.hpp"
 #include "support/JointTestNumerics.hpp"
 #include "support/JointRuntimeJson.hpp"
+#include "core/detail/joint_component/TiledDerivative.hpp"
 #include <cmath>
 #include "data/io/detail/JointResultJson.hpp"
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
@@ -31,6 +32,14 @@ core::JointProblemInput Snapshot()
 }
 void CountAssessmentStageSnapshot(const n::AssessmentWork &,void * context)
 {++*static_cast<int *>(context);}
+struct AssessmentMicroStageCapture {int snapshots{},calls{},completed_calls{};std::string active,last;};
+void CaptureAssessmentMicroStage(const n::AssessmentWork & work,void * context)
+{
+    auto & capture=*static_cast<AssessmentMicroStageCapture *>(context); ++capture.snapshots;
+    capture.active=work.active_stage; capture.last=work.last_stage;
+    const auto found=std::find_if(work.stages.begin(),work.stages.end(),[&](const auto & stage){return stage.name==work.last_stage;});
+    if(found!=work.stages.end()) {capture.calls=found->calls; capture.completed_calls=found->completed_calls;}
+}
 }
 TEST(JointComponentRuntimeTest, ImmutableSnapshotAndPartialFailure)
 {
@@ -212,6 +221,7 @@ TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTi
     const auto context=n::ChildContext(data.context,view,true);
     const auto search=n::SearchProfile(view.domain,y,n::Vector::Constant(1,.55),context);
     n::AssessmentWorkForTesting()={};
+    n::DerivativeWorkForTesting()={};
     n::SetAssessmentStageObserverForTesting(nullptr,nullptr);
     n::AssessComponentSearch(view.domain,y,context,search);
     EXPECT_EQ(n::AssessmentWorkForTesting().assessments,1);
@@ -223,7 +233,8 @@ TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTi
     };
     for(const auto * name:{"total-assessment","endpoint-primary-evaluation","reference-evaluation",
             "design-spectrum","derivative-preparation","derivative-reduction","projected-width-spectrum",
-            "normalized-width-spectrum","correction-jacobian-spectrum"})
+            "normalized-width-spectrum","correction-jacobian-spectrum","derivative-rows",
+            "derivative-projected-qr","derivative-jacobian-qr","derivative-norms"})
     {
         const auto & measurement=stage(name);
         EXPECT_GE(measurement.seconds,0);
@@ -233,6 +244,42 @@ TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTi
         EXPECT_GT(measurement.columns,0);
     }
     EXPECT_EQ(stage("total-assessment").calls,1);
+    const auto & derivative=n::DerivativeWorkForTesting();
+    EXPECT_EQ(derivative.tile_count,1);
+    EXPECT_EQ(derivative.projected_qr.role,"derivative-projected-qr");
+    EXPECT_EQ(derivative.jacobian_qr.role,"derivative-jacobian-qr");
+    EXPECT_EQ(derivative.projected_qr.append_calls,derivative.tile_count);
+    EXPECT_EQ(derivative.jacobian_qr.append_calls,derivative.tile_count);
+    EXPECT_EQ(derivative.projected_qr.rows_processed,static_cast<std::size_t>(view.domain.rows));
+    EXPECT_EQ(derivative.jacobian_qr.rows_processed,static_cast<std::size_t>(view.domain.rows));
+    EXPECT_EQ(derivative.projected_qr.columns,1); EXPECT_EQ(derivative.projected_qr.responses,0);
+    EXPECT_EQ(derivative.jacobian_qr.columns,1); EXPECT_EQ(derivative.jacobian_qr.responses,1);
+    EXPECT_GT(derivative.projected_qr.maximum_assembled_rows,0);
+    EXPECT_GT(derivative.projected_qr.maximum_dense_design_bytes,0);
+    EXPECT_EQ(derivative.projected_qr.maximum_dense_response_bytes,0);
+    EXPECT_GT(derivative.jacobian_qr.maximum_dense_response_bytes,0);
+    EXPECT_GE(derivative.projected_qr.qr_seconds,0);
+    EXPECT_GE(derivative.jacobian_qr.qr_seconds,0);
+    EXPECT_EQ(stage("derivative-rows").calls,derivative.tile_count);
+    EXPECT_EQ(stage("derivative-projected-qr").calls,derivative.projected_qr.append_calls);
+    EXPECT_EQ(stage("derivative-jacobian-qr").calls,derivative.jacobian_qr.append_calls);
+    EXPECT_EQ(stage("derivative-norms").calls,derivative.tile_count);
+}
+
+TEST(JointComponentRuntimeTest, AssessmentMicroStageCheckpointKeepsInterruptedStage)
+{
+    n::AssessmentWorkForTesting()={}; AssessmentMicroStageCapture capture;
+    n::SetAssessmentStageObserverForTesting(CaptureAssessmentMicroStage,&capture);
+    n::BeginAssessmentStageForTesting("derivative-jacobian-qr",8192,512);
+    EXPECT_EQ(capture.active,"derivative-jacobian-qr");
+    EXPECT_EQ(capture.last,"derivative-jacobian-qr");
+    EXPECT_EQ(capture.calls,1); EXPECT_EQ(capture.completed_calls,0);
+    EXPECT_EQ(n::AssessmentWorkForTesting().active_stage,"derivative-jacobian-qr");
+    n::FinishAssessmentStageForTesting("derivative-jacobian-qr",0.,false);
+    n::SetAssessmentStageObserverForTesting(nullptr,nullptr);
+    EXPECT_EQ(capture.snapshots,2);
+    EXPECT_EQ(capture.completed_calls,0);
+    n::AssessmentWorkForTesting()={};
 }
 
 TEST(JointComponentRuntimeTest, AssessmentSnapshotHookDoesNotChangeAssessmentResults)

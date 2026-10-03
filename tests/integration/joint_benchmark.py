@@ -311,6 +311,8 @@ def normalize_result(profile, raw):
             'accepted_updates': search.get('accepted_updates'), 'endpoint_valid': primary.get('valid'),
             'assessment_execution': raw.get('assessment_execution'),
             'assessment_telemetry': raw.get('assessment_telemetry'),
+            'derivative_reduction_micro_attribution': (raw.get('assessment_telemetry') or {}).get(
+                'derivative_reduction_micro_attribution'),
             'assessment_stage': raw.get('assessment_stage'),
             'last_assessment_stage': raw.get('last_assessment_stage'),
             'active_assessment_stage': raw.get('active_assessment_stage'),
