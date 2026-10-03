@@ -1,6 +1,7 @@
 #include "CompactSvd.hpp"
 #include "SparseFactor.hpp"
 #include <algorithm>
+#include <cmath>
 
 namespace rhbm_gem::core::joint_component {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -97,5 +98,16 @@ CompactSvdResult EvaluateRank(const Matrix & compact,const RankRequest & request
         out.rank=(out.singular_values.array()>out.threshold).count();
     return out;
 }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+bool CompactRankDecisionSafeForTesting(const CompactSvdResult & result)
+{
+    if(!result.valid || result.singular_values.size()==0 || !std::isfinite(result.threshold)) return false;
+    const double lower=std::nextafter(result.threshold,0.);
+    const double upper=std::nextafter(result.threshold,std::numeric_limits<double>::infinity());
+    for(Eigen::Index k=0;k<result.singular_values.size();++k)
+        if(result.singular_values(k)>=lower && result.singular_values(k)<=upper) return false;
+    return true;
+}
+#endif
 
 }

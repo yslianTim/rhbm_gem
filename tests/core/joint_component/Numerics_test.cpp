@@ -6,8 +6,10 @@
 #include "support/JointOperatorWorkload.hpp"
 #include "support/JointTestNumerics.hpp"
 #include <unsupported/Eigen/NonLinearOptimization>
+#include <array>
 #include <cmath>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 
 namespace {
@@ -444,6 +446,85 @@ TEST(JointComponentNumericsTest, CompactJacobianDiagnosticsCoverCancellationAndA
     record("active_face_max_scaled_Ztr_stationarity",active_faces.maximum.ztr_scaled);
     RecordProperty("active_face_candidate_rank_parity",active_faces.rank_parity ? "true" : "false");
     RecordProperty("active_and_interior_faces_seen",saw_active && saw_interior ? "true" : "false");
+}
+
+TEST(JointComponentNumericsTest, CompactJacobianRankBoundariesRespectPolicyAndFallBackWithinOneUlp)
+{
+    const n::RankPolicy policy{32,2,1};
+    const double relative=policy.Relative(2);
+    const std::array<n::RankBoundary,2> boundaries{n::RankBoundary::SvdNative,n::RankBoundary::StrictGreater};
+    const std::array<double,3> scales{.125,1.,8.};
+    for(const auto boundary:boundaries) for(const double scale:scales) for(const bool permute_rows:{false,true})
+    {
+        const double maximum=2.*scale,cutoff=relative*maximum;
+        const std::array<std::pair<const char *,double>,5> grid{{
+            {"clearly-below",.5*cutoff},
+            {"just-below",std::nextafter(cutoff,0.)},
+            {"boundary",cutoff},
+            {"just-above",std::nextafter(cutoff,std::numeric_limits<double>::infinity())},
+            {"clearly-above",2.*cutoff}}};
+        for(const auto [label,minimum]:grid)
+        {
+            SCOPED_TRACE(std::string(label)+" scale="+std::to_string(scale)+
+                " boundary="+std::to_string(static_cast<int>(boundary))+" permuted="+std::to_string(permute_rows));
+            Matrix current=Matrix::Zero(2,2); current(0,0)=maximum; current(1,1)=minimum;
+            Vector response(2); response<<.25*scale,-.125*scale;
+            if(permute_rows) {current.row(0).swap(current.row(1)); std::swap(response(0),response(1));}
+            Matrix compact=Matrix::Zero(4,2); compact.bottomRows(2)=current;
+            Vector compact_response=Vector::Zero(4); compact_response.tail(2)=response;
+            if(permute_rows)
+            {
+                Matrix reordered(4,2); Vector reordered_response(4);
+                const std::array<Eigen::Index,4> order{3,0,2,1};
+                for(Eigen::Index row=0;row<4;++row)
+                {reordered.row(row)=compact.row(order[static_cast<std::size_t>(row)]); reordered_response(row)=compact_response(order[static_cast<std::size_t>(row)]);}
+                compact=std::move(reordered); compact_response=std::move(reordered_response);
+            }
+            const n::RankRequest request{policy,2,-1.,boundary};
+            const auto reference=n::EvaluateRank(current,request,&response,n::CompactSvdVectors::Right);
+            const auto candidate=n::EvaluateRank(compact,request,&compact_response,n::CompactSvdVectors::Right);
+            ASSERT_TRUE(reference.valid); ASSERT_TRUE(candidate.valid);
+            ASSERT_EQ(reference.singular_values.size(),2); ASSERT_EQ(candidate.singular_values.size(),2);
+            const std::string point=label;
+            if(point=="clearly-below") EXPECT_EQ(reference.rank,1);
+            if(point=="clearly-above") EXPECT_EQ(reference.rank,2);
+            if(boundary==n::RankBoundary::StrictGreater)
+                EXPECT_EQ(reference.rank,(reference.singular_values.array()>reference.threshold).count());
+            else
+            {
+                Eigen::JacobiSVD<Matrix> native(current,Eigen::ComputeFullU|Eigen::ComputeFullV);
+                native.setThreshold(relative); EXPECT_EQ(reference.rank,native.rank());
+            }
+            EXPECT_DOUBLE_EQ(reference.threshold,relative*maximum);
+            EXPECT_DOUBLE_EQ(candidate.threshold,reference.threshold);
+            EXPECT_LE((reference.singular_values-candidate.singular_values).norm()/maximum,1e-14);
+            const bool boundary_ambiguous=reference.rank!=candidate.rank;
+            if(!boundary_ambiguous)
+            {
+                const std::string reference_reason=reference.rank==2 ? "rank-verified-full" : "rank-deficient";
+                const std::string candidate_reason=candidate.rank==2 ? "rank-verified-full" : "rank-deficient";
+                EXPECT_EQ(reference_reason,candidate_reason);
+            }
+            const Matrix reference_projector=reference.right_vectors.col(1)*reference.right_vectors.col(1).transpose();
+            const Matrix candidate_projector=candidate.right_vectors.col(1)*candidate.right_vectors.col(1).transpose();
+            EXPECT_LE((reference_projector-candidate_projector).norm(),1e-12);
+            EXPECT_LE((reference.solution-candidate.solution).norm(),1e-12*(1.+reference.solution.norm()));
+
+            const double below=std::nextafter(reference.threshold,0.);
+            const double above=std::nextafter(reference.threshold,std::numeric_limits<double>::infinity());
+            const bool near_boundary=minimum>=below && minimum<=above;
+            const bool expected_near=std::string(label)=="just-below" || std::string(label)=="boundary" ||
+                std::string(label)=="just-above";
+            EXPECT_EQ(near_boundary,expected_near);
+            const bool compact_safe=n::CompactRankDecisionSafeForTesting(candidate);
+            EXPECT_EQ(compact_safe,!expected_near);
+            if(boundary_ambiguous) EXPECT_FALSE(compact_safe);
+            const auto & selected=(compact_safe && !boundary_ambiguous) ? candidate : reference;
+            EXPECT_EQ(selected.rank,reference.rank);
+            EXPECT_DOUBLE_EQ(selected.threshold,reference.threshold);
+            EXPECT_EQ(!near_boundary,std::string(label)=="clearly-below" || std::string(label)=="clearly-above");
+        }
+    }
 }
 
 
