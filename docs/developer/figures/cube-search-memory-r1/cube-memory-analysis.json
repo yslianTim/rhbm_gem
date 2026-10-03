@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "tool": "cube_search_memory_analysis",
+  "scope": "SPQR OperatorPcg search-only; RSS from process-tree watchdog; factor storage is a separate exported-storage proxy",
+  "ordering_parity": [
+    {
+      "case": "cube-512",
+      "ordering": "BEST",
+      "stop_reason_equal": true,
+      "accepted_updates_equal": true,
+      "profile_evaluations_equal": true,
+      "rank_status_equal": true,
+      "rank_certificate_equal": true,
+      "pcg_iterations_per_solve_equal": true,
+      "objective_absolute_difference": 1.2924697071141057e-26,
+      "gradient_inf_absolute_difference": 3.1034644824988975e-19,
+      "pcg_relative_residual_absolute_difference": 2.4192358545320448e-17,
+      "returned_state_relative_l2_difference": 1.1695831813516653e-16
+    },
+    {
+      "case": "cube-512",
+      "ordering": "DEFAULT",
+      "stop_reason_equal": true,
+      "accepted_updates_equal": true,
+      "profile_evaluations_equal": true,
+      "rank_status_equal": true,
+      "rank_certificate_equal": true,
+      "pcg_iterations_per_solve_equal": true,
+      "objective_absolute_difference": 0.0,
+      "gradient_inf_absolute_difference": 0.0,
+      "pcg_relative_residual_absolute_difference": 0.0,
+      "returned_state_relative_l2_difference": 0.0
+    },
+    {
+      "case": "cube-512",
+      "ordering": "METIS",
+      "stop_reason_equal": true,
+      "accepted_updates_equal": true,
+      "profile_evaluations_equal": true,
+      "rank_status_equal": true,
+      "rank_certificate_equal": true,
+      "pcg_iterations_per_solve_equal": true,
+      "objective_absolute_difference": 8.91804097908733e-25,
+      "gradient_inf_absolute_difference": 1.932968572870106e-20,
+      "pcg_relative_residual_absolute_difference": 1.0483900443103853e-16,
+      "returned_state_relative_l2_difference": 1.2199106299096981e-16
+    },
+    {
+      "case": "cube-1024",
+      "ordering": "BEST",
+      "stop_reason_equal": true,
+      "accepted_updates_equal": true,
+      "profile_evaluations_equal": true,
+      "rank_status_equal": true,
+      "rank_certificate_equal": true,
+      "pcg_iterations_per_solve_equal": true,
+      "objective_absolute_difference": 1.3958672836832342e-24,
+      "gradient_inf_absolute_difference": 1.6256688183987317e-19,
+      "pcg_relative_residual_absolute_difference": 5.533398433056803e-17,
+      "returned_state_relative_l2_difference": 1.191862938878189e-16
+    },
+    {
+      "case": "cube-1024",
+      "ordering": "DEFAULT",
+      "stop_reason_equal": true,
+      "accepted_updates_equal": true,
+      "profile_evaluations_equal": true,
+      "rank_status_equal": true,
+      "rank_certificate_equal": true,
+      "pcg_iterations_per_solve_equal": true,
+      "objective_absolute_difference": 0.0,
+      "gradient_inf_absolute_difference": 0.0,
+      "pcg_relative_residual_absolute_difference": 0.0,
+      "returned_state_relative_l2_difference": 0.0
+    },
+    {
+      "case": "cube-1024",
+      "ordering": "METIS",
+      "stop_reason_equal": true,
+      "accepted_updates_equal": true,
+      "profile_evaluations_equal": true,
+      "rank_status_equal": true,
+      "rank_certificate_equal": true,
+      "pcg_iterations_per_solve_equal": true,
+      "objective_absolute_difference": 6.85008944770476e-25,
+      "gradient_inf_absolute_difference": 3.816108681238641e-19,
+      "pcg_relative_residual_absolute_difference": 4.181991930229944e-17,
+      "returned_state_relative_l2_difference": 1.1865961745382248e-16
+    }
+  ],
+  "spqr_ordering_material_effect": {
+    "cube_1024_colamd_peak_rss_bytes": 4144726016,
+    "cube_1024_default_peak_rss_bytes": 4138352640,
+    "cube_1024_best_peak_rss_bytes": 3626352640,
+    "cube_1024_metis_peak_rss_bytes": 3439509504,
+    "colamd_fixed_factor_nonzeros": 481584,
+    "best_fixed_factor_nonzeros": 255930,
+    "metis_fixed_factor_nonzeros": 257141,
+    "colamd_factor_exported_storage_bytes": 1472353992,
+    "best_factor_exported_storage_bytes": 744311192,
+    "metis_factor_exported_storage_bytes": 750435560,
+    "conclusion": "BEST and METIS materially reduce factor fill/storage and process peak RSS; DEFAULT matches COLAMD on these cube cases."
+  },
+  "rss_limit_events": {
+    "cube_2048_colamd_diagonal": {
+      "active_stage": "spqr-fixed-factor",
+      "last_completed_stage": "profile-evaluation",
+      "peak_rss_bytes": 4315447296,
+      "input_rows": 715825,
+      "input_columns": 4096,
+      "input_nonzeros": 2109440
+    },
+    "cube_2048_colamd_schwarz": {
+      "active_stage": "spqr-fixed-factor",
+      "last_completed_stage": "schwarz-partition",
+      "peak_rss_bytes": 4324687872,
+      "input_rows": 715825,
+      "input_columns": 4096,
+      "input_nonzeros": 2109440
+    },
+    "cube_2048_best_diagonal": {
+      "active_stage": null,
+      "last_completed_stage": "search",
+      "peak_rss_bytes": 6089932800,
+      "completed_stages": [
+        "profile-basis-build",
+        "linear-factor-preparation",
+        "spqr-symbolic",
+        "linear-symbolic",
+        "spqr-numeric",
+        "linear-numeric",
+        "linear-solve",
+        "profile-evaluation",
+        "spqr-fixed-factor",
+        "fixed-operator-factor",
+        "rank-certificate",
+        "operator-prepare",
+        "width-metric",
+        "pcg",
+        "trial-evaluation",
+        "search"
+      ],
+      "completed_fixed_factor_nonzeros": 733540,
+      "completed_factor_storage_bytes": 2061439800
+    },
+    "cube_2048_best_schwarz": {
+      "active_stage": "spqr-fixed-factor",
+      "last_completed_stage": "schwarz-partition",
+      "peak_rss_bytes": 4803592192,
+      "last_completed_stage_before_factor": "schwarz-partition"
+    },
+    "cube_2048_metis_diagonal": {
+      "active_stage": "spqr-fixed-factor",
+      "last_completed_stage": "profile-evaluation",
+      "peak_rss_bytes": 4788535296
+    },
+    "cube_2048_default_diagonal": {
+      "active_stage": "spqr-fixed-factor",
+      "last_completed_stage": "profile-evaluation",
+      "peak_rss_bytes": 4301996032
+    },
+    "diagonal_vs_schwarz": "COLAMD diagonal and Schwarz both exceeded 4 GiB while active in spqr-fixed-factor. Schwarz partition completed but local build and PCG did not begin. This identifies the common blocker as fixed-factor fill; it is not a Schwarz-local-build or PCG-iteration failure. BEST Schwarz and METIS diagonal also stopped at spqr-fixed-factor. BEST diagonal under 4 GiB advanced through PCG/trial evaluation, then exceeded the envelope during a later rank-certificate."
+  },
+  "cube_2048": {
+    "formal_4_gib_success": false,
+    "formal_multi_block_point_valid": false,
+    "decision": "resource-limited before fourth multi-block point",
+    "diagnostic_only_best_diagonal": {
+      "artifact": "individual-results/cube-2048-diagonal-best-6g-diagnostic.json",
+      "diagnostic_resource_override": true,
+      "rss_limit_bytes": 6442450944,
+      "completed": true,
+      "search_seconds": 395.7242,
+      "peak_rss_bytes": 6089932800,
+      "accepted_updates": 4,
+      "profile_evaluations": 5,
+      "stop_reason": "operator-gradient-stop",
+      "excluded_from_formal_gate": true
+    }
+  },
+  "formal_multi_block_gate": {
+    "status": "insufficient-evidence",
+    "valid_existing_multi_block_sizes": [
+      256,
+      512,
+      1024
+    ],
+    "new_2048_schwarz_point": "none",
+    "recalculation": "not run because cube-2048 did not complete within 4 GiB; no gate input point was added",
+    "valid_point_count": 3,
+    "point_sizes": [
+      256,
+      512,
+      1024
+    ],
+    "block_counts": [
+      2,
+      4,
+      9
+    ],
+    "iterations_per_solve": [
+      6,
+      6,
+      7
+    ],
+    "iteration_loglog_slope": 0.11119621066822394,
+    "endpoint_iteration_growth_ratio": 1.1666666666666667,
+    "source_analysis_artifact": "../joint-search-scaling-r1/search-scaling-analysis.json",
+    "decision": "insufficient-evidence; the fourth multi-block point was resource-limited before completion."
+  },
+  "production_ordering": {
+    "changed": false,
+    "reason": "benchmark-only parity and material factor savings are established, but no ordering completed cube-2048 within the production 4 GiB envelope; production ordering is left unchanged."
+  }
+}

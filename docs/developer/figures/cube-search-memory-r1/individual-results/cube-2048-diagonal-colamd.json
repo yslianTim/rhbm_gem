@@ -1,0 +1,297 @@
+{
+  "schema_version": 1,
+  "profile": "search",
+  "measurement_scope": "search-only",
+  "case": "cube-2048",
+  "metadata": {
+    "backend": "SPQR",
+    "build_type": "",
+    "compiler": "AppleClang 21.0.0.21000334",
+    "commit": "c851b4da6b50ffdd10b37025f0de6ea3cf0717de",
+    "profile": "search",
+    "case": "cube-2048",
+    "source_sha256": "9ac9d9e2e042cde8a309ef33799057eea267afa2d1c5e25d3d659b37d6dea208",
+    "benchmark_sha256": "ce95ec184e7fe6e48d73b88b549be2d2cc5be997de122d99eb2c83cb362270e7",
+    "solver_policy": {
+      "search_method": "OperatorPcg",
+      "sparse_backend": "SPQR",
+      "operator_rank_active": true,
+      "operator_rank_mode": "auto",
+      "resolved_rank_backend": "SpqrBounds",
+      "operator_rank_budget_seconds": 120,
+      "operator_rank_budget_entries": 100000000,
+      "operator_rank_budget_workspace_bytes": 268435456,
+      "preconditioner": "diagonal",
+      "spqr_ordering": "COLAMD",
+      "schwarz_core_atoms": 128,
+      "schwarz_overlap_hops": 1,
+      "schwarz_max_block_atoms": 512,
+      "schwarz_storage_bytes": 536870912,
+      "schwarz_scratch_bytes": 268435456
+    },
+    "driver_sha256": "b4c58cc9155ac3a09406677b5a7701a4b3bd7c2a3ab37dffbcf72259794abb1d",
+    "input_sha256": "ec7223ff21192d168022b1a503f22c5761fb9a1f4f07d9de3088a106a50e48a3"
+  },
+  "execution": {
+    "status": "rss_limit",
+    "returncode": null,
+    "completed_repetitions": 0,
+    "failed_repetitions": 1,
+    "runs": [
+      {
+        "kind": "measurement",
+        "index": 1,
+        "status": "rss_limit",
+        "reason": "rss-limit",
+        "elapsed_seconds": 24.00655504106544,
+        "process_wall_seconds": 24.00655504106544,
+        "peak_rss_bytes": 4315447296,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": 2048,
+          "voxels": 715825,
+          "components": null,
+          "free_columns": null,
+          "design_nonzeros": null,
+          "parameters": 6144
+        },
+        "numerics": {
+          "rank": null,
+          "objective": null,
+          "gradient_norm": null,
+          "runtime_convergence": null,
+          "active_atoms": null
+        },
+        "result": {
+          "qualified": null,
+          "scientific_status": "search-only",
+          "details": {
+            "measurement_scope": "search-only",
+            "scope_description": null,
+            "assessment_execution": null,
+            "assessment_work": null,
+            "search_completed": null,
+            "stop_reason": null,
+            "profile_evaluations": null,
+            "accepted_updates": null,
+            "accepted_objective": null,
+            "accepted_gradient_inf_norm": null,
+            "returned_search_state": null,
+            "search_seconds": null,
+            "free_columns": null,
+            "design_nonzeros": null,
+            "search_work": null,
+            "failure_stage": "search",
+            "active_search_stage": "spqr-fixed-factor",
+            "last_completed_search_stage": "profile-evaluation",
+            "completed_search_stages": [
+              "profile-basis-build",
+              "linear-factor-preparation",
+              "spqr-symbolic",
+              "linear-symbolic",
+              "spqr-numeric",
+              "linear-numeric",
+              "linear-solve",
+              "profile-evaluation"
+            ],
+            "stage_seconds": {
+              "search": 0.0,
+              "profile-evaluation": 10.465529667,
+              "profile-basis-build": 1.094260083,
+              "linear-solve": 9.368754708,
+              "linear-factor-preparation": 0.047535,
+              "linear-symbolic": 0.142552,
+              "spqr-symbolic": 0.141443666,
+              "linear-numeric": 7.676011833,
+              "spqr-numeric": 7.674637666,
+              "operator-prepare": 0.0,
+              "fixed-operator-factor": 0.0,
+              "spqr-fixed-factor": 0.0
+            },
+            "stage_calls": {
+              "search": 1,
+              "profile-evaluation": 1,
+              "profile-basis-build": 1,
+              "linear-solve": 1,
+              "linear-factor-preparation": 1,
+              "linear-symbolic": 1,
+              "spqr-symbolic": 1,
+              "linear-numeric": 1,
+              "spqr-numeric": 1,
+              "operator-prepare": 1,
+              "fixed-operator-factor": 1,
+              "spqr-fixed-factor": 1
+            },
+            "stage_completed_calls": {
+              "search": 0,
+              "profile-evaluation": 1,
+              "profile-basis-build": 1,
+              "linear-solve": 1,
+              "linear-factor-preparation": 1,
+              "linear-symbolic": 1,
+              "spqr-symbolic": 1,
+              "linear-numeric": 1,
+              "spqr-numeric": 1,
+              "operator-prepare": 0,
+              "fixed-operator-factor": 0,
+              "spqr-fixed-factor": 0
+            },
+            "stage_dimensions": {
+              "search": {
+                "rows": 715825,
+                "columns": 2048
+              },
+              "profile-evaluation": {
+                "rows": 715825,
+                "columns": 2048
+              },
+              "profile-basis-build": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "linear-solve": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "linear-factor-preparation": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "linear-symbolic": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "spqr-symbolic": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "linear-numeric": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "spqr-numeric": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "operator-prepare": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "fixed-operator-factor": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "spqr-fixed-factor": {
+                "rows": 715825,
+                "columns": 4096
+              }
+            },
+            "stage_nnz": {
+              "search": 0,
+              "profile-evaluation": 0,
+              "profile-basis-build": 2109440,
+              "linear-solve": 2109440,
+              "linear-factor-preparation": 2109440,
+              "linear-symbolic": 2109440,
+              "spqr-symbolic": 2109440,
+              "linear-numeric": 2109440,
+              "spqr-numeric": 2109440,
+              "operator-prepare": 2109440,
+              "fixed-operator-factor": 2109440,
+              "spqr-fixed-factor": 2109440
+            },
+            "spqr_factorization": {
+              "ordering": "COLAMD",
+              "symbolic": {
+                "calls": 1,
+                "seconds": 0.142182,
+                "matrix_rows": 715825,
+                "matrix_columns": 4096,
+                "matrix_nonzeros": 2109440
+              },
+              "numeric": {
+                "calls": 1,
+                "seconds": 7.675631625,
+                "matrix_rows": 715825,
+                "matrix_columns": 4096,
+                "matrix_nonzeros": 2109440,
+                "reported_factor_nonzeros": 1710576
+              },
+              "fixed_factor": {
+                "calls": 1,
+                "seconds": 0.0,
+                "matrix_rows": 715825,
+                "matrix_columns": 4096,
+                "matrix_nonzeros": 2109440,
+                "reported_factor_nonzeros": 0,
+                "factor_exported_storage_bytes": 0
+              }
+            }
+          }
+        },
+        "driver_stage": "search",
+        "measurement_scope": "search-only",
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "rss_limit",
+            "exit_code": -15,
+            "wall_seconds": 24.00655504106544,
+            "sampled_tree_peak_rss_bytes": 4315447296,
+            "os_process_peak_rss_bytes": null,
+            "samples": 220,
+            "maximum_sampling_gap_seconds": 0.15484062512405217
+          }
+        ]
+      }
+    ]
+  },
+  "problem": {
+    "atoms": null,
+    "voxels": null,
+    "components": null,
+    "free_columns": null,
+    "design_nonzeros": null,
+    "parameters": null
+  },
+  "numerics": {
+    "rank": null,
+    "objective": null,
+    "gradient_norm": null,
+    "runtime_convergence": null,
+    "active_atoms": null
+  },
+  "resources": {
+    "elapsed_seconds": null,
+    "peak_rss_bytes": 4315447296,
+    "completed_measurement_peak_rss_bytes": null,
+    "count": 1,
+    "failed_count": 1,
+    "samples": [
+      null
+    ]
+  },
+  "result": {
+    "qualified": null,
+    "scientific_status": "search-only",
+    "details": {
+      "measurement_scope": null,
+      "scope_description": null,
+      "assessment_execution": null,
+      "assessment_work": null,
+      "search_completed": null,
+      "stop_reason": null,
+      "profile_evaluations": null,
+      "accepted_updates": null,
+      "accepted_objective": null,
+      "accepted_gradient_inf_norm": null,
+      "returned_search_state": null,
+      "search_seconds": null,
+      "free_columns": null,
+      "design_nonzeros": null,
+      "search_work": null
+    }
+  }
+}
