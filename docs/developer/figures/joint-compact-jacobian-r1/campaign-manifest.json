@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "campaign": "joint-compact-jacobian-r1",
+  "source_commit_before_prototype_expansion": "1ee52cbd3ed5139d53ce1c3a7bacf4408911a8c4",
+  "source_file": "tests/core/joint_component/Numerics_test.cpp",
+  "source_file_sha256": "52b6b1a39d4e8a671584309cbedf936182294006f2b1b31cf6cf4d8446f1283c",
+  "build_command": "cmake --build build/joint-spqr --target rhbm_tests -j4",
+  "test_commands": [
+    "build/joint-spqr/bin/RHBM-GEM-TEST --gtest_filter='JointComponentNumericsTest.CompactJacobianGramIdentityDiagnosticsAcrossLattices' --gtest_output=xml:/private/tmp/joint-compact-jacobian-prototype-r1.xml",
+    "build/joint-spqr/bin/RHBM-GEM-TEST --gtest_filter='JointComponentNumericsTest.CompactJacobianDiagnosticsCoverCancellationAndActiveFaces' --gtest_output=xml:/private/tmp/joint-compact-jacobian-fixtures-r1.xml"
+  ],
+  "resource_envelope": {
+    "process_watchdog": "none; local diagnostic test binary",
+    "build_jobs_max": 4,
+    "eigen_thread_override": "none"
+  },
+  "production_effect": "none; candidate is constructed inside tests only; LegacyCompact/default and assessment source path unchanged"
+}

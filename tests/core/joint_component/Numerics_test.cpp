@@ -380,8 +380,7 @@ TEST(JointComponentNumericsTest, CompactJacobianGramIdentityDiagnosticsAcrossLat
         const Vector eta=Vector::Constant(atoms,std::log(.55));
         const auto e=n::EvaluateProfile(data.domain,data.y,eta,false,&data.context);
         ASSERT_TRUE(e.valid)<<topology<<"-"<<atoms<<": "<<e.reason;
-        const bool candidate=atoms<=32;
-        CheckCompactJacobianIdentity(e,data.context,topology+"-"+std::to_string(atoms),true,candidate,candidate,summary);
+        CheckCompactJacobianIdentity(e,data.context,topology+"-"+std::to_string(atoms),true,true,true,summary);
     }
     const auto record=[](const char * key,double value) {
         std::ostringstream out; out<<std::setprecision(17)<<value; RecordProperty(key,out.str());
