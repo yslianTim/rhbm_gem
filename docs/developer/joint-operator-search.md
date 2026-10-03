@@ -125,8 +125,13 @@ rebuild cost. Incomplete comparisons cannot justify promotion. The production
 default remains LegacyCompact; the historical evidence index records why
 previous operator/Schwarz campaigns did not qualify.
 
-The current one-level campaign stopped before PCG at the first chain-128
-bounded-rank `rank-work-budget` result. It has no eligible iterations-per-solve
-points and establishes neither stable Krylov scaling nor iteration growth. See
+The bounded local-support rank certificate has removed the earlier rank-work
+budget blocker for the current campaign. Chain and cube cases at 128 and 256
+atoms completed search and returned-state assessment; cases at 512 and 1024
+completed rank certification and PCG search but timed out during returned-state
+assessment. Search completion alone is not runtime convergence or endpoint
+qualification. The current measurements do not provide enough formal
+multi-block search-only evidence to support a two-level Schwarz investigation.
+Rank-certificate continuation is not warranted by the measured rank share. See
 the [current campaign record](joint-benchmark.md#current-one-level-scaling-evidence)
-for its fixed policy, resource outcome, and retained artifacts.
+for policies, measurements, and retained artifacts.
