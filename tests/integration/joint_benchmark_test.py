@@ -55,7 +55,7 @@ def scaling_row(atoms, iterations, **overrides):
 
 class JointBenchmarkContract(unittest.TestCase):
     def test_profiles_have_distinct_measurement_scopes(self):
-        expected = {'prepare', 'fixed', 'solve', 'rank', 'workflow', 'postprocess', 'command'}
+        expected = {'prepare', 'fixed', 'search', 'solve', 'rank', 'workflow', 'postprocess', 'command'}
         self.assertEqual(set(benchmark.SCOPES), expected)
         self.assertEqual(len(set(benchmark.SCOPES.values())), len(expected))
 
@@ -72,6 +72,8 @@ class JointBenchmarkContract(unittest.TestCase):
             {'steps': [{'kind': 'schwarz', 'fixed_step_wall_seconds': .4}]}, 99), .4)
         self.assertAlmostEqual(benchmark.raw_elapsed('solve',
             {'search_seconds': .7, 'assessment_seconds': .2}, 99), .9)
+        self.assertEqual(benchmark.raw_elapsed('search',
+            {'search_seconds': .7, 'assessment_seconds': 50.}, 99), .7)
         self.assertAlmostEqual(benchmark.raw_elapsed('postprocess',
             {'phases': {'uncertainty_seconds': .1, 'save_seconds': .2}}, 99), .3)
 
@@ -81,6 +83,16 @@ class JointBenchmarkContract(unittest.TestCase):
         })
         self.assertFalse(result['qualified'])
         self.assertEqual(result['scientific_status'], 'failed')
+
+    def test_search_scope_never_reports_endpoint_qualification(self):
+        result = benchmark.normalize_result('search', {
+            'measurement_scope': 'search-only', 'assessment_execution': 'not-run',
+            'search': {'execution_complete': True, 'stop_reason': 'converged'},
+            'returned_assessment': {'runtime_convergence': 'passed'},
+        })
+        self.assertIsNone(result['qualified'])
+        self.assertEqual(result['scientific_status'], 'search-only')
+        self.assertNotIn('runtime_convergence', result['details'])
 
     def test_operator_and_schwarz_defaults_are_stable(self):
         parser = benchmark.build_parser()
@@ -130,6 +142,11 @@ class JointBenchmarkContract(unittest.TestCase):
             fixed = benchmark.command_for_profile(args, {'kind': 'synthetic', 'topology': 'chain', 'atoms': 8},
                                                   Path('fixed.json'), build)
             self.assertEqual(fixed[fixed.index('--schwarz-overlap-hops') + 1], '0')
+            args.profile = 'search'
+            search = benchmark.command_for_profile(args, {'kind': 'synthetic', 'topology': 'chain', 'atoms': 8},
+                                                   Path('search.json'), build)
+            self.assertIn('--search-only', search)
+            self.assertEqual(search[search.index('--search') + 1], 'schwarz')
 
     def test_rank_profile_metadata_names_the_backend_it_executes(self):
         parser = benchmark.build_parser()
@@ -518,7 +535,7 @@ def smoke(build):
                         '--potential-model', 'single', '--blurring-width', '.5', '-g', '.3', '-v', '0'],
                        check=True, capture_output=True, text=True, timeout=60)
         map_path = next(root.glob('*.map'))
-        profiles = ('prepare', 'fixed', 'solve', 'rank', 'workflow', 'postprocess')
+        profiles = ('prepare', 'fixed', 'search', 'solve', 'rank', 'workflow', 'postprocess')
         for profile in profiles:
             output = root / f'{profile}.json'
             command = [sys.executable, str(script), '--profile', profile, '--case',
@@ -548,6 +565,9 @@ def smoke(build):
             elif profile == 'solve':
                 direct_command = [str(build / 'bin/joint_sparse_benchmark'), 'synthetic', 'chain', '8',
                                   'fixed', str(direct), '--search', 'schwarz', '--resources']
+            elif profile == 'search':
+                direct_command = [str(build / 'bin/joint_sparse_benchmark'), 'synthetic', 'chain', '8',
+                                  'fixed', str(direct), '--search', 'schwarz', '--search-only', '--resources']
             elif profile == 'rank':
                 direct_command = [str(build / 'bin/joint_sparse_benchmark'), 'synthetic', 'chain', '8',
                                   'rank', str(direct), '--resources']
@@ -613,6 +633,27 @@ def smoke(build):
                             work['operator_rank_compact_extractions'] != 0 or
                             work['operator_rank_free_design_svds'] != 0):
                         raise AssertionError(f'SPQR bounded rank used an unexpected path: {work}')
+            if profile == 'search':
+                details = report['result']['details']
+                work = details['search_work']
+                if (details['measurement_scope'] != 'search-only' or details['assessment_execution'] != 'not-run' or
+                        details['assessment_work'] != {'assessments': 0, 'reference_evaluations': 0} or
+                        report['result']['qualified'] is not None or report['numerics']['runtime_convergence'] is not None or
+                        not work['pcg_solves'] or not work['operator_rank_checks'] or
+                        work['operator_rank_compact_extractions'] != 0 or work['operator_rank_free_design_svds'] != 0):
+                    raise AssertionError(f'search-only contract or telemetry failed: {report}')
+                if not details.get('stop_reason') or not details.get('partition', {}).get('blocks'):
+                    raise AssertionError(f'search stop reason or Schwarz partition metadata is missing: {details}')
+
+        diagonal = root / 'search-diagonal.json'
+        subprocess.run([sys.executable, str(script), '--profile', 'search', '--case', 'chain-8',
+                        '--build-dir', str(build), '--output', str(diagonal), '--timeout', '60',
+                        '--preconditioner', 'diagonal'],
+                       check=True, capture_output=True, text=True, timeout=120)
+        diagonal_report = json.loads(diagonal.read_text())
+        if (diagonal_report['metadata']['solver_policy']['preconditioner'] != 'diagonal' or
+                'partition' in diagonal_report['result']['details']):
+            raise AssertionError(f'diagonal search incorrectly reports Schwarz partition policy: {diagonal_report}')
 
         rank_override = root / 'rank-budget-override.json'
         subprocess.run([sys.executable, str(script), '--profile', 'rank', '--case', 'chain-8',

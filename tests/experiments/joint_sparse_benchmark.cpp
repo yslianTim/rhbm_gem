@@ -32,6 +32,7 @@ using Clock=std::chrono::steady_clock;
 bool audit{};
 bool operator_audit{};
 std::string search_kind;
+bool search_only{};
 std::filesystem::path capture;
 j::array svd_records;
 n::OperatorRankMode operator_rank_mode{n::OperatorRankMode::Auto};
@@ -251,6 +252,11 @@ j::object SearchWork()
 #endif
     return out;
 }
+j::object AssessmentWork()
+{
+    const auto & work=n::AssessmentWorkForTesting();
+    return {{"assessments",work.assessments},{"reference_evaluations",work.reference_evaluations}};
+}
 void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::EvaluationContext context,const char * output)
 {
 #ifndef PR23_BASELINE_DRIVER
@@ -266,11 +272,16 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
     if(search_kind!="legacy") throw std::invalid_argument("Baseline supports only legacy search");
 #endif
     ConfigureSearchPolicy(context);
-    j::object report{{"stage","search"},{"search_kind",search_kind},{"atoms",b.size()},{"rows",domain.rows}};
+    j::object report{{"stage","search"},{"search_kind",search_kind},{"atoms",b.size()},{"rows",domain.rows},
+        {"measurement_scope",search_only ? "search-only" : "joint-search-and-returned-state-assessment"}};
     report["solver_policy"]=PolicyRecord(context.search);
     Snapshot(output,report);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    n::AssessmentWorkForTesting()={};
+#endif
     auto search=n::SearchProfile(domain,y,b,context);
     report["search"]=second_stage_test::matched::runtime_json::Search(search,context,domain.rows);
+    if(search_only) report["search"].as_object().erase("runtime_convergence");
 #ifndef PR23_BASELINE_DRIVER
     if(search_kind=="schwarz")
     {
@@ -280,6 +291,18 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
 #endif
     report["search_seconds"]=search.seconds; report["search_work"]=SearchWork();
     report["search_global_derivative_preparations"]=n::SparseWorkForTesting().derivative_preparations;
+#ifndef PR23_BASELINE_DRIVER
+    report["free_columns"]=n::OperatorWorkForTesting().rank_columns;
+    report["design_nonzeros"]=n::OperatorWorkForTesting().rank_design_nonzeros;
+#endif
+    if(search_only)
+    {
+        report["assessment_execution"]="not-run";
+        report["returned_assessment"]=nullptr;
+        report["assessment_work"]=AssessmentWork();
+        report["scope_description"]="This profile measures nonlinear Operator-PCG search only. It does not perform returned-state assessment and does not establish runtime convergence or endpoint qualification.";
+        report["stage"]="complete"; Snapshot(output,report); return;
+    }
     report["stage"]="assessment"; Snapshot(output,report);
     const auto fit=n::AssessComponentSearch(domain,y,context,std::move(search));
     report["search_completed"]=fit.search_success;
@@ -411,6 +434,7 @@ int main(int argc,char ** argv)
                 else if(option=="--audit") audit=true;
                 else if(option=="--operator") operator_audit=true;
                 else if(option=="--search" && k+1<end) search_kind=argv[++k];
+                else if(option=="--search-only") search_only=true;
                 else if(option=="--operator-rank" && k+1<end) operator_rank_mode=ParseOperatorRankMode(argv[++k]);
                 else if(option=="--operator-rank-seconds" && k+1<end) operator_rank_budget.seconds=ParseSeconds(argv[++k]);
                 else if(option=="--operator-rank-work-entries" && k+1<end) operator_rank_budget.entries=ParseSize(argv[++k],true);
@@ -432,6 +456,8 @@ int main(int argc,char ** argv)
         }
         if(schwarz_policy.max_block_atoms<schwarz_policy.core_atoms)
             throw std::invalid_argument("Schwarz max block atoms must be at least core atoms");
+        if(search_only && (search_kind.empty() || search_kind=="legacy"))
+            throw std::invalid_argument("Search-only profile requires OperatorPcg");
         if(audit) n::CompactSvdCaptureForTesting()=Capture;
 #endif
         Eigen::setNbThreads(1); const std::string mode=argc>1 ? argv[1] : "";

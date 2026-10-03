@@ -21,6 +21,7 @@ from joint_runtime_support import read, unpack
 SCOPES = {
     'prepare': 'joint_problem_construction_and_basis_preparation',
     'fixed': 'fixed_state_operator_preparation_and_selected_step',
+    'search': 'search-only',
     'solve': 'joint_search_and_returned_state_assessment',
     'rank': 'bounded_free_design_rank_evaluation',
     'workflow': 'prepare_estimate_postprocess_and_persist',
@@ -145,7 +146,7 @@ def driver_json(directory, output=None):
 def command_for_profile(args, case, output, build):
     sparse = build / 'bin/joint_sparse_benchmark'
     workflow = build / 'bin/joint_postprocessing_benchmark'
-    if args.profile in ('prepare', 'fixed', 'solve', 'rank'):
+    if args.profile in ('prepare', 'fixed', 'search', 'solve', 'rank'):
         if not sparse.is_file():
             raise ValueError('Build joint_sparse_benchmark with RHBM_GEM_BUILD_BENCHMARKS=ON')
         if args.profile == 'prepare':
@@ -155,6 +156,10 @@ def command_for_profile(args, case, output, build):
                 '--fixed', args.fixed_action, '--state', args.state_path,
                 '--fixed-preconditioner', args.preconditioner,
                 *operator_policy_options(args)), args.svd_mode)
+        if args.profile == 'search':
+            return sparse_command(sparse, case, 'fixed', output,
+                                  ('--search', args.preconditioner, '--search-only',
+                                   *operator_policy_options(args)), args.svd_mode)
         if args.profile == 'solve':
             return sparse_command(sparse, case, 'fixed', output,
                                   ('--search', args.preconditioner, *operator_policy_options(args)), args.svd_mode)
@@ -203,7 +208,7 @@ def operator_policy_options(args):
 def solver_policy_metadata(args, backend):
     rank_profile = args.profile == 'rank'
     active = (args.profile == 'fixed' or
-              (args.profile == 'solve' and args.preconditioner != 'legacy') or rank_profile)
+              (args.profile in ('search', 'solve') and args.preconditioner != 'legacy') or rank_profile)
     resolved = None
     backend_name = backend.upper()
     if rank_profile:
@@ -244,6 +249,8 @@ def raw_elapsed(profile, raw, process_wall):
         return steps[0].get('fixed_step_wall_seconds', process_wall) if steps else process_wall
     if profile == 'solve':
         return sum(raw.get(key, 0.) for key in ('search_seconds', 'assessment_seconds'))
+    if profile == 'search':
+        return raw.get('search_seconds', process_wall)
     if profile == 'rank':
         return raw.get('rank_wall_seconds', process_wall)
     if profile == 'workflow':
@@ -258,6 +265,8 @@ def normalize_result(profile, raw):
     rank_result = raw.get('rank_result') or {}
     convergence = assessment.get('runtime_convergence')
     qualified = convergence == 'passed' if convergence in ('passed', 'failed') else None
+    if profile == 'search':
+        qualified = None
     if profile == 'fixed' and isinstance(raw.get('valid'), bool):
         qualified = raw['valid']
     if profile == 'prepare' and isinstance(raw.get('raw_state_valid'), bool):
@@ -294,6 +303,24 @@ def normalize_result(profile, raw):
         for key in ('search_work', 'partition'):
             if key in raw:
                 details[key] = raw[key]
+    elif profile == 'search':
+        search = raw.get('search') or {}
+        details = {
+            'measurement_scope': raw.get('measurement_scope'),
+            'scope_description': raw.get('scope_description'),
+            'assessment_execution': raw.get('assessment_execution'),
+            'assessment_work': raw.get('assessment_work'),
+            'search_completed': search.get('execution_complete'),
+            'stop_reason': search.get('stop_reason'),
+            'profile_evaluations': search.get('profile_evaluations'),
+            'accepted_updates': search.get('accepted_updates'),
+            'search_seconds': raw.get('search_seconds'),
+            'free_columns': raw.get('free_columns'),
+            'design_nonzeros': raw.get('design_nonzeros'),
+            'search_work': raw.get('search_work'),
+        }
+        if 'partition' in raw:
+            details['partition'] = raw['partition']
     elif profile == 'rank':
         details = {key: rank_result.get(key) for key in (
             'status', 'reason', 'rank_lower', 'rank_upper', 'exact_rank', 'rank',
@@ -317,7 +344,8 @@ def normalize_result(profile, raw):
         }
     return {
         'qualified': qualified,
-        'scientific_status': convergence or rank_result.get('status') or 'not-assessed',
+        'scientific_status': ('search-only' if profile == 'search' else
+                              convergence or rank_result.get('status') or 'not-assessed'),
         'details': details,
     }
 
@@ -333,6 +361,7 @@ def problem_result(raw):
         components = len(endpoints)
     rows = raw.get('rows')
     return {'atoms': atoms, 'voxels': rows, 'components': components,
+            'free_columns': raw.get('free_columns'), 'design_nonzeros': raw.get('design_nonzeros'),
             'parameters': 3 * atoms if isinstance(atoms, int) else None}
 
 
@@ -481,6 +510,8 @@ def validate_args(parser, args):
         parser.error('Schwarz core, max block, and memory limits must be positive; overlap must be nonnegative and max block must cover core')
     if args.profile == 'fixed' and args.preconditioner == 'legacy':
         parser.error('fixed profile requires identity, diagonal, or schwarz preconditioner')
+    if args.profile == 'search' and args.preconditioner == 'legacy':
+        parser.error('search profile requires identity, diagonal, or schwarz preconditioner')
 
 
 def main(argv=None):
@@ -500,7 +531,7 @@ def main(argv=None):
     metadata.update(commit=commit, profile=args.profile, case=args.case,
                     source_sha256=source_hash(ROOT), benchmark_sha256=sha(Path(__file__)))
     metadata['solver_policy'] = solver_policy_metadata(args, metadata['backend'])
-    if args.profile in ('prepare', 'fixed', 'solve', 'rank'):
+    if args.profile in ('prepare', 'fixed', 'search', 'solve', 'rank'):
         driver = build / 'bin/joint_sparse_benchmark'
     elif args.profile in ('workflow', 'postprocess'):
         driver = build / 'bin/joint_postprocessing_benchmark'
@@ -512,14 +543,14 @@ def main(argv=None):
         parser.error('workflow and postprocess cases are full, halo, or multi')
     if args.profile == 'command' and not re.fullmatch(r'[A-Za-z0-9._-]+', args.case):
         parser.error('command case names may contain letters, digits, dot, underscore, and hyphen')
-    if args.profile in ('prepare', 'fixed', 'solve', 'rank') and not synthetic_case(args.case) and ':' not in args.case:
+    if args.profile in ('prepare', 'fixed', 'search', 'solve', 'rank') and not synthetic_case(args.case) and ':' not in args.case:
         parser.error('Joint cases use chain-N, cube-N, or DATASET:CASE')
 
     work_parent = output.parent
     with tempfile.TemporaryDirectory(prefix='joint-benchmark-', dir=work_parent) as temporary:
         work = Path(temporary)
         try:
-            case = case_input(args, work / 'inputs') if args.profile in ('prepare', 'fixed', 'solve', 'rank') else {
+            case = case_input(args, work / 'inputs') if args.profile in ('prepare', 'fixed', 'search', 'solve', 'rank') else {
                 'kind': 'synthetic', 'input_sha256': digest({
                     'driver': sha(build / 'bin/joint_postprocessing_benchmark')
                     if args.profile in ('workflow', 'postprocess') and (build / 'bin/joint_postprocessing_benchmark').is_file()
