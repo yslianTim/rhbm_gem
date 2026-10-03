@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "campaign": "joint-post-compact-frontier-r1",
+  "purpose": "Measure the post-compact end-to-end assessment frontier before changing projected-width reduction.",
+  "preselected_frontier_size": 640,
+  "selection_reason": "The frozen-lattice generator naturally supports 640 atoms; 640 is five 128-atom Schwarz cores and is the first selected intermediate point above the completed 512-atom production-equivalent assessments.",
+  "selection_fixed_before_measurement": true,
+  "initial_head": "7ac662da",
+  "branch": "develop",
+  "cases": ["chain-640", "cube-640"],
+  "configuration": {
+    "profile": "solve",
+    "sparse_backend": "SPQR",
+    "search_method": "OperatorPcg",
+    "preconditioner": "Schwarz",
+    "schwarz_core_atoms": 128,
+    "schwarz_overlap_hops": 1,
+    "schwarz_max_block_atoms": 512,
+    "operator_rank": "auto",
+    "resolved_operator_rank": "SpqrBounds",
+    "operator_rank_work_entries": 100000000,
+    "operator_rank_workspace_bytes": 268435456,
+    "ordering": "production default (COLAMD)",
+    "factor_representation": "production default (exported fixed factor)",
+    "assessment_reduction": "compact-stack-qr",
+    "rss_limit_bytes": 4294967296,
+    "timeout_seconds": 600,
+    "eigen_threads": 1,
+    "warmup": 0,
+    "repeat": 1
+  },
+  "results": {
+    "chain-640": {
+      "artifact": "chain-640.json",
+      "status": "timeout",
+      "failure_type": "time-limit",
+      "active_stage": "derivative-projected-qr",
+      "last_completed_stage": "derivative-norms",
+      "projected_qr_seconds": 376.535192294,
+      "compact_jacobian_qr_seconds": 0.0,
+      "process_wall_seconds": 600.0333182909526,
+      "peak_rss_bytes": 667533312
+    },
+    "cube-640": {
+      "artifact": "cube-640.json",
+      "status": "timeout",
+      "failure_type": "time-limit",
+      "active_stage": "derivative-projected-qr",
+      "last_completed_stage": "derivative-norms",
+      "projected_qr_seconds": 266.813401376,
+      "compact_jacobian_qr_seconds": 0.0,
+      "process_wall_seconds": 600.0344007499516,
+      "peak_rss_bytes": 3900604416
+    }
+  },
+  "protocol_pilot": {
+    "artifact": "chain-640-observation-tsqr-pilot.json",
+    "status": "excluded-from-production-frontier",
+    "reason": "The instrumented solve option selected the pre-promotion observation TSQR route (compact_attempts=0); the formal frontier uses compact-stack-qr to match the guarded compact Jacobian production route."
+  },
+  "decision": "projected-QR-limited; both preselected 640-atom cases reached the 600 s limit in derivative-projected-qr while remaining below the 4 GiB RSS cap. Do not run 768 in this campaign."
+}

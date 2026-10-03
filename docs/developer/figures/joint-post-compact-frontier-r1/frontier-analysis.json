@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "campaign": "joint-post-compact-frontier-r1",
+  "preselected_frontier_size": 640,
+  "selection_reason": "Generator-supported size equal to five 128-atom Schwarz cores, between completed 512 and the next larger sizes.",
+  "classification": "projected-QR-limited",
+  "first_post_compact_end_to_end_blocker": "The production-equivalent full solve reaches the 600 s timeout during observation-scale derivative-projected-qr. Neither 640 case reaches the 4 GiB RSS limit, although cube-640 has only about 376 MiB of sampled headroom.",
+  "larger_size_policy": "No 768-atom solve was run because the preselected 640 chain case timed out in derivative-projected-qr.",
+  "cases": [
+    {
+      "case": "chain-640",
+      "status": "timeout",
+      "failure_type": "time-limit",
+      "process_wall_seconds": 600.0333182909526,
+      "assessment_seconds": null,
+      "peak_rss_bytes": 667533312,
+      "active_assessment_stage": "derivative-projected-qr",
+      "last_completed_assessment_stage": "derivative-norms",
+      "search_seconds": 18.556125959,
+      "reference_evaluation_seconds": 66.079386416,
+      "design_spectrum_seconds": 34.085339708,
+      "derivative_preparation_seconds": 68.915217541,
+      "projected_qr_seconds": 376.535192294,
+      "compact_jacobian_qr_seconds": 0.0,
+      "compact_attempts": 1,
+      "compact_accepted": 0,
+      "compact_boundary_fallbacks": 0,
+      "compact_other_fallbacks": 0
+    },
+    {
+      "case": "cube-640",
+      "status": "timeout",
+      "failure_type": "time-limit",
+      "process_wall_seconds": 600.0344007499516,
+      "assessment_seconds": null,
+      "peak_rss_bytes": 3900604416,
+      "active_assessment_stage": "derivative-projected-qr",
+      "last_completed_assessment_stage": "derivative-norms",
+      "search_seconds": 113.422149458,
+      "reference_evaluation_seconds": 67.519389125,
+      "design_spectrum_seconds": 35.165094542,
+      "derivative_preparation_seconds": 83.403441958,
+      "projected_qr_seconds": 266.813401376,
+      "compact_jacobian_qr_seconds": 0.0,
+      "compact_attempts": 1,
+      "compact_accepted": 0,
+      "compact_boundary_fallbacks": 0,
+      "compact_other_fallbacks": 0
+    }
+  ],
+  "pilot_excluded": {
+    "artifact": "chain-640-observation-tsqr-pilot.json",
+    "reason": "It ran the pre-promotion full Jacobian observation-TSQR path and is not the production-equivalent compact assessment frontier."
+  }
+}
