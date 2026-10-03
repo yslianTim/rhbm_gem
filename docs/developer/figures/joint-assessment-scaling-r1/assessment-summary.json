@@ -1,0 +1,883 @@
+{
+  "schema_version": 1,
+  "campaign": "joint-returned-state-assessment-attribution-r1",
+  "measurement_scope": "joint_search_and_returned_state_assessment",
+  "purpose": "Attribute returned-state assessment cost by stage. A timeout is retained as an incomplete assessment, never as a pass.",
+  "resource_envelope": {
+    "timeout_seconds_per_run": 600,
+    "rss_limit_bytes": 4294967296
+  },
+  "cases": [
+    {
+      "topology": "chain",
+      "atoms": 128,
+      "measurement_scope": "joint_search_and_returned_state_assessment",
+      "profile": "solve",
+      "preconditioner": "schwarz",
+      "solver_policy": {
+        "search_method": "OperatorPcg",
+        "sparse_backend": "SPQR",
+        "operator_rank_active": true,
+        "operator_rank_mode": "auto",
+        "resolved_rank_backend": "SpqrBounds",
+        "operator_rank_budget_seconds": 120.0,
+        "operator_rank_budget_entries": 100000000,
+        "operator_rank_budget_workspace_bytes": 268435456,
+        "preconditioner": "schwarz",
+        "schwarz_core_atoms": 128,
+        "schwarz_overlap_hops": 1,
+        "schwarz_max_block_atoms": 512,
+        "schwarz_storage_bytes": 536870912,
+        "schwarz_scratch_bytes": 268435456
+      },
+      "status": "completed",
+      "reason": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 3,
+      "failed_repetitions": 0,
+      "process_wall_seconds": 25.355697458959185,
+      "peak_rss_bytes": 225656832,
+      "partition_block_count": 1,
+      "maximum_block_atoms": 128,
+      "search_seconds": 3.373644542,
+      "rank_seconds": 0.393865499,
+      "stage_seconds": {
+        "endpoint-primary-evaluation": 0.114342417,
+        "reference-evaluation": 1.392361875,
+        "design-spectrum": 0.93751275,
+        "derivative-preparation": 2.334638459,
+        "derivative-reduction": 15.792545666,
+        "projected-width-spectrum": 0.21489125,
+        "normalized-width-spectrum": 0.194257084,
+        "correction-jacobian-spectrum": 0.249705334,
+        "endpoint-trust-replay": 0.038138125,
+        "total-assessment": 21.340000792
+      },
+      "derivative_seconds": 18.127184125,
+      "stage_dimensions": {
+        "total-assessment": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 58300,
+          "columns": 128
+        },
+        "endpoint-primary-evaluation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 58300,
+          "columns": 128
+        },
+        "reference-evaluation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 58300,
+          "columns": 128
+        },
+        "design-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 58300,
+          "columns": 256
+        },
+        "derivative-preparation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 58300,
+          "columns": 256
+        },
+        "derivative-reduction": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 58300,
+          "columns": 128
+        },
+        "projected-width-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 128,
+          "columns": 128
+        },
+        "normalized-width-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 128,
+          "columns": 128
+        },
+        "correction-jacobian-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 128,
+          "columns": 128
+        },
+        "endpoint-trust-replay": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 58300,
+          "columns": 128
+        }
+      },
+      "completed_assessment_stages": [
+        "total-assessment",
+        "endpoint-primary-evaluation",
+        "reference-evaluation",
+        "design-spectrum",
+        "derivative-preparation",
+        "derivative-reduction",
+        "projected-width-spectrum",
+        "normalized-width-spectrum",
+        "correction-jacobian-spectrum",
+        "endpoint-trust-replay"
+      ],
+      "last_completed_stage": "endpoint-trust-replay",
+      "active_stage_at_end": null,
+      "timeout_stage": null,
+      "dominant_stage": "derivative-reduction",
+      "dominant_fraction": 0.7400442867799871,
+      "individual_result": "individual-results/chain-128-schwarz.json",
+      "runtime_convergence": "passed",
+      "state_available": true,
+      "stage_fraction_of_total": {
+        "endpoint-primary-evaluation": 0.005358126183522214,
+        "reference-evaluation": 0.06524657091493513,
+        "design-spectrum": 0.0439321797191056,
+        "derivative-preparation": 0.10940198558358141,
+        "derivative-reduction": 0.7400442867799871,
+        "projected-width-spectrum": 0.010069880132364336,
+        "normalized-width-spectrum": 0.009102955800864995,
+        "correction-jacobian-spectrum": 0.011701280446700369,
+        "endpoint-trust-replay": 0.0017871660536346993
+      },
+      "derivative_fraction": 0.8494462723635684,
+      "optimization_candidate": null,
+      "search_result_available": true,
+      "search_stop_reason": "operator-gradient-stop",
+      "rank_checks": 5,
+      "linearizations": 5,
+      "pcg_solves": 27,
+      "pcg_iterations": 79,
+      "pcg_iterations_per_solve": 3.0,
+      "rank_status": "full-rank",
+      "rank_certificate": "local-support",
+      "compact_extractions": 0,
+      "free_design_svds": 0,
+      "stop_reason": "operator-gradient-stop"
+    },
+    {
+      "topology": "chain",
+      "atoms": 256,
+      "measurement_scope": "joint_search_and_returned_state_assessment",
+      "profile": "solve",
+      "preconditioner": "schwarz",
+      "solver_policy": {
+        "search_method": "OperatorPcg",
+        "sparse_backend": "SPQR",
+        "operator_rank_active": true,
+        "operator_rank_mode": "auto",
+        "resolved_rank_backend": "SpqrBounds",
+        "operator_rank_budget_seconds": 120.0,
+        "operator_rank_budget_entries": 100000000,
+        "operator_rank_budget_workspace_bytes": 268435456,
+        "preconditioner": "schwarz",
+        "schwarz_core_atoms": 128,
+        "schwarz_overlap_hops": 1,
+        "schwarz_max_block_atoms": 512,
+        "schwarz_storage_bytes": 536870912,
+        "schwarz_scratch_bytes": 268435456
+      },
+      "status": "completed",
+      "reason": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 3,
+      "failed_repetitions": 0,
+      "process_wall_seconds": 126.7098441249691,
+      "peak_rss_bytes": 394739712,
+      "partition_block_count": 2,
+      "maximum_block_atoms": 129,
+      "search_seconds": 7.334679792,
+      "rank_seconds": 0.792738167,
+      "stage_seconds": {
+        "endpoint-primary-evaluation": 0.235912417,
+        "reference-evaluation": 6.683922458,
+        "design-spectrum": 4.134089125,
+        "derivative-preparation": 9.793932209,
+        "derivative-reduction": 94.29591925,
+        "projected-width-spectrum": 0.998086416,
+        "normalized-width-spectrum": 0.865642375,
+        "correction-jacobian-spectrum": 1.199136625,
+        "endpoint-trust-replay": 0.077065292,
+        "total-assessment": 118.334000541
+      },
+      "derivative_seconds": 104.089851459,
+      "stage_dimensions": {
+        "total-assessment": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 116540,
+          "columns": 256
+        },
+        "endpoint-primary-evaluation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 116540,
+          "columns": 256
+        },
+        "reference-evaluation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 116540,
+          "columns": 256
+        },
+        "design-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 116540,
+          "columns": 512
+        },
+        "derivative-preparation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 116540,
+          "columns": 512
+        },
+        "derivative-reduction": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 116540,
+          "columns": 256
+        },
+        "projected-width-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 256,
+          "columns": 256
+        },
+        "normalized-width-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 256,
+          "columns": 256
+        },
+        "correction-jacobian-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 256,
+          "columns": 256
+        },
+        "endpoint-trust-replay": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 116540,
+          "columns": 256
+        }
+      },
+      "completed_assessment_stages": [
+        "total-assessment",
+        "endpoint-primary-evaluation",
+        "reference-evaluation",
+        "design-spectrum",
+        "derivative-preparation",
+        "derivative-reduction",
+        "projected-width-spectrum",
+        "normalized-width-spectrum",
+        "correction-jacobian-spectrum",
+        "endpoint-trust-replay"
+      ],
+      "last_completed_stage": "endpoint-trust-replay",
+      "active_stage_at_end": null,
+      "timeout_stage": null,
+      "dominant_stage": "derivative-reduction",
+      "dominant_fraction": 0.7968624302305122,
+      "individual_result": "individual-results/chain-256-schwarz.json",
+      "runtime_convergence": "passed",
+      "state_available": true,
+      "stage_fraction_of_total": {
+        "endpoint-primary-evaluation": 0.00199361481840768,
+        "reference-evaluation": 0.0564835332824244,
+        "design-spectrum": 0.03493576745567419,
+        "derivative-preparation": 0.08276515764044189,
+        "derivative-reduction": 0.7968624302305122,
+        "projected-width-spectrum": 0.008434485536168332,
+        "normalized-width-spectrum": 0.007315246429956324,
+        "correction-jacobian-spectrum": 0.010133491807238671,
+        "endpoint-trust-replay": 0.0006512523167278424
+      },
+      "derivative_fraction": 0.8796275878709541,
+      "optimization_candidate": null,
+      "search_result_available": true,
+      "search_stop_reason": "operator-gradient-stop",
+      "rank_checks": 5,
+      "linearizations": 5,
+      "pcg_solves": 27,
+      "pcg_iterations": 107,
+      "pcg_iterations_per_solve": 4.0,
+      "rank_status": "full-rank",
+      "rank_certificate": "local-support",
+      "compact_extractions": 0,
+      "free_design_svds": 0,
+      "stop_reason": "operator-gradient-stop"
+    },
+    {
+      "topology": "cube",
+      "atoms": 128,
+      "measurement_scope": "joint_search_and_returned_state_assessment",
+      "profile": "solve",
+      "preconditioner": "schwarz",
+      "solver_policy": {
+        "search_method": "OperatorPcg",
+        "sparse_backend": "SPQR",
+        "operator_rank_active": true,
+        "operator_rank_mode": "auto",
+        "resolved_rank_backend": "SpqrBounds",
+        "operator_rank_budget_seconds": 120.0,
+        "operator_rank_budget_entries": 100000000,
+        "operator_rank_budget_workspace_bytes": 268435456,
+        "preconditioner": "schwarz",
+        "schwarz_core_atoms": 128,
+        "schwarz_overlap_hops": 1,
+        "schwarz_max_block_atoms": 512,
+        "schwarz_storage_bytes": 536870912,
+        "schwarz_scratch_bytes": 268435456
+      },
+      "status": "completed",
+      "reason": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 3,
+      "failed_repetitions": 0,
+      "process_wall_seconds": 27.392116750008427,
+      "peak_rss_bytes": 554876928,
+      "partition_block_count": 1,
+      "maximum_block_atoms": 128,
+      "search_seconds": 7.239662584,
+      "rank_seconds": 0.292794291,
+      "stage_seconds": {
+        "endpoint-primary-evaluation": 0.155256041,
+        "reference-evaluation": 1.602318958,
+        "design-spectrum": 1.232536416,
+        "derivative-preparation": 2.66420975,
+        "derivative-reduction": 12.993466,
+        "projected-width-spectrum": 0.269537833,
+        "normalized-width-spectrum": 0.257410542,
+        "correction-jacobian-spectrum": 0.307181375,
+        "endpoint-trust-replay": 0.0373905,
+        "total-assessment": 19.547519
+      },
+      "derivative_seconds": 15.65767575,
+      "stage_dimensions": {
+        "total-assessment": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 47792,
+          "columns": 128
+        },
+        "endpoint-primary-evaluation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 47792,
+          "columns": 128
+        },
+        "reference-evaluation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 47792,
+          "columns": 128
+        },
+        "design-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 47792,
+          "columns": 256
+        },
+        "derivative-preparation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 47792,
+          "columns": 256
+        },
+        "derivative-reduction": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 47792,
+          "columns": 128
+        },
+        "projected-width-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 128,
+          "columns": 128
+        },
+        "normalized-width-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 128,
+          "columns": 128
+        },
+        "correction-jacobian-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 128,
+          "columns": 128
+        },
+        "endpoint-trust-replay": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 47792,
+          "columns": 128
+        }
+      },
+      "completed_assessment_stages": [
+        "total-assessment",
+        "endpoint-primary-evaluation",
+        "reference-evaluation",
+        "design-spectrum",
+        "derivative-preparation",
+        "derivative-reduction",
+        "projected-width-spectrum",
+        "normalized-width-spectrum",
+        "correction-jacobian-spectrum",
+        "endpoint-trust-replay"
+      ],
+      "last_completed_stage": "endpoint-trust-replay",
+      "active_stage_at_end": null,
+      "timeout_stage": null,
+      "dominant_stage": "derivative-reduction",
+      "dominant_fraction": 0.6647117723737728,
+      "individual_result": "individual-results/cube-128-schwarz.json",
+      "runtime_convergence": "passed",
+      "state_available": true,
+      "stage_fraction_of_total": {
+        "endpoint-primary-evaluation": 0.007942493418218444,
+        "reference-evaluation": 0.08197045149310252,
+        "design-spectrum": 0.06305334277971542,
+        "derivative-preparation": 0.13629400999686966,
+        "derivative-reduction": 0.6647117723737728,
+        "projected-width-spectrum": 0.013788851311514264,
+        "normalized-width-spectrum": 0.013168450789074563,
+        "correction-jacobian-spectrum": 0.015714596568495467,
+        "endpoint-trust-replay": 0.0019128002893871083
+      },
+      "derivative_fraction": 0.8010057823706425,
+      "optimization_candidate": null,
+      "search_result_available": true,
+      "search_stop_reason": "operator-gradient-stop",
+      "rank_checks": 5,
+      "linearizations": 5,
+      "pcg_solves": 27,
+      "pcg_iterations": 82,
+      "pcg_iterations_per_solve": 3.0,
+      "rank_status": "full-rank",
+      "rank_certificate": "local-support",
+      "compact_extractions": 0,
+      "free_design_svds": 0,
+      "stop_reason": "operator-gradient-stop"
+    },
+    {
+      "topology": "cube",
+      "atoms": 256,
+      "measurement_scope": "joint_search_and_returned_state_assessment",
+      "profile": "solve",
+      "preconditioner": "schwarz",
+      "solver_policy": {
+        "search_method": "OperatorPcg",
+        "sparse_backend": "SPQR",
+        "operator_rank_active": true,
+        "operator_rank_mode": "auto",
+        "resolved_rank_backend": "SpqrBounds",
+        "operator_rank_budget_seconds": 120.0,
+        "operator_rank_budget_entries": 100000000,
+        "operator_rank_budget_workspace_bytes": 268435456,
+        "preconditioner": "schwarz",
+        "schwarz_core_atoms": 128,
+        "schwarz_overlap_hops": 1,
+        "schwarz_max_block_atoms": 512,
+        "schwarz_storage_bytes": 536870912,
+        "schwarz_scratch_bytes": 268435456
+      },
+      "status": "completed",
+      "reason": null,
+      "requested_repetitions": 3,
+      "completed_repetitions": 3,
+      "failed_repetitions": 0,
+      "process_wall_seconds": 131.62663041602354,
+      "peak_rss_bytes": 1175453696,
+      "partition_block_count": 2,
+      "maximum_block_atoms": 201,
+      "search_seconds": 28.29102275,
+      "rank_seconds": 0.563317086,
+      "stage_seconds": {
+        "endpoint-primary-evaluation": 0.360753459,
+        "reference-evaluation": 7.170662959,
+        "design-spectrum": 4.631486041,
+        "derivative-preparation": 11.085774709,
+        "derivative-reduction": 75.747971833,
+        "projected-width-spectrum": 1.072547958,
+        "normalized-width-spectrum": 0.961261709,
+        "correction-jacobian-spectrum": 1.264159334,
+        "endpoint-trust-replay": 0.075178667,
+        "total-assessment": 102.458420208
+      },
+      "derivative_seconds": 86.833746542,
+      "stage_dimensions": {
+        "total-assessment": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 93431,
+          "columns": 256
+        },
+        "endpoint-primary-evaluation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 93431,
+          "columns": 256
+        },
+        "reference-evaluation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 93431,
+          "columns": 256
+        },
+        "design-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 93431,
+          "columns": 512
+        },
+        "derivative-preparation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 93431,
+          "columns": 512
+        },
+        "derivative-reduction": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 93431,
+          "columns": 256
+        },
+        "projected-width-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 256,
+          "columns": 256
+        },
+        "normalized-width-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 256,
+          "columns": 256
+        },
+        "correction-jacobian-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 256,
+          "columns": 256
+        },
+        "endpoint-trust-replay": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 93431,
+          "columns": 256
+        }
+      },
+      "completed_assessment_stages": [
+        "total-assessment",
+        "endpoint-primary-evaluation",
+        "reference-evaluation",
+        "design-spectrum",
+        "derivative-preparation",
+        "derivative-reduction",
+        "projected-width-spectrum",
+        "normalized-width-spectrum",
+        "correction-jacobian-spectrum",
+        "endpoint-trust-replay"
+      ],
+      "last_completed_stage": "endpoint-trust-replay",
+      "active_stage_at_end": null,
+      "timeout_stage": null,
+      "dominant_stage": "derivative-reduction",
+      "dominant_fraction": 0.7393045069329065,
+      "individual_result": "individual-results/cube-256-schwarz.json",
+      "runtime_convergence": "passed",
+      "state_available": true,
+      "stage_fraction_of_total": {
+        "endpoint-primary-evaluation": 0.0035209742475790407,
+        "reference-evaluation": 0.06998607771272382,
+        "design-spectrum": 0.045203566789314704,
+        "derivative-preparation": 0.10819779073789015,
+        "derivative-reduction": 0.7393045069329065,
+        "projected-width-spectrum": 0.010468128981714037,
+        "normalized-width-spectrum": 0.009381968871358257,
+        "correction-jacobian-spectrum": 0.012338266893376262,
+        "endpoint-trust-replay": 0.0007337480594311371
+      },
+      "derivative_fraction": 0.8475022976707968,
+      "optimization_candidate": null,
+      "search_result_available": true,
+      "search_stop_reason": "operator-gradient-stop",
+      "rank_checks": 5,
+      "linearizations": 5,
+      "pcg_solves": 30,
+      "pcg_iterations": 170,
+      "pcg_iterations_per_solve": 6.0,
+      "rank_status": "full-rank",
+      "rank_certificate": "local-support",
+      "compact_extractions": 0,
+      "free_design_svds": 0,
+      "stop_reason": "operator-gradient-stop"
+    },
+    {
+      "topology": "chain",
+      "atoms": 512,
+      "measurement_scope": "joint_search_and_returned_state_assessment",
+      "profile": "solve",
+      "preconditioner": "schwarz",
+      "solver_policy": {
+        "search_method": "OperatorPcg",
+        "sparse_backend": "SPQR",
+        "operator_rank_active": true,
+        "operator_rank_mode": "auto",
+        "resolved_rank_backend": "SpqrBounds",
+        "operator_rank_budget_seconds": 120.0,
+        "operator_rank_budget_entries": 100000000,
+        "operator_rank_budget_workspace_bytes": 268435456,
+        "preconditioner": "schwarz",
+        "schwarz_core_atoms": 128,
+        "schwarz_overlap_hops": 1,
+        "schwarz_max_block_atoms": 512,
+        "schwarz_storage_bytes": 536870912,
+        "schwarz_scratch_bytes": 268435456
+      },
+      "status": "timeout",
+      "reason": "time-limit",
+      "requested_repetitions": 1,
+      "completed_repetitions": 0,
+      "failed_repetitions": 1,
+      "process_wall_seconds": 600.0316021669423,
+      "peak_rss_bytes": 610091008,
+      "partition_block_count": 4,
+      "maximum_block_atoms": 130,
+      "search_seconds": 14.701626125,
+      "rank_seconds": 1.5708567500000001,
+      "stage_seconds": {
+        "endpoint-primary-evaluation": 0.463711542,
+        "reference-evaluation": 37.167635833,
+        "design-spectrum": 20.198722125,
+        "derivative-preparation": 42.140317916,
+        "derivative-reduction": null,
+        "projected-width-spectrum": null,
+        "normalized-width-spectrum": null,
+        "correction-jacobian-spectrum": null,
+        "endpoint-trust-replay": null,
+        "total-assessment": null
+      },
+      "derivative_seconds": null,
+      "stage_dimensions": {
+        "total-assessment": {
+          "calls": 1,
+          "completed_calls": 0,
+          "rows": 233020,
+          "columns": 512
+        },
+        "endpoint-primary-evaluation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 233020,
+          "columns": 512
+        },
+        "reference-evaluation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 233020,
+          "columns": 512
+        },
+        "design-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 233020,
+          "columns": 1024
+        },
+        "derivative-preparation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 233020,
+          "columns": 1024
+        },
+        "derivative-reduction": {
+          "calls": 1,
+          "completed_calls": 0,
+          "rows": 233020,
+          "columns": 512
+        }
+      },
+      "completed_assessment_stages": [
+        "endpoint-primary-evaluation",
+        "reference-evaluation",
+        "design-spectrum",
+        "derivative-preparation"
+      ],
+      "last_completed_stage": "derivative-preparation",
+      "active_stage_at_end": "derivative-reduction",
+      "timeout_stage": "derivative-reduction",
+      "dominant_stage": "derivative-reduction",
+      "dominant_fraction": null,
+      "individual_result": "individual-results/chain-512-schwarz.json",
+      "runtime_convergence": null,
+      "state_available": null,
+      "stage_fraction_of_total": {
+        "endpoint-primary-evaluation": null,
+        "reference-evaluation": null,
+        "design-spectrum": null,
+        "derivative-preparation": null,
+        "derivative-reduction": null,
+        "projected-width-spectrum": null,
+        "normalized-width-spectrum": null,
+        "correction-jacobian-spectrum": null,
+        "endpoint-trust-replay": null
+      },
+      "derivative_fraction": null,
+      "optimization_candidate": null,
+      "search_result_available": true,
+      "search_stop_reason": "operator-gradient-stop",
+      "rank_checks": 5,
+      "linearizations": 5,
+      "pcg_solves": 27,
+      "pcg_iterations": 107,
+      "pcg_iterations_per_solve": 4.0,
+      "rank_status": "full-rank",
+      "rank_certificate": "local-support",
+      "compact_extractions": 0,
+      "free_design_svds": 0,
+      "stop_reason": "operator-gradient-stop"
+    },
+    {
+      "topology": "cube",
+      "atoms": 512,
+      "measurement_scope": "joint_search_and_returned_state_assessment",
+      "profile": "solve",
+      "preconditioner": "schwarz",
+      "solver_policy": {
+        "search_method": "OperatorPcg",
+        "sparse_backend": "SPQR",
+        "operator_rank_active": true,
+        "operator_rank_mode": "auto",
+        "resolved_rank_backend": "SpqrBounds",
+        "operator_rank_budget_seconds": 120.0,
+        "operator_rank_budget_entries": 100000000,
+        "operator_rank_budget_workspace_bytes": 268435456,
+        "preconditioner": "schwarz",
+        "schwarz_core_atoms": 128,
+        "schwarz_overlap_hops": 1,
+        "schwarz_max_block_atoms": 512,
+        "schwarz_storage_bytes": 536870912,
+        "schwarz_scratch_bytes": 268435456
+      },
+      "status": "timeout",
+      "reason": "time-limit",
+      "requested_repetitions": 1,
+      "completed_repetitions": 0,
+      "failed_repetitions": 1,
+      "process_wall_seconds": 600.0313947910909,
+      "peak_rss_bytes": 2836692992,
+      "partition_block_count": 4,
+      "maximum_block_atoms": 256,
+      "search_seconds": 75.773609917,
+      "rank_seconds": 1.0919102509999998,
+      "stage_seconds": {
+        "endpoint-primary-evaluation": 0.853347625,
+        "reference-evaluation": 44.477465167,
+        "design-spectrum": 27.003291417,
+        "derivative-preparation": 54.2277965,
+        "derivative-reduction": null,
+        "projected-width-spectrum": null,
+        "normalized-width-spectrum": null,
+        "correction-jacobian-spectrum": null,
+        "endpoint-trust-replay": null,
+        "total-assessment": null
+      },
+      "derivative_seconds": null,
+      "stage_dimensions": {
+        "total-assessment": {
+          "calls": 1,
+          "completed_calls": 0,
+          "rows": 183040,
+          "columns": 512
+        },
+        "endpoint-primary-evaluation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 183040,
+          "columns": 512
+        },
+        "reference-evaluation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 183040,
+          "columns": 512
+        },
+        "design-spectrum": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 183040,
+          "columns": 1024
+        },
+        "derivative-preparation": {
+          "calls": 1,
+          "completed_calls": 1,
+          "rows": 183040,
+          "columns": 1024
+        },
+        "derivative-reduction": {
+          "calls": 1,
+          "completed_calls": 0,
+          "rows": 183040,
+          "columns": 512
+        }
+      },
+      "completed_assessment_stages": [
+        "endpoint-primary-evaluation",
+        "reference-evaluation",
+        "design-spectrum",
+        "derivative-preparation"
+      ],
+      "last_completed_stage": "derivative-preparation",
+      "active_stage_at_end": "derivative-reduction",
+      "timeout_stage": "derivative-reduction",
+      "dominant_stage": "derivative-reduction",
+      "dominant_fraction": null,
+      "individual_result": "individual-results/cube-512-schwarz.json",
+      "runtime_convergence": null,
+      "state_available": null,
+      "stage_fraction_of_total": {
+        "endpoint-primary-evaluation": null,
+        "reference-evaluation": null,
+        "design-spectrum": null,
+        "derivative-preparation": null,
+        "derivative-reduction": null,
+        "projected-width-spectrum": null,
+        "normalized-width-spectrum": null,
+        "correction-jacobian-spectrum": null,
+        "endpoint-trust-replay": null
+      },
+      "derivative_fraction": null,
+      "optimization_candidate": null,
+      "search_result_available": true,
+      "search_stop_reason": "operator-gradient-stop",
+      "rank_checks": 5,
+      "linearizations": 5,
+      "pcg_solves": 30,
+      "pcg_iterations": 177,
+      "pcg_iterations_per_solve": 6.0,
+      "rank_status": "full-rank",
+      "rank_certificate": "local-support",
+      "compact_extractions": 0,
+      "free_design_svds": 0,
+      "stop_reason": "operator-gradient-stop"
+    }
+  ],
+  "artifacts": [
+    "assessment-summary.json",
+    "assessment-summary.csv",
+    "assessment-analysis.json",
+    "campaign-manifest.json",
+    "individual-results/"
+  ]
+}

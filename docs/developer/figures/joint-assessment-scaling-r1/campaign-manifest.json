@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "campaign": "joint-returned-state-assessment-attribution-r1",
+  "generated_at_utc": "2026-10-03T03:25:52.891919+00:00",
+  "repository": {
+    "url": "https://github.com/yslianTim/rhbm_gem",
+    "branch": "develop",
+    "source_commit": "e8a01668074cf5e9b6f9f94f417513c4e28b23d7"
+  },
+  "measurement": {
+    "profile": "solve",
+    "measurement_scope": "joint_search_and_returned_state_assessment",
+    "topologies": [
+      "chain",
+      "cube"
+    ],
+    "atoms": [
+      128,
+      256,
+      512
+    ],
+    "preconditioner": "schwarz",
+    "policy": {
+      "search_method": "OperatorPcg",
+      "sparse_backend": "SPQR",
+      "requested_rank_backend": "auto",
+      "resolved_rank_backend": "SpqrBounds",
+      "rank_certificate": "LocalSupport",
+      "rank_time_budget_seconds": 120,
+      "rank_work_entries": 100000000,
+      "rank_workspace_bytes": 268435456,
+      "core_atoms": 128,
+      "overlap_hops": 1,
+      "max_block_atoms": 512,
+      "storage_bytes": 536870912,
+      "scratch_bytes": 268435456
+    },
+    "repetitions": {
+      "128_256": {
+        "warmup": 1,
+        "repeat": 3
+      },
+      "512": {
+        "warmup": 0,
+        "repeat": 1
+      }
+    },
+    "eigen_threads": 1,
+    "resource_envelope": {
+      "timeout_seconds_per_run": 600,
+      "rss_limit_bytes": 4294967296
+    }
+  },
+  "provenance": {
+    "benchmark_commit": "e8a01668074cf5e9b6f9f94f417513c4e28b23d7",
+    "benchmark_source_sha256": "1c6930b5ff19a33c687117bff7161a8b4ba57f46ea3a4643d8a90d3f46467ebf",
+    "numerics_source_sha256": "d92b76e4c211ec220f0c4b0046faff546b9706371076dd2e0538bbd7fad3ab75",
+    "benchmark_driver_sha256": "9c82fe3d9cd8b91ced86db22cdb74563ad992ef62d88c51a5caf887e34721944",
+    "sweep_driver_sha256": "c84fbfaf5a290a0f67c0857c62d346c31b26f5d27d3afba4f7576d9d2943c777",
+    "binary_sha256": "c00cefc04e61789deb9ae816366e506aa86490d10cdd60ab092674581472f38a"
+  },
+  "outcome": {
+    "completed_cases": 4,
+    "timeout_cases": 2,
+    "timeout_stage": "derivative-reduction",
+    "note": "512 cases completed search, then timed out during returned-state assessment; failures remain failures."
+  },
+  "artifacts": [
+    "assessment-summary.json",
+    "assessment-summary.csv",
+    "assessment-analysis.json",
+    "campaign-manifest.json",
+    "individual-results/"
+  ]
+}
