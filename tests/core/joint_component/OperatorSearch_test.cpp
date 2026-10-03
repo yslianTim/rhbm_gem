@@ -440,7 +440,7 @@ TEST(JointOperatorSearchTest, SearchResourceStagesAreNeutralDistinctAndBounded)
     };
     for(const auto * name:{"profile-evaluation","profile-basis-build","linear-solve","linear-factor-preparation",
         "linear-symbolic","spqr-symbolic","linear-numeric","spqr-numeric","fixed-operator-factor",
-        "spqr-fixed-factor","rank-certificate","pcg","trial-evaluation"})
+        "spqr-fixed-factor","rank-certificate","operator-prepare","width-metric","pcg","trial-evaluation"})
         EXPECT_TRUE(has_stage(name))<<name;
     EXPECT_GT(n::SparseWorkForTesting().symbolic,0);
     EXPECT_GT(n::SparseWorkForTesting().numeric,0);

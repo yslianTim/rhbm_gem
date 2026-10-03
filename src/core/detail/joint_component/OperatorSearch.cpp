@@ -115,7 +115,9 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
             if(!op.Valid()) return finish(op.Reason());
             Vector norms;
             {
-                ResourcePhase phase_metric("width-metric"); WorkTimer timer(SearchWorkForTesting().metric_seconds);
+                ResourcePhase phase_metric("width-metric",true,accepted.residual.size(),accepted.eta.size(),
+                    static_cast<std::size_t>(accepted.derivative.nonZeros()));
+                WorkTimer timer(SearchWorkForTesting().metric_seconds);
                 norms=WidthNorms(RawWidthDerivative(accepted),context.scale);
                 const Vector current=WidthMetric(norms); metric=metric.size() ? metric.cwiseMax(current).eval() : current;
             }

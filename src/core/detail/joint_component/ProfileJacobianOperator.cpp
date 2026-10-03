@@ -31,10 +31,10 @@ const char * RankStatus(FreeDesignRankStatus status)
 ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const EvaluationContext & context,double absolute,FreeDesignRankBackend backend)
     :identity_(std::make_shared<const LinearizationIdentity>()),scale_(context.scale)
 {
-    ResourcePhase phase("operator-prepare");
+    const auto n=e.x.rows(),m=e.eta.size();
+    ResourcePhase phase("operator-prepare",true,n,e.x.cols(),static_cast<std::size_t>(e.x.nonZeros()));
     auto & work=OperatorWorkForTesting(); ++work.preparations; WorkTimer timer(work.preparation_seconds);
     reason_="invalid-inner";
-    const auto n=e.x.rows(),m=e.eta.size();
     if(!e.valid || !(scale_>0) || !std::isfinite(scale_) || m<=0 || e.beta.size()!=2*m ||
         e.x.cols()!=2*m || e.derivative.rows()!=n || e.derivative.cols()!=2*m || e.residual.size()!=n ||
         !e.beta.allFinite() || !e.residual.allFinite()) return;
