@@ -128,22 +128,69 @@ previous operator/Schwarz campaigns did not qualify.
 The rigorous bounded `LocalSupport` rank certificate has removed the rank-work
 blocker under the existing 120-second, 100,000,000-entry, 256-MiB budget.
 Rank certification, nonlinear search, and returned-state assessment now have
-separate measurement records. The `search` benchmark profile runs the actual
-`SearchProfile(...)` path and exits before `AssessComponentSearch(...)`; its
-`search-only` scope does not establish runtime convergence or endpoint
-qualification. In the formal search campaign, all five chain Schwarz sizes
-completed. Four cube sizes were eligible; cube-2048 hit the 4-GiB RSS limit
-during search. The chain multi-block gate is stable across four sizes. The cube
-multi-block gate has only three eligible sizes and is insufficient; the
-full-range growth gate includes the single-block to multi-block transition.
-Therefore current evidence does not warrant a two-level Schwarz investigation.
+separate measurement records: rank certification reports bounded work and
+certificate evidence; Operator-PCG scaling reports per-solve Krylov counts;
+search memory/throughput reports stage ownership, factor fill and process RSS;
+returned-state assessment reports endpoint work after search. The `search`
+benchmark profile runs the actual `SearchProfile(...)` path and exits before
+`AssessComponentSearch(...)`; its `search-only` scope does not establish runtime
+convergence or endpoint qualification. In the formal search campaign, all five
+chain Schwarz sizes completed. Cube-2048 hit the 4-GiB RSS limit during search.
+The chain multi-block gate is stable across four sizes. The cube multi-block
+gate has only three eligible sizes and remains insufficient; the full-range
+growth gate includes the single-block to multi-block transition.
+
+### Cube search memory and SPQR ordering
+
+The [cube memory campaign](figures/cube-search-memory-r1/cube-memory-analysis.json)
+adds process-tree RSS samples and active/last-completed search-stage snapshots.
+With production COLAMD, cube-2048 diagonal and Schwarz runs both stopped in
+`spqr-fixed-factor` at about 4.02 GiB. Diagonal had completed
+`profile-evaluation`; Schwarz had completed `schwarz-partition`, but neither
+Schwarz local-build nor PCG had begun. This locates the shared baseline blocker
+at the global fixed factor, not in Schwarz local blocks or Krylov convergence.
+
+The benchmark-only COLAMD/DEFAULT/BEST/METIS comparison completed cube-512 and
+cube-1024 with diagonal preconditioning. DEFAULT matched COLAMD fill. At
+cube-1024, BEST reduced fixed-factor nnz from 481,584 to 255,930 and exported
+factor storage from 1,472 MB to 744 MB; sampled RSS fell from 3.860 GiB to
+3.377 GiB. METIS produced 257,141 fixed-factor nnz, 750 MB storage, and
+3.203 GiB RSS. The candidates agreed on rank certificate, accepted updates,
+profile evaluations, search stop reason, PCG iterations, objective, gradient,
+residual, and returned state within floating-point tolerance. Despite the
+material fill reduction, none completed cube-2048 within the original 4 GiB
+envelope. BEST/diagonal under 4 GiB reached PCG/trial evaluation but later hit
+the limit in `rank-certificate`; other recorded candidates hit
+`spqr-fixed-factor`. Production ordering therefore remains COLAMD.
+
+A single diagnostic-only BEST/diagonal run under 6 GiB completed at 5.672 GiB
+in 395.7 seconds with mean 7.8 PCG iterations per solve. It is excluded from
+the formal scaling gate and provides no Schwarz 2048 point. The cube gate
+remains `insufficient-evidence` with valid multi-block sizes 256/512/1024,
+blocks 2/4/9, iterations/solve 6/6/7, slope 0.1112 and growth 1.167. Current
+evidence does not warrant a two-level Schwarz investigation. No coarse
+correction was implemented, and the RSS failure is not reported as a Schwarz
+solver failure.
 
 The separate assessment attribution campaign completed chain and cube at 128
 and 256. At 512, rank and PCG search completed, then both cases timed out in
-returned-state assessment at `derivative-reduction`. This does not qualify
-either endpoint. Derivative reduction dominated the completed assessments; no
-exact redundant computation was identified, so no assessment optimization was
-made. Rank took 1.8%–11.7% of search time, with one rank check per each of five
+returned-state assessment. The [micro-attribution campaign](figures/joint-derivative-scaling-r1/derivative-scaling-analysis.json)
+split reduction into row generation, projected QR, Jacobian QR, and norms.
+Both 512 cases timed out on `derivative-projected-qr`; completed tiles spent
+about 226/229 seconds in projected/Jacobian QR for chain and 187/189 seconds
+for cube, with 2–3 seconds in norms. These are incomplete endpoints, not
+assessment passes. From 128 to 256 inclusive derivative-reduction grew 6.02x
+for chain and 5.81x for cube. QR accounts for most completed reduction time.
+
+The [compact identity diagnostics](figures/joint-compact-jacobian-r1/compact-jacobian-analysis.json)
+measured a maximum `Z^T P` relative residual of 1.40e-15 and full Gram
+reconstruction relative Frobenius error of 1.51e-15. A test-only stacked QR
+candidate matched rank across chain/cube 8/32/128/256; maximum singular-value
+relative difference was 3.05e-15 and correction difference 4.20e-15. The
+candidate has not been wired into assessment: near-threshold rank behavior,
+full endpoint assessment parity, and production resource/time performance
+remain open. Production still uses the observation-scale Jacobian TSQR. Rank
+took 1.8%–11.7% of search time, with one rank check per each of five
 linearizations per measurement; rank-certificate continuation is not
-warranted. The [benchmark guide](joint-benchmark.md) links the current search
-and assessment machine-readable artifacts and their scope contracts.
+warranted. The [benchmark guide](joint-benchmark.md) links all current
+machine-readable evidence and the scope contracts.

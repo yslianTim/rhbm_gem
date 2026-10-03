@@ -172,6 +172,21 @@ cost by `search_seconds`; they are null when that denominator is zero or
 unavailable. These are descriptive measurements and have no hardware-specific
 pass threshold.
 
+## Four scaling questions
+
+Do not use total solve wall time as a proxy for a single scaling property. The
+current evidence separates four questions:
+
+| Scaling question | Measurement | Current evidence |
+| --- | --- | --- |
+| Rank certification | bounded rank work, certificate status, SPQR reconstruction | [rank frontier](figures/joint-rank-budget-frontier/campaign-manifest.json) and [local-support census](figures/joint-local-rank-witness-census/local-rank-witness-census.json) |
+| Operator-PCG Krylov | iterations per solve under a fixed Schwarz policy | [search scaling and multi-block gates](figures/joint-search-scaling-r1/search-scaling-analysis.json) |
+| Search memory and operator throughput | search-stage ownership, factor fill/storage, sampled process RSS, PCG/operator time | [cube memory analysis](figures/cube-search-memory-r1/cube-memory-analysis.json) |
+| Returned-state assessment | assessment stages and derivative micro-stages after search returns | [derivative scaling analysis](figures/joint-derivative-scaling-r1/derivative-scaling-analysis.json) |
+
+Search-only results do not establish assessment or endpoint qualification.
+Assessment timeouts remain incomplete evidence even when search succeeded.
+
 ## Schwarz scaling sweep
 
 `joint_schwarz_sweep.py` creates a configuration matrix and invokes the
@@ -342,9 +357,10 @@ assessment. Its JSON says `measurement_scope: "search-only"`; assessment and
 endpoint qualification are `not-run`, and runtime convergence is never
 reported as passed. The permanent test checks zero assessments and zero
 reference evaluations. Eighteen of 20 configurations were search-side
-eligible. Both cube-2048 preconditioners hit the RSS ceiling during search;
-those failures remain recorded and do not count as points. Search-side
-eligibility makes no endpoint-correctness claim.
+eligible. The original COLAMD cube-2048 diagonal and Schwarz runs hit the RSS
+ceiling during search; their substage attribution and benchmark-only ordering
+follow-up are recorded below. Search-side eligibility makes no
+endpoint-correctness claim.
 
 The Schwarz measurements were:
 
@@ -385,6 +401,63 @@ diagonal/Schwarz result set, eligibility records, failures, and both gates are
 in the machine-readable
 [`campaign artifacts`](figures/joint-search-scaling-r1/).
 
+### Cube search memory frontier and SPQR ordering
+
+The follow-up campaign is recorded in
+[`cube-search-memory-r1`](figures/cube-search-memory-r1/campaign-manifest.json).
+All four available SuiteSparse orderings were measured on cube-512 and
+cube-1024 with the diagonal preconditioner, SPQR, OperatorPcg, `auto` rank
+(`SpqrBounds`), production-equivalent rank budgets, one Eigen thread, a
+600-second timeout, and the original 4 GiB RSS limit. `DEFAULT` matched
+COLAMD fill. `BEST` and METIS materially reduced fill and process RSS while
+preserving rank status/certificate, accepted updates, evaluations, stop
+reason, PCG iterations, objective, gradient, residual, and returned state
+within floating-point tolerance.
+
+| Ordering | Case | Numeric/fixed factor nnz | Exported factor storage | Symbolic s | Numeric s | Peak RSS | Search result |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| COLAMD | cube-512 | 143,684 / 130,980 | 413.9 MB | 0.069 | 1.694 | 1.631 GiB | complete; 6.97 PCG/solve |
+| DEFAULT | cube-512 | 143,684 / 130,980 | 413.9 MB | 0.068 | 1.675 | 1.901 GiB | complete; 6.97 PCG/solve |
+| BEST | cube-512 | 98,080 / 87,951 | 271.0 MB | 0.123 | 1.027 | 1.439 GiB | complete; 6.97 PCG/solve |
+| METIS | cube-512 | 98,080 / 88,687 | 273.6 MB | 0.085 | 1.016 | 1.438 GiB | complete; 6.97 PCG/solve |
+| COLAMD | cube-1024 | 519,728 / 481,584 | 1,472.4 MB | 0.119 | 7.984 | 3.860 GiB | complete; 7.8 PCG/solve |
+| DEFAULT | cube-1024 | 519,728 / 481,584 | 1,472.4 MB | 0.123 | 8.048 | 3.854 GiB | complete; 7.8 PCG/solve |
+| BEST | cube-1024 | 277,240 / 255,930 | 744.3 MB | 0.258 | 3.205 | 3.377 GiB | complete; 7.8 PCG/solve |
+| METIS | cube-1024 | 277,240 / 257,141 | 750.4 MB | 0.150 | 3.201 | 3.203 GiB | complete; 7.8 PCG/solve |
+
+The factor column is numeric-factor nnz / fixed-operator factor nnz. Exported
+storage is an owned-factor proxy; it is not process RSS or SuiteSparse scratch.
+Sampled process peak RSS is reported separately.
+
+At cube-2048, no ordering completed search inside 4 GiB:
+
+| Ordering / preconditioner | Status | Peak RSS | Active stage | Last completed stage |
+| --- | --- | ---: | --- | --- |
+| COLAMD / diagonal | RSS limit | 4.019 GiB | `spqr-fixed-factor` | `profile-evaluation` |
+| COLAMD / Schwarz | RSS limit | 4.028 GiB | `spqr-fixed-factor` | `schwarz-partition` |
+| DEFAULT / diagonal | RSS limit | 4.007 GiB | `spqr-fixed-factor` | `profile-evaluation` |
+| BEST / Schwarz | RSS limit | 4.474 GiB | `spqr-fixed-factor` | `schwarz-partition` |
+| METIS / diagonal | RSS limit | 4.460 GiB | `spqr-fixed-factor` | `profile-evaluation` |
+| BEST / diagonal | RSS limit | 4.143 GiB | `rank-certificate` | `fixed-operator-factor` |
+
+For the COLAMD baseline, diagonal and Schwarz failed at the same SPQR fixed
+factor stage at nearly the same RSS. Schwarz partition completed before its
+factorization failure; local Schwarz build and PCG did not start. This is a
+fixed-factor fill/RSS blocker, not a Schwarz-local-memory or Krylov-iteration
+failure. BEST/diagonal progressed through PCG and trial evaluation before
+exceeding 4 GiB during a later rank certificate.
+
+One diagnostic-only BEST/diagonal run used a 6 GiB cap. It completed at
+5.672 GiB in 395.7 seconds with four accepted updates, five profile
+evaluations, 30 PCG solves, and 7.8 mean iterations per solve. It is excluded
+from the formal 4 GiB gate and provides no Schwarz block-count point. No
+cube-2048 Schwarz point was obtained. The cube multi-block gate therefore
+remains `insufficient-evidence`: sizes 256/512/1024, blocks 2/4/9,
+iterations/solve 6/6/7, slope 0.1112, growth 1.167. Do not infer that Schwarz
+failed, and do not begin a two-level Schwarz investigation. Production ordering
+remains COLAMD because no candidate completed cube-2048 inside the original
+resource envelope. No production memory optimization was promoted.
+
 ### Returned-state assessment attribution
 
 Assessment has a separate measurement record in
@@ -411,10 +484,59 @@ stage dimensions, 600-second process wall, and peak RSS (581.8 MiB for chain;
 2.64 GiB for cube). Their stage checkpoints and per-run records are available
 in the assessment campaign JSON, CSV, analysis, and `individual-results/`.
 
-No exact duplicate recomputation or identity-safe reuse was demonstrated in
-the dominant derivative-reduction work. Removing or approximating that work
-would alter the assessment evidence, so no assessment optimization was
-implemented.
+### Derivative-reduction scaling
+
+The finer attribution campaign is recorded in
+[`joint-derivative-scaling-r1`](figures/joint-derivative-scaling-r1/campaign-manifest.json).
+It used returned-state assessment with Schwarz, `auto` rank (`SpqrBounds`),
+one Eigen thread, a 600-second timeout, and 4 GiB RSS. The 128/256 cases use
+three measurements; 512 uses one. Completed rows show median inclusive
+reduction and median exclusive substages. The timeout values are cumulative
+completed-tile work, not complete stage totals.
+
+| Case | Reduction total | Rows | Projected QR | Jacobian QR | Norms | Status / active stage |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| chain-128 | 15.73 s | 1.06 s | 6.94 s | 7.11 s | 0.177 s | complete |
+| chain-256 | 94.69 s | 4.29 s | 43.69 s | 44.38 s | 0.716 s | complete |
+| chain-512 | — | 14.03 s* | 225.90 s* | 228.74 s* | 2.223 s* | timeout; `derivative-projected-qr` |
+| cube-128 | 13.11 s | 0.945 s | 5.76 s | 5.90 s | 0.146 s | complete |
+| cube-256 | 76.23 s | 3.72 s | 35.02 s | 35.60 s | 0.576 s | complete |
+| cube-512 | — | 12.55 s* | 187.06 s* | 188.56 s* | 1.814 s* | timeout; `derivative-projected-qr` |
+
+`*` denotes cumulative times observed before timeout. Chain-512 completed 22
+QR appends per role before the next projected QR timed out; cube-512 completed
+18 per role and was also interrupted on projected QR. Peak RSS was 0.545 GiB
+for chain and 2.392 GiB for cube, so these were timeouts rather than memory
+failures. On completed 128/256 cases, projected QR was 43.9%–46.1% and
+Jacobian QR was 45.0%–46.9% of reduction time; rows were 4.5%–7.2% and norms
+were 0.76%–1.12%. Inclusive reduction grew 6.02x for chain and 5.81x for cube
+from 128 to 256. The exclusive sum is slightly below inclusive time because
+outer-loop and checkpoint work is not assigned to a micro-stage.
+
+### Compact Jacobian diagnostics
+
+The identity and test-only QR prototype diagnostics are recorded in
+[`joint-compact-jacobian-r1`](figures/joint-compact-jacobian-r1/compact-jacobian-analysis.json).
+For `J = P - Z C`, the full identity is
+`J^T J = P^T P - P^T Z C - C^T Z^T P + C^T Z^T Z C`. Across chain/cube at
+8/32/128/256, maximum `||Z^T P||/(||Z|| ||P||)` was 1.40e-15; the full Gram
+relative Frobenius error was 1.51e-15, absolute Frobenius error 1.35e-16, and
+maximum elementwise error 7.63e-17. Omitting the measured cross terms changed
+the Gram by at most 1.83e-15 relative on these fixtures.
+
+The test-only QR stack `[R_P; -R_Z C]` matched rank on all eight lattice cases
+and on cancellation/active-face fixtures. Across lattice cases, maximum
+singular-value relative error was 3.05e-15, weak-direction projector
+difference 2.11e-11, response-gradient difference 1.11e-17, and correction
+difference 4.20e-15. For a near-exact active-face fit, the residual-normalized
+`||Z^T r||/(||Z|| ||r||)` ratio reached 0.478 because `||r||` was near zero;
+observation-scale normalization gave 6.60e-16.
+
+These results support a test-only compact QR prototype, not a production
+replacement. Near-threshold Jacobian rank behavior, complete endpoint
+assessment parity, and production resource/time behavior remain unmeasured.
+The observation-scale Jacobian TSQR remains the production source of truth;
+no assessment optimization or threshold change was made.
 
 The fixed-state compact-SVD, operator, rank, and action contracts remain owned
 by permanent tests such as `Numerics_test`, `ProfileOperator_test`, and
