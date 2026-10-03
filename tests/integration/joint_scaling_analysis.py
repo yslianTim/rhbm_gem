@@ -11,7 +11,9 @@ from experiment_io import write
 
 GROUP_FIELDS = (
     'topology', 'preconditioner', 'core_atoms', 'overlap_hops',
-    'max_block_atoms', 'operator_rank', 'sparse_backend',
+    'max_block_atoms', 'storage_mib', 'scratch_mib', 'operator_rank',
+    'operator_rank_seconds', 'operator_rank_work_entries',
+    'operator_rank_workspace_mib', 'sparse_backend', 'measurement_scope',
 )
 SUPPORT_FIELDS = (
     'pcg_solves', 'linearizations', 'damping_trials', 'operator_normals',
@@ -33,6 +35,12 @@ def configuration_key(row):
         'max_block_atoms': config.get('max_block_atoms', row.get('max_block_atoms')),
         'operator_rank': config.get('operator_rank', row.get('operator_rank')),
         'sparse_backend': row.get('sparse_backend'),
+        'storage_mib': config.get('storage_mib', row.get('storage_mib')),
+        'scratch_mib': config.get('scratch_mib', row.get('scratch_mib')),
+        'operator_rank_seconds': config.get('operator_rank_seconds', row.get('operator_rank_seconds')),
+        'operator_rank_work_entries': config.get('operator_rank_work_entries', row.get('operator_rank_work_entries')),
+        'operator_rank_workspace_mib': config.get('operator_rank_workspace_mib', row.get('operator_rank_workspace_mib')),
+        'measurement_scope': config.get('measurement_scope', row.get('measurement_scope')),
     }
 
 
@@ -56,6 +64,7 @@ def measurement_point(row):
         if not counts and row.get('stop_reason') == 'pcg-iteration-budget':
             budget_repetitions = 1
     point = {'atoms': atoms, 'iterations_per_solve': iterations_per_solve(row),
+             'block_count': row.get('blocks', row.get('block_count')),
              'pcg_iteration_budget_repetitions': budget_repetitions,
              'stop_reasons_by_repetition': counts}
     point.update({field: row.get(field) for field in SUPPORT_FIELDS})
@@ -184,6 +193,28 @@ def classify_group(key, rows):
     else:
         interpretation = 'these rows do not share a comparable one-level Schwarz policy'
 
+    multi_block_rows = [point for point in points
+                        if isinstance(point.get('block_count'), (int, float)) and point['block_count'] >= 2]
+    multi_valid_points = [point for point in multi_block_rows if point['valid_iteration_point']]
+    multi_atoms = [point['atoms'] for point in multi_block_rows
+                   if isinstance(point.get('atoms'), (int, float))]
+    multi_larger = [point for point in multi_block_rows
+                    if multi_atoms and isinstance(point.get('atoms'), (int, float)) and
+                    point['atoms'] > min(multi_atoms)]
+    multi_budget_limited = any(point['pcg_iteration_budget_repetitions'] for point in multi_larger)
+    multi_slope = loglog_slope(multi_valid_points, 'iterations_per_solve')
+    multi_growth = endpoint_growth_ratio(multi_valid_points, 'iterations_per_solve')
+    if not_comparable:
+        multi_gate = 'not-comparable'
+    elif multi_budget_limited:
+        multi_gate = 'pcg-budget-limited'
+    elif len(multi_valid_points) < MINIMUM_POINTS:
+        multi_gate = 'insufficient-evidence'
+    elif multi_slope >= GROWTH_SLOPE_THRESHOLD and multi_growth >= GROWTH_RATIO_THRESHOLD:
+        multi_gate = 'growth-observed'
+    else:
+        multi_gate = 'stable'
+
     return {
         **key,
         'points': points,
@@ -195,6 +226,12 @@ def classify_group(key, rows):
         'doubling_ratios': [item for item in adjacent if item['approximately_doubling']],
         'supporting_scaling': supporting,
         'coarse_gate': gate,
+        'multi_block_valid_point_count': len(multi_valid_points),
+        'multi_block_point_sizes': [point['atoms'] for point in multi_block_rows],
+        'multi_block_counts': [point['block_count'] for point in multi_block_rows],
+        'multi_block_iteration_loglog_slope': multi_slope,
+        'multi_block_iteration_growth_ratio': multi_growth,
+        'multi_block_gate': multi_gate,
         'diagnostics': diagnostics,
         'interpretation': interpretation,
     }
@@ -213,6 +250,10 @@ def analyze(document):
     for row in rows:
         if not isinstance(row, dict):
             continue
+        row = dict(row)
+        if row.get('measurement_scope') is None:
+            row['measurement_scope'] = ('search-only' if document.get('measurement_profile') == 'search' else
+                                        'joint_search_and_returned_state_assessment')
         key = configuration_key(row)
         identity = tuple(key[field] for field in GROUP_FIELDS)
         if row.get('evidence_eligible') is False:

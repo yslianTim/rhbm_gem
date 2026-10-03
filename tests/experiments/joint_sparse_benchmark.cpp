@@ -273,7 +273,7 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
 #endif
     ConfigureSearchPolicy(context);
     j::object report{{"stage","search"},{"search_kind",search_kind},{"atoms",b.size()},{"rows",domain.rows},
-        {"measurement_scope",search_only ? "search-only" : "joint-search-and-returned-state-assessment"}};
+        {"measurement_scope",search_only ? "search-only" : "joint_search_and_returned_state_assessment"}};
     report["solver_policy"]=PolicyRecord(context.search);
     Snapshot(output,report);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION

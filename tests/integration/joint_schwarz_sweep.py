@@ -34,6 +34,9 @@ def build_configurations(args):
                         'operator_rank_seconds': args.operator_rank_seconds,
                         'operator_rank_work_entries': args.operator_rank_work_entries,
                         'operator_rank_workspace_mib': args.operator_rank_workspace_mib,
+                        'profile': args.profile,
+                        'measurement_scope': ('search-only' if args.profile == 'search' else
+                                              'joint_search_and_returned_state_assessment'),
                         'repeat': args.repeat,
                         'warmup': args.warmup,
                         'timeout': args.timeout,
@@ -49,14 +52,16 @@ def build_configurations(args):
 def configuration_key(config):
     fields = (config['topology'], config['atoms'], config['preconditioner'],
               config['core_atoms'], config['overlap_hops'], config['max_block_atoms'],
+              config['storage_mib'], config['scratch_mib'],
               config['operator_rank'], config['operator_rank_seconds'],
               config['operator_rank_work_entries'], config['operator_rank_workspace_mib'],
+              config.get('profile', 'solve'),
               f"r{config.get('repeat', 1)}", f"w{config.get('warmup', 0)}")
     return '-'.join(str(value) for value in fields if value is not None)
 
 
 def benchmark_command(script, config, args, output):
-    command = [sys.executable, str(script), '--profile', 'solve',
+    command = [sys.executable, str(script), '--profile', config.get('profile', args.profile),
                '--case', f"{config['topology']}-{config['atoms']}",
                '--build-dir', str(args.build_dir), '--output', str(output),
                '--repeat', str(args.repeat), '--warmup', str(args.warmup), '--timeout', str(args.timeout),
@@ -134,11 +139,21 @@ def summarize(config, report, individual_name, process_error=None):
         rank_repetition_evidence.append({
             'rank_status': item_work.get('operator_rank_status'),
             'rank_certificate': item_work.get('operator_rank_certificate'),
+            'rank_reason': item_work.get('operator_rank_reason'),
+            'rank_checks': item_work.get('operator_rank_checks'),
+            'rank_seconds': item_work.get('operator_rank_seconds'),
+            'rank_entries': item_work.get('operator_rank_entries'),
+            'rank_workspace_bytes': item_work.get('operator_rank_workspace_bytes'),
             'compact_extractions': item_work.get('operator_rank_compact_extractions'),
             'free_design_svds': item_work.get('operator_rank_free_design_svds'),
             'work_stage': item_work.get('operator_rank_work_stage'),
             'estimated_total_entries': item_work.get('operator_rank_estimated_total_entries'),
             'estimated_remaining_entries': item_work.get('operator_rank_estimated_remaining_entries'),
+            'search_result_available': item_details.get('search_completed') is True,
+            'stop_reason': item_details.get('stop_reason'),
+            'measurement_scope': item_details.get('measurement_scope'),
+            'assessment_execution': item_details.get('assessment_execution'),
+            'assessment_work': item_details.get('assessment_work'),
         })
         search_seconds = item_details.get('search_seconds')
         assessment_seconds = item_details.get('assessment_seconds')
@@ -198,6 +213,7 @@ def summarize(config, report, individual_name, process_error=None):
     pooled_mean = statistics.mean(pooled_iterations) if pooled_iterations else None
     row = {
         'configuration': config,
+        'measurement_scope': (report or {}).get('measurement_scope', config.get('measurement_scope')),
         'status': status,
         'reason': process_error or run.get('reason'),
         'individual_json': individual_name,
@@ -212,7 +228,12 @@ def summarize(config, report, individual_name, process_error=None):
         'pcg_iteration_valid_repetitions': len(repetition_medians),
         'pcg_iteration_telemetry_complete': (
             bool(successful) and len(per_run_iterations) == len(successful) and
-            len(repetition_medians) == len(successful)),
+            len(repetition_medians) == len(successful) and all(
+                len(item.get('result', {}).get('details', {}).get('search_work', {}).get('pcg_iteration_counts', [])) ==
+                item.get('result', {}).get('details', {}).get('search_work', {}).get('pcg_solves', -1) and
+                sum(item.get('result', {}).get('details', {}).get('search_work', {}).get('pcg_iteration_counts', [])) ==
+                item.get('result', {}).get('details', {}).get('search_work', {}).get('pcg_iterations', -1)
+                for item in successful)),
         'rank_repetition_evidence': rank_repetition_evidence,
         'stop_reasons_by_repetition': stop_reasons,
         'pcg_iteration_budget_repetitions': sum(reason == 'pcg-iteration-budget' for reason in stop_reasons),
@@ -221,6 +242,7 @@ def summarize(config, report, individual_name, process_error=None):
         'free_columns': work.get('operator_rank_columns'),
         'rank_backend': policy.get('resolved_rank_backend'),
         'sparse_backend': policy.get('sparse_backend'),
+        'solver_policy': policy,
         'rank_status': work.get('operator_rank_status'),
         'rank_certificate': work.get('operator_rank_certificate'),
         'rank_reason': work.get('operator_rank_reason'),
@@ -303,6 +325,33 @@ def evidence_exclusion_reasons(row):
         reasons.append('incomplete-repetitions')
     if row.get('pcg_iteration_telemetry_complete') is not True:
         reasons.append('missing-pcg-telemetry')
+    if row.get('measurement_scope') == 'search-only':
+        config = row.get('configuration') or {}
+        policy = row.get('solver_policy') or {}
+        missing_schwarz_policy = (config.get('preconditioner') == 'schwarz' and not all(
+            config.get(key) is not None for key in
+            ('core_atoms', 'overlap_hops', 'max_block_atoms', 'storage_mib', 'scratch_mib')))
+        if (policy.get('search_method') != 'OperatorPcg' or
+                policy.get('preconditioner') != config.get('preconditioner') or
+                policy.get('operator_rank_mode') != config.get('operator_rank') or missing_schwarz_policy):
+            reasons.append('missing-fixed-search-policy')
+        if not isinstance(row.get('pcg_solves'), (int, float)) or row['pcg_solves'] <= 0:
+            reasons.append('no-pcg-solves')
+        rank_runs = row.get('rank_repetition_evidence') or []
+        if not rank_runs or any(run.get('search_result_available') is not True or not run.get('stop_reason')
+                                for run in rank_runs):
+            reasons.append('missing-search-result-or-stop-reason')
+        if any(run.get('measurement_scope') != 'search-only' or
+               run.get('assessment_execution') != 'not-run' or
+               run.get('assessment_work') != {'assessments': 0, 'reference_evaluations': 0}
+               for run in rank_runs):
+            reasons.append('search-scope-contract-violated')
+        required_rank_work = ('rank_reason', 'rank_checks', 'rank_seconds', 'rank_entries',
+                              'rank_workspace_bytes', 'work_stage', 'compact_extractions',
+                              'free_design_svds')
+        if not rank_runs or any(any(run.get(field) is None for field in required_rank_work) or
+                                run.get('rank_checks', 0) <= 0 for run in rank_runs):
+            reasons.append('incomplete-rank-telemetry')
     if str(row.get('sparse_backend', '')).upper() != 'SPQR':
         reasons.append('sparse-backend-not-spqr')
     if row.get('rank_backend') != 'SpqrBounds':
@@ -330,7 +379,7 @@ def set_evidence_eligibility(row):
 
 
 CSV_BASE_FIELDS = (
-    'configuration', 'status', 'reason', 'individual_json', 'evidence_eligible',
+    'configuration', 'measurement_scope', 'solver_policy', 'status', 'reason', 'individual_json', 'evidence_eligible',
     'evidence_exclusion_reasons', 'rank_repetition_evidence', 'atoms', 'rows', 'free_columns',
     'sparse_backend', 'rank_backend', 'rank_status', 'rank_certificate', 'rank_reason', 'rank_seconds', 'rank_entries',
     'rank_workspace_bytes', 'rank_work_stage', 'rank_estimated_total_entries',
@@ -367,6 +416,7 @@ def write_csv(path, rows):
         for row in rows:
             flattened = dict(row)
             flattened['configuration'] = json.dumps(row['configuration'], sort_keys=True)
+            flattened['solver_policy'] = json.dumps(row.get('solver_policy', {}), sort_keys=True)
             flattened['evidence_exclusion_reasons'] = json.dumps(row.get('evidence_exclusion_reasons', []))
             flattened['rank_repetition_evidence'] = json.dumps(row.get('rank_repetition_evidence', []))
             for field, summary in row.get('measurements', {}).items():
@@ -380,6 +430,7 @@ def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build-dir', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True, help='Aggregate JSON output path')
+    parser.add_argument('--profile', choices=('solve', 'search'), default='solve')
     parser.add_argument('--csv', type=Path, help='Optional CSV summary path')
     parser.add_argument('--topologies', nargs='+', choices=('chain', 'cube'), default=['chain'])
     parser.add_argument('--atoms', nargs='+', type=int, default=[64, 128])
@@ -467,7 +518,7 @@ def main(argv=None):
     aggregate = {
         'schema_version': 1,
         'tool': 'joint_schwarz_sweep',
-        'measurement_profile': 'solve',
+        'measurement_profile': args.profile,
         'orchestration': {
             'warmup': args.warmup,
             'repeat': args.repeat,

@@ -17,7 +17,11 @@ import joint_schwarz_sweep as schwarz_sweep
 def scaling_row(atoms, iterations, **overrides):
     config = {'topology': 'chain', 'atoms': atoms, 'preconditioner': 'schwarz',
               'core_atoms': 32, 'overlap_hops': 1, 'max_block_atoms': 64,
-              'operator_rank': 'auto'}
+              'storage_mib': 512, 'scratch_mib': 256,
+              'operator_rank': 'auto', 'operator_rank_seconds': 120,
+              'operator_rank_work_entries': 100_000_000,
+              'operator_rank_workspace_mib': 256,
+              'measurement_scope': 'joint_search_and_returned_state_assessment'}
     row = {
         'configuration': config,
         'status': 'completed',
@@ -43,10 +47,13 @@ def scaling_row(atoms, iterations, **overrides):
         'stop_reason': 'converged',
         'stop_reasons_by_repetition': ['converged'] * 3,
         'pcg_iteration_budget_repetitions': 0,
+        'blocks': 2,
     }
     for key, value in overrides.items():
         if key in ('topology', 'preconditioner', 'core_atoms', 'overlap_hops',
-                   'max_block_atoms', 'operator_rank'):
+                   'max_block_atoms', 'storage_mib', 'scratch_mib', 'operator_rank',
+                   'operator_rank_seconds', 'operator_rank_work_entries',
+                   'operator_rank_workspace_mib', 'measurement_scope'):
             config[key] = value
         else:
             row[key] = value
@@ -261,6 +268,9 @@ class JointBenchmarkContract(unittest.TestCase):
         self.assertNotIn('--schwarz-overlap-hops', command)
         self.assertEqual(command[command.index('--warmup') + 1], '0')
         self.assertEqual(command[command.index('--operator-rank-work-entries') + 1], '100000000')
+        config['profile'] = 'search'
+        search = schwarz_sweep.benchmark_command(Path('joint_benchmark.py'), config, args, Path('search.json'))
+        self.assertEqual(search[search.index('--profile') + 1], 'search')
 
     def test_outer_sweep_timeout_counts_warmups_and_measurements(self):
         parser = schwarz_sweep.build_parser()
@@ -351,7 +361,7 @@ class JointBenchmarkContract(unittest.TestCase):
     def test_sweep_aggregates_completed_repetitions_and_excludes_warmup(self):
         def run(kind, index, counts, scale, search_seconds, wall_seconds, rss_bytes):
             work = {
-                'pcg_solves': 2 * scale,
+                'pcg_solves': len(counts),
                 'pcg_iterations': sum(counts),
                 'pcg_iteration_counts': counts,
                 'operator_normals': 7 + 2 * scale,
@@ -417,7 +427,7 @@ class JointBenchmarkContract(unittest.TestCase):
         self.assertEqual(row['measurements']['peak_rss_bytes'], {'min': 100, 'median': 300, 'max': 400})
         self.assertEqual(row['peak_rss_bytes'], 400)
         self.assertEqual(row['measurements']['operator_normals'], {'min': 9, 'median': 11, 'max': 13})
-        self.assertEqual(row['measurements']['pcg_solves'], {'min': 2, 'median': 4, 'max': 6})
+        self.assertEqual(row['measurements']['pcg_solves'], {'min': 2, 'median': 2, 'max': 2})
         self.assertEqual(row['measurements']['factor_builds'], {'min': 1, 'median': 1, 'max': 1})
         self.assertEqual(row['pcg_iterations_per_solve'], 5.)
         self.assertEqual(row['pcg_iterations_per_solve_pooled_median'], 5.)
@@ -518,6 +528,82 @@ class JointBenchmarkContract(unittest.TestCase):
         result = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep', 'configurations': rows})
         self.assertEqual(len(result['groups']), 2)
         self.assertTrue(all(group['coarse_gate'] == 'insufficient-evidence' for group in result['groups']))
+
+    def test_multi_block_gate_uses_actual_partition_counts_and_existing_thresholds(self):
+        sizes = (128, 256, 512, 1024)
+        stable = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep', 'configurations': [
+            scaling_row(atoms, iterations, sparse_backend='SPQR')
+            for atoms, iterations in zip(sizes, (4, 4, 5, 5))]})['groups'][0]
+        self.assertEqual(stable['multi_block_gate'], 'stable')
+        self.assertEqual(stable['multi_block_valid_point_count'], 4)
+
+        growth = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep', 'configurations': [
+            scaling_row(atoms, iterations, sparse_backend='SPQR')
+            for atoms, iterations in zip(sizes, (4, 6, 9, 14))]})['groups'][0]
+        self.assertEqual(growth['multi_block_gate'], 'growth-observed')
+
+        insufficient = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep', 'configurations': [
+            scaling_row(atoms, 4, sparse_backend='SPQR') for atoms in sizes[:3]]})['groups'][0]
+        self.assertEqual(insufficient['multi_block_gate'], 'insufficient-evidence')
+
+        transition_sizes = (128, 256, 512, 1024, 2048)
+        transition_rows = [scaling_row(transition_sizes[0], 3, blocks=1, sparse_backend='SPQR')]
+        transition_rows += [scaling_row(atoms, iterations, sparse_backend='SPQR')
+                            for atoms, iterations in zip(transition_sizes[1:], (4, 5, 6, 7))]
+        transition = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep',
+                                                'configurations': transition_rows})['groups'][0]
+        self.assertEqual(transition['multi_block_valid_point_count'], 4)
+        self.assertEqual(transition['multi_block_point_sizes'], [256, 512, 1024, 2048])
+
+    def test_scaling_groups_separate_scope_and_schwarz_policy(self):
+        sizes = (128, 256, 512, 1024)
+        scoped = [scaling_row(atoms, 4, measurement_scope='search-only', sparse_backend='SPQR')
+                  for atoms in sizes]
+        scoped += [scaling_row(atoms, 5, measurement_scope='joint_search_and_returned_state_assessment',
+                               sparse_backend='SPQR') for atoms in sizes]
+        result = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep', 'configurations': scoped})
+        self.assertEqual(len(result['groups']), 2)
+        self.assertEqual({group['measurement_scope'] for group in result['groups']},
+                         {'search-only', 'joint_search_and_returned_state_assessment'})
+
+        policies = [scaling_row(atoms, 4, core_atoms=32 if atoms <= 256 else 64,
+                                sparse_backend='SPQR') for atoms in sizes]
+        policy_result = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep', 'configurations': policies})
+        self.assertEqual(len(policy_result['groups']), 2)
+        self.assertTrue(all(group['multi_block_valid_point_count'] == 2 for group in policy_result['groups']))
+
+    def test_multi_block_budget_stop_keeps_stronger_classification(self):
+        sizes = (128, 256, 512, 1024)
+        rows = [scaling_row(atoms, 4, sparse_backend='SPQR') for atoms in sizes]
+        rows[-1]['stop_reason'] = 'pcg-iteration-budget'
+        rows[-1]['stop_reasons_by_repetition'] = ['pcg-iteration-budget'] * 3
+        rows[-1]['pcg_iteration_budget_repetitions'] = 3
+        group = scaling_analysis.analyze({'tool': 'joint_schwarz_sweep', 'configurations': rows})['groups'][0]
+        self.assertEqual(group['multi_block_gate'], 'pcg-budget-limited')
+
+    def test_search_only_evidence_requires_search_contract_not_assessment(self):
+        row = {
+            'measurement_scope': 'search-only', 'status': 'completed',
+            'measurements_complete': True, 'pcg_iteration_telemetry_complete': True,
+            'pcg_solves': 2,
+            'configuration': {'preconditioner': 'schwarz', 'operator_rank': 'auto', 'core_atoms': 128,
+                              'overlap_hops': 1, 'max_block_atoms': 512, 'storage_mib': 512,
+                              'scratch_mib': 256},
+            'solver_policy': {'search_method': 'OperatorPcg', 'preconditioner': 'schwarz',
+                              'operator_rank_mode': 'auto'},
+            'sparse_backend': 'SPQR', 'rank_backend': 'SpqrBounds',
+            'rank_repetition_evidence': [{
+                'rank_status': 'full-rank', 'rank_certificate': 'local-support',
+                'rank_reason': 'rank-verified-full', 'rank_checks': 1, 'rank_seconds': .1,
+                'rank_entries': 100, 'rank_workspace_bytes': 1024, 'work_stage': 'local-witness',
+                'compact_extractions': 0, 'free_design_svds': 0,
+                'search_result_available': True, 'stop_reason': 'operator-gradient-stop',
+                'measurement_scope': 'search-only', 'assessment_execution': 'not-run',
+                'assessment_work': {'assessments': 0, 'reference_evaluations': 0},
+            }],
+        }
+        schwarz_sweep.set_evidence_eligibility(row)
+        self.assertTrue(row['evidence_eligible'], row['evidence_exclusion_reasons'])
 
 
 def smoke(build):
