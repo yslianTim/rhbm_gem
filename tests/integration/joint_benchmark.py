@@ -174,9 +174,11 @@ def command_for_profile(args, case, output, build):
             ordering = ('--spqr-ordering', args.spqr_ordering) if args.spqr_ordering else ()
             representation = (('--operator-factor-representation', args.operator_factor_representation)
                               if args.operator_factor_representation != 'exported-fixed' else ())
+            ownership = (('--operator-factor-ownership', args.operator_factor_ownership)
+                         if args.operator_factor_ownership != 'dedicated-fixed' else ())
             return sparse_command(sparse, case, 'fixed', output,
                                   ('--search', args.preconditioner, '--search-only',
-                                   *operator_policy_options(args), *ordering, *representation), args.svd_mode)
+                                   *operator_policy_options(args), *ordering, *representation, *ownership), args.svd_mode)
         if args.profile == 'solve':
             return sparse_command(sparse, case, 'fixed', output,
                                   ('--search', args.preconditioner, *operator_policy_options(args),
@@ -252,6 +254,7 @@ def solver_policy_metadata(args, backend):
         'operator_rank_budget_entries': args.operator_rank_work_entries,
         'operator_rank_budget_workspace_bytes': args.operator_rank_workspace_mib * 1024**2,
         'operator_factor_representation': args.operator_factor_representation,
+        'operator_factor_ownership': args.operator_factor_ownership,
         'projected_reduction': args.projected_reduction,
         'preconditioner': args.preconditioner,
         'spqr_ordering': args.spqr_ordering.upper() if args.spqr_ordering else 'COLAMD',
@@ -357,7 +360,8 @@ def normalize_result(profile, raw):
         for key in ('failure_stage', 'active_search_stage', 'last_completed_search_stage',
                     'completed_search_stages', 'stage_seconds', 'stage_calls', 'stage_completed_calls',
                     'stage_dimensions', 'stage_nnz',
-                    'spqr_factorization', 'factor_residency', 'operator_factor_representation'):
+                    'spqr_factorization', 'factor_residency', 'operator_factor_representation',
+                    'operator_factor_ownership'):
             if key in raw:
                 details[key] = raw[key]
         if 'partition' in raw:
@@ -536,6 +540,8 @@ def build_parser():
     parser.add_argument('--spqr-ordering', choices=('colamd', 'default', 'best', 'metis'))
     parser.add_argument('--operator-factor-representation', choices=('exported-fixed', 'native-qr'),
                         default='exported-fixed')
+    parser.add_argument('--operator-factor-ownership', choices=('dedicated-fixed', 'dedicated-native',
+                        'reuse-accepted-copy-on-write', 'reuse-accepted-handoff'), default='dedicated-fixed')
     parser.add_argument('--operator-rank', choices=('auto', 'dense', 'spqr-bounds'), default='auto')
     parser.add_argument('--operator-rank-seconds', type=float, default=120)
     parser.add_argument('--operator-rank-work-entries', type=int, default=100_000_000)
@@ -576,6 +582,8 @@ def validate_args(parser, args):
         parser.error('--spqr-ordering is supported by the benchmark-only search profile')
     if args.operator_factor_representation != 'exported-fixed' and args.profile != 'search':
         parser.error('--operator-factor-representation is supported only by the benchmark-only search profile')
+    if args.operator_factor_ownership != 'dedicated-fixed' and args.profile != 'search':
+        parser.error('--operator-factor-ownership is supported only by the benchmark-only search profile')
     if args.assessment_reduction != 'observation-tsqr' and args.profile != 'solve':
         parser.error('--assessment-reduction is supported only by the benchmark-only solve profile')
     if args.projected_reduction != 'observation-tiled-qr' and args.profile != 'solve':

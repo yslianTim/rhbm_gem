@@ -261,6 +261,19 @@ class JointBenchmarkContract(unittest.TestCase):
                                   '--operator-factor-representation', 'native-qr'])
         benchmark.validate_args(parser, args)
         self.assertEqual(benchmark.solver_policy_metadata(args, 'SPQR')['operator_factor_representation'], 'native-qr')
+        args = parser.parse_args(['--profile', 'search', '--case', 'cube-512',
+                                  '--build-dir', 'build/debug', '--output', 'result.json',
+                                  '--operator-factor-ownership', 'reuse-accepted-copy-on-write'])
+        benchmark.validate_args(parser, args)
+        self.assertEqual(benchmark.solver_policy_metadata(args, 'SPQR')['operator_factor_ownership'],
+                         'reuse-accepted-copy-on-write')
+        with tempfile.TemporaryDirectory() as temporary:
+            build = Path(temporary); driver = build / 'bin/joint_sparse_benchmark'
+            driver.parent.mkdir(); driver.touch()
+            command = benchmark.command_for_profile(args, {'kind': 'synthetic', 'topology': 'cube', 'atoms': 512},
+                                                    Path('result.json'), build)
+        self.assertEqual(command[command.index('--operator-factor-ownership') + 1],
+                         'reuse-accepted-copy-on-write')
         args = parser.parse_args(['--profile', 'solve', '--case', 'cube-512',
                                   '--build-dir', 'build/debug', '--output', 'result.json',
                                   '--spqr-ordering', 'best'])
@@ -928,6 +941,22 @@ def smoke(build):
         if (diagonal_report['metadata']['solver_policy']['preconditioner'] != 'diagonal' or
                 'partition' in diagonal_report['result']['details']):
             raise AssertionError(f'diagonal search incorrectly reports Schwarz partition policy: {diagonal_report}')
+
+        reused = root / 'search-reuse-accepted.json'
+        subprocess.run([sys.executable, str(script), '--profile', 'search', '--case', 'chain-8',
+                        '--build-dir', str(build), '--output', str(reused), '--timeout', '60',
+                        '--operator-factor-ownership', 'reuse-accepted-handoff'],
+                       check=True, capture_output=True, text=True, timeout=120)
+        reused_report = json.loads(reused.read_text())
+        reused_details = reused_report['result']['details']
+        reused_work = reused_details['search_work']
+        if (reused_report['metadata']['solver_policy']['operator_factor_ownership'] !=
+                'reuse-accepted-handoff' or reused_details.get('operator_factor_ownership') !=
+                'reuse-accepted-handoff' or not reused_work.get('accepted_factor_reuse_attempts') or
+                reused_work.get('accepted_factor_reuse_accepted') != reused_work.get('accepted_factor_reuse_attempts') or
+                reused_work.get('accepted_factor_reuse_fallbacks') != 0 or
+                not reused_work.get('factor_residency', {}).get('maximum_concurrent_factor_count')):
+            raise AssertionError(f'accepted-factor ownership telemetry is incomplete: {reused_report}')
 
         rank_override = root / 'rank-budget-override.json'
         subprocess.run([sys.executable, str(script), '--profile', 'rank', '--case', 'chain-8',

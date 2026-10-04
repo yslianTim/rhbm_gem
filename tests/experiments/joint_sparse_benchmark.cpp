@@ -42,6 +42,9 @@ n::RankBudget operator_rank_budget{};
 n::SchwarzPolicy schwarz_policy{};
 n::SpqrOrdering spqr_ordering{n::SpqrOrdering::Colamd};
 bool spqr_ordering_requested{};
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+n::OperatorFactorOwnershipKindForTesting factor_ownership{n::OperatorFactorOwnershipKindForTesting::DedicatedFixed};
+#endif
 j::value Read(const char * path,bool precise=false)
 {
     std::ifstream f(path); if(!f) throw std::runtime_error("Missing input");
@@ -291,6 +294,7 @@ void Snapshot(const char * output,j::object & report)
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     report["work"].as_object()["spqr_ordering"]=n::SpqrOrderingName(n::SpqrOrderingForTesting());
     report["operator_factor_representation"]=n::OperatorFactorRepresentationName(n::OperatorFactorRepresentationForTesting());
+    report["operator_factor_ownership"]=n::OperatorFactorOwnershipName(factor_ownership);
     report["spqr_factorization"]=j::object{
         {"ordering",n::SpqrOrderingName(n::SpqrOrderingForTesting())},
         {"symbolic",j::object{{"calls",w.symbolic},{"seconds",w.symbolic_seconds},{"matrix_rows",w.symbolic_rows},
@@ -381,6 +385,11 @@ j::object SearchWork()
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     out["native_factor_accepted"]=op.native_factor_accepted;
     out["native_factor_fallbacks"]=op.native_factor_fallbacks;
+    out["accepted_factor_reuse_attempts"]=op.accepted_factor_reuse_attempts;
+    out["accepted_factor_reuse_accepted"]=op.accepted_factor_reuse_accepted;
+    out["accepted_factor_reuse_fallbacks"]=op.accepted_factor_reuse_fallbacks;
+    out["accepted_factor_reuse_fallback_reason"]=op.accepted_factor_reuse_fallback_reason;
+    out["operator_factor_ownership"]=op.factor_ownership;
     out["factor_residency"]=FactorResidency();
 #endif
 #endif
@@ -733,6 +742,16 @@ int main(int argc,char ** argv)
                     else if(representation=="native-qr")
                         n::OperatorFactorRepresentationForTesting()=n::OperatorFactorRepresentation::NativeQr;
                     else throw std::invalid_argument("Expected --operator-factor-representation exported-fixed|native-qr");
+                }
+                else if(option=="--operator-factor-ownership" && k+1<end)
+                {
+                    const std::string ownership=argv[++k];
+                    if(ownership=="dedicated-fixed") factor_ownership=n::OperatorFactorOwnershipKindForTesting::DedicatedFixed;
+                    else if(ownership=="dedicated-native") factor_ownership=n::OperatorFactorOwnershipKindForTesting::DedicatedNative;
+                    else if(ownership=="reuse-accepted-copy-on-write") factor_ownership=n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite;
+                    else if(ownership=="reuse-accepted-handoff") factor_ownership=n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedHandoff;
+                    else throw std::invalid_argument("Expected --operator-factor-ownership dedicated-fixed|dedicated-native|reuse-accepted-copy-on-write|reuse-accepted-handoff");
+                    n::OperatorFactorOwnershipForTesting()=factor_ownership;
                 }
 #endif
                 else if(option=="--operator-rank" && k+1<end) operator_rank_mode=ParseOperatorRankMode(argv[++k]);

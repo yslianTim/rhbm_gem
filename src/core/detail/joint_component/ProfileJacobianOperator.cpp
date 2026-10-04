@@ -69,6 +69,9 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
     :identity_(std::make_shared<const LinearizationIdentity>()),scale_(context.scale)
 {
     const auto n=e.x.rows(),m=e.eta.size();
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    [[maybe_unused]] bool reused_rank_evidence_ready{};
+#endif
     ResourcePhase phase("operator-prepare",true,n,e.x.cols(),static_cast<std::size_t>(e.x.nonZeros()));
     auto & work=OperatorWorkForTesting(); ++work.preparations; WorkTimer timer(work.preparation_seconds);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -108,15 +111,35 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
         ownership==OperatorFactorOwnershipKindForTesting::ReuseAcceptedHandoff)
     {
         ++work.accepted_factor_reuse_attempts;
-        if(e.factor && e.factor->Matches(design,free))
+        if(!e.factor || !e.factor->Matches(design,free))
+        {++work.accepted_factor_reuse_fallbacks; work.accepted_factor_reuse_fallback_reason="accepted-factor-mismatch";}
+        else if(backend!=FreeDesignRankBackend::SpqrBounds)
         {factor_=e.factor; ++work.accepted_factor_reuse_accepted;}
-        else ++work.accepted_factor_reuse_fallbacks;
+        else
+        {
+            ResourcePhase rank_phase("operator-rank");
+            ResourcePhase rank_stage("rank-certificate",true,n,p,static_cast<std::size_t>(design.nonZeros()));
+            ++work.rank_checks; WorkTimer rank_timer(work.rank_seconds);
+            RankWorkAudit rank_audit{work,SparseWorkForTesting()};
+            auto evidence=EvaluateFreeDesignRank(design,nullptr,{context.rank,p,absolute},context.search.operator_rank.budget);
+            if(evidence.status==FreeDesignRankStatus::FullRank)
+            {
+                RecordRankEvidence(work,evidence); rank_evidence_=std::move(evidence);
+                reused_rank_evidence_ready=true; factor_=e.factor; ++work.accepted_factor_reuse_accepted;
+            }
+            else
+            {
+                ++work.accepted_factor_reuse_fallbacks;
+                work.accepted_factor_reuse_fallback_reason="rank-certificate-needs-fixed-factor-view";
+            }
+        }
     }
 #endif
     try {
 #if defined(RHBM_GEM_TEST_INSTRUMENTATION) && defined(RHBM_GEM_JOINT_SPQR)
-        const bool native_requested=OperatorFactorRepresentationForTesting()==OperatorFactorRepresentation::NativeQr ||
-            ownership==OperatorFactorOwnershipKindForTesting::DedicatedNative;
+        const bool native_requested=ownership==OperatorFactorOwnershipKindForTesting::DedicatedNative ||
+            (ownership==OperatorFactorOwnershipKindForTesting::DedicatedFixed &&
+                OperatorFactorRepresentationForTesting()==OperatorFactorRepresentation::NativeQr);
         bool native_eligible=false;
         FreeDesignRankResult native_evidence;
         if(native_requested && backend==FreeDesignRankBackend::SpqrBounds)
@@ -157,7 +180,7 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
             {
 #if defined(RHBM_GEM_TEST_INSTRUMENTATION) && defined(RHBM_GEM_JOINT_SPQR)
                 if(native_eligible) rank_evidence_=std::move(native_evidence);
-                else
+                else if(!reused_rank_evidence_ready)
 #endif
                 {
                     ++work.rank_checks; WorkTimer rank_timer(work.rank_seconds);

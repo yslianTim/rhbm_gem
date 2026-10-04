@@ -15,7 +15,7 @@ struct OperatorWork
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     std::size_t native_factor_accepted{},native_factor_fallbacks{},accepted_factor_reuse_attempts{},
         accepted_factor_reuse_accepted{},accepted_factor_reuse_fallbacks{};
-    std::string factor_ownership;
+    std::string factor_ownership,accepted_factor_reuse_fallback_reason;
 #endif
     std::string rank_status,rank_reason;
 };

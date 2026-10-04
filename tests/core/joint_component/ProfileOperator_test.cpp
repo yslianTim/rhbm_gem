@@ -249,6 +249,42 @@ TEST(JointProfileOperatorTest, ReusedAcceptedFactorPreservesActionsRankAndWorksp
     EXPECT_EQ(unavailable_candidate.RankEvidence().status,unavailable_current.RankEvidence().status);
     EXPECT_EQ(unavailable_candidate.RankEvidence().reason,unavailable_current.RankEvidence().reason);
 }
+
+TEST(JointProfileOperatorTest, ReuseFallsBackWhenBoundedRankNeedsFixedFactorView)
+{
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"SPQR accepted-factor rank fallback";
+    n::Evaluation e; e.valid=true; e.eta=n::Vector::Zero(2); e.beta=n::Vector::Ones(4);
+    n::Matrix x(20,4);
+    for(Eigen::Index r=0;r<x.rows();++r)
+    {
+        const double t=.1+.07*static_cast<double>(r);
+        x(r,0)=1; x(r,1)=t; x(r,2)=t*t; x(r,3)=std::sin(t)+.03*t*t*t;
+    }
+    e.x=x.sparseView(); e.derivative=e.x; e.residual=n::Vector::Zero(x.rows());
+    const auto context=n::CreateContext(e.residual,2);
+    const std::vector<Eigen::Index> free{0,1,2,3}; n::Matrix normalized=x;
+    for(Eigen::Index k=0;k<normalized.cols();++k) normalized.col(k)/=x.col(k).norm();
+    n::LinearWorkspace workspace;
+    e.factor=workspace.Factor(normalized.sparseView(),free,0);
+    const n::ProfileJacobianOperator current(e,context,-1,n::FreeDesignRankBackend::SpqrBounds);
+    ASSERT_TRUE(current.Valid())<<current.Reason();
+    ASSERT_NE(current.RankEvidence().certificate,n::FreeDesignRankCertificate::LocalSupport);
+    n::SparseWorkForTesting()={}; n::OperatorWorkForTesting()={};
+    n::OperatorFactorOwnershipScopeForTesting ownership(n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite);
+    const n::ProfileJacobianOperator candidate(e,context,-1,n::FreeDesignRankBackend::SpqrBounds);
+    ASSERT_TRUE(candidate.Valid())<<candidate.Reason();
+    EXPECT_EQ(candidate.RankEvidence().status,current.RankEvidence().status);
+    EXPECT_EQ(candidate.RankEvidence().certificate,current.RankEvidence().certificate);
+    EXPECT_EQ(candidate.RankEvidence().reason,current.RankEvidence().reason);
+    EXPECT_EQ(n::OperatorWorkForTesting().accepted_factor_reuse_attempts,1);
+    EXPECT_EQ(n::OperatorWorkForTesting().accepted_factor_reuse_accepted,0);
+    EXPECT_EQ(n::OperatorWorkForTesting().accepted_factor_reuse_fallbacks,1);
+    EXPECT_EQ(n::OperatorWorkForTesting().accepted_factor_reuse_fallback_reason,
+        "rank-certificate-needs-fixed-factor-view");
+    EXPECT_EQ(n::SparseWorkForTesting().fixed_factorizations,1);
+    const n::Vector v=n::Vector::LinSpaced(2,-.3,.8);
+    EXPECT_EQ(candidate.Apply(v),current.Apply(v));
+}
 #endif
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 TEST(JointProfileOperatorTest, FactorResidencyTracksConcurrentStatesAndGenerations)
