@@ -290,6 +290,7 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
         sweep.global_ac_kkt=global.certificate.projected_kkt;
         sweep.global_width_gradient_inf_norm=global.gradient.lpNorm<Eigen::Infinity>();
         sweep.wall_seconds=Seconds(sweep_started); out.sweeps.push_back(sweep);
+        if(policy.sweep_observer) policy.sweep_observer(out.sweeps.back());
         if(sweep.cache_replay_error>2e-12+2e-13*std::max(1.0,replay.prediction.cwiseAbs().maxCoeff()) ||
             !WithinBlockObjectiveReplay(sweep.objective_replay_error,replay.objective))
         {out.reason="block-cache-replay-failed"; stop=true; break;}

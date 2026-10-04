@@ -1,13 +1,9 @@
 #pragma once
 #include "FixedBBlockCoordinate.hpp"
+#include <functional>
 
 namespace rhbm_gem::core::joint_component {
 enum class FixedNeighborBlockOrder {Forward,Reverse};
-struct FixedNeighborPolicy
-{
-    std::size_t core_atoms{128},maximum_sweeps{30};
-    FixedNeighborBlockOrder order{FixedNeighborBlockOrder::Forward};
-};
 struct FixedNeighborBlockRecord
 {
     std::size_t sweep{},block{},affected_rows{};
@@ -24,6 +20,12 @@ struct FixedNeighborBlockSweep
     double objective_before{},objective_after{},global_a_feasibility{},global_ac_kkt{};
     double global_width_gradient_inf_norm{},cache_replay_error{},objective_replay_error{},wall_seconds{};
     std::size_t block_solves{},profile_evaluations{},maximum_block_rows{},maximum_block_columns{};
+};
+struct FixedNeighborPolicy
+{
+    std::size_t core_atoms{128},maximum_sweeps{30};
+    FixedNeighborBlockOrder order{FixedNeighborBlockOrder::Forward};
+    std::function<void(const FixedNeighborBlockSweep &)> sweep_observer;
 };
 struct FixedNeighborResult
 {

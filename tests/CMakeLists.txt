@@ -184,6 +184,7 @@ set(JOINT_COMPONENT_TEST_SOURCES
     core/joint_component/OperatorSearch_test.cpp
     core/joint_component/BlockCoordinate_test.cpp
     core/joint_component/FixedBBlockCoordinate_test.cpp
+    core/joint_component/FixedNeighborBlockCoordinate_test.cpp
     core/joint_component/CompactAssessment_test.cpp
     core/joint_component/ProjectedTailQr_test.cpp
     core/joint_component/Numerics_test.cpp
