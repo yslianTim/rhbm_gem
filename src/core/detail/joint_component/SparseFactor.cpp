@@ -613,7 +613,8 @@ FreeDesignFactor::FreeDesignFactor(std::shared_ptr<SparseFactorState> state,std:
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 const Sparse & FreeDesignFactor::DesignForTesting() const {Check(); return state_->design;}
 const std::vector<Eigen::Index> & FreeDesignFactor::ColumnsForTesting() const {Check(); return state_->columns;}
-ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparseForTesting(const Sparse & rhs) const
+ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparseForTesting(
+    const Sparse & rhs,bool materialize_tail) const
 {
     Check(); auto & s=*state_;
     if(rhs.rows()!=s.design.rows()) throw std::invalid_argument("Invalid sparse Q transpose RHS size");
@@ -645,11 +646,28 @@ ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparse
     result.transformed_nonzeros=static_cast<std::size_t>(outer[transformed.value->ncol]);
     result.transformed_storage_bytes=transformed.value->nzmax*(sizeof(double)+sizeof(int64_t))+
         (transformed.value->ncol+1)*sizeof(int64_t);
+    if(!transformed.value->sorted) throw std::runtime_error("Unsorted SPQR sparse Q transpose output");
+    const auto extraction_started=Clock::now();
+    const auto * values=static_cast<const double *>(transformed.value->x);
     for(Eigen::Index column=0;column<result.columns;++column)
         for(auto item=outer[column];item<outer[column+1];++item)
             if(inner[item]>=p) ++result.tail_nonzeros;
     result.tail_storage_bytes=result.tail_nonzeros*(sizeof(double)+sizeof(int))+
         static_cast<std::size_t>(result.columns+1)*sizeof(int);
+    if(materialize_tail)
+    {
+        result.tail.resize(result.tail_rows,result.columns);
+        result.tail.reserve(static_cast<Eigen::Index>(result.tail_nonzeros));
+        for(Eigen::Index column=0;column<result.columns;++column)
+        {
+            result.tail.startVec(static_cast<int>(column));
+            for(auto item=outer[column];item<outer[column+1];++item)
+                if(inner[item]>=p)
+                    result.tail.insertBack(static_cast<int>(inner[item]-p),static_cast<int>(column))=values[item];
+        }
+        result.tail.finalize(); result.tail.makeCompressed();
+    }
+    result.tail_extract_seconds=Seconds(extraction_started);
     return result;
 }
 Matrix FreeDesignFactor::OrthogonalTransposeForTesting(const Matrix & rhs) const
@@ -931,7 +949,7 @@ FreeDesignFactor::FreeDesignFactor(std::shared_ptr<SparseFactorState> s,std::siz
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 const Sparse & FreeDesignFactor::DesignForTesting() const {Check(); return state_->design;}
 const std::vector<Eigen::Index> & FreeDesignFactor::ColumnsForTesting() const {Check(); return state_->columns;}
-ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparseForTesting(const Sparse &) const
+ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparseForTesting(const Sparse &,bool)
 {throw std::runtime_error("sparse Q transpose census requires SPQR");}
 Matrix FreeDesignFactor::OrthogonalTransposeForTesting(const Matrix & rhs) const
 {Check(); return state_->qr.matrixQ().adjoint()*rhs;}
