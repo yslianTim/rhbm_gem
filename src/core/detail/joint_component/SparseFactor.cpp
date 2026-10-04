@@ -613,6 +613,47 @@ FreeDesignFactor::FreeDesignFactor(std::shared_ptr<SparseFactorState> state,std:
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 const Sparse & FreeDesignFactor::DesignForTesting() const {Check(); return state_->design;}
 const std::vector<Eigen::Index> & FreeDesignFactor::ColumnsForTesting() const {Check(); return state_->columns;}
+ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparseForTesting(const Sparse & rhs) const
+{
+    Check(); auto & s=*state_;
+    if(rhs.rows()!=s.design.rows()) throw std::invalid_argument("Invalid sparse Q transpose RHS size");
+    ProjectedTailTransformForTesting result;
+    result.rows=rhs.rows(); result.columns=rhs.cols(); result.input_nonzeros=static_cast<std::size_t>(rhs.nonZeros());
+    const auto p=s.design.cols();
+    LongSparse storage=rhs; storage.makeCompressed(); auto view=View(storage);
+    struct SparseOwner
+    {
+        cholmod_sparse * value{}; cholmod_common * common{};
+        ~SparseOwner() {if(value) cholmod_l_free_sparse(&value,common);}
+    } transformed{nullptr,&s.cc};
+    {
+        ResourcePhase phase("spqr-q-transform-sparse",true,rhs.rows(),rhs.cols(),result.input_nonzeros);
+        auto & work=SparseWorkForTesting(); ++work.q_actions; WorkTimer timer(work.q_seconds);
+        const auto started=Clock::now();
+        transformed.value=s.fixed_rank>=0 ? SuiteSparseQR_qmult<double>(SPQR_QTX,s.h,s.tau,s.hpinv,&view,&s.cc) :
+            SuiteSparseQR_qmult<double>(SPQR_QTX,s.qr,&view,&s.cc);
+        result.q_transform_seconds=Seconds(started);
+    }
+    if(!transformed.value) throw std::runtime_error("SPQR sparse Q transpose failed");
+    if(transformed.value->itype!=CHOLMOD_LONG) throw std::runtime_error("Unexpected SPQR sparse index type");
+    result.tail_rows=static_cast<Eigen::Index>(transformed.value->nrow)-p;
+    if(result.tail_rows<0 || transformed.value->nrow!=static_cast<std::size_t>(rhs.rows()) ||
+        transformed.value->ncol!=static_cast<std::size_t>(rhs.cols()))
+        throw std::runtime_error("Unexpected SPQR sparse Q transpose shape");
+    const auto * outer=static_cast<const int64_t *>(transformed.value->p);
+    const auto * inner=static_cast<const int64_t *>(transformed.value->i);
+    result.transformed_nonzeros=static_cast<std::size_t>(outer[transformed.value->ncol]);
+    result.transformed_storage_bytes=transformed.value->nzmax*(sizeof(double)+sizeof(int64_t))+
+        (transformed.value->ncol+1)*sizeof(int64_t);
+    for(Eigen::Index column=0;column<result.columns;++column)
+        for(auto item=outer[column];item<outer[column+1];++item)
+            if(inner[item]>=p) ++result.tail_nonzeros;
+    result.tail_storage_bytes=result.tail_nonzeros*(sizeof(double)+sizeof(int))+
+        static_cast<std::size_t>(result.columns+1)*sizeof(int);
+    return result;
+}
+Matrix FreeDesignFactor::OrthogonalTransposeForTesting(const Matrix & rhs) const
+{Check(); return state_->Orthogonal(rhs,true);}
 #endif
 void FreeDesignFactor::Check() const
 {if(!state_ || state_->generation!=generation_ || (!state_->qr && state_->fixed_rank<0)) throw std::logic_error("Expired free-design factor");}
@@ -890,6 +931,10 @@ FreeDesignFactor::FreeDesignFactor(std::shared_ptr<SparseFactorState> s,std::siz
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 const Sparse & FreeDesignFactor::DesignForTesting() const {Check(); return state_->design;}
 const std::vector<Eigen::Index> & FreeDesignFactor::ColumnsForTesting() const {Check(); return state_->columns;}
+ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparseForTesting(const Sparse &) const
+{throw std::runtime_error("sparse Q transpose census requires SPQR");}
+Matrix FreeDesignFactor::OrthogonalTransposeForTesting(const Matrix & rhs) const
+{Check(); return state_->qr.matrixQ().adjoint()*rhs;}
 #endif
 void FreeDesignFactor::Check() const
 {if(!state_ || !state_->valid || generation_!=state_->generation) throw std::logic_error("Expired free-design factor");}

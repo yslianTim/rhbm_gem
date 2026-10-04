@@ -49,6 +49,13 @@ struct StructuredProjectedQrResultForTesting
 };
 StructuredProjectedQrResultForTesting StructuredProjectedQrForTesting(
     const Sparse &,const Sparse &,VectorRef,double);
+struct ProjectedTailTransformForTesting
+{
+    Eigen::Index rows{},columns{},tail_rows{};
+    std::size_t input_nonzeros{},transformed_nonzeros{},tail_nonzeros{},
+        transformed_storage_bytes{},tail_storage_bytes{};
+    double q_transform_seconds{};
+};
 struct FactorResidencyRecord
 {
     std::size_t factor_id{},generation{};
@@ -129,6 +136,8 @@ public:
     static std::shared_ptr<FreeDesignFactor> NativeFixedForTesting(const Sparse &,const std::vector<Eigen::Index> &);
     const Sparse & DesignForTesting() const;
     const std::vector<Eigen::Index> & ColumnsForTesting() const;
+    ProjectedTailTransformForTesting OrthogonalTransposeTailSparseForTesting(const Sparse &) const;
+    Matrix OrthogonalTransposeForTesting(const Matrix &) const;
 #endif
     bool Matches(const Sparse &,const std::vector<Eigen::Index> &) const;
     int Rank() const;

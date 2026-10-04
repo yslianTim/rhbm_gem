@@ -102,6 +102,9 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
                 AssessmentStageTimerForTesting projection_stage("compact-design-response",n,p);
 #endif
                 out.free_design_factor=compact;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                out.free_design_factor_for_testing=factor;
+#endif
                 const Matrix response=e.residual/scale;
                 out.free_design_response=(compact*factor->LeastSquares(response)).col(0);
             }
@@ -209,11 +212,15 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
     const auto jacobian_base=work.jacobian_qr,compact_base=work.compact_jacobian_qr;
     const bool structured=compact && widths &&
         ProjectedReductionForTesting()==ProjectedReductionKindForTesting::StructuredCompactQr;
+    const bool census=compact && widths &&
+        ProjectedReductionForTesting()==ProjectedReductionKindForTesting::ProjectedTailCensus;
     auto & projected_work=work.projected_reduction;
-    projected_work.kind=structured ? "structured-compact-qr" : "observation-tiled-qr";
-    projected_work.ordering=structured ? "SuiteSparseQR_FIXED" : "none";
+    projected_work.kind=structured ? "structured-compact-qr" :
+        census ? "projected-tail-census" : "observation-tiled-qr";
+    projected_work.ordering=structured ? "SuiteSparseQR_FIXED" :
+        census ? "sparse-qmult-free-design-factor" : "none";
     projected_work.factor_rows=m; projected_work.factor_columns=m;
-    if(structured) ++projected_work.attempts;
+    if(structured || census) ++projected_work.attempts;
 #endif
     out.projected_norms=Vector::Zero(m); out.jacobian_norms=Vector::Zero(m);
     Matrix p,j;
@@ -320,6 +327,42 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
                 projected_work.observation_projected_rows_processed+=static_cast<std::size_t>(count);
             }
         }
+    }
+    else if(census)
+    {
+        projected_work.observations=n;
+        projected_work.free_design_columns=d.free_design.cols();
+        projected_work.width_columns=m;
+        projected_work.raw_nonzeros=static_cast<std::size_t>(d.raw.nonZeros());
+        projected_work.raw_density=n>0 && m>0 ?
+            static_cast<double>(projected_work.raw_nonzeros)/(static_cast<double>(n)*static_cast<double>(m)) : 0.;
+        try
+        {
+            if(!d.free_design_factor_for_testing) throw std::runtime_error("free-design-factor-unavailable");
+            const Sparse raw=d.raw;
+            const auto transformed=d.free_design_factor_for_testing->OrthogonalTransposeTailSparseForTesting(raw);
+            projected_work.sparse_rows=transformed.rows;
+            projected_work.sparse_columns=transformed.columns;
+            projected_work.sparse_nonzeros=transformed.transformed_nonzeros;
+            projected_work.q_transformed_nonzeros=transformed.transformed_nonzeros;
+            projected_work.tail_rows=transformed.tail_rows;
+            projected_work.tail_nonzeros=transformed.tail_nonzeros;
+            projected_work.q_transformed_storage_bytes=transformed.transformed_storage_bytes;
+            projected_work.tail_storage_bytes=transformed.tail_storage_bytes;
+            projected_work.q_transformed_density=n>0 && m>0 ?
+                static_cast<double>(transformed.transformed_nonzeros)/(static_cast<double>(n)*static_cast<double>(m)) : 0.;
+            projected_work.tail_density=transformed.tail_rows>0 && m>0 ?
+                static_cast<double>(transformed.tail_nonzeros)/(static_cast<double>(transformed.tail_rows)*static_cast<double>(m)) : 0.;
+            projected_work.q_transform_seconds=transformed.q_transform_seconds;
+            projected_work.seconds+=transformed.q_transform_seconds;
+        }
+        catch(const std::exception & error)
+        {
+            projected_work.fallback_reason=error.what();
+        }
+        ++projected_work.fallbacks;
+        if(projected_work.fallback_reason.empty())
+            projected_work.fallback_reason="census-only-observation-tiled-fallback";
     }
     work.projected_qr=AccumulateTiledQr(projected_base,projected.telemetry);
     work.jacobian_qr=AccumulateTiledQr(jacobian_base,jacobian.telemetry);

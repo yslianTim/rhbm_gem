@@ -248,6 +248,26 @@ class JointBenchmarkContract(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 benchmark.validate_args(parser, args)
 
+    def test_projected_tail_census_is_solve_only_and_is_recorded(self):
+        parser = benchmark.build_parser()
+        args = parser.parse_args(['--profile', 'solve', '--case', 'chain-8',
+                                  '--build-dir', 'build/debug', '--output', 'result.json',
+                                  '--projected-reduction', 'projected-tail-census'])
+        benchmark.validate_args(parser, args)
+        with tempfile.TemporaryDirectory() as temporary:
+            build = Path(temporary)
+            driver = build / 'bin/joint_sparse_benchmark'
+            driver.parent.mkdir(); driver.touch()
+            command = benchmark.command_for_profile(args, {'kind': 'synthetic', 'topology': 'chain', 'atoms': 8},
+                                                    Path('result.json'), build)
+            self.assertEqual(command[command.index('--projected-reduction') + 1], 'projected-tail-census')
+        self.assertEqual(benchmark.solver_policy_metadata(args, 'SPQR')['projected_reduction'],
+                         'projected-tail-census')
+        args.profile = 'search'
+        with redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                benchmark.validate_args(parser, args)
+
     def test_benchmark_ordering_candidates_and_unavailable_reason(self):
         parser = benchmark.build_parser()
         for ordering in ('colamd', 'default', 'best'):

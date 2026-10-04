@@ -558,7 +558,8 @@ def build_parser():
     parser.add_argument('--svd-mode', choices=('legacy', 'values', 'auto'))
     parser.add_argument('--assessment-reduction', choices=('observation-tsqr', 'compact-stack-qr'),
                         default='observation-tsqr')
-    parser.add_argument('--projected-reduction', choices=('observation-tiled-qr', 'structured-compact-qr'),
+    parser.add_argument('--projected-reduction', choices=('observation-tiled-qr', 'structured-compact-qr',
+                        'projected-tail-census'),
                         default='observation-tiled-qr')
     parser.add_argument('--rank-mode', choices=('prototype', 'oracle'), default='prototype')
     parser.add_argument('--cli', type=Path)
@@ -603,8 +604,8 @@ def main(argv=None):
     output.parent.mkdir(parents=True, exist_ok=True)
     try:
         metadata = build_metadata(build)
-        if args.projected_reduction == 'structured-compact-qr' and metadata['backend'].upper() != 'SPQR':
-            parser.error('structured-compact-qr requires the SPQR benchmark backend')
+        if args.projected_reduction in ('structured-compact-qr', 'projected-tail-census') and metadata['backend'].upper() != 'SPQR':
+            parser.error(f'{args.projected_reduction} requires the SPQR benchmark backend')
         commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT, check=True,
                                 capture_output=True, text=True).stdout.strip()
     except (OSError, subprocess.CalledProcessError, ValueError) as error:

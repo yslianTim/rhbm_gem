@@ -12,6 +12,9 @@ struct TiledDifferential
     double scale{};
     bool valid{},reference_order{};
     std::string reason;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    std::shared_ptr<FreeDesignFactor> free_design_factor_for_testing;
+#endif
     void Rows(Eigen::Index first,Eigen::Index count,Matrix & projected,Matrix & jacobian) const;
 };
 struct ReducedDifferential
@@ -35,7 +38,7 @@ ReducedDifferential ReduceDerivativeCompact(const TiledDifferential &,VectorRef,
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 enum class JacobianReductionKindForTesting {ObservationTsqr,CompactStackQr};
 JacobianReductionKindForTesting & JacobianReductionForTesting();
-enum class ProjectedReductionKindForTesting {ObservationTiledQr,StructuredCompactQr};
+enum class ProjectedReductionKindForTesting {ObservationTiledQr,StructuredCompactQr,ProjectedTailCensus};
 ProjectedReductionKindForTesting & ProjectedReductionForTesting();
 TiledDifferential PrepareDerivativeForTesting(const Evaluation &,double,const EvaluationContext *,double,
     Eigen::Index,bool);
@@ -45,9 +48,13 @@ struct ProjectedReductionWorkForTesting
 {
     std::string kind{"observation-tiled-qr"},ordering{"none"},fallback_reason;
     std::size_t attempts{},accepted{},fallbacks{},sparse_nonzeros{};
+    std::size_t raw_nonzeros{},q_transformed_nonzeros{},tail_nonzeros{},
+        q_transformed_storage_bytes{},tail_storage_bytes{};
     std::size_t observation_projected_rows_processed{},compact_projected_rows_processed{},maximum_dense_bytes{};
-    Eigen::Index sparse_rows{},sparse_columns{},factor_rows{},factor_columns{};
-    double seconds{},symbolic_seconds{},numeric_seconds{};
+    Eigen::Index observations{},free_design_columns{},width_columns{},tail_rows{},
+        sparse_rows{},sparse_columns{},factor_rows{},factor_columns{};
+    double raw_density{},q_transformed_density{},tail_density{};
+    double seconds{},symbolic_seconds{},numeric_seconds{},q_transform_seconds{};
 };
 struct DerivativeWork
 {

@@ -452,6 +452,14 @@ j::object AssessmentTelemetry()
         {"observation_projected_rows_processed",reduction.observation_projected_rows_processed},
         {"compact_projected_rows_processed",reduction.compact_projected_rows_processed},
         {"maximum_dense_bytes",reduction.maximum_dense_bytes},
+        {"observations",reduction.observations},{"free_design_columns",reduction.free_design_columns},
+        {"width_columns",reduction.width_columns},{"raw_nonzeros",reduction.raw_nonzeros},
+        {"raw_density",reduction.raw_density},{"q_transformed_nonzeros",reduction.q_transformed_nonzeros},
+        {"q_transformed_density",reduction.q_transformed_density},{"tail_rows",reduction.tail_rows},
+        {"tail_nonzeros",reduction.tail_nonzeros},{"tail_density",reduction.tail_density},
+        {"q_transform_seconds",reduction.q_transform_seconds},
+        {"q_transformed_storage_bytes",reduction.q_transformed_storage_bytes},
+        {"tail_storage_bytes",reduction.tail_storage_bytes},
         {"sparse_rows",reduction.sparse_rows},{"sparse_columns",reduction.sparse_columns},
         {"sparse_nnz",reduction.sparse_nonzeros},
         {"symbolic_seconds",reduction.symbolic_seconds},{"numeric_seconds",reduction.numeric_seconds},
@@ -731,7 +739,9 @@ int main(int argc,char ** argv)
                         n::ProjectedReductionForTesting()=n::ProjectedReductionKindForTesting::ObservationTiledQr;
                     else if(projected_reduction=="structured-compact-qr")
                         n::ProjectedReductionForTesting()=n::ProjectedReductionKindForTesting::StructuredCompactQr;
-                    else throw std::invalid_argument("Expected --projected-reduction observation-tiled-qr|structured-compact-qr");
+                    else if(projected_reduction=="projected-tail-census")
+                        n::ProjectedReductionForTesting()=n::ProjectedReductionKindForTesting::ProjectedTailCensus;
+                    else throw std::invalid_argument("Expected --projected-reduction observation-tiled-qr|structured-compact-qr|projected-tail-census");
                 }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
                 else if(option=="--operator-factor-representation" && k+1<end)
