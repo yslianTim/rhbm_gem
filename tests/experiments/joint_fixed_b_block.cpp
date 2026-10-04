@@ -2,8 +2,11 @@
 #include "core/detail/joint_component/Problem.hpp"
 #include "support/JointOperatorWorkload.hpp"
 #include <boost/json.hpp>
+#include <Eigen/Eigenvalues>
 #include <algorithm>
+#include <array>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -162,10 +165,111 @@ Outcome Run(const std::string & topology,int atoms,const std::string & order)
 }
 void Write(const std::filesystem::path & path,const j::value & value)
 {std::ofstream out(path); if(!out) throw std::runtime_error("Could not open campaign output."); out<<j::serialize(value)<<'\n';}
+j::object Coupling(const std::string & topology,int atoms)
+{
+    auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
+    const auto & layout=n::BuildParameterLayout(*input); const n::Domain parent_domain(input);
+    const auto profile_domain=n::ProfileDomain(parent_domain,layout);
+    const auto parent=n::CreateContext(input); const auto context=n::ProfileContext(parent,layout,parent_domain.rows);
+    const n::Vector observations=Eigen::Map<const n::Vector>(input->observations.data(),static_cast<Eigen::Index>(input->observations.size()));
+    const n::Vector eta=n::Vector::Constant(static_cast<Eigen::Index>(input->atom_ids.size()),std::log(.5));
+    const auto profile_y=Select(observations,layout.informative_rows),profile_eta=Select(eta,layout.full_atoms);
+    const auto global=n::EvaluateProfile(profile_domain,profile_y,profile_eta,false,&context);
+    if(!global.valid) throw std::runtime_error("Global fixed-B profile failed: "+global.reason);
+    const auto partition=n::BuildStructuralBlockPartition(*input,layout,128);
+    if(partition.cores.size()!=2) throw std::runtime_error("Coupling diagnostic requires exactly two blocks.");
+
+    std::vector<Eigen::Index> first_columns,second_columns;
+    std::vector<Eigen::Index> atom_column(input->atom_ids.size(),-1);
+    for(std::size_t k=0;k<layout.full_atoms.size();++k)
+        atom_column.at(layout.full_atoms[k])=static_cast<Eigen::Index>(k);
+    const std::array<const n::StructuralCore *,2> cores{&partition.cores[0],&partition.cores[1]};
+    for(std::size_t block=0;block<cores.size();++block)
+        for(auto atom:cores[block]->atoms)
+        {
+            const auto column=atom_column.at(static_cast<std::size_t>(atom));
+            auto & columns=block==0 ? first_columns : second_columns;
+            columns.push_back(2*column); columns.push_back(2*column+1);
+        }
+
+    n::Sparse gram_sparse=global.x.transpose()*global.x;
+    n::Matrix gram(gram_sparse);
+    n::Vector column_scale=gram.diagonal().cwiseSqrt();
+    for(Eigen::Index row=0;row<gram.rows();++row)
+        for(Eigen::Index column=0;column<gram.cols();++column)
+            gram(row,column)/=column_scale(row)*column_scale(column);
+    const auto n1=static_cast<Eigen::Index>(first_columns.size()),n2=static_cast<Eigen::Index>(second_columns.size());
+    n::Matrix h11(n1,n1),h12(n1,n2),h21(n2,n1),h22(n2,n2);
+    for(Eigen::Index row=0;row<n1;++row) for(Eigen::Index column=0;column<n1;++column)
+        h11(row,column)=gram(first_columns[static_cast<std::size_t>(row)],first_columns[static_cast<std::size_t>(column)]);
+    for(Eigen::Index row=0;row<n1;++row) for(Eigen::Index column=0;column<n2;++column)
+        h12(row,column)=gram(first_columns[static_cast<std::size_t>(row)],second_columns[static_cast<std::size_t>(column)]);
+    for(Eigen::Index row=0;row<n2;++row) for(Eigen::Index column=0;column<n1;++column)
+        h21(row,column)=gram(second_columns[static_cast<std::size_t>(row)],first_columns[static_cast<std::size_t>(column)]);
+    for(Eigen::Index row=0;row<n2;++row) for(Eigen::Index column=0;column<n2;++column)
+        h22(row,column)=gram(second_columns[static_cast<std::size_t>(row)],second_columns[static_cast<std::size_t>(column)]);
+    Eigen::LLT<n::Matrix> llt1(h11),llt2(h22);
+    if(llt1.info()!=Eigen::Success || llt2.info()!=Eigen::Success)
+        throw std::runtime_error("Block Gram factorization failed in coupling diagnostic.");
+    const n::Matrix inverse_lower1=llt1.matrixL().solve(n::Matrix::Identity(n1,n1));
+    const n::Matrix inverse_lower2=llt2.matrixL().solve(n::Matrix::Identity(n2,n2));
+    const n::Matrix normalized_cross=(inverse_lower1*h12*inverse_lower2.transpose()).eval();
+    Eigen::JacobiSVD<n::Matrix> coupling_svd(normalized_cross);
+    const double canonical_coupling=coupling_svd.singularValues()(0);
+    const n::Matrix gauss_seidel=llt2.solve(h21*llt1.solve(h12));
+    Eigen::EigenSolver<n::Matrix> eigenvalues(gauss_seidel,false);
+    if(eigenvalues.info()!=Eigen::Success) throw std::runtime_error("Gauss-Seidel spectrum failed.");
+    double theoretical_radius{};
+    for(Eigen::Index k=0;k<eigenvalues.eigenvalues().size();++k)
+        theoretical_radius=std::max(theoretical_radius,std::abs(eigenvalues.eigenvalues()(k)));
+
+    std::vector<std::uint8_t> row_owners(input->observations.size());
+    for(std::size_t block=0;block<cores.size();++block)
+        for(auto atom:cores[block]->atoms) for(const auto & support:input->support.at(static_cast<std::size_t>(atom)))
+            if(std::binary_search(layout.informative_rows.begin(),layout.informative_rows.end(),support.row))
+                row_owners[support.row]|=static_cast<std::uint8_t>(1u<<block);
+    std::size_t touched_rows{},boundary_rows{};
+    for(auto owner:row_owners) {touched_rows+=owner!=0; boundary_rows+=owner==3;}
+
+    n::FixedBBlockPolicy policy; policy.core_atoms=128; policy.maximum_sweeps=7;
+    const auto block=n::SearchFixedBBlocks(*input,layout,observations,eta,context,policy);
+    std::vector<double> kkt_ratios;
+    for(std::size_t k=1;k<block.sweeps.size();++k)
+        if(block.sweeps[k-1].global_ac_kkt>0)
+            kkt_ratios.push_back(block.sweeps[k].global_ac_kkt/block.sweeps[k-1].global_ac_kkt);
+    if(kkt_ratios.empty()) throw std::runtime_error("No early KKT ratios available.");
+    auto ordered_ratios=kkt_ratios; std::sort(ordered_ratios.begin(),ordered_ratios.end());
+    const double median=ordered_ratios.size()%2 ? ordered_ratios[ordered_ratios.size()/2] :
+        .5*(ordered_ratios[ordered_ratios.size()/2-1]+ordered_ratios[ordered_ratios.size()/2]);
+    j::array ratios; for(auto ratio:kkt_ratios) ratios.push_back(ratio);
+    const auto free_columns=static_cast<std::size_t>(global.beta.size())-global.certificate.active_atoms.size();
+    return {{"topology",topology},{"atoms",atoms},{"blocks",partition.cores.size()},
+        {"boundary_rows",boundary_rows},{"touched_rows",touched_rows},
+        {"boundary_row_fraction",static_cast<double>(boundary_rows)/static_cast<double>(touched_rows)},
+        {"canonical_block_coupling",canonical_coupling},{"theoretical_gs_radius",theoretical_radius},
+        {"canonical_coupling_squared",canonical_coupling*canonical_coupling},
+        {"radius_squared_difference",std::abs(theoretical_radius-canonical_coupling*canonical_coupling)},
+        {"early_sweep_kkt_ratios",ratios},{"median_early_contraction",median},
+        {"global_active_atoms",global.certificate.active_atoms.size()},{"global_free_columns",free_columns},
+        {"global_kkt",global.certificate.projected_kkt},{"observed_sweeps",block.sweeps.size()}};
+}
+void RunCouplingCampaign(const std::filesystem::path & root)
+{
+    std::filesystem::create_directories(root);
+    j::array cases; cases.push_back(Coupling("chain",256)); cases.push_back(Coupling("cube",256));
+    Write(root/"coupling.json",j::object{{"cases",cases}});
+    Write(root/"campaign-manifest.json",j::object{{"phase","F1.5 fixed-B block coupling diagnostics"},
+        {"topologies",{"chain","cube"}},{"atoms",256},{"core_atoms",128},
+        {"local_solver","existing constrained SolveLinear"},{"block_order","forward"},
+        {"maximum_kkt_sweeps",7},{"global_kkt_tolerance",1e-10},
+        {"normalization","column-scaled Gram; canonical metric invariant to per-column scaling"}});
+}
 }
 int main(int argc,char ** argv)
 {
     try {
+        if(argc==3 && std::string(argv[1])=="--coupling")
+        {RunCouplingCampaign(argv[2]); std::cout<<"fixed-B coupling diagnostics complete\n"; return 0;}
         if(argc!=2) throw std::invalid_argument("Usage: joint_fixed_b_block_experiment OUTPUT_DIR");
         const std::filesystem::path root(argv[1]); const auto individuals=root/"individual-results";
         std::filesystem::create_directories(individuals);

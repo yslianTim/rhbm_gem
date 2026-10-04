@@ -1,0 +1,1 @@
+{"phase":"F1.5 fixed-B block coupling diagnostics","topologies":["chain","cube"],"atoms":256,"core_atoms":128,"local_solver":"existing constrained SolveLinear","block_order":"forward","maximum_kkt_sweeps":7,"global_kkt_tolerance":1E-10,"normalization":"column-scaled Gram; canonical metric invariant to per-column scaling"}
