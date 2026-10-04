@@ -172,18 +172,19 @@ cost by `search_seconds`; they are null when that denominator is zero or
 unavailable. These are descriptive measurements and have no hardware-specific
 pass threshold.
 
-## Five scalability axes
+## Six scalability axes
 
 Do not use total solve wall time as a proxy for a single scaling property. The
-current evidence separates five questions:
+current evidence separates six questions:
 
 | Scalability axis | Measurement | Current evidence |
 | --- | --- | --- |
 | Rank certification | bounded rank work, certificate status, SPQR reconstruction | [rank frontier](figures/joint-rank-budget-frontier/campaign-manifest.json) and [local-support census](figures/joint-local-rank-witness-census/local-rank-witness-census.json) |
 | Krylov iteration scaling | iterations per solve under a fixed Schwarz policy | [cube multi-block gate](figures/joint-search-scaling-r2/search-scaling-analysis.json) |
-| Search operator throughput | operator action, factorization, and search time | [factor residency](figures/joint-factor-residency-r2/residency-analysis.json) and [operator factor frontier](figures/joint-operator-factor-frontier-r1/factor-frontier-analysis.json) |
-| Search memory and factor representation | factor lifetime, owned-byte estimates, factor fill, and sampled process-tree RSS | [operator factor frontier](figures/joint-operator-factor-frontier-r1/factor-frontier-analysis.json) and [cube memory analysis](figures/cube-search-memory-r1/cube-memory-analysis.json) |
-| Returned-state assessment scaling | assessment stages, derivative reduction, and full endpoint behavior | [compact acceptance](figures/joint-compact-acceptance-r2/acceptance-analysis.json) and [derivative scaling](figures/joint-derivative-scaling-r1/derivative-scaling-analysis.json) |
+| Search operator throughput | operator actions, factorization, and search time | [factor ownership](figures/joint-factor-ownership-r1/factor-ownership-analysis.json) and [operator factor frontier](figures/joint-operator-factor-frontier-r1/factor-frontier-analysis.json) |
+| Search factor memory | factor lifetime, owned-byte estimates, factor fill, and sampled process-tree RSS | [factor ownership](figures/joint-factor-ownership-r1/factor-ownership-analysis.json), [factor residency](figures/joint-factor-residency-r2/residency-analysis.json), and [cube memory analysis](figures/cube-search-memory-r1/cube-memory-analysis.json) |
+| Assessment derivative reduction | row generation and projected-width QR cost | [projected-width comparison](figures/joint-projected-width-r1/projected-width-analysis.json) and [derivative scaling](figures/joint-derivative-scaling-r1/derivative-scaling-analysis.json) |
+| End-to-end returned-state assessment | assessment completion, returned-state parity, timeout, and RSS | [compact acceptance](figures/joint-compact-acceptance-r2/acceptance-analysis.json) and [post-compact frontier](figures/joint-post-compact-frontier-r1/frontier-analysis.json) |
 
 Search-only results do not establish assessment or endpoint qualification.
 Assessment timeouts remain incomplete evidence even when search succeeded.
@@ -478,7 +479,7 @@ runner; at a resource stop it can describe stage-entry factors while another
 factor construction is in progress.
 
 The [operator factor frontier](figures/joint-operator-factor-frontier-r1/factor-frontier-analysis.json)
-compares the current exported `Fixed` factor with a benchmark-only native
+compares the dedicated exported `Fixed` control with a benchmark-only native
 SuiteSparseQR representation. At cube-512/COLAMD, the native run matched the
 current run's stop reason, accepted updates, rank certificate, all 30 PCG
 iteration counts, and returned search state (maximum absolute state difference
@@ -494,9 +495,11 @@ while the native candidate finished only about 29 MiB below it; an earlier
 current run completed at about 4.12 GB. That variability does not establish a
 reliable process-RSS margin for the production ordering. All six cube-2048
 representation/ordering retries stopped at the unchanged 4 GiB cap before any
-PCG solve. Therefore the native representation remains benchmark-only, the
-production factor representation remains exported `Fixed`, and production
-ordering remains COLAMD. No production memory optimization was promoted.
+PCG solve. The production OperatorPcg path now reuses the accepted profile
+factor with copy-on-write workspace mutation. Native QR remains benchmark-only,
+production ordering remains COLAMD, and the dedicated fallback retains the
+exported `Fixed` representation. The accepted-factor measurements are in the
+[factor ownership campaign](figures/joint-factor-ownership-r1/factor-ownership-analysis.json).
 
 ### Returned-state assessment attribution
 
@@ -587,6 +590,49 @@ rerun under the same 600-second / 4-GiB envelope and completed: chain-512 used
 454.88 s assessment time and 627 MB peak RSS; cube-512 used 410.41 s and
 2.56 GB. The guarded compact reduction is therefore the production assessment
 path, with the current observation-scale TSQR retained as the exact fallback.
+
+### Post-compact assessment frontier
+
+The [preselected 640-atom frontier](figures/joint-post-compact-frontier-r1/frontier-analysis.json)
+used the production compact-Jacobian assessment route, SPQR, OperatorPcg,
+Schwarz, COLAMD, one Eigen thread, and the unchanged 600-second / 4-GiB
+limits. Both cases completed search and entered returned-state assessment.
+
+| Case | Status | Active stage | Last completed | Projected QR s | Compact Jacobian QR s | Wall s | Peak RSS |
+| --- | --- | --- | --- | ---: | ---: | ---: | --- |
+| chain-640 | timeout | `derivative-projected-qr` | `derivative-norms` | 376.54 | 0.00 | 600.03 | 0.62 GiB |
+| cube-640 | timeout | `derivative-projected-qr` | `derivative-norms` | 266.81 | 0.00 | 600.03 | 3.63 GiB |
+
+The first post-compact end-to-end blocker is projected-width QR time, not the
+4-GiB RSS ceiling. The cube case has about 0.36 GiB of sampled RSS headroom.
+The preselected 640 point timed out, so this campaign ran no 768-atom solve.
+
+### Projected-width reduction comparison
+
+The [projected-width campaign](figures/joint-projected-width-r1/projected-width-analysis.json)
+compares production observation-tiled QR with a benchmark-only fixed-order
+SPQR factorization of `[Z D]`, with every `Z` column before every `D` column.
+The candidate checks the identity ordering and extracts the trailing compact
+factor; it does not use a free column permutation or normal equations. The
+current route remains the production path. Permanent tests check projected
+Gram, spectra, ranks, norms, normalized spectra, weak-subspace projectors,
+response, cancellation, near-collinearity, row permutation, scale, active-face,
+and rank-boundary behavior. Ambiguous rank-boundary fixtures use the current
+observation-tiled QR fallback.
+
+| Case | Current assessment s | Candidate assessment s | Assessment speedup | Current projected QR s | Candidate reduction s | Current / candidate peak RSS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| chain-128 | 14.39 | 7.64 | 1.88x | 7.14 | 0.42 | 0.21 / 0.69 GiB |
+| cube-128 | 13.79 | 8.58 | 1.61x | 5.83 | 0.62 | 0.52 / 1.03 GiB |
+| chain-256 | 75.03 | 33.63 | 2.23x | 44.18 | 2.39 | 0.32 / 2.04 GiB |
+| cube-256 | 68.32 | 35.89 | 1.90x | 35.52 | 3.11 | 1.06 / 2.24 GiB |
+
+Full assessment and returned-state parity passed at 128 and 256. Candidate RSS
+grew materially with size. At 512 it exceeded the same 4-GiB limit during
+`derivative-projected-qr` for both chain and cube; production completed at
+454.88 s / 410.41 s and 0.58 / 2.39 GiB sampled peak RSS. No 640 candidate was
+run after its 512 RSS gate failed. The candidate remains benchmark-only; the
+observation-tiled projected QR is still the production implementation.
 
 The fixed-state compact-SVD, operator, rank, and action contracts remain owned
 by permanent tests such as `Numerics_test`, `ProfileOperator_test`, and

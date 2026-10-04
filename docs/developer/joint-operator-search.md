@@ -35,10 +35,23 @@ never switches to dense. Rank checks use the policy's finite time, entry, and
 workspace budgets. A/C, reference, assessment, assembly and uncertainty retain
 their current paths.
 
-Each accepted state owns a dedicated operator factor. Trial evaluation uses a
-separate mutable workspace; rejection retains the accepted linearization.
-Accepting a trial rebuilds state-dependent numerical data. Only structural
-block topology survives accepted updates. There is no state/face cache.
+The production OperatorPcg path reuses the accepted profile factor when its
+normalized free design and column map match the operator design. For bounded
+SPQR rank, reuse is accepted only when the existing no-factor rank check
+certifies FullRank; otherwise the dedicated fixed-factor path supplies the
+same bounded rank view. `Unavailable` remains unavailable. The operator holds
+the accepted factor read-only, and the trial workspace copy-on-writes before
+its next factorization, so a later evaluation cannot invalidate the operator.
+Rejected trials retain the accepted linearization. Accepting a trial rebuilds
+state-dependent numerical data. Only structural block topology survives
+accepted updates. There is no state/face cache.
+
+The stored profile factor is for normalized free columns `Z = X_f N^-1`, where
+`N` is the diagonal of raw free-column norms. Operator action tests compare
+reuse against a dedicated normalized factor and against the raw-design scaling
+identities for Apply, ApplyAdjoint, and ApplyNormal. They check the adjoint and
+normal identities, bounded rank status/certificate/reason, and workspace
+mutation lifetime.
 
 Raw-width column norms d_j = norm(D_j)/s provide an approximate search metric.
 Positive floors are sqrt(epsilon)*max(d) (all-zero norms use ones), and
@@ -130,10 +143,10 @@ previous operator/Schwarz campaigns did not qualify.
 
 The rigorous bounded `LocalSupport` rank certificate has removed the rank-work
 blocker under the existing 120-second, 100,000,000-entry, 256-MiB budget.
-Current evidence is reported on five distinct scalability axes: rank
+Current evidence is reported on six distinct scalability axes: rank
 certification, Krylov iteration scaling, search operator throughput, search
-memory/factor representation, and returned-state assessment scaling. The
-`search` benchmark profile runs `SearchProfile(...)` and exits before
+factor memory, assessment derivative reduction, and end-to-end returned-state
+assessment. The `search` benchmark profile runs `SearchProfile(...)` and exits before
 `AssessComponentSearch(...)`; its search-only scope does not establish runtime
 convergence or endpoint qualification.
 
@@ -178,13 +191,16 @@ solver failure.
 ### Factor residency and representation
 
 The [factor residency analysis](figures/joint-factor-residency-r2/residency-analysis.json)
-observed at most two overlapping global factors at peak events: an older
-profile/trial workspace and the next operator factor under construction. The
-owned-factor byte estimate is distinct from sampled process-tree RSS.
+records the dedicated-fixed control with two overlapping global factors: an
+older profile/trial workspace and the next operator factor under construction.
+Production reuses the accepted profile factor. During a trial factorization,
+the accepted profile and new trial factor can still overlap, so the current
+route can also reach two factors. The owned-factor byte estimate is distinct
+from sampled process-tree RSS.
 
 The [operator representation frontier](figures/joint-operator-factor-frontier-r1/factor-frontier-analysis.json)
-compared the benchmark-only native SuiteSparseQR state with the current
-exported `Fixed` representation. On matched completed runs, it preserved the
+compared the benchmark-only native SuiteSparseQR state with the dedicated
+exported `Fixed` control. On matched completed runs, it preserved the
 stop reason, accepted updates, rank certificate, all per-solve PCG counts, and
 returned search state within floating-point differences. At cube-512/COLAMD,
 native QR lowered search time from 75.58 s to 64.55 s and sampled RSS from
@@ -193,18 +209,44 @@ native QR lowered search time from 75.58 s to 64.55 s and sampled RSS from
 cube-1024/COLAMD, the native run finished only about 29 MiB below the 4 GiB cap;
 the current run varied between a small RSS-limit failure and an earlier
 completion near 4.12 GB. All six cube-2048 retries stopped at the 4 GiB limit
-before PCG. Production remains COLAMD with exported `Fixed`; the native
-representation was not promoted.
+before PCG. Production ordering remains COLAMD; native QR remains
+benchmark-only. The dedicated fallback retains exported `Fixed`.
 
-The original assessment attribution campaign completed chain and cube at 128
-and 256. Its 512 baseline runs completed rank and PCG search, then timed out in
-returned-state assessment. The [micro-attribution campaign](figures/joint-derivative-scaling-r1/derivative-scaling-analysis.json)
-split reduction into row generation, projected QR, Jacobian QR, and norms.
-Both 512 cases timed out on `derivative-projected-qr`; completed tiles spent
-about 226/229 seconds in projected/Jacobian QR for chain and 187/189 seconds
-for cube, with 2–3 seconds in norms. These are incomplete endpoints, not
-assessment passes. From 128 to 256 inclusive derivative-reduction grew 6.02x
-for chain and 5.81x for cube. QR accounts for most completed reduction time.
+The [accepted-factor ownership campaign](figures/joint-factor-ownership-r1/factor-ownership-analysis.json)
+compares dedicated factors, copy-on-write reuse, and a handoff prototype. At
+cube-512/COLAMD, COW preserved the full search trace while search time changed
+from 75.72 s to 62.93 s and peak RSS from 2.21 GiB to 1.06 GiB. At
+cube-1024/COLAMD, reuse matched the completed dedicated-fixed reference trace;
+search time changed from 273.61 s to 220.79 s and peak RSS from 3.83 GiB to
+2.32 GiB. A fresh dedicated-fixed retry stopped at `spqr-fixed-factor` under
+the same 4-GiB limit, while COW completed with about 1.68 GiB of RSS headroom.
+The raw references, exact policy, and analyzer output are listed in the
+[campaign manifest](figures/joint-factor-ownership-r1/campaign-manifest.json).
+
+At cube-2048, both COW search-only profiles remained `rss_limit` under the
+original 4-GiB / 600-s envelope: Diagonal stopped at 592.33 s and Schwarz at
+570.46 s, with sampled peaks of 4.03 / 4.01 GiB, each during trial
+`spqr-numeric` after 28 completed PCG solves.
+Both had last completed stage `linear-symbolic`, peak factor count two, and an
+owned-byte estimate of 4.60 GiB. The factor-reuse route clears the former
+operator-factor construction stage but does not complete a 2048 search; no
+2048 search trajectory parity is claimed.
+
+### Assessment derivative reduction
+
+Under the current compact-Jacobian assessment route, 512-atom production
+assessments complete in 454.88 s for chain and 410.41 s for cube. Projected QR
+uses 304.15 s and 235.94 s respectively; compact Jacobian QR uses about
+1.71 s in each case. The [preselected 640 frontier](figures/joint-post-compact-frontier-r1/frontier-analysis.json)
+times out in `derivative-projected-qr` for both topologies under the same
+600-second / 4-GiB envelope. This makes observation-scale projected-width QR
+the first end-to-end assessment blocker after compact-Jacobian promotion.
+
+The [structured projected-width candidate](figures/joint-projected-width-r1/projected-width-analysis.json)
+matches full Assessment and returned state at 128/256, with 1.61x–2.23x total
+assessment speedups and much lower projected-reduction time. It exceeds the
+4-GiB limit at 512 on both topologies, so it remains benchmark-only. Production
+continues to use observation-tiled projected QR.
 
 The [compact identity diagnostics](figures/joint-compact-jacobian-r1/compact-jacobian-analysis.json)
 measured a maximum `Z^T P` relative residual of 1.40e-15 and full Gram
@@ -222,7 +264,7 @@ and 128/256 acceptance cases. Median assessment speedups were 1.41x–1.57x,
 with peak RSS changes no larger than 3.4%. After production promotion,
 chain-512 completed assessment in 454.88 s at 627 MB peak RSS; cube-512 took
 410.41 s at 2.56 GB, within the original 600-second / 4-GiB envelope. Production
-uses guarded compact reduction and retains current observation-scale TSQR as
-the exact fallback. Rank, objective, and convergence thresholds are unchanged.
-The [benchmark guide](joint-benchmark.md) links all current machine-readable
-evidence and scope contracts.
+uses guarded compact Jacobian reduction and retains current observation-scale
+TSQR as its exact rank-boundary fallback. Rank, objective, and convergence
+thresholds are unchanged. The [benchmark guide](joint-benchmark.md) links the
+projected-width method and end-to-end frontier evidence.

@@ -100,6 +100,8 @@
   "decision": {
     "selected_strategy": "reuse-accepted-copy-on-write",
     "ownership_prototype_promotion_gate": "passed for measured completed 512 and 1024 searches: action/rank/trajectory/lifetime parity, material RSS reduction, and no search-time regression.",
+    "production_promotion": true,
+    "production_promotion_commit": "9272f7eab53c9bd0af7b8a229c040ac99585826e",
     "2048_frontier": "remains RSS-limited during trial SPQR numeric factorization under the unchanged 4 GiB / 600 s envelope; both profiles overlap two workspace factors. No 2048 trajectory parity is claimed.",
     "factor_count_interpretation": "Accepted-factor reuse removes the separate operator factor, but trial evaluation still overlaps the accepted profile factor; peak factor count is two.",
     "two_level_schwarz": "not investigated; the existing synthetic multi-block gate remains stable."

@@ -28,10 +28,26 @@ checkout.
 | Offline weak-halo diagnosis | [Weak-halo guide](joint-weak-halo-attribution.md) |
 | Statistical research protocol | [Noise/mismatch experiment](joint-noise-mismatch-validation.md) |
 | Current benchmark commands | [Benchmark guide](joint-benchmark.md) |
+| Assessment derivative reduction and end-to-end frontier | [Benchmark guide](joint-benchmark.md#post-compact-assessment-frontier) |
+| Operator search factor ownership and lifetime | [Operator search](joint-operator-search.md#factor-residency-and-representation) and [ownership campaign](figures/joint-factor-ownership-r1/campaign-manifest.json) |
 | Workflow integration | [Stage integration](joint-stage-integration.md) |
 | Data and persistence | [Data I/O architecture](architecture/dataobject-io-architecture.md) and [Joint JSON/CSV contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schemas-3-4-and-5) |
 | Certification mathematics | [Certification contract](joint_abc_certification_contract.md) |
 | Component mathematics | [Component contract](joint_abc_components_contract.md) |
+
+### Current scalability axes
+
+The benchmark guide keeps rank certification, Krylov iteration scaling,
+operator throughput, search factor memory, assessment derivative reduction,
+and end-to-end returned-state assessment separate. Current assessment uses
+guarded compact Jacobian reduction with observation-tiled projected QR; the
+fixed-order projected-width route remains benchmark-only after its 512 RSS
+gate. The internal OperatorPcg path reuses the accepted profile factor with
+copy-on-write workspace mutation and falls back to the dedicated factor when
+bounded rank needs its factor view. `LegacyCompact` remains the production
+search default. The [operator search guide](joint-operator-search.md) and
+[benchmark guide](joint-benchmark.md) link the exact current measurement
+artifacts.
 
 ## 2. Algorithm-formation evidence
 
