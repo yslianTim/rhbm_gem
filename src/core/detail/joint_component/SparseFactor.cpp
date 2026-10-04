@@ -627,6 +627,9 @@ ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparse
         cholmod_sparse * value{}; cholmod_common * common{};
         ~SparseOwner() {if(value) cholmod_l_free_sparse(&value,common);}
     } transformed{nullptr,&s.cc};
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    AssessmentStageTimerForTesting transform_stage("projected-tail-q-transform",rhs.rows(),rhs.cols());
+#endif
     {
         ResourcePhase phase("spqr-q-transform-sparse",true,rhs.rows(),rhs.cols(),result.input_nonzeros);
         auto & work=SparseWorkForTesting(); ++work.q_actions; WorkTimer timer(work.q_seconds);
@@ -635,6 +638,9 @@ ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparse
             SuiteSparseQR_qmult<double>(SPQR_QTX,s.qr,&view,&s.cc);
         result.q_transform_seconds=Seconds(started);
     }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    transform_stage.Finish();
+#endif
     if(!transformed.value) throw std::runtime_error("SPQR sparse Q transpose failed");
     if(transformed.value->itype!=CHOLMOD_LONG) throw std::runtime_error("Unexpected SPQR sparse index type");
     result.tail_rows=static_cast<Eigen::Index>(transformed.value->nrow)-p;
@@ -648,6 +654,9 @@ ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparse
         (transformed.value->ncol+1)*sizeof(int64_t);
     if(!transformed.value->sorted) throw std::runtime_error("Unsorted SPQR sparse Q transpose output");
     const auto extraction_started=Clock::now();
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    AssessmentStageTimerForTesting extraction_stage("projected-tail-extract",rhs.rows(),rhs.cols());
+#endif
     const auto * values=static_cast<const double *>(transformed.value->x);
     for(Eigen::Index column=0;column<result.columns;++column)
         for(auto item=outer[column];item<outer[column+1];++item)
@@ -668,6 +677,9 @@ ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparse
         result.tail.finalize(); result.tail.makeCompressed();
     }
     result.tail_extract_seconds=Seconds(extraction_started);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    extraction_stage.Finish();
+#endif
     return result;
 }
 Matrix FreeDesignFactor::OrthogonalTransposeForTesting(const Matrix & rhs) const
@@ -693,9 +705,15 @@ ProjectedTailQrResultForTesting FreeDesignFactor::ProjectedTailQrForTesting(
         result.tail_rows=transformed.tail_rows;
         result.tail_extract_seconds=transformed.tail_extract_seconds;
         result.q_transform_seconds=transformed.q_transform_seconds;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        AssessmentStageTimerForTesting residual_transform_stage("projected-tail-residual-q-transform",raw.rows(),1);
+#endif
         const auto residual_started=Clock::now();
         const Matrix qz_residual=OrthogonalTransposeForTesting(Matrix(residual/scale));
         result.q_transform_seconds+=Seconds(residual_started);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        residual_transform_stage.Finish();
+#endif
         const Matrix tail_response=qz_residual.bottomRows(result.tail_rows);
 
         auto tail_state=std::make_shared<SparseFactorState>();
@@ -717,6 +735,10 @@ ProjectedTailQrResultForTesting FreeDesignFactor::ProjectedTailQrForTesting(
                 return OwnedFactorBytesForTesting(state->design,nullptr,state->cc);});
         construction={tail_state->residency_id,tail_state->generation,true};
         ++work.symbolic;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        AssessmentStageTimerForTesting symbolic_stage("projected-tail-symbolic",tail_state->design.rows(),
+            tail_state->design.cols());
+#endif
         {
             ResourcePhase phase("spqr-tail-symbolic",true,tail_state->design.rows(),tail_state->design.cols(),
                 static_cast<std::size_t>(tail_state->design.nonZeros()));
@@ -727,8 +749,15 @@ ProjectedTailQrResultForTesting FreeDesignFactor::ProjectedTailQrForTesting(
             result.tail_symbolic_seconds=Seconds(symbolic_started);
             work.symbolic_seconds+=result.tail_symbolic_seconds;
         }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        symbolic_stage.Finish();
+#endif
         if(!tail_state->qr) {result.reason="projected-tail-symbolic-failed"; return result;}
         ++work.numeric;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        AssessmentStageTimerForTesting numeric_stage("projected-tail-numeric",tail_state->design.rows(),
+            tail_state->design.cols());
+#endif
         {
             ResourcePhase phase("spqr-tail-numeric",true,tail_state->design.rows(),tail_state->design.cols(),
                 static_cast<std::size_t>(tail_state->design.nonZeros()));
@@ -738,6 +767,9 @@ ProjectedTailQrResultForTesting FreeDesignFactor::ProjectedTailQrForTesting(
             work.numeric_seconds+=result.tail_numeric_seconds;
             if(!success) {result.reason="projected-tail-numeric-failed"; return result;}
         }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        numeric_stage.Finish();
+#endif
         construction.Finish();
         result.tail_factor_nonzeros=static_cast<std::size_t>(std::max<int64_t>(0,tail_state->cc.SPQR_istat[0]));
         result.tail_factor_storage_bytes=OwnedFactorBytesForTesting(tail_state->design,nullptr,tail_state->cc);
@@ -750,12 +782,22 @@ ProjectedTailQrResultForTesting FreeDesignFactor::ProjectedTailQrForTesting(
         tail_state->residency_generation=tail_state->generation; tail_state->residency_active=true;
         const auto tail_factor=std::shared_ptr<FreeDesignFactor>(
             new FreeDesignFactor(tail_state,tail_state->generation));
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        AssessmentStageTimerForTesting compact_stage("projected-tail-compact",raw.cols(),raw.cols());
+#endif
         const auto compact_started=Clock::now();
         result.factor=tail_factor->Compact()/scale;
         result.tail_compact_seconds=Seconds(compact_started);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        compact_stage.Finish();
+        AssessmentStageTimerForTesting qmult_stage("projected-tail-qmult",raw.cols(),1);
+#endif
         const auto qmult_started=Clock::now();
         result.response=tail_factor->OrthogonalTransposeForTesting(tail_response).topRows(raw.cols()).col(0);
         result.tail_qmult_seconds=Seconds(qmult_started);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        qmult_stage.Finish();
+#endif
         result.columns_restored=true;
         result.valid=result.factor.allFinite() && result.response.allFinite();
         result.reason=result.valid ? "projected-tail-qr" : "projected-tail-nonfinite";
