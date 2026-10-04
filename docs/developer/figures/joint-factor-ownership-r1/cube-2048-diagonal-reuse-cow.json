@@ -1,0 +1,412 @@
+{
+  "schema_version": 1,
+  "profile": "search",
+  "measurement_scope": "search-only",
+  "case": "cube-2048",
+  "metadata": {
+    "backend": "SPQR",
+    "build_type": "",
+    "compiler": "AppleClang 21.0.0.21000334",
+    "commit": "dbe1fb3d97c38ac305ea66afd44f61b7550d723c",
+    "profile": "search",
+    "case": "cube-2048",
+    "assessment_reduction": "observation-tsqr",
+    "projected_reduction": "observation-tiled-qr",
+    "source_sha256": "9f90ffd7c8572f269539a5d0c1b382a990e43e20a065c3521c34f0dde46ddf7f",
+    "benchmark_sha256": "cfe87daf9d85c853a842069f28e5c67c43cb56fbd02fd74f47d46cc6fd1ff6e4",
+    "solver_policy": {
+      "search_method": "OperatorPcg",
+      "sparse_backend": "SPQR",
+      "operator_rank_active": true,
+      "operator_rank_mode": "auto",
+      "resolved_rank_backend": "SpqrBounds",
+      "operator_rank_budget_seconds": 120.0,
+      "operator_rank_budget_entries": 100000000,
+      "operator_rank_budget_workspace_bytes": 268435456,
+      "operator_factor_representation": "exported-fixed",
+      "operator_factor_ownership": "reuse-accepted-copy-on-write",
+      "projected_reduction": "observation-tiled-qr",
+      "preconditioner": "diagonal",
+      "spqr_ordering": "COLAMD",
+      "schwarz_core_atoms": 128,
+      "schwarz_overlap_hops": 1,
+      "schwarz_max_block_atoms": 512,
+      "schwarz_storage_bytes": 536870912,
+      "schwarz_scratch_bytes": 268435456
+    },
+    "driver_sha256": "3537ef099c93cd392ede4ee2fdc73e03b8c6b897968782b9f53e1a8e658d8ced",
+    "input_sha256": "ec7223ff21192d168022b1a503f22c5761fb9a1f4f07d9de3088a106a50e48a3"
+  },
+  "execution": {
+    "status": "rss_limit",
+    "returncode": null,
+    "completed_repetitions": 0,
+    "failed_repetitions": 1,
+    "runs": [
+      {
+        "kind": "measurement",
+        "index": 1,
+        "status": "rss_limit",
+        "reason": "rss-limit",
+        "elapsed_seconds": 592.3283381250221,
+        "process_wall_seconds": 592.3283381250221,
+        "peak_rss_bytes": 4328505344,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": 2048,
+          "voxels": 715825,
+          "components": null,
+          "free_columns": null,
+          "design_nonzeros": null,
+          "parameters": 6144
+        },
+        "numerics": {
+          "rank": null,
+          "objective": null,
+          "gradient_norm": null,
+          "runtime_convergence": null,
+          "active_atoms": null
+        },
+        "result": {
+          "qualified": null,
+          "scientific_status": "search-only",
+          "details": {
+            "measurement_scope": "search-only",
+            "scope_description": null,
+            "assessment_execution": null,
+            "assessment_work": null,
+            "search_completed": null,
+            "stop_reason": null,
+            "profile_evaluations": null,
+            "accepted_updates": null,
+            "accepted_objective": null,
+            "accepted_gradient_inf_norm": null,
+            "returned_search_state": null,
+            "search_seconds": null,
+            "free_columns": null,
+            "design_nonzeros": null,
+            "search_work": null,
+            "failure_stage": "search",
+            "active_search_stage": "spqr-numeric",
+            "last_completed_search_stage": "linear-symbolic",
+            "completed_search_stages": [
+              "profile-basis-build",
+              "linear-factor-preparation",
+              "spqr-symbolic",
+              "linear-symbolic",
+              "spqr-numeric",
+              "linear-numeric",
+              "linear-solve",
+              "profile-evaluation",
+              "rank-certificate",
+              "fixed-operator-factor",
+              "operator-prepare",
+              "width-metric",
+              "pcg",
+              "trial-evaluation"
+            ],
+            "stage_seconds": {
+              "search": 0.0,
+              "profile-evaluation": 10.311731166,
+              "profile-basis-build": 3.2823931249999996,
+              "linear-solve": 18.884074501,
+              "linear-factor-preparation": 0.14299562500000002,
+              "linear-symbolic": 0.424351417,
+              "spqr-symbolic": 0.420065083,
+              "linear-numeric": 15.286835833000001,
+              "spqr-numeric": 15.282460458,
+              "operator-prepare": 3.9033494170000003,
+              "rank-certificate": 1.6836789579999998,
+              "fixed-operator-factor": 3.2489999999999997e-06,
+              "width-metric": 0.169630625,
+              "pcg": 468.85985766399995,
+              "trial-evaluation": 10.750773167
+            },
+            "stage_calls": {
+              "search": 1,
+              "profile-evaluation": 1,
+              "profile-basis-build": 3,
+              "linear-solve": 3,
+              "linear-factor-preparation": 3,
+              "linear-symbolic": 3,
+              "spqr-symbolic": 3,
+              "linear-numeric": 3,
+              "spqr-numeric": 3,
+              "operator-prepare": 2,
+              "rank-certificate": 4,
+              "fixed-operator-factor": 2,
+              "width-metric": 2,
+              "pcg": 28,
+              "trial-evaluation": 2
+            },
+            "stage_completed_calls": {
+              "search": 0,
+              "profile-evaluation": 1,
+              "profile-basis-build": 3,
+              "linear-solve": 2,
+              "linear-factor-preparation": 3,
+              "linear-symbolic": 3,
+              "spqr-symbolic": 3,
+              "linear-numeric": 2,
+              "spqr-numeric": 2,
+              "operator-prepare": 2,
+              "rank-certificate": 4,
+              "fixed-operator-factor": 2,
+              "width-metric": 2,
+              "pcg": 28,
+              "trial-evaluation": 1
+            },
+            "stage_dimensions": {
+              "search": {
+                "rows": 715825,
+                "columns": 2048
+              },
+              "profile-evaluation": {
+                "rows": 715825,
+                "columns": 2048
+              },
+              "profile-basis-build": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "linear-solve": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "linear-factor-preparation": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "linear-symbolic": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "spqr-symbolic": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "linear-numeric": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "spqr-numeric": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "operator-prepare": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "rank-certificate": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "fixed-operator-factor": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "width-metric": {
+                "rows": 715825,
+                "columns": 2048
+              },
+              "pcg": {
+                "rows": 2048,
+                "columns": 2048
+              },
+              "trial-evaluation": {
+                "rows": 715825,
+                "columns": 2048
+              }
+            },
+            "stage_nnz": {
+              "search": 0,
+              "profile-evaluation": 0,
+              "profile-basis-build": 2109440,
+              "linear-solve": 2109440,
+              "linear-factor-preparation": 2109440,
+              "linear-symbolic": 2109440,
+              "spqr-symbolic": 2109440,
+              "linear-numeric": 2109440,
+              "spqr-numeric": 2109440,
+              "operator-prepare": 2109440,
+              "rank-certificate": 2109440,
+              "fixed-operator-factor": 2109440,
+              "width-metric": 2109440,
+              "pcg": 0,
+              "trial-evaluation": 0
+            },
+            "spqr_factorization": {
+              "ordering": "COLAMD",
+              "symbolic": {
+                "calls": 3,
+                "seconds": 0.423384208,
+                "matrix_rows": 715825,
+                "matrix_columns": 4096,
+                "matrix_nonzeros": 2109440
+              },
+              "numeric": {
+                "calls": 3,
+                "seconds": 15.284447958000001,
+                "matrix_rows": 715825,
+                "matrix_columns": 4096,
+                "matrix_nonzeros": 2109440,
+                "reported_factor_nonzeros": 1710576
+              },
+              "fixed_factor": {
+                "calls": 0,
+                "seconds": 0.0,
+                "matrix_rows": 0,
+                "matrix_columns": 0,
+                "matrix_nonzeros": 0,
+                "reported_factor_nonzeros": 0,
+                "factor_exported_storage_bytes": 0
+              },
+              "native_operator_factor": {
+                "calls": 0,
+                "seconds": 0.0
+              }
+            },
+            "factor_residency": {
+              "current_concurrent_factor_count": 2,
+              "current_concurrent_owned_bytes_estimate": 2531173344,
+              "maximum_concurrent_factor_count": 2,
+              "maximum_concurrent_owned_bytes_estimate": 4942238920,
+              "maximum_concurrent_factor_stage": "linear-solve",
+              "maximum_concurrent_owned_bytes_stage": "spqr-numeric",
+              "process_peak_rss_bytes_observed_at_factor_events": 4303880192,
+              "factor_count_at_process_peak_rss_event": 2,
+              "owned_factor_bytes_at_process_peak_rss_event_estimate": 4942238920,
+              "stage_at_process_peak_rss_event": "spqr-numeric",
+              "factor_ids_at_process_peak_rss_event": [
+                1,
+                4
+              ],
+              "factor_generations_at_process_peak_rss_event": [
+                "1:2",
+                "4:2"
+              ],
+              "factors": [
+                {
+                  "factor_id": 1,
+                  "generation": 2,
+                  "kind": "workspace",
+                  "role": "profile",
+                  "created_at_stage": "linear-solve",
+                  "destroyed_at_stage": "search",
+                  "search_stage": "linear-solve",
+                  "destroyed_search_stage": "search",
+                  "rows": 715825,
+                  "columns": 4096,
+                  "nonzeros": 2109440,
+                  "r_nonzeros": 1710576,
+                  "h_nonzeros": 745349,
+                  "owned_factor_bytes_estimate": 2471119460,
+                  "created_seconds": 8.896575417,
+                  "destroyed_seconds": 174.991343584,
+                  "alive_at_snapshot": false
+                },
+                {
+                  "factor_id": 4,
+                  "generation": 2,
+                  "kind": "workspace",
+                  "role": "trial",
+                  "created_at_stage": "linear-solve",
+                  "destroyed_at_stage": null,
+                  "search_stage": "linear-solve",
+                  "destroyed_search_stage": null,
+                  "rows": 715825,
+                  "columns": 4096,
+                  "nonzeros": 2109440,
+                  "r_nonzeros": 1710576,
+                  "h_nonzeros": 745349,
+                  "owned_factor_bytes_estimate": 2471119460,
+                  "created_seconds": 173.076513417,
+                  "destroyed_seconds": null,
+                  "alive_at_snapshot": true
+                }
+              ],
+              "constructions_in_progress": [
+                {
+                  "factor_id": 6,
+                  "generation": 2,
+                  "kind": "workspace",
+                  "role": "trial",
+                  "stage": "linear-solve",
+                  "rows": 715825,
+                  "columns": 4096,
+                  "nonzeros": 2109440,
+                  "owned_factor_bytes_estimate": 60053884
+                }
+              ],
+              "semantics": "owned bytes estimate includes CHOLMOD current allocations plus owned sparse design/R arrays; it is separate from process RSS"
+            },
+            "operator_factor_representation": "exported-fixed",
+            "operator_factor_ownership": "reuse-accepted-copy-on-write"
+          }
+        },
+        "driver_stage": "search",
+        "measurement_scope": "search-only",
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "rss_limit",
+            "exit_code": -15,
+            "wall_seconds": 592.3283381250221,
+            "sampled_tree_peak_rss_bytes": 4328505344,
+            "os_process_peak_rss_bytes": null,
+            "samples": 5420,
+            "maximum_sampling_gap_seconds": 0.18929208419285715
+          }
+        ]
+      }
+    ]
+  },
+  "problem": {
+    "atoms": null,
+    "voxels": null,
+    "components": null,
+    "free_columns": null,
+    "design_nonzeros": null,
+    "parameters": null
+  },
+  "numerics": {
+    "rank": null,
+    "objective": null,
+    "gradient_norm": null,
+    "runtime_convergence": null,
+    "active_atoms": null
+  },
+  "resources": {
+    "elapsed_seconds": null,
+    "peak_rss_bytes": 4328505344,
+    "completed_measurement_peak_rss_bytes": null,
+    "count": 1,
+    "failed_count": 1,
+    "samples": [
+      null
+    ]
+  },
+  "result": {
+    "qualified": null,
+    "scientific_status": "search-only",
+    "details": {
+      "measurement_scope": null,
+      "scope_description": null,
+      "assessment_execution": null,
+      "assessment_work": null,
+      "search_completed": null,
+      "stop_reason": null,
+      "profile_evaluations": null,
+      "accepted_updates": null,
+      "accepted_objective": null,
+      "accepted_gradient_inf_norm": null,
+      "returned_search_state": null,
+      "search_seconds": null,
+      "free_columns": null,
+      "design_nonzeros": null,
+      "search_work": null
+    }
+  }
+}

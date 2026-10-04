@@ -60,6 +60,39 @@ class FactorOwnershipAnalysisTest(unittest.TestCase):
         self.assertEqual(row['status'], 'timeout')
         self.assertEqual(row['maximum_concurrent_factor_count'], 2)
 
+    def test_resource_stop_retains_nested_factor_and_stage_evidence(self):
+        value = report('reuse-accepted-copy-on-write', status='rss_limit')
+        details = value['result']['details']
+        details['failure_stage'] = 'search'
+        details['active_search_stage'] = 'spqr-numeric'
+        details['last_completed_search_stage'] = 'linear-symbolic'
+        details['stage_calls'] = {'pcg': 28}
+        details['stage_completed_calls'] = {'pcg': 28}
+        details['factor_residency'] = {
+            'maximum_concurrent_factor_count': 2,
+            'maximum_concurrent_owned_bytes_estimate': 8192,
+            'maximum_concurrent_factor_stage': 'linear-solve',
+        }
+        details['search_work'] = None
+        value['execution']['runs'][0]['result'] = {'details': details}
+        value['result']['details'] = {'search_work': None}
+
+        row = analysis._run(value)
+
+        self.assertEqual(row['status'], 'rss_limit')
+        self.assertEqual(row['active_stage'], 'spqr-numeric')
+        self.assertEqual(row['last_completed_stage'], 'linear-symbolic')
+        self.assertEqual(row['pcg_solves'], 28)
+        self.assertEqual(row['maximum_concurrent_factor_count'], 2)
+
+    def test_duplicate_dedicated_fixed_controls_are_not_candidate_comparisons(self):
+        rows = [analysis._run(report('dedicated-fixed')),
+                analysis._run(report('dedicated-fixed', status='rss_limit')),
+                analysis._run(report('reuse-accepted-copy-on-write'))]
+        comparisons = analysis._comparisons(rows)
+        self.assertEqual(len(comparisons), 1)
+        self.assertEqual(comparisons[0]['ownership'], 'reuse-accepted-copy-on-write')
+
 
 if __name__ == '__main__':
     unittest.main()

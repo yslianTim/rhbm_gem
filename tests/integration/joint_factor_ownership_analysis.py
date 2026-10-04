@@ -14,6 +14,15 @@ def _close(left, right):
 
 def _run(report):
     details = (report.get('result') or {}).get('details') or {}
+    runs = report.get('execution', {}).get('runs') or []
+    if not ((details.get('search_work') or {}).get('factor_residency') or
+            details.get('factor_residency') or details.get('failure_stage')):
+        for run in reversed(runs):
+            run_details = ((run.get('result') or {}).get('details') or {})
+            if ((run_details.get('search_work') or {}).get('factor_residency') or
+                    run_details.get('factor_residency') or run_details.get('failure_stage')):
+                details = run_details
+                break
     work = details.get('search_work') or {}
     residency = work.get('factor_residency') or details.get('factor_residency') or {}
     policy = (report.get('metadata') or {}).get('solver_policy') or {}
@@ -21,20 +30,31 @@ def _run(report):
     if ownership is None:
         representation = details.get('operator_factor_representation') or policy.get('operator_factor_representation')
         ownership = {'native-qr': 'dedicated-native'}.get(representation, 'dedicated-fixed')
-    runs = report.get('execution', {}).get('runs') or []
     stages = [stage for run in runs for stage in run.get('stages', [])]
     rss = [stage.get('sampled_tree_peak_rss_bytes') for stage in stages
            if stage.get('sampled_tree_peak_rss_bytes') is not None]
+    walls = [run.get('process_wall_seconds') for run in runs
+             if isinstance(run.get('process_wall_seconds'), (int, float))]
     factorization = details.get('spqr_factorization') or {}
     symbolic = (factorization.get('symbolic') or {}).get('calls')
     numeric = (factorization.get('numeric') or {}).get('calls')
+    iterations = work.get('pcg_iteration_counts') or []
+    stage_calls = details.get('stage_calls') or {}
+    stage_completed = details.get('stage_completed_calls') or {}
     return {
         'case': report.get('case'),
+        'source_commit': (report.get('metadata') or {}).get('commit'),
         'ownership': ownership,
+        'factor_representation': details.get('operator_factor_representation') or
+            policy.get('operator_factor_representation'),
         'status': report.get('execution', {}).get('status'),
         'search_seconds': details.get('search_seconds'),
-        'process_wall_seconds': max((run.get('process_wall_seconds', 0) for run in runs), default=None),
+        'process_wall_seconds': max(walls, default=None),
         'peak_rss_bytes': max(rss, default=None),
+        'failure_stage': details.get('failure_stage'),
+        'active_stage': details.get('active_search_stage') or details.get('active_assessment_stage'),
+        'last_completed_stage': details.get('last_completed_search_stage') or
+            details.get('last_completed_assessment_stage'),
         'maximum_concurrent_factor_count': residency.get('maximum_concurrent_factor_count'),
         'maximum_concurrent_owned_bytes_estimate': residency.get('maximum_concurrent_owned_bytes_estimate'),
         'maximum_concurrent_factor_stage': residency.get('maximum_concurrent_factor_stage'),
@@ -52,10 +72,13 @@ def _run(report):
         'reuse_attempts': work.get('accepted_factor_reuse_attempts'),
         'reuse_accepted': work.get('accepted_factor_reuse_accepted'),
         'reuse_fallbacks': work.get('accepted_factor_reuse_fallbacks'),
+        'pcg_solves': len(iterations) if iterations else
+            work.get('pcg_solves', stage_completed.get('pcg', stage_calls.get('pcg'))),
+        'pcg_iterations_total': sum(iterations) if iterations else work.get('pcg_iterations'),
         'stop_reason': details.get('stop_reason'),
         'profile_evaluations': details.get('profile_evaluations'),
         'accepted_updates': details.get('accepted_updates'),
-        'pcg_iteration_counts': work.get('pcg_iteration_counts'),
+        'pcg_iteration_counts': iterations or None,
         'rank_status': work.get('operator_rank_status'),
         'rank_certificate': work.get('operator_rank_certificate'),
         'rank_reason': work.get('operator_rank_reason'),
@@ -78,18 +101,26 @@ def trajectory_parity(reference, candidate):
     return {'passed': all(checks.values()), 'checks': checks}
 
 
-def analyze(paths):
-    rows = [_run(json.loads(Path(path).read_text())) for path in paths]
+def _comparisons(rows):
     comparisons = []
     for case in sorted({row['case'] for row in rows}):
         group = [row for row in rows if row['case'] == case]
-        baseline = next((row for row in group if row['ownership'] == 'dedicated-fixed'), None)
+        baseline = next((row for row in group if row['ownership'] == 'dedicated-fixed' and
+                         row['status'] == 'completed'), None)
+        if baseline is None:
+            baseline = next((row for row in group if row['ownership'] == 'dedicated-fixed'), None)
         for row in group:
-            if row is baseline:
+            if row is baseline or row['ownership'] == 'dedicated-fixed':
                 continue
             comparisons.append({'case': case, 'ownership': row['ownership'],
                                 'trajectory_parity': (trajectory_parity(baseline, row)
                                                       if baseline else None)})
+    return comparisons
+
+
+def analyze(paths):
+    rows = [_run(json.loads(Path(path).read_text())) for path in paths]
+    comparisons = _comparisons(rows)
     return {'schema_version': 1, 'rows': rows, 'comparisons': comparisons}
 
 

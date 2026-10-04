@@ -1,0 +1,11 @@
+case,strategy,source_commit,status,search_seconds,process_wall_seconds,peak_rss_gib,maximum_factor_count,maximum_owned_factor_gib,maximum_factor_stage,pcg_solves,pcg_iterations_total,reuse_attempts,reuse_accepted,reuse_fallbacks,trajectory_parity
+cube-512,dedicated-fixed,ac1ed566588142099535c8de82e8936b7afa8e9a,completed,75.721611833,77.27279579103924,2.2131,2,0.6017,fixed-operator-factor,30,177,0,0,0,reference
+cube-512,reuse-accepted-copy-on-write,ac1ed566588142099535c8de82e8936b7afa8e9a,completed,62.9343085,64.45724708400667,1.0551,2,0.4179,linear-solve,30,177,5,5,0,True
+cube-512,reuse-accepted-handoff,ac1ed566588142099535c8de82e8936b7afa8e9a,completed,63.001403875,64.4844424999319,1.0567,2,0.4179,linear-solve,30,177,5,5,0,True
+cube-512,dedicated-native,076db5aa27f69ec8d2b4140644c13ed5a9458961,completed,64.54883875,66.079181374982,1.8856,2,0.4179,fixed-operator-factor,30,177,,,,True
+cube-1024,dedicated-fixed,5eb13f8f6aca9204f95291e162b8e3e09905af7a,completed,273.608427291,276.30790483392775,3.825,2,2.1039,fixed-operator-factor,30,195,,,,reference
+cube-1024,dedicated-fixed,dbe1fb3d97c38ac305ea66afd44f61b7550d723c,rss_limit,,293.25796454190277,4.0364,2,2.1039,fixed-operator-factor,30,,,,,
+cube-1024,reuse-accepted-copy-on-write,5836a4a2216702f924880e350970444043c75c64,completed,220.786395917,223.57389966701157,2.3155,2,1.436,linear-solve,30,195,5,5,0,True
+cube-1024,dedicated-native,076db5aa27f69ec8d2b4140644c13ed5a9458961,completed,228.6931605,231.52046245895326,3.9726,2,1.436,fixed-operator-factor,30,195,,,,True
+cube-2048,reuse-accepted-copy-on-write,dbe1fb3d97c38ac305ea66afd44f61b7550d723c,rss_limit,,592.3283381250221,4.0312,2,4.6028,linear-solve,28,,,,,
+cube-2048,reuse-accepted-copy-on-write,dbe1fb3d97c38ac305ea66afd44f61b7550d723c,rss_limit,,570.4593197919894,4.0144,2,4.6028,linear-solve,28,,,,,

@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "campaign": "joint-factor-ownership-r1",
+  "branch": "develop",
+  "campaign_head": "dbe1fb3d97c38ac305ea66afd44f61b7550d723c",
+  "campaign_source_sha256": "9f90ffd7c8572f269539a5d0c1b382a990e43e20a065c3521c34f0dde46ddf7f",
+  "candidate_source_commit": "5836a4a2216702f924880e350970444043c75c64",
+  "candidate_source_sha256": "f4d7186aa01474726a561f51634fc1293a345b720d22135db26915eb97af01ec",
+  "purpose": "Validate reuse of the accepted normalized profile factor for Operator-PCG actions, compare ownership lifetimes, and measure the current COLAMD search-memory frontier.",
+  "selection": {
+    "completed_comparison_sizes": [
+      512,
+      1024
+    ],
+    "frontier_size": 2048,
+    "reason": "Cube-512 establishes the first completed search comparison; reuse at cube-1024 retained the same trajectory with RSS margin under 4 GiB, so cube-2048 was measured next.",
+    "ordering": "COLAMD; production ordering",
+    "preconditioner_sequence": [
+      "Diagonal",
+      "Schwarz"
+    ]
+  },
+  "configuration": {
+    "profile": "search",
+    "scope": "search-only; no returned-state assessment or endpoint qualification",
+    "backend": "SPQR",
+    "search_method": "OperatorPcg",
+    "operator_rank": "auto -> SpqrBounds",
+    "rank_seconds": 120,
+    "rank_work_entries": 100000000,
+    "rank_workspace_bytes": 268435456,
+    "schwarz_core_atoms": 128,
+    "schwarz_overlap_hops": 1,
+    "schwarz_max_block_atoms": 512,
+    "factor_representation": "exported-fixed for DedicatedFixed and reuse; native-qr only for saved DedicatedNative references",
+    "eigen_threads": 1,
+    "warmup": 0,
+    "repeat": 1,
+    "timeout_seconds": 600,
+    "rss_limit_bytes": 4294967296
+  },
+  "reports": {
+    "cube512_dedicated_fixed": "cube-512-dedicated-fixed.json",
+    "cube512_reuse_cow": "cube-512-reuse-cow.json",
+    "cube512_reuse_handoff": "cube-512-reuse-handoff.json",
+    "cube512_dedicated_native_reference": "../joint-operator-factor-frontier-r1/individual-results/cube-512-schwarz-128-1-512-512-256-auto-120.0-100000000-256-colamd-native-qr-observation-tsqr-search-r1-w0.json",
+    "cube1024_dedicated_fixed_reference": "../joint-factor-residency-r2/individual-results/cube-1024-colamd.json",
+    "cube1024_dedicated_fixed_same_head_rerun": "cube-1024-dedicated-fixed.json",
+    "cube1024_reuse_cow": "cube-1024-reuse-cow.json",
+    "cube1024_dedicated_native_reference": "../joint-operator-factor-frontier-r1/individual-results/cube-1024-schwarz-128-1-512-512-256-auto-120.0-100000000-256-colamd-native-qr-observation-tsqr-search-r1-w0.json",
+    "cube2048_diagonal_reuse_cow": "cube-2048-diagonal-reuse-cow.json",
+    "cube2048_schwarz_reuse_cow": "cube-2048-schwarz-reuse-cow.json"
+  },
+  "provenance_notes": [
+    "The 512 test-only prototype reports were run with candidate source contents that now match commit 5836a4a, as verified by source_sha256; the benchmark script observed the preceding ac1ed566 HEAD because the prototype changes were not yet committed at run time.",
+    "The 1024 DedicatedFixed completed reference is from source commit 5eb13f8. A fresh same-head rerun is retained and hit rss_limit in spqr-fixed-factor; its failed status is not used as a trajectory baseline.",
+    "The same-head 1024 reuse report is source commit 5836a4a. The 2048 reuse reports are source commit dbe1fb3.",
+    "The ownership analyzer preserves stage/factor telemetry nested inside failed repetition records; missing search trajectory on resource-stopped cases is not treated as parity."
+  ],
+  "results": {
+    "cube512": {
+      "dedicated_fixed_search_seconds": 75.721611833,
+      "reuse_cow_search_seconds": 62.9343085,
+      "dedicated_fixed_rss_bytes": 2376269824,
+      "reuse_cow_rss_bytes": 1132953600,
+      "max_factor_count": 2,
+      "trajectory_parity": true
+    },
+    "cube1024": {
+      "dedicated_fixed_completed_reference_search_seconds": 273.608427291,
+      "reuse_cow_search_seconds": 220.786395917,
+      "dedicated_fixed_completed_reference_rss_bytes": 4107010048,
+      "reuse_cow_rss_bytes": 2486239232,
+      "same_head_dedicated_fixed_rerun_status": "rss_limit",
+      "same_head_dedicated_fixed_rerun_active_stage": "spqr-fixed-factor",
+      "reuse_trajectory_parity": true,
+      "max_factor_count": 2
+    },
+    "cube2048_diagonal": {
+      "status": "rss_limit",
+      "wall_seconds": 592.3283381250221,
+      "peak_rss_bytes": 4328505344,
+      "failure_stage": "search",
+      "active_stage": "spqr-numeric",
+      "last_completed_stage": "linear-symbolic",
+      "pcg_solves_completed": 28,
+      "max_factor_count": 2
+    },
+    "cube2048_schwarz": {
+      "status": "rss_limit",
+      "wall_seconds": 570.4593197919894,
+      "peak_rss_bytes": 4310433792,
+      "failure_stage": "search",
+      "active_stage": "spqr-numeric",
+      "last_completed_stage": "linear-symbolic",
+      "pcg_solves_completed": 28,
+      "max_factor_count": 2
+    }
+  },
+  "decision": {
+    "selected_strategy": "reuse-accepted-copy-on-write",
+    "ownership_prototype_promotion_gate": "passed for measured completed 512 and 1024 searches: action/rank/trajectory/lifetime parity, material RSS reduction, and no search-time regression.",
+    "2048_frontier": "remains RSS-limited during trial SPQR numeric factorization under the unchanged 4 GiB / 600 s envelope; both profiles overlap two workspace factors. No 2048 trajectory parity is claimed.",
+    "factor_count_interpretation": "Accepted-factor reuse removes the separate operator factor, but trial evaluation still overlaps the accepted profile factor; peak factor count is two.",
+    "two_level_schwarz": "not investigated; the existing synthetic multi-block gate remains stable."
+  }
+}
