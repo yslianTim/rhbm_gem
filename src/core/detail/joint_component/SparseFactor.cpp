@@ -1055,7 +1055,9 @@ struct SparseFactorState
     Eigen::SparseQR<Sparse,Eigen::COLAMDOrdering<int>> qr;
     Sparse design;
     std::vector<Eigen::Index> columns;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     double tolerance{};
+#endif
     std::size_t generation{};
     bool valid{};
 };
@@ -1070,7 +1072,10 @@ std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const
 {
     if(!state_) state_=std::make_shared<SparseFactorState>();
     if(copy_on_write_ && state_.use_count()>1) state_=std::make_shared<SparseFactorState>();
-    auto & s=*state_; ++s.generation; s.valid=false; s.design=a; s.columns=columns; s.tolerance=tolerance;
+    auto & s=*state_; ++s.generation; s.valid=false; s.design=a; s.columns=columns;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    s.tolerance=tolerance;
+#endif
     s.qr.setPivotThreshold(tolerance);
     auto & work=SparseWorkForTesting();
     {WorkTimer timer(work.symbolic_seconds); s.qr.analyzePattern(a); ++work.symbolic;}
