@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/OperatorSearch.hpp"
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/StructuralPartition.hpp"
 #include "support/JointOperatorWorkload.hpp"
 #include "support/JointDenseReference.hpp"
 #include <algorithm>
@@ -125,6 +126,47 @@ TEST(JointOperatorSearchTest, FrozenTopologyDeterminismMappingsAndLimits)
     policy.storage_bytes=512ULL*1024*1024; policy.scratch_bytes=1;
     try {n::BuildPreconditionerPartition(input,n::BuildParameterLayout(*input),policy); FAIL();}
     catch(const std::runtime_error & error) {EXPECT_STREQ(error.what(),"preconditioner-scratch-limit");}
+}
+TEST(JointOperatorSearchTest, SharedStructuralPartitionPreservesSchwarzTopologyAndIncidence)
+{
+    auto input=std::make_shared<c::JointProblemInput>(second_stage_test::OperatorWorkload("chain",8));
+    const auto atom_ids=input->atom_ids,row_ids=input->row_ids;
+    const auto layout=n::BuildParameterLayout(*input);
+    n::SchwarzPolicy policy; policy.core_atoms=2; policy.overlap_hops=1;
+    const auto schwarz=n::BuildPreconditionerPartition(input,layout,policy);
+    const auto structural=n::BuildStructuralBlockPartition(*input,layout,policy.core_atoms,
+        policy.overlap_hops,policy.max_block_atoms);
+    ASSERT_EQ(structural.cores.size(),schwarz->blocks.size());
+    std::vector<unsigned> membership(input->atom_ids.size());
+    std::vector<bool> informative(input->row_ids.size());
+    for(auto row:layout.informative_rows) informative[static_cast<std::size_t>(row)]=true;
+    for(std::size_t k=0;k<structural.cores.size();++k)
+    {
+        const auto & core=structural.cores[k]; const auto & block=schwarz->blocks[k];
+        EXPECT_EQ(core.id,block.id); EXPECT_EQ(core.atoms,block.core_atoms);
+        EXPECT_EQ(core.context_atoms,block.overlap_atoms);
+        for(auto atom:core.atoms) ++membership[static_cast<std::size_t>(atom)];
+        std::vector<Eigen::Index> affected;
+        for(auto atom:core.atoms) for(const auto & support:input->support[static_cast<std::size_t>(atom)])
+            if(informative[support.row]) affected.push_back(static_cast<Eigen::Index>(support.row));
+        std::sort(affected.begin(),affected.end()); affected.erase(std::unique(affected.begin(),affected.end()),affected.end());
+        EXPECT_EQ(core.affected_rows,affected);
+        std::vector<Eigen::Index> neighbors;
+        for(auto atom:core.atoms) for(auto other:layout.full_atoms)
+        {
+            if(std::find(core.atoms.begin(),core.atoms.end(),other)!=core.atoms.end()) continue;
+            bool coupled=false;
+            for(const auto & left:input->support[static_cast<std::size_t>(atom)])
+                for(const auto & right:input->support[static_cast<std::size_t>(other)])
+                    if(left.row==right.row && informative[left.row]) {coupled=true; break;}
+            if(coupled) neighbors.push_back(static_cast<Eigen::Index>(other));
+        }
+        std::sort(neighbors.begin(),neighbors.end(),[&](auto a,auto b){return input->atom_ids[static_cast<std::size_t>(a)]<input->atom_ids[static_cast<std::size_t>(b)];});
+        neighbors.erase(std::unique(neighbors.begin(),neighbors.end()),neighbors.end());
+        EXPECT_EQ(core.neighbor_atoms,neighbors);
+    }
+    for(auto atom:layout.full_atoms) EXPECT_EQ(membership[static_cast<std::size_t>(atom)],1U);
+    EXPECT_EQ(input->atom_ids,atom_ids); EXPECT_EQ(input->row_ids,row_ids);
 }
 TEST(JointOperatorSearchTest, OverlapZeroOneTwoFollowStructuralGraphHops)
 {

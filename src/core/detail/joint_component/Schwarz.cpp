@@ -1,6 +1,6 @@
 #include "OperatorSearch.hpp"
+#include "StructuralPartition.hpp"
 #include <algorithm>
-#include <deque>
 #include <numeric>
 
 namespace rhbm_gem::core::joint_component {
@@ -59,67 +59,33 @@ std::shared_ptr<const PreconditionerPartition> BuildPreconditionerPartition(
     for(auto a:layout.full_atoms) memberships+=input->support.at(a).size();
     const auto scratch=24*(n+1)+24*(m+1)+16*memberships+32*std::min(m,policy.max_block_atoms);
     Budget(scratch,policy.scratch_bytes,"preconditioner-scratch-limit"); work.scratch_bytes=std::max(work.scratch_bytes,scratch);
-    std::vector<bool> informative(n,false),assigned(m,false);
-    for(auto r:layout.informative_rows) informative.at(r)=true;
-    std::vector<std::size_t> offsets(n+1),order=layout.full_atoms;
-    std::sort(order.begin(),order.end(),[&](auto a,auto b){return input->atom_ids.at(a)<input->atom_ids.at(b);});
-    auto less=[&](Eigen::Index a,Eigen::Index b){return input->atom_ids.at(static_cast<std::size_t>(a))<input->atom_ids.at(static_cast<std::size_t>(b));};
-    for(auto a:order) for(const auto & s:input->support.at(a)) if(informative.at(s.row)) ++offsets[s.row+1];
-    std::partial_sum(offsets.begin(),offsets.end(),offsets.begin());
-    Indices incidence(offsets.back()); auto cursor=offsets;
-    for(auto a:order) for(const auto & s:input->support[a]) if(informative[s.row]) incidence[cursor[s.row]++]=static_cast<Eigen::Index>(a);
-    std::vector<std::size_t> marks(m); std::size_t generation{};
-    auto neighbors=[&](std::size_t a) {
-        Indices out; ++generation;
-        for(const auto & s:input->support[a]) if(informative[s.row])
-            for(auto k=offsets[s.row];k<offsets[s.row+1];++k)
-            {const auto b=static_cast<std::size_t>(incidence[k]); if(marks[b]!=generation) {marks[b]=generation; out.push_back(static_cast<Eigen::Index>(b));}}
-        std::sort(out.begin(),out.end(),less); out.erase(std::unique(out.begin(),out.end()),out.end()); return out;
-    };
-    std::vector<PreconditionerBlock> blocks;
+    StructuralTopology topology(*input,layout); auto structural=topology.BuildCores(policy.core_atoms,false);
+    std::vector<bool> informative(n,false); for(auto row:layout.informative_rows) informative.at(row)=true;
+    std::vector<PreconditionerBlock> blocks; blocks.reserve(structural.cores.size());
     std::size_t bytes=32*m+8*(layout.full_atoms.size()+layout.informative_rows.size());
-    for(auto seed:order) if(!assigned[seed])
+    for(auto & core:structural.cores)
     {
-        PreconditionerBlock block; block.id=input->atom_ids[seed];
-        std::deque<Eigen::Index> queue{static_cast<Eigen::Index>(seed)}; std::vector<bool> queued(m,false); queued[seed]=true;
-        while(!queue.empty() && block.core_atoms.size()<policy.core_atoms)
+        PreconditionerBlock block; block.id=std::move(core.id); block.core_atoms=std::move(core.atoms);
+        try {block.overlap_atoms=topology.ContextAtoms(block.core_atoms,policy.overlap_hops,policy.max_block_atoms);}
+        catch(const std::runtime_error & error)
         {
-            const auto a=queue.front(); queue.pop_front(); if(assigned[static_cast<std::size_t>(a)]) continue;
-            assigned[static_cast<std::size_t>(a)]=true; block.core_atoms.push_back(a);
-            for(auto b:neighbors(static_cast<std::size_t>(a))) if(!assigned[static_cast<std::size_t>(b)] && !queued[static_cast<std::size_t>(b)])
-            {queue.push_back(b); queued[static_cast<std::size_t>(b)]=true;}
+            if(std::string(error.what())=="structural-context-limit") throw std::runtime_error("preconditioner-block-limit");
+            throw;
         }
-        std::sort(block.core_atoms.begin(),block.core_atoms.end(),less);
-        blocks.push_back(std::move(block));
-    }
-    for(auto & block:blocks)
-    {
-        std::vector<bool> included(m,false); for(auto a:block.core_atoms) included[static_cast<std::size_t>(a)]=true;
-        Indices frontier=block.core_atoms;
-        for(std::size_t hop=0;hop<policy.overlap_hops && !frontier.empty();++hop)
-        {
-            Indices next;
-            for(auto a:frontier) for(auto b:neighbors(static_cast<std::size_t>(a))) if(!included[static_cast<std::size_t>(b)])
-            {
-                included[static_cast<std::size_t>(b)]=true; block.overlap_atoms.push_back(b); next.push_back(b);
-                if(block.core_atoms.size()+block.overlap_atoms.size()>policy.max_block_atoms)
-                    throw std::runtime_error("preconditioner-block-limit");
-            }
-            frontier=std::move(next);
-        }
-        std::sort(block.overlap_atoms.begin(),block.overlap_atoms.end(),less);
         std::size_t row_bound{};
         for(const auto * atoms:{&block.core_atoms,&block.overlap_atoms}) for(auto a:*atoms) row_bound+=input->support[static_cast<std::size_t>(a)].size();
         Budget(bytes+8*row_bound+64*policy.max_block_atoms+sizeof(block)+block.id.size(),policy.storage_bytes,"preconditioner-storage-limit");
         block.informative_rows.reserve(row_bound);
         for(const auto * atoms:{&block.core_atoms,&block.overlap_atoms}) for(auto a:*atoms)
-            for(const auto & s:input->support[static_cast<std::size_t>(a)]) if(informative[s.row]) block.informative_rows.push_back(static_cast<Eigen::Index>(s.row));
+            for(const auto & s:input->support[static_cast<std::size_t>(a)])
+                if(informative[s.row]) block.informative_rows.push_back(static_cast<Eigen::Index>(s.row));
         std::sort(block.informative_rows.begin(),block.informative_rows.end());
         block.informative_rows.erase(std::unique(block.informative_rows.begin(),block.informative_rows.end()),block.informative_rows.end());
         block.informative_rows.shrink_to_fit();
         bytes+=sizeof(block)+block.id.size()+32*(block.core_atoms.size()+block.overlap_atoms.size())+8*block.informative_rows.size();
         Budget(bytes,policy.storage_bytes,"preconditioner-storage-limit");
         work.maximum_block_atoms=std::max(work.maximum_block_atoms,block.core_atoms.size()+block.overlap_atoms.size());
+        blocks.push_back(std::move(block));
     }
     auto result=std::make_shared<const PreconditionerPartition>(std::move(input),layout,std::move(blocks),policy);
     work.topology_bytes=TopologyBytes(*result); Budget(work.topology_bytes,policy.storage_bytes,"preconditioner-storage-limit"); return result;
