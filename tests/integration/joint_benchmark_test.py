@@ -929,7 +929,8 @@ def smoke(build):
             def strip_timings(value):
                 if isinstance(value, dict):
                     for field in list(value):
-                        if field == 'seconds' or field.endswith('_seconds'):
+                        if (field == 'seconds' or field.endswith('_seconds') or
+                                field == 'process_peak_rss_bytes_observed_at_factor_events'):
                             value.pop(field)
                         else:
                             strip_timings(value[field])
@@ -993,8 +994,11 @@ def smoke(build):
             if profile == 'search':
                 details = report['result']['details']
                 work = details['search_work']
+                assessment_work = details['assessment_work']
                 if (details['measurement_scope'] != 'search-only' or details['assessment_execution'] != 'not-run' or
-                        details['assessment_work'] != {'assessments': 0, 'reference_evaluations': 0} or
+                        assessment_work.get('assessments') != 0 or assessment_work.get('reference_evaluations') != 0 or
+                        any(assessment_work.get(field, 0) != 0 for field in
+                            ('compact_attempts', 'compact_accepted', 'compact_boundary_fallbacks', 'compact_other_fallbacks')) or
                         report['result']['qualified'] is not None or report['numerics']['runtime_convergence'] is not None or
                         not work['pcg_solves'] or not work['operator_rank_checks'] or
                         work['operator_rank_compact_extractions'] != 0 or work['operator_rank_free_design_svds'] != 0):
