@@ -268,6 +268,13 @@ OperatorFactorRepresentationScopeForTesting::OperatorFactorRepresentationScopeFo
 {OperatorFactorRepresentationForTesting()=representation;}
 OperatorFactorRepresentationScopeForTesting::~OperatorFactorRepresentationScopeForTesting()
 {OperatorFactorRepresentationForTesting()=previous_;}
+WorkspaceFactorMutationForTesting & WorkspaceFactorMutationForTestingKind()
+{static thread_local auto mutation=WorkspaceFactorMutationForTesting::InPlace; return mutation;}
+WorkspaceFactorMutationScopeForTesting::WorkspaceFactorMutationScopeForTesting(WorkspaceFactorMutationForTesting mutation)
+    :previous_(WorkspaceFactorMutationForTestingKind())
+{WorkspaceFactorMutationForTestingKind()=mutation;}
+WorkspaceFactorMutationScopeForTesting::~WorkspaceFactorMutationScopeForTesting()
+{WorkspaceFactorMutationForTestingKind()=previous_;}
 bool SpqrOrderingAvailable(SpqrOrdering ordering)
 {
 #ifdef RHBM_GEM_JOINT_SPQR
@@ -445,6 +452,9 @@ struct SparseFactorState
 bool SparseBackendEnabled() {return true;}
 SparseBackend ActiveSparseBackend() {return SparseBackend::Spqr;}
 LinearWorkspace::LinearWorkspace():state_(std::make_shared<SparseFactorState>()) {}
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+void LinearWorkspace::HandoffForTesting() {state_=std::make_shared<SparseFactorState>();}
+#endif
 void LinearWorkspace::Bind(const void * domain,const void * observations,const LinearPolicy * policy)
 {
     const auto p=policy ? *policy : LinearPolicy{};
@@ -456,6 +466,10 @@ void LinearWorkspace::Bind(const void * domain,const void * observations,const L
 }
 std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const std::vector<Eigen::Index> & columns,double tolerance)
 {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(WorkspaceFactorMutationForTestingKind()==WorkspaceFactorMutationForTesting::CopyOnWrite && state_.use_count()>1)
+        state_=std::make_shared<SparseFactorState>();
+#endif
     auto & s=*state_;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(s.residency_active)
@@ -605,6 +619,10 @@ std::shared_ptr<FreeDesignFactor> FreeDesignFactor::NativeFixedForTesting(const 
 }
 #endif
 FreeDesignFactor::FreeDesignFactor(std::shared_ptr<SparseFactorState> state,std::size_t generation):state_(std::move(state)),generation_(generation) {}
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+const Sparse & FreeDesignFactor::DesignForTesting() const {Check(); return state_->design;}
+const std::vector<Eigen::Index> & FreeDesignFactor::ColumnsForTesting() const {Check(); return state_->columns;}
+#endif
 void FreeDesignFactor::Check() const
 {if(!state_ || state_->generation!=generation_ || (!state_->qr && state_->fixed_rank<0)) throw std::logic_error("Expired free-design factor");}
 bool FreeDesignFactor::Matches(const Sparse & a,const std::vector<Eigen::Index> & columns) const
@@ -857,6 +875,9 @@ struct SparseFactorState
 bool SparseBackendEnabled() {return false;}
 SparseBackend ActiveSparseBackend() {return SparseBackend::Eigen;}
 LinearWorkspace::LinearWorkspace()=default;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+void LinearWorkspace::HandoffForTesting() {state_=std::make_shared<SparseFactorState>();}
+#endif
 void LinearWorkspace::Bind(const void *,const void *,const LinearPolicy *) {}
 std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const std::vector<Eigen::Index> & columns,double tolerance)
 {
@@ -874,6 +895,10 @@ std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const
 std::shared_ptr<FreeDesignFactor> FreeDesignFactor::Fixed(const Sparse & a,const std::vector<Eigen::Index> & columns)
 {LinearWorkspace workspace; return workspace.Factor(a,columns,0);}
 FreeDesignFactor::FreeDesignFactor(std::shared_ptr<SparseFactorState> s,std::size_t g):state_(std::move(s)),generation_(g) {}
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+const Sparse & FreeDesignFactor::DesignForTesting() const {Check(); return state_->design;}
+const std::vector<Eigen::Index> & FreeDesignFactor::ColumnsForTesting() const {Check(); return state_->columns;}
+#endif
 void FreeDesignFactor::Check() const
 {if(!state_ || !state_->valid || generation_!=state_->generation) throw std::logic_error("Expired free-design factor");}
 bool FreeDesignFactor::Matches(const Sparse & a,const std::vector<Eigen::Index> & columns) const

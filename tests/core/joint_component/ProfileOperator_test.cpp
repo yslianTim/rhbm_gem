@@ -136,6 +136,121 @@ TEST(JointProfileOperatorTest, FactorAdjointsAndPermutation)
     EXPECT_THROW(factor->LeastSquares(w),std::logic_error);
 }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
+TEST(JointProfileOperatorTest, NormalizedAcceptedFactorMatchesRawDesignScalingAlgebra)
+{
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"SPQR accepted-factor reuse";
+    Sample s; n::LinearWorkspace workspace;
+    auto e=n::EvaluateProfile(s.domain,s.y,s.eta,false,&s.context,nullptr,&workspace); ASSERT_TRUE(e.valid);
+    std::vector<Eigen::Index> free;
+    for(Eigen::Index k=0;k<e.beta.size();++k) if(k%2 || e.beta(k)>0) free.push_back(k);
+    n::Matrix x(e.x.rows(),static_cast<Eigen::Index>(free.size())); n::Vector scales(x.cols());
+    for(Eigen::Index j=0;j<x.cols();++j)
+    {x.col(j)=e.x.col(free[static_cast<std::size_t>(j)]); scales(j)=e.x.col(free[static_cast<std::size_t>(j)]).norm();}
+    std::vector<Eigen::Triplet<double>> normalized_entries;
+    for(Eigen::Index j=0;j<x.cols();++j)
+        for(Eigen::Index r=0;r<x.rows();++r)
+            if(x(r,j)!=0) normalized_entries.emplace_back(r,j,x(r,j)/scales(j));
+    n::Sparse sparse_z(x.rows(),x.cols()); sparse_z.setFromTriplets(normalized_entries.begin(),normalized_entries.end());
+    ASSERT_TRUE(e.factor);
+    EXPECT_EQ(e.factor->ColumnsForTesting(),free);
+    EXPECT_EQ((e.factor->DesignForTesting()-sparse_z).norm(),0);
+    EXPECT_TRUE(e.factor->Matches(sparse_z,free));
+    const auto raw_factor=n::FreeDesignFactor::Fixed(x.sparseView(),free);
+    const auto normalized_factor=n::FreeDesignFactor::Fixed(sparse_z,free);
+    n::Matrix raw=n::Matrix::Zero(e.x.rows(),e.eta.size());
+    for(Eigen::Index k=0;k<e.derivative.cols();++k) raw.col(k/2)+=e.beta(k)*n::Matrix(e.derivative.col(k));
+    n::Vector contraction(x.cols());
+    for(Eigen::Index j=0;j<x.cols();++j)
+        contraction(j)=e.derivative.col(free[static_cast<std::size_t>(j)]).dot(e.residual)/scales(j);
+    const n::Vector v=n::Vector::LinSpaced(e.eta.size(),-.4,.7);
+    const n::Vector w=n::Vector::LinSpaced(e.residual.size(),-.2,.9);
+    n::Vector t(x.cols());
+    for(Eigen::Index j=0;j<x.cols();++j) t(j)=contraction(j)*v(free[static_cast<std::size_t>(j)]/2);
+    const n::Vector raw_direction=raw*v;
+    const n::Vector apply_candidate=raw_factor->ProjectComplement(raw_direction).col(0)-
+        raw_factor->PseudoInverseTranspose((scales.array()*t.array()).matrix()).col(0);
+    const n::Vector apply_reference=normalized_factor->ProjectComplement(raw_direction).col(0)-
+        normalized_factor->PseudoInverseTranspose(t).col(0);
+    EXPECT_LE((apply_candidate-apply_reference).norm(),1e-10*(1+apply_reference.norm()));
+    const n::Vector projected_w=raw_factor->ProjectComplement(w).col(0);
+    n::Vector adjoint_candidate=raw.transpose()*projected_w;
+    const n::Vector raw_solve=raw_factor->LeastSquares(w).col(0);
+    for(Eigen::Index j=0;j<x.cols();++j)
+        adjoint_candidate(free[static_cast<std::size_t>(j)]/2)-=contraction(j)*scales(j)*raw_solve(j);
+    n::Vector adjoint_reference=raw.transpose()*normalized_factor->ProjectComplement(w).col(0);
+    const n::Vector normalized_solve=normalized_factor->LeastSquares(w).col(0);
+    for(Eigen::Index j=0;j<x.cols();++j)
+        adjoint_reference(free[static_cast<std::size_t>(j)]/2)-=contraction(j)*normalized_solve(j);
+    EXPECT_LE((adjoint_candidate-adjoint_reference).norm(),1e-10*(1+adjoint_reference.norm()));
+    const n::Vector normal_input=raw.transpose()*normalized_factor->ProjectComplement(raw_direction).col(0);
+    n::Vector normal_raw=raw.transpose()*raw_factor->ProjectComplement(raw_direction).col(0);
+    const n::Vector normal_solution=raw_factor->NormalSolve((scales.array()*t.array()).matrix()).col(0);
+    for(Eigen::Index j=0;j<x.cols();++j)
+        normal_raw(free[static_cast<std::size_t>(j)]/2)+=contraction(j)*scales(j)*normal_solution(j);
+    n::Vector normal_normalized=normal_input;
+    const n::Vector normalized_normal=normalized_factor->NormalSolve(t).col(0);
+    for(Eigen::Index j=0;j<x.cols();++j)
+        normal_normalized(free[static_cast<std::size_t>(j)]/2)+=contraction(j)*normalized_normal(j);
+    EXPECT_LE((normal_raw-normal_normalized).norm(),1e-10*(1+normal_normalized.norm()));
+    EXPECT_LE((raw_factor->ProjectComplement(w)-normalized_factor->ProjectComplement(w)).norm(),1e-10*(1+w.norm()));
+    EXPECT_LE((raw_factor->LeastSquares(w).col(0).array()*scales.array()-normalized_factor->LeastSquares(w).col(0).array()).matrix().norm(),
+        1e-10*(1+normalized_factor->LeastSquares(w).norm()));
+}
+
+TEST(JointProfileOperatorTest, ReusedAcceptedFactorPreservesActionsRankAndWorkspaceLifetime)
+{
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"SPQR accepted-factor reuse";
+    Sample s; n::LinearWorkspace workspace;
+    auto e=n::EvaluateProfile(s.domain,s.y,s.eta,false,&s.context,nullptr,&workspace); ASSERT_TRUE(e.valid);
+    auto context=s.context; context.search.operator_rank.mode=n::OperatorRankMode::SpqrBounds;
+    const n::ProfileJacobianOperator current(e,context,-1,n::FreeDesignRankBackend::Dense);
+    ASSERT_TRUE(current.Valid());
+    const n::Vector v=n::Vector::LinSpaced(current.Columns(),-.3,.8);
+    const n::Vector w=n::Vector::LinSpaced(current.Rows(),-.4,.7);
+    const auto apply=current.Apply(v),adjoint=current.ApplyAdjoint(w),normal=current.ApplyNormal(v);
+    const auto rank=current.RankEvidence();
+    n::OperatorFactorOwnershipScopeForTesting ownership(n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite);
+    n::OperatorWorkForTesting()={};
+    const n::ProfileJacobianOperator candidate(e,context,-1,n::FreeDesignRankBackend::Dense);
+    ASSERT_TRUE(candidate.Valid())<<candidate.Reason();
+    EXPECT_EQ(candidate.RankEvidence().status,rank.status);
+    EXPECT_EQ(candidate.RankEvidence().certificate,rank.certificate);
+    EXPECT_EQ(candidate.RankEvidence().reason,rank.reason);
+    EXPECT_EQ(n::OperatorWorkForTesting().accepted_factor_reuse_attempts,1);
+    EXPECT_EQ(n::OperatorWorkForTesting().accepted_factor_reuse_accepted,1);
+    EXPECT_EQ(n::OperatorWorkForTesting().accepted_factor_reuse_fallbacks,0);
+    EXPECT_LE((candidate.Apply(v)-apply).norm(),1e-10*(1+apply.norm()));
+    EXPECT_LE((candidate.ApplyAdjoint(w)-adjoint).norm(),1e-10*(1+adjoint.norm()));
+    EXPECT_LE((candidate.ApplyNormal(v)-normal).norm(),1e-10*(1+normal.norm()));
+    EXPECT_NEAR(candidate.Apply(v).dot(w),v.dot(candidate.ApplyAdjoint(w)),
+        1e-12*std::max({1.,candidate.Apply(v).norm()*w.norm(),v.norm()*candidate.ApplyAdjoint(w).norm()}));
+    EXPECT_LE((candidate.ApplyNormal(v)-candidate.ApplyAdjoint(candidate.Apply(v))).norm(),1e-10*(1+normal.norm()));
+    n::WorkspaceFactorMutationScopeForTesting cow_mutation(n::WorkspaceFactorMutationForTesting::CopyOnWrite);
+    const auto next=n::EvaluateProfile(s.domain,s.y,s.eta.array()+.02,false,&context,nullptr,&workspace);
+    ASSERT_TRUE(next.valid);
+    EXPECT_LE((candidate.Apply(v)-apply).norm(),1e-10*(1+apply.norm()));
+
+    n::LinearWorkspace handoff_workspace;
+    auto handoff_e=n::EvaluateProfile(s.domain,s.y,s.eta,false,&context,nullptr,&handoff_workspace); ASSERT_TRUE(handoff_e.valid);
+    n::OperatorFactorOwnershipScopeForTesting handoff(n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedHandoff);
+    const n::ProfileJacobianOperator handoff_op(handoff_e,context,-1,n::FreeDesignRankBackend::Dense);
+    ASSERT_TRUE(handoff_op.Valid())<<handoff_op.Reason();
+    handoff_workspace.HandoffForTesting();
+    const auto handoff_next=n::EvaluateProfile(s.domain,s.y,handoff_e.eta.array()+.02,false,&context,nullptr,&handoff_workspace);
+    ASSERT_TRUE(handoff_next.valid);
+    EXPECT_LE((handoff_op.Apply(v)-apply).norm(),1e-10*(1+apply.norm()));
+
+    auto limited=context; limited.search.operator_rank.budget.entries=0;
+    const n::ProfileJacobianOperator unavailable_current(e,limited,-1,n::FreeDesignRankBackend::SpqrBounds);
+    n::OperatorFactorOwnershipScopeForTesting limited_reuse(n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite);
+    const n::ProfileJacobianOperator unavailable_candidate(e,limited,-1,n::FreeDesignRankBackend::SpqrBounds);
+    EXPECT_FALSE(unavailable_current.Valid()); EXPECT_FALSE(unavailable_candidate.Valid());
+    EXPECT_EQ(unavailable_candidate.RankEvidence().status,n::FreeDesignRankStatus::Unavailable);
+    EXPECT_EQ(unavailable_candidate.RankEvidence().status,unavailable_current.RankEvidence().status);
+    EXPECT_EQ(unavailable_candidate.RankEvidence().reason,unavailable_current.RankEvidence().reason);
+}
+#endif
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
 TEST(JointProfileOperatorTest, FactorResidencyTracksConcurrentStatesAndGenerations)
 {
     if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"SPQR factor residency";

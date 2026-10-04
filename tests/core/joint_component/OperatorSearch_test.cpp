@@ -432,6 +432,78 @@ TEST(JointOperatorSearchTest, NativeQrRepresentationPreservesSearchAndPcgEvidenc
         EXPECT_NEAR(*candidate.result.accepted_gradient_inf_norm,*current.result.accepted_gradient_inf_norm,
             1e-12*(1+std::abs(*current.result.accepted_gradient_inf_norm)));
 }
+
+TEST(JointOperatorSearchTest, AcceptedFactorOwnershipPreservesSearchTrajectoryAndLifetime)
+{
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"SPQR accepted-factor ownership";
+    Sample s; auto context=s.data.context; context.search.method=n::SearchMethod::OperatorPcg;
+    context.search.preconditioner=n::PreconditionerKind::Schwarz;
+    context.search.operator_rank.mode=n::OperatorRankMode::SpqrBounds;
+    struct Outcome
+    {
+        n::SearchResult result;
+        std::vector<std::size_t> pcg_iterations;
+        n::FreeDesignRankStatus rank_status{};
+        n::FreeDesignRankCertificate rank_certificate{};
+        std::size_t reuse_attempts{},reuse_accepted{},reuse_fallbacks{},factor_count{},owned_bytes{};
+    };
+    const auto run=[&](n::OperatorFactorOwnershipKindForTesting kind) {
+        n::OperatorFactorOwnershipScopeForTesting ownership(kind);
+        n::ResetFactorResidencyWorkForTesting(); n::SparseWorkForTesting()={};
+        n::OperatorWorkForTesting()={}; n::SearchWorkForTesting()={};
+        auto result=n::SearchProfile(s.data.domain,s.data.y,n::Vector::Constant(4,.55),context);
+        const auto & op=n::OperatorWorkForTesting(); const auto & search=n::SearchWorkForTesting();
+        const auto & residency=n::FactorResidencyWorkForTesting();
+        return Outcome{std::move(result),search.pcg_iteration_counts,
+            op.rank_status=="full-rank" ? n::FreeDesignRankStatus::FullRank :
+                op.rank_status=="deficient" ? n::FreeDesignRankStatus::Deficient : n::FreeDesignRankStatus::Unavailable,
+            op.rank_certificate,op.accepted_factor_reuse_attempts,op.accepted_factor_reuse_accepted,
+            op.accepted_factor_reuse_fallbacks,residency.maximum_concurrent_factor_count,
+            residency.maximum_concurrent_owned_bytes};
+    };
+    const auto current=run(n::OperatorFactorOwnershipKindForTesting::DedicatedFixed);
+    const auto cow=run(n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite);
+    const auto handoff=run(n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedHandoff);
+    for(const auto * candidate:{&cow,&handoff})
+    {
+        ASSERT_TRUE(current.result.initial_accepted); ASSERT_TRUE(candidate->result.initial_accepted);
+        EXPECT_EQ(candidate->result.stop_reason,current.result.stop_reason);
+        EXPECT_EQ(candidate->result.evaluations,current.result.evaluations);
+        EXPECT_EQ(candidate->result.accepted,current.result.accepted);
+        EXPECT_EQ(candidate->result.references,current.result.references);
+        EXPECT_EQ(candidate->pcg_iterations,current.pcg_iterations);
+        EXPECT_EQ(candidate->rank_status,current.rank_status);
+        EXPECT_EQ(candidate->rank_certificate,current.rank_certificate);
+        EXPECT_EQ(candidate->result.eta,current.result.eta);
+        EXPECT_EQ(candidate->result.trials.size(),current.result.trials.size());
+        EXPECT_EQ(candidate->reuse_attempts,candidate->result.derivatives);
+        EXPECT_GT(candidate->reuse_attempts,0);
+        EXPECT_EQ(candidate->reuse_accepted,candidate->reuse_attempts);
+        EXPECT_EQ(candidate->reuse_fallbacks,0);
+        ASSERT_EQ(candidate->result.accepted_objective.has_value(),current.result.accepted_objective.has_value());
+        if(current.result.accepted_objective)
+            EXPECT_NEAR(*candidate->result.accepted_objective,*current.result.accepted_objective,
+                1e-12*(1+std::abs(*current.result.accepted_objective)));
+        ASSERT_EQ(candidate->result.accepted_gradient_inf_norm.has_value(),current.result.accepted_gradient_inf_norm.has_value());
+        if(current.result.accepted_gradient_inf_norm)
+            EXPECT_NEAR(*candidate->result.accepted_gradient_inf_norm,*current.result.accepted_gradient_inf_norm,
+                1e-12*(1+*current.result.accepted_gradient_inf_norm));
+        ASSERT_EQ(candidate->result.trials.size(),current.result.trials.size());
+        for(std::size_t k=0;k<current.result.trials.size();++k)
+        {
+            const auto & a=candidate->result.trials[k]; const auto & b=current.result.trials[k];
+            EXPECT_EQ(a.evaluation,b.evaluation); EXPECT_EQ(a.accepted,b.accepted);
+            EXPECT_EQ(a.accepted_update,b.accepted_update);
+            ASSERT_EQ(a.lm.has_value(),b.lm.has_value());
+            if(a.lm && b.lm)
+            {
+                EXPECT_NEAR(a.lm->predicted_decrease,b.lm->predicted_decrease,
+                    1e-12*(1+std::abs(b.lm->predicted_decrease)));
+                EXPECT_LE((a.lm->step-b.lm->step).norm(),1e-10*(1+b.lm->step.norm()));
+            }
+        }
+    }
+}
 #endif
 
 TEST(JointOperatorSearchTest, UnavailableBoundedBackendNeverFallsBackToDense)

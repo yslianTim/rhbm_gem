@@ -4,6 +4,26 @@
 
 namespace rhbm_gem::core::joint_component {
 OperatorWork & OperatorWorkForTesting() {static thread_local OperatorWork work; return work;}
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+OperatorFactorOwnershipKindForTesting & OperatorFactorOwnershipForTesting()
+{static thread_local auto kind=OperatorFactorOwnershipKindForTesting::DedicatedFixed; return kind;}
+const char * OperatorFactorOwnershipName(OperatorFactorOwnershipKindForTesting kind)
+{
+    switch(kind)
+    {
+    case OperatorFactorOwnershipKindForTesting::DedicatedFixed: return "dedicated-fixed";
+    case OperatorFactorOwnershipKindForTesting::DedicatedNative: return "dedicated-native";
+    case OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite: return "reuse-accepted-copy-on-write";
+    case OperatorFactorOwnershipKindForTesting::ReuseAcceptedHandoff: return "reuse-accepted-handoff";
+    }
+    return "unknown";
+}
+OperatorFactorOwnershipScopeForTesting::OperatorFactorOwnershipScopeForTesting(OperatorFactorOwnershipKindForTesting kind)
+    :previous_(OperatorFactorOwnershipForTesting())
+{OperatorFactorOwnershipForTesting()=kind;}
+OperatorFactorOwnershipScopeForTesting::~OperatorFactorOwnershipScopeForTesting()
+{OperatorFactorOwnershipForTesting()=previous_;}
+#endif
 namespace {
 struct RankWorkAudit
 {
@@ -51,6 +71,10 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
     const auto n=e.x.rows(),m=e.eta.size();
     ResourcePhase phase("operator-prepare",true,n,e.x.cols(),static_cast<std::size_t>(e.x.nonZeros()));
     auto & work=OperatorWorkForTesting(); ++work.preparations; WorkTimer timer(work.preparation_seconds);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    const auto ownership=OperatorFactorOwnershipForTesting();
+    work.factor_ownership=OperatorFactorOwnershipName(ownership);
+#endif
     reason_="invalid-inner";
     if(!e.valid || !(scale_>0) || !std::isfinite(scale_) || m<=0 || e.beta.size()!=2*m ||
         e.x.cols()!=2*m || e.derivative.rows()!=n || e.derivative.cols()!=2*m || e.residual.size()!=n ||
@@ -79,9 +103,20 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
     if(!contraction_.allFinite()) {reason_="nonfinite-derivative"; return;}
     design.setFromTriplets(entries.begin(),entries.end()); raw_.setFromTriplets(raw.begin(),raw.end());
     work.design_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-design_started).count();
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(ownership==OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite ||
+        ownership==OperatorFactorOwnershipKindForTesting::ReuseAcceptedHandoff)
+    {
+        ++work.accepted_factor_reuse_attempts;
+        if(e.factor && e.factor->Matches(design,free))
+        {factor_=e.factor; ++work.accepted_factor_reuse_accepted;}
+        else ++work.accepted_factor_reuse_fallbacks;
+    }
+#endif
     try {
 #if defined(RHBM_GEM_TEST_INSTRUMENTATION) && defined(RHBM_GEM_JOINT_SPQR)
-        const bool native_requested=OperatorFactorRepresentationForTesting()==OperatorFactorRepresentation::NativeQr;
+        const bool native_requested=OperatorFactorRepresentationForTesting()==OperatorFactorRepresentation::NativeQr ||
+            ownership==OperatorFactorOwnershipKindForTesting::DedicatedNative;
         bool native_eligible=false;
         FreeDesignRankResult native_evidence;
         if(native_requested && backend==FreeDesignRankBackend::SpqrBounds)
@@ -96,23 +131,23 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
                 native_evidence.certificate==FreeDesignRankCertificate::LocalSupport;
         }
 #endif
-        // Dedicated ownership: a trial's mutable workspace cannot expire this factor.
+        // A dedicated operator factor outlives workspace refactorization; benchmark reuse routes already own a matched factor.
         {ResourcePhase factor_stage("fixed-operator-factor",true,n,p,static_cast<std::size_t>(design.nonZeros()));
         WorkTimer factor_timer(work.factor_seconds);
 #if defined(RHBM_GEM_TEST_INSTRUMENTATION) && defined(RHBM_GEM_JOINT_SPQR)
-        if(native_eligible)
+        if(!factor_ && native_eligible)
         {
             try {factor_=FreeDesignFactor::NativeFixedForTesting(design,free);}
             catch(const std::runtime_error &) {native_eligible=false;}
         }
-        if(!native_eligible) factor_=FreeDesignFactor::Fixed(design,free);
+        if(!factor_ && !native_eligible) factor_=FreeDesignFactor::Fixed(design,free);
         if(native_requested)
         {
             if(native_eligible) ++work.native_factor_accepted;
             else ++work.native_factor_fallbacks;
         }
 #else
-        factor_=FreeDesignFactor::Fixed(design,free);
+        if(!factor_) factor_=FreeDesignFactor::Fixed(design,free);
 #endif
         }
         {

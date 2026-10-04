@@ -66,6 +66,17 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
     const JointProgressObserver & observer,const JointProgressComponent * progress_component)
 {
     ResourcePhase phase("search",true,domain.rows,initial_b.size()); const auto start=std::chrono::steady_clock::now();
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    const auto previous_mutation=WorkspaceFactorMutationForTestingKind();
+    WorkspaceFactorMutationForTestingKind()=OperatorFactorOwnershipForTesting()==
+        OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite ?
+        WorkspaceFactorMutationForTesting::CopyOnWrite : WorkspaceFactorMutationForTesting::InPlace;
+    struct RestoreMutation
+    {
+        WorkspaceFactorMutationForTesting previous;
+        ~RestoreMutation() {WorkspaceFactorMutationForTestingKind()=previous;}
+    } restore_mutation{previous_mutation};
+#endif
     SearchResult out; out.eta=initial_b.array().log(); out.stopped=true; out.lm_status=9;
     auto report=[&] {
         if(!progress_component) return;
@@ -113,6 +124,10 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
             }
             const ProfileJacobianOperator op(accepted,context,-1,*rank_backend); ++out.derivatives; ++SearchWorkForTesting().linearizations;
             if(!op.Valid()) return finish(op.Reason());
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            if(OperatorFactorOwnershipForTesting()==OperatorFactorOwnershipKindForTesting::ReuseAcceptedHandoff)
+                trial_workspace.HandoffForTesting();
+#endif
             Vector norms;
             {
                 ResourcePhase phase_metric("width-metric",true,accepted.residual.size(),accepted.eta.size(),

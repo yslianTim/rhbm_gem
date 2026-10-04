@@ -13,11 +13,27 @@ struct OperatorWork
     FreeDesignLocalWitness rank_local_witness;
     double preparation_seconds{},rank_seconds{},apply_seconds{},adjoint_seconds{},normal_seconds{},design_seconds{},factor_seconds{},compact_seconds{},svd_seconds{};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    std::size_t native_factor_accepted{},native_factor_fallbacks{};
+    std::size_t native_factor_accepted{},native_factor_fallbacks{},accepted_factor_reuse_attempts{},
+        accepted_factor_reuse_accepted{},accepted_factor_reuse_fallbacks{};
+    std::string factor_ownership;
 #endif
     std::string rank_status,rank_reason;
 };
 OperatorWork & OperatorWorkForTesting();
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+enum class OperatorFactorOwnershipKindForTesting {DedicatedFixed,DedicatedNative,ReuseAcceptedCopyOnWrite,ReuseAcceptedHandoff};
+OperatorFactorOwnershipKindForTesting & OperatorFactorOwnershipForTesting();
+const char * OperatorFactorOwnershipName(OperatorFactorOwnershipKindForTesting);
+class OperatorFactorOwnershipScopeForTesting
+{
+    OperatorFactorOwnershipKindForTesting previous_;
+public:
+    explicit OperatorFactorOwnershipScopeForTesting(OperatorFactorOwnershipKindForTesting);
+    ~OperatorFactorOwnershipScopeForTesting();
+    OperatorFactorOwnershipScopeForTesting(const OperatorFactorOwnershipScopeForTesting &)=delete;
+    OperatorFactorOwnershipScopeForTesting & operator=(const OperatorFactorOwnershipScopeForTesting &)=delete;
+};
+#endif
 // A unique immutable identity; equal dimensions do not imply equal states.
 struct LinearizationIdentity {};
 class ProfileJacobianOperator

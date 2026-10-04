@@ -106,6 +106,17 @@ public:
     OperatorFactorRepresentationScopeForTesting(const OperatorFactorRepresentationScopeForTesting &)=delete;
     OperatorFactorRepresentationScopeForTesting & operator=(const OperatorFactorRepresentationScopeForTesting &)=delete;
 };
+enum class WorkspaceFactorMutationForTesting {InPlace,CopyOnWrite};
+WorkspaceFactorMutationForTesting & WorkspaceFactorMutationForTestingKind();
+class WorkspaceFactorMutationScopeForTesting
+{
+    WorkspaceFactorMutationForTesting previous_;
+public:
+    explicit WorkspaceFactorMutationScopeForTesting(WorkspaceFactorMutationForTesting);
+    ~WorkspaceFactorMutationScopeForTesting();
+    WorkspaceFactorMutationScopeForTesting(const WorkspaceFactorMutationScopeForTesting &)=delete;
+    WorkspaceFactorMutationScopeForTesting & operator=(const WorkspaceFactorMutationScopeForTesting &)=delete;
+};
 #endif
 // Inclusive elapsed time, including early returns and exception unwinding.
 struct WorkTimer
@@ -127,6 +138,8 @@ public:
     static std::shared_ptr<FreeDesignFactor> Fixed(const Sparse &,const std::vector<Eigen::Index> &);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     static std::shared_ptr<FreeDesignFactor> NativeFixedForTesting(const Sparse &,const std::vector<Eigen::Index> &);
+    const Sparse & DesignForTesting() const;
+    const std::vector<Eigen::Index> & ColumnsForTesting() const;
 #endif
     bool Matches(const Sparse &,const std::vector<Eigen::Index> &) const;
     int Rank() const;
@@ -144,6 +157,9 @@ public:
     LinearWorkspace();
     void Bind(const void * domain,const void * observations,const LinearPolicy *);
     std::shared_ptr<FreeDesignFactor> Factor(const Sparse &,const std::vector<Eigen::Index> &,double);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    void HandoffForTesting();
+#endif
 };
 std::pair<Matrix,Vector> SparseReferenceQR(const Sparse &,const Vector &,const Vector &,VectorRef);
 }
