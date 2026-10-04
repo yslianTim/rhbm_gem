@@ -180,7 +180,8 @@ def command_for_profile(args, case, output, build):
         if args.profile == 'solve':
             return sparse_command(sparse, case, 'fixed', output,
                                   ('--search', args.preconditioner, *operator_policy_options(args),
-                                   '--assessment-reduction', args.assessment_reduction), args.svd_mode)
+                                   '--assessment-reduction', args.assessment_reduction,
+                                   '--projected-reduction', args.projected_reduction), args.svd_mode)
         return sparse_command(sparse, case,
                               'rank' if args.rank_mode == 'prototype' else 'rank-oracle', output,
                               rank_budget_options(args), args.svd_mode)
@@ -251,6 +252,7 @@ def solver_policy_metadata(args, backend):
         'operator_rank_budget_entries': args.operator_rank_work_entries,
         'operator_rank_budget_workspace_bytes': args.operator_rank_workspace_mib * 1024**2,
         'operator_factor_representation': args.operator_factor_representation,
+        'projected_reduction': args.projected_reduction,
         'preconditioner': args.preconditioner,
         'spqr_ordering': args.spqr_ordering.upper() if args.spqr_ordering else 'COLAMD',
         'schwarz_core_atoms': args.schwarz_core_atoms,
@@ -547,6 +549,8 @@ def build_parser():
     parser.add_argument('--svd-mode', choices=('legacy', 'values', 'auto'))
     parser.add_argument('--assessment-reduction', choices=('observation-tsqr', 'compact-stack-qr'),
                         default='observation-tsqr')
+    parser.add_argument('--projected-reduction', choices=('observation-tiled-qr', 'structured-compact-qr'),
+                        default='observation-tiled-qr')
     parser.add_argument('--rank-mode', choices=('prototype', 'oracle'), default='prototype')
     parser.add_argument('--cli', type=Path)
     parser.add_argument('--model', type=Path)
@@ -574,6 +578,8 @@ def validate_args(parser, args):
         parser.error('--operator-factor-representation is supported only by the benchmark-only search profile')
     if args.assessment_reduction != 'observation-tsqr' and args.profile != 'solve':
         parser.error('--assessment-reduction is supported only by the benchmark-only solve profile')
+    if args.projected_reduction != 'observation-tiled-qr' and args.profile != 'solve':
+        parser.error('--projected-reduction is supported only by the benchmark-only solve profile')
 
 
 def main(argv=None):
@@ -586,12 +592,15 @@ def main(argv=None):
     output.parent.mkdir(parents=True, exist_ok=True)
     try:
         metadata = build_metadata(build)
+        if args.projected_reduction == 'structured-compact-qr' and metadata['backend'].upper() != 'SPQR':
+            parser.error('structured-compact-qr requires the SPQR benchmark backend')
         commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT, check=True,
                                 capture_output=True, text=True).stdout.strip()
     except (OSError, subprocess.CalledProcessError, ValueError) as error:
         parser.error(str(error))
     metadata.update(commit=commit, profile=args.profile, case=args.case,
                     assessment_reduction=args.assessment_reduction,
+                    projected_reduction=args.projected_reduction,
                     source_sha256=source_hash(ROOT), benchmark_sha256=sha(Path(__file__)))
     metadata['solver_policy'] = solver_policy_metadata(args, metadata['backend'])
     if args.profile in ('prepare', 'fixed', 'search', 'solve', 'rank'):

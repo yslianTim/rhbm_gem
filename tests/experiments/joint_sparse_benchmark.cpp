@@ -33,6 +33,7 @@ bool audit{};
 bool operator_audit{};
 std::string search_kind;
 std::string assessment_reduction{"observation-tsqr"};
+std::string projected_reduction{"observation-tiled-qr"};
 bool search_only{};
 std::filesystem::path capture;
 j::array svd_records;
@@ -426,6 +427,26 @@ j::object AssessmentTelemetry()
     const double jacobian_seconds=stage_seconds("derivative-jacobian-qr");
     const double compact_jacobian_seconds=stage_seconds("derivative-compact-jacobian-qr");
     const double norms_seconds=stage_seconds("derivative-norms");
+    const auto & reduction=derivative.projected_reduction;
+    const double projected_reduction_seconds=reduction.kind=="observation-tiled-qr" ?
+        derivative.projected_qr.qr_seconds : reduction.seconds+
+        (reduction.fallbacks ? derivative.projected_qr.qr_seconds : 0.);
+    j::object projected_reduction_telemetry{
+        {"projected_reduction_kind",reduction.kind},
+        {"projected_reduction_fallback_reason",reduction.fallback_reason},
+        {"projected_reduction_attempts",reduction.attempts},
+        {"projected_reduction_accepted",reduction.accepted},
+        {"projected_reduction_fallbacks",reduction.fallbacks},
+        {"projected_reduction_seconds",projected_reduction_seconds},
+        {"projected_factor_rows",reduction.factor_rows},
+        {"projected_factor_columns",reduction.factor_columns},
+        {"observation_projected_rows_processed",reduction.observation_projected_rows_processed},
+        {"compact_projected_rows_processed",reduction.compact_projected_rows_processed},
+        {"maximum_dense_bytes",reduction.maximum_dense_bytes},
+        {"sparse_rows",reduction.sparse_rows},{"sparse_columns",reduction.sparse_columns},
+        {"sparse_nnz",reduction.sparse_nonzeros},
+        {"symbolic_seconds",reduction.symbolic_seconds},{"numeric_seconds",reduction.numeric_seconds},
+        {"ordering",reduction.ordering}};
     j::object derivative_reduction{{"active_micro_stage",optional_stage(
             work.active_stage=="derivative-rows" || work.active_stage=="derivative-projected-qr" ||
             work.active_stage=="derivative-jacobian-qr" || work.active_stage=="derivative-compact-jacobian-qr" ||
@@ -433,6 +454,7 @@ j::object AssessmentTelemetry()
         {"reduction_inclusive_seconds",stage_seconds("derivative-reduction")},
         {"rows_seconds",rows_seconds},{"projected_qr_seconds",projected_seconds},
         {"jacobian_qr_seconds",jacobian_seconds},{"compact_jacobian_qr_seconds",compact_jacobian_seconds},
+        {"projected_reduction",projected_reduction_telemetry},
         {"norms_seconds",norms_seconds},
         {"exclusive_substage_seconds",rows_seconds+projected_seconds+jacobian_seconds+compact_jacobian_seconds+norms_seconds},
         {"tile_count",derivative.tile_count},{"tiled_qr",j::object{
@@ -497,7 +519,7 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
     ConfigureSearchPolicy(context);
     j::object report{{"stage","search"},{"search_kind",search_kind},{"atoms",b.size()},{"rows",domain.rows},
         {"measurement_scope",search_only ? "search-only" : "joint_search_and_returned_state_assessment"},
-        {"assessment_reduction",assessment_reduction}};
+        {"assessment_reduction",assessment_reduction},{"projected_reduction",projected_reduction}};
     report["solver_policy"]=PolicyRecord(context.search);
     auto & resource=n::ResourceWorkForTesting(); const bool resources_enabled=resource.enabled;
     resource={}; resource.enabled=resources_enabled;
@@ -692,6 +714,15 @@ int main(int argc,char ** argv)
                     else if(assessment_reduction=="compact-stack-qr")
                         n::JacobianReductionForTesting()=n::JacobianReductionKindForTesting::CompactStackQr;
                     else throw std::invalid_argument("Expected --assessment-reduction observation-tsqr|compact-stack-qr");
+                }
+                else if(option=="--projected-reduction" && k+1<end)
+                {
+                    projected_reduction=argv[++k];
+                    if(projected_reduction=="observation-tiled-qr")
+                        n::ProjectedReductionForTesting()=n::ProjectedReductionKindForTesting::ObservationTiledQr;
+                    else if(projected_reduction=="structured-compact-qr")
+                        n::ProjectedReductionForTesting()=n::ProjectedReductionKindForTesting::StructuredCompactQr;
+                    else throw std::invalid_argument("Expected --projected-reduction observation-tiled-qr|structured-compact-qr");
                 }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
                 else if(option=="--operator-factor-representation" && k+1<end)
