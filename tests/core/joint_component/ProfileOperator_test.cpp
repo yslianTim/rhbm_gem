@@ -88,6 +88,7 @@ TEST(JointProfileOperatorTest, FullResidualCorrectionAndFixedStateParity)
 TEST(JointProfileOperatorTest, ActiveFaceAndOwnership)
 {
     Sample s; n::LinearWorkspace workspace;
+    workspace.EnableCopyOnWrite();
     auto e=n::EvaluateProfile(s.domain,s.y,s.eta,false,&s.context,nullptr,&workspace); ASSERT_TRUE(e.valid);
     const n::ProfileJacobianOperator op(e,s.context); ASSERT_TRUE(op.Valid());
     const n::Vector v=n::Vector::Ones(3),before=op.Apply(v);
@@ -323,6 +324,7 @@ TEST(JointProfileOperatorTest, NativeQrRepresentationMatchesActionsAfterLocalSup
     const auto & data=c::JointProblemAccess::Get(problem);
     const auto e=n::EvaluateProfile(data.domain,data.y,n::Vector::Constant(4,std::log(.55)),false,&data.context);
     ASSERT_TRUE(e.valid);
+    n::OperatorFactorOwnershipScopeForTesting ownership(n::OperatorFactorOwnershipKindForTesting::DedicatedFixed);
     n::OperatorWorkForTesting()={};
     const n::ProfileJacobianOperator current(e,data.context,-1,n::FreeDesignRankBackend::SpqrBounds);
     ASSERT_TRUE(current.Valid());
@@ -358,6 +360,7 @@ TEST(JointProfileOperatorTest, NativeQrRepresentationFallsBackWhenLocalSupportIs
     e.x=x.sparseView(); e.derivative=e.x; e.residual=n::Vector::Zero(x.rows());
     const auto context=n::CreateContext(e.residual,2);
     n::SparseWorkForTesting()={}; n::OperatorWorkForTesting()={};
+    n::OperatorFactorOwnershipScopeForTesting ownership(n::OperatorFactorOwnershipKindForTesting::DedicatedFixed);
     n::OperatorFactorRepresentationScopeForTesting representation(n::OperatorFactorRepresentation::NativeQr);
     const n::ProfileJacobianOperator candidate(e,context,-1,n::FreeDesignRankBackend::SpqrBounds);
     ASSERT_TRUE(candidate.Valid())<<candidate.Reason();

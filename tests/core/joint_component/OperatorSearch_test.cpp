@@ -388,6 +388,7 @@ TEST(JointOperatorSearchTest, NativeQrRepresentationPreservesSearchAndPcgEvidenc
         std::size_t native_factor_accepted{},native_factor_fallbacks{};
     };
     const auto run=[&](n::OperatorFactorRepresentation representation) {
+        n::OperatorFactorOwnershipScopeForTesting ownership(n::OperatorFactorOwnershipKindForTesting::DedicatedFixed);
         n::OperatorFactorRepresentationScopeForTesting scope(representation);
         n::SparseWorkForTesting()={}; n::OperatorWorkForTesting()={}; n::SearchWorkForTesting()={};
         auto result=n::SearchProfile(s.data.domain,s.data.y,n::Vector::Constant(4,.55),context);
@@ -554,8 +555,10 @@ TEST(JointOperatorSearchTest, FullRuntimeEvidenceUncertaintyAndPersistenceWithOp
 
 TEST(JointOperatorSearchTest, SearchResourceStagesAreNeutralDistinctAndBounded)
 {
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"SPQR factor-stage telemetry";
     Sample s; auto context=s.data.context; context.search.method=n::SearchMethod::OperatorPcg;
     context.search.preconditioner=n::PreconditionerKind::Diagonal;
+    n::OperatorFactorOwnershipScopeForTesting ownership(n::OperatorFactorOwnershipKindForTesting::DedicatedFixed);
     auto & resources=n::ResourceWorkForTesting(); resources={};
     const auto control=n::SearchProfile(s.data.domain,s.data.y,n::Vector::Constant(4,.55),context);
     EXPECT_TRUE(resources.search_stages.empty());
