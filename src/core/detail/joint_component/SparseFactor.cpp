@@ -268,13 +268,6 @@ OperatorFactorRepresentationScopeForTesting::OperatorFactorRepresentationScopeFo
 {OperatorFactorRepresentationForTesting()=representation;}
 OperatorFactorRepresentationScopeForTesting::~OperatorFactorRepresentationScopeForTesting()
 {OperatorFactorRepresentationForTesting()=previous_;}
-WorkspaceFactorMutationForTesting & WorkspaceFactorMutationForTestingKind()
-{static thread_local auto mutation=WorkspaceFactorMutationForTesting::InPlace; return mutation;}
-WorkspaceFactorMutationScopeForTesting::WorkspaceFactorMutationScopeForTesting(WorkspaceFactorMutationForTesting mutation)
-    :previous_(WorkspaceFactorMutationForTestingKind())
-{WorkspaceFactorMutationForTestingKind()=mutation;}
-WorkspaceFactorMutationScopeForTesting::~WorkspaceFactorMutationScopeForTesting()
-{WorkspaceFactorMutationForTestingKind()=previous_;}
 bool SpqrOrderingAvailable(SpqrOrdering ordering)
 {
 #ifdef RHBM_GEM_JOINT_SPQR
@@ -466,10 +459,8 @@ void LinearWorkspace::Bind(const void * domain,const void * observations,const L
 }
 std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const std::vector<Eigen::Index> & columns,double tolerance)
 {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(WorkspaceFactorMutationForTestingKind()==WorkspaceFactorMutationForTesting::CopyOnWrite && state_.use_count()>1)
+    if(copy_on_write_ && state_.use_count()>1)
         state_=std::make_shared<SparseFactorState>();
-#endif
     auto & s=*state_;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(s.residency_active)
@@ -882,6 +873,7 @@ void LinearWorkspace::Bind(const void *,const void *,const LinearPolicy *) {}
 std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const std::vector<Eigen::Index> & columns,double tolerance)
 {
     if(!state_) state_=std::make_shared<SparseFactorState>();
+    if(copy_on_write_ && state_.use_count()>1) state_=std::make_shared<SparseFactorState>();
     auto & s=*state_; ++s.generation; s.valid=false; s.design=a; s.columns=columns;
     s.qr.setPivotThreshold(tolerance);
     auto & work=SparseWorkForTesting();

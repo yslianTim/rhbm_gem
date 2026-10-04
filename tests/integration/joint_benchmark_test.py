@@ -272,8 +272,14 @@ class JointBenchmarkContract(unittest.TestCase):
             driver.parent.mkdir(); driver.touch()
             command = benchmark.command_for_profile(args, {'kind': 'synthetic', 'topology': 'cube', 'atoms': 512},
                                                     Path('result.json'), build)
-        self.assertEqual(command[command.index('--operator-factor-ownership') + 1],
-                         'reuse-accepted-copy-on-write')
+        self.assertNotIn('--operator-factor-ownership', command)
+        args.operator_factor_ownership = 'dedicated-fixed'
+        with tempfile.TemporaryDirectory() as temporary:
+            build = Path(temporary); driver = build / 'bin/joint_sparse_benchmark'
+            driver.parent.mkdir(); driver.touch()
+            command = benchmark.command_for_profile(args, {'kind': 'synthetic', 'topology': 'cube', 'atoms': 512},
+                                                    Path('result.json'), build)
+        self.assertEqual(command[command.index('--operator-factor-ownership') + 1], 'dedicated-fixed')
         args = parser.parse_args(['--profile', 'solve', '--case', 'cube-512',
                                   '--build-dir', 'build/debug', '--output', 'result.json',
                                   '--spqr-ordering', 'best'])

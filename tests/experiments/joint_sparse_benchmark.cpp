@@ -43,7 +43,7 @@ n::SchwarzPolicy schwarz_policy{};
 n::SpqrOrdering spqr_ordering{n::SpqrOrdering::Colamd};
 bool spqr_ordering_requested{};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-n::OperatorFactorOwnershipKindForTesting factor_ownership{n::OperatorFactorOwnershipKindForTesting::DedicatedFixed};
+n::OperatorFactorOwnershipKindForTesting factor_ownership{n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite};
 #endif
 j::value Read(const char * path,bool precise=false)
 {

@@ -225,7 +225,7 @@ TEST(JointProfileOperatorTest, ReusedAcceptedFactorPreservesActionsRankAndWorksp
     EXPECT_NEAR(candidate.Apply(v).dot(w),v.dot(candidate.ApplyAdjoint(w)),
         1e-12*std::max({1.,candidate.Apply(v).norm()*w.norm(),v.norm()*candidate.ApplyAdjoint(w).norm()}));
     EXPECT_LE((candidate.ApplyNormal(v)-candidate.ApplyAdjoint(candidate.Apply(v))).norm(),1e-10*(1+normal.norm()));
-    n::WorkspaceFactorMutationScopeForTesting cow_mutation(n::WorkspaceFactorMutationForTesting::CopyOnWrite);
+    workspace.EnableCopyOnWrite();
     const auto next=n::EvaluateProfile(s.domain,s.y,s.eta.array()+.02,false,&context,nullptr,&workspace);
     ASSERT_TRUE(next.valid);
     EXPECT_LE((candidate.Apply(v)-apply).norm(),1e-10*(1+apply.norm()));

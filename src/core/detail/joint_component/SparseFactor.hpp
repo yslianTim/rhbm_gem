@@ -106,17 +106,6 @@ public:
     OperatorFactorRepresentationScopeForTesting(const OperatorFactorRepresentationScopeForTesting &)=delete;
     OperatorFactorRepresentationScopeForTesting & operator=(const OperatorFactorRepresentationScopeForTesting &)=delete;
 };
-enum class WorkspaceFactorMutationForTesting {InPlace,CopyOnWrite};
-WorkspaceFactorMutationForTesting & WorkspaceFactorMutationForTestingKind();
-class WorkspaceFactorMutationScopeForTesting
-{
-    WorkspaceFactorMutationForTesting previous_;
-public:
-    explicit WorkspaceFactorMutationScopeForTesting(WorkspaceFactorMutationForTesting);
-    ~WorkspaceFactorMutationScopeForTesting();
-    WorkspaceFactorMutationScopeForTesting(const WorkspaceFactorMutationScopeForTesting &)=delete;
-    WorkspaceFactorMutationScopeForTesting & operator=(const WorkspaceFactorMutationScopeForTesting &)=delete;
-};
 #endif
 // Inclusive elapsed time, including early returns and exception unwinding.
 struct WorkTimer
@@ -153,9 +142,11 @@ public:
 class LinearWorkspace
 {
     std::shared_ptr<SparseFactorState> state_;
+    bool copy_on_write_{};
 public:
     LinearWorkspace();
     void Bind(const void * domain,const void * observations,const LinearPolicy *);
+    void EnableCopyOnWrite() {copy_on_write_=true;}
     std::shared_ptr<FreeDesignFactor> Factor(const Sparse &,const std::vector<Eigen::Index> &,double);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     void HandoffForTesting();

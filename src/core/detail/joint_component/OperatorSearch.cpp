@@ -66,17 +66,6 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
     const JointProgressObserver & observer,const JointProgressComponent * progress_component)
 {
     ResourcePhase phase("search",true,domain.rows,initial_b.size()); const auto start=std::chrono::steady_clock::now();
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    const auto previous_mutation=WorkspaceFactorMutationForTestingKind();
-    WorkspaceFactorMutationForTestingKind()=OperatorFactorOwnershipForTesting()==
-        OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite ?
-        WorkspaceFactorMutationForTesting::CopyOnWrite : WorkspaceFactorMutationForTesting::InPlace;
-    struct RestoreMutation
-    {
-        WorkspaceFactorMutationForTesting previous;
-        ~RestoreMutation() {WorkspaceFactorMutationForTestingKind()=previous;}
-    } restore_mutation{previous_mutation};
-#endif
     SearchResult out; out.eta=initial_b.array().log(); out.stopped=true; out.lm_status=9;
     auto report=[&] {
         if(!progress_component) return;
@@ -90,6 +79,12 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
         out.seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count(); return out;
     };
     LinearWorkspace trial_workspace;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(OperatorFactorOwnershipForTesting()==OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite)
+        trial_workspace.EnableCopyOnWrite();
+#else
+    trial_workspace.EnableCopyOnWrite();
+#endif
     auto evaluate=[&](const Vector & eta) {
         ResourcePhase evaluation(out.evaluations==0 ? "profile-evaluation" : "trial-evaluation",true,domain.rows,eta.size());
         const auto t=std::chrono::steady_clock::now();

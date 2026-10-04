@@ -174,8 +174,9 @@ def command_for_profile(args, case, output, build):
             ordering = ('--spqr-ordering', args.spqr_ordering) if args.spqr_ordering else ()
             representation = (('--operator-factor-representation', args.operator_factor_representation)
                               if args.operator_factor_representation != 'exported-fixed' else ())
-            ownership = (('--operator-factor-ownership', args.operator_factor_ownership)
-                         if args.operator_factor_ownership != 'dedicated-fixed' else ())
+            ownership_name = args.operator_factor_ownership or 'reuse-accepted-copy-on-write'
+            ownership = (('--operator-factor-ownership', ownership_name)
+                         if ownership_name != 'reuse-accepted-copy-on-write' else ())
             return sparse_command(sparse, case, 'fixed', output,
                                   ('--search', args.preconditioner, '--search-only',
                                    *operator_policy_options(args), *ordering, *representation, *ownership), args.svd_mode)
@@ -254,7 +255,8 @@ def solver_policy_metadata(args, backend):
         'operator_rank_budget_entries': args.operator_rank_work_entries,
         'operator_rank_budget_workspace_bytes': args.operator_rank_workspace_mib * 1024**2,
         'operator_factor_representation': args.operator_factor_representation,
-        'operator_factor_ownership': args.operator_factor_ownership,
+        'operator_factor_ownership': (args.operator_factor_ownership or 'reuse-accepted-copy-on-write')
+            if args.profile == 'search' else None,
         'projected_reduction': args.projected_reduction,
         'preconditioner': args.preconditioner,
         'spqr_ordering': args.spqr_ordering.upper() if args.spqr_ordering else 'COLAMD',
@@ -541,7 +543,8 @@ def build_parser():
     parser.add_argument('--operator-factor-representation', choices=('exported-fixed', 'native-qr'),
                         default='exported-fixed')
     parser.add_argument('--operator-factor-ownership', choices=('dedicated-fixed', 'dedicated-native',
-                        'reuse-accepted-copy-on-write', 'reuse-accepted-handoff'), default='dedicated-fixed')
+                        'reuse-accepted-copy-on-write', 'reuse-accepted-handoff'),
+                        default=None)
     parser.add_argument('--operator-rank', choices=('auto', 'dense', 'spqr-bounds'), default='auto')
     parser.add_argument('--operator-rank-seconds', type=float, default=120)
     parser.add_argument('--operator-rank-work-entries', type=int, default=100_000_000)
@@ -582,7 +585,7 @@ def validate_args(parser, args):
         parser.error('--spqr-ordering is supported by the benchmark-only search profile')
     if args.operator_factor_representation != 'exported-fixed' and args.profile != 'search':
         parser.error('--operator-factor-representation is supported only by the benchmark-only search profile')
-    if args.operator_factor_ownership != 'dedicated-fixed' and args.profile != 'search':
+    if args.operator_factor_ownership is not None and args.profile != 'search':
         parser.error('--operator-factor-ownership is supported only by the benchmark-only search profile')
     if args.assessment_reduction != 'observation-tsqr' and args.profile != 'solve':
         parser.error('--assessment-reduction is supported only by the benchmark-only solve profile')

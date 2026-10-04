@@ -6,7 +6,7 @@ namespace rhbm_gem::core::joint_component {
 OperatorWork & OperatorWorkForTesting() {static thread_local OperatorWork work; return work;}
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 OperatorFactorOwnershipKindForTesting & OperatorFactorOwnershipForTesting()
-{static thread_local auto kind=OperatorFactorOwnershipKindForTesting::DedicatedFixed; return kind;}
+{static thread_local auto kind=OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite; return kind;}
 const char * OperatorFactorOwnershipName(OperatorFactorOwnershipKindForTesting kind)
 {
     switch(kind)
@@ -69,14 +69,17 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
     :identity_(std::make_shared<const LinearizationIdentity>()),scale_(context.scale)
 {
     const auto n=e.x.rows(),m=e.eta.size();
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    [[maybe_unused]] bool reused_rank_evidence_ready{};
-#endif
+    bool reused_rank_evidence_ready{};
     ResourcePhase phase("operator-prepare",true,n,e.x.cols(),static_cast<std::size_t>(e.x.nonZeros()));
     auto & work=OperatorWorkForTesting(); ++work.preparations; WorkTimer timer(work.preparation_seconds);
+    bool reuse_accepted_factor{};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     const auto ownership=OperatorFactorOwnershipForTesting();
     work.factor_ownership=OperatorFactorOwnershipName(ownership);
+    reuse_accepted_factor=ownership==OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite ||
+        ownership==OperatorFactorOwnershipKindForTesting::ReuseAcceptedHandoff;
+#else
+    reuse_accepted_factor=true;
 #endif
     reason_="invalid-inner";
     if(!e.valid || !(scale_>0) || !std::isfinite(scale_) || m<=0 || e.beta.size()!=2*m ||
@@ -106,15 +109,27 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
     if(!contraction_.allFinite()) {reason_="nonfinite-derivative"; return;}
     design.setFromTriplets(entries.begin(),entries.end()); raw_.setFromTriplets(raw.begin(),raw.end());
     work.design_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-design_started).count();
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(ownership==OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite ||
-        ownership==OperatorFactorOwnershipKindForTesting::ReuseAcceptedHandoff)
+    if(reuse_accepted_factor)
     {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
         ++work.accepted_factor_reuse_attempts;
+#endif
+        const auto reuse_fallback=[&](const char * reason) {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            ++work.accepted_factor_reuse_fallbacks; work.accepted_factor_reuse_fallback_reason=reason;
+#else
+            (void)reason;
+#endif
+        };
         if(!e.factor || !e.factor->Matches(design,free))
-        {++work.accepted_factor_reuse_fallbacks; work.accepted_factor_reuse_fallback_reason="accepted-factor-mismatch";}
+            reuse_fallback("accepted-factor-mismatch");
         else if(backend!=FreeDesignRankBackend::SpqrBounds)
-        {factor_=e.factor; ++work.accepted_factor_reuse_accepted;}
+        {
+            factor_=e.factor;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            ++work.accepted_factor_reuse_accepted;
+#endif
+        }
         else
         {
             ResourcePhase rank_phase("operator-rank");
@@ -125,16 +140,14 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
             if(evidence.status==FreeDesignRankStatus::FullRank)
             {
                 RecordRankEvidence(work,evidence); rank_evidence_=std::move(evidence);
-                reused_rank_evidence_ready=true; factor_=e.factor; ++work.accepted_factor_reuse_accepted;
+                reused_rank_evidence_ready=true; factor_=e.factor;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                ++work.accepted_factor_reuse_accepted;
+#endif
             }
-            else
-            {
-                ++work.accepted_factor_reuse_fallbacks;
-                work.accepted_factor_reuse_fallback_reason="rank-certificate-needs-fixed-factor-view";
-            }
+            else reuse_fallback("rank-certificate-needs-fixed-factor-view");
         }
     }
-#endif
     try {
 #if defined(RHBM_GEM_TEST_INSTRUMENTATION) && defined(RHBM_GEM_JOINT_SPQR)
         const bool native_requested=ownership==OperatorFactorOwnershipKindForTesting::DedicatedNative ||
@@ -154,7 +167,7 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
                 native_evidence.certificate==FreeDesignRankCertificate::LocalSupport;
         }
 #endif
-        // A dedicated operator factor outlives workspace refactorization; benchmark reuse routes already own a matched factor.
+        // Production reuses a matched accepted factor; dedicated factors remain the bounded-rank fallback.
         {ResourcePhase factor_stage("fixed-operator-factor",true,n,p,static_cast<std::size_t>(design.nonZeros()));
         WorkTimer factor_timer(work.factor_seconds);
 #if defined(RHBM_GEM_TEST_INSTRUMENTATION) && defined(RHBM_GEM_JOINT_SPQR)
@@ -179,9 +192,10 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
             if(backend==FreeDesignRankBackend::SpqrBounds)
             {
 #if defined(RHBM_GEM_TEST_INSTRUMENTATION) && defined(RHBM_GEM_JOINT_SPQR)
-                if(native_eligible) rank_evidence_=std::move(native_evidence);
-                else if(!reused_rank_evidence_ready)
+                if(native_eligible)
+                {rank_evidence_=std::move(native_evidence); reused_rank_evidence_ready=true;}
 #endif
+                if(!reused_rank_evidence_ready)
                 {
                     ++work.rank_checks; WorkTimer rank_timer(work.rank_seconds);
                     RankWorkAudit rank_audit{work,SparseWorkForTesting()};
