@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "campaign": "joint-bounded-trial-r1",
+  "branch": "develop",
+  "prototype_commit": "9718c92e",
+  "measurement_commit": "9718c92e",
+  "status": "benchmark-only; production promotion gate failed at cube-2048 RSS",
+  "diagnostic_reference": "../joint-cube2048-diagnostic-r1/summary.json",
+  "resource_contract": {
+    "formal_rss_limit_bytes": 4294967296,
+    "formal_timeout_seconds": 600,
+    "diagnostic_override_used_in_this_campaign": false
+  },
+  "cases": {
+    "cube-512": [
+      "cube-512-cow.json",
+      "cube-512-evict.json"
+    ],
+    "cube-1024": [
+      "cube-1024-cow.json",
+      "cube-1024-evict.json"
+    ],
+    "cube-2048": [
+      "cube-2048-evict-formal.json"
+    ]
+  },
+  "derived_analysis": "bounded-trial-summary.json",
+  "trajectory_export": "trial-trajectory.csv",
+  "comparison_note": "Trajectory parity compares all search decisions and numerical trial fields. factor_constructions is strategy-specific and intentionally differs (COW builds both overlapping factors; evict keeps one)."
+}

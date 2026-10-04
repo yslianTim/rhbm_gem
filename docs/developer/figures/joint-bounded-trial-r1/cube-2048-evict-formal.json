@@ -1,0 +1,418 @@
+{
+  "schema_version": 1,
+  "profile": "search",
+  "measurement_scope": "search-only",
+  "case": "cube-2048",
+  "metadata": {
+    "backend": "SPQR",
+    "build_type": "",
+    "compiler": "AppleClang 21.0.0.21000334",
+    "commit": "9718c92ea7d0fe80c30354e4890f80888e36ae77",
+    "profile": "search",
+    "case": "cube-2048",
+    "assessment_reduction": "observation-tsqr",
+    "projected_reduction": "observation-tiled-qr",
+    "source_sha256": "de2068a63b6afb14c07707b1161cbfaab1b57c1cf35ef27a5191e83bfce161c0",
+    "benchmark_sha256": "f8c3cbdc7b158c85397973bf0a8d7886a713ebda1fa46c7340af68fcefedbae5",
+    "solver_policy": {
+      "search_method": "OperatorPcg",
+      "sparse_backend": "SPQR",
+      "operator_rank_active": true,
+      "operator_rank_mode": "auto",
+      "resolved_rank_backend": "SpqrBounds",
+      "operator_rank_budget_seconds": 120,
+      "operator_rank_budget_entries": 100000000,
+      "operator_rank_budget_workspace_bytes": 268435456,
+      "operator_factor_representation": "exported-fixed",
+      "operator_factor_ownership": "evict-before-trial",
+      "search_trial_telemetry": true,
+      "projected_reduction": "observation-tiled-qr",
+      "preconditioner": "schwarz",
+      "spqr_ordering": "COLAMD",
+      "schwarz_core_atoms": 128,
+      "schwarz_overlap_hops": 1,
+      "schwarz_max_block_atoms": 512,
+      "schwarz_storage_bytes": 536870912,
+      "schwarz_scratch_bytes": 268435456
+    },
+    "driver_sha256": "1f8d5e4b458c0bb75ea73a3f662ea92f045472f87f0b49a7aee7b7a6eeb8e784",
+    "input_sha256": "ec7223ff21192d168022b1a503f22c5761fb9a1f4f07d9de3088a106a50e48a3"
+  },
+  "execution": {
+    "status": "rss_limit",
+    "returncode": null,
+    "completed_repetitions": 0,
+    "failed_repetitions": 1,
+    "runs": [
+      {
+        "kind": "measurement",
+        "index": 1,
+        "status": "rss_limit",
+        "reason": "rss-limit",
+        "elapsed_seconds": 170.35345808393322,
+        "process_wall_seconds": 170.35345808393322,
+        "peak_rss_bytes": 4298588160,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": 2048,
+          "voxels": 715825,
+          "components": null,
+          "free_columns": null,
+          "design_nonzeros": null,
+          "parameters": 6144
+        },
+        "numerics": {
+          "rank": null,
+          "objective": null,
+          "gradient_norm": null,
+          "runtime_convergence": null,
+          "active_atoms": null
+        },
+        "result": {
+          "qualified": null,
+          "scientific_status": "search-only",
+          "details": {
+            "measurement_scope": "search-only",
+            "scope_description": null,
+            "assessment_execution": null,
+            "assessment_work": null,
+            "search_completed": null,
+            "stop_reason": null,
+            "profile_evaluations": null,
+            "accepted_updates": null,
+            "accepted_objective": null,
+            "accepted_gradient_inf_norm": null,
+            "returned_search_state": null,
+            "search_seconds": null,
+            "free_columns": null,
+            "design_nonzeros": null,
+            "search_work": null,
+            "failure_stage": "search",
+            "active_search_stage": "spqr-numeric",
+            "last_completed_search_stage": "linear-symbolic",
+            "completed_search_stages": [
+              "profile-basis-build",
+              "linear-factor-preparation",
+              "spqr-symbolic",
+              "linear-symbolic",
+              "spqr-numeric",
+              "linear-numeric",
+              "linear-solve",
+              "profile-evaluation",
+              "schwarz-partition",
+              "rank-certificate",
+              "fixed-operator-factor",
+              "operator-prepare",
+              "width-metric",
+              "schwarz-local-build",
+              "schwarz-factor",
+              "pcg"
+            ],
+            "stage_seconds": {
+              "search": 0.0,
+              "profile-evaluation": 9.953093375,
+              "profile-basis-build": 2.208062542,
+              "linear-solve": 8.853814083,
+              "linear-factor-preparation": 0.096592749,
+              "linear-symbolic": 0.286645625,
+              "spqr-symbolic": 0.283531,
+              "linear-numeric": 7.165378,
+              "spqr-numeric": 7.164248958,
+              "schwarz-partition": 1.059430417,
+              "operator-prepare": 1.928488208,
+              "rank-certificate": 0.830754833,
+              "fixed-operator-factor": 1.875e-06,
+              "width-metric": 0.083591084,
+              "schwarz-local-build": 13.00148575,
+              "schwarz-factor": 2.662059792,
+              "pcg": 104.66807395800001,
+              "trial-evaluation": 0.0
+            },
+            "stage_calls": {
+              "search": 1,
+              "profile-evaluation": 1,
+              "profile-basis-build": 2,
+              "linear-solve": 2,
+              "linear-factor-preparation": 2,
+              "linear-symbolic": 2,
+              "spqr-symbolic": 2,
+              "linear-numeric": 2,
+              "spqr-numeric": 2,
+              "schwarz-partition": 1,
+              "operator-prepare": 1,
+              "rank-certificate": 2,
+              "fixed-operator-factor": 1,
+              "width-metric": 1,
+              "schwarz-local-build": 1,
+              "schwarz-factor": 8,
+              "pcg": 8,
+              "trial-evaluation": 1
+            },
+            "stage_completed_calls": {
+              "search": 0,
+              "profile-evaluation": 1,
+              "profile-basis-build": 2,
+              "linear-solve": 1,
+              "linear-factor-preparation": 2,
+              "linear-symbolic": 2,
+              "spqr-symbolic": 2,
+              "linear-numeric": 1,
+              "spqr-numeric": 1,
+              "schwarz-partition": 1,
+              "operator-prepare": 1,
+              "rank-certificate": 2,
+              "fixed-operator-factor": 1,
+              "width-metric": 1,
+              "schwarz-local-build": 1,
+              "schwarz-factor": 8,
+              "pcg": 8,
+              "trial-evaluation": 0
+            },
+            "stage_dimensions": {
+              "search": {
+                "rows": 715825,
+                "columns": 2048
+              },
+              "profile-evaluation": {
+                "rows": 715825,
+                "columns": 2048
+              },
+              "profile-basis-build": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "linear-solve": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "linear-factor-preparation": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "linear-symbolic": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "spqr-symbolic": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "linear-numeric": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "spqr-numeric": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "schwarz-partition": {
+                "rows": 715825,
+                "columns": 2048
+              },
+              "operator-prepare": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "rank-certificate": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "fixed-operator-factor": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "width-metric": {
+                "rows": 715825,
+                "columns": 2048
+              },
+              "schwarz-local-build": {
+                "rows": 715825,
+                "columns": 4096
+              },
+              "schwarz-factor": {
+                "rows": 21,
+                "columns": 2048
+              },
+              "pcg": {
+                "rows": 2048,
+                "columns": 2048
+              },
+              "trial-evaluation": {
+                "rows": 715825,
+                "columns": 2048
+              }
+            },
+            "stage_nnz": {
+              "search": 0,
+              "profile-evaluation": 0,
+              "profile-basis-build": 2109440,
+              "linear-solve": 2109440,
+              "linear-factor-preparation": 2109440,
+              "linear-symbolic": 2109440,
+              "spqr-symbolic": 2109440,
+              "linear-numeric": 2109440,
+              "spqr-numeric": 2109440,
+              "schwarz-partition": 0,
+              "operator-prepare": 2109440,
+              "rank-certificate": 2109440,
+              "fixed-operator-factor": 2109440,
+              "width-metric": 2109440,
+              "schwarz-local-build": 0,
+              "schwarz-factor": 0,
+              "pcg": 0,
+              "trial-evaluation": 0
+            },
+            "spqr_factorization": {
+              "ordering": "COLAMD",
+              "symbolic": {
+                "calls": 2,
+                "seconds": 0.286010875,
+                "matrix_rows": 715825,
+                "matrix_columns": 4096,
+                "matrix_nonzeros": 2109440
+              },
+              "numeric": {
+                "calls": 2,
+                "seconds": 7.165170208,
+                "matrix_rows": 715825,
+                "matrix_columns": 4096,
+                "matrix_nonzeros": 2109440,
+                "reported_factor_nonzeros": 1710576
+              },
+              "fixed_factor": {
+                "calls": 0,
+                "seconds": 0.0,
+                "matrix_rows": 0,
+                "matrix_columns": 0,
+                "matrix_nonzeros": 0,
+                "reported_factor_nonzeros": 0,
+                "factor_exported_storage_bytes": 0
+              },
+              "native_operator_factor": {
+                "calls": 0,
+                "seconds": 0.0
+              }
+            },
+            "factor_residency": {
+              "current_concurrent_factor_count": 1,
+              "current_concurrent_owned_bytes_estimate": 60053884,
+              "maximum_concurrent_factor_count": 1,
+              "maximum_concurrent_owned_bytes_estimate": 2471119460,
+              "maximum_concurrent_factor_stage": "linear-solve",
+              "maximum_concurrent_owned_bytes_stage": "spqr-numeric",
+              "process_peak_rss_bytes_observed_at_factor_events": 3129147392,
+              "factor_count_at_process_peak_rss_event": 1,
+              "owned_factor_bytes_at_process_peak_rss_event_estimate": 2471119460,
+              "stage_at_process_peak_rss_event": "schwarz-factor",
+              "factor_ids_at_process_peak_rss_event": [
+                1
+              ],
+              "factor_generations_at_process_peak_rss_event": [
+                "1:2"
+              ],
+              "factors": [
+                {
+                  "factor_id": 1,
+                  "generation": 2,
+                  "kind": "workspace",
+                  "role": "profile",
+                  "created_at_stage": "linear-solve",
+                  "destroyed_at_stage": "search",
+                  "search_stage": "linear-solve",
+                  "destroyed_search_stage": "search",
+                  "rows": 715825,
+                  "columns": 4096,
+                  "nonzeros": 2109440,
+                  "r_nonzeros": 1710576,
+                  "h_nonzeros": 745349,
+                  "owned_factor_bytes_estimate": 2471119460,
+                  "created_seconds": 8.722317,
+                  "destroyed_seconds": 159.994577167,
+                  "alive_at_snapshot": false
+                }
+              ],
+              "constructions_in_progress": [
+                {
+                  "factor_id": 3,
+                  "generation": 2,
+                  "kind": "workspace",
+                  "role": "trial",
+                  "stage": "linear-solve",
+                  "rows": 715825,
+                  "columns": 4096,
+                  "nonzeros": 2109440,
+                  "owned_factor_bytes_estimate": 60053884
+                }
+              ],
+              "semantics": "owned bytes estimate includes CHOLMOD current allocations plus owned sparse design/R arrays; it is separate from process RSS"
+            },
+            "operator_factor_representation": "exported-fixed",
+            "operator_factor_ownership": "evict-before-trial"
+          }
+        },
+        "driver_stage": "search",
+        "measurement_scope": "search-only",
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "rss_limit",
+            "exit_code": -15,
+            "wall_seconds": 170.35345808393322,
+            "sampled_tree_peak_rss_bytes": 4298588160,
+            "os_process_peak_rss_bytes": null,
+            "samples": 1559,
+            "maximum_sampling_gap_seconds": 0.17634154204279184
+          }
+        ]
+      }
+    ]
+  },
+  "problem": {
+    "atoms": null,
+    "voxels": null,
+    "components": null,
+    "free_columns": null,
+    "design_nonzeros": null,
+    "parameters": null
+  },
+  "numerics": {
+    "rank": null,
+    "objective": null,
+    "gradient_norm": null,
+    "runtime_convergence": null,
+    "active_atoms": null
+  },
+  "resources": {
+    "elapsed_seconds": null,
+    "peak_rss_bytes": 4298588160,
+    "completed_measurement_peak_rss_bytes": null,
+    "count": 1,
+    "failed_count": 1,
+    "samples": [
+      null
+    ]
+  },
+  "result": {
+    "qualified": null,
+    "scientific_status": "search-only",
+    "details": {
+      "measurement_scope": null,
+      "scope_description": null,
+      "assessment_execution": null,
+      "assessment_work": null,
+      "search_completed": null,
+      "stop_reason": null,
+      "profile_evaluations": null,
+      "accepted_updates": null,
+      "accepted_objective": null,
+      "accepted_gradient_inf_norm": null,
+      "returned_search_state": null,
+      "search_seconds": null,
+      "free_columns": null,
+      "design_nonzeros": null,
+      "search_work": null
+    }
+  }
+}
