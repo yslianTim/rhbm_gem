@@ -349,7 +349,7 @@ int main(int argc,char ** argv)
             {"objective_replay_tolerance","1e-12 + 2e-12 * abs(global_objective)"},
             {"prediction_replay_tolerance","2e-12 + 2e-13 * max(1, abs(global_prediction))"},
             {"order_comparisons",order_results}});
-        Write(root/"campaign-manifest.json",j::object{{"phase","F1.5 fixed-B convergence-floor attribution"},
+        Write(root/"campaign-manifest.json",j::object{{"phase","F1.5 fixed-B block convergence requalification"},
             {"topologies",{"chain","cube"}},{"atom_counts",{256}},
             {"fixed_B",.5},{"initial_A",0},{"initial_C",0},{"core_atoms",128},
             {"local_solver","existing constrained SolveLinear"},{"orderings",{"forward","reverse"}},
