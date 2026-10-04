@@ -29,6 +29,8 @@ struct SearchWork
     std::vector<std::size_t> pcg_iteration_counts; // One entry per PCG solve.
     std::vector<RegularizationRecord> regularizations; // Resource-audit mode only.
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    std::size_t accepted_factor_rebuilds{};
+    double accepted_factor_rebuild_seconds{};
     bool capture_trial_telemetry{};
     std::vector<SearchTrialDiagnostic> trial_diagnostics;
 #endif

@@ -205,12 +205,16 @@ class JointBenchmarkContract(unittest.TestCase):
             args.profile = 'search'
             args.spqr_ordering = 'best'
             args.search_trial_telemetry = True
+            args.operator_factor_ownership = 'evict-before-trial'
             search = benchmark.command_for_profile(args, {'kind': 'synthetic', 'topology': 'chain', 'atoms': 8},
                                                    Path('search.json'), build)
             self.assertIn('--search-only', search)
             self.assertIn('--search-trial-telemetry', search)
             self.assertEqual(search[search.index('--search') + 1], 'schwarz')
             self.assertEqual(search[search.index('--spqr-ordering') + 1], 'best')
+            self.assertEqual(search[search.index('--operator-factor-ownership') + 1], 'evict-before-trial')
+            self.assertEqual(benchmark.solver_policy_metadata(args, 'SPQR')['operator_factor_ownership'],
+                             'evict-before-trial')
 
     def test_compact_assessment_route_is_benchmark_only(self):
         parser = benchmark.build_parser()

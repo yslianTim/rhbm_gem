@@ -1,5 +1,6 @@
 #include "ProfileJacobianOperator.hpp"
 #include "CompactSvd.hpp"
+#include "OperatorSearch.hpp"
 #include <cmath>
 
 namespace rhbm_gem::core::joint_component {
@@ -15,6 +16,7 @@ const char * OperatorFactorOwnershipName(OperatorFactorOwnershipKindForTesting k
     case OperatorFactorOwnershipKindForTesting::DedicatedNative: return "dedicated-native";
     case OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite: return "reuse-accepted-copy-on-write";
     case OperatorFactorOwnershipKindForTesting::ReuseAcceptedHandoff: return "reuse-accepted-handoff";
+    case OperatorFactorOwnershipKindForTesting::ReuseAcceptedEvictBeforeTrial: return "evict-before-trial";
     }
     return "unknown";
 }
@@ -77,7 +79,8 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
     const auto ownership=OperatorFactorOwnershipForTesting();
     work.factor_ownership=OperatorFactorOwnershipName(ownership);
     reuse_accepted_factor=ownership==OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite ||
-        ownership==OperatorFactorOwnershipKindForTesting::ReuseAcceptedHandoff;
+        ownership==OperatorFactorOwnershipKindForTesting::ReuseAcceptedHandoff ||
+        ownership==OperatorFactorOwnershipKindForTesting::ReuseAcceptedEvictBeforeTrial;
 #else
     reuse_accepted_factor=true;
 #endif
@@ -231,6 +234,29 @@ ProfileJacobianOperator::ProfileJacobianOperator(const Evaluation & e,const Eval
         valid_=true; reason_="full-profile-operator";
     } catch(const std::runtime_error &) {factor_.reset(); reason_="operator-factorization-failed";}
 }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+void ProfileJacobianOperator::EvictAcceptedFactorForTesting()
+{
+    if(!factor_) throw std::logic_error("Cannot evict an unavailable accepted operator factor");
+    evicted_design_=factor_->DesignForTesting();
+    evicted_columns_=factor_->ColumnsForTesting();
+    evicted_tolerance_=factor_->ToleranceForTesting();
+    factor_.reset();
+}
+void ProfileJacobianOperator::RebuildAcceptedFactorForTesting()
+{
+    if(factor_) return;
+    if(evicted_design_.rows()==0 || evicted_columns_.empty())
+        throw std::logic_error("Accepted operator factor has no rebuild snapshot");
+    ResourcePhase phase("accepted-factor-rebuild",true,evicted_design_.rows(),evicted_design_.cols(),
+        static_cast<std::size_t>(evicted_design_.nonZeros()));
+    auto & work=SearchWorkForTesting(); ++work.accepted_factor_rebuilds;
+    WorkTimer timer(work.accepted_factor_rebuild_seconds);
+    FactorCreationRoleScopeForTesting role("accepted-rebuild");
+    LinearWorkspace workspace;
+    factor_=workspace.Factor(evicted_design_,evicted_columns_,evicted_tolerance_);
+}
+#endif
 void ProfileJacobianOperator::Check(VectorRef rhs,Eigen::Index size) const
 {
     if(!valid_) throw std::logic_error("Unavailable profile operator: "+reason_);

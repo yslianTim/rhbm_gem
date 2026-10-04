@@ -613,6 +613,7 @@ FreeDesignFactor::FreeDesignFactor(std::shared_ptr<SparseFactorState> state,std:
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 const Sparse & FreeDesignFactor::DesignForTesting() const {Check(); return state_->design;}
 const std::vector<Eigen::Index> & FreeDesignFactor::ColumnsForTesting() const {Check(); return state_->columns;}
+double FreeDesignFactor::ToleranceForTesting() const {Check(); return state_->tolerance;}
 ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparseForTesting(
     const Sparse & rhs,bool materialize_tail) const
 {
@@ -1084,6 +1085,7 @@ FreeDesignFactor::FreeDesignFactor(std::shared_ptr<SparseFactorState> s,std::siz
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 const Sparse & FreeDesignFactor::DesignForTesting() const {Check(); return state_->design;}
 const std::vector<Eigen::Index> & FreeDesignFactor::ColumnsForTesting() const {Check(); return state_->columns;}
+double FreeDesignFactor::ToleranceForTesting() const {Check(); return state_->tolerance;}
 ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparseForTesting(const Sparse &,bool)
 {throw std::runtime_error("sparse Q transpose census requires SPQR");}
 ProjectedTailQrResultForTesting FreeDesignFactor::ProjectedTailQrForTesting(const Sparse &,VectorRef,double)

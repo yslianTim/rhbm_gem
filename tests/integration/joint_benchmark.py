@@ -546,7 +546,7 @@ def build_parser():
     parser.add_argument('--operator-factor-representation', choices=('exported-fixed', 'native-qr'),
                         default='exported-fixed')
     parser.add_argument('--operator-factor-ownership', choices=('dedicated-fixed', 'dedicated-native',
-                        'reuse-accepted-copy-on-write', 'reuse-accepted-handoff'),
+                        'reuse-accepted-copy-on-write', 'reuse-accepted-handoff', 'evict-before-trial'),
                         default=None)
     parser.add_argument('--search-trial-telemetry', action='store_true',
                         help='Record benchmark-only per-damping-trial factor timing and RSS')

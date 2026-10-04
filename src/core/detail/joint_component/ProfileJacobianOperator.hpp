@@ -21,7 +21,7 @@ struct OperatorWork
 };
 OperatorWork & OperatorWorkForTesting();
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-enum class OperatorFactorOwnershipKindForTesting {DedicatedFixed,DedicatedNative,ReuseAcceptedCopyOnWrite,ReuseAcceptedHandoff};
+enum class OperatorFactorOwnershipKindForTesting {DedicatedFixed,DedicatedNative,ReuseAcceptedCopyOnWrite,ReuseAcceptedHandoff,ReuseAcceptedEvictBeforeTrial};
 OperatorFactorOwnershipKindForTesting & OperatorFactorOwnershipForTesting();
 const char * OperatorFactorOwnershipName(OperatorFactorOwnershipKindForTesting);
 class OperatorFactorOwnershipScopeForTesting
@@ -47,6 +47,11 @@ class ProfileJacobianOperator
     bool valid_{};
     FreeDesignRankResult rank_evidence_;
     std::string reason_;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    Sparse evicted_design_;
+    std::vector<Eigen::Index> evicted_columns_;
+    double evicted_tolerance_{};
+#endif
     void Check(VectorRef,Eigen::Index) const;
 public:
     ProfileJacobianOperator(const Evaluation &,const EvaluationContext &,double absolute=-1,FreeDesignRankBackend=FreeDesignRankBackend::Dense);
@@ -58,6 +63,11 @@ public:
     Eigen::Index FreeColumns() const {return contraction_.size();}
     Eigen::Index RawNonZeros() const {return raw_.nonZeros();}
     const std::shared_ptr<const LinearizationIdentity> & Identity() const {return identity_;}
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    void EvictAcceptedFactorForTesting();
+    void RebuildAcceptedFactorForTesting();
+    std::shared_ptr<FreeDesignFactor> FactorForTesting() const {return factor_;}
+#endif
     Vector Apply(VectorRef) const;
     Vector ApplyAdjoint(VectorRef) const;
     Vector ApplyNormal(VectorRef) const;

@@ -384,6 +384,8 @@ j::object SearchWork()
         {"operator_apply_seconds",op.apply_seconds},{"operator_adjoint_seconds",op.adjoint_seconds},
         {"operator_applications",op.applications},{"operator_adjoints",op.adjoints},{"regularizations",regularizations}};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    out["accepted_factor_rebuilds"]=w.accepted_factor_rebuilds;
+    out["accepted_factor_rebuild_seconds"]=w.accepted_factor_rebuild_seconds;
     out["native_factor_accepted"]=op.native_factor_accepted;
     out["native_factor_fallbacks"]=op.native_factor_fallbacks;
     out["accepted_factor_reuse_attempts"]=op.accepted_factor_reuse_attempts;
@@ -796,7 +798,8 @@ int main(int argc,char ** argv)
                     else if(ownership=="dedicated-native") factor_ownership=n::OperatorFactorOwnershipKindForTesting::DedicatedNative;
                     else if(ownership=="reuse-accepted-copy-on-write") factor_ownership=n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite;
                     else if(ownership=="reuse-accepted-handoff") factor_ownership=n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedHandoff;
-                    else throw std::invalid_argument("Expected --operator-factor-ownership dedicated-fixed|dedicated-native|reuse-accepted-copy-on-write|reuse-accepted-handoff");
+                    else if(ownership=="evict-before-trial") factor_ownership=n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedEvictBeforeTrial;
+                    else throw std::invalid_argument("Expected --operator-factor-ownership dedicated-fixed|dedicated-native|reuse-accepted-copy-on-write|reuse-accepted-handoff|evict-before-trial");
                     n::OperatorFactorOwnershipForTesting()=factor_ownership;
                 }
 #endif

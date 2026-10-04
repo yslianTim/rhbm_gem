@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <map>
 #include <numeric>
+#include <tuple>
 
 namespace {
 namespace n=rhbm_gem::core::joint_component;
@@ -446,12 +447,14 @@ TEST(JointOperatorSearchTest, AcceptedFactorOwnershipPreservesSearchTrajectoryAn
         std::vector<std::size_t> pcg_iterations;
         n::FreeDesignRankStatus rank_status{};
         n::FreeDesignRankCertificate rank_certificate{};
-        std::size_t reuse_attempts{},reuse_accepted{},reuse_fallbacks{},factor_count{},owned_bytes{};
+        std::size_t reuse_attempts{},reuse_accepted{},reuse_fallbacks{},factor_count{},owned_bytes{},rebuilds{};
+        double rebuild_seconds{};
     };
     const auto run=[&](n::OperatorFactorOwnershipKindForTesting kind) {
         n::OperatorFactorOwnershipScopeForTesting ownership(kind);
         n::ResetFactorResidencyWorkForTesting(); n::SparseWorkForTesting()={};
         n::OperatorWorkForTesting()={}; n::SearchWorkForTesting()={};
+        n::SearchWorkForTesting().capture_trial_telemetry=kind==n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedEvictBeforeTrial;
         auto result=n::SearchProfile(s.data.domain,s.data.y,n::Vector::Constant(4,.55),context);
         const auto & op=n::OperatorWorkForTesting(); const auto & search=n::SearchWorkForTesting();
         const auto & residency=n::FactorResidencyWorkForTesting();
@@ -460,12 +463,13 @@ TEST(JointOperatorSearchTest, AcceptedFactorOwnershipPreservesSearchTrajectoryAn
                 op.rank_status=="deficient" ? n::FreeDesignRankStatus::Deficient : n::FreeDesignRankStatus::Unavailable,
             op.rank_certificate,op.accepted_factor_reuse_attempts,op.accepted_factor_reuse_accepted,
             op.accepted_factor_reuse_fallbacks,residency.maximum_concurrent_factor_count,
-            residency.maximum_concurrent_owned_bytes};
+            residency.maximum_concurrent_owned_bytes,search.accepted_factor_rebuilds,search.accepted_factor_rebuild_seconds};
     };
     const auto current=run(n::OperatorFactorOwnershipKindForTesting::DedicatedFixed);
     const auto cow=run(n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite);
     const auto handoff=run(n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedHandoff);
-    for(const auto * candidate:{&cow,&handoff})
+    const auto evicted=run(n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedEvictBeforeTrial);
+    for(const auto * candidate:{&cow,&handoff,&evicted})
     {
         ASSERT_TRUE(current.result.initial_accepted); ASSERT_TRUE(candidate->result.initial_accepted);
         EXPECT_EQ(candidate->result.stop_reason,current.result.stop_reason);
@@ -504,8 +508,116 @@ TEST(JointOperatorSearchTest, AcceptedFactorOwnershipPreservesSearchTrajectoryAn
             }
         }
     }
+    EXPECT_TRUE(evicted.result.initial_accepted);
+    EXPECT_EQ(evicted.rebuilds,0);
+    EXPECT_LE(evicted.factor_count,1);
+    EXPECT_TRUE(n::SearchWorkForTesting().trial_diagnostics.size()>0);
+    for(const auto & trial:n::SearchWorkForTesting().trial_diagnostics)
+        if(trial.candidate_evaluated) {EXPECT_TRUE(trial.accepted); EXPECT_TRUE(trial.trusted);}
+}
+
+TEST(JointOperatorSearchTest, EvictBeforeTrialPreservesAcceptedAndRejectedSearchSequence)
+{
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"SPQR bounded trial-factor ownership";
+    const auto compare=[](const n::SearchResult & expected,const n::SearchResult & actual) {
+        EXPECT_EQ(actual.stop_reason,expected.stop_reason); EXPECT_EQ(actual.evaluations,expected.evaluations);
+        EXPECT_EQ(actual.accepted,expected.accepted); EXPECT_EQ(actual.references,expected.references);
+        EXPECT_EQ(actual.initial_accepted,expected.initial_accepted);
+        EXPECT_EQ(actual.eta.size(),expected.eta.size());
+        EXPECT_LE((actual.eta-expected.eta).norm(),1e-12*(1+expected.eta.norm()));
+        ASSERT_EQ(actual.accepted_objective.has_value(),expected.accepted_objective.has_value());
+        if(expected.accepted_objective)
+            EXPECT_NEAR(*actual.accepted_objective,*expected.accepted_objective,1e-12*(1+std::abs(*expected.accepted_objective)));
+        ASSERT_EQ(actual.accepted_gradient_inf_norm.has_value(),expected.accepted_gradient_inf_norm.has_value());
+        if(expected.accepted_gradient_inf_norm)
+            EXPECT_NEAR(*actual.accepted_gradient_inf_norm,*expected.accepted_gradient_inf_norm,
+                1e-12*(1+*expected.accepted_gradient_inf_norm));
+        ASSERT_EQ(actual.trials.size(),expected.trials.size());
+        for(std::size_t k=0;k<expected.trials.size();++k)
+        {
+            const auto & a=actual.trials[k]; const auto & b=expected.trials[k];
+            EXPECT_EQ(a.evaluation,b.evaluation); EXPECT_EQ(a.accepted,b.accepted); EXPECT_EQ(a.accepted_update,b.accepted_update);
+            ASSERT_EQ(a.lm.has_value(),b.lm.has_value());
+            if(a.lm && b.lm)
+            {
+                EXPECT_NEAR(a.lm->damping,b.lm->damping,1e-12*(1+std::abs(b.lm->damping)));
+                EXPECT_NEAR(a.lm->radius,b.lm->radius,1e-12*(1+std::abs(b.lm->radius)));
+                EXPECT_NEAR(a.lm->actual_decrease,b.lm->actual_decrease,1e-12*(1+std::abs(b.lm->actual_decrease)));
+                EXPECT_NEAR(a.lm->predicted_decrease,b.lm->predicted_decrease,1e-12*(1+std::abs(b.lm->predicted_decrease)));
+                EXPECT_NEAR(a.lm->ratio,b.lm->ratio,1e-12*(1+std::abs(b.lm->ratio)));
+                EXPECT_LE((a.lm->step-b.lm->step).norm(),1e-12*(1+b.lm->step.norm()));
+            }
+        }
+    };
+    const auto run=[&](const n::ProblemData & data,double width,int update_budget,
+        n::OperatorFactorOwnershipKindForTesting ownership_kind) {
+        auto context=data.context; context.search.method=n::SearchMethod::OperatorPcg;
+        context.search.preconditioner=n::PreconditionerKind::Schwarz; context.update_budget=update_budget;
+        n::OperatorFactorOwnershipScopeForTesting ownership(ownership_kind);
+        n::ResetFactorResidencyWorkForTesting(); n::SparseWorkForTesting()={};
+        n::OperatorWorkForTesting()={}; n::SearchWorkForTesting()={};
+        n::SearchWorkForTesting().capture_trial_telemetry=true;
+        const auto result=n::SearchProfile(data.domain,data.y,n::Vector::Constant(4,width),context);
+        return std::tuple{result,n::SearchWorkForTesting().trial_diagnostics,
+            n::SearchWorkForTesting().damping_trials,n::SearchWorkForTesting().accepted_factor_rebuilds,
+            n::SearchWorkForTesting().accepted_factor_rebuild_seconds,
+            n::FactorResidencyWorkForTesting().maximum_concurrent_factor_count,
+            n::FactorResidencyWorkForTesting().maximum_concurrent_owned_bytes,
+            std::all_of(n::FactorResidencyWorkForTesting().factors.begin(),n::FactorResidencyWorkForTesting().factors.end(),
+                [](const auto & factor){return !factor.alive;})};
+    };
+    Sample s;
+    const auto accepted_cow=run(s.data,.55,1,n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite);
+    const auto accepted_evict=run(s.data,.55,1,n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedEvictBeforeTrial);
+    compare(std::get<0>(accepted_cow),std::get<0>(accepted_evict));
+    const auto accepted_events=std::count_if(std::get<1>(accepted_evict).begin(),std::get<1>(accepted_evict).end(),
+        [](const auto & event){return event.candidate_evaluated;});
+    ASSERT_EQ(accepted_events,1);
+    const auto accepted_event=std::find_if(std::get<1>(accepted_evict).begin(),std::get<1>(accepted_evict).end(),
+        [](const auto & event){return event.candidate_evaluated;});
+    EXPECT_TRUE(accepted_event->accepted);
+    EXPECT_EQ(std::get<0>(accepted_evict).stop_reason,"accepted-update-budget");
+    EXPECT_EQ(std::get<3>(accepted_evict),0);
+    EXPECT_LE(std::get<5>(accepted_evict),1);
+    EXPECT_TRUE(std::get<7>(accepted_evict));
+
+    const auto rejected_cow=run(s.data,2.,9,n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite);
+    const auto rejected_evict=run(s.data,2.,9,n::OperatorFactorOwnershipKindForTesting::ReuseAcceptedEvictBeforeTrial);
+    compare(std::get<0>(rejected_cow),std::get<0>(rejected_evict));
+    const auto & trace=std::get<1>(rejected_evict);
+    std::vector<bool> expected_acceptance,actual_acceptance;
+    for(const auto & event:std::get<1>(rejected_cow)) if(event.candidate_evaluated) expected_acceptance.push_back(event.accepted);
+    for(const auto & event:trace) if(event.candidate_evaluated) actual_acceptance.push_back(event.accepted);
+    EXPECT_EQ(actual_acceptance,expected_acceptance);
+    const auto first_reject=std::find(actual_acceptance.begin(),actual_acceptance.end(),false);
+    ASSERT_NE(first_reject,actual_acceptance.end());
+    EXPECT_NE(std::find(std::next(first_reject),actual_acceptance.end(),true),actual_acceptance.end());
+    EXPECT_GE(std::count(actual_acceptance.begin(),actual_acceptance.end(),false),2);
+    EXPECT_EQ(std::get<3>(rejected_evict),static_cast<std::size_t>(std::count(actual_acceptance.begin(),actual_acceptance.end(),false)));
+    EXPECT_GT(std::get<4>(rejected_evict),0);
+    EXPECT_LE(std::get<5>(rejected_evict),1);
+    EXPECT_LT(std::get<6>(rejected_evict),std::get<6>(rejected_cow));
+    EXPECT_TRUE(std::get<7>(rejected_evict));
+    EXPECT_EQ(std::get<2>(rejected_evict),std::get<2>(rejected_cow));
+    for(std::size_t k=0;k<std::get<1>(rejected_cow).size();++k)
+    {
+        const auto & a=std::get<1>(rejected_cow)[k]; const auto & b=trace[k];
+        EXPECT_EQ(a.trial_index,b.trial_index); EXPECT_EQ(a.accepted_update,b.accepted_update);
+        EXPECT_EQ(a.damping_attempt,b.damping_attempt); EXPECT_EQ(a.candidate_evaluated,b.candidate_evaluated);
+        EXPECT_EQ(a.accepted,b.accepted); EXPECT_EQ(a.rejection_reason,b.rejection_reason);
+        EXPECT_NEAR(a.mu,b.mu,1e-12*(1+std::abs(b.mu)));
+        EXPECT_NEAR(a.radius,b.radius,1e-12*(1+std::abs(b.radius)));
+        EXPECT_NEAR(a.step_length,b.step_length,1e-12*(1+std::abs(b.step_length)));
+        if(a.candidate_evaluated)
+        {
+            EXPECT_NEAR(a.actual_reduction,b.actual_reduction,1e-12*(1+std::abs(b.actual_reduction)));
+            EXPECT_NEAR(a.predicted_reduction,b.predicted_reduction,1e-12*(1+std::abs(b.predicted_reduction)));
+            EXPECT_NEAR(a.ratio,b.ratio,1e-12*(1+std::abs(b.ratio)));
+        }
+    }
 }
 #endif
+
 
 TEST(JointOperatorSearchTest, UnavailableBoundedBackendNeverFallsBackToDense)
 {

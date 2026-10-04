@@ -145,6 +145,7 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
     };
     LinearWorkspace trial_workspace;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    const bool evict_before_trial=OperatorFactorOwnershipForTesting()==OperatorFactorOwnershipKindForTesting::ReuseAcceptedEvictBeforeTrial;
     if(OperatorFactorOwnershipForTesting()==OperatorFactorOwnershipKindForTesting::ReuseAcceptedCopyOnWrite)
         trial_workspace.EnableCopyOnWrite();
 #else
@@ -208,7 +209,7 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
                 OperatorWorkForTesting().rank_reason="rank-backend-unavailable";
                 return finish("rank-backend-unavailable");
             }
-            const ProfileJacobianOperator op(accepted,context,-1,*rank_backend); ++out.derivatives; ++SearchWorkForTesting().linearizations;
+            ProfileJacobianOperator op(accepted,context,-1,*rank_backend); ++out.derivatives; ++SearchWorkForTesting().linearizations;
             if(!op.Valid()) return finish(op.Reason());
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             if(OperatorFactorOwnershipForTesting()==OperatorFactorOwnershipKindForTesting::ReuseAcceptedHandoff)
@@ -228,6 +229,19 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
             PreconditionerContext pc{op.Identity(),PreconditionerSpace::Width,metric,mu};
             std::unique_ptr<SchwarzModel> local;
             if(partition) local=std::make_unique<SchwarzModel>(*partition,accepted,context.scale,pc);
+            const auto rebuild_accepted_factor=[&](Evaluation & candidate) {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                if(evict_before_trial)
+                {
+                    candidate.factor.reset();
+                    trial_workspace.HandoffForTesting();
+                    op.RebuildAcceptedFactorForTesting();
+                    accepted.factor=op.FactorForTesting();
+                }
+#else
+                (void)candidate;
+#endif
+            };
             bool advanced=false,rejected=false; double lower=0,upper=0;
             for(int attempt=0;attempt<std::min(20,context.search.damping_trials);++attempt)
             {
@@ -308,12 +322,20 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
 #endif
                     return finish("profile-budget");
                 }
+                const double objective=.5*(accepted.residual/context.scale).squaredNorm();
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                if(evict_before_trial)
+                {
+                    op.EvictAcceptedFactorForTesting();
+                    accepted.factor.reset();
+                    trial_workspace.HandoffForTesting();
+                }
+#endif
                 auto candidate=evaluate(candidate_eta
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
                     ,diagnostic
 #endif
                     );
-                const double objective=.5*(accepted.residual/context.scale).squaredNorm();
                 const double actual=candidate.valid ? objective-.5*(candidate.residual/context.scale).squaredNorm() : unavailable;
                 const double ratio=actual/step.predicted;
                 const bool proposed=candidate.valid && std::isfinite(ratio) && ratio>=1e-4;
@@ -333,7 +355,8 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
                 if(!trusted)
                 {
                     UpdateAcceptedProfileObjective(out.accepted_objective,candidate,context.scale,false);
-                    rejected=true; radius*=.25; mu*=4; lower=upper=0; continue;
+                    rejected=true; radius*=.25; mu*=4; lower=upper=0;
+                    rebuild_accepted_factor(candidate); continue;
                 }
                 if(ratio<=.25) {radius*=.25; mu*=4;}
                 else if(ratio>=.75) {radius=std::max(radius,2*length); mu=std::max(1e-12,mu*.5);}
@@ -355,6 +378,7 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
                 UpdateAcceptedProfileObjective(out.accepted_objective,candidate,context.scale,false);
                 rejected=true; lower=upper=0;
                 if(radius<=1e-12*metric.cwiseProduct(out.eta).stableNorm()) return finish("no-trustworthy-descent-step");
+                rebuild_accepted_factor(candidate);
             }
             if(!advanced) return finish("damping-trial-budget");
         }
