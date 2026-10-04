@@ -1055,6 +1055,7 @@ struct SparseFactorState
     Eigen::SparseQR<Sparse,Eigen::COLAMDOrdering<int>> qr;
     Sparse design;
     std::vector<Eigen::Index> columns;
+    double tolerance{};
     std::size_t generation{};
     bool valid{};
 };
@@ -1069,7 +1070,7 @@ std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const
 {
     if(!state_) state_=std::make_shared<SparseFactorState>();
     if(copy_on_write_ && state_.use_count()>1) state_=std::make_shared<SparseFactorState>();
-    auto & s=*state_; ++s.generation; s.valid=false; s.design=a; s.columns=columns;
+    auto & s=*state_; ++s.generation; s.valid=false; s.design=a; s.columns=columns; s.tolerance=tolerance;
     s.qr.setPivotThreshold(tolerance);
     auto & work=SparseWorkForTesting();
     {WorkTimer timer(work.symbolic_seconds); s.qr.analyzePattern(a); ++work.symbolic;}
@@ -1086,9 +1087,9 @@ FreeDesignFactor::FreeDesignFactor(std::shared_ptr<SparseFactorState> s,std::siz
 const Sparse & FreeDesignFactor::DesignForTesting() const {Check(); return state_->design;}
 const std::vector<Eigen::Index> & FreeDesignFactor::ColumnsForTesting() const {Check(); return state_->columns;}
 double FreeDesignFactor::ToleranceForTesting() const {Check(); return state_->tolerance;}
-ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparseForTesting(const Sparse &,bool)
+ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparseForTesting(const Sparse &,bool) const
 {throw std::runtime_error("sparse Q transpose census requires SPQR");}
-ProjectedTailQrResultForTesting FreeDesignFactor::ProjectedTailQrForTesting(const Sparse &,VectorRef,double)
+ProjectedTailQrResultForTesting FreeDesignFactor::ProjectedTailQrForTesting(const Sparse &,VectorRef,double) const
 {
     ProjectedTailQrResultForTesting result;
     result.reason="projected-tail-qr-requires-spqr";
