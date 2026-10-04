@@ -449,6 +449,8 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         PROPERTIES LABELS "core;domain:integration;intent:algorithm")
     add_test(NAME joint_component_evidence_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_evidence_test.py")
+    add_test(NAME joint_fixed_b_scaling_analysis_test
+        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_b_scaling_test.py")
     add_test(NAME joint_component_runtime_runner_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime_test.py")
     add_test(NAME joint_component_regression
@@ -457,7 +459,7 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     add_test(NAME joint_component_physical_smoke
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime.py"
             physical-smoke --executable $<TARGET_FILE:joint_component_runtime>)
-    set_tests_properties(joint_component_evidence_test joint_component_runtime_runner_test
+    set_tests_properties(joint_component_evidence_test joint_fixed_b_scaling_analysis_test joint_component_runtime_runner_test
         joint_component_regression joint_component_physical_smoke
         PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:runtime")
 

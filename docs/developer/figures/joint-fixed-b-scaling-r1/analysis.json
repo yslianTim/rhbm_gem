@@ -1,0 +1,61 @@
+{
+  "fixed_b_scaling": "passed",
+  "all_cases_converged_and_objective_parity": true,
+  "sweep_trends": {
+    "chain": {
+      "classification": "stable-looking",
+      "multi_block_sizes": [
+        256,
+        512,
+        1024
+      ],
+      "sweeps_to_global_kkt": [
+        5,
+        5,
+        5
+      ],
+      "endpoint_sweep_ratio": 1.0,
+      "formal_growth_gate": "not evaluated; only three multi-block sizes"
+    },
+    "cube": {
+      "classification": "stable-looking",
+      "multi_block_sizes": [
+        256,
+        512,
+        1024
+      ],
+      "sweeps_to_global_kkt": [
+        9,
+        11,
+        11
+      ],
+      "endpoint_sweep_ratio": 1.2222222222222223,
+      "formal_growth_gate": "not evaluated; only three multi-block sizes"
+    }
+  },
+  "forward_reverse_512": {
+    "chain": {
+      "status": "converged-endpoint-comparison",
+      "compared_converged_endpoints": true,
+      "objective_difference": 4.205621735124926e-17,
+      "scaled_ac_difference": 5.4999806792244144e-11,
+      "sweep_count_difference": 0,
+      "objective_tolerance": 1.0000000003011507e-12,
+      "ac_tolerance": 1e-08,
+      "passed": true
+    },
+    "cube": {
+      "status": "converged-endpoint-comparison",
+      "compared_converged_endpoints": true,
+      "objective_difference": 4.951380525100678e-16,
+      "scaled_ac_difference": 6.71894900827752e-11,
+      "sweep_count_difference": 1,
+      "objective_tolerance": 1.0000000001555972e-12,
+      "ac_tolerance": 1e-08,
+      "passed": true
+    }
+  },
+  "no_severe_sweep_growth": true,
+  "no_material_converged_order_dependence": true,
+  "resume_nonlinear_f2": true
+}

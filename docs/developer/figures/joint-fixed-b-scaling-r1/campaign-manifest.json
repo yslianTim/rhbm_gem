@@ -1,0 +1,24 @@
+{
+  "phase": "F1.5 fixed-B block scaling",
+  "topologies": [
+    "chain",
+    "cube"
+  ],
+  "atom_counts": [
+    128,
+    256,
+    512,
+    1024
+  ],
+  "reverse_controls": [
+    "chain-512",
+    "cube-512"
+  ],
+  "core_atoms": 128,
+  "block_order": "forward serial Gauss-Seidel; reverse only at 512 controls",
+  "local_solver": "existing constrained SolveLinear",
+  "maximum_sweeps": 200,
+  "global_kkt_tolerance": 1e-10,
+  "objective_parity_tolerance": "1e-12 + 2e-12 * abs(global_objective)",
+  "formal_growth_gate": "not evaluated; three multi-block sizes, trend classification only"
+}

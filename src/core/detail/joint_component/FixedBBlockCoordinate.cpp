@@ -157,6 +157,7 @@ FixedBBlockResult SearchFixedBBlocks(const JointProblemInput & input,const Joint
             const auto factor_started=Clock::now();
             const auto solved=SolveLinear(local.design,local_y,Vector::Ones(local_y.size()),false,true,nullptr,&context.linear);
             record.factor_seconds=Seconds(factor_started); record.local_iterations=solved.solves;
+            record.factorizations=solved.block_factorizations;
             if(policy.capture_diagnostics)
             {
                 record.linear_solves=solved.solves;

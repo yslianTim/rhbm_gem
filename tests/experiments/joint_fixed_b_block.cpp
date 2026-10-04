@@ -11,6 +11,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <sys/resource.h>
 
 namespace {
 namespace n=rhbm_gem::core::joint_component;
@@ -165,6 +166,113 @@ Outcome Run(const std::string & topology,int atoms,const std::string & order)
 }
 void Write(const std::filesystem::path & path,const j::value & value)
 {std::ofstream out(path); if(!out) throw std::runtime_error("Could not open campaign output."); out<<j::serialize(value)<<'\n';}
+double PeakRssMb()
+{
+    rusage usage{};
+    if(getrusage(RUSAGE_SELF,&usage)!=0) throw std::runtime_error("Could not read peak RSS.");
+#if defined(__APPLE__)
+    return static_cast<double>(usage.ru_maxrss)/(1024.0*1024.0);
+#else
+    return static_cast<double>(usage.ru_maxrss)/1024.0;
+#endif
+}
+j::object GlobalReference(const std::string & topology,int atoms)
+{
+    auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
+    const auto & layout=n::BuildParameterLayout(*input); const n::Domain parent_domain(input);
+    const auto profile_domain=n::ProfileDomain(parent_domain,layout);
+    const auto context=n::ProfileContext(n::CreateContext(input),layout,parent_domain.rows);
+    const n::Vector observations=Eigen::Map<const n::Vector>(input->observations.data(),static_cast<Eigen::Index>(input->observations.size()));
+    const n::Vector eta=n::Vector::Constant(static_cast<Eigen::Index>(input->atom_ids.size()),std::log(.5));
+    const auto global=n::EvaluateProfile(profile_domain,Select(observations,layout.informative_rows),
+        Select(eta,layout.full_atoms),false,&context);
+    if(!global.valid) throw std::runtime_error("Global fixed-B profile failed: "+global.reason);
+    return {{"topology",topology},{"atoms",atoms},
+        {"objective",global.certificate.objective/(context.scale*context.scale)},
+        {"projected_kkt",global.certificate.projected_kkt},
+        {"active_atoms",global.certificate.active_atoms.size()},
+        {"free_columns",static_cast<std::size_t>(global.beta.size())-global.certificate.active_atoms.size()},
+        {"peak_rss_mb",PeakRssMb()}};
+}
+j::object FixedBScalingCase(const std::string & topology,int atoms,const std::string & order,double global_objective)
+{
+    auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
+    const auto & layout=n::BuildParameterLayout(*input); const n::Domain parent_domain(input);
+    const auto context=n::ProfileContext(n::CreateContext(input),layout,parent_domain.rows);
+    const n::Vector observations=Eigen::Map<const n::Vector>(input->observations.data(),static_cast<Eigen::Index>(input->observations.size()));
+    const n::Vector profile_y=Select(observations,layout.informative_rows);
+    const n::Vector eta=n::Vector::Constant(static_cast<Eigen::Index>(input->atom_ids.size()),std::log(.5));
+    const auto partition=n::BuildStructuralBlockPartition(*input,layout,128);
+    n::FixedBBlockPolicy policy; policy.core_atoms=128; policy.maximum_sweeps=200;
+    policy.order=order=="forward" ? n::FixedBBlockOrder::Forward : n::FixedBBlockOrder::Reverse;
+    const double initial_objective=.5*profile_y.squaredNorm()/(context.scale*context.scale);
+    const auto started=Clock::now();
+    const auto block=n::SearchFixedBBlocks(*input,layout,observations,eta,context,policy);
+    const double search_seconds=Seconds(started);
+    const double final_kkt=block.sweeps.empty() ? std::numeric_limits<double>::infinity() : block.sweeps.back().global_ac_kkt;
+    std::size_t objective_sweep{}; const double objective_tolerance=1e-12+2e-12*std::abs(global_objective);
+    j::array sweep_objectives,sweep_global_kkt;
+    for(std::size_t k=0;k<block.sweeps.size();++k)
+    {
+        const auto & sweep=block.sweeps[k];
+        sweep_objectives.push_back(sweep.objective_after); sweep_global_kkt.push_back(sweep.global_ac_kkt);
+        if(objective_sweep==0 && std::abs(sweep.objective_after-global_objective)<=objective_tolerance) objective_sweep=k+1;
+    }
+    std::size_t block_solves{},linear_solves{},factorizations{}; double factor_seconds{};
+    for(const auto & record:block.blocks)
+    {
+        ++block_solves; linear_solves+=static_cast<std::size_t>(record.local_iterations);
+        factorizations+=static_cast<std::size_t>(record.local_iterations+record.factorizations);
+        factor_seconds+=record.factor_seconds;
+    }
+    std::size_t maximum_rows{},maximum_columns{};
+    std::vector<std::size_t> row_owner_count(input->observations.size());
+    for(const auto & core:partition.cores)
+    {
+        maximum_rows=std::max(maximum_rows,core.affected_rows.size());
+        maximum_columns=std::max(maximum_columns,2*core.atoms.size());
+        for(auto row:core.affected_rows) ++row_owner_count[static_cast<std::size_t>(row)];
+    }
+    std::size_t touched_rows{},boundary_rows{};
+    for(auto owners:row_owner_count) {touched_rows+=owners!=0; boundary_rows+=owners>1;}
+    n::Vector column_norms= n::Vector::Zero(2*static_cast<Eigen::Index>(layout.full_atoms.size()));
+    std::vector<std::uint8_t> informative(input->observations.size());
+    for(auto row:layout.informative_rows) informative.at(row)=1;
+    for(std::size_t k=0;k<layout.full_atoms.size();++k)
+    {
+        const auto atom=layout.full_atoms[k]; const double width=std::exp(eta(static_cast<Eigen::Index>(atom)));
+        for(const auto & support:input->support.at(atom)) if(informative[support.row])
+        {
+            const auto basis=n::EvaluateKernel(support.squared_distance,width,2.5);
+            column_norms(2*static_cast<Eigen::Index>(k))+=basis.gaussian*basis.gaussian;
+            column_norms(2*static_cast<Eigen::Index>(k)+1)+=basis.charge*basis.charge;
+        }
+    }
+    column_norms=column_norms.cwiseSqrt(); j::array scaled_parameters;
+    for(std::size_t k=0;k<layout.full_atoms.size();++k)
+    {
+        const auto atom=static_cast<Eigen::Index>(layout.full_atoms[k]);
+        for(Eigen::Index kind=0;kind<2;++kind)
+        {
+            const auto local=2*static_cast<Eigen::Index>(k)+kind,parent=2*atom+kind;
+            scaled_parameters.push_back(block.state.beta(parent)*column_norms(local)/context.scale);
+        }
+    }
+    return {{"topology",topology},{"atoms",atoms},{"order",order},{"blocks",partition.cores.size()},
+        {"success",block.success},{"reason",block.reason},{"sweeps",block.sweeps.size()},
+        {"sweeps_to_global_kkt",block.sweeps_to_global_kkt},{"sweeps_to_objective_parity",objective_sweep},
+        {"initial_objective",initial_objective},{"global_objective",global_objective},
+        {"final_objective",block.state.objective},{"objective_difference",std::abs(block.state.objective-global_objective)},
+        {"final_global_kkt",final_kkt},{"objective_parity",objective_sweep!=0},
+        {"global_kkt_passed",block.success && final_kkt<=1e-10},
+        {"block_solves",block_solves},{"linear_solves",linear_solves},{"factorizations",factorizations},
+        {"factor_seconds",factor_seconds},{"search_seconds",search_seconds},{"peak_rss_mb",PeakRssMb()},
+        {"maximum_block_rows",maximum_rows},{"maximum_block_columns",maximum_columns},
+        {"boundary_rows",boundary_rows},{"touched_rows",touched_rows},
+        {"boundary_row_fraction",touched_rows ? static_cast<double>(boundary_rows)/static_cast<double>(touched_rows) : 0.0},
+        {"sweep_objective",sweep_objectives},{"sweep_global_kkt",sweep_global_kkt},
+        {"block_scaled_parameters",scaled_parameters}};
+}
 j::object Coupling(const std::string & topology,int atoms)
 {
     auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
@@ -268,9 +376,13 @@ void RunCouplingCampaign(const std::filesystem::path & root)
 int main(int argc,char ** argv)
 {
     try {
+        if(argc==5 && std::string(argv[1])=="--global-reference")
+        {Write(argv[2],GlobalReference(argv[3],std::stoi(argv[4]))); return 0;}
+        if(argc==7 && std::string(argv[1])=="--scaling-case")
+        {Write(argv[2],FixedBScalingCase(argv[3],std::stoi(argv[4]),argv[5],std::stod(argv[6]))); return 0;}
         if(argc==3 && std::string(argv[1])=="--coupling")
         {RunCouplingCampaign(argv[2]); std::cout<<"fixed-B coupling diagnostics complete\n"; return 0;}
-        if(argc!=2) throw std::invalid_argument("Usage: joint_fixed_b_block_experiment OUTPUT_DIR");
+        if(argc!=2) throw std::invalid_argument("Usage: joint_fixed_b_block_experiment OUTPUT_DIR | --global-reference FILE TOPOLOGY ATOMS | --scaling-case FILE TOPOLOGY ATOMS ORDER GLOBAL_OBJECTIVE | --coupling OUTPUT_DIR");
         const std::filesystem::path root(argv[1]); const auto individuals=root/"individual-results";
         std::filesystem::create_directories(individuals);
         j::array summary; std::vector<Outcome> outcomes;

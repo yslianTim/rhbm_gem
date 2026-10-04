@@ -19,7 +19,7 @@ struct FixedBBlockRecord
     double local_kkt{},local_feasibility{},global_kkt_before{},global_kkt_after{};
     double raw_ac_change{},solver_beta_norm_difference{},global_replay_delta{},local_global_delta_error{},objective_replay_enclosure{};
     int local_iterations{},active_A{},free_columns{};
-    int linear_solves{},rank{};
+    int linear_solves{},rank{},factorizations{};
     std::size_t active_atoms{};
     bool diagnostics_captured{},solver_beta_equal_old{},accepted{};
     bool local_certificate_available{},local_certificate_feasible{},local_certificate_kkt_passed{};
