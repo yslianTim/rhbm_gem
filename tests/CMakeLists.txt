@@ -319,6 +319,10 @@ if(RHBM_GEM_BUILD_BENCHMARKS)
     add_executable(joint_fixed_b_block_experiment experiments/joint_fixed_b_block.cpp)
     target_link_libraries(joint_fixed_b_block_experiment PRIVATE joint_test_support rhbm_gem CompilerFlags)
     add_dependencies(benchmarks_all joint_fixed_b_block_experiment)
+
+    add_executable(joint_fixed_neighbor_experiment experiments/joint_fixed_neighbor.cpp)
+    target_link_libraries(joint_fixed_neighbor_experiment PRIVATE joint_test_support rhbm_gem CompilerFlags)
+    add_dependencies(benchmarks_all joint_fixed_neighbor_experiment)
 endif()
 
 if(RHBM_GEM_BUILD_BENCHMARKS OR RHBM_GEM_BUILD_RESEARCH_TOOLS)
@@ -452,6 +456,8 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_evidence_test.py")
     add_test(NAME joint_fixed_b_scaling_analysis_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_b_scaling_test.py")
+    add_test(NAME joint_fixed_neighbor_analysis_test
+        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_analysis_test.py")
     add_test(NAME joint_component_runtime_runner_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime_test.py")
     add_test(NAME joint_component_regression
@@ -460,7 +466,7 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     add_test(NAME joint_component_physical_smoke
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime.py"
             physical-smoke --executable $<TARGET_FILE:joint_component_runtime>)
-    set_tests_properties(joint_component_evidence_test joint_fixed_b_scaling_analysis_test joint_component_runtime_runner_test
+    set_tests_properties(joint_component_evidence_test joint_fixed_b_scaling_analysis_test joint_fixed_neighbor_analysis_test joint_component_runtime_runner_test
         joint_component_regression joint_component_physical_smoke
         PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:runtime")
 
@@ -595,6 +601,7 @@ foreach(_optional_target IN ITEMS
     joint_postprocessing_benchmark
     joint_component_benchmark
     joint_fixed_b_block_experiment
+    joint_fixed_neighbor_experiment
     joint_statistical_experiment)
     if(_optional_target IN_LIST _tests_all_dependencies)
         message(FATAL_ERROR "Optional target ${_optional_target} must not be a tests_all dependency")
@@ -602,13 +609,13 @@ foreach(_optional_target IN ITEMS
 endforeach()
 
 if(RHBM_GEM_BUILD_BENCHMARKS)
-    foreach(_target IN ITEMS joint_partial_selection joint_postprocessing_benchmark joint_component_benchmark joint_fixed_b_block_experiment)
+    foreach(_target IN ITEMS joint_partial_selection joint_postprocessing_benchmark joint_component_benchmark joint_fixed_b_block_experiment joint_fixed_neighbor_experiment)
         if(NOT TARGET ${_target})
             message(FATAL_ERROR "RHBM_GEM_BUILD_BENCHMARKS did not create ${_target}")
         endif()
     endforeach()
 else()
-    foreach(_target IN ITEMS joint_partial_selection joint_postprocessing_benchmark joint_component_benchmark joint_fixed_b_block_experiment)
+    foreach(_target IN ITEMS joint_partial_selection joint_postprocessing_benchmark joint_component_benchmark joint_fixed_b_block_experiment joint_fixed_neighbor_experiment)
         if(TARGET ${_target})
             message(FATAL_ERROR "${_target} exists while RHBM_GEM_BUILD_BENCHMARKS=OFF")
         endif()
