@@ -67,3 +67,50 @@ TEST(JointFixedBBlockCoordinateTest, FixedBBlockSweepsRecoverSmallGlobalConstrai
     CheckFixedBCase("chain",8);
     CheckFixedBCase("cube",8);
 }
+
+TEST(JointFixedBBlockCoordinateTest, DiagnosticObserverDoesNotChangeFixedBResult)
+{
+    auto input=std::make_shared<JointProblemInput>(second_stage_test::OperatorWorkload("cube",256));
+    const auto & layout=n::BuildParameterLayout(*input);
+    const n::Domain parent_domain(input);
+    const auto context=n::ProfileContext(n::CreateContext(input),layout,parent_domain.rows);
+    const n::Vector observations=Eigen::Map<const n::Vector>(input->observations.data(),static_cast<Eigen::Index>(input->observations.size()));
+    const n::Vector eta=n::Vector::Constant(static_cast<Eigen::Index>(input->atom_ids.size()),std::log(.5));
+    n::FixedBBlockPolicy policy; policy.core_atoms=128; policy.maximum_sweeps=12;
+    const auto without_observer=n::SearchFixedBBlocks(*input,layout,observations,eta,context,policy);
+    policy.capture_diagnostics=true;
+    const auto with_observer=n::SearchFixedBBlocks(*input,layout,observations,eta,context,policy);
+
+    EXPECT_EQ(without_observer.success,with_observer.success);
+    EXPECT_EQ(without_observer.reason,with_observer.reason);
+    EXPECT_EQ(without_observer.sweeps_to_global_kkt,with_observer.sweeps_to_global_kkt);
+    EXPECT_DOUBLE_EQ(without_observer.state.objective,with_observer.state.objective);
+    EXPECT_TRUE((without_observer.state.eta.array()==with_observer.state.eta.array()).all());
+    EXPECT_TRUE((without_observer.state.beta.array()==with_observer.state.beta.array()).all());
+    EXPECT_TRUE((without_observer.state.prediction.array()==with_observer.state.prediction.array()).all());
+    EXPECT_TRUE((without_observer.state.residual.array()==with_observer.state.residual.array()).all());
+    ASSERT_EQ(without_observer.sweeps.size(),with_observer.sweeps.size());
+    for(std::size_t k=0;k<without_observer.sweeps.size();++k)
+    {
+        const auto & lhs=without_observer.sweeps[k]; const auto & rhs=with_observer.sweeps[k];
+        EXPECT_DOUBLE_EQ(lhs.objective_before,rhs.objective_before);
+        EXPECT_DOUBLE_EQ(lhs.objective_after,rhs.objective_after);
+        EXPECT_DOUBLE_EQ(lhs.global_ac_kkt,rhs.global_ac_kkt);
+        EXPECT_DOUBLE_EQ(lhs.cache_replay_error,rhs.cache_replay_error);
+        EXPECT_DOUBLE_EQ(lhs.objective_replay_error,rhs.objective_replay_error);
+        EXPECT_EQ(lhs.accepted_blocks,rhs.accepted_blocks);
+        EXPECT_EQ(lhs.unchanged_blocks,rhs.unchanged_blocks);
+        EXPECT_EQ(lhs.failed_blocks,rhs.failed_blocks);
+    }
+    ASSERT_EQ(without_observer.blocks.size(),with_observer.blocks.size());
+    for(std::size_t k=0;k<without_observer.blocks.size();++k)
+    {
+        const auto & lhs=without_observer.blocks[k]; const auto & rhs=with_observer.blocks[k];
+        EXPECT_EQ(lhs.status,rhs.status);
+        EXPECT_EQ(lhs.reason,rhs.reason);
+        EXPECT_DOUBLE_EQ(lhs.objective_before,rhs.objective_before);
+        EXPECT_DOUBLE_EQ(lhs.objective_after,rhs.objective_after);
+        EXPECT_DOUBLE_EQ(lhs.objective_reduction,rhs.objective_reduction);
+        EXPECT_TRUE(rhs.diagnostics_captured);
+    }
+}

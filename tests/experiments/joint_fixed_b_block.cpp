@@ -21,8 +21,35 @@ n::Vector Select(n::VectorRef v,const std::vector<std::size_t> & indices)
     for(std::size_t k=0;k<indices.size();++k) out(static_cast<Eigen::Index>(k))=v(static_cast<Eigen::Index>(indices[k]));
     return out;
 }
-j::array Doubles(n::VectorRef v)
-{j::array out; for(Eigen::Index k=0;k<v.size();++k) out.push_back(v(k)); return out;}
+j::array BlockTelemetry(const std::vector<n::FixedBBlockRecord> & records)
+{
+    j::array out;
+    for(const auto & record:records)
+        out.push_back({{"sweep",record.sweep},{"block",record.block},
+            {"objective_before",record.objective_before},{"objective_after",record.objective_after},
+            {"objective_reduction",record.objective_reduction},
+            {"local_objective_before",record.local_objective_before},
+            {"local_objective_after",record.local_objective_after},
+            {"local_objective_reduction",record.local_objective_reduction},
+            {"local_kkt",record.local_kkt},{"local_feasibility",record.local_feasibility},
+            {"global_kkt_before",record.global_kkt_before},{"global_kkt_after",record.global_kkt_after},
+            {"max_scaled_ac_change",record.max_scaled_ac_change},{"raw_ac_change",record.raw_ac_change},
+            {"solver_beta_equal_old",record.solver_beta_equal_old},
+            {"solver_beta_norm_difference",record.solver_beta_norm_difference},
+            {"accepted",record.accepted},{"status",record.status},{"reason",record.reason},
+            {"global_replay_delta",record.global_replay_delta},
+            {"local_global_delta_error",record.local_global_delta_error},
+            {"objective_replay_enclosure",record.objective_replay_enclosure},
+            {"factor_seconds",record.factor_seconds},{"linear_solves",record.linear_solves},
+            {"certificate",{{"available",record.local_certificate_available},
+                {"feasible",record.local_certificate_feasible},
+                {"kkt_passed",record.local_certificate_kkt_passed},
+                {"projected_kkt",record.local_certificate_projected_kkt},
+                {"rss",record.local_certificate_rss},{"objective",record.local_certificate_objective},
+                {"linear_solves",record.linear_solves},{"rank",record.rank},
+                {"active_atoms",record.active_atoms},{"free_columns",record.free_columns}}}});
+    return out;
+}
 struct Outcome
 {
     std::string topology,order;
@@ -36,7 +63,7 @@ struct Outcome
     j::object individual;
     std::vector<double> sweep_objectives,sweep_kkt;
     std::vector<double> block_scaled_parameters;
-    j::array structural_cores;
+    j::array block_telemetry;
 };
 Outcome Run(const std::string & topology,int atoms,const std::string & order)
 {
@@ -49,19 +76,9 @@ Outcome Run(const std::string & topology,int atoms,const std::string & order)
     const auto profile_y=Select(observations,layout.informative_rows),profile_eta=Select(eta,layout.full_atoms);
     const auto global=n::EvaluateProfile(profile_domain,profile_y,profile_eta,false,&context);
     if(!global.valid) throw std::runtime_error("Global fixed-B profile failed: "+global.reason);
-    n::FixedBBlockPolicy policy; policy.core_atoms=128; policy.maximum_sweeps=200;
+    n::FixedBBlockPolicy policy; policy.core_atoms=128; policy.maximum_sweeps=12; policy.capture_diagnostics=true;
     policy.order=order=="forward" ? n::FixedBBlockOrder::Forward : n::FixedBBlockOrder::Reverse;
     const auto partition=n::BuildStructuralBlockPartition(*input,layout,policy.core_atoms);
-    j::array structural_cores;
-    for(const auto & core:partition.cores)
-    {
-        j::array core_atoms,affected_rows,neighbor_atoms;
-        for(auto atom:core.atoms) core_atoms.push_back(atom);
-        for(auto row:core.affected_rows) affected_rows.push_back(row);
-        for(auto atom:core.neighbor_atoms) neighbor_atoms.push_back(atom);
-        structural_cores.push_back({{"atoms",core_atoms},{"affected_rows",affected_rows},
-            {"neighbor_atoms",neighbor_atoms}});
-    }
     const auto search_started=Clock::now();
     const auto block=n::SearchFixedBBlocks(*input,layout,observations,eta,context,policy);
     const double search_seconds=Seconds(search_started);
@@ -97,7 +114,7 @@ Outcome Run(const std::string & topology,int atoms,const std::string & order)
         }
     }
     Outcome out; out.topology=topology; out.order=order; out.atoms=atoms;
-    out.blocks=(static_cast<std::size_t>(atoms)+127)/128; out.structural_cores=std::move(structural_cores);
+    out.blocks=partition.cores.size();
     out.global_objective=global.certificate.objective/(context.scale*context.scale); out.block_objective=block.state.objective;
     out.prediction_inf=(block_prediction-global_prediction).lpNorm<Eigen::Infinity>();
     out.residual_inf=(block_residual-global_residual).lpNorm<Eigen::Infinity>();
@@ -109,6 +126,7 @@ Outcome Run(const std::string & topology,int atoms,const std::string & order)
     out.success=block.success; out.reason=block.reason; out.active_face_mismatches=active_mismatches;
     out.active_face_equal=active_mismatches==0; out.global_free_columns=global_free_columns;
     out.free_columns=block_free_columns; out.block_scaled_parameters=std::move(block_scaled_parameters);
+    out.block_telemetry=BlockTelemetry(block.blocks);
     out.initial_objective=.5*profile_y.squaredNorm()/(context.scale*context.scale);
     out.objective_parity=std::abs(out.block_objective-out.global_objective)<=1e-12+2e-12*std::abs(out.global_objective);
     out.prediction_parity=out.prediction_inf<=2e-12+2e-13*std::max(1.0,global_prediction.cwiseAbs().maxCoeff());
@@ -130,21 +148,16 @@ Outcome Run(const std::string & topology,int atoms,const std::string & order)
             {"a_feasibility",out.block_feasibility},{"sweeps",out.sweeps},
             {"sweeps_to_global_kkt",out.sweeps_to_global_kkt},
             {"sweeps_to_objective_parity",out.sweeps_to_objective_parity}}},
-        {"structural_partition",{{"core_atoms",policy.core_atoms},{"core_count",partition.cores.size()},
-            {"cores",out.structural_cores}}},
         {"comparison",{{"objective_difference",std::abs(out.block_objective-out.global_objective)},
             {"prediction_inf_difference",out.prediction_inf},{"residual_inf_difference",out.residual_inf},
             {"ac_scaled_inf_difference",out.ac_scaled_inf},{"ac_raw_inf_difference",out.ac_raw_inf},
             {"active_face_mismatches",active_mismatches},{"objective_parity",out.objective_parity},
             {"prediction_parity",out.prediction_parity},{"ac_parity",out.ac_parity}}},
         {"initial_objective",out.initial_objective},{"search_seconds",search_seconds},
+        {"block_telemetry",out.block_telemetry},
         {"sweep_objective",[&] {j::array a; for(auto v:out.sweep_objectives) a.push_back(v); return a;}()},
         {"sweep_global_kkt",[&] {j::array a; for(auto v:out.sweep_kkt) a.push_back(v); return a;}()},
-        {"global_A",Doubles(global.beta(Eigen::seq(0,global.beta.size()-1,2)))},
-        {"global_C",Doubles(global.beta(Eigen::seq(1,global.beta.size()-1,2)))},
-        {"block_A",Doubles(block.state.beta(Eigen::seq(0,block.state.beta.size()-1,2)))},
-        {"block_C",Doubles(block.state.beta(Eigen::seq(1,block.state.beta.size()-1,2)))},
-        {"block_scaled_parameters",[&] {j::array a; for(auto v:out.block_scaled_parameters) a.push_back(v); return a;}()}};
+        {"diagnostics_captured",true}};
     return out;
 }
 void Write(const std::filesystem::path & path,const j::value & value)
@@ -157,8 +170,7 @@ int main(int argc,char ** argv)
         const std::filesystem::path root(argv[1]); const auto individuals=root/"individual-results";
         std::filesystem::create_directories(individuals);
         j::array summary; std::vector<Outcome> outcomes;
-        const std::vector<std::pair<std::string,int>> cases{{"chain",8},{"chain",32},{"chain",128},{"chain",256},
-            {"cube",8},{"cube",32},{"cube",128},{"cube",256}};
+        const std::vector<std::pair<std::string,int>> cases{{"chain",256},{"cube",256}};
         for(const auto & [topology,atoms]:cases) for(const std::string order:{"forward","reverse"})
         {
             auto result=Run(topology,atoms,order);
@@ -233,11 +245,12 @@ int main(int argc,char ** argv)
             {"objective_replay_tolerance","1e-12 + 2e-12 * abs(global_objective)"},
             {"prediction_replay_tolerance","2e-12 + 2e-13 * max(1, abs(global_prediction))"},
             {"order_comparisons",order_results}});
-        Write(root/"campaign-manifest.json",j::object{{"phase","F1 fixed-B convex comparison"},
-            {"topologies",{"chain","cube"}},{"atom_counts",{8,32,128,256}},
+        Write(root/"campaign-manifest.json",j::object{{"phase","F1.5 fixed-B convergence-floor attribution"},
+            {"topologies",{"chain","cube"}},{"atom_counts",{256}},
             {"fixed_B",.5},{"initial_A",0},{"initial_C",0},{"core_atoms",128},
             {"local_solver","existing constrained SolveLinear"},{"orderings",{"forward","reverse"}},
-            {"maximum_sweeps",200},{"normalization","parent scale max(1, norm(y))"},
+            {"maximum_sweeps",12},{"diagnostics","per-block local/global attribution; observer only"},
+            {"normalization","parent scale max(1, norm(y))"},
             {"statistical_objective","unchanged FullABC informative-row profile objective"}});
         std::cout<<"fixed-B parity="<<(parity?"passed":"failed")
             <<" order parity="<<(order_parity?"passed":"failed")<<" results="<<outcomes.size()<<'\n';

@@ -130,6 +130,12 @@ FixedBBlockResult SearchFixedBBlocks(const JointProblemInput & input,const Joint
             const auto & core=partition.cores[block_index]; FixedBBlockRecord record;
             record.sweep=sweep_index+1; record.block=block_index+1; record.core_atoms=core.atoms;
             record.affected_rows=core.affected_rows; record.neighbor_atoms=core.neighbor_atoms;
+            record.diagnostics_captured=policy.capture_diagnostics;
+            if(policy.capture_diagnostics)
+            {
+                record.global_kkt_before=DiagnoseGlobalAC(input,layout,out.state,context.scale).kkt;
+                record.global_kkt_after=record.global_kkt_before;
+            }
             record.objective_before=out.state.objective;
             const auto local=BuildBlockDesign(input,core,out.state.eta,layout);
             Vector local_y(static_cast<Eigen::Index>(local.rows.size())),old_beta(2*static_cast<Eigen::Index>(core.atoms.size()));
@@ -147,9 +153,21 @@ FixedBBlockResult SearchFixedBBlocks(const JointProblemInput & input,const Joint
             if(!local_y.allFinite())
             {record.status="failed"; record.reason="block-invalid-effective-response"; ++sweep.failed_blocks; out.blocks.push_back(std::move(record)); out.reason="block-invalid-effective-response"; return out;}
             const auto local_before=.5*(local.design*old_beta-local_y).squaredNorm()/(context.scale*context.scale);
+            if(policy.capture_diagnostics) record.local_objective_before=local_before;
             const auto factor_started=Clock::now();
             const auto solved=SolveLinear(local.design,local_y,Vector::Ones(local_y.size()),false,true,nullptr,&context.linear);
             record.factor_seconds=Seconds(factor_started); record.local_iterations=solved.solves;
+            if(policy.capture_diagnostics)
+            {
+                record.linear_solves=solved.solves;
+                record.rank=solved.rank;
+                if(solved.beta.size()==old_beta.size())
+                {
+                    record.solver_beta_equal_old=(solved.beta.array()==old_beta.array()).all();
+                    record.solver_beta_norm_difference=(solved.beta-old_beta).norm();
+                    record.raw_ac_change=record.solver_beta_norm_difference;
+                }
+            }
             record.active_A=0; record.free_columns=0;
             if(!solved.valid)
             {
@@ -157,6 +175,18 @@ FixedBBlockResult SearchFixedBBlocks(const JointProblemInput & input,const Joint
                 ++sweep.failed_blocks; out.reason=record.reason; out.blocks.push_back(std::move(record)); return out;
             }
             const auto certificate=CertifyLinear(local.design,local_y,solved.beta,context.scale);
+            if(policy.capture_diagnostics)
+            {
+                record.local_kkt=certificate.projected_kkt;
+                record.local_feasibility=certificate.feasible ? 0.0 : 1.0;
+                record.active_atoms=certificate.active_atoms.size();
+                record.local_certificate_available=certificate.available;
+                record.local_certificate_feasible=certificate.feasible;
+                record.local_certificate_kkt_passed=certificate.kkt_passed;
+                record.local_certificate_projected_kkt=certificate.projected_kkt;
+                record.local_certificate_rss=certificate.rss;
+                record.local_certificate_objective=certificate.objective;
+            }
             if(!certificate.available || !certificate.feasible || !certificate.kkt_passed)
             {record.status="failed"; record.reason="block-inner-invalid"; ++sweep.failed_blocks; out.blocks.push_back(std::move(record)); out.reason="block-inner-invalid"; return out;}
             for(Eigen::Index k=0;k<solved.beta.size();++k)
@@ -165,12 +195,23 @@ FixedBBlockResult SearchFixedBBlocks(const JointProblemInput & input,const Joint
                 if(k%2!=0 || solved.beta(k)>0) ++record.free_columns;
             }
             const auto local_after=.5*(local.design*solved.beta-local_y).squaredNorm()/(context.scale*context.scale);
+            if(policy.capture_diagnostics)
+            {
+                record.local_objective_after=local_after;
+                record.local_objective_reduction=local_before-local_after;
+            }
             Vector candidate_beta=out.state.beta;
             for(std::size_t k=0;k<core.atoms.size();++k)
                 candidate_beta.segment<2>(2*static_cast<Eigen::Index>(core.atoms[k]))=solved.beta.segment<2>(2*static_cast<Eigen::Index>(k));
             const auto replay=Replay(input,layout,observations,out.state.eta,candidate_beta,context.scale);
             record.objective_after=replay.objective; record.objective_reduction=record.objective_before-record.objective_after;
+            if(policy.capture_diagnostics)
+            {
+                record.global_replay_delta=replay.objective-out.state.objective;
+                record.objective_replay_enclosure=1e-12+2e-12*std::max(std::abs(replay.objective),std::abs(out.state.objective));
+            }
             double local_global_error=std::abs((replay.objective-out.state.objective)-(local_after-local_before));
+            if(policy.capture_diagnostics) record.local_global_delta_error=local_global_error;
             if(!WithinObjectiveReplay(local_global_error,std::max(std::abs(replay.objective),std::abs(out.state.objective))))
             {record.status="failed"; record.reason="block-objective-replay-failed"; ++sweep.failed_blocks; out.blocks.push_back(std::move(record)); out.reason="block-objective-replay-failed"; return out;}
             if(replay.objective>out.state.objective)
@@ -195,6 +236,11 @@ FixedBBlockResult SearchFixedBBlocks(const JointProblemInput & input,const Joint
             sweep.max_scaled_ac_change=std::max(sweep.max_scaled_ac_change,record.max_scaled_ac_change);
             const bool unchanged=(solved.beta.array()==old_beta.array()).all();
             record.status=unchanged ? "unchanged" : "accepted"; record.reason=unchanged ? "block-unchanged" : "";
+            if(policy.capture_diagnostics)
+            {
+                record.accepted=!unchanged;
+                if(!unchanged) record.global_kkt_after=DiagnoseGlobalAC(input,layout,out.state,context.scale).kkt;
+            }
             if(unchanged) ++sweep.unchanged_blocks; else ++sweep.accepted_blocks;
             sweep.objective_after=out.state.objective; out.blocks.push_back(std::move(record));
         }
