@@ -61,6 +61,56 @@ void CheckFixedBCase(const std::string & topology,int atoms)
         EXPECT_DOUBLE_EQ(block.state.eta(atom),eta(atom));
     }
 }
+void CheckFixedB256Case(const std::string & topology,n::FixedBBlockOrder order)
+{
+    auto input=std::make_shared<JointProblemInput>(second_stage_test::OperatorWorkload(topology,256));
+    const auto & layout=n::BuildParameterLayout(*input); const n::Domain parent_domain(input);
+    const auto profile_domain=n::ProfileDomain(parent_domain,layout);
+    const auto context=n::ProfileContext(n::CreateContext(input),layout,parent_domain.rows);
+    const n::Vector observations=Eigen::Map<const n::Vector>(input->observations.data(),static_cast<Eigen::Index>(input->observations.size()));
+    const n::Vector eta=n::Vector::Constant(static_cast<Eigen::Index>(input->atom_ids.size()),std::log(.5));
+    const auto global=n::EvaluateProfile(profile_domain,Select(observations,layout.informative_rows),
+        Select(eta,layout.full_atoms),false,&context);
+    ASSERT_TRUE(global.valid)<<global.reason;
+    n::FixedBBlockPolicy policy; policy.core_atoms=128; policy.maximum_sweeps=12;
+    policy.order=order; policy.capture_diagnostics=true;
+    const auto block=n::SearchFixedBBlocks(*input,layout,observations,eta,context,policy);
+    ASSERT_TRUE(block.success)<<block.reason<<" sweeps="<<block.sweeps.size()
+        <<" kkt="<<(block.sweeps.empty()?0:block.sweeps.back().global_ac_kkt);
+    ASSERT_FALSE(block.sweeps.empty());
+    EXPECT_GT(block.sweeps_to_global_kkt,0u);
+    EXPECT_LE(block.sweeps.back().global_ac_kkt,1e-10);
+    const double global_objective=global.certificate.objective/(context.scale*context.scale);
+    EXPECT_LE(std::abs(block.state.objective-global_objective),1e-12+2e-12*std::abs(global_objective));
+    double scaled_ac_difference{};
+    for(const auto & sweep:block.sweeps)
+    {
+        EXPECT_LE(sweep.objective_after,sweep.objective_before);
+        EXPECT_LE(sweep.cache_replay_error,2e-12);
+        EXPECT_LE(sweep.objective_replay_error,1e-12);
+    }
+    for(const auto & record:block.blocks)
+    {
+        EXPECT_TRUE(record.diagnostics_captured);
+        EXPECT_LE(record.local_global_delta_error,record.objective_replay_enclosure);
+        if(record.accepted)
+        {
+            EXPECT_LE(record.local_objective_after,record.local_objective_before);
+            EXPECT_LE(record.global_replay_delta,record.objective_replay_enclosure);
+        }
+    }
+    for(std::size_t k=0;k<layout.full_atoms.size();++k)
+    {
+        const auto atom=static_cast<Eigen::Index>(layout.full_atoms[k]);
+        for(Eigen::Index kind=0;kind<2;++kind)
+        {
+            const auto column=2*static_cast<Eigen::Index>(k)+kind,parent_column=2*atom+kind;
+            scaled_ac_difference=std::max(scaled_ac_difference,
+                std::abs(block.state.beta(parent_column)-global.beta(column))*global.x.col(column).norm()/context.scale);
+        }
+    }
+    EXPECT_LE(scaled_ac_difference,1e-8);
+}
 }
 TEST(JointFixedBBlockCoordinateTest, FixedBBlockSweepsRecoverSmallGlobalConstrainedProfiles)
 {
@@ -113,4 +163,12 @@ TEST(JointFixedBBlockCoordinateTest, DiagnosticObserverDoesNotChangeFixedBResult
         EXPECT_DOUBLE_EQ(lhs.objective_reduction,rhs.objective_reduction);
         EXPECT_TRUE(rhs.diagnostics_captured);
     }
+}
+
+TEST(JointFixedBBlockCoordinateTest, RoundoffAwareAcceptanceRequalifies256AtomControls)
+{
+    CheckFixedB256Case("chain",n::FixedBBlockOrder::Forward);
+    CheckFixedB256Case("chain",n::FixedBBlockOrder::Reverse);
+    CheckFixedB256Case("cube",n::FixedBBlockOrder::Forward);
+    CheckFixedB256Case("cube",n::FixedBBlockOrder::Reverse);
 }

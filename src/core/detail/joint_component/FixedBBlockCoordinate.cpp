@@ -212,9 +212,14 @@ FixedBBlockResult SearchFixedBBlocks(const JointProblemInput & input,const Joint
             }
             double local_global_error=std::abs((replay.objective-out.state.objective)-(local_after-local_before));
             if(policy.capture_diagnostics) record.local_global_delta_error=local_global_error;
-            if(!WithinObjectiveReplay(local_global_error,std::max(std::abs(replay.objective),std::abs(out.state.objective))))
+            const double replay_reference=std::max(std::abs(replay.objective),std::abs(out.state.objective));
+            const bool local_global_delta_enclosed=WithinObjectiveReplay(local_global_error,replay_reference);
+            const double replay_enclosure=1e-12+2e-12*replay_reference;
+            if(!local_global_delta_enclosed)
             {record.status="failed"; record.reason="block-objective-replay-failed"; ++sweep.failed_blocks; out.blocks.push_back(std::move(record)); out.reason="block-objective-replay-failed"; return out;}
-            if(replay.objective>out.state.objective)
+            const double global_replay_delta=replay.objective-out.state.objective;
+            if(global_replay_delta>0 && !(local_after<=local_before && local_global_delta_enclosed &&
+                global_replay_delta<=replay_enclosure))
             {
                 record.status="unchanged"; record.reason="block-objective-increase"; ++sweep.unchanged_blocks;
                 sweep.objective_after=out.state.objective; out.blocks.push_back(std::move(record)); continue;
