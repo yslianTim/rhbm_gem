@@ -724,7 +724,126 @@ std::pair<Matrix,Vector> SparseReferenceQR(const Sparse & x,const Vector & weigh
     if(rank<0 || !c) throw std::runtime_error("Independent SPQR reduction failed");
     return {std::move(result),response.Copy().col(0)};
 }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+StructuredProjectedQrResultForTesting StructuredProjectedQrForTesting(
+    const Sparse & design,const Sparse & raw,VectorRef residual,double scale)
+{
+    StructuredProjectedQrResultForTesting result;
+    if(design.rows()!=raw.rows() || residual.size()!=design.rows() || design.cols()<=0 || raw.cols()<=0 ||
+        !(scale>0) || !std::isfinite(scale))
+    {result.reason="invalid-structured-projected-qr-input"; return result;}
+    using Triplet=Eigen::Triplet<double,int64_t>;
+    std::vector<Triplet> entries;
+    entries.reserve(static_cast<std::size_t>(design.nonZeros()+raw.nonZeros()));
+    for(Eigen::Index column=0;column<design.outerSize();++column)
+        for(Sparse::InnerIterator value(design,column);value;++value)
+            entries.emplace_back(value.row(),column,value.value());
+    for(Eigen::Index column=0;column<raw.outerSize();++column)
+        for(Sparse::InnerIterator value(raw,column);value;++value)
+            entries.emplace_back(value.row(),design.cols()+column,value.value());
+    LongSparse combined(design.rows(),design.cols()+raw.cols());
+    combined.setFromTriplets(entries.begin(),entries.end()); combined.makeCompressed();
+    result.sparse_rows=combined.rows(); result.sparse_columns=combined.cols();
+    result.sparse_nonzeros=static_cast<std::size_t>(combined.nonZeros());
+    auto & work=SparseWorkForTesting();
+    work.symbolic_rows=std::max(work.symbolic_rows,combined.rows());
+    work.symbolic_columns=std::max(work.symbolic_columns,combined.cols());
+    work.symbolic_input_nonzeros=std::max(work.symbolic_input_nonzeros,result.sparse_nonzeros);
+    work.numeric_rows=std::max(work.numeric_rows,combined.rows());
+    work.numeric_columns=std::max(work.numeric_columns,combined.cols());
+    work.numeric_input_nonzeros=std::max(work.numeric_input_nonzeros,result.sparse_nonzeros);
+    struct Owner
+    {
+        cholmod_common common{};
+        SuiteSparseQR_factorization<double> * factor{};
+        cholmod_sparse * transformed{};
+        cholmod_dense * response{};
+        bool started{};
+        Owner():started(cholmod_l_start(&common)!=0) {common.SPQR_nthreads=1;}
+        ~Owner()
+        {
+            if(transformed) cholmod_l_free_sparse(&transformed,&common);
+            if(response) cholmod_l_free_dense(&response,&common);
+            if(factor) SuiteSparseQR_free<double>(&factor,&common);
+            if(started) cholmod_l_finish(&common);
+        }
+    } owner;
+    if(!owner.started) {result.reason="spqr-common-init-failed"; return result;}
+    auto matrix=View(combined);
+    ++work.symbolic;
+    {
+        ResourcePhase phase("spqr-projected-symbolic",true,combined.rows(),combined.cols(),result.sparse_nonzeros);
+        const auto started=Clock::now();
+        owner.factor=SuiteSparseQR_symbolic<double>(SPQR_ORDERING_FIXED,false,&matrix,&owner.common);
+        result.symbolic_seconds=Seconds(started); work.symbolic_seconds+=result.symbolic_seconds;
+    }
+    if(!owner.factor) {result.reason="spqr-projected-symbolic-failed"; return result;}
+    const auto is_identity=[](const int64_t * permutation,Eigen::Index size) {
+        if(!permutation) return true;
+        for(Eigen::Index k=0;k<size;++k) if(permutation[k]!=k) return false;
+        return true;
+    };
+    result.input_order_preserved=is_identity(owner.factor->QRsym->Qfill,combined.cols()) &&
+        is_identity(owner.factor->Q1fill,combined.cols());
+    if(!result.input_order_preserved)
+    {result.reason="spqr-fixed-order-permutation"; return result;}
+    ++work.numeric;
+    {
+        ResourcePhase phase("spqr-projected-numeric",true,combined.rows(),combined.cols(),result.sparse_nonzeros);
+        const auto started=Clock::now();
+        const int success=SuiteSparseQR_numeric<double>(SPQR_NO_TOL,&matrix,owner.factor,&owner.common);
+        result.numeric_seconds=Seconds(started); work.numeric_seconds+=result.numeric_seconds;
+        if(!success) {result.reason="spqr-projected-numeric-failed"; return result;}
+    }
+    if(owner.factor->QRsym->do_rank_detection)
+    {result.reason="spqr-projected-rank-detection-enabled"; return result;}
+    const Eigen::Index p=design.cols(),m=raw.cols(),k=p+m;
+    Matrix rhs=residual/scale; auto dense_rhs=View(rhs);
+    {
+        ResourcePhase phase("spqr-projected-qmult",true,combined.rows(),combined.cols(),result.sparse_nonzeros);
+        const auto started=Clock::now();
+        owner.response=SuiteSparseQR_qmult<double>(SPQR_QTX,owner.factor,&dense_rhs,&owner.common);
+        owner.transformed=SuiteSparseQR_qmult<double>(SPQR_QTX,owner.factor,&matrix,&owner.common);
+        result.orthogonal_seconds=Seconds(started);
+    }
+    if(!owner.response || !owner.transformed)
+    {result.reason="spqr-projected-qmult-failed"; return result;}
+    if(owner.response->nrow<static_cast<std::size_t>(k) || owner.transformed->nrow<static_cast<std::size_t>(k) ||
+        owner.transformed->ncol!=static_cast<std::size_t>(k))
+    {result.reason="spqr-projected-factor-shape"; return result;}
+    result.factor=Matrix::Zero(m,m); result.response.resize(m);
+    result.factor_rows=m; result.factor_columns=m;
+    result.maximum_dense_bytes=std::max({static_cast<std::size_t>(rhs.size())*sizeof(double),
+        static_cast<std::size_t>(m)*static_cast<std::size_t>(m)*sizeof(double),
+        static_cast<std::size_t>(k)*sizeof(double)});
+    const auto * outer=static_cast<const int64_t *>(owner.transformed->p);
+    const auto * inner=static_cast<const int64_t *>(owner.transformed->i);
+    const auto * values=static_cast<const double *>(owner.transformed->x);
+    for(Eigen::Index column=p;column<k;++column)
+        for(int64_t item=outer[column];item<outer[column+1];++item)
+        {
+            const auto row=static_cast<Eigen::Index>(inner[item]);
+            if(row>=p && row<k) result.factor(row-p,column-p)=values[item]/scale;
+        }
+    const auto * transformed_response=static_cast<const double *>(owner.response->x);
+    for(Eigen::Index column=0;column<m;++column)
+        result.response(column)=transformed_response[p+column];
+    if(!result.factor.allFinite() || !result.response.allFinite())
+    {result.reason="spqr-projected-nonfinite"; return result;}
+    result.valid=true; result.reason="structured-fixed-order-qr";
+    return result;
+}
+#endif
 #else
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+StructuredProjectedQrResultForTesting StructuredProjectedQrForTesting(
+    const Sparse &,const Sparse &,VectorRef,double)
+{
+    StructuredProjectedQrResultForTesting result;
+    result.reason="structured-sparse-qr-requires-spqr";
+    return result;
+}
+#endif
 // This factor is used only by the fixed-state operator. The production Eigen
 // active-set solver retains its existing row reduction and rank policy.
 struct SparseFactorState

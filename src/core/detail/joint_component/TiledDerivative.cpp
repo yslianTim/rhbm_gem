@@ -9,6 +9,8 @@ namespace rhbm_gem::core::joint_component {
 DerivativeWork & DerivativeWorkForTesting() {static thread_local DerivativeWork work; return work;}
 JacobianReductionKindForTesting & JacobianReductionForTesting()
 {static thread_local auto kind=JacobianReductionKindForTesting::ObservationTsqr; return kind;}
+ProjectedReductionKindForTesting & ProjectedReductionForTesting()
+{static thread_local auto kind=ProjectedReductionKindForTesting::ObservationTiledQr; return kind;}
 namespace {
 TiledQrTelemetry AccumulateTiledQr(const TiledQrTelemetry & accumulated,const TiledQrTelemetry & current)
 {
@@ -205,6 +207,13 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     auto & work=DerivativeWorkForTesting(); const auto projected_base=work.projected_qr;
     const auto jacobian_base=work.jacobian_qr,compact_base=work.compact_jacobian_qr;
+    const bool structured=compact && widths &&
+        ProjectedReductionForTesting()==ProjectedReductionKindForTesting::StructuredCompactQr;
+    auto & projected_work=work.projected_reduction;
+    projected_work.kind=structured ? "structured-compact-qr" : "observation-tiled-qr";
+    projected_work.ordering=structured ? "SuiteSparseQR_FIXED" : "none";
+    projected_work.factor_rows=m; projected_work.factor_columns=m;
+    if(structured) ++projected_work.attempts;
 #endif
     out.projected_norms=Vector::Zero(m); out.jacobian_norms=Vector::Zero(m);
     Matrix p,j;
@@ -226,16 +235,27 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
         if(widths)
         {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            AssessmentStageTimerForTesting projected_stage("derivative-projected-qr",count,m);
-#endif
+            if(!structured)
+            {
+                AssessmentStageTimerForTesting projected_stage("derivative-projected-qr",count,m);
+                if(compact)
+                {
+                    Matrix response(count,1); response.col(0)=residual.segment(first,count)/d.scale;
+                    projected.Append(p,response);
+                }
+                else projected.Append(p,Matrix(count,0));
+                work.projected_qr=AccumulateTiledQr(projected_base,projected.telemetry);
+                projected_work.observation_projected_rows_processed+=static_cast<std::size_t>(count);
+                projected_work.maximum_dense_bytes=std::max(projected_work.maximum_dense_bytes,
+                    projected.telemetry.maximum_dense_design_bytes);
+            }
+#else
             if(compact)
             {
                 Matrix response(count,1); response.col(0)=residual.segment(first,count)/d.scale;
                 projected.Append(p,response);
             }
             else projected.Append(p,Matrix(count,0));
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            work.projected_qr=AccumulateTiledQr(projected_base,projected.telemetry);
 #endif
         }
         if(!compact)
@@ -262,8 +282,48 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
 #endif
     }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(structured)
+    {
+        StructuredProjectedQrResultForTesting candidate;
+        {
+            AssessmentStageTimerForTesting projected_stage("derivative-projected-qr",n,m);
+            const auto started=std::chrono::steady_clock::now();
+            candidate=StructuredProjectedQrForTesting(d.free_design,d.raw,residual,d.scale);
+            projected_work.seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
+            projected_stage.Finish();
+        }
+        projected_work.symbolic_seconds+=candidate.symbolic_seconds;
+        projected_work.numeric_seconds+=candidate.numeric_seconds;
+        projected_work.sparse_rows=candidate.sparse_rows;
+        projected_work.sparse_columns=candidate.sparse_columns;
+        projected_work.sparse_nonzeros+=candidate.sparse_nonzeros;
+        projected_work.factor_rows=candidate.factor_rows;
+        projected_work.factor_columns=candidate.factor_columns;
+        projected_work.compact_projected_rows_processed+=static_cast<std::size_t>(candidate.factor_rows);
+        projected_work.maximum_dense_bytes=std::max(projected_work.maximum_dense_bytes,candidate.maximum_dense_bytes);
+        if(candidate.valid)
+        {
+            projected.r=std::move(candidate.factor);
+            projected.target=candidate.response;
+            out.projected_structured=true;
+        }
+        else
+        {
+            projected_work.fallback_reason=candidate.reason;
+            ++projected_work.fallbacks;
+            for(Eigen::Index first=0;first<n;first+=tile)
+            {
+                const auto count=std::min(tile,n-first);
+                d.Rows(first,count,p,j);
+                Matrix response(count,1); response.col(0)=residual.segment(first,count)/d.scale;
+                projected.Append(p,response);
+                projected_work.observation_projected_rows_processed+=static_cast<std::size_t>(count);
+            }
+        }
+    }
     work.projected_qr=AccumulateTiledQr(projected_base,projected.telemetry);
     work.jacobian_qr=AccumulateTiledQr(jacobian_base,jacobian.telemetry);
+    if(compact) out.projected_response=projected.target.col(0);
 #endif
     out.projected=std::move(projected.r);
     if(compact)

@@ -524,26 +524,56 @@ Assessment AssessEvaluated(const Domain &,VectorRef y,const Evaluation & endpoin
 #endif
     if(!differential.valid) {out.failure=differential.reason; return out;}
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    AssessmentStageTimerForTesting width_stage("projected-width-spectrum",differential.projected.rows(),differential.projected.cols());
-#endif
+    CompactSvdResult widths,normalized_svd;
+    const auto width_spectra=[&]() {
+        {
+            AssessmentStageTimerForTesting width_stage("projected-width-spectrum",differential.projected.rows(),differential.projected.cols());
+            widths=Decompose(differential.projected,context->rank.rows,CompactSvdVectors::Right);
+        }
+        if(!widths.valid) return false;
+        {
+            AssessmentStageTimerForTesting normalized_stage("normalized-width-spectrum",differential.projected.rows(),differential.projected.cols());
+            Matrix normalized=differential.projected;
+            for(Eigen::Index k=0;k<differential.projected_norms.size();++k)
+                if(differential.projected_norms(k)>0) normalized.col(k)/=differential.projected_norms(k);
+            normalized_svd=Decompose(normalized,context->rank.rows);
+        }
+        return normalized_svd.valid;
+    };
+#else
     const auto widths=Decompose(differential.projected,context->rank.rows,CompactSvdVectors::Right);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    width_stage.Finish();
 #endif
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(!width_spectra()) {out.failure="spectrum-factorization-failed"; return out;}
+    if(differential.projected_structured &&
+        (!CompactRankDecisionSafe(widths) || !CompactRankDecisionSafe(normalized_svd)))
+    {
+        auto & projected_work=DerivativeWorkForTesting().projected_reduction;
+        ++projected_work.fallbacks;
+        projected_work.fallback_reason="rank-decision-boundary";
+        const auto saved=ProjectedReductionForTesting();
+        ProjectedReductionForTesting()=ProjectedReductionKindForTesting::ObservationTiledQr;
+        differential=ReduceDerivativeCompact(prepared,endpoint.residual);
+        ProjectedReductionForTesting()=saved;
+        projected_work.kind="structured-compact-qr";
+        if(!differential.valid || !width_spectra()) {out.failure="spectrum-factorization-failed"; return out;}
+    }
+    else if(differential.projected_structured)
+        ++DerivativeWorkForTesting().projected_reduction.accepted;
+    out.widths=CompactSpectrum(widths,context->rank.rows);
+    out.widths->column_norms=differential.projected_norms;
+    out.normalized_widths=CompactSpectrum(normalized_svd,context->rank.rows);
+#else
     if(!widths.valid) {out.failure="spectrum-factorization-failed"; return out;}
     out.widths=CompactSpectrum(widths,context->rank.rows);
-    const Vector & norms=differential.projected_norms; out.widths->column_norms=norms;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    AssessmentStageTimerForTesting normalized_stage("normalized-width-spectrum",differential.projected.rows(),differential.projected.cols());
-#endif
+    out.widths->column_norms=differential.projected_norms;
     Matrix normalized=differential.projected;
-    for(Eigen::Index k=0;k<norms.size();++k) if(norms(k)>0) normalized.col(k)/=norms(k);
+    for(Eigen::Index k=0;k<differential.projected_norms.size();++k)
+        if(differential.projected_norms(k)>0) normalized.col(k)/=differential.projected_norms(k);
     const auto normalized_svd=Decompose(normalized,context->rank.rows);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    normalized_stage.Finish();
-#endif
     if(!normalized_svd.valid) {out.failure="spectrum-factorization-failed"; return out;}
     out.normalized_widths=CompactSpectrum(normalized_svd,context->rank.rows);
+#endif
     out.weak_directions.resize(eta.size(),std::min<Eigen::Index>(3,widths.right_vectors.cols()));
     for(Eigen::Index k=0;k<out.weak_directions.cols();++k)
     {

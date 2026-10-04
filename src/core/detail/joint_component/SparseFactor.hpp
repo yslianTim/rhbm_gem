@@ -36,6 +36,19 @@ struct SparseWork
 };
 SparseWork & SparseWorkForTesting();
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
+struct StructuredProjectedQrResultForTesting
+{
+    Matrix factor;
+    Vector response;
+    Eigen::Index sparse_rows{},sparse_columns{},factor_rows{},factor_columns{};
+    std::size_t sparse_nonzeros{};
+    std::size_t maximum_dense_bytes{};
+    double symbolic_seconds{},numeric_seconds{},orthogonal_seconds{};
+    bool valid{},input_order_preserved{};
+    std::string reason;
+};
+StructuredProjectedQrResultForTesting StructuredProjectedQrForTesting(
+    const Sparse &,const Sparse &,VectorRef,double);
 struct FactorResidencyRecord
 {
     std::size_t factor_id{},generation{};
