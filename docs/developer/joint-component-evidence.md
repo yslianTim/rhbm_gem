@@ -49,6 +49,16 @@ search default. The [operator search guide](joint-operator-search.md) and
 [benchmark guide](joint-benchmark.md) link the exact current measurement
 artifacts.
 
+The benchmark-only Projected Tail QR reuses the free-design Q and factors the
+projected tail. It passes the 128/256 parity and speed gates and completed
+chain-512 on a repeat, but cube-512 crossed 4 GiB in tail symbolic factorization;
+observation-tiled projected QR remains the production route. The cube-2048
+Schwarz COW diagnostic completed at 671.35 s under its excluded 6-GiB / 900-s
+limit. The evict-before-trial prototype limits live global-factor residency to
+one at cube-512/1024 with exact trajectory parity, but its formal cube-2048
+retry crossed 4 GiB in `spqr-numeric` while one factor was resident. It remains
+benchmark-only; both memory and time remain current search constraints.
+
 ## 2. Algorithm-formation evidence
 
 These findings describe the historical experiments that shaped the current

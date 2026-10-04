@@ -228,9 +228,45 @@ original 4-GiB / 600-s envelope: Diagonal stopped at 592.33 s and Schwarz at
 570.46 s, with sampled peaks of 4.03 / 4.01 GiB, each during trial
 `spqr-numeric` after 28 completed PCG solves.
 Both had last completed stage `linear-symbolic`, peak factor count two, and an
-owned-byte estimate of 4.60 GiB. The factor-reuse route clears the former
-operator-factor construction stage but does not complete a 2048 search; no
-2048 search trajectory parity is claimed.
+owned-byte estimate of 4.60 GiB.
+
+The [Schwarz diagnostic trajectory](figures/joint-cube2048-diagnostic-r1/summary.json)
+ran the current COW route with a diagnostic-only 6-GiB / 900-s limit. It
+completed in 671.35 s search time (676.74 s process wall), at 4.323 GiB peak
+RSS. It evaluated five profiles, accepted four updates, and rejected no
+candidate profiles. The search made 30 PCG solves and 198 iterations (5–7 per
+solve; median 7), and reached `operator-gradient-stop`. Peak residency was two
+global factors with an owned-byte estimate of 4.60 GiB. The diagnostic is
+excluded from the formal production gate; its classification is B: completed
+after 600 s and before 900 s.
+
+The [bounded-trial comparison](figures/joint-bounded-trial-r1/bounded-trial-summary.json)
+uses an opt-in benchmark route that saves the accepted free-design matrix,
+evicts its factor before candidate evaluation, and rebuilds the accepted factor
+only after a rejected candidate. It does not alter search decisions.
+
+| Case | Strategy | Search s | Peak RSS | Max factors | Max owned factor bytes | Rebuilds | Trajectory |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| cube-512 | COW | 62.56 | 1.135 GB | 2 | 448.7 MB | 0 | — |
+| cube-512 | evict-before-trial | 63.14 | 0.925 GB | 1 | 224.3 MB | 0 | exact parity |
+| cube-1024 | COW | 219.89 | 2.774 GB | 2 | 1,541.9 MB | 0 | — |
+| cube-1024 | evict-before-trial | 219.67 | 2.891 GB | 1 | 771.0 MB | 0 | exact parity |
+
+Both sizes preserve all damping decisions, candidate decisions, numerical
+reductions/ratios, PCG iterations, returned state, objective, gradient, and stop
+reason. The maximum owned factor bytes fall by half. Process RSS decreases
+18.5% at 512 but increases 4.2% at 1024, so observed RSS benefit is not uniform.
+Neither large run rejected a candidate, so neither incurred an accepted-factor
+rebuild; the permanent small search fixture separately checks multiple
+rejections followed by acceptance and rebuild parity.
+
+The formal [cube-2048 bounded retry](figures/joint-bounded-trial-r1/cube-2048-evict-formal.json)
+hit the 4-GiB RSS cap at 170.35 s during the first trial's `spqr-numeric`, at
+4,298,588,160 bytes (3,620,864 bytes over the limit). Factor residency was one
+global factor at that point. Evicting the accepted factor therefore does not
+make the 2048 trial factorization fit the production memory envelope. The
+benchmark route remains test-only; no production promotion or operator
+throughput decomposition was made.
 
 ### Assessment derivative reduction
 

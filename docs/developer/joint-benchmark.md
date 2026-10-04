@@ -634,6 +634,53 @@ grew materially with size. At 512 it exceeded the same 4-GiB limit during
 run after its 512 RSS gate failed. The candidate remains benchmark-only; the
 observation-tiled projected QR is still the production implementation.
 
+The fixed-order `[Z D]` candidate is numerically valid and performance-promising
+at 128/256, but its 512 chain and cube runs exceed the 4-GiB RSS limit. It is
+memory-rejected and remains benchmark-only; this is a resource result, not a
+mathematical failure.
+
+### Projected Tail QR
+
+The [projected-tail census](figures/joint-projected-tail-r1/projected-tail-summary.csv)
+reuses the free-design factor `Z = Q [R; 0]`, applies its sparse `Q^T` transform
+to `D`, and keeps the bottom block `T` from `Q^T D = [B; T]`. Since the
+projected derivative is `P = Q_2 T`, the candidate factors only `T`; it restores
+the tail QR column permutation before using the compact factor. Census counts
+are from the actual sparse transformed representation, not a conceptual dense
+matrix.
+
+| Case | n | p | m | D nnz | Tail rows | Tail nnz | Tail density | Q transform s | Census peak RSS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| chain-128 | 58,300 | 256 | 128 | 65,920 | 58,044 | 3,998,050 | 53.81% | 0.041 | 0.345 GB |
+| cube-128 | 47,792 | 256 | 128 | 65,920 | 47,536 | 4,610,601 | 75.77% | 0.074 | 0.471 GB |
+| chain-256 | 116,540 | 512 | 256 | 131,840 | 116,028 | 15,421,154 | 51.92% | 0.167 | 0.823 GB |
+| cube-256 | 93,431 | 512 | 256 | 131,840 | 92,919 | 16,330,509 | 68.65% | 0.354 | 0.871 GB |
+| chain-512 | 233,020 | 1,024 | 512 | 263,680 | 231,996 | 53,360,618 | 44.92% | 0.861 | 2.840 GB |
+| cube-512 | 183,040 | 1,024 | 512 | 263,680 | 182,016 | 58,348,670 | 62.61% | 2.096 | 2.392 GB |
+
+The [assessment frontier](figures/joint-projected-tail-a4-r1/projected-tail-assessment-frontier.json)
+compares the same search endpoint and assessment settings. The numerical
+candidate uses QR and fill-reducing ordering after eliminating `Z`; it does not
+form normal equations.
+
+| Case | Current assessment s | Tail assessment s | Speedup | Current projected QR s | Tail reduction s | Current / tail peak RSS | Parity/status |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| chain-128 | 14.54 | 8.10 | 1.79x | 7.18 | 0.86 | 0.189 / 0.527 GB | passed |
+| cube-128 | 13.85 | 8.85 | 1.57x | 5.86 | 0.87 | 0.336 / 0.673 GB | passed |
+| chain-256 | 75.56 | 36.78 | 2.05x | 44.38 | 5.46 | 0.281 / 1.580 GB | passed |
+| cube-256 | 68.41 | 37.70 | 1.82x | 35.48 | 4.86 | 0.641 / 1.644 GB | passed |
+| chain-512 | 439.89 | 175.26 | 2.51x | 295.38 | 30.70 | 0.439 / 4.104 GB | completed on repeat; narrow RSS headroom |
+| cube-512 | 404.83 | RSS limit | — | 233.09 | symbolic stage did not complete | 1.461 / 4.635 GB | candidate stopped in `projected-tail-symbolic` |
+
+Permanent fixtures pass projected Gram, singular spectrum, rank, column-norm,
+normalized-width, weak-subspace, response, `P^T r`, compact-Jacobian, and
+correction parity within their asserted tolerances. Full assessment/search
+observable parity passes at 128/256 and for the completed chain-512 repeat.
+At cube-512, tail extraction completed, but the tail QR symbolic stage crossed
+4 GiB; the sparse Q transform was not the limiting stage. The candidate is
+therefore not promoted. Production keeps observation-tiled projected QR as the
+exact route and fallback.
+
 The fixed-state compact-SVD, operator, rank, and action contracts remain owned
 by permanent tests such as `Numerics_test`, `ProfileOperator_test`, and
 `FreeDesignRank_test`. Search and bounded-work contracts remain in
