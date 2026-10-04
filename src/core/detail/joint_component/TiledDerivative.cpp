@@ -212,15 +212,17 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
     const auto jacobian_base=work.jacobian_qr,compact_base=work.compact_jacobian_qr;
     const bool structured=compact && widths &&
         ProjectedReductionForTesting()==ProjectedReductionKindForTesting::StructuredCompactQr;
+    const bool tail_candidate=compact && widths &&
+        ProjectedReductionForTesting()==ProjectedReductionKindForTesting::ProjectedTailQr;
     const bool census=compact && widths &&
         ProjectedReductionForTesting()==ProjectedReductionKindForTesting::ProjectedTailCensus;
     auto & projected_work=work.projected_reduction;
-    projected_work.kind=structured ? "structured-compact-qr" :
+    projected_work.kind=structured ? "structured-compact-qr" : tail_candidate ? "projected-tail-qr" :
         census ? "projected-tail-census" : "observation-tiled-qr";
-    projected_work.ordering=structured ? "SuiteSparseQR_FIXED" :
+    projected_work.ordering=structured ? "SuiteSparseQR_FIXED" : tail_candidate ? "SuiteSparseQR_COLAMD" :
         census ? "sparse-qmult-free-design-factor" : "none";
     projected_work.factor_rows=m; projected_work.factor_columns=m;
-    if(structured || census) ++projected_work.attempts;
+    if(structured || tail_candidate || census) ++projected_work.attempts;
 #endif
     out.projected_norms=Vector::Zero(m); out.jacobian_norms=Vector::Zero(m);
     Matrix p,j;
@@ -242,7 +244,7 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
         if(widths)
         {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(!structured)
+            if(!structured && !tail_candidate)
             {
                 AssessmentStageTimerForTesting projected_stage("derivative-projected-qr",count,m);
                 if(compact)
@@ -312,7 +314,69 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
         {
             projected.r=std::move(candidate.factor);
             projected.target=candidate.response;
-            out.projected_structured=true;
+            out.projected_candidate=true;
+        }
+        else
+        {
+            projected_work.fallback_reason=candidate.reason;
+            ++projected_work.fallbacks;
+            for(Eigen::Index first=0;first<n;first+=tile)
+            {
+                const auto count=std::min(tile,n-first);
+                d.Rows(first,count,p,j);
+                Matrix response(count,1); response.col(0)=residual.segment(first,count)/d.scale;
+                projected.Append(p,response);
+                projected_work.observation_projected_rows_processed+=static_cast<std::size_t>(count);
+            }
+        }
+    }
+    else if(tail_candidate)
+    {
+        ProjectedTailQrResultForTesting candidate;
+        {
+            AssessmentStageTimerForTesting projected_stage("derivative-projected-qr",n,m);
+            const auto started=std::chrono::steady_clock::now();
+            if(!d.free_design_factor_for_testing)
+                candidate.reason="free-design-factor-unavailable";
+            else candidate=d.free_design_factor_for_testing->ProjectedTailQrForTesting(d.raw,residual,d.scale);
+            projected_work.seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
+            projected_stage.Finish();
+        }
+        projected_work.q_transform_seconds+=candidate.q_transform_seconds;
+        projected_work.tail_extract_seconds+=candidate.tail_extract_seconds;
+        projected_work.symbolic_seconds+=candidate.tail_symbolic_seconds;
+        projected_work.numeric_seconds+=candidate.tail_numeric_seconds;
+        projected_work.tail_qmult_seconds+=candidate.tail_qmult_seconds;
+        projected_work.tail_compact_seconds+=candidate.tail_compact_seconds;
+        if(!candidate.ordering.empty()) projected_work.ordering="SuiteSparseQR_"+candidate.ordering;
+        projected_work.sparse_rows=n; projected_work.sparse_columns=m;
+        projected_work.q_transformed_nonzeros=candidate.q_transformed_nonzeros;
+        projected_work.tail_nonzeros=candidate.tail_nonzeros;
+        projected_work.tail_factor_nonzeros=candidate.tail_factor_nonzeros;
+        projected_work.tail_factor_storage_bytes=candidate.tail_factor_storage_bytes;
+        projected_work.q_transformed_storage_bytes=candidate.q_transformed_storage_bytes;
+        projected_work.tail_storage_bytes=candidate.tail_storage_bytes;
+        projected_work.tail_rows=candidate.tail_rows;
+        projected_work.sparse_nonzeros=candidate.tail_nonzeros;
+        projected_work.observations=n;
+        projected_work.free_design_columns=d.free_design.cols();
+        projected_work.width_columns=m;
+        projected_work.raw_nonzeros=static_cast<std::size_t>(d.raw.nonZeros());
+        projected_work.raw_density=n>0 && m>0 ?
+            static_cast<double>(projected_work.raw_nonzeros)/(static_cast<double>(n)*static_cast<double>(m)) : 0.;
+        projected_work.tail_density=candidate.tail_rows>0 && m>0 ?
+            static_cast<double>(candidate.tail_nonzeros)/(static_cast<double>(candidate.tail_rows)*static_cast<double>(m)) : 0.;
+        projected_work.q_transformed_density=n>0 && m>0 ?
+            static_cast<double>(candidate.q_transformed_nonzeros)/(static_cast<double>(n)*static_cast<double>(m)) : 0.;
+        projected_work.factor_rows=m; projected_work.factor_columns=m;
+        projected_work.compact_projected_rows_processed+=static_cast<std::size_t>(m);
+        projected_work.maximum_dense_bytes=std::max(projected_work.maximum_dense_bytes,
+            static_cast<std::size_t>(m)*static_cast<std::size_t>(m)*sizeof(double));
+        if(candidate.valid)
+        {
+            projected.r=std::move(candidate.factor);
+            projected.target=candidate.response;
+            out.projected_candidate=true;
         }
         else
         {

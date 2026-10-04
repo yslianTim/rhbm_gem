@@ -3,6 +3,7 @@
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "core/detail/joint_component/CompactSvd.hpp"
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/SparseFactor.hpp"
 #include "support/JointOperatorWorkload.hpp"
 #include "support/JointRuntimeJson.hpp"
 #include <boost/json.hpp>
@@ -107,14 +108,15 @@ std::pair<n::Assessment,n::Assessment> CompareRoutes(const n::Domain & domain,n:
 }
 
 std::pair<n::Assessment,n::Assessment> CompareProjectedRoutes(const n::Domain & domain,n::VectorRef y,
-    const n::Evaluation & endpoint,const n::Evaluation & reference,n::EvaluationContext context)
+    const n::Evaluation & endpoint,const n::Evaluation & reference,n::EvaluationContext context,
+    n::ProjectedReductionKindForTesting candidate_kind=n::ProjectedReductionKindForTesting::StructuredCompactQr)
 {
     const auto saved=n::ProjectedReductionForTesting();
     n::JacobianReductionForTesting()=n::JacobianReductionKindForTesting::CompactStackQr;
     n::ProjectedReductionForTesting()=n::ProjectedReductionKindForTesting::ObservationTiledQr;
     n::AssessmentWorkForTesting()={}; n::DerivativeWorkForTesting()={};
     const auto current=n::AssessEvaluated(domain,y,endpoint,reference,context);
-    n::ProjectedReductionForTesting()=n::ProjectedReductionKindForTesting::StructuredCompactQr;
+    n::ProjectedReductionForTesting()=candidate_kind;
     n::AssessmentWorkForTesting()={}; n::DerivativeWorkForTesting()={};
     const auto candidate=n::AssessEvaluated(domain,y,endpoint,reference,context);
     n::ProjectedReductionForTesting()=saved;
@@ -199,7 +201,11 @@ n::TiledDifferential ProjectedFixture(const Matrix & z,const Matrix & raw,double
     out.correction=Matrix::Zero(z.cols(),raw.cols()); out.scale=scale; out.valid=true;
     Eigen::HouseholderQR<Matrix> qr(z);
     out.free_design_factor=qr.matrixQR().topRows(z.cols()).triangularView<Eigen::Upper>();
-    out.free_design_response=n::Vector::Zero(z.cols()); return out;
+    out.free_design_response=n::Vector::Zero(z.cols());
+    std::vector<Eigen::Index> columns(static_cast<std::size_t>(z.cols()));
+    for(Eigen::Index column=0;column<z.cols();++column) columns[static_cast<std::size_t>(column)]=column;
+    out.free_design_factor_for_testing=n::FreeDesignFactor::Fixed(out.free_design,columns);
+    return out;
 }
 
 void CompareProjectedFactors(const std::string & topology,bool near_collinear,bool permute_rows,double scale)
@@ -245,7 +251,7 @@ void CompareProjectedFactors(const std::string & topology,bool near_collinear,bo
     n::DerivativeWorkForTesting()={};
     const auto candidate=n::ReduceDerivativeForTesting(differential,ordered_residual,true,
         n::JacobianReductionKindForTesting::CompactStackQr,11);
-    ASSERT_TRUE(current.valid); ASSERT_TRUE(candidate.valid); ASSERT_TRUE(candidate.projected_structured);
+    ASSERT_TRUE(current.valid); ASSERT_TRUE(candidate.valid); ASSERT_TRUE(candidate.projected_candidate);
     ASSERT_EQ(current.projected.rows(),m); ASSERT_EQ(candidate.projected.rows(),m);
     const Matrix current_gram=current.projected.transpose()*current.projected;
     const Matrix candidate_gram=candidate.projected.transpose()*candidate.projected;
@@ -276,6 +282,33 @@ void CompareProjectedFactors(const std::string & topology,bool near_collinear,bo
     const Matrix current_weak=current_svd.right_vectors.rightCols(2)*current_svd.right_vectors.rightCols(2).transpose();
     const Matrix candidate_weak=candidate_svd.right_vectors.rightCols(2)*candidate_svd.right_vectors.rightCols(2).transpose();
     EXPECT_LE((current_weak-candidate_weak).norm(),2e-9);
+
+    n::ProjectedReductionForTesting()=n::ProjectedReductionKindForTesting::ProjectedTailQr;
+    n::DerivativeWorkForTesting()={};
+    const auto tail=n::ReduceDerivativeForTesting(differential,ordered_residual,true,
+        n::JacobianReductionKindForTesting::CompactStackQr,11);
+    ASSERT_TRUE(tail.valid);
+    if(n::SparseBackendEnabled()) EXPECT_TRUE(tail.projected_candidate);
+    else EXPECT_FALSE(tail.projected_candidate);
+    const Matrix tail_gram=tail.projected.transpose()*tail.projected;
+    EXPECT_LE((current_gram-tail_gram).norm(),2e-11*(1.+current_gram.norm()));
+    EXPECT_LE((current.projected_norms-tail.projected_norms).norm(),
+        2e-11*(1.+current.projected_norms.norm()));
+    EXPECT_LE((current.projected.transpose()*current.projected_response-
+        tail.projected.transpose()*tail.projected_response).norm(),
+        2e-11*(1.+(current.projected.transpose()*current.projected_response).norm()));
+    const auto tail_svd=n::EvaluateRank(tail.projected,request,nullptr,n::CompactSvdVectors::Right);
+    ASSERT_TRUE(tail_svd.valid); EXPECT_EQ(current_svd.rank,tail_svd.rank);
+    EXPECT_LE((current_svd.singular_values-tail_svd.singular_values).norm(),
+        2e-11*(1.+current_svd.singular_values.norm()));
+    Matrix tail_normalized=tail.projected;
+    for(Eigen::Index column=0;column<m;++column) tail_normalized.col(column)/=tail.projected_norms(column);
+    const auto tail_normalized_svd=n::EvaluateRank(tail_normalized,request);
+    ASSERT_TRUE(tail_normalized_svd.valid); EXPECT_EQ(current_normalized_svd.rank,tail_normalized_svd.rank);
+    EXPECT_LE((current_normalized_svd.singular_values-tail_normalized_svd.singular_values).norm(),
+        2e-11*(1.+current_normalized_svd.singular_values.norm()));
+    const Matrix tail_weak=tail_svd.right_vectors.rightCols(2)*tail_svd.right_vectors.rightCols(2).transpose();
+    EXPECT_LE((current_weak-tail_weak).norm(),2e-9);
 }
 
 TEST(JointProjectedWidthTest, StructuredFactorMatchesObservationTiledQrFixtures)
@@ -319,6 +352,16 @@ TEST(JointProjectedWidthTest, FullAssessmentAndReturnedStateParityAcrossSmallLat
         EXPECT_GT(reduction.attempts,0);
         EXPECT_GT(reduction.accepted,0);
         EXPECT_EQ(reduction.attempts,reduction.accepted+reduction.fallbacks);
+
+        n::ProjectedReductionForTesting()=n::ProjectedReductionKindForTesting::ProjectedTailQr;
+        n::AssessmentWorkForTesting()={}; n::DerivativeWorkForTesting()={};
+        const auto tail=n::AssessComponentSearch(data.domain,data.y,context,search);
+        CompareComponentResult(current,tail);
+        const auto & tail_reduction=n::DerivativeWorkForTesting().projected_reduction;
+        EXPECT_GT(tail_reduction.attempts,0);
+        EXPECT_EQ(tail_reduction.attempts,tail_reduction.accepted+tail_reduction.fallbacks);
+        if(n::SparseBackendEnabled()) EXPECT_GT(tail_reduction.accepted,0);
+        else EXPECT_GT(tail_reduction.fallbacks,0);
     }
 }
 
@@ -351,6 +394,36 @@ TEST(JointProjectedWidthTest, BoundaryAndActiveFaceFallbackParity)
     EXPECT_EQ(reduction.attempts,1);
     EXPECT_EQ(reduction.accepted,1);
     EXPECT_EQ(reduction.fallbacks,0);
+
+    for(const double minimum:{std::nextafter(cutoff,0.),cutoff,
+        std::nextafter(cutoff,std::numeric_limits<double>::infinity())})
+    {
+        const auto boundary_endpoint=BoundaryEndpoint(minimum);
+        const auto [boundary_current,boundary_tail]=CompareProjectedRoutes(domain,y,boundary_endpoint,boundary_endpoint,context,
+            n::ProjectedReductionKindForTesting::ProjectedTailQr);
+        EXPECT_EQ(boundary_current.jacobian->rank,boundary_tail.jacobian->rank);
+        const auto & tail_reduction=n::DerivativeWorkForTesting().projected_reduction;
+        EXPECT_EQ(tail_reduction.attempts,1);
+        EXPECT_EQ(tail_reduction.accepted,0);
+        EXPECT_EQ(tail_reduction.fallbacks,1);
+        EXPECT_EQ(tail_reduction.fallback_reason,"rank-decision-boundary");
+    }
+    const auto tail_active_endpoint=BoundaryEndpoint(1e-3,true);
+    const auto [active_current,active_tail]=CompareProjectedRoutes(domain,y,tail_active_endpoint,
+        tail_active_endpoint,context,n::ProjectedReductionKindForTesting::ProjectedTailQr);
+    EXPECT_EQ(active_current.jacobian->rank,active_tail.jacobian->rank);
+    const auto & active_tail_reduction=n::DerivativeWorkForTesting().projected_reduction;
+    EXPECT_EQ(active_tail_reduction.attempts,1);
+    if(n::SparseBackendEnabled())
+    {
+        EXPECT_EQ(active_tail_reduction.accepted,1);
+        EXPECT_EQ(active_tail_reduction.fallbacks,0);
+    }
+    else
+    {
+        EXPECT_EQ(active_tail_reduction.accepted,0);
+        EXPECT_EQ(active_tail_reduction.fallbacks,1);
+    }
 }
 
 TEST(JointCompactAssessmentTest, FullAssessmentAndReturnedStateParityAcrossSmallLattices)
@@ -474,6 +547,11 @@ TEST(JointCompactAssessmentTest, CancellationAndActiveFaceAssessmentParity)
         ASSERT_TRUE(reference.valid);
         const auto [current,compact]=CompareProjectedRoutes(data.domain,data.y,endpoint,reference,data.context);
         EXPECT_EQ(current.primary.beta,compact.primary.beta);
+        EXPECT_EQ(n::DerivativeWorkForTesting().projected_reduction.attempts,0);
+        const auto [tail_current,tail]=CompareProjectedRoutes(data.domain,data.y,endpoint,reference,data.context,
+            n::ProjectedReductionKindForTesting::ProjectedTailQr);
+        CompareAssessment(tail_current,tail);
+        EXPECT_EQ(tail_current.primary.beta,tail.primary.beta);
         EXPECT_EQ(n::DerivativeWorkForTesting().projected_reduction.attempts,0);
     }
     {

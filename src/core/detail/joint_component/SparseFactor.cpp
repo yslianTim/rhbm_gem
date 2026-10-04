@@ -672,6 +672,99 @@ ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparse
 }
 Matrix FreeDesignFactor::OrthogonalTransposeForTesting(const Matrix & rhs) const
 {Check(); return state_->Orthogonal(rhs,true);}
+ProjectedTailQrResultForTesting FreeDesignFactor::ProjectedTailQrForTesting(
+    const Sparse & raw,VectorRef residual,double scale) const
+{
+    Check();
+    ProjectedTailQrResultForTesting result;
+    result.rows=raw.rows(); result.free_design_columns=state_->design.cols(); result.width_columns=raw.cols();
+    result.ordering=SpqrOrderingName(SpqrOrderingForTesting());
+    const auto started=Clock::now();
+    if(raw.rows()!=state_->design.rows() || residual.size()!=raw.rows() || raw.cols()<=0 ||
+        !(scale>0) || !std::isfinite(scale))
+    {result.reason="invalid-projected-tail-qr-input"; return result;}
+    try
+    {
+        auto transformed=OrthogonalTransposeTailSparseForTesting(raw,true);
+        result.q_transformed_nonzeros=transformed.transformed_nonzeros;
+        result.q_transformed_storage_bytes=transformed.transformed_storage_bytes;
+        result.tail_nonzeros=transformed.tail_nonzeros;
+        result.tail_storage_bytes=transformed.tail_storage_bytes;
+        result.tail_rows=transformed.tail_rows;
+        result.tail_extract_seconds=transformed.tail_extract_seconds;
+        result.q_transform_seconds=transformed.q_transform_seconds;
+        const auto residual_started=Clock::now();
+        const Matrix qz_residual=OrthogonalTransposeForTesting(Matrix(residual/scale));
+        result.q_transform_seconds+=Seconds(residual_started);
+        const Matrix tail_response=qz_residual.bottomRows(result.tail_rows);
+
+        auto tail_state=std::make_shared<SparseFactorState>();
+        tail_state->design=std::move(transformed.tail);
+        tail_state->columns.resize(static_cast<std::size_t>(raw.cols()));
+        for(Eigen::Index column=0;column<raw.cols();++column)
+            tail_state->columns[static_cast<std::size_t>(column)]=column;
+        LongSparse tail_storage=tail_state->design; tail_storage.makeCompressed(); auto tail_view=View(tail_storage);
+        struct ConstructionScope
+        {
+            std::size_t id{},generation{}; bool active{};
+            ~ConstructionScope() {if(active) EndFactorConstructionForTesting(id,generation);}
+            void Finish() {if(active) {EndFactorConstructionForTesting(id,generation); active=false;}}
+        } construction;
+        auto & work=SparseWorkForTesting();
+        BeginFactorConstructionForTesting(tail_state->residency_id,tail_state->generation,
+            "projected-tail","projected-tail",tail_state->design.rows(),tail_state->design.cols(),
+            static_cast<std::size_t>(tail_state->design.nonZeros()),[state=tail_state.get()]{
+                return OwnedFactorBytesForTesting(state->design,nullptr,state->cc);});
+        construction={tail_state->residency_id,tail_state->generation,true};
+        ++work.symbolic;
+        {
+            ResourcePhase phase("spqr-tail-symbolic",true,tail_state->design.rows(),tail_state->design.cols(),
+                static_cast<std::size_t>(tail_state->design.nonZeros()));
+            const auto symbolic_started=Clock::now();
+            RecordSparseShape("projected-tail",tail_state->design.rows(),tail_state->design.cols(),
+                static_cast<std::size_t>(tail_state->design.nonZeros()));
+            tail_state->qr=SuiteSparseQR_symbolic<double>(ActiveOrdering(),false,&tail_view,&tail_state->cc);
+            result.tail_symbolic_seconds=Seconds(symbolic_started);
+            work.symbolic_seconds+=result.tail_symbolic_seconds;
+        }
+        if(!tail_state->qr) {result.reason="projected-tail-symbolic-failed"; return result;}
+        ++work.numeric;
+        {
+            ResourcePhase phase("spqr-tail-numeric",true,tail_state->design.rows(),tail_state->design.cols(),
+                static_cast<std::size_t>(tail_state->design.nonZeros()));
+            const auto numeric_started=Clock::now();
+            const auto success=SuiteSparseQR_numeric<double>(SPQR_NO_TOL,&tail_view,tail_state->qr,&tail_state->cc);
+            result.tail_numeric_seconds=Seconds(numeric_started);
+            work.numeric_seconds+=result.tail_numeric_seconds;
+            if(!success) {result.reason="projected-tail-numeric-failed"; return result;}
+        }
+        construction.Finish();
+        result.tail_factor_nonzeros=static_cast<std::size_t>(std::max<int64_t>(0,tail_state->cc.SPQR_istat[0]));
+        result.tail_factor_storage_bytes=OwnedFactorBytesForTesting(tail_state->design,nullptr,tail_state->cc);
+        const auto h_nonzeros=tail_state->qr->QRnum ?
+            static_cast<std::size_t>(std::max<int64_t>(0,tail_state->qr->QRnum->hisize)) : 0;
+        StartFactorResidencyForTesting(tail_state->residency_id,tail_state->generation,"projected-tail",
+            "projected-tail",tail_state->design.rows(),tail_state->design.cols(),
+            static_cast<std::size_t>(tail_state->design.nonZeros()),result.tail_factor_nonzeros,h_nonzeros,
+            result.tail_factor_storage_bytes);
+        tail_state->residency_generation=tail_state->generation; tail_state->residency_active=true;
+        const auto tail_factor=std::shared_ptr<FreeDesignFactor>(
+            new FreeDesignFactor(tail_state,tail_state->generation));
+        const auto compact_started=Clock::now();
+        result.factor=tail_factor->Compact()/scale;
+        result.tail_compact_seconds=Seconds(compact_started);
+        const auto qmult_started=Clock::now();
+        result.response=tail_factor->OrthogonalTransposeForTesting(tail_response).topRows(raw.cols()).col(0);
+        result.tail_qmult_seconds=Seconds(qmult_started);
+        result.columns_restored=true;
+        result.valid=result.factor.allFinite() && result.response.allFinite();
+        result.reason=result.valid ? "projected-tail-qr" : "projected-tail-nonfinite";
+    }
+    catch(const std::exception & error)
+    {result.reason=error.what();}
+    result.seconds=Seconds(started);
+    return result;
+}
 #endif
 void FreeDesignFactor::Check() const
 {if(!state_ || state_->generation!=generation_ || (!state_->qr && state_->fixed_rank<0)) throw std::logic_error("Expired free-design factor");}
@@ -951,6 +1044,12 @@ const Sparse & FreeDesignFactor::DesignForTesting() const {Check(); return state
 const std::vector<Eigen::Index> & FreeDesignFactor::ColumnsForTesting() const {Check(); return state_->columns;}
 ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparseForTesting(const Sparse &,bool)
 {throw std::runtime_error("sparse Q transpose census requires SPQR");}
+ProjectedTailQrResultForTesting FreeDesignFactor::ProjectedTailQrForTesting(const Sparse &,VectorRef,double)
+{
+    ProjectedTailQrResultForTesting result;
+    result.reason="projected-tail-qr-requires-spqr";
+    return result;
+}
 Matrix FreeDesignFactor::OrthogonalTransposeForTesting(const Matrix & rhs) const
 {Check(); return state_->qr.matrixQ().adjoint()*rhs;}
 #endif

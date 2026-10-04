@@ -457,7 +457,12 @@ j::object AssessmentTelemetry()
         {"raw_density",reduction.raw_density},{"q_transformed_nonzeros",reduction.q_transformed_nonzeros},
         {"q_transformed_density",reduction.q_transformed_density},{"tail_rows",reduction.tail_rows},
         {"tail_nonzeros",reduction.tail_nonzeros},{"tail_density",reduction.tail_density},
+        {"tail_factor_nonzeros",reduction.tail_factor_nonzeros},
+        {"tail_factor_storage_bytes",reduction.tail_factor_storage_bytes},
         {"q_transform_seconds",reduction.q_transform_seconds},
+        {"tail_extract_seconds",reduction.tail_extract_seconds},
+        {"tail_qmult_seconds",reduction.tail_qmult_seconds},
+        {"tail_compact_seconds",reduction.tail_compact_seconds},
         {"q_transformed_storage_bytes",reduction.q_transformed_storage_bytes},
         {"tail_storage_bytes",reduction.tail_storage_bytes},
         {"sparse_rows",reduction.sparse_rows},{"sparse_columns",reduction.sparse_columns},
@@ -741,7 +746,9 @@ int main(int argc,char ** argv)
                         n::ProjectedReductionForTesting()=n::ProjectedReductionKindForTesting::StructuredCompactQr;
                     else if(projected_reduction=="projected-tail-census")
                         n::ProjectedReductionForTesting()=n::ProjectedReductionKindForTesting::ProjectedTailCensus;
-                    else throw std::invalid_argument("Expected --projected-reduction observation-tiled-qr|structured-compact-qr|projected-tail-census");
+                    else if(projected_reduction=="projected-tail-qr")
+                        n::ProjectedReductionForTesting()=n::ProjectedReductionKindForTesting::ProjectedTailQr;
+                    else throw std::invalid_argument("Expected --projected-reduction observation-tiled-qr|structured-compact-qr|projected-tail-census|projected-tail-qr");
                 }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
                 else if(option=="--operator-factor-representation" && k+1<end)

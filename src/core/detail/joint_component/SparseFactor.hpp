@@ -57,6 +57,18 @@ struct ProjectedTailTransformForTesting
         transformed_storage_bytes{},tail_storage_bytes{};
     double q_transform_seconds{},tail_extract_seconds{};
 };
+struct ProjectedTailQrResultForTesting
+{
+    Matrix factor;
+    Vector response;
+    Eigen::Index rows{},free_design_columns{},width_columns{},tail_rows{};
+    std::size_t q_transformed_nonzeros{},tail_nonzeros{},q_transformed_storage_bytes{},tail_storage_bytes{},
+        tail_factor_nonzeros{},tail_factor_storage_bytes{};
+    double q_transform_seconds{},tail_extract_seconds{},tail_symbolic_seconds{},
+        tail_numeric_seconds{},tail_qmult_seconds{},tail_compact_seconds{},seconds{};
+    bool valid{},columns_restored{};
+    std::string ordering,reason;
+};
 struct FactorResidencyRecord
 {
     std::size_t factor_id{},generation{};
@@ -140,6 +152,7 @@ public:
     // Census sparse Q^T rhs in place; materialize_tail is reserved for QR parity tests and candidates.
     ProjectedTailTransformForTesting OrthogonalTransposeTailSparseForTesting(const Sparse &,bool=false) const;
     Matrix OrthogonalTransposeForTesting(const Matrix &) const;
+    ProjectedTailQrResultForTesting ProjectedTailQrForTesting(const Sparse &,VectorRef,double) const;
 #endif
     bool Matches(const Sparse &,const std::vector<Eigen::Index> &) const;
     int Rank() const;
