@@ -314,6 +314,10 @@ if(RHBM_GEM_BUILD_BENCHMARKS)
     add_executable(joint_component_benchmark experiments/joint_component_benchmark.cpp)
     target_link_libraries(joint_component_benchmark PRIVATE rhbm_gem CompilerFlags)
     add_dependencies(benchmarks_all joint_component_benchmark)
+
+    add_executable(joint_fixed_b_block_experiment experiments/joint_fixed_b_block.cpp)
+    target_link_libraries(joint_fixed_b_block_experiment PRIVATE joint_test_support rhbm_gem CompilerFlags)
+    add_dependencies(benchmarks_all joint_fixed_b_block_experiment)
 endif()
 
 if(RHBM_GEM_BUILD_BENCHMARKS OR RHBM_GEM_BUILD_RESEARCH_TOOLS)
@@ -587,6 +591,7 @@ foreach(_optional_target IN ITEMS
     joint_sparse_benchmark
     joint_postprocessing_benchmark
     joint_component_benchmark
+    joint_fixed_b_block_experiment
     joint_statistical_experiment)
     if(_optional_target IN_LIST _tests_all_dependencies)
         message(FATAL_ERROR "Optional target ${_optional_target} must not be a tests_all dependency")
@@ -594,13 +599,13 @@ foreach(_optional_target IN ITEMS
 endforeach()
 
 if(RHBM_GEM_BUILD_BENCHMARKS)
-    foreach(_target IN ITEMS joint_partial_selection joint_postprocessing_benchmark joint_component_benchmark)
+    foreach(_target IN ITEMS joint_partial_selection joint_postprocessing_benchmark joint_component_benchmark joint_fixed_b_block_experiment)
         if(NOT TARGET ${_target})
             message(FATAL_ERROR "RHBM_GEM_BUILD_BENCHMARKS did not create ${_target}")
         endif()
     endforeach()
 else()
-    foreach(_target IN ITEMS joint_partial_selection joint_postprocessing_benchmark joint_component_benchmark)
+    foreach(_target IN ITEMS joint_partial_selection joint_postprocessing_benchmark joint_component_benchmark joint_fixed_b_block_experiment)
         if(TARGET ${_target})
             message(FATAL_ERROR "${_target} exists while RHBM_GEM_BUILD_BENCHMARKS=OFF")
         endif()

@@ -136,13 +136,21 @@ TEST(JointOperatorSearchTest, SharedStructuralPartitionPreservesSchwarzTopologyA
     const auto schwarz=n::BuildPreconditionerPartition(input,layout,policy);
     const auto structural=n::BuildStructuralBlockPartition(*input,layout,policy.core_atoms,
         policy.overlap_hops,policy.max_block_atoms);
+    const auto structural_again=n::BuildStructuralBlockPartition(*input,layout,policy.core_atoms,
+        policy.overlap_hops,policy.max_block_atoms);
     ASSERT_EQ(structural.cores.size(),schwarz->blocks.size());
+    ASSERT_EQ(structural_again.cores.size(),structural.cores.size());
     std::vector<unsigned> membership(input->atom_ids.size());
     std::vector<bool> informative(input->row_ids.size());
     for(auto row:layout.informative_rows) informative[static_cast<std::size_t>(row)]=true;
     for(std::size_t k=0;k<structural.cores.size();++k)
     {
         const auto & core=structural.cores[k]; const auto & block=schwarz->blocks[k];
+        EXPECT_EQ(structural_again.cores[k].id,core.id);
+        EXPECT_EQ(structural_again.cores[k].atoms,core.atoms);
+        EXPECT_EQ(structural_again.cores[k].affected_rows,core.affected_rows);
+        EXPECT_EQ(structural_again.cores[k].neighbor_atoms,core.neighbor_atoms);
+        EXPECT_EQ(structural_again.cores[k].context_atoms,core.context_atoms);
         EXPECT_EQ(core.id,block.id); EXPECT_EQ(core.atoms,block.core_atoms);
         EXPECT_EQ(core.context_atoms,block.overlap_atoms);
         for(auto atom:core.atoms) ++membership[static_cast<std::size_t>(atom)];
