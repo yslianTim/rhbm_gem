@@ -1,8 +1,73 @@
 #include "OperatorSearch.hpp"
 #include <chrono>
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include <atomic>
+#include <fstream>
+#include <thread>
+#include <sys/resource.h>
+#ifdef __APPLE__
+#include <mach/mach.h>
+#include <mach/task_info.h>
+#elif defined(__linux__)
+#include <unistd.h>
+#endif
+#endif
 
 namespace rhbm_gem::core::joint_component {
 SearchWork & SearchWorkForTesting() {static thread_local SearchWork work; return work;}
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+namespace {
+std::size_t CurrentResidentBytesForTrial()
+{
+#ifdef __APPLE__
+    mach_task_basic_info_data_t info{}; mach_msg_type_number_t count=MACH_TASK_BASIC_INFO_COUNT;
+    if(task_info(mach_task_self(),MACH_TASK_BASIC_INFO,reinterpret_cast<task_info_t>(&info),&count)==KERN_SUCCESS)
+        return static_cast<std::size_t>(info.resident_size);
+#elif defined(__linux__)
+    std::ifstream statm("/proc/self/statm"); std::size_t total{},resident{};
+    if(statm>>total>>resident) return resident*static_cast<std::size_t>(sysconf(_SC_PAGESIZE));
+#endif
+    rusage usage{};
+    if(getrusage(RUSAGE_SELF,&usage)==0)
+    {
+#ifdef __APPLE__
+        return static_cast<std::size_t>(usage.ru_maxrss);
+#else
+        return static_cast<std::size_t>(usage.ru_maxrss)*1024;
+#endif
+    }
+    return 0;
+}
+class TrialResidentSampler
+{
+    std::atomic<bool> stopped_{};
+    std::atomic<std::size_t> peak_{};
+    std::thread thread_;
+    void Observe()
+    {
+        const auto bytes=CurrentResidentBytesForTrial(); auto previous=peak_.load(std::memory_order_relaxed);
+        while(bytes>previous && !peak_.compare_exchange_weak(previous,bytes,std::memory_order_relaxed)) {}
+    }
+public:
+    explicit TrialResidentSampler(bool enabled)
+    {
+        if(!enabled) return;
+        Observe();
+        thread_=std::thread([this] {
+            while(!stopped_.load(std::memory_order_relaxed))
+            {Observe(); std::this_thread::sleep_for(std::chrono::milliseconds(25));}
+            Observe();
+        });
+    }
+    std::size_t Stop()
+    {
+        if(thread_.joinable()) {stopped_.store(true,std::memory_order_relaxed); thread_.join();}
+        return peak_.load(std::memory_order_relaxed);
+    }
+    ~TrialResidentSampler() {Stop();}
+};
+}
+#endif
 WidthStepResult SolvePcg(const VectorAction & action,const VectorAction & inverse,VectorRef rhs,VectorRef metric,int limit)
 {
     ResourcePhase phase("pcg",true,rhs.size(),rhs.size()); auto & work=SearchWorkForTesting(); WorkTimer timer(work.pcg_seconds); ++work.pcg_solves;
@@ -85,16 +150,42 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
 #else
     trial_workspace.EnableCopyOnWrite();
 #endif
-    auto evaluate=[&](const Vector & eta) {
+    auto evaluate=[&](const Vector & eta
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        ,SearchTrialDiagnostic * diagnostic
+#endif
+        ) {
         ResourcePhase evaluation(out.evaluations==0 ? "profile-evaluation" : "trial-evaluation",true,domain.rows,eta.size());
         const auto t=std::chrono::steady_clock::now();
+        auto & sparse_work=SparseWorkForTesting();
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        const auto symbolic_before=sparse_work.symbolic_seconds,numeric_before=sparse_work.numeric_seconds;
+        const auto factor_id_before=FactorResidencyWorkForTesting().next_factor_id;
+        TrialResidentSampler rss_sampler(diagnostic!=nullptr);
+#endif
         auto e=EvaluateProfile(domain,y,eta,false,&context,nullptr,&trial_workspace); ++out.evaluations;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(diagnostic)
+        {
+            diagnostic->profile_evaluation=static_cast<std::size_t>(out.evaluations);
+            diagnostic->factor_seconds=(sparse_work.symbolic_seconds-symbolic_before)+
+                (sparse_work.numeric_seconds-numeric_before);
+            diagnostic->factor_constructions=FactorResidencyWorkForTesting().next_factor_id-factor_id_before;
+            diagnostic->peak_rss_bytes=rss_sampler.Stop();
+            diagnostic->candidate_evaluated=true; diagnostic->candidate_valid=e.valid;
+            if(!e.valid) diagnostic->rejection_reason=e.reason;
+        }
+#endif
         Trial trial; trial.endpoint=e; trial.evaluation=out.evaluations;
         trial.seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-t).count(); out.trials.push_back(std::move(trial));
         report(); return e;
     };
     if(context.profile_budget<=0) return finish("profile-budget");
-    auto accepted=evaluate(out.eta); out.initial=accepted;
+    auto accepted=evaluate(out.eta
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        ,nullptr
+#endif
+        ); out.initial=accepted;
     if(!accepted.valid) return finish("inner-"+accepted.reason);
     out.trials.back().trust=CheckReplay(domain,y,accepted,context);
     if(!out.trials.back().trust->passed) return finish("untrusted-trial");
@@ -141,6 +232,16 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
             for(int attempt=0;attempt<std::min(20,context.search.damping_trials);++attempt)
             {
                 ++SearchWorkForTesting().damping_trials; mu=std::max(1e-12,mu); pc.damping=mu;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                SearchTrialDiagnostic * diagnostic=nullptr;
+                if(SearchWorkForTesting().capture_trial_telemetry)
+                {
+                    SearchTrialDiagnostic record; record.trial_index=SearchWorkForTesting().trial_diagnostics.size()+1;
+                    record.accepted_update=out.accepted; record.damping_attempt=attempt+1; record.mu=mu; record.radius=radius;
+                    SearchWorkForTesting().trial_diagnostics.push_back(std::move(record));
+                    diagnostic=&SearchWorkForTesting().trial_diagnostics.back();
+                }
+#endif
                 std::unique_ptr<SchwarzPreconditioner> schwarz;
                 if(local) schwarz=std::make_unique<SchwarzPreconditioner>(*local,pc);
                 const Vector diagonal=norms.array().square()+mu*metric.array().square();
@@ -150,18 +251,68 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
                     return r;
                 };
                 const auto step=WidthStepSolver(op,gradient,pc,inverse,context.search.pcg_iterations);
-                if(!step.valid) return finish(step.reason);
+                if(!step.valid)
+                {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                    if(diagnostic) diagnostic->rejection_reason=step.reason;
+#endif
+                    return finish(step.reason);
+                }
                 const double length=metric.cwiseProduct(step.step).stableNorm();
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                if(diagnostic) diagnostic->step_length=length;
+#endif
                 if(length>radius)
-                {lower=mu; mu=upper>0 ? std::sqrt(lower*upper) : mu*4; continue;}
+                {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                    if(diagnostic) diagnostic->rejection_reason="step-exceeds-radius";
+#endif
+                    lower=mu; mu=upper>0 ? std::sqrt(lower*upper) : mu*4; continue;
+                }
                 if(length<.9*radius && mu>1e-12 && !rejected)
-                {upper=mu; mu=lower>0 ? std::sqrt(lower*upper) : std::max(1e-12,mu/4); continue;}
-                if(!(step.predicted>0)) return finish("nonpositive-predicted-reduction");
+                {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                    if(diagnostic) diagnostic->rejection_reason="step-below-radius-target";
+#endif
+                    upper=mu; mu=lower>0 ? std::sqrt(lower*upper) : std::max(1e-12,mu/4); continue;
+                }
+                if(!(step.predicted>0))
+                {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                    if(diagnostic) diagnostic->rejection_reason="nonpositive-predicted-reduction";
+#endif
+                    return finish("nonpositive-predicted-reduction");
+                }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                if(diagnostic) diagnostic->predicted_reduction=step.predicted;
+#endif
                 const Vector candidate_eta=out.eta+step.step;
-                if((candidate_eta.array()==out.eta.array()).all()) return finish("unrepresentable-step");
-                if(!candidate_eta.allFinite()) return finish("unrepresentable-step");
-                if(out.evaluations>=context.profile_budget) return finish("profile-budget");
-                auto candidate=evaluate(candidate_eta);
+                if((candidate_eta.array()==out.eta.array()).all())
+                {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                    if(diagnostic) diagnostic->rejection_reason="unrepresentable-step";
+#endif
+                    return finish("unrepresentable-step");
+                }
+                if(!candidate_eta.allFinite())
+                {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                    if(diagnostic) diagnostic->rejection_reason="unrepresentable-step";
+#endif
+                    return finish("unrepresentable-step");
+                }
+                if(out.evaluations>=context.profile_budget)
+                {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                    if(diagnostic) diagnostic->rejection_reason="profile-budget";
+#endif
+                    return finish("profile-budget");
+                }
+                auto candidate=evaluate(candidate_eta
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                    ,diagnostic
+#endif
+                    );
                 const double objective=.5*(accepted.residual/context.scale).squaredNorm();
                 const double actual=candidate.valid ? objective-.5*(candidate.residual/context.scale).squaredNorm() : unavailable;
                 const double ratio=actual/step.predicted;
@@ -169,6 +320,16 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
                 auto & trial=out.trials.back(); trial.lm=LmTrial{out.eta,step.step,metric,radius,mu,actual,step.predicted,ratio,proposed};
                 if(proposed || context.audit.trial_details) trial.trust=CheckReplay(domain,y,candidate,context);
                 const bool trusted=candidate.valid && (!trial.trust || trial.trust->passed);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                if(diagnostic)
+                {
+                    diagnostic->actual_reduction=actual; diagnostic->predicted_reduction=step.predicted;
+                    diagnostic->ratio=ratio; diagnostic->trust_evaluated=trial.trust.has_value(); diagnostic->trusted=trusted;
+                    if(!candidate.valid) diagnostic->rejection_reason=candidate.reason;
+                    else if(!trusted) diagnostic->rejection_reason=trial.trust ? trial.trust->reason : "untrusted-candidate";
+                    else if(!proposed) diagnostic->rejection_reason="trust-ratio-below-threshold";
+                }
+#endif
                 if(!trusted)
                 {
                     UpdateAcceptedProfileObjective(out.accepted_objective,candidate,context.scale,false);
@@ -182,6 +343,9 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
                     UpdateAcceptedProfileObjective(out.accepted_objective,accepted,context.scale,true);
                     out.accepted_gradient_inf_norm=ProfileGradientInfinityNorm(accepted);
                     trial.accepted=true; trial.accepted_update=out.accepted; advanced=true;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                    if(diagnostic) diagnostic->accepted=true;
+#endif
                     report();
                     const bool small_reduction=std::abs(actual)<=1e-14*objective && step.predicted<=1e-14*objective;
                     const bool small_step=radius<=1e-12*metric.cwiseProduct(out.eta).stableNorm();

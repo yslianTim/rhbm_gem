@@ -204,9 +204,11 @@ class JointBenchmarkContract(unittest.TestCase):
             self.assertEqual(fixed[fixed.index('--schwarz-overlap-hops') + 1], '0')
             args.profile = 'search'
             args.spqr_ordering = 'best'
+            args.search_trial_telemetry = True
             search = benchmark.command_for_profile(args, {'kind': 'synthetic', 'topology': 'chain', 'atoms': 8},
                                                    Path('search.json'), build)
             self.assertIn('--search-only', search)
+            self.assertIn('--search-trial-telemetry', search)
             self.assertEqual(search[search.index('--search') + 1], 'schwarz')
             self.assertEqual(search[search.index('--spqr-ordering') + 1], 'best')
 
@@ -342,6 +344,24 @@ class JointBenchmarkContract(unittest.TestCase):
         self.assertEqual(details['accepted_objective'], 0.125)
         self.assertEqual(details['accepted_gradient_inf_norm'], 1e-13)
         self.assertEqual(details['returned_search_state'], [0.1, 0.2])
+
+    def test_trial_telemetry_is_search_only_and_survives_normalization(self):
+        parser = benchmark.build_parser()
+        args = parser.parse_args(['--profile', 'search', '--case', 'cube-2048',
+                                  '--build-dir', 'build/joint-spqr', '--output', 'result.json',
+                                  '--search-trial-telemetry'])
+        benchmark.validate_args(parser, args)
+        self.assertTrue(benchmark.solver_policy_metadata(args, 'SPQR')['search_trial_telemetry'])
+        trajectory = [{'trial_index': 1, 'damping_attempt': 1, 'candidate_evaluated': True,
+                       'trial_factor_seconds': 4.5, 'trial_peak_rss_bytes': 1234}]
+        details = benchmark.normalize_result('search', {'search_work': {
+            'trial_telemetry_enabled': True, 'trial_trajectory': trajectory}})['details']
+        self.assertEqual(details['search_work']['trial_trajectory'], trajectory)
+
+        args.profile = 'solve'
+        with redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                benchmark.validate_args(parser, args)
 
     def test_rank_profile_metadata_names_the_backend_it_executes(self):
         parser = benchmark.build_parser()

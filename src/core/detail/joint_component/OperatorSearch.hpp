@@ -9,6 +9,17 @@ struct RegularizationRecord
     double lambda{},damping{},tau{};
     int attempt{};
 };
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+struct SearchTrialDiagnostic
+{
+    std::size_t trial_index{},profile_evaluation{},factor_constructions{},peak_rss_bytes{};
+    int accepted_update{},damping_attempt{};
+    double mu{unavailable},radius{unavailable},step_length{unavailable},actual_reduction{unavailable},
+        predicted_reduction{unavailable},ratio{unavailable},factor_seconds{unavailable};
+    bool candidate_evaluated{},candidate_valid{},trust_evaluated{},trusted{},accepted{};
+    std::string rejection_reason;
+};
+#endif
 struct SearchWork
 {
     std::size_t linearizations{},pcg_solves{},pcg_iterations{},damping_trials{},local_builds{},factor_builds{},inverse_actions{};
@@ -17,6 +28,10 @@ struct SearchWork
     double maximum_lambda{},maximum_tau{},last_relative_residual{};
     std::vector<std::size_t> pcg_iteration_counts; // One entry per PCG solve.
     std::vector<RegularizationRecord> regularizations; // Resource-audit mode only.
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    bool capture_trial_telemetry{};
+    std::vector<SearchTrialDiagnostic> trial_diagnostics;
+#endif
 };
 SearchWork & SearchWorkForTesting();
 std::shared_ptr<const PreconditionerPartition> BuildPreconditionerPartition(

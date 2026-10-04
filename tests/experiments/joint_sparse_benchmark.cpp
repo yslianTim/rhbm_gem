@@ -35,6 +35,7 @@ std::string search_kind;
 std::string assessment_reduction{"observation-tsqr"};
 std::string projected_reduction{"observation-tiled-qr"};
 bool search_only{};
+bool search_trial_telemetry{};
 std::filesystem::path capture;
 j::array svd_records;
 n::OperatorRankMode operator_rank_mode{n::OperatorRankMode::Auto};
@@ -391,6 +392,28 @@ j::object SearchWork()
     out["accepted_factor_reuse_fallback_reason"]=op.accepted_factor_reuse_fallback_reason;
     out["operator_factor_ownership"]=op.factor_ownership;
     out["factor_residency"]=FactorResidency();
+    j::array trial_trajectory;
+    for(const auto & trial:w.trial_diagnostics)
+        trial_trajectory.push_back(j::object{{"trial_index",trial.trial_index},
+            {"profile_evaluation",trial.candidate_evaluated ? j::value(trial.profile_evaluation) : j::value(nullptr)},
+            {"accepted_update",trial.accepted_update},{"damping_attempt",trial.damping_attempt},
+            {"mu",second_stage_test::matched::runtime_json::Number(trial.mu)},
+            {"radius",second_stage_test::matched::runtime_json::Number(trial.radius)},
+            {"step_length",second_stage_test::matched::runtime_json::Number(trial.step_length)},
+            {"actual_reduction",second_stage_test::matched::runtime_json::Number(trial.actual_reduction)},
+            {"predicted_reduction",second_stage_test::matched::runtime_json::Number(trial.predicted_reduction)},
+            {"ratio",second_stage_test::matched::runtime_json::Number(trial.ratio)},
+            {"candidate_evaluated",trial.candidate_evaluated},{"candidate_valid",trial.candidate_evaluated ? j::value(trial.candidate_valid) : j::value(nullptr)},
+            {"trust_evaluated",trial.candidate_evaluated ? j::value(trial.trust_evaluated) : j::value(nullptr)},
+            {"trusted",trial.candidate_evaluated ? j::value(trial.trusted) : j::value(nullptr)},
+            {"accepted",trial.candidate_evaluated ? j::value(trial.accepted) : j::value(nullptr)},
+            {"rejection_reason",trial.rejection_reason.empty() ? j::value(nullptr) : j::value(trial.rejection_reason)},
+            {"trial_factor_seconds",second_stage_test::matched::runtime_json::Number(trial.factor_seconds)},
+            {"factor_constructions",trial.candidate_evaluated ? j::value(trial.factor_constructions) : j::value(nullptr)},
+            {"trial_peak_rss_bytes",trial.candidate_evaluated ? j::value(trial.peak_rss_bytes) : j::value(nullptr)}});
+    out["trial_telemetry_enabled"]=w.capture_trial_telemetry;
+    out["trial_peak_rss_sampling_interval_ms"]=w.capture_trial_telemetry ? j::value(25) : j::value(nullptr);
+    out["trial_trajectory"]=std::move(trial_trajectory);
 #endif
 #endif
     return out;
@@ -551,6 +574,9 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
     n::ResetFactorResidencyWorkForTesting();
 #endif
     n::SparseWorkForTesting()={}; n::SearchWorkForTesting()={}; n::OperatorWorkForTesting()={};
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    n::SearchWorkForTesting().capture_trial_telemetry=search_trial_telemetry;
+#endif
     Snapshot(output,report);
     SearchStageSnapshotRegistration search_snapshot(output,report);
     auto search=n::SearchProfile(domain,y,b,context);
@@ -728,6 +754,9 @@ int main(int argc,char ** argv)
                 else if(option=="--operator") operator_audit=true;
                 else if(option=="--search" && k+1<end) search_kind=argv[++k];
                 else if(option=="--search-only") search_only=true;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                else if(option=="--search-trial-telemetry") search_trial_telemetry=true;
+#endif
                 else if(option=="--assessment-reduction" && k+1<end)
                 {
                     assessment_reduction=argv[++k];
@@ -799,6 +828,8 @@ int main(int argc,char ** argv)
         n::SpqrOrderingForTesting()=spqr_ordering;
         if(search_only && (search_kind.empty() || search_kind=="legacy"))
             throw std::invalid_argument("Search-only profile requires OperatorPcg");
+        if(search_trial_telemetry && (search_kind.empty() || search_kind=="legacy" || !search_only))
+            throw std::invalid_argument("Trial telemetry requires the benchmark-only OperatorPcg search profile");
         if(audit) n::CompactSvdCaptureForTesting()=Capture;
 #endif
         Eigen::setNbThreads(1); const std::string mode=argc>1 ? argv[1] : "";

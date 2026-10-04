@@ -177,9 +177,11 @@ def command_for_profile(args, case, output, build):
             ownership_name = args.operator_factor_ownership or 'reuse-accepted-copy-on-write'
             ownership = (('--operator-factor-ownership', ownership_name)
                          if ownership_name != 'reuse-accepted-copy-on-write' else ())
+            trial_telemetry = ('--search-trial-telemetry',) if args.search_trial_telemetry else ()
             return sparse_command(sparse, case, 'fixed', output,
                                   ('--search', args.preconditioner, '--search-only',
-                                   *operator_policy_options(args), *ordering, *representation, *ownership), args.svd_mode)
+                                   *operator_policy_options(args), *ordering, *representation, *ownership,
+                                   *trial_telemetry), args.svd_mode)
         if args.profile == 'solve':
             return sparse_command(sparse, case, 'fixed', output,
                                   ('--search', args.preconditioner, *operator_policy_options(args),
@@ -257,6 +259,7 @@ def solver_policy_metadata(args, backend):
         'operator_factor_representation': args.operator_factor_representation,
         'operator_factor_ownership': (args.operator_factor_ownership or 'reuse-accepted-copy-on-write')
             if args.profile == 'search' else None,
+        'search_trial_telemetry': args.search_trial_telemetry if args.profile == 'search' else None,
         'projected_reduction': args.projected_reduction,
         'preconditioner': args.preconditioner,
         'spqr_ordering': args.spqr_ordering.upper() if args.spqr_ordering else 'COLAMD',
@@ -545,6 +548,8 @@ def build_parser():
     parser.add_argument('--operator-factor-ownership', choices=('dedicated-fixed', 'dedicated-native',
                         'reuse-accepted-copy-on-write', 'reuse-accepted-handoff'),
                         default=None)
+    parser.add_argument('--search-trial-telemetry', action='store_true',
+                        help='Record benchmark-only per-damping-trial factor timing and RSS')
     parser.add_argument('--operator-rank', choices=('auto', 'dense', 'spqr-bounds'), default='auto')
     parser.add_argument('--operator-rank-seconds', type=float, default=120)
     parser.add_argument('--operator-rank-work-entries', type=int, default=100_000_000)
@@ -588,6 +593,8 @@ def validate_args(parser, args):
         parser.error('--operator-factor-representation is supported only by the benchmark-only search profile')
     if args.operator_factor_ownership is not None and args.profile != 'search':
         parser.error('--operator-factor-ownership is supported only by the benchmark-only search profile')
+    if args.search_trial_telemetry and args.profile != 'search':
+        parser.error('--search-trial-telemetry is supported only by the benchmark-only search profile')
     if args.assessment_reduction != 'observation-tsqr' and args.profile != 'solve':
         parser.error('--assessment-reduction is supported only by the benchmark-only solve profile')
     if args.projected_reduction != 'observation-tiled-qr' and args.profile != 'solve':
