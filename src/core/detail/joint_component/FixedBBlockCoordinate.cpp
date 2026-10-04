@@ -100,9 +100,11 @@ GlobalDiagnostics DiagnoseGlobalAC(const JointProblemInput & input,const JointPa
 }
 bool WithinPredictionReplay(double error,VectorRef reference)
 {return error<=2e-12+2e-13*std::max(1.0,reference.cwiseAbs().maxCoeff());}
-bool WithinObjectiveReplay(double error,double reference)
-{return error<=1e-12+2e-12*std::abs(reference);}
 }
+double BlockObjectiveReplayEnclosure(double reference)
+{return 1e-12+2e-12*std::abs(reference);}
+bool WithinBlockObjectiveReplay(double error,double reference)
+{return error<=BlockObjectiveReplayEnclosure(reference);}
 FixedBBlockResult SearchFixedBBlocks(const JointProblemInput & input,const JointParameterLayout & layout,VectorRef observations,
     VectorRef eta,const EvaluationContext & context,const FixedBBlockPolicy & policy)
 {
@@ -209,13 +211,13 @@ FixedBBlockResult SearchFixedBBlocks(const JointProblemInput & input,const Joint
             if(policy.capture_diagnostics)
             {
                 record.global_replay_delta=replay.objective-out.state.objective;
-                record.objective_replay_enclosure=1e-12+2e-12*std::max(std::abs(replay.objective),std::abs(out.state.objective));
+                record.objective_replay_enclosure=BlockObjectiveReplayEnclosure(std::max(std::abs(replay.objective),std::abs(out.state.objective)));
             }
             double local_global_error=std::abs((replay.objective-out.state.objective)-(local_after-local_before));
             if(policy.capture_diagnostics) record.local_global_delta_error=local_global_error;
             const double replay_reference=std::max(std::abs(replay.objective),std::abs(out.state.objective));
-            const bool local_global_delta_enclosed=WithinObjectiveReplay(local_global_error,replay_reference);
-            const double replay_enclosure=1e-12+2e-12*replay_reference;
+            const bool local_global_delta_enclosed=WithinBlockObjectiveReplay(local_global_error,replay_reference);
+            const double replay_enclosure=BlockObjectiveReplayEnclosure(replay_reference);
             if(!local_global_delta_enclosed)
             {record.status="failed"; record.reason="block-objective-replay-failed"; ++sweep.failed_blocks; out.blocks.push_back(std::move(record)); out.reason="block-objective-replay-failed"; return out;}
             const double global_replay_delta=replay.objective-out.state.objective;
@@ -256,7 +258,7 @@ FixedBBlockResult SearchFixedBBlocks(const JointProblemInput & input,const Joint
         sweep.cache_replay_error=(out.state.prediction-replay.prediction).lpNorm<Eigen::Infinity>();
         sweep.objective_replay_error=std::abs(out.state.objective-replay.objective);
         if(!WithinPredictionReplay(sweep.cache_replay_error,replay.prediction) ||
-            !WithinObjectiveReplay(sweep.objective_replay_error,replay.objective))
+            !WithinBlockObjectiveReplay(sweep.objective_replay_error,replay.objective))
         {sweep.failed_blocks=1; out.reason="block-cache-replay-failed";}
         const auto diagnostics=DiagnoseGlobalAC(input,layout,out.state,context.scale);
         sweep.global_a_feasibility=diagnostics.feasibility; sweep.global_ac_kkt=diagnostics.kkt;

@@ -49,4 +49,6 @@ struct FixedBBlockResult
 
 FixedBBlockResult SearchFixedBBlocks(const JointProblemInput &,const JointParameterLayout &,VectorRef observations,
     VectorRef eta,const EvaluationContext &,const FixedBBlockPolicy & = {});
+double BlockObjectiveReplayEnclosure(double reference);
+bool WithinBlockObjectiveReplay(double error,double reference);
 }
