@@ -182,6 +182,7 @@ set(JOINT_COMPONENT_TEST_SOURCES
     core/joint_component/FreeDesignRank_test.cpp
     core/joint_component/ProfileOperator_test.cpp
     core/joint_component/OperatorSearch_test.cpp
+    core/joint_component/BlockCoordinate_test.cpp
     core/joint_component/CompactAssessment_test.cpp
     core/joint_component/ProjectedTailQr_test.cpp
     core/joint_component/Numerics_test.cpp
@@ -279,6 +280,7 @@ add_dependencies(tests_all rhbm_tests)
 # Test-only helpers contain no historical runner or multiprecision orchestration.
 add_library(joint_test_support STATIC
     support/JointOperatorWorkload.cpp
+    support/JointBlockCoordinate.cpp
     support/JointTestGeometry.cpp support/JointTestNumerics.cpp support/JointDenseReference.cpp
     support/JointTestContext.cpp support/JointComponentChecks.cpp
     support/JointFixtureSupport.cpp)
