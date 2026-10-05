@@ -1,0 +1,21 @@
+{
+  "phase": "S5 confirmed-stationarity FixedNeighbor 512 certification",
+  "source_revision": "1da368a6",
+  "branch": "develop",
+  "backend": "SPQR",
+  "eigen_threads": 1,
+  "core_atoms": 128,
+  "block_order": "forward serial Gauss-Seidel",
+  "local_solver": "LegacyCompact",
+  "confirmation_rule": "cheap A/C KKT and width-gradient criteria plus eta infinity change versus previous complete sweep",
+  "thresholds": {
+    "global_ac_kkt": 1e-10,
+    "width_gradient_inf_norm": 1e-12,
+    "eta_change_inf": 1e-10
+  },
+  "certified_local_candidates": false,
+  "a_c_polish": false,
+  "cases": ["chain-512", "cube-512"],
+  "global_baselines": ["LegacyCompact", "OperatorPcg"],
+  "promotion_gate": "both FixedNeighbor endpoints certified, all RuntimeConvergence checks passed, and global objective/scaled A-C parity passed"
+}
