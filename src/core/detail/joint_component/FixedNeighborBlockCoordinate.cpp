@@ -9,6 +9,8 @@
 namespace rhbm_gem::core::joint_component {
 namespace {
 using Clock=std::chrono::steady_clock;
+enum class StationarityState {NotStationary,CandidateStationary,ConfirmedStationary};
+constexpr double EtaChangeConfirmationThreshold=1e-10;
 double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
 Vector Select(VectorRef values,const Indices & indices)
 {
@@ -129,6 +131,11 @@ void BuildEndpointResult(const JointProblem & problem,const ProblemData & data,c
 }
 bool IsCertifiedLocalEndpoint(const Assessment & assessment,const TrustEvidence & trust)
 {return assessment.inner && assessment.gradient && assessment.local && assessment.identified && trust.passed;}
+bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_complete_sweep)
+{
+    return has_previous_complete_sweep && std::isfinite(eta_change_inf) && eta_change_inf>=0.0 &&
+        eta_change_inf<=EtaChangeConfirmationThreshold;
+}
 FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef initial_eta,const FixedNeighborPolicy & policy)
 {
     FixedNeighborResult out;
@@ -369,9 +376,17 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
         {out.reason="block-cache-replay-failed"; stop=true; break;}
         if(policy.stop_after_no_certified_update && sweep.local_assessments>0 && sweep.certified_local_candidates==0)
         {out.reason="local-endpoint-uncertified"; break;}
+        StationarityState stationarity=StationarityState::NotStationary;
         if(sweep.global_ac_kkt<=1e-10 && sweep.global_width_gradient_inf_norm<=1e-12)
         {
-            if(!out.search_converged) out.sweeps_to_stationarity=sweep_index+1;
+            if(out.first_order_stationarity_sweep==0) out.first_order_stationarity_sweep=sweep_index+1;
+            stationarity=StationarityState::CandidateStationary;
+            if(IsFixedNeighborEtaChangeConfirmed(sweep.eta_change_inf,sweep.coordinate_confirmation_available))
+                stationarity=StationarityState::ConfirmedStationary;
+        }
+        if(stationarity==StationarityState::ConfirmedStationary)
+        {
+            if(out.confirmed_stationarity_sweep==0) out.confirmed_stationarity_sweep=sweep_index+1;
             out.search_converged=true; out.reason="block-stationary";
             if(policy.stop_after_stationarity) break;
         }

@@ -5,7 +5,7 @@ def baseline(passed, state=0.0):
     endpoint = {"assessment": {"inner": passed, "gradient": passed, "local": passed,
         "identified": passed, "endpoint_trust": {"passed": passed}}}
     return {"topology": "cube", "atoms": 256,
-        "fixed_neighbor": {"sweeps_to_stationarity": 11, "search_converged": True,
+        "fixed_neighbor": {"first_order_stationarity_sweep": 11, "search_converged": True,
             "sweep_telemetry": [{"wall_seconds": 1.0, "objective_before": 1.0, "objective_after": 0.5}],
             "block_telemetry": [{"sweep": 11, "profile_evaluations": 2}]},
         "endpoint_decomposition": [{"sweep": 11, "raw": endpoint,

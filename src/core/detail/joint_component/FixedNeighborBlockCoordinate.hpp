@@ -53,13 +53,14 @@ struct FixedNeighborResult
     std::vector<FixedNeighborBlockSweep> sweeps;
     bool search_converged{},endpoint_certified{};
     std::string reason;
-    std::size_t sweeps_to_stationarity{};
+    std::size_t first_order_stationarity_sweep{},confirmed_stationarity_sweep{};
     Assessment assessment;
     TrustEvidence endpoint_trust;
     JointFitResult fit;
 };
 
 bool IsCertifiedLocalEndpoint(const Assessment &,const TrustEvidence &);
+bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_complete_sweep);
 FixedNeighborResult SearchFixedNeighbor(const JointProblem &,VectorRef initial_eta,
     const FixedNeighborPolicy & = {});
 }

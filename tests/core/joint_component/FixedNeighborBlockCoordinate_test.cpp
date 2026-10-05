@@ -3,6 +3,7 @@
 #include "core/detail/joint_component/Problem.hpp"
 #include "support/JointOperatorWorkload.hpp"
 #include <cmath>
+#include <limits>
 #include <vector>
 
 namespace {
@@ -25,7 +26,9 @@ void CheckSingleBlock(const std::string & topology,int atoms)
     const auto unobserved=n::SearchFixedNeighbor(problem,eta,unobserved_policy);
     ASSERT_TRUE(result.search_converged)<<result.reason;
     ASSERT_TRUE(result.endpoint_certified)<<result.endpoint_trust.reason;
-    EXPECT_EQ(result.sweeps.size(),1u);
+    EXPECT_EQ(result.sweeps.size(),2u);
+    EXPECT_EQ(result.first_order_stationarity_sweep,1u);
+    EXPECT_EQ(result.confirmed_stationarity_sweep,2u);
     ASSERT_EQ(observed.size(),result.sweeps.size());
     EXPECT_EQ(state_callbacks,result.sweeps.size());
     EXPECT_TRUE((observed_state.eta.array()==result.state.eta.array()).all());
@@ -77,6 +80,37 @@ TEST(JointFixedNeighborBlockCoordinateTest, SmallSingleBlockFixturesUseExistingE
 TEST(JointFixedNeighborBlockCoordinateTest, MultiBlockBudgetFailureRemainsDistinctFromRuntimeConvergence)
 {
     CheckMultiBlockBudgetFailure("chain"); CheckMultiBlockBudgetFailure("cube");
+}
+TEST(JointFixedNeighborBlockCoordinateTest, CheapStationarityNeedsCompleteSweepConfirmation)
+{
+    JointProblem problem(second_stage_test::OperatorWorkload("chain",8));
+    const n::Vector eta=n::Vector::Constant(8,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.maximum_sweeps=1;
+    const auto candidate=n::SearchFixedNeighbor(problem,eta,policy);
+    EXPECT_FALSE(candidate.search_converged);
+    EXPECT_EQ(candidate.reason,"block-sweep-budget");
+    EXPECT_EQ(candidate.sweeps.size(),1u);
+    EXPECT_EQ(candidate.first_order_stationarity_sweep,1u);
+    EXPECT_EQ(candidate.confirmed_stationarity_sweep,0u);
+    EXPECT_TRUE(candidate.endpoint_certified);
+    EXPECT_EQ(candidate.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+
+    policy.maximum_sweeps=4;
+    const auto confirmed=n::SearchFixedNeighbor(problem,eta,policy);
+    ASSERT_TRUE(confirmed.search_converged)<<confirmed.reason;
+    EXPECT_EQ(confirmed.first_order_stationarity_sweep,1u);
+    EXPECT_EQ(confirmed.confirmed_stationarity_sweep,2u);
+    EXPECT_EQ(confirmed.sweeps.size(),2u);
+}
+TEST(JointFixedNeighborBlockCoordinateTest, EtaConfirmationUsesInclusiveExistingThreshold)
+{
+    constexpr double threshold=1e-10;
+    EXPECT_FALSE(n::IsFixedNeighborEtaChangeConfirmed(threshold,false));
+    EXPECT_TRUE(n::IsFixedNeighborEtaChangeConfirmed(threshold,true));
+    EXPECT_TRUE(n::IsFixedNeighborEtaChangeConfirmed(std::nextafter(threshold,0.0),true));
+    EXPECT_FALSE(n::IsFixedNeighborEtaChangeConfirmed(std::nextafter(threshold,
+        std::numeric_limits<double>::infinity()),true));
+    EXPECT_FALSE(n::IsFixedNeighborEtaChangeConfirmed(std::numeric_limits<double>::quiet_NaN(),true));
 }
 TEST(JointFixedNeighborBlockCoordinateTest, SweepCoordinateTelemetryUsesCompleteSweepStates)
 {

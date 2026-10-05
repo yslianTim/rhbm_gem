@@ -378,7 +378,8 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             {"local_final_ac_kkt",Number(block.local_final_ac_kkt)}});
     j::object neighbor_json{{"method","FixedNeighbor"},{"search_converged",neighbor.search_converged},
         {"search_reason",neighbor.reason},{"sweeps",neighbor.sweeps.size()},
-        {"sweeps_to_stationarity",neighbor.sweeps_to_stationarity},
+        {"first_order_stationarity_sweep",neighbor.first_order_stationarity_sweep},
+        {"confirmed_stationarity_sweep",neighbor.confirmed_stationarity_sweep},
         {"endpoint_certified",neighbor.endpoint_certified},
         {"endpoint_trust_reason",neighbor.endpoint_trust.reason},
         {"objective",neighbor.fit.objective ? j::value(*neighbor.fit.objective) : j::value(nullptr)},

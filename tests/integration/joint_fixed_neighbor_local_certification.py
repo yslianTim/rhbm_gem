@@ -12,7 +12,7 @@ def _endpoint_passed(state):
 
 def _baseline(case):
     fixed = case["fixed_neighbor"]
-    stationarity = fixed["sweeps_to_stationarity"]
+    stationarity = fixed["first_order_stationarity_sweep"]
     snapshot = next(row for row in case["endpoint_decomposition"] if row["sweep"] == stationarity)
     sweeps = [row for row in fixed["sweep_telemetry"][:stationarity]]
     blocks = [row for row in fixed["block_telemetry"] if row["sweep"] <= stationarity]
