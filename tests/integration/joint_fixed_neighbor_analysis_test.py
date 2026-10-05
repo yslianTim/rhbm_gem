@@ -10,7 +10,8 @@ def result():
 
 
 def case():
-    fixed = result() | {"search_converged": True, "endpoint_certified": True, "sweeps": 3}
+    fixed = result() | {"search_converged": True, "endpoint_certified": True, "sweeps": 3,
+        "first_order_stationarity_sweep": 1, "confirmed_stationarity_sweep": 2}
     return {"topology": "chain", "atoms": 32, "global_legacy_compact": result(),
         "global_operator_pcg": result(), "fixed_neighbor": fixed, "peak_rss_mb": 100.0,
         "comparisons": [{"method": "FixedNeighbor", "objective_difference": 1e-15,
@@ -21,9 +22,17 @@ def test_passes_only_for_certified_parity_case():
     expected = {("chain", 32)}
     report = analyze([case()], expected)
     assert report["fixed_neighbor_f2_gate"] == "passed"
+    assert report["cases"][0]["first_order_stationarity_sweep"] == 1
+    assert report["cases"][0]["confirmed_stationarity_sweep"] == 2
+    assert report["cases"][0]["confirmation_extra_sweeps"] == 1
     broken = case()
     broken["fixed_neighbor"]["endpoint_certified"] = False
     assert analyze([broken], expected)["fixed_neighbor_f2_gate"] == "failed"
+    unconfirmed = case()
+    unconfirmed["fixed_neighbor"]["confirmed_stationarity_sweep"] = 0
+    report = analyze([unconfirmed], expected)
+    assert report["fixed_neighbor_f2_gate"] == "failed"
+    assert report["cases"][0]["reasons"] == ["stationarity-unconfirmed"]
 
 
 def test_missing_expected_case_fails_gate():

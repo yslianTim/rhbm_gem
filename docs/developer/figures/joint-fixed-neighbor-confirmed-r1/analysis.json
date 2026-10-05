@@ -1,0 +1,122 @@
+{
+  "cases": [
+    {
+      "atoms": 128,
+      "confirmation_extra_sweeps": 1,
+      "confirmed_stationarity_sweep": 2,
+      "first_order_stationarity_sweep": 1,
+      "global_kkt": 9.71445146547012e-17,
+      "objective": 1.486837875042113e-10,
+      "passed": true,
+      "peak_rss_mb": 168.859375,
+      "reasons": [],
+      "search_seconds": 71.668562625,
+      "sweeps": 2,
+      "topology": "chain",
+      "width_gradient_inf_norm": 7.463024277377786e-18
+    },
+    {
+      "atoms": 256,
+      "confirmation_extra_sweeps": 1,
+      "confirmed_stationarity_sweep": 7,
+      "first_order_stationarity_sweep": 6,
+      "global_kkt": 5.540706782269922e-14,
+      "objective": 1.4847245978065849e-10,
+      "passed": true,
+      "peak_rss_mb": 290.96875,
+      "reasons": [],
+      "search_seconds": 535.539062082,
+      "sweeps": 7,
+      "topology": "chain",
+      "width_gradient_inf_norm": 9.417013752797912e-15
+    },
+    {
+      "atoms": 32,
+      "confirmation_extra_sweeps": 1,
+      "confirmed_stationarity_sweep": 2,
+      "first_order_stationarity_sweep": 1,
+      "global_kkt": 1.3877787807814457e-16,
+      "objective": 1.5342582759813994e-10,
+      "passed": true,
+      "peak_rss_mb": 65.59375,
+      "reasons": [],
+      "search_seconds": 3.2166995419999997,
+      "sweeps": 2,
+      "topology": "chain",
+      "width_gradient_inf_norm": 2.1032707416610786e-17
+    },
+    {
+      "atoms": 128,
+      "confirmation_extra_sweeps": 1,
+      "confirmed_stationarity_sweep": 2,
+      "first_order_stationarity_sweep": 1,
+      "global_kkt": 1.1102230246251565e-16,
+      "objective": 8.767436776579984e-11,
+      "passed": true,
+      "peak_rss_mb": 561.671875,
+      "reasons": [],
+      "search_seconds": 64.501368625,
+      "sweeps": 2,
+      "topology": "cube",
+      "width_gradient_inf_norm": 1.5627346751482695e-16
+    },
+    {
+      "atoms": 256,
+      "confirmation_extra_sweeps": 3,
+      "confirmed_stationarity_sweep": 14,
+      "first_order_stationarity_sweep": 11,
+      "global_kkt": 1.9701601461363794e-13,
+      "objective": 8.222328628106002e-11,
+      "passed": true,
+      "peak_rss_mb": 499.65625,
+      "reasons": [],
+      "search_seconds": 1116.170224875,
+      "sweeps": 14,
+      "topology": "cube",
+      "width_gradient_inf_norm": 7.632672899554522e-16
+    },
+    {
+      "atoms": 32,
+      "confirmation_extra_sweeps": 1,
+      "confirmed_stationarity_sweep": 2,
+      "first_order_stationarity_sweep": 1,
+      "global_kkt": 1.249000902703301e-16,
+      "objective": 9.879302931281586e-11,
+      "passed": true,
+      "peak_rss_mb": 115.59375,
+      "reasons": [],
+      "search_seconds": 3.9590978339999996,
+      "sweeps": 2,
+      "topology": "cube",
+      "width_gradient_inf_norm": 2.1889710531146278e-17
+    }
+  ],
+  "expected_cases": [
+    {
+      "atoms": 32,
+      "topology": "chain"
+    },
+    {
+      "atoms": 128,
+      "topology": "chain"
+    },
+    {
+      "atoms": 256,
+      "topology": "chain"
+    },
+    {
+      "atoms": 32,
+      "topology": "cube"
+    },
+    {
+      "atoms": 128,
+      "topology": "cube"
+    },
+    {
+      "atoms": 256,
+      "topology": "cube"
+    }
+  ],
+  "fixed_neighbor_f2_gate": "passed",
+  "missing_cases": []
+}

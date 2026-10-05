@@ -22,6 +22,11 @@ def analyze(cases, expected=EXPECTED_CASES):
             reasons.append("runtime-convergence")
         if not fixed["search_converged"] or not fixed["endpoint_certified"]:
             reasons.append("search-or-endpoint-certification")
+        first_order_sweep = fixed.get("first_order_stationarity_sweep", 0)
+        confirmed_sweep = fixed.get("confirmed_stationarity_sweep", 0)
+        if (first_order_sweep == 0 or confirmed_sweep == 0 or confirmed_sweep < first_order_sweep or
+                confirmed_sweep > fixed["sweeps"]):
+            reasons.append("stationarity-unconfirmed")
         for name in ("assessment_inner", "assessment_gradient", "assessment_local", "assessment_identified"):
             if fixed[name] is None or fixed[name]["status"] != "Passed":
                 reasons.append(name)
@@ -35,6 +40,9 @@ def analyze(cases, expected=EXPECTED_CASES):
                 reasons.append("scaled-ac-parity")
         rows.append({"topology": key[0], "atoms": key[1], "passed": not reasons, "reasons": reasons,
             "sweeps": fixed["sweeps"], "objective": fixed["objective"],
+            "first_order_stationarity_sweep": first_order_sweep,
+            "confirmed_stationarity_sweep": confirmed_sweep,
+            "confirmation_extra_sweeps": confirmed_sweep-first_order_sweep if confirmed_sweep else None,
             "global_kkt": fixed["global_kkt"]["value"], "width_gradient_inf_norm": fixed["width_gradient_inf_norm"],
             "search_seconds": fixed["search_seconds"], "peak_rss_mb": case["peak_rss_mb"]})
     missing = sorted(expected - seen)
