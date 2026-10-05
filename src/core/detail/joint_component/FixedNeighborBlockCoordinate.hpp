@@ -10,6 +10,7 @@ struct FixedNeighborBlockRecord
     Indices core_atoms;
     double objective_before{},objective_after{},local_objective_before{},local_objective_after{};
     double global_replay_delta{},local_global_delta_error{},objective_replay_enclosure{};
+    double local_final_gradient_inf_norm{},local_final_ac_kkt{};
     double search_seconds{};
     int profile_evaluations{},accepted_updates{};
     bool accepted{};
@@ -25,7 +26,10 @@ struct FixedNeighborPolicy
 {
     std::size_t core_atoms{128},maximum_sweeps{30};
     FixedNeighborBlockOrder order{FixedNeighborBlockOrder::Forward};
+    bool stop_after_stationarity{true};
     std::function<void(const FixedNeighborBlockSweep &)> sweep_observer;
+    std::function<void(std::size_t,const BlockCoordinateState &,const FixedNeighborBlockSweep &,
+        const std::vector<FixedNeighborBlockRecord> &)> state_observer;
 };
 struct FixedNeighborResult
 {

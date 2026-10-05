@@ -1,0 +1,29 @@
+{
+  "phase": "F2.5 FixedNeighbor endpoint decomposition",
+  "backend": "SPQR",
+  "build_directory": "build/joint-spqr",
+  "build_type": "default",
+  "eigen_threads": 1,
+  "core_atoms": 128,
+  "block_order": "forward serial Gauss-Seidel",
+  "local_solver": "LegacyCompact",
+  "cases": {
+    "chain-256": {
+      "role": "passing control",
+      "snapshot": "final cheap-stationary sweep"
+    },
+    "cube-256": {
+      "role": "endpoint failure target",
+      "snapshots": [8, 9, 10, 11, 12, 13, 14, 15],
+      "maximum_sweeps": 15,
+      "continue_after_cheap_stationarity": true
+    }
+  },
+  "classification_thresholds": {
+    "inner_coefficient_difference": 1e-10,
+    "global_ac_kkt": 1e-10,
+    "width_stationarity": 1e-12,
+    "local_correction": 1e-10
+  },
+  "global_profile_role": "diagnostic and control only; never written into FixedNeighbor state"
+}

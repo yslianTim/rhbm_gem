@@ -1,0 +1,40 @@
+{
+  "classification": "mixed",
+  "control_case": {
+    "atoms": 256,
+    "snapshots": 1,
+    "topology": "chain"
+  },
+  "evidence": [
+    {
+      "rule": "beta-gap-and-profile-width-or-correction-fails",
+      "sweep": 8
+    },
+    {
+      "rule": "beta-gap-and-profile-width-or-correction-fails",
+      "sweep": 9
+    },
+    {
+      "rule": "beta-gap-and-profile-width-or-correction-fails",
+      "sweep": 10
+    },
+    {
+      "rule": "beta-gap-and-profile-width-or-correction-fails",
+      "sweep": 11
+    },
+    {
+      "rule": "beta-gap-and-profile-width-or-correction-fails",
+      "sweep": 12
+    }
+  ],
+  "target_case": {
+    "atoms": 256,
+    "snapshots": 8,
+    "topology": "cube"
+  },
+  "thresholds": {
+    "inner_coefficient_difference": 1e-10,
+    "local_correction": 1e-10,
+    "width_stationarity": 1e-12
+  }
+}

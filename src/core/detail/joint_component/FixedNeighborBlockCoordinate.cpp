@@ -229,6 +229,8 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
                 record.status="failed"; record.reason="block-inner-invalid"; out.reason=record.reason;
                 out.blocks.push_back(std::move(record)); stop=true; break;
             }
+            record.local_final_gradient_inf_norm=local_state.gradient.lpNorm<Eigen::Infinity>();
+            record.local_final_ac_kkt=local_state.certificate.projected_kkt;
             record.local_objective_after=local_state.certificate.objective/(context.scale*context.scale);
             if(record.local_objective_after>record.local_objective_before)
             {
@@ -291,12 +293,15 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
         sweep.global_width_gradient_inf_norm=global.gradient.lpNorm<Eigen::Infinity>();
         sweep.wall_seconds=Seconds(sweep_started); out.sweeps.push_back(sweep);
         if(policy.sweep_observer) policy.sweep_observer(out.sweeps.back());
+        if(policy.state_observer) policy.state_observer(sweep_index+1,out.state,out.sweeps.back(),out.blocks);
         if(sweep.cache_replay_error>2e-12+2e-13*std::max(1.0,replay.prediction.cwiseAbs().maxCoeff()) ||
             !WithinBlockObjectiveReplay(sweep.objective_replay_error,replay.objective))
         {out.reason="block-cache-replay-failed"; stop=true; break;}
         if(sweep.global_ac_kkt<=1e-10 && sweep.global_width_gradient_inf_norm<=1e-12)
         {
-            out.search_converged=true; out.reason="block-stationary"; out.sweeps_to_stationarity=sweep_index+1; break;
+            if(!out.search_converged) out.sweeps_to_stationarity=sweep_index+1;
+            out.search_converged=true; out.reason="block-stationary";
+            if(policy.stop_after_stationarity) break;
         }
     }
     if(!out.search_converged && out.reason.empty()) out.reason="block-sweep-budget";

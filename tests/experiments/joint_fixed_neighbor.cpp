@@ -55,6 +55,79 @@ double WidthGradient(const rhbm_gem::core::JointFitResult & fit)
     if(!fit.assembled_state || fit.assembled_state->width_gradient.empty()) return std::numeric_limits<double>::infinity();
     double out{}; for(double value:fit.assembled_state->width_gradient) out=std::max(out,std::abs(value)); return out;
 }
+j::value Number(double value)
+{return std::isfinite(value) ? j::value(value) : j::value(nullptr);}
+j::array NumberArray(const n::Vector & values)
+{j::array out; for(Eigen::Index k=0;k<values.size();++k) out.push_back(Number(values(k))); return out;}
+double CoefficientDifference(const n::Vector & lhs,const n::Vector & rhs)
+{
+    if(lhs.size()!=rhs.size() || lhs.size()==0) return std::numeric_limits<double>::infinity();
+    return ((lhs-rhs).array().abs()/(1+lhs.array().abs().max(rhs.array().abs()))).maxCoeff();
+}
+j::value SpectrumJson(const std::optional<n::Spectrum> & spectrum)
+{
+    if(!spectrum) return nullptr;
+    return j::object{{"rank",spectrum->rank},{"minimum_singular_value",Number(spectrum->minimum)},
+        {"rank_threshold",Number(spectrum->threshold)},{"condition_estimate",Number(spectrum->condition)}};
+}
+j::object AssessmentJson(const n::Assessment & assessment,const n::TrustEvidence & trust)
+{
+    const double correction=assessment.correction.size()==0 ? std::numeric_limits<double>::infinity() :
+        assessment.correction.lpNorm<Eigen::Infinity>();
+    return {{"inner",assessment.inner},{"gradient",assessment.gradient},{"local",assessment.local},
+        {"identified",assessment.identified},{"failure",assessment.failure},
+        {"local_correction_inf_norm",Number(correction)},
+        {"projected_width",SpectrumJson(assessment.widths)},
+        {"corrected_jacobian",SpectrumJson(assessment.jacobian)},
+        {"normalized_width",SpectrumJson(assessment.normalized_widths)},
+        {"endpoint_trust",j::object{{"passed",trust.passed},{"reason",trust.reason}}}};
+}
+j::object EndpointStateJson(const std::string & name,const n::Evaluation & endpoint,
+    const n::Assessment & assessment,const n::TrustEvidence & trust,double scale)
+{
+    return {{"state",name},{"valid",endpoint.valid},{"evaluation_reason",endpoint.reason},
+        {"objective",endpoint.certificate.evaluated ? Number(endpoint.certificate.objective/(scale*scale)) : j::value(nullptr)},
+        {"a_feasible",endpoint.certificate.feasible},
+        {"ac_kkt",Number(endpoint.certificate.projected_kkt)},
+        {"ac_kkt_passed",endpoint.certificate.available && endpoint.certificate.feasible &&
+            endpoint.certificate.kkt_passed && endpoint.certificate.projected_kkt<=1e-10},
+        {"width_gradient_inf_norm",endpoint.gradient.size() ? Number(endpoint.gradient.lpNorm<Eigen::Infinity>()) : j::value(nullptr)},
+        {"assessment",AssessmentJson(assessment,trust)}};
+}
+j::object DecomposeEndpoint(const n::Domain & domain,const n::Vector & y,const n::EvaluationContext & context,
+    const n::BlockCoordinateState & state,std::size_t sweep,const n::FixedNeighborBlockSweep & sweep_record,
+    const std::vector<n::FixedNeighborBlockRecord> & block_records)
+{
+    const n::Vector eta=state.eta,beta=state.beta;
+    const auto raw=n::EvaluateState(domain,y,eta,beta,context);
+    const auto primary=n::EvaluateProfile(domain,y,eta,false,&context);
+    const auto reference=n::EvaluateProfile(domain,y,eta,true,&context);
+    const auto raw_assessment=n::AssessEvaluated(domain,y,raw,reference,context,true);
+    const auto primary_assessment=n::AssessEvaluated(domain,y,primary,reference,context,false);
+    const auto reference_assessment=n::AssessEvaluated(domain,y,reference,primary,context,false);
+    const auto raw_trust=n::CheckTrust(domain,y,raw,context,reference);
+    const auto primary_trust=n::CheckTrust(domain,y,primary,context,reference);
+    const auto reference_trust=n::CheckTrust(domain,y,reference,context,primary);
+    const bool eta_unchanged=(state.eta.array()==eta.array()).all();
+    j::array local_blocks;
+    for(const auto & block:block_records) if(block.sweep==sweep)
+        local_blocks.push_back({{"block",block.block},{"core_atoms",block.core_atoms.size()},
+            {"local_search_stop_reason",block.local_search_stop_reason},
+            {"profile_evaluations",block.profile_evaluations},{"accepted_updates",block.accepted_updates},
+            {"local_final_gradient_inf_norm",Number(block.local_final_gradient_inf_norm)},
+            {"local_final_ac_kkt",Number(block.local_final_ac_kkt)}});
+    return {{"sweep",sweep},{"eta_unchanged",eta_unchanged},
+        {"eta",NumberArray(eta)},{"beta",NumberArray(beta)},
+        {"search_state",j::object{{"objective",state.objective},{"global_ac_kkt",sweep_record.global_ac_kkt},
+            {"raw_width_gradient_inf_norm",sweep_record.global_width_gradient_inf_norm}}},
+        {"coefficient_difference_block_primary",Number(CoefficientDifference(beta,primary.beta))},
+        {"coefficient_difference_primary_reference",Number(CoefficientDifference(primary.beta,reference.beta))},
+        {"coefficient_difference_block_reference",Number(CoefficientDifference(beta,reference.beta))},
+        {"raw",EndpointStateJson("raw",raw,raw_assessment,raw_trust,context.scale)},
+        {"same_eta_primary",EndpointStateJson("same-eta-primary",primary,primary_assessment,primary_trust,context.scale)},
+        {"same_eta_reference",EndpointStateJson("same-eta-reference",reference,reference_assessment,reference_trust,context.scale)},
+        {"local_blocks",local_blocks}};
+}
 j::object PackFit(const std::string & method,const rhbm_gem::core::JointFitResult & fit,double seconds)
 {
     return {{"method",method},{"search_completed",fit.search_completed},
@@ -100,23 +173,47 @@ j::object SweepJson(const n::FixedNeighborBlockSweep & sweep)
         {"wall_seconds",sweep.wall_seconds}};
 }
 void Write(const std::filesystem::path &,const j::value &);
-j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,bool compare_global)
+j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,bool compare_global,bool decompose=false)
 {
     auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
     const rhbm_gem::core::JointProblem problem(*input);
     const std::vector<double> initial_b(static_cast<std::size_t>(atoms),.55);
     n::Vector initial_eta= n::Vector::Constant(atoms,std::log(.55)); n::FixedNeighborPolicy neighbor_policy;
     neighbor_policy.core_atoms=128;
+    if(decompose && topology=="cube" && atoms==256)
+    {neighbor_policy.maximum_sweeps=15; neighbor_policy.stop_after_stationarity=false;}
     j::array progress_sweeps;
+    j::array endpoint_snapshots;
     const auto progress_path=std::filesystem::path(output_path.string()+".progress.json");
     neighbor_policy.sweep_observer=[&](const auto & sweep) {
         progress_sweeps.push_back(SweepJson(sweep));
-        Write(progress_path,j::object{{"topology",topology},{"atoms",atoms},
-            {"sweeps_completed",progress_sweeps.size()},{"sweep_telemetry",progress_sweeps}});
+        j::object progress{{"topology",topology},{"atoms",atoms},
+            {"sweeps_completed",progress_sweeps.size()},{"sweep_telemetry",progress_sweeps}};
+        if(decompose) progress["endpoint_decomposition"]=endpoint_snapshots;
+        Write(progress_path,progress);
         std::cerr<<topology<<'-'<<atoms<<" FixedNeighbor sweep "<<progress_sweeps.size()
             <<" KKT="<<sweep.global_ac_kkt<<" width-grad="<<sweep.global_width_gradient_inf_norm
             <<" seconds="<<sweep.wall_seconds<<'\n';
     };
+    if(decompose)
+        neighbor_policy.state_observer=[&](std::size_t sweep,const n::BlockCoordinateState & state,
+            const n::FixedNeighborBlockSweep & sweep_record,const std::vector<n::FixedNeighborBlockRecord> & blocks) {
+            const bool cube_snapshot=topology=="cube" && atoms==256 && sweep>=8 && sweep<=15;
+            const bool chain_control=topology=="chain" && atoms==256 &&
+                sweep_record.global_ac_kkt<=1e-10 && sweep_record.global_width_gradient_inf_norm<=1e-12;
+            if(!cube_snapshot && !chain_control) return;
+            const auto diagnostic_started=Clock::now();
+            const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+            const auto domain=n::ProfileDomain(data.domain,data.layout);
+            const auto context=n::ProfileContext(data.context,data.layout,data.domain.rows);
+            const n::Vector y=data.y;
+            auto snapshot=DecomposeEndpoint(domain,y,context,state,sweep,sweep_record,blocks);
+            snapshot["diagnostic_seconds"]=Seconds(diagnostic_started);
+            endpoint_snapshots.push_back(std::move(snapshot));
+            Write(progress_path,j::object{{"topology",topology},{"atoms",atoms},
+                {"sweeps_completed",progress_sweeps.size()},{"sweep_telemetry",progress_sweeps},
+                {"endpoint_decomposition",endpoint_snapshots}});
+        };
     std::cerr<<topology<<'-'<<atoms<<" FixedNeighbor started\n";
     auto started=Clock::now(); const auto neighbor=n::SearchFixedNeighbor(problem,initial_eta,neighbor_policy);
     const double neighbor_seconds=Seconds(started);
@@ -139,7 +236,9 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             {"objective_replay_enclosure",block.objective_replay_enclosure},
             {"profile_evaluations",block.profile_evaluations},{"accepted_updates",block.accepted_updates},
             {"search_seconds",block.search_seconds},{"accepted",block.accepted},
-            {"status",block.status},{"reason",block.reason},{"local_search_stop_reason",block.local_search_stop_reason}});
+            {"status",block.status},{"reason",block.reason},{"local_search_stop_reason",block.local_search_stop_reason},
+            {"local_final_gradient_inf_norm",Number(block.local_final_gradient_inf_norm)},
+            {"local_final_ac_kkt",Number(block.local_final_ac_kkt)}});
     j::object neighbor_json{{"method","FixedNeighbor"},{"search_converged",neighbor.search_converged},
         {"search_reason",neighbor.reason},{"sweeps",neighbor.sweeps.size()},
         {"sweeps_to_stationarity",neighbor.sweeps_to_stationarity},
@@ -152,6 +251,11 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"runtime_convergence",CheckName(neighbor.fit.RuntimeConvergence())},
         {"sweep_telemetry",sweeps},{"block_telemetry",blocks},
         {"search_seconds",neighbor_search_seconds},{"total_elapsed_seconds",neighbor_seconds}};
+    if(decompose)
+        return {{"topology",topology},{"atoms",atoms},{"core_atoms",neighbor_policy.core_atoms},
+            {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
+            {"fixed_neighbor",neighbor_json},{"endpoint_decomposition",endpoint_snapshots},
+            {"peak_rss_mb",PeakRssMb()}};
     if(!compare_global)
         return {{"topology",topology},{"atoms",atoms},{"core_atoms",neighbor_policy.core_atoms},
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
@@ -192,12 +296,14 @@ void Write(const std::filesystem::path & path,const j::value & value)
 int main(int argc,char ** argv)
 {
     try {
-        if(argc!=5 || (std::string(argv[1])!="--case" && std::string(argv[1])!="--neighbor-only"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only OUTPUT_FILE TOPOLOGY ATOMS");
+        if(argc!=5 || (std::string(argv[1])!="--case" && std::string(argv[1])!="--neighbor-only" &&
+            std::string(argv[1])!="--decompose"))
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose OUTPUT_FILE TOPOLOGY ATOMS");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
-        Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,std::string(argv[1])=="--case"));
+        const std::string mode(argv[1]);
+        Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--case",mode=="--decompose"));
         std::cout<<argv[3]<<'-'<<argv[4]<<" fixed-neighbor endpoint experiment complete\n";
         return 0;
     } catch(const std::exception & error) {std::cerr<<error.what()<<'\n'; return 1;}
