@@ -1,0 +1,922 @@
+{
+  "candidate_rule_safety": {
+    "beta_only": {
+      "missing_confirmation_cases": [],
+      "safe_across_cases": true,
+      "unsafe_cases": []
+    },
+    "eta_beta": {
+      "missing_confirmation_cases": [],
+      "safe_across_cases": true,
+      "unsafe_cases": []
+    },
+    "eta_only": {
+      "missing_confirmation_cases": [],
+      "safe_across_cases": true,
+      "unsafe_cases": []
+    }
+  },
+  "cases": [
+    {
+      "atoms": 32,
+      "beta_only_confirmation_sweep": 2,
+      "candidate_results": {
+        "beta_only": {
+          "confirmation_delay": 1,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 2
+        },
+        "eta_beta": {
+          "confirmation_delay": 1,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 2
+        },
+        "eta_only": {
+          "confirmation_delay": 1,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 2
+        }
+      },
+      "cheap_stationarity_sweep": 1,
+      "endpoint_certification_by_sweep": [
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 1
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 2
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 3
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 4
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 5
+        }
+      ],
+      "eta_beta_confirmation_sweep": 2,
+      "eta_only_confirmation_sweep": 2,
+      "final_runtime_convergence": "Passed",
+      "first_certified_sweep": 1,
+      "runtime_convergence_by_sweep": [
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 1
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 2
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 3
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 4
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 5
+        }
+      ],
+      "search_sweeps_executed": 5,
+      "topology": "chain"
+    },
+    {
+      "atoms": 128,
+      "beta_only_confirmation_sweep": 2,
+      "candidate_results": {
+        "beta_only": {
+          "confirmation_delay": 1,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 2
+        },
+        "eta_beta": {
+          "confirmation_delay": 1,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 2
+        },
+        "eta_only": {
+          "confirmation_delay": 1,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 2
+        }
+      },
+      "cheap_stationarity_sweep": 1,
+      "endpoint_certification_by_sweep": [
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 1
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 2
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 3
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 4
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 5
+        }
+      ],
+      "eta_beta_confirmation_sweep": 2,
+      "eta_only_confirmation_sweep": 2,
+      "final_runtime_convergence": "Passed",
+      "first_certified_sweep": 1,
+      "runtime_convergence_by_sweep": [
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 1
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 2
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 3
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 4
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 5
+        }
+      ],
+      "search_sweeps_executed": 5,
+      "topology": "chain"
+    },
+    {
+      "atoms": 256,
+      "beta_only_confirmation_sweep": 8,
+      "candidate_results": {
+        "beta_only": {
+          "confirmation_delay": 2,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 8
+        },
+        "eta_beta": {
+          "confirmation_delay": 2,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 8
+        },
+        "eta_only": {
+          "confirmation_delay": 1,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 7
+        }
+      },
+      "cheap_stationarity_sweep": 6,
+      "endpoint_certification_by_sweep": [
+        {
+          "endpoint_certified": false,
+          "endpoint_trust": false,
+          "fully_certified": false,
+          "gradient": false,
+          "identified": false,
+          "inner": false,
+          "local": false,
+          "runtime_convergence": "Failed",
+          "sweep": 1
+        },
+        {
+          "endpoint_certified": false,
+          "endpoint_trust": false,
+          "fully_certified": false,
+          "gradient": false,
+          "identified": false,
+          "inner": false,
+          "local": false,
+          "runtime_convergence": "Failed",
+          "sweep": 2
+        },
+        {
+          "endpoint_certified": false,
+          "endpoint_trust": false,
+          "fully_certified": false,
+          "gradient": false,
+          "identified": false,
+          "inner": false,
+          "local": false,
+          "runtime_convergence": "Failed",
+          "sweep": 3
+        },
+        {
+          "endpoint_certified": false,
+          "endpoint_trust": false,
+          "fully_certified": false,
+          "gradient": false,
+          "identified": false,
+          "inner": false,
+          "local": false,
+          "runtime_convergence": "Failed",
+          "sweep": 4
+        },
+        {
+          "endpoint_certified": false,
+          "endpoint_trust": false,
+          "fully_certified": false,
+          "gradient": false,
+          "identified": false,
+          "inner": false,
+          "local": false,
+          "runtime_convergence": "Failed",
+          "sweep": 5
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 6
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 7
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 8
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 9
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 10
+        }
+      ],
+      "eta_beta_confirmation_sweep": 8,
+      "eta_only_confirmation_sweep": 7,
+      "final_runtime_convergence": "Passed",
+      "first_certified_sweep": 6,
+      "runtime_convergence_by_sweep": [
+        {
+          "runtime_convergence": "Failed",
+          "sweep": 1
+        },
+        {
+          "runtime_convergence": "Failed",
+          "sweep": 2
+        },
+        {
+          "runtime_convergence": "Failed",
+          "sweep": 3
+        },
+        {
+          "runtime_convergence": "Failed",
+          "sweep": 4
+        },
+        {
+          "runtime_convergence": "Failed",
+          "sweep": 5
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 6
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 7
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 8
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 9
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 10
+        }
+      ],
+      "search_sweeps_executed": 10,
+      "topology": "chain"
+    },
+    {
+      "atoms": 32,
+      "beta_only_confirmation_sweep": 2,
+      "candidate_results": {
+        "beta_only": {
+          "confirmation_delay": 1,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 2
+        },
+        "eta_beta": {
+          "confirmation_delay": 1,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 2
+        },
+        "eta_only": {
+          "confirmation_delay": 1,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 2
+        }
+      },
+      "cheap_stationarity_sweep": 1,
+      "endpoint_certification_by_sweep": [
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 1
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 2
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 3
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 4
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 5
+        }
+      ],
+      "eta_beta_confirmation_sweep": 2,
+      "eta_only_confirmation_sweep": 2,
+      "final_runtime_convergence": "Passed",
+      "first_certified_sweep": 1,
+      "runtime_convergence_by_sweep": [
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 1
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 2
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 3
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 4
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 5
+        }
+      ],
+      "search_sweeps_executed": 5,
+      "topology": "cube"
+    },
+    {
+      "atoms": 128,
+      "beta_only_confirmation_sweep": 2,
+      "candidate_results": {
+        "beta_only": {
+          "confirmation_delay": 1,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 2
+        },
+        "eta_beta": {
+          "confirmation_delay": 1,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 2
+        },
+        "eta_only": {
+          "confirmation_delay": 1,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 2
+        }
+      },
+      "cheap_stationarity_sweep": 1,
+      "endpoint_certification_by_sweep": [
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 1
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 2
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 3
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 4
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 5
+        }
+      ],
+      "eta_beta_confirmation_sweep": 2,
+      "eta_only_confirmation_sweep": 2,
+      "final_runtime_convergence": "Passed",
+      "first_certified_sweep": 1,
+      "runtime_convergence_by_sweep": [
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 1
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 2
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 3
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 4
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 5
+        }
+      ],
+      "search_sweeps_executed": 5,
+      "topology": "cube"
+    },
+    {
+      "atoms": 256,
+      "beta_only_confirmation_sweep": 14,
+      "candidate_results": {
+        "beta_only": {
+          "confirmation_delay": 1,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 14
+        },
+        "eta_beta": {
+          "confirmation_delay": 1,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 14
+        },
+        "eta_only": {
+          "confirmation_delay": 1,
+          "confirmation_precedes_certification": false,
+          "confirmation_sweep": 14
+        }
+      },
+      "cheap_stationarity_sweep": 11,
+      "endpoint_certification_by_sweep": [
+        {
+          "endpoint_certified": false,
+          "endpoint_trust": false,
+          "fully_certified": false,
+          "gradient": false,
+          "identified": false,
+          "inner": false,
+          "local": false,
+          "runtime_convergence": "Failed",
+          "sweep": 1
+        },
+        {
+          "endpoint_certified": false,
+          "endpoint_trust": false,
+          "fully_certified": false,
+          "gradient": false,
+          "identified": false,
+          "inner": false,
+          "local": false,
+          "runtime_convergence": "Failed",
+          "sweep": 2
+        },
+        {
+          "endpoint_certified": false,
+          "endpoint_trust": false,
+          "fully_certified": false,
+          "gradient": false,
+          "identified": false,
+          "inner": false,
+          "local": false,
+          "runtime_convergence": "Failed",
+          "sweep": 3
+        },
+        {
+          "endpoint_certified": false,
+          "endpoint_trust": false,
+          "fully_certified": false,
+          "gradient": false,
+          "identified": false,
+          "inner": false,
+          "local": false,
+          "runtime_convergence": "Failed",
+          "sweep": 4
+        },
+        {
+          "endpoint_certified": false,
+          "endpoint_trust": false,
+          "fully_certified": false,
+          "gradient": false,
+          "identified": false,
+          "inner": false,
+          "local": false,
+          "runtime_convergence": "Failed",
+          "sweep": 5
+        },
+        {
+          "endpoint_certified": false,
+          "endpoint_trust": false,
+          "fully_certified": false,
+          "gradient": false,
+          "identified": false,
+          "inner": false,
+          "local": false,
+          "runtime_convergence": "Failed",
+          "sweep": 6
+        },
+        {
+          "endpoint_certified": false,
+          "endpoint_trust": false,
+          "fully_certified": false,
+          "gradient": false,
+          "identified": false,
+          "inner": false,
+          "local": false,
+          "runtime_convergence": "Failed",
+          "sweep": 7
+        },
+        {
+          "endpoint_certified": false,
+          "endpoint_trust": false,
+          "fully_certified": false,
+          "gradient": false,
+          "identified": false,
+          "inner": false,
+          "local": false,
+          "runtime_convergence": "Failed",
+          "sweep": 8
+        },
+        {
+          "endpoint_certified": false,
+          "endpoint_trust": false,
+          "fully_certified": false,
+          "gradient": false,
+          "identified": false,
+          "inner": false,
+          "local": false,
+          "runtime_convergence": "Failed",
+          "sweep": 9
+        },
+        {
+          "endpoint_certified": false,
+          "endpoint_trust": false,
+          "fully_certified": false,
+          "gradient": false,
+          "identified": false,
+          "inner": false,
+          "local": false,
+          "runtime_convergence": "Failed",
+          "sweep": 10
+        },
+        {
+          "endpoint_certified": false,
+          "endpoint_trust": false,
+          "fully_certified": false,
+          "gradient": false,
+          "identified": true,
+          "inner": false,
+          "local": false,
+          "runtime_convergence": "Failed",
+          "sweep": 11
+        },
+        {
+          "endpoint_certified": false,
+          "endpoint_trust": false,
+          "fully_certified": false,
+          "gradient": true,
+          "identified": true,
+          "inner": false,
+          "local": false,
+          "runtime_convergence": "Failed",
+          "sweep": 12
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 13
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 14
+        },
+        {
+          "endpoint_certified": true,
+          "endpoint_trust": true,
+          "fully_certified": true,
+          "gradient": true,
+          "identified": true,
+          "inner": true,
+          "local": true,
+          "runtime_convergence": "Passed",
+          "sweep": 15
+        }
+      ],
+      "eta_beta_confirmation_sweep": 14,
+      "eta_only_confirmation_sweep": 14,
+      "final_runtime_convergence": "Passed",
+      "first_certified_sweep": 13,
+      "runtime_convergence_by_sweep": [
+        {
+          "runtime_convergence": "Failed",
+          "sweep": 1
+        },
+        {
+          "runtime_convergence": "Failed",
+          "sweep": 2
+        },
+        {
+          "runtime_convergence": "Failed",
+          "sweep": 3
+        },
+        {
+          "runtime_convergence": "Failed",
+          "sweep": 4
+        },
+        {
+          "runtime_convergence": "Failed",
+          "sweep": 5
+        },
+        {
+          "runtime_convergence": "Failed",
+          "sweep": 6
+        },
+        {
+          "runtime_convergence": "Failed",
+          "sweep": 7
+        },
+        {
+          "runtime_convergence": "Failed",
+          "sweep": 8
+        },
+        {
+          "runtime_convergence": "Failed",
+          "sweep": 9
+        },
+        {
+          "runtime_convergence": "Failed",
+          "sweep": 10
+        },
+        {
+          "runtime_convergence": "Failed",
+          "sweep": 11
+        },
+        {
+          "runtime_convergence": "Failed",
+          "sweep": 12
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 13
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 14
+        },
+        {
+          "runtime_convergence": "Passed",
+          "sweep": 15
+        }
+      ],
+      "search_sweeps_executed": 15,
+      "topology": "cube"
+    }
+  ],
+  "expected_cases": [
+    {
+      "atoms": 32,
+      "topology": "chain"
+    },
+    {
+      "atoms": 128,
+      "topology": "chain"
+    },
+    {
+      "atoms": 256,
+      "topology": "chain"
+    },
+    {
+      "atoms": 32,
+      "topology": "cube"
+    },
+    {
+      "atoms": 128,
+      "topology": "cube"
+    },
+    {
+      "atoms": 256,
+      "topology": "cube"
+    }
+  ],
+  "missing_cases": [],
+  "qualification": "passed",
+  "thresholds": {
+    "beta_scaled_change": 1e-10,
+    "eta_change_inf": 1e-10,
+    "global_ac_kkt": 1e-10,
+    "width_gradient_inf_norm": 1e-12
+  }
+}

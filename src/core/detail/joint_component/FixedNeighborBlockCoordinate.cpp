@@ -68,6 +68,11 @@ Sparse Design(const Domain & domain,VectorRef eta)
 }
 double PredictionDifference(VectorRef a,VectorRef b)
 {return (a-b).lpNorm<Eigen::Infinity>();}
+double ScaledCoefficientDifference(VectorRef lhs,VectorRef rhs)
+{
+    if(lhs.size()!=rhs.size() || lhs.size()==0) return std::numeric_limits<double>::infinity();
+    return ((lhs-rhs).array().abs()/(1.0+lhs.array().abs().max(rhs.array().abs()))).maxCoeff();
+}
 JointState State(const Endpoint & endpoint,double scale)
 {
     return {Values(endpoint.beta),Values(endpoint.eta.array().exp()),Values(endpoint.eta),
@@ -108,7 +113,7 @@ void BuildEndpointResult(const JointProblem & problem,const ProblemData & data,c
     if(agrees)
     {
         expected=control.x*beta;
-        coefficient_difference=((beta-control.beta).array().abs()/(1+beta.array().abs().max(control.beta.array().abs()))).maxCoeff();
+        coefficient_difference=ScaledCoefficientDifference(beta,control.beta);
         agrees=coefficient_difference<=1e-10;
     }
     const Vector actual=Select(out.state.prediction,IndicesOf(layout.informative_rows));
@@ -157,7 +162,8 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
     bool stop=false;
     for(std::size_t sweep_index=0;sweep_index<policy.maximum_sweeps && !stop;++sweep_index)
     {
-        const auto sweep_started=Clock::now(); FixedNeighborBlockSweep sweep;
+        const auto sweep_started=Clock::now(); FixedNeighborBlockSweep sweep; sweep.sweep=sweep_index+1;
+        const Vector eta_before=out.state.eta,beta_before=out.state.beta;
         sweep.objective_before=out.state.objective;
         for(auto block_index:order)
         {
@@ -347,6 +353,14 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
         sweep.global_a_feasibility=global.certificate.feasible ? 0.0 : 1.0;
         sweep.global_ac_kkt=global.certificate.projected_kkt;
         sweep.global_width_gradient_inf_norm=global.gradient.lpNorm<Eigen::Infinity>();
+        sweep.eta_change_inf=(out.state.eta-eta_before).lpNorm<Eigen::Infinity>();
+        sweep.beta_scaled_change=ScaledCoefficientDifference(out.state.beta,beta_before);
+        sweep.coordinate_confirmation_available=sweep_index>0;
+        for(const auto & block:out.blocks) if(block.sweep==sweep_index+1)
+        {
+            if(block.accepted) ++sweep.accepted_blocks;
+            else if(block.status=="unchanged") ++sweep.unchanged_blocks;
+        }
         sweep.wall_seconds=Seconds(sweep_started); out.sweeps.push_back(sweep);
         if(policy.sweep_observer) policy.sweep_observer(out.sweeps.back());
         if(policy.state_observer) policy.state_observer(sweep_index+1,out.state,out.sweeps.back(),out.blocks);

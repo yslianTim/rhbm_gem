@@ -78,6 +78,50 @@ TEST(JointFixedNeighborBlockCoordinateTest, MultiBlockBudgetFailureRemainsDistin
 {
     CheckMultiBlockBudgetFailure("chain"); CheckMultiBlockBudgetFailure("cube");
 }
+TEST(JointFixedNeighborBlockCoordinateTest, SweepCoordinateTelemetryUsesCompleteSweepStates)
+{
+    JointProblem problem(second_stage_test::OperatorWorkload("chain",32));
+    const n::Vector initial_eta=n::Vector::Constant(32,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.core_atoms=16; policy.maximum_sweeps=5;
+    policy.stop_after_stationarity=false;
+    n::Vector previous_eta=initial_eta,previous_beta=n::Vector::Zero(64);
+    std::size_t observed_sweeps{};
+    policy.state_observer=[&](std::size_t sweep,const n::BlockCoordinateState & state,
+        const n::FixedNeighborBlockSweep & telemetry,const std::vector<n::FixedNeighborBlockRecord> & blocks) {
+        ++observed_sweeps;
+        EXPECT_EQ(telemetry.coordinate_confirmation_available,sweep>1);
+        EXPECT_DOUBLE_EQ(telemetry.eta_change_inf,(state.eta-previous_eta).lpNorm<Eigen::Infinity>());
+        const double beta_change=((state.beta-previous_beta).array().abs() /
+            (1.0+state.beta.array().abs().max(previous_beta.array().abs()))).maxCoeff();
+        EXPECT_DOUBLE_EQ(telemetry.beta_scaled_change,beta_change);
+        std::size_t accepted{},unchanged{};
+        for(const auto & block:blocks) if(block.sweep==sweep)
+        {
+            accepted+=block.accepted ? 1u : 0u;
+            unchanged+=block.status=="unchanged" ? 1u : 0u;
+        }
+        EXPECT_EQ(telemetry.accepted_blocks,accepted);
+        EXPECT_EQ(telemetry.unchanged_blocks,unchanged);
+        previous_eta=state.eta; previous_beta=state.beta;
+    };
+    const auto observed=n::SearchFixedNeighbor(problem,initial_eta,policy);
+    auto quiet_policy=policy; quiet_policy.state_observer={};
+    const auto quiet=n::SearchFixedNeighbor(problem,initial_eta,quiet_policy);
+    ASSERT_EQ(observed_sweeps,observed.sweeps.size());
+    ASSERT_EQ(observed.sweeps.size(),quiet.sweeps.size());
+    EXPECT_EQ(observed.search_converged,quiet.search_converged);
+    EXPECT_EQ(observed.reason,quiet.reason);
+    EXPECT_TRUE((observed.state.eta.array()==quiet.state.eta.array()).all());
+    EXPECT_TRUE((observed.state.beta.array()==quiet.state.beta.array()).all());
+    EXPECT_DOUBLE_EQ(observed.state.objective,quiet.state.objective);
+    for(std::size_t k=0;k<observed.sweeps.size();++k)
+    {
+        EXPECT_DOUBLE_EQ(observed.sweeps[k].eta_change_inf,quiet.sweeps[k].eta_change_inf);
+        EXPECT_DOUBLE_EQ(observed.sweeps[k].beta_scaled_change,quiet.sweeps[k].beta_scaled_change);
+        EXPECT_EQ(observed.sweeps[k].accepted_blocks,quiet.sweeps[k].accepted_blocks);
+        EXPECT_EQ(observed.sweeps[k].unchanged_blocks,quiet.sweeps[k].unchanged_blocks);
+    }
+}
 TEST(JointFixedNeighborBlockCoordinateTest, InvalidCorePolicyKeepsFailureSemantics)
 {
     JointProblem problem(second_stage_test::OperatorWorkload("chain",8));

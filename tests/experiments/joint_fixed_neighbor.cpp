@@ -128,6 +128,55 @@ j::object DecomposeEndpoint(const n::Domain & domain,const n::Vector & y,const n
         {"same_eta_reference",EndpointStateJson("same-eta-reference",reference,reference_assessment,reference_trust,context.scale)},
         {"local_blocks",local_blocks}};
 }
+j::object AssessSweepEndpoint(const rhbm_gem::JointParameterLayout & layout,
+    const n::Domain & domain,const n::Vector & y,const n::EvaluationContext & context,
+    const n::BlockCoordinateState & state,std::size_t sweep)
+{
+    const n::Vector eta=state.eta,beta=state.beta;
+    const auto endpoint=n::EvaluateState(domain,y,eta,beta,context);
+    const auto reference=n::EvaluateProfile(domain,y,eta,true,&context);
+    const auto assessment=n::AssessEvaluated(domain,y,endpoint,reference,context,true);
+    const auto trust=n::CheckTrust(domain,y,endpoint,context,reference);
+    const auto control=n::EvaluateProfile(domain,y,eta,false,&context);
+    bool agrees=control.valid;
+    double coefficient_difference=std::numeric_limits<double>::infinity();
+    n::Vector expected=n::Vector::Zero(y.size());
+    if(agrees)
+    {
+        expected=control.x*beta;
+        coefficient_difference=CoefficientDifference(beta,control.beta);
+        agrees=coefficient_difference<=1e-10;
+    }
+    n::Vector actual(y.size());
+    for(std::size_t k=0;k<layout.informative_rows.size();++k)
+        actual(static_cast<Eigen::Index>(k))=state.prediction(static_cast<Eigen::Index>(layout.informative_rows[k]));
+    const double prediction_difference=((actual-expected).array().abs() /
+        (1.0+actual.array().abs().max(expected.array().abs()))).maxCoeff();
+    const double profile_objective=.5*(expected-y).squaredNorm()/(context.scale*context.scale);
+    const bool reconstruction=actual.allFinite() && expected.allFinite() && prediction_difference<=1e-10 &&
+        std::abs(state.objective-profile_objective)<=1e-12;
+    agrees &= reconstruction;
+
+    using Scope=rhbm_gem::JointEvidenceScope;
+    using Status=rhbm_gem::JointCheckStatus;
+    auto global_evidence=n::AssessmentEvidence(assessment,Scope::AssembledGlobal);
+    global_evidence.push_back({"assembled-profile",agrees ? Status::Passed : Status::Failed,
+        Scope::AssembledGlobal,std::max(coefficient_difference,prediction_difference),1e-10,
+        reconstruction ? "" : "full-domain-reconstruction-failed"});
+    const auto global_status=n::ConvergenceStatus(global_evidence,Scope::AssembledGlobal,true);
+    const auto component_status=n::ConvergenceStatus(
+        n::AssessmentEvidence(assessment,Scope::ComponentLocal),Scope::ComponentLocal);
+    const auto runtime_status=n::MergeConvergenceStatus(global_status,component_status);
+    const bool endpoint_certified=n::IsCertifiedLocalEndpoint(assessment,trust);
+    return {{"sweep",sweep},{"objective",state.objective},
+        {"global_ac_kkt",Number(endpoint.certificate.projected_kkt)},
+        {"width_gradient_inf_norm",Number(endpoint.gradient.lpNorm<Eigen::Infinity>())},
+        {"inner",assessment.inner},{"gradient",assessment.gradient},{"local",assessment.local},
+        {"identified",assessment.identified},{"endpoint_trust",trust.passed},
+        {"endpoint_trust_reason",trust.reason},{"endpoint_certified",endpoint_certified},
+        {"runtime_convergence",CheckName(runtime_status)},
+        {"assessment",AssessmentJson(assessment,trust)}};
+}
 j::object PackFit(const std::string & method,const rhbm_gem::core::JointFitResult & fit,double seconds)
 {
     return {{"method",method},{"search_completed",fit.search_completed},
@@ -164,9 +213,13 @@ double ScaledAcDifference(const rhbm_gem::core::JointProblem & problem,const Met
 }
 j::object SweepJson(const n::FixedNeighborBlockSweep & sweep)
 {
-    return {{"objective_before",sweep.objective_before},{"objective_after",sweep.objective_after},
+    return {{"sweep",sweep.sweep},{"objective",sweep.objective_after},
+        {"objective_before",sweep.objective_before},{"objective_after",sweep.objective_after},
         {"global_a_feasibility",sweep.global_a_feasibility},{"global_ac_kkt",sweep.global_ac_kkt},
         {"global_width_gradient_inf_norm",sweep.global_width_gradient_inf_norm},
+        {"eta_change_inf",sweep.eta_change_inf},{"beta_scaled_change",sweep.beta_scaled_change},
+        {"coordinate_confirmation_available",sweep.coordinate_confirmation_available},
+        {"accepted_blocks",sweep.accepted_blocks},{"unchanged_blocks",sweep.unchanged_blocks},
         {"cache_replay_error",sweep.cache_replay_error},{"objective_replay_error",sweep.objective_replay_error},
         {"block_solves",sweep.block_solves},{"profile_evaluations",sweep.profile_evaluations},
         {"maximum_block_rows",sweep.maximum_block_rows},{"maximum_block_columns",sweep.maximum_block_columns},
@@ -178,7 +231,7 @@ j::object SweepJson(const n::FixedNeighborBlockSweep & sweep)
 }
 void Write(const std::filesystem::path &,const j::value &);
 j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,bool compare_global,
-    bool decompose=false,bool certify_local=false)
+    bool decompose=false,bool certify_local=false,bool qualification=false)
 {
     auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
     const rhbm_gem::core::JointProblem problem(*input);
@@ -187,11 +240,17 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     neighbor_policy.core_atoms=128;
     neighbor_policy.certify_local_candidates=certify_local;
     neighbor_policy.stop_after_no_certified_update=certify_local;
+    if(qualification)
+    {
+        neighbor_policy.stop_after_stationarity=false;
+        neighbor_policy.maximum_sweeps=atoms==256 ? (topology=="cube" ? 15 : 10) : 5;
+    }
     if(decompose && topology=="cube" && atoms==256)
     {neighbor_policy.maximum_sweeps=15; neighbor_policy.stop_after_stationarity=false;}
     j::array progress_sweeps;
     j::array endpoint_snapshots;
     j::array local_block_snapshots;
+    j::array endpoint_assessments;
     const auto progress_path=std::filesystem::path(output_path.string()+".progress.json");
     neighbor_policy.sweep_observer=[&](const auto & sweep) {
         progress_sweeps.push_back(SweepJson(sweep));
@@ -199,14 +258,26 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             {"sweeps_completed",progress_sweeps.size()},{"sweep_telemetry",progress_sweeps}};
         if(decompose) progress["endpoint_decomposition"]=endpoint_snapshots;
         if(certify_local) progress["local_block_telemetry"]=local_block_snapshots;
+        if(qualification) progress["endpoint_assessment_by_sweep"]=endpoint_assessments;
         Write(progress_path,progress);
         std::cerr<<topology<<'-'<<atoms<<" FixedNeighbor sweep "<<progress_sweeps.size()
             <<" KKT="<<sweep.global_ac_kkt<<" width-grad="<<sweep.global_width_gradient_inf_norm
             <<" seconds="<<sweep.wall_seconds<<'\n';
     };
-    if(decompose || certify_local)
+    if(decompose || certify_local || qualification)
         neighbor_policy.state_observer=[&](std::size_t sweep,const n::BlockCoordinateState & state,
             const n::FixedNeighborBlockSweep & sweep_record,const std::vector<n::FixedNeighborBlockRecord> & blocks) {
+            if(qualification)
+            {
+                const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+                const auto domain=n::ProfileDomain(data.domain,data.layout);
+                const auto context=n::ProfileContext(data.context,data.layout,data.domain.rows);
+                endpoint_assessments.push_back(AssessSweepEndpoint(data.layout,domain,data.y,
+                    context,state,sweep));
+                Write(progress_path,j::object{{"topology",topology},{"atoms",atoms},
+                    {"sweeps_completed",progress_sweeps.size()},{"sweep_telemetry",progress_sweeps},
+                    {"endpoint_assessment_by_sweep",endpoint_assessments}});
+            }
             if(certify_local)
             {
                 for(const auto & block:blocks) if(block.sweep==sweep)
@@ -332,6 +403,11 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
             {"fixed_neighbor",neighbor_json},{"endpoint_decomposition",endpoint_snapshots},
             {"peak_rss_mb",PeakRssMb()}};
+    if(qualification)
+        return {{"topology",topology},{"atoms",atoms},{"core_atoms",neighbor_policy.core_atoms},
+            {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
+            {"fixed_neighbor",neighbor_json},{"endpoint_assessment_by_sweep",endpoint_assessments},
+            {"peak_rss_mb",PeakRssMb()}};
     if(!compare_global)
         return {{"topology",topology},{"atoms",atoms},{"core_atoms",neighbor_policy.core_atoms},
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
@@ -373,14 +449,15 @@ int main(int argc,char ** argv)
 {
     try {
         if(argc!=5 || (std::string(argv[1])!="--case" && std::string(argv[1])!="--neighbor-only" &&
-            std::string(argv[1])!="--decompose" && std::string(argv[1])!="--certified-local"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local OUTPUT_FILE TOPOLOGY ATOMS");
+            std::string(argv[1])!="--decompose" && std::string(argv[1])!="--certified-local" &&
+            std::string(argv[1])!="--qualification"))
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification OUTPUT_FILE TOPOLOGY ATOMS");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
         const std::string mode(argv[1]);
         Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--case",mode=="--decompose",
-            mode=="--certified-local"));
+            mode=="--certified-local",mode=="--qualification"));
         std::cout<<argv[3]<<'-'<<argv[4]<<" fixed-neighbor endpoint experiment complete\n";
         return 0;
     } catch(const std::exception & error) {std::cerr<<error.what()<<'\n'; return 1;}

@@ -25,11 +25,15 @@ struct FixedNeighborBlockRecord
 };
 struct FixedNeighborBlockSweep
 {
+    std::size_t sweep{};
     double objective_before{},objective_after{},global_a_feasibility{},global_ac_kkt{};
     double global_width_gradient_inf_norm{},cache_replay_error{},objective_replay_error{},wall_seconds{};
+    double eta_change_inf{},beta_scaled_change{};
+    bool coordinate_confirmation_available{};
     double local_assessment_seconds{};
     std::size_t block_solves{},profile_evaluations{},local_assessments{},certified_local_candidates{},
-        maximum_block_rows{},maximum_block_columns{},maximum_local_assessment_rows{},maximum_local_assessment_columns{};
+        maximum_block_rows{},maximum_block_columns{},maximum_local_assessment_rows{},maximum_local_assessment_columns{},
+        accepted_blocks{},unchanged_blocks{};
 };
 struct FixedNeighborPolicy
 {

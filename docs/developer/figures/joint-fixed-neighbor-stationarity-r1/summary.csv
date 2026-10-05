@@ -1,0 +1,7 @@
+topology,atoms,cheap_stationarity_sweep,first_certified_sweep,eta_only_confirmation_sweep,beta_only_confirmation_sweep,eta_beta_confirmation_sweep,search_sweeps_executed,final_runtime_convergence
+chain,32,1,1,2,2,2,5,Passed
+chain,128,1,1,2,2,2,5,Passed
+chain,256,6,6,7,8,8,10,Passed
+cube,32,1,1,2,2,2,5,Passed
+cube,128,1,1,2,2,2,5,Passed
+cube,256,11,13,14,14,14,15,Passed
