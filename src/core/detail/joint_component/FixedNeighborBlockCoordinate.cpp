@@ -122,6 +122,8 @@ void BuildEndpointResult(const JointProblem & problem,const ProblemData & data,c
         reconstruction ? "" : "full-domain-reconstruction-failed"});
 }
 }
+bool IsCertifiedLocalEndpoint(const Assessment & assessment,const TrustEvidence & trust)
+{return assessment.inner && assessment.gradient && assessment.local && assessment.identified && trust.passed;}
 FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef initial_eta,const FixedNeighborPolicy & policy)
 {
     FixedNeighborResult out;
@@ -231,6 +233,60 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
             }
             record.local_final_gradient_inf_norm=local_state.gradient.lpNorm<Eigen::Infinity>();
             record.local_final_ac_kkt=local_state.certificate.projected_kkt;
+            if(policy.certify_local_candidates)
+            {
+                record.local_assessment_attempted=true;
+                record.local_assessment_rows=local_state.x.rows();
+                record.local_assessment_columns=local_state.x.cols();
+                const auto assessment_started=Clock::now();
+                const auto local_reference=EvaluateProfile(local_domain,local_y,local_state.eta,true,&local_context);
+                const auto local_assessment=AssessEvaluated(local_domain,local_y,local_state,local_reference,local_context,true);
+                const auto local_trust=CheckTrust(local_domain,local_y,local_state,local_context,local_reference);
+                record.local_assessment_seconds=Seconds(assessment_started);
+                sweep.local_assessment_seconds+=record.local_assessment_seconds;
+                ++sweep.local_assessments;
+                sweep.maximum_local_assessment_rows=std::max(sweep.maximum_local_assessment_rows,
+                    static_cast<std::size_t>(record.local_assessment_rows));
+                sweep.maximum_local_assessment_columns=std::max(sweep.maximum_local_assessment_columns,
+                    static_cast<std::size_t>(record.local_assessment_columns));
+                record.local_inner_passed=local_assessment.inner;
+                record.local_gradient_passed=local_assessment.gradient;
+                record.local_correction_passed=local_assessment.local;
+                record.local_identified=local_assessment.identified;
+                record.local_trust_passed=local_trust.passed;
+                record.local_profile_gradient_inf_norm=local_assessment.primary.gradient.size() ?
+                    local_assessment.primary.gradient.lpNorm<Eigen::Infinity>() : std::numeric_limits<double>::infinity();
+                record.local_reference_gradient_inf_norm=local_assessment.reference.gradient.size() ?
+                    local_assessment.reference.gradient.lpNorm<Eigen::Infinity>() : std::numeric_limits<double>::infinity();
+                record.local_correction_inf_norm=local_assessment.correction.size() ?
+                    local_assessment.correction.lpNorm<Eigen::Infinity>() : std::numeric_limits<double>::infinity();
+                if(local_assessment.widths)
+                {
+                    record.local_projected_width_rank=local_assessment.widths->rank;
+                    record.local_projected_width_minimum=local_assessment.widths->minimum;
+                }
+                if(local_assessment.jacobian)
+                {
+                    record.local_corrected_jacobian_rank=local_assessment.jacobian->rank;
+                    record.local_corrected_jacobian_minimum=local_assessment.jacobian->minimum;
+                }
+                if(local_assessment.normalized_widths)
+                {
+                    record.local_normalized_width_rank=local_assessment.normalized_widths->rank;
+                    record.local_normalized_width_minimum=local_assessment.normalized_widths->minimum;
+                }
+                record.local_assessment_failure=local_assessment.failure;
+                record.local_trust_reason=local_trust.reason;
+                record.local_assessment_passed=IsCertifiedLocalEndpoint(local_assessment,local_trust);
+                if(!record.local_assessment_passed)
+                {
+                    record.status="unchanged"; record.reason="local-endpoint-uncertified";
+                    record.local_objective_after=record.local_objective_before;
+                    record.objective_after=record.objective_before;
+                    out.blocks.push_back(std::move(record)); continue;
+                }
+                ++sweep.certified_local_candidates;
+            }
             record.local_objective_after=local_state.certificate.objective/(context.scale*context.scale);
             if(record.local_objective_after>record.local_objective_before)
             {
@@ -297,6 +353,8 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
         if(sweep.cache_replay_error>2e-12+2e-13*std::max(1.0,replay.prediction.cwiseAbs().maxCoeff()) ||
             !WithinBlockObjectiveReplay(sweep.objective_replay_error,replay.objective))
         {out.reason="block-cache-replay-failed"; stop=true; break;}
+        if(policy.stop_after_no_certified_update && sweep.local_assessments>0 && sweep.certified_local_candidates==0)
+        {out.reason="local-endpoint-uncertified"; break;}
         if(sweep.global_ac_kkt<=1e-10 && sweep.global_width_gradient_inf_norm<=1e-12)
         {
             if(!out.search_converged) out.sweeps_to_stationarity=sweep_index+1;

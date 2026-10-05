@@ -1,0 +1,113 @@
+{
+  "cases": {
+    "chain-256": {
+      "CertifiedLocal": {
+        "endpoint_certification": false,
+        "local_assessment_count": 2,
+        "local_assessment_failures": [
+          {
+            "block": 1,
+            "correction_inf_norm": 3.878190379055135e-10,
+            "failure": "b-not-stationary",
+            "profile_gradient_inf_norm": 3.7210449083731437e-13,
+            "sweep": 1,
+            "trust_reason": "trusted"
+          },
+          {
+            "block": 2,
+            "correction_inf_norm": 3.8792957158584614e-10,
+            "failure": "b-not-stationary",
+            "profile_gradient_inf_norm": 3.7219875618521865e-13,
+            "sweep": 1,
+            "trust_reason": "trusted"
+          }
+        ],
+        "local_assessment_seconds": 29.332924834,
+        "maximum_local_assessment_columns": 256,
+        "maximum_local_assessment_rows": 58300,
+        "objective_monotone": true,
+        "process_peak_rss_mb": 175.125,
+        "process_peak_rss_scope": "CertifiedLocal run includes existing final global endpoint assessment",
+        "profile_evaluations": 20,
+        "rejected_local_candidates": 2,
+        "runtime_convergence": "Failed",
+        "search_seconds": 209.15862904099998,
+        "sweeps": 1
+      },
+      "SearchOnlyLocal": {
+        "endpoint_certification": true,
+        "local_assessment_count": 0,
+        "local_assessment_seconds": 0.0,
+        "maximum_local_assessment_columns": 0,
+        "maximum_local_assessment_rows": 0,
+        "objective_monotone": true,
+        "process_peak_rss_mb": 341.78125,
+        "process_peak_rss_scope": "Q1 decomposition run includes global profile and endpoint assessments",
+        "profile_evaluations": 54,
+        "rejected_local_candidates": 0,
+        "runtime_convergence": "Passed",
+        "search_seconds": 487.07702521,
+        "sweeps": 6
+      },
+      "beta_inf_difference": 2.000064309460146,
+      "certified_local_improves_global_endpoint": false,
+      "eta_inf_difference": 0.09531646751617051,
+      "local_endpoint_differs": true
+    },
+    "cube-256": {
+      "CertifiedLocal": {
+        "endpoint_certification": false,
+        "local_assessment_count": 2,
+        "local_assessment_failures": [
+          {
+            "block": 1,
+            "correction_inf_norm": 4.753228836670547e-08,
+            "failure": "b-not-stationary",
+            "profile_gradient_inf_norm": 2.7028889757600975e-11,
+            "sweep": 1,
+            "trust_reason": "trusted"
+          },
+          {
+            "block": 2,
+            "correction_inf_norm": 4.9052825768725674e-08,
+            "failure": "b-not-stationary",
+            "profile_gradient_inf_norm": 2.7807360392803316e-11,
+            "sweep": 1,
+            "trust_reason": "trusted"
+          }
+        ],
+        "local_assessment_seconds": 28.679055543,
+        "maximum_local_assessment_columns": 256,
+        "maximum_local_assessment_rows": 50039,
+        "objective_monotone": true,
+        "process_peak_rss_mb": 410.796875,
+        "process_peak_rss_scope": "CertifiedLocal run includes existing final global endpoint assessment",
+        "profile_evaluations": 36,
+        "rejected_local_candidates": 2,
+        "runtime_convergence": "Failed",
+        "search_seconds": 363.481783582,
+        "sweeps": 1
+      },
+      "SearchOnlyLocal": {
+        "endpoint_certification": false,
+        "local_assessment_count": 0,
+        "local_assessment_seconds": 0.0,
+        "maximum_local_assessment_columns": 0,
+        "maximum_local_assessment_rows": 0,
+        "objective_monotone": true,
+        "process_peak_rss_mb": 590.171875,
+        "process_peak_rss_scope": "Q1 decomposition run includes global profile and endpoint assessments",
+        "profile_evaluations": 112,
+        "rejected_local_candidates": 0,
+        "runtime_convergence": "Failed",
+        "search_seconds": 977.494615542,
+        "sweeps": 11
+      },
+      "beta_inf_difference": 2.0000702680644595,
+      "certified_local_improves_global_endpoint": false,
+      "eta_inf_difference": 0.09531735054728974,
+      "local_endpoint_differs": true
+    }
+  },
+  "strategy": "bounded-local-assessment"
+}

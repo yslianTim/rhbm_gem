@@ -1,0 +1,21 @@
+{
+  "phase": "F2.5 mixed-case local certification comparison",
+  "backend": "SPQR",
+  "build_directory": "build/joint-spqr",
+  "build_type": "default",
+  "eigen_threads": 1,
+  "core_atoms": 128,
+  "block_order": "forward serial Gauss-Seidel",
+  "local_solver": "LegacyCompact",
+  "local_candidate_assessment": "independent reference profile plus existing AssessEvaluated and CheckTrust on the core conditional problem",
+  "cases": ["chain-256", "cube-256"],
+  "thresholds": {
+    "inner_coefficient_difference": 1e-10,
+    "width_stationarity": 1e-12,
+    "local_correction": 1e-10,
+    "rank_semantics": "unchanged"
+  },
+  "global_search_and_final_endpoint_assessment": "existing FixedNeighbor paths",
+  "global_profile_coefficients_written_to_block_state": false,
+  "measurement_note": "SearchOnlyLocal baseline rows come from the Q1 endpoint-decomposition campaign; baseline RSS includes those diagnostic assessments and is not a clean RSS comparison."
+}

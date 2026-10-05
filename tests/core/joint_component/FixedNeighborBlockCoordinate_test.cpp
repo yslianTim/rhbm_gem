@@ -134,3 +134,48 @@ TEST(JointFixedNeighborBlockCoordinateTest, SameEtaRawPrimaryAndReferenceDiagnos
     }
     EXPECT_TRUE(raw_trust.primary_valid); EXPECT_TRUE(primary_trust.primary_valid); EXPECT_TRUE(reference_trust.primary_valid);
 }
+TEST(JointFixedNeighborBlockCoordinateTest, CertifiedLocalCandidatesUseExistingChecksAndBoundedCores)
+{
+    JointProblem problem(second_stage_test::OperatorWorkload("chain",32));
+    const n::Vector eta=n::Vector::Constant(32,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.core_atoms=16; policy.maximum_sweeps=3;
+    policy.certify_local_candidates=true;
+    const auto result=n::SearchFixedNeighbor(problem,eta,policy);
+    ASSERT_FALSE(result.blocks.empty());
+    for(const auto & block:result.blocks)
+    {
+        ASSERT_TRUE(block.local_assessment_attempted);
+        EXPECT_LE(block.local_assessment_columns,2*static_cast<Eigen::Index>(policy.core_atoms));
+        EXPECT_GT(block.local_assessment_rows,0);
+        if(!block.local_assessment_passed)
+        {
+            EXPECT_FALSE(block.accepted);
+            EXPECT_EQ(block.reason,"local-endpoint-uncertified");
+        }
+        if(block.local_assessment_passed)
+        {
+            EXPECT_TRUE(block.local_inner_passed);
+            EXPECT_TRUE(block.local_gradient_passed);
+            EXPECT_TRUE(block.local_correction_passed);
+            EXPECT_TRUE(block.local_identified);
+            EXPECT_TRUE(block.local_trust_passed);
+        }
+    }
+    for(const auto & sweep:result.sweeps)
+    {
+        EXPECT_EQ(sweep.local_assessments,sweep.block_solves);
+        EXPECT_LE(sweep.objective_after,sweep.objective_before+n::BlockObjectiveReplayEnclosure(sweep.objective_before));
+        EXPECT_LE(sweep.maximum_local_assessment_columns,2*policy.core_atoms);
+    }
+}
+TEST(JointFixedNeighborBlockCoordinateTest, LocalCertificationRequiresEveryExistingEndpointCheck)
+{
+    n::Assessment assessment; n::TrustEvidence trust;
+    assessment.inner=assessment.gradient=assessment.local=assessment.identified=true; trust.passed=true;
+    EXPECT_TRUE(n::IsCertifiedLocalEndpoint(assessment,trust));
+    assessment.inner=false; EXPECT_FALSE(n::IsCertifiedLocalEndpoint(assessment,trust));
+    assessment.inner=true; assessment.gradient=false; EXPECT_FALSE(n::IsCertifiedLocalEndpoint(assessment,trust));
+    assessment.gradient=true; assessment.local=false; EXPECT_FALSE(n::IsCertifiedLocalEndpoint(assessment,trust));
+    assessment.local=true; assessment.identified=false; EXPECT_FALSE(n::IsCertifiedLocalEndpoint(assessment,trust));
+    assessment.identified=true; trust.passed=false; EXPECT_FALSE(n::IsCertifiedLocalEndpoint(assessment,trust));
+}
