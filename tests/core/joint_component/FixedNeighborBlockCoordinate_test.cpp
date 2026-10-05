@@ -102,6 +102,33 @@ TEST(JointFixedNeighborBlockCoordinateTest, CheapStationarityNeedsCompleteSweepC
     EXPECT_EQ(confirmed.confirmed_stationarity_sweep,2u);
     EXPECT_EQ(confirmed.sweeps.size(),2u);
 }
+TEST(JointFixedNeighborBlockCoordinateTest, SearchOnlySkipsFinalAssessmentWithoutChangingTrajectory)
+{
+    JointProblem problem(second_stage_test::OperatorWorkload("chain",8));
+    const n::Vector eta=n::Vector::Constant(8,std::log(.55));
+    const auto assessed=n::SearchFixedNeighbor(problem,eta);
+    n::FixedNeighborPolicy policy; policy.assess_final_endpoint=false;
+    const auto search_only=n::SearchFixedNeighbor(problem,eta,policy);
+    ASSERT_TRUE(assessed.endpoint_certified);
+    ASSERT_TRUE(search_only.search_converged)<<search_only.reason;
+    EXPECT_FALSE(search_only.endpoint_certified);
+    EXPECT_TRUE(search_only.fit.components.empty());
+    EXPECT_EQ(search_only.reason,assessed.reason);
+    ASSERT_EQ(search_only.sweeps.size(),assessed.sweeps.size());
+    EXPECT_TRUE((search_only.state.eta.array()==assessed.state.eta.array()).all());
+    EXPECT_TRUE((search_only.state.beta.array()==assessed.state.beta.array()).all());
+    EXPECT_TRUE((search_only.state.prediction.array()==assessed.state.prediction.array()).all());
+    EXPECT_TRUE((search_only.state.residual.array()==assessed.state.residual.array()).all());
+    EXPECT_DOUBLE_EQ(search_only.state.objective,assessed.state.objective);
+    for(std::size_t k=0;k<search_only.sweeps.size();++k)
+    {
+        EXPECT_EQ(search_only.sweeps[k].sweep,assessed.sweeps[k].sweep);
+        EXPECT_DOUBLE_EQ(search_only.sweeps[k].objective_after,assessed.sweeps[k].objective_after);
+        EXPECT_DOUBLE_EQ(search_only.sweeps[k].global_ac_kkt,assessed.sweeps[k].global_ac_kkt);
+        EXPECT_DOUBLE_EQ(search_only.sweeps[k].global_width_gradient_inf_norm,
+            assessed.sweeps[k].global_width_gradient_inf_norm);
+    }
+}
 TEST(JointFixedNeighborBlockCoordinateTest, EtaConfirmationUsesInclusiveExistingThreshold)
 {
     constexpr double threshold=1e-10;

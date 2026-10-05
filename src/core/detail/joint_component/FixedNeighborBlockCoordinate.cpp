@@ -392,7 +392,7 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
         }
     }
     if(!out.search_converged && out.reason.empty()) out.reason="block-sweep-budget";
-    BuildEndpointResult(problem,data,layout,domain,y,context,out);
+    if(policy.assess_final_endpoint) BuildEndpointResult(problem,data,layout,domain,y,context,out);
     return out;
 }
 }

@@ -231,7 +231,7 @@ j::object SweepJson(const n::FixedNeighborBlockSweep & sweep)
 }
 void Write(const std::filesystem::path &,const j::value &);
 j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,bool compare_global,
-    bool decompose=false,bool certify_local=false,bool qualification=false)
+    bool decompose=false,bool certify_local=false,bool qualification=false,bool scaling_only=false)
 {
     auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
     const rhbm_gem::core::JointProblem problem(*input);
@@ -240,6 +240,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     neighbor_policy.core_atoms=128;
     neighbor_policy.certify_local_candidates=certify_local;
     neighbor_policy.stop_after_no_certified_update=certify_local;
+    neighbor_policy.assess_final_endpoint=!scaling_only;
     if(qualification)
     {
         neighbor_policy.stop_after_stationarity=false;
@@ -341,8 +342,10 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         [](std::size_t maximum,const auto & sweep){return std::max(maximum,sweep.maximum_local_assessment_columns);});
     std::cerr<<topology<<'-'<<atoms<<" FixedNeighbor finished in "<<neighbor_seconds<<" s; converged="
         <<neighbor.search_converged<<" sweeps="<<neighbor.sweeps.size()<<" KKT="
-        <<(neighbor.sweeps.empty() ? 0.0 : neighbor.sweeps.back().global_ac_kkt)<<" endpoint="
-        <<neighbor.endpoint_certified<<" runtime="<<CheckName(neighbor.fit.RuntimeConvergence())<<'\n';
+        <<(neighbor.sweeps.empty() ? 0.0 : neighbor.sweeps.back().global_ac_kkt);
+    if(!scaling_only) std::cerr<<" endpoint="<<neighbor.endpoint_certified
+        <<" runtime="<<CheckName(neighbor.fit.RuntimeConvergence());
+    std::cerr<<'\n';
     j::array sweeps;
     for(const auto & sweep:neighbor.sweeps)
         sweeps.push_back(SweepJson(sweep));
@@ -376,6 +379,44 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             {"status",block.status},{"reason",block.reason},{"local_search_stop_reason",block.local_search_stop_reason},
             {"local_final_gradient_inf_norm",Number(block.local_final_gradient_inf_norm)},
             {"local_final_ac_kkt",Number(block.local_final_ac_kkt)}});
+    if(scaling_only)
+    {
+        const auto sum_sweeps=[&](auto member) {
+            return std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),std::size_t{},
+                [&](std::size_t total,const auto & sweep){return total+sweep.*member;});
+        };
+        const double local_factor_seconds=std::accumulate(neighbor.blocks.begin(),neighbor.blocks.end(),0.0,
+            [](double total,const auto & block){return total+block.search_seconds;});
+        const auto accepted_local_updates=std::accumulate(neighbor.blocks.begin(),neighbor.blocks.end(),std::size_t{},
+            [](std::size_t total,const auto & block){return total+static_cast<std::size_t>(block.accepted_updates);});
+        const auto blocks_per_sweep=static_cast<std::size_t>(std::count_if(neighbor.blocks.begin(),neighbor.blocks.end(),
+            [](const auto & block){return block.sweep==1;}));
+        const auto & last=neighbor.sweeps.empty() ? n::FixedNeighborBlockSweep{} : neighbor.sweeps.back();
+        return {{"topology",topology},{"atoms",atoms},{"core_atoms",neighbor_policy.core_atoms},
+            {"maximum_sweeps",neighbor_policy.maximum_sweeps},
+            {"measurement_scope","fixed-neighbor-search-only"},
+            {"fixed_neighbor",j::object{{"search_converged",neighbor.search_converged},
+                {"search_reason",neighbor.reason},{"blocks_per_sweep",blocks_per_sweep},
+                {"first_order_stationarity_sweep",neighbor.first_order_stationarity_sweep},
+                {"confirmed_stationarity_sweep",neighbor.confirmed_stationarity_sweep},
+                {"confirmation_extra_sweeps",neighbor.first_order_stationarity_sweep && neighbor.confirmed_stationarity_sweep ?
+                    j::value(neighbor.confirmed_stationarity_sweep-neighbor.first_order_stationarity_sweep) : j::value(nullptr)},
+                {"sweeps",neighbor.sweeps.size()},{"objective",neighbor.state.objective},
+                {"final_global_ac_kkt",neighbor.sweeps.empty() ? j::value(nullptr) : Number(last.global_ac_kkt)},
+                {"final_raw_width_gradient_inf_norm",neighbor.sweeps.empty() ? j::value(nullptr) : Number(last.global_width_gradient_inf_norm)},
+                {"block_solves",sum_sweeps(&n::FixedNeighborBlockSweep::block_solves)},
+                {"profile_evaluations",sum_sweeps(&n::FixedNeighborBlockSweep::profile_evaluations)},
+                {"accepted_blocks",sum_sweeps(&n::FixedNeighborBlockSweep::accepted_blocks)},
+                {"accepted_local_updates",accepted_local_updates},
+                {"local_factor_seconds",local_factor_seconds},{"search_seconds",neighbor_search_seconds},
+                {"total_elapsed_seconds",neighbor_seconds},
+                {"maximum_local_rows",std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),std::size_t{},
+                    [](std::size_t maximum,const auto & sweep){return std::max(maximum,sweep.maximum_block_rows);})},
+                {"maximum_local_columns",std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),std::size_t{},
+                    [](std::size_t maximum,const auto & sweep){return std::max(maximum,sweep.maximum_block_columns);})},
+                {"sweep_telemetry",sweeps},{"block_telemetry",blocks}}},
+            {"peak_rss_mb",PeakRssMb()}};
+    }
     j::object neighbor_json{{"method","FixedNeighbor"},{"search_converged",neighbor.search_converged},
         {"search_reason",neighbor.reason},{"sweeps",neighbor.sweeps.size()},
         {"first_order_stationarity_sweep",neighbor.first_order_stationarity_sweep},
@@ -452,15 +493,15 @@ int main(int argc,char ** argv)
     try {
         if(argc!=5 || (std::string(argv[1])!="--case" && std::string(argv[1])!="--neighbor-only" &&
             std::string(argv[1])!="--decompose" && std::string(argv[1])!="--certified-local" &&
-            std::string(argv[1])!="--qualification"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification OUTPUT_FILE TOPOLOGY ATOMS");
+            std::string(argv[1])!="--qualification" && std::string(argv[1])!="--scaling-only"))
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--scaling-only OUTPUT_FILE TOPOLOGY ATOMS");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
         const std::string mode(argv[1]);
         Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--case",mode=="--decompose",
-            mode=="--certified-local",mode=="--qualification"));
-        std::cout<<argv[3]<<'-'<<argv[4]<<" fixed-neighbor endpoint experiment complete\n";
+            mode=="--certified-local",mode=="--qualification",mode=="--scaling-only"));
+        std::cout<<argv[3]<<'-'<<argv[4]<<" fixed-neighbor experiment complete\n";
         return 0;
     } catch(const std::exception & error) {std::cerr<<error.what()<<'\n'; return 1;}
 }

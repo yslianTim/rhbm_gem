@@ -42,6 +42,7 @@ struct FixedNeighborPolicy
     bool stop_after_stationarity{true};
     bool certify_local_candidates{};
     bool stop_after_no_certified_update{};
+    bool assess_final_endpoint{true};
     std::function<void(const FixedNeighborBlockSweep &)> sweep_observer;
     std::function<void(std::size_t,const BlockCoordinateState &,const FixedNeighborBlockSweep &,
         const std::vector<FixedNeighborBlockRecord> &)> state_observer;
