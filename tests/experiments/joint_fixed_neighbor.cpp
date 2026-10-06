@@ -277,6 +277,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     neighbor_policy.sweep_observer=[&](const auto & sweep) {
         progress_sweeps.push_back(SweepJson(sweep));
         j::object progress{{"topology",topology},{"atoms",atoms},
+            {"rows",problem.Input().observations.size()},{"parameter_count",3*atoms},
             {"sweeps_completed",progress_sweeps.size()},{"sweep_telemetry",progress_sweeps}};
         if(decompose) progress["endpoint_decomposition"]=endpoint_snapshots;
         if(certify_local) progress["local_block_telemetry"]=local_block_snapshots;
@@ -439,7 +440,8 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             scaling_json["final_beta"]=NumberArray(neighbor.state.beta);
             scaling_json["final_ac_scaling_weights"]=AcScalingWeights(problem,neighbor.state.eta);
         }
-        return {{"topology",topology},{"atoms",atoms},{"core_atoms",neighbor_policy.core_atoms},
+        return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
+            {"parameter_count",3*atoms},{"core_atoms",neighbor_policy.core_atoms},
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},
             {"block_order",reverse_order ? "reverse" : "forward"},
             {"measurement_scope","fixed-neighbor-search-only"},
@@ -474,17 +476,20 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     if(record_final_state)
         neighbor_json["final_ac_scaling_weights"]=AcScalingWeights(problem,neighbor.state.eta);
     if(decompose)
-        return {{"topology",topology},{"atoms",atoms},{"core_atoms",neighbor_policy.core_atoms},
+        return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
+            {"parameter_count",3*atoms},{"core_atoms",neighbor_policy.core_atoms},
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
             {"fixed_neighbor",neighbor_json},{"endpoint_decomposition",endpoint_snapshots},
             {"peak_rss_mb",PeakRssMb()}};
     if(qualification)
-        return {{"topology",topology},{"atoms",atoms},{"core_atoms",neighbor_policy.core_atoms},
+        return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
+            {"parameter_count",3*atoms},{"core_atoms",neighbor_policy.core_atoms},
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
             {"fixed_neighbor",neighbor_json},{"endpoint_assessment_by_sweep",endpoint_assessments},
             {"peak_rss_mb",PeakRssMb()}};
     if(!compare_global)
-        return {{"topology",topology},{"atoms",atoms},{"core_atoms",neighbor_policy.core_atoms},
+        return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
+            {"parameter_count",3*atoms},{"core_atoms",neighbor_policy.core_atoms},
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
             {"fixed_neighbor",neighbor_json},{"peak_rss_mb",PeakRssMb()}};
     n::SearchPolicy legacy_policy;
@@ -511,7 +516,8 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             {"objective_difference",objective_difference},{"eta_inf_difference",eta_difference},
             {"scaled_ac_inf_difference",ScaledAcDifference(problem,reference,candidate)}});
     }
-    return {{"topology",topology},{"atoms",atoms},{"core_atoms",neighbor_policy.core_atoms},
+    return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
+        {"parameter_count",3*atoms},{"core_atoms",neighbor_policy.core_atoms},
         {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
         {"global_legacy_compact",PackFit("LegacyCompact",legacy,legacy_seconds)},
         {"global_operator_pcg",PackFit("OperatorPcg",operator_fit,operator_seconds)},

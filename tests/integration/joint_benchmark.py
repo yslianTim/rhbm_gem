@@ -150,6 +150,33 @@ def driver_json(directory, output=None):
 
 def partial_driver_json(profile, directory, output=None):
     if profile not in ('workflow', 'postprocess'):
+        if profile in ('search', 'solve') and output:
+            progress_path = Path(str(output) + '.progress.json')
+            if progress_path.is_file():
+                progress = read(progress_path)
+                sweeps = progress.get('sweep_telemetry', [])
+                last = sweeps[-1] if sweeps else {}
+                confirmed = bool(last.get('coordinate_confirmation_available') and
+                                 last.get('global_ac_kkt', float('inf')) <= 1e-10 and
+                                 last.get('global_width_gradient_inf_norm', float('inf')) <= 1e-12 and
+                                 last.get('eta_change_inf', float('inf')) <= 1e-10)
+                progress['fixed_neighbor'] = {
+                    'method': 'FixedNeighbor', 'search_converged': confirmed,
+                    'search_reason': 'block-stationary' if confirmed else 'interrupted-before-search-completion',
+                    'sweeps': len(sweeps), 'objective': last.get('objective_after'),
+                    'final_global_ac_kkt': last.get('global_ac_kkt'),
+                    'final_raw_width_gradient_inf_norm': last.get('global_width_gradient_inf_norm'),
+                    'block_solves': sum(item.get('block_solves', 0) for item in sweeps),
+                    'profile_evaluations': sum(item.get('profile_evaluations', 0) for item in sweeps),
+                    'accepted_blocks': sum(item.get('accepted_blocks', 0) for item in sweeps),
+                    'local_factor_seconds': None,
+                    'search_seconds': sum(item.get('wall_seconds', 0.) for item in sweeps),
+                    'total_elapsed_seconds': sum(item.get('wall_seconds', 0.) for item in sweeps),
+                    'sweep_telemetry': sweeps,
+                }
+                progress['measurement_scope'] = 'fixed-neighbor-search-only'
+                progress['failure_stage'] = 'assessment' if profile == 'solve' and confirmed else 'search'
+                return progress
         try:
             return driver_json(directory, output)
         except (OSError, ValueError, json.JSONDecodeError):
@@ -159,8 +186,17 @@ def partial_driver_json(profile, directory, output=None):
 
 def command_for_profile(args, case, output, build):
     sparse = build / 'bin/joint_sparse_benchmark'
+    fixed_neighbor = build / 'bin/joint_fixed_neighbor_experiment'
     workflow = build / 'bin/joint_postprocessing_benchmark'
     if args.profile in ('prepare', 'fixed', 'search', 'solve', 'rank'):
+        if (args.profile in ('search', 'solve') and
+                args.preconditioner == 'fixed-neighbor'):
+            if case['kind'] != 'synthetic':
+                raise ValueError('FixedNeighbor benchmarks require a synthetic chain-N or cube-N case.')
+            if not fixed_neighbor.is_file():
+                raise ValueError('Build joint_fixed_neighbor_experiment with RHBM_GEM_BUILD_BENCHMARKS=ON')
+            mode = '--scaling-only' if args.profile == 'search' else '--neighbor-only'
+            return [str(fixed_neighbor), mode, str(output), case['topology'], str(case['atoms'])]
         if not sparse.is_file():
             raise ValueError('Build joint_sparse_benchmark with RHBM_GEM_BUILD_BENCHMARKS=ON')
         if args.profile == 'prepare':
@@ -232,7 +268,8 @@ def operator_policy_options(args):
 def solver_policy_metadata(args, backend):
     rank_profile = args.profile == 'rank'
     active = (args.profile == 'fixed' or
-              (args.profile in ('search', 'solve') and args.preconditioner != 'legacy') or rank_profile)
+              (args.profile in ('search', 'solve') and
+               args.preconditioner not in ('legacy', 'fixed-neighbor')) or rank_profile)
     resolved = None
     backend_name = backend.upper()
     if rank_profile:
@@ -247,7 +284,10 @@ def solver_policy_metadata(args, backend):
     else:
         rank_mode = args.operator_rank
     return {
-        'search_method': ('OperatorPcg' if active and not rank_profile else
+        'search_method': ('FixedNeighborBlocks' if args.profile in ('search', 'solve') and
+                          args.preconditioner == 'fixed-neighbor' else
+                          'OperatorPcg' if active and not rank_profile else
+                          'LegacyCompact' if args.profile in ('search', 'solve') and args.preconditioner == 'legacy' else
                           'LegacyCompact' if args.profile == 'solve' else None),
         'sparse_backend': backend,
         'operator_rank_active': active,
@@ -278,8 +318,12 @@ def raw_elapsed(profile, raw, process_wall):
         steps = raw.get('steps', [])
         return steps[0].get('fixed_step_wall_seconds', process_wall) if steps else process_wall
     if profile == 'solve':
+        if isinstance(raw.get('fixed_neighbor'), dict):
+            return raw['fixed_neighbor'].get('total_elapsed_seconds', process_wall)
         return sum(raw.get(key, 0.) for key in ('search_seconds', 'assessment_seconds'))
     if profile == 'search':
+        if isinstance(raw.get('fixed_neighbor'), dict):
+            return raw['fixed_neighbor'].get('search_seconds', process_wall)
         return raw.get('search_seconds', process_wall)
     if profile == 'rank':
         return raw.get('rank_wall_seconds', process_wall)
@@ -291,12 +335,53 @@ def raw_elapsed(profile, raw, process_wall):
 
 
 def normalize_result(profile, raw):
+    fixed = raw.get('fixed_neighbor') or {}
     assessment = raw.get('returned_assessment') or {}
     rank_result = raw.get('rank_result') or {}
     convergence = assessment.get('runtime_convergence')
     qualified = convergence == 'passed' if convergence in ('passed', 'failed') else None
     if profile == 'search':
         qualified = None
+        if fixed:
+            return {'qualified': None, 'scientific_status': 'search-only', 'details': {
+                'measurement_scope': 'search-only',
+                'search_completed': fixed.get('search_converged'),
+                'stop_reason': fixed.get('search_reason'),
+                'sweeps': fixed.get('sweeps'),
+                'block_solves': fixed.get('block_solves'),
+                'profile_evaluations': fixed.get('profile_evaluations'),
+                'objective': fixed.get('objective'),
+                'global_ac_kkt': fixed.get('final_global_ac_kkt'),
+                'width_gradient_inf_norm': fixed.get('final_raw_width_gradient_inf_norm'),
+                'search_seconds': fixed.get('search_seconds'),
+                'factor_seconds': fixed.get('local_factor_seconds'),
+            }}
+    if profile == 'solve' and fixed:
+        passed = fixed.get('runtime_convergence') == 'Passed'
+        details = {
+            'search_completed': fixed.get('search_converged'),
+            'stop_reason': fixed.get('search_reason'),
+            'endpoint_certified': fixed.get('endpoint_certified'),
+            'endpoint_inner': (fixed.get('assessment_inner') or {}).get('status'),
+            'endpoint_gradient': (fixed.get('assessment_gradient') or {}).get('status'),
+            'endpoint_local': (fixed.get('assessment_local') or {}).get('status'),
+            'endpoint_identified': (fixed.get('assessment_identified') or {}).get('status'),
+            'endpoint_trust': (fixed.get('endpoint_assessment') or {}).get('endpoint_trust', {}).get('passed'),
+            'runtime_convergence': fixed.get('runtime_convergence'),
+            'objective': fixed.get('objective'),
+            'global_ac_kkt': (fixed.get('global_kkt') or {}).get('value'),
+            'width_gradient_inf_norm': fixed.get('width_gradient_inf_norm'),
+            'search_seconds': fixed.get('search_seconds'),
+            'assessment_seconds': max(0., fixed.get('total_elapsed_seconds', 0.) -
+                                      fixed.get('search_seconds', 0.)),
+            'sweeps': fixed.get('sweeps'),
+            'block_solves': sum(item.get('block_solves', 0) for item in fixed.get('sweep_telemetry', [])),
+            'profile_evaluations': sum(item.get('profile_evaluations', 0)
+                                       for item in fixed.get('sweep_telemetry', [])),
+            'factor_seconds': sum(item.get('search_seconds', 0.) for item in fixed.get('block_telemetry', [])),
+        }
+        return {'qualified': passed, 'scientific_status': fixed.get('runtime_convergence', 'not-assessed'),
+                'details': details}
     if profile == 'fixed' and isinstance(raw.get('valid'), bool):
         qualified = raw['valid']
     if profile == 'prepare' and isinstance(raw.get('raw_state_valid'), bool):
@@ -412,10 +497,16 @@ def problem_result(raw):
     rows = raw.get('rows')
     return {'atoms': atoms, 'voxels': rows, 'components': components,
             'free_columns': raw.get('free_columns'), 'design_nonzeros': raw.get('design_nonzeros'),
-            'parameters': 3 * atoms if isinstance(atoms, int) else None}
+            'parameters': raw.get('parameter_count', 3 * atoms if isinstance(atoms, int) else None)}
 
 
 def numerics_result(raw):
+    fixed = raw.get('fixed_neighbor') or {}
+    if fixed:
+        return {'rank': None, 'objective': fixed.get('objective'),
+                'gradient_norm': fixed.get('width_gradient_inf_norm',
+                                           fixed.get('final_raw_width_gradient_inf_norm')),
+                'runtime_convergence': fixed.get('runtime_convergence'), 'active_atoms': None}
     state = raw.get('returned_state') or raw.get('state_control') or {}
     assessment = raw.get('returned_assessment') or {}
     primary = assessment.get('primary') or {}
@@ -541,7 +632,7 @@ def build_parser():
     parser.add_argument('--warmup', type=int, default=0)
     parser.add_argument('--timeout', type=float, default=600)
     parser.add_argument('--rss-limit', type=int, default=4 * 1024**3)
-    parser.add_argument('--preconditioner', choices=('legacy', 'identity', 'diagonal', 'schwarz'), default='schwarz')
+    parser.add_argument('--preconditioner', choices=('legacy', 'identity', 'diagonal', 'schwarz', 'fixed-neighbor'), default='schwarz')
     parser.add_argument('--spqr-ordering', choices=('colamd', 'default', 'best', 'metis'))
     parser.add_argument('--operator-factor-representation', choices=('exported-fixed', 'native-qr'),
                         default='exported-fixed')
@@ -585,8 +676,10 @@ def validate_args(parser, args):
         parser.error('Schwarz core, max block, and memory limits must be positive; overlap must be nonnegative and max block must cover core')
     if args.profile == 'fixed' and args.preconditioner == 'legacy':
         parser.error('fixed profile requires identity, diagonal, or schwarz preconditioner')
-    if args.profile == 'search' and args.preconditioner == 'legacy':
-        parser.error('search profile requires identity, diagonal, or schwarz preconditioner')
+    if args.profile == 'fixed' and args.preconditioner == 'fixed-neighbor':
+        parser.error('fixed-neighbor is available only for search or solve profiles')
+    if args.profile in ('search', 'solve') and args.preconditioner == 'fixed-neighbor' and args.spqr_ordering:
+        parser.error('FixedNeighbor does not use OperatorPcg SPQR ordering controls')
     if args.spqr_ordering and args.profile != 'search':
         parser.error('--spqr-ordering is supported by the benchmark-only search profile')
     if args.operator_factor_representation != 'exported-fixed' and args.profile != 'search':
@@ -623,7 +716,9 @@ def main(argv=None):
                     source_sha256=source_hash(ROOT), benchmark_sha256=sha(Path(__file__)))
     metadata['solver_policy'] = solver_policy_metadata(args, metadata['backend'])
     if args.profile in ('prepare', 'fixed', 'search', 'solve', 'rank'):
-        driver = build / 'bin/joint_sparse_benchmark'
+        driver = (build / 'bin/joint_fixed_neighbor_experiment'
+                  if args.profile in ('search', 'solve') and args.preconditioner == 'fixed-neighbor'
+                  else build / 'bin/joint_sparse_benchmark')
     elif args.profile in ('workflow', 'postprocess'):
         driver = build / 'bin/joint_postprocessing_benchmark'
     else:
@@ -691,6 +786,7 @@ def main(argv=None):
             run['numerics'] = numerics_result(raw)
             run['result'] = normalize_result(args.profile, raw)
             run['driver_stage'] = raw.get('stage')
+            run['failure_stage'] = raw.get('failure_stage')
             run['measurement_scope'] = raw.get('measurement_scope')
             run['stages'] = [{key: stage.get(key) for key in (
                 'role', 'status', 'exit_code', 'wall_seconds',

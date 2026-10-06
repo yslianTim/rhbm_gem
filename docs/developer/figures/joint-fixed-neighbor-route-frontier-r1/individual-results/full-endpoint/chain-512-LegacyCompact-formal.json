@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "profile": "solve",
+  "measurement_scope": "joint_search_and_returned_state_assessment",
+  "case": "chain-512",
+  "metadata": {
+    "backend": "SPQR",
+    "build_type": "",
+    "compiler": "AppleClang 21.0.0.21000334",
+    "commit": "1e0aae481c2ebb3110d1d15da30880a8b4a0b664",
+    "profile": "solve",
+    "case": "chain-512",
+    "assessment_reduction": "observation-tsqr",
+    "projected_reduction": "observation-tiled-qr",
+    "source_sha256": "b17d09375b16364fbf959f3e0528482b3586fb3d4dd503c4b5725a86812eb9ee",
+    "benchmark_sha256": "c287ceed07f74a6ab26bc87ffa90d376cd773ae4071ea9181de156edf52bf104",
+    "solver_policy": {
+      "search_method": "LegacyCompact",
+      "sparse_backend": "SPQR",
+      "operator_rank_active": false,
+      "operator_rank_mode": "auto",
+      "resolved_rank_backend": null,
+      "operator_rank_budget_seconds": 120.0,
+      "operator_rank_budget_entries": 100000000,
+      "operator_rank_budget_workspace_bytes": 268435456,
+      "operator_factor_representation": "exported-fixed",
+      "operator_factor_ownership": null,
+      "search_trial_telemetry": null,
+      "projected_reduction": "observation-tiled-qr",
+      "preconditioner": "legacy",
+      "spqr_ordering": "COLAMD",
+      "schwarz_core_atoms": 128,
+      "schwarz_overlap_hops": 1,
+      "schwarz_max_block_atoms": 512,
+      "schwarz_storage_bytes": 536870912,
+      "schwarz_scratch_bytes": 268435456
+    },
+    "driver_sha256": "433cf4bc9a8194b1690a489f8942d5973ade337348fac1e0544150ae78f16d2a",
+    "input_sha256": "2fb5c8a3863f8e323eecb3d3043609a0102e34c83725886f248a9461a2cf9efc"
+  },
+  "execution": {
+    "status": "timeout",
+    "returncode": null,
+    "completed_repetitions": 0,
+    "failed_repetitions": 1,
+    "runs": [
+      {
+        "kind": "measurement",
+        "index": 1,
+        "status": "timeout",
+        "reason": "time-limit",
+        "elapsed_seconds": 0.0,
+        "process_wall_seconds": 600.023671625182,
+        "peak_rss_bytes": 426442752,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": 512,
+          "voxels": 233020,
+          "components": null,
+          "free_columns": null,
+          "design_nonzeros": null,
+          "parameters": 1536
+        },
+        "numerics": {
+          "rank": null,
+          "objective": null,
+          "gradient_norm": null,
+          "runtime_convergence": null,
+          "active_atoms": null
+        },
+        "result": {
+          "qualified": null,
+          "scientific_status": "not-assessed",
+          "details": {
+            "search_completed": null,
+            "stop_reason": null,
+            "profile_evaluations": null,
+            "accepted_updates": null,
+            "endpoint_valid": null,
+            "assessment_execution": null,
+            "assessment_telemetry": null,
+            "derivative_reduction_micro_attribution": null,
+            "assessment_stage": null,
+            "last_assessment_stage": null,
+            "active_assessment_stage": null,
+            "completed_assessment_stages": null,
+            "completed_stage_seconds": null,
+            "stage_dimensions": {
+              "search": {
+                "rows": 233020,
+                "columns": 512
+              },
+              "profile-evaluation": {
+                "rows": 233020,
+                "columns": 512
+              },
+              "profile-basis-build": {
+                "rows": 233020,
+                "columns": 1024
+              },
+              "linear-solve": {
+                "rows": 233020,
+                "columns": 1024
+              },
+              "linear-factor-preparation": {
+                "rows": 233020,
+                "columns": 1024
+              },
+              "linear-symbolic": {
+                "rows": 233020,
+                "columns": 1024
+              },
+              "spqr-symbolic": {
+                "rows": 233020,
+                "columns": 1024
+              },
+              "linear-numeric": {
+                "rows": 233020,
+                "columns": 1024
+              },
+              "spqr-numeric": {
+                "rows": 233020,
+                "columns": 1024
+              },
+              "trial-evaluation": {
+                "rows": 233020,
+                "columns": 512
+              }
+            }
+          }
+        },
+        "driver_stage": "search",
+        "failure_stage": "search",
+        "measurement_scope": "joint_search_and_returned_state_assessment",
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "timeout",
+            "exit_code": -15,
+            "wall_seconds": 600.023671625182,
+            "sampled_tree_peak_rss_bytes": 426442752,
+            "os_process_peak_rss_bytes": null,
+            "samples": 5489,
+            "maximum_sampling_gap_seconds": 0.16145566618070006
+          }
+        ]
+      }
+    ]
+  },
+  "problem": {
+    "atoms": null,
+    "voxels": null,
+    "components": null,
+    "free_columns": null,
+    "design_nonzeros": null,
+    "parameters": null
+  },
+  "numerics": {
+    "rank": null,
+    "objective": null,
+    "gradient_norm": null,
+    "runtime_convergence": null,
+    "active_atoms": null
+  },
+  "resources": {
+    "elapsed_seconds": null,
+    "peak_rss_bytes": 426442752,
+    "completed_measurement_peak_rss_bytes": null,
+    "count": 1,
+    "failed_count": 1,
+    "samples": [
+      null
+    ]
+  },
+  "result": {
+    "qualified": null,
+    "scientific_status": "not-assessed",
+    "details": {
+      "search_completed": null,
+      "stop_reason": null,
+      "profile_evaluations": null,
+      "accepted_updates": null,
+      "endpoint_valid": null,
+      "assessment_execution": null,
+      "assessment_telemetry": null,
+      "derivative_reduction_micro_attribution": null,
+      "assessment_stage": null,
+      "last_assessment_stage": null,
+      "active_assessment_stage": null,
+      "completed_assessment_stages": null,
+      "completed_stage_seconds": null,
+      "stage_dimensions": null
+    }
+  }
+}

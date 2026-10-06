@@ -607,7 +607,9 @@ void RunSearch(const n::Domain & domain,n::VectorRef y,const n::Vector & b,n::Ev
         report["assessment_execution"]="not-run";
         report["returned_assessment"]=nullptr;
         report["assessment_work"]=AssessmentWork();
-        report["scope_description"]="This profile measures nonlinear Operator-PCG search only. It does not perform returned-state assessment and does not establish runtime convergence or endpoint qualification.";
+        report["scope_description"] = search_kind == "legacy" ?
+            "This profile measures nonlinear LegacyCompact search only. It does not perform returned-state assessment or establish endpoint qualification." :
+            "This profile measures nonlinear Operator-PCG search only. It does not perform returned-state assessment and does not establish runtime convergence or endpoint qualification.";
         report["stage"]="complete"; Snapshot(output,report); return;
     }
     report["assessment_execution"]="running";
@@ -829,8 +831,6 @@ int main(int argc,char ** argv)
         if(spqr_ordering_requested && !n::SpqrOrderingAvailable(spqr_ordering))
             throw std::invalid_argument(std::string("spqr-ordering-unavailable: ")+n::SpqrOrderingName(spqr_ordering)+" is not provided by this SPQR build");
         n::SpqrOrderingForTesting()=spqr_ordering;
-        if(search_only && (search_kind.empty() || search_kind=="legacy"))
-            throw std::invalid_argument("Search-only profile requires OperatorPcg");
         if(search_trial_telemetry && (search_kind.empty() || search_kind=="legacy" || !search_only))
             throw std::invalid_argument("Trial telemetry requires the benchmark-only OperatorPcg search profile");
         if(audit) n::CompactSvdCaptureForTesting()=Capture;
@@ -842,7 +842,9 @@ int main(int argc,char ** argv)
             const std::string topology=argv[2],phase=argv[4]; const int atoms=std::stoi(argv[3]);
             if(phase!="prepare" && phase!="fixed" && phase!="workflow" && phase!="local" && phase!="rank" && phase!="rank-oracle") throw std::invalid_argument("Invalid synthetic phase");
             const bool operator_search=search_kind=="identity" || search_kind=="diagonal" || search_kind=="schwarz";
-            if(atoms>512 && phase!="prepare" && phase!="local" && phase!="rank" && !(phase=="fixed" && operator_search))
+            const bool matched_legacy_endpoint=phase=="fixed" && !search_only && atoms==768 && search_kind=="legacy";
+            if(atoms>512 && phase!="prepare" && phase!="local" && phase!="rank" &&
+                !(phase=="fixed" && (operator_search || search_only || matched_legacy_endpoint)))
                 throw std::invalid_argument("Large solves require an explicit OperatorPcg search route");
             const auto started=Clock::now(); const c::JointProblem problem(second_stage_test::OperatorWorkload(topology,atoms));
             const double construction_seconds=Seconds(started);

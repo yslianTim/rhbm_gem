@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "profile": "search",
+  "measurement_scope": "search-only",
+  "case": "cube-512",
+  "metadata": {
+    "backend": "SPQR",
+    "build_type": "",
+    "compiler": "AppleClang 21.0.0.21000334",
+    "commit": "1e0aae481c2ebb3110d1d15da30880a8b4a0b664",
+    "profile": "search",
+    "case": "cube-512",
+    "assessment_reduction": "observation-tsqr",
+    "projected_reduction": "observation-tiled-qr",
+    "source_sha256": "b17d09375b16364fbf959f3e0528482b3586fb3d4dd503c4b5725a86812eb9ee",
+    "benchmark_sha256": "c287ceed07f74a6ab26bc87ffa90d376cd773ae4071ea9181de156edf52bf104",
+    "solver_policy": {
+      "search_method": "FixedNeighborBlocks",
+      "sparse_backend": "SPQR",
+      "operator_rank_active": false,
+      "operator_rank_mode": "auto",
+      "resolved_rank_backend": null,
+      "operator_rank_budget_seconds": 120.0,
+      "operator_rank_budget_entries": 100000000,
+      "operator_rank_budget_workspace_bytes": 268435456,
+      "operator_factor_representation": "exported-fixed",
+      "operator_factor_ownership": "reuse-accepted-copy-on-write",
+      "search_trial_telemetry": false,
+      "projected_reduction": "observation-tiled-qr",
+      "preconditioner": "fixed-neighbor",
+      "spqr_ordering": "COLAMD",
+      "schwarz_core_atoms": 128,
+      "schwarz_overlap_hops": 1,
+      "schwarz_max_block_atoms": 512,
+      "schwarz_storage_bytes": 536870912,
+      "schwarz_scratch_bytes": 268435456
+    },
+    "driver_sha256": "685629476dae345901b0125f63e1382c3ce3ddf4f49797d1673690853a6e8c0e",
+    "input_sha256": "d9ee6d1180838fa39d6ffdc18f3bc0374731eaa85e066d2a63aec1b699f6b64e"
+  },
+  "execution": {
+    "status": "completed",
+    "returncode": 0,
+    "completed_repetitions": 1,
+    "failed_repetitions": 0,
+    "runs": [
+      {
+        "kind": "measurement",
+        "index": 1,
+        "status": "completed",
+        "reason": null,
+        "elapsed_seconds": 2762.2994719989993,
+        "process_wall_seconds": 2763.9761995419394,
+        "peak_rss_bytes": 499957760,
+        "persistence_result": null,
+        "export_result": null,
+        "export_bytes": null,
+        "problem": {
+          "atoms": 512,
+          "voxels": 183040,
+          "components": null,
+          "free_columns": null,
+          "design_nonzeros": null,
+          "parameters": 1536
+        },
+        "numerics": {
+          "rank": null,
+          "objective": 7.729226733019517e-11,
+          "gradient_norm": 7.817892931772926e-16,
+          "runtime_convergence": null,
+          "active_atoms": null
+        },
+        "result": {
+          "qualified": null,
+          "scientific_status": "search-only",
+          "details": {
+            "measurement_scope": "search-only",
+            "search_completed": true,
+            "stop_reason": "block-stationary",
+            "sweeps": 17,
+            "block_solves": 68,
+            "profile_evaluations": 312,
+            "objective": 7.729226733019517e-11,
+            "global_ac_kkt": 2.81531742363228e-13,
+            "width_gradient_inf_norm": 7.817892931772926e-16,
+            "search_seconds": 2762.2994719989993,
+            "factor_seconds": 2740.192663664001
+          }
+        },
+        "driver_stage": null,
+        "failure_stage": null,
+        "measurement_scope": "fixed-neighbor-search-only",
+        "stages": [
+          {
+            "role": "measurement",
+            "status": "completed",
+            "exit_code": 0,
+            "wall_seconds": 2763.9761995419394,
+            "sampled_tree_peak_rss_bytes": 499204096,
+            "os_process_peak_rss_bytes": 499957760,
+            "samples": 26261,
+            "maximum_sampling_gap_seconds": 0.6391436669509858
+          }
+        ]
+      }
+    ]
+  },
+  "problem": {
+    "atoms": 512,
+    "voxels": 183040,
+    "components": null,
+    "free_columns": null,
+    "design_nonzeros": null,
+    "parameters": 1536
+  },
+  "numerics": {
+    "rank": null,
+    "objective": 7.729226733019517e-11,
+    "gradient_norm": 7.817892931772926e-16,
+    "runtime_convergence": null,
+    "active_atoms": null
+  },
+  "resources": {
+    "elapsed_seconds": 2762.2994719989993,
+    "peak_rss_bytes": 499957760,
+    "completed_measurement_peak_rss_bytes": 499957760,
+    "count": 1,
+    "failed_count": 0,
+    "samples": [
+      2762.2994719989993
+    ]
+  },
+  "result": {
+    "qualified": null,
+    "scientific_status": "search-only",
+    "details": {
+      "measurement_scope": "search-only",
+      "search_completed": true,
+      "stop_reason": "block-stationary",
+      "sweeps": 17,
+      "block_solves": 68,
+      "profile_evaluations": 312,
+      "objective": 7.729226733019517e-11,
+      "global_ac_kkt": 2.81531742363228e-13,
+      "width_gradient_inf_norm": 7.817892931772926e-16,
+      "search_seconds": 2762.2994719989993,
+      "factor_seconds": 2740.192663664001
+    }
+  }
+}

@@ -216,6 +216,31 @@ class JointBenchmarkContract(unittest.TestCase):
             self.assertEqual(benchmark.solver_policy_metadata(args, 'SPQR')['operator_factor_ownership'],
                              'evict-before-trial')
 
+    def test_large_search_profile_accepts_legacy_and_fixed_neighbor_routes(self):
+        parser = benchmark.build_parser()
+        with tempfile.TemporaryDirectory() as temporary:
+            build = Path(temporary)
+            (build / 'bin').mkdir()
+            (build / 'bin/joint_sparse_benchmark').touch()
+            (build / 'bin/joint_fixed_neighbor_experiment').touch()
+            case = {'kind': 'synthetic', 'topology': 'chain', 'atoms': 768}
+
+            legacy = parser.parse_args(['--profile', 'search', '--case', 'chain-768',
+                '--build-dir', str(build), '--output', 'legacy.json', '--preconditioner', 'legacy'])
+            benchmark.validate_args(parser, legacy)
+            legacy_command = benchmark.command_for_profile(legacy, case, Path('legacy.json'), build)
+            self.assertEqual(legacy_command[legacy_command.index('--search') + 1], 'legacy')
+            self.assertIn('--search-only', legacy_command)
+            self.assertEqual(benchmark.solver_policy_metadata(legacy, 'SPQR')['search_method'], 'LegacyCompact')
+
+            fixed_args = parser.parse_args(['--profile', 'search', '--case', 'chain-768',
+                '--build-dir', str(build), '--output', 'fixed.json', '--preconditioner', 'fixed-neighbor'])
+            benchmark.validate_args(parser, fixed_args)
+            fixed_command = benchmark.command_for_profile(fixed_args, case, Path('fixed.json'), build)
+            self.assertEqual(fixed_command[1], '--scaling-only')
+            self.assertEqual(benchmark.solver_policy_metadata(fixed_args, 'SPQR')['search_method'],
+                             'FixedNeighborBlocks')
+
     def test_compact_assessment_route_is_benchmark_only(self):
         parser = benchmark.build_parser()
         args = parser.parse_args(['--profile', 'solve', '--case', 'chain-8',

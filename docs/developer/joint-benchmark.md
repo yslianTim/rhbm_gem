@@ -26,8 +26,8 @@ python3 tests/integration/joint_benchmark.py \
 | --- | --- | --- |
 | `prepare` | Joint problem construction and fixed-state basis preparation | `joint_sparse_benchmark` |
 | `fixed` | Fixed-state operator preparation and one selected preconditioned step; the saved state is prepared in a separate, unmeasured process. Optional `--svd-mode legacy|values|auto` selects the compact-SVD path | `joint_sparse_benchmark` |
-| `solve` | Joint search and returned-state assessment, with explicit Operator-PCG rank and Schwarz policies | `joint_sparse_benchmark` |
-| `search` | Nonlinear Operator-PCG search only; no returned-state assessment or endpoint qualification | `joint_sparse_benchmark` |
+| `solve` | Joint search and returned-state assessment for LegacyCompact, OperatorPcg, or FixedNeighbor | `joint_sparse_benchmark` or `joint_fixed_neighbor_experiment` |
+| `search` | LegacyCompact, OperatorPcg, or FixedNeighbor search only; no returned-state assessment or endpoint qualification | `joint_sparse_benchmark` or `joint_fixed_neighbor_experiment` |
 | `rank` | Bounded free-design rank evaluation; select `--rank-mode prototype` or `oracle` | `joint_sparse_benchmark` |
 | `workflow` | Prepare, estimate, postprocess, and persist | `joint_postprocessing_benchmark` |
 | `postprocess` | Uncertainty, peeling, summary, and persistence using the driver's fixed endpoint | `joint_postprocessing_benchmark` |
@@ -64,12 +64,12 @@ belong to the internal benchmark drivers and do not add production CLI
 switches.
 
 The `search` profile uses the same `SearchProfile(...)` path as the solve
-profile and stops before `AssessComponentSearch(...)`. It writes
-`measurement_scope: "search-only"`; returned assessment, runtime convergence,
-and endpoint qualification are `not-run` or absent. The result explains that
-the profile measures nonlinear Operator-PCG search only and does not establish
-runtime convergence or endpoint qualification. Permanent tests verify zero
-assessments and zero reference evaluations. For example:
+profile for LegacyCompact and OperatorPcg and stops before
+`AssessComponentSearch(...)`. The FixedNeighbor route uses the same synthetic
+workload and stops before its final endpoint assessment. Each writes
+`measurement_scope: "search-only"`; returned assessment and endpoint
+qualification are not run. Search-only results do not establish runtime
+convergence or endpoint qualification. For example:
 
 ```sh
 python3 tests/integration/joint_benchmark.py \
