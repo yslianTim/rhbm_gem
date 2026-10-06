@@ -17,9 +17,9 @@ Detailed evidence is in:
 - [fixed-B requalification](figures/joint-fixed-b-requal-r1/analysis.json)
 - [fixed-B scaling](figures/joint-fixed-b-scaling-r1/analysis.json)
 
-## Nonlinear endpoint experiment
+## Initial nonlinear endpoint diagnosis
 
-The nonlinear experiment used disjoint 128-atom cores, serial Gauss-Seidel updates, local `LegacyCompact` width search, and the existing global replay and endpoint certification. Global `LegacyCompact` and `OperatorPcg` returned runtime-converged references for all six cases.
+The initial nonlinear experiment stopped at the first cheap stationarity sweep. It used disjoint 128-atom cores, serial Gauss-Seidel updates, local `LegacyCompact` width search, and the existing global replay and endpoint certification. Global `LegacyCompact` and `OperatorPcg` returned runtime-converged references for all six cases.
 
 | Case | Sweeps | FixedNeighbor objective | Global A/C KKT | Width gradient infinity norm | Scaled A/C difference vs LegacyCompact | Endpoint | Runtime |
 |---|---:|---:|---:|---:|---:|---|---|
@@ -34,4 +34,10 @@ All six FixedNeighbor objectives were within the experiment's objective parity t
 
 An exploratory continuation past the initial stationary point reduced cube-256 KKT to `1.97e-13` by sweep 14, then produced the same KKT at sweep 15. Endpoint certification had still not passed through sweep 14. This did not identify a supported repair, so no sweep-budget or certification semantics were changed.
 
-The F2 endpoint gate therefore remains failed. Fixed-neighbor large-component nonlinear scaling, order sensitivity, and route promotion were skipped. Coordinated/shared-parameter blocks remain deferred: the observed cube-256 failure is an endpoint-assessment mismatch, not evidence of sweep growth, converged order dependence, or boundary oscillation.
+That initial F2 result identified premature stopping, rather than a failed block update. Stationarity qualification selected eta-only coordinate confirmation at the existing `1e-10` change threshold. With that stopping rule, all six nonlinear 32/128/256 cases passed endpoint certification and `RuntimeConvergence`; chain-512 and cube-512 also passed. The qualification, six-case requalification, and 512 gate are documented in [stationarity confirmation](figures/joint-fixed-neighbor-stationarity-r1/README.md), [nonlinear requalification](figures/joint-fixed-neighbor-confirmed-r1/README.md), and [512 certification](figures/joint-fixed-neighbor-confirmed-512-r1/README.md).
+
+Formal 256/512/768/1024 nonlinear sweep scaling was stable for both topologies, with confirmation overhead bounded at one sweep for chain and at most four for cube. Chain and cube 2048 search-only frontier runs completed with confirmed stationarity. Local factor columns remained bounded at 256; process peak RSS varies and is not constant-memory evidence. See the [scaling campaign](figures/joint-fixed-neighbor-scaling-r1/README.md).
+
+The [converged order campaign](figures/joint-fixed-neighbor-order-r1/README.md) passed: all five forward/reverse pairs confirmed convergence, maximum eta infinity difference was `3.75e-11`, maximum scaled A/C difference was `2.09e-12`, and fully assessed endpoint/runtime results agreed and passed through 512. Cube-1024 remains search-only. Coordinated/shared-parameter blocks remain deferred because the measured endpoints show no material order divergence, sweep growth, or observed persistent oscillation.
+
+FixedNeighbor remains an internal experimental route rather than a selectable estimator method. Large runs demonstrate bounded local factor width and confirmed search, but 1024/2048 did not receive full endpoint assessment and no matched large-size comparison establishes an end-to-end resource benefit. `LegacyCompact` remains the default; `CertifiedLocal` remains available for diagnostics and reproduction.
