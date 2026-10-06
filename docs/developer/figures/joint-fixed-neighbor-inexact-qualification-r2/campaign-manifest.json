@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "phase": "P4 bounded FixedNeighbor local-work qualification",
+  "source_revision": "6557ebb5c8c1d339a6457d17e58bbe85f36a7eaa",
+  "source_sha256": "1e7860460f1b4216d7d1023ae56c5b5caacf5e2f5adc09aa339bfe4053b4cf9a",
+  "benchmark_source_hashes": {
+    "driver": "01daf8731516d5bfc0b15f016630cd67411eb546d25c26e17b76e3ebbbb19a21",
+    "qualification": "8e9d299d79e8155c43d9903ee401a6ad1ea5dc2a52caf341b4f8c26dc4845572"
+  },
+  "branch": "develop",
+  "backend": "SPQR",
+  "eigen_threads": 1,
+  "cases": [
+    "chain-1024",
+    "cube-1024"
+  ],
+  "candidate_policy": "OneAccepted",
+  "measurement_scope": "fixed-neighbor-search-only",
+  "resource_envelope": {
+    "wall_seconds": 7200.0,
+    "rss_bytes": 4294967296
+  },
+  "full_baseline_campaign": "docs/developer/figures/joint-fixed-neighbor-scaling-r1/campaign-manifest.json",
+  "full_baseline_manifest_sha256": "b8a47f491ac4f034a62bb7d06c3c03a0161ee2abd6fe03a3aaed9f3995fdd1dc",
+  "analysis": {
+    "qualification_gate": "passed",
+    "selected_policy": "OneAccepted"
+  }
+}

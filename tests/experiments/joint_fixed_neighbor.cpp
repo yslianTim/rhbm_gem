@@ -586,21 +586,23 @@ int main(int argc,char ** argv)
             std::string(argv[1])!="--attribution" &&
             std::string(argv[1])!="--full-attribution" &&
             std::string(argv[1])!="--inexact-one" && std::string(argv[1])!="--inexact-two" &&
+            std::string(argv[1])!="--inexact-one-search" &&
             std::string(argv[1])!="--neighbor-forward" && std::string(argv[1])!="--neighbor-reverse" &&
             std::string(argv[1])!="--scaling-forward" && std::string(argv[1])!="--scaling-reverse"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS");
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
         const std::string mode(argv[1]);
         Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--case",mode=="--decompose",
             mode=="--certified-local",mode=="--qualification",
-            mode=="--scaling-only" || mode=="--attribution" || mode=="--scaling-forward" || mode=="--scaling-reverse",
+            mode=="--scaling-only" || mode=="--attribution" || mode=="--scaling-forward" || mode=="--scaling-reverse" ||
+                mode=="--inexact-one-search",
             mode=="--neighbor-reverse" || mode=="--scaling-reverse",
             mode=="--neighbor-forward" || mode=="--neighbor-reverse" ||
                 mode=="--scaling-forward" || mode=="--scaling-reverse",
             mode=="--attribution" || mode=="--full-attribution",
-            mode=="--inexact-one" ? n::FixedNeighborLocalWork::OneAcceptedUpdate :
+            (mode=="--inexact-one" || mode=="--inexact-one-search") ? n::FixedNeighborLocalWork::OneAcceptedUpdate :
                 mode=="--inexact-two" ? n::FixedNeighborLocalWork::TwoAcceptedUpdates :
                 n::FixedNeighborLocalWork::Full));
         std::cout<<argv[3]<<'-'<<argv[4]<<" fixed-neighbor experiment complete\n";
