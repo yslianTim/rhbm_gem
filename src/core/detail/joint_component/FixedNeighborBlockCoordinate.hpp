@@ -4,6 +4,7 @@
 
 namespace rhbm_gem::core::joint_component {
 enum class FixedNeighborBlockOrder {Forward,Reverse};
+enum class FixedNeighborLocalWork {Full,OneAcceptedUpdate,TwoAcceptedUpdates};
 struct FixedNeighborProfileTrial
 {
     std::size_t trial_index{};
@@ -50,6 +51,7 @@ struct FixedNeighborPolicy
 {
     std::size_t core_atoms{128},maximum_sweeps{30};
     FixedNeighborBlockOrder order{FixedNeighborBlockOrder::Forward};
+    FixedNeighborLocalWork local_work{FixedNeighborLocalWork::Full};
     bool stop_after_stationarity{true};
     bool certify_local_candidates{};
     bool capture_local_trajectory{};

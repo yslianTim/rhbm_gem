@@ -454,8 +454,10 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_route_frontier_test.py")
     add_test(NAME joint_fixed_neighbor_attribution_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_attribution_test.py")
+    add_test(NAME joint_fixed_neighbor_inexact_test
+        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_inexact_test.py")
     set_tests_properties(experiment_support_test experiment_runner_dependency_test joint_benchmark_contract_test
-        joint_route_frontier_test joint_fixed_neighbor_attribution_test
+        joint_route_frontier_test joint_fixed_neighbor_attribution_test joint_fixed_neighbor_inexact_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm")
     add_test(NAME joint_component_evidence_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_evidence_test.py")

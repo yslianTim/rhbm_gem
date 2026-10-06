@@ -1,0 +1,17 @@
+{
+  "command": [
+    "/Users/yslian/Project/em_map_analysis/build/joint-spqr/bin/joint_fixed_neighbor_experiment",
+    "--inexact-two",
+    "/Users/yslian/Project/em_map_analysis/docs/developer/figures/joint-fixed-neighbor-inexact-local-r1/individual-results/chain-512-TwoAccepted.json",
+    "chain",
+    "512"
+  ],
+  "status": "completed",
+  "sample_interval_seconds": 0.1,
+  "wall_seconds": 1075.909033959033,
+  "exit_code": 0,
+  "sampled_tree_peak_rss_bytes": 515997696,
+  "samples": 9839,
+  "maximum_sampling_gap_seconds": 0.13122383295558393,
+  "os_process_peak_rss_bytes": 514834432
+}

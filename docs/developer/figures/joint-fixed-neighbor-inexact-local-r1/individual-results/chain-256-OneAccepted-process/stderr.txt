@@ -1,0 +1,28 @@
+chain-256 FixedNeighbor started
+chain-256 FixedNeighbor sweep 1 KKT=0.00287137 width-grad=6.32265e-05 seconds=24.3882
+chain-256 FixedNeighbor sweep 2 KKT=8.40953e-05 width-grad=3.90069e-07 seconds=24.3125
+chain-256 FixedNeighbor sweep 3 KKT=1.81783e-06 width-grad=7.90584e-09 seconds=24.2932
+chain-256 FixedNeighbor sweep 4 KKT=3.06555e-08 width-grad=1.22902e-10 seconds=24.6557
+chain-256 FixedNeighbor sweep 5 KKT=5.19127e-10 width-grad=2.07834e-12 seconds=24.2133
+chain-256 FixedNeighbor sweep 6 KKT=8.79153e-12 width-grad=3.5197e-14 seconds=24.2445
+chain-256 FixedNeighbor sweep 7 KKT=1.48916e-13 width-grad=5.95838e-16 seconds=24.2433
+chain-256 FixedNeighbor sweep 8 KKT=2.1233e-15 width-grad=2.69364e-15 seconds=24.2548
+chain-256 FixedNeighbor finished in 273.269 s; converged=1 sweeps=8 KKT=2.1233e-15 endpoint=1 runtime=Passed
+      274.11 real       273.25 user         0.33 sys
+           291192832  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               37304  page reclaims
+                 161  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  46  voluntary context switches
+               10045  involuntary context switches
+       3255070396503  instructions retired
+        839068633829  cycles elapsed
+           233310016  peak memory footprint

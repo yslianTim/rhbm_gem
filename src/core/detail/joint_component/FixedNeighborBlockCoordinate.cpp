@@ -136,6 +136,16 @@ bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_c
     return has_previous_complete_sweep && std::isfinite(eta_change_inf) && eta_change_inf>=0.0 &&
         eta_change_inf<=EtaChangeConfirmationThreshold;
 }
+int LocalUpdateBudget(FixedNeighborLocalWork work)
+{
+    switch(work)
+    {
+    case FixedNeighborLocalWork::Full: return 0;
+    case FixedNeighborLocalWork::OneAcceptedUpdate: return 1;
+    case FixedNeighborLocalWork::TwoAcceptedUpdates: return 2;
+    }
+    return 0;
+}
 FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef initial_eta,const FixedNeighborPolicy & policy)
 {
     FixedNeighborResult out;
@@ -202,6 +212,8 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
             local_context.rank={local_domain.rows,2*local_atoms,local_atoms};
             local_context.linear.rank_relative=local_context.rank.Relative(2*local_atoms);
             local_context.search=SearchPolicy{}; local_context.search.method=SearchMethod::LegacyCompact;
+            const int local_update_budget=LocalUpdateBudget(policy.local_work);
+            if(local_update_budget>0) local_context.update_budget=local_update_budget;
 
             Vector old_eta(local_atoms),old_beta(2*local_atoms);
             for(std::size_t k=0;k<core.atoms.size();++k)
