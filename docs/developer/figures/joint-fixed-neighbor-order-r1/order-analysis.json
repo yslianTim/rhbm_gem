@@ -1,0 +1,255 @@
+{
+  "cases": [
+    {
+      "atoms": 256,
+      "cheap_sweep_difference": 0,
+      "comparison_status": "compared",
+      "confirmed_sweep_difference": 0,
+      "convergence_asymmetry": false,
+      "directions": {
+        "forward": {
+          "block_order": "forward",
+          "cheap_sweep": 6,
+          "confirmed_sweep": 7,
+          "endpoint_certified": true,
+          "global_kkt": 5.540706782269922e-14,
+          "objective": 1.4847245978065849e-10,
+          "runtime_convergence": "Passed",
+          "search_converged": true,
+          "search_reason": "block-stationary",
+          "sweeps": 7,
+          "width_gradient_inf_norm": 9.417013752797912e-15
+        },
+        "reverse": {
+          "block_order": "reverse",
+          "cheap_sweep": 6,
+          "confirmed_sweep": 7,
+          "endpoint_certified": true,
+          "global_kkt": 5.192929419806092e-13,
+          "objective": 1.4847244873148078e-10,
+          "runtime_convergence": "Passed",
+          "search_converged": true,
+          "search_reason": "block-stationary",
+          "sweeps": 7,
+          "width_gradient_inf_norm": 2.079352941840282e-15
+        }
+      },
+      "endpoint_and_runtime_passed_both": true,
+      "endpoint_certification_parity": true,
+      "eta_inf_difference": 9.622747043636082e-12,
+      "measurement_scope": "endpoint-assessed",
+      "no_material_parameter_divergence": true,
+      "objective_abs_difference": 1.1049177709686133e-17,
+      "runtime_convergence_parity": true,
+      "scaled_ac_inf_difference": 1.1210379469703232e-12,
+      "topology": "chain"
+    },
+    {
+      "atoms": 512,
+      "cheap_sweep_difference": 0,
+      "comparison_status": "compared",
+      "confirmed_sweep_difference": 0,
+      "convergence_asymmetry": false,
+      "directions": {
+        "forward": {
+          "block_order": "forward",
+          "cheap_sweep": 6,
+          "confirmed_sweep": 7,
+          "endpoint_certified": true,
+          "global_kkt": 4.7802040104016896e-14,
+          "objective": 1.4790255317553044e-10,
+          "runtime_convergence": "Passed",
+          "search_converged": true,
+          "search_reason": "block-stationary",
+          "sweeps": 7,
+          "width_gradient_inf_norm": 4.710008914403274e-15
+        },
+        "reverse": {
+          "block_order": "reverse",
+          "cheap_sweep": 6,
+          "confirmed_sweep": 7,
+          "endpoint_certified": true,
+          "global_kkt": 4.7791631763161035e-14,
+          "objective": 1.4790253425059618e-10,
+          "runtime_convergence": "Passed",
+          "search_converged": true,
+          "search_reason": "block-stationary",
+          "sweeps": 7,
+          "width_gradient_inf_norm": 4.710982434431639e-15
+        }
+      },
+      "endpoint_and_runtime_passed_both": true,
+      "endpoint_certification_parity": true,
+      "eta_inf_difference": 9.624301355870557e-12,
+      "measurement_scope": "endpoint-assessed",
+      "no_material_parameter_divergence": true,
+      "objective_abs_difference": 1.89249342557206e-17,
+      "runtime_convergence_parity": true,
+      "scaled_ac_inf_difference": 5.274179438079189e-13,
+      "topology": "chain"
+    },
+    {
+      "atoms": 256,
+      "cheap_sweep_difference": 0,
+      "comparison_status": "compared",
+      "confirmed_sweep_difference": 0,
+      "convergence_asymmetry": false,
+      "directions": {
+        "forward": {
+          "block_order": "forward",
+          "cheap_sweep": 11,
+          "confirmed_sweep": 14,
+          "endpoint_certified": true,
+          "global_kkt": 1.9701601461363794e-13,
+          "objective": 8.222328628106002e-11,
+          "runtime_convergence": "Passed",
+          "search_converged": true,
+          "search_reason": "block-stationary",
+          "sweeps": 14,
+          "width_gradient_inf_norm": 7.632672899554522e-16
+        },
+        "reverse": {
+          "block_order": "reverse",
+          "cheap_sweep": 11,
+          "confirmed_sweep": 14,
+          "endpoint_certified": true,
+          "global_kkt": 1.79134485023269e-13,
+          "objective": 8.222498004195629e-11,
+          "runtime_convergence": "Passed",
+          "search_converged": true,
+          "search_reason": "block-stationary",
+          "sweeps": 14,
+          "width_gradient_inf_norm": 6.938386823643111e-16
+        }
+      },
+      "endpoint_and_runtime_passed_both": true,
+      "endpoint_certification_parity": true,
+      "eta_inf_difference": 5.864864149884852e-12,
+      "measurement_scope": "endpoint-assessed",
+      "no_material_parameter_divergence": true,
+      "objective_abs_difference": 1.693760896266345e-15,
+      "runtime_convergence_parity": true,
+      "scaled_ac_inf_difference": 6.555340061318746e-13,
+      "topology": "cube"
+    },
+    {
+      "atoms": 512,
+      "cheap_sweep_difference": 0,
+      "comparison_status": "compared",
+      "confirmed_sweep_difference": 1,
+      "convergence_asymmetry": false,
+      "directions": {
+        "forward": {
+          "block_order": "forward",
+          "cheap_sweep": 13,
+          "confirmed_sweep": 17,
+          "endpoint_certified": true,
+          "global_kkt": 2.81531742363228e-13,
+          "objective": 7.729226733019517e-11,
+          "runtime_convergence": "Passed",
+          "search_converged": true,
+          "search_reason": "block-stationary",
+          "sweeps": 17,
+          "width_gradient_inf_norm": 7.817892931772926e-16
+        },
+        "reverse": {
+          "block_order": "reverse",
+          "cheap_sweep": 13,
+          "confirmed_sweep": 16,
+          "endpoint_certified": true,
+          "global_kkt": 3.7839523181482093e-13,
+          "objective": 7.72927311652522e-11,
+          "runtime_convergence": "Passed",
+          "search_converged": true,
+          "search_reason": "block-stationary",
+          "sweeps": 16,
+          "width_gradient_inf_norm": 8.084494498578929e-15
+        }
+      },
+      "endpoint_and_runtime_passed_both": true,
+      "endpoint_certification_parity": true,
+      "eta_inf_difference": 2.960098832716085e-11,
+      "measurement_scope": "endpoint-assessed",
+      "no_material_parameter_divergence": true,
+      "objective_abs_difference": 4.638350570286633e-16,
+      "runtime_convergence_parity": true,
+      "scaled_ac_inf_difference": 1.852872196105834e-12,
+      "topology": "cube"
+    },
+    {
+      "atoms": 1024,
+      "cheap_sweep_difference": 0,
+      "comparison_status": "compared",
+      "confirmed_sweep_difference": -1,
+      "convergence_asymmetry": false,
+      "directions": {
+        "forward": {
+          "block_order": "forward",
+          "cheap_sweep": 14,
+          "confirmed_sweep": 17,
+          "endpoint_certified": null,
+          "global_kkt": 6.905552518698954e-13,
+          "objective": 7.409276831656928e-11,
+          "runtime_convergence": null,
+          "search_converged": true,
+          "search_reason": "block-stationary",
+          "sweeps": 17,
+          "width_gradient_inf_norm": 1.3368720079609914e-15
+        },
+        "reverse": {
+          "block_order": "reverse",
+          "cheap_sweep": 14,
+          "confirmed_sweep": 18,
+          "endpoint_certified": null,
+          "global_kkt": 2.31866609246012e-13,
+          "objective": 7.409217758966996e-11,
+          "runtime_convergence": null,
+          "search_converged": true,
+          "search_reason": "block-stationary",
+          "sweeps": 18,
+          "width_gradient_inf_norm": 4.429153041462435e-15
+        }
+      },
+      "endpoint_and_runtime_passed_both": null,
+      "endpoint_certification_parity": null,
+      "eta_inf_difference": 3.753564126185438e-11,
+      "measurement_scope": "fixed-neighbor-search-only",
+      "no_material_parameter_divergence": true,
+      "objective_abs_difference": 5.907268993142391e-16,
+      "runtime_convergence_parity": null,
+      "scaled_ac_inf_difference": 2.087898863469118e-12,
+      "topology": "cube"
+    }
+  ],
+  "confirmation_rule": "A/C KKT <=1e-10 and width-gradient <=1e-12 plus eta-change <=1e-10",
+  "expected_cases": [
+    {
+      "atoms": 256,
+      "topology": "chain"
+    },
+    {
+      "atoms": 512,
+      "topology": "chain"
+    },
+    {
+      "atoms": 256,
+      "topology": "cube"
+    },
+    {
+      "atoms": 512,
+      "topology": "cube"
+    },
+    {
+      "atoms": 1024,
+      "topology": "cube"
+    }
+  ],
+  "failures": [],
+  "missing_cases": [],
+  "order_sensitivity_gate": "passed",
+  "parameter_difference_thresholds": {
+    "eta_inf": 1e-10,
+    "scaled_ac_definition": "max absolute beta difference times the larger endpoint scale weight",
+    "scaled_ac_inf": 1e-10
+  }
+}

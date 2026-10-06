@@ -1,0 +1,6 @@
+topology,atoms,measurement_scope,comparison_status,objective_abs_difference,eta_inf_difference,scaled_ac_inf_difference,cheap_sweep_difference,confirmed_sweep_difference,endpoint_certification_parity,runtime_convergence_parity,endpoint_and_runtime_passed_both,no_material_parameter_divergence
+chain,256,endpoint-assessed,compared,1.1049177709686133e-17,9.622747043636082e-12,1.1210379469703232e-12,0,0,True,True,True,True
+chain,512,endpoint-assessed,compared,1.89249342557206e-17,9.624301355870557e-12,5.274179438079189e-13,0,0,True,True,True,True
+cube,256,endpoint-assessed,compared,1.693760896266345e-15,5.864864149884852e-12,6.555340061318746e-13,0,0,True,True,True,True
+cube,512,endpoint-assessed,compared,4.638350570286633e-16,2.960098832716085e-11,1.852872196105834e-12,0,1,True,True,True,True
+cube,1024,fixed-neighbor-search-only,compared,5.907268993142391e-16,3.753564126185438e-11,2.087898863469118e-12,0,-1,,,,True

@@ -211,6 +211,25 @@ double ScaledAcDifference(const rhbm_gem::core::JointProblem & problem,const Met
     }
     return difference;
 }
+j::array AcScalingWeights(const rhbm_gem::core::JointProblem & problem,const n::Vector & eta)
+{
+    const auto & input=problem.Input(); const auto & layout=problem.ParameterLayout();
+    const double scale=problem.ObservationScale(); j::array weights;
+    for(std::size_t k=0;k<layout.full_atoms.size();++k)
+    {
+        const auto atom=layout.full_atoms[k]; const double width=std::exp(eta(static_cast<Eigen::Index>(atom)));
+        double gaussian{},charge{};
+        for(const auto & support:input.support.at(atom))
+        {
+            if(!std::binary_search(layout.informative_rows.begin(),layout.informative_rows.end(),support.row)) continue;
+            const auto basis=n::EvaluateKernel(support.squared_distance,width,2.5);
+            gaussian+=basis.gaussian*basis.gaussian; charge+=basis.charge*basis.charge;
+        }
+        weights.push_back(Number(std::sqrt(gaussian)/scale));
+        weights.push_back(Number(std::sqrt(charge)/scale));
+    }
+    return weights;
+}
 j::object SweepJson(const n::FixedNeighborBlockSweep & sweep)
 {
     return {{"sweep",sweep.sweep},{"objective",sweep.objective_after},
@@ -231,13 +250,15 @@ j::object SweepJson(const n::FixedNeighborBlockSweep & sweep)
 }
 void Write(const std::filesystem::path &,const j::value &);
 j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,bool compare_global,
-    bool decompose=false,bool certify_local=false,bool qualification=false,bool scaling_only=false)
+    bool decompose=false,bool certify_local=false,bool qualification=false,bool scaling_only=false,
+    bool reverse_order=false,bool record_final_state=false)
 {
     auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
     const rhbm_gem::core::JointProblem problem(*input);
     const std::vector<double> initial_b(static_cast<std::size_t>(atoms),.55);
     n::Vector initial_eta= n::Vector::Constant(atoms,std::log(.55)); n::FixedNeighborPolicy neighbor_policy;
     neighbor_policy.core_atoms=128;
+    neighbor_policy.order=reverse_order ? n::FixedNeighborBlockOrder::Reverse : n::FixedNeighborBlockOrder::Forward;
     neighbor_policy.certify_local_candidates=certify_local;
     neighbor_policy.stop_after_no_certified_update=certify_local;
     neighbor_policy.assess_final_endpoint=!scaling_only;
@@ -392,10 +413,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         const auto blocks_per_sweep=static_cast<std::size_t>(std::count_if(neighbor.blocks.begin(),neighbor.blocks.end(),
             [](const auto & block){return block.sweep==1;}));
         const auto & last=neighbor.sweeps.empty() ? n::FixedNeighborBlockSweep{} : neighbor.sweeps.back();
-        return {{"topology",topology},{"atoms",atoms},{"core_atoms",neighbor_policy.core_atoms},
-            {"maximum_sweeps",neighbor_policy.maximum_sweeps},
-            {"measurement_scope","fixed-neighbor-search-only"},
-            {"fixed_neighbor",j::object{{"search_converged",neighbor.search_converged},
+        j::object scaling_json{{"search_converged",neighbor.search_converged},
                 {"search_reason",neighbor.reason},{"blocks_per_sweep",blocks_per_sweep},
                 {"first_order_stationarity_sweep",neighbor.first_order_stationarity_sweep},
                 {"confirmed_stationarity_sweep",neighbor.confirmed_stationarity_sweep},
@@ -414,10 +432,22 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                     [](std::size_t maximum,const auto & sweep){return std::max(maximum,sweep.maximum_block_rows);})},
                 {"maximum_local_columns",std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),std::size_t{},
                     [](std::size_t maximum,const auto & sweep){return std::max(maximum,sweep.maximum_block_columns);})},
-                {"sweep_telemetry",sweeps},{"block_telemetry",blocks}}},
+                {"sweep_telemetry",sweeps},{"block_telemetry",blocks}};
+        if(record_final_state)
+        {
+            scaling_json["final_eta"]=NumberArray(neighbor.state.eta);
+            scaling_json["final_beta"]=NumberArray(neighbor.state.beta);
+            scaling_json["final_ac_scaling_weights"]=AcScalingWeights(problem,neighbor.state.eta);
+        }
+        return {{"topology",topology},{"atoms",atoms},{"core_atoms",neighbor_policy.core_atoms},
+            {"maximum_sweeps",neighbor_policy.maximum_sweeps},
+            {"block_order",reverse_order ? "reverse" : "forward"},
+            {"measurement_scope","fixed-neighbor-search-only"},
+            {"fixed_neighbor",scaling_json},
             {"peak_rss_mb",PeakRssMb()}};
     }
     j::object neighbor_json{{"method","FixedNeighbor"},{"search_converged",neighbor.search_converged},
+        {"block_order",reverse_order ? "reverse" : "forward"},
         {"search_reason",neighbor.reason},{"sweeps",neighbor.sweeps.size()},
         {"first_order_stationarity_sweep",neighbor.first_order_stationarity_sweep},
         {"confirmed_stationarity_sweep",neighbor.confirmed_stationarity_sweep},
@@ -436,11 +466,13 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"maximum_local_assessment_rows",maximum_local_assessment_rows},
         {"maximum_local_assessment_columns",maximum_local_assessment_columns},
         {"total_elapsed_seconds",neighbor_seconds}};
-    if(certify_local)
+    if(certify_local || record_final_state)
     {
         neighbor_json["final_eta"]=NumberArray(neighbor.state.eta);
         neighbor_json["final_beta"]=NumberArray(neighbor.state.beta);
     }
+    if(record_final_state)
+        neighbor_json["final_ac_scaling_weights"]=AcScalingWeights(problem,neighbor.state.eta);
     if(decompose)
         return {{"topology",topology},{"atoms",atoms},{"core_atoms",neighbor_policy.core_atoms},
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
@@ -493,14 +525,20 @@ int main(int argc,char ** argv)
     try {
         if(argc!=5 || (std::string(argv[1])!="--case" && std::string(argv[1])!="--neighbor-only" &&
             std::string(argv[1])!="--decompose" && std::string(argv[1])!="--certified-local" &&
-            std::string(argv[1])!="--qualification" && std::string(argv[1])!="--scaling-only"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--scaling-only OUTPUT_FILE TOPOLOGY ATOMS");
+            std::string(argv[1])!="--qualification" && std::string(argv[1])!="--scaling-only" &&
+            std::string(argv[1])!="--neighbor-forward" && std::string(argv[1])!="--neighbor-reverse" &&
+            std::string(argv[1])!="--scaling-forward" && std::string(argv[1])!="--scaling-reverse"))
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--scaling-only|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
         const std::string mode(argv[1]);
         Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--case",mode=="--decompose",
-            mode=="--certified-local",mode=="--qualification",mode=="--scaling-only"));
+            mode=="--certified-local",mode=="--qualification",
+            mode=="--scaling-only" || mode=="--scaling-forward" || mode=="--scaling-reverse",
+            mode=="--neighbor-reverse" || mode=="--scaling-reverse",
+            mode=="--neighbor-forward" || mode=="--neighbor-reverse" ||
+                mode=="--scaling-forward" || mode=="--scaling-reverse"));
         std::cout<<argv[3]<<'-'<<argv[4]<<" fixed-neighbor experiment complete\n";
         return 0;
     } catch(const std::exception & error) {std::cerr<<error.what()<<'\n'; return 1;}
