@@ -126,7 +126,7 @@ struct Trial
     int evaluation{};
     bool accepted{};
     std::optional<int> accepted_update;
-    double seconds{};
+    double seconds{},factor_seconds{};
     std::optional<LmTrial> lm;
     std::optional<TrustEvidence> trust;
 };

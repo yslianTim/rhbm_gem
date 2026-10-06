@@ -226,6 +226,39 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
             const auto local_search=SearchProfile(local_domain,local_y,old_widths,local_context);
             record.search_seconds=Seconds(search_started); record.profile_evaluations=local_search.evaluations;
             record.accepted_updates=local_search.accepted; record.local_search_stop_reason=local_search.stop_reason;
+            if(policy.capture_local_trajectory)
+            {
+                record.profile_trials.reserve(local_search.trials.size());
+                double accepted_objective=record.local_objective_before;
+                Vector accepted_eta=old_eta; double cumulative_factor_seconds{};
+                for(std::size_t trial_index=0;trial_index<local_search.trials.size();++trial_index)
+                {
+                    const auto & trial=local_search.trials[trial_index];
+                    const double objective=trial.endpoint.certificate.evaluated && trial.endpoint.certificate.available ?
+                        trial.endpoint.certificate.objective/(context.scale*context.scale) : unavailable;
+                    FixedNeighborProfileTrial telemetry;
+                    telemetry.trial_index=trial_index; telemetry.profile_evaluation=trial.evaluation;
+                    telemetry.accepted=trial.accepted; telemetry.accepted_update=trial.accepted_update;
+                    telemetry.local_objective_before=accepted_objective;
+                    telemetry.local_objective_after=objective;
+                    telemetry.objective_reduction=std::isfinite(accepted_objective) && std::isfinite(objective) ?
+                        accepted_objective-objective : unavailable;
+                    telemetry.eta_change_inf=trial.endpoint.eta.size()==accepted_eta.size() ?
+                        (trial.endpoint.eta-accepted_eta).lpNorm<Eigen::Infinity>() : unavailable;
+                    telemetry.gradient_inf_norm=trial.endpoint.gradient.size() ?
+                        trial.endpoint.gradient.lpNorm<Eigen::Infinity>() : unavailable;
+                    telemetry.profile_seconds=trial.seconds; telemetry.factor_seconds=trial.factor_seconds;
+                    cumulative_factor_seconds+=trial.factor_seconds;
+                    telemetry.cumulative_factor_seconds=cumulative_factor_seconds;
+                    record.profile_trials.push_back(std::move(telemetry));
+                    if(trial.accepted && std::isfinite(objective))
+                    {
+                        accepted_objective=objective;
+                        if(trial.endpoint.eta.size()==accepted_eta.size()) accepted_eta=trial.endpoint.eta;
+                    }
+                }
+                record.profile_factor_seconds=cumulative_factor_seconds;
+            }
             sweep.block_solves++; sweep.profile_evaluations+=static_cast<std::size_t>(local_search.evaluations);
             sweep.maximum_block_rows=std::max(sweep.maximum_block_rows,static_cast<std::size_t>(local_domain.rows));
             sweep.maximum_block_columns=std::max(sweep.maximum_block_columns,static_cast<std::size_t>(2*local_atoms));

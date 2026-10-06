@@ -129,6 +129,40 @@ TEST(JointFixedNeighborBlockCoordinateTest, SearchOnlySkipsFinalAssessmentWithou
             assessed.sweeps[k].global_width_gradient_inf_norm);
     }
 }
+TEST(JointFixedNeighborBlockCoordinateTest, LocalTrajectoryTelemetryIsOptInAndDoesNotChangeSearchState)
+{
+    JointProblem problem(second_stage_test::OperatorWorkload("chain",8));
+    const n::Vector eta=n::Vector::Constant(8,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.assess_final_endpoint=false; policy.maximum_sweeps=1;
+    policy.capture_local_trajectory=true;
+    const auto captured=n::SearchFixedNeighbor(problem,eta,policy);
+    policy.capture_local_trajectory=false;
+    const auto quiet=n::SearchFixedNeighbor(problem,eta,policy);
+    ASSERT_FALSE(captured.blocks.empty());
+    ASSERT_EQ(captured.blocks.size(),quiet.blocks.size());
+    ASSERT_FALSE(captured.blocks.front().profile_trials.empty());
+    for(std::size_t k=0;k<captured.blocks.size();++k)
+    {
+        const auto & block=captured.blocks[k];
+        double factor_seconds{};
+        std::size_t accepted_updates{};
+        for(const auto & trial:block.profile_trials)
+        {
+            factor_seconds+=trial.factor_seconds;
+            if(trial.accepted && trial.accepted_update && *trial.accepted_update>0) ++accepted_updates;
+            EXPECT_GE(trial.cumulative_factor_seconds,factor_seconds);
+        }
+        EXPECT_DOUBLE_EQ(block.profile_factor_seconds,factor_seconds);
+        EXPECT_EQ(accepted_updates,static_cast<std::size_t>(block.accepted_updates));
+        EXPECT_TRUE(block.local_objective_before==block.local_objective_before);
+        EXPECT_EQ(block.profile_evaluations,static_cast<int>(block.profile_trials.size()));
+    }
+    EXPECT_EQ(captured.reason,quiet.reason);
+    EXPECT_EQ(captured.sweeps.size(),quiet.sweeps.size());
+    EXPECT_TRUE((captured.state.eta.array()==quiet.state.eta.array()).all());
+    EXPECT_TRUE((captured.state.beta.array()==quiet.state.beta.array()).all());
+    EXPECT_DOUBLE_EQ(captured.state.objective,quiet.state.objective);
+}
 TEST(JointFixedNeighborBlockCoordinateTest, EtaConfirmationUsesInclusiveExistingThreshold)
 {
     constexpr double threshold=1e-10;

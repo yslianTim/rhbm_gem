@@ -1,0 +1,17 @@
+{
+  "command": [
+    "/Users/yslian/Project/em_map_analysis/build/joint-spqr/bin/joint_fixed_neighbor_experiment",
+    "--attribution",
+    "/Users/yslian/Project/em_map_analysis/docs/developer/figures/joint-fixed-neighbor-local-attribution-r1/individual-results/cube-512.json",
+    "cube",
+    "512"
+  ],
+  "status": "completed",
+  "sample_interval_seconds": 0.1,
+  "wall_seconds": 2658.2459320828784,
+  "exit_code": 0,
+  "sampled_tree_peak_rss_bytes": 502022144,
+  "samples": 24311,
+  "maximum_sampling_gap_seconds": 0.21738112485036254,
+  "os_process_peak_rss_bytes": 527056896
+}

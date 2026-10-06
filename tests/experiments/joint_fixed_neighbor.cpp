@@ -59,6 +59,23 @@ j::value Number(double value)
 {return std::isfinite(value) ? j::value(value) : j::value(nullptr);}
 j::array NumberArray(const n::Vector & values)
 {j::array out; for(Eigen::Index k=0;k<values.size();++k) out.push_back(Number(values(k))); return out;}
+j::array ProfileTrialsJson(const std::vector<n::FixedNeighborProfileTrial> & trials)
+{
+    j::array out;
+    for(const auto & trial:trials)
+        out.push_back({{"trial_index",trial.trial_index},{"profile_evaluation",trial.profile_evaluation},
+            {"accepted",trial.accepted},{"accepted_update",trial.accepted_update ?
+                j::value(*trial.accepted_update) : j::value(nullptr)},
+            {"local_objective_before",Number(trial.local_objective_before)},
+            {"local_objective_after",Number(trial.local_objective_after)},
+            {"objective_reduction",Number(trial.objective_reduction)},
+            {"eta_change_inf",Number(trial.eta_change_inf)},
+            {"gradient_inf_norm",Number(trial.gradient_inf_norm)},
+            {"profile_seconds",Number(trial.profile_seconds)},
+            {"factor_seconds",Number(trial.factor_seconds)},
+            {"cumulative_factor_seconds",Number(trial.cumulative_factor_seconds)}});
+    return out;
+}
 double CoefficientDifference(const n::Vector & lhs,const n::Vector & rhs)
 {
     if(lhs.size()!=rhs.size() || lhs.size()==0) return std::numeric_limits<double>::infinity();
@@ -251,7 +268,7 @@ j::object SweepJson(const n::FixedNeighborBlockSweep & sweep)
 void Write(const std::filesystem::path &,const j::value &);
 j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,bool compare_global,
     bool decompose=false,bool certify_local=false,bool qualification=false,bool scaling_only=false,
-    bool reverse_order=false,bool record_final_state=false)
+    bool reverse_order=false,bool record_final_state=false,bool attribution=false)
 {
     auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
     const rhbm_gem::core::JointProblem problem(*input);
@@ -260,6 +277,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     neighbor_policy.core_atoms=128;
     neighbor_policy.order=reverse_order ? n::FixedNeighborBlockOrder::Reverse : n::FixedNeighborBlockOrder::Forward;
     neighbor_policy.certify_local_candidates=certify_local;
+    neighbor_policy.capture_local_trajectory=attribution;
     neighbor_policy.stop_after_no_certified_update=certify_local;
     neighbor_policy.assess_final_endpoint=!scaling_only;
     if(qualification)
@@ -280,14 +298,14 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             {"rows",problem.Input().observations.size()},{"parameter_count",3*atoms},
             {"sweeps_completed",progress_sweeps.size()},{"sweep_telemetry",progress_sweeps}};
         if(decompose) progress["endpoint_decomposition"]=endpoint_snapshots;
-        if(certify_local) progress["local_block_telemetry"]=local_block_snapshots;
+        if(certify_local || attribution) progress["local_block_telemetry"]=local_block_snapshots;
         if(qualification) progress["endpoint_assessment_by_sweep"]=endpoint_assessments;
         Write(progress_path,progress);
         std::cerr<<topology<<'-'<<atoms<<" FixedNeighbor sweep "<<progress_sweeps.size()
             <<" KKT="<<sweep.global_ac_kkt<<" width-grad="<<sweep.global_width_gradient_inf_norm
             <<" seconds="<<sweep.wall_seconds<<'\n';
     };
-    if(decompose || certify_local || qualification)
+    if(decompose || certify_local || qualification || attribution)
         neighbor_policy.state_observer=[&](std::size_t sweep,const n::BlockCoordinateState & state,
             const n::FixedNeighborBlockSweep & sweep_record,const std::vector<n::FixedNeighborBlockRecord> & blocks) {
             if(qualification)
@@ -301,10 +319,11 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                     {"sweeps_completed",progress_sweeps.size()},{"sweep_telemetry",progress_sweeps},
                     {"endpoint_assessment_by_sweep",endpoint_assessments}});
             }
-            if(certify_local)
+            if(certify_local || attribution)
             {
                 for(const auto & block:blocks) if(block.sweep==sweep)
-                    local_block_snapshots.push_back({{"sweep",block.sweep},{"block",block.block},
+                {
+                    j::object snapshot{{"sweep",block.sweep},{"block",block.block},
                         {"affected_rows",block.affected_rows},{"local_assessment_rows",block.local_assessment_rows},
                         {"local_assessment_columns",block.local_assessment_columns},
                         {"local_assessment_attempted",block.local_assessment_attempted},
@@ -324,7 +343,11 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                         {"local_assessment_failure",block.local_assessment_failure},
                         {"local_trust_reason",block.local_trust_reason},
                         {"local_assessment_seconds",block.local_assessment_seconds},
-                        {"accepted",block.accepted},{"status",block.status},{"reason",block.reason}});
+                        {"profile_factor_seconds",Number(block.profile_factor_seconds)},
+                        {"profile_trials",ProfileTrialsJson(block.profile_trials)},
+                        {"accepted",block.accepted},{"status",block.status},{"reason",block.reason}};
+                    local_block_snapshots.push_back(std::move(snapshot));
+                }
                 Write(progress_path,j::object{{"topology",topology},{"atoms",atoms},
                     {"sweeps_completed",progress_sweeps.size()},{"sweep_telemetry",progress_sweeps},
                     {"local_block_telemetry",local_block_snapshots}});
@@ -373,7 +396,8 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         sweeps.push_back(SweepJson(sweep));
     j::array blocks;
     for(const auto & block:neighbor.blocks)
-        blocks.push_back({{"sweep",block.sweep},{"block",block.block},{"atoms",block.core_atoms.size()},
+    {
+        j::object block_json{{"sweep",block.sweep},{"block",block.block},{"atoms",block.core_atoms.size()},
             {"affected_rows",block.affected_rows},{"objective_before",block.objective_before},
             {"objective_after",block.objective_after},{"local_objective_before",block.local_objective_before},
             {"local_objective_after",block.local_objective_after},{"global_replay_delta",block.global_replay_delta},
@@ -397,10 +421,14 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             {"local_trust_reason",block.local_trust_reason},
             {"local_assessment_rows",block.local_assessment_rows},{"local_assessment_columns",block.local_assessment_columns},
             {"local_assessment_seconds",block.local_assessment_seconds},
+            {"profile_factor_seconds",Number(block.profile_factor_seconds)},
+            {"profile_trials",ProfileTrialsJson(block.profile_trials)},
             {"search_seconds",block.search_seconds},{"accepted",block.accepted},
             {"status",block.status},{"reason",block.reason},{"local_search_stop_reason",block.local_search_stop_reason},
             {"local_final_gradient_inf_norm",Number(block.local_final_gradient_inf_norm)},
-            {"local_final_ac_kkt",Number(block.local_final_ac_kkt)}});
+            {"local_final_ac_kkt",Number(block.local_final_ac_kkt)}};
+        blocks.push_back(std::move(block_json));
+    }
     if(scaling_only)
     {
         const auto sum_sweeps=[&](auto member) {
@@ -409,6 +437,8 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         };
         const double local_factor_seconds=std::accumulate(neighbor.blocks.begin(),neighbor.blocks.end(),0.0,
             [](double total,const auto & block){return total+block.search_seconds;});
+        const double profile_factor_seconds=std::accumulate(neighbor.blocks.begin(),neighbor.blocks.end(),0.0,
+            [](double total,const auto & block){return total+block.profile_factor_seconds;});
         const auto accepted_local_updates=std::accumulate(neighbor.blocks.begin(),neighbor.blocks.end(),std::size_t{},
             [](std::size_t total,const auto & block){return total+static_cast<std::size_t>(block.accepted_updates);});
         const auto blocks_per_sweep=static_cast<std::size_t>(std::count_if(neighbor.blocks.begin(),neighbor.blocks.end(),
@@ -427,7 +457,9 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                 {"profile_evaluations",sum_sweeps(&n::FixedNeighborBlockSweep::profile_evaluations)},
                 {"accepted_blocks",sum_sweeps(&n::FixedNeighborBlockSweep::accepted_blocks)},
                 {"accepted_local_updates",accepted_local_updates},
-                {"local_factor_seconds",local_factor_seconds},{"search_seconds",neighbor_search_seconds},
+                {"local_factor_seconds",local_factor_seconds},{"profile_factor_seconds",profile_factor_seconds},
+                {"search_seconds",neighbor_search_seconds},
+                {"local_trajectory_telemetry",attribution},
                 {"total_elapsed_seconds",neighbor_seconds},
                 {"maximum_local_rows",std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),std::size_t{},
                     [](std::size_t maximum,const auto & sweep){return std::max(maximum,sweep.maximum_block_rows);})},
@@ -532,19 +564,21 @@ int main(int argc,char ** argv)
         if(argc!=5 || (std::string(argv[1])!="--case" && std::string(argv[1])!="--neighbor-only" &&
             std::string(argv[1])!="--decompose" && std::string(argv[1])!="--certified-local" &&
             std::string(argv[1])!="--qualification" && std::string(argv[1])!="--scaling-only" &&
+            std::string(argv[1])!="--attribution" &&
             std::string(argv[1])!="--neighbor-forward" && std::string(argv[1])!="--neighbor-reverse" &&
             std::string(argv[1])!="--scaling-forward" && std::string(argv[1])!="--scaling-reverse"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--scaling-only|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS");
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--scaling-only|--attribution|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
         const std::string mode(argv[1]);
         Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--case",mode=="--decompose",
             mode=="--certified-local",mode=="--qualification",
-            mode=="--scaling-only" || mode=="--scaling-forward" || mode=="--scaling-reverse",
+            mode=="--scaling-only" || mode=="--attribution" || mode=="--scaling-forward" || mode=="--scaling-reverse",
             mode=="--neighbor-reverse" || mode=="--scaling-reverse",
             mode=="--neighbor-forward" || mode=="--neighbor-reverse" ||
-                mode=="--scaling-forward" || mode=="--scaling-reverse"));
+                mode=="--scaling-forward" || mode=="--scaling-reverse",
+            mode=="--attribution"));
         std::cout<<argv[3]<<'-'<<argv[4]<<" fixed-neighbor experiment complete\n";
         return 0;
     } catch(const std::exception & error) {std::cerr<<error.what()<<'\n'; return 1;}

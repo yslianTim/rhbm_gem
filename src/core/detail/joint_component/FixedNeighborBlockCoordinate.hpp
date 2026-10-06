@@ -4,6 +4,16 @@
 
 namespace rhbm_gem::core::joint_component {
 enum class FixedNeighborBlockOrder {Forward,Reverse};
+struct FixedNeighborProfileTrial
+{
+    std::size_t trial_index{};
+    int profile_evaluation{};
+    bool accepted{};
+    std::optional<int> accepted_update;
+    double local_objective_before{},local_objective_after{},objective_reduction{};
+    double eta_change_inf{},gradient_inf_norm{};
+    double profile_seconds{},factor_seconds{},cumulative_factor_seconds{};
+};
 struct FixedNeighborBlockRecord
 {
     std::size_t sweep{},block{},affected_rows{};
@@ -16,8 +26,9 @@ struct FixedNeighborBlockRecord
     Eigen::Index local_projected_width_rank{},local_corrected_jacobian_rank{},local_normalized_width_rank{};
     double local_assessment_seconds{};
     Eigen::Index local_assessment_rows{},local_assessment_columns{};
-    double search_seconds{};
+    double search_seconds{},profile_factor_seconds{};
     int profile_evaluations{},accepted_updates{};
+    std::vector<FixedNeighborProfileTrial> profile_trials;
     bool accepted{},local_assessment_attempted{},local_assessment_passed{},local_inner_passed{},
         local_gradient_passed{},local_correction_passed{},local_identified{},local_trust_passed{};
     std::string local_assessment_failure,local_trust_reason;
@@ -41,6 +52,7 @@ struct FixedNeighborPolicy
     FixedNeighborBlockOrder order{FixedNeighborBlockOrder::Forward};
     bool stop_after_stationarity{true};
     bool certify_local_candidates{};
+    bool capture_local_trajectory{};
     bool stop_after_no_certified_update{};
     bool assess_final_endpoint{true};
     std::function<void(const FixedNeighborBlockSweep &)> sweep_observer;

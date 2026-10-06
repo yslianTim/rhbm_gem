@@ -60,8 +60,14 @@ struct Profile
         failure.clear();
         ResourcePhase evaluation(evaluations==0 ? "profile-evaluation" : "trial-evaluation",true,domain.rows,eta.size());
         const auto start=std::chrono::steady_clock::now();
+        const auto & sparse_work=SparseWorkForTesting();
+        const double factor_seconds_before=sparse_work.symbolic_seconds+sparse_work.numeric_seconds+
+            sparse_work.fixed_factor_seconds;
         cached=EvaluateProfile(domain,y,eta,false,&context,nullptr,&workspace); ++evaluations;
-        joint_component::Trial row; row.endpoint=cached; row.evaluation=evaluations; row.seconds=Seconds(start); trace.push_back(std::move(row));
+        joint_component::Trial row; row.endpoint=cached; row.evaluation=evaluations; row.seconds=Seconds(start);
+        row.factor_seconds=SparseWorkForTesting().symbolic_seconds+SparseWorkForTesting().numeric_seconds+
+            SparseWorkForTesting().fixed_factor_seconds-factor_seconds_before;
+        trace.push_back(std::move(row));
         Report();
         if(!cached.valid) failure="inner-"+cached.reason;
         return cached.valid;
