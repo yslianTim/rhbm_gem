@@ -183,18 +183,21 @@ set(JOINT_COMPONENT_TEST_SOURCES
     core/joint_component/ProfileOperator_test.cpp
     core/joint_component/OperatorSearch_test.cpp
     core/joint_component/BlockCoordinate_test.cpp
-    core/joint_component/FixedBBlockCoordinate_test.cpp
-    core/joint_component/FixedNeighborBlockCoordinate_test.cpp
-    core/joint_component/CompactAssessment_test.cpp
     core/joint_component/ProjectedTailQr_test.cpp
-    core/joint_component/Numerics_test.cpp
     core/joint_component/Search_test.cpp
-    core/joint_component/Components_test.cpp
     core/joint_component/Observation_test.cpp
     core/joint_component/Runtime_test.cpp
     core/joint_component/Progress_test.cpp
     core/joint_component/PartialSelection_test.cpp
     core/joint_component/ObservableProfile_test.cpp
+)
+
+set(JOINT_COMPONENT_SCALABILITY_TEST_SOURCES
+    core/joint_component/FixedBBlockCoordinate_test.cpp
+    core/joint_component/FixedNeighborBlockCoordinate_test.cpp
+    core/joint_component/CompactAssessment_test.cpp
+    core/joint_component/Components_test.cpp
+    core/joint_component/Numerics_test.cpp
 )
 
 set(INTEGRATION_COMMAND_TEST_SOURCES
@@ -214,6 +217,7 @@ set(RHBM_GEM_ALL_GTEST_SOURCES
     ${UTILS_DOMAIN_TEST_SOURCES}
     ${UTILS_HRL_TEST_SOURCES}
     ${JOINT_COMPONENT_TEST_SOURCES}
+    ${JOINT_COMPONENT_SCALABILITY_TEST_SOURCES}
     ${INTEGRATION_COMMAND_TEST_SOURCES}
 )
 
@@ -367,6 +371,10 @@ add_rhbm_gtest_group(rhbm_tests_joint_component
     DOMAIN core INTENTS algorithm contract SOURCES ${JOINT_COMPONENT_TEST_SOURCES})
 set_property(TEST rhbm_tests_joint_component APPEND PROPERTY LABELS "joint:runtime")
 
+add_rhbm_gtest_group(rhbm_tests_joint_component_scalability
+    DOMAIN core INTENTS algorithm SOURCES ${JOINT_COMPONENT_SCALABILITY_TEST_SOURCES})
+set_property(TEST rhbm_tests_joint_component_scalability APPEND PROPERTY LABELS "joint:scalability")
+
 add_rhbm_gtest_group(rhbm_tests_core_command
     DOMAIN core
     INTENTS command validation
@@ -463,10 +471,11 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     add_test(NAME joint_optimized_frontier_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_optimized_frontier_test.py")
     set_tests_properties(experiment_support_test experiment_runner_dependency_test joint_benchmark_contract_test
-        joint_route_frontier_test joint_fixed_neighbor_attribution_test joint_fixed_neighbor_inexact_test
+        joint_route_frontier_test joint_fixed_neighbor_inexact_test
         joint_fixed_neighbor_inexact_qualification_test joint_fixed_neighbor_core_size_test
-        joint_optimized_frontier_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm")
+    set_tests_properties(joint_fixed_neighbor_attribution_test joint_optimized_frontier_test
+        PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:scalability")
     add_test(NAME joint_component_evidence_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_evidence_test.py")
     add_test(NAME joint_fixed_b_scaling_analysis_test
