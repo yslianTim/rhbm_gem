@@ -114,21 +114,8 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
         }
         else if(valid && !layout.informative_rows.empty())
         {
-            const auto domain=ProfileDomain(data.domain,layout);
-            auto context=ProfileContext(data.context,layout,static_cast<Eigen::Index>(view.rows.size())); context.independent_search=true; context.search=search_policy;
-            const Vector y=SelectValues(data.y,IndicesOf(layout.informative_rows));
-            const Vector start=SelectValues(widths,IndicesOf(layout.full_atoms));
-            ComponentResult result;
-            if(search_policy.method==SearchMethod::FixedNeighbor)
-                result=SolveFixedNeighborComponent(input,layout,view,data.y,widths,data.context,
-                    search_policy.fixed_neighbor,observer,progress_component ? &*progress_component : nullptr);
-            else
-            {
-                auto search=SearchProfile(domain,y,start,context,observer,
-                    progress_component ? &*progress_component : nullptr);
-                result=AssessComponentSearch(domain,y,context,std::move(search),observer,
-                    progress_component ? &*progress_component : nullptr);
-            }
+            const ComponentResult result=SolveComponentWithSearchPolicy(input,data.domain,view,layout,data.y,widths,
+                data.context,search_policy,observer,progress_component ? &*progress_component : nullptr);
             accepted_objective=result.search.accepted_objective;
             accepted_gradient_inf_norm=result.search.accepted_gradient_inf_norm;
             component.search_completed=result.search_success; component.stop_reason=result.search.stop_reason;
