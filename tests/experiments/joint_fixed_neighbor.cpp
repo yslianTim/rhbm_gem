@@ -1,5 +1,6 @@
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/SparseFactor.hpp"
 #include "support/JointOperatorWorkload.hpp"
 #include <boost/json.hpp>
 #include <Eigen/Core>
@@ -382,8 +383,10 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                 {"endpoint_decomposition",endpoint_snapshots}});
         };
     std::cerr<<topology<<'-'<<atoms<<" FixedNeighbor started\n";
+    n::SparseWorkForTesting()={};
     auto started=Clock::now(); const auto neighbor=n::SearchFixedNeighbor(problem,initial_eta,neighbor_policy);
     const double neighbor_seconds=Seconds(started);
+    const auto sparse_work=n::SparseWorkForTesting();
     const double sweep_seconds=std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),0.0,
         [](double total,const auto & sweep){return total+sweep.wall_seconds;});
     const double local_assessment_seconds=std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),0.0,
@@ -469,6 +472,17 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                 {"profile_evaluations",sum_sweeps(&n::FixedNeighborBlockSweep::profile_evaluations)},
                 {"accepted_blocks",sum_sweeps(&n::FixedNeighborBlockSweep::accepted_blocks)},
                 {"accepted_local_updates",accepted_local_updates},
+                {"prepared_block_count",neighbor.block_preparations},
+                {"block_preparations",neighbor.block_preparations},
+                {"domain_preparations",neighbor.domain_preparations},
+                {"mapping_preparations",neighbor.mapping_preparations},
+                {"symbolic_factorizations",sparse_work.symbolic},
+                {"symbolic_reuses",sparse_work.symbolic_reuses},
+                {"numeric_factorizations",sparse_work.numeric},
+                {"fresh_workspace_symbolic_factorizations",sparse_work.numeric},
+                {"symbolic_seconds",sparse_work.symbolic_seconds},
+                {"numeric_seconds",sparse_work.numeric_seconds},
+                {"factor_storage_bytes",sparse_work.factor_storage_bytes},
                 {"local_factor_seconds",local_factor_seconds},{"profile_factor_seconds",profile_factor_seconds},
                 {"search_seconds",neighbor_search_seconds},
                 {"local_trajectory_telemetry",attribution},
@@ -514,6 +528,17 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"local_assessment_count",local_assessments},
         {"certified_local_candidates",certified_local_candidates},
         {"local_assessment_seconds",local_assessment_seconds},
+        {"prepared_block_count",neighbor.block_preparations},
+        {"block_preparations",neighbor.block_preparations},
+        {"domain_preparations",neighbor.domain_preparations},
+        {"mapping_preparations",neighbor.mapping_preparations},
+        {"symbolic_factorizations",sparse_work.symbolic},
+        {"symbolic_reuses",sparse_work.symbolic_reuses},
+        {"numeric_factorizations",sparse_work.numeric},
+        {"fresh_workspace_symbolic_factorizations",sparse_work.numeric},
+        {"symbolic_seconds",sparse_work.symbolic_seconds},
+        {"numeric_seconds",sparse_work.numeric_seconds},
+        {"factor_storage_bytes",sparse_work.factor_storage_bytes},
         {"profile_factor_seconds",std::accumulate(neighbor.blocks.begin(),neighbor.blocks.end(),0.0,
             [](double total,const auto & block){return total+block.profile_factor_seconds;})},
         {"maximum_local_assessment_rows",maximum_local_assessment_rows},
