@@ -163,6 +163,38 @@ TEST(JointFixedNeighborBlockCoordinateTest, LocalTrajectoryTelemetryIsOptInAndDo
     EXPECT_TRUE((captured.state.beta.array()==quiet.state.beta.array()).all());
     EXPECT_DOUBLE_EQ(captured.state.objective,quiet.state.objective);
 }
+TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutputWithoutDiagnostics)
+{
+    JointProblem problem(second_stage_test::OperatorWorkload("chain",32));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector initial_eta=n::Vector::Constant(32,std::log(.55));
+    const n::Domain domain=n::ProfileDomain(data.domain,data.layout);
+    const auto context=n::ProfileContext(data.context,data.layout,data.domain.rows);
+    n::FixedNeighborPolicy quiet_policy; quiet_policy.core_atoms=16; quiet_policy.maximum_sweeps=3;
+    const auto quiet=n::SearchFixedNeighborComponent(*data.input,data.layout,domain,data.y,data.y,
+        initial_eta,context,quiet_policy);
+    auto diagnostic_policy=quiet_policy; diagnostic_policy.collect_diagnostics=true;
+    const auto diagnostic=n::SearchFixedNeighborComponent(*data.input,data.layout,domain,data.y,data.y,
+        initial_eta,context,diagnostic_policy);
+
+    EXPECT_TRUE(quiet.blocks.empty());
+    EXPECT_TRUE(quiet.sweeps.empty());
+    ASSERT_FALSE(diagnostic.sweeps.empty());
+    ASSERT_TRUE(quiet.final_sweep.has_value());
+    EXPECT_EQ(quiet.sweep_count,diagnostic.sweep_count);
+    EXPECT_EQ(quiet.total_block_solves,diagnostic.total_block_solves);
+    EXPECT_EQ(quiet.total_profile_evaluations,diagnostic.total_profile_evaluations);
+    EXPECT_EQ(quiet.reason,diagnostic.reason);
+    EXPECT_EQ(quiet.search_converged,diagnostic.search_converged);
+    EXPECT_EQ(quiet.endpoint_certified,diagnostic.endpoint_certified);
+    EXPECT_TRUE((quiet.state.eta.array()==diagnostic.state.eta.array()).all());
+    EXPECT_TRUE((quiet.state.beta.array()==diagnostic.state.beta.array()).all());
+    EXPECT_DOUBLE_EQ(quiet.state.objective,diagnostic.state.objective);
+    EXPECT_DOUBLE_EQ(quiet.final_sweep->global_ac_kkt,diagnostic.sweeps.back().global_ac_kkt);
+    EXPECT_DOUBLE_EQ(quiet.final_sweep->global_width_gradient_inf_norm,
+        diagnostic.sweeps.back().global_width_gradient_inf_norm);
+    EXPECT_TRUE((quiet.assessment.primary.eta.array()==diagnostic.assessment.primary.eta.array()).all());
+}
 TEST(JointFixedNeighborBlockCoordinateTest, BoundedLocalWorkCountsTrustedAcceptedUpdatesOnly)
 {
     JointProblem problem(second_stage_test::OperatorWorkload("chain",32));

@@ -174,12 +174,25 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     for(std::size_t k=0;k<layout.informative_rows.size();++k) row_position.at(layout.informative_rows[k])=static_cast<Eigen::Index>(k);
     std::vector<std::size_t> order(partition.cores.size()); std::iota(order.begin(),order.end(),0);
     if(policy.order==FixedNeighborBlockOrder::Reverse) std::reverse(order.begin(),order.end());
+    const bool retain_diagnostics=policy.collect_diagnostics || policy.capture_local_trajectory ||
+        policy.certify_local_candidates || static_cast<bool>(policy.state_observer);
     bool stop=false;
     for(std::size_t sweep_index=0;sweep_index<policy.maximum_sweeps && !stop;++sweep_index)
     {
         const auto sweep_started=Clock::now(); FixedNeighborBlockSweep sweep; sweep.sweep=sweep_index+1;
         const Vector eta_before=out.state.eta,beta_before=out.state.beta;
         sweep.objective_before=out.state.objective;
+        auto finish_record=[&](FixedNeighborBlockRecord record) {
+            if(record.accepted)
+            {
+                ++sweep.accepted_blocks;
+                sweep.accepted_local_updates+=static_cast<std::size_t>(record.accepted_updates);
+                out.total_accepted_local_updates+=static_cast<std::size_t>(record.accepted_updates);
+            }
+            else if(record.status=="unchanged") ++sweep.unchanged_blocks;
+            if(policy.diagnostic_sink && policy.diagnostic_sink->block) policy.diagnostic_sink->block(record);
+            if(retain_diagnostics) out.blocks.push_back(std::move(record));
+        };
         for(auto block_index:order)
         {
             const auto & core=partition.cores[block_index]; FixedNeighborBlockRecord record;
@@ -269,7 +282,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 }
                 record.profile_factor_seconds=cumulative_factor_seconds;
             }
-            sweep.block_solves++; sweep.profile_evaluations+=static_cast<std::size_t>(local_search.evaluations);
+            ++sweep.block_solves; ++out.total_block_solves;
+            sweep.profile_evaluations+=static_cast<std::size_t>(local_search.evaluations);
+            out.total_profile_evaluations+=static_cast<std::size_t>(local_search.evaluations);
             sweep.maximum_block_rows=std::max(sweep.maximum_block_rows,static_cast<std::size_t>(local_domain.rows));
             sweep.maximum_block_columns=std::max(sweep.maximum_block_columns,static_cast<std::size_t>(2*local_atoms));
             const Trial * accepted=nullptr;
@@ -278,14 +293,14 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             if(!accepted)
             {
                 record.status="failed"; record.reason="block-search-failed"; out.reason=record.reason;
-                out.blocks.push_back(std::move(record)); stop=true; break;
+                finish_record(std::move(record)); stop=true; break;
             }
             const auto local_state=EvaluateState(local_domain,local_y,accepted->endpoint.eta,accepted->endpoint.beta,local_context);
             if(!local_state.valid || !local_state.certificate.available || !local_state.certificate.feasible ||
                 !local_state.certificate.kkt_passed)
             {
                 record.status="failed"; record.reason="block-inner-invalid"; out.reason=record.reason;
-                out.blocks.push_back(std::move(record)); stop=true; break;
+                finish_record(std::move(record)); stop=true; break;
             }
             record.local_final_gradient_inf_norm=local_state.gradient.lpNorm<Eigen::Infinity>();
             record.local_final_ac_kkt=local_state.certificate.projected_kkt;
@@ -300,7 +315,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 const auto local_trust=CheckTrust(local_domain,local_y,local_state,local_context,local_reference);
                 record.local_assessment_seconds=Seconds(assessment_started);
                 sweep.local_assessment_seconds+=record.local_assessment_seconds;
-                ++sweep.local_assessments;
+                ++sweep.local_assessments; ++out.total_local_assessments;
                 sweep.maximum_local_assessment_rows=std::max(sweep.maximum_local_assessment_rows,
                     static_cast<std::size_t>(record.local_assessment_rows));
                 sweep.maximum_local_assessment_columns=std::max(sweep.maximum_local_assessment_columns,
@@ -339,7 +354,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                     record.status="unchanged"; record.reason="local-endpoint-uncertified";
                     record.local_objective_after=record.local_objective_before;
                     record.objective_after=record.objective_before;
-                    out.blocks.push_back(std::move(record)); continue;
+                    finish_record(std::move(record)); continue;
                 }
                 ++sweep.certified_local_candidates;
             }
@@ -347,7 +362,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             if(record.local_objective_after>record.local_objective_before)
             {
                 record.status="unchanged"; record.reason="block-objective-increase";
-                record.objective_after=record.objective_before; out.blocks.push_back(std::move(record)); continue;
+                record.objective_after=record.objective_before; finish_record(std::move(record)); continue;
             }
             Vector candidate_eta=out.state.eta,candidate_beta=out.state.beta;
             for(std::size_t k=0;k<core.atoms.size();++k)
@@ -366,13 +381,13 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             if(!delta_enclosed)
             {
                 record.status="failed"; record.reason="block-objective-replay-failed"; out.reason=record.reason;
-                out.blocks.push_back(std::move(record)); stop=true; break;
+                finish_record(std::move(record)); stop=true; break;
             }
             if(record.global_replay_delta>0 && !(record.local_objective_after<=record.local_objective_before &&
                 record.global_replay_delta<=record.objective_replay_enclosure))
             {
                 record.status="unchanged"; record.reason="block-objective-increase";
-                out.blocks.push_back(std::move(record)); continue;
+                finish_record(std::move(record)); continue;
             }
             const bool unchanged=(out.state.eta.array()==candidate_eta.array()).all() &&
                 (out.state.beta.array()==candidate_beta.array()).all();
@@ -388,7 +403,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             out.state.eta=std::move(candidate_eta); out.state.beta=std::move(candidate_beta);
             record.accepted=!unchanged; record.status=unchanged ? "unchanged" : "accepted";
             record.reason=unchanged ? "block-unchanged" : "";
-            out.blocks.push_back(std::move(record));
+            finish_record(std::move(record));
         }
         if(stop) break;
         sweep.objective_after=out.state.objective;
@@ -406,17 +421,16 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         sweep.eta_change_inf=(out.state.eta-eta_before).lpNorm<Eigen::Infinity>();
         sweep.beta_scaled_change=ScaledCoefficientDifference(out.state.beta,beta_before);
         sweep.coordinate_confirmation_available=sweep_index>0;
-        for(const auto & block:out.blocks) if(block.sweep==sweep_index+1)
+        sweep.wall_seconds=Seconds(sweep_started); out.search_seconds+=sweep.wall_seconds;
+        ++out.sweep_count; out.final_sweep=sweep;
+        if(policy.diagnostic_sink && policy.diagnostic_sink->sweep) policy.diagnostic_sink->sweep(sweep);
+        if(policy.production_progress) policy.production_progress(sweep);
+        if(retain_diagnostics) out.sweeps.push_back(sweep);
+        if(policy.sweep_observer)
         {
-            if(block.accepted)
-            {
-                ++sweep.accepted_blocks;
-                sweep.accepted_local_updates+=static_cast<std::size_t>(block.accepted_updates);
-            }
-            else if(block.status=="unchanged") ++sweep.unchanged_blocks;
+            const auto & observed=retain_diagnostics ? out.sweeps.back() : sweep;
+            policy.sweep_observer(observed);
         }
-        sweep.wall_seconds=Seconds(sweep_started); out.sweeps.push_back(sweep);
-        if(policy.sweep_observer) policy.sweep_observer(out.sweeps.back());
         if(policy.state_observer) policy.state_observer(sweep_index+1,out.state,out.sweeps.back(),out.blocks);
         if(sweep.cache_replay_error>2e-12+2e-13*std::max(1.0,replay.prediction.cwiseAbs().maxCoeff()) ||
             !WithinBlockObjectiveReplay(sweep.objective_replay_error,replay.objective))
@@ -480,14 +494,14 @@ std::shared_ptr<const JointProblemInput> MakeFixedNeighborInput(
 
 std::optional<double> LastFixedNeighborObjective(const FixedNeighborSearchResult & result)
 {
-    if(result.sweeps.empty()) return std::nullopt;
-    return result.sweeps.back().objective_after;
+    if(result.final_sweep) return result.final_sweep->objective_after;
+    return std::nullopt;
 }
 
 std::optional<double> LastFixedNeighborGradient(const FixedNeighborSearchResult & result)
 {
-    if(result.sweeps.empty()) return std::nullopt;
-    return result.sweeps.back().global_width_gradient_inf_norm;
+    if(result.final_sweep) return result.final_sweep->global_width_gradient_inf_norm;
+    return std::nullopt;
 }
 }
 
@@ -541,7 +555,7 @@ ComponentResult SolveFixedNeighborComponent(
     policy.assess_final_endpoint=true;
     if(progress_component && observer)
     {
-        policy.sweep_observer=[&observer,progress_component,&production_policy,context](
+        policy.production_progress=[&observer,progress_component,&production_policy,context](
             const FixedNeighborBlockSweep & sweep) {
             auto event=MakeJointProgressEvent(JointProgressPhase::SearchProgress,*progress_component);
             event.profile_evaluations=static_cast<int>(sweep.profile_evaluations);
@@ -566,17 +580,10 @@ ComponentResult SolveFixedNeighborComponent(
     out.search.stop_reason=result.reason; out.search.lm_status=0;
     out.search.accepted_objective=LastFixedNeighborObjective(result);
     out.search.accepted_gradient_inf_norm=LastFixedNeighborGradient(result);
-    for(const auto & sweep:result.sweeps)
-    {
-        out.search.evaluations+=static_cast<int>(sweep.profile_evaluations);
-        out.search.seconds+=sweep.wall_seconds;
-        for(const auto & block:result.blocks)
-            if(block.sweep==sweep.sweep)
-            {
-                out.search.accepted+=block.accepted_updates;
-                out.search.references+=block.local_assessment_attempted ? 1 : 0;
-            }
-    }
+    out.search.evaluations=static_cast<int>(result.total_profile_evaluations);
+    out.search.seconds=result.search_seconds;
+    out.search.accepted=static_cast<int>(result.total_accepted_local_updates);
+    out.search.references=static_cast<int>(result.total_local_assessments);
     out.assessment=result.assessment;
     if(result.search_converged && !result.endpoint_certified)
     {
@@ -614,7 +621,8 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
     const Domain domain=ProfileDomain(data.domain,layout);
     const EvaluationContext context=ProfileContext(data.context,layout,data.domain.rows);
     const Vector y=Select(data.y,IndicesOf(layout.informative_rows));
-    const auto search=SearchFixedNeighborComponent(*data.input,layout,domain,data.y,y,initial_eta,context,policy);
+    auto run_policy=policy; run_policy.collect_diagnostics=true;
+    const auto search=SearchFixedNeighborComponent(*data.input,layout,domain,data.y,y,initial_eta,context,run_policy);
     out.state=search.state; out.blocks=search.blocks; out.sweeps=search.sweeps;
     out.search_converged=search.search_converged; out.reason=search.reason;
     out.first_order_stationarity_sweep=search.first_order_stationarity_sweep;

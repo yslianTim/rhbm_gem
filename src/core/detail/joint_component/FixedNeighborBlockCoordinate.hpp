@@ -46,6 +46,11 @@ struct FixedNeighborBlockSweep
         maximum_block_rows{},maximum_block_columns{},maximum_local_assessment_rows{},maximum_local_assessment_columns{},
         accepted_blocks{},unchanged_blocks{},accepted_local_updates{};
 };
+struct FixedNeighborDiagnosticSink
+{
+    std::function<void(const FixedNeighborBlockRecord &)> block;
+    std::function<void(const FixedNeighborBlockSweep &)> sweep;
+};
 struct FixedNeighborPolicy
 {
     std::size_t core_atoms{128},maximum_sweeps{30};
@@ -56,6 +61,9 @@ struct FixedNeighborPolicy
     bool capture_local_trajectory{};
     bool stop_after_no_certified_update{};
     bool assess_final_endpoint{true};
+    bool collect_diagnostics{};
+    FixedNeighborDiagnosticSink * diagnostic_sink{};
+    std::function<void(const FixedNeighborBlockSweep &)> production_progress;
     std::function<void(const FixedNeighborBlockSweep &)> sweep_observer;
     std::function<void(std::size_t,const BlockCoordinateState &,const FixedNeighborBlockSweep &,
         const std::vector<FixedNeighborBlockRecord> &)> state_observer;
@@ -83,6 +91,10 @@ struct FixedNeighborSearchResult
     bool search_converged{},endpoint_certified{};
     std::string reason;
     std::size_t first_order_stationarity_sweep{},confirmed_stationarity_sweep{};
+    std::size_t sweep_count{},total_block_solves{},total_profile_evaluations{},total_local_assessments{},
+        total_accepted_local_updates{};
+    double search_seconds{};
+    std::optional<FixedNeighborBlockSweep> final_sweep;
     Assessment assessment;
     TrustEvidence endpoint_trust;
 };
