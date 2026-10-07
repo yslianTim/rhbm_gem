@@ -23,6 +23,11 @@ struct SparseWork
     std::size_t q_actions{},triangular_solves{},compact_extractions{},fixed_factorizations{},factor_storage_bytes{};
     double least_squares_seconds{},q_seconds{},triangular_seconds{},compact_seconds{},fixed_factor_seconds{};
     std::size_t symbolic{},numeric{},symbolic_reuses{},factor_reuses{},reference{},factor_nonzeros{},cancellation_reductions{};
+    std::size_t numeric_factor_requests{},numeric_factor_exact_reuse_opportunities{},numeric_factor_pattern_only_matches{},
+        numeric_factor_value_mismatches{},numeric_factor_column_mismatches{},numeric_factor_policy_mismatches{},
+        numeric_factor_pattern_mismatches{},initial_profile_exact_reuse_opportunities{},
+        trial_profile_exact_reuse_opportunities{},reference_exact_reuse_opportunities{},
+        accepted_endpoint_exact_reuse_opportunities{};
     Eigen::Index symbolic_rows{},symbolic_columns{},numeric_rows{},numeric_columns{},fixed_factor_rows{},fixed_factor_columns{};
     std::size_t symbolic_input_nonzeros{},numeric_input_nonzeros{},fixed_factor_input_nonzeros{},fixed_factor_nonzeros{};
     std::size_t fixed_factor_storage_bytes{};
@@ -134,6 +139,26 @@ struct WorkTimer
     std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
     explicit WorkTimer(double & value):seconds(value) {}
     ~WorkTimer() {seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();}
+};
+ProfileEvaluationRole & ProfileEvaluationRoleForTesting();
+class ProfileEvaluationRoleScopeForTesting
+{
+    ProfileEvaluationRole previous_;
+public:
+    explicit ProfileEvaluationRoleScopeForTesting(ProfileEvaluationRole);
+    ~ProfileEvaluationRoleScopeForTesting();
+    ProfileEvaluationRoleScopeForTesting(const ProfileEvaluationRoleScopeForTesting &)=delete;
+    ProfileEvaluationRoleScopeForTesting & operator=(const ProfileEvaluationRoleScopeForTesting &)=delete;
+};
+bool & LinearTelemetryEnabledForTesting();
+class LinearTelemetryScopeForTesting
+{
+    bool previous_;
+public:
+    explicit LinearTelemetryScopeForTesting(bool);
+    ~LinearTelemetryScopeForTesting();
+    LinearTelemetryScopeForTesting(const LinearTelemetryScopeForTesting &)=delete;
+    LinearTelemetryScopeForTesting & operator=(const LinearTelemetryScopeForTesting &)=delete;
 };
 bool SparseBackendEnabled();
 class FreeDesignFactor

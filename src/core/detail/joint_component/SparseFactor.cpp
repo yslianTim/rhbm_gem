@@ -14,6 +14,44 @@
 namespace rhbm_gem::core::joint_component {
 SparseWork & SparseWorkForTesting() {static thread_local SparseWork work; return work;}
 ResourceWork & ResourceWorkForTesting() {static thread_local ResourceWork work; return work;}
+ProfileEvaluationRole & ProfileEvaluationRoleForTesting()
+{static thread_local auto role=ProfileEvaluationRole::Unspecified; return role;}
+ProfileEvaluationRoleScopeForTesting::ProfileEvaluationRoleScopeForTesting(ProfileEvaluationRole role)
+    :previous_(ProfileEvaluationRoleForTesting())
+{ProfileEvaluationRoleForTesting()=role;}
+ProfileEvaluationRoleScopeForTesting::~ProfileEvaluationRoleScopeForTesting()
+{ProfileEvaluationRoleForTesting()=previous_;}
+bool & LinearTelemetryEnabledForTesting()
+{static thread_local bool enabled{}; return enabled;}
+LinearTelemetryScopeForTesting::LinearTelemetryScopeForTesting(bool enabled)
+    :previous_(LinearTelemetryEnabledForTesting())
+{LinearTelemetryEnabledForTesting()=enabled;}
+LinearTelemetryScopeForTesting::~LinearTelemetryScopeForTesting()
+{LinearTelemetryEnabledForTesting()=previous_;}
+namespace {
+bool SameSparsePattern(const Sparse & a,const Sparse & b)
+{
+    return a.rows()==b.rows() && a.cols()==b.cols() && a.nonZeros()==b.nonZeros() &&
+        std::equal(a.outerIndexPtr(),a.outerIndexPtr()+a.cols()+1,b.outerIndexPtr()) &&
+        std::equal(a.innerIndexPtr(),a.innerIndexPtr()+a.nonZeros(),b.innerIndexPtr());
+}
+bool SameSparseValues(const Sparse & a,const Sparse & b)
+{
+    return SameSparsePattern(a,b) && std::equal(a.valuePtr(),a.valuePtr()+a.nonZeros(),b.valuePtr());
+}
+void RecordExactReuseOpportunity(SparseWork & work)
+{
+    ++work.numeric_factor_exact_reuse_opportunities;
+    switch(ProfileEvaluationRoleForTesting())
+    {
+    case ProfileEvaluationRole::InitialProfile: ++work.initial_profile_exact_reuse_opportunities; break;
+    case ProfileEvaluationRole::TrialProfile: ++work.trial_profile_exact_reuse_opportunities; break;
+    case ProfileEvaluationRole::Reference: ++work.reference_exact_reuse_opportunities; break;
+    case ProfileEvaluationRole::AcceptedEndpoint: ++work.accepted_endpoint_exact_reuse_opportunities; break;
+    case ProfileEvaluationRole::Unspecified: break;
+    }
+}
+}
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 FactorResidencyWork & FactorResidencyWorkForTesting() {static thread_local FactorResidencyWork work; return work;}
 void ResetFactorResidencyWorkForTesting() {FactorResidencyWorkForTesting()=FactorResidencyWork{};}
@@ -409,7 +447,7 @@ struct SparseFactorState
     const void * domain{}; const void * observations{};
     LinearPolicy policy{};
     double tolerance{};
-    bool bound{},policy_present{};
+    bool bound{},policy_present{},policy_mismatch_pending{};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     std::size_t residency_id{},residency_generation{};
     bool residency_active{};
@@ -452,9 +490,15 @@ void LinearWorkspace::Bind(const void * domain,const void * observations,const L
 {
     const auto p=policy ? *policy : LinearPolicy{};
     auto & s=*state_;
-    if(s.bound && (s.domain!=domain || s.observations!=observations || s.policy_present!=(policy!=nullptr) ||
+    s.policy_mismatch_pending=false;
+    const bool policy_changed=s.bound && (s.policy_present!=(policy!=nullptr) ||
         s.policy.rank_relative!=p.rank_relative || s.policy.release_factor!=p.release_factor ||
-        s.policy.release_response_norm!=p.release_response_norm || s.policy.active_set_iteration_factor!=p.active_set_iteration_factor)) s.Clear();
+        s.policy.release_response_norm!=p.release_response_norm || s.policy.active_set_iteration_factor!=p.active_set_iteration_factor);
+    if(s.bound && (s.domain!=domain || s.observations!=observations || policy_changed))
+    {
+        s.policy_mismatch_pending=policy_changed && s.qr!=nullptr;
+        s.Clear();
+    }
     s.domain=domain; s.observations=observations; s.policy=p; s.policy_present=policy!=nullptr; s.bound=true;
 }
 std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const std::vector<Eigen::Index> & columns,double tolerance)
@@ -462,6 +506,24 @@ std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const
     if(copy_on_write_ && state_.use_count()>1)
         state_=std::make_shared<SparseFactorState>();
     auto & s=*state_;
+    auto & work=SparseWorkForTesting();
+    if(LinearTelemetryEnabledForTesting())
+    {
+        ++work.numeric_factor_requests;
+        if(s.policy_mismatch_pending) ++work.numeric_factor_policy_mismatches;
+        else if(s.qr)
+        {
+            if(s.columns!=columns) ++work.numeric_factor_column_mismatches;
+            else if(s.tolerance!=tolerance) ++work.numeric_factor_policy_mismatches;
+            else if(SameSparsePattern(s.design,a))
+            {
+                if(SameSparseValues(s.design,a)) RecordExactReuseOpportunity(work);
+                else {++work.numeric_factor_pattern_only_matches; ++work.numeric_factor_value_mismatches;}
+            }
+            else ++work.numeric_factor_pattern_mismatches;
+        }
+    }
+    s.policy_mismatch_pending=false;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(s.residency_active)
     {EndFactorResidencyForTesting(s.residency_id,s.residency_generation); s.residency_active=false;}
@@ -476,7 +538,7 @@ std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const
     }
     if(!s.qr || s.tolerance!=tolerance || s.columns!=columns || !Pattern(s.design,a))
     {
-        s.Clear(); const auto start=Clock::now(); auto & work=SparseWorkForTesting();
+        s.Clear(); const auto start=Clock::now();
         ++work.symbolic; work.symbolic_rows=std::max(work.symbolic_rows,a.rows());
         work.symbolic_columns=std::max(work.symbolic_columns,a.cols());
         work.symbolic_input_nonzeros=std::max(work.symbolic_input_nonzeros,static_cast<std::size_t>(a.nonZeros()));
@@ -491,7 +553,7 @@ std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const
     }
     else ++SparseWorkForTesting().symbolic_reuses;
     s.design=a; s.columns=columns; s.tolerance=tolerance;
-    auto & work=SparseWorkForTesting(); const auto start=Clock::now(); int ok{};
+    const auto start=Clock::now(); int ok{};
     ++work.numeric; work.numeric_rows=std::max(work.numeric_rows,a.rows());
     work.numeric_columns=std::max(work.numeric_columns,a.cols());
     work.numeric_input_nonzeros=std::max(work.numeric_input_nonzeros,static_cast<std::size_t>(a.nonZeros()));
@@ -1055,9 +1117,7 @@ struct SparseFactorState
     Eigen::SparseQR<Sparse,Eigen::COLAMDOrdering<int>> qr;
     Sparse design;
     std::vector<Eigen::Index> columns;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     double tolerance{};
-#endif
     std::size_t generation{};
     bool valid{};
 };
@@ -1072,12 +1132,25 @@ std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const
 {
     if(!state_) state_=std::make_shared<SparseFactorState>();
     if(copy_on_write_ && state_.use_count()>1) state_=std::make_shared<SparseFactorState>();
-    auto & s=*state_; ++s.generation; s.valid=false; s.design=a; s.columns=columns;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    auto & s=*state_; auto & work=SparseWorkForTesting();
+    if(LinearTelemetryEnabledForTesting())
+    {
+        ++work.numeric_factor_requests;
+        if(s.valid)
+        {
+            if(s.columns!=columns) ++work.numeric_factor_column_mismatches;
+            else if(s.tolerance!=tolerance) ++work.numeric_factor_policy_mismatches;
+            else if(SameSparsePattern(s.design,a))
+            {
+                if(SameSparseValues(s.design,a)) RecordExactReuseOpportunity(work);
+                else {++work.numeric_factor_pattern_only_matches; ++work.numeric_factor_value_mismatches;}
+            }
+            else ++work.numeric_factor_pattern_mismatches;
+        }
+    }
+    ++s.generation; s.valid=false; s.design=a; s.columns=columns;
     s.tolerance=tolerance;
-#endif
     s.qr.setPivotThreshold(tolerance);
-    auto & work=SparseWorkForTesting();
     {WorkTimer timer(work.symbolic_seconds); s.qr.analyzePattern(a); ++work.symbolic;}
     {WorkTimer timer(work.numeric_seconds); s.qr.factorize(a); ++work.numeric;}
     if(s.qr.info()!=Eigen::Success) throw std::runtime_error("Eigen operator factorization failed");

@@ -267,6 +267,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutp
     EXPECT_EQ(diagnostic.block_preparations,quiet.block_preparations);
     EXPECT_GT(sparse_work.numeric,0u);
     EXPECT_GT(sparse_work.symbolic_reuses,0u);
+    EXPECT_EQ(sparse_work.numeric_factor_requests,0u);
+    EXPECT_EQ(sparse_work.numeric_factor_exact_reuse_opportunities,0u);
     EXPECT_EQ(quiet.work.local_profile_work.total.evaluations,0u);
     EXPECT_EQ(quiet.reason,diagnostic.reason);
     EXPECT_EQ(quiet.search_converged,diagnostic.search_converged);

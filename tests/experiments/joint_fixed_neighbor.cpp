@@ -320,6 +320,20 @@ j::object ProfileWorkJson(const n::ProfileSearchWork & work)
         {"accepted_endpoint",ProfileRoleWorkJson(work.accepted_endpoint)},
         {"reference_evaluation",ProfileRoleWorkJson(work.reference_evaluation)}};
 }
+void AddSparseAttributionJson(j::object & output,const n::SparseWork & work)
+{
+    output["numeric_factor_requests"]=work.numeric_factor_requests;
+    output["numeric_factor_exact_reuse_opportunities"]=work.numeric_factor_exact_reuse_opportunities;
+    output["numeric_factor_pattern_only_matches"]=work.numeric_factor_pattern_only_matches;
+    output["numeric_factor_value_mismatches"]=work.numeric_factor_value_mismatches;
+    output["numeric_factor_column_mismatches"]=work.numeric_factor_column_mismatches;
+    output["numeric_factor_policy_mismatches"]=work.numeric_factor_policy_mismatches;
+    output["numeric_factor_pattern_mismatches"]=work.numeric_factor_pattern_mismatches;
+    output["initial_profile_exact_reuse_opportunities"]=work.initial_profile_exact_reuse_opportunities;
+    output["trial_profile_exact_reuse_opportunities"]=work.trial_profile_exact_reuse_opportunities;
+    output["reference_exact_reuse_opportunities"]=work.reference_exact_reuse_opportunities;
+    output["accepted_endpoint_exact_reuse_opportunities"]=work.accepted_endpoint_exact_reuse_opportunities;
+}
 void Write(const std::filesystem::path &,const j::value &);
 j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,bool compare_global,
     bool decompose=false,bool certify_local=false,bool qualification=false,bool scaling_only=false,
@@ -543,6 +557,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                     [](std::size_t maximum,const auto & sweep){return std::max(maximum,sweep.maximum_block_columns);})},
                 {"sweep_telemetry",sweeps},{"block_telemetry",blocks}};
         scaling_json["local_profile_work"]=ProfileWorkJson(neighbor.work.local_profile_work);
+        AddSparseAttributionJson(scaling_json,sparse_work);
         if(record_final_state)
         {
             scaling_json["final_eta"]=NumberArray(neighbor.state.eta);
@@ -599,6 +614,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"maximum_local_assessment_columns",maximum_local_assessment_columns},
         {"total_elapsed_seconds",neighbor_seconds}};
     neighbor_json["local_profile_work"]=ProfileWorkJson(neighbor.work.local_profile_work);
+    AddSparseAttributionJson(neighbor_json,sparse_work);
     if(certify_local || record_final_state)
     {
         neighbor_json["final_eta"]=NumberArray(neighbor.state.eta);

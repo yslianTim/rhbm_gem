@@ -569,6 +569,44 @@ TEST(JointComponentNumericsTest, SparseWorkspaceChecksPatternScopePolicyAndGener
     EXPECT_EQ(n::SparseWorkForTesting().symbolic,7);
 }
 
+TEST(JointComponentNumericsTest, ExactNumericReuseCensusRequiresAllFactorInputsToMatch)
+{
+    namespace n=p::runtime;
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"Optional SPQR backend";
+    Matrix dense(6,2); dense<<1,0,2,1,0,3,4,2,1,1,0,2;
+    n::Sparse x=dense.sparseView(); x.makeCompressed(); n::LinearWorkspace workspace;
+    n::LinearPolicy policy{1e-14}; int domain{};
+    n::SparseWorkForTesting()={}; n::LinearTelemetryScopeForTesting telemetry(true);
+    n::ProfileEvaluationRoleScopeForTesting role(n::ProfileEvaluationRole::InitialProfile);
+    workspace.Bind(&domain,&domain,&policy);
+    workspace.Factor(x,{0,1},1e-14);
+    workspace.Factor(x,{0,1},1e-14);
+    x.valuePtr()[0]+=.1;
+    workspace.Factor(x,{0,1},1e-14);
+    workspace.Factor(x,{1,0},1e-14);
+    auto changed=policy; changed.release_factor=64;
+    workspace.Bind(&domain,&domain,&changed);
+    workspace.Factor(x,{0,1},1e-14);
+
+    const auto census=n::SparseWorkForTesting();
+    EXPECT_EQ(census.numeric_factor_requests,5u);
+    EXPECT_EQ(census.numeric_factor_exact_reuse_opportunities,1u);
+    EXPECT_EQ(census.initial_profile_exact_reuse_opportunities,1u);
+    EXPECT_EQ(census.trial_profile_exact_reuse_opportunities,0u);
+    EXPECT_EQ(census.reference_exact_reuse_opportunities,0u);
+    EXPECT_EQ(census.accepted_endpoint_exact_reuse_opportunities,0u);
+    EXPECT_EQ(census.numeric_factor_pattern_only_matches,1u);
+    EXPECT_EQ(census.numeric_factor_value_mismatches,1u);
+    EXPECT_EQ(census.numeric_factor_column_mismatches,1u);
+    EXPECT_EQ(census.numeric_factor_policy_mismatches,1u);
+    EXPECT_EQ(census.numeric_factor_pattern_mismatches,0u);
+
+    n::SparseWorkForTesting()={}; n::LinearWorkspace fresh;
+    fresh.Bind(&domain,&domain,&policy); fresh.Factor(x,{0,1},1e-14);
+    EXPECT_EQ(n::SparseWorkForTesting().numeric_factor_requests,1u);
+    EXPECT_EQ(n::SparseWorkForTesting().numeric_factor_exact_reuse_opportunities,0u);
+}
+
 TEST(JointComponentNumericsTest, SparseWeightedSolveAndIndependentReferenceMatchDenseOracle)
 {
     namespace n=p::runtime;

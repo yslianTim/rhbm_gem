@@ -175,6 +175,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     try {partition=BuildStructuralBlockPartition(input,layout,policy.core_atoms);}
     catch(const std::exception &) {out.reason="block-invalid-partition"; return out;}
     if(partition.cores.empty()) {out.reason="block-invalid-partition"; return out;}
+    LinearTelemetryScopeForTesting telemetry_scope(policy.collect_telemetry);
     auto * const profile_work=policy.collect_telemetry ? &out.work.local_profile_work : nullptr;
 
     out.state.eta=initial_eta; out.state.beta=Vector::Zero(2*static_cast<Eigen::Index>(input.atom_ids.size()));

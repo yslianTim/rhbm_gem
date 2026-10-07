@@ -340,6 +340,7 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     ProfileEvaluationRole role,ProfileSearchWork * profile_work)
 {
     ResourcePhase phase(reference ? "reference" : "ac-profile");
+    ProfileEvaluationRoleScopeForTesting role_scope(role);
     EvaluationTelemetry telemetry(profile_work,role);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     const auto search_stage=ResourceWorkForTesting().active_search_stage;
@@ -391,6 +392,7 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
 Evaluation EvaluateState(const Domain & domain,VectorRef y,const Vector & eta,const Vector & beta,const EvaluationContext & context,
     ProfileEvaluationRole role,ProfileSearchWork * profile_work)
 {
+    ProfileEvaluationRoleScopeForTesting role_scope(role);
     EvaluationTelemetry telemetry(profile_work,role);
     OptionalSeconds basis_timer(profile_work ? &telemetry.work.basis_seconds : nullptr);
     auto out=Basis(domain,y,eta);
