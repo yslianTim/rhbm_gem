@@ -241,6 +241,18 @@ class JointBenchmarkContract(unittest.TestCase):
             self.assertEqual(benchmark.solver_policy_metadata(fixed_args, 'SPQR')['search_method'],
                              'FixedNeighborBlocks')
 
+            optimized_args = parser.parse_args(['--profile', 'search', '--case', 'chain-768',
+                '--build-dir', str(build), '--output', 'fixed-optimized.json',
+                '--preconditioner', 'fixed-neighbor', '--fixed-local-work', 'one',
+                '--fixed-core-atoms', '64'])
+            benchmark.validate_args(parser, optimized_args)
+            optimized_command = benchmark.command_for_profile(
+                optimized_args, case, Path('fixed-optimized.json'), build)
+            self.assertEqual(optimized_command[1], '--inexact-one-search')
+            self.assertEqual(optimized_command[-1], '64')
+            self.assertEqual(benchmark.solver_policy_metadata(optimized_args, 'SPQR')[
+                'fixed_neighbor_local_work'], 'one')
+
     def test_compact_assessment_route_is_benchmark_only(self):
         parser = benchmark.build_parser()
         args = parser.parse_args(['--profile', 'solve', '--case', 'chain-8',

@@ -195,6 +195,11 @@ def command_for_profile(args, case, output, build):
                 raise ValueError('FixedNeighbor benchmarks require a synthetic chain-N or cube-N case.')
             if not fixed_neighbor.is_file():
                 raise ValueError('Build joint_fixed_neighbor_experiment with RHBM_GEM_BUILD_BENCHMARKS=ON')
+            if args.fixed_local_work == 'one':
+                if args.profile != 'search':
+                    raise ValueError('OneAccepted FixedNeighbor is available only for search profiles.')
+                return [str(fixed_neighbor), '--inexact-one-search', str(output),
+                        case['topology'], str(case['atoms']), str(args.fixed_core_atoms)]
             mode = '--scaling-only' if args.profile == 'search' else '--neighbor-only'
             return [str(fixed_neighbor), mode, str(output), case['topology'], str(case['atoms'])]
         if not sparse.is_file():
@@ -300,6 +305,10 @@ def solver_policy_metadata(args, backend):
         'operator_factor_ownership': (args.operator_factor_ownership or 'reuse-accepted-copy-on-write')
             if args.profile == 'search' else None,
         'search_trial_telemetry': args.search_trial_telemetry if args.profile == 'search' else None,
+        'fixed_neighbor_local_work': (args.fixed_local_work
+                                      if args.preconditioner == 'fixed-neighbor' else None),
+        'fixed_neighbor_core_atoms': (args.fixed_core_atoms
+                                      if args.preconditioner == 'fixed-neighbor' else None),
         'projected_reduction': args.projected_reduction,
         'preconditioner': args.preconditioner,
         'spqr_ordering': args.spqr_ordering.upper() if args.spqr_ordering else 'COLAMD',
@@ -650,6 +659,10 @@ def build_parser():
     parser.add_argument('--schwarz-max-block-atoms', type=int, default=512)
     parser.add_argument('--schwarz-storage-mib', type=int, default=512)
     parser.add_argument('--schwarz-scratch-mib', type=int, default=256)
+    parser.add_argument('--fixed-local-work', choices=('full', 'one'), default='full',
+                        help='Benchmark-only FixedNeighbor local-work policy; default is the frozen Full policy')
+    parser.add_argument('--fixed-core-atoms', type=int, default=128,
+                        help='Benchmark-only FixedNeighbor core size; default is the frozen 128-atom core')
     parser.add_argument('--fixed-action', choices=('composed', 'normal'), default='normal')
     parser.add_argument('--svd-mode', choices=('legacy', 'values', 'auto'))
     parser.add_argument('--assessment-reduction', choices=('observation-tsqr', 'compact-stack-qr'),
@@ -674,6 +687,11 @@ def validate_args(parser, args):
             args.schwarz_max_block_atoms < args.schwarz_core_atoms or
             args.schwarz_storage_mib <= 0 or args.schwarz_scratch_mib <= 0):
         parser.error('Schwarz core, max block, and memory limits must be positive; overlap must be nonnegative and max block must cover core')
+    if args.fixed_core_atoms <= 0:
+        parser.error('FixedNeighbor core atoms must be positive')
+    if args.preconditioner != 'fixed-neighbor' and (args.fixed_local_work != 'full' or
+                                                    args.fixed_core_atoms != 128):
+        parser.error('FixedNeighbor local-work and core options require --preconditioner fixed-neighbor')
     if args.profile == 'fixed' and args.preconditioner == 'legacy':
         parser.error('fixed profile requires identity, diagonal, or schwarz preconditioner')
     if args.profile == 'fixed' and args.preconditioner == 'fixed-neighbor':
