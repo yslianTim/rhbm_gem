@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "phase": "P5 FixedNeighbor core-size performance study",
+  "source_revision": "6da25e8149de69c45c8a57756c2747da7f0b614f",
+  "source_sha256": "1e7860460f1b4216d7d1023ae56c5b5caacf5e2f5adc09aa339bfe4053b4cf9a",
+  "benchmark_source_hashes": {
+    "driver": "c29cbecdf346cf1b30db7785f9c77e670dae5ff39529d1f8c6f929ee31b7924e",
+    "core_size": "cd00df84b7f874b339e965b69e29c6010a9c606017ff03efb5b4c94f81e8ef0e"
+  },
+  "branch": "develop",
+  "backend": "SPQR",
+  "eigen_threads": 1,
+  "cases": [
+    "chain-512",
+    "cube-512",
+    "cube-1024"
+  ],
+  "policy": "OneAccepted",
+  "core_sizes": [
+    64,
+    128,
+    256
+  ],
+  "measurement_scope": "fixed-neighbor-search-only",
+  "resource_envelope": {
+    "wall_seconds": 7200.0,
+    "rss_bytes": 4294967296
+  },
+  "correctness_contract": [
+    "search_converged",
+    "A/C KKT <= 1e-10",
+    "width gradient <= 1e-12"
+  ],
+  "analysis": {
+    "correctness_gate": "passed",
+    "selected_core_size": 64
+  }
+}

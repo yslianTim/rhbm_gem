@@ -279,13 +279,13 @@ void Write(const std::filesystem::path &,const j::value &);
 j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,bool compare_global,
     bool decompose=false,bool certify_local=false,bool qualification=false,bool scaling_only=false,
     bool reverse_order=false,bool record_final_state=false,bool attribution=false,
-    n::FixedNeighborLocalWork local_work=n::FixedNeighborLocalWork::Full)
+    n::FixedNeighborLocalWork local_work=n::FixedNeighborLocalWork::Full,std::size_t core_atoms=128)
 {
     auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
     const rhbm_gem::core::JointProblem problem(*input);
     const std::vector<double> initial_b(static_cast<std::size_t>(atoms),.55);
     n::Vector initial_eta= n::Vector::Constant(atoms,std::log(.55)); n::FixedNeighborPolicy neighbor_policy;
-    neighbor_policy.core_atoms=128;
+    neighbor_policy.core_atoms=core_atoms;
     neighbor_policy.order=reverse_order ? n::FixedNeighborBlockOrder::Reverse : n::FixedNeighborBlockOrder::Forward;
     neighbor_policy.local_work=local_work;
     neighbor_policy.certify_local_candidates=certify_local;
@@ -580,7 +580,7 @@ void Write(const std::filesystem::path & path,const j::value & value)
 int main(int argc,char ** argv)
 {
     try {
-        if(argc!=5 || (std::string(argv[1])!="--case" && std::string(argv[1])!="--neighbor-only" &&
+        if((argc!=5 && argc!=6) || (std::string(argv[1])!="--case" && std::string(argv[1])!="--neighbor-only" &&
             std::string(argv[1])!="--decompose" && std::string(argv[1])!="--certified-local" &&
             std::string(argv[1])!="--qualification" && std::string(argv[1])!="--scaling-only" &&
             std::string(argv[1])!="--attribution" &&
@@ -589,11 +589,15 @@ int main(int argc,char ** argv)
             std::string(argv[1])!="--inexact-one-search" &&
             std::string(argv[1])!="--neighbor-forward" && std::string(argv[1])!="--neighbor-reverse" &&
             std::string(argv[1])!="--scaling-forward" && std::string(argv[1])!="--scaling-reverse"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS");
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [CORE_ATOMS]");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
         const std::string mode(argv[1]);
+        if(argc==6 && mode!="--inexact-one-search")
+            throw std::invalid_argument("CORE_ATOMS is supported only with --inexact-one-search.");
+        const std::size_t core_atoms=argc==6 ? static_cast<std::size_t>(std::stoul(argv[5])) : 128;
+        if(core_atoms==0) throw std::invalid_argument("CORE_ATOMS must be positive.");
         Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--case",mode=="--decompose",
             mode=="--certified-local",mode=="--qualification",
             mode=="--scaling-only" || mode=="--attribution" || mode=="--scaling-forward" || mode=="--scaling-reverse" ||
@@ -604,7 +608,7 @@ int main(int argc,char ** argv)
             mode=="--attribution" || mode=="--full-attribution",
             (mode=="--inexact-one" || mode=="--inexact-one-search") ? n::FixedNeighborLocalWork::OneAcceptedUpdate :
                 mode=="--inexact-two" ? n::FixedNeighborLocalWork::TwoAcceptedUpdates :
-                n::FixedNeighborLocalWork::Full));
+                n::FixedNeighborLocalWork::Full,core_atoms));
         std::cout<<argv[3]<<'-'<<argv[4]<<" fixed-neighbor experiment complete\n";
         return 0;
     } catch(const std::exception & error) {std::cerr<<error.what()<<'\n'; return 1;}
