@@ -41,3 +41,77 @@ Formal 256/512/768/1024 nonlinear sweep scaling was stable for both topologies, 
 The [converged order campaign](figures/joint-fixed-neighbor-order-r1/README.md) passed: all five forward/reverse pairs confirmed convergence, maximum eta infinity difference was `3.75e-11`, maximum scaled A/C difference was `2.09e-12`, and fully assessed endpoint/runtime results agreed and passed through 512. Cube-1024 remains search-only. Coordinated/shared-parameter blocks remain deferred because the measured endpoints show no material order divergence, sweep growth, or observed persistent oscillation.
 
 FixedNeighbor remains an internal experimental route rather than a selectable estimator method. Large runs demonstrate bounded local factor width and confirmed search, but 1024/2048 did not receive full endpoint assessment and no matched large-size comparison establishes an end-to-end resource benefit. `LegacyCompact` remains the default; `CertifiedLocal` remains available for diagnostics and reproduction.
+
+## Local-work and core-size qualification
+
+The matched local-work attribution found substantial repeated local factor work in the
+Full policy. The bounded prototype therefore counted trusted accepted updates, not rejected
+trials, while leaving the global replay and every endpoint threshold unchanged.
+
+- `OneAcceptedUpdate` was selected over `Full` and `TwoAcceptedUpdates`: all four 256/512-atom
+  chain/cube full-endpoint cases passed endpoint certification and `RuntimeConvergence`, and
+  `OneAcceptedUpdate` was the fastest policy in each case.
+- The 1024 qualification was intentionally search-only. OneAccepted reduced local work by
+  67.607% (chain) and 75.414% (cube), with search reductions of 66.798% and 74.722%.
+  The final A/C KKT and width-gradient checks remained at the existing `1e-10` and `1e-12`
+  thresholds.
+- The core-size study selected 64 atoms from 64/128/256 on chain-512, cube-512, and cube-1024.
+  Every point passed the search correctness gate; aggregate search seconds were 1226.860,
+  2598.111, and 6267.089 for cores 64, 128, and 256.
+
+The machine-readable records are in the [inexact qualification](figures/joint-fixed-neighbor-inexact-qualification-r2/analysis.json)
+and [core-size study](figures/joint-fixed-neighbor-core-size-r1/analysis.json) artifacts.
+
+## Optimized matched frontier
+
+P6 compared the P1 LegacyCompact, OperatorPcg, and original Full/128-core FixedNeighbor
+records with OneAccepted/64-core FixedNeighbor on the same six search-only workloads. The
+formal envelope was 600 seconds and 4 GiB RSS; non-passing formal runs received a 7200-second
+diagnostic retry.
+
+| Case | OperatorPcg search / RSS | Original FixedNeighbor search / RSS | Optimized FixedNeighbor search / RSS | Formal result |
+|---|---:|---:|---:|---|
+| chain-512 | 15.508 s / 306 MiB | 1161.205 s / 198 MiB | 169.145 s / 288 MiB | pass |
+| cube-512 | 65.720 s / 631 MiB | 2762.299 s / 477 MiB | 323.885 s / 324 MiB | pass |
+| chain-768 | 22.690 s / 392 MiB | formal timeout | 262.766 s / 283 MiB | pass |
+| cube-768 | 135.293 s / 1376 MiB | formal timeout | 541.565 s / 515 MiB | pass |
+| chain-1024 | 30.270 s / 581 MiB | formal timeout | 368.137 s / 310 MiB | pass |
+| cube-1024 | 220.797 s / 2681 MiB | formal timeout | 769.116 s / 276 MiB | diagnostic pass |
+
+OperatorPcg was fastest in all six groups. The optimized FixedNeighbor route used less RSS
+than OperatorPcg in all six groups and materially improved the original FixedNeighbor search,
+but OperatorPcg also completed every point inside the formal envelope. This is a resource
+observation, not a demonstrated formal resource-survival case.
+
+The complete reports, route ranking, promotion gate, and provenance are in the
+[optimized frontier artifact](figures/joint-fixed-neighbor-optimized-frontier-r1/README.md).
+
+## Current route and promotion decision
+
+The P6 promotion gate is **deferred**. FixedNeighbor does not become a production or
+auto-selected route in this round:
+
+- `OperatorPcg` is the general fast route while it fits the formal resource envelope.
+- `LegacyCompact` remains the compatibility/reference route and the production default.
+- `FixedNeighbor` remains an experimental, explicitly benchmarkable bounded-RSS route. Its
+  lower RSS is useful evidence, but no matched formal case required it to survive where
+  OperatorPcg failed.
+
+Atom-count auto-routing is deferred; no magic size threshold was introduced. Coordinated or
+shared-parameter blocks are also deferred because performance alone supplied no new
+convergence evidence. `CertifiedLocal` remains diagnostic-only and is not part of production
+semantics.
+
+## Final verification for this round
+
+- `cmake --build build/joint-spqr -j4`: passed.
+- P1 route, P3/P4/P5 policy, and P6 analyzer tests: 7/7 passed.
+- `joint_benchmark_test.py`: 45/45 passed (the expected argparse diagnostic is printed by one
+  negative test).
+- `ctest --test-dir build/joint-spqr -L joint:runtime --output-on-failure`: 10/11 tests
+  passed; the 213-test `rhbm_tests_joint_component` process reached the ctest 1500-second
+  timeout without an assertion failure, while the remaining ten runtime tests passed.
+
+The observed timeout is retained as a regression result rather than being presented as a
+passing full suite. No production default or numerical threshold was changed by the
+performance experiments.
