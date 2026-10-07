@@ -3,6 +3,7 @@
 #include "SparseFactor.hpp"
 #include "InstrumentedLM.hpp"
 #include "TiledDerivative.hpp"
+#include <algorithm>
 #include <chrono>
 
 namespace rhbm_gem::core::joint_component {
@@ -22,6 +23,8 @@ struct Profile
     LinearWorkspace workspace;
     LinearWorkspace * supplied_workspace{};
     const void * workspace_identity{};
+    ProfileSearchWork * telemetry{};
+    ProfileEvaluationRole last_role{ProfileEvaluationRole::Unspecified};
     const JointProgressObserver & observer;
     const JointProgressComponent * progress_component{};
     std::chrono::steady_clock::time_point search_start;
@@ -46,7 +49,14 @@ struct Profile
         bool trusted=cached.valid;
         if(proposed || context.audit.trial_details)
         {
+            const auto replay_started=std::chrono::steady_clock::now();
             auto evidence=CheckReplay(domain,y,cached,context);
+            if(telemetry)
+            {
+                ProfileRoleWork work; work.replay_checks=1;
+                work.replay_trust_seconds=Seconds(replay_started);
+                telemetry->Add(last_role,work);
+            }
             trusted=evidence.passed; row.trust=std::move(evidence);
         }
         if(!proposed || !trusted)
@@ -67,7 +77,8 @@ struct Profile
             sparse_work.fixed_factor_seconds;
         auto * active_workspace=supplied_workspace ? supplied_workspace : &workspace;
         const void * identity=supplied_workspace ? workspace_identity : nullptr;
-        cached=EvaluateProfile(domain,y,eta,false,&context,nullptr,active_workspace,identity); ++evaluations;
+        last_role=evaluations==0 ? ProfileEvaluationRole::InitialProfile : ProfileEvaluationRole::TrialProfile;
+        cached=EvaluateProfile(domain,y,eta,false,&context,nullptr,active_workspace,identity,last_role,telemetry); ++evaluations;
         joint_component::Trial row; row.endpoint=cached; row.evaluation=evaluations; row.seconds=Seconds(start);
         row.factor_seconds=SparseWorkForTesting().symbolic_seconds+SparseWorkForTesting().numeric_seconds+
             SparseWorkForTesting().fixed_factor_seconds-factor_seconds_before;
@@ -81,8 +92,19 @@ struct Profile
     int linearize(const Vector & eta,const Vector &,Matrix & factor,Vector & response,Vector & norms)
     {
         if(!Get(eta)) return -1;
+        const auto prepare_started=std::chrono::steady_clock::now();
         const auto prepared=PrepareDerivative(cached,scale,&context);
+        const auto prepare_seconds=Seconds(prepare_started);
+        const auto reduce_started=std::chrono::steady_clock::now();
         auto differential=ReduceDerivative(prepared,cached.residual,false); ++derivatives;
+        const auto reduce_seconds=Seconds(reduce_started);
+        if(telemetry)
+        {
+            ProfileRoleWork work; work.derivative_preparations=1; work.derivative_prepare_seconds=prepare_seconds;
+            telemetry->Add(last_role,work);
+            work={}; work.derivative_reductions=1; work.derivative_reduce_seconds=reduce_seconds;
+            telemetry->Add(last_role,work);
+        }
         if(!differential.valid) {failure=differential.reason; return -1;}
         factor=std::move(differential.jacobian); response=std::move(differential.response);
         norms=std::move(differential.jacobian_norms); return 0;
@@ -102,14 +124,16 @@ struct Profile
 }
 SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
     const EvaluationContext & context,const JointProgressObserver & observer,
-    const JointProgressComponent * progress_component,LinearWorkspace * workspace,const void * workspace_identity)
+    const JointProgressComponent * progress_component,LinearWorkspace * workspace,const void * workspace_identity,
+    ProfileSearchWork * telemetry)
 {
     if(context.search.method==SearchMethod::OperatorPcg)
         return SearchOperatorProfile(domain,y,initial_b,context,observer,progress_component);
     ResourcePhase phase("search",true,domain.rows,initial_b.size());
     const auto start=std::chrono::steady_clock::now();
-    Profile profile{domain,y,context.scale,context,{}, {},0,0,{}, {},workspace,workspace_identity,observer,
-        progress_component,start,0,{}, {}};
+    ProfileSearchWork local_work;
+    Profile profile{domain,y,context.scale,context,{}, {},0,0,{}, {},workspace,workspace_identity,
+        telemetry ? &local_work : nullptr,ProfileEvaluationRole::Unspecified,observer,progress_component,start,0,{}, {}};
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
         lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;
@@ -138,6 +162,13 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     out.stop_reason=profile.failure.empty() ? "native-lm-stop" : profile.failure;
     out.evaluations=profile.evaluations; out.derivatives=profile.derivatives; out.accepted=accepted;
     out.stopped=status==Eigen::LevenbergMarquardtSpace::UserAsked || status==Eigen::LevenbergMarquardtSpace::TooManyFunctionEvaluation || !profile.failure.empty();
-    out.seconds=Seconds(start); return out;
+    out.seconds=Seconds(start);
+    if(telemetry)
+    {
+        local_work.total_seconds=out.seconds;
+        local_work.lm_overhead_seconds=std::max(0.0,out.seconds-local_work.AttributedSeconds());
+        out.profile_work=std::move(local_work);
+    }
+    return out;
 }
 }

@@ -276,6 +276,7 @@ j::object SweepJson(const n::FixedNeighborBlockSweep & sweep)
         {"maximum_local_assessment_columns",sweep.maximum_local_assessment_columns},
         {"wall_seconds",sweep.wall_seconds}};
 }
+j::object ProfileWorkJson(const n::ProfileSearchWork &);
 j::object WorkJson(const n::FixedNeighborWork & work)
 {
     return {{"old_core_seconds",Number(work.old_core_seconds)},
@@ -291,7 +292,33 @@ j::object WorkJson(const n::FixedNeighborWork & work)
         {"full_candidate_replays",work.full_candidate_replays},
         {"candidate_state_full_copies",work.candidate_state_full_copies},
         {"affected_row_updates",work.affected_row_updates},
-        {"old_core_basis_builds",work.old_core_basis_builds}};
+        {"old_core_basis_builds",work.old_core_basis_builds},
+        {"local_profile_work",ProfileWorkJson(work.local_profile_work)}};
+}
+j::object ProfileRoleWorkJson(const n::ProfileRoleWork & work)
+{
+    return {{"evaluations",work.evaluations},{"evaluation_seconds",Number(work.evaluation_seconds)},
+        {"profile_basis_seconds",Number(work.basis_seconds)},
+        {"linear_matrix_preparation_seconds",Number(work.linear_matrix_preparation_seconds)},
+        {"linear_symbolic_seconds",Number(work.linear_symbolic_seconds)},
+        {"linear_numeric_seconds",Number(work.linear_numeric_seconds)},
+        {"linear_rhs_solve_seconds",Number(work.linear_rhs_solve_seconds)},
+        {"linear_certificate_seconds",Number(work.linear_certificate_seconds)},
+        {"derivative_preparations",work.derivative_preparations},
+        {"derivative_prepare_seconds",Number(work.derivative_prepare_seconds)},
+        {"derivative_reductions",work.derivative_reductions},
+        {"derivative_reduce_seconds",Number(work.derivative_reduce_seconds)},
+        {"replay_checks",work.replay_checks},{"replay_trust_seconds",Number(work.replay_trust_seconds)}};
+}
+j::object ProfileWorkJson(const n::ProfileSearchWork & work)
+{
+    return {{"total_seconds",Number(work.total_seconds)},
+        {"lm_overhead_seconds",Number(work.lm_overhead_seconds)},
+        {"total",ProfileRoleWorkJson(work.total)},
+        {"initial_profile",ProfileRoleWorkJson(work.initial_profile)},
+        {"trial_profile",ProfileRoleWorkJson(work.trial_profile)},
+        {"accepted_endpoint",ProfileRoleWorkJson(work.accepted_endpoint)},
+        {"reference_evaluation",ProfileRoleWorkJson(work.reference_evaluation)}};
 }
 void Write(const std::filesystem::path &,const j::value &);
 j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,bool compare_global,
@@ -515,6 +542,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                 {"maximum_local_columns",std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),std::size_t{},
                     [](std::size_t maximum,const auto & sweep){return std::max(maximum,sweep.maximum_block_columns);})},
                 {"sweep_telemetry",sweeps},{"block_telemetry",blocks}};
+        scaling_json["local_profile_work"]=ProfileWorkJson(neighbor.work.local_profile_work);
         if(record_final_state)
         {
             scaling_json["final_eta"]=NumberArray(neighbor.state.eta);
@@ -570,6 +598,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"maximum_local_assessment_rows",maximum_local_assessment_rows},
         {"maximum_local_assessment_columns",maximum_local_assessment_columns},
         {"total_elapsed_seconds",neighbor_seconds}};
+    neighbor_json["local_profile_work"]=ProfileWorkJson(neighbor.work.local_profile_work);
     if(certify_local || record_final_state)
     {
         neighbor_json["final_eta"]=NumberArray(neighbor.state.eta);

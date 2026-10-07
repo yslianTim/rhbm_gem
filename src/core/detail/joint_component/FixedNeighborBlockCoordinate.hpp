@@ -54,6 +54,7 @@ struct FixedNeighborWork
         sweep_global_state_seconds{};
     std::size_t block_solves{},full_candidate_replays{},candidate_state_full_copies{},affected_row_updates{},
         old_core_basis_builds{};
+    ProfileSearchWork local_profile_work;
 };
 struct FixedNeighborDiagnosticSink
 {

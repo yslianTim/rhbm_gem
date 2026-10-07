@@ -50,6 +50,24 @@ struct EvaluationContext
     SearchPolicy search;
     int profile_budget{200},update_budget{100};
 };
+enum class ProfileEvaluationRole {Unspecified,InitialProfile,TrialProfile,AcceptedEndpoint,Reference};
+const char * ProfileEvaluationRoleName(ProfileEvaluationRole);
+struct ProfileRoleWork
+{
+    std::size_t evaluations{},derivative_preparations{},derivative_reductions{},replay_checks{};
+    double evaluation_seconds{},basis_seconds{},linear_matrix_preparation_seconds{},linear_symbolic_seconds{},
+        linear_numeric_seconds{},linear_rhs_solve_seconds{},linear_certificate_seconds{},derivative_prepare_seconds{},
+        derivative_reduce_seconds{},replay_trust_seconds{};
+};
+struct ProfileSearchWork
+{
+    ProfileRoleWork total,initial_profile,trial_profile,accepted_endpoint,reference_evaluation;
+    double total_seconds{},lm_overhead_seconds{};
+    ProfileRoleWork & Role(ProfileEvaluationRole);
+    void Add(ProfileEvaluationRole,const ProfileRoleWork &);
+    void Merge(const ProfileSearchWork &);
+    double AttributedSeconds() const;
+};
 EvaluationContext CreateContext(VectorRef,Eigen::Index,const std::string & = "",const AuditPlan & = {});
 EvaluationContext CreateContext(std::shared_ptr<const JointProblemInput>,const std::string & = "",const AuditPlan & = {});
 struct BasisValues {double gaussian{},charge{},gaussian_log_width{},charge_log_width{};};
@@ -101,8 +119,10 @@ Spectrum DesignSpectrum(const Sparse &,const Vector &,const RankPolicy * = nullp
 Spectrum ComputeSpectrum(const Sparse &,const RankPolicy &,Eigen::Index,bool);
 Spectrum ComputeSpectrum(const Matrix &,const RankPolicy &,Eigen::Index,bool);
 Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,bool,const EvaluationContext *,
-    const std::vector<LinearBlock> * = nullptr,LinearWorkspace * = nullptr,const void * = nullptr);
-Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &);
+    const std::vector<LinearBlock> * = nullptr,LinearWorkspace * = nullptr,const void * = nullptr,
+    ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);
+Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &,
+    ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);
 struct TrustEvidence
 {
     std::optional<Endpoint> reference;
@@ -142,10 +162,11 @@ struct SearchResult
     bool stopped{},initial_accepted{};
     std::string stop_reason;
     double seconds{},reference_seconds{};
+    ProfileSearchWork profile_work;
 };
 SearchResult SearchProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr,LinearWorkspace * = nullptr,
-    const void * = nullptr);
+    const void * = nullptr,ProfileSearchWork * = nullptr);
 struct Assessment
 {
     Endpoint primary,reference;

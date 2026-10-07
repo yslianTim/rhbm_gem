@@ -5,6 +5,7 @@
 #include "support/JointOperatorWorkload.hpp"
 #include <cmath>
 #include <limits>
+#include <numeric>
 #include <vector>
 
 namespace {
@@ -206,6 +207,37 @@ TEST(JointFixedNeighborBlockCoordinateTest, AggregateWorkTelemetryIsOptInAndDoes
     EXPECT_TRUE((measured.state.beta.array()==quiet.state.beta.array()).all());
     EXPECT_DOUBLE_EQ(measured.state.objective,quiet.state.objective);
 }
+TEST(JointFixedNeighborBlockCoordinateTest, LocalProfileAttributionIsAggregateAndOptIn)
+{
+    JointProblem problem(second_stage_test::OperatorWorkload("chain",16));
+    const n::Vector eta=n::Vector::Constant(16,std::log(.55));
+    n::FixedNeighborPolicy measured_policy; measured_policy.core_atoms=8; measured_policy.maximum_sweeps=1;
+    measured_policy.assess_final_endpoint=false; measured_policy.collect_telemetry=true;
+    const auto measured=n::SearchFixedNeighbor(problem,eta,measured_policy);
+    auto quiet_policy=measured_policy; quiet_policy.collect_telemetry=false;
+    const auto quiet=n::SearchFixedNeighbor(problem,eta,quiet_policy);
+    const auto & profile=measured.work.local_profile_work;
+    ASSERT_GT(profile.total.evaluations,0u);
+    EXPECT_EQ(profile.initial_profile.evaluations+profile.trial_profile.evaluations,
+        std::accumulate(measured.sweeps.begin(),measured.sweeps.end(),std::size_t{},
+            [](std::size_t total,const auto & sweep){return total+sweep.profile_evaluations;}));
+    EXPECT_EQ(profile.initial_profile.evaluations,static_cast<std::size_t>(measured.sweeps.front().block_solves));
+    EXPECT_EQ(profile.total.evaluations,profile.initial_profile.evaluations+profile.trial_profile.evaluations+
+        profile.accepted_endpoint.evaluations+profile.reference_evaluation.evaluations);
+    for(const double seconds:{profile.total.evaluation_seconds,profile.total.basis_seconds,
+        profile.total.linear_matrix_preparation_seconds,profile.total.linear_symbolic_seconds,
+        profile.total.linear_numeric_seconds,profile.total.linear_rhs_solve_seconds,
+        profile.total.linear_certificate_seconds,profile.total.derivative_prepare_seconds,
+        profile.total.derivative_reduce_seconds,profile.total.replay_trust_seconds,
+        profile.lm_overhead_seconds}) EXPECT_GE(seconds,0.0);
+    EXPECT_EQ(quiet.work.local_profile_work.total.evaluations,0u);
+    EXPECT_DOUBLE_EQ(quiet.work.local_profile_work.total.basis_seconds,0.0);
+    EXPECT_DOUBLE_EQ(quiet.work.local_profile_work.lm_overhead_seconds,0.0);
+    EXPECT_EQ(measured.reason,quiet.reason);
+    EXPECT_TRUE((measured.state.eta.array()==quiet.state.eta.array()).all());
+    EXPECT_TRUE((measured.state.beta.array()==quiet.state.beta.array()).all());
+    EXPECT_DOUBLE_EQ(measured.state.objective,quiet.state.objective);
+}
 TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutputWithoutDiagnostics)
 {
     JointProblem problem(second_stage_test::OperatorWorkload("chain",32));
@@ -235,6 +267,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutp
     EXPECT_EQ(diagnostic.block_preparations,quiet.block_preparations);
     EXPECT_GT(sparse_work.numeric,0u);
     EXPECT_GT(sparse_work.symbolic_reuses,0u);
+    EXPECT_EQ(quiet.work.local_profile_work.total.evaluations,0u);
     EXPECT_EQ(quiet.reason,diagnostic.reason);
     EXPECT_EQ(quiet.search_converged,diagnostic.search_converged);
     EXPECT_EQ(quiet.endpoint_certified,diagnostic.endpoint_certified);

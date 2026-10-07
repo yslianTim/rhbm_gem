@@ -175,6 +175,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     try {partition=BuildStructuralBlockPartition(input,layout,policy.core_atoms);}
     catch(const std::exception &) {out.reason="block-invalid-partition"; return out;}
     if(partition.cores.empty()) {out.reason="block-invalid-partition"; return out;}
+    auto * const profile_work=policy.collect_telemetry ? &out.work.local_profile_work : nullptr;
 
     out.state.eta=initial_eta; out.state.beta=Vector::Zero(2*static_cast<Eigen::Index>(input.atom_ids.size()));
     const auto initial=Replay(input,layout,observations,out.state.eta,out.state.beta,context.scale);
@@ -288,7 +289,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             std::unique_ptr<LinearWorkspace> fresh_workspace;
             if(!policy.reuse_block_workspace) fresh_workspace=std::make_unique<LinearWorkspace>();
             const auto local_search=SearchProfile(local_domain,local_y,old_widths,local_context,{},nullptr,
-                fresh_workspace ? fresh_workspace.get() : prepared.workspace.get(),&prepared);
+                fresh_workspace ? fresh_workspace.get() : prepared.workspace.get(),&prepared,profile_work);
+            if(policy.collect_telemetry) out.work.local_profile_work.Merge(local_search.profile_work);
             record.search_seconds=Seconds(search_started); record.profile_evaluations=local_search.evaluations;
             if(policy.collect_telemetry) out.work.local_search_seconds+=record.search_seconds;
             record.accepted_updates=local_search.accepted; record.local_search_stop_reason=local_search.stop_reason;
@@ -340,7 +342,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 finish_record(std::move(record)); stop=true; break;
             }
             const auto local_state_started=Clock::now();
-            const auto local_state=EvaluateState(local_domain,local_y,accepted->endpoint.eta,accepted->endpoint.beta,local_context);
+            const auto local_state=EvaluateState(local_domain,local_y,accepted->endpoint.eta,accepted->endpoint.beta,local_context,
+                ProfileEvaluationRole::AcceptedEndpoint,profile_work);
             if(policy.collect_telemetry) out.work.local_state_seconds+=Seconds(local_state_started);
             if(!local_state.valid || !local_state.certificate.available || !local_state.certificate.feasible ||
                 !local_state.certificate.kkt_passed)
@@ -356,7 +359,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 record.local_assessment_rows=local_state.x.rows();
                 record.local_assessment_columns=local_state.x.cols();
                 const auto assessment_started=Clock::now();
-                const auto local_reference=EvaluateProfile(local_domain,local_y,local_state.eta,true,&local_context);
+                const auto local_reference=EvaluateProfile(local_domain,local_y,local_state.eta,true,&local_context,
+                    nullptr,nullptr,nullptr,ProfileEvaluationRole::Reference,profile_work);
                 const auto local_assessment=AssessEvaluated(local_domain,local_y,local_state,local_reference,local_context,true);
                 const auto local_trust=CheckTrust(local_domain,local_y,local_state,local_context,local_reference);
                 record.local_assessment_seconds=Seconds(assessment_started);
@@ -479,7 +483,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         const Vector eta=Select(out.state.eta,IndicesOf(layout.full_atoms));
         const Vector beta=SelectBeta(out.state.beta,layout.full_atoms);
         const auto global_started=Clock::now();
-        const auto global=EvaluateState(domain,y,eta,beta,context);
+        const auto global=EvaluateState(domain,y,eta,beta,context,ProfileEvaluationRole::AcceptedEndpoint,profile_work);
         if(policy.collect_telemetry) out.work.sweep_global_state_seconds+=Seconds(global_started);
         if(!global.valid || !global.certificate.available)
         {out.reason="block-inner-invalid"; stop=true; break;}
@@ -523,8 +527,10 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     if(!out.search_converged && out.reason.empty()) out.reason="block-sweep-budget";
     if(policy.assess_final_endpoint)
     {
-        const auto endpoint=EvaluateState(domain,y,out.state.eta,out.state.beta,context);
-        const auto reference=EvaluateProfile(domain,y,out.state.eta,true,&context);
+        const auto endpoint=EvaluateState(domain,y,out.state.eta,out.state.beta,context,
+            ProfileEvaluationRole::AcceptedEndpoint,profile_work);
+        const auto reference=EvaluateProfile(domain,y,out.state.eta,true,&context,nullptr,nullptr,nullptr,
+            ProfileEvaluationRole::Reference,profile_work);
         out.assessment=AssessEvaluated(domain,y,endpoint,reference,context,true);
         out.endpoint_trust=CheckTrust(domain,y,endpoint,context,reference);
         out.endpoint_certified=out.endpoint_trust.passed;

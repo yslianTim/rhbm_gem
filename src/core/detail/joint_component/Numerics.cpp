@@ -11,6 +11,67 @@
 
 namespace rhbm_gem::core::joint_component {
 namespace {
+void AddRoleWork(ProfileRoleWork & destination,const ProfileRoleWork & source)
+{
+    destination.evaluations+=source.evaluations;
+    destination.derivative_preparations+=source.derivative_preparations;
+    destination.derivative_reductions+=source.derivative_reductions;
+    destination.replay_checks+=source.replay_checks;
+    destination.evaluation_seconds+=source.evaluation_seconds;
+    destination.basis_seconds+=source.basis_seconds;
+    destination.linear_matrix_preparation_seconds+=source.linear_matrix_preparation_seconds;
+    destination.linear_symbolic_seconds+=source.linear_symbolic_seconds;
+    destination.linear_numeric_seconds+=source.linear_numeric_seconds;
+    destination.linear_rhs_solve_seconds+=source.linear_rhs_solve_seconds;
+    destination.linear_certificate_seconds+=source.linear_certificate_seconds;
+    destination.derivative_prepare_seconds+=source.derivative_prepare_seconds;
+    destination.derivative_reduce_seconds+=source.derivative_reduce_seconds;
+    destination.replay_trust_seconds+=source.replay_trust_seconds;
+}
+}
+const char * ProfileEvaluationRoleName(ProfileEvaluationRole role)
+{
+    switch(role)
+    {
+    case ProfileEvaluationRole::Unspecified: return "unspecified";
+    case ProfileEvaluationRole::InitialProfile: return "initial-profile";
+    case ProfileEvaluationRole::TrialProfile: return "trial-profile";
+    case ProfileEvaluationRole::AcceptedEndpoint: return "accepted-endpoint";
+    case ProfileEvaluationRole::Reference: return "reference";
+    }
+    return "unspecified";
+}
+ProfileRoleWork & ProfileSearchWork::Role(ProfileEvaluationRole role)
+{
+    switch(role)
+    {
+    case ProfileEvaluationRole::InitialProfile: return initial_profile;
+    case ProfileEvaluationRole::TrialProfile: return trial_profile;
+    case ProfileEvaluationRole::AcceptedEndpoint: return accepted_endpoint;
+    case ProfileEvaluationRole::Reference: return reference_evaluation;
+    case ProfileEvaluationRole::Unspecified: return total;
+    }
+    return total;
+}
+void ProfileSearchWork::Add(ProfileEvaluationRole role,const ProfileRoleWork & work)
+{
+    if(role!=ProfileEvaluationRole::Unspecified) AddRoleWork(Role(role),work);
+    AddRoleWork(total,work);
+}
+void ProfileSearchWork::Merge(const ProfileSearchWork & other)
+{
+    AddRoleWork(total,other.total); AddRoleWork(initial_profile,other.initial_profile);
+    AddRoleWork(trial_profile,other.trial_profile); AddRoleWork(accepted_endpoint,other.accepted_endpoint);
+    AddRoleWork(reference_evaluation,other.reference_evaluation);
+    total_seconds+=other.total_seconds; lm_overhead_seconds+=other.lm_overhead_seconds;
+}
+double ProfileSearchWork::AttributedSeconds() const
+{
+    return total.basis_seconds+total.linear_matrix_preparation_seconds+total.linear_symbolic_seconds+
+        total.linear_numeric_seconds+total.linear_rhs_solve_seconds+total.linear_certificate_seconds+
+        total.derivative_prepare_seconds+total.derivative_reduce_seconds+total.replay_trust_seconds;
+}
+namespace {
 double Difference(const Vector & a,const Vector & b) {return ((a-b).array().abs()/(1+a.array().abs().max(b.array().abs()))).maxCoeff();}
 // Full-column TSQR from original rows. RHS columns undergo the same orthogonal
 // transformations. Only the small R and transformed RHS survive each tile.
@@ -220,6 +281,31 @@ void UpdateAcceptedProfileObjective(std::optional<double> & accepted_objective,
 }
 
 namespace {
+struct OptionalSeconds
+{
+    double * target{};
+    std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
+    explicit OptionalSeconds(double * target):target(target) {}
+    ~OptionalSeconds()
+    {if(target) *target+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();}
+};
+struct EvaluationTelemetry
+{
+    ProfileSearchWork * target{};
+    ProfileEvaluationRole role{ProfileEvaluationRole::Unspecified};
+    ProfileRoleWork work;
+    std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
+    EvaluationTelemetry(ProfileSearchWork * target,ProfileEvaluationRole role):target(target),role(role)
+    {if(target) ++work.evaluations;}
+    ~EvaluationTelemetry()
+    {
+        if(target)
+        {
+            work.evaluation_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
+            target->Add(role,work);
+        }
+    }
+};
 Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
 {
     ResourcePhase phase("profile-basis-build",true,domain.rows,2*eta.size());
@@ -250,9 +336,11 @@ Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
 }
 }
 Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,bool reference,const EvaluationContext * context,
-    const std::vector<LinearBlock> * blocks,LinearWorkspace * workspace,const void * workspace_identity)
+    const std::vector<LinearBlock> * blocks,LinearWorkspace * workspace,const void * workspace_identity,
+    ProfileEvaluationRole role,ProfileSearchWork * profile_work)
 {
     ResourcePhase phase(reference ? "reference" : "ac-profile");
+    EvaluationTelemetry telemetry(profile_work,role);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     const auto search_stage=ResourceWorkForTesting().active_search_stage;
     FactorCreationRoleScopeForTesting factor_role(reference ? "reference" :
@@ -263,14 +351,31 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
 #endif
     if(workspace) workspace->Bind(&domain,workspace_identity ? workspace_identity : y.data(),context ? &context->linear : nullptr);
     const auto matrix_started=std::chrono::steady_clock::now();
+    OptionalSeconds basis_timer(profile_work ? &telemetry.work.basis_seconds : nullptr);
     auto out=Basis(domain,y,eta);
+    basis_timer.target=nullptr;
     SparseWorkForTesting().matrix_preparation_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-matrix_started).count();
     if(!out.valid) return out; out.valid=false;
     const Eigen::Index m=eta.size();
     ResourcePhase linear_solve("linear-solve",true,out.x.rows(),out.x.cols(),static_cast<std::size_t>(out.x.nonZeros()));
+    const auto sparse_before=SparseWorkForTesting();
     const auto solved=SolveLinear(out.x,y,Vector::Ones(y.size()),reference,true,nullptr,context ? &context->linear : nullptr,blocks,workspace);
+    const auto & sparse_after=SparseWorkForTesting();
+    if(profile_work)
+    {
+        telemetry.work.linear_matrix_preparation_seconds+=
+            sparse_after.matrix_preparation_seconds-sparse_before.matrix_preparation_seconds;
+        telemetry.work.linear_symbolic_seconds+=sparse_after.symbolic_seconds-sparse_before.symbolic_seconds;
+        telemetry.work.linear_numeric_seconds+=sparse_after.numeric_seconds-sparse_before.numeric_seconds;
+        telemetry.work.linear_rhs_solve_seconds+=(sparse_after.q_seconds-sparse_before.q_seconds)+
+            (sparse_after.triangular_seconds-sparse_before.triangular_seconds)+
+            (sparse_after.least_squares_seconds-sparse_before.least_squares_seconds);
+    }
     if(!reference) out.factor=solved.factor;
-    out.beta=solved.beta; out.certificate=CertifyLinear(out.x,y,out.beta,context ? context->scale : 0);
+    out.beta=solved.beta;
+    OptionalSeconds certificate_timer(profile_work ? &telemetry.work.linear_certificate_seconds : nullptr);
+    out.certificate=CertifyLinear(out.x,y,out.beta,context ? context->scale : 0);
+    certificate_timer.target=nullptr;
     out.certificate.linear_solves=solved.solves; out.certificate.free_rank=solved.rank;
     if(blocks) out.certificate.block_factorizations=solved.block_factorizations;
     if (!solved.valid) {out.reason=solved.reason; return out;}
@@ -283,12 +388,19 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     out.reason=out.valid ? "qualified-inner" : "nonfinite-residual"; return out;
 }
 
-Evaluation EvaluateState(const Domain & domain,VectorRef y,const Vector & eta,const Vector & beta,const EvaluationContext & context)
+Evaluation EvaluateState(const Domain & domain,VectorRef y,const Vector & eta,const Vector & beta,const EvaluationContext & context,
+    ProfileEvaluationRole role,ProfileSearchWork * profile_work)
 {
-    auto out=Basis(domain,y,eta); if(!out.valid) return out; out.valid=false;
+    EvaluationTelemetry telemetry(profile_work,role);
+    OptionalSeconds basis_timer(profile_work ? &telemetry.work.basis_seconds : nullptr);
+    auto out=Basis(domain,y,eta);
+    basis_timer.target=nullptr;
+    if(!out.valid) return out; out.valid=false;
     if(beta.size()!=out.x.cols() || !beta.allFinite()) {out.reason="invalid-coefficients"; return out;}
     out.beta=beta; out.residual=out.x*beta-y; out.gradient=Vector::Zero(eta.size());
+    OptionalSeconds certificate_timer(profile_work ? &telemetry.work.linear_certificate_seconds : nullptr);
     out.certificate=CertifyLinear(out.x,y,beta,context.scale);
+    certificate_timer.target=nullptr;
     for(Eigen::Index k=0;k<beta.size();++k)
         out.gradient(k/2)+=beta(k)*out.derivative.col(k).dot(out.residual)/context.scale/context.scale;
     out.valid=out.residual.allFinite() && out.gradient.allFinite(); out.reason=out.valid ? "raw-state" : "nonfinite-state";
