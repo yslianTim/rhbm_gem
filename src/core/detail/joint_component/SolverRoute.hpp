@@ -54,6 +54,7 @@ std::string_view SparseBackendName(SparseBackend backend);
 std::string_view SearchMethodName(SearchMethod method);
 std::string_view SearchMethodToken(SearchMethod method);
 std::string_view PreconditionerName(PreconditionerKind preconditioner);
+std::string_view FixedNeighborBlockOrderName(FixedNeighborBlockOrder order);
 std::string_view FixedNeighborLocalWorkName(FixedNeighborLocalWork work);
 std::string_view OperatorRankModeName(OperatorRankMode mode);
 std::string_view FreeDesignRankBackendName(FreeDesignRankBackend backend);

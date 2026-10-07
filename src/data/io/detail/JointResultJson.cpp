@@ -171,6 +171,10 @@ j::value OptionalSize(std::optional<std::size_t> value)
 {return value ? j::value(*value) : j::value(nullptr);}
 std::optional<std::size_t> ReadOptionalSize(const j::value & value)
 {return value.is_null() ? std::nullopt : std::optional<std::size_t>(j::value_to<std::size_t>(value));}
+j::value OptionalInt(std::optional<int> value)
+{return value ? j::value(*value) : j::value(nullptr);}
+std::optional<int> ReadOptionalInt(const j::value & value)
+{return value.is_null() ? std::nullopt : std::optional<int>(j::value_to<int>(value));}
 Object Units()
 {
     return {{"contract","joint-kernel-map-units-v1"},{"map_value","fit-map-unit"},
@@ -195,8 +199,27 @@ Object Metadata(const JointAnalysisMetadata & m)
     {
         const auto & p=*m.solver;
         solver=Object{{"search_method",p.search_method},
+            {"contract_version",OptionalText(p.contract_version)},
+            {"sparse_backend",OptionalText(p.sparse_backend)},
+            {"preconditioner",OptionalText(p.preconditioner)},
+            {"operator_rank_mode",OptionalText(p.operator_rank_mode)},
+            {"operator_rank_backend",OptionalText(p.operator_rank_backend)},
+            {"operator_pcg_iterations",OptionalInt(p.operator_pcg_iterations)},
+            {"operator_damping_trials",OptionalInt(p.operator_damping_trials)},
+            {"operator_rank_budget_seconds",Number(p.operator_rank_budget_seconds)},
+            {"operator_rank_budget_entries",OptionalSize(p.operator_rank_budget_entries)},
+            {"operator_rank_budget_workspace_bytes",OptionalSize(p.operator_rank_budget_workspace_bytes)},
+            {"schwarz_core_atoms",OptionalSize(p.schwarz_core_atoms)},
+            {"schwarz_overlap_hops",OptionalSize(p.schwarz_overlap_hops)},
+            {"schwarz_max_block_atoms",OptionalSize(p.schwarz_max_block_atoms)},
+            {"schwarz_storage_bytes",OptionalSize(p.schwarz_storage_bytes)},
+            {"schwarz_scratch_bytes",OptionalSize(p.schwarz_scratch_bytes)},
             {"fixed_neighbor_core_atoms",OptionalSize(p.fixed_neighbor_core_atoms)},
-            {"fixed_neighbor_local_work",OptionalText(p.fixed_neighbor_local_work)}};
+            {"fixed_neighbor_local_work",OptionalText(p.fixed_neighbor_local_work)},
+            {"fixed_neighbor_policy_version",OptionalText(p.fixed_neighbor_policy_version)},
+            {"fixed_neighbor_maximum_sweeps",OptionalSize(p.fixed_neighbor_maximum_sweeps)},
+            {"fixed_neighbor_order",OptionalText(p.fixed_neighbor_order)},
+            {"fixed_neighbor_local_search",OptionalText(p.fixed_neighbor_local_search)}};
     }
     return {{"model_path",m.model_path},{"map_path",m.map_path},
         {"grid_size",j::value_from(m.grid_size)},{"grid_spacing",j::value_from(m.grid_spacing)},
@@ -228,11 +251,31 @@ JointAnalysisMetadata ReadMetadata(const Object & m)
     if(m.contains("solver") && !m.at("solver").is_null())
     {
         const auto & p=m.at("solver").as_object();
-        out.solver=JointSolverProvenance{Read<std::string>(p,"search_method"),
+        JointSolverProvenance solver{Read<std::string>(p,"search_method"),
             p.contains("fixed_neighbor_core_atoms") ?
                 ReadOptionalSize(p.at("fixed_neighbor_core_atoms")) : std::nullopt,
             p.contains("fixed_neighbor_local_work") ?
                 ReadOptionalText(p.at("fixed_neighbor_local_work")) : std::nullopt};
+        solver.contract_version=p.contains("contract_version") ? ReadOptionalText(p.at("contract_version")) : std::nullopt;
+        solver.sparse_backend=p.contains("sparse_backend") ? ReadOptionalText(p.at("sparse_backend")) : std::nullopt;
+        solver.preconditioner=p.contains("preconditioner") ? ReadOptionalText(p.at("preconditioner")) : std::nullopt;
+        solver.operator_rank_mode=p.contains("operator_rank_mode") ? ReadOptionalText(p.at("operator_rank_mode")) : std::nullopt;
+        solver.operator_rank_backend=p.contains("operator_rank_backend") ? ReadOptionalText(p.at("operator_rank_backend")) : std::nullopt;
+        solver.operator_pcg_iterations=p.contains("operator_pcg_iterations") ? ReadOptionalInt(p.at("operator_pcg_iterations")) : std::nullopt;
+        solver.operator_damping_trials=p.contains("operator_damping_trials") ? ReadOptionalInt(p.at("operator_damping_trials")) : std::nullopt;
+        solver.operator_rank_budget_seconds=p.contains("operator_rank_budget_seconds") ? OptionalNumber(p.at("operator_rank_budget_seconds")) : std::nullopt;
+        solver.operator_rank_budget_entries=p.contains("operator_rank_budget_entries") ? ReadOptionalSize(p.at("operator_rank_budget_entries")) : std::nullopt;
+        solver.operator_rank_budget_workspace_bytes=p.contains("operator_rank_budget_workspace_bytes") ? ReadOptionalSize(p.at("operator_rank_budget_workspace_bytes")) : std::nullopt;
+        solver.schwarz_core_atoms=p.contains("schwarz_core_atoms") ? ReadOptionalSize(p.at("schwarz_core_atoms")) : std::nullopt;
+        solver.schwarz_overlap_hops=p.contains("schwarz_overlap_hops") ? ReadOptionalSize(p.at("schwarz_overlap_hops")) : std::nullopt;
+        solver.schwarz_max_block_atoms=p.contains("schwarz_max_block_atoms") ? ReadOptionalSize(p.at("schwarz_max_block_atoms")) : std::nullopt;
+        solver.schwarz_storage_bytes=p.contains("schwarz_storage_bytes") ? ReadOptionalSize(p.at("schwarz_storage_bytes")) : std::nullopt;
+        solver.schwarz_scratch_bytes=p.contains("schwarz_scratch_bytes") ? ReadOptionalSize(p.at("schwarz_scratch_bytes")) : std::nullopt;
+        solver.fixed_neighbor_policy_version=p.contains("fixed_neighbor_policy_version") ? ReadOptionalText(p.at("fixed_neighbor_policy_version")) : std::nullopt;
+        solver.fixed_neighbor_maximum_sweeps=p.contains("fixed_neighbor_maximum_sweeps") ? ReadOptionalSize(p.at("fixed_neighbor_maximum_sweeps")) : std::nullopt;
+        solver.fixed_neighbor_order=p.contains("fixed_neighbor_order") ? ReadOptionalText(p.at("fixed_neighbor_order")) : std::nullopt;
+        solver.fixed_neighbor_local_search=p.contains("fixed_neighbor_local_search") ? ReadOptionalText(p.at("fixed_neighbor_local_search")) : std::nullopt;
+        out.solver=std::move(solver);
     }
     return out;
 }
@@ -251,10 +294,52 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
         const auto & p=*m.solver;
         Require(p.search_method=="legacy-compact" || p.search_method=="operator-pcg" ||
             p.search_method=="fixed-neighbor","invalid solver search method");
+        if(p.contract_version)
+            Require(*p.contract_version==JointSolverProvenanceContractVersion,"unsupported solver provenance contract");
+        if(p.sparse_backend)
+            Require(*p.sparse_backend=="EIGEN" || *p.sparse_backend=="SPQR","invalid solver sparse backend");
+        if(p.preconditioner)
+            Require(*p.preconditioner=="Identity" || *p.preconditioner=="Diagonal" || *p.preconditioner=="Schwarz",
+                "invalid solver preconditioner");
+        if(p.operator_rank_mode)
+            Require(*p.operator_rank_mode=="Auto" || *p.operator_rank_mode=="Dense" ||
+                *p.operator_rank_mode=="SpqrBounds","invalid operator rank mode");
+        if(p.operator_rank_backend)
+            Require(*p.operator_rank_backend=="Dense" || *p.operator_rank_backend=="SpqrBounds",
+                "invalid operator rank backend");
+        if(p.operator_pcg_iterations) Require(*p.operator_pcg_iterations>=-1,"invalid operator PCG iteration budget");
+        if(p.operator_damping_trials) Require(*p.operator_damping_trials>=0,"invalid operator damping trial budget");
+        if(p.operator_rank_budget_seconds)
+            Require(std::isfinite(*p.operator_rank_budget_seconds) && *p.operator_rank_budget_seconds>0,
+                "invalid operator rank time budget");
+        const auto require_positive=[](const auto & value) {
+            if(value) Require(*value>0,"invalid solver resource budget");
+        };
+        require_positive(p.operator_rank_budget_entries); require_positive(p.operator_rank_budget_workspace_bytes);
+        require_positive(p.schwarz_core_atoms); require_positive(p.schwarz_overlap_hops);
+        require_positive(p.schwarz_max_block_atoms); require_positive(p.schwarz_storage_bytes);
+        require_positive(p.schwarz_scratch_bytes);
+        if(p.schwarz_core_atoms && p.schwarz_max_block_atoms)
+            Require(*p.schwarz_max_block_atoms>=*p.schwarz_core_atoms,"invalid Schwarz block limits");
         if(p.search_method=="fixed-neighbor")
+        {
             Require(p.fixed_neighbor_core_atoms && *p.fixed_neighbor_core_atoms>0 &&
                 p.fixed_neighbor_local_work && !p.fixed_neighbor_local_work->empty(),
                 "incomplete fixed-neighbor provenance");
+            Require(*p.fixed_neighbor_local_work=="full" || *p.fixed_neighbor_local_work=="one-accepted" ||
+                *p.fixed_neighbor_local_work=="two-accepted","invalid fixed-neighbor local work");
+            if(p.fixed_neighbor_policy_version)
+                Require(*p.fixed_neighbor_policy_version==FixedNeighborPolicyContractVersion,
+                    "unsupported fixed-neighbor policy contract");
+            if(p.fixed_neighbor_maximum_sweeps) Require(*p.fixed_neighbor_maximum_sweeps>0,
+                "invalid fixed-neighbor sweep budget");
+            if(p.fixed_neighbor_order)
+                Require(*p.fixed_neighbor_order=="forward" || *p.fixed_neighbor_order=="reverse",
+                    "invalid fixed-neighbor block order");
+            if(p.fixed_neighbor_local_search)
+                Require(*p.fixed_neighbor_local_search=="legacy-compact",
+                    "invalid fixed-neighbor local search");
+        }
     }
     if(m.map_normalization)
     {

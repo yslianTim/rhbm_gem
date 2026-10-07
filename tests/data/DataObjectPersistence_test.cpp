@@ -524,6 +524,69 @@ TEST(DataObjectPersistenceTest, JointSolverProvenanceRoundTripsAndMissingFieldRe
     EXPECT_FALSE(legacy.metadata.solver);
 }
 
+TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsAllProductionRoutesAndRejectsMalformedValues)
+{
+    namespace io=rg::joint_result_io;
+    auto fixed=SavedJointExample();
+    rg::JointSolverProvenance fixed_provenance{"fixed-neighbor",64u,"one-accepted"};
+    fixed_provenance.contract_version=rg::JointSolverProvenanceContractVersion;
+    fixed_provenance.sparse_backend="SPQR";
+    fixed_provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
+    fixed_provenance.fixed_neighbor_maximum_sweeps=30;
+    fixed_provenance.fixed_neighbor_order="forward";
+    fixed_provenance.fixed_neighbor_local_search="legacy-compact";
+    fixed.metadata.solver=fixed_provenance;
+    const auto fixed_decoded=io::Decode(io::Encode(fixed));
+    ASSERT_TRUE(fixed_decoded.metadata.solver);
+    EXPECT_EQ(fixed_decoded.metadata.solver->contract_version,rg::JointSolverProvenanceContractVersion);
+    EXPECT_EQ(fixed_decoded.metadata.solver->sparse_backend,"SPQR");
+    EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_maximum_sweeps,30u);
+    EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_order,"forward");
+    EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_local_search,"legacy-compact");
+
+    auto operator_result=SavedJointExample();
+    rg::JointSolverProvenance operator_provenance;
+    operator_provenance.search_method="operator-pcg";
+    operator_provenance.contract_version=rg::JointSolverProvenanceContractVersion;
+    operator_provenance.sparse_backend="SPQR";
+    operator_provenance.preconditioner="Schwarz";
+    operator_provenance.operator_rank_mode="Auto";
+    operator_provenance.operator_rank_backend="SpqrBounds";
+    operator_provenance.operator_pcg_iterations=-1;
+    operator_provenance.operator_damping_trials=20;
+    operator_provenance.schwarz_core_atoms=128;
+    operator_provenance.schwarz_overlap_hops=1;
+    operator_provenance.schwarz_max_block_atoms=512;
+    operator_provenance.schwarz_storage_bytes=512ULL*1024*1024;
+    operator_provenance.schwarz_scratch_bytes=256ULL*1024*1024;
+    operator_result.metadata.solver=operator_provenance;
+    const auto operator_decoded=io::Decode(io::Encode(operator_result));
+    ASSERT_TRUE(operator_decoded.metadata.solver);
+    EXPECT_EQ(operator_decoded.metadata.solver->preconditioner,"Schwarz");
+    EXPECT_EQ(operator_decoded.metadata.solver->operator_rank_backend,"SpqrBounds");
+    EXPECT_EQ(operator_decoded.metadata.solver->schwarz_max_block_atoms,512u);
+
+    auto partial=boost::json::parse(io::Encode(operator_result)).as_object();
+    auto & partial_solver=partial.at("metadata").as_object().at("solver").as_object();
+    for(const auto key:{"contract_version","sparse_backend","preconditioner","operator_rank_mode",
+        "operator_rank_backend","operator_pcg_iterations","operator_damping_trials","operator_rank_budget_seconds",
+        "operator_rank_budget_entries","operator_rank_budget_workspace_bytes","schwarz_core_atoms",
+        "schwarz_overlap_hops","schwarz_max_block_atoms","schwarz_storage_bytes","schwarz_scratch_bytes"})
+        partial_solver.erase(key);
+    const auto partial_decoded=io::Decode(boost::json::serialize(partial));
+    ASSERT_TRUE(partial_decoded.metadata.solver);
+    EXPECT_EQ(partial_decoded.metadata.solver->search_method,"operator-pcg");
+    EXPECT_FALSE(partial_decoded.metadata.solver->operator_rank_mode);
+    EXPECT_FALSE(partial_decoded.metadata.solver->schwarz_core_atoms);
+
+    auto malformed=boost::json::parse(io::Encode(fixed)).as_object();
+    malformed.at("metadata").as_object().at("solver").as_object()["fixed_neighbor_order"]="sideways";
+    EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::invalid_argument);
+    malformed=boost::json::parse(io::Encode(operator_result)).as_object();
+    malformed.at("metadata").as_object().at("solver").as_object()["preconditioner"]="unknown";
+    EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::invalid_argument);
+}
+
 TEST(DataObjectPersistenceTest, JointContributorSubsetRoundTripsAndRejectsForeignOrHydrogenIds)
 {
     const command_test::ScopedTempDir dir{"joint_subset"};

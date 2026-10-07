@@ -97,6 +97,15 @@ std::string_view PreconditionerName(PreconditionerKind preconditioner)
     }
     return {};
 }
+std::string_view FixedNeighborBlockOrderName(FixedNeighborBlockOrder order)
+{
+    switch(order)
+    {
+    case FixedNeighborBlockOrder::Forward: return "forward";
+    case FixedNeighborBlockOrder::Reverse: return "reverse";
+    }
+    return {};
+}
 std::string_view FixedNeighborLocalWorkName(FixedNeighborLocalWork work)
 {
     switch(work)
