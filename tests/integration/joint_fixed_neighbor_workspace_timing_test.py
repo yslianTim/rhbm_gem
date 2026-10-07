@@ -11,6 +11,21 @@ def _report(variant, repetition, search_seconds, symbolic, reuses):
         "total_elapsed_seconds": search_seconds + 0.1, "symbolic_factorizations": symbolic,
         "symbolic_reuses": reuses, "numeric_factorizations": 8,
         "matrix_preparation_seconds": 0.2, "symbolic_seconds": 0.3, "numeric_seconds": 0.5,
+        "numeric_factor_requests": 8, "numeric_factor_exact_reuse_opportunities": 2,
+        "initial_profile_exact_reuse_opportunities": 2,
+        "local_profile_work": {
+            "total_seconds": 7.0,
+            "lm_overhead_seconds": 0.5,
+            "total": {
+                "evaluations": 8, "profile_basis_seconds": 1.0,
+                "linear_matrix_preparation_seconds": 0.2, "linear_symbolic_seconds": 0.3,
+                "linear_numeric_seconds": 0.5, "linear_rhs_solve_seconds": 1.0,
+                "linear_certificate_seconds": 0.4, "derivative_prepare_seconds": 0.6,
+                "derivative_reduce_seconds": 0.7, "replay_trust_seconds": 1.8,
+            },
+            "initial_profile": {"evaluations": 2}, "trial_profile": {"evaluations": 4},
+            "accepted_endpoint": {"evaluations": 1}, "reference_evaluation": {"evaluations": 1},
+        },
         "final_eta": [0.1, 0.2], "final_beta": [0.3, 0.4, 0.5, 0.6],
         "block_telemetry": [{"sweep": 1, "block": 1, "status": "accepted",
                              "accepted": True, "accepted_updates": 1}],
@@ -39,6 +54,9 @@ def test_matched_workspace_analysis_checks_trajectory_and_reports_phases():
     assert case["numerical_gate"] == "passed"
     assert case["performance_class"] == "material"
     assert case["treatment"]["candidate_replay_copy_fraction_median"] == 0.11 / 8.0
+    assert case["treatment"]["attribution"]["numeric_factor_exact_reuse_opportunities_median"] == 2
+    assert case["treatment"]["attribution"]["exact_reuse_rate_median"] == 0.25
+    assert case["treatment"]["attribution"]["linear_numeric_seconds_median"] == 0.5
     assert all(comparison["passed"] for comparison in case["comparisons"])
 
 

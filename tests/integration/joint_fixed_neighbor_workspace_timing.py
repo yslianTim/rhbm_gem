@@ -24,6 +24,20 @@ CORE_ATOMS = 64
 CONTROL = "fresh-workspace"
 TREATMENT = "persistent-workspace"
 MODES = {CONTROL: "--matched-control", TREATMENT: "--inexact-one-search"}
+PROFILE_FIELDS = (
+    "profile_basis_seconds", "linear_matrix_preparation_seconds", "linear_symbolic_seconds",
+    "linear_numeric_seconds", "linear_rhs_solve_seconds", "linear_certificate_seconds",
+    "derivative_prepare_seconds", "derivative_reduce_seconds", "replay_trust_seconds",
+    "lm_overhead_seconds",
+)
+REUSE_FIELDS = (
+    "numeric_factor_requests", "numeric_factor_exact_reuse_opportunities",
+    "numeric_factor_pattern_only_matches", "numeric_factor_value_mismatches",
+    "numeric_factor_column_mismatches", "numeric_factor_policy_mismatches",
+    "numeric_factor_pattern_mismatches", "initial_profile_exact_reuse_opportunities",
+    "trial_profile_exact_reuse_opportunities", "reference_exact_reuse_opportunities",
+    "accepted_endpoint_exact_reuse_opportunities",
+)
 
 
 def _finite(value):
@@ -57,6 +71,16 @@ def _work(report):
     return _fixed(report).get("fixed_neighbor_work", {})
 
 
+def _profile_work(fixed, work):
+    return fixed.get("local_profile_work") or work.get("local_profile_work", {})
+
+
+def _profile_value(profile, field):
+    if field == "lm_overhead_seconds":
+        return profile.get(field)
+    return (profile.get("total") or {}).get(field)
+
+
 def _run_case(args, output_dir, topology, atoms, variant, repetition, warmup):
     case = f"{topology}-{atoms}"
     label = f"{case}-{variant}-{'warmup' if warmup else 'measurement'}-{repetition}"
@@ -86,6 +110,9 @@ def _summary(report):
     result = report.get("result") or {}
     process = report.get("process") or {}
     work = _work(report)
+    profile = _profile_work(fixed, work)
+    requests = fixed.get("numeric_factor_requests", 0)
+    exact = fixed.get("numeric_factor_exact_reuse_opportunities", 0)
     return {
         "topology": report.get("topology"), "atoms": report.get("atoms"),
         "variant": report.get("variant"), "repetition": report.get("repetition"),
@@ -113,6 +140,13 @@ def _summary(report):
         "matrix_preparation_seconds": fixed.get("matrix_preparation_seconds"),
         "symbolic_seconds": fixed.get("symbolic_seconds"),
         "numeric_seconds": fixed.get("numeric_seconds"),
+        **{field: _profile_value(profile, field) for field in PROFILE_FIELDS},
+        **{field: fixed.get(field, 0) for field in REUSE_FIELDS},
+        "exact_reuse_rate": exact / requests if _finite(requests) and requests > 0 else None,
+        "initial_profile_evaluations": (profile.get("initial_profile") or {}).get("evaluations", 0),
+        "trial_profile_evaluations": (profile.get("trial_profile") or {}).get("evaluations", 0),
+        "reference_evaluations": (profile.get("reference_evaluation") or {}).get("evaluations", 0),
+        "accepted_endpoint_evaluations": (profile.get("accepted_endpoint") or {}).get("evaluations", 0),
         "full_candidate_replays": work.get("full_candidate_replays"),
         "candidate_state_full_copies": work.get("candidate_state_full_copies"),
         "candidate_replay_seconds": work.get("candidate_replay_seconds"),
@@ -125,6 +159,18 @@ def _summary(report):
 def _median(rows, key):
     values = [row.get(key) for row in rows if _finite(row.get(key))]
     return statistics.median(values) if values else None
+
+
+def _attribution(rows):
+    values = {f"{field}_median": _median(rows, field) for field in PROFILE_FIELDS + REUSE_FIELDS}
+    values.update({
+        "exact_reuse_rate_median": _median(rows, "exact_reuse_rate"),
+        "initial_profile_evaluations_median": _median(rows, "initial_profile_evaluations"),
+        "trial_profile_evaluations_median": _median(rows, "trial_profile_evaluations"),
+        "reference_evaluations_median": _median(rows, "reference_evaluations"),
+        "accepted_endpoint_evaluations_median": _median(rows, "accepted_endpoint_evaluations"),
+    })
+    return values
 
 
 def _scaled_difference(lhs, rhs):
@@ -223,7 +269,8 @@ def _case_report(rows, warmup, measurements):
                      "numeric_factorizations_median": _median(controls, "numeric_factorizations"),
                      "matrix_preparation_seconds_median": _median(controls, "matrix_preparation_seconds"),
                      "symbolic_seconds_median": _median(controls, "symbolic_seconds"),
-                     "numeric_seconds_median": _median(controls, "numeric_seconds")},
+                     "numeric_seconds_median": _median(controls, "numeric_seconds"),
+                     "attribution": _attribution(controls)},
         "treatment": {"search_seconds_median": treatment_search, "total_seconds_median": treatment_total,
                        "peak_rss_mb_median": _median(treatments, "peak_rss_mb"),
                        "symbolic_factorizations_median": _median(treatments, "symbolic_factorizations"),
@@ -233,7 +280,8 @@ def _case_report(rows, warmup, measurements):
                        "symbolic_seconds_median": _median(treatments, "symbolic_seconds"),
                        "numeric_seconds_median": _median(treatments, "numeric_seconds"),
                        "candidate_replay_copy_fraction_median": (
-                           statistics.median(candidate_fractions) if candidate_fractions else None)},
+                           statistics.median(candidate_fractions) if candidate_fractions else None),
+                       "attribution": _attribution(treatments)},
         "relative_search_improvement": improvement,
         "relative_total_improvement": ((control_total - treatment_total) / control_total
                                         if _finite(control_total) and _finite(treatment_total) and control_total > 0
@@ -288,7 +336,9 @@ def write_outputs(report, output_dir):
                "relative_search_improvement", "relative_total_improvement",
                "treatment_candidate_replay_copy_fraction_median",
                "control_symbolic_factorizations_median", "control_symbolic_reuses_median",
-               "treatment_symbolic_factorizations_median", "treatment_symbolic_reuses_median"]
+               "treatment_symbolic_factorizations_median", "treatment_symbolic_reuses_median",
+               "treatment_numeric_factor_requests_median", "treatment_exact_reuse_opportunities_median",
+               "treatment_exact_reuse_rate_median"]
     with (output_dir / "summary.csv").open("w", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=columns, lineterminator="\n")
         writer.writeheader()
@@ -310,6 +360,15 @@ def write_outputs(report, output_dir):
                     (case.get("treatment") or {}).get("symbolic_factorizations_median"),
                 "treatment_symbolic_reuses_median":
                     (case.get("treatment") or {}).get("symbolic_reuses_median"),
+                "treatment_numeric_factor_requests_median":
+                    ((case.get("treatment") or {}).get("attribution") or {}).get(
+                        "numeric_factor_requests_median"),
+                "treatment_exact_reuse_opportunities_median":
+                    ((case.get("treatment") or {}).get("attribution") or {}).get(
+                        "numeric_factor_exact_reuse_opportunities_median"),
+                "treatment_exact_reuse_rate_median":
+                    ((case.get("treatment") or {}).get("attribution") or {}).get(
+                        "exact_reuse_rate_median"),
             })
 
 

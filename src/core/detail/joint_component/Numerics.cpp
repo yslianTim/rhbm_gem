@@ -281,14 +281,6 @@ void UpdateAcceptedProfileObjective(std::optional<double> & accepted_objective,
 }
 
 namespace {
-struct OptionalSeconds
-{
-    double * target{};
-    std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
-    explicit OptionalSeconds(double * target):target(target) {}
-    ~OptionalSeconds()
-    {if(target) *target+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();}
-};
 struct EvaluationTelemetry
 {
     ProfileSearchWork * target{};
@@ -352,9 +344,10 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
 #endif
     if(workspace) workspace->Bind(&domain,workspace_identity ? workspace_identity : y.data(),context ? &context->linear : nullptr);
     const auto matrix_started=std::chrono::steady_clock::now();
-    OptionalSeconds basis_timer(profile_work ? &telemetry.work.basis_seconds : nullptr);
+    const auto basis_started=std::chrono::steady_clock::now();
     auto out=Basis(domain,y,eta);
-    basis_timer.target=nullptr;
+    if(profile_work) telemetry.work.basis_seconds+=
+        std::chrono::duration<double>(std::chrono::steady_clock::now()-basis_started).count();
     SparseWorkForTesting().matrix_preparation_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-matrix_started).count();
     if(!out.valid) return out; out.valid=false;
     const Eigen::Index m=eta.size();
@@ -374,9 +367,10 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     }
     if(!reference) out.factor=solved.factor;
     out.beta=solved.beta;
-    OptionalSeconds certificate_timer(profile_work ? &telemetry.work.linear_certificate_seconds : nullptr);
+    const auto certificate_started=std::chrono::steady_clock::now();
     out.certificate=CertifyLinear(out.x,y,out.beta,context ? context->scale : 0);
-    certificate_timer.target=nullptr;
+    if(profile_work) telemetry.work.linear_certificate_seconds+=
+        std::chrono::duration<double>(std::chrono::steady_clock::now()-certificate_started).count();
     out.certificate.linear_solves=solved.solves; out.certificate.free_rank=solved.rank;
     if(blocks) out.certificate.block_factorizations=solved.block_factorizations;
     if (!solved.valid) {out.reason=solved.reason; return out;}
@@ -394,15 +388,17 @@ Evaluation EvaluateState(const Domain & domain,VectorRef y,const Vector & eta,co
 {
     ProfileEvaluationRoleScopeForTesting role_scope(role);
     EvaluationTelemetry telemetry(profile_work,role);
-    OptionalSeconds basis_timer(profile_work ? &telemetry.work.basis_seconds : nullptr);
+    const auto basis_started=std::chrono::steady_clock::now();
     auto out=Basis(domain,y,eta);
-    basis_timer.target=nullptr;
+    if(profile_work) telemetry.work.basis_seconds+=
+        std::chrono::duration<double>(std::chrono::steady_clock::now()-basis_started).count();
     if(!out.valid) return out; out.valid=false;
     if(beta.size()!=out.x.cols() || !beta.allFinite()) {out.reason="invalid-coefficients"; return out;}
     out.beta=beta; out.residual=out.x*beta-y; out.gradient=Vector::Zero(eta.size());
-    OptionalSeconds certificate_timer(profile_work ? &telemetry.work.linear_certificate_seconds : nullptr);
+    const auto certificate_started=std::chrono::steady_clock::now();
     out.certificate=CertifyLinear(out.x,y,beta,context.scale);
-    certificate_timer.target=nullptr;
+    if(profile_work) telemetry.work.linear_certificate_seconds+=
+        std::chrono::duration<double>(std::chrono::steady_clock::now()-certificate_started).count();
     for(Eigen::Index k=0;k<beta.size();++k)
         out.gradient(k/2)+=beta(k)*out.derivative.col(k).dot(out.residual)/context.scale/context.scale;
     out.valid=out.residual.allFinite() && out.gradient.allFinite(); out.reason=out.valid ? "raw-state" : "nonfinite-state";

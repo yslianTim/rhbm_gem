@@ -466,6 +466,10 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_local_attribution_test.py")
     add_test(NAME joint_fixed_neighbor_numeric_reuse_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_numeric_reuse_test.py")
+    add_test(NAME joint_fixed_neighbor_workspace_timing_test
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "PYTHONPATH=${PROJECT_SOURCE_DIR}/tests/integration"
+            "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_workspace_timing_test.py")
     add_test(NAME joint_fixed_neighbor_inexact_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_inexact_test.py")
     add_test(NAME joint_fixed_neighbor_inexact_qualification_test
@@ -479,7 +483,7 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         joint_fixed_neighbor_inexact_qualification_test joint_fixed_neighbor_core_size_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm")
     set_tests_properties(joint_fixed_neighbor_attribution_test joint_fixed_neighbor_local_attribution_test
-        joint_fixed_neighbor_numeric_reuse_test
+        joint_fixed_neighbor_numeric_reuse_test joint_fixed_neighbor_workspace_timing_test
         joint_optimized_frontier_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:scalability")
     add_test(NAME joint_component_evidence_test

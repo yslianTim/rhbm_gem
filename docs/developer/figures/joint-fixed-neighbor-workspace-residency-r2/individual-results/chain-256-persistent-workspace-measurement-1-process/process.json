@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/Users/yslian/Project/em_map_analysis/build/qualification/bin/joint_fixed_neighbor_experiment",
+    "--inexact-one-search",
+    "/Users/yslian/Project/em_map_analysis/docs/developer/figures/joint-fixed-neighbor-workspace-residency-r2/individual-results/chain-256-persistent-workspace-measurement-1.json",
+    "chain",
+    "256",
+    "64"
+  ],
+  "status": "completed",
+  "sample_interval_seconds": 0.1,
+  "wall_seconds": 83.48185908398591,
+  "exit_code": 0,
+  "sampled_tree_peak_rss_bytes": 186908672,
+  "samples": 768,
+  "maximum_sampling_gap_seconds": 0.11009929096326232,
+  "os_process_peak_rss_bytes": 188416000
+}

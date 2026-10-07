@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "phase": "matched FixedNeighbor prepared-workspace timing",
+  "source_revision": "0edaa0b8f875ee3039a805aaa411a1e2c7318261",
+  "source_sha256": "a6c513e1d33c1ca144decc32eeb1968141ebd811d60d7f5dcaf4c096e928d8a8",
+  "benchmark_source_hashes": {
+    "driver": "dc5c84c0c33123006b2b221fcc20d9731e5b7e3598a4f65c4263fd0b06017931",
+    "timing": "6c3354e521525e7594f88e4aa2097aa4aac8e18f6c4d6d3b9f84294b181f3f7d"
+  },
+  "branch": "develop",
+  "cases": [
+    "chain-256",
+    "cube-256",
+    "chain-512",
+    "cube-512",
+    "chain-1024",
+    "cube-1024"
+  ],
+  "warmup_runs": 1,
+  "measurements": 3,
+  "policy": {
+    "core_atoms": 64,
+    "maximum_sweeps": 30,
+    "block_order": "forward",
+    "local_work": "OneAcceptedUpdate",
+    "local_search": "LegacyCompact",
+    "backend": "SPQR",
+    "eigen_threads": 1
+  },
+  "measurement_scope": "fixed-neighbor-search-only",
+  "resource_envelope": {
+    "wall_seconds": 7200.0,
+    "rss_bytes": 4294967296
+  },
+  "analysis": {
+    "qualification_gate": "passed",
+    "wall_time_gate": "not-material"
+  }
+}

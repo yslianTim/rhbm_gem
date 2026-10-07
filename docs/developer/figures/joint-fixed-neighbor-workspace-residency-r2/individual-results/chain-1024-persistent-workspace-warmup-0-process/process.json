@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/Users/yslian/Project/em_map_analysis/build/qualification/bin/joint_fixed_neighbor_experiment",
+    "--inexact-one-search",
+    "/Users/yslian/Project/em_map_analysis/docs/developer/figures/joint-fixed-neighbor-workspace-residency-r2/individual-results/chain-1024-persistent-workspace-warmup-0.json",
+    "chain",
+    "1024",
+    "64"
+  ],
+  "status": "completed",
+  "sample_interval_seconds": 0.1,
+  "wall_seconds": 351.00946045899764,
+  "exit_code": 0,
+  "sampled_tree_peak_rss_bytes": 557301760,
+  "samples": 3222,
+  "maximum_sampling_gap_seconds": 0.11012395797297359,
+  "os_process_peak_rss_bytes": 559661056
+}

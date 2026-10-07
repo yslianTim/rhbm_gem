@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/Users/yslian/Project/em_map_analysis/build/qualification/bin/joint_fixed_neighbor_experiment",
+    "--matched-control",
+    "/Users/yslian/Project/em_map_analysis/docs/developer/figures/joint-fixed-neighbor-workspace-residency-r2/individual-results/cube-256-fresh-workspace-measurement-0.json",
+    "cube",
+    "256",
+    "64"
+  ],
+  "status": "completed",
+  "sample_interval_seconds": 0.1,
+  "wall_seconds": 151.26031995890662,
+  "exit_code": 0,
+  "sampled_tree_peak_rss_bytes": 208732160,
+  "samples": 1390,
+  "maximum_sampling_gap_seconds": 0.11012874986045063,
+  "os_process_peak_rss_bytes": 210681856
+}
