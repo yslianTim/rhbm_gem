@@ -81,6 +81,25 @@ parameterization, rank semantics, parent scale, objective or
 `RuntimeConvergence()` semantics. Its progress event adds sweep, block,
 accepted-local-update, KKT, width-gradient, eta-change and objective fields.
 
+The production FixedNeighbor implementation now follows an explicit prepared
+view. Component preparation owns the immutable local snapshot, parent/local
+index maps, identities, support domain and rank shape. Structural partitioning
+then creates one prepared block view per block, including its core and affected
+row mappings, local `Domain` and context template. A sweep still rebuilds the
+state-dependent `eta`, `beta`, effective response and numerical design; it does
+not rebuild those structural views. Each prepared block also owns a persistent
+linear workspace. SPQR symbolic analysis may be reused when the block pattern
+and scope match, while every new width state still performs a fresh numeric
+factorization and solve. No numeric factor, active set or coefficient solution
+is carried across sweeps.
+
+Production search retains only aggregate counters, final sweep state and the
+endpoint assessment needed by the component route. Full block records, local
+trial trajectories, reverse order and local certification remain opt-in
+experiment/test diagnostics. The preparation and symbolic-reuse counters are
+reported by the matched search-only qualification driver; they are
+implementation attribution, not new convergence criteria.
+
 Within one immutable problem, a full single component can share its assessment
 with assembly only when observations, structural support, identities, state,
 scale and linear/rank policy match exactly. Offline audit directions do not
@@ -307,7 +326,11 @@ describes parameter layouts, nuisance contributions and seed provenance. See the
 `JointAnalysisMetadata` contains optional `JointMapNormalization`, input SHA-256
 values, `JointSoftwareProvenance` and optional `JointSolverProvenance`.
 `JointSolverProvenance` records the explicit search method and, for
-FixedNeighbor, its core size and local-work policy. `CaptureJointAnalysisResult`
+FixedNeighbor, its core size and local-work policy. Current writers additionally
+record the route-symmetric provenance contract, active sparse backend and the
+resolved OperatorPcg or FixedNeighbor policy fields. The current contracts are
+`joint-solver-provenance-v2` and `fixed-neighbor-production-v1`.
+`CaptureJointAnalysisResult`
 records the current library's version/source/configuration/build identity. The
 decoder and exporter preserve saved identity without recalculation. Direct
 in-memory callers leave unknown input hashes and normalization null; capture

@@ -101,6 +101,29 @@ python3 tests/integration/joint_benchmark.py \
   --output build/chain-512-search.json
 ```
 
+### Prepared-block qualification
+
+The prepared FixedNeighbor route has a dedicated matched search-only campaign:
+
+```sh
+cmake --build build/joint-spqr --target joint_fixed_neighbor_experiment -j4
+python3 tests/integration/joint_fixed_neighbor_prepared_block.py \
+  --build-dir build/joint-spqr \
+  --output-dir build/joint-fixed-neighbor-prepared
+```
+
+The campaign fixes the production policy at 64-atom forward cores, a 30-sweep
+budget, one accepted local `LegacyCompact` update and one Eigen thread. Its
+chain/cube 256, 512 and 1024 cases are explicitly `fixed-neighbor-search-only`.
+The gate checks the existing A/C KKT (`1e-10`), width-gradient (`1e-12`) and
+complete-sweep eta confirmation (`1e-10`), then attributes preparation and
+factor work with `prepared_block_count`, block/domain/mapping preparation
+counters, symbolic factorizations, symbolic reuses and numeric factorizations.
+The fresh-workspace symbolic count is an instrumentation control estimate;
+`wall_time_gate` remains separate and is `not-run` unless a same-policy matched
+wall-time control is supplied. These results must not be described as full
+endpoint certification for the large search-only cases.
+
 For example, compare a small Schwarz core with core-only and one-hop overlap:
 
 ```sh

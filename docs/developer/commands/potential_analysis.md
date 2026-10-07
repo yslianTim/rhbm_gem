@@ -272,7 +272,12 @@ or `fixed-neighbor`. FixedNeighbor records
 `fixed_neighbor_local_work: "one-accepted"` for the production policy. The
 field is optional so schema-5 documents created before solver provenance was
 added remain readable and retain an unknown solver route rather than being
-rewritten.
+rewritten. Current writers also persist the optional
+`joint-solver-provenance-v2` contract, active sparse backend, resolved
+OperatorPcg rank/preconditioner budgets, and FixedNeighbor's
+`fixed-neighbor-production-v1` policy version, maximum sweeps, forward order
+and `legacy-compact` local search. Readers accept older documents with those
+extension keys absent; they are not inferred during load.
 
 `metadata.map_normalization` is `{requested, applied, divisor}`. The operation is
 `fit_map = input_map / divisor`, with no mean subtraction. An applied operation

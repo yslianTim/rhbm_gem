@@ -114,6 +114,28 @@ Atom-count auto-routing is not introduced. Coordinated or shared-parameter
 blocks remain outside this policy, and `CertifiedLocal` remains diagnostic-only
 and is not part of production semantics.
 
+## Prepared-block hardening
+
+The current production kernel separates the prepared component from the
+historical diagnostic wrapper. An immutable prepared component owns the local
+snapshot, parent/local mappings, identities and support domain. Each structural
+FixedNeighbor block is prepared once with its core mapping, affected rows,
+local domain and context/rank template. Sweeps update only the state-dependent
+effective response, widths, coefficients and numerical basis values.
+
+Each prepared block owns one persistent `LinearWorkspace`. This enables SPQR
+symbolic reuse for a stable block pattern and scope, while numeric
+factorization, active-set decisions and coefficient solves remain fresh for
+every width state. The optimization does not change objective, effective
+response, serial Gauss-Seidel order, accepted-step semantics, replay, or any
+KKT, width-gradient, eta-confirmation or endpoint threshold.
+
+Production output keeps minimal aggregate search telemetry. Full local trial
+trajectories, reverse order, alternate core sizes and local certification are
+experiment/test diagnostics. The reproducible matched qualification driver is
+`tests/integration/joint_fixed_neighbor_prepared_block.py`; its large cases are
+search-only and its symbolic attribution is separate from any wall-time gate.
+
 ## Historical verification record
 
 - `cmake --build build/joint-spqr -j4`: passed.
