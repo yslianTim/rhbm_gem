@@ -1,5 +1,6 @@
 #include "FixedNeighborBlockCoordinate.hpp"
 #include "Problem.hpp"
+#include "SparseFactor.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -198,6 +199,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         prepared.row_mapping=std::make_shared<Indices>(std::move(row_mapping));
         prepared.domain=domain.Select(prepared.profile_atoms,
             static_cast<Eigen::Index>(prepared.profile_rows.size()),prepared.row_mapping);
+        prepared.workspace=std::make_shared<LinearWorkspace>();
         prepared.context=context;
         prepared.context.atom_ids=context.atom_ids.Select(prepared.profile_atoms);
         prepared.context.row_ids=context.row_ids.Select(prepared.profile_rows);
@@ -263,7 +265,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             record.local_objective_before=.5*local_before_squared/(context.scale*context.scale);
             const auto search_started=Clock::now();
             const auto old_widths=old_eta.array().exp().eval();
-            const auto local_search=SearchProfile(local_domain,local_y,old_widths,local_context);
+            const auto local_search=SearchProfile(local_domain,local_y,old_widths,local_context,{},nullptr,
+                prepared.workspace.get(),&prepared);
             record.search_seconds=Seconds(search_started); record.profile_evaluations=local_search.evaluations;
             record.accepted_updates=local_search.accepted; record.local_search_stop_reason=local_search.stop_reason;
             if(policy.capture_local_trajectory)

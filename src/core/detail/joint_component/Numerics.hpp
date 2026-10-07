@@ -100,7 +100,8 @@ struct Spectrum
 Spectrum DesignSpectrum(const Sparse &,const Vector &,const RankPolicy * = nullptr);
 Spectrum ComputeSpectrum(const Sparse &,const RankPolicy &,Eigen::Index,bool);
 Spectrum ComputeSpectrum(const Matrix &,const RankPolicy &,Eigen::Index,bool);
-Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,bool,const EvaluationContext *,const std::vector<LinearBlock> * = nullptr,LinearWorkspace * = nullptr);
+Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,bool,const EvaluationContext *,
+    const std::vector<LinearBlock> * = nullptr,LinearWorkspace * = nullptr,const void * = nullptr);
 Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &);
 struct TrustEvidence
 {
@@ -143,7 +144,8 @@ struct SearchResult
     double seconds{},reference_seconds{};
 };
 SearchResult SearchProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,
-    const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
+    const JointProgressObserver & = {},const JointProgressComponent * = nullptr,LinearWorkspace * = nullptr,
+    const void * = nullptr);
 struct Assessment
 {
     Endpoint primary,reference;

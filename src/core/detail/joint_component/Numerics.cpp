@@ -250,7 +250,7 @@ Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
 }
 }
 Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,bool reference,const EvaluationContext * context,
-    const std::vector<LinearBlock> * blocks,LinearWorkspace * workspace)
+    const std::vector<LinearBlock> * blocks,LinearWorkspace * workspace,const void * workspace_identity)
 {
     ResourcePhase phase(reference ? "reference" : "ac-profile");
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -261,7 +261,7 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(reference) ++AssessmentWorkForTesting().reference_evaluations;
 #endif
-    if(workspace) workspace->Bind(&domain,y.data(),context ? &context->linear : nullptr);
+    if(workspace) workspace->Bind(&domain,workspace_identity ? workspace_identity : y.data(),context ? &context->linear : nullptr);
     const auto matrix_started=std::chrono::steady_clock::now();
     auto out=Basis(domain,y,eta);
     SparseWorkForTesting().matrix_preparation_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-matrix_started).count();

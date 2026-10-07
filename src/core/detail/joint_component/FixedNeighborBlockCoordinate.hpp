@@ -57,6 +57,7 @@ struct PreparedFixedNeighborBlock
     std::size_t block{};
     Indices core_atoms,affected_rows,profile_atoms,profile_rows;
     std::shared_ptr<const Indices> row_mapping;
+    std::shared_ptr<LinearWorkspace> workspace;
     Domain domain{0,{}};
     EvaluationContext context;
     Eigen::Index local_atoms{};

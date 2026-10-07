@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/SparseFactor.hpp"
 #include "support/JointOperatorWorkload.hpp"
 #include <cmath>
 #include <limits>
@@ -171,8 +172,10 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutp
     const n::Domain domain=n::ProfileDomain(data.domain,data.layout);
     const auto context=n::ProfileContext(data.context,data.layout,data.domain.rows);
     n::FixedNeighborPolicy quiet_policy; quiet_policy.core_atoms=16; quiet_policy.maximum_sweeps=3;
+    n::SparseWorkForTesting()={};
     const auto quiet=n::SearchFixedNeighborComponent(*data.input,data.layout,domain,data.y,data.y,
         initial_eta,context,quiet_policy);
+    const auto sparse_work=n::SparseWorkForTesting();
     auto diagnostic_policy=quiet_policy; diagnostic_policy.collect_diagnostics=true;
     const auto diagnostic=n::SearchFixedNeighborComponent(*data.input,data.layout,domain,data.y,data.y,
         initial_eta,context,diagnostic_policy);
@@ -188,6 +191,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutp
     EXPECT_EQ(quiet.domain_preparations,quiet.block_preparations);
     EXPECT_EQ(quiet.mapping_preparations,quiet.block_preparations);
     EXPECT_EQ(diagnostic.block_preparations,quiet.block_preparations);
+    EXPECT_GT(sparse_work.numeric,0u);
+    EXPECT_GT(sparse_work.symbolic_reuses,0u);
     EXPECT_EQ(quiet.reason,diagnostic.reason);
     EXPECT_EQ(quiet.search_converged,diagnostic.search_converged);
     EXPECT_EQ(quiet.endpoint_certified,diagnostic.endpoint_certified);
@@ -198,6 +203,39 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutp
     EXPECT_DOUBLE_EQ(quiet.final_sweep->global_width_gradient_inf_norm,
         diagnostic.sweeps.back().global_width_gradient_inf_norm);
     EXPECT_TRUE((quiet.assessment.primary.eta.array()==diagnostic.assessment.primary.eta.array()).all());
+}
+TEST(JointFixedNeighborBlockCoordinateTest, PreparedWorkspaceReusesSymbolicFactorizationWithFreshControl)
+{
+    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"Optional SPQR backend";
+    JointProblem problem(second_stage_test::OperatorWorkload("chain",32));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Domain domain=n::ProfileDomain(data.domain,data.layout);
+    auto context=n::ProfileContext(data.context,data.layout,data.domain.rows);
+    context.profile_budget=1; context.update_budget=0;
+    const n::Vector widths=n::Vector::Constant(32,.55);
+
+    n::SparseWorkForTesting()={};
+    n::LinearWorkspace workspace;
+    const auto reused_first=n::SearchProfile(domain,data.y,widths,context,{},nullptr,&workspace,&domain);
+    const auto reused_second=n::SearchProfile(domain,data.y,widths,context,{},nullptr,&workspace,&domain);
+    const auto reused_work=n::SparseWorkForTesting();
+    ASSERT_TRUE(reused_first.initial.valid);
+    ASSERT_TRUE(reused_second.initial.valid);
+    EXPECT_EQ(reused_first.stop_reason,reused_second.stop_reason);
+    EXPECT_TRUE((reused_first.eta.array()==reused_second.eta.array()).all());
+    EXPECT_EQ(reused_work.symbolic,1u);
+    EXPECT_GE(reused_work.symbolic_reuses,1u);
+    EXPECT_EQ(reused_work.numeric,2u);
+
+    n::SparseWorkForTesting()={};
+    const auto fresh_first=n::SearchProfile(domain,data.y,widths,context);
+    const auto fresh_second=n::SearchProfile(domain,data.y,widths,context);
+    const auto fresh_work=n::SparseWorkForTesting();
+    ASSERT_TRUE(fresh_first.initial.valid);
+    ASSERT_TRUE(fresh_second.initial.valid);
+    EXPECT_EQ(fresh_work.symbolic,2u);
+    EXPECT_EQ(fresh_work.symbolic_reuses,0u);
+    EXPECT_EQ(fresh_work.numeric,2u);
 }
 TEST(JointFixedNeighborBlockCoordinateTest, BoundedLocalWorkCountsTrustedAcceptedUpdatesOnly)
 {

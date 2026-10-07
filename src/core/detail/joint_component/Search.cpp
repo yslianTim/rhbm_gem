@@ -20,6 +20,8 @@ struct Profile
     int evaluations{},derivatives{};
     std::string failure;
     LinearWorkspace workspace;
+    LinearWorkspace * supplied_workspace{};
+    const void * workspace_identity{};
     const JointProgressObserver & observer;
     const JointProgressComponent * progress_component{};
     std::chrono::steady_clock::time_point search_start;
@@ -63,7 +65,9 @@ struct Profile
         const auto & sparse_work=SparseWorkForTesting();
         const double factor_seconds_before=sparse_work.symbolic_seconds+sparse_work.numeric_seconds+
             sparse_work.fixed_factor_seconds;
-        cached=EvaluateProfile(domain,y,eta,false,&context,nullptr,&workspace); ++evaluations;
+        auto * active_workspace=supplied_workspace ? supplied_workspace : &workspace;
+        const void * identity=supplied_workspace ? workspace_identity : nullptr;
+        cached=EvaluateProfile(domain,y,eta,false,&context,nullptr,active_workspace,identity); ++evaluations;
         joint_component::Trial row; row.endpoint=cached; row.evaluation=evaluations; row.seconds=Seconds(start);
         row.factor_seconds=SparseWorkForTesting().symbolic_seconds+SparseWorkForTesting().numeric_seconds+
             SparseWorkForTesting().fixed_factor_seconds-factor_seconds_before;
@@ -98,13 +102,14 @@ struct Profile
 }
 SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
     const EvaluationContext & context,const JointProgressObserver & observer,
-    const JointProgressComponent * progress_component)
+    const JointProgressComponent * progress_component,LinearWorkspace * workspace,const void * workspace_identity)
 {
     if(context.search.method==SearchMethod::OperatorPcg)
         return SearchOperatorProfile(domain,y,initial_b,context,observer,progress_component);
     ResourcePhase phase("search",true,domain.rows,initial_b.size());
     const auto start=std::chrono::steady_clock::now();
-    Profile profile{domain,y,context.scale,context,{}, {},0,0,{}, {},observer,progress_component,start,0,{}, {}};
+    Profile profile{domain,y,context.scale,context,{}, {},0,0,{}, {},workspace,workspace_identity,observer,
+        progress_component,start,0,{}, {}};
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
         lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;
