@@ -164,6 +164,48 @@ TEST(JointFixedNeighborBlockCoordinateTest, LocalTrajectoryTelemetryIsOptInAndDo
     EXPECT_TRUE((captured.state.beta.array()==quiet.state.beta.array()).all());
     EXPECT_DOUBLE_EQ(captured.state.objective,quiet.state.objective);
 }
+TEST(JointFixedNeighborBlockCoordinateTest, AggregateWorkTelemetryIsOptInAndDoesNotChangeSearchState)
+{
+    JointProblem problem(second_stage_test::OperatorWorkload("chain",32));
+    const n::Vector eta=n::Vector::Constant(32,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.core_atoms=16; policy.maximum_sweeps=2;
+    policy.assess_final_endpoint=false; policy.collect_telemetry=true;
+    const auto measured=n::SearchFixedNeighbor(problem,eta,policy);
+    policy.collect_telemetry=false;
+    const auto quiet=n::SearchFixedNeighbor(problem,eta,policy);
+
+    ASSERT_GT(measured.work.block_solves,0u);
+    std::size_t sweep_block_solves{};
+    for(const auto & sweep:measured.sweeps) sweep_block_solves+=sweep.block_solves;
+    EXPECT_EQ(measured.work.block_solves,sweep_block_solves);
+    EXPECT_EQ(measured.work.old_core_basis_builds,measured.work.block_solves);
+    EXPECT_EQ(measured.work.full_candidate_replays,measured.work.candidate_state_full_copies);
+    EXPECT_GT(measured.work.affected_row_updates,0u);
+    for(const double seconds:{measured.work.old_core_seconds,measured.work.effective_response_seconds,
+        measured.work.local_search_seconds,measured.work.local_state_seconds,measured.work.candidate_copy_seconds,
+        measured.work.candidate_replay_seconds,measured.work.cache_update_seconds,
+        measured.work.sweep_replay_seconds,measured.work.sweep_global_state_seconds})
+        EXPECT_GE(seconds,0.0);
+
+    EXPECT_EQ(quiet.work.block_solves,0u);
+    EXPECT_EQ(quiet.work.full_candidate_replays,0u);
+    EXPECT_EQ(quiet.work.candidate_state_full_copies,0u);
+    EXPECT_EQ(quiet.work.affected_row_updates,0u);
+    EXPECT_EQ(quiet.work.old_core_basis_builds,0u);
+    EXPECT_DOUBLE_EQ(quiet.work.old_core_seconds,0.0);
+    EXPECT_DOUBLE_EQ(quiet.work.candidate_replay_seconds,0.0);
+    EXPECT_DOUBLE_EQ(quiet.work.sweep_replay_seconds,0.0);
+    for(const double seconds:{quiet.work.effective_response_seconds,quiet.work.local_search_seconds,
+        quiet.work.local_state_seconds,quiet.work.candidate_copy_seconds,quiet.work.cache_update_seconds,
+        quiet.work.sweep_global_state_seconds})
+        EXPECT_DOUBLE_EQ(seconds,0.0);
+    EXPECT_EQ(measured.reason,quiet.reason);
+    EXPECT_EQ(measured.search_converged,quiet.search_converged);
+    EXPECT_EQ(measured.sweeps.size(),quiet.sweeps.size());
+    EXPECT_TRUE((measured.state.eta.array()==quiet.state.eta.array()).all());
+    EXPECT_TRUE((measured.state.beta.array()==quiet.state.beta.array()).all());
+    EXPECT_DOUBLE_EQ(measured.state.objective,quiet.state.objective);
+}
 TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutputWithoutDiagnostics)
 {
     JointProblem problem(second_stage_test::OperatorWorkload("chain",32));

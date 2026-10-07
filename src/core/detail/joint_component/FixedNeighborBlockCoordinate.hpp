@@ -47,6 +47,14 @@ struct FixedNeighborBlockSweep
         maximum_block_rows{},maximum_block_columns{},maximum_local_assessment_rows{},maximum_local_assessment_columns{},
         accepted_blocks{},unchanged_blocks{},accepted_local_updates{};
 };
+struct FixedNeighborWork
+{
+    double old_core_seconds{},effective_response_seconds{},local_search_seconds{},local_state_seconds{},
+        candidate_copy_seconds{},candidate_replay_seconds{},cache_update_seconds{},sweep_replay_seconds{},
+        sweep_global_state_seconds{};
+    std::size_t block_solves{},full_candidate_replays{},candidate_state_full_copies{},affected_row_updates{},
+        old_core_basis_builds{};
+};
 struct FixedNeighborDiagnosticSink
 {
     std::function<void(const FixedNeighborBlockRecord &)> block;
@@ -72,6 +80,7 @@ struct FixedNeighborPolicy
     bool capture_local_trajectory{};
     bool stop_after_no_certified_update{};
     bool assess_final_endpoint{true};
+    bool collect_telemetry{};
     bool collect_diagnostics{};
     FixedNeighborDiagnosticSink * diagnostic_sink{};
     std::function<void(const FixedNeighborBlockSweep &)> production_progress;
@@ -88,6 +97,7 @@ struct FixedNeighborResult
     std::string reason;
     std::size_t first_order_stationarity_sweep{},confirmed_stationarity_sweep{};
     std::size_t block_preparations{},domain_preparations{},mapping_preparations{};
+    FixedNeighborWork work;
     Assessment assessment;
     TrustEvidence endpoint_trust;
     JointFitResult fit;
@@ -106,6 +116,7 @@ struct FixedNeighborSearchResult
     std::size_t sweep_count{},total_block_solves{},total_profile_evaluations{},total_local_assessments{},
         total_accepted_local_updates{},block_preparations{},domain_preparations{},mapping_preparations{};
     double search_seconds{};
+    FixedNeighborWork work;
     std::optional<FixedNeighborBlockSweep> final_sweep;
     Assessment assessment;
     TrustEvidence endpoint_trust;

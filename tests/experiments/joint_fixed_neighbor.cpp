@@ -276,6 +276,23 @@ j::object SweepJson(const n::FixedNeighborBlockSweep & sweep)
         {"maximum_local_assessment_columns",sweep.maximum_local_assessment_columns},
         {"wall_seconds",sweep.wall_seconds}};
 }
+j::object WorkJson(const n::FixedNeighborWork & work)
+{
+    return {{"old_core_seconds",Number(work.old_core_seconds)},
+        {"effective_response_seconds",Number(work.effective_response_seconds)},
+        {"local_search_seconds",Number(work.local_search_seconds)},
+        {"local_state_seconds",Number(work.local_state_seconds)},
+        {"candidate_copy_seconds",Number(work.candidate_copy_seconds)},
+        {"candidate_replay_seconds",Number(work.candidate_replay_seconds)},
+        {"cache_update_seconds",Number(work.cache_update_seconds)},
+        {"sweep_replay_seconds",Number(work.sweep_replay_seconds)},
+        {"sweep_global_state_seconds",Number(work.sweep_global_state_seconds)},
+        {"block_solves",work.block_solves},
+        {"full_candidate_replays",work.full_candidate_replays},
+        {"candidate_state_full_copies",work.candidate_state_full_copies},
+        {"affected_row_updates",work.affected_row_updates},
+        {"old_core_basis_builds",work.old_core_basis_builds}};
+}
 void Write(const std::filesystem::path &,const j::value &);
 j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,bool compare_global,
     bool decompose=false,bool certify_local=false,bool qualification=false,bool scaling_only=false,
@@ -293,6 +310,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     neighbor_policy.capture_local_trajectory=attribution || local_work!=n::FixedNeighborLocalWork::Full;
     neighbor_policy.stop_after_no_certified_update=certify_local;
     neighbor_policy.assess_final_endpoint=!scaling_only;
+    neighbor_policy.collect_telemetry=true;
     if(qualification)
     {
         neighbor_policy.stop_after_stationarity=false;
@@ -484,6 +502,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                 {"numeric_seconds",sparse_work.numeric_seconds},
                 {"factor_storage_bytes",sparse_work.factor_storage_bytes},
                 {"local_factor_seconds",local_factor_seconds},{"profile_factor_seconds",profile_factor_seconds},
+                {"fixed_neighbor_work",WorkJson(neighbor.work)},
                 {"search_seconds",neighbor_search_seconds},
                 {"local_trajectory_telemetry",attribution},
                 {"local_work_policy",LocalWorkName(local_work)},
@@ -539,6 +558,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"symbolic_seconds",sparse_work.symbolic_seconds},
         {"numeric_seconds",sparse_work.numeric_seconds},
         {"factor_storage_bytes",sparse_work.factor_storage_bytes},
+        {"fixed_neighbor_work",WorkJson(neighbor.work)},
         {"profile_factor_seconds",std::accumulate(neighbor.blocks.begin(),neighbor.blocks.end(),0.0,
             [](double total,const auto & block){return total+block.profile_factor_seconds;})},
         {"maximum_local_assessment_rows",maximum_local_assessment_rows},
