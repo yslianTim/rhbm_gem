@@ -555,7 +555,7 @@ TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsAllProductionRoutes
     operator_provenance.operator_pcg_iterations=-1;
     operator_provenance.operator_damping_trials=20;
     operator_provenance.schwarz_core_atoms=128;
-    operator_provenance.schwarz_overlap_hops=1;
+    operator_provenance.schwarz_overlap_hops=0;
     operator_provenance.schwarz_max_block_atoms=512;
     operator_provenance.schwarz_storage_bytes=512ULL*1024*1024;
     operator_provenance.schwarz_scratch_bytes=256ULL*1024*1024;
@@ -564,6 +564,7 @@ TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsAllProductionRoutes
     ASSERT_TRUE(operator_decoded.metadata.solver);
     EXPECT_EQ(operator_decoded.metadata.solver->preconditioner,"Schwarz");
     EXPECT_EQ(operator_decoded.metadata.solver->operator_rank_backend,"SpqrBounds");
+    EXPECT_EQ(operator_decoded.metadata.solver->schwarz_overlap_hops,0u);
     EXPECT_EQ(operator_decoded.metadata.solver->schwarz_max_block_atoms,512u);
 
     auto partial=boost::json::parse(io::Encode(operator_result)).as_object();

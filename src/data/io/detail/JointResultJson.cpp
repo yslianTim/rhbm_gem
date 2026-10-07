@@ -316,7 +316,8 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
             if(value) Require(*value>0,"invalid solver resource budget");
         };
         require_positive(p.operator_rank_budget_entries); require_positive(p.operator_rank_budget_workspace_bytes);
-        require_positive(p.schwarz_core_atoms); require_positive(p.schwarz_overlap_hops);
+        require_positive(p.schwarz_core_atoms);
+        // overlap_hops is size_t, so its type already enforces >= 0; zero is valid.
         require_positive(p.schwarz_max_block_atoms); require_positive(p.schwarz_storage_bytes);
         require_positive(p.schwarz_scratch_bytes);
         if(p.schwarz_core_atoms && p.schwarz_max_block_atoms)
