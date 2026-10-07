@@ -285,8 +285,10 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 
             const auto search_started=Clock::now();
             const auto old_widths=old_eta.array().exp().eval();
+            std::unique_ptr<LinearWorkspace> fresh_workspace;
+            if(!policy.reuse_block_workspace) fresh_workspace=std::make_unique<LinearWorkspace>();
             const auto local_search=SearchProfile(local_domain,local_y,old_widths,local_context,{},nullptr,
-                prepared.workspace.get(),&prepared);
+                fresh_workspace ? fresh_workspace.get() : prepared.workspace.get(),&prepared);
             record.search_seconds=Seconds(search_started); record.profile_evaluations=local_search.evaluations;
             if(policy.collect_telemetry) out.work.local_search_seconds+=record.search_seconds;
             record.accepted_updates=local_search.accepted; record.local_search_stop_reason=local_search.stop_reason;

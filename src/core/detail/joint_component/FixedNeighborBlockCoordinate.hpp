@@ -80,6 +80,7 @@ struct FixedNeighborPolicy
     bool capture_local_trajectory{};
     bool stop_after_no_certified_update{};
     bool assess_final_endpoint{true};
+    bool reuse_block_workspace{true};
     bool collect_telemetry{};
     bool collect_diagnostics{};
     FixedNeighborDiagnosticSink * diagnostic_sink{};
