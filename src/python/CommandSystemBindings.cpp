@@ -48,6 +48,10 @@ void BindCommandTypes(py::module_ & module)
     BindEnumEntries(potential_estimator);
     py::implicitly_convertible<int, PotentialEstimator>();
 
+    auto joint_search_method{ py::enum_<JointSearchMethod>(module, "JointSearchMethod") };
+    BindEnumEntries(joint_search_method);
+    py::implicitly_convertible<int, JointSearchMethod>();
+
     auto potential_model{ py::enum_<PotentialModel>(module, "PotentialModel") };
     BindEnumEntries(potential_model);
     py::implicitly_convertible<int, PotentialModel>();

@@ -33,8 +33,16 @@ CompactSvdResult Decompose(const Matrix & r,Eigen::Index rows,CompactSvdVectors 
 JointSolverRoute ResolveJointSolverRoute(const SearchPolicy & policy)
 {
     std::optional<PreconditionerKind> preconditioner;
+    std::optional<std::size_t> fixed_neighbor_core_atoms;
+    std::optional<FixedNeighborLocalWork> fixed_neighbor_local_work;
     if(policy.method==SearchMethod::OperatorPcg) preconditioner=policy.preconditioner;
-    return {ActiveSparseBackend(),policy.method,preconditioner};
+    if(policy.method==SearchMethod::FixedNeighbor)
+    {
+        fixed_neighbor_core_atoms=policy.fixed_neighbor.core_atoms;
+        fixed_neighbor_local_work=policy.fixed_neighbor.local_work;
+    }
+    return {ActiveSparseBackend(),policy.method,preconditioner,
+        fixed_neighbor_core_atoms,fixed_neighbor_local_work};
 }
 std::optional<FreeDesignRankBackend> ResolveOperatorRankBackend(OperatorRankMode mode,SparseBackend backend)
 {
@@ -65,6 +73,17 @@ std::string_view SearchMethodName(SearchMethod method)
     {
     case SearchMethod::LegacyCompact: return "LegacyCompact";
     case SearchMethod::OperatorPcg: return "OperatorPcg";
+    case SearchMethod::FixedNeighbor: return "FixedNeighbor";
+    }
+    return {};
+}
+std::string_view SearchMethodToken(SearchMethod method)
+{
+    switch(method)
+    {
+    case SearchMethod::LegacyCompact: return "legacy-compact";
+    case SearchMethod::OperatorPcg: return "operator-pcg";
+    case SearchMethod::FixedNeighbor: return "fixed-neighbor";
     }
     return {};
 }
@@ -75,6 +94,16 @@ std::string_view PreconditionerName(PreconditionerKind preconditioner)
     case PreconditionerKind::Identity: return "Identity";
     case PreconditionerKind::Diagonal: return "Diagonal";
     case PreconditionerKind::Schwarz: return "Schwarz";
+    }
+    return {};
+}
+std::string_view FixedNeighborLocalWorkName(FixedNeighborLocalWork work)
+{
+    switch(work)
+    {
+    case FixedNeighborLocalWork::Full: return "full";
+    case FixedNeighborLocalWork::OneAcceptedUpdate: return "one-accepted";
+    case FixedNeighborLocalWork::TwoAcceptedUpdates: return "two-accepted";
     }
     return {};
 }

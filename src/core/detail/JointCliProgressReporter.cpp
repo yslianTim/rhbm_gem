@@ -58,8 +58,19 @@ void JointCliProgressReporter::ShowProgress(const JointProgressEvent & event, bo
     std::ostringstream output;
     output << "Joint component " << event.component_index << '/' << event.component_count << " | "
         << (certifying ? "certifying endpoint" : "searching")
-        << " | atoms=" << event.atom_count << " rows=" << event.row_count
-        << " | eval=" << event.profile_evaluations << '/' << event.profile_budget
+        << " | atoms=" << event.atom_count << " rows=" << event.row_count;
+    if (event.fixed_neighbor)
+    {
+        const auto & progress=*event.fixed_neighbor;
+        output << " | sweep=" << progress.sweep << '/' << progress.maximum_sweeps
+            << " | blocks=" << progress.block_solves << " | accepted-blocks=" << progress.accepted_blocks
+            << " | local-accepted=" << progress.local_accepted_updates
+            << " | kkt=" << Scientific(progress.global_ac_kkt)
+            << " | width-grad=" << Scientific(progress.width_gradient_inf_norm)
+            << " | eta-change=" << Scientific(progress.eta_change_inf)
+            << " | objective=" << Scientific(progress.objective);
+    }
+    else output << " | eval=" << event.profile_evaluations << '/' << event.profile_budget
         << " | accepted=" << event.accepted_updates << '/' << event.update_budget;
     if (event.accepted_objective)
         output << " | " << (certifying ? "accepted-obj=" : "obj=") << Scientific(*event.accepted_objective);
@@ -88,9 +99,14 @@ void JointCliProgressReporter::OnProgress(const JointProgressEvent & event)
         const auto & route = *event.solver_route;
         std::ostringstream output;
         output << "[Joint] Solver route: sparse=" << joint_component::SparseBackendName(route.sparse_backend)
-            << " | width-search=" << joint_component::SearchMethodName(route.search_method);
+            << " | search=" << joint_component::SearchMethodToken(route.search_method);
         if (route.preconditioner)
             output << " | preconditioner=" << joint_component::PreconditionerName(*route.preconditioner);
+        if (route.fixed_neighbor_core_atoms)
+            output << " | core=" << *route.fixed_neighbor_core_atoms;
+        if (route.fixed_neighbor_local_work)
+            output << " | local-work=" << joint_component::FixedNeighborLocalWorkName(*route.fixed_neighbor_local_work)
+                << " | local-search=legacy-compact";
         LogJointInfo(output.str());
         return;
     }

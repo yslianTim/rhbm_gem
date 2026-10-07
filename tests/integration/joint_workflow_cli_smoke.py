@@ -34,6 +34,9 @@ def main() -> int:
         database = root / "joint.sqlite"
         run("potential_analysis", "--estimator", "joint-components", "--only-backbone", "true", "-a", model,
             "-m", map_path, "-d", database, "-k", "example", "--map-normalization", "false", "-v", "0")
+        run("potential_analysis", "--estimator", "joint-components", "--joint-search", "fixed-neighbor",
+            "--only-backbone", "true", "-a", model, "-m", map_path, "-d", database, "-k", "fixed",
+            "--map-normalization", "false", "-v", "0")
         model_hash = hashlib.sha256(model.read_bytes()).hexdigest()
         map_hash = hashlib.sha256(map_path.read_bytes()).hexdigest()
         # The same path with different bytes must produce a different fingerprint.
@@ -55,6 +58,7 @@ def main() -> int:
         with sqlite3.connect(database) as connection:
             assert connection.execute("PRAGMA user_version").fetchone()[0] == 19
             payload = connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='example'").fetchone()[0]
+            fixed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='fixed'").fetchone()[0])
             changed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='changed'").fetchone()[0])
             stages = json.loads(connection.execute("SELECT result_json FROM model_stage_result WHERE key_tag='example'").fetchone()[0])
             assert stages["version"] == 2
@@ -73,6 +77,12 @@ def main() -> int:
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
         assert saved["schema_version"] == 5
+        assert saved["metadata"]["solver"]["search_method"] == "legacy-compact"
+        assert fixed["metadata"]["solver"] == {
+            "search_method": "fixed-neighbor",
+            "fixed_neighbor_core_atoms": 64,
+            "fixed_neighbor_local_work": "one-accepted",
+        }
         assert saved["selection_domain"]["target_indices"] == [0]
         assert saved["atom_ids"] == ["1", "2"]
         assert saved["initialization"]["data_scope"] == "contributor-local-sampling-may-read-outside-target-domain"

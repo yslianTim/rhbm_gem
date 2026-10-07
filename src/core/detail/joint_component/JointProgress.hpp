@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <limits>
 #include <optional>
 #include <string>
 
@@ -18,6 +19,15 @@ enum class JointProgressPhase
     ComponentCompleted,
     AssemblyStarted,
     AssemblyCompleted
+};
+
+struct JointFixedNeighborProgress
+{
+    std::size_t sweep{},maximum_sweeps{},block_solves{},accepted_blocks{},local_accepted_updates{};
+    double objective{std::numeric_limits<double>::quiet_NaN()};
+    double global_ac_kkt{std::numeric_limits<double>::quiet_NaN()};
+    double width_gradient_inf_norm{std::numeric_limits<double>::quiet_NaN()};
+    double eta_change_inf{std::numeric_limits<double>::quiet_NaN()};
 };
 
 struct JointProgressEvent
@@ -38,6 +48,7 @@ struct JointProgressEvent
     double elapsed_seconds{};
     std::string stop_reason;
     bool trusted_state{};
+    std::optional<JointFixedNeighborProgress> fixed_neighbor;
 };
 
 using JointProgressObserver = std::function<void(const JointProgressEvent &)>;

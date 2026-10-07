@@ -100,6 +100,17 @@ struct EnumMappingTraits<PotentialEstimator>
 };
 
 template <>
+struct EnumMappingTraits<JointSearchMethod>
+{
+    static constexpr std::string_view kFirstBindingToken{ "LEGACY_COMPACT" };
+    static constexpr std::array<EnumMappingExpectation<JointSearchMethod>, 3> kExpectations{{
+        { "legacy-compact", JointSearchMethod::LegacyCompact },
+        { "operator-pcg", JointSearchMethod::OperatorPcg },
+        { "fixed-neighbor", JointSearchMethod::FixedNeighbor },
+    }};
+};
+
+template <>
 struct EnumMappingTraits<PotentialModel>
 {
     static constexpr std::string_view kFirstBindingToken{ "SINGLE_GAUS" };
@@ -166,6 +177,7 @@ using CommandEnumTypes = testing::Types<
     PrinterType,
     PotentialModel,
     PotentialEstimator,
+    JointSearchMethod,
     PartialCharge,
     TesterType,
     SphereSamplingMethod>;

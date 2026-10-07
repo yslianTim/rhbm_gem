@@ -63,6 +63,7 @@ struct JointFitResult
     bool search_completed{};
     double observation_scale{1};
     JointCheckStatus regular_certificate{JointCheckStatus::NotRun};
+    JointSolverProvenance solver_provenance;
     // Actual-state numerical evidence only; independent of search termination and offline audits.
     JointCheckStatus RuntimeConvergence() const;
     JointCheckStatus TargetRuntimeConvergence() const;

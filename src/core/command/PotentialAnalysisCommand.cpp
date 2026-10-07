@@ -65,12 +65,19 @@ void NormalizeAndValidateRequest(
     runner.RequireNonEmptyList(request, &PotentialAnalysisRequest::saved_key_tag);
     runner.RequireEnum(request, &PotentialAnalysisRequest::sampling_method);
     runner.RequireEnum(request, &PotentialAnalysisRequest::estimator);
+    runner.RequireEnum(request, &PotentialAnalysisRequest::joint_search_method);
     if (request.estimator==PotentialEstimator::JOINT_COMPONENTS)
     {
         if (request.sampling_method!=SphereSamplingMethod::FibonacciDeterministic)
             runner.AddFieldValidationError(&PotentialAnalysisRequest::sampling_method,"Joint initialization requires Fibonacci sampling.");
         if (request.job_count>1) runner.AddFieldNormalizationWarning(&PotentialAnalysisRequest::job_count,"Joint initialization and fitting use one worker.");
         request.exclude_hydrogen=true;
+    }
+    else if (request.joint_search_method!=JointSearchMethod::LegacyCompact)
+    {
+        runner.AddFieldNormalizationWarning(&PotentialAnalysisRequest::joint_search_method,
+            "Joint search method is ignored for the two-stage estimator.");
+        request.joint_search_method=JointSearchMethod::LegacyCompact;
     }
 }
 
@@ -154,6 +161,7 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
     FitOptions options;
     options.thread_size = joint ? 1 : request.job_count;
     options.estimator = request.estimator;
+    options.joint_search_method = request.joint_search_method;
     options.sampling_method = request.sampling_method;
     options.exclude_hydrogen = request.exclude_hydrogen;
     options.enable_second_stage_failed_only_refinement = request.enable_second_stage_failed_only_refinement;
@@ -177,6 +185,7 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
         metadata.origin=map_object->GetOrigin(); metadata.simulation=request.simulation_flag;
         metadata.map_normalization=normalization;
         metadata.software=fit.metadata.software;
+        metadata.solver=fit.metadata.solver;
         model_object->EditAnalysis().UpdateJointMetadata(std::move(metadata));
 
     }

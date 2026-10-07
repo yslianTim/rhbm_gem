@@ -1,4 +1,5 @@
 #include "Problem.hpp"
+#include "FixedNeighborBlockCoordinate.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -117,10 +118,17 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
             auto context=ProfileContext(data.context,layout,static_cast<Eigen::Index>(view.rows.size())); context.independent_search=true; context.search=search_policy;
             const Vector y=SelectValues(data.y,IndicesOf(layout.informative_rows));
             const Vector start=SelectValues(widths,IndicesOf(layout.full_atoms));
-            auto search=SearchProfile(domain,y,start,context,observer,
-                progress_component ? &*progress_component : nullptr);
-            const auto result=AssessComponentSearch(domain,y,context,std::move(search),observer,
-                progress_component ? &*progress_component : nullptr);
+            ComponentResult result;
+            if(search_policy.method==SearchMethod::FixedNeighbor)
+                result=SolveFixedNeighborComponent(input,layout,view,data.y,widths,data.context,
+                    search_policy.fixed_neighbor,observer,progress_component ? &*progress_component : nullptr);
+            else
+            {
+                auto search=SearchProfile(domain,y,start,context,observer,
+                    progress_component ? &*progress_component : nullptr);
+                result=AssessComponentSearch(domain,y,context,std::move(search),observer,
+                    progress_component ? &*progress_component : nullptr);
+            }
             accepted_objective=result.search.accepted_objective;
             accepted_gradient_inf_norm=result.search.accepted_gradient_inf_norm;
             component.search_completed=result.search_success; component.stop_reason=result.search.stop_reason;

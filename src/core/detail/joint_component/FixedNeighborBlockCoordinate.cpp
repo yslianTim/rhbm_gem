@@ -81,15 +81,14 @@ JointState State(const Endpoint & endpoint,double scale)
         Values(endpoint.gradient),endpoint.certificate.objective/(scale*scale),{}};
 }
 void BuildEndpointResult(const JointProblem & problem,const ProblemData & data,const JointParameterLayout & layout,
-    const Domain & domain,VectorRef y,const EvaluationContext & context,FixedNeighborResult & out)
+    const Domain & domain,VectorRef y,const EvaluationContext & context,
+    const FixedNeighborSearchResult & search,FixedNeighborResult & out)
 {
+    out.assessment=search.assessment;
+    out.endpoint_trust=search.endpoint_trust;
+    out.endpoint_certified=search.endpoint_certified;
     const Vector eta=Select(out.state.eta,IndicesOf(layout.full_atoms));
     const Vector beta=SelectBeta(out.state.beta,layout.full_atoms);
-    const auto endpoint=EvaluateState(domain,y,eta,beta,context);
-    const auto reference=EvaluateProfile(domain,y,eta,true,&context);
-    out.assessment=AssessEvaluated(domain,y,endpoint,reference,context,true);
-    out.endpoint_trust=CheckTrust(domain,y,endpoint,context,reference);
-    out.endpoint_certified=out.endpoint_trust.passed;
 
     const auto & component_view=data.partition.components.front();
     JointComponentResult component; component.id=component_view.id;
@@ -146,23 +145,22 @@ int LocalUpdateBudget(FixedNeighborLocalWork work)
     }
     return 0;
 }
-FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef initial_eta,const FixedNeighborPolicy & policy)
+FixedNeighborSearchResult SearchFixedNeighborComponent(
+    const JointProblemInput & input,const JointParameterLayout & layout,const Domain & domain,
+    VectorRef observations,VectorRef y,VectorRef initial_eta,const EvaluationContext & context,
+    const FixedNeighborPolicy & policy)
 {
-    FixedNeighborResult out;
-    const auto & data=JointProblemAccess::Get(problem); const auto & input=*data.input; const auto & layout=data.layout;
+    FixedNeighborSearchResult out;
     if(initial_eta.size()!=static_cast<Eigen::Index>(input.atom_ids.size()) || !initial_eta.allFinite() ||
-        !(data.context.scale>0) || !std::isfinite(data.context.scale) || policy.core_atoms==0 ||
-        layout.groups.size()!=0 || layout.full_atoms.size()!=input.atom_ids.size() ||
-        layout.informative_rows.size()!=input.observations.size() || data.partition.components.size()!=1)
+        observations.size()!=static_cast<Eigen::Index>(input.observations.size()) || !observations.allFinite() ||
+        y.size()!=domain.rows || !y.allFinite() || !(context.scale>0) || !std::isfinite(context.scale) ||
+        policy.core_atoms==0 || layout.groups.size()!=0 || layout.full_atoms.size()!=input.atom_ids.size() ||
+        layout.informative_rows.size()!=input.observations.size() || domain.atoms.size()!=input.atom_ids.size())
     {out.reason="block-invalid-partition"; return out;}
     for(Eigen::Index a=0;a<initial_eta.size();++a)
         if(!(std::exp(initial_eta(a))>0) || !std::isfinite(std::exp(initial_eta(a))))
         {out.reason="block-invalid-partition"; return out;}
 
-    const VectorMap observations(data.y.data(),data.y.size());
-    const Domain domain=ProfileDomain(data.domain,layout);
-    const EvaluationContext context=ProfileContext(data.context,layout,data.domain.rows);
-    const Vector y=Select(observations,IndicesOf(layout.informative_rows));
     StructuralBlockPartition partition;
     try {partition=BuildStructuralBlockPartition(input,layout,policy.core_atoms);}
     catch(const std::exception &) {out.reason="block-invalid-partition"; return out;}
@@ -410,7 +408,11 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
         sweep.coordinate_confirmation_available=sweep_index>0;
         for(const auto & block:out.blocks) if(block.sweep==sweep_index+1)
         {
-            if(block.accepted) ++sweep.accepted_blocks;
+            if(block.accepted)
+            {
+                ++sweep.accepted_blocks;
+                sweep.accepted_local_updates+=static_cast<std::size_t>(block.accepted_updates);
+            }
             else if(block.status=="unchanged") ++sweep.unchanged_blocks;
         }
         sweep.wall_seconds=Seconds(sweep_started); out.sweeps.push_back(sweep);
@@ -437,7 +439,187 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
         }
     }
     if(!out.search_converged && out.reason.empty()) out.reason="block-sweep-budget";
-    if(policy.assess_final_endpoint) BuildEndpointResult(problem,data,layout,domain,y,context,out);
+    if(policy.assess_final_endpoint)
+    {
+        const auto endpoint=EvaluateState(domain,y,out.state.eta,out.state.beta,context);
+        const auto reference=EvaluateProfile(domain,y,out.state.eta,true,&context);
+        out.assessment=AssessEvaluated(domain,y,endpoint,reference,context,true);
+        out.endpoint_trust=CheckTrust(domain,y,endpoint,context,reference);
+        out.endpoint_certified=out.endpoint_trust.passed;
+    }
+    return out;
+}
+
+namespace {
+std::shared_ptr<const JointProblemInput> MakeFixedNeighborInput(
+    const JointProblemInput & parent,const JointParameterLayout & component_layout)
+{
+    auto input=std::make_shared<JointProblemInput>();
+    std::vector<Eigen::Index> row_to_local(parent.observations.size(),-1);
+    input->atom_ids.reserve(component_layout.full_atoms.size());
+    input->support.resize(component_layout.full_atoms.size());
+    for(std::size_t k=0;k<component_layout.informative_rows.size();++k)
+    {
+        const auto row=component_layout.informative_rows[k];
+        row_to_local.at(row)=static_cast<Eigen::Index>(k);
+        input->row_ids.push_back(parent.row_ids.at(row));
+        input->observations.push_back(parent.observations.at(row));
+    }
+    for(std::size_t k=0;k<component_layout.full_atoms.size();++k)
+    {
+        const auto atom=component_layout.full_atoms[k];
+        input->atom_ids.push_back(parent.atom_ids.at(atom));
+        for(const auto & support:parent.support.at(atom))
+        {
+            const auto row=row_to_local.at(support.row);
+            if(row>=0) input->support[k].push_back({static_cast<std::size_t>(row),support.squared_distance});
+        }
+    }
+    return input;
+}
+
+std::optional<double> LastFixedNeighborObjective(const FixedNeighborSearchResult & result)
+{
+    if(result.sweeps.empty()) return std::nullopt;
+    return result.sweeps.back().objective_after;
+}
+
+std::optional<double> LastFixedNeighborGradient(const FixedNeighborSearchResult & result)
+{
+    if(result.sweeps.empty()) return std::nullopt;
+    return result.sweeps.back().global_width_gradient_inf_norm;
+}
+}
+
+ComponentResult SolveFixedNeighborComponent(
+    const JointProblemInput & parent,const JointParameterLayout & component_layout,const ComponentView & view,
+    VectorRef observations,VectorRef initial_b,const EvaluationContext & parent_context,
+    const FixedNeighborSearchPolicy & production_policy,const JointProgressObserver & observer,
+    const JointProgressComponent * progress_component)
+{
+    ComponentResult out;
+    if(observations.size()!=static_cast<Eigen::Index>(parent.observations.size()))
+    {
+        out.search.stop_reason="invalid-initial-widths"; out.search.stopped=true; return out;
+    }
+    if(component_layout.full_atoms.empty() || component_layout.informative_rows.empty())
+    {
+        out.search.stop_reason=component_layout.full_atoms.empty() ? "analytic-nuisance-only" : "unobserved-full-parameters";
+        out.search.stopped=true;
+        return out;
+    }
+    for(const auto atom:component_layout.full_atoms)
+        if(atom>=static_cast<std::size_t>(initial_b.size()) || !std::isfinite(initial_b(static_cast<Eigen::Index>(atom))) ||
+            !(initial_b(static_cast<Eigen::Index>(atom))>0))
+        {
+            out.search.stop_reason="invalid-initial-widths"; out.search.stopped=true; return out;
+        }
+
+    const auto local_input=MakeFixedNeighborInput(parent,component_layout);
+    const JointParameterLayout local_layout=BuildParameterLayout(*local_input);
+    const Domain local_domain(local_input);
+    const VectorMap local_observations(local_input->observations.data(),
+        static_cast<Eigen::Index>(local_input->observations.size()));
+    const Vector local_y=local_observations;
+    auto context=parent_context;
+    context.atom_ids=parent_context.atom_ids.Select(IndicesOf(component_layout.full_atoms));
+    context.row_ids=parent_context.row_ids.Select(IndicesOf(component_layout.informative_rows));
+    context.independent_search=true;
+    const auto atom_count=static_cast<Eigen::Index>(component_layout.full_atoms.size());
+    context.rank={static_cast<Eigen::Index>(view.rows.size()),2*atom_count,atom_count};
+    context.linear.rank_relative=context.rank.Relative(2*atom_count);
+
+    Vector initial_eta(atom_count);
+    for(std::size_t k=0;k<component_layout.full_atoms.size();++k)
+        initial_eta(static_cast<Eigen::Index>(k))=std::log(initial_b(static_cast<Eigen::Index>(component_layout.full_atoms[k])));
+
+    FixedNeighborPolicy policy;
+    policy.core_atoms=production_policy.core_atoms;
+    policy.maximum_sweeps=production_policy.maximum_sweeps;
+    policy.order=production_policy.order;
+    policy.local_work=production_policy.local_work;
+    policy.assess_final_endpoint=true;
+    if(progress_component && observer)
+    {
+        policy.sweep_observer=[&observer,progress_component,&production_policy,context](
+            const FixedNeighborBlockSweep & sweep) {
+            auto event=MakeJointProgressEvent(JointProgressPhase::SearchProgress,*progress_component);
+            event.profile_evaluations=static_cast<int>(sweep.profile_evaluations);
+            event.profile_budget=context.profile_budget;
+            event.accepted_updates=static_cast<int>(sweep.accepted_blocks);
+            event.update_budget=static_cast<int>(sweep.block_solves);
+            event.elapsed_seconds=sweep.wall_seconds;
+            event.accepted_objective=sweep.objective_after;
+            event.accepted_gradient_inf_norm=sweep.global_width_gradient_inf_norm;
+            event.fixed_neighbor=JointFixedNeighborProgress{
+                sweep.sweep,production_policy.maximum_sweeps,sweep.block_solves,sweep.accepted_blocks,
+                sweep.accepted_local_updates,
+                sweep.objective_after,sweep.global_ac_kkt,sweep.global_width_gradient_inf_norm,sweep.eta_change_inf};
+            observer(event);
+        };
+    }
+    const auto result=SearchFixedNeighborComponent(*local_input,local_layout,local_domain,
+        local_observations,local_y,initial_eta,context,policy);
+    out.search.initial.eta=initial_eta; out.search.initial.beta=Vector::Zero(2*atom_count);
+    out.search.initial.valid=true; out.search.initial.certificate.evaluated=true;
+    out.search.eta=result.state.eta; out.search.stopped=!result.search_converged;
+    out.search.stop_reason=result.reason; out.search.lm_status=0;
+    out.search.accepted_objective=LastFixedNeighborObjective(result);
+    out.search.accepted_gradient_inf_norm=LastFixedNeighborGradient(result);
+    for(const auto & sweep:result.sweeps)
+    {
+        out.search.evaluations+=static_cast<int>(sweep.profile_evaluations);
+        out.search.seconds+=sweep.wall_seconds;
+        for(const auto & block:result.blocks)
+            if(block.sweep==sweep.sweep)
+            {
+                out.search.accepted+=block.accepted_updates;
+                out.search.references+=block.local_assessment_attempted ? 1 : 0;
+            }
+    }
+    out.assessment=result.assessment;
+    if(result.search_converged && !result.endpoint_certified)
+    {
+        out.search.stop_reason="endpoint-certification-failed";
+        out.search.stopped=true;
+    }
+    if(result.endpoint_certified)
+    {
+        out.endpoint_trust=result.endpoint_trust;
+        out.trusted_state=result.assessment.primary;
+        out.trusted_assessment=result.assessment;
+    }
+    out.search_success=result.search_converged && result.endpoint_certified;
+    if(progress_component)
+        NotifyJointProgress(observer,JointProgressPhase::CertificationStarted,*progress_component,
+            out.search.evaluations,parent_context.profile_budget,out.search.accepted,parent_context.update_budget,
+            out.search.seconds,out.search.stop_reason,out.trusted_state.has_value(),
+            out.search.accepted_objective,out.search.accepted_gradient_inf_norm);
+    return out;
+}
+
+FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef initial_eta,const FixedNeighborPolicy & policy)
+{
+    FixedNeighborResult out;
+    const auto & data=JointProblemAccess::Get(problem); const auto & input=*data.input; const auto & layout=data.layout;
+    if(initial_eta.size()!=static_cast<Eigen::Index>(input.atom_ids.size()) || !initial_eta.allFinite() ||
+        !(data.context.scale>0) || !std::isfinite(data.context.scale) || policy.core_atoms==0 ||
+        layout.groups.size()!=0 || layout.full_atoms.size()!=input.atom_ids.size() ||
+        layout.informative_rows.size()!=input.observations.size() || data.partition.components.size()!=1)
+    {out.reason="block-invalid-partition"; return out;}
+    for(Eigen::Index a=0;a<initial_eta.size();++a)
+        if(!(std::exp(initial_eta(a))>0) || !std::isfinite(std::exp(initial_eta(a))))
+        {out.reason="block-invalid-partition"; return out;}
+
+    const Domain domain=ProfileDomain(data.domain,layout);
+    const EvaluationContext context=ProfileContext(data.context,layout,data.domain.rows);
+    const Vector y=Select(data.y,IndicesOf(layout.informative_rows));
+    const auto search=SearchFixedNeighborComponent(*data.input,layout,domain,data.y,y,initial_eta,context,policy);
+    out.state=search.state; out.blocks=search.blocks; out.sweeps=search.sweeps;
+    out.search_converged=search.search_converged; out.reason=search.reason;
+    out.first_order_stationarity_sweep=search.first_order_stationarity_sweep;
+    out.confirmed_stationarity_sweep=search.confirmed_stationarity_sweep;
+    if(policy.assess_final_endpoint) BuildEndpointResult(problem,data,layout,domain,y,context,search,out);
     return out;
 }
 }

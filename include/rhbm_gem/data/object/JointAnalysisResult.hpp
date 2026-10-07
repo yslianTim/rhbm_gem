@@ -12,6 +12,12 @@ struct JointSoftwareProvenance
 {
     std::string version, source_sha256, configuration_sha256, build_sha256;
 };
+struct JointSolverProvenance
+{
+    std::string search_method;
+    std::optional<std::size_t> fixed_neighbor_core_atoms;
+    std::optional<std::string> fixed_neighbor_local_work;
+};
 struct JointAnalysisMetadata
 {
     std::string model_path, map_path;
@@ -22,6 +28,7 @@ struct JointAnalysisMetadata
     std::optional<JointMapNormalization> map_normalization;
     std::optional<std::string> model_sha256, map_sha256;
     std::optional<JointSoftwareProvenance> software;
+    std::optional<JointSolverProvenance> solver;
 };
 struct JointAnalysisComponent : JointComponentData
 {

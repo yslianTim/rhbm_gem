@@ -1,4 +1,5 @@
 #include "Numerics.hpp"
+#include "FixedNeighborBlockCoordinate.hpp"
 #include "ResourceWork.hpp"
 #include <algorithm>
 #include <map>
@@ -84,6 +85,15 @@ EvaluationContext ChildContext(const EvaluationContext & parent,const ComponentV
 ComponentResult SolveComponent(const ComponentView & view,VectorRef y,const Vector & initial_b,const EvaluationContext & parent,
     const JointProgressObserver & observer,const JointProgressComponent * progress_component)
 {
+    if(parent.search.method==SearchMethod::FixedNeighbor)
+    {
+        JointParameterLayout component_layout;
+        component_layout.full_atoms.assign(view.atoms.begin(),view.atoms.end());
+        component_layout.informative_rows.assign(view.rows.begin(),view.rows.end());
+        const auto snapshot=view.domain.atoms.Snapshot();
+        return SolveFixedNeighborComponent(*snapshot,component_layout,view,y,initial_b,parent,
+            parent.search.fixed_neighbor,observer,progress_component);
+    }
     const auto context=ChildContext(parent,view,true);
     const Vector start=SelectValues(initial_b,view.atoms);
     const bool contiguous=!view.rows.empty() && view.rows.back()-view.rows.front()+1==static_cast<Eigen::Index>(view.rows.size());

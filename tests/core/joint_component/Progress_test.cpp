@@ -538,6 +538,50 @@ TEST(JointProgressTest, LifecycleAndNumericsMatchForBothSearchPolicies)
     }
 }
 
+TEST(JointProgressTest, FixedNeighborUsesComponentRouteAndQualifiedDefaults)
+{
+    const core::JointProblem problem(MakeInput());
+    const std::vector<double> initial{.55, .55};
+    joint::SearchPolicy policy;
+    policy.method=joint::SearchMethod::FixedNeighbor;
+    std::vector<joint::JointProgressEvent> events;
+    const auto fit=joint::FitWithSearchPolicy(problem,initial,policy,
+        [&](const auto & event) { events.push_back(event); });
+
+    ASSERT_EQ(fit.components.size(),2u);
+    EXPECT_EQ(fit.solver_provenance.search_method,"fixed-neighbor");
+    EXPECT_EQ(fit.solver_provenance.fixed_neighbor_core_atoms,64u);
+    EXPECT_EQ(fit.solver_provenance.fixed_neighbor_local_work,"one-accepted");
+    ASSERT_TRUE(fit.assembled_state);
+    EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    const auto route=joint::ResolveJointSolverRoute(policy);
+    ASSERT_TRUE(events.front().solver_route);
+    EXPECT_EQ(events.front().solver_route->search_method,joint::SearchMethod::FixedNeighbor);
+    EXPECT_FALSE(events.front().solver_route->preconditioner);
+    EXPECT_EQ(events.front().solver_route->fixed_neighbor_core_atoms,64u);
+    ASSERT_TRUE(std::any_of(events.begin(),events.end(),[](const auto & event) {
+        return event.fixed_neighbor && event.fixed_neighbor->sweep>0;
+    }));
+    EXPECT_EQ(events.front().solver_route->fixed_neighbor_local_work,
+        route.fixed_neighbor_local_work);
+}
+
+TEST(JointProgressTest, FixedNeighborObservableComponentsShareAssemblyContract)
+{
+    const core::JointProblem problem(MakeObservableInput());
+    const std::vector<double> initial{.55,std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::quiet_NaN()};
+    joint::SearchPolicy policy;
+    policy.method=joint::SearchMethod::FixedNeighbor;
+    const auto fit=joint::FitWithSearchPolicy(problem,initial,policy);
+    ASSERT_EQ(problem.ParameterLayout().groups.size(),1u);
+    ASSERT_EQ(fit.components.size(),1u);
+    ASSERT_TRUE(fit.components.front().state);
+    ASSERT_TRUE(fit.assembled_state);
+    EXPECT_EQ(fit.components.front().layout->groups.size(),1u);
+    EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+}
+
 TEST(JointProgressTest, ObservableComponentsUseTheSameLifecycle)
 {
     const core::JointProblem problem(MakeObservableInput());
@@ -585,12 +629,12 @@ TEST(JointProgressTest, CliReporterFormatsResolvedSolverRoutes)
     const auto output = testing::internal::GetCapturedStdout();
     Logger::SetLogLevel(previous_level);
     const std::string sparse(joint::SparseBackendName(joint::ActiveSparseBackend()));
-    const auto legacy = output.find("[Joint] Solver route: sparse=" + sparse + " | width-search=LegacyCompact");
+    const auto legacy = output.find("[Joint] Solver route: sparse=" + sparse + " | search=legacy-compact");
     ASSERT_NE(legacy, std::string::npos);
     const auto legacy_line_end = output.find('\n', legacy);
     EXPECT_EQ(output.substr(legacy, legacy_line_end - legacy).find("preconditioner="), std::string::npos);
     EXPECT_NE(output.find("[Joint] Solver route: sparse=" + sparse
-        + " | width-search=OperatorPcg | preconditioner=Schwarz"), std::string::npos);
+        + " | search=operator-pcg | preconditioner=Schwarz"), std::string::npos);
 }
 
 TEST(JointProgressTest, CliReporterRefreshesPhasesAndFinishesLines)

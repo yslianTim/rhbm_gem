@@ -167,6 +167,10 @@ j::value OptionalText(const std::optional<std::string> & value)
 {return value ? j::value(*value) : j::value(nullptr);}
 std::optional<std::string> ReadOptionalText(const j::value & value)
 {return value.is_null() ? std::nullopt : std::optional<std::string>(j::value_to<std::string>(value));}
+j::value OptionalSize(std::optional<std::size_t> value)
+{return value ? j::value(*value) : j::value(nullptr);}
+std::optional<std::size_t> ReadOptionalSize(const j::value & value)
+{return value.is_null() ? std::nullopt : std::optional<std::size_t>(j::value_to<std::size_t>(value));}
 Object Units()
 {
     return {{"contract","joint-kernel-map-units-v1"},{"map_value","fit-map-unit"},
@@ -175,7 +179,7 @@ Object Units()
 }
 Object Metadata(const JointAnalysisMetadata & m)
 {
-    j::value normalization=nullptr,software=nullptr;
+    j::value normalization=nullptr,software=nullptr,solver=nullptr;
     if(m.map_normalization)
     {
         const auto & n=*m.map_normalization;
@@ -187,11 +191,19 @@ Object Metadata(const JointAnalysisMetadata & m)
         software=Object{{"version",p.version},{"source_sha256",p.source_sha256},
             {"configuration_sha256",p.configuration_sha256},{"build_sha256",p.build_sha256}};
     }
+    if(m.solver)
+    {
+        const auto & p=*m.solver;
+        solver=Object{{"search_method",p.search_method},
+            {"fixed_neighbor_core_atoms",OptionalSize(p.fixed_neighbor_core_atoms)},
+            {"fixed_neighbor_local_work",OptionalText(p.fixed_neighbor_local_work)}};
+    }
     return {{"model_path",m.model_path},{"map_path",m.map_path},
         {"grid_size",j::value_from(m.grid_size)},{"grid_spacing",j::value_from(m.grid_spacing)},
         {"origin",j::value_from(m.origin)},{"simulation",m.simulation},
         {"map_normalization",std::move(normalization)},{"model_sha256",OptionalText(m.model_sha256)},
-        {"map_sha256",OptionalText(m.map_sha256)},{"software",std::move(software)},{"units",Units()}};
+        {"map_sha256",OptionalText(m.map_sha256)},{"software",std::move(software)},
+        {"solver",std::move(solver)},{"units",Units()}};
 }
 JointAnalysisMetadata ReadMetadata(const Object & m)
 {
@@ -213,6 +225,15 @@ JointAnalysisMetadata ReadMetadata(const Object & m)
         out.software=JointSoftwareProvenance{Read<std::string>(p,"version"),Read<std::string>(p,"source_sha256"),
             Read<std::string>(p,"configuration_sha256"),Read<std::string>(p,"build_sha256")};
     }
+    if(m.contains("solver") && !m.at("solver").is_null())
+    {
+        const auto & p=m.at("solver").as_object();
+        out.solver=JointSolverProvenance{Read<std::string>(p,"search_method"),
+            p.contains("fixed_neighbor_core_atoms") ?
+                ReadOptionalSize(p.at("fixed_neighbor_core_atoms")) : std::nullopt,
+            p.contains("fixed_neighbor_local_work") ?
+                ReadOptionalText(p.at("fixed_neighbor_local_work")) : std::nullopt};
+    }
     return out;
 }
 void ValidateMetadata(const JointAnalysisMetadata & m)
@@ -224,6 +245,16 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
         const auto & p=*m.software;
         Require(!p.version.empty() && IsSha256(p.source_sha256) && IsSha256(p.configuration_sha256) &&
             IsSha256(p.build_sha256),"invalid software provenance");
+    }
+    if(m.solver)
+    {
+        const auto & p=*m.solver;
+        Require(p.search_method=="legacy-compact" || p.search_method=="operator-pcg" ||
+            p.search_method=="fixed-neighbor","invalid solver search method");
+        if(p.search_method=="fixed-neighbor")
+            Require(p.fixed_neighbor_core_atoms && *p.fixed_neighbor_core_atoms>0 &&
+                p.fixed_neighbor_local_work && !p.fixed_neighbor_local_work->empty(),
+                "incomplete fixed-neighbor provenance");
     }
     if(m.map_normalization)
     {

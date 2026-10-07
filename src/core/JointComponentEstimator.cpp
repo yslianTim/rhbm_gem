@@ -174,8 +174,22 @@ JointFitResult n::FitWithSearchPolicyImpl(const JointProblem & problem,const std
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
     const auto route=n::ResolveJointSolverRoute(search_policy);
     n::NotifyJointSolverConfigured(observer,route);
-    if(!problem.ParameterLayout().groups.empty()) return n::FitObservableComponents(problem,initial_b,search_policy,observer);
+    auto provenance=[&] {
+        JointSolverProvenance out;
+        out.search_method=std::string(n::SearchMethodToken(route.search_method));
+        out.fixed_neighbor_core_atoms=route.fixed_neighbor_core_atoms;
+        if(route.fixed_neighbor_local_work)
+            out.fixed_neighbor_local_work=std::string(n::FixedNeighborLocalWorkName(*route.fixed_neighbor_local_work));
+        return out;
+    };
+    if(!problem.ParameterLayout().groups.empty())
+    {
+        auto out=n::FitObservableComponents(problem,initial_b,search_policy,observer);
+        out.solver_provenance=provenance();
+        return out;
+    }
     const auto & data=JointProblemAccess::Get(problem); JointFitResult out; out.problem=problem;
+    out.solver_provenance=provenance();
     out.observation_scale=data.context.scale; out.initialization.b=initial_b;
     out.initialization.valid=initial_b.size()==data.domain.atoms.size() && std::all_of(initial_b.begin(),initial_b.end(),[](double b){return std::isfinite(b) && b>0;});
     out.initialization.reason=out.initialization.valid ? "valid-widths" : "invalid-widths";
@@ -275,6 +289,8 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
         RHBM_GEM_SIMULATION_SOURCE_SHA256,RHBM_GEM_SIMULATION_CONFIG_SHA256,
         RHBM_GEM_SIMULATION_BUILD_SHA256};
     out.metadata=std::move(metadata);
+    out.metadata.solver=fit.solver_provenance.search_method.empty() ? std::nullopt :
+        std::optional<JointSolverProvenance>{fit.solver_provenance};
     out.atom_ids=fit.problem->Input().atom_ids; out.row_ids=fit.problem->Input().row_ids;
     out.selection_domain=fit.problem->Input().selection_domain;
     out.initialization=fit.initialization; out.costs=fit.costs;

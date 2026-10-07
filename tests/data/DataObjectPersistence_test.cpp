@@ -507,6 +507,23 @@ TEST(DataObjectPersistenceTest, JointResultsRoundTripCopyClearAndReplaceAtomical
     EXPECT_EQ(data_test::CountRows(path,"model_joint_result"),0);
 }
 
+TEST(DataObjectPersistenceTest, JointSolverProvenanceRoundTripsAndMissingFieldRemainsReadable)
+{
+    namespace io=rg::joint_result_io;
+    auto fixed=SavedJointExample();
+    fixed.metadata.solver=rg::JointSolverProvenance{"fixed-neighbor",64u,"one-accepted"};
+    const auto decoded=io::Decode(io::Encode(fixed));
+    ASSERT_TRUE(decoded.metadata.solver);
+    EXPECT_EQ(decoded.metadata.solver->search_method,"fixed-neighbor");
+    EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_core_atoms,64u);
+    EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_local_work,"one-accepted");
+
+    auto old=boost::json::parse(io::Encode(fixed)).as_object();
+    old.at("metadata").as_object().erase("solver");
+    const auto legacy=io::Decode(boost::json::serialize(old));
+    EXPECT_FALSE(legacy.metadata.solver);
+}
+
 TEST(DataObjectPersistenceTest, JointContributorSubsetRoundTripsAndRejectsForeignOrHydrogenIds)
 {
     const command_test::ScopedTempDir dir{"joint_subset"};
