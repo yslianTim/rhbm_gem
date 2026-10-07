@@ -34,6 +34,7 @@ Shared fields:
 Command-specific fields:
 
 - `estimator` (default `PotentialEstimator::TWO_STAGE`)
+- `joint_search_method` (default `JointSearchMethod::LegacyCompact` for joint components)
 - `database_path`
 - `model_file_path`
 - `map_file_path`
@@ -166,6 +167,21 @@ those prepared samples in isolation and supplies First B plus seed provenance to
 target summary, post-fit peeling, uncertainty, and parameter-evidence group
 inference.
 
+Joint search is explicit and applies only to `JOINT_COMPONENTS`:
+
+```text
+--joint-search legacy-compact   # default
+--joint-search operator-pcg
+--joint-search fixed-neighbor
+```
+
+`FixedNeighbor` is a supported bounded-memory production route with the fixed
+core-64, forward, one-accepted-local-update policy documented in the
+[joint runtime contract](../joint-component-runtime.md). It is not an
+automatic fallback or size-based route. Supplying a non-default
+`joint_search_method` with `TWO_STAGE` produces a normalization warning and
+the two-stage estimator continues on its existing path.
+
 The standalone `EstimateJointComponents` convenience API remains available and
 keeps its model-copy and target writeback behavior.
 
@@ -185,6 +201,7 @@ normalization; other requests honor `--map-normalization`.
 ```cpp
 rhbm_gem::core::PotentialAnalysisRequest request;
 request.estimator = rhbm_gem::core::PotentialEstimator::JOINT_COMPONENTS;
+request.joint_search_method = rhbm_gem::core::JointSearchMethod::FixedNeighbor;
 request.model_file_path = "model.cif";
 request.map_file_path = "map.mrc";
 request.database_path = "joint.sqlite"; // new v19 database
@@ -196,6 +213,7 @@ auto completed = rhbm_gem::core::RunCommand(request);
 import rhbm_gem_module as gem
 request = gem.PotentialAnalysisRequest()
 request.estimator = gem.PotentialEstimator.JOINT_COMPONENTS
+request.joint_search_method = gem.JointSearchMethod.FIXED_NEIGHBOR
 request.model_file_path = "model.cif"
 request.map_file_path = "map.mrc"
 request.database_path = "joint.sqlite"
@@ -247,6 +265,14 @@ checked before and after loading. Paths remain descriptive, not content identity
 build SHA-256 fingerprints from the existing build-time generator. Loading or
 exporting a saved outcome preserves these values; it does not stamp the reader's
 version or access either input file.
+
+`metadata.solver` records the explicit route as `legacy-compact`, `operator-pcg`
+or `fixed-neighbor`. FixedNeighbor records
+`fixed_neighbor_core_atoms: 64` and
+`fixed_neighbor_local_work: "one-accepted"` for the production policy. The
+field is optional so schema-5 documents created before solver provenance was
+added remain readable and retain an unknown solver route rather than being
+rewritten.
 
 `metadata.map_normalization` is `{requested, applied, divisor}`. The operation is
 `fit_map = input_map / divisor`, with no mean subtraction. An applied operation

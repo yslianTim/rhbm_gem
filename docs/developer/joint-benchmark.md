@@ -38,6 +38,28 @@ as `chain-8` and `cube-8`. Fixed and solve also accept frozen fixture cases such
 as `baseline:first-stage-double` or `weak-1e-4:first-stage-double`. Workflow
 and postprocess cases are `full`, `halo`, and `multi`.
 
+### Production FixedNeighbor route
+
+FixedNeighbor is a supported production Joint search method, selected
+explicitly through `FitOptions::joint_search_method` or
+`potential_analysis --joint-search fixed-neighbor`. Its production policy is
+core size 64, forward serial Gauss-Seidel order, at most 30 sweeps, and one
+trusted accepted local `LegacyCompact` update per block visit. The benchmark
+and historical experiment drivers still expose broader controls for
+reproduction and attribution; those controls are diagnostic and are not
+production defaults. Search-only measurements remain search-only and cannot
+establish endpoint certification.
+
+The current matched synthetic frontier shows the intended trade-off rather
+than a performance gate: OperatorPcg is faster on the tested large cases,
+while FixedNeighbor materially reduces peak RSS through bounded local block
+factors. On cube-1024, the formal 600-second FixedNeighbor envelope timed out
+near convergence; an uncapped diagnostic run completed at about 769 seconds
+with peak RSS around 276 MiB, compared with about 221 seconds and 2681 MiB for
+OperatorPcg. The timeout is a wall-time/resource trade-off, not a numerical
+failure, and does not make FixedNeighbor the default. Search-only evidence
+through larger sizes must not be described as full endpoint certification.
+
 The `fixed` and `solve` profiles accept these internal policy controls:
 
 ```text

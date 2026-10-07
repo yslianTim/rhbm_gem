@@ -1,6 +1,12 @@
-# Fixed-neighbor joint search: experimental evidence
+# Fixed-neighbor joint search: qualification evidence
 
-FixedNeighbor remains an internal experimental search route. It is not part of the production main flow and does not change the default `LegacyCompact` method.
+This document records the historical qualification and resource evidence for
+FixedNeighbor. It is now a supported production Joint search method selected
+explicitly through `FitOptions::joint_search_method` or
+`--joint-search fixed-neighbor`; `LegacyCompact` remains the default and no
+automatic route selection is added. The broader Full/128-core and diagnostic
+controls described below remain historical reproduction controls, not the
+production policy.
 
 ## Fixed-B qualification
 
@@ -40,7 +46,11 @@ Formal 256/512/768/1024 nonlinear sweep scaling was stable for both topologies, 
 
 The [converged order campaign](figures/joint-fixed-neighbor-order-r1/README.md) passed: all five forward/reverse pairs confirmed convergence, maximum eta infinity difference was `3.75e-11`, maximum scaled A/C difference was `2.09e-12`, and fully assessed endpoint/runtime results agreed and passed through 512. Cube-1024 remains search-only. Coordinated/shared-parameter blocks remain deferred because the measured endpoints show no material order divergence, sweep growth, or observed persistent oscillation.
 
-FixedNeighbor remains an internal experimental route rather than a selectable estimator method. Large runs demonstrate bounded local factor width and confirmed search, but 1024/2048 did not receive full endpoint assessment and no matched large-size comparison establishes an end-to-end resource benefit. `LegacyCompact` remains the default; `CertifiedLocal` remains available for diagnostics and reproduction.
+The historical qualification established bounded local factor width and
+confirmed search, but 1024/2048 did not receive full endpoint assessment.
+Those results remain search-only evidence; they do not imply full estimator
+certification. `LegacyCompact` remains the default, and `CertifiedLocal`
+remains available only for diagnostics and reproduction.
 
 ## Local-work and core-size qualification
 
@@ -86,23 +96,25 @@ observation, not a demonstrated formal resource-survival case.
 The complete reports, route ranking, promotion gate, and provenance are in the
 [optimized frontier artifact](figures/joint-fixed-neighbor-optimized-frontier-r1/README.md).
 
-## Current route and promotion decision
+## Current supported route
 
-The P6 promotion gate is **deferred**. FixedNeighbor does not become a production or
-auto-selected route in this round:
+The P6 promotion decision is complete: FixedNeighbor is a supported production
+Joint search method, without a performance gate and without automatic routing.
+The selected production policy is core 64, forward serial Gauss-Seidel order,
+at most 30 sweeps, and one trusted accepted local `LegacyCompact` update per
+block visit. Existing replay, KKT, width-gradient, eta-confirmation and
+endpoint certification semantics remain unchanged.
 
-- `OperatorPcg` is the general fast route while it fits the formal resource envelope.
+- `OperatorPcg` is the general fast route and was fastest on the matched frontier.
 - `LegacyCompact` remains the compatibility/reference route and the production default.
-- `FixedNeighbor` remains an experimental, explicitly benchmarkable bounded-RSS route. Its
-  lower RSS is useful evidence, but no matched formal case required it to survive where
-  OperatorPcg failed.
+- `FixedNeighbor` is the explicitly selected bounded-memory block-coordinate route; its
+  lower RSS trades against longer wall time on the measured frontier.
 
-Atom-count auto-routing is deferred; no magic size threshold was introduced. Coordinated or
-shared-parameter blocks are also deferred because performance alone supplied no new
-convergence evidence. `CertifiedLocal` remains diagnostic-only and is not part of production
-semantics.
+Atom-count auto-routing is not introduced. Coordinated or shared-parameter
+blocks remain outside this policy, and `CertifiedLocal` remains diagnostic-only
+and is not part of production semantics.
 
-## Final verification for this round
+## Historical verification record
 
 - `cmake --build build/joint-spqr -j4`: passed.
 - P1 route, P3/P4/P5 policy, and P6 analyzer tests: 7/7 passed.
@@ -112,6 +124,13 @@ semantics.
   passed; the 213-test `rhbm_tests_joint_component` process reached the ctest 1500-second
   timeout without an assertion failure, while the remaining ten runtime tests passed.
 
-The observed timeout is retained as a regression result rather than being presented as a
-passing full suite. No production default or numerical threshold was changed by the
+This is retained as a historical regression record, not as the current runtime
+status. No production default or numerical threshold was changed by the
 performance experiments.
+
+## Current implementation verification
+
+The current production integration is covered by the runtime and persistence
+checks documented in the main [joint runtime contract](joint-component-runtime.md).
+The current `joint:runtime` lane is 11/11 green after the long frontier and
+diagnostic suites were separated into `joint:scalability`.
