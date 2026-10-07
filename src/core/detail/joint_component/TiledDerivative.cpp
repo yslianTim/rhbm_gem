@@ -7,6 +7,8 @@
 namespace rhbm_gem::core::joint_component {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 DerivativeWork & DerivativeWorkForTesting() {static thread_local DerivativeWork work; return work;}
+Eigen::Index & DerivativeTileRowsForTesting()
+{static thread_local Eigen::Index rows=derivative_tile_rows; return rows;}
 JacobianReductionKindForTesting & JacobianReductionForTesting()
 {static thread_local auto kind=JacobianReductionKindForTesting::ObservationTsqr; return kind;}
 ProjectedReductionKindForTesting & ProjectedReductionForTesting()

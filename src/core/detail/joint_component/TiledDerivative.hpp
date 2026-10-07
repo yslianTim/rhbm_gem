@@ -44,6 +44,7 @@ TiledDifferential PrepareDerivativeForTesting(const Evaluation &,double,const Ev
     Eigen::Index,bool);
 ReducedDifferential ReduceDerivativeForTesting(const TiledDifferential &,VectorRef,bool,
     JacobianReductionKindForTesting,Eigen::Index=derivative_tile_rows);
+Eigen::Index & DerivativeTileRowsForTesting();
 struct ProjectedReductionWorkForTesting
 {
     std::string kind{"observation-tiled-qr"},ordering{"none"},fallback_reason;

@@ -2,6 +2,7 @@
 #include "core/detail/joint_component/OperatorSearch.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/SparseFactor.hpp"
+#include "core/detail/joint_component/TiledDerivative.hpp"
 #include "support/JointOperatorWorkload.hpp"
 #include <boost/json.hpp>
 #include <Eigen/Core>
@@ -87,6 +88,14 @@ const char * LocalPreconditionerName(n::FixedNeighborLocalPreconditioner precond
     case n::FixedNeighborLocalPreconditioner::Schwarz: return "Schwarz";
     }
     return "Diagonal";
+}
+std::size_t DerivativeTileRows()
+{
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    return static_cast<std::size_t>(n::DerivativeTileRowsForTesting());
+#else
+    return static_cast<std::size_t>(n::derivative_tile_rows);
+#endif
 }
 j::array NumberArray(const n::Vector & values)
 {j::array out; for(Eigen::Index k=0;k<values.size();++k) out.push_back(Number(values(k))); return out;}
@@ -610,6 +619,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                 {"search_seconds",neighbor_search_seconds},
                 {"local_search_method",LocalSearchName(local_search)},
                 {"local_preconditioner",LocalPreconditionerName(local_preconditioner)},
+                {"derivative_tile_rows",DerivativeTileRows()},
                 {"local_operator_work",LocalOperatorWorkJson()},
                 {"local_trajectory_telemetry",attribution},
                 {"local_work_policy",LocalWorkName(local_work)},
@@ -640,6 +650,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     j::object neighbor_json{{"method","FixedNeighbor"},
         {"local_search_method",LocalSearchName(local_search)},
         {"local_preconditioner",LocalPreconditionerName(local_preconditioner)},
+        {"derivative_tile_rows",DerivativeTileRows()},
         {"search_converged",neighbor.search_converged},
         {"workspace_mode",reuse_block_workspace ? "persistent" : "fresh-per-block-visit"},
         {"block_order",reverse_order ? "reverse" : "forward"},
@@ -752,18 +763,22 @@ int main(int argc,char ** argv)
             std::string(argv[1])!="--inexact-one-search" && std::string(argv[1])!="--matched-control" &&
             std::string(argv[1])!="--local-legacy" &&
             std::string(argv[1])!="--local-operator-identity" && std::string(argv[1])!="--local-operator-diagonal" &&
-            std::string(argv[1])!="--local-operator-schwarz" &&
+            std::string(argv[1])!="--local-operator-schwarz" && std::string(argv[1])!="--tile-1024" &&
+            std::string(argv[1])!="--tile-2048" && std::string(argv[1])!="--tile-4096" &&
+            std::string(argv[1])!="--tile-8192" && std::string(argv[1])!="--tile-16384" &&
             std::string(argv[1])!="--neighbor-forward" && std::string(argv[1])!="--neighbor-reverse" &&
             std::string(argv[1])!="--scaling-forward" && std::string(argv[1])!="--scaling-reverse"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--matched-control|--local-legacy|--local-operator-identity|--local-operator-diagonal|--local-operator-schwarz|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [CORE_ATOMS]");
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--matched-control|--local-legacy|--local-operator-identity|--local-operator-diagonal|--local-operator-schwarz|--tile-1024|--tile-2048|--tile-4096|--tile-8192|--tile-16384|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [CORE_ATOMS]");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
         const std::string mode(argv[1]);
         const bool local_operator_mode=mode=="--local-operator-identity" || mode=="--local-operator-diagonal" ||
             mode=="--local-operator-schwarz";
-        const bool local_search_mode=mode=="--inexact-one-search" || mode=="--local-legacy" || local_operator_mode;
-        const bool local_qualification_mode=mode=="--local-legacy" || local_operator_mode;
+        const bool tile_mode=mode=="--tile-1024" || mode=="--tile-2048" || mode=="--tile-4096" ||
+            mode=="--tile-8192" || mode=="--tile-16384";
+        const bool local_search_mode=mode=="--inexact-one-search" || mode=="--local-legacy" || local_operator_mode || tile_mode;
+        const bool local_qualification_mode=mode=="--local-legacy" || local_operator_mode || tile_mode;
         if(argc==6 && !local_search_mode && mode!="--matched-control")
             throw std::invalid_argument("CORE_ATOMS is supported only with --inexact-one-search, local operator modes, or --matched-control.");
         const std::size_t core_atoms=argc==6 ? static_cast<std::size_t>(std::stoul(argv[5])) : 128;
@@ -773,6 +788,11 @@ int main(int argc,char ** argv)
         const auto local_preconditioner=mode=="--local-operator-identity" ? n::FixedNeighborLocalPreconditioner::Identity :
             mode=="--local-operator-schwarz" ? n::FixedNeighborLocalPreconditioner::Schwarz :
             n::FixedNeighborLocalPreconditioner::Diagonal;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(tile_mode)
+            n::DerivativeTileRowsForTesting()=mode=="--tile-1024" ? 1024 : mode=="--tile-2048" ? 2048 :
+                mode=="--tile-4096" ? 4096 : mode=="--tile-16384" ? 16384 : 8192;
+#endif
         Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--case",mode=="--decompose",
             mode=="--certified-local",mode=="--qualification",
             mode=="--scaling-only" || mode=="--attribution" || mode=="--scaling-forward" || mode=="--scaling-reverse" ||
