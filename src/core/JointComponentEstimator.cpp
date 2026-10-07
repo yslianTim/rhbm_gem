@@ -224,7 +224,7 @@ JointFitResult n::FitWithSearchPolicyImpl(const JointProblem & problem,const std
             JointParameterLayout component_layout;
             component_layout.full_atoms.assign(view.atoms.begin(),view.atoms.end());
             component_layout.informative_rows.assign(view.rows.begin(),view.rows.end());
-            result=n::SolveComponentWithSearchPolicy(*data.input,data.domain,view,component_layout,data.y,b,
+            result=n::SolveComponentWithSearchPolicy(data.domain,view,component_layout,data.y,b,
                 search_context,search_policy,observer,progress_component ? &*progress_component : nullptr);
         }
         else {result.search.stopped=true; result.search.stop_reason="invalid-initial-widths";}

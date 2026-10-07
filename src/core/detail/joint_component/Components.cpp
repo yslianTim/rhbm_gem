@@ -64,6 +64,46 @@ ComponentPartition Partition(const Domain & domain,const Identities & ids)
     }
     return out;
 }
+PreparedComponent PrepareComponent(const JointParameterLayout & parent_layout,const ComponentView & view)
+{
+    const auto parent=view.domain.atoms.Snapshot();
+    auto input=std::make_shared<JointProblemInput>();
+    std::vector<Eigen::Index> row_to_local(parent->observations.size(),-1);
+    input->atom_ids.reserve(parent_layout.full_atoms.size());
+    input->support.resize(parent_layout.full_atoms.size());
+    PreparedComponent out;
+    out.input=input; out.parent_layout=parent_layout; out.view=view;
+    out.local_to_parent_atoms.reserve(parent_layout.full_atoms.size());
+    out.local_to_parent_rows.reserve(parent_layout.informative_rows.size());
+    out.parent_to_local_atoms.assign(parent->atom_ids.size(),-1);
+    out.parent_to_local_rows.assign(parent->observations.size(),-1);
+    for(std::size_t k=0;k<parent_layout.informative_rows.size();++k)
+    {
+        const auto row=parent_layout.informative_rows[k];
+        row_to_local.at(row)=static_cast<Eigen::Index>(k);
+        input->row_ids.push_back(parent->row_ids.at(row));
+        input->observations.push_back(parent->observations.at(row));
+        out.local_to_parent_rows.push_back(static_cast<Eigen::Index>(row));
+        out.parent_to_local_rows.at(row)=static_cast<Eigen::Index>(k);
+        out.local_layout.informative_rows.push_back(k);
+    }
+    for(std::size_t k=0;k<parent_layout.full_atoms.size();++k)
+    {
+        const auto atom=parent_layout.full_atoms[k];
+        input->atom_ids.push_back(parent->atom_ids.at(atom));
+        out.local_to_parent_atoms.push_back(static_cast<Eigen::Index>(atom));
+        out.parent_to_local_atoms.at(atom)=static_cast<Eigen::Index>(k);
+        out.local_layout.full_atoms.push_back(k);
+        for(const auto & support:parent->support.at(atom))
+        {
+            const auto row=row_to_local.at(support.row);
+            if(row>=0) input->support[k].push_back({static_cast<std::size_t>(row),support.squared_distance});
+        }
+    }
+    out.domain=Domain(input);
+    out.atom_ids=Identities(input->atom_ids); out.row_ids=Identities(input->row_ids);
+    return out;
+}
 Eigen::VectorXd SelectValues(VectorRef v,const std::vector<Eigen::Index> & indices)
 {Eigen::VectorXd out(static_cast<Eigen::Index>(indices.size())); for(std::size_t k=0;k<indices.size();++k) out(static_cast<Eigen::Index>(k))=v(indices[k]); return out;}
 EvaluationContext ChildContext(const EvaluationContext & parent,const ComponentView & view,bool independent)
@@ -86,14 +126,15 @@ EvaluationContext ChildContext(const EvaluationContext & parent,const ComponentV
     return c;
 }
 ComponentResult SolveComponentWithSearchPolicy(
-    const JointProblemInput & input,const Domain & parent_domain,const ComponentView & view,
+    const Domain & parent_domain,const ComponentView & view,
     const JointParameterLayout & component_layout,VectorRef parent_observations,const Vector & initial_b,
     const EvaluationContext & parent_context,const SearchPolicy & search_policy,
     const JointProgressObserver & observer,const JointProgressComponent * progress_component)
 {
     if(search_policy.method==SearchMethod::FixedNeighbor)
     {
-        return SolveFixedNeighborComponent(input,component_layout,view,parent_observations,initial_b,parent_context,
+        const auto prepared=PrepareComponent(component_layout,view);
+        return SolveFixedNeighborComponent(prepared,initial_b,parent_context,
             search_policy.fixed_neighbor,observer,progress_component);
     }
     const bool exact_view=component_layout.groups.empty() && component_layout.full_atoms.size()==view.atoms.size() &&
@@ -117,7 +158,7 @@ ComponentResult SolveComponent(const ComponentView & view,VectorRef y,const Vect
     JointParameterLayout component_layout;
     component_layout.full_atoms.assign(view.atoms.begin(),view.atoms.end());
     component_layout.informative_rows.assign(view.rows.begin(),view.rows.end());
-    return SolveComponentWithSearchPolicy(*snapshot,parent_domain,view,component_layout,y,initial_b,parent,parent.search,
+    return SolveComponentWithSearchPolicy(parent_domain,view,component_layout,y,initial_b,parent,parent.search,
         observer,progress_component);
 }
 ComponentResult AssessComponentSearch(const Domain & domain,VectorRef y,const EvaluationContext & context,SearchResult search,

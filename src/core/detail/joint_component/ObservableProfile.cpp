@@ -114,7 +114,7 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
         }
         else if(valid && !layout.informative_rows.empty())
         {
-            const ComponentResult result=SolveComponentWithSearchPolicy(input,data.domain,view,layout,data.y,widths,
+            const ComponentResult result=SolveComponentWithSearchPolicy(data.domain,view,layout,data.y,widths,
                 data.context,search_policy,observer,progress_component ? &*progress_component : nullptr);
             accepted_objective=result.search.accepted_objective;
             accepted_gradient_inf_norm=result.search.accepted_gradient_inf_norm;

@@ -4,6 +4,7 @@
 #include <functional>
 
 namespace rhbm_gem::core::joint_component {
+struct PreparedComponent;
 struct FixedNeighborProfileTrial
 {
     std::size_t trial_index{};
@@ -105,8 +106,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     const JointProblemInput &,const JointParameterLayout &,const Domain &,VectorRef observations,
     VectorRef y,VectorRef initial_eta,const EvaluationContext &,const FixedNeighborPolicy & = {});
 ComponentResult SolveFixedNeighborComponent(
-    const JointProblemInput &,const JointParameterLayout &,const ComponentView &,VectorRef observations,
-    VectorRef initial_b,const EvaluationContext &,const FixedNeighborSearchPolicy &,
+    const PreparedComponent &,VectorRef initial_b,const EvaluationContext &,const FixedNeighborSearchPolicy &,
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
 FixedNeighborResult SearchFixedNeighbor(const JointProblem &,VectorRef initial_eta,
     const FixedNeighborPolicy & = {});

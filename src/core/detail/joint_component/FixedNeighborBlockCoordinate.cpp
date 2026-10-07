@@ -465,33 +465,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 }
 
 namespace {
-std::shared_ptr<const JointProblemInput> MakeFixedNeighborInput(
-    const JointProblemInput & parent,const JointParameterLayout & component_layout)
-{
-    auto input=std::make_shared<JointProblemInput>();
-    std::vector<Eigen::Index> row_to_local(parent.observations.size(),-1);
-    input->atom_ids.reserve(component_layout.full_atoms.size());
-    input->support.resize(component_layout.full_atoms.size());
-    for(std::size_t k=0;k<component_layout.informative_rows.size();++k)
-    {
-        const auto row=component_layout.informative_rows[k];
-        row_to_local.at(row)=static_cast<Eigen::Index>(k);
-        input->row_ids.push_back(parent.row_ids.at(row));
-        input->observations.push_back(parent.observations.at(row));
-    }
-    for(std::size_t k=0;k<component_layout.full_atoms.size();++k)
-    {
-        const auto atom=component_layout.full_atoms[k];
-        input->atom_ids.push_back(parent.atom_ids.at(atom));
-        for(const auto & support:parent.support.at(atom))
-        {
-            const auto row=row_to_local.at(support.row);
-            if(row>=0) input->support[k].push_back({static_cast<std::size_t>(row),support.squared_distance});
-        }
-    }
-    return input;
-}
-
 std::optional<double> LastFixedNeighborObjective(const FixedNeighborSearchResult & result)
 {
     if(result.final_sweep) return result.final_sweep->objective_after;
@@ -506,16 +479,12 @@ std::optional<double> LastFixedNeighborGradient(const FixedNeighborSearchResult 
 }
 
 ComponentResult SolveFixedNeighborComponent(
-    const JointProblemInput & parent,const JointParameterLayout & component_layout,const ComponentView & view,
-    VectorRef observations,VectorRef initial_b,const EvaluationContext & parent_context,
+    const PreparedComponent & prepared,VectorRef initial_b,const EvaluationContext & parent_context,
     const FixedNeighborSearchPolicy & production_policy,const JointProgressObserver & observer,
     const JointProgressComponent * progress_component)
 {
     ComponentResult out;
-    if(observations.size()!=static_cast<Eigen::Index>(parent.observations.size()))
-    {
-        out.search.stop_reason="invalid-initial-widths"; out.search.stopped=true; return out;
-    }
+    const auto & component_layout=prepared.parent_layout; const auto & view=prepared.view;
     if(component_layout.full_atoms.empty() || component_layout.informative_rows.empty())
     {
         out.search.stop_reason=component_layout.full_atoms.empty() ? "analytic-nuisance-only" : "unobserved-full-parameters";
@@ -529,23 +498,21 @@ ComponentResult SolveFixedNeighborComponent(
             out.search.stop_reason="invalid-initial-widths"; out.search.stopped=true; return out;
         }
 
-    const auto local_input=MakeFixedNeighborInput(parent,component_layout);
-    const JointParameterLayout local_layout=BuildParameterLayout(*local_input);
-    const Domain local_domain(local_input);
+    const auto & local_input=prepared.input; const auto & local_layout=prepared.local_layout;
+    const auto & local_domain=prepared.domain;
     const VectorMap local_observations(local_input->observations.data(),
         static_cast<Eigen::Index>(local_input->observations.size()));
     const Vector local_y=local_observations;
     auto context=parent_context;
-    context.atom_ids=parent_context.atom_ids.Select(IndicesOf(component_layout.full_atoms));
-    context.row_ids=parent_context.row_ids.Select(IndicesOf(component_layout.informative_rows));
+    context.atom_ids=prepared.atom_ids; context.row_ids=prepared.row_ids;
     context.independent_search=true;
     const auto atom_count=static_cast<Eigen::Index>(component_layout.full_atoms.size());
     context.rank={static_cast<Eigen::Index>(view.rows.size()),2*atom_count,atom_count};
     context.linear.rank_relative=context.rank.Relative(2*atom_count);
 
     Vector initial_eta(atom_count);
-    for(std::size_t k=0;k<component_layout.full_atoms.size();++k)
-        initial_eta(static_cast<Eigen::Index>(k))=std::log(initial_b(static_cast<Eigen::Index>(component_layout.full_atoms[k])));
+    for(std::size_t k=0;k<prepared.local_to_parent_atoms.size();++k)
+        initial_eta(static_cast<Eigen::Index>(k))=std::log(initial_b(prepared.local_to_parent_atoms[k]));
 
     FixedNeighborPolicy policy;
     policy.core_atoms=production_policy.core_atoms;

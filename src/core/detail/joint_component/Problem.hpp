@@ -16,8 +16,18 @@ struct ProblemData
         y(input->observations.data(),static_cast<Eigen::Index>(input->observations.size())) {}
 };
 JointParameterLayout BuildParameterLayout(const JointProblemInput &);
+struct PreparedComponent
+{
+    std::shared_ptr<const JointProblemInput> input;
+    JointParameterLayout parent_layout,local_layout;
+    ComponentView view;
+    Domain domain{0,{}};
+    Indices local_to_parent_atoms,local_to_parent_rows,parent_to_local_atoms,parent_to_local_rows;
+    Identities atom_ids,row_ids;
+};
+PreparedComponent PrepareComponent(const JointParameterLayout &,const ComponentView &);
 ComponentResult SolveComponentWithSearchPolicy(
-    const JointProblemInput &,const Domain &,const ComponentView &,const JointParameterLayout &,
+    const Domain &,const ComponentView &,const JointParameterLayout &,
     VectorRef,const Vector &,const EvaluationContext &,const SearchPolicy &,const JointProgressObserver & = {},
     const JointProgressComponent * = nullptr);
 JointFitResult FitObservableComponents(const JointProblem &,const std::vector<double> &,const SearchPolicy & = {},

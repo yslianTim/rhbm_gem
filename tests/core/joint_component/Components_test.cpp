@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include "support/JointComponentChecks.hpp"
 #include "support/CommandTestHelpers.hpp"
+#include "core/detail/joint_component/Problem.hpp"
+#include <algorithm>
 #include <fstream>
 
 namespace {
@@ -74,6 +76,66 @@ TEST(JointComponentChecksTest, PartitionIDsSurviveStoragePermutationAndRejectMal
     for(std::size_t k=0;k<x.components.size();++k) EXPECT_EQ(x.components[k].id,y.components[k].id);
     EXPECT_THROW(p::BuildPartition(p::Domain(1,{{{0,1},{0,1}}}),{"A"}),std::invalid_argument);
     EXPECT_THROW(p::BuildPartition(p::Domain(1,{{{1,1}}}),{"A"}),std::invalid_argument);
+}
+
+TEST(JointComponentChecksTest, PreparedComponentMappingsRoundTripAcrossComponentsAndHaloLayout)
+{
+    using rhbm_gem::core::JointProblem;
+    using rhbm_gem::core::JointProblemInput;
+    namespace n=rhbm_gem::core::joint_component;
+    const auto component_layout=[](const auto & parent,const auto & view) {
+        rhbm_gem::JointParameterLayout out;
+        for(const auto atom:parent.full_atoms) if(view.LocalAtom(static_cast<Eigen::Index>(atom))>=0) out.full_atoms.push_back(atom);
+        for(const auto row:parent.informative_rows) if(view.LocalRow(static_cast<Eigen::Index>(row))>=0) out.informative_rows.push_back(row);
+        for(const auto & group:parent.groups) if(view.LocalRow(static_cast<Eigen::Index>(group.row))>=0) out.groups.push_back(group);
+        return out;
+    };
+    const auto check=[&](JointProblem problem) {
+        const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+        for(const auto & view:data.partition.components)
+        {
+            const auto layout=component_layout(data.layout,view);
+            const auto prepared=n::PrepareComponent(layout,view);
+            ASSERT_EQ(prepared.local_to_parent_atoms.size(),prepared.local_layout.full_atoms.size());
+            ASSERT_EQ(prepared.local_to_parent_rows.size(),prepared.local_layout.informative_rows.size());
+            for(std::size_t local=0;local<prepared.local_to_parent_atoms.size();++local)
+            {
+                const auto parent=prepared.local_to_parent_atoms[local];
+                EXPECT_EQ(prepared.parent_to_local_atoms[static_cast<std::size_t>(parent)],static_cast<Eigen::Index>(local));
+                EXPECT_EQ(prepared.atom_ids[local],data.input->atom_ids[static_cast<std::size_t>(parent)]);
+            }
+            for(std::size_t local=0;local<prepared.local_to_parent_rows.size();++local)
+            {
+                const auto parent=prepared.local_to_parent_rows[local];
+                EXPECT_EQ(prepared.parent_to_local_rows[static_cast<std::size_t>(parent)],static_cast<Eigen::Index>(local));
+                EXPECT_EQ(prepared.row_ids[local],data.input->row_ids[static_cast<std::size_t>(parent)]);
+            }
+            for(const auto atom:view.atoms)
+            {
+                const bool included=std::find(layout.full_atoms.begin(),layout.full_atoms.end(),static_cast<std::size_t>(atom))!=layout.full_atoms.end();
+                EXPECT_EQ(prepared.parent_to_local_atoms[static_cast<std::size_t>(atom)]>=0,included);
+            }
+            for(const auto row:view.rows)
+            {
+                const bool included=std::find(layout.informative_rows.begin(),layout.informative_rows.end(),static_cast<std::size_t>(row))!=layout.informative_rows.end();
+                EXPECT_EQ(prepared.parent_to_local_rows[static_cast<std::size_t>(row)]>=0,included);
+            }
+            EXPECT_EQ(prepared.domain.atoms.size(),prepared.input->atom_ids.size());
+            EXPECT_EQ(prepared.domain.rows,static_cast<Eigen::Index>(prepared.input->observations.size()));
+        }
+    };
+
+    JointProblemInput disconnected;
+    disconnected.atom_ids={"a","b","c"}; disconnected.row_ids={"r0","r1","r2"};
+    disconnected.observations={1,2,3}; disconnected.support={{{0,0}},{{1,1}},{{2,2}}};
+    check(JointProblem(std::move(disconnected)));
+
+    JointProblemInput observable;
+    observable.atom_ids={"target","halo","other"}; observable.row_ids={"r0","r1","r2"};
+    observable.observations={1,2,3}; observable.support={{{0,0},{1,1}},{{0,1}},{{2,2}}};
+    observable.selection_domain=rhbm_gem::JointSelectionDomain{};
+    observable.selection_domain->target_indices={0,2};
+    check(JointProblem(std::move(observable)));
 }
 
 TEST(JointComponentChecksTest, RegisteredAuditDoesNotShrinkWithAComponent)
