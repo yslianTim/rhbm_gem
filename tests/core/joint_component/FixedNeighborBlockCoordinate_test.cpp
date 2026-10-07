@@ -184,6 +184,10 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutp
     EXPECT_EQ(quiet.sweep_count,diagnostic.sweep_count);
     EXPECT_EQ(quiet.total_block_solves,diagnostic.total_block_solves);
     EXPECT_EQ(quiet.total_profile_evaluations,diagnostic.total_profile_evaluations);
+    EXPECT_EQ(quiet.block_preparations,2u);
+    EXPECT_EQ(quiet.domain_preparations,quiet.block_preparations);
+    EXPECT_EQ(quiet.mapping_preparations,quiet.block_preparations);
+    EXPECT_EQ(diagnostic.block_preparations,quiet.block_preparations);
     EXPECT_EQ(quiet.reason,diagnostic.reason);
     EXPECT_EQ(quiet.search_converged,diagnostic.search_converged);
     EXPECT_EQ(quiet.endpoint_certified,diagnostic.endpoint_certified);

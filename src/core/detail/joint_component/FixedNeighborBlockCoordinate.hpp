@@ -52,6 +52,15 @@ struct FixedNeighborDiagnosticSink
     std::function<void(const FixedNeighborBlockRecord &)> block;
     std::function<void(const FixedNeighborBlockSweep &)> sweep;
 };
+struct PreparedFixedNeighborBlock
+{
+    std::size_t block{};
+    Indices core_atoms,affected_rows,profile_atoms,profile_rows;
+    std::shared_ptr<const Indices> row_mapping;
+    Domain domain{0,{}};
+    EvaluationContext context;
+    Eigen::Index local_atoms{};
+};
 struct FixedNeighborPolicy
 {
     std::size_t core_atoms{128},maximum_sweeps{30};
@@ -77,6 +86,7 @@ struct FixedNeighborResult
     bool search_converged{},endpoint_certified{};
     std::string reason;
     std::size_t first_order_stationarity_sweep{},confirmed_stationarity_sweep{};
+    std::size_t block_preparations{},domain_preparations{},mapping_preparations{};
     Assessment assessment;
     TrustEvidence endpoint_trust;
     JointFitResult fit;
@@ -93,7 +103,7 @@ struct FixedNeighborSearchResult
     std::string reason;
     std::size_t first_order_stationarity_sweep{},confirmed_stationarity_sweep{};
     std::size_t sweep_count{},total_block_solves{},total_profile_evaluations{},total_local_assessments{},
-        total_accepted_local_updates{};
+        total_accepted_local_updates{},block_preparations{},domain_preparations{},mapping_preparations{};
     double search_seconds{};
     std::optional<FixedNeighborBlockSweep> final_sweep;
     Assessment assessment;

@@ -172,6 +172,47 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     Indices atom_position(input.atom_ids.size(),-1),row_position(input.observations.size(),-1);
     for(std::size_t k=0;k<layout.full_atoms.size();++k) atom_position.at(layout.full_atoms[k])=static_cast<Eigen::Index>(k);
     for(std::size_t k=0;k<layout.informative_rows.size();++k) row_position.at(layout.informative_rows[k])=static_cast<Eigen::Index>(k);
+    std::vector<PreparedFixedNeighborBlock> prepared_blocks;
+    prepared_blocks.reserve(partition.cores.size());
+    const int local_update_budget=LocalUpdateBudget(policy.local_work);
+    for(std::size_t block_index=0;block_index<partition.cores.size();++block_index)
+    {
+        const auto & core=partition.cores[block_index]; PreparedFixedNeighborBlock prepared;
+        prepared.block=block_index; prepared.core_atoms=core.atoms; prepared.affected_rows=core.affected_rows;
+        prepared.profile_atoms.reserve(core.atoms.size()); prepared.profile_rows.reserve(core.affected_rows.size());
+        for(auto atom:core.atoms)
+        {
+            const auto position=atom_position.at(static_cast<std::size_t>(atom));
+            if(position<0) {out.reason="block-invalid-partition"; return out;}
+            prepared.profile_atoms.push_back(position);
+        }
+        for(auto row:core.affected_rows)
+        {
+            const auto position=row_position.at(static_cast<std::size_t>(row));
+            if(position<0) {out.reason="block-invalid-partition"; return out;}
+            prepared.profile_rows.push_back(position);
+        }
+        std::vector<Eigen::Index> row_mapping(static_cast<std::size_t>(domain.rows),-1);
+        for(std::size_t k=0;k<prepared.profile_rows.size();++k)
+            row_mapping.at(static_cast<std::size_t>(prepared.profile_rows[k]))=static_cast<Eigen::Index>(k);
+        prepared.row_mapping=std::make_shared<Indices>(std::move(row_mapping));
+        prepared.domain=domain.Select(prepared.profile_atoms,
+            static_cast<Eigen::Index>(prepared.profile_rows.size()),prepared.row_mapping);
+        prepared.context=context;
+        prepared.context.atom_ids=context.atom_ids.Select(prepared.profile_atoms);
+        prepared.context.row_ids=context.row_ids.Select(prepared.profile_rows);
+        prepared.context.independent_search=true;
+        prepared.local_atoms=static_cast<Eigen::Index>(prepared.profile_atoms.size());
+        prepared.context.rank={prepared.domain.rows,2*prepared.local_atoms,prepared.local_atoms};
+        prepared.context.linear.rank_relative=prepared.context.rank.Relative(2*prepared.local_atoms);
+        prepared.context.search=SearchPolicy{};
+        prepared.context.search.method=SearchMethod::LegacyCompact;
+        if(local_update_budget>0) prepared.context.update_budget=local_update_budget;
+        prepared_blocks.push_back(std::move(prepared));
+    }
+    out.block_preparations=prepared_blocks.size();
+    out.domain_preparations=prepared_blocks.size();
+    out.mapping_preparations=prepared_blocks.size();
     std::vector<std::size_t> order(partition.cores.size()); std::iota(order.begin(),order.end(),0);
     if(policy.order==FixedNeighborBlockOrder::Reverse) std::reverse(order.begin(),order.end());
     const bool retain_diagnostics=policy.collect_diagnostics || policy.capture_local_trajectory ||
@@ -195,51 +236,27 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         };
         for(auto block_index:order)
         {
-            const auto & core=partition.cores[block_index]; FixedNeighborBlockRecord record;
-            record.sweep=sweep_index+1; record.block=block_index+1; record.core_atoms=core.atoms;
-            record.affected_rows=core.affected_rows.size(); record.objective_before=out.state.objective;
-            Indices profile_atoms,profile_rows; profile_atoms.reserve(core.atoms.size()); profile_rows.reserve(core.affected_rows.size());
-            for(auto atom:core.atoms)
-            {
-                const auto position=atom_position.at(static_cast<std::size_t>(atom));
-                if(position<0) {out.reason="block-invalid-partition"; stop=true; break;}
-                profile_atoms.push_back(position);
-            }
-            if(stop) break;
-            for(auto row:core.affected_rows)
-            {
-                const auto position=row_position.at(static_cast<std::size_t>(row));
-                if(position<0) {out.reason="block-invalid-partition"; stop=true; break;}
-                profile_rows.push_back(position);
-            }
-            if(stop) break;
-            std::vector<Eigen::Index> row_mapping(static_cast<std::size_t>(domain.rows),-1);
-            for(std::size_t k=0;k<profile_rows.size();++k) row_mapping.at(static_cast<std::size_t>(profile_rows[k]))=static_cast<Eigen::Index>(k);
-            auto mapping=std::make_shared<Indices>(std::move(row_mapping));
-            const Domain local_domain=domain.Select(profile_atoms,static_cast<Eigen::Index>(profile_rows.size()),mapping);
-            auto local_context=context; local_context.atom_ids=context.atom_ids.Select(profile_atoms);
-            local_context.row_ids=context.row_ids.Select(profile_rows); local_context.independent_search=true;
-            const auto local_atoms=static_cast<Eigen::Index>(profile_atoms.size());
-            local_context.rank={local_domain.rows,2*local_atoms,local_atoms};
-            local_context.linear.rank_relative=local_context.rank.Relative(2*local_atoms);
-            local_context.search=SearchPolicy{}; local_context.search.method=SearchMethod::LegacyCompact;
-            const int local_update_budget=LocalUpdateBudget(policy.local_work);
-            if(local_update_budget>0) local_context.update_budget=local_update_budget;
+            const auto & prepared=prepared_blocks.at(block_index);
+            const auto & core_atoms=prepared.core_atoms; const auto & affected_rows=prepared.affected_rows;
+            const auto & local_domain=prepared.domain; const auto & local_context=prepared.context;
+            const auto local_atoms=prepared.local_atoms; FixedNeighborBlockRecord record;
+            record.sweep=sweep_index+1; record.block=block_index+1; record.core_atoms=core_atoms;
+            record.affected_rows=affected_rows.size(); record.objective_before=out.state.objective;
 
             Vector old_eta(local_atoms),old_beta(2*local_atoms);
-            for(std::size_t k=0;k<core.atoms.size();++k)
+            for(std::size_t k=0;k<core_atoms.size();++k)
             {
-                const auto atom=static_cast<Eigen::Index>(core.atoms[k]);
+                const auto atom=static_cast<Eigen::Index>(core_atoms[k]);
                 old_eta(static_cast<Eigen::Index>(k))=out.state.eta(atom);
                 old_beta.segment<2>(2*static_cast<Eigen::Index>(k))=out.state.beta.segment<2>(2*atom);
             }
             const Sparse old_design=Design(local_domain,old_eta);
             const Vector old_core=(old_design*old_beta).eval();
-            Vector local_y(static_cast<Eigen::Index>(core.affected_rows.size()));
+            Vector local_y(static_cast<Eigen::Index>(affected_rows.size()));
             double local_before_squared{};
-            for(std::size_t k=0;k<core.affected_rows.size();++k)
+            for(std::size_t k=0;k<affected_rows.size();++k)
             {
-                const auto row=static_cast<Eigen::Index>(core.affected_rows[k]);
+                const auto row=static_cast<Eigen::Index>(affected_rows[k]);
                 local_y(static_cast<Eigen::Index>(k))=old_core(static_cast<Eigen::Index>(k))-out.state.residual(row);
                 local_before_squared+=out.state.residual(row)*out.state.residual(row);
             }
@@ -365,9 +382,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 record.objective_after=record.objective_before; finish_record(std::move(record)); continue;
             }
             Vector candidate_eta=out.state.eta,candidate_beta=out.state.beta;
-            for(std::size_t k=0;k<core.atoms.size();++k)
+            for(std::size_t k=0;k<core_atoms.size();++k)
             {
-                const auto atom=static_cast<Eigen::Index>(core.atoms[k]);
+                const auto atom=static_cast<Eigen::Index>(core_atoms[k]);
                 candidate_eta(atom)=accepted->endpoint.eta(static_cast<Eigen::Index>(k));
                 candidate_beta.segment<2>(2*atom)=accepted->endpoint.beta.segment<2>(2*static_cast<Eigen::Index>(k));
             }
@@ -392,9 +409,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             const bool unchanged=(out.state.eta.array()==candidate_eta.array()).all() &&
                 (out.state.beta.array()==candidate_beta.array()).all();
             const Vector new_core=(local_state.x*local_state.beta).eval(); double old_squared{},new_squared{};
-            for(std::size_t k=0;k<core.affected_rows.size();++k)
+            for(std::size_t k=0;k<affected_rows.size();++k)
             {
-                const auto row=static_cast<Eigen::Index>(core.affected_rows[k]); const double before=out.state.residual(row);
+                const auto row=static_cast<Eigen::Index>(affected_rows[k]); const double before=out.state.residual(row);
                 const double change=new_core(static_cast<Eigen::Index>(k))-old_core(static_cast<Eigen::Index>(k));
                 out.state.prediction(row)+=change; out.state.residual(row)+=change;
                 old_squared+=before*before; new_squared+=out.state.residual(row)*out.state.residual(row);
@@ -594,6 +611,9 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
     out.search_converged=search.search_converged; out.reason=search.reason;
     out.first_order_stationarity_sweep=search.first_order_stationarity_sweep;
     out.confirmed_stationarity_sweep=search.confirmed_stationarity_sweep;
+    out.block_preparations=search.block_preparations;
+    out.domain_preparations=search.domain_preparations;
+    out.mapping_preparations=search.mapping_preparations;
     if(policy.assess_final_endpoint) BuildEndpointResult(problem,data,layout,domain,y,context,search,out);
     return out;
 }
