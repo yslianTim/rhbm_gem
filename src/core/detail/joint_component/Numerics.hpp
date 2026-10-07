@@ -57,7 +57,13 @@ struct ProfileRoleWork
     std::size_t evaluations{},derivative_preparations{},derivative_reductions{},replay_checks{};
     double evaluation_seconds{},basis_seconds{},linear_matrix_preparation_seconds{},linear_symbolic_seconds{},
         linear_numeric_seconds{},linear_rhs_solve_seconds{},linear_certificate_seconds{},derivative_prepare_seconds{},
-        derivative_reduce_seconds{},replay_trust_seconds{};
+        derivative_reduce_seconds{},derivative_raw_assembly_seconds{},derivative_free_design_assembly_seconds{},
+        derivative_factor_match_seconds{},derivative_factor_build_seconds{},derivative_factor_compact_seconds{},
+        derivative_rank_seconds{},derivative_least_squares_seconds{},derivative_normal_solve_seconds{},
+        derivative_cancellation_check_seconds{},derivative_cancellation_fallback_seconds{},derivative_rows_seconds{},
+        derivative_jacobian_qr_seconds{},derivative_norms_seconds{},derivative_outer_overhead_seconds{},
+        tiled_qr_assembly_copy_seconds{},tiled_qr_householder_seconds{},tiled_qr_rhs_transform_seconds{},
+        replay_trust_seconds{};
 };
 struct ProfileSearchWork
 {

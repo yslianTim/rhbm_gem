@@ -26,6 +26,23 @@ void AddRoleWork(ProfileRoleWork & destination,const ProfileRoleWork & source)
     destination.linear_certificate_seconds+=source.linear_certificate_seconds;
     destination.derivative_prepare_seconds+=source.derivative_prepare_seconds;
     destination.derivative_reduce_seconds+=source.derivative_reduce_seconds;
+    destination.derivative_raw_assembly_seconds+=source.derivative_raw_assembly_seconds;
+    destination.derivative_free_design_assembly_seconds+=source.derivative_free_design_assembly_seconds;
+    destination.derivative_factor_match_seconds+=source.derivative_factor_match_seconds;
+    destination.derivative_factor_build_seconds+=source.derivative_factor_build_seconds;
+    destination.derivative_factor_compact_seconds+=source.derivative_factor_compact_seconds;
+    destination.derivative_rank_seconds+=source.derivative_rank_seconds;
+    destination.derivative_least_squares_seconds+=source.derivative_least_squares_seconds;
+    destination.derivative_normal_solve_seconds+=source.derivative_normal_solve_seconds;
+    destination.derivative_cancellation_check_seconds+=source.derivative_cancellation_check_seconds;
+    destination.derivative_cancellation_fallback_seconds+=source.derivative_cancellation_fallback_seconds;
+    destination.derivative_rows_seconds+=source.derivative_rows_seconds;
+    destination.derivative_jacobian_qr_seconds+=source.derivative_jacobian_qr_seconds;
+    destination.derivative_norms_seconds+=source.derivative_norms_seconds;
+    destination.derivative_outer_overhead_seconds+=source.derivative_outer_overhead_seconds;
+    destination.tiled_qr_assembly_copy_seconds+=source.tiled_qr_assembly_copy_seconds;
+    destination.tiled_qr_householder_seconds+=source.tiled_qr_householder_seconds;
+    destination.tiled_qr_rhs_transform_seconds+=source.tiled_qr_rhs_transform_seconds;
     destination.replay_trust_seconds+=source.replay_trust_seconds;
 }
 }

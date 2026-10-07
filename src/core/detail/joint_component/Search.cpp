@@ -93,16 +93,58 @@ struct Profile
     {
         if(!Get(eta)) return -1;
         const auto prepare_started=std::chrono::steady_clock::now();
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        const auto derivative_before=DerivativeWorkForTesting();
+#endif
         const auto prepared=PrepareDerivative(cached,scale,&context);
         const auto prepare_seconds=Seconds(prepare_started);
         const auto reduce_started=std::chrono::steady_clock::now();
         auto differential=ReduceDerivative(prepared,cached.residual,false); ++derivatives;
         const auto reduce_seconds=Seconds(reduce_started);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        const auto derivative_after=DerivativeWorkForTesting();
+#endif
         if(telemetry)
         {
             ProfileRoleWork work; work.derivative_preparations=1; work.derivative_prepare_seconds=prepare_seconds;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            work.derivative_raw_assembly_seconds=derivative_after.preparation.raw_assembly_seconds-
+                derivative_before.preparation.raw_assembly_seconds;
+            work.derivative_free_design_assembly_seconds=derivative_after.preparation.free_design_assembly_seconds-
+                derivative_before.preparation.free_design_assembly_seconds;
+            work.derivative_factor_match_seconds=derivative_after.preparation.factor_match_seconds-
+                derivative_before.preparation.factor_match_seconds;
+            work.derivative_factor_build_seconds=derivative_after.preparation.factor_build_seconds-
+                derivative_before.preparation.factor_build_seconds;
+            work.derivative_factor_compact_seconds=derivative_after.preparation.factor_compact_seconds-
+                derivative_before.preparation.factor_compact_seconds;
+            work.derivative_rank_seconds=derivative_after.preparation.rank_seconds-
+                derivative_before.preparation.rank_seconds;
+            work.derivative_least_squares_seconds=derivative_after.preparation.least_squares_seconds-
+                derivative_before.preparation.least_squares_seconds;
+            work.derivative_normal_solve_seconds=derivative_after.preparation.normal_solve_seconds-
+                derivative_before.preparation.normal_solve_seconds;
+            work.derivative_cancellation_check_seconds=derivative_after.preparation.cancellation_check_seconds-
+                derivative_before.preparation.cancellation_check_seconds;
+            work.derivative_cancellation_fallback_seconds=derivative_after.preparation.cancellation_fallback_seconds-
+                derivative_before.preparation.cancellation_fallback_seconds;
+#endif
             telemetry->Add(last_role,work);
             work={}; work.derivative_reductions=1; work.derivative_reduce_seconds=reduce_seconds;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            work.derivative_rows_seconds=derivative_after.rows_seconds-derivative_before.rows_seconds;
+            work.derivative_jacobian_qr_seconds=derivative_after.jacobian_qr_seconds-
+                derivative_before.jacobian_qr_seconds;
+            work.derivative_norms_seconds=derivative_after.norms_seconds-derivative_before.norms_seconds;
+            work.derivative_outer_overhead_seconds=derivative_after.outer_overhead_seconds-
+                derivative_before.outer_overhead_seconds;
+            work.tiled_qr_assembly_copy_seconds=derivative_after.jacobian_qr.assembly_copy_seconds-
+                derivative_before.jacobian_qr.assembly_copy_seconds;
+            work.tiled_qr_householder_seconds=derivative_after.jacobian_qr.householder_seconds-
+                derivative_before.jacobian_qr.householder_seconds;
+            work.tiled_qr_rhs_transform_seconds=derivative_after.jacobian_qr.rhs_transform_seconds-
+                derivative_before.jacobian_qr.rhs_transform_seconds;
+#endif
             telemetry->Add(last_role,work);
         }
         if(!differential.valid) {failure=differential.reason; return -1;}

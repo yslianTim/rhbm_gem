@@ -9,7 +9,10 @@ def test_phase_attribution_reports_both_denominators_and_roles():
             "local_profile_work": {
                 "total_seconds": 8.0,
                 "total": {"evaluations": 6, "profile_basis_seconds": 2.0,
-                           "linear_numeric_seconds": 3.0, "replay_trust_seconds": 1.0},
+                           "linear_numeric_seconds": 3.0, "replay_trust_seconds": 1.0,
+                           "derivative_raw_assembly_seconds": 0.5,
+                           "derivative_jacobian_qr_seconds": 4.0,
+                           "tiled_qr_householder_seconds": 3.0},
                 "initial_profile": {"evaluations": 2},
                 "trial_profile": {"evaluations": 4},
                 "accepted_endpoint": {"evaluations": 2},
@@ -23,6 +26,8 @@ def test_phase_attribution_reports_both_denominators_and_roles():
     phases = {row["phase"]: row for row in result["phases"]}
     assert phases["Basis construction"]["percent_of_local_search"] == 25.0
     assert phases["Numeric QR"]["percent_of_total_search"] == 30.0
+    assert phases["Derivative raw assembly"]["seconds"] == 0.5
+    assert phases["Jacobian TiledQR"]["percent_of_total_search"] == 40.0
 
 
 if __name__ == "__main__":

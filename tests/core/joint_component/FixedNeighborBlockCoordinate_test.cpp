@@ -228,7 +228,16 @@ TEST(JointFixedNeighborBlockCoordinateTest, LocalProfileAttributionIsAggregateAn
         profile.total.linear_matrix_preparation_seconds,profile.total.linear_symbolic_seconds,
         profile.total.linear_numeric_seconds,profile.total.linear_rhs_solve_seconds,
         profile.total.linear_certificate_seconds,profile.total.derivative_prepare_seconds,
-        profile.total.derivative_reduce_seconds,profile.total.replay_trust_seconds,
+        profile.total.derivative_raw_assembly_seconds,profile.total.derivative_free_design_assembly_seconds,
+        profile.total.derivative_factor_match_seconds,profile.total.derivative_factor_build_seconds,
+        profile.total.derivative_factor_compact_seconds,profile.total.derivative_rank_seconds,
+        profile.total.derivative_least_squares_seconds,profile.total.derivative_normal_solve_seconds,
+        profile.total.derivative_cancellation_check_seconds,profile.total.derivative_cancellation_fallback_seconds,
+        profile.total.derivative_reduce_seconds,profile.total.derivative_rows_seconds,
+        profile.total.derivative_jacobian_qr_seconds,profile.total.derivative_norms_seconds,
+        profile.total.derivative_outer_overhead_seconds,profile.total.tiled_qr_assembly_copy_seconds,
+        profile.total.tiled_qr_householder_seconds,profile.total.tiled_qr_rhs_transform_seconds,
+        profile.total.replay_trust_seconds,
         profile.lm_overhead_seconds}) EXPECT_GE(seconds,0.0);
     EXPECT_EQ(quiet.work.local_profile_work.total.evaluations,0u);
     EXPECT_DOUBLE_EQ(quiet.work.local_profile_work.total.basis_seconds,0.0);

@@ -21,7 +21,11 @@ TiledQrTelemetry AccumulateTiledQr(const TiledQrTelemetry & accumulated,const Ti
     result.maximum_assembled_rows=std::max(result.maximum_assembled_rows,current.maximum_assembled_rows);
     result.maximum_dense_design_bytes=std::max(result.maximum_dense_design_bytes,current.maximum_dense_design_bytes);
     result.maximum_dense_response_bytes=std::max(result.maximum_dense_response_bytes,current.maximum_dense_response_bytes);
-    result.qr_seconds+=current.qr_seconds; return result;
+    result.qr_seconds+=current.qr_seconds;
+    result.assembly_copy_seconds+=current.assembly_copy_seconds;
+    result.householder_seconds+=current.householder_seconds;
+    result.rhs_transform_seconds+=current.rhs_transform_seconds;
+    return result;
 }
 }
 #endif
@@ -30,6 +34,9 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
     double absolute,Eigen::Index tile,bool compact_jacobian)
 {
     auto & work=SparseWorkForTesting(); ++work.derivative_preparations;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    auto & derivative_work=DerivativeWorkForTesting();
+#endif
     ResourcePhase phase("derivative-prepare");
     WorkTimer preparation_timer(work.derivative_seconds);
     TiledDifferential out;
@@ -44,16 +51,37 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
     RecordDenseShape("derivative-t",p,m);
     RecordDenseShape("derivative-coefficients",p,m);
     RecordDenseShape("derivative-correction",p,m);
-    for(Eigen::Index k=0;k<2*m;++k) for(Sparse::InnerIterator entry(e.derivative,k);entry;++entry)
-        raw.emplace_back(entry.row(),k/2,entry.value()*e.beta(k));
-    for(Eigen::Index col=0;col<p;++col)
     {
-        const auto k=free[static_cast<std::size_t>(col)]; const double norm=e.x.col(k).norm();
-        if(!(norm>0)) {out.reason="zero-free-column"; return out;}
-        for(Sparse::InnerIterator entry(e.x,k);entry;++entry) entries.emplace_back(entry.row(),col,entry.value()/norm);
-        t(col,k/2)=e.derivative.col(k).dot(e.residual)/norm;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        WorkTimer timer(derivative_work.preparation.raw_assembly_seconds);
+#endif
+        for(Eigen::Index k=0;k<2*m;++k) for(Sparse::InnerIterator entry(e.derivative,k);entry;++entry)
+            raw.emplace_back(entry.row(),k/2,entry.value()*e.beta(k));
     }
-    out.free_design.setFromTriplets(entries.begin(),entries.end()); out.raw.setFromTriplets(raw.begin(),raw.end());
+    {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        WorkTimer timer(derivative_work.preparation.free_design_assembly_seconds);
+#endif
+        for(Eigen::Index col=0;col<p;++col)
+        {
+            const auto k=free[static_cast<std::size_t>(col)]; const double norm=e.x.col(k).norm();
+            if(!(norm>0)) {out.reason="zero-free-column"; return out;}
+            for(Sparse::InnerIterator entry(e.x,k);entry;++entry) entries.emplace_back(entry.row(),col,entry.value()/norm);
+            t(col,k/2)=e.derivative.col(k).dot(e.residual)/norm;
+        }
+    }
+    {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        WorkTimer timer(derivative_work.preparation.free_design_assembly_seconds);
+#endif
+        out.free_design.setFromTriplets(entries.begin(),entries.end());
+    }
+    {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        WorkTimer timer(derivative_work.preparation.raw_assembly_seconds);
+#endif
+        out.raw.setFromTriplets(raw.begin(),raw.end());
+    }
     const auto cancelled=[&]() {
         constexpr double relative_roundoff=64*std::numeric_limits<double>::epsilon()/1e-10;
         for(Eigen::Index k=0;k<m;++k)
@@ -64,6 +92,9 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
         return false;
     };
     const auto reference_raw=[&]() {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        WorkTimer timer(derivative_work.preparation.cancellation_fallback_seconds);
+#endif
         ++SparseWorkForTesting().cancellation_reductions;
         out.reference_order=true;
         // Match the independent reference's multiply-add accumulation before
@@ -89,11 +120,36 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
         const Sparse design=out.free_design;
         auto factor=e.factor;
         try {
-            if(!factor || !factor->Matches(design,free)) factor=workspace.Factor(design,free,0);
+            bool matches{};
+            {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                WorkTimer timer(derivative_work.preparation.factor_match_seconds);
+#endif
+                matches=factor && factor->Matches(design,free);
+            }
+            if(!matches)
+            {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                WorkTimer timer(derivative_work.preparation.factor_build_seconds);
+#endif
+                factor=workspace.Factor(design,free,0);
+            }
             else ++SparseWorkForTesting().factor_reuses;
             Matrix compact;
-            {++work.derivative_compacts; WorkTimer timer(work.derivative_compact_seconds); compact=factor->Compact();}
-            const auto svd=EvaluateRank(compact,{{context ? context->rank.rows : n,2*m,m},p,absolute});
+            {
+                ++work.derivative_compacts; WorkTimer timer(work.derivative_compact_seconds);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                WorkTimer stage(derivative_work.preparation.factor_compact_seconds);
+#endif
+                compact=factor->Compact();
+            }
+            CompactSvdResult svd;
+            {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                WorkTimer timer(derivative_work.preparation.rank_seconds);
+#endif
+                svd=EvaluateRank(compact,{{context ? context->rank.rows : n,2*m,m},p,absolute});
+            }
             if(!svd.valid) {out.reason="nonfinite-derivative"; return out;}
             if(svd.rank!=p) {out.reason="rank-deficient-free-design"; return out;}
             if(compact_jacobian)
@@ -106,14 +162,33 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
                 out.free_design_factor_for_testing=factor;
 #endif
                 const Matrix response=e.residual/scale;
-                out.free_design_response=(compact*factor->LeastSquares(response)).col(0);
+                {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                    WorkTimer timer(derivative_work.preparation.least_squares_seconds);
+#endif
+                    out.free_design_response=(compact*factor->LeastSquares(response)).col(0);
+                }
             }
             out.coefficients.resize(p,m); out.correction.resize(p,m);
-            for(Eigen::Index first=0;first<m;first+=16)
             {
-                const auto count=std::min<Eigen::Index>(16,m-first);
-                out.coefficients.middleCols(first,count)=factor->LeastSquares(Matrix(out.raw.middleCols(first,count)));
-                out.correction.middleCols(first,count)=factor->NormalSolve(t.middleCols(first,count));
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                WorkTimer timer(derivative_work.preparation.least_squares_seconds);
+#endif
+                for(Eigen::Index first=0;first<m;first+=16)
+                {
+                    const auto count=std::min<Eigen::Index>(16,m-first);
+                    out.coefficients.middleCols(first,count)=factor->LeastSquares(Matrix(out.raw.middleCols(first,count)));
+                }
+            }
+            {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                WorkTimer timer(derivative_work.preparation.normal_solve_seconds);
+#endif
+                for(Eigen::Index first=0;first<m;first+=16)
+                {
+                    const auto count=std::min<Eigen::Index>(16,m-first);
+                    out.correction.middleCols(first,count)=factor->NormalSolve(t.middleCols(first,count));
+                }
             }
         } catch(const std::runtime_error &) {out.reason="sparse-derivative-failed"; return out;}
         out.valid=out.coefficients.allFinite() && out.correction.allFinite();
@@ -121,7 +196,14 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
         // Near-complete cancellation amplifies QR ordering roundoff in the
         // normalized width spectrum. Use reference-compatible tiled arithmetic in
         // that regime; this changes computation, never acceptance thresholds.
-        if(!cancelled()) {out.reason="full-profile-derivative"; return out;}
+        bool cancellation_detected{};
+        {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            WorkTimer timer(derivative_work.preparation.cancellation_check_seconds);
+#endif
+            cancellation_detected=cancelled();
+        }
+        if(!cancellation_detected) {out.reason="full-profile-derivative"; return out;}
         reference_raw();
         out.valid=false;
     }
@@ -165,7 +247,14 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
         return true;
     };
     if(!tiled_solve()) return out;
-    if(!out.reference_order && cancelled())
+    bool cancellation_detected{};
+    {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        WorkTimer timer(derivative_work.preparation.cancellation_check_seconds);
+#endif
+        cancellation_detected=cancelled();
+    }
+    if(!out.reference_order && cancellation_detected)
     {
         reference_raw();
         if(!tiled_solve()) return out;
@@ -210,6 +299,20 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     auto & work=DerivativeWorkForTesting(); const auto projected_base=work.projected_qr;
     const auto jacobian_base=work.jacobian_qr,compact_base=work.compact_jacobian_qr;
+    struct ReductionAttribution
+    {
+        DerivativeWork & work;
+        std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
+        double rows_seconds{},jacobian_qr_seconds{},norms_seconds{};
+        ~ReductionAttribution()
+        {
+            work.rows_seconds+=rows_seconds;
+            work.jacobian_qr_seconds+=jacobian_qr_seconds;
+            work.norms_seconds+=norms_seconds;
+            const double total=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
+            work.outer_overhead_seconds+=std::max(0.0,total-rows_seconds-jacobian_qr_seconds-norms_seconds);
+        }
+    } attribution{work};
     const bool structured=compact && widths &&
         ProjectedReductionForTesting()==ProjectedReductionKindForTesting::StructuredCompactQr;
     const bool tail_candidate=compact && widths &&
@@ -233,6 +336,7 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
         ++work.tile_count;
         {
             AssessmentStageTimerForTesting rows_stage("derivative-rows",count,m);
+            WorkTimer attribution_timer(attribution.rows_seconds);
             d.Rows(first,count,p,j);
             work.maximum_generated_rows=std::max(work.maximum_generated_rows,count);
             work.maximum_reduction_rows=std::max(work.maximum_reduction_rows,count+jacobian.r.rows());
@@ -271,6 +375,7 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
         {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             AssessmentStageTimerForTesting jacobian_stage("derivative-jacobian-qr",count,m);
+            WorkTimer attribution_timer(attribution.jacobian_qr_seconds);
 #endif
             jacobian.Append(j,Matrix(residual.segment(first,count)/d.scale));
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -280,6 +385,7 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         {
             AssessmentStageTimerForTesting norms_stage("derivative-norms",count,m);
+            WorkTimer attribution_timer(attribution.norms_seconds);
 #endif
             for(Eigen::Index k=0;k<m;++k)
             {

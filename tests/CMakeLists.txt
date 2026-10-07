@@ -325,7 +325,8 @@ if(RHBM_GEM_BUILD_BENCHMARKS)
     add_dependencies(benchmarks_all joint_fixed_b_block_experiment)
 
     add_executable(joint_fixed_neighbor_experiment experiments/joint_fixed_neighbor.cpp)
-    target_link_libraries(joint_fixed_neighbor_experiment PRIVATE joint_test_support rhbm_gem CompilerFlags)
+    target_link_libraries(joint_fixed_neighbor_experiment PRIVATE joint_test_support rhbm_gem_test CompilerFlags)
+    target_compile_definitions(joint_fixed_neighbor_experiment PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
     add_dependencies(benchmarks_all joint_fixed_neighbor_experiment)
 endif()
 

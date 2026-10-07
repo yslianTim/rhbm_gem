@@ -59,6 +59,13 @@ struct ProjectedReductionWorkForTesting
 };
 struct DerivativeWork
 {
+    struct Preparation
+    {
+        double raw_assembly_seconds{},free_design_assembly_seconds{},factor_match_seconds{},factor_build_seconds{},
+            factor_compact_seconds{},rank_seconds{},least_squares_seconds{},normal_solve_seconds{},
+            cancellation_check_seconds{},cancellation_fallback_seconds{};
+    } preparation;
+    double rows_seconds{},jacobian_qr_seconds{},norms_seconds{},outer_overhead_seconds{};
     Eigen::Index maximum_generated_rows{},maximum_reduction_rows{};
     std::size_t tile_count{};
     TiledQrTelemetry projected_qr,jacobian_qr,compact_jacobian_qr;
