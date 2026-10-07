@@ -1,4 +1,5 @@
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
+#include "core/detail/joint_component/OperatorSearch.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/SparseFactor.hpp"
 #include "support/JointOperatorWorkload.hpp"
@@ -67,6 +68,25 @@ const char * LocalWorkName(n::FixedNeighborLocalWork work)
     case n::FixedNeighborLocalWork::TwoAcceptedUpdates: return "TwoAcceptedLocalUpdates";
     }
     return "FullLocalSearch";
+}
+const char * LocalSearchName(n::FixedNeighborLocalSearch search)
+{
+    switch(search)
+    {
+    case n::FixedNeighborLocalSearch::LegacyCompact: return "LegacyCompact";
+    case n::FixedNeighborLocalSearch::OperatorPcg: return "OperatorPcg";
+    }
+    return "LegacyCompact";
+}
+const char * LocalPreconditionerName(n::FixedNeighborLocalPreconditioner preconditioner)
+{
+    switch(preconditioner)
+    {
+    case n::FixedNeighborLocalPreconditioner::Identity: return "Identity";
+    case n::FixedNeighborLocalPreconditioner::Diagonal: return "Diagonal";
+    case n::FixedNeighborLocalPreconditioner::Schwarz: return "Schwarz";
+    }
+    return "Diagonal";
 }
 j::array NumberArray(const n::Vector & values)
 {j::array out; for(Eigen::Index k=0;k<values.size();++k) out.push_back(Number(values(k))); return out;}
@@ -277,6 +297,25 @@ j::object SweepJson(const n::FixedNeighborBlockSweep & sweep)
         {"wall_seconds",sweep.wall_seconds}};
 }
 j::object ProfileWorkJson(const n::ProfileSearchWork &);
+j::object LocalOperatorWorkJson()
+{
+    const auto & search=n::SearchWorkForTesting(); const auto & operator_work=n::OperatorWorkForTesting();
+    std::size_t maximum_iterations{};
+    for(const auto iterations:search.pcg_iteration_counts) maximum_iterations=std::max(maximum_iterations,iterations);
+    const double mean_iterations=search.pcg_iteration_counts.empty() ? 0. :
+        static_cast<double>(search.pcg_iterations)/static_cast<double>(search.pcg_iteration_counts.size());
+    return { {"linearizations",search.linearizations}, {"pcg_solves",search.pcg_solves},
+        {"pcg_iterations",search.pcg_iterations}, {"pcg_mean_iterations",Number(mean_iterations)},
+        {"pcg_max_iterations",maximum_iterations}, {"damping_trials",search.damping_trials},
+        {"operator_setup_seconds",Number(operator_work.preparation_seconds)},
+        {"preconditioner_setup_seconds",Number(search.partition_seconds+search.local_seconds+search.factor_seconds)},
+        {"partition_seconds",Number(search.partition_seconds)}, {"preconditioner_model_seconds",Number(search.local_seconds)},
+        {"preconditioner_factor_seconds",Number(search.factor_seconds)}, {"inverse_seconds",Number(search.inverse_seconds)},
+        {"metric_seconds",Number(search.metric_seconds)}, {"operator_rank_seconds",Number(operator_work.rank_seconds)},
+        {"operator_apply_seconds",Number(operator_work.apply_seconds)}, {"operator_adjoint_seconds",Number(operator_work.adjoint_seconds)},
+        {"pcg_seconds",Number(search.pcg_seconds)}, {"local_builds",search.local_builds},
+        {"factor_builds",search.factor_builds}, {"inverse_actions",search.inverse_actions} };
+}
 j::object WorkJson(const n::FixedNeighborWork & work)
 {
     return {{"old_core_seconds",Number(work.old_core_seconds)},
@@ -356,7 +395,9 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     bool decompose=false,bool certify_local=false,bool qualification=false,bool scaling_only=false,
     bool reverse_order=false,bool record_final_state=false,bool attribution=false,
     n::FixedNeighborLocalWork local_work=n::FixedNeighborLocalWork::Full,std::size_t core_atoms=128,
-    bool reuse_block_workspace=true)
+    bool reuse_block_workspace=true,
+    n::FixedNeighborLocalSearch local_search=n::FixedNeighborLocalSearch::LegacyCompact,
+    n::FixedNeighborLocalPreconditioner local_preconditioner=n::FixedNeighborLocalPreconditioner::Diagonal)
 {
     auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
     const rhbm_gem::core::JointProblem problem(*input);
@@ -365,6 +406,8 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     neighbor_policy.core_atoms=core_atoms;
     neighbor_policy.order=reverse_order ? n::FixedNeighborBlockOrder::Reverse : n::FixedNeighborBlockOrder::Forward;
     neighbor_policy.local_work=local_work;
+    neighbor_policy.local_search=local_search;
+    neighbor_policy.local_preconditioner=local_preconditioner;
     neighbor_policy.certify_local_candidates=certify_local;
     neighbor_policy.capture_local_trajectory=attribution || local_work!=n::FixedNeighborLocalWork::Full;
     neighbor_policy.stop_after_no_certified_update=certify_local;
@@ -461,7 +504,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                 {"endpoint_decomposition",endpoint_snapshots}});
         };
     std::cerr<<topology<<'-'<<atoms<<" FixedNeighbor started\n";
-    n::SparseWorkForTesting()={};
+    n::SparseWorkForTesting()={}; n::SearchWorkForTesting()={}; n::OperatorWorkForTesting()={};
     auto started=Clock::now(); const auto neighbor=n::SearchFixedNeighbor(problem,initial_eta,neighbor_policy);
     const double neighbor_seconds=Seconds(started);
     const auto sparse_work=n::SparseWorkForTesting();
@@ -565,6 +608,9 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                 {"local_factor_seconds",local_factor_seconds},{"profile_factor_seconds",profile_factor_seconds},
                 {"fixed_neighbor_work",WorkJson(neighbor.work)},
                 {"search_seconds",neighbor_search_seconds},
+                {"local_search_method",LocalSearchName(local_search)},
+                {"local_preconditioner",LocalPreconditionerName(local_preconditioner)},
+                {"local_operator_work",LocalOperatorWorkJson()},
                 {"local_trajectory_telemetry",attribution},
                 {"local_work_policy",LocalWorkName(local_work)},
                 {"total_elapsed_seconds",neighbor_seconds},
@@ -591,7 +637,10 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             {"fixed_neighbor",scaling_json},
             {"peak_rss_mb",PeakRssMb()}};
     }
-    j::object neighbor_json{{"method","FixedNeighbor"},{"search_converged",neighbor.search_converged},
+    j::object neighbor_json{{"method","FixedNeighbor"},
+        {"local_search_method",LocalSearchName(local_search)},
+        {"local_preconditioner",LocalPreconditionerName(local_preconditioner)},
+        {"search_converged",neighbor.search_converged},
         {"workspace_mode",reuse_block_workspace ? "persistent" : "fresh-per-block-visit"},
         {"block_order",reverse_order ? "reverse" : "forward"},
         {"local_work_policy",LocalWorkName(local_work)},
@@ -631,6 +680,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"maximum_local_assessment_columns",maximum_local_assessment_columns},
         {"total_elapsed_seconds",neighbor_seconds}};
     neighbor_json["local_profile_work"]=ProfileWorkJson(neighbor.work.local_profile_work);
+    neighbor_json["local_operator_work"]=LocalOperatorWorkJson();
     AddSparseAttributionJson(neighbor_json,sparse_work);
     if(certify_local || record_final_state)
     {
@@ -700,29 +750,41 @@ int main(int argc,char ** argv)
             std::string(argv[1])!="--full-attribution" &&
             std::string(argv[1])!="--inexact-one" && std::string(argv[1])!="--inexact-two" &&
             std::string(argv[1])!="--inexact-one-search" && std::string(argv[1])!="--matched-control" &&
+            std::string(argv[1])!="--local-legacy" &&
+            std::string(argv[1])!="--local-operator-identity" && std::string(argv[1])!="--local-operator-diagonal" &&
+            std::string(argv[1])!="--local-operator-schwarz" &&
             std::string(argv[1])!="--neighbor-forward" && std::string(argv[1])!="--neighbor-reverse" &&
             std::string(argv[1])!="--scaling-forward" && std::string(argv[1])!="--scaling-reverse"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--matched-control|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [CORE_ATOMS]");
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--matched-control|--local-legacy|--local-operator-identity|--local-operator-diagonal|--local-operator-schwarz|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [CORE_ATOMS]");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
         const std::string mode(argv[1]);
-        if(argc==6 && mode!="--inexact-one-search" && mode!="--matched-control")
-            throw std::invalid_argument("CORE_ATOMS is supported only with --inexact-one-search or --matched-control.");
+        const bool local_operator_mode=mode=="--local-operator-identity" || mode=="--local-operator-diagonal" ||
+            mode=="--local-operator-schwarz";
+        const bool local_search_mode=mode=="--inexact-one-search" || mode=="--local-legacy" || local_operator_mode;
+        const bool local_qualification_mode=mode=="--local-legacy" || local_operator_mode;
+        if(argc==6 && !local_search_mode && mode!="--matched-control")
+            throw std::invalid_argument("CORE_ATOMS is supported only with --inexact-one-search, local operator modes, or --matched-control.");
         const std::size_t core_atoms=argc==6 ? static_cast<std::size_t>(std::stoul(argv[5])) : 128;
         if(core_atoms==0) throw std::invalid_argument("CORE_ATOMS must be positive.");
+        const auto local_search=local_operator_mode ? n::FixedNeighborLocalSearch::OperatorPcg :
+            n::FixedNeighborLocalSearch::LegacyCompact;
+        const auto local_preconditioner=mode=="--local-operator-identity" ? n::FixedNeighborLocalPreconditioner::Identity :
+            mode=="--local-operator-schwarz" ? n::FixedNeighborLocalPreconditioner::Schwarz :
+            n::FixedNeighborLocalPreconditioner::Diagonal;
         Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--case",mode=="--decompose",
             mode=="--certified-local",mode=="--qualification",
             mode=="--scaling-only" || mode=="--attribution" || mode=="--scaling-forward" || mode=="--scaling-reverse" ||
-                mode=="--inexact-one-search" || mode=="--matched-control",
+                mode=="--inexact-one-search" || (local_qualification_mode && std::stoi(argv[4])>=1024) || mode=="--matched-control",
             mode=="--neighbor-reverse" || mode=="--scaling-reverse",
             mode=="--neighbor-forward" || mode=="--neighbor-reverse" ||
                 mode=="--scaling-forward" || mode=="--scaling-reverse" ||
-                mode=="--inexact-one-search" || mode=="--matched-control",
+                local_search_mode || mode=="--matched-control",
             mode=="--attribution" || mode=="--full-attribution",
-            (mode=="--inexact-one" || mode=="--inexact-one-search" || mode=="--matched-control") ? n::FixedNeighborLocalWork::OneAcceptedUpdate :
+            (mode=="--inexact-one" || local_search_mode || mode=="--matched-control") ? n::FixedNeighborLocalWork::OneAcceptedUpdate :
                 mode=="--inexact-two" ? n::FixedNeighborLocalWork::TwoAcceptedUpdates :
-                n::FixedNeighborLocalWork::Full,core_atoms,mode!="--matched-control"));
+                n::FixedNeighborLocalWork::Full,core_atoms,mode!="--matched-control",local_search,local_preconditioner));
         std::cout<<argv[3]<<'-'<<argv[4]<<" fixed-neighbor experiment complete\n";
         return 0;
     } catch(const std::exception & error) {std::cerr<<error.what()<<'\n'; return 1;}

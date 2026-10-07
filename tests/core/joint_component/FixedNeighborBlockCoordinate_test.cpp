@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
+#include "core/detail/joint_component/OperatorSearch.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/SparseFactor.hpp"
 #include "support/JointOperatorWorkload.hpp"
@@ -246,6 +247,23 @@ TEST(JointFixedNeighborBlockCoordinateTest, LocalProfileAttributionIsAggregateAn
     EXPECT_TRUE((measured.state.eta.array()==quiet.state.eta.array()).all());
     EXPECT_TRUE((measured.state.beta.array()==quiet.state.beta.array()).all());
     EXPECT_DOUBLE_EQ(measured.state.objective,quiet.state.objective);
+}
+TEST(JointFixedNeighborBlockCoordinateTest, OperatorPcgIsSelectableOnlyAsTheLocalSearchEngine)
+{
+    JointProblem problem(second_stage_test::OperatorWorkload("chain",32));
+    const n::Vector eta=n::Vector::Constant(32,std::log(.55));
+    n::SearchWorkForTesting()={}; n::OperatorWorkForTesting()={};
+    n::FixedNeighborPolicy policy; policy.maximum_sweeps=6; policy.local_work=n::FixedNeighborLocalWork::OneAcceptedUpdate;
+    policy.local_search=n::FixedNeighborLocalSearch::OperatorPcg;
+    policy.local_preconditioner=n::FixedNeighborLocalPreconditioner::Diagonal;
+    policy.assess_final_endpoint=false; policy.collect_telemetry=true;
+    const auto result=n::SearchFixedNeighbor(problem,eta,policy);
+    ASSERT_TRUE(result.search_converged)<<result.reason;
+    EXPECT_FALSE(result.endpoint_certified);
+    EXPECT_GT(n::SearchWorkForTesting().pcg_solves,0u);
+    EXPECT_GT(result.work.local_profile_work.total.evaluations,0u);
+    EXPECT_DOUBLE_EQ(result.work.local_profile_work.total.derivative_prepare_seconds,0.0);
+    EXPECT_DOUBLE_EQ(result.work.local_profile_work.total.derivative_reduce_seconds,0.0);
 }
 TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutputWithoutDiagnostics)
 {

@@ -85,5 +85,5 @@ using VectorAction=std::function<Vector(VectorRef)>;
 WidthStepResult SolvePcg(const VectorAction &,const VectorAction &,VectorRef,VectorRef,int=-1);
 WidthStepResult WidthStepSolver(const ProfileJacobianOperator &,VectorRef,const PreconditionerContext &,const VectorAction &,int=-1);
 SearchResult SearchOperatorProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,
-    const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
+    const JointProgressObserver & = {},const JointProgressComponent * = nullptr,ProfileSearchWork * = nullptr);
 }

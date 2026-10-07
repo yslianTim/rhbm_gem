@@ -170,7 +170,7 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     ProfileSearchWork * telemetry)
 {
     if(context.search.method==SearchMethod::OperatorPcg)
-        return SearchOperatorProfile(domain,y,initial_b,context,observer,progress_component);
+        return SearchOperatorProfile(domain,y,initial_b,context,observer,progress_component,telemetry);
     ResourcePhase phase("search",true,domain.rows,initial_b.size());
     const auto start=std::chrono::steady_clock::now();
     ProfileSearchWork local_work;

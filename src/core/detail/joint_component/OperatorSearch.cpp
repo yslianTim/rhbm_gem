@@ -128,10 +128,12 @@ WidthStepResult WidthStepSolver(const ProfileJacobianOperator & op,VectorRef gra
     return result;
 }
 SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vector & initial_b,const EvaluationContext & context,
-    const JointProgressObserver & observer,const JointProgressComponent * progress_component)
+    const JointProgressObserver & observer,const JointProgressComponent * progress_component,ProfileSearchWork * telemetry)
 {
     ResourcePhase phase("search",true,domain.rows,initial_b.size()); const auto start=std::chrono::steady_clock::now();
     SearchResult out; out.eta=initial_b.array().log(); out.stopped=true; out.lm_status=9;
+    ProfileSearchWork local_work;
+    ProfileEvaluationRole last_role{ProfileEvaluationRole::Unspecified};
     auto report=[&] {
         if(!progress_component) return;
         NotifyJointProgress(observer,JointProgressPhase::SearchProgress,*progress_component,
@@ -141,7 +143,14 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
     };
     auto finish=[&](const std::string & reason,bool stopped=true,int status=9) {
         out.stop_reason=reason; out.stopped=stopped; out.lm_status=status;
-        out.seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count(); return out;
+        out.seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
+        if(telemetry)
+        {
+            local_work.total_seconds=out.seconds;
+            local_work.lm_overhead_seconds=std::max(0.0,out.seconds-local_work.AttributedSeconds());
+            out.profile_work=std::move(local_work);
+        }
+        return out;
     };
     LinearWorkspace trial_workspace;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -151,6 +160,17 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
 #else
     trial_workspace.EnableCopyOnWrite();
 #endif
+    auto check_replay=[&](const Evaluation & evaluation) {
+        const auto replay_started=std::chrono::steady_clock::now();
+        auto evidence=CheckReplay(domain,y,evaluation,context);
+        if(telemetry)
+        {
+            ProfileRoleWork work; work.replay_checks=1;
+            work.replay_trust_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-replay_started).count();
+            local_work.Add(last_role,work);
+        }
+        return evidence;
+    };
     auto evaluate=[&](const Vector & eta
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         ,SearchTrialDiagnostic * diagnostic
@@ -164,7 +184,13 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
         const auto factor_id_before=FactorResidencyWorkForTesting().next_factor_id;
         TrialResidentSampler rss_sampler(diagnostic!=nullptr);
 #endif
-        auto e=EvaluateProfile(domain,y,eta,false,&context,nullptr,&trial_workspace); ++out.evaluations;
+        last_role=out.evaluations==0 ? ProfileEvaluationRole::InitialProfile : ProfileEvaluationRole::TrialProfile;
+        Evaluation e;
+        if(telemetry)
+            e=EvaluateProfile(domain,y,eta,false,&context,nullptr,&trial_workspace,nullptr,last_role,&local_work);
+        else
+            e=EvaluateProfile(domain,y,eta,false,&context,nullptr,&trial_workspace);
+        ++out.evaluations;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(diagnostic)
         {
@@ -188,7 +214,7 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
 #endif
         ); out.initial=accepted;
     if(!accepted.valid) return finish("inner-"+accepted.reason);
-    out.trials.back().trust=CheckReplay(domain,y,accepted,context);
+    out.trials.back().trust=check_replay(accepted);
     if(!out.trials.back().trust->passed) return finish("untrusted-trial");
     out.initial_accepted=true; out.trials.back().accepted=true; out.trials.back().accepted_update=0;
     UpdateAcceptedProfileObjective(out.accepted_objective,accepted,context.scale,true);
@@ -340,7 +366,7 @@ SearchResult SearchOperatorProfile(const Domain & domain,VectorRef y,const Vecto
                 const double ratio=actual/step.predicted;
                 const bool proposed=candidate.valid && std::isfinite(ratio) && ratio>=1e-4;
                 auto & trial=out.trials.back(); trial.lm=LmTrial{out.eta,step.step,metric,radius,mu,actual,step.predicted,ratio,proposed};
-                if(proposed || context.audit.trial_details) trial.trust=CheckReplay(domain,y,candidate,context);
+                if(proposed || context.audit.trial_details) trial.trust=check_replay(candidate);
                 const bool trusted=candidate.valid && (!trial.trust || trial.trust->passed);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
                 if(diagnostic)

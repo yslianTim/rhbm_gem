@@ -6,6 +6,8 @@ namespace rhbm_gem::core::joint_component {
 
 enum class FixedNeighborBlockOrder {Forward,Reverse};
 enum class FixedNeighborLocalWork {Full,OneAcceptedUpdate,TwoAcceptedUpdates};
+enum class FixedNeighborLocalSearch {LegacyCompact,OperatorPcg};
+enum class FixedNeighborLocalPreconditioner {Identity,Diagonal,Schwarz};
 
 // The production policy contains only the qualified route controls. Numerical
 // tolerances and diagnostic switches remain implementation details.
