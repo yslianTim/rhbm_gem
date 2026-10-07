@@ -93,6 +93,16 @@ and scope match, while every new width state still performs a fresh numeric
 factorization and solve. No numeric factor, active set or coefficient solution
 is carried across sweeps.
 
+The repeated workspace-residency study is closed as Route C: chain/cube at
+256/512/1024, one warmup plus three measurements per case, passed its
+numerical gate but found no material persistent-workspace wall-time benefit.
+Persistent RSS was higher in all six cases, exact numeric-factor opportunities
+were only `1.17%`–`15.00%` and occurred only at initial-profile evaluation, and
+the production policy therefore keeps fresh numeric factorization with no
+extra factor cache or candidate-replay optimization. The dominant measured
+cost is now local derivative preparation plus reduction, accounting for `83.7%`
+of chain-1024 search and `81.5%` of cube-1024 search.
+
 Production search retains only aggregate counters, final sweep state and the
 endpoint assessment needed by the component route. Full block records, local
 trial trajectories, reverse order and local certification remain opt-in

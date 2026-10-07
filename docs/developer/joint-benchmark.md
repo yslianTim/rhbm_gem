@@ -60,6 +60,19 @@ OperatorPcg. The timeout is a wall-time/resource trade-off, not a numerical
 failure, and does not make FixedNeighbor the default. Search-only evidence
 through larger sizes must not be described as full endpoint certification.
 
+The repeated workspace-residency study is closed as Route C. It used the same
+production policy on chain/cube × 256/512/1024 with one warmup and three
+measured repetitions per case. All six numerical gates passed, while the
+persistent-workspace wall-time gate was `not-material`: measured search changes
+ranged from `-0.32%` to `+0.16%`, with higher persistent RSS in every case.
+Exact numeric-factor reuse opportunities ranged from `1.17%` to `15.00%` and
+were limited to initial-profile evaluation; they are not a production reuse
+policy. No workspace-policy change, exact numeric-factor reuse, or candidate
+replay optimization was made. The current large-case bottleneck is the local
+derivative preparation/reduction path, which accounted for `83.7%` of
+chain-1024 search and `81.5%` of cube-1024 search. See the [workspace
+attribution](joint-fixed-neighbor-workspace-attribution.md) record.
+
 The `fixed` and `solve` profiles accept these internal policy controls:
 
 ```text

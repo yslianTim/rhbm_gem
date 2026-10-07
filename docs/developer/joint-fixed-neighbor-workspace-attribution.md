@@ -1,8 +1,9 @@
 # Fixed-neighbor workspace attribution
 
-Status: **Gate B — stop after the measurement commits**. The measurements do
-not justify localized candidate-replay changes. Production solver semantics,
-ordering, tolerances and certification gates are unchanged.
+Status: **Route C — study closed**. The repeated campaign does not justify a
+production workspace-policy change, exact numeric-factor reuse, or candidate
+replay optimization. Production solver semantics, ordering, tolerances and
+certification gates are unchanged.
 
 ## Scope
 
@@ -25,38 +26,42 @@ remains the treatment.
 
 ## Results
 
-The chain-256 row is a qualification smoke campaign with one warmup and three
-matched measured pairs. The 1024 rows are single matched pairs run after the
-smoke campaign; they are exploratory measurements, not a repeated statistical
-campaign.
+The canonical repeated campaign covers six cases (chain/cube × 256/512/1024)
+with one warmup and three matched measured repetitions per case. The numerical
+gate passed for every measured pair. The persistent-workspace wall-time gate is
+`not-material`.
 
-| Case | Control search (s) | Treatment search (s) | Search improvement | Treatment candidate replay + copy | Result |
-| --- | ---: | ---: | ---: | ---: | --- |
-| chain-256, 1 warmup + 3 measurements | 82.842 median | 83.213 median | -0.45% | 1.76% | not major |
-| chain-1024, single pair | 358.609 | 349.155 | +2.64% | 5.51% | not major |
-| cube-1024, single pair | 745.278 | 754.583 | -1.25% | 6.41% | regression in this pair |
+| Case | Fresh search (s) | Persistent search (s) | Improvement | Fresh / persistent RSS (MB) | Exact numeric reuse |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| chain-256 | 82.167 | 82.434 | -0.32% | 146.1 / 177.8 | 15.00% |
+| chain-512 | 168.892 | 168.630 | +0.16% | 263.9 / 355.7 | 13.19% |
+| chain-1024 | 348.867 | 348.998 | -0.04% | 491.2 / 568.0 | 12.50% |
+| cube-256 | 150.360 | 150.565 | -0.14% | 295.4 / 365.0 | 12.24% |
+| cube-512 | 325.039 | 324.943 | +0.03% | 543.7 / 632.4 | 1.17% |
+| cube-1024 | 735.772 | 737.640 | -0.25% | 645.4 / 747.9 | 7.07% |
 
-The chain-256 qualification numerical gate passed for all three matched
-comparisons. Its wall-time gate was `not-material`. For the 1024 pairs, both
-variants converged with the same sweep count, reason, block trajectory,
-objective, final eta, final beta, AC scaling weights, and certification values.
-
-| Case | Sweeps | Search reason | Final global AC KKT | Final width-gradient norm |
-| --- | ---: | --- | ---: | ---: |
-| chain-1024, both variants | 8 | block-stationary | 7.54e-14 | 6.83e-16 |
-| cube-1024, both variants | 18 | block-stationary | 4.04e-13 | 2.34e-15 |
+Exact reuse opportunities occur only during initial-profile evaluation; trial,
+reference and accepted-endpoint opportunities are zero. The treatment still
+performs fresh numeric factorization: the reuse numbers are a census of
+matching inputs, not a production reuse policy.
 
 ## Attribution
 
-The cube-1024 treatment is the larger measured search and provides the clearest
-breakdown:
+The repeated campaign identifies local derivative preparation plus reduction as
+the dominant path in the production `LegacyCompact` local search:
 
-- local search: 670.47 s, 88.85% of search time;
-- candidate replay: 48.37 s;
-- candidate state copy: 0.016 s;
-- candidate replay plus copy: 6.41% of search time;
-- 360 block solves and 356 full candidate replays;
-- 7,339,991 affected-row updates.
+| Case | Search (s) | Derivative preparation (s) | Derivative reduction (s) | Combined share |
+| --- | ---: | ---: | ---: | ---: |
+| chain-256 | 82.434 | 18.188 | 53.168 | 86.3% |
+| chain-512 | 168.630 | 36.960 | 107.552 | 85.7% |
+| chain-1024 | 348.998 | 74.541 | 217.447 | 83.7% |
+| cube-256 | 150.565 | 38.593 | 88.802 | 84.6% |
+| cube-512 | 324.943 | 83.451 | 193.199 | 85.1% |
+| cube-1024 | 737.640 | 181.767 | 419.167 | 81.5% |
+
+For the two large cases, chain-1024 spends 291.99 s (83.7% of search) and
+cube-1024 spends 600.93 s (81.5%) in these two derivative stages. This is the
+new optimization target; candidate replay and vector copy are not material.
 
 Persistent workspace reuse substantially reduced symbolic factorizations in the
 two 1024 cases, while numeric factorizations stayed equal:
@@ -67,21 +72,16 @@ two 1024 cases, while numeric factorizations stayed equal:
 | cube-1024 | control / treatment | 690 / 360 | 31 / 361 | 721 / 721 | 327.9 / 659.7 |
 
 The lower symbolic count did not produce a material wall-time gain, and the
-persistent treatment used more peak memory in these direct runs. The dominant
-cost is therefore the local block search/profile path, not the full candidate
-replay or vector copy.
+persistent treatment used more peak memory in these repeated runs. The
+dominant cost is therefore the local derivative path, not the full candidate
+replay, vector copy, or numeric factorization.
 
 ## Decision and next direction
 
-This is Gate B. Commits 4–7 (localized replay, partial state restore, and
-related production-path changes) are intentionally not implemented. The
-current evidence does not meet the roadmap's material replay threshold or show
-a scaling-driven need for that risk.
-
-If performance work resumes, the next measurement should attribute the local
-`SearchProfile` path itself: local factorization work, profile evaluations,
-local state evaluation, and the effect of workspace residency on memory. A
-repeated 512/1024 campaign should be used before changing production behavior.
+Route C is closed with no production workspace-policy change, no exact
+numeric-factor reuse, and no candidate replay optimization. Performance work
+now moves to FixedNeighbor local `SearchProfile` derivative preparation and
+reduction, with search-specific attribution before any algorithmic change.
 
 ## Reproduction and validation boundaries
 
@@ -94,9 +94,9 @@ PYTHONPATH=tests/integration python3 \
   --output-dir <output-directory>
 ```
 
-The harness requires at least three measured repetitions. The 1024 direct
-measurements above were run one control/treatment pair at a time because of
-their runtime and must not be reported as a full campaign.
+The canonical campaign uses one warmup and three measured repetitions for each
+of the six cases above. Its machine-readable results are in
+`figures/joint-fixed-neighbor-workspace-residency-r2/analysis.json`.
 
 Endpoint certification in the timing harness remains `not-run-search-only`;
 the KKT and width-gradient values above are the search-produced certification

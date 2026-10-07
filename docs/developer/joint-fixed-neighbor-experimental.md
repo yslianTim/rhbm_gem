@@ -130,6 +130,18 @@ every width state. The optimization does not change objective, effective
 response, serial Gauss-Seidel order, accepted-step semantics, replay, or any
 KKT, width-gradient, eta-confirmation or endpoint threshold.
 
+The repeated workspace-residency campaign is now closed as Route C. It covered
+chain/cube at 256, 512 and 1024 atoms with one warmup and three measured
+repetitions per case; all numerical comparisons passed, while the persistent
+wall-time gate was `not-material`. Search improvement ranged from `-0.32%` to
+`+0.16%`, and persistent RSS was higher in every case. Exact numeric-factor
+reuse opportunities were `1.17%`–`15.00%`, all at initial-profile evaluation,
+but numeric factorization remains fresh. There is therefore no production
+workspace-policy change, exact numeric-factor reuse, or candidate-replay
+optimization. The large-case bottleneck is instead local derivative
+preparation plus reduction: `291.99 s`/`83.7%` of chain-1024 search and
+`600.93 s`/`81.5%` of cube-1024 search. See the [workspace attribution](joint-fixed-neighbor-workspace-attribution.md).
+
 Production output keeps minimal aggregate search telemetry. Full local trial
 trajectories, reverse order, alternate core sizes and local certification are
 experiment/test diagnostics. The reproducible matched qualification driver is
