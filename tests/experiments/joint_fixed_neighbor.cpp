@@ -330,9 +330,8 @@ j::object SweepJson(const n::FixedNeighborBlockSweep & sweep)
         {"wall_seconds",sweep.wall_seconds}};
 }
 j::object ProfileWorkJson(const n::ProfileSearchWork &);
-j::object LocalOperatorWorkJson()
+j::object LocalOperatorWorkJson(const n::SearchWork & search,const n::OperatorWork & operator_work)
 {
-    const auto & search=n::SearchWorkForTesting(); const auto & operator_work=n::OperatorWorkForTesting();
     std::size_t maximum_iterations{};
     for(const auto iterations:search.pcg_iteration_counts) maximum_iterations=std::max(maximum_iterations,iterations);
     const double mean_iterations=search.pcg_iteration_counts.empty() ? 0. :
@@ -370,6 +369,12 @@ j::object LocalOperatorWorkJson()
         {"operator_apply_seconds",Number(operator_work.apply_seconds)}, {"operator_adjoint_seconds",Number(operator_work.adjoint_seconds)},
         {"pcg_seconds",Number(search.pcg_seconds)}, {"local_builds",search.local_builds},
         {"factor_builds",search.factor_builds}, {"inverse_actions",search.inverse_actions} };
+}
+j::object LocalOperatorWorkJson()
+{return LocalOperatorWorkJson(n::SearchWorkForTesting(),n::OperatorWorkForTesting());}
+j::object PhaseSweepJson(const n::FixedNeighborBlockSweep & sweep,std::size_t offset,const char * phase)
+{
+    auto output=SweepJson(sweep); output["sweep"]=sweep.sweep+offset; output["phase"]=phase; return output;
 }
 j::object WorkJson(const n::FixedNeighborWork & work)
 {
@@ -837,6 +842,106 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"global_operator_pcg",PackFit("OperatorPcg",operator_fit,operator_seconds)},
         {"fixed_neighbor",neighbor_json},{"comparisons",comparisons},{"peak_rss_mb",PeakRssMb()}};
 }
+j::object RunHybrid(const std::string & topology,int atoms,const std::filesystem::path &,std::size_t core_atoms,
+    std::size_t polish_sweeps,n::SchwarzPolicy local_schwarz)
+{
+    auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
+    const rhbm_gem::core::JointProblem problem(*input);
+    const n::Vector initial_eta=n::Vector::Constant(atoms,std::log(.55));
+    n::FixedNeighborPolicy operator_policy;
+    operator_policy.core_atoms=core_atoms;
+    operator_policy.maximum_sweeps=30;
+    operator_policy.local_work=n::FixedNeighborLocalWork::OneAcceptedUpdate;
+    operator_policy.local_search=n::FixedNeighborLocalSearch::OperatorPcg;
+    operator_policy.local_preconditioner=n::FixedNeighborLocalPreconditioner::Schwarz;
+    operator_policy.local_schwarz=local_schwarz;
+    operator_policy.assess_final_endpoint=false;
+    operator_policy.collect_telemetry=true;
+
+    n::SparseWorkForTesting()={}; n::SearchWorkForTesting()={}; n::OperatorWorkForTesting()={};
+    const auto operator_started=Clock::now();
+    const auto operator_result=n::SearchFixedNeighbor(problem,initial_eta,operator_policy);
+    const double operator_seconds=Seconds(operator_started);
+    const auto operator_search_work=n::SearchWorkForTesting();
+    const auto operator_work=n::OperatorWorkForTesting();
+
+    n::FixedNeighborPolicy polish_policy;
+    polish_policy.core_atoms=core_atoms;
+    polish_policy.maximum_sweeps=polish_sweeps;
+    polish_policy.local_work=n::FixedNeighborLocalWork::OneAcceptedUpdate;
+    polish_policy.local_search=n::FixedNeighborLocalSearch::LegacyCompact;
+    polish_policy.assess_final_endpoint=true;
+    polish_policy.confirmation_from_initial_state=true;
+    polish_policy.collect_telemetry=true;
+    n::SparseWorkForTesting()={}; n::SearchWorkForTesting()={}; n::OperatorWorkForTesting()={};
+    const auto polish_started=Clock::now();
+    const auto polish_result=n::SearchFixedNeighbor(problem,operator_result.state.eta,polish_policy,
+        operator_result.state.beta);
+    const double polish_seconds=Seconds(polish_started);
+    const auto polish_search_work=n::SearchWorkForTesting();
+    const auto polish_operator_work=n::OperatorWorkForTesting();
+    const double total_seconds=operator_seconds+polish_seconds;
+    const auto search_seconds=[](const n::FixedNeighborResult & result) {
+        return std::accumulate(result.sweeps.begin(),result.sweeps.end(),0.0,
+            [](double total,const auto & sweep){return total+sweep.wall_seconds;});
+    };
+    const double operator_search_seconds=search_seconds(operator_result);
+    const double polish_search_seconds=search_seconds(polish_result);
+
+    j::array sweeps;
+    for(const auto & sweep:operator_result.sweeps) sweeps.push_back(PhaseSweepJson(sweep,0,"operator"));
+    for(const auto & sweep:polish_result.sweeps)
+        sweeps.push_back(PhaseSweepJson(sweep,operator_result.sweeps.size(),"legacy-polish"));
+    j::object polish_json{{"solver","LegacyCompact"},{"maximum_sweeps",polish_sweeps},
+        {"sweeps",polish_result.sweeps.size()},{"search_converged",polish_result.search_converged},
+        {"search_reason",polish_result.reason},{"search_seconds",Number(polish_search_seconds)},
+        {"total_elapsed_seconds",Number(polish_seconds)},
+        {"local_work_policy",LocalWorkName(polish_policy.local_work)},
+        {"local_operator_work",LocalOperatorWorkJson(polish_search_work,polish_operator_work)}};
+    j::object operator_json{{"solver","OperatorPcg"},{"sweeps",operator_result.sweeps.size()},
+        {"search_converged",operator_result.search_converged},{"search_reason",operator_result.reason},
+        {"search_seconds",Number(operator_search_seconds)},{"total_elapsed_seconds",Number(operator_seconds)},
+        {"local_work_policy",LocalWorkName(operator_policy.local_work)},
+        {"local_operator_work",LocalOperatorWorkJson(operator_search_work,operator_work)}};
+    j::object final_json{{"method","FixedNeighbor"},{"hybrid",true},
+        {"local_search_method","OperatorPcg"},{"local_preconditioner","Schwarz"},
+        {"outer_core_atoms",core_atoms},
+        {"local_schwarz_core_atoms",local_schwarz.core_atoms},
+        {"local_schwarz_overlap_hops",local_schwarz.overlap_hops},
+        {"local_schwarz_max_block_atoms",local_schwarz.max_block_atoms},
+        {"local_work_policy",LocalWorkName(operator_policy.local_work)},
+        {"polish_solver","LegacyCompact"},{"maximum_polish_sweeps",polish_sweeps},
+        {"polish_sweeps",polish_result.sweeps.size()},
+        {"search_converged",polish_result.search_converged},{"search_reason",polish_result.reason},
+        {"sweeps",sweeps},{"operator_phase",operator_json},{"legacy_polish_phase",polish_json},
+        {"operator_phase_seconds",Number(operator_seconds)},
+        {"legacy_polish_seconds",Number(polish_seconds)},
+        {"operator_search_seconds",Number(operator_search_seconds)},
+        {"legacy_polish_search_seconds",Number(polish_search_seconds)},
+        {"total_search_seconds",Number(operator_search_seconds+polish_search_seconds)},
+        {"assessment_seconds",Number(std::max(0.0,polish_seconds-polish_search_seconds))},
+        {"endpoint_certified",polish_result.endpoint_certified},
+        {"objective",polish_result.state.objective},
+        {"global_kkt",CheckValue(polish_result.fit,"kkt")},
+        {"width_gradient_inf_norm",WidthGradient(polish_result.fit)},
+        {"assessment_inner",CheckValue(polish_result.fit,"inner")},
+        {"assessment_gradient",CheckValue(polish_result.fit,"width-stationarity")},
+        {"assessment_local",CheckValue(polish_result.fit,"local-correction")},
+        {"assessment_identified",CheckValue(polish_result.fit,"numerical-identifiability")},
+        {"endpoint_assessment",AssessmentJson(polish_result.assessment,polish_result.endpoint_trust)},
+        {"runtime_convergence",CheckName(polish_result.fit.RuntimeConvergence())},
+        {"fixed_neighbor_work",WorkJson(polish_result.work)},
+        {"local_operator_work",j::object{{"operator_phase",LocalOperatorWorkJson(operator_search_work,operator_work)},
+            {"legacy_polish_phase",LocalOperatorWorkJson(polish_search_work,polish_operator_work)}}},
+        {"final_eta",NumberArray(polish_result.state.eta)},
+        {"final_beta",NumberArray(polish_result.state.beta)},
+        {"final_ac_scaling_weights",AcScalingWeights(problem,polish_result.state.eta)},
+        {"total_elapsed_seconds",Number(total_seconds)}};
+    return {{"topology",topology},{"atoms",atoms},{"rows",input->observations.size()},
+        {"parameter_count",3*atoms},{"core_atoms",core_atoms},{"outer_core_atoms",core_atoms},
+        {"maximum_sweeps",30},{"measurement_scope","fixed-neighbor-hybrid-full-endpoint"},
+        {"fixed_neighbor",std::move(final_json)},{"peak_rss_mb",PeakRssMb()}};
+}
 void Write(const std::filesystem::path & path,const j::value & value)
 {std::ofstream output(path); if(!output) throw std::runtime_error("Could not open experiment output."); output<<j::serialize(value)<<'\n';}
 }
@@ -858,13 +963,15 @@ int main(int argc,char ** argv)
             std::string(argv[1])!="--local-operator-schwarz-search" &&
             std::string(argv[1])!="--local-operator-schwarz-two" &&
             std::string(argv[1])!="--local-operator-schwarz-full" &&
+            std::string(argv[1])!="--local-operator-schwarz-polish-one" &&
+            std::string(argv[1])!="--local-operator-schwarz-polish-two" &&
             std::string(argv[1])!="--operator-diagnostic" &&
             std::string(argv[1])!="--tile-1024" &&
             std::string(argv[1])!="--tile-2048" && std::string(argv[1])!="--tile-4096" &&
             std::string(argv[1])!="--tile-8192" && std::string(argv[1])!="--tile-16384" &&
             std::string(argv[1])!="--neighbor-forward" && std::string(argv[1])!="--neighbor-reverse" &&
             std::string(argv[1])!="--scaling-forward" && std::string(argv[1])!="--scaling-reverse"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--operator-diagnostic|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--matched-control|--local-legacy|--local-operator-identity|--local-operator-diagonal|--local-operator-schwarz|--local-operator-identity-search|--local-operator-diagonal-search|--local-operator-schwarz-search|--local-operator-schwarz-two|--local-operator-schwarz-full|--tile-1024|--tile-2048|--tile-4096|--tile-8192|--tile-16384|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [OUTER_CORE_ATOMS [LOCAL_SCHWARZ_CORE_ATOMS LOCAL_SCHWARZ_OVERLAP_HOPS LOCAL_SCHWARZ_MAX_BLOCK_ATOMS]]");
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--operator-diagnostic|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--matched-control|--local-legacy|--local-operator-identity|--local-operator-diagonal|--local-operator-schwarz|--local-operator-identity-search|--local-operator-diagonal-search|--local-operator-schwarz-search|--local-operator-schwarz-two|--local-operator-schwarz-full|--local-operator-schwarz-polish-one|--local-operator-schwarz-polish-two|--tile-1024|--tile-2048|--tile-4096|--tile-8192|--tile-16384|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [OUTER_CORE_ATOMS [LOCAL_SCHWARZ_CORE_ATOMS LOCAL_SCHWARZ_OVERLAP_HOPS LOCAL_SCHWARZ_MAX_BLOCK_ATOMS]]");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
@@ -875,8 +982,12 @@ int main(int argc,char ** argv)
             mode=="--local-operator-schwarz" || local_operator_search_mode;
         const bool operator_two_mode=mode=="--local-operator-schwarz-two";
         const bool operator_full_mode=mode=="--local-operator-schwarz-full";
+        const bool operator_polish_one_mode=mode=="--local-operator-schwarz-polish-one";
+        const bool operator_polish_two_mode=mode=="--local-operator-schwarz-polish-two";
+        const bool operator_polish_mode=operator_polish_one_mode || operator_polish_two_mode;
         const bool operator_diagnostic=mode=="--operator-diagnostic";
-        const bool operator_mode=local_operator_mode || operator_two_mode || operator_full_mode || operator_diagnostic;
+        const bool operator_mode=local_operator_mode || operator_two_mode || operator_full_mode ||
+            operator_polish_mode || operator_diagnostic;
         const bool tile_mode=mode=="--tile-1024" || mode=="--tile-2048" || mode=="--tile-4096" ||
             mode=="--tile-8192" || mode=="--tile-16384";
         const bool local_search_mode=mode=="--inexact-one-search" || mode=="--local-legacy" || operator_mode ||
@@ -896,6 +1007,14 @@ int main(int argc,char ** argv)
             local_schwarz.max_block_atoms=static_cast<std::size_t>(std::stoul(argv[8]));
             if(local_schwarz.core_atoms==0 || local_schwarz.max_block_atoms==0)
                 throw std::invalid_argument("LOCAL_SCHWARZ_CORE_ATOMS and LOCAL_SCHWARZ_MAX_BLOCK_ATOMS must be positive.");
+        }
+        if(operator_polish_mode)
+        {
+            const auto polish_sweeps=operator_polish_one_mode ? 1u : 2u;
+            n::SparseWorkForTesting()={}; n::SearchWorkForTesting()={}; n::OperatorWorkForTesting()={};
+            Write(output_path,RunHybrid(argv[3],std::stoi(argv[4]),output_path,core_atoms,polish_sweeps,local_schwarz));
+            std::cout<<argv[3]<<'-'<<argv[4]<<" fixed-neighbor hybrid experiment complete\n";
+            return 0;
         }
         const auto local_search=operator_mode ? n::FixedNeighborLocalSearch::OperatorPcg :
             n::FixedNeighborLocalSearch::LegacyCompact;

@@ -471,6 +471,19 @@ TEST(JointFixedNeighborBlockCoordinateTest, EtaConfirmationUsesInclusiveExisting
         std::numeric_limits<double>::infinity()),true));
     EXPECT_FALSE(n::IsFixedNeighborEtaChangeConfirmed(std::numeric_limits<double>::quiet_NaN(),true));
 }
+TEST(JointFixedNeighborBlockCoordinateTest, BenchmarkPolishCanConfirmAgainstHandedOffState)
+{
+    JointProblem problem(second_stage_test::OperatorWorkload("chain",8));
+    const n::Vector initial_eta=n::Vector::Constant(8,std::log(.55));
+    const n::Vector initial_beta=n::Vector::Constant(16,.02);
+    n::FixedNeighborPolicy polish; polish.core_atoms=8; polish.maximum_sweeps=1;
+    polish.local_search=n::FixedNeighborLocalSearch::LegacyCompact;
+    polish.assess_final_endpoint=false; polish.confirmation_from_initial_state=true;
+    const auto result=n::SearchFixedNeighbor(problem,initial_eta,polish,initial_beta);
+    ASSERT_FALSE(result.sweeps.empty());
+    EXPECT_TRUE(result.sweeps.front().coordinate_confirmation_available);
+    EXPECT_EQ(result.state.beta.size(),initial_beta.size());
+}
 TEST(JointFixedNeighborBlockCoordinateTest, SweepCoordinateTelemetryUsesCompleteSweepStates)
 {
     JointProblem problem(second_stage_test::OperatorWorkload("chain",32));

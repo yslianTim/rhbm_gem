@@ -169,12 +169,15 @@ PreconditionerKind LocalPreconditioner(FixedNeighborLocalPreconditioner precondi
 FixedNeighborSearchResult SearchFixedNeighborComponent(
     const JointProblemInput & input,const JointParameterLayout & layout,const Domain & domain,
     VectorRef observations,VectorRef y,VectorRef initial_eta,const EvaluationContext & context,
-    const FixedNeighborPolicy & policy)
+    const FixedNeighborPolicy & policy,Vector initial_beta)
 {
     FixedNeighborSearchResult out;
+    const bool has_initial_beta=initial_beta.size()!=0;
     if(initial_eta.size()!=static_cast<Eigen::Index>(input.atom_ids.size()) || !initial_eta.allFinite() ||
         observations.size()!=static_cast<Eigen::Index>(input.observations.size()) || !observations.allFinite() ||
         y.size()!=domain.rows || !y.allFinite() || !(context.scale>0) || !std::isfinite(context.scale) ||
+        (has_initial_beta && (initial_beta.size()!=2*static_cast<Eigen::Index>(input.atom_ids.size()) ||
+            !initial_beta.allFinite())) ||
         policy.core_atoms==0 || layout.groups.size()!=0 || layout.full_atoms.size()!=input.atom_ids.size() ||
         layout.informative_rows.size()!=input.observations.size() || domain.atoms.size()!=input.atom_ids.size())
     {out.reason="block-invalid-partition"; return out;}
@@ -189,7 +192,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     LinearTelemetryScopeForTesting telemetry_scope(policy.collect_telemetry);
     auto * const profile_work=policy.collect_telemetry ? &out.work.local_profile_work : nullptr;
 
-    out.state.eta=initial_eta; out.state.beta=Vector::Zero(2*static_cast<Eigen::Index>(input.atom_ids.size()));
+    out.state.eta=initial_eta;
+    out.state.beta=has_initial_beta ? std::move(initial_beta) :
+        Vector::Zero(2*static_cast<Eigen::Index>(input.atom_ids.size()));
     const auto initial=Replay(input,layout,observations,out.state.eta,out.state.beta,context.scale);
     out.state.prediction=initial.prediction; out.state.residual=initial.residual; out.state.objective=initial.objective;
     Indices atom_position(input.atom_ids.size(),-1),row_position(input.observations.size(),-1);
@@ -523,7 +528,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         sweep.global_width_gradient_inf_norm=global.gradient.lpNorm<Eigen::Infinity>();
         sweep.eta_change_inf=(out.state.eta-eta_before).lpNorm<Eigen::Infinity>();
         sweep.beta_scaled_change=ScaledCoefficientDifference(out.state.beta,beta_before);
-        sweep.coordinate_confirmation_available=sweep_index>0;
+        sweep.coordinate_confirmation_available=sweep_index>0 || policy.confirmation_from_initial_state;
         sweep.wall_seconds=Seconds(sweep_started); out.search_seconds+=sweep.wall_seconds;
         ++out.sweep_count; out.final_sweep=sweep;
         if(policy.diagnostic_sink && policy.diagnostic_sink->sweep) policy.diagnostic_sink->sweep(sweep);
@@ -677,7 +682,8 @@ ComponentResult SolveFixedNeighborComponent(
     return out;
 }
 
-FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef initial_eta,const FixedNeighborPolicy & policy)
+FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef initial_eta,
+    const FixedNeighborPolicy & policy,Vector initial_beta)
 {
     FixedNeighborResult out;
     const auto & data=JointProblemAccess::Get(problem); const auto & input=*data.input; const auto & layout=data.layout;
@@ -694,7 +700,8 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
     const EvaluationContext context=ProfileContext(data.context,layout,data.domain.rows);
     const Vector y=Select(data.y,IndicesOf(layout.informative_rows));
     auto run_policy=policy; run_policy.collect_diagnostics=true;
-    const auto search=SearchFixedNeighborComponent(*data.input,layout,domain,data.y,y,initial_eta,context,run_policy);
+    const auto search=SearchFixedNeighborComponent(*data.input,layout,domain,data.y,y,initial_eta,context,
+        run_policy,std::move(initial_beta));
     out.state=search.state; out.blocks=search.blocks; out.sweeps=search.sweeps;
     out.search_converged=search.search_converged; out.reason=search.reason;
     out.first_order_stationarity_sweep=search.first_order_stationarity_sweep;

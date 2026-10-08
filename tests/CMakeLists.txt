@@ -511,6 +511,10 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         COMMAND "${CMAKE_COMMAND}" -E env
             "PYTHONPATH=${PROJECT_SOURCE_DIR}/tests/integration"
             "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_local_schwarz_local_work_test.py")
+    add_test(NAME joint_fixed_neighbor_hybrid_test
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "PYTHONPATH=${PROJECT_SOURCE_DIR}/tests/integration"
+            "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_hybrid_test.py")
     add_test(NAME joint_fixed_neighbor_order_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_order_test.py")
     add_test(NAME joint_fixed_neighbor_prepared_block_test
@@ -528,6 +532,7 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         joint_fixed_neighbor_stationarity_test joint_fixed_neighbor_operator_diagnostic_test
         joint_fixed_neighbor_local_schwarz_test
         joint_fixed_neighbor_local_schwarz_local_work_test
+        joint_fixed_neighbor_hybrid_test
         joint_fixed_neighbor_order_test
         joint_fixed_neighbor_prepared_block_test
         joint_component_runtime_runner_test

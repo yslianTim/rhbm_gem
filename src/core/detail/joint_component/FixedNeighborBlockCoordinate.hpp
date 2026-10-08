@@ -86,6 +86,9 @@ struct FixedNeighborPolicy
     bool certify_local_candidates{};
     bool capture_local_trajectory{};
     bool stop_after_no_certified_update{};
+    // Benchmark/test-only: permit a first post-switch sweep to confirm against
+    // the handed-off state. Production FixedNeighbor never sets this.
+    bool confirmation_from_initial_state{};
     bool assess_final_endpoint{true};
     bool reuse_block_workspace{true};
     bool collect_telemetry{};
@@ -134,10 +137,11 @@ bool IsCertifiedLocalEndpoint(const Assessment &,const TrustEvidence &);
 bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_complete_sweep);
 FixedNeighborSearchResult SearchFixedNeighborComponent(
     const JointProblemInput &,const JointParameterLayout &,const Domain &,VectorRef observations,
-    VectorRef y,VectorRef initial_eta,const EvaluationContext &,const FixedNeighborPolicy & = {});
+    VectorRef y,VectorRef initial_eta,const EvaluationContext &,const FixedNeighborPolicy & = {},
+    Vector initial_beta = {});
 ComponentResult SolveFixedNeighborComponent(
     const PreparedComponent &,VectorRef initial_b,const EvaluationContext &,const FixedNeighborSearchPolicy &,
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
 FixedNeighborResult SearchFixedNeighbor(const JointProblem &,VectorRef initial_eta,
-    const FixedNeighborPolicy & = {});
+    const FixedNeighborPolicy & = {},Vector initial_beta = {});
 }
