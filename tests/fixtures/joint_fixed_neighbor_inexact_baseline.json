@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "classification": "qualified-historical-evidence",
+  "policy": {
+    "local_work": "Full",
+    "core_atoms": 128,
+    "block_order": "forward",
+    "local_search": "LegacyCompact",
+    "maximum_sweeps": 30
+  },
+  "measurement_scope": "fixed-neighbor-search-only",
+  "cases": {
+    "chain-1024": {
+      "topology": "chain",
+      "atoms": 1024,
+      "core_atoms": 128,
+      "measurement_scope": "fixed-neighbor-search-only",
+      "search_converged": true,
+      "search_reason": "block-stationary",
+      "sweeps": 7,
+      "confirmed_stationarity_sweep": 7,
+      "block_solves": 56,
+      "profile_evaluations": 247,
+      "accepted_local_updates": 158,
+      "local_factor_seconds": 2259.23321925,
+      "search_seconds": 2281.8054273740004,
+      "total_elapsed_seconds": 2281.8054273740004,
+      "peak_rss_mb": 339.671875,
+      "final_global_ac_kkt": 2.5964994043725653e-13,
+      "final_raw_width_gradient_inf_norm": 5.202432698510381e-16,
+      "maximum_local_columns": 256
+    },
+    "cube-1024": {
+      "topology": "cube",
+      "atoms": 1024,
+      "core_atoms": 128,
+      "measurement_scope": "fixed-neighbor-search-only",
+      "search_converged": true,
+      "search_reason": "block-stationary",
+      "sweeps": 17,
+      "confirmed_stationarity_sweep": 17,
+      "block_solves": 153,
+      "profile_evaluations": 741,
+      "accepted_local_updates": 512,
+      "local_factor_seconds": 5828.252909411997,
+      "search_seconds": 5881.848895460001,
+      "total_elapsed_seconds": 5881.848895460001,
+      "peak_rss_mb": 821.84375,
+      "final_global_ac_kkt": 6.905552518698954e-13,
+      "final_raw_width_gradient_inf_norm": 1.3368720079609914e-15,
+      "maximum_local_columns": 256
+    }
+  }
+}

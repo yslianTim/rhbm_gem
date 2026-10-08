@@ -57,12 +57,15 @@ def main():
     cmake = (ROOT / "tests" / "CMakeLists.txt").read_text()
     experiment = (ROOT / "tests" / "experiments" / "joint_fixed_neighbor.cpp").read_text()
     gitignore = (ROOT / ".gitignore").read_text()
+    active_sources = "\n".join(path.read_text() for path in integration.glob("*.py"))
 
     missing = [name for name in RETIRED_DRIVERS + RETIRED_TESTS
                if (integration / name).exists()]
     assert not missing, f"retired Joint files returned: {missing}"
     assert not any(name.removesuffix(".py") in cmake for name in RETIRED_TESTS)
     assert not any(mode in experiment for mode in CLOSED_MODES)
+    historical_raw_path = "docs/developer/figures/" + "joint-fixed-neighbor-scaling-r1/individual-results"
+    assert historical_raw_path not in active_sources
     assert "/docs/developer/figures/**/individual-results/" in gitignore
     assert "/docs/developer/figures/**/runs.json" in gitignore
     assert "/docs/developer/figures/**/*.progress.json" in gitignore

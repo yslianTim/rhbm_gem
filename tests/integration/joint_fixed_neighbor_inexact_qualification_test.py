@@ -1,5 +1,6 @@
 import unittest
 
+import joint_fixed_neighbor_inexact_qualification as qualification
 from joint_fixed_neighbor_inexact_qualification import analyze, summarize
 
 
@@ -13,6 +14,19 @@ def row(topology, policy, local_work, search, converged=True, kkt=1e-12, width=1
 
 
 class QualificationTest(unittest.TestCase):
+    def test_historical_baseline_is_a_compact_fixture(self):
+        baseline = qualification._baseline("chain", 1024)
+        self.assertEqual(baseline["source_file"],
+                         "tests/fixtures/joint_fixed_neighbor_inexact_baseline.json")
+        self.assertNotIn("individual-results", str(qualification.BASELINE_FIXTURE))
+
+    def test_candidate_command_is_explicitly_production_core12(self):
+        self.assertEqual(qualification.PRODUCTION_CORE_ATOMS, 12)
+        self.assertEqual(qualification.MODE, "--inexact-one-search")
+        partial = qualification._partial({"topology": "chain", "atoms": 1024,
+                                          "sweep_telemetry": []})
+        self.assertEqual(partial["core_atoms"], 12)
+
     def test_positive_reduction_passes(self):
         report = analyze([row("chain", "Full", 100.0, 110.0),
                           row("chain", "OneAccepted", 40.0, 50.0)])

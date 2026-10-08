@@ -17,7 +17,8 @@ from experiment_provenance import source_hash
 DEFAULT_CASES = ("chain-1024", "cube-1024")
 POLICY = "OneAccepted"
 MODE = "--inexact-one-search"
-BASELINE_DIR = ROOT / "docs/developer/figures/joint-fixed-neighbor-scaling-r1/individual-results"
+PRODUCTION_CORE_ATOMS = 12
+BASELINE_FIXTURE = ROOT / "tests/fixtures/joint_fixed_neighbor_inexact_baseline.json"
 
 
 def _finite(value):
@@ -60,7 +61,7 @@ def _partial(progress):
                                             for row in progress.get("sweep_telemetry", [])))
     fixed.setdefault("total_elapsed_seconds", fixed["search_seconds"])
     return {"topology": progress.get("topology"), "atoms": progress.get("atoms"),
-            "core_atoms": 128, "measurement_scope": "fixed-neighbor-search-only",
+            "core_atoms": PRODUCTION_CORE_ATOMS, "measurement_scope": "fixed-neighbor-search-only",
             "fixed_neighbor": fixed, "peak_rss_mb": None}
 
 
@@ -73,7 +74,7 @@ def _run_candidate(args, output_dir, topology, atoms):
     if wrapper_path.is_file():
         return read(wrapper_path)
     command = [str(args.build_dir / "bin" / "joint_fixed_neighbor_experiment"), MODE,
-               str(raw_path), topology, str(atoms)]
+               str(raw_path), topology, str(atoms), str(PRODUCTION_CORE_ATOMS)]
     print(f"Running {case} {POLICY} with {args.timeout:g}s cap", flush=True)
     process = monitored(command, process_dir, time.monotonic() + args.timeout,
                         rss_limit=args.rss_limit, seconds=args.timeout)
@@ -91,14 +92,14 @@ def _run_candidate(args, output_dir, topology, atoms):
 
 
 def _baseline(topology, atoms):
-    path = BASELINE_DIR / f"{topology}-{atoms}.json"
-    if not path.is_file():
-        raise FileNotFoundError(f"missing FullLocalSearch baseline: {path}")
-    result = read(path)
+    fixture = read(BASELINE_FIXTURE)
+    result = fixture.get("cases", {}).get(f"{topology}-{atoms}")
+    if result is None:
+        raise FileNotFoundError(f"missing historical FullLocalSearch fixture case: {topology}-{atoms}")
     return {"topology": topology, "atoms": atoms, "policy": "Full",
             "measurement_scope": result.get("measurement_scope", "fixed-neighbor-search-only"),
             "status": "completed", "completed": True, "result": result,
-            "source_file": str(path.relative_to(ROOT))}
+            "source_file": str(BASELINE_FIXTURE.relative_to(ROOT))}
 
 
 def _factor_seconds(fixed):
@@ -200,7 +201,6 @@ def run_campaign(args):
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     cases = [_case(value) for value in args.cases]
-    baseline_manifest = ROOT / "docs/developer/figures/joint-fixed-neighbor-scaling-r1/campaign-manifest.json"
     reports = []
     for topology, atoms in cases:
         reports.append(_baseline(topology, atoms))
@@ -218,10 +218,14 @@ def run_campaign(args):
         "branch": subprocess.run(["git", "branch", "--show-current"], cwd=ROOT,
                                   check=True, capture_output=True, text=True).stdout.strip(),
         "backend": "SPQR", "eigen_threads": 1, "cases": [f"{t}-{a}" for t, a in cases],
-        "candidate_policy": POLICY, "measurement_scope": "fixed-neighbor-search-only",
+        "candidate_policy": {"local_work": POLICY, "core_atoms": PRODUCTION_CORE_ATOMS,
+                             "block_order": "forward", "local_search": "LegacyCompact",
+                             "maximum_sweeps": 30},
+        "historical_baseline": {"local_work": "Full", "core_atoms": 128,
+                                 "source": str(BASELINE_FIXTURE.relative_to(ROOT))},
+        "measurement_scope": "fixed-neighbor-search-only",
         "resource_envelope": {"wall_seconds": args.timeout, "rss_bytes": args.rss_limit},
-        "full_baseline_campaign": str(baseline_manifest.relative_to(ROOT)),
-        "full_baseline_manifest_sha256": sha(baseline_manifest),
+        "historical_baseline_fixture_sha256": sha(BASELINE_FIXTURE),
         "analysis": {"qualification_gate": analysis["qualification_gate"],
                      "selected_policy": analysis["selected_policy"]},
     }
@@ -230,10 +234,10 @@ def run_campaign(args):
     (output_dir / "README.md").write_text(
         "# FixedNeighbor bounded local-work qualification\n\n"
         "This P4 campaign runs the P3-selected OneAcceptedLocalUpdate policy at "
-        "chain-1024 and cube-1024 in search-only mode. FullLocalSearch values are "
-        "the existing matched search-only frontier from "
-        "`joint-fixed-neighbor-scaling-r1`; the candidate uses the same SPQR backend, "
-        "128-atom core, forward order, one Eigen thread, and frozen stationarity checks.\n\n"
+        "chain-1024 and cube-1024 in search-only mode. FullLocalSearch values come "
+        "from a compact qualified-historical fixture; the candidate uses the same SPQR backend, "
+        "12-atom core, forward order, one Eigen thread, and frozen stationarity checks. The Full\n"
+        "comparison is a compact historical core128 fixture, not a current production baseline.\n\n"
         "`local_work_seconds` is the comparable legacy local profile-work field. "
         "The candidate also reports the newer `profile_factor_seconds` telemetry; the "
         "pre-P3 Full baseline does not contain that field. No full endpoint claim is "
