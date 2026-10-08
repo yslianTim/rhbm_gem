@@ -1,4 +1,4 @@
-"""Qualify prepared FixedNeighbor blocks on a matched search-only frontier."""
+"""Check prepared FixedNeighbor structural invariants on small deterministic cases."""
 from __future__ import annotations
 
 import argparse
@@ -14,14 +14,11 @@ from experiment_process import RSS_LIMIT_BYTES, monitored
 from experiment_provenance import source_hash
 
 
-DEFAULT_CASES = tuple(
-    f"{topology}-{atoms}"
-    for topology in ("chain", "cube")
-    for atoms in (256, 512, 1024)
-)
+CORE_ATOMS = 12
+SMALL_CASE_ATOMS = 24
+DEFAULT_CASES = tuple(f"{topology}-{SMALL_CASE_ATOMS}" for topology in ("chain", "cube"))
 POLICY = "OneAccepted"
 MODE = "--inexact-one-search"
-CORE_ATOMS = 64
 
 
 def _finite(value):
@@ -31,7 +28,7 @@ def _finite(value):
 def _case(value):
     topology, atoms = value.split("-", 1)
     atoms = int(atoms)
-    if topology not in ("chain", "cube") or atoms not in (256, 512, 1024):
+    if topology not in ("chain", "cube") or atoms != SMALL_CASE_ATOMS:
         raise ValueError(f"Unsupported qualification case: {value}")
     return topology, atoms
 
@@ -143,7 +140,7 @@ def _numerical_gate(row):
 
 def _preparation_gate(row):
     blocks = row.get("blocks_per_sweep")
-    return isinstance(blocks, int) and blocks > 0 and \
+    return row.get("core_atoms") == CORE_ATOMS and isinstance(blocks, int) and blocks > 0 and \
         row.get("prepared_block_count") == blocks and \
         row.get("block_preparations") == blocks and \
         row.get("domain_preparations") == blocks and \
@@ -182,7 +179,7 @@ def analyze(rows, expected=None):
         cases.append({"topology": key[0], "atoms": key[1], "passed": not reasons,
                       "reasons": reasons, "metrics": row})
     return {
-        "phase": "prepared FixedNeighbor matched search-only qualification",
+        "phase": "prepared FixedNeighbor structural contract",
         "policy": {"core_atoms": CORE_ATOMS, "maximum_sweeps": 30,
                    "block_order": "forward", "local_work": POLICY,
                    "local_search": "LegacyCompact", "backend": "SPQR", "eigen_threads": 1},
@@ -240,10 +237,10 @@ def run_campaign(args):
     write(output_dir / "campaign-manifest.json", manifest)
     write_outputs(analysis, output_dir)
     (output_dir / "README.md").write_text(
-        "# Prepared FixedNeighbor matched qualification\n\n"
-        "This campaign measures the production FixedNeighbor policy on chain/cube 256, 512, and 1024. "
-        "It is search-only: no large-case endpoint certification is claimed. Preparation counters and "
-        "SparseWork symbolic/numeric counts provide attribution for prepared-block and symbolic reuse.\n\n"
+        "# Prepared FixedNeighbor structural contract\n\n"
+        "This small deterministic check exercises the production FixedNeighbor policy on chain/cube 24 "
+        "with a 12-atom core, producing two prepared blocks. It checks preparation counts and "
+        "symbolic reuse invariants; it is not a performance campaign and makes no large-case claim.\n\n"
         f"Qualification gate: **{analysis['qualification_gate']}**. Wall-time gate: **{analysis['wall_time_gate']}**.\n"
     )
     return analysis

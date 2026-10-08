@@ -4,7 +4,7 @@ from joint_fixed_neighbor_prepared_block import analyze, summarize
 
 
 def row(topology, atoms, *, symbolic=4, reuses=12, numeric=16,
-        preparations=4, converged=True):
+        preparations=2, converged=True):
     fixed = {
         "search_converged": converged,
         "sweeps": 4,
@@ -28,23 +28,21 @@ def row(topology, atoms, *, symbolic=4, reuses=12, numeric=16,
         "fresh_workspace_symbolic_factorizations": numeric,
     }
     return {"topology": topology, "atoms": atoms, "status": "completed",
-            "measurement_scope": "fixed-neighbor-search-only", "core_atoms": 64,
+            "measurement_scope": "fixed-neighbor-search-only", "core_atoms": 12,
             "fixed_neighbor": fixed}
 
 
 class PreparedBlockQualificationTest(unittest.TestCase):
     def test_all_matched_cases_require_preparation_and_reuse_attribution(self):
-        cases = [row(topology, atoms) for topology in ("chain", "cube")
-                 for atoms in (256, 512, 1024)]
+        cases = [row(topology, 24) for topology in ("chain", "cube")]
         report = analyze([summarize(case) for case in cases])
         self.assertEqual(report["qualification_gate"], "passed")
-        self.assertEqual(len(report["cases"]), 6)
+        self.assertEqual(len(report["cases"]), 2)
         self.assertEqual(report["wall_time_gate"], "not-run")
 
     def test_missing_or_unreused_case_fails_without_relaxing_numerical_gate(self):
-        cases = [row(topology, atoms) for topology in ("chain", "cube")
-                 for atoms in (256, 512)]
-        broken = row("cube", 1024, symbolic=16, reuses=0, numeric=16)
+        cases = [row("chain", 24)]
+        broken = row("cube", 24, symbolic=16, reuses=0, numeric=16)
         report = analyze([summarize(case) for case in cases] + [summarize(broken)])
         self.assertEqual(report["qualification_gate"], "failed")
         reasons = report["cases"][-1]["reasons"]
