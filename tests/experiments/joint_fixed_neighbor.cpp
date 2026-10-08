@@ -1,5 +1,4 @@
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
-#include "core/detail/joint_component/OperatorSearch.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/SparseFactor.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
@@ -70,25 +69,6 @@ const char * LocalWorkName(n::FixedNeighborLocalWork work)
     case n::FixedNeighborLocalWork::TwoAcceptedUpdates: return "TwoAcceptedLocalUpdates";
     }
     return "FullLocalSearch";
-}
-const char * LocalSearchName(n::FixedNeighborLocalSearch search)
-{
-    switch(search)
-    {
-    case n::FixedNeighborLocalSearch::LegacyCompact: return "LegacyCompact";
-    case n::FixedNeighborLocalSearch::OperatorPcg: return "OperatorPcg";
-    }
-    return "LegacyCompact";
-}
-const char * LocalPreconditionerName(n::FixedNeighborLocalPreconditioner preconditioner)
-{
-    switch(preconditioner)
-    {
-    case n::FixedNeighborLocalPreconditioner::Identity: return "Identity";
-    case n::FixedNeighborLocalPreconditioner::Diagonal: return "Diagonal";
-    case n::FixedNeighborLocalPreconditioner::Schwarz: return "Schwarz";
-    }
-    return "Diagonal";
 }
 std::size_t DerivativeTileRows()
 {
@@ -228,48 +208,6 @@ j::object SweepJson(const n::FixedNeighborBlockSweep & sweep)
         {"wall_seconds",sweep.wall_seconds}};
 }
 j::object ProfileWorkJson(const n::ProfileSearchWork &);
-j::object LocalOperatorWorkJson(const n::SearchWork & search,const n::OperatorWork & operator_work)
-{
-    std::size_t maximum_iterations{};
-    for(const auto iterations:search.pcg_iteration_counts) maximum_iterations=std::max(maximum_iterations,iterations);
-    const double mean_iterations=search.pcg_iteration_counts.empty() ? 0. :
-        static_cast<double>(search.pcg_iterations)/static_cast<double>(search.pcg_iteration_counts.size());
-    const double geometry_blocks=static_cast<double>(search.preconditioner_geometry_block_count);
-    const double mean_core=search.preconditioner_geometry_block_count ? search.total_core_atoms/geometry_blocks : 0.;
-    const double mean_overlap=search.preconditioner_geometry_block_count ? search.total_overlap_atoms/geometry_blocks : 0.;
-    const double mean_realized=search.preconditioner_geometry_block_count ? search.total_realized_block_atoms/geometry_blocks : 0.;
-    const double mean_coverage=search.preconditioner_geometry_block_count ?
-        search.total_preconditioner_coverage_ratio/geometry_blocks : 0.;
-    return { {"linearizations",search.linearizations}, {"pcg_solves",search.pcg_solves},
-        {"pcg_iterations",search.pcg_iterations}, {"pcg_mean_iterations",Number(mean_iterations)},
-        {"pcg_max_iterations",maximum_iterations}, {"damping_trials",search.damping_trials},
-        {"requested_schwarz_core_atoms",search.requested_schwarz_core_atoms},
-        {"requested_schwarz_overlap_hops",search.requested_schwarz_overlap_hops},
-        {"requested_schwarz_max_block_atoms",search.requested_schwarz_max_block_atoms},
-        {"preconditioner_partition_count",search.preconditioner_partition_count},
-        {"preconditioner_geometry_block_count",search.preconditioner_geometry_block_count},
-        {"minimum_core_atoms",search.minimum_core_atoms},{"mean_core_atoms",Number(mean_core)},
-        {"maximum_core_atoms",search.maximum_core_atoms},
-        {"minimum_overlap_atoms",search.minimum_overlap_atoms},{"mean_overlap_atoms",Number(mean_overlap)},
-        {"maximum_overlap_atoms",search.maximum_overlap_atoms},
-        {"minimum_realized_block_atoms",search.minimum_realized_block_atoms},
-        {"mean_realized_block_atoms",Number(mean_realized)},
-        {"maximum_realized_block_atoms",search.maximum_realized_block_atoms},
-        {"mean_preconditioner_coverage_ratio",Number(mean_coverage)},
-        {"minimum_preconditioner_coverage_ratio",Number(search.preconditioner_geometry_block_count ?
-            search.minimum_preconditioner_coverage_ratio : 0.)},
-        {"maximum_preconditioner_coverage_ratio",Number(search.maximum_preconditioner_coverage_ratio)},
-        {"operator_setup_seconds",Number(operator_work.preparation_seconds)},
-        {"preconditioner_setup_seconds",Number(search.partition_seconds+search.local_seconds+search.factor_seconds)},
-        {"partition_seconds",Number(search.partition_seconds)}, {"preconditioner_model_seconds",Number(search.local_seconds)},
-        {"preconditioner_factor_seconds",Number(search.factor_seconds)}, {"inverse_seconds",Number(search.inverse_seconds)},
-        {"metric_seconds",Number(search.metric_seconds)}, {"operator_rank_seconds",Number(operator_work.rank_seconds)},
-        {"operator_apply_seconds",Number(operator_work.apply_seconds)}, {"operator_adjoint_seconds",Number(operator_work.adjoint_seconds)},
-        {"pcg_seconds",Number(search.pcg_seconds)}, {"local_builds",search.local_builds},
-        {"factor_builds",search.factor_builds}, {"inverse_actions",search.inverse_actions} };
-}
-j::object LocalOperatorWorkJson()
-{return LocalOperatorWorkJson(n::SearchWorkForTesting(),n::OperatorWorkForTesting());}
 j::object WorkJson(const n::FixedNeighborWork & work)
 {
     return {{"old_core_seconds",Number(work.old_core_seconds)},
@@ -359,13 +297,9 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     const rhbm_gem::core::JointProblem problem(*input);
     const std::vector<double> initial_b(static_cast<std::size_t>(atoms),.55);
     n::Vector initial_eta= n::Vector::Constant(atoms,std::log(.55)); n::FixedNeighborPolicy neighbor_policy;
-    const n::SchwarzPolicy local_schwarz{};
     neighbor_policy.core_atoms=core_atoms;
     neighbor_policy.order=reverse_order ? n::FixedNeighborBlockOrder::Reverse : n::FixedNeighborBlockOrder::Forward;
     neighbor_policy.local_work=local_work;
-    neighbor_policy.local_search=n::FixedNeighborLocalSearch::LegacyCompact;
-    neighbor_policy.local_preconditioner=n::FixedNeighborLocalPreconditioner::Diagonal;
-    neighbor_policy.local_schwarz=local_schwarz;
     neighbor_policy.capture_local_trajectory=attribution || local_work!=n::FixedNeighborLocalWork::Full;
     neighbor_policy.assess_final_endpoint=!scaling_only;
     neighbor_policy.reuse_block_workspace=true;
@@ -420,7 +354,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                 {"local_block_telemetry",local_block_snapshots}});
         };
     std::cerr<<topology<<'-'<<atoms<<" FixedNeighbor started\n";
-    n::SparseWorkForTesting()={}; n::SearchWorkForTesting()={}; n::OperatorWorkForTesting()={};
+    n::SparseWorkForTesting()={};
     auto started=Clock::now(); const auto neighbor=n::SearchFixedNeighbor(problem,initial_eta,neighbor_policy);
     const double neighbor_seconds=Seconds(started);
     const auto sparse_work=n::SparseWorkForTesting();
@@ -524,18 +458,12 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                 {"local_factor_seconds",local_factor_seconds},{"profile_factor_seconds",profile_factor_seconds},
                 {"fixed_neighbor_work",WorkJson(neighbor.work)},
                 {"search_seconds",neighbor_search_seconds},
-                {"local_search_method",LocalSearchName(n::FixedNeighborLocalSearch::LegacyCompact)},
-                {"local_preconditioner",LocalPreconditionerName(n::FixedNeighborLocalPreconditioner::Diagonal)},
                 {"outer_core_atoms",neighbor_policy.core_atoms},
                 {"local_atoms",j::object{{"minimum",neighbor.work.minimum_local_atoms},
                     {"mean",Number(neighbor.work.local_problem_count ? neighbor.work.total_local_atoms/
                         static_cast<double>(neighbor.work.local_problem_count) : 0.)},
                     {"maximum",neighbor.work.maximum_local_atoms}}},
-                {"local_schwarz_core_atoms",local_schwarz.core_atoms},
-                {"local_schwarz_overlap_hops",local_schwarz.overlap_hops},
-                {"local_schwarz_max_block_atoms",local_schwarz.max_block_atoms},
                 {"derivative_tile_rows",DerivativeTileRows()},
-                {"local_operator_work",LocalOperatorWorkJson()},
                 {"local_trajectory_telemetry",attribution},
                 {"local_work_policy",LocalWorkName(local_work)},
                 {"total_elapsed_seconds",neighbor_seconds},
@@ -567,16 +495,11 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     if(record_final_state)
         endpoint_assessment["correction"]=CorrectionJson(neighbor.assessment,neighbor.state.eta);
     j::object neighbor_json{{"method","FixedNeighbor"},
-        {"local_search_method",LocalSearchName(n::FixedNeighborLocalSearch::LegacyCompact)},
-        {"local_preconditioner",LocalPreconditionerName(n::FixedNeighborLocalPreconditioner::Diagonal)},
         {"outer_core_atoms",neighbor_policy.core_atoms},
         {"local_atoms",j::object{{"minimum",neighbor.work.minimum_local_atoms},
             {"mean",Number(neighbor.work.local_problem_count ? neighbor.work.total_local_atoms/
                 static_cast<double>(neighbor.work.local_problem_count) : 0.)},
             {"maximum",neighbor.work.maximum_local_atoms}}},
-        {"local_schwarz_core_atoms",local_schwarz.core_atoms},
-        {"local_schwarz_overlap_hops",local_schwarz.overlap_hops},
-        {"local_schwarz_max_block_atoms",local_schwarz.max_block_atoms},
         {"derivative_tile_rows",DerivativeTileRows()},
         {"search_converged",neighbor.search_converged},
         {"workspace_mode","persistent"},
@@ -618,7 +541,6 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"maximum_local_assessment_columns",maximum_local_assessment_columns},
         {"total_elapsed_seconds",neighbor_seconds}};
     neighbor_json["local_profile_work"]=ProfileWorkJson(neighbor.work.local_profile_work);
-    neighbor_json["local_operator_work"]=LocalOperatorWorkJson();
     AddSparseAttributionJson(neighbor_json,sparse_work);
     if(record_final_state)
     {

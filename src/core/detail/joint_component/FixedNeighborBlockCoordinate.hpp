@@ -78,10 +78,6 @@ struct FixedNeighborPolicy
     std::size_t core_atoms{128},maximum_sweeps{30};
     FixedNeighborBlockOrder order{FixedNeighborBlockOrder::Forward};
     FixedNeighborLocalWork local_work{FixedNeighborLocalWork::Full};
-    // Benchmark/test-only controls. The production component policy does not expose them.
-    FixedNeighborLocalSearch local_search{FixedNeighborLocalSearch::LegacyCompact};
-    FixedNeighborLocalPreconditioner local_preconditioner{FixedNeighborLocalPreconditioner::Diagonal};
-    SchwarzPolicy local_schwarz{};
     bool stop_after_stationarity{true};
     bool certify_local_candidates{};
     bool capture_local_trajectory{};

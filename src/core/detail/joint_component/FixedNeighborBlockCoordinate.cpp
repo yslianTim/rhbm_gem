@@ -1,5 +1,4 @@
 #include "FixedNeighborBlockCoordinate.hpp"
-#include "OperatorSearch.hpp"
 #include "Problem.hpp"
 #include "SparseFactor.hpp"
 #include <algorithm>
@@ -156,16 +155,6 @@ int LocalUpdateBudget(FixedNeighborLocalWork work)
     }
     return 0;
 }
-PreconditionerKind LocalPreconditioner(FixedNeighborLocalPreconditioner preconditioner)
-{
-    switch(preconditioner)
-    {
-    case FixedNeighborLocalPreconditioner::Identity: return PreconditionerKind::Identity;
-    case FixedNeighborLocalPreconditioner::Diagonal: return PreconditionerKind::Diagonal;
-    case FixedNeighborLocalPreconditioner::Schwarz: return PreconditionerKind::Schwarz;
-    }
-    return PreconditionerKind::Diagonal;
-}
 FixedNeighborSearchResult SearchFixedNeighborComponent(
     const JointProblemInput & input,const JointParameterLayout & layout,const Domain & domain,
     VectorRef observations,VectorRef y,VectorRef initial_eta,const EvaluationContext & context,
@@ -235,13 +224,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         prepared.context.rank={prepared.domain.rows,2*prepared.local_atoms,prepared.local_atoms};
         prepared.context.linear.rank_relative=prepared.context.rank.Relative(2*prepared.local_atoms);
         prepared.context.search=SearchPolicy{};
-        prepared.context.search.method=policy.local_search==FixedNeighborLocalSearch::OperatorPcg ?
-            SearchMethod::OperatorPcg : SearchMethod::LegacyCompact;
-        if(policy.local_search==FixedNeighborLocalSearch::OperatorPcg)
-        {
-            prepared.context.search.preconditioner=LocalPreconditioner(policy.local_preconditioner);
-            prepared.context.search.schwarz=policy.local_schwarz;
-        }
+        prepared.context.search.method=SearchMethod::LegacyCompact;
         if(local_update_budget>0) prepared.context.update_budget=local_update_budget;
         prepared_blocks.push_back(std::move(prepared));
     }
