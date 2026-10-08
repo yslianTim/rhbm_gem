@@ -22,17 +22,10 @@ struct FixedNeighborBlockRecord
     double objective_before{},objective_after{},local_objective_before{},local_objective_after{};
     double global_replay_delta{},local_global_delta_error{},objective_replay_enclosure{};
     double local_final_gradient_inf_norm{},local_final_ac_kkt{};
-    double local_profile_gradient_inf_norm{},local_reference_gradient_inf_norm{},local_correction_inf_norm{};
-    double local_projected_width_minimum{},local_corrected_jacobian_minimum{},local_normalized_width_minimum{};
-    Eigen::Index local_projected_width_rank{},local_corrected_jacobian_rank{},local_normalized_width_rank{};
-    double local_assessment_seconds{};
-    Eigen::Index local_assessment_rows{},local_assessment_columns{};
     double search_seconds{},profile_factor_seconds{};
     int profile_evaluations{},accepted_updates{};
     std::vector<FixedNeighborProfileTrial> profile_trials;
-    bool accepted{},local_assessment_attempted{},local_assessment_passed{},local_inner_passed{},
-        local_gradient_passed{},local_correction_passed{},local_identified{},local_trust_passed{};
-    std::string local_assessment_failure,local_trust_reason;
+    bool accepted{};
     std::string status,reason,local_search_stop_reason;
 };
 struct FixedNeighborBlockSweep
@@ -42,9 +35,7 @@ struct FixedNeighborBlockSweep
     double global_width_gradient_inf_norm{},cache_replay_error{},objective_replay_error{},wall_seconds{};
     double eta_change_inf{},beta_scaled_change{};
     bool coordinate_confirmation_available{};
-    double local_assessment_seconds{};
-    std::size_t block_solves{},profile_evaluations{},local_assessments{},certified_local_candidates{},
-        maximum_block_rows{},maximum_block_columns{},maximum_local_assessment_rows{},maximum_local_assessment_columns{},
+    std::size_t block_solves{},profile_evaluations{},maximum_block_rows{},maximum_block_columns{},
         accepted_blocks{},unchanged_blocks{},accepted_local_updates{};
 };
 struct FixedNeighborWork
@@ -79,14 +70,8 @@ struct FixedNeighborPolicy
     FixedNeighborBlockOrder order{FixedNeighborBlockOrder::Forward};
     FixedNeighborLocalWork local_work{FixedNeighborLocalWork::Full};
     bool stop_after_stationarity{true};
-    bool certify_local_candidates{};
     bool capture_local_trajectory{};
-    bool stop_after_no_certified_update{};
-    // Benchmark/test-only: permit a first post-switch sweep to confirm against
-    // the handed-off state. Production FixedNeighbor never sets this.
-    bool confirmation_from_initial_state{};
     bool assess_final_endpoint{true};
-    bool reuse_block_workspace{true};
     bool collect_telemetry{};
     bool collect_diagnostics{};
     FixedNeighborDiagnosticSink * diagnostic_sink{};
@@ -120,8 +105,8 @@ struct FixedNeighborSearchResult
     bool search_converged{},endpoint_certified{};
     std::string reason;
     std::size_t first_order_stationarity_sweep{},confirmed_stationarity_sweep{};
-    std::size_t sweep_count{},total_block_solves{},total_profile_evaluations{},total_local_assessments{},
-        total_accepted_local_updates{},block_preparations{},domain_preparations{},mapping_preparations{};
+    std::size_t sweep_count{},total_block_solves{},total_profile_evaluations{},total_accepted_local_updates{},
+        block_preparations{},domain_preparations{},mapping_preparations{};
     double search_seconds{};
     FixedNeighborWork work;
     std::optional<FixedNeighborBlockSweep> final_sweep;
@@ -129,7 +114,6 @@ struct FixedNeighborSearchResult
     TrustEvidence endpoint_trust;
 };
 
-bool IsCertifiedLocalEndpoint(const Assessment &,const TrustEvidence &);
 bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_complete_sweep);
 FixedNeighborSearchResult SearchFixedNeighborComponent(
     const JointProblemInput &,const JointParameterLayout &,const Domain &,VectorRef observations,

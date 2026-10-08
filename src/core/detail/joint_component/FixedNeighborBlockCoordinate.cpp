@@ -138,8 +138,6 @@ void BuildEndpointResult(const JointProblem & problem,const ProblemData & data,c
         reconstruction ? "" : "full-domain-reconstruction-failed"});
 }
 }
-bool IsCertifiedLocalEndpoint(const Assessment & assessment,const TrustEvidence & trust)
-{return assessment.inner && assessment.gradient && assessment.local && assessment.identified && trust.passed;}
 bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_complete_sweep)
 {
     return has_previous_complete_sweep && std::isfinite(eta_change_inf) && eta_change_inf>=0.0 &&
@@ -234,7 +232,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     std::vector<std::size_t> order(partition.cores.size()); std::iota(order.begin(),order.end(),0);
     if(policy.order==FixedNeighborBlockOrder::Reverse) std::reverse(order.begin(),order.end());
     const bool retain_diagnostics=policy.collect_diagnostics || policy.capture_local_trajectory ||
-        policy.certify_local_candidates || static_cast<bool>(policy.state_observer);
+        static_cast<bool>(policy.state_observer);
     bool stop=false;
     for(std::size_t sweep_index=0;sweep_index<policy.maximum_sweeps && !stop;++sweep_index)
     {
@@ -305,10 +303,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 }
             }
             const auto old_widths=old_eta.array().exp().eval();
-            std::unique_ptr<LinearWorkspace> fresh_workspace;
-            if(!policy.reuse_block_workspace) fresh_workspace=std::make_unique<LinearWorkspace>();
             const auto local_search=SearchProfile(local_domain,local_y,old_widths,local_context,{},nullptr,
-                fresh_workspace ? fresh_workspace.get() : prepared.workspace.get(),&prepared,profile_work);
+                prepared.workspace.get(),&prepared,profile_work);
             if(policy.collect_telemetry) out.work.local_profile_work.Merge(local_search.profile_work);
             record.search_seconds=Seconds(search_started); record.profile_evaluations=local_search.evaluations;
             if(policy.collect_telemetry) out.work.local_search_seconds+=record.search_seconds;
@@ -372,61 +368,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             }
             record.local_final_gradient_inf_norm=local_state.gradient.lpNorm<Eigen::Infinity>();
             record.local_final_ac_kkt=local_state.certificate.projected_kkt;
-            if(policy.certify_local_candidates)
-            {
-                record.local_assessment_attempted=true;
-                record.local_assessment_rows=local_state.x.rows();
-                record.local_assessment_columns=local_state.x.cols();
-                const auto assessment_started=Clock::now();
-                const auto local_reference=EvaluateProfile(local_domain,local_y,local_state.eta,true,&local_context,
-                    nullptr,nullptr,nullptr,ProfileEvaluationRole::Reference,profile_work);
-                const auto local_assessment=AssessEvaluated(local_domain,local_y,local_state,local_reference,local_context,true);
-                const auto local_trust=CheckTrust(local_domain,local_y,local_state,local_context,local_reference);
-                record.local_assessment_seconds=Seconds(assessment_started);
-                sweep.local_assessment_seconds+=record.local_assessment_seconds;
-                ++sweep.local_assessments; ++out.total_local_assessments;
-                sweep.maximum_local_assessment_rows=std::max(sweep.maximum_local_assessment_rows,
-                    static_cast<std::size_t>(record.local_assessment_rows));
-                sweep.maximum_local_assessment_columns=std::max(sweep.maximum_local_assessment_columns,
-                    static_cast<std::size_t>(record.local_assessment_columns));
-                record.local_inner_passed=local_assessment.inner;
-                record.local_gradient_passed=local_assessment.gradient;
-                record.local_correction_passed=local_assessment.local;
-                record.local_identified=local_assessment.identified;
-                record.local_trust_passed=local_trust.passed;
-                record.local_profile_gradient_inf_norm=local_assessment.primary.gradient.size() ?
-                    local_assessment.primary.gradient.lpNorm<Eigen::Infinity>() : std::numeric_limits<double>::infinity();
-                record.local_reference_gradient_inf_norm=local_assessment.reference.gradient.size() ?
-                    local_assessment.reference.gradient.lpNorm<Eigen::Infinity>() : std::numeric_limits<double>::infinity();
-                record.local_correction_inf_norm=local_assessment.correction.size() ?
-                    local_assessment.correction.lpNorm<Eigen::Infinity>() : std::numeric_limits<double>::infinity();
-                if(local_assessment.widths)
-                {
-                    record.local_projected_width_rank=local_assessment.widths->rank;
-                    record.local_projected_width_minimum=local_assessment.widths->minimum;
-                }
-                if(local_assessment.jacobian)
-                {
-                    record.local_corrected_jacobian_rank=local_assessment.jacobian->rank;
-                    record.local_corrected_jacobian_minimum=local_assessment.jacobian->minimum;
-                }
-                if(local_assessment.normalized_widths)
-                {
-                    record.local_normalized_width_rank=local_assessment.normalized_widths->rank;
-                    record.local_normalized_width_minimum=local_assessment.normalized_widths->minimum;
-                }
-                record.local_assessment_failure=local_assessment.failure;
-                record.local_trust_reason=local_trust.reason;
-                record.local_assessment_passed=IsCertifiedLocalEndpoint(local_assessment,local_trust);
-                if(!record.local_assessment_passed)
-                {
-                    record.status="unchanged"; record.reason="local-endpoint-uncertified";
-                    record.local_objective_after=record.local_objective_before;
-                    record.objective_after=record.objective_before;
-                    finish_record(std::move(record)); continue;
-                }
-                ++sweep.certified_local_candidates;
-            }
             record.local_objective_after=local_state.certificate.objective/(context.scale*context.scale);
             if(record.local_objective_after>record.local_objective_before)
             {
@@ -511,7 +452,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         sweep.global_width_gradient_inf_norm=global.gradient.lpNorm<Eigen::Infinity>();
         sweep.eta_change_inf=(out.state.eta-eta_before).lpNorm<Eigen::Infinity>();
         sweep.beta_scaled_change=ScaledCoefficientDifference(out.state.beta,beta_before);
-        sweep.coordinate_confirmation_available=sweep_index>0 || policy.confirmation_from_initial_state;
+        sweep.coordinate_confirmation_available=sweep_index>0;
         sweep.wall_seconds=Seconds(sweep_started); out.search_seconds+=sweep.wall_seconds;
         ++out.sweep_count; out.final_sweep=sweep;
         if(policy.diagnostic_sink && policy.diagnostic_sink->sweep) policy.diagnostic_sink->sweep(sweep);
@@ -526,8 +467,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         if(sweep.cache_replay_error>2e-12+2e-13*std::max(1.0,replay.prediction.cwiseAbs().maxCoeff()) ||
             !WithinBlockObjectiveReplay(sweep.objective_replay_error,replay.objective))
         {out.reason="block-cache-replay-failed"; stop=true; break;}
-        if(policy.stop_after_no_certified_update && sweep.local_assessments>0 && sweep.certified_local_candidates==0)
-        {out.reason="local-endpoint-uncertified"; break;}
         StationarityState stationarity=StationarityState::NotStationary;
         if(sweep.global_ac_kkt<=1e-10 && sweep.global_width_gradient_inf_norm<=1e-12)
         {
@@ -643,7 +582,6 @@ ComponentResult SolveFixedNeighborComponent(
     out.search.evaluations=static_cast<int>(result.total_profile_evaluations);
     out.search.seconds=result.search_seconds;
     out.search.accepted=static_cast<int>(result.total_accepted_local_updates);
-    out.search.references=static_cast<int>(result.total_local_assessments);
     out.assessment=result.assessment;
     if(result.search_converged && !result.endpoint_certified)
     {

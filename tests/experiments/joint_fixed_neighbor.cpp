@@ -201,10 +201,6 @@ j::object SweepJson(const n::FixedNeighborBlockSweep & sweep)
         {"cache_replay_error",sweep.cache_replay_error},{"objective_replay_error",sweep.objective_replay_error},
         {"block_solves",sweep.block_solves},{"profile_evaluations",sweep.profile_evaluations},
         {"maximum_block_rows",sweep.maximum_block_rows},{"maximum_block_columns",sweep.maximum_block_columns},
-        {"local_assessments",sweep.local_assessments},{"certified_local_candidates",sweep.certified_local_candidates},
-        {"local_assessment_seconds",sweep.local_assessment_seconds},
-        {"maximum_local_assessment_rows",sweep.maximum_local_assessment_rows},
-        {"maximum_local_assessment_columns",sweep.maximum_local_assessment_columns},
         {"wall_seconds",sweep.wall_seconds}};
 }
 j::object ProfileWorkJson(const n::ProfileSearchWork &);
@@ -302,7 +298,6 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     neighbor_policy.local_work=local_work;
     neighbor_policy.capture_local_trajectory=attribution || local_work!=n::FixedNeighborLocalWork::Full;
     neighbor_policy.assess_final_endpoint=!scaling_only;
-    neighbor_policy.reuse_block_workspace=true;
     neighbor_policy.collect_telemetry=true;
     j::array progress_sweeps;
     j::array local_block_snapshots;
@@ -325,25 +320,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             for(const auto & block:blocks) if(block.sweep==sweep)
             {
                 j::object snapshot{{"sweep",block.sweep},{"block",block.block},
-                    {"affected_rows",block.affected_rows},{"local_assessment_rows",block.local_assessment_rows},
-                    {"local_assessment_columns",block.local_assessment_columns},
-                    {"local_assessment_attempted",block.local_assessment_attempted},
-                    {"local_assessment_passed",block.local_assessment_passed},
-                    {"local_inner_passed",block.local_inner_passed},{"local_gradient_passed",block.local_gradient_passed},
-                    {"local_correction_passed",block.local_correction_passed},{"local_identified",block.local_identified},
-                    {"local_trust_passed",block.local_trust_passed},
-                    {"local_profile_gradient_inf_norm",Number(block.local_profile_gradient_inf_norm)},
-                    {"local_reference_gradient_inf_norm",Number(block.local_reference_gradient_inf_norm)},
-                    {"local_correction_inf_norm",Number(block.local_correction_inf_norm)},
-                    {"local_projected_width_minimum",Number(block.local_projected_width_minimum)},
-                    {"local_projected_width_rank",block.local_projected_width_rank},
-                    {"local_corrected_jacobian_minimum",Number(block.local_corrected_jacobian_minimum)},
-                    {"local_corrected_jacobian_rank",block.local_corrected_jacobian_rank},
-                    {"local_normalized_width_minimum",Number(block.local_normalized_width_minimum)},
-                    {"local_normalized_width_rank",block.local_normalized_width_rank},
-                    {"local_assessment_failure",block.local_assessment_failure},
-                    {"local_trust_reason",block.local_trust_reason},
-                    {"local_assessment_seconds",block.local_assessment_seconds},
+                    {"affected_rows",block.affected_rows},
                     {"profile_factor_seconds",Number(block.profile_factor_seconds)},
                     {"profile_trials",ProfileTrialsJson(block.profile_trials)},
                     {"accepted",block.accepted},{"status",block.status},{"reason",block.reason}};
@@ -360,17 +337,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     const auto sparse_work=n::SparseWorkForTesting();
     const double sweep_seconds=std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),0.0,
         [](double total,const auto & sweep){return total+sweep.wall_seconds;});
-    const double local_assessment_seconds=std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),0.0,
-        [](double total,const auto & sweep){return total+sweep.local_assessment_seconds;});
-    const double neighbor_search_seconds=sweep_seconds-local_assessment_seconds;
-    const auto local_assessments=std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),std::size_t{},
-        [](std::size_t total,const auto & sweep){return total+sweep.local_assessments;});
-    const auto certified_local_candidates=std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),std::size_t{},
-        [](std::size_t total,const auto & sweep){return total+sweep.certified_local_candidates;});
-    const auto maximum_local_assessment_rows=std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),std::size_t{},
-        [](std::size_t maximum,const auto & sweep){return std::max(maximum,sweep.maximum_local_assessment_rows);});
-    const auto maximum_local_assessment_columns=std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),std::size_t{},
-        [](std::size_t maximum,const auto & sweep){return std::max(maximum,sweep.maximum_local_assessment_columns);});
+    const double neighbor_search_seconds=sweep_seconds;
     std::cerr<<topology<<'-'<<atoms<<" FixedNeighbor finished in "<<neighbor_seconds<<" s; converged="
         <<neighbor.search_converged<<" sweeps="<<neighbor.sweeps.size()<<" KKT="
         <<(neighbor.sweeps.empty() ? 0.0 : neighbor.sweeps.back().global_ac_kkt);
@@ -390,23 +357,6 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             {"local_global_delta_error",block.local_global_delta_error},
             {"objective_replay_enclosure",block.objective_replay_enclosure},
             {"profile_evaluations",block.profile_evaluations},{"accepted_updates",block.accepted_updates},
-            {"local_assessment_attempted",block.local_assessment_attempted},
-            {"local_assessment_passed",block.local_assessment_passed},
-            {"local_inner_passed",block.local_inner_passed},{"local_gradient_passed",block.local_gradient_passed},
-            {"local_correction_passed",block.local_correction_passed},{"local_identified",block.local_identified},
-            {"local_trust_passed",block.local_trust_passed},{"local_assessment_failure",block.local_assessment_failure},
-            {"local_profile_gradient_inf_norm",Number(block.local_profile_gradient_inf_norm)},
-            {"local_reference_gradient_inf_norm",Number(block.local_reference_gradient_inf_norm)},
-            {"local_correction_inf_norm",Number(block.local_correction_inf_norm)},
-            {"local_projected_width_minimum",Number(block.local_projected_width_minimum)},
-            {"local_projected_width_rank",block.local_projected_width_rank},
-            {"local_corrected_jacobian_minimum",Number(block.local_corrected_jacobian_minimum)},
-            {"local_corrected_jacobian_rank",block.local_corrected_jacobian_rank},
-            {"local_normalized_width_minimum",Number(block.local_normalized_width_minimum)},
-            {"local_normalized_width_rank",block.local_normalized_width_rank},
-            {"local_trust_reason",block.local_trust_reason},
-            {"local_assessment_rows",block.local_assessment_rows},{"local_assessment_columns",block.local_assessment_columns},
-            {"local_assessment_seconds",block.local_assessment_seconds},
             {"profile_factor_seconds",Number(block.profile_factor_seconds)},
             {"profile_trials",ProfileTrialsJson(block.profile_trials)},
             {"search_seconds",block.search_seconds},{"accepted",block.accepted},
@@ -519,9 +469,6 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"sweep_telemetry",sweeps},{"block_telemetry",blocks},
         {"search_seconds",neighbor_search_seconds},
         {"assessment_seconds",std::max(0.0,neighbor_seconds-neighbor_search_seconds)},
-        {"local_assessment_count",local_assessments},
-        {"certified_local_candidates",certified_local_candidates},
-        {"local_assessment_seconds",local_assessment_seconds},
         {"prepared_block_count",neighbor.block_preparations},
         {"block_preparations",neighbor.block_preparations},
         {"domain_preparations",neighbor.domain_preparations},
@@ -537,8 +484,6 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"fixed_neighbor_work",WorkJson(neighbor.work)},
         {"profile_factor_seconds",std::accumulate(neighbor.blocks.begin(),neighbor.blocks.end(),0.0,
             [](double total,const auto & block){return total+block.profile_factor_seconds;})},
-        {"maximum_local_assessment_rows",maximum_local_assessment_rows},
-        {"maximum_local_assessment_columns",maximum_local_assessment_columns},
         {"total_elapsed_seconds",neighbor_seconds}};
     neighbor_json["local_profile_work"]=ProfileWorkJson(neighbor.work.local_profile_work);
     AddSparseAttributionJson(neighbor_json,sparse_work);
