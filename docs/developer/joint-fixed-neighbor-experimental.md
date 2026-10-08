@@ -408,10 +408,8 @@ FixedNeighbor core 64 with local `LegacyCompact`, serial Forward Gauss-Seidel,
 small outer-core qualification superseded that default with core 12; see the
 [outer-core qualification](joint-fixed-neighbor-outer-core-qualification.md).
 
-The campaign drivers are `tests/integration/joint_fixed_neighbor_local_schwarz.py`,
-`joint_fixed_neighbor_operator_diagnostic.py`,
-`joint_fixed_neighbor_local_schwarz_local_work.py`,
-`joint_fixed_neighbor_hybrid.py`, and
-`joint_fixed_neighbor_operator_route.py`. Their search-only outputs label
-endpoint assessment and RuntimeConvergence as `NotRun`; search evidence must
-not be described as full endpoint certification.
+These campaign-specific drivers are retired from the current tree after their
+negative results were captured above. Their historical implementations remain
+recoverable from Git history. The search-only outputs label endpoint assessment
+and RuntimeConvergence as `NotRun`; search evidence must not be described as
+full endpoint certification.

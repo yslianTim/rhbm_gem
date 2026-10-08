@@ -90,14 +90,10 @@ and tile results.
 
 ## Reproduction and validation boundaries
 
-The matched campaign harness is:
-
-```sh
-PYTHONPATH=tests/integration python3 \
-  tests/integration/joint_fixed_neighbor_workspace_timing.py \
-  --build-dir build/qualification \
-  --output-dir <output-directory>
-```
+The matched timing harness was a closed campaign driver and is retired from the
+current tree. The compact analysis above is the retained evidence; the
+historical implementation remains recoverable from Git history if reproduction
+is needed.
 
 The canonical campaign uses one warmup and three measured repetitions for each
 of the six cases above. Its machine-readable results are in
