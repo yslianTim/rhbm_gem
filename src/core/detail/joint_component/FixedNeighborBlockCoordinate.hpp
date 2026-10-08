@@ -66,9 +66,9 @@ struct PreparedFixedNeighborBlock
 };
 struct FixedNeighborPolicy
 {
-    std::size_t core_atoms{128},maximum_sweeps{30};
+    std::size_t core_atoms{12},maximum_sweeps{30};
     FixedNeighborBlockOrder order{FixedNeighborBlockOrder::Forward};
-    FixedNeighborLocalWork local_work{FixedNeighborLocalWork::Full};
+    FixedNeighborLocalWork local_work{FixedNeighborLocalWork::OneAcceptedUpdate};
     bool stop_after_stationarity{true};
     bool capture_local_trajectory{};
     bool assess_final_endpoint{true};

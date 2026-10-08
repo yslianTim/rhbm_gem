@@ -286,8 +286,8 @@ void AddSparseAttributionJson(j::object & output,const n::SparseWork & work)
 void Write(const std::filesystem::path &,const j::value &);
 j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,bool compare_global,
     bool scaling_only=false,bool reverse_order=false,bool record_final_state=false,
-    bool attribution=false,n::FixedNeighborLocalWork local_work=n::FixedNeighborLocalWork::Full,
-    std::size_t core_atoms=128)
+    bool attribution=false,n::FixedNeighborLocalWork local_work=n::FixedNeighborLocalWork::OneAcceptedUpdate,
+    std::size_t core_atoms=12)
 {
     auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
     const rhbm_gem::core::JointProblem problem(*input);
@@ -554,7 +554,7 @@ int main(int argc,char ** argv)
             mode!="--neighbor-forward" && mode!="--neighbor-reverse" && mode!="--scaling-forward" &&
             mode!="--scaling-reverse")
             throw std::invalid_argument("OUTER_CORE_ATOMS is supported only with a FixedNeighbor search mode.");
-        const std::size_t core_atoms=argc>=6 ? static_cast<std::size_t>(std::stoul(argv[5])) : 128;
+        const std::size_t core_atoms=argc>=6 ? static_cast<std::size_t>(std::stoul(argv[5])) : 12;
         if(core_atoms==0) throw std::invalid_argument("CORE_ATOMS must be positive.");
         Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--case",
             mode=="--scaling-only" || mode=="--scaling-forward" || mode=="--scaling-reverse" ||

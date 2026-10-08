@@ -511,11 +511,11 @@ TEST(DataObjectPersistenceTest, JointSolverProvenanceRoundTripsAndMissingFieldRe
 {
     namespace io=rg::joint_result_io;
     auto fixed=SavedJointExample();
-    fixed.metadata.solver=rg::JointSolverProvenance{"fixed-neighbor",64u,"one-accepted"};
+    fixed.metadata.solver=rg::JointSolverProvenance{"fixed-neighbor",12u,"one-accepted"};
     const auto decoded=io::Decode(io::Encode(fixed));
     ASSERT_TRUE(decoded.metadata.solver);
     EXPECT_EQ(decoded.metadata.solver->search_method,"fixed-neighbor");
-    EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_core_atoms,64u);
+    EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_core_atoms,12u);
     EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_local_work,"one-accepted");
 
     auto old=boost::json::parse(io::Encode(fixed)).as_object();
@@ -528,7 +528,7 @@ TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsAllProductionRoutes
 {
     namespace io=rg::joint_result_io;
     auto fixed=SavedJointExample();
-    rg::JointSolverProvenance fixed_provenance{"fixed-neighbor",64u,"one-accepted"};
+    rg::JointSolverProvenance fixed_provenance{"fixed-neighbor",12u,"one-accepted"};
     fixed_provenance.contract_version=rg::JointSolverProvenanceContractVersion;
     fixed_provenance.sparse_backend="SPQR";
     fixed_provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
