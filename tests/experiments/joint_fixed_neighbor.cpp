@@ -802,33 +802,40 @@ int main(int argc,char ** argv)
             std::string(argv[1])!="--inexact-one-search" && std::string(argv[1])!="--matched-control" &&
             std::string(argv[1])!="--local-legacy" &&
             std::string(argv[1])!="--local-operator-identity" && std::string(argv[1])!="--local-operator-diagonal" &&
-            std::string(argv[1])!="--local-operator-schwarz" && std::string(argv[1])!="--operator-diagnostic" &&
+            std::string(argv[1])!="--local-operator-schwarz" &&
+            std::string(argv[1])!="--local-operator-schwarz-two" &&
+            std::string(argv[1])!="--local-operator-schwarz-full" &&
+            std::string(argv[1])!="--operator-diagnostic" &&
             std::string(argv[1])!="--tile-1024" &&
             std::string(argv[1])!="--tile-2048" && std::string(argv[1])!="--tile-4096" &&
             std::string(argv[1])!="--tile-8192" && std::string(argv[1])!="--tile-16384" &&
             std::string(argv[1])!="--neighbor-forward" && std::string(argv[1])!="--neighbor-reverse" &&
             std::string(argv[1])!="--scaling-forward" && std::string(argv[1])!="--scaling-reverse"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--operator-diagnostic|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--matched-control|--local-legacy|--local-operator-identity|--local-operator-diagonal|--local-operator-schwarz|--tile-1024|--tile-2048|--tile-4096|--tile-8192|--tile-16384|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [CORE_ATOMS]");
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--operator-diagnostic|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--matched-control|--local-legacy|--local-operator-identity|--local-operator-diagonal|--local-operator-schwarz|--local-operator-schwarz-two|--local-operator-schwarz-full|--tile-1024|--tile-2048|--tile-4096|--tile-8192|--tile-16384|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [CORE_ATOMS]");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
         const std::string mode(argv[1]);
         const bool local_operator_mode=mode=="--local-operator-identity" || mode=="--local-operator-diagonal" ||
             mode=="--local-operator-schwarz";
+        const bool operator_two_mode=mode=="--local-operator-schwarz-two";
+        const bool operator_full_mode=mode=="--local-operator-schwarz-full";
         const bool operator_diagnostic=mode=="--operator-diagnostic";
+        const bool operator_mode=local_operator_mode || operator_two_mode || operator_full_mode || operator_diagnostic;
         const bool tile_mode=mode=="--tile-1024" || mode=="--tile-2048" || mode=="--tile-4096" ||
             mode=="--tile-8192" || mode=="--tile-16384";
-        const bool local_search_mode=mode=="--inexact-one-search" || mode=="--local-legacy" || local_operator_mode ||
+        const bool local_search_mode=mode=="--inexact-one-search" || mode=="--local-legacy" || operator_mode ||
             tile_mode || operator_diagnostic;
-        const bool local_qualification_mode=mode=="--local-legacy" || local_operator_mode || tile_mode || operator_diagnostic;
+        const bool local_qualification_mode=mode=="--local-legacy" || operator_mode || tile_mode || operator_diagnostic;
         if(argc==6 && !local_search_mode && mode!="--matched-control")
             throw std::invalid_argument("CORE_ATOMS is supported only with --inexact-one-search, local operator modes, or --matched-control.");
         const std::size_t core_atoms=argc==6 ? static_cast<std::size_t>(std::stoul(argv[5])) : 128;
         if(core_atoms==0) throw std::invalid_argument("CORE_ATOMS must be positive.");
-        const auto local_search=(local_operator_mode || operator_diagnostic) ? n::FixedNeighborLocalSearch::OperatorPcg :
+        const auto local_search=operator_mode ? n::FixedNeighborLocalSearch::OperatorPcg :
             n::FixedNeighborLocalSearch::LegacyCompact;
         const auto local_preconditioner=mode=="--local-operator-identity" ? n::FixedNeighborLocalPreconditioner::Identity :
             mode=="--local-operator-schwarz" ? n::FixedNeighborLocalPreconditioner::Schwarz :
+            operator_two_mode || operator_full_mode ? n::FixedNeighborLocalPreconditioner::Schwarz :
             operator_diagnostic ? n::FixedNeighborLocalPreconditioner::Schwarz :
             n::FixedNeighborLocalPreconditioner::Diagonal;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -845,9 +852,10 @@ int main(int argc,char ** argv)
                 mode=="--scaling-forward" || mode=="--scaling-reverse" ||
                 local_search_mode || mode=="--matched-control",
             mode=="--attribution" || mode=="--full-attribution",
-            (mode=="--inexact-one" || local_search_mode || mode=="--matched-control") ? n::FixedNeighborLocalWork::OneAcceptedUpdate :
-                mode=="--inexact-two" ? n::FixedNeighborLocalWork::TwoAcceptedUpdates :
-                n::FixedNeighborLocalWork::Full,core_atoms,mode!="--matched-control",local_search,local_preconditioner));
+            (mode=="--inexact-two" || operator_two_mode) ? n::FixedNeighborLocalWork::TwoAcceptedUpdates :
+                (mode=="--inexact-one" || (local_search_mode && !operator_full_mode) || mode=="--matched-control") ?
+                    n::FixedNeighborLocalWork::OneAcceptedUpdate : n::FixedNeighborLocalWork::Full,
+            core_atoms,mode!="--matched-control",local_search,local_preconditioner));
         std::cout<<argv[3]<<'-'<<argv[4]<<" fixed-neighbor experiment complete\n";
         return 0;
     } catch(const std::exception & error) {std::cerr<<error.what()<<'\n'; return 1;}
