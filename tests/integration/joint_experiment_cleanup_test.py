@@ -5,6 +5,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 RETIRED_DRIVERS = (
+    "joint_fixed_neighbor_core_size.py",
+    "joint_fixed_neighbor_outer_core_endpoint.py",
+    "joint_fixed_neighbor_outer_core_frontier.py",
     "joint_optimized_frontier.py",
     "joint_fixed_neighbor_analysis.py",
     "joint_fixed_neighbor_attribution.py",
@@ -70,6 +73,7 @@ def main():
     assert "/docs/developer/figures/**/runs.json" in gitignore
     assert "/docs/developer/figures/**/*.progress.json" in gitignore
     assert (integration / "joint_fixed_neighbor_outer_core_qualification.py").is_file()
+    assert (integration / "joint_fixed_neighbor_outer_core_support.py").is_file()
     assert (ROOT / "docs/developer/joint-experiments.md").is_file()
     assert (ROOT / "docs/developer/joint-fixed-neighbor-experimental.md").is_file()
     print("joint experiment cleanup contract passed")

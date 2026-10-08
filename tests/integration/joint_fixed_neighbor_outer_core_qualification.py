@@ -8,36 +8,33 @@ from pathlib import Path
 
 from experiment_io import ROOT, read, sha, write
 from experiment_process import RSS_LIMIT_BYTES
-from joint_fixed_neighbor_core_size import _parse_core_sizes
-import joint_fixed_neighbor_core_size as screen
-import joint_fixed_neighbor_outer_core_endpoint as endpoint
-import joint_fixed_neighbor_outer_core_frontier as frontier
+import joint_fixed_neighbor_outer_core_support as support
 
 
 PHASES = ("screen", "endpoint", "frontier")
 
 
-def _module(phase):
-    return {"screen": screen, "endpoint": endpoint, "frontier": frontier}[phase]
-
-
 def analyze(phase, rows, *, core_sizes=None, finalist_core_sizes=None,
-            control_core_size=frontier.CONTROL_CORE_SIZE, selected_core_size=None):
+            control_core_size=support.frontier_CONTROL_CORE_SIZE, selected_core_size=None):
     """Apply the phase-specific correctness gate through one public API."""
     if phase == "screen":
-        return screen.analyze(rows, core_sizes or screen.CORE_SIZES)
+        return support.screen_analyze(rows, core_sizes or support.screen_CORE_SIZES)
     if phase == "endpoint":
-        return endpoint.analyze(rows, core_sizes or endpoint.FINALIST_CORES)
+        return support.endpoint_analyze(rows, core_sizes or support.endpoint_FINALIST_CORES)
     if phase == "frontier":
-        return frontier.analyze(
-            rows, finalist_core_sizes or frontier.DEFAULT_FINALIST_CORE_SIZES,
+        return support.frontier_analyze(
+            rows, finalist_core_sizes or support.frontier_DEFAULT_FINALIST_CORE_SIZES,
             control_core_size, selected_core_size)
     raise ValueError(f"unknown qualification phase: {phase}")
 
 
 def _cases(phase, values):
-    module = _module(phase)
-    return list(values or module.DEFAULT_CASES)
+    defaults = {
+        "screen": support.screen_DEFAULT_CASES,
+        "endpoint": support.endpoint_DEFAULT_CASES,
+        "frontier": support.frontier_DEFAULT_CASES,
+    }
+    return list(values or defaults[phase])
 
 
 def _phase_args(args):
@@ -53,12 +50,12 @@ def _phase_args(args):
     if phase == "screen":
         return argparse.Namespace(
             **common,
-            core_sizes=args.core_sizes or screen.HISTORICAL_CORE_SIZES,
+            core_sizes=args.core_sizes or support.screen_HISTORICAL_CORE_SIZES,
         )
     if phase == "endpoint":
         return argparse.Namespace(
             **common,
-            core_sizes=args.core_sizes or endpoint.FINALIST_CORES,
+            core_sizes=args.core_sizes or support.endpoint_FINALIST_CORES,
         )
     finalists = args.core_sizes or args.finalist_core_sizes
     return argparse.Namespace(
@@ -82,7 +79,12 @@ def _patch_manifest(args, phase):
 
 def run_phase(args):
     phase_args = _phase_args(args)
-    analysis = _module(args.phase).run_campaign(phase_args)
+    runners = {
+        "screen": support.screen_run_campaign,
+        "endpoint": support.endpoint_run_campaign,
+        "frontier": support.frontier_run_campaign,
+    }
+    analysis = runners[args.phase](phase_args)
     _patch_manifest(args, args.phase)
     return analysis
 
@@ -101,13 +103,13 @@ def build_parser():
     parser.add_argument("--rss-limit", type=int, default=RSS_LIMIT_BYTES)
     parser.add_argument("--cases", nargs="+",
                         help="explicit phase-compatible topology-atom cases")
-    parser.add_argument("--core-sizes", type=_parse_core_sizes,
+    parser.add_argument("--core-sizes", type=support.screen_parse_core_sizes,
                         help="explicit comma-separated candidate cores")
-    parser.add_argument("--finalist-core-sizes", type=_parse_core_sizes,
-                        default=frontier.DEFAULT_FINALIST_CORE_SIZES,
+    parser.add_argument("--finalist-core-sizes", type=support.screen_parse_core_sizes,
+                        default=support.frontier_DEFAULT_FINALIST_CORE_SIZES,
                         help="frontier finalists; --core-sizes is an alias")
     parser.add_argument("--control-core-size", type=int,
-                        default=frontier.CONTROL_CORE_SIZE)
+                        default=support.frontier_CONTROL_CORE_SIZE)
     return parser
 
 
@@ -124,8 +126,13 @@ def main(argv=None):
         parser.error("build joint_fixed_neighbor_experiment before running qualification")
     try:
         phase_args = _phase_args(args)
+        validators = {
+            "screen": support.screen_case,
+            "endpoint": support.endpoint_case,
+            "frontier": support.screen_case,
+        }
         for value in phase_args.cases:
-            _module(args.phase)._case(value)
+            validators[args.phase](value)
         analysis = run_phase(args)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         parser.error(str(error))

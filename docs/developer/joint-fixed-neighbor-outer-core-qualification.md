@@ -33,7 +33,7 @@ was close enough to remain a finalist.
 
 ### C3: full endpoint qualification
 
-Finalists 12 and 16 were compared with the production control 64 on
+Finalists 12 and 16 were compared with the historical/control core 64 on
 chain/cube × 256/512. All 12 runs completed with `block-stationary` search,
 endpoint certification, `RuntimeConvergence`, inner/gradient/local/identified
 assessment, endpoint trust and replay limits. Final beta/eta/scaled A/C
