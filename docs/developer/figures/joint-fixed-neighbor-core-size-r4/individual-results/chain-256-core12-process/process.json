@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/Users/yslian/Project/em_map_analysis/build/qualification/bin/joint_fixed_neighbor_experiment",
+    "--inexact-one-endpoint",
+    "/Users/yslian/Project/em_map_analysis/docs/developer/figures/joint-fixed-neighbor-core-size-r4/individual-results/chain-256-core12.json",
+    "chain",
+    "256",
+    "12"
+  ],
+  "status": "completed",
+  "sample_interval_seconds": 0.1,
+  "wall_seconds": 149.08485679188743,
+  "exit_code": 0,
+  "sampled_tree_peak_rss_bytes": 238223360,
+  "samples": 1450,
+  "maximum_sampling_gap_seconds": 0.26092187501490116,
+  "os_process_peak_rss_bytes": 237682688
+}

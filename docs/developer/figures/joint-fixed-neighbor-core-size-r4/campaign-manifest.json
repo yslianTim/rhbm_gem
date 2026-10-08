@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "phase": "C3 FixedNeighbor outer-core full endpoint qualification",
+  "source_revision": "76dae9f06071862b7e4a5ad39a47f2011ea98668",
+  "source_sha256": "8ad2c321ee0511f27203533e5ae2345ebc64b34a3bed2a21f8891f0cba25f5fb",
+  "benchmark_source_hashes": {
+    "driver": "215f2a82d0aaaf5cf304d070bc96f813ea366a58f0c1204312e69694876dda68",
+    "endpoint": "2897baa9db7903b177472fa904eb8fca965ea980ae5bb0ecf60c674a7b7a1180"
+  },
+  "branch": "develop",
+  "backend": "SPQR",
+  "eigen_threads": 1,
+  "cases": [
+    "chain-256",
+    "cube-256",
+    "chain-512",
+    "cube-512"
+  ],
+  "core_sizes": [
+    12,
+    16,
+    64
+  ],
+  "local_search": "LegacyCompact",
+  "local_work": "OneAcceptedUpdate",
+  "block_order": "Forward",
+  "maximum_sweeps": 30,
+  "measurement_scope": "fixed-neighbor-endpoint-assessed",
+  "resource_envelope": {
+    "wall_seconds": 7200.0,
+    "rss_bytes": 4294967296
+  },
+  "correctness_contract": [
+    "block-stationary",
+    "AC KKT <= 1e-10",
+    "width gradient <= 1e-12",
+    "eta confirmation <= 1e-10",
+    "cache/objective replay within existing limits",
+    "endpoint assessment/trust",
+    "RuntimeConvergence"
+  ],
+  "analysis": {
+    "qualification_gate": "passed",
+    "qualified_core_sizes": [
+      12,
+      16
+    ]
+  }
+}

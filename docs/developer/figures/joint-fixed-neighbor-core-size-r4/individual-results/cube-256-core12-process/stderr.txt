@@ -1,0 +1,38 @@
+cube-256 FixedNeighbor started
+cube-256 FixedNeighbor sweep 1 KKT=0.0125586 width-grad=0.000183875 seconds=3.09688
+cube-256 FixedNeighbor sweep 2 KKT=0.00141405 width-grad=5.00889e-06 seconds=3.04191
+cube-256 FixedNeighbor sweep 3 KKT=0.000309551 width-grad=1.55624e-06 seconds=3.06882
+cube-256 FixedNeighbor sweep 4 KKT=8.25544e-05 width-grad=3.23349e-07 seconds=3.05105
+cube-256 FixedNeighbor sweep 5 KKT=2.42885e-05 width-grad=9.42257e-08 seconds=3.05164
+cube-256 FixedNeighbor sweep 6 KKT=6.63514e-06 width-grad=2.60537e-08 seconds=3.05554
+cube-256 FixedNeighbor sweep 7 KKT=1.75748e-06 width-grad=6.92724e-09 seconds=3.06123
+cube-256 FixedNeighbor sweep 8 KKT=4.62155e-07 width-grad=1.8236e-09 seconds=3.05919
+cube-256 FixedNeighbor sweep 9 KKT=1.2212e-07 width-grad=4.82022e-10 seconds=3.05714
+cube-256 FixedNeighbor sweep 10 KKT=3.26356e-08 width-grad=1.28829e-10 seconds=3.03818
+cube-256 FixedNeighbor sweep 11 KKT=8.85166e-09 width-grad=3.49434e-11 seconds=3.16306
+cube-256 FixedNeighbor sweep 12 KKT=2.44043e-09 width-grad=9.63407e-12 seconds=3.08441
+cube-256 FixedNeighbor sweep 13 KKT=6.84013e-10 width-grad=2.70023e-12 seconds=3.06951
+cube-256 FixedNeighbor sweep 14 KKT=1.94728e-10 width-grad=7.68687e-13 seconds=3.03833
+cube-256 FixedNeighbor sweep 15 KKT=5.62203e-11 width-grad=2.21922e-13 seconds=3.06285
+cube-256 FixedNeighbor sweep 16 KKT=1.68022e-11 width-grad=6.68785e-14 seconds=3.07729
+cube-256 FixedNeighbor sweep 17 KKT=5.36551e-12 width-grad=2.13466e-14 seconds=3.08732
+cube-256 FixedNeighbor sweep 18 KKT=1.69897e-12 width-grad=8.11373e-15 seconds=3.06462
+cube-256 FixedNeighbor finished in 161.189 s; converged=1 sweeps=18 KKT=1.69897e-12 endpoint=1 runtime=Passed
+      162.02 real       160.35 user         0.67 sys
+           299417600  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               59830  page reclaims
+                 186  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  32  voluntary context switches
+               46180  involuntary context switches
+       1951440070283  instructions retired
+        499611983145  cycles elapsed
+           234178368  peak memory footprint

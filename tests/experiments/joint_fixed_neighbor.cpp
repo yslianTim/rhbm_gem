@@ -953,7 +953,8 @@ int main(int argc,char ** argv)
             std::string(argv[1])!="--qualification" && std::string(argv[1])!="--scaling-only" &&
             std::string(argv[1])!="--attribution" &&
             std::string(argv[1])!="--full-attribution" &&
-            std::string(argv[1])!="--inexact-one" && std::string(argv[1])!="--inexact-two" &&
+            std::string(argv[1])!="--inexact-one" && std::string(argv[1])!="--inexact-one-endpoint" &&
+            std::string(argv[1])!="--inexact-two" &&
             std::string(argv[1])!="--inexact-one-search" && std::string(argv[1])!="--matched-control" &&
             std::string(argv[1])!="--local-legacy" &&
             std::string(argv[1])!="--local-operator-identity" && std::string(argv[1])!="--local-operator-diagonal" &&
@@ -971,7 +972,7 @@ int main(int argc,char ** argv)
             std::string(argv[1])!="--tile-8192" && std::string(argv[1])!="--tile-16384" &&
             std::string(argv[1])!="--neighbor-forward" && std::string(argv[1])!="--neighbor-reverse" &&
             std::string(argv[1])!="--scaling-forward" && std::string(argv[1])!="--scaling-reverse"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--operator-diagnostic|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--matched-control|--local-legacy|--local-operator-identity|--local-operator-diagonal|--local-operator-schwarz|--local-operator-identity-search|--local-operator-diagonal-search|--local-operator-schwarz-search|--local-operator-schwarz-two|--local-operator-schwarz-full|--local-operator-schwarz-polish-one|--local-operator-schwarz-polish-two|--tile-1024|--tile-2048|--tile-4096|--tile-8192|--tile-16384|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [OUTER_CORE_ATOMS [LOCAL_SCHWARZ_CORE_ATOMS LOCAL_SCHWARZ_OVERLAP_HOPS LOCAL_SCHWARZ_MAX_BLOCK_ATOMS]]");
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--operator-diagnostic|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-one-endpoint|--inexact-two|--inexact-one-search|--matched-control|--local-legacy|--local-operator-identity|--local-operator-diagonal|--local-operator-schwarz|--local-operator-identity-search|--local-operator-diagonal-search|--local-operator-schwarz-search|--local-operator-schwarz-two|--local-operator-schwarz-full|--local-operator-schwarz-polish-one|--local-operator-schwarz-polish-two|--tile-1024|--tile-2048|--tile-4096|--tile-8192|--tile-16384|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [OUTER_CORE_ATOMS [LOCAL_SCHWARZ_CORE_ATOMS LOCAL_SCHWARZ_OVERLAP_HOPS LOCAL_SCHWARZ_MAX_BLOCK_ATOMS]]");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
@@ -990,11 +991,12 @@ int main(int argc,char ** argv)
             operator_polish_mode || operator_diagnostic;
         const bool tile_mode=mode=="--tile-1024" || mode=="--tile-2048" || mode=="--tile-4096" ||
             mode=="--tile-8192" || mode=="--tile-16384";
-        const bool local_search_mode=mode=="--inexact-one-search" || mode=="--local-legacy" || operator_mode ||
+        const bool local_search_mode=mode=="--inexact-one-search" || mode=="--inexact-one-endpoint" ||
+            mode=="--local-legacy" || operator_mode ||
             tile_mode || operator_diagnostic;
         const bool local_qualification_mode=mode=="--local-legacy" || operator_mode || tile_mode || operator_diagnostic;
         if(argc>=6 && !local_search_mode && mode!="--matched-control")
-            throw std::invalid_argument("OUTER_CORE_ATOMS is supported only with --inexact-one-search, local operator modes, or --matched-control.");
+            throw std::invalid_argument("OUTER_CORE_ATOMS is supported only with --inexact-one-search, --inexact-one-endpoint, local operator modes, or --matched-control.");
         if(argc>6 && argc!=9)
             throw std::invalid_argument("LOCAL_SCHWARZ_CORE_ATOMS, LOCAL_SCHWARZ_OVERLAP_HOPS, and LOCAL_SCHWARZ_MAX_BLOCK_ATOMS must be provided together.");
         const std::size_t core_atoms=argc>=6 ? static_cast<std::size_t>(std::stoul(argv[5])) : 128;
