@@ -8,4 +8,4 @@ The formal four-point gate uses 256, 512, 768, and 1024 atoms separately by topo
 
 Both 2048 frontier searches completed and confirmed stationarity. Chain used 7 sweeps in 4496.4 seconds; cube used 18 sweeps in 11314.9 seconds. Endpoint assessment was skipped as planned. Local factor columns remained bounded at 256 across all sizes; maximum local rows were 58300 (chain) and 52464 (cube). Process peak RSS varies by workload and scope and is not evidence of constant memory.
 
-The formal scaling gate supports proceeding to converged order-sensitivity measurements. It does not by itself promote FixedNeighbor; LegacyCompact remains the production default. The raw measurements and per-case status are in `individual-results/`, `analysis.json`, and `summary.csv`.
+The formal scaling gate supports proceeding to converged order-sensitivity measurements. It does not by itself promote FixedNeighbor; LegacyCompact remains the production default. The compact analysis and summary remain in this directory; the raw `individual-results/` telemetry has been pruned as historical evidence.

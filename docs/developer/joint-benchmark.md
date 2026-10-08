@@ -610,8 +610,9 @@ Derivative reduction dominated every completed assessment, accounting for
 512 timeouts. Total assessment grew 5.55x for chain and 5.24x for cube from
 128 to 256. The 512 timeout rows retain the completed stages, active stage,
 stage dimensions, 600-second process wall, and peak RSS (581.8 MiB for chain;
-2.64 GiB for cube). Their stage checkpoints and per-run records are available
-in the assessment campaign JSON, CSV, analysis, and `individual-results/`.
+2.64 GiB for cube). Their stage checkpoints are retained in the assessment
+campaign JSON, CSV and analysis; the duplicated per-run `individual-results/`
+telemetry was pruned after the campaign was classified as historical evidence.
 
 ### Derivative-reduction scaling
 

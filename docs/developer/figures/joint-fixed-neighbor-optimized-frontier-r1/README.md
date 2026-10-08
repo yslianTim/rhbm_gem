@@ -6,4 +6,4 @@ Formal envelope: 600.0 seconds. Diagnostic envelope: 7200.0 seconds.
 
 Route position: **OperatorPcg-dominant**.
 
-Promotion gate: **deferred**. OperatorPcg remained fastest and passed the formal envelope at every matched point; the optimized FixedNeighbor route had lower RSS, but this campaign did not show a formal resource-survival case that warrants an internal-route promotion.
+Promotion gate: **deferred**. OperatorPcg remained fastest and passed the formal envelope at every matched point; the historical OneAccepted/core64 FixedNeighbor route had lower RSS, but this campaign did not show a formal resource-survival case that warrants an internal-route promotion. The compact evidence remains; raw per-case telemetry was pruned after the route was superseded by the qualified core12 policy.
