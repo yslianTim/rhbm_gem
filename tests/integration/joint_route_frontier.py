@@ -16,6 +16,13 @@ ROUTES = {
     'OperatorPcg': 'schwarz',
     'FixedNeighbor': 'fixed-neighbor',
 }
+FIXED_NEIGHBOR_POLICY = {
+    'core_atoms': 12,
+    'local_work': 'OneAcceptedUpdate',
+    'block_order': 'forward',
+    'local_search': 'LegacyCompact',
+    'maximum_sweeps': 30,
+}
 SCOPES = {'search-only': 'search', 'full-endpoint': 'solve'}
 DEFAULT_CASES = tuple(
     f'{topology}-{atoms}'
@@ -301,6 +308,8 @@ def _run_case(args, profile, case, route, timeout, report_path):
         '--schwarz-max-block-atoms', '512', '--schwarz-storage-mib', '512',
         '--schwarz-scratch-mib', '256',
     ]
+    if route == 'FixedNeighbor':
+        command.extend(['--fixed-local-work', 'one', '--fixed-core-atoms', '12'])
     print(f'Running {case} {route} {profile} with {timeout:g}s cap', flush=True)
     completed = subprocess.run(command, cwd=ROOT, check=False)
     if not report_path.is_file():
@@ -350,8 +359,9 @@ def run_campaign(args):
         'route_policy': {
             'LegacyCompact': 'global LegacyCompact search',
             'OperatorPcg': 'global OperatorPcg with Schwarz, 128 core atoms, one overlap hop',
-            'FixedNeighbor': 'serial forward Gauss-Seidel, 128 atom core, local LegacyCompact',
+            'FixedNeighbor': 'serial forward Gauss-Seidel, 12 atom core, OneAcceptedUpdate, local LegacyCompact',
         },
+        'fixed_neighbor_policy': FIXED_NEIGHBOR_POLICY,
         'formal_results': [],
     }
     cache = (args.build_dir / 'CMakeCache.txt').read_text()

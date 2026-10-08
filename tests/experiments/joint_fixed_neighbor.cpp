@@ -683,8 +683,10 @@ int main(int argc,char ** argv)
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
         const std::string mode(argv[1]);
         const bool local_search_mode=mode=="--inexact-one-search" || mode=="--inexact-one-endpoint";
-        if(argc>=6 && !local_search_mode)
-            throw std::invalid_argument("OUTER_CORE_ATOMS is supported only with --inexact-one-search or --inexact-one-endpoint.");
+        if(argc>=6 && !local_search_mode && mode!="--neighbor-only" && mode!="--scaling-only" &&
+            mode!="--neighbor-forward" && mode!="--neighbor-reverse" && mode!="--scaling-forward" &&
+            mode!="--scaling-reverse")
+            throw std::invalid_argument("OUTER_CORE_ATOMS is supported only with a FixedNeighbor search mode.");
         const std::size_t core_atoms=argc>=6 ? static_cast<std::size_t>(std::stoul(argv[5])) : 128;
         if(core_atoms==0) throw std::invalid_argument("CORE_ATOMS must be positive.");
         Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--case",

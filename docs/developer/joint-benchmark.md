@@ -128,6 +128,13 @@ workload and stops before its final endpoint assessment. Each writes
 qualification are not run. Search-only results do not establish runtime
 convergence or endpoint qualification. For example:
 
+For `--preconditioner fixed-neighbor`, the benchmark defaults are explicitly
+`--fixed-core-atoms 12` and `--fixed-local-work one`, matching the production
+policy. The resulting `metadata.solver_policy` records the core, local work,
+forward order, 30-sweep budget, `LegacyCompact` local search, and whether the
+policy is `production` or an explicit `custom` override. Historical or research
+comparisons must pass their core and local-work values explicitly.
+
 ```sh
 python3 tests/integration/joint_benchmark.py \
   --profile search --case chain-512 --preconditioner schwarz \

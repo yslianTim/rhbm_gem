@@ -89,6 +89,16 @@ def test_output_writer_uses_both_resource_envelope_records():
         assert '7200-second wall cap' in readme
 
 
+def test_fixed_neighbor_route_manifest_locks_the_production_policy():
+    assert frontier.FIXED_NEIGHBOR_POLICY == {
+        'core_atoms': 12,
+        'local_work': 'OneAcceptedUpdate',
+        'block_order': 'forward',
+        'local_search': 'LegacyCompact',
+        'maximum_sweeps': 30,
+    }
+
+
 def test_skip_diagnostics_records_formal_timeouts_without_retrying():
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
@@ -133,6 +143,7 @@ if __name__ == '__main__':
         test_least_rss_uses_formal_timeout_observation_when_diagnostic_is_deferred,
         test_2048_is_appended_only_after_all_lower_cases,
         test_output_writer_uses_both_resource_envelope_records,
+        test_fixed_neighbor_route_manifest_locks_the_production_policy,
         test_skip_diagnostics_records_formal_timeouts_without_retrying,
     )
     suite = unittest.TestSuite(unittest.FunctionTestCase(test) for test in tests)
