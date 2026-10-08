@@ -1,4 +1,5 @@
 """Measure repeated fixed-neighbor search performance for qualified outer cores."""
+# Internal frontier-phase implementation. Use joint_fixed_neighbor_outer_core_qualification.py.
 from __future__ import annotations
 
 import argparse

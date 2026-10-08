@@ -1,4 +1,5 @@
 """Qualify finalist FixedNeighbor outer cores with full endpoint assessment."""
+# Internal endpoint-phase implementation. Use joint_fixed_neighbor_outer_core_qualification.py.
 from __future__ import annotations
 
 import argparse

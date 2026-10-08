@@ -42,7 +42,7 @@ the endpoint campaign did not require bitwise-identical trajectories.
 
 See the [C3 README](figures/joint-fixed-neighbor-core-size-r4/README.md),
 [C3 analysis](figures/joint-fixed-neighbor-core-size-r4/analysis.json), and
-the [endpoint driver](../../tests/integration/joint_fixed_neighbor_outer_core_endpoint.py).
+the endpoint phase of the [outer-core qualification driver](../../tests/integration/joint_fixed_neighbor_outer_core_qualification.py).
 
 ### C4: repeated frontier
 
@@ -67,8 +67,8 @@ candidate sweep count was 23.
 The complete matched records are in the [C4 README](figures/joint-fixed-neighbor-core-size-r5/README.md),
 [C4 analysis](figures/joint-fixed-neighbor-core-size-r5/analysis.json), and
 [C4 summary CSV](figures/joint-fixed-neighbor-core-size-r5/summary.csv). The
-reproducible driver is
-[joint_fixed_neighbor_outer_core_frontier.py](../../tests/integration/joint_fixed_neighbor_outer_core_frontier.py).
+reproducible frontier phase is exposed by the
+[outer-core qualification driver](../../tests/integration/joint_fixed_neighbor_outer_core_qualification.py).
 
 ## Production decision
 

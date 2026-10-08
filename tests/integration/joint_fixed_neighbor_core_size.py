@@ -1,4 +1,5 @@
 """Compare selected bounded local-work performance across core sizes."""
+# Internal screen-phase implementation. Use joint_fixed_neighbor_outer_core_qualification.py.
 from __future__ import annotations
 
 import argparse
