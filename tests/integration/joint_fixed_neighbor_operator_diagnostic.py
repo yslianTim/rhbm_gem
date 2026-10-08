@@ -119,15 +119,34 @@ def _scaled_ac_difference(operator, legacy):
 
 def _state(case):
     fixed = _fixed(case)
+    assessment = _last_assessment(case)
+    correction = assessment.get("correction", {})
     return {
         "eta": fixed.get("final_eta", []),
         "beta": fixed.get("final_beta", []),
         "objective": fixed.get("objective"),
         "ac_scaling_weights": fixed.get("final_ac_scaling_weights", []),
-        "assessment": _last_assessment(case),
+        "assessment": assessment,
+        "correction_vector": correction.get("vector", []),
         "runtime_convergence": fixed.get("runtime_convergence"),
         "endpoint_certified": fixed.get("endpoint_certified"),
     }
+
+
+def _largest_corrections(state, limit=5):
+    vector = state.get("correction_vector", [])
+    eta = state.get("eta", [])
+    entries = []
+    for atom, value in enumerate(vector):
+        if not _finite(value):
+            continue
+        width = math.exp(eta[atom]) if atom < len(eta) and _finite(eta[atom]) else None
+        entries.append({"atom": atom, "value": value, "width": width,
+                        "absolute_value": abs(value)})
+    entries.sort(key=lambda item: (-item["absolute_value"], item["atom"]))
+    for item in entries:
+        item.pop("absolute_value")
+    return entries[:limit]
 
 
 def _state_summary(state):
@@ -142,6 +161,7 @@ def _state_summary(state):
         "reference_gradient_inf_norm": assessment.get("reference_gradient_inf_norm"),
         "correction_inf_norm": correction.get("inf_norm", assessment.get("local_correction_inf_norm")),
         "correction_max_coordinate": correction.get("max_coordinate"),
+        "largest_corrections": _largest_corrections(state),
         "runtime_convergence": state["runtime_convergence"],
         "endpoint_certified": state["endpoint_certified"],
     }
@@ -177,11 +197,16 @@ def analyze_case(operator_case, legacy_case):
         "atoms": operator_case.get("atoms"),
         "policy": {
             "outer_search": "FixedNeighbor",
-            "core_atoms": operator_fixed.get("core_atoms", operator_case.get("core_atoms")),
+            "outer_core_atoms": operator_fixed.get("outer_core_atoms",
+                                                   operator_fixed.get("core_atoms",
+                                                                      operator_case.get("core_atoms"))),
             "block_order": operator_fixed.get("block_order"),
             "local_work": operator_fixed.get("local_work_policy"),
             "operator_local_search": operator_fixed.get("local_search_method"),
             "operator_preconditioner": operator_fixed.get("local_preconditioner"),
+            "local_schwarz_core_atoms": operator_fixed.get("local_schwarz_core_atoms"),
+            "local_schwarz_overlap_hops": operator_fixed.get("local_schwarz_overlap_hops"),
+            "local_schwarz_max_block_atoms": operator_fixed.get("local_schwarz_max_block_atoms"),
         },
         "operator": _state_summary(operator),
         "legacy": _state_summary(legacy),

@@ -8,6 +8,8 @@ def _case(method, correction, objective, offset=0.0):
         "fixed_neighbor": {
             "core_atoms": 2, "block_order": "forward", "local_work_policy": "OneAcceptedLocalUpdate",
             "local_search_method": method, "local_preconditioner": "Schwarz",
+            "outer_core_atoms": 2, "local_schwarz_core_atoms": 2,
+            "local_schwarz_overlap_hops": 0, "local_schwarz_max_block_atoms": 2,
             "search_reason": "block-stationary", "endpoint_certified": method == "LegacyCompact",
             "runtime_convergence": "Passed" if method == "LegacyCompact" else "Failed",
             "objective": objective, "final_eta": [0.1 + offset] * 4,
@@ -54,6 +56,11 @@ def test_analyze_case_preserves_trajectory_and_comparison():
     assert abs(report["comparison"]["eta_inf_difference"] - 1e-12) < 1e-15
     assert abs(report["comparison"]["correction_vector_inf_difference"] - 1.397e-10) < 1e-15
     assert report["operator"]["reference_coefficient_difference"] == 7e-11
+    assert report["policy"]["outer_core_atoms"] == 2
+    assert report["policy"]["local_schwarz_core_atoms"] == 2
+    assert report["operator"]["largest_corrections"][0] == {
+        "atom": 0, "value": 1.4e-10, "width": 1.1051709180756477,
+    }
 
 
 def test_rank_change_takes_precedence_over_trajectory_shape():
