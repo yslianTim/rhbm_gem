@@ -853,6 +853,9 @@ int main(int argc,char ** argv)
             std::string(argv[1])!="--local-legacy" &&
             std::string(argv[1])!="--local-operator-identity" && std::string(argv[1])!="--local-operator-diagonal" &&
             std::string(argv[1])!="--local-operator-schwarz" &&
+            std::string(argv[1])!="--local-operator-identity-search" &&
+            std::string(argv[1])!="--local-operator-diagonal-search" &&
+            std::string(argv[1])!="--local-operator-schwarz-search" &&
             std::string(argv[1])!="--local-operator-schwarz-two" &&
             std::string(argv[1])!="--local-operator-schwarz-full" &&
             std::string(argv[1])!="--operator-diagnostic" &&
@@ -861,13 +864,15 @@ int main(int argc,char ** argv)
             std::string(argv[1])!="--tile-8192" && std::string(argv[1])!="--tile-16384" &&
             std::string(argv[1])!="--neighbor-forward" && std::string(argv[1])!="--neighbor-reverse" &&
             std::string(argv[1])!="--scaling-forward" && std::string(argv[1])!="--scaling-reverse"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--operator-diagnostic|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--matched-control|--local-legacy|--local-operator-identity|--local-operator-diagonal|--local-operator-schwarz|--local-operator-schwarz-two|--local-operator-schwarz-full|--tile-1024|--tile-2048|--tile-4096|--tile-8192|--tile-16384|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [OUTER_CORE_ATOMS [LOCAL_SCHWARZ_CORE_ATOMS LOCAL_SCHWARZ_OVERLAP_HOPS LOCAL_SCHWARZ_MAX_BLOCK_ATOMS]]");
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--operator-diagnostic|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--matched-control|--local-legacy|--local-operator-identity|--local-operator-diagonal|--local-operator-schwarz|--local-operator-identity-search|--local-operator-diagonal-search|--local-operator-schwarz-search|--local-operator-schwarz-two|--local-operator-schwarz-full|--tile-1024|--tile-2048|--tile-4096|--tile-8192|--tile-16384|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [OUTER_CORE_ATOMS [LOCAL_SCHWARZ_CORE_ATOMS LOCAL_SCHWARZ_OVERLAP_HOPS LOCAL_SCHWARZ_MAX_BLOCK_ATOMS]]");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
         const std::string mode(argv[1]);
+        const bool local_operator_search_mode=mode=="--local-operator-identity-search" ||
+            mode=="--local-operator-diagonal-search" || mode=="--local-operator-schwarz-search";
         const bool local_operator_mode=mode=="--local-operator-identity" || mode=="--local-operator-diagonal" ||
-            mode=="--local-operator-schwarz";
+            mode=="--local-operator-schwarz" || local_operator_search_mode;
         const bool operator_two_mode=mode=="--local-operator-schwarz-two";
         const bool operator_full_mode=mode=="--local-operator-schwarz-full";
         const bool operator_diagnostic=mode=="--operator-diagnostic";
@@ -894,8 +899,9 @@ int main(int argc,char ** argv)
         }
         const auto local_search=operator_mode ? n::FixedNeighborLocalSearch::OperatorPcg :
             n::FixedNeighborLocalSearch::LegacyCompact;
-        const auto local_preconditioner=mode=="--local-operator-identity" ? n::FixedNeighborLocalPreconditioner::Identity :
-            mode=="--local-operator-schwarz" ? n::FixedNeighborLocalPreconditioner::Schwarz :
+        const auto local_preconditioner=mode=="--local-operator-identity" || mode=="--local-operator-identity-search" ?
+            n::FixedNeighborLocalPreconditioner::Identity :
+            mode=="--local-operator-schwarz" || mode=="--local-operator-schwarz-search" ? n::FixedNeighborLocalPreconditioner::Schwarz :
             operator_two_mode || operator_full_mode ? n::FixedNeighborLocalPreconditioner::Schwarz :
             operator_diagnostic ? n::FixedNeighborLocalPreconditioner::Schwarz :
             n::FixedNeighborLocalPreconditioner::Diagonal;
@@ -907,7 +913,8 @@ int main(int argc,char ** argv)
         Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--case",mode=="--decompose",
             mode=="--certified-local",mode=="--qualification",operator_diagnostic,
             mode=="--scaling-only" || mode=="--attribution" || mode=="--scaling-forward" || mode=="--scaling-reverse" ||
-                mode=="--inexact-one-search" || (local_qualification_mode && std::stoi(argv[4])>=1024) || mode=="--matched-control",
+            mode=="--inexact-one-search" || local_operator_search_mode ||
+                (local_qualification_mode && std::stoi(argv[4])>=1024) || mode=="--matched-control",
             mode=="--neighbor-reverse" || mode=="--scaling-reverse",
             mode=="--neighbor-forward" || mode=="--neighbor-reverse" ||
                 mode=="--scaling-forward" || mode=="--scaling-reverse" ||
