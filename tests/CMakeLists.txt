@@ -474,9 +474,13 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         joint_fixed_neighbor_inexact_qualification_test
         joint_fixed_neighbor_outer_core_qualification_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm")
-    set_tests_properties(joint_fixed_neighbor_inexact_test joint_fixed_neighbor_inexact_qualification_test
-        joint_fixed_neighbor_outer_core_qualification_test joint_experiment_cleanup_test
+    set_tests_properties(joint_benchmark_contract_test joint_route_frontier_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:scalability")
+    set_tests_properties(joint_fixed_neighbor_inexact_test
+        joint_fixed_neighbor_inexact_qualification_test
+        joint_fixed_neighbor_outer_core_qualification_test
+        joint_experiment_cleanup_test
+        PROPERTIES LABELS "core;domain:integration;intent:algorithm")
     add_test(NAME joint_component_evidence_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_evidence_test.py")
     add_test(NAME joint_fixed_b_scaling_analysis_test
@@ -488,6 +492,10 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     add_test(NAME joint_fixed_neighbor_prepared_block_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_prepared_block_test.py")
     set_tests_properties(joint_fixed_neighbor_stationarity_test joint_fixed_neighbor_order_test
+        PROPERTIES LABELS "core;domain:integration;intent:algorithm")
+    set_tests_properties(joint_fixed_neighbor_prepared_block_test
+        PROPERTIES LABELS "core;domain:integration;intent:algorithm")
+    set_tests_properties(joint_fixed_b_scaling_analysis_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:scalability")
     add_test(NAME joint_component_runtime_runner_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime_test.py")
@@ -497,8 +505,7 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     add_test(NAME joint_component_physical_smoke
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime.py"
             physical-smoke --executable $<TARGET_FILE:joint_component_runtime>)
-    set_tests_properties(joint_component_evidence_test joint_fixed_b_scaling_analysis_test
-        joint_fixed_neighbor_prepared_block_test
+    set_tests_properties(joint_component_evidence_test
         joint_component_runtime_runner_test
         joint_component_regression joint_component_physical_smoke
         PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:runtime")
@@ -508,7 +515,7 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
             COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_benchmark_test.py"
                 --smoke "${PROJECT_BINARY_DIR}")
         set_tests_properties(joint_benchmark_smoke PROPERTIES
-            LABELS "benchmark;domain:integration;intent:benchmark;joint:benchmark")
+            LABELS "benchmark;domain:integration;intent:benchmark;joint:scalability")
     endif()
 
     if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
