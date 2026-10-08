@@ -54,6 +54,10 @@ The C4 measurements that explain the adopted core are:
 Every measured run passed search/replay correctness. The 64-atom values are
 historical controls, not the current production default.
 
+The former OneAccepted/core64 optimized frontier is superseded by the
+qualified core12 production policy. Its compact comparison is retained as
+historical evidence; it is not an active route or benchmark default.
+
 ## Closed directions
 
 These results are retained as compact negative evidence only. They do not

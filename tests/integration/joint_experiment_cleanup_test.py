@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 RETIRED_DRIVERS = (
+    "joint_optimized_frontier.py",
     "joint_fixed_neighbor_analysis.py",
     "joint_fixed_neighbor_attribution.py",
     "joint_fixed_neighbor_attribution_campaign.py",
@@ -21,6 +22,7 @@ RETIRED_DRIVERS = (
 )
 
 RETIRED_TESTS = (
+    "joint_optimized_frontier_test.py",
     "joint_factor_ownership_analysis_test.py",
     "joint_projected_tail_analysis_test.py",
     "joint_projected_width_analysis_test.py",
