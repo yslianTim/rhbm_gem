@@ -544,13 +544,14 @@ TEST(JointProgressTest, FixedNeighborUsesComponentRouteAndQualifiedDefaults)
     const std::vector<double> initial{.55, .55};
     joint::SearchPolicy policy;
     policy.method=joint::SearchMethod::FixedNeighbor;
+    EXPECT_EQ(policy.fixed_neighbor.core_atoms,12u);
     std::vector<joint::JointProgressEvent> events;
     const auto fit=joint::FitWithSearchPolicy(problem,initial,policy,
         [&](const auto & event) { events.push_back(event); });
 
     ASSERT_EQ(fit.components.size(),2u);
     EXPECT_EQ(fit.solver_provenance.search_method,"fixed-neighbor");
-    EXPECT_EQ(fit.solver_provenance.fixed_neighbor_core_atoms,64u);
+    EXPECT_EQ(fit.solver_provenance.fixed_neighbor_core_atoms,12u);
     EXPECT_EQ(fit.solver_provenance.fixed_neighbor_local_work,"one-accepted");
     ASSERT_TRUE(fit.assembled_state);
     EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
@@ -558,7 +559,7 @@ TEST(JointProgressTest, FixedNeighborUsesComponentRouteAndQualifiedDefaults)
     ASSERT_TRUE(events.front().solver_route);
     EXPECT_EQ(events.front().solver_route->search_method,joint::SearchMethod::FixedNeighbor);
     EXPECT_FALSE(events.front().solver_route->preconditioner);
-    EXPECT_EQ(events.front().solver_route->fixed_neighbor_core_atoms,64u);
+    EXPECT_EQ(events.front().solver_route->fixed_neighbor_core_atoms,12u);
     ASSERT_TRUE(std::any_of(events.begin(),events.end(),[](const auto & event) {
         return event.fixed_neighbor && event.fixed_neighbor->sweep>0;
     }));
