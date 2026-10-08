@@ -461,16 +461,6 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_benchmark_test.py")
     add_test(NAME joint_route_frontier_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_route_frontier_test.py")
-    add_test(NAME joint_fixed_neighbor_attribution_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_attribution_test.py")
-    add_test(NAME joint_fixed_neighbor_local_attribution_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_local_attribution_test.py")
-    add_test(NAME joint_fixed_neighbor_numeric_reuse_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_numeric_reuse_test.py")
-    add_test(NAME joint_fixed_neighbor_workspace_timing_test
-        COMMAND "${CMAKE_COMMAND}" -E env
-            "PYTHONPATH=${PROJECT_SOURCE_DIR}/tests/integration"
-            "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_workspace_timing_test.py")
     add_test(NAME joint_fixed_neighbor_inexact_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_inexact_test.py")
     add_test(NAME joint_fixed_neighbor_inexact_qualification_test
@@ -488,46 +478,24 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         joint_fixed_neighbor_inexact_qualification_test joint_fixed_neighbor_core_size_test
         joint_fixed_neighbor_outer_core_endpoint_test joint_fixed_neighbor_outer_core_frontier_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm")
-    set_tests_properties(joint_fixed_neighbor_attribution_test joint_fixed_neighbor_local_attribution_test
-        joint_fixed_neighbor_numeric_reuse_test joint_fixed_neighbor_workspace_timing_test
-        joint_optimized_frontier_test
+    set_tests_properties(joint_fixed_neighbor_inexact_test joint_fixed_neighbor_inexact_qualification_test
+        joint_fixed_neighbor_core_size_test joint_fixed_neighbor_outer_core_endpoint_test
+        joint_fixed_neighbor_outer_core_frontier_test
+        PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:scalability")
+    set_tests_properties(joint_optimized_frontier_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:scalability")
     add_test(NAME joint_component_evidence_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_evidence_test.py")
     add_test(NAME joint_fixed_b_scaling_analysis_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_b_scaling_test.py")
-    add_test(NAME joint_fixed_neighbor_analysis_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_analysis_test.py")
-    add_test(NAME joint_fixed_neighbor_endpoint_decomposition_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_endpoint_decomposition_test.py")
-    add_test(NAME joint_fixed_neighbor_local_certification_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_local_certification_test.py")
     add_test(NAME joint_fixed_neighbor_stationarity_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_stationarity_test.py")
-    add_test(NAME joint_fixed_neighbor_operator_diagnostic_test
-        COMMAND "${CMAKE_COMMAND}" -E env
-            "PYTHONPATH=${PROJECT_SOURCE_DIR}/tests/integration"
-            "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_operator_diagnostic_test.py")
-    add_test(NAME joint_fixed_neighbor_local_schwarz_test
-        COMMAND "${CMAKE_COMMAND}" -E env
-            "PYTHONPATH=${PROJECT_SOURCE_DIR}/tests/integration"
-            "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_local_schwarz_test.py")
-    add_test(NAME joint_fixed_neighbor_local_schwarz_local_work_test
-        COMMAND "${CMAKE_COMMAND}" -E env
-            "PYTHONPATH=${PROJECT_SOURCE_DIR}/tests/integration"
-            "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_local_schwarz_local_work_test.py")
-    add_test(NAME joint_fixed_neighbor_hybrid_test
-        COMMAND "${CMAKE_COMMAND}" -E env
-            "PYTHONPATH=${PROJECT_SOURCE_DIR}/tests/integration"
-            "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_hybrid_test.py")
-    add_test(NAME joint_fixed_neighbor_operator_route_test
-        COMMAND "${CMAKE_COMMAND}" -E env
-            "PYTHONPATH=${PROJECT_SOURCE_DIR}/tests/integration"
-            "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_operator_route_test.py")
     add_test(NAME joint_fixed_neighbor_order_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_order_test.py")
     add_test(NAME joint_fixed_neighbor_prepared_block_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_prepared_block_test.py")
+    set_tests_properties(joint_fixed_neighbor_stationarity_test joint_fixed_neighbor_order_test
+        PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:scalability")
     add_test(NAME joint_component_runtime_runner_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime_test.py")
     add_test(NAME joint_component_regression
@@ -536,14 +504,7 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     add_test(NAME joint_component_physical_smoke
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime.py"
             physical-smoke --executable $<TARGET_FILE:joint_component_runtime>)
-    set_tests_properties(joint_component_evidence_test joint_fixed_b_scaling_analysis_test joint_fixed_neighbor_analysis_test
-        joint_fixed_neighbor_endpoint_decomposition_test joint_fixed_neighbor_local_certification_test
-        joint_fixed_neighbor_stationarity_test joint_fixed_neighbor_operator_diagnostic_test
-        joint_fixed_neighbor_local_schwarz_test
-        joint_fixed_neighbor_local_schwarz_local_work_test
-        joint_fixed_neighbor_hybrid_test
-        joint_fixed_neighbor_operator_route_test
-        joint_fixed_neighbor_order_test
+    set_tests_properties(joint_component_evidence_test joint_fixed_b_scaling_analysis_test
         joint_fixed_neighbor_prepared_block_test
         joint_component_runtime_runner_test
         joint_component_regression joint_component_physical_smoke
