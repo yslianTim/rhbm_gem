@@ -6,4 +6,4 @@ The sweep observer records the global A/C KKT, width gradient, objective, eta ch
 
 `analysis.json` compares eta-only, scaled-beta-only, and eta-plus-beta confirmation at the existing `1e-10` estimator-level thresholds. It reports each rule's first confirmation sweep, the first sweep passing all five endpoint checks and `RuntimeConvergence`, whether confirmation could stop too early, delay after certification, and `RuntimeConvergence` by sweep. The first coordinate-change observation is excluded from confirmation because no previous complete sweep exists.
 
-The per-case JSON files preserve the complete search telemetry and per-sweep ground truth. `summary.csv` contains the sweep-level comparison used to choose the smallest safe confirmation rule. This qualification does not change numerical search behavior or production defaults.
+The former per-case JSON files preserved complete search telemetry and per-sweep ground truth. The current tree retains the sweep-level comparison used to choose the smallest safe confirmation rule in `analysis.json` and `summary.csv`. This qualification does not change numerical search behavior or production defaults.

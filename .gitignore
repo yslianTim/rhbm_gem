@@ -70,3 +70,11 @@ scripts/user/local/
 
 # Reproducible compact SVD acceptance evidence
 !docs/developer/figures/joint-compact-acceptance/*.gz
+
+# Joint campaign execution telemetry is generated in build/output trees.
+# Compact campaign summaries remain trackable in docs/developer/figures.
+/docs/developer/figures/**/individual-results/
+/docs/developer/figures/**/runs.json
+/docs/developer/figures/**/*.progress.json
+/docs/developer/figures/**/*-process/
+/docs/developer/figures/**/*-run.json

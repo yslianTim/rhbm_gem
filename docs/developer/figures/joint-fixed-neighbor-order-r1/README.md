@@ -14,8 +14,8 @@ Only search-converged endpoints were compared. The scale-aware A/C difference is
 
 All five pairs converged in both orders. The largest parameter differences remain below the existing `1e-10` interpretation bounds; the maximum confirmed-sweep difference is one. For all fully assessed 256/512 cases, both endpoint certification and `RuntimeConvergence` passed in both orders. The 1024 case is explicitly search-only and carries no endpoint or runtime-convergence claim.
 
-Global KKT and width-gradient values are preserved for each direction in `order-analysis.json` and the raw case JSONs. The largest observed local factor width was 256 columns. This is bounded by the 128-atom core, while process RSS remains workload-wide and is not constant-memory evidence.
+Global KKT and width-gradient values are preserved for each direction in `order-analysis.json`. The former raw case JSONs are historical execution telemetry. The largest observed local factor width was 256 columns. This is bounded by the 128-atom core, while process RSS remains workload-wide and is not constant-memory evidence.
 
 The order-sensitivity gate passes, and coordinated/shared-parameter blocks remain deferred. FixedNeighbor is not promoted to a selectable estimator route: 1024/2048 scaling runs did not include full endpoint assessment, and the campaign has no matched large-size baseline establishing an end-to-end resource benefit. `LegacyCompact` remains the production default. `CertifiedLocal` remains diagnostic support.
 
-Raw measurements are in `individual-results/`; the machine-readable comparison and CSV are `order-analysis.json` and `summary.csv`.
+The current tree retains the machine-readable comparison and CSV in `order-analysis.json` and `summary.csv`; raw per-run measurements remain recoverable from Git history.

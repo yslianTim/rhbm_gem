@@ -1,1 +1,0 @@
-cube-1024 fixed-neighbor experiment complete
