@@ -126,11 +126,12 @@ failed the existing local assessment threshold because
 Objective parity was about `1.0e-16` versus LegacyCompact, but objective
 parity and global KKT do not replace endpoint certification.
 
-Therefore Decision Gate A is **failed**. The OperatorPcg local route was not
-promoted, no automatic fallback or threshold relaxation was added, and the
-512/1024 local-operator matrix plus repeated large-case promotion campaign
-were not run. Commit 4 preconditioner qualification and productionization
-commits were consequently not started.
+Therefore the original, pre-geometry Decision Gate A was **failed**. The
+OperatorPcg local route was not promoted, no automatic fallback or threshold
+relaxation was added, and the 512/1024 local-operator matrix plus repeated
+large-case promotion campaign were not run in that historical experiment.
+The revised independent-local-Schwarz campaign and its bounded-polish
+follow-up are recorded below; neither changes the production route.
 
 Because Gate A failed, the exact LegacyCompact tile screen was tested next on
 chain-512. The 8192-row control was the only full-endpoint run; the other
@@ -228,3 +229,187 @@ The current production integration is covered by the runtime and persistence
 checks documented in the main [joint runtime contract](joint-component-runtime.md).
 The current `joint:runtime` lane is 11/11 green after the long frontier and
 diagnostic suites were separated into `joint:scalability`.
+
+## Revised local Schwarz geometry qualification (2026-10-08)
+
+This campaign corrected the experimental confounder in the historical local
+`OperatorPcg + Schwarz` result. The three sizes are now recorded separately:
+
+- `outer_core_atoms = 64`: atoms permitted in one production FixedNeighbor
+  block-coordinate visit.
+- `local_atoms <= 64`: atoms in the particular local Operator problem; the
+  chain/cube 256 workloads had local min/mean/max of `4/51.20/64` and
+  `1/42.67/64`, respectively.
+- `local_schwarz_core_atoms`: the explicit structural core used only to build
+  the local Schwarz preconditioner.
+
+The benchmark-only local policy is explicit and independent of the global
+`SchwarzPolicy`. For these experiments its resource envelope was fixed at
+`local_schwarz_max_block_atoms = 64`; the global default
+`core_atoms=128, overlap_hops=1, max_block_atoms=512` was not changed. The
+JSON records the requested policy, partition count, min/mean/max core and
+overlap atoms, min/mean/max realized block atoms, and mean/max coverage ratio
+without retaining per-action block matrices. The coverage ratio is
+`realized_block_atoms / local_atoms`.
+
+### 128 versus 64 sanity
+
+The deterministic structural test compared the historical `128/1/512`
+policy with `64/1/64` and `64/0/64` on a 64-atom local domain. The result was
+**equivalent** in all three cases: one partition, one realized block of 64
+atoms, zero realized overlap atoms, identical core/overlap assignments,
+identical PCG iteration/state trajectory, and identical objective, eta/beta
+and replay results. The tail blocks also realized the complete local domain,
+not a 128-atom block. Thus the historical `Schwarz-128` result was a
+full-local preconditioner result, not a qualified 128-atom local additive
+Schwarz experiment.
+
+### 256 search screen
+
+All candidates converged in the search-only screen and passed the existing
+search correctness checks. `assessment_local` and `RuntimeConvergence` were
+intentionally `NotRun` here; endpoint assessment was done only after the
+geometry screen. `partition_count` was 35 for chain-256 and 84 for cube-256
+for every Schwarz candidate.
+
+The following values are `chain/cube`; setup is aggregate preconditioner
+setup, and PCG is `mean/max` iterations.
+
+| Local candidate | Search seconds | Schwarz setup seconds | PCG mean/max |
+| --- | ---: | ---: | ---: |
+| Identity | 22.790 / 98.325 | — / — | 6.037/7 / 7.338/13 |
+| Diagonal | 22.979 / 97.196 | — / — | 6.023/7 / 7.248/9 |
+| Schwarz 128/1 | 19.285 / 59.682 | 1.422 / 2.894 | 2.312/4 / 2.193/8 |
+| Schwarz 64/0 | 19.368 / 59.949 | 1.410 / 2.854 | 2.312/4 / 2.193/8 |
+| Schwarz 64/1 | 19.370 / 60.286 | 1.446 / 2.922 | 2.312/4 / 2.193/8 |
+| Schwarz 32/0 | 20.095 / 89.484 | 1.200 / 2.469 | 2.951/5 / 5.423/9 |
+| Schwarz 32/1 | 19.899 / 82.124 | 1.284 / 5.051 | 2.764/4 / 4.342/8 |
+| Schwarz 16/0 | 20.721 / 93.158 | 1.232 / 2.510 | 3.069/5 / 5.788/9 |
+| Schwarz 16/1 | 20.014 / 87.130 | 1.317 / 6.369 | 2.852/5 / 4.642/8 |
+| Schwarz 8/0 | 21.305 / 96.527 | 1.390 / 2.997 | 3.375/5 / 6.562/9 |
+| Schwarz 8/1 | 21.314 / 91.426 | 1.616 / 9.163 | 3.229/5 / 5.184/8 |
+
+| Local candidate | Realized block min/mean/max (chain) | Realized block min/mean/max (cube) | Mean coverage ratio (chain/cube) |
+| --- | ---: | ---: | ---: |
+| Identity / Diagonal | — | — | — / — |
+| Schwarz 128/1 | 4/51.20/64 | 1/42.67/64 | 1.000 / 1.000 |
+| Schwarz 64/0 | 4/51.20/64 | 1/42.67/64 | 1.000 / 1.000 |
+| Schwarz 64/1 | 4/51.20/64 | 1/42.67/64 | 1.000 / 1.000 |
+| Schwarz 32/0 | 4/25.60/32 | 1/21.33/32 | 0.500 / 0.500 |
+| Schwarz 32/1 | 4/26.60/34 | 1/38.83/64 | 0.516 / 0.785 |
+| Schwarz 16/0 | 4/14.22/16 | 1/11.13/16 | 0.278 / 0.261 |
+| Schwarz 16/1 | 4/15.67/18 | 1/29.65/61 | 0.301 / 0.559 |
+| Schwarz 8/0 | 4/7.53/8 | 1/5.22/8 | 0.147 / 0.122 |
+| Schwarz 8/1 | 4/9.24/10 | 1/21.63/45 | 0.174 / 0.403 |
+
+The overlap result is topology-dependent. On the chain, one-hop overlap is
+small and remains close to the nominal sub-block geometry. On the cube, the
+same overlap can inflate a nominal 32/16/8 core to mean realized blocks of
+38.83/29.65/21.63 atoms, with maximum blocks of 64/61/45. This is why the
+realized coverage ratio, not the requested core alone, is the selection
+metric.
+
+### Gate S and endpoint qualification
+
+The full endpoint screen used chain-256 and cube-256 with the existing
+assessment, trust, certification, replay and RuntimeConvergence gates. No
+Schwarz candidate passed both topologies. `Identity` and `Diagonal` were
+search controls and did not receive this endpoint screen.
+
+| Local candidate | `assessment_local` chain/cube | Runtime chain/cube |
+| --- | ---: | --- |
+| Identity | NotRun / NotRun | NotRun / NotRun |
+| Diagonal | NotRun / NotRun | NotRun / NotRun |
+| Schwarz 128/1 | 1.458662500e-10 / 1.002286348e-09 | Failed / Failed |
+| Schwarz 64/0 | 1.458662500e-10 / 1.002286348e-09 | Failed / Failed |
+| Schwarz 64/1 | 1.458662500e-10 / 1.002286348e-09 | Failed / Failed |
+| Schwarz 32/0 | 1.458662500e-10 / 1.002286291e-09 | Failed / Failed |
+| Schwarz 32/1 | 1.458662496e-10 / 1.002286381e-09 | Failed / Failed |
+| Schwarz 16/0 | 1.458662500e-10 / 1.002286377e-09 | Failed / Failed |
+| Schwarz 16/1 | 1.458662500e-10 / 1.002286426e-09 | Failed / Failed |
+| Schwarz 8/0 | 1.458662502e-10 / 1.002286293e-09 | Failed / Failed |
+| Schwarz 8/1 | 1.458662500e-10 / 1.002286380e-09 | Failed / Failed |
+
+The unchanged local correction threshold is `1e-10`; values such as
+`1.4587e-10` remain failures. Therefore Gate S selected **no correctness-
+qualified geometry**. `Schwarz 32/0/64` was retained only for attribution
+because it had the smallest cube correction, nearly the smallest chain
+correction, lower setup cost than 32/1, and a measured coverage near 0.5.
+It is not a production selection.
+
+### Correction attribution
+
+With 32/0/64, the per-sweep diagnostic classified both chain-256 and
+cube-256 as **plateaued**, not decreasing, oscillatory, rank-boundary-driven,
+or active-face-driven. Rank stayed 256. The largest chain correction was
+`1.4586625e-10` at atom 195; the largest cube correction was
+`1.0022863e-9` at atom 73. The corresponding LegacyCompact controls reached
+`3.0066468e-13` and `2.8718686e-11`, respectively. Operator and Legacy
+trajectories therefore differ at a small number of coordinates, but the
+existing endpoint gate still rejects the pure local Operator route.
+
+### Local-work qualification
+
+The selected geometry was held fixed at 32/0/64. Every local-work budget
+failed the unchanged endpoint gate:
+
+| Work policy | Chain search / PCG / correction | Cube search / PCG / correction | Runtime |
+| --- | --- | --- | --- |
+| OneAccepted | 20.006 s / 2.951/5 / 1.459e-10 | 89.328 s / 5.423/9 / 1.002e-9 | Failed / Failed |
+| TwoAccepted | 24.193 s / 2.680/5 / 5.182e-10 | 104.280 s / 5.407/9 / 1.113e-9 | Failed / Failed |
+| Full | 30.387 s / 2.507/5 / 5.028e-10 | 133.751 s / 5.454/9 / 1.067e-9 | Failed / Failed |
+
+Gate A therefore failed for pure tuned OperatorPcg. No pure Operator local-
+work policy was selected.
+
+### Bounded Legacy polish
+
+Because pure OperatorPcg failed, the bounded hybrid prototype was tested with
+the same outer FixedNeighbor route and 32/0/64 local geometry. Confirmation
+was recomputed after every solver switch; a one-polish run was not accepted
+when its eta confirmation still exceeded `1e-10`.
+
+| Policy | Topology | Operator s | Polish s | Total search s | `assessment_local` | Runtime |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| Operator only | chain | 20.006 | 0.000 | 20.006 | 1.459e-10 | Failed |
+| +1 Legacy polish | chain | 19.773 | 129.627 | 29.749 | 1.899e-11 | Failed (eta 1.451e-10) |
+| +2 Legacy polish | chain | 19.954 | 138.822 | 39.968 | 1.899e-11 | Passed |
+| Legacy control | chain | 0.000 | 81.484 | 81.484 | 3.007e-13 | Passed |
+| Operator only | cube | 89.328 | 0.000 | 89.328 | 1.002e-9 | Failed |
+| +1 Legacy polish | cube | 89.114 | 112.561 | 98.268 | 9.116e-11 | Failed (eta 9.111e-10) |
+| +2 Legacy polish | cube | 89.092 | 122.256 | 107.589 | 2.325e-11 | Passed |
+| Legacy control | cube | 0.000 | 149.227 | 149.227 | 2.872e-11 | Passed |
+
+The strict hybrid analyzer selected `+2 Legacy polish` for the 256 cases;
+`+1` was correctly rejected for confirmation even when its endpoint
+assessment passed.
+
+### 256/512 route gate and promotion decision
+
+The selected route was then qualified with full endpoint checks on chain/cube
+256/512. Three cases passed every required gate. Cube-512 passed endpoint
+assessment, trust, certification and the RuntimeConvergence assessment, but
+failed the separate eta confirmation/search-convergence gate:
+
+| Case | Total search s | `assessment_local` | Eta change | Search convergence | Runtime |
+| --- | ---: | ---: | ---: | --- | --- |
+| chain-256 | 39.968 | 1.899e-11 | 9.99e-16 | Passed | Passed |
+| cube-256 | 107.589 | 2.325e-11 | 6.82e-11 | Passed | Passed |
+| chain-512 | 82.964 | 2.457e-11 | 2.47e-11 | Passed | Passed |
+| cube-512 | 223.119 | 5.526e-11 | 1.547e-10 | **Failed** | Passed assessment, route rejected |
+
+Since one 512 case failed the required confirmation gate, 1024 repeated
+timing/frontier work was **not run** and Gate B is not passed. The production
+decision is **DO NOT PROMOTE**. There is no `SearchMethod::Hybrid`, no
+production local Operator policy, no public auto-routing, and no changed
+threshold. Current production remains outer FixedNeighbor core 64 with local
+`LegacyCompact`, serial Forward Gauss-Seidel, `OneAcceptedUpdate`, and the
+existing endpoint/replay semantics.
+
+The campaign drivers are `tests/integration/joint_fixed_neighbor_local_schwarz.py`,
+`joint_fixed_neighbor_operator_diagnostic.py`,
+`joint_fixed_neighbor_local_schwarz_local_work.py`,
+`joint_fixed_neighbor_hybrid.py`, and
+`joint_fixed_neighbor_operator_route.py`. Their search-only outputs label
+endpoint assessment and RuntimeConvergence as `NotRun`; search evidence must
+not be described as full endpoint certification.
