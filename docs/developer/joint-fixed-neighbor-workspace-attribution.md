@@ -7,9 +7,11 @@ certification gates are unchanged.
 
 ## Scope
 
-This measurement compares the existing persistent per-block workspace with a
-matched benchmark control that creates a fresh `LinearWorkspace` for every
-block visit.
+This historical measurement compared the existing persistent per-block
+workspace with a matched benchmark control that created a fresh
+`LinearWorkspace` for every block visit. The treatment/control names below are
+campaign labels, not current CLI or policy switches; the retired
+`reuse_block_workspace` switch no longer exists in the current tree.
 
 - topology: chain and cube
 - core size: 64 atoms
@@ -17,12 +19,12 @@ block visit.
 - local policy: `OneAcceptedUpdate`
 - maximum sweeps: 30
 - measurement scope: fixed-neighbor search only
-- treatment: `reuse_block_workspace=true`
-- control: `reuse_block_workspace=false`
+- historical treatment: `reuse_block_workspace=true`
+- historical control: `reuse_block_workspace=false`
 
-The aggregate work counters and timers are opt-in telemetry. The production
-component route does not enable telemetry, and the default workspace policy
-remains the treatment.
+The aggregate work counters and timers are opt-in telemetry. The current
+production component route retains the persistent workspace path and always
+performs fresh numeric factorization; it has no public workspace-policy switch.
 
 ## Results
 

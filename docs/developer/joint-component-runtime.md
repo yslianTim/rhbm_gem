@@ -75,13 +75,16 @@ controls such as full local work, reverse order and trajectory capture are not
 production configuration.
 
 The local solver is part of the FixedNeighbor policy, not a fourth public
-`SearchMethod`. A benchmark-only substitution of local `OperatorPcg` with
-Identity, Diagonal, and Schwarz preconditioners was evaluated under the same
-outer contract. All three candidates failed the existing local assessment
-threshold on chain-256 (`1.4586625e-10 > 1e-10`) and consequently failed
-`RuntimeConvergence`, despite passing global KKT, width-gradient, endpoint
-trust, and endpoint-certification checks. Production therefore remains
-FixedNeighbor plus local `LegacyCompact`; there is no automatic routing or
+`SearchMethod`. A historical benchmark-only substitution of local
+`OperatorPcg` with Identity, Diagonal, and Schwarz preconditioners was
+evaluated under the same outer contract. All three candidates failed the
+existing local assessment threshold on chain-256 (`1.4586625e-10 > 1e-10`) and
+consequently failed `RuntimeConvergence`, despite passing global KKT,
+width-gradient, endpoint trust, and endpoint-certification checks. Those
+FixedNeighbor-local experimental hooks are removed from the current tree;
+global `OperatorPcg`, global Schwarz and the sparse backend remain current Joint
+functionality. Production therefore remains FixedNeighbor plus local
+`LegacyCompact`; there is no hidden policy switch, automatic routing or
 fallback to the unqualified local operator route.
 
 All three routes return the same `ComponentResult`, then use the same component

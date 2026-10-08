@@ -76,7 +76,11 @@ define a production option or a current CTest runtime contract.
 | Endpoint decomposition/local certification/attribution | Diagnostic only | These answered completed research questions and had no production invariant after qualification; their campaign drivers and runtime tests were retired. |
 
 The negative evidence is intentionally numeric where it affects a decision.
-The old campaign wrappers, per-run JSON, progress files and process logs are
-not required to interpret the current route. The current repository keeps
-canonical README/analysis/summary/manifest evidence and the focused regression
-contracts; raw execution data is historical.
+The retired FixedNeighbor-local OperatorPcg, Schwarz and hybrid hooks are
+removed from the current tree; the global `SearchMethod::OperatorPcg` route,
+global Schwarz preconditioner and sparse backend remain current Joint
+functionality. There is no hidden FixedNeighbor policy switch. The old campaign
+wrappers, per-run JSON, progress files and process logs are not required to
+interpret the current route. The current repository keeps canonical
+README/analysis/summary/manifest evidence and the focused regression contracts;
+raw execution data is historical and recoverable from Git history when needed.

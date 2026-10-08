@@ -109,6 +109,11 @@ The `fixed` and `solve` profiles accept these internal policy controls:
 --schwarz-scratch-mib N
 ```
 
+These controls belong to the global benchmark operator/Schwarz routes. They do
+not re-enable the retired FixedNeighbor-local OperatorPcg, Schwarz or hybrid
+hooks; FixedNeighbor remains the explicit core12/OneAccepted/Forward/
+LegacyCompact production policy.
+
 Defaults are `auto`, 128 core atoms, one overlap hop, 512 maximum block atoms,
 512 MiB storage, and 256 MiB scratch. `auto` resolves to bounded rank on SPQR
 and dense rank on Eigen. The benchmark writes the requested and resolved rank

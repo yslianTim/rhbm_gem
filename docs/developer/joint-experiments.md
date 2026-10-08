@@ -5,9 +5,12 @@ Rows are experiment units rather than individual output files; the table is
 kept deliberately regular so it can be consumed as a simple pipe-delimited
 inventory. Status is one of `Active`, `Qualified`, `Closed`, or `Unknown`.
 
-Snapshot: `develop` at `fb124abea1d569c573db231063b4873439b01ee4`.
-The checkout contained 1,428 tracked `docs/developer` files (476,541,823
-bytes), including 1,391 figure files (476,032,625 bytes).
+Current FixedNeighbor means the qualified production policy: core 12,
+`OneAcceptedUpdate`, Forward serial Gauss-Seidel, 30 maximum sweeps, and local
+`LegacyCompact`. The benchmark and route-frontier drivers use that policy by
+default and record explicit custom overrides as custom or historical policy.
+Full/core128 and OneAccepted/core64 are historical evidence only; the latter
+was superseded by the qualified core12 policy.
 
 | Experiment | Status | Production relevance | Canonical evidence | Active driver | Active test | Raw artifacts |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -18,13 +21,13 @@ bytes), including 1,391 figure files (476,032,625 bytes).
 | FixedNeighbor prepared-block behavior | Qualified | Preserves prepared mapping and symbolic-reuse contract under the current core12 policy | `joint-fixed-neighbor-experimental.md`; prepared-block structural contract | `joint_fixed_neighbor_prepared_block.py` | `joint_fixed_neighbor_prepared_block_test.py` | Small deterministic contract only; historical large-case output is compact evidence |
 | FixedNeighbor order consistency | Qualified | Confirms production Forward order against the retained diagnostic | `joint-fixed-neighbor-order-r1/` | `joint_fixed_neighbor_order.py` | `joint_fixed_neighbor_order_test.py` | Compact comparison; raw pairs are not a runtime dependency |
 | FixedNeighbor block acceptance / Fixed-B regression | Qualified | Protects replay-aware acceptance and block contracts | fixed-B campaign summaries; `joint-fixed-neighbor-experimental.md` | `joint_fixed_b_scaling.py`; C++ experiment | FixedB/FixedNeighbor component regression tests | Compact summaries; no production telemetry dependency |
-| Global Joint benchmark and route frontier | Active | Research/scalability evidence for explicit production routes; no auto-routing | `joint-benchmark.md`; route frontier summaries | `joint_benchmark.py`; `joint_route_frontier.py` | benchmark and route-frontier contract tests | Route baseline raw is retained only as historical evidence; new output belongs in the build tree |
+| Global Joint benchmark and route frontier | Active | Current scalability evidence for explicit production routes; no auto-routing | `joint-benchmark.md`; route frontier summaries | `joint_benchmark.py`; `joint_route_frontier.py` | benchmark and route-frontier contract tests | Compact evidence is retained; superseded raw telemetry is pruned and new output belongs in the build tree |
 | Superseded FixedNeighbor optimized frontier | Closed | Historical OneAccepted/core64 comparison; superseded by the qualified core12 production policy | `figures/joint-fixed-neighbor-optimized-frontier-r1/{README.md,analysis.json,summary.csv,campaign-manifest.json}` | none | none | Compact evidence retained; no active driver or raw dependency |
 | Global Operator/SPQR/Schwarz scaling | Active | Current benchmark infrastructure, not a FixedNeighbor production policy | `joint-benchmark.md`; sparse backend docs | `joint_schwarz_sweep.py`; sparse benchmark tools | benchmark/scalability contracts | Canonical campaign summaries; outputs should be generated outside the source tree |
 | Global factor ownership, bounded-rank, and projected-width/tail evidence | Qualified | Supports current Operator diagnostics without being a runtime gate | `joint-operator-search.md`; compact factor/rank/projected reports | analyzers are offline-only | no registered current test for the orphan analyzers | Compact evidence only; orphan analyzer tests have no current dependency |
 | Historical FixedNeighbor endpoint/trajectory diagnostics | Closed | Negative evidence only; no production route or threshold change | `joint-fixed-neighbor-experimental.md` and compact diagnostic summaries | none | none after retirement | Raw endpoint decomposition, local certification, and trajectory output is removable |
-| FixedNeighbor local Operator/Schwarz/hybrid branches | Closed | Explicitly not promoted; production remains LegacyCompact | negative evidence in `joint-fixed-neighbor-experimental.md` | none after retirement | none after retirement | High-volume campaign raw output is removable |
-| FixedNeighbor workspace residency, numeric reuse, and local attribution | Closed | No production wall-time or correctness benefit | `joint-fixed-neighbor-workspace-attribution.md` and compact summaries | none after retirement | none after retirement | Raw repetitions, wrappers, progress, and process logs are removable |
+| FixedNeighbor local Operator/Schwarz/hybrid branches | Closed | Explicitly not promoted; production remains LegacyCompact | negative evidence in `joint-fixed-neighbor-experimental.md` | none after retirement | none after retirement | Local hooks are removed from the current tree; historical implementation is recoverable from Git history |
+| FixedNeighbor workspace residency, numeric reuse, and local attribution | Closed | No production wall-time or correctness benefit | `joint-fixed-neighbor-workspace-attribution.md` and compact summaries | none after retirement | none after retirement | Raw repetitions, wrappers, progress, and process logs are removable; no current policy switch remains |
 | Historical FixedNeighbor CLI modes and campaign wrappers | Closed | Reproducible from Git history if needed; not a production surface | this inventory plus the closed-direction table in the canonical overview | none | none | Do not retain zero-caller mode telemetry or wrappers |
 | Orphan factor-ownership/projected-tail/projected-width analyzer tests | Closed | No CMake registration, import, or current gate | corresponding compact figure reports | none | none | Test files are removable; canonical evidence remains |
 | Generic experiment I/O, process monitoring, provenance, and manifest helpers | Active | Shared infrastructure for active benchmark/qualification drivers | `tests/integration/experiment_*.py` contracts | shared helpers | `experiment_support_test.py`; dependency tests | Generated output belongs in build/output directories |
