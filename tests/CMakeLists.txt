@@ -499,6 +499,10 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_local_certification_test.py")
     add_test(NAME joint_fixed_neighbor_stationarity_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_stationarity_test.py")
+    add_test(NAME joint_fixed_neighbor_operator_diagnostic_test
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "PYTHONPATH=${PROJECT_SOURCE_DIR}/tests/integration"
+            "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_operator_diagnostic_test.py")
     add_test(NAME joint_fixed_neighbor_order_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_order_test.py")
     add_test(NAME joint_fixed_neighbor_prepared_block_test
@@ -513,7 +517,8 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
             physical-smoke --executable $<TARGET_FILE:joint_component_runtime>)
     set_tests_properties(joint_component_evidence_test joint_fixed_b_scaling_analysis_test joint_fixed_neighbor_analysis_test
         joint_fixed_neighbor_endpoint_decomposition_test joint_fixed_neighbor_local_certification_test
-        joint_fixed_neighbor_stationarity_test joint_fixed_neighbor_order_test
+        joint_fixed_neighbor_stationarity_test joint_fixed_neighbor_operator_diagnostic_test
+        joint_fixed_neighbor_order_test
         joint_fixed_neighbor_prepared_block_test
         joint_component_runtime_runner_test
         joint_component_regression joint_component_physical_smoke

@@ -10,6 +10,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -133,11 +134,32 @@ j::object AssessmentJson(const n::Assessment & assessment,const n::TrustEvidence
         assessment.correction.lpNorm<Eigen::Infinity>();
     return {{"inner",assessment.inner},{"gradient",assessment.gradient},{"local",assessment.local},
         {"identified",assessment.identified},{"failure",assessment.failure},
+        {"coefficient_difference",Number(assessment.coefficient_difference)},
+        {"primary_gradient_inf_norm",assessment.primary.gradient.size() ?
+            Number(assessment.primary.gradient.lpNorm<Eigen::Infinity>()) : j::value(nullptr)},
+        {"reference_gradient_inf_norm",assessment.reference.gradient.size() ?
+            Number(assessment.reference.gradient.lpNorm<Eigen::Infinity>()) : j::value(nullptr)},
         {"local_correction_inf_norm",Number(correction)},
         {"projected_width",SpectrumJson(assessment.widths)},
         {"corrected_jacobian",SpectrumJson(assessment.jacobian)},
         {"normalized_width",SpectrumJson(assessment.normalized_widths)},
         {"endpoint_trust",j::object{{"passed",trust.passed},{"reason",trust.reason}}}};
+}
+j::object CorrectionJson(const n::Assessment & assessment,const n::Vector & eta)
+{
+    const auto & correction=assessment.correction;
+    j::object out{{"inf_norm",correction.size() ? Number(correction.lpNorm<Eigen::Infinity>()) : j::value(nullptr)},
+        {"vector",NumberArray(correction)}};
+    if(correction.size()==0)
+    {
+        out["max_coordinate"]=nullptr;
+        return out;
+    }
+    Eigen::Index index{}; correction.cwiseAbs().maxCoeff(&index);
+    const double log_width=eta.size()==correction.size() ? eta(index) : std::numeric_limits<double>::quiet_NaN();
+    out["max_coordinate"]={{"atom",index},{"value",Number(correction(index))},
+        {"eta",Number(log_width)},{"width",Number(std::exp(log_width))}};
+    return out;
 }
 j::object EndpointStateJson(const std::string & name,const n::Evaluation & endpoint,
     const n::Assessment & assessment,const n::TrustEvidence & trust,double scale)
@@ -225,6 +247,8 @@ j::object AssessSweepEndpoint(const rhbm_gem::JointParameterLayout & layout,
         n::AssessmentEvidence(assessment,Scope::ComponentLocal),Scope::ComponentLocal);
     const auto runtime_status=n::MergeConvergenceStatus(global_status,component_status);
     const bool endpoint_certified=n::IsCertifiedLocalEndpoint(assessment,trust);
+    auto assessment_json=AssessmentJson(assessment,trust);
+    assessment_json["correction"]=CorrectionJson(assessment,state.eta);
     return {{"sweep",sweep},{"objective",state.objective},
         {"global_ac_kkt",Number(endpoint.certificate.projected_kkt)},
         {"width_gradient_inf_norm",Number(endpoint.gradient.lpNorm<Eigen::Infinity>())},
@@ -232,7 +256,7 @@ j::object AssessSweepEndpoint(const rhbm_gem::JointParameterLayout & layout,
         {"identified",assessment.identified},{"endpoint_trust",trust.passed},
         {"endpoint_trust_reason",trust.reason},{"endpoint_certified",endpoint_certified},
         {"runtime_convergence",CheckName(runtime_status)},
-        {"assessment",AssessmentJson(assessment,trust)}};
+        {"assessment",std::move(assessment_json)}};
 }
 j::object PackFit(const std::string & method,const rhbm_gem::core::JointFitResult & fit,double seconds)
 {
@@ -401,7 +425,8 @@ void AddSparseAttributionJson(j::object & output,const n::SparseWork & work)
 }
 void Write(const std::filesystem::path &,const j::value &);
 j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,bool compare_global,
-    bool decompose=false,bool certify_local=false,bool qualification=false,bool scaling_only=false,
+    bool decompose=false,bool certify_local=false,bool qualification=false,bool endpoint_trajectory=false,
+    bool scaling_only=false,
     bool reverse_order=false,bool record_final_state=false,bool attribution=false,
     n::FixedNeighborLocalWork local_work=n::FixedNeighborLocalWork::Full,std::size_t core_atoms=128,
     bool reuse_block_workspace=true,
@@ -442,16 +467,16 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             {"sweeps_completed",progress_sweeps.size()},{"sweep_telemetry",progress_sweeps}};
         if(decompose) progress["endpoint_decomposition"]=endpoint_snapshots;
         if(certify_local || attribution) progress["local_block_telemetry"]=local_block_snapshots;
-        if(qualification) progress["endpoint_assessment_by_sweep"]=endpoint_assessments;
+        if(qualification || endpoint_trajectory) progress["endpoint_assessment_by_sweep"]=endpoint_assessments;
         Write(progress_path,progress);
         std::cerr<<topology<<'-'<<atoms<<" FixedNeighbor sweep "<<progress_sweeps.size()
             <<" KKT="<<sweep.global_ac_kkt<<" width-grad="<<sweep.global_width_gradient_inf_norm
             <<" seconds="<<sweep.wall_seconds<<'\n';
     };
-    if(decompose || certify_local || qualification || attribution)
+    if(decompose || certify_local || qualification || endpoint_trajectory || attribution)
         neighbor_policy.state_observer=[&](std::size_t sweep,const n::BlockCoordinateState & state,
             const n::FixedNeighborBlockSweep & sweep_record,const std::vector<n::FixedNeighborBlockRecord> & blocks) {
-            if(qualification)
+            if(qualification || endpoint_trajectory)
             {
                 const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
                 const auto domain=n::ProfileDomain(data.domain,data.layout);
@@ -516,6 +541,17 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     n::SparseWorkForTesting()={}; n::SearchWorkForTesting()={}; n::OperatorWorkForTesting()={};
     auto started=Clock::now(); const auto neighbor=n::SearchFixedNeighbor(problem,initial_eta,neighbor_policy);
     const double neighbor_seconds=Seconds(started);
+    for(auto & snapshot:endpoint_assessments)
+    {
+        const auto sweep=snapshot.at("sweep").as_uint64();
+        const auto first=neighbor.first_order_stationarity_sweep;
+        const auto confirmed=neighbor.confirmed_stationarity_sweep;
+        const std::string reason=confirmed && sweep>=static_cast<std::uint64_t>(confirmed) ?
+            (sweep==static_cast<std::uint64_t>(confirmed) ? neighbor.reason : "stationarity-confirmed") :
+            first && sweep>=static_cast<std::uint64_t>(first) ? "first-order-stationarity" : "not-stationary";
+        snapshot.as_object()["search_stop_reason"]=reason;
+        snapshot.as_object()["search_termination_reason"]=neighbor.reason;
+    }
     const auto sparse_work=n::SparseWorkForTesting();
     const double sweep_seconds=std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),0.0,
         [](double total,const auto & sweep){return total+sweep.wall_seconds;});
@@ -647,6 +683,9 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             {"fixed_neighbor",scaling_json},
             {"peak_rss_mb",PeakRssMb()}};
     }
+    auto endpoint_assessment=AssessmentJson(neighbor.assessment,neighbor.endpoint_trust);
+    if(record_final_state || qualification || endpoint_trajectory)
+        endpoint_assessment["correction"]=CorrectionJson(neighbor.assessment,neighbor.state.eta);
     j::object neighbor_json{{"method","FixedNeighbor"},
         {"local_search_method",LocalSearchName(local_search)},
         {"local_preconditioner",LocalPreconditionerName(local_preconditioner)},
@@ -664,7 +703,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"global_kkt",CheckValue(neighbor.fit,"kkt")},{"width_gradient_inf_norm",WidthGradient(neighbor.fit)},
         {"assessment_inner",CheckValue(neighbor.fit,"inner")},{"assessment_gradient",CheckValue(neighbor.fit,"width-stationarity")},
         {"assessment_local",CheckValue(neighbor.fit,"local-correction")},{"assessment_identified",CheckValue(neighbor.fit,"numerical-identifiability")},
-        {"endpoint_assessment",AssessmentJson(neighbor.assessment,neighbor.endpoint_trust)},
+        {"endpoint_assessment",std::move(endpoint_assessment)},
         {"runtime_convergence",CheckName(neighbor.fit.RuntimeConvergence())},
         {"sweep_telemetry",sweeps},{"block_telemetry",blocks},
         {"search_seconds",neighbor_search_seconds},
@@ -706,7 +745,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
             {"fixed_neighbor",neighbor_json},{"endpoint_decomposition",endpoint_snapshots},
             {"peak_rss_mb",PeakRssMb()}};
-    if(qualification)
+    if(qualification || endpoint_trajectory)
         return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
             {"parameter_count",3*atoms},{"core_atoms",neighbor_policy.core_atoms},
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
@@ -763,30 +802,34 @@ int main(int argc,char ** argv)
             std::string(argv[1])!="--inexact-one-search" && std::string(argv[1])!="--matched-control" &&
             std::string(argv[1])!="--local-legacy" &&
             std::string(argv[1])!="--local-operator-identity" && std::string(argv[1])!="--local-operator-diagonal" &&
-            std::string(argv[1])!="--local-operator-schwarz" && std::string(argv[1])!="--tile-1024" &&
+            std::string(argv[1])!="--local-operator-schwarz" && std::string(argv[1])!="--operator-diagnostic" &&
+            std::string(argv[1])!="--tile-1024" &&
             std::string(argv[1])!="--tile-2048" && std::string(argv[1])!="--tile-4096" &&
             std::string(argv[1])!="--tile-8192" && std::string(argv[1])!="--tile-16384" &&
             std::string(argv[1])!="--neighbor-forward" && std::string(argv[1])!="--neighbor-reverse" &&
             std::string(argv[1])!="--scaling-forward" && std::string(argv[1])!="--scaling-reverse"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--matched-control|--local-legacy|--local-operator-identity|--local-operator-diagonal|--local-operator-schwarz|--tile-1024|--tile-2048|--tile-4096|--tile-8192|--tile-16384|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [CORE_ATOMS]");
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--operator-diagnostic|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--matched-control|--local-legacy|--local-operator-identity|--local-operator-diagonal|--local-operator-schwarz|--tile-1024|--tile-2048|--tile-4096|--tile-8192|--tile-16384|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [CORE_ATOMS]");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
         const std::string mode(argv[1]);
         const bool local_operator_mode=mode=="--local-operator-identity" || mode=="--local-operator-diagonal" ||
             mode=="--local-operator-schwarz";
+        const bool operator_diagnostic=mode=="--operator-diagnostic";
         const bool tile_mode=mode=="--tile-1024" || mode=="--tile-2048" || mode=="--tile-4096" ||
             mode=="--tile-8192" || mode=="--tile-16384";
-        const bool local_search_mode=mode=="--inexact-one-search" || mode=="--local-legacy" || local_operator_mode || tile_mode;
-        const bool local_qualification_mode=mode=="--local-legacy" || local_operator_mode || tile_mode;
+        const bool local_search_mode=mode=="--inexact-one-search" || mode=="--local-legacy" || local_operator_mode ||
+            tile_mode || operator_diagnostic;
+        const bool local_qualification_mode=mode=="--local-legacy" || local_operator_mode || tile_mode || operator_diagnostic;
         if(argc==6 && !local_search_mode && mode!="--matched-control")
             throw std::invalid_argument("CORE_ATOMS is supported only with --inexact-one-search, local operator modes, or --matched-control.");
         const std::size_t core_atoms=argc==6 ? static_cast<std::size_t>(std::stoul(argv[5])) : 128;
         if(core_atoms==0) throw std::invalid_argument("CORE_ATOMS must be positive.");
-        const auto local_search=local_operator_mode ? n::FixedNeighborLocalSearch::OperatorPcg :
+        const auto local_search=(local_operator_mode || operator_diagnostic) ? n::FixedNeighborLocalSearch::OperatorPcg :
             n::FixedNeighborLocalSearch::LegacyCompact;
         const auto local_preconditioner=mode=="--local-operator-identity" ? n::FixedNeighborLocalPreconditioner::Identity :
             mode=="--local-operator-schwarz" ? n::FixedNeighborLocalPreconditioner::Schwarz :
+            operator_diagnostic ? n::FixedNeighborLocalPreconditioner::Schwarz :
             n::FixedNeighborLocalPreconditioner::Diagonal;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(tile_mode)
@@ -794,7 +837,7 @@ int main(int argc,char ** argv)
                 mode=="--tile-4096" ? 4096 : mode=="--tile-16384" ? 16384 : 8192;
 #endif
         Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--case",mode=="--decompose",
-            mode=="--certified-local",mode=="--qualification",
+            mode=="--certified-local",mode=="--qualification",operator_diagnostic,
             mode=="--scaling-only" || mode=="--attribution" || mode=="--scaling-forward" || mode=="--scaling-reverse" ||
                 mode=="--inexact-one-search" || (local_qualification_mode && std::stoi(argv[4])>=1024) || mode=="--matched-control",
             mode=="--neighbor-reverse" || mode=="--scaling-reverse",
