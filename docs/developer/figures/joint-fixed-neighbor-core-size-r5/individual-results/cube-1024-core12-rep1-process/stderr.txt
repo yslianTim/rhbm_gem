@@ -1,0 +1,43 @@
+cube-1024 FixedNeighbor started
+cube-1024 FixedNeighbor sweep 1 KKT=0.00817682 width-grad=4.92832e-05 seconds=21.5024
+cube-1024 FixedNeighbor sweep 2 KKT=0.000901597 width-grad=3.87555e-06 seconds=21.3201
+cube-1024 FixedNeighbor sweep 3 KKT=0.000197689 width-grad=4.96158e-07 seconds=21.2718
+cube-1024 FixedNeighbor sweep 4 KKT=5.96512e-05 width-grad=1.25545e-07 seconds=21.2466
+cube-1024 FixedNeighbor sweep 5 KKT=1.9711e-05 width-grad=3.90606e-08 seconds=21.2802
+cube-1024 FixedNeighbor sweep 6 KKT=7.1961e-06 width-grad=1.41594e-08 seconds=21.2766
+cube-1024 FixedNeighbor sweep 7 KKT=2.58999e-06 width-grad=5.06283e-09 seconds=21.2479
+cube-1024 FixedNeighbor sweep 8 KKT=1.00549e-06 width-grad=1.95643e-09 seconds=21.4244
+cube-1024 FixedNeighbor sweep 9 KKT=3.84971e-07 width-grad=7.48829e-10 seconds=21.2641
+cube-1024 FixedNeighbor sweep 10 KKT=1.45961e-07 width-grad=2.83801e-10 seconds=21.3602
+cube-1024 FixedNeighbor sweep 11 KKT=5.49449e-08 width-grad=1.06789e-10 seconds=21.3069
+cube-1024 FixedNeighbor sweep 12 KKT=2.05747e-08 width-grad=3.99743e-11 seconds=21.2892
+cube-1024 FixedNeighbor sweep 13 KKT=7.67524e-09 width-grad=1.49077e-11 seconds=21.3096
+cube-1024 FixedNeighbor sweep 14 KKT=2.85539e-09 width-grad=5.54467e-12 seconds=21.4017
+cube-1024 FixedNeighbor sweep 15 KKT=1.06022e-09 width-grad=2.05833e-12 seconds=21.6898
+cube-1024 FixedNeighbor sweep 16 KKT=3.93125e-10 width-grad=7.6309e-13 seconds=21.3807
+cube-1024 FixedNeighbor sweep 17 KKT=1.4563e-10 width-grad=2.82641e-13 seconds=21.3731
+cube-1024 FixedNeighbor sweep 18 KKT=5.39127e-11 width-grad=1.04975e-13 seconds=21.2803
+cube-1024 FixedNeighbor sweep 19 KKT=2.02592e-11 width-grad=3.98964e-14 seconds=21.3816
+cube-1024 FixedNeighbor sweep 20 KKT=7.67925e-12 width-grad=1.51196e-14 seconds=21.221
+cube-1024 FixedNeighbor sweep 21 KKT=2.90344e-12 width-grad=5.71568e-15 seconds=21.0801
+cube-1024 FixedNeighbor sweep 22 KKT=1.09529e-12 width-grad=3.40079e-15 seconds=20.8604
+cube-1024 FixedNeighbor sweep 23 KKT=4.12354e-13 width-grad=3.15251e-15 seconds=20.1634
+cube-1024 FixedNeighbor finished in 489.746 s; converged=1 sweeps=23 KKT=4.12354e-13
+      492.36 real       491.04 user         0.74 sys
+           683294720  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               73331  page reclaims
+                 149  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  60  voluntary context switches
+               16923  involuntary context switches
+       6328789094692  instructions retired
+       1538406969394  cycles elapsed
+           622365440  peak memory footprint

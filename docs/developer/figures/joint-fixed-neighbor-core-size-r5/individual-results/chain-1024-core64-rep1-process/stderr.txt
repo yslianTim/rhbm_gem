@@ -1,0 +1,28 @@
+chain-1024 FixedNeighbor started
+chain-1024 FixedNeighbor sweep 1 KKT=0.00143707 width-grad=1.61926e-05 seconds=43.6935
+chain-1024 FixedNeighbor sweep 2 KKT=4.23275e-05 width-grad=9.79904e-08 seconds=43.5017
+chain-1024 FixedNeighbor sweep 3 KKT=9.19806e-07 width-grad=2.00526e-09 seconds=43.387
+chain-1024 FixedNeighbor sweep 4 KKT=1.55141e-08 width-grad=3.11725e-11 seconds=43.4058
+chain-1024 FixedNeighbor sweep 5 KKT=2.62742e-10 width-grad=5.27122e-13 seconds=43.3773
+chain-1024 FixedNeighbor sweep 6 KKT=4.45002e-12 width-grad=8.92641e-15 seconds=43.491
+chain-1024 FixedNeighbor sweep 7 KKT=7.53807e-14 width-grad=1.51639e-16 seconds=43.4311
+chain-1024 FixedNeighbor sweep 8 KKT=7.53807e-14 width-grad=6.82786e-16 seconds=42.1741
+chain-1024 FixedNeighbor finished in 347.013 s; converged=1 sweeps=8 KKT=7.53807e-14
+      349.70 real       348.98 user         0.56 sys
+           592756736  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               97557  page reclaims
+                 147  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  58  voluntary context switches
+               11245  involuntary context switches
+       4376753514105  instructions retired
+       1093759862040  cycles elapsed
+           525978176  peak memory footprint

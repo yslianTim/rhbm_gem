@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/Users/yslian/Project/em_map_analysis/build/qualification/bin/joint_fixed_neighbor_experiment",
+    "--inexact-one-search",
+    "/Users/yslian/Project/em_map_analysis/docs/developer/figures/joint-fixed-neighbor-core-size-r5/individual-results/cube-1024-core12-rep3.json",
+    "cube",
+    "1024",
+    "12"
+  ],
+  "status": "completed",
+  "sample_interval_seconds": 0.1,
+  "wall_seconds": 494.3581684578676,
+  "exit_code": 0,
+  "sampled_tree_peak_rss_bytes": 678936576,
+  "samples": 4544,
+  "maximum_sampling_gap_seconds": 0.1130562920589,
+  "os_process_peak_rss_bytes": 677773312
+}

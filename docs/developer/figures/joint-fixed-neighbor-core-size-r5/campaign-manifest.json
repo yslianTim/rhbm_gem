@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "phase": "FixedNeighbor outer-core repeated frontier",
+  "source_revision": "d0bffbd2fff313e418d6c0e62fa9e94a1cfff224",
+  "source_sha256": "8ad2c321ee0511f27203533e5ae2345ebc64b34a3bed2a21f8891f0cba25f5fb",
+  "benchmark_source_hashes": {
+    "driver": "215f2a82d0aaaf5cf304d070bc96f813ea366a58f0c1204312e69694876dda68",
+    "core_size": "b560376c153f242cf83fbb39a3c4e2771be898c93393c3e72adb145ac0e72366",
+    "frontier": "91ee491ae8850d6a1f194274474499c2d0cf6bb74d17c523c5cc62e922852a39"
+  },
+  "branch": "develop",
+  "backend": "SPQR",
+  "eigen_threads": 1,
+  "cases": [
+    "chain-512",
+    "cube-512",
+    "chain-1024",
+    "cube-1024"
+  ],
+  "policy": "OneAccepted",
+  "finalist_core_sizes": [
+    12,
+    16
+  ],
+  "control_core_size": 64,
+  "measurement_scope": "fixed-neighbor-search-only",
+  "resource_envelope": {
+    "wall_seconds": 7200.0,
+    "rss_bytes": 4294967296
+  },
+  "repetitions": {
+    "warmup": 1,
+    "measured": 3
+  },
+  "correctness_contract": [
+    "search_converged",
+    "A/C KKT <= 1e-10",
+    "width gradient <= 1e-12",
+    "cache/objective replay limits"
+  ],
+  "analysis": {
+    "qualification_gate": "passed",
+    "selected_core_size": 12,
+    "warnings": []
+  }
+}
