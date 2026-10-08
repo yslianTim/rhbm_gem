@@ -43,12 +43,18 @@ and postprocess cases are `full`, `halo`, and `multi`.
 FixedNeighbor is a supported production Joint search method, selected
 explicitly through `FitOptions::joint_search_method` or
 `potential_analysis --joint-search fixed-neighbor`. Its production policy is
-core size 64, forward serial Gauss-Seidel order, at most 30 sweeps, and one
+core size 12, forward serial Gauss-Seidel order, at most 30 sweeps, and one
 trusted accepted local `LegacyCompact` update per block visit. The benchmark
 and historical experiment drivers still expose broader controls for
 reproduction and attribution; those controls are diagnostic and are not
 production defaults. Search-only measurements remain search-only and cannot
 establish endpoint certification.
+
+The outer-core default was qualified against the historical 64-atom control
+on chain/cube 256, 512 and 1024 workloads. The two finalist cores passed full
+endpoint qualification; repeated 1-warmup/3-measured frontier timing selected
+core 12 with at least 33.0% median search improvement on every 512/1024
+topology. See the [outer-core qualification](joint-fixed-neighbor-outer-core-qualification.md).
 
 The production FixedNeighbor local width-search engine is `LegacyCompact`.
 An internal benchmark-only experiment substituted `OperatorPcg` with Identity,
@@ -141,9 +147,10 @@ python3 tests/integration/joint_fixed_neighbor_prepared_block.py \
   --output-dir build/joint-fixed-neighbor-prepared
 ```
 
-The campaign fixes the production policy at 64-atom forward cores, a 30-sweep
+The historical control campaign fixes a 64-atom forward core, a 30-sweep
 budget, one accepted local `LegacyCompact` update and one Eigen thread. Its
-chain/cube 256, 512 and 1024 cases are explicitly `fixed-neighbor-search-only`.
+chain/cube 256, 512 and 1024 cases are explicitly `fixed-neighbor-search-only`;
+the current production default is the qualified 12-atom core documented above.
 The gate checks the existing A/C KKT (`1e-10`), width-gradient (`1e-12`) and
 complete-sweep eta confirmation (`1e-10`), then attributes preparation and
 factor work with `prepared_block_count`, block/domain/mapping preparation

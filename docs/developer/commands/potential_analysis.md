@@ -176,7 +176,7 @@ Joint search is explicit and applies only to `JOINT_COMPONENTS`:
 ```
 
 `FixedNeighbor` is a supported bounded-memory production route with the fixed
-core-64, forward, one-accepted-local-update policy documented in the
+core-12, forward, one-accepted-local-update policy documented in the
 [joint runtime contract](../joint-component-runtime.md). It is not an
 automatic fallback or size-based route. Supplying a non-default
 `joint_search_method` with `TWO_STAGE` produces a normalization warning and
@@ -268,7 +268,7 @@ version or access either input file.
 
 `metadata.solver` records the explicit route as `legacy-compact`, `operator-pcg`
 or `fixed-neighbor`. FixedNeighbor records
-`fixed_neighbor_core_atoms: 64` and
+`fixed_neighbor_core_atoms: 12` and
 `fixed_neighbor_local_work: "one-accepted"` for the production policy. The
 field is optional so schema-5 documents created before solver provenance was
 added remain readable and retain an unknown solver route rather than being

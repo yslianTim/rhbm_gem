@@ -64,7 +64,7 @@ component size or resource estimates.
 
 The public `FitOptions::joint_search_method` and the command
 `--joint-search` option select the route. The production FixedNeighbor policy
-is intentionally small and fixed: disjoint mutable cores of 64 atoms, at most
+is intentionally small and fixed: disjoint mutable cores of 12 atoms, at most
 30 forward Gauss-Seidel sweeps, and one trusted accepted local
 `LegacyCompact` update per block visit. Outside-core neighbors remain fixed
 while a block is solved. Each accepted block is replayed globally, checked for

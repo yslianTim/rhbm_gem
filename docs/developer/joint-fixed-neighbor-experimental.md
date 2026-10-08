@@ -235,8 +235,8 @@ diagnostic suites were separated into `joint:scalability`.
 This campaign corrected the experimental confounder in the historical local
 `OperatorPcg + Schwarz` result. The three sizes are now recorded separately:
 
-- `outer_core_atoms = 64`: atoms permitted in one production FixedNeighbor
-  block-coordinate visit.
+- `outer_core_atoms = 64`: atoms permitted in the historical production
+  control used by this benchmark-only local-Schwarz qualification.
 - `local_atoms <= 64`: atoms in the particular local Operator problem; the
   chain/cube 256 workloads had local min/mean/max of `4/51.20/64` and
   `1/42.67/64`, respectively.
@@ -402,9 +402,11 @@ Since one 512 case failed the required confirmation gate, 1024 repeated
 timing/frontier work was **not run** and Gate B is not passed. The production
 decision is **DO NOT PROMOTE**. There is no `SearchMethod::Hybrid`, no
 production local Operator policy, no public auto-routing, and no changed
-threshold. Current production remains outer FixedNeighbor core 64 with local
-`LegacyCompact`, serial Forward Gauss-Seidel, `OneAcceptedUpdate`, and the
-existing endpoint/replay semantics.
+threshold. At that historical checkpoint production remained outer
+FixedNeighbor core 64 with local `LegacyCompact`, serial Forward Gauss-Seidel,
+`OneAcceptedUpdate`, and the existing endpoint/replay semantics. The later
+small outer-core qualification superseded that default with core 12; see the
+[outer-core qualification](joint-fixed-neighbor-outer-core-qualification.md).
 
 The campaign drivers are `tests/integration/joint_fixed_neighbor_local_schwarz.py`,
 `joint_fixed_neighbor_operator_diagnostic.py`,
