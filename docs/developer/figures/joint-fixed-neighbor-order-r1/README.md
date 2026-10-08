@@ -16,6 +16,6 @@ All five pairs converged in both orders. The largest parameter differences remai
 
 Global KKT and width-gradient values are preserved for each direction in `order-analysis.json`. The former raw case JSONs are historical execution telemetry. The largest observed local factor width was 256 columns. This is bounded by the 128-atom core, while process RSS remains workload-wide and is not constant-memory evidence.
 
-The order-sensitivity gate passes, and coordinated/shared-parameter blocks remain deferred. FixedNeighbor is not promoted to a selectable estimator route: 1024/2048 scaling runs did not include full endpoint assessment, and the campaign has no matched large-size baseline establishing an end-to-end resource benefit. `LegacyCompact` remains the production default. `CertifiedLocal` remains diagnostic support.
+The order-sensitivity gate passes, and coordinated/shared-parameter blocks remain deferred. This order campaign alone did not promote FixedNeighbor: 1024/2048 scaling runs did not include full endpoint assessment, and the campaign has no matched large-size baseline establishing an end-to-end resource benefit. The later outer-core qualification adopted FixedNeighbor as an explicit route with core 12; `LegacyCompact` remains the global production default. `CertifiedLocal` remains diagnostic support.
 
 The current tree retains the machine-readable comparison and CSV in `order-analysis.json` and `summary.csv`; raw per-run measurements remain recoverable from Git history.
