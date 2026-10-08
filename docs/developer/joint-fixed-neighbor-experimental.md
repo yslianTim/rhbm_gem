@@ -96,6 +96,60 @@ observation, not a demonstrated formal resource-survival case.
 The complete reports, route ranking, promotion gate, and provenance are in the
 [optimized frontier artifact](figures/joint-fixed-neighbor-optimized-frontier-r1/README.md).
 
+## FixedNeighbor local-search experiment
+
+The P6 frontier above compares the global `OperatorPcg` route with the outer
+FixedNeighbor route. It must not be confused with the later benchmark-only
+experiment that changed only the local width-search engine inside a
+FixedNeighbor block. The outer algorithm remained serial Forward
+Gauss-Seidel, with 64-atom cores, at most 30 sweeps, `OneAcceptedUpdate`,
+global replay, and the existing convergence and endpoint checks.
+
+The local candidates were `LegacyCompact` and `OperatorPcg` with Identity,
+Diagonal, or Schwarz preconditioning. Production remained `LegacyCompact`.
+The chain-256 comparison was:
+
+| Local candidate | Search (s) | Local search (s) | RSS (MiB) | Sweeps / block solves | Profile evaluations | PCG mean / max | Assessment local | Runtime |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| LegacyCompact | 82.474 | 77.021 | 232.1 | 8 / 40 | 130 | — | `3.01e-13` | Passed |
+| OperatorPcg + Identity | 24.952 | 20.169 | 207.1 | 7 / 35 | 109 | 6.04 / 7 | `1.458662526e-10` | **Failed** |
+| OperatorPcg + Diagonal | 24.880 | 20.108 | 207.0 | 7 / 35 | 109 | 6.02 / 7 | `1.458662500e-10` | **Failed** |
+| OperatorPcg + Schwarz | 20.277 | 15.505 | 207.8 | 7 / 35 | 109 | 2.31 / 4 | `1.458662500e-10` | **Failed** |
+
+Identity and Diagonal operator setup took about `2.08 s` with no separate
+preconditioner setup. Schwarz setup took `2.08 s` for the operator and
+`1.42 s` for the preconditioner. All three OperatorPcg runs reached
+`block-stationary`, global A/C KKT `1.01e-13`, width-gradient
+`1.61e-13`, trusted endpoint state, and endpoint certification. They still
+failed the existing local assessment threshold because
+`assessment_local = 1.4586625e-10 > 1e-10`, so `RuntimeConvergence` failed.
+Objective parity was about `1.0e-16` versus LegacyCompact, but objective
+parity and global KKT do not replace endpoint certification.
+
+Therefore Decision Gate A is **failed**. The OperatorPcg local route was not
+promoted, no automatic fallback or threshold relaxation was added, and the
+512/1024 local-operator matrix plus repeated large-case promotion campaign
+were not run. Commit 4 preconditioner qualification and productionization
+commits were consequently not started.
+
+Because Gate A failed, the exact LegacyCompact tile screen was tested next on
+chain-512. The 8192-row control was the only full-endpoint run; the other
+rows were search-only:
+
+| Tile rows | Search (s) | Change vs 8192 | Derivative reduction (s) | Jacobian TiledQR (s) | Allocation/copy (s) | Householder (s) |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1024 | 172.693 | +3.78% | 112.520 | 88.416 | 1.349 | 82.526 |
+| 2048 | 169.900 | +2.10% | 109.311 | 85.112 | 1.553 | 79.228 |
+| 4096 | 168.263 | +1.12% | 107.844 | 83.473 | 1.295 | 77.932 |
+| 8192 | 166.401 | 0.00% | 106.244 | 82.110 | 1.296 | 76.667 |
+| 16384 | 167.432 | +0.62% | 106.406 | 82.010 | 1.282 | 76.621 |
+
+All five chain-512 searches converged, and the 8192 control passed endpoint
+certification. Householder arithmetic was `93.1%`–`93.3%` of Jacobian
+TiledQR, while allocation/copy was only `1.3%`–`1.6%`; no tile reached the
+10% improvement gate. The tile direction therefore stopped without a
+production QR/scratch change.
+
 ## Current supported route
 
 The P6 promotion decision is complete: FixedNeighbor is a supported production
@@ -109,6 +163,12 @@ endpoint certification semantics remain unchanged.
 - `LegacyCompact` remains the compatibility/reference route and the production default.
 - `FixedNeighbor` is the explicitly selected bounded-memory block-coordinate route; its
   lower RSS trades against longer wall time on the measured frontier.
+
+The benchmark-only local `OperatorPcg` experiment did not change this policy:
+its correctness gate failed at the existing local assessment threshold, so the
+production FixedNeighbor local solver remains `LegacyCompact`. The global
+`OperatorPcg` bullet above refers to the separate global route, not to a
+promoted local solver inside FixedNeighbor.
 
 Atom-count auto-routing is not introduced. Coordinated or shared-parameter
 blocks remain outside this policy, and `CertifiedLocal` remains diagnostic-only

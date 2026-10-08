@@ -80,8 +80,13 @@ replay, vector copy, or numeric factorization.
 
 Route C is closed with no production workspace-policy change, no exact
 numeric-factor reuse, and no candidate replay optimization. Performance work
-now moves to FixedNeighbor local `SearchProfile` derivative preparation and
-reduction, with search-specific attribution before any algorithmic change.
+then moved to FixedNeighbor local `SearchProfile` derivative preparation and
+reduction. The search-specific attribution and local-solver decision are now
+closed: the local OperatorPcg candidate failed the existing correctness gate,
+and the chain-512 tile screen found no 10% LegacyCompact improvement. The
+production local route remains `LegacyCompact`; see the [qualification
+evidence](joint-fixed-neighbor-experimental.md) for the measured gate failure
+and tile results.
 
 ## Reproduction and validation boundaries
 

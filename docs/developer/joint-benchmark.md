@@ -50,6 +50,14 @@ reproduction and attribution; those controls are diagnostic and are not
 production defaults. Search-only measurements remain search-only and cannot
 establish endpoint certification.
 
+The production FixedNeighbor local width-search engine is `LegacyCompact`.
+An internal benchmark-only experiment substituted `OperatorPcg` with Identity,
+Diagonal, and Schwarz preconditioners while keeping the outer FixedNeighbor
+contract unchanged. All three candidates failed the existing local assessment
+gate on chain-256 (`1.4586625e-10 > 1e-10`) and therefore failed
+`RuntimeConvergence`; none was promoted. This local experiment is distinct from
+the global `OperatorPcg` route described below.
+
 The current matched synthetic frontier shows the intended trade-off rather
 than a performance gate: OperatorPcg is faster on the tested large cases,
 while FixedNeighbor materially reduces peak RSS through bounded local block
@@ -72,6 +80,14 @@ replay optimization was made. The current large-case bottleneck is the local
 derivative preparation/reduction path, which accounted for `83.7%` of
 chain-1024 search and `81.5%` of cube-1024 search. See the [workspace
 attribution](joint-fixed-neighbor-workspace-attribution.md) record.
+
+The subsequent search-specific attribution found that Jacobian TiledQR was
+`77.5%` of derivative reduction on chain-1024 and `76.8%` on cube-1024.
+Within that TiledQR, Householder arithmetic was about `93%` and
+allocation/copy was about `1.6%`. A chain-512 tile screen found no tile-size
+improvement of at least 10%, so no LegacyCompact QR or scratch optimization
+was promoted. The full local-solver and tile decisions are recorded in the
+[FixedNeighbor experimental evidence](joint-fixed-neighbor-experimental.md).
 
 The `fixed` and `solve` profiles accept these internal policy controls:
 
