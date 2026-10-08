@@ -24,6 +24,12 @@ struct SearchWork
 {
     std::size_t linearizations{},pcg_solves{},pcg_iterations{},damping_trials{},local_builds{},factor_builds{},inverse_actions{};
     std::size_t topology_bytes{},storage_bytes{},scratch_bytes{},maximum_block_atoms{};
+    std::size_t requested_schwarz_core_atoms{},requested_schwarz_overlap_hops{},requested_schwarz_max_block_atoms{};
+    std::size_t preconditioner_partition_count{},preconditioner_geometry_block_count{};
+    std::size_t minimum_core_atoms{},maximum_core_atoms{},minimum_overlap_atoms{},maximum_overlap_atoms{};
+    std::size_t minimum_realized_block_atoms{},maximum_realized_block_atoms{};
+    double total_core_atoms{},total_overlap_atoms{},total_realized_block_atoms{},total_preconditioner_coverage_ratio{};
+    double minimum_preconditioner_coverage_ratio{},maximum_preconditioner_coverage_ratio{};
     double partition_seconds{},metric_seconds{},local_seconds{},factor_seconds{},inverse_seconds{},pcg_seconds{};
     double maximum_lambda{},maximum_tau{},last_relative_residual{};
     std::vector<std::size_t> pcg_iteration_counts; // One entry per PCG solve.

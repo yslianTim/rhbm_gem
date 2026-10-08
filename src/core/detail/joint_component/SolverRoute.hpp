@@ -1,6 +1,7 @@
 #pragma once
 
 #include "FixedNeighborPolicy.hpp"
+#include "SchwarzPolicy.hpp"
 #include <optional>
 #include <cstddef>
 #include <string_view>
@@ -22,12 +23,6 @@ struct OperatorRankPolicy
     OperatorRankMode mode{OperatorRankMode::Auto};
     RankBudget budget{};
 };
-struct SchwarzPolicy
-{
-    std::size_t core_atoms{128},overlap_hops{1},max_block_atoms{512};
-    std::size_t storage_bytes{512ULL*1024*1024},scratch_bytes{256ULL*1024*1024};
-};
-
 struct SearchPolicy
 {
     SearchMethod method{SearchMethod::LegacyCompact};

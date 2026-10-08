@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SchwarzPolicy.hpp"
 #include <cstddef>
 
 namespace rhbm_gem::core::joint_component {

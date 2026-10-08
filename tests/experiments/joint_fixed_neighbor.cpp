@@ -337,9 +337,31 @@ j::object LocalOperatorWorkJson()
     for(const auto iterations:search.pcg_iteration_counts) maximum_iterations=std::max(maximum_iterations,iterations);
     const double mean_iterations=search.pcg_iteration_counts.empty() ? 0. :
         static_cast<double>(search.pcg_iterations)/static_cast<double>(search.pcg_iteration_counts.size());
+    const double geometry_blocks=static_cast<double>(search.preconditioner_geometry_block_count);
+    const double mean_core=search.preconditioner_geometry_block_count ? search.total_core_atoms/geometry_blocks : 0.;
+    const double mean_overlap=search.preconditioner_geometry_block_count ? search.total_overlap_atoms/geometry_blocks : 0.;
+    const double mean_realized=search.preconditioner_geometry_block_count ? search.total_realized_block_atoms/geometry_blocks : 0.;
+    const double mean_coverage=search.preconditioner_geometry_block_count ?
+        search.total_preconditioner_coverage_ratio/geometry_blocks : 0.;
     return { {"linearizations",search.linearizations}, {"pcg_solves",search.pcg_solves},
         {"pcg_iterations",search.pcg_iterations}, {"pcg_mean_iterations",Number(mean_iterations)},
         {"pcg_max_iterations",maximum_iterations}, {"damping_trials",search.damping_trials},
+        {"requested_schwarz_core_atoms",search.requested_schwarz_core_atoms},
+        {"requested_schwarz_overlap_hops",search.requested_schwarz_overlap_hops},
+        {"requested_schwarz_max_block_atoms",search.requested_schwarz_max_block_atoms},
+        {"preconditioner_partition_count",search.preconditioner_partition_count},
+        {"preconditioner_geometry_block_count",search.preconditioner_geometry_block_count},
+        {"minimum_core_atoms",search.minimum_core_atoms},{"mean_core_atoms",Number(mean_core)},
+        {"maximum_core_atoms",search.maximum_core_atoms},
+        {"minimum_overlap_atoms",search.minimum_overlap_atoms},{"mean_overlap_atoms",Number(mean_overlap)},
+        {"maximum_overlap_atoms",search.maximum_overlap_atoms},
+        {"minimum_realized_block_atoms",search.minimum_realized_block_atoms},
+        {"mean_realized_block_atoms",Number(mean_realized)},
+        {"maximum_realized_block_atoms",search.maximum_realized_block_atoms},
+        {"mean_preconditioner_coverage_ratio",Number(mean_coverage)},
+        {"minimum_preconditioner_coverage_ratio",Number(search.preconditioner_geometry_block_count ?
+            search.minimum_preconditioner_coverage_ratio : 0.)},
+        {"maximum_preconditioner_coverage_ratio",Number(search.maximum_preconditioner_coverage_ratio)},
         {"operator_setup_seconds",Number(operator_work.preparation_seconds)},
         {"preconditioner_setup_seconds",Number(search.partition_seconds+search.local_seconds+search.factor_seconds)},
         {"partition_seconds",Number(search.partition_seconds)}, {"preconditioner_model_seconds",Number(search.local_seconds)},
@@ -365,6 +387,11 @@ j::object WorkJson(const n::FixedNeighborWork & work)
         {"candidate_state_full_copies",work.candidate_state_full_copies},
         {"affected_row_updates",work.affected_row_updates},
         {"old_core_basis_builds",work.old_core_basis_builds},
+        {"local_problem_count",work.local_problem_count},
+        {"minimum_local_atoms",work.minimum_local_atoms},
+        {"mean_local_atoms",Number(work.local_problem_count ? work.total_local_atoms/
+            static_cast<double>(work.local_problem_count) : 0.)},
+        {"maximum_local_atoms",work.maximum_local_atoms},
         {"local_profile_work",ProfileWorkJson(work.local_profile_work)}};
 }
 j::object ProfileRoleWorkJson(const n::ProfileRoleWork & work)
@@ -431,7 +458,8 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     n::FixedNeighborLocalWork local_work=n::FixedNeighborLocalWork::Full,std::size_t core_atoms=128,
     bool reuse_block_workspace=true,
     n::FixedNeighborLocalSearch local_search=n::FixedNeighborLocalSearch::LegacyCompact,
-    n::FixedNeighborLocalPreconditioner local_preconditioner=n::FixedNeighborLocalPreconditioner::Diagonal)
+    n::FixedNeighborLocalPreconditioner local_preconditioner=n::FixedNeighborLocalPreconditioner::Diagonal,
+    n::SchwarzPolicy local_schwarz={})
 {
     auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
     const rhbm_gem::core::JointProblem problem(*input);
@@ -442,6 +470,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     neighbor_policy.local_work=local_work;
     neighbor_policy.local_search=local_search;
     neighbor_policy.local_preconditioner=local_preconditioner;
+    neighbor_policy.local_schwarz=local_schwarz;
     neighbor_policy.certify_local_candidates=certify_local;
     neighbor_policy.capture_local_trajectory=attribution || local_work!=n::FixedNeighborLocalWork::Full;
     neighbor_policy.stop_after_no_certified_update=certify_local;
@@ -655,6 +684,14 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                 {"search_seconds",neighbor_search_seconds},
                 {"local_search_method",LocalSearchName(local_search)},
                 {"local_preconditioner",LocalPreconditionerName(local_preconditioner)},
+                {"outer_core_atoms",neighbor_policy.core_atoms},
+                {"local_atoms",j::object{{"minimum",neighbor.work.minimum_local_atoms},
+                    {"mean",Number(neighbor.work.local_problem_count ? neighbor.work.total_local_atoms/
+                        static_cast<double>(neighbor.work.local_problem_count) : 0.)},
+                    {"maximum",neighbor.work.maximum_local_atoms}}},
+                {"local_schwarz_core_atoms",local_schwarz.core_atoms},
+                {"local_schwarz_overlap_hops",local_schwarz.overlap_hops},
+                {"local_schwarz_max_block_atoms",local_schwarz.max_block_atoms},
                 {"derivative_tile_rows",DerivativeTileRows()},
                 {"local_operator_work",LocalOperatorWorkJson()},
                 {"local_trajectory_telemetry",attribution},
@@ -675,6 +712,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         }
         return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
             {"parameter_count",3*atoms},{"core_atoms",neighbor_policy.core_atoms},
+            {"outer_core_atoms",neighbor_policy.core_atoms},
             {"workspace_mode",reuse_block_workspace ? "persistent" : "fresh-per-block-visit"},
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},
             {"block_order",reverse_order ? "reverse" : "forward"},
@@ -689,6 +727,14 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     j::object neighbor_json{{"method","FixedNeighbor"},
         {"local_search_method",LocalSearchName(local_search)},
         {"local_preconditioner",LocalPreconditionerName(local_preconditioner)},
+        {"outer_core_atoms",neighbor_policy.core_atoms},
+        {"local_atoms",j::object{{"minimum",neighbor.work.minimum_local_atoms},
+            {"mean",Number(neighbor.work.local_problem_count ? neighbor.work.total_local_atoms/
+                static_cast<double>(neighbor.work.local_problem_count) : 0.)},
+            {"maximum",neighbor.work.maximum_local_atoms}}},
+        {"local_schwarz_core_atoms",local_schwarz.core_atoms},
+        {"local_schwarz_overlap_hops",local_schwarz.overlap_hops},
+        {"local_schwarz_max_block_atoms",local_schwarz.max_block_atoms},
         {"derivative_tile_rows",DerivativeTileRows()},
         {"search_converged",neighbor.search_converged},
         {"workspace_mode",reuse_block_workspace ? "persistent" : "fresh-per-block-visit"},
@@ -742,18 +788,21 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     if(decompose)
         return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
             {"parameter_count",3*atoms},{"core_atoms",neighbor_policy.core_atoms},
+            {"outer_core_atoms",neighbor_policy.core_atoms},
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
             {"fixed_neighbor",neighbor_json},{"endpoint_decomposition",endpoint_snapshots},
             {"peak_rss_mb",PeakRssMb()}};
     if(qualification || endpoint_trajectory)
         return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
             {"parameter_count",3*atoms},{"core_atoms",neighbor_policy.core_atoms},
+            {"outer_core_atoms",neighbor_policy.core_atoms},
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
             {"fixed_neighbor",neighbor_json},{"endpoint_assessment_by_sweep",endpoint_assessments},
             {"peak_rss_mb",PeakRssMb()}};
     if(!compare_global)
         return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
             {"parameter_count",3*atoms},{"core_atoms",neighbor_policy.core_atoms},
+            {"outer_core_atoms",neighbor_policy.core_atoms},
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
             {"fixed_neighbor",neighbor_json},{"peak_rss_mb",PeakRssMb()}};
     n::SearchPolicy legacy_policy;
@@ -782,6 +831,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     }
     return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
         {"parameter_count",3*atoms},{"core_atoms",neighbor_policy.core_atoms},
+        {"outer_core_atoms",neighbor_policy.core_atoms},
         {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
         {"global_legacy_compact",PackFit("LegacyCompact",legacy,legacy_seconds)},
         {"global_operator_pcg",PackFit("OperatorPcg",operator_fit,operator_seconds)},
@@ -793,7 +843,7 @@ void Write(const std::filesystem::path & path,const j::value & value)
 int main(int argc,char ** argv)
 {
     try {
-        if((argc!=5 && argc!=6) || (std::string(argv[1])!="--case" && std::string(argv[1])!="--neighbor-only" &&
+        if((argc<5 || argc>9) || (std::string(argv[1])!="--case" && std::string(argv[1])!="--neighbor-only" &&
             std::string(argv[1])!="--decompose" && std::string(argv[1])!="--certified-local" &&
             std::string(argv[1])!="--qualification" && std::string(argv[1])!="--scaling-only" &&
             std::string(argv[1])!="--attribution" &&
@@ -811,7 +861,7 @@ int main(int argc,char ** argv)
             std::string(argv[1])!="--tile-8192" && std::string(argv[1])!="--tile-16384" &&
             std::string(argv[1])!="--neighbor-forward" && std::string(argv[1])!="--neighbor-reverse" &&
             std::string(argv[1])!="--scaling-forward" && std::string(argv[1])!="--scaling-reverse"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--operator-diagnostic|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--matched-control|--local-legacy|--local-operator-identity|--local-operator-diagonal|--local-operator-schwarz|--local-operator-schwarz-two|--local-operator-schwarz-full|--tile-1024|--tile-2048|--tile-4096|--tile-8192|--tile-16384|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [CORE_ATOMS]");
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--decompose|--certified-local|--qualification|--operator-diagnostic|--scaling-only|--attribution|--full-attribution|--inexact-one|--inexact-two|--inexact-one-search|--matched-control|--local-legacy|--local-operator-identity|--local-operator-diagonal|--local-operator-schwarz|--local-operator-schwarz-two|--local-operator-schwarz-full|--tile-1024|--tile-2048|--tile-4096|--tile-8192|--tile-16384|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [OUTER_CORE_ATOMS [LOCAL_SCHWARZ_CORE_ATOMS LOCAL_SCHWARZ_OVERLAP_HOPS LOCAL_SCHWARZ_MAX_BLOCK_ATOMS]]");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
@@ -827,10 +877,21 @@ int main(int argc,char ** argv)
         const bool local_search_mode=mode=="--inexact-one-search" || mode=="--local-legacy" || operator_mode ||
             tile_mode || operator_diagnostic;
         const bool local_qualification_mode=mode=="--local-legacy" || operator_mode || tile_mode || operator_diagnostic;
-        if(argc==6 && !local_search_mode && mode!="--matched-control")
-            throw std::invalid_argument("CORE_ATOMS is supported only with --inexact-one-search, local operator modes, or --matched-control.");
-        const std::size_t core_atoms=argc==6 ? static_cast<std::size_t>(std::stoul(argv[5])) : 128;
+        if(argc>=6 && !local_search_mode && mode!="--matched-control")
+            throw std::invalid_argument("OUTER_CORE_ATOMS is supported only with --inexact-one-search, local operator modes, or --matched-control.");
+        if(argc>6 && argc!=9)
+            throw std::invalid_argument("LOCAL_SCHWARZ_CORE_ATOMS, LOCAL_SCHWARZ_OVERLAP_HOPS, and LOCAL_SCHWARZ_MAX_BLOCK_ATOMS must be provided together.");
+        const std::size_t core_atoms=argc>=6 ? static_cast<std::size_t>(std::stoul(argv[5])) : 128;
         if(core_atoms==0) throw std::invalid_argument("CORE_ATOMS must be positive.");
+        n::SchwarzPolicy local_schwarz;
+        if(argc==9)
+        {
+            local_schwarz.core_atoms=static_cast<std::size_t>(std::stoul(argv[6]));
+            local_schwarz.overlap_hops=static_cast<std::size_t>(std::stoul(argv[7]));
+            local_schwarz.max_block_atoms=static_cast<std::size_t>(std::stoul(argv[8]));
+            if(local_schwarz.core_atoms==0 || local_schwarz.max_block_atoms==0)
+                throw std::invalid_argument("LOCAL_SCHWARZ_CORE_ATOMS and LOCAL_SCHWARZ_MAX_BLOCK_ATOMS must be positive.");
+        }
         const auto local_search=operator_mode ? n::FixedNeighborLocalSearch::OperatorPcg :
             n::FixedNeighborLocalSearch::LegacyCompact;
         const auto local_preconditioner=mode=="--local-operator-identity" ? n::FixedNeighborLocalPreconditioner::Identity :
@@ -855,7 +916,7 @@ int main(int argc,char ** argv)
             (mode=="--inexact-two" || operator_two_mode) ? n::FixedNeighborLocalWork::TwoAcceptedUpdates :
                 (mode=="--inexact-one" || (local_search_mode && !operator_full_mode) || mode=="--matched-control") ?
                     n::FixedNeighborLocalWork::OneAcceptedUpdate : n::FixedNeighborLocalWork::Full,
-            core_atoms,mode!="--matched-control",local_search,local_preconditioner));
+            core_atoms,mode!="--matched-control",local_search,local_preconditioner,local_schwarz));
         std::cout<<argv[3]<<'-'<<argv[4]<<" fixed-neighbor experiment complete\n";
         return 0;
     } catch(const std::exception & error) {std::cerr<<error.what()<<'\n'; return 1;}

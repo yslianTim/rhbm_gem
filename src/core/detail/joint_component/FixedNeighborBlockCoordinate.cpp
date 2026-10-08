@@ -233,7 +233,10 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         prepared.context.search.method=policy.local_search==FixedNeighborLocalSearch::OperatorPcg ?
             SearchMethod::OperatorPcg : SearchMethod::LegacyCompact;
         if(policy.local_search==FixedNeighborLocalSearch::OperatorPcg)
+        {
             prepared.context.search.preconditioner=LocalPreconditioner(policy.local_preconditioner);
+            prepared.context.search.schwarz=policy.local_schwarz;
+        }
         if(local_update_budget>0) prepared.context.update_budget=local_update_budget;
         prepared_blocks.push_back(std::move(prepared));
     }
@@ -300,6 +303,19 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             }
 
             const auto search_started=Clock::now();
+            if(policy.collect_telemetry)
+            {
+                const auto atoms=static_cast<std::size_t>(local_atoms);
+                ++out.work.local_problem_count;
+                out.work.total_local_atoms+=static_cast<double>(atoms);
+                if(out.work.local_problem_count==1)
+                    out.work.minimum_local_atoms=out.work.maximum_local_atoms=atoms;
+                else
+                {
+                    out.work.minimum_local_atoms=std::min(out.work.minimum_local_atoms,atoms);
+                    out.work.maximum_local_atoms=std::max(out.work.maximum_local_atoms,atoms);
+                }
+            }
             const auto old_widths=old_eta.array().exp().eval();
             std::unique_ptr<LinearWorkspace> fresh_workspace;
             if(!policy.reuse_block_workspace) fresh_workspace=std::make_unique<LinearWorkspace>();

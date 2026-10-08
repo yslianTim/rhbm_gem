@@ -60,6 +60,10 @@ std::shared_ptr<const PreconditionerPartition> BuildPreconditionerPartition(
     const auto scratch=24*(n+1)+24*(m+1)+16*memberships+32*std::min(m,policy.max_block_atoms);
     Budget(scratch,policy.scratch_bytes,"preconditioner-scratch-limit"); work.scratch_bytes=std::max(work.scratch_bytes,scratch);
     StructuralTopology topology(*input,layout); auto structural=topology.BuildCores(policy.core_atoms,false);
+    ++work.preconditioner_partition_count;
+    work.requested_schwarz_core_atoms=policy.core_atoms;
+    work.requested_schwarz_overlap_hops=policy.overlap_hops;
+    work.requested_schwarz_max_block_atoms=policy.max_block_atoms;
     std::vector<bool> informative(n,false); for(auto row:layout.informative_rows) informative.at(row)=true;
     std::vector<PreconditionerBlock> blocks; blocks.reserve(structural.cores.size());
     std::size_t bytes=32*m+8*(layout.full_atoms.size()+layout.informative_rows.size());
@@ -84,7 +88,33 @@ std::shared_ptr<const PreconditionerPartition> BuildPreconditionerPartition(
         block.informative_rows.shrink_to_fit();
         bytes+=sizeof(block)+block.id.size()+32*(block.core_atoms.size()+block.overlap_atoms.size())+8*block.informative_rows.size();
         Budget(bytes,policy.storage_bytes,"preconditioner-storage-limit");
-        work.maximum_block_atoms=std::max(work.maximum_block_atoms,block.core_atoms.size()+block.overlap_atoms.size());
+        const auto realized=block.core_atoms.size()+block.overlap_atoms.size();
+        const auto local_atoms=layout.full_atoms.size();
+        const double coverage=local_atoms ? static_cast<double>(realized)/static_cast<double>(local_atoms) : 0.0;
+        ++work.preconditioner_geometry_block_count;
+        work.total_core_atoms+=static_cast<double>(block.core_atoms.size());
+        work.total_overlap_atoms+=static_cast<double>(block.overlap_atoms.size());
+        work.total_realized_block_atoms+=static_cast<double>(realized);
+        work.total_preconditioner_coverage_ratio+=coverage;
+        if(work.preconditioner_geometry_block_count==1)
+        {
+            work.minimum_core_atoms=work.maximum_core_atoms=block.core_atoms.size();
+            work.minimum_overlap_atoms=work.maximum_overlap_atoms=block.overlap_atoms.size();
+            work.minimum_realized_block_atoms=work.maximum_realized_block_atoms=realized;
+            work.minimum_preconditioner_coverage_ratio=work.maximum_preconditioner_coverage_ratio=coverage;
+        }
+        else
+        {
+            work.minimum_core_atoms=std::min(work.minimum_core_atoms,block.core_atoms.size());
+            work.maximum_core_atoms=std::max(work.maximum_core_atoms,block.core_atoms.size());
+            work.minimum_overlap_atoms=std::min(work.minimum_overlap_atoms,block.overlap_atoms.size());
+            work.maximum_overlap_atoms=std::max(work.maximum_overlap_atoms,block.overlap_atoms.size());
+            work.minimum_realized_block_atoms=std::min(work.minimum_realized_block_atoms,realized);
+            work.maximum_realized_block_atoms=std::max(work.maximum_realized_block_atoms,realized);
+            work.minimum_preconditioner_coverage_ratio=std::min(work.minimum_preconditioner_coverage_ratio,coverage);
+            work.maximum_preconditioner_coverage_ratio=std::max(work.maximum_preconditioner_coverage_ratio,coverage);
+        }
+        work.maximum_block_atoms=std::max(work.maximum_block_atoms,realized);
         blocks.push_back(std::move(block));
     }
     auto result=std::make_shared<const PreconditionerPartition>(std::move(input),layout,std::move(blocks),policy);

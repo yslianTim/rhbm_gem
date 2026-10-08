@@ -54,6 +54,8 @@ struct FixedNeighborWork
         sweep_global_state_seconds{};
     std::size_t block_solves{},full_candidate_replays{},candidate_state_full_copies{},affected_row_updates{},
         old_core_basis_builds{};
+    std::size_t local_problem_count{},minimum_local_atoms{},maximum_local_atoms{};
+    double total_local_atoms{};
     ProfileSearchWork local_profile_work;
 };
 struct FixedNeighborDiagnosticSink
@@ -79,6 +81,7 @@ struct FixedNeighborPolicy
     // Benchmark/test-only controls. The production component policy does not expose them.
     FixedNeighborLocalSearch local_search{FixedNeighborLocalSearch::LegacyCompact};
     FixedNeighborLocalPreconditioner local_preconditioner{FixedNeighborLocalPreconditioner::Diagonal};
+    SchwarzPolicy local_schwarz{};
     bool stop_after_stationarity{true};
     bool certify_local_candidates{};
     bool capture_local_trajectory{};
