@@ -74,6 +74,29 @@ void CheckMultiBlockBudgetFailure(const std::string & topology)
     EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Failed);
     EXPECT_EQ(result.fit.components.size(),1u);
 }
+struct LocalSchwarzRun
+{
+    n::FixedNeighborResult result;
+    n::SearchWork work;
+};
+LocalSchwarzRun RunLocalSchwarz(const n::SchwarzPolicy & schwarz)
+{
+    JointProblem problem(second_stage_test::OperatorWorkload("chain",64));
+    const n::Vector eta=n::Vector::Constant(64,std::log(.55));
+    n::FixedNeighborPolicy policy;
+    policy.core_atoms=64;
+    policy.maximum_sweeps=1;
+    policy.local_work=n::FixedNeighborLocalWork::OneAcceptedUpdate;
+    policy.local_search=n::FixedNeighborLocalSearch::OperatorPcg;
+    policy.local_preconditioner=n::FixedNeighborLocalPreconditioner::Schwarz;
+    policy.local_schwarz=schwarz;
+    policy.assess_final_endpoint=false;
+    policy.collect_telemetry=true;
+    n::SearchWorkForTesting()={};
+    n::OperatorWorkForTesting()={};
+    const auto result=n::SearchFixedNeighbor(problem,eta,policy);
+    return {result,n::SearchWorkForTesting()};
+}
 }
 TEST(JointFixedNeighborBlockCoordinateTest, SmallSingleBlockFixturesUseExistingEndpointCertification)
 {
@@ -264,6 +287,75 @@ TEST(JointFixedNeighborBlockCoordinateTest, OperatorPcgIsSelectableOnlyAsTheLoca
     EXPECT_GT(result.work.local_profile_work.total.evaluations,0u);
     EXPECT_DOUBLE_EQ(result.work.local_profile_work.total.derivative_prepare_seconds,0.0);
     EXPECT_DOUBLE_EQ(result.work.local_profile_work.total.derivative_reduce_seconds,0.0);
+}
+TEST(JointFixedNeighborBlockCoordinateTest, LocalSchwarzFullBlockPoliciesHaveEquivalentSixtyFourAtomGeometry)
+{
+    auto input=std::make_shared<rhbm_gem::core::JointProblemInput>(second_stage_test::OperatorWorkload("chain",64));
+    const auto layout=n::BuildParameterLayout(*input);
+    n::SchwarzPolicy historical; historical.core_atoms=128; historical.overlap_hops=1; historical.max_block_atoms=512;
+    n::SchwarzPolicy matched; matched.core_atoms=64; matched.overlap_hops=1; matched.max_block_atoms=64;
+    n::SchwarzPolicy zero_overlap=matched; zero_overlap.overlap_hops=0;
+    const auto historical_partition=n::BuildPreconditionerPartition(input,layout,historical);
+    ASSERT_EQ(historical_partition->blocks.size(),1u);
+    for(const auto & policy:{matched,zero_overlap})
+    {
+        const auto partition=n::BuildPreconditionerPartition(input,layout,policy);
+        ASSERT_EQ(partition->blocks.size(),1u);
+        EXPECT_EQ(partition->blocks.front().core_atoms,historical_partition->blocks.front().core_atoms);
+        EXPECT_EQ(partition->blocks.front().overlap_atoms,historical_partition->blocks.front().overlap_atoms);
+        EXPECT_EQ(partition->blocks.front().informative_rows,historical_partition->blocks.front().informative_rows);
+        const auto mapping=n::WidthMapping(*partition);
+        ASSERT_EQ(mapping.blocks.size(),1u);
+        EXPECT_EQ(mapping.blocks.front().global,historical_partition->blocks.front().core_atoms);
+    }
+
+    const auto historical_run=RunLocalSchwarz(historical);
+    const auto matched_run=RunLocalSchwarz(matched);
+    const auto zero_overlap_run=RunLocalSchwarz(zero_overlap);
+    for(const auto * run:{&historical_run,&matched_run,&zero_overlap_run})
+    {
+        ASSERT_EQ(run->result.blocks.size(),1u);
+        ASSERT_EQ(run->work.preconditioner_partition_count,1u);
+        ASSERT_EQ(run->work.preconditioner_geometry_block_count,1u);
+        EXPECT_EQ(run->work.minimum_core_atoms,64u);
+        EXPECT_EQ(run->work.maximum_core_atoms,64u);
+        EXPECT_DOUBLE_EQ(run->work.total_core_atoms,64.0);
+        EXPECT_EQ(run->work.minimum_overlap_atoms,0u);
+        EXPECT_EQ(run->work.maximum_overlap_atoms,0u);
+        EXPECT_DOUBLE_EQ(run->work.total_overlap_atoms,0.0);
+        EXPECT_EQ(run->work.minimum_realized_block_atoms,64u);
+        EXPECT_EQ(run->work.maximum_realized_block_atoms,64u);
+        EXPECT_DOUBLE_EQ(run->work.total_realized_block_atoms,64.0);
+        EXPECT_DOUBLE_EQ(run->work.total_preconditioner_coverage_ratio,1.0);
+        EXPECT_DOUBLE_EQ(run->work.minimum_preconditioner_coverage_ratio,1.0);
+        EXPECT_DOUBLE_EQ(run->work.maximum_preconditioner_coverage_ratio,1.0);
+        EXPECT_EQ(run->work.pcg_solves,run->work.pcg_iteration_counts.size());
+    }
+    EXPECT_EQ(historical_run.work.requested_schwarz_core_atoms,128u);
+    EXPECT_EQ(historical_run.work.requested_schwarz_overlap_hops,1u);
+    EXPECT_EQ(historical_run.work.requested_schwarz_max_block_atoms,512u);
+    EXPECT_EQ(matched_run.work.requested_schwarz_core_atoms,64u);
+    EXPECT_EQ(matched_run.work.requested_schwarz_overlap_hops,1u);
+    EXPECT_EQ(matched_run.work.requested_schwarz_max_block_atoms,64u);
+    EXPECT_EQ(zero_overlap_run.work.requested_schwarz_core_atoms,64u);
+    EXPECT_EQ(zero_overlap_run.work.requested_schwarz_overlap_hops,0u);
+    EXPECT_EQ(zero_overlap_run.work.requested_schwarz_max_block_atoms,64u);
+
+    for(const auto * run:{&matched_run,&zero_overlap_run})
+    {
+        EXPECT_EQ(run->result.reason,historical_run.result.reason);
+        EXPECT_EQ(run->result.search_converged,historical_run.result.search_converged);
+        EXPECT_EQ(run->result.sweeps.size(),historical_run.result.sweeps.size());
+        EXPECT_EQ(run->work.pcg_solves,historical_run.work.pcg_solves);
+        EXPECT_EQ(run->work.pcg_iterations,historical_run.work.pcg_iterations);
+        EXPECT_EQ(run->work.pcg_iteration_counts,historical_run.work.pcg_iteration_counts);
+        EXPECT_EQ(run->result.blocks.front().status,historical_run.result.blocks.front().status);
+        EXPECT_LT((run->result.state.eta-historical_run.result.state.eta).norm(),1e-12);
+        EXPECT_LT((run->result.state.beta-historical_run.result.state.beta).norm(),1e-12);
+        EXPECT_LT((run->result.state.prediction-historical_run.result.state.prediction).norm(),1e-12);
+        EXPECT_LT((run->result.state.residual-historical_run.result.state.residual).norm(),1e-12);
+        EXPECT_NEAR(run->result.state.objective,historical_run.result.state.objective,1e-14);
+    }
 }
 TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutputWithoutDiagnostics)
 {
