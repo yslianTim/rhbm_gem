@@ -253,8 +253,6 @@ if(RHBM_GEM_ENABLE_UMAP)
     target_link_libraries(rhbm_gem_test PRIVATE "$<BUILD_INTERFACE:libscran::umappp>")
     target_compile_definitions(rhbm_gem_test PUBLIC RHBM_GEM_ENABLE_UMAP)
 endif()
-find_package(SPQR 4 CONFIG REQUIRED)
-target_link_libraries(rhbm_gem_test PRIVATE SuiteSparse::SPQR SuiteSparse::CHOLMOD)
 target_include_directories(rhbm_gem_test PRIVATE "${PROJECT_SOURCE_DIR}/tests")
 target_compile_definitions(rhbm_gem_test PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
 

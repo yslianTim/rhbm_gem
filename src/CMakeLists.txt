@@ -156,11 +156,6 @@ target_include_directories(rhbm_gem PRIVATE
 
 target_link_libraries(rhbm_gem PUBLIC rhbm_gem_dependencies)
 rhbm_gem_prepare_openmp_for_appleclang()
-find_package(SPQR 4 CONFIG REQUIRED)
-if(NOT SPQR_VERSION VERSION_LESS "5")
-    message(FATAL_ERROR "Joint SPQR backend requires SPQR 4.x")
-endif()
-target_link_libraries(rhbm_gem PRIVATE SuiteSparse::SPQR SuiteSparse::CHOLMOD)
 target_link_libraries(rhbm_gem PRIVATE "$<BUILD_INTERFACE:CompilerFlags>")
 include(SimulationBuildInfo)
 if(RHBM_GEM_ENABLE_UMAP)
