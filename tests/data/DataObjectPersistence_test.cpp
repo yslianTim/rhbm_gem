@@ -572,7 +572,7 @@ TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsCurrentAndHistorica
     auto fixed=SavedJointExample();
     rg::JointSolverProvenance fixed_provenance{"fixed-neighbor",12u,std::nullopt};
     fixed_provenance.contract_version=rg::JointSolverProvenanceContractVersion;
-    fixed_provenance.sparse_backend="SPQR";
+    fixed_provenance.sparse_backend="EIGEN";
     fixed_provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
     fixed_provenance.fixed_neighbor_maximum_sweeps=30;
     fixed_provenance.fixed_neighbor_order="forward";
@@ -581,7 +581,7 @@ TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsCurrentAndHistorica
     const auto fixed_decoded=io::Decode(io::Encode(fixed));
     ASSERT_TRUE(fixed_decoded.metadata.solver);
     EXPECT_EQ(fixed_decoded.metadata.solver->contract_version,rg::JointSolverProvenanceContractVersion);
-    EXPECT_EQ(fixed_decoded.metadata.solver->sparse_backend,"SPQR");
+    EXPECT_EQ(fixed_decoded.metadata.solver->sparse_backend,"EIGEN");
     EXPECT_FALSE(fixed_decoded.metadata.solver->fixed_neighbor_local_work);
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_maximum_sweeps,30u);
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_order,"forward");

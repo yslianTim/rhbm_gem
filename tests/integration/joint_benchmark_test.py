@@ -25,7 +25,7 @@ class JointBenchmarkContractTest(unittest.TestCase):
             '--output', 'result.json'])
         self.assertEqual(benchmark.solver_policy_metadata(args), {
             'search_method': 'FixedNeighbor',
-            'sparse_backend': 'SPQR',
+            'sparse_backend': 'EIGEN',
             'fixed_neighbor_core_atoms': 12,
             'fixed_neighbor_block_order': 'forward',
             'fixed_neighbor_maximum_sweeps': 30,

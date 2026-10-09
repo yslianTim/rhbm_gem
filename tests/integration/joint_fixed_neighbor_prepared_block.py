@@ -182,7 +182,7 @@ def analyze(rows, expected=None):
         "phase": "prepared FixedNeighbor structural contract",
         "policy": {"core_atoms": CORE_ATOMS, "maximum_sweeps": 30,
                    "block_order": "forward",
-                   "local_search": "LegacyCompact", "backend": "SPQR", "eigen_threads": 1},
+                   "local_search": "LegacyCompact", "backend": "EIGEN", "eigen_threads": 1},
         "measurement_scope": "fixed-neighbor-search-only",
         "expected_cases": [{"topology": topology, "atoms": atoms} for topology, atoms in sorted(expected)],
         "cases": cases, "failures": failures,

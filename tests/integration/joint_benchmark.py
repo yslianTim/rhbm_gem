@@ -51,7 +51,7 @@ def build_metadata(build: Path):
                 values[key] = value
     compiler = values.get('compiler', '').split(';')
     return {
-        'backend': 'SPQR',
+        'backend': 'EIGEN',
         'build_type': cache_value(cache, 'CMAKE_BUILD_TYPE', 'multi-config'),
         'compiler': ' '.join(compiler[1:]) if len(compiler) > 1 else None,
     }
@@ -330,7 +330,7 @@ def execute_once(args, build, run_root, deadline):
 def solver_policy_metadata(args):
     return {
         'search_method': 'FixedNeighbor',
-        'sparse_backend': 'SPQR',
+        'sparse_backend': 'EIGEN',
         'fixed_neighbor_core_atoms': args.fixed_core_atoms,
         'fixed_neighbor_block_order': 'forward',
         'fixed_neighbor_maximum_sweeps': 30,

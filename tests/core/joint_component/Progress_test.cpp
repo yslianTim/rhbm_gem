@@ -570,7 +570,7 @@ TEST(JointProgressTest, CliReporterFormatsFixedNeighborConfiguration)
     const auto output = testing::internal::GetCapturedStdout();
     Logger::SetLogLevel(previous_level);
     const auto fixed = output.find(
-        "[Joint] Solver: FixedNeighbor | sparse=SPQR | core=12 | local-search=legacy-compact");
+        "[Joint] Solver: FixedNeighbor | sparse=EIGEN | core=12 | local-search=legacy-compact");
     ASSERT_NE(fixed, std::string::npos);
     const auto fixed_line_end = output.find('\n', fixed);
     EXPECT_EQ(output.substr(fixed, fixed_line_end - fixed).find("local-work="), std::string::npos);
