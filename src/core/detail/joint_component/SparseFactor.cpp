@@ -277,50 +277,6 @@ ResourcePhase::~ResourcePhase()
     w.phase=previous_;
     if(search_stage_) NotifyResourceStageObserver();
 }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-SpqrOrdering & SpqrOrderingForTesting() {static thread_local SpqrOrdering ordering=SpqrOrdering::Colamd; return ordering;}
-const char * SpqrOrderingName(SpqrOrdering ordering)
-{
-    switch(ordering)
-    {
-    case SpqrOrdering::Colamd: return "COLAMD";
-    case SpqrOrdering::Default: return "DEFAULT";
-    case SpqrOrdering::Best: return "BEST";
-    case SpqrOrdering::Metis: return "METIS";
-    }
-    return "unknown";
-}
-bool SpqrOrderingAvailable(SpqrOrdering ordering)
-{
-#ifdef RHBM_GEM_JOINT_SPQR
-    switch(ordering)
-    {
-    case SpqrOrdering::Colamd: return true;
-    case SpqrOrdering::Default:
-#ifdef SPQR_ORDERING_DEFAULT
-        return true;
-#else
-        return false;
-#endif
-    case SpqrOrdering::Best:
-#ifdef SPQR_ORDERING_BEST
-        return true;
-#else
-        return false;
-#endif
-    case SpqrOrdering::Metis:
-#ifdef SPQR_ORDERING_METIS
-        return true;
-#else
-        return false;
-#endif
-    }
-#else
-    (void)ordering;
-#endif
-    return false;
-}
-#endif
 #ifdef RHBM_GEM_JOINT_SPQR
 namespace {
 using Clock=std::chrono::steady_clock;
@@ -328,30 +284,6 @@ double Seconds(Clock::time_point t) {return std::chrono::duration<double>(Clock:
 using LongSparse=Eigen::SparseMatrix<double,Eigen::ColMajor,int64_t>;
 int ActiveOrdering()
 {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    switch(SpqrOrderingForTesting())
-    {
-    case SpqrOrdering::Colamd: return SPQR_ORDERING_COLAMD;
-    case SpqrOrdering::Default:
-#ifdef SPQR_ORDERING_DEFAULT
-        return SPQR_ORDERING_DEFAULT;
-#else
-        return SPQR_ORDERING_COLAMD;
-#endif
-    case SpqrOrdering::Best:
-#ifdef SPQR_ORDERING_BEST
-        return SPQR_ORDERING_BEST;
-#else
-        return SPQR_ORDERING_COLAMD;
-#endif
-    case SpqrOrdering::Metis:
-#ifdef SPQR_ORDERING_METIS
-        return SPQR_ORDERING_METIS;
-#else
-        return SPQR_ORDERING_COLAMD;
-#endif
-    }
-#endif
     return SPQR_ORDERING_COLAMD;
 }
 cholmod_sparse View(LongSparse & a)
@@ -705,7 +637,6 @@ ProjectedTailQrResultForTesting FreeDesignFactor::ProjectedTailQrForTesting(
     Check();
     ProjectedTailQrResultForTesting result;
     result.rows=raw.rows(); result.free_design_columns=state_->design.cols(); result.width_columns=raw.cols();
-    result.ordering=SpqrOrderingName(SpqrOrderingForTesting());
     const auto started=Clock::now();
     if(raw.rows()!=state_->design.rows() || residual.size()!=raw.rows() || raw.cols()<=0 ||
         !(scale>0) || !std::isfinite(scale))

@@ -47,7 +47,7 @@ ReducedDifferential ReduceDerivativeForTesting(const TiledDifferential &,VectorR
 Eigen::Index & DerivativeTileRowsForTesting();
 struct ProjectedReductionWorkForTesting
 {
-    std::string kind{"observation-tiled-qr"},ordering{"none"},fallback_reason;
+    std::string kind{"observation-tiled-qr"},fallback_reason;
     std::size_t attempts{},accepted{},fallbacks{},sparse_nonzeros{};
     std::size_t raw_nonzeros{},q_transformed_nonzeros{},tail_nonzeros{},
         q_transformed_storage_bytes{},tail_storage_bytes{},tail_factor_nonzeros{},tail_factor_storage_bytes{};

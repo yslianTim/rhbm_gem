@@ -324,8 +324,6 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
     auto & projected_work=work.projected_reduction;
     projected_work.kind=structured ? "structured-compact-qr" : tail_candidate ? "projected-tail-qr" :
         census ? "projected-tail-census" : "observation-tiled-qr";
-    projected_work.ordering=structured ? "SuiteSparseQR_FIXED" : tail_candidate ? "SuiteSparseQR_COLAMD" :
-        census ? "sparse-qmult-free-design-factor" : "none";
     projected_work.factor_rows=m; projected_work.factor_columns=m;
     if(structured || tail_candidate || census) ++projected_work.attempts;
 #endif
@@ -456,7 +454,6 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
         projected_work.numeric_seconds+=candidate.tail_numeric_seconds;
         projected_work.tail_qmult_seconds+=candidate.tail_qmult_seconds;
         projected_work.tail_compact_seconds+=candidate.tail_compact_seconds;
-        if(!candidate.ordering.empty()) projected_work.ordering="SuiteSparseQR_"+candidate.ordering;
         projected_work.sparse_rows=n; projected_work.sparse_columns=m;
         projected_work.q_transformed_nonzeros=candidate.q_transformed_nonzeros;
         projected_work.tail_nonzeros=candidate.tail_nonzeros;

@@ -68,7 +68,7 @@ struct ProjectedTailQrResultForTesting
     double q_transform_seconds{},tail_extract_seconds{},tail_symbolic_seconds{},
         tail_numeric_seconds{},tail_qmult_seconds{},tail_compact_seconds{},seconds{};
     bool valid{},columns_restored{};
-    std::string ordering,reason;
+    std::string reason;
 };
 struct FactorResidencyRecord
 {
@@ -111,10 +111,6 @@ public:
     FactorCreationRoleScopeForTesting(const FactorCreationRoleScopeForTesting &)=delete;
     FactorCreationRoleScopeForTesting & operator=(const FactorCreationRoleScopeForTesting &)=delete;
 };
-enum class SpqrOrdering {Colamd,Default,Best,Metis};
-SpqrOrdering & SpqrOrderingForTesting();
-const char * SpqrOrderingName(SpqrOrdering);
-bool SpqrOrderingAvailable(SpqrOrdering);
 #endif
 // Inclusive elapsed time, including early returns and exception unwinding.
 struct WorkTimer

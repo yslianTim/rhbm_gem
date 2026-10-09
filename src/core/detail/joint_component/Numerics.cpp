@@ -633,12 +633,10 @@ Assessment AssessEvaluated(const Domain &,VectorRef y,const Evaluation & endpoin
         projected_work.fallback_reason="rank-decision-boundary";
         const auto saved=ProjectedReductionForTesting();
         const auto candidate_kind=projected_work.kind;
-        const auto candidate_ordering=projected_work.ordering;
         ProjectedReductionForTesting()=ProjectedReductionKindForTesting::ObservationTiledQr;
         differential=ReduceDerivativeCompact(prepared,endpoint.residual);
         ProjectedReductionForTesting()=saved;
         projected_work.kind=candidate_kind;
-        projected_work.ordering=candidate_ordering;
         if(!differential.valid || !width_spectra()) {out.failure="spectrum-factorization-failed"; return out;}
     }
     else if(differential.projected_candidate)
