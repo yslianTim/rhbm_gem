@@ -459,6 +459,28 @@ TEST(JointProgressTest, PublicFitWithoutObserverIsSilent)
     EXPECT_TRUE(stderr_text.empty());
 }
 
+TEST(JointProgressTest, PublicFitUsesFixedNeighborProductionContract)
+{
+    const core::JointProblem problem(MakeInput());
+    const std::vector<double> initial{.55, .55};
+    joint::SearchPolicy fixed_neighbor;
+    fixed_neighbor.method = joint::SearchMethod::FixedNeighbor;
+    const auto expected = joint::FitWithSearchPolicy(problem, initial, fixed_neighbor);
+    const auto actual = core::FitJointComponents(problem, initial);
+
+    EXPECT_EQ(actual.solver_provenance.search_method, "fixed-neighbor");
+    EXPECT_EQ(actual.solver_provenance.fixed_neighbor_core_atoms, 12u);
+    EXPECT_EQ(actual.solver_provenance.fixed_neighbor_policy_version,
+        rhbm_gem::FixedNeighborPolicyContractVersion);
+    EXPECT_EQ(actual.solver_provenance.fixed_neighbor_maximum_sweeps, 30u);
+    EXPECT_EQ(actual.solver_provenance.fixed_neighbor_order, "forward");
+    EXPECT_EQ(actual.solver_provenance.fixed_neighbor_local_search, "legacy-compact");
+    EXPECT_EQ(actual.RuntimeConvergence(), expected.RuntimeConvergence());
+    ASSERT_TRUE(actual.assembled_state);
+    ASSERT_TRUE(expected.assembled_state);
+    ExpectSameFitNumerics(actual, expected);
+}
+
 TEST(JointProgressTest, ActiveSparseBackendMatchesCompiledFactorizationBackend)
 {
     const auto expected = joint::SparseBackendEnabled() ? joint::SparseBackend::Spqr : joint::SparseBackend::Eigen;
