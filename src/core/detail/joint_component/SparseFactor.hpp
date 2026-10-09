@@ -34,10 +34,6 @@ struct SparseWork
     double matrix_preparation_seconds{},symbolic_seconds{},numeric_seconds{},reference_seconds{},reference_svd_seconds{},derivative_seconds{};
     std::size_t derivative_preparations{},derivative_compacts{},reference_compacts{},free_design_svds{},reference_svds{},reference_solves{},bdc_svds{},jacobi_retries{};
     double derivative_compact_seconds{},reference_compact_seconds{},free_design_svd_seconds{},reference_solve_seconds{},cancellation_seconds{},jacobi_retry_seconds{};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    std::size_t native_operator_factorizations{};
-    double native_operator_factor_seconds{};
-#endif
 };
 SparseWork & SparseWorkForTesting();
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -119,18 +115,6 @@ enum class SpqrOrdering {Colamd,Default,Best,Metis};
 SpqrOrdering & SpqrOrderingForTesting();
 const char * SpqrOrderingName(SpqrOrdering);
 bool SpqrOrderingAvailable(SpqrOrdering);
-enum class OperatorFactorRepresentation {ExportedFixed,NativeQr};
-OperatorFactorRepresentation & OperatorFactorRepresentationForTesting();
-const char * OperatorFactorRepresentationName(OperatorFactorRepresentation);
-class OperatorFactorRepresentationScopeForTesting
-{
-    OperatorFactorRepresentation previous_;
-public:
-    explicit OperatorFactorRepresentationScopeForTesting(OperatorFactorRepresentation);
-    ~OperatorFactorRepresentationScopeForTesting();
-    OperatorFactorRepresentationScopeForTesting(const OperatorFactorRepresentationScopeForTesting &)=delete;
-    OperatorFactorRepresentationScopeForTesting & operator=(const OperatorFactorRepresentationScopeForTesting &)=delete;
-};
 #endif
 // Inclusive elapsed time, including early returns and exception unwinding.
 struct WorkTimer
@@ -171,7 +155,6 @@ class FreeDesignFactor
 public:
     static std::shared_ptr<FreeDesignFactor> Fixed(const Sparse &,const std::vector<Eigen::Index> &);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    static std::shared_ptr<FreeDesignFactor> NativeFixedForTesting(const Sparse &,const std::vector<Eigen::Index> &);
     const Sparse & DesignForTesting() const;
     const std::vector<Eigen::Index> & ColumnsForTesting() const;
     double ToleranceForTesting() const;

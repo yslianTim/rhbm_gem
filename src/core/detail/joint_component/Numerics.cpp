@@ -151,15 +151,6 @@ std::string_view FixedNeighborBlockOrderName(FixedNeighborBlockOrder order)
     }
     return {};
 }
-std::string_view FreeDesignRankBackendName(FreeDesignRankBackend backend)
-{
-    switch(backend)
-    {
-    case FreeDesignRankBackend::Dense: return "Dense";
-    case FreeDesignRankBackend::SpqrBounds: return "SpqrBounds";
-    }
-    return {};
-}
 double RankPolicy::Relative(Eigen::Index columns) const
 {return std::numeric_limits<double>::epsilon()*static_cast<double>(std::max(rows,columns));}
 double RankPolicy::Absolute(Eigen::Index columns,double maximum) const
