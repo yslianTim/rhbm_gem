@@ -316,7 +316,7 @@ def execute_once(args, build, run_root, deadline):
                 'elapsed_seconds': None, 'process_wall_seconds': record.get('wall_seconds'),
                 'peak_rss_bytes': rss, 'stages': results, 'raw': None}
     try:
-        raw = driver_json(directory, driver_output)
+        raw = driver_json(directory, driver_output if args.profile in ('search', 'solve') else None)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         return {'status': 'process_error', 'reason': str(error), 'elapsed_seconds': None,
                 'peak_rss_bytes': rss, 'stages': results, 'raw': None}
