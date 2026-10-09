@@ -1,5 +1,4 @@
 #include "Numerics.hpp"
-#include "OperatorSearch.hpp"
 #include "SparseFactor.hpp"
 #include "InstrumentedLM.hpp"
 #include "TiledDerivative.hpp"
@@ -176,8 +175,6 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     const JointProgressComponent * progress_component,LinearWorkspace * workspace,const void * workspace_identity,
     ProfileSearchWork * telemetry)
 {
-    if(context.search.method==SearchMethod::OperatorPcg)
-        return SearchOperatorProfile(domain,y,initial_b,context,observer,progress_component,telemetry);
     ResourcePhase phase("search",true,domain.rows,initial_b.size());
     const auto start=std::chrono::steady_clock::now();
     ProfileSearchWork local_work;

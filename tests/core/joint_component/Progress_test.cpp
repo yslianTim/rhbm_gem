@@ -21,8 +21,6 @@
 #include "core/command/detail/MapSimulation.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "core/detail/JointCliProgressReporter.hpp"
-#include "core/detail/joint_component/OperatorSearch.hpp"
-#include "core/detail/joint_component/ProfileJacobianOperator.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/SparseFactor.hpp"
 #include "support/JointOperatorWorkload.hpp"
@@ -181,7 +179,6 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
     const auto expected_route = joint::ResolveJointSolverRoute(policy);
     EXPECT_EQ(events.front().solver_route->sparse_backend, expected_route.sparse_backend);
     EXPECT_EQ(events.front().solver_route->search_method, expected_route.search_method);
-    EXPECT_EQ(events.front().solver_route->preconditioner, expected_route.preconditioner);
     EXPECT_EQ(std::count_if(events.begin(), events.end(), [](const auto & event) {
         return event.phase == joint::JointProgressPhase::SolverConfigured;
     }), 1);
@@ -334,7 +331,7 @@ TEST(JointProgressTest, RejectedCandidateKeepsAcceptedObjective)
     EXPECT_DOUBLE_EQ(*accepted_objective, 10);
 }
 
-TEST(JointProgressTest, SearchEventsTrackOnlyAcceptedMetricsForBothPolicies)
+TEST(JointProgressTest, SearchEventsTrackOnlyAcceptedMetrics)
 {
     const core::JointProblem problem(second_stage_test::OperatorWorkload("chain", 4));
     const auto & data = core::JointProblemAccess::Get(problem);
@@ -344,30 +341,14 @@ TEST(JointProgressTest, SearchEventsTrackOnlyAcceptedMetricsForBothPolicies)
     const joint::JointProgressComponent progress_component{
         1, data.partition.components.size(), view.id, view.atoms.size(), view.rows.size()};
 
-    for (const auto method : {joint::SearchMethod::LegacyCompact, joint::SearchMethod::OperatorPcg})
+    for (const double initial_width : {.05, 2.})
     {
-        context.search.method = method;
-        const double initial_width = method == joint::SearchMethod::LegacyCompact ? .05 : 2.;
+        context.search.method = joint::SearchMethod::LegacyCompact;
         const auto initial = joint::Vector::Constant(static_cast<Eigen::Index>(view.atoms.size()), initial_width);
-        const auto adjoints_before = joint::OperatorWorkForTesting().adjoints;
-        const auto preparations_before = joint::OperatorWorkForTesting().preparations;
-        const auto search_work_before = joint::SearchWorkForTesting();
         const auto without_observer = joint::SearchProfile(view.domain, y, initial, context);
-        const auto no_observer_adjoints = joint::OperatorWorkForTesting().adjoints - adjoints_before;
-        const auto no_observer_preparations = joint::OperatorWorkForTesting().preparations - preparations_before;
-        const auto no_observer_search_work = joint::SearchWorkForTesting();
-        const auto observed_adjoints_before = joint::OperatorWorkForTesting().adjoints;
-        const auto observed_preparations_before = joint::OperatorWorkForTesting().preparations;
-        const auto observed_search_work_before = joint::SearchWorkForTesting();
         std::vector<joint::JointProgressEvent> events;
         const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
         const auto observed = joint::SearchProfile(view.domain, y, initial, context, observer, &progress_component);
-        EXPECT_EQ(joint::OperatorWorkForTesting().adjoints - observed_adjoints_before, no_observer_adjoints);
-        EXPECT_EQ(joint::OperatorWorkForTesting().preparations - observed_preparations_before, no_observer_preparations);
-        EXPECT_EQ(joint::SearchWorkForTesting().pcg_solves - observed_search_work_before.pcg_solves,
-            no_observer_search_work.pcg_solves - search_work_before.pcg_solves);
-        EXPECT_EQ(joint::SearchWorkForTesting().pcg_iterations - observed_search_work_before.pcg_iterations,
-            no_observer_search_work.pcg_iterations - search_work_before.pcg_iterations);
 
         EXPECT_EQ(observed.evaluations, without_observer.evaluations);
         EXPECT_EQ(observed.references, without_observer.references);
@@ -488,27 +469,9 @@ TEST(JointProgressTest, LegacyCompactRouteOmitsUnusedPreconditioner)
 {
     joint::SearchPolicy policy;
     policy.method = joint::SearchMethod::LegacyCompact;
-    policy.preconditioner = joint::PreconditionerKind::Schwarz;
     const auto route = joint::ResolveJointSolverRoute(policy);
     EXPECT_EQ(route.sparse_backend, joint::ActiveSparseBackend());
     EXPECT_EQ(route.search_method, joint::SearchMethod::LegacyCompact);
-    EXPECT_FALSE(route.preconditioner);
-}
-
-TEST(JointProgressTest, OperatorPcgRoutePreservesRequestedPreconditioner)
-{
-    joint::SearchPolicy policy;
-    policy.method = joint::SearchMethod::OperatorPcg;
-    for (const auto preconditioner : {joint::PreconditionerKind::Identity,
-        joint::PreconditionerKind::Diagonal, joint::PreconditionerKind::Schwarz})
-    {
-        policy.preconditioner = preconditioner;
-        const auto route = joint::ResolveJointSolverRoute(policy);
-        EXPECT_EQ(route.sparse_backend, joint::ActiveSparseBackend());
-        EXPECT_EQ(route.search_method, joint::SearchMethod::OperatorPcg);
-        ASSERT_TRUE(route.preconditioner);
-        EXPECT_EQ(*route.preconditioner, preconditioner);
-    }
 }
 
 TEST(JointProgressTest, SolverRouteNamesAreCanonical)
@@ -516,27 +479,20 @@ TEST(JointProgressTest, SolverRouteNamesAreCanonical)
     EXPECT_EQ(joint::SparseBackendName(joint::SparseBackend::Eigen), "EIGEN");
     EXPECT_EQ(joint::SparseBackendName(joint::SparseBackend::Spqr), "SPQR");
     EXPECT_EQ(joint::SearchMethodName(joint::SearchMethod::LegacyCompact), "LegacyCompact");
-    EXPECT_EQ(joint::SearchMethodName(joint::SearchMethod::OperatorPcg), "OperatorPcg");
-    EXPECT_EQ(joint::PreconditionerName(joint::PreconditionerKind::Identity), "Identity");
-    EXPECT_EQ(joint::PreconditionerName(joint::PreconditionerKind::Diagonal), "Diagonal");
-    EXPECT_EQ(joint::PreconditionerName(joint::PreconditionerKind::Schwarz), "Schwarz");
 }
 
-TEST(JointProgressTest, LifecycleAndNumericsMatchForBothSearchPolicies)
+TEST(JointProgressTest, LifecycleAndNumericsMatchForLegacyCompactSearch)
 {
     const core::JointProblem problem(MakeInput());
     const std::vector<double> initial{.55, .55};
-    for (const auto method : {joint::SearchMethod::LegacyCompact, joint::SearchMethod::OperatorPcg})
-    {
-        joint::SearchPolicy policy;
-        policy.method = method;
-        const auto without_observer = joint::FitWithSearchPolicy(problem, initial, policy);
-        std::vector<joint::JointProgressEvent> events;
-        const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
-        const auto with_observer = joint::FitWithSearchPolicy(problem, initial, policy, observer);
-        ExpectSameFitNumerics(without_observer, with_observer);
-        ExpectLifecycle(problem, with_observer, events, policy);
-    }
+    joint::SearchPolicy policy;
+    policy.method = joint::SearchMethod::LegacyCompact;
+    const auto without_observer = joint::FitWithSearchPolicy(problem, initial, policy);
+    std::vector<joint::JointProgressEvent> events;
+    const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
+    const auto with_observer = joint::FitWithSearchPolicy(problem, initial, policy, observer);
+    ExpectSameFitNumerics(without_observer, with_observer);
+    ExpectLifecycle(problem, with_observer, events, policy);
 }
 
 TEST(JointProgressTest, FixedNeighborUsesComponentRouteAndQualifiedDefaults)
@@ -563,7 +519,6 @@ TEST(JointProgressTest, FixedNeighborUsesComponentRouteAndQualifiedDefaults)
     EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(events.front().solver_route);
     EXPECT_EQ(events.front().solver_route->search_method,joint::SearchMethod::FixedNeighbor);
-    EXPECT_FALSE(events.front().solver_route->preconditioner);
     EXPECT_EQ(events.front().solver_route->fixed_neighbor_core_atoms,12u);
     ASSERT_TRUE(std::any_of(events.begin(),events.end(),[](const auto & event) {
         return event.fixed_neighbor && event.fixed_neighbor->sweep>0;
@@ -633,11 +588,6 @@ TEST(JointProgressTest, CliReporterFormatsResolvedSolverRoutes)
     event.solver_route = joint::ResolveJointSolverRoute(policy);
     reporter.OnProgress(event);
 
-    policy.method = joint::SearchMethod::OperatorPcg;
-    policy.preconditioner = joint::PreconditionerKind::Schwarz;
-    event.solver_route = joint::ResolveJointSolverRoute(policy);
-    reporter.OnProgress(event);
-
     policy.method = joint::SearchMethod::FixedNeighbor;
     event.solver_route = joint::ResolveJointSolverRoute(policy);
     reporter.OnProgress(event);
@@ -649,8 +599,6 @@ TEST(JointProgressTest, CliReporterFormatsResolvedSolverRoutes)
     ASSERT_NE(legacy, std::string::npos);
     const auto legacy_line_end = output.find('\n', legacy);
     EXPECT_EQ(output.substr(legacy, legacy_line_end - legacy).find("preconditioner="), std::string::npos);
-    EXPECT_NE(output.find("[Joint] Solver route: sparse=" + sparse
-        + " | search=operator-pcg | preconditioner=Schwarz"), std::string::npos);
     const auto fixed = output.find("[Joint] Solver route: sparse=" + sparse
         + " | search=fixed-neighbor | core=12 | local-search=legacy-compact");
     ASSERT_NE(fixed, std::string::npos);

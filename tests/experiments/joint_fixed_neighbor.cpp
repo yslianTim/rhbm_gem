@@ -6,7 +6,6 @@
 #include <boost/json.hpp>
 #include <Eigen/Core>
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -135,30 +134,6 @@ j::object PackFit(const std::string & method,const rhbm_gem::core::JointFitResul
         {"assessment_inner",CheckValue(fit,"inner")},{"assessment_gradient",CheckValue(fit,"width-stationarity")},
         {"assessment_local",CheckValue(fit,"local-correction")},{"assessment_identified",CheckValue(fit,"numerical-identifiability")},
         {"runtime_convergence",CheckName(fit.RuntimeConvergence())}};
-}
-struct MethodState {std::string name; const rhbm_gem::core::JointFitResult * fit{};};
-double ScaledAcDifference(const rhbm_gem::core::JointProblem & problem,const MethodState & lhs,const MethodState & rhs)
-{
-    if(!lhs.fit || !rhs.fit || !lhs.fit->assembled_state || !rhs.fit->assembled_state) return std::numeric_limits<double>::infinity();
-    const auto & input=problem.Input(); const auto & layout=problem.ParameterLayout();
-    const auto & a=lhs.fit->assembled_state->ac; const auto & b=rhs.fit->assembled_state->ac;
-    if(a.size()!=b.size()) return std::numeric_limits<double>::infinity();
-    const double scale=problem.ObservationScale(); double difference{};
-    for(std::size_t k=0;k<layout.full_atoms.size();++k)
-    {
-        const auto atom=layout.full_atoms[k]; const double width=rhs.fit->assembled_state->b.at(k);
-        double gaussian{},charge{};
-        for(const auto & support:input.support.at(atom))
-        {
-            if(!std::binary_search(layout.informative_rows.begin(),layout.informative_rows.end(),support.row)) continue;
-            const auto basis=n::EvaluateKernel(support.squared_distance,width,2.5);
-            gaussian+=basis.gaussian*basis.gaussian; charge+=basis.charge*basis.charge;
-        }
-        const double scales[]{std::sqrt(gaussian)/scale,std::sqrt(charge)/scale};
-        for(std::size_t kind=0;kind<2;++kind)
-            difference=std::max(difference,std::abs(a[2*k+kind]-b[2*k+kind])*scales[kind]);
-    }
-    return difference;
 }
 j::array AcScalingWeights(const rhbm_gem::core::JointProblem & problem,const n::Vector & eta)
 {
@@ -470,32 +445,12 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     started=Clock::now(); const auto legacy=n::FitWithSearchPolicy(problem,initial_b,legacy_policy);
     const double legacy_seconds=Seconds(started);
     std::cerr<<topology<<'-'<<atoms<<" global LegacyCompact finished in "<<legacy_seconds<<" s\n";
-    n::SearchPolicy operator_policy; operator_policy.method=n::SearchMethod::OperatorPcg;
-    std::cerr<<topology<<'-'<<atoms<<" global OperatorPcg started\n";
-    started=Clock::now(); const auto operator_fit=n::FitWithSearchPolicy(problem,initial_b,operator_policy);
-    const double operator_seconds=Seconds(started);
-    std::cerr<<topology<<'-'<<atoms<<" global OperatorPcg finished in "<<operator_seconds<<" s\n";
-    const MethodState reference{"LegacyCompact",&legacy};
-    j::array comparisons;
-    for(const MethodState & candidate:std::array<MethodState,2>{{{"OperatorPcg",&operator_fit},{"FixedNeighbor",&neighbor.fit}}})
-    {
-        const double objective_difference=legacy.objective && candidate.fit->objective ?
-            std::abs(*legacy.objective-*candidate.fit->objective) : std::numeric_limits<double>::infinity();
-        const double eta_difference=legacy.assembled_state && candidate.fit->assembled_state ?
-            (n::Vector::Map(legacy.assembled_state->log_b.data(),static_cast<Eigen::Index>(legacy.assembled_state->log_b.size()))-
-             n::Vector::Map(candidate.fit->assembled_state->log_b.data(),static_cast<Eigen::Index>(candidate.fit->assembled_state->log_b.size()))).lpNorm<Eigen::Infinity>() :
-            std::numeric_limits<double>::infinity();
-        comparisons.push_back({{"against","LegacyCompact"},{"method",candidate.name},
-            {"objective_difference",objective_difference},{"eta_inf_difference",eta_difference},
-            {"scaled_ac_inf_difference",ScaledAcDifference(problem,reference,candidate)}});
-    }
     return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
         {"parameter_count",3*atoms},{"core_atoms",neighbor_policy.core_atoms},
         {"outer_core_atoms",neighbor_policy.core_atoms},
         {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
         {"global_legacy_compact",PackFit("LegacyCompact",legacy,legacy_seconds)},
-        {"global_operator_pcg",PackFit("OperatorPcg",operator_fit,operator_seconds)},
-        {"fixed_neighbor",neighbor_json},{"comparisons",comparisons},{"peak_rss_mb",PeakRssMb()}};
+        {"fixed_neighbor",neighbor_json},{"peak_rss_mb",PeakRssMb()}};
 }
 void Write(const std::filesystem::path & path,const j::value & value)
 {std::ofstream output(path); if(!output) throw std::runtime_error("Could not open experiment output."); output<<j::serialize(value)<<'\n';}

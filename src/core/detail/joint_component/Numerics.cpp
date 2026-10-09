@@ -110,27 +110,10 @@ CompactSvdResult Decompose(const Matrix & r,Eigen::Index rows,CompactSvdVectors 
 }
 JointSolverRoute ResolveJointSolverRoute(const SearchPolicy & policy)
 {
-    std::optional<PreconditionerKind> preconditioner;
     std::optional<std::size_t> fixed_neighbor_core_atoms;
-    if(policy.method==SearchMethod::OperatorPcg) preconditioner=policy.preconditioner;
     if(policy.method==SearchMethod::FixedNeighbor)
         fixed_neighbor_core_atoms=policy.fixed_neighbor.core_atoms;
-    return {ActiveSparseBackend(),policy.method,preconditioner,
-        fixed_neighbor_core_atoms};
-}
-std::optional<FreeDesignRankBackend> ResolveOperatorRankBackend(OperatorRankMode mode,SparseBackend backend)
-{
-    switch(mode)
-    {
-    case OperatorRankMode::Auto:
-        return backend==SparseBackend::Spqr ? FreeDesignRankBackend::SpqrBounds : FreeDesignRankBackend::Dense;
-    case OperatorRankMode::Dense:
-        return FreeDesignRankBackend::Dense;
-    case OperatorRankMode::SpqrBounds:
-        if(backend==SparseBackend::Spqr) return FreeDesignRankBackend::SpqrBounds;
-        return std::nullopt;
-    }
-    return std::nullopt;
+    return {ActiveSparseBackend(),policy.method,fixed_neighbor_core_atoms};
 }
 std::string_view SparseBackendName(SparseBackend backend)
 {
@@ -146,7 +129,6 @@ std::string_view SearchMethodName(SearchMethod method)
     switch(method)
     {
     case SearchMethod::LegacyCompact: return "LegacyCompact";
-    case SearchMethod::OperatorPcg: return "OperatorPcg";
     case SearchMethod::FixedNeighbor: return "FixedNeighbor";
     }
     return {};
@@ -156,18 +138,7 @@ std::string_view SearchMethodToken(SearchMethod method)
     switch(method)
     {
     case SearchMethod::LegacyCompact: return "legacy-compact";
-    case SearchMethod::OperatorPcg: return "operator-pcg";
     case SearchMethod::FixedNeighbor: return "fixed-neighbor";
-    }
-    return {};
-}
-std::string_view PreconditionerName(PreconditionerKind preconditioner)
-{
-    switch(preconditioner)
-    {
-    case PreconditionerKind::Identity: return "Identity";
-    case PreconditionerKind::Diagonal: return "Diagonal";
-    case PreconditionerKind::Schwarz: return "Schwarz";
     }
     return {};
 }
@@ -177,16 +148,6 @@ std::string_view FixedNeighborBlockOrderName(FixedNeighborBlockOrder order)
     {
     case FixedNeighborBlockOrder::Forward: return "forward";
     case FixedNeighborBlockOrder::Reverse: return "reverse";
-    }
-    return {};
-}
-std::string_view OperatorRankModeName(OperatorRankMode mode)
-{
-    switch(mode)
-    {
-    case OperatorRankMode::Auto: return "Auto";
-    case OperatorRankMode::Dense: return "Dense";
-    case OperatorRankMode::SpqrBounds: return "SpqrBounds";
     }
     return {};
 }

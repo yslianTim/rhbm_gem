@@ -1,7 +1,6 @@
 #pragma once
 
 #include "FixedNeighborPolicy.hpp"
-#include "SchwarzPolicy.hpp"
 #include <optional>
 #include <cstddef>
 #include <string_view>
@@ -9,27 +8,16 @@
 namespace rhbm_gem::core::joint_component {
 
 enum class SparseBackend {Eigen,Spqr};
-enum class SearchMethod {LegacyCompact,OperatorPcg,FixedNeighbor};
-enum class PreconditionerKind {Identity,Diagonal,Schwarz};
+enum class SearchMethod {LegacyCompact,FixedNeighbor};
 enum class FreeDesignRankBackend {Dense,SpqrBounds};
-enum class OperatorRankMode {Auto,Dense,SpqrBounds};
 struct RankBudget
 {
     double seconds{120};
     std::size_t entries{100000000},workspace_bytes{256*1024*1024};
 };
-struct OperatorRankPolicy
-{
-    OperatorRankMode mode{OperatorRankMode::Auto};
-    RankBudget budget{};
-};
 struct SearchPolicy
 {
     SearchMethod method{SearchMethod::LegacyCompact};
-    PreconditionerKind preconditioner{PreconditionerKind::Schwarz};
-    OperatorRankPolicy operator_rank{};
-    SchwarzPolicy schwarz{};
-    int pcg_iterations{-1},damping_trials{20};
     FixedNeighborSearchPolicy fixed_neighbor{};
 };
 
@@ -37,19 +25,15 @@ struct JointSolverRoute
 {
     SparseBackend sparse_backend{};
     SearchMethod search_method{};
-    std::optional<PreconditionerKind> preconditioner;
     std::optional<std::size_t> fixed_neighbor_core_atoms;
 };
 
 SparseBackend ActiveSparseBackend();
-std::optional<FreeDesignRankBackend> ResolveOperatorRankBackend(OperatorRankMode,SparseBackend);
 JointSolverRoute ResolveJointSolverRoute(const SearchPolicy & policy);
 std::string_view SparseBackendName(SparseBackend backend);
 std::string_view SearchMethodName(SearchMethod method);
 std::string_view SearchMethodToken(SearchMethod method);
-std::string_view PreconditionerName(PreconditionerKind preconditioner);
 std::string_view FixedNeighborBlockOrderName(FixedNeighborBlockOrder order);
-std::string_view OperatorRankModeName(OperatorRankMode mode);
 std::string_view FreeDesignRankBackendName(FreeDesignRankBackend backend);
 
 } // namespace rhbm_gem::core::joint_component

@@ -180,8 +180,6 @@ set(UTILS_HRL_TEST_SOURCES
 
 set(JOINT_COMPONENT_TEST_SOURCES
     core/joint_component/FreeDesignRank_test.cpp
-    core/joint_component/ProfileOperator_test.cpp
-    core/joint_component/OperatorSearch_test.cpp
     core/joint_component/BlockCoordinate_test.cpp
     core/joint_component/ProjectedTailQr_test.cpp
     core/joint_component/Search_test.cpp
@@ -328,18 +326,6 @@ if(RHBM_GEM_BUILD_BENCHMARKS)
     target_link_libraries(joint_fixed_neighbor_experiment PRIVATE joint_test_support rhbm_gem_test CompilerFlags)
     target_compile_definitions(joint_fixed_neighbor_experiment PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
     add_dependencies(benchmarks_all joint_fixed_neighbor_experiment)
-endif()
-
-if(RHBM_GEM_BUILD_BENCHMARKS OR RHBM_GEM_BUILD_RESEARCH_TOOLS)
-    add_executable(joint_sparse_benchmark experiments/joint_sparse_benchmark.cpp)
-    target_link_libraries(joint_sparse_benchmark PRIVATE joint_test_support rhbm_gem_test)
-    target_compile_definitions(joint_sparse_benchmark PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
-    if(RHBM_GEM_BUILD_BENCHMARKS)
-        add_dependencies(benchmarks_all joint_sparse_benchmark)
-    endif()
-    if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
-        add_dependencies(research_tools_all joint_sparse_benchmark)
-    endif()
 endif()
 
 if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
@@ -655,12 +641,8 @@ else()
     endforeach()
 endif()
 
-if(RHBM_GEM_BUILD_BENCHMARKS OR RHBM_GEM_BUILD_RESEARCH_TOOLS)
-    if(NOT TARGET joint_sparse_benchmark)
-        message(FATAL_ERROR "Benchmark or research builds require joint_sparse_benchmark")
-    endif()
-elseif(TARGET joint_sparse_benchmark)
-    message(FATAL_ERROR "joint_sparse_benchmark exists in the default test configuration")
+if(TARGET joint_sparse_benchmark)
+    message(FATAL_ERROR "Retired operator benchmark target joint_sparse_benchmark exists")
 endif()
 
 if(RHBM_GEM_BUILD_RESEARCH_TOOLS)

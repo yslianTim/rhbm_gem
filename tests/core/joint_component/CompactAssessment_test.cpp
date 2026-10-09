@@ -336,8 +336,6 @@ TEST(JointProjectedWidthTest, FullAssessmentAndReturnedStateParityAcrossSmallLat
         const c::JointProblem problem(second_stage_test::OperatorWorkload(topology,atoms));
         const auto & data=c::JointProblemAccess::Get(problem);
         auto context=data.context;
-        context.search.method=n::SearchMethod::OperatorPcg;
-        context.search.preconditioner=n::PreconditionerKind::Schwarz;
         const auto search=n::SearchProfile(data.domain,data.y,n::Vector::Constant(atoms,.55),context);
 
         n::JacobianReductionForTesting()=n::JacobianReductionKindForTesting::CompactStackQr;
@@ -436,8 +434,7 @@ TEST(JointCompactAssessmentTest, FullAssessmentAndReturnedStateParityAcrossSmall
         SCOPED_TRACE(topology+"-"+std::to_string(atoms));
         const c::JointProblem problem(second_stage_test::OperatorWorkload(topology,atoms));
         const auto & data=c::JointProblemAccess::Get(problem);
-        auto context=data.context; context.search.method=n::SearchMethod::OperatorPcg;
-        context.search.preconditioner=n::PreconditionerKind::Schwarz;
+        auto context=data.context;
         const auto search=n::SearchProfile(data.domain,data.y,n::Vector::Constant(atoms,.55),context);
 
         n::JacobianReductionForTesting()=n::JacobianReductionKindForTesting::ObservationTsqr;
@@ -466,11 +463,6 @@ TEST(JointCompactAssessmentTest, FullAssessmentAndReturnedStateParityAtAcceptanc
         const c::JointProblem problem(second_stage_test::OperatorWorkload(topology,atoms));
         const auto & data=c::JointProblemAccess::Get(problem);
         auto context=data.context;
-        context.search.method=n::SearchMethod::OperatorPcg;
-        context.search.preconditioner=n::PreconditionerKind::Schwarz;
-        context.search.operator_rank.mode=n::OperatorRankMode::Auto;
-        context.search.operator_rank.budget={120,100'000'000,256*1024*1024};
-        context.search.schwarz={128,1,512,512ULL*1024*1024,256ULL*1024*1024};
         const auto search=n::SearchProfile(data.domain,data.y,n::Vector::Constant(atoms,.55),context);
 
         n::JacobianReductionForTesting()=n::JacobianReductionKindForTesting::ObservationTsqr;

@@ -100,8 +100,6 @@ void JointCliProgressReporter::OnProgress(const JointProgressEvent & event)
         std::ostringstream output;
         output << "[Joint] Solver route: sparse=" << joint_component::SparseBackendName(route.sparse_backend)
             << " | search=" << joint_component::SearchMethodToken(route.search_method);
-        if (route.preconditioner)
-            output << " | preconditioner=" << joint_component::PreconditionerName(*route.preconditioner);
         if (route.fixed_neighbor_core_atoms)
             output << " | core=" << *route.fixed_neighbor_core_atoms
                 << " | local-search=legacy-compact";

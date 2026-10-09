@@ -179,26 +179,6 @@ JointFitResult n::FitWithSearchPolicyImpl(const JointProblem & problem,const std
         out.search_method=std::string(n::SearchMethodToken(route.search_method));
         out.contract_version=std::string(JointSolverProvenanceContractVersion);
         out.sparse_backend=std::string(n::SparseBackendName(route.sparse_backend));
-        if(route.search_method==n::SearchMethod::OperatorPcg)
-        {
-            out.preconditioner=std::string(n::PreconditionerName(search_policy.preconditioner));
-            out.operator_rank_mode=std::string(n::OperatorRankModeName(search_policy.operator_rank.mode));
-            if(const auto backend=n::ResolveOperatorRankBackend(search_policy.operator_rank.mode,route.sparse_backend))
-                out.operator_rank_backend=std::string(n::FreeDesignRankBackendName(*backend));
-            out.operator_pcg_iterations=search_policy.pcg_iterations;
-            out.operator_damping_trials=search_policy.damping_trials;
-            out.operator_rank_budget_seconds=search_policy.operator_rank.budget.seconds;
-            out.operator_rank_budget_entries=search_policy.operator_rank.budget.entries;
-            out.operator_rank_budget_workspace_bytes=search_policy.operator_rank.budget.workspace_bytes;
-            if(search_policy.preconditioner==n::PreconditionerKind::Schwarz)
-            {
-                out.schwarz_core_atoms=search_policy.schwarz.core_atoms;
-                out.schwarz_overlap_hops=search_policy.schwarz.overlap_hops;
-                out.schwarz_max_block_atoms=search_policy.schwarz.max_block_atoms;
-                out.schwarz_storage_bytes=search_policy.schwarz.storage_bytes;
-                out.schwarz_scratch_bytes=search_policy.schwarz.scratch_bytes;
-            }
-        }
         if(route.search_method==n::SearchMethod::FixedNeighbor)
         {
             const auto & policy=search_policy.fixed_neighbor;
