@@ -291,7 +291,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutp
 }
 TEST(JointFixedNeighborBlockCoordinateTest, PreparedWorkspaceReusesSymbolicFactorizationWithFreshControl)
 {
-    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"Optional SPQR backend";
     JointProblem problem(second_stage_test::OperatorWorkload("chain",32));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Domain domain=n::ProfileDomain(data.domain,data.layout);

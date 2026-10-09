@@ -1,7 +1,8 @@
 #include "Numerics.hpp"
 #include "SparseFactor.hpp"
 #include "CompactSvd.hpp"
-#include <Eigen/SparseQR>
+#include <Eigen/QR>
+#include <Eigen/SVD>
 #include <algorithm>
 #include <cmath>
 #include <type_traits>
@@ -19,87 +20,17 @@ bool Finite(const Sparse & x)
 Eigen::VectorXd ColumnNorms(const Eigen::MatrixXd & x) { return x.colwise().norm(); }
 Eigen::VectorXd ColumnNorms(const Sparse & x)
 {
-    if(SparseBackendEnabled())
-    {
-        Eigen::VectorXd out(x.cols());
-        for(Eigen::Index k=0;k<x.cols();++k) out(k)=x.col(k).norm();
-        return out;
-    }
-    Eigen::VectorXd out=Eigen::VectorXd::Zero(x.cols());
-    for (int k=0;k<x.outerSize();++k) for (Sparse::InnerIterator e(x,k);e;++e) out(k)+=e.value()*e.value();
-    return out.cwiseSqrt();
+    Eigen::VectorXd out(x.cols());
+    for(Eigen::Index k=0;k<x.cols();++k) out(k)=x.col(k).norm();
+    return out;
 }
 }
 std::pair<Eigen::MatrixXd,Eigen::VectorXd> ReferenceQR(const Sparse & x,
     const Eigen::VectorXd & weights,const Eigen::VectorXd & scales,VectorRef y)
 {
-    if(SparseBackendEnabled()) return SparseReferenceQR(x,weights,scales,y);
-    ++SparseWorkForTesting().reference; WorkTimer timer(SparseWorkForTesting().reference_seconds);
-    const Eigen::SparseMatrix<double,Eigen::RowMajor> rows(x);
-    Eigen::MatrixXd r(0,x.cols()); Eigen::VectorXd target(0);
-    constexpr Eigen::Index tile=8192;
-    for (Eigen::Index first=0;first<x.rows();first+=tile)
-    {
-        const Eigen::Index n=std::min(tile,x.rows()-first), prior=r.rows();
-        Eigen::MatrixXd a=Eigen::MatrixXd::Zero(prior+n,x.cols());
-        RecordDenseShape("reference-tile",prior+n,x.cols());
-        Eigen::VectorXd rhs=Eigen::VectorXd::Zero(prior+n);
-        if (prior) {a.topRows(prior)=r; rhs.head(prior)=target;}
-        for (Eigen::Index row=first;row<first+n;++row)
-        {
-            const double w=std::sqrt(weights(row)); rhs(prior+row-first)=w*y(row);
-            for (Eigen::SparseMatrix<double,Eigen::RowMajor>::InnerIterator e(rows,row);e;++e)
-                a(prior+row-first,e.col())=w*e.value()/scales(e.col());
-        }
-        const Eigen::HouseholderQR<Eigen::MatrixXd> qr(a);
-        const Eigen::VectorXd transformed=qr.householderQ().adjoint()*rhs;
-        const Eigen::Index keep=std::min(a.rows(),a.cols());
-        r=qr.matrixQR().topRows(keep).triangularView<Eigen::Upper>(); target=transformed.head(keep);
-    }
-    return {std::move(r),std::move(target)};
+    return SparseReferenceQR(x,weights,scales,y);
 }
 namespace {
-std::pair<Eigen::SparseMatrix<double>,Eigen::VectorXd> ReduceSparseRows(
-    const Eigen::SparseMatrix<double> & a,const Eigen::VectorXd & rhs)
-{
-    // Orthogonal elimination within contiguous row tiles. Only structurally
-    // present columns need local QR; all original rows and weights participate.
-    // The discarded Q^T y tail contributes a coefficient-independent constant,
-    // while objective and stationarity are always evaluated on the full design.
-    const Eigen::SparseMatrix<double,Eigen::RowMajor> rows(a);
-    std::vector<Eigen::Triplet<double>> entries; std::vector<double> response;
-    constexpr Eigen::Index tile_size{1024};
-    for (Eigen::Index first=0;first<a.rows();first+=tile_size)
-    {
-        const Eigen::Index count{std::min(tile_size,a.rows()-first)};
-        std::vector<int> local_column(static_cast<std::size_t>(a.cols()),-1),columns;
-        for (Eigen::Index row=first;row<first+count;++row)
-            for (Eigen::SparseMatrix<double,Eigen::RowMajor>::InnerIterator e(rows,row);e;++e)
-                local_column[static_cast<std::size_t>(e.col())]=0;
-        for (Eigen::Index k=0;k<a.cols();++k) if (local_column[static_cast<std::size_t>(k)]==0)
-        {local_column[static_cast<std::size_t>(k)]=static_cast<int>(columns.size()); columns.push_back(static_cast<int>(k));}
-        if (columns.empty()) continue;
-        Eigen::MatrixXd local{Eigen::MatrixXd::Zero(count,static_cast<Eigen::Index>(columns.size()))};
-        RecordDenseShape("ac-row-reduction",local.rows(),local.cols());
-        for (Eigen::Index row=first;row<first+count;++row)
-            for (Eigen::SparseMatrix<double,Eigen::RowMajor>::InnerIterator e(rows,row);e;++e)
-                local(row-first,local_column[static_cast<std::size_t>(e.col())])=e.value();
-        const Eigen::HouseholderQR<Eigen::MatrixXd> qr(local);
-        const Eigen::VectorXd transformed{qr.householderQ().adjoint()*rhs.segment(first,count)};
-        const Eigen::Index retained{std::min(count,local.cols())},offset{static_cast<Eigen::Index>(response.size())};
-        for (Eigen::Index row=0;row<retained;++row)
-        {
-            response.push_back(transformed(row));
-            for (Eigen::Index col=row;col<local.cols();++col)
-                if (qr.matrixQR()(row,col)!=0) entries.emplace_back(offset+row,columns[static_cast<std::size_t>(col)],qr.matrixQR()(row,col));
-        }
-    }
-    Eigen::SparseMatrix<double> reduced(static_cast<Eigen::Index>(response.size()),a.cols());
-    reduced.setFromTriplets(entries.begin(),entries.end());
-    Eigen::VectorXd transformed(static_cast<Eigen::Index>(response.size()));
-    for (std::size_t row=0;row<response.size();++row) transformed(static_cast<Eigen::Index>(row))=response[row];
-    return {std::move(reduced),std::move(transformed)};
-}
 struct BlockFace
 {
     Eigen::VectorXd solution;
@@ -160,8 +91,7 @@ BlockFace SolveBlocks(const Sparse & x,VectorRef y,const Eigen::VectorXd & weigh
                 maximum=std::max(maximum,std::sqrt(squared));
             }
             const Eigen::VectorXd rhs=w.cwiseSqrt().array()*response.array();
-            if(SparseBackendEnabled()) {f.reduced=std::move(selected); f.rhs=rhs;}
-            else {auto reduced=ReduceSparseRows(selected,rhs); f.reduced=std::move(reduced.first); f.rhs=std::move(reduced.second);}
+            f.reduced=std::move(selected); f.rhs=rhs;
         }
         factors.push_back(std::move(f));
     }
@@ -177,22 +107,11 @@ BlockFace SolveBlocks(const Sparse & x,VectorRef y,const Eigen::VectorXd & weigh
         }
         else
         {
-            if(SparseBackendEnabled())
-            {
-                LinearWorkspace workspace;
-                try {
-                    const auto factor=workspace.Factor(f.reduced,f.positions,absolute);
-                    out.rank+=factor->Rank(); solution=factor->LeastSquares(f.rhs);
-                } catch(const std::runtime_error &) {out.valid=false; return out;}
-            }
-            else
-            {
-                Eigen::SparseQR<Sparse,Eigen::COLAMDOrdering<int>> qr;
-                qr.setPivotThreshold(absolute); qr.compute(f.reduced);
-                if(qr.info()==Eigen::Success) SparseWorkForTesting().factor_nonzeros=std::max(SparseWorkForTesting().factor_nonzeros,static_cast<std::size_t>(qr.matrixR().nonZeros()));
-                if(qr.info()!=Eigen::Success) {out.valid=false; return out;}
-                out.rank+=static_cast<int>(qr.rank()); solution=qr.solve(f.rhs);
-            }
+            LinearWorkspace workspace;
+            try {
+                const auto factor=workspace.Factor(f.reduced,f.positions,absolute);
+                out.rank+=factor->Rank(); solution=factor->LeastSquares(f.rhs);
+            } catch(const std::runtime_error &) {out.valid=false; return out;}
         }
         ++out.factorizations;
         for(std::size_t k=0;k<f.positions.size();++k) out.solution(f.positions[k])=solution(static_cast<Eigen::Index>(k));
@@ -221,8 +140,7 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
         sparse_z=*sparse_design;
         for (int k=0;k<sparse_z.outerSize();++k)
             for (Eigen::SparseMatrix<double>::InnerIterator entry(sparse_z,k);entry;++entry)
-                if(SparseBackendEnabled()) entry.valueRef()=(entry.value()*std::sqrt(weights(entry.row())))/scales(k);
-                else entry.valueRef()*=std::sqrt(weights(entry.row()))/scales(k);
+                entry.valueRef()=(entry.value()*std::sqrt(weights(entry.row())))/scales(k);
     }
     else if constexpr (!std::is_same_v<Matrix,Sparse>) z=weights.cwiseSqrt().asDiagonal()*x*scales.cwiseInverse().asDiagonal();
     Eigen::VectorXd rhs{weights.cwiseSqrt().array()*y.array()};
@@ -274,26 +192,12 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
             }
             selected.finalize();
             if (maximum_norm==0) {out.reason="rank-deficient"; return out;}
-            if(SparseBackendEnabled())
-            {
-                try {
-                    out.factor=workspace->Factor(selected,columns,rank_threshold*maximum_norm);
-                    out.rank=out.factor->Rank();
-                    if(out.rank!=static_cast<int>(columns.size())) {out.reason="rank-deficient"; return out;}
-                    solution=out.factor->LeastSquares(rhs);
-                } catch(const std::runtime_error &) {out.reason="sparse-factorization-failed"; return out;}
-            }
-            else
-            {
-                Eigen::SparseQR<Eigen::SparseMatrix<double>,Eigen::COLAMDOrdering<int>> qr;
-                // SparseQR uses an absolute pivot threshold. The scale is the
-                // largest norm of the weighted, column-normalized design.
-                const auto reduced{ReduceSparseRows(selected,rhs)};
-                qr.setPivotThreshold(rank_threshold*maximum_norm); qr.compute(reduced.first);
-                if(qr.info()==Eigen::Success) SparseWorkForTesting().factor_nonzeros=std::max(SparseWorkForTesting().factor_nonzeros,static_cast<std::size_t>(qr.matrixR().nonZeros()));
-                if (qr.info()!=Eigen::Success) {out.reason="nonfinite"; return out;}
-                out.rank=static_cast<int>(qr.rank()); solution=qr.solve(reduced.second);
-            }
+            try {
+                out.factor=workspace->Factor(selected,columns,rank_threshold*maximum_norm);
+                out.rank=out.factor->Rank();
+                if(out.rank!=static_cast<int>(columns.size())) {out.reason="rank-deficient"; return out;}
+                solution=out.factor->LeastSquares(rhs);
+            } catch(const std::runtime_error &) {out.reason="sparse-factorization-failed"; return out;}
         }
         else if (use_svd && blocked_svd)
         {

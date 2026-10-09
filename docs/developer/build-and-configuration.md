@@ -11,6 +11,11 @@ All executable runtime targets from a build tree (CLI and C++ test executables) 
 
 This project requires CMake 3.24 or newer and uses C++20 with GNU extensions enabled by default. A single dependency-provider switch controls third-party resolution:
 
+The Joint Component estimator has one sparse factorization backend: SuiteSparseQR
+4.x with CHOLMOD. It is a required dependency for Joint builds and is not
+selected through a CMake cache option. The old sparse-backend cache selector
+has been removed; do not add a backend `-D` option to a configure command.
+
 - `RHBM_GEM_DEP_PROVIDER=SYSTEM`: strictly require system packages for Eigen3 `>=5.0.0,<6.0.0`, CLI11, SQLite3, and Boost >=1.90; also require `pybind11` plus Python development headers when bindings are enabled, and GTest when tests are enabled. UMAP is the only dependency group with the system-preferred fallback described below.
 - `RHBM_GEM_DEP_PROVIDER=FETCH`: use pinned `FetchContent` sources for Eigen3 5.0.0, CLI11, SQLite3, and Boost >=1.90; additionally fetch `pybind11` when bindings are enabled and GTest when tests are enabled.
 

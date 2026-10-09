@@ -98,8 +98,7 @@ void JointCliProgressReporter::OnProgress(const JointProgressEvent & event)
         if (!event.solver_configuration) return;
         const auto & configuration = *event.solver_configuration;
         std::ostringstream output;
-        output << "[Joint] Solver: FixedNeighbor | sparse="
-            << joint_component::SparseBackendName(configuration.sparse_backend)
+        output << "[Joint] Solver: FixedNeighbor | sparse=SPQR"
             << " | core=" << configuration.fixed_neighbor_core_atoms
             << " | local-search=legacy-compact";
         LogJointInfo(output.str());

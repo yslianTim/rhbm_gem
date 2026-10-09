@@ -51,7 +51,7 @@ def build_metadata(build: Path):
                 values[key] = value
     compiler = values.get('compiler', '').split(';')
     return {
-        'backend': cache_value(cache, 'RHBM_GEM_JOINT_SPARSE_BACKEND', 'unknown'),
+        'backend': 'SPQR',
         'build_type': cache_value(cache, 'CMAKE_BUILD_TYPE', 'multi-config'),
         'compiler': ' '.join(compiler[1:]) if len(compiler) > 1 else None,
     }
@@ -327,10 +327,10 @@ def execute_once(args, build, run_root, deadline):
             'stages': results, 'raw': raw}
 
 
-def solver_policy_metadata(args, backend):
+def solver_policy_metadata(args):
     return {
         'search_method': 'FixedNeighbor',
-        'sparse_backend': backend,
+        'sparse_backend': 'SPQR',
         'fixed_neighbor_core_atoms': args.fixed_core_atoms,
         'fixed_neighbor_block_order': 'forward',
         'fixed_neighbor_maximum_sweeps': 30,
@@ -387,7 +387,7 @@ def main(argv=None):
         parser.error(str(error))
     metadata.update(commit=commit, profile=args.profile, case=args.case,
                     source_sha256=source_hash(ROOT), benchmark_sha256=sha(Path(__file__)))
-    metadata['solver_policy'] = solver_policy_metadata(args, metadata['backend'])
+    metadata['solver_policy'] = solver_policy_metadata(args)
     if args.profile in ('search', 'solve'):
         driver = build / 'bin/joint_fixed_neighbor_experiment'
     elif args.profile in ('workflow', 'postprocess'):

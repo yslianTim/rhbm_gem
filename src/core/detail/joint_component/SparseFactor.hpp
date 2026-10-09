@@ -140,7 +140,6 @@ public:
     LinearTelemetryScopeForTesting(const LinearTelemetryScopeForTesting &)=delete;
     LinearTelemetryScopeForTesting & operator=(const LinearTelemetryScopeForTesting &)=delete;
 };
-bool SparseBackendEnabled();
 class FreeDesignFactor
 {
     friend class LinearWorkspace;

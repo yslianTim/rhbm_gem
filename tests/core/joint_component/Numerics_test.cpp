@@ -415,7 +415,7 @@ TEST(JointComponentNumericsTest, CompactJacobianDiagnosticsCoverCancellationAndA
         n::SparseWorkForTesting()={};
         const auto prepared=n::PrepareDerivative(e,context.scale,&context);
         ASSERT_TRUE(prepared.valid);
-        EXPECT_EQ(prepared.reference_order,n::SparseBackendEnabled());
+        EXPECT_TRUE(prepared.reference_order);
         CheckCompactJacobianIdentity(e,context,"near-complete-cancellation",false,true,false,cancellation);
     }
     CompactJacobianSummary active_faces; bool saw_active=false,saw_interior=false;
@@ -531,7 +531,6 @@ TEST(JointComponentNumericsTest, CompactJacobianRankBoundariesRespectPolicyAndFa
 TEST(JointComponentNumericsTest, SparseWorkspaceChecksPatternScopePolicyAndGeneration)
 {
     namespace n=p::runtime;
-    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"Optional SPQR backend";
     Matrix dense(6,2); dense<<1,0,2,1,0,3,4,2,1,1,0,2;
     n::Sparse x=dense.sparseView(); n::LinearWorkspace workspace;
     n::LinearPolicy policy{1e-14}; int domain{},other{};
@@ -572,7 +571,6 @@ TEST(JointComponentNumericsTest, SparseWorkspaceChecksPatternScopePolicyAndGener
 TEST(JointComponentNumericsTest, ExactNumericReuseCensusRequiresAllFactorInputsToMatch)
 {
     namespace n=p::runtime;
-    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"Optional SPQR backend";
     Matrix dense(6,2); dense<<1,0,2,1,0,3,4,2,1,1,0,2;
     n::Sparse x=dense.sparseView(); x.makeCompressed(); n::LinearWorkspace workspace;
     n::LinearPolicy policy{1e-14}; int domain{};
@@ -620,22 +618,18 @@ TEST(JointComponentNumericsTest, SparseWeightedSolveAndIndependentReferenceMatch
     EXPECT_EQ(primary.rank,dense.rank); EXPECT_EQ(reference.rank,dense.rank);
     EXPECT_LT((primary.beta-dense.beta).norm(),1e-10);
     EXPECT_LT((reference.beta-dense.beta).norm(),1e-10);
-    if(n::SparseBackendEnabled())
-    {
-        const auto before=n::SparseWorkForTesting().reference;
-        const auto numeric=n::SparseWorkForTesting().numeric;
-        ASSERT_TRUE(primary.factor);
-        n::SolveLinear(sparse,y,w,true);
-        EXPECT_EQ(n::SparseWorkForTesting().reference,before+1);
-        EXPECT_EQ(n::SparseWorkForTesting().numeric,numeric);
-        EXPECT_EQ(primary.factor->Rank(),primary.rank);
-    }
+    const auto before=n::SparseWorkForTesting().reference;
+    const auto numeric=n::SparseWorkForTesting().numeric;
+    ASSERT_TRUE(primary.factor);
+    n::SolveLinear(sparse,y,w,true);
+    EXPECT_EQ(n::SparseWorkForTesting().reference,before+1);
+    EXPECT_EQ(n::SparseWorkForTesting().numeric,numeric);
+    EXPECT_EQ(primary.factor->Rank(),primary.rank);
 }
 
 TEST(JointComponentNumericsTest, SparseDerivativeReusesOnlyTheCanonicalCurrentFace)
 {
     namespace n=p::runtime;
-    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"Optional SPQR backend";
     Sample sample; const p::Domain domain(sample.grid,sample.atoms);
     const auto context=p::MakeContext(sample.y,2); const Vector eta=Eigen::Vector2d(.55,.51).array().log();
     n::LinearWorkspace workspace;
@@ -673,7 +667,6 @@ TEST(JointComponentNumericsTest, SparseReferencePreservesSvdRankNearDegeneracy)
 TEST(JointComponentNumericsTest, SparseCancellationRetainsTiledDerivativePrecision)
 {
     namespace n=p::runtime;
-    if(!n::SparseBackendEnabled()) GTEST_SKIP()<<"Optional SPQR backend";
     Sample sample; const p::Domain domain(sample.grid,sample.atoms);
     const auto context=p::MakeContext(sample.y,2);
     auto e=n::EvaluateProfile(domain,sample.y,Eigen::Vector2d(.55,.51).array().log(),false,&context);

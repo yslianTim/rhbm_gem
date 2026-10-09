@@ -109,16 +109,7 @@ CompactSvdResult Decompose(const Matrix & r,Eigen::Index rows,CompactSvdVectors 
 }
 }
 JointSolverConfiguration ResolveJointSolverConfiguration(const FixedNeighborSearchPolicy & policy)
-{return {ActiveSparseBackend(),policy.core_atoms};}
-std::string_view SparseBackendName(SparseBackend backend)
-{
-    switch(backend)
-    {
-    case SparseBackend::Eigen: return "EIGEN";
-    case SparseBackend::Spqr: return "SPQR";
-    }
-    return {};
-}
+{return {policy.core_atoms};}
 std::string_view FixedNeighborBlockOrderName(FixedNeighborBlockOrder order)
 {
     switch(order)

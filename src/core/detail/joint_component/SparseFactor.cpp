@@ -6,10 +6,7 @@
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 #include <sys/resource.h>
 #endif
-#include <Eigen/SparseQR>
-#ifdef RHBM_GEM_JOINT_SPQR
 #include <SuiteSparseQR.hpp>
-#endif
 
 namespace rhbm_gem::core::joint_component {
 SparseWork & SparseWorkForTesting() {static thread_local SparseWork work; return work;}
@@ -170,7 +167,6 @@ void EndFactorConstructionForTesting(std::size_t id,std::size_t generation)
     constructing.erase(std::remove_if(constructing.begin(),constructing.end(),[&](const auto & factor)
         {return factor.factor_id==id && factor.generation==generation;}),constructing.end());
 }
-#ifdef RHBM_GEM_JOINT_SPQR
 std::size_t OwnedFactorBytesForTesting(const Sparse & design,
     const Eigen::SparseMatrix<double,Eigen::ColMajor,int64_t> * r,const cholmod_common & cc)
 {
@@ -180,7 +176,6 @@ std::size_t OwnedFactorBytesForTesting(const Sparse & design,
         static_cast<std::size_t>(r->cols()+1)*sizeof(int64_t) : 0;
     return design_bytes+r_bytes+cc.memory_inuse;
 }
-#endif
 }
 #endif
 namespace {
@@ -277,7 +272,6 @@ ResourcePhase::~ResourcePhase()
     w.phase=previous_;
     if(search_stage_) NotifyResourceStageObserver();
 }
-#ifdef RHBM_GEM_JOINT_SPQR
 namespace {
 using Clock=std::chrono::steady_clock;
 double Seconds(Clock::time_point t) {return std::chrono::duration<double>(Clock::now()-t).count();}
@@ -396,8 +390,6 @@ struct SparseFactorState
         ++generation; if(qr) SuiteSparseQR_free<double>(&qr,&cc);
     }
 };
-bool SparseBackendEnabled() {return true;}
-SparseBackend ActiveSparseBackend() {return SparseBackend::Spqr;}
 LinearWorkspace::LinearWorkspace():state_(std::make_shared<SparseFactorState>()) {}
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 void LinearWorkspace::HandoffForTesting() {state_=std::make_shared<SparseFactorState>();}
@@ -982,132 +974,5 @@ StructuredProjectedQrResultForTesting StructuredProjectedQrForTesting(
     result.valid=true; result.reason="structured-fixed-order-qr";
     return result;
 }
-#endif
-#else
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-StructuredProjectedQrResultForTesting StructuredProjectedQrForTesting(
-    const Sparse &,const Sparse &,VectorRef,double)
-{
-    StructuredProjectedQrResultForTesting result;
-    result.reason="structured-sparse-qr-requires-spqr";
-    return result;
-}
-#endif
-// This factor is used only by the fixed-state operator. The production Eigen
-// active-set solver retains its existing row reduction and rank policy.
-struct SparseFactorState
-{
-    Eigen::SparseQR<Sparse,Eigen::COLAMDOrdering<int>> qr;
-    Sparse design;
-    std::vector<Eigen::Index> columns;
-    double tolerance{};
-    std::size_t generation{};
-    bool valid{};
-};
-bool SparseBackendEnabled() {return false;}
-SparseBackend ActiveSparseBackend() {return SparseBackend::Eigen;}
-LinearWorkspace::LinearWorkspace()=default;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-void LinearWorkspace::HandoffForTesting() {state_=std::make_shared<SparseFactorState>();}
-#endif
-void LinearWorkspace::Bind(const void *,const void *,const LinearPolicy *) {}
-std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const std::vector<Eigen::Index> & columns,double tolerance)
-{
-    if(!state_) state_=std::make_shared<SparseFactorState>();
-    if(copy_on_write_ && state_.use_count()>1) state_=std::make_shared<SparseFactorState>();
-    auto & s=*state_; auto & work=SparseWorkForTesting();
-    if(LinearTelemetryEnabledForTesting())
-    {
-        ++work.numeric_factor_requests;
-        if(s.valid)
-        {
-            if(s.columns!=columns) ++work.numeric_factor_column_mismatches;
-            else if(s.tolerance!=tolerance) ++work.numeric_factor_policy_mismatches;
-            else if(SameSparsePattern(s.design,a))
-            {
-                if(SameSparseValues(s.design,a)) RecordExactReuseOpportunity(work);
-                else {++work.numeric_factor_pattern_only_matches; ++work.numeric_factor_value_mismatches;}
-            }
-            else ++work.numeric_factor_pattern_mismatches;
-        }
-    }
-    ++s.generation; s.valid=false; s.design=a; s.columns=columns;
-    s.tolerance=tolerance;
-    s.qr.setPivotThreshold(tolerance);
-    {WorkTimer timer(work.symbolic_seconds); s.qr.analyzePattern(a); ++work.symbolic;}
-    {WorkTimer timer(work.numeric_seconds); s.qr.factorize(a); ++work.numeric;}
-    if(s.qr.info()!=Eigen::Success) throw std::runtime_error("Eigen operator factorization failed");
-    s.valid=true;
-    work.factor_nonzeros=std::max(work.factor_nonzeros,static_cast<std::size_t>(s.qr.matrixR().nonZeros()));
-    return std::shared_ptr<FreeDesignFactor>(new FreeDesignFactor(state_,s.generation));
-}
-std::shared_ptr<FreeDesignFactor> FreeDesignFactor::Fixed(const Sparse & a,const std::vector<Eigen::Index> & columns)
-{LinearWorkspace workspace; return workspace.Factor(a,columns,0);}
-FreeDesignFactor::FreeDesignFactor(std::shared_ptr<SparseFactorState> s,std::size_t g):state_(std::move(s)),generation_(g) {}
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-const Sparse & FreeDesignFactor::DesignForTesting() const {Check(); return state_->design;}
-const std::vector<Eigen::Index> & FreeDesignFactor::ColumnsForTesting() const {Check(); return state_->columns;}
-double FreeDesignFactor::ToleranceForTesting() const {Check(); return state_->tolerance;}
-ProjectedTailTransformForTesting FreeDesignFactor::OrthogonalTransposeTailSparseForTesting(const Sparse &,bool) const
-{throw std::runtime_error("sparse Q transpose census requires SPQR");}
-ProjectedTailQrResultForTesting FreeDesignFactor::ProjectedTailQrForTesting(const Sparse &,VectorRef,double) const
-{
-    ProjectedTailQrResultForTesting result;
-    result.reason="projected-tail-qr-requires-spqr";
-    return result;
-}
-Matrix FreeDesignFactor::OrthogonalTransposeForTesting(const Matrix & rhs) const
-{Check(); return state_->qr.matrixQ().adjoint()*rhs;}
-#endif
-void FreeDesignFactor::Check() const
-{if(!state_ || !state_->valid || generation_!=state_->generation) throw std::logic_error("Expired free-design factor");}
-bool FreeDesignFactor::Matches(const Sparse & a,const std::vector<Eigen::Index> & columns) const
-{
-    return state_ && state_->valid && generation_==state_->generation && columns==state_->columns &&
-        a.rows()==state_->design.rows() && a.cols()==state_->design.cols() && (a-state_->design).norm()==0;
-}
-int FreeDesignFactor::Rank() const {Check(); return static_cast<int>(state_->qr.rank());}
-std::optional<RankFactorView> FreeDesignFactor::RankView() const {Check(); return std::nullopt;}
-Matrix FreeDesignFactor::Compact() const
-{
-    Check(); auto & work=SparseWorkForTesting(); ++work.compact_extractions; WorkTimer timer(work.compact_seconds);
-    const auto & s=*state_; const auto p=s.design.cols();
-    RecordDenseShape("free-design-compact",p,p);
-    // Z*P=Q*R. Restore the original column order without repeating N-by-p
-    // orthogonal actions; this is still the same transient compact rank check.
-    return Matrix(s.qr.matrixR().topRows(p))*s.qr.colsPermutation().transpose();
-}
-Matrix FreeDesignFactor::LeastSquares(const Matrix & rhs) const
-{Check(); if(rhs.rows()!=state_->design.rows()) throw std::invalid_argument("Invalid least-squares RHS size"); auto & work=SparseWorkForTesting(); ++work.q_actions; ++work.triangular_solves; WorkTimer timer(work.least_squares_seconds); return state_->qr.solve(rhs);}
-Matrix FreeDesignFactor::PseudoInverseTranspose(const Matrix & rhs) const
-{
-    Check(); const auto & s=*state_; const auto p=s.design.cols();
-    if(rhs.rows()!=p) throw std::invalid_argument("Invalid adjoint RHS size");
-    Matrix padded=Matrix::Zero(s.design.rows(),rhs.cols());
-    const Matrix permuted=s.qr.colsPermutation().transpose()*rhs;
-    auto & work=SparseWorkForTesting(); ++work.triangular_solves;
-    {WorkTimer timer(work.triangular_seconds); padded.topRows(p)=s.qr.matrixR().topLeftCorner(p,p).transpose().triangularView<Eigen::Lower>().solve(permuted);}
-    ++work.q_actions; WorkTimer timer(work.q_seconds); return s.qr.matrixQ()*padded;
-}
-Matrix FreeDesignFactor::ProjectComplement(const Matrix & rhs) const
-{
-    Check(); const auto & s=*state_;
-    if(rhs.rows()!=s.design.rows()) throw std::invalid_argument("Invalid projection RHS size");
-    auto & work=SparseWorkForTesting(); work.q_actions+=2; WorkTimer timer(work.q_seconds);
-    Matrix tail=s.qr.matrixQ().adjoint()*rhs; tail.topRows(s.design.cols()).setZero();
-    return s.qr.matrixQ()*tail;
-}
-Matrix FreeDesignFactor::NormalSolve(const Matrix & rhs) const
-{
-    Check(); const auto & s=*state_; const auto p=s.design.cols();
-    if(rhs.rows()!=p) throw std::invalid_argument("Invalid normal RHS size");
-    auto & work=SparseWorkForTesting(); work.triangular_solves+=2; WorkTimer timer(work.triangular_seconds);
-    const Matrix permuted=s.qr.colsPermutation().transpose()*rhs;
-    const Matrix adjoint=s.qr.matrixR().topLeftCorner(p,p).transpose().triangularView<Eigen::Lower>().solve(permuted);
-    const Matrix solved=s.qr.matrixR().topLeftCorner(p,p).triangularView<Eigen::Upper>().solve(adjoint);
-    return s.qr.colsPermutation()*solved;
-}
-std::pair<Matrix,Vector> SparseReferenceQR(const Sparse &,const Vector &,const Vector &,VectorRef)
-{throw std::logic_error("SPQR backend is disabled");}
 #endif
 }

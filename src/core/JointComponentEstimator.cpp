@@ -178,7 +178,7 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         JointSolverProvenance out;
         out.search_method="fixed-neighbor";
         out.contract_version=std::string(JointSolverProvenanceContractVersion);
-        out.sparse_backend=std::string(n::SparseBackendName(configuration.sparse_backend));
+        out.sparse_backend="SPQR";
         out.fixed_neighbor_core_atoms=production_policy.core_atoms;
         out.fixed_neighbor_policy_version=std::string(FixedNeighborPolicyContractVersion);
         out.fixed_neighbor_maximum_sweeps=production_policy.maximum_sweeps;

@@ -116,7 +116,6 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
         }
         out.raw.setFromTriplets(raw.begin(),raw.end());
     };
-    if(SparseBackendEnabled())
     {
         LinearWorkspace workspace;
         const Sparse design=out.free_design;
@@ -209,8 +208,7 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
         reference_raw();
         out.valid=false;
     }
-    std::optional<WorkTimer> cancellation_timer;
-    if(SparseBackendEnabled()) cancellation_timer.emplace(work.cancellation_seconds);
+    WorkTimer cancellation_timer(work.cancellation_seconds);
     const auto tiled_solve=[&]() {
         const Eigen::Index response_count=m+(compact_jacobian ? 1 : 0);
         TiledQR qr(p,response_count);

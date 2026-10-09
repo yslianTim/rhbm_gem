@@ -178,7 +178,6 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
     EXPECT_EQ(events.front().phase, joint::JointProgressPhase::SolverConfigured);
     ASSERT_TRUE(events.front().solver_configuration);
     const auto expected_configuration = joint::ResolveJointSolverConfiguration(policy);
-    EXPECT_EQ(events.front().solver_configuration->sparse_backend, expected_configuration.sparse_backend);
     EXPECT_EQ(events.front().solver_configuration->fixed_neighbor_core_atoms,
         expected_configuration.fixed_neighbor_core_atoms);
     EXPECT_EQ(std::count_if(events.begin(), events.end(), [](const auto & event) {
@@ -489,12 +488,6 @@ TEST(JointProgressTest, PublicFitUsesFixedNeighborProductionContract)
     ExpectSameFitNumerics(actual, expected);
 }
 
-TEST(JointProgressTest, ActiveSparseBackendMatchesCompiledFactorizationBackend)
-{
-    const auto expected = joint::SparseBackendEnabled() ? joint::SparseBackend::Spqr : joint::SparseBackend::Eigen;
-    EXPECT_EQ(joint::ActiveSparseBackend(), expected);
-}
-
 TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
 {
     const core::JointProblem problem(MakeInput());
@@ -576,9 +569,8 @@ TEST(JointProgressTest, CliReporterFormatsFixedNeighborConfiguration)
 
     const auto output = testing::internal::GetCapturedStdout();
     Logger::SetLogLevel(previous_level);
-    const std::string sparse(joint::SparseBackendName(joint::ActiveSparseBackend()));
-    const auto fixed = output.find("[Joint] Solver: FixedNeighbor | sparse=" + sparse
-        + " | core=12 | local-search=legacy-compact");
+    const auto fixed = output.find(
+        "[Joint] Solver: FixedNeighbor | sparse=SPQR | core=12 | local-search=legacy-compact");
     ASSERT_NE(fixed, std::string::npos);
     const auto fixed_line_end = output.find('\n', fixed);
     EXPECT_EQ(output.substr(fixed, fixed_line_end - fixed).find("local-work="), std::string::npos);

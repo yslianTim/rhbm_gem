@@ -122,8 +122,8 @@ affect runtime assessment. Constant rows or different contexts require separate
 assessments. This is scoped result reuse,
 not a persistent cache. A fallback state's evidence is assessed at that state's
 actual coefficients and widths. Assessment reuse does not change search decisions or counts; assessment work
-and timing are separate from search work. Orthogonal backend row reduction can
-change the search trajectory within the numerical parity contract below.
+and timing are separate from search work. Sparse factorization details can
+change floating-point trajectories within the fixed endpoint contract.
 
 ### Selection-domain contract
 
@@ -226,24 +226,30 @@ fresh process and reports construction, search, assessment, assembly, total time
 and process peak RSS. The current profiles and measurement semantics are listed
 in the [benchmark guide](joint-benchmark.md).
 
-## Internal numerical backends
+## Internal numerical path
 
-The tiled derivative and profile-operator architecture is owned by the
-[profile-operator guide](joint-profile-operator.md); sparse factorization and its
-rank certificates are owned by the
-[sparse-backend guide](joint-component-sparse-backend.md). Both preserve the
-original parent rank context and the full residual norm. They do not cut
-component edges or use a dense runtime fallback.
+The current numerical path is:
 
-Backend parity remains a current numerical contract: trusted-state availability
-and required runtime checks must agree; converged identifiable A/C/B endpoints
-use scaled 1e-10 and normalized objectives use 1e-12. Same-state projected/full
-derivatives use relative 1e-8, spectra use 1e-10 relative to their largest
-singular value, local corrections use scaled 1e-10, and gradients use
-1e-13 + 2e-9 * abs(reference). A nonconverged comparison may not worsen objective
-by more than 1e-12. Changed active faces are reported explicitly; rank is compared
-across endpoints only when their active faces match. Missing states and
-unavailable corrections remain explicit.
+```text
+FixedNeighbor
+  -> local LegacyCompact profile search
+  -> LinearSolve / SparseFactor (SPQR)
+  -> TiledDerivative and its cancellation-safe tiled fallback
+  -> global replay, endpoint certification, RuntimeConvergence
+```
+
+These stages preserve the original parent rank context and full residual norm.
+They do not cut component edges or use a size-based route. The
+[sparse-backend guide](joint-component-sparse-backend.md) documents the fixed
+SPQR factorization; the former profile-operator material is historical evidence,
+not a current Joint route.
+
+The EIGEN/SPQR comparison was a one-time backend qualification, not a current
+runtime parity contract. Permanent tests assert the single SPQR path and the
+existing numerical contract: trusted-state availability and required runtime
+checks must agree, missing states remain explicit, and the production KKT,
+width-gradient, eta-confirmation, replay, endpoint-certification and
+`RuntimeConvergence` thresholds remain unchanged.
 
 ## Routine regression
 
@@ -289,8 +295,8 @@ runtime regression.
 Offline two-step, local-audit preparation and precision code are linked only into
 `joint_component_audit` and `joint_offline_tests`, never the library or ordinary
 test executable. Kernel or Jacobian changes require the applicable derivative
-audits; constraint changes also require boundary controls. Backend changes
-require rank and precision controls. Recorded campaign results and their limits
+audits; constraint changes also require boundary controls. Sparse-factorization
+changes require rank and precision controls. Recorded campaign results and their limits
 belong in the [canonical evidence index](joint-component-evidence.md).
 
 ```sh
@@ -307,9 +313,10 @@ local weak-direction evidence and independently reprofiled consistency remain
 required; a local certificate cannot promote a missing or failed component.
 
 Historical research results and retrieval provenance are indexed in the
-[canonical evidence document](joint-component-evidence.md). Current backend
-behavior and benchmark commands are documented by the profile-operator,
-sparse-backend, and benchmark guides.
+[canonical evidence document](joint-component-evidence.md). Current
+sparse-factorization behavior and benchmark commands are documented by the
+sparse-backend and benchmark guides. Profile-operator and EIGEN comparison
+material is historical evidence only.
 
 ## Saved production outcomes
 
@@ -342,7 +349,7 @@ describes parameter layouts, nuisance contributions and seed provenance. See the
 values, `JointSoftwareProvenance` and optional `JointSolverProvenance`.
 `JointSolverProvenance` records the current FixedNeighbor estimator and, when
 reading an older record, preserves its historical route and local-work fields.
-Current writers record the active sparse backend and the FixedNeighbor policy
+Current writers record the fixed SPQR sparse backend and the FixedNeighbor policy
 fields; current FixedNeighbor records use `fixed-neighbor-production-v2` with
 intrinsic OneAccepted behavior and the `joint-solver-provenance-v3` contract.
 The historical `joint-solver-provenance-v2` contract remains readable for

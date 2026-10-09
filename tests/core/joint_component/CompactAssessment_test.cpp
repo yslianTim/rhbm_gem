@@ -288,8 +288,7 @@ void CompareProjectedFactors(const std::string & topology,bool near_collinear,bo
     const auto tail=n::ReduceDerivativeForTesting(differential,ordered_residual,true,
         n::JacobianReductionKindForTesting::CompactStackQr,11);
     ASSERT_TRUE(tail.valid);
-    if(n::SparseBackendEnabled()) EXPECT_TRUE(tail.projected_candidate);
-    else EXPECT_FALSE(tail.projected_candidate);
+    EXPECT_TRUE(tail.projected_candidate);
     const Matrix tail_gram=tail.projected.transpose()*tail.projected;
     EXPECT_LE((current_gram-tail_gram).norm(),2e-11*(1.+current_gram.norm()));
     EXPECT_LE((current.projected_norms-tail.projected_norms).norm(),
@@ -358,8 +357,7 @@ TEST(JointProjectedWidthTest, FullAssessmentAndReturnedStateParityAcrossSmallLat
         const auto & tail_reduction=n::DerivativeWorkForTesting().projected_reduction;
         EXPECT_GT(tail_reduction.attempts,0);
         EXPECT_EQ(tail_reduction.attempts,tail_reduction.accepted+tail_reduction.fallbacks);
-        if(n::SparseBackendEnabled()) EXPECT_GT(tail_reduction.accepted,0);
-        else EXPECT_GT(tail_reduction.fallbacks,0);
+        EXPECT_GT(tail_reduction.accepted,0);
     }
 }
 
@@ -412,16 +410,8 @@ TEST(JointProjectedWidthTest, BoundaryAndActiveFaceFallbackParity)
     EXPECT_EQ(active_current.jacobian->rank,active_tail.jacobian->rank);
     const auto & active_tail_reduction=n::DerivativeWorkForTesting().projected_reduction;
     EXPECT_EQ(active_tail_reduction.attempts,1);
-    if(n::SparseBackendEnabled())
-    {
-        EXPECT_EQ(active_tail_reduction.accepted,1);
-        EXPECT_EQ(active_tail_reduction.fallbacks,0);
-    }
-    else
-    {
-        EXPECT_EQ(active_tail_reduction.accepted,0);
-        EXPECT_EQ(active_tail_reduction.fallbacks,1);
-    }
+    EXPECT_EQ(active_tail_reduction.accepted,1);
+    EXPECT_EQ(active_tail_reduction.fallbacks,0);
 }
 
 TEST(JointCompactAssessmentTest, FullAssessmentAndReturnedStateParityAcrossSmallLattices)

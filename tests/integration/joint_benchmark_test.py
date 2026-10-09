@@ -23,7 +23,7 @@ class JointBenchmarkContractTest(unittest.TestCase):
         args = benchmark.build_parser().parse_args([
             '--profile', 'solve', '--case', 'chain-8', '--build-dir', 'build/debug-tests',
             '--output', 'result.json'])
-        self.assertEqual(benchmark.solver_policy_metadata(args, 'SPQR'), {
+        self.assertEqual(benchmark.solver_policy_metadata(args), {
             'search_method': 'FixedNeighbor',
             'sparse_backend': 'SPQR',
             'fixed_neighbor_core_atoms': 12,
