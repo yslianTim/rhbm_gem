@@ -73,11 +73,10 @@ void NormalizeAndValidateRequest(
         if (request.job_count>1) runner.AddFieldNormalizationWarning(&PotentialAnalysisRequest::job_count,"Joint initialization and fitting use one worker.");
         request.exclude_hydrogen=true;
     }
-    else if (request.joint_search_method!=JointSearchMethod::LegacyCompact)
+    else if (request.joint_search_method==JointSearchMethod::FixedNeighbor)
     {
         runner.AddFieldNormalizationWarning(&PotentialAnalysisRequest::joint_search_method,
             "Joint search method is ignored for the two-stage estimator.");
-        request.joint_search_method=JointSearchMethod::LegacyCompact;
     }
 }
 

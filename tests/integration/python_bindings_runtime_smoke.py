@@ -39,7 +39,6 @@ def assert_module_surface() -> None:
     assert hasattr(m, "PotentialEstimator")
     assert hasattr(m.PotentialEstimator, "JOINT_COMPONENTS")
     assert hasattr(m, "JointSearchMethod")
-    assert hasattr(m.JointSearchMethod, "LEGACY_COMPACT")
     assert hasattr(m.JointSearchMethod, "FIXED_NEIGHBOR")
     assert not hasattr(m.JointSearchMethod, "OPERATOR_PCG")
     assert hasattr(m, "PrinterType")

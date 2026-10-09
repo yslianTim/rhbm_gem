@@ -54,8 +54,7 @@ struct CommandEnumTraits<PotentialEstimator>
 template <>
 struct CommandEnumTraits<JointSearchMethod>
 {
-    inline static constexpr std::array<CommandEnumDefinition<JointSearchMethod, 2>, 2> kOptions{{
-        { JointSearchMethod::LegacyCompact, "LEGACY_COMPACT", { "0", "legacy-compact" } },
+    inline static constexpr std::array<CommandEnumDefinition<JointSearchMethod, 2>, 1> kOptions{{
         { JointSearchMethod::FixedNeighbor, "FIXED_NEIGHBOR", { "2", "fixed-neighbor" } }
     }};
 };

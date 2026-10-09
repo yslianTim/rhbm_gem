@@ -34,16 +34,10 @@ void LogJointInfo(const std::string & message)
     Logger::Log(LogLevel::Info, message);
 }
 
-joint_component::SearchPolicy MakeJointSearchPolicy(JointSearchMethod method)
+joint_component::SearchPolicy MakeJointSearchPolicy(JointSearchMethod)
 {
     joint_component::SearchPolicy policy;
-    switch (method)
-    {
-    case JointSearchMethod::LegacyCompact:
-        policy.method=joint_component::SearchMethod::LegacyCompact; break;
-    case JointSearchMethod::FixedNeighbor:
-        policy.method=joint_component::SearchMethod::FixedNeighbor; break;
-    }
+    policy.method=joint_component::SearchMethod::FixedNeighbor;
     return policy;
 }
 }

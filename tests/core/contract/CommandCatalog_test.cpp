@@ -102,9 +102,8 @@ struct EnumMappingTraits<PotentialEstimator>
 template <>
 struct EnumMappingTraits<JointSearchMethod>
 {
-    static constexpr std::string_view kFirstBindingToken{ "LEGACY_COMPACT" };
-    static constexpr std::array<EnumMappingExpectation<JointSearchMethod>, 2> kExpectations{{
-        { "legacy-compact", JointSearchMethod::LegacyCompact },
+    static constexpr std::string_view kFirstBindingToken{ "FIXED_NEIGHBOR" };
+    static constexpr std::array<EnumMappingExpectation<JointSearchMethod>, 1> kExpectations{{
         { "fixed-neighbor", JointSearchMethod::FixedNeighbor },
     }};
 };
