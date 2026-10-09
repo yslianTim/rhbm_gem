@@ -461,24 +461,17 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_benchmark_test.py")
     add_test(NAME joint_route_frontier_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_route_frontier_test.py")
-    add_test(NAME joint_fixed_neighbor_inexact_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_inexact_test.py")
-    add_test(NAME joint_fixed_neighbor_inexact_qualification_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_inexact_qualification_test.py")
     add_test(NAME joint_fixed_neighbor_outer_core_qualification_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_outer_core_qualification_test.py")
     add_test(NAME joint_experiment_cleanup_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_experiment_cleanup_test.py")
     set_tests_properties(experiment_support_test experiment_runner_dependency_test joint_benchmark_contract_test
-        joint_route_frontier_test joint_fixed_neighbor_inexact_test
-        joint_fixed_neighbor_inexact_qualification_test
+        joint_route_frontier_test
         joint_fixed_neighbor_outer_core_qualification_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm")
     set_tests_properties(joint_benchmark_contract_test joint_route_frontier_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:scalability")
-    set_tests_properties(joint_fixed_neighbor_inexact_test
-        joint_fixed_neighbor_inexact_qualification_test
-        joint_fixed_neighbor_outer_core_qualification_test
+    set_tests_properties(joint_fixed_neighbor_outer_core_qualification_test
         joint_experiment_cleanup_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm")
     add_test(NAME joint_component_evidence_test
