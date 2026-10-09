@@ -12,9 +12,7 @@ struct TiledDifferential
     double scale{};
     bool valid{},reference_order{};
     std::string reason;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     std::shared_ptr<FreeDesignFactor> free_design_factor_for_testing;
-#endif
     void Rows(Eigen::Index first,Eigen::Index count,Matrix & projected,Matrix & jacobian) const;
 };
 struct ReducedDifferential
@@ -23,10 +21,8 @@ struct ReducedDifferential
     Vector response,projected_norms,jacobian_norms;
     bool valid{};
     std::string reason;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     bool projected_candidate{};
     Vector projected_response;
-#endif
 };
 TiledDifferential PrepareDerivative(const Evaluation &,double,const EvaluationContext *,double=-1,
     Eigen::Index=derivative_tile_rows);
