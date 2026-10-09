@@ -73,8 +73,7 @@ preconditioner, Schwarz geometry, operator rank, or operator-factor ownership.
 names is rejected by the current parser or command catalog; it is not silently
 mapped to FixedNeighbor.
 
-The top-level `LegacyCompact` route remains available only as a temporary
-Checkpoint A reference path in the estimator API. It is not a current benchmark
+The top-level `LegacyCompact` route is retired and is not a current benchmark
 profile. The `LegacyCompact` numerical implementation itself remains active as
 FixedNeighbor's local profile solver.
 

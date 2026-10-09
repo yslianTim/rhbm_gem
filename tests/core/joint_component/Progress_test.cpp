@@ -587,12 +587,12 @@ TEST(JointProgressTest, CliReporterFormatsResolvedSolverRoutes)
     const auto output = testing::internal::GetCapturedStdout();
     Logger::SetLogLevel(previous_level);
     const std::string sparse(joint::SparseBackendName(joint::ActiveSparseBackend()));
-    const auto legacy = output.find("[Joint] Solver route: sparse=" + sparse + " | search=legacy-compact");
+    const auto legacy = output.find("[Joint] Solver: LegacyCompact (reference) | sparse=" + sparse);
     ASSERT_NE(legacy, std::string::npos);
     const auto legacy_line_end = output.find('\n', legacy);
     EXPECT_EQ(output.substr(legacy, legacy_line_end - legacy).find("preconditioner="), std::string::npos);
-    const auto fixed = output.find("[Joint] Solver route: sparse=" + sparse
-        + " | search=fixed-neighbor | core=12 | local-search=legacy-compact");
+    const auto fixed = output.find("[Joint] Solver: FixedNeighbor | sparse=" + sparse
+        + " | core=12 | local-search=legacy-compact");
     ASSERT_NE(fixed, std::string::npos);
     const auto fixed_line_end = output.find('\n', fixed);
     EXPECT_EQ(output.substr(fixed, fixed_line_end - fixed).find("local-work="), std::string::npos);

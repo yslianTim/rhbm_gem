@@ -34,7 +34,6 @@ Shared fields:
 Command-specific fields:
 
 - `estimator` (default `PotentialEstimator::TWO_STAGE`)
-- `joint_search_method` (default `JointSearchMethod::FixedNeighbor` for joint components)
 - `database_path`
 - `model_file_path`
 - `map_file_path`
@@ -167,22 +166,12 @@ those prepared samples in isolation and supplies First B plus seed provenance to
 target summary, post-fit peeling, uncertainty, and parameter-evidence group
 inference.
 
-Joint search is explicit and applies only to `JOINT_COMPONENTS` during the
-Checkpoint A transition:
-
-```text
---joint-search fixed-neighbor   # default production route
---joint-search legacy-compact   # temporary reference route
-```
-
-`FixedNeighbor` is the qualified bounded-memory production route with the fixed
+`FixedNeighbor` is the sole qualified bounded-memory production route with the fixed
 core-12, forward, one-accepted-local-update policy documented in the
 [joint runtime contract](../joint-component-runtime.md). Its local profile
 solver is the existing `LegacyCompact` implementation. It is not an automatic
-fallback or size-based route. The removed `operator-pcg` option is rejected by
-validation; it does not silently select FixedNeighbor. Supplying a non-default
-`joint_search_method` with `TWO_STAGE` produces a normalization warning and
-the two-stage estimator continues on its existing path.
+fallback or size-based route. Use `--estimator joint-components`; no separate
+Joint search option is required.
 
 The standalone `EstimateJointComponents` convenience API remains available and
 keeps its model-copy and target writeback behavior.
@@ -203,7 +192,6 @@ normalization; other requests honor `--map-normalization`.
 ```cpp
 rhbm_gem::core::PotentialAnalysisRequest request;
 request.estimator = rhbm_gem::core::PotentialEstimator::JOINT_COMPONENTS;
-request.joint_search_method = rhbm_gem::core::JointSearchMethod::FixedNeighbor;
 request.model_file_path = "model.cif";
 request.map_file_path = "map.mrc";
 request.database_path = "joint.sqlite"; // new v19 database
@@ -215,7 +203,6 @@ auto completed = rhbm_gem::core::RunCommand(request);
 import rhbm_gem_module as gem
 request = gem.PotentialAnalysisRequest()
 request.estimator = gem.PotentialEstimator.JOINT_COMPONENTS
-request.joint_search_method = gem.JointSearchMethod.FIXED_NEIGHBOR
 request.model_file_path = "model.cif"
 request.map_file_path = "map.mrc"
 request.database_path = "joint.sqlite"
@@ -268,17 +255,18 @@ build SHA-256 fingerprints from the existing build-time generator. Loading or
 exporting a saved outcome preserves these values; it does not stamp the reader's
 version or access either input file.
 
-`metadata.solver` records the explicit route as `legacy-compact` or
-`fixed-neighbor`. FixedNeighbor records
+`metadata.solver` records the current `fixed-neighbor` estimator. FixedNeighbor records
 `fixed_neighbor_core_atoms: 12` and the intrinsic at-most-one trusted accepted
 `LegacyCompact` update per block visit. Current writers use
 `fixed-neighbor-production-v2`; `fixed_neighbor_local_work` is absent or null,
 because it is legacy provenance rather than a current policy input. They also
-persist the optional `joint-solver-provenance-v2` contract, active sparse
+persist the `joint-solver-provenance-v3` contract, active sparse
 backend, and FixedNeighbor's maximum sweeps, forward order and
 `legacy-compact` local search. Operator, rank, preconditioner and Schwarz
 controls are historical provenance only and are not emitted by current
-writers.
+writers. Historical `joint-solver-provenance-v2` records, including
+`legacy-compact` and `operator-pcg`, remain readable through the compatibility
+decoder.
 
 Older `fixed-neighbor-production-v1` records remain readable and preserve their
 explicit `full`, `one-accepted`, or `two-accepted` local-work provenance. A v2

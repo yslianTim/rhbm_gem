@@ -70,9 +70,9 @@ class JointBenchmarkContractTest(unittest.TestCase):
             'search_converged': True, 'search_reason': 'block-stationary',
             'endpoint_certified': True, 'runtime_convergence': 'Passed',
             'objective': .1, 'sweep_telemetry': [],
-        }, 'global_legacy_compact': {'method': 'LegacyCompact'}})
+        }})
         self.assertTrue(solve['qualified'])
-        self.assertEqual(solve['details']['global_legacy_compact']['method'], 'LegacyCompact')
+        self.assertNotIn('global_legacy_compact', solve['details'])
 
 
 def smoke(build):

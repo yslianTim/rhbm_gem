@@ -125,16 +125,6 @@ j::object CorrectionJson(const n::Assessment & assessment,const n::Vector & eta)
         {"eta",Number(log_width)},{"width",Number(std::exp(log_width))}};
     return out;
 }
-j::object PackFit(const std::string & method,const rhbm_gem::core::JointFitResult & fit,double seconds)
-{
-    return {{"method",method},{"search_completed",fit.search_completed},
-        {"search_seconds",fit.costs.search_seconds},{"total_elapsed_seconds",seconds},
-        {"objective",fit.objective ? j::value(*fit.objective) : j::value(nullptr)},
-        {"global_kkt",CheckValue(fit,"kkt")},{"width_gradient_inf_norm",WidthGradient(fit)},
-        {"assessment_inner",CheckValue(fit,"inner")},{"assessment_gradient",CheckValue(fit,"width-stationarity")},
-        {"assessment_local",CheckValue(fit,"local-correction")},{"assessment_identified",CheckValue(fit,"numerical-identifiability")},
-        {"runtime_convergence",CheckName(fit.RuntimeConvergence())}};
-}
 j::array AcScalingWeights(const rhbm_gem::core::JointProblem & problem,const n::Vector & eta)
 {
     const auto & input=problem.Input(); const auto & layout=problem.ParameterLayout();
@@ -249,13 +239,12 @@ void AddSparseAttributionJson(j::object & output,const n::SparseWork & work)
     output["accepted_endpoint_exact_reuse_opportunities"]=work.accepted_endpoint_exact_reuse_opportunities;
 }
 void Write(const std::filesystem::path &,const j::value &);
-j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,bool compare_global,
+j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,
     bool scaling_only=false,bool reverse_order=false,bool record_final_state=false,
     std::size_t core_atoms=12)
 {
     auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
     const rhbm_gem::core::JointProblem problem(*input);
-    const std::vector<double> initial_b(static_cast<std::size_t>(atoms),.55);
     n::Vector initial_eta= n::Vector::Constant(atoms,std::log(.55)); n::FixedNeighborPolicy neighbor_policy;
     neighbor_policy.core_atoms=core_atoms;
     neighbor_policy.order=reverse_order ? n::FixedNeighborBlockOrder::Reverse : n::FixedNeighborBlockOrder::Forward;
@@ -434,22 +423,10 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     }
     if(record_final_state)
         neighbor_json["final_ac_scaling_weights"]=AcScalingWeights(problem,neighbor.state.eta);
-    if(!compare_global)
-        return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
-            {"parameter_count",3*atoms},{"core_atoms",neighbor_policy.core_atoms},
-            {"outer_core_atoms",neighbor_policy.core_atoms},
-            {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
-            {"fixed_neighbor",neighbor_json},{"peak_rss_mb",PeakRssMb()}};
-    n::SearchPolicy legacy_policy;
-    std::cerr<<topology<<'-'<<atoms<<" global LegacyCompact started\n";
-    started=Clock::now(); const auto legacy=n::FitWithSearchPolicy(problem,initial_b,legacy_policy);
-    const double legacy_seconds=Seconds(started);
-    std::cerr<<topology<<'-'<<atoms<<" global LegacyCompact finished in "<<legacy_seconds<<" s\n";
     return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
         {"parameter_count",3*atoms},{"core_atoms",neighbor_policy.core_atoms},
         {"outer_core_atoms",neighbor_policy.core_atoms},
         {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
-        {"global_legacy_compact",PackFit("LegacyCompact",legacy,legacy_seconds)},
         {"fixed_neighbor",neighbor_json},{"peak_rss_mb",PeakRssMb()}};
 }
 void Write(const std::filesystem::path & path,const j::value & value)
@@ -473,7 +450,7 @@ int main(int argc,char ** argv)
             throw std::invalid_argument("OUTER_CORE_ATOMS is supported only with a FixedNeighbor search mode.");
         const std::size_t core_atoms=argc>=6 ? static_cast<std::size_t>(std::stoul(argv[5])) : 12;
         if(core_atoms==0) throw std::invalid_argument("CORE_ATOMS must be positive.");
-        Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--case",
+        Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,
             mode=="--scaling-only" || mode=="--scaling-forward" || mode=="--scaling-reverse",
             mode=="--neighbor-reverse" || mode=="--scaling-reverse",
             mode=="--neighbor-forward" || mode=="--neighbor-reverse" ||

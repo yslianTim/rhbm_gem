@@ -276,8 +276,8 @@ This conclusion is retained without the experiment-specific recovery record.
 - Numerical full rank does not guarantee practical parameter sensitivity or
   recovery for a weak halo.
 - Search termination does not establish runtime convergence.
-- The historical operator/Schwarz campaign is insufficient for production
-  promotion; the production default remains LegacyCompact.
+- The historical operator/Schwarz campaign is closed; the later FixedNeighbor
+  qualification adopted FixedNeighbor as the production estimator.
 - The bounded SPQR rank prototype can return Unavailable on a large case and
   does not guarantee definitive rank within its configured budget.
 - A timeout or resource stop is neither a numerical failure nor a convergence

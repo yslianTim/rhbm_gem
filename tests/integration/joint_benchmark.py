@@ -206,7 +206,6 @@ def normalize_result(profile, raw):
                 'profile_evaluations': sum(item.get('profile_evaluations', 0)
                                            for item in fixed.get('sweep_telemetry', [])),
                 'local_profile_work': fixed.get('local_profile_work'),
-                'global_legacy_compact': raw.get('global_legacy_compact'),
             },
         }
     if profile == 'workflow':

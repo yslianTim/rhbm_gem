@@ -6,9 +6,9 @@ from Git history; they are not part of the current production surface.
 
 ## Current production contract
 
-`FixedNeighbor` is an explicit Joint search route selected through
-`FitOptions::joint_search_method` or `--joint-search fixed-neighbor`. It is not
-the global default and is never selected by automatic routing.
+`FixedNeighbor` is the sole Joint estimator. It is selected by
+`--estimator joint-components`; there is no separate global search-route
+option or automatic routing layer.
 
 | Policy | Current value |
 | --- | --- |

@@ -177,7 +177,8 @@ JointFitResult n::FitWithSearchPolicyImpl(const JointProblem & problem,const std
     auto provenance=[&] {
         JointSolverProvenance out;
         out.search_method=std::string(n::SearchMethodToken(route.search_method));
-        out.contract_version=std::string(JointSolverProvenanceContractVersion);
+        out.contract_version=std::string(route.search_method==n::SearchMethod::FixedNeighbor ?
+            JointSolverProvenanceContractVersion : JointSolverProvenanceHistoricalContractVersion);
         out.sparse_backend=std::string(n::SparseBackendName(route.sparse_backend));
         if(route.search_method==n::SearchMethod::FixedNeighbor)
         {

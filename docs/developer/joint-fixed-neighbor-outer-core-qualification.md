@@ -2,8 +2,8 @@
 
 Status: **qualified and adopted** on 2026-10-08. The production
 `FixedNeighborSearchPolicy` default outer core is now **12 atoms**. FixedNeighbor
-is the default Joint production route; during Checkpoint A, the remaining
-top-level LegacyCompact route is only a temporary reference path.
+is the sole Joint production route; the former top-level LegacyCompact route
+was retired after this qualification.
 
 ## Scope and contract
 

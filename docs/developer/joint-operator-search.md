@@ -24,9 +24,8 @@ The old option is rejected rather than silently mapped to FixedNeighbor.
 
 ## Current relationship to LegacyCompact
 
-During Checkpoint A, top-level `LegacyCompact` remains a temporary reference
-route for deterministic regression. It is not the production default. The
-existing `LegacyCompact` profile solver is still active inside every
+The former top-level `LegacyCompact` route was retired after FixedNeighbor
+promotion. The existing `LegacyCompact` profile solver is still active inside every
 FixedNeighbor block visit: it performs the local width search, after which at
 most one trusted update is replayed globally. Removing OperatorPcg did not
 remove this local numerical primitive.

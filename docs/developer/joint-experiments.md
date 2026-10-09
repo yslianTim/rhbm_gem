@@ -7,10 +7,10 @@ inventory. Status is one of `Active`, `Qualified`, `Closed`, or `Unknown`.
 
 The current production estimator is FixedNeighbor: core 12, Forward serial
 Gauss-Seidel, 30 maximum sweeps, local `LegacyCompact`, and at most one trusted
-accepted local update per block visit. Top-level `LegacyCompact` remains only a
-temporary reference route during Checkpoint A. `OperatorPcg` is closed and
-removed from the current implementation, command surface and benchmark
-drivers; its compact evidence and historical provenance compatibility remain.
+accepted local update per block visit. The former top-level `LegacyCompact`
+route is retired. `OperatorPcg` is closed and removed from the current
+implementation, command surface and benchmark drivers; its compact evidence
+and historical provenance compatibility remain.
 
 Current FixedNeighbor means the qualified production policy: core 12, Forward
 serial Gauss-Seidel, 30 maximum sweeps, local `LegacyCompact`, and at most one

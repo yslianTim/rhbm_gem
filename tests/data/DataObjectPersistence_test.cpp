@@ -531,7 +531,7 @@ TEST(DataObjectPersistenceTest, FixedNeighborPolicyVersionsPreserveLegacyAndReje
     {
         auto legacy=SavedJointExample();
         rg::JointSolverProvenance provenance{"fixed-neighbor",12u,local_work};
-        provenance.contract_version=rg::JointSolverProvenanceContractVersion;
+        provenance.contract_version=rg::JointSolverProvenanceHistoricalContractVersion;
         provenance.fixed_neighbor_policy_version=rg::FixedNeighborLegacyPolicyContractVersion;
         provenance.fixed_neighbor_maximum_sweeps=30;
         provenance.fixed_neighbor_order="forward";
@@ -566,7 +566,7 @@ TEST(DataObjectPersistenceTest, FixedNeighborPolicyVersionsPreserveLegacyAndReje
     }
 }
 
-TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsAllProductionRoutesAndRejectsMalformedValues)
+TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsCurrentAndHistoricalRoutesAndRejectsMalformedValues)
 {
     namespace io=rg::joint_result_io;
     auto fixed=SavedJointExample();
@@ -603,7 +603,7 @@ TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsAllProductionRoutes
     auto operator_result=SavedJointExample();
     rg::JointSolverProvenance operator_provenance;
     operator_provenance.search_method="operator-pcg";
-    operator_provenance.contract_version=rg::JointSolverProvenanceContractVersion;
+    operator_provenance.contract_version=rg::JointSolverProvenanceHistoricalContractVersion;
     operator_provenance.sparse_backend="SPQR";
     operator_provenance.preconditioner="Schwarz";
     operator_provenance.operator_rank_mode="Auto";
@@ -628,6 +628,23 @@ TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsAllProductionRoutes
     EXPECT_EQ(operator_round_tripped.metadata.solver->preconditioner,"Schwarz");
     EXPECT_EQ(operator_round_tripped.metadata.solver->operator_rank_mode,"Auto");
     EXPECT_EQ(operator_round_tripped.metadata.solver->schwarz_scratch_bytes,256ULL*1024*1024);
+
+    auto legacy_result=SavedJointExample();
+    rg::JointSolverProvenance legacy_provenance;
+    legacy_provenance.search_method="legacy-compact";
+    legacy_provenance.contract_version=rg::JointSolverProvenanceHistoricalContractVersion;
+    legacy_provenance.sparse_backend="EIGEN";
+    legacy_result.metadata.solver=legacy_provenance;
+    const auto legacy_decoded=io::Decode(io::Encode(legacy_result));
+    ASSERT_TRUE(legacy_decoded.metadata.solver);
+    EXPECT_EQ(legacy_decoded.metadata.solver->search_method,"legacy-compact");
+    EXPECT_EQ(legacy_decoded.metadata.solver->contract_version,
+        rg::JointSolverProvenanceHistoricalContractVersion);
+
+    auto current_operator=boost::json::parse(io::Encode(operator_result)).as_object();
+    current_operator.at("metadata").as_object().at("solver").as_object()["contract_version"]=
+        std::string(rg::JointSolverProvenanceContractVersion);
+    EXPECT_THROW(io::Decode(boost::json::serialize(current_operator)),std::invalid_argument);
 
     auto partial=boost::json::parse(io::Encode(operator_result)).as_object();
     auto & partial_solver=partial.at("metadata").as_object().at("solver").as_object();

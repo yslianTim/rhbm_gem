@@ -294,8 +294,27 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
         const auto & p=*m.solver;
         Require(p.search_method=="legacy-compact" || p.search_method=="operator-pcg" ||
             p.search_method=="fixed-neighbor","invalid solver search method");
-        if(p.contract_version)
-            Require(*p.contract_version==JointSolverProvenanceContractVersion,"unsupported solver provenance contract");
+        const bool current_contract=p.contract_version &&
+            *p.contract_version==JointSolverProvenanceContractVersion;
+        const bool historical_contract=!p.contract_version ||
+            *p.contract_version==JointSolverProvenanceHistoricalContractVersion;
+        Require(current_contract || historical_contract,"unsupported solver provenance contract");
+        if(current_contract)
+        {
+            Require(p.search_method=="fixed-neighbor",
+                "current solver provenance must use FixedNeighbor");
+            Require(!p.preconditioner && !p.operator_rank_mode && !p.operator_rank_backend &&
+                !p.operator_pcg_iterations && !p.operator_damping_trials &&
+                !p.operator_rank_budget_seconds && !p.operator_rank_budget_entries &&
+                !p.operator_rank_budget_workspace_bytes && !p.schwarz_core_atoms &&
+                !p.schwarz_overlap_hops && !p.schwarz_max_block_atoms &&
+                !p.schwarz_storage_bytes && !p.schwarz_scratch_bytes,
+                "current solver provenance contains retired operator controls");
+            Require(p.fixed_neighbor_policy_version &&
+                *p.fixed_neighbor_policy_version==FixedNeighborPolicyContractVersion &&
+                !p.fixed_neighbor_local_work,
+                "incomplete current FixedNeighbor provenance");
+        }
         if(p.sparse_backend)
             Require(*p.sparse_backend=="EIGEN" || *p.sparse_backend=="SPQR","invalid solver sparse backend");
         if(p.preconditioner)
