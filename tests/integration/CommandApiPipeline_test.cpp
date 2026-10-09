@@ -9,6 +9,7 @@
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/CommandSystem.hpp>
+#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -271,8 +272,13 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
         EXPECT_DOUBLE_EQ(saved.metadata.map_normalization->divisor,normalization ? sd : 1);
         auto map=rg::ReadMap(map_path); auto model=rg::ReadModel(request.model_file_path);
         model->SelectAllAtoms(); model->ApplyBackboneSelection(true); if(normalization) map->MapValueArrayNormalization();
-        const auto direct=rgc::EstimateJointComponents(*map,*model);
-        auto expected=rgc::CaptureJointAnalysisResult(direct,saved.metadata); expected.costs=saved.costs;
+        rgc::FitOptions direct_options;
+        direct_options.estimator=rgc::PotentialEstimator::JOINT_COMPONENTS;
+        direct_options.quiet_mode=true;
+        rgc::RunPotentialFittingWorkflow(*map,*model,direct_options);
+        ASSERT_TRUE(model->GetAnalysisView().GetJointResult());
+        auto expected=*model->GetAnalysisView().GetJointResult();
+        expected.metadata=saved.metadata; expected.costs=saved.costs;
         EXPECT_EQ(rg::joint_result_io::Encode(expected),rg::joint_result_io::Encode(saved));
     }
     for(int option=0;option<3;++option)
