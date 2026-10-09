@@ -322,32 +322,26 @@ TEST(JointFixedNeighborBlockCoordinateTest, PreparedWorkspaceReusesSymbolicFacto
     EXPECT_EQ(fresh_work.symbolic_reuses,0u);
     EXPECT_EQ(fresh_work.numeric,2u);
 }
-TEST(JointFixedNeighborBlockCoordinateTest, BoundedLocalWorkCountsTrustedAcceptedUpdatesOnly)
+TEST(JointFixedNeighborBlockCoordinateTest, FixedNeighborAcceptsAtMostOneTrustedLocalUpdatePerBlockVisit)
 {
     JointProblem problem(second_stage_test::OperatorWorkload("chain",32));
     const n::Vector eta=n::Vector::Constant(32,std::log(.55));
-    for(const auto bounded:{n::FixedNeighborLocalWork::OneAcceptedUpdate,
-                            n::FixedNeighborLocalWork::TwoAcceptedUpdates})
+    n::FixedNeighborPolicy policy; policy.core_atoms=16; policy.maximum_sweeps=2;
+    policy.assess_final_endpoint=false; policy.capture_local_trajectory=true;
+    const auto result=n::SearchFixedNeighbor(problem,eta,policy);
+    ASSERT_FALSE(result.blocks.empty());
+    for(const auto & block:result.blocks)
     {
-        n::FixedNeighborPolicy policy; policy.core_atoms=16; policy.maximum_sweeps=2;
-        policy.assess_final_endpoint=false; policy.capture_local_trajectory=true;
-        policy.local_work=bounded;
-        const auto result=n::SearchFixedNeighbor(problem,eta,policy);
-        const std::size_t budget=bounded==n::FixedNeighborLocalWork::OneAcceptedUpdate ? 1u : 2u;
-        ASSERT_FALSE(result.blocks.empty());
-        for(const auto & block:result.blocks)
+        std::size_t accepted_updates{},rejected_trials{};
+        for(const auto & trial:block.profile_trials)
         {
-            std::size_t accepted_updates{},rejected_trials{};
-            for(const auto & trial:block.profile_trials)
-            {
-                if(trial.accepted && trial.accepted_update && *trial.accepted_update>0) ++accepted_updates;
-                if(!trial.accepted) ++rejected_trials;
-            }
-            EXPECT_LE(accepted_updates,budget);
-            EXPECT_EQ(accepted_updates,static_cast<std::size_t>(block.accepted_updates));
-            EXPECT_LE(block.accepted_updates,static_cast<int>(budget));
-            if(rejected_trials>0) EXPECT_LE(accepted_updates,budget);
+            if(trial.accepted && trial.accepted_update && *trial.accepted_update>0) ++accepted_updates;
+            if(!trial.accepted) ++rejected_trials;
         }
+        EXPECT_LE(accepted_updates,1u);
+        EXPECT_EQ(accepted_updates,static_cast<std::size_t>(block.accepted_updates));
+        EXPECT_LE(block.accepted_updates,1);
+        if(rejected_trials>0) EXPECT_LE(accepted_updates,1u);
     }
 }
 TEST(JointFixedNeighborBlockCoordinateTest, EtaConfirmationUsesInclusiveExistingThreshold)
