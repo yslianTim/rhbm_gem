@@ -41,8 +41,6 @@ joint_component::SearchPolicy MakeJointSearchPolicy(JointSearchMethod method)
     {
     case JointSearchMethod::LegacyCompact:
         policy.method=joint_component::SearchMethod::LegacyCompact; break;
-    case JointSearchMethod::OperatorPcg:
-        policy.method=joint_component::SearchMethod::OperatorPcg; break;
     case JointSearchMethod::FixedNeighbor:
         policy.method=joint_component::SearchMethod::FixedNeighbor; break;
     }

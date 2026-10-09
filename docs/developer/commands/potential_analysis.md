@@ -34,7 +34,7 @@ Shared fields:
 Command-specific fields:
 
 - `estimator` (default `PotentialEstimator::TWO_STAGE`)
-- `joint_search_method` (default `JointSearchMethod::LegacyCompact` for joint components)
+- `joint_search_method` (default `JointSearchMethod::FixedNeighbor` for joint components)
 - `database_path`
 - `model_file_path`
 - `map_file_path`
@@ -171,7 +171,6 @@ Joint search is explicit and applies only to `JOINT_COMPONENTS`:
 
 ```text
 --joint-search legacy-compact   # default
---joint-search operator-pcg
 --joint-search fixed-neighbor
 ```
 
@@ -266,8 +265,8 @@ build SHA-256 fingerprints from the existing build-time generator. Loading or
 exporting a saved outcome preserves these values; it does not stamp the reader's
 version or access either input file.
 
-`metadata.solver` records the explicit route as `legacy-compact`, `operator-pcg`
-or `fixed-neighbor`. FixedNeighbor records
+`metadata.solver` records the explicit route as `legacy-compact` or
+`fixed-neighbor`. FixedNeighbor records
 `fixed_neighbor_core_atoms: 12` and the intrinsic at-most-one trusted accepted
 `LegacyCompact` update per block visit. Current writers use
 `fixed-neighbor-production-v2`; `fixed_neighbor_local_work` is absent or null,

@@ -103,9 +103,8 @@ template <>
 struct EnumMappingTraits<JointSearchMethod>
 {
     static constexpr std::string_view kFirstBindingToken{ "LEGACY_COMPACT" };
-    static constexpr std::array<EnumMappingExpectation<JointSearchMethod>, 3> kExpectations{{
+    static constexpr std::array<EnumMappingExpectation<JointSearchMethod>, 2> kExpectations{{
         { "legacy-compact", JointSearchMethod::LegacyCompact },
-        { "operator-pcg", JointSearchMethod::OperatorPcg },
         { "fixed-neighbor", JointSearchMethod::FixedNeighbor },
     }};
 };
