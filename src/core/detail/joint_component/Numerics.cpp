@@ -112,15 +112,11 @@ JointSolverRoute ResolveJointSolverRoute(const SearchPolicy & policy)
 {
     std::optional<PreconditionerKind> preconditioner;
     std::optional<std::size_t> fixed_neighbor_core_atoms;
-    std::optional<FixedNeighborLocalWork> fixed_neighbor_local_work;
     if(policy.method==SearchMethod::OperatorPcg) preconditioner=policy.preconditioner;
     if(policy.method==SearchMethod::FixedNeighbor)
-    {
         fixed_neighbor_core_atoms=policy.fixed_neighbor.core_atoms;
-        fixed_neighbor_local_work=policy.fixed_neighbor.local_work;
-    }
     return {ActiveSparseBackend(),policy.method,preconditioner,
-        fixed_neighbor_core_atoms,fixed_neighbor_local_work};
+        fixed_neighbor_core_atoms};
 }
 std::optional<FreeDesignRankBackend> ResolveOperatorRankBackend(OperatorRankMode mode,SparseBackend backend)
 {
@@ -181,16 +177,6 @@ std::string_view FixedNeighborBlockOrderName(FixedNeighborBlockOrder order)
     {
     case FixedNeighborBlockOrder::Forward: return "forward";
     case FixedNeighborBlockOrder::Reverse: return "reverse";
-    }
-    return {};
-}
-std::string_view FixedNeighborLocalWorkName(FixedNeighborLocalWork work)
-{
-    switch(work)
-    {
-    case FixedNeighborLocalWork::Full: return "full";
-    case FixedNeighborLocalWork::OneAcceptedUpdate: return "one-accepted";
-    case FixedNeighborLocalWork::TwoAcceptedUpdates: return "two-accepted";
     }
     return {};
 }

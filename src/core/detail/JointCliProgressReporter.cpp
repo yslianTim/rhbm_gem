@@ -103,9 +103,7 @@ void JointCliProgressReporter::OnProgress(const JointProgressEvent & event)
         if (route.preconditioner)
             output << " | preconditioner=" << joint_component::PreconditionerName(*route.preconditioner);
         if (route.fixed_neighbor_core_atoms)
-            output << " | core=" << *route.fixed_neighbor_core_atoms;
-        if (route.fixed_neighbor_local_work)
-            output << " | local-work=" << joint_component::FixedNeighborLocalWorkName(*route.fixed_neighbor_local_work)
+            output << " | core=" << *route.fixed_neighbor_core_atoms
                 << " | local-search=legacy-compact";
         LogJointInfo(output.str());
         return;

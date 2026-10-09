@@ -552,10 +552,9 @@ TEST(JointProgressTest, FixedNeighborUsesComponentRouteAndQualifiedDefaults)
     ASSERT_EQ(fit.components.size(),2u);
     EXPECT_EQ(fit.solver_provenance.search_method,"fixed-neighbor");
     EXPECT_EQ(fit.solver_provenance.fixed_neighbor_core_atoms,12u);
-    EXPECT_EQ(fit.solver_provenance.fixed_neighbor_local_work,"one-accepted");
+    EXPECT_FALSE(fit.solver_provenance.fixed_neighbor_local_work);
     ASSERT_TRUE(fit.assembled_state);
     EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
-    const auto route=joint::ResolveJointSolverRoute(policy);
     ASSERT_TRUE(events.front().solver_route);
     EXPECT_EQ(events.front().solver_route->search_method,joint::SearchMethod::FixedNeighbor);
     EXPECT_FALSE(events.front().solver_route->preconditioner);
@@ -563,8 +562,6 @@ TEST(JointProgressTest, FixedNeighborUsesComponentRouteAndQualifiedDefaults)
     ASSERT_TRUE(std::any_of(events.begin(),events.end(),[](const auto & event) {
         return event.fixed_neighbor && event.fixed_neighbor->sweep>0;
     }));
-    EXPECT_EQ(events.front().solver_route->fixed_neighbor_local_work,
-        route.fixed_neighbor_local_work);
 }
 
 TEST(JointProgressTest, FixedNeighborObservableComponentsShareAssemblyContract)
@@ -627,6 +624,10 @@ TEST(JointProgressTest, CliReporterFormatsResolvedSolverRoutes)
     event.solver_route = joint::ResolveJointSolverRoute(policy);
     reporter.OnProgress(event);
 
+    policy.method = joint::SearchMethod::FixedNeighbor;
+    event.solver_route = joint::ResolveJointSolverRoute(policy);
+    reporter.OnProgress(event);
+
     const auto output = testing::internal::GetCapturedStdout();
     Logger::SetLogLevel(previous_level);
     const std::string sparse(joint::SparseBackendName(joint::ActiveSparseBackend()));
@@ -636,6 +637,11 @@ TEST(JointProgressTest, CliReporterFormatsResolvedSolverRoutes)
     EXPECT_EQ(output.substr(legacy, legacy_line_end - legacy).find("preconditioner="), std::string::npos);
     EXPECT_NE(output.find("[Joint] Solver route: sparse=" + sparse
         + " | search=operator-pcg | preconditioner=Schwarz"), std::string::npos);
+    const auto fixed = output.find("[Joint] Solver route: sparse=" + sparse
+        + " | search=fixed-neighbor | core=12 | local-search=legacy-compact");
+    ASSERT_NE(fixed, std::string::npos);
+    const auto fixed_line_end = output.find('\n', fixed);
+    EXPECT_EQ(output.substr(fixed, fixed_line_end - fixed).find("local-work="), std::string::npos);
 }
 
 TEST(JointProgressTest, CliReporterRefreshesPhasesAndFinishesLines)
