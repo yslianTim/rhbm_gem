@@ -100,15 +100,6 @@ struct EnumMappingTraits<PotentialEstimator>
 };
 
 template <>
-struct EnumMappingTraits<JointSearchMethod>
-{
-    static constexpr std::string_view kFirstBindingToken{ "FIXED_NEIGHBOR" };
-    static constexpr std::array<EnumMappingExpectation<JointSearchMethod>, 1> kExpectations{{
-        { "fixed-neighbor", JointSearchMethod::FixedNeighbor },
-    }};
-};
-
-template <>
 struct EnumMappingTraits<PotentialModel>
 {
     static constexpr std::string_view kFirstBindingToken{ "SINGLE_GAUS" };
@@ -175,7 +166,6 @@ using CommandEnumTypes = testing::Types<
     PrinterType,
     PotentialModel,
     PotentialEstimator,
-    JointSearchMethod,
     PartialCharge,
     TesterType,
     SphereSamplingMethod>;

@@ -34,7 +34,7 @@ def main() -> int:
         database = root / "joint.sqlite"
         run("potential_analysis", "--estimator", "joint-components", "--only-backbone", "true", "-a", model,
             "-m", map_path, "-d", database, "-k", "example", "--map-normalization", "false", "-v", "0")
-        run("potential_analysis", "--estimator", "joint-components", "--joint-search", "fixed-neighbor",
+        run("potential_analysis", "--estimator", "joint-components",
             "--only-backbone", "true", "-a", model, "-m", map_path, "-d", database, "-k", "fixed",
             "--map-normalization", "false", "-v", "0")
         model_hash = hashlib.sha256(model.read_bytes()).hexdigest()

@@ -52,14 +52,6 @@ struct CommandEnumTraits<PotentialEstimator>
 };
 
 template <>
-struct CommandEnumTraits<JointSearchMethod>
-{
-    inline static constexpr std::array<CommandEnumDefinition<JointSearchMethod, 2>, 1> kOptions{{
-        { JointSearchMethod::FixedNeighbor, "FIXED_NEIGHBOR", { "2", "fixed-neighbor" } }
-    }};
-};
-
-template <>
 struct CommandEnumTraits<PotentialModel>
 {
     inline static constexpr std::array<CommandEnumDefinition<PotentialModel, 2>, 3> kOptions{{

@@ -38,9 +38,6 @@ def assert_module_surface() -> None:
     assert not hasattr(m.PainterType, "QSCORE")
     assert hasattr(m, "PotentialEstimator")
     assert hasattr(m.PotentialEstimator, "JOINT_COMPONENTS")
-    assert hasattr(m, "JointSearchMethod")
-    assert hasattr(m.JointSearchMethod, "FIXED_NEIGHBOR")
-    assert not hasattr(m.JointSearchMethod, "OPERATOR_PCG")
     assert hasattr(m, "PrinterType")
     assert hasattr(m.PrinterType, "JOINT_ESTIMATES")
     assert hasattr(m.PrinterType, "ATOM_OUTLIER")
@@ -118,9 +115,6 @@ def assert_request_objects_are_usable() -> None:
 
     analysis = m.PotentialAnalysisRequest()
     assert analysis.estimator == m.PotentialEstimator.TWO_STAGE
-    assert analysis.joint_search_method == m.JointSearchMethod.FIXED_NEIGHBOR
-    analysis.joint_search_method = m.JointSearchMethod.FIXED_NEIGHBOR
-    assert analysis.joint_search_method == m.JointSearchMethod.FIXED_NEIGHBOR
     assert analysis.enable_second_stage_failed_only_refinement is True
     analysis.enable_second_stage_failed_only_refinement = False
     assert analysis.enable_second_stage_failed_only_refinement is False

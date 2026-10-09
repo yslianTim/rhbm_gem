@@ -525,14 +525,6 @@ TEST(JointProgressTest, FixedNeighborUsesComponentRouteAndQualifiedDefaults)
     }));
 }
 
-TEST(JointProgressTest, PublicJointDefaultsSelectFixedNeighbor)
-{
-    core::FitOptions options;
-    EXPECT_EQ(options.joint_search_method,core::JointSearchMethod::FixedNeighbor);
-    core::PotentialAnalysisRequest request;
-    EXPECT_EQ(request.joint_search_method,core::JointSearchMethod::FixedNeighbor);
-}
-
 TEST(JointProgressTest, FixedNeighborObservableComponentsShareAssemblyContract)
 {
     const core::JointProblem problem(MakeObservableInput());

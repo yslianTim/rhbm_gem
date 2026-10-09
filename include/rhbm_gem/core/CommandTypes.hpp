@@ -8,7 +8,6 @@
 #include <vector>
 
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
-#include <rhbm_gem/core/JointSearchMethod.hpp>
 #include <rhbm_gem/core/PotentialEstimator.hpp>
 
 namespace rhbm_gem::core {
@@ -79,7 +78,6 @@ struct CommandRequestBase
 struct PotentialAnalysisRequest : public CommandRequestBase
 {
     PotentialEstimator estimator{ PotentialEstimator::TWO_STAGE };
-    JointSearchMethod joint_search_method{ JointSearchMethod::FixedNeighbor };
     std::filesystem::path database_path{ GetDefaultDatabasePath() };
     std::filesystem::path model_file_path{};
     std::filesystem::path map_file_path{};

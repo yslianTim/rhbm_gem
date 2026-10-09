@@ -34,12 +34,6 @@ void LogJointInfo(const std::string & message)
     Logger::Log(LogLevel::Info, message);
 }
 
-joint_component::SearchPolicy MakeJointSearchPolicy(JointSearchMethod)
-{
-    joint_component::SearchPolicy policy;
-    policy.method=joint_component::SearchMethod::FixedNeighbor;
-    return policy;
-}
 }
 
 void RunTwoStageFromPreparedSamples(
@@ -110,7 +104,8 @@ void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOp
         observer = reporter->Observer();
     }
     auto snapshot = [&] {
-        const auto search_policy=MakeJointSearchPolicy(options.joint_search_method);
+        joint_component::SearchPolicy search_policy;
+        search_policy.method=joint_component::SearchMethod::FixedNeighbor;
         auto fit = joint_component::FitWithSearchPolicy(problem, initialization.b, search_policy, observer);
         fit.costs.construction_seconds = construction_seconds;
         fit.costs.initialization_seconds = initialization_seconds;
