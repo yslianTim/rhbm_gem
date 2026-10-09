@@ -444,17 +444,14 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/runner_dependency_test.py")
     add_test(NAME joint_benchmark_contract_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_benchmark_test.py")
-    add_test(NAME joint_route_frontier_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_route_frontier_test.py")
     add_test(NAME joint_fixed_neighbor_outer_core_qualification_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_outer_core_qualification_test.py")
     add_test(NAME joint_experiment_cleanup_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_experiment_cleanup_test.py")
     set_tests_properties(experiment_support_test experiment_runner_dependency_test joint_benchmark_contract_test
-        joint_route_frontier_test
         joint_fixed_neighbor_outer_core_qualification_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm")
-    set_tests_properties(joint_benchmark_contract_test joint_route_frontier_test
+    set_tests_properties(joint_benchmark_contract_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:scalability")
     set_tests_properties(joint_fixed_neighbor_outer_core_qualification_test
         joint_experiment_cleanup_test
@@ -615,7 +612,6 @@ endif()
 get_target_property(_tests_all_dependencies tests_all MANUALLY_ADDED_DEPENDENCIES)
 foreach(_optional_target IN ITEMS
     joint_partial_selection
-    joint_sparse_benchmark
     joint_postprocessing_benchmark
     joint_component_benchmark
     joint_fixed_b_block_experiment
@@ -638,10 +634,6 @@ else()
             message(FATAL_ERROR "${_target} exists while RHBM_GEM_BUILD_BENCHMARKS=OFF")
         endif()
     endforeach()
-endif()
-
-if(TARGET joint_sparse_benchmark)
-    message(FATAL_ERROR "Retired operator benchmark target joint_sparse_benchmark exists")
 endif()
 
 if(RHBM_GEM_BUILD_RESEARCH_TOOLS)

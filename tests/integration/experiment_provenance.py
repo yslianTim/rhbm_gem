@@ -27,7 +27,7 @@ def build_fingerprint(root):
     cache = (root / 'CMakeCache.txt').read_text()
     source = Path(next(line.split('=', 1)[1] for line in cache.splitlines()
                        if line.startswith('CMAKE_HOME_DIRECTORY:')))
-    binaries = [root / 'bin/joint_sparse_benchmark', root / 'bin/joint_component_runtime',
+    binaries = [root / 'bin/joint_fixed_neighbor_experiment', root / 'bin/joint_component_runtime',
                 root / 'bin/joint_offline_diagnostic', root / 'bin/joint_statistical_experiment',
                 root / 'bin/RHBM-GEM', *sorted((root / 'src').glob('librhbm_gem.*'))]
     return dict(source_root=str(source), source_sha256=source_hash(source), cache=cache,
@@ -42,17 +42,17 @@ def require_current_build(build):
     cache = (build / 'CMakeCache.txt').read_text()
     source = Path(next(line.split('=', 1)[1] for line in cache.splitlines() if line.startswith('CMAKE_HOME_DIRECTORY:')))
     libraries = list((build / 'src').glob('librhbm_gem.*'))
-    outputs = [build / 'bin/joint_sparse_benchmark', *libraries]
+    outputs = [build / 'bin/joint_fixed_neighbor_experiment', *libraries]
     if not libraries or any(not p.is_file() for p in outputs): raise ValueError(f'Build is incomplete: {build}')
     sources = [p for folder in ('src', 'include', 'cmake') for p in (source / folder).rglob('*')
                if p.is_file() and p.suffix in ('.cpp', '.hpp', '.h', '.cmake', '.txt')]
     sources += [source / 'CMakeLists.txt']
     core_time = max(p.stat().st_mtime_ns for p in sources)
-    driver_sources = [source / 'tests/experiments/joint_sparse_benchmark.cpp',
+    driver_sources = [source / 'tests/experiments/joint_fixed_neighbor.cpp',
                       *list((source / 'tests/support').glob('Joint*.hpp')),
                       *list((source / 'tests/support').glob('Joint*.cpp'))]
     driver_time = max(p.stat().st_mtime_ns for p in driver_sources if p.is_file())
-    if core_time > min(p.stat().st_mtime_ns for p in libraries) or max(core_time, driver_time) > (build / 'bin/joint_sparse_benchmark').stat().st_mtime_ns:
+    if core_time > min(p.stat().st_mtime_ns for p in libraries) or max(core_time, driver_time) > (build / 'bin/joint_fixed_neighbor_experiment').stat().st_mtime_ns:
         raise ValueError(f'Sources are newer than measured binaries; rebuild before starting a campaign: {build}')
 
 

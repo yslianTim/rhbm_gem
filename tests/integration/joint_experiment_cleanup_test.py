@@ -28,6 +28,7 @@ RETIRED_DRIVERS = (
 )
 
 RETIRED_TESTS = (
+    "joint_route_frontier_test.py",
     "joint_optimized_frontier_test.py",
     "joint_factor_ownership_analysis_test.py",
     "joint_projected_tail_analysis_test.py",
@@ -48,6 +49,12 @@ RETIRED_TESTS = (
     "joint_fixed_neighbor_inexact_qualification_test.py",
 )
 
+RETIRED_REPOSITORY_FILES = (
+    "tests/experiments/joint_sparse_benchmark.cpp",
+    "tests/core/joint_component/OperatorSearch_test.cpp",
+    "tests/core/joint_component/ProfileOperator_test.cpp",
+)
+
 RETIRED_FIXTURES = (
     "joint_fixed_neighbor_inexact_baseline.json",
 )
@@ -63,6 +70,11 @@ CLOSED_MODES = (
     "--tile-1024", "--tile-2048", "--tile-4096", "--tile-8192", "--tile-16384",
     "--inexact-one", "--inexact-one-search", "--inexact-one-endpoint",
     "--inexact-two", "--full-attribution",
+    "--joint-search", "operator-pcg", "--operator-rank",
+    "--operator-rank-seconds", "--operator-rank-work-entries",
+    "--operator-rank-workspace-mib", "--schwarz-core-atoms",
+    "--schwarz-overlap-hops", "--schwarz-max-block-atoms",
+    "--schwarz-storage-mib", "--schwarz-scratch-mib",
 )
 
 
@@ -72,7 +84,8 @@ def main():
     experiment = (ROOT / "tests" / "experiments" / "joint_fixed_neighbor.cpp").read_text()
     gitignore = (ROOT / ".gitignore").read_text()
     active_sources = "\n".join(path.read_text() for path in integration.glob("*.py"))
-    active_paths = [path for path in (ROOT / "src").rglob("*") if path.is_file()]
+    active_paths = [path for path in (ROOT / "src/core").rglob("*") if path.is_file()]
+    active_paths.extend(path for path in (ROOT / "include/rhbm_gem/core").rglob("*") if path.is_file())
     active_paths.extend(path for path in (ROOT / "tests" / "experiments").rglob("*")
                         if path.is_file())
     active_paths.extend(path for path in integration.glob("*.py")
@@ -87,8 +100,11 @@ def main():
                if (integration / name).exists()]
     missing_fixtures = [name for name in RETIRED_FIXTURES
                         if (ROOT / "tests" / "fixtures" / name).exists()]
+    present_files = [name for name in RETIRED_REPOSITORY_FILES
+                     if (ROOT / name).exists()]
     assert not missing, f"retired Joint files returned: {missing}"
     assert not missing_fixtures, f"retired Joint fixtures returned: {missing_fixtures}"
+    assert not present_files, f"retired Operator files returned: {present_files}"
     assert not any(name.removesuffix(".py") in cmake for name in RETIRED_TESTS)
     assert not any(mode in experiment for mode in CLOSED_MODES)
     for token in (
