@@ -1,6 +1,6 @@
 #pragma once
 
-#include "SolverRoute.hpp"
+#include "SolverConfiguration.hpp"
 
 #include <cstddef>
 #include <functional>

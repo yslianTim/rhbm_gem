@@ -1,7 +1,7 @@
 #pragma once
 #include <Eigen/Dense>
 #include "JointProgress.hpp"
-#include "SolverRoute.hpp"
+#include "SolverConfiguration.hpp"
 #include "SnapshotViews.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <Eigen/SparseCore>

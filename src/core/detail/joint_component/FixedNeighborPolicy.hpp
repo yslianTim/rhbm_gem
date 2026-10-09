@@ -6,7 +6,7 @@ namespace rhbm_gem::core::joint_component {
 
 enum class FixedNeighborBlockOrder {Forward,Reverse};
 
-// The production policy contains only the qualified route controls. Numerical
+// The production policy contains only the qualified policy controls. Numerical
 // tolerances and diagnostic switches remain implementation details.
 struct FixedNeighborSearchPolicy
 {

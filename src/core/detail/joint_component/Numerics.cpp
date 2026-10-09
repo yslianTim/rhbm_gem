@@ -559,18 +559,18 @@ Assessment AssessEvaluated(const Domain &,VectorRef y,const Evaluation & endpoin
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     AssessmentStageTimerForTesting prepare_stage("derivative-preparation",endpoint.derivative.rows(),endpoint.derivative.cols());
     const auto reduction_kind=JacobianReductionForTesting();
-    const bool compact_route=reduction_kind==JacobianReductionKindForTesting::CompactStackQr;
-    if(compact_route) ++AssessmentWorkForTesting().compact_attempts;
+    const bool compact_reduction=reduction_kind==JacobianReductionKindForTesting::CompactStackQr;
+    if(compact_reduction) ++AssessmentWorkForTesting().compact_attempts;
 #else
-    constexpr bool compact_route=true;
+    constexpr bool compact_reduction=true;
 #endif
-    const auto prepared=compact_route ?
+    const auto prepared=compact_reduction ?
         PrepareDerivativeCompact(endpoint,scale,context) : PrepareDerivative(endpoint,scale,context);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     prepare_stage.Finish();
     AssessmentStageTimerForTesting reduce_stage("derivative-reduction",prepared.raw.rows(),prepared.raw.cols());
 #endif
-    bool compact_differential=compact_route;
+    bool compact_differential=compact_reduction;
     ReducedDifferential differential;
     if(compact_differential && prepared.reference_order)
     {

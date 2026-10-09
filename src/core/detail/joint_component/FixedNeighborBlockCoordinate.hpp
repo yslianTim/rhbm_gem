@@ -94,7 +94,7 @@ struct FixedNeighborResult
     JointFitResult fit;
 };
 
-// Search output shared by the production component route and the historical
+// Search output shared by the production component implementation and the historical
 // whole-problem wrapper. It deliberately contains no assembled JointFitResult.
 struct FixedNeighborSearchResult
 {
