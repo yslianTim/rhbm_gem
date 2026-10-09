@@ -169,16 +169,18 @@ double NormalizedEndpointObjective(const joint::Endpoint & endpoint,double scale
 }
 
 void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitResult & fit,
-    const std::vector<joint::JointProgressEvent> & events, const joint::SearchPolicy & policy)
+    const std::vector<joint::JointProgressEvent> & events,
+    const joint::FixedNeighborSearchPolicy & policy)
 {
     const auto & data = core::JointProblemAccess::Get(problem);
     ASSERT_EQ(fit.components.size(), data.partition.components.size());
     ASSERT_FALSE(events.empty());
     EXPECT_EQ(events.front().phase, joint::JointProgressPhase::SolverConfigured);
-    ASSERT_TRUE(events.front().solver_route);
-    const auto expected_route = joint::ResolveJointSolverRoute(policy);
-    EXPECT_EQ(events.front().solver_route->sparse_backend, expected_route.sparse_backend);
-    EXPECT_EQ(events.front().solver_route->search_method, expected_route.search_method);
+    ASSERT_TRUE(events.front().solver_configuration);
+    const auto expected_configuration = joint::ResolveJointSolverConfiguration(policy);
+    EXPECT_EQ(events.front().solver_configuration->sparse_backend, expected_configuration.sparse_backend);
+    EXPECT_EQ(events.front().solver_configuration->fixed_neighbor_core_atoms,
+        expected_configuration.fixed_neighbor_core_atoms);
     EXPECT_EQ(std::count_if(events.begin(), events.end(), [](const auto & event) {
         return event.phase == joint::JointProgressPhase::SolverConfigured;
     }), 1);
@@ -200,6 +202,7 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
         int last_accepted = 0;
         std::optional<double> last_search_objective;
         std::optional<double> last_search_gradient;
+        bool fixed_neighbor_progress{};
         while (cursor < events.size() && events[cursor].phase == joint::JointProgressPhase::SearchProgress)
         {
             const auto & progress = events[cursor++];
@@ -208,7 +211,12 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
             EXPECT_EQ(progress.atom_count, view.atoms.size());
             EXPECT_EQ(progress.row_count, view.rows.size());
             EXPECT_EQ(progress.profile_budget, data.context.profile_budget);
-            EXPECT_EQ(progress.update_budget, data.context.update_budget);
+            if (progress.fixed_neighbor)
+            {
+                fixed_neighbor_progress = true;
+                EXPECT_EQ(progress.update_budget, static_cast<int>(progress.fixed_neighbor->block_solves));
+            }
+            else EXPECT_EQ(progress.update_budget, data.context.update_budget);
             EXPECT_GE(progress.profile_evaluations, last_evaluation);
             EXPECT_GE(progress.accepted_updates, last_accepted);
             EXPECT_GE(progress.elapsed_seconds, 0);
@@ -218,8 +226,11 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
             if (progress.accepted_gradient_inf_norm) last_search_gradient = progress.accepted_gradient_inf_norm;
         }
         EXPECT_GT(last_evaluation, 0);
-        EXPECT_EQ(last_evaluation, component.profile_evaluations);
-        EXPECT_EQ(last_accepted, component.accepted_updates);
+        if (!fixed_neighbor_progress)
+        {
+            EXPECT_EQ(last_evaluation, component.profile_evaluations);
+            EXPECT_EQ(last_accepted, component.accepted_updates);
+        }
 
         ASSERT_LT(cursor, events.size());
         const auto & certifying = events[cursor++];
@@ -343,7 +354,6 @@ TEST(JointProgressTest, SearchEventsTrackOnlyAcceptedMetrics)
 
     for (const double initial_width : {.05, 2.})
     {
-        context.search.method = joint::SearchMethod::LegacyCompact;
         const auto initial = joint::Vector::Constant(static_cast<Eigen::Index>(view.atoms.size()), initial_width);
         const auto without_observer = joint::SearchProfile(view.domain, y, initial, context);
         std::vector<joint::JointProgressEvent> events;
@@ -463,9 +473,7 @@ TEST(JointProgressTest, PublicFitUsesFixedNeighborProductionContract)
 {
     const core::JointProblem problem(MakeInput());
     const std::vector<double> initial{.55, .55};
-    joint::SearchPolicy fixed_neighbor;
-    fixed_neighbor.method = joint::SearchMethod::FixedNeighbor;
-    const auto expected = joint::FitWithSearchPolicy(problem, initial, fixed_neighbor);
+    const auto expected = joint::FitFixedNeighborComponents(problem, initial, {});
     const auto actual = core::FitJointComponents(problem, initial);
 
     EXPECT_EQ(actual.solver_provenance.search_method, "fixed-neighbor");
@@ -487,45 +495,14 @@ TEST(JointProgressTest, ActiveSparseBackendMatchesCompiledFactorizationBackend)
     EXPECT_EQ(joint::ActiveSparseBackend(), expected);
 }
 
-TEST(JointProgressTest, LegacyCompactRouteOmitsUnusedPreconditioner)
-{
-    joint::SearchPolicy policy;
-    policy.method = joint::SearchMethod::LegacyCompact;
-    const auto route = joint::ResolveJointSolverRoute(policy);
-    EXPECT_EQ(route.sparse_backend, joint::ActiveSparseBackend());
-    EXPECT_EQ(route.search_method, joint::SearchMethod::LegacyCompact);
-}
-
-TEST(JointProgressTest, SolverRouteNamesAreCanonical)
-{
-    EXPECT_EQ(joint::SparseBackendName(joint::SparseBackend::Eigen), "EIGEN");
-    EXPECT_EQ(joint::SparseBackendName(joint::SparseBackend::Spqr), "SPQR");
-    EXPECT_EQ(joint::SearchMethodName(joint::SearchMethod::LegacyCompact), "LegacyCompact");
-}
-
-TEST(JointProgressTest, LifecycleAndNumericsMatchForLegacyCompactSearch)
+TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
 {
     const core::JointProblem problem(MakeInput());
     const std::vector<double> initial{.55, .55};
-    joint::SearchPolicy policy;
-    policy.method = joint::SearchMethod::LegacyCompact;
-    const auto without_observer = joint::FitWithSearchPolicy(problem, initial, policy);
+    const joint::FixedNeighborSearchPolicy policy{};
+    EXPECT_EQ(policy.core_atoms,12u);
     std::vector<joint::JointProgressEvent> events;
-    const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
-    const auto with_observer = joint::FitWithSearchPolicy(problem, initial, policy, observer);
-    ExpectSameFitNumerics(without_observer, with_observer);
-    ExpectLifecycle(problem, with_observer, events, policy);
-}
-
-TEST(JointProgressTest, FixedNeighborUsesComponentRouteAndQualifiedDefaults)
-{
-    const core::JointProblem problem(MakeInput());
-    const std::vector<double> initial{.55, .55};
-    joint::SearchPolicy policy;
-    policy.method=joint::SearchMethod::FixedNeighbor;
-    EXPECT_EQ(policy.fixed_neighbor.core_atoms,12u);
-    std::vector<joint::JointProgressEvent> events;
-    const auto fit=joint::FitWithSearchPolicy(problem,initial,policy,
+    const auto fit=joint::FitFixedNeighborComponents(problem,initial,policy,
         [&](const auto & event) { events.push_back(event); });
 
     ASSERT_EQ(fit.components.size(),2u);
@@ -539,9 +516,8 @@ TEST(JointProgressTest, FixedNeighborUsesComponentRouteAndQualifiedDefaults)
     EXPECT_EQ(fit.solver_provenance.fixed_neighbor_local_search,"legacy-compact");
     ASSERT_TRUE(fit.assembled_state);
     EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
-    ASSERT_TRUE(events.front().solver_route);
-    EXPECT_EQ(events.front().solver_route->search_method,joint::SearchMethod::FixedNeighbor);
-    EXPECT_EQ(events.front().solver_route->fixed_neighbor_core_atoms,12u);
+    ASSERT_TRUE(events.front().solver_configuration);
+    EXPECT_EQ(events.front().solver_configuration->fixed_neighbor_core_atoms,12u);
     ASSERT_TRUE(std::any_of(events.begin(),events.end(),[](const auto & event) {
         return event.fixed_neighbor && event.fixed_neighbor->sweep>0;
     }));
@@ -552,9 +528,7 @@ TEST(JointProgressTest, FixedNeighborObservableComponentsShareAssemblyContract)
     const core::JointProblem problem(MakeObservableInput());
     const std::vector<double> initial{.55,std::numeric_limits<double>::quiet_NaN(),
         std::numeric_limits<double>::quiet_NaN()};
-    joint::SearchPolicy policy;
-    policy.method=joint::SearchMethod::FixedNeighbor;
-    const auto fit=joint::FitWithSearchPolicy(problem,initial,policy);
+    const auto fit=joint::FitFixedNeighborComponents(problem,initial,{});
     ASSERT_EQ(problem.ParameterLayout().groups.size(),1u);
     ASSERT_EQ(fit.components.size(),1u);
     ASSERT_TRUE(fit.components.front().state);
@@ -570,7 +544,7 @@ TEST(JointProgressTest, ObservableComponentsUseTheSameLifecycle)
         std::numeric_limits<double>::quiet_NaN()};
     std::vector<joint::JointProgressEvent> events;
     const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
-    const auto fit = joint::FitWithSearchPolicy(problem, initial, {}, observer);
+    const auto fit = joint::FitFixedNeighborComponents(problem, initial, {}, observer);
     ASSERT_EQ(problem.ParameterLayout().groups.size(), 1);
     ASSERT_TRUE(fit.assembled_state);
     ExpectLifecycle(problem, fit, events, {});
@@ -587,7 +561,7 @@ TEST(JointProgressTest, ObservableComponentsUseTheSameLifecycle)
     }
 }
 
-TEST(JointProgressTest, CliReporterFormatsResolvedSolverRoutes)
+TEST(JointProgressTest, CliReporterFormatsFixedNeighborConfiguration)
 {
     const auto previous_level = Logger::GetLogLevel();
     Logger::SetLogLevel(LogLevel::Info);
@@ -597,27 +571,18 @@ TEST(JointProgressTest, CliReporterFormatsResolvedSolverRoutes)
     core::detail::JointCliProgressReporter reporter;
     joint::JointProgressEvent event;
     event.phase = joint::JointProgressPhase::SolverConfigured;
-    joint::SearchPolicy policy;
-    policy.method = joint::SearchMethod::LegacyCompact;
-    event.solver_route = joint::ResolveJointSolverRoute(policy);
-    reporter.OnProgress(event);
-
-    policy.method = joint::SearchMethod::FixedNeighbor;
-    event.solver_route = joint::ResolveJointSolverRoute(policy);
+    event.solver_configuration = joint::ResolveJointSolverConfiguration({});
     reporter.OnProgress(event);
 
     const auto output = testing::internal::GetCapturedStdout();
     Logger::SetLogLevel(previous_level);
     const std::string sparse(joint::SparseBackendName(joint::ActiveSparseBackend()));
-    const auto legacy = output.find("[Joint] Solver: LegacyCompact (reference) | sparse=" + sparse);
-    ASSERT_NE(legacy, std::string::npos);
-    const auto legacy_line_end = output.find('\n', legacy);
-    EXPECT_EQ(output.substr(legacy, legacy_line_end - legacy).find("preconditioner="), std::string::npos);
     const auto fixed = output.find("[Joint] Solver: FixedNeighbor | sparse=" + sparse
         + " | core=12 | local-search=legacy-compact");
     ASSERT_NE(fixed, std::string::npos);
     const auto fixed_line_end = output.find('\n', fixed);
     EXPECT_EQ(output.substr(fixed, fixed_line_end - fixed).find("local-work="), std::string::npos);
+    EXPECT_EQ(output.find("LegacyCompact (reference)"), std::string::npos);
 }
 
 TEST(JointProgressTest, CliReporterRefreshesPhasesAndFinishesLines)
@@ -767,7 +732,7 @@ TEST(JointProgressTest, AnalyticNuisanceComponentHasNoAcceptedMetrics)
         std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()};
     std::vector<joint::JointProgressEvent> events;
     const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
-    const auto fit = joint::FitWithSearchPolicy(problem, initial, {}, observer);
+    const auto fit = joint::FitFixedNeighborComponents(problem, initial, {}, observer);
 
     const auto analytic = std::find_if(fit.components.begin(), fit.components.end(), [](const auto & component) {
         return component.stop_reason == "analytic-nuisance-only";

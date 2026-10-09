@@ -104,9 +104,7 @@ void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOp
         observer = reporter->Observer();
     }
     auto snapshot = [&] {
-        joint_component::SearchPolicy search_policy;
-        search_policy.method=joint_component::SearchMethod::FixedNeighbor;
-        auto fit = joint_component::FitWithSearchPolicy(problem, initialization.b, search_policy, observer);
+        auto fit = joint_component::FitFixedNeighborComponents(problem, initialization.b, {}, observer);
         fit.costs.construction_seconds = construction_seconds;
         fit.costs.initialization_seconds = initialization_seconds;
         fit.initialization = initialization;

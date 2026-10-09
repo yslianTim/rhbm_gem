@@ -95,19 +95,13 @@ void JointCliProgressReporter::OnProgress(const JointProgressEvent & event)
     {
     case JointProgressPhase::SolverConfigured:
     {
-        if (!event.solver_route) return;
-        const auto & route = *event.solver_route;
+        if (!event.solver_configuration) return;
+        const auto & configuration = *event.solver_configuration;
         std::ostringstream output;
-        if (route.search_method == joint_component::SearchMethod::FixedNeighbor)
-            output << "[Joint] Solver: FixedNeighbor | sparse="
-                << joint_component::SparseBackendName(route.sparse_backend);
-        else
-            output << "[Joint] Solver: LegacyCompact (reference) | sparse="
-                << joint_component::SparseBackendName(route.sparse_backend);
-        if (route.search_method == joint_component::SearchMethod::FixedNeighbor
-            && route.fixed_neighbor_core_atoms)
-            output << " | core=" << *route.fixed_neighbor_core_atoms
-                << " | local-search=legacy-compact";
+        output << "[Joint] Solver: FixedNeighbor | sparse="
+            << joint_component::SparseBackendName(configuration.sparse_backend)
+            << " | core=" << configuration.fixed_neighbor_core_atoms
+            << " | local-search=legacy-compact";
         LogJointInfo(output.str());
         return;
     }

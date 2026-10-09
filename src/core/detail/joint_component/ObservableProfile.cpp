@@ -75,7 +75,7 @@ EvaluationContext ProfileContext(const EvaluationContext & parent,const JointPar
     return context;
 }
 JointFitResult FitObservableComponents(const JointProblem & problem,const std::vector<double> & initial_b,
-    const SearchPolicy & search_policy,const JointProgressObserver & observer)
+    const FixedNeighborSearchPolicy & production_policy,const JointProgressObserver & observer)
 {
     const auto & data=JointProblemAccess::Get(problem); const auto & input=*data.input;
     JointFitResult out; out.problem=problem; out.layout=data.layout; out.observation_scale=data.context.scale;
@@ -114,8 +114,8 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
         }
         else if(valid && !layout.informative_rows.empty())
         {
-            const ComponentResult result=SolveComponentWithSearchPolicy(data.domain,view,layout,data.y,widths,
-                data.context,search_policy,observer,progress_component ? &*progress_component : nullptr);
+            const ComponentResult result=SolveFixedNeighborComponentView(view,layout,widths,
+                data.context,production_policy,observer,progress_component ? &*progress_component : nullptr);
             accepted_objective=result.search.accepted_objective;
             accepted_gradient_inf_norm=result.search.accepted_gradient_inf_norm;
             component.search_completed=result.search_success; component.stop_reason=result.search.stop_reason;

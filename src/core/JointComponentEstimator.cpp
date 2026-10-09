@@ -167,33 +167,28 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
     return JointProblem(std::move(input));
 }
 JointFitResult FitJointComponents(const JointProblem & problem,const std::vector<double> & initial_b)
-{return n::FitWithSearchPolicy(problem,initial_b,{});}
-JointFitResult n::FitWithSearchPolicyImpl(const JointProblem & problem,const std::vector<double> & initial_b,
-    const n::SearchPolicy & search_policy,const n::JointProgressObserver & observer)
+{return n::FitFixedNeighborComponents(problem,initial_b,{});}
+JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,const std::vector<double> & initial_b,
+    const n::FixedNeighborSearchPolicy & production_policy,const n::JointProgressObserver & observer)
 {
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
-    const auto route=n::ResolveJointSolverRoute(search_policy);
-    n::NotifyJointSolverConfigured(observer,route);
+    const auto configuration=n::ResolveJointSolverConfiguration(production_policy);
+    n::NotifyJointSolverConfigured(observer,configuration);
     auto provenance=[&] {
         JointSolverProvenance out;
-        out.search_method=std::string(n::SearchMethodToken(route.search_method));
-        out.contract_version=std::string(route.search_method==n::SearchMethod::FixedNeighbor ?
-            JointSolverProvenanceContractVersion : JointSolverProvenanceHistoricalContractVersion);
-        out.sparse_backend=std::string(n::SparseBackendName(route.sparse_backend));
-        if(route.search_method==n::SearchMethod::FixedNeighbor)
-        {
-            const auto & policy=search_policy.fixed_neighbor;
-            out.fixed_neighbor_core_atoms=policy.core_atoms;
-            out.fixed_neighbor_policy_version=std::string(FixedNeighborPolicyContractVersion);
-            out.fixed_neighbor_maximum_sweeps=policy.maximum_sweeps;
-            out.fixed_neighbor_order=std::string(n::FixedNeighborBlockOrderName(policy.order));
-            out.fixed_neighbor_local_search=std::string(n::SearchMethodToken(n::SearchMethod::LegacyCompact));
-        }
+        out.search_method="fixed-neighbor";
+        out.contract_version=std::string(JointSolverProvenanceContractVersion);
+        out.sparse_backend=std::string(n::SparseBackendName(configuration.sparse_backend));
+        out.fixed_neighbor_core_atoms=production_policy.core_atoms;
+        out.fixed_neighbor_policy_version=std::string(FixedNeighborPolicyContractVersion);
+        out.fixed_neighbor_maximum_sweeps=production_policy.maximum_sweeps;
+        out.fixed_neighbor_order=std::string(n::FixedNeighborBlockOrderName(production_policy.order));
+        out.fixed_neighbor_local_search="legacy-compact";
         return out;
     };
     if(!problem.ParameterLayout().groups.empty())
     {
-        auto out=n::FitObservableComponents(problem,initial_b,search_policy,observer);
+        auto out=n::FitObservableComponents(problem,initial_b,production_policy,observer);
         out.solver_provenance=provenance();
         return out;
     }
@@ -208,7 +203,7 @@ JointFitResult n::FitWithSearchPolicyImpl(const JointProblem & problem,const std
         for(auto row:data.partition.constant_rows) out.available_row_mask[static_cast<std::size_t>(row)]=true;
         return out;
     }
-    auto search_context=data.context; search_context.search=search_policy;
+    auto search_context=data.context;
     const n::Vector b=Eigen::Map<const n::Vector>(initial_b.data(),static_cast<Eigen::Index>(initial_b.size()));
     std::vector<n::ComponentResult> results;
     const auto component_count=data.partition.components.size();
@@ -233,8 +228,8 @@ JointFitResult n::FitWithSearchPolicyImpl(const JointProblem & problem,const std
             JointParameterLayout component_layout;
             component_layout.full_atoms.assign(view.atoms.begin(),view.atoms.end());
             component_layout.informative_rows.assign(view.rows.begin(),view.rows.end());
-            result=n::SolveComponentWithSearchPolicy(data.domain,view,component_layout,data.y,b,
-                search_context,search_policy,observer,progress_component ? &*progress_component : nullptr);
+            result=n::SolveFixedNeighborComponentView(view,component_layout,b,
+                search_context,production_policy,observer,progress_component ? &*progress_component : nullptr);
         }
         else {result.search.stopped=true; result.search.stop_reason="invalid-initial-widths";}
 

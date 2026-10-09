@@ -457,8 +457,10 @@ TEST(JointComponentRuntimeTest, ActualAssessmentFollowsFallbackAndLocalDirection
     EXPECT_EQ(fallback.trusted_assessment->primary.eta,accepted.eta);
     EXPECT_EQ(fallback.trusted_assessment->primary.beta,accepted.beta);
     context.audit.directions=n::Matrix::Zero(1,3);
-    const auto local=n::SolveComponent(view,data.y,n::Vector::Constant(2,.55),data.context);
-    const auto directed=n::AssessComponentSearch(view.domain,y,context,local.search);
+    const auto search_context=n::ChildContext(data.context,view,true);
+    const auto local_initial=n::Vector::Constant(static_cast<Eigen::Index>(view.atoms.size()),.55);
+    const auto local_search=n::SearchProfile(view.domain,y,local_initial,search_context);
+    const auto directed=n::AssessComponentSearch(view.domain,y,context,local_search);
     ASSERT_TRUE(directed.trusted_assessment);
     const auto fresh=n::AssessProfile(view.domain,y,directed.trusted_state->eta,
         n::ChildContext(data.context,view,true),&directed.trusted_state->beta);

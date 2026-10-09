@@ -33,7 +33,7 @@ struct JointFixedNeighborProgress
 struct JointProgressEvent
 {
     JointProgressPhase phase{};
-    std::optional<JointSolverRoute> solver_route;
+    std::optional<JointSolverConfiguration> solver_configuration;
     std::size_t component_index{};
     std::size_t component_count{};
     std::string component_id;
@@ -54,12 +54,12 @@ struct JointProgressEvent
 using JointProgressObserver = std::function<void(const JointProgressEvent &)>;
 
 inline void NotifyJointSolverConfigured(
-    const JointProgressObserver & observer, const JointSolverRoute & route)
+    const JointProgressObserver & observer, const JointSolverConfiguration & configuration)
 {
     if (!observer) return;
     JointProgressEvent event;
     event.phase = JointProgressPhase::SolverConfigured;
-    event.solver_route = route;
+    event.solver_configuration = configuration;
     observer(event);
 }
 

@@ -416,6 +416,9 @@ TEST(JointObservableProfileTest, TargetEvidenceIsUnavailableAtTheRankThreshold)
 TEST(JointObservableProfileTest, TargetEvidenceUsesEveryComponentAndTheSavedState)
 {
     auto input=TwoRowHalo(false,true);
+    input.support[3].push_back({2,.8});
+    input.observations[2]+=n::EvaluateKernel(.8,.65,2.5).gaussian+
+        .2*n::EvaluateKernel(.8,.65,2.5).charge;
     const auto copy=input;
     for(std::size_t a=0;a<copy.atom_ids.size();++a)
     {

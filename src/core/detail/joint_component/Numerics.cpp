@@ -108,37 +108,14 @@ CompactSvdResult Decompose(const Matrix & r,Eigen::Index rows,CompactSvdVectors 
     return EvaluateRank(r,{{rows,0,0},r.cols()},rhs,vectors);
 }
 }
-JointSolverRoute ResolveJointSolverRoute(const SearchPolicy & policy)
-{
-    std::optional<std::size_t> fixed_neighbor_core_atoms;
-    if(policy.method==SearchMethod::FixedNeighbor)
-        fixed_neighbor_core_atoms=policy.fixed_neighbor.core_atoms;
-    return {ActiveSparseBackend(),policy.method,fixed_neighbor_core_atoms};
-}
+JointSolverConfiguration ResolveJointSolverConfiguration(const FixedNeighborSearchPolicy & policy)
+{return {ActiveSparseBackend(),policy.core_atoms};}
 std::string_view SparseBackendName(SparseBackend backend)
 {
     switch(backend)
     {
     case SparseBackend::Eigen: return "EIGEN";
     case SparseBackend::Spqr: return "SPQR";
-    }
-    return {};
-}
-std::string_view SearchMethodName(SearchMethod method)
-{
-    switch(method)
-    {
-    case SearchMethod::LegacyCompact: return "LegacyCompact";
-    case SearchMethod::FixedNeighbor: return "FixedNeighbor";
-    }
-    return {};
-}
-std::string_view SearchMethodToken(SearchMethod method)
-{
-    switch(method)
-    {
-    case SearchMethod::LegacyCompact: return "legacy-compact";
-    case SearchMethod::FixedNeighbor: return "fixed-neighbor";
     }
     return {};
 }

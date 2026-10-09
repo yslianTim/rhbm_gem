@@ -47,7 +47,6 @@ struct EvaluationContext
     LinearPolicy linear;
     AuditPlan audit;
     bool independent_search{};
-    SearchPolicy search;
     int profile_budget{200},update_budget{100};
 };
 enum class ProfileEvaluationRole {Unspecified,InitialProfile,TrialProfile,AcceptedEndpoint,Reference};

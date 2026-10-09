@@ -26,15 +26,15 @@ struct PreparedComponent
     Identities atom_ids,row_ids;
 };
 PreparedComponent PrepareComponent(const JointParameterLayout &,const ComponentView &);
-ComponentResult SolveComponentWithSearchPolicy(
-    const Domain &,const ComponentView &,const JointParameterLayout &,
-    VectorRef,const Vector &,const EvaluationContext &,const SearchPolicy &,const JointProgressObserver & = {},
+ComponentResult SolveFixedNeighborComponentView(
+    const ComponentView &,const JointParameterLayout &,const Vector &,const EvaluationContext &,
+    const FixedNeighborSearchPolicy &,const JointProgressObserver & = {},
     const JointProgressComponent * = nullptr);
-JointFitResult FitObservableComponents(const JointProblem &,const std::vector<double> &,const SearchPolicy & = {},
+JointFitResult FitObservableComponents(const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy & = {},
     const JointProgressObserver & = {});
-JointFitResult FitWithSearchPolicy(const JointProblem &,const std::vector<double> &,const SearchPolicy &,
+JointFitResult FitFixedNeighborComponents(const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy &,
     const JointProgressObserver & = {});
-JointFitResult FitWithSearchPolicyImpl(const JointProblem &,const std::vector<double> &,const SearchPolicy &,
+JointFitResult FitFixedNeighborComponentsImpl(const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy &,
     const JointProgressObserver & = {});
 std::vector<JointRankEvidence> AssessmentRanks(const Assessment &,JointEvidenceScope);
 Domain ProfileDomain(const Domain &,const JointParameterLayout &);

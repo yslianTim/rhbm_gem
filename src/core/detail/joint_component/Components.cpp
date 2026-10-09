@@ -12,8 +12,6 @@
 namespace rhbm_gem::core::joint_component {
 namespace {
 std::size_t Index(Eigen::Index i) {return static_cast<std::size_t>(i);}
-Indices IndicesOf(const std::vector<std::size_t> & values)
-{return {values.begin(),values.end()};}
 }
 ComponentPartition Partition(const Domain & domain,const Identities & ids)
 {
@@ -125,40 +123,23 @@ EvaluationContext ChildContext(const EvaluationContext & parent,const ComponentV
     }
     return c;
 }
-ComponentResult SolveComponentWithSearchPolicy(
-    const Domain & parent_domain,const ComponentView & view,
-    const JointParameterLayout & component_layout,VectorRef parent_observations,const Vector & initial_b,
-    const EvaluationContext & parent_context,const SearchPolicy & search_policy,
+ComponentResult SolveFixedNeighborComponentView(
+    const ComponentView & view,const JointParameterLayout & component_layout,const Vector & initial_b,
+    const EvaluationContext & parent_context,const FixedNeighborSearchPolicy & production_policy,
     const JointProgressObserver & observer,const JointProgressComponent * progress_component)
 {
-    if(search_policy.method==SearchMethod::FixedNeighbor)
-    {
-        const auto prepared=PrepareComponent(component_layout,view);
-        return SolveFixedNeighborComponent(prepared,initial_b,parent_context,
-            search_policy.fixed_neighbor,observer,progress_component);
-    }
-    const bool exact_view=component_layout.groups.empty() && component_layout.full_atoms.size()==view.atoms.size() &&
-        component_layout.informative_rows.size()==view.rows.size();
-    const Domain domain=exact_view ? view.domain : ProfileDomain(parent_domain,component_layout);
-    const auto context=exact_view ? ChildContext(parent_context,view,true) :
-        ProfileContext(parent_context,component_layout,view.domain.rows);
-    const Vector local_y=exact_view ? SelectValues(parent_observations,view.rows) :
-        SelectValues(parent_observations,IndicesOf(component_layout.informative_rows));
-    const Vector start=SelectValues(initial_b,IndicesOf(component_layout.full_atoms));
-    auto search_context=context; search_context.independent_search=true; search_context.search=search_policy;
-    auto search=SearchProfile(domain,local_y,start,search_context,observer,progress_component);
-    return AssessComponentSearch(domain,local_y,search_context,std::move(search),observer,progress_component);
+    const auto prepared=PrepareComponent(component_layout,view);
+    return SolveFixedNeighborComponent(prepared,initial_b,parent_context,
+        production_policy,observer,progress_component);
 }
-ComponentResult SolveComponent(const ComponentView & view,VectorRef y,const Vector & initial_b,
+ComponentResult SolveComponent(const ComponentView & view,VectorRef,const Vector & initial_b,
     const EvaluationContext & parent,const JointProgressObserver & observer,
     const JointProgressComponent * progress_component)
 {
-    const auto snapshot=view.domain.atoms.Snapshot();
-    const Domain parent_domain(snapshot);
     JointParameterLayout component_layout;
     component_layout.full_atoms.assign(view.atoms.begin(),view.atoms.end());
     component_layout.informative_rows.assign(view.rows.begin(),view.rows.end());
-    return SolveComponentWithSearchPolicy(parent_domain,view,component_layout,y,initial_b,parent,parent.search,
+    return SolveFixedNeighborComponentView(view,component_layout,initial_b,parent,{},
         observer,progress_component);
 }
 ComponentResult AssessComponentSearch(const Domain & domain,VectorRef y,const EvaluationContext & context,SearchResult search,
