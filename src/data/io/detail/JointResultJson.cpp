@@ -324,14 +324,26 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
             Require(*p.schwarz_max_block_atoms>=*p.schwarz_core_atoms,"invalid Schwarz block limits");
         if(p.search_method=="fixed-neighbor")
         {
-            Require(p.fixed_neighbor_core_atoms && *p.fixed_neighbor_core_atoms>0 &&
-                p.fixed_neighbor_local_work && !p.fixed_neighbor_local_work->empty(),
+            Require(p.fixed_neighbor_core_atoms && *p.fixed_neighbor_core_atoms>0,
                 "incomplete fixed-neighbor provenance");
-            Require(*p.fixed_neighbor_local_work=="full" || *p.fixed_neighbor_local_work=="one-accepted" ||
-                *p.fixed_neighbor_local_work=="two-accepted","invalid fixed-neighbor local work");
-            if(p.fixed_neighbor_policy_version)
-                Require(*p.fixed_neighbor_policy_version==FixedNeighborPolicyContractVersion,
-                    "unsupported fixed-neighbor policy contract");
+            const bool current_policy=p.fixed_neighbor_policy_version &&
+                *p.fixed_neighbor_policy_version==FixedNeighborPolicyContractVersion;
+            const bool legacy_policy=!p.fixed_neighbor_policy_version ||
+                *p.fixed_neighbor_policy_version==FixedNeighborLegacyPolicyContractVersion;
+            Require(current_policy || legacy_policy,"unsupported fixed-neighbor policy contract");
+            if(current_policy)
+            {
+                if(p.fixed_neighbor_local_work)
+                    Require(*p.fixed_neighbor_local_work=="one-accepted",
+                        "current FixedNeighbor v2 cannot claim retired local work");
+            }
+            else
+            {
+                Require(p.fixed_neighbor_local_work && !p.fixed_neighbor_local_work->empty(),
+                    "incomplete legacy fixed-neighbor provenance");
+                Require(*p.fixed_neighbor_local_work=="full" || *p.fixed_neighbor_local_work=="one-accepted" ||
+                    *p.fixed_neighbor_local_work=="two-accepted","invalid legacy fixed-neighbor local work");
+            }
             if(p.fixed_neighbor_maximum_sweeps) Require(*p.fixed_neighbor_maximum_sweeps>0,
                 "invalid fixed-neighbor sweep budget");
             if(p.fixed_neighbor_order)

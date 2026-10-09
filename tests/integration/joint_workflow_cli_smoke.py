@@ -81,11 +81,13 @@ def main() -> int:
         fixed_solver = fixed["metadata"]["solver"]
         assert {key: fixed_solver[key] for key in (
             "search_method", "fixed_neighbor_core_atoms", "fixed_neighbor_local_work",
+            "fixed_neighbor_policy_version",
             "fixed_neighbor_maximum_sweeps", "fixed_neighbor_order", "fixed_neighbor_local_search",
         )} == {
             "search_method": "fixed-neighbor",
             "fixed_neighbor_core_atoms": 12,
-            "fixed_neighbor_local_work": "one-accepted",
+            "fixed_neighbor_local_work": None,
+            "fixed_neighbor_policy_version": "fixed-neighbor-production-v2",
             "fixed_neighbor_maximum_sweeps": 30,
             "fixed_neighbor_order": "forward",
             "fixed_neighbor_local_search": "legacy-compact",

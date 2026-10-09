@@ -553,6 +553,8 @@ TEST(JointProgressTest, FixedNeighborUsesComponentRouteAndQualifiedDefaults)
     EXPECT_EQ(fit.solver_provenance.search_method,"fixed-neighbor");
     EXPECT_EQ(fit.solver_provenance.fixed_neighbor_core_atoms,12u);
     EXPECT_FALSE(fit.solver_provenance.fixed_neighbor_local_work);
+    EXPECT_EQ(fit.solver_provenance.fixed_neighbor_policy_version,
+        rhbm_gem::FixedNeighborPolicyContractVersion);
     ASSERT_TRUE(fit.assembled_state);
     EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(events.front().solver_route);

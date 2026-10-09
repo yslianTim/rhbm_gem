@@ -524,11 +524,53 @@ TEST(DataObjectPersistenceTest, JointSolverProvenanceRoundTripsAndMissingFieldRe
     EXPECT_FALSE(legacy.metadata.solver);
 }
 
+TEST(DataObjectPersistenceTest, FixedNeighborPolicyVersionsPreserveLegacyAndRejectRetiredV2Claims)
+{
+    namespace io=rg::joint_result_io;
+    for(const std::string local_work: {"full","two-accepted"})
+    {
+        auto legacy=SavedJointExample();
+        rg::JointSolverProvenance provenance{"fixed-neighbor",12u,local_work};
+        provenance.contract_version=rg::JointSolverProvenanceContractVersion;
+        provenance.fixed_neighbor_policy_version=rg::FixedNeighborLegacyPolicyContractVersion;
+        provenance.fixed_neighbor_maximum_sweeps=30;
+        provenance.fixed_neighbor_order="forward";
+        provenance.fixed_neighbor_local_search="legacy-compact";
+        legacy.metadata.solver=provenance;
+
+        const auto decoded=io::Decode(io::Encode(legacy));
+        ASSERT_TRUE(decoded.metadata.solver);
+        EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_local_work,local_work);
+        const auto round_tripped=io::Decode(io::Encode(decoded));
+        ASSERT_TRUE(round_tripped.metadata.solver);
+        EXPECT_EQ(round_tripped.metadata.solver->fixed_neighbor_local_work,local_work);
+    }
+
+    auto current=SavedJointExample();
+    rg::JointSolverProvenance current_provenance{"fixed-neighbor",12u,std::nullopt};
+    current_provenance.contract_version=rg::JointSolverProvenanceContractVersion;
+    current_provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
+    current_provenance.fixed_neighbor_maximum_sweeps=30;
+    current_provenance.fixed_neighbor_order="forward";
+    current_provenance.fixed_neighbor_local_search="legacy-compact";
+    current.metadata.solver=current_provenance;
+    const auto current_decoded=io::Decode(io::Encode(current));
+    ASSERT_TRUE(current_decoded.metadata.solver);
+    EXPECT_FALSE(current_decoded.metadata.solver->fixed_neighbor_local_work);
+
+    for(const std::string local_work: {"full","two-accepted"})
+    {
+        auto malformed=boost::json::parse(io::Encode(current)).as_object();
+        malformed.at("metadata").as_object().at("solver").as_object()["fixed_neighbor_local_work"]=local_work;
+        EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::invalid_argument);
+    }
+}
+
 TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsAllProductionRoutesAndRejectsMalformedValues)
 {
     namespace io=rg::joint_result_io;
     auto fixed=SavedJointExample();
-    rg::JointSolverProvenance fixed_provenance{"fixed-neighbor",12u,"one-accepted"};
+    rg::JointSolverProvenance fixed_provenance{"fixed-neighbor",12u,std::nullopt};
     fixed_provenance.contract_version=rg::JointSolverProvenanceContractVersion;
     fixed_provenance.sparse_backend="SPQR";
     fixed_provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
@@ -540,6 +582,7 @@ TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsAllProductionRoutes
     ASSERT_TRUE(fixed_decoded.metadata.solver);
     EXPECT_EQ(fixed_decoded.metadata.solver->contract_version,rg::JointSolverProvenanceContractVersion);
     EXPECT_EQ(fixed_decoded.metadata.solver->sparse_backend,"SPQR");
+    EXPECT_FALSE(fixed_decoded.metadata.solver->fixed_neighbor_local_work);
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_maximum_sweeps,30u);
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_order,"forward");
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_local_search,"legacy-compact");
