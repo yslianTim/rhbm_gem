@@ -502,7 +502,9 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
         if (target) EXPECT_EQ(view.GetPostFitPeeling()->samples.size(), view.GetRawSamplingEntries(false).size());
         EXPECT_FALSE(view.GetGroupMemberResult());
     }
-    const auto direct = core::FitJointComponents(problem, result.initialization.b);
+    n::SearchPolicy fixed_policy;
+    fixed_policy.method = n::SearchMethod::FixedNeighbor;
+    const auto direct = n::FitWithSearchPolicy(problem, result.initialization.b, fixed_policy);
     ASSERT_EQ(result.components.size(), direct.components.size());
     for (std::size_t c = 0; c < direct.components.size(); ++c)
     {

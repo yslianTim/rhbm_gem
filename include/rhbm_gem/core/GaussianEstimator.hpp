@@ -19,7 +19,7 @@ namespace core {
 struct FitOptions
 {
     PotentialEstimator estimator{ PotentialEstimator::TWO_STAGE };
-    JointSearchMethod joint_search_method{ JointSearchMethod::LegacyCompact };
+    JointSearchMethod joint_search_method{ JointSearchMethod::FixedNeighbor };
     SphereSamplingMethod sampling_method{ SphereSamplingMethod::FibonacciDeterministic };
     int thread_size{ 1 };
     bool quiet_mode{ false };

@@ -77,7 +77,21 @@ def main() -> int:
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
         assert saved["schema_version"] == 5
-        assert saved["metadata"]["solver"]["search_method"] == "legacy-compact"
+        assert saved["metadata"]["solver"]["search_method"] == "fixed-neighbor"
+        default_solver = saved["metadata"]["solver"]
+        assert {key: default_solver[key] for key in (
+            "search_method", "fixed_neighbor_core_atoms", "fixed_neighbor_local_work",
+            "fixed_neighbor_policy_version", "fixed_neighbor_maximum_sweeps",
+            "fixed_neighbor_order", "fixed_neighbor_local_search",
+        )} == {
+            "search_method": "fixed-neighbor",
+            "fixed_neighbor_core_atoms": 12,
+            "fixed_neighbor_local_work": None,
+            "fixed_neighbor_policy_version": "fixed-neighbor-production-v2",
+            "fixed_neighbor_maximum_sweeps": 30,
+            "fixed_neighbor_order": "forward",
+            "fixed_neighbor_local_search": "legacy-compact",
+        }
         fixed_solver = fixed["metadata"]["solver"]
         assert {key: fixed_solver[key] for key in (
             "search_method", "fixed_neighbor_core_atoms", "fixed_neighbor_local_work",

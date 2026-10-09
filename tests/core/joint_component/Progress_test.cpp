@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
+#include <rhbm_gem/core/CommandTypes.hpp>
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -567,6 +568,14 @@ TEST(JointProgressTest, FixedNeighborUsesComponentRouteAndQualifiedDefaults)
     ASSERT_TRUE(std::any_of(events.begin(),events.end(),[](const auto & event) {
         return event.fixed_neighbor && event.fixed_neighbor->sweep>0;
     }));
+}
+
+TEST(JointProgressTest, PublicJointDefaultsSelectFixedNeighbor)
+{
+    core::FitOptions options;
+    EXPECT_EQ(options.joint_search_method,core::JointSearchMethod::FixedNeighbor);
+    core::PotentialAnalysisRequest request;
+    EXPECT_EQ(request.joint_search_method,core::JointSearchMethod::FixedNeighbor);
 }
 
 TEST(JointProgressTest, FixedNeighborObservableComponentsShareAssemblyContract)

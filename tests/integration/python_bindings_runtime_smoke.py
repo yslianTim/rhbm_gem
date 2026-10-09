@@ -117,7 +117,7 @@ def assert_request_objects_are_usable() -> None:
 
     analysis = m.PotentialAnalysisRequest()
     assert analysis.estimator == m.PotentialEstimator.TWO_STAGE
-    assert analysis.joint_search_method == m.JointSearchMethod.LEGACY_COMPACT
+    assert analysis.joint_search_method == m.JointSearchMethod.FIXED_NEIGHBOR
     analysis.joint_search_method = m.JointSearchMethod.FIXED_NEIGHBOR
     assert analysis.joint_search_method == m.JointSearchMethod.FIXED_NEIGHBOR
     assert analysis.enable_second_stage_failed_only_refinement is True

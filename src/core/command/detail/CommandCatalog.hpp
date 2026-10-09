@@ -50,7 +50,7 @@ struct RequestFieldCatalog<PotentialAnalysisRequest>
             RequestField{ "estimator", "--estimator",
                 "Estimator: two-stage (default) or joint-components", &Self::estimator },
             RequestField{ "joint_search_method", "--joint-search",
-                "Joint search method: legacy-compact (default), operator-pcg, or fixed-neighbor",
+                "Joint search method: fixed-neighbor (default), legacy-compact, or operator-pcg",
                 &Self::joint_search_method },
             RequestField{ "database_path", "-d,--database",
                 "Database file path",
