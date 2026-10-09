@@ -22,6 +22,9 @@ RETIRED_DRIVERS = (
     "joint_fixed_neighbor_operator_diagnostic.py",
     "joint_fixed_neighbor_operator_route.py",
     "joint_fixed_neighbor_workspace_timing.py",
+    "joint_fixed_neighbor_inexact.py",
+    "joint_fixed_neighbor_inexact_campaign.py",
+    "joint_fixed_neighbor_inexact_qualification.py",
 )
 
 RETIRED_TESTS = (
@@ -41,6 +44,12 @@ RETIRED_TESTS = (
     "joint_fixed_neighbor_local_schwarz_local_work_test.py",
     "joint_fixed_neighbor_hybrid_test.py",
     "joint_fixed_neighbor_operator_route_test.py",
+    "joint_fixed_neighbor_inexact_test.py",
+    "joint_fixed_neighbor_inexact_qualification_test.py",
+)
+
+RETIRED_FIXTURES = (
+    "joint_fixed_neighbor_inexact_baseline.json",
 )
 
 CLOSED_MODES = (
@@ -52,6 +61,8 @@ CLOSED_MODES = (
     "--local-operator-schwarz-two", "--local-operator-schwarz-full",
     "--local-operator-schwarz-polish-one", "--local-operator-schwarz-polish-two",
     "--tile-1024", "--tile-2048", "--tile-4096", "--tile-8192", "--tile-16384",
+    "--inexact-one", "--inexact-one-search", "--inexact-one-endpoint",
+    "--inexact-two", "--full-attribution",
 )
 
 
@@ -61,12 +72,34 @@ def main():
     experiment = (ROOT / "tests" / "experiments" / "joint_fixed_neighbor.cpp").read_text()
     gitignore = (ROOT / ".gitignore").read_text()
     active_sources = "\n".join(path.read_text() for path in integration.glob("*.py"))
+    active_paths = [path for path in (ROOT / "src").rglob("*") if path.is_file()]
+    active_paths.extend(path for path in (ROOT / "tests" / "experiments").rglob("*")
+                        if path.is_file())
+    active_paths.extend(path for path in integration.glob("*.py")
+                        if path.name != Path(__file__).name)
+    active_code = "\n".join(
+        path.read_text(errors="ignore")
+        for path in active_paths
+        if path.suffix in {".cpp", ".hpp", ".py"}
+    )
 
     missing = [name for name in RETIRED_DRIVERS + RETIRED_TESTS
                if (integration / name).exists()]
+    missing_fixtures = [name for name in RETIRED_FIXTURES
+                        if (ROOT / "tests" / "fixtures" / name).exists()]
     assert not missing, f"retired Joint files returned: {missing}"
+    assert not missing_fixtures, f"retired Joint fixtures returned: {missing_fixtures}"
     assert not any(name.removesuffix(".py") in cmake for name in RETIRED_TESTS)
     assert not any(mode in experiment for mode in CLOSED_MODES)
+    for token in (
+        "FixedNeighborLocalWork",
+        "TwoAcceptedUpdates",
+        "FullLocalSearch",
+        "--fixed-local-work",
+        "--inexact-one",
+        "--inexact-two",
+    ):
+        assert token not in active_code, f"retired FixedNeighbor token remains: {token}"
     historical_raw_path = "docs/developer/figures/" + "joint-fixed-neighbor-scaling-r1/individual-results"
     assert historical_raw_path not in active_sources
     assert "/docs/developer/figures/**/individual-results/" in gitignore

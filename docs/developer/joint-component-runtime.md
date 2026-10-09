@@ -70,9 +70,9 @@ is intentionally small and fixed: disjoint mutable cores of 12 atoms, at most
 while a block is solved. Each accepted block is replayed globally, checked for
 monotone roundoff-safe acceptance, and contributes to the existing global A/C
 KKT (`1e-10`), width-gradient (`1e-12`) and eta-confirmation (`1e-10`)
-criteria. Endpoint trust and certification use the existing checks; diagnostic
-controls such as full local work, reverse order and trajectory capture are not
-production configuration.
+criteria. Endpoint trust and certification use the existing checks. The
+at-most-one accepted-update contract is intrinsic; diagnostic controls such as
+reverse order and trajectory capture are not production configuration.
 
 The local solver is part of the FixedNeighbor policy, not a fourth public
 `SearchMethod`. A historical benchmark-only substitution of local
@@ -117,7 +117,7 @@ cost is now local derivative preparation plus reduction, accounting for `83.7%`
 of chain-1024 search and `81.5%` of cube-1024 search.
 
 Production search retains only aggregate counters, final sweep state and the
-endpoint assessment needed by the component route. Full block records, local
+endpoint assessment needed by the component route. Detailed block records, local
 trial trajectories, reverse order and local certification remain opt-in
 experiment/test diagnostics. The preparation and symbolic-reuse counters are
 reported by the matched search-only qualification driver; they are
@@ -349,10 +349,12 @@ describes parameter layouts, nuisance contributions and seed provenance. See the
 `JointAnalysisMetadata` contains optional `JointMapNormalization`, input SHA-256
 values, `JointSoftwareProvenance` and optional `JointSolverProvenance`.
 `JointSolverProvenance` records the explicit search method and, for
-FixedNeighbor, its core size and local-work policy. Current writers additionally
-record the route-symmetric provenance contract, active sparse backend and the
-resolved OperatorPcg or FixedNeighbor policy fields. The current contracts are
-`joint-solver-provenance-v2` and `fixed-neighbor-production-v1`.
+FixedNeighbor, its core size plus legacy local-work provenance when reading an
+older record. Current writers record the route-symmetric provenance contract,
+active sparse backend and the resolved OperatorPcg or FixedNeighbor policy
+fields; current FixedNeighbor records use
+`fixed-neighbor-production-v2` with intrinsic OneAccepted behavior. The current
+contracts are `joint-solver-provenance-v2` and `fixed-neighbor-production-v2`.
 `CaptureJointAnalysisResult`
 records the current library's version/source/configuration/build identity. The
 decoder and exporter preserve saved identity without recalculation. Direct

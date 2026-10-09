@@ -16,7 +16,7 @@ the global default and is never selected by automatic routing.
 | Block order | Forward serial Gauss-Seidel |
 | Maximum sweeps | 30 |
 | Local search | `LegacyCompact` |
-| Local work | `OneAcceptedUpdate` |
+| Local update contract | At most one trusted accepted `LegacyCompact` update per block visit |
 | Acceptance | Existing replay and roundoff-safe monotone acceptance |
 | Convergence | Existing A/C KKT, width-gradient and eta-confirmation checks |
 | Endpoint | Existing trust, certification and `RuntimeConvergence` semantics |
@@ -35,7 +35,7 @@ details.
 | Evidence | Decision | Canonical record |
 | --- | --- | --- |
 | Stationarity confirmation | Eta-only confirmation is safe under the existing `1e-10` change threshold; confirmed endpoints pass the existing gates through the qualified cases | [stationarity summary](figures/joint-fixed-neighbor-stationarity-r1/README.md) |
-| `OneAcceptedUpdate` | Selected over Full and TwoAccepted; all four 256/512 full-endpoint cases passed, while the 1024 comparison remains search-only | [local-work qualification](figures/joint-fixed-neighbor-inexact-qualification-r2/README.md) |
+| Historical local-update selection | Full and TwoAccepted were evaluated as historical alternatives; OneAccepted was selected and is now intrinsic to FixedNeighbor. All four 256/512 full-endpoint cases passed, while the 1024 comparison remains search-only | [local-work qualification](figures/joint-fixed-neighbor-inexact-qualification-r2/README.md) |
 | Outer-core C3 endpoint gate | Cores 12, 16 and historical control 64 passed endpoint, trust, `RuntimeConvergence`, replay and parity checks on chain/cube 256/512 | [outer-core qualification](joint-fixed-neighbor-outer-core-qualification.md) |
 | Outer-core C4 repeated frontier | Core 12 passed the correctness gate and exceeded the 10% search-improvement requirement on every measured topology/size | [C4 summary](figures/joint-fixed-neighbor-core-size-r5/README.md) |
 | Prepared-block behavior | Structural preparation and symbolic reuse are measured separately from fresh numeric factorization; no new convergence criterion was introduced | [prepared-block qualification](joint-benchmark.md) |

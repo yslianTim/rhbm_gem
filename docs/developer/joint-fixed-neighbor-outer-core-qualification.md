@@ -11,7 +11,7 @@ The study was restricted to the production-compatible route:
 
 - `FixedNeighbor` outer blocks
 - `LegacyCompact` local search
-- `OneAcceptedUpdate`
+- at most one trusted accepted local update per block visit
 - forward serial Gauss-Seidel order
 - SPQR and one Eigen thread
 - maximum 30 sweeps

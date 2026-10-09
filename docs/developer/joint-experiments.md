@@ -5,10 +5,11 @@ Rows are experiment units rather than individual output files; the table is
 kept deliberately regular so it can be consumed as a simple pipe-delimited
 inventory. Status is one of `Active`, `Qualified`, `Closed`, or `Unknown`.
 
-Current FixedNeighbor means the qualified production policy: core 12,
-`OneAcceptedUpdate`, Forward serial Gauss-Seidel, 30 maximum sweeps, and local
-`LegacyCompact`. The benchmark and route-frontier drivers use that policy by
-default and record explicit custom overrides as custom or historical policy.
+Current FixedNeighbor means the qualified production policy: core 12, Forward
+serial Gauss-Seidel, 30 maximum sweeps, local `LegacyCompact`, and at most one
+trusted accepted local update per block visit. The benchmark and route-frontier
+drivers use that policy by default; only structural core-size overrides are
+custom benchmark inputs.
 Full/core128 and OneAccepted/core64 are historical evidence only; the latter
 was superseded by the qualified core12 policy.
 
@@ -16,7 +17,7 @@ was superseded by the qualified core12 policy.
 | --- | --- | --- | --- | --- | --- | --- |
 | Joint estimator runtime, persistence, and component regression | Active | Production correctness and provenance | `joint-component-runtime.md`; production C++ tests | `joint_component_runtime.py`; `joint_workflow_cli_smoke.py` | `joint_component_runtime_test.py`; runtime/physical smoke; persistence tests | No tracked execution telemetry |
 | FixedNeighbor stationarity confirmation | Qualified | Locks the existing eta-only confirmation contract | `joint-fixed-neighbor-stationarity-r1/{README.md,analysis.json,summary.csv}` | `joint_fixed_neighbor_stationarity.py` | `joint_fixed_neighbor_stationarity_test.py` | Compact evidence; sweep telemetry is historical |
-| FixedNeighbor OneAcceptedUpdate qualification | Qualified | Supports the production local-work choice | `joint-fixed-neighbor-inexact-local-r1/`; `joint-fixed-neighbor-inexact-qualification-r2/` | `joint_fixed_neighbor_inexact*.py` | `joint_fixed_neighbor_inexact*_test.py` | Compact evidence; the 1024 Full comparison uses a small qualified-historical fixture |
+| FixedNeighbor historical local-update selection evidence | Qualified | Explains why the one-accepted update contract is intrinsic to the production route | `joint-fixed-neighbor-inexact-local-r1/`; `joint-fixed-neighbor-inexact-qualification-r2/` | none | `FixedNeighborBlockCoordinate_test.cpp` | Compact historical evidence; Full and TwoAccepted are alternatives from the completed selection study |
 | FixedNeighbor outer-core qualification | Qualified | Justifies the adopted production core of 12 | `joint-fixed-neighbor-outer-core-qualification.md`; C3/C4 `README.md`, `analysis.json`, `summary.csv` | `joint_fixed_neighbor_outer_core_qualification.py` with `screen`, `endpoint`, and `frontier` phases | `joint_fixed_neighbor_outer_core_qualification_test.py` | r1-r5 current tree keeps compact evidence only; raw execution telemetry is historical |
 | FixedNeighbor prepared-block behavior | Qualified | Preserves prepared mapping and symbolic-reuse contract under the current core12 policy | `joint-fixed-neighbor-experimental.md`; prepared-block structural contract | `joint_fixed_neighbor_prepared_block.py` | `joint_fixed_neighbor_prepared_block_test.py` | Small deterministic contract only; historical large-case output is compact evidence |
 | FixedNeighbor order consistency | Qualified | Confirms production Forward order against the retained diagnostic | `joint-fixed-neighbor-order-r1/` | `joint_fixed_neighbor_order.py` | `joint_fixed_neighbor_order_test.py` | Compact comparison; raw pairs are not a runtime dependency |

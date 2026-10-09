@@ -268,16 +268,19 @@ version or access either input file.
 
 `metadata.solver` records the explicit route as `legacy-compact`, `operator-pcg`
 or `fixed-neighbor`. FixedNeighbor records
-`fixed_neighbor_core_atoms: 12` and
-`fixed_neighbor_local_work: "one-accepted"` for the production policy. The
-field is optional so schema-5 documents created before solver provenance was
-added remain readable and retain an unknown solver route rather than being
-rewritten. Current writers also persist the optional
-`joint-solver-provenance-v2` contract, active sparse backend, resolved
-OperatorPcg rank/preconditioner budgets, and FixedNeighbor's
-`fixed-neighbor-production-v1` policy version, maximum sweeps, forward order
-and `legacy-compact` local search. Readers accept older documents with those
-extension keys absent; they are not inferred during load.
+`fixed_neighbor_core_atoms: 12` and the intrinsic at-most-one trusted accepted
+`LegacyCompact` update per block visit. Current writers use
+`fixed-neighbor-production-v2`; `fixed_neighbor_local_work` is absent or null,
+because it is legacy provenance rather than a current policy input. They also
+persist the optional `joint-solver-provenance-v2` contract, active sparse
+backend, resolved OperatorPcg rank/preconditioner budgets, and FixedNeighbor's
+maximum sweeps, forward order and `legacy-compact` local search.
+
+Older `fixed-neighbor-production-v1` records remain readable and preserve their
+explicit `full`, `one-accepted`, or `two-accepted` local-work provenance. A v2
+record may omit that field or carry transitional `one-accepted`, but explicit
+v2 `full` and `two-accepted` claims are rejected; the decoder never silently
+converts historical provenance into the current contract.
 
 `metadata.map_normalization` is `{requested, applied, divisor}`. The operation is
 `fit_map = input_map / divisor`, with no mean subtraction. An applied operation

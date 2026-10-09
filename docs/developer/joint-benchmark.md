@@ -45,10 +45,10 @@ explicitly through `FitOptions::joint_search_method` or
 `potential_analysis --joint-search fixed-neighbor`. Its production policy is
 core size 12, forward serial Gauss-Seidel order, at most 30 sweeps, and one
 trusted accepted local `LegacyCompact` update per block visit. The benchmark
-and historical experiment drivers still expose broader controls for
-reproduction and attribution; those controls are diagnostic and are not
-production defaults. Search-only measurements remain search-only and cannot
-establish endpoint certification.
+and historical experiment drivers expose only structural core-size overrides;
+the one-update contract is intrinsic rather than a benchmark policy option.
+Search-only measurements remain search-only and cannot establish endpoint
+certification.
 
 The outer-core default was qualified against the historical 64-atom control
 on chain/cube 256, 512 and 1024 workloads. The two finalist cores passed full
@@ -111,8 +111,8 @@ The `fixed` and `solve` profiles accept these internal policy controls:
 
 These controls belong to the global benchmark operator/Schwarz routes. They do
 not re-enable the retired FixedNeighbor-local OperatorPcg, Schwarz or hybrid
-hooks; FixedNeighbor remains the explicit core12/OneAccepted/Forward/
-LegacyCompact production policy.
+hooks; FixedNeighbor remains the explicit core12/Forward/LegacyCompact policy
+with its intrinsic at-most-one trusted accepted local update.
 
 Defaults are `auto`, 128 core atoms, one overlap hop, 512 maximum block atoms,
 512 MiB storage, and 256 MiB scratch. `auto` resolves to bounded rank on SPQR
@@ -133,12 +133,12 @@ workload and stops before its final endpoint assessment. Each writes
 qualification are not run. Search-only results do not establish runtime
 convergence or endpoint qualification. For example:
 
-For `--preconditioner fixed-neighbor`, the benchmark defaults are explicitly
-`--fixed-core-atoms 12` and `--fixed-local-work one`, matching the production
-policy. The resulting `metadata.solver_policy` records the core, local work,
-forward order, 30-sweep budget, `LegacyCompact` local search, and whether the
-policy is `production` or an explicit `custom` override. Historical or research
-comparisons must pass their core and local-work values explicitly.
+For `--preconditioner fixed-neighbor`, the benchmark defaults to
+`--fixed-core-atoms 12`; this is the only FixedNeighbor structural override.
+There is no local-work option. The resulting `metadata.solver_policy` records
+the core, forward order, 30-sweep budget, `LegacyCompact` local search, and
+whether the core-size policy is `production` or an explicit `custom` override.
+Historical Full and TwoAccepted comparisons remain compact evidence only.
 
 ```sh
 python3 tests/integration/joint_benchmark.py \
