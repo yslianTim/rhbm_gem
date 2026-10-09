@@ -60,16 +60,6 @@ double WidthGradient(const rhbm_gem::core::JointFitResult & fit)
 }
 j::value Number(double value)
 {return std::isfinite(value) ? j::value(value) : j::value(nullptr);}
-const char * LocalWorkName(n::FixedNeighborLocalWork work)
-{
-    switch(work)
-    {
-    case n::FixedNeighborLocalWork::Full: return "FullLocalSearch";
-    case n::FixedNeighborLocalWork::OneAcceptedUpdate: return "OneAcceptedLocalUpdate";
-    case n::FixedNeighborLocalWork::TwoAcceptedUpdates: return "TwoAcceptedLocalUpdates";
-    }
-    return "FullLocalSearch";
-}
 std::size_t DerivativeTileRows()
 {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -286,7 +276,6 @@ void AddSparseAttributionJson(j::object & output,const n::SparseWork & work)
 void Write(const std::filesystem::path &,const j::value &);
 j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,bool compare_global,
     bool scaling_only=false,bool reverse_order=false,bool record_final_state=false,
-    bool attribution=false,n::FixedNeighborLocalWork local_work=n::FixedNeighborLocalWork::OneAcceptedUpdate,
     std::size_t core_atoms=12)
 {
     auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
@@ -295,41 +284,21 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     n::Vector initial_eta= n::Vector::Constant(atoms,std::log(.55)); n::FixedNeighborPolicy neighbor_policy;
     neighbor_policy.core_atoms=core_atoms;
     neighbor_policy.order=reverse_order ? n::FixedNeighborBlockOrder::Reverse : n::FixedNeighborBlockOrder::Forward;
-    neighbor_policy.local_work=local_work;
-    neighbor_policy.capture_local_trajectory=attribution || local_work!=n::FixedNeighborLocalWork::Full;
+    neighbor_policy.capture_local_trajectory=true;
     neighbor_policy.assess_final_endpoint=!scaling_only;
     neighbor_policy.collect_telemetry=true;
     j::array progress_sweeps;
-    j::array local_block_snapshots;
     const auto progress_path=std::filesystem::path(output_path.string()+".progress.json");
     neighbor_policy.sweep_observer=[&](const auto & sweep) {
         progress_sweeps.push_back(SweepJson(sweep));
         j::object progress{{"topology",topology},{"atoms",atoms},
             {"rows",problem.Input().observations.size()},{"parameter_count",3*atoms},
             {"sweeps_completed",progress_sweeps.size()},{"sweep_telemetry",progress_sweeps}};
-        if(attribution) progress["local_block_telemetry"]=local_block_snapshots;
         Write(progress_path,progress);
         std::cerr<<topology<<'-'<<atoms<<" FixedNeighbor sweep "<<progress_sweeps.size()
             <<" KKT="<<sweep.global_ac_kkt<<" width-grad="<<sweep.global_width_gradient_inf_norm
             <<" seconds="<<sweep.wall_seconds<<'\n';
     };
-    if(attribution)
-        neighbor_policy.state_observer=[&](std::size_t sweep,const n::BlockCoordinateState & state,
-            const n::FixedNeighborBlockSweep & sweep_record,const std::vector<n::FixedNeighborBlockRecord> & blocks) {
-            (void)state; (void)sweep_record;
-            for(const auto & block:blocks) if(block.sweep==sweep)
-            {
-                j::object snapshot{{"sweep",block.sweep},{"block",block.block},
-                    {"affected_rows",block.affected_rows},
-                    {"profile_factor_seconds",Number(block.profile_factor_seconds)},
-                    {"profile_trials",ProfileTrialsJson(block.profile_trials)},
-                    {"accepted",block.accepted},{"status",block.status},{"reason",block.reason}};
-                local_block_snapshots.push_back(std::move(snapshot));
-            }
-            Write(progress_path,j::object{{"topology",topology},{"atoms",atoms},
-                {"sweeps_completed",progress_sweeps.size()},{"sweep_telemetry",progress_sweeps},
-                {"local_block_telemetry",local_block_snapshots}});
-        };
     std::cerr<<topology<<'-'<<atoms<<" FixedNeighbor started\n";
     n::SparseWorkForTesting()={};
     auto started=Clock::now(); const auto neighbor=n::SearchFixedNeighbor(problem,initial_eta,neighbor_policy);
@@ -414,8 +383,6 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                         static_cast<double>(neighbor.work.local_problem_count) : 0.)},
                     {"maximum",neighbor.work.maximum_local_atoms}}},
                 {"derivative_tile_rows",DerivativeTileRows()},
-                {"local_trajectory_telemetry",attribution},
-                {"local_work_policy",LocalWorkName(local_work)},
                 {"total_elapsed_seconds",neighbor_seconds},
                 {"maximum_local_rows",std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),std::size_t{},
                     [](std::size_t maximum,const auto & sweep){return std::max(maximum,sweep.maximum_block_rows);})},
@@ -436,7 +403,6 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             {"workspace_mode","persistent"},
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},
             {"block_order",reverse_order ? "reverse" : "forward"},
-            {"local_work_policy",LocalWorkName(local_work)},
             {"measurement_scope","fixed-neighbor-search-only"},
             {"fixed_neighbor",scaling_json},
             {"peak_rss_mb",PeakRssMb()}};
@@ -454,7 +420,6 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"search_converged",neighbor.search_converged},
         {"workspace_mode","persistent"},
         {"block_order",reverse_order ? "reverse" : "forward"},
-        {"local_work_policy",LocalWorkName(local_work)},
         {"search_reason",neighbor.reason},{"sweeps",neighbor.sweeps.size()},
         {"first_order_stationarity_sweep",neighbor.first_order_stationarity_sweep},
         {"confirmed_stationarity_sweep",neighbor.confirmed_stationarity_sweep},
@@ -539,34 +504,25 @@ int main(int argc,char ** argv)
 {
     try {
         if((argc<5 || argc>6) || (std::string(argv[1])!="--case" && std::string(argv[1])!="--neighbor-only" &&
-            std::string(argv[1])!="--scaling-only" && std::string(argv[1])!="--full-attribution" &&
-            std::string(argv[1])!="--inexact-one" && std::string(argv[1])!="--inexact-one-endpoint" &&
-            std::string(argv[1])!="--inexact-two" && std::string(argv[1])!="--inexact-one-search" &&
+            std::string(argv[1])!="--scaling-only" &&
             std::string(argv[1])!="--neighbor-forward" && std::string(argv[1])!="--neighbor-reverse" &&
             std::string(argv[1])!="--scaling-forward" && std::string(argv[1])!="--scaling-reverse"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--scaling-only|--full-attribution|--inexact-one|--inexact-one-endpoint|--inexact-two|--inexact-one-search|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [OUTER_CORE_ATOMS]");
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--scaling-only|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [OUTER_CORE_ATOMS]");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
         const std::string mode(argv[1]);
-        const bool local_search_mode=mode=="--inexact-one-search" || mode=="--inexact-one-endpoint";
-        if(argc>=6 && !local_search_mode && mode!="--neighbor-only" && mode!="--scaling-only" &&
+        if(argc>=6 && mode!="--neighbor-only" && mode!="--scaling-only" &&
             mode!="--neighbor-forward" && mode!="--neighbor-reverse" && mode!="--scaling-forward" &&
             mode!="--scaling-reverse")
             throw std::invalid_argument("OUTER_CORE_ATOMS is supported only with a FixedNeighbor search mode.");
         const std::size_t core_atoms=argc>=6 ? static_cast<std::size_t>(std::stoul(argv[5])) : 12;
         if(core_atoms==0) throw std::invalid_argument("CORE_ATOMS must be positive.");
         Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--case",
-            mode=="--scaling-only" || mode=="--scaling-forward" || mode=="--scaling-reverse" ||
-                mode=="--inexact-one-search",
+            mode=="--scaling-only" || mode=="--scaling-forward" || mode=="--scaling-reverse",
             mode=="--neighbor-reverse" || mode=="--scaling-reverse",
             mode=="--neighbor-forward" || mode=="--neighbor-reverse" ||
-                mode=="--scaling-forward" || mode=="--scaling-reverse" ||
-                local_search_mode,
-            mode=="--full-attribution",
-            mode=="--inexact-two" ? n::FixedNeighborLocalWork::TwoAcceptedUpdates :
-                (mode=="--inexact-one" || local_search_mode) ?
-                    n::FixedNeighborLocalWork::OneAcceptedUpdate : n::FixedNeighborLocalWork::Full,
+                mode=="--scaling-forward" || mode=="--scaling-reverse",
             core_atoms));
         std::cout<<argv[3]<<'-'<<argv[4]<<" fixed-neighbor experiment complete\n";
         return 0;
