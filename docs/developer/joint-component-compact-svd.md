@@ -12,7 +12,7 @@ The independent reference computes its own weighted reduction and retains the
 singular-vector factors needed by its compact free-face least-squares solve.
 
 The private compact helper uses JacobiSVD when the compact dimension is below
-16 and Eigen BDCSVD otherwise. The current SPQR-backed path uses this dispatch;
+16 and Eigen BDCSVD otherwise. The current EIGEN-backed path uses this dispatch;
 there is no user-facing SVD option or additional dependency. The direct dense
 oracle, block diagnostic, endpoint spectra, local-correction SVD and LM are
 unchanged.
@@ -46,7 +46,7 @@ switching size. Unsafe floating-point optimization is not used; see the
 Current internal work counters include reference QR, per-face compact
 reduction, derivative compact extraction/reduction, reference and free-design
 SVD, reference solve, Jacobi retry and cancellation reduction. Counters cover
-the current SPQR path, including early returns and exceptions. An SVD count is a
+the current EIGEN path, including early returns and exceptions. An SVD count is a
 helper invocation; BDCSVD attempts and Jacobi retries have separate counts.
 
 derivative_inclusive_seconds covers the whole preparation. Reference phase
@@ -58,7 +58,7 @@ of the factors. OS peak RSS is not an allocation-level attribution.
 
 ## Current measurement
 
-Use the current FixedNeighbor solve profile in the SPQR build:
+Use the current FixedNeighbor solve profile in the EIGEN-only build:
 
     python3 tests/integration/joint_benchmark.py \
       --profile solve --case chain-8 \

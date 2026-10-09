@@ -92,11 +92,8 @@ index maps, identities, support domain and rank shape. Structural partitioning
 then creates one prepared block view per block, including its core and affected
 row mappings, local `Domain` and context template. A sweep still rebuilds the
 state-dependent `eta`, `beta`, effective response and numerical design; it does
-not rebuild those structural views. Each prepared block also owns a persistent
-linear workspace. SPQR symbolic analysis may be reused when the block pattern
-and scope match, while every new width state still performs a fresh numeric
-factorization and solve. No numeric factor, active set or coefficient solution
-is carried across sweeps.
+not rebuild those structural views. No numeric factor, active set or coefficient
+solution is carried across sweeps.
 
 The repeated workspace-residency study is closed as Route C: chain/cube at
 256/512/1024, one warmup plus three measurements per case, passed its
@@ -111,9 +108,9 @@ of chain-1024 search and `81.5%` of cube-1024 search.
 Production search retains only aggregate counters, final sweep state and the
 endpoint assessment needed by the component route. Detailed block records, local
 trial trajectories, reverse order and local certification remain opt-in
-experiment/test diagnostics. The preparation and symbolic-reuse counters are
-reported by the matched search-only qualification driver; they are
-implementation attribution, not new convergence criteria.
+experiment/test diagnostics. The preparation and mapping counters are reported
+by the matched search-only qualification driver; they are implementation
+attribution, not new convergence criteria.
 
 Within one immutable problem, a full single component can share its assessment
 with assembly only when observations, structural support, identities, state,
@@ -233,7 +230,7 @@ The current numerical path is:
 ```text
 FixedNeighbor
   -> local LegacyCompact profile search
-  -> LinearSolve / SparseFactor (SPQR)
+  -> LinearSolve / EIGEN sparse QR
   -> TiledDerivative and its cancellation-safe tiled fallback
   -> global replay, endpoint certification, RuntimeConvergence
 ```
@@ -241,15 +238,15 @@ FixedNeighbor
 These stages preserve the original parent rank context and full residual norm.
 They do not cut component edges or use a size-based route. The
 [sparse-backend guide](joint-component-sparse-backend.md) documents the fixed
-SPQR factorization; the former profile-operator material is historical evidence,
-not a current Joint route.
+EIGEN implementation; the former profile-operator material is historical
+evidence, not a current Joint route.
 
 The EIGEN/SPQR comparison was a one-time backend qualification, not a current
-runtime parity contract. Permanent tests assert the single SPQR path and the
-existing numerical contract: trusted-state availability and required runtime
-checks must agree, missing states remain explicit, and the production KKT,
-width-gradient, eta-confirmation, replay, endpoint-certification and
-`RuntimeConvergence` thresholds remain unchanged.
+runtime selector. Permanent tests assert the single EIGEN path and the existing
+numerical contract: trusted-state availability and required runtime checks must
+agree, missing states remain explicit, and the production KKT, width-gradient,
+eta-confirmation, replay, endpoint-certification and `RuntimeConvergence`
+thresholds remain unchanged.
 
 ## Routine regression
 
@@ -315,7 +312,7 @@ required; a local certificate cannot promote a missing or failed component.
 Historical research results and retrieval provenance are indexed in the
 [canonical evidence document](joint-component-evidence.md). Current
 sparse-factorization behavior and benchmark commands are documented by the
-sparse-backend and benchmark guides. Profile-operator and EIGEN comparison
+sparse-backend and benchmark guides. Profile-operator and SPQR comparison
 material is historical evidence only.
 
 ## Saved production outcomes
@@ -349,7 +346,7 @@ describes parameter layouts, nuisance contributions and seed provenance. See the
 values, `JointSoftwareProvenance` and optional `JointSolverProvenance`.
 `JointSolverProvenance` records the current FixedNeighbor estimator and, when
 reading an older record, preserves its historical route and local-work fields.
-Current writers record the fixed SPQR sparse backend and the FixedNeighbor policy
+Current writers record the fixed EIGEN sparse backend and the FixedNeighbor policy
 fields; current FixedNeighbor records use `fixed-neighbor-production-v2` with
 intrinsic OneAccepted behavior and the `joint-solver-provenance-v3` contract.
 The historical `joint-solver-provenance-v2` contract remains readable for

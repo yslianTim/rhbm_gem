@@ -31,6 +31,15 @@ completed, despite a moderate RSS increase. The dependency and deployment
 cost is accepted for that production-level time benefit. Historical operator,
 ordering, and benchmark campaigns are not part of this decision.
 
+## Superseded production choice
+
+The original qualification selected SPQR under a wall-time-first policy. The
+measurement files and this historical decision are retained unchanged.
+Production later changed its policy to prioritize memory footprint, dependency
+simplicity, installation portability and maintenance surface over the measured
+wall-time benefit. Under that superseding policy, EIGEN is the sole current
+Joint sparse backend; SPQR is historical qualification evidence only.
+
 `analysis.json`, `summary.csv`, and `campaign-manifest.json` are the complete
 compact evidence. Individual result files and process logs are intentionally
 not committed.

@@ -260,7 +260,7 @@ version or access either input file.
 `LegacyCompact` update per block visit. Current writers use
 `fixed-neighbor-production-v2`; `fixed_neighbor_local_work` is absent or null,
 because it is legacy provenance rather than a current policy input. They also
-persist the `joint-solver-provenance-v3` contract, fixed SPQR sparse
+persist the `joint-solver-provenance-v3` contract, fixed EIGEN sparse
 backend, and FixedNeighbor's maximum sweeps, forward order and
 `legacy-compact` local search. Operator, rank, preconditioner and Schwarz
 controls are historical provenance only and are not emitted by current

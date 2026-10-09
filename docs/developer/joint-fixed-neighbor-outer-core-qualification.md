@@ -13,13 +13,17 @@ The study was restricted to the production-compatible route:
 - `LegacyCompact` local search
 - at most one trusted accepted local update per block visit
 - forward serial Gauss-Seidel order
-- SPQR and one Eigen thread
+- historical SPQR backend and one Eigen thread
 - maximum 30 sweeps
 
 OperatorPcg, local Schwarz, hybrid routing, replay optimization and threshold
 changes were excluded. The existing A/C KKT (`1e-10`), width-gradient
 (`1e-12`), eta confirmation, endpoint, RuntimeConvergence and replay
 semantics were preserved.
+
+This qualification records the source-era backend used for the core-size
+study. The current production backend is EIGEN; the core12 policy and all
+FixedNeighbor numerical thresholds remain unchanged.
 
 ## Qualification gates
 

@@ -38,7 +38,7 @@ details.
 | Historical local-update selection | Full and TwoAccepted were evaluated as historical alternatives; OneAccepted was selected and is now intrinsic to FixedNeighbor. All four 256/512 full-endpoint cases passed, while the 1024 comparison remains search-only | [local-work qualification](figures/joint-fixed-neighbor-inexact-qualification-r2/README.md) |
 | Outer-core C3 endpoint gate | Cores 12, 16 and historical control 64 passed endpoint, trust, `RuntimeConvergence`, replay and parity checks on chain/cube 256/512 | [outer-core qualification](joint-fixed-neighbor-outer-core-qualification.md) |
 | Outer-core C4 repeated frontier | Core 12 passed the correctness gate and exceeded the 10% search-improvement requirement on every measured topology/size | [C4 summary](figures/joint-fixed-neighbor-core-size-r5/README.md) |
-| Prepared-block behavior | Structural preparation and symbolic reuse are measured separately from fresh numeric factorization; no new convergence criterion was introduced | [prepared-block qualification](joint-benchmark.md) |
+| Prepared-block behavior | Structural preparation and mapping counts are checked separately from numerical solving; no new convergence criterion was introduced | [prepared-block qualification](joint-benchmark.md) |
 | Forward/reverse order | All five pairs confirmed convergence; maximum eta difference was `3.75e-11` and maximum scaled A/C difference was `2.09e-12`; full endpoint/runtime parity passed through 512 | [order summary](figures/joint-fixed-neighbor-order-r1/README.md) |
 | Fixed-B replay floor | The roundoff-aware acceptance contract and its regression evidence remain unchanged | [Fixed-B requalification](figures/joint-fixed-b-requal-r1/analysis.json) |
 
@@ -78,7 +78,7 @@ define a production option or a current CTest runtime contract.
 The negative evidence is intentionally numeric where it affects a decision.
 The retired FixedNeighbor-local OperatorPcg, Schwarz and hybrid hooks, as well
 as the global OperatorPcg/Schwarz route, are removed from the current tree.
-The shared sparse backend remains current because FixedNeighbor and its local
+The EIGEN sparse backend remains current because FixedNeighbor and its local
 LegacyCompact profile search still use it. There is no hidden FixedNeighbor
 policy switch. The old campaign wrappers, per-run JSON, progress files and
 process logs are not required to interpret the current route. The current repository keeps canonical

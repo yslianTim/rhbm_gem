@@ -39,10 +39,12 @@ checkout.
 
 The active benchmark separates FixedNeighbor search-only attribution, production
 solve with endpoint certification and `RuntimeConvergence`, workflow/persistence
-smoke, and complete-command smoke. Current measurements use the shared EIGEN or
-SPQR backend and the unchanged production policy: core 12, Forward order, 30
-maximum sweeps, local `LegacyCompact`, and at most one trusted local update per
-block visit.
+smoke, and complete-command smoke. Current measurements use the EIGEN backend
+and the unchanged production policy: core 12, Forward order, 30 maximum
+sweeps, local `LegacyCompact`, and at most one trusted local update per block
+visit. The retained EIGEN/SPQR
+qualification is historical evidence only; it does not define a current
+selector or comparison run.
 
 Rank certification, Krylov iteration scaling, operator throughput, Schwarz
 geometry and operator-factor residency are closed historical dimensions. Their
@@ -90,7 +92,7 @@ state-availability outcomes.
 | Endpoint reference | The 43.81-minute historical campaign completed all 18 fixed-state audits and all 128/512 analysis-export comparisons. Single-128 changed from 5.229 s to 4.912 s; single-512 from 307.805 s to 300.564 s, with peak RSS from 2.500 GiB to 1.872 GiB for single-512. Search reference evaluations changed from six to zero. Detailed comparisons and archive provenance remain in the [summary](figures/joint-reference-acceptance/summary.json) and [archive inventory](figures/joint-reference-acceptance/archives.json). | These are incremental historical results on the recorded host; search and endpoint assessment remained the dominant costs. | [Compact SVD](joint-component-compact-svd.md). |
 | Profile operator | The experiment-specific receipts have been retired from the current tree. The summary below is the canonical historical record. All 18 fixed-state audits passed, establishing operator/action parity on finite recorded controls. The 10,000-atom workload was preparation-only and does not prove solve, search, or full-workflow scalability. Historical 6Z6U runs hit the sampled RSS watchdog and established no numerical verdict. | Fixed-state and preparation-only results do not establish full-workflow scalability or a 6Z6U numerical outcome. | [Profile operator](joint-profile-operator.md). |
 | Operator LM and Schwarz search | The experiment-specific receipts have been retired from the current tree. The summary below is the canonical historical record. The full promotion campaign was incomplete and required comparisons were not all run. The historical Single-512 performance gate did not support promotion; the qualified FixedNeighbor route was subsequently adopted as the production default. No 6Z6U promotion conclusion was established. | The campaign is closed and does not define a current solver route. | [Operator search](joint-operator-search.md). |
-| Bounded SPQR rank prototype | Small controls established full-rank and deficient decisions against the dense oracle. Two representative SPQR prototypes returned Unavailable before completing the reconstruction certificate. | Unavailable is not deficient; no definitive 128-atom or 512/2,000-atom rank result or scaling guarantee was established. A separate Single-512 Schwarz attempt exceeded the sampled RSS threshold on both backends and had no endpoint. The rank prototype is historical; shared sparse factorization remains current. | [Sparse backend](joint-component-sparse-backend.md). |
+| Bounded SPQR rank prototype | Small controls established full-rank and deficient decisions against the dense oracle. Two representative SPQR prototypes returned Unavailable before completing the reconstruction certificate. | Unavailable is not deficient; no definitive 128-atom or 512/2,000-atom rank result or scaling guarantee was established. A separate Single-512 Schwarz attempt exceeded the sampled RSS threshold on both backends and had no endpoint. The rank prototype is historical; the current EIGEN sparse factorization remains current. | [Sparse backend](joint-component-sparse-backend.md). |
 
 These fixed-state results must not be confused with the full-command resource
 envelope in §6.

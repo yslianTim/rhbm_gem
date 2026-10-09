@@ -8,36 +8,30 @@ EIGEN comparison, and bounded-rank results are indexed in the
 
 ## Fixed production backend
 
-The current Joint sparse factorization backend is SPQR. SuiteSparseQR 4.x,
-CHOLMOD and their transitive dependencies are required at configure time;
-missing dependencies fail configuration. There is no Joint sparse-backend
-selector, runtime fallback, or automatic routing.
+The current Joint sparse factorization backend is EIGEN. It is the sole
+production implementation; there is no sparse-backend selector, runtime
+fallback, or automatic routing. The current build does not search for, link,
+or install SuiteSparseQR, SPQR, CHOLMOD, or SuiteSparse.
 
 ```bash
-cmake -S . -B build/joint-spqr -DCMAKE_BUILD_TYPE=Release \
+cmake -S . -B build/joint-eigen -DCMAKE_BUILD_TYPE=Release \
   -DRHBM_GEM_ENABLE_UMAP=OFF
 ```
-
-SPQR is GPL-2.0-or-later (alternate licenses are available from its author).
-See the third-party notices. Installed shared builds need the linked runtime
-libraries. Installed static builds resolve dependency targets through the
-package configuration.
 
 ## Current numerical contract
 
 The backend supplies the sparse factorization, compact reduction and derivative
-work needed by the existing local profile search. `SparseFactor`,
-`StructuralPartition`, `CompactSvd`, `TiledDerivative` and `LinearSolve` are
-retained where they have current callers. Symbolic reuse is scoped to matching
-matrix structure and policy; each new width state still performs fresh numeric
-factorization and solve work. No numeric factor, active set or coefficient
+work needed by the existing local profile search. `StructuralPartition`,
+`CompactSvd`, `TiledDerivative` and `LinearSolve` retain their current callers;
+the old SPQR-specific factor residency, projected-tail and workspace APIs are
+not part of the production surface. Each width state performs its qualified
+EIGEN solve independently. No numeric factor, active set or coefficient
 solution is carried across FixedNeighbor sweeps.
 
-The SPQR implementation shares the estimator's observation domain,
+The EIGEN implementation shares the estimator's observation domain,
 parameterization, objective, threshold policy, endpoint certification and
-`RuntimeConvergence` contract. Configuration fingerprints and benchmark
-metadata record `sparse_backend=SPQR` as scientific provenance, not as a
-runtime choice.
+`RuntimeConvergence` contract. Current configuration fingerprints and benchmark
+metadata record `sparse_backend=EIGEN`.
 
 FixedNeighbor's production numerical settings remain independent of backend
 selection: core 12, Forward order, 30 maximum sweeps, one trusted accepted
@@ -50,14 +44,17 @@ The one-time current FixedNeighbor qualification is retained as compact
 promotion evidence in
 [`joint-fixed-neighbor-backend-qualification-r1/`](figures/joint-fixed-neighbor-backend-qualification-r1/).
 Small chain/cube, observable/nuisance, and partial-selection cases passed
-with numerical parity. SPQR also showed a reproducible current-production
-wall-time advantage on the bounded chain/cube resource probes, while using
-more RSS; both backends timed out on the bounded 512 probes. That result,
-along with the correctness and completion checks, supports the SPQR choice
-despite its SuiteSparse/CHOLMOD deployment cost.
+with numerical parity. The completed 128/256 resource probes showed a
+reproducible SPQR wall-time advantage, while EIGEN consistently used less
+peak RSS; both backends timed out on the bounded 512 probes. The original
+qualification selected SPQR under a wall-time-first policy. Production later
+changed its policy to prioritize memory footprint, dependency simplicity,
+installation portability and maintenance surface over that measured
+wall-time benefit, so EIGEN is now the sole backend.
 
-The EIGEN comparison is historical promotion evidence only. EIGEN is not a
-current selectable build or regression backend.
+The qualification measurements and historical `chosen_backend=SPQR` decision
+remain unchanged in the canonical evidence. They are retained as historical
+readability and provenance, not as a current build or regression selector.
 
 ## Historical rank and operator work
 
@@ -71,8 +68,8 @@ available for provenance in the
 
 This cleanup does not remove rank or identifiability evidence that is part of
 the current endpoint assessment. It removes only the operator-only
-rank/preconditioner infrastructure; shared sparse factorization remains active
-because the current estimator still uses it.
+rank/preconditioner infrastructure; the current estimator uses the EIGEN
+sparse implementation.
 
 ## Current verification
 
@@ -85,6 +82,7 @@ python3 tests/integration/joint_benchmark.py \
 ```
 
 The benchmark wrapper has no sparse-backend, rank, operator, preconditioner or
-Schwarz modes. Focused C++ tests cover the SPQR factorization, compact
+Schwarz modes. Focused C++ tests cover the EIGEN linear solve, compact
 assessment, prepared blocks, endpoint certification and FixedNeighbor
-regressions. The EIGEN comparison is not regenerated as a current test.
+regressions. The historical EIGEN/SPQR comparison is not regenerated as a
+current test.

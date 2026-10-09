@@ -46,7 +46,7 @@ fixed_neighbor_block_order = forward
 fixed_neighbor_maximum_sweeps = 30
 fixed_neighbor_local_search = LegacyCompact
 fixed_neighbor_policy = production
-sparse_backend = SPQR
+sparse_backend = EIGEN
 ```
 
 FixedNeighbor visits structural blocks in Forward order. Each visit runs the
@@ -65,9 +65,9 @@ build metadata, source provenance, and the normalized numerical result. Use
 measurements; generated output belongs in the build or output tree rather than
 in the source tree.
 
-The sparse backend is fixed to SPQR in current builds. There is no backend
-command-line option or CMake selector; EIGEN appears only in the historical
-qualification evidence.
+The sparse backend is fixed to EIGEN in current builds. There is no backend
+command-line option or CMake selector. SPQR appears only in the retained
+historical qualification evidence and legacy provenance decoder.
 
 ## Current option boundary
 
