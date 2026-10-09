@@ -31,8 +31,8 @@ def runtime_expected(expected):
     return out
 
 
-def backend_differences(expected, actual, scale):
-    """Fixed backend contract; historical search traces remain in differences()."""
+def runtime_differences(expected, actual, scale):
+    """Fixed runtime contract; historical search traces remain in differences()."""
     delta = []
     for key in ('usable_state', 'runtime_convergence', 'runtime_checks'):
         if (key in expected) != (key in actual) or expected.get(key) != actual.get(key):
@@ -97,18 +97,18 @@ def regression(args):
             expected = runtime_expected(cases[case]['expected'])
             scale = max(1., np.linalg.norm(data['y64' if case.endswith('double') else 'y32']))
             delta = (differences(expected, actual['record']) if args.strict_history else
-                     backend_differences(expected, actual['record'], scale))
+                     runtime_differences(expected, actual['record'], scale))
             if not args.strict_history:
-                for parity in actual['backend_parity'].values():
-                    require(parity['status'] != 'failed', 'Same-state backend parity failed: '+str(parity))
+                for parity in actual['derivative_parity'].values():
+                    require(parity['status'] != 'failed', 'Same-state derivative parity failed: '+str(parity))
                     if expected['runtime_convergence'] == 'passed':
-                        require(parity['status'] == 'passed', 'Missing backend parity for a converged endpoint')
+                        require(parity['status'] == 'passed', 'Missing derivative parity for a converged endpoint')
             require(actual['api_contract_passed'] and not delta, dataset+'/'+case+': '+str(delta[:20]))
             old_state = expected.get('last_trusted_state')
             results.append(dict(dataset=dataset, case=case, passed=True,
                                 endpoint_same_active_face=(old_state['active_atoms'] == state['active_atoms']) if old_state and state else None))
     require(results, 'No regression cases selected')
-    result = dict(passed=True, cases=results, oracle='pre-extraction frozen component states', comparison='strict-history' if args.strict_history else 'backend-numerical')
+    result = dict(passed=True, cases=results, oracle='pre-extraction frozen component states', comparison='strict-history' if args.strict_history else 'runtime-numerical')
     write(args.work_dir/'summary.json', result)
     return result
 

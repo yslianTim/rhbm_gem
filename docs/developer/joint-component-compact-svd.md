@@ -12,9 +12,10 @@ The independent reference computes its own weighted reduction and retains the
 singular-vector factors needed by its compact free-face least-squares solve.
 
 The private compact helper uses JacobiSVD when the compact dimension is below
-16 and Eigen BDCSVD otherwise. Both sparse backends use this dispatch; there is
-no user-facing SVD option or additional dependency. The direct dense oracle,
-block diagnostic, endpoint spectra, local-correction SVD and LM are unchanged.
+16 and Eigen BDCSVD otherwise. The current SPQR-backed path uses this dispatch;
+there is no user-facing SVD option or additional dependency. The direct dense
+oracle, block diagnostic, endpoint spectra, local-correction SVD and LM are
+unchanged.
 
 Rank and solve use the original caller's relative threshold, including the
 original observation dimensions and any absolute-threshold override. Compact
@@ -45,7 +46,7 @@ switching size. Unsafe floating-point optimization is not used; see the
 Current internal work counters include reference QR, per-face compact
 reduction, derivative compact extraction/reduction, reference and free-design
 SVD, reference solve, Jacobi retry and cancellation reduction. Counters cover
-both EIGEN and SPQR, including early returns and exceptions. An SVD count is a
+the current SPQR path, including early returns and exceptions. An SVD count is a
 helper invocation; BDCSVD attempts and Jacobi retries have separate counts.
 
 derivative_inclusive_seconds covers the whole preparation. Reference phase
@@ -57,14 +58,13 @@ of the factors. OS peak RSS is not an allocation-level attribution.
 
 ## Current measurement
 
-Use the unified fixed-state profile in each backend build:
+Use the current FixedNeighbor solve profile in the SPQR build:
 
     python3 tests/integration/joint_benchmark.py \
-      --profile fixed --case baseline:first-stage-double \
-      --build-dir build/joint-compact-eigen --output build/compact-eigen.json
-    python3 tests/integration/joint_benchmark.py \
-      --profile fixed --case baseline:first-stage-double \
-      --build-dir build/joint-compact-spqr --output build/compact-spqr.json
+      --profile solve --case chain-8 \
+      --build-dir build/qualification --output build/joint-solve.json
 
+The one-time EIGEN comparison is retained in the compact
+[backend qualification evidence](figures/joint-fixed-neighbor-backend-qualification-r1/).
 Historical campaign results, limitations, and source provenance are indexed in
 the [canonical historical evidence](joint-component-evidence.md).

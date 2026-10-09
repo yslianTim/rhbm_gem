@@ -276,10 +276,6 @@ namespace {
 using Clock=std::chrono::steady_clock;
 double Seconds(Clock::time_point t) {return std::chrono::duration<double>(Clock::now()-t).count();}
 using LongSparse=Eigen::SparseMatrix<double,Eigen::ColMajor,int64_t>;
-int ActiveOrdering()
-{
-    return SPQR_ORDERING_COLAMD;
-}
 cholmod_sparse View(LongSparse & a)
 {
     cholmod_sparse v{}; v.nrow=static_cast<std::size_t>(a.rows()); v.ncol=static_cast<std::size_t>(a.cols());
@@ -454,7 +450,7 @@ std::shared_ptr<FreeDesignFactor> LinearWorkspace::Factor(const Sparse & a,const
             ResourcePhase linear_stage("linear-symbolic",true,a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
             ResourcePhase stage("spqr-symbolic",true,a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
             RecordSparseShape("free-design",a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
-            s.qr=SuiteSparseQR_symbolic<double>(ActiveOrdering(),true,&view,&s.cc);
+            s.qr=SuiteSparseQR_symbolic<double>(SPQR_ORDERING_COLAMD,true,&view,&s.cc);
             work.symbolic_seconds+=Seconds(start);
         }
         if(!s.qr) throw std::runtime_error("SPQR symbolic analysis failed");
@@ -514,7 +510,7 @@ std::shared_ptr<FreeDesignFactor> FreeDesignFactor::Fixed(const Sparse & a,const
         ResourcePhase stage("spqr-fixed-factor",true,a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
         RecordSparseShape("free-design",a.rows(),a.cols(),static_cast<std::size_t>(a.nonZeros()));
         WorkTimer timer(work.fixed_factor_seconds);
-        s.fixed_rank=static_cast<int>(SuiteSparseQR<double>(ActiveOrdering(),0,static_cast<int64_t>(a.cols()),
+        s.fixed_rank=static_cast<int>(SuiteSparseQR<double>(SPQR_ORDERING_COLAMD,0,static_cast<int64_t>(a.cols()),
             &view,&r,&s.permutation,&s.h,&s.hpinv,&s.tau,&s.cc));
     }
     if(r)
@@ -683,7 +679,7 @@ ProjectedTailQrResultForTesting FreeDesignFactor::ProjectedTailQrForTesting(
             const auto symbolic_started=Clock::now();
             RecordSparseShape("projected-tail",tail_state->design.rows(),tail_state->design.cols(),
                 static_cast<std::size_t>(tail_state->design.nonZeros()));
-            tail_state->qr=SuiteSparseQR_symbolic<double>(ActiveOrdering(),false,&tail_view,&tail_state->cc);
+            tail_state->qr=SuiteSparseQR_symbolic<double>(SPQR_ORDERING_COLAMD,false,&tail_view,&tail_state->cc);
             result.tail_symbolic_seconds=Seconds(symbolic_started);
             work.symbolic_seconds+=result.tail_symbolic_seconds;
         }

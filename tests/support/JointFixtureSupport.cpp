@@ -29,7 +29,7 @@ std::vector<std::vector<double>> Table(const fs::path & path)
     return rows;
 }
 
-j::object BackendParity(const Domain & domain,const Vector & y,const j::value & state,const EvaluationContext & context)
+j::object DerivativeParity(const Domain & domain,const Vector & y,const j::value & state,const EvaluationContext & context)
 {
     if(state.is_null()) return {{"status","unavailable"},{"reason","missing-trusted-state"}};
     const auto e=runtime::EvaluateState(domain,y,Parse(state.at("eta")),Parse(state.at("beta")),context);
@@ -183,9 +183,9 @@ void RunFrozenFixture(const fs::path & path,const std::string & name,const fs::p
             if(std::abs(value-objective)>1e-15*(1+objective)) throw std::runtime_error("Public objective normalization differs.");
     }
     else if(result.prediction || result.objective) throw std::runtime_error("Failed component fabricated a complete prediction.");
-    const j::object parity{{"historical_endpoint",BackendParity(in.domain,y,cases.at(name).at("expected").at("last_trusted_state"),context)},
-        {"actual_endpoint",BackendParity(in.domain,y,record.at("last_trusted_state"),context)}};
+    const j::object parity{{"historical_endpoint",DerivativeParity(in.domain,y,cases.at(name).at("expected").at("last_trusted_state"),context)},
+        {"actual_endpoint",DerivativeParity(in.domain,y,record.at("last_trusted_state"),context)}};
     fs::create_directories(output.parent_path());
-    Write(output,j::object{{"dataset",in.name},{"case",name},{"record",record},{"census",Census(in.domain,partition,context)},{"api_contract_passed",true},{"backend_parity",parity}});
+    Write(output,j::object{{"dataset",in.name},{"case",name},{"record",record},{"census",Census(in.domain,partition,context)},{"api_contract_passed",true},{"derivative_parity",parity}});
 }
 }
