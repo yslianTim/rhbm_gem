@@ -187,8 +187,6 @@ j::object ProfileRoleWorkJson(const n::ProfileRoleWork & work)
     return {{"evaluations",work.evaluations},{"evaluation_seconds",Number(work.evaluation_seconds)},
         {"profile_basis_seconds",Number(work.basis_seconds)},
         {"linear_matrix_preparation_seconds",Number(work.linear_matrix_preparation_seconds)},
-        {"linear_symbolic_seconds",Number(work.linear_symbolic_seconds)},
-        {"linear_numeric_seconds",Number(work.linear_numeric_seconds)},
         {"linear_rhs_solve_seconds",Number(work.linear_rhs_solve_seconds)},
         {"linear_certificate_seconds",Number(work.linear_certificate_seconds)},
         {"derivative_preparations",work.derivative_preparations},
@@ -224,20 +222,6 @@ j::object ProfileWorkJson(const n::ProfileSearchWork & work)
         {"accepted_endpoint",ProfileRoleWorkJson(work.accepted_endpoint)},
         {"reference_evaluation",ProfileRoleWorkJson(work.reference_evaluation)}};
 }
-void AddSparseAttributionJson(j::object & output,const n::SparseWork & work)
-{
-    output["numeric_factor_requests"]=work.numeric_factor_requests;
-    output["numeric_factor_exact_reuse_opportunities"]=work.numeric_factor_exact_reuse_opportunities;
-    output["numeric_factor_pattern_only_matches"]=work.numeric_factor_pattern_only_matches;
-    output["numeric_factor_value_mismatches"]=work.numeric_factor_value_mismatches;
-    output["numeric_factor_column_mismatches"]=work.numeric_factor_column_mismatches;
-    output["numeric_factor_policy_mismatches"]=work.numeric_factor_policy_mismatches;
-    output["numeric_factor_pattern_mismatches"]=work.numeric_factor_pattern_mismatches;
-    output["initial_profile_exact_reuse_opportunities"]=work.initial_profile_exact_reuse_opportunities;
-    output["trial_profile_exact_reuse_opportunities"]=work.trial_profile_exact_reuse_opportunities;
-    output["reference_exact_reuse_opportunities"]=work.reference_exact_reuse_opportunities;
-    output["accepted_endpoint_exact_reuse_opportunities"]=work.accepted_endpoint_exact_reuse_opportunities;
-}
 void Write(const std::filesystem::path &,const j::value &);
 j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,
     bool scaling_only=false,bool reverse_order=false,bool record_final_state=false,
@@ -264,10 +248,8 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             <<" seconds="<<sweep.wall_seconds<<'\n';
     };
     std::cerr<<topology<<'-'<<atoms<<" FixedNeighbor started\n";
-    n::SparseWorkForTesting()={};
     auto started=Clock::now(); const auto neighbor=n::SearchFixedNeighbor(problem,initial_eta,neighbor_policy);
     const double neighbor_seconds=Seconds(started);
-    const auto sparse_work=n::SparseWorkForTesting();
     const double sweep_seconds=std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),0.0,
         [](double total,const auto & sweep){return total+sweep.wall_seconds;});
     const double neighbor_search_seconds=sweep_seconds;
@@ -330,14 +312,6 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                 {"block_preparations",neighbor.block_preparations},
                 {"domain_preparations",neighbor.domain_preparations},
                 {"mapping_preparations",neighbor.mapping_preparations},
-                {"symbolic_factorizations",sparse_work.symbolic},
-                {"symbolic_reuses",sparse_work.symbolic_reuses},
-                {"numeric_factorizations",sparse_work.numeric},
-                {"fresh_workspace_symbolic_factorizations",sparse_work.numeric},
-                {"symbolic_seconds",sparse_work.symbolic_seconds},
-                {"numeric_seconds",sparse_work.numeric_seconds},
-                {"matrix_preparation_seconds",sparse_work.matrix_preparation_seconds},
-                {"factor_storage_bytes",sparse_work.factor_storage_bytes},
                 {"local_factor_seconds",local_factor_seconds},{"profile_factor_seconds",profile_factor_seconds},
                 {"fixed_neighbor_work",WorkJson(neighbor.work)},
                 {"search_seconds",neighbor_search_seconds},
@@ -354,7 +328,6 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                     [](std::size_t maximum,const auto & sweep){return std::max(maximum,sweep.maximum_block_columns);})},
                 {"sweep_telemetry",sweeps},{"block_telemetry",blocks}};
         scaling_json["local_profile_work"]=ProfileWorkJson(neighbor.work.local_profile_work);
-        AddSparseAttributionJson(scaling_json,sparse_work);
         if(record_final_state)
         {
             scaling_json["final_eta"]=NumberArray(neighbor.state.eta);
@@ -364,7 +337,6 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
             {"parameter_count",3*atoms},{"core_atoms",neighbor_policy.core_atoms},
             {"outer_core_atoms",neighbor_policy.core_atoms},
-            {"workspace_mode","persistent"},
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},
             {"block_order",reverse_order ? "reverse" : "forward"},
             {"measurement_scope","fixed-neighbor-search-only"},
@@ -382,7 +354,6 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             {"maximum",neighbor.work.maximum_local_atoms}}},
         {"derivative_tile_rows",DerivativeTileRows()},
         {"search_converged",neighbor.search_converged},
-        {"workspace_mode","persistent"},
         {"block_order",reverse_order ? "reverse" : "forward"},
         {"search_reason",neighbor.reason},{"sweeps",neighbor.sweeps.size()},
         {"first_order_stationarity_sweep",neighbor.first_order_stationarity_sweep},
@@ -402,20 +373,11 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"block_preparations",neighbor.block_preparations},
         {"domain_preparations",neighbor.domain_preparations},
         {"mapping_preparations",neighbor.mapping_preparations},
-        {"symbolic_factorizations",sparse_work.symbolic},
-        {"symbolic_reuses",sparse_work.symbolic_reuses},
-        {"numeric_factorizations",sparse_work.numeric},
-        {"fresh_workspace_symbolic_factorizations",sparse_work.numeric},
-        {"symbolic_seconds",sparse_work.symbolic_seconds},
-        {"numeric_seconds",sparse_work.numeric_seconds},
-        {"matrix_preparation_seconds",sparse_work.matrix_preparation_seconds},
-        {"factor_storage_bytes",sparse_work.factor_storage_bytes},
         {"fixed_neighbor_work",WorkJson(neighbor.work)},
         {"profile_factor_seconds",std::accumulate(neighbor.blocks.begin(),neighbor.blocks.end(),0.0,
             [](double total,const auto & block){return total+block.profile_factor_seconds;})},
         {"total_elapsed_seconds",neighbor_seconds}};
     neighbor_json["local_profile_work"]=ProfileWorkJson(neighbor.work.local_profile_work);
-    AddSparseAttributionJson(neighbor_json,sparse_work);
     if(record_final_state)
     {
         neighbor_json["final_eta"]=NumberArray(neighbor.state.eta);

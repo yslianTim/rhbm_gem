@@ -180,7 +180,6 @@ set(UTILS_HRL_TEST_SOURCES
 
 set(JOINT_COMPONENT_TEST_SOURCES
     core/joint_component/BlockCoordinate_test.cpp
-    core/joint_component/ProjectedTailQr_test.cpp
     core/joint_component/Search_test.cpp
     core/joint_component/Observation_test.cpp
     core/joint_component/Runtime_test.cpp

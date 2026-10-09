@@ -54,8 +54,8 @@ const char * ProfileEvaluationRoleName(ProfileEvaluationRole);
 struct ProfileRoleWork
 {
     std::size_t evaluations{},derivative_preparations{},derivative_reductions{},replay_checks{};
-    double evaluation_seconds{},basis_seconds{},linear_matrix_preparation_seconds{},linear_symbolic_seconds{},
-        linear_numeric_seconds{},linear_rhs_solve_seconds{},linear_certificate_seconds{},derivative_prepare_seconds{},
+    double evaluation_seconds{},basis_seconds{},linear_matrix_preparation_seconds{},linear_rhs_solve_seconds{},
+        linear_certificate_seconds{},derivative_prepare_seconds{},
         derivative_reduce_seconds{},derivative_raw_assembly_seconds{},derivative_free_design_assembly_seconds{},
         derivative_factor_match_seconds{},derivative_factor_build_seconds{},derivative_factor_compact_seconds{},
         derivative_rank_seconds{},derivative_least_squares_seconds{},derivative_normal_solve_seconds{},
@@ -77,19 +77,16 @@ EvaluationContext CreateContext(VectorRef,Eigen::Index,const std::string & = "",
 EvaluationContext CreateContext(std::shared_ptr<const JointProblemInput>,const std::string & = "",const AuditPlan & = {});
 struct BasisValues {double gaussian{},charge{},gaussian_log_width{},charge_log_width{};};
 BasisValues EvaluateKernel(double,double,double);
-class LinearWorkspace;
-class FreeDesignFactor;
 struct LinearResult
 {
     Vector beta;
-    std::shared_ptr<FreeDesignFactor> factor;
     bool valid{};
     std::string reason;
     int rank{},solves{},releases{},block_factorizations{};
 };
 struct LinearBlock {std::vector<Eigen::Index> rows,columns;};
 LinearResult SolveLinear(const Sparse &,VectorRef,const Vector &,bool=false,bool=true,
-    const Sparse * = nullptr,const LinearPolicy * = nullptr,const std::vector<LinearBlock> * = nullptr,LinearWorkspace * = nullptr);
+    const Sparse * = nullptr,const LinearPolicy * = nullptr,const std::vector<LinearBlock> * = nullptr);
 LinearResult SolveLinear(const Matrix &,VectorRef,const Vector &,bool=false,bool=false,const Sparse * = nullptr);
 std::pair<Matrix,Vector> ReferenceQR(const Sparse &,const Vector &,const Vector &,VectorRef);
 struct Certificate
@@ -108,7 +105,7 @@ struct Endpoint
     bool valid{};
     std::string reason;
 };
-struct Evaluation : Endpoint {Vector residual; Sparse x,derivative; std::shared_ptr<FreeDesignFactor> factor;};
+struct Evaluation : Endpoint {Vector residual; Sparse x,derivative;};
 std::optional<double> NormalizedProfileObjective(const Evaluation &,double scale);
 std::optional<double> ProfileGradientInfinityNorm(const Evaluation &);
 void UpdateAcceptedProfileObjective(std::optional<double> &,const Evaluation &,double scale,bool accepted);
@@ -124,7 +121,7 @@ Spectrum DesignSpectrum(const Sparse &,const Vector &,const RankPolicy * = nullp
 Spectrum ComputeSpectrum(const Sparse &,const RankPolicy &,Eigen::Index,bool);
 Spectrum ComputeSpectrum(const Matrix &,const RankPolicy &,Eigen::Index,bool);
 Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,bool,const EvaluationContext *,
-    const std::vector<LinearBlock> * = nullptr,LinearWorkspace * = nullptr,const void * = nullptr,
+    const std::vector<LinearBlock> * = nullptr,
     ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);
 Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &,
     ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);
@@ -170,8 +167,7 @@ struct SearchResult
     ProfileSearchWork profile_work;
 };
 SearchResult SearchProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,
-    const JointProgressObserver & = {},const JointProgressComponent * = nullptr,LinearWorkspace * = nullptr,
-    const void * = nullptr,ProfileSearchWork * = nullptr);
+    const JointProgressObserver & = {},const JointProgressComponent * = nullptr,ProfileSearchWork * = nullptr);
 struct Assessment
 {
     Endpoint primary,reference;

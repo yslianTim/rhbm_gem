@@ -20,8 +20,6 @@ void AddRoleWork(ProfileRoleWork & destination,const ProfileRoleWork & source)
     destination.evaluation_seconds+=source.evaluation_seconds;
     destination.basis_seconds+=source.basis_seconds;
     destination.linear_matrix_preparation_seconds+=source.linear_matrix_preparation_seconds;
-    destination.linear_symbolic_seconds+=source.linear_symbolic_seconds;
-    destination.linear_numeric_seconds+=source.linear_numeric_seconds;
     destination.linear_rhs_solve_seconds+=source.linear_rhs_solve_seconds;
     destination.linear_certificate_seconds+=source.linear_certificate_seconds;
     destination.derivative_prepare_seconds+=source.derivative_prepare_seconds;
@@ -84,8 +82,8 @@ void ProfileSearchWork::Merge(const ProfileSearchWork & other)
 }
 double ProfileSearchWork::AttributedSeconds() const
 {
-    return total.basis_seconds+total.linear_matrix_preparation_seconds+total.linear_symbolic_seconds+
-        total.linear_numeric_seconds+total.linear_rhs_solve_seconds+total.linear_certificate_seconds+
+    return total.basis_seconds+total.linear_matrix_preparation_seconds+total.linear_rhs_solve_seconds+
+        total.linear_certificate_seconds+
         total.derivative_prepare_seconds+total.derivative_reduce_seconds+total.replay_trust_seconds;
 }
 namespace {
@@ -251,21 +249,15 @@ Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
 }
 }
 Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,bool reference,const EvaluationContext * context,
-    const std::vector<LinearBlock> * blocks,LinearWorkspace * workspace,const void * workspace_identity,
+    const std::vector<LinearBlock> * blocks,
     ProfileEvaluationRole role,ProfileSearchWork * profile_work)
 {
     ResourcePhase phase(reference ? "reference" : "ac-profile");
     ProfileEvaluationRoleScopeForTesting role_scope(role);
     EvaluationTelemetry telemetry(profile_work,role);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    const auto search_stage=ResourceWorkForTesting().active_search_stage;
-    FactorCreationRoleScopeForTesting factor_role(reference ? "reference" :
-        search_stage=="trial-evaluation" ? "trial" : "profile");
-#endif
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(reference) ++AssessmentWorkForTesting().reference_evaluations;
 #endif
-    if(workspace) workspace->Bind(&domain,workspace_identity ? workspace_identity : y.data(),context ? &context->linear : nullptr);
     const auto matrix_started=std::chrono::steady_clock::now();
     const auto basis_started=std::chrono::steady_clock::now();
     auto out=Basis(domain,y,eta);
@@ -275,20 +267,13 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     if(!out.valid) return out; out.valid=false;
     const Eigen::Index m=eta.size();
     ResourcePhase linear_solve("linear-solve",true,out.x.rows(),out.x.cols(),static_cast<std::size_t>(out.x.nonZeros()));
-    const auto sparse_before=SparseWorkForTesting();
-    const auto solved=SolveLinear(out.x,y,Vector::Ones(y.size()),reference,true,nullptr,context ? &context->linear : nullptr,blocks,workspace);
-    const auto & sparse_after=SparseWorkForTesting();
+    const auto solve_started=std::chrono::steady_clock::now();
+    const auto solved=SolveLinear(out.x,y,Vector::Ones(y.size()),reference,true,nullptr,context ? &context->linear : nullptr,blocks);
     if(profile_work)
     {
-        telemetry.work.linear_matrix_preparation_seconds+=
-            sparse_after.matrix_preparation_seconds-sparse_before.matrix_preparation_seconds;
-        telemetry.work.linear_symbolic_seconds+=sparse_after.symbolic_seconds-sparse_before.symbolic_seconds;
-        telemetry.work.linear_numeric_seconds+=sparse_after.numeric_seconds-sparse_before.numeric_seconds;
-        telemetry.work.linear_rhs_solve_seconds+=(sparse_after.q_seconds-sparse_before.q_seconds)+
-            (sparse_after.triangular_seconds-sparse_before.triangular_seconds)+
-            (sparse_after.least_squares_seconds-sparse_before.least_squares_seconds);
+        telemetry.work.linear_rhs_solve_seconds+=
+            std::chrono::duration<double>(std::chrono::steady_clock::now()-solve_started).count();
     }
-    if(!reference) out.factor=solved.factor;
     out.beta=solved.beta;
     const auto certificate_started=std::chrono::steady_clock::now();
     out.certificate=CertifyLinear(out.x,y,out.beta,context ? context->scale : 0);
@@ -616,22 +601,6 @@ Assessment AssessEvaluated(const Domain &,VectorRef y,const Evaluation & endpoin
 #endif
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(!width_spectra()) {out.failure="spectrum-factorization-failed"; return out;}
-    if(differential.projected_candidate &&
-        (!CompactRankDecisionSafe(widths) || !CompactRankDecisionSafe(normalized_svd)))
-    {
-        auto & projected_work=DerivativeWorkForTesting().projected_reduction;
-        ++projected_work.fallbacks;
-        projected_work.fallback_reason="rank-decision-boundary";
-        const auto saved=ProjectedReductionForTesting();
-        const auto candidate_kind=projected_work.kind;
-        ProjectedReductionForTesting()=ProjectedReductionKindForTesting::ObservationTiledQr;
-        differential=ReduceDerivativeCompact(prepared,endpoint.residual);
-        ProjectedReductionForTesting()=saved;
-        projected_work.kind=candidate_kind;
-        if(!differential.valid || !width_spectra()) {out.failure="spectrum-factorization-failed"; return out;}
-    }
-    else if(differential.projected_candidate)
-        ++DerivativeWorkForTesting().projected_reduction.accepted;
     out.widths=CompactSpectrum(widths,context->rank.rows);
     out.widths->column_norms=differential.projected_norms;
     out.normalized_widths=CompactSpectrum(normalized_svd,context->rank.rows);

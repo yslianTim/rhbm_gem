@@ -166,7 +166,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     try {partition=BuildStructuralBlockPartition(input,layout,policy.core_atoms);}
     catch(const std::exception &) {out.reason="block-invalid-partition"; return out;}
     if(partition.cores.empty()) {out.reason="block-invalid-partition"; return out;}
-    LinearTelemetryScopeForTesting telemetry_scope(policy.collect_telemetry);
     auto * const profile_work=policy.collect_telemetry ? &out.work.local_profile_work : nullptr;
 
     out.state.eta=initial_eta;
@@ -202,7 +201,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         prepared.row_mapping=std::make_shared<Indices>(std::move(row_mapping));
         prepared.domain=domain.Select(prepared.profile_atoms,
             static_cast<Eigen::Index>(prepared.profile_rows.size()),prepared.row_mapping);
-        prepared.workspace=std::make_shared<LinearWorkspace>();
         prepared.context=context;
         prepared.context.atom_ids=context.atom_ids.Select(prepared.profile_atoms);
         prepared.context.row_ids=context.row_ids.Select(prepared.profile_rows);
@@ -291,8 +289,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 }
             }
             const auto old_widths=old_eta.array().exp().eval();
-            const auto local_search=SearchProfile(local_domain,local_y,old_widths,local_context,{},nullptr,
-                prepared.workspace.get(),&prepared,profile_work);
+            const auto local_search=SearchProfile(local_domain,local_y,old_widths,local_context,{},nullptr,profile_work);
             if(policy.collect_telemetry) out.work.local_profile_work.Merge(local_search.profile_work);
             record.search_seconds=Seconds(search_started); record.profile_evaluations=local_search.evaluations;
             if(policy.collect_telemetry) out.work.local_search_seconds+=record.search_seconds;
@@ -475,7 +472,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     {
         const auto endpoint=EvaluateState(domain,y,out.state.eta,out.state.beta,context,
             ProfileEvaluationRole::AcceptedEndpoint,profile_work);
-        const auto reference=EvaluateProfile(domain,y,out.state.eta,true,&context,nullptr,nullptr,nullptr,
+        const auto reference=EvaluateProfile(domain,y,out.state.eta,true,&context,nullptr,
             ProfileEvaluationRole::Reference,profile_work);
         out.assessment=AssessEvaluated(domain,y,endpoint,reference,context,true);
         out.endpoint_trust=CheckTrust(domain,y,endpoint,context,reference);

@@ -345,7 +345,7 @@ def screen_run_campaign(args):
                                     "support": sha(Path(__file__))},
         "branch": subprocess.run(["git", "branch", "--show-current"], cwd=ROOT,
                                   check=True, capture_output=True, text=True).stdout.strip(),
-        "backend": "SPQR", "eigen_threads": 1, "cases": [f"{t}-{a}" for t, a in cases],
+        "backend": "EIGEN", "eigen_threads": 1, "cases": [f"{t}-{a}" for t, a in cases],
         "policy": screen_POLICY, "core_sizes": list(core_sizes),
         "measurement_scope": "fixed-neighbor-search-only",
         "resource_envelope": {"wall_seconds": args.timeout, "rss_bytes": args.rss_limit},
@@ -359,7 +359,7 @@ def screen_run_campaign(args):
     (output_dir / "README.md").write_text(
         "# FixedNeighbor outer-core performance study\n\n"
         "This search-only study keeps FixedNeighbor's intrinsic one-accepted local-update "
-        "contract, forward serial Gauss-Seidel order, SPQR backend, one Eigen thread, and "
+        "contract, forward serial Gauss-Seidel order, EIGEN backend, one Eigen thread, and "
         "frozen stationarity checks. It varies only outer core_atoms over "
         f"{', '.join(str(core) for core in core_sizes)} for "
         f"{', '.join(f'{topology}-{atoms}' for topology, atoms in cases)}.\n\n"
@@ -595,7 +595,7 @@ def endpoint_run_campaign(args):
                                     "support": sha(Path(__file__))},
         "branch": subprocess.run(["git", "branch", "--show-current"], cwd=ROOT,
                                   check=True, capture_output=True, text=True).stdout.strip(),
-        "backend": "SPQR", "eigen_threads": 1,
+        "backend": "EIGEN", "eigen_threads": 1,
         "cases": [f"{topology}-{atoms}" for topology, atoms in cases],
         "core_sizes": list(core_sizes), "local_search": "LegacyCompact",
         "block_order": "Forward",
@@ -617,7 +617,7 @@ def endpoint_run_campaign(args):
         f"{', '.join(f'{topology}-{atoms}' for topology, atoms in cases)}. "
         "It keeps LegacyCompact, the intrinsic one-accepted local-update contract, "
         "Forward serial Gauss-Seidel, "
-        "SPQR, one Eigen thread, maximum_sweeps=30, and all existing thresholds.\n\n"
+        "EIGEN, one Eigen thread, maximum_sweeps=30, and all existing thresholds.\n\n"
         "Core 64 is the historical/control comparison. Endpoint parity reports objective, eta, "
         "scaled A/C, and rank evidence; it does not require bitwise-identical trajectories.\n\n"
         f"Qualification gate: **{analysis['qualification_gate']}**. Qualified cores: "
@@ -986,7 +986,7 @@ def frontier_run_campaign(args):
         },
         "branch": subprocess.run(["git", "branch", "--show-current"], cwd=ROOT,
                                   check=True, capture_output=True, text=True).stdout.strip(),
-        "backend": "SPQR",
+        "backend": "EIGEN",
         "eigen_threads": 1,
         "cases": [f"{topology}-{atoms}" for topology, atoms in cases],
         "policy": screen_POLICY,
@@ -1007,7 +1007,7 @@ def frontier_run_campaign(args):
         "# FixedNeighbor outer-core repeated frontier\n\n"
         "This P4 frontier keeps LegacyCompact, FixedNeighbor's intrinsic one-accepted "
         "local-update contract, Forward serial "
-        "Gauss-Seidel, SPQR, one Eigen thread, and the existing search gates. It uses "
+        "Gauss-Seidel, EIGEN, one Eigen thread, and the existing search gates. It uses "
         f"one warmup and {frontier_MEASURED_REPETITIONS} interleaved measured repetitions. The "
         f"512-atom cases compare finalists {', '.join(str(core) for core in finalists)} "
         f"against control {args.control_core_size}; the fastest correct finalist by "

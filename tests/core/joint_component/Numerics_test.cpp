@@ -527,84 +527,6 @@ TEST(JointComponentNumericsTest, CompactJacobianRankBoundariesRespectPolicyAndFa
     }
 }
 
-
-TEST(JointComponentNumericsTest, SparseWorkspaceChecksPatternScopePolicyAndGeneration)
-{
-    namespace n=p::runtime;
-    Matrix dense(6,2); dense<<1,0,2,1,0,3,4,2,1,1,0,2;
-    n::Sparse x=dense.sparseView(); n::LinearWorkspace workspace;
-    n::LinearPolicy policy{1e-14}; int domain{},other{};
-    workspace.Bind(&domain,&domain,&policy); n::SparseWorkForTesting()={};
-    auto first=workspace.Factor(x,{0,1},1e-14);
-    ASSERT_EQ(first->Rank(),2);
-    const Matrix rhs=Matrix::Ones(6,1);
-    EXPECT_LT((first->LeastSquares(rhs)-dense.colPivHouseholderQr().solve(rhs)).norm(),1e-12);
-    Matrix compact=first->Compact();
-    EXPECT_LT((compact.transpose()*compact-dense.transpose()*dense).norm(),1e-12);
-    x.valuePtr()[0]+=.1;
-    auto second=workspace.Factor(x,{0,1},1e-14);
-    EXPECT_EQ(n::SparseWorkForTesting().symbolic,1);
-    EXPECT_EQ(n::SparseWorkForTesting().numeric,2);
-    EXPECT_EQ(n::SparseWorkForTesting().symbolic_reuses,1);
-    EXPECT_FALSE(first->Matches(x,{0,1}));
-    EXPECT_THROW(first->LeastSquares(rhs),std::logic_error);
-    EXPECT_TRUE(second->Matches(x,{0,1}));
-    x.coeffRef(0,1)=.2; x.makeCompressed();
-    workspace.Factor(x,{0,1},1e-14);
-    EXPECT_EQ(n::SparseWorkForTesting().symbolic,2);
-    workspace.Factor(x,{2,3},1e-14);
-    EXPECT_EQ(n::SparseWorkForTesting().symbolic,3);
-    policy.release_factor=64; workspace.Bind(&domain,&domain,&policy);
-    workspace.Factor(x,{2,3},1e-14);
-    EXPECT_EQ(n::SparseWorkForTesting().symbolic,4);
-    workspace.Bind(&other,&domain,&policy); workspace.Factor(x,{2,3},1e-14);
-    EXPECT_EQ(n::SparseWorkForTesting().symbolic,5);
-    x.valuePtr()[0]=0;
-    workspace.Factor(x,{2,3},1e-14);
-    EXPECT_EQ(n::SparseWorkForTesting().symbolic,5); // Stored zero does not change CSC pattern.
-    x.prune(0.); workspace.Factor(x,{2,3},1e-14);
-    EXPECT_EQ(n::SparseWorkForTesting().symbolic,6);
-    workspace.Factor(x,{2,3},0.);
-    EXPECT_EQ(n::SparseWorkForTesting().symbolic,7);
-}
-
-TEST(JointComponentNumericsTest, ExactNumericReuseCensusRequiresAllFactorInputsToMatch)
-{
-    namespace n=p::runtime;
-    Matrix dense(6,2); dense<<1,0,2,1,0,3,4,2,1,1,0,2;
-    n::Sparse x=dense.sparseView(); x.makeCompressed(); n::LinearWorkspace workspace;
-    n::LinearPolicy policy{1e-14}; int domain{};
-    n::SparseWorkForTesting()={}; n::LinearTelemetryScopeForTesting telemetry(true);
-    n::ProfileEvaluationRoleScopeForTesting role(n::ProfileEvaluationRole::InitialProfile);
-    workspace.Bind(&domain,&domain,&policy);
-    workspace.Factor(x,{0,1},1e-14);
-    workspace.Factor(x,{0,1},1e-14);
-    x.valuePtr()[0]+=.1;
-    workspace.Factor(x,{0,1},1e-14);
-    workspace.Factor(x,{1,0},1e-14);
-    auto changed=policy; changed.release_factor=64;
-    workspace.Bind(&domain,&domain,&changed);
-    workspace.Factor(x,{0,1},1e-14);
-
-    const auto census=n::SparseWorkForTesting();
-    EXPECT_EQ(census.numeric_factor_requests,5u);
-    EXPECT_EQ(census.numeric_factor_exact_reuse_opportunities,1u);
-    EXPECT_EQ(census.initial_profile_exact_reuse_opportunities,1u);
-    EXPECT_EQ(census.trial_profile_exact_reuse_opportunities,0u);
-    EXPECT_EQ(census.reference_exact_reuse_opportunities,0u);
-    EXPECT_EQ(census.accepted_endpoint_exact_reuse_opportunities,0u);
-    EXPECT_EQ(census.numeric_factor_pattern_only_matches,1u);
-    EXPECT_EQ(census.numeric_factor_value_mismatches,1u);
-    EXPECT_EQ(census.numeric_factor_column_mismatches,1u);
-    EXPECT_EQ(census.numeric_factor_policy_mismatches,1u);
-    EXPECT_EQ(census.numeric_factor_pattern_mismatches,0u);
-
-    n::SparseWorkForTesting()={}; n::LinearWorkspace fresh;
-    fresh.Bind(&domain,&domain,&policy); fresh.Factor(x,{0,1},1e-14);
-    EXPECT_EQ(n::SparseWorkForTesting().numeric_factor_requests,1u);
-    EXPECT_EQ(n::SparseWorkForTesting().numeric_factor_exact_reuse_opportunities,0u);
-}
-
 TEST(JointComponentNumericsTest, SparseWeightedSolveAndIndependentReferenceMatchDenseOracle)
 {
     namespace n=p::runtime;
@@ -619,33 +541,8 @@ TEST(JointComponentNumericsTest, SparseWeightedSolveAndIndependentReferenceMatch
     EXPECT_LT((primary.beta-dense.beta).norm(),1e-10);
     EXPECT_LT((reference.beta-dense.beta).norm(),1e-10);
     const auto before=n::SparseWorkForTesting().reference;
-    const auto numeric=n::SparseWorkForTesting().numeric;
-    ASSERT_TRUE(primary.factor);
     n::SolveLinear(sparse,y,w,true);
     EXPECT_EQ(n::SparseWorkForTesting().reference,before+1);
-    EXPECT_EQ(n::SparseWorkForTesting().numeric,numeric);
-    EXPECT_EQ(primary.factor->Rank(),primary.rank);
-}
-
-TEST(JointComponentNumericsTest, SparseDerivativeReusesOnlyTheCanonicalCurrentFace)
-{
-    namespace n=p::runtime;
-    Sample sample; const p::Domain domain(sample.grid,sample.atoms);
-    const auto context=p::MakeContext(sample.y,2); const Vector eta=Eigen::Vector2d(.55,.51).array().log();
-    n::LinearWorkspace workspace;
-    auto e=n::EvaluateProfile(domain,sample.y,eta,false,&context,nullptr,&workspace);
-    ASSERT_TRUE(e.valid); ASSERT_TRUE(e.factor);
-    n::SparseWorkForTesting()={};
-    ASSERT_TRUE(n::PrepareDerivative(e,context.scale,&context).valid);
-    EXPECT_EQ(n::SparseWorkForTesting().factor_reuses,1);
-    EXPECT_EQ(n::SparseWorkForTesting().numeric,0);
-    e.beta(0)=0; // A free-set flag is not the canonical derivative face.
-    ASSERT_TRUE(n::PrepareDerivative(e,context.scale,&context).valid);
-    EXPECT_EQ(n::SparseWorkForTesting().numeric,1);
-    const auto raw=n::EvaluateState(domain,sample.y,eta,e.beta,context);
-    const auto copy=raw.beta;
-    ASSERT_TRUE(n::PrepareDerivative(raw,context.scale,&context).valid);
-    EXPECT_EQ(raw.beta,copy);
 }
 
 TEST(JointComponentNumericsTest, SparseReferencePreservesSvdRankNearDegeneracy)

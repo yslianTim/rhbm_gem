@@ -57,8 +57,7 @@ def _partial(progress):
                                                  for row in progress.get("sweep_telemetry", [])))
     fixed.setdefault("accepted_local_updates", None)
     for key in ("prepared_block_count", "block_preparations", "domain_preparations",
-                "mapping_preparations", "symbolic_factorizations", "symbolic_reuses",
-                "numeric_factorizations", "fresh_workspace_symbolic_factorizations"):
+                "mapping_preparations"):
         fixed.setdefault(key, None)
     fixed.setdefault("final_global_ac_kkt", None)
     fixed.setdefault("final_raw_width_gradient_inf_norm", None)
@@ -101,8 +100,7 @@ def summarize(report):
     fixed = result.get("fixed_neighbor", result)
     process = report.get("process") or {}
     keys = ("prepared_block_count", "block_preparations", "domain_preparations",
-            "mapping_preparations", "symbolic_factorizations", "symbolic_reuses",
-            "numeric_factorizations", "fresh_workspace_symbolic_factorizations")
+            "mapping_preparations")
     return {
         "topology": report.get("topology"), "atoms": report.get("atoms"),
         "policy": report.get("policy", POLICY), "status": report.get("status", "completed"),
@@ -147,16 +145,6 @@ def _preparation_gate(row):
         row.get("mapping_preparations") == blocks
 
 
-def _symbolic_gate(row):
-    symbolic = row.get("symbolic_factorizations")
-    reuses = row.get("symbolic_reuses")
-    numeric = row.get("numeric_factorizations")
-    fresh = row.get("fresh_workspace_symbolic_factorizations")
-    return all(isinstance(value, int) for value in (symbolic, reuses, numeric, fresh)) and \
-        symbolic > 0 and reuses > 0 and numeric >= symbolic and fresh == numeric and \
-        symbolic + reuses == numeric
-
-
 def analyze(rows, expected=None):
     expected = set(expected or ((_case(value) for value in DEFAULT_CASES)))
     by_case = {(row["topology"], row["atoms"]): row for row in rows}
@@ -172,8 +160,6 @@ def analyze(rows, expected=None):
                 reasons.append("numerical-gate")
             if not _preparation_gate(row):
                 reasons.append("prepared-block-gate")
-            if not _symbolic_gate(row):
-                reasons.append("symbolic-reuse-gate")
             if reasons:
                 failures.append({"topology": key[0], "atoms": key[1], "reasons": reasons})
         cases.append({"topology": key[0], "atoms": key[1], "passed": not reasons,
@@ -186,7 +172,6 @@ def analyze(rows, expected=None):
         "measurement_scope": "fixed-neighbor-search-only",
         "expected_cases": [{"topology": topology, "atoms": atoms} for topology, atoms in sorted(expected)],
         "cases": cases, "failures": failures,
-        "symbolic_attribution": "fresh workspace symbolic count is the observed numeric factorization count; persistent count and reuse are measured by SparseWork",
         "wall_time_gate": "not-run",
         "qualification_gate": "passed" if not failures and len(cases) == len(expected) else "failed",
     }
@@ -199,8 +184,7 @@ def write_outputs(report, output_dir):
                "block_solves", "profile_evaluations", "accepted_local_updates", "search_seconds",
                "assessment_seconds", "total_seconds", "peak_rss_mb", "final_global_ac_kkt",
                "final_width_gradient_inf_norm", "prepared_block_count", "block_preparations",
-               "domain_preparations", "mapping_preparations", "symbolic_factorizations",
-               "symbolic_reuses", "numeric_factorizations", "fresh_workspace_symbolic_factorizations"]
+               "domain_preparations", "mapping_preparations"]
     with (output_dir / "summary.csv").open("w", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=columns, lineterminator="\n")
         writer.writeheader()
@@ -240,7 +224,7 @@ def run_campaign(args):
         "# Prepared FixedNeighbor structural contract\n\n"
         "This small deterministic check exercises the production FixedNeighbor policy on chain/cube 24 "
         "with a 12-atom core, producing two prepared blocks. It checks preparation counts and "
-        "symbolic reuse invariants; it is not a performance campaign and makes no large-case claim.\n\n"
+        "mapping invariants; it is not a performance campaign and makes no large-case claim.\n\n"
         f"Qualification gate: **{analysis['qualification_gate']}**. Wall-time gate: **{analysis['wall_time_gate']}**.\n"
     )
     return analysis

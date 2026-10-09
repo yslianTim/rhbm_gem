@@ -19,9 +19,6 @@ struct Profile
     std::vector<joint_component::Trial> trace;
     int evaluations{},derivatives{};
     std::string failure;
-    LinearWorkspace workspace;
-    LinearWorkspace * supplied_workspace{};
-    const void * workspace_identity{};
     ProfileSearchWork * telemetry{};
     ProfileEvaluationRole last_role{ProfileEvaluationRole::Unspecified};
     const JointProgressObserver & observer;
@@ -71,16 +68,9 @@ struct Profile
         failure.clear();
         ResourcePhase evaluation(evaluations==0 ? "profile-evaluation" : "trial-evaluation",true,domain.rows,eta.size());
         const auto start=std::chrono::steady_clock::now();
-        const auto & sparse_work=SparseWorkForTesting();
-        const double factor_seconds_before=sparse_work.symbolic_seconds+sparse_work.numeric_seconds+
-            sparse_work.fixed_factor_seconds;
-        auto * active_workspace=supplied_workspace ? supplied_workspace : &workspace;
-        const void * identity=supplied_workspace ? workspace_identity : nullptr;
         last_role=evaluations==0 ? ProfileEvaluationRole::InitialProfile : ProfileEvaluationRole::TrialProfile;
-        cached=EvaluateProfile(domain,y,eta,false,&context,nullptr,active_workspace,identity,last_role,telemetry); ++evaluations;
+        cached=EvaluateProfile(domain,y,eta,false,&context,nullptr,last_role,telemetry); ++evaluations;
         joint_component::Trial row; row.endpoint=cached; row.evaluation=evaluations; row.seconds=Seconds(start);
-        row.factor_seconds=SparseWorkForTesting().symbolic_seconds+SparseWorkForTesting().numeric_seconds+
-            SparseWorkForTesting().fixed_factor_seconds-factor_seconds_before;
         trace.push_back(std::move(row));
         Report();
         if(!cached.valid) failure="inner-"+cached.reason;
@@ -172,14 +162,13 @@ struct Profile
 }
 SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
     const EvaluationContext & context,const JointProgressObserver & observer,
-    const JointProgressComponent * progress_component,LinearWorkspace * workspace,const void * workspace_identity,
-    ProfileSearchWork * telemetry)
+    const JointProgressComponent * progress_component,ProfileSearchWork * telemetry)
 {
     ResourcePhase phase("search",true,domain.rows,initial_b.size());
     const auto start=std::chrono::steady_clock::now();
     ProfileSearchWork local_work;
-    Profile profile{domain,y,context.scale,context,{}, {},0,0,{}, {},workspace,workspace_identity,
-        telemetry ? &local_work : nullptr,ProfileEvaluationRole::Unspecified,observer,progress_component,start,0,{}, {}};
+    Profile profile{domain,y,context.scale,context,{}, {},0,0,{},telemetry ? &local_work : nullptr,
+        ProfileEvaluationRole::Unspecified,observer,progress_component,start,0,{}, {}};
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
         lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;

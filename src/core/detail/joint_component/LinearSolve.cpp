@@ -184,10 +184,8 @@ BlockFace SolveBlocks(const Sparse & x,VectorRef y,const Eigen::VectorXd & weigh
 template<class Matrix>
 LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
     const Eigen::VectorXd & weights, bool use_svd, bool blocked_svd, const Eigen::SparseMatrix<double> * sparse_design,
-    const LinearPolicy * policy=nullptr,const std::vector<LinearBlock> * blocks=nullptr,LinearWorkspace * workspace=nullptr)
+    const LinearPolicy * policy=nullptr,const std::vector<LinearBlock> * blocks=nullptr)
 {
-    LinearWorkspace local_workspace;
-    if(!workspace) workspace=&local_workspace;
     LinearResult out; out.reason="invalid-input"; out.beta=Eigen::VectorXd::Zero(x.cols());
     if (x.cols()==0 || x.cols()%2!=0 || x.rows()<=x.cols() || y.size()!=x.rows() || weights.size()!=y.size() ||
         !Finite(x) || !y.allFinite() || !weights.allFinite() || (weights.array()<0).any()) return out;
@@ -333,8 +331,8 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
 
 
 } // namespace
-LinearResult SolveLinear(const Sparse & x,VectorRef y,const Vector & w,bool svd,bool blocked,const Sparse * cache,const LinearPolicy * policy,const std::vector<LinearBlock> * blocks,LinearWorkspace * workspace)
-{return WeightedSolveImpl(x,y,w,svd,blocked,cache,policy,blocks,workspace);}
+LinearResult SolveLinear(const Sparse & x,VectorRef y,const Vector & w,bool svd,bool blocked,const Sparse * cache,const LinearPolicy * policy,const std::vector<LinearBlock> * blocks)
+{return WeightedSolveImpl(x,y,w,svd,blocked,cache,policy,blocks);}
 LinearResult SolveLinear(const Matrix & x,VectorRef y,const Vector & w,bool svd,bool blocked,const Sparse * cache)
 {return WeightedSolveImpl(x,y,w,svd,blocked,cache);}
 }
