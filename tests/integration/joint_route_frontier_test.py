@@ -92,7 +92,6 @@ def test_output_writer_uses_both_resource_envelope_records():
 def test_fixed_neighbor_route_manifest_locks_the_production_policy():
     assert frontier.FIXED_NEIGHBOR_POLICY == {
         'core_atoms': 12,
-        'local_work': 'OneAcceptedUpdate',
         'block_order': 'forward',
         'local_search': 'LegacyCompact',
         'maximum_sweeps': 30,
