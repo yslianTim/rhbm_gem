@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "source_commit": "4f17f189fc90c04cd19cfffc3647c60a6f1d4cfd",
+  "policy": {
+    "algorithm": "FixedNeighbor",
+    "core_atoms": 12,
+    "order": "forward",
+    "maximum_sweeps": 30,
+    "accepted_local_updates_maximum_per_block_visit": 1,
+    "local_solver": "legacy-compact",
+    "eigen_threads": 1,
+    "thresholds": {
+      "projected_kkt": 1e-10,
+      "width_gradient_inf_norm": 1e-12,
+      "eta_confirmation": 1e-10
+    }
+  },
+  "parity": [
+    {
+      "case": "chain-8",
+      "eigen": {"runtime_convergence": "Passed", "endpoint_certified": true, "objective": 1.7218544302365226e-10, "global_kkt": 1.3877787807814457e-16, "width_gradient_inf_norm": 1.4772371611147352e-15},
+      "spqr": {"runtime_convergence": "Passed", "endpoint_certified": true, "objective": 1.721854434309963e-10, "global_kkt": 2.220446049250313e-16, "width_gradient_inf_norm": 1.3701281635326363e-15},
+      "max_abs_ac_difference": 4.440892098500626e-15,
+      "max_abs_log_width_difference": 2.220446049250313e-16,
+      "objective_abs_difference": 4.0734403282657864e-19
+    },
+    {
+      "case": "cube-8",
+      "eigen": {"runtime_convergence": "Passed", "endpoint_certified": true, "objective": 1.1487849253100824e-10, "global_kkt": 1.3877787807814457e-16, "width_gradient_inf_norm": 2.8255265727760783e-15},
+      "spqr": {"runtime_convergence": "Passed", "endpoint_certified": true, "objective": 1.1487849217674275e-10, "global_kkt": 2.220446049250313e-16, "width_gradient_inf_norm": 2.8055515549746276e-15},
+      "max_abs_ac_difference": 2.886579864025407e-15,
+      "max_abs_log_width_difference": 1.1102230246251565e-16,
+      "objective_abs_difference": 3.542654814308818e-19
+    }
+  ],
+  "representative_workflows": {
+    "halo": {"eigen_total_seconds": 3.833024583, "spqr_total_seconds": 3.218669542, "eigen_peak_rss_mib": 67.109375, "spqr_peak_rss_mib": 82.53125, "both_completed": true, "target_covariance_available": true},
+    "multi": {"eigen_total_seconds": 9.480579167, "spqr_total_seconds": 7.590474541, "eigen_peak_rss_mib": 98.90625, "spqr_peak_rss_mib": 122.734375, "both_completed": true, "all_target_covariances_available": true},
+    "partial": {"eigen_total_seconds": 0.640696041, "spqr_total_seconds": 0.603997875, "eigen_peak_rss_mib": 38.21875, "spqr_peak_rss_mib": 39.984375, "both_completed": true, "matched_control_passed": true}
+  },
+  "resource_probes": [
+    {"case": "chain-128", "eigen_total_seconds": 24.202471417, "spqr_total_seconds": 10.7096175, "eigen_peak_rss_mib": 68.484375, "spqr_peak_rss_mib": 82.609375, "eigen_search_completed": true, "spqr_search_completed": true},
+    {"case": "cube-128", "eigen_total_seconds": 42.809007375, "spqr_total_seconds": 22.599127584, "eigen_peak_rss_mib": 65.234375, "spqr_peak_rss_mib": 81.984375, "eigen_search_completed": true, "spqr_search_completed": true},
+    {"case": "chain-256", "eigen_total_seconds": 52.367056958, "spqr_total_seconds": 24.747082791, "eigen_peak_rss_mib": 114.328125, "spqr_peak_rss_mib": 142.75, "eigen_search_completed": true, "spqr_search_completed": true},
+    {"case": "cube-256", "eigen_total_seconds": 99.761249583, "spqr_total_seconds": 55.705273791, "eigen_peak_rss_mib": 107.640625, "spqr_peak_rss_mib": 142.890625, "eigen_search_completed": true, "spqr_search_completed": true}
+  ],
+  "bounded_large_probes": [
+    {"case": "chain-512", "timeout_seconds": 60, "eigen_status": "timeout", "spqr_status": "timeout"},
+    {"case": "cube-512", "timeout_seconds": 60, "eigen_status": "timeout", "spqr_status": "timeout"}
+  ],
+  "decision": {
+    "chosen_backend": "SPQR",
+    "correctness": "both backends passed all completed numerical and representative workflow cases; parity is at floating-point roundoff on small full cases",
+    "completion": "no completion advantage was claimed; both backends timed out under the same 60-second 512 probe",
+    "time": "SPQR was approximately 1.8x to 2.3x faster on completed chain/cube 128 and 256 resource probes and faster on halo/multi workflows",
+    "memory": "SPQR used more RSS in every completed resource/workflow comparison, approximately 14 to 35 MiB more on the 128/256 probes",
+    "dependency_maintenance": "SPQR adds required SuiteSparse/CHOLMOD packaging and deployment cost; the measured current FixedNeighbor wall-time advantage was judged material enough to retain it",
+    "retired_backend": "EIGEN is removed from the active Joint factor backend after promotion; Eigen dense types and decompositions remain ordinary project dependencies"
+  }
+}

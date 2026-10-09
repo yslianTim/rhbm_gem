@@ -1,0 +1,23 @@
+case,backend,status,search_completed,endpoint_certified,runtime_convergence,objective,global_kkt,width_gradient_inf_norm,total_seconds,peak_rss_mib,sweeps,accepted_blocks,profile_evaluations,notes
+chain-8,EIGEN,completed,true,true,Passed,1.7218544302365226e-10,1.3877787807814457e-16,1.4772371611147352e-15,0.708849750,35.921875,5,5,10,full endpoint qualification
+chain-8,SPQR,completed,true,true,Passed,1.721854434309963e-10,2.220446049250313e-16,1.3701281635326363e-15,0.375645500,39.265625,5,4,10,full endpoint qualification
+cube-8,EIGEN,completed,true,true,Passed,1.1487849253100824e-10,1.3877787807814457e-16,2.8255265727760783e-15,0.615048083,35.65625,5,4,10,full endpoint qualification
+cube-8,SPQR,completed,true,true,Passed,1.1487849217674275e-10,2.220446049250313e-16,2.8055515549746276e-15,0.375283834,38.9375,5,5,10,full endpoint qualification
+halo,EIGEN,completed,true,true,Passed,1.1769111797062644e-08,,,,3.833024583,67.109375,,,,observable/nuisance postprocessing; target covariance available
+halo,SPQR,completed,true,true,Passed,1.1769111797062794e-08,,,,3.218669542,82.53125,,,,observable/nuisance postprocessing; target covariance available
+multi,EIGEN,completed,true,true,Passed,1.9196408557314363e-08,,,,9.480579167,98.90625,,,,three-component postprocessing; all target covariances available
+multi,SPQR,completed,true,true,Passed,1.9196408557314466e-08,,,,7.590474541,122.734375,,,,three-component postprocessing; all target covariances available
+partial,EIGEN,completed,true,true,Passed,8.139650467647788e-32,,,,0.640696041,38.21875,,,,partial-selection matched control passed
+partial,SPQR,completed,true,true,Passed,4.759120390882263e-31,,,,0.603997875,39.984375,,,,partial-selection matched control passed
+chain-128,EIGEN,completed,true,false,not-assessed,,,,24.202471417,68.484375,8,85,176,search-only resource probe
+chain-128,SPQR,completed,true,false,not-assessed,,,,10.709617500,82.609375,8,85,176,search-only resource probe
+cube-128,EIGEN,completed,true,false,not-assessed,,,,42.809007375,65.234375,17,187,375,search-only resource probe
+cube-128,SPQR,completed,true,false,not-assessed,,,,22.599127584,81.984375,17,187,376,search-only resource probe
+chain-256,EIGEN,completed,true,false,not-assessed,,,,52.367056958,114.328125,8,169,352,search-only resource probe
+chain-256,SPQR,completed,true,false,not-assessed,,,,24.747082791,142.750000,8,171,352,search-only resource probe
+cube-256,EIGEN,completed,true,false,not-assessed,,,,99.761249583,107.640625,18,431,867,search-only resource probe
+cube-256,SPQR,completed,true,false,not-assessed,,,,55.705273791,142.890625,18,432,868,search-only resource probe
+chain-512,EIGEN,timeout,,,,,,,,60.000000,,,,,60-second bounded probe
+chain-512,SPQR,timeout,,,,,,,,60.000000,,,,,60-second bounded probe
+cube-512,EIGEN,timeout,,,,,,,,60.000000,,,,,60-second bounded probe
+cube-512,SPQR,timeout,,,,,,,,60.000000,,,,,60-second bounded probe
