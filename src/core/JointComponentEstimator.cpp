@@ -203,7 +203,6 @@ JointFitResult n::FitWithSearchPolicyImpl(const JointProblem & problem,const std
         {
             const auto & policy=search_policy.fixed_neighbor;
             out.fixed_neighbor_core_atoms=policy.core_atoms;
-            out.fixed_neighbor_local_work=std::string(n::FixedNeighborLocalWorkName(policy.local_work));
             out.fixed_neighbor_policy_version=std::string(FixedNeighborPolicyContractVersion);
             out.fixed_neighbor_maximum_sweeps=policy.maximum_sweeps;
             out.fixed_neighbor_order=std::string(n::FixedNeighborBlockOrderName(policy.order));

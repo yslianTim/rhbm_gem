@@ -143,16 +143,6 @@ bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_c
     return has_previous_complete_sweep && std::isfinite(eta_change_inf) && eta_change_inf>=0.0 &&
         eta_change_inf<=EtaChangeConfirmationThreshold;
 }
-int LocalUpdateBudget(FixedNeighborLocalWork work)
-{
-    switch(work)
-    {
-    case FixedNeighborLocalWork::Full: return 0;
-    case FixedNeighborLocalWork::OneAcceptedUpdate: return 1;
-    case FixedNeighborLocalWork::TwoAcceptedUpdates: return 2;
-    }
-    return 0;
-}
 FixedNeighborSearchResult SearchFixedNeighborComponent(
     const JointProblemInput & input,const JointParameterLayout & layout,const Domain & domain,
     VectorRef observations,VectorRef y,VectorRef initial_eta,const EvaluationContext & context,
@@ -189,7 +179,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     for(std::size_t k=0;k<layout.informative_rows.size();++k) row_position.at(layout.informative_rows[k])=static_cast<Eigen::Index>(k);
     std::vector<PreparedFixedNeighborBlock> prepared_blocks;
     prepared_blocks.reserve(partition.cores.size());
-    const int local_update_budget=LocalUpdateBudget(policy.local_work);
     for(std::size_t block_index=0;block_index<partition.cores.size();++block_index)
     {
         const auto & core=partition.cores[block_index]; PreparedFixedNeighborBlock prepared;
@@ -223,7 +212,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         prepared.context.linear.rank_relative=prepared.context.rank.Relative(2*prepared.local_atoms);
         prepared.context.search=SearchPolicy{};
         prepared.context.search.method=SearchMethod::LegacyCompact;
-        if(local_update_budget>0) prepared.context.update_budget=local_update_budget;
+        // FixedNeighbor performs at most one trusted accepted local update per block visit.
+        prepared.context.update_budget=1;
         prepared_blocks.push_back(std::move(prepared));
     }
     out.block_preparations=prepared_blocks.size();
@@ -550,7 +540,6 @@ ComponentResult SolveFixedNeighborComponent(
     policy.core_atoms=production_policy.core_atoms;
     policy.maximum_sweeps=production_policy.maximum_sweeps;
     policy.order=production_policy.order;
-    policy.local_work=production_policy.local_work;
     policy.assess_final_endpoint=true;
     if(progress_component && observer)
     {
