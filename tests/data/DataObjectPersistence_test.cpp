@@ -586,6 +586,19 @@ TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsAllProductionRoutes
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_maximum_sweeps,30u);
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_order,"forward");
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_local_search,"legacy-compact");
+    EXPECT_FALSE(fixed_decoded.metadata.solver->preconditioner);
+    EXPECT_FALSE(fixed_decoded.metadata.solver->operator_rank_mode);
+    EXPECT_FALSE(fixed_decoded.metadata.solver->operator_rank_backend);
+    EXPECT_FALSE(fixed_decoded.metadata.solver->operator_pcg_iterations);
+    EXPECT_FALSE(fixed_decoded.metadata.solver->operator_damping_trials);
+    EXPECT_FALSE(fixed_decoded.metadata.solver->operator_rank_budget_seconds);
+    EXPECT_FALSE(fixed_decoded.metadata.solver->operator_rank_budget_entries);
+    EXPECT_FALSE(fixed_decoded.metadata.solver->operator_rank_budget_workspace_bytes);
+    EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_core_atoms);
+    EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_overlap_hops);
+    EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_max_block_atoms);
+    EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_storage_bytes);
+    EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_scratch_bytes);
 
     auto operator_result=SavedJointExample();
     rg::JointSolverProvenance operator_provenance;
@@ -609,6 +622,12 @@ TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsAllProductionRoutes
     EXPECT_EQ(operator_decoded.metadata.solver->operator_rank_backend,"SpqrBounds");
     EXPECT_EQ(operator_decoded.metadata.solver->schwarz_overlap_hops,0u);
     EXPECT_EQ(operator_decoded.metadata.solver->schwarz_max_block_atoms,512u);
+    const auto operator_round_tripped=io::Decode(io::Encode(operator_decoded));
+    ASSERT_TRUE(operator_round_tripped.metadata.solver);
+    EXPECT_EQ(operator_round_tripped.metadata.solver->search_method,"operator-pcg");
+    EXPECT_EQ(operator_round_tripped.metadata.solver->preconditioner,"Schwarz");
+    EXPECT_EQ(operator_round_tripped.metadata.solver->operator_rank_mode,"Auto");
+    EXPECT_EQ(operator_round_tripped.metadata.solver->schwarz_scratch_bytes,256ULL*1024*1024);
 
     auto partial=boost::json::parse(io::Encode(operator_result)).as_object();
     auto & partial_solver=partial.at("metadata").as_object().at("solver").as_object();

@@ -21,6 +21,7 @@ struct JointSolverProvenance
     std::optional<std::string> fixed_neighbor_local_work;
     std::optional<std::string> contract_version;
     std::optional<std::string> sparse_backend;
+    // Historical multi-route provenance only. These are not current solver controls.
     std::optional<std::string> preconditioner;
     std::optional<std::string> operator_rank_mode,operator_rank_backend;
     std::optional<int> operator_pcg_iterations,operator_damping_trials;
