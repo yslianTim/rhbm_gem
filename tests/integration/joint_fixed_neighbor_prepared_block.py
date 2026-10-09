@@ -17,8 +17,8 @@ from experiment_provenance import source_hash
 CORE_ATOMS = 12
 SMALL_CASE_ATOMS = 24
 DEFAULT_CASES = tuple(f"{topology}-{SMALL_CASE_ATOMS}" for topology in ("chain", "cube"))
-POLICY = "OneAccepted"
-MODE = "--inexact-one-search"
+POLICY = "FixedNeighbor"
+MODE = "--scaling-only"
 
 
 def _finite(value):
@@ -181,7 +181,7 @@ def analyze(rows, expected=None):
     return {
         "phase": "prepared FixedNeighbor structural contract",
         "policy": {"core_atoms": CORE_ATOMS, "maximum_sweeps": 30,
-                   "block_order": "forward", "local_work": POLICY,
+                   "block_order": "forward",
                    "local_search": "LegacyCompact", "backend": "SPQR", "eigen_threads": 1},
         "measurement_scope": "fixed-neighbor-search-only",
         "expected_cases": [{"topology": topology, "atoms": atoms} for topology, atoms in sorted(expected)],

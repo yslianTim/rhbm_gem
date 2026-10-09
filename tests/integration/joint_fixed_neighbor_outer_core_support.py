@@ -22,8 +22,8 @@ screen_HISTORICAL_CORE_SIZES = (64, 128, 256)
 # Keep the historical artifact reproducible while allowing every campaign to
 # choose its own explicit outer-core list.
 screen_CORE_SIZES = screen_HISTORICAL_CORE_SIZES
-screen_POLICY = "OneAccepted"
-screen_MODE = "--inexact-one-search"
+screen_POLICY = "FixedNeighbor"
+screen_MODE = "--scaling-only"
 
 
 def screen_finite(value):
@@ -358,8 +358,8 @@ def screen_run_campaign(args):
     screen_write_outputs(analysis, output_dir)
     (output_dir / "README.md").write_text(
         "# FixedNeighbor outer-core performance study\n\n"
-        "This search-only study keeps the production-compatible OneAcceptedLocalUpdate "
-        "policy, forward serial Gauss-Seidel order, SPQR backend, one Eigen thread, and "
+        "This search-only study keeps FixedNeighbor's intrinsic one-accepted local-update "
+        "contract, forward serial Gauss-Seidel order, SPQR backend, one Eigen thread, and "
         "frozen stationarity checks. It varies only outer core_atoms over "
         f"{', '.join(str(core) for core in core_sizes)} for "
         f"{', '.join(f'{topology}-{atoms}' for topology, atoms in cases)}.\n\n"
@@ -373,7 +373,7 @@ def screen_run_campaign(args):
 
 endpoint_DEFAULT_CASES = ("chain-256", "cube-256", "chain-512", "cube-512")
 endpoint_FINALIST_CORES = (12, 16, 64)
-endpoint_MODE = "--inexact-one-endpoint"
+endpoint_MODE = "--neighbor-only"
 endpoint_KKT_LIMIT = 1e-10
 endpoint_WIDTH_GRADIENT_LIMIT = 1e-12
 endpoint_REPLAY_CACHE_LIMIT = 2e-12
@@ -457,7 +457,7 @@ def endpoint_run_case(args, output_dir, topology, atoms, core_atoms):
 def endpoint_summarize_endpoint(report):
     result = report.get("result") or {}
     fixed = result.get("fixed_neighbor", result)
-    row = screen_summarize({**report, "policy": "OneAccepted",
+    row = screen_summarize({**report, "policy": screen_POLICY,
                      "measurement_scope": "fixed-neighbor-endpoint-assessed"})
     global_kkt = endpoint_check_value(fixed, "global_kkt")
     objective = fixed.get("objective")
@@ -598,7 +598,7 @@ def endpoint_run_campaign(args):
         "backend": "SPQR", "eigen_threads": 1,
         "cases": [f"{topology}-{atoms}" for topology, atoms in cases],
         "core_sizes": list(core_sizes), "local_search": "LegacyCompact",
-        "local_work": "OneAcceptedUpdate", "block_order": "Forward",
+        "block_order": "Forward",
         "maximum_sweeps": 30, "measurement_scope": "fixed-neighbor-endpoint-assessed",
         "resource_envelope": {"wall_seconds": args.timeout, "rss_bytes": args.rss_limit},
         "correctness_contract": ["block-stationary", "AC KKT <= 1e-10",
@@ -615,7 +615,8 @@ def endpoint_run_campaign(args):
         "This C3 campaign qualifies finalist outer cores "
         f"{', '.join(str(core) for core in core_sizes)} on "
         f"{', '.join(f'{topology}-{atoms}' for topology, atoms in cases)}. "
-        "It keeps LegacyCompact, OneAcceptedUpdate, Forward serial Gauss-Seidel, "
+        "It keeps LegacyCompact, the intrinsic one-accepted local-update contract, "
+        "Forward serial Gauss-Seidel, "
         "SPQR, one Eigen thread, maximum_sweeps=30, and all existing thresholds.\n\n"
         "Core 64 is the historical/control comparison. Endpoint parity reports objective, eta, "
         "scaled A/C, and rank evidence; it does not require bitwise-identical trajectories.\n\n"
@@ -1004,7 +1005,8 @@ def frontier_run_campaign(args):
     frontier_write_outputs(analysis, output_dir)
     (output_dir / "README.md").write_text(
         "# FixedNeighbor outer-core repeated frontier\n\n"
-        "This P4 frontier keeps LegacyCompact, OneAcceptedUpdate, Forward serial "
+        "This P4 frontier keeps LegacyCompact, FixedNeighbor's intrinsic one-accepted "
+        "local-update contract, Forward serial "
         "Gauss-Seidel, SPQR, one Eigen thread, and the existing search gates. It uses "
         f"one warmup and {frontier_MEASURED_REPETITIONS} interleaved measured repetitions. The "
         f"512-atom cases compare finalists {', '.join(str(core) for core in finalists)} "

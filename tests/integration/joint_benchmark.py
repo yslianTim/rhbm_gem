@@ -195,10 +195,7 @@ def command_for_profile(args, case, output, build):
                 raise ValueError('FixedNeighbor benchmarks require a synthetic chain-N or cube-N case.')
             if not fixed_neighbor.is_file():
                 raise ValueError('Build joint_fixed_neighbor_experiment with RHBM_GEM_BUILD_BENCHMARKS=ON')
-            if args.fixed_local_work == 'one':
-                mode = '--inexact-one-search' if args.profile == 'search' else '--inexact-one-endpoint'
-            else:
-                mode = '--scaling-only' if args.profile == 'search' else '--neighbor-only'
+            mode = '--scaling-only' if args.profile == 'search' else '--neighbor-only'
             return [str(fixed_neighbor), mode, str(output), case['topology'],
                     str(case['atoms']), str(args.fixed_core_atoms)]
         if not sparse.is_file():
@@ -306,14 +303,12 @@ def solver_policy_metadata(args, backend):
         'operator_factor_ownership': (args.operator_factor_ownership or 'reuse-accepted-copy-on-write')
             if args.profile == 'search' else None,
         'search_trial_telemetry': args.search_trial_telemetry if args.profile == 'search' else None,
-        'fixed_neighbor_local_work': (args.fixed_local_work if fixed_neighbor_active else None),
         'fixed_neighbor_core_atoms': (args.fixed_core_atoms if fixed_neighbor_active else None),
         'fixed_neighbor_block_order': 'forward' if fixed_neighbor_active else None,
         'fixed_neighbor_maximum_sweeps': 30 if fixed_neighbor_active else None,
         'fixed_neighbor_local_search': 'LegacyCompact' if fixed_neighbor_active else None,
         'fixed_neighbor_policy': (
-            'production' if fixed_neighbor_active and args.fixed_local_work == 'one' and
-            args.fixed_core_atoms == 12 else 'custom'
+            'production' if fixed_neighbor_active and args.fixed_core_atoms == 12 else 'custom'
             if fixed_neighbor_active else None),
         'projected_reduction': args.projected_reduction,
         'preconditioner': args.preconditioner,
@@ -665,8 +660,6 @@ def build_parser():
     parser.add_argument('--schwarz-max-block-atoms', type=int, default=512)
     parser.add_argument('--schwarz-storage-mib', type=int, default=512)
     parser.add_argument('--schwarz-scratch-mib', type=int, default=256)
-    parser.add_argument('--fixed-local-work', choices=('full', 'one'), default='one',
-                        help='Benchmark-only FixedNeighbor local-work policy; default is the production OneAccepted policy')
     parser.add_argument('--fixed-core-atoms', type=int, default=12,
                         help='Benchmark-only FixedNeighbor core size; default is the production 12-atom core')
     parser.add_argument('--fixed-action', choices=('composed', 'normal'), default='normal')
@@ -695,9 +688,8 @@ def validate_args(parser, args):
         parser.error('Schwarz core, max block, and memory limits must be positive; overlap must be nonnegative and max block must cover core')
     if args.fixed_core_atoms <= 0:
         parser.error('FixedNeighbor core atoms must be positive')
-    if args.preconditioner != 'fixed-neighbor' and (args.fixed_local_work != 'one' or
-                                                    args.fixed_core_atoms != 12):
-        parser.error('FixedNeighbor local-work and core options require --preconditioner fixed-neighbor')
+    if args.preconditioner != 'fixed-neighbor' and args.fixed_core_atoms != 12:
+        parser.error('FixedNeighbor core option requires --preconditioner fixed-neighbor')
     if args.profile == 'fixed' and args.preconditioner == 'legacy':
         parser.error('fixed profile requires identity, diagonal, or schwarz preconditioner')
     if args.profile == 'fixed' and args.preconditioner == 'fixed-neighbor':

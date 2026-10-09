@@ -237,7 +237,7 @@ class JointBenchmarkContract(unittest.TestCase):
                 '--build-dir', str(build), '--output', 'fixed.json', '--preconditioner', 'fixed-neighbor'])
             benchmark.validate_args(parser, fixed_args)
             fixed_command = benchmark.command_for_profile(fixed_args, case, Path('fixed.json'), build)
-            self.assertEqual(fixed_command[1], '--inexact-one-search')
+            self.assertEqual(fixed_command[1], '--scaling-only')
             self.assertEqual(fixed_command[-1], '12')
             self.assertEqual(benchmark.solver_policy_metadata(fixed_args, 'SPQR')['search_method'],
                              'FixedNeighborBlocks')
@@ -246,15 +246,12 @@ class JointBenchmarkContract(unittest.TestCase):
 
             optimized_args = parser.parse_args(['--profile', 'search', '--case', 'chain-768',
                 '--build-dir', str(build), '--output', 'fixed-optimized.json',
-                '--preconditioner', 'fixed-neighbor', '--fixed-local-work', 'one',
-                '--fixed-core-atoms', '64'])
+                '--preconditioner', 'fixed-neighbor', '--fixed-core-atoms', '64'])
             benchmark.validate_args(parser, optimized_args)
             optimized_command = benchmark.command_for_profile(
                 optimized_args, case, Path('fixed-optimized.json'), build)
-            self.assertEqual(optimized_command[1], '--inexact-one-search')
+            self.assertEqual(optimized_command[1], '--scaling-only')
             self.assertEqual(optimized_command[-1], '64')
-            self.assertEqual(benchmark.solver_policy_metadata(optimized_args, 'SPQR')[
-                'fixed_neighbor_local_work'], 'one')
             self.assertEqual(benchmark.solver_policy_metadata(optimized_args, 'SPQR')[
                 'fixed_neighbor_policy'], 'custom')
 
@@ -264,17 +261,17 @@ class JointBenchmarkContract(unittest.TestCase):
                                   '--build-dir', 'build/debug', '--output', 'result.json',
                                   '--preconditioner', 'fixed-neighbor'])
         benchmark.validate_args(parser, args)
-        self.assertEqual((args.fixed_core_atoms, args.fixed_local_work), (12, 'one'))
+        self.assertEqual(args.fixed_core_atoms, 12)
         policy = benchmark.solver_policy_metadata(args, 'SPQR')
         self.assertEqual({key: policy[key] for key in (
-            'fixed_neighbor_core_atoms', 'fixed_neighbor_local_work',
+            'fixed_neighbor_core_atoms',
             'fixed_neighbor_block_order', 'fixed_neighbor_local_search',
             'fixed_neighbor_maximum_sweeps', 'fixed_neighbor_policy')}, {
-            'fixed_neighbor_core_atoms': 12, 'fixed_neighbor_local_work': 'one',
+            'fixed_neighbor_core_atoms': 12,
             'fixed_neighbor_block_order': 'forward', 'fixed_neighbor_local_search': 'LegacyCompact',
             'fixed_neighbor_maximum_sweeps': 30, 'fixed_neighbor_policy': 'production'})
 
-    def test_fixed_neighbor_endpoint_profile_uses_one_accepted_driver_mode(self):
+    def test_fixed_neighbor_endpoint_profile_uses_canonical_driver_mode(self):
         parser = benchmark.build_parser()
         args = parser.parse_args(['--profile', 'solve', '--case', 'chain-8',
                                   '--build-dir', 'build/debug', '--output', 'result.json',
@@ -287,7 +284,7 @@ class JointBenchmarkContract(unittest.TestCase):
             command = benchmark.command_for_profile(
                 args, {'kind': 'synthetic', 'topology': 'chain', 'atoms': 8}, Path('result.json'),
                 build)
-        self.assertEqual(command[1], '--inexact-one-endpoint')
+        self.assertEqual(command[1], '--neighbor-only')
         self.assertEqual(command[-1], '12')
 
     def test_compact_assessment_route_is_benchmark_only(self):
