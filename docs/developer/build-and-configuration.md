@@ -145,7 +145,11 @@ cmake -S . -B build-research \\
 cmake --build build-research --target research_tools_all
 ```
 
-`joint_sparse_benchmark` is shared by benchmark and research builds. Stage A's
+Benchmark builds create the current Joint benchmark executables, including
+`joint_fixed_neighbor_experiment`, `joint_component_benchmark` and
+`joint_postprocessing_benchmark`. The former `joint_sparse_benchmark`, Schwarz
+sweep and route-frontier campaigns are retired; their compact historical
+evidence remains under `docs/developer/figures/`. Stage A's
 `joint_offline_diagnostic` is created only by
 `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS`; Stage B's
 `joint_statistical_experiment` is created only by

@@ -18,18 +18,18 @@ checkout.
 | Concern | Current owner |
 | --- | --- |
 | Runtime estimator and selection domain | [Runtime guide](joint-component-runtime.md) |
-| Sparse backend and bounded SPQR rank | [Sparse backend](joint-component-sparse-backend.md) |
+| Sparse backend and shared factorization | [Sparse backend](joint-component-sparse-backend.md) |
 | Compact SVD | [Compact SVD](joint-component-compact-svd.md) |
 | Fixed factors and normal actions | [Fixed actions](joint-fixed-actions.md) |
-| Tiled/profile operator | [Profile operator](joint-profile-operator.md) |
-| Operator search | [Operator search](joint-operator-search.md) |
+| Historical profile/operator evidence | [Retired profile-operator record](joint-profile-operator.md) |
+| Historical OperatorPcg evidence | [Retired OperatorPcg record](joint-operator-search.md) |
 | Observable halo | [Observable-halo parameterization](joint-observable-halo.md) |
 | Target estimability | [Target estimability](joint-target-estimability.md) |
 | Offline weak-halo diagnosis | [Weak-halo guide](joint-weak-halo-attribution.md) |
 | Statistical research protocol | [Noise/mismatch experiment](joint-noise-mismatch-validation.md) |
 | Current benchmark commands | [Benchmark guide](joint-benchmark.md) |
-| Assessment derivative reduction and end-to-end frontier | [Benchmark guide](joint-benchmark.md#post-compact-assessment-frontier) |
-| Operator search factor ownership and lifetime | [Operator search](joint-operator-search.md#factor-residency-and-representation) and [ownership campaign](figures/joint-factor-ownership-r1/campaign-manifest.json) |
+| Historical assessment and end-to-end evidence | [Benchmark guide](joint-benchmark.md#historical-evidence) |
+| Historical operator factor ownership and lifetime | [Retired OperatorPcg record](joint-operator-search.md) and [ownership campaign](figures/joint-factor-ownership-r1/campaign-manifest.json) |
 | Workflow integration | [Stage integration](joint-stage-integration.md) |
 | Data and persistence | [Data I/O architecture](architecture/dataobject-io-architecture.md) and [Joint JSON/CSV contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schemas-3-4-and-5) |
 | Certification mathematics | [Certification contract](joint_abc_certification_contract.md) |
@@ -37,27 +37,17 @@ checkout.
 
 ### Current scalability axes
 
-The benchmark guide keeps rank certification, Krylov iteration scaling,
-operator throughput, search factor memory, assessment derivative reduction,
-and end-to-end returned-state assessment separate. Current assessment uses
-guarded compact Jacobian reduction with observation-tiled projected QR; the
-fixed-order projected-width route remains benchmark-only after its 512 RSS
-gate. The internal OperatorPcg path reuses the accepted profile factor with
-copy-on-write workspace mutation and falls back to the dedicated factor when
-bounded rank needs its factor view. `LegacyCompact` remains the production
-search default. The [operator search guide](joint-operator-search.md) and
-[benchmark guide](joint-benchmark.md) link the exact current measurement
-artifacts.
+The active benchmark separates FixedNeighbor search-only attribution, production
+solve with endpoint certification and `RuntimeConvergence`, workflow/persistence
+smoke, and complete-command smoke. Current measurements use the shared EIGEN or
+SPQR backend and the unchanged production policy: core 12, Forward order, 30
+maximum sweeps, local `LegacyCompact`, and at most one trusted local update per
+block visit.
 
-The benchmark-only Projected Tail QR reuses the free-design Q and factors the
-projected tail. It passes the 128/256 parity and speed gates and completed
-chain-512 on a repeat, but cube-512 crossed 4 GiB in tail symbolic factorization;
-observation-tiled projected QR remains the production route. The cube-2048
-Schwarz COW diagnostic completed at 671.35 s under its excluded 6-GiB / 900-s
-limit. The evict-before-trial prototype limits live global-factor residency to
-one at cube-512/1024 with exact trajectory parity, but its formal cube-2048
-retry crossed 4 GiB in `spqr-numeric` while one factor was resident. It remains
-benchmark-only; both memory and time remain current search constraints.
+Rank certification, Krylov iteration scaling, operator throughput, Schwarz
+geometry and operator-factor residency are closed historical dimensions. Their
+compact results remain below and in the figures, but no current driver or
+runtime route depends on them.
 
 ## 2. Algorithm-formation evidence
 
@@ -99,8 +89,8 @@ state-availability outcomes.
 | Fixed factors and normal actions | The recorded campaign completed **72/72 processes** and **24/24** three-repetition A/B, B/C, and A/C comparisons. Normal actions used two Q/Q′ calls versus six for the composed control. | These fixed-state/fixed-step results do not promote a different full-search default or establish large-workflow scalability. Some original step subtotals omitted gradient setup; corrected bounds are not exact end-to-end step times. | [Fixed actions](joint-fixed-actions.md); [summary](figures/joint-fixed-actions/summary.json) and [comparison decisions](figures/joint-fixed-actions/comparison.json). |
 | Endpoint reference | The 43.81-minute historical campaign completed all 18 fixed-state audits and all 128/512 analysis-export comparisons. Single-128 changed from 5.229 s to 4.912 s; single-512 from 307.805 s to 300.564 s, with peak RSS from 2.500 GiB to 1.872 GiB for single-512. Search reference evaluations changed from six to zero. Detailed comparisons and archive provenance remain in the [summary](figures/joint-reference-acceptance/summary.json) and [archive inventory](figures/joint-reference-acceptance/archives.json). | These are incremental historical results on the recorded host; search and endpoint assessment remained the dominant costs. | [Compact SVD](joint-component-compact-svd.md). |
 | Profile operator | The experiment-specific receipts have been retired from the current tree. The summary below is the canonical historical record. All 18 fixed-state audits passed, establishing operator/action parity on finite recorded controls. The 10,000-atom workload was preparation-only and does not prove solve, search, or full-workflow scalability. Historical 6Z6U runs hit the sampled RSS watchdog and established no numerical verdict. | Fixed-state and preparation-only results do not establish full-workflow scalability or a 6Z6U numerical outcome. | [Profile operator](joint-profile-operator.md). |
-| Operator LM and Schwarz search | The experiment-specific receipts have been retired from the current tree. The summary below is the canonical historical record. The full promotion campaign was incomplete and required comparisons were not all run. The historical Single-512 performance gate did not support promotion; the production default remained LegacyCompact. No 6Z6U promotion conclusion was established. | The campaign does not support changing the production default. | [Operator search](joint-operator-search.md). |
-| Bounded SPQR rank prototype | Small controls established full-rank and deficient decisions against the dense oracle. Two representative SPQR prototypes returned Unavailable before completing the reconstruction certificate. | Unavailable is not deficient; no definitive 128-atom or 512/2,000-atom rank result or scaling guarantee was established. A separate Single-512 Schwarz attempt exceeded the sampled RSS threshold on both backends and had no endpoint. | [Sparse backend](joint-component-sparse-backend.md). |
+| Operator LM and Schwarz search | The experiment-specific receipts have been retired from the current tree. The summary below is the canonical historical record. The full promotion campaign was incomplete and required comparisons were not all run. The historical Single-512 performance gate did not support promotion; the qualified FixedNeighbor route was subsequently adopted as the production default. No 6Z6U promotion conclusion was established. | The campaign is closed and does not define a current solver route. | [Operator search](joint-operator-search.md). |
+| Bounded SPQR rank prototype | Small controls established full-rank and deficient decisions against the dense oracle. Two representative SPQR prototypes returned Unavailable before completing the reconstruction certificate. | Unavailable is not deficient; no definitive 128-atom or 512/2,000-atom rank result or scaling guarantee was established. A separate Single-512 Schwarz attempt exceeded the sampled RSS threshold on both backends and had no endpoint. The rank prototype is historical; shared sparse factorization remains current. | [Sparse backend](joint-component-sparse-backend.md). |
 
 These fixed-state results must not be confused with the full-command resource
 envelope in §6.

@@ -1,9 +1,9 @@
 # FixedNeighbor small outer-core qualification
 
 Status: **qualified and adopted** on 2026-10-08. The production
-`FixedNeighborSearchPolicy` default outer core is now **12 atoms**. The route
-remains explicit; this does not make `FixedNeighbor` the global default search
-method.
+`FixedNeighborSearchPolicy` default outer core is now **12 atoms**. FixedNeighbor
+is the default Joint production route; during Checkpoint A, the remaining
+top-level LegacyCompact route is only a temporary reference path.
 
 ## Scope and contract
 

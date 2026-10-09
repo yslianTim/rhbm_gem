@@ -167,17 +167,20 @@ those prepared samples in isolation and supplies First B plus seed provenance to
 target summary, post-fit peeling, uncertainty, and parameter-evidence group
 inference.
 
-Joint search is explicit and applies only to `JOINT_COMPONENTS`:
+Joint search is explicit and applies only to `JOINT_COMPONENTS` during the
+Checkpoint A transition:
 
 ```text
---joint-search legacy-compact   # default
---joint-search fixed-neighbor
+--joint-search fixed-neighbor   # default production route
+--joint-search legacy-compact   # temporary reference route
 ```
 
-`FixedNeighbor` is a supported bounded-memory production route with the fixed
+`FixedNeighbor` is the qualified bounded-memory production route with the fixed
 core-12, forward, one-accepted-local-update policy documented in the
-[joint runtime contract](../joint-component-runtime.md). It is not an
-automatic fallback or size-based route. Supplying a non-default
+[joint runtime contract](../joint-component-runtime.md). Its local profile
+solver is the existing `LegacyCompact` implementation. It is not an automatic
+fallback or size-based route. The removed `operator-pcg` option is rejected by
+validation; it does not silently select FixedNeighbor. Supplying a non-default
 `joint_search_method` with `TWO_STAGE` produces a normalization warning and
 the two-stage estimator continues on its existing path.
 
@@ -272,8 +275,10 @@ version or access either input file.
 `fixed-neighbor-production-v2`; `fixed_neighbor_local_work` is absent or null,
 because it is legacy provenance rather than a current policy input. They also
 persist the optional `joint-solver-provenance-v2` contract, active sparse
-backend, resolved OperatorPcg rank/preconditioner budgets, and FixedNeighbor's
-maximum sweeps, forward order and `legacy-compact` local search.
+backend, and FixedNeighbor's maximum sweeps, forward order and
+`legacy-compact` local search. Operator, rank, preconditioner and Schwarz
+controls are historical provenance only and are not emitted by current
+writers.
 
 Older `fixed-neighbor-production-v1` records remain readable and preserve their
 explicit `full`, `one-accepted`, or `two-accepted` local-work provenance. A v2
