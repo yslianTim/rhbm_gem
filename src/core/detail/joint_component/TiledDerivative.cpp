@@ -1,5 +1,5 @@
 #include "TiledDerivative.hpp"
-#include "SparseFactor.hpp"
+#include "ResourceWork.hpp"
 #include "CompactSvd.hpp"
 #include <cmath>
 #include <optional>
@@ -33,7 +33,7 @@ namespace {
 TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const EvaluationContext * context,
     double absolute,Eigen::Index tile,bool compact_jacobian)
 {
-    auto & work=SparseWorkForTesting(); ++work.derivative_preparations;
+    auto & work=NumericsWorkForTesting(); ++work.derivative_preparations;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     auto & derivative_work=DerivativeWorkForTesting();
 #endif
@@ -95,7 +95,7 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         WorkTimer timer(derivative_work.preparation.cancellation_fallback_seconds);
 #endif
-        ++SparseWorkForTesting().cancellation_reductions;
+        ++NumericsWorkForTesting().cancellation_reductions;
         out.reference_order=true;
         // Match the independent reference's multiply-add accumulation before
         // normalization amplifies a nearly cancelled projected column.

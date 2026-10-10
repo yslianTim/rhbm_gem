@@ -1,6 +1,6 @@
 #include "FixedNeighborBlockCoordinate.hpp"
 #include "Problem.hpp"
-#include "SparseFactor.hpp"
+#include "ResourceWork.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>

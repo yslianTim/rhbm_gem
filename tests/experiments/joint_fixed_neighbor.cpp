@@ -1,6 +1,5 @@
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
 #include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/joint_component/SparseFactor.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "support/JointOperatorWorkload.hpp"
 #include <boost/json.hpp>

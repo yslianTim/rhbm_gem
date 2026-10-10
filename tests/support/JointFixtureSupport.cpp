@@ -3,7 +3,7 @@
 #include "support/JointRuntimeJson.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/joint_component/SparseFactor.hpp"
+#include "core/detail/joint_component/ResourceWork.hpp"
 #include <fstream>
 #include <sstream>
 namespace second_stage_test::matched::joint_abc {
@@ -34,7 +34,7 @@ j::object DerivativeParity(const Domain & domain,const Vector & y,const j::value
     if(state.is_null()) return {{"status","unavailable"},{"reason","missing-trusted-state"}};
     const auto e=runtime::EvaluateState(domain,y,Parse(state.at("eta")),Parse(state.at("beta")),context);
     const auto dense=DenseDifferentiate(e,context.scale,&context);
-    const auto cancellations=runtime::SparseWorkForTesting().cancellation_reductions;
+    const auto cancellations=runtime::NumericsWorkForTesting().cancellation_reductions;
     const auto prepared=runtime::PrepareDerivative(e,context.scale,&context);
     const auto reduced=runtime::ReduceDerivative(prepared,e.residual);
     if(dense.valid!=reduced.valid) return {{"status","failed"},{"reason","derivative-validity"}};
@@ -88,7 +88,7 @@ j::object DerivativeParity(const Domain & domain,const Vector & y,const j::value
     passed &= gradient_passed;
     return {{"status",passed ? (correction_available ? "passed" : "limited") : "failed"},
         {"active_face",j::value_from(e.certificate.active_atoms)},{"raw_assembly_difference",raw_error},{"spectrum_families",families},{"projected_column_norms",j::value_from(std::vector<double>(reduced.projected_norms.data(),reduced.projected_norms.data()+reduced.projected_norms.size()))},
-        {"cancellation_fallback",runtime::SparseWorkForTesting().cancellation_reductions>cancellations},
+        {"cancellation_fallback",runtime::NumericsWorkForTesting().cancellation_reductions>cancellations},
         {"projected_relative_difference",projected_error},{"jacobian_relative_difference",jacobian_error},
         {"normalized_spectrum_difference",spectrum_error},{"ranks_agree",ranks},{"gradient_passed",gradient_passed},
         {"local_correction_available",correction_available},{"local_correction_scaled_difference",correction_available ? j::value(correction_error) : j::value(nullptr)}};

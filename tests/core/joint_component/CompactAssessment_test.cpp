@@ -3,7 +3,6 @@
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "core/detail/joint_component/CompactSvd.hpp"
 #include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/joint_component/SparseFactor.hpp"
 #include "support/JointOperatorWorkload.hpp"
 #include "support/JointRuntimeJson.hpp"
 #include <boost/json.hpp>

@@ -1,5 +1,5 @@
 #include "Numerics.hpp"
-#include "SparseFactor.hpp"
+#include "ResourceWork.hpp"
 #include "CompactSvd.hpp"
 #include <Eigen/SparseQR>
 #include <Eigen/QR>
@@ -30,7 +30,7 @@ Eigen::VectorXd ColumnNorms(const Sparse & x)
 std::pair<Eigen::MatrixXd,Eigen::VectorXd> ReferenceQR(const Sparse & x,
     const Eigen::VectorXd & weights,const Eigen::VectorXd & scales,VectorRef y)
 {
-    ++SparseWorkForTesting().reference; WorkTimer timer(SparseWorkForTesting().reference_seconds);
+    ++NumericsWorkForTesting().reference; WorkTimer timer(NumericsWorkForTesting().reference_seconds);
     const Eigen::SparseMatrix<double,Eigen::RowMajor> rows(x);
     Eigen::MatrixXd r(0,x.cols()); Eigen::VectorXd target(0);
     constexpr Eigen::Index tile=8192;
@@ -172,7 +172,7 @@ BlockFace SolveBlocks(const Sparse & x,VectorRef y,const Eigen::VectorXd & weigh
         {
             Eigen::SparseQR<Sparse,Eigen::COLAMDOrdering<int>> qr;
             qr.setPivotThreshold(absolute); qr.compute(f.reduced);
-            if(qr.info()==Eigen::Success) SparseWorkForTesting().factor_nonzeros=std::max(SparseWorkForTesting().factor_nonzeros,static_cast<std::size_t>(qr.matrixR().nonZeros()));
+            if(qr.info()==Eigen::Success) NumericsWorkForTesting().factor_nonzeros=std::max(NumericsWorkForTesting().factor_nonzeros,static_cast<std::size_t>(qr.matrixR().nonZeros()));
             if(qr.info()!=Eigen::Success) {out.valid=false; return out;}
             out.rank+=static_cast<int>(qr.rank()); solution=qr.solve(f.rhs);
         }
@@ -258,7 +258,7 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
             // largest norm of the weighted, column-normalized design.
             const auto reduced{ReduceSparseRows(selected,rhs)};
             qr.setPivotThreshold(rank_threshold*maximum_norm); qr.compute(reduced.first);
-            if(qr.info()==Eigen::Success) SparseWorkForTesting().factor_nonzeros=std::max(SparseWorkForTesting().factor_nonzeros,static_cast<std::size_t>(qr.matrixR().nonZeros()));
+            if(qr.info()==Eigen::Success) NumericsWorkForTesting().factor_nonzeros=std::max(NumericsWorkForTesting().factor_nonzeros,static_cast<std::size_t>(qr.matrixR().nonZeros()));
             if(qr.info()!=Eigen::Success) {out.reason="nonfinite"; return out;}
             out.rank=static_cast<int>(qr.rank()); solution=qr.solve(reduced.second);
         }
@@ -269,8 +269,8 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
             // without materializing the tall left singular-vector matrix.
             Eigen::MatrixXd r; Eigen::VectorXd transformed;
             {
-                ++SparseWorkForTesting().reference_compacts;
-                WorkTimer timer(SparseWorkForTesting().reference_compact_seconds);
+                ++NumericsWorkForTesting().reference_compacts;
+                WorkTimer timer(NumericsWorkForTesting().reference_compact_seconds);
                 const Eigen::HouseholderQR<Eigen::MatrixXd> reduction(a);
                 r=reduction.matrixQR().topRows(a.cols()).triangularView<Eigen::Upper>();
                 transformed=(reduction.householderQ().adjoint()*rhs).eval().head(a.cols());

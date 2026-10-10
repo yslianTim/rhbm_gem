@@ -1,5 +1,5 @@
 #include "CompactSvd.hpp"
-#include "SparseFactor.hpp"
+#include "ResourceWork.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -12,7 +12,7 @@ namespace {
 template<class Svd>
 CompactSvdResult Decompose(const Matrix & matrix,double relative,double absolute,const Vector * rhs,bool guard,bool right)
 {
-    auto & work=SparseWorkForTesting();
+    auto & work=NumericsWorkForTesting();
     CompactSvdResult out; Svd svd;
     {
         WorkTimer timer(rhs ? work.reference_svd_seconds : work.free_design_svd_seconds);
@@ -54,7 +54,7 @@ CompactSvdResult CompactSvd(const Matrix & matrix,double relative,double absolut
     RecordDenseShape("svd-input",matrix.rows(),matrix.cols());
     if(vectors==CompactSvdVectors::Right) RecordDenseShape("svd-right-vectors",matrix.cols(),std::min(matrix.rows(),matrix.cols()));
     const bool right=vectors==CompactSvdVectors::Right;
-    auto & work=SparseWorkForTesting();
+    auto & work=NumericsWorkForTesting();
     ++(rhs ? work.reference_svds : work.free_design_svds);
     if(matrix.rows()==0 || matrix.cols()==0 || !matrix.allFinite() ||
         (rhs && (rhs->size()!=matrix.rows() || !rhs->allFinite()))) return {};

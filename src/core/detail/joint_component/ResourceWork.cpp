@@ -1,10 +1,10 @@
-#include "SparseFactor.hpp"
+#include "ResourceWork.hpp"
+#include "Numerics.hpp"
 #include <algorithm>
-#include <chrono>
 #include <cstring>
 
 namespace rhbm_gem::core::joint_component {
-SparseWork & SparseWorkForTesting() {static thread_local SparseWork work; return work;}
+NumericsWork & NumericsWorkForTesting() {static thread_local NumericsWork work; return work;}
 ResourceWork & ResourceWorkForTesting() {static thread_local ResourceWork work; return work;}
 ProfileEvaluationRole & ProfileEvaluationRoleForTesting()
 {static thread_local auto role=ProfileEvaluationRole::Unspecified; return role;}
@@ -101,5 +101,4 @@ ResourcePhase::~ResourcePhase()
     w.phase=previous_;
     if(search_stage_) NotifyResourceStageObserver();
 }
-
 }

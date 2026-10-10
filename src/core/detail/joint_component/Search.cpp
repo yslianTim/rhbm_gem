@@ -1,5 +1,5 @@
 #include "Numerics.hpp"
-#include "SparseFactor.hpp"
+#include "ResourceWork.hpp"
 #include "InstrumentedLM.hpp"
 #include "TiledDerivative.hpp"
 #include <algorithm>

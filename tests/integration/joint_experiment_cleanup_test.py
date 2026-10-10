@@ -54,6 +54,8 @@ RETIRED_REPOSITORY_FILES = (
     "tests/core/joint_component/OperatorSearch_test.cpp",
     "tests/core/joint_component/ProfileOperator_test.cpp",
     "tests/core/joint_component/ProjectedTailQr_test.cpp",
+    "src/core/detail/joint_component/SparseFactor.hpp",
+    "src/core/detail/joint_component/SparseFactor.cpp",
 )
 
 ACTIVE_BACKEND_TERMS = (
@@ -67,6 +69,7 @@ ACTIVE_BACKEND_TERMS = (
     "SparseBackendEnabled",
     "SPQR_ORDERING",
     "SpqrOrdering",
+    "SparseFactor",
 )
 
 RETIRED_FIXTURES = (

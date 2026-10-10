@@ -25,7 +25,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/joint_component/TiledDerivative.cpp
     core/detail/joint_component/LinearSolve.cpp
     core/detail/joint_component/CompactSvd.cpp
-    core/detail/joint_component/SparseFactor.cpp
+    core/detail/joint_component/ResourceWork.cpp
     core/detail/joint_component/StructuralPartition.cpp
     core/detail/joint_component/FixedBBlockCoordinate.cpp
     core/detail/joint_component/FixedNeighborBlockCoordinate.cpp

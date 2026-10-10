@@ -22,7 +22,6 @@
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "core/detail/JointCliProgressReporter.hpp"
 #include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/joint_component/SparseFactor.hpp"
 #include "support/JointOperatorWorkload.hpp"
 
 namespace {

@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/TiledDerivative.hpp"
-#include "core/detail/joint_component/SparseFactor.hpp"
+#include "core/detail/joint_component/ResourceWork.hpp"
 #include "core/detail/joint_component/CompactSvd.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "support/JointOperatorWorkload.hpp"
@@ -412,7 +412,7 @@ TEST(JointComponentNumericsTest, CompactJacobianDiagnosticsCoverCancellationAndA
         auto e=n::EvaluateProfile(domain,sample.y,Eigen::Vector2d(.55,.51).array().log(),false,&context);
         ASSERT_TRUE(e.valid);
         e.derivative=e.x;
-        n::SparseWorkForTesting()={};
+        n::NumericsWorkForTesting()={};
         const auto prepared=n::PrepareDerivative(e,context.scale,&context);
         ASSERT_TRUE(prepared.valid);
         EXPECT_TRUE(prepared.reference_order);
@@ -540,9 +540,9 @@ TEST(JointComponentNumericsTest, SparseWeightedSolveAndIndependentReferenceMatch
     EXPECT_EQ(primary.rank,dense.rank); EXPECT_EQ(reference.rank,dense.rank);
     EXPECT_LT((primary.beta-dense.beta).norm(),1e-10);
     EXPECT_LT((reference.beta-dense.beta).norm(),1e-10);
-    const auto before=n::SparseWorkForTesting().reference;
+    const auto before=n::NumericsWorkForTesting().reference;
     n::SolveLinear(sparse,y,w,true);
-    EXPECT_EQ(n::SparseWorkForTesting().reference,before+1);
+    EXPECT_EQ(n::NumericsWorkForTesting().reference,before+1);
 }
 
 TEST(JointComponentNumericsTest, SparseReferencePreservesSvdRankNearDegeneracy)
@@ -569,10 +569,10 @@ TEST(JointComponentNumericsTest, SparseCancellationRetainsTiledDerivativePrecisi
     auto e=n::EvaluateProfile(domain,sample.y,Eigen::Vector2d(.55,.51).array().log(),false,&context);
     ASSERT_TRUE(e.valid);
     e.derivative=e.x; // Each raw width column now lies in the free design span.
-    n::SparseWorkForTesting()={};
+    n::NumericsWorkForTesting()={};
     const auto prepared=n::PrepareDerivative(e,context.scale,&context);
     ASSERT_TRUE(prepared.valid);
-    EXPECT_EQ(n::SparseWorkForTesting().cancellation_reductions,1);
+    EXPECT_EQ(n::NumericsWorkForTesting().cancellation_reductions,1);
     const auto dense=p::DenseDifferentiate(e,context.scale,&context);
     Matrix projected,jacobian; prepared.Rows(0,e.x.rows(),projected,jacobian);
     EXPECT_LT((projected-dense.projected).norm(),1e-12);
@@ -595,7 +595,7 @@ TEST(JointComponentNumericsTest, CompactSvdDispatchAndRepeatedSpectrumMatchJacob
         const double relative=std::numeric_limits<double>::epsilon()*1000000;
         n::CompactSvdResult expected;
         {SvdMode mode(n::CompactSvdMode::Legacy); expected=n::CompactSvd(x,relative,-1,&rhs);}
-        n::SparseWorkForTesting()={};
+        n::NumericsWorkForTesting()={};
         const auto spectrum=n::CompactSvd(x,relative),solved=n::CompactSvd(x,relative,-1,&rhs);
         ASSERT_TRUE(expected.valid && spectrum.valid && solved.valid);
         EXPECT_EQ(spectrum.used_bdc,size>=16); EXPECT_FALSE(spectrum.jacobi_retry);
@@ -603,9 +603,9 @@ TEST(JointComponentNumericsTest, CompactSvdDispatchAndRepeatedSpectrumMatchJacob
         EXPECT_LT((spectrum.singular_values-expected.singular_values).lpNorm<Eigen::Infinity>(),1e-10);
         EXPECT_LT((solved.solution-expected.solution).norm(),1e-10);
         EXPECT_NEAR(spectrum.threshold,relative,1e-10*relative);
-        EXPECT_EQ(n::SparseWorkForTesting().bdc_svds,size>=16 ? 2 : 0);
-        EXPECT_EQ(n::SparseWorkForTesting().reference_solves,1);
-        EXPECT_EQ(n::SparseWorkForTesting().free_design_svds,1);
+        EXPECT_EQ(n::NumericsWorkForTesting().bdc_svds,size>=16 ? 2 : 0);
+        EXPECT_EQ(n::NumericsWorkForTesting().reference_solves,1);
+        EXPECT_EQ(n::NumericsWorkForTesting().free_design_svds,1);
     }
 }
 
@@ -620,16 +620,16 @@ TEST(JointComponentNumericsTest, CompactSvdPreservesRankBoundaryAndAbsoluteOverr
         const Vector rhs=x*Vector::LinSpaced(16,.5,2.);
         n::CompactSvdResult expected;
         {SvdMode mode(n::CompactSvdMode::Legacy); expected=n::CompactSvd(x,relative,absolute,&rhs);}
-        n::SparseWorkForTesting()={};
+        n::NumericsWorkForTesting()={};
         const auto actual=n::CompactSvd(x,relative,absolute,&rhs);
         ASSERT_TRUE(actual.valid); EXPECT_EQ(actual.rank,expected.rank);
         EXPECT_EQ(actual.threshold,expected.threshold);
         EXPECT_LT((actual.solution-expected.solution).norm(),1e-10);
         const bool near=std::abs(factor-1)*threshold<=64*std::numeric_limits<double>::epsilon()*16;
         EXPECT_EQ(actual.jacobi_retry,near);
-        EXPECT_EQ(n::SparseWorkForTesting().jacobi_retries,near ? 1 : 0);
-        EXPECT_EQ(n::SparseWorkForTesting().reference_solves,1);
-        if(near) EXPECT_GT(n::SparseWorkForTesting().jacobi_retry_seconds,0);
+        EXPECT_EQ(n::NumericsWorkForTesting().jacobi_retries,near ? 1 : 0);
+        EXPECT_EQ(n::NumericsWorkForTesting().reference_solves,1);
+        if(near) EXPECT_GT(n::NumericsWorkForTesting().jacobi_retry_seconds,0);
     }
 }
 
@@ -716,11 +716,11 @@ TEST(JointComponentNumericsTest, CompactSvdLargeDerivativeAndReferencePreserveRe
     {SvdMode mode(n::CompactSvdMode::Legacy);
         legacy=n::PrepareDerivative(e,context.scale,&context);
         reference=n::EvaluateProfile(domain,y,eta,true,&context);}
-    n::SparseWorkForTesting()={};
+    n::NumericsWorkForTesting()={};
     const auto actual=n::PrepareDerivative(e,context.scale,&context);
     const auto fast=n::EvaluateProfile(domain,y,eta,true,&context);
     ASSERT_TRUE(actual.valid && legacy.valid && reference.valid && fast.valid);
-    EXPECT_GT(n::SparseWorkForTesting().bdc_svds,0);
+    EXPECT_GT(n::NumericsWorkForTesting().bdc_svds,0);
     EXPECT_LT((actual.coefficients-legacy.coefficients).norm(),1e-10);
     EXPECT_LT((actual.correction-legacy.correction).norm(),1e-10);
     EXPECT_LT((fast.beta-reference.beta).norm(),1e-10);
@@ -732,8 +732,8 @@ TEST(JointComponentNumericsTest, CompactSvdLargeDerivativeAndReferencePreserveRe
     EXPECT_LT((projected-dense.projected).norm()/dense.projected.norm(),1e-8);
     const auto rejected=n::PrepareDerivative(e,context.scale,&context,100.);
     EXPECT_FALSE(rejected.valid); EXPECT_EQ(rejected.reason,"rank-deficient-free-design");
-    EXPECT_EQ(n::SparseWorkForTesting().derivative_preparations,2);
-    EXPECT_GT(n::SparseWorkForTesting().derivative_seconds,0);
+    EXPECT_EQ(n::NumericsWorkForTesting().derivative_preparations,2);
+    EXPECT_GT(n::NumericsWorkForTesting().derivative_seconds,0);
 }
 
 TEST(JointComponentNumericsTest, CompactSvdReferencePreservesWeightedChangingActiveFace)
@@ -744,11 +744,11 @@ TEST(JointComponentNumericsTest, CompactSvdReferencePreservesWeightedChangingAct
     const Vector y=x*truth; Vector weights=Vector::LinSpaced(33,.5,2.); weights(32)=0;
     const n::Sparse sparse=x.sparseView();
     const auto oracle=n::SolveLinear(x,y,weights,true);
-    n::SparseWorkForTesting()={};
+    n::NumericsWorkForTesting()={};
     const auto candidate=n::SolveLinear(sparse,y,weights,true,true);
     ASSERT_TRUE(oracle.valid && candidate.valid);
-    EXPECT_EQ(candidate.beta(0),0); EXPECT_GT(n::SparseWorkForTesting().bdc_svds,0);
-    EXPECT_GT(n::SparseWorkForTesting().reference_svds,1);
+    EXPECT_EQ(candidate.beta(0),0); EXPECT_GT(n::NumericsWorkForTesting().bdc_svds,0);
+    EXPECT_GT(n::NumericsWorkForTesting().reference_svds,1);
     EXPECT_EQ(candidate.rank,oracle.rank);
     EXPECT_LT((candidate.beta-oracle.beta).norm(),1e-10);
 }
