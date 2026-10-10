@@ -1,6 +1,7 @@
 #include "FixedNeighborBlockCoordinate.hpp"
 #include "Problem.hpp"
 #include "ResourceWork.hpp"
+#include "StructuralPartition.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
