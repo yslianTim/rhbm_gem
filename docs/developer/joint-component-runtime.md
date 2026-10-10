@@ -377,3 +377,39 @@ protect the fixed observation domain, nonrecursive halo closure, bridge
 parameterization, unavailable target states, and unchanged numerical policy.
 These are current contracts; historical controls and measured limitations belong
 in the [canonical evidence index](joint-component-evidence.md).
+
+## Joint validation tiers
+
+Build with at most four jobs, then run the bounded gates from the build tree:
+
+```sh
+cmake --build build/debug-tests -j4
+ctest --test-dir build/debug-tests -L 'joint:contract'
+ctest --test-dir build/debug-tests -L 'joint:workflow'
+ctest --test-dir build/debug-tests -L 'joint:numerical'
+```
+
+Contract covers deterministic component, linear algebra, and small assessment
+checks, including all 14 `JointComponentChecksTest` cases. Workflow covers
+runtime, persistence, CLI, and smoke paths. Numerical covers bounded
+FixedNeighbor, stationarity, order, prepared-block, KKT, and derivative/reference
+qualification. Each gate has a CTest timeout and sets `OMP_NUM_THREADS=1`.
+
+Ordinary Joint cleanup or refactoring accepts passing all three gates. A
+numerical solver change also runs each relevant scalability case. Release or
+performance qualification runs Tier 4 for its campaign scope:
+
+```sh
+ctest --test-dir build/debug-tests -L 'joint:scalability'
+ctest --test-dir build/debug-tests -L 'joint:offline'
+```
+
+Tier 4 gives `joint_component_gram_scalability`, the two 256-atom FixedB cases,
+and optional offline audits their own CTest entries with a one-hour timeout.
+These entries are outside ordinary acceptance. Offline audit entries are
+registered when configured with
+`-DRHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON`.
+
+Report test states as `passed`, `failed`, `timeout`, `not-run`, or
+`not-completed`. A manually stopped run without a test result is
+`not-completed`; it is neither a pass nor a failure.
