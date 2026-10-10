@@ -44,5 +44,8 @@ Compact historical summaries and figures remain under
 [`docs/developer/figures/`](/docs/developer/figures/). The current experiment
 inventory is in [`joint-experiments.md`](joint-experiments.md), and the active
 benchmark surface is documented in [`joint-benchmark.md`](joint-benchmark.md).
+The closed [cube search memory frontier](figures/cube-search-memory-r1/README.md)
+retains compact SPQR OperatorPcg ordering and resource evidence without its
+individual execution JSONs.
 The retired implementation and raw campaign wrappers remain recoverable from
 Git history; they are not rebuilt or rerun by current validation.

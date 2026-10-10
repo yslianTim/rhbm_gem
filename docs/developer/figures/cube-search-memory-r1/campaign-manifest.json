@@ -373,9 +373,13 @@
     "cube-memory-summary.json",
     "cube-memory-summary.csv",
     "cube-memory-analysis.json",
-    "campaign-manifest.json",
-    "individual-results/"
+    "campaign-manifest.json"
   ],
+  "raw_artifact_retention": {
+    "individual_results": "pruned after compact summaries and analysis were retained",
+    "individual_results_count": 15,
+    "individual_results_bytes": 784282
+  },
   "decision": {
     "cube_2048_under_4_gib": false,
     "failure_stage": "spqr-fixed-factor for COLAMD diagonal/Schwarz, BEST Schwarz, METIS diagonal and DEFAULT diagonal; BEST diagonal advanced to rank-certificate after PCG/trials",
