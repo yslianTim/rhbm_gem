@@ -17,5 +17,9 @@ AuditPlan RegisteredAudit(Eigen::Index atoms, const std::string & dataset = "",
     const std::string & case_name = "");
 EvaluationContext MakeContext(const Eigen::VectorXd &, Eigen::Index atoms,
     const std::string & snapshot_hash = "", const AuditPlan * = nullptr);
+std::shared_ptr<rhbm_gem::core::JointProblemInput> MakeSyntheticJointProblemInput(
+    const runtime::Domain &, const Eigen::VectorXd & observations);
+EvaluationContext MakeContext(std::shared_ptr<const rhbm_gem::core::JointProblemInput>,
+    const std::string & snapshot_hash = "", const AuditPlan * = nullptr);
 boost::json::object ContextEvidence(const EvaluationContext &);
 } // namespace second_stage_test::matched::joint_abc

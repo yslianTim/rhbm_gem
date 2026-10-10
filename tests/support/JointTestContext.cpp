@@ -1,6 +1,7 @@
 #include "support/JointTestContext.hpp"
 #include <algorithm>
 #include <limits>
+#include <stdexcept>
 
 namespace second_stage_test::matched::joint_abc {
 AuditPlan RegisteredAudit(Eigen::Index atoms,const std::string & dataset,const std::string & name)
@@ -14,6 +15,35 @@ AuditPlan RegisteredAudit(Eigen::Index atoms,const std::string & dataset,const s
 }
 EvaluationContext MakeContext(const Eigen::VectorXd & y,Eigen::Index atoms,const std::string & hash,const AuditPlan * plan)
 {return runtime::CreateContext(y,atoms,hash,plan ? *plan : RegisteredAudit(atoms));}
+std::shared_ptr<rhbm_gem::core::JointProblemInput> MakeSyntheticJointProblemInput(
+    const runtime::Domain & domain,const Eigen::VectorXd & observations)
+{
+    if(domain.rows!=observations.size() || !observations.allFinite())
+        throw std::invalid_argument("Invalid synthetic joint observations.");
+    auto input=std::make_shared<rhbm_gem::core::JointProblemInput>();
+    input->observations.assign(observations.data(),observations.data()+observations.size());
+    input->atom_ids.reserve(domain.atoms.size()); input->support.resize(domain.atoms.size());
+    for(std::size_t atom=0;atom<domain.atoms.size();++atom)
+    {
+        input->atom_ids.push_back("atom-"+std::to_string(atom));
+        for(const auto & support:domain.atoms[atom])
+        {
+            if(support.row<0 || support.row>=domain.rows || !std::isfinite(support.square) ||
+                support.square<0 || support.square>6.25)
+                throw std::invalid_argument("Invalid synthetic joint support.");
+            input->support[atom].push_back({static_cast<std::size_t>(support.row),support.square});
+        }
+    }
+    input->row_ids.reserve(static_cast<std::size_t>(domain.rows));
+    for(Eigen::Index row=0;row<domain.rows;++row) input->row_ids.push_back("row-"+std::to_string(row));
+    return input;
+}
+EvaluationContext MakeContext(std::shared_ptr<const rhbm_gem::core::JointProblemInput> input,
+    const std::string & hash,const AuditPlan * plan)
+{
+    const auto atoms=static_cast<Eigen::Index>(input->atom_ids.size());
+    return runtime::CreateContext(std::move(input),hash,plan ? *plan : RegisteredAudit(atoms));
+}
 boost::json::object ContextEvidence(const EvaluationContext & c)
 {
     namespace j=boost::json;
