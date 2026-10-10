@@ -178,22 +178,31 @@ set(UTILS_HRL_TEST_SOURCES
     utils/hrl/MDPDERegression_test.cpp
 )
 
-set(JOINT_COMPONENT_TEST_SOURCES
+set(JOINT_COMPONENT_CONTRACT_TEST_SOURCES
     core/joint_component/BlockCoordinate_test.cpp
     core/joint_component/Search_test.cpp
     core/joint_component/Observation_test.cpp
+    core/joint_component/CompactAssessment_test.cpp
+    core/joint_component/Components_test.cpp
+)
+
+set(JOINT_COMPONENT_WORKFLOW_TEST_SOURCES
     core/joint_component/Runtime_test.cpp
     core/joint_component/Progress_test.cpp
     core/joint_component/PartialSelection_test.cpp
     core/joint_component/ObservableProfile_test.cpp
 )
 
-set(JOINT_COMPONENT_SCALABILITY_TEST_SOURCES
+set(JOINT_COMPONENT_NUMERICAL_TEST_SOURCES
     core/joint_component/FixedBBlockCoordinate_test.cpp
     core/joint_component/FixedNeighborBlockCoordinate_test.cpp
-    core/joint_component/CompactAssessment_test.cpp
-    core/joint_component/Components_test.cpp
     core/joint_component/Numerics_test.cpp
+)
+
+set(JOINT_COMPONENT_TEST_SOURCES
+    ${JOINT_COMPONENT_CONTRACT_TEST_SOURCES}
+    ${JOINT_COMPONENT_WORKFLOW_TEST_SOURCES}
+    ${JOINT_COMPONENT_NUMERICAL_TEST_SOURCES}
 )
 
 set(INTEGRATION_COMMAND_TEST_SOURCES
@@ -213,7 +222,6 @@ set(RHBM_GEM_ALL_GTEST_SOURCES
     ${UTILS_DOMAIN_TEST_SOURCES}
     ${UTILS_HRL_TEST_SOURCES}
     ${JOINT_COMPONENT_TEST_SOURCES}
-    ${JOINT_COMPONENT_SCALABILITY_TEST_SOURCES}
     ${INTEGRATION_COMMAND_TEST_SOURCES}
 )
 
@@ -338,7 +346,9 @@ if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
         core/joint_component/OfflineComponents_test.cpp)
     target_link_libraries(joint_offline_tests PRIVATE joint_offline_support rhbm_gem ${GTEST_MAIN_TARGET})
     add_test(NAME joint_component_offline_tests COMMAND joint_offline_tests)
-    set_tests_properties(joint_component_offline_tests PROPERTIES LABELS "offline;domain:core;intent:algorithm;joint:offline")
+    set_tests_properties(joint_component_offline_tests PROPERTIES
+        LABELS "offline;domain:core;intent:algorithm;joint:offline;long" TIMEOUT 3600
+        ENVIRONMENT "OMP_NUM_THREADS=1")
     add_dependencies(tests_all joint_component_audit joint_offline_diagnostic joint_offline_tests)
 endif()
 
@@ -348,13 +358,62 @@ if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
     add_dependencies(research_tools_all joint_statistical_experiment)
 endif()
 
-add_rhbm_gtest_group(rhbm_tests_joint_component
-    DOMAIN core INTENTS algorithm contract SOURCES ${JOINT_COMPONENT_TEST_SOURCES})
-set_property(TEST rhbm_tests_joint_component APPEND PROPERTY LABELS "joint:runtime")
+add_rhbm_gtest_group(rhbm_tests_joint_component_contract
+    DOMAIN core INTENTS algorithm contract SOURCES ${JOINT_COMPONENT_CONTRACT_TEST_SOURCES})
+set_tests_properties(rhbm_tests_joint_component_contract PROPERTIES
+    LABELS "core;domain:core;intent:algorithm;intent:contract;joint:contract" TIMEOUT 180
+    ENVIRONMENT "OMP_NUM_THREADS=1")
 
-add_rhbm_gtest_group(rhbm_tests_joint_component_scalability
-    DOMAIN core INTENTS algorithm SOURCES ${JOINT_COMPONENT_SCALABILITY_TEST_SOURCES})
-set_property(TEST rhbm_tests_joint_component_scalability APPEND PROPERTY LABELS "joint:scalability")
+add_rhbm_gtest_group(rhbm_tests_joint_component_workflow
+    DOMAIN core INTENTS algorithm SOURCES ${JOINT_COMPONENT_WORKFLOW_TEST_SOURCES})
+set_tests_properties(rhbm_tests_joint_component_workflow PROPERTIES
+    LABELS "core;domain:core;intent:algorithm;joint:workflow" TIMEOUT 600
+    ENVIRONMENT "OMP_NUM_THREADS=1")
+
+rhbm_gem_collect_gtest_patterns(joint_numerical_patterns ${JOINT_COMPONENT_NUMERICAL_TEST_SOURCES})
+list(JOIN joint_numerical_patterns ":" joint_numerical_filter)
+string(APPEND joint_numerical_filter
+    "-JointComponentNumericsTest.CompactJacobianGramIdentityDiagnosticsAcrossLattices:JointFixedBBlockCoordinateTest.DiagnosticObserverDoesNotChangeFixedBResult:JointFixedBBlockCoordinateTest.RoundoffAwareAcceptanceRequalifies256AtomControls")
+add_test(NAME rhbm_tests_joint_component_numerical
+    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes --gtest_filter=${joint_numerical_filter})
+set_tests_properties(rhbm_tests_joint_component_numerical PROPERTIES
+    LABELS "core;domain:core;intent:algorithm;joint:numerical" TIMEOUT 900
+    ENVIRONMENT "OMP_NUM_THREADS=1")
+
+add_test(NAME joint_component_gram_scalability
+    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
+        --gtest_filter=JointComponentNumericsTest.CompactJacobianGramIdentityDiagnosticsAcrossLattices)
+add_test(NAME joint_fixed_b_observer_scalability
+    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
+        --gtest_filter=JointFixedBBlockCoordinateTest.DiagnosticObserverDoesNotChangeFixedBResult)
+add_test(NAME joint_fixed_b_256_scalability
+    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
+        --gtest_filter=JointFixedBBlockCoordinateTest.RoundoffAwareAcceptanceRequalifies256AtomControls)
+set_tests_properties(joint_component_gram_scalability joint_fixed_b_observer_scalability joint_fixed_b_256_scalability
+    PROPERTIES LABELS "core;domain:core;intent:algorithm;joint:scalability;joint:offline;long" TIMEOUT 3600
+        ENVIRONMENT "OMP_NUM_THREADS=1")
+
+set(joint_persistence_test_patterns
+    DataObjectPersistenceTest.JointResultsRoundTripCopyClearAndReplaceAtomically
+    DataObjectPersistenceTest.JointSolverProvenanceRoundTripsAndMissingFieldRemainsReadable
+    DataObjectPersistenceTest.FixedNeighborPolicyVersionsPreserveLegacyAndRejectRetiredV2Claims
+    DataObjectPersistenceTest.CurrentFixedNeighborSolverProvenanceRoundTrips
+    DataObjectPersistenceTest.HistoricalV2SolverProvenanceRemainsReadable
+    DataObjectPersistenceTest.MalformedCurrentSolverProvenanceIsRejected
+    DataObjectPersistenceTest.JointContributorSubsetRoundTripsAndRejectsForeignOrHydrogenIds
+    DataObjectPersistenceTest.JointCodecRejectsMalformedMappingsAndPreservesMissingValues
+    DataObjectPersistenceTest.JointMetadataRejectsInvalidValuesAndOldDocumentsWithoutWrites
+    DataObjectPersistenceTest.JointSelectionMetadataValidationAndCsvRoles
+    DataObjectPersistenceTest.JointNeutralRoundTripPreservesSourcesGeometryAndUnavailableStates
+    DataObjectPersistenceTest.LegacyJointSnapshotMapsPointsWithoutInventingDerivedEvidence
+    DataObjectPersistenceTest.CanonicalNativeDiagnosticsAndMissingStatesRoundTripExactly
+)
+list(JOIN joint_persistence_test_patterns ":" joint_persistence_test_filter)
+add_test(NAME joint_persistence_contract_test
+    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes --gtest_filter=${joint_persistence_test_filter})
+set_tests_properties(joint_persistence_contract_test PROPERTIES
+    LABELS "core;domain:data;intent:contract;joint:workflow" TIMEOUT 300
+    ENVIRONMENT "OMP_NUM_THREADS=1")
 
 add_rhbm_gtest_group(rhbm_tests_core_command
     DOMAIN core
@@ -443,14 +502,14 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_outer_core_qualification_test.py")
     add_test(NAME joint_experiment_cleanup_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_experiment_cleanup_test.py")
-    set_tests_properties(experiment_support_test experiment_runner_dependency_test joint_benchmark_contract_test
-        joint_fixed_neighbor_outer_core_qualification_test
+    set_tests_properties(experiment_support_test experiment_runner_dependency_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm")
     set_tests_properties(joint_benchmark_contract_test
-        PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:scalability")
-    set_tests_properties(joint_fixed_neighbor_outer_core_qualification_test
-        joint_experiment_cleanup_test
-        PROPERTIES LABELS "core;domain:integration;intent:algorithm")
+        PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:numerical" TIMEOUT 300
+        ENVIRONMENT "OMP_NUM_THREADS=1")
+    set_tests_properties(joint_experiment_cleanup_test
+        PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:contract" TIMEOUT 180
+        ENVIRONMENT "OMP_NUM_THREADS=1")
     add_test(NAME joint_component_evidence_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_evidence_test.py")
     add_test(NAME joint_fixed_b_scaling_analysis_test
@@ -461,12 +520,11 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_order_test.py")
     add_test(NAME joint_fixed_neighbor_prepared_block_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_prepared_block_test.py")
-    set_tests_properties(joint_fixed_neighbor_stationarity_test joint_fixed_neighbor_order_test
-        PROPERTIES LABELS "core;domain:integration;intent:algorithm")
-    set_tests_properties(joint_fixed_neighbor_prepared_block_test
-        PROPERTIES LABELS "core;domain:integration;intent:algorithm")
-    set_tests_properties(joint_fixed_b_scaling_analysis_test
-        PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:scalability")
+    set_tests_properties(joint_fixed_neighbor_outer_core_qualification_test
+        joint_fixed_neighbor_stationarity_test joint_fixed_neighbor_order_test
+        joint_fixed_neighbor_prepared_block_test joint_fixed_b_scaling_analysis_test
+        PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:numerical" TIMEOUT 300
+        ENVIRONMENT "OMP_NUM_THREADS=1")
     add_test(NAME joint_component_runtime_runner_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime_test.py")
     add_test(NAME joint_component_regression
@@ -476,16 +534,21 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime.py"
             physical-smoke --executable $<TARGET_FILE:joint_component_runtime>)
     set_tests_properties(joint_component_evidence_test
+        PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:contract" TIMEOUT 180
+        ENVIRONMENT "OMP_NUM_THREADS=1")
+    set_tests_properties(
         joint_component_runtime_runner_test
         joint_component_regression joint_component_physical_smoke
-        PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:runtime")
+        PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:workflow" TIMEOUT 600
+        ENVIRONMENT "OMP_NUM_THREADS=1")
 
     if(RHBM_GEM_BUILD_BENCHMARKS)
         add_test(NAME joint_benchmark_smoke
             COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_benchmark_test.py"
                 --smoke "${PROJECT_BINARY_DIR}")
         set_tests_properties(joint_benchmark_smoke PROPERTIES
-            LABELS "benchmark;domain:integration;intent:benchmark;joint:scalability")
+            LABELS "benchmark;domain:integration;intent:benchmark;joint:numerical" TIMEOUT 300
+            ENVIRONMENT "OMP_NUM_THREADS=1")
     endif()
 
     if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
@@ -495,7 +558,8 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
                 --executable $<TARGET_FILE:joint_offline_diagnostic>
                 --output "${PROJECT_BINARY_DIR}/joint-offline-diagnostic/weak-halo.json")
         set_tests_properties(joint_offline_diagnostic_smoke
-            PROPERTIES LABELS "offline;domain:integration;intent:algorithm;joint:offline")
+            PROPERTIES LABELS "offline;domain:integration;intent:algorithm;joint:offline;long" TIMEOUT 3600
+            ENVIRONMENT "OMP_NUM_THREADS=1")
     endif()
 
     if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
@@ -517,14 +581,16 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
             COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_audit.py"
                 --two-step-only --executable $<TARGET_FILE:joint_component_audit> --work-dir "${PROJECT_BINARY_DIR}/joint-two-step")
         set_tests_properties(joint_component_offline_regression joint_component_two_step_regression
-            PROPERTIES LABELS "offline;domain:integration;intent:algorithm;joint:offline")
+            PROPERTIES LABELS "offline;domain:integration;intent:algorithm;joint:offline;long" TIMEOUT 3600
+            ENVIRONMENT "OMP_NUM_THREADS=1")
     endif()
     if(RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS)
         add_test(NAME joint_component_extended_regression
             COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime.py"
                 regression --extended --executable $<TARGET_FILE:joint_component_runtime> --work-dir "${PROJECT_BINARY_DIR}/joint-extended")
         set_tests_properties(joint_component_extended_regression
-            PROPERTIES LABELS "extended;domain:integration;intent:algorithm;joint:extended")
+            PROPERTIES LABELS "extended;domain:integration;intent:algorithm;joint:offline;long" TIMEOUT 3600
+            ENVIRONMENT "OMP_NUM_THREADS=1")
     endif()
 endif()
 
@@ -549,7 +615,9 @@ if(DEFINED Python_EXECUTABLE)
     add_test(NAME joint_workflow_cli_smoke_test
         COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/integration/joint_workflow_cli_smoke.py
             $<TARGET_FILE:rhbm_gem_cli>)
-    set_tests_properties(joint_workflow_cli_smoke_test PROPERTIES LABELS "core;domain:integration;intent:command")
+    set_tests_properties(joint_workflow_cli_smoke_test
+        PROPERTIES LABELS "core;domain:integration;intent:command;joint:workflow" TIMEOUT 300
+        ENVIRONMENT "OMP_NUM_THREADS=1")
     add_test(
         NAME command_scaffold_smoke_test
         COMMAND ${Python_EXECUTABLE}
