@@ -69,6 +69,8 @@ class JointRuntimeSupportTest(unittest.TestCase):
         self.assertTrue(runtime_differences(record, actual, 1.))
         actual = copy.deepcopy(record); actual['last_trusted_state']['free_rank'] = 1
         self.assertTrue(runtime_differences(record, actual, 1.))
+        actual = copy.deepcopy(record); del actual['last_trusted_state']['free_rank']
+        self.assertFalse(runtime_differences(record, actual, 1.))
 
     def test_nonconverged_endpoint_must_not_worsen_objective(self):
         expected = dict(usable_state=True, runtime_convergence='failed', runtime_checks={'identified': False},

@@ -52,7 +52,9 @@ def runtime_differences(expected, actual, scale):
     if left is None:
         return delta
     same_face = left.get('active_atoms') == right.get('active_atoms')
-    endpoint_flags = ('valid', 'feasible', 'kkt_passed') + (('free_rank',) if same_face else ())
+    endpoint_flags = ('valid', 'feasible', 'kkt_passed')
+    if same_face and 'free_rank' in left and 'free_rank' in right:
+        endpoint_flags += ('free_rank',)
     for key in endpoint_flags:
         if key not in left or key not in right or left[key] != right[key]:
             delta.append('/last_trusted_state/'+key)

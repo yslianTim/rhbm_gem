@@ -132,7 +132,13 @@ void RunFrozenFixture(const fs::path & path,const std::string & name,const fs::p
     const auto & y=name.ends_with("double") ? in.y64 : in.y32;
     const auto plan=RegisteredAudit(initial.size(),in.name,name);
     auto context=MakeContext(y,initial.size(),in.hash,&plan); context.atom_ids=in.ids;
-    const auto partition=BuildPartition(in.domain,in.ids);
+    core::JointProblemInput input; input.atom_ids=in.ids; input.row_ids=context.row_ids;
+    input.observations.assign(y.data(),y.data()+y.size()); input.support.resize(in.domain.atoms.size());
+    for(std::size_t a=0;a<input.support.size();++a) for(const auto & point:in.domain.atoms[a])
+        input.support[a].push_back({static_cast<std::size_t>(point.row),point.square});
+    const core::JointProblem problem(std::move(input));
+    const auto & domain=core::JointProblemAccess::Get(problem).domain;
+    const auto partition=BuildPartition(domain,in.ids);
     if(partition.components.size()!=1) throw std::runtime_error("Frozen catalog case must be a single structural component.");
     const auto fit=FitComponent(partition.components[0],y,initial,context);
     j::object record;
@@ -149,11 +155,6 @@ void RunFrozenFixture(const fs::path & path,const std::string & name,const fs::p
         trials.push_back(j::object{{"accepted",trial.at("accepted")},{"valid",trial.at("valid")},{"trust_passed",trust}});
     }
     record["trials"]=trials;
-    core::JointProblemInput input; input.atom_ids=in.ids; input.row_ids=context.row_ids;
-    input.observations.assign(y.data(),y.data()+y.size()); input.support.resize(in.domain.atoms.size());
-    for(std::size_t a=0;a<input.support.size();++a) for(const auto & point:in.domain.atoms[a])
-        input.support[a].push_back({static_cast<std::size_t>(point.row),point.square});
-    const core::JointProblem problem(std::move(input));
     const auto result=core::FitJointComponents(problem,{initial.data(),initial.data()+initial.size()});
     const bool available=fit.at("usable_state").as_bool();
     if(result.components.size()!=1 || result.components[0].state.has_value()!=available || result.search_completed!=fit.at("search_success").as_bool())
@@ -183,9 +184,9 @@ void RunFrozenFixture(const fs::path & path,const std::string & name,const fs::p
             if(std::abs(value-objective)>1e-15*(1+objective)) throw std::runtime_error("Public objective normalization differs.");
     }
     else if(result.prediction || result.objective) throw std::runtime_error("Failed component fabricated a complete prediction.");
-    const j::object parity{{"historical_endpoint",DerivativeParity(in.domain,y,cases.at(name).at("expected").at("last_trusted_state"),context)},
-        {"actual_endpoint",DerivativeParity(in.domain,y,record.at("last_trusted_state"),context)}};
+    const j::object parity{{"historical_endpoint",DerivativeParity(domain,y,cases.at(name).at("expected").at("last_trusted_state"),context)},
+        {"actual_endpoint",DerivativeParity(domain,y,record.at("last_trusted_state"),context)}};
     fs::create_directories(output.parent_path());
-    Write(output,j::object{{"dataset",in.name},{"case",name},{"record",record},{"census",Census(in.domain,partition,context)},{"api_contract_passed",true},{"derivative_parity",parity}});
+    Write(output,j::object{{"dataset",in.name},{"case",name},{"record",record},{"census",Census(domain,partition,context)},{"api_contract_passed",true},{"derivative_parity",parity}});
 }
 }
