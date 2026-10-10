@@ -26,9 +26,9 @@ option(RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS
 option(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS
     "Build independent joint component derivative and certification tools" OFF)
 option(RHBM_GEM_BUILD_BENCHMARKS
-    "Build optional benchmark and resource measurement tools" OFF)
+    "Build current Joint benchmark and measurement tools" OFF)
 option(RHBM_GEM_BUILD_RESEARCH_TOOLS
-    "Build optional research and historical validation tools" OFF)
+    "Build optional current Joint research tools" OFF)
 foreach(retired_option IN ITEMS RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT)
     if(DEFINED ${retired_option})
         message(FATAL_ERROR "${retired_option} is retired. Remove this option from your command and cache.")
