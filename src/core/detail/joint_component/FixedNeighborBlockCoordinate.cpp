@@ -8,6 +8,11 @@
 #include <numeric>
 
 namespace rhbm_gem::core::joint_component {
+double BlockObjectiveReplayEnclosure(double reference)
+{return 1e-12+2e-12*std::abs(reference);}
+bool WithinBlockObjectiveReplay(double error,double reference)
+{return error<=BlockObjectiveReplayEnclosure(reference);}
+
 namespace {
 using Clock=std::chrono::steady_clock;
 enum class StationarityState {NotStationary,CandidateStationary,ConfirmedStationary};

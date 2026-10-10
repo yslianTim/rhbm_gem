@@ -1,10 +1,19 @@
 #pragma once
-#include "FixedBBlockCoordinate.hpp"
+#include "Numerics.hpp"
 #include "FixedNeighborPolicy.hpp"
 #include <functional>
 
 namespace rhbm_gem::core::joint_component {
 struct PreparedComponent;
+struct BlockCoordinateState
+{
+    Vector eta,beta,prediction,residual;
+    double objective{};
+};
+
+double BlockObjectiveReplayEnclosure(double reference);
+bool WithinBlockObjectiveReplay(double error,double reference);
+
 struct FixedNeighborProfileTrial
 {
     std::size_t trial_index{};
