@@ -89,6 +89,7 @@ def main():
     cmake = (ROOT / "tests" / "CMakeLists.txt").read_text()
     fixed_neighbor_source = (ROOT / "tests/experiments/joint_fixed_neighbor.cpp").read_text()
     benchmark_driver = (integration / "joint_benchmark.py").read_text()
+    runtime_runner = (integration / "joint_component_runtime.py").read_text()
     audit_source = (ROOT / "tests/tools/joint_component_audit.cpp").read_text()
     audit_runner = (integration / "joint_component_audit.py").read_text()
     gitignore = (ROOT / ".gitignore").read_text()
@@ -150,6 +151,8 @@ def main():
         f"closed Joint evidence directories returned: {unexpected_figure_dirs}")
     assert "joint_fixed_b_block_experiment" not in cmake
     assert "joint_fixed_b_scaling" not in cmake
+    assert "joint_component_benchmark" not in cmake
+    assert "commands.add_parser('benchmark')" not in runtime_runner
     for token in (
         "joint_fixed_b_observer_scalability",
         "joint_fixed_b_256_scalability",
