@@ -14,8 +14,7 @@ numeric factorization.
 Derivative preparation and reduction accounted for roughly 82%–86% of search
 time in the measured cases. The result did not justify a workspace-policy
 switch, numeric-factor cache, or candidate-replay optimization. Production
-semantics remain the frozen core-12 FixedNeighbor route with local
-LegacyCompact.
+semantics remain the frozen core-12 FixedNeighbor route with local Profile LM.
 
 This concise conclusion is the retained record. Closed campaign drivers and
 machine-readable outputs are recoverable from Git history and are intentionally

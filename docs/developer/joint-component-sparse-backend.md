@@ -1,7 +1,7 @@
 # Joint sparse factorization backend
 
 This document describes the shared sparse numerical backend used by the
-current FixedNeighbor Joint estimator and its local `LegacyCompact` profile
+current FixedNeighbor Joint estimator and its local Profile LM search
 solver. It is not an OperatorPcg or rank-prototype guide. Historical operator,
 EIGEN comparison, and bounded-rank results are indexed in the
 [canonical historical evidence](joint-component-evidence.md).
@@ -35,7 +35,7 @@ metadata record `sparse_backend=EIGEN`.
 
 FixedNeighbor's production numerical settings remain independent of backend
 selection: core 12, Forward order, 30 maximum sweeps, one trusted accepted
-local update per block visit, and local `LegacyCompact` profile search. The
+local update per block visit, and local Profile LM search. The
 existing KKT, width-gradient and eta-confirmation thresholds are unchanged.
 
 ## Qualification evidence

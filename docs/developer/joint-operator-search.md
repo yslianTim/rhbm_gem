@@ -22,13 +22,14 @@ implementation, or its preconditioner/Schwarz implementation. There is no
 current CLI, Python, benchmark, or route-selection option for `operator-pcg`.
 The old option is rejected rather than silently mapped to FixedNeighbor.
 
-## Current relationship to LegacyCompact
+## Current relationship to Profile LM
 
 The former top-level `LegacyCompact` route was retired after FixedNeighbor
-promotion. The existing `LegacyCompact` profile solver is still active inside every
-FixedNeighbor block visit: it performs the local width search, after which at
-most one trusted update is replayed globally. Removing OperatorPcg did not
-remove this local numerical primitive.
+promotion. The local numerical primitive inside every FixedNeighbor block is
+named Profile LM: it optimizes the profiled log-width objective and conditionally
+solves A/C at each profile evaluation. At most one trusted update is replayed
+globally per block visit. Removing OperatorPcg did not remove this local
+computation.
 
 ## Historical compatibility
 
@@ -42,7 +43,7 @@ does not recreate the removed solver.
 
 | Topic | Conclusion |
 | --- | --- |
-| OperatorPcg and Schwarz | Investigated for large connected components, but the required promotion campaign did not complete all large-case gates. They were not adopted. The current estimator is FixedNeighbor with local LegacyCompact and EIGEN. |
+| OperatorPcg and Schwarz | Investigated for large connected components, but the required promotion campaign did not complete all large-case gates. They were not adopted. The current estimator is FixedNeighbor with local Profile LM and EIGEN. |
 | Factor ownership and residency | Factor-sharing and persistent-workspace variants did not justify a current route or factor cache. Some 2048 Schwarz diagnostics exceeded the 4 GiB process limit while constructing the SPQR factor, before search PCG began. |
 | Bounded rank budget | Small cases matched dense controls, but representative large SPQR prototypes returned Unavailable before reconstruction completed. No large-case rank or scaling guarantee was established. |
 | Projected width and tail | Completed cases showed numerical parity and some faster assessment phases, but the projected-width candidate exceeded the 4 GiB limit on both 512-atom topologies; projected-tail symbolic work exceeded the limit on cube-512. Neither was promoted. |

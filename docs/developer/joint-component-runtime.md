@@ -64,7 +64,7 @@ operator/preconditioner/Schwarz implementation, and the former global
 
 The production FixedNeighbor policy is intentionally small and fixed: disjoint
 mutable cores of 12 atoms, at most 30 forward Gauss-Seidel sweeps, and one
-trusted accepted local `LegacyCompact` update per block visit. Outside-core
+trusted accepted local Profile LM update per block visit. Outside-core
 neighbors remain fixed while a block is solved. Each accepted block is replayed
 globally, checked for monotone roundoff-safe acceptance, and contributes to the
 existing global A/C KKT (`1e-10`), width-gradient (`1e-12`) and eta-confirmation
@@ -72,11 +72,23 @@ existing global A/C KKT (`1e-10`), width-gradient (`1e-12`) and eta-confirmation
 The at-most-one accepted-update contract is intrinsic; diagnostic controls such
 as reverse order and trajectory capture are not production configuration.
 
-`LegacyCompact` remains an active local numerical primitive inside each
-FixedNeighbor block. It is not a second local route selector: each visit runs
-the existing profile-width search, accepts at most one trusted update, and then
-replays the candidate against the global state. There is no hidden operator
-fallback or size-based routing.
+The local numerical primitive is named **Profile LM** (Levenberg–Marquardt
+optimization of the profiled width objective). `SearchProfile()` optimizes
+`η = log(B)` with `InstrumentedLM<Profile>`. At every profile evaluation,
+`EvaluateProfile()` conditionally solves the A/C coefficients with the existing
+constrained `SolveLinear()` call, which uses EIGEN SparseQR:
+
+```text
+β*(η) = arg min 1/2 ||X(η)β - y_eff||²
+        subject to A_i >= 0 and C_i unrestricted
+```
+
+The full profile derivative drives the LM width update. `AssessProfile()` keeps
+its existing assessment responsibility. This names the current computation;
+it does not add a local route selector or change the numerical contract. Each
+block visit accepts at most one trusted update and replays the candidate
+against the global state. There is no hidden operator fallback or size-based
+routing.
 
 FixedNeighbor returns the same `ComponentResult`, then uses the existing
 component assembly, `JointFitResult`, post-processing and persistence path.
@@ -228,9 +240,9 @@ The current numerical path is:
 
 ```text
 FixedNeighbor
-  -> local LegacyCompact profile search
-  -> LinearSolve / EIGEN sparse QR
-  -> TiledDerivative and its cancellation-safe tiled fallback
+  -> local Profile LM over η = log(B)
+  -> conditional A/C profile solve / EIGEN SparseQR
+  -> full profile derivative and LM width update
   -> global replay, endpoint certification, RuntimeConvergence
 ```
 

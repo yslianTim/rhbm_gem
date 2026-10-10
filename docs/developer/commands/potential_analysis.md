@@ -169,8 +169,9 @@ inference.
 `FixedNeighbor` is the sole qualified bounded-memory production route with the fixed
 core-12, forward, one-accepted-local-update policy documented in the
 [joint runtime contract](../joint-component-runtime.md). Its local profile
-solver is the existing `LegacyCompact` implementation. It is not an automatic
-fallback or size-based route. Use `--estimator joint-components`; no separate
+solver is Profile LM, the existing profiled-width Levenberg–Marquardt
+computation; it is not an automatic fallback or size-based route. Use
+`--estimator joint-components`; no separate
 Joint search option is required.
 
 The standalone `EstimateJointComponents` convenience API remains available and
@@ -257,16 +258,18 @@ version or access either input file.
 
 `metadata.solver` records the current `fixed-neighbor` estimator. FixedNeighbor records
 `fixed_neighbor_core_atoms: 12` and the intrinsic at-most-one trusted accepted
-`LegacyCompact` update per block visit. Current writers use
+Profile LM update per block visit. Current writers use
 `fixed-neighbor-production-v2`; `fixed_neighbor_local_work` is absent or null,
 because it is legacy provenance rather than a current policy input. They also
 persist the `joint-solver-provenance-v3` contract, fixed EIGEN sparse
 backend, and FixedNeighbor's maximum sweeps, forward order and
-`legacy-compact` local search. Operator, rank, preconditioner and Schwarz
+`fixed_neighbor_local_search: profile-lm` local search. Readers accept
+`legacy-compact` as the previous v3 value for that local-search field.
+Operator, rank, preconditioner and Schwarz
 controls are historical provenance only and are not emitted by current
 writers. Historical `joint-solver-provenance-v2` records, including
-`legacy-compact` and `operator-pcg`, remain readable through the compatibility
-decoder.
+top-level `search_method` values `legacy-compact` and `operator-pcg`, remain
+readable through the compatibility decoder.
 
 Older `fixed-neighbor-production-v1` records remain readable and preserve their
 explicit `full`, `one-accepted`, or `two-accepted` local-work provenance. A v2

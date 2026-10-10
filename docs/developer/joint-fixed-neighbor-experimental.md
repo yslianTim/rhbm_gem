@@ -15,8 +15,8 @@ option or automatic routing layer.
 | Outer core | 12 atoms, disjoint mutable blocks |
 | Block order | Forward serial Gauss-Seidel |
 | Maximum sweeps | 30 |
-| Local search | `LegacyCompact` |
-| Local update contract | At most one trusted accepted `LegacyCompact` update per block visit |
+| Local search | Profile LM (`fixed_neighbor_local_search=profile-lm`) |
+| Local update contract | At most one trusted accepted Profile LM update per block visit |
 | Acceptance | Existing replay and roundoff-safe monotone acceptance |
 | Convergence | Existing A/C KKT, width-gradient and eta-confirmation checks |
 | Endpoint | Existing trust, certification and `RuntimeConvergence` semantics |
@@ -77,8 +77,8 @@ define a production option or a current CTest runtime contract.
 The negative evidence is intentionally numeric where it affects a decision.
 The retired FixedNeighbor-local OperatorPcg, Schwarz and hybrid hooks, as well
 as the global OperatorPcg/Schwarz route, are removed from the current tree.
-The EIGEN sparse backend remains current because FixedNeighbor and its local
-LegacyCompact profile search still use it. There is no hidden FixedNeighbor
+The EIGEN sparse backend remains current because FixedNeighbor's conditional
+profile solve uses it. There is no hidden FixedNeighbor
 policy switch. Closed experiment implementations and machine-readable receipts
 are recoverable from Git history and are intentionally not retained in the
 current tree.

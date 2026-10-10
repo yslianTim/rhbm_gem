@@ -7,11 +7,12 @@ and [Joint FixedNeighbor](joint-fixed-neighbor-experimental.md).
 
 ## Current estimator
 
-The production route is Joint → FixedNeighbor → local LegacyCompact →
-LinearSolve → EIGEN. Its policy is core 12, Forward serial Gauss-Seidel,
-at most 30 sweeps, and at most one trusted accepted local update per block
-visit. The frozen KKT, width-gradient, eta-confirmation, replay and endpoint
-contracts are recorded in the [production contract](joint-fixed-neighbor-experimental.md).
+The production route is Joint → FixedNeighbor → local Profile LM → conditional
+A/C profile solve → EIGEN SparseQR. Its policy is core 12, Forward serial
+Gauss-Seidel, at most 30 sweeps, and at most one trusted accepted local update
+per block visit. The frozen KKT, width-gradient, eta-confirmation, replay and
+endpoint contracts are recorded in the
+[production contract](joint-fixed-neighbor-experimental.md).
 
 ## Historical algorithm decisions
 
@@ -56,7 +57,7 @@ The complete concise record of those FixedNeighbor choices is in
   numeric-factor reuse opportunities were limited to initial-profile
   evaluations; no factor-cache policy was adopted.
 - Tested derivative tile sizes did not reach the 10% improvement gate. The
-  production local solver remains LegacyCompact.
+  production local solver remains Profile LM.
 - The endpoint-reference comparison passed its recorded fixed-state audits.
   On its historical host, single-512 analysis/export changed from 307.805 s
   to 300.564 s and sampled peak RSS from 2.500 GiB to 1.872 GiB. This

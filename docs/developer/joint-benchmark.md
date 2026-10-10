@@ -8,7 +8,7 @@ current workflow costs. Its only workflow entry point is
 
 | Profile | Measurement scope | Executable |
 | --- | --- | --- |
-| search | FixedNeighbor search and local LegacyCompact work; no endpoint qualification claim | joint_fixed_neighbor_experiment with --scaling-only |
+| search | FixedNeighbor search and local Profile LM work; no endpoint qualification claim | joint_fixed_neighbor_experiment with --scaling-only |
 | solve | Search, global replay, endpoint certification and RuntimeConvergence | joint_fixed_neighbor_experiment with --case |
 | workflow | Complete in-memory Joint workflow and persistence | joint_postprocessing_benchmark |
 | postprocess | Peeling, uncertainty, group processing and persistence | joint_postprocessing_benchmark |
@@ -42,7 +42,8 @@ Every report records the frozen estimator policy:
 | Core | 12 atoms |
 | Block order | Forward |
 | Maximum sweeps | 30 |
-| Local search | LegacyCompact |
+| Local search | Profile LM |
+| Provenance | `fixed_neighbor_local_search=profile-lm` |
 | Accepted local updates | OneAccepted: at most one trusted update per block visit |
 | Sparse backend | EIGEN |
 

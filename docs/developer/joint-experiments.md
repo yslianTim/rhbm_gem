@@ -2,7 +2,7 @@
 
 This inventory describes the current checkout. The production estimator is
 FixedNeighbor with core 12, Forward serial Gauss-Seidel, at most 30 sweeps,
-local LegacyCompact and at most one trusted accepted local update per block
+local Profile LM and at most one trusted accepted local update per block
 visit.
 
 ## Current reproducible tools
@@ -53,8 +53,8 @@ ordinary tests; the experiment whitelist does not exclude them.
 | Block order | Forward was adopted as the serial Gauss-Seidel order. Reverse was a qualification diagnostic only. | Production policy contract |
 | Local update policy | OneAccepted was selected and is intrinsic to the production block visit. | FixedNeighbor numerical tests |
 | Sparse backend | EIGEN and SPQR passed bounded parity; SPQR was faster on completed 128/256 probes and EIGEN used less peak RSS. Both bounded 512 probes timed out. A later memory, dependency and maintenance policy selected EIGEN. | EIGEN numerical tests and historical persistence compatibility tests |
-| OperatorPcg and Schwarz | Investigated for large connected components but not adopted. | FixedNeighbor with local LegacyCompact and EIGEN |
-| Top-level LegacyCompact | The former global route was retired; LegacyCompact remains the local FixedNeighbor solver. | FixedNeighbor production implementation |
+| OperatorPcg and Schwarz | Investigated for large connected components but not adopted. | FixedNeighbor with local Profile LM and EIGEN |
+| Top-level LegacyCompact | The former global route was retired; the local FixedNeighbor primitive is named Profile LM. | FixedNeighbor production implementation |
 | Qualification campaigns | Completed core, order, stationarity, prepared-block and local-route decisions are closed. Permanent tests own the frozen contracts. | Joint contract and numerical tests |
 
 The detailed historical decisions are in

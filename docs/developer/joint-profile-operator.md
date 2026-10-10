@@ -8,7 +8,7 @@ They are no longer part of the current Joint solver, benchmark surface, or
 public API.
 
 The active numerical path is FixedNeighbor. Each structural block invokes the
-existing local `SearchProfile()` / `LegacyCompact` profile solver, then applies
+existing local Profile LM `SearchProfile()` operation, then applies
 the existing trust, global replay, stationarity, endpoint-certification and
 `RuntimeConvergence` contracts. `LinearSolve` owns the EIGEN sparse solve;
 `StructuralPartition`, `CompactSvd` and `TiledDerivative` provide the current
