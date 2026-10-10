@@ -194,7 +194,6 @@ set(JOINT_COMPONENT_WORKFLOW_TEST_SOURCES
 )
 
 set(JOINT_COMPONENT_NUMERICAL_TEST_SOURCES
-    core/joint_component/FixedBBlockCoordinate_test.cpp
     core/joint_component/FixedNeighborBlockCoordinate_test.cpp
     core/joint_component/Numerics_test.cpp
 )
@@ -320,9 +319,6 @@ if(RHBM_GEM_BUILD_BENCHMARKS)
     target_link_libraries(joint_component_benchmark PRIVATE rhbm_gem CompilerFlags)
     add_dependencies(benchmarks_all joint_component_benchmark)
 
-    add_executable(joint_fixed_b_block_experiment experiments/joint_fixed_b_block.cpp)
-    target_link_libraries(joint_fixed_b_block_experiment PRIVATE joint_test_support rhbm_gem CompilerFlags)
-    add_dependencies(benchmarks_all joint_fixed_b_block_experiment)
 
     add_executable(joint_fixed_neighbor_experiment experiments/joint_fixed_neighbor.cpp)
     target_link_libraries(joint_fixed_neighbor_experiment PRIVATE joint_test_support rhbm_gem_test CompilerFlags)
@@ -373,7 +369,7 @@ set_tests_properties(rhbm_tests_joint_component_workflow PROPERTIES
 rhbm_gem_collect_gtest_patterns(joint_numerical_patterns ${JOINT_COMPONENT_NUMERICAL_TEST_SOURCES})
 list(JOIN joint_numerical_patterns ":" joint_numerical_filter)
 string(APPEND joint_numerical_filter
-    "-JointComponentNumericsTest.CompactJacobianGramIdentityDiagnosticsAcrossLattices:JointFixedBBlockCoordinateTest.DiagnosticObserverDoesNotChangeFixedBResult:JointFixedBBlockCoordinateTest.RoundoffAwareAcceptanceRequalifies256AtomControls")
+    "-JointComponentNumericsTest.CompactJacobianGramIdentityDiagnosticsAcrossLattices")
 add_test(NAME rhbm_tests_joint_component_numerical
     COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes --gtest_filter=${joint_numerical_filter})
 set_tests_properties(rhbm_tests_joint_component_numerical PROPERTIES
@@ -383,13 +379,7 @@ set_tests_properties(rhbm_tests_joint_component_numerical PROPERTIES
 add_test(NAME joint_component_gram_scalability
     COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
         --gtest_filter=JointComponentNumericsTest.CompactJacobianGramIdentityDiagnosticsAcrossLattices)
-add_test(NAME joint_fixed_b_observer_scalability
-    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
-        --gtest_filter=JointFixedBBlockCoordinateTest.DiagnosticObserverDoesNotChangeFixedBResult)
-add_test(NAME joint_fixed_b_256_scalability
-    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
-        --gtest_filter=JointFixedBBlockCoordinateTest.RoundoffAwareAcceptanceRequalifies256AtomControls)
-set_tests_properties(joint_component_gram_scalability joint_fixed_b_observer_scalability joint_fixed_b_256_scalability
+set_tests_properties(joint_component_gram_scalability
     PROPERTIES LABELS "core;domain:core;intent:algorithm;joint:scalability;joint:offline;long" TIMEOUT 3600
         ENVIRONMENT "OMP_NUM_THREADS=1")
 
@@ -512,8 +502,6 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         ENVIRONMENT "OMP_NUM_THREADS=1")
     add_test(NAME joint_component_evidence_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_evidence_test.py")
-    add_test(NAME joint_fixed_b_scaling_analysis_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_b_scaling_test.py")
     add_test(NAME joint_fixed_neighbor_stationarity_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_stationarity_test.py")
     add_test(NAME joint_fixed_neighbor_order_test
@@ -522,7 +510,7 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_prepared_block_test.py")
     set_tests_properties(joint_fixed_neighbor_outer_core_qualification_test
         joint_fixed_neighbor_stationarity_test joint_fixed_neighbor_order_test
-        joint_fixed_neighbor_prepared_block_test joint_fixed_b_scaling_analysis_test
+        joint_fixed_neighbor_prepared_block_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:numerical" TIMEOUT 300
         ENVIRONMENT "OMP_NUM_THREADS=1")
     add_test(NAME joint_component_runtime_runner_test
@@ -677,7 +665,6 @@ foreach(_optional_target IN ITEMS
     joint_partial_selection
     joint_postprocessing_benchmark
     joint_component_benchmark
-    joint_fixed_b_block_experiment
     joint_fixed_neighbor_experiment
     joint_statistical_experiment)
     if(_optional_target IN_LIST _tests_all_dependencies)
@@ -686,13 +673,13 @@ foreach(_optional_target IN ITEMS
 endforeach()
 
 if(RHBM_GEM_BUILD_BENCHMARKS)
-    foreach(_target IN ITEMS joint_partial_selection joint_postprocessing_benchmark joint_component_benchmark joint_fixed_b_block_experiment joint_fixed_neighbor_experiment)
+    foreach(_target IN ITEMS joint_partial_selection joint_postprocessing_benchmark joint_component_benchmark joint_fixed_neighbor_experiment)
         if(NOT TARGET ${_target})
             message(FATAL_ERROR "RHBM_GEM_BUILD_BENCHMARKS did not create ${_target}")
         endif()
     endforeach()
 else()
-    foreach(_target IN ITEMS joint_partial_selection joint_postprocessing_benchmark joint_component_benchmark joint_fixed_b_block_experiment joint_fixed_neighbor_experiment)
+    foreach(_target IN ITEMS joint_partial_selection joint_postprocessing_benchmark joint_component_benchmark joint_fixed_neighbor_experiment)
         if(TARGET ${_target})
             message(FATAL_ERROR "${_target} exists while RHBM_GEM_BUILD_BENCHMARKS=OFF")
         endif()
