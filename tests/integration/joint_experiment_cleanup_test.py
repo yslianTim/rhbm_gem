@@ -72,6 +72,14 @@ ACTIVE_BACKEND_TERMS = (
     "SparseFactor",
 )
 
+RETIRED_DERIVATIVE_CONTROLS = (
+    "JacobianReductionKindForTesting",
+    "JacobianReductionForTesting",
+    "PrepareDerivativeForTesting",
+    "ReduceDerivativeForTesting",
+    "DerivativeTileRowsForTesting",
+)
+
 RETIRED_FIXTURES = (
     "joint_fixed_neighbor_inexact_baseline.json",
 )
@@ -105,12 +113,14 @@ def main():
     active_paths.extend(path for path in (ROOT / "include/rhbm_gem/core").rglob("*") if path.is_file())
     active_paths.extend(path for path in (ROOT / "tests" / "experiments").rglob("*")
                         if path.is_file())
-    active_paths.extend(path for path in integration.glob("*.py")
-                        if path.name != Path(__file__).name)
+    active_paths.extend(path for path in (ROOT / "tests" / "core" / "joint_component").rglob("*")
+                        if path.is_file())
+    active_paths.extend(path for path in integration.rglob("*")
+                        if path.is_file() and path.name != Path(__file__).name)
     active_code = "\n".join(
         path.read_text(errors="ignore")
         for path in active_paths
-        if path.suffix in {".cpp", ".hpp", ".py"}
+        if path.suffix in {".c", ".cc", ".cpp", ".h", ".hh", ".hpp", ".hxx", ".py", ".sh"}
     )
 
     missing = [name for name in RETIRED_DRIVERS + RETIRED_TESTS
@@ -151,6 +161,8 @@ def main():
     src_cmake = (ROOT / "src" / "CMakeLists.txt").read_text()
     for token in ACTIVE_BACKEND_TERMS:
         assert token.lower() not in src_cmake.lower(), f"retired sparse backend token remains in src CMake: {token}"
+    for token in RETIRED_DERIVATIVE_CONTROLS:
+        assert token not in active_code, f"retired derivative control remains: {token}"
     historical_raw_path = "docs/developer/figures/" + "joint-fixed-neighbor-scaling-r1/individual-results"
     assert historical_raw_path not in active_sources
     assert "/docs/developer/figures/**/individual-results/" in gitignore
