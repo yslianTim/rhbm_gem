@@ -46,5 +46,5 @@
   },
   "status": "superseded",
   "superseded_by": "../joint-factor-residency-r2/campaign-manifest.json",
-  "superseded_reason": "The first instrumentation did not census a factor while it was under construction, so its 1024/2048 partial RSS-limit snapshots could not identify the overlapping generations. Raw r1 files are retained for provenance; r2 adds in-flight factor records and preserves the stage-entry snapshot."
+  "superseded_reason": "The first instrumentation did not census a factor while it was under construction, so its 1024/2048 partial RSS-limit snapshots could not identify the overlapping generations. R2 adds in-flight factor records and preserves the stage-entry snapshot; r1 raw result files are pruned under the conclusion-level evidence policy."
 }
