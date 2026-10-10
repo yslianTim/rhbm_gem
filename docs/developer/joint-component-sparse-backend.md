@@ -40,31 +40,23 @@ existing KKT, width-gradient and eta-confirmation thresholds are unchanged.
 
 ## Qualification evidence
 
-The one-time current FixedNeighbor qualification is retained as compact
-promotion evidence in
-[`joint-fixed-neighbor-backend-qualification-r1/`](figures/joint-fixed-neighbor-backend-qualification-r1/).
-Small chain/cube, observable/nuisance, and partial-selection cases passed
-with numerical parity. The completed 128/256 resource probes showed a
-reproducible SPQR wall-time advantage, while EIGEN consistently used less
-peak RSS; both backends timed out on the bounded 512 probes. The original
-qualification selected SPQR under a wall-time-first policy. Production later
-changed its policy to prioritize memory footprint, dependency simplicity,
-installation portability and maintenance surface over that measured
-wall-time benefit, so EIGEN is now the sole backend.
-
-The qualification measurements and historical `chosen_backend=SPQR` decision
-remain unchanged in the canonical evidence. They are retained as historical
-readability and provenance, not as a current build or regression selector.
-Historical saved-result metadata can still decode SPQR provenance; current v3
-provenance requires `sparse_backend=EIGEN`.
+The one-time EIGEN/SPQR qualification and its superseded wall-time-first choice
+are summarized in the [historical decision record](joint-operator-search.md).
+Both backends passed bounded numerical parity; SPQR was faster on completed
+128/256 probes, EIGEN consistently used less peak RSS, and both bounded 512
+probes timed out. Production later prioritized memory footprint, dependency
+simplicity and maintenance, making EIGEN the sole current backend. This is a
+historical decision, not a current build or regression selector. Historical
+saved-result metadata can still decode SPQR provenance; current v3 provenance
+requires `sparse_backend=EIGEN`.
 
 ## Historical rank and operator work
 
 The former bounded SPQR rank certificate, OperatorPcg policy, preconditioner
-and Schwarz experiments were research infrastructure. Their source drivers
-and current route hooks are removed. They must not be reintroduced as hidden
-fallbacks or current benchmark options. Compact summaries and figures remain
-available for provenance in the
+and Schwarz experiments were research infrastructure. Their source drivers,
+current route hooks and machine-readable campaign outputs are removed. They
+must not be reintroduced as hidden fallbacks or current benchmark options;
+their decisions are summarized in the
 [historical evidence](joint-component-evidence.md) and
 [retired OperatorPcg record](joint-operator-search.md).
 
