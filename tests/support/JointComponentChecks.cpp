@@ -1,5 +1,7 @@
 #include "support/JointComponentChecks.hpp"
 #include "support/JointRuntimeJson.hpp"
+#include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
+#include "core/detail/joint_component/Problem.hpp"
 #include <sys/resource.h>
 #include <algorithm>
 #include <map>
@@ -283,10 +285,19 @@ j::object SameState(const Domain & domain,const Vector & y,const Vector & eta,co
     out["profile_solves"]=solves; out["spectra"]=spectra; out["passed"]=passed;
     out["full_equivalence"]=passed && out.at("full_equivalence").as_bool(); return out;
 }
-j::object FitComponent(const ComponentView & view,const Vector & y,const Vector & initial_b,const EvaluationContext & parent)
+runtime::ComponentResult SolveFixedNeighborComponentForTesting(const ComponentView & view,
+    const Vector & initial_b,const EvaluationContext & parent)
+{
+    rhbm_gem::JointParameterLayout layout;
+    layout.full_atoms.assign(view.atoms.begin(),view.atoms.end());
+    layout.informative_rows.assign(view.rows.begin(),view.rows.end());
+    const auto prepared=runtime::PrepareComponent(layout,view);
+    return runtime::SolveFixedNeighborComponent(prepared,initial_b,parent,{});
+}
+j::object FitComponent(const ComponentView & view,const Vector & initial_b,const EvaluationContext & parent)
 {
     const auto context=ComponentContext(parent,view,true); const Vector start=Select(initial_b,view.atoms);
-    const auto result=runtime::SolveComponent(view,y,initial_b,parent);
+    const auto result=SolveFixedNeighborComponentForTesting(view,initial_b,parent);
     auto fit=runtime_json::Search(result.search,context,view.domain.rows);
     auto assessment=runtime_json::Assessment(result.trusted_assessment ? *result.trusted_assessment : result.assessment);
     for(auto & field:assessment) fit[field.key()]=std::move(field.value());
@@ -360,10 +371,12 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
     out["runtime_convergence"]=runtime_json::Status(convergence);
     out["assembly_seconds"]=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count(); return out;
 }
-j::object FitComponents(const Domain & domain,const Vector & y,const Vector & initial_b,
-    const ComponentPartition & partition,const EvaluationContext & context)
+j::object FitComponents(std::shared_ptr<const rhbm_gem::core::JointProblemInput> input,
+    const Vector & initial_b,const ComponentPartition & partition,const EvaluationContext & context)
 {
-    j::array fits; for(const auto & view:partition.components) fits.push_back(FitComponent(view,y,initial_b,context));
+    const Domain domain(input);
+    const runtime::VectorMap y(input->observations.data(),static_cast<Eigen::Index>(input->observations.size()));
+    j::array fits; for(const auto & view:partition.components) fits.push_back(FitComponent(view,initial_b,context));
     auto result=Assemble(domain,y,partition,context,fits); result["components"]=std::move(fits); return result;
 }
 } // namespace second_stage_test::matched::joint_abc

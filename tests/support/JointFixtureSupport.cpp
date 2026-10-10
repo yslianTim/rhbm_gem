@@ -140,7 +140,7 @@ void RunFrozenFixture(const fs::path & path,const std::string & name,const fs::p
     const auto & domain=core::JointProblemAccess::Get(problem).domain;
     const auto partition=BuildPartition(domain,in.ids);
     if(partition.components.size()!=1) throw std::runtime_error("Frozen catalog case must be a single structural component.");
-    const auto fit=FitComponent(partition.components[0],y,initial,context);
+    const auto fit=FitComponent(partition.components[0],initial,context);
     j::object record;
     for(const char * key:{"search_success","usable_state","stop_reason","accepted_updates","profile_evaluations",
         "last_trusted_state","runtime_checks","runtime_convergence"})

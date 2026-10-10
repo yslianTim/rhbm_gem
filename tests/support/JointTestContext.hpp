@@ -18,7 +18,8 @@ AuditPlan RegisteredAudit(Eigen::Index atoms, const std::string & dataset = "",
 EvaluationContext MakeContext(const Eigen::VectorXd &, Eigen::Index atoms,
     const std::string & snapshot_hash = "", const AuditPlan * = nullptr);
 std::shared_ptr<rhbm_gem::core::JointProblemInput> MakeSyntheticJointProblemInput(
-    const runtime::Domain &, const Eigen::VectorXd & observations);
+    const runtime::Domain &, const Eigen::VectorXd & observations,
+    std::vector<std::string> atom_ids = {}, std::vector<std::string> row_ids = {});
 EvaluationContext MakeContext(std::shared_ptr<const rhbm_gem::core::JointProblemInput>,
     const std::string & snapshot_hash = "", const AuditPlan * = nullptr);
 boost::json::object ContextEvidence(const EvaluationContext &);

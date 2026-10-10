@@ -8,7 +8,7 @@
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "core/command/detail/MapSimulation.hpp"
-#include "support/JointTestNumerics.hpp"
+#include "support/JointComponentChecks.hpp"
 #include "support/JointRuntimeJson.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include <cmath>
@@ -18,6 +18,7 @@
 namespace {
 namespace core=rhbm_gem::core;
 namespace n=core::joint_component;
+namespace p=second_stage_test::matched::joint_abc;
 core::JointProblemInput Snapshot()
 {
     core::JointProblemInput input; input.atom_ids={"a","b"}; input.support.resize(2);
@@ -178,7 +179,7 @@ TEST(JointComponentRuntimeTest, AssemblyPreservesSuppliedCoefficientsInsteadOfRe
     const auto initial=n::Vector::Constant(2,.55);
     std::vector<n::ComponentResult> components;
     for(const auto & view:data.partition.components)
-        components.push_back(n::SolveComponent(view,data.y,initial,data.context));
+        components.push_back(p::SolveFixedNeighborComponentForTesting(view,initial,data.context));
     ASSERT_TRUE(components[0].trusted_state && components[1].trusted_state);
     components[0].trusted_state->beta(0)+=.1;
     const double actual=components[0].trusted_state->beta(0);
@@ -422,7 +423,8 @@ TEST(JointComponentRuntimeTest, ReusedAssemblyMatchesFreshAssessmentAndRejectsCh
     input.row_ids.resize(40); input.observations.resize(40);
     const core::JointProblem problem(input); const auto & data=core::JointProblemAccess::Get(problem);
     auto context=n::ChildContext(data.context,data.partition.components[0],true);
-    std::vector<n::ComponentResult> fits{n::SolveComponent(data.partition.components[0],data.y,n::Vector::Constant(1,.55),data.context)};
+    std::vector<n::ComponentResult> fits{p::SolveFixedNeighborComponentForTesting(
+        data.partition.components[0],n::Vector::Constant(1,.55),data.context)};
     ASSERT_TRUE(fits[0].trusted_assessment);
     const n::AssessmentReuse reuse{data.domain,data.y,context,*fits[0].trusted_assessment};
     const auto check=[&](const n::Domain & domain,const n::Vector & y,const n::EvaluationContext & policy,int assessments) {

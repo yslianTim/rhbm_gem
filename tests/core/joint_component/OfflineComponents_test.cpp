@@ -119,8 +119,9 @@ TEST(JointComponentChecksTest, GlobalBlockBoundaryScanIncludesOtherComponentsAnd
 TEST(JointComponentChecksTest, StandaloneBundleNeedsNoDatasetOrSiblingFiles)
 {
     namespace j=boost::json;
-    const TwoBlocks f; const auto parent=p::MakeContext(f.y,2);
-    const auto partition=p::BuildPartition(f.domain,parent.atom_ids); const auto & view=partition.components[0];
+    const TwoBlocks f; const auto snapshot=p::MakeSyntheticJointProblemInput(f.domain,f.y); const p::Domain domain(snapshot);
+    const auto parent=p::MakeContext(snapshot);
+    const auto partition=p::BuildPartition(domain,parent.atom_ids); const auto & view=partition.components[0];
     j::array observations,atoms,rows,memberships;
     for(double value:f.y) observations.push_back(value);
     for(auto atom:view.atoms) atoms.push_back(atom);
@@ -137,7 +138,7 @@ TEST(JointComponentChecksTest, StandaloneBundleNeedsNoDatasetOrSiblingFiles)
         return j::parse(std::string(std::istreambuf_iterator<char>(stream),{}),{},options);
     };
     write(); p::ComponentLocalBundleRerun(input.string(),(temporary.path()/"fit").string());
-    auto expected=p::FitComponent(view,f.y,Vector::Constant(2,.55),parent);
+    auto expected=p::FitComponent(view,Vector::Constant(2,.55),parent);
     expected["dataset"]="unit"; expected["case"]="unit"; expected["initial_b"]=j::array{.55};
     expected["observation_snapshot_sha256"]=parent.snapshot_hash;
     EXPECT_EQ(Science(expected),Science(read(temporary.path()/"fit/fit.json")));
@@ -152,19 +153,20 @@ TEST(JointComponentChecksTest, StandaloneBundleNeedsNoDatasetOrSiblingFiles)
 TEST(JointComponentChecksTest, LocalAuditUsesActualStateAndDiscardsSiblingDirections)
 {
     const TwoBlocks f;
-    auto parent=p::MakeContext(f.y,2);
-    const auto part=p::BuildPartition(f.domain,parent.atom_ids);
+    const auto input=p::MakeSyntheticJointProblemInput(f.domain,f.y); const p::Domain domain(input);
+    auto parent=p::MakeContext(input);
+    const auto part=p::BuildPartition(domain,parent.atom_ids);
     const auto & view=part.components[0];
-    auto fit=p::FitComponent(view,f.y,Vector::Constant(2,.55),parent);
+    auto fit=p::FitComponent(view,Vector::Constant(2,.55),parent);
     ASSERT_TRUE(fit.at("usable_state").as_bool());
     const auto y=p::Select(f.y,view.rows);
     auto child=p::ComponentContext(parent,view,true);
     child.audit.directions=Eigen::MatrixXd::Zero(1,3);
     const auto before=second_stage_test::matched::certification::PrepareLocalAudit(view.domain,y,fit,child);
-    (void)p::FitComponent(part.components[1],f.y,Vector::Constant(2,.55),parent);
+    (void)p::FitComponent(part.components[1],Vector::Constant(2,.55),parent);
     child.audit.directions=Eigen::MatrixXd::Constant(1,3,1e-100);
     const auto after=second_stage_test::matched::certification::PrepareLocalAudit(view.domain,y,fit,child);
-    const auto rerun=p::FitComponent(view,f.y,Vector::Constant(2,.55),parent);
+    const auto rerun=p::FitComponent(view,Vector::Constant(2,.55),parent);
     const auto reverse=second_stage_test::matched::certification::PrepareLocalAudit(view.domain,y,rerun,child);
     EXPECT_EQ(Science(fit),Science(rerun));
     EXPECT_EQ(Science(before.fit),Science(reverse.fit));

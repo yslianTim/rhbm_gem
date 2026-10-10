@@ -132,16 +132,6 @@ ComponentResult SolveFixedNeighborComponentView(
     return SolveFixedNeighborComponent(prepared,initial_b,parent_context,
         production_policy,observer,progress_component);
 }
-ComponentResult SolveComponent(const ComponentView & view,VectorRef,const Vector & initial_b,
-    const EvaluationContext & parent,const JointProgressObserver & observer,
-    const JointProgressComponent * progress_component)
-{
-    JointParameterLayout component_layout;
-    component_layout.full_atoms.assign(view.atoms.begin(),view.atoms.end());
-    component_layout.informative_rows.assign(view.rows.begin(),view.rows.end());
-    return SolveFixedNeighborComponentView(view,component_layout,initial_b,parent,{},
-        observer,progress_component);
-}
 ComponentResult AssessComponentSearch(const Domain & domain,VectorRef y,const EvaluationContext & context,SearchResult search,
     const JointProgressObserver & observer,const JointProgressComponent * progress_component)
 {

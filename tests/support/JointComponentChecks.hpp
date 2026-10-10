@@ -14,10 +14,12 @@ Evaluation ComponentEvaluation(const Evaluation &, const ComponentView &);
 Differential DifferentiatePartitioned(const Evaluation &, const ComponentPartition &, const EvaluationContext &);
 boost::json::object SameState(const Domain &, const Eigen::VectorXd &, const Eigen::VectorXd & eta,
     const Eigen::VectorXd & beta, const ComponentPartition &, const EvaluationContext &);
-boost::json::object FitComponent(const ComponentView &, const Eigen::VectorXd & parent_y,
+runtime::ComponentResult SolveFixedNeighborComponentForTesting(const ComponentView &,
     const Eigen::VectorXd & parent_initial_b, const EvaluationContext &);
+boost::json::object FitComponent(const ComponentView &, const Eigen::VectorXd & parent_initial_b,
+    const EvaluationContext &);
 boost::json::object Assemble(const Domain &, const Eigen::VectorXd &, const ComponentPartition &,
     const EvaluationContext &, const boost::json::array & component_fits);
-boost::json::object FitComponents(const Domain &, const Eigen::VectorXd &, const Eigen::VectorXd & initial_b,
-    const ComponentPartition &, const EvaluationContext &);
+boost::json::object FitComponents(std::shared_ptr<const rhbm_gem::core::JointProblemInput>,
+    const Eigen::VectorXd & initial_b, const ComponentPartition &, const EvaluationContext &);
 } // namespace second_stage_test::matched::joint_abc

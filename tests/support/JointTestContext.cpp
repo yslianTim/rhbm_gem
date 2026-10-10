@@ -1,6 +1,7 @@
 #include "support/JointTestContext.hpp"
 #include <algorithm>
 #include <limits>
+#include <set>
 #include <stdexcept>
 
 namespace second_stage_test::matched::joint_abc {
@@ -16,16 +17,25 @@ AuditPlan RegisteredAudit(Eigen::Index atoms,const std::string & dataset,const s
 EvaluationContext MakeContext(const Eigen::VectorXd & y,Eigen::Index atoms,const std::string & hash,const AuditPlan * plan)
 {return runtime::CreateContext(y,atoms,hash,plan ? *plan : RegisteredAudit(atoms));}
 std::shared_ptr<rhbm_gem::core::JointProblemInput> MakeSyntheticJointProblemInput(
-    const runtime::Domain & domain,const Eigen::VectorXd & observations)
+    const runtime::Domain & domain,const Eigen::VectorXd & observations,
+    std::vector<std::string> atom_ids,std::vector<std::string> row_ids)
 {
     if(domain.rows!=observations.size() || !observations.allFinite())
         throw std::invalid_argument("Invalid synthetic joint observations.");
+    if(atom_ids.empty()) for(std::size_t atom=0;atom<domain.atoms.size();++atom)
+        atom_ids.push_back("atom-"+std::to_string(atom));
+    if(row_ids.empty()) for(Eigen::Index row=0;row<domain.rows;++row)
+        row_ids.push_back("row-"+std::to_string(row));
+    if(atom_ids.size()!=domain.atoms.size() || row_ids.size()!=static_cast<std::size_t>(domain.rows) ||
+        std::set<std::string>(atom_ids.begin(),atom_ids.end()).size()!=atom_ids.size() ||
+        std::set<std::string>(row_ids.begin(),row_ids.end()).size()!=row_ids.size())
+        throw std::invalid_argument("Invalid synthetic joint identities.");
     auto input=std::make_shared<rhbm_gem::core::JointProblemInput>();
     input->observations.assign(observations.data(),observations.data()+observations.size());
     input->atom_ids.reserve(domain.atoms.size()); input->support.resize(domain.atoms.size());
     for(std::size_t atom=0;atom<domain.atoms.size();++atom)
     {
-        input->atom_ids.push_back("atom-"+std::to_string(atom));
+        input->atom_ids.push_back(std::move(atom_ids[atom]));
         for(const auto & support:domain.atoms[atom])
         {
             if(support.row<0 || support.row>=domain.rows || !std::isfinite(support.square) ||
@@ -34,8 +44,7 @@ std::shared_ptr<rhbm_gem::core::JointProblemInput> MakeSyntheticJointProblemInpu
             input->support[atom].push_back({static_cast<std::size_t>(support.row),support.square});
         }
     }
-    input->row_ids.reserve(static_cast<std::size_t>(domain.rows));
-    for(Eigen::Index row=0;row<domain.rows;++row) input->row_ids.push_back("row-"+std::to_string(row));
+    input->row_ids=std::move(row_ids);
     return input;
 }
 EvaluationContext MakeContext(std::shared_ptr<const rhbm_gem::core::JointProblemInput> input,

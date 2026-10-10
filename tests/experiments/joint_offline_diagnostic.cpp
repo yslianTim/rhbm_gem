@@ -123,7 +123,7 @@ void Run(int start, const Path & output)
     extended.profile_budget = 1000;
     extended.update_budget = 500;
     out["diagnostic_restart"] = p::FitComponent(
-        data.partition.components.front(), y, eta.array().exp(), extended);
+        data.partition.components.front(), eta.array().exp(), extended);
     out["audit_complete"] = true;
     Write(output, out);
 }

@@ -241,15 +241,15 @@ TEST(JointComponentChecksTest, FailureIsolationDoesNotFillMissingRowsWithZero)
     const auto input=p::MakeSyntheticJointProblemInput(f.domain,f.y); f.domain=p::Domain(input);
     auto c=p::MakeContext(input); const auto part=p::BuildPartition(f.domain,c.atom_ids);
     const Vector initial=Vector::Constant(3,.55);
-    const auto result=p::FitComponents(f.domain,f.y,initial,part,c);
+    const auto result=p::FitComponents(input,initial,part,c);
     ASSERT_EQ(result.at("components").as_array().size(),2);
     EXPECT_TRUE(result.at("components").at(0).at("search_success").as_bool());
     EXPECT_FALSE(result.at("components").at(1).at("usable_state").as_bool());
     EXPECT_FALSE(result.at("prediction_available").as_bool()); EXPECT_TRUE(result.at("prediction").is_null());
     EXPECT_NE(result.at("runtime_convergence"),"passed");
     for(std::size_t r=0;r<81;++r) EXPECT_EQ(result.at("available_row_mask").at(r).as_bool(),r<40 || r==80);
-    const auto failed_first=p::FitComponent(part.components[1],f.y,initial,c);
-    const auto healthy_second=p::FitComponent(part.components[0],f.y,initial,c);
+    const auto failed_first=p::FitComponent(part.components[1],initial,c);
+    const auto healthy_second=p::FitComponent(part.components[0],initial,c);
     EXPECT_EQ(Science(failed_first),Science(result.at("components").at(1)));
     EXPECT_EQ(Science(healthy_second),Science(result.at("components").at(0)));
 }
@@ -259,18 +259,18 @@ TEST(JointComponentChecksTest, LocalProfileBudgetAndInvalidStartRetainHonestAvai
     const TwoBlocks f; const auto input=p::MakeSyntheticJointProblemInput(f.domain,f.y); const p::Domain domain(input);
     auto c=p::MakeContext(input); const auto part=p::BuildPartition(domain,c.atom_ids);
     const Vector initial=Vector::Constant(2,.6);
-    const auto healthy=p::FitComponent(part.components[0],f.y,initial,c);
+    const auto healthy=p::FitComponent(part.components[0],initial,c);
     auto limited=c; limited.profile_budget=1;
-    const auto exhausted=p::FitComponent(part.components[1],f.y,initial,limited);
+    const auto exhausted=p::FitComponent(part.components[1],initial,limited);
     EXPECT_FALSE(exhausted.at("search_success").as_bool()); EXPECT_TRUE(exhausted.at("usable_state").as_bool());
     EXPECT_EQ(exhausted.at("stop_reason"),"block-sweep-budget");
     const auto assembled=p::Assemble(domain,f.y,part,c,boost::json::array{healthy,exhausted});
     EXPECT_TRUE(assembled.at("prediction_available").as_bool()); EXPECT_NE(assembled.at("runtime_convergence"),"passed");
     EXPECT_TRUE(assembled.at("search_stopped_without_convergence").as_bool());
     Vector invalid=initial; invalid(1)=0;
-    const auto failure=p::FitComponent(part.components[1],f.y,invalid,c);
+    const auto failure=p::FitComponent(part.components[1],invalid,c);
     EXPECT_FALSE(failure.at("usable_state").as_bool());
-    EXPECT_EQ(Science(healthy),Science(p::FitComponent(part.components[0],f.y,initial,c)));
+    EXPECT_EQ(Science(healthy),Science(p::FitComponent(part.components[0],initial,c)));
 }
 
 TEST(JointComponentChecksTest, UnobservedAtomsKeepRawPredictionButDisableProfileClaims)
@@ -283,7 +283,7 @@ TEST(JointComponentChecksTest, UnobservedAtomsKeepRawPredictionButDisableProfile
     EXPECT_FALSE(state.at("full_equivalence").as_bool());
     EXPECT_FALSE(state.at("profile_solves").at(0).at("available").as_bool());
     EXPECT_EQ(part.unobserved_atoms,(std::vector<Eigen::Index>{1}));
-    const auto fit=p::FitComponents(f.domain,f.y,Vector(f.eta.array().exp()),part,c);
+    const auto fit=p::FitComponents(input,Vector(f.eta.array().exp()),part,c);
     EXPECT_TRUE(fit.at("components").at(0).at("search_success").as_bool());
     EXPECT_FALSE(fit.at("components").at(1).at("usable_state").as_bool());
     EXPECT_FALSE(fit.at("prediction_available").as_bool());

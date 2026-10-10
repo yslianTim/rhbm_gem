@@ -20,10 +20,14 @@ int main(int argc,char ** argv)
             for(std::size_t k=0;k<values.size();++k) initial(static_cast<Eigen::Index>(k))=j::value_to<double>(values[k]);
             const auto & y=name.ends_with("double") ? in.y64 : in.y32;
             auto plan=p::RegisteredAudit(initial.size(),in.name,name); plan.cache_precision=true;
-            auto context=p::MakeContext(y,initial.size(),in.hash,&plan); context.atom_ids=in.ids;
-            const auto partition=p::BuildPartition(in.domain,in.ids);
+            auto numerical_context=p::MakeContext(y,initial.size(),in.hash,&plan);
+            std::vector<std::string> row_ids=numerical_context.row_ids;
+            const auto snapshot=p::MakeSyntheticJointProblemInput(in.domain,y,in.ids,std::move(row_ids));
+            const p::Domain domain(snapshot);
+            auto context=p::MakeContext(snapshot,in.hash,&plan);
+            const auto partition=p::BuildPartition(domain,in.ids);
             for(std::size_t k=0;k<partition.components.size();++k) {
-                auto fit=p::FitComponent(partition.components[k],y,initial,context);
+                auto fit=p::FitComponent(partition.components[k],initial,context);
                 fit["dataset"]=in.name; fit["case"]=name;
                 if(std::string(argv[1])=="two-step-fixture")
                 {

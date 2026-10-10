@@ -261,8 +261,6 @@ struct ComponentResult
 };
 ComponentResult AssessComponentSearch(const Domain &,VectorRef,const EvaluationContext &,SearchResult,
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
-ComponentResult SolveComponent(const ComponentView &,VectorRef,const Vector &,const EvaluationContext &,
-    const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
 struct AssemblyResult
 {
     bool available{},completed{true},profile_agrees{};

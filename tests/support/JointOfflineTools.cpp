@@ -124,7 +124,19 @@ void ComponentLocalBundleRerun(const std::string & bundle_path,const std::string
     std::vector<std::vector<Support>> support(view.atoms.size());
     for(const auto & entry:input.at("memberships").as_array())
         support.at(j::value_to<std::size_t>(entry.at(1))).push_back({j::value_to<Eigen::Index>(entry.at(0)),j::value_to<double>(entry.at(2))});
-    view.domain=Domain(static_cast<Eigen::Index>(view.rows.size()),std::move(support));
+    auto snapshot=std::make_shared<rhbm_gem::core::JointProblemInput>();
+    snapshot->observations.assign(y.data(),y.data()+y.size());
+    snapshot->atom_ids=context.atom_ids; snapshot->row_ids=context.row_ids;
+    snapshot->support.resize(static_cast<std::size_t>(count));
+    for(std::size_t local_atom=0;local_atom<support.size();++local_atom)
+        for(const auto & point:support[local_atom])
+            snapshot->support.at(static_cast<std::size_t>(view.atoms.at(local_atom))).push_back({
+                static_cast<std::size_t>(view.rows.at(static_cast<std::size_t>(point.row))),point.square});
+    const runtime::Domain parent_domain(snapshot);
+    auto row_mapping=std::make_shared<runtime::Indices>(static_cast<std::size_t>(y.size()),-1);
+    for(std::size_t local_row=0;local_row<view.rows.size();++local_row)
+        row_mapping->at(static_cast<std::size_t>(view.rows[local_row]))=static_cast<Eigen::Index>(local_row);
+    view.domain=parent_domain.Select(view.atoms,static_cast<Eigen::Index>(view.rows.size()),row_mapping);
     std::vector<std::string> ids; for(auto atom:view.atoms) ids.push_back(context.atom_ids.at(static_cast<std::size_t>(atom)));
     const auto partition=BuildPartition(view.domain,ids);
     if(partition.components.size()!=1 || partition.components[0].id!=view.id) throw std::invalid_argument("Bundle must contain exactly the requested structural component.");
@@ -133,7 +145,7 @@ void ComponentLocalBundleRerun(const std::string & bundle_path,const std::string
         throw std::invalid_argument("Invalid isolated component initialization.");
     Vector initial=Vector::Zero(count);
     for(std::size_t k=0;k<view.atoms.size();++k) initial(view.atoms[k])=local_b(static_cast<Eigen::Index>(k));
-    auto fit=FitComponent(view,y,initial,context);
+    auto fit=FitComponent(view,initial,context);
     fit["dataset"]=bundle.at("dataset"); fit["case"]=bundle.at("case"); fit["initial_b"]=Values(local_b);
     fit["observation_snapshot_sha256"]=context.snapshot_hash;
     fs::create_directories(output); Write(output/"fit.json",fit);
