@@ -2,7 +2,7 @@
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/StructuralPartition.hpp"
 #include "support/JointBlockCoordinate.hpp"
-#include "support/JointOperatorWorkload.hpp"
+#include "support/JointSyntheticWorkload.hpp"
 #include <algorithm>
 #include <numeric>
 #include <random>
@@ -122,7 +122,7 @@ TEST(JointBlockCoordinateTest, ConditionalResidualAndObjectiveMatchOnChainAndCub
     for(const auto & [topology,atoms,seed]:{std::tuple<std::string,int,unsigned>{"chain",8,8},
         {"chain",32,32},{"cube",8,108},{"cube",32,132}})
     {
-        auto input=second_stage_test::OperatorWorkload(topology,atoms); const auto layout=n::BuildParameterLayout(input);
+        auto input=second_stage_test::SyntheticJointWorkload(topology,atoms); const auto layout=n::BuildParameterLayout(input);
         const auto partition=n::BuildStructuralBlockPartition(input,layout,4);
         ExerciseConditionalReplacements(input,layout,partition,seed);
     }

@@ -94,7 +94,7 @@ def case_input(case):
         'topology': topology,
         'atoms': atoms,
         'input_sha256': digest({
-            'generator': sha(ROOT / 'tests/support/JointOperatorWorkload.cpp'),
+            'generator': sha(ROOT / 'tests/support/JointSyntheticWorkload.cpp'),
             'topology': topology,
             'atoms': atoms,
         }),

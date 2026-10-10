@@ -22,7 +22,7 @@
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "core/detail/JointCliProgressReporter.hpp"
 #include "core/detail/joint_component/Problem.hpp"
-#include "support/JointOperatorWorkload.hpp"
+#include "support/JointSyntheticWorkload.hpp"
 
 namespace {
 namespace core = rhbm_gem::core;
@@ -342,7 +342,7 @@ TEST(JointProgressTest, RejectedCandidateKeepsAcceptedObjective)
 
 TEST(JointProgressTest, SearchEventsTrackOnlyAcceptedMetrics)
 {
-    const core::JointProblem problem(second_stage_test::OperatorWorkload("chain", 4));
+    const core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain", 4));
     const auto & data = core::JointProblemAccess::Get(problem);
     const auto & view = data.partition.components.front();
     const auto y = joint::SelectValues(data.y, view.rows);

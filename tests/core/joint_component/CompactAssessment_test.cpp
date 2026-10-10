@@ -2,7 +2,7 @@
 #include "core/detail/joint_component/Numerics.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "core/detail/joint_component/Problem.hpp"
-#include "support/JointOperatorWorkload.hpp"
+#include "support/JointSyntheticWorkload.hpp"
 #include <Eigen/SVD>
 #include <algorithm>
 #include <array>
@@ -79,7 +79,7 @@ TEST(JointCompactAssessmentTest, CompactStackMatchesObservationReferenceAcrossLa
     for(const std::string topology:{"chain","cube"}) for(const int atoms:{8,32})
     {
         SCOPED_TRACE(topology+"-"+std::to_string(atoms));
-        const c::JointProblem problem(second_stage_test::OperatorWorkload(topology,atoms));
+        const c::JointProblem problem(second_stage_test::SyntheticJointWorkload(topology,atoms));
         const auto & data=c::JointProblemAccess::Get(problem);
         const auto eta=n::Vector::Constant(atoms,std::log(.55));
         const auto endpoint=n::EvaluateProfile(data.domain,data.y,eta,false,&data.context);
@@ -121,7 +121,7 @@ TEST(JointCompactAssessmentTest, CancellationFallbackAndActiveFaceRemainValid)
 {
     EigenThreads threads;
     {
-        const c::JointProblem problem(second_stage_test::OperatorWorkload("chain",8));
+        const c::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
         const auto & data=c::JointProblemAccess::Get(problem);
         auto endpoint=n::EvaluateProfile(data.domain,data.y,n::Vector::Constant(8,std::log(.55)),false,&data.context);
         ASSERT_TRUE(endpoint.valid);

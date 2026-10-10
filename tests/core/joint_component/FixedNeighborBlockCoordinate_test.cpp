@@ -2,7 +2,7 @@
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/StructuralPartition.hpp"
-#include "support/JointOperatorWorkload.hpp"
+#include "support/JointSyntheticWorkload.hpp"
 #include <cmath>
 #include <limits>
 #include <numeric>
@@ -13,7 +13,7 @@ namespace n=rhbm_gem::core::joint_component;
 using rhbm_gem::core::JointProblem;
 void CheckSingleBlock(const std::string & topology,int atoms)
 {
-    JointProblem problem(second_stage_test::OperatorWorkload(topology,atoms));
+    JointProblem problem(second_stage_test::SyntheticJointWorkload(topology,atoms));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(atoms,std::log(.55));
     n::FixedNeighborPolicy policy; policy.maximum_sweeps=30;
@@ -60,7 +60,7 @@ void CheckSingleBlock(const std::string & topology,int atoms)
 }
 void CheckMultiBlockBudgetFailure(const std::string & topology)
 {
-    JointProblem problem(second_stage_test::OperatorWorkload(topology,32));
+    JointProblem problem(second_stage_test::SyntheticJointWorkload(topology,32));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const auto partition=n::BuildStructuralBlockPartition(*data.input,data.layout,16);
     ASSERT_EQ(partition.cores.size(),2u);
@@ -86,7 +86,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, MultiBlockBudgetFailureRemainsDistin
 }
 TEST(JointFixedNeighborBlockCoordinateTest, CheapStationarityNeedsCompleteSweepConfirmation)
 {
-    JointProblem problem(second_stage_test::OperatorWorkload("chain",8));
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
     const n::Vector eta=n::Vector::Constant(8,std::log(.55));
     n::FixedNeighborPolicy policy; policy.maximum_sweeps=1;
     const auto candidate=n::SearchFixedNeighbor(problem,eta,policy);
@@ -105,7 +105,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, CheapStationarityNeedsCompleteSweepC
 }
 TEST(JointFixedNeighborBlockCoordinateTest, SearchOnlySkipsFinalAssessmentWithoutChangingTrajectory)
 {
-    JointProblem problem(second_stage_test::OperatorWorkload("chain",8));
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
     const n::Vector eta=n::Vector::Constant(8,std::log(.55));
     const auto assessed=n::SearchFixedNeighbor(problem,eta);
     n::FixedNeighborPolicy policy; policy.assess_final_endpoint=false;
@@ -132,7 +132,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, SearchOnlySkipsFinalAssessmentWithou
 }
 TEST(JointFixedNeighborBlockCoordinateTest, LocalTrajectoryTelemetryIsOptInAndDoesNotChangeSearchState)
 {
-    JointProblem problem(second_stage_test::OperatorWorkload("chain",8));
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
     const n::Vector eta=n::Vector::Constant(8,std::log(.55));
     n::FixedNeighborPolicy policy; policy.assess_final_endpoint=false; policy.maximum_sweeps=1;
     policy.capture_local_trajectory=true;
@@ -166,7 +166,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, LocalTrajectoryTelemetryIsOptInAndDo
 }
 TEST(JointFixedNeighborBlockCoordinateTest, AggregateWorkTelemetryIsOptInAndDoesNotChangeSearchState)
 {
-    JointProblem problem(second_stage_test::OperatorWorkload("chain",32));
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",32));
     const n::Vector eta=n::Vector::Constant(32,std::log(.55));
     n::FixedNeighborPolicy policy; policy.core_atoms=16; policy.maximum_sweeps=2;
     policy.assess_final_endpoint=false; policy.collect_telemetry=true;
@@ -208,7 +208,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, AggregateWorkTelemetryIsOptInAndDoes
 }
 TEST(JointFixedNeighborBlockCoordinateTest, LocalProfileAttributionIsAggregateAndOptIn)
 {
-    JointProblem problem(second_stage_test::OperatorWorkload("chain",16));
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",16));
     const n::Vector eta=n::Vector::Constant(16,std::log(.55));
     n::FixedNeighborPolicy measured_policy; measured_policy.core_atoms=8; measured_policy.maximum_sweeps=1;
     measured_policy.assess_final_endpoint=false; measured_policy.collect_telemetry=true;
@@ -247,7 +247,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, LocalProfileAttributionIsAggregateAn
 }
 TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutputWithoutDiagnostics)
 {
-    JointProblem problem(second_stage_test::OperatorWorkload("chain",32));
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",32));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector initial_eta=n::Vector::Constant(32,std::log(.55));
     const n::Domain domain=n::ProfileDomain(data.domain,data.layout);
@@ -284,7 +284,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutp
 }
 TEST(JointFixedNeighborBlockCoordinateTest, FixedNeighborAcceptsAtMostOneTrustedLocalUpdatePerBlockVisit)
 {
-    JointProblem problem(second_stage_test::OperatorWorkload("chain",32));
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",32));
     const n::Vector eta=n::Vector::Constant(32,std::log(.55));
     n::FixedNeighborPolicy policy; policy.core_atoms=16; policy.maximum_sweeps=2;
     policy.assess_final_endpoint=false; policy.capture_local_trajectory=true;
@@ -316,7 +316,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, EtaConfirmationUsesInclusiveExisting
 }
 TEST(JointFixedNeighborBlockCoordinateTest, SweepCoordinateTelemetryUsesCompleteSweepStates)
 {
-    JointProblem problem(second_stage_test::OperatorWorkload("chain",32));
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",32));
     const n::Vector initial_eta=n::Vector::Constant(32,std::log(.55));
     n::FixedNeighborPolicy policy; policy.core_atoms=16; policy.maximum_sweeps=5;
     policy.stop_after_stationarity=false;
@@ -360,7 +360,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, SweepCoordinateTelemetryUsesComplete
 }
 TEST(JointFixedNeighborBlockCoordinateTest, InvalidCorePolicyKeepsFailureSemantics)
 {
-    JointProblem problem(second_stage_test::OperatorWorkload("chain",8));
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
     const n::Vector eta=n::Vector::Constant(8,std::log(.55)); n::FixedNeighborPolicy policy; policy.core_atoms=0;
     const auto result=n::SearchFixedNeighbor(problem,eta,policy);
     EXPECT_FALSE(result.search_converged); EXPECT_EQ(result.reason,"block-invalid-partition");
@@ -368,7 +368,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, InvalidCorePolicyKeepsFailureSemanti
 }
 TEST(JointFixedNeighborBlockCoordinateTest, SameEtaRawPrimaryAndReferenceDiagnosticsPreserveSearchState)
 {
-    JointProblem problem(second_stage_test::OperatorWorkload("chain",8));
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector initial_eta=n::Vector::Constant(8,std::log(.55));
     const auto search=n::SearchFixedNeighbor(problem,initial_eta);

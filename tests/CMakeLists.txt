@@ -284,7 +284,7 @@ add_dependencies(tests_all rhbm_tests)
 
 # Test-only helpers contain no historical runner or multiprecision orchestration.
 add_library(joint_test_support STATIC
-    support/JointOperatorWorkload.cpp
+    support/JointSyntheticWorkload.cpp
     support/JointBlockCoordinate.cpp
     support/JointTestGeometry.cpp support/JointTestNumerics.cpp support/JointDenseReference.cpp
     support/JointTestContext.cpp support/JointComponentChecks.cpp

@@ -3,7 +3,7 @@
 #include "core/detail/joint_component/ResourceWork.hpp"
 #include "core/detail/joint_component/CompactSvd.hpp"
 #include "core/detail/joint_component/Problem.hpp"
-#include "support/JointOperatorWorkload.hpp"
+#include "support/JointSyntheticWorkload.hpp"
 #include "support/JointTestNumerics.hpp"
 #include <unsupported/Eigen/NonLinearOptimization>
 #include <array>
@@ -377,7 +377,7 @@ TEST(JointComponentNumericsTest, CompactJacobianGramIdentityDiagnosticsAcrossLat
     CompactJacobianSummary summary;
     for(const std::string topology:{"chain","cube"}) for(const int atoms:{8,32,128,256})
     {
-        rhbm_gem::core::JointProblem problem(second_stage_test::OperatorWorkload(topology,atoms));
+        rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload(topology,atoms));
         const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
         const Vector eta=Vector::Constant(atoms,std::log(.55));
         const auto e=n::EvaluateProfile(data.domain,data.y,eta,false,&data.context);

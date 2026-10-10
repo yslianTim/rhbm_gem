@@ -1,4 +1,4 @@
-#include "JointOperatorWorkload.hpp"
+#include "JointSyntheticWorkload.hpp"
 #include "core/detail/joint_component/Numerics.hpp"
 #include <algorithm>
 #include <array>
@@ -7,7 +7,7 @@
 #include <boost/hash2/sha2.hpp>
 
 namespace second_stage_test {
-std::string OperatorWorkloadHash(const rhbm_gem::core::JointProblemInput & input)
+std::string SyntheticJointWorkloadHash(const rhbm_gem::core::JointProblemInput & input)
 {
     // Versioned canonical stream: uint64 little endian lengths/indices, exact
     // IEEE double bits and length-prefixed identity bytes. No snapshot copy.
@@ -29,7 +29,7 @@ std::string OperatorWorkloadHash(const rhbm_gem::core::JointProblemInput & input
     }
     return boost::hash2::to_string(hash.result());
 }
-rhbm_gem::core::JointProblemInput OperatorWorkload(const std::string & topology,int count)
+rhbm_gem::core::JointProblemInput SyntheticJointWorkload(const std::string & topology,int count)
 {
     if((topology!="chain" && topology!="cube") || count<=0 || count>10000)
         throw std::invalid_argument("Expected chain/cube and 1..10000 atoms");

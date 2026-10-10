@@ -1,7 +1,7 @@
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
-#include "support/JointOperatorWorkload.hpp"
+#include "support/JointSyntheticWorkload.hpp"
 #include <boost/json.hpp>
 #include <Eigen/Core>
 #include <algorithm>
@@ -184,7 +184,7 @@ void Write(const std::filesystem::path &,const j::value &);
 j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,
     bool scaling_only=false)
 {
-    auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
+    auto input=std::make_shared<Input>(second_stage_test::SyntheticJointWorkload(topology,atoms));
     const rhbm_gem::core::JointProblem problem(*input);
     n::Vector initial_eta= n::Vector::Constant(atoms,std::log(.55)); n::FixedNeighborPolicy neighbor_policy;
     neighbor_policy.core_atoms=12;
