@@ -297,7 +297,7 @@ target_include_directories(joint_test_support PUBLIC
     "${PROJECT_SOURCE_DIR}/tests")
 target_link_libraries(rhbm_tests PRIVATE joint_test_support)
 
-add_executable(joint_component_runtime experiments/joint_component_runtime.cpp support/JointComponentRuntime.cpp)
+add_executable(joint_component_runtime tools/joint_component_runtime.cpp support/JointComponentRuntime.cpp)
 target_link_libraries(joint_component_runtime PRIVATE joint_test_support rhbm_gem)
 add_dependencies(tests_all joint_component_runtime)
 
@@ -330,7 +330,7 @@ if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
 endif()
 
 if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
-    add_executable(joint_component_audit experiments/joint_component_audit.cpp)
+    add_executable(joint_component_audit tools/joint_component_audit.cpp)
     target_link_libraries(joint_component_audit PRIVATE joint_offline_support rhbm_gem)
     add_executable(joint_offline_diagnostic experiments/joint_offline_diagnostic.cpp)
     target_link_libraries(joint_offline_diagnostic PRIVATE joint_offline_support rhbm_gem)
@@ -548,10 +548,7 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         add_test(NAME joint_component_offline_regression
             COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_audit.py"
                 --executable $<TARGET_FILE:joint_component_audit> --work-dir "${PROJECT_BINARY_DIR}/joint-offline")
-        add_test(NAME joint_component_two_step_regression
-            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_audit.py"
-                --two-step-only --executable $<TARGET_FILE:joint_component_audit> --work-dir "${PROJECT_BINARY_DIR}/joint-two-step")
-        set_tests_properties(joint_component_offline_regression joint_component_two_step_regression
+        set_tests_properties(joint_component_offline_regression
             PROPERTIES LABELS "offline;domain:integration;intent:algorithm;joint:offline;long" TIMEOUT 3600
             ENVIRONMENT "OMP_NUM_THREADS=1")
     endif()
