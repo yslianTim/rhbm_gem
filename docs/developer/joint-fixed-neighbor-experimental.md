@@ -30,19 +30,19 @@ certification, persistence and `RuntimeConvergence` contract. See the
 [Joint runtime contract](joint-component-runtime.md) for the implementation
 details.
 
-## Current qualification evidence
+## Historical decisions
 
-| Evidence | Decision | Canonical record |
-| --- | --- | --- |
-| Stationarity confirmation | Eta-only confirmation is safe under the existing `1e-10` change threshold; confirmed endpoints pass the existing gates through the qualified cases | [stationarity summary](figures/joint-fixed-neighbor-stationarity-r1/README.md) |
-| Historical local-update selection | Full and TwoAccepted were evaluated as historical alternatives; OneAccepted was selected and is now intrinsic to FixedNeighbor. All four 256/512 full-endpoint cases passed, while the 1024 comparison remains search-only | [local-work qualification](figures/joint-fixed-neighbor-inexact-qualification-r2/README.md) |
-| Outer-core C3 endpoint gate | Cores 12, 16 and historical control 64 passed endpoint, trust, `RuntimeConvergence`, replay and parity checks on chain/cube 256/512 | [outer-core qualification](joint-fixed-neighbor-outer-core-qualification.md) |
-| Outer-core C4 repeated frontier | Core 12 passed the correctness gate and exceeded the 10% search-improvement requirement on every measured topology/size | [C4 summary](figures/joint-fixed-neighbor-core-size-r5/README.md) |
-| Prepared-block behavior | Structural preparation and mapping counts are checked separately from numerical solving; no new convergence criterion was introduced | [prepared-block qualification](joint-benchmark.md) |
-| Forward/reverse order | All five pairs confirmed convergence; maximum eta difference was `3.75e-11` and maximum scaled A/C difference was `2.09e-12`; full endpoint/runtime parity passed through 512 | [order summary](figures/joint-fixed-neighbor-order-r1/README.md) |
-| Fixed-B replay floor | The roundoff-aware acceptance contract and its regression evidence remain unchanged | [Fixed-B requalification](figures/joint-fixed-b-requal-r1/analysis.json) |
+| Topic | Conclusion |
+| --- | --- |
+| Fixed-B | Conditional block updates and replay accounting were numerically feasible, but Fixed-B was not promoted as the estimator. Nonlinear FixedNeighbor superseded it. |
+| Core size | Repeated correctness-checked qualification selected core 12. Against the historical core-64 control, measured median search improved by 33.0%–64.3% across chain/cube at 512 and 1024 atoms. Larger cores did not justify their added local problem size. |
+| Block order | Forward was adopted as the production serial Gauss-Seidel order. Reverse was a qualification diagnostic; the largest fully checked parameter differences stayed below existing interpretation bounds. |
+| Stationarity | Eta-only confirmation was selected with the frozen `1e-10` threshold and requires a previous complete sweep. Current tests retain the KKT `1e-10` and width-gradient `1e-12` gates. |
+| Prepared blocks | Structural block, domain and mapping preparation is checked by a deterministic test. Preparation adds no convergence criterion and does not reuse numeric factors across sweeps. |
+| Local update | OneAccepted was selected over Full and TwoAccepted local updates; the at-most-one trusted accepted update is now intrinsic to production. |
+| Optimized/frontier variants | The historical OneAccepted/core-64 and alternative-route frontiers were superseded by the qualified core-12 production policy. |
 
-The C4 measurements that explain the adopted core are:
+The repeated core-size measurements that explain the adopted policy are:
 
 | Case | Core 12 median search | Historical control 64 | Improvement |
 | --- | ---: | ---: | ---: |
@@ -54,9 +54,8 @@ The C4 measurements that explain the adopted core are:
 Every measured run passed search/replay correctness. The 64-atom values are
 historical controls, not the current production default.
 
-The former OneAccepted/core64 optimized frontier is superseded by the
-qualified core12 production policy. Its compact comparison is retained as
-historical evidence; it is not an active route or benchmark default.
+The table is a compact historical comparison only; core 64 is not a current
+default or benchmark option.
 
 ## Closed directions
 
@@ -80,7 +79,6 @@ The retired FixedNeighbor-local OperatorPcg, Schwarz and hybrid hooks, as well
 as the global OperatorPcg/Schwarz route, are removed from the current tree.
 The EIGEN sparse backend remains current because FixedNeighbor and its local
 LegacyCompact profile search still use it. There is no hidden FixedNeighbor
-policy switch. The old campaign wrappers, per-run JSON, progress files and
-process logs are not required to interpret the current route. The current repository keeps canonical
-README/analysis/summary/manifest evidence and the focused regression contracts;
-raw execution data is historical and recoverable from Git history when needed.
+policy switch. Closed experiment implementations and machine-readable receipts
+are recoverable from Git history and are intentionally not retained in the
+current tree.

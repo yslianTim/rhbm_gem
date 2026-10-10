@@ -1,5 +1,0 @@
-topology,atoms,order,blocks,sweeps,sweeps_to_global_kkt,sweeps_to_objective_parity,global_objective,block_objective,ac_scaled_inf_difference,prediction_inf_difference,global_kkt,block_kkt,active_face_equal,global_free_columns,block_free_columns,success,reason,search_seconds
-chain,256,forward,2,5,5,3,1.51138e-10,1.51139e-10,7.0279e-11,5.47865e-10,7.63278e-17,4.94776e-11,1,512,512,1,block-converged,2.28471
-chain,256,reverse,2,5,5,3,1.51138e-10,1.51139e-10,7.02731e-11,5.4782e-10,7.63278e-17,4.94735e-11,1,512,512,1,block-converged,2.27813
-cube,256,forward,2,9,9,6,8.29861e-11,8.29849e-11,1.02152e-10,8.30623e-10,1.00614e-16,6.19325e-11,1,512,512,1,block-converged,4.81178
-cube,256,reverse,2,9,9,6,8.29861e-11,8.29846e-11,9.27538e-11,7.54219e-10,1.00614e-16,5.62743e-11,1,512,512,1,block-converged,4.82273

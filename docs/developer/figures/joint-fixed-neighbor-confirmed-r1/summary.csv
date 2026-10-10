@@ -1,7 +1,0 @@
-topology,atoms,old_cheap_stop_sweep,first_order_stationarity_sweep,confirmed_stationarity_sweep,confirmation_extra_sweeps,confirmed_sweep_seconds,total_sweeps,objective,global_ac_kkt,width_gradient_inf_norm,inner,gradient,local,identified,endpoint_trust,runtime_convergence,search_seconds,assessment_seconds,peak_rss_mb,f2_gate_passed
-chain,128,1,1,2,1,11.803903,2,1.486837875042113e-10,9.71445146547012e-17,7.463024277377786e-18,Passed,Passed,Passed,Passed,trusted,Passed,71.668562625,14.904360957999998,168.859375,True
-chain,256,6,6,7,1,35.823959208,7,1.4847245978065849e-10,5.540706782269922e-14,9.417013752797912e-15,Passed,Passed,Passed,Passed,trusted,Passed,535.539062082,78.51093008400005,290.96875,True
-chain,32,1,1,2,1,0.611412083,2,1.5342582759813994e-10,1.3877787807814457e-16,2.1032707416610786e-17,Passed,Passed,Passed,Passed,trusted,Passed,3.2166995419999997,0.7467652080000002,65.59375,True
-cube,128,1,1,2,1,11.098081334,2,8.767436776579984e-11,1.1102230246251565e-16,1.5627346751482695e-16,Passed,Passed,Passed,Passed,trusted,Passed,64.501368625,14.197721583000003,561.671875,True
-cube,256,11,11,14,3,45.39203675,14,8.222328628106002e-11,1.9701601461363794e-13,7.632672899554522e-16,Passed,Passed,Passed,Passed,trusted,Passed,1116.170224875,72.91777954200006,499.65625,True
-cube,32,1,1,2,1,0.627924167,2,9.879302931281586e-11,1.249000902703301e-16,2.1889710531146278e-17,Passed,Passed,Passed,Passed,trusted,Passed,3.9590978339999996,1.1644771240000003,115.59375,True
