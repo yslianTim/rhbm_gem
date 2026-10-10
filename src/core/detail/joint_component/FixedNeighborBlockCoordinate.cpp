@@ -295,19 +295,19 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 }
             }
             const auto old_widths=old_eta.array().exp().eval();
-            const auto local_search=SearchProfile(local_domain,local_y,old_widths,local_context,{},nullptr,profile_work);
-            if(policy.collect_telemetry) out.work.local_profile_work.Merge(local_search.profile_work);
-            record.search_seconds=Seconds(search_started); record.profile_evaluations=local_search.evaluations;
+            const auto profile_search=SearchProfile(local_domain,local_y,old_widths,local_context,{},nullptr,profile_work);
+            if(policy.collect_telemetry) out.work.local_profile_work.Merge(profile_search.profile_work);
+            record.search_seconds=Seconds(search_started); record.profile_evaluations=profile_search.evaluations;
             if(policy.collect_telemetry) out.work.local_search_seconds+=record.search_seconds;
-            record.accepted_updates=local_search.accepted; record.local_search_stop_reason=local_search.stop_reason;
+            record.accepted_updates=profile_search.accepted; record.local_search_stop_reason=profile_search.stop_reason;
             if(policy.capture_local_trajectory)
             {
-                record.profile_trials.reserve(local_search.trials.size());
+                record.profile_trials.reserve(profile_search.trials.size());
                 double accepted_objective=record.local_objective_before;
                 Vector accepted_eta=old_eta; double cumulative_factor_seconds{};
-                for(std::size_t trial_index=0;trial_index<local_search.trials.size();++trial_index)
+                for(std::size_t trial_index=0;trial_index<profile_search.trials.size();++trial_index)
                 {
-                    const auto & trial=local_search.trials[trial_index];
+                    const auto & trial=profile_search.trials[trial_index];
                     const double objective=trial.endpoint.certificate.evaluated && trial.endpoint.certificate.available ?
                         trial.endpoint.certificate.objective/(context.scale*context.scale) : unavailable;
                     FixedNeighborProfileTrial telemetry;
@@ -335,12 +335,12 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             }
             ++sweep.block_solves; ++out.total_block_solves;
             if(policy.collect_telemetry) ++out.work.block_solves;
-            sweep.profile_evaluations+=static_cast<std::size_t>(local_search.evaluations);
-            out.total_profile_evaluations+=static_cast<std::size_t>(local_search.evaluations);
+            sweep.profile_evaluations+=static_cast<std::size_t>(profile_search.evaluations);
+            out.total_profile_evaluations+=static_cast<std::size_t>(profile_search.evaluations);
             sweep.maximum_block_rows=std::max(sweep.maximum_block_rows,static_cast<std::size_t>(local_domain.rows));
             sweep.maximum_block_columns=std::max(sweep.maximum_block_columns,static_cast<std::size_t>(2*local_atoms));
             const Trial * accepted=nullptr;
-            for(auto it=local_search.trials.rbegin();it!=local_search.trials.rend();++it)
+            for(auto it=profile_search.trials.rbegin();it!=profile_search.trials.rend();++it)
                 if(it->accepted && it->endpoint.valid && it->trust && it->trust->passed) {accepted=&*it; break;}
             if(!accepted)
             {

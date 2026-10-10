@@ -36,6 +36,7 @@ inline constexpr std::string_view JointSolverProvenanceContractVersion="joint-so
 inline constexpr std::string_view JointSolverProvenanceHistoricalContractVersion="joint-solver-provenance-v2";
 inline constexpr std::string_view FixedNeighborLegacyPolicyContractVersion="fixed-neighbor-production-v1";
 inline constexpr std::string_view FixedNeighborPolicyContractVersion="fixed-neighbor-production-v2";
+inline constexpr std::string_view FixedNeighborLocalSearchName="profile-lm";
 struct JointAnalysisMetadata
 {
     std::string model_path, map_path;

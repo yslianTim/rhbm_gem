@@ -18,7 +18,7 @@ from joint_runtime_support import read
 
 
 SCOPES = {
-    'search': 'FixedNeighbor search-only with local LegacyCompact profile work',
+    'search': 'FixedNeighbor search-only with local Profile LM work',
     'solve': 'FixedNeighbor search, replay, endpoint certification, and RuntimeConvergence',
     'workflow': 'Joint workflow, postprocess, and persistence',
     'postprocess': 'Joint postprocess, uncertainty, and persistence',
@@ -333,7 +333,7 @@ def solver_policy_metadata():
         'fixed_neighbor_core_atoms': 12,
         'fixed_neighbor_block_order': 'Forward',
         'fixed_neighbor_maximum_sweeps': 30,
-        'fixed_neighbor_local_search': 'LegacyCompact',
+        'fixed_neighbor_local_search': 'profile-lm',
         'fixed_neighbor_update_policy': 'OneAccepted',
     }
 

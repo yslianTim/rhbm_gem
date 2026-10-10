@@ -183,7 +183,7 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         out.fixed_neighbor_policy_version=std::string(FixedNeighborPolicyContractVersion);
         out.fixed_neighbor_maximum_sweeps=production_policy.maximum_sweeps;
         out.fixed_neighbor_order=std::string(n::FixedNeighborBlockOrderName(production_policy.order));
-        out.fixed_neighbor_local_search="legacy-compact";
+        out.fixed_neighbor_local_search=std::string(FixedNeighborLocalSearchName);
         return out;
     };
     if(!problem.ParameterLayout().groups.empty())

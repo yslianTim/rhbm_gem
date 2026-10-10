@@ -1,5 +1,6 @@
 #include "JointCliProgressReporter.hpp"
 
+#include <rhbm_gem/data/object/JointAnalysisResult.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <iomanip>
@@ -100,7 +101,7 @@ void JointCliProgressReporter::OnProgress(const JointProgressEvent & event)
         std::ostringstream output;
         output << "[Joint] Solver: FixedNeighbor | sparse=EIGEN"
             << " | core=" << configuration.fixed_neighbor_core_atoms
-            << " | local-search=legacy-compact";
+            << " | local-search=" << FixedNeighborLocalSearchName;
         LogJointInfo(output.str());
         return;
     }
