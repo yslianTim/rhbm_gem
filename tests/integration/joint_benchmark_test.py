@@ -23,14 +23,14 @@ class JointBenchmarkContractTest(unittest.TestCase):
         args = benchmark.build_parser().parse_args([
             '--profile', 'solve', '--case', 'chain-8', '--build-dir', 'build/debug-tests',
             '--output', 'result.json'])
-        self.assertEqual(benchmark.solver_policy_metadata(args), {
+        self.assertEqual(benchmark.solver_policy_metadata(), {
             'search_method': 'FixedNeighbor',
             'sparse_backend': 'EIGEN',
             'fixed_neighbor_core_atoms': 12,
-            'fixed_neighbor_block_order': 'forward',
+            'fixed_neighbor_block_order': 'Forward',
             'fixed_neighbor_maximum_sweeps': 30,
             'fixed_neighbor_local_search': 'LegacyCompact',
-            'fixed_neighbor_policy': 'production',
+            'fixed_neighbor_update_policy': 'OneAccepted',
         })
 
     def test_profile_commands_use_fixed_neighbor_driver(self):
@@ -47,7 +47,14 @@ class JointBenchmarkContractTest(unittest.TestCase):
                 command = benchmark.command_for_profile(args, Path('result.json'), build)
                 self.assertEqual(command[0], str(driver))
                 self.assertEqual(command[1], mode)
-                self.assertEqual(command[-1], '12' if profile == 'search' else '8')
+                self.assertEqual(command[-2:], ['chain', '8'])
+                self.assertEqual(len(command), 5)
+
+    def test_custom_core_size_option_is_not_exposed(self):
+        with self.assertRaises(SystemExit):
+            benchmark.build_parser().parse_args([
+                '--profile', 'search', '--case', 'chain-8', '--build-dir', 'build',
+                '--output', 'result.json', '--fixed-core-atoms', '16'])
 
     def test_old_operator_route_options_are_rejected(self):
         parser = benchmark.build_parser()
@@ -92,7 +99,7 @@ def smoke(build):
             if (policy['search_method'] != 'FixedNeighbor' or
                     policy['fixed_neighbor_core_atoms'] != 12 or
                     policy['fixed_neighbor_maximum_sweeps'] != 30 or
-                    policy['fixed_neighbor_block_order'] != 'forward' or
+                    policy['fixed_neighbor_block_order'] != 'Forward' or
                     policy['fixed_neighbor_local_search'] != 'LegacyCompact'):
                 raise AssertionError(f'FixedNeighbor policy metadata is incomplete: {policy}')
             if profile == 'search' and report['result']['qualified'] is not None:

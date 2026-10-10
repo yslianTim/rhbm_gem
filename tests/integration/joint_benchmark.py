@@ -124,8 +124,7 @@ def fixed_neighbor_command(args, output, build):
         raise ValueError('Build joint_fixed_neighbor_experiment with RHBM_GEM_BUILD_BENCHMARKS=ON')
     topology, atoms = synthetic_case(args.case)
     if args.profile == 'search':
-        return [str(driver), '--scaling-only', str(output), topology, str(atoms),
-                str(args.fixed_core_atoms)]
+        return [str(driver), '--scaling-only', str(output), topology, str(atoms)]
     return [str(driver), '--case', str(output), topology, str(atoms)]
 
 
@@ -327,15 +326,15 @@ def execute_once(args, build, run_root, deadline):
             'stages': results, 'raw': raw}
 
 
-def solver_policy_metadata(args):
+def solver_policy_metadata():
     return {
         'search_method': 'FixedNeighbor',
         'sparse_backend': 'EIGEN',
-        'fixed_neighbor_core_atoms': args.fixed_core_atoms,
-        'fixed_neighbor_block_order': 'forward',
+        'fixed_neighbor_core_atoms': 12,
+        'fixed_neighbor_block_order': 'Forward',
         'fixed_neighbor_maximum_sweeps': 30,
         'fixed_neighbor_local_search': 'LegacyCompact',
-        'fixed_neighbor_policy': 'production' if args.fixed_core_atoms == 12 else 'custom',
+        'fixed_neighbor_update_policy': 'OneAccepted',
     }
 
 
@@ -349,8 +348,6 @@ def build_parser():
     parser.add_argument('--warmup', type=int, default=0)
     parser.add_argument('--timeout', type=float, default=600)
     parser.add_argument('--rss-limit', type=int, default=4 * 1024**3)
-    parser.add_argument('--fixed-core-atoms', type=int, default=12,
-                        help='FixedNeighbor core size; the production default is 12 atoms')
     parser.add_argument('--cli', type=Path)
     parser.add_argument('--model', type=Path)
     parser.add_argument('--map', dest='map_path', type=Path)
@@ -360,10 +357,6 @@ def build_parser():
 def validate_args(parser, args):
     if args.repeat < 1 or args.warmup < 0 or args.timeout <= 0 or args.rss_limit <= 0:
         parser.error('--repeat and limits must be positive; --warmup must be nonnegative')
-    if args.fixed_core_atoms <= 0:
-        parser.error('FixedNeighbor core atoms must be positive')
-    if args.profile == 'solve' and args.fixed_core_atoms != 12:
-        parser.error('solve compares the production 12-atom FixedNeighbor route')
     if args.profile in ('workflow', 'postprocess') and args.case not in ('full', 'halo', 'multi'):
         parser.error('workflow and postprocess cases are full, halo, or multi')
     if args.profile == 'command' and not re.fullmatch(r'[A-Za-z0-9._-]+', args.case):
@@ -387,7 +380,7 @@ def main(argv=None):
         parser.error(str(error))
     metadata.update(commit=commit, profile=args.profile, case=args.case,
                     source_sha256=source_hash(ROOT), benchmark_sha256=sha(Path(__file__)))
-    metadata['solver_policy'] = solver_policy_metadata(args)
+    metadata['solver_policy'] = solver_policy_metadata()
     if args.profile in ('search', 'solve'):
         driver = build / 'bin/joint_fixed_neighbor_experiment'
     elif args.profile in ('workflow', 'postprocess'):

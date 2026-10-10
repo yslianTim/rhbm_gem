@@ -62,8 +62,6 @@ std::size_t DerivativeTileRows()
 {
     return static_cast<std::size_t>(n::derivative_tile_rows);
 }
-j::array NumberArray(const n::Vector & values)
-{j::array out; for(Eigen::Index k=0;k<values.size();++k) out.push_back(Number(values(k))); return out;}
 j::array ProfileTrialsJson(const std::vector<n::FixedNeighborProfileTrial> & trials)
 {
     j::array out;
@@ -103,41 +101,6 @@ j::object AssessmentJson(const n::Assessment & assessment,const n::TrustEvidence
         {"corrected_jacobian",SpectrumJson(assessment.jacobian)},
         {"normalized_width",SpectrumJson(assessment.normalized_widths)},
         {"endpoint_trust",j::object{{"passed",trust.passed},{"reason",trust.reason}}}};
-}
-j::object CorrectionJson(const n::Assessment & assessment,const n::Vector & eta)
-{
-    const auto & correction=assessment.correction;
-    j::object out{{"inf_norm",correction.size() ? Number(correction.lpNorm<Eigen::Infinity>()) : j::value(nullptr)},
-        {"vector",NumberArray(correction)}};
-    if(correction.size()==0)
-    {
-        out["max_coordinate"]=nullptr;
-        return out;
-    }
-    Eigen::Index index{}; correction.cwiseAbs().maxCoeff(&index);
-    const double log_width=eta.size()==correction.size() ? eta(index) : std::numeric_limits<double>::quiet_NaN();
-    out["max_coordinate"]={{"atom",index},{"value",Number(correction(index))},
-        {"eta",Number(log_width)},{"width",Number(std::exp(log_width))}};
-    return out;
-}
-j::array AcScalingWeights(const rhbm_gem::core::JointProblem & problem,const n::Vector & eta)
-{
-    const auto & input=problem.Input(); const auto & layout=problem.ParameterLayout();
-    const double scale=problem.ObservationScale(); j::array weights;
-    for(std::size_t k=0;k<layout.full_atoms.size();++k)
-    {
-        const auto atom=layout.full_atoms[k]; const double width=std::exp(eta(static_cast<Eigen::Index>(atom)));
-        double gaussian{},charge{};
-        for(const auto & support:input.support.at(atom))
-        {
-            if(!std::binary_search(layout.informative_rows.begin(),layout.informative_rows.end(),support.row)) continue;
-            const auto basis=n::EvaluateKernel(support.squared_distance,width,2.5);
-            gaussian+=basis.gaussian*basis.gaussian; charge+=basis.charge*basis.charge;
-        }
-        weights.push_back(Number(std::sqrt(gaussian)/scale));
-        weights.push_back(Number(std::sqrt(charge)/scale));
-    }
-    return weights;
 }
 j::object SweepJson(const n::FixedNeighborBlockSweep & sweep)
 {
@@ -219,14 +182,13 @@ j::object ProfileWorkJson(const n::ProfileSearchWork & work)
 }
 void Write(const std::filesystem::path &,const j::value &);
 j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,
-    bool scaling_only=false,bool reverse_order=false,bool record_final_state=false,
-    std::size_t core_atoms=12)
+    bool scaling_only=false)
 {
     auto input=std::make_shared<Input>(second_stage_test::OperatorWorkload(topology,atoms));
     const rhbm_gem::core::JointProblem problem(*input);
     n::Vector initial_eta= n::Vector::Constant(atoms,std::log(.55)); n::FixedNeighborPolicy neighbor_policy;
-    neighbor_policy.core_atoms=core_atoms;
-    neighbor_policy.order=reverse_order ? n::FixedNeighborBlockOrder::Reverse : n::FixedNeighborBlockOrder::Forward;
+    neighbor_policy.core_atoms=12;
+    neighbor_policy.maximum_sweeps=30;
     neighbor_policy.capture_local_trajectory=true;
     neighbor_policy.assess_final_endpoint=!scaling_only;
     neighbor_policy.collect_telemetry=true;
@@ -310,7 +272,6 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                 {"local_factor_seconds",local_factor_seconds},{"profile_factor_seconds",profile_factor_seconds},
                 {"fixed_neighbor_work",WorkJson(neighbor.work)},
                 {"search_seconds",neighbor_search_seconds},
-                {"outer_core_atoms",neighbor_policy.core_atoms},
                 {"local_atoms",j::object{{"minimum",neighbor.work.minimum_local_atoms},
                     {"mean",Number(neighbor.work.local_problem_count ? neighbor.work.total_local_atoms/
                         static_cast<double>(neighbor.work.local_problem_count) : 0.)},
@@ -323,33 +284,23 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                     [](std::size_t maximum,const auto & sweep){return std::max(maximum,sweep.maximum_block_columns);})},
                 {"sweep_telemetry",sweeps},{"block_telemetry",blocks}};
         scaling_json["local_profile_work"]=ProfileWorkJson(neighbor.work.local_profile_work);
-        if(record_final_state)
-        {
-            scaling_json["final_eta"]=NumberArray(neighbor.state.eta);
-            scaling_json["final_beta"]=NumberArray(neighbor.state.beta);
-            scaling_json["final_ac_scaling_weights"]=AcScalingWeights(problem,neighbor.state.eta);
-        }
         return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
-            {"parameter_count",3*atoms},{"core_atoms",neighbor_policy.core_atoms},
-            {"outer_core_atoms",neighbor_policy.core_atoms},
+            {"parameter_count",3*atoms},{"core_atoms",12},
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},
-            {"block_order",reverse_order ? "reverse" : "forward"},
+            {"block_order","Forward"},
             {"measurement_scope","fixed-neighbor-search-only"},
             {"fixed_neighbor",scaling_json},
             {"peak_rss_mb",PeakRssMb()}};
     }
     auto endpoint_assessment=AssessmentJson(neighbor.assessment,neighbor.endpoint_trust);
-    if(record_final_state)
-        endpoint_assessment["correction"]=CorrectionJson(neighbor.assessment,neighbor.state.eta);
     j::object neighbor_json{{"method","FixedNeighbor"},
-        {"outer_core_atoms",neighbor_policy.core_atoms},
         {"local_atoms",j::object{{"minimum",neighbor.work.minimum_local_atoms},
             {"mean",Number(neighbor.work.local_problem_count ? neighbor.work.total_local_atoms/
                 static_cast<double>(neighbor.work.local_problem_count) : 0.)},
             {"maximum",neighbor.work.maximum_local_atoms}}},
         {"derivative_tile_rows",DerivativeTileRows()},
         {"search_converged",neighbor.search_converged},
-        {"block_order",reverse_order ? "reverse" : "forward"},
+        {"block_order","Forward"},
         {"search_reason",neighbor.reason},{"sweeps",neighbor.sweeps.size()},
         {"first_order_stationarity_sweep",neighbor.first_order_stationarity_sweep},
         {"confirmed_stationarity_sweep",neighbor.confirmed_stationarity_sweep},
@@ -373,16 +324,8 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             [](double total,const auto & block){return total+block.profile_factor_seconds;})},
         {"total_elapsed_seconds",neighbor_seconds}};
     neighbor_json["local_profile_work"]=ProfileWorkJson(neighbor.work.local_profile_work);
-    if(record_final_state)
-    {
-        neighbor_json["final_eta"]=NumberArray(neighbor.state.eta);
-        neighbor_json["final_beta"]=NumberArray(neighbor.state.beta);
-    }
-    if(record_final_state)
-        neighbor_json["final_ac_scaling_weights"]=AcScalingWeights(problem,neighbor.state.eta);
     return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
-        {"parameter_count",3*atoms},{"core_atoms",neighbor_policy.core_atoms},
-        {"outer_core_atoms",neighbor_policy.core_atoms},
+        {"parameter_count",3*atoms},{"core_atoms",12},
         {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
         {"fixed_neighbor",neighbor_json},{"peak_rss_mb",PeakRssMb()}};
 }
@@ -392,27 +335,13 @@ void Write(const std::filesystem::path & path,const j::value & value)
 int main(int argc,char ** argv)
 {
     try {
-        if((argc<5 || argc>6) || (std::string(argv[1])!="--case" && std::string(argv[1])!="--neighbor-only" &&
-            std::string(argv[1])!="--scaling-only" &&
-            std::string(argv[1])!="--neighbor-forward" && std::string(argv[1])!="--neighbor-reverse" &&
-            std::string(argv[1])!="--scaling-forward" && std::string(argv[1])!="--scaling-reverse"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--neighbor-only|--scaling-only|--neighbor-forward|--neighbor-reverse|--scaling-forward|--scaling-reverse OUTPUT_FILE TOPOLOGY ATOMS [OUTER_CORE_ATOMS]");
+        if(argc!=5 || (std::string(argv[1])!="--case" && std::string(argv[1])!="--scaling-only"))
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--scaling-only OUTPUT_FILE TOPOLOGY ATOMS");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
         const std::string mode(argv[1]);
-        if(argc>=6 && mode!="--neighbor-only" && mode!="--scaling-only" &&
-            mode!="--neighbor-forward" && mode!="--neighbor-reverse" && mode!="--scaling-forward" &&
-            mode!="--scaling-reverse")
-            throw std::invalid_argument("OUTER_CORE_ATOMS is supported only with a FixedNeighbor search mode.");
-        const std::size_t core_atoms=argc>=6 ? static_cast<std::size_t>(std::stoul(argv[5])) : 12;
-        if(core_atoms==0) throw std::invalid_argument("CORE_ATOMS must be positive.");
-        Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,
-            mode=="--scaling-only" || mode=="--scaling-forward" || mode=="--scaling-reverse",
-            mode=="--neighbor-reverse" || mode=="--scaling-reverse",
-            mode=="--neighbor-forward" || mode=="--neighbor-reverse" ||
-                mode=="--scaling-forward" || mode=="--scaling-reverse",
-            core_atoms));
+        Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--scaling-only"));
         std::cout<<argv[3]<<'-'<<argv[4]<<" fixed-neighbor experiment complete\n";
         return 0;
     } catch(const std::exception & error) {std::cerr<<error.what()<<'\n'; return 1;}
