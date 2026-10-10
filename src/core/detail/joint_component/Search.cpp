@@ -84,18 +84,11 @@ struct Profile
         const auto prepare_started=std::chrono::steady_clock::now();
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         const auto derivative_before=DerivativeWorkForTesting();
-        const auto tile_rows=DerivativeTileRowsForTesting();
-        const auto prepared=PrepareDerivative(cached,scale,&context,-1,tile_rows);
-#else
-        const auto prepared=PrepareDerivative(cached,scale,&context);
 #endif
+        const auto prepared=PrepareDerivative(cached,scale,&context);
         const auto prepare_seconds=Seconds(prepare_started);
         const auto reduce_started=std::chrono::steady_clock::now();
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        auto differential=ReduceDerivative(prepared,cached.residual,false,tile_rows); ++derivatives;
-#else
         auto differential=ReduceDerivative(prepared,cached.residual,false); ++derivatives;
-#endif
         const auto reduce_seconds=Seconds(reduce_started);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         const auto derivative_after=DerivativeWorkForTesting();

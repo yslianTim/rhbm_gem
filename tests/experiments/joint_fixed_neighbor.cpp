@@ -60,11 +60,7 @@ j::value Number(double value)
 {return std::isfinite(value) ? j::value(value) : j::value(nullptr);}
 std::size_t DerivativeTileRows()
 {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    return static_cast<std::size_t>(n::DerivativeTileRowsForTesting());
-#else
     return static_cast<std::size_t>(n::derivative_tile_rows);
-#endif
 }
 j::array NumberArray(const n::Vector & values)
 {j::array out; for(Eigen::Index k=0;k<values.size();++k) out.push_back(Number(values(k))); return out;}

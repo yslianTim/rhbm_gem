@@ -7,10 +7,6 @@
 namespace rhbm_gem::core::joint_component {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 DerivativeWork & DerivativeWorkForTesting() {static thread_local DerivativeWork work; return work;}
-Eigen::Index & DerivativeTileRowsForTesting()
-{static thread_local Eigen::Index rows=derivative_tile_rows; return rows;}
-JacobianReductionKindForTesting & JacobianReductionForTesting()
-{static thread_local auto kind=JacobianReductionKindForTesting::ObservationTsqr; return kind;}
 namespace {
 TiledQrTelemetry AccumulateTiledQr(const TiledQrTelemetry & accumulated,const TiledQrTelemetry & current)
 {
@@ -176,12 +172,6 @@ TiledDifferential PrepareDerivative(const Evaluation & e,double scale,const Eval
 TiledDifferential PrepareDerivativeCompact(const Evaluation & e,double scale,const EvaluationContext * context,
     double absolute,Eigen::Index tile)
 {return PrepareDerivativeImpl(e,scale,context,absolute,tile,true);}
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-TiledDifferential PrepareDerivativeForTesting(const Evaluation & e,double scale,const EvaluationContext * context,
-    double absolute,Eigen::Index tile,bool compact_jacobian)
-{return compact_jacobian ? PrepareDerivativeCompact(e,scale,context,absolute,tile) :
-    PrepareDerivative(e,scale,context,absolute,tile);}
-#endif
 void TiledDifferential::Rows(Eigen::Index first,Eigen::Index count,Matrix & projected,Matrix & jacobian) const
 {
     if(reference_order)
@@ -322,10 +312,4 @@ ReducedDifferential ReduceDerivative(const TiledDifferential & d,VectorRef resid
 {return ReduceDerivativeImpl(d,residual,widths,tile,false);}
 ReducedDifferential ReduceDerivativeCompact(const TiledDifferential & d,VectorRef residual,bool widths,Eigen::Index tile)
 {return ReduceDerivativeImpl(d,residual,widths,tile,true);}
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-ReducedDifferential ReduceDerivativeForTesting(const TiledDifferential & d,VectorRef residual,bool widths,
-    JacobianReductionKindForTesting kind,Eigen::Index tile)
-{return kind==JacobianReductionKindForTesting::CompactStackQr ?
-    ReduceDerivativeCompact(d,residual,widths,tile) : ReduceDerivative(d,residual,widths,tile);}
-#endif
 }

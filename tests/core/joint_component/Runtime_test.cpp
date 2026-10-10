@@ -234,7 +234,7 @@ TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTi
     for(const auto * name:{"total-assessment","endpoint-primary-evaluation","reference-evaluation",
             "design-spectrum","derivative-preparation","derivative-reduction","projected-width-spectrum",
             "normalized-width-spectrum","correction-jacobian-spectrum","derivative-rows",
-            "derivative-projected-qr","derivative-jacobian-qr","derivative-norms"})
+            "derivative-projected-qr","derivative-compact-jacobian-qr","derivative-norms"})
     {
         const auto & measurement=stage(name);
         EXPECT_GE(measurement.seconds,0);
@@ -247,22 +247,24 @@ TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTi
     const auto & derivative=n::DerivativeWorkForTesting();
     EXPECT_EQ(derivative.tile_count,1);
     EXPECT_EQ(derivative.projected_qr.role,"derivative-projected-qr");
-    EXPECT_EQ(derivative.jacobian_qr.role,"derivative-jacobian-qr");
     EXPECT_EQ(derivative.projected_qr.append_calls,derivative.tile_count);
-    EXPECT_EQ(derivative.jacobian_qr.append_calls,derivative.tile_count);
     EXPECT_EQ(derivative.projected_qr.rows_processed,static_cast<std::size_t>(view.domain.rows));
-    EXPECT_EQ(derivative.jacobian_qr.rows_processed,static_cast<std::size_t>(view.domain.rows));
-    EXPECT_EQ(derivative.projected_qr.columns,1); EXPECT_EQ(derivative.projected_qr.responses,0);
-    EXPECT_EQ(derivative.jacobian_qr.columns,1); EXPECT_EQ(derivative.jacobian_qr.responses,1);
+    EXPECT_EQ(derivative.projected_qr.columns,1); EXPECT_EQ(derivative.projected_qr.responses,1);
+    EXPECT_EQ(derivative.jacobian_qr.append_calls,0);
+    EXPECT_EQ(derivative.compact_jacobian_qr.role,"derivative-compact-jacobian-qr");
+    EXPECT_EQ(derivative.compact_jacobian_qr.append_calls,1);
+    EXPECT_GT(derivative.compact_jacobian_qr.rows_processed,0);
+    EXPECT_EQ(derivative.compact_jacobian_qr.columns,1);
+    EXPECT_EQ(derivative.compact_jacobian_qr.responses,1);
     EXPECT_GT(derivative.projected_qr.maximum_assembled_rows,0);
     EXPECT_GT(derivative.projected_qr.maximum_dense_design_bytes,0);
-    EXPECT_EQ(derivative.projected_qr.maximum_dense_response_bytes,0);
-    EXPECT_GT(derivative.jacobian_qr.maximum_dense_response_bytes,0);
+    EXPECT_GT(derivative.projected_qr.maximum_dense_response_bytes,0);
+    EXPECT_GT(derivative.compact_jacobian_qr.maximum_dense_response_bytes,0);
     EXPECT_GE(derivative.projected_qr.qr_seconds,0);
-    EXPECT_GE(derivative.jacobian_qr.qr_seconds,0);
+    EXPECT_GE(derivative.compact_jacobian_qr.qr_seconds,0);
     EXPECT_EQ(stage("derivative-rows").calls,derivative.tile_count);
     EXPECT_EQ(stage("derivative-projected-qr").calls,derivative.projected_qr.append_calls);
-    EXPECT_EQ(stage("derivative-jacobian-qr").calls,derivative.jacobian_qr.append_calls);
+    EXPECT_EQ(stage("derivative-compact-jacobian-qr").calls,derivative.compact_jacobian_qr.append_calls);
     EXPECT_EQ(stage("derivative-norms").calls,derivative.tile_count);
 }
 

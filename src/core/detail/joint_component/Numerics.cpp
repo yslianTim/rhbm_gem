@@ -541,37 +541,33 @@ Assessment AssessEvaluated(const Domain &,VectorRef y,const Evaluation & endpoin
     out.inner=difference<=1e-10 && out.design->rank==endpoint.x.cols();
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     AssessmentStageTimerForTesting prepare_stage("derivative-preparation",endpoint.derivative.rows(),endpoint.derivative.cols());
-    const auto reduction_kind=JacobianReductionForTesting();
-    const bool compact_reduction=reduction_kind==JacobianReductionKindForTesting::CompactStackQr;
-    if(compact_reduction) ++AssessmentWorkForTesting().compact_attempts;
-#else
-    constexpr bool compact_reduction=true;
+    ++AssessmentWorkForTesting().compact_attempts;
 #endif
-    const auto prepared=compact_reduction ?
-        PrepareDerivativeCompact(endpoint,scale,context) : PrepareDerivative(endpoint,scale,context);
+    const auto prepared=PrepareDerivativeCompact(endpoint,scale,context);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     prepare_stage.Finish();
     AssessmentStageTimerForTesting reduce_stage("derivative-reduction",prepared.raw.rows(),prepared.raw.cols());
 #endif
-    bool compact_differential=compact_reduction;
+    bool compact_differential=!prepared.reference_order;
     ReducedDifferential differential;
-    if(compact_differential && prepared.reference_order)
+    if(!compact_differential)
     {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         ++AssessmentWorkForTesting().compact_other_fallbacks;
 #endif
         differential=ReduceDerivative(prepared,endpoint.residual);
-        compact_differential=false;
     }
-    else differential=compact_differential ? ReduceDerivativeCompact(prepared,endpoint.residual) :
-        ReduceDerivative(prepared,endpoint.residual);
-    if(compact_differential && !differential.valid)
+    else
     {
+        differential=ReduceDerivativeCompact(prepared,endpoint.residual);
+        if(!differential.valid)
+        {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        ++AssessmentWorkForTesting().compact_other_fallbacks;
+            ++AssessmentWorkForTesting().compact_other_fallbacks;
 #endif
-        differential=ReduceDerivative(prepared,endpoint.residual);
-        compact_differential=false;
+            differential=ReduceDerivative(prepared,endpoint.residual);
+            compact_differential=false;
+        }
     }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     reduce_stage.Finish();
