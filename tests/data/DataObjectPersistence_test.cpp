@@ -553,7 +553,7 @@ TEST(DataObjectPersistenceTest, FixedNeighborPolicyVersionsPreserveLegacyAndReje
     current_provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
     current_provenance.fixed_neighbor_maximum_sweeps=30;
     current_provenance.fixed_neighbor_order="forward";
-    current_provenance.fixed_neighbor_local_search="legacy-compact";
+    current_provenance.fixed_neighbor_local_search="profile-lm";
     current.metadata.solver=current_provenance;
     const auto current_decoded=io::Decode(io::Encode(current));
     ASSERT_TRUE(current_decoded.metadata.solver);
@@ -577,16 +577,20 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
     fixed_provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
     fixed_provenance.fixed_neighbor_maximum_sweeps=30;
     fixed_provenance.fixed_neighbor_order="forward";
-    fixed_provenance.fixed_neighbor_local_search="legacy-compact";
+    fixed_provenance.fixed_neighbor_local_search="profile-lm";
     fixed.metadata.solver=fixed_provenance;
-    const auto fixed_decoded=io::Decode(io::Encode(fixed));
+    const auto fixed_json=io::Encode(fixed);
+    const auto fixed_object=boost::json::parse(fixed_json).as_object();
+    EXPECT_EQ(fixed_object.at("metadata").as_object().at("solver").as_object()
+        .at("fixed_neighbor_local_search").as_string(),"profile-lm");
+    const auto fixed_decoded=io::Decode(fixed_json);
     ASSERT_TRUE(fixed_decoded.metadata.solver);
     EXPECT_EQ(fixed_decoded.metadata.solver->contract_version,rg::JointSolverProvenanceContractVersion);
     EXPECT_EQ(fixed_decoded.metadata.solver->sparse_backend,"EIGEN");
     EXPECT_FALSE(fixed_decoded.metadata.solver->fixed_neighbor_local_work);
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_maximum_sweeps,30u);
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_order,"forward");
-    EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_local_search,"legacy-compact");
+    EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_local_search,"profile-lm");
     EXPECT_FALSE(fixed_decoded.metadata.solver->preconditioner);
     EXPECT_FALSE(fixed_decoded.metadata.solver->operator_rank_mode);
     EXPECT_FALSE(fixed_decoded.metadata.solver->operator_rank_backend);
@@ -600,6 +604,16 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
     EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_max_block_atoms);
     EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_storage_bytes);
     EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_scratch_bytes);
+
+    auto saved_current=boost::json::parse(fixed_json).as_object();
+    saved_current.at("metadata").as_object().at("solver").as_object()["fixed_neighbor_local_search"]=
+        "legacy-compact";
+    const auto old_current_decoded=io::Decode(boost::json::serialize(saved_current));
+    ASSERT_TRUE(old_current_decoded.metadata.solver);
+    EXPECT_EQ(old_current_decoded.metadata.solver->contract_version,
+        rg::JointSolverProvenanceContractVersion);
+    EXPECT_EQ(old_current_decoded.metadata.solver->search_method,"fixed-neighbor");
+    EXPECT_EQ(old_current_decoded.metadata.solver->fixed_neighbor_local_search,"legacy-compact");
 }
 
 TEST(DataObjectPersistenceTest, HistoricalV2SolverProvenanceRemainsReadable)
@@ -670,7 +684,7 @@ TEST(DataObjectPersistenceTest, MalformedCurrentSolverProvenanceIsRejected)
     provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
     provenance.fixed_neighbor_maximum_sweeps=30;
     provenance.fixed_neighbor_order="forward";
-    provenance.fixed_neighbor_local_search="legacy-compact";
+    provenance.fixed_neighbor_local_search="profile-lm";
     fixed.metadata.solver=provenance;
 
     auto malformed=boost::json::parse(io::Encode(fixed)).as_object();

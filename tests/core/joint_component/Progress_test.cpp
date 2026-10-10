@@ -480,7 +480,7 @@ TEST(JointProgressTest, PublicFitUsesFixedNeighborProductionContract)
         rhbm_gem::FixedNeighborPolicyContractVersion);
     EXPECT_EQ(actual.solver_provenance.fixed_neighbor_maximum_sweeps, 30u);
     EXPECT_EQ(actual.solver_provenance.fixed_neighbor_order, "forward");
-    EXPECT_EQ(actual.solver_provenance.fixed_neighbor_local_search, "legacy-compact");
+    EXPECT_EQ(actual.solver_provenance.fixed_neighbor_local_search, "profile-lm");
     EXPECT_EQ(actual.RuntimeConvergence(), expected.RuntimeConvergence());
     ASSERT_TRUE(actual.assembled_state);
     ASSERT_TRUE(expected.assembled_state);
@@ -505,7 +505,7 @@ TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
         rhbm_gem::FixedNeighborPolicyContractVersion);
     EXPECT_EQ(fit.solver_provenance.fixed_neighbor_maximum_sweeps,30u);
     EXPECT_EQ(fit.solver_provenance.fixed_neighbor_order,"forward");
-    EXPECT_EQ(fit.solver_provenance.fixed_neighbor_local_search,"legacy-compact");
+    EXPECT_EQ(fit.solver_provenance.fixed_neighbor_local_search,"profile-lm");
     ASSERT_TRUE(fit.assembled_state);
     EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(events.front().solver_configuration);
@@ -569,7 +569,7 @@ TEST(JointProgressTest, CliReporterFormatsFixedNeighborConfiguration)
     const auto output = testing::internal::GetCapturedStdout();
     Logger::SetLogLevel(previous_level);
     const auto fixed = output.find(
-        "[Joint] Solver: FixedNeighbor | sparse=EIGEN | core=12 | local-search=legacy-compact");
+        "[Joint] Solver: FixedNeighbor | sparse=EIGEN | core=12 | local-search=profile-lm");
     ASSERT_NE(fixed, std::string::npos);
     const auto fixed_line_end = output.find('\n', fixed);
     EXPECT_EQ(output.substr(fixed, fixed_line_end - fixed).find("local-work="), std::string::npos);

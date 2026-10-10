@@ -31,7 +31,7 @@ class JointBenchmarkContractTest(unittest.TestCase):
             'fixed_neighbor_core_atoms': 12,
             'fixed_neighbor_block_order': 'Forward',
             'fixed_neighbor_maximum_sweeps': 30,
-            'fixed_neighbor_local_search': 'LegacyCompact',
+            'fixed_neighbor_local_search': 'profile-lm',
             'fixed_neighbor_update_policy': 'OneAccepted',
         })
 
@@ -95,7 +95,7 @@ def smoke(build):
                     policy['fixed_neighbor_core_atoms'] != 12 or
                     policy['fixed_neighbor_maximum_sweeps'] != 30 or
                     policy['fixed_neighbor_block_order'] != 'Forward' or
-                    policy['fixed_neighbor_local_search'] != 'LegacyCompact'):
+                    policy['fixed_neighbor_local_search'] != 'profile-lm'):
                 raise AssertionError(f'FixedNeighbor policy metadata is incomplete: {policy}')
             if profile == 'search' and report['result']['qualified'] is not None:
                 raise AssertionError('search-only benchmark must not claim endpoint qualification')

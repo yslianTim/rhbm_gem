@@ -90,7 +90,7 @@ def main() -> int:
             "fixed_neighbor_policy_version": "fixed-neighbor-production-v2",
             "fixed_neighbor_maximum_sweeps": 30,
             "fixed_neighbor_order": "forward",
-            "fixed_neighbor_local_search": "legacy-compact",
+            "fixed_neighbor_local_search": "profile-lm",
         }
         fixed_solver = fixed["metadata"]["solver"]
         assert {key: fixed_solver[key] for key in (
@@ -104,7 +104,7 @@ def main() -> int:
             "fixed_neighbor_policy_version": "fixed-neighbor-production-v2",
             "fixed_neighbor_maximum_sweeps": 30,
             "fixed_neighbor_order": "forward",
-            "fixed_neighbor_local_search": "legacy-compact",
+            "fixed_neighbor_local_search": "profile-lm",
         }
         assert saved["selection_domain"]["target_indices"] == [0]
         assert saved["atom_ids"] == ["1", "2"]
