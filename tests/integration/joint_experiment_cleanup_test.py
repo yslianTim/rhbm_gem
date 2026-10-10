@@ -27,11 +27,26 @@ CURRENT_PYTHON_VALIDATION_RUNNERS = {
 
 RETIRED_REPOSITORY_FILES = (
     "tests/experiments/joint_sparse_benchmark.cpp",
+    "tests/core/joint_component/FixedBBlockCoordinate_test.cpp",
     "tests/core/joint_component/OperatorSearch_test.cpp",
     "tests/core/joint_component/ProfileOperator_test.cpp",
     "tests/core/joint_component/ProjectedTailQr_test.cpp",
     "src/core/detail/joint_component/SparseFactor.hpp",
     "src/core/detail/joint_component/SparseFactor.cpp",
+)
+
+RETIRED_PYTHON_CAMPAIGNS = (
+    "tests/integration/joint_fixed_b_scaling.py",
+    "tests/integration/joint_fixed_b_scaling_test.py",
+    "tests/integration/joint_fixed_neighbor_outer_core_qualification.py",
+    "tests/integration/joint_fixed_neighbor_outer_core_support.py",
+    "tests/integration/joint_fixed_neighbor_outer_core_qualification_test.py",
+    "tests/integration/joint_fixed_neighbor_order.py",
+    "tests/integration/joint_fixed_neighbor_order_test.py",
+    "tests/integration/joint_fixed_neighbor_stationarity.py",
+    "tests/integration/joint_fixed_neighbor_stationarity_test.py",
+    "tests/integration/joint_fixed_neighbor_prepared_block.py",
+    "tests/integration/joint_fixed_neighbor_prepared_block_test.py",
 )
 
 ACTIVE_BACKEND_TERMS = (
@@ -56,6 +71,15 @@ RETIRED_DERIVATIVE_CONTROLS = (
     "DerivativeTileRowsForTesting",
 )
 
+RETIRED_FIXED_B_SOLVER = (
+    "FixedBBlockPolicy",
+    "FixedBBlockOrder",
+    "FixedBBlockResult",
+    "SearchFixedBBlocks",
+    "FixedBBlockRecord",
+    "FixedBBlockSweep",
+)
+
 RETIRED_FIXTURES = (
     "joint_fixed_neighbor_inexact_baseline.json",
 )
@@ -63,6 +87,10 @@ RETIRED_FIXTURES = (
 def main():
     integration = ROOT / "tests" / "integration"
     cmake = (ROOT / "tests" / "CMakeLists.txt").read_text()
+    fixed_neighbor_source = (ROOT / "tests/experiments/joint_fixed_neighbor.cpp").read_text()
+    benchmark_driver = (integration / "joint_benchmark.py").read_text()
+    audit_source = (ROOT / "tests/tools/joint_component_audit.cpp").read_text()
+    audit_runner = (integration / "joint_component_audit.py").read_text()
     gitignore = (ROOT / ".gitignore").read_text()
     active_sources = "\n".join(path.read_text() for path in integration.glob("*.py"))
     active_paths = [path for path in (ROOT / "src/core").rglob("*") if path.is_file()]
@@ -98,6 +126,8 @@ def main():
                         if (ROOT / "tests" / "fixtures" / name).exists()]
     present_files = [name for name in RETIRED_REPOSITORY_FILES
                      if (ROOT / name).exists()]
+    present_campaigns = [name for name in RETIRED_PYTHON_CAMPAIGNS
+                         if (ROOT / name).exists()]
     test_paths = [path for path in (ROOT / "tests").rglob("*") if path.is_file()]
     retired_test_name_parts = (
         "spqrbenchmark", "benchmarkspqr", "spqrorder", "orderspqr",
@@ -111,9 +141,35 @@ def main():
     ]
     assert not missing_fixtures, f"retired Joint fixtures returned: {missing_fixtures}"
     assert not present_files, f"retired Operator files returned: {present_files}"
+    assert not present_campaigns, f"retired qualification drivers/tests returned: {present_campaigns}"
     assert not present_retired_tests, f"retired sparse tests returned: {present_retired_tests}"
+    figure_root = ROOT / "docs/developer/figures"
+    figure_dirs = {path.name for path in figure_root.iterdir() if path.is_dir()}
+    unexpected_figure_dirs = sorted(figure_dirs - {"joint-validation"})
+    assert figure_dirs == {"joint-validation"}, (
+        f"closed Joint evidence directories returned: {unexpected_figure_dirs}")
     assert "joint_fixed_b_block_experiment" not in cmake
     assert "joint_fixed_b_scaling" not in cmake
+    for token in (
+        "joint_fixed_b_observer_scalability",
+        "joint_fixed_b_256_scalability",
+        "joint_fixed_neighbor_outer_core_qualification_test",
+        "joint_fixed_neighbor_stationarity_test",
+        "joint_fixed_neighbor_order_test",
+        "joint_fixed_neighbor_prepared_block_test",
+        "joint_component_two_step_regression",
+    ):
+        assert token not in cmake, f"retired Joint CTest returned: {token}"
+    for token in (
+        "--neighbor-forward", "--neighbor-reverse",
+        "--scaling-forward", "--scaling-reverse", "OUTER_CORE_ATOMS",
+    ):
+        assert token not in fixed_neighbor_source, f"retired benchmark mode returned: {token}"
+    for token in ("--fixed-core-atoms", "fixed_neighbor_policy = custom"):
+        assert token not in benchmark_driver, f"custom benchmark policy returned: {token}"
+    for token in ("two-step-fixture", "--two-step-only"):
+        assert token not in audit_source and token not in audit_runner, (
+            f"historical two-step audit mode returned: {token}")
     for token in (
         "FixedNeighborLocalWork",
         "TwoAcceptedUpdates",
@@ -131,6 +187,8 @@ def main():
         assert token.lower() not in src_cmake.lower(), f"retired sparse backend token remains in src CMake: {token}"
     for token in RETIRED_DERIVATIVE_CONTROLS:
         assert token not in active_code, f"retired derivative control remains: {token}"
+    for token in RETIRED_FIXED_B_SOLVER:
+        assert token not in active_code, f"retired Fixed-B solver remains: {token}"
     historical_raw_path = "docs/developer/figures/" + "joint-fixed-neighbor-scaling-r1/individual-results"
     assert historical_raw_path not in active_sources
     assert "/docs/developer/figures/**/individual-results/" in gitignore

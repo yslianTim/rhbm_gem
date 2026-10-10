@@ -38,9 +38,11 @@ with project internals.
   and measurement semantics.
 - [Capabilities and limitations](joint-capabilities-limitations.md) identifies
   supported behavior and current research boundaries.
-- [Canonical historical evidence](joint-component-evidence.md) indexes
-  retired experiments, counterexamples, unproven boundaries, and artifact
-  retrieval.
+- [Current experiment and validation inventory](joint-experiments.md) lists
+  active tools, build options, validation harnesses, and permanent test owners.
+- [Historical evidence](joint-component-evidence.md) summarizes retired
+  decisions and scientific limits. Closed implementations and machine-readable
+  results are recoverable from Git history and are not retained in the tree.
 - [Certification contract](joint_abc_certification_contract.md),
   [component contract](joint_abc_components_contract.md), and the
   [compact-SVD implementation contract](joint-component-compact-svd.md) own

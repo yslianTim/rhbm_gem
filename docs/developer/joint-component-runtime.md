@@ -218,10 +218,9 @@ serialization boundary.
 
 The Map builder collects and sorts relevant voxel indices instead of allocating
 an index array for the entire map. Voxel ordering and support arithmetic remain
-unchanged. `joint_component_benchmark DATASET CASE` measures the public API in a
-fresh process and reports construction, search, assessment, assembly, total time
-and process peak RSS. The current profiles and measurement semantics are listed
-in the [benchmark guide](joint-benchmark.md).
+unchanged. Current Joint search, solve, workflow, postprocessing and command
+measurements are run through the single workflow in the
+[benchmark guide](joint-benchmark.md).
 
 ## Internal numerical path
 
@@ -270,9 +269,9 @@ by offline assessment and retains its derivative-dependent meaning.
 `joint_component_runtime` provides commands for public API runs, physical-input
 smokes, and fixture cases. The Python runner exposes run, summary, comparison,
 regression and physical-smoke operations. Current entry points are maintained in
-`tests/integration/joint_component_runtime.py`; historical campaign procedures
-and measured outcomes are indexed in the
-[canonical evidence document](joint-component-evidence.md).
+`tests/integration/joint_component_runtime.py`. It is a validation harness,
+not a benchmark or experiment entry point. Current experiments and validation
+tools are listed in [joint-experiments.md](joint-experiments.md).
 
 ## Extended and offline checks
 
@@ -289,9 +288,10 @@ ctest --test-dir build -L 'joint:extended|joint:offline' --output-on-failure
 Extended and offline lanes are opt-in and stay separate from the default
 runtime regression.
 
-Offline two-step, local-audit preparation and precision code are linked only into
-`joint_component_audit` and `joint_offline_tests`, never the library or ordinary
-test executable. Kernel or Jacobian changes require the applicable derivative
+Local-audit preparation and precision code are linked only into
+`joint_component_audit`, `joint_offline_diagnostic` and `joint_offline_tests`,
+never the library or ordinary test executable. Kernel or Jacobian changes
+require the applicable derivative
 audits; constraint changes also require boundary controls. Sparse-factorization
 changes require rank and precision controls. Recorded campaign results and their limits
 belong in the [canonical evidence index](joint-component-evidence.md).

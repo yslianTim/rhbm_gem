@@ -1,78 +1,71 @@
-# Joint experiment lifecycle
+# Joint experiment and validation surface
 
-This is the current-tree inventory for Joint and FixedNeighbor experiments.
-Rows are experiment units rather than individual output files; the table is
-kept deliberately regular so it can be consumed as a simple pipe-delimited
-inventory. Status is one of `Active`, `Qualified`, `Closed`, or `Unknown`.
+This inventory describes the current checkout. The production estimator is
+FixedNeighbor with core 12, Forward serial Gauss-Seidel, at most 30 sweeps,
+local LegacyCompact and at most one trusted accepted local update per block
+visit.
 
-The current production estimator is FixedNeighbor: core 12, Forward serial
-Gauss-Seidel, 30 maximum sweeps, local `LegacyCompact`, and at most one trusted
-accepted local update per block visit. The former top-level `LegacyCompact`
-route is retired. `OperatorPcg` is closed and removed from the current
-implementation, command surface and benchmark drivers; its compact evidence
-and historical provenance compatibility remain.
+## Current reproducible tools
 
-Current FixedNeighbor means the qualified production policy: core 12, Forward
-serial Gauss-Seidel, 30 maximum sweeps, local `LegacyCompact`, and at most one
-trusted accepted local update per block visit. The benchmark driver uses that
-policy by default; only structural core-size overrides are custom benchmark
-inputs.
-Full/core128 and OneAccepted/core64 are historical evidence only; the latter
-was superseded by the qualified core12 policy.
+| Tool | Current question | Build option | Permanent owner |
+| --- | --- | --- | --- |
+| Joint benchmark | How do current FixedNeighbor search, solve, workflow, postprocessing and command paths perform and use resources? | RHBM_GEM_BUILD_BENCHMARKS | joint_benchmark_contract_test, joint_benchmark_smoke, Joint contract/workflow/numerical tests |
+| Partial-selection measurement | What are the current selection, contributor-closure and halo measurement results? | RHBM_GEM_BUILD_BENCHMARKS | PartialSelection_test.cpp and Joint workflow/numerical tests |
+| Statistical research | How do fixed-seed noise and position mismatch affect the current estimator outcomes? | RHBM_GEM_BUILD_RESEARCH_TOOLS | joint_statistical_experiment_contract_test and joint_statistical_experiment_smoke |
+| Offline numerical diagnosis | What does the current weak-halo and local numerical evidence show on immutable inputs? | RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS | joint_offline_diagnostic_smoke, joint_component_evidence_test, joint_component_offline_tests and joint_component_offline_regression |
 
-| Experiment | Status | Production relevance | Canonical evidence | Active driver | Active test | Raw artifacts |
-| --- | --- | --- | --- | --- | --- | --- |
-| Joint estimator runtime, persistence, and component regression | Active | Production correctness and provenance | `joint-component-runtime.md`; production C++ tests | `joint_component_runtime.py`; `joint_workflow_cli_smoke.py` | `joint_component_runtime_test.py`; runtime/physical smoke; persistence tests | No tracked execution telemetry |
-| FixedNeighbor stationarity confirmation | Qualified | Locks the existing eta-only confirmation contract | `joint-fixed-neighbor-stationarity-r1/{README.md,analysis.json,summary.csv}` | `joint_fixed_neighbor_stationarity.py` | `joint_fixed_neighbor_stationarity_test.py` | Compact evidence; sweep telemetry is historical |
-| FixedNeighbor historical local-update selection evidence | Qualified | Explains why the one-accepted update contract is intrinsic to the production route | `joint-fixed-neighbor-inexact-local-r1/`; `joint-fixed-neighbor-inexact-qualification-r2/` | none | `FixedNeighborBlockCoordinate_test.cpp` | Compact historical evidence; Full and TwoAccepted are alternatives from the completed selection study |
-| FixedNeighbor outer-core qualification | Qualified | Justifies the adopted production core of 12 | `joint-fixed-neighbor-outer-core-qualification.md`; C3/C4 `README.md`, `analysis.json`, `summary.csv` | `joint_fixed_neighbor_outer_core_qualification.py` with `screen`, `endpoint`, and `frontier` phases | `joint_fixed_neighbor_outer_core_qualification_test.py` | r1-r5 current tree keeps compact evidence only; raw execution telemetry is historical |
-| FixedNeighbor prepared-block behavior | Qualified | Preserves prepared mapping and structural-count contract under the current core12 policy | `joint-fixed-neighbor-experimental.md`; prepared-block structural contract | `joint_fixed_neighbor_prepared_block.py` | `joint_fixed_neighbor_prepared_block_test.py` | Small deterministic contract only; historical large-case output is compact evidence |
-| FixedNeighbor order consistency | Qualified | Confirms production Forward order against the retained diagnostic | `joint-fixed-neighbor-order-r1/` | `joint_fixed_neighbor_order.py` | `joint_fixed_neighbor_order_test.py` | Compact comparison; raw pairs are not a runtime dependency |
-| FixedNeighbor block acceptance / Fixed-B regression | Qualified | Protects replay-aware acceptance and block contracts | fixed-B campaign summaries; `joint-fixed-neighbor-experimental.md` | `joint_fixed_b_scaling.py`; C++ experiment | FixedB/FixedNeighbor component regression tests | Compact summaries; no production telemetry dependency |
-| Current Joint benchmark | Active | Current deterministic workflow, search and command smoke coverage for FixedNeighbor | `joint-benchmark.md`; current benchmark output | `joint_benchmark.py` | `joint_benchmark_contract_test.py`; `joint_benchmark_smoke` | New output belongs in the build/output tree |
-| Current FixedNeighbor sparse-backend qualification | Qualified / Closed | Historical EIGEN/SPQR correctness and resource qualification; current production later adopted EIGEN under the memory/dependency-first policy | `figures/joint-fixed-neighbor-backend-qualification-r1/{README.md,analysis.json,summary.csv,campaign-manifest.json}` | none | permanent EIGEN numerical-contract tests | Measurements and historical decision retained; no current selector |
-| Superseded FixedNeighbor optimized frontier | Closed | Historical OneAccepted/core64 comparison; superseded by the qualified core12 production policy | `figures/joint-fixed-neighbor-optimized-frontier-r1/{README.md,analysis.json,summary.csv,campaign-manifest.json}` | none | none | Compact evidence retained; no active driver or raw dependency |
-| Global Operator/SPQR/Schwarz scaling | Closed | Historical evidence for the removed OperatorPcg investigation | `joint-operator-search.md`; retained figures | none | none | Compact campaign summaries remain; raw telemetry is not a current dependency |
-| Global factor ownership, bounded-rank, and projected-width/tail evidence | Closed | Historical diagnostic evidence; not a runtime gate | `joint-operator-search.md`; compact factor/rank/projected reports | none | none | Compact evidence only; orphan analyzers have no current dependency |
-| Historical FixedNeighbor endpoint/trajectory diagnostics | Closed | Negative evidence only; no production route or threshold change | `joint-fixed-neighbor-experimental.md` and compact diagnostic summaries | none | none after retirement | Raw endpoint decomposition, local certification, and trajectory output is removable |
-| FixedNeighbor local Operator/Schwarz/hybrid branches | Closed | Explicitly not promoted; production uses local LegacyCompact | negative evidence in `joint-fixed-neighbor-experimental.md` | none after retirement | none after retirement | Local hooks are removed from the current tree; historical implementation is recoverable from Git history |
-| FixedNeighbor workspace residency, numeric reuse, and local attribution | Closed | No production wall-time or correctness benefit | `joint-fixed-neighbor-workspace-attribution.md` and compact summaries | none after retirement | none after retirement | Raw repetitions, wrappers, progress, and process logs are removable; no current policy switch remains |
-| Historical FixedNeighbor CLI modes and campaign wrappers | Closed | Reproducible from Git history if needed; not a production surface | this inventory plus the closed-direction table in the canonical overview | none | none | Do not retain zero-caller mode telemetry or wrappers |
-| Orphan factor-ownership/projected-tail/projected-width analyzer tests | Closed | No CMake registration, import, or current gate | corresponding compact figure reports | none | none | Test files are removable; canonical evidence remains |
-| Generic experiment I/O, process monitoring, provenance, and manifest helpers | Active | Shared infrastructure for active benchmark/qualification drivers | `tests/integration/experiment_*.py` contracts | shared helpers | `experiment_support_test.py`; dependency tests | Generated output belongs in build/output directories |
+The single benchmark workflow is tests/integration/joint_benchmark.py. It
+calls the production FixedNeighbor benchmark for search and solve, the
+postprocessing benchmark for workflow and postprocess, and the main command
+for complete-command measurements. The benchmark policy has no custom core,
+reverse order or alternative solver mode.
 
-## Retention policy
+Current Python experiment drivers are joint_benchmark.py,
+joint_partial_selection.py, joint_statistical_experiment.py and
+joint_offline_diagnostic.py. Their C++ measurement programs live in
+tests/experiments/. No other executable source in that directory is current.
 
-For a tracked campaign, retain the compact evidence that explains its result:
+The weak-halo diagnosis and noise/mismatch research retain machine-readable
+results in docs/developer/figures/joint-validation/. Both answer current
+diagnosis or scientific questions; other closed campaign results are not
+retained as current-tree machine-readable evidence.
 
-- `README.md`, when present;
-- `analysis.json`, when present;
-- `summary.csv`, when present; and
-- `campaign-manifest.json`, when present.
+## Validation tools
 
-These are defaults, not a requirement to invent a missing file. A small
-representative result is retained only when the compact evidence cannot explain
-the contract without it.
+| Tool | Role | Build option | Permanent owner |
+| --- | --- | --- | --- |
+| Joint runtime harness | Runs current public-API fixtures, regression cases and physical-input smoke checks | BUILD_TESTING | joint_component_runtime_runner_test, joint_component_regression and joint_component_physical_smoke |
+| Joint offline audit | Produces current offline certification bundles for audit workflows | RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS | joint_component_offline_tests and joint_component_offline_regression |
+| Joint cleanup contract | Keeps experiment and Python-driver directories within the current whitelist | BUILD_TESTING | joint_experiment_cleanup_test |
+| Ordinary numerical and workflow tests | Permanently verify the frozen production contracts and current application paths | BUILD_TESTING | rhbm_tests_joint_component_contract, rhbm_tests_joint_component_workflow and rhbm_tests_joint_component_numerical |
 
-The following are not permanent source-tree artifacts by default:
+The C++ runtime and audit harness sources live in tests/tools/. Python runtime,
+audit and workflow smoke entry points are validation tools, not experiment
+drivers. Files ending in _test.py and permanent C++ regression sources remain
+ordinary tests; the experiment whitelist does not exclude them.
 
-- `runs.json` and other aggregate execution dumps;
-- `individual-results/`;
-- `*.progress.json`;
-- `*-process/` and its `stdout.txt`/`stderr.txt`;
-- per-run wrapper JSON; and
-- duplicate raw result JSON.
+## Historical decisions
 
-For closed SPQR, OperatorPcg, Schwarz, factor-residency and rank-frontier
-campaigns, prune individual raw results once the retained compact evidence
-records the cases, measurements and conclusion. Historical raw output is not
-kept solely because it was once generated.
+| Topic | Conclusion | Current owner |
+| --- | --- | --- |
+| Fixed-B | Block updates and replay accounting were feasible, but Fixed-B was not promoted; FixedNeighbor superseded it. | FixedNeighbor production tests |
+| Core size | Repeated qualification selected core 12; larger tested cores did not justify their added local problem size. | Production policy contract |
+| Block order | Forward was adopted as the serial Gauss-Seidel order. Reverse was a qualification diagnostic only. | Production policy contract |
+| Local update policy | OneAccepted was selected and is intrinsic to the production block visit. | FixedNeighbor numerical tests |
+| Sparse backend | EIGEN and SPQR passed bounded parity; SPQR was faster on completed 128/256 probes and EIGEN used less peak RSS. Both bounded 512 probes timed out. A later memory, dependency and maintenance policy selected EIGEN. | EIGEN numerical tests and historical persistence compatibility tests |
+| OperatorPcg and Schwarz | Investigated for large connected components but not adopted. | FixedNeighbor with local LegacyCompact and EIGEN |
+| Top-level LegacyCompact | The former global route was retired; LegacyCompact remains the local FixedNeighbor solver. | FixedNeighbor production implementation |
+| Qualification campaigns | Completed core, order, stationarity, prepared-block and local-route decisions are closed. Permanent tests own the frozen contracts. | Joint contract and numerical tests |
 
-Drivers should write new execution output below the build/output tree. Any
-tracked exception must be named by the campaign README and justified by a
-current analyzer or regression contract.
+The detailed historical decisions are in
+[joint-fixed-neighbor-experimental.md](joint-fixed-neighbor-experimental.md),
+[joint-operator-search.md](joint-operator-search.md) and
+[joint-component-evidence.md](joint-component-evidence.md). Historical
+compatibility decoders preserve old result metadata without restoring retired
+solver implementations or experiment modes.
 
-This cleanup only reduces the current checkout and prevents future source-tree
-growth. It does not rewrite existing Git history. In particular, this work
-does not use `git filter-repo`, BFG, force-push, reset to an old commit, or any
-other history-rewriting operation.
+Closed experiment implementations and machine-readable receipts are recoverable
+from Git history and are intentionally not retained in the current tree. The
+current tree keeps executable experiments only for current production
+measurement, current feature measurement, current scientific research or
+current offline diagnosis.

@@ -11,7 +11,7 @@ columns were proportional. The resulting structural rank bound was 4,314;
 EIGEN, SPQR, multiple legal width starts, and an independent QR/SVD control
 reproduced it. This was a support/parameterization obstruction, not an
 initialization failure. The full evidence and scope are in the
-[canonical historical index](joint-component-evidence.md#41-historical-full-abc-6z6u-obstruction).
+[canonical historical index](joint-component-evidence.md#structural-workflow-and-scientific-limits).
 
 Singleton-halo profiling removes that diagnosed A/C obstruction while retaining
 the same observations. It does not establish target-width identifiability or a

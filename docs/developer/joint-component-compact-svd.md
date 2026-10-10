@@ -64,7 +64,6 @@ Use the current FixedNeighbor solve profile in the EIGEN-only build:
       --profile solve --case chain-8 \
       --build-dir build/qualification --output build/joint-solve.json
 
-The one-time EIGEN comparison is retained in the compact
-[backend qualification evidence](figures/joint-fixed-neighbor-backend-qualification-r1/).
-Historical campaign results, limitations, and source provenance are indexed in
-the [canonical historical evidence](joint-component-evidence.md).
+The historical EIGEN/SPQR parity and resource conclusion is summarized in
+[joint-operator-search.md](joint-operator-search.md). Its campaign outputs are
+retired; source and raw results remain available from Git history.

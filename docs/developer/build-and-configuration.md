@@ -138,7 +138,7 @@ Build benchmark tools explicitly:
 cmake -S . -B build-bench \\
   -DBUILD_TESTING=ON \\
   -DRHBM_GEM_BUILD_BENCHMARKS=ON
-cmake --build build-bench --target benchmarks_all
+cmake --build build-bench --target benchmarks_all -j4
 ```
 
 Build research tools explicitly:
@@ -147,22 +147,18 @@ Build research tools explicitly:
 cmake -S . -B build-research \\
   -DBUILD_TESTING=ON \\
   -DRHBM_GEM_BUILD_RESEARCH_TOOLS=ON
-cmake --build build-research --target research_tools_all
+cmake --build build-research --target research_tools_all -j4
 ```
 
-Benchmark builds create the current Joint benchmark executables, including
-`joint_fixed_neighbor_experiment`, `joint_component_benchmark` and
-`joint_postprocessing_benchmark`. The former `joint_sparse_benchmark`, Schwarz
-sweep and route-frontier campaigns are retired; their compact historical
-evidence remains under `docs/developer/figures/`. Stage A's
-`joint_offline_diagnostic` is created only by
-`RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS`; Stage B's
-`joint_statistical_experiment` is created only by
-`RHBM_GEM_BUILD_RESEARCH_TOOLS`. Stage C complete-command measurements use
-`tests/integration/joint_benchmark.py --profile command` with
-`RHBM_GEM_BUILD_BENCHMARKS`. No per-stage CMake switches are needed. The command
-profile smoke runs only in benchmark builds; it checks save/reload and export
-without running a resource campaign.
+Benchmark builds create the current measurement tools: `joint_fixed_neighbor_experiment`
+for search/solve, `joint_postprocessing_benchmark` for workflow/postprocess, and
+`joint_partial_selection` for current selection and halo measurements. The
+single benchmark workflow is `tests/integration/joint_benchmark.py`. The
+research option creates only `joint_statistical_experiment`. The offline-audit
+option creates `joint_component_audit`, `joint_offline_diagnostic`, and their
+current offline tests. Complete-command measurements use the same benchmark
+workflow with `--profile command`; they require the regular CLI build and
+explicit model/map inputs. No per-stage CMake switches are needed.
 
 CTest labels include `core`, `offline`, `extended`, `external`, `benchmark`, and
 `research`. The default configuration registers only core tests. Turning a
@@ -289,8 +285,8 @@ Beginner / common:
 | `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` | `OFF` | Enable experimental features across the project. |
 | `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS` | `OFF` | Build independent joint numerical audit tools and tests. |
 | `RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS` | `OFF` | Register larger self-contained correctness regressions. |
-| `RHBM_GEM_BUILD_BENCHMARKS` | `OFF` | Create optional benchmark and resource-measurement targets. Requires `BUILD_TESTING=ON`. |
-| `RHBM_GEM_BUILD_RESEARCH_TOOLS` | `OFF` | Create optional Joint statistical research targets. Requires `BUILD_TESTING=ON`. |
+| `RHBM_GEM_BUILD_BENCHMARKS` | `OFF` | Build current Joint benchmark and measurement targets. Requires `BUILD_TESTING=ON`. |
+| `RHBM_GEM_BUILD_RESEARCH_TOOLS` | `OFF` | Build current Joint statistical research tools. Requires `BUILD_TESTING=ON`. |
 | `RHBM_GEM_PYTHON_INSTALL_LAYOUT` | `SITE_PREFIX` | Python module install layout: `SITE_PREFIX` or `LIBDIR`. |
 | `RHBM_GEM_PYTHON_INSTALL_DIR` | empty | Explicit install directory for the Python extension module. |
 

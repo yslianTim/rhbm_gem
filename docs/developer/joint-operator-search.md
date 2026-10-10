@@ -53,20 +53,11 @@ does not recreate the removed solver.
 
 Both backends passed bounded numerical parity. SPQR was faster in the
 completed 128/256 resource probes, while EIGEN used less peak RSS in every
-completed case:
-
-| Case | EIGEN seconds | SPQR seconds | EIGEN RSS MiB | SPQR RSS MiB |
-| --- | ---: | ---: | ---: | ---: |
-| chain-128 | 24.20 | 10.71 | 68.48 | 82.61 |
-| cube-128 | 42.81 | 22.60 | 65.23 | 81.98 |
-| chain-256 | 52.37 | 24.75 | 114.33 | 142.75 |
-| cube-256 | 99.76 | 55.71 | 107.64 | 142.89 |
-
-Both bounded 512 probes timed out. The original wall-time-first qualification
-selected SPQR based on the completed cases. Production later prioritized
-memory footprint, dependency and installation simplicity, and maintenance;
-EIGEN became the sole backend. SPQR did not fail numerical parity, and its
-historical speed advantage is not erased by the later decision.
+completed case. Both bounded 512 probes timed out. The original wall-time-first
+qualification selected SPQR based on the completed cases. Production later
+prioritized memory footprint, dependency and installation simplicity, and
+maintenance; EIGEN became the sole backend. SPQR did not fail numerical parity,
+and its historical speed advantage is not erased by the later decision.
 
 Closed experiment implementations and machine-readable receipts are
 recoverable from Git history and are intentionally not retained in the current

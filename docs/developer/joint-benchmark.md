@@ -1,108 +1,85 @@
 # Joint benchmark
 
-The current benchmark surface measures the qualified `FixedNeighbor` Joint
-estimator. It is intentionally separate from the historical OperatorPcg and
-Schwarz campaigns; those drivers are retired and their compact evidence is
-kept under `docs/developer/figures/`.
+The current benchmark measures the production FixedNeighbor estimator and
+current workflow costs. Its only workflow entry point is
+[tests/integration/joint_benchmark.py](../../tests/integration/joint_benchmark.py).
 
-## Current entry point
+## Profiles
 
-Use [`tests/integration/joint_benchmark.py`](/tests/integration/joint_benchmark.py)
-with a benchmark build (`RHBM_GEM_BUILD_BENCHMARKS=ON`). The active profiles are:
-
-| Profile | Scope | Driver |
+| Profile | Measurement scope | Executable |
 | --- | --- | --- |
-| `search` | FixedNeighbor search-only work, including local LegacyCompact profile work | `joint_fixed_neighbor_experiment --scaling-only` |
-| `solve` | FixedNeighbor search, global replay, endpoint certification, and `RuntimeConvergence` | `joint_fixed_neighbor_experiment --case` |
-| `workflow` | Joint workflow, postprocess, and persistence | `joint_postprocessing_benchmark` |
-| `postprocess` | Joint postprocess, uncertainty, and persistence | `joint_postprocessing_benchmark` |
-| `command` | CLI analysis, SQLite reload, and Joint export | `RHBM-GEM` |
+| search | FixedNeighbor search and local LegacyCompact work; no endpoint qualification claim | joint_fixed_neighbor_experiment with --scaling-only |
+| solve | Search, global replay, endpoint certification and RuntimeConvergence | joint_fixed_neighbor_experiment with --case |
+| workflow | Complete in-memory Joint workflow and persistence | joint_postprocessing_benchmark |
+| postprocess | Peeling, uncertainty, group processing and persistence | joint_postprocessing_benchmark |
+| command | CLI analysis, save/reload and Joint export | RHBM-GEM |
 
-For example:
+Build the search, solve, workflow and postprocess executables with
+RHBM_GEM_BUILD_BENCHMARKS=ON. The command profile uses the regular CLI build
+and requires --model and --map inputs.
 
-```bash
-python3 tests/integration/joint_benchmark.py \
-  --profile search --case chain-8 \
-  --build-dir build/qualification --output build/joint-search.json
+For small synthetic search and solve measurements:
 
-python3 tests/integration/joint_benchmark.py \
-  --profile solve --case chain-8 \
-  --build-dir build/qualification --output build/joint-solve.json
-```
+    python3 tests/integration/joint_benchmark.py \
+      --profile search --case chain-8 \
+      --build-dir build/bench --output build/joint-search.json
 
-The `search` profile is an attribution measurement and must not claim endpoint
-qualification. Use `solve` when the result must include endpoint certification
-and `RuntimeConvergence`. `workflow`, `postprocess`, and `command` are smoke
-and persistence surfaces rather than substitutes for numerical qualification.
+    python3 tests/integration/joint_benchmark.py \
+      --profile solve --case chain-8 \
+      --build-dir build/bench --output build/joint-solve.json
 
-## FixedNeighbor production metadata
+Use workflow and postprocess with full, halo or multi cases. Use command with a
+case name plus --model and --map. Reports and temporary outputs belong in the
+build/output tree.
 
-The default production policy is recorded in each report:
+## Fixed production policy
 
-```text
-search_method = FixedNeighbor
-fixed_neighbor_core_atoms = 12
-fixed_neighbor_block_order = forward
-fixed_neighbor_maximum_sweeps = 30
-fixed_neighbor_local_search = LegacyCompact
-fixed_neighbor_policy = production
-sparse_backend = EIGEN
-```
+Every report records the frozen estimator policy:
 
-FixedNeighbor visits structural blocks in Forward order. Each visit runs the
-existing local LegacyCompact profile solver, accepts at most one trusted local
-update, replays the candidate globally, and preserves the existing stationarity,
-endpoint-certification, and `RuntimeConvergence` contracts. The benchmark does
-not introduce a second numerical policy or an automatic route selector.
+| Setting | Value |
+| --- | --- |
+| Estimator | FixedNeighbor |
+| Core | 12 atoms |
+| Block order | Forward |
+| Maximum sweeps | 30 |
+| Local search | LegacyCompact |
+| Accepted local updates | OneAccepted: at most one trusted update per block visit |
+| Sparse backend | EIGEN |
 
-`--fixed-core-atoms` is available for search-only custom attribution cases.
-The `solve` profile is restricted to the production core of 12 atoms. Custom
-core sizes are not production defaults and do not change the estimator contract.
+Search and solve are the only FixedNeighbor measurement modes. The C++ driver
+accepts --scaling-only for search measurement or --case for solve measurement.
+It exposes no reverse-order mode, arbitrary core size or alternative policy.
 
-The wrapper records process wall time, sampled RSS, timeout/process status,
-build metadata, source provenance, and the normalized numerical result. Use
-`--repeat`, `--warmup`, `--timeout`, and the RSS options for repeatable small
-measurements; generated output belongs in the build or output tree rather than
-in the source tree.
+Search reports search_seconds; solve reports search_seconds and
+assessment_seconds. Both can report peak RSS, sweeps, block solves, profile
+evaluations, KKT and width-gradient metrics. The Python wrapper also records
+process status, elapsed time, source/build metadata and the fixed solver policy.
+Use --repeat, --warmup, --timeout and --rss-limit to control the measurement
+process.
 
-The sparse backend is fixed to EIGEN in current builds. There is no backend
-command-line option or CMake selector. SPQR appears only in the retained
-historical qualification evidence and legacy provenance decoder.
+The wrapper modes describe different measurement scopes; they do not select
+different estimator policies. There is no backend selector or alternate
+solver route. EIGEN is the only current sparse backend.
 
-## Current option boundary
+## Permanent checks
 
-The current benchmark deliberately has no options for an operator route,
-preconditioner, Schwarz geometry, operator rank, or operator-factor ownership.
-`joint_sparse_benchmark`, `joint_route_frontier.py`, and
-`joint_schwarz_sweep.py` are retired. A request using their old route or option
-names is rejected by the current parser or command catalog; it is not silently
-mapped to FixedNeighbor.
+joint_benchmark_contract_test checks the profile and metadata contract,
+including rejection of arbitrary core sizes. joint_benchmark_smoke runs small
+search and solve cases and checks the production policy. The Joint C++ contract,
+workflow and numerical tests own numerical correctness and frozen thresholds;
+a benchmark result does not replace those tests.
 
-The top-level `LegacyCompact` route is retired and is not a current benchmark
-profile. The `LegacyCompact` numerical implementation itself remains active as
-FixedNeighbor's local profile solver.
+## Historical decisions
 
-## Historical evidence
+Completed qualification campaigns established core 12, Forward order and
+OneAccepted. Fixed-B and global OperatorPcg/Schwarz were not promoted. The
+bounded SPQR comparison passed numerical parity and favored SPQR on completed
+128/256 wall-time probes, while EIGEN used less peak RSS; both 512 probes timed
+out. A later memory, dependency and maintenance policy selected EIGEN.
 
-The following are closed investigations, not current benchmark instructions:
-
-- global OperatorPcg/PCG search and preconditioner comparisons;
-- Schwarz geometry and scaling campaigns;
-- bounded-rank and operator-factor ownership experiments; and
-- route-frontier comparisons between LegacyCompact, OperatorPcg, and
-  FixedNeighbor.
-
-Their compact summaries, manifests, and figures remain available for scientific
-provenance. Raw repetitions and process telemetry are not required by the
-current regression surface and are not regenerated as part of route cleanup.
-Historical saved results remain readable through the legacy provenance decoder;
-the old operator fields are compatibility data, not current solver controls.
-
-## Regression contract
-
-The parser and metadata contract are covered by
-`tests/integration/joint_benchmark_test.py`. The registered smoke test runs the
-small `chain-8` search and solve profiles. Numerical C++ tests cover ordinary,
-multi-component, observable/nuisance, partial-selection, prepared-block,
-stationarity, order, and persistence behavior separately from the benchmark
-wrapper.
+Closed experiment implementations and machine-readable receipts are
+recoverable from Git history and are intentionally not retained in the current
+tree. The historical decisions are summarized in
+[joint-fixed-neighbor-experimental.md](joint-fixed-neighbor-experimental.md),
+[joint-operator-search.md](joint-operator-search.md) and
+[joint-component-evidence.md](joint-component-evidence.md).

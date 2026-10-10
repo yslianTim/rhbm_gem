@@ -13,6 +13,8 @@ This project uses a two-axis test organization model:
 | `tests/core/contract/` | `core` | Command catalog/metadata/surface contracts and docs sync checks |
 | `tests/core/second_stage/` | `core` | Second-stage fitting state, solvers, acceptance, recovery, finalization, and performance logging |
 | `tests/data/` | `data` | Data public-surface guards, file I/O/runtime behavior, and schema/persistence validation |
+| `tests/experiments/` | optional tools | Current Joint measurement, research, and offline diagnosis executables |
+| `tests/tools/` | test support | Current runtime and offline validation harness executables |
 | `tests/utils/math/` | `utils` | Numeric/statistical/geometry helper algorithms |
 | `tests/utils/domain/` | `utils` | Domain helpers (string/logging/file-path/chemistry-related helpers) |
 | `tests/utils/hrl/` | `utils` | HRL-specific algorithm and transform tests |
@@ -175,20 +177,11 @@ consumer execution. A source copy without Git metadata must also build/install
 and run the consumer. Keep the frozen fixture packages and current parity
 thresholds unchanged.
 
-Configure with `RHBM_GEM_BUILD_BENCHMARKS=ON` before building
-`joint_partial_selection`; it is an optional measurement executable.
-Partial-selection structural tests use an exhaustive full-grid/catalogue reference,
-plus matched, omitted-halo, bridge and failure-isolation controls. Reproduce small
-complete-process measurements with `tests/integration/joint_partial_selection.py
---executable BUILD/bin/joint_partial_selection --output REPORT.json` (three serial
-independent processes per case). These measurements include builder and initializer
-costs and do not establish a maximum supported problem size.
-
-Joint experiment responsibilities are split by build category. The offline
-`joint_offline_diagnostic` covers weak-halo and identifiability diagnosis; the
-research `joint_statistical_experiment` retains the fixed noise/mismatch design
-and has a deterministic smoke; the benchmark command profile covers the
-complete CLI/save/reload/export path under resource measurement. The statistical
-and command smokes are opt-in and are not full campaigns. See the
-[capability guide](../docs/developer/joint-capabilities-limitations.md) for
-current commands and the historical evidence mapping.
+Current Joint experiments, build options, validation harnesses and permanent
+test owners are listed in the
+[Joint experiment inventory](../docs/developer/joint-experiments.md). The sole
+benchmark workflow is `tests/integration/joint_benchmark.py`; it includes the
+FixedNeighbor search/solve, workflow/postprocess and complete-command scopes.
+Partial-selection, weak-halo and noise/mismatch measurements remain current
+feature, diagnosis and research tools. Closed campaign drivers and their
+machine-readable results are not retained in the current tree.

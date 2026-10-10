@@ -1,8 +1,6 @@
 {
   "schema_version": 1,
   "source_commit": "6f30510c06def630226a3dab25e9bcc579d72687",
-  "source_archive": "docs/developer/figures/joint-abc-components/search-records-a.tar.gz",
-  "source_archive_sha256": "08fc5798f9cd5683653621beb88bf20ff44d8d1d6a9e763057d86d993b310cd1",
   "starts": [
     "first-stage",
     "narrower",
@@ -313,10 +311,5 @@
       ],
       "extended_cases": []
     }
-  },
-  "local_audit_source": {
-    "commit": "ba2449faf1e1b163f1b4209c3ef386ff6516de43",
-    "archive": "docs/developer/figures/joint-component-runtime/component-audit-records.tar.gz",
-    "sha256": "8436936d09e727495f6972d1a6ec5b4dd2fdb8cea15c87ed45747dd462dcf6fe"
   }
 }

@@ -15,8 +15,7 @@ the existing trust, global replay, stationarity, endpoint-certification and
 partitioning and local numerical work. `ResourceWork` owns resource
 attribution; `NumericsWork` owns numerical profiling counters.
 
-Historical fixed-state parity, factor-residency and preparation results remain
-available through the compact reports and figures referenced by
-[`joint-component-evidence.md`](joint-component-evidence.md). They are
-provenance only and do not define a current operator class or a route that can
-be selected at runtime.
+Historical fixed-state parity, factor-residency and preparation conclusions
+are summarized in [joint-component-evidence.md](joint-component-evidence.md).
+They do not define a current operator class or a route that can be selected at
+runtime. Closed campaign implementations and outputs remain in Git history.
