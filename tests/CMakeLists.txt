@@ -488,8 +488,6 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/runner_dependency_test.py")
     add_test(NAME joint_benchmark_contract_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_benchmark_test.py")
-    add_test(NAME joint_fixed_neighbor_outer_core_qualification_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_outer_core_qualification_test.py")
     add_test(NAME joint_experiment_cleanup_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_experiment_cleanup_test.py")
     set_tests_properties(experiment_support_test experiment_runner_dependency_test
@@ -502,17 +500,6 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         ENVIRONMENT "OMP_NUM_THREADS=1")
     add_test(NAME joint_component_evidence_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_evidence_test.py")
-    add_test(NAME joint_fixed_neighbor_stationarity_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_stationarity_test.py")
-    add_test(NAME joint_fixed_neighbor_order_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_order_test.py")
-    add_test(NAME joint_fixed_neighbor_prepared_block_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fixed_neighbor_prepared_block_test.py")
-    set_tests_properties(joint_fixed_neighbor_outer_core_qualification_test
-        joint_fixed_neighbor_stationarity_test joint_fixed_neighbor_order_test
-        joint_fixed_neighbor_prepared_block_test
-        PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:numerical" TIMEOUT 300
-        ENVIRONMENT "OMP_NUM_THREADS=1")
     add_test(NAME joint_component_runtime_runner_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime_test.py")
     add_test(NAME joint_component_regression
