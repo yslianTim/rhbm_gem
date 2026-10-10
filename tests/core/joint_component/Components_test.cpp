@@ -14,7 +14,7 @@ struct TwoBlocks
 {
     p::Domain domain{81,{{},{}}};
     Vector y=Vector::Zero(81),eta=Vector::Constant(2,std::log(.55)),beta=Vector::Zero(4);
-    TwoBlocks(double amplitude=2)
+    TwoBlocks(double amplitude=2,double noise=.001)
     {
         beta<<2,.2,amplitude,-.15;
         auto support=domain.CopySupport();
@@ -23,7 +23,7 @@ struct TwoBlocks
             const auto row=block*40+k; const double square=.003*k*k;
             support[static_cast<std::size_t>(block)].push_back({row,square});
             const auto b=second_stage_test::matched::EvaluateBasis(square,.5,2.5);
-            y(row)=beta(2*block)*b.gaussian+beta(2*block+1)*b.charge+.001*std::sin(k);
+            y(row)=beta(2*block)*b.gaussian+beta(2*block+1)*b.charge+noise*std::sin(k);
         }
         domain=p::Domain(81,std::move(support));
         y(80)=3;
@@ -237,7 +237,7 @@ TEST(JointComponentChecksTest, RankEvidenceUsesGlobalDimensionsAndCurrentSpectru
 
 TEST(JointComponentChecksTest, FailureIsolationDoesNotFillMissingRowsWithZero)
 {
-    TwoBlocks f; auto support=f.domain.CopySupport(); support.push_back(support[1]); f.domain=p::Domain(f.domain.rows,std::move(support));
+    TwoBlocks f(2,0); auto support=f.domain.CopySupport(); support.push_back(support[1]); f.domain=p::Domain(f.domain.rows,std::move(support));
     const auto input=p::MakeSyntheticJointProblemInput(f.domain,f.y); f.domain=p::Domain(input);
     auto c=p::MakeContext(input); const auto part=p::BuildPartition(f.domain,c.atom_ids);
     const Vector initial=Vector::Constant(3,.55);
@@ -254,7 +254,7 @@ TEST(JointComponentChecksTest, FailureIsolationDoesNotFillMissingRowsWithZero)
     EXPECT_EQ(Science(healthy_second),Science(result.at("components").at(0)));
 }
 
-TEST(JointComponentChecksTest, BudgetAndInvalidStartRetainHonestAvailability)
+TEST(JointComponentChecksTest, LocalProfileBudgetAndInvalidStartRetainHonestAvailability)
 {
     const TwoBlocks f; const auto input=p::MakeSyntheticJointProblemInput(f.domain,f.y); const p::Domain domain(input);
     auto c=p::MakeContext(input); const auto part=p::BuildPartition(domain,c.atom_ids);
@@ -263,7 +263,7 @@ TEST(JointComponentChecksTest, BudgetAndInvalidStartRetainHonestAvailability)
     auto limited=c; limited.profile_budget=1;
     const auto exhausted=p::FitComponent(part.components[1],f.y,initial,limited);
     EXPECT_FALSE(exhausted.at("search_success").as_bool()); EXPECT_TRUE(exhausted.at("usable_state").as_bool());
-    EXPECT_EQ(exhausted.at("stop_reason"),"profile-budget");
+    EXPECT_EQ(exhausted.at("stop_reason"),"block-sweep-budget");
     const auto assembled=p::Assemble(domain,f.y,part,c,boost::json::array{healthy,exhausted});
     EXPECT_TRUE(assembled.at("prediction_available").as_bool()); EXPECT_NE(assembled.at("runtime_convergence"),"passed");
     EXPECT_TRUE(assembled.at("search_stopped_without_convergence").as_bool());
@@ -275,7 +275,7 @@ TEST(JointComponentChecksTest, BudgetAndInvalidStartRetainHonestAvailability)
 
 TEST(JointComponentChecksTest, UnobservedAtomsKeepRawPredictionButDisableProfileClaims)
 {
-    TwoBlocks f; auto support=f.domain.CopySupport(); support[1].clear(); f.domain=p::Domain(f.domain.rows,std::move(support));
+    TwoBlocks f(2,0); auto support=f.domain.CopySupport(); support[1].clear(); f.domain=p::Domain(f.domain.rows,std::move(support));
     const auto input=p::MakeSyntheticJointProblemInput(f.domain,f.y); f.domain=p::Domain(input); const auto c=p::MakeContext(input);
     const auto part=p::BuildPartition(f.domain,c.atom_ids);
     const auto state=p::SameState(f.domain,f.y,f.eta,f.beta,part,c);
