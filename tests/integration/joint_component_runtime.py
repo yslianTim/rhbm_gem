@@ -2,7 +2,6 @@
 """Self-contained runtime regressions and fresh Map/Model entry points."""
 import argparse
 import json
-from statistics import median
 from pathlib import Path
 import subprocess
 import tempfile
@@ -145,21 +144,6 @@ def physical_smoke(executable):
     return dict(passed=True, cases=3)
 
 
-def benchmark(args):
-    samples = []
-    for _ in range(3):
-        result = subprocess.run([str(args.executable), str(args.input), args.case],
-                                check=True, capture_output=True, text=True)
-        sample = json.loads(result.stdout)
-        require(sample['available'], 'Benchmark has no assembled state')
-        samples.append(sample)
-    keys = ('construction_seconds', 'search_seconds', 'assessment_seconds', 'assembly_seconds',
-            'total_seconds', 'process_peak_rss_bytes')
-    result = dict(samples=samples, median={key: median(row[key] for row in samples) for key in keys})
-    write(args.output, result)
-    return result
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
@@ -181,9 +165,6 @@ def main():
         if command == 'run':
             sub.add_argument('--model', type=Path, required=True)
             sub.add_argument('--map', type=Path, required=True)
-    sub = commands.add_parser('benchmark')
-    for name in ('executable', 'input', 'output'): sub.add_argument('--'+name, type=Path, required=True)
-    sub.add_argument('--case', default='first-stage-float32')
     sub = commands.add_parser('summarize'); sub.add_argument('--run', type=Path, required=True)
     sub = commands.add_parser('compare')
     for name in ('left', 'right', 'output'): sub.add_argument('--'+name, type=Path, required=True)
@@ -191,7 +172,6 @@ def main():
     if args.command == 'regression' and args.case and not args.dataset:
         parser.error('--case requires --dataset')
     if args.command == 'regression': result = regression(args)
-    elif args.command == 'benchmark': result = benchmark(args)
     elif args.command == 'physical-smoke': result = physical_smoke(args.executable)
     elif args.command == 'summarize': result = summarize(args.run)
     elif args.command == 'compare':
