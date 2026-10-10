@@ -258,12 +258,10 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(reference) ++AssessmentWorkForTesting().reference_evaluations;
 #endif
-    const auto matrix_started=std::chrono::steady_clock::now();
     const auto basis_started=std::chrono::steady_clock::now();
     auto out=Basis(domain,y,eta);
     if(profile_work) telemetry.work.basis_seconds+=
         std::chrono::duration<double>(std::chrono::steady_clock::now()-basis_started).count();
-    NumericsWorkForTesting().matrix_preparation_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-matrix_started).count();
     if(!out.valid) return out; out.valid=false;
     const Eigen::Index m=eta.size();
     ResourcePhase linear_solve("linear-solve",true,out.x.rows(),out.x.cols(),static_cast<std::size_t>(out.x.nonZeros()));

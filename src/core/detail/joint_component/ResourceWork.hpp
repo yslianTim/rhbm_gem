@@ -43,10 +43,9 @@ struct ResourceWork
 
 struct NumericsWork
 {
-    std::size_t reference{},factor_nonzeros{},cancellation_reductions{};
-    double matrix_preparation_seconds{},reference_seconds{},reference_svd_seconds{},derivative_seconds{};
-    std::size_t derivative_preparations{},derivative_compacts{},reference_compacts{},free_design_svds{},reference_svds{},reference_solves{},bdc_svds{},jacobi_retries{};
-    double derivative_compact_seconds{},reference_compact_seconds{},free_design_svd_seconds{},reference_solve_seconds{},cancellation_seconds{},jacobi_retry_seconds{};
+    std::size_t reference{},cancellation_reductions{},derivative_preparations{};
+    std::size_t free_design_svds{},reference_svds{},reference_solves{},bdc_svds{},jacobi_retries{};
+    double derivative_seconds{},jacobi_retry_seconds{};
 };
 NumericsWork & NumericsWorkForTesting();
 struct WorkTimer

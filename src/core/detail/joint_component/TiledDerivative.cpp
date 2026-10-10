@@ -121,7 +121,6 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
         const Eigen::Index response_count=m+(compact_jacobian ? 1 : 0);
         TiledQR qr(p,response_count);
         {
-            ++work.derivative_compacts; WorkTimer compact_timer(work.derivative_compact_seconds);
             for(Eigen::Index first=0;first<n;first+=tile)
             {
                 const auto count=std::min(tile,n-first);

@@ -14,10 +14,7 @@ CompactSvdResult Decompose(const Matrix & matrix,double relative,double absolute
 {
     auto & work=NumericsWorkForTesting();
     CompactSvdResult out; Svd svd;
-    {
-        WorkTimer timer(rhs ? work.reference_svd_seconds : work.free_design_svd_seconds);
-        svd.compute(matrix);
-    }
+    svd.compute(matrix);
     if(svd.info()!=Eigen::Success || !svd.singularValues().allFinite()) return out;
     out.singular_values=svd.singularValues();
     const double maximum=out.singular_values(0);
@@ -39,7 +36,7 @@ CompactSvdResult Decompose(const Matrix & matrix,double relative,double absolute
     }
     if(rhs)
     {
-        ++work.reference_solves; WorkTimer timer(work.reference_solve_seconds);
+        ++work.reference_solves;
         out.solution=svd.solve(*rhs);
         if(!out.solution.allFinite()) return out;
     }
