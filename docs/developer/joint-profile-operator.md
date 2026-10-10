@@ -10,10 +10,10 @@ public API.
 The active numerical path is FixedNeighbor. Each structural block invokes the
 existing local `SearchProfile()` / `LegacyCompact` profile solver, then applies
 the existing trust, global replay, stationarity, endpoint-certification and
-`RuntimeConvergence` contracts. Shared numerical components such as
-`SparseFactor`, `StructuralPartition`, `CompactSvd`, `TiledDerivative`, and
-`LinearSolve` remain when they have current callers; this document does not
-imply that shared sparse or derivative code was removed.
+`RuntimeConvergence` contracts. `LinearSolve` owns the EIGEN sparse solve;
+`StructuralPartition`, `CompactSvd` and `TiledDerivative` provide the current
+partitioning and local numerical work. `ResourceWork` owns resource
+attribution; `NumericsWork` owns numerical profiling counters.
 
 Historical fixed-state parity, factor-residency and preparation results remain
 available through the compact reports and figures referenced by

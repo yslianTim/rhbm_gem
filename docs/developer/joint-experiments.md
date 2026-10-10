@@ -63,6 +63,11 @@ The following are not permanent source-tree artifacts by default:
 - per-run wrapper JSON; and
 - duplicate raw result JSON.
 
+For closed SPQR, OperatorPcg, Schwarz, factor-residency and rank-frontier
+campaigns, prune individual raw results once the retained compact evidence
+records the cases, measurements and conclusion. Historical raw output is not
+kept solely because it was once generated.
+
 Drivers should write new execution output below the build/output tree. Any
 tracked exception must be named by the campaign README and justified by a
 current analyzer or regression contract.

@@ -20,13 +20,13 @@ cmake -S . -B build/joint-eigen -DCMAKE_BUILD_TYPE=Release \
 
 ## Current numerical contract
 
-The backend supplies the sparse factorization, compact reduction and derivative
-work needed by the existing local profile search. `StructuralPartition`,
-`CompactSvd`, `TiledDerivative` and `LinearSolve` retain their current callers;
-the old SPQR-specific factor residency, projected-tail and workspace APIs are
-not part of the production surface. Each width state performs its qualified
-EIGEN solve independently. No numeric factor, active set or coefficient
-solution is carried across FixedNeighbor sweeps.
+`LinearSolve` performs the sparse solve with EIGEN `SparseQR` and
+`COLAMDOrdering`; the compact reduction and derivative work feed the existing
+local profile search. `StructuralPartition`, `CompactSvd` and
+`TiledDerivative` provide the current partitioning and local numerical work.
+Each width state performs its qualified EIGEN solve independently. No numeric
+factor, active set or coefficient solution is carried across FixedNeighbor
+sweeps.
 
 The EIGEN implementation shares the estimator's observation domain,
 parameterization, objective, threshold policy, endpoint certification and
@@ -55,6 +55,8 @@ wall-time benefit, so EIGEN is now the sole backend.
 The qualification measurements and historical `chosen_backend=SPQR` decision
 remain unchanged in the canonical evidence. They are retained as historical
 readability and provenance, not as a current build or regression selector.
+Historical saved-result metadata can still decode SPQR provenance; current v3
+provenance requires `sparse_backend=EIGEN`.
 
 ## Historical rank and operator work
 
