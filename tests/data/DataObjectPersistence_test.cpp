@@ -549,6 +549,7 @@ TEST(DataObjectPersistenceTest, FixedNeighborPolicyVersionsPreserveLegacyAndReje
     auto current=SavedJointExample();
     rg::JointSolverProvenance current_provenance{"fixed-neighbor",12u,std::nullopt};
     current_provenance.contract_version=rg::JointSolverProvenanceContractVersion;
+    current_provenance.sparse_backend="EIGEN";
     current_provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
     current_provenance.fixed_neighbor_maximum_sweeps=30;
     current_provenance.fixed_neighbor_order="forward";
@@ -566,7 +567,7 @@ TEST(DataObjectPersistenceTest, FixedNeighborPolicyVersionsPreserveLegacyAndReje
     }
 }
 
-TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsCurrentAndHistoricalRoutesAndRejectsMalformedValues)
+TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
 {
     namespace io=rg::joint_result_io;
     auto fixed=SavedJointExample();
@@ -599,7 +600,11 @@ TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsCurrentAndHistorica
     EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_max_block_atoms);
     EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_storage_bytes);
     EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_scratch_bytes);
+}
 
+TEST(DataObjectPersistenceTest, HistoricalV2SolverProvenanceRemainsReadable)
+{
+    namespace io=rg::joint_result_io;
     auto operator_result=SavedJointExample();
     rg::JointSolverProvenance operator_provenance;
     operator_provenance.search_method="operator-pcg";
@@ -641,11 +646,6 @@ TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsCurrentAndHistorica
     EXPECT_EQ(legacy_decoded.metadata.solver->contract_version,
         rg::JointSolverProvenanceHistoricalContractVersion);
 
-    auto current_operator=boost::json::parse(io::Encode(operator_result)).as_object();
-    current_operator.at("metadata").as_object().at("solver").as_object()["contract_version"]=
-        std::string(rg::JointSolverProvenanceContractVersion);
-    EXPECT_THROW(io::Decode(boost::json::serialize(current_operator)),std::invalid_argument);
-
     auto partial=boost::json::parse(io::Encode(operator_result)).as_object();
     auto & partial_solver=partial.at("metadata").as_object().at("solver").as_object();
     for(const auto key:{"contract_version","sparse_backend","preconditioner","operator_rank_mode",
@@ -658,12 +658,39 @@ TEST(DataObjectPersistenceTest, JointSolverProvenancePersistsCurrentAndHistorica
     EXPECT_EQ(partial_decoded.metadata.solver->search_method,"operator-pcg");
     EXPECT_FALSE(partial_decoded.metadata.solver->operator_rank_mode);
     EXPECT_FALSE(partial_decoded.metadata.solver->schwarz_core_atoms);
+}
+
+TEST(DataObjectPersistenceTest, MalformedCurrentSolverProvenanceIsRejected)
+{
+    namespace io=rg::joint_result_io;
+    auto fixed=SavedJointExample();
+    rg::JointSolverProvenance provenance{"fixed-neighbor",12u,std::nullopt};
+    provenance.contract_version=rg::JointSolverProvenanceContractVersion;
+    provenance.sparse_backend="EIGEN";
+    provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
+    provenance.fixed_neighbor_maximum_sweeps=30;
+    provenance.fixed_neighbor_order="forward";
+    provenance.fixed_neighbor_local_search="legacy-compact";
+    fixed.metadata.solver=provenance;
 
     auto malformed=boost::json::parse(io::Encode(fixed)).as_object();
-    malformed.at("metadata").as_object().at("solver").as_object()["fixed_neighbor_order"]="sideways";
+    malformed.at("metadata").as_object().at("solver").as_object().erase("sparse_backend");
     EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::invalid_argument);
-    malformed=boost::json::parse(io::Encode(operator_result)).as_object();
-    malformed.at("metadata").as_object().at("solver").as_object()["preconditioner"]="unknown";
+
+    malformed=boost::json::parse(io::Encode(fixed)).as_object();
+    malformed.at("metadata").as_object().at("solver").as_object()["sparse_backend"]="unsupported";
+    EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::invalid_argument);
+
+    malformed=boost::json::parse(io::Encode(fixed)).as_object();
+    malformed.at("metadata").as_object().at("solver").as_object()["search_method"]="unsupported";
+    EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::invalid_argument);
+
+    malformed=boost::json::parse(io::Encode(fixed)).as_object();
+    malformed.at("metadata").as_object().at("solver").as_object()["preconditioner"]="Identity";
+    EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::invalid_argument);
+
+    malformed=boost::json::parse(io::Encode(fixed)).as_object();
+    malformed.at("metadata").as_object().at("solver").as_object()["fixed_neighbor_order"]="sideways";
     EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::invalid_argument);
 }
 

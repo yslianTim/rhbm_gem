@@ -303,6 +303,8 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
         {
             Require(p.search_method=="fixed-neighbor",
                 "current solver provenance must use FixedNeighbor");
+            Require(p.sparse_backend && *p.sparse_backend=="EIGEN",
+                "current solver provenance must use EIGEN");
             Require(!p.preconditioner && !p.operator_rank_mode && !p.operator_rank_backend &&
                 !p.operator_pcg_iterations && !p.operator_damping_trials &&
                 !p.operator_rank_budget_seconds && !p.operator_rank_budget_entries &&
@@ -315,8 +317,8 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
                 !p.fixed_neighbor_local_work,
                 "incomplete current FixedNeighbor provenance");
         }
-        if(p.sparse_backend)
-            Require(*p.sparse_backend=="EIGEN" || *p.sparse_backend=="SPQR","invalid solver sparse backend");
+        else if(p.sparse_backend)
+            Require(*p.sparse_backend=="EIGEN" || *p.sparse_backend=="SPQR","invalid historical solver sparse backend");
         if(p.preconditioner)
             Require(*p.preconditioner=="Identity" || *p.preconditioner=="Diagonal" || *p.preconditioner=="Schwarz",
                 "invalid solver preconditioner");
