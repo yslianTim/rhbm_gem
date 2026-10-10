@@ -13,11 +13,13 @@ class JointBenchmarkContractTest(unittest.TestCase):
     def test_surface_has_only_current_profiles_and_options(self):
         parser = benchmark.build_parser()
         profile_action = next(action for action in parser._actions if action.dest == 'profile')
-        self.assertEqual(set(profile_action.choices), set(benchmark.SCOPES))
-        help_text = parser.format_help()
-        for token in ('OperatorPcg', 'operator-pcg', 'joint_sparse_benchmark',
-                      '--operator-rank', '--schwarz-', '--preconditioner', '--rank-mode'):
-            self.assertNotIn(token, help_text)
+        self.assertEqual(set(profile_action.choices),
+                         {'search', 'solve', 'workflow', 'postprocess', 'command'})
+        options = {option for action in parser._actions for option in action.option_strings}
+        self.assertEqual(options, {
+            '-h', '--help', '--profile', '--case', '--build-dir', '--output', '--repeat',
+            '--warmup', '--timeout', '--rss-limit', '--cli', '--model', '--map',
+        })
 
     def test_default_solver_metadata_locks_fixed_neighbor_production_policy(self):
         args = benchmark.build_parser().parse_args([
@@ -55,13 +57,6 @@ class JointBenchmarkContractTest(unittest.TestCase):
             benchmark.build_parser().parse_args([
                 '--profile', 'search', '--case', 'chain-8', '--build-dir', 'build',
                 '--output', 'result.json', '--fixed-core-atoms', '16'])
-
-    def test_old_operator_route_options_are_rejected(self):
-        parser = benchmark.build_parser()
-        with self.assertRaises(SystemExit):
-            parser.parse_args(['--profile', 'solve', '--case', 'chain-8',
-                               '--build-dir', 'build/debug-tests', '--output', 'result.json',
-                               '--operator-rank', 'auto'])
 
     def test_normalization_preserves_search_and_endpoint_contracts(self):
         search = benchmark.normalize_result('search', {'fixed_neighbor': {
