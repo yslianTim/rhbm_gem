@@ -84,6 +84,38 @@ RETIRED_FIXTURES = (
     "joint_fixed_neighbor_inexact_baseline.json",
 )
 
+CURRENT_JOINT_DOCUMENTS = (
+    "docs/developer/joint-benchmark.md",
+    "docs/developer/joint-component-runtime.md",
+    "docs/developer/joint-experiments.md",
+    "docs/developer/joint-fixed-neighbor-experimental.md",
+    "docs/developer/joint-operator-search.md",
+    "docs/developer/joint-component-sparse-backend.md",
+    "docs/developer/joint-fixed-actions.md",
+    "docs/developer/joint-profile-operator.md",
+    "docs/developer/joint-fixed-neighbor-workspace-attribution.md",
+    "docs/developer/joint-component-evidence.md",
+    "docs/developer/commands/potential_analysis.md",
+)
+
+RETIRED_LOCAL_SEARCH_DESCRIPTIONS = (
+    "local legacycompact",
+    "local `legacycompact`",
+    "legacycompact profile solver",
+    "legacycompact profile search",
+    "legacycompact remains an active local",
+    "legacycompact remains the local",
+    "legacycompact is still active inside",
+    "local search | legacycompact",
+    "local search | `legacycompact`",
+    "local search: legacycompact",
+    "local search: `legacycompact`",
+    "legacy-compact local search",
+    "`legacy-compact` local search",
+    "fixed_neighbor_local_search=legacy-compact",
+    "fixed_neighbor_local_search: legacy-compact",
+)
+
 def main():
     integration = ROOT / "tests" / "integration"
     cmake = (ROOT / "tests" / "CMakeLists.txt").read_text()
@@ -107,6 +139,42 @@ def main():
         for path in active_paths
         if path.suffix in {".c", ".cc", ".cpp", ".h", ".hh", ".hpp", ".hxx", ".py", ".sh"}
     )
+
+    # Check current surfaces only. The JSON decoder, persistence fixtures and
+    # historical documentation intentionally retain old provenance values.
+    core_source = "\n".join(
+        path.read_text(errors="ignore")
+        for path in (ROOT / "src/core").rglob("*")
+        if path.is_file() and path.suffix in {".c", ".cc", ".cpp", ".h", ".hh", ".hpp", ".hxx"}
+    )
+    assert '"legacy-compact"' not in core_source, (
+        "current Joint core must not emit the legacy local-search label")
+    assert "'fixed_neighbor_local_search': 'profile-lm'" in benchmark_driver
+    assert "'fixed_neighbor_local_search': 'LegacyCompact'" not in benchmark_driver
+    assert "'fixed_neighbor_local_search': 'legacy-compact'" not in benchmark_driver
+    current_joint_tests = (
+        ROOT / "tests/core/joint_component/Progress_test.cpp",
+        integration / "joint_benchmark_test.py",
+        integration / "joint_workflow_cli_smoke.py",
+    )
+    current_test_text = "\n".join(path.read_text() for path in current_joint_tests)
+    assert "local-search=profile-lm" in current_test_text
+    assert "fixed_neighbor_local_search" in current_test_text
+    assert "fixed_neighbor_local_search': 'LegacyCompact'" not in current_test_text
+    assert 'fixed_neighbor_local_search": "legacy-compact"' not in current_test_text
+    for relative_path in CURRENT_JOINT_DOCUMENTS:
+        document = (ROOT / relative_path).read_text().lower()
+        assert "profile lm" in document, (
+            f"current Joint documentation omits the Profile LM name: {relative_path}")
+        for phrase in RETIRED_LOCAL_SEARCH_DESCRIPTIONS:
+            assert phrase not in document, (
+                f"current Joint documentation describes the local solver as LegacyCompact: "
+                f"{relative_path}: {phrase}")
+
+    persistence_tests = (ROOT / "tests/data/DataObjectPersistence_test.cpp").read_text()
+    assert 'old_current_decoded.metadata.solver->fixed_neighbor_local_search,"legacy-compact"' in persistence_tests
+    assert 'legacy_provenance.search_method="legacy-compact"' in persistence_tests
+    assert 'operator_provenance.search_method="operator-pcg"' in persistence_tests
 
     experiment_dir = ROOT / "tests" / "experiments"
     experiment_sources = {path.name for path in experiment_dir.iterdir()
