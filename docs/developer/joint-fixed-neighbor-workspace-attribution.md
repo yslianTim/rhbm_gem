@@ -97,9 +97,9 @@ current tree. The compact analysis above is the retained evidence; the
 historical implementation remains recoverable from Git history if reproduction
 is needed.
 
-The canonical campaign uses one warmup and three measured repetitions for each
-of the six cases above. Its machine-readable results are in
-`figures/joint-fixed-neighbor-workspace-residency-r2/analysis.json`.
+The canonical campaign used one warmup and three measured repetitions for each
+of the six cases above. This Markdown conclusion is the retained record; the
+campaign driver and machine-readable results are retired.
 
 Endpoint certification in the timing harness remains `not-run-search-only`;
 the KKT and width-gradient values above are the search-produced certification

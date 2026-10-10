@@ -1,3 +1,0 @@
-case,status,wall_seconds,assessment_seconds,peak_rss_bytes,active_assessment_stage,last_completed_assessment_stage,search_seconds,reference_evaluation_seconds,design_spectrum_seconds,derivative_preparation_seconds,projected_qr_seconds,compact_jacobian_qr_seconds
-chain-640,timeout,600.0333182909526,,667533312,derivative-projected-qr,derivative-norms,18.556125959,66.079386416,34.085339708,68.915217541,376.535192294,0
-cube-640,timeout,600.0344007499516,,3900604416,derivative-projected-qr,derivative-norms,113.422149458,67.519389125,35.165094542,83.403441958,266.813401376,0

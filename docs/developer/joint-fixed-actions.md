@@ -1,6 +1,6 @@
 # Retired fixed-action investigation
 
-Status: **Closed / Removed**
+Status: **Closed**
 
 The fixed-state factor, normal-action and operator-action experiments were
 part of the retired OperatorPcg research surface. They are historical evidence,
@@ -12,7 +12,8 @@ uses the existing trust, global replay, stationarity, endpoint-certification
 and `RuntimeConvergence` contracts. Shared numerical components remain when
 FixedNeighbor or its local profile search still calls them.
 
-Historical fixed-action parity, factor-residency and preparation results remain
-available through the compact reports and figures indexed by
-[`joint-component-evidence.md`](joint-component-evidence.md). They are not
-recreated by the current tree.
+The historical fixed-state comparison used two Q/Q′ calls for normal actions,
+compared with six in the composed control. That result did not establish a
+different full-search default or large-workflow scalability. The conclusion
+is summarized in [joint-component-evidence.md](joint-component-evidence.md);
+the experiment-specific reports and figures are retired.

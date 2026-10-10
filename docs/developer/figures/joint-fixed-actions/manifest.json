@@ -1,7 +1,0 @@
-{
-  "baseline": "ec24f3056427408cb1978cff004ed477908fb0d0",
-  "numerical_runs": 72,
-  "numerical_comparisons": 24,
-  "promotion": false,
-  "timing_note": "Original totals exclude gradient setup; see the historical evidence summary. Raw receipts retained in Git history; final corrected wrappers and functional checks included."
-}
