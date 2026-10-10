@@ -53,6 +53,20 @@ RETIRED_REPOSITORY_FILES = (
     "tests/experiments/joint_sparse_benchmark.cpp",
     "tests/core/joint_component/OperatorSearch_test.cpp",
     "tests/core/joint_component/ProfileOperator_test.cpp",
+    "tests/core/joint_component/ProjectedTailQr_test.cpp",
+)
+
+ACTIVE_BACKEND_TERMS = (
+    "SPQR",
+    "SuiteSparse",
+    "CHOLMOD",
+    "RHBM_GEM_JOINT_SPQR",
+    "RHBM_GEM_JOINT_SPARSE_BACKEND",
+    "SparseBackend",
+    "ActiveSparseBackend",
+    "SparseBackendEnabled",
+    "SPQR_ORDERING",
+    "SpqrOrdering",
 )
 
 RETIRED_FIXTURES = (
@@ -102,9 +116,21 @@ def main():
                         if (ROOT / "tests" / "fixtures" / name).exists()]
     present_files = [name for name in RETIRED_REPOSITORY_FILES
                      if (ROOT / name).exists()]
+    test_paths = [path for path in (ROOT / "tests").rglob("*") if path.is_file()]
+    retired_test_name_parts = (
+        "spqrbenchmark", "benchmarkspqr", "spqrorder", "orderspqr",
+        "sparsebackend", "backendselector",
+    )
+    present_retired_tests = [
+        str(path.relative_to(ROOT))
+        for path in test_paths
+        if any(part in path.stem.lower().replace("_", "").replace("-", "")
+               for part in retired_test_name_parts)
+    ]
     assert not missing, f"retired Joint files returned: {missing}"
     assert not missing_fixtures, f"retired Joint fixtures returned: {missing_fixtures}"
     assert not present_files, f"retired Operator files returned: {present_files}"
+    assert not present_retired_tests, f"retired sparse tests returned: {present_retired_tests}"
     assert not any(name.removesuffix(".py") in cmake for name in RETIRED_TESTS)
     assert not any(mode in experiment for mode in CLOSED_MODES)
     for token in (
@@ -116,6 +142,12 @@ def main():
         "--inexact-two",
     ):
         assert token not in active_code, f"retired FixedNeighbor token remains: {token}"
+    for token in ACTIVE_BACKEND_TERMS:
+        assert token.lower() not in active_code.lower(), f"retired sparse backend token remains: {token}"
+        assert token.lower() not in cmake.lower(), f"retired sparse backend token remains in tests CMake: {token}"
+    src_cmake = (ROOT / "src" / "CMakeLists.txt").read_text()
+    for token in ACTIVE_BACKEND_TERMS:
+        assert token.lower() not in src_cmake.lower(), f"retired sparse backend token remains in src CMake: {token}"
     historical_raw_path = "docs/developer/figures/" + "joint-fixed-neighbor-scaling-r1/individual-results"
     assert historical_raw_path not in active_sources
     assert "/docs/developer/figures/**/individual-results/" in gitignore
