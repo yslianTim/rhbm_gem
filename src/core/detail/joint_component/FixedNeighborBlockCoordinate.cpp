@@ -36,6 +36,13 @@ Vector Select(VectorRef values,const Indices & indices)
 }
 Indices IndicesOf(const std::vector<std::size_t> & values)
 {return {values.begin(),values.end()};}
+Vector SelectBeta(VectorRef beta,const std::vector<std::size_t> & atoms)
+{
+    Vector out(2*static_cast<Eigen::Index>(atoms.size()));
+    for(std::size_t k=0;k<atoms.size();++k)
+        out.segment<2>(2*static_cast<Eigen::Index>(k))=beta.segment<2>(2*static_cast<Eigen::Index>(atoms[k]));
+    return out;
+}
 struct ReplayState {Vector prediction,residual; double objective{};};
 ReplayState Replay(const Domain & domain,const JointParameterLayout & layout,VectorRef observations,
     VectorRef eta,VectorRef beta,double scale)
