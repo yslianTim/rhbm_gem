@@ -241,6 +241,7 @@ add_library(rhbm_gem_test STATIC
     support/SolverFailureCapture.cpp
     support/MDPDETestSupport.cpp
     support/EndpointRefinementTestSupport.cpp
+    support/JointFixedNeighborDiagnostic.cpp
 )
 foreach(_property IN ITEMS
     COMPILE_FEATURES INTERFACE_COMPILE_FEATURES

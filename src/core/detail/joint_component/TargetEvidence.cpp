@@ -186,8 +186,10 @@ JointFitResult FitFixedNeighborComponents(const JointProblem & problem,const std
     const FixedNeighborSearchPolicy & policy,
     const JointProgressObserver & observer)
 {
+    auto out=FitFixedNeighborComponentsImpl(problem,b,policy,observer);
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
-    auto out=FitFixedNeighborComponentsImpl(problem,b,policy,observer); AddTargetEvidence(out); return out;
+    AddTargetEvidence(out);
+    return out;
 }
 }
 namespace rhbm_gem::core {

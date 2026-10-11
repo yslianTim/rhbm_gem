@@ -1,4 +1,4 @@
-#include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
+#include "support/JointFixedNeighborDiagnostic.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "support/JointSyntheticWorkload.hpp"

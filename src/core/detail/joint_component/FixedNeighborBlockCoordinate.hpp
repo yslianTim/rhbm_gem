@@ -87,22 +87,6 @@ struct FixedNeighborPolicy
     std::function<void(std::size_t,const BlockCoordinateState &,const FixedNeighborBlockSweep &,
         const std::vector<FixedNeighborBlockRecord> &)> state_observer;
 };
-// Result for the test and experiment whole-problem diagnostic facade.
-struct FixedNeighborDiagnosticResult
-{
-    BlockCoordinateState state;
-    std::vector<FixedNeighborBlockRecord> blocks;
-    std::vector<FixedNeighborBlockSweep> sweeps;
-    bool search_converged{},endpoint_certified{};
-    std::string reason;
-    std::size_t first_order_stationarity_sweep{},confirmed_stationarity_sweep{};
-    std::size_t block_preparations{},domain_preparations{},mapping_preparations{};
-    FixedNeighborWork work;
-    Assessment assessment;
-    TrustEvidence endpoint_trust;
-    JointFitResult fit;
-};
-
 // Search output contains only the candidate state and search diagnostics.
 struct FixedNeighborSearchResult
 {
@@ -147,6 +131,4 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
 std::optional<double> LastFixedNeighborObjective(const FixedNeighborSearchResult &);
 std::optional<double> LastFixedNeighborGradient(const FixedNeighborSearchResult &);
-FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem &,VectorRef initial_eta,
-    const FixedNeighborPolicy & = {},Vector initial_beta = {});
 }
