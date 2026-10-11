@@ -248,7 +248,7 @@ struct ComponentPartition
 ComponentPartition Partition(const Domain &,const Identities &);
 Vector SelectValues(VectorRef,const std::vector<Eigen::Index> &);
 EvaluationContext ChildContext(const EvaluationContext &,const ComponentView &,bool);
-struct ComponentResult
+struct ProfileSearchDiagnosticResult
 {
     SearchResult search;
     Assessment assessment; // Historical search-endpoint diagnostics.
@@ -260,7 +260,7 @@ struct ComponentResult
     bool search_success{};
 };
 struct FixedNeighborComponentResult;
-ComponentResult AssessComponentSearch(const Domain &,VectorRef,const EvaluationContext &,SearchResult,
+ProfileSearchDiagnosticResult AssessProfileSearchForDiagnostics(const Domain &,VectorRef,const EvaluationContext &,SearchResult,
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
 struct AssemblyResult
 {

@@ -190,7 +190,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     neighbor_policy.core_atoms=12;
     neighbor_policy.maximum_sweeps=30;
     neighbor_policy.capture_local_trajectory=true;
-    neighbor_policy.assess_final_endpoint=!scaling_only;
+    neighbor_policy.certify_endpoint=!scaling_only;
     neighbor_policy.collect_telemetry=true;
     j::array progress_sweeps;
     const auto progress_path=std::filesystem::path(output_path.string()+".progress.json");
@@ -205,7 +205,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             <<" seconds="<<sweep.wall_seconds<<'\n';
     };
     std::cerr<<topology<<'-'<<atoms<<" FixedNeighbor started\n";
-    auto started=Clock::now(); const auto neighbor=n::SearchFixedNeighbor(problem,initial_eta,neighbor_policy);
+    auto started=Clock::now(); const auto neighbor=n::RunFixedNeighborDiagnostic(problem,initial_eta,neighbor_policy);
     const double neighbor_seconds=Seconds(started);
     const double sweep_seconds=std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),0.0,
         [](double total,const auto & sweep){return total+sweep.wall_seconds;});

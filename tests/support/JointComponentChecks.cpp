@@ -294,31 +294,32 @@ runtime::FixedNeighborComponentResult SolveFixedNeighborComponentForTesting(cons
     const auto prepared=runtime::MakeComponentProblemView(layout,view);
     return runtime::SolveFixedNeighborComponent(prepared,initial_b,parent,{});
 }
-runtime::ComponentResult SolveFixedNeighborComponentForDiagnostics(const ComponentView & view,
+runtime::ProfileSearchDiagnosticResult SolveFixedNeighborComponentForDiagnostics(const ComponentView & view,
     const Vector & initial_b,const EvaluationContext & parent)
 {
     const auto fixed=SolveFixedNeighborComponentForTesting(view,initial_b,parent);
-    runtime::ComponentResult out;
+    runtime::ProfileSearchDiagnosticResult out;
     const auto & result=fixed.search;
+    const auto & certification=*fixed.certification;
     out.search.initial.eta.resize(static_cast<Eigen::Index>(view.atoms.size()));
     out.search.initial.beta=Vector::Zero(2*static_cast<Eigen::Index>(view.atoms.size()));
     for(std::size_t k=0;k<view.atoms.size();++k)
         out.search.initial.eta(static_cast<Eigen::Index>(k))=std::log(initial_b(view.atoms[k]));
     out.search.initial.valid=true;
     out.search.eta=result.state.eta;
-    out.search.stopped=!result.search_converged || !result.endpoint_certified;
+    out.search.stopped=!result.search_converged || !certification.passed();
     out.search.stop_reason=fixed.stop_reason;
     out.search.evaluations=static_cast<int>(result.total_profile_evaluations);
     out.search.seconds=result.search_seconds;
     out.search.accepted=static_cast<int>(result.total_accepted_local_updates);
     out.search.accepted_objective=runtime::LastFixedNeighborObjective(result);
     out.search.accepted_gradient_inf_norm=runtime::LastFixedNeighborGradient(result);
-    out.assessment=result.assessment;
-    if(result.endpoint_certified)
+    out.assessment=certification.assessment;
+    if(certification.passed())
     {
-        out.endpoint_trust=result.endpoint_trust;
-        out.trusted_state=result.assessment.primary;
-        out.trusted_assessment=result.assessment;
+        out.endpoint_trust=certification.trust;
+        out.trusted_state=certification.assessment.primary;
+        out.trusted_assessment=certification.assessment;
     }
     out.search_success=fixed.succeeded;
     return out;
@@ -365,9 +366,9 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
         if(!child.succeeded) failed.push_back(j::object{{"id",view.id},{"reason",fit.at("stop_reason")}});
         if(fit.at("usable_state").as_bool())
         {
-            child.search.endpoint_certified=true;
-            child.search.assessment.primary.eta=Parse(fit.at("last_trusted_state").at("eta"));
-            child.search.assessment.primary.beta=Parse(fit.at("last_trusted_state").at("beta"));
+            child.certification.emplace(); child.certification->trust.passed=true;
+            child.certification->assessment.primary.eta=Parse(fit.at("last_trusted_state").at("eta"));
+            child.certification->assessment.primary.beta=Parse(fit.at("last_trusted_state").at("beta"));
         }
         children.push_back(std::move(child));
     }

@@ -15,7 +15,7 @@ FittingWorkset MakeTwoStageFittingWorkset(ModelObject & model)
     FittingWorkset workset;
     workset.contributors = model.GetSelectedAtoms();
     workset.target_mask.assign(workset.contributors.size(), true);
-    workset.full_parameter_mask.assign(workset.contributors.size(), true);
+    workset.initialization_mask.assign(workset.contributors.size(), true);
     return workset;
 }
 
@@ -33,18 +33,18 @@ FittingWorkset MakeJointFittingWorkset(ModelObject & model, const JointProblem &
         const auto & targets = input.selection_domain->target_indices;
         workset.target_mask.push_back(std::binary_search(targets.begin(), targets.end(), i));
         const auto & full = problem.ParameterLayout().full_atoms;
-        workset.full_parameter_mask.push_back(std::binary_search(full.begin(), full.end(), i));
+        workset.initialization_mask.push_back(std::binary_search(full.begin(), full.end(), i));
     }
     return workset;
 }
 
 std::vector<AtomObject *> CollectFirstStageAtoms(const FittingWorkset & workset)
 {
-    if (workset.full_parameter_mask.size() != workset.contributors.size())
+    if (workset.initialization_mask.size() != workset.contributors.size())
         throw std::invalid_argument("First-stage workset parameter count mismatch.");
     std::vector<AtomObject *> atoms;
     for (std::size_t i = 0; i < workset.contributors.size(); ++i)
-        if (workset.full_parameter_mask[i]) atoms.push_back(workset.contributors[i]);
+        if (workset.initialization_mask[i]) atoms.push_back(workset.contributors[i]);
     return atoms;
 }
 

@@ -118,7 +118,7 @@ TEST(JointComponentPartialSelectionTest, BridgeAndMonolithicEquivalence)
     EXPECT_EQ(core::JointProblemAccess::Get(disconnected).partition.components.size(),2);
     const auto fit=core::FitJointComponents(p,f.b);
     const n::Vector widths=Eigen::Map<n::Vector>(f.b.data(),static_cast<Eigen::Index>(f.b.size()));
-    const auto mono=n::AssessComponentSearch(data.domain,data.y,data.context,n::SearchProfile(data.domain,data.y,widths,data.context));
+    const auto mono=n::AssessProfileSearchForDiagnostics(data.domain,data.y,data.context,n::SearchProfile(data.domain,data.y,widths,data.context));
     ASSERT_TRUE(fit.assembled_state); ASSERT_TRUE(mono.trusted_state);
     for(std::size_t i=0;i<fit.assembled_state->ac.size();++i)
         EXPECT_NEAR(fit.assembled_state->ac[i],mono.trusted_state->beta(static_cast<Eigen::Index>(i)),1e-10*(1+std::abs(fit.assembled_state->ac[i])));
@@ -364,7 +364,7 @@ TEST(JointComponentPartialSelectionTest, WorksetSamplingAndFirstFitExcludeContri
     const auto workset = core::detail::MakeJointFittingWorkset(model, problem);
     ASSERT_EQ(workset.contributors.size(), 3);
     EXPECT_EQ(workset.target_mask, (std::vector<bool>{true, false, false}));
-    EXPECT_EQ(workset.full_parameter_mask, (std::vector<bool>{true, true, false}));
+    EXPECT_EQ(workset.initialization_mask, (std::vector<bool>{true, true, false}));
     EXPECT_EQ(problem.ParameterLayout().full_atoms, (std::vector<std::size_t>{0, 1}));
     const auto selected = model.GetSelectedAtoms();
     const auto bonds = model.GetSelectedBonds();

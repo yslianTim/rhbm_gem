@@ -192,11 +192,11 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             component.search_completed=fit.succeeded; component.stop_reason=fit.stop_reason;
             component.profile_evaluations=static_cast<int>(fit.search.total_profile_evaluations);
             component.accepted_updates=static_cast<int>(fit.search.total_accepted_local_updates);
-            if(fit.search.endpoint_certified)
+            if(fit.certification && fit.certification->passed())
             {
-                component.state=ComponentState(fit.search.assessment.primary,data.context.scale);
-                component.evidence=AssessmentEvidence(fit.search.assessment,JointEvidenceScope::ComponentLocal);
-                component.ranks=AssessmentRanks(fit.search.assessment,JointEvidenceScope::ComponentLocal);
+                component.state=ComponentState(fit.certification->assessment.primary,data.context.scale);
+                component.evidence=AssessmentEvidence(fit.certification->assessment,JointEvidenceScope::ComponentLocal);
+                component.ranks=AssessmentRanks(fit.certification->assessment,JointEvidenceScope::ComponentLocal);
             }
         }
         else component.stop_reason=valid ? "unobserved-full-parameters" : "invalid-initial-widths";
@@ -229,14 +229,14 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
     return SolveFixedNeighborComponent(prepared,initial_b,parent_context,
         production_policy,observer,progress_component);
 }
-ComponentResult AssessComponentSearch(const Domain & domain,VectorRef y,const EvaluationContext & context,SearchResult search,
+ProfileSearchDiagnosticResult AssessProfileSearchForDiagnostics(const Domain & domain,VectorRef y,const EvaluationContext & context,SearchResult search,
     const JointProgressObserver & observer,const JointProgressComponent * progress_component)
 {
     if(progress_component)
         NotifyJointProgress(observer,JointProgressPhase::CertificationStarted,*progress_component,
             search.evaluations,context.profile_budget,search.accepted,context.update_budget,search.seconds,search.stop_reason,
             false,search.accepted_objective,search.accepted_gradient_inf_norm);
-    ComponentResult out; out.search=std::move(search);
+    ProfileSearchDiagnosticResult out; out.search=std::move(search);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     AssessmentStageTimerForTesting total_stage("total-assessment",y.size(),out.search.eta.size());
     AssessmentStageTimerForTesting primary_stage("endpoint-primary-evaluation",y.size(),out.search.eta.size());
@@ -329,8 +329,8 @@ AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const Compon
     for(std::size_t k=0;k<fits.size();++k)
     {
         const auto & fit=fits[k]; const auto & view=partition.components[k]; out.completed &= fit.succeeded;
-        if(!fit.search.endpoint_certified) {out.available=false; continue;}
-        const auto & state=fit.search.assessment.primary;
+        if(!fit.certification || !fit.certification->passed()) {out.available=false; continue;}
+        const auto & state=fit.certification->assessment.primary;
         for(std::size_t a=0;a<view.atoms.size();++a)
         {
             out.eta(view.atoms[a])=state.eta(static_cast<Eigen::Index>(a));

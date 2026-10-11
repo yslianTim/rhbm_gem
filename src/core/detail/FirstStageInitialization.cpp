@@ -63,7 +63,7 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
 {
     if (workset.target_mask.size() != workset.contributors.size())
         throw std::invalid_argument("First-stage workset role count mismatch.");
-    if (workset.full_parameter_mask.size() != workset.contributors.size())
+    if (workset.initialization_mask.size() != workset.contributors.size())
         throw std::invalid_argument("First-stage workset parameter count mismatch.");
     JointInitialization initialization;
     initialization.data_scope = "contributor-local-sampling-may-read-outside-target-domain";
@@ -78,7 +78,7 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
         record.mdpde = record.ols;
         record.alpha = std::numeric_limits<double>::quiet_NaN();
         double width = std::numeric_limits<double>::quiet_NaN();
-        if (!workset.full_parameter_mask[index])
+        if (!workset.initialization_mask[index])
         {
             record.reason = "not-required-observable-contribution";
             record.seed_source = "not-required";

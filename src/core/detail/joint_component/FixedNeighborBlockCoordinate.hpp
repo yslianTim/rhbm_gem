@@ -78,7 +78,7 @@ struct FixedNeighborPolicy
     FixedNeighborBlockOrder order{FixedNeighborBlockOrder::Forward};
     bool stop_after_stationarity{true};
     bool capture_local_trajectory{};
-    bool assess_final_endpoint{true};
+    bool certify_endpoint{true}; // Diagnostic facade only; production components always certify.
     bool collect_telemetry{};
     bool collect_diagnostics{};
     FixedNeighborDiagnosticSink * diagnostic_sink{};
@@ -87,7 +87,7 @@ struct FixedNeighborPolicy
     std::function<void(std::size_t,const BlockCoordinateState &,const FixedNeighborBlockSweep &,
         const std::vector<FixedNeighborBlockRecord> &)> state_observer;
 };
-struct FixedNeighborResult
+struct FixedNeighborDiagnosticResult
 {
     BlockCoordinateState state;
     std::vector<FixedNeighborBlockRecord> blocks;
@@ -102,14 +102,13 @@ struct FixedNeighborResult
     JointFitResult fit;
 };
 
-// Search output shared by the production component implementation and the historical
-// whole-problem wrapper. It deliberately contains no assembled JointFitResult.
+// Search output contains only the candidate state and search diagnostics.
 struct FixedNeighborSearchResult
 {
     BlockCoordinateState state;
     std::vector<FixedNeighborBlockRecord> blocks;
     std::vector<FixedNeighborBlockSweep> sweeps;
-    bool search_converged{},endpoint_certified{};
+    bool search_converged{};
     std::string reason;
     std::size_t first_order_stationarity_sweep{},confirmed_stationarity_sweep{};
     std::size_t sweep_count{},total_block_solves{},total_profile_evaluations{},total_accepted_local_updates{},
@@ -117,13 +116,19 @@ struct FixedNeighborSearchResult
     double search_seconds{};
     FixedNeighborWork work;
     std::optional<FixedNeighborBlockSweep> final_sweep;
+};
+
+struct FixedNeighborEndpointCertification
+{
     Assessment assessment;
-    TrustEvidence endpoint_trust;
+    TrustEvidence trust;
+    bool passed() const {return trust.passed;}
 };
 
 struct FixedNeighborComponentResult
 {
     FixedNeighborSearchResult search;
+    std::optional<FixedNeighborEndpointCertification> certification;
     bool succeeded{};
     std::string stop_reason;
 };
@@ -133,11 +138,14 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     const Domain &,const JointParameterLayout &,VectorRef y,VectorRef initial_eta,const EvaluationContext &,
     const FixedNeighborPolicy & = {},
     Vector initial_beta = {});
+FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
+    const Domain &,VectorRef y,const BlockCoordinateState &,const EvaluationContext &,
+    ProfileSearchWork * = nullptr);
 FixedNeighborComponentResult SolveFixedNeighborComponent(
     const ComponentProblemView &,VectorRef initial_b,const EvaluationContext &,const FixedNeighborSearchPolicy &,
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
 std::optional<double> LastFixedNeighborObjective(const FixedNeighborSearchResult &);
 std::optional<double> LastFixedNeighborGradient(const FixedNeighborSearchResult &);
-FixedNeighborResult SearchFixedNeighbor(const JointProblem &,VectorRef initial_eta,
+FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem &,VectorRef initial_eta,
     const FixedNeighborPolicy & = {},Vector initial_beta = {});
 }

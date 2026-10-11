@@ -96,13 +96,14 @@ JointState State(const Endpoint & endpoint,double scale)
     return {Values(endpoint.beta),Values(endpoint.eta.array().exp()),Values(endpoint.eta),
         Values(endpoint.gradient),endpoint.certificate.objective/(scale*scale),{}};
 }
-void BuildEndpointResult(const JointProblem & problem,const ProblemData & data,const JointParameterLayout & layout,
+void AssembleFixedNeighborDiagnosticResult(const JointProblem & problem,const ProblemData & data,const JointParameterLayout & layout,
     const Domain & domain,VectorRef y,const EvaluationContext & context,
-    const FixedNeighborSearchResult & search,FixedNeighborResult & out)
+    const FixedNeighborSearchResult & search,const FixedNeighborEndpointCertification & certification,
+    FixedNeighborDiagnosticResult & out)
 {
-    out.assessment=search.assessment;
-    out.endpoint_trust=search.endpoint_trust;
-    out.endpoint_certified=search.endpoint_certified;
+    out.assessment=certification.assessment;
+    out.endpoint_trust=certification.trust;
+    out.endpoint_certified=certification.passed();
     const Vector eta=Select(out.state.eta,IndicesOf(layout.full_atoms));
     const Vector beta=SelectBeta(out.state.beta,layout.full_atoms);
 
@@ -473,16 +474,23 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         }
     }
     if(!out.search_converged && out.reason.empty()) out.reason="block-sweep-budget";
-    if(policy.assess_final_endpoint)
-    {
-        const auto endpoint=EvaluateState(domain,y,out.state.eta,out.state.beta,context,
-            ProfileEvaluationRole::AcceptedEndpoint,profile_work);
-        const auto reference=EvaluateProfile(domain,y,out.state.eta,true,&context,nullptr,
-            ProfileEvaluationRole::Reference,profile_work);
-        out.assessment=AssessEvaluated(domain,y,endpoint,reference,context,true);
-        out.endpoint_trust=CheckTrust(domain,y,endpoint,context,reference);
-        out.endpoint_certified=out.endpoint_trust.passed;
-    }
+    return out;
+}
+
+FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
+    const Domain & domain,VectorRef y,const BlockCoordinateState & state,const EvaluationContext & context,
+    ProfileSearchWork * profile_work)
+{
+    FixedNeighborEndpointCertification out;
+    const auto atom_count=static_cast<Eigen::Index>(domain.atoms.size());
+    if(state.eta.size()!=atom_count || state.beta.size()!=2*atom_count || y.size()!=domain.rows)
+        return out;
+    const auto endpoint=EvaluateState(domain,y,state.eta,state.beta,context,
+        ProfileEvaluationRole::AcceptedEndpoint,profile_work);
+    const auto reference=EvaluateProfile(domain,y,state.eta,true,&context,nullptr,
+        ProfileEvaluationRole::Reference,profile_work);
+    out.assessment=AssessEvaluated(domain,y,endpoint,reference,context,true);
+    out.trust=CheckTrust(domain,y,endpoint,context,reference);
     return out;
 }
 
@@ -534,7 +542,6 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     policy.core_atoms=production_policy.core_atoms;
     policy.maximum_sweeps=production_policy.maximum_sweeps;
     policy.order=production_policy.order;
-    policy.assess_final_endpoint=true;
     if(progress_component && observer)
     {
         policy.production_progress=[&observer,progress_component,&production_policy,context](
@@ -555,22 +562,25 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
         };
     }
     out.search=SearchFixedNeighborComponent(prepared.domain,local_layout,local_y,initial_eta,context,policy);
-    out.succeeded=out.search.search_converged && out.search.endpoint_certified;
-    out.stop_reason=out.search.search_converged && !out.search.endpoint_certified ?
+    if(out.search.state.eta.size()==static_cast<Eigen::Index>(prepared.domain.atoms.size()))
+        out.certification=CertifyFixedNeighborEndpoint(prepared.domain,local_y,out.search.state,context);
+    const bool certified=out.certification && out.certification->passed();
+    out.succeeded=out.search.search_converged && certified;
+    out.stop_reason=out.search.search_converged && !certified ?
         "endpoint-certification-failed" : out.search.reason;
     if(progress_component)
         NotifyJointProgress(observer,JointProgressPhase::CertificationStarted,*progress_component,
             static_cast<int>(out.search.total_profile_evaluations),parent_context.profile_budget,
             static_cast<int>(out.search.total_accepted_local_updates),parent_context.update_budget,
-            out.search.search_seconds,out.stop_reason,out.search.endpoint_certified,
+            out.search.search_seconds,out.stop_reason,certified,
             LastFixedNeighborObjective(out.search),LastFixedNeighborGradient(out.search));
     return out;
 }
 
-FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef initial_eta,
+FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & problem,VectorRef initial_eta,
     const FixedNeighborPolicy & policy,Vector initial_beta)
 {
-    FixedNeighborResult out;
+    FixedNeighborDiagnosticResult out;
     const auto & data=JointProblemAccess::Get(problem); const auto & input=*data.input; const auto & layout=data.layout;
     if(initial_eta.size()!=static_cast<Eigen::Index>(input.atom_ids.size()) || !initial_eta.allFinite() ||
         !(data.context.scale>0) || !std::isfinite(data.context.scale) || policy.core_atoms==0 ||
@@ -585,7 +595,7 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
     const EvaluationContext context=ProfileContext(data.context,layout,data.domain.rows);
     const Vector y=Select(data.y,IndicesOf(layout.informative_rows));
     auto run_policy=policy; run_policy.collect_diagnostics=true;
-    const auto search=SearchFixedNeighborComponent(domain,layout,y,initial_eta,context,
+    auto search=SearchFixedNeighborComponent(domain,layout,y,initial_eta,context,
         run_policy,std::move(initial_beta));
     out.state=search.state; out.blocks=search.blocks; out.sweeps=search.sweeps;
     out.search_converged=search.search_converged; out.reason=search.reason;
@@ -595,7 +605,13 @@ FixedNeighborResult SearchFixedNeighbor(const JointProblem & problem,VectorRef i
     out.domain_preparations=search.domain_preparations;
     out.mapping_preparations=search.mapping_preparations;
     out.work=search.work;
-    if(policy.assess_final_endpoint) BuildEndpointResult(problem,data,layout,domain,y,context,search,out);
+    if(policy.certify_endpoint && search.state.eta.size()==static_cast<Eigen::Index>(domain.atoms.size()))
+    {
+        auto certification=CertifyFixedNeighborEndpoint(domain,y,search.state,context,
+            policy.collect_telemetry ? &search.work.local_profile_work : nullptr);
+        out.work=search.work;
+        AssembleFixedNeighborDiagnosticResult(problem,data,layout,domain,y,context,search,certification,out);
+    }
     return out;
 }
 }

@@ -16,7 +16,7 @@ struct FittingWorkset
 {
     std::vector<AtomObject *> contributors;
     std::vector<bool> target_mask;
-    std::vector<bool> full_parameter_mask;
+    std::vector<bool> initialization_mask;
 };
 
 FittingWorkset MakeTwoStageFittingWorkset(ModelObject &);

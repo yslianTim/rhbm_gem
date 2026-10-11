@@ -181,9 +181,10 @@ TEST(JointComponentRuntimeTest, AssemblyPreservesSuppliedCoefficientsInsteadOfRe
     std::vector<n::FixedNeighborComponentResult> components;
     for(const auto & view:data.partition.components)
         components.push_back(p::SolveFixedNeighborComponentForTesting(view,initial,data.context));
-    ASSERT_TRUE(components[0].search.endpoint_certified && components[1].search.endpoint_certified);
-    components[0].search.assessment.primary.beta(0)+=.1;
-    const double actual=components[0].search.assessment.primary.beta(0);
+    ASSERT_TRUE(components[0].certification && components[0].certification->passed());
+    ASSERT_TRUE(components[1].certification && components[1].certification->passed());
+    components[0].certification->assessment.primary.beta(0)+=.1;
+    const double actual=components[0].certification->assessment.primary.beta(0);
     const auto assembled=n::AssembleComponents(data.domain,data.y,data.partition,data.context,components);
     ASSERT_TRUE(assembled.available);
     EXPECT_DOUBLE_EQ(assembled.beta(0),actual);
@@ -225,7 +226,7 @@ TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTi
     n::AssessmentWorkForTesting()={};
     n::DerivativeWorkForTesting()={};
     n::SetAssessmentStageObserverForTesting(nullptr,nullptr);
-    n::AssessComponentSearch(view.domain,y,context,search);
+    n::AssessProfileSearchForDiagnostics(view.domain,y,context,search);
     EXPECT_EQ(n::AssessmentWorkForTesting().assessments,1);
     const auto & stages=n::AssessmentWorkForTesting().stages;
     const auto stage=[&](const std::string & name)->const n::AssessmentStageWork & {
@@ -293,14 +294,14 @@ TEST(JointComponentRuntimeTest, AssessmentSnapshotHookDoesNotChangeAssessmentRes
     const auto context=n::ChildContext(data.context,view,true);
     const auto search=n::SearchProfile(view.domain,y,n::Vector::Constant(1,.55),context);
     n::SetAssessmentStageObserverForTesting(nullptr,nullptr); n::AssessmentWorkForTesting()={};
-    const auto baseline=n::AssessComponentSearch(view.domain,y,context,search);
+    const auto baseline=n::AssessProfileSearchForDiagnostics(view.domain,y,context,search);
     const auto baseline_status=n::ConvergenceStatus(
         n::AssessmentEvidence(baseline.assessment,rhbm_gem::JointEvidenceScope::ComponentLocal),
         rhbm_gem::JointEvidenceScope::ComponentLocal);
     int snapshots{};
     n::SetAssessmentStageObserverForTesting(CountAssessmentStageSnapshot,&snapshots);
     n::AssessmentWorkForTesting()={};
-    const auto observed=n::AssessComponentSearch(view.domain,y,context,search);
+    const auto observed=n::AssessProfileSearchForDiagnostics(view.domain,y,context,search);
     n::SetAssessmentStageObserverForTesting(nullptr,nullptr);
     const auto observed_status=n::ConvergenceStatus(
         n::AssessmentEvidence(observed.assessment,rhbm_gem::JointEvidenceScope::ComponentLocal),
@@ -340,7 +341,7 @@ TEST(JointComponentRuntimeTest, SearchReplaysWithoutReferenceIncludingInitialAnd
             EXPECT_TRUE(json.at("reference").is_null());
             EXPECT_TRUE(json.at("scaled_coefficient_difference").is_null());
         }
-        const auto fit=n::AssessComponentSearch(view.domain,y,context,search);
+        const auto fit=n::AssessProfileSearchForDiagnostics(view.domain,y,context,search);
         ASSERT_TRUE(fit.trusted_state); ASSERT_TRUE(fit.endpoint_trust);
         EXPECT_TRUE(fit.endpoint_trust->passed); EXPECT_TRUE(fit.endpoint_trust->reference);
         EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,1);
@@ -395,7 +396,7 @@ TEST(JointComponentRuntimeTest, FallbackCertifiesSavedCoefficientsNewestFirst)
     const auto expected=search.trials[accepted[accepted.size()-2]].endpoint;
     search.trials[accepted.back()].endpoint.beta(0)+=1;
     search.eta=n::Vector::Constant(1,1000); search.stopped=false;
-    const auto fit=n::AssessComponentSearch(view.domain,y,context,search);
+    const auto fit=n::AssessProfileSearchForDiagnostics(view.domain,y,context,search);
     ASSERT_TRUE(fit.trusted_state && fit.trusted_assessment);
     EXPECT_EQ(fit.trusted_trial,accepted[accepted.size()-2]);
     EXPECT_EQ(fit.trusted_state->eta,expected.eta); EXPECT_EQ(fit.trusted_state->beta,expected.beta);
@@ -405,13 +406,13 @@ TEST(JointComponentRuntimeTest, FallbackCertifiesSavedCoefficientsNewestFirst)
     EXPECT_EQ(fit.search.stop_reason,"endpoint-certification-failed");
     EXPECT_FALSE(fit.assessment.primary.valid);
     for(auto k:accepted) search.trials[k].endpoint.beta(0)=-1;
-    const auto failed=n::AssessComponentSearch(view.domain,y,context,search);
+    const auto failed=n::AssessProfileSearchForDiagnostics(view.domain,y,context,search);
     EXPECT_FALSE(failed.trusted_state); EXPECT_FALSE(failed.trusted_assessment);
     EXPECT_FALSE(failed.search_success);
     // Even the initial state is eligible, but it must pass fresh certification.
     search.trials[accepted.front()].endpoint=search.initial;
     search.stopped=true; search.stop_reason="profile-budget";
-    const auto initial=n::AssessComponentSearch(view.domain,y,context,search);
+    const auto initial=n::AssessProfileSearchForDiagnostics(view.domain,y,context,search);
     ASSERT_TRUE(initial.trusted_state && initial.trusted_assessment);
     EXPECT_EQ(initial.trusted_trial,accepted.front());
     EXPECT_EQ(initial.trusted_state->beta,search.initial.beta);
@@ -426,8 +427,8 @@ TEST(JointComponentRuntimeTest, ReusedAssemblyMatchesFreshAssessmentAndRejectsCh
     auto context=n::ChildContext(data.context,data.partition.components[0],true);
     std::vector<n::FixedNeighborComponentResult> fits{p::SolveFixedNeighborComponentForTesting(
         data.partition.components[0],n::Vector::Constant(1,.55),data.context)};
-    ASSERT_TRUE(fits[0].search.endpoint_certified);
-    const n::AssessmentReuse reuse{data.domain,data.y,context,fits[0].search.assessment};
+    ASSERT_TRUE(fits[0].certification && fits[0].certification->passed());
+    const n::AssessmentReuse reuse{data.domain,data.y,context,fits[0].certification->assessment};
     const auto check=[&](const n::Domain & domain,const n::Vector & y,const n::EvaluationContext & policy,int assessments) {
         n::AssessmentWorkForTesting()={};
         const auto assembled=n::AssembleComponents(domain,y,data.partition,policy,fits,&reuse);
@@ -443,7 +444,7 @@ TEST(JointComponentRuntimeTest, ReusedAssemblyMatchesFreshAssessmentAndRejectsCh
     policy=data.context; policy.audit.directions=n::Matrix::Ones(1,3); check(data.domain,data.y,policy,0);
     n::Vector y=data.y; y(0)+=.01; check(data.domain,y,data.context,1);
     auto support=data.domain.CopySupport(); support[0][1].square+=.001; n::Domain domain(data.domain.rows,std::move(support)); check(domain,data.y,data.context,1);
-    fits[0].search.assessment.primary.beta(0)+=.1; check(data.domain,data.y,data.context,1);
+    fits[0].certification->assessment.primary.beta(0)+=.1; check(data.domain,data.y,data.context,1);
 }
 
 TEST(JointComponentRuntimeTest, ActualAssessmentFollowsFallbackAndLocalDirections)
@@ -455,7 +456,7 @@ TEST(JointComponentRuntimeTest, ActualAssessmentFollowsFallbackAndLocalDirection
     ASSERT_TRUE(search.trials.back().accepted);
     const auto accepted=search.trials.back().endpoint;
     search.eta=n::Vector::Constant(1,1000); search.stopped=true; search.stop_reason="untrusted-trial";
-    const auto fallback=n::AssessComponentSearch(view.domain,y,context,search);
+    const auto fallback=n::AssessProfileSearchForDiagnostics(view.domain,y,context,search);
     ASSERT_TRUE(fallback.trusted_state && fallback.trusted_assessment);
     EXPECT_FALSE(fallback.search_success); EXPECT_FALSE(fallback.assessment.primary.valid);
     EXPECT_EQ(fallback.trusted_state->eta,accepted.eta);
@@ -465,7 +466,7 @@ TEST(JointComponentRuntimeTest, ActualAssessmentFollowsFallbackAndLocalDirection
     const auto search_context=n::ChildContext(data.context,view,true);
     const auto local_initial=n::Vector::Constant(static_cast<Eigen::Index>(view.atoms.size()),.55);
     const auto local_search=n::SearchProfile(view.domain,y,local_initial,search_context);
-    const auto directed=n::AssessComponentSearch(view.domain,y,context,local_search);
+    const auto directed=n::AssessProfileSearchForDiagnostics(view.domain,y,context,local_search);
     ASSERT_TRUE(directed.trusted_assessment);
     const auto fresh=n::AssessProfile(view.domain,y,directed.trusted_state->eta,
         n::ChildContext(data.context,view,true),&directed.trusted_state->beta);

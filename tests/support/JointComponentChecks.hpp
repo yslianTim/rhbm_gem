@@ -16,7 +16,7 @@ boost::json::object SameState(const Domain &, const Eigen::VectorXd &, const Eig
     const Eigen::VectorXd & beta, const ComponentPartition &, const EvaluationContext &);
 runtime::FixedNeighborComponentResult SolveFixedNeighborComponentForTesting(const ComponentView &,
     const Eigen::VectorXd & parent_initial_b, const EvaluationContext &);
-runtime::ComponentResult SolveFixedNeighborComponentForDiagnostics(const ComponentView &,
+runtime::ProfileSearchDiagnosticResult SolveFixedNeighborComponentForDiagnostics(const ComponentView &,
     const Eigen::VectorXd & parent_initial_b, const EvaluationContext &);
 boost::json::object FitComponent(const ComponentView &, const Eigen::VectorXd & parent_initial_b,
     const EvaluationContext &);

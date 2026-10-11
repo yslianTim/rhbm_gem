@@ -214,12 +214,13 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
     n::NotifyJointAssemblyProgress(observer,n::JointProgressPhase::AssemblyStarted,component_count);
     std::optional<n::EvaluationContext> reuse_context;
     std::optional<n::AssessmentReuse> reuse;
-    if(results.size()==1 && results[0].search.endpoint_certified && data.partition.constant_rows.empty())
+    if(results.size()==1 && results[0].certification && results[0].certification->passed() &&
+        data.partition.constant_rows.empty())
     {
         const auto & view=data.partition.components[0];
         // A single full component has identity row/atom mappings in this immutable snapshot.
         reuse_context=n::ChildContext(data.context,view,true);
-        reuse.emplace(n::AssessmentReuse{view.domain,data.y,*reuse_context,results[0].search.assessment});
+        reuse.emplace(n::AssessmentReuse{view.domain,data.y,*reuse_context,results[0].certification->assessment});
     }
     const auto assembly=n::AssembleComponents(data.domain,data.y,data.partition,data.context,results,reuse ? &*reuse : nullptr);
     out.search_completed=assembly.completed; out.available_row_mask=assembly.row_mask;
