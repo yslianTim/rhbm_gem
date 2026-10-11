@@ -374,13 +374,10 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
         {
             const auto & endpoint=fit.at("last_trusted_state");
             const auto beta=Parse(endpoint.at("beta")),b=Parse(endpoint.at("b")),eta=Parse(endpoint.at("eta"));
-            const auto gradient=Parse(endpoint.at("b_gradient"));
             rhbm_gem::JointState state;
             state.ac.assign(beta.data(),beta.data()+beta.size());
             state.b.assign(b.data(),b.data()+b.size());
             state.log_b.assign(eta.data(),eta.data()+eta.size());
-            state.width_gradient.assign(gradient.data(),gradient.data()+gradient.size());
-            state.objective=j::value_to<double>(endpoint.at("objective"))/(context.scale*context.scale);
             child.state=std::move(state);
         }
         children.push_back(std::move(child));
