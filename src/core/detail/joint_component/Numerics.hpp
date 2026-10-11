@@ -251,8 +251,8 @@ EvaluationContext ChildContext(const EvaluationContext &,const ComponentView &,b
 struct ProfileSearchDiagnosticResult
 {
     SearchResult search;
-    Assessment assessment; // Historical search-endpoint diagnostics.
-    std::optional<Assessment> trusted_assessment; // Actual returned state.
+    Assessment assessment; // Assessment of the search endpoint.
+    std::optional<Assessment> trusted_assessment; // Assessment of the state returned by fallback logic.
     std::optional<Endpoint> trusted_state;
     std::optional<std::size_t> trusted_trial;
     double assessment_seconds{};

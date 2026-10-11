@@ -132,7 +132,7 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
             agrees=difference<=1e-10;
         }
     }
-    else out.evidence=AnalyticEvidence(JointEvidenceScope::AssembledGlobal);
+    else out.evidence=AnalyticNuisanceEvidence(JointEvidenceScope::AssembledGlobal);
     const double prediction_difference=((prediction-expected).array().abs()/
         (1+prediction.array().abs().max(expected.array().abs()))).maxCoeff();
     const double profile_objective=.5*(expected-data.y).squaredNorm()/(data.context.scale*data.context.scale);

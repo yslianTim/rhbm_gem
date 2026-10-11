@@ -87,6 +87,7 @@ struct FixedNeighborPolicy
     std::function<void(std::size_t,const BlockCoordinateState &,const FixedNeighborBlockSweep &,
         const std::vector<FixedNeighborBlockRecord> &)> state_observer;
 };
+// Result for the test and experiment whole-problem diagnostic facade.
 struct FixedNeighborDiagnosticResult
 {
     BlockCoordinateState state;

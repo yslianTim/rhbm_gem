@@ -48,6 +48,7 @@ JointFitResult FitFixedNeighborComponents(const JointProblem &,const std::vector
 JointFitResult FitFixedNeighborComponentsImpl(const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy &,
     const JointProgressObserver & = {});
 std::vector<JointRankEvidence> AssessmentRanks(const Assessment &,JointEvidenceScope);
+std::vector<JointCheck> AnalyticNuisanceEvidence(JointEvidenceScope);
 Domain ProfileDomain(const Domain &,const JointParameterLayout &);
 EvaluationContext ProfileContext(const EvaluationContext &,const JointParameterLayout &,Eigen::Index);
 }

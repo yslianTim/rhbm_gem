@@ -103,7 +103,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, CheapStationarityNeedsCompleteSweepC
     EXPECT_GT(confirmed.confirmed_stationarity_sweep,confirmed.first_order_stationarity_sweep);
     EXPECT_EQ(confirmed.confirmed_stationarity_sweep,confirmed.sweeps.size());
 }
-TEST(JointFixedNeighborBlockCoordinateTest, SearchOnlySkipsFinalAssessmentWithoutChangingTrajectory)
+TEST(JointFixedNeighborBlockCoordinateTest, DiagnosticFacadeCanSkipCertificationWithoutChangingCandidate)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
     const n::Vector eta=n::Vector::Constant(8,std::log(.55));
@@ -245,7 +245,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, LocalProfileAttributionIsAggregateAn
     EXPECT_TRUE((measured.state.beta.array()==quiet.state.beta.array()).all());
     EXPECT_DOUBLE_EQ(measured.state.objective,quiet.state.objective);
 }
-TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutputWithoutDiagnostics)
+TEST(JointFixedNeighborBlockCoordinateTest, SearchResultAndIndependentCertificationStaySeparate)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",32));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -256,6 +256,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutp
     const auto quiet=n::SearchFixedNeighborComponent(domain,data.layout,data.y,initial_eta,context,quiet_policy);
     auto diagnostic_policy=quiet_policy; diagnostic_policy.collect_diagnostics=true;
     const auto diagnostic=n::SearchFixedNeighborComponent(domain,data.layout,data.y,initial_eta,context,diagnostic_policy);
+    const auto quiet_state=quiet.state;
     const auto quiet_certification=n::CertifyFixedNeighborEndpoint(domain,data.y,quiet.state,context);
     const auto diagnostic_certification=n::CertifyFixedNeighborEndpoint(domain,data.y,diagnostic.state,context);
 
@@ -274,6 +275,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutp
     EXPECT_EQ(quiet.reason,diagnostic.reason);
     EXPECT_EQ(quiet.search_converged,diagnostic.search_converged);
     EXPECT_EQ(quiet_certification.passed(),diagnostic_certification.passed());
+    EXPECT_TRUE((quiet.state.eta.array()==quiet_state.eta.array()).all());
+    EXPECT_TRUE((quiet.state.beta.array()==quiet_state.beta.array()).all());
     EXPECT_TRUE((quiet.state.eta.array()==diagnostic.state.eta.array()).all());
     EXPECT_TRUE((quiet.state.beta.array()==diagnostic.state.beta.array()).all());
     EXPECT_DOUBLE_EQ(quiet.state.objective,diagnostic.state.objective);
@@ -282,6 +285,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutp
         diagnostic.sweeps.back().global_width_gradient_inf_norm);
     EXPECT_TRUE((quiet_certification.assessment.primary.eta.array()==
         diagnostic_certification.assessment.primary.eta.array()).all());
+    EXPECT_TRUE((quiet_certification.assessment.primary.eta.array()==quiet.state.eta.array()).all());
+    EXPECT_TRUE((quiet_certification.assessment.primary.beta.array()==quiet.state.beta.array()).all());
 }
 TEST(JointFixedNeighborBlockCoordinateTest, FixedNeighborAcceptsAtMostOneTrustedLocalUpdatePerBlockVisit)
 {

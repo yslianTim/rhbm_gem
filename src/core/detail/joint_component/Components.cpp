@@ -132,13 +132,13 @@ JointParameterLayout ComponentLayout(const JointParameterLayout & layout,const C
     for(const auto & group:layout.groups) if(view.LocalRow(static_cast<Eigen::Index>(group.row))>=0) out.groups.push_back(group);
     return out;
 }
-std::vector<JointCheck> AnalyticEvidence(JointEvidenceScope scope)
+}
+std::vector<JointCheck> AnalyticNuisanceEvidence(JointEvidenceScope scope)
 {
     auto out=AssessmentEvidence(Assessment{},scope);
     for(auto & check:out) if(check.status==JointCheckStatus::Unavailable)
     {check.status=JointCheckStatus::Passed; check.reason="analytic-nuisance-only"; check.value=0;}
     return out;
-}
 }
 FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
     const JointProblem & problem,const std::vector<double> & initial_b,
@@ -181,7 +181,7 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
         if(observable_profile && layout.full_atoms.empty())
         {
             component.state.emplace(); component.search_completed=true; component.stop_reason="analytic-nuisance-only";
-            component.evidence=AnalyticEvidence(JointEvidenceScope::ComponentLocal);
+            component.evidence=AnalyticNuisanceEvidence(JointEvidenceScope::ComponentLocal);
         }
         else if(valid && !layout.informative_rows.empty())
         {

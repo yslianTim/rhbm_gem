@@ -98,7 +98,7 @@ JointState State(const Endpoint & endpoint,double scale)
 }
 void AssembleFixedNeighborDiagnosticResult(const JointProblem & problem,const ProblemData & data,const JointParameterLayout & layout,
     const Domain & domain,VectorRef y,const EvaluationContext & context,
-    const FixedNeighborSearchResult & search,const FixedNeighborEndpointCertification & certification,
+    const FixedNeighborEndpointCertification & certification,
     FixedNeighborDiagnosticResult & out)
 {
     out.assessment=certification.assessment;
@@ -610,7 +610,7 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
         auto certification=CertifyFixedNeighborEndpoint(domain,y,search.state,context,
             policy.collect_telemetry ? &search.work.local_profile_work : nullptr);
         out.work=search.work;
-        AssembleFixedNeighborDiagnosticResult(problem,data,layout,domain,y,context,search,certification,out);
+        AssembleFixedNeighborDiagnosticResult(problem,data,layout,domain,y,context,certification,out);
     }
     return out;
 }

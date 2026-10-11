@@ -513,6 +513,7 @@ TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
     ASSERT_TRUE(std::any_of(events.begin(),events.end(),[](const auto & event) {
         return event.fixed_neighbor && event.fixed_neighbor->sweep>0;
     }));
+    ExpectLifecycle(problem,fit,events,policy);
 }
 
 TEST(JointProgressTest, FixedNeighborObservableComponentsShareAssemblyContract)

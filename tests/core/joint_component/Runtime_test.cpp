@@ -428,7 +428,8 @@ TEST(JointComponentRuntimeTest, ReusedAssemblyMatchesFreshAssessmentAndRejectsCh
     std::vector<n::FixedNeighborComponentResult> fits{p::SolveFixedNeighborComponentForTesting(
         data.partition.components[0],n::Vector::Constant(1,.55),data.context)};
     ASSERT_TRUE(fits[0].certification && fits[0].certification->passed());
-    const n::AssessmentReuse reuse{data.domain,data.y,context,fits[0].certification->assessment};
+    const auto reusable_assessment=fits[0].certification->assessment;
+    const n::AssessmentReuse reuse{data.domain,data.y,context,reusable_assessment};
     const auto check=[&](const n::Domain & domain,const n::Vector & y,const n::EvaluationContext & policy,int assessments) {
         n::AssessmentWorkForTesting()={};
         const auto assembled=n::AssembleComponents(domain,y,data.partition,policy,fits,&reuse);
