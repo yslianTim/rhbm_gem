@@ -1,7 +1,9 @@
 #pragma once
 #include "Numerics.hpp"
 #include "JointProgress.hpp"
+#include "FixedNeighborBlockCoordinate.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include <functional>
 namespace rhbm_gem::core::joint_component {
 JointInitialization InitializeContributors(MapObject &,ModelObject &,const JointProblem &);
 struct ProblemData
@@ -30,6 +32,16 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
     const ComponentView &,const JointParameterLayout &,const Vector &,const EvaluationContext &,
     const FixedNeighborSearchPolicy &,const JointProgressObserver & = {},
     const JointProgressComponent * = nullptr);
+struct FixedNeighborComponentBatch
+{
+    std::vector<JointComponentResult> components;
+    std::vector<FixedNeighborComponentResult> fits;
+    JointFitCosts costs;
+};
+using ComponentStateFinalizer=std::function<double(const ComponentView &,JointComponentResult &,const JointParameterLayout &)>;
+FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
+    const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy &,
+    const JointProgressObserver &,bool observable_profile,const ComponentStateFinalizer & = {});
 JointFitResult FitObservableComponents(const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy & = {},
     const JointProgressObserver & = {});
 JointFitResult FitFixedNeighborComponents(const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy &,

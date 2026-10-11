@@ -123,6 +123,108 @@ EvaluationContext ChildContext(const EvaluationContext & parent,const ComponentV
     }
     return c;
 }
+namespace {
+using Clock=std::chrono::steady_clock;
+double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
+std::vector<double> Values(const Vector & v) {return {v.data(),v.data()+v.size()};}
+JointState ComponentState(const Endpoint & e,double scale)
+{return {Values(e.beta),Values(e.eta.array().exp()),Values(e.eta),Values(e.gradient),e.certificate.objective/(scale*scale),{}};}
+JointParameterLayout ComponentLayout(const JointParameterLayout & layout,const ComponentView & view)
+{
+    JointParameterLayout out;
+    for(auto a:layout.full_atoms) if(view.LocalAtom(static_cast<Eigen::Index>(a))>=0) out.full_atoms.push_back(a);
+    for(auto r:layout.informative_rows) if(view.LocalRow(static_cast<Eigen::Index>(r))>=0) out.informative_rows.push_back(r);
+    for(const auto & group:layout.groups) if(view.LocalRow(static_cast<Eigen::Index>(group.row))>=0) out.groups.push_back(group);
+    return out;
+}
+std::vector<JointCheck> AnalyticEvidence(JointEvidenceScope scope)
+{
+    auto out=AssessmentEvidence(Assessment{},scope);
+    for(auto & check:out) if(check.status==JointCheckStatus::Unavailable)
+    {check.status=JointCheckStatus::Passed; check.reason="analytic-nuisance-only"; check.value=0;}
+    return out;
+}
+}
+FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
+    const JointProblem & problem,const std::vector<double> & initial_b,
+    const FixedNeighborSearchPolicy & production_policy,const JointProgressObserver & observer,
+    bool observable_profile,const ComponentStateFinalizer & finalize_state)
+{
+    const auto & data=JointProblemAccess::Get(problem);
+    FixedNeighborComponentBatch out;
+    const auto component_count=data.partition.components.size();
+    out.components.reserve(component_count); out.fits.reserve(component_count);
+    const VectorMap widths(initial_b.data(),static_cast<Eigen::Index>(initial_b.size()));
+    for(std::size_t component_index=0;component_index<component_count;++component_index)
+    {
+        const auto & view=data.partition.components[component_index];
+        const auto component_start=Clock::now();
+        std::optional<JointProgressComponent> progress_component;
+        if(observer)
+        {
+            progress_component.emplace(JointProgressComponent{component_index+1,component_count,view.id,
+                view.atoms.size(),view.rows.size()});
+            NotifyJointProgress(observer,JointProgressPhase::ComponentStarted,*progress_component,
+                0,data.context.profile_budget,0,data.context.update_budget);
+        }
+        JointParameterLayout layout;
+        if(observable_profile) layout=ComponentLayout(data.layout,view);
+        else
+        {
+            layout.full_atoms.assign(view.atoms.begin(),view.atoms.end());
+            layout.informative_rows.assign(view.rows.begin(),view.rows.end());
+        }
+        JointComponentResult component; component.id=view.id;
+        component.atoms.assign(view.atoms.begin(),view.atoms.end());
+        component.rows.assign(view.rows.begin(),view.rows.end());
+        if(observable_profile) component.layout=layout;
+        FixedNeighborComponentResult fit;
+        std::optional<double> accepted_objective,accepted_gradient_inf_norm;
+        const bool valid=std::all_of(layout.full_atoms.begin(),layout.full_atoms.end(),[&](auto a) {
+            return a<initial_b.size() && std::isfinite(initial_b[a]) && initial_b[a]>0;
+        });
+        if(observable_profile && layout.full_atoms.empty())
+        {
+            component.state.emplace(); component.search_completed=true; component.stop_reason="analytic-nuisance-only";
+            component.evidence=AnalyticEvidence(JointEvidenceScope::ComponentLocal);
+        }
+        else if(valid && !layout.informative_rows.empty())
+        {
+            fit=SolveFixedNeighborComponentView(view,layout,widths,data.context,production_policy,observer,
+                progress_component ? &*progress_component : nullptr);
+            accepted_objective=LastFixedNeighborObjective(fit.search);
+            accepted_gradient_inf_norm=LastFixedNeighborGradient(fit.search);
+            component.search_completed=fit.succeeded; component.stop_reason=fit.stop_reason;
+            component.profile_evaluations=static_cast<int>(fit.search.total_profile_evaluations);
+            component.accepted_updates=static_cast<int>(fit.search.total_accepted_local_updates);
+            if(fit.search.endpoint_certified)
+            {
+                component.state=ComponentState(fit.search.assessment.primary,data.context.scale);
+                component.evidence=AssessmentEvidence(fit.search.assessment,JointEvidenceScope::ComponentLocal);
+                component.ranks=AssessmentRanks(fit.search.assessment,JointEvidenceScope::ComponentLocal);
+            }
+        }
+        else component.stop_reason=valid ? "unobserved-full-parameters" : "invalid-initial-widths";
+
+        if(!component.state)
+        {
+            Assessment missing; missing.failure=component.stop_reason;
+            component.evidence=AssessmentEvidence(missing,JointEvidenceScope::ComponentLocal);
+        }
+        const double assembly_seconds=finalize_state ? finalize_state(view,component,layout) : 0;
+        const double elapsed=Seconds(component_start);
+        out.costs.search_seconds+=fit.search.search_seconds;
+        out.costs.assembly_seconds+=assembly_seconds;
+        out.costs.assessment_seconds+=elapsed-fit.search.search_seconds-assembly_seconds;
+        if(progress_component)
+            NotifyJointProgress(observer,JointProgressPhase::ComponentCompleted,*progress_component,
+                component.profile_evaluations,data.context.profile_budget,component.accepted_updates,
+                data.context.update_budget,elapsed,component.stop_reason,component.state.has_value(),
+                accepted_objective,accepted_gradient_inf_norm);
+        out.components.push_back(std::move(component)); out.fits.push_back(std::move(fit));
+    }
+    return out;
+}
 FixedNeighborComponentResult SolveFixedNeighborComponentView(
     const ComponentView & view,const JointParameterLayout & component_layout,const Vector & initial_b,
     const EvaluationContext & parent_context,const FixedNeighborSearchPolicy & production_policy,
