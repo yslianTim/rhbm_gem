@@ -77,7 +77,7 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
     out.search_completed=std::all_of(out.components.begin(),out.components.end(),[](const auto & c){return c.search_completed;});
     const auto assembly_started=Clock::now();
     NotifyJointAssemblyProgress(observer,JointProgressPhase::AssemblyStarted,component_count);
-    for(const auto & component:out.components) if(component.state)
+    for(auto & component:out.components) if(component.state)
     {
         const auto started=Clock::now();
         Reconstruct(input,*component.layout,*component.state,prediction);
