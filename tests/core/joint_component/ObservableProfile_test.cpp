@@ -10,6 +10,7 @@
 #include "core/detail/JointUncertainty.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include "data/io/detail/JointResultJson.hpp"
+#include <algorithm>
 #include <limits>
 #include "core/detail/PostFitPeeling.hpp"
 #include "core/detail/MapSampler.hpp"

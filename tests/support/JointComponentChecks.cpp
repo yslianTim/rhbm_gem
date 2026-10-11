@@ -354,21 +354,34 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
     const EvaluationContext & context,const j::array & fits)
 {
     const auto start=std::chrono::steady_clock::now();
-    std::vector<runtime::FixedNeighborComponentResult> children; int evaluations{},references{},updates{}; j::array failed;
+    std::vector<rhbm_gem::core::JointComponentResult> children; int evaluations{},references{},updates{}; j::array failed;
     for(const auto & view:partition.components)
     {
         const auto found=std::find_if(fits.begin(),fits.end(),[&](const auto & f){return f.at("component_id").as_string()==view.id;});
         if(found==fits.end()) throw std::invalid_argument("Missing component scientific record.");
         const auto & fit=*found; evaluations+=j::value_to<int>(fit.at("profile_evaluations"));
         references+=j::value_to<int>(fit.at("search_reference_evaluations")); updates+=j::value_to<int>(fit.at("accepted_updates"));
-        runtime::FixedNeighborComponentResult child; child.succeeded=fit.at("search_success").as_bool();
+        rhbm_gem::core::JointComponentResult child; child.id=view.id;
+        for(const auto atom:view.atoms) child.atoms.push_back(static_cast<std::size_t>(atom));
+        for(const auto row:view.rows) child.rows.push_back(static_cast<std::size_t>(row));
+        child.search_completed=fit.at("search_success").as_bool();
         child.stop_reason=j::value_to<std::string>(fit.at("stop_reason"));
-        if(!child.succeeded) failed.push_back(j::object{{"id",view.id},{"reason",fit.at("stop_reason")}});
+        child.profile_evaluations=j::value_to<int>(fit.at("profile_evaluations"));
+        child.reference_evaluations=j::value_to<int>(fit.at("search_reference_evaluations"));
+        child.accepted_updates=j::value_to<int>(fit.at("accepted_updates"));
+        if(!child.search_completed) failed.push_back(j::object{{"id",view.id},{"reason",fit.at("stop_reason")}});
         if(fit.at("usable_state").as_bool())
         {
-            child.certification.emplace(); child.certification->trust.passed=true;
-            child.certification->assessment.primary.eta=Parse(fit.at("last_trusted_state").at("eta"));
-            child.certification->assessment.primary.beta=Parse(fit.at("last_trusted_state").at("beta"));
+            const auto & endpoint=fit.at("last_trusted_state");
+            const auto beta=Parse(endpoint.at("beta")),b=Parse(endpoint.at("b")),eta=Parse(endpoint.at("eta"));
+            const auto gradient=Parse(endpoint.at("b_gradient"));
+            rhbm_gem::JointState state;
+            state.ac.assign(beta.data(),beta.data()+beta.size());
+            state.b.assign(b.data(),b.data()+b.size());
+            state.log_b.assign(eta.data(),eta.data()+eta.size());
+            state.width_gradient.assign(gradient.data(),gradient.data()+gradient.size());
+            state.objective=j::value_to<double>(endpoint.at("objective"))/(context.scale*context.scale);
+            child.state=std::move(state);
         }
         children.push_back(std::move(child));
     }
