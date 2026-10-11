@@ -4,7 +4,7 @@
 #include <functional>
 
 namespace rhbm_gem::core::joint_component {
-struct PreparedComponent;
+struct ComponentProblemView;
 struct BlockCoordinateState
 {
     Vector eta,beta,prediction,residual;
@@ -130,11 +130,11 @@ struct FixedNeighborComponentResult
 
 bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_complete_sweep);
 FixedNeighborSearchResult SearchFixedNeighborComponent(
-    const JointProblemInput &,const JointParameterLayout &,const Domain &,VectorRef observations,
-    VectorRef y,VectorRef initial_eta,const EvaluationContext &,const FixedNeighborPolicy & = {},
+    const Domain &,const JointParameterLayout &,VectorRef y,VectorRef initial_eta,const EvaluationContext &,
+    const FixedNeighborPolicy & = {},
     Vector initial_beta = {});
 FixedNeighborComponentResult SolveFixedNeighborComponent(
-    const PreparedComponent &,VectorRef initial_b,const EvaluationContext &,const FixedNeighborSearchPolicy &,
+    const ComponentProblemView &,VectorRef initial_b,const EvaluationContext &,const FixedNeighborSearchPolicy &,
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
 std::optional<double> LastFixedNeighborObjective(const FixedNeighborSearchResult &);
 std::optional<double> LastFixedNeighborGradient(const FixedNeighborSearchResult &);

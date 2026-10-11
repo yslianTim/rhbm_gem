@@ -253,11 +253,9 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchKeepsOnlyMinimalOutp
     const n::Domain domain=n::ProfileDomain(data.domain,data.layout);
     const auto context=n::ProfileContext(data.context,data.layout,data.domain.rows);
     n::FixedNeighborPolicy quiet_policy; quiet_policy.core_atoms=16; quiet_policy.maximum_sweeps=3;
-    const auto quiet=n::SearchFixedNeighborComponent(*data.input,data.layout,domain,data.y,data.y,
-        initial_eta,context,quiet_policy);
+    const auto quiet=n::SearchFixedNeighborComponent(domain,data.layout,data.y,initial_eta,context,quiet_policy);
     auto diagnostic_policy=quiet_policy; diagnostic_policy.collect_diagnostics=true;
-    const auto diagnostic=n::SearchFixedNeighborComponent(*data.input,data.layout,domain,data.y,data.y,
-        initial_eta,context,diagnostic_policy);
+    const auto diagnostic=n::SearchFixedNeighborComponent(domain,data.layout,data.y,initial_eta,context,diagnostic_policy);
 
     EXPECT_TRUE(quiet.blocks.empty());
     EXPECT_TRUE(quiet.sweeps.empty());

@@ -62,44 +62,39 @@ ComponentPartition Partition(const Domain & domain,const Identities & ids)
     }
     return out;
 }
-PreparedComponent PrepareComponent(const JointParameterLayout & parent_layout,const ComponentView & view)
+ComponentProblemView MakeComponentProblemView(const JointParameterLayout & parent_layout,const ComponentView & view)
 {
     const auto parent=view.domain.atoms.Snapshot();
-    auto input=std::make_shared<JointProblemInput>();
-    std::vector<Eigen::Index> row_to_local(parent->observations.size(),-1);
-    input->atom_ids.reserve(parent_layout.full_atoms.size());
-    input->support.resize(parent_layout.full_atoms.size());
-    PreparedComponent out;
-    out.input=input; out.parent_layout=parent_layout; out.view=view;
+    ComponentProblemView out; out.parent_row_count=static_cast<Eigen::Index>(view.rows.size());
+    Indices view_to_local_rows(static_cast<std::size_t>(view.domain.rows),-1);
+    Indices local_to_view_atoms;
     out.local_to_parent_atoms.reserve(parent_layout.full_atoms.size());
     out.local_to_parent_rows.reserve(parent_layout.informative_rows.size());
-    out.parent_to_local_atoms.assign(parent->atom_ids.size(),-1);
-    out.parent_to_local_rows.assign(parent->observations.size(),-1);
+    local_to_view_atoms.reserve(parent_layout.full_atoms.size());
     for(std::size_t k=0;k<parent_layout.informative_rows.size();++k)
     {
         const auto row=parent_layout.informative_rows[k];
-        row_to_local.at(row)=static_cast<Eigen::Index>(k);
-        input->row_ids.push_back(parent->row_ids.at(row));
-        input->observations.push_back(parent->observations.at(row));
+        const auto component_row=view.LocalRow(static_cast<Eigen::Index>(row));
+        if(component_row<0) throw std::invalid_argument("Component row is outside its view.");
+        view_to_local_rows.at(static_cast<std::size_t>(component_row))=static_cast<Eigen::Index>(k);
         out.local_to_parent_rows.push_back(static_cast<Eigen::Index>(row));
-        out.parent_to_local_rows.at(row)=static_cast<Eigen::Index>(k);
         out.local_layout.informative_rows.push_back(k);
     }
     for(std::size_t k=0;k<parent_layout.full_atoms.size();++k)
     {
         const auto atom=parent_layout.full_atoms[k];
-        input->atom_ids.push_back(parent->atom_ids.at(atom));
+        const auto component_atom=view.LocalAtom(static_cast<Eigen::Index>(atom));
+        if(component_atom<0) throw std::invalid_argument("Component atom is outside its view.");
         out.local_to_parent_atoms.push_back(static_cast<Eigen::Index>(atom));
-        out.parent_to_local_atoms.at(atom)=static_cast<Eigen::Index>(k);
+        local_to_view_atoms.push_back(component_atom);
         out.local_layout.full_atoms.push_back(k);
-        for(const auto & support:parent->support.at(atom))
-        {
-            const auto row=row_to_local.at(support.row);
-            if(row>=0) input->support[k].push_back({static_cast<std::size_t>(row),support.squared_distance});
-        }
     }
-    out.domain=Domain(input);
-    out.atom_ids=Identities(input->atom_ids); out.row_ids=Identities(input->row_ids);
+    const std::shared_ptr<const Indices> row_mapping=std::make_shared<Indices>(std::move(view_to_local_rows));
+    out.domain=view.domain.Select(local_to_view_atoms,static_cast<Eigen::Index>(out.local_layout.informative_rows.size()),row_mapping);
+    const Identities parent_atoms(std::shared_ptr<const std::vector<std::string>>(parent,&parent->atom_ids));
+    const Identities parent_rows(std::shared_ptr<const std::vector<std::string>>(parent,&parent->row_ids));
+    out.atom_ids=parent_atoms.Select(out.local_to_parent_atoms);
+    out.row_ids=parent_rows.Select(out.local_to_parent_rows);
     return out;
 }
 Eigen::VectorXd SelectValues(VectorRef v,const std::vector<Eigen::Index> & indices)
@@ -230,7 +225,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
     const EvaluationContext & parent_context,const FixedNeighborSearchPolicy & production_policy,
     const JointProgressObserver & observer,const JointProgressComponent * progress_component)
 {
-    const auto prepared=PrepareComponent(component_layout,view);
+    const auto prepared=MakeComponentProblemView(component_layout,view);
     return SolveFixedNeighborComponent(prepared,initial_b,parent_context,
         production_policy,observer,progress_component);
 }

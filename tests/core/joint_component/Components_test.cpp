@@ -78,7 +78,7 @@ TEST(JointComponentChecksTest, PartitionIDsSurviveStoragePermutationAndRejectMal
     EXPECT_THROW(p::BuildPartition(p::Domain(1,{{{1,1}}}),{"A"}),std::invalid_argument);
 }
 
-TEST(JointComponentChecksTest, PreparedComponentMappingsRoundTripAcrossComponentsAndHaloLayout)
+TEST(JointComponentChecksTest, ImmutableComponentViewsMapDomainsWithoutCopyingProblemData)
 {
     using rhbm_gem::core::JointProblem;
     using rhbm_gem::core::JointProblemInput;
@@ -95,33 +95,50 @@ TEST(JointComponentChecksTest, PreparedComponentMappingsRoundTripAcrossComponent
         for(const auto & view:data.partition.components)
         {
             const auto layout=component_layout(data.layout,view);
-            const auto prepared=n::PrepareComponent(layout,view);
+            const auto prepared=n::MakeComponentProblemView(layout,view);
             ASSERT_EQ(prepared.local_to_parent_atoms.size(),prepared.local_layout.full_atoms.size());
             ASSERT_EQ(prepared.local_to_parent_rows.size(),prepared.local_layout.informative_rows.size());
+            EXPECT_EQ(prepared.domain.atoms.Storage(),data.input.get());
+            EXPECT_EQ(prepared.domain.atoms.size(),prepared.local_layout.full_atoms.size());
+            EXPECT_EQ(prepared.domain.rows,static_cast<Eigen::Index>(prepared.local_layout.informative_rows.size()));
             for(std::size_t local=0;local<prepared.local_to_parent_atoms.size();++local)
             {
                 const auto parent=prepared.local_to_parent_atoms[local];
-                EXPECT_EQ(prepared.parent_to_local_atoms[static_cast<std::size_t>(parent)],static_cast<Eigen::Index>(local));
+                EXPECT_EQ(prepared.local_layout.full_atoms[local],local);
+                EXPECT_GE(view.LocalAtom(parent),0);
+                EXPECT_EQ(prepared.domain.atoms.ParentAtom(local),static_cast<std::size_t>(parent));
                 EXPECT_EQ(prepared.atom_ids[local],data.input->atom_ids[static_cast<std::size_t>(parent)]);
+                const auto supports=prepared.domain.atoms[local];
+                for(std::size_t k=0;k<supports.size();++k)
+                {
+                    const auto support=supports[k];
+                    const auto parent_row=prepared.local_to_parent_rows.at(static_cast<std::size_t>(support.row));
+                    EXPECT_EQ(supports.ParentRow(k),parent_row);
+                    const auto & source=data.input->support.at(static_cast<std::size_t>(parent));
+                    EXPECT_TRUE(std::any_of(source.begin(),source.end(),[&](const auto & item) {
+                        return item.row==static_cast<std::size_t>(parent_row) && item.squared_distance==support.square;
+                    }));
+                }
             }
             for(std::size_t local=0;local<prepared.local_to_parent_rows.size();++local)
             {
                 const auto parent=prepared.local_to_parent_rows[local];
-                EXPECT_EQ(prepared.parent_to_local_rows[static_cast<std::size_t>(parent)],static_cast<Eigen::Index>(local));
+                EXPECT_EQ(prepared.local_layout.informative_rows[local],local);
+                EXPECT_GE(view.LocalRow(parent),0);
                 EXPECT_EQ(prepared.row_ids[local],data.input->row_ids[static_cast<std::size_t>(parent)]);
             }
             for(const auto atom:view.atoms)
             {
+                const auto found=std::find(prepared.local_to_parent_atoms.begin(),prepared.local_to_parent_atoms.end(),atom);
                 const bool included=std::find(layout.full_atoms.begin(),layout.full_atoms.end(),static_cast<std::size_t>(atom))!=layout.full_atoms.end();
-                EXPECT_EQ(prepared.parent_to_local_atoms[static_cast<std::size_t>(atom)]>=0,included);
+                EXPECT_EQ(found!=prepared.local_to_parent_atoms.end(),included);
             }
             for(const auto row:view.rows)
             {
+                const auto found=std::find(prepared.local_to_parent_rows.begin(),prepared.local_to_parent_rows.end(),row);
                 const bool included=std::find(layout.informative_rows.begin(),layout.informative_rows.end(),static_cast<std::size_t>(row))!=layout.informative_rows.end();
-                EXPECT_EQ(prepared.parent_to_local_rows[static_cast<std::size_t>(row)]>=0,included);
+                EXPECT_EQ(found!=prepared.local_to_parent_rows.end(),included);
             }
-            EXPECT_EQ(prepared.domain.atoms.size(),prepared.input->atom_ids.size());
-            EXPECT_EQ(prepared.domain.rows,static_cast<Eigen::Index>(prepared.input->observations.size()));
         }
     };
 

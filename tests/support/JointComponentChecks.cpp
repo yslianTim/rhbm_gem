@@ -291,7 +291,7 @@ runtime::FixedNeighborComponentResult SolveFixedNeighborComponentForTesting(cons
     rhbm_gem::JointParameterLayout layout;
     layout.full_atoms.assign(view.atoms.begin(),view.atoms.end());
     layout.informative_rows.assign(view.rows.begin(),view.rows.end());
-    const auto prepared=runtime::PrepareComponent(layout,view);
+    const auto prepared=runtime::MakeComponentProblemView(layout,view);
     return runtime::SolveFixedNeighborComponent(prepared,initial_b,parent,{});
 }
 runtime::ComponentResult SolveFixedNeighborComponentForDiagnostics(const ComponentView & view,

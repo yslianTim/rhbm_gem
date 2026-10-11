@@ -4,46 +4,60 @@
 #include <numeric>
 
 namespace rhbm_gem::core::joint_component {
-StructuralTopology::StructuralTopology(const JointProblemInput & input,const JointParameterLayout & layout)
-    :input_(input),informative_rows_(input.observations.size(),false),row_offsets_(input.observations.size()+1),
-     atom_order_(layout.full_atoms),neighbor_marks_(input.atom_ids.size())
+StructuralTopology::StructuralTopology(const Domain & domain,const Identities & identities,
+    const JointParameterLayout & layout)
+    :domain_(domain),identities_(identities),informative_rows_(static_cast<std::size_t>(domain.rows),false),
+     row_offsets_(static_cast<std::size_t>(domain.rows)+1),atom_order_(layout.full_atoms),
+     neighbor_marks_(domain.atoms.size())
 {
+    if(domain.rows<0 || identities.size()!=domain.atoms.size())
+        throw std::invalid_argument("Invalid structural partition view.");
     for(auto row:layout.informative_rows) informative_rows_.at(row)=true;
     std::sort(atom_order_.begin(),atom_order_.end(),[&](auto a,auto b) {
-        return input_.atom_ids.at(a)<input_.atom_ids.at(b);
+        return identities_.at(a)<identities_.at(b);
     });
-    for(auto atom:atom_order_) for(const auto & support:input_.support.at(atom))
-        if(informative_rows_.at(support.row)) ++row_offsets_[support.row+1];
+    for(auto atom:atom_order_) for(const auto & support:domain_.atoms[atom])
+    {
+        const auto row=static_cast<std::size_t>(support.row);
+        if(informative_rows_.at(row)) ++row_offsets_[row+1];
+    }
     std::partial_sum(row_offsets_.begin(),row_offsets_.end(),row_offsets_.begin());
     row_atoms_.resize(row_offsets_.back()); auto cursor=row_offsets_;
-    for(auto atom:atom_order_) for(const auto & support:input_.support.at(atom))
-        if(informative_rows_[support.row]) row_atoms_[cursor[support.row]++]=static_cast<Eigen::Index>(atom);
+    for(auto atom:atom_order_) for(const auto & support:domain_.atoms[atom])
+    {
+        const auto row=static_cast<std::size_t>(support.row);
+        if(informative_rows_[row]) row_atoms_[cursor[row]++]=static_cast<Eigen::Index>(atom);
+    }
 }
 bool StructuralTopology::LessAtom(Eigen::Index a,Eigen::Index b) const
 {
-    return input_.atom_ids.at(static_cast<std::size_t>(a))<input_.atom_ids.at(static_cast<std::size_t>(b));
+    return identities_.at(static_cast<std::size_t>(a))<identities_.at(static_cast<std::size_t>(b));
 }
 Indices StructuralTopology::Neighbors(std::size_t atom)
 {
     Indices out; ++neighbor_generation_;
-    for(const auto & support:input_.support.at(atom)) if(informative_rows_[support.row])
-        for(auto k=row_offsets_[support.row];k<row_offsets_[support.row+1];++k)
+    for(const auto & support:domain_.atoms[atom])
+    {
+        const auto row=static_cast<std::size_t>(support.row);
+        if(!informative_rows_[row]) continue;
+        for(auto k=row_offsets_[row];k<row_offsets_[row+1];++k)
         {
             const auto other=row_atoms_[k]; const auto index=static_cast<std::size_t>(other);
             if(neighbor_marks_[index]!=neighbor_generation_)
             {neighbor_marks_[index]=neighbor_generation_; out.push_back(other);}
         }
+    }
     std::sort(out.begin(),out.end(),[&](auto a,auto b){return LessAtom(a,b);});
     return out;
 }
 StructuralBlockPartition StructuralTopology::BuildCores(std::size_t core_atoms,bool include_metadata)
 {
     if(core_atoms==0) throw std::invalid_argument("Invalid structural partition policy");
-    const auto count=input_.atom_ids.size(); std::vector<bool> assigned(count,false);
+    const auto count=domain_.atoms.size(); std::vector<bool> assigned(count,false);
     StructuralBlockPartition result;
     for(auto seed:atom_order_) if(!assigned[seed])
     {
-        StructuralCore core; core.id=input_.atom_ids[seed];
+        StructuralCore core; core.id=identities_[seed];
         std::deque<Eigen::Index> queue{static_cast<Eigen::Index>(seed)};
         std::vector<bool> queued(count,false); queued[seed]=true;
         while(!queue.empty() && core.atoms.size()<core_atoms)
@@ -67,8 +81,8 @@ StructuralBlockPartition StructuralTopology::BuildCores(std::size_t core_atoms,b
         for(auto atom:core.atoms)
         {
             in_core[static_cast<std::size_t>(atom)]=true;
-            for(const auto & support:input_.support[static_cast<std::size_t>(atom)])
-                if(informative_rows_[support.row]) core.affected_rows.push_back(static_cast<Eigen::Index>(support.row));
+            for(const auto & support:domain_.atoms[static_cast<std::size_t>(atom)])
+                if(informative_rows_[static_cast<std::size_t>(support.row)]) core.affected_rows.push_back(support.row);
         }
         std::sort(core.affected_rows.begin(),core.affected_rows.end());
         core.affected_rows.erase(std::unique(core.affected_rows.begin(),core.affected_rows.end()),core.affected_rows.end());
@@ -81,7 +95,7 @@ StructuralBlockPartition StructuralTopology::BuildCores(std::size_t core_atoms,b
 }
 Indices StructuralTopology::ContextAtoms(const Indices & core_atoms,std::size_t context_hops,std::size_t max_block_atoms)
 {
-    const auto count=input_.atom_ids.size(); std::vector<bool> included(count,false);
+    const auto count=domain_.atoms.size(); std::vector<bool> included(count,false);
     for(auto atom:core_atoms) included.at(static_cast<std::size_t>(atom))=true;
     Indices context,frontier=core_atoms;
     for(std::size_t hop=0;hop<context_hops && !frontier.empty();++hop)
@@ -102,8 +116,16 @@ Indices StructuralTopology::ContextAtoms(const Indices & core_atoms,std::size_t 
 StructuralBlockPartition BuildStructuralBlockPartition(const JointProblemInput & input,const JointParameterLayout & layout,
     std::size_t core_atoms,std::size_t context_hops,std::size_t max_block_atoms)
 {
+    const auto owner=std::shared_ptr<const JointProblemInput>(&input,[](const JointProblemInput *){});
+    const Domain domain(owner);
+    const Identities identities(std::shared_ptr<const std::vector<std::string>>(owner,&input.atom_ids));
+    return BuildStructuralBlockPartition(domain,identities,layout,core_atoms,context_hops,max_block_atoms);
+}
+StructuralBlockPartition BuildStructuralBlockPartition(const Domain & domain,const Identities & identities,
+    const JointParameterLayout & layout,std::size_t core_atoms,std::size_t context_hops,std::size_t max_block_atoms)
+{
     if(core_atoms>max_block_atoms) throw std::invalid_argument("Invalid structural partition policy");
-    StructuralTopology topology(input,layout); auto partition=topology.BuildCores(core_atoms);
+    StructuralTopology topology(domain,identities,layout); auto partition=topology.BuildCores(core_atoms);
     for(auto & core:partition.cores) core.context_atoms=topology.ContextAtoms(core.atoms,context_hops,max_block_atoms);
     return partition;
 }
