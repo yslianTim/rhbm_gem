@@ -112,6 +112,38 @@ TEST(JointObservableProfileTest, ReconstructionAndUnavailableHaloParameters)
     EXPECT_EQ(decoded.assembled_state->nuisance_amplitudes,saved.assembled_state->nuisance_amplitudes);
     EXPECT_EQ(decoded.layout->groups[0].atoms,saved.layout->groups[0].atoms);
 }
+TEST(JointObservableProfileTest, SharedOrchestrationReturnsCertifiedStatesBeforeAssembly)
+{
+    const core::JointProblem problem(Input());
+    const std::vector<double> initial{.65,missing_width,missing_width};
+    std::vector<n::JointProgressEvent> events;
+    const auto batch=n::OrchestrateFixedNeighborComponents(problem,initial,{},
+        [&](const auto & event) {events.push_back(event);},true);
+    ASSERT_EQ(batch.components.size(),1);
+    ASSERT_TRUE(batch.components.front().state);
+    ASSERT_TRUE(batch.components.front().layout);
+    EXPECT_FALSE(batch.single_component_assessment);
+    EXPECT_EQ(events.back().phase,n::JointProgressPhase::ComponentCompleted);
+    EXPECT_TRUE(std::none_of(events.begin(),events.end(),[](const auto & event) {
+        return event.phase==n::JointProgressPhase::AssemblyStarted ||
+            event.phase==n::JointProgressPhase::AssemblyCompleted;
+    }));
+
+    const auto fit=n::FitObservableComponents(problem,initial);
+    ASSERT_TRUE(fit.assembled_state); ASSERT_TRUE(fit.prediction); ASSERT_TRUE(fit.objective);
+    ASSERT_TRUE(fit.components.front().state);
+    EXPECT_EQ(fit.components.front().state->ac,batch.components.front().state->ac);
+    EXPECT_EQ(fit.components.front().state->log_b,batch.components.front().state->log_b);
+    ASSERT_EQ(fit.assembled_state->nuisance_amplitudes.size(),1);
+    EXPECT_NEAR(fit.assembled_state->nuisance_amplitudes.front(),.7,1e-10);
+    n::Vector residual(static_cast<Eigen::Index>(problem.Input().observations.size()));
+    for(std::size_t row=0;row<problem.Input().observations.size();++row)
+    {
+        EXPECT_NEAR(fit.prediction->at(row),problem.Input().observations[row],1e-10);
+        residual(static_cast<Eigen::Index>(row))=fit.prediction->at(row)-problem.Input().observations[row];
+    }
+    EXPECT_NEAR(*fit.objective,.5*residual.squaredNorm()/(fit.observation_scale*fit.observation_scale),1e-15);
+}
 TEST(JointObservableProfileTest, RemainingUnobservedTargetStillFails)
 {
     auto input=Input(); input.support[0]={{23,1}};
