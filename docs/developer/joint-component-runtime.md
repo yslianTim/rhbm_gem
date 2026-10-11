@@ -26,18 +26,15 @@ fails, the component has no usable state and reports the endpoint failure unless
 an earlier search stop reason already applies. Search completion, certification,
 state availability and runtime convergence remain separate outcomes.
 
-The older `AssessProfileSearchForDiagnostics()` helper still checks accepted
-Profile search history for a trusted state; tests use it to exercise that
-diagnostic behavior. It does not select the endpoint for production FixedNeighbor
+`AssessProfileSearchForDiagnostics()` checks accepted Profile search history for
+a trusted state. It does not select the endpoint for production FixedNeighbor
 fitting. Offline audits retain their independent reference solves.
 
 ### Production FixedNeighbor route
 
 The sole production route for `JOINT_COMPONENTS` is `FixedNeighbor`. The
 estimator, workflow API, CLI and Python API do not expose a Joint route
-selector; `--estimator joint-components` is sufficient. `OperatorPcg` and its
-operator/preconditioner/Schwarz implementation, and the former global
-`LegacyCompact` route, are removed from the current tree.
+selector; `--estimator joint-components` is sufficient.
 
 The production FixedNeighbor policy is intentionally small and fixed: disjoint
 mutable cores of 12 atoms, at most 30 forward Gauss-Seidel sweeps, and one
@@ -61,11 +58,8 @@ constrained `SolveLinear()` call, which uses EIGEN SparseQR:
 ```
 
 The full profile derivative drives the LM width update. `AssessProfile()` keeps
-its existing assessment responsibility. This names the current computation;
-it does not add a local route selector or change the numerical contract. Each
-block visit accepts at most one trusted update and replays the candidate
-against the global state. There is no hidden operator fallback or size-based
-routing.
+its assessment responsibility. Each block visit accepts at most one trusted
+update and replays the candidate against the global state.
 
 The production search returns an internal `FixedNeighborComponentResult` with
 the search state and independent endpoint certification. Shared orchestration
@@ -73,11 +67,11 @@ turns that into the certified public `JointComponentResult`, records component
 cost/status and progress, then releases the larger search result. The batch
 retains those public component results, aggregate costs and only the optional
 single-component assessment that can be reused by exact-match FullABC assembly;
-it does not hold a second vector of solver results. The route then uses the
-existing `JointFitResult`, post-processing and persistence path. It does not change
-the observation domain, contributor/halo closure, parameterization, rank
-semantics, parent scale, objective or `RuntimeConvergence()` semantics. Its
-progress event adds sweep, block, accepted-local-update, KKT, width-gradient,
+it does not hold a second vector of solver results. The route returns through
+`JointFitResult` and the standard post-processing and persistence path. It uses
+the defined observation domain, contributor/halo closure, parameterization, rank
+semantics, parent scale, objective and `RuntimeConvergence()` semantics. Its
+progress event includes sweep, block, accepted-local-update, KKT, width-gradient,
 eta-change and objective fields.
 
 The production FixedNeighbor implementation uses `MakeComponentProblemView()`
@@ -107,22 +101,11 @@ target evidence once after implementation and assembly finish. Public
 `FitJointComponents()` and `EstimateJointComponents()` keep their existing
 contracts and do not expose assembly details to callers.
 
-The repeated workspace-residency study is closed as Route C: chain/cube at
-256/512/1024, one warmup plus three measurements per case, passed its
-numerical gate but found no material persistent-workspace wall-time benefit.
-Persistent RSS was higher in all six cases, exact numeric-factor opportunities
-were only `1.17%`–`15.00%` and occurred only at initial-profile evaluation, and
-the production policy therefore keeps fresh numeric factorization with no
-extra factor cache or candidate-replay optimization. The dominant measured
-cost is now local derivative preparation plus reduction, accounting for `83.7%`
-of chain-1024 search and `81.5%` of cube-1024 search.
-
 Production search retains only aggregate counters, final sweep state and the
 endpoint assessment needed by the component route. Detailed block records, local
 trial trajectories, reverse order and local certification remain opt-in
 experiment/test diagnostics. The preparation and mapping counters are reported
-by the matched search-only qualification driver; they are implementation
-attribution, not new convergence criteria.
+as implementation attribution; they are not convergence criteria.
 
 The whole-problem `RunFixedNeighborDiagnostic()` facade is compiled into test
 support and called only by component tests and the fixed-neighbor experiment.
@@ -136,10 +119,9 @@ with assembly only when observations, structural support, identities, state,
 scale and linear/rank policy match exactly. Offline audit directions do not
 affect runtime assessment. Constant rows or different contexts require separate
 assessments. This is scoped result reuse, not a persistent cache. When the
-separate Profile-search diagnostic helper selects an accepted historical trial,
-it assesses that trial at its saved coefficients and widths. Assessment reuse
-does not change search decisions or counts; assessment work
-and timing are separate from search work. Sparse factorization details can
+separate Profile-search diagnostic helper selects an earlier accepted trial,
+it assesses that trial at its saved coefficients and widths. Assessment work and
+timing are reported separately from search work. Sparse factorization details can
 change floating-point trajectories within the fixed endpoint contract.
 
 ### Selection-domain contract
@@ -181,7 +163,8 @@ Otherwise invalid widths/initialization exceptions block only their structural
 component, which retains mappings, stop reason and unavailable evidence; other
 components continue. `initialization.valid` describes all widths, not whether
 any component can run. Missing component states still prevent global assembly.
-No Peeling result, truth, historical fit or certificate initializes the estimator.
+Peeling results, truth, prior fits and certificates do not initialize the
+estimator.
 `costs.construction_seconds` measures the Map/Model builder; initialization timing
 includes the model copy and setup. Direct frozen-input fitting has zero builder
 and initializer costs.
@@ -191,8 +174,8 @@ component, assembled-state and result objectives are
 `0.5 * ||prediction - observations||² / ObservationScale()²`. Components use the
 same parent scale `max(1, ||parent observations||₂)`; constant rows contribute
 once to the global objective.
-Width gradients are with respect to log-B. Internal and historical raw objectives
-retain half-RSS semantics. This public objective correction changes returned
+Width gradients are with respect to log-B. Internal raw objectives retain
+half-RSS semantics. This public objective correction changes returned
 scale, not the optimizer or its acceptance thresholds.
 
 Component `state` is the actual last trusted state used by assembly. Search
@@ -221,9 +204,7 @@ checks combine in this order: any `Failed`, any missing/`Unavailable`, any
 Search completion is independent: a budget/untrusted-trial stop can leave a
 trusted endpoint whose runtime checks pass; its stop reason is still reported.
 
-Historical fixture outcomes and their remaining limitations are summarized in
-the [canonical evidence index](joint-component-evidence.md). Runtime convergence
-does not imply an offline regular certificate.
+Runtime convergence does not imply an offline regular certificate.
 
 ## Immutable storage and component views
 
@@ -270,15 +251,12 @@ FixedNeighbor
 These stages preserve the original parent rank context and full residual norm.
 They do not cut component edges or use a size-based route. The
 [sparse-backend guide](joint-component-sparse-backend.md) documents the fixed
-EIGEN implementation; the former profile-operator material is historical
-evidence, not a current Joint route.
+EIGEN implementation.
 
-The EIGEN/SPQR comparison was a one-time backend qualification, not a current
-runtime selector. Permanent tests assert the single EIGEN path and the existing
-numerical contract: trusted-state availability and required runtime checks must
-agree, missing states remain explicit, and the production KKT, width-gradient,
-eta-confirmation, replay, endpoint-certification and `RuntimeConvergence`
-thresholds remain unchanged.
+Permanent tests check the EIGEN path and numerical contract: trusted-state
+availability and required runtime checks must agree, missing states remain
+explicit, and the production KKT, width-gradient, eta-confirmation, replay,
+endpoint-certification and `RuntimeConvergence` thresholds remain unchanged.
 
 ## Routine regression
 
@@ -342,11 +320,8 @@ invalid widths are rejected. Parent normalization, actual-state preservation,
 local weak-direction evidence and independently reprofiled consistency remain
 required; a local certificate cannot promote a missing or failed component.
 
-Historical research results and retrieval provenance are indexed in the
-[canonical evidence document](joint-component-evidence.md). Current
-sparse-factorization behavior and benchmark commands are documented by the
-sparse-backend and benchmark guides. Profile-operator and SPQR comparison
-material is historical evidence only.
+Current sparse-factorization behavior and benchmark commands are documented by
+the sparse-backend and benchmark guides.
 
 ## Saved production outcomes
 
@@ -377,13 +352,13 @@ describes parameter layouts, nuisance contributions and seed provenance. See the
 [metadata contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schemas-3-4-and-5).
 `JointAnalysisMetadata` contains optional `JointMapNormalization`, input SHA-256
 values, `JointSoftwareProvenance` and optional `JointSolverProvenance`.
-`JointSolverProvenance` records the current FixedNeighbor estimator and, when
-reading an older record, preserves its historical route and local-work fields.
+`JointSolverProvenance` records the current FixedNeighbor estimator and
+preserves solver and local-work fields found in saved records.
 Current writers record the fixed EIGEN sparse backend and the FixedNeighbor policy
 fields; current FixedNeighbor records use `fixed-neighbor-production-v2` with
 intrinsic OneAccepted behavior and the `joint-solver-provenance-v3` contract.
-The historical `joint-solver-provenance-v2` contract remains readable for
-LegacyCompact and OperatorPcg records.
+Saved `joint-solver-provenance-v2` records with LegacyCompact and OperatorPcg
+fields remain readable.
 `CaptureJointAnalysisResult`
 records the current library's version/source/configuration/build identity. The
 decoder and exporter preserve saved identity without recalculation. Direct
@@ -406,10 +381,8 @@ The command's default estimator remains two-stage. Joint LS is opt-in and its
 runtime checks do not establish an offline regular certificate.
 
 Permanent [partial-selection tests](../../tests/core/joint_component/PartialSelection_test.cpp)
-protect the fixed observation domain, nonrecursive halo closure, bridge
-parameterization, unavailable target states, and unchanged numerical policy.
-These are current contracts; historical controls and measured limitations belong
-in the [canonical evidence index](joint-component-evidence.md).
+cover the fixed observation domain, nonrecursive halo closure, bridge
+parameterization, unavailable target states, and the numerical policy.
 
 ## Joint validation tiers
 
