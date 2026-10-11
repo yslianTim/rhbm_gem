@@ -207,22 +207,20 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
     const auto component_count=data.partition.components.size();
     auto component_batch=n::OrchestrateFixedNeighborComponents(problem,initial_b,production_policy,observer,false);
     out.components=std::move(component_batch.components);
-    auto results=std::move(component_batch.fits);
     out.costs.search_seconds+=component_batch.costs.search_seconds;
     out.costs.assessment_seconds+=component_batch.costs.assessment_seconds;
     const auto assembly_start=Clock::now();
     n::NotifyJointAssemblyProgress(observer,n::JointProgressPhase::AssemblyStarted,component_count);
     std::optional<n::EvaluationContext> reuse_context;
     std::optional<n::AssessmentReuse> reuse;
-    if(results.size()==1 && results[0].certification && results[0].certification->passed() &&
-        data.partition.constant_rows.empty())
+    if(component_batch.single_component_assessment)
     {
         const auto & view=data.partition.components[0];
         // A single full component has identity row/atom mappings in this immutable snapshot.
         reuse_context=n::ChildContext(data.context,view,true);
-        reuse.emplace(n::AssessmentReuse{view.domain,data.y,*reuse_context,results[0].certification->assessment});
+        reuse.emplace(n::AssessmentReuse{view.domain,data.y,*reuse_context,*component_batch.single_component_assessment});
     }
-    const auto assembly=n::AssembleComponents(data.domain,data.y,data.partition,data.context,results,reuse ? &*reuse : nullptr);
+    const auto assembly=n::AssembleComponents(data.domain,data.y,data.partition,data.context,out.components,reuse ? &*reuse : nullptr);
     out.search_completed=assembly.completed; out.available_row_mask=assembly.row_mask;
     out.evidence=n::AssessmentEvidence(assembly.assessment,JointEvidenceScope::AssembledGlobal);
     out.ranks=n::AssessmentRanks(assembly.assessment,JointEvidenceScope::AssembledGlobal);

@@ -273,5 +273,5 @@ struct AssemblyResult
     bool profile_evaluated{};
 };
 AssemblyResult AssembleComponents(const Domain &,VectorRef,const ComponentPartition &,const EvaluationContext &,
-    const std::vector<FixedNeighborComponentResult> &,const AssessmentReuse * = nullptr);
+    const std::vector<JointComponentResult> &,const AssessmentReuse * = nullptr);
 }

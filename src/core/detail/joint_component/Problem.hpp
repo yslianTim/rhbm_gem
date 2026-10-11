@@ -3,7 +3,6 @@
 #include "JointProgress.hpp"
 #include "FixedNeighborBlockCoordinate.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
-#include <functional>
 namespace rhbm_gem::core::joint_component {
 JointInitialization InitializeContributors(MapObject &,ModelObject &,const JointProblem &);
 struct ProblemData
@@ -34,13 +33,15 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
 struct FixedNeighborComponentBatch
 {
     std::vector<JointComponentResult> components;
-    std::vector<FixedNeighborComponentResult> fits;
+    // The single-component FullABC path can reuse its certified assessment
+    // during assembly. Other search and certification state is released as
+    // each component finishes.
+    std::optional<Assessment> single_component_assessment;
     JointFitCosts costs;
 };
-using ComponentStateFinalizer=std::function<double(const ComponentView &,JointComponentResult &,const JointParameterLayout &)>;
 FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
     const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy &,
-    const JointProgressObserver &,bool observable_profile,const ComponentStateFinalizer & = {});
+    const JointProgressObserver &,bool observable_profile);
 JointFitResult FitObservableComponents(const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy & = {},
     const JointProgressObserver & = {});
 JointFitResult FitFixedNeighborComponents(const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy &,

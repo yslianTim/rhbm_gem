@@ -70,19 +70,20 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
     if(initial_b.size()!=input.atom_ids.size()) return out;
     Vector prediction=Vector::Zero(data.y.size());
     const auto component_count=data.partition.components.size();
-    const auto finalize_state=[&](const ComponentView &,JointComponentResult & component,const JointParameterLayout & layout)
-    {
-        if(!component.state) return 0.0;
-        const auto started=Clock::now();
-        Reconstruct(input,layout,*component.state,prediction);
-        for(auto row:component.rows) out.available_row_mask[row]=true;
-        return Seconds(started);
-    };
-    auto component_batch=OrchestrateFixedNeighborComponents(problem,initial_b,production_policy,observer,true,finalize_state);
-    out.components=std::move(component_batch.components); out.costs=component_batch.costs;
+    auto component_batch=OrchestrateFixedNeighborComponents(problem,initial_b,production_policy,observer,true);
+    out.components=std::move(component_batch.components);
+    out.costs.search_seconds=component_batch.costs.search_seconds;
+    out.costs.assessment_seconds=component_batch.costs.assessment_seconds;
     out.search_completed=std::all_of(out.components.begin(),out.components.end(),[](const auto & c){return c.search_completed;});
     const auto assembly_started=Clock::now();
     NotifyJointAssemblyProgress(observer,JointProgressPhase::AssemblyStarted,component_count);
+    for(const auto & component:out.components) if(component.state)
+    {
+        const auto started=Clock::now();
+        Reconstruct(input,*component.layout,*component.state,prediction);
+        for(auto row:component.rows) out.available_row_mask[row]=true;
+        out.costs.assembly_seconds+=Seconds(started);
+    }
     if(std::any_of(out.components.begin(),out.components.end(),[](const auto & c){return !c.state;}))
     {
         out.evidence=AssessmentEvidence(Assessment{},JointEvidenceScope::AssembledGlobal);

@@ -143,12 +143,12 @@ std::vector<JointCheck> AnalyticNuisanceEvidence(JointEvidenceScope scope)
 FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
     const JointProblem & problem,const std::vector<double> & initial_b,
     const FixedNeighborSearchPolicy & production_policy,const JointProgressObserver & observer,
-    bool observable_profile,const ComponentStateFinalizer & finalize_state)
+    bool observable_profile)
 {
     const auto & data=JointProblemAccess::Get(problem);
     FixedNeighborComponentBatch out;
     const auto component_count=data.partition.components.size();
-    out.components.reserve(component_count); out.fits.reserve(component_count);
+    out.components.reserve(component_count);
     const VectorMap widths(initial_b.data(),static_cast<Eigen::Index>(initial_b.size()));
     for(std::size_t component_index=0;component_index<component_count;++component_index)
     {
@@ -206,17 +206,18 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             Assessment missing; missing.failure=component.stop_reason;
             component.evidence=AssessmentEvidence(missing,JointEvidenceScope::ComponentLocal);
         }
-        const double assembly_seconds=finalize_state ? finalize_state(view,component,layout) : 0;
         const double elapsed=Seconds(component_start);
         out.costs.search_seconds+=fit.search.search_seconds;
-        out.costs.assembly_seconds+=assembly_seconds;
-        out.costs.assessment_seconds+=elapsed-fit.search.search_seconds-assembly_seconds;
+        out.costs.assessment_seconds+=elapsed-fit.search.search_seconds;
         if(progress_component)
             NotifyJointProgress(observer,JointProgressPhase::ComponentCompleted,*progress_component,
                 component.profile_evaluations,data.context.profile_budget,component.accepted_updates,
                 data.context.update_budget,elapsed,component.stop_reason,component.state.has_value(),
                 accepted_objective,accepted_gradient_inf_norm);
-        out.components.push_back(std::move(component)); out.fits.push_back(std::move(fit));
+        if(!observable_profile && component_count==1 && data.partition.constant_rows.empty() &&
+            fit.certification && fit.certification->passed())
+            out.single_component_assessment=std::move(fit.certification->assessment);
+        out.components.push_back(std::move(component));
     }
     return out;
 }
@@ -318,24 +319,27 @@ ProfileSearchDiagnosticResult AssessProfileSearchForDiagnostics(const Domain & d
     out.search_success=out.trusted_state.has_value() && !out.search.stopped; return out;
 }
 AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const ComponentPartition & partition,
-    const EvaluationContext & context,const std::vector<FixedNeighborComponentResult> & fits,const AssessmentReuse * reuse)
+    const EvaluationContext & context,const std::vector<JointComponentResult> & components,const AssessmentReuse * reuse)
 {
     ResourcePhase phase("assembly");
-    if(fits.size()!=partition.components.size()) throw std::invalid_argument("Missing component result.");
+    if(components.size()!=partition.components.size()) throw std::invalid_argument("Missing component result.");
     AssemblyResult out; out.available=true; out.row_mask.assign(static_cast<std::size_t>(domain.rows),false);
     out.eta=Vector::Constant(static_cast<Eigen::Index>(domain.atoms.size()),unavailable);
     out.beta=Vector::Constant(2*out.eta.size(),unavailable);
     for(auto r:partition.constant_rows) out.row_mask[static_cast<std::size_t>(r)]=true;
-    for(std::size_t k=0;k<fits.size();++k)
+    for(std::size_t k=0;k<components.size();++k)
     {
-        const auto & fit=fits[k]; const auto & view=partition.components[k]; out.completed &= fit.succeeded;
-        if(!fit.certification || !fit.certification->passed()) {out.available=false; continue;}
-        const auto & state=fit.certification->assessment.primary;
+        const auto & component=components[k]; const auto & view=partition.components[k];
+        out.completed &= component.search_completed;
+        if(!component.state) {out.available=false; continue;}
+        const auto & state=*component.state;
+        if(state.ac.size()!=2*view.atoms.size() || state.log_b.size()!=view.atoms.size())
+            throw std::invalid_argument("Invalid certified component state.");
         for(std::size_t a=0;a<view.atoms.size();++a)
         {
-            out.eta(view.atoms[a])=state.eta(static_cast<Eigen::Index>(a));
-            out.beta(2*view.atoms[a])=state.beta(static_cast<Eigen::Index>(2*a));
-            out.beta(2*view.atoms[a]+1)=state.beta(static_cast<Eigen::Index>(2*a+1));
+            out.eta(view.atoms[a])=state.log_b[a];
+            out.beta(2*view.atoms[a])=state.ac[2*a];
+            out.beta(2*view.atoms[a]+1)=state.ac[2*a+1];
         }
         for(auto r:view.rows) out.row_mask[static_cast<std::size_t>(r)]=true;
     }
