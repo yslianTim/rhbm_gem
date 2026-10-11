@@ -1,14 +1,11 @@
 #include "support/JointFixedNeighborDiagnostic.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <limits>
 
 namespace rhbm_gem::core::joint_component {
 namespace {
-using Clock=std::chrono::steady_clock;
-double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
 Vector Select(VectorRef values,const Indices & indices)
 {
     Vector out(static_cast<Eigen::Index>(indices.size()));
