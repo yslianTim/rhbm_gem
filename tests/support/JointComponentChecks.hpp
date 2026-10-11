@@ -14,7 +14,9 @@ Evaluation ComponentEvaluation(const Evaluation &, const ComponentView &);
 Differential DifferentiatePartitioned(const Evaluation &, const ComponentPartition &, const EvaluationContext &);
 boost::json::object SameState(const Domain &, const Eigen::VectorXd &, const Eigen::VectorXd & eta,
     const Eigen::VectorXd & beta, const ComponentPartition &, const EvaluationContext &);
-runtime::ComponentResult SolveFixedNeighborComponentForTesting(const ComponentView &,
+runtime::FixedNeighborComponentResult SolveFixedNeighborComponentForTesting(const ComponentView &,
+    const Eigen::VectorXd & parent_initial_b, const EvaluationContext &);
+runtime::ComponentResult SolveFixedNeighborComponentForDiagnostics(const ComponentView &,
     const Eigen::VectorXd & parent_initial_b, const EvaluationContext &);
 boost::json::object FitComponent(const ComponentView &, const Eigen::VectorXd & parent_initial_b,
     const EvaluationContext &);

@@ -114,19 +114,19 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
         }
         else if(valid && !layout.informative_rows.empty())
         {
-            const ComponentResult result=SolveFixedNeighborComponentView(view,layout,widths,
+            const FixedNeighborComponentResult result=SolveFixedNeighborComponentView(view,layout,widths,
                 data.context,production_policy,observer,progress_component ? &*progress_component : nullptr);
-            accepted_objective=result.search.accepted_objective;
-            accepted_gradient_inf_norm=result.search.accepted_gradient_inf_norm;
-            component.search_completed=result.search_success; component.stop_reason=result.search.stop_reason;
-            component.profile_evaluations=result.search.evaluations; component.reference_evaluations=result.search.references;
-            component.accepted_updates=result.search.accepted; component.native_status=result.search.lm_status;
-            out.costs.search_seconds+=result.search.seconds; out.costs.search_reference_seconds+=result.search.reference_seconds;
-            if(result.trusted_state)
+            accepted_objective=LastFixedNeighborObjective(result.search);
+            accepted_gradient_inf_norm=LastFixedNeighborGradient(result.search);
+            component.search_completed=result.succeeded; component.stop_reason=result.stop_reason;
+            component.profile_evaluations=static_cast<int>(result.search.total_profile_evaluations);
+            component.accepted_updates=static_cast<int>(result.search.total_accepted_local_updates);
+            out.costs.search_seconds+=result.search.search_seconds;
+            if(result.search.endpoint_certified)
             {
-                component.state=State(*result.trusted_state,data.context.scale);
-                component.evidence=AssessmentEvidence(*result.trusted_assessment,JointEvidenceScope::ComponentLocal);
-                component.ranks=AssessmentRanks(*result.trusted_assessment,JointEvidenceScope::ComponentLocal);
+                component.state=State(result.search.assessment.primary,data.context.scale);
+                component.evidence=AssessmentEvidence(result.search.assessment,JointEvidenceScope::ComponentLocal);
+                component.ranks=AssessmentRanks(result.search.assessment,JointEvidenceScope::ComponentLocal);
             }
         }
         else component.stop_reason=valid ? "unobserved-full-parameters" : "invalid-initial-widths";

@@ -1,6 +1,7 @@
 #include "SimulationBuildInfo.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/FittingWorkset.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
@@ -205,7 +206,7 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
     }
     auto search_context=data.context;
     const n::Vector b=Eigen::Map<const n::Vector>(initial_b.data(),static_cast<Eigen::Index>(initial_b.size()));
-    std::vector<n::ComponentResult> results;
+    std::vector<n::FixedNeighborComponentResult> results;
     const auto component_count=data.partition.components.size();
     for(std::size_t component_index=0;component_index<component_count;++component_index)
     {
@@ -219,7 +220,7 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
             n::NotifyJointProgress(observer,n::JointProgressPhase::ComponentStarted,*progress_component,
                 0,search_context.profile_budget,0,search_context.update_budget);
         }
-        n::ComponentResult result;
+        n::FixedNeighborComponentResult result;
         const bool valid=std::all_of(view.atoms.begin(),view.atoms.end(),[&](auto a) {
             return std::isfinite(initial_b[static_cast<std::size_t>(a)]) && initial_b[static_cast<std::size_t>(a)]>0;
         });
@@ -231,34 +232,33 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
             result=n::SolveFixedNeighborComponentView(view,component_layout,b,
                 search_context,production_policy,observer,progress_component ? &*progress_component : nullptr);
         }
-        else {result.search.stopped=true; result.search.stop_reason="invalid-initial-widths";}
+        else result.stop_reason="invalid-initial-widths";
 
-        JointComponentResult component; component.id=view.id; component.stop_reason=result.search.stop_reason;
+        JointComponentResult component; component.id=view.id; component.stop_reason=result.stop_reason;
         for(auto a:view.atoms) component.atoms.push_back(static_cast<std::size_t>(a));
         for(auto row:view.rows) component.rows.push_back(static_cast<std::size_t>(row));
-        component.search_completed=result.search_success; component.native_status=result.search.lm_status;
-        component.profile_evaluations=result.search.evaluations; component.reference_evaluations=result.search.references;
-        component.accepted_updates=result.search.accepted;
-        if(result.trusted_state)
+        component.search_completed=result.succeeded;
+        component.profile_evaluations=static_cast<int>(result.search.total_profile_evaluations);
+        component.accepted_updates=static_cast<int>(result.search.total_accepted_local_updates);
+        if(result.search.endpoint_certified)
         {
-            component.state=State(*result.trusted_state,data.context.scale);
-            component.evidence=n::AssessmentEvidence(*result.trusted_assessment,JointEvidenceScope::ComponentLocal);
-            component.ranks=n::AssessmentRanks(*result.trusted_assessment,JointEvidenceScope::ComponentLocal);
+            component.state=State(result.search.assessment.primary,data.context.scale);
+            component.evidence=n::AssessmentEvidence(result.search.assessment,JointEvidenceScope::ComponentLocal);
+            component.ranks=n::AssessmentRanks(result.search.assessment,JointEvidenceScope::ComponentLocal);
         }
         else
         {
             n::Assessment missing;
-            missing.failure=result.search.stop_reason;
+            missing.failure=result.stop_reason;
             component.evidence=n::AssessmentEvidence(missing,JointEvidenceScope::ComponentLocal);
         }
-        out.costs.search_seconds+=result.search.seconds;
-        out.costs.search_reference_seconds+=result.search.reference_seconds;
-        out.costs.assessment_seconds+=Seconds(component_start)-result.search.seconds;
+        out.costs.search_seconds+=result.search.search_seconds;
+        out.costs.assessment_seconds+=Seconds(component_start)-result.search.search_seconds;
         if(progress_component)
             n::NotifyJointProgress(observer,n::JointProgressPhase::ComponentCompleted,*progress_component,
                 component.profile_evaluations,search_context.profile_budget,component.accepted_updates,
                 search_context.update_budget,Seconds(component_start),component.stop_reason,component.state.has_value(),
-                result.search.accepted_objective,result.search.accepted_gradient_inf_norm);
+                n::LastFixedNeighborObjective(result.search),n::LastFixedNeighborGradient(result.search));
         out.components.push_back(std::move(component)); results.push_back(std::move(result));
     }
     const auto assembly_start=Clock::now();

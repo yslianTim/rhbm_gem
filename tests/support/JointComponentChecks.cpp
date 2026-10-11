@@ -285,7 +285,7 @@ j::object SameState(const Domain & domain,const Vector & y,const Vector & eta,co
     out["profile_solves"]=solves; out["spectra"]=spectra; out["passed"]=passed;
     out["full_equivalence"]=passed && out.at("full_equivalence").as_bool(); return out;
 }
-runtime::ComponentResult SolveFixedNeighborComponentForTesting(const ComponentView & view,
+runtime::FixedNeighborComponentResult SolveFixedNeighborComponentForTesting(const ComponentView & view,
     const Vector & initial_b,const EvaluationContext & parent)
 {
     rhbm_gem::JointParameterLayout layout;
@@ -294,10 +294,39 @@ runtime::ComponentResult SolveFixedNeighborComponentForTesting(const ComponentVi
     const auto prepared=runtime::PrepareComponent(layout,view);
     return runtime::SolveFixedNeighborComponent(prepared,initial_b,parent,{});
 }
+runtime::ComponentResult SolveFixedNeighborComponentForDiagnostics(const ComponentView & view,
+    const Vector & initial_b,const EvaluationContext & parent)
+{
+    const auto fixed=SolveFixedNeighborComponentForTesting(view,initial_b,parent);
+    runtime::ComponentResult out;
+    const auto & result=fixed.search;
+    out.search.initial.eta.resize(static_cast<Eigen::Index>(view.atoms.size()));
+    out.search.initial.beta=Vector::Zero(2*static_cast<Eigen::Index>(view.atoms.size()));
+    for(std::size_t k=0;k<view.atoms.size();++k)
+        out.search.initial.eta(static_cast<Eigen::Index>(k))=std::log(initial_b(view.atoms[k]));
+    out.search.initial.valid=true;
+    out.search.eta=result.state.eta;
+    out.search.stopped=!result.search_converged || !result.endpoint_certified;
+    out.search.stop_reason=fixed.stop_reason;
+    out.search.evaluations=static_cast<int>(result.total_profile_evaluations);
+    out.search.seconds=result.search_seconds;
+    out.search.accepted=static_cast<int>(result.total_accepted_local_updates);
+    out.search.accepted_objective=runtime::LastFixedNeighborObjective(result);
+    out.search.accepted_gradient_inf_norm=runtime::LastFixedNeighborGradient(result);
+    out.assessment=result.assessment;
+    if(result.endpoint_certified)
+    {
+        out.endpoint_trust=result.endpoint_trust;
+        out.trusted_state=result.assessment.primary;
+        out.trusted_assessment=result.assessment;
+    }
+    out.search_success=fixed.succeeded;
+    return out;
+}
 j::object FitComponent(const ComponentView & view,const Vector & initial_b,const EvaluationContext & parent)
 {
     const auto context=ComponentContext(parent,view,true); const Vector start=Select(initial_b,view.atoms);
-    const auto result=SolveFixedNeighborComponentForTesting(view,initial_b,parent);
+    const auto result=SolveFixedNeighborComponentForDiagnostics(view,initial_b,parent);
     auto fit=runtime_json::Search(result.search,context,view.domain.rows);
     auto assessment=runtime_json::Assessment(result.trusted_assessment ? *result.trusted_assessment : result.assessment);
     for(auto & field:assessment) fit[field.key()]=std::move(field.value());
@@ -324,19 +353,21 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
     const EvaluationContext & context,const j::array & fits)
 {
     const auto start=std::chrono::steady_clock::now();
-    std::vector<runtime::ComponentResult> children; int evaluations{},references{},updates{}; j::array failed;
+    std::vector<runtime::FixedNeighborComponentResult> children; int evaluations{},references{},updates{}; j::array failed;
     for(const auto & view:partition.components)
     {
         const auto found=std::find_if(fits.begin(),fits.end(),[&](const auto & f){return f.at("component_id").as_string()==view.id;});
         if(found==fits.end()) throw std::invalid_argument("Missing component scientific record.");
         const auto & fit=*found; evaluations+=j::value_to<int>(fit.at("profile_evaluations"));
         references+=j::value_to<int>(fit.at("search_reference_evaluations")); updates+=j::value_to<int>(fit.at("accepted_updates"));
-        runtime::ComponentResult child; child.search_success=fit.at("search_success").as_bool();
-        if(!child.search_success) failed.push_back(j::object{{"id",view.id},{"reason",fit.at("stop_reason")}});
+        runtime::FixedNeighborComponentResult child; child.succeeded=fit.at("search_success").as_bool();
+        child.stop_reason=j::value_to<std::string>(fit.at("stop_reason"));
+        if(!child.succeeded) failed.push_back(j::object{{"id",view.id},{"reason",fit.at("stop_reason")}});
         if(fit.at("usable_state").as_bool())
         {
-            runtime::Endpoint state; state.eta=Parse(fit.at("last_trusted_state").at("eta"));
-            state.beta=Parse(fit.at("last_trusted_state").at("beta")); child.trusted_state=std::move(state);
+            child.search.endpoint_certified=true;
+            child.search.assessment.primary.eta=Parse(fit.at("last_trusted_state").at("eta"));
+            child.search.assessment.primary.beta=Parse(fit.at("last_trusted_state").at("beta"));
         }
         children.push_back(std::move(child));
     }

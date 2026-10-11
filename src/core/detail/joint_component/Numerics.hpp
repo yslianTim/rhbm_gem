@@ -259,6 +259,7 @@ struct ComponentResult
     std::optional<TrustEvidence> endpoint_trust;
     bool search_success{};
 };
+struct FixedNeighborComponentResult;
 ComponentResult AssessComponentSearch(const Domain &,VectorRef,const EvaluationContext &,SearchResult,
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
 struct AssemblyResult
@@ -272,5 +273,5 @@ struct AssemblyResult
     bool profile_evaluated{};
 };
 AssemblyResult AssembleComponents(const Domain &,VectorRef,const ComponentPartition &,const EvaluationContext &,
-    const std::vector<ComponentResult> &,const AssessmentReuse * = nullptr);
+    const std::vector<FixedNeighborComponentResult> &,const AssessmentReuse * = nullptr);
 }

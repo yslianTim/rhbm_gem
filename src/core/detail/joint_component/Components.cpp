@@ -123,7 +123,7 @@ EvaluationContext ChildContext(const EvaluationContext & parent,const ComponentV
     }
     return c;
 }
-ComponentResult SolveFixedNeighborComponentView(
+FixedNeighborComponentResult SolveFixedNeighborComponentView(
     const ComponentView & view,const JointParameterLayout & component_layout,const Vector & initial_b,
     const EvaluationContext & parent_context,const FixedNeighborSearchPolicy & production_policy,
     const JointProgressObserver & observer,const JointProgressComponent * progress_component)
@@ -221,7 +221,7 @@ ComponentResult AssessComponentSearch(const Domain & domain,VectorRef y,const Ev
     out.search_success=out.trusted_state.has_value() && !out.search.stopped; return out;
 }
 AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const ComponentPartition & partition,
-    const EvaluationContext & context,const std::vector<ComponentResult> & fits,const AssessmentReuse * reuse)
+    const EvaluationContext & context,const std::vector<FixedNeighborComponentResult> & fits,const AssessmentReuse * reuse)
 {
     ResourcePhase phase("assembly");
     if(fits.size()!=partition.components.size()) throw std::invalid_argument("Missing component result.");
@@ -231,9 +231,9 @@ AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const Compon
     for(auto r:partition.constant_rows) out.row_mask[static_cast<std::size_t>(r)]=true;
     for(std::size_t k=0;k<fits.size();++k)
     {
-        const auto & fit=fits[k]; const auto & view=partition.components[k]; out.completed &= fit.search_success;
-        if(!fit.trusted_state) {out.available=false; continue;}
-        const auto & state=*fit.trusted_state;
+        const auto & fit=fits[k]; const auto & view=partition.components[k]; out.completed &= fit.succeeded;
+        if(!fit.search.endpoint_certified) {out.available=false; continue;}
+        const auto & state=fit.search.assessment.primary;
         for(std::size_t a=0;a<view.atoms.size();++a)
         {
             out.eta(view.atoms[a])=state.eta(static_cast<Eigen::Index>(a));

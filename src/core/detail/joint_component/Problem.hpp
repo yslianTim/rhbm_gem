@@ -26,7 +26,7 @@ struct PreparedComponent
     Identities atom_ids,row_ids;
 };
 PreparedComponent PrepareComponent(const JointParameterLayout &,const ComponentView &);
-ComponentResult SolveFixedNeighborComponentView(
+FixedNeighborComponentResult SolveFixedNeighborComponentView(
     const ComponentView &,const JointParameterLayout &,const Vector &,const EvaluationContext &,
     const FixedNeighborSearchPolicy &,const JointProgressObserver & = {},
     const JointProgressComponent * = nullptr);

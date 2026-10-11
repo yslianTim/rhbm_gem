@@ -487,7 +487,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     return out;
 }
 
-namespace {
 std::optional<double> LastFixedNeighborObjective(const FixedNeighborSearchResult & result)
 {
     if(result.final_sweep) return result.final_sweep->objective_after;
@@ -499,26 +498,24 @@ std::optional<double> LastFixedNeighborGradient(const FixedNeighborSearchResult 
     if(result.final_sweep) return result.final_sweep->global_width_gradient_inf_norm;
     return std::nullopt;
 }
-}
 
-ComponentResult SolveFixedNeighborComponent(
+FixedNeighborComponentResult SolveFixedNeighborComponent(
     const PreparedComponent & prepared,VectorRef initial_b,const EvaluationContext & parent_context,
     const FixedNeighborSearchPolicy & production_policy,const JointProgressObserver & observer,
     const JointProgressComponent * progress_component)
 {
-    ComponentResult out;
+    FixedNeighborComponentResult out;
     const auto & component_layout=prepared.parent_layout; const auto & view=prepared.view;
     if(component_layout.full_atoms.empty() || component_layout.informative_rows.empty())
     {
-        out.search.stop_reason=component_layout.full_atoms.empty() ? "analytic-nuisance-only" : "unobserved-full-parameters";
-        out.search.stopped=true;
+        out.stop_reason=component_layout.full_atoms.empty() ? "analytic-nuisance-only" : "unobserved-full-parameters";
         return out;
     }
     for(const auto atom:component_layout.full_atoms)
         if(atom>=static_cast<std::size_t>(initial_b.size()) || !std::isfinite(initial_b(static_cast<Eigen::Index>(atom))) ||
             !(initial_b(static_cast<Eigen::Index>(atom))>0))
         {
-            out.search.stop_reason="invalid-initial-widths"; out.search.stopped=true; return out;
+            out.stop_reason="invalid-initial-widths"; return out;
         }
 
     const auto & local_input=prepared.input; const auto & local_layout=prepared.local_layout;
@@ -561,35 +558,17 @@ ComponentResult SolveFixedNeighborComponent(
             observer(event);
         };
     }
-    const auto result=SearchFixedNeighborComponent(*local_input,local_layout,local_domain,
+    out.search=SearchFixedNeighborComponent(*local_input,local_layout,local_domain,
         local_observations,local_y,initial_eta,context,policy);
-    out.search.initial.eta=initial_eta; out.search.initial.beta=Vector::Zero(2*atom_count);
-    out.search.initial.valid=true; out.search.initial.certificate.evaluated=true;
-    out.search.eta=result.state.eta; out.search.stopped=!result.search_converged;
-    out.search.stop_reason=result.reason; out.search.lm_status=0;
-    out.search.accepted_objective=LastFixedNeighborObjective(result);
-    out.search.accepted_gradient_inf_norm=LastFixedNeighborGradient(result);
-    out.search.evaluations=static_cast<int>(result.total_profile_evaluations);
-    out.search.seconds=result.search_seconds;
-    out.search.accepted=static_cast<int>(result.total_accepted_local_updates);
-    out.assessment=result.assessment;
-    if(result.search_converged && !result.endpoint_certified)
-    {
-        out.search.stop_reason="endpoint-certification-failed";
-        out.search.stopped=true;
-    }
-    if(result.endpoint_certified)
-    {
-        out.endpoint_trust=result.endpoint_trust;
-        out.trusted_state=result.assessment.primary;
-        out.trusted_assessment=result.assessment;
-    }
-    out.search_success=result.search_converged && result.endpoint_certified;
+    out.succeeded=out.search.search_converged && out.search.endpoint_certified;
+    out.stop_reason=out.search.search_converged && !out.search.endpoint_certified ?
+        "endpoint-certification-failed" : out.search.reason;
     if(progress_component)
         NotifyJointProgress(observer,JointProgressPhase::CertificationStarted,*progress_component,
-            out.search.evaluations,parent_context.profile_budget,out.search.accepted,parent_context.update_budget,
-            out.search.seconds,out.search.stop_reason,out.trusted_state.has_value(),
-            out.search.accepted_objective,out.search.accepted_gradient_inf_norm);
+            static_cast<int>(out.search.total_profile_evaluations),parent_context.profile_budget,
+            static_cast<int>(out.search.total_accepted_local_updates),parent_context.update_budget,
+            out.search.search_seconds,out.stop_reason,out.search.endpoint_certified,
+            LastFixedNeighborObjective(out.search),LastFixedNeighborGradient(out.search));
     return out;
 }
 

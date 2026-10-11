@@ -121,14 +121,23 @@ struct FixedNeighborSearchResult
     TrustEvidence endpoint_trust;
 };
 
+struct FixedNeighborComponentResult
+{
+    FixedNeighborSearchResult search;
+    bool succeeded{};
+    std::string stop_reason;
+};
+
 bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_complete_sweep);
 FixedNeighborSearchResult SearchFixedNeighborComponent(
     const JointProblemInput &,const JointParameterLayout &,const Domain &,VectorRef observations,
     VectorRef y,VectorRef initial_eta,const EvaluationContext &,const FixedNeighborPolicy & = {},
     Vector initial_beta = {});
-ComponentResult SolveFixedNeighborComponent(
+FixedNeighborComponentResult SolveFixedNeighborComponent(
     const PreparedComponent &,VectorRef initial_b,const EvaluationContext &,const FixedNeighborSearchPolicy &,
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
+std::optional<double> LastFixedNeighborObjective(const FixedNeighborSearchResult &);
+std::optional<double> LastFixedNeighborGradient(const FixedNeighborSearchResult &);
 FixedNeighborResult SearchFixedNeighbor(const JointProblem &,VectorRef initial_eta,
     const FixedNeighborPolicy & = {},Vector initial_beta = {});
 }

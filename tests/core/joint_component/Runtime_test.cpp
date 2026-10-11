@@ -6,6 +6,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "core/command/detail/MapSimulation.hpp"
 #include "support/JointComponentChecks.hpp"
@@ -177,12 +178,12 @@ TEST(JointComponentRuntimeTest, AssemblyPreservesSuppliedCoefficientsInsteadOfRe
     const core::JointProblem problem(Snapshot());
     const auto & data=core::JointProblemAccess::Get(problem);
     const auto initial=n::Vector::Constant(2,.55);
-    std::vector<n::ComponentResult> components;
+    std::vector<n::FixedNeighborComponentResult> components;
     for(const auto & view:data.partition.components)
         components.push_back(p::SolveFixedNeighborComponentForTesting(view,initial,data.context));
-    ASSERT_TRUE(components[0].trusted_state && components[1].trusted_state);
-    components[0].trusted_state->beta(0)+=.1;
-    const double actual=components[0].trusted_state->beta(0);
+    ASSERT_TRUE(components[0].search.endpoint_certified && components[1].search.endpoint_certified);
+    components[0].search.assessment.primary.beta(0)+=.1;
+    const double actual=components[0].search.assessment.primary.beta(0);
     const auto assembled=n::AssembleComponents(data.domain,data.y,data.partition,data.context,components);
     ASSERT_TRUE(assembled.available);
     EXPECT_DOUBLE_EQ(assembled.beta(0),actual);
@@ -423,10 +424,10 @@ TEST(JointComponentRuntimeTest, ReusedAssemblyMatchesFreshAssessmentAndRejectsCh
     input.row_ids.resize(40); input.observations.resize(40);
     const core::JointProblem problem(input); const auto & data=core::JointProblemAccess::Get(problem);
     auto context=n::ChildContext(data.context,data.partition.components[0],true);
-    std::vector<n::ComponentResult> fits{p::SolveFixedNeighborComponentForTesting(
+    std::vector<n::FixedNeighborComponentResult> fits{p::SolveFixedNeighborComponentForTesting(
         data.partition.components[0],n::Vector::Constant(1,.55),data.context)};
-    ASSERT_TRUE(fits[0].trusted_assessment);
-    const n::AssessmentReuse reuse{data.domain,data.y,context,*fits[0].trusted_assessment};
+    ASSERT_TRUE(fits[0].search.endpoint_certified);
+    const n::AssessmentReuse reuse{data.domain,data.y,context,fits[0].search.assessment};
     const auto check=[&](const n::Domain & domain,const n::Vector & y,const n::EvaluationContext & policy,int assessments) {
         n::AssessmentWorkForTesting()={};
         const auto assembled=n::AssembleComponents(domain,y,data.partition,policy,fits,&reuse);
@@ -442,7 +443,7 @@ TEST(JointComponentRuntimeTest, ReusedAssemblyMatchesFreshAssessmentAndRejectsCh
     policy=data.context; policy.audit.directions=n::Matrix::Ones(1,3); check(data.domain,data.y,policy,0);
     n::Vector y=data.y; y(0)+=.01; check(data.domain,y,data.context,1);
     auto support=data.domain.CopySupport(); support[0][1].square+=.001; n::Domain domain(data.domain.rows,std::move(support)); check(domain,data.y,data.context,1);
-    fits[0].trusted_state->beta(0)+=.1; check(data.domain,data.y,data.context,1);
+    fits[0].search.assessment.primary.beta(0)+=.1; check(data.domain,data.y,data.context,1);
 }
 
 TEST(JointComponentRuntimeTest, ActualAssessmentFollowsFallbackAndLocalDirections)
