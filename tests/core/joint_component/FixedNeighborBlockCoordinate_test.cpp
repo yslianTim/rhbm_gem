@@ -15,6 +15,7 @@
 #include <iostream>
 #include <limits>
 #include <numeric>
+#include <sstream>
 #include <utility>
 #include <vector>
 
@@ -811,6 +812,44 @@ TEST(JointFixedNeighborBlockCoordinateTest, SameEtaRawPrimaryAndReferenceDiagnos
     EXPECT_TRUE(std::isfinite(difference(beta,primary.beta)));
     EXPECT_TRUE(std::isfinite(difference(primary.beta,reference.beta)));
     EXPECT_TRUE(std::isfinite(difference(beta,reference.beta)));
+    ASSERT_TRUE(raw.certificate.available && reference.certificate.available);
+    ASSERT_TRUE(raw_trust.reference.has_value());
+    ASSERT_TRUE(raw_assessment.design && raw_assessment.widths && raw_assessment.jacobian);
+    EXPECT_EQ(raw.certificate.feasible,reference.certificate.feasible);
+    EXPECT_LE(raw.certificate.projected_kkt,1e-10);
+    EXPECT_LE(reference.certificate.projected_kkt,1e-10);
+    EXPECT_LE(raw.gradient.lpNorm<Eigen::Infinity>(),1e-12);
+    EXPECT_LE(reference.gradient.lpNorm<Eigen::Infinity>(),1e-12);
+    EXPECT_LE(raw_trust.coefficient_difference,1e-10);
+    EXPECT_LE(raw_trust.kkt_difference,1e-13);
+    EXPECT_LE(raw_trust.prediction_difference,2e-12+2e-13*(raw.x*raw.beta).cwiseAbs().maxCoeff());
+    EXPECT_LE(raw_trust.gradient_difference,1e-13+2e-9*raw.gradient.lpNorm<Eigen::Infinity>());
+    EXPECT_EQ(raw_assessment.design->rank,raw.x.cols());
+    EXPECT_EQ(raw_assessment.widths->rank,eta.size());
+    EXPECT_TRUE(raw_assessment.inner);
+    EXPECT_TRUE(raw_assessment.local);
+    EXPECT_TRUE(raw_assessment.identified);
+    EXPECT_TRUE(raw_assessment.gradient);
+    EXPECT_TRUE(raw_trust.passed);
+    const auto number=[](double value) {
+        std::ostringstream out; out<<std::setprecision(17)<<value; return out.str();
+    };
+    RecordProperty("legacy_primary_ac_kkt",number(raw.certificate.projected_kkt));
+    RecordProperty("legacy_primary_width_gradient",number(raw.gradient.lpNorm<Eigen::Infinity>()));
+    RecordProperty("legacy_primary_feasibility",raw.certificate.feasible ? "true" : "false");
+    RecordProperty("legacy_reference_ac_kkt",number(reference.certificate.projected_kkt));
+    RecordProperty("legacy_reference_width_gradient",number(reference.gradient.lpNorm<Eigen::Infinity>()));
+    RecordProperty("legacy_reference_coefficient_difference",number(raw_trust.coefficient_difference));
+    RecordProperty("legacy_independent_prediction_difference",number(raw_trust.prediction_difference));
+    RecordProperty("legacy_independent_kkt_difference",number(raw_trust.kkt_difference));
+    RecordProperty("legacy_independent_gradient_difference",number(raw_trust.gradient_difference));
+    RecordProperty("legacy_design_rank",std::to_string(raw_assessment.design->rank));
+    RecordProperty("legacy_projected_width_rank",std::to_string(raw_assessment.widths->rank));
+    RecordProperty("legacy_local_correction",number(raw_assessment.correction.lpNorm<Eigen::Infinity>()));
+    RecordProperty("legacy_numerical_identifiability",raw_assessment.identified ? "passed" : "failed");
+    RecordProperty("legacy_endpoint_trust",raw_trust.passed ? "passed" : "failed");
+    RecordProperty("legacy_runtime_convergence",raw_assessment.identified && raw_assessment.inner &&
+        raw_assessment.local && raw_assessment.gradient && raw_trust.passed ? "passed" : "failed");
     for(const auto * assessment:{&raw_assessment,&primary_assessment,&reference_assessment})
     {
         EXPECT_TRUE(assessment->primary.valid);
