@@ -2,6 +2,7 @@
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <Eigen/Core>
 #include <algorithm>
+#include <limits>
 #include <numeric>
 #include <span>
 #include <stdexcept>
@@ -11,6 +12,41 @@ using Vector=Eigen::VectorXd;
 using VectorRef=Eigen::Ref<const Vector>;
 using VectorMap=Eigen::Map<const Vector>;
 using Indices=std::vector<Eigen::Index>;
+inline bool SafeAdd(std::size_t a,std::size_t b,std::size_t & out)
+{if(b>std::numeric_limits<std::size_t>::max()-a) return false; out=a+b; return true;}
+inline bool SafeMultiply(std::size_t a,std::size_t b,std::size_t & out)
+{if(a && b>std::numeric_limits<std::size_t>::max()/a) return false; out=a*b; return true;}
+struct CompactRowMapping
+{
+    Indices parent_rows,local_rows;
+    static std::shared_ptr<const CompactRowMapping> FromParentRows(const Indices & rows)
+    {
+        auto mapping=std::make_shared<CompactRowMapping>();
+        std::vector<std::pair<Eigen::Index,Eigen::Index>> pairs; pairs.reserve(rows.size());
+        for(std::size_t k=0;k<rows.size();++k) pairs.emplace_back(rows[k],static_cast<Eigen::Index>(k));
+        std::sort(pairs.begin(),pairs.end(),[](const auto & a,const auto & b){return a.first<b.first;});
+        for(std::size_t k=0;k<pairs.size();++k)
+        {
+            if(k && pairs[k-1].first==pairs[k].first) throw std::invalid_argument("Duplicate row mapping key.");
+            mapping->parent_rows.push_back(pairs[k].first); mapping->local_rows.push_back(pairs[k].second);
+        }
+        return mapping;
+    }
+    Eigen::Index Find(Eigen::Index row) const
+    {
+        const auto found=std::lower_bound(parent_rows.begin(),parent_rows.end(),row);
+        return found==parent_rows.end() || *found!=row ? -1 : local_rows[static_cast<std::size_t>(found-parent_rows.begin())];
+    }
+    std::size_t StorageBytes() const
+    {
+        std::size_t parent{},local{},total{};
+        if(!SafeMultiply(parent_rows.capacity(),sizeof(Eigen::Index),parent) ||
+            !SafeMultiply(local_rows.capacity(),sizeof(Eigen::Index),local) || !SafeAdd(parent,local,total))
+            return std::numeric_limits<std::size_t>::max();
+        return total;
+    }
+};
+struct LocalSupportIndex {std::size_t support{}; Eigen::Index row{};};
 
 // A context may outlive its problem handle. The map's deleter retains its owner.
 inline std::shared_ptr<const VectorMap> Observe(std::shared_ptr<const JointProblemInput> input)
@@ -56,41 +92,43 @@ class DomainAtoms
     std::shared_ptr<const JointProblemInput> input;
     std::shared_ptr<const DomainAtoms> parent;
     Indices selected;
-    std::shared_ptr<const Indices> row_to_local;
-    std::shared_ptr<const std::vector<Indices>> retained;
+    std::shared_ptr<const CompactRowMapping> row_to_local;
+    std::shared_ptr<const std::vector<std::vector<LocalSupportIndex>>> local_supports;
     std::size_t RootAtom(std::size_t a) const {return parent ? parent->RootAtom(static_cast<std::size_t>(selected.at(a))) : a;}
     Eigen::Index LocalRow(Eigen::Index row) const
     {
         if(!parent) return row;
         const auto previous=parent->LocalRow(row);
-        return previous<0 ? -1 : row_to_local->at(static_cast<std::size_t>(previous));
+        return previous<0 ? -1 : row_to_local->Find(previous);
     }
 public:
     explicit DomainAtoms(std::shared_ptr<const JointProblemInput> snapshot):input(std::move(snapshot)) {}
-    DomainAtoms Select(const Indices & atoms,std::shared_ptr<const Indices> rows) const
+    DomainAtoms Select(const Indices & atoms,std::shared_ptr<const CompactRowMapping> rows) const
     {
         DomainAtoms out(input); out.parent=std::make_shared<const DomainAtoms>(*this); out.selected=atoms; out.row_to_local=std::move(rows);
-        auto indices=std::make_shared<std::vector<Indices>>(atoms.size()); bool filtered=false;
+        auto indices=std::make_shared<std::vector<std::vector<LocalSupportIndex>>>(atoms.size());
         for(std::size_t a=0;a<atoms.size();++a)
         {
             const auto & support=input->support.at(out.RootAtom(a));
             for(std::size_t k=0;k<support.size();++k)
-                if(out.LocalRow(static_cast<Eigen::Index>(support[k].row))>=0) (*indices)[a].push_back(static_cast<Eigen::Index>(k));
-                else filtered=true;
+            {
+                const auto local=out.LocalRow(static_cast<Eigen::Index>(support[k].row));
+                if(local>=0) (*indices)[a].push_back({k,local});
+            }
         }
-        if(filtered) out.retained=std::move(indices);
+        out.local_supports=std::move(indices);
         return out;
     }
     std::size_t size() const {return parent ? selected.size() : input->support.size();}
     struct Rows
     {
         const DomainAtoms * owner; std::span<const JointSupport> entries;
-        const Indices * retained{};
-        std::size_t size() const {return retained ? retained->size() : entries.size();} bool empty() const {return size()==0;}
+        const std::vector<LocalSupportIndex> * local{};
+        std::size_t size() const {return local ? local->size() : entries.size();} bool empty() const {return size()==0;}
         Support operator[](std::size_t i) const
-        {const auto & s=entries[retained ? static_cast<std::size_t>(retained->at(i)) : i]; return {owner->LocalRow(static_cast<Eigen::Index>(s.row)),s.squared_distance};}
+        {const auto & s=entries[local ? local->at(i).support : i]; return {local ? local->at(i).row : owner->LocalRow(static_cast<Eigen::Index>(s.row)),s.squared_distance};}
         Eigen::Index ParentRow(std::size_t i) const
-        {return static_cast<Eigen::Index>(entries[retained ? static_cast<std::size_t>(retained->at(i)) : i].row);}
+        {return static_cast<Eigen::Index>(entries[local ? local->at(i).support : i].row);}
         struct Iterator
         {
             const Rows * rows; std::size_t index;
@@ -100,7 +138,7 @@ public:
         };
         Iterator begin() const {return {this,0};} Iterator end() const {return {this,size()};}
     };
-    Rows operator[](std::size_t a) const {return {this,input->support.at(RootAtom(a)),retained ? &retained->at(a) : nullptr};}
+    Rows operator[](std::size_t a) const {return {this,input->support.at(RootAtom(a)),local_supports ? &local_supports->at(a) : nullptr};}
     struct Iterator
     {
         const DomainAtoms * owner; std::size_t index;
@@ -112,6 +150,26 @@ public:
     std::shared_ptr<const JointProblemInput> Snapshot() const {return input;}
     std::size_t ParentAtom(std::size_t a) const {return RootAtom(a);}
     const JointProblemInput * Storage() const {return input.get();}
+    std::size_t LocalSupportIndexEntries() const
+    {
+        std::size_t count{};
+        if(local_supports) for(const auto & atom:*local_supports)
+            if(!SafeAdd(count,atom.capacity(),count)) return std::numeric_limits<std::size_t>::max();
+        return count;
+    }
+    std::size_t LocalSupportIndexBytes() const
+    {
+        std::size_t bytes{};
+        if(local_supports && !SafeMultiply(local_supports->capacity(),sizeof(std::vector<LocalSupportIndex>),bytes))
+            return std::numeric_limits<std::size_t>::max();
+        if(local_supports) for(const auto & atom:*local_supports)
+        {
+            std::size_t item{};
+            if(!SafeMultiply(atom.capacity(),sizeof(LocalSupportIndex),item) || !SafeAdd(bytes,item,bytes))
+                return std::numeric_limits<std::size_t>::max();
+        }
+        return bytes;
+    }
 };
 struct Domain
 {
@@ -124,7 +182,7 @@ struct Domain
             input->support[a].push_back({static_cast<std::size_t>(s.row),s.square});
         return input;
     }()) {rows=count;}
-    Domain Select(const Indices & selected,Eigen::Index count,std::shared_ptr<const Indices> mapping) const
+    Domain Select(const Indices & selected,Eigen::Index count,std::shared_ptr<const CompactRowMapping> mapping) const
     {auto out=*this; out.rows=count; out.atoms=atoms.Select(selected,std::move(mapping)); return out;}
     std::vector<std::vector<Support>> CopySupport() const
     {

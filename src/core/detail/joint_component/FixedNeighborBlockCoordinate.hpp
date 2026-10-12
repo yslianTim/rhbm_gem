@@ -1,6 +1,7 @@
 #pragma once
 #include "Numerics.hpp"
 #include "FixedNeighborPolicy.hpp"
+#include "ResourceWork.hpp"
 #include <functional>
 
 namespace rhbm_gem::core::joint_component {
@@ -74,7 +75,7 @@ struct PreparedFixedNeighborBlock
 {
     std::size_t block{};
     Indices core_atoms,affected_rows,profile_atoms,profile_rows;
-    std::shared_ptr<const Indices> row_mapping;
+    std::shared_ptr<const CompactRowMapping> row_mapping;
     Domain domain{0,{}};
     EvaluationContext context;
     Eigen::Index local_atoms{};
@@ -111,6 +112,8 @@ struct FixedNeighborSearchResult
     std::size_t first_order_stationarity_sweep{},confirmed_stationarity_sweep{},certification_sweep{};
     std::size_t sweep_count{},total_block_solves{},total_profile_evaluations{},total_accepted_local_updates{},
         block_preparations{},domain_preparations{},mapping_preparations{};
+    std::size_t prepared_mapping_entries{},prepared_mapping_bytes{};
+    MemoryEstimate memory_estimate;
     double search_seconds{};
     FixedNeighborWork work;
     std::optional<FixedNeighborBlockSweep> final_sweep;

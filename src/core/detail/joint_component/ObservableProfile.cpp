@@ -44,8 +44,9 @@ JointParameterLayout BuildParameterLayout(const JointProblemInput & input)
 }
 Domain ProfileDomain(const Domain & domain,const JointParameterLayout & layout)
 {
-    auto mapping=std::make_shared<Indices>(static_cast<std::size_t>(domain.rows),-1);
-    for(std::size_t r=0;r<layout.informative_rows.size();++r) mapping->at(layout.informative_rows[r])=static_cast<Eigen::Index>(r);
+    Indices rows; rows.reserve(layout.informative_rows.size());
+    for(const auto row:layout.informative_rows) rows.push_back(static_cast<Eigen::Index>(row));
+    const auto mapping=CompactRowMapping::FromParentRows(rows);
     return domain.Select(IndicesOf(layout.full_atoms),static_cast<Eigen::Index>(layout.informative_rows.size()),mapping);
 }
 EvaluationContext ProfileContext(const EvaluationContext & parent,const JointParameterLayout & layout,Eigen::Index original_rows)

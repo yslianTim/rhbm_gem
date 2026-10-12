@@ -205,6 +205,28 @@ TEST(JointFixedNeighborBlockCoordinateTest, LocalTrajectoryTelemetryIsOptInAndDo
     EXPECT_TRUE((captured.state.beta.array()==quiet.state.beta.array()).all());
     EXPECT_DOUBLE_EQ(captured.state.objective,quiet.state.objective);
 }
+
+TEST(JointFixedNeighborBlockCoordinateTest, PreparedRowMappingsScaleWithMembershipsRatherThanRowsTimesBlocks)
+{
+    constexpr int atoms=192;
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",atoms));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    n::FixedNeighborPolicy policy; policy.core_atoms=12; policy.maximum_sweeps=0;
+    const n::Vector eta=n::Vector::Constant(atoms,std::log(.55));
+    const auto result=n::RunFixedNeighborDiagnostic(problem,eta,policy);
+    const auto blocks=n::BuildStructuralBlockPartition(*data.input,data.layout,policy.core_atoms);
+    ASSERT_GT(blocks.cores.size(),1u);
+    EXPECT_EQ(result.mapping_preparations,blocks.cores.size());
+    EXPECT_EQ(result.memory_estimate.status,n::MemoryStatus::Pass);
+    ASSERT_GT(result.prepared_mapping_bytes,0u);
+    std::size_t legacy_bytes{};
+    ASSERT_TRUE(n::CheckedMultiplyBytes(static_cast<std::size_t>(data.domain.rows),blocks.cores.size(),legacy_bytes));
+    ASSERT_TRUE(n::CheckedMultiplyBytes(legacy_bytes,sizeof(Eigen::Index),legacy_bytes));
+    EXPECT_LT(result.prepared_mapping_bytes,legacy_bytes);
+    EXPECT_LT(result.prepared_mapping_entries,
+        static_cast<std::size_t>(data.domain.rows)*blocks.cores.size());
+    EXPECT_EQ(result.reason,"block-sweep-budget");
+}
 TEST(JointFixedNeighborBlockCoordinateTest, AggregateWorkTelemetryIsOptInAndDoesNotChangeSearchState)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",32));

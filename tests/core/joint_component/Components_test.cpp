@@ -155,6 +155,49 @@ TEST(JointComponentChecksTest, ImmutableComponentViewsMapDomainsWithoutCopyingPr
     check(JointProblem(std::move(observable)));
 }
 
+TEST(JointComponentChecksTest, NestedCompactRowsPreserveNoncontiguousAndZeroValuedMemberships)
+{
+    using rhbm_gem::core::JointProblem;
+    using rhbm_gem::core::JointProblemInput;
+    namespace n=rhbm_gem::core::joint_component;
+    JointProblemInput input;
+    input.atom_ids={"a","b","c"}; input.row_ids={"r0","r1","r2","r3","r4","r5"};
+    input.observations={1,0,-1,0,2,0};
+    input.support={{{0,0},{4,1}},{{2,0},{4,2}},{{2,3}}};
+    const JointProblem problem(std::move(input));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    ASSERT_EQ(data.partition.components.size(),1u);
+    const auto & view=data.partition.components.front();
+    EXPECT_EQ(view.rows,(std::vector<Eigen::Index>{0,2,4}));
+    rhbm_gem::JointParameterLayout component_layout;
+    for(const auto atom:data.layout.full_atoms) if(view.LocalAtom(static_cast<Eigen::Index>(atom))>=0)
+        component_layout.full_atoms.push_back(atom);
+    for(const auto row:data.layout.informative_rows) if(view.LocalRow(static_cast<Eigen::Index>(row))>=0)
+        component_layout.informative_rows.push_back(row);
+    const auto prepared=n::MakeComponentProblemView(component_layout,view);
+    ASSERT_EQ(prepared.domain.rows,3);
+    ASSERT_EQ(prepared.local_to_parent_rows,(n::Indices{0,2,4}));
+    for(std::size_t atom=0;atom<prepared.domain.atoms.size();++atom)
+    {
+        const auto rows=prepared.domain.atoms[atom];
+        const auto root_atom=prepared.local_to_parent_atoms[atom];
+        const auto & root_support=data.input->support[static_cast<std::size_t>(root_atom)];
+        ASSERT_EQ(rows.size(),root_support.size());
+        for(std::size_t k=0;k<rows.size();++k)
+        {
+            const auto row=rows[k];
+            EXPECT_EQ(rows.ParentRow(k),static_cast<Eigen::Index>(root_support[k].row));
+            EXPECT_EQ(prepared.local_to_parent_rows[static_cast<std::size_t>(row.row)],
+                static_cast<Eigen::Index>(root_support[k].row));
+            EXPECT_DOUBLE_EQ(row.square,root_support[k].squared_distance);
+        }
+    }
+    EXPECT_EQ(prepared.domain.atoms[0][0].row,0);
+    EXPECT_EQ(prepared.domain.atoms[0][1].row,2);
+    EXPECT_EQ(prepared.domain.atoms[1][0].row,1);
+    EXPECT_LT(data.y(2),0);
+}
+
 TEST(JointComponentChecksTest, RegisteredAuditDoesNotShrinkWithAComponent)
 {
     const auto plan=p::RegisteredAudit(168,"heterogeneous-168","first-stage-double");

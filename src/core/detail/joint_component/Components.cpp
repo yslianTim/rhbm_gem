@@ -57,7 +57,7 @@ ComponentPartition Partition(const Domain & domain,const Identities & ids)
         auto & v=out.components[c]; v.mappings=mappings; v.component_index=static_cast<Eigen::Index>(c);
         for(std::size_t r=0;r<v.rows.size();++r) mappings->row_to_local[Index(v.rows[r])]=static_cast<Eigen::Index>(r);
         for(std::size_t a=0;a<v.atoms.size();++a) mappings->atom_to_local[Index(v.atoms[a])]=static_cast<Eigen::Index>(a);
-        const std::shared_ptr<const Indices> rows(mappings,&mappings->row_to_local);
+        const auto rows=CompactRowMapping::FromParentRows(v.rows);
         v.domain=domain.Select(v.atoms,static_cast<Eigen::Index>(v.rows.size()),rows);
     }
     return out;
@@ -66,7 +66,7 @@ ComponentProblemView MakeComponentProblemView(const JointParameterLayout & paren
 {
     const auto parent=view.domain.atoms.Snapshot();
     ComponentProblemView out; out.parent_row_count=static_cast<Eigen::Index>(view.rows.size());
-    Indices view_to_local_rows(static_cast<std::size_t>(view.domain.rows),-1);
+    Indices view_to_local_rows;
     Indices local_to_view_atoms;
     out.local_to_parent_atoms.reserve(parent_layout.full_atoms.size());
     out.local_to_parent_rows.reserve(parent_layout.informative_rows.size());
@@ -76,7 +76,7 @@ ComponentProblemView MakeComponentProblemView(const JointParameterLayout & paren
         const auto row=parent_layout.informative_rows[k];
         const auto component_row=view.LocalRow(static_cast<Eigen::Index>(row));
         if(component_row<0) throw std::invalid_argument("Component row is outside its view.");
-        view_to_local_rows.at(static_cast<std::size_t>(component_row))=static_cast<Eigen::Index>(k);
+        view_to_local_rows.push_back(component_row);
         out.local_to_parent_rows.push_back(static_cast<Eigen::Index>(row));
         out.local_layout.informative_rows.push_back(k);
     }
@@ -89,7 +89,7 @@ ComponentProblemView MakeComponentProblemView(const JointParameterLayout & paren
         local_to_view_atoms.push_back(component_atom);
         out.local_layout.full_atoms.push_back(k);
     }
-    const std::shared_ptr<const Indices> row_mapping=std::make_shared<Indices>(std::move(view_to_local_rows));
+    const auto row_mapping=CompactRowMapping::FromParentRows(view_to_local_rows);
     out.domain=view.domain.Select(local_to_view_atoms,static_cast<Eigen::Index>(out.local_layout.informative_rows.size()),row_mapping);
     const Identities parent_atoms(std::shared_ptr<const std::vector<std::string>>(parent,&parent->atom_ids));
     const Identities parent_rows(std::shared_ptr<const std::vector<std::string>>(parent,&parent->row_ids));
@@ -218,6 +218,12 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             Assessment missing; missing.failure=component.stop_reason;
             component.evidence=AssessmentEvidence(missing,JointEvidenceScope::ComponentLocal);
         }
+        if(fit.search.memory_estimate.status!=MemoryStatus::Pass)
+            component.evidence.push_back({"memory-preflight",JointCheckStatus::Unavailable,JointEvidenceScope::ComponentLocal,
+                static_cast<double>(fit.search.memory_estimate.estimated_peak_bytes),
+                static_cast<double>(fit.search.memory_estimate.budget_bytes),
+                std::string("resource-limit:")+MemoryStageName(fit.search.memory_estimate.stage)+":"+
+                    fit.search.memory_estimate.reason});
         const double elapsed=Seconds(component_start);
         out.costs.search_seconds+=fit.search.search_seconds;
         out.costs.assessment_seconds+=elapsed-fit.search.search_seconds;

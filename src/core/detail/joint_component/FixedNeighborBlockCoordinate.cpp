@@ -36,6 +36,10 @@ Vector Select(VectorRef values,const Indices & indices)
 }
 Indices IndicesOf(const std::vector<std::size_t> & values)
 {return {values.begin(),values.end()};}
+bool AddMemoryBytes(std::size_t & total,std::size_t count,std::size_t width)
+{
+    std::size_t bytes{}; return CheckedMultiplyBytes(count,width,bytes) && CheckedAddBytes(total,bytes,total);
+}
 Vector SelectBeta(VectorRef beta,const std::vector<std::size_t> & atoms)
 {
     Vector out(2*static_cast<Eigen::Index>(atoms.size()));
@@ -134,6 +138,43 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     try {partition=BuildStructuralBlockPartition(domain,context.atom_ids,layout,policy.core_atoms);}
     catch(const std::exception &) {out.reason="block-invalid-partition"; return out;}
     if(partition.cores.empty()) {out.reason="block-invalid-partition"; return out;}
+    MemoryShape memory_shape; memory_shape.component_atoms=domain.atoms.size();
+    memory_shape.component_observations=static_cast<std::size_t>(domain.rows);
+    memory_shape.component_blocks=partition.cores.size(); memory_shape.component_target_columns=context.target_columns;
+    if(!CheckedMultiplyBytes(memory_shape.component_atoms,2,memory_shape.component_free_columns))
+    {out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation; out.memory_estimate.status=MemoryStatus::Overflow;
+        out.memory_estimate.reason="size-overflow"; out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
+    for(std::size_t a=0;a<domain.atoms.size();++a)
+        if(!CheckedAddBytes(memory_shape.component_support_entries,domain.atoms[a].size(),memory_shape.component_support_entries))
+        {out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation; out.memory_estimate.status=MemoryStatus::Overflow;
+            out.memory_estimate.reason="size-overflow"; out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
+    for(const auto & core:partition.cores)
+        if(!CheckedAddBytes(memory_shape.affected_row_entries,core.affected_rows.size(),memory_shape.affected_row_entries) ||
+            !CheckedAddBytes(memory_shape.component_neighbor_entries,core.neighbor_atoms.size(),memory_shape.component_neighbor_entries))
+        {out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation; out.memory_estimate.status=MemoryStatus::Overflow;
+            out.memory_estimate.reason="size-overflow"; out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
+    const auto * input=domain.atoms.Storage();
+    const auto snapshot_bytes=input ? EstimateSnapshotBytes(*input) : std::nullopt;
+    std::size_t resident=snapshot_bytes.value_or(0),root_mappings{},root_entries{};
+    std::size_t structural_entries{};
+    if(!snapshot_bytes || !CheckedAddBytes(input->atom_ids.size(),input->observations.size(),root_entries) ||
+        !AddMemoryBytes(root_mappings,root_entries,
+            4*sizeof(Eigen::Index)) || !CheckedAddBytes(resident,root_mappings,resident) ||
+        !AddMemoryBytes(resident,memory_shape.component_support_entries,sizeof(LocalSupportIndex)) ||
+        !CheckedAddBytes(memory_shape.component_atoms,memory_shape.affected_row_entries,structural_entries) ||
+        !CheckedAddBytes(structural_entries,memory_shape.component_neighbor_entries,structural_entries) ||
+        !AddMemoryBytes(resident,structural_entries,sizeof(Eigen::Index)) ||
+        !AddMemoryBytes(resident,memory_shape.component_blocks,sizeof(StructuralCore)))
+    {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
+        out.memory_estimate.status=MemoryStatus::Overflow; out.memory_estimate.reason="size-overflow";
+        out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
+    memory_shape.resident_bytes=resident;
+    out.memory_estimate=PlanMemory(memory_shape,MemoryStage::FixedNeighborPreparation);
+    if(out.memory_estimate.status!=MemoryStatus::Pass ||
+        out.memory_estimate.estimated_peak_bytes>out.memory_estimate.budget_bytes/2)
+        LogMemoryEstimate(out.memory_estimate);
+    if(out.memory_estimate.status!=MemoryStatus::Pass)
+    {out.reason="resource-limit:fixed-neighbor-preparation:"+out.memory_estimate.reason; return out;}
     auto * const profile_work=policy.collect_telemetry ? &out.work.local_profile_work : nullptr;
     const auto certify_endpoint=[&] {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -170,12 +211,19 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             if(position<0) {out.reason="block-invalid-partition"; return out;}
             prepared.profile_rows.push_back(position);
         }
-        std::vector<Eigen::Index> row_mapping(static_cast<std::size_t>(domain.rows),-1);
-        for(std::size_t k=0;k<prepared.profile_rows.size();++k)
-            row_mapping.at(static_cast<std::size_t>(prepared.profile_rows[k]))=static_cast<Eigen::Index>(k);
-        prepared.row_mapping=std::make_shared<Indices>(std::move(row_mapping));
+        prepared.row_mapping=CompactRowMapping::FromParentRows(prepared.profile_rows);
         prepared.domain=domain.Select(prepared.profile_atoms,
             static_cast<Eigen::Index>(prepared.profile_rows.size()),prepared.row_mapping);
+        std::size_t mapping_entries{},mapping_bytes{};
+        const auto support_entries=prepared.domain.atoms.LocalSupportIndexEntries();
+        const auto support_bytes=prepared.domain.atoms.LocalSupportIndexBytes();
+        if(!CheckedAddBytes(prepared.row_mapping->parent_rows.size(),prepared.row_mapping->local_rows.size(),mapping_entries) ||
+            !CheckedAddBytes(mapping_entries,support_entries,mapping_entries) ||
+            !CheckedAddBytes(prepared.row_mapping->StorageBytes(),support_bytes,mapping_bytes) ||
+            !CheckedAddBytes(out.prepared_mapping_entries,mapping_entries,out.prepared_mapping_entries) ||
+            !CheckedAddBytes(out.prepared_mapping_bytes,mapping_bytes,out.prepared_mapping_bytes))
+        {out.memory_estimate.status=MemoryStatus::Overflow; out.memory_estimate.reason="size-overflow";
+            out.reason="resource-limit:fixed-neighbor-mapping:size-overflow"; return out;}
         prepared.context=context;
         prepared.context.atom_ids=context.atom_ids.Select(prepared.profile_atoms);
         prepared.context.row_ids=context.row_ids.Select(prepared.profile_rows);
@@ -529,6 +577,16 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     auto context=parent_context;
     context.atom_ids=prepared.atom_ids; context.row_ids=prepared.row_ids;
     context.independent_search=true;
+    context.target_columns=0;
+    if(const auto * input=prepared.domain.atoms.Storage(); input && input->selection_domain)
+    {
+        std::size_t targets{};
+        for(const auto atom:prepared.local_to_parent_atoms)
+            targets+=std::binary_search(input->selection_domain->target_indices.begin(),
+                input->selection_domain->target_indices.end(),static_cast<std::size_t>(atom));
+        if(!CheckedMultiplyBytes(targets,3,context.target_columns))
+            context.target_columns=std::numeric_limits<std::size_t>::max();
+    }
     const auto atom_count=static_cast<Eigen::Index>(local_layout.full_atoms.size());
     context.rank={prepared.parent_row_count,2*atom_count,atom_count};
     context.linear.rank_relative=context.rank.Relative(2*atom_count);

@@ -133,9 +133,7 @@ void ComponentLocalBundleRerun(const std::string & bundle_path,const std::string
             snapshot->support.at(static_cast<std::size_t>(view.atoms.at(local_atom))).push_back({
                 static_cast<std::size_t>(view.rows.at(static_cast<std::size_t>(point.row))),point.square});
     const runtime::Domain parent_domain(snapshot);
-    auto row_mapping=std::make_shared<runtime::Indices>(static_cast<std::size_t>(y.size()),-1);
-    for(std::size_t local_row=0;local_row<view.rows.size();++local_row)
-        row_mapping->at(static_cast<std::size_t>(view.rows[local_row]))=static_cast<Eigen::Index>(local_row);
+    const auto row_mapping=runtime::CompactRowMapping::FromParentRows(view.rows);
     view.domain=parent_domain.Select(view.atoms,static_cast<Eigen::Index>(view.rows.size()),row_mapping);
     std::vector<std::string> ids; for(auto atom:view.atoms) ids.push_back(context.atom_ids.at(static_cast<std::size_t>(atom)));
     const auto partition=BuildPartition(view.domain,ids);

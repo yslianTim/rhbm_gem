@@ -112,8 +112,9 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
     case MemoryStage::FixedNeighborPreparation:
         // Each mapping stores sorted parent/local row pairs. The view can also retain
         // one support index per original membership; neither term scales as rows*blocks.
-        ok=AddProduct(temporary,affected,4*sizeof(Eigen::Index)) &&
+        ok=AddProduct(temporary,affected,6*sizeof(Eigen::Index)) &&
             AddProduct(temporary,entries,2*sizeof(Eigen::Index)) &&
+            AddProduct(temporary,atoms,2*sizeof(Eigen::Index)) &&
             AddProduct(temporary,blocks,6*sizeof(std::vector<Eigen::Index>));
         break;
     case MemoryStage::GlobalStateEvaluation:
@@ -181,6 +182,7 @@ std::string FormatMemoryEstimate(const MemoryEstimate & estimate)
        <<" component_atoms="<<s.component_atoms
        <<" component_rows="<<s.component_observations<<" support_entries="<<s.component_support_entries
        <<" prepared_blocks="<<s.component_blocks<<" affected_row_entries="<<s.affected_row_entries
+       <<" neighbor_entries="<<s.component_neighbor_entries
        <<" free_columns="<<s.component_free_columns<<" target_columns="<<s.component_target_columns
        <<" resident="<<Bytes(estimate.resident_bytes)<<" temporary="<<Bytes(estimate.temporary_bytes)
        <<" estimated_peak="<<Bytes(estimate.estimated_peak_bytes)<<" budget="<<Bytes(estimate.budget_bytes)

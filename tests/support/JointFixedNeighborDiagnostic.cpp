@@ -118,6 +118,9 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
     out.block_preparations=search.block_preparations;
     out.domain_preparations=search.domain_preparations;
     out.mapping_preparations=search.mapping_preparations;
+    out.prepared_mapping_entries=search.prepared_mapping_entries;
+    out.prepared_mapping_bytes=search.prepared_mapping_bytes;
+    out.memory_estimate=search.memory_estimate;
     out.work=search.work;
     if(policy.certify_endpoint)
     {
