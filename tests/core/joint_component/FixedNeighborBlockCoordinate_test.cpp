@@ -70,7 +70,7 @@ void CheckSingleBlock(const std::string & topology,int atoms)
     EXPECT_LE(result.sweeps.back().global_width_gradient_inf_norm,1e-12);
     EXPECT_LE(result.sweeps.back().cache_replay_error,2e-12);
     EXPECT_TRUE(result.assessment.primary.valid);
-    EXPECT_TRUE(result.assessment.reference.valid);
+    EXPECT_TRUE(result.assessment.independent_replay.passed);
     EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     EXPECT_TRUE(result.fit.search_completed);
     const auto production=rhbm_gem::core::FitJointComponents(problem,std::vector<double>(static_cast<std::size_t>(atoms),.55));
@@ -325,10 +325,12 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     RecordProperty("estimated_fixed_neighbor_peak_bytes",
         std::to_string(result.global_state_memory_estimate.estimated_peak_bytes));
 }
-TEST(JointFixedNeighborBlockCoordinateTest, DenseReferencePreflightStopsBeforeBasisAndEndpointMatrices)
+TEST(JointFixedNeighborBlockCoordinateTest, EndpointReplayIsReferenceFreeAndRankPreflightRemainsUnavailable)
 {
     constexpr Eigen::Index atoms=37'406;
-    const n::Domain domain(8,std::vector<std::vector<n::Support>>(static_cast<std::size_t>(atoms)));
+    std::vector<std::vector<n::Support>> support(static_cast<std::size_t>(atoms));
+    for(auto & atom:support) atom.push_back({0,.5});
+    const n::Domain domain(8,std::move(support));
     const n::Vector y=n::Vector::Zero(8),eta=n::Vector::Constant(atoms,std::log(.55));
     const auto context=n::CreateContext(y,atoms);
     n::ProfileSearchWork work;
@@ -339,12 +341,19 @@ TEST(JointFixedNeighborBlockCoordinateTest, DenseReferencePreflightStopsBeforeBa
     EXPECT_DOUBLE_EQ(work.total.basis_seconds,0.0);
 
     n::BlockCoordinateState state; state.eta=eta; state.beta=n::Vector::Zero(2*atoms);
+    n::AssessmentWorkForTesting()={};
     const auto certification=n::CertifyFixedNeighborEndpoint(domain,y,state,context);
-    EXPECT_EQ(certification.reference_memory_estimate.stage,n::MemoryStage::ReferenceSolve);
-    EXPECT_EQ(certification.reference_memory_estimate.status,n::MemoryStatus::Reject);
-    EXPECT_EQ(certification.assessment.failure,"resource-limit:reference-solve");
-    EXPECT_EQ(certification.trust.reason,"resource-limit:reference-solve");
-    EXPECT_FALSE(certification.passed());
+    EXPECT_EQ(certification.verification_memory_estimate.stage,n::MemoryStage::EndpointVerification);
+    EXPECT_EQ(certification.verification_memory_estimate.status,n::MemoryStatus::Pass);
+    EXPECT_TRUE(certification.trust.primary_valid);
+    EXPECT_TRUE(certification.passed())<<certification.trust.reason;
+    EXPECT_TRUE(certification.assessment.endpoint_verified);
+    EXPECT_FALSE(certification.assessment.qualified);
+    EXPECT_EQ(certification.assessment.rank_memory_estimate.stage,n::MemoryStage::RankAssessment);
+    EXPECT_EQ(certification.assessment.rank_memory_estimate.status,n::MemoryStatus::Reject);
+    EXPECT_FALSE(certification.assessment.design.has_value());
+    EXPECT_EQ(certification.assessment.primary.x.size(),0);
+    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,1);
 }
 TEST(JointFixedNeighborBlockCoordinateTest, AggregateWorkTelemetryIsOptInAndDoesNotChangeSearchState)
 {

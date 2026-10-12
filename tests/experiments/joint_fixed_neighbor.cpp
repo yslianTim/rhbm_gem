@@ -188,7 +188,7 @@ j::object ProfileWorkJson(const n::ProfileSearchWork &);
 j::object WorkJson(const n::FixedNeighborWork & work)
 {
     return {{"structural_preparation_seconds",Number(work.structural_preparation_seconds)},
-        {"reference_assessment_seconds",Number(work.reference_assessment_seconds)},
+        {"endpoint_verification_seconds",Number(work.endpoint_verification_seconds)},
         {"old_core_seconds",Number(work.old_core_seconds)},
         {"effective_response_seconds",Number(work.effective_response_seconds)},
         {"local_profile_seconds",Number(work.local_search_seconds)},
@@ -432,8 +432,9 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"runtime_convergence",CheckName(neighbor.fit.RuntimeConvergence())},
         {"sweep_telemetry",sweeps},{"block_telemetry",blocks},
         {"search_seconds",neighbor_search_seconds},
-        {"assessment_seconds",Number(neighbor.work.reference_assessment_seconds)},
-        {"reference_assessment_seconds",Number(neighbor.work.reference_assessment_seconds)},
+        {"assessment_seconds",Number(neighbor.work.endpoint_verification_seconds)},
+        {"reference_solve_seconds",0.0},
+        {"endpoint_verification_seconds",Number(neighbor.work.endpoint_verification_seconds)},
         {"prepared_block_count",neighbor.block_preparations},
         {"block_preparations",neighbor.block_preparations},
         {"domain_preparations",neighbor.domain_preparations},

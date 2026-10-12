@@ -163,18 +163,17 @@ JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & s
     if(search.certification)
     {
         const auto & certification=*search.certification;
-        out.reference_status=certification.reference_memory_estimate.status!=MemoryStatus::Pass ?
-            JointCheckStatus::Unavailable : certification.assessment.reference.valid ?
-                JointCheckStatus::Passed : JointCheckStatus::Failed;
+        out.reference_status=JointCheckStatus::NotRun;
         out.rank_assessment_status=certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass ?
             JointCheckStatus::Unavailable : !certification.assessment.widths ?
                 JointCheckStatus::Unavailable : certification.assessment.identified ?
                     JointCheckStatus::Passed : JointCheckStatus::Failed;
-        out.certification_status=certification.passed() ? JointCheckStatus::Passed :
-            certification.trust.reason.starts_with("resource-limit:") ?
+        out.certification_status=certification.passed() && certification.assessment.qualified ? JointCheckStatus::Passed :
+            certification.verification_memory_estimate.status!=MemoryStatus::Pass ||
+                certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass ?
                 JointCheckStatus::Unavailable : JointCheckStatus::Failed;
-        if(certification.reference_memory_estimate.status!=MemoryStatus::Pass)
-            out.resource_limit_reason="resource-limit:reference-solve:"+certification.reference_memory_estimate.reason;
+        if(certification.verification_memory_estimate.status!=MemoryStatus::Pass)
+            out.resource_limit_reason="resource-limit:endpoint-verification:"+certification.verification_memory_estimate.reason;
         else if(certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass)
             out.resource_limit_reason="resource-limit:rank-assessment:"+certification.assessment.rank_memory_estimate.reason;
     }
@@ -249,27 +248,13 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
                 const auto & certification=*fit.search.certification;
                 component.evidence=AssessmentEvidence(certification.assessment,JointEvidenceScope::ComponentLocal);
                 component.ranks=AssessmentRanks(certification.assessment,JointEvidenceScope::ComponentLocal);
-                const bool reference_unavailable=certification.trust.reason.starts_with("resource-limit:reference-solve");
-                component.evidence.push_back({"endpoint-trust",reference_unavailable ? JointCheckStatus::Unavailable :
-                    certification.passed() ? JointCheckStatus::Passed : JointCheckStatus::Failed,
-                    JointEvidenceScope::ComponentLocal,{},{},certification.trust.reason});
-                if(certification.reference_memory_estimate.status!=MemoryStatus::Pass)
-                    component.evidence.push_back({"reference-memory-preflight",JointCheckStatus::Unavailable,
+                if(certification.verification_memory_estimate.status!=MemoryStatus::Pass)
+                    component.evidence.push_back({"endpoint-verification-memory",JointCheckStatus::Unavailable,
                         JointEvidenceScope::ComponentLocal,
-                        static_cast<double>(certification.reference_memory_estimate.estimated_peak_bytes),
-                        static_cast<double>(certification.reference_memory_estimate.budget_bytes),
-                        std::string("resource-limit:reference-solve:")+certification.reference_memory_estimate.reason});
-                const auto add_width_gradient=[&](const char * name,const Endpoint & evaluation) {
-                    const bool available=evaluation.valid && evaluation.gradient.size()>0 && evaluation.gradient.allFinite();
-                    const double value=available ? evaluation.gradient.lpNorm<Eigen::Infinity>() : 0.0;
-                    component.evidence.push_back({name,!available ? JointCheckStatus::Unavailable :
-                        value<=1e-12 ? JointCheckStatus::Passed : JointCheckStatus::Failed,
-                        JointEvidenceScope::ComponentLocal,available ? std::optional<double>(value) : std::nullopt,
-                        1e-12,available ? "" : evaluation.reason});
-                };
-                add_width_gradient("endpoint-primary-width-gradient",certification.assessment.primary);
-                add_width_gradient("endpoint-reference-width-gradient",certification.assessment.reference);
-                if(certification.passed())
+                        static_cast<double>(certification.verification_memory_estimate.estimated_peak_bytes),
+                        static_cast<double>(certification.verification_memory_estimate.budget_bytes),
+                        std::string("resource-limit:endpoint-verification:")+certification.verification_memory_estimate.reason});
+                if(certification.passed() && certification.assessment.qualified)
                     component.state=ComponentState(certification.assessment.primary,data.context.scale);
             }
         }
@@ -295,7 +280,7 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
                 data.context.update_budget,elapsed,component.stop_reason,component.state.has_value(),
                 accepted_objective,accepted_gradient_inf_norm);
         if(!has_observable_groups && component_count==1 && data.partition.constant_rows.empty() &&
-            fit.search.certification && fit.search.certification->passed())
+            fit.search.certification && fit.search.certification->passed() && fit.search.certification->assessment.qualified)
             out.single_component_assessment=std::move(fit.search.certification->assessment);
         out.components.push_back(std::move(component));
     }
@@ -387,9 +372,26 @@ AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const Compon
         }
         for(auto r:view.rows) out.row_mask[static_cast<std::size_t>(r)]=true;
     }
-    if(!out.available) return out;
-    const auto raw=EvaluateState(domain,y,out.eta,out.beta,context);
+    out.mapping_valid=out.available && out.eta.allFinite() && out.beta.allFinite() &&
+        std::all_of(out.row_mask.begin(),out.row_mask.end(),[](bool mapped){return mapped;});
+    if(!out.mapping_valid) {out.available=false; return out;}
+    out.verification_memory_estimate=EndpointVerificationMemoryEstimate(domain,y,context);
+    if(out.verification_memory_estimate.status!=MemoryStatus::Pass)
+    {
+        LogMemoryEstimate(out.verification_memory_estimate);
+        out.assessment.reference_free=true;
+        out.assessment.failure="resource-limit:endpoint-verification:"+out.verification_memory_estimate.reason;
+        out.assessment.verification_memory_estimate=out.verification_memory_estimate;
+        out.assessment.primary.eta=out.eta; out.assessment.primary.reason=out.assessment.failure;
+        out.replay.reason=out.assessment.failure;
+        return out;
+    }
+    if(out.verification_memory_estimate.estimated_peak_bytes>out.verification_memory_estimate.budget_bytes/2)
+        LogMemoryEstimate(out.verification_memory_estimate);
+    const auto raw=EvaluateStateStreaming(domain,y,out.eta,out.beta,context);
     out.raw=raw;
+    out.replay=CheckIndependentReplay(domain,y,raw,context);
+    out.consistency_passed=out.replay.passed;
     bool same=reuse && SameAssessmentPolicy(reuse->context,context) && reuse->domain.rows==domain.rows &&
         reuse->domain.atoms.size()==domain.atoms.size() && reuse->observations.size()==y.size() &&
         (reuse->observations.array()==y.array()).all() && reuse->assessment.primary.eta.size()==out.eta.size() &&
@@ -404,23 +406,14 @@ AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const Compon
     if(same)
     {
         out.assessment=reuse->assessment;
-        // Preserve raw-state metadata; the shared numerical evidence is unchanged.
+        out.assessment.independent_replay=out.replay;
+        out.assessment.endpoint_verified=out.replay.passed && out.replay.primary_width_gradient<=1e-12;
         out.assessment.primary=raw;
     }
     else
-    {
-        const auto reference=EvaluateProfile(domain,y,out.eta,true,&context);
-        out.assessment=AssessEvaluated(domain,y,raw,reference,context,true);
-    }
-    if(raw.valid) {out.prediction=raw.x*out.beta; out.objective=.5*raw.residual.squaredNorm();}
-    if(raw.valid && out.assessment.primary.valid)
-    {
-        const auto profile=EvaluateProfile(domain,y,out.eta,false,&context);
-        out.profile_control=profile; out.profile_evaluated=true;
-        if(!profile.valid) return out;
-        out.profile_difference=((out.beta-profile.beta).array().abs()/(1+out.beta.array().abs().max(profile.beta.array().abs()))).maxCoeff();
-        out.profile_agrees=out.profile_difference<=1e-10;
-    }
+        out.assessment=AssessEvaluated(domain,y,raw,out.replay,context,true);
+    out.assessment.verification_memory_estimate=out.verification_memory_estimate;
+    if(raw.valid) {out.prediction=raw.residual+y; out.objective=raw.certificate.objective;}
     return out;
 }
 

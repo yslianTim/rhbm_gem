@@ -452,8 +452,21 @@ Evaluation EvaluateStateStreaming(const Domain & domain,VectorRef y,const Vector
 }
 TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy)
 {
-    const auto reference=EvaluateProfile(domain,y,e.eta,true,&policy);
-    return CheckTrust(domain,y,e,policy,reference);
+    return CheckTrust(domain,y,e,policy,CheckIndependentReplay(domain,y,e,policy));
+}
+TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation & e,const EvaluationContext &,
+    const IndependentReplayEvidence & replay)
+{
+    TrustEvidence out; out.primary_valid=e.valid; out.independent=replay;
+    out.prediction_passed=replay.prediction_passed && replay.residual_passed && replay.objective_passed;
+    out.gradient_passed=replay.kkt_agrees && replay.gradient_agrees;
+    out.kkt_difference=replay.kkt_difference;
+    out.prediction_difference=replay.prediction_difference;
+    out.gradient_difference=replay.gradient_difference;
+    out.cancellation_ratio=replay.cancellation_ratio;
+    out.passed=replay.passed;
+    out.reason=replay.reason;
+    return out;
 }
 TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy,const Evaluation & reference)
 {
@@ -709,18 +722,35 @@ Assessment AssessProfile(const Domain & domain,VectorRef y,const Vector & eta,co
 {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     AssessmentStageTimerForTesting total_stage("total-assessment",y.size(),eta.size());
+#endif
+    const auto verification_memory=EndpointVerificationMemoryEstimate(domain,y,policy);
+    if(verification_memory.status!=MemoryStatus::Pass)
+    {
+        Evaluation primary; primary.eta=eta;
+        primary.reason="resource-limit:endpoint-verification:"+verification_memory.reason;
+        IndependentReplayEvidence replay; replay.reason=primary.reason;
+        auto assessment=AssessEvaluated(domain,y,primary,replay,policy,supplied_beta!=nullptr);
+        assessment.verification_memory_estimate=verification_memory;
+        return assessment;
+    }
+    if(verification_memory.estimated_peak_bytes>verification_memory.budget_bytes/2)
+        LogMemoryEstimate(verification_memory);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     AssessmentStageTimerForTesting primary_stage("endpoint-primary-evaluation",y.size(),eta.size());
 #endif
-    const auto endpoint=supplied_beta ? EvaluateState(domain,y,eta,*supplied_beta,policy) : EvaluateProfile(domain,y,eta,false,&policy);
+    const auto endpoint=supplied_beta ? EvaluateStateStreaming(domain,y,eta,*supplied_beta,policy) :
+        EvaluateProfile(domain,y,eta,false,&policy);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     primary_stage.Finish();
-    AssessmentStageTimerForTesting reference_stage("reference-evaluation",y.size(),eta.size());
+    AssessmentStageTimerForTesting replay_stage("independent-streaming-replay",y.size(),eta.size());
 #endif
-    const auto reference=EvaluateProfile(domain,y,eta,true,&policy);
+    const auto replay=CheckIndependentReplay(domain,y,endpoint,policy);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    reference_stage.Finish();
+    replay_stage.Finish();
 #endif
-    return AssessEvaluated(domain,y,endpoint,reference,policy,supplied_beta!=nullptr);
+    auto assessment=AssessEvaluated(domain,y,endpoint,replay,policy,supplied_beta!=nullptr);
+    assessment.verification_memory_estimate=verification_memory;
+    return assessment;
 }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 AssessmentWork & AssessmentWorkForTesting() {static thread_local AssessmentWork work; return work;}
@@ -787,7 +817,7 @@ bool SameAssessmentPolicy(const EvaluationContext & a,const EvaluationContext & 
 }
 namespace {
 MemoryEstimate RankAssessmentMemoryEstimate(const Domain & domain,VectorRef,const Evaluation & endpoint,
-    const Evaluation & reference,const EvaluationContext & context)
+    const Evaluation * reference,const EvaluationContext & context,std::size_t resident_override)
 {
     MemoryShape shape; shape.component_atoms=domain.atoms.size(); shape.component_observations=static_cast<std::size_t>(domain.rows);
     shape.component_target_columns=context.target_columns;
@@ -820,47 +850,63 @@ MemoryEstimate RankAssessmentMemoryEstimate(const Domain & domain,VectorRef,cons
         !add_product(resident,shape.component_observations,2*sizeof(Eigen::Index)) ||
         !add_product(resident,shape.component_atoms,2*sizeof(Eigen::Index)) ||
         !add_sparse(endpoint.x) || !add_sparse(endpoint.derivative) ||
-        !add_sparse(reference.x) || !add_sparse(reference.derivative)) return overflow();
-    shape.resident_bytes=resident;
+        (reference && (!add_sparse(reference->x) || !add_sparse(reference->derivative)))) return overflow();
+    shape.resident_bytes=std::max(resident,resident_override);
     return PlanMemory(shape,MemoryStage::RankAssessment);
 }
 }
-Assessment AssessEvaluated(const Domain & domain,VectorRef y,const Evaluation & endpoint,const Evaluation & reference,
-    const EvaluationContext & policy,bool supplied)
+namespace {
+Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluation & endpoint,const Evaluation * reference,
+    const IndependentReplayEvidence * replay,const EvaluationContext & policy,bool supplied,std::size_t resident_override)
 {
     ResourcePhase phase("assessment");
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     ++AssessmentWorkForTesting().assessments;
 #endif
     const auto * context=&policy; const double scale=context->scale; const auto & eta=endpoint.eta; Assessment out;
-    out.primary=endpoint; out.reference=reference;
-    if(supplied && endpoint.valid && !endpoint.certificate.kkt_passed)
+    out.primary=endpoint;
+    out.reference_free=reference==nullptr;
+    if(reference) out.reference=*reference;
+    if(replay) out.independent_replay=*replay;
+    if(supplied && endpoint.valid && !endpoint.certificate.kkt_passed && !replay)
     {out.primary.valid=false; out.primary.reason="assembled-kkt-failed";}
-    if(!out.primary.valid || !reference.valid)
+    if(!out.primary.valid || (reference && !reference->valid) ||
+        (replay && (!replay->available || !replay->valid)))
     {
-        out.failure=!reference.valid && reference.reason.starts_with("resource-limit:reference-solve") ? reference.reason : "inner-solve";
+        out.failure=reference && !reference->valid ? reference->reason : replay && !replay->valid ? replay->reason : "inner-solve";
         return out;
     }
-    const double difference=Difference(endpoint.beta,reference.beta); out.coefficient_difference=difference;
-    out.rank_memory_estimate=RankAssessmentMemoryEstimate(domain,y,endpoint,reference,policy);
+    if(reference) out.coefficient_difference=Difference(endpoint.beta,reference->beta);
+    out.endpoint_verified=replay && replay->passed && replay->primary_kkt_passed && replay->independent_kkt_passed &&
+        replay->primary_width_gradient<=1e-12;
+    out.rank_memory_estimate=RankAssessmentMemoryEstimate(domain,y,endpoint,reference,policy,resident_override);
     if(out.rank_memory_estimate.status!=MemoryStatus::Pass ||
         out.rank_memory_estimate.estimated_peak_bytes>out.rank_memory_estimate.budget_bytes/2)
         LogMemoryEstimate(out.rank_memory_estimate);
     if(out.rank_memory_estimate.status!=MemoryStatus::Pass)
     {out.failure="resource-limit:rank-assessment"; return out;}
+    Evaluation rebuilt;
+    const Evaluation * evaluated=&endpoint;
+    if(endpoint.x.cols()==0 || endpoint.derivative.cols()==0)
+    {
+        rebuilt=EvaluateState(domain,y,endpoint.eta,endpoint.beta,policy);
+        if(!rebuilt.valid) {out.failure=rebuilt.reason; return out;}
+        evaluated=&rebuilt;
+    }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    AssessmentStageTimerForTesting design_stage("design-spectrum",endpoint.x.rows(),endpoint.x.cols());
+    AssessmentStageTimerForTesting design_stage("design-spectrum",evaluated->x.rows(),evaluated->x.cols());
 #endif
-    out.design=DesignSpectrum(endpoint.x,Vector::Ones(y.size()),&policy.rank);
+    out.design=DesignSpectrum(evaluated->x,Vector::Ones(y.size()),&policy.rank);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     design_stage.Finish();
 #endif
-    out.inner=difference<=1e-10 && out.design->rank==endpoint.x.cols();
+    out.inner=reference ? out.coefficient_difference<=1e-10 && out.design->rank==evaluated->x.cols() :
+        replay->primary_kkt_passed && replay->independent_kkt_passed;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    AssessmentStageTimerForTesting prepare_stage("derivative-preparation",endpoint.derivative.rows(),endpoint.derivative.cols());
+    AssessmentStageTimerForTesting prepare_stage("derivative-preparation",evaluated->derivative.rows(),evaluated->derivative.cols());
     ++AssessmentWorkForTesting().compact_attempts;
 #endif
-    const auto prepared=PrepareDerivativeCompact(endpoint,scale,context);
+    const auto prepared=PrepareDerivativeCompact(*evaluated,scale,context);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     prepare_stage.Finish();
     AssessmentStageTimerForTesting reduce_stage("derivative-reduction",prepared.raw.rows(),prepared.raw.cols());
@@ -872,17 +918,17 @@ Assessment AssessEvaluated(const Domain & domain,VectorRef y,const Evaluation & 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         ++AssessmentWorkForTesting().compact_other_fallbacks;
 #endif
-        differential=ReduceDerivative(prepared,endpoint.residual);
+        differential=ReduceDerivative(prepared,evaluated->residual);
     }
     else
     {
-        differential=ReduceDerivativeCompact(prepared,endpoint.residual);
+        differential=ReduceDerivativeCompact(prepared,evaluated->residual);
         if(!differential.valid)
         {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             ++AssessmentWorkForTesting().compact_other_fallbacks;
 #endif
-            differential=ReduceDerivative(prepared,endpoint.residual);
+            differential=ReduceDerivative(prepared,evaluated->residual);
             compact_differential=false;
         }
     }
@@ -949,7 +995,7 @@ Assessment AssessEvaluated(const Domain & domain,VectorRef y,const Evaluation & 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         ++AssessmentWorkForTesting().compact_boundary_fallbacks;
 #endif
-        differential=ReduceDerivative(prepared,endpoint.residual);
+        differential=ReduceDerivative(prepared,evaluated->residual);
         if(!differential.valid) {out.failure=differential.reason; return out;}
         response=-differential.response;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -969,12 +1015,23 @@ Assessment AssessEvaluated(const Domain & domain,VectorRef y,const Evaluation & 
     if(!correction_svd.valid) {out.failure="spectrum-factorization-failed"; return out;}
     const Vector & correction=correction_svd.solution; out.correction=correction;
     out.jacobian=CompactSpectrum(correction_svd,context->rank.rows);
-    out.gradient=endpoint.gradient.lpNorm<Eigen::Infinity>()<=1e-12 && reference.gradient.lpNorm<Eigen::Infinity>()<=1e-12;
+    out.gradient=endpoint.gradient.lpNorm<Eigen::Infinity>()<=1e-12 &&
+        (reference ? reference->gradient.lpNorm<Eigen::Infinity>()<=1e-12 : replay->gradient_agrees);
     out.local=correction.allFinite() && correction.lpNorm<Eigen::Infinity>()<=1e-10;
     out.identified=widths.rank==eta.size() && correction_svd.rank==eta.size();
-    out.failure=!out.inner ? "inner-solve" : !out.identified ? "width-unidentified" :
-        !out.gradient || !out.local ? "b-not-stationary" : "none";
+    const bool design_full_rank=out.design->rank==evaluated->x.cols();
+    out.qualified=out.endpoint_verified && design_full_rank && out.identified && out.gradient && out.local;
+    out.failure=reference && !out.inner ? "inner-solve" : !design_full_rank ? "design-unidentified" :
+        !out.identified ? "width-unidentified" : !out.gradient || !out.local ? "b-not-stationary" :
+        !out.endpoint_verified ? "endpoint-verification-failed" : "none";
     return out;
 }
+}
+Assessment AssessEvaluated(const Domain & domain,VectorRef y,const Evaluation & endpoint,const Evaluation & reference,
+    const EvaluationContext & policy,bool supplied)
+{return AssessEvaluatedImpl(domain,y,endpoint,&reference,nullptr,policy,supplied,0);}
+Assessment AssessEvaluated(const Domain & domain,VectorRef y,const Evaluation & endpoint,
+    const IndependentReplayEvidence & replay,const EvaluationContext & policy,bool supplied,std::size_t resident_override)
+{return AssessEvaluatedImpl(domain,y,endpoint,nullptr,&replay,policy,supplied,resident_override);}
 
 }

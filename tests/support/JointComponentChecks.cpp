@@ -397,16 +397,21 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
         {"certificate",runtime_json::Certificate(assembly.raw.certificate)},{"valid",assembly.raw.valid}};
     out["assembled_state_preserved"]=true;
     out["assembled_rss"]=assembly.raw.valid ? j::value(assembly.raw.certificate.rss) : j::value(nullptr);
-    if(assembly.profile_evaluated)
-    {
-        out["profile_control"]=j::object{{"valid",assembly.profile_control.valid},{"reason",assembly.profile_control.reason},
-            {"certificate",runtime_json::Certificate(assembly.profile_control.certificate)}};
-        out["profile_control_evaluations"]=1;
-        if(assembly.profile_control.valid) out["assembled_profile_difference"]=assembly.profile_difference;
-    }
-    out["assembled_profile_agrees"]=assembly.profile_agrees;
+    out["assembly_mapping_valid"]=assembly.mapping_valid;
+    out["assembled_consistency_passed"]=assembly.consistency_passed;
+    out["independent_prediction_difference"]=runtime_json::Number(assembly.replay.prediction_difference);
+    out["independent_objective_difference"]=runtime_json::Number(assembly.replay.objective_difference);
+    const auto offline_profile=runtime::EvaluateProfile(domain,y,assembly.eta,false,&context);
+    const bool profile_agrees=offline_profile.valid &&
+        ((assembly.beta-offline_profile.beta).array().abs()<=1e-10*(1+assembly.beta.array().abs().max(offline_profile.beta.array().abs()))).all();
+    out["offline_profile_control"]=j::object{{"valid",offline_profile.valid},{"reason",offline_profile.reason},
+        {"certificate",runtime_json::Certificate(offline_profile.certificate)}};
+    out["offline_profile_control_evaluations"]=1;
+    out["assembled_profile_difference"]=offline_profile.valid ?
+        j::value(((assembly.beta-offline_profile.beta).array().abs()/(1+assembly.beta.array().abs().max(offline_profile.beta.array().abs()))).maxCoeff()) : j::value(nullptr);
+    out["assembled_profile_agrees"]=profile_agrees;
     auto evidence=runtime::AssessmentEvidence(assembly.assessment,rhbm_gem::core::JointEvidenceScope::AssembledGlobal);
-    evidence.push_back({"assembled-profile",assembly.profile_agrees ? rhbm_gem::core::JointCheckStatus::Passed : rhbm_gem::core::JointCheckStatus::Failed,
+    evidence.push_back({"assembled-consistency",assembly.consistency_passed ? rhbm_gem::core::JointCheckStatus::Passed : rhbm_gem::core::JointCheckStatus::Failed,
         rhbm_gem::core::JointEvidenceScope::AssembledGlobal,{},{},{}});
     auto convergence=runtime::ConvergenceStatus(evidence,rhbm_gem::core::JointEvidenceScope::AssembledGlobal,true);
     for(const auto & fit:fits) convergence=runtime::MergeConvergenceStatus(convergence,runtime_json::ParseStatus(fit.at("runtime_convergence")));

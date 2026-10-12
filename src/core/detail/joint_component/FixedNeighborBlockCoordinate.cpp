@@ -295,7 +295,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     }
     auto * const profile_work=policy.collect_telemetry ? &out.work.local_profile_work : nullptr;
     const auto certify_endpoint=[&] {
-        const auto assessment_timer=Measure(policy.collect_telemetry,out.work.reference_assessment_seconds);
+        const auto assessment_timer=Measure(policy.collect_telemetry,out.work.endpoint_verification_seconds);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(policy.certification_for_testing)
             return policy.certification_for_testing(domain,y,out.state,context,profile_work);
@@ -697,7 +697,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 break;
             }
             if(!out.certification->trust.primary_valid ||
-                out.certification->trust.reason.starts_with("resource-limit:reference-solve"))
+                out.certification->trust.reason.starts_with("resource-limit:"))
             {
                 out.reason=out.certification->trust.reason.empty() ?
                     "endpoint-certification-invalid-primary" : out.certification->trust.reason;
@@ -714,7 +714,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             out.certification=certify_endpoint();
             out.certification_sweep=out.sweep_count;
             if(!out.certification->trust.primary_valid ||
-                out.certification->trust.reason.starts_with("resource-limit:reference-solve"))
+                out.certification->trust.reason.starts_with("resource-limit:"))
                 out.reason=out.certification->trust.reason.empty() ? "endpoint-certification-invalid-primary" :
                     out.certification->trust.reason;
         }
@@ -730,26 +730,26 @@ FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
     const auto atom_count=static_cast<Eigen::Index>(domain.atoms.size());
     if(state.eta.size()!=atom_count || state.beta.size()!=2*atom_count || y.size()!=domain.rows)
         return out;
-    out.reference_memory_estimate=ReferenceSolveMemoryEstimate(domain,y,context,resident_override);
-    if(out.reference_memory_estimate.status!=MemoryStatus::Pass)
+    out.verification_memory_estimate=EndpointVerificationMemoryEstimate(domain,y,context,resident_override);
+    if(out.verification_memory_estimate.status!=MemoryStatus::Pass)
     {
-        LogMemoryEstimate(out.reference_memory_estimate);
-        const auto reason=std::string("resource-limit:reference-solve");
-        out.assessment.primary=EvaluateStateStreaming(domain,y,state.eta,state.beta,context,
-            ProfileEvaluationRole::AcceptedEndpoint,profile_work);
-        out.assessment.reference.eta=state.eta; out.assessment.reference.reason=reason;
+        LogMemoryEstimate(out.verification_memory_estimate);
+        const auto reason=std::string("resource-limit:endpoint-verification:")+out.verification_memory_estimate.reason;
+        out.assessment.primary.eta=state.eta; out.assessment.primary.reason=reason;
         out.assessment.failure=reason;
-        out.trust.primary_valid=out.assessment.primary.valid; out.trust.reason=reason;
+        out.assessment.reference_free=true;
+        out.assessment.verification_memory_estimate=out.verification_memory_estimate;
+        out.trust.reason=reason;
         return out;
     }
-    if(out.reference_memory_estimate.estimated_peak_bytes>out.reference_memory_estimate.budget_bytes/2)
-        LogMemoryEstimate(out.reference_memory_estimate);
-    const auto endpoint=EvaluateState(domain,y,state.eta,state.beta,context,
+    if(out.verification_memory_estimate.estimated_peak_bytes>out.verification_memory_estimate.budget_bytes/2)
+        LogMemoryEstimate(out.verification_memory_estimate);
+    const auto endpoint=EvaluateStateStreaming(domain,y,state.eta,state.beta,context,
         ProfileEvaluationRole::AcceptedEndpoint,profile_work);
-    const auto reference=EvaluateProfile(domain,y,state.eta,true,&context,nullptr,
-        ProfileEvaluationRole::Reference,profile_work);
-    out.assessment=AssessEvaluated(domain,y,endpoint,reference,context,true);
-    out.trust=CheckTrust(domain,y,endpoint,context,reference);
+    const auto replay=CheckIndependentReplay(domain,y,endpoint,context);
+    out.assessment=AssessEvaluated(domain,y,endpoint,replay,context,true,resident_override);
+    out.assessment.verification_memory_estimate=out.verification_memory_estimate;
+    out.trust=CheckTrust(domain,y,endpoint,context,replay);
     return out;
 }
 

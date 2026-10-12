@@ -189,7 +189,7 @@ TEST(JointComponentRuntimeTest, PublicObjectivesUseParentScaleAndIncludeConstant
     EXPECT_NEAR(components+49/(2*scale*scale),total,1e-15);
 }
 
-TEST(JointComponentRuntimeTest, AssemblyPreservesSuppliedCoefficientsInsteadOfReprofiling)
+TEST(JointComponentRuntimeTest, AssemblyPreservesSuppliedCoefficientsWithoutGlobalReprofile)
 {
     const core::JointProblem problem(Snapshot());
     const auto & data=core::JointProblemAccess::Get(problem);
@@ -198,10 +198,12 @@ TEST(JointComponentRuntimeTest, AssemblyPreservesSuppliedCoefficientsInsteadOfRe
     ASSERT_TRUE(components[0].state && components[1].state);
     components[0].state->ac[0]+=.1;
     const double actual=components[0].state->ac[0];
+    n::AssessmentWorkForTesting()={};
     const auto assembled=n::AssembleComponents(data.domain,data.y,data.partition,data.context,components);
     ASSERT_TRUE(assembled.available);
     EXPECT_DOUBLE_EQ(assembled.beta(0),actual);
-    EXPECT_FALSE(assembled.profile_agrees);
+    EXPECT_FALSE(assembled.consistency_passed);
+    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
     const auto replay=n::EvaluateState(data.domain,data.y,assembled.eta,assembled.beta,data.context);
     EXPECT_EQ(assembled.prediction,replay.x*assembled.beta);
 }

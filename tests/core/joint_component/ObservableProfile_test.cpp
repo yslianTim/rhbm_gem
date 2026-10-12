@@ -221,7 +221,7 @@ TEST(JointObservableProfileTest, RemainingTwoRowInteriorWidthIsUnidentified)
     const auto context=n::ProfileContext(data.context,layout,data.y.size());
     const n::Vector eta=Eigen::Vector2d(.6,.65).array().log();
     const auto assessment=n::AssessProfile(n::ProfileDomain(data.domain,layout),data.y.head(23),eta,context);
-    ASSERT_TRUE(assessment.primary.valid); ASSERT_TRUE(assessment.reference.valid);
+    ASSERT_TRUE(assessment.primary.valid); ASSERT_TRUE(assessment.independent_replay.passed);
     EXPECT_GT(assessment.primary.beta(0),0); EXPECT_GT(assessment.primary.beta(2),0);
     EXPECT_FALSE(assessment.identified); EXPECT_EQ(assessment.failure,"width-unidentified");
 }

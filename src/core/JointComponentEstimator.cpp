@@ -70,18 +70,48 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
     auto check=[scope](std::string name,bool available,bool pass,std::optional<double> value={},std::optional<double> threshold={}) {
         return JointCheck{std::move(name),available ? (pass ? Status::Passed : Status::Failed) : Status::Unavailable,scope,value,threshold,{}};
     };
-    const bool valid=a.primary.valid && a.reference.valid;
     std::vector<JointCheck> out;
-    out.push_back(check("inner",a.design.has_value(),a.inner,
-        std::isfinite(a.coefficient_difference) ? std::optional<double>(a.coefficient_difference) : std::nullopt,1e-10));
-    out.push_back(check("kkt",a.primary.certificate.available,a.primary.certificate.kkt_passed,
-        a.primary.certificate.available ? std::optional<double>(a.primary.certificate.projected_kkt) : std::nullopt,1e-10));
-    out.push_back(check("width-stationarity",valid && a.widths.has_value(),a.gradient,
-        valid && a.primary.gradient.size() ? std::optional<double>(std::max(a.primary.gradient.lpNorm<Eigen::Infinity>(),
-            a.reference.gradient.lpNorm<Eigen::Infinity>())) : std::nullopt,1e-12));
-    out.push_back(check("local-correction",a.jacobian.has_value(),a.local,
-        a.correction.size() ? std::optional<double>(a.correction.lpNorm<Eigen::Infinity>()) : std::nullopt,1e-10));
-    out.push_back(check("numerical-identifiability",a.widths.has_value(),a.identified));
+    if(a.reference_free)
+    {
+        const auto & replay=a.independent_replay;
+        out.push_back(check("conditional-ac-optimality",replay.valid,
+            replay.primary_kkt_passed && replay.feasible,
+            std::isfinite(replay.primary_ac_kkt) ? std::optional<double>(replay.primary_ac_kkt) : std::nullopt,1e-10));
+        out.push_back(check("independent-replay",replay.valid,replay.passed,
+            std::isfinite(replay.kkt_difference) ? std::optional<double>(replay.kkt_difference) : std::nullopt,1e-13));
+        out.back().reason=replay.reason.empty() ? a.failure : replay.reason;
+        out.push_back(check("width-stationarity",a.primary.valid && a.primary.gradient.size()>0,
+            replay.primary_width_gradient<=1e-12,
+            std::isfinite(replay.primary_width_gradient) ? std::optional<double>(replay.primary_width_gradient) : std::nullopt,1e-12));
+        const bool design_full_rank=a.design && a.design->rank==a.design->columns;
+        out.push_back(check("design-identifiability",a.design.has_value(),design_full_rank,
+            a.design ? std::optional<double>(static_cast<double>(a.design->rank)) : std::nullopt,
+            a.design ? std::optional<double>(static_cast<double>(a.design->columns)) : std::nullopt));
+        out.push_back(check("local-correction",a.jacobian.has_value(),a.local,
+            a.correction.size() ? std::optional<double>(a.correction.lpNorm<Eigen::Infinity>()) : std::nullopt,1e-10));
+        out.push_back(check("numerical-identifiability",a.widths.has_value(),a.identified));
+    }
+    else
+    {
+        const bool valid=a.primary.valid && a.reference.valid;
+        out.push_back(check("inner",a.design.has_value(),a.inner,
+            std::isfinite(a.coefficient_difference) ? std::optional<double>(a.coefficient_difference) : std::nullopt,1e-10));
+        out.push_back(check("kkt",a.primary.certificate.available,a.primary.certificate.kkt_passed,
+            a.primary.certificate.available ? std::optional<double>(a.primary.certificate.projected_kkt) : std::nullopt,1e-10));
+        out.push_back(check("width-stationarity",valid && a.widths.has_value(),a.gradient,
+            valid && a.primary.gradient.size() ? std::optional<double>(std::max(a.primary.gradient.lpNorm<Eigen::Infinity>(),
+                a.reference.gradient.lpNorm<Eigen::Infinity>())) : std::nullopt,1e-12));
+        out.push_back(check("local-correction",a.jacobian.has_value(),a.local,
+            a.correction.size() ? std::optional<double>(a.correction.lpNorm<Eigen::Infinity>()) : std::nullopt,1e-10));
+        out.push_back(check("numerical-identifiability",a.widths.has_value(),a.identified));
+    }
+    if(a.reference_free && a.verification_memory_estimate.stage==n::MemoryStage::EndpointVerification)
+        out.push_back({"endpoint-verification-memory",
+            a.verification_memory_estimate.status==n::MemoryStatus::Pass ? Status::Passed : Status::Unavailable,
+            scope,static_cast<double>(a.verification_memory_estimate.estimated_peak_bytes),
+            static_cast<double>(a.verification_memory_estimate.budget_bytes),
+            a.verification_memory_estimate.reason.empty() ? "" :
+                std::string("resource-limit:endpoint-verification:")+a.verification_memory_estimate.reason});
     if(a.rank_memory_estimate.status!=n::MemoryStatus::Pass)
         out.push_back({"rank-memory-preflight",Status::Unavailable,scope,
             static_cast<double>(a.rank_memory_estimate.estimated_peak_bytes),
@@ -363,13 +393,32 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
     out.search_completed=assembly.completed; out.available_row_mask=assembly.row_mask;
     out.evidence=n::AssessmentEvidence(assembly.assessment,JointEvidenceScope::AssembledGlobal);
     out.ranks=n::AssessmentRanks(assembly.assessment,JointEvidenceScope::AssembledGlobal);
+    out.evidence.push_back({"assembly-mapping",assembly.mapping_valid ? JointCheckStatus::Passed :
+        JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{},{},
+        assembly.mapping_valid ? "exact-component-identity-mapping" : "missing-component-state"});
     if(assembly.available)
     {
         const auto & state=assembly.raw;
-        out.assembled_state=State(state,data.context.scale);
-        if(state.valid) {out.prediction=Values(assembly.prediction); out.objective=assembly.objective/(data.context.scale*data.context.scale);}
-        out.evidence.push_back({"assembled-profile",assembly.profile_agrees ? JointCheckStatus::Passed : JointCheckStatus::Failed,
-            JointEvidenceScope::AssembledGlobal,assembly.profile_difference,1e-10,{}});
+        const auto consistency_status=assembly.consistency_passed ? JointCheckStatus::Passed :
+            !state.valid && assembly.verification_memory_estimate.status!=n::MemoryStatus::Pass ?
+                JointCheckStatus::Unavailable : JointCheckStatus::Failed;
+        out.evidence.push_back({"assembled-consistency",consistency_status,
+            JointEvidenceScope::AssembledGlobal,
+            std::isfinite(assembly.replay.prediction_difference) ?
+                std::optional<double>(assembly.replay.prediction_difference) : std::nullopt,2e-12,
+            assembly.replay.reason});
+        if(assembly.verification_memory_estimate.status!=n::MemoryStatus::Pass)
+            out.evidence.push_back({"assembly-verification-memory",JointCheckStatus::Unavailable,
+                JointEvidenceScope::AssembledGlobal,
+                static_cast<double>(assembly.verification_memory_estimate.estimated_peak_bytes),
+                static_cast<double>(assembly.verification_memory_estimate.budget_bytes),
+                std::string("resource-limit:endpoint-verification:")+assembly.verification_memory_estimate.reason});
+        if(assembly.assessment.qualified && assembly.consistency_passed)
+        {
+            out.assembled_state=State(state,data.context.scale);
+            out.prediction=Values(assembly.prediction);
+            out.objective=assembly.objective/(data.context.scale*data.context.scale);
+        }
     }
     out.costs.assembly_seconds=Seconds(assembly_start);
     n::NotifyJointAssemblyProgress(observer,n::JointProgressPhase::AssemblyCompleted,component_count,

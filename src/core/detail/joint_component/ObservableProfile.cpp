@@ -111,39 +111,69 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
     }
     for(const auto & group:layout.groups) state.nuisance_amplitudes.push_back(amplitudes.at(group.row));
     state.objective=.5*(prediction-data.y).squaredNorm()/(data.context.scale*data.context.scale);
-    bool agrees=true; double difference=0;
     Vector expected=Vector::Zero(data.y.size());
     for(const auto & group:layout.groups) expected(static_cast<Eigen::Index>(group.row))=data.y(static_cast<Eigen::Index>(group.row));
+    Assessment assessment;
+    bool profile_replay_passed=true;
     if(count)
     {
         const auto domain=ProfileDomain(data.domain,layout); const auto context=ProfileContext(data.context,layout,data.y.size());
         const Vector y=SelectValues(data.y,IndicesOf(layout.informative_rows));
         const Vector eta=Eigen::Map<const Vector>(state.log_b.data(),static_cast<Eigen::Index>(count));
         const Vector beta=Eigen::Map<const Vector>(state.ac.data(),static_cast<Eigen::Index>(2*count));
-        const auto assessment=AssessProfile(domain,y,eta,context,&beta);
+        assessment=AssessProfile(domain,y,eta,context,&beta);
         out.evidence=AssessmentEvidence(assessment,JointEvidenceScope::AssembledGlobal);
         out.ranks=AssessmentRanks(assessment,JointEvidenceScope::AssembledGlobal);
-        const auto control=EvaluateProfile(domain,y,eta,false,&context);
-        agrees=control.valid;
-        if(agrees)
+        profile_replay_passed=assessment.independent_replay.passed;
+        if(assessment.primary.valid)
         {
-            const Vector full_prediction=control.x*beta;
             for(std::size_t r=0;r<layout.informative_rows.size();++r)
-                expected(static_cast<Eigen::Index>(layout.informative_rows[r]))=full_prediction(static_cast<Eigen::Index>(r));
-            difference=((beta-control.beta).array().abs()/(1+beta.array().abs().max(control.beta.array().abs()))).maxCoeff();
-            agrees=difference<=1e-10;
+                expected(static_cast<Eigen::Index>(layout.informative_rows[r]))=
+                    assessment.primary.residual(static_cast<Eigen::Index>(r))+y(static_cast<Eigen::Index>(r));
+            for(std::size_t k=0;k<count;++k)
+                state.width_gradient[k]=assessment.primary.gradient(static_cast<Eigen::Index>(k));
         }
     }
     else out.evidence=AnalyticNuisanceEvidence(JointEvidenceScope::AssembledGlobal);
-    const double prediction_difference=((prediction-expected).array().abs()/
-        (1+prediction.array().abs().max(expected.array().abs()))).maxCoeff();
-    const double profile_objective=.5*(expected-data.y).squaredNorm()/(data.context.scale*data.context.scale);
-    const bool reconstruction=prediction.allFinite() && expected.allFinite() && prediction_difference<=1e-10 &&
-        std::abs(state.objective-profile_objective)<=1e-12;
-    difference=std::max(difference,prediction_difference); agrees &= reconstruction;
-    out.evidence.push_back({"assembled-profile",agrees ? JointCheckStatus::Passed : JointCheckStatus::Failed,
-        JointEvidenceScope::AssembledGlobal,difference,1e-10,reconstruction ? "" : "full-domain-reconstruction-failed"});
-    out.assembled_state=std::move(state); out.prediction=Values(prediction); out.objective=out.assembled_state->objective;
+    double prediction_difference{},prediction_error_ratio{}; bool prediction_passed=true;
+    for(Eigen::Index row=0;row<data.y.size();++row)
+    {
+        const double error=std::abs(prediction(row)-expected(row));
+        prediction_difference=std::max(prediction_difference,error);
+        const double tolerance=2e-12+2e-13*std::abs(expected(row));
+        prediction_error_ratio=std::max(prediction_error_ratio,error/tolerance);
+        prediction_passed &= error<=tolerance;
+    }
+    const double raw_objective=.5*(prediction-data.y).squaredNorm();
+    const double expected_raw_objective=.5*(expected-data.y).squaredNorm();
+    const double objective_difference=std::abs(raw_objective-expected_raw_objective);
+    const bool reconstruction=prediction.allFinite() && expected.allFinite() && prediction_passed &&
+        objective_difference<=1e-12+2e-12*std::abs(expected_raw_objective);
+    const bool mapping=std::all_of(out.available_row_mask.begin(),out.available_row_mask.end(),[](bool value){return value;}) &&
+        std::all_of(state.ac.begin(),state.ac.end(),[](double value){return std::isfinite(value);}) &&
+        std::all_of(state.log_b.begin(),state.log_b.end(),[](double value){return std::isfinite(value);});
+    const bool consistency=mapping && reconstruction && profile_replay_passed;
+    out.evidence.push_back({"assembly-mapping",mapping ? JointCheckStatus::Passed : JointCheckStatus::Failed,
+        JointEvidenceScope::AssembledGlobal,{},{},mapping ? "exact-component-identity-mapping" : "incomplete-component-mapping"});
+    out.evidence.push_back({"assembly-prediction-consistency",prediction_passed ? JointCheckStatus::Passed :
+        JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,prediction_error_ratio,1.0,{}});
+    out.evidence.push_back({"assembly-objective-consistency",
+        objective_difference<=1e-12+2e-12*std::abs(expected_raw_objective) ? JointCheckStatus::Passed : JointCheckStatus::Failed,
+        JointEvidenceScope::AssembledGlobal,objective_difference,1e-12+2e-12*std::abs(expected_raw_objective),{}});
+    out.evidence.push_back({"assembled-consistency",consistency ? JointCheckStatus::Passed :
+        !prediction.allFinite() || !expected.allFinite() ? JointCheckStatus::Unavailable : JointCheckStatus::Failed,
+        JointEvidenceScope::AssembledGlobal,prediction_difference,2e-12,
+        !profile_replay_passed ? assessment.independent_replay.reason :
+            reconstruction ? "" : "full-domain-prediction-objective-mismatch"});
+    if(!assessment.verification_memory_estimate.reason.empty())
+        out.evidence.push_back({"assembly-verification-memory",JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,
+            static_cast<double>(assessment.verification_memory_estimate.estimated_peak_bytes),
+            static_cast<double>(assessment.verification_memory_estimate.budget_bytes),
+            "resource-limit:endpoint-verification:"+assessment.verification_memory_estimate.reason});
+    if(!count || (assessment.qualified && consistency))
+    {
+        out.assembled_state=std::move(state); out.prediction=Values(prediction); out.objective=out.assembled_state->objective;
+    }
     out.costs.assembly_seconds+=Seconds(started);
     NotifyJointAssemblyProgress(observer,JointProgressPhase::AssemblyCompleted,component_count,
         Seconds(assembly_started),out.assembled_state.has_value());

@@ -58,7 +58,7 @@ IncrementalCandidateReplay EvaluateCandidateDelta(VectorRef current_residual,
     double current_objective,double scale);
 struct FixedNeighborWork
 {
-    double structural_preparation_seconds{},reference_assessment_seconds{},old_core_seconds{},
+    double structural_preparation_seconds{},endpoint_verification_seconds{},old_core_seconds{},
         effective_response_seconds{},local_search_seconds{},local_state_seconds{},
         candidate_copy_seconds{},candidate_replay_seconds{},cache_update_seconds{},sweep_replay_seconds{},
         sweep_global_state_seconds{},maximum_block_seconds{},incremental_candidate_replay_seconds{},
@@ -76,7 +76,7 @@ struct FixedNeighborEndpointCertification
 {
     Assessment assessment;
     TrustEvidence trust;
-    MemoryEstimate reference_memory_estimate;
+    MemoryEstimate verification_memory_estimate;
     bool passed() const {return trust.passed;}
 };
 enum class FixedNeighborStationarityState {NotStationary,CandidateStationary,ConfirmedStationary};

@@ -146,6 +146,7 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain &,VectorRef,const 
 struct TrustEvidence
 {
     std::optional<Endpoint> reference;
+    std::optional<IndependentReplayEvidence> independent;
     bool primary_valid{},passed{},prediction_passed{},gradient_passed{};
     std::string reason;
     double coefficient_difference{unavailable},kkt_difference{unavailable},prediction_difference{unavailable},
@@ -154,6 +155,7 @@ struct TrustEvidence
 };
 TrustEvidence CheckReplay(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &);
 TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &);
+TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &,const IndependentReplayEvidence &);
 TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &,const Evaluation & reference);
 struct LmTrial
 {
@@ -189,12 +191,13 @@ SearchResult SearchProfile(const Domain &,VectorRef,const Vector &,const Evaluat
 struct Assessment
 {
     Endpoint primary,reference;
+    IndependentReplayEvidence independent_replay;
     std::optional<Spectrum> design,widths,normalized_widths,jacobian;
     Matrix weak_directions;
     Vector correction;
-    MemoryEstimate rank_memory_estimate;
+    MemoryEstimate verification_memory_estimate,rank_memory_estimate;
     double coefficient_difference{unavailable};
-    bool inner{},gradient{},local{},identified{};
+    bool inner{},gradient{},local{},identified{},endpoint_verified{},qualified{},reference_free{};
     std::string failure;
 };
 std::vector<JointCheck> AssessmentEvidence(const Assessment &,JointEvidenceScope);
@@ -203,6 +206,8 @@ JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> &,JointEvidence
 Assessment AssessProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,const Vector * = nullptr);
 // Evaluations belong to this exact domain, observations and numerical policy.
 Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const Evaluation &,const EvaluationContext &,bool supplied=false);
+Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const IndependentReplayEvidence &,
+    const EvaluationContext &,bool supplied=false,std::size_t resident_override=0);
 bool SameAssessmentPolicy(const EvaluationContext &,const EvaluationContext &);
 // Borrowed only while the originating immutable problem and report remain alive.
 struct AssessmentReuse
@@ -270,13 +275,14 @@ EvaluationContext ChildContext(const EvaluationContext &,const ComponentView &,b
 struct FixedNeighborComponentResult;
 struct AssemblyResult
 {
-    bool available{},completed{true},profile_agrees{};
+    bool available{},completed{true},mapping_valid{},consistency_passed{};
     std::vector<bool> row_mask;
     Vector eta,beta,prediction;
-    double objective{unavailable},profile_difference{unavailable};
+    double objective{unavailable};
     Assessment assessment;
-    Endpoint raw,profile_control;
-    bool profile_evaluated{};
+    Endpoint raw;
+    IndependentReplayEvidence replay;
+    MemoryEstimate verification_memory_estimate;
 };
 AssemblyResult AssembleComponents(const Domain &,VectorRef,const ComponentPartition &,const EvaluationContext &,
     const std::vector<JointComponentResult> &,const AssessmentReuse * = nullptr);
