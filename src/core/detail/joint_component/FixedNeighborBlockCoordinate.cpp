@@ -450,7 +450,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     if(!out.search_converged && !stop)
     {
         out.reason="block-sweep-budget";
-        if(policy.stop_after_stationarity && policy.certify_endpoint && !out.certification && out.sweep_count)
+        if(policy.stop_after_stationarity && policy.certify_endpoint && out.sweep_count &&
+            out.certification_sweep!=out.sweep_count)
         {
             out.certification=CertifyFixedNeighborEndpoint(domain,y,out.state,context,profile_work);
             out.certification_sweep=out.sweep_count;
