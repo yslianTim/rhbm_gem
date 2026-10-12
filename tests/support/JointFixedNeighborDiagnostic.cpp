@@ -99,7 +99,7 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
     const Domain domain=ProfileDomain(data.domain,layout);
     const EvaluationContext context=ProfileContext(data.context,layout,data.domain.rows);
     const Vector y=Select(data.y,IndicesOf(layout.informative_rows));
-    auto run_policy=policy; run_policy.collect_diagnostics=true;
+    auto run_policy=policy; run_policy.collect_diagnostics=true; run_policy.certify_endpoint=false;
     auto search=SearchFixedNeighborComponent(domain,layout,y,initial_eta,context,
         run_policy,std::move(initial_beta));
     out.state=search.state; out.blocks=search.blocks; out.sweeps=search.sweeps;

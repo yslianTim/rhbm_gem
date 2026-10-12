@@ -414,11 +414,39 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         if(stationarity==StationarityState::ConfirmedStationary)
         {
             if(out.confirmed_stationarity_sweep==0) out.confirmed_stationarity_sweep=sweep_index+1;
-            out.search_converged=true; out.reason="block-stationary";
-            if(policy.stop_after_stationarity) break;
+            if(!policy.stop_after_stationarity || !policy.certify_endpoint)
+            {
+                out.search_converged=true; out.reason="block-stationary";
+                if(policy.stop_after_stationarity) break;
+                continue;
+            }
+            out.certification=CertifyFixedNeighborEndpoint(domain,y,out.state,context,profile_work);
+            out.certification_sweep=sweep_index+1;
+            if(out.certification->passed())
+            {
+                out.search_converged=true; out.reason="block-stationary";
+                break;
+            }
+            if(!out.certification->trust.primary_valid)
+            {
+                out.reason=out.certification->trust.reason.empty() ?
+                    "endpoint-certification-invalid-primary" : out.certification->trust.reason;
+                stop=true;
+            }
         }
     }
-    if(!out.search_converged && out.reason.empty()) out.reason="block-sweep-budget";
+    if(!out.search_converged && !stop)
+    {
+        out.reason="block-sweep-budget";
+        if(policy.stop_after_stationarity && policy.certify_endpoint && !out.certification && out.sweep_count)
+        {
+            out.certification=CertifyFixedNeighborEndpoint(domain,y,out.state,context,profile_work);
+            out.certification_sweep=out.sweep_count;
+            if(!out.certification->trust.primary_valid)
+                out.reason=out.certification->trust.reason.empty() ? "endpoint-certification-invalid-primary" :
+                    out.certification->trust.reason;
+        }
+    }
     return out;
 }
 
@@ -507,12 +535,10 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
         };
     }
     out.search=SearchFixedNeighborComponent(prepared.domain,local_layout,local_y,initial_eta,context,policy);
-    if(out.search.state.eta.size()==static_cast<Eigen::Index>(prepared.domain.atoms.size()))
-        out.certification=CertifyFixedNeighborEndpoint(prepared.domain,local_y,out.search.state,context);
+    out.certification=out.search.certification;
     const bool certified=out.certification && out.certification->passed();
     out.succeeded=out.search.search_converged && certified;
-    out.stop_reason=out.search.search_converged && !certified ?
-        "endpoint-certification-failed" : out.search.reason;
+    out.stop_reason=out.search.reason;
     if(progress_component)
         NotifyJointProgress(observer,JointProgressPhase::CertificationStarted,*progress_component,
             static_cast<int>(out.search.total_profile_evaluations),parent_context.profile_budget,

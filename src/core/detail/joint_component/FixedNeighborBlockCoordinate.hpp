@@ -58,6 +58,12 @@ struct FixedNeighborWork
     double total_local_atoms{};
     ProfileSearchWork local_profile_work;
 };
+struct FixedNeighborEndpointCertification
+{
+    Assessment assessment;
+    TrustEvidence trust;
+    bool passed() const {return trust.passed;}
+};
 struct FixedNeighborDiagnosticSink
 {
     std::function<void(const FixedNeighborBlockRecord &)> block;
@@ -91,23 +97,17 @@ struct FixedNeighborPolicy
 struct FixedNeighborSearchResult
 {
     BlockCoordinateState state;
+    std::optional<FixedNeighborEndpointCertification> certification;
     std::vector<FixedNeighborBlockRecord> blocks;
     std::vector<FixedNeighborBlockSweep> sweeps;
     bool search_converged{};
     std::string reason;
-    std::size_t first_order_stationarity_sweep{},confirmed_stationarity_sweep{};
+    std::size_t first_order_stationarity_sweep{},confirmed_stationarity_sweep{},certification_sweep{};
     std::size_t sweep_count{},total_block_solves{},total_profile_evaluations{},total_accepted_local_updates{},
         block_preparations{},domain_preparations{},mapping_preparations{};
     double search_seconds{};
     FixedNeighborWork work;
     std::optional<FixedNeighborBlockSweep> final_sweep;
-};
-
-struct FixedNeighborEndpointCertification
-{
-    Assessment assessment;
-    TrustEvidence trust;
-    bool passed() const {return trust.passed;}
 };
 
 struct FixedNeighborComponentResult
