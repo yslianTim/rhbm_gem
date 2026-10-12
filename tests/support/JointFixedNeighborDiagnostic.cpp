@@ -48,9 +48,15 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
     component.atoms.assign(component_view.atoms.begin(),component_view.atoms.end());
     component.rows.assign(component_view.rows.begin(),component_view.rows.end());
     component.layout=layout; component.search_completed=out.search_converged; component.stop_reason=out.reason;
+    component.search_sweeps=out.sweeps.size();
+    component.first_order_stationarity_sweep=out.first_order_stationarity_sweep;
+    component.confirmed_stationarity_sweep=out.confirmed_stationarity_sweep;
+    component.endpoint_certification_sweep=out.sweeps.size();
     component.state=State(out.assessment.primary,context.scale);
     component.evidence=AssessmentEvidence(out.assessment,JointEvidenceScope::ComponentLocal);
     component.ranks=AssessmentRanks(out.assessment,JointEvidenceScope::ComponentLocal);
+    component.evidence.push_back({"endpoint-trust",certification.passed() ? JointCheckStatus::Passed :
+        JointCheckStatus::Failed,JointEvidenceScope::ComponentLocal,{},{},certification.trust.reason});
 
     out.fit.problem=problem; out.fit.layout=layout; out.fit.initialization.valid=true;
     out.fit.initialization.reason="valid-widths"; out.fit.initialization.b=Values(out.state.eta.array().exp());

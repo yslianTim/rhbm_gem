@@ -470,6 +470,8 @@ rg::JointAnalysisResult SavedJointExample()
     rg::JointAnalysisComponent component;
     component.id="component-0"; component.atoms={0,1}; component.rows={0};
     component.stop_reason="budget"; component.search_completed=false;
+    component.search_sweeps=120; component.first_order_stationarity_sweep=107;
+    component.confirmed_stationarity_sweep=108; component.endpoint_certification_sweep=108;
     component.state=rg::JointState{{2.123456789012345,-.3,4,.2},{.5,.6},{-.7,-.5},{1e-14,-2e-14},.012345678901234567};
     component.runtime_convergence=rg::JointCheckStatus::Failed;
     component.evidence.push_back({"local-correction",rg::JointCheckStatus::Failed,rg::JointEvidenceScope::ComponentLocal,.1,1e-10,"too-large"});
@@ -522,6 +524,34 @@ TEST(DataObjectPersistenceTest, JointSolverProvenanceRoundTripsAndMissingFieldRe
     old.at("metadata").as_object().erase("solver");
     const auto legacy=io::Decode(boost::json::serialize(old));
     EXPECT_FALSE(legacy.metadata.solver);
+}
+
+TEST(DataObjectPersistenceTest, FixedNeighborFailureEvidenceAndSweepCountsRoundTrip)
+{
+    namespace io=rg::joint_result_io;
+    auto result=SavedJointExample();
+    result.components.front().evidence.push_back({"endpoint-trust",rg::JointCheckStatus::Failed,
+        rg::JointEvidenceScope::ComponentLocal,{},{},"reference-disagreement"});
+    const auto decoded=io::Decode(io::Encode(result));
+    ASSERT_EQ(decoded.components.size(),1u);
+    const auto & component=decoded.components.front();
+    EXPECT_EQ(component.search_sweeps,120u);
+    EXPECT_EQ(component.first_order_stationarity_sweep,107u);
+    EXPECT_EQ(component.confirmed_stationarity_sweep,108u);
+    EXPECT_EQ(component.endpoint_certification_sweep,108u);
+    ASSERT_FALSE(component.evidence.empty());
+    EXPECT_EQ(component.evidence.back().reason,"reference-disagreement");
+
+    auto legacy=boost::json::parse(io::Encode(result)).as_object();
+    auto & saved_component=legacy.at("components").as_array().front().as_object();
+    for(const auto key:{"search_sweeps","first_order_stationarity_sweep",
+        "confirmed_stationarity_sweep","endpoint_certification_sweep"}) saved_component.erase(key);
+    const auto legacy_decoded=io::Decode(boost::json::serialize(legacy));
+    ASSERT_EQ(legacy_decoded.components.size(),1u);
+    EXPECT_EQ(legacy_decoded.components.front().search_sweeps,0u);
+    EXPECT_EQ(legacy_decoded.components.front().first_order_stationarity_sweep,0u);
+    EXPECT_EQ(legacy_decoded.components.front().confirmed_stationarity_sweep,0u);
+    EXPECT_EQ(legacy_decoded.components.front().endpoint_certification_sweep,0u);
 }
 
 TEST(DataObjectPersistenceTest, FixedNeighborPolicyVersionsPreserveLegacyAndRejectRetiredV2Claims)

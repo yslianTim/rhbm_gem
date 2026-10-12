@@ -113,7 +113,6 @@ struct FixedNeighborSearchResult
 struct FixedNeighborComponentResult
 {
     FixedNeighborSearchResult search;
-    std::optional<FixedNeighborEndpointCertification> certification;
     bool succeeded{};
     std::string stop_reason;
 };

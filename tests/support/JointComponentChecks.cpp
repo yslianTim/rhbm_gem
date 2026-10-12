@@ -300,7 +300,7 @@ runtime::ProfileSearchDiagnosticResult SolveFixedNeighborComponentForDiagnostics
     const auto fixed=SolveFixedNeighborComponentForTesting(view,initial_b,parent);
     runtime::ProfileSearchDiagnosticResult out;
     const auto & result=fixed.search;
-    const bool endpoint_certified=fixed.certification && fixed.certification->passed();
+    const bool endpoint_certified=result.certification && result.certification->passed();
     out.search.initial.eta.resize(static_cast<Eigen::Index>(view.atoms.size()));
     out.search.initial.beta=Vector::Zero(2*static_cast<Eigen::Index>(view.atoms.size()));
     for(std::size_t k=0;k<view.atoms.size();++k)
@@ -314,12 +314,12 @@ runtime::ProfileSearchDiagnosticResult SolveFixedNeighborComponentForDiagnostics
     out.search.accepted=static_cast<int>(result.total_accepted_local_updates);
     out.search.accepted_objective=runtime::LastFixedNeighborObjective(result);
     out.search.accepted_gradient_inf_norm=runtime::LastFixedNeighborGradient(result);
-    if(fixed.certification) out.assessment=fixed.certification->assessment;
+    if(result.certification) out.assessment=result.certification->assessment;
     if(endpoint_certified)
     {
-        out.endpoint_trust=fixed.certification->trust;
-        out.trusted_state=fixed.certification->assessment.primary;
-        out.trusted_assessment=fixed.certification->assessment;
+        out.endpoint_trust=result.certification->trust;
+        out.trusted_state=result.certification->assessment.primary;
+        out.trusted_assessment=result.certification->assessment;
     }
     out.search_success=fixed.succeeded;
     return out;

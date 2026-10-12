@@ -550,7 +550,11 @@ std::string Encode(const JointAnalysisResult & x)
     j::array components;
     for(const auto & c:x.components) components.emplace_back(Object{
         {"id",c.id},{"stop_reason",c.stop_reason},{"atoms",j::value_from(c.atoms)},{"rows",j::value_from(c.rows)},
-        {"search_completed",c.search_completed},{"profile_evaluations",c.profile_evaluations},{"reference_evaluations",c.reference_evaluations},
+        {"search_completed",c.search_completed},{"search_sweeps",c.search_sweeps},
+        {"first_order_stationarity_sweep",c.first_order_stationarity_sweep},
+        {"confirmed_stationarity_sweep",c.confirmed_stationarity_sweep},
+        {"endpoint_certification_sweep",c.endpoint_certification_sweep},
+        {"profile_evaluations",c.profile_evaluations},{"reference_evaluations",c.reference_evaluations},
         {"accepted_updates",c.accepted_updates},{"native_status",c.native_status},{"state",OptionalState(c.state)},
         {"evidence",Checks(c.evidence)},{"ranks",Ranks(c.ranks)},{"regular_certificate",StatusText(c.regular_certificate)},
         { "runtime_convergence",StatusText(c.runtime_convergence)},{"layout",Layout(c.layout)},
@@ -593,7 +597,15 @@ JointAnalysisResult Decode(std::string_view text)
         if(version>=4) component.layout=ReadLayout(c);
         component.id=Read<std::string>(c,"id"); component.stop_reason=Read<std::string>(c,"stop_reason");
         component.atoms=Read<std::vector<std::size_t>>(c,"atoms"); component.rows=Read<std::vector<std::size_t>>(c,"rows");
-        component.search_completed=Read<bool>(c,"search_completed"); component.profile_evaluations=Read<int>(c,"profile_evaluations");
+        component.search_completed=Read<bool>(c,"search_completed");
+        component.search_sweeps=c.contains("search_sweeps") ? Read<std::size_t>(c,"search_sweeps") : 0;
+        component.first_order_stationarity_sweep=c.contains("first_order_stationarity_sweep") ?
+            Read<std::size_t>(c,"first_order_stationarity_sweep") : 0;
+        component.confirmed_stationarity_sweep=c.contains("confirmed_stationarity_sweep") ?
+            Read<std::size_t>(c,"confirmed_stationarity_sweep") : 0;
+        component.endpoint_certification_sweep=c.contains("endpoint_certification_sweep") ?
+            Read<std::size_t>(c,"endpoint_certification_sweep") : 0;
+        component.profile_evaluations=Read<int>(c,"profile_evaluations");
         component.reference_evaluations=Read<int>(c,"reference_evaluations"); component.accepted_updates=Read<int>(c,"accepted_updates");
         component.native_status=Read<int>(c,"native_status");
         if(!c.at("state").is_null()) component.state=ReadState(c.at("state"));

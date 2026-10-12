@@ -98,6 +98,8 @@ struct JointComponentData
     std::string id,stop_reason;
     std::vector<std::size_t> atoms,rows;
     bool search_completed{};
+    std::size_t search_sweeps{},first_order_stationarity_sweep{},confirmed_stationarity_sweep{},
+        endpoint_certification_sweep{};
     int profile_evaluations{},reference_evaluations{},accepted_updates{},native_status{};
     std::optional<JointState> state;
     std::vector<JointCheck> evidence;

@@ -535,8 +535,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
         };
     }
     out.search=SearchFixedNeighborComponent(prepared.domain,local_layout,local_y,initial_eta,context,policy);
-    out.certification=out.search.certification;
-    const bool certified=out.certification && out.certification->passed();
+    const bool certified=out.search.certification && out.search.certification->passed();
     out.succeeded=out.search.search_converged && certified;
     out.stop_reason=out.search.reason;
     if(progress_component)

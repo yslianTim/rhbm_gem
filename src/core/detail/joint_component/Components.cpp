@@ -184,18 +184,36 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             accepted_objective=LastFixedNeighborObjective(fit.search);
             accepted_gradient_inf_norm=LastFixedNeighborGradient(fit.search);
             component.search_completed=fit.succeeded; component.stop_reason=fit.stop_reason;
+            component.search_sweeps=fit.search.sweep_count;
+            component.first_order_stationarity_sweep=fit.search.first_order_stationarity_sweep;
+            component.confirmed_stationarity_sweep=fit.search.confirmed_stationarity_sweep;
+            component.endpoint_certification_sweep=fit.search.certification_sweep;
             component.profile_evaluations=static_cast<int>(fit.search.total_profile_evaluations);
             component.accepted_updates=static_cast<int>(fit.search.total_accepted_local_updates);
-            if(fit.certification && fit.certification->passed())
+            if(fit.search.certification)
             {
-                component.state=ComponentState(fit.certification->assessment.primary,data.context.scale);
-                component.evidence=AssessmentEvidence(fit.certification->assessment,JointEvidenceScope::ComponentLocal);
-                component.ranks=AssessmentRanks(fit.certification->assessment,JointEvidenceScope::ComponentLocal);
+                const auto & certification=*fit.search.certification;
+                component.evidence=AssessmentEvidence(certification.assessment,JointEvidenceScope::ComponentLocal);
+                component.ranks=AssessmentRanks(certification.assessment,JointEvidenceScope::ComponentLocal);
+                component.evidence.push_back({"endpoint-trust",certification.passed() ? JointCheckStatus::Passed :
+                    JointCheckStatus::Failed,JointEvidenceScope::ComponentLocal,{},{},certification.trust.reason});
+                const auto add_width_gradient=[&](const char * name,const Endpoint & evaluation) {
+                    const bool available=evaluation.valid && evaluation.gradient.size()>0 && evaluation.gradient.allFinite();
+                    const double value=available ? evaluation.gradient.lpNorm<Eigen::Infinity>() : 0.0;
+                    component.evidence.push_back({name,!available ? JointCheckStatus::Unavailable :
+                        value<=1e-12 ? JointCheckStatus::Passed : JointCheckStatus::Failed,
+                        JointEvidenceScope::ComponentLocal,available ? std::optional<double>(value) : std::nullopt,
+                        1e-12,available ? "" : evaluation.reason});
+                };
+                add_width_gradient("endpoint-primary-width-gradient",certification.assessment.primary);
+                add_width_gradient("endpoint-reference-width-gradient",certification.assessment.reference);
+                if(certification.passed())
+                    component.state=ComponentState(certification.assessment.primary,data.context.scale);
             }
         }
         else component.stop_reason=valid ? "unobserved-full-parameters" : "invalid-initial-widths";
 
-        if(!component.state)
+        if(!component.state && !fit.search.certification)
         {
             Assessment missing; missing.failure=component.stop_reason;
             component.evidence=AssessmentEvidence(missing,JointEvidenceScope::ComponentLocal);
@@ -209,8 +227,8 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
                 data.context.update_budget,elapsed,component.stop_reason,component.state.has_value(),
                 accepted_objective,accepted_gradient_inf_norm);
         if(!has_observable_groups && component_count==1 && data.partition.constant_rows.empty() &&
-            fit.certification && fit.certification->passed())
-            out.single_component_assessment=std::move(fit.certification->assessment);
+            fit.search.certification && fit.search.certification->passed())
+            out.single_component_assessment=std::move(fit.search.certification->assessment);
         out.components.push_back(std::move(component));
     }
     return out;
