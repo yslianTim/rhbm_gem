@@ -193,17 +193,25 @@ ReferenceFeasibility AssessReferenceFeasibility(const MemoryShape & shape,std::s
 std::string FormatMemoryEstimate(const MemoryEstimate & estimate)
 {
     const auto & s=estimate.shape; std::ostringstream out;
-    out<<"[Joint][Memory] stage="<<MemoryStageName(estimate.stage)<<" scope="<<(s.problem_scope ? "problem" : "component")
-       <<" component_atoms="<<s.component_atoms
-       <<" component_rows="<<s.component_observations<<" support_entries="<<s.component_support_entries
-       <<" prepared_blocks="<<s.component_blocks<<" affected_row_entries="<<s.affected_row_entries
-       <<" neighbor_entries="<<s.component_neighbor_entries
-       <<" max_block_rows="<<s.maximum_block_rows<<" max_block_support_entries="<<s.maximum_block_support_entries
-       <<" free_columns="<<s.component_free_columns<<" target_columns="<<s.component_target_columns
-       <<" resident="<<Bytes(estimate.resident_bytes)<<" temporary="<<Bytes(estimate.temporary_bytes)
-       <<" estimated_peak="<<Bytes(estimate.estimated_peak_bytes)<<" budget="<<Bytes(estimate.budget_bytes)
-       <<" preflight="<<MemoryStatusName(estimate.status);
-    if(!estimate.reason.empty()) out<<" reason="<<estimate.reason;
+    out<<"[Joint][Memory]\n"
+       <<"  stage="<<MemoryStageName(estimate.stage)<<'\n'
+       <<"  scope="<<(s.problem_scope ? "problem" : "component")<<'\n'
+       <<"  component_atoms="<<s.component_atoms<<'\n'
+       <<"  component_rows="<<s.component_observations<<'\n'
+       <<"  support_entries="<<s.component_support_entries<<'\n'
+       <<"  prepared_blocks="<<s.component_blocks<<'\n'
+       <<"  affected_row_entries="<<s.affected_row_entries<<'\n'
+       <<"  neighbor_entries="<<s.component_neighbor_entries<<'\n'
+       <<"  max_block_rows="<<s.maximum_block_rows<<'\n'
+       <<"  max_block_support_entries="<<s.maximum_block_support_entries<<'\n'
+       <<"  free_columns="<<s.component_free_columns<<'\n'
+       <<"  target_columns="<<s.component_target_columns<<'\n'
+       <<"  resident="<<Bytes(estimate.resident_bytes)<<'\n'
+       <<"  temporary="<<Bytes(estimate.temporary_bytes)<<'\n'
+       <<"  estimated_peak="<<Bytes(estimate.estimated_peak_bytes)<<'\n'
+       <<"  budget="<<Bytes(estimate.budget_bytes)<<'\n'
+       <<"  preflight="<<MemoryStatusName(estimate.status);
+    if(!estimate.reason.empty()) out<<'\n'<<"  reason="<<estimate.reason;
     return out.str();
 }
 void LogMemoryEstimate(const MemoryEstimate & estimate)
