@@ -131,6 +131,18 @@ Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,
 Evaluation EvaluateStateStreaming(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &,
     ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);
 MemoryEstimate ReferenceSolveMemoryEstimate(const Domain &,VectorRef,const EvaluationContext &,std::size_t resident_override=0);
+MemoryEstimate EndpointVerificationMemoryEstimate(const Domain &,VectorRef,const EvaluationContext &,std::size_t resident_override=0);
+struct IndependentReplayEvidence
+{
+    bool available{},valid{},feasible{},primary_valid{},primary_kkt_passed{},independent_kkt_passed{},
+        prediction_passed{},residual_passed{},objective_passed{},kkt_agrees{},gradient_agrees{},passed{};
+    std::string reason;
+    double prediction_difference{unavailable},residual_difference{unavailable},objective_difference{unavailable},
+        kkt_difference{unavailable},gradient_difference{unavailable},cancellation_ratio{unavailable},
+        primary_ac_kkt{unavailable},independent_ac_kkt{unavailable},primary_width_gradient{unavailable},
+        independent_width_gradient{unavailable};
+};
+IndependentReplayEvidence CheckIndependentReplay(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &);
 struct TrustEvidence
 {
     std::optional<Endpoint> reference;

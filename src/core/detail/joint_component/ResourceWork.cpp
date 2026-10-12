@@ -99,6 +99,7 @@ const char * MemoryStageName(MemoryStage stage)
     case MemoryStage::StructuralConstruction: return "structural-construction";
     case MemoryStage::FixedNeighborPreparation: return "fixed-neighbor-preparation";
     case MemoryStage::GlobalStateEvaluation: return "global-state-evaluation";
+    case MemoryStage::EndpointVerification: return "endpoint-verification";
     case MemoryStage::ReferenceSolve: return "reference-solve";
     case MemoryStage::RankAssessment: return "rank-assessment";
     case MemoryStage::TargetIdentifiability: return "target-identifiability";
@@ -163,6 +164,12 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
     case MemoryStage::GlobalStateEvaluation:
         ok=AddProduct(temporary,rows,3*sizeof(double)+sizeof(std::uint8_t)) &&
             AddProduct(temporary,atoms,24*sizeof(double)+sizeof(Eigen::Index));
+        break;
+    case MemoryStage::EndpointVerification:
+        // The independent replay holds compensated prediction accumulators and
+        // O(P) gradient, norm and feasibility vectors, never an N-by-2P design.
+        ok=AddProduct(temporary,rows,3*sizeof(double)) &&
+            AddProduct(temporary,atoms,16*sizeof(double)+3*sizeof(Eigen::Index));
         break;
     case MemoryStage::ReferenceSolve:
     {

@@ -277,6 +277,33 @@ MemoryEstimate ReferenceSolveMemoryEstimate(const Domain & domain,VectorRef,cons
     shape.resident_bytes=std::max(view_bytes,resident_override);
     return PlanMemory(shape,MemoryStage::ReferenceSolve);
 }
+MemoryEstimate EndpointVerificationMemoryEstimate(const Domain & domain,VectorRef y,const EvaluationContext & context,
+    std::size_t resident_override)
+{
+    MemoryShape shape; shape.component_atoms=domain.atoms.size();
+    shape.component_observations=static_cast<std::size_t>(domain.rows);
+    shape.component_target_columns=context.target_columns;
+    for(std::size_t atom=0;atom<domain.atoms.size();++atom)
+        if(!CheckedAddBytes(shape.component_support_entries,domain.atoms[atom].size(),shape.component_support_entries))
+        {
+            auto estimate=PlanMemory(shape,MemoryStage::EndpointVerification);
+            estimate.status=MemoryStatus::Overflow; estimate.reason="size-overflow"; return estimate;
+        }
+    const auto * input=domain.atoms.Storage();
+    const auto snapshot=input ? EstimateSnapshotBytes(*input) : std::optional<std::size_t>{0};
+    std::size_t resident{};
+    std::size_t support_bytes{},observation_bytes{};
+    if(!snapshot || !CheckedMultiplyBytes(shape.component_support_entries,sizeof(JointSupport),support_bytes) ||
+        !CheckedMultiplyBytes(static_cast<std::size_t>(std::max<Eigen::Index>(0,y.size())),2*sizeof(double),observation_bytes) ||
+        !CheckedAddBytes(*snapshot,domain.atoms.LocalSupportIndexBytes(),resident) ||
+        !CheckedAddBytes(resident,support_bytes,resident) || !CheckedAddBytes(resident,observation_bytes,resident))
+    {
+        auto estimate=PlanMemory(shape,MemoryStage::EndpointVerification);
+        estimate.status=MemoryStatus::Overflow; estimate.reason="size-overflow"; return estimate;
+    }
+    shape.resident_bytes=std::max(resident,resident_override);
+    return PlanMemory(shape,MemoryStage::EndpointVerification);
+}
 Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,bool reference,const EvaluationContext * context,
     const std::vector<LinearBlock> * blocks,
     ProfileEvaluationRole role,ProfileSearchWork * profile_work)
@@ -508,6 +535,130 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
     if (context->audit.trial_details) out.design=DesignSpectrum(e.x,Vector::Ones(y.size()),&policy.rank);
     out.passed=prediction_ok && gradient_ok && kkt_difference<=1e-13;
     out.reason=out.passed ? "trusted" : "replay-disagreement";
+    return out;
+}
+
+IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef y,const Evaluation & e,
+    const EvaluationContext & policy)
+{
+    constexpr double pi=std::numbers::pi;
+    IndependentReplayEvidence out; out.primary_valid=e.valid;
+    if(!e.valid || domain.rows!=y.size() || e.residual.size()!=y.size() ||
+        e.eta.size()!=static_cast<Eigen::Index>(domain.atoms.size()) || e.beta.size()!=2*e.eta.size())
+    {out.reason="invalid-primary"; return out;}
+    if(!e.certificate.available)
+    {out.reason="primary-kkt-unavailable"; return out;}
+
+    const auto atoms=e.eta.size();
+    const Vector widths=e.eta.array().exp();
+    if(!widths.allFinite() || (widths.array()<=0).any())
+    {out.reason="invalid-widths"; return out;}
+    Vector prediction=Vector::Zero(y.size()),prediction_error=prediction,absolute_sum=prediction;
+    Vector column_norms_squared=Vector::Zero(e.beta.size());
+    const auto add=[&](Eigen::Index row,double value) {
+        const double adjusted=value-prediction_error(row);
+        const double next=prediction(row)+adjusted;
+        prediction_error(row)=(next-prediction(row))-adjusted;
+        prediction(row)=next; absolute_sum(row)+=std::abs(value);
+    };
+    const auto kernel=[&](double square,double width) {
+        struct Values {double gaussian{},charge{},gaussian_log_width{},charge_log_width{};};
+        Values value;
+        if(square>2.5*2.5) return value;
+        const double radius=std::sqrt(square),width_squared=width*width;
+        const double exponential=std::exp(-square/(2*width_squared));
+        value.gaussian=exponential/std::pow(2*pi*width_squared,1.5);
+        value.gaussian_log_width=value.gaussian*(square/width_squared-3.0);
+        const double center=std::sqrt(2/(pi*width_squared));
+        if(radius<1e-5)
+        {value.charge=center; value.charge_log_width=-center;}
+        else
+        {value.charge=std::erf(radius/width/std::sqrt(2.0))/radius; value.charge_log_width=-center*exponential;}
+        return value;
+    };
+    for(Eigen::Index atom=0;atom<atoms;++atom)
+        for(const auto & support:domain.atoms[static_cast<std::size_t>(atom)])
+        {
+            const auto basis=kernel(support.square,widths(atom));
+            add(support.row,e.beta(2*atom)*basis.gaussian);
+            add(support.row,e.beta(2*atom+1)*basis.charge);
+            column_norms_squared(2*atom)+=basis.gaussian*basis.gaussian;
+            column_norms_squared(2*atom+1)+=basis.charge*basis.charge;
+        }
+    if(!prediction.allFinite() || !column_norms_squared.allFinite())
+    {out.reason="nonfinite-replay"; return out;}
+
+    double rss{},rss_compensation{},prediction_difference{},residual_difference{},cancellation_ratio{};
+    bool prediction_ok=true,residual_ok=true;
+    for(Eigen::Index row=0;row<y.size();++row)
+    {
+        const double independent_residual=prediction(row)-y(row),primary_prediction=e.residual(row)+y(row);
+        const double prediction_error_value=std::abs(prediction(row)-primary_prediction);
+        const double residual_error_value=std::abs(independent_residual-e.residual(row));
+        prediction_difference=std::max(prediction_difference,prediction_error_value);
+        residual_difference=std::max(residual_difference,residual_error_value);
+        const double prediction_tolerance=2e-12+2e-13*std::abs(primary_prediction);
+        prediction_ok &= prediction_error_value<=prediction_tolerance;
+        residual_ok &= residual_error_value<=prediction_tolerance;
+        const double square=independent_residual*independent_residual;
+        const double adjusted=square-rss_compensation,next=rss+adjusted;
+        rss_compensation=(next-rss)-adjusted; rss=next;
+        cancellation_ratio=std::max(cancellation_ratio,absolute_sum(row)/std::max(1.0,std::abs(prediction(row))));
+    }
+
+    Vector ac_gradient=Vector::Zero(e.beta.size()),ac_compensation=ac_gradient;
+    Vector width_gradient=Vector::Zero(atoms),width_compensation=width_gradient;
+    const auto add_compensated=[](Vector & sum,Vector & compensation,Eigen::Index index,double value) {
+        const double adjusted=value-compensation(index),next=sum(index)+adjusted;
+        compensation(index)=(next-sum(index))-adjusted; sum(index)=next;
+    };
+    for(Eigen::Index atom=0;atom<atoms;++atom)
+        for(const auto & support:domain.atoms[static_cast<std::size_t>(atom)])
+        {
+            const auto basis=kernel(support.square,widths(atom));
+            const double residual=prediction(support.row)-y(support.row);
+            add_compensated(ac_gradient,ac_compensation,2*atom,basis.gaussian*residual);
+            add_compensated(ac_gradient,ac_compensation,2*atom+1,basis.charge*residual);
+            add_compensated(width_gradient,width_compensation,atom,
+                (e.beta(2*atom)*basis.gaussian_log_width+e.beta(2*atom+1)*basis.charge_log_width)*residual);
+        }
+    const Vector column_norms=column_norms_squared.array().sqrt();
+    if(!ac_gradient.allFinite() || !width_gradient.allFinite() || !column_norms.allFinite() ||
+        (column_norms.array()<=0).any())
+    {out.available=true; out.reason="rank-deficient-column"; return out;}
+
+    const double scale=policy.scale>0 ? policy.scale : std::max(1.0,y.norm());
+    const Vector scaled_beta=column_norms.array()*e.beta.array()/scale;
+    const Vector scaled_gradient=ac_gradient.array()/column_norms.array()/scale;
+    Vector projected=scaled_beta-scaled_gradient;
+    bool feasible=true;
+    for(Eigen::Index atom=0;atom<atoms;++atom)
+    {feasible &= e.beta(2*atom)>=0; projected(2*atom)=std::max(0.0,projected(2*atom));}
+    out.available=true; out.valid=true; out.feasible=feasible;
+    out.primary_ac_kkt=e.certificate.projected_kkt;
+    out.independent_ac_kkt=(scaled_beta-projected).lpNorm<Eigen::Infinity>();
+    out.primary_width_gradient=e.gradient.lpNorm<Eigen::Infinity>();
+    out.independent_width_gradient=width_gradient.lpNorm<Eigen::Infinity>();
+    out.prediction_difference=prediction_difference; out.residual_difference=residual_difference;
+    out.objective_difference=std::abs(.5*rss-e.certificate.objective);
+    out.kkt_difference=std::abs(out.independent_ac_kkt-out.primary_ac_kkt);
+    out.gradient_difference=(width_gradient-e.gradient).lpNorm<Eigen::Infinity>();
+    out.cancellation_ratio=cancellation_ratio;
+    out.primary_kkt_passed=e.certificate.feasible && e.certificate.kkt_passed && out.primary_ac_kkt<=1e-10;
+    out.independent_kkt_passed=feasible && out.independent_ac_kkt<=1e-10;
+    out.prediction_passed=prediction_ok;
+    out.residual_passed=residual_ok;
+    out.objective_passed=out.objective_difference<=1e-12+2e-12*std::abs(e.certificate.objective);
+    out.kkt_agrees=out.kkt_difference<=1e-13;
+    out.gradient_agrees=((width_gradient-e.gradient).array().abs()<=
+        1e-13+2e-9*e.gradient.array().abs()).all();
+    out.passed=out.primary_kkt_passed && out.independent_kkt_passed && out.prediction_passed &&
+        out.residual_passed && out.objective_passed && out.kkt_agrees && out.gradient_agrees;
+    out.reason=out.passed ? "verified" : !out.primary_kkt_passed ? "primary-kkt-failed" :
+        !out.independent_kkt_passed ? "independent-kkt-failed" : "replay-disagreement";
+    out.valid=std::isfinite(out.independent_ac_kkt) && std::isfinite(out.independent_width_gradient) &&
+        std::isfinite(out.objective_difference);
+    if(!out.valid) {out.passed=false; out.reason="nonfinite-replay-evidence";}
     return out;
 }
 

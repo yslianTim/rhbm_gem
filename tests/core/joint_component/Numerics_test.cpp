@@ -799,6 +799,7 @@ TEST(JointComponentNumericsTest, MemoryPlannerUsesCheckedStageSpecificEstimates)
     const auto reference=n::AssessReferenceFeasibility(large);
     const auto rank=n::PlanMemory(large,n::MemoryStage::RankAssessment);
     const auto target=n::PlanMemory(large,n::MemoryStage::TargetIdentifiability);
+    const auto verification=n::PlanMemory(large,n::MemoryStage::EndpointVerification);
     EXPECT_EQ(mappings.status,n::MemoryStatus::Pass);
     EXPECT_EQ(structural.status,n::MemoryStatus::Pass);
     EXPECT_EQ(state.status,n::MemoryStatus::Pass);
@@ -806,6 +807,8 @@ TEST(JointComponentNumericsTest, MemoryPlannerUsesCheckedStageSpecificEstimates)
     EXPECT_EQ(reference.numerical_status,"unavailable");
     EXPECT_EQ(rank.status,n::MemoryStatus::Reject);
     EXPECT_EQ(target.status,n::MemoryStatus::Reject);
+    EXPECT_EQ(verification.status,n::MemoryStatus::Pass);
+    EXPECT_LT(verification.estimated_peak_bytes,reference.estimated_peak_bytes);
     EXPECT_EQ(mappings.budget_bytes,3'200'000'000u);
     EXPECT_NE(mappings.estimated_peak_bytes,state.estimated_peak_bytes);
 
@@ -846,6 +849,84 @@ TEST(JointComponentNumericsTest, StreamingStateMatchesSparseGlobalEvaluation)
         2e-12*std::max(1.0,sparse.gradient.lpNorm<Eigen::Infinity>()));
     EXPECT_EQ(streaming.x.size(),0);
     EXPECT_EQ(streaming.derivative.size(),0);
+}
+
+TEST(JointComponentNumericsTest, IndependentStreamingReplayMatchesLegacyMatrixReplay)
+{
+    for(const std::string topology:{"chain","cube"})
+    {
+        SCOPED_TRACE(topology);
+        using rhbm_gem::core::JointProblem;
+        using rhbm_gem::core::JointProblemAccess;
+        JointProblem problem(second_stage_test::SyntheticJointWorkload(topology,8));
+        const auto & data=JointProblemAccess::Get(problem);
+        const Vector eta=Vector::Constant(8,std::log(.55));
+        const auto primary=n::EvaluateProfile(data.domain,data.y,eta,false,&data.context);
+        ASSERT_TRUE(primary.valid);
+        const auto streaming=n::EvaluateStateStreaming(data.domain,data.y,primary.eta,primary.beta,data.context);
+        ASSERT_TRUE(streaming.valid);
+        const auto legacy=n::CheckReplay(data.domain,data.y,primary,data.context);
+        const auto independent=n::CheckIndependentReplay(data.domain,data.y,streaming,data.context);
+        ASSERT_TRUE(legacy.passed)<<legacy.reason;
+        ASSERT_TRUE(independent.available && independent.valid)<<independent.reason;
+        EXPECT_TRUE(independent.primary_kkt_passed);
+        EXPECT_TRUE(independent.independent_kkt_passed);
+        EXPECT_TRUE(independent.prediction_passed);
+        EXPECT_TRUE(independent.residual_passed);
+        EXPECT_TRUE(independent.objective_passed);
+        EXPECT_TRUE(independent.kkt_agrees);
+        EXPECT_TRUE(independent.gradient_agrees);
+        EXPECT_TRUE(independent.passed)<<independent.reason;
+        EXPECT_LE(independent.prediction_difference,2e-12+2e-13*(primary.x*primary.beta).cwiseAbs().maxCoeff());
+        EXPECT_LE(independent.residual_difference,2e-12+2e-13*(primary.x*primary.beta).cwiseAbs().maxCoeff());
+        EXPECT_LE(independent.objective_difference,1e-12+2e-12*primary.certificate.objective);
+        EXPECT_LE(independent.kkt_difference,1e-13);
+        EXPECT_LE(independent.gradient_difference,1e-13+2e-9*streaming.gradient.lpNorm<Eigen::Infinity>());
+        EXPECT_TRUE(std::isfinite(independent.cancellation_ratio));
+    }
+}
+
+TEST(JointComponentNumericsTest, IndependentStreamingReplayPreservesActiveBoundaryAndCancellation)
+{
+    constexpr Eigen::Index rows=33;
+    std::vector<std::vector<n::Support>> support(1);
+    Vector y(rows),eta=Vector::Constant(1,std::log(.55)),beta(2);
+    Vector gaussian(rows),charge(rows);
+    for(Eigen::Index row=0;row<rows;++row)
+    {
+        const double square=6.25*static_cast<double>(row)/static_cast<double>(rows-1);
+        support[0].push_back({row,square});
+        const auto basis=n::EvaluateKernel(square,.55,2.5);
+        gaussian(row)=basis.gaussian; charge(row)=basis.charge;
+    }
+    n::Domain domain(rows,std::move(support));
+    y=-gaussian; beta<<0,charge.dot(y)/charge.squaredNorm();
+    const auto context=n::CreateContext(y,1);
+    const auto active=n::EvaluateStateStreaming(domain,y,eta,beta,context);
+    ASSERT_TRUE(active.valid)<<active.reason;
+    ASSERT_TRUE(active.certificate.kkt_passed);
+    const auto active_replay=n::CheckIndependentReplay(domain,y,active,context);
+    EXPECT_TRUE(active_replay.passed)<<active_replay.reason;
+    EXPECT_TRUE(active_replay.feasible);
+    EXPECT_DOUBLE_EQ(beta(0),0.0);
+
+    std::vector<std::vector<n::Support>> duplicate_support(2);
+    for(Eigen::Index row=0;row<rows;++row)
+    {
+        const double square=6.25*static_cast<double>(row)/static_cast<double>(rows-1);
+        duplicate_support[0].push_back({row,square});
+        duplicate_support[1].push_back({row,square});
+    }
+    n::Domain duplicate_domain(rows,std::move(duplicate_support));
+    const Vector zero=Vector::Zero(rows),duplicate_eta=Vector::Constant(2,std::log(.55));
+    Vector cancelling_beta(4); cancelling_beta<<0,1e12,0,-1e12;
+    const auto duplicate_context=n::CreateContext(zero,2);
+    const auto cancelling=n::EvaluateStateStreaming(duplicate_domain,zero,duplicate_eta,cancelling_beta,duplicate_context);
+    ASSERT_TRUE(cancelling.valid)<<cancelling.reason;
+    const auto cancellation_replay=n::CheckIndependentReplay(duplicate_domain,zero,cancelling,duplicate_context);
+    EXPECT_TRUE(cancellation_replay.passed)<<cancellation_replay.reason;
+    EXPECT_GT(cancellation_replay.cancellation_ratio,1e10);
+    EXPECT_DOUBLE_EQ(cancellation_replay.objective_difference,0.0);
 }
 
 TEST(JointComponentNumericsTest, RankAssessmentPreflightStopsDenseDesignSpectrum)
