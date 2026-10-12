@@ -242,8 +242,6 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
         RejectBuildPreflight(shape,"size-overflow");
     shape.resident_bytes=planned_snapshot;
     const auto build_estimate=n::PlanMemory(shape,n::MemoryStage::ProblemConstruction);
-    if(build_estimate.status!=n::MemoryStatus::Pass || build_estimate.estimated_peak_bytes>n::JointMemoryPlanningBudgetBytes/2)
-        n::LogMemoryEstimate(build_estimate);
     if(build_estimate.status!=n::MemoryStatus::Pass)
         RejectBuildPreflight(shape,build_estimate.reason.c_str());
 
