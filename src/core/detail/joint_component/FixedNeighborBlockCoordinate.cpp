@@ -16,7 +16,6 @@ bool WithinBlockObjectiveReplay(double error,double reference)
 
 namespace {
 using Clock=std::chrono::steady_clock;
-enum class StationarityState {NotStationary,CandidateStationary,ConfirmedStationary};
 constexpr double EtaChangeConfirmationThreshold=1e-10;
 constexpr std::size_t EndpointCertificationRetryInterval=10;
 double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
@@ -96,6 +95,23 @@ bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_c
     return has_previous_complete_sweep && std::isfinite(eta_change_inf) && eta_change_inf>=0.0 &&
         eta_change_inf<=EtaChangeConfirmationThreshold;
 }
+FixedNeighborStationarityState ClassifyFixedNeighborStationarity(
+    double ac_kkt,double width_gradient_inf,double eta_change_inf,bool has_previous_complete_sweep)
+{
+    if(!(ac_kkt<=1e-10) || !(width_gradient_inf<=1e-12))
+        return FixedNeighborStationarityState::NotStationary;
+    return IsFixedNeighborEtaChangeConfirmed(eta_change_inf,has_previous_complete_sweep) ?
+        FixedNeighborStationarityState::ConfirmedStationary : FixedNeighborStationarityState::CandidateStationary;
+}
+bool ShouldAttemptFixedNeighborCertification(FixedNeighborStationarityState stationarity,std::size_t sweep,
+    std::size_t & next_retry_sweep)
+{
+    if(stationarity!=FixedNeighborStationarityState::ConfirmedStationary)
+    {next_retry_sweep=0; return false;}
+    if(next_retry_sweep!=0 && sweep<next_retry_sweep) return false;
+    next_retry_sweep=sweep+EndpointCertificationRetryInterval;
+    return true;
+}
 FixedNeighborSearchResult SearchFixedNeighborComponent(
     const Domain & domain,const JointParameterLayout & layout,VectorRef y,VectorRef initial_eta,const EvaluationContext & context,
     const FixedNeighborPolicy & policy,Vector initial_beta)
@@ -172,7 +188,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     const bool retain_diagnostics=policy.collect_diagnostics || policy.capture_local_trajectory ||
         static_cast<bool>(policy.state_observer);
     bool stop=false;
-    bool stationarity_reset_after_certification=true;
     std::size_t next_certification_retry_sweep{};
     for(std::size_t sweep_index=0;sweep_index<policy.maximum_sweeps && !stop;++sweep_index)
     {
@@ -406,16 +421,13 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         if(sweep.cache_replay_error>2e-12+2e-13*std::max(1.0,replay.prediction.cwiseAbs().maxCoeff()) ||
             !WithinBlockObjectiveReplay(sweep.objective_replay_error,replay.objective))
         {out.reason="block-cache-replay-failed"; stop=true; break;}
-        StationarityState stationarity=StationarityState::NotStationary;
-        if(sweep.global_ac_kkt<=1e-10 && sweep.global_width_gradient_inf_norm<=1e-12)
-        {
-            if(out.first_order_stationarity_sweep==0) out.first_order_stationarity_sweep=sweep_index+1;
-            stationarity=StationarityState::CandidateStationary;
-            if(IsFixedNeighborEtaChangeConfirmed(sweep.eta_change_inf,sweep.coordinate_confirmation_available))
-                stationarity=StationarityState::ConfirmedStationary;
-        }
-        else if(out.certification && !out.certification->passed()) stationarity_reset_after_certification=true;
-        if(stationarity==StationarityState::ConfirmedStationary)
+        const auto stationarity=ClassifyFixedNeighborStationarity(sweep.global_ac_kkt,
+            sweep.global_width_gradient_inf_norm,sweep.eta_change_inf,sweep.coordinate_confirmation_available);
+        if(stationarity!=FixedNeighborStationarityState::NotStationary && out.first_order_stationarity_sweep==0)
+            out.first_order_stationarity_sweep=sweep_index+1;
+        const bool certification_retry_due=ShouldAttemptFixedNeighborCertification(
+            stationarity,sweep_index+1,next_certification_retry_sweep);
+        if(stationarity==FixedNeighborStationarityState::ConfirmedStationary)
         {
             if(out.confirmed_stationarity_sweep==0) out.confirmed_stationarity_sweep=sweep_index+1;
             if(!policy.stop_after_stationarity || !policy.certify_endpoint)
@@ -424,8 +436,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 if(policy.stop_after_stationarity) break;
                 continue;
             }
-            const bool retry_due=!out.certification || out.certification->passed() ||
-                stationarity_reset_after_certification || sweep_index+1>=next_certification_retry_sweep;
+            const bool retry_due=!out.certification || out.certification->passed() || certification_retry_due;
             if(!retry_due) continue;
             out.certification=CertifyFixedNeighborEndpoint(domain,y,out.state,context,profile_work);
             out.certification_sweep=sweep_index+1;
@@ -439,11 +450,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 out.reason=out.certification->trust.reason.empty() ?
                     "endpoint-certification-invalid-primary" : out.certification->trust.reason;
                 stop=true;
-            }
-            else
-            {
-                stationarity_reset_after_certification=false;
-                next_certification_retry_sweep=sweep_index+1+EndpointCertificationRetryInterval;
             }
         }
     }

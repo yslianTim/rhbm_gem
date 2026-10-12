@@ -359,6 +359,58 @@ TEST(JointFixedNeighborBlockCoordinateTest, EtaConfirmationUsesInclusiveExisting
         std::numeric_limits<double>::infinity()),true));
     EXPECT_FALSE(n::IsFixedNeighborEtaChangeConfirmed(std::numeric_limits<double>::quiet_NaN(),true));
 }
+TEST(JointFixedNeighborBlockCoordinateTest, CertificationRetryWaitsTenSweepsWhileStationarityPersists)
+{
+    std::size_t next_retry_sweep{};
+    const auto stationary=n::ClassifyFixedNeighborStationarity(1e-10,1e-12,0.0,true);
+    ASSERT_EQ(stationary,n::FixedNeighborStationarityState::ConfirmedStationary);
+    EXPECT_TRUE(n::ShouldAttemptFixedNeighborCertification(stationary,5,next_retry_sweep));
+    EXPECT_EQ(next_retry_sweep,15u);
+    EXPECT_FALSE(n::ShouldAttemptFixedNeighborCertification(stationary,5,next_retry_sweep));
+    for(std::size_t sweep=6;sweep<15;++sweep)
+        EXPECT_FALSE(n::ShouldAttemptFixedNeighborCertification(stationary,sweep,next_retry_sweep));
+    EXPECT_TRUE(n::ShouldAttemptFixedNeighborCertification(stationary,15,next_retry_sweep));
+    EXPECT_EQ(next_retry_sweep,25u);
+}
+TEST(JointFixedNeighborBlockCoordinateTest, CertificationRetryResetsAfterKktLoss)
+{
+    std::size_t next_retry_sweep{};
+    ASSERT_TRUE(n::ShouldAttemptFixedNeighborCertification(
+        n::FixedNeighborStationarityState::ConfirmedStationary,5,next_retry_sweep));
+    const auto lost=n::ClassifyFixedNeighborStationarity(1.1e-10,5e-13,0.0,true);
+    ASSERT_EQ(lost,n::FixedNeighborStationarityState::NotStationary);
+    EXPECT_FALSE(n::ShouldAttemptFixedNeighborCertification(lost,10,next_retry_sweep));
+    EXPECT_EQ(next_retry_sweep,0u);
+    const auto restored=n::ClassifyFixedNeighborStationarity(5e-11,5e-13,0.0,true);
+    EXPECT_EQ(restored,n::FixedNeighborStationarityState::ConfirmedStationary);
+    EXPECT_TRUE(n::ShouldAttemptFixedNeighborCertification(restored,11,next_retry_sweep));
+}
+TEST(JointFixedNeighborBlockCoordinateTest, CertificationRetryResetsAfterWidthGradientLoss)
+{
+    std::size_t next_retry_sweep{};
+    ASSERT_TRUE(n::ShouldAttemptFixedNeighborCertification(
+        n::FixedNeighborStationarityState::ConfirmedStationary,5,next_retry_sweep));
+    const auto lost=n::ClassifyFixedNeighborStationarity(5e-11,1.1e-12,0.0,true);
+    ASSERT_EQ(lost,n::FixedNeighborStationarityState::NotStationary);
+    EXPECT_FALSE(n::ShouldAttemptFixedNeighborCertification(lost,10,next_retry_sweep));
+    EXPECT_EQ(next_retry_sweep,0u);
+    const auto restored=n::ClassifyFixedNeighborStationarity(5e-11,5e-13,0.0,true);
+    EXPECT_EQ(restored,n::FixedNeighborStationarityState::ConfirmedStationary);
+    EXPECT_TRUE(n::ShouldAttemptFixedNeighborCertification(restored,11,next_retry_sweep));
+}
+TEST(JointFixedNeighborBlockCoordinateTest, EtaChangeLossResetsCertificationRetryEligibility)
+{
+    std::size_t next_retry_sweep{};
+    ASSERT_TRUE(n::ShouldAttemptFixedNeighborCertification(
+        n::FixedNeighborStationarityState::ConfirmedStationary,5,next_retry_sweep));
+    const auto candidate=n::ClassifyFixedNeighborStationarity(1e-10,1e-12,1.1e-10,true);
+    ASSERT_EQ(candidate,n::FixedNeighborStationarityState::CandidateStationary);
+    EXPECT_FALSE(n::ShouldAttemptFixedNeighborCertification(candidate,10,next_retry_sweep));
+    EXPECT_EQ(next_retry_sweep,0u);
+    const auto reconfirmed=n::ClassifyFixedNeighborStationarity(1e-10,1e-12,1e-10,true);
+    EXPECT_EQ(reconfirmed,n::FixedNeighborStationarityState::ConfirmedStationary);
+    EXPECT_TRUE(n::ShouldAttemptFixedNeighborCertification(reconfirmed,11,next_retry_sweep));
+}
 TEST(JointFixedNeighborBlockCoordinateTest, SweepCoordinateTelemetryUsesCompleteSweepStates)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",32));

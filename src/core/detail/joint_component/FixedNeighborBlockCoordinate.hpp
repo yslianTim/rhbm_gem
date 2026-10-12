@@ -64,6 +64,7 @@ struct FixedNeighborEndpointCertification
     TrustEvidence trust;
     bool passed() const {return trust.passed;}
 };
+enum class FixedNeighborStationarityState {NotStationary,CandidateStationary,ConfirmedStationary};
 struct FixedNeighborDiagnosticSink
 {
     std::function<void(const FixedNeighborBlockRecord &)> block;
@@ -118,6 +119,10 @@ struct FixedNeighborComponentResult
 };
 
 bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_complete_sweep);
+FixedNeighborStationarityState ClassifyFixedNeighborStationarity(
+    double ac_kkt,double width_gradient_inf,double eta_change_inf,bool has_previous_complete_sweep);
+bool ShouldAttemptFixedNeighborCertification(FixedNeighborStationarityState,std::size_t sweep,
+    std::size_t & next_retry_sweep);
 FixedNeighborSearchResult SearchFixedNeighborComponent(
     const Domain &,const JointParameterLayout &,VectorRef y,VectorRef initial_eta,const EvaluationContext &,
     const FixedNeighborPolicy & = {},
