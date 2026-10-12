@@ -38,6 +38,51 @@ serial update semantics, replay, persistence and `RuntimeConvergence` contract. 
 [Joint runtime contract](joint-component-runtime.md) for the implementation
 details.
 
+## KKT and reference agreement
+
+For fixed widths and an unchanged active set, let `X_F` contain the free A/C
+columns and let `g_F = X_Fᵀr` be the least-squares gradient on that face. In the
+unconstrained full-rank case, `g_F = (X_FᵀX_F)(β_F - β_F*)`, giving
+
+```text
+||β_F - β_F*||₂ ≤ ||g_F||₂ / σ_min(X_F)².
+```
+
+With nonnegative A constraints, this bound applies only on a stable free face;
+active coordinates also require a constrained error bound using projected KKT
+and the active multipliers. The runtime projected KKT value is a normalized
+residual, while reference agreement is a scaled coordinate-wise infinity
+difference. They are not interchangeable, and numerical rank alone does not
+bound their relationship without conditioning and scaling information.
+
+The 168-atom diagnosis provides this continuation evidence at the same input and
+initial widths. The 150-sweep row is a diagnostic run that continued beyond the
+107-sweep candidate; it is not an offline regular certificate.
+
+| Sweeps | Projected A/C KKT | Primary width gradient | Reference width gradient | Scaled A/C difference | Endpoint trust |
+| ---: | ---: | ---: | ---: | ---: | --- |
+| 30 | 3.6848e-5 | 7.3085e-7 | 1.4159e-6 | 1.0196e-3 | Failed: `kkt-failed` |
+| 107 | 4.5219e-11 | 8.3490e-13 | 1.6499e-12 | 1.2573e-9 | Failed: `reference-disagreement` |
+| 150, continued diagnostic | 8.3766e-14 | 9.1791e-15 | 1.2882e-14 | 2.8179e-12 | Passed: `trusted` |
+
+At sweep 107, the KKT and primary width-gradient checks passed, but the
+coefficient difference remained above `1e-10`, and the reference width gradient
+remained above `1e-12`. Continuing the ordinary accepted search reduced both
+disagreements enough to pass the existing endpoint checks. This case therefore
+shows that KKT does not imply the current reference agreement check, and that
+the observed disagreement was recoverable through more sweeps. It provides no
+evidence of an irreducible floating-point failure.
+
+The saved diagnosis does not contain the active-face `σ_min(X_F)` or condition
+number, so it cannot establish how much conditioning explains the sweep-107
+coefficient difference. Because the projected KKT and scaled coefficient
+metrics also use different normalizations, no condition-aware threshold can be
+derived from those values alone. Keep the current KKT (`1e-10`), width-gradient
+(`1e-12`), coefficient-agreement (`1e-10`) and local-correction (`1e-10`)
+thresholds, as well as the independent reference solve. A future condition-aware
+rule would first need active-face spectra and consistently scaled residual and
+coefficient errors across additional cases.
+
 ## Historical decisions
 
 | Topic | Conclusion |
