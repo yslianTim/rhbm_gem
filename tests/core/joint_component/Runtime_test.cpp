@@ -10,6 +10,7 @@
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "core/command/detail/MapSimulation.hpp"
 #include "support/JointComponentChecks.hpp"
+#include "support/JointProfileSearchDiagnostic.hpp"
 #include "support/JointRuntimeJson.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include <cmath>

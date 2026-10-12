@@ -248,20 +248,7 @@ struct ComponentPartition
 ComponentPartition Partition(const Domain &,const Identities &);
 Vector SelectValues(VectorRef,const std::vector<Eigen::Index> &);
 EvaluationContext ChildContext(const EvaluationContext &,const ComponentView &,bool);
-struct ProfileSearchDiagnosticResult
-{
-    SearchResult search;
-    Assessment assessment; // Assessment of the search endpoint.
-    std::optional<Assessment> trusted_assessment; // Assessment of the state returned by fallback logic.
-    std::optional<Endpoint> trusted_state;
-    std::optional<std::size_t> trusted_trial;
-    double assessment_seconds{};
-    std::optional<TrustEvidence> endpoint_trust;
-    bool search_success{};
-};
 struct FixedNeighborComponentResult;
-ProfileSearchDiagnosticResult AssessProfileSearchForDiagnostics(const Domain &,VectorRef,const EvaluationContext &,SearchResult,
-    const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
 struct AssemblyResult
 {
     bool available{},completed{true},profile_agrees{};

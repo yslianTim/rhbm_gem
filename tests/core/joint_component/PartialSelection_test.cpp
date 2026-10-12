@@ -4,6 +4,7 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <algorithm>
 #include "support/JointPartialSelection.hpp"
+#include "support/JointProfileSearchDiagnostic.hpp"
 #include "support/DataObjectTestSupport.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/FirstStageInitialization.hpp"

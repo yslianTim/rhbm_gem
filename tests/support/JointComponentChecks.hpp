@@ -1,5 +1,6 @@
 #pragma once
 #include "support/JointTestNumerics.hpp"
+#include "support/JointProfileSearchDiagnostic.hpp"
 
 namespace second_stage_test::matched::joint_abc {
 using ComponentView=runtime::ComponentView;
