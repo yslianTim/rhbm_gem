@@ -91,6 +91,11 @@ struct FixedNeighborPolicy
     FixedNeighborDiagnosticSink * diagnostic_sink{};
     std::function<void(const FixedNeighborBlockSweep &)> production_progress;
     std::function<void(const FixedNeighborBlockSweep &)> sweep_observer;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    // Test-only fault injection; compiled out of production targets.
+    std::function<FixedNeighborEndpointCertification(const Domain &,VectorRef,const BlockCoordinateState &,
+        const EvaluationContext &,ProfileSearchWork *)> certification_for_testing;
+#endif
     std::function<void(std::size_t,const BlockCoordinateState &,const FixedNeighborBlockSweep &,
         const std::vector<FixedNeighborBlockRecord> &)> state_observer;
 };

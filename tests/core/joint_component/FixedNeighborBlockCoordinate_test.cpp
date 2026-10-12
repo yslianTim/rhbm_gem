@@ -11,6 +11,8 @@
 #include <fstream>
 #include "support/JointSyntheticWorkload.hpp"
 #include <cmath>
+#include <iomanip>
+#include <iostream>
 #include <limits>
 #include <numeric>
 #include <utility>
@@ -499,6 +501,68 @@ TEST(JointFixedNeighborBlockCoordinateTest, InvalidEndpointCertificationStopsWit
     EXPECT_FALSE(certification.passed());
     EXPECT_FALSE(certification.trust.primary_valid);
     EXPECT_EQ(certification.trust.reason,"invalid-primary");
+
+    n::FixedNeighborPolicy policy; policy.maximum_sweeps=30;
+    std::size_t certification_attempts{};
+    policy.certification_for_testing=[&](const auto & endpoint_domain,n::VectorRef endpoint_y,
+        const n::BlockCoordinateState & state,const n::EvaluationContext & endpoint_context,
+        n::ProfileSearchWork * work) {
+        ++certification_attempts;
+        auto result=n::CertifyFixedNeighborEndpoint(endpoint_domain,endpoint_y,state,endpoint_context,work);
+        result.trust.passed=false; result.trust.primary_valid=false; result.trust.reason="invalid-primary";
+        return result;
+    };
+    const auto search=n::RunFixedNeighborDiagnostic(problem,n::Vector::Constant(8,std::log(.55)),policy);
+    EXPECT_FALSE(search.search_converged);
+    EXPECT_EQ(search.reason,"invalid-primary");
+    EXPECT_EQ(certification_attempts,1u);
+    EXPECT_GT(search.confirmed_stationarity_sweep,0u);
+    EXPECT_EQ(search.sweeps.size(),search.confirmed_stationarity_sweep);
+    EXPECT_FALSE(search.fit.search_completed);
+    ASSERT_EQ(search.fit.components.size(),1u);
+    EXPECT_EQ(search.fit.components.front().stop_reason,"invalid-primary");
+    const auto endpoint_trust=std::find_if(search.fit.components.front().evidence.begin(),
+        search.fit.components.front().evidence.end(),[](const auto & check){return check.name=="endpoint-trust";});
+    ASSERT_NE(endpoint_trust,search.fit.components.front().evidence.end());
+    EXPECT_EQ(endpoint_trust->status,rhbm_gem::JointCheckStatus::Failed);
+    EXPECT_EQ(endpoint_trust->reason,"invalid-primary");
+    EXPECT_FALSE(search.fit.components.front().state);
+    EXPECT_FALSE(search.fit.assembled_state);
+    EXPECT_FALSE(search.fit.prediction);
+    EXPECT_FALSE(search.fit.objective);
+    EXPECT_EQ(search.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Unavailable);
+}
+TEST(JointFixedNeighborBlockCoordinateTest, CertificationAtLastBudgetSweepIsNotRepeated)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
+    const n::Vector eta=n::Vector::Constant(8,std::log(.55));
+    n::FixedNeighborPolicy search_only; search_only.certify_endpoint=false;
+    const auto confirmed=n::RunFixedNeighborDiagnostic(problem,eta,search_only);
+    ASSERT_TRUE(confirmed.search_converged)<<confirmed.reason;
+    ASSERT_GT(confirmed.confirmed_stationarity_sweep,0u);
+
+    n::FixedNeighborPolicy policy; policy.maximum_sweeps=confirmed.confirmed_stationarity_sweep;
+    std::size_t current_sweep{}; std::vector<std::size_t> certification_sweeps;
+    policy.sweep_observer=[&](const auto & sweep){current_sweep=sweep.sweep;};
+    policy.certification_for_testing=[&](const auto & domain,n::VectorRef y,const n::BlockCoordinateState & state,
+        const n::EvaluationContext & context,n::ProfileSearchWork * work) {
+        certification_sweeps.push_back(current_sweep);
+        auto result=n::CertifyFixedNeighborEndpoint(domain,y,state,context,work);
+        result.trust.passed=false; result.trust.primary_valid=true; result.trust.reason="reference-disagreement";
+        return result;
+    };
+    const auto budget=n::RunFixedNeighborDiagnostic(problem,eta,policy);
+    EXPECT_FALSE(budget.search_converged);
+    EXPECT_EQ(budget.reason,"block-sweep-budget");
+    EXPECT_EQ(budget.sweeps.size(),confirmed.confirmed_stationarity_sweep);
+    ASSERT_EQ(certification_sweeps.size(),1u);
+    EXPECT_EQ(certification_sweeps.front(),budget.sweeps.size());
+    ASSERT_EQ(budget.fit.components.size(),1u);
+    EXPECT_EQ(budget.fit.components.front().endpoint_certification_sweep,budget.sweeps.size());
+    EXPECT_TRUE((budget.state.eta.array()==budget.assessment.primary.eta.array()).all());
+    EXPECT_TRUE((budget.state.beta.array()==budget.assessment.primary.beta.array()).all());
+    EXPECT_FALSE(budget.fit.components.front().state);
+    EXPECT_FALSE(budget.fit.assembled_state);
 }
 TEST(JointFixedNeighborBlockCoordinateTest, ReferenceDisagreementCanRetryAndCertifyTheSameAcceptedSearch)
 {
@@ -507,6 +571,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceDisagreementCanRetryAndCert
     ASSERT_EQ(problem.Input().observations.size(),30108u);
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     ASSERT_EQ(data.partition.components.size(),1u);
+    const auto blocks=n::BuildStructuralBlockPartition(*data.input,data.layout,12);
+    ASSERT_EQ(blocks.cores.size(),23u);
     const auto fit=rhbm_gem::core::FitJointComponents(problem,widths);
     ASSERT_EQ(fit.components.size(),1u);
     const auto & component=fit.components.front();
@@ -523,6 +589,24 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceDisagreementCanRetryAndCert
     ASSERT_NE(trust,component.evidence.end());
     EXPECT_EQ(trust->status,rhbm_gem::JointCheckStatus::Passed);
     EXPECT_EQ(component.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    const auto check=[&](const char * name) {
+        return std::find_if(component.evidence.begin(),component.evidence.end(),[&](const auto & item) {
+            return item.name==name;
+        });
+    };
+    const auto kkt=check("kkt"),width_gradient=check("endpoint-primary-width-gradient"),agreement=check("inner");
+    ASSERT_NE(kkt,component.evidence.end()); ASSERT_TRUE(kkt->value);
+    ASSERT_NE(width_gradient,component.evidence.end()); ASSERT_TRUE(width_gradient->value);
+    ASSERT_NE(agreement,component.evidence.end()); ASSERT_TRUE(agreement->value);
+    std::cout<<std::setprecision(17)<<"joint168 objective="<<fit.objective.value()
+        <<" sweeps="<<component.search_sweeps
+        <<" first_candidate="<<component.first_order_stationarity_sweep
+        <<" first_confirmed="<<component.confirmed_stationarity_sweep
+        <<" final_certification="<<component.endpoint_certification_sweep
+        <<" final_ac_kkt="<<*kkt->value
+        <<" final_width_gradient="<<*width_gradient->value
+        <<" reference_coefficient_difference="<<*agreement->value
+        <<" endpoint_trust=passed runtime_convergence=passed component_state=available assembled_state=available\n";
 }
 TEST(JointFixedNeighborBlockCoordinateTest, BudgetExhaustionCertifiesFinalAcceptedState)
 {

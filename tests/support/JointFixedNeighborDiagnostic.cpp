@@ -52,7 +52,7 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
     component.first_order_stationarity_sweep=out.first_order_stationarity_sweep;
     component.confirmed_stationarity_sweep=out.confirmed_stationarity_sweep;
     component.endpoint_certification_sweep=out.sweeps.size();
-    component.state=State(out.assessment.primary,context.scale);
+    if(certification.passed()) component.state=State(out.assessment.primary,context.scale);
     component.evidence=AssessmentEvidence(out.assessment,JointEvidenceScope::ComponentLocal);
     component.ranks=AssessmentRanks(out.assessment,JointEvidenceScope::ComponentLocal);
     component.evidence.push_back({"endpoint-trust",certification.passed() ? JointCheckStatus::Passed :
@@ -62,8 +62,11 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
     out.fit.initialization.reason="valid-widths"; out.fit.initialization.b=Values(out.state.eta.array().exp());
     out.fit.components.push_back(std::move(component)); out.fit.search_completed=out.search_converged;
     out.fit.observation_scale=context.scale; out.fit.available_row_mask.assign(data.input->observations.size(),true);
-    out.fit.assembled_state=out.fit.components.front().state;
-    out.fit.prediction=Values(out.state.prediction); out.fit.objective=out.state.objective;
+    if(certification.passed())
+    {
+        out.fit.assembled_state=out.fit.components.front().state;
+        out.fit.prediction=Values(out.state.prediction); out.fit.objective=out.state.objective;
+    }
     out.fit.evidence=AssessmentEvidence(out.assessment,JointEvidenceScope::AssembledGlobal);
     out.fit.ranks=AssessmentRanks(out.assessment,JointEvidenceScope::AssembledGlobal);
 

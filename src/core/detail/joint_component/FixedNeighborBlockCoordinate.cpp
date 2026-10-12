@@ -135,6 +135,13 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     catch(const std::exception &) {out.reason="block-invalid-partition"; return out;}
     if(partition.cores.empty()) {out.reason="block-invalid-partition"; return out;}
     auto * const profile_work=policy.collect_telemetry ? &out.work.local_profile_work : nullptr;
+    const auto certify_endpoint=[&] {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(policy.certification_for_testing)
+            return policy.certification_for_testing(domain,y,out.state,context,profile_work);
+#endif
+        return CertifyFixedNeighborEndpoint(domain,y,out.state,context,profile_work);
+    };
 
     out.state.eta=initial_eta;
     out.state.beta=has_initial_beta ? std::move(initial_beta) :
@@ -438,7 +445,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             }
             const bool retry_due=!out.certification || out.certification->passed() || certification_retry_due;
             if(!retry_due) continue;
-            out.certification=CertifyFixedNeighborEndpoint(domain,y,out.state,context,profile_work);
+            out.certification=certify_endpoint();
             out.certification_sweep=sweep_index+1;
             if(out.certification->passed())
             {
@@ -459,7 +466,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         if(policy.stop_after_stationarity && policy.certify_endpoint && out.sweep_count &&
             out.certification_sweep!=out.sweep_count)
         {
-            out.certification=CertifyFixedNeighborEndpoint(domain,y,out.state,context,profile_work);
+            out.certification=certify_endpoint();
             out.certification_sweep=out.sweep_count;
             if(!out.certification->trust.primary_valid)
                 out.reason=out.certification->trust.reason.empty() ? "endpoint-certification-invalid-primary" :

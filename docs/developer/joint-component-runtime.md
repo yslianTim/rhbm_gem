@@ -24,15 +24,20 @@ complete sweep, global stationarity checks identify a candidate endpoint. A
 confirmed candidate is independently certified before search can complete;
 reference coefficients never replace the accepted search coefficients. A valid
 endpoint that fails trust keeps its assessment and may continue through the
-same block-coordinate updates. While stationarity remains confirmed, another
-certification is attempted at most once every 10 sweeps. If stationarity clears,
-it must be reached and confirmed again before certification is retried. An
-invalid primary endpoint stops immediately. At budget exhaustion, a final
-endpoint is certified only if no candidate certification has run. A passing
-final trust check may preserve a usable state while the search remains
-incomplete; a failed check preserves its evidence and leaves state unavailable.
-An earlier failed candidate assessment is retained without repeating its
-reference solve. Search completion, certification,
+same block-coordinate updates. While all stationarity requirements remain
+confirmed, another certification is attempted at most once every 10 sweeps. A
+failed KKT, width-gradient or eta-change confirmation resets retry eligibility;
+after the full stationarity conditions are confirmed again, certification may
+be retried immediately. An invalid primary endpoint stops immediately. At
+budget exhaustion, if the final sweep has no certification, one bounded
+assessment certifies the final accepted state. It does not change accepted
+parameters, add a sweep or mark the search complete. If the final sweep already
+has a certification, that assessment is not repeated. A passing final trust
+check may preserve a usable state while the search remains incomplete; a failed
+check preserves its evidence and leaves state unavailable. Whenever a final
+assessment is completed, its provenance is `endpoint_certification_sweep ==
+search_sweeps`; zero-sweep searches and earlier unrecoverable failures do not
+invent certification provenance. Search completion, certification,
 state availability and runtime convergence remain separate outcomes.
 
 `AssessProfileSearchForDiagnostics()` is a test-support diagnostic for Profile
@@ -123,7 +128,9 @@ contracts and do not expose assembly details to callers.
 Production search retains aggregate counters, final sweep state and the latest
 endpoint assessment needed by the component route. Persisted component counters
 record actual sweeps, first and confirmed stationarity, and the last certification
-sweep. Detailed block records, local trial trajectories, reverse order and local
+sweep. A completed final assessment at budget exhaustion records the same sweep
+as `search_sweeps`; no certification sweep is recorded when no assessment ran.
+Detailed block records, local trial trajectories, reverse order and local
 certification remain opt-in experiment/test diagnostics. The preparation and
 mapping counters are reported as implementation attribution; they are not
 convergence criteria.

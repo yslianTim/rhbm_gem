@@ -18,20 +18,28 @@ option or automatic routing layer.
 | Local search | Profile LM (`fixed_neighbor_local_search=profile-lm`) |
 | Local update contract | At most one trusted accepted Profile LM update per block visit |
 | Acceptance | Existing replay and roundoff-safe monotone acceptance |
-| Candidate stationarity | Existing A/C KKT, width-gradient and eta-confirmation checks |
+| Candidate stationarity | A/C KKT `≤ 1e-10` and width-gradient infinity norm `≤ 1e-12` |
+| Confirmation | A previous complete sweep exists and eta-change infinity norm is `≤ 1e-10` |
 | Endpoint | Independent certification must pass before successful stopping |
-| Certification retry | Valid failed endpoints continue; retry every 10 sweeps while stationarity holds |
-| Exhaustion | Preserve evidence; a final trust-passed state may remain available while search is incomplete |
+| Certification retry | Valid failed endpoints continue; retry every 10 confirmed sweeps while all stationarity requirements hold; any failed requirement resets eligibility |
+| Exhaustion | One bounded assessment certifies the last accepted state if its final sweep has not already been certified; a trusted state may remain available while search is incomplete |
 
 The numerical thresholds are unchanged: A/C KKT `1e-10`, width-gradient
 `1e-12`, and eta confirmation `1e-10`. A confirmed stationary endpoint is
 certified using the existing reference solve and trust checks. Reference
 disagreement does not replace accepted coefficients or stop a valid search;
 FixedNeighbor continues its normal updates and retries certification at a
-bounded interval. An invalid primary endpoint is fatal. At budget exhaustion,
-the last endpoint is certified only when no candidate certification ran; a
-failed assessment leaves state unavailable, while a passing one retains a
-trusted state with an incomplete search. Prepared structural block mappings and workspace reuse do not
+bounded interval. Any failed KKT, width-gradient or eta-change requirement
+resets retry eligibility, so a later complete confirmation can certify
+immediately. An invalid primary endpoint is fatal. Budget exhaustion does not
+increase the sweep count or mark search complete: if the final sweep has no
+certification, one final assessment runs on the accepted state; otherwise its
+existing assessment is reused. A failed assessment leaves state unavailable,
+while a passing one retains a trusted state with an incomplete search. A
+completed final assessment records
+`endpoint_certification_sweep == search_sweeps`; zero-sweep and unrecoverable
+failures retain no fabricated certification sweep. Runtime convergence remains
+independent of search completion. Prepared structural block mappings and workspace reuse do not
 reuse numeric factors, accepted states, or replay results across sweeps. The
 route therefore preserves the objective, A/C solve, width parameterization,
 serial update semantics, replay, persistence and `RuntimeConvergence` contract. See the
