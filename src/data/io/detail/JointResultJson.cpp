@@ -251,11 +251,12 @@ JointAnalysisMetadata ReadMetadata(const Object & m)
     if(m.contains("solver") && !m.at("solver").is_null())
     {
         const auto & p=m.at("solver").as_object();
-        JointSolverProvenance solver{Read<std::string>(p,"search_method"),
-            p.contains("fixed_neighbor_core_atoms") ?
-                ReadOptionalSize(p.at("fixed_neighbor_core_atoms")) : std::nullopt,
-            p.contains("fixed_neighbor_local_work") ?
-                ReadOptionalText(p.at("fixed_neighbor_local_work")) : std::nullopt};
+        JointSolverProvenance solver;
+        solver.search_method=Read<std::string>(p,"search_method");
+        solver.fixed_neighbor_core_atoms=p.contains("fixed_neighbor_core_atoms") ?
+            ReadOptionalSize(p.at("fixed_neighbor_core_atoms")) : std::nullopt;
+        solver.fixed_neighbor_local_work=p.contains("fixed_neighbor_local_work") ?
+            ReadOptionalText(p.at("fixed_neighbor_local_work")) : std::nullopt;
         solver.contract_version=p.contains("contract_version") ? ReadOptionalText(p.at("contract_version")) : std::nullopt;
         solver.sparse_backend=p.contains("sparse_backend") ? ReadOptionalText(p.at("sparse_backend")) : std::nullopt;
         solver.preconditioner=p.contains("preconditioner") ? ReadOptionalText(p.at("preconditioner")) : std::nullopt;
