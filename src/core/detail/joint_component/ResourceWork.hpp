@@ -35,13 +35,13 @@ struct SearchStageWork
 
 inline constexpr std::size_t JointMemoryHardLimitBytes=4'000'000'000;
 inline constexpr std::size_t JointMemoryPlanningBudgetBytes=3'200'000'000;
-enum class MemoryStage {ProblemConstruction,FixedNeighborPreparation,GlobalStateEvaluation,ReferenceSolve,RankAssessment,TargetIdentifiability};
+enum class MemoryStage {ProblemConstruction,StructuralConstruction,FixedNeighborPreparation,GlobalStateEvaluation,ReferenceSolve,RankAssessment,TargetIdentifiability};
 enum class MemoryStatus {Pass,Reject,Overflow};
 struct MemoryShape
 {
     std::size_t component_atoms{},component_observations{},component_support_entries{},component_blocks{},
         affected_row_entries{},component_neighbor_entries{},maximum_block_rows{},maximum_block_support_entries{},
-        component_free_columns{},component_target_columns{},resident_bytes{};
+        component_free_columns{},component_target_columns{},identity_validation_bytes{},resident_bytes{};
     bool problem_scope{};
 };
 struct MemoryEstimate
@@ -62,6 +62,7 @@ struct ReferenceFeasibility
 bool CheckedAddBytes(std::size_t,std::size_t,std::size_t &);
 bool CheckedMultiplyBytes(std::size_t,std::size_t,std::size_t &);
 std::optional<std::size_t> EstimateSnapshotBytes(const JointProblemInput &);
+std::optional<std::size_t> EstimateConstructionScratchBytes(const JointProblemInput &);
 std::optional<std::size_t> CountSupportEntries(const JointProblemInput &);
 MemoryEstimate PlanMemory(const MemoryShape &,MemoryStage,std::size_t=JointMemoryPlanningBudgetBytes);
 ReferenceFeasibility AssessReferenceFeasibility(const MemoryShape &,std::size_t=JointMemoryPlanningBudgetBytes);

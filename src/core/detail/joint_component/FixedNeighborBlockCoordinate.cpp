@@ -40,6 +40,22 @@ bool AddMemoryBytes(std::size_t & total,std::size_t count,std::size_t width)
 {
     std::size_t bytes{}; return CheckedMultiplyBytes(count,width,bytes) && CheckedAddBytes(total,bytes,total);
 }
+bool PartitionStorageBytes(const StructuralBlockPartition & partition,bool include_metadata,std::size_t & bytes)
+{
+    bytes=0;
+    if(!AddMemoryBytes(bytes,partition.cores.capacity(),sizeof(StructuralCore))) return false;
+    for(const auto & core:partition.cores)
+    {
+        std::size_t id_bytes{};
+        if(!CheckedAddBytes(core.id.capacity(),1,id_bytes) || !CheckedAddBytes(id_bytes,32,id_bytes) ||
+            !CheckedAddBytes(bytes,id_bytes,bytes) || !AddMemoryBytes(bytes,core.atoms.capacity(),sizeof(Eigen::Index)) ||
+            !AddMemoryBytes(bytes,1,4*32)) return false;
+        if(include_metadata && (!AddMemoryBytes(bytes,core.affected_rows.capacity(),sizeof(Eigen::Index)) ||
+            !AddMemoryBytes(bytes,core.neighbor_atoms.capacity(),sizeof(Eigen::Index)) ||
+            !AddMemoryBytes(bytes,core.context_atoms.capacity(),sizeof(Eigen::Index)))) return false;
+    }
+    return true;
+}
 Vector SelectBeta(VectorRef beta,const std::vector<std::size_t> & atoms)
 {
     Vector out(2*static_cast<Eigen::Index>(atoms.size()));
@@ -134,46 +150,80 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         if(!(std::exp(initial_eta(a))>0) || !std::isfinite(std::exp(initial_eta(a))))
         {out.reason="block-invalid-partition"; return out;}
 
-    StructuralBlockPartition partition;
-    try {partition=BuildStructuralBlockPartition(domain,context.atom_ids,layout,policy.core_atoms);}
-    catch(const std::exception &) {out.reason="block-invalid-partition"; return out;}
-    if(partition.cores.empty()) {out.reason="block-invalid-partition"; return out;}
     MemoryShape memory_shape; memory_shape.component_atoms=domain.atoms.size();
     memory_shape.component_observations=static_cast<std::size_t>(domain.rows);
-    memory_shape.component_blocks=partition.cores.size(); memory_shape.component_target_columns=context.target_columns;
+    memory_shape.component_target_columns=context.target_columns;
     if(!CheckedMultiplyBytes(memory_shape.component_atoms,2,memory_shape.component_free_columns))
-    {out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation; out.memory_estimate.status=MemoryStatus::Overflow;
-        out.memory_estimate.reason="size-overflow"; out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
+    {out.memory_estimate.stage=MemoryStage::StructuralConstruction; out.memory_estimate.status=MemoryStatus::Overflow;
+        out.memory_estimate.reason="size-overflow"; out.reason="resource-limit:structural-construction:size-overflow"; return out;}
     for(std::size_t a=0;a<domain.atoms.size();++a)
         if(!CheckedAddBytes(memory_shape.component_support_entries,domain.atoms[a].size(),memory_shape.component_support_entries))
-        {out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation; out.memory_estimate.status=MemoryStatus::Overflow;
-            out.memory_estimate.reason="size-overflow"; out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
-    for(const auto & core:partition.cores)
-    {
-        std::size_t block_support_entries{};
-        for(const auto atom:core.atoms)
-            if(atom<0 || static_cast<std::size_t>(atom)>=domain.atoms.size() ||
-                !CheckedAddBytes(block_support_entries,domain.atoms[static_cast<std::size_t>(atom)].size(),block_support_entries))
-            {out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation; out.memory_estimate.status=MemoryStatus::Overflow;
-                out.memory_estimate.reason="size-overflow"; out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
-        memory_shape.maximum_block_rows=std::max(memory_shape.maximum_block_rows,core.affected_rows.size());
-        memory_shape.maximum_block_support_entries=std::max(memory_shape.maximum_block_support_entries,block_support_entries);
-        if(!CheckedAddBytes(memory_shape.affected_row_entries,core.affected_rows.size(),memory_shape.affected_row_entries) ||
-            !CheckedAddBytes(memory_shape.component_neighbor_entries,core.neighbor_atoms.size(),memory_shape.component_neighbor_entries))
-        {out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation; out.memory_estimate.status=MemoryStatus::Overflow;
-            out.memory_estimate.reason="size-overflow"; out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
-    }
+        {out.memory_estimate.stage=MemoryStage::StructuralConstruction; out.memory_estimate.status=MemoryStatus::Overflow;
+            out.memory_estimate.reason="size-overflow"; out.reason="resource-limit:structural-construction:size-overflow"; return out;}
     const auto * input=domain.atoms.Storage();
-    const auto snapshot_bytes=input ? EstimateSnapshotBytes(*input) : std::nullopt;
-    std::size_t resident=snapshot_bytes.value_or(0),root_mappings{},root_entries{};
-    std::size_t structural_entries{};
-    if(!snapshot_bytes || !CheckedAddBytes(input->atom_ids.size(),input->observations.size(),root_entries) ||
-        !AddMemoryBytes(root_mappings,root_entries,
-            4*sizeof(Eigen::Index)) || !CheckedAddBytes(resident,root_mappings,resident) ||
-        !CheckedAddBytes(memory_shape.component_atoms,memory_shape.affected_row_entries,structural_entries) ||
-        !CheckedAddBytes(structural_entries,memory_shape.component_neighbor_entries,structural_entries) ||
-        !AddMemoryBytes(resident,structural_entries,sizeof(Eigen::Index)) ||
-        !AddMemoryBytes(resident,memory_shape.component_blocks,sizeof(StructuralCore)))
+    const auto snapshot_bytes=input ? EstimateSnapshotBytes(*input) : std::optional<std::size_t>{0};
+    std::size_t base_resident=snapshot_bytes.value_or(0),root_mappings{},root_entries{},selector_entries{},twice_rows{};
+    const auto local_support_bytes=domain.atoms.LocalSupportIndexBytes();
+    if(!snapshot_bytes || local_support_bytes==std::numeric_limits<std::size_t>::max() ||
+        (input && (!CheckedAddBytes(input->atom_ids.size(),input->observations.size(),root_entries) ||
+            !AddMemoryBytes(root_mappings,root_entries,4*sizeof(Eigen::Index)) ||
+            !CheckedAddBytes(base_resident,root_mappings,base_resident))) ||
+        !AddMemoryBytes(base_resident,local_support_bytes,1) ||
+        !CheckedMultiplyBytes(memory_shape.component_observations,2,twice_rows) ||
+        !CheckedAddBytes(memory_shape.component_atoms,twice_rows,selector_entries) ||
+        !AddMemoryBytes(base_resident,selector_entries,sizeof(Eigen::Index)))
+    {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::StructuralConstruction;
+        out.memory_estimate.status=MemoryStatus::Overflow; out.memory_estimate.reason="size-overflow";
+        out.reason="resource-limit:structural-construction:size-overflow"; return out;}
+    memory_shape.resident_bytes=base_resident;
+    memory_shape.component_blocks=memory_shape.component_atoms;
+    out.memory_estimate=PlanMemory(memory_shape,MemoryStage::StructuralConstruction);
+    if(out.memory_estimate.status!=MemoryStatus::Pass)
+    {LogMemoryEstimate(out.memory_estimate); out.reason="resource-limit:structural-construction:"+out.memory_estimate.reason; return out;}
+
+    StructuralBlockPartition partition;
+    StructuralBlockCensus census;
+    std::size_t partition_bytes{};
+    try
+    {
+        StructuralTopology topology(domain,context.atom_ids,layout);
+        partition=topology.BuildCores(policy.core_atoms,false);
+        if(partition.cores.empty()) {out.reason="block-invalid-partition"; return out;}
+        census=topology.Census(partition);
+        memory_shape.component_blocks=partition.cores.size();
+        memory_shape.affected_row_entries=census.affected_row_entries;
+        memory_shape.component_neighbor_entries=census.neighbor_atom_entries;
+        memory_shape.maximum_block_rows=census.maximum_block_rows;
+        memory_shape.maximum_block_support_entries=census.maximum_block_support_entries;
+        std::size_t topology_bytes{},core_bytes{},planned_metadata{},planned_entries{};
+        if(!CheckedAddBytes(census.affected_row_entries,census.neighbor_atom_entries,planned_entries) ||
+            !CheckedMultiplyBytes(planned_entries,2*sizeof(Eigen::Index),planned_metadata) ||
+            !AddMemoryBytes(planned_metadata,partition.cores.size(),4*32) ||
+            !PartitionStorageBytes(partition,false,core_bytes) ||
+            (topology_bytes=topology.StorageBytes())==std::numeric_limits<std::size_t>::max() ||
+            !CheckedAddBytes(base_resident,topology_bytes,memory_shape.resident_bytes) ||
+            !CheckedAddBytes(memory_shape.resident_bytes,core_bytes,memory_shape.resident_bytes) ||
+            !CheckedAddBytes(memory_shape.resident_bytes,planned_metadata,memory_shape.resident_bytes))
+        {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
+            out.memory_estimate.status=MemoryStatus::Overflow; out.memory_estimate.reason="size-overflow";
+            out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
+        const auto structural_estimate=PlanMemory(memory_shape,MemoryStage::FixedNeighborPreparation);
+        if(structural_estimate.status!=MemoryStatus::Pass)
+        {out.memory_estimate=structural_estimate; LogMemoryEstimate(out.memory_estimate);
+            out.reason="resource-limit:fixed-neighbor-preparation:"+out.memory_estimate.reason; return out;}
+        topology.PopulateMetadata(partition);
+        if(!PartitionStorageBytes(partition,true,partition_bytes))
+        {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
+            out.memory_estimate.status=MemoryStatus::Overflow; out.memory_estimate.reason="size-overflow";
+            out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
+    }
+    catch(const std::overflow_error &)
+    {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
+        out.memory_estimate.status=MemoryStatus::Overflow; out.memory_estimate.reason="size-overflow";
+        out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
+    catch(const std::exception &) {out.reason="block-invalid-partition"; return out;}
+    std::size_t resident{};
+    if(!CheckedAddBytes(base_resident,partition_bytes,resident))
     {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
         out.memory_estimate.status=MemoryStatus::Overflow; out.memory_estimate.reason="size-overflow";
         out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}

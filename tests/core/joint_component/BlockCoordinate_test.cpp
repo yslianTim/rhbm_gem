@@ -4,6 +4,7 @@
 #include "support/JointBlockCoordinate.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include <algorithm>
+#include <memory>
 #include <numeric>
 #include <random>
 #include <tuple>
@@ -136,6 +137,30 @@ TEST(JointBlockCoordinateTest, BridgeAtomRetainsEveryBoundaryCoupling)
     EXPECT_EQ(bridge->affected_rows,(n::Indices{1,2}));
     EXPECT_EQ(bridge->neighbor_atoms,(n::Indices{0,2}));
     ExerciseConditionalReplacements(input,layout,partition,501);
+}
+TEST(JointBlockCoordinateTest, StructuralCensusMatchesPreparedCoreMetadata)
+{
+    const auto owner=std::make_shared<const c::JointProblemInput>(BridgeInput());
+    const n::Domain domain(owner);
+    const n::Identities identities(std::shared_ptr<const std::vector<std::string>>(owner,&owner->atom_ids));
+    const auto layout=n::BuildParameterLayout(*owner);
+    n::StructuralTopology topology(domain,identities,layout);
+    auto cores=topology.BuildCores(1,false);
+    const auto census=topology.Census(cores);
+    topology.PopulateMetadata(cores);
+    std::size_t affected{},neighbors{},maximum_rows{},maximum_support{};
+    for(const auto & core:cores.cores)
+    {
+        affected+=core.affected_rows.size(); neighbors+=core.neighbor_atoms.size();
+        maximum_rows=std::max(maximum_rows,core.affected_rows.size());
+        std::size_t support{};
+        for(auto atom:core.atoms) support+=owner->support[static_cast<std::size_t>(atom)].size();
+        maximum_support=std::max(maximum_support,support);
+    }
+    EXPECT_EQ(census.affected_row_entries,affected);
+    EXPECT_EQ(census.neighbor_atom_entries,neighbors);
+    EXPECT_EQ(census.maximum_block_rows,maximum_rows);
+    EXPECT_EQ(census.maximum_block_support_entries,maximum_support);
 }
 TEST(JointBlockCoordinateTest, HaloAndContributionOnlyLambdaRowsStayOutOfBlockRows)
 {

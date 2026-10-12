@@ -62,6 +62,29 @@ std::optional<std::size_t> EstimateSnapshotBytes(const JointProblemInput & input
     if(input.selection_domain && !AddProduct(total,input.selection_domain->target_indices.capacity(),sizeof(std::size_t))) return {};
     return total;
 }
+std::optional<std::size_t> EstimateConstructionScratchBytes(const JointProblemInput & input)
+{
+    std::size_t total{},characters{},maximum_atom_support{};
+    const auto node_bytes=sizeof(std::string)+4*sizeof(void *)+32;
+    for(const auto & id:input.row_ids)
+    {
+        std::size_t bytes{};
+        if(!CheckedAddBytes(id.capacity(),1,bytes) || !CheckedAddBytes(characters,bytes,characters)) return {};
+    }
+    if(!AddProduct(total,input.row_ids.size(),node_bytes) ||
+        !AddProduct(total,characters,sizeof(char))) return {};
+    characters=0;
+    for(const auto & id:input.atom_ids)
+    {
+        std::size_t bytes{};
+        if(!CheckedAddBytes(id.capacity(),1,bytes) || !CheckedAddBytes(characters,bytes,characters)) return {};
+    }
+    if(!AddProduct(total,input.atom_ids.size(),2*sizeof(std::string)+node_bytes) ||
+        !AddProduct(total,characters,2*sizeof(char))) return {};
+    for(const auto & atom:input.support) maximum_atom_support=std::max(maximum_atom_support,atom.size());
+    if(!AddProduct(total,maximum_atom_support,sizeof(std::size_t)+4*sizeof(void *)+32)) return {};
+    return total;
+}
 std::optional<std::size_t> CountSupportEntries(const JointProblemInput & input)
 {
     std::size_t total{};
@@ -73,6 +96,7 @@ const char * MemoryStageName(MemoryStage stage)
     switch(stage)
     {
     case MemoryStage::ProblemConstruction: return "problem-construction";
+    case MemoryStage::StructuralConstruction: return "structural-construction";
     case MemoryStage::FixedNeighborPreparation: return "fixed-neighbor-preparation";
     case MemoryStage::GlobalStateEvaluation: return "global-state-evaluation";
     case MemoryStage::ReferenceSolve: return "reference-solve";
@@ -107,8 +131,22 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
             AddProduct(temporary,rows,sizeof(std::vector<Eigen::Index>)) &&
             AddProduct(temporary,entries,4*sizeof(Eigen::Index)) &&
             AddProduct(temporary,rows_plus_atoms,4*sizeof(Eigen::Index)) &&
-            AddProduct(temporary,rows_plus_one,sizeof(std::size_t)) && AddProduct(temporary,rows,sizeof(std::uint8_t));
+            AddProduct(temporary,rows_plus_one,sizeof(std::size_t)) && AddProduct(temporary,rows,sizeof(std::uint8_t)) &&
+            CheckedAddBytes(temporary,shape.identity_validation_bytes,temporary);
         break;
+    case MemoryStage::StructuralConstruction:
+    {
+        // Coarse upper bound before StructuralTopology and core traversal allocate
+        // row incidence, census marks and traversal state.
+        ok=CheckedAddBytes(rows,1,rows_plus_one) &&
+            AddProduct(temporary,rows_plus_one,2*sizeof(std::size_t)) &&
+            AddProduct(temporary,rows,sizeof(std::uint8_t)+sizeof(std::size_t)) &&
+            AddProduct(temporary,entries,2*sizeof(Eigen::Index)) &&
+            AddProduct(temporary,atoms,sizeof(Eigen::Index)+5*sizeof(std::size_t)) &&
+            AddProduct(temporary,blocks,3*sizeof(std::vector<Eigen::Index>)+64) &&
+            AddProduct(temporary,atoms,sizeof(Eigen::Index));
+        break;
+    }
     case MemoryStage::FixedNeighborPreparation:
         // Each mapping stores sorted parent/local row pairs. The view can also retain
         // one support index per original membership; neither term scales as rows*blocks.
@@ -206,6 +244,7 @@ std::string FormatMemoryEstimate(const MemoryEstimate & estimate)
        <<"  max_block_support_entries="<<s.maximum_block_support_entries<<'\n'
        <<"  free_columns="<<s.component_free_columns<<'\n'
        <<"  target_columns="<<s.component_target_columns<<'\n'
+       <<"  identity_validation_scratch="<<Bytes(s.identity_validation_bytes)<<'\n'
        <<"  resident="<<Bytes(estimate.resident_bytes)<<'\n'
        <<"  temporary="<<Bytes(estimate.temporary_bytes)<<'\n'
        <<"  estimated_peak="<<Bytes(estimate.estimated_peak_bytes)<<'\n'
@@ -246,7 +285,9 @@ void SetResourceStageObserverForTesting(ResourceStageObserverForTesting observer
 void RecordDenseShape(const char * role,Eigen::Index rows,Eigen::Index columns)
 {
     auto & w=ResourceWorkForTesting(); if(!w.enabled) return;
-    const auto bytes=static_cast<std::size_t>(rows)*static_cast<std::size_t>(columns)*sizeof(double);
+    std::size_t bytes{};
+    if(rows<0 || columns<0 || !CheckedMultiplyBytes(static_cast<std::size_t>(rows),static_cast<std::size_t>(columns),bytes) ||
+        !CheckedMultiplyBytes(bytes,sizeof(double),bytes)) bytes=std::numeric_limits<std::size_t>::max();
     for(auto & record:w.dense_shapes) if(record.phase==w.phase && record.role==role)
     {
         ++record.observations;

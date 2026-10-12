@@ -786,6 +786,7 @@ TEST(JointComponentNumericsTest, MemoryPlannerUsesCheckedStageSpecificEstimates)
     input.support={{{0,0},{1,1}},{{1,2}}};
     ASSERT_EQ(n::CountSupportEntries(input),3u);
     ASSERT_TRUE(n::EstimateSnapshotBytes(input));
+    ASSERT_TRUE(n::EstimateConstructionScratchBytes(input));
 
     n::MemoryShape large; large.component_atoms=37'406; large.component_observations=5'938'087;
     large.component_support_entries=2'000'000; large.component_blocks=3'118;
@@ -793,11 +794,13 @@ TEST(JointComponentNumericsTest, MemoryPlannerUsesCheckedStageSpecificEstimates)
     large.maximum_block_rows=8'000; large.maximum_block_support_entries=80'000;
     large.component_target_columns=112'218; large.resident_bytes=256'000'000;
     const auto mappings=n::PlanMemory(large,n::MemoryStage::FixedNeighborPreparation);
+    const auto structural=n::PlanMemory(large,n::MemoryStage::StructuralConstruction);
     const auto state=n::PlanMemory(large,n::MemoryStage::GlobalStateEvaluation);
     const auto reference=n::AssessReferenceFeasibility(large);
     const auto rank=n::PlanMemory(large,n::MemoryStage::RankAssessment);
     const auto target=n::PlanMemory(large,n::MemoryStage::TargetIdentifiability);
     EXPECT_EQ(mappings.status,n::MemoryStatus::Pass);
+    EXPECT_EQ(structural.status,n::MemoryStatus::Pass);
     EXPECT_EQ(state.status,n::MemoryStatus::Pass);
     EXPECT_EQ(reference.budget_status,n::MemoryStatus::Reject);
     EXPECT_EQ(reference.numerical_status,"unavailable");
@@ -805,6 +808,11 @@ TEST(JointComponentNumericsTest, MemoryPlannerUsesCheckedStageSpecificEstimates)
     EXPECT_EQ(target.status,n::MemoryStatus::Reject);
     EXPECT_EQ(mappings.budget_bytes,3'200'000'000u);
     EXPECT_NE(mappings.estimated_peak_bytes,state.estimated_peak_bytes);
+
+    auto validation=large; validation.identity_validation_bytes=3'200'000'000;
+    EXPECT_EQ(n::PlanMemory(validation,n::MemoryStage::ProblemConstruction).status,n::MemoryStatus::Reject);
+    auto overflow=large; overflow.component_blocks=std::numeric_limits<std::size_t>::max();
+    EXPECT_EQ(n::PlanMemory(overflow,n::MemoryStage::StructuralConstruction).status,n::MemoryStatus::Overflow);
 }
 
 TEST(JointComponentNumericsTest, StreamingStateMatchesSparseGlobalEvaluation)

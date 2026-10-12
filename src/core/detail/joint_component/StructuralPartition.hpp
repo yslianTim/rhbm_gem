@@ -17,6 +17,10 @@ struct StructuralBlockPartition
 {
     std::vector<StructuralCore> cores;
 };
+struct StructuralBlockCensus
+{
+    std::size_t affected_row_entries{},neighbor_atom_entries{},maximum_block_rows{},maximum_block_support_entries{};
+};
 
 class StructuralTopology
 {
@@ -32,6 +36,9 @@ class StructuralTopology
 public:
     StructuralTopology(const Domain &,const Identities &,const JointParameterLayout &);
     StructuralBlockPartition BuildCores(std::size_t core_atoms,bool include_metadata=true);
+    StructuralBlockCensus Census(const StructuralBlockPartition &) const;
+    std::size_t StorageBytes() const;
+    void PopulateMetadata(StructuralBlockPartition &);
     Indices ContextAtoms(const Indices & core_atoms,std::size_t context_hops,std::size_t max_block_atoms);
 };
 

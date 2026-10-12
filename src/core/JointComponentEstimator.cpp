@@ -55,7 +55,8 @@ bool AddEstimatedBytes(std::size_t & total,std::size_t count,std::size_t width)
 [[noreturn]] void RejectBuildPreflight(const n::MemoryShape & shape,const char * reason)
 {
     auto estimate=n::PlanMemory(shape,n::MemoryStage::ProblemConstruction);
-    estimate.status=estimate.status==n::MemoryStatus::Overflow ? n::MemoryStatus::Overflow : n::MemoryStatus::Reject;
+    estimate.status=estimate.status==n::MemoryStatus::Overflow || std::string_view(reason)=="size-overflow" ?
+        n::MemoryStatus::Overflow : n::MemoryStatus::Reject;
     estimate.reason=reason; n::LogMemoryEstimate(estimate);
     throw std::runtime_error(std::string("resource-limit:build-joint-problem:")+reason);
 }
@@ -134,46 +135,56 @@ std::vector<JointRankEvidence> joint_component::AssessmentRanks(const n::Assessm
 }
 JointProblem::JointProblem(JointProblemInput input)
 {
-    if(input.atom_ids.empty() || input.support.size()!=input.atom_ids.size() || input.row_ids.size()!=input.observations.size() ||
-        std::set<std::string>(input.row_ids.begin(),input.row_ids.end()).size()!=input.row_ids.size())
+    if(input.atom_ids.empty() || input.support.size()!=input.atom_ids.size() || input.row_ids.size()!=input.observations.size())
         throw std::invalid_argument("Invalid joint problem identities or dimensions.");
     if(input.selection_domain && !input.selection_domain->IsValid(input.atom_ids.size()))
         throw std::invalid_argument("Invalid joint selection domain.");
+    if(!std::all_of(input.observations.begin(),input.observations.end(),[](double value){return std::isfinite(value);}))
+        throw std::invalid_argument("Nonfinite joint observations.");
     for(const auto & atom:input.support) for(const auto & s:atom)
-        if(s.row>=input.observations.size()) throw std::invalid_argument("Invalid joint contributor row.");
-    auto data=std::make_shared<n::ProblemData>(std::make_shared<const JointProblemInput>(std::move(input)));
-    if(!data->y.allFinite()) throw std::invalid_argument("Nonfinite joint observations.");
-    data->context=n::CreateContext(data->input);
-    data->layout=n::BuildParameterLayout(*data->input);
+        if(s.row>=input.observations.size() || !std::isfinite(s.squared_distance) || s.squared_distance<0 || s.squared_distance>6.25)
+            throw std::invalid_argument("Invalid joint contributor row.");
     n::MemoryShape shape;
-    shape.component_atoms=data->input->atom_ids.size();
-    shape.component_observations=data->input->observations.size();
+    shape.component_atoms=input.atom_ids.size();
+    shape.component_observations=input.observations.size();
     shape.problem_scope=true;
-    const auto support_entries=n::CountSupportEntries(*data->input);
-    const auto resident=n::EstimateSnapshotBytes(*data->input);
+    const auto support_entries=n::CountSupportEntries(input);
+    const auto resident=n::EstimateSnapshotBytes(input);
+    const auto construction_scratch=n::EstimateConstructionScratchBytes(input);
     std::size_t free_columns{},target_columns{};
-    const auto target_atoms=data->input->selection_domain ? data->input->selection_domain->target_indices.size() : 0;
-    const bool dimensions_ok=n::CheckedMultiplyBytes(data->layout.full_atoms.size(),2,free_columns) &&
+    const auto target_atoms=input.selection_domain ? input.selection_domain->target_indices.size() : 0;
+    const bool dimensions_ok=n::CheckedMultiplyBytes(input.atom_ids.size(),2,free_columns) &&
         n::CheckedMultiplyBytes(target_atoms,3,target_columns);
-    if(!support_entries || !resident || !dimensions_ok)
+    n::MemoryEstimate construction_memory;
+    if(!support_entries || !resident || !construction_scratch || !dimensions_ok)
     {
-        data->construction_memory.shape=shape;
-        data->construction_memory.stage=n::MemoryStage::ProblemConstruction;
-        data->construction_memory.status=n::MemoryStatus::Overflow;
-        data->construction_memory.reason="size-overflow";
-        data->construction_memory.budget_bytes=n::JointMemoryPlanningBudgetBytes;
+        construction_memory.shape=shape;
+        construction_memory.stage=n::MemoryStage::ProblemConstruction;
+        construction_memory.status=n::MemoryStatus::Overflow;
+        construction_memory.reason="size-overflow";
+        construction_memory.budget_bytes=n::JointMemoryPlanningBudgetBytes;
     }
     else
     {
         shape.component_support_entries=*support_entries; shape.resident_bytes=*resident;
+        shape.identity_validation_bytes=*construction_scratch;
         shape.component_free_columns=free_columns; shape.component_target_columns=target_columns;
-        data->construction_memory=n::PlanMemory(shape,n::MemoryStage::ProblemConstruction);
+        construction_memory=n::PlanMemory(shape,n::MemoryStage::ProblemConstruction);
     }
-    if(data->construction_memory.status!=n::MemoryStatus::Pass ||
-        data->construction_memory.estimated_peak_bytes>n::JointMemoryPlanningBudgetBytes/2)
-        n::LogMemoryEstimate(data->construction_memory);
+    if(construction_memory.status!=n::MemoryStatus::Pass ||
+        construction_memory.estimated_peak_bytes>n::JointMemoryPlanningBudgetBytes/2)
+        n::LogMemoryEstimate(construction_memory);
+    if(construction_memory.status==n::MemoryStatus::Pass &&
+        std::set<std::string>(input.row_ids.begin(),input.row_ids.end()).size()!=input.row_ids.size())
+        throw std::invalid_argument("Invalid joint problem identities or dimensions.");
+    auto data=std::make_shared<n::ProblemData>(std::make_shared<const JointProblemInput>(std::move(input)));
+    data->construction_memory=construction_memory;
     if(data->construction_memory.status==n::MemoryStatus::Pass)
+    {
+        data->context=n::CreateContext(data->input);
+        data->layout=n::BuildParameterLayout(*data->input);
         data->partition=n::Partition(data->domain,data->input->atom_ids);
+    }
     m_data=std::move(data);
 }
 const JointProblemInput & JointProblem::Input() const {return *m_data->input;}
@@ -197,10 +208,16 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
     std::size_t selected_row_buffer{};
     if(!n::CheckedMultiplyBytes(selected_support_entries,sizeof(std::size_t),selected_row_buffer))
         throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
-    if(selected_row_buffer>n::JointMemoryPlanningBudgetBytes)
+    std::size_t builder_resident=selected_row_buffer,builder_tracking{};
+    if(!AddEstimatedBytes(builder_tracking,atoms.capacity(),sizeof(const AtomObject *)) ||
+        !AddEstimatedBytes(builder_tracking,selected.size(),4*sizeof(void *)+32) ||
+        !n::CheckedAddBytes(builder_resident,builder_tracking,builder_resident))
+        throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
+    if(builder_resident>n::JointMemoryPlanningBudgetBytes)
     {
-        n::MemoryShape shape; shape.component_atoms=selected.size(); shape.component_support_entries=selected_support_entries;
-        shape.resident_bytes=selected_row_buffer; shape.problem_scope=true;
+        n::MemoryShape shape; shape.component_atoms=atoms.size(); shape.component_observations=selected_support_entries;
+        shape.component_support_entries=selected_support_entries; shape.resident_bytes=builder_resident;
+        shape.problem_scope=true;
         RejectBuildPreflight(shape,"raw-target-row-buffer-exceeds-budget");
     }
     std::vector<std::size_t> rows; rows.reserve(selected_support_entries);
@@ -208,7 +225,7 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
         VisitSupport(map,*atom,[&](auto index,double) {rows.push_back(index);});
     std::sort(rows.begin(),rows.end()); rows.erase(std::unique(rows.begin(),rows.end()),rows.end());
 
-    std::size_t contributors{},support_entries{};
+    std::size_t contributors{},support_entries{},maximum_atom_support{};
     for(const auto * atom:atoms)
     {
         std::size_t memberships{};
@@ -219,6 +236,7 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
         });
         if(selected.contains(atom) || memberships)
         {
+            maximum_atom_support=std::max(maximum_atom_support,memberships);
             if(!n::CheckedAddBytes(contributors,1,contributors) ||
                 !n::CheckedAddBytes(support_entries,memberships,support_entries))
                 throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
@@ -232,13 +250,22 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
         RejectBuildPreflight(shape,"size-overflow");
     shape.component_free_columns=free_columns;
     std::size_t planned_snapshot{};
+    std::size_t identity_characters{},identity_scratch{};
+    const auto identity_node=sizeof(std::string)+4*sizeof(void *)+32;
+    if(!AddEstimatedBytes(identity_characters,contributors,32) || !AddEstimatedBytes(identity_characters,rows.size(),32) ||
+        !AddEstimatedBytes(identity_scratch,rows.size(),identity_node+32) ||
+        !AddEstimatedBytes(identity_scratch,contributors,2*sizeof(std::string)+identity_node+64) ||
+        !AddEstimatedBytes(identity_scratch,maximum_atom_support,sizeof(std::size_t)+4*sizeof(void *)+32) ||
+        !AddEstimatedBytes(planned_snapshot,identity_characters,2*sizeof(char)))
+        RejectBuildPreflight(shape,"size-overflow");
+    shape.identity_validation_bytes=identity_scratch;
     if(!AddEstimatedBytes(planned_snapshot,rows.size(),2*sizeof(double)) ||
         !AddEstimatedBytes(planned_snapshot,contributors,2*sizeof(std::vector<JointSupport>)) ||
         !AddEstimatedBytes(planned_snapshot,contributors,2*sizeof(std::string)) ||
         !AddEstimatedBytes(planned_snapshot,rows.size(),2*sizeof(std::string)) ||
         !AddEstimatedBytes(planned_snapshot,support_entries,2*sizeof(JointSupport)) ||
-        !AddEstimatedBytes(planned_snapshot,selected.size(),sizeof(std::size_t)) ||
-        !n::CheckedAddBytes(planned_snapshot,selected_row_buffer,planned_snapshot))
+        !AddEstimatedBytes(planned_snapshot,selected.size(),2*sizeof(std::size_t)) ||
+        !n::CheckedAddBytes(planned_snapshot,builder_resident,planned_snapshot))
         RejectBuildPreflight(shape,"size-overflow");
     shape.resident_bytes=planned_snapshot;
     const auto build_estimate=n::PlanMemory(shape,n::MemoryStage::ProblemConstruction);

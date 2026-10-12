@@ -8,6 +8,7 @@
 #include <set>
 #include <cmath>
 #include <chrono>
+#include <limits>
 
 namespace rhbm_gem::core::joint_component {
 namespace {
@@ -252,9 +253,61 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
     const EvaluationContext & parent_context,const FixedNeighborSearchPolicy & production_policy,
     const JointProgressObserver & observer,const JointProgressComponent * progress_component)
 {
+    FixedNeighborComponentResult out;
+    if(production_policy.core_atoms==0)
+    {out.stop_reason="block-invalid-partition"; out.search.reason=out.stop_reason; return out;}
+    MemoryShape shape; shape.component_atoms=component_layout.full_atoms.size();
+    shape.component_observations=component_layout.informative_rows.size();
+    shape.component_target_columns=parent_context.target_columns;
+    shape.component_blocks=shape.component_atoms;
+    std::size_t support_entries{};
+    for(const auto atom:component_layout.full_atoms)
+    {
+        const auto local=view.LocalAtom(static_cast<Eigen::Index>(atom));
+        if(local<0 || !CheckedAddBytes(support_entries,view.domain.atoms[static_cast<std::size_t>(local)].size(),support_entries))
+        {out.search.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
+            out.search.memory_estimate.status=MemoryStatus::Overflow; out.search.memory_estimate.reason="size-overflow";
+            out.search.reason="resource-limit:fixed-neighbor-preparation:size-overflow";
+            out.stop_reason=out.search.reason; return out;}
+    }
+    for(const auto row:component_layout.informative_rows)
+        if(view.LocalRow(static_cast<Eigen::Index>(row))<0)
+        {out.stop_reason="block-invalid-partition"; out.search.reason=out.stop_reason; return out;}
+    shape.component_support_entries=support_entries; shape.affected_row_entries=support_entries;
+    shape.maximum_block_rows=shape.component_observations;
+    shape.maximum_block_support_entries=support_entries;
+    if(!CheckedMultiplyBytes(shape.component_atoms,2,shape.component_free_columns))
+    {out.search.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
+        out.search.memory_estimate.status=MemoryStatus::Overflow; out.search.memory_estimate.reason="size-overflow";
+        out.search.reason="resource-limit:fixed-neighbor-preparation:size-overflow";
+        out.stop_reason=out.search.reason; return out;}
+    const auto * input=view.domain.atoms.Storage();
+    const auto snapshot=input ? EstimateSnapshotBytes(*input) : std::optional<std::size_t>{0};
+    std::size_t resident=snapshot.value_or(0),root_entries{},root_mappings{},view_entries{};
+    const auto support_index_bytes=view.domain.atoms.LocalSupportIndexBytes();
+    if(!snapshot || support_index_bytes==std::numeric_limits<std::size_t>::max() ||
+        (input && (!CheckedAddBytes(input->atom_ids.size(),input->observations.size(),root_entries) ||
+            !CheckedMultiplyBytes(root_entries,4*sizeof(Eigen::Index),root_mappings) ||
+            !CheckedAddBytes(resident,root_mappings,resident))) ||
+        !CheckedAddBytes(resident,support_index_bytes,resident) ||
+        !CheckedAddBytes(view.atoms.capacity(),view.rows.capacity(),view_entries) ||
+        !CheckedMultiplyBytes(view_entries,sizeof(Eigen::Index),root_mappings) ||
+        !CheckedAddBytes(resident,root_mappings,resident))
+    {out.search.memory_estimate.shape=shape; out.search.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
+        out.search.memory_estimate.status=MemoryStatus::Overflow; out.search.memory_estimate.reason="size-overflow";
+        out.search.reason="resource-limit:fixed-neighbor-preparation:size-overflow";
+        out.stop_reason=out.search.reason; return out;}
+    shape.resident_bytes=resident;
+    out.search.memory_estimate=PlanMemory(shape,MemoryStage::FixedNeighborPreparation);
+    if(out.search.memory_estimate.status!=MemoryStatus::Pass)
+    {
+        out.search.reason="resource-limit:fixed-neighbor-preparation:"+out.search.memory_estimate.reason;
+        out.stop_reason=out.search.reason; return out;
+    }
     const auto prepared=MakeComponentProblemView(component_layout,view);
-    return SolveFixedNeighborComponent(prepared,initial_b,parent_context,
+    out=SolveFixedNeighborComponent(prepared,initial_b,parent_context,
         production_policy,observer,progress_component);
+    return out;
 }
 AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const ComponentPartition & partition,
     const EvaluationContext & context,const std::vector<JointComponentResult> & components,const AssessmentReuse * reuse)
