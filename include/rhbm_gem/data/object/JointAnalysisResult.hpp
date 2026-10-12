@@ -17,7 +17,7 @@ struct JointSolverProvenance
 {
     std::string search_method;
     std::optional<std::size_t> fixed_neighbor_core_atoms;
-    // Legacy provenance only. Current FixedNeighbor v2 has intrinsic OneAccepted behavior.
+    // Legacy provenance only. Current FixedNeighbor v3 has intrinsic OneAccepted behavior.
     std::optional<std::string> fixed_neighbor_local_work;
     std::optional<std::string> contract_version;
     std::optional<std::string> sparse_backend;
@@ -32,10 +32,12 @@ struct JointSolverProvenance
     std::optional<std::string> fixed_neighbor_policy_version,fixed_neighbor_order,fixed_neighbor_local_search;
     std::optional<std::size_t> fixed_neighbor_maximum_sweeps;
 };
-inline constexpr std::string_view JointSolverProvenanceContractVersion="joint-solver-provenance-v3";
+inline constexpr std::string_view JointSolverProvenanceContractVersion="joint-solver-provenance-v4";
+inline constexpr std::string_view JointSolverProvenanceReferenceContractVersion="joint-solver-provenance-v3";
 inline constexpr std::string_view JointSolverProvenanceHistoricalContractVersion="joint-solver-provenance-v2";
 inline constexpr std::string_view FixedNeighborLegacyPolicyContractVersion="fixed-neighbor-production-v1";
-inline constexpr std::string_view FixedNeighborPolicyContractVersion="fixed-neighbor-production-v2";
+inline constexpr std::string_view FixedNeighborPolicyContractVersion="fixed-neighbor-production-v3";
+inline constexpr std::string_view FixedNeighborReferencePolicyContractVersion="fixed-neighbor-production-v2";
 inline constexpr std::string_view FixedNeighborLocalSearchName="profile-lm";
 struct JointAnalysisMetadata
 {

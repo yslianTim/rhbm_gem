@@ -76,7 +76,7 @@ def main() -> int:
                     assert atom["evidence"] is None
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
-        assert saved["schema_version"] == 6
+        assert saved["schema_version"] == 7
         assert saved["metadata"]["solver"]["search_method"] == "fixed-neighbor"
         default_solver = saved["metadata"]["solver"]
         assert {key: default_solver[key] for key in (
@@ -87,7 +87,7 @@ def main() -> int:
             "search_method": "fixed-neighbor",
             "fixed_neighbor_core_atoms": 12,
             "fixed_neighbor_local_work": None,
-            "fixed_neighbor_policy_version": "fixed-neighbor-production-v2",
+            "fixed_neighbor_policy_version": "fixed-neighbor-production-v3",
             "fixed_neighbor_maximum_sweeps": 200,
             "fixed_neighbor_order": "forward",
             "fixed_neighbor_local_search": "profile-lm",
@@ -101,7 +101,7 @@ def main() -> int:
             "search_method": "fixed-neighbor",
             "fixed_neighbor_core_atoms": 12,
             "fixed_neighbor_local_work": None,
-            "fixed_neighbor_policy_version": "fixed-neighbor-production-v2",
+            "fixed_neighbor_policy_version": "fixed-neighbor-production-v3",
             "fixed_neighbor_maximum_sweeps": 200,
             "fixed_neighbor_order": "forward",
             "fixed_neighbor_local_search": "profile-lm",
@@ -133,9 +133,14 @@ def main() -> int:
                 assert component["confirmed_stationarity_sweep"] <= component["endpoint_certification_sweep"]
                 assert component["endpoint_certification_sweep"] == component["search_sweeps"] <= 200
                 checks = {check["name"]: check for check in component["evidence"]}
-                assert checks["endpoint-trust"]["status"] == "passed"
-                assert checks["endpoint-primary-width-gradient"]["status"] == "passed"
-                assert checks["endpoint-reference-width-gradient"]["status"] == "passed"
+                assert checks["ac-feasibility"]["status"] == "passed"
+                assert checks["conditional-ac-optimality"]["status"] == "passed"
+                assert checks["independent-ac-optimality"]["status"] == "passed"
+                assert checks["independent-kkt-consistency"]["status"] == "passed"
+                assert checks["independent-replay"]["status"] == "passed"
+                assert checks["width-gradient-consistency"]["status"] == "passed"
+                assert checks["width-stationarity"]["status"] == "passed"
+                assert checks["design-identifiability"]["status"] == "passed"
         assert "prediction" not in saved and "observations" not in saved
         assert (root / "joint_atoms_example.csv").read_text().startswith("AtomID,ComponentID,A,B,C,")
         run("result_dump", "--printer", "gaus", "-d", database, "-k", "example", "-o", root)

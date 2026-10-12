@@ -164,18 +164,35 @@ JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & s
     {
         const auto & certification=*search.certification;
         out.reference_status=JointCheckStatus::NotRun;
-        out.rank_assessment_status=certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass ?
-            JointCheckStatus::Unavailable : !certification.assessment.widths ?
-                JointCheckStatus::Unavailable : certification.assessment.identified ?
-                    JointCheckStatus::Passed : JointCheckStatus::Failed;
+        out.endpoint_verification_status=certification.assessment.endpoint_verified ? JointCheckStatus::Passed :
+            certification.verification_memory_estimate.status!=MemoryStatus::Pass ||
+                certification.assessment.failure.starts_with("resource-limit:") ?
+                    JointCheckStatus::Unavailable : JointCheckStatus::Failed;
+        const bool rank_unavailable=certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass ||
+            !certification.assessment.design || !certification.assessment.widths ||
+            !certification.assessment.normalized_widths || !certification.assessment.jacobian;
+        const bool rank_identified=!rank_unavailable &&
+            certification.assessment.design->rank==certification.assessment.design->columns &&
+            certification.assessment.identified;
+        out.rank_assessment_status=rank_unavailable ? JointCheckStatus::Unavailable :
+            rank_identified ? JointCheckStatus::Passed : JointCheckStatus::Failed;
         out.certification_status=certification.passed() && certification.assessment.qualified ? JointCheckStatus::Passed :
             certification.verification_memory_estimate.status!=MemoryStatus::Pass ||
                 certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass ?
                 JointCheckStatus::Unavailable : JointCheckStatus::Failed;
+        out.numerical_qualification_status=out.certification_status;
+        out.verification_reason=!certification.trust.reason.empty() ? certification.trust.reason :
+            certification.assessment.failure;
         if(certification.verification_memory_estimate.status!=MemoryStatus::Pass)
             out.resource_limit_reason="resource-limit:endpoint-verification:"+certification.verification_memory_estimate.reason;
         else if(certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass)
             out.resource_limit_reason="resource-limit:rank-assessment:"+certification.assessment.rank_memory_estimate.reason;
+    }
+    else if(out.candidate_available && search.reason.starts_with("resource-limit:"))
+    {
+        out.endpoint_verification_status=JointCheckStatus::Unavailable;
+        out.numerical_qualification_status=JointCheckStatus::Unavailable;
+        out.verification_reason=search.reason;
     }
     if(out.resource_limit_reason.empty() && search.memory_estimate.status!=MemoryStatus::Pass)
         out.resource_limit_reason=std::string("resource-limit:")+MemoryStageName(search.memory_estimate.stage)+":"+
@@ -187,10 +204,19 @@ JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & s
 }
 std::vector<JointCheck> AnalyticNuisanceEvidence(JointEvidenceScope scope)
 {
-    auto out=AssessmentEvidence(Assessment{},scope);
-    for(auto & check:out) if(check.status==JointCheckStatus::Unavailable)
-    {check.status=JointCheckStatus::Passed; check.reason="analytic-nuisance-only"; check.value=0;}
-    return out;
+    constexpr auto passed=JointCheckStatus::Passed;
+    constexpr auto reason="analytic-nuisance-only";
+    return {
+        {"ac-feasibility",passed,scope,0.0,0.0,reason},
+        {"conditional-ac-optimality",passed,scope,0.0,1e-10,reason},
+        {"independent-ac-optimality",passed,scope,0.0,1e-10,reason},
+        {"independent-kkt-consistency",passed,scope,0.0,1e-13,reason},
+        {"independent-replay",passed,scope,0.0,{},reason},
+        {"width-gradient-consistency",passed,scope,0.0,{},reason},
+        {"width-stationarity",passed,scope,0.0,1e-12,reason},
+        {"design-identifiability",passed,scope,0.0,0.0,reason},
+        {"local-correction",passed,scope,0.0,1e-10,reason},
+        {"numerical-identifiability",passed,scope,0.0,0.0,reason}};
 }
 FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
     const JointProblem & problem,const std::vector<double> & initial_b,

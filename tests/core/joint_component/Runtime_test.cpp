@@ -151,15 +151,15 @@ TEST(JointComponentRuntimeTest, InnerEvidenceRemainsAvailableNearBoundary)
     {
         ASSERT_TRUE(component.state);
         EXPECT_NEAR(component.state->ac[0],0,1e-10);
-        bool found_inner=false;
-        for(const auto & check:component.evidence) if(check.name=="inner")
+        bool found_optimality=false;
+        for(const auto & check:component.evidence) if(check.name=="conditional-ac-optimality")
         {
-            found_inner=true;
+            found_optimality=true;
             EXPECT_EQ(check.status,core::JointCheckStatus::Passed);
             ASSERT_TRUE(check.value); ASSERT_TRUE(check.threshold);
             EXPECT_LE(*check.value,*check.threshold);
         }
-        EXPECT_TRUE(found_inner);
+        EXPECT_TRUE(found_optimality);
         EXPECT_EQ(component.regular_certificate,core::JointCheckStatus::NotRun);
     }
 }
@@ -218,18 +218,18 @@ TEST(JointComponentRuntimeTest, AssessmentWorkIsSharedOnlyForIdenticalScopes)
     EXPECT_EQ(n::AssessmentWorkForTesting().assessments,1);
     EXPECT_EQ(fit.components[0].reference_evaluations,0);
     EXPECT_EQ(fit.costs.search_reference_seconds,0);
-    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,fit.components[0].reference_evaluations+1);
+    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
     input.row_ids.push_back("constant"); input.observations.push_back(7);
     n::AssessmentWorkForTesting()={};
     const auto constant=core::FitJointComponents(core::JointProblem(input),{.55});
     ASSERT_TRUE(constant.assembled_state);
     EXPECT_EQ(n::AssessmentWorkForTesting().assessments,2);
-    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,2);
+    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
     n::AssessmentWorkForTesting()={};
     const auto multiple=core::FitJointComponents(core::JointProblem(Snapshot()),{.55,.55});
     ASSERT_TRUE(multiple.assembled_state);
     EXPECT_EQ(n::AssessmentWorkForTesting().assessments,3);
-    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,3);
+    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
 }
 
 TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTimes)
@@ -456,7 +456,7 @@ TEST(JointComponentRuntimeTest, ReusedAssemblyMatchesFreshAssessmentAndRejectsCh
     const auto fresh_assembly=n::AssembleComponents(data.domain,data.y,data.partition,data.context,components);
     ASSERT_TRUE(fresh_assembly.available);
     EXPECT_EQ(n::AssessmentWorkForTesting().assessments,1);
-    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,1);
+    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
     EXPECT_EQ(reused.eta,fresh_assembly.eta);
     EXPECT_EQ(reused.beta,fresh_assembly.beta);
     EXPECT_EQ(reused.prediction,fresh_assembly.prediction);
@@ -531,7 +531,7 @@ TEST(JointComponentRuntimeTest, RuntimeConvergenceIsDerivedFromActualEvidenceNot
     EXPECT_EQ(fit.RuntimeConvergence(),Status::NotRun);
     evidence[1].status=Status::Unavailable;
     EXPECT_EQ(fit.RuntimeConvergence(),Status::Unavailable);
-    evidence[2].status=Status::Failed;
+    evidence[3].status=Status::Failed;
     EXPECT_EQ(fit.RuntimeConvergence(),Status::Failed);
     fit.components[0].state.reset();
     EXPECT_EQ(fit.components[0].RuntimeConvergence(),Status::Unavailable);
@@ -546,7 +546,7 @@ TEST(JointComponentRuntimeTest, MissingOrWrongScopeEvidenceCannotVacuouslyConver
     component.evidence.clear(); EXPECT_EQ(component.RuntimeConvergence(),Status::Unavailable);
     component.evidence=fit.evidence; EXPECT_EQ(component.RuntimeConvergence(),Status::Unavailable);
     auto global=fit;
-    for(auto & check:global.evidence) if(check.name=="assembled-profile") check.status=Status::Failed;
+    for(auto & check:global.evidence) if(check.name=="assembled-consistency") check.status=Status::Failed;
     EXPECT_EQ(global.RuntimeConvergence(),Status::Failed);
     global=fit; global.evidence=fit.components[0].evidence;
     EXPECT_EQ(global.RuntimeConvergence(),Status::Unavailable);

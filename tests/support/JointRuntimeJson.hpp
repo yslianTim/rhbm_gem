@@ -50,6 +50,23 @@ inline j::object Trust(const r::TrustEvidence & t)
 {
     j::object out{{"reference",t.reference ? j::value(Endpoint(*t.reference)) : j::value(nullptr)},
         {"passed",t.passed},{"reason",t.reason}};
+    if(t.independent)
+    {
+        const auto & replay=*t.independent;
+        out["reference_solve_calls"]=0;
+        out["independent_replay"]=j::object{{"available",replay.available},{"valid",replay.valid},
+            {"passed",replay.passed},{"feasible",replay.feasible},
+            {"prediction_difference",Number(replay.prediction_difference)},
+            {"residual_difference",Number(replay.residual_difference)},
+            {"objective_difference",Number(replay.objective_difference)},
+            {"primary_ac_kkt",Number(replay.primary_ac_kkt)},
+            {"independent_ac_kkt",Number(replay.independent_ac_kkt)},
+            {"kkt_difference",Number(replay.kkt_difference)},
+            {"primary_width_gradient",Number(replay.primary_width_gradient)},
+            {"independent_width_gradient",Number(replay.independent_width_gradient)},
+            {"gradient_difference",Number(replay.gradient_difference)},
+            {"cancellation_ratio",Number(replay.cancellation_ratio)},{"reason",replay.reason}};
+    }
     out["scaled_coefficient_difference"]=Number(t.coefficient_difference);
     if(t.design) out["design_spectrum"]=DesignSpectrum(*t.design);
     if(!t.primary_valid) return out;
@@ -94,10 +111,43 @@ inline j::object Assessment(const r::Assessment & a)
 {
     const auto evidence=r::AssessmentEvidence(a,rhbm_gem::core::JointEvidenceScope::ComponentLocal);
     j::object out{{"runtime_convergence",Status(a.primary.valid ? r::ConvergenceStatus(evidence,rhbm_gem::core::JointEvidenceScope::ComponentLocal) : rhbm_gem::core::JointCheckStatus::Unavailable)},
-        {"primary",Endpoint(a.primary)},{"reference",Endpoint(a.reference)},
-        {"endpoint_evaluations",2},{"directional_evaluations",0},{"runtime_failure",a.failure}};
+        {"primary",Endpoint(a.primary)},{"directional_evaluations",0},{"runtime_failure",a.failure}};
+    if(a.reference_free)
+    {
+        const auto & replay=a.independent_replay;
+        out["reference"]=nullptr;
+        out["endpoint_evaluations"]=1;
+        out["reference_solve_calls"]=0;
+        out["independent_replay"]=j::object{{"available",replay.available},{"valid",replay.valid},
+            {"passed",replay.passed},{"feasible",replay.feasible},
+            {"prediction_difference",Number(replay.prediction_difference)},
+            {"residual_difference",Number(replay.residual_difference)},
+            {"objective_difference",Number(replay.objective_difference)},
+            {"primary_ac_kkt",Number(replay.primary_ac_kkt)},
+            {"independent_ac_kkt",Number(replay.independent_ac_kkt)},
+            {"kkt_difference",Number(replay.kkt_difference)},
+            {"primary_width_gradient",Number(replay.primary_width_gradient)},
+            {"independent_width_gradient",Number(replay.independent_width_gradient)},
+            {"gradient_difference",Number(replay.gradient_difference)},
+            {"cancellation_ratio",Number(replay.cancellation_ratio)},{"reason",replay.reason}};
+        out["runtime_checks"]=j::object{{"ac_feasibility",replay.available && replay.feasible},
+            {"conditional_ac_optimality",replay.primary_kkt_passed && replay.feasible},
+            {"independent_ac_optimality",replay.independent_kkt_passed && replay.feasible},
+            {"independent_kkt_consistency",replay.kkt_agrees},
+            {"independent_replay",replay.valid && replay.passed},
+            {"width_gradient_consistency",replay.gradient_agrees},
+            {"width_stationarity",replay.primary_width_gradient<=1e-12},
+            {"design_identifiability",a.design && a.design->rank==a.design->columns},
+            {"local_correction",a.local},{"numerical_identifiability",a.identified}};
+    }
+    else
+    {
+        out["reference"]=Endpoint(a.reference);
+        out["endpoint_evaluations"]=2;
+    }
     if(!a.design) return out;
-    out["scaled_reference_difference"]=Number(a.coefficient_difference); out["design_spectrum"]=DesignSpectrum(*a.design);
+    if(!a.reference_free) out["scaled_reference_difference"]=Number(a.coefficient_difference);
+    out["design_spectrum"]=DesignSpectrum(*a.design);
     if(!a.widths) return out;
     auto widths=Spectrum(*a.widths); widths["column_norms"]=Values(a.widths->column_norms);
     widths["column_normalized"]=Spectrum(*a.normalized_widths); widths["active_face_only"]=!a.primary.certificate.active_atoms.empty();
@@ -105,8 +155,8 @@ inline j::object Assessment(const r::Assessment & a)
     widths["weak_directions"]=weak; out["width_spectrum"]=widths;
     out["local_correction"]=Values(a.correction); out["local_correction_inf"]=Number(a.correction.lpNorm<Eigen::Infinity>());
     out["profile_jacobian_spectrum"]=Spectrum(*a.jacobian);
-    out["runtime_checks"]=j::object{{"inner",a.inner},{"b_gradient",a.gradient},{"local_correction",a.local},
-        {"identified",a.identified}};
+    if(!a.reference_free) out["runtime_checks"]=j::object{{"inner",a.inner},{"b_gradient",a.gradient},
+        {"local_correction",a.local},{"identified",a.identified}};
     return out;
 }
 inline j::object Search(const r::SearchResult & s,const r::EvaluationContext & c,Eigen::Index rows)

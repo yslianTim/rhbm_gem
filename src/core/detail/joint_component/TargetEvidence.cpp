@@ -106,7 +106,13 @@ JointTargetEvidence AssessTargetState(const JointProblem & problem,const JointPa
     auto check=[&](const char * name,Status status,std::string reason,std::optional<double> value={},std::optional<double> threshold={}) {
         out.checks.push_back({name,status,scope,value,threshold,std::move(reason)});
     };
-    for(const auto & c:existing) if(c.name=="inner" || c.name=="kkt" || c.name=="width-stationarity" || c.name=="assembled-profile") out.checks.push_back(c);
+    for(const auto & c:existing)
+        if(c.name=="conditional-ac-optimality" || c.name=="independent-replay" ||
+            c.name=="width-stationarity" || c.name=="design-identifiability" ||
+            c.name=="local-correction" || c.name=="numerical-identifiability" ||
+            c.name=="assembly-mapping" || c.name=="assembled-consistency" ||
+            c.name=="inner" || c.name=="kkt" || c.name=="assembled-profile")
+            out.checks.push_back(c);
     if(state)
     {
         const auto estimate=TargetIdentifiabilityMemoryEstimate(input,layout,layout.informative_rows.size());
@@ -209,7 +215,15 @@ JointCheckStatus TargetConvergence(const std::optional<JointTargetEvidence> & ev
     if(!evidence) return Status::NotRun;
     if(!state) return Status::Unavailable;
     auto status=Status::Passed;
-    for(const char * name:{"inner","kkt","width-stationarity","target-identifiability","target-local-correction"})
+    const bool reference_free=std::any_of(evidence->checks.begin(),evidence->checks.end(),[](const auto & check) {
+        return check.name=="conditional-ac-optimality";
+    });
+    const std::vector<const char *> required=reference_free ?
+        std::vector<const char *>{"conditional-ac-optimality","independent-replay","width-stationarity",
+            "design-identifiability","local-correction","numerical-identifiability",
+            "target-identifiability","target-local-correction"} :
+        std::vector<const char *>{"inner","kkt","width-stationarity","target-identifiability","target-local-correction"};
+    for(const char * name:required)
     {
         const auto found=std::find_if(evidence->checks.begin(),evidence->checks.end(),[&](const auto & c){return c.name==name;});
         status=MergeConvergenceStatus(status,found==evidence->checks.end() ? Status::Unavailable : found->status);
@@ -250,7 +264,11 @@ JointCheckStatus JointFitResult::TargetRuntimeConvergence() const
         !std::all_of(available_row_mask.begin(),available_row_mask.end(),[](bool b){return b;})) return JointCheckStatus::Unavailable;
     auto status=joint_component::TargetConvergence(target_evidence,true);
     for(const auto & c:components) status=joint_component::MergeConvergenceStatus(status,c.TargetRuntimeConvergence());
-    const auto found=std::find_if(evidence.begin(),evidence.end(),[](const auto & c){return c.name=="assembled-profile";});
-    return joint_component::MergeConvergenceStatus(status,found==evidence.end() ? JointCheckStatus::Unavailable : found->status);
+    for(const char * name:{"assembly-mapping","assembled-consistency"})
+    {
+        const auto found=std::find_if(evidence.begin(),evidence.end(),[&](const auto & c){return c.name==name;});
+        status=joint_component::MergeConvergenceStatus(status,found==evidence.end() ? JointCheckStatus::Unavailable : found->status);
+    }
+    return status;
 }
 }

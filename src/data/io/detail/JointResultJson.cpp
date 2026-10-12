@@ -96,9 +96,12 @@ Object CandidateDiagnostic(const JointCandidateDiagnostic & x)
         {"reference_status",StatusText(x.reference_status)},
         {"rank_assessment_status",StatusText(x.rank_assessment_status)},
         {"certification_status",StatusText(x.certification_status)},
+        {"endpoint_verification_status",StatusText(x.endpoint_verification_status)},
+        {"numerical_qualification_status",StatusText(x.numerical_qualification_status)},
+        {"verification_reason",x.verification_reason},
         {"resource_limit_reason",x.resource_limit_reason}};
 }
-std::optional<JointCandidateDiagnostic> ReadCandidateDiagnostic(const j::value & value)
+std::optional<JointCandidateDiagnostic> ReadCandidateDiagnostic(const j::value & value,bool reference_free_schema)
 {
     if(value.is_null()) return {};
     const auto & o=value.as_object(); JointCandidateDiagnostic x;
@@ -113,6 +116,12 @@ std::optional<JointCandidateDiagnostic> ReadCandidateDiagnostic(const j::value &
     x.reference_status=Status(o.at("reference_status"));
     x.rank_assessment_status=Status(o.at("rank_assessment_status"));
     x.certification_status=Status(o.at("certification_status"));
+    if(reference_free_schema)
+    {
+        x.endpoint_verification_status=Status(o.at("endpoint_verification_status"));
+        x.numerical_qualification_status=Status(o.at("numerical_qualification_status"));
+        x.verification_reason=Read<std::string>(o,"verification_reason");
+    }
     x.resource_limit_reason=Read<std::string>(o,"resource_limit_reason");
     const auto candidate_status=Read<std::string>(o,"candidate_status");
     if(candidate_status!=CandidateStatusText(x))
@@ -335,10 +344,12 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
             p.search_method=="fixed-neighbor","invalid solver search method");
         const bool current_contract=p.contract_version &&
             *p.contract_version==JointSolverProvenanceContractVersion;
-        const bool historical_contract=!p.contract_version ||
+        const bool reference_contract=p.contract_version &&
+            *p.contract_version==JointSolverProvenanceReferenceContractVersion;
+        const bool historical_contract=!p.contract_version || reference_contract ||
             *p.contract_version==JointSolverProvenanceHistoricalContractVersion;
         Require(current_contract || historical_contract,"unsupported solver provenance contract");
-        if(current_contract)
+        if(current_contract || reference_contract)
         {
             Require(p.search_method=="fixed-neighbor",
                 "current solver provenance must use FixedNeighbor");
@@ -351,10 +362,11 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
                 !p.schwarz_overlap_hops && !p.schwarz_max_block_atoms &&
                 !p.schwarz_storage_bytes && !p.schwarz_scratch_bytes,
                 "current solver provenance contains retired operator controls");
+            const auto policy=current_contract ? FixedNeighborPolicyContractVersion :
+                FixedNeighborReferencePolicyContractVersion;
             Require(p.fixed_neighbor_policy_version &&
-                *p.fixed_neighbor_policy_version==FixedNeighborPolicyContractVersion &&
-                !p.fixed_neighbor_local_work,
-                "incomplete current FixedNeighbor provenance");
+                *p.fixed_neighbor_policy_version==policy && !p.fixed_neighbor_local_work,
+                "incomplete FixedNeighbor provenance");
         }
         else if(p.sparse_backend)
             Require(*p.sparse_backend=="EIGEN" || *p.sparse_backend=="SPQR","invalid historical solver sparse backend");
@@ -386,16 +398,18 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
         {
             Require(p.fixed_neighbor_core_atoms && *p.fixed_neighbor_core_atoms>0,
                 "incomplete fixed-neighbor provenance");
-            const bool current_policy=p.fixed_neighbor_policy_version &&
+            const bool current_policy=current_contract && p.fixed_neighbor_policy_version &&
                 *p.fixed_neighbor_policy_version==FixedNeighborPolicyContractVersion;
+            const bool reference_policy=reference_contract && p.fixed_neighbor_policy_version &&
+                *p.fixed_neighbor_policy_version==FixedNeighborReferencePolicyContractVersion;
             const bool legacy_policy=!p.fixed_neighbor_policy_version ||
                 *p.fixed_neighbor_policy_version==FixedNeighborLegacyPolicyContractVersion;
-            Require(current_policy || legacy_policy,"unsupported fixed-neighbor policy contract");
-            if(current_policy)
+            Require(current_policy || reference_policy || legacy_policy,"unsupported fixed-neighbor policy contract");
+            if(current_policy || reference_policy)
             {
                 if(p.fixed_neighbor_local_work)
                     Require(*p.fixed_neighbor_local_work=="one-accepted",
-                        "current FixedNeighbor v2 cannot claim retired local work");
+                        "current FixedNeighbor cannot claim retired local work");
             }
             else
             {
@@ -432,7 +446,8 @@ void ValidateState(const JointState & x,std::size_t atoms,std::size_t groups=0)
     Require(x.nuisance_amplitudes.size()==groups,"nuisance amplitude dimensions");
     for(double value:x.nuisance_amplitudes) Require(std::isfinite(value),"nonfinite nuisance amplitude");
 }
-void ValidateCandidateDiagnostic(const JointCandidateDiagnostic & x,std::size_t atoms,bool trusted_state)
+void ValidateCandidateDiagnostic(const JointCandidateDiagnostic & x,std::size_t atoms,bool trusted_state,
+    bool reference_free_contract)
 {
     Require(atoms<=std::numeric_limits<std::size_t>::max()/2,"candidate dimensions");
     if(x.candidate_available)
@@ -452,6 +467,15 @@ void ValidateCandidateDiagnostic(const JointCandidateDiagnostic & x,std::size_t 
         "candidate certification disagrees with trusted state");
     Require(x.certification_status!=JointCheckStatus::Passed || x.candidate_available,
         "certified candidate is unavailable");
+    if(reference_free_contract)
+    {
+        Require((x.numerical_qualification_status==JointCheckStatus::Passed)==trusted_state,
+            "candidate numerical qualification disagrees with trusted state");
+        Require(x.numerical_qualification_status!=JointCheckStatus::Passed || x.candidate_available,
+            "qualified candidate is unavailable");
+        Require(x.endpoint_verification_status!=JointCheckStatus::Passed || x.candidate_available,
+            "verified candidate is unavailable");
+    }
 }
 j::value SelectionDomain(const std::optional<JointSelectionDomain> & domain)
 {
@@ -547,6 +571,8 @@ void ValidateTarget(const std::optional<JointTargetEvidence> & value,const std::
 void Validate(const JointAnalysisResult & x)
 {
     ValidateMetadata(x.metadata);
+    const bool reference_free_contract=x.metadata.solver && x.metadata.solver->contract_version &&
+        *x.metadata.solver->contract_version==JointSolverProvenanceContractVersion;
     const auto atoms=x.atom_ids.size(), rows=x.row_ids.size();
     Require(!x.selection_domain || x.selection_domain->IsValid(atoms),"selection domain");
     Require(x.initialization.data_scope=="caller-provided-widths" ||
@@ -601,7 +627,7 @@ void Validate(const JointAnalysisResult & x)
         ValidateTarget(c.target_evidence,c.atoms,x.selection_domain,c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.rows.size());
         if(c.state) ValidateState(*c.state,c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.layout ? c.layout->groups.size() : 0);
         if(c.candidate_diagnostic) ValidateCandidateDiagnostic(*c.candidate_diagnostic,
-            c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.state.has_value());
+            c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.state.has_value(),reference_free_contract);
     }
 }
 }
@@ -622,7 +648,7 @@ std::string Encode(const JointAnalysisResult & x)
         {"evidence",Checks(c.evidence)},{"ranks",Ranks(c.ranks)},{"regular_certificate",StatusText(c.regular_certificate)},
         { "runtime_convergence",StatusText(c.runtime_convergence)},{"layout",Layout(c.layout)},
         {"target_evidence",Target(c.target_evidence)},{"target_runtime_convergence",StatusText(c.target_runtime_convergence)}});
-    Object out{{"schema_version",6},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
+    Object out{{"schema_version",7},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
         { "support_contract","sphere-fma-v1"},{"parameterization_contract",x.parameterization_contract},{"layout",Layout(x.layout)},{"metadata",Metadata(m)},{"selection_domain",SelectionDomain(x.selection_domain)},
         {"atom_ids",j::value_from(x.atom_ids)},{"row_ids",j::value_from(x.row_ids)},{"initialization",Initialization(x.initialization)},
         {"costs",Object{{"construction_seconds",t.construction_seconds},{"initialization_seconds",t.initialization_seconds},{"search_seconds",t.search_seconds},
@@ -639,7 +665,8 @@ JointAnalysisResult Decode(std::string_view text)
     j::parse_options options; options.numbers=j::number_precision::precise;
     const auto parsed=j::parse(text,{},options); const auto & o=parsed.as_object();
     const int version=Read<int>(o,"schema_version");
-    Require(version==3 || version==4 || version==5 || version==6,"unsupported result schema version (expected 3, 4, 5 or 6)");
+    Require(version==3 || version==4 || version==5 || version==6 || version==7,
+        "unsupported result schema version (expected 3, 4, 5, 6 or 7)");
     Require(Read<std::string>(o,"estimator")=="joint-components" &&
         Read<std::string>(o,"estimator_contract")=="guarded-joint-ls-v1" &&
         Read<std::string>(o,"objective_contract")=="parent-normalized-half-rss-v1" &&
@@ -672,7 +699,7 @@ JointAnalysisResult Decode(std::string_view text)
         component.reference_evaluations=Read<int>(c,"reference_evaluations"); component.accepted_updates=Read<int>(c,"accepted_updates");
         component.native_status=Read<int>(c,"native_status");
         if(!c.at("state").is_null()) component.state=ReadState(c.at("state"));
-        if(version>=6) component.candidate_diagnostic=ReadCandidateDiagnostic(c.at("candidate_diagnostic"));
+        if(version>=6) component.candidate_diagnostic=ReadCandidateDiagnostic(c.at("candidate_diagnostic"),version>=7);
         component.evidence=ReadChecks(c.at("evidence")); component.ranks=ReadRanks(c.at("ranks"));
         component.regular_certificate=Status(c.at("regular_certificate")); component.runtime_convergence=Status(c.at("runtime_convergence"));
         if(version>=5) {component.target_evidence=ReadTarget(c.at("target_evidence")); component.target_runtime_convergence=Status(c.at("target_runtime_convergence"));}

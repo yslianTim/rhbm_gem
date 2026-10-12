@@ -104,6 +104,9 @@ struct JointCandidateDiagnostic
     JointCheckStatus reference_status{JointCheckStatus::NotRun};
     JointCheckStatus rank_assessment_status{JointCheckStatus::NotRun};
     JointCheckStatus certification_status{JointCheckStatus::NotRun};
+    JointCheckStatus endpoint_verification_status{JointCheckStatus::NotRun};
+    JointCheckStatus numerical_qualification_status{JointCheckStatus::NotRun};
+    std::string verification_reason;
     std::string resource_limit_reason;
 };
 struct JointComponentData

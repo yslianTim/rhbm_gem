@@ -74,13 +74,24 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
     if(a.reference_free)
     {
         const auto & replay=a.independent_replay;
-        out.push_back(check("conditional-ac-optimality",replay.valid,
+        const bool resource_unavailable=a.failure.starts_with("resource-limit:");
+        const bool evidence_available=replay.available || (!a.primary.valid && !resource_unavailable);
+        out.push_back(check("ac-feasibility",evidence_available,replay.feasible,
+            evidence_available ? std::optional<double>(replay.feasible ? 0.0 : 1.0) : std::nullopt,0.0));
+        out.push_back(check("conditional-ac-optimality",evidence_available,
             replay.primary_kkt_passed && replay.feasible,
             std::isfinite(replay.primary_ac_kkt) ? std::optional<double>(replay.primary_ac_kkt) : std::nullopt,1e-10));
-        out.push_back(check("independent-replay",replay.valid,replay.passed,
+        out.push_back(check("independent-ac-optimality",evidence_available,
+            replay.independent_kkt_passed && replay.feasible,
+            std::isfinite(replay.independent_ac_kkt) ? std::optional<double>(replay.independent_ac_kkt) : std::nullopt,1e-10));
+        out.push_back(check("independent-kkt-consistency",evidence_available,replay.kkt_agrees,
             std::isfinite(replay.kkt_difference) ? std::optional<double>(replay.kkt_difference) : std::nullopt,1e-13));
+        out.push_back(check("independent-replay",evidence_available,replay.valid && replay.passed));
         out.back().reason=replay.reason.empty() ? a.failure : replay.reason;
-        out.push_back(check("width-stationarity",a.primary.valid && a.primary.gradient.size()>0,
+        out.push_back(check("width-gradient-consistency",evidence_available,replay.gradient_agrees,
+            std::isfinite(replay.gradient_difference) ? std::optional<double>(replay.gradient_difference) : std::nullopt));
+        out.back().reason=replay.reason.empty() ? "per-coordinate-replay-enclosure" : replay.reason;
+        out.push_back(check("width-stationarity",evidence_available && a.primary.valid && a.primary.gradient.size()>0,
             replay.primary_width_gradient<=1e-12,
             std::isfinite(replay.primary_width_gradient) ? std::optional<double>(replay.primary_width_gradient) : std::nullopt,1e-12));
         const bool design_full_rank=a.design && a.design->rank==a.design->columns;
@@ -132,11 +143,28 @@ JointCheckStatus MergeConvergenceStatus(JointCheckStatus a,JointCheckStatus b)
 JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> & evidence,JointEvidenceScope scope,bool assembled)
 {
     auto status=JointCheckStatus::Passed;
-    for(const char * name:{"inner","kkt","width-stationarity","local-correction","numerical-identifiability","assembled-profile"})
+    const bool reference_free=std::any_of(evidence.begin(),evidence.end(),[&](const auto & check) {
+        return check.name=="conditional-ac-optimality" && check.scope==scope;
+    });
+    const std::vector<const char *> required=reference_free ?
+        std::vector<const char *>{"conditional-ac-optimality","independent-replay","width-stationarity",
+            "design-identifiability","local-correction","numerical-identifiability"} :
+        std::vector<const char *>{"inner","kkt","width-stationarity","local-correction","numerical-identifiability"};
+    for(const char * name:required)
     {
-        if(!assembled && std::string_view(name)=="assembled-profile") continue;
         const auto found=std::find_if(evidence.begin(),evidence.end(),[&](const auto & check){return check.name==name && check.scope==scope;});
         status=MergeConvergenceStatus(status,found==evidence.end() ? JointCheckStatus::Unavailable : found->status);
+    }
+    if(assembled)
+    {
+        const std::vector<const char *> assembly_required=reference_free ?
+            std::vector<const char *>{"assembly-mapping","assembled-consistency"} :
+            std::vector<const char *>{"assembled-profile"};
+        for(const char * name:assembly_required)
+        {
+            const auto found=std::find_if(evidence.begin(),evidence.end(),[&](const auto & check){return check.name==name && check.scope==scope;});
+            status=MergeConvergenceStatus(status,found==evidence.end() ? JointCheckStatus::Unavailable : found->status);
+        }
     }
     return status;
 }

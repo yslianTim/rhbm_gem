@@ -561,6 +561,7 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
     {out.reason="invalid-primary"; return out;}
     if(!e.certificate.available)
     {out.reason="primary-kkt-unavailable"; return out;}
+    out.available=true;
 
     const auto atoms=e.eta.size();
     const Vector widths=e.eta.array().exp();

@@ -647,6 +647,24 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
     EXPECT_EQ(old_current_decoded.metadata.solver->fixed_neighbor_local_search,"legacy-compact");
 }
 
+TEST(DataObjectPersistenceTest, ReferenceSolverProvenanceRemainsReadableAsHistoricalV3)
+{
+    namespace io=rg::joint_result_io;
+    auto fixed=SavedJointExample();
+    rg::JointSolverProvenance provenance{"fixed-neighbor",12u,std::nullopt};
+    provenance.contract_version=rg::JointSolverProvenanceReferenceContractVersion;
+    provenance.sparse_backend="EIGEN";
+    provenance.fixed_neighbor_policy_version=rg::FixedNeighborReferencePolicyContractVersion;
+    provenance.fixed_neighbor_maximum_sweeps=200;
+    provenance.fixed_neighbor_order="forward";
+    provenance.fixed_neighbor_local_search="profile-lm";
+    fixed.metadata.solver=provenance;
+    const auto decoded=io::Decode(io::Encode(fixed));
+    ASSERT_TRUE(decoded.metadata.solver);
+    EXPECT_EQ(decoded.metadata.solver->contract_version,rg::JointSolverProvenanceReferenceContractVersion);
+    EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_policy_version,rg::FixedNeighborReferencePolicyContractVersion);
+}
+
 TEST(DataObjectPersistenceTest, HistoricalV2SolverProvenanceRemainsReadable)
 {
     namespace io=rg::joint_result_io;
@@ -814,11 +832,22 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     candidate.reference_status=rg::JointCheckStatus::Unavailable;
     candidate.rank_assessment_status=rg::JointCheckStatus::Unavailable;
     candidate.certification_status=rg::JointCheckStatus::Unavailable;
-    candidate.resource_limit_reason="resource-limit:reference-solve:budget-exceeded";
+    candidate.endpoint_verification_status=rg::JointCheckStatus::Passed;
+    candidate.numerical_qualification_status=rg::JointCheckStatus::Unavailable;
+    candidate.verification_reason="rank-assessment-unavailable";
+    candidate.resource_limit_reason="resource-limit:rank-assessment:budget-exceeded";
     component.candidate_diagnostic=candidate;
+    rg::JointSolverProvenance provenance{"fixed-neighbor",12u,std::nullopt};
+    provenance.contract_version=rg::JointSolverProvenanceContractVersion;
+    provenance.sparse_backend="EIGEN";
+    provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
+    provenance.fixed_neighbor_maximum_sweeps=200;
+    provenance.fixed_neighbor_order="forward";
+    provenance.fixed_neighbor_local_search="profile-lm";
+    record.metadata.solver=provenance;
 
     const auto json=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(json.at("schema_version").as_int64(),6);
+    EXPECT_EQ(json.at("schema_version").as_int64(),7);
     EXPECT_EQ(json.at("components").as_array()[0].at("candidate_diagnostic").at("candidate_status").as_string(),"uncertified");
     const auto decoded=io::Decode(boost::json::serialize(json));
     ASSERT_TRUE(decoded.components.front().candidate_diagnostic);
@@ -834,12 +863,48 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->reference_status,rg::JointCheckStatus::Unavailable);
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->rank_assessment_status,rg::JointCheckStatus::Unavailable);
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->certification_status,rg::JointCheckStatus::Unavailable);
+    EXPECT_EQ(decoded.components.front().candidate_diagnostic->endpoint_verification_status,rg::JointCheckStatus::Passed);
+    EXPECT_EQ(decoded.components.front().candidate_diagnostic->numerical_qualification_status,rg::JointCheckStatus::Unavailable);
+    EXPECT_EQ(decoded.components.front().candidate_diagnostic->verification_reason,"rank-assessment-unavailable");
     EXPECT_TRUE(decoded.components.front().ranks.empty());
     EXPECT_FALSE(decoded.components.front().target_evidence);
 
     rg::WriteJointAnalysisResult(decoded,dir.path()/"result.json",dir.path()/"atoms.csv");
     std::ifstream csv(dir.path()/"atoms.csv"); std::string line;
     while(std::getline(csv,line)) EXPECT_EQ(line.find("999.125"),std::string::npos);
+}
+
+TEST(DataObjectPersistenceTest, SchemaSixEvidenceRetainsLegacyReferenceMeaning)
+{
+    namespace io=rg::joint_result_io;
+    auto record=SavedJointExample();
+    auto & component=record.components.front();
+    component.candidate_diagnostic=rg::JointCandidateDiagnostic{};
+    component.candidate_diagnostic->candidate_available=true;
+    component.candidate_diagnostic->candidate_eta={-.7,-.5};
+    component.candidate_diagnostic->candidate_ac={2,-.3,4,.2};
+    component.candidate_diagnostic->candidate_objective=.02;
+    component.candidate_diagnostic->reference_status=rg::JointCheckStatus::Passed;
+    component.candidate_diagnostic->certification_status=rg::JointCheckStatus::Passed;
+    component.evidence.push_back({"inner",rg::JointCheckStatus::Passed,
+        rg::JointEvidenceScope::ComponentLocal,2e-12,1e-10,"legacy-reference-coefficient-agreement"});
+    auto legacy=boost::json::parse(io::Encode(record)).as_object();
+    legacy["schema_version"]=6;
+    auto & diagnostic=legacy.at("components").as_array()[0].as_object().at("candidate_diagnostic").as_object();
+    diagnostic.erase("endpoint_verification_status");
+    diagnostic.erase("numerical_qualification_status");
+    diagnostic.erase("verification_reason");
+    const auto decoded=io::Decode(boost::json::serialize(legacy));
+    const auto & saved=*decoded.components.front().candidate_diagnostic;
+    EXPECT_EQ(saved.reference_status,rg::JointCheckStatus::Passed);
+    EXPECT_EQ(saved.certification_status,rg::JointCheckStatus::Passed);
+    EXPECT_EQ(saved.endpoint_verification_status,rg::JointCheckStatus::NotRun);
+    EXPECT_EQ(saved.numerical_qualification_status,rg::JointCheckStatus::NotRun);
+    const auto old_inner=std::find_if(decoded.components.front().evidence.begin(),decoded.components.front().evidence.end(),
+        [](const auto & check){return check.name=="inner";});
+    ASSERT_NE(old_inner,decoded.components.front().evidence.end());
+    EXPECT_EQ(old_inner->status,rg::JointCheckStatus::Passed);
+    EXPECT_EQ(old_inner->reason,"legacy-reference-coefficient-agreement");
 }
 
 TEST(DataObjectPersistenceTest, CandidateDiagnosticsRejectInvalidOrUntrustedCheckpointParameters)

@@ -372,7 +372,7 @@ TEST(JointObservableProfileTest, HaloNonuniquenessDoesNotCertifyItsParameters)
     EXPECT_FALSE(stages.at(4).point); EXPECT_EQ(stages.at(4).reason,"nonunique-parameter-directions");
     const auto text=rhbm_gem::joint_result_io::Encode(saved);
     auto value=boost::json::parse(text);
-    EXPECT_EQ(value.at("schema_version").as_int64(),6);
+    EXPECT_EQ(value.at("schema_version").as_int64(),7);
     const auto restored=rhbm_gem::joint_result_io::Decode(text);
     EXPECT_EQ(restored.target_runtime_convergence,saved.target_runtime_convergence);
     EXPECT_EQ(restored.components[0].target_evidence->atoms.back().status,rhbm_gem::JointCheckStatus::Failed);

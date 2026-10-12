@@ -166,10 +166,11 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
             AddProduct(temporary,atoms,24*sizeof(double)+sizeof(Eigen::Index));
         break;
     case MemoryStage::EndpointVerification:
-        // The independent replay holds compensated prediction accumulators and
-        // O(P) gradient, norm and feasibility vectors, never an N-by-2P design.
-        ok=AddProduct(temporary,rows,3*sizeof(double)) &&
-            AddProduct(temporary,atoms,16*sizeof(double)+3*sizeof(Eigen::Index));
+        // The primary residual remains live while the independent replay holds
+        // compensated prediction accumulators and O(P) gradient/norm vectors.
+        // Neither path forms an N-by-2P or N-by-3P design.
+        ok=AddProduct(temporary,rows,4*sizeof(double)) &&
+            AddProduct(temporary,atoms,24*sizeof(double)+3*sizeof(Eigen::Index));
         break;
     case MemoryStage::ReferenceSolve:
     {
