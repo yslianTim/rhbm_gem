@@ -551,7 +551,7 @@ TEST(DataObjectPersistenceTest, FixedNeighborPolicyVersionsPreserveLegacyAndReje
     current_provenance.contract_version=rg::JointSolverProvenanceContractVersion;
     current_provenance.sparse_backend="EIGEN";
     current_provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
-    current_provenance.fixed_neighbor_maximum_sweeps=30;
+    current_provenance.fixed_neighbor_maximum_sweeps=200;
     current_provenance.fixed_neighbor_order="forward";
     current_provenance.fixed_neighbor_local_search="profile-lm";
     current.metadata.solver=current_provenance;
@@ -575,7 +575,7 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
     fixed_provenance.contract_version=rg::JointSolverProvenanceContractVersion;
     fixed_provenance.sparse_backend="EIGEN";
     fixed_provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
-    fixed_provenance.fixed_neighbor_maximum_sweeps=30;
+    fixed_provenance.fixed_neighbor_maximum_sweeps=200;
     fixed_provenance.fixed_neighbor_order="forward";
     fixed_provenance.fixed_neighbor_local_search="profile-lm";
     fixed.metadata.solver=fixed_provenance;
@@ -588,7 +588,7 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
     EXPECT_EQ(fixed_decoded.metadata.solver->contract_version,rg::JointSolverProvenanceContractVersion);
     EXPECT_EQ(fixed_decoded.metadata.solver->sparse_backend,"EIGEN");
     EXPECT_FALSE(fixed_decoded.metadata.solver->fixed_neighbor_local_work);
-    EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_maximum_sweeps,30u);
+    EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_maximum_sweeps,200u);
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_order,"forward");
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_local_search,"profile-lm");
     EXPECT_FALSE(fixed_decoded.metadata.solver->preconditioner);
@@ -682,7 +682,7 @@ TEST(DataObjectPersistenceTest, MalformedCurrentSolverProvenanceIsRejected)
     provenance.contract_version=rg::JointSolverProvenanceContractVersion;
     provenance.sparse_backend="EIGEN";
     provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
-    provenance.fixed_neighbor_maximum_sweeps=30;
+    provenance.fixed_neighbor_maximum_sweeps=200;
     provenance.fixed_neighbor_order="forward";
     provenance.fixed_neighbor_local_search="profile-lm";
     fixed.metadata.solver=provenance;

@@ -11,7 +11,7 @@ enum class FixedNeighborBlockOrder {Forward,Reverse};
 struct FixedNeighborSearchPolicy
 {
     std::size_t core_atoms{12};
-    std::size_t maximum_sweeps{30};
+    std::size_t maximum_sweeps{200};
     FixedNeighborBlockOrder order{FixedNeighborBlockOrder::Forward};
 };
 

@@ -88,7 +88,7 @@ def main() -> int:
             "fixed_neighbor_core_atoms": 12,
             "fixed_neighbor_local_work": None,
             "fixed_neighbor_policy_version": "fixed-neighbor-production-v2",
-            "fixed_neighbor_maximum_sweeps": 30,
+            "fixed_neighbor_maximum_sweeps": 200,
             "fixed_neighbor_order": "forward",
             "fixed_neighbor_local_search": "profile-lm",
         }
@@ -102,7 +102,7 @@ def main() -> int:
             "fixed_neighbor_core_atoms": 12,
             "fixed_neighbor_local_work": None,
             "fixed_neighbor_policy_version": "fixed-neighbor-production-v2",
-            "fixed_neighbor_maximum_sweeps": 30,
+            "fixed_neighbor_maximum_sweeps": 200,
             "fixed_neighbor_order": "forward",
             "fixed_neighbor_local_search": "profile-lm",
         }

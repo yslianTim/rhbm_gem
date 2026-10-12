@@ -478,7 +478,7 @@ TEST(JointProgressTest, PublicFitUsesFixedNeighborProductionContract)
     EXPECT_EQ(actual.solver_provenance.fixed_neighbor_core_atoms, 12u);
     EXPECT_EQ(actual.solver_provenance.fixed_neighbor_policy_version,
         rhbm_gem::FixedNeighborPolicyContractVersion);
-    EXPECT_EQ(actual.solver_provenance.fixed_neighbor_maximum_sweeps, 30u);
+    EXPECT_EQ(actual.solver_provenance.fixed_neighbor_maximum_sweeps, 200u);
     EXPECT_EQ(actual.solver_provenance.fixed_neighbor_order, "forward");
     EXPECT_EQ(actual.solver_provenance.fixed_neighbor_local_search, "profile-lm");
     EXPECT_EQ(actual.RuntimeConvergence(), expected.RuntimeConvergence());
@@ -503,7 +503,7 @@ TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
     EXPECT_FALSE(fit.solver_provenance.fixed_neighbor_local_work);
     EXPECT_EQ(fit.solver_provenance.fixed_neighbor_policy_version,
         rhbm_gem::FixedNeighborPolicyContractVersion);
-    EXPECT_EQ(fit.solver_provenance.fixed_neighbor_maximum_sweeps,30u);
+    EXPECT_EQ(fit.solver_provenance.fixed_neighbor_maximum_sweeps,200u);
     EXPECT_EQ(fit.solver_provenance.fixed_neighbor_order,"forward");
     EXPECT_EQ(fit.solver_provenance.fixed_neighbor_local_search,"profile-lm");
     ASSERT_TRUE(fit.assembled_state);
