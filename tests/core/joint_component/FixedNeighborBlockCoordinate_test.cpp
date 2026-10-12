@@ -99,6 +99,47 @@ void CheckSingleBlock(const std::string & topology,int atoms)
         EXPECT_LE(sweep.objective_after,sweep.objective_before+n::BlockObjectiveReplayEnclosure(sweep.objective_before));
     EXPECT_EQ(data.partition.components.size(),1u);
 }
+TEST(JointFixedNeighborBlockCoordinateTest, IncrementalCandidateDeltaMatchesAffectedRowFullReplay)
+{
+    n::Vector residual(4); residual<<1.25,-.75,2e-8,-2.0;
+    const n::Indices affected_rows{0,2};
+    n::Vector old_core(2),new_core(2); old_core<<.5,-.3; new_core<<.25,-.30000001;
+    const double scale=.75;
+    const double current=.5*residual.squaredNorm()/(scale*scale);
+    const auto incremental=n::EvaluateCandidateDelta(residual,affected_rows,old_core,new_core,current,scale);
+    n::Vector full_residual=residual;
+    for(std::size_t k=0;k<affected_rows.size();++k)
+        full_residual(static_cast<Eigen::Index>(affected_rows[k]))+=new_core(static_cast<Eigen::Index>(k))-
+            old_core(static_cast<Eigen::Index>(k));
+    const double full_objective=.5*full_residual.squaredNorm()/(scale*scale);
+    ASSERT_EQ(incremental.residual_delta.size(),2);
+    EXPECT_DOUBLE_EQ(incremental.residual_delta(0),-.25);
+    EXPECT_NEAR(incremental.residual_delta(1),-1e-8,1e-16);
+    EXPECT_NEAR(incremental.objective,full_objective,2e-15);
+    EXPECT_NEAR(incremental.objective_delta,full_objective-current,2e-15);
+    EXPECT_TRUE(std::isfinite(incremental.delta_condition));
+}
+TEST(JointFixedNeighborBlockCoordinateTest, IncrementalCandidateExperimentMatchesFullReplayOnChainAndCube)
+{
+    for(const auto & topology:{"chain","cube"})
+    {
+        JointProblem problem(second_stage_test::SyntheticJointWorkload(topology,8));
+        const n::Vector eta=n::Vector::Constant(8,std::log(.55));
+        n::FixedNeighborPolicy policy; policy.maximum_sweeps=1; policy.certify_endpoint=false;
+        policy.collect_telemetry=true; policy.retain_diagnostic_records=false;
+        policy.compare_incremental_replay=true;
+        const auto result=n::RunFixedNeighborDiagnostic(problem,eta,policy);
+        EXPECT_EQ(result.sweep_count,1u)<<topology;
+        EXPECT_EQ(result.work.incremental_candidate_replays,result.work.full_candidate_replays)<<topology;
+        EXPECT_EQ(result.work.incremental_acceptance_mismatches,0u)<<topology;
+        EXPECT_LE(result.work.maximum_incremental_objective_difference,1e-10)<<topology;
+        EXPECT_LE(result.work.maximum_incremental_residual_difference,1e-12)<<topology;
+        ASSERT_TRUE(result.final_sweep.has_value())<<topology;
+        EXPECT_LE(result.final_sweep->cache_replay_error,2e-12)<<topology;
+        EXPECT_TRUE(result.blocks.empty())<<topology;
+        EXPECT_TRUE(result.sweeps.empty())<<topology;
+    }
+}
 void CheckMultiBlockBudgetFailure(const std::string & topology)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload(topology,32));

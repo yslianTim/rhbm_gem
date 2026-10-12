@@ -17,8 +17,10 @@ visit.
 The single benchmark workflow is tests/integration/joint_benchmark.py. It
 calls the production FixedNeighbor benchmark for search and solve, the
 postprocessing benchmark for workflow and postprocess, and the main command
-for complete-command measurements. The benchmark policy has no custom core,
-reverse order or alternative solver mode.
+for complete-command measurements. An opt-in incremental candidate replay
+mode compares a local objective delta against the existing full replay without
+changing accepted states. The benchmark policy has no custom core, reverse
+order or alternative solver mode.
 
 Current Python experiment drivers are joint_benchmark.py,
 joint_partial_selection.py, joint_statistical_experiment.py and

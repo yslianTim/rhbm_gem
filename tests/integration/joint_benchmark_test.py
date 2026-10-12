@@ -19,7 +19,7 @@ class JointBenchmarkContractTest(unittest.TestCase):
         self.assertEqual(options, {
             '-h', '--help', '--profile', '--case', '--build-dir', '--output', '--repeat',
             '--warmup', '--timeout', '--rss-limit', '--maximum-sweeps', '--detailed',
-            '--cli', '--model', '--map',
+            '--incremental-replay-experiment', '--cli', '--model', '--map',
         })
 
     def test_default_solver_metadata_locks_fixed_neighbor_production_policy(self):
@@ -69,6 +69,24 @@ class JointBenchmarkContractTest(unittest.TestCase):
         self.assertEqual(details['diagnostic_scope'], 'preparation-only')
         self.assertEqual(details['rss_checkpoints']['rss_before_preparation'], 10)
         self.assertEqual(details['resource_census']['component_atoms'], 8)
+
+    def test_incremental_replay_mode_is_diagnostic_only(self):
+        parser = benchmark.build_parser()
+        args = parser.parse_args([
+            '--profile', 'search', '--case', 'chain-8', '--build-dir', 'build',
+            '--output', 'result.json', '--incremental-replay-experiment'])
+        benchmark.validate_args(parser, args)
+        with tempfile.TemporaryDirectory() as temporary:
+            build = Path(temporary)
+            (build / 'bin').mkdir()
+            driver = build / 'bin/joint_fixed_neighbor_experiment'
+            driver.touch()
+            command = benchmark.command_for_profile(args, Path('result.json'), build)
+            self.assertEqual(command[-1], '--compare-incremental-replay')
+        result = benchmark.normalize_result('search', {'fixed_neighbor': {
+            'incremental_replay_validation': {'enabled': True, 'acceptance_mismatches': 0},
+        }})
+        self.assertTrue(result['details']['incremental_replay_validation']['enabled'])
 
     def test_custom_core_size_option_is_not_exposed(self):
         with self.assertRaises(SystemExit):

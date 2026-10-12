@@ -39,6 +39,13 @@ preparation, after preparation, after the first sweep and after certification,
 and the process peak RSS where the platform exposes it. Unsupported checkpoint
 measurements are `null`.
 
+For an experimental affected-row candidate replay comparison, add
+`--incremental-replay-experiment` to a search or solve run. The experiment
+measures the incremental objective/residual delta beside the unchanged full
+component replay and compares acceptance decisions. It still uses full replay
+as the authority and does not run a different estimator trajectory; results
+are diagnostic evidence, not a production speedup claim.
+
 Use workflow and postprocess with full, halo or multi cases. Use command with a
 case name plus --model and --map. Reports and temporary outputs belong in the
 build/output tree.

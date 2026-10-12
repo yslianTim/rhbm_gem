@@ -90,6 +90,20 @@ The complete concise record of those FixedNeighbor choices is in
   controls, but large reconstructions or resource gates remained incomplete.
   Unavailable and timed-out results do not establish deficient rank or
   numerical failure.
+- An opt-in affected-row candidate replay experiment compared the incremental
+  objective/residual delta with the existing full replay on one-sweep synthetic
+  chain/cube workloads from 128 through 1024 atoms. Across 339 candidate
+  comparisons, all acceptance decisions agreed; the maximum absolute objective
+  difference was `1.85e-14`, the maximum residual difference was `1.12e-15`,
+  and the maximum sweep-end cache replay error was `1.12e-15`. At 1024 atoms,
+  full candidate replay took 1.463 s (chain) and 1.618 s (cube), compared with
+  0.00243 s and 0.00245 s for the incremental calculation, including local
+  core prediction. Those are candidate-phase timings from a Release synthetic
+  benchmark, not measured total-search savings: every run still performed the
+  full replay oracle. The experiment did not execute a separate no-oracle
+  trajectory or cover borderline acceptance, weak-signal, rank-deficient and
+  active-amplitude-boundary searches. Incremental replay remains experimental;
+  production acceptance continues to use full replay.
 
 The sparse-backend and global OperatorPcg/Schwarz conclusions, including the
 bounded EIGEN/SPQR timing and memory comparison, are summarized in

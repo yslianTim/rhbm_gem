@@ -13,6 +13,30 @@ double BlockObjectiveReplayEnclosure(double reference)
 {return 1e-12+2e-12*std::abs(reference);}
 bool WithinBlockObjectiveReplay(double error,double reference)
 {return error<=BlockObjectiveReplayEnclosure(reference);}
+IncrementalCandidateReplay EvaluateCandidateDelta(VectorRef current_residual,
+    const Indices & affected_rows,VectorRef old_core,VectorRef new_core,
+    double current_objective,double scale)
+{
+    if(affected_rows.size()!=static_cast<std::size_t>(old_core.size()) || old_core.size()!=new_core.size() ||
+        !(scale>0) || !std::isfinite(scale)) throw std::invalid_argument("Invalid incremental candidate dimensions.");
+    IncrementalCandidateReplay out; out.residual_delta.resize(new_core.size());
+    long double delta{},correction{},absolute_delta{};
+    const long double normalization=2.0L*static_cast<long double>(scale)*static_cast<long double>(scale);
+    for(Eigen::Index k=0;k<new_core.size();++k)
+    {
+        const auto row=affected_rows[static_cast<std::size_t>(k)];
+        const double change=new_core(k)-old_core(k); out.residual_delta(k)=change;
+        const long double residual=current_residual(row),difference=change;
+        const long double term=(2.0L*residual*difference+difference*difference)/normalization;
+        const long double adjusted=term-correction,next=delta+adjusted;
+        correction=(next-delta)-adjusted; delta=next; absolute_delta+=std::abs(term);
+    }
+    out.objective_delta=static_cast<double>(delta);
+    out.objective=current_objective+out.objective_delta;
+    out.delta_condition=absolute_delta==0 ? 0.0 : delta==0 ? std::numeric_limits<double>::infinity() :
+        static_cast<double>(absolute_delta/std::abs(delta));
+    return out;
+}
 
 namespace {
 using Clock=std::chrono::steady_clock;
@@ -510,6 +534,17 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 }
                 (void)candidate_copy_timer;
             }
+            Vector new_core; bool new_core_ready=false;
+            std::optional<IncrementalCandidateReplay> incremental;
+            if(policy.compare_incremental_replay)
+            {
+                const auto incremental_started=Clock::now();
+                new_core=(local_state.x*local_state.beta).eval(); new_core_ready=true;
+                incremental=EvaluateCandidateDelta(out.state.residual,affected_rows,old_core,new_core,
+                    out.state.objective,context.scale);
+                out.work.incremental_candidate_replay_seconds+=Seconds(incremental_started);
+                ++out.work.incremental_candidate_replays;
+            }
             ReplayState replay;
             {
                 const auto candidate_replay_timer=Measure(policy.collect_telemetry,out.work.candidate_replay_seconds);
@@ -523,6 +558,51 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             record.local_global_delta_error=std::abs(record.global_replay_delta+
                 record.local_objective_before-record.local_objective_after);
             const bool delta_enclosed=WithinBlockObjectiveReplay(record.local_global_delta_error,replay_reference);
+            const bool candidate_unchanged=(out.state.eta.array()==candidate_eta.array()).all() &&
+                (out.state.beta.array()==candidate_beta.array()).all();
+            if(incremental)
+            {
+                const double objective_difference=std::abs(incremental->objective-replay.objective);
+                const double relative_scale=std::max({std::abs(incremental->objective),std::abs(replay.objective),
+                    std::numeric_limits<double>::min()});
+                std::size_t affected_index{};
+                double residual_difference{};
+                for(auto row:layout.informative_rows)
+                {
+                    double change{};
+                    if(affected_index<affected_rows.size() &&
+                        affected_rows[affected_index]==static_cast<Eigen::Index>(row))
+                    {
+                        change=incremental->residual_delta(static_cast<Eigen::Index>(affected_index));
+                        ++affected_index;
+                    }
+                    residual_difference=std::max(residual_difference,
+                        std::abs(out.state.residual(static_cast<Eigen::Index>(row))+change-
+                            replay.residual(static_cast<Eigen::Index>(row))));
+                }
+                const double incremental_reference=std::max(std::abs(incremental->objective),std::abs(out.state.objective));
+                const double incremental_error=std::abs(incremental->objective_delta+
+                    record.local_objective_before-record.local_objective_after);
+                const double incremental_enclosure=BlockObjectiveReplayEnclosure(incremental_reference);
+                const bool incremental_enclosed=WithinBlockObjectiveReplay(incremental_error,incremental_reference);
+                const bool full_accept=delta_enclosed && !candidate_unchanged &&
+                    !(record.global_replay_delta>0 && !(record.local_objective_after<=record.local_objective_before &&
+                        record.global_replay_delta<=record.objective_replay_enclosure));
+                const bool incremental_accept=incremental_enclosed && !candidate_unchanged &&
+                    !(incremental->objective_delta>0 && !(record.local_objective_after<=record.local_objective_before &&
+                        incremental->objective_delta<=incremental_enclosure));
+                if(full_accept!=incremental_accept) ++out.work.incremental_acceptance_mismatches;
+                out.work.maximum_incremental_objective_difference=std::max(
+                    out.work.maximum_incremental_objective_difference,objective_difference);
+                out.work.maximum_incremental_relative_objective_difference=std::max(
+                    out.work.maximum_incremental_relative_objective_difference,objective_difference/relative_scale);
+                out.work.maximum_incremental_residual_difference=std::max(
+                    out.work.maximum_incremental_residual_difference,residual_difference);
+                out.work.maximum_incremental_delta_condition=std::max(
+                    out.work.maximum_incremental_delta_condition,incremental->delta_condition);
+                out.work.last_incremental_candidate_objective=incremental->objective;
+                out.work.last_full_candidate_objective=replay.objective;
+            }
             if(!delta_enclosed)
             {
                 record.status="failed"; record.reason="block-objective-replay-failed"; out.reason=record.reason;
@@ -534,10 +614,10 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 record.status="unchanged"; record.reason="block-objective-increase";
                 finish_record(std::move(record),block_started); continue;
             }
-            const bool unchanged=(out.state.eta.array()==candidate_eta.array()).all() &&
-                (out.state.beta.array()==candidate_beta.array()).all();
+            const bool unchanged=candidate_unchanged;
             const auto cache_started=Clock::now();
-            const Vector new_core=(local_state.x*local_state.beta).eval(); double old_squared{},new_squared{};
+            if(!new_core_ready) new_core=(local_state.x*local_state.beta).eval();
+            double old_squared{},new_squared{};
             for(std::size_t k=0;k<affected_rows.size();++k)
             {
                 const auto row=static_cast<Eigen::Index>(affected_rows[k]); const double before=out.state.residual(row);
@@ -563,6 +643,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         }
         sweep.cache_replay_error=PredictionDifference(out.state.prediction,replay.prediction);
         sweep.objective_replay_error=std::abs(out.state.objective-replay.objective);
+        if(policy.collect_telemetry)
+            out.work.maximum_cache_replay_error=std::max(out.work.maximum_cache_replay_error,sweep.cache_replay_error);
         const Vector eta=Select(out.state.eta,IndicesOf(layout.full_atoms));
         const Vector beta=SelectBeta(out.state.beta,layout.full_atoms);
         const auto global_started=Clock::now();

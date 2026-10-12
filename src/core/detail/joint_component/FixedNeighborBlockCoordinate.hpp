@@ -48,13 +48,25 @@ struct FixedNeighborBlockSweep
     std::size_t block_solves{},profile_evaluations{},maximum_block_rows{},maximum_block_columns{},
         accepted_blocks{},unchanged_blocks{},accepted_local_updates{};
 };
+struct IncrementalCandidateReplay
+{
+    Vector residual_delta;
+    double objective{},objective_delta{},delta_condition{};
+};
+IncrementalCandidateReplay EvaluateCandidateDelta(VectorRef current_residual,
+    const Indices & affected_rows,VectorRef old_core,VectorRef new_core,
+    double current_objective,double scale);
 struct FixedNeighborWork
 {
     double structural_preparation_seconds{},reference_assessment_seconds{},old_core_seconds{},
         effective_response_seconds{},local_search_seconds{},local_state_seconds{},
         candidate_copy_seconds{},candidate_replay_seconds{},cache_update_seconds{},sweep_replay_seconds{},
-        sweep_global_state_seconds{},maximum_block_seconds{};
-    std::size_t block_visits{},block_solves{},full_candidate_replays{},candidate_state_full_copies{},affected_row_updates{},
+        sweep_global_state_seconds{},maximum_block_seconds{},incremental_candidate_replay_seconds{},
+        maximum_incremental_objective_difference{},maximum_incremental_relative_objective_difference{},
+        maximum_incremental_residual_difference{},maximum_incremental_delta_condition{},maximum_cache_replay_error{},
+        last_incremental_candidate_objective{},last_full_candidate_objective{};
+    std::size_t block_visits{},block_solves{},full_candidate_replays{},incremental_candidate_replays{},
+        incremental_acceptance_mismatches{},candidate_state_full_copies{},affected_row_updates{},
         old_core_basis_builds{};
     std::size_t local_problem_count{},minimum_local_atoms{},maximum_local_atoms{};
     double total_local_atoms{};
@@ -89,6 +101,7 @@ struct FixedNeighborPolicy
     bool stop_after_stationarity{true};
     bool capture_local_trajectory{};
     bool retain_diagnostic_records{true};
+    bool compare_incremental_replay{};
     bool certify_endpoint{true}; // Diagnostic facade only; production components always certify.
     bool collect_telemetry{};
     bool collect_diagnostics{};

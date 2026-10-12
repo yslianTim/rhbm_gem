@@ -196,6 +196,16 @@ j::object WorkJson(const n::FixedNeighborWork & work)
         {"local_state_seconds",Number(work.local_state_seconds)},
         {"candidate_copy_seconds",Number(work.candidate_copy_seconds)},
         {"candidate_replay_seconds",Number(work.candidate_replay_seconds)},
+        {"incremental_candidate_replay_seconds",Number(work.incremental_candidate_replay_seconds)},
+        {"incremental_candidate_replays",work.incremental_candidate_replays},
+        {"incremental_acceptance_mismatches",work.incremental_acceptance_mismatches},
+        {"maximum_incremental_objective_difference",Number(work.maximum_incremental_objective_difference)},
+        {"maximum_incremental_relative_objective_difference",Number(work.maximum_incremental_relative_objective_difference)},
+        {"maximum_incremental_residual_difference",Number(work.maximum_incremental_residual_difference)},
+        {"maximum_incremental_delta_condition",Number(work.maximum_incremental_delta_condition)},
+        {"last_incremental_candidate_objective",Number(work.last_incremental_candidate_objective)},
+        {"last_full_candidate_objective",Number(work.last_full_candidate_objective)},
+        {"maximum_cache_replay_error",Number(work.maximum_cache_replay_error)},
         {"cache_update_seconds",Number(work.cache_update_seconds)},
         {"sweep_replay_seconds",Number(work.sweep_replay_seconds)},
         {"sweep_global_state_seconds",Number(work.sweep_global_state_seconds)},
@@ -212,6 +222,23 @@ j::object WorkJson(const n::FixedNeighborWork & work)
             static_cast<double>(work.local_problem_count) : 0.)},
         {"maximum_local_atoms",work.maximum_local_atoms},
         {"local_profile_work",ProfileWorkJson(work.local_profile_work)}};
+}
+j::object IncrementalReplayJson(const n::FixedNeighborWork & work,bool enabled)
+{
+    return {{"enabled",enabled},{"candidate_comparisons",work.incremental_candidate_replays},
+        {"incremental_candidate_replays",work.incremental_candidate_replays},
+        {"full_replay_oracle_replays",work.full_candidate_replays},
+        {"acceptance_mismatches",work.incremental_acceptance_mismatches},
+        {"acceptance_agreements",work.incremental_candidate_replays-work.incremental_acceptance_mismatches},
+        {"incremental_seconds",Number(work.incremental_candidate_replay_seconds)},
+        {"full_candidate_replay_seconds",Number(work.candidate_replay_seconds)},
+        {"maximum_absolute_objective_difference",Number(work.maximum_incremental_objective_difference)},
+        {"maximum_relative_objective_difference",Number(work.maximum_incremental_relative_objective_difference)},
+        {"maximum_residual_difference",Number(work.maximum_incremental_residual_difference)},
+        {"maximum_delta_condition",Number(work.maximum_incremental_delta_condition)},
+        {"last_incremental_objective",Number(work.last_incremental_candidate_objective)},
+        {"last_full_replay_objective",Number(work.last_full_candidate_objective)},
+        {"maximum_cache_replay_error",Number(work.maximum_cache_replay_error)}};
 }
 j::object ProfileRoleWorkJson(const n::ProfileRoleWork & work)
 {
@@ -255,7 +282,8 @@ j::object ProfileWorkJson(const n::ProfileSearchWork & work)
 }
 void Write(const std::filesystem::path &,const j::value &);
 j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,
-    bool scaling_only=false,std::size_t maximum_sweeps=30,bool detailed=false)
+    bool scaling_only=false,std::size_t maximum_sweeps=30,bool detailed=false,
+    bool compare_incremental_replay=false)
 {
     auto input=std::make_shared<Input>(second_stage_test::SyntheticJointWorkload(topology,atoms));
     const rhbm_gem::core::JointProblem problem(*input);
@@ -265,6 +293,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     neighbor_policy.capture_local_trajectory=detailed;
     neighbor_policy.collect_diagnostics=detailed;
     neighbor_policy.retain_diagnostic_records=detailed;
+    neighbor_policy.compare_incremental_replay=compare_incremental_replay;
     neighbor_policy.certify_endpoint=!scaling_only && maximum_sweeps>0;
     neighbor_policy.collect_telemetry=true;
     const auto rss_before=CurrentRssBytes();
@@ -350,6 +379,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
                 {"local_factor_seconds",local_factor_seconds},
                 {"profile_factor_seconds",detailed ? j::value(profile_factor_seconds) : j::value(nullptr)},
                 {"resource_census",ResourceCensusJson(neighbor)},
+                {"incremental_replay_validation",IncrementalReplayJson(neighbor.work,neighbor_policy.compare_incremental_replay)},
                 {"rss_checkpoints",RssCheckpointsJson(rss_before,rss_after_preparation,rss_after_first_sweep,rss_after_certification)},
                 {"fixed_neighbor_work",WorkJson(neighbor.work)},
                 {"search_seconds",neighbor_search_seconds},
@@ -420,6 +450,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"total_elapsed_seconds",neighbor_seconds}};
     neighbor_json["local_profile_work"]=ProfileWorkJson(neighbor.work.local_profile_work);
     neighbor_json["resource_census"]=ResourceCensusJson(neighbor);
+    neighbor_json["incremental_replay_validation"]=IncrementalReplayJson(neighbor.work,neighbor_policy.compare_incremental_replay);
     neighbor_json["rss_checkpoints"]=RssCheckpointsJson(rss_before,rss_after_preparation,rss_after_first_sweep,rss_after_certification);
     const auto peak_rss=PeakRssBytes();
     return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
@@ -435,16 +466,17 @@ int main(int argc,char ** argv)
 {
     try {
         if(argc<5 || (std::string(argv[1])!="--case" && std::string(argv[1])!="--scaling-only"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--scaling-only OUTPUT_FILE TOPOLOGY ATOMS [--maximum-sweeps N] [--detailed]");
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--scaling-only OUTPUT_FILE TOPOLOGY ATOMS [--maximum-sweeps N] [--detailed] [--compare-incremental-replay]");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
         const std::string mode(argv[1]);
-        std::size_t maximum_sweeps=30; bool detailed=false;
+        std::size_t maximum_sweeps=30; bool detailed=false,compare_incremental_replay=false;
         for(int i=5;i<argc;++i)
         {
             const std::string option(argv[i]);
             if(option=="--detailed") detailed=true;
+            else if(option=="--compare-incremental-replay") compare_incremental_replay=true;
             else if(option=="--maximum-sweeps" && i+1<argc)
             {
                 const auto value=std::stoull(argv[++i]);
@@ -453,7 +485,8 @@ int main(int argc,char ** argv)
             }
             else throw std::invalid_argument("Unknown FixedNeighbor experiment option: "+option);
         }
-        Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--scaling-only",maximum_sweeps,detailed));
+        Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--scaling-only",maximum_sweeps,
+            detailed,compare_incremental_replay));
         std::cout<<argv[3]<<'-'<<argv[4]<<" fixed-neighbor experiment complete\n";
         return 0;
     } catch(const std::exception & error) {std::cerr<<error.what()<<'\n'; return 1;}

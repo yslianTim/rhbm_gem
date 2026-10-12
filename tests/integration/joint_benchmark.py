@@ -128,6 +128,8 @@ def fixed_neighbor_command(args, output, build):
                str(output), topology, str(atoms), '--maximum-sweeps', str(args.maximum_sweeps)]
     if args.detailed:
         command.append('--detailed')
+    if args.incremental_replay_experiment:
+        command.append('--compare-incremental-replay')
     return command
 
 
@@ -189,6 +191,7 @@ def normalize_result(profile, raw):
                 'resource_census': fixed.get('resource_census'),
                 'rss_checkpoints': fixed.get('rss_checkpoints'),
                 'fixed_neighbor_work': fixed.get('fixed_neighbor_work'),
+                'incremental_replay_validation': fixed.get('incremental_replay_validation'),
                 'candidate_replay_fraction': fixed.get('candidate_replay_fraction'),
                 'local_profile_fraction': fixed.get('local_profile_fraction'),
                 'local_profile_work': fixed.get('local_profile_work'),
@@ -211,6 +214,7 @@ def normalize_result(profile, raw):
                 'resource_census': fixed.get('resource_census'),
                 'rss_checkpoints': fixed.get('rss_checkpoints'),
                 'fixed_neighbor_work': fixed.get('fixed_neighbor_work'),
+                'incremental_replay_validation': fixed.get('incremental_replay_validation'),
                 'candidate_replay_fraction': fixed.get('candidate_replay_fraction'),
                 'local_profile_fraction': fixed.get('local_profile_fraction'),
                 'assessment_seconds': fixed.get('assessment_seconds'),
@@ -366,6 +370,8 @@ def build_parser():
                         help='Bound the benchmark diagnostic search from 0 (preparation only) to 200 sweeps.')
     parser.add_argument('--detailed', action='store_true',
                         help='Retain per-block/profile trial diagnostics; aggregate telemetry is the default.')
+    parser.add_argument('--incremental-replay-experiment', action='store_true',
+                        help='Compare affected-row candidate objective deltas with the authoritative full replay.')
     parser.add_argument('--cli', type=Path)
     parser.add_argument('--model', type=Path)
     parser.add_argument('--map', dest='map_path', type=Path)
@@ -379,6 +385,8 @@ def validate_args(parser, args):
         parser.error('--maximum-sweeps must be between 0 and 200')
     if args.detailed and args.profile not in ('search', 'solve'):
         parser.error('--detailed is available only for FixedNeighbor search and solve profiles')
+    if args.incremental_replay_experiment and args.profile not in ('search', 'solve'):
+        parser.error('--incremental-replay-experiment is available only for FixedNeighbor search and solve profiles')
     if args.profile in ('workflow', 'postprocess') and args.case not in ('full', 'halo', 'multi'):
         parser.error('workflow and postprocess cases are full, halo, or multi')
     if args.profile == 'command' and not re.fullmatch(r'[A-Za-z0-9._-]+', args.case):
@@ -409,6 +417,7 @@ def main(argv=None):
                      'one-full-sweep' if args.maximum_sweeps == 1 else 'bounded-multi-sweep',
             'maximum_sweeps': args.maximum_sweeps,
             'detailed': args.detailed,
+            'incremental_replay_experiment': args.incremental_replay_experiment,
         }
     if args.profile in ('search', 'solve'):
         driver = build / 'bin/joint_fixed_neighbor_experiment'
