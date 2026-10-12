@@ -205,7 +205,7 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         return out;
     }
     const auto component_count=data.partition.components.size();
-    auto component_batch=n::OrchestrateFixedNeighborComponents(problem,initial_b,production_policy,observer,false);
+    auto component_batch=n::OrchestrateFixedNeighborComponents(problem,initial_b,production_policy,observer);
     out.components=std::move(component_batch.components);
     out.costs.search_seconds+=component_batch.costs.search_seconds;
     out.costs.assessment_seconds+=component_batch.costs.assessment_seconds;

@@ -70,7 +70,7 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
     if(initial_b.size()!=input.atom_ids.size()) return out;
     Vector prediction=Vector::Zero(data.y.size());
     const auto component_count=data.partition.components.size();
-    auto component_batch=OrchestrateFixedNeighborComponents(problem,initial_b,production_policy,observer,true);
+    auto component_batch=OrchestrateFixedNeighborComponents(problem,initial_b,production_policy,observer);
     out.components=std::move(component_batch.components);
     out.costs.search_seconds=component_batch.costs.search_seconds;
     out.costs.assessment_seconds=component_batch.costs.assessment_seconds;

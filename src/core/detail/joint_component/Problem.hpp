@@ -41,7 +41,7 @@ struct FixedNeighborComponentBatch
 };
 FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
     const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy &,
-    const JointProgressObserver &,bool observable_profile);
+    const JointProgressObserver &);
 JointFitResult FitObservableComponents(const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy & = {},
     const JointProgressObserver & = {});
 JointFitResult FitFixedNeighborComponents(const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy &,

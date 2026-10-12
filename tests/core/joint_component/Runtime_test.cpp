@@ -83,6 +83,7 @@ TEST(JointComponentRuntimeTest, TypedSearchPreservesFrozenAdapterResults)
     rhbm_gem::eigen_helper::ScopedEigenThreadCount caller_threads{2};
     const auto before_threads=Eigen::nbThreads();
     const auto fit=core::FitJointComponents(problem,{.55,.55}); ASSERT_TRUE(fit.assembled_state);
+    EXPECT_FALSE(fit.components.front().layout);
     EXPECT_EQ(Eigen::nbThreads(),before_threads);
     auto original=second_stage_test::matched::joint_abc::Fit(data.domain,data.y,n::Vector::Constant(2,.55),&data.context);
     const auto & beta=original.at("primary").at("beta").as_array();

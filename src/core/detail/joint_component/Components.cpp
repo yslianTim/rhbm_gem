@@ -142,10 +142,10 @@ std::vector<JointCheck> AnalyticNuisanceEvidence(JointEvidenceScope scope)
 }
 FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
     const JointProblem & problem,const std::vector<double> & initial_b,
-    const FixedNeighborSearchPolicy & production_policy,const JointProgressObserver & observer,
-    bool observable_profile)
+    const FixedNeighborSearchPolicy & production_policy,const JointProgressObserver & observer)
 {
     const auto & data=JointProblemAccess::Get(problem);
+    const bool has_observable_groups=!data.layout.groups.empty();
     FixedNeighborComponentBatch out;
     const auto component_count=data.partition.components.size();
     out.components.reserve(component_count);
@@ -162,23 +162,17 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             NotifyJointProgress(observer,JointProgressPhase::ComponentStarted,*progress_component,
                 0,data.context.profile_budget,0,data.context.update_budget);
         }
-        JointParameterLayout layout;
-        if(observable_profile) layout=ComponentLayout(data.layout,view);
-        else
-        {
-            layout.full_atoms.assign(view.atoms.begin(),view.atoms.end());
-            layout.informative_rows.assign(view.rows.begin(),view.rows.end());
-        }
+        const auto layout=ComponentLayout(data.layout,view);
         JointComponentResult component; component.id=view.id;
         component.atoms.assign(view.atoms.begin(),view.atoms.end());
         component.rows.assign(view.rows.begin(),view.rows.end());
-        if(observable_profile) component.layout=layout;
+        if(has_observable_groups) component.layout=layout;
         FixedNeighborComponentResult fit;
         std::optional<double> accepted_objective,accepted_gradient_inf_norm;
         const bool valid=std::all_of(layout.full_atoms.begin(),layout.full_atoms.end(),[&](auto a) {
             return a<initial_b.size() && std::isfinite(initial_b[a]) && initial_b[a]>0;
         });
-        if(observable_profile && layout.full_atoms.empty())
+        if(has_observable_groups && layout.full_atoms.empty())
         {
             component.state.emplace(); component.search_completed=true; component.stop_reason="analytic-nuisance-only";
             component.evidence=AnalyticNuisanceEvidence(JointEvidenceScope::ComponentLocal);
@@ -214,7 +208,7 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
                 component.profile_evaluations,data.context.profile_budget,component.accepted_updates,
                 data.context.update_budget,elapsed,component.stop_reason,component.state.has_value(),
                 accepted_objective,accepted_gradient_inf_norm);
-        if(!observable_profile && component_count==1 && data.partition.constant_rows.empty() &&
+        if(!has_observable_groups && component_count==1 && data.partition.constant_rows.empty() &&
             fit.certification && fit.certification->passed())
             out.single_component_assessment=std::move(fit.certification->assessment);
         out.components.push_back(std::move(component));

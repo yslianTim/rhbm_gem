@@ -119,7 +119,7 @@ TEST(JointObservableProfileTest, SharedOrchestrationReturnsCertifiedStatesBefore
     const std::vector<double> initial{.65,missing_width,missing_width};
     std::vector<n::JointProgressEvent> events;
     const auto batch=n::OrchestrateFixedNeighborComponents(problem,initial,{},
-        [&](const auto & event) {events.push_back(event);},true);
+        [&](const auto & event) {events.push_back(event);});
     ASSERT_EQ(batch.components.size(),1);
     ASSERT_TRUE(batch.components.front().state);
     ASSERT_TRUE(batch.components.front().layout);
