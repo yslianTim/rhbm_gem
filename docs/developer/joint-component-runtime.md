@@ -26,9 +26,10 @@ fails, the component has no usable state and reports the endpoint failure unless
 an earlier search stop reason already applies. Search completion, certification,
 state availability and runtime convergence remain separate outcomes.
 
-`AssessProfileSearchForDiagnostics()` checks accepted Profile search history for
-a trusted state. It does not select the endpoint for production FixedNeighbor
-fitting. Offline audits retain their independent reference solves.
+`AssessProfileSearchForDiagnostics()` is a test-support diagnostic for Profile
+search history and trusted historical states. Production components use
+`CertifyFixedNeighborEndpoint()` for independent endpoint certification. Both
+paths use the shared evaluation, replay and assessment primitives.
 
 ### Production FixedNeighbor route
 
@@ -84,10 +85,15 @@ rebuilds the state-dependent `eta`, `beta`, effective response and numerical
 design; it does not rebuild those structural views. No numeric factor, active
 set or coefficient solution is carried across sweeps.
 
-`OrchestrateFixedNeighborComponents()` owns component traversal, layout and
-width-seed validation, search, independent certification and component progress.
-It has no assembly callback. FullABC assembly consumes the certified public
-component states and performs global reconstruction and consistency assessment.
+`JointProblem::ParameterLayout()` is the parameterization authority.
+`OrchestrateFixedNeighborComponents()` projects that layout onto each component
+and owns component traversal, width-seed validation, search, independent
+certification and component progress. The presence of nuisance groups selects
+observable assembly; callers do not pass a separate mode flag. FullABC results
+keep `component.layout` absent, while observable results retain each projected
+layout for reconstruction. The orchestration has no assembly callback. FullABC
+assembly consumes the certified public component states and performs global
+reconstruction and consistency assessment.
 Observable assembly runs after component traversal: it reconstructs each
 component's full-atom contributions, analytically profiles each singleton-halo
 nuisance amplitude as `lambda = observation - current prediction`, updates the
@@ -116,13 +122,14 @@ qualified core-size, sweep-count and block-order controls through
 
 Within one immutable problem, a full single component can share its assessment
 with assembly only when observations, structural support, identities, state,
-scale and linear/rank policy match exactly. Offline audit directions do not
-affect runtime assessment. Constant rows or different contexts require separate
-assessments. This is scoped result reuse, not a persistent cache. When the
-separate Profile-search diagnostic helper selects an earlier accepted trial,
-it assesses that trial at its saved coefficients and widths. Assessment work and
-timing are reported separately from search work. Sparse factorization details can
-change floating-point trajectories within the fixed endpoint contract.
+scale and linear/rank policy match exactly. This avoids repeating the reference
+evaluation and assessment for the same returned state. Offline audit directions
+do not affect runtime assessment. Constant rows or different contexts require
+separate assessments. This is scoped result reuse, not a persistent cache. The
+test-support Profile-search diagnostic assesses a selected historical trial at
+its saved coefficients and widths. Assessment work and timing are reported
+separately from search work. Sparse factorization details can change
+floating-point trajectories within the fixed endpoint contract.
 
 ### Selection-domain contract
 
@@ -147,16 +154,21 @@ only for the supplied catalogue and truncated support model. The saved outcome
 retains this domain and atom ordering; stage and CSV metadata report target,
 halo, or not-recorded roles. No role is inferred when selection was not recorded.
 
-`EstimateJointComponents` uses a full model copy and sequential per-atom
-Fibonacci sampling, alpha training and first-stage MDPDE for all contributors.
-Only B initializes joint fitting. Its initialization data scope is
+`EstimateJointComponents` and the production workflow share
+`PrepareJointWidthInitialization()`: it samples only FullABC contributors with
+the deterministic Fibonacci sampler, then trains local alpha and computes
+first-stage MDPDE width seeds for all required contributors. The workflow first
+initializes the selected model analysis and applies the prepared results there.
+`EstimateJointComponents` runs the same preparation on a full model copy, then
+copies raw samples and first-stage results back only for successfully initialized
+targets. Only B initializes joint fitting. Its initialization data scope is
 `contributor-local-sampling-may-read-outside-target-domain`: interpolation and
 sampling can read beyond V, while the joint objective cannot. Supplied widths
 use `caller-provided-widths`. Global map normalization is also separate from V.
-Raw samples and first-stage results are copied back only for successfully
-initialized targets; halo history, original selection, second-stage and group
-results are preserved. Initialization records retain atom-specific reasons and
-nonfinite diagnostics as unavailable, not replacement coefficients.
+The standalone copy/writeback contract preserves halo history, original
+selection, second-stage and group results. Initialization records retain
+atom-specific reasons and nonfinite diagnostics as unavailable, not replacement
+coefficients.
 
 An incorrectly sized initial-width vector remains a whole-input failure.
 Otherwise invalid widths/initialization exceptions block only their structural

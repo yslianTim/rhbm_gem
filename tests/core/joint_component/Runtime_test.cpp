@@ -445,6 +445,22 @@ TEST(JointComponentRuntimeTest, ReusedAssemblyMatchesFreshAssessmentAndRejectsCh
         PublicComponent(data.partition.components[0],fit,data.context.scale)};
     auto reusable_assessment=fit.certification->assessment;
     const n::AssessmentReuse reuse{data.domain,data.y,context,reusable_assessment};
+    n::AssessmentWorkForTesting()={};
+    const auto reused=n::AssembleComponents(data.domain,data.y,data.partition,data.context,components,&reuse);
+    ASSERT_TRUE(reused.available);
+    EXPECT_EQ(n::AssessmentWorkForTesting().assessments,0);
+    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
+    n::AssessmentWorkForTesting()={};
+    const auto fresh_assembly=n::AssembleComponents(data.domain,data.y,data.partition,data.context,components);
+    ASSERT_TRUE(fresh_assembly.available);
+    EXPECT_EQ(n::AssessmentWorkForTesting().assessments,1);
+    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,1);
+    EXPECT_EQ(reused.eta,fresh_assembly.eta);
+    EXPECT_EQ(reused.beta,fresh_assembly.beta);
+    EXPECT_EQ(reused.prediction,fresh_assembly.prediction);
+    EXPECT_DOUBLE_EQ(reused.objective,fresh_assembly.objective);
+    EXPECT_EQ(second_stage_test::matched::runtime_json::Assessment(reused.assessment),
+        second_stage_test::matched::runtime_json::Assessment(fresh_assembly.assessment));
     const auto check=[&](const n::Domain & domain,const n::Vector & y,const n::EvaluationContext & policy,int assessments) {
         n::AssessmentWorkForTesting()={};
         const auto assembled=n::AssembleComponents(domain,y,data.partition,policy,components,&reuse);
