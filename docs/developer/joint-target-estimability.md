@@ -9,12 +9,14 @@ large-scale boundary are indexed in the
 
 Target qualification is separate from full-parameter runtime convergence.
 Inputs without recorded selection metadata have target convergence
-NotRun; roles are not inferred. Component target convergence requires a saved
-state and passing inner, KKT, width-stationarity, target-identifiability, and
-target-local-correction checks. The assembled result additionally requires a
-complete assembled state and prediction, all observation rows, every component
-target result, and the assembled-profile check. Search completion remains a
-separate status.
+NotRun; roles are not inferred. Component target convergence requires a saved,
+fully qualified state and passing conditional A/C optimality, independent
+replay, width stationarity, target-identifiability, and target-local-correction
+checks. Endpoint verification alone does not prove identifiable parameters.
+The assembled result additionally requires a complete assembled state and
+prediction, all observation rows, every component target result, and assembled
+mapping plus independent prediction/objective consistency. Search completion
+remains a separate status.
 
 The target certificate assesses the saved state. It does not reprofile to
 replace that state. Any active A=0 in the FullABC parameterization makes target
@@ -69,7 +71,9 @@ freedom failures retain explicit unavailable reasons. Halo covariance is not
 inferred by selecting an arbitrary representative.
 
 Joint JSON schema 5 introduced target evidence and target-runtime status; schema
-6 adds optional candidate diagnostics. Readers accept schemas 3 through 6;
+6 adds optional candidate diagnostics and preserves the legacy reference-based
+certification semantics. Schema 7 records reference-free endpoint and
+qualification statuses separately. Readers accept schemas 3 through 7;
 schema 3/4 records retain their original evidence and do not gain target
 certification or inferred candidates. CSV records target/halo/not-recorded
 selection role, target convergence, and parameter identifiability. It preserves

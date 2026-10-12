@@ -196,6 +196,7 @@ struct Assessment
     Matrix weak_directions;
     Vector correction;
     MemoryEstimate verification_memory_estimate,rank_memory_estimate;
+    double primary_endpoint_seconds{},independent_replay_seconds{},rank_assessment_seconds{};
     double coefficient_difference{unavailable};
     bool inner{},gradient{},local{},identified{},endpoint_verified{},qualified{},reference_free{};
     std::string failure;

@@ -10,8 +10,11 @@ and [Joint FixedNeighbor](joint-fixed-neighbor-experimental.md).
 The production route is Joint → FixedNeighbor → local Profile LM → conditional
 A/C profile solve → EIGEN SparseQR. Its policy is core 12, Forward serial
 Gauss-Seidel, at most 200 sweeps, and at most one trusted accepted local update
-per block visit. The frozen KKT, width-gradient, eta-confirmation, replay and
-endpoint contracts are recorded in the
+per block visit. Endpoint verification uses an independent streaming replay at
+the accepted parameters and constrained A/C KKT; it does not run a second
+global A/C solve. Full numerical qualification separately requires design
+rank, local correction and numerical identifiability. The current thresholds
+and versioned checks are recorded in the
 [production contract](joint-fixed-neighbor-experimental.md).
 
 ## Historical algorithm decisions
@@ -43,13 +46,14 @@ The complete concise record of those FixedNeighbor choices is in
   148,119,642,128 bytes (148.120 GB, about 137.9 GiB). The replacement's exact
   bytes require the actual affected-row and support-membership counts; those
   counts cannot be derived from rows and atoms alone.
-- Global sweep stationarity now streams prediction, residual, A/C and width
-  reductions from support entries. The local solve, EIGEN reference QR, rank
-  assessment and target Jacobian have not been replaced by alternate solvers.
-- For 37,406 atoms, 74,812 A/C columns make the existing dense reference `R`
-  alone about 44.775 GB (41.7 GiB). The reference feasibility guard therefore
-  reports `Unavailable` before the reference basis is built. Current rank and
-  target identifiability also report unavailable when their stage estimates
+- Global sweep stationarity and endpoint verification stream prediction,
+  residual, A/C and width reductions from support entries. The local
+  conditional solve remains EIGEN SparseQR. The independent global reference
+  solver remains only an offline/test oracle; production does not build its
+  dense reference `R`.
+- For 37,406 atoms, a hypothetical 74,812-column reference `R` alone would be
+  about 44.775 GB (41.7 GiB). Production avoids that work. Current rank and
+  target identifiability still report unavailable when their stage estimates
   exceed budget; no approximate spectral result is treated as a certificate.
 - A deterministic 37,406-atom, 5,938,087-row single-chain fixture has 74,811
   support memberships and 3,118 blocks. It records 2,892,736 prepared-mapping
@@ -82,10 +86,16 @@ The complete concise record of those FixedNeighbor choices is in
   evaluations; no factor-cache policy was adopted.
 - Tested derivative tile sizes did not reach the 10% improvement gate. The
   production local solver remains Profile LM.
-- The endpoint-reference comparison passed its recorded fixed-state audits.
+- The legacy endpoint-reference comparison passed its recorded fixed-state audits.
   On its historical host, single-512 analysis/export changed from 307.805 s
   to 300.564 s and sampled peak RSS from 2.500 GiB to 1.872 GiB. This
   incremental comparison is not a current performance guarantee.
+- The historical 168-atom reference diagnostics remain useful evidence that
+  KKT and coefficient agreement are distinct numerical guarantees. The
+  sweep-107 coefficient difference was 1.2573e-9 while primary KKT was
+  4.5219e-11; the sweep-150 difference was 2.8179e-12. These values are not
+  results from replaying the new production contract and do not prove parameter
+  accuracy from KKT alone.
 - Bounded rank and projected-width/tail prototypes matched completed small
   controls, but large reconstructions or resource gates remained incomplete.
   Unavailable and timed-out results do not establish deficient rank or

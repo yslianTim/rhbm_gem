@@ -70,13 +70,16 @@ accepts --scaling-only for search measurement or --case for solve measurement.
 It exposes no reverse-order mode, arbitrary core size or alternative policy.
 
 Search reports search and structural-preparation work; solve also reports
-reference-assessment work. Aggregate timings attribute local Profile LM work,
+primary endpoint, independent replay and rank-assessment time separately.
+Reports state `reference_solve_calls=0` for production and do not count local
+conditional A/C solves as removed reference work. Aggregate timings attribute local Profile LM work,
 old-core and effective-response preparation, candidate replay and copying,
 cache updates, sweep replay and global-state evaluation. Reports also include
 block visits and solves, accepted updates, profile evaluations, full candidate
 replays/copies and maximum block time. The Python wrapper records process
-status, elapsed time, source/build metadata, the diagnostic sweep cap and the
-unchanged production solver policy. Use --repeat, --warmup, --timeout and
+status, elapsed time, source/build metadata, endpoint evidence, estimated peak
+bytes, observed process peak RSS, the diagnostic sweep cap and the unchanged
+production solver policy. Use --repeat, --warmup, --timeout and
 --rss-limit to control the measurement process.
 
 The wrapper modes describe different measurement scopes; they do not select

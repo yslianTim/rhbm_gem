@@ -296,16 +296,25 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     auto * const profile_work=policy.collect_telemetry ? &out.work.local_profile_work : nullptr;
     const auto certify_endpoint=[&] {
         const auto assessment_timer=Measure(policy.collect_telemetry,out.work.endpoint_verification_seconds);
+        const auto record_assessment_work=[&](FixedNeighborEndpointCertification certification) {
+            if(policy.collect_telemetry)
+            {
+                out.work.primary_endpoint_seconds+=certification.assessment.primary_endpoint_seconds;
+                out.work.independent_replay_seconds+=certification.assessment.independent_replay_seconds;
+                out.work.rank_assessment_seconds+=certification.assessment.rank_assessment_seconds;
+            }
+            return certification;
+        };
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(policy.certification_for_testing)
-            return policy.certification_for_testing(domain,y,out.state,context,profile_work);
+            return record_assessment_work(policy.certification_for_testing(domain,y,out.state,context,profile_work));
 #endif
         auto certification_resident=out.global_state_memory_estimate.shape.resident_bytes;
         if(!AddMemoryBytes(certification_resident,memory_shape.component_observations,3*sizeof(double)) ||
             !AddMemoryBytes(certification_resident,memory_shape.component_atoms,8*sizeof(double)))
             certification_resident=std::numeric_limits<std::size_t>::max();
-        return CertifyFixedNeighborEndpoint(domain,y,out.state,context,profile_work,
-            certification_resident);
+        return record_assessment_work(CertifyFixedNeighborEndpoint(domain,y,out.state,context,profile_work,
+            certification_resident));
     };
 
     out.state.eta=initial_eta;
@@ -744,11 +753,17 @@ FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
     }
     if(out.verification_memory_estimate.estimated_peak_bytes>out.verification_memory_estimate.budget_bytes/2)
         LogMemoryEstimate(out.verification_memory_estimate);
+    const auto primary_started=Clock::now();
     const auto endpoint=EvaluateStateStreaming(domain,y,state.eta,state.beta,context,
         ProfileEvaluationRole::AcceptedEndpoint,profile_work);
+    const double primary_seconds=Seconds(primary_started);
+    const auto replay_started=Clock::now();
     const auto replay=CheckIndependentReplay(domain,y,endpoint,context);
+    const double replay_seconds=Seconds(replay_started);
     out.assessment=AssessEvaluated(domain,y,endpoint,replay,context,true,resident_override);
     out.assessment.verification_memory_estimate=out.verification_memory_estimate;
+    out.assessment.primary_endpoint_seconds=primary_seconds;
+    out.assessment.independent_replay_seconds=replay_seconds;
     out.trust=CheckTrust(domain,y,endpoint,context,replay);
     return out;
 }

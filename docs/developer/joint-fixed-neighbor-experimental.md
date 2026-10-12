@@ -20,29 +20,29 @@ option or automatic routing layer.
 | Acceptance | Existing replay and roundoff-safe monotone acceptance |
 | Candidate stationarity | A/C KKT `≤ 1e-10` and width-gradient infinity norm `≤ 1e-12` |
 | Confirmation | A previous complete sweep exists and eta-change infinity norm is `≤ 1e-10` |
-| Endpoint | Independent certification must pass before successful stopping |
+| Endpoint | Primary streaming evaluation and independent streaming replay must pass |
 | Certification retry | Valid failed endpoints continue; retry every 10 confirmed sweeps while all stationarity requirements hold; any failed requirement resets eligibility |
 | Exhaustion | One bounded assessment certifies the last accepted state if its final sweep has not already been certified; a trusted state may remain available while search is incomplete |
 
-The numerical thresholds are unchanged: A/C KKT `1e-10`, width-gradient
+The unchanged thresholds are A/C projected KKT `1e-10`, width stationarity
 `1e-12`, and eta confirmation `1e-10`. A confirmed stationary endpoint is
-certified using the existing reference solve and trust checks. Reference
-disagreement does not replace accepted coefficients or stop a valid search;
-FixedNeighbor continues its normal updates and retries certification at a
-bounded interval. Any failed KKT, width-gradient or eta-change requirement
-resets retry eligibility, so a later complete confirmation can certify
-immediately. An invalid primary endpoint is fatal. Budget exhaustion does not
-increase the sweep count or mark search complete: if the final sweep has no
-certification, one final assessment runs on the accepted state; otherwise its
-existing assessment is reused. A failed assessment leaves state unavailable,
-while a passing one retains a trusted state with an incomplete search. A
-completed final assessment records
-`endpoint_certification_sweep == search_sweeps`; zero-sweep and unrecoverable
-failures retain no fabricated certification sweep. Runtime convergence remains
-independent of search completion. Prepared structural block mappings and workspace reuse do not
+checked at the accepted parameters by a primary streaming evaluation and an
+independent scalar replay. The replay verifies prediction, residual, objective,
+KKT and width-gradient consistency; it does not solve a second global A/C
+problem. Conditional A/C optimality, endpoint verification and full numerical
+qualification are separate evidence. Full qualification also requires design
+rank, local correction and numerical identifiability. If rank resources are
+unavailable, the endpoint may be verified while qualification and
+`RuntimeConvergence` remain unavailable. Valid failed endpoints continue normal
+updates and retry certification at a bounded interval. Budget exhaustion does
+not increase the sweep count or mark search complete: one final assessment runs
+on the accepted state only if its final sweep has no certification. Runtime
+convergence remains independent of search completion. Prepared structural
+block mappings and workspace reuse do not
 reuse numeric factors, accepted states, or replay results across sweeps. The
-route therefore preserves the objective, A/C solve, width parameterization,
-serial update semantics, replay, persistence and `RuntimeConvergence` contract. See the
+route preserves the objective, local A/C solve, width parameterization, serial
+update semantics and OneAccepted behavior. The reference-free numerical
+contract is versioned separately from legacy evidence. See the
 [Joint runtime contract](joint-component-runtime.md) for the implementation
 details.
 
@@ -52,8 +52,9 @@ FixedNeighbor preflights its actual component rows, support memberships,
 affected rows, neighbor lists and largest block before preparing block views.
 The accepted global sweep evaluation uses support iteration and vector
 reductions; it avoids a full component design and width-derivative matrix. This
-does not make the local profile solve or the independent reference/rank stages
-matrix-free.
+does not make the local profile solve or rank assessment matrix-free. Production
+endpoint verification uses O(N+P) streaming passes and does not construct a
+global design matrix.
 
 The old per-block row map would use 148,119,642,128 bytes (148.120 GB, about
 137.9 GiB) for 5,938,087 rows and 3,118 blocks, before any other data. The
@@ -71,8 +72,8 @@ The planner rejects estimated peaks above 3,200,000,000 bytes (3.200 GB,
 2.980 GiB), below the nominal 4,000,000,000-byte limit. This is an allocation
 estimate with safety margin, not observed peak RSS. It does not establish that a
 full physical search fits within 4 GB: real support count and neighborhood shape
-are required, and the existing dense reference, rank and target assessments
-remain unavailable when their own stage estimates exceed budget.
+are required, and rank and target assessments remain unavailable when their
+own stage estimates exceed budget.
 
 The benchmark driver reports the structural census, estimated preparation and
 global-state peaks, RSS before and after preparation, RSS after the first sweep
@@ -83,7 +84,11 @@ per-block timings and local profile trials require `--detailed`. No physical
 map/model input is present in this workspace, so driver measurements are
 synthetic and cannot establish physical full-search feasibility.
 
-## KKT and reference agreement
+## Historical KKT and reference agreement evidence
+
+This section records the retired coefficient-agreement contract. Production
+uses the versioned reference-free contract above. KKT is a first-order
+optimality check and is not numerically equivalent to coefficient agreement.
 
 For fixed widths and an unchanged active set, let `X_F` contain the free A/C
 columns and let `g_F = X_Fᵀr` be the least-squares gradient on that face. In the
@@ -100,9 +105,10 @@ residual, while reference agreement is a scaled coordinate-wise infinity
 difference. They are not interchangeable, and numerical rank alone does not
 bound their relationship without conditioning and scaling information.
 
-The 168-atom diagnosis provides this continuation evidence at the same input and
-initial widths. The 150-sweep row is a diagnostic run that continued beyond the
-107-sweep candidate; it is not an offline regular certificate.
+The 168-atom diagnosis provides this historical continuation evidence at the
+same input and initial widths. The 150-sweep row is a diagnostic run that
+continued beyond the 107-sweep candidate; it is not an offline regular
+certificate or a replay of the new production contract.
 
 | Sweeps | Projected A/C KKT | Primary width gradient | Reference width gradient | Scaled A/C difference | Endpoint trust |
 | ---: | ---: | ---: | ---: | ---: | --- |
@@ -110,23 +116,19 @@ initial widths. The 150-sweep row is a diagnostic run that continued beyond the
 | 107 | 4.5219e-11 | 8.3490e-13 | 1.6499e-12 | 1.2573e-9 | Failed: `reference-disagreement` |
 | 150, continued diagnostic | 8.3766e-14 | 9.1791e-15 | 1.2882e-14 | 2.8179e-12 | Passed: `trusted` |
 
-At sweep 107, the KKT and primary width-gradient checks passed, but the
+Under the legacy contract, at sweep 107, the KKT and primary width-gradient checks passed, but the
 coefficient difference remained above `1e-10`, and the reference width gradient
 remained above `1e-12`. Continuing the ordinary accepted search reduced both
 disagreements enough to pass the existing endpoint checks. This case therefore
-shows that KKT does not imply the current reference agreement check, and that
+shows that KKT did not imply the legacy reference agreement check, and that
 the observed disagreement was recoverable through more sweeps. It provides no
 evidence of an irreducible floating-point failure.
 
 The saved diagnosis does not contain the active-face `σ_min(X_F)` or condition
 number, so it cannot establish how much conditioning explains the sweep-107
-coefficient difference. Because the projected KKT and scaled coefficient
-metrics also use different normalizations, no condition-aware threshold can be
-derived from those values alone. Keep the current KKT (`1e-10`), width-gradient
-(`1e-12`), coefficient-agreement (`1e-10`) and local-correction (`1e-10`)
-thresholds, as well as the independent reference solve. A future condition-aware
-rule would first need active-face spectra and consistently scaled residual and
-coefficient errors across additional cases.
+coefficient difference. Because projected KKT and scaled coefficient metrics
+use different normalizations, these recorded values cannot certify coefficient
+accuracy under the current reference-free contract.
 
 ## Historical decisions
 

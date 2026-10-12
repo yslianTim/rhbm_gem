@@ -29,9 +29,13 @@ factor, active set or coefficient solution is carried across FixedNeighbor
 sweeps.
 
 The EIGEN implementation shares the estimator's observation domain,
-parameterization, objective, threshold policy, endpoint certification and
-`RuntimeConvergence` contract. Current configuration fingerprints and benchmark
-metadata record `sparse_backend=EIGEN`.
+parameterization, objective, threshold policy, endpoint verification and
+`RuntimeConvergence` contract. The local Profile LM still solves the
+conditional constrained A/C problem using EIGEN. Production endpoint
+verification separately replays the accepted parameters with scalar kernels
+and compensated streaming accumulators; it does not invoke a second global
+A/C solver. Current configuration fingerprints and benchmark metadata record
+`sparse_backend=EIGEN`.
 
 FixedNeighbor's production numerical settings remain independent of backend
 selection: core 12, Forward order, 200 maximum sweeps, one trusted accepted
@@ -40,19 +44,21 @@ existing KKT, width-gradient and eta-confirmation thresholds are unchanged.
 
 ## Memory-bounded assessment limits
 
-The global FixedNeighbor sweep now computes stationarity reductions directly
-from support entries, but this does not change the EIGEN local A/C solve or the
-independent reference method. The reference path still forms the existing dense
-QR `R`; its stage preflight estimates matrix and workspace bytes before basis
-construction and reports `Unavailable` when the 3.2 GB planning budget is
-exceeded. At 74,812 A/C columns, `R` alone is about 44.775 GB (41.7 GiB).
+The global FixedNeighbor sweep and endpoint verifier compute stationarity and
+replay reductions directly from support entries. The verifier has O(N+P)
+working memory and never forms global `N × 2P` or `N × 3P` matrices. The old
+independent reference solver remains available to offline tests and audits; its
+dense QR `R` is not built in production. At 74,812 A/C columns, that historical
+`R` alone would be about 44.775 GB (41.7 GiB).
 
 Rank assessment still uses the current design QR and profile derivative
 assessment, while target identifiability still uses its full target Jacobian
 rank. Each has a separate stage estimate and returns unavailable when that work
-cannot fit the planning budget. No sparse constrained reference replacement,
-approximate rank certificate, SPQR dependency, or alternate estimator route is
-qualified by this work. Estimates are not observed peak RSS.
+cannot fit the planning budget. Removing the reference solve does not remove
+the global rank factorization or make a missing rank result pass. No sparse
+constrained reference replacement, approximate rank certificate, SPQR
+dependency, or alternate estimator route is qualified by this work. Estimates
+are not observed peak RSS.
 
 ## Qualification evidence
 

@@ -414,9 +414,13 @@ AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const Compon
     }
     if(out.verification_memory_estimate.estimated_peak_bytes>out.verification_memory_estimate.budget_bytes/2)
         LogMemoryEstimate(out.verification_memory_estimate);
+    const auto primary_started=Clock::now();
     const auto raw=EvaluateStateStreaming(domain,y,out.eta,out.beta,context);
+    const double primary_seconds=Seconds(primary_started);
     out.raw=raw;
+    const auto replay_started=Clock::now();
     out.replay=CheckIndependentReplay(domain,y,raw,context);
+    const double replay_seconds=Seconds(replay_started);
     out.consistency_passed=out.replay.passed;
     bool same=reuse && SameAssessmentPolicy(reuse->context,context) && reuse->domain.rows==domain.rows &&
         reuse->domain.atoms.size()==domain.atoms.size() && reuse->observations.size()==y.size() &&
@@ -439,6 +443,8 @@ AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const Compon
     else
         out.assessment=AssessEvaluated(domain,y,raw,out.replay,context,true);
     out.assessment.verification_memory_estimate=out.verification_memory_estimate;
+    out.assessment.primary_endpoint_seconds=primary_seconds;
+    out.assessment.independent_replay_seconds=replay_seconds;
     if(raw.valid) {out.prediction=raw.residual+y; out.objective=raw.certificate.objective;}
     return out;
 }

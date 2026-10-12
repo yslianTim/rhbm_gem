@@ -739,18 +739,24 @@ Assessment AssessProfile(const Domain & domain,VectorRef y,const Vector & eta,co
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     AssessmentStageTimerForTesting primary_stage("endpoint-primary-evaluation",y.size(),eta.size());
 #endif
+    const auto primary_started=std::chrono::steady_clock::now();
     const auto endpoint=supplied_beta ? EvaluateStateStreaming(domain,y,eta,*supplied_beta,policy) :
         EvaluateProfile(domain,y,eta,false,&policy);
+    const double primary_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-primary_started).count();
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     primary_stage.Finish();
     AssessmentStageTimerForTesting replay_stage("independent-streaming-replay",y.size(),eta.size());
 #endif
+    const auto replay_started=std::chrono::steady_clock::now();
     const auto replay=CheckIndependentReplay(domain,y,endpoint,policy);
+    const double replay_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-replay_started).count();
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     replay_stage.Finish();
 #endif
     auto assessment=AssessEvaluated(domain,y,endpoint,replay,policy,supplied_beta!=nullptr);
     assessment.verification_memory_estimate=verification_memory;
+    assessment.primary_endpoint_seconds=primary_seconds;
+    assessment.independent_replay_seconds=replay_seconds;
     return assessment;
 }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -880,6 +886,13 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
     if(reference) out.coefficient_difference=Difference(endpoint.beta,reference->beta);
     out.endpoint_verified=replay && replay->passed && replay->primary_kkt_passed && replay->independent_kkt_passed &&
         replay->primary_width_gradient<=1e-12;
+    struct RankAssessmentTimer
+    {
+        double & value;
+        std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
+        ~RankAssessmentTimer()
+        {value=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();}
+    } rank_timer{out.rank_assessment_seconds};
     out.rank_memory_estimate=RankAssessmentMemoryEstimate(domain,y,endpoint,reference,policy,resident_override);
     if(out.rank_memory_estimate.status!=MemoryStatus::Pass ||
         out.rank_memory_estimate.estimated_peak_bytes>out.rank_memory_estimate.budget_bytes/2)

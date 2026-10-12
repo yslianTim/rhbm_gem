@@ -20,25 +20,21 @@ objective is `0.5 * ||prediction - observations||² / ObservationScale()²`.
 Production fitting uses the FixedNeighbor route described below. Each accepted
 local Profile LM update is replayed against the global state and passes the
 roundoff-safe monotone acceptance rule before it is kept. At the end of each
-complete sweep, global stationarity checks identify a candidate endpoint. A
-confirmed candidate is independently certified before search can complete;
-reference coefficients never replace the accepted search coefficients. A valid
-endpoint that fails trust keeps its assessment and may continue through the
-same block-coordinate updates. While all stationarity requirements remain
-confirmed, another certification is attempted at most once every 10 sweeps. A
-failed KKT, width-gradient or eta-change confirmation resets retry eligibility;
-after the full stationarity conditions are confirmed again, certification may
-be retried immediately. An invalid primary endpoint stops immediately. At
+complete sweep, global stationarity checks identify a candidate endpoint.
+Certification evaluates that accepted A/C/B state with a primary streaming pass
+and an independent scalar streaming replay. It does not solve a second global
+A/C problem. The replay compares prediction, residual, objective, projected
+KKT and width-gradient evidence at the same parameters. Constrained KKT checks
+fixed-width A/C optimality; replay agreement checks numerical consistency; rank
+and local-correction checks separately qualify parameter identifiability. A
+valid endpoint that fails a check keeps its assessment and may continue through
+the same block-coordinate updates. While stationarity requirements remain
+confirmed, another certification is attempted at most once every 10 sweeps. At
 budget exhaustion, if the final sweep has no certification, one bounded
-assessment certifies the final accepted state. It does not change accepted
-parameters, add a sweep or mark the search complete. If the final sweep already
-has a certification, that assessment is not repeated. A passing final trust
-check may preserve a usable state while the search remains incomplete; a failed
-check preserves its evidence and leaves state unavailable. Whenever a final
-assessment is completed, its provenance is `endpoint_certification_sweep ==
-search_sweeps`; zero-sweep searches and earlier unrecoverable failures do not
-invent certification provenance. Search completion, certification,
-state availability and runtime convergence remain separate outcomes.
+assessment evaluates the final accepted state. It does not change parameters,
+add a sweep or mark the search complete. Search completion, endpoint
+verification, full numerical qualification, state availability and runtime
+convergence remain separate outcomes.
 
 `AssessProfileSearchForDiagnostics()` is a test-support diagnostic for Profile
 search history and trusted historical states. Production components use
@@ -218,8 +214,9 @@ prevents complete prediction/objective; the row mask retains available rows,
 including constant rows. Assembly does not reprofile or zero-fill missing states.
 Each attempted component search also retains a parameter-only candidate
 diagnostic when its last accepted state is finite and dimensionally valid.
-Its candidate status is `uncertified` until the existing endpoint certification
-passes; certification, reference and rank availability are recorded separately.
+Its candidate status records endpoint verification and numerical qualification
+separately. A verified candidate with unavailable rank remains a candidate and
+does not become trusted scientific state.
 The diagnostic may include eta, A/C, objective, feasibility and stationarity
 summaries, but never prediction/residual vectors or rank matrices. The enclosing
 saved result supplies the component identity, sweep and stop reason, input hashes
@@ -233,15 +230,25 @@ certification.
 
 `component.RuntimeConvergence()` and `result.RuntimeConvergence()` derive their
 status from the returned evidence; they do not run numerical work or store another
-success flag. Component convergence requires an actual trusted state and all five
-checks: inner/reference agreement, A/C KKT (including feasibility), log-B gradient,
-local correction and numerical identifiability. Existing thresholds remain
-`1e-10` for coefficient agreement, KKT and local correction, and `1e-12` for both
-primary/reference width gradients. Full profile derivatives, including the
-nonzero-residual correction, remain in the numerical core.
+success flag. Component convergence requires an actual trusted state and current
+qualification checks: A/C feasibility, conditional A/C projected KKT
+(`1e-10`), independent streaming replay, width stationarity (`1e-12`), design
+rank, local correction (`1e-10`) and numerical identifiability. Replay prediction
+enclosure remains `2e-12 + 2e-13 |prediction|`; width-gradient agreement remains
+`1e-13 + 2e-9 |gradient|`; normalized KKT agreement remains `1e-13`. Full
+profile derivatives, including the nonzero-residual correction, remain in the
+numerical core.
 
-Global convergence additionally requires every component to converge, complete
-assembly, global evidence and independently reprofiled assembly consistency.
+The previous coefficient-agreement check was a different guarantee and is not
+recreated by KKT: a small residual gradient can coexist with materially different
+coefficients on an ill-conditioned or rank-deficient design. The current
+solver-provenance contract is v4 and the FixedNeighbor policy contract is v3.
+Saved schema-6 checks retain their old reference-agreement meaning.
+
+Global convergence additionally requires every component to be numerically
+qualified, complete assembly, global evidence and assembled mapping plus
+independent prediction/objective consistency. Assembly does not globally
+reprofile A/C coefficients.
 Missing required states or assembly give `Unavailable`. Otherwise, required
 checks combine in this order: any `Failed`, any missing/`Unavailable`, any
 `NotRun`, then `Passed`. Only evidence from the required scope participates.
@@ -268,8 +275,8 @@ FixedNeighbor reuses prepared block mappings across sweeps.
 
 ## Memory feasibility and unavailable large-case checks
 
-`ResourceWork` plans problem construction, FixedNeighbor preparation, global
-sweep evaluation, reference solve, rank assessment and target identifiability
+`ResourceWork` plans problem construction, FixedNeighbor preparation, endpoint
+verification, rank assessment and target identifiability
 separately. Estimates use the actual support-entry count and checked byte
 arithmetic. The planning budget is 3,200,000,000 bytes (3.200 GB, about
 2.980 GiB), leaving 20% below the nominal 4,000,000,000-byte limit (4.000 GB,
@@ -288,18 +295,16 @@ traverses support entries and keeps vector state; it does not build the global
 `N × 2P` design and derivative matrices. Local block solves and endpoint
 assessment still use their existing sparse design matrices.
 
-The independent reference route remains the current EIGEN reference QR. Its
-dense `R` grows with the square of the free A/C column count: at 74,812 columns,
-the matrix alone is about 44.775 GB (41.7 GiB), before factorization workspace.
-The feasibility guard stops before basis construction when that route exceeds
-budget; no sparse constrained replacement has been qualified. Rank assessment
-and target identifiability also retain their current dense QR/SVD definitions
-and return unavailable when their estimated workspaces exceed budget. A direct
-Release test process for the synthetic no-sweep fixture recorded 474,546,176
-bytes peak RSS (0.475 GB, 0.442 GiB); the corresponding global-evaluation
-estimated peak was 876,119,666 bytes. The test disables sweeps and endpoint
-certification. No full 37,406-atom, 5,938,087-observation physical search or
-certification has been measured.
+Production endpoint verification is O(N+P) and does not build a global design
+matrix or run a global reference QR. The old independent solver remains an
+offline/test oracle. Rank assessment and target identifiability retain their
+dense QR/SVD definitions and return unavailable when their estimated workspaces
+exceed budget. A direct Release test process for the synthetic no-sweep fixture
+recorded 474,546,176 bytes peak RSS (0.475 GB, 0.442 GiB) before endpoint
+verification was added; its global-evaluation estimated peak was 876,119,666
+bytes. The updated synthetic scalability test runs primary and independent
+streaming endpoint verification, then confirms rank assessment is unavailable.
+No full physical map/model search has been measured.
 
 Uncertainty preparation uses the same `MakeComponentProblemView()` for ordinary
 component covariance and observable target-quotient covariance. It selects the
@@ -316,7 +321,7 @@ measurements are run through the single workflow in the
 [benchmark guide](joint-benchmark.md).
 
 The FixedNeighbor experiment reports structural census counts, estimated
-preparation/global-state peaks, stage timing attribution, per-sweep summaries
+preparation, endpoint and rank peaks, stage timing attribution, per-sweep summaries
 and process RSS. It supports preparation-only, one-sweep and bounded
 multi-sweep diagnostics without changing the production policy. Aggregate
 counters are the default; per-block and profile-trial records require explicit
@@ -434,7 +439,7 @@ remove it, while `ClearTransientFitStates()` does not.
 
 ### Saved provenance and units
 
-Production outcome JSON writes schema 6 and retains schema 3, 4 and 5 reading
+Production outcome JSON writes schema 7 and retains schema 3 through 6 reading
 (distinct from fixture and offline report schemas). The [observable-halo contract](joint-observable-halo.md)
 describes parameter layouts, nuisance contributions and seed provenance. See the
 [metadata contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schemas-3-through-6).
@@ -443,8 +448,12 @@ values, `JointSoftwareProvenance` and optional `JointSolverProvenance`.
 `JointSolverProvenance` records the current FixedNeighbor estimator and
 preserves solver and local-work fields found in saved records.
 Current writers record the fixed EIGEN sparse backend and the FixedNeighbor policy
-fields; current FixedNeighbor records use `fixed-neighbor-production-v2` with
-intrinsic OneAccepted behavior and the `joint-solver-provenance-v3` contract.
+fields; current FixedNeighbor records use `fixed-neighbor-production-v3` with
+intrinsic OneAccepted behavior and the `joint-solver-provenance-v4` contract.
+Schema 7 candidate diagnostics store endpoint-verification and numerical-
+qualification statuses separately. Legacy schemas preserve their saved checks;
+no legacy `inner=Passed` is mapped to a new KKT result and no historical
+reference status is reinterpreted as streaming replay.
 Saved `joint-solver-provenance-v2` records with LegacyCompact and OperatorPcg
 fields remain readable.
 `CaptureJointAnalysisResult`
