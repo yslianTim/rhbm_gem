@@ -48,6 +48,7 @@ struct EvaluationContext
     AuditPlan audit;
     bool independent_search{};
     int profile_budget{200},update_budget{100};
+    std::size_t target_columns{};
 };
 enum class ProfileEvaluationRole {Unspecified,InitialProfile,TrialProfile,AcceptedEndpoint,Reference};
 const char * ProfileEvaluationRoleName(ProfileEvaluationRole);

@@ -1,8 +1,12 @@
 #pragma once
 #include <Eigen/Core>
+#include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace rhbm_gem::core::joint_component {
@@ -28,6 +32,43 @@ struct SearchStageWork
     Eigen::Index rows{},columns{};
     double seconds{};
 };
+
+inline constexpr std::size_t JointMemoryHardLimitBytes=4'000'000'000;
+inline constexpr std::size_t JointMemoryPlanningBudgetBytes=3'200'000'000;
+enum class MemoryStage {ProblemConstruction,FixedNeighborPreparation,GlobalStateEvaluation,ReferenceSolve,RankAssessment,TargetIdentifiability};
+enum class MemoryStatus {Pass,Reject,Overflow};
+struct MemoryShape
+{
+    std::size_t component_atoms{},component_observations{},component_support_entries{},component_blocks{},
+        affected_row_entries{},component_free_columns{},component_target_columns{},resident_bytes{};
+    bool problem_scope{};
+};
+struct MemoryEstimate
+{
+    MemoryShape shape;
+    MemoryStage stage{MemoryStage::ProblemConstruction};
+    std::size_t resident_bytes{},temporary_bytes{},estimated_peak_bytes{},budget_bytes{JointMemoryPlanningBudgetBytes};
+    MemoryStatus status{MemoryStatus::Pass};
+    std::string reason;
+};
+struct ReferenceFeasibility
+{
+    std::size_t estimated_matrix_bytes{},estimated_factor_bytes{},estimated_workspace_bytes{},estimated_peak_bytes{};
+    MemoryStatus budget_status{MemoryStatus::Pass};
+    std::string numerical_status{"not-run"};
+    std::string reason;
+};
+bool CheckedAddBytes(std::size_t,std::size_t,std::size_t &);
+bool CheckedMultiplyBytes(std::size_t,std::size_t,std::size_t &);
+std::optional<std::size_t> EstimateSnapshotBytes(const JointProblemInput &);
+std::optional<std::size_t> CountSupportEntries(const JointProblemInput &);
+MemoryEstimate PlanMemory(const MemoryShape &,MemoryStage,std::size_t=JointMemoryPlanningBudgetBytes);
+ReferenceFeasibility AssessReferenceFeasibility(const MemoryShape &,std::size_t=JointMemoryPlanningBudgetBytes);
+const char * MemoryStageName(MemoryStage);
+const char * MemoryStatusName(MemoryStatus);
+std::string FormatMemoryEstimate(const MemoryEstimate &);
+void LogMemoryEstimate(const MemoryEstimate &);
+
 struct ResourceWork
 {
     bool enabled{};

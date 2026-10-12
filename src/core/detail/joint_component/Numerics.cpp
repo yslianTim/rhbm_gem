@@ -127,6 +127,8 @@ EvaluationContext CreateContext(std::shared_ptr<const JointProblemInput> input,c
     const auto & y=*c.observations; const auto atoms=static_cast<Eigen::Index>(input->atom_ids.size());
     c.scale=std::max(1.0,y.norm()); c.rank={y.size(),2*atoms,atoms};
     c.linear.rank_relative=c.rank.Relative(2*atoms); c.linear.release_response_norm=y.norm(); c.audit=plan;
+    if(input->selection_domain && !CheckedMultiplyBytes(input->selection_domain->target_indices.size(),3,c.target_columns))
+        c.target_columns=std::numeric_limits<std::size_t>::max();
     c.atom_ids=Identities(std::shared_ptr<const std::vector<std::string>>(input,&input->atom_ids));
     c.row_ids=Identities(std::shared_ptr<const std::vector<std::string>>(input,&input->row_ids)); return c;
 }

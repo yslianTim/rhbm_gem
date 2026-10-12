@@ -773,3 +773,35 @@ TEST(JointComponentNumericsTest, SharedRankContractPreservesBothBoundaryRules)
     EXPECT_EQ(n::EvaluateRank(Matrix::Zero(4,4),{{1000,8,4},4}).rank,0);
     EXPECT_FALSE(n::EvaluateRank(Matrix::Constant(4,4,n::unavailable),{{1000,8,4},4}).valid);
 }
+
+TEST(JointComponentNumericsTest, MemoryPlannerUsesCheckedStageSpecificEstimates)
+{
+    using rhbm_gem::core::JointProblemInput;
+    std::size_t bytes{};
+    EXPECT_TRUE(n::CheckedMultiplyBytes(8,16,bytes)); EXPECT_EQ(bytes,128u);
+    EXPECT_FALSE(n::CheckedMultiplyBytes(std::numeric_limits<std::size_t>::max(),2,bytes));
+    EXPECT_FALSE(n::CheckedAddBytes(std::numeric_limits<std::size_t>::max(),1,bytes));
+
+    JointProblemInput input; input.observations={1,2}; input.atom_ids={"a","b"}; input.row_ids={"r0","r1"};
+    input.support={{{0,0},{1,1}},{{1,2}}};
+    ASSERT_EQ(n::CountSupportEntries(input),3u);
+    ASSERT_TRUE(n::EstimateSnapshotBytes(input));
+
+    n::MemoryShape large; large.component_atoms=37'406; large.component_observations=5'938'087;
+    large.component_support_entries=2'000'000; large.component_blocks=3'118;
+    large.affected_row_entries=3'000'000; large.component_free_columns=74'812;
+    large.component_target_columns=112'218; large.resident_bytes=256'000'000;
+    const auto mappings=n::PlanMemory(large,n::MemoryStage::FixedNeighborPreparation);
+    const auto state=n::PlanMemory(large,n::MemoryStage::GlobalStateEvaluation);
+    const auto reference=n::AssessReferenceFeasibility(large);
+    const auto rank=n::PlanMemory(large,n::MemoryStage::RankAssessment);
+    const auto target=n::PlanMemory(large,n::MemoryStage::TargetIdentifiability);
+    EXPECT_EQ(mappings.status,n::MemoryStatus::Pass);
+    EXPECT_EQ(state.status,n::MemoryStatus::Pass);
+    EXPECT_EQ(reference.budget_status,n::MemoryStatus::Reject);
+    EXPECT_EQ(reference.numerical_status,"unavailable");
+    EXPECT_EQ(rank.status,n::MemoryStatus::Reject);
+    EXPECT_EQ(target.status,n::MemoryStatus::Reject);
+    EXPECT_EQ(mappings.budget_bytes,3'200'000'000u);
+    EXPECT_NE(mappings.estimated_peak_bytes,state.estimated_peak_bytes);
+}

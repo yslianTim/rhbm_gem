@@ -2,6 +2,7 @@
 #include "Numerics.hpp"
 #include "JointProgress.hpp"
 #include "FixedNeighborBlockCoordinate.hpp"
+#include "ResourceWork.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 namespace rhbm_gem::core::joint_component {
 JointInitialization InitializeContributors(MapObject &,ModelObject &,const JointProblem &);
@@ -13,6 +14,7 @@ struct ProblemData
     EvaluationContext context;
     ComponentPartition partition;
     JointParameterLayout layout;
+    MemoryEstimate construction_memory;
     explicit ProblemData(std::shared_ptr<const JointProblemInput> snapshot):input(std::move(snapshot)),domain(input),
         y(input->observations.data(),static_cast<Eigen::Index>(input->observations.size())) {}
 };
