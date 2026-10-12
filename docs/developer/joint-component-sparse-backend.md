@@ -34,7 +34,7 @@ parameterization, objective, threshold policy, endpoint certification and
 metadata record `sparse_backend=EIGEN`.
 
 FixedNeighbor's production numerical settings remain independent of backend
-selection: core 12, Forward order, 30 maximum sweeps, one trusted accepted
+selection: core 12, Forward order, 200 maximum sweeps, one trusted accepted
 local update per block visit, and local Profile LM search. The
 existing KKT, width-gradient and eta-confirmation thresholds are unchanged.
 

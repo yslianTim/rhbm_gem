@@ -15,7 +15,10 @@ RSS_LIMIT_BYTES = 4 * 1024**3
 
 
 def process_tree_rss(pid):
-    result = subprocess.run(['ps', '-axo', 'pid=,ppid=,rss='], capture_output=True, text=True, check=True)
+    try:
+        result = subprocess.run(['ps', '-axo', 'pid=,ppid=,rss='], capture_output=True, text=True, check=True)
+    except (OSError, subprocess.CalledProcessError):
+        return None
     rows = [tuple(map(int, line.split())) for line in result.stdout.splitlines()]
     descendants = {pid}
     while True:
@@ -33,17 +36,23 @@ def monitored(command, directory, deadline, *, rss_limit=RSS_LIMIT_BYTES, second
     if available <= 0:
         return dict(status='not-run-budget', command=list(map(str, command)), wall_seconds=0)
     expires = min(deadline, start + seconds)
-    peak = 0; samples = 0; gap = 0.; last = start; next_update = start + 30
+    peak = 0; sampling_available = True; samples = 0; gap = 0.; last = start; next_update = start + 30
     record = dict(command=list(map(str, command)), status='running', sample_interval_seconds=.1)
     # The parent owns the entire process group, including time and all CLI children.
-    timed = ['/usr/bin/time', '-l' if sys.platform == 'darwin' else '-v', *map(str, command)]
+    timed = (['/usr/bin/time', '-v', *map(str, command)] if sys.platform == 'linux'
+             else list(map(str, command)))
     with (directory / 'stdout.txt').open('w') as stdout, (directory / 'stderr.txt').open('w') as stderr:
         process = subprocess.Popen(timed, stdout=stdout, stderr=stderr, env=ENV, start_new_session=True)
         try:
             while process.poll() is None:
                 now = time.monotonic(); gap = max(gap, now - last); last = now
-                peak = max(peak, process_tree_rss(process.pid)); samples += 1
-                reason = 'rss-limit' if peak > rss_limit else ('time-limit' if now >= expires else None)
+                sample = process_tree_rss(process.pid)
+                if sample is None:
+                    sampling_available = False
+                else:
+                    peak = max(peak, sample)
+                samples += 1
+                reason = 'rss-limit' if sampling_available and peak > rss_limit else ('time-limit' if now >= expires else None)
                 if reason:
                     record['status'] = reason
                     os.killpg(process.pid, signal.SIGTERM)
@@ -61,10 +70,12 @@ def monitored(command, directory, deadline, *, rss_limit=RSS_LIMIT_BYTES, second
             raise
     if record['status'] == 'running': record['status'] = 'completed' if process.returncode == 0 else 'process-failure'
     text = (directory / 'stderr.txt').read_text()
-    match = re.search(r'(\d+)\s+maximum resident set size', text) if sys.platform == 'darwin' else re.search(r'Maximum resident set size \(kbytes\): (\d+)', text)
+    match = re.search(r'Maximum resident set size \(kbytes\): (\d+)', text) if sys.platform == 'linux' else None
     record.update(wall_seconds=time.monotonic() - start, exit_code=process.returncode,
-                  sampled_tree_peak_rss_bytes=peak, samples=samples, maximum_sampling_gap_seconds=gap,
-                  os_process_peak_rss_bytes=int(match[1]) * (1 if sys.platform == 'darwin' else 1024) if match else None)
+                  sampled_tree_peak_rss_bytes=peak if sampling_available else None,
+                  live_rss_sampling_available=sampling_available, samples=samples,
+                  maximum_sampling_gap_seconds=gap,
+                  os_process_peak_rss_bytes=int(match[1]) * 1024 if match else None)
     if record['status'] == 'completed' and (record['os_process_peak_rss_bytes'] or 0) > rss_limit:
         record['status'] = 'rss-limit-observed-after-exit'
     write(directory / 'process.json', record)

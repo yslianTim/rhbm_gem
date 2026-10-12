@@ -12,8 +12,9 @@ OperatorPcg introduced a large operator, rank, preconditioner and Schwarz
 surface around the Joint estimator. The associated resource-scaling evidence
 did not justify keeping a second production route, while qualified FixedNeighbor
 met the existing stationarity, endpoint-certification and `RuntimeConvergence`
-contracts with a fixed core of 12 atoms, Forward order, 30 maximum sweeps, and
-one trusted local update per block visit. FixedNeighbor is therefore the current
+contracts with a fixed core of 12 atoms, Forward order, and one trusted local
+update per block visit. That historical qualification used a 30-sweep cap; the
+current production maximum is 200 sweeps. FixedNeighbor is the current
 production/default estimator.
 
 The current implementation no longer contains `OperatorPcg`,

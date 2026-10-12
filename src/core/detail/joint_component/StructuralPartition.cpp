@@ -89,7 +89,7 @@ StructuralBlockCensus StructuralTopology::Census(const StructuralBlockPartition 
     {
         if(generation==std::numeric_limits<std::size_t>::max()) throw std::overflow_error("Structural census generation overflow.");
         ++generation;
-        std::size_t block_rows{},block_support{};
+        std::size_t block_rows{},block_support{},block_neighbors{};
         for(auto atom:core.atoms)
         {
             const auto index=static_cast<std::size_t>(atom);
@@ -119,7 +119,7 @@ StructuralBlockCensus StructuralTopology::Census(const StructuralBlockPartition 
                     if(!in_core[other] && neighbor_marks[other]!=generation)
                     {
                         neighbor_marks[other]=generation;
-                        if(!SafeAdd(census.neighbor_atom_entries,1,census.neighbor_atom_entries))
+                        if(!SafeAdd(block_neighbors,1,block_neighbors))
                             throw std::overflow_error("Structural neighbor census overflow.");
                     }
                 }
@@ -128,8 +128,12 @@ StructuralBlockCensus StructuralTopology::Census(const StructuralBlockPartition 
         }
         if(!SafeAdd(census.affected_row_entries,block_rows,census.affected_row_entries))
             throw std::overflow_error("Structural row census overflow.");
+        if(!SafeAdd(census.neighbor_atom_entries,block_neighbors,census.neighbor_atom_entries) ||
+            !SafeAdd(census.total_block_support_entries,block_support,census.total_block_support_entries))
+            throw std::overflow_error("Structural resource census overflow.");
         census.maximum_block_rows=std::max(census.maximum_block_rows,block_rows);
         census.maximum_block_support_entries=std::max(census.maximum_block_support_entries,block_support);
+        census.maximum_neighbor_atoms=std::max(census.maximum_neighbor_atoms,block_neighbors);
     }
     return census;
 }

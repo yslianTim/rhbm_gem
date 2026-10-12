@@ -18,7 +18,8 @@ class JointBenchmarkContractTest(unittest.TestCase):
         options = {option for action in parser._actions for option in action.option_strings}
         self.assertEqual(options, {
             '-h', '--help', '--profile', '--case', '--build-dir', '--output', '--repeat',
-            '--warmup', '--timeout', '--rss-limit', '--cli', '--model', '--map',
+            '--warmup', '--timeout', '--rss-limit', '--maximum-sweeps', '--detailed',
+            '--cli', '--model', '--map',
         })
 
     def test_default_solver_metadata_locks_fixed_neighbor_production_policy(self):
@@ -30,7 +31,7 @@ class JointBenchmarkContractTest(unittest.TestCase):
             'sparse_backend': 'EIGEN',
             'fixed_neighbor_core_atoms': 12,
             'fixed_neighbor_block_order': 'Forward',
-            'fixed_neighbor_maximum_sweeps': 30,
+            'fixed_neighbor_maximum_sweeps': 200,
             'fixed_neighbor_local_search': 'profile-lm',
             'fixed_neighbor_update_policy': 'OneAccepted',
         })
@@ -49,8 +50,25 @@ class JointBenchmarkContractTest(unittest.TestCase):
                 command = benchmark.command_for_profile(args, Path('result.json'), build)
                 self.assertEqual(command[0], str(driver))
                 self.assertEqual(command[1], mode)
-                self.assertEqual(command[-2:], ['chain', '8'])
-                self.assertEqual(len(command), 5)
+                self.assertEqual(command[3:], ['chain', '8', '--maximum-sweeps', '30'])
+                self.assertEqual(len(command), 7)
+
+    def test_detailed_option_is_explicit_and_zero_sweeps_is_preparation_only(self):
+        parser = benchmark.build_parser()
+        args = parser.parse_args([
+            '--profile', 'search', '--case', 'chain-8', '--build-dir', 'build',
+            '--output', 'result.json', '--maximum-sweeps', '0', '--detailed'])
+        benchmark.validate_args(parser, args)
+        self.assertEqual(args.maximum_sweeps, 0)
+        self.assertTrue(args.detailed)
+        normalized = benchmark.normalize_result('search', {'fixed_neighbor': {
+            'measurement_scope': 'preparation-only', 'rss_checkpoints': {'rss_before_preparation': 10},
+            'resource_census': {'component_atoms': 8}, 'fixed_neighbor_work': {'block_visits': 0},
+        }})
+        details = normalized['details']
+        self.assertEqual(details['diagnostic_scope'], 'preparation-only')
+        self.assertEqual(details['rss_checkpoints']['rss_before_preparation'], 10)
+        self.assertEqual(details['resource_census']['component_atoms'], 8)
 
     def test_custom_core_size_option_is_not_exposed(self):
         with self.assertRaises(SystemExit):
@@ -93,10 +111,12 @@ def smoke(build):
             policy = report['metadata']['solver_policy']
             if (policy['search_method'] != 'FixedNeighbor' or
                     policy['fixed_neighbor_core_atoms'] != 12 or
-                    policy['fixed_neighbor_maximum_sweeps'] != 30 or
+                    policy['fixed_neighbor_maximum_sweeps'] != 200 or
                     policy['fixed_neighbor_block_order'] != 'Forward' or
                     policy['fixed_neighbor_local_search'] != 'profile-lm'):
                 raise AssertionError(f'FixedNeighbor policy metadata is incomplete: {policy}')
+            if report['metadata']['measurement']['maximum_sweeps'] != 30:
+                raise AssertionError('benchmark diagnostic sweep bound metadata is incomplete')
             if profile == 'search' and report['result']['qualified'] is not None:
                 raise AssertionError('search-only benchmark must not claim endpoint qualification')
     return 0

@@ -242,6 +242,8 @@ std::string FormatMemoryEstimate(const MemoryEstimate & estimate)
        <<"  neighbor_entries="<<s.component_neighbor_entries<<'\n'
        <<"  max_block_rows="<<s.maximum_block_rows<<'\n'
        <<"  max_block_support_entries="<<s.maximum_block_support_entries<<'\n'
+       <<"  total_block_support_entries="<<s.total_block_support_entries<<'\n'
+       <<"  maximum_neighbor_atoms="<<s.maximum_neighbor_atoms<<'\n'
        <<"  free_columns="<<s.component_free_columns<<'\n'
        <<"  target_columns="<<s.component_target_columns<<'\n'
        <<"  identity_validation_scratch="<<Bytes(s.identity_validation_bytes)<<'\n'

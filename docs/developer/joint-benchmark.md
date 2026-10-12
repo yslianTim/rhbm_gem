@@ -28,6 +28,17 @@ For small synthetic search and solve measurements:
       --profile solve --case chain-8 \
       --build-dir build/bench --output build/joint-solve.json
 
+These runs default to a 30-sweep diagnostic cap. Use `--maximum-sweeps 0` for
+structural preparation only, `--maximum-sweeps 1` for one complete sweep, or a
+larger cap up to 200 for a bounded multi-sweep measurement. These bounds apply
+only to the experiment driver; they do not change the production estimator.
+Aggregate telemetry is recorded by default. Add `--detailed` to retain
+per-block and profile-trial records. The driver reports a resource census,
+estimated preparation/global-state peaks, process RSS checkpoints before
+preparation, after preparation, after the first sweep and after certification,
+and the process peak RSS where the platform exposes it. Unsupported checkpoint
+measurements are `null`.
+
 Use workflow and postprocess with full, halo or multi cases. Use command with a
 case name plus --model and --map. Reports and temporary outputs belong in the
 build/output tree.
@@ -41,7 +52,7 @@ Every report records the frozen estimator policy:
 | Estimator | FixedNeighbor |
 | Core | 12 atoms |
 | Block order | Forward |
-| Maximum sweeps | 30 |
+| Maximum sweeps | 200 |
 | Local search | Profile LM |
 | Provenance | `fixed_neighbor_local_search=profile-lm` |
 | Accepted local updates | OneAccepted: at most one trusted update per block visit |
@@ -51,12 +62,15 @@ Search and solve are the only FixedNeighbor measurement modes. The C++ driver
 accepts --scaling-only for search measurement or --case for solve measurement.
 It exposes no reverse-order mode, arbitrary core size or alternative policy.
 
-Search reports search_seconds; solve reports search_seconds and
-assessment_seconds. Both can report peak RSS, sweeps, block solves, profile
-evaluations, KKT and width-gradient metrics. The Python wrapper also records
-process status, elapsed time, source/build metadata and the fixed solver policy.
-Use --repeat, --warmup, --timeout and --rss-limit to control the measurement
-process.
+Search reports search and structural-preparation work; solve also reports
+reference-assessment work. Aggregate timings attribute local Profile LM work,
+old-core and effective-response preparation, candidate replay and copying,
+cache updates, sweep replay and global-state evaluation. Reports also include
+block visits and solves, accepted updates, profile evaluations, full candidate
+replays/copies and maximum block time. The Python wrapper records process
+status, elapsed time, source/build metadata, the diagnostic sweep cap and the
+unchanged production solver policy. Use --repeat, --warmup, --timeout and
+--rss-limit to control the measurement process.
 
 The wrapper modes describe different measurement scopes; they do not select
 different estimator policies. There is no backend selector or alternate

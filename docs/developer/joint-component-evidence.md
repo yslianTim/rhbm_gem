@@ -9,7 +9,7 @@ and [Joint FixedNeighbor](joint-fixed-neighbor-experimental.md).
 
 The production route is Joint → FixedNeighbor → local Profile LM → conditional
 A/C profile solve → EIGEN SparseQR. Its policy is core 12, Forward serial
-Gauss-Seidel, at most 30 sweeps, and at most one trusted accepted local update
+Gauss-Seidel, at most 200 sweeps, and at most one trusted accepted local update
 per block visit. The frozen KKT, width-gradient, eta-confirmation, replay and
 endpoint contracts are recorded in the
 [production contract](joint-fixed-neighbor-experimental.md).

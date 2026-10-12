@@ -32,7 +32,7 @@ struct FixedNeighborBlockRecord
     double objective_before{},objective_after{},local_objective_before{},local_objective_after{};
     double global_replay_delta{},local_global_delta_error{},objective_replay_enclosure{};
     double local_final_gradient_inf_norm{},local_final_ac_kkt{};
-    double search_seconds{},profile_factor_seconds{};
+    double search_seconds{},block_seconds{},profile_factor_seconds{};
     int profile_evaluations{},accepted_updates{};
     std::vector<FixedNeighborProfileTrial> profile_trials;
     bool accepted{};
@@ -50,10 +50,11 @@ struct FixedNeighborBlockSweep
 };
 struct FixedNeighborWork
 {
-    double old_core_seconds{},effective_response_seconds{},local_search_seconds{},local_state_seconds{},
+    double structural_preparation_seconds{},reference_assessment_seconds{},old_core_seconds{},
+        effective_response_seconds{},local_search_seconds{},local_state_seconds{},
         candidate_copy_seconds{},candidate_replay_seconds{},cache_update_seconds{},sweep_replay_seconds{},
-        sweep_global_state_seconds{};
-    std::size_t block_solves{},full_candidate_replays{},candidate_state_full_copies{},affected_row_updates{},
+        sweep_global_state_seconds{},maximum_block_seconds{};
+    std::size_t block_visits{},block_solves{},full_candidate_replays{},candidate_state_full_copies{},affected_row_updates{},
         old_core_basis_builds{};
     std::size_t local_problem_count{},minimum_local_atoms{},maximum_local_atoms{};
     double total_local_atoms{};
@@ -87,9 +88,11 @@ struct FixedNeighborPolicy
     FixedNeighborBlockOrder order{FixedNeighborBlockOrder::Forward};
     bool stop_after_stationarity{true};
     bool capture_local_trajectory{};
+    bool retain_diagnostic_records{true};
     bool certify_endpoint{true}; // Diagnostic facade only; production components always certify.
     bool collect_telemetry{};
     bool collect_diagnostics{};
+    std::function<void()> preparation_observer;
     FixedNeighborDiagnosticSink * diagnostic_sink{};
     std::function<void(const FixedNeighborBlockSweep &)> production_progress;
     std::function<void(const FixedNeighborBlockSweep &)> sweep_observer;

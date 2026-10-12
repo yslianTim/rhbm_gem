@@ -71,7 +71,8 @@ def process_status(record):
 def process_record(record):
     result = {key: record.get(key) for key in (
         'status', 'exit_code', 'wall_seconds', 'sampled_tree_peak_rss_bytes',
-        'os_process_peak_rss_bytes', 'samples', 'maximum_sampling_gap_seconds')}
+        'os_process_peak_rss_bytes', 'live_rss_sampling_available', 'samples',
+        'maximum_sampling_gap_seconds')}
     result['raw_status'] = result['status']
     result['status'] = process_status(record)
     return result
@@ -123,9 +124,11 @@ def fixed_neighbor_command(args, output, build):
     if not driver.is_file():
         raise ValueError('Build joint_fixed_neighbor_experiment with RHBM_GEM_BUILD_BENCHMARKS=ON')
     topology, atoms = synthetic_case(args.case)
-    if args.profile == 'search':
-        return [str(driver), '--scaling-only', str(output), topology, str(atoms)]
-    return [str(driver), '--case', str(output), topology, str(atoms)]
+    command = [str(driver), '--scaling-only' if args.profile == 'search' else '--case',
+               str(output), topology, str(atoms), '--maximum-sweeps', str(args.maximum_sweeps)]
+    if args.detailed:
+        command.append('--detailed')
+    return command
 
 
 def command_for_profile(args, output, build):
@@ -154,7 +157,7 @@ def command_for_profile(args, output, build):
 def raw_elapsed(profile, raw, process_wall):
     fixed = raw.get('fixed_neighbor') or {}
     if profile == 'search':
-        return fixed.get('search_seconds', process_wall)
+        return fixed.get('total_elapsed_seconds', process_wall)
     if profile == 'solve':
         return fixed.get('total_elapsed_seconds', process_wall)
     if profile == 'workflow':
@@ -172,6 +175,7 @@ def normalize_result(profile, raw):
             'scientific_status': 'search-only',
             'details': {
                 'measurement_scope': 'fixed-neighbor-search-only',
+                'diagnostic_scope': fixed.get('measurement_scope'),
                 'search_completed': fixed.get('search_converged'),
                 'stop_reason': fixed.get('search_reason'),
                 'sweeps': fixed.get('sweeps'),
@@ -182,6 +186,11 @@ def normalize_result(profile, raw):
                 'global_ac_kkt': fixed.get('final_global_ac_kkt'),
                 'width_gradient_inf_norm': fixed.get('final_raw_width_gradient_inf_norm'),
                 'search_seconds': fixed.get('search_seconds'),
+                'resource_census': fixed.get('resource_census'),
+                'rss_checkpoints': fixed.get('rss_checkpoints'),
+                'fixed_neighbor_work': fixed.get('fixed_neighbor_work'),
+                'candidate_replay_fraction': fixed.get('candidate_replay_fraction'),
+                'local_profile_fraction': fixed.get('local_profile_fraction'),
                 'local_profile_work': fixed.get('local_profile_work'),
             },
         }
@@ -199,6 +208,11 @@ def normalize_result(profile, raw):
                 'global_kkt': fixed.get('global_kkt'),
                 'width_gradient_inf_norm': fixed.get('width_gradient_inf_norm'),
                 'search_seconds': fixed.get('search_seconds'),
+                'resource_census': fixed.get('resource_census'),
+                'rss_checkpoints': fixed.get('rss_checkpoints'),
+                'fixed_neighbor_work': fixed.get('fixed_neighbor_work'),
+                'candidate_replay_fraction': fixed.get('candidate_replay_fraction'),
+                'local_profile_fraction': fixed.get('local_profile_fraction'),
                 'assessment_seconds': fixed.get('assessment_seconds'),
                 'sweeps': fixed.get('sweeps'),
                 'block_solves': sum(item.get('block_solves', 0) for item in fixed.get('sweep_telemetry', [])),
@@ -332,7 +346,7 @@ def solver_policy_metadata():
         'sparse_backend': 'EIGEN',
         'fixed_neighbor_core_atoms': 12,
         'fixed_neighbor_block_order': 'Forward',
-        'fixed_neighbor_maximum_sweeps': 30,
+        'fixed_neighbor_maximum_sweeps': 200,
         'fixed_neighbor_local_search': 'profile-lm',
         'fixed_neighbor_update_policy': 'OneAccepted',
     }
@@ -348,6 +362,10 @@ def build_parser():
     parser.add_argument('--warmup', type=int, default=0)
     parser.add_argument('--timeout', type=float, default=600)
     parser.add_argument('--rss-limit', type=int, default=4 * 1024**3)
+    parser.add_argument('--maximum-sweeps', type=int, default=30,
+                        help='Bound the benchmark diagnostic search from 0 (preparation only) to 200 sweeps.')
+    parser.add_argument('--detailed', action='store_true',
+                        help='Retain per-block/profile trial diagnostics; aggregate telemetry is the default.')
     parser.add_argument('--cli', type=Path)
     parser.add_argument('--model', type=Path)
     parser.add_argument('--map', dest='map_path', type=Path)
@@ -357,6 +375,10 @@ def build_parser():
 def validate_args(parser, args):
     if args.repeat < 1 or args.warmup < 0 or args.timeout <= 0 or args.rss_limit <= 0:
         parser.error('--repeat and limits must be positive; --warmup must be nonnegative')
+    if not 0 <= args.maximum_sweeps <= 200:
+        parser.error('--maximum-sweeps must be between 0 and 200')
+    if args.detailed and args.profile not in ('search', 'solve'):
+        parser.error('--detailed is available only for FixedNeighbor search and solve profiles')
     if args.profile in ('workflow', 'postprocess') and args.case not in ('full', 'halo', 'multi'):
         parser.error('workflow and postprocess cases are full, halo, or multi')
     if args.profile == 'command' and not re.fullmatch(r'[A-Za-z0-9._-]+', args.case):
@@ -381,6 +403,13 @@ def main(argv=None):
     metadata.update(commit=commit, profile=args.profile, case=args.case,
                     source_sha256=source_hash(ROOT), benchmark_sha256=sha(Path(__file__)))
     metadata['solver_policy'] = solver_policy_metadata()
+    if args.profile in ('search', 'solve'):
+        metadata['measurement'] = {
+            'scope': 'preparation-only' if args.maximum_sweeps == 0 else
+                     'one-full-sweep' if args.maximum_sweeps == 1 else 'bounded-multi-sweep',
+            'maximum_sweeps': args.maximum_sweeps,
+            'detailed': args.detailed,
+        }
     if args.profile in ('search', 'solve'):
         driver = build / 'bin/joint_fixed_neighbor_experiment'
     elif args.profile in ('workflow', 'postprocess'):
@@ -430,7 +459,8 @@ def main(argv=None):
                 'result': normalize_result(args.profile, raw),
                 'stages': [{key: stage.get(key) for key in (
                     'role', 'status', 'exit_code', 'wall_seconds',
-                    'sampled_tree_peak_rss_bytes', 'os_process_peak_rss_bytes')}
+                    'sampled_tree_peak_rss_bytes', 'os_process_peak_rss_bytes',
+                    'live_rss_sampling_available')}
                            for stage in record.get('stages', [])],
             })
         report = {

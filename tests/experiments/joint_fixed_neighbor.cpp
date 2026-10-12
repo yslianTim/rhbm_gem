@@ -13,7 +13,17 @@
 #include <iostream>
 #include <limits>
 #include <numeric>
+#include <optional>
+#if defined(__APPLE__) || defined(__linux__)
 #include <sys/resource.h>
+#endif
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#include <mach/task_info.h>
+#endif
+#if defined(__linux__)
+#include <unistd.h>
+#endif
 
 namespace {
 namespace n=rhbm_gem::core::joint_component;
@@ -21,13 +31,33 @@ namespace j=boost::json;
 using Clock=std::chrono::steady_clock;
 using Input=rhbm_gem::core::JointProblemInput;
 double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
-double PeakRssMb()
+std::optional<std::size_t> PeakRssBytes()
 {
-    rusage usage{}; if(getrusage(RUSAGE_SELF,&usage)!=0) throw std::runtime_error("Could not read peak RSS.");
+ #if defined(__APPLE__) || defined(__linux__)
+    rusage usage{}; if(getrusage(RUSAGE_SELF,&usage)!=0) return {};
 #if defined(__APPLE__)
-    return static_cast<double>(usage.ru_maxrss)/(1024.0*1024.0);
+    return static_cast<std::size_t>(usage.ru_maxrss);
 #else
-    return static_cast<double>(usage.ru_maxrss)/1024.0;
+    return static_cast<std::size_t>(usage.ru_maxrss)*1024;
+#endif
+ #else
+    return {};
+ #endif
+}
+std::optional<std::size_t> CurrentRssBytes()
+{
+#if defined(__APPLE__)
+    mach_task_basic_info_data_t info{}; mach_msg_type_number_t count=MACH_TASK_BASIC_INFO_COUNT;
+    if(task_info(mach_task_self(),MACH_TASK_BASIC_INFO,reinterpret_cast<task_info_t>(&info),&count)!=KERN_SUCCESS) return {};
+    return static_cast<std::size_t>(info.resident_size);
+#elif defined(__linux__)
+    std::ifstream statm("/proc/self/statm"); std::size_t total_pages{},resident_pages{};
+    const auto page_bytes=sysconf(_SC_PAGESIZE);
+    if(!(statm>>total_pages>>resident_pages) || page_bytes<=0 ||
+        resident_pages>std::numeric_limits<std::size_t>::max()/static_cast<std::size_t>(page_bytes)) return {};
+    return resident_pages*static_cast<std::size_t>(page_bytes);
+#else
+    return {};
 #endif
 }
 const rhbm_gem::JointCheck * FindCheck(const rhbm_gem::core::JointFitResult & fit,const std::string & name)
@@ -58,6 +88,44 @@ double WidthGradient(const rhbm_gem::core::JointFitResult & fit)
 }
 j::value Number(double value)
 {return std::isfinite(value) ? j::value(value) : j::value(nullptr);}
+j::value BytesValue(std::optional<std::size_t> value)
+{return value ? j::value(*value) : j::value(nullptr);}
+j::object MemoryEstimateJson(const n::MemoryEstimate & estimate)
+{
+    return {{"stage",n::MemoryStageName(estimate.stage)},
+        {"status",n::MemoryStatusName(estimate.status)},
+        {"reason",estimate.reason},
+        {"resident_bytes",estimate.resident_bytes},
+        {"temporary_bytes",estimate.temporary_bytes},
+        {"estimated_peak_bytes",estimate.estimated_peak_bytes},
+        {"budget_bytes",estimate.budget_bytes}};
+}
+j::object ResourceCensusJson(const n::FixedNeighborDiagnosticResult & result)
+{
+    const auto & shape=result.memory_estimate.shape;
+    return {{"component_atoms",shape.component_atoms},{"component_rows",shape.component_observations},
+        {"support_entries",shape.component_support_entries},{"component_blocks",shape.component_blocks},
+        {"total_affected_rows",shape.affected_row_entries},{"maximum_block_rows",shape.maximum_block_rows},
+        {"total_block_support_entries",shape.total_block_support_entries},
+        {"maximum_block_support_entries",shape.maximum_block_support_entries},
+        {"total_neighbor_atoms",shape.component_neighbor_entries},
+        {"maximum_neighbor_atoms",shape.maximum_neighbor_atoms},
+        {"prepared_mapping_entries",result.prepared_mapping_entries},
+        {"prepared_mapping_bytes",result.prepared_mapping_bytes},
+        {"estimated_preparation_peak_bytes",result.memory_estimate.estimated_peak_bytes},
+        {"estimated_global_state_peak_bytes",result.global_state_memory_estimate.estimated_peak_bytes},
+        {"preparation_preflight",MemoryEstimateJson(result.memory_estimate)},
+        {"global_state_preflight",MemoryEstimateJson(result.global_state_memory_estimate)}};
+}
+j::object RssCheckpointsJson(std::optional<std::size_t> before,std::optional<std::size_t> after_preparation,
+    std::optional<std::size_t> after_first_sweep,std::optional<std::size_t> after_certification)
+{
+    return {{"measurement",CurrentRssBytes() ? "available" : "unavailable"},
+        {"rss_before_preparation",BytesValue(before)},
+        {"rss_after_preparation",BytesValue(after_preparation)},
+        {"rss_after_first_sweep",BytesValue(after_first_sweep)},
+        {"rss_after_certification",BytesValue(after_certification)}};
+}
 std::size_t DerivativeTileRows()
 {
     return static_cast<std::size_t>(n::derivative_tile_rows);
@@ -119,8 +187,11 @@ j::object SweepJson(const n::FixedNeighborBlockSweep & sweep)
 j::object ProfileWorkJson(const n::ProfileSearchWork &);
 j::object WorkJson(const n::FixedNeighborWork & work)
 {
-    return {{"old_core_seconds",Number(work.old_core_seconds)},
+    return {{"structural_preparation_seconds",Number(work.structural_preparation_seconds)},
+        {"reference_assessment_seconds",Number(work.reference_assessment_seconds)},
+        {"old_core_seconds",Number(work.old_core_seconds)},
         {"effective_response_seconds",Number(work.effective_response_seconds)},
+        {"local_profile_seconds",Number(work.local_search_seconds)},
         {"local_search_seconds",Number(work.local_search_seconds)},
         {"local_state_seconds",Number(work.local_state_seconds)},
         {"candidate_copy_seconds",Number(work.candidate_copy_seconds)},
@@ -128,6 +199,8 @@ j::object WorkJson(const n::FixedNeighborWork & work)
         {"cache_update_seconds",Number(work.cache_update_seconds)},
         {"sweep_replay_seconds",Number(work.sweep_replay_seconds)},
         {"sweep_global_state_seconds",Number(work.sweep_global_state_seconds)},
+        {"maximum_block_seconds",Number(work.maximum_block_seconds)},
+        {"block_visits",work.block_visits},
         {"block_solves",work.block_solves},
         {"full_candidate_replays",work.full_candidate_replays},
         {"candidate_state_full_copies",work.candidate_state_full_copies},
@@ -182,19 +255,30 @@ j::object ProfileWorkJson(const n::ProfileSearchWork & work)
 }
 void Write(const std::filesystem::path &,const j::value &);
 j::object Run(const std::string & topology,int atoms,const std::filesystem::path & output_path,
-    bool scaling_only=false)
+    bool scaling_only=false,std::size_t maximum_sweeps=30,bool detailed=false)
 {
     auto input=std::make_shared<Input>(second_stage_test::SyntheticJointWorkload(topology,atoms));
     const rhbm_gem::core::JointProblem problem(*input);
     n::Vector initial_eta= n::Vector::Constant(atoms,std::log(.55)); n::FixedNeighborPolicy neighbor_policy;
     neighbor_policy.core_atoms=12;
-    neighbor_policy.maximum_sweeps=30;
-    neighbor_policy.capture_local_trajectory=true;
-    neighbor_policy.certify_endpoint=!scaling_only;
+    neighbor_policy.maximum_sweeps=maximum_sweeps;
+    neighbor_policy.capture_local_trajectory=detailed;
+    neighbor_policy.collect_diagnostics=detailed;
+    neighbor_policy.retain_diagnostic_records=detailed;
+    neighbor_policy.certify_endpoint=!scaling_only && maximum_sweeps>0;
     neighbor_policy.collect_telemetry=true;
+    const auto rss_before=CurrentRssBytes();
+    std::optional<std::size_t> rss_after_preparation,rss_after_first_sweep,rss_after_certification;
+    neighbor_policy.preparation_observer=[&] {rss_after_preparation=CurrentRssBytes();};
     j::array progress_sweeps;
     const auto progress_path=std::filesystem::path(output_path.string()+".progress.json");
+    std::size_t first_sweep_block_solves{},accepted_blocks{},maximum_local_rows{},maximum_local_columns{};
     neighbor_policy.sweep_observer=[&](const auto & sweep) {
+        if(sweep.sweep==1) rss_after_first_sweep=CurrentRssBytes();
+        if(sweep.sweep==1) first_sweep_block_solves=sweep.block_solves;
+        accepted_blocks+=sweep.accepted_blocks;
+        maximum_local_rows=std::max(maximum_local_rows,sweep.maximum_block_rows);
+        maximum_local_columns=std::max(maximum_local_columns,sweep.maximum_block_columns);
         progress_sweeps.push_back(SweepJson(sweep));
         j::object progress{{"topology",topology},{"atoms",atoms},
             {"rows",problem.Input().observations.size()},{"parameter_count",3*atoms},
@@ -206,19 +290,16 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     };
     std::cerr<<topology<<'-'<<atoms<<" FixedNeighbor started\n";
     auto started=Clock::now(); const auto neighbor=n::RunFixedNeighborDiagnostic(problem,initial_eta,neighbor_policy);
+    if(neighbor.certification_attempted) rss_after_certification=CurrentRssBytes();
     const double neighbor_seconds=Seconds(started);
-    const double sweep_seconds=std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),0.0,
-        [](double total,const auto & sweep){return total+sweep.wall_seconds;});
-    const double neighbor_search_seconds=sweep_seconds;
+    const double neighbor_search_seconds=neighbor.search_seconds;
     std::cerr<<topology<<'-'<<atoms<<" FixedNeighbor finished in "<<neighbor_seconds<<" s; converged="
-        <<neighbor.search_converged<<" sweeps="<<neighbor.sweeps.size()<<" KKT="
-        <<(neighbor.sweeps.empty() ? 0.0 : neighbor.sweeps.back().global_ac_kkt);
+        <<neighbor.search_converged<<" sweeps="<<neighbor.sweep_count<<" KKT="
+        <<(neighbor.final_sweep ? neighbor.final_sweep->global_ac_kkt : 0.0);
     if(!scaling_only) std::cerr<<" endpoint="<<neighbor.endpoint_certified
         <<" runtime="<<CheckName(neighbor.fit.RuntimeConvergence());
     std::cerr<<'\n';
-    j::array sweeps;
-    for(const auto & sweep:neighbor.sweeps)
-        sweeps.push_back(SweepJson(sweep));
+    j::array sweeps=progress_sweeps;
     j::array blocks;
     for(const auto & block:neighbor.blocks)
     {
@@ -231,7 +312,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
             {"profile_evaluations",block.profile_evaluations},{"accepted_updates",block.accepted_updates},
             {"profile_factor_seconds",Number(block.profile_factor_seconds)},
             {"profile_trials",ProfileTrialsJson(block.profile_trials)},
-            {"search_seconds",block.search_seconds},{"accepted",block.accepted},
+            {"search_seconds",block.search_seconds},{"block_seconds",block.block_seconds},{"accepted",block.accepted},
             {"status",block.status},{"reason",block.reason},{"local_search_stop_reason",block.local_search_stop_reason},
             {"local_final_gradient_inf_norm",Number(block.local_final_gradient_inf_norm)},
             {"local_final_ac_kkt",Number(block.local_final_ac_kkt)}};
@@ -239,58 +320,63 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
     }
     if(scaling_only)
     {
-        const auto sum_sweeps=[&](auto member) {
-            return std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),std::size_t{},
-                [&](std::size_t total,const auto & sweep){return total+sweep.*member;});
-        };
-        const double local_factor_seconds=std::accumulate(neighbor.blocks.begin(),neighbor.blocks.end(),0.0,
-            [](double total,const auto & block){return total+block.search_seconds;});
+        const double local_factor_seconds=neighbor.work.local_search_seconds;
         const double profile_factor_seconds=std::accumulate(neighbor.blocks.begin(),neighbor.blocks.end(),0.0,
             [](double total,const auto & block){return total+block.profile_factor_seconds;});
-        const auto accepted_local_updates=std::accumulate(neighbor.blocks.begin(),neighbor.blocks.end(),std::size_t{},
-            [](std::size_t total,const auto & block){return total+static_cast<std::size_t>(block.accepted_updates);});
-        const auto blocks_per_sweep=static_cast<std::size_t>(std::count_if(neighbor.blocks.begin(),neighbor.blocks.end(),
-            [](const auto & block){return block.sweep==1;}));
-        const auto & last=neighbor.sweeps.empty() ? n::FixedNeighborBlockSweep{} : neighbor.sweeps.back();
+        const auto accepted_local_updates=neighbor.total_accepted_local_updates;
+        const auto profile_evaluations=neighbor.total_profile_evaluations;
+        const auto blocks_per_sweep=first_sweep_block_solves;
+        const auto & last=neighbor.final_sweep ? *neighbor.final_sweep : n::FixedNeighborBlockSweep{};
         j::object scaling_json{{"search_converged",neighbor.search_converged},
+                {"measurement_scope",maximum_sweeps==0 ? "preparation-only" :
+                    maximum_sweeps==1 ? "one-full-sweep" : "bounded-multi-sweep"},
                 {"search_reason",neighbor.reason},{"blocks_per_sweep",blocks_per_sweep},
                 {"first_order_stationarity_sweep",neighbor.first_order_stationarity_sweep},
                 {"confirmed_stationarity_sweep",neighbor.confirmed_stationarity_sweep},
                 {"confirmation_extra_sweeps",neighbor.first_order_stationarity_sweep && neighbor.confirmed_stationarity_sweep ?
                     j::value(neighbor.confirmed_stationarity_sweep-neighbor.first_order_stationarity_sweep) : j::value(nullptr)},
-                {"sweeps",neighbor.sweeps.size()},{"objective",neighbor.state.objective},
-                {"final_global_ac_kkt",neighbor.sweeps.empty() ? j::value(nullptr) : Number(last.global_ac_kkt)},
-                {"final_raw_width_gradient_inf_norm",neighbor.sweeps.empty() ? j::value(nullptr) : Number(last.global_width_gradient_inf_norm)},
-                {"block_solves",sum_sweeps(&n::FixedNeighborBlockSweep::block_solves)},
-                {"profile_evaluations",sum_sweeps(&n::FixedNeighborBlockSweep::profile_evaluations)},
-                {"accepted_blocks",sum_sweeps(&n::FixedNeighborBlockSweep::accepted_blocks)},
+                {"sweeps",neighbor.sweep_count},{"objective",neighbor.state.objective},
+                {"final_global_ac_kkt",neighbor.final_sweep ? Number(last.global_ac_kkt) : j::value(nullptr)},
+                {"final_raw_width_gradient_inf_norm",neighbor.final_sweep ? Number(last.global_width_gradient_inf_norm) : j::value(nullptr)},
+                {"block_solves",neighbor.total_block_solves},
+                {"profile_evaluations",profile_evaluations},
+                {"accepted_blocks",accepted_blocks},
+                {"accepted_updates",accepted_local_updates},
                 {"accepted_local_updates",accepted_local_updates},
                 {"prepared_block_count",neighbor.block_preparations},
                 {"block_preparations",neighbor.block_preparations},
                 {"domain_preparations",neighbor.domain_preparations},
                 {"mapping_preparations",neighbor.mapping_preparations},
-                {"local_factor_seconds",local_factor_seconds},{"profile_factor_seconds",profile_factor_seconds},
+                {"local_factor_seconds",local_factor_seconds},
+                {"profile_factor_seconds",detailed ? j::value(profile_factor_seconds) : j::value(nullptr)},
+                {"resource_census",ResourceCensusJson(neighbor)},
+                {"rss_checkpoints",RssCheckpointsJson(rss_before,rss_after_preparation,rss_after_first_sweep,rss_after_certification)},
                 {"fixed_neighbor_work",WorkJson(neighbor.work)},
                 {"search_seconds",neighbor_search_seconds},
+                {"candidate_replay_fraction",Number(neighbor_search_seconds>0 ?
+                    neighbor.work.candidate_replay_seconds/neighbor_search_seconds : 0.)},
+                {"local_profile_fraction",Number(neighbor_search_seconds>0 ?
+                    neighbor.work.local_search_seconds/neighbor_search_seconds : 0.)},
                 {"local_atoms",j::object{{"minimum",neighbor.work.minimum_local_atoms},
                     {"mean",Number(neighbor.work.local_problem_count ? neighbor.work.total_local_atoms/
                         static_cast<double>(neighbor.work.local_problem_count) : 0.)},
                     {"maximum",neighbor.work.maximum_local_atoms}}},
                 {"derivative_tile_rows",DerivativeTileRows()},
                 {"total_elapsed_seconds",neighbor_seconds},
-                {"maximum_local_rows",std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),std::size_t{},
-                    [](std::size_t maximum,const auto & sweep){return std::max(maximum,sweep.maximum_block_rows);})},
-                {"maximum_local_columns",std::accumulate(neighbor.sweeps.begin(),neighbor.sweeps.end(),std::size_t{},
-                    [](std::size_t maximum,const auto & sweep){return std::max(maximum,sweep.maximum_block_columns);})},
+                {"maximum_local_rows",maximum_local_rows},
+                {"maximum_local_columns",maximum_local_columns},
                 {"sweep_telemetry",sweeps},{"block_telemetry",blocks}};
         scaling_json["local_profile_work"]=ProfileWorkJson(neighbor.work.local_profile_work);
+        const auto peak_rss=PeakRssBytes();
         return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
             {"parameter_count",3*atoms},{"core_atoms",12},
             {"maximum_sweeps",neighbor_policy.maximum_sweeps},
             {"block_order","Forward"},
-            {"measurement_scope","fixed-neighbor-search-only"},
+            {"measurement_scope",maximum_sweeps==0 ? "preparation-only" :
+                maximum_sweeps==1 ? "one-full-sweep" : "bounded-multi-sweep"},
             {"fixed_neighbor",scaling_json},
-            {"peak_rss_mb",PeakRssMb()}};
+            {"peak_rss_bytes",BytesValue(peak_rss)},
+            {"peak_rss_mb",peak_rss ? j::value(static_cast<double>(*peak_rss)/(1024.0*1024.0)) : j::value(nullptr)}};
     }
     auto endpoint_assessment=AssessmentJson(neighbor.assessment,neighbor.endpoint_trust);
     j::object neighbor_json{{"method","FixedNeighbor"},
@@ -301,33 +387,46 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"derivative_tile_rows",DerivativeTileRows()},
         {"search_converged",neighbor.search_converged},
         {"block_order","Forward"},
-        {"search_reason",neighbor.reason},{"sweeps",neighbor.sweeps.size()},
+        {"search_reason",neighbor.reason},{"sweeps",neighbor.sweep_count},
+        {"measurement_scope",maximum_sweeps==0 ? "preparation-only" :
+            maximum_sweeps==1 ? "one-full-sweep" : "bounded-multi-sweep"},
         {"first_order_stationarity_sweep",neighbor.first_order_stationarity_sweep},
         {"confirmed_stationarity_sweep",neighbor.confirmed_stationarity_sweep},
         {"endpoint_certified",neighbor.endpoint_certified},
         {"endpoint_trust_reason",neighbor.endpoint_trust.reason},
         {"objective",neighbor.fit.objective ? j::value(*neighbor.fit.objective) : j::value(nullptr)},
-        {"global_kkt",CheckValue(neighbor.fit,"kkt")},{"width_gradient_inf_norm",WidthGradient(neighbor.fit)},
+        {"global_kkt",CheckValue(neighbor.fit,"kkt")},{"width_gradient_inf_norm",Number(WidthGradient(neighbor.fit))},
         {"assessment_inner",CheckValue(neighbor.fit,"inner")},{"assessment_gradient",CheckValue(neighbor.fit,"width-stationarity")},
         {"assessment_local",CheckValue(neighbor.fit,"local-correction")},{"assessment_identified",CheckValue(neighbor.fit,"numerical-identifiability")},
         {"endpoint_assessment",std::move(endpoint_assessment)},
         {"runtime_convergence",CheckName(neighbor.fit.RuntimeConvergence())},
         {"sweep_telemetry",sweeps},{"block_telemetry",blocks},
         {"search_seconds",neighbor_search_seconds},
-        {"assessment_seconds",std::max(0.0,neighbor_seconds-neighbor_search_seconds)},
+        {"assessment_seconds",Number(neighbor.work.reference_assessment_seconds)},
+        {"reference_assessment_seconds",Number(neighbor.work.reference_assessment_seconds)},
         {"prepared_block_count",neighbor.block_preparations},
         {"block_preparations",neighbor.block_preparations},
         {"domain_preparations",neighbor.domain_preparations},
         {"mapping_preparations",neighbor.mapping_preparations},
         {"fixed_neighbor_work",WorkJson(neighbor.work)},
-        {"profile_factor_seconds",std::accumulate(neighbor.blocks.begin(),neighbor.blocks.end(),0.0,
-            [](double total,const auto & block){return total+block.profile_factor_seconds;})},
+        {"profile_factor_seconds",detailed ? j::value(std::accumulate(neighbor.blocks.begin(),neighbor.blocks.end(),0.0,
+            [](double total,const auto & block){return total+block.profile_factor_seconds;})) : j::value(nullptr)},
+        {"accepted_updates",neighbor.total_accepted_local_updates},
+        {"profile_evaluations",neighbor.total_profile_evaluations},
+        {"candidate_replay_fraction",Number(neighbor_search_seconds>0 ?
+            neighbor.work.candidate_replay_seconds/neighbor_search_seconds : 0.)},
+        {"local_profile_fraction",Number(neighbor_search_seconds>0 ?
+            neighbor.work.local_search_seconds/neighbor_search_seconds : 0.)},
         {"total_elapsed_seconds",neighbor_seconds}};
     neighbor_json["local_profile_work"]=ProfileWorkJson(neighbor.work.local_profile_work);
+    neighbor_json["resource_census"]=ResourceCensusJson(neighbor);
+    neighbor_json["rss_checkpoints"]=RssCheckpointsJson(rss_before,rss_after_preparation,rss_after_first_sweep,rss_after_certification);
+    const auto peak_rss=PeakRssBytes();
     return {{"topology",topology},{"atoms",atoms},{"rows",problem.Input().observations.size()},
         {"parameter_count",3*atoms},{"core_atoms",12},
         {"maximum_sweeps",neighbor_policy.maximum_sweeps},{"observation_scale",problem.ObservationScale()},
-        {"fixed_neighbor",neighbor_json},{"peak_rss_mb",PeakRssMb()}};
+        {"fixed_neighbor",neighbor_json},{"peak_rss_bytes",BytesValue(peak_rss)},
+        {"peak_rss_mb",peak_rss ? j::value(static_cast<double>(*peak_rss)/(1024.0*1024.0)) : j::value(nullptr)}};
 }
 void Write(const std::filesystem::path & path,const j::value & value)
 {std::ofstream output(path); if(!output) throw std::runtime_error("Could not open experiment output."); output<<j::serialize(value)<<'\n';}
@@ -335,13 +434,26 @@ void Write(const std::filesystem::path & path,const j::value & value)
 int main(int argc,char ** argv)
 {
     try {
-        if(argc!=5 || (std::string(argv[1])!="--case" && std::string(argv[1])!="--scaling-only"))
-            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--scaling-only OUTPUT_FILE TOPOLOGY ATOMS");
+        if(argc<5 || (std::string(argv[1])!="--case" && std::string(argv[1])!="--scaling-only"))
+            throw std::invalid_argument("Usage: joint_fixed_neighbor_experiment --case|--scaling-only OUTPUT_FILE TOPOLOGY ATOMS [--maximum-sweeps N] [--detailed]");
         Eigen::setNbThreads(1);
         const std::filesystem::path output_path(argv[2]);
         if(output_path.has_parent_path()) std::filesystem::create_directories(output_path.parent_path());
         const std::string mode(argv[1]);
-        Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--scaling-only"));
+        std::size_t maximum_sweeps=30; bool detailed=false;
+        for(int i=5;i<argc;++i)
+        {
+            const std::string option(argv[i]);
+            if(option=="--detailed") detailed=true;
+            else if(option=="--maximum-sweeps" && i+1<argc)
+            {
+                const auto value=std::stoull(argv[++i]);
+                if(value>200) throw std::invalid_argument("Benchmark sweep bound must not exceed 200.");
+                maximum_sweeps=static_cast<std::size_t>(value);
+            }
+            else throw std::invalid_argument("Unknown FixedNeighbor experiment option: "+option);
+        }
+        Write(output_path,Run(argv[3],std::stoi(argv[4]),output_path,mode=="--scaling-only",maximum_sweeps,detailed));
         std::cout<<argv[3]<<'-'<<argv[4]<<" fixed-neighbor experiment complete\n";
         return 0;
     } catch(const std::exception & error) {std::cerr<<error.what()<<'\n'; return 1;}

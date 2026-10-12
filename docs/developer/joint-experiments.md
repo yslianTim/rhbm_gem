@@ -1,7 +1,7 @@
 # Joint experiment and validation surface
 
 This inventory describes the current checkout. The production estimator is
-FixedNeighbor with core 12, Forward serial Gauss-Seidel, at most 30 sweeps,
+FixedNeighbor with core 12, Forward serial Gauss-Seidel, at most 200 sweeps,
 local Profile LM and at most one trusted accepted local update per block
 visit.
 

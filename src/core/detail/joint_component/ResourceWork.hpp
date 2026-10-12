@@ -41,7 +41,8 @@ struct MemoryShape
 {
     std::size_t component_atoms{},component_observations{},component_support_entries{},component_blocks{},
         affected_row_entries{},component_neighbor_entries{},maximum_block_rows{},maximum_block_support_entries{},
-        component_free_columns{},component_target_columns{},identity_validation_bytes{},resident_bytes{};
+        total_block_support_entries{},maximum_neighbor_atoms{},component_free_columns{},component_target_columns{},
+        identity_validation_bytes{},resident_bytes{};
     bool problem_scope{};
 };
 struct MemoryEstimate

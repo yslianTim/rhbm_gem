@@ -74,6 +74,15 @@ full physical search fits within 4 GB: real support count and neighborhood shape
 are required, and the existing dense reference, rank and target assessments
 remain unavailable when their own stage estimates exceed budget.
 
+The benchmark driver reports the structural census, estimated preparation and
+global-state peaks, RSS before and after preparation, RSS after the first sweep
+and after certification when those stages run, and process peak RSS. Its
+preparation-only (`--maximum-sweeps 0`), one-sweep and bounded multi-sweep
+modes are diagnostic harness settings. Aggregate counters are the default;
+per-block timings and local profile trials require `--detailed`. No physical
+map/model input is present in this workspace, so driver measurements are
+synthetic and cannot establish physical full-search feasibility.
+
 ## KKT and reference agreement
 
 For fixed widths and an unchanged active set, let `X_F` contain the free A/C

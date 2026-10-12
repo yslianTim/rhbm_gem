@@ -108,13 +108,18 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
     const Domain domain=ProfileDomain(data.domain,layout);
     const EvaluationContext context=ProfileContext(data.context,layout,data.domain.rows);
     const Vector y=Select(data.y,IndicesOf(layout.informative_rows));
-    auto run_policy=policy; run_policy.collect_diagnostics=true;
+    auto run_policy=policy;
+    run_policy.collect_diagnostics=policy.collect_diagnostics || policy.retain_diagnostic_records;
     auto search=SearchFixedNeighborComponent(domain,layout,y,initial_eta,context,
         run_policy,std::move(initial_beta));
-    out.state=search.state; out.blocks=search.blocks; out.sweeps=search.sweeps;
+    out.state=std::move(search.state); out.blocks=std::move(search.blocks); out.sweeps=std::move(search.sweeps);
     out.search_converged=search.search_converged; out.reason=search.reason;
     out.first_order_stationarity_sweep=search.first_order_stationarity_sweep;
     out.confirmed_stationarity_sweep=search.confirmed_stationarity_sweep;
+    out.sweep_count=search.sweep_count;
+    out.total_block_solves=search.total_block_solves;
+    out.total_profile_evaluations=search.total_profile_evaluations;
+    out.total_accepted_local_updates=search.total_accepted_local_updates;
     out.block_preparations=search.block_preparations;
     out.domain_preparations=search.domain_preparations;
     out.mapping_preparations=search.mapping_preparations;
@@ -123,6 +128,9 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
     out.memory_estimate=search.memory_estimate;
     out.global_state_memory_estimate=search.global_state_memory_estimate;
     out.work=search.work;
+    out.search_seconds=search.search_seconds;
+    out.final_sweep=search.final_sweep;
+    out.certification_attempted=search.certification.has_value();
     if(policy.certify_endpoint)
     {
         if(search.certification)

@@ -305,6 +305,14 @@ unchanged. Current Joint search, solve, workflow, postprocessing and command
 measurements are run through the single workflow in the
 [benchmark guide](joint-benchmark.md).
 
+The FixedNeighbor experiment reports structural census counts, estimated
+preparation/global-state peaks, stage timing attribution, per-sweep summaries
+and process RSS. It supports preparation-only, one-sweep and bounded
+multi-sweep diagnostics without changing the production policy. Aggregate
+counters are the default; per-block and profile-trial records require explicit
+detailed mode. The 37,406-atom preparation fixture is synthetic and does not
+measure a physical map/model search.
+
 ## Internal numerical path
 
 The current numerical path is:
