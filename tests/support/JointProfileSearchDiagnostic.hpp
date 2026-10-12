@@ -5,6 +5,9 @@ namespace rhbm_gem::core::joint_component {
 struct ProfileSearchDiagnosticResult
 {
     SearchResult search;
+    Vector candidate_eta,candidate_beta;
+    double candidate_objective{};
+    bool candidate_available{};
     Assessment assessment;
     std::optional<Assessment> trusted_assessment;
     std::optional<Endpoint> trusted_state;

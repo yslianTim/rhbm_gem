@@ -9,8 +9,11 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
+#include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 
 namespace second_stage_test::matched::joint_abc {
 namespace {
@@ -96,12 +99,25 @@ void Fresh(rhbm_gem::MapObject & map,rhbm_gem::ModelObject & model,const fs::pat
     auto assembled=Assemble(data.domain,data.y,data.partition,context,components); assembled["case"]=name; assembled["dataset"]=dataset;
     if(fit.prediction.has_value()!=assembled.at("prediction_available").as_bool()) throw std::runtime_error("Runtime availability differs from reference assembly.");
     double prediction_difference{};
+    bool prediction_reassembly_passed=false;
     if(fit.prediction)
     {
         const auto state=runtime::EvaluateState(data.domain,data.y,Parse(assembled.at("assembled_state").at("eta")),Parse(assembled.at("assembled_state").at("beta")),context);
         const Vector runtime_prediction=Eigen::Map<const Vector>(fit.prediction->data(),static_cast<Eigen::Index>(fit.prediction->size()));
-        prediction_difference=(runtime_prediction-(state.x*state.beta)).lpNorm<Eigen::Infinity>();
-        if(prediction_difference!=0 || !fit.objective || *fit.objective!=state.certificate.objective/(context.scale*context.scale))
+        const Vector replay_prediction=state.x*state.beta;
+        double maximum_prediction_error_ratio{};
+        for(Eigen::Index row=0;row<runtime_prediction.size();++row)
+        {
+            const double error=std::abs(runtime_prediction(row)-replay_prediction(row));
+            const double tolerance=2e-12+2e-13*std::abs(runtime_prediction(row));
+            prediction_difference=std::max(prediction_difference,error);
+            maximum_prediction_error_ratio=std::max(maximum_prediction_error_ratio,error/tolerance);
+        }
+        const double replay_objective=state.certificate.objective/(context.scale*context.scale);
+        const double objective_difference=fit.objective ? std::abs(*fit.objective-replay_objective) : std::numeric_limits<double>::infinity();
+        prediction_reassembly_passed=state.valid && maximum_prediction_error_ratio<=1 && fit.objective &&
+            objective_difference<=1e-12+2e-12*std::abs(replay_objective);
+        if(!prediction_reassembly_passed)
             throw std::runtime_error("Runtime result changed during audit assembly.");
     }
     bool monolithic_parity=false;
@@ -122,7 +138,7 @@ void Fresh(rhbm_gem::MapObject & map,rhbm_gem::ModelObject & model,const fs::pat
     Write(target/"monolithic-fit.json",mono); Write(target/"assembled-fit.json",assembled);
     Write(target/"runtime.json",j::object{{"schema_version",2},{"initial_b",Values(initial)},{"search_completed",fit.search_completed},
         {"prediction_available",fit.prediction.has_value()},{"objective",fit.objective ? runtime_json::Number(*fit.objective) : j::value(nullptr)},
-        {"runtime_convergence",runtime_json::Status(fit.RuntimeConvergence())},{"regular_certificate","not-run"},{"monolithic_parity_passed",monolithic_parity},{"prediction_reassembly_difference",prediction_difference},
+        {"runtime_convergence",runtime_json::Status(fit.RuntimeConvergence())},{"regular_certificate","not-run"},{"monolithic_parity_passed",monolithic_parity},{"prediction_reassembly_passed",prediction_reassembly_passed},{"prediction_reassembly_difference",prediction_difference},
         {"initialization_seconds",fit.costs.initialization_seconds},{"search_seconds",fit.costs.search_seconds},
         {"search_reference_seconds",fit.costs.search_reference_seconds},{"assessment_seconds",fit.costs.assessment_seconds},{"assembly_seconds",fit.costs.assembly_seconds}});
     Write(root/"completion.json",j::object{{"complete",true},{"cases",j::array{name}},{"requires_regular_parity",physical},

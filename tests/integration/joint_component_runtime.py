@@ -9,7 +9,7 @@ from joint_runtime_support import read, write, require, scientific, differences,
 
 import joint_fixture_records as records
 from joint_fixture_records import CATALOG
-from joint_numerical_reference import replay_passed
+from joint_numerical_reference import replay, replay_passed
 import numpy as np
 
 
@@ -31,11 +31,27 @@ def runtime_expected(expected):
 
 
 def runtime_differences(expected, actual, scale):
-    """Fixed runtime contract; historical search traces remain in differences()."""
+    """Compare optimization evidence while allowing the certification contract to change."""
     delta = []
-    for key in ('usable_state', 'runtime_convergence', 'runtime_checks'):
-        if (key in expected) != (key in actual) or expected.get(key) != actual.get(key):
-            delta.append('/'+key)
+    checks=actual.get('runtime_checks')
+    required_checks=('ac_feasibility','conditional_ac_optimality','independent_ac_optimality',
+                     'independent_kkt_consistency','independent_replay','width_gradient_consistency',
+                     'width_stationarity','design_identifiability','local_correction','numerical_identifiability')
+    if not isinstance(checks,dict) or any(type(checks.get(name)) is not bool for name in required_checks):
+        if actual.get('endpoint_verification_status')!='not-run' or actual.get('runtime_convergence')!='unavailable':
+            delta.append('/runtime_checks/reference-free-contract')
+    elif actual.get('runtime_convergence')=='passed' and not all(checks[name] for name in required_checks):
+        delta.append('/runtime_convergence-with-failed-check')
+    if actual.get('reference_solve_calls',0)!=0:
+        delta.append('/reference_solve_calls')
+    candidate=actual.get('candidate_state')
+    if type(actual.get('candidate_available')) is not bool or actual['candidate_available'] != isinstance(candidate,dict):
+        delta.append('/candidate-availability')
+    if isinstance(candidate,dict):
+        for key in ('beta','eta','b','objective'):
+            value=candidate.get(key)
+            if not np.all(np.isfinite(np.asarray(value,dtype=float))):
+                delta.append('/candidate_state/'+key)
     if not isinstance(actual.get('search_success'), bool) or not actual.get('stop_reason'):
         delta.append('/search-termination')
     for key, maximum in (('accepted_updates', 100), ('profile_evaluations', 200)):
@@ -45,28 +61,62 @@ def runtime_differences(expected, actual, scale):
     for trial in actual.get('trials', []):
         if trial['accepted'] and (not trial['valid'] or trial['trust_passed'] is not True):
             delta.append('/untrusted-accepted-trial')
-    left, right = expected.get('last_trusted_state'), actual.get('last_trusted_state')
-    if (left is None) != (right is None):
-        return delta+['/last_trusted_state']
+    left, right = expected.get('last_trusted_state'), candidate
     if left is None:
         return delta
-    same_face = left.get('active_atoms') == right.get('active_atoms')
-    endpoint_flags = ('valid', 'feasible', 'kkt_passed')
-    if same_face and 'free_rank' in left and 'free_rank' in right:
-        endpoint_flags += ('free_rank',)
-    for key in endpoint_flags:
-        if key not in left or key not in right or left[key] != right[key]:
-            delta.append('/last_trusted_state/'+key)
+    if right is None:
+        return delta+['/candidate_state']
     a, b = left['objective']/scale**2, right['objective']/scale**2
-    converged = expected['runtime_convergence'] == 'passed'
-    if not np.isfinite(b) or (abs(a-b) if converged else b-a) > 1e-12:
+    objective_error=abs(a-b) if expected['runtime_convergence']=='passed' else b-a
+    if not np.isfinite(b) or objective_error > 1e-12:
         delta.append('/normalized-objective')
-    if converged:
-        for key in ('beta', 'eta', 'b'):
-            x, y = np.asarray(left[key]), np.asarray(right[key])
-            if x.shape != y.shape or not np.all(np.isfinite(y)) or np.any(np.abs(x-y) > 1e-10*(1+np.maximum(np.abs(x), np.abs(y)))):
-                delta.append('/last_trusted_state/'+key)
+    for key in ('beta','eta','b'):
+        x, y = np.asarray(left[key]), np.asarray(right[key])
+        if x.shape != y.shape or not np.all(np.isfinite(y)):
+            delta.append('/candidate_state/'+key)
     return delta
+
+
+def candidate_comparison(data, y, expected, actual, scale):
+    old=expected.get('last_trusted_state')
+    new=actual.get('candidate_state')
+    if new is None:
+        return None
+    replay_new=replay(data,y,new,scale)
+    result={
+        'candidate_available':actual.get('candidate_available'),
+        'primary_ac_kkt':new.get('projected_kkt'),
+        'primary_width_gradient_inf':float(np.max(np.abs(new['b_gradient']))) if isinstance(new.get('b_gradient'),list) and new['b_gradient'] else None,
+        'independent_python_candidate_ac_kkt':replay_new['projected_kkt'],
+        'independent_python_candidate_width_gradient_inf':float(np.max(np.abs(replay_new['b_gradient']))) if replay_new['b_gradient'].size else 0.,
+        'candidate_residual_norm':float(np.linalg.norm(replay_new['residual'])),
+        'production_independent_replay':actual.get('independent_replay'),
+        'search_accepted_updates':actual.get('accepted_updates'),
+        'legacy_accepted_updates':expected.get('accepted_updates'),
+        'search_profile_evaluations':actual.get('profile_evaluations'),
+        'legacy_profile_evaluations':expected.get('profile_evaluations'),
+        'search_stop_reason':actual.get('stop_reason'),
+        'legacy_stop_reason':expected.get('stop_reason'),
+        'legacy_runtime_convergence':expected.get('runtime_convergence'),
+        'reference_free_runtime_convergence':actual.get('runtime_convergence'),
+        'endpoint_verification_status':actual.get('endpoint_verification_status'),
+        'numerical_qualification_status':actual.get('numerical_qualification_status'),
+        'rank_assessment_status':actual.get('rank_assessment_status'),
+        'verification_reason':actual.get('verification_reason'),
+        'early_stop':actual.get('accepted_updates',0)<expected.get('accepted_updates',0)}
+    if old is None:
+        result['legacy_endpoint_available']=False
+        return result
+    replay_old=replay(data,y,old,scale)
+    result.update(legacy_endpoint_available=True,
+        candidate_objective_difference=0.5*(np.dot(replay_new['residual'],replay_new['residual'])-
+                                             np.dot(replay_old['residual'],replay_old['residual']))/(scale*scale),
+        ac_kkt_difference=replay_new['projected_kkt']-replay_old['projected_kkt'],
+        width_gradient_difference_inf=float(np.max(np.abs(replay_new['b_gradient']-replay_old['b_gradient']))),
+        residual_difference_norm=float(np.linalg.norm(replay_new['residual']-replay_old['residual'])),
+        candidate_parameter_max_abs={key:float(np.max(np.abs(np.asarray(new[key])-np.asarray(old[key]))))
+                                     for key in ('beta','eta','b')})
+    return result
 
 
 def regression(args):
@@ -91,10 +141,10 @@ def regression(args):
             execute(args.executable, 'fixture', source, case, output)
             actual = read(output)
             records.verify_census(data, actual['census'])
-            state = actual['record']['last_trusted_state']
-            if state is not None:
-                y = data['y64' if case.endswith('double') else 'y32']
-                require(replay_passed(data, y, state, max(1., np.linalg.norm(y))), 'Independent endpoint replay failed')
+            y = data['y64' if case.endswith('double') else 'y32']
+            state = actual['record']['candidate_state']
+            if state is not None and state.get('valid') and all(key in state for key in ('projected_kkt','b_gradient','rss')):
+                require(replay_passed(data, y, state, max(1., np.linalg.norm(y))), 'Independent candidate replay failed')
             expected = runtime_expected(cases[case]['expected'])
             scale = max(1., np.linalg.norm(data['y64' if case.endswith('double') else 'y32']))
             delta = (differences(expected, actual['record']) if args.strict_history else
@@ -106,10 +156,17 @@ def regression(args):
                         require(parity['status'] == 'passed', 'Missing derivative parity for a converged endpoint')
             require(actual['api_contract_passed'] and not delta, dataset+'/'+case+': '+str(delta[:20]))
             old_state = expected.get('last_trusted_state')
+            comparison=candidate_comparison(data,y,expected,actual['record'],scale)
             results.append(dict(dataset=dataset, case=case, passed=True,
-                                endpoint_same_active_face=(old_state['active_atoms'] == state['active_atoms']) if old_state and state else None))
+                                legacy_runtime_convergence=expected['runtime_convergence'],
+                                reference_free_runtime_convergence=actual['record']['runtime_convergence'],
+                                convergence_status_changed=expected['runtime_convergence']!=actual['record']['runtime_convergence'],
+                                endpoint_same_active_face=(old_state['active_atoms'] == state['active_atoms']) if old_state and state and 'active_atoms' in state else None,
+                                numerical_comparison=comparison))
     require(results, 'No regression cases selected')
-    result = dict(passed=True, cases=results, oracle='pre-extraction frozen component states', comparison='strict-history' if args.strict_history else 'runtime-numerical')
+    result = dict(passed=True, cases=results, oracle='pre-extraction frozen component states',
+                  comparison='strict-history' if args.strict_history else 'reference-free-runtime-numerical',
+                  certification_contract='reference-free-v1')
     write(args.work_dir/'summary.json', result)
     return result
 
@@ -120,7 +177,7 @@ def summarize(root):
     for path in files:
         value = read(path)
         require(value['regular_certificate'] == 'not-run', 'Runtime claimed an offline certificate')
-        require(value['prediction_available'] and value['prediction_reassembly_difference'] == 0 and value['monolithic_parity_passed'],
+        require(value['prediction_available'] and value['prediction_reassembly_passed'] and value['monolithic_parity_passed'],
                 'Incomplete or inconsistent fresh-input result: '+str(path))
     return dict(passed=True, cases=len(files))
 

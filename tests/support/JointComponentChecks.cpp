@@ -307,6 +307,12 @@ runtime::ProfileSearchDiagnosticResult SolveFixedNeighborComponentForDiagnostics
         out.search.initial.eta(static_cast<Eigen::Index>(k))=std::log(initial_b(view.atoms[k]));
     out.search.initial.valid=true;
     out.search.eta=result.state.eta;
+    out.candidate_eta=result.state.eta;
+    out.candidate_beta=result.state.beta;
+    out.candidate_objective=result.state.objective;
+    out.candidate_available=out.candidate_eta.size()==static_cast<Eigen::Index>(view.atoms.size()) &&
+        out.candidate_beta.size()==2*static_cast<Eigen::Index>(view.atoms.size()) &&
+        out.candidate_eta.allFinite() && out.candidate_beta.allFinite() && std::isfinite(out.candidate_objective);
     out.search.stopped=!result.search_converged || !endpoint_certified;
     out.search.stop_reason=fixed.stop_reason;
     out.search.evaluations=static_cast<int>(result.total_profile_evaluations);
@@ -343,6 +349,26 @@ j::object FitComponent(const ComponentView & view,const Vector & initial_b,const
     fit["component_id"]=view.id; fit["parent_atoms"]=Indices(view.atoms); fit["parent_rows"]=Indices(view.rows);
     fit["context"]=ContextEvidence(context); fit["initial_b"]=Values(start);
     fit["usable_state"]=result.trusted_state.has_value(); fit["last_trusted_state"]=nullptr;
+    fit["candidate_available"]=result.candidate_available;
+    if(result.candidate_available)
+    {
+        const auto & primary=result.assessment.primary;
+        const double objective=primary.certificate.available ? primary.certificate.objective : result.candidate_objective;
+        j::object candidate{{"beta",Values(result.candidate_beta)},
+            {"eta",Values(result.candidate_eta)},
+            {"b",Values(result.candidate_eta.array().exp().matrix())},
+            {"objective",objective},{"valid",primary.valid}};
+        if(primary.certificate.evaluated)
+        {
+            candidate["feasible"]=primary.certificate.feasible;
+            candidate["kkt_passed"]=primary.certificate.kkt_passed;
+            candidate["projected_kkt"]=runtime_json::Number(primary.certificate.projected_kkt);
+            candidate["rss"]=runtime_json::Number(primary.certificate.rss);
+            candidate["b_gradient"]=Values(primary.gradient);
+        }
+        fit["candidate_state"]=std::move(candidate);
+    }
+    else fit["candidate_state"]=nullptr;
     if(result.trusted_trial) fit["last_trusted_state"]=runtime_json::Trial(result.search.trials[*result.trusted_trial]);
     else if(result.trusted_state) fit["last_trusted_state"]=runtime_json::Endpoint(*result.trusted_state);
     if(result.endpoint_trust) fit["endpoint_trust"]=runtime_json::Trust(*result.endpoint_trust);

@@ -143,7 +143,8 @@ void RunFrozenFixture(const fs::path & path,const std::string & name,const fs::p
     const auto fit=FitComponent(partition.components[0],initial,context);
     j::object record;
     for(const char * key:{"search_success","usable_state","stop_reason","accepted_updates","profile_evaluations",
-        "last_trusted_state","runtime_checks","runtime_convergence"})
+        "last_trusted_state","candidate_available","candidate_state","primary","independent_replay",
+        "runtime_checks","runtime_convergence","reference_solve_calls"})
         if(fit.contains(key)) record[key]=fit.at(key);
     j::array trials;
     for(const auto & t:fit.at("trials").as_array())
@@ -156,32 +157,49 @@ void RunFrozenFixture(const fs::path & path,const std::string & name,const fs::p
     }
     record["trials"]=trials;
     const auto result=core::FitJointComponents(problem,{initial.data(),initial.data()+initial.size()});
-    const bool available=fit.at("usable_state").as_bool();
-    if(result.components.size()!=1 || result.components[0].state.has_value()!=available || result.search_completed!=fit.at("search_success").as_bool())
-        throw std::runtime_error("Public runtime availability differs from frozen component search.");
-    if(runtime_json::Status(result.components[0].RuntimeConvergence())!=fit.at("runtime_convergence").as_string() ||
-        runtime_json::Status(result.RuntimeConvergence())!=fit.at("runtime_convergence").as_string())
-        throw std::runtime_error("Public runtime convergence differs from the single-component evidence.");
+    if(result.components.size()!=1 || result.search_completed!=fit.at("search_success").as_bool() ||
+        !result.components[0].candidate_diagnostic ||
+        result.components[0].candidate_diagnostic->candidate_available!=fit.at("candidate_available").as_bool())
+        throw std::runtime_error("Public candidate availability differs from frozen component search.");
+    const auto & public_candidate=*result.components[0].candidate_diagnostic;
+    record["endpoint_verification_status"]=runtime_json::Status(public_candidate.endpoint_verification_status);
+    record["numerical_qualification_status"]=runtime_json::Status(public_candidate.numerical_qualification_status);
+    record["rank_assessment_status"]=runtime_json::Status(public_candidate.rank_assessment_status);
+    record["verification_reason"]=public_candidate.verification_reason;
+    if(!record.contains("reference_solve_calls")) record["reference_solve_calls"]=0;
+    const bool available=result.components[0].state.has_value();
+    const auto runtime_status=result.RuntimeConvergence();
+    if(available && runtime_status!=core::JointCheckStatus::Passed)
+        throw std::runtime_error("Public trusted state lacks full numerical qualification.");
+    if(!available && (runtime_status==core::JointCheckStatus::Passed || result.prediction || result.objective || result.assembled_state))
+        throw std::runtime_error("Unqualified candidate was promoted to a public scientific result.");
     for(const auto & component:result.components) for(const auto & check:component.evidence)
         if(check.name=="two-step-derivative" && check.status!=core::JointCheckStatus::NotRun)
             throw std::runtime_error("Runtime executed an offline derivative audit.");
     if(result.regular_certificate!=core::JointCheckStatus::NotRun) throw std::runtime_error("Runtime promoted an offline certificate.");
-    if(available)
+    if(fit.at("candidate_available").as_bool())
     {
-        const auto & state=*result.components[0].state;
-        const auto & expected=fit.at("last_trusted_state");
+        const auto & candidate=*result.components[0].candidate_diagnostic;
+        const auto & expected=fit.at("candidate_state");
         const auto beta=Parse(expected.at("beta")),eta=Parse(expected.at("eta"));
         for(Eigen::Index k=0;k<beta.size();++k)
-            if(std::abs(state.ac[static_cast<std::size_t>(k)]-beta(k))>1e-10*(1+std::abs(beta(k))))
-                throw std::runtime_error("Public coefficients differ from component search.");
+            if(std::abs(candidate.candidate_ac.at(static_cast<std::size_t>(k))-beta(k))>1e-10*(1+std::abs(beta(k))))
+                throw std::runtime_error("Public candidate coefficients differ from component search.");
         for(Eigen::Index k=0;k<eta.size();++k)
-            if(std::abs(state.log_b[static_cast<std::size_t>(k)]-eta(k))>1e-10)
-                throw std::runtime_error("Public widths differ from component search.");
-        if(!result.prediction || !result.objective || !result.assembled_state) throw std::runtime_error("Missing assembled runtime state.");
-        const Vector prediction=Eigen::Map<const Vector>(result.prediction->data(),y.size());
-        const double objective=.5*(prediction-y).squaredNorm()/(context.scale*context.scale);
-        for(double value:{state.objective,result.assembled_state->objective,*result.objective})
-            if(std::abs(value-objective)>1e-15*(1+objective)) throw std::runtime_error("Public objective normalization differs.");
+            if(std::abs(candidate.candidate_eta.at(static_cast<std::size_t>(k))-eta(k))>1e-10)
+                throw std::runtime_error("Public candidate widths differ from component search.");
+        if(available)
+        {
+            const auto & state=*result.components[0].state;
+            for(std::size_t k=0;k<state.ac.size();++k)
+                if(std::abs(state.ac[k]-candidate.candidate_ac[k])>1e-12*(1+std::abs(state.ac[k])))
+                    throw std::runtime_error("Trusted coefficients differ from verified candidate.");
+            if(!result.prediction || !result.objective || !result.assembled_state) throw std::runtime_error("Missing assembled runtime state.");
+            const Vector prediction=Eigen::Map<const Vector>(result.prediction->data(),y.size());
+            const double objective=.5*(prediction-y).squaredNorm()/(context.scale*context.scale);
+            for(double value:{state.objective,result.assembled_state->objective,*result.objective})
+                if(std::abs(value-objective)>1e-15*(1+objective)) throw std::runtime_error("Public objective normalization differs.");
+        }
     }
     else if(result.prediction || result.objective) throw std::runtime_error("Failed component fabricated a complete prediction.");
     const j::object parity{{"historical_endpoint",DerivativeParity(domain,y,cases.at(name).at("expected").at("last_trusted_state"),context)},
