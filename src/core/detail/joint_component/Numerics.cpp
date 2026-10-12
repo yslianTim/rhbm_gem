@@ -250,6 +250,32 @@ Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
     out.valid=true; return out;
 }
 }
+MemoryEstimate ReferenceSolveMemoryEstimate(const Domain & domain,VectorRef y,const EvaluationContext & context,
+    std::size_t resident_override)
+{
+    MemoryShape shape; shape.component_atoms=domain.atoms.size(); shape.component_observations=static_cast<std::size_t>(domain.rows);
+    shape.component_target_columns=context.target_columns;
+    const auto overflow=[&] {
+        auto estimate=PlanMemory(shape,MemoryStage::ReferenceSolve);
+        estimate.status=MemoryStatus::Overflow; estimate.reason="size-overflow"; return estimate;
+    };
+    const auto add_product=[](std::size_t & total,std::size_t count,std::size_t width) {
+        std::size_t bytes{}; return CheckedMultiplyBytes(count,width,bytes) && CheckedAddBytes(total,bytes,total);
+    };
+    if(!CheckedMultiplyBytes(shape.component_atoms,2,shape.component_free_columns)) return overflow();
+    for(std::size_t atom=0;atom<domain.atoms.size();++atom)
+        if(!CheckedAddBytes(shape.component_support_entries,domain.atoms[atom].size(),shape.component_support_entries))
+            return overflow();
+    const auto * input=domain.atoms.Storage();
+    const auto snapshot=input ? EstimateSnapshotBytes(*input) : std::nullopt;
+    std::size_t view_bytes{};
+    if(!snapshot || !CheckedAddBytes(*snapshot,domain.atoms.LocalSupportIndexBytes(),view_bytes) ||
+        !add_product(view_bytes,static_cast<std::size_t>(std::max<Eigen::Index>(0,domain.rows)),sizeof(double)) ||
+        !add_product(view_bytes,shape.component_observations,2*sizeof(Eigen::Index)) ||
+        !add_product(view_bytes,shape.component_atoms,2*sizeof(Eigen::Index))) return overflow();
+    shape.resident_bytes=std::max(view_bytes,resident_override);
+    return PlanMemory(shape,MemoryStage::ReferenceSolve);
+}
 Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,bool reference,const EvaluationContext * context,
     const std::vector<LinearBlock> * blocks,
     ProfileEvaluationRole role,ProfileSearchWork * profile_work)
@@ -260,6 +286,15 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(reference) ++AssessmentWorkForTesting().reference_evaluations;
 #endif
+    if(reference)
+    {
+        const EvaluationContext fallback_context;
+        const auto estimate=ReferenceSolveMemoryEstimate(domain,y,context ? *context : fallback_context);
+        if(estimate.status!=MemoryStatus::Pass || estimate.estimated_peak_bytes>estimate.budget_bytes/2)
+            LogMemoryEstimate(estimate);
+        if(estimate.status!=MemoryStatus::Pass)
+        {Evaluation unavailable; unavailable.eta=eta; unavailable.reason="resource-limit:reference-solve"; return unavailable;}
+    }
     const auto basis_started=std::chrono::steady_clock::now();
     auto out=Basis(domain,y,eta);
     if(profile_work) telemetry.work.basis_seconds+=
@@ -393,6 +428,8 @@ TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,
 }
 TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy,const Evaluation & reference)
 {
+    if(!reference.valid && reference.reason.starts_with("resource-limit:reference-solve"))
+    {TrustEvidence unavailable; unavailable.primary_valid=e.valid; unavailable.reason=reference.reason; return unavailable;}
     auto out=CheckReplay(domain,y,e,policy); out.reference=reference;
     if(!out.primary_valid) return out;
     out.coefficient_difference=reference.beta.size()==e.beta.size() ? Difference(e.beta,reference.beta) :
@@ -605,7 +642,11 @@ Assessment AssessEvaluated(const Domain &,VectorRef y,const Evaluation & endpoin
     out.primary=endpoint; out.reference=reference;
     if(supplied && endpoint.valid && !endpoint.certificate.kkt_passed)
     {out.primary.valid=false; out.primary.reason="assembled-kkt-failed";}
-    if(!out.primary.valid || !reference.valid) {out.failure="inner-solve"; return out;}
+    if(!out.primary.valid || !reference.valid)
+    {
+        out.failure=!reference.valid && reference.reason.starts_with("resource-limit:reference-solve") ? reference.reason : "inner-solve";
+        return out;
+    }
     const double difference=Difference(endpoint.beta,reference.beta); out.coefficient_difference=difference;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     AssessmentStageTimerForTesting design_stage("design-spectrum",endpoint.x.rows(),endpoint.x.cols());

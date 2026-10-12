@@ -195,8 +195,16 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
                 const auto & certification=*fit.search.certification;
                 component.evidence=AssessmentEvidence(certification.assessment,JointEvidenceScope::ComponentLocal);
                 component.ranks=AssessmentRanks(certification.assessment,JointEvidenceScope::ComponentLocal);
-                component.evidence.push_back({"endpoint-trust",certification.passed() ? JointCheckStatus::Passed :
-                    JointCheckStatus::Failed,JointEvidenceScope::ComponentLocal,{},{},certification.trust.reason});
+                const bool reference_unavailable=certification.trust.reason.starts_with("resource-limit:reference-solve");
+                component.evidence.push_back({"endpoint-trust",reference_unavailable ? JointCheckStatus::Unavailable :
+                    certification.passed() ? JointCheckStatus::Passed : JointCheckStatus::Failed,
+                    JointEvidenceScope::ComponentLocal,{},{},certification.trust.reason});
+                if(certification.reference_memory_estimate.status!=MemoryStatus::Pass)
+                    component.evidence.push_back({"reference-memory-preflight",JointCheckStatus::Unavailable,
+                        JointEvidenceScope::ComponentLocal,
+                        static_cast<double>(certification.reference_memory_estimate.estimated_peak_bytes),
+                        static_cast<double>(certification.reference_memory_estimate.budget_bytes),
+                        std::string("resource-limit:reference-solve:")+certification.reference_memory_estimate.reason});
                 const auto add_width_gradient=[&](const char * name,const Endpoint & evaluation) {
                     const bool available=evaluation.valid && evaluation.gradient.size()>0 && evaluation.gradient.allFinite();
                     const double value=available ? evaluation.gradient.lpNorm<Eigen::Infinity>() : 0.0;

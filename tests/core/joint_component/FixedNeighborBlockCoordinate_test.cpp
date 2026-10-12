@@ -229,6 +229,27 @@ TEST(JointFixedNeighborBlockCoordinateTest, PreparedRowMappingsScaleWithMembersh
         static_cast<std::size_t>(data.domain.rows)*blocks.cores.size());
     EXPECT_EQ(result.reason,"block-sweep-budget");
 }
+TEST(JointFixedNeighborBlockCoordinateTest, DenseReferencePreflightStopsBeforeBasisAndEndpointMatrices)
+{
+    constexpr Eigen::Index atoms=37'406;
+    const n::Domain domain(8,std::vector<std::vector<n::Support>>(static_cast<std::size_t>(atoms)));
+    const n::Vector y=n::Vector::Zero(8),eta=n::Vector::Constant(atoms,std::log(.55));
+    const auto context=n::CreateContext(y,atoms);
+    n::ProfileSearchWork work;
+    const auto reference=n::EvaluateProfile(domain,y,eta,true,&context,nullptr,
+        n::ProfileEvaluationRole::Reference,&work);
+    EXPECT_FALSE(reference.valid);
+    EXPECT_EQ(reference.reason,"resource-limit:reference-solve");
+    EXPECT_DOUBLE_EQ(work.total.basis_seconds,0.0);
+
+    n::BlockCoordinateState state; state.eta=eta; state.beta=n::Vector::Zero(2*atoms);
+    const auto certification=n::CertifyFixedNeighborEndpoint(domain,y,state,context);
+    EXPECT_EQ(certification.reference_memory_estimate.stage,n::MemoryStage::ReferenceSolve);
+    EXPECT_EQ(certification.reference_memory_estimate.status,n::MemoryStatus::Reject);
+    EXPECT_EQ(certification.assessment.failure,"resource-limit:reference-solve");
+    EXPECT_EQ(certification.trust.reason,"resource-limit:reference-solve");
+    EXPECT_FALSE(certification.passed());
+}
 TEST(JointFixedNeighborBlockCoordinateTest, AggregateWorkTelemetryIsOptInAndDoesNotChangeSearchState)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",32));

@@ -63,6 +63,7 @@ struct FixedNeighborEndpointCertification
 {
     Assessment assessment;
     TrustEvidence trust;
+    MemoryEstimate reference_memory_estimate;
     bool passed() const {return trust.passed;}
 };
 enum class FixedNeighborStationarityState {NotStationary,CandidateStationary,ConfirmedStationary};
@@ -137,7 +138,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     Vector initial_beta = {});
 FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
     const Domain &,VectorRef y,const BlockCoordinateState &,const EvaluationContext &,
-    ProfileSearchWork * = nullptr);
+    ProfileSearchWork * = nullptr,std::size_t resident_override=0);
 FixedNeighborComponentResult SolveFixedNeighborComponent(
     const ComponentProblemView &,VectorRef initial_b,const EvaluationContext &,const FixedNeighborSearchPolicy &,
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr);

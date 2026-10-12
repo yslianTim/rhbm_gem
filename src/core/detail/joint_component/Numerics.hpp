@@ -3,6 +3,7 @@
 #include "JointProgress.hpp"
 #include "SolverConfiguration.hpp"
 #include "SnapshotViews.hpp"
+#include "ResourceWork.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <Eigen/SparseCore>
 #include <memory>
@@ -129,6 +130,7 @@ Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,
 // Scalar/vector reductions for accepted global sweep states. Leaves x and derivative empty.
 Evaluation EvaluateStateStreaming(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &,
     ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);
+MemoryEstimate ReferenceSolveMemoryEstimate(const Domain &,VectorRef,const EvaluationContext &,std::size_t resident_override=0);
 struct TrustEvidence
 {
     std::optional<Endpoint> reference;

@@ -202,7 +202,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         if(policy.certification_for_testing)
             return policy.certification_for_testing(domain,y,out.state,context,profile_work);
 #endif
-        return CertifyFixedNeighborEndpoint(domain,y,out.state,context,profile_work);
+        return CertifyFixedNeighborEndpoint(domain,y,out.state,context,profile_work,
+            out.global_state_memory_estimate.estimated_peak_bytes);
     };
 
     out.state.eta=initial_eta;
@@ -521,7 +522,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 out.search_converged=true; out.reason="block-stationary";
                 break;
             }
-            if(!out.certification->trust.primary_valid)
+            if(!out.certification->trust.primary_valid ||
+                out.certification->trust.reason.starts_with("resource-limit:reference-solve"))
             {
                 out.reason=out.certification->trust.reason.empty() ?
                     "endpoint-certification-invalid-primary" : out.certification->trust.reason;
@@ -537,7 +539,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         {
             out.certification=certify_endpoint();
             out.certification_sweep=out.sweep_count;
-            if(!out.certification->trust.primary_valid)
+            if(!out.certification->trust.primary_valid ||
+                out.certification->trust.reason.starts_with("resource-limit:reference-solve"))
                 out.reason=out.certification->trust.reason.empty() ? "endpoint-certification-invalid-primary" :
                     out.certification->trust.reason;
         }
@@ -547,12 +550,26 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 
 FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
     const Domain & domain,VectorRef y,const BlockCoordinateState & state,const EvaluationContext & context,
-    ProfileSearchWork * profile_work)
+    ProfileSearchWork * profile_work,std::size_t resident_override)
 {
     FixedNeighborEndpointCertification out;
     const auto atom_count=static_cast<Eigen::Index>(domain.atoms.size());
     if(state.eta.size()!=atom_count || state.beta.size()!=2*atom_count || y.size()!=domain.rows)
         return out;
+    out.reference_memory_estimate=ReferenceSolveMemoryEstimate(domain,y,context,resident_override);
+    if(out.reference_memory_estimate.status!=MemoryStatus::Pass)
+    {
+        LogMemoryEstimate(out.reference_memory_estimate);
+        const auto reason=std::string("resource-limit:reference-solve");
+        out.assessment.primary=EvaluateStateStreaming(domain,y,state.eta,state.beta,context,
+            ProfileEvaluationRole::AcceptedEndpoint,profile_work);
+        out.assessment.reference.eta=state.eta; out.assessment.reference.reason=reason;
+        out.assessment.failure=reason;
+        out.trust.primary_valid=out.assessment.primary.valid; out.trust.reason=reason;
+        return out;
+    }
+    if(out.reference_memory_estimate.estimated_peak_bytes>out.reference_memory_estimate.budget_bytes/2)
+        LogMemoryEstimate(out.reference_memory_estimate);
     const auto endpoint=EvaluateState(domain,y,state.eta,state.beta,context,
         ProfileEvaluationRole::AcceptedEndpoint,profile_work);
     const auto reference=EvaluateProfile(domain,y,state.eta,true,&context,nullptr,
