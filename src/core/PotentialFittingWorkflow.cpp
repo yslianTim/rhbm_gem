@@ -87,14 +87,7 @@ void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOp
     const auto initialization = [&] {
         const auto workset = MakeJointFittingWorkset(model, problem);
         model.EditAnalysis().InitializeFromSelection();
-        const auto first_stage_atoms = CollectFirstStageAtoms(workset);
-        if (!options.quiet_mode)
-            LogJointInfo("[Joint] Sampling " + std::to_string(first_stage_atoms.size()) + " FullABC contributors");
-        RunPotentialSamplingWorkflow(map, model, first_stage_atoms,
-            SphereSamplingMethod::FibonacciDeterministic, 1, " Joint sampling", options.quiet_mode);
-        if (!options.quiet_mode)
-            LogJointInfo("[Joint] Initializing " + std::to_string(workset.contributors.size()) + " contributors");
-        return RunJointFirstStageInitializationFromPreparedSamples(model, workset, options);
+        return PrepareJointWidthInitialization(map, model, workset, options);
     }();
     const auto initialization_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - initialization_start).count();

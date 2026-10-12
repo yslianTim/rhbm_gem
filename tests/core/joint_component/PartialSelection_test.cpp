@@ -377,15 +377,11 @@ TEST(JointComponentPartialSelectionTest, WorksetSamplingAndFirstFitExcludeContri
     std::map<int, int> sampling_calls;
     std::map<int, int> first_fit_calls;
     core::detail::PotentialSamplingObserverForTesting() = [&](int id) { ++sampling_calls[id]; };
-    const auto first_stage_atoms = core::detail::CollectFirstStageAtoms(workset);
-    core::RunPotentialSamplingWorkflow(
-        map, model, first_stage_atoms, options.sampling_method, 1);
-    core::detail::PotentialSamplingObserverForTesting() = {};
     core::detail::FirstStageObserverForTesting() = [&](int id, std::string_view phase) {
         if (phase == "first") ++first_fit_calls[id];
     };
-    const auto initialization =
-        core::detail::RunJointFirstStageInitializationFromPreparedSamples(model, workset, options);
+    const auto initialization = core::detail::PrepareJointWidthInitialization(map, model, workset, options);
+    core::detail::PotentialSamplingObserverForTesting() = {};
     core::detail::FirstStageObserverForTesting() = {};
 
     EXPECT_EQ(sampling_calls[1], 1);

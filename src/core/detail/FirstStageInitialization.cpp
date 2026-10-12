@@ -1,5 +1,6 @@
 #include "FirstStageInitialization.hpp"
 #include "FittingWorkset.hpp"
+#include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -126,5 +127,27 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
     }
     ApplyJointSeedFallback(initialization);
     return initialization;
+}
+
+JointInitialization PrepareJointWidthInitialization(
+    MapObject & map, ModelObject & model, const FittingWorkset & workset, const FitOptions & options)
+{
+    if (!options.quiet_mode)
+    {
+        Logger::FinishProgressLine();
+        Logger::Log(LogLevel::Info, "[Joint] Sampling " +
+            std::to_string(std::count(workset.initialization_mask.begin(), workset.initialization_mask.end(), true)) +
+            " FullABC contributors");
+    }
+    const auto atoms = CollectFirstStageAtoms(workset);
+    RunPotentialSamplingWorkflow(map, model, atoms, SphereSamplingMethod::FibonacciDeterministic,
+        1, " Joint sampling", options.quiet_mode);
+    if (!options.quiet_mode)
+    {
+        Logger::FinishProgressLine();
+        Logger::Log(LogLevel::Info, "[Joint] Initializing " +
+            std::to_string(workset.contributors.size()) + " contributors");
+    }
+    return RunJointFirstStageInitializationFromPreparedSamples(model, workset, options);
 }
 }

@@ -6,7 +6,6 @@
 #include "core/detail/FittingWorkset.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
-#include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
@@ -272,10 +271,7 @@ JointInitialization joint_component::InitializeContributors(MapObject & map,Mode
     ModelObject initializer(model);
     const auto workset = detail::MakeJointFittingWorkset(initializer, problem);
     FitOptions options; options.thread_size = 1; options.quiet_mode = true; options.exclude_hydrogen = true;
-    const auto first_stage_atoms = detail::CollectFirstStageAtoms(workset);
-    RunPotentialSamplingWorkflow(map, initializer, first_stage_atoms, options.sampling_method, 1, {}, true);
-    const auto initialization = detail::RunJointFirstStageInitializationFromPreparedSamples(
-        initializer, workset, options);
+    const auto initialization = detail::PrepareJointWidthInitialization(map, initializer, workset, options);
     for (std::size_t i = 0; i < workset.contributors.size(); ++i)
     {
         if (!workset.target_mask[i] || initialization.atoms[i].reason != "valid-width") continue;

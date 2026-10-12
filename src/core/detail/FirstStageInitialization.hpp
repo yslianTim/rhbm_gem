@@ -7,7 +7,7 @@
 #include <string_view>
 #endif
 
-namespace rhbm_gem { class ModelAnalysisEditor; }
+namespace rhbm_gem { class MapObject; class ModelAnalysisEditor; }
 
 namespace rhbm_gem::core::detail {
 struct FittingWorkset;
@@ -18,6 +18,8 @@ void RunBatchFirstStageFromPreparedSamples(
     ModelObject &, const std::vector<AtomObject *> &, const FitOptions &);
 JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
     ModelObject &, const FittingWorkset &, const FitOptions &);
+JointInitialization PrepareJointWidthInitialization(
+    MapObject &, ModelObject &, const FittingWorkset &, const FitOptions &);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 using FirstStageObserver = std::function<void(int, std::string_view)>;
 FirstStageObserver & FirstStageObserverForTesting();
