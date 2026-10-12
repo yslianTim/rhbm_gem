@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <string>
 #include <fstream>
+#include <limits>
 #include <boost/json.hpp>
 #include <rhbm_gem/data/io/JointAnalysisFileIO.hpp>
 #include "data/io/detail/JointResultJson.hpp"
@@ -793,6 +794,92 @@ TEST(DataObjectPersistenceTest, JointCodecRejectsMalformedMappingsAndPreservesMi
     std::getline(csv,header); std::getline(csv,line);
     EXPECT_NE(line.find("\"1\",\"component-0\",,,,0,0,"),std::string::npos);
     EXPECT_THROW(rg::WriteJointAnalysisResult(decoded,dir.path()/"missing"/"result.json",dir.path()/"atoms.csv"),std::runtime_error);
+}
+
+TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutEnteringScientificExports)
+{
+    namespace io=rg::joint_result_io;
+    const command_test::ScopedTempDir dir{"joint_candidate_diagnostic"};
+    auto record=SavedJointExample();
+    auto & component=record.components.front();
+    component.state.reset(); record.assembled_state.reset(); record.objective.reset();
+    component.runtime_convergence=rg::JointCheckStatus::Unavailable;
+    record.runtime_convergence=rg::JointCheckStatus::Unavailable;
+    component.ranks.clear(); component.target_evidence.reset(); record.target_evidence.reset();
+    rg::JointCandidateDiagnostic candidate;
+    candidate.candidate_available=true;
+    candidate.candidate_eta={-.7,-.5}; candidate.candidate_ac={999.125,-.3,4,.2};
+    candidate.candidate_objective=.0123; candidate.candidate_ac_kkt=.1;
+    candidate.candidate_width_gradient_inf_norm=.2; candidate.candidate_feasible=true;
+    candidate.reference_status=rg::JointCheckStatus::Unavailable;
+    candidate.rank_assessment_status=rg::JointCheckStatus::Unavailable;
+    candidate.certification_status=rg::JointCheckStatus::Unavailable;
+    candidate.resource_limit_reason="resource-limit:reference-solve:budget-exceeded";
+    component.candidate_diagnostic=candidate;
+
+    const auto json=boost::json::parse(io::Encode(record));
+    EXPECT_EQ(json.at("schema_version").as_int64(),6);
+    EXPECT_EQ(json.at("components").as_array()[0].at("candidate_diagnostic").at("candidate_status").as_string(),"uncertified");
+    const auto decoded=io::Decode(boost::json::serialize(json));
+    ASSERT_TRUE(decoded.components.front().candidate_diagnostic);
+    EXPECT_EQ(decoded.components.front().id,component.id);
+    EXPECT_EQ(decoded.components.front().search_sweeps,component.search_sweeps);
+    EXPECT_EQ(decoded.components.front().stop_reason,component.stop_reason);
+    EXPECT_FALSE(decoded.components.front().state);
+    EXPECT_EQ(decoded.components.front().runtime_convergence,rg::JointCheckStatus::Unavailable);
+    EXPECT_EQ(decoded.metadata.model_sha256,record.metadata.model_sha256);
+    ASSERT_TRUE(decoded.metadata.software);
+    EXPECT_EQ(decoded.metadata.software->configuration_sha256,record.metadata.software->configuration_sha256);
+    EXPECT_EQ(decoded.components.front().candidate_diagnostic->candidate_ac,candidate.candidate_ac);
+    EXPECT_EQ(decoded.components.front().candidate_diagnostic->reference_status,rg::JointCheckStatus::Unavailable);
+    EXPECT_EQ(decoded.components.front().candidate_diagnostic->rank_assessment_status,rg::JointCheckStatus::Unavailable);
+    EXPECT_EQ(decoded.components.front().candidate_diagnostic->certification_status,rg::JointCheckStatus::Unavailable);
+    EXPECT_TRUE(decoded.components.front().ranks.empty());
+    EXPECT_FALSE(decoded.components.front().target_evidence);
+
+    rg::WriteJointAnalysisResult(decoded,dir.path()/"result.json",dir.path()/"atoms.csv");
+    std::ifstream csv(dir.path()/"atoms.csv"); std::string line;
+    while(std::getline(csv,line)) EXPECT_EQ(line.find("999.125"),std::string::npos);
+}
+
+TEST(DataObjectPersistenceTest, CandidateDiagnosticsRejectInvalidOrUntrustedCheckpointParameters)
+{
+    namespace io=rg::joint_result_io;
+    auto record=SavedJointExample();
+    auto & component=record.components.front();
+    component.candidate_diagnostic=rg::JointCandidateDiagnostic{};
+    component.candidate_diagnostic->candidate_available=true;
+    component.candidate_diagnostic->candidate_eta={-.7};
+    component.candidate_diagnostic->candidate_ac={1,2};
+    component.candidate_diagnostic->candidate_objective=.1;
+    EXPECT_THROW(io::Encode(record),std::invalid_argument);
+
+    component.state.reset(); record.assembled_state.reset(); record.objective.reset();
+    component.candidate_diagnostic->candidate_eta={std::numeric_limits<double>::quiet_NaN(),-.5};
+    component.candidate_diagnostic->candidate_ac={1,2,3,4};
+    EXPECT_THROW(io::Encode(record),std::invalid_argument);
+
+    component.candidate_diagnostic->candidate_available=false;
+    component.candidate_diagnostic->candidate_eta.clear();
+    component.candidate_diagnostic->candidate_ac.clear();
+    component.candidate_diagnostic->candidate_objective.reset();
+    EXPECT_NO_THROW(io::Encode(record));
+}
+
+TEST(DataObjectPersistenceTest, SchemaFiveRecordsDoNotInferCandidateDiagnostics)
+{
+    namespace io=rg::joint_result_io;
+    auto record=SavedJointExample();
+    rg::JointCandidateDiagnostic candidate;
+    candidate.candidate_available=true; candidate.candidate_eta={-.7,-.5};
+    candidate.candidate_ac={2,-.3,4,.2}; candidate.candidate_objective=.2;
+    candidate.certification_status=rg::JointCheckStatus::Passed;
+    record.components.front().candidate_diagnostic=candidate;
+    auto json=boost::json::parse(io::Encode(record)).as_object();
+    json["schema_version"]=5;
+    for(auto & component:json.at("components").as_array()) component.as_object().erase("candidate_diagnostic");
+    const auto decoded=io::Decode(boost::json::serialize(json));
+    EXPECT_FALSE(decoded.components.front().candidate_diagnostic);
 }
 
 TEST(DataObjectPersistenceTest, JointMetadataRejectsInvalidValuesAndOldDocumentsWithoutWrites)

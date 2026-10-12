@@ -62,10 +62,10 @@ turn the original first-stage fit into a success or create new donors.
 * Uncertainty uses the FullABC Jacobian on informative rows. At an interior,
   full-rank endpoint its residual degrees of freedom are N-q-3p. Existing
   boundary, rank, variance and availability checks remain in force.
-* New Joint JSON is schema 5, with `singleton-halo-profile-v1` or
+* New Joint JSON is schema 6, with `singleton-halo-profile-v1` or
   `full-abc-v1` as its parameterization contract. Schemas 3 and 4 retain their
-  original saved semantics; they do not acquire inferred reduction, target
-  evidence, or stronger qualification. SQLite schema v19 stores the Joint JSON
+  original saved semantics; schemas 3 through 5 do not acquire inferred
+  candidate diagnostics. SQLite schema v19 stores the Joint JSON
   payload.
 * Atom CSV retains all contributors. Reduced A/B/C cells are empty with a group
   ID. The sibling `.contributions.csv` has exactly one row per nuisance group;

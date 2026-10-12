@@ -93,6 +93,19 @@ struct JointState
     double objective{};
     std::vector<double> nuisance_amplitudes{};
 };
+// A parameter-only snapshot of the latest accepted search candidate. This is
+// diagnostic data; the component's `state` remains the trusted scientific state.
+struct JointCandidateDiagnostic
+{
+    bool candidate_available{};
+    std::vector<double> candidate_eta,candidate_ac;
+    std::optional<double> candidate_objective,candidate_ac_kkt,candidate_width_gradient_inf_norm;
+    std::optional<bool> candidate_feasible;
+    JointCheckStatus reference_status{JointCheckStatus::NotRun};
+    JointCheckStatus rank_assessment_status{JointCheckStatus::NotRun};
+    JointCheckStatus certification_status{JointCheckStatus::NotRun};
+    std::string resource_limit_reason;
+};
 struct JointComponentData
 {
     std::string id,stop_reason;
@@ -102,6 +115,7 @@ struct JointComponentData
         endpoint_certification_sweep{};
     int profile_evaluations{},reference_evaluations{},accepted_updates{},native_status{};
     std::optional<JointState> state;
+    std::optional<JointCandidateDiagnostic> candidate_diagnostic;
     std::vector<JointCheck> evidence;
     std::vector<JointRankEvidence> ranks;
     JointCheckStatus regular_certificate{JointCheckStatus::NotRun};

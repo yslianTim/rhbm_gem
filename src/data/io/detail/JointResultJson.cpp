@@ -81,6 +81,44 @@ JointState ReadState(const j::value & v)
         o.contains("nuisance_amplitudes") ? Read<std::vector<double>>(o,"nuisance_amplitudes") : std::vector<double>{}};
 }
 j::value OptionalState(const std::optional<JointState> & x) {return x ? j::value(State(*x)) : j::value(nullptr);}
+const char * CandidateStatusText(const JointCandidateDiagnostic & x)
+{return x.certification_status==JointCheckStatus::Passed ? "certified" : "uncertified";}
+Object CandidateDiagnostic(const JointCandidateDiagnostic & x)
+{
+    return {{"candidate_status",CandidateStatusText(x)},
+        {"candidate_available",x.candidate_available},
+        {"candidate_eta",j::value_from(x.candidate_eta)},
+        {"candidate_ac",j::value_from(x.candidate_ac)},
+        {"candidate_objective",Number(x.candidate_objective)},
+        {"candidate_ac_kkt",Number(x.candidate_ac_kkt)},
+        {"candidate_width_gradient_inf_norm",Number(x.candidate_width_gradient_inf_norm)},
+        {"candidate_feasible",x.candidate_feasible ? j::value(*x.candidate_feasible) : j::value(nullptr)},
+        {"reference_status",StatusText(x.reference_status)},
+        {"rank_assessment_status",StatusText(x.rank_assessment_status)},
+        {"certification_status",StatusText(x.certification_status)},
+        {"resource_limit_reason",x.resource_limit_reason}};
+}
+std::optional<JointCandidateDiagnostic> ReadCandidateDiagnostic(const j::value & value)
+{
+    if(value.is_null()) return {};
+    const auto & o=value.as_object(); JointCandidateDiagnostic x;
+    x.candidate_available=Read<bool>(o,"candidate_available");
+    x.candidate_eta=Read<std::vector<double>>(o,"candidate_eta");
+    x.candidate_ac=Read<std::vector<double>>(o,"candidate_ac");
+    x.candidate_objective=OptionalNumber(o.at("candidate_objective"));
+    x.candidate_ac_kkt=OptionalNumber(o.at("candidate_ac_kkt"));
+    x.candidate_width_gradient_inf_norm=OptionalNumber(o.at("candidate_width_gradient_inf_norm"));
+    x.candidate_feasible=o.at("candidate_feasible").is_null() ? std::nullopt :
+        std::optional<bool>(Read<bool>(o,"candidate_feasible"));
+    x.reference_status=Status(o.at("reference_status"));
+    x.rank_assessment_status=Status(o.at("rank_assessment_status"));
+    x.certification_status=Status(o.at("certification_status"));
+    x.resource_limit_reason=Read<std::string>(o,"resource_limit_reason");
+    const auto candidate_status=Read<std::string>(o,"candidate_status");
+    if(candidate_status!=CandidateStatusText(x))
+        throw std::invalid_argument("Invalid saved joint candidate status: "+candidate_status);
+    return x;
+}
 j::array Checks(const std::vector<JointCheck> & values)
 {
     j::array out;
@@ -394,6 +432,27 @@ void ValidateState(const JointState & x,std::size_t atoms,std::size_t groups=0)
     Require(x.nuisance_amplitudes.size()==groups,"nuisance amplitude dimensions");
     for(double value:x.nuisance_amplitudes) Require(std::isfinite(value),"nonfinite nuisance amplitude");
 }
+void ValidateCandidateDiagnostic(const JointCandidateDiagnostic & x,std::size_t atoms,bool trusted_state)
+{
+    Require(atoms<=std::numeric_limits<std::size_t>::max()/2,"candidate dimensions");
+    if(x.candidate_available)
+    {
+        Require(x.candidate_eta.size()==atoms && x.candidate_ac.size()==2*atoms && x.candidate_objective,
+            "candidate dimensions");
+        for(double eta:x.candidate_eta)
+            Require(std::isfinite(eta) && std::isfinite(std::exp(eta)) && std::exp(eta)>0,"invalid candidate width");
+        for(double value:x.candidate_ac) Require(std::isfinite(value),"nonfinite candidate A/C");
+        Require(std::isfinite(*x.candidate_objective),"nonfinite candidate objective");
+    }
+    else Require(x.candidate_eta.empty() && x.candidate_ac.empty() && !x.candidate_objective,
+        "unavailable candidate contains parameters");
+    for(const auto * value:{&x.candidate_ac_kkt,&x.candidate_width_gradient_inf_norm})
+        Require(!*value || (std::isfinite(**value) && **value>=0),"invalid candidate diagnostic value");
+    Require((x.certification_status==JointCheckStatus::Passed)==trusted_state,
+        "candidate certification disagrees with trusted state");
+    Require(x.certification_status!=JointCheckStatus::Passed || x.candidate_available,
+        "certified candidate is unavailable");
+}
 j::value SelectionDomain(const std::optional<JointSelectionDomain> & domain)
 {
     if(!domain) return nullptr;
@@ -541,6 +600,8 @@ void Validate(const JointAnalysisResult & x)
         }
         ValidateTarget(c.target_evidence,c.atoms,x.selection_domain,c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.rows.size());
         if(c.state) ValidateState(*c.state,c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.layout ? c.layout->groups.size() : 0);
+        if(c.candidate_diagnostic) ValidateCandidateDiagnostic(*c.candidate_diagnostic,
+            c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.state.has_value());
     }
 }
 }
@@ -557,10 +618,11 @@ std::string Encode(const JointAnalysisResult & x)
         {"endpoint_certification_sweep",c.endpoint_certification_sweep},
         {"profile_evaluations",c.profile_evaluations},{"reference_evaluations",c.reference_evaluations},
         {"accepted_updates",c.accepted_updates},{"native_status",c.native_status},{"state",OptionalState(c.state)},
+        {"candidate_diagnostic",c.candidate_diagnostic ? j::value(CandidateDiagnostic(*c.candidate_diagnostic)) : j::value(nullptr)},
         {"evidence",Checks(c.evidence)},{"ranks",Ranks(c.ranks)},{"regular_certificate",StatusText(c.regular_certificate)},
         { "runtime_convergence",StatusText(c.runtime_convergence)},{"layout",Layout(c.layout)},
         {"target_evidence",Target(c.target_evidence)},{"target_runtime_convergence",StatusText(c.target_runtime_convergence)}});
-    Object out{{"schema_version",5},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
+    Object out{{"schema_version",6},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
         { "support_contract","sphere-fma-v1"},{"parameterization_contract",x.parameterization_contract},{"layout",Layout(x.layout)},{"metadata",Metadata(m)},{"selection_domain",SelectionDomain(x.selection_domain)},
         {"atom_ids",j::value_from(x.atom_ids)},{"row_ids",j::value_from(x.row_ids)},{"initialization",Initialization(x.initialization)},
         {"costs",Object{{"construction_seconds",t.construction_seconds},{"initialization_seconds",t.initialization_seconds},{"search_seconds",t.search_seconds},
@@ -577,7 +639,7 @@ JointAnalysisResult Decode(std::string_view text)
     j::parse_options options; options.numbers=j::number_precision::precise;
     const auto parsed=j::parse(text,{},options); const auto & o=parsed.as_object();
     const int version=Read<int>(o,"schema_version");
-    Require(version==3 || version==4 || version==5,"unsupported result schema version (expected 3, 4 or 5)");
+    Require(version==3 || version==4 || version==5 || version==6,"unsupported result schema version (expected 3, 4, 5 or 6)");
     Require(Read<std::string>(o,"estimator")=="joint-components" &&
         Read<std::string>(o,"estimator_contract")=="guarded-joint-ls-v1" &&
         Read<std::string>(o,"objective_contract")=="parent-normalized-half-rss-v1" &&
@@ -610,6 +672,7 @@ JointAnalysisResult Decode(std::string_view text)
         component.reference_evaluations=Read<int>(c,"reference_evaluations"); component.accepted_updates=Read<int>(c,"accepted_updates");
         component.native_status=Read<int>(c,"native_status");
         if(!c.at("state").is_null()) component.state=ReadState(c.at("state"));
+        if(version>=6) component.candidate_diagnostic=ReadCandidateDiagnostic(c.at("candidate_diagnostic"));
         component.evidence=ReadChecks(c.at("evidence")); component.ranks=ReadRanks(c.at("ranks"));
         component.regular_certificate=Status(c.at("regular_certificate")); component.runtime_convergence=Status(c.at("runtime_convergence"));
         if(version>=5) {component.target_evidence=ReadTarget(c.at("target_evidence")); component.target_runtime_convergence=Status(c.at("target_runtime_convergence"));}

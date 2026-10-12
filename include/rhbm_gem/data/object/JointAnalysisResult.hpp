@@ -54,8 +54,8 @@ struct JointAnalysisComponent : JointComponentData
     JointCheckStatus runtime_convergence{JointCheckStatus::Unavailable};
     JointCheckStatus target_runtime_convergence{JointCheckStatus::NotRun};
 };
-// A saved outcome, not an audit/restart bundle. Convergence values are captured
-// from the runtime result once and are never inferred by storage or readers.
+// A saved outcome with optional parameter-only candidate diagnostics, not an
+// audit/restart bundle. Convergence is captured and never inferred by storage.
 struct JointAnalysisResult
 {
     std::string parameterization_contract{"full-abc-v1"};

@@ -102,6 +102,31 @@ TEST(JointObservableProfileTest, ReconstructionAndUnavailableHaloParameters)
     ASSERT_TRUE(fit.assembled_state); ASSERT_TRUE(fit.prediction);
     EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     EXPECT_EQ(fit.components[0].atoms.size(),3); EXPECT_EQ(fit.components[0].state->b.size(),1);
+    ASSERT_TRUE(fit.components[0].candidate_diagnostic);
+    EXPECT_TRUE(fit.components[0].candidate_diagnostic->candidate_available);
+    EXPECT_EQ(fit.components[0].candidate_diagnostic->candidate_eta,fit.components[0].state->log_b);
+    EXPECT_EQ(fit.components[0].candidate_diagnostic->candidate_ac,fit.components[0].state->ac);
+    EXPECT_EQ(fit.components[0].candidate_diagnostic->certification_status,rhbm_gem::JointCheckStatus::Passed);
+    const auto & problem_data=core::JointProblemAccess::Get(problem);
+    const auto & component_layout=*fit.components[0].layout;
+    const auto candidate_domain=n::ProfileDomain(problem_data.domain,component_layout);
+    const auto candidate_context=n::ProfileContext(problem_data.context,component_layout,problem_data.domain.rows);
+    n::Vector candidate_y(static_cast<Eigen::Index>(component_layout.informative_rows.size()));
+    for(std::size_t k=0;k<component_layout.informative_rows.size();++k)
+        candidate_y(static_cast<Eigen::Index>(k))=problem_data.input->observations[component_layout.informative_rows[k]];
+    n::Vector candidate_eta(static_cast<Eigen::Index>(fit.components[0].candidate_diagnostic->candidate_eta.size()));
+    n::Vector candidate_ac(static_cast<Eigen::Index>(fit.components[0].candidate_diagnostic->candidate_ac.size()));
+    for(std::size_t k=0;k<fit.components[0].candidate_diagnostic->candidate_eta.size();++k)
+        candidate_eta(static_cast<Eigen::Index>(k))=fit.components[0].candidate_diagnostic->candidate_eta[k];
+    for(std::size_t k=0;k<fit.components[0].candidate_diagnostic->candidate_ac.size();++k)
+        candidate_ac(static_cast<Eigen::Index>(k))=fit.components[0].candidate_diagnostic->candidate_ac[k];
+    const auto reconstructed=n::EvaluateStateStreaming(candidate_domain,candidate_y,candidate_eta,candidate_ac,candidate_context);
+    ASSERT_TRUE(reconstructed.valid);
+    ASSERT_TRUE(fit.components[0].candidate_diagnostic->candidate_objective);
+    EXPECT_NEAR(*fit.components[0].candidate_diagnostic->candidate_objective,
+        reconstructed.certificate.objective/(fit.observation_scale*fit.observation_scale),1e-14);
+    EXPECT_EQ(boost::json::parse(rhbm_gem::joint_result_io::Encode(core::CaptureJointAnalysisResult(fit)))
+        .at("components").as_array()[0].at("candidate_diagnostic").at("candidate_status").as_string(),"certified");
     EXPECT_NEAR(fit.assembled_state->b[0],.6,1e-10);
     EXPECT_NEAR(fit.assembled_state->nuisance_amplitudes.at(0),.7,1e-10);
     for(std::size_t r=0;r<24;++r) EXPECT_NEAR(fit.prediction->at(r),problem.Input().observations[r],1e-10);
@@ -112,6 +137,11 @@ TEST(JointObservableProfileTest, ReconstructionAndUnavailableHaloParameters)
     const auto decoded=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved));
     EXPECT_EQ(decoded.assembled_state->nuisance_amplitudes,saved.assembled_state->nuisance_amplitudes);
     EXPECT_EQ(decoded.layout->groups[0].atoms,saved.layout->groups[0].atoms);
+    ASSERT_TRUE(decoded.components[0].candidate_diagnostic);
+    EXPECT_EQ(decoded.components[0].candidate_diagnostic->candidate_eta,
+        saved.components[0].candidate_diagnostic->candidate_eta);
+    EXPECT_EQ(decoded.components[0].candidate_diagnostic->certification_status,
+        saved.components[0].candidate_diagnostic->certification_status);
 }
 TEST(JointObservableProfileTest, SharedOrchestrationReturnsCertifiedStatesBeforeAssembly)
 {
@@ -144,6 +174,20 @@ TEST(JointObservableProfileTest, SharedOrchestrationReturnsCertifiedStatesBefore
         residual(static_cast<Eigen::Index>(row))=fit.prediction->at(row)-problem.Input().observations[row];
     }
     EXPECT_NEAR(*fit.objective,.5*residual.squaredNorm()/(fit.observation_scale*fit.observation_scale),1e-15);
+}
+TEST(JointObservableProfileTest, SweepBudgetRetainsCandidateWithoutCompletingSearch)
+{
+    const core::JointProblem problem(Input());
+    n::FixedNeighborSearchPolicy policy; policy.maximum_sweeps=1;
+    const auto fit=n::FitFixedNeighborComponents(problem,{.65,missing_width,missing_width},policy);
+    ASSERT_EQ(fit.components.size(),1u);
+    const auto & component=fit.components.front();
+    ASSERT_TRUE(component.candidate_diagnostic);
+    EXPECT_TRUE(component.candidate_diagnostic->candidate_available);
+    EXPECT_FALSE(component.search_completed);
+    EXPECT_EQ(component.stop_reason,"block-sweep-budget");
+    EXPECT_EQ(component.candidate_diagnostic->candidate_eta.size(),component.layout->full_atoms.size());
+    EXPECT_NE(component.candidate_diagnostic->certification_status,rhbm_gem::JointCheckStatus::NotRun);
 }
 TEST(JointObservableProfileTest, RemainingUnobservedTargetStillFails)
 {
@@ -328,13 +372,16 @@ TEST(JointObservableProfileTest, HaloNonuniquenessDoesNotCertifyItsParameters)
     EXPECT_FALSE(stages.at(4).point); EXPECT_EQ(stages.at(4).reason,"nonunique-parameter-directions");
     const auto text=rhbm_gem::joint_result_io::Encode(saved);
     auto value=boost::json::parse(text);
-    EXPECT_EQ(value.at("schema_version").as_int64(),5);
+    EXPECT_EQ(value.at("schema_version").as_int64(),6);
     const auto restored=rhbm_gem::joint_result_io::Decode(text);
     EXPECT_EQ(restored.target_runtime_convergence,saved.target_runtime_convergence);
     EXPECT_EQ(restored.components[0].target_evidence->atoms.back().status,rhbm_gem::JointCheckStatus::Failed);
     value.as_object()["schema_version"]=4;
+    for(auto & component:value.as_object().at("components").as_array())
+        component.as_object().erase("candidate_diagnostic");
     const auto old=rhbm_gem::joint_result_io::Decode(boost::json::serialize(value));
     EXPECT_FALSE(old.target_evidence); EXPECT_FALSE(old.components[0].target_evidence);
+    EXPECT_FALSE(old.components[0].candidate_diagnostic);
     EXPECT_EQ(old.target_runtime_convergence,rhbm_gem::JointCheckStatus::NotRun);
 }
 TEST(JointObservableProfileTest, TheSameTwoRowGeometryCannotIdentifyASelectedTarget)

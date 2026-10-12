@@ -68,9 +68,10 @@ receive covariance; boundary, missing state, rank, variance, and degrees-of-
 freedom failures retain explicit unavailable reasons. Halo covariance is not
 inferred by selecting an arbitrary representative.
 
-Joint JSON schema 5 writes target evidence and target-runtime status. Readers
-accept schemas 3, 4, and 5; schema 3/4 records retain their original evidence
-and do not gain target certification. CSV records target/halo/not-recorded
+Joint JSON schema 5 introduced target evidence and target-runtime status; schema
+6 adds optional candidate diagnostics. Readers accept schemas 3 through 6;
+schema 3/4 records retain their original evidence and do not gain target
+certification or inferred candidates. CSV records target/halo/not-recorded
 selection role, target convergence, and parameter identifiability. It preserves
 target point states independently of convergence and leaves unidentified halo
 parameters blank. The command guide owns the full JSON/CSV field list and unit

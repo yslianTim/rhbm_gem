@@ -216,6 +216,16 @@ Component `state` is the actual last trusted state used by assembly. Search
 completion, usable state and evidence status are separate. A missing component
 prevents complete prediction/objective; the row mask retains available rows,
 including constant rows. Assembly does not reprofile or zero-fill missing states.
+Each attempted component search also retains a parameter-only candidate
+diagnostic when its last accepted state is finite and dimensionally valid.
+Its candidate status is `uncertified` until the existing endpoint certification
+passes; certification, reference and rank availability are recorded separately.
+The diagnostic may include eta, A/C, objective, feasibility and stationarity
+summaries, but never prediction/residual vectors or rank matrices. The enclosing
+saved result supplies the component identity, sweep and stop reason, input hashes
+when available, and solver provenance. This is a diagnostic snapshot, not a
+search-resume checkpoint. Candidate values never populate `component.state`,
+assembly, uncertainty or the atom CSV.
 Two-step derivative, Richardson, multiprecision, boundary and regular certificates
 are `NotRun` in runtime results. Offline tools produce separate evidence without
 mutating the runtime result. Operational runtime checks are not regular
@@ -413,20 +423,21 @@ Read it through `model.GetAnalysisView().GetJointResult()`. Include
 `<rhbm_gem/data/io/JointAnalysisFileIO.hpp>` to export a saved result directly with
 `WriteJointAnalysisResult(result, json_path, csv_path)`.
 
-The snapshot, prediction vector and numerical workspaces are not captured. Only
-result values and identity/mapping information survive. Global and component
-runtime-convergence statuses are captured from the existing runtime methods;
+The problem snapshot, prediction vector and numerical workspaces are not captured.
+Trusted result values, optional parameter-only candidate diagnostics and
+identity/mapping information survive. Global and component runtime-convergence statuses are captured from the existing runtime methods;
 storage validates the document structure but neither recomputes convergence nor
-runs an audit. These saved documents are not standalone numerical audit bundles.
+runs an audit. Candidate diagnostics do not define a resume contract. These saved
+documents are not standalone numerical audit bundles.
 Model copying retains the outcome; analysis `Clear()` and `ClearJointResult()`
 remove it, while `ClearTransientFitStates()` does not.
 
 ### Saved provenance and units
 
-Production outcome JSON writes schema 5 and retains schema 3 and 4 reading
+Production outcome JSON writes schema 6 and retains schema 3, 4 and 5 reading
 (distinct from fixture and offline report schemas). The [observable-halo contract](joint-observable-halo.md)
 describes parameter layouts, nuisance contributions and seed provenance. See the
-[metadata contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schemas-3-4-and-5).
+[metadata contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schemas-3-through-6).
 `JointAnalysisMetadata` contains optional `JointMapNormalization`, input SHA-256
 values, `JointSoftwareProvenance` and optional `JointSolverProvenance`.
 `JointSolverProvenance` records the current FixedNeighbor estimator and

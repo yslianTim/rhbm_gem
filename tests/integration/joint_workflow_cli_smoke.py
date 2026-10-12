@@ -76,7 +76,7 @@ def main() -> int:
                     assert atom["evidence"] is None
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
-        assert saved["schema_version"] == 5
+        assert saved["schema_version"] == 6
         assert saved["metadata"]["solver"]["search_method"] == "fixed-neighbor"
         default_solver = saved["metadata"]["solver"]
         assert {key: default_solver[key] for key in (

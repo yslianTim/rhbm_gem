@@ -133,6 +133,58 @@ JointParameterLayout ComponentLayout(const JointParameterLayout & layout,const C
     for(const auto & group:layout.groups) if(view.LocalRow(static_cast<Eigen::Index>(group.row))>=0) out.groups.push_back(group);
     return out;
 }
+JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & search,std::size_t atoms)
+{
+    JointCandidateDiagnostic out;
+    const auto & state=search.state;
+    bool finite_widths=state.eta.size()==static_cast<Eigen::Index>(atoms) && state.eta.allFinite();
+    if(finite_widths) for(Eigen::Index atom=0;atom<state.eta.size();++atom)
+    {
+        const double width=std::exp(state.eta(atom));
+        finite_widths &= std::isfinite(width) && width>0;
+    }
+    const bool finite_ac=atoms<=std::numeric_limits<std::size_t>::max()/2 &&
+        state.beta.size()==static_cast<Eigen::Index>(2*atoms) && state.beta.allFinite();
+    out.candidate_available=finite_widths && finite_ac && std::isfinite(state.objective);
+    if(out.candidate_available)
+    {
+        out.candidate_eta=Values(state.eta);
+        out.candidate_ac=Values(state.beta);
+        out.candidate_objective=state.objective;
+    }
+    if(search.final_sweep)
+    {
+        const auto & sweep=*search.final_sweep;
+        if(std::isfinite(sweep.global_ac_kkt)) out.candidate_ac_kkt=sweep.global_ac_kkt;
+        if(std::isfinite(sweep.global_width_gradient_inf_norm))
+            out.candidate_width_gradient_inf_norm=sweep.global_width_gradient_inf_norm;
+        if(std::isfinite(sweep.global_a_feasibility)) out.candidate_feasible=sweep.global_a_feasibility==0;
+    }
+    if(search.certification)
+    {
+        const auto & certification=*search.certification;
+        out.reference_status=certification.reference_memory_estimate.status!=MemoryStatus::Pass ?
+            JointCheckStatus::Unavailable : certification.assessment.reference.valid ?
+                JointCheckStatus::Passed : JointCheckStatus::Failed;
+        out.rank_assessment_status=certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass ?
+            JointCheckStatus::Unavailable : !certification.assessment.widths ?
+                JointCheckStatus::Unavailable : certification.assessment.identified ?
+                    JointCheckStatus::Passed : JointCheckStatus::Failed;
+        out.certification_status=certification.passed() ? JointCheckStatus::Passed :
+            certification.trust.reason.starts_with("resource-limit:") ?
+                JointCheckStatus::Unavailable : JointCheckStatus::Failed;
+        if(certification.reference_memory_estimate.status!=MemoryStatus::Pass)
+            out.resource_limit_reason="resource-limit:reference-solve:"+certification.reference_memory_estimate.reason;
+        else if(certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass)
+            out.resource_limit_reason="resource-limit:rank-assessment:"+certification.assessment.rank_memory_estimate.reason;
+    }
+    if(out.resource_limit_reason.empty() && search.memory_estimate.status!=MemoryStatus::Pass)
+        out.resource_limit_reason=std::string("resource-limit:")+MemoryStageName(search.memory_estimate.stage)+":"+
+            search.memory_estimate.reason;
+    if(out.resource_limit_reason.empty() && search.reason.starts_with("resource-limit:"))
+        out.resource_limit_reason=search.reason;
+    return out;
+}
 }
 std::vector<JointCheck> AnalyticNuisanceEvidence(JointEvidenceScope scope)
 {
@@ -191,6 +243,7 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             component.endpoint_certification_sweep=fit.search.certification_sweep;
             component.profile_evaluations=static_cast<int>(fit.search.total_profile_evaluations);
             component.accepted_updates=static_cast<int>(fit.search.total_accepted_local_updates);
+            component.candidate_diagnostic=CandidateDiagnostic(fit.search,layout.full_atoms.size());
             if(fit.search.certification)
             {
                 const auto & certification=*fit.search.certification;
