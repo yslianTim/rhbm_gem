@@ -2,7 +2,6 @@
 #include "core/detail/joint_component/Problem.hpp"
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 namespace rhbm_gem::core::joint_component {
 namespace {
@@ -28,11 +27,6 @@ JointState State(const Endpoint & endpoint,double scale)
     return {Values(endpoint.beta),Values(endpoint.eta.array().exp()),Values(endpoint.eta),
         Values(endpoint.gradient),endpoint.certificate.objective/(scale*scale),{}};
 }
-double ScaledCoefficientDifference(VectorRef lhs,VectorRef rhs)
-{
-    if(lhs.size()!=rhs.size() || lhs.size()==0) return std::numeric_limits<double>::infinity();
-    return ((lhs-rhs).array().abs()/(1.0+lhs.array().abs().max(rhs.array().abs()))).maxCoeff();
-}
 void AssembleResult(const JointProblem & problem,const ProblemData & data,const JointParameterLayout & layout,
     const Domain & domain,VectorRef y,const EvaluationContext & context,
     const FixedNeighborEndpointCertification & certification,FixedNeighborDiagnosticResult & out)
@@ -42,6 +36,11 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
     out.endpoint_certified=certification.passed();
     const Vector eta=Select(out.state.eta,IndicesOf(layout.full_atoms));
     const Vector beta=SelectBeta(out.state.beta,layout.full_atoms);
+    JointCheck assembly_mapping,assembled_consistency;
+    bool exact_identity_mapping=layout.full_atoms.size()==domain.atoms.size() &&
+        layout.informative_rows.size()==static_cast<std::size_t>(domain.rows);
+    for(std::size_t k=0;k<layout.full_atoms.size();++k) exact_identity_mapping &= layout.full_atoms[k]==k;
+    for(std::size_t k=0;k<layout.informative_rows.size();++k) exact_identity_mapping &= layout.informative_rows[k]==k;
 
     const auto & component_view=data.partition.components.front();
     JointComponentResult component; component.id=component_view.id;
@@ -52,7 +51,8 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
     component.first_order_stationarity_sweep=out.first_order_stationarity_sweep;
     component.confirmed_stationarity_sweep=out.confirmed_stationarity_sweep;
     component.endpoint_certification_sweep=out.sweeps.size();
-    if(certification.passed()) component.state=State(out.assessment.primary,context.scale);
+    const bool qualified=certification.passed() && out.assessment.qualified;
+    if(qualified) component.state=State(out.assessment.primary,context.scale);
     component.evidence=AssessmentEvidence(out.assessment,JointEvidenceScope::ComponentLocal);
     component.ranks=AssessmentRanks(out.assessment,JointEvidenceScope::ComponentLocal);
     component.evidence.push_back({"endpoint-trust",certification.passed() ? JointCheckStatus::Passed :
@@ -61,33 +61,56 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
     out.fit.problem=problem; out.fit.layout=layout; out.fit.initialization.valid=true;
     out.fit.initialization.reason="valid-widths"; out.fit.initialization.b=Values(out.state.eta.array().exp());
     out.fit.components.push_back(std::move(component)); out.fit.search_completed=out.search_converged;
-    out.fit.observation_scale=context.scale; out.fit.available_row_mask.assign(data.input->observations.size(),true);
-    if(certification.passed())
+    out.fit.observation_scale=context.scale;
+    out.fit.available_row_mask.assign(data.input->observations.size(),false);
+    if(qualified && exact_identity_mapping)
     {
+        std::fill(out.fit.available_row_mask.begin(),out.fit.available_row_mask.end(),true);
         out.fit.assembled_state=out.fit.components.front().state;
-        out.fit.prediction=Values(out.state.prediction); out.fit.objective=out.state.objective;
+        const auto assembled=EvaluateStateStreaming(domain,y,eta,beta,context);
+        const auto replay=CheckIndependentReplay(domain,y,assembled,context);
+        bool prediction_agrees=assembled.valid && assembled.residual.size()==out.state.prediction.size();
+        if(prediction_agrees) for(Eigen::Index row=0;row<assembled.residual.size();++row)
+        {
+            const double prediction=assembled.residual(row)+y(row);
+            const double error=std::abs(prediction-out.state.prediction(row));
+            prediction_agrees &= error<=2e-12+2e-13*std::abs(prediction);
+        }
+        const double objective=assembled.certificate.objective/(context.scale*context.scale);
+        const bool objective_agrees=std::isfinite(objective) &&
+            std::abs(objective-out.state.objective)<=1e-12+2e-12*std::abs(objective);
+        if(assembled.valid)
+        {
+            out.fit.prediction=Values(assembled.residual+y);
+            out.fit.objective=objective;
+        }
+        assembly_mapping={"assembly-mapping",JointCheckStatus::Passed,
+            JointEvidenceScope::AssembledGlobal,{}, {},"exact-component-identity-mapping"};
+        const bool consistency=prediction_agrees && objective_agrees && replay.valid && replay.passed;
+        assembled_consistency={"assembled-consistency",consistency ? JointCheckStatus::Passed :
+            JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
+            replay.available ? std::optional<double>(replay.prediction_difference) : std::nullopt,2e-12,
+            consistency ? "verified" : "assembled-streaming-replay-failed"};
+    }
+    else if(!qualified)
+    {
+        assembly_mapping={"assembly-mapping",JointCheckStatus::Unavailable,
+            JointEvidenceScope::AssembledGlobal,{}, {},"missing-qualified-component-state"};
+        assembled_consistency={"assembled-consistency",JointCheckStatus::Unavailable,
+            JointEvidenceScope::AssembledGlobal,{}, {},"missing-qualified-component-state"};
+    }
+    else
+    {
+        assembly_mapping={"assembly-mapping",JointCheckStatus::Failed,
+            JointEvidenceScope::AssembledGlobal,{}, {},"component-layout-is-not-identity"};
+        assembled_consistency={"assembled-consistency",JointCheckStatus::Unavailable,
+            JointEvidenceScope::AssembledGlobal,{}, {},"component-layout-is-not-identity"};
     }
     out.fit.evidence=AssessmentEvidence(out.assessment,JointEvidenceScope::AssembledGlobal);
+    out.fit.evidence.push_back(std::move(assembly_mapping));
+    out.fit.evidence.push_back(std::move(assembled_consistency));
     out.fit.ranks=AssessmentRanks(out.assessment,JointEvidenceScope::AssembledGlobal);
 
-    const auto control=EvaluateProfile(domain,y,eta,false,&context);
-    bool agrees=control.valid; double coefficient_difference=std::numeric_limits<double>::infinity();
-    Vector expected=Vector::Zero(y.size());
-    if(agrees)
-    {
-        expected=control.x*beta;
-        coefficient_difference=ScaledCoefficientDifference(beta,control.beta);
-        agrees=coefficient_difference<=1e-10;
-    }
-    const Vector actual=Select(out.state.prediction,IndicesOf(layout.informative_rows));
-    const double prediction_difference=((actual-expected).array().abs()/(1+actual.array().abs().max(expected.array().abs()))).maxCoeff();
-    const double profile_objective=.5*(expected-y).squaredNorm()/(context.scale*context.scale);
-    const bool reconstruction=actual.allFinite() && expected.allFinite() && prediction_difference<=1e-10 &&
-        std::abs(out.state.objective-profile_objective)<=1e-12;
-    agrees &= reconstruction;
-    out.fit.evidence.push_back({"assembled-profile",agrees ? JointCheckStatus::Passed : JointCheckStatus::Failed,
-        JointEvidenceScope::AssembledGlobal,std::max(coefficient_difference,prediction_difference),1e-10,
-        reconstruction ? "" : "full-domain-reconstruction-failed"});
 }
 }
 
