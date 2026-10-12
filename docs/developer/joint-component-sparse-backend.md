@@ -38,6 +38,22 @@ selection: core 12, Forward order, 30 maximum sweeps, one trusted accepted
 local update per block visit, and local Profile LM search. The
 existing KKT, width-gradient and eta-confirmation thresholds are unchanged.
 
+## Memory-bounded assessment limits
+
+The global FixedNeighbor sweep now computes stationarity reductions directly
+from support entries, but this does not change the EIGEN local A/C solve or the
+independent reference method. The reference path still forms the existing dense
+QR `R`; its stage preflight estimates matrix and workspace bytes before basis
+construction and reports `Unavailable` when the 3.2 GB planning budget is
+exceeded. At 74,812 A/C columns, `R` alone is about 44.775 GB (41.7 GiB).
+
+Rank assessment still uses the current design QR and profile derivative
+assessment, while target identifiability still uses its full target Jacobian
+rank. Each has a separate stage estimate and returns unavailable when that work
+cannot fit the planning budget. No sparse constrained reference replacement,
+approximate rank certificate, SPQR dependency, or alternate estimator route is
+qualified by this work. Estimates are not observed peak RSS.
+
 ## Qualification evidence
 
 The one-time EIGEN/SPQR qualification and its superseded wall-time-first choice

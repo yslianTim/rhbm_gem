@@ -229,6 +229,60 @@ TEST(JointFixedNeighborBlockCoordinateTest, PreparedRowMappingsScaleWithMembersh
         static_cast<std::size_t>(data.domain.rows)*blocks.cores.size());
     EXPECT_EQ(result.reason,"block-sweep-budget");
 }
+TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPreparationStaysBelowBudget)
+{
+    constexpr Eigen::Index rows=5'938'087;
+    constexpr std::size_t atoms=37'406;
+    auto input=std::make_shared<rhbm_gem::core::JointProblemInput>();
+    input->observations.resize(static_cast<std::size_t>(rows)); input->row_ids.resize(static_cast<std::size_t>(rows));
+    input->atom_ids.reserve(atoms); input->support.resize(atoms);
+    for(std::size_t atom=0;atom<atoms;++atom)
+    {
+        input->atom_ids.push_back("atom-"+std::to_string(atom));
+        input->support[atom].push_back({atom,0.0});
+        if(atom+1<atoms) input->support[atom].push_back({atom+1,0.0});
+    }
+    const std::shared_ptr<const rhbm_gem::core::JointProblemInput> snapshot=input;
+    n::Domain domain(snapshot); domain.rows=rows;
+    rhbm_gem::JointParameterLayout layout; layout.full_atoms.resize(atoms);
+    std::iota(layout.full_atoms.begin(),layout.full_atoms.end(),std::size_t{0});
+    layout.informative_rows.resize(static_cast<std::size_t>(rows));
+    std::iota(layout.informative_rows.begin(),layout.informative_rows.end(),Eigen::Index{0});
+    n::EvaluationContext context; context.scale=1; context.target_columns=3*atoms;
+    context.rank={rows,2*static_cast<Eigen::Index>(atoms),static_cast<Eigen::Index>(atoms)};
+    context.linear.rank_relative=context.rank.Relative(context.rank.design_columns);
+    context.observations=n::Observe(snapshot);
+    context.atom_ids=n::Identities(std::shared_ptr<const std::vector<std::string>>(snapshot,&snapshot->atom_ids));
+    context.row_ids=n::Identities(std::shared_ptr<const std::vector<std::string>>(snapshot,&snapshot->row_ids));
+    const n::Vector y=n::Vector::Zero(rows),eta=n::Vector::Constant(static_cast<Eigen::Index>(atoms),std::log(.55));
+    n::FixedNeighborPolicy policy; policy.core_atoms=12; policy.maximum_sweeps=0; policy.certify_endpoint=false;
+    const auto result=n::SearchFixedNeighborComponent(domain,layout,y,eta,context,policy);
+
+    const auto support_entries=n::CountSupportEntries(*snapshot);
+    ASSERT_TRUE(support_entries);
+    EXPECT_EQ(*support_entries,2*atoms-1);
+    EXPECT_EQ(result.memory_estimate.shape.component_atoms,atoms);
+    EXPECT_EQ(result.memory_estimate.shape.component_observations,static_cast<std::size_t>(rows));
+    EXPECT_EQ(result.memory_estimate.shape.component_support_entries,*support_entries);
+    EXPECT_EQ(result.memory_estimate.shape.component_blocks,3'118u);
+    EXPECT_EQ(result.memory_estimate.status,n::MemoryStatus::Pass);
+    EXPECT_EQ(result.global_state_memory_estimate.status,n::MemoryStatus::Pass);
+    EXPECT_LE(result.global_state_memory_estimate.estimated_peak_bytes,n::JointMemoryPlanningBudgetBytes);
+    EXPECT_EQ(result.sweep_count,0u);
+    EXPECT_EQ(result.reason,"block-sweep-budget");
+
+    std::size_t legacy_bytes{};
+    ASSERT_TRUE(n::CheckedMultiplyBytes(static_cast<std::size_t>(rows),result.memory_estimate.shape.component_blocks,legacy_bytes));
+    ASSERT_TRUE(n::CheckedMultiplyBytes(legacy_bytes,sizeof(Eigen::Index),legacy_bytes));
+    EXPECT_EQ(legacy_bytes,148'119'642'128u);
+    ASSERT_GT(result.prepared_mapping_bytes,0u);
+    EXPECT_LT(result.prepared_mapping_bytes,legacy_bytes);
+    EXPECT_LT(result.prepared_mapping_bytes,n::JointMemoryPlanningBudgetBytes);
+    RecordProperty("synthetic_support_entries",std::to_string(*support_entries));
+    RecordProperty("prepared_mapping_bytes",std::to_string(result.prepared_mapping_bytes));
+    RecordProperty("estimated_fixed_neighbor_peak_bytes",
+        std::to_string(result.global_state_memory_estimate.estimated_peak_bytes));
+}
 TEST(JointFixedNeighborBlockCoordinateTest, DenseReferencePreflightStopsBeforeBasisAndEndpointMatrices)
 {
     constexpr Eigen::Index atoms=37'406;

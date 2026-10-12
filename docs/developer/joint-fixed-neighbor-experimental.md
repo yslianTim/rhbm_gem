@@ -46,6 +46,34 @@ serial update semantics, replay, persistence and `RuntimeConvergence` contract. 
 [Joint runtime contract](joint-component-runtime.md) for the implementation
 details.
 
+## Memory planning and large components
+
+FixedNeighbor preflights its actual component rows, support memberships,
+affected rows, neighbor lists and largest block before preparing block views.
+The accepted global sweep evaluation uses support iteration and vector
+reductions; it avoids a full component design and width-derivative matrix. This
+does not make the local profile solve or the independent reference/rank stages
+matrix-free.
+
+The old per-block row map would use 148,119,642,128 bytes (148.120 GB, about
+137.9 GiB) for 5,938,087 rows and 3,118 blocks, before any other data. The
+current prepared mapping stores two indices per affected row and a
+`LocalSupportIndex` per retained support membership. Its exact reported bytes
+depend on `sum(block.affected_rows)` and the actual support memberships and
+capacities; observations and atom counts alone cannot determine that number.
+The deterministic large chain fixture has 74,811 support memberships and
+3,118 blocks; it reports 2,892,736 prepared-mapping bytes. Its global-evaluation
+estimated peak is 876,119,666 bytes, and a direct no-sweep test process recorded
+474,546,176 bytes peak RSS (0.475 GB, 0.442 GiB). The fixture disables sweeps
+and endpoint certification and does not materialize a global dense matrix.
+
+The planner rejects estimated peaks above 3,200,000,000 bytes (3.200 GB,
+2.980 GiB), below the nominal 4,000,000,000-byte limit. This is an allocation
+estimate with safety margin, not observed peak RSS. It does not establish that a
+full physical search fits within 4 GB: real support count and neighborhood shape
+are required, and the existing dense reference, rank and target assessments
+remain unavailable when their own stage estimates exceed budget.
+
 ## KKT and reference agreement
 
 For fixed widths and an unchanged active set, let `X_F` contain the free A/C

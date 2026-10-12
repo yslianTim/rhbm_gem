@@ -817,7 +817,7 @@ TEST(JointComponentNumericsTest, StreamingStateMatchesSparseGlobalEvaluation)
     Vector beta(16);
     for(Eigen::Index atom=0;atom<8;++atom)
     {
-        beta(2*atom)=atom%5==0 ? 0.0 : 1.7+.1*atom;
+        beta(2*atom)=atom%5==0 ? 0.0 : 1.7+.1*static_cast<double>(atom);
         beta(2*atom+1)=atom%2 ? -.4 : .3;
     }
     const auto sparse=n::EvaluateState(data.domain,data.y,eta,beta,data.context);

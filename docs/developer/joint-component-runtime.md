@@ -256,6 +256,41 @@ atom selection and precomputed row-to-local mapping over the parent view. Suppor
 iteration applies those mappings directly in constant work per view layer, and
 FixedNeighbor reuses prepared block mappings across sweeps.
 
+## Memory feasibility and unavailable large-case checks
+
+`ResourceWork` plans problem construction, FixedNeighbor preparation, global
+sweep evaluation, reference solve, rank assessment and target identifiability
+separately. Estimates use the actual support-entry count and checked byte
+arithmetic. The planning budget is 3,200,000,000 bytes (3.200 GB, about
+2.980 GiB), leaving 20% below the nominal 4,000,000,000-byte limit (4.000 GB,
+about 3.725 GiB). It is an engineering margin, not a numerical tolerance.
+Each log reports its stage, dimensions, resident bytes, temporary bytes,
+estimated peak and budget. These are estimated allocations, not observed peak
+RSS or a promise about the operating system's process limit. A rejected stage
+returns an unavailable resource result with a `resource-limit:<stage>` reason;
+it is not recorded as numerical nonconvergence.
+
+Prepared row mappings store sorted parent/local row pairs only for each block's
+affected rows, plus cached local support indices. Their structural cost follows
+the sum of affected rows and support memberships, not
+`component_rows × block_count`. The global sweep KKT and width-gradient pass now
+traverses support entries and keeps vector state; it does not build the global
+`N × 2P` design and derivative matrices. Local block solves and endpoint
+assessment still use their existing sparse design matrices.
+
+The independent reference route remains the current EIGEN reference QR. Its
+dense `R` grows with the square of the free A/C column count: at 74,812 columns,
+the matrix alone is about 44.775 GB (41.7 GiB), before factorization workspace.
+The feasibility guard stops before basis construction when that route exceeds
+budget; no sparse constrained replacement has been qualified. Rank assessment
+and target identifiability also retain their current dense QR/SVD definitions
+and return unavailable when their estimated workspaces exceed budget. A direct
+Release test process for the synthetic no-sweep fixture recorded 474,546,176
+bytes peak RSS (0.475 GB, 0.442 GiB); the corresponding global-evaluation
+estimated peak was 876,119,666 bytes. The test disables sweeps and endpoint
+certification. No full 37,406-atom, 5,938,087-observation physical search or
+certification has been measured.
+
 Uncertainty preparation uses the same `MakeComponentProblemView()` for ordinary
 component covariance and observable target-quotient covariance. It selects the
 needed observation values for numerical work but reads support membership and

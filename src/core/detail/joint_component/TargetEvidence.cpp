@@ -39,6 +39,7 @@ MemoryEstimate TargetIdentifiabilityMemoryEstimate(const JointProblemInput & inp
     if(!snapshot) return overflow();
     resident=*snapshot;
     if(!add_product(resident,rows,sizeof(double)) ||
+        !add_product(resident,shape.component_atoms,4*sizeof(double)) ||
         !add_product(resident,rows,2*sizeof(Eigen::Index)) ||
         !add_product(resident,shape.component_atoms,2*sizeof(Eigen::Index)+sizeof(std::vector<LocalSupportIndex>)) ||
         !add_product(resident,shape.component_support_entries,sizeof(LocalSupportIndex))) return overflow();

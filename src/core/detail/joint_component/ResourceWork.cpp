@@ -115,6 +115,7 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
         ok=AddProduct(temporary,affected,6*sizeof(Eigen::Index)) &&
             AddProduct(temporary,entries,2*sizeof(Eigen::Index)) &&
             AddProduct(temporary,atoms,2*sizeof(Eigen::Index)) &&
+            AddProduct(temporary,atoms,sizeof(std::vector<LocalSupportIndex>)) &&
             AddProduct(temporary,blocks,6*sizeof(std::vector<Eigen::Index>)) &&
             AddProduct(temporary,rows,6*sizeof(double)) &&
             AddProduct(temporary,atoms,3*sizeof(double)) &&
@@ -122,7 +123,7 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
             AddProduct(temporary,shape.maximum_block_support_entries,4*(sizeof(double)+sizeof(Eigen::Index)));
         break;
     case MemoryStage::GlobalStateEvaluation:
-        ok=AddProduct(temporary,rows,2*sizeof(double)+sizeof(std::uint8_t)) &&
+        ok=AddProduct(temporary,rows,3*sizeof(double)+sizeof(std::uint8_t)) &&
             AddProduct(temporary,atoms,24*sizeof(double)+sizeof(Eigen::Index));
         break;
     case MemoryStage::ReferenceSolve:

@@ -88,8 +88,9 @@ and CIF/MRC. All required inputs live in `tests/fixtures/joint_component/`; no
 historical archive or external model is loaded.
 
 Run the bounded Joint gates with `joint:contract`, `joint:workflow`, and
-`joint:numerical` labels. Large Gram and 256-atom diagnostics are separately
-listed under `joint:scalability`. `RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS=ON`
+`joint:numerical` labels. Large Gram, production-shape single-component
+mapping-memory, and 256-atom diagnostics are separately listed under
+`joint:scalability`. `RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS=ON`
 adds the 168-atom float32 case and additional catalog cases to the offline
 qualification lane. `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON` builds the
 separate precision/certification targets and tests. Both options default to

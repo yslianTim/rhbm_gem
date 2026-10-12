@@ -250,7 +250,7 @@ Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
     out.valid=true; return out;
 }
 }
-MemoryEstimate ReferenceSolveMemoryEstimate(const Domain & domain,VectorRef y,const EvaluationContext & context,
+MemoryEstimate ReferenceSolveMemoryEstimate(const Domain & domain,VectorRef,const EvaluationContext & context,
     std::size_t resident_override)
 {
     MemoryShape shape; shape.component_atoms=domain.atoms.size(); shape.component_observations=static_cast<std::size_t>(domain.rows);
@@ -270,9 +270,10 @@ MemoryEstimate ReferenceSolveMemoryEstimate(const Domain & domain,VectorRef y,co
     const auto snapshot=input ? EstimateSnapshotBytes(*input) : std::nullopt;
     std::size_t view_bytes{};
     if(!snapshot || !CheckedAddBytes(*snapshot,domain.atoms.LocalSupportIndexBytes(),view_bytes) ||
-        !add_product(view_bytes,static_cast<std::size_t>(std::max<Eigen::Index>(0,domain.rows)),sizeof(double)) ||
+        !add_product(view_bytes,shape.component_observations,2*sizeof(double)) ||
         !add_product(view_bytes,shape.component_observations,2*sizeof(Eigen::Index)) ||
-        !add_product(view_bytes,shape.component_atoms,2*sizeof(Eigen::Index))) return overflow();
+        !add_product(view_bytes,shape.component_atoms,2*sizeof(Eigen::Index)+4*sizeof(double)) ||
+        !add_product(view_bytes,shape.component_support_entries,4*(sizeof(double)+sizeof(Eigen::Index)))) return overflow();
     shape.resident_bytes=std::max(view_bytes,resident_override);
     return PlanMemory(shape,MemoryStage::ReferenceSolve);
 }
@@ -293,7 +294,8 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
         if(estimate.status!=MemoryStatus::Pass || estimate.estimated_peak_bytes>estimate.budget_bytes/2)
             LogMemoryEstimate(estimate);
         if(estimate.status!=MemoryStatus::Pass)
-        {Evaluation unavailable; unavailable.eta=eta; unavailable.reason="resource-limit:reference-solve"; return unavailable;}
+        {Evaluation unavailable_evaluation; unavailable_evaluation.eta=eta;
+            unavailable_evaluation.reason="resource-limit:reference-solve"; return unavailable_evaluation;}
     }
     const auto basis_started=std::chrono::steady_clock::now();
     auto out=Basis(domain,y,eta);
@@ -429,7 +431,8 @@ TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,
 TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy,const Evaluation & reference)
 {
     if(!reference.valid && reference.reason.starts_with("resource-limit:reference-solve"))
-    {TrustEvidence unavailable; unavailable.primary_valid=e.valid; unavailable.reason=reference.reason; return unavailable;}
+    {TrustEvidence unavailable_trust; unavailable_trust.primary_valid=e.valid;
+        unavailable_trust.reason=reference.reason; return unavailable_trust;}
     auto out=CheckReplay(domain,y,e,policy); out.reference=reference;
     if(!out.primary_valid) return out;
     out.coefficient_difference=reference.beta.size()==e.beta.size() ? Difference(e.beta,reference.beta) :
@@ -632,7 +635,7 @@ bool SameAssessmentPolicy(const EvaluationContext & a,const EvaluationContext & 
         a.linear.release_response_norm==b.linear.release_response_norm && a.atom_ids==b.atom_ids && a.row_ids==b.row_ids;
 }
 namespace {
-MemoryEstimate RankAssessmentMemoryEstimate(const Domain & domain,VectorRef y,const Evaluation & endpoint,
+MemoryEstimate RankAssessmentMemoryEstimate(const Domain & domain,VectorRef,const Evaluation & endpoint,
     const Evaluation & reference,const EvaluationContext & context)
 {
     MemoryShape shape; shape.component_atoms=domain.atoms.size(); shape.component_observations=static_cast<std::size_t>(domain.rows);

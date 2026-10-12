@@ -367,7 +367,8 @@ set_tests_properties(rhbm_tests_joint_component_workflow PROPERTIES
 rhbm_gem_collect_gtest_patterns(joint_numerical_patterns ${JOINT_COMPONENT_NUMERICAL_TEST_SOURCES})
 list(JOIN joint_numerical_patterns ":" joint_numerical_filter)
 string(APPEND joint_numerical_filter
-    "-JointComponentNumericsTest.CompactJacobianGramIdentityDiagnosticsAcrossLattices")
+    "-JointComponentNumericsTest.CompactJacobianGramIdentityDiagnosticsAcrossLattices"
+    ":JointFixedNeighborBlockCoordinateTest.ProductionScaleSingleComponentPreparationStaysBelowBudget")
 add_test(NAME rhbm_tests_joint_component_numerical
     COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes --gtest_filter=${joint_numerical_filter})
 set_tests_properties(rhbm_tests_joint_component_numerical PROPERTIES
@@ -379,6 +380,13 @@ add_test(NAME joint_component_gram_scalability
         --gtest_filter=JointComponentNumericsTest.CompactJacobianGramIdentityDiagnosticsAcrossLattices)
 set_tests_properties(joint_component_gram_scalability
     PROPERTIES LABELS "core;domain:core;intent:algorithm;joint:scalability;joint:offline;long" TIMEOUT 3600
+        ENVIRONMENT "OMP_NUM_THREADS=1")
+
+add_test(NAME joint_component_mapping_memory_scalability
+    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
+        --gtest_filter=JointFixedNeighborBlockCoordinateTest.ProductionScaleSingleComponentPreparationStaysBelowBudget)
+set_tests_properties(joint_component_mapping_memory_scalability
+    PROPERTIES LABELS "core;domain:core;intent:algorithm;joint:scalability;long" TIMEOUT 3600
         ENVIRONMENT "OMP_NUM_THREADS=1")
 
 set(joint_persistence_test_patterns

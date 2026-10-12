@@ -170,7 +170,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     if(!snapshot_bytes || !CheckedAddBytes(input->atom_ids.size(),input->observations.size(),root_entries) ||
         !AddMemoryBytes(root_mappings,root_entries,
             4*sizeof(Eigen::Index)) || !CheckedAddBytes(resident,root_mappings,resident) ||
-        !AddMemoryBytes(resident,memory_shape.component_support_entries,sizeof(LocalSupportIndex)) ||
         !CheckedAddBytes(memory_shape.component_atoms,memory_shape.affected_row_entries,structural_entries) ||
         !CheckedAddBytes(structural_entries,memory_shape.component_neighbor_entries,structural_entries) ||
         !AddMemoryBytes(resident,structural_entries,sizeof(Eigen::Index)) ||
@@ -186,7 +185,23 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     if(out.memory_estimate.status!=MemoryStatus::Pass)
     {out.reason="resource-limit:fixed-neighbor-preparation:"+out.memory_estimate.reason; return out;}
     auto global_shape=memory_shape;
-    global_shape.resident_bytes=out.memory_estimate.estimated_peak_bytes;
+    auto global_resident=resident;
+    if(!AddMemoryBytes(global_resident,memory_shape.component_support_entries,sizeof(LocalSupportIndex)) ||
+        !AddMemoryBytes(global_resident,memory_shape.affected_row_entries,5*sizeof(Eigen::Index)) ||
+        !AddMemoryBytes(global_resident,memory_shape.component_atoms,4*sizeof(Eigen::Index)+3*sizeof(double)+
+            sizeof(std::vector<LocalSupportIndex>)) ||
+        !AddMemoryBytes(global_resident,memory_shape.component_blocks,
+            sizeof(PreparedFixedNeighborBlock)+sizeof(CompactRowMapping)+sizeof(std::size_t)) ||
+        !AddMemoryBytes(global_resident,memory_shape.component_observations,3*sizeof(double)+sizeof(Eigen::Index)))
+    {
+        out.global_state_memory_estimate.shape=memory_shape;
+        out.global_state_memory_estimate.stage=MemoryStage::GlobalStateEvaluation;
+        out.global_state_memory_estimate.status=MemoryStatus::Overflow;
+        out.global_state_memory_estimate.reason="size-overflow";
+        out.memory_estimate=out.global_state_memory_estimate;
+        out.reason="resource-limit:global-state-evaluation:size-overflow"; return out;
+    }
+    global_shape.resident_bytes=global_resident;
     out.global_state_memory_estimate=PlanMemory(global_shape,MemoryStage::GlobalStateEvaluation);
     if(out.global_state_memory_estimate.status!=MemoryStatus::Pass ||
         out.global_state_memory_estimate.estimated_peak_bytes>out.global_state_memory_estimate.budget_bytes/2)
@@ -202,15 +217,20 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         if(policy.certification_for_testing)
             return policy.certification_for_testing(domain,y,out.state,context,profile_work);
 #endif
+        auto certification_resident=out.global_state_memory_estimate.shape.resident_bytes;
+        if(!AddMemoryBytes(certification_resident,memory_shape.component_observations,3*sizeof(double)) ||
+            !AddMemoryBytes(certification_resident,memory_shape.component_atoms,8*sizeof(double)))
+            certification_resident=std::numeric_limits<std::size_t>::max();
         return CertifyFixedNeighborEndpoint(domain,y,out.state,context,profile_work,
-            out.global_state_memory_estimate.estimated_peak_bytes);
+            certification_resident);
     };
 
     out.state.eta=initial_eta;
     out.state.beta=has_initial_beta ? std::move(initial_beta) :
         Vector::Zero(2*static_cast<Eigen::Index>(domain.atoms.size()));
-    const auto initial=Replay(domain,layout,y,out.state.eta,out.state.beta,context.scale);
-    out.state.prediction=initial.prediction; out.state.residual=initial.residual; out.state.objective=initial.objective;
+    auto initial=Replay(domain,layout,y,out.state.eta,out.state.beta,context.scale);
+    out.state.prediction=std::move(initial.prediction); out.state.residual=std::move(initial.residual);
+    out.state.objective=initial.objective;
     Indices atom_position(domain.atoms.size(),-1),row_position(static_cast<std::size_t>(domain.rows),-1);
     for(std::size_t k=0;k<layout.full_atoms.size();++k) atom_position.at(layout.full_atoms[k])=static_cast<Eigen::Index>(k);
     for(std::size_t k=0;k<layout.informative_rows.size();++k) row_position.at(layout.informative_rows[k])=static_cast<Eigen::Index>(k);

@@ -34,6 +34,30 @@ The complete concise record of those FixedNeighbor choices is in
 
 ## Numerical and resource findings
 
+- Current `ResourceWork` preflights use actual support memberships and a
+  3,200,000,000-byte (3.200 GB, 2.980 GiB) estimated-peak budget, leaving 20%
+  below the nominal 4 GB limit. The estimate is not process RSS. A resource
+  rejection is reported as `Unavailable` with a stage-specific reason.
+- Compact prepared row mappings remove the old `rows × blocks` allocation.
+  At 5,938,087 rows and 3,118 blocks, that old index map alone is
+  148,119,642,128 bytes (148.120 GB, about 137.9 GiB). The replacement's exact
+  bytes require the actual affected-row and support-membership counts; those
+  counts cannot be derived from rows and atoms alone.
+- Global sweep stationarity now streams prediction, residual, A/C and width
+  reductions from support entries. The local solve, EIGEN reference QR, rank
+  assessment and target Jacobian have not been replaced by alternate solvers.
+- For 37,406 atoms, 74,812 A/C columns make the existing dense reference `R`
+  alone about 44.775 GB (41.7 GiB). The reference feasibility guard therefore
+  reports `Unavailable` before the reference basis is built. Current rank and
+  target identifiability also report unavailable when their stage estimates
+  exceed budget; no approximate spectral result is treated as a certificate.
+- A deterministic 37,406-atom, 5,938,087-row single-chain fixture has 74,811
+  support memberships and 3,118 blocks. It records 2,892,736 prepared-mapping
+  bytes and an 876,119,666-byte global-evaluation estimated peak. A direct
+  no-sweep test process recorded 474,546,176 bytes peak RSS (0.475 GB,
+  0.442 GiB). The fixture disables sweeps and endpoint certification; it does
+  not represent the unknown physical support graph or qualify the full
+  physical search and certification.
 - Historical fixed-state compact-SVD checks passed their recorded numerical
   gates. The campaign showed substantial reductions in selected compact
   reference and derivative calculations, but did not establish a current
