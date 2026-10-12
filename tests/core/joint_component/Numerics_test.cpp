@@ -790,6 +790,7 @@ TEST(JointComponentNumericsTest, MemoryPlannerUsesCheckedStageSpecificEstimates)
     n::MemoryShape large; large.component_atoms=37'406; large.component_observations=5'938'087;
     large.component_support_entries=2'000'000; large.component_blocks=3'118;
     large.affected_row_entries=3'000'000; large.component_free_columns=74'812;
+    large.maximum_block_rows=8'000; large.maximum_block_support_entries=80'000;
     large.component_target_columns=112'218; large.resident_bytes=256'000'000;
     const auto mappings=n::PlanMemory(large,n::MemoryStage::FixedNeighborPreparation);
     const auto state=n::PlanMemory(large,n::MemoryStage::GlobalStateEvaluation);
@@ -804,4 +805,37 @@ TEST(JointComponentNumericsTest, MemoryPlannerUsesCheckedStageSpecificEstimates)
     EXPECT_EQ(target.status,n::MemoryStatus::Reject);
     EXPECT_EQ(mappings.budget_bytes,3'200'000'000u);
     EXPECT_NE(mappings.estimated_peak_bytes,state.estimated_peak_bytes);
+}
+
+TEST(JointComponentNumericsTest, StreamingStateMatchesSparseGlobalEvaluation)
+{
+    using rhbm_gem::core::JointProblem;
+    using rhbm_gem::core::JointProblemAccess;
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
+    const auto & data=JointProblemAccess::Get(problem);
+    const Vector eta=Vector::Constant(8,std::log(.55));
+    Vector beta(16);
+    for(Eigen::Index atom=0;atom<8;++atom)
+    {
+        beta(2*atom)=atom%5==0 ? 0.0 : 1.7+.1*atom;
+        beta(2*atom+1)=atom%2 ? -.4 : .3;
+    }
+    const auto sparse=n::EvaluateState(data.domain,data.y,eta,beta,data.context);
+    const auto streaming=n::EvaluateStateStreaming(data.domain,data.y,eta,beta,data.context);
+    ASSERT_TRUE(sparse.valid)<<sparse.reason;
+    ASSERT_TRUE(streaming.valid)<<streaming.reason;
+    ASSERT_TRUE(sparse.certificate.available && streaming.certificate.available);
+    const Vector sparse_prediction=sparse.residual+data.y;
+    const Vector streaming_prediction=streaming.residual+data.y;
+    const double prediction_scale=std::max(1.0,sparse_prediction.cwiseAbs().maxCoeff());
+    EXPECT_LE((streaming_prediction-sparse_prediction).lpNorm<Eigen::Infinity>(),2e-13*prediction_scale);
+    EXPECT_LE((streaming.residual-sparse.residual).lpNorm<Eigen::Infinity>(),2e-13*prediction_scale);
+    EXPECT_NEAR(streaming.certificate.objective,sparse.certificate.objective,2e-13*std::max(1.0,sparse.certificate.objective));
+    EXPECT_NEAR(streaming.certificate.projected_kkt,sparse.certificate.projected_kkt,2e-12);
+    EXPECT_EQ(streaming.certificate.active_atoms,sparse.certificate.active_atoms);
+    EXPECT_EQ(streaming.certificate.feasible,sparse.certificate.feasible);
+    EXPECT_LE((streaming.gradient-sparse.gradient).lpNorm<Eigen::Infinity>(),
+        2e-12*std::max(1.0,sparse.gradient.lpNorm<Eigen::Infinity>()));
+    EXPECT_EQ(streaming.x.size(),0);
+    EXPECT_EQ(streaming.derivative.size(),0);
 }

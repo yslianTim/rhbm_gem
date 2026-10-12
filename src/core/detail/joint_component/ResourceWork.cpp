@@ -115,11 +115,15 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
         ok=AddProduct(temporary,affected,6*sizeof(Eigen::Index)) &&
             AddProduct(temporary,entries,2*sizeof(Eigen::Index)) &&
             AddProduct(temporary,atoms,2*sizeof(Eigen::Index)) &&
-            AddProduct(temporary,blocks,6*sizeof(std::vector<Eigen::Index>));
+            AddProduct(temporary,blocks,6*sizeof(std::vector<Eigen::Index>)) &&
+            AddProduct(temporary,rows,6*sizeof(double)) &&
+            AddProduct(temporary,atoms,3*sizeof(double)) &&
+            AddProduct(temporary,shape.maximum_block_rows,4*sizeof(double)) &&
+            AddProduct(temporary,shape.maximum_block_support_entries,4*(sizeof(double)+sizeof(Eigen::Index)));
         break;
     case MemoryStage::GlobalStateEvaluation:
-        ok=AddProduct(temporary,rows,3*sizeof(double)+sizeof(std::uint8_t)) &&
-            AddProduct(temporary,atoms,8*sizeof(double));
+        ok=AddProduct(temporary,rows,2*sizeof(double)+sizeof(std::uint8_t)) &&
+            AddProduct(temporary,atoms,24*sizeof(double)+sizeof(Eigen::Index));
         break;
     case MemoryStage::ReferenceSolve:
     {
@@ -183,6 +187,7 @@ std::string FormatMemoryEstimate(const MemoryEstimate & estimate)
        <<" component_rows="<<s.component_observations<<" support_entries="<<s.component_support_entries
        <<" prepared_blocks="<<s.component_blocks<<" affected_row_entries="<<s.affected_row_entries
        <<" neighbor_entries="<<s.component_neighbor_entries
+       <<" max_block_rows="<<s.maximum_block_rows<<" max_block_support_entries="<<s.maximum_block_support_entries
        <<" free_columns="<<s.component_free_columns<<" target_columns="<<s.component_target_columns
        <<" resident="<<Bytes(estimate.resident_bytes)<<" temporary="<<Bytes(estimate.temporary_bytes)
        <<" estimated_peak="<<Bytes(estimate.estimated_peak_bytes)<<" budget="<<Bytes(estimate.budget_bytes)

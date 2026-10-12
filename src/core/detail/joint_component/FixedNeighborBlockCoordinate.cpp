@@ -149,10 +149,20 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         {out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation; out.memory_estimate.status=MemoryStatus::Overflow;
             out.memory_estimate.reason="size-overflow"; out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
     for(const auto & core:partition.cores)
+    {
+        std::size_t block_support_entries{};
+        for(const auto atom:core.atoms)
+            if(atom<0 || static_cast<std::size_t>(atom)>=domain.atoms.size() ||
+                !CheckedAddBytes(block_support_entries,domain.atoms[static_cast<std::size_t>(atom)].size(),block_support_entries))
+            {out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation; out.memory_estimate.status=MemoryStatus::Overflow;
+                out.memory_estimate.reason="size-overflow"; out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
+        memory_shape.maximum_block_rows=std::max(memory_shape.maximum_block_rows,core.affected_rows.size());
+        memory_shape.maximum_block_support_entries=std::max(memory_shape.maximum_block_support_entries,block_support_entries);
         if(!CheckedAddBytes(memory_shape.affected_row_entries,core.affected_rows.size(),memory_shape.affected_row_entries) ||
             !CheckedAddBytes(memory_shape.component_neighbor_entries,core.neighbor_atoms.size(),memory_shape.component_neighbor_entries))
         {out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation; out.memory_estimate.status=MemoryStatus::Overflow;
             out.memory_estimate.reason="size-overflow"; out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
+    }
     const auto * input=domain.atoms.Storage();
     const auto snapshot_bytes=input ? EstimateSnapshotBytes(*input) : std::nullopt;
     std::size_t resident=snapshot_bytes.value_or(0),root_mappings{},root_entries{};
@@ -175,6 +185,17 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         LogMemoryEstimate(out.memory_estimate);
     if(out.memory_estimate.status!=MemoryStatus::Pass)
     {out.reason="resource-limit:fixed-neighbor-preparation:"+out.memory_estimate.reason; return out;}
+    auto global_shape=memory_shape;
+    global_shape.resident_bytes=out.memory_estimate.estimated_peak_bytes;
+    out.global_state_memory_estimate=PlanMemory(global_shape,MemoryStage::GlobalStateEvaluation);
+    if(out.global_state_memory_estimate.status!=MemoryStatus::Pass ||
+        out.global_state_memory_estimate.estimated_peak_bytes>out.global_state_memory_estimate.budget_bytes/2)
+        LogMemoryEstimate(out.global_state_memory_estimate);
+    if(out.global_state_memory_estimate.status!=MemoryStatus::Pass)
+    {
+        out.memory_estimate=out.global_state_memory_estimate;
+        out.reason="resource-limit:global-state-evaluation:"+out.memory_estimate.reason; return out;
+    }
     auto * const profile_work=policy.collect_telemetry ? &out.work.local_profile_work : nullptr;
     const auto certify_endpoint=[&] {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -452,7 +473,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         const Vector eta=Select(out.state.eta,IndicesOf(layout.full_atoms));
         const Vector beta=SelectBeta(out.state.beta,layout.full_atoms);
         const auto global_started=Clock::now();
-        const auto global=EvaluateState(domain,y,eta,beta,context,ProfileEvaluationRole::AcceptedEndpoint,profile_work);
+        const auto global=EvaluateStateStreaming(domain,y,eta,beta,context,ProfileEvaluationRole::AcceptedEndpoint,profile_work);
         if(policy.collect_telemetry) out.work.sweep_global_state_seconds+=Seconds(global_started);
         if(!global.valid || !global.certificate.available)
         {out.reason="block-inner-invalid"; stop=true; break;}

@@ -113,7 +113,7 @@ struct FixedNeighborSearchResult
     std::size_t sweep_count{},total_block_solves{},total_profile_evaluations{},total_accepted_local_updates{},
         block_preparations{},domain_preparations{},mapping_preparations{};
     std::size_t prepared_mapping_entries{},prepared_mapping_bytes{};
-    MemoryEstimate memory_estimate;
+    MemoryEstimate memory_estimate,global_state_memory_estimate;
     double search_seconds{};
     FixedNeighborWork work;
     std::optional<FixedNeighborBlockSweep> final_sweep;

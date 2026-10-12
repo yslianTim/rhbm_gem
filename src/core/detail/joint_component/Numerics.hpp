@@ -126,6 +126,9 @@ Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,bool,const Ev
     ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);
 Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &,
     ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);
+// Scalar/vector reductions for accepted global sweep states. Leaves x and derivative empty.
+Evaluation EvaluateStateStreaming(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &,
+    ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);
 struct TrustEvidence
 {
     std::optional<Endpoint> reference;

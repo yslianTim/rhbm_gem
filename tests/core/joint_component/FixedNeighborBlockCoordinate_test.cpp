@@ -218,6 +218,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, PreparedRowMappingsScaleWithMembersh
     ASSERT_GT(blocks.cores.size(),1u);
     EXPECT_EQ(result.mapping_preparations,blocks.cores.size());
     EXPECT_EQ(result.memory_estimate.status,n::MemoryStatus::Pass);
+    EXPECT_EQ(result.global_state_memory_estimate.status,n::MemoryStatus::Pass);
+    EXPECT_EQ(result.global_state_memory_estimate.stage,n::MemoryStage::GlobalStateEvaluation);
     ASSERT_GT(result.prepared_mapping_bytes,0u);
     std::size_t legacy_bytes{};
     ASSERT_TRUE(n::CheckedMultiplyBytes(static_cast<std::size_t>(data.domain.rows),blocks.cores.size(),legacy_bytes));

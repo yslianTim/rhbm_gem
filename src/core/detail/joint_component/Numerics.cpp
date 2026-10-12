@@ -312,6 +312,80 @@ Evaluation EvaluateState(const Domain & domain,VectorRef y,const Vector & eta,co
     out.valid=out.residual.allFinite() && out.gradient.allFinite(); out.reason=out.valid ? "raw-state" : "nonfinite-state";
     return out;
 }
+Evaluation EvaluateStateStreaming(const Domain & domain,VectorRef y,const Vector & eta,const Vector & beta,
+    const EvaluationContext & context,ProfileEvaluationRole role,ProfileSearchWork * profile_work)
+{
+    ResourcePhase phase("global-state-evaluation",true,domain.rows,2*eta.size());
+    ProfileEvaluationRoleScopeForTesting role_scope(role);
+    EvaluationTelemetry telemetry(profile_work,role);
+    Evaluation out; out.eta=eta;
+    if(domain.rows!=y.size() || domain.rows==0 || eta.size()!=static_cast<Eigen::Index>(domain.atoms.size()) ||
+        eta.size()==0 || !eta.allFinite() || !y.allFinite())
+    {out.reason="invalid-input"; return out;}
+    if(beta.size()!=2*eta.size() || !beta.allFinite()) {out.reason="invalid-coefficients"; return out;}
+    const Vector widths=eta.array().exp();
+    if(!widths.allFinite() || (widths.array()<=0).any()) {out.reason="invalid-b"; return out;}
+
+    Vector prediction=Vector::Zero(y.size()),norms_squared=Vector::Zero(beta.size());
+    for(Eigen::Index atom=0;atom<eta.size();++atom)
+        for(const auto & support:domain.atoms[static_cast<std::size_t>(atom)])
+        {
+            const auto basis=EvaluateKernel(support.square,widths(atom),2.5);
+            if(!std::isfinite(basis.gaussian) || !std::isfinite(basis.charge) ||
+                !std::isfinite(basis.gaussian_log_width) || !std::isfinite(basis.charge_log_width))
+            {out.reason="nonfinite-basis"; return out;}
+            prediction(support.row)+=beta(2*atom)*basis.gaussian+beta(2*atom+1)*basis.charge;
+            norms_squared(2*atom)+=basis.gaussian*basis.gaussian;
+            norms_squared(2*atom+1)+=basis.charge*basis.charge;
+        }
+    out.beta=beta; out.residual=std::move(prediction); out.residual-=y;
+    Vector ac_gradient=Vector::Zero(beta.size());
+    Vector gaussian_width_dot=Vector::Zero(eta.size()),charge_width_dot=Vector::Zero(eta.size());
+    for(Eigen::Index atom=0;atom<eta.size();++atom)
+        for(const auto & support:domain.atoms[static_cast<std::size_t>(atom)])
+        {
+            const auto basis=EvaluateKernel(support.square,widths(atom),2.5);
+            const double residual=out.residual(support.row);
+            ac_gradient(2*atom)+=basis.gaussian*residual;
+            ac_gradient(2*atom+1)+=basis.charge*residual;
+            gaussian_width_dot(atom)+=basis.gaussian_log_width*residual;
+            charge_width_dot(atom)+=basis.charge_log_width*residual;
+        }
+    out.gradient.resize(eta.size());
+    for(Eigen::Index atom=0;atom<eta.size();++atom)
+    {
+        out.gradient(atom)=beta(2*atom)*gaussian_width_dot(atom)/context.scale/context.scale;
+        out.gradient(atom)+=beta(2*atom+1)*charge_width_dot(atom)/context.scale/context.scale;
+    }
+    if(!norms_squared.allFinite() || (norms_squared.array()<=0).any())
+    {out.reason="rank-deficient"; return out;}
+    const Vector norms=norms_squared.array().sqrt();
+    const double certificate_scale=context.scale>0 ? context.scale : std::max(1.0,y.norm());
+    const Vector scaled_beta=norms.array()*beta.array()/certificate_scale;
+    const Vector scaled_gradient=ac_gradient.array()/norms.array()/certificate_scale;
+    Vector projected=scaled_beta-scaled_gradient;
+    Certificate certificate; certificate.evaluated=true;
+    bool feasible=true;
+    for(Eigen::Index atom=0;atom<eta.size();++atom)
+    {
+        const Eigen::Index amplitude=2*atom;
+        feasible &= beta(amplitude)>=0;
+        projected(amplitude)=std::max(0.0,projected(amplitude));
+        if(beta(amplitude)==0) certificate.active_atoms.push_back(atom);
+    }
+    certificate.projected_kkt=(scaled_beta-projected).lpNorm<Eigen::Infinity>();
+    certificate.available=true; certificate.feasible=feasible;
+    certificate.kkt_passed=feasible && certificate.projected_kkt<=1e-10;
+    certificate.rss=out.residual.squaredNorm(); certificate.objective=.5*certificate.rss;
+    certificate.residual_scale=certificate.rss/static_cast<double>(y.size());
+    certificate.residual_rmse=out.residual.norm()/std::sqrt(static_cast<double>(y.size()));
+    certificate.residual_max=out.residual.cwiseAbs().maxCoeff();
+    certificate.relative_residual=out.residual.norm()/certificate_scale;
+    out.certificate=std::move(certificate);
+    out.valid=out.residual.allFinite() && out.gradient.allFinite();
+    out.reason=out.valid ? "raw-state" : "nonfinite-state";
+    return out;
+}
 TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy)
 {
     const auto reference=EvaluateProfile(domain,y,e.eta,true,&policy);
