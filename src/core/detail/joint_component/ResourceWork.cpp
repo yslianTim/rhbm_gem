@@ -139,12 +139,22 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
     }
     case MemoryStage::RankAssessment:
     {
-        // TiledDerivative currently holds three free-column by width dense arrays,
-        // then compact projected/Jacobian factors. This is an upper-bound workspace.
+        // DesignSpectrum uses the current dense reference QR; derivative assessment then
+        // holds free-column by width arrays and compact projected/Jacobian factors.
         const auto widths=atoms;
-        ok=AddProduct2D(temporary,free,widths,3*sizeof(double)) &&
-            AddProduct2D(temporary,widths,widths,2*sizeof(double)) &&
-            AddProduct2D(temporary,2*8192,widths,sizeof(double));
+        std::size_t derivative{},design_columns{},factor{},workspace{},spectrum{};
+        ok=AddProduct2D(derivative,free,widths,3*sizeof(double)) &&
+            AddProduct2D(derivative,widths,widths,2*sizeof(double)) &&
+            AddProduct2D(derivative,2*8192,widths,sizeof(double)) &&
+            AddProduct(derivative,entries,6*(sizeof(double)+sizeof(Eigen::Index))) &&
+            CheckedMultiplyBytes(atoms,2,design_columns) &&
+            CheckedMultiplyBytes(design_columns,design_columns,factor) &&
+            CheckedMultiplyBytes(factor,sizeof(double),factor) &&
+            CheckedMultiplyBytes(factor,3,workspace) &&
+            AddProduct(workspace,design_columns,2*8192*sizeof(double)) &&
+            CheckedAddBytes(factor,workspace,spectrum) &&
+            AddProduct(spectrum,entries,4*(sizeof(double)+sizeof(Eigen::Index)));
+        if(ok) temporary=std::max(derivative,spectrum);
         break;
     }
     case MemoryStage::TargetIdentifiability:

@@ -81,9 +81,14 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
     out.push_back(check("local-correction",a.jacobian.has_value(),a.local,
         a.correction.size() ? std::optional<double>(a.correction.lpNorm<Eigen::Infinity>()) : std::nullopt,1e-10));
     out.push_back(check("numerical-identifiability",a.widths.has_value(),a.identified));
+    if(a.rank_memory_estimate.status!=n::MemoryStatus::Pass)
+        out.push_back({"rank-memory-preflight",Status::Unavailable,scope,
+            static_cast<double>(a.rank_memory_estimate.estimated_peak_bytes),
+            static_cast<double>(a.rank_memory_estimate.budget_bytes),
+            std::string("resource-limit:rank-assessment:")+a.rank_memory_estimate.reason});
     for(const char * name:{"two-step-derivative","richardson","precision-50-100","boundary-audit","regular-certificate"})
         out.push_back({name,Status::NotRun,scope,{},{},"offline-audit-not-run"});
-    for(auto & evidence:out) if(evidence.status==Status::Unavailable)
+    for(auto & evidence:out) if(evidence.status==Status::Unavailable && evidence.reason.empty())
         evidence.reason=a.failure.empty() ? "missing-trusted-state" : a.failure;
     return out;
 }

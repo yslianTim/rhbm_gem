@@ -631,7 +631,47 @@ bool SameAssessmentPolicy(const EvaluationContext & a,const EvaluationContext & 
         a.linear.active_set_iteration_factor==b.linear.active_set_iteration_factor && a.linear.release_factor==b.linear.release_factor &&
         a.linear.release_response_norm==b.linear.release_response_norm && a.atom_ids==b.atom_ids && a.row_ids==b.row_ids;
 }
-Assessment AssessEvaluated(const Domain &,VectorRef y,const Evaluation & endpoint,const Evaluation & reference,
+namespace {
+MemoryEstimate RankAssessmentMemoryEstimate(const Domain & domain,VectorRef y,const Evaluation & endpoint,
+    const Evaluation & reference,const EvaluationContext & context)
+{
+    MemoryShape shape; shape.component_atoms=domain.atoms.size(); shape.component_observations=static_cast<std::size_t>(domain.rows);
+    shape.component_target_columns=context.target_columns;
+    const auto overflow=[&] {
+        auto estimate=PlanMemory(shape,MemoryStage::RankAssessment);
+        estimate.status=MemoryStatus::Overflow; estimate.reason="size-overflow"; return estimate;
+    };
+    for(Eigen::Index k=0;k<endpoint.beta.size();++k)
+        if(k%2 || endpoint.beta(k)>0)
+            if(!CheckedAddBytes(shape.component_free_columns,1,shape.component_free_columns)) return overflow();
+    for(std::size_t atom=0;atom<domain.atoms.size();++atom)
+        if(!CheckedAddBytes(shape.component_support_entries,domain.atoms[atom].size(),shape.component_support_entries))
+            return overflow();
+    const auto * input=domain.atoms.Storage();
+    const auto snapshot=input ? EstimateSnapshotBytes(*input) : std::nullopt;
+    std::size_t resident{};
+    const auto add_product=[](std::size_t & total,std::size_t count,std::size_t width) {
+        std::size_t bytes{}; return CheckedMultiplyBytes(count,width,bytes) && CheckedAddBytes(total,bytes,total);
+    };
+    const auto add_sparse=[&](const Sparse & matrix) {
+        std::size_t outer{};
+        return matrix.outerSize()>=0 && matrix.nonZeros()>=0 &&
+            CheckedAddBytes(static_cast<std::size_t>(matrix.outerSize()),1,outer) &&
+            add_product(resident,static_cast<std::size_t>(matrix.nonZeros()),sizeof(double)+sizeof(Eigen::Index)) &&
+            add_product(resident,outer,sizeof(Eigen::Index));
+    };
+    if(!snapshot || !CheckedAddBytes(*snapshot,domain.atoms.LocalSupportIndexBytes(),resident) ||
+        !add_product(resident,static_cast<std::size_t>(std::max<Eigen::Index>(0,domain.rows)),3*sizeof(double)) ||
+        !add_product(resident,shape.component_atoms,16*sizeof(double)+4*sizeof(Eigen::Index)) ||
+        !add_product(resident,shape.component_observations,2*sizeof(Eigen::Index)) ||
+        !add_product(resident,shape.component_atoms,2*sizeof(Eigen::Index)) ||
+        !add_sparse(endpoint.x) || !add_sparse(endpoint.derivative) ||
+        !add_sparse(reference.x) || !add_sparse(reference.derivative)) return overflow();
+    shape.resident_bytes=resident;
+    return PlanMemory(shape,MemoryStage::RankAssessment);
+}
+}
+Assessment AssessEvaluated(const Domain & domain,VectorRef y,const Evaluation & endpoint,const Evaluation & reference,
     const EvaluationContext & policy,bool supplied)
 {
     ResourcePhase phase("assessment");
@@ -648,6 +688,12 @@ Assessment AssessEvaluated(const Domain &,VectorRef y,const Evaluation & endpoin
         return out;
     }
     const double difference=Difference(endpoint.beta,reference.beta); out.coefficient_difference=difference;
+    out.rank_memory_estimate=RankAssessmentMemoryEstimate(domain,y,endpoint,reference,policy);
+    if(out.rank_memory_estimate.status!=MemoryStatus::Pass ||
+        out.rank_memory_estimate.estimated_peak_bytes>out.rank_memory_estimate.budget_bytes/2)
+        LogMemoryEstimate(out.rank_memory_estimate);
+    if(out.rank_memory_estimate.status!=MemoryStatus::Pass)
+    {out.failure="resource-limit:rank-assessment"; return out;}
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     AssessmentStageTimerForTesting design_stage("design-spectrum",endpoint.x.rows(),endpoint.x.cols());
 #endif

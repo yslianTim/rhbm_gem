@@ -412,6 +412,38 @@ TEST(JointObservableProfileTest, TargetEvidenceRequiresSelectionMetadata)
     EXPECT_FALSE(fit.target_evidence);
 }
 
+TEST(JointObservableProfileTest, LargeTargetIdentifiabilityPreflightReturnsUnavailableEvidence)
+{
+    constexpr std::size_t atoms=37'406;
+    core::JointProblemInput input; input.observations.assign(8,0.0); input.row_ids.reserve(8);
+    for(std::size_t row=0;row<input.observations.size();++row) input.row_ids.push_back("row-"+std::to_string(row));
+    input.atom_ids.reserve(atoms); input.support.resize(atoms);
+    for(std::size_t atom=0;atom<atoms;++atom)
+    {
+        input.atom_ids.push_back("atom-"+std::to_string(atom)); input.support[atom].push_back({0,0.0});
+    }
+    input.selection_domain.emplace(); input.selection_domain->target_indices.reserve(atoms);
+    for(std::size_t atom=0;atom<atoms;++atom) input.selection_domain->target_indices.push_back(atom);
+    const core::JointProblem problem(std::move(input));
+    const auto & data=core::JointProblemAccess::Get(problem);
+    rhbm_gem::JointState state; state.ac.assign(2*atoms,1.0); state.b.assign(atoms,.55);
+    state.log_b.assign(atoms,std::log(.55));
+    const auto evidence=n::AssessTargetState(problem,problem.ParameterLayout(),state,{},
+        rhbm_gem::JointEvidenceScope::AssembledGlobal,data.input->observations.size());
+    const auto identifiability=std::find_if(evidence.checks.begin(),evidence.checks.end(),[](const auto & check) {
+        return check.name=="target-identifiability";
+    });
+    ASSERT_NE(identifiability,evidence.checks.end());
+    EXPECT_EQ(identifiability->status,rhbm_gem::JointCheckStatus::Unavailable);
+    EXPECT_EQ(identifiability->reason,"resource-limit:target-identifiability");
+    EXPECT_EQ(evidence.atoms.size(),atoms);
+    EXPECT_TRUE(std::all_of(evidence.atoms.begin(),evidence.atoms.end(),[](const auto & atom) {
+        return atom.status==rhbm_gem::JointCheckStatus::Unavailable;
+    }));
+    EXPECT_TRUE(evidence.ranks.empty());
+    EXPECT_EQ(n::TargetConvergence(evidence,true),rhbm_gem::JointCheckStatus::Unavailable);
+}
+
 TEST(JointObservableProfileTest, ActiveBoundaryDoesNotAcquireTargetCertificate)
 {
     auto input=TwoRowHalo();

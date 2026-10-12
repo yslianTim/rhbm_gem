@@ -18,6 +18,33 @@ Matrix SquareCompact(const Matrix & r)
 {
     Matrix out=Matrix::Zero(r.cols(),r.cols()); out.topRows(r.rows())=r; return out;
 }
+MemoryEstimate TargetIdentifiabilityMemoryEstimate(const JointProblemInput & input,const JointParameterLayout & layout,
+    std::size_t rows)
+{
+    MemoryShape shape; shape.component_atoms=layout.full_atoms.size(); shape.component_observations=rows;
+    const auto overflow=[&] {
+        auto estimate=PlanMemory(shape,MemoryStage::TargetIdentifiability);
+        estimate.status=MemoryStatus::Overflow; estimate.reason="size-overflow"; return estimate;
+    };
+    if(!CheckedMultiplyBytes(shape.component_atoms,3,shape.component_target_columns)) return overflow();
+    for(const auto atom:layout.full_atoms)
+        if(atom>=input.support.size() ||
+            !CheckedAddBytes(shape.component_support_entries,input.support[atom].size(),shape.component_support_entries))
+            return overflow();
+    const auto snapshot=EstimateSnapshotBytes(input);
+    std::size_t resident{};
+    const auto add_product=[](std::size_t & total,std::size_t count,std::size_t width) {
+        std::size_t bytes{}; return CheckedMultiplyBytes(count,width,bytes) && CheckedAddBytes(total,bytes,total);
+    };
+    if(!snapshot) return overflow();
+    resident=*snapshot;
+    if(!add_product(resident,rows,sizeof(double)) ||
+        !add_product(resident,rows,2*sizeof(Eigen::Index)) ||
+        !add_product(resident,shape.component_atoms,2*sizeof(Eigen::Index)+sizeof(std::vector<LocalSupportIndex>)) ||
+        !add_product(resident,shape.component_support_entries,sizeof(LocalSupportIndex))) return overflow();
+    shape.resident_bytes=resident;
+    return PlanMemory(shape,MemoryStage::TargetIdentifiability);
+}
 }
 TargetGeometry BuildTargetGeometry(const Domain & domain,VectorRef y,const JointState & state,const EvaluationContext & context)
 {
@@ -79,6 +106,26 @@ JointTargetEvidence AssessTargetState(const JointProblem & problem,const JointPa
         out.checks.push_back({name,status,scope,value,threshold,std::move(reason)});
     };
     for(const auto & c:existing) if(c.name=="inner" || c.name=="kkt" || c.name=="width-stationarity" || c.name=="assembled-profile") out.checks.push_back(c);
+    if(state)
+    {
+        const auto estimate=TargetIdentifiabilityMemoryEstimate(input,layout,layout.informative_rows.size());
+        if(estimate.status!=MemoryStatus::Pass || estimate.estimated_peak_bytes>estimate.budget_bytes/2)
+            LogMemoryEstimate(estimate);
+        if(estimate.status!=MemoryStatus::Pass)
+        {
+            const auto reason=std::string("resource-limit:target-identifiability");
+            for(const auto atom:layout.full_atoms) out.atoms.push_back({atom,Status::Unavailable,{},reason});
+            for(const auto & group:layout.groups) for(const auto atom:group.atoms)
+                out.atoms.push_back({atom,Status::Unavailable,{},"observable-contribution-only"});
+            std::sort(out.atoms.begin(),out.atoms.end(),[](const auto & a,const auto & b){return a.atom<b.atom;});
+            check("target-identifiability",Status::Unavailable,reason);
+            check("target-local-correction",Status::Unavailable,reason);
+            check("target-memory-preflight",Status::Unavailable,
+                std::string("resource-limit:target-identifiability:")+estimate.reason,
+                static_cast<double>(estimate.estimated_peak_bytes),static_cast<double>(estimate.budget_bytes));
+            return out;
+        }
+    }
     TargetGeometry geometry;
     auto context=ProfileContext(data.context,layout,static_cast<Eigen::Index>(original_rows));
     const auto domain=ProfileDomain(data.domain,layout);

@@ -180,6 +180,7 @@ struct Assessment
     std::optional<Spectrum> design,widths,normalized_widths,jacobian;
     Matrix weak_directions;
     Vector correction;
+    MemoryEstimate rank_memory_estimate;
     double coefficient_difference{unavailable};
     bool inner{},gradient{},local{},identified{};
     std::string failure;
