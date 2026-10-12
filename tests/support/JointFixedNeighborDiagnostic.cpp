@@ -105,7 +105,7 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
     const Domain domain=ProfileDomain(data.domain,layout);
     const EvaluationContext context=ProfileContext(data.context,layout,data.domain.rows);
     const Vector y=Select(data.y,IndicesOf(layout.informative_rows));
-    auto run_policy=policy; run_policy.collect_diagnostics=true; run_policy.certify_endpoint=false;
+    auto run_policy=policy; run_policy.collect_diagnostics=true;
     auto search=SearchFixedNeighborComponent(domain,layout,y,initial_eta,context,
         run_policy,std::move(initial_beta));
     out.state=search.state; out.blocks=search.blocks; out.sweeps=search.sweeps;
@@ -116,12 +116,21 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
     out.domain_preparations=search.domain_preparations;
     out.mapping_preparations=search.mapping_preparations;
     out.work=search.work;
-    if(policy.certify_endpoint && search.state.eta.size()==static_cast<Eigen::Index>(domain.atoms.size()))
+    if(policy.certify_endpoint)
     {
-        auto certification=CertifyFixedNeighborEndpoint(domain,y,search.state,context,
-            policy.collect_telemetry ? &search.work.local_profile_work : nullptr);
-        out.work=search.work;
-        AssembleResult(problem,data,layout,domain,y,context,certification,out);
+        if(search.certification)
+        {
+            out.work=search.work;
+            AssembleResult(problem,data,layout,domain,y,context,*search.certification,out);
+        }
+        else if(!policy.stop_after_stationarity && search.search_converged &&
+            search.state.eta.size()==static_cast<Eigen::Index>(domain.atoms.size()))
+        {
+            const auto certification=CertifyFixedNeighborEndpoint(domain,y,search.state,context,
+                policy.collect_telemetry ? &search.work.local_profile_work : nullptr);
+            out.work=search.work;
+            AssembleResult(problem,data,layout,domain,y,context,certification,out);
+        }
     }
     return out;
 }

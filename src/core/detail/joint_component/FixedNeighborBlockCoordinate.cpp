@@ -18,6 +18,7 @@ namespace {
 using Clock=std::chrono::steady_clock;
 enum class StationarityState {NotStationary,CandidateStationary,ConfirmedStationary};
 constexpr double EtaChangeConfirmationThreshold=1e-10;
+constexpr std::size_t EndpointCertificationRetryInterval=10;
 double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
 struct OptionalPhaseTimer
 {
@@ -171,6 +172,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     const bool retain_diagnostics=policy.collect_diagnostics || policy.capture_local_trajectory ||
         static_cast<bool>(policy.state_observer);
     bool stop=false;
+    bool stationarity_reset_after_certification=true;
+    std::size_t next_certification_retry_sweep{};
     for(std::size_t sweep_index=0;sweep_index<policy.maximum_sweeps && !stop;++sweep_index)
     {
         const auto sweep_started=Clock::now(); FixedNeighborBlockSweep sweep; sweep.sweep=sweep_index+1;
@@ -411,6 +414,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             if(IsFixedNeighborEtaChangeConfirmed(sweep.eta_change_inf,sweep.coordinate_confirmation_available))
                 stationarity=StationarityState::ConfirmedStationary;
         }
+        else if(out.certification && !out.certification->passed()) stationarity_reset_after_certification=true;
         if(stationarity==StationarityState::ConfirmedStationary)
         {
             if(out.confirmed_stationarity_sweep==0) out.confirmed_stationarity_sweep=sweep_index+1;
@@ -420,6 +424,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 if(policy.stop_after_stationarity) break;
                 continue;
             }
+            const bool retry_due=!out.certification || out.certification->passed() ||
+                stationarity_reset_after_certification || sweep_index+1>=next_certification_retry_sweep;
+            if(!retry_due) continue;
             out.certification=CertifyFixedNeighborEndpoint(domain,y,out.state,context,profile_work);
             out.certification_sweep=sweep_index+1;
             if(out.certification->passed())
@@ -432,6 +439,11 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 out.reason=out.certification->trust.reason.empty() ?
                     "endpoint-certification-invalid-primary" : out.certification->trust.reason;
                 stop=true;
+            }
+            else
+            {
+                stationarity_reset_after_certification=false;
+                next_certification_retry_sweep=sweep_index+1+EndpointCertificationRetryInterval;
             }
         }
     }

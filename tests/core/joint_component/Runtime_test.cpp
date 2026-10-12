@@ -38,9 +38,9 @@ core::JointComponentResult PublicComponent(const n::ComponentView & view,const n
     core::JointComponentResult out; out.id=view.id;
     out.atoms.assign(view.atoms.begin(),view.atoms.end()); out.rows.assign(view.rows.begin(),view.rows.end());
     out.search_completed=fit.succeeded; out.stop_reason=fit.stop_reason;
-    if(fit.certification && fit.certification->passed())
+    if(fit.search.certification && fit.search.certification->passed())
     {
-        const auto & endpoint=fit.certification->assessment.primary;
+        const auto & endpoint=fit.search.certification->assessment.primary;
         const auto values=[](const n::Vector & v) {return std::vector<double>(v.data(),v.data()+v.size());};
         out.state=rhbm_gem::JointState{values(endpoint.beta),values(endpoint.eta.array().exp()),
             values(endpoint.eta),values(endpoint.gradient),endpoint.certificate.objective/(scale*scale),{}};
@@ -440,10 +440,10 @@ TEST(JointComponentRuntimeTest, ReusedAssemblyMatchesFreshAssessmentAndRejectsCh
     auto context=n::ChildContext(data.context,data.partition.components[0],true);
     const auto fit=p::SolveFixedNeighborComponentForTesting(
         data.partition.components[0],n::Vector::Constant(1,.55),data.context);
-    ASSERT_TRUE(fit.certification && fit.certification->passed());
+    ASSERT_TRUE(fit.search.certification && fit.search.certification->passed());
     const std::vector<core::JointComponentResult> components{
         PublicComponent(data.partition.components[0],fit,data.context.scale)};
-    auto reusable_assessment=fit.certification->assessment;
+    auto reusable_assessment=fit.search.certification->assessment;
     const n::AssessmentReuse reuse{data.domain,data.y,context,reusable_assessment};
     n::AssessmentWorkForTesting()={};
     const auto reused=n::AssembleComponents(data.domain,data.y,data.partition,data.context,components,&reuse);
