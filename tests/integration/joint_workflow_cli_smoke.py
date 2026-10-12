@@ -125,6 +125,17 @@ def main() -> int:
         assert metadata["software"] == generator
         assert saved["regular_certificate"] == "not-run"
         assert saved["components"] and saved["assembled_state"] is not None
+        for component in saved["components"]:
+            if component["search_sweeps"]:
+                assert component["search_completed"]
+                assert component["state"] is not None
+                assert 0 < component["first_order_stationarity_sweep"] <= component["confirmed_stationarity_sweep"]
+                assert component["confirmed_stationarity_sweep"] <= component["endpoint_certification_sweep"]
+                assert component["endpoint_certification_sweep"] == component["search_sweeps"] <= 200
+                checks = {check["name"]: check for check in component["evidence"]}
+                assert checks["endpoint-trust"]["status"] == "passed"
+                assert checks["endpoint-primary-width-gradient"]["status"] == "passed"
+                assert checks["endpoint-reference-width-gradient"]["status"] == "passed"
         assert "prediction" not in saved and "observations" not in saved
         assert (root / "joint_atoms_example.csv").read_text().startswith("AtomID,ComponentID,A,B,C,")
         run("result_dump", "--printer", "gaus", "-d", database, "-k", "example", "-o", root)

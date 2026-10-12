@@ -14,19 +14,27 @@ option or automatic routing layer.
 | --- | --- |
 | Outer core | 12 atoms, disjoint mutable blocks |
 | Block order | Forward serial Gauss-Seidel |
-| Maximum sweeps | 30 |
+| Maximum sweeps | 200 |
 | Local search | Profile LM (`fixed_neighbor_local_search=profile-lm`) |
 | Local update contract | At most one trusted accepted Profile LM update per block visit |
 | Acceptance | Existing replay and roundoff-safe monotone acceptance |
-| Convergence | Existing A/C KKT, width-gradient and eta-confirmation checks |
-| Endpoint | Existing trust, certification and `RuntimeConvergence` semantics |
+| Candidate stationarity | Existing A/C KKT, width-gradient and eta-confirmation checks |
+| Endpoint | Independent certification must pass before successful stopping |
+| Certification retry | Valid failed endpoints continue; retry every 10 sweeps while stationarity holds |
+| Exhaustion | Preserve evidence; a final trust-passed state may remain available while search is incomplete |
 
 The numerical thresholds are unchanged: A/C KKT `1e-10`, width-gradient
-`1e-12`, and eta confirmation `1e-10`. Prepared structural block mappings and
-workspace reuse do not reuse numeric factors, accepted states, or replay
-results across sweeps. The route therefore preserves the objective, A/C solve,
-width parameterization, serial update semantics, replay, endpoint
-certification, persistence and `RuntimeConvergence` contract. See the
+`1e-12`, and eta confirmation `1e-10`. A confirmed stationary endpoint is
+certified using the existing reference solve and trust checks. Reference
+disagreement does not replace accepted coefficients or stop a valid search;
+FixedNeighbor continues its normal updates and retries certification at a
+bounded interval. An invalid primary endpoint is fatal. At budget exhaustion,
+the last endpoint is certified only when no candidate certification ran; a
+failed assessment leaves state unavailable, while a passing one retains a
+trusted state with an incomplete search. Prepared structural block mappings and workspace reuse do not
+reuse numeric factors, accepted states, or replay results across sweeps. The
+route therefore preserves the objective, A/C solve, width parameterization,
+serial update semantics, replay, persistence and `RuntimeConvergence` contract. See the
 [Joint runtime contract](joint-component-runtime.md) for the implementation
 details.
 

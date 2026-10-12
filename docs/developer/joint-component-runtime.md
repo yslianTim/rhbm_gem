@@ -19,11 +19,20 @@ objective is `0.5 * ||prediction - observations||² / ObservationScale()²`.
 
 Production fitting uses the FixedNeighbor route described below. Each accepted
 local Profile LM update is replayed against the global state and passes the
-roundoff-safe monotone acceptance rule before it is kept. After block search
-stops, the search endpoint is independently evaluated and certified. Reference
-coefficients do not replace the search coefficients. If endpoint certification
-fails, the component has no usable state and reports the endpoint failure unless
-an earlier search stop reason already applies. Search completion, certification,
+roundoff-safe monotone acceptance rule before it is kept. At the end of each
+complete sweep, global stationarity checks identify a candidate endpoint. A
+confirmed candidate is independently certified before search can complete;
+reference coefficients never replace the accepted search coefficients. A valid
+endpoint that fails trust keeps its assessment and may continue through the
+same block-coordinate updates. While stationarity remains confirmed, another
+certification is attempted at most once every 10 sweeps. If stationarity clears,
+it must be reached and confirmed again before certification is retried. An
+invalid primary endpoint stops immediately. At budget exhaustion, a final
+endpoint is certified only if no candidate certification has run. A passing
+final trust check may preserve a usable state while the search remains
+incomplete; a failed check preserves its evidence and leaves state unavailable.
+An earlier failed candidate assessment is retained without repeating its
+reference solve. Search completion, certification,
 state availability and runtime convergence remain separate outcomes.
 
 `AssessProfileSearchForDiagnostics()` is a test-support diagnostic for Profile
@@ -38,14 +47,18 @@ estimator, workflow API, CLI and Python API do not expose a Joint route
 selector; `--estimator joint-components` is sufficient.
 
 The production FixedNeighbor policy is intentionally small and fixed: disjoint
-mutable cores of 12 atoms, at most 30 forward Gauss-Seidel sweeps, and one
+mutable cores of 12 atoms, at most 200 forward Gauss-Seidel sweeps, and one
 trusted accepted local Profile LM update per block visit. Outside-core
 neighbors remain fixed while a block is solved. Each accepted block is replayed
 globally, checked for monotone roundoff-safe acceptance, and contributes to the
 existing global A/C KKT (`1e-10`), width-gradient (`1e-12`) and eta-confirmation
-(`1e-10`) criteria. Endpoint trust and certification use the existing checks.
-The at-most-one accepted-update contract is intrinsic; diagnostic controls such
-as reverse order and trajectory capture are not production configuration.
+(`1e-10`) criteria. Meeting these checks makes the endpoint a candidate; the
+existing independent trust assessment must also pass for successful stopping.
+Valid trust failures remain eligible for bounded retry; invalid primary
+assessments stop, and an untrusted endpoint at the sweep limit reports budget
+exhaustion without a usable state. The at-most-one accepted-update contract is
+intrinsic; diagnostic controls such as reverse order and trajectory capture are
+not production configuration.
 
 The local numerical primitive is named **Profile LM** (Levenberg–Marquardt
 optimization of the profiled width objective). `SearchProfile()` optimizes
@@ -107,11 +120,13 @@ target evidence once after implementation and assembly finish. Public
 `FitJointComponents()` and `EstimateJointComponents()` keep their existing
 contracts and do not expose assembly details to callers.
 
-Production search retains only aggregate counters, final sweep state and the
-endpoint assessment needed by the component route. Detailed block records, local
-trial trajectories, reverse order and local certification remain opt-in
-experiment/test diagnostics. The preparation and mapping counters are reported
-as implementation attribution; they are not convergence criteria.
+Production search retains aggregate counters, final sweep state and the latest
+endpoint assessment needed by the component route. Persisted component counters
+record actual sweeps, first and confirmed stationarity, and the last certification
+sweep. Detailed block records, local trial trajectories, reverse order and local
+certification remain opt-in experiment/test diagnostics. The preparation and
+mapping counters are reported as implementation attribution; they are not
+convergence criteria.
 
 The whole-problem `RunFixedNeighborDiagnostic()` facade is compiled into test
 support and called only by component tests and the fixed-neighbor experiment.
