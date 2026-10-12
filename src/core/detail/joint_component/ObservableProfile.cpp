@@ -111,8 +111,6 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
     }
     for(const auto & group:layout.groups) state.nuisance_amplitudes.push_back(amplitudes.at(group.row));
     state.objective=.5*(prediction-data.y).squaredNorm()/(data.context.scale*data.context.scale);
-    Vector expected=Vector::Zero(data.y.size());
-    for(const auto & group:layout.groups) expected(static_cast<Eigen::Index>(group.row))=data.y(static_cast<Eigen::Index>(group.row));
     Assessment assessment;
     bool profile_replay_passed=true;
     if(count)
@@ -121,48 +119,77 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
         const Vector y=SelectValues(data.y,IndicesOf(layout.informative_rows));
         const Vector eta=Eigen::Map<const Vector>(state.log_b.data(),static_cast<Eigen::Index>(count));
         const Vector beta=Eigen::Map<const Vector>(state.ac.data(),static_cast<Eigen::Index>(2*count));
-        assessment=AssessProfile(domain,y,eta,context,&beta);
+        assessment=AssessProfile(domain,y,eta,context,&beta,&prediction,&layout.informative_rows);
         out.evidence=AssessmentEvidence(assessment,JointEvidenceScope::AssembledGlobal);
         out.ranks=AssessmentRanks(assessment,JointEvidenceScope::AssembledGlobal);
         profile_replay_passed=assessment.independent_replay.passed;
         if(assessment.primary.valid)
         {
-            for(std::size_t r=0;r<layout.informative_rows.size();++r)
-                expected(static_cast<Eigen::Index>(layout.informative_rows[r]))=
-                    assessment.primary.residual(static_cast<Eigen::Index>(r))+y(static_cast<Eigen::Index>(r));
             for(std::size_t k=0;k<count;++k)
                 state.width_gradient[k]=assessment.primary.gradient(static_cast<Eigen::Index>(k));
         }
     }
     else out.evidence=AnalyticNuisanceEvidence(JointEvidenceScope::AssembledGlobal);
-    double prediction_difference{},prediction_error_ratio{}; bool prediction_passed=true;
-    for(Eigen::Index row=0;row<data.y.size();++row)
+    const bool assembly_replay_available=!count || assessment.independent_replay.assembled_prediction_available;
+    double prediction_difference=std::isfinite(assessment.independent_replay.assembled_prediction_difference) ?
+        assessment.independent_replay.assembled_prediction_difference : 0.0;
+    double prediction_error_ratio=std::isfinite(assessment.independent_replay.assembled_prediction_error_ratio) ?
+        assessment.independent_replay.assembled_prediction_error_ratio : 0.0;
+    bool prediction_passed=!count || (assembly_replay_available && assessment.independent_replay.assembled_prediction_passed);
+    std::vector<bool> replayed_rows(input.observations.size());
+    for(const auto row:layout.informative_rows) replayed_rows[row]=true;
+    for(const auto & group:layout.groups)
     {
-        const double error=std::abs(prediction(row)-expected(row));
+        const auto row=static_cast<Eigen::Index>(group.row);
+        replayed_rows[group.row]=true;
+        const double error=std::abs(prediction(row)-data.y(row));
         prediction_difference=std::max(prediction_difference,error);
-        const double tolerance=2e-12+2e-13*std::abs(expected(row));
+        const double tolerance=2e-12+2e-13*std::abs(data.y(row));
         prediction_error_ratio=std::max(prediction_error_ratio,error/tolerance);
         prediction_passed &= error<=tolerance;
     }
+    double unprofiled_rss{},unprofiled_compensation{};
+    for(std::size_t row=0;row<replayed_rows.size();++row) if(!replayed_rows[row])
+    {
+        const auto index=static_cast<Eigen::Index>(row);
+        const double error=std::abs(prediction(index));
+        const double tolerance=2e-12;
+        prediction_difference=std::max(prediction_difference,error);
+        prediction_error_ratio=std::max(prediction_error_ratio,error/tolerance);
+        prediction_passed &= error<=tolerance;
+        const double square=data.y(index)*data.y(index);
+        const double adjusted=square-unprofiled_compensation,next=unprofiled_rss+adjusted;
+        unprofiled_compensation=(next-unprofiled_rss)-adjusted;
+        unprofiled_rss=next;
+    }
     const double raw_objective=.5*(prediction-data.y).squaredNorm();
-    const double expected_raw_objective=.5*(expected-data.y).squaredNorm();
-    const double objective_difference=std::abs(raw_objective-expected_raw_objective);
-    const bool reconstruction=prediction.allFinite() && expected.allFinite() && prediction_passed &&
-        objective_difference<=1e-12+2e-12*std::abs(expected_raw_objective);
+    const double independent_objective=count ? assessment.independent_replay.independent_objective+.5*unprofiled_rss : raw_objective;
+    const bool objective_evidence_available=!count || (assembly_replay_available && std::isfinite(independent_objective));
+    const double objective_difference=objective_evidence_available ? std::abs(raw_objective-independent_objective) : 0.0;
+    const double objective_tolerance=objective_evidence_available ? 1e-12+2e-12*std::abs(independent_objective) : 1e-12;
+    const bool objective_passed=!count || (objective_evidence_available &&
+        assessment.independent_replay.assembled_objective_passed && objective_difference<=objective_tolerance);
+    const bool reconstruction=prediction.allFinite() && prediction_passed && objective_passed;
     const bool mapping=std::all_of(out.available_row_mask.begin(),out.available_row_mask.end(),[](bool value){return value;}) &&
         std::all_of(state.ac.begin(),state.ac.end(),[](double value){return std::isfinite(value);}) &&
         std::all_of(state.log_b.begin(),state.log_b.end(),[](double value){return std::isfinite(value);});
     const bool consistency=mapping && reconstruction && profile_replay_passed;
     out.evidence.push_back({"assembly-mapping",mapping ? JointCheckStatus::Passed : JointCheckStatus::Failed,
         JointEvidenceScope::AssembledGlobal,{},{},mapping ? "exact-component-identity-mapping" : "incomplete-component-mapping"});
-    out.evidence.push_back({"assembly-prediction-consistency",prediction_passed ? JointCheckStatus::Passed :
-        JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,prediction_error_ratio,1.0,{}});
-    out.evidence.push_back({"assembly-objective-consistency",
-        objective_difference<=1e-12+2e-12*std::abs(expected_raw_objective) ? JointCheckStatus::Passed : JointCheckStatus::Failed,
-        JointEvidenceScope::AssembledGlobal,objective_difference,1e-12+2e-12*std::abs(expected_raw_objective),{}});
+    const auto prediction_status=!count ? JointCheckStatus::Passed : !assembly_replay_available ?
+        JointCheckStatus::Unavailable : prediction_passed ? JointCheckStatus::Passed : JointCheckStatus::Failed;
+    const auto objective_status=!count ? JointCheckStatus::Passed : !objective_evidence_available ?
+        JointCheckStatus::Unavailable : objective_passed ? JointCheckStatus::Passed : JointCheckStatus::Failed;
+    out.evidence.push_back({"assembly-prediction-consistency",prediction_status,JointEvidenceScope::AssembledGlobal,
+        assembly_replay_available ? std::optional<double>(prediction_error_ratio) : std::nullopt,1.0,{}});
+    out.evidence.push_back({"assembly-objective-consistency",objective_status,
+        JointEvidenceScope::AssembledGlobal,objective_evidence_available ?
+        std::optional<double>(objective_difference) : std::nullopt,objective_tolerance,{}});
     out.evidence.push_back({"assembled-consistency",consistency ? JointCheckStatus::Passed :
-        !prediction.allFinite() || !expected.allFinite() ? JointCheckStatus::Unavailable : JointCheckStatus::Failed,
-        JointEvidenceScope::AssembledGlobal,prediction_difference,2e-12,
+        !prediction.allFinite() || (count && !assessment.independent_replay.valid) ?
+            JointCheckStatus::Unavailable : JointCheckStatus::Failed,
+        JointEvidenceScope::AssembledGlobal,assembly_replay_available ?
+            std::optional<double>(prediction_error_ratio) : std::nullopt,1.0,
         !profile_replay_passed ? assessment.independent_replay.reason :
             reconstruction ? "" : "full-domain-prediction-objective-mismatch"});
     if(!assessment.verification_memory_estimate.reason.empty())

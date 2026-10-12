@@ -138,9 +138,12 @@ TEST(JointComponentPartialSelectionTest, IdentifiableRecoveryOmissionAndOutsideD
     }
     auto omitted=p.Input(); omitted.atom_ids.resize(1); omitted.support.resize(1);
     const auto wrong=core::FitJointComponents(core::JointProblem(omitted),{f.b[0]});
-    ASSERT_TRUE(wrong.objective); ASSERT_TRUE(wrong.assembled_state);
-    EXPECT_GT(*wrong.objective,*fit.objective+1e-8);
-    EXPECT_GT(std::abs(wrong.assembled_state->ac[0]-f.a[0]),1e-5);
+    ASSERT_FALSE(wrong.objective); ASSERT_FALSE(wrong.assembled_state);
+    ASSERT_TRUE(wrong.components[0].candidate_diagnostic);
+    EXPECT_TRUE(wrong.components[0].candidate_diagnostic->candidate_available);
+    ASSERT_GE(wrong.components[0].candidate_diagnostic->candidate_ac.size(),2);
+    EXPECT_GT(std::abs(wrong.components[0].candidate_diagnostic->candidate_ac[0]-f.a[0]),1e-5);
+    EXPECT_NE(wrong.RuntimeConvergence(),core::JointCheckStatus::Passed);
     std::set<std::string> rows(p.Input().row_ids.begin(),p.Input().row_ids.end());
     auto values=std::make_unique<double[]>(f.map->GetMapValueArraySize());
     for(std::size_t i=0;i<f.map->GetMapValueArraySize();++i) values[i]=rows.contains(std::to_string(i)) ? f.map->GetMapValue(i) : 12345;
@@ -241,8 +244,15 @@ TEST(JointComponentPartialSelectionTest, InitializationExceptionsKeepProvenanceW
     ASSERT_EQ(initialization.atoms.size(),2);
     EXPECT_TRUE(initialization.atoms[0].reason.starts_with("initialization-exception:"));
     EXPECT_EQ(initialization.atoms[1].reason,"valid-width");
-    ASSERT_EQ(fit.components.size(),2); EXPECT_TRUE(fit.components[0].state); EXPECT_TRUE(fit.components[1].state);
-    EXPECT_TRUE(initialization.valid); EXPECT_TRUE(fit.objective);
+    ASSERT_EQ(fit.components.size(),2);
+    for(const auto & component:fit.components)
+    {
+        EXPECT_FALSE(component.state);
+        ASSERT_TRUE(component.candidate_diagnostic);
+        EXPECT_TRUE(component.candidate_diagnostic->candidate_available);
+    }
+    EXPECT_TRUE(initialization.valid); EXPECT_FALSE(fit.objective);
+    EXPECT_NE(fit.RuntimeConvergence(),core::JointCheckStatus::Passed);
     EXPECT_EQ(initialization.atoms[0].seed_source,"median-fallback");
     EXPECT_EQ(initialization.atoms[0].donor_count,1);
     EXPECT_FALSE(initialization.atoms[0].original_b);

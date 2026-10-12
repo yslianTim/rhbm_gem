@@ -135,14 +135,19 @@ MemoryEstimate EndpointVerificationMemoryEstimate(const Domain &,VectorRef,const
 struct IndependentReplayEvidence
 {
     bool available{},valid{},feasible{},primary_valid{},primary_kkt_passed{},independent_kkt_passed{},
-        prediction_passed{},residual_passed{},objective_passed{},kkt_agrees{},gradient_agrees{},passed{};
+        prediction_passed{},residual_passed{},objective_passed{},kkt_agrees{},gradient_agrees{},passed{},
+        assembled_prediction_available{},assembled_prediction_passed{},assembled_objective_passed{};
     std::string reason;
     double prediction_difference{unavailable},residual_difference{unavailable},objective_difference{unavailable},
+        independent_objective{unavailable},
         kkt_difference{unavailable},gradient_difference{unavailable},cancellation_ratio{unavailable},
+        assembled_prediction_difference{unavailable},assembled_prediction_error_ratio{unavailable},
+        assembled_objective_difference{unavailable},
         primary_ac_kkt{unavailable},independent_ac_kkt{unavailable},primary_width_gradient{unavailable},
         independent_width_gradient{unavailable};
 };
-IndependentReplayEvidence CheckIndependentReplay(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &);
+IndependentReplayEvidence CheckIndependentReplay(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &,
+    const Vector * assembled_prediction=nullptr,const std::vector<std::size_t> * assembled_rows=nullptr);
 struct TrustEvidence
 {
     std::optional<Endpoint> reference;
@@ -204,7 +209,8 @@ struct Assessment
 std::vector<JointCheck> AssessmentEvidence(const Assessment &,JointEvidenceScope);
 JointCheckStatus MergeConvergenceStatus(JointCheckStatus,JointCheckStatus);
 JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> &,JointEvidenceScope,bool assembled=false);
-Assessment AssessProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,const Vector * = nullptr);
+Assessment AssessProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,const Vector * = nullptr,
+    const Vector * assembled_prediction=nullptr,const std::vector<std::size_t> * assembled_rows=nullptr);
 // Evaluations belong to this exact domain, observations and numerical policy.
 Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const Evaluation &,const EvaluationContext &,bool supplied=false);
 Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const IndependentReplayEvidence &,

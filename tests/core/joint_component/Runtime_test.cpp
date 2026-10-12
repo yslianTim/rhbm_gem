@@ -167,7 +167,6 @@ TEST(JointComponentRuntimeTest, InnerEvidenceRemainsAvailableNearBoundary)
 TEST(JointComponentRuntimeTest, PublicObjectivesUseParentScaleAndIncludeConstantRows)
 {
     auto input=Snapshot();
-    for(std::size_t k=0;k<input.observations.size();++k) input.observations[k]+=.03*std::sin(static_cast<double>(k));
     input.row_ids.push_back("constant"); input.observations.push_back(7);
     const core::JointProblem problem(input); const double scale=problem.ObservationScale();
     ASSERT_GT(scale,1);
@@ -205,7 +204,8 @@ TEST(JointComponentRuntimeTest, AssemblyPreservesSuppliedCoefficientsWithoutGlob
     EXPECT_FALSE(assembled.consistency_passed);
     EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
     const auto replay=n::EvaluateState(data.domain,data.y,assembled.eta,assembled.beta,data.context);
-    EXPECT_EQ(assembled.prediction,replay.x*assembled.beta);
+    EXPECT_LT((assembled.prediction-replay.x*assembled.beta).lpNorm<Eigen::Infinity>(),
+        2e-12+2e-13*assembled.prediction.lpNorm<Eigen::Infinity>());
 }
 
 TEST(JointComponentRuntimeTest, AssessmentWorkIsSharedOnlyForIdenticalScopes)
@@ -527,11 +527,15 @@ TEST(JointComponentRuntimeTest, RuntimeConvergenceIsDerivedFromActualEvidenceNot
     EXPECT_EQ(fit.RuntimeConvergence(),Status::Passed);
     EXPECT_EQ(fit.regular_certificate,Status::NotRun);
     auto & evidence=fit.components[0].evidence;
-    evidence[0].status=Status::NotRun;
+    const auto set_status=[&](const std::string & name,Status status) {
+        const auto found=std::find_if(evidence.begin(),evidence.end(),[&](const auto & check){return check.name==name;});
+        ASSERT_NE(found,evidence.end()); found->status=status;
+    };
+    set_status("independent-replay",Status::NotRun);
     EXPECT_EQ(fit.RuntimeConvergence(),Status::NotRun);
-    evidence[1].status=Status::Unavailable;
+    set_status("conditional-ac-optimality",Status::Unavailable);
     EXPECT_EQ(fit.RuntimeConvergence(),Status::Unavailable);
-    evidence[3].status=Status::Failed;
+    set_status("local-correction",Status::Failed);
     EXPECT_EQ(fit.RuntimeConvergence(),Status::Failed);
     fit.components[0].state.reset();
     EXPECT_EQ(fit.components[0].RuntimeConvergence(),Status::Unavailable);

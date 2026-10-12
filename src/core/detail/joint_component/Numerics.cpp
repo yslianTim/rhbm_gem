@@ -552,7 +552,7 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
 }
 
 IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef y,const Evaluation & e,
-    const EvaluationContext & policy)
+    const EvaluationContext & policy,const Vector * assembled_prediction,const std::vector<std::size_t> * assembled_rows)
 {
     constexpr double pi=std::numbers::pi;
     IndependentReplayEvidence out; out.primary_valid=e.valid;
@@ -561,9 +561,15 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
     {out.reason="invalid-primary"; return out;}
     if(!e.certificate.available)
     {out.reason="primary-kkt-unavailable"; return out;}
+    if(assembled_prediction && (!assembled_rows || assembled_rows->size()!=static_cast<std::size_t>(y.size()) ||
+        std::any_of(assembled_rows->begin(),assembled_rows->end(),[&](std::size_t row) {
+            return row>=static_cast<std::size_t>(assembled_prediction->size());
+        })))
+    {out.reason="invalid-assembled-prediction-mapping"; return out;}
     out.available=true;
 
     const auto atoms=e.eta.size();
+    const double scale=policy.scale>0 ? policy.scale : std::max(1.0,y.norm());
     const Vector widths=e.eta.array().exp();
     if(!widths.allFinite() || (widths.array()<=0).any())
     {out.reason="invalid-widths"; return out;}
@@ -602,8 +608,9 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
     if(!prediction.allFinite() || !column_norms_squared.allFinite())
     {out.reason="nonfinite-replay"; return out;}
 
-    double rss{},rss_compensation{},prediction_difference{},residual_difference{},cancellation_ratio{};
-    bool prediction_ok=true,residual_ok=true;
+    double rss{},rss_compensation{},prediction_difference{},residual_difference{},cancellation_ratio{},
+        assembled_rss{},assembled_rss_compensation{},assembled_prediction_difference{},assembled_prediction_error_ratio{};
+    bool prediction_ok=true,residual_ok=true,assembled_prediction_ok=true;
     for(Eigen::Index row=0;row<y.size();++row)
     {
         const double independent_residual=prediction(row)-y(row),primary_prediction=e.residual(row)+y(row);
@@ -614,6 +621,22 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
         const double prediction_tolerance=2e-12+2e-13*std::abs(primary_prediction);
         prediction_ok &= prediction_error_value<=prediction_tolerance;
         residual_ok &= residual_error_value<=prediction_tolerance;
+        if(assembled_prediction)
+        {
+            const double assembled_value=(*assembled_prediction)(static_cast<Eigen::Index>(assembled_rows->at(
+                static_cast<std::size_t>(row))));
+            const double assembled_error=std::abs(prediction(row)-assembled_value);
+            const double assembled_tolerance=2e-12+2e-13*std::abs(assembled_value);
+            assembled_prediction_difference=std::max(assembled_prediction_difference,assembled_error);
+            assembled_prediction_error_ratio=std::max(assembled_prediction_error_ratio,assembled_error/assembled_tolerance);
+            assembled_prediction_ok &= std::isfinite(assembled_value) && assembled_error<=assembled_tolerance;
+            const double assembled_residual=assembled_value-y(row);
+            const double assembled_square=assembled_residual*assembled_residual;
+            const double assembled_adjusted=assembled_square-assembled_rss_compensation;
+            const double assembled_next=assembled_rss+assembled_adjusted;
+            assembled_rss_compensation=(assembled_next-assembled_rss)-assembled_adjusted;
+            assembled_rss=assembled_next;
+        }
         const double square=independent_residual*independent_residual;
         const double adjusted=square-rss_compensation,next=rss+adjusted;
         rss_compensation=(next-rss)-adjusted; rss=next;
@@ -634,14 +657,14 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
             add_compensated(ac_gradient,ac_compensation,2*atom,basis.gaussian*residual);
             add_compensated(ac_gradient,ac_compensation,2*atom+1,basis.charge*residual);
             add_compensated(width_gradient,width_compensation,atom,
-                (e.beta(2*atom)*basis.gaussian_log_width+e.beta(2*atom+1)*basis.charge_log_width)*residual);
+                (e.beta(2*atom)*basis.gaussian_log_width+e.beta(2*atom+1)*basis.charge_log_width)*
+                    residual/scale/scale);
         }
     const Vector column_norms=column_norms_squared.array().sqrt();
     if(!ac_gradient.allFinite() || !width_gradient.allFinite() || !column_norms.allFinite() ||
         (column_norms.array()<=0).any())
     {out.available=true; out.reason="rank-deficient-column"; return out;}
 
-    const double scale=policy.scale>0 ? policy.scale : std::max(1.0,y.norm());
     const Vector scaled_beta=column_norms.array()*e.beta.array()/scale;
     const Vector scaled_gradient=ac_gradient.array()/column_norms.array()/scale;
     Vector projected=scaled_beta-scaled_gradient;
@@ -654,10 +677,21 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
     out.primary_width_gradient=e.gradient.lpNorm<Eigen::Infinity>();
     out.independent_width_gradient=width_gradient.lpNorm<Eigen::Infinity>();
     out.prediction_difference=prediction_difference; out.residual_difference=residual_difference;
-    out.objective_difference=std::abs(.5*rss-e.certificate.objective);
+    out.independent_objective=.5*rss;
+    out.objective_difference=std::abs(out.independent_objective-e.certificate.objective);
     out.kkt_difference=std::abs(out.independent_ac_kkt-out.primary_ac_kkt);
     out.gradient_difference=(width_gradient-e.gradient).lpNorm<Eigen::Infinity>();
     out.cancellation_ratio=cancellation_ratio;
+    if(assembled_prediction)
+    {
+        out.assembled_prediction_available=true;
+        out.assembled_prediction_difference=assembled_prediction_difference;
+        out.assembled_prediction_error_ratio=assembled_prediction_error_ratio;
+        out.assembled_prediction_passed=assembled_prediction_ok;
+        out.assembled_objective_difference=std::abs(.5*assembled_rss-.5*rss);
+        out.assembled_objective_passed=std::isfinite(out.assembled_objective_difference) &&
+            out.assembled_objective_difference<=1e-12+2e-12*std::abs(.5*rss);
+    }
     out.primary_kkt_passed=e.certificate.feasible && e.certificate.kkt_passed && out.primary_ac_kkt<=1e-10;
     out.independent_kkt_passed=feasible && out.independent_ac_kkt<=1e-10;
     out.prediction_passed=prediction_ok;
@@ -667,9 +701,13 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
     out.gradient_agrees=((width_gradient-e.gradient).array().abs()<=
         1e-13+2e-9*e.gradient.array().abs()).all();
     out.passed=out.primary_kkt_passed && out.independent_kkt_passed && out.prediction_passed &&
-        out.residual_passed && out.objective_passed && out.kkt_agrees && out.gradient_agrees;
+        out.residual_passed && out.objective_passed && out.kkt_agrees && out.gradient_agrees &&
+        (!assembled_prediction || (out.assembled_prediction_passed && out.assembled_objective_passed));
     out.reason=out.passed ? "verified" : !out.primary_kkt_passed ? "primary-kkt-failed" :
-        !out.independent_kkt_passed ? "independent-kkt-failed" : "replay-disagreement";
+        !out.independent_kkt_passed ? "independent-kkt-failed" :
+        assembled_prediction && !out.assembled_prediction_passed ? "assembled-prediction-disagreement" :
+        assembled_prediction && !out.assembled_objective_passed ? "assembled-objective-disagreement" :
+        "replay-disagreement";
     out.valid=std::isfinite(out.independent_ac_kkt) && std::isfinite(out.independent_width_gradient) &&
         std::isfinite(out.objective_difference);
     if(!out.valid) {out.passed=false; out.reason="nonfinite-replay-evidence";}
@@ -716,10 +754,11 @@ Spectrum DesignSpectrum(const Sparse & x,const Vector & weights,const RankPolicy
     const auto reduced=ReferenceQR(x,weights,scales,Vector::Zero(x.rows()));
     const auto svd=EvaluateRank(reduced.first,{{policy ? policy->rows : x.rows(),x.cols(),0},x.cols(),-1,RankBoundary::StrictGreater}); const auto & values=svd.singular_values;
     if(!svd.valid) {Spectrum out; out.available=false; out.reason="spectrum-factorization-failed"; return out;}
-    Spectrum out; out.rank=svd.rank; out.minimum=values.tail(1)(0);
+    Spectrum out; out.rows=x.rows(); out.columns=x.cols(); out.rank=svd.rank; out.minimum=values.tail(1)(0);
     out.condition=values(0)/values.tail(1)(0); out.singular_values=values; out.threshold=svd.threshold; return out;
 }
-Assessment AssessProfile(const Domain & domain,VectorRef y,const Vector & eta,const EvaluationContext & policy,const Vector * supplied_beta)
+Assessment AssessProfile(const Domain & domain,VectorRef y,const Vector & eta,const EvaluationContext & policy,
+    const Vector * supplied_beta,const Vector * assembled_prediction,const std::vector<std::size_t> * assembled_rows)
 {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     AssessmentStageTimerForTesting total_stage("total-assessment",y.size(),eta.size());
@@ -748,7 +787,7 @@ Assessment AssessProfile(const Domain & domain,VectorRef y,const Vector & eta,co
     AssessmentStageTimerForTesting replay_stage("independent-streaming-replay",y.size(),eta.size());
 #endif
     const auto replay_started=std::chrono::steady_clock::now();
-    const auto replay=CheckIndependentReplay(domain,y,endpoint,policy);
+    const auto replay=CheckIndependentReplay(domain,y,endpoint,policy,assembled_prediction,assembled_rows);
     const double replay_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-replay_started).count();
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     replay_stage.Finish();

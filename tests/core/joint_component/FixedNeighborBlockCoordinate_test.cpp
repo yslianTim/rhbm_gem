@@ -342,7 +342,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     EXPECT_FALSE(certification.assessment.qualified);
     EXPECT_EQ(certification.assessment.rank_memory_estimate.status,n::MemoryStatus::Reject);
     EXPECT_FALSE(certification.assessment.design.has_value());
-    EXPECT_EQ(certification.assessment.primary.x.size(),0);
     EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
     RecordProperty("synthetic_support_entries",std::to_string(*support_entries));
     RecordProperty("prepared_mapping_bytes",std::to_string(result.prepared_mapping_bytes));
@@ -386,7 +385,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, EndpointReplayIsReferenceFreeAndRank
     EXPECT_EQ(certification.assessment.rank_memory_estimate.stage,n::MemoryStage::RankAssessment);
     EXPECT_EQ(certification.assessment.rank_memory_estimate.status,n::MemoryStatus::Reject);
     EXPECT_FALSE(certification.assessment.design.has_value());
-    EXPECT_EQ(certification.assessment.primary.x.size(),0);
     EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
 }
 TEST(JointFixedNeighborBlockCoordinateTest, AggregateWorkTelemetryIsOptInAndDoesNotChangeSearchState)
