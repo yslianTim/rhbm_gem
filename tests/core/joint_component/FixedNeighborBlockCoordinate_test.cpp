@@ -1303,6 +1303,24 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168ContinuesAfterSweep1
     EXPECT_EQ(qualified_primary.certificate.active_atoms,qualified_legacy_reference.certificate.active_atoms);
     EXPECT_LE(qualified_legacy_trust.coefficient_difference,1e-10);
     EXPECT_TRUE(qualified_legacy_trust.passed);
+    RecordProperty("correction_baseline_168_sweep107", "verified; design=336/336; projected-width=168/168; correction=failed");
+    RecordProperty("correction_baseline_168_sweep107_ac_kkt", early_assessment.primary.certificate.projected_kkt);
+    RecordProperty("correction_baseline_168_sweep107_width_gradient",
+        early_assessment.primary.gradient.lpNorm<Eigen::Infinity>());
+    RecordProperty("correction_baseline_168_sweep107_replay_prediction_difference",
+        early_assessment.independent_replay.prediction_difference);
+    RecordProperty("correction_baseline_168_sweep107_replay_objective_difference",
+        early_assessment.independent_replay.objective_difference);
+    RecordProperty("correction_baseline_168_sweep107_local_correction", early_assessment.local_correction_inf_norm);
+    RecordProperty("correction_baseline_168_sweep117_mapped_correction", width_only.certification.assessment.local_correction_inf_norm);
+    RecordProperty("correction_baseline_168_old_qualified_sweep", extended_component.search_sweeps);
+    RecordProperty("correction_baseline_168_old_state_available", extended_component.state.has_value());
+    RecordProperty("correction_baseline_168_objective", qualified_primary.certificate.objective/(data.context.scale*data.context.scale));
+    RecordProperty("correction_baseline_168_residual_norm", qualified_primary.residual.norm());
+    RecordProperty("correction_baseline_168_design_rank", qualified_assessment.design->rank);
+    RecordProperty("correction_baseline_168_projected_width_rank", qualified_assessment.widths->rank);
+    RecordProperty("correction_baseline_168_local_correction", qualified_assessment.local_correction_inf_norm);
+    RecordProperty("correction_baseline_168_target_local_correction", *target_correction->value);
     EXPECT_NEAR(primary.certificate.projected_kkt,4.5219e-11,1e-14);
     EXPECT_NEAR(primary.gradient.lpNorm<Eigen::Infinity>(),8.3490e-13,1e-16);
     EXPECT_NEAR((legacy_reference.gradient.lpNorm<Eigen::Infinity>()),1.6499e-12,1e-15);
