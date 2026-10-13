@@ -1,5 +1,5 @@
 #include "TargetEvidence.hpp"
-#include "TiledDerivative.hpp"
+#include "TiledQR.hpp"
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <algorithm>
 #include <chrono>
@@ -13,6 +13,24 @@ bool Sensitive(const CompactSvdResult & svd)
 {
     return svd.threshold>0 && ((svd.singular_values.array()>=.5*svd.threshold) &&
         (svd.singular_values.array()<=2*svd.threshold)).any();
+}
+bool SameLayout(const JointParameterLayout & a,const JointParameterLayout & b)
+{
+    if(a.full_atoms!=b.full_atoms || a.informative_rows!=b.informative_rows || a.groups.size()!=b.groups.size()) return false;
+    for(std::size_t i=0;i<a.groups.size();++i)
+        if(a.groups[i].row!=b.groups[i].row || a.groups[i].atoms!=b.groups[i].atoms) return false;
+    return true;
+}
+bool SameState(const JointState & a,const JointState & b)
+{
+    return a.ac==b.ac && a.b==b.b && a.log_b==b.log_b && a.width_gradient==b.width_gradient &&
+        a.objective==b.objective && a.nuisance_amplitudes==b.nuisance_amplitudes;
+}
+bool FullRowIdentity(const std::vector<std::size_t> & rows,std::size_t count)
+{
+    if(rows.size()!=count) return false;
+    for(std::size_t i=0;i<count;++i) if(rows[i]!=i) return false;
+    return true;
 }
 Matrix SquareCompact(const Matrix & r)
 {
@@ -122,7 +140,7 @@ JointTargetEvidence AssessTargetState(const JointProblem & problem,const JointPa
     for(const auto & c:existing)
         if(c.name=="conditional-ac-optimality" || c.name=="independent-replay" ||
             c.name=="width-stationarity" || c.name=="design-identifiability" ||
-            c.name=="local-correction" || c.name=="numerical-identifiability" ||
+            c.name=="numerical-identifiability" ||
             c.name=="assembly-mapping" || c.name=="assembled-consistency" ||
             c.name=="inner" || c.name=="kkt" || c.name=="assembled-profile")
             out.checks.push_back(c);
@@ -146,7 +164,6 @@ JointTargetEvidence AssessTargetState(const JointProblem & problem,const JointPa
                 out.atoms.push_back({atom,Status::Unavailable,{},"observable-contribution-only"});
             std::sort(out.atoms.begin(),out.atoms.end(),[](const auto & a,const auto & b){return a.atom<b.atom;});
             check("target-identifiability",Status::Unavailable,reason);
-            check("target-local-correction",Status::Unavailable,reason);
             check("target-memory-preflight",Status::Unavailable,
                 std::string("resource-limit:target-identifiability:")+target_memory.reason,
                 static_cast<double>(target_memory.estimated_peak_bytes),static_cast<double>(target_memory.budget_bytes));
@@ -202,58 +219,10 @@ JointTargetEvidence AssessTargetState(const JointProblem & problem,const JointPa
     if(!targets)
     {
         check("target-identifiability",state ? Status::Passed : Status::Unavailable,state ? "no-target-coordinates" : geometry.reason);
-        check("target-local-correction",state ? Status::Passed : Status::Unavailable,state ? "no-target-coordinates" : geometry.reason);
         return out;
     }
     check("target-identifiability",!usable ? Status::Unavailable : targets_identified ? Status::Passed : Status::Failed,
         !usable ? geometry.reason : targets_identified ? "" : "target-confounded-with-nuisance");
-    if(!usable || !targets_identified)
-    {check("target-local-correction",Status::Unavailable,!usable ? geometry.reason : "target-unidentified"); return out;}
-    // The per-atom null-space checks and output copies are complete. Release the
-    // full right-vector matrix before preparing the local correction.
-    geometry.svd=CompactSvdResult{}; geometry.scales=Vector{};
-    const auto & e=geometry.endpoint;
-    {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        const auto correction_memory=PlanMemory(target_memory.shape,MemoryStage::TargetLocalCorrection,
-            target_memory.budget_bytes);
-        AssessmentStageTimerForTesting correction_stage("target-local-correction",
-            static_cast<Eigen::Index>(target_memory.shape.component_width_columns),
-            static_cast<Eigen::Index>(target_memory.shape.component_width_columns),&correction_memory);
-#endif
-        const auto prepared=PrepareDerivative(e,context.scale,&context);
-        const auto reduced=ReduceDerivative(prepared,e.residual,false);
-        if(!reduced.valid) {check("target-local-correction",Status::Unavailable,reduced.reason); return out;}
-        Matrix compact=SquareCompact(reduced.jacobian);
-        Vector rhs=Vector::Zero(compact.rows()); rhs.head(reduced.response.size())=-reduced.response;
-        const auto step=EvaluateRank(compact,{context.rank,compact.cols()},&rhs,CompactSvdVectors::Right);
-        if(step.valid) out.ranks.push_back({"undamped-full-profile-step",scope,static_cast<std::size_t>(step.rank),step.threshold,Values(step.singular_values)});
-        if(!step.valid || Sensitive(step))
-        {
-            check("target-local-correction",Status::Unavailable,
-                step.valid ? "profile-step-rank-threshold-sensitive" : "profile-step-rank-unavailable"); return out;
-        }
-        double correction{},leakage{};
-        for(std::size_t a=0;a<layout.full_atoms.size();++a)
-        {
-            if(!std::binary_search(input.selection_domain->target_indices.begin(),input.selection_domain->target_indices.end(),layout.full_atoms[a])) continue;
-            Matrix map=Matrix::Zero(3,compact.cols());
-            for(int k=0;k<2;++k)
-            {
-                const auto col=2*static_cast<Eigen::Index>(a)+k;
-                map.row(k)=-(prepared.coefficients.row(col)+prepared.correction.row(col))/
-                    (e.x.col(col).norm()*(1+std::abs(e.beta(col))));
-            }
-            map(2,static_cast<Eigen::Index>(a))=1;
-            correction=std::max(correction,(map*step.solution).lpNorm<Eigen::Infinity>());
-            const Matrix null=map*step.right_vectors.rightCols(step.right_vectors.cols()-step.rank);
-            leakage=std::max(leakage,null.norm()/std::max(1.,map.norm()));
-        }
-        check("target-local-correction",leakage>1e-10 ? Status::Unavailable : correction<=1e-10 ? Status::Passed : Status::Failed,
-            leakage>1e-10 ? "nonunique-target-profile-step" : "",correction,1e-10);
-        check("target-step-null-space",leakage<=1e-10 ? Status::Passed : Status::Unavailable,
-            leakage<=1e-10 ? "" : "nonunique-target-profile-step",leakage,1e-10);
-    }
     return out;
 }
 JointCheckStatus TargetConvergence(const std::optional<JointTargetEvidence> & evidence,bool state)
@@ -266,9 +235,9 @@ JointCheckStatus TargetConvergence(const std::optional<JointTargetEvidence> & ev
     });
     const std::vector<const char *> required=reference_free ?
         std::vector<const char *>{"conditional-ac-optimality","independent-replay","width-stationarity",
-            "design-identifiability","local-correction","numerical-identifiability",
-            "target-identifiability","target-local-correction"} :
-        std::vector<const char *>{"inner","kkt","width-stationarity","target-identifiability","target-local-correction"};
+            "design-identifiability","numerical-identifiability",
+            "target-identifiability"} :
+        std::vector<const char *>{"inner","kkt","width-stationarity","target-identifiability"};
     for(const char * name:required)
     {
         const auto found=std::find_if(evidence->checks.begin(),evidence->checks.end(),[&](const auto & c){return c.name==name;});
@@ -281,13 +250,53 @@ void AddTargetEvidence(JointFitResult & fit)
     if(!fit.problem || !fit.problem->Input().selection_domain) return;
     const auto started=std::chrono::steady_clock::now();
     const auto & problem=*fit.problem;
+    const auto & data=JointProblemAccess::Get(problem);
     for(auto & c:fit.components)
     {
         const JointParameterLayout layout=c.layout.value_or(JointParameterLayout{c.atoms,c.rows,{}});
         c.target_evidence=AssessTargetState(problem,layout,c.state,c.evidence,JointEvidenceScope::ComponentLocal,c.rows.size());
     }
-    fit.target_evidence=AssessTargetState(problem,problem.ParameterLayout(),fit.assembled_state,fit.evidence,
-        JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
+    const auto & global_layout=problem.ParameterLayout();
+    bool reused=false;
+    if(fit.components.size()==1 && fit.components.front().state && fit.assembled_state &&
+        fit.components.front().target_evidence && fit.components.front().layout &&
+        fit.components.front().rows.size()==problem.Input().observations.size() &&
+        FullRowIdentity(fit.components.front().rows,problem.Input().observations.size()) &&
+        SameLayout(*fit.components.front().layout,global_layout) &&
+        SameState(*fit.components.front().state,*fit.assembled_state) && problem.Input().selection_domain)
+    {
+        const auto component_context=ProfileContext(data.context,*fit.components.front().layout,
+            static_cast<Eigen::Index>(fit.components.front().rows.size()));
+        const auto global_context=ProfileContext(data.context,global_layout,
+            static_cast<Eigen::Index>(problem.Input().observations.size()));
+        if(SameAssessmentPolicy(component_context,global_context))
+        {
+            fit.target_evidence=*fit.components.front().target_evidence;
+            fit.target_evidence->original_rows=problem.Input().observations.size();
+            std::vector<JointCheck> global_checks;
+            for(const auto & check:fit.evidence)
+                if(check.name=="conditional-ac-optimality" || check.name=="independent-replay" ||
+                    check.name=="width-stationarity" || check.name=="design-identifiability" ||
+                    check.name=="numerical-identifiability" || check.name=="assembly-mapping" ||
+                    check.name=="assembled-consistency" || check.name=="inner" || check.name=="kkt" ||
+                    check.name=="assembled-profile")
+                {
+                    global_checks.push_back(check);
+                    global_checks.back().scope=JointEvidenceScope::AssembledGlobal;
+                }
+            const auto target_check=std::find_if(fit.target_evidence->checks.begin(),fit.target_evidence->checks.end(),
+                [](const auto & check){return check.name=="target-identifiability";});
+            if(target_check!=fit.target_evidence->checks.end())
+                global_checks.push_back({target_check->name,target_check->status,JointEvidenceScope::AssembledGlobal,
+                    target_check->value,target_check->threshold,target_check->reason});
+            fit.target_evidence->checks=std::move(global_checks);
+            for(auto & rank:fit.target_evidence->ranks) rank.scope=JointEvidenceScope::AssembledGlobal;
+            reused=true;
+        }
+    }
+    if(!reused)
+        fit.target_evidence=AssessTargetState(problem,global_layout,fit.assembled_state,fit.evidence,
+            JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
     fit.costs.assessment_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
 }
 JointFitResult FitFixedNeighborComponents(const JointProblem & problem,const std::vector<double> & b,

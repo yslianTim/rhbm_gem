@@ -472,6 +472,49 @@ TEST(JointObservableProfileTest, TargetEvidenceRequiresSelectionMetadata)
     EXPECT_FALSE(fit.target_evidence);
 }
 
+TEST(JointObservableProfileTest, ExactSingleComponentTargetEvidenceIsReused)
+{
+    const core::JointProblem problem(Input());
+    n::AssessmentWorkForTesting()={};
+    const auto fit=core::FitJointComponents(problem,{.6,missing_width,missing_width});
+    ASSERT_EQ(fit.components.size(),1);
+    ASSERT_TRUE(fit.components[0].target_evidence);
+    ASSERT_TRUE(fit.target_evidence);
+    auto geometry_calls=[&] {
+        const auto & stages=n::AssessmentWorkForTesting().stages;
+        const auto found=std::find_if(stages.begin(),stages.end(),[](const auto & stage) {
+            return stage.name=="target-geometry";
+        });
+        return found==stages.end() ? 0 : found->calls;
+    };
+    EXPECT_EQ(geometry_calls(),1);
+    for(const auto & check:fit.target_evidence->checks)
+        EXPECT_NE(check.name,"target-local-correction");
+    for(const auto & rank:fit.target_evidence->ranks)
+        EXPECT_NE(rank.name,"undamped-full-profile-step");
+
+    const auto & data=core::JointProblemAccess::Get(problem);
+    const auto fresh=n::AssessTargetState(problem,problem.ParameterLayout(),fit.assembled_state,fit.evidence,
+        rhbm_gem::JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
+    EXPECT_EQ(geometry_calls(),2);
+    ASSERT_EQ(fit.target_evidence->checks.size(),fresh.checks.size());
+    for(std::size_t i=0;i<fresh.checks.size();++i)
+    {
+        EXPECT_EQ(fit.target_evidence->checks[i].name,fresh.checks[i].name);
+        EXPECT_EQ(fit.target_evidence->checks[i].status,fresh.checks[i].status);
+        EXPECT_EQ(fit.target_evidence->checks[i].scope,fresh.checks[i].scope);
+        EXPECT_EQ(fit.target_evidence->checks[i].reason,fresh.checks[i].reason);
+    }
+    ASSERT_EQ(fit.target_evidence->atoms.size(),fresh.atoms.size());
+    for(std::size_t i=0;i<fresh.atoms.size();++i)
+    {
+        EXPECT_EQ(fit.target_evidence->atoms[i].atom,fresh.atoms[i].atom);
+        EXPECT_EQ(fit.target_evidence->atoms[i].status,fresh.atoms[i].status);
+        EXPECT_EQ(fit.target_evidence->atoms[i].null_space_leakage,fresh.atoms[i].null_space_leakage);
+    }
+    EXPECT_EQ(data.context.scale,fit.observation_scale);
+}
+
 TEST(JointObservableProfileTest, TargetMemoryShapeSeparatesTargetsFromHaloColumns)
 {
     const auto input=TwoRowHalo(false);
