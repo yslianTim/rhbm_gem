@@ -14,7 +14,7 @@ boost::json::object AssessWithDerivativeAudit(const joint_abc::Domain & domain,c
     auto out=runtime_json::Assessment(assessment);
     out.erase("runtime_convergence"); out.erase("runtime_checks"); out.erase("runtime_failure");
     out["joint_qualified"]=false; out["qualification_failure"]=assessment.failure;
-    if(!assessment.jacobian) return out;
+    if(!assessment.widths) return out;
     const auto differential=joint_abc::MaterializeDerivative(endpoint,scale,context);
     j::array checks;
     std::vector<Vector> directions{Vector::Ones(eta.size()).normalized(),Vector(eta.size()),assessment.weak_directions.col(0)};
@@ -42,10 +42,10 @@ boost::json::object AssessWithDerivativeAudit(const joint_abc::Domain & domain,c
 
     out["derivative_checks"]=checks; out["directional_evaluations"]=2*checks.size(); out["derivative_verified"]=verified;
     out["qualification_checks"]=j::object{{"inner",assessment.inner},{"b_gradient",assessment.gradient},
-        {"local_correction",assessment.local},{"identified",assessment.identified},{"derivative",verified}};
-    out["joint_qualified"]=assessment.inner && assessment.gradient && assessment.local && assessment.identified && verified;
+        {"identified",assessment.identified},{"derivative",verified}};
+    out["joint_qualified"]=assessment.inner && assessment.gradient && assessment.identified && verified;
     out["qualification_failure"]=!assessment.inner ? "inner-solve" : !verified ? "derivative-unverified" :
-        !assessment.identified ? "width-unidentified" : !assessment.gradient || !assessment.local ? "b-not-stationary" : "none";
+        !assessment.identified ? "width-unidentified" : !assessment.gradient ? "b-not-stationary" : "none";
     return out;
 }
 }

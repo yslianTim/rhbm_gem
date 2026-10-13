@@ -433,7 +433,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     ASSERT_TRUE(structural_repeat.proven_deficient);
     EXPECT_EQ(structural_repeat.rank_upper_bound,structure.rank_upper_bound);
     const auto & rank_stages=certification.assessment.rank_memory_estimate.attributed_stages;
-    ASSERT_EQ(rank_stages.size(),3u);
+    ASSERT_EQ(rank_stages.size(),2u);
     const auto target_rss_before=n::CurrentRssBytes();
     const auto target_started=std::chrono::steady_clock::now();
     const auto target_memory=n::TargetIdentifiabilityMemoryEstimate(*snapshot,layout,rows);
@@ -456,7 +456,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     });
     ASSERT_NE(rank_aggregate,assessment_stages.end());
     EXPECT_EQ(rank_aggregate->memory_status,n::MemoryStatus::Reject);
-    EXPECT_EQ(rank_aggregate->attributed_memory_stages.size(),3u);
+    EXPECT_EQ(rank_aggregate->attributed_memory_stages.size(),2u);
     EXPECT_EQ(std::find_if(assessment_stages.begin(),assessment_stages.end(),[](const auto & stage) {
         return stage.name=="design-spectrum";
     }),assessment_stages.end());
@@ -469,7 +469,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     const auto current_rss=n::CurrentRssBytes();
     const auto process_peak_rss=n::ProcessPeakRssBytes();
     const auto target_geometry=target_memory.attributed_stages.at(0);
-    const auto target_correction=target_memory.attributed_stages.at(1);
     const auto snapshot_bytes=n::EstimateSnapshotBytes(*snapshot);
     ASSERT_TRUE(snapshot_bytes);
     const auto * primary_stage=find_assessment_stage("endpoint-primary-evaluation");
@@ -522,22 +521,14 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
         <<" rank_estimated_peak_bytes="<<certification.assessment.rank_memory_estimate.estimated_peak_bytes
         <<" design_spectrum_peak_bytes="<<rank_stages[0].estimated_peak_bytes
         <<" projected_width_peak_bytes="<<rank_stages[1].estimated_peak_bytes
-        <<" local_correction_peak_bytes="<<rank_stages[2].estimated_peak_bytes
         <<" target_identifiability_peak_bytes="<<target_memory.estimated_peak_bytes
         <<" target_geometry_peak_bytes="<<target_geometry.estimated_peak_bytes
-        <<" target_local_correction_peak_bytes="<<target_correction.estimated_peak_bytes
         <<" target_geometry_resident_bytes="<<target_geometry.resident_bytes
         <<" target_geometry_temporary_bytes="<<target_geometry.temporary_bytes
         <<" target_geometry_factor_bytes="<<target_geometry.dense_factor_bytes
         <<" target_geometry_workspace_bytes="<<target_geometry.factor_workspace_bytes
         <<" target_geometry_right_null_bytes="<<target_geometry.right_null_space_bytes
         <<" target_geometry_sparse_bytes="<<target_geometry.sparse_design_bytes
-        <<" target_local_resident_bytes="<<target_correction.resident_bytes
-        <<" target_local_temporary_bytes="<<target_correction.temporary_bytes
-        <<" target_local_factor_bytes="<<target_correction.dense_factor_bytes
-        <<" target_local_workspace_bytes="<<target_correction.factor_workspace_bytes
-        <<" target_local_right_null_bytes="<<target_correction.right_null_space_bytes
-        <<" target_local_sparse_bytes="<<target_correction.sparse_design_bytes
         <<" overall_estimated_peak_bytes="<<std::max({result.memory_estimate.estimated_peak_bytes,
             result.global_state_memory_estimate.estimated_peak_bytes,endpoint_memory.estimated_peak_bytes,
             certification.assessment.rank_memory_estimate.estimated_peak_bytes,target_memory.estimated_peak_bytes})
@@ -565,9 +556,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
         <<" projected_factor_dimensions="<<rank_stages[1].factor_rows<<"x"<<rank_stages[1].factor_columns
         <<" projected_workspace_bytes="<<rank_stages[1].factor_workspace_bytes
         <<" projected_right_vector_bytes="<<rank_stages[1].right_singular_vector_bytes
-        <<" correction_factor_dimensions="<<rank_stages[2].factor_rows<<"x"<<rank_stages[2].factor_columns
-        <<" correction_workspace_bytes="<<rank_stages[2].factor_workspace_bytes
-        <<" correction_right_vector_bytes="<<rank_stages[2].right_singular_vector_bytes
         <<" primary_endpoint_seconds="<<certification.assessment.primary_endpoint_seconds
         <<" independent_replay_seconds="<<certification.assessment.independent_replay_seconds
         <<" rank_assessment_seconds="<<certification.assessment.rank_assessment_seconds
@@ -595,7 +583,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
         <<" process_peak_rss_bytes="<<(process_peak_rss ? std::to_string(*process_peak_rss) : "unavailable")
         <<" reference_qr_factorization_calls="<<n::NumericsWorkForTesting().reference
         <<" endpoint_verification_status=Passed design_rank_status=ResourceLimit"
-        <<" projected_width_status=NotRun local_correction_status=NotRun"
+        <<" projected_width_status=NotRun"
         <<" numerical_identifiability_status=Unavailable target_identifiability_status=ResourceLimit"
         <<" runtime_convergence_status=Unavailable physical_input=not-measured"
         <<" endpoint_verification="<<(certification.verified()?"passed":"failed")
@@ -1184,8 +1172,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168StopsAtFirstCorrecti
     const auto sweep117_certification=n::CertifyFixedNeighborEndpoint(data.domain,data.y,sweep117,data.context);
     EXPECT_TRUE(sweep117_certification.verified());
     EXPECT_TRUE(sweep117_certification.qualified());
-    EXPECT_LE(sweep117_certification.assessment.correction.lpNorm<Eigen::Infinity>(),1e-10);
-    EXPECT_GT(sweep117_certification.assessment.local_correction_inf_norm,1e-10);
     const auto & old_qualified=continued_run.trajectory[126].state;
     const auto sweep127_certification=n::CertifyFixedNeighborEndpoint(data.domain,data.y,old_qualified,data.context);
     EXPECT_TRUE(sweep127_certification.verified());
@@ -1201,7 +1187,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168StopsAtFirstCorrecti
     EXPECT_EQ(early_assessment.widths->rank,168);
     EXPECT_TRUE(early_assessment.identified);
     EXPECT_TRUE(early_assessment.qualified);
-    EXPECT_GT(early_assessment.local_correction_inf_norm,1e-10);
     const auto early_primary=n::EvaluateState(data.domain,data.y,early.eta,early.beta,data.context);
     ASSERT_TRUE(early_primary.valid)<<early_primary.reason;
     const auto early_replay=n::CheckIndependentReplay(data.domain,data.y,early_primary,data.context);
@@ -1293,7 +1278,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, SameEtaRawPrimaryAndReferenceDiagnos
     EXPECT_TRUE(std::isfinite(difference(beta,reference.beta)));
     ASSERT_TRUE(raw.certificate.available && reference.certificate.available);
     ASSERT_TRUE(raw_trust.reference.has_value());
-    ASSERT_TRUE(raw_assessment.design && raw_assessment.widths && raw_assessment.jacobian);
+    ASSERT_TRUE(raw_assessment.design && raw_assessment.widths);
     EXPECT_EQ(raw_assessment.design->rank,raw_assessment.design->columns);
     EXPECT_TRUE(std::isfinite(raw_assessment.design->condition));
     EXPECT_LE(raw_assessment.design->condition,1e8);
@@ -1314,7 +1299,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, SameEtaRawPrimaryAndReferenceDiagnos
     EXPECT_EQ(raw_assessment.design->rank,raw.x.cols());
     EXPECT_EQ(raw_assessment.widths->rank,eta.size());
     EXPECT_TRUE(raw_assessment.inner);
-    EXPECT_TRUE(raw_assessment.local);
     EXPECT_TRUE(raw_assessment.identified);
     EXPECT_TRUE(raw_assessment.gradient);
     EXPECT_TRUE(raw_trust.passed);
@@ -1332,19 +1316,16 @@ TEST(JointFixedNeighborBlockCoordinateTest, SameEtaRawPrimaryAndReferenceDiagnos
     RecordProperty("legacy_independent_gradient_difference",number(raw_trust.gradient_difference));
     RecordProperty("legacy_design_rank",std::to_string(raw_assessment.design->rank));
     RecordProperty("legacy_projected_width_rank",std::to_string(raw_assessment.widths->rank));
-    RecordProperty("legacy_local_correction",number(raw_assessment.correction.lpNorm<Eigen::Infinity>()));
     RecordProperty("legacy_numerical_identifiability",raw_assessment.identified ? "passed" : "failed");
     RecordProperty("legacy_endpoint_trust",raw_trust.passed ? "passed" : "failed");
     RecordProperty("legacy_runtime_convergence",raw_assessment.identified && raw_assessment.inner &&
-        raw_assessment.local && raw_assessment.gradient && raw_trust.passed ? "passed" : "failed");
+        raw_assessment.gradient && raw_trust.passed ? "passed" : "failed");
     for(const auto * assessment:{&raw_assessment,&primary_assessment,&reference_assessment})
     {
         EXPECT_TRUE(assessment->primary.valid);
         EXPECT_TRUE(assessment->reference.valid);
         EXPECT_TRUE(assessment->design.has_value());
         EXPECT_TRUE(assessment->widths.has_value());
-        EXPECT_TRUE(assessment->jacobian.has_value());
-        EXPECT_TRUE(assessment->normalized_widths.has_value());
         EXPECT_EQ(assessment->gradient,assessment->primary.gradient.lpNorm<Eigen::Infinity>()<=1e-12 &&
             assessment->reference.gradient.lpNorm<Eigen::Infinity>()<=1e-12);
     }

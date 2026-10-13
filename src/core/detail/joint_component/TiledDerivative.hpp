@@ -6,11 +6,9 @@ namespace rhbm_gem::core::joint_component {
 struct TiledDifferential
 {
     Eigen::SparseMatrix<double,Eigen::RowMajor> free_design,raw;
-    Matrix free_design_factor;
-    Vector free_design_response;
     Matrix coefficients,correction;
     double scale{};
-    bool valid{},reference_order{};
+    bool valid{},reference_order{},projected_only{};
     std::string reason;
     void Rows(Eigen::Index first,Eigen::Index count,Matrix & projected,Matrix & jacobian) const;
 };
@@ -23,11 +21,10 @@ struct ReducedDifferential
 };
 TiledDifferential PrepareDerivative(const Evaluation &,double,const EvaluationContext *,double=-1,
     Eigen::Index=derivative_tile_rows);
-TiledDifferential PrepareDerivativeCompact(const Evaluation &,double,const EvaluationContext *,double=-1,
+TiledDifferential PrepareProjectedWidthDerivative(const Evaluation &,double,const EvaluationContext *,double=-1,
     Eigen::Index=derivative_tile_rows);
 ReducedDifferential ReduceDerivative(const TiledDifferential &,VectorRef,bool=true,Eigen::Index=derivative_tile_rows);
-ReducedDifferential ReduceDerivativeCompact(const TiledDifferential &,VectorRef,bool=true,
-    Eigen::Index=derivative_tile_rows);
+ReducedDifferential ReduceProjectedWidthDerivative(const TiledDifferential &,Eigen::Index=derivative_tile_rows);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 struct DerivativeWork
 {
@@ -40,7 +37,7 @@ struct DerivativeWork
     double rows_seconds{},jacobian_qr_seconds{},norms_seconds{},outer_overhead_seconds{};
     Eigen::Index maximum_generated_rows{},maximum_reduction_rows{};
     std::size_t tile_count{};
-    TiledQrTelemetry projected_qr,jacobian_qr,compact_jacobian_qr;
+    TiledQrTelemetry projected_qr,jacobian_qr;
 };
 DerivativeWork & DerivativeWorkForTesting();
 #endif

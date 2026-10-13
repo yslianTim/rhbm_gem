@@ -42,12 +42,6 @@ bool AddTileWorkspace(std::size_t & total,std::size_t tile_rows,std::size_t colu
     std::size_t rows{}; return CheckedMultiplyBytes(tile_rows,2,rows) &&
         AddProduct2D(total,rows,columns,sizeof(double));
 }
-bool AddTargetGeometryRetained(std::size_t & total,const MemoryShape & shape)
-{
-    return AddProduct(total,shape.component_support_entries,2*(sizeof(double)+sizeof(Eigen::Index))) &&
-        AddProduct(total,shape.component_observations,3*sizeof(double)) &&
-        AddProduct(total,shape.component_atoms,16*sizeof(double)+4*sizeof(Eigen::Index));
-}
 std::string Bytes(std::size_t value)
 {
     std::ostringstream out; out<<value<<" bytes ("<<std::fixed<<std::setprecision(3)
@@ -130,10 +124,8 @@ const char * MemoryStageName(MemoryStage stage)
     case MemoryStage::SparseQRResearch: return "sparseqr-research";
     case MemoryStage::DesignSpectrum: return "design-spectrum";
     case MemoryStage::ProjectedWidthAssessment: return "projected-width-assessment";
-    case MemoryStage::LocalCorrection: return "local-correction";
     case MemoryStage::TargetIdentifiability: return "target-identifiability";
     case MemoryStage::TargetGeometry: return "target-geometry";
-    case MemoryStage::TargetLocalCorrection: return "target-local-correction";
     }
     return "unknown";
 }
@@ -219,11 +211,9 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
     {
         const auto design=PlanMemory(shape,MemoryStage::DesignSpectrum,budget);
         const auto projected=PlanMemory(shape,MemoryStage::ProjectedWidthAssessment,budget);
-        const auto correction=PlanMemory(shape,MemoryStage::LocalCorrection,budget);
-        if(design.status==MemoryStatus::Overflow || projected.status==MemoryStatus::Overflow ||
-            correction.status==MemoryStatus::Overflow) {ok=false; break;}
-        temporary=std::max({design.temporary_bytes,projected.temporary_bytes,correction.temporary_bytes});
-        out.attributed_stages={Attribute(design),Attribute(projected),Attribute(correction)};
+        if(design.status==MemoryStatus::Overflow || projected.status==MemoryStatus::Overflow) {ok=false; break;}
+        temporary=std::max(design.temporary_bytes,projected.temporary_bytes);
+        out.attributed_stages={Attribute(design),Attribute(projected)};
         break;
     }
     case MemoryStage::StructuralRank:
@@ -285,11 +275,13 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
         break;
     }
     case MemoryStage::ProjectedWidthAssessment:
-    case MemoryStage::LocalCorrection:
     {
         const auto widths=shape.component_width_columns ? shape.component_width_columns : atoms;
         std::size_t free_width{},width_factor{},right_vectors{},factor_total{},tile{},sparse{};
-        ok=AddProduct2D(free_width,free,widths,3*sizeof(double)) &&
+        // Qualification retains only the projection coefficients, the compact
+        // projected factor and its right vectors. The profile correction arrays
+        // remain exclusive to the optimizer derivative path.
+        ok=AddProduct2D(free_width,free,widths,sizeof(double)) &&
             AddProduct2D(width_factor,widths,widths,sizeof(double)) &&
             AddTileWorkspace(tile,shape.maximum_tile_rows,widths) &&
             AddProduct(sparse,entries,6*(sizeof(double)+sizeof(Eigen::Index)));
@@ -309,12 +301,9 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
     case MemoryStage::TargetIdentifiability:
     {
         const auto geometry=PlanMemory(shape,MemoryStage::TargetGeometry,budget);
-        const auto correction=PlanMemory(shape,MemoryStage::TargetLocalCorrection,budget);
-        if(geometry.status==MemoryStatus::Overflow || correction.status==MemoryStatus::Overflow)
-        {ok=false; break;}
-        if(correction.estimated_peak_bytes<out.resident_bytes) {ok=false; break;}
-        temporary=std::max(geometry.temporary_bytes,correction.estimated_peak_bytes-out.resident_bytes);
-        out.attributed_stages={Attribute(geometry),Attribute(correction)};
+        if(geometry.status==MemoryStatus::Overflow) {ok=false; break;}
+        temporary=geometry.temporary_bytes;
+        out.attributed_stages={Attribute(geometry)};
         break;
     }
     case MemoryStage::TargetGeometry:
@@ -332,28 +321,6 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
             out.right_singular_vector_bytes=factor; out.right_null_space_bytes=factor;
             ok=CheckedAddBytes(factor,tile,out.factor_workspace_bytes);
             out.factor_rows=columns; out.factor_columns=columns;
-        }
-        break;
-    }
-    case MemoryStage::TargetLocalCorrection:
-    {
-        const auto widths=shape.component_width_columns ? shape.component_width_columns : atoms;
-        std::size_t free_width{},width_factor{},right_vectors{},factor_total{},tile{},sparse{};
-        ok=AddTargetGeometryRetained(out.resident_bytes,shape) &&
-            AddProduct2D(free_width,free,widths,3*sizeof(double)) &&
-            AddProduct2D(width_factor,widths,widths,sizeof(double)) &&
-            AddTileWorkspace(tile,shape.maximum_tile_rows,widths) &&
-            AddProduct(sparse,entries,6*(sizeof(double)+sizeof(Eigen::Index)));
-        right_vectors=width_factor;
-        ok=ok && CheckedAddBytes(width_factor,right_vectors,factor_total) &&
-            CheckedAddBytes(free_width,factor_total,temporary) &&
-            CheckedAddBytes(temporary,tile,temporary) && CheckedAddBytes(temporary,sparse,temporary);
-        if(ok)
-        {
-            out.sparse_design_bytes=sparse; out.dense_factor_bytes=width_factor;
-            out.right_singular_vector_bytes=right_vectors; out.right_null_space_bytes=right_vectors;
-            ok=CheckedAddBytes(free_width,tile,out.factor_workspace_bytes);
-            out.factor_rows=widths; out.factor_columns=widths;
         }
         break;
     }

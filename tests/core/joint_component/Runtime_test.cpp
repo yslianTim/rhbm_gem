@@ -251,9 +251,8 @@ TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTi
     };
     for(const auto * name:{"total-assessment","endpoint-primary-evaluation","reference-evaluation",
             "design-spectrum","derivative-preparation","derivative-reduction","projected-width-spectrum",
-            "normalized-width-spectrum","correction-jacobian-spectrum","projected-width-assessment",
-            "local-correction","numerical-identifiability","derivative-rows",
-            "derivative-projected-qr","derivative-compact-jacobian-qr","derivative-norms"})
+            "projected-width-assessment","numerical-identifiability","derivative-rows",
+            "derivative-projected-qr","derivative-norms"})
     {
         const auto & measurement=stage(name);
         EXPECT_GE(measurement.seconds,0);
@@ -262,6 +261,9 @@ TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTi
         EXPECT_GT(measurement.rows,0);
         EXPECT_GT(measurement.columns,0);
     }
+    for(const auto * name:{"normalized-width-spectrum","correction-jacobian-spectrum","local-correction",
+            "derivative-jacobian-qr","derivative-compact-jacobian-qr"})
+        EXPECT_EQ(std::find_if(stages.begin(),stages.end(),[&](const auto & value){return value.name==name;}),stages.end());
     EXPECT_EQ(stage("total-assessment").calls,1);
     const auto & design_memory=stage("design-spectrum");
     EXPECT_TRUE(design_memory.memory_estimate_available);
@@ -271,38 +273,26 @@ TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTi
     const auto & identifiability=stage("numerical-identifiability");
     EXPECT_TRUE(identifiability.memory_estimate_available);
     EXPECT_EQ(identifiability.memory_status,n::MemoryStatus::Pass);
-    ASSERT_EQ(identifiability.attributed_memory_stages.size(),3u);
+    ASSERT_EQ(identifiability.attributed_memory_stages.size(),2u);
     EXPECT_EQ(identifiability.attributed_memory_stages[0].stage,n::MemoryStage::DesignSpectrum);
     const auto & width=stage("projected-width-assessment");
     EXPECT_EQ(width.memory_stage,n::MemoryStage::ProjectedWidthAssessment);
     EXPECT_EQ(width.memory_status,n::MemoryStatus::Pass);
-    const auto & correction=stage("local-correction");
-    EXPECT_EQ(correction.memory_stage,n::MemoryStage::LocalCorrection);
-    EXPECT_EQ(correction.memory_status,n::MemoryStatus::Pass);
-    EXPECT_GT(correction.right_singular_vector_bytes,0u);
     if(identifiability.current_rss_before_bytes) EXPECT_GT(*identifiability.current_rss_before_bytes,0u);
     if(identifiability.process_peak_rss_bytes) EXPECT_GT(*identifiability.process_peak_rss_bytes,0u);
     const auto & derivative=n::DerivativeWorkForTesting();
     EXPECT_EQ(derivative.tile_count,1);
-    EXPECT_EQ(derivative.projected_qr.role,"derivative-projected-qr");
+    EXPECT_EQ(derivative.projected_qr.role,"projected-width-only-qr");
     EXPECT_EQ(derivative.projected_qr.append_calls,derivative.tile_count);
     EXPECT_EQ(derivative.projected_qr.rows_processed,static_cast<std::size_t>(view.domain.rows));
-    EXPECT_EQ(derivative.projected_qr.columns,1); EXPECT_EQ(derivative.projected_qr.responses,1);
+    EXPECT_EQ(derivative.projected_qr.columns,1); EXPECT_EQ(derivative.projected_qr.responses,0);
     EXPECT_EQ(derivative.jacobian_qr.append_calls,0);
-    EXPECT_EQ(derivative.compact_jacobian_qr.role,"derivative-compact-jacobian-qr");
-    EXPECT_EQ(derivative.compact_jacobian_qr.append_calls,1);
-    EXPECT_GT(derivative.compact_jacobian_qr.rows_processed,0);
-    EXPECT_EQ(derivative.compact_jacobian_qr.columns,1);
-    EXPECT_EQ(derivative.compact_jacobian_qr.responses,1);
     EXPECT_GT(derivative.projected_qr.maximum_assembled_rows,0);
     EXPECT_GT(derivative.projected_qr.maximum_dense_design_bytes,0);
-    EXPECT_GT(derivative.projected_qr.maximum_dense_response_bytes,0);
-    EXPECT_GT(derivative.compact_jacobian_qr.maximum_dense_response_bytes,0);
+    EXPECT_EQ(derivative.projected_qr.maximum_dense_response_bytes,0u);
     EXPECT_GE(derivative.projected_qr.qr_seconds,0);
-    EXPECT_GE(derivative.compact_jacobian_qr.qr_seconds,0);
     EXPECT_EQ(stage("derivative-rows").calls,derivative.tile_count);
     EXPECT_EQ(stage("derivative-projected-qr").calls,derivative.projected_qr.append_calls);
-    EXPECT_EQ(stage("derivative-compact-jacobian-qr").calls,derivative.compact_jacobian_qr.append_calls);
     EXPECT_EQ(stage("derivative-norms").calls,derivative.tile_count);
 }
 
@@ -525,7 +515,6 @@ TEST(JointComponentRuntimeTest, ActualAssessmentFollowsFallbackAndLocalDirection
     const auto fresh=n::AssessProfile(view.domain,y,directed.trusted_state->eta,
         n::ChildContext(data.context,view,true),&directed.trusted_state->beta);
     EXPECT_EQ(directed.trusted_assessment->primary.beta,fresh.primary.beta);
-    EXPECT_EQ(directed.trusted_assessment->correction,fresh.correction);
     EXPECT_EQ(directed.trusted_assessment->weak_directions,fresh.weak_directions);
 }
 

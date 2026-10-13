@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/Numerics.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
+#include "core/detail/joint_component/CompactSvd.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include <Eigen/SVD>
@@ -33,26 +34,18 @@ void CompareSpectrum(const Matrix & reference,const Matrix & compact)
         1e-10*(1.+a.singularValues().norm()));
 }
 
-void CompareDerivativeRoutes(const n::Evaluation & endpoint,const n::EvaluationContext & context)
+void CompareProjectedWidthRoutes(const n::Evaluation & endpoint,const n::EvaluationContext & context)
 {
     const auto reference_prepared=n::PrepareDerivative(endpoint,context.scale,&context);
-    const auto compact_prepared=n::PrepareDerivativeCompact(endpoint,context.scale,&context);
-    ASSERT_TRUE(reference_prepared.valid); ASSERT_TRUE(compact_prepared.valid);
+    const auto projected_prepared=n::PrepareProjectedWidthDerivative(endpoint,context.scale,&context);
+    ASSERT_TRUE(reference_prepared.valid); ASSERT_TRUE(projected_prepared.valid);
     const auto reference=n::ReduceDerivative(reference_prepared,endpoint.residual);
-    const auto compact=n::ReduceDerivativeCompact(compact_prepared,endpoint.residual);
-    ASSERT_TRUE(reference.valid); ASSERT_TRUE(compact.valid);
-    CompareSpectrum(reference.projected,compact.projected);
-    CompareSpectrum(reference.jacobian,compact.jacobian);
-    EXPECT_LE((reference.projected_norms-compact.projected_norms).norm(),
+    const auto projected=n::ReduceProjectedWidthDerivative(projected_prepared);
+    ASSERT_TRUE(reference.valid); ASSERT_TRUE(projected.valid);
+    EXPECT_TRUE(projected.jacobian.size()==0);
+    CompareSpectrum(reference.projected,projected.projected);
+    EXPECT_LE((reference.projected_norms-projected.projected_norms).norm(),
         1e-10*(1.+reference.projected_norms.norm()));
-    EXPECT_LE((reference.jacobian_norms-compact.jacobian_norms).norm(),
-        1e-10*(1.+reference.jacobian_norms.norm()));
-    const Eigen::JacobiSVD<Matrix> a(reference.jacobian,Eigen::ComputeThinU|Eigen::ComputeThinV);
-    const Eigen::JacobiSVD<Matrix> b(compact.jacobian,Eigen::ComputeThinU|Eigen::ComputeThinV);
-    const auto reference_correction=a.solve(-reference.response);
-    const auto compact_correction=b.solve(-compact.response);
-    EXPECT_LE((reference_correction-compact_correction).norm(),
-        1e-9*(1.+reference_correction.norm()));
 }
 
 n::Evaluation BoundaryEndpoint(double minimum,bool active_face=false)
@@ -73,7 +66,7 @@ n::Evaluation BoundaryEndpoint(double minimum,bool active_face=false)
     return endpoint;
 }
 
-TEST(JointCompactAssessmentTest, CompactStackMatchesObservationReferenceAcrossLattices)
+TEST(JointCompactAssessmentTest, ProjectedWidthOnlyRouteMatchesProfileDerivativeAcrossLattices)
 {
     EigenThreads threads;
     for(const std::string topology:{"chain","cube"}) for(const int atoms:{8,32})
@@ -84,17 +77,17 @@ TEST(JointCompactAssessmentTest, CompactStackMatchesObservationReferenceAcrossLa
         const auto eta=n::Vector::Constant(atoms,std::log(.55));
         const auto endpoint=n::EvaluateProfile(data.domain,data.y,eta,false,&data.context);
         ASSERT_TRUE(endpoint.valid);
-        CompareDerivativeRoutes(endpoint,data.context);
+        CompareProjectedWidthRoutes(endpoint,data.context);
     }
 }
 
-TEST(JointCompactAssessmentTest, RankBoundaryUsesObservationFallbackWithinOneUlpBand)
+TEST(JointCompactAssessmentTest, ProjectedWidthRankKeepsThresholdSensitiveResultsUnavailable)
 {
     EigenThreads threads;
-    const n::Domain domain(6,{});
     const n::Vector y=n::Vector::Zero(6);
     auto context=n::CreateContext(y,2);
     context.rank={6,4,2};
+    const n::Domain domain(6,{{{0,0.0},{1,1.0}},{{2,2.0},{3,3.0}}});
     const double cutoff=context.rank.Relative(2);
     const std::array<std::pair<const char *,double>,5> cases{{
         {"below",.5*cutoff},
@@ -106,18 +99,29 @@ TEST(JointCompactAssessmentTest, RankBoundaryUsesObservationFallbackWithinOneUlp
     {
         SCOPED_TRACE(name);
         const auto endpoint=BoundaryEndpoint(minimum);
-        n::AssessmentWorkForTesting()={};
-        const auto assessment=n::AssessEvaluated(domain,y,endpoint,endpoint,context);
-        ASSERT_TRUE(assessment.jacobian);
+        const auto prepared=n::PrepareProjectedWidthDerivative(endpoint,context.scale,&context);
+        ASSERT_TRUE(prepared.valid);
+        const auto differential=n::ReduceProjectedWidthDerivative(prepared);
+        ASSERT_TRUE(differential.valid);
+        const auto rank=n::EvaluateRank(differential.projected,{context.rank,endpoint.eta.size()},
+            nullptr,n::CompactSvdVectors::Right);
+        ASSERT_TRUE(rank.valid);
         const bool near=std::string(name)=="just-below" || std::string(name)=="boundary" ||
             std::string(name)=="just-above";
-        EXPECT_EQ(n::AssessmentWorkForTesting().compact_boundary_fallbacks,near ? 1 : 0);
-        EXPECT_EQ(n::AssessmentWorkForTesting().compact_accepted,near ? 0 : 1);
-        EXPECT_EQ(n::AssessmentWorkForTesting().compact_attempts,1);
+        EXPECT_EQ(n::CompactRankDecisionSafe(rank),!near);
+        EXPECT_EQ(rank.rank,minimum>cutoff ? 2 : 1);
+        const auto assessment=n::AssessEvaluated(domain,y,endpoint,endpoint,context);
+        const auto evidence=n::AssessmentEvidence(assessment,rhbm_gem::JointEvidenceScope::ComponentLocal);
+        const auto identified=std::find_if(evidence.begin(),evidence.end(),[](const auto & check) {
+            return check.name=="numerical-identifiability";
+        });
+        ASSERT_NE(identified,evidence.end());
+        EXPECT_EQ(identified->status,near ? rhbm_gem::JointCheckStatus::Unavailable :
+            rank.rank==2 ? rhbm_gem::JointCheckStatus::Passed : rhbm_gem::JointCheckStatus::Failed);
     }
 }
 
-TEST(JointCompactAssessmentTest, CancellationFallbackAndActiveFaceRemainValid)
+TEST(JointCompactAssessmentTest, ProjectedWidthCancellationFallbackAndActiveFaceRemainValid)
 {
     EigenThreads threads;
     {
@@ -126,22 +130,23 @@ TEST(JointCompactAssessmentTest, CancellationFallbackAndActiveFaceRemainValid)
         auto endpoint=n::EvaluateProfile(data.domain,data.y,n::Vector::Constant(8,std::log(.55)),false,&data.context);
         ASSERT_TRUE(endpoint.valid);
         endpoint.derivative=endpoint.x;
-        const auto reference=n::EvaluateProfile(data.domain,data.y,endpoint.eta,true,&data.context);
-        ASSERT_TRUE(reference.valid);
-        n::AssessmentWorkForTesting()={};
-        const auto assessment=n::AssessEvaluated(data.domain,data.y,endpoint,reference,data.context);
-        EXPECT_TRUE(assessment.jacobian);
-        EXPECT_EQ(n::AssessmentWorkForTesting().compact_other_fallbacks,1);
+        const auto projected=n::PrepareProjectedWidthDerivative(endpoint,data.context.scale,&data.context);
+        ASSERT_TRUE(projected.valid);
+        EXPECT_TRUE(projected.reference_order);
+        const auto differential=n::ReduceProjectedWidthDerivative(projected);
+        ASSERT_TRUE(differential.valid);
+        EXPECT_EQ(differential.projected.cols(),8);
     }
     {
-        const n::Domain domain(6,{});
         const n::Vector y=n::Vector::Zero(6);
         auto context=n::CreateContext(y,2); context.rank={6,4,2};
         const auto endpoint=BoundaryEndpoint(1e-3,true);
-        const auto assessment=n::AssessEvaluated(domain,y,endpoint,endpoint,context);
-        EXPECT_EQ(assessment.primary.beta(0),0.);
-        EXPECT_EQ(assessment.primary.beta(2),0.);
-        EXPECT_TRUE(assessment.jacobian);
+        EXPECT_EQ(endpoint.beta(0),0.); EXPECT_EQ(endpoint.beta(2),0.);
+        const auto projected=n::PrepareProjectedWidthDerivative(endpoint,context.scale,&context);
+        ASSERT_TRUE(projected.valid);
+        const auto differential=n::ReduceProjectedWidthDerivative(projected);
+        ASSERT_TRUE(differential.valid);
+        EXPECT_EQ(differential.projected.cols(),2);
     }
 }
 

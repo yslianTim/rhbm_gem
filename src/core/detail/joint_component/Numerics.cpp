@@ -971,8 +971,6 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
         out.rank_memory_estimate.budget_bytes);
     const auto projected_memory=PlanMemory(out.rank_memory_estimate.shape,MemoryStage::ProjectedWidthAssessment,
         out.rank_memory_estimate.budget_bytes);
-    const auto correction_memory=PlanMemory(out.rank_memory_estimate.shape,MemoryStage::LocalCorrection,
-        out.rank_memory_estimate.budget_bytes);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     AssessmentStageTimerForTesting identifiability_stage("numerical-identifiability",y.size(),
         static_cast<Eigen::Index>(out.rank_memory_estimate.shape.component_design_columns),&out.rank_memory_estimate);
@@ -1012,77 +1010,32 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
         &projected_memory);
     AssessmentStageTimerForTesting prepare_stage("derivative-preparation",evaluated->derivative.rows(),
         evaluated->derivative.cols(),&projected_memory);
-    ++AssessmentWorkForTesting().compact_attempts;
 #endif
-    const auto prepared=PrepareDerivativeCompact(*evaluated,scale,context);
+    const auto prepared=PrepareProjectedWidthDerivative(*evaluated,scale,context);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     prepare_stage.Finish();
     AssessmentStageTimerForTesting reduce_stage("derivative-reduction",prepared.raw.rows(),prepared.raw.cols(),
         &projected_memory);
 #endif
-    bool compact_differential=!prepared.reference_order;
-    ReducedDifferential differential;
-    if(!compact_differential)
-    {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        ++AssessmentWorkForTesting().compact_other_fallbacks;
-#endif
-        differential=ReduceDerivative(prepared,evaluated->residual);
-    }
-    else
-    {
-        differential=ReduceDerivativeCompact(prepared,evaluated->residual);
-        if(!differential.valid)
-        {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            ++AssessmentWorkForTesting().compact_other_fallbacks;
-#endif
-            differential=ReduceDerivative(prepared,evaluated->residual);
-            compact_differential=false;
-        }
-    }
+    const auto differential=ReduceProjectedWidthDerivative(prepared);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     reduce_stage.Finish();
 #endif
     if(!differential.valid) {out.failure=differential.reason; return out;}
+    CompactSvdResult widths;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    CompactSvdResult widths,normalized_svd;
-    const auto width_spectra=[&]() {
-        {
-            AssessmentStageTimerForTesting width_stage("projected-width-spectrum",differential.projected.rows(),
-                differential.projected.cols(),&projected_memory);
-            widths=Decompose(differential.projected,context->rank.rows,CompactSvdVectors::Right);
-        }
-        if(!widths.valid) return false;
-        {
-            AssessmentStageTimerForTesting normalized_stage("normalized-width-spectrum",differential.projected.rows(),
-                differential.projected.cols(),&projected_memory);
-            Matrix normalized=differential.projected;
-            for(Eigen::Index k=0;k<differential.projected_norms.size();++k)
-                if(differential.projected_norms(k)>0) normalized.col(k)/=differential.projected_norms(k);
-            normalized_svd=Decompose(normalized,context->rank.rows);
-        }
-        return normalized_svd.valid;
-    };
+    {
+        AssessmentStageTimerForTesting width_stage("projected-width-spectrum",differential.projected.rows(),
+            differential.projected.cols(),&projected_memory);
+        widths=Decompose(differential.projected,context->rank.rows,CompactSvdVectors::Right);
+    }
 #else
-    auto widths=Decompose(differential.projected,context->rank.rows,CompactSvdVectors::Right);
+    widths=Decompose(differential.projected,context->rank.rows,CompactSvdVectors::Right);
 #endif
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(!width_spectra()) {out.failure="spectrum-factorization-failed"; return out;}
-    out.widths=CompactSpectrum(widths,context->rank.rows);
-    out.widths->column_norms=differential.projected_norms;
-    out.normalized_widths=CompactSpectrum(normalized_svd,context->rank.rows);
-#else
     if(!widths.valid) {out.failure="spectrum-factorization-failed"; return out;}
+    out.width_rank_threshold_sensitive=!CompactRankDecisionSafe(widths);
     out.widths=CompactSpectrum(widths,context->rank.rows);
     out.widths->column_norms=differential.projected_norms;
-    Matrix normalized=differential.projected;
-    for(Eigen::Index k=0;k<differential.projected_norms.size();++k)
-        if(differential.projected_norms(k)>0) normalized.col(k)/=differential.projected_norms(k);
-    const auto normalized_svd=Decompose(normalized,context->rank.rows);
-    if(!normalized_svd.valid) {out.failure="spectrum-factorization-failed"; return out;}
-    out.normalized_widths=CompactSpectrum(normalized_svd,context->rank.rows);
-#endif
     const auto projected_width_rank=widths.rank;
     out.weak_directions.resize(eta.size(),std::min<Eigen::Index>(3,widths.right_vectors.cols()));
     for(Eigen::Index k=0;k<out.weak_directions.cols();++k)
@@ -1092,79 +1045,18 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
         out.weak_directions.col(k)=direction;
     }
     Matrix{}.swap(widths.right_vectors);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    projected_overall.Finish();
-#endif
-    Vector response=-differential.response;
-    CompactSvdResult correction_svd;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    AssessmentStageTimerForTesting correction_overall("local-correction",differential.jacobian.rows(),
-        differential.jacobian.cols(),&correction_memory);
-#endif
-    {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        AssessmentStageTimerForTesting correction_stage("correction-jacobian-spectrum",
-            differential.jacobian.rows(),differential.jacobian.cols(),&correction_memory);
-#endif
-        correction_svd=Decompose(differential.jacobian,context->rank.rows,CompactSvdVectors::None,&response);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        correction_stage.Finish();
-#endif
-    }
-    if(compact_differential && !CompactRankDecisionSafe(correction_svd))
-    {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        ++AssessmentWorkForTesting().compact_boundary_fallbacks;
-#endif
-        differential=ReduceDerivative(prepared,evaluated->residual);
-        if(!differential.valid) {out.failure=differential.reason; return out;}
-        response=-differential.response;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        AssessmentStageTimerForTesting fallback_stage("correction-jacobian-spectrum",
-            differential.jacobian.rows(),differential.jacobian.cols(),&correction_memory);
-#endif
-        correction_svd=Decompose(differential.jacobian,context->rank.rows,CompactSvdVectors::None,&response);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        fallback_stage.Finish();
-#endif
-    }
-    else if(compact_differential)
-    {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        ++AssessmentWorkForTesting().compact_accepted;
-#endif
-    }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    correction_overall.Finish();
-#endif
-    if(!correction_svd.valid) {out.failure="spectrum-factorization-failed"; return out;}
-    const Vector & correction=correction_svd.solution; out.correction=correction;
-    out.jacobian=CompactSpectrum(correction_svd,context->rank.rows);
     out.gradient=endpoint.gradient.lpNorm<Eigen::Infinity>()<=1e-12 &&
         (reference ? reference->gradient.lpNorm<Eigen::Infinity>()<=1e-12 : replay->gradient_agrees);
-    if(correction.allFinite())
-    {
-        out.local_correction_inf_norm=correction.lpNorm<Eigen::Infinity>();
-        Eigen::Index free_column{};
-        for(Eigen::Index col=0;col<evaluated->beta.size();++col)
-        {
-            if(col%2==0 && evaluated->beta(col)==0) continue;
-            // Map the same undamped profile step to free A/C coordinates,
-            // including the nonzero-residual coefficient correction.
-            const double step=(prepared.coefficients.row(free_column)+prepared.correction.row(free_column)).dot(correction)/
-                (evaluated->x.col(col).norm()*(1+std::abs(evaluated->beta(col))));
-            if(!std::isfinite(step)) {out.local_correction_inf_norm=std::numeric_limits<double>::infinity(); break;}
-            out.local_correction_inf_norm=std::max(out.local_correction_inf_norm,std::abs(step));
-            ++free_column;
-        }
-    }
-    out.local=std::isfinite(out.local_correction_inf_norm) && out.local_correction_inf_norm<=1e-10;
-    out.identified=projected_width_rank==eta.size() && correction_svd.rank==eta.size();
+    out.identified=projected_width_rank==eta.size() && !out.width_rank_threshold_sensitive;
     const bool design_full_rank=out.design->rank==evaluated->x.cols();
     out.qualified=out.endpoint_verified && design_full_rank && out.identified && out.gradient;
     out.failure=reference && !out.inner ? "inner-solve" : !design_full_rank ? "design-unidentified" :
+        out.width_rank_threshold_sensitive ? "width-rank-threshold-sensitive" :
         !out.identified ? "width-unidentified" : !out.gradient ? "b-not-stationary" :
         !out.endpoint_verified ? "endpoint-verification-failed" : "none";
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    projected_overall.Finish();
+#endif
     return out;
 }
 }

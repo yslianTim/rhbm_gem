@@ -209,15 +209,13 @@ struct Assessment
 {
     Endpoint primary,reference;
     IndependentReplayEvidence independent_replay;
-    std::optional<Spectrum> design,widths,normalized_widths,jacobian;
+    std::optional<Spectrum> design,widths;
     std::optional<StructuralRankEvidence> design_structure;
     Matrix weak_directions;
-    Vector correction;
     MemoryEstimate verification_memory_estimate,rank_memory_estimate;
     double primary_endpoint_seconds{},independent_replay_seconds{},rank_assessment_seconds{};
     double coefficient_difference{unavailable};
-    double local_correction_inf_norm{unavailable};
-    bool inner{},gradient{},local{},identified{},endpoint_verified{},qualified{},reference_free{};
+    bool inner{},gradient{},identified{},endpoint_verified{},qualified{},reference_free{},width_rank_threshold_sensitive{};
     std::string failure;
 };
 std::vector<JointCheck> AssessmentEvidence(const Assessment &,JointEvidenceScope);
@@ -258,7 +256,6 @@ struct AssessmentStageWork
 struct AssessmentWork
 {
     int assessments{},reference_evaluations{};
-    int compact_attempts{},compact_accepted{},compact_boundary_fallbacks{},compact_other_fallbacks{};
     std::string active_stage,last_stage;
     std::vector<std::string> stage_stack;
     std::vector<AssessmentStageWork> stages;

@@ -528,9 +528,9 @@ TEST(JointObservableProfileTest, TargetMemoryShapeSeparatesTargetsFromHaloColumn
     EXPECT_EQ(estimate.shape.component_width_columns,2u);
     EXPECT_EQ(estimate.shape.component_target_columns,3u);
     EXPECT_EQ(estimate.shape.component_jacobian_columns,6u);
-    ASSERT_EQ(estimate.attributed_stages.size(),2u);
+    ASSERT_EQ(estimate.attributed_stages.size(),1u);
     EXPECT_EQ(estimate.attributed_stages[0].factor_rows,6u);
-    EXPECT_EQ(estimate.attributed_stages[1].factor_rows,2u);
+    EXPECT_EQ(estimate.attributed_stages[0].stage,n::MemoryStage::TargetGeometry);
 }
 
 TEST(JointObservableProfileTest, LargeTargetIdentifiabilityPreflightReturnsUnavailableEvidence)
@@ -572,10 +572,8 @@ TEST(JointObservableProfileTest, LargeTargetIdentifiabilityPreflightReturnsUnava
     EXPECT_EQ(preflight->memory_status,n::MemoryStatus::Reject);
     EXPECT_EQ(preflight->calls,1); EXPECT_EQ(preflight->completed_calls,1);
     EXPECT_GT(preflight->estimated_peak_bytes,preflight->budget_bytes);
-    ASSERT_EQ(preflight->attributed_memory_stages.size(),2u);
-    EXPECT_LT(preflight->attributed_memory_stages[1].resident_bytes,
-        preflight->attributed_memory_stages[0].resident_bytes+
-            preflight->attributed_memory_stages[0].right_null_space_bytes);
+    ASSERT_EQ(preflight->attributed_memory_stages.size(),1u);
+    EXPECT_EQ(preflight->attributed_memory_stages[0].stage,n::MemoryStage::TargetGeometry);
     EXPECT_EQ(std::find_if(stages.begin(),stages.end(),[](const auto & stage) {
         return stage.name=="target-geometry";
     }),stages.end());

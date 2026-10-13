@@ -148,7 +148,7 @@ inline j::object Assessment(const r::Assessment & a)
             {"width_gradient_consistency",replay.gradient_agrees},
             {"width_stationarity",replay.primary_width_gradient<=1e-12},
             {"design_identifiability",a.design && a.design->rank==a.design->columns},
-            {"local_correction",a.local},{"numerical_identifiability",a.identified}};
+            {"numerical_identifiability",a.identified}};
     }
     else
     {
@@ -161,13 +161,11 @@ inline j::object Assessment(const r::Assessment & a)
     out["design_spectrum"]=DesignSpectrum(*a.design);
     if(!a.widths) return out;
     auto widths=Spectrum(*a.widths); widths["column_norms"]=Values(a.widths->column_norms);
-    widths["column_normalized"]=Spectrum(*a.normalized_widths); widths["active_face_only"]=!a.primary.certificate.active_atoms.empty();
+    widths["active_face_only"]=!a.primary.certificate.active_atoms.empty();
     j::array weak; for(Eigen::Index k=0;k<a.weak_directions.cols();++k) weak.push_back(Values(a.weak_directions.col(k)));
     widths["weak_directions"]=weak; out["width_spectrum"]=widths;
-    out["local_correction"]=Values(a.correction); out["local_correction_inf"]=Number(a.correction.lpNorm<Eigen::Infinity>());
-    out["profile_jacobian_spectrum"]=Spectrum(*a.jacobian);
     if(!a.reference_free) out["runtime_checks"]=j::object{{"inner",a.inner},{"b_gradient",a.gradient},
-        {"local_correction",a.local},{"identified",a.identified}};
+        {"identified",a.identified}};
     return out;
 }
 inline j::object Search(const r::SearchResult & s,const r::EvaluationContext & c,Eigen::Index rows)

@@ -89,8 +89,8 @@ void Run(int start, const Path & output)
     out["dense_tiled_jacobian_relative_difference"] =
         (dense.jacobian - tiled.jacobian).norm() / std::max(1e-300, dense.jacobian.norm());
     n::Matrix directions(eta.size(), 2);
-    directions.col(0) = assessment.correction.normalized();
-    directions.col(1) = assessment.weak_directions.col(0).normalized();
+    directions.col(0) = assessment.weak_directions.col(0).normalized();
+    directions.col(1) = assessment.weak_directions.col(1).normalized();
     out["directions"] = j::array{r::Values(directions.col(0)), r::Values(directions.col(1))};
     out["precision"] = audit::PrecisionAudit(domain, y, evaluation, directions, &data.context);
     Write(output, out);

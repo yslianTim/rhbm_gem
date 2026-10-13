@@ -205,7 +205,7 @@ j::object AssessmentJson(const n::Assessment & assessment,const n::TrustEvidence
         {"width_gradient_difference",Number(replay.gradient_difference)},
         {"prediction_difference",Number(replay.prediction_difference)},
         {"objective_difference",Number(replay.objective_difference)},
-        {"local_correction_passed",assessment.local},{"numerical_identifiability_passed",assessment.identified},
+        {"numerical_identifiability_passed",assessment.identified},
         {"failure",assessment.failure},{"verification_reason",replay.reason},
         {"primary_endpoint_seconds",Number(assessment.primary_endpoint_seconds)},
         {"independent_replay_seconds",Number(assessment.independent_replay_seconds)},
@@ -215,10 +215,7 @@ j::object AssessmentJson(const n::Assessment & assessment,const n::TrustEvidence
         {"assessment_stage_telemetry",AssessmentStagesJson()},
         {"primary_gradient_inf_norm",assessment.primary.gradient.size() ?
             Number(assessment.primary.gradient.lpNorm<Eigen::Infinity>()) : j::value(nullptr)},
-        {"local_correction_inf_norm",Number(assessment.local_correction_inf_norm)},
         {"projected_width",SpectrumJson(assessment.widths)},
-        {"corrected_jacobian",SpectrumJson(assessment.jacobian)},
-        {"normalized_width",SpectrumJson(assessment.normalized_widths)},
         {"endpoint_verification",j::object{{"passed",trust.passed},{"reason",trust.reason}}},
         {"reference_solve_calls",0}};
 }
@@ -487,7 +484,6 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"width_gradient_consistency",CheckValue(neighbor.fit,"width-gradient-consistency")},
         {"ac_feasibility",CheckValue(neighbor.fit,"ac-feasibility")},
         {"width_gradient_inf_norm",Number(WidthGradient(neighbor.fit))},
-        {"assessment_local",CheckValue(neighbor.fit,"local-correction")},
         {"assessment_identified",CheckValue(neighbor.fit,"numerical-identifiability")},
         {"endpoint_assessment",std::move(endpoint_assessment)},
         {"runtime_convergence",CheckName(neighbor.fit.RuntimeConvergence())},

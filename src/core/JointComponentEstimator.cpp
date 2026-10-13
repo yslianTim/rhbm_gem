@@ -107,7 +107,8 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
         out.push_back(check("design-identifiability",design_evidence_available,design_full_rank,
             design_rank_value,design_columns));
         if(structural_failure) out.back().reason="proven-rank-upper-bound:"+a.design_structure->reason;
-        out.push_back(check("numerical-identifiability",a.widths.has_value(),a.identified));
+        out.push_back(check("numerical-identifiability",a.widths.has_value() && !a.width_rank_threshold_sensitive,
+            a.identified));
     }
     else
     {
@@ -119,7 +120,8 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
         out.push_back(check("width-stationarity",valid && a.widths.has_value(),a.gradient,
             valid && a.primary.gradient.size() ? std::optional<double>(std::max(a.primary.gradient.lpNorm<Eigen::Infinity>(),
                 a.reference.gradient.lpNorm<Eigen::Infinity>())) : std::nullopt,1e-12));
-        out.push_back(check("numerical-identifiability",a.widths.has_value(),a.identified));
+        out.push_back(check("numerical-identifiability",a.widths.has_value() && !a.width_rank_threshold_sensitive,
+            a.identified));
     }
     if(a.reference_free && a.verification_memory_estimate.stage==n::MemoryStage::EndpointVerification)
         out.push_back({"endpoint-verification-memory",
@@ -192,7 +194,7 @@ std::vector<JointRankEvidence> joint_component::AssessmentRanks(const n::Assessm
 {
     std::vector<JointRankEvidence> out;
     for(const auto & [name,spectrum]:std::vector<std::pair<std::string,const std::optional<n::Spectrum> *>>{
-        {"design",&a.design},{"projected-width",&a.widths},{"normalized-width",&a.normalized_widths},{"jacobian",&a.jacobian}})
+        {"design",&a.design},{"projected-width",&a.widths}})
         if(*spectrum) out.push_back({name,scope,static_cast<std::size_t>((*spectrum)->rank),(*spectrum)->threshold,Values((*spectrum)->singular_values)});
     return out;
 }
