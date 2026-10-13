@@ -2,9 +2,11 @@
 #include "core/detail/joint_component/CompactSvd.hpp"
 #include "core/detail/joint_component/Numerics.hpp"
 #include <Eigen/SVD>
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -65,6 +67,9 @@ Matrix NormalizeColumns(Matrix x,Vector & norms)
     return x;
 }
 
+n::Sparse SparseFrom(const Matrix & matrix)
+{return matrix.sparseView();}
+
 TEST(JointComponentBoundedRankTest, DenseSvdOracleCoversReferenceControls)
 {
     for(const auto & fixture:ReferenceFixtures())
@@ -123,6 +128,90 @@ TEST(JointComponentBoundedRankTest, StrictRankBoundaryUsesOriginalRowsAndStrictG
         EXPECT_EQ(spectrum.rows,original_rows);
         EXPECT_EQ(spectrum.rank,item.second>threshold ? 2 : 1);
     }
+}
+
+TEST(JointComponentBoundedRankTest, StructuralObstructionsAndMatchingDoNotClaimNumericalRank)
+{
+    n::Sparse zero_column(3,3);
+    for(Eigen::Index row=0;row<3;++row) {zero_column.insert(row,0)=1; zero_column.insert(row,1)=1;}
+    auto zero=n::AssessStructuralRank(zero_column);
+    ASSERT_TRUE(zero.available);
+    EXPECT_TRUE(zero.proven_deficient);
+    EXPECT_EQ(zero.supported_columns,2);
+    EXPECT_EQ(zero.rank_upper_bound,2);
+    EXPECT_EQ(zero.reason,"zero-design-column");
+
+    n::Sparse row_obstruction(2,3); row_obstruction.insert(0,0)=1;
+    row_obstruction.insert(1,1)=1; row_obstruction.insert(1,2)=1;
+    const auto rows=n::AssessStructuralRank(row_obstruction);
+    ASSERT_TRUE(rows.available);
+    EXPECT_TRUE(rows.proven_deficient);
+    EXPECT_EQ(rows.supported_rows,2);
+    EXPECT_EQ(rows.rank_upper_bound,2);
+
+    n::Sparse hall(3,3); hall.insert(0,0)=1; hall.insert(0,1)=1;
+    hall.insert(1,2)=1; hall.insert(2,2)=1;
+    const auto matching=n::AssessStructuralRank(hall);
+    ASSERT_TRUE(matching.available);
+    ASSERT_TRUE(matching.matching_available);
+    EXPECT_TRUE(matching.proven_deficient);
+    EXPECT_FALSE(matching.structurally_full_rank);
+    EXPECT_EQ(matching.supported_rows,3);
+    EXPECT_EQ(matching.matching_size,2);
+    EXPECT_EQ(matching.rank_upper_bound,2);
+
+    Matrix proportional(2,2); proportional<<1,2,2,4;
+    const auto proportional_structure=n::AssessStructuralRank(SparseFrom(proportional));
+    ASSERT_TRUE(proportional_structure.matching_available);
+    EXPECT_TRUE(proportional_structure.structurally_full_rank);
+    EXPECT_FALSE(proportional_structure.proven_deficient);
+    EXPECT_EQ(proportional_structure.identical_support_pattern_groups,1);
+    const auto proportional_numeric=n::ComputeSpectrum(proportional,{2,2,0},2,false);
+    ASSERT_TRUE(proportional_numeric.available);
+    EXPECT_EQ(proportional_numeric.rank,1);
+
+    const auto full=n::AssessStructuralRank(SparseFrom(Matrix::Identity(3,3)));
+    ASSERT_TRUE(full.matching_available);
+    EXPECT_TRUE(full.structurally_full_rank);
+    EXPECT_FALSE(full.proven_deficient);
+    EXPECT_EQ(full.matching_size,3);
+}
+
+TEST(JointComponentBoundedRankTest, MixedRolesAndActiveFaceKeepSeparateColumnDomains)
+{
+    Matrix design=Matrix::Zero(4,4);
+    design(0,1)=1; design(1,2)=1; design(2,3)=1;
+    const auto full=n::AssessStructuralRank(SparseFrom(design));
+    ASSERT_TRUE(full.available);
+    EXPECT_TRUE(full.proven_deficient);
+    EXPECT_EQ(full.columns,4);
+    EXPECT_EQ(full.rank_upper_bound,3);
+    Matrix free_face=design(Eigen::all,Eigen::seq(1,3));
+    const auto free=n::AssessStructuralRank(SparseFrom(free_face));
+    ASSERT_TRUE(free.matching_available);
+    EXPECT_TRUE(free.structurally_full_rank);
+    EXPECT_EQ(free.columns,3);
+
+    Matrix mixed(4,3); mixed<<1,0,0,0,1,0,0,0,1,0,0,0;
+    const auto roles=n::AssessStructuralRank(SparseFrom(mixed));
+    ASSERT_TRUE(roles.matching_available);
+    EXPECT_TRUE(roles.structurally_full_rank);
+}
+
+TEST(JointComponentBoundedRankTest, StructuralMemoryPreflightRejectsBeforeGraphAllocation)
+{
+    n::Sparse x(100,4); x.insert(0,0)=1; x.insert(1,1)=1; x.insert(2,2)=1; x.insert(3,3)=1;
+    const auto rejected=n::AssessStructuralRank(x,0,0);
+    EXPECT_FALSE(rejected.available);
+    EXPECT_FALSE(rejected.matching_available);
+    EXPECT_EQ(rejected.reason,"structural-rank-memory-limit");
+
+    n::MemoryShape overflow;
+    overflow.component_observations=std::numeric_limits<std::size_t>::max();
+    overflow.component_design_columns=std::numeric_limits<std::size_t>::max();
+    overflow.component_structural_nonzeros=std::numeric_limits<std::size_t>::max();
+    overflow.component_structural_matching=true;
+    EXPECT_EQ(n::PlanMemory(overflow,n::MemoryStage::StructuralRank).status,n::MemoryStatus::Overflow);
 }
 
 } // namespace

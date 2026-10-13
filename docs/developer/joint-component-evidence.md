@@ -65,11 +65,15 @@ The complete concise record of those FixedNeighbor choices is in
   not represent the unknown physical support graph or qualify the full
   physical search and certification.
 - A separate serial census adds endpoint streaming and both memory preflights.
-  The same synthetic shape estimates DesignSpectrum at 189,484,131,163 bytes,
-  projected-width and local correction at 61,453,268,315 bytes each, and
-  target identifiability at 317,422,079,259 bytes. It rejects the dense stages
-  before allocation; its process peak is 622,624,768 bytes. This RSS covers the
-  input, preparation, verification and rejected preflights only. Per-stage
+  On its synthetic single-chain shape, the actual full A/C design has 74,812
+  columns but only 37,406 unique supported rows. The production structural
+  row-count check therefore proves full-design rank deficiency without QR or
+  SVD; it does not give an exact rank or classify the 37,406-column free face.
+  The dense DesignSpectrum estimate remains 189,484,131,163 bytes, projected
+  width and local correction remain 61,453,268,315 bytes each, and target
+  identifiability remains 317,422,079,259 bytes. Those dense and downstream
+  stages are not run. The earlier process peak of 622,624,768 bytes covered
+  input, preparation, verification and the rejected preflights only. Per-stage
   shape, timing and RSS details are in the
   [component memory census](joint-component-memory-census.md).
 - Historical fixed-state compact-SVD checks passed their recorded numerical

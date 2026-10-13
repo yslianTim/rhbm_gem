@@ -76,6 +76,14 @@ exhaustion and remains available only as a candidate diagnostic. The
 at-most-one accepted-update contract is intrinsic; diagnostic controls such as
 reverse order and trajectory capture are not production configuration.
 
+The dense global design rank contract remains `tau = epsilon * max(N, P) *
+sigma_max`, with `N` from the original rank policy and `P` equal to the full
+A/C design column count. `sigma_max` is measured after the existing column
+normalization, and singular values count as rank only when they are strictly
+greater than `tau`. The structural obstruction runs before that dense method;
+it does not change the threshold or remove unsupported observation rows from
+`N`.
+
 The local numerical primitive is named **Profile LM** (Levenberg–Marquardt
 optimization of the profiled width objective). `SearchProfile()` optimizes
 `η = log(B)` with `InstrumentedLM<Profile>`. At every profile evaluation,
@@ -302,8 +310,18 @@ RSS or a promise about the operating system's process limit. A rejected stage
 returns an unavailable resource result with a `resource-limit:<stage>` reason;
 it is not recorded as numerical nonconvergence.
 
-Rank assessment attributes its existing estimate to DesignSpectrum,
-projected-width assessment and local correction. Target identifiability
+Before the dense rank stages, production counts the actual nonzero support of
+the full A/C design. A zero design column or fewer unique supported rows than
+full design columns proves that full design cannot have full column rank. This
+one-way result marks design qualification `Failed`; it reports a rank upper
+bound and reason without inventing an exact rank, singular values or condition
+number. Structural matching, when run by research diagnostics, can also prove
+deficiency; a full matching does not prove numerical full rank. The check
+retains the full A/C column domain even when amplitudes are active at the
+boundary.
+
+If those low-cost checks find no obstruction, rank assessment attributes its
+existing estimate to DesignSpectrum, projected-width assessment and local correction. Target identifiability
 attributes geometry and target-local correction separately. The parent peak is
 the maximum of the sequential stage peaks with each stage's resident data; it
 does not add all stage temporaries together. The assessment telemetry records
@@ -334,11 +352,12 @@ assessment still use their existing sparse design matrices.
 
 Production endpoint verification is O(N+P) and does not build a global design
 matrix or run a global reference solve. The old independent solver remains an
-offline/test oracle. DesignSpectrum still uses `ReferenceQR` as its dense rank
-factorization primitive when its preflight passes; zero production reference
-solve calls therefore do not imply zero dense QR work. Rank assessment and
-target identifiability retain their dense QR/SVD definitions and return
-unavailable when their estimated workspaces exceed budget. An earlier
+offline/test oracle. When structural checks do not prove deficiency,
+DesignSpectrum still uses `ReferenceQR` as its dense rank factorization
+primitive when its preflight passes; zero production reference solve calls
+therefore do not imply zero dense QR work. Rank assessment and target
+identifiability retain their dense QR/SVD definitions and return unavailable
+when their estimated workspaces exceed budget. An earlier
 preparation-only test process recorded 474,546,176 bytes peak RSS
 (0.475 GB, 0.442 GiB) with a global-state estimated peak of 876,119,666 bytes.
 The updated serial census additionally runs primary and independent streaming

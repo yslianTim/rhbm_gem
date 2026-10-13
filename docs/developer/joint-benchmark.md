@@ -103,7 +103,11 @@ joint_benchmark_contract_test checks the profile and metadata contract,
 including rejection of arbitrary core sizes. joint_benchmark_smoke runs small
 search and solve cases and checks the production policy. The Joint C++ contract,
 workflow and numerical tests own numerical correctness and frozen thresholds;
-a benchmark result does not replace those tests.
+a benchmark result does not replace those tests. Bounded-rank controls compare
+the dense SVD oracle with the unchanged row, column-normalization and strict
+threshold contract. Production structural evidence is a one-way rank-failure
+check; matching and streaming estimates remain research diagnostics unless
+their stronger proof requirements are met.
 
 ## Historical decisions
 

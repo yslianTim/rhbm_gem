@@ -347,7 +347,61 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     EXPECT_FALSE(certification.assessment.qualified);
     EXPECT_EQ(certification.assessment.rank_memory_estimate.status,n::MemoryStatus::Reject);
     EXPECT_FALSE(certification.assessment.design.has_value());
+    ASSERT_TRUE(certification.assessment.design_structure.has_value());
+    const auto & structure=*certification.assessment.design_structure;
+    EXPECT_TRUE(structure.available);
+    EXPECT_FALSE(structure.matching_available);
+    EXPECT_TRUE(structure.proven_deficient);
+    EXPECT_EQ(structure.rows,rows);
+    EXPECT_EQ(structure.columns,74'812);
+    EXPECT_EQ(structure.nonzero_entries,149'622);
+    EXPECT_EQ(structure.supported_rows,37'406);
+    EXPECT_EQ(structure.rank_upper_bound,37'406);
+    EXPECT_EQ(certification.assessment.rank_memory_estimate.shape.component_free_columns,37'406u);
+    std::vector<Eigen::Triplet<double>> free_face_entries; free_face_entries.reserve(*support_entries);
+    for(Eigen::Index atom=0;atom<static_cast<Eigen::Index>(atoms);++atom)
+        for(const auto & support:endpoint_domain.atoms[static_cast<std::size_t>(atom)])
+        {
+            const auto basis=n::EvaluateKernel(support.square,.55,2.5);
+            if(basis.charge!=0) free_face_entries.emplace_back(support.row,atom,basis.charge);
+        }
+    n::Sparse free_face(rows,static_cast<Eigen::Index>(atoms));
+    free_face.setFromTriplets(free_face_entries.begin(),free_face_entries.end()); free_face.makeCompressed();
+    std::size_t free_face_bytes{},free_face_outer{};
+    ASSERT_TRUE(n::CheckedMultiplyBytes(static_cast<std::size_t>(free_face.nonZeros()),
+        sizeof(double)+sizeof(Eigen::Index),free_face_bytes));
+    ASSERT_TRUE(n::CheckedAddBytes(static_cast<std::size_t>(free_face.outerSize()),1,free_face_outer));
+    ASSERT_TRUE(n::CheckedMultiplyBytes(free_face_outer,sizeof(Eigen::Index),free_face_outer));
+    ASSERT_TRUE(n::CheckedAddBytes(free_face_bytes,free_face_outer,free_face_bytes));
+    ASSERT_TRUE(n::CheckedAddBytes(free_face_bytes,certification.assessment.rank_memory_estimate.resident_bytes,
+        free_face_bytes));
+    const auto free_structure=n::AssessStructuralRank(free_face,free_face_bytes);
+    ASSERT_TRUE(free_structure.matching_available);
+    EXPECT_TRUE(free_structure.structurally_full_rank);
+    EXPECT_FALSE(free_structure.proven_deficient);
+    EXPECT_EQ(free_structure.columns,37'406);
+    EXPECT_EQ(free_structure.supported_rows,37'406);
+    EXPECT_EQ(free_structure.matching_size,37'406);
+    const auto rank_evidence=n::AssessmentEvidence(certification.assessment,rhbm_gem::JointEvidenceScope::ComponentLocal);
+    const auto design_check=std::find_if(rank_evidence.begin(),rank_evidence.end(),[](const auto & check) {
+        return check.name=="design-identifiability";
+    });
+    ASSERT_NE(design_check,rank_evidence.end());
+    EXPECT_EQ(design_check->status,rhbm_gem::JointCheckStatus::Failed);
+    EXPECT_EQ(n::ConvergenceStatus(rank_evidence,rhbm_gem::JointEvidenceScope::ComponentLocal),
+        rhbm_gem::JointCheckStatus::Failed);
     EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
+    const auto structural_rss_before=n::CurrentRssBytes();
+    const auto structural_started=std::chrono::steady_clock::now();
+    const auto structural_repeat=n::AssessDesignStructuralRank(endpoint_domain,eta,
+        certification.assessment.rank_memory_estimate.resident_bytes,
+        certification.assessment.rank_memory_estimate.budget_bytes,false);
+    const double structural_seconds=std::chrono::duration<double>(
+        std::chrono::steady_clock::now()-structural_started).count();
+    const auto structural_rss_after=n::CurrentRssBytes();
+    const auto structural_process_peak=n::ProcessPeakRssBytes();
+    ASSERT_TRUE(structural_repeat.proven_deficient);
+    EXPECT_EQ(structural_repeat.rank_upper_bound,structure.rank_upper_bound);
     const auto & rank_stages=certification.assessment.rank_memory_estimate.attributed_stages;
     ASSERT_EQ(rank_stages.size(),3u);
     const auto target_rss_before=n::CurrentRssBytes();
@@ -398,6 +452,22 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     RecordProperty("estimated_endpoint_verification_peak_bytes",std::to_string(endpoint_memory.estimated_peak_bytes));
     std::cout<<"joint-large-synthetic rows="<<rows<<" atoms="<<atoms
         <<" support_entries="<<*support_entries
+        <<" structural_nonzeros="<<structure.nonzero_entries
+        <<" unique_supported_rows="<<structure.supported_rows
+        <<" full_design_columns="<<structure.columns
+        <<" structural_rank_upper_bound="<<structure.rank_upper_bound
+        <<" structural_memory_estimate_bytes="<<structure.memory_estimate_bytes
+        <<" structural_repeat_seconds="<<structural_seconds
+        <<" structural_repeat_rss_before_bytes="<<(structural_rss_before ? std::to_string(*structural_rss_before) : "unavailable")
+        <<" structural_repeat_rss_after_bytes="<<(structural_rss_after ? std::to_string(*structural_rss_after) : "unavailable")
+        <<" structural_repeat_process_peak_rss_bytes="<<(structural_process_peak ? std::to_string(*structural_process_peak) : "unavailable")
+        <<" structural_repeat_status="<<structural_repeat.reason
+        <<" free_face_columns="<<free_structure.columns
+        <<" free_face_nonzeros="<<free_structure.nonzero_entries
+        <<" free_face_supported_rows="<<free_structure.supported_rows
+        <<" free_face_matching="<<free_structure.matching_size
+        <<" free_face_structural_status="<<free_structure.reason
+        <<" free_face_memory_estimate_bytes="<<free_structure.memory_estimate_bytes
         <<" endpoint_estimated_peak_bytes="<<endpoint_memory.estimated_peak_bytes
         <<" rank_estimated_peak_bytes="<<certification.assessment.rank_memory_estimate.estimated_peak_bytes
         <<" design_spectrum_peak_bytes="<<rank_stages[0].estimated_peak_bytes

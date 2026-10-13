@@ -125,6 +125,8 @@ const char * MemoryStageName(MemoryStage stage)
     case MemoryStage::EndpointVerification: return "endpoint-verification";
     case MemoryStage::ReferenceSolve: return "reference-solve";
     case MemoryStage::RankAssessment: return "rank-assessment";
+    case MemoryStage::StructuralRank: return "structural-rank";
+    case MemoryStage::StreamingSpectralBounds: return "streaming-spectral-bounds";
     case MemoryStage::DesignSpectrum: return "design-spectrum";
     case MemoryStage::ProjectedWidthAssessment: return "projected-width-assessment";
     case MemoryStage::LocalCorrection: return "local-correction";
@@ -221,6 +223,32 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
             correction.status==MemoryStatus::Overflow) {ok=false; break;}
         temporary=std::max({design.temporary_bytes,projected.temporary_bytes,correction.temporary_bytes});
         out.attributed_stages={Attribute(design),Attribute(projected),Attribute(correction)};
+        break;
+    }
+    case MemoryStage::StructuralRank:
+    {
+        const auto supported=shape.component_structural_supported_rows ?
+            shape.component_structural_supported_rows : std::min(rows,shape.component_structural_nonzeros);
+        std::size_t offsets{};
+        ok=AddProduct(temporary,shape.component_structural_nonzeros,2*sizeof(Eigen::Index)) &&
+            AddProduct(temporary,supported,sizeof(Eigen::Index)) &&
+            AddProduct(temporary,shape.component_design_columns,sizeof(std::uint8_t));
+        if(ok && shape.component_structural_matching)
+        {
+            ok=CheckedAddBytes(shape.component_design_columns,1,offsets) &&
+                AddProduct(temporary,offsets,sizeof(std::size_t)) &&
+                AddProduct(temporary,shape.component_design_columns,7*sizeof(Eigen::Index)+sizeof(std::size_t)) &&
+                AddProduct(temporary,supported,sizeof(Eigen::Index));
+        }
+        break;
+    }
+    case MemoryStage::StreamingSpectralBounds:
+    {
+        std::size_t columns=shape.component_design_columns;
+        if(!columns) columns=shape.component_free_columns;
+        ok=AddProduct(temporary,rows,sizeof(double)) &&
+            AddProduct(temporary,columns,3*sizeof(double)) &&
+            AddProduct(temporary,shape.component_structural_nonzeros,sizeof(Eigen::Index));
         break;
     }
     case MemoryStage::DesignSpectrum:

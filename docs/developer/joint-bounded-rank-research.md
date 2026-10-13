@@ -45,6 +45,32 @@ control. It has 5,938,087 observation rows and 74,811 support memberships;
 its eventual structural assessment must count unique supported rows rather
 than treating affected-row entries as unique rows.
 
+## Structural rank evidence
+
+`AssessDesignStructuralRank()` traverses the kernel support at the endpoint
+widths and applies a preflight before retaining compact row/column pairs. It
+uses the actual nonzero Gaussian and charge entries, then counts unique rows
+and supported columns. Its rank upper bound is at most the smaller of those
+counts. A zero column or an upper bound below the full-design column count
+proves deficiency. Structural support patterns that are identical are counted
+as diagnostics only; they do not establish equal coefficient values.
+
+`AssessStructuralRank()` also constructs the compact column/row bipartite graph
+for offline controls. Maximum matching is an upper bound on numerical rank. A
+matching smaller than the column count proves deficiency; a full matching
+means only structurally full rank. The production endpoint runs the basic
+obstruction check and does not spend time on matching when that check is
+inconclusive. Matching is preflighted separately before its arrays are
+allocated and can return `Unavailable`.
+
+For the giant synthetic fixture, the full design has 74,812 columns, 149,622
+actual nonzeros, and 37,406 unique supported rows. Therefore its structural
+rank upper bound is 37,406 and full-design rank qualification is `Failed`.
+The active state has 37,406 free A/C columns. Those columns have the same
+37,406 supported rows, so the row-count check does not prove free-face
+deficiency. The C-only graph has a perfect 37,406 by 37,406 matching; this is
+still structural evidence, not a numerical full-rank certificate.
+
 ## Evidence states
 
 Research reports distinguish an exact numerical SVD result, a structural rank

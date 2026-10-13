@@ -38,6 +38,16 @@ inline j::object Spectrum(const r::Spectrum & s)
 {
     auto out=DesignSpectrum(s); out["singular_values"]=Values(s.singular_values); out["rank_threshold"]=Number(s.threshold); return out;
 }
+inline j::object StructuralRank(const r::StructuralRankEvidence & s)
+{
+    return {{"available",s.available},{"matching_available",s.matching_available},
+        {"proven_deficient",s.proven_deficient},{"structurally_full_rank",s.structurally_full_rank},
+        {"rows",s.rows},{"columns",s.columns},{"nonzero_entries",s.nonzero_entries},
+        {"supported_rows",s.supported_rows},{"supported_columns",s.supported_columns},
+        {"matching_size",s.matching_size},{"rank_upper_bound",s.rank_upper_bound},
+        {"identical_support_pattern_groups",s.identical_support_pattern_groups},
+        {"memory_estimate_bytes",s.memory_estimate_bytes},{"reason",s.reason}};
+}
 inline j::object MatrixSpectrum(const r::Spectrum & s)
 {
     if(!s.available) return {{"available",false},{"reason",s.reason}};
@@ -145,6 +155,7 @@ inline j::object Assessment(const r::Assessment & a)
         out["reference"]=Endpoint(a.reference);
         out["endpoint_evaluations"]=2;
     }
+    if(a.design_structure) out["design_structure"]=StructuralRank(*a.design_structure);
     if(!a.design) return out;
     if(!a.reference_free) out["scaled_reference_difference"]=Number(a.coefficient_difference);
     out["design_spectrum"]=DesignSpectrum(*a.design);

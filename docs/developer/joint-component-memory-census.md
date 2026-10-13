@@ -1,8 +1,9 @@
 # Joint Component Assessment Memory Census
 
-This report records the current Reference-free assessment preflight for the
-production-scale synthetic single-component shape. It is a memory diagnostic;
-it adds no rank method and does not change numerical thresholds.
+This report records the current reference-free assessment preflight and the
+one-way structural rank obstruction for the production-scale synthetic
+single-component shape. The structural check does not change numerical
+thresholds or produce an exact numerical rank.
 
 ## Input and structural shape
 
@@ -21,6 +22,11 @@ it adds no rank method and does not change numerical thresholds.
 | Maximum block support entries | 24 |
 | Design columns | 74,812 |
 | Free A/C columns at the tested state | 37,406 |
+| Actual full-design structural nonzeros | 149,622 |
+| Unique rows supported by the full design | 37,406 |
+| Full-design structural rank upper bound | 37,406 |
+| Full-design structural matching | NotRun; row-count obstruction is sufficient |
+| Free-face structural matching | 37,406 of 37,406 columns |
 | Width columns | 37,406 |
 | Target columns | 112,218 |
 | Full Jacobian shape | 5,938,087 × 112,218 |
@@ -29,6 +35,15 @@ The fixture is deliberately sparse: each atom contributes one or two support
 memberships. It is not a physical cryo-EM support graph. The tested state has
 zero amplitudes, so only the 37,406 charge columns are free in the rank-shape
 estimate; target correction conservatively budgets all 74,812 A/C columns.
+At the tested widths, each support membership contributes a nonzero Gaussian
+and charge design entry. The unique supported-row count is therefore 37,406,
+not the 40,523 sum of affected-row entries. Since 37,406 is below the 74,812
+full-design columns, `rank(X) <= 37,406 < 74,812` proves full-design rank
+deficiency. The free face has 37,406 columns and 37,406 supported rows, so
+that row-count inequality does not prove free-face deficiency; no full-design
+conclusion is transferred to the free face. A separate sparse free-face graph
+has a perfect structural matching, which still does not certify its numerical
+rank or conditioning.
 
 ## Estimated memory
 
@@ -45,13 +60,19 @@ storage.
 | Global state evaluation | — | — | — | 972,989,100 | Pass |
 | Prepared row mappings | — | — | — | 2,892,736 mapping bytes | prepared |
 | Endpoint verification | streaming | — | — | 625,051,683 | Pass |
+| Structural design check | 5,938,087 rows × 74,812 columns | 574,853,787 | 3,665,740 | 578,519,527 | Pass; full-design deficiency proven |
 | DesignSpectrum | 74,812 × 74,812 | 574,853,787 | 188,909,277,376 | 189,484,131,163 | ResourceLimit; NotRun |
 | Projected-width assessment | 37,406 × 37,406 | 574,853,787 | 60,878,414,528 | 61,453,268,315 | ResourceLimit; NotRun |
 | Local correction | 37,406 × 37,406 | 574,853,787 | 60,878,414,528 | 61,453,268,315 | ResourceLimit; NotRun |
 | Target geometry | 112,218 × 112,218 | 477,151,131 | 316,944,928,128 | 317,422,079,259 | ResourceLimit; NotRun |
 | Target local correction | 37,406 × 37,406 | 628,044,131 | 94,459,426,592 | 95,087,470,723 | ResourceLimit; NotRun |
 
-DesignSpectrum is the first rank stage that exceeds budget. Target geometry is
+The structural check uses support traversal and compact row/column IDs; its
+preflight is O(P + E + U), where U is the unique supported-row count, and includes pair storage,
+supported-row IDs and per-column marks. Matching is skipped when the
+supported-row count already proves deficiency. The bound is an upper bound,
+not an exact numerical rank; no singular values or condition number are
+reported for this result. Target geometry is
 the largest estimated stage. Its full Jacobian factor is estimated at
 100,743,036,192 bytes (100.743 GB); the right-vector/null-space storage is
 included in the stage estimate. The `right_null_space_bytes` field describes a
@@ -110,7 +131,8 @@ so those allocations never happened. The observed RSS is evidence for the
 input, preparation, streaming verification and preflight path only; it cannot
 validate the predicted RSS of an unexecuted dense stage.
 
-Runtime statuses were: endpoint verification `Passed`; design-rank preflight
+Runtime statuses were: endpoint verification `Passed`; full-design rank
+`Failed` by the structural upper bound; dense design-rank preflight
 `ResourceLimit`; projected-width and local-correction stages `NotRun`;
 numerical identifiability `Unavailable`; target-identifiability preflight
 `ResourceLimit`; target geometry and target-local correction `NotRun`; and

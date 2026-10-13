@@ -94,10 +94,19 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
         out.push_back(check("width-stationarity",evidence_available && a.primary.valid && a.primary.gradient.size()>0,
             replay.primary_width_gradient<=1e-12,
             std::isfinite(replay.primary_width_gradient) ? std::optional<double>(replay.primary_width_gradient) : std::nullopt,1e-12));
-        const bool design_full_rank=a.design && a.design->rank==a.design->columns;
-        out.push_back(check("design-identifiability",a.design.has_value(),design_full_rank,
-            a.design ? std::optional<double>(static_cast<double>(a.design->rank)) : std::nullopt,
-            a.design ? std::optional<double>(static_cast<double>(a.design->columns)) : std::nullopt));
+        const bool structural_failure=a.design_structure && a.design_structure->proven_deficient;
+        const bool design_full_rank=!structural_failure && a.design && a.design->rank==a.design->columns;
+        const bool design_evidence_available=a.design.has_value() || structural_failure;
+        std::optional<double> design_rank_value,design_columns;
+        if(a.design) {design_rank_value=static_cast<double>(a.design->rank); design_columns=static_cast<double>(a.design->columns);}
+        else if(structural_failure)
+        {
+            design_rank_value=static_cast<double>(a.design_structure->rank_upper_bound);
+            design_columns=static_cast<double>(a.design_structure->columns);
+        }
+        out.push_back(check("design-identifiability",design_evidence_available,design_full_rank,
+            design_rank_value,design_columns));
+        if(structural_failure) out.back().reason="proven-rank-upper-bound:"+a.design_structure->reason;
         out.push_back(check("local-correction",a.jacobian.has_value(),a.local,
             std::isfinite(a.local_correction_inf_norm) ? std::optional<double>(a.local_correction_inf_norm) : std::nullopt,1e-10));
         out.push_back(check("numerical-identifiability",a.widths.has_value(),a.identified));

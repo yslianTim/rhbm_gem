@@ -967,6 +967,14 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
         {value=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();}
     } rank_timer{out.rank_assessment_seconds};
     out.rank_memory_estimate=RankAssessmentMemoryEstimate(domain,y,endpoint,reference,policy,resident_override);
+    out.design_structure=AssessDesignStructuralRank(domain,eta,out.rank_memory_estimate.resident_bytes,
+        out.rank_memory_estimate.budget_bytes,false);
+    if(out.design_structure->proven_deficient)
+    {
+        out.inner=false;
+        out.failure="design-unidentified:"+out.design_structure->reason;
+        return out;
+    }
     const auto design_memory=PlanMemory(out.rank_memory_estimate.shape,MemoryStage::DesignSpectrum,
         out.rank_memory_estimate.budget_bytes);
     const auto projected_memory=PlanMemory(out.rank_memory_estimate.shape,MemoryStage::ProjectedWidthAssessment,

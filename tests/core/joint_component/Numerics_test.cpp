@@ -945,21 +945,25 @@ TEST(JointComponentNumericsTest, IndependentStreamingReplayPreservesActiveBounda
 
 TEST(JointComponentNumericsTest, RankAssessmentPreflightStopsDenseDesignSpectrum)
 {
-    constexpr Eigen::Index atoms=6'000;
-    const n::Domain domain(8,std::vector<std::vector<n::Support>>(static_cast<std::size_t>(atoms)));
-    const Vector y=Vector::Zero(8);
+    constexpr Eigen::Index atoms=4,rows=8;
+    std::vector<std::vector<n::Support>> support(static_cast<std::size_t>(atoms));
+    for(auto & atom:support) for(Eigen::Index row=0;row<rows;++row) atom.push_back({row,0});
+    const n::Domain domain(rows,std::move(support));
+    const Vector y=Vector::Zero(rows);
     const auto context=n::CreateContext(y,atoms);
     n::Evaluation endpoint; endpoint.eta=Vector::Zero(atoms); endpoint.beta=Vector::Zero(2*atoms);
-    endpoint.gradient=Vector::Zero(atoms); endpoint.residual=Vector::Zero(8); endpoint.valid=true;
+    endpoint.gradient=Vector::Zero(atoms); endpoint.residual=Vector::Zero(rows); endpoint.valid=true;
     endpoint.certificate.available=true; endpoint.certificate.kkt_passed=true;
-    endpoint.x.resize(8,2*atoms); endpoint.derivative.resize(8,2*atoms);
-    const auto reference=endpoint;
-    const auto assessment=n::AssessEvaluated(domain,y,endpoint,reference,context);
+    endpoint.x.resize(rows,2*atoms); endpoint.derivative.resize(rows,2*atoms);
+    n::IndependentReplayEvidence replay; replay.available=true; replay.valid=true;
+    const auto assessment=n::AssessEvaluated(domain,y,endpoint,replay,context,false,n::JointMemoryPlanningBudgetBytes);
     EXPECT_EQ(assessment.failure,"resource-limit:rank-assessment");
     EXPECT_EQ(assessment.rank_memory_estimate.stage,n::MemoryStage::RankAssessment);
     EXPECT_EQ(assessment.rank_memory_estimate.status,n::MemoryStatus::Reject);
     EXPECT_TRUE(assessment.primary.valid);
     EXPECT_TRUE(assessment.primary.certificate.available);
     EXPECT_FALSE(assessment.design.has_value());
+    ASSERT_TRUE(assessment.design_structure.has_value());
+    EXPECT_FALSE(assessment.design_structure->proven_deficient);
     EXPECT_FALSE(assessment.widths.has_value());
 }

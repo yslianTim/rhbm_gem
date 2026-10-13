@@ -168,24 +168,28 @@ JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & s
             certification.verification_memory_estimate.status!=MemoryStatus::Pass ||
                 certification.assessment.failure.starts_with("resource-limit:") ?
                     JointCheckStatus::Unavailable : JointCheckStatus::Failed;
-        const bool rank_unavailable=certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass ||
-            !certification.assessment.design || !certification.assessment.widths ||
-            !certification.assessment.normalized_widths || !certification.assessment.jacobian;
+        const bool structural_design_failure=certification.assessment.design_structure &&
+            certification.assessment.design_structure->proven_deficient;
+        const bool rank_unavailable=!structural_design_failure &&
+            (certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass ||
+                !certification.assessment.design || !certification.assessment.widths ||
+                !certification.assessment.normalized_widths || !certification.assessment.jacobian);
         const bool rank_identified=!rank_unavailable &&
-            certification.assessment.design->rank==certification.assessment.design->columns &&
+            !structural_design_failure && certification.assessment.design->rank==certification.assessment.design->columns &&
             certification.assessment.identified;
         out.rank_assessment_status=rank_unavailable ? JointCheckStatus::Unavailable :
             rank_identified ? JointCheckStatus::Passed : JointCheckStatus::Failed;
         out.certification_status=certification.qualified() ? JointCheckStatus::Passed :
-            certification.verification_memory_estimate.status!=MemoryStatus::Pass ||
-                certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass ?
-                JointCheckStatus::Unavailable : JointCheckStatus::Failed;
+            structural_design_failure ? JointCheckStatus::Failed :
+                certification.verification_memory_estimate.status!=MemoryStatus::Pass ||
+                    certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass ?
+                    JointCheckStatus::Unavailable : JointCheckStatus::Failed;
         out.numerical_qualification_status=out.certification_status;
         out.verification_reason=!certification.trust.reason.empty() ? certification.trust.reason :
             certification.assessment.failure;
         if(certification.verification_memory_estimate.status!=MemoryStatus::Pass)
             out.resource_limit_reason="resource-limit:endpoint-verification:"+certification.verification_memory_estimate.reason;
-        else if(certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass)
+        else if(!structural_design_failure && certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass)
             out.resource_limit_reason="resource-limit:rank-assessment:"+certification.assessment.rank_memory_estimate.reason;
     }
     else if(out.candidate_available && search.reason.starts_with("resource-limit:"))

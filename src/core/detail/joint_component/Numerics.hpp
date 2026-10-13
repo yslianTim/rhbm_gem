@@ -119,6 +119,18 @@ struct Spectrum
     Vector singular_values,column_norms;
     double minimum{unavailable},condition{unavailable},threshold{};
 };
+struct StructuralRankEvidence
+{
+    bool available{},matching_available{},proven_deficient{},structurally_full_rank{};
+    Eigen::Index rows{},columns{},nonzero_entries{},supported_rows{},supported_columns{},matching_size{},rank_upper_bound{};
+    Eigen::Index identical_support_pattern_groups{};
+    std::size_t memory_estimate_bytes{};
+    std::string reason;
+};
+StructuralRankEvidence AssessStructuralRank(const Sparse &,std::size_t resident_bytes=0,
+    std::size_t budget=JointMemoryPlanningBudgetBytes);
+StructuralRankEvidence AssessDesignStructuralRank(const Domain &,VectorRef eta,std::size_t resident_bytes=0,
+    std::size_t budget=JointMemoryPlanningBudgetBytes,bool attempt_matching=true);
 Spectrum DesignSpectrum(const Sparse &,const Vector &,const RankPolicy * = nullptr);
 Spectrum ComputeSpectrum(const Sparse &,const RankPolicy &,Eigen::Index,bool);
 Spectrum ComputeSpectrum(const Matrix &,const RankPolicy &,Eigen::Index,bool);
@@ -198,6 +210,7 @@ struct Assessment
     Endpoint primary,reference;
     IndependentReplayEvidence independent_replay;
     std::optional<Spectrum> design,widths,normalized_widths,jacobian;
+    std::optional<StructuralRankEvidence> design_structure;
     Matrix weak_directions;
     Vector correction;
     MemoryEstimate verification_memory_estimate,rank_memory_estimate;
