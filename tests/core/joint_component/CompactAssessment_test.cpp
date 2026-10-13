@@ -66,6 +66,46 @@ n::Evaluation BoundaryEndpoint(double minimum,bool active_face=false)
     return endpoint;
 }
 
+n::Evaluation RankEndpoint(double separation,Eigen::Index atoms=2)
+{
+    n::Evaluation endpoint;
+    const Eigen::Index columns=2*atoms,rows=columns+4;
+    endpoint.valid=true; endpoint.eta=n::Vector::Zero(atoms); endpoint.beta=n::Vector::Ones(columns);
+    endpoint.gradient=n::Vector::Zero(atoms); endpoint.residual=n::Vector::Zero(rows);
+    endpoint.x.resize(rows,columns);
+    endpoint.x.insert(0,0)=1.; endpoint.x.insert(0,1)=1.; endpoint.x.insert(1,1)=separation;
+    for(Eigen::Index column=2;column<columns;++column) endpoint.x.insert(column,column)=1.;
+    endpoint.x.makeCompressed();
+    endpoint.derivative.resize(rows,columns);
+    for(Eigen::Index column=0;column<columns;++column) endpoint.derivative.insert(columns+column%4,column)=1.;
+    endpoint.derivative.makeCompressed();
+    return endpoint;
+}
+
+struct CapturedFreeDesignRank
+{
+    n::TiledDifferential prepared;
+    Matrix factor;
+    n::CompactSvdResult svd;
+    std::size_t calls{};
+};
+
+CapturedFreeDesignRank CaptureFreeDesignRank(const n::Evaluation & endpoint,const n::EvaluationContext & context)
+{
+    struct RestoreCapture
+    {
+        n::CompactSvdCapture saved{n::CompactSvdCaptureForTesting()};
+        ~RestoreCapture() {n::CompactSvdCaptureForTesting()=std::move(saved);}
+    } restore;
+    CapturedFreeDesignRank out;
+    n::CompactSvdCaptureForTesting()=[&](const Matrix & factor,double,double,const n::Vector *,
+        const n::CompactSvdResult & svd) {
+        ++out.calls; out.factor=factor; out.svd=svd;
+    };
+    out.prepared=n::PrepareProjectedWidthDerivative(endpoint,context.scale,&context);
+    return out;
+}
+
 TEST(JointCompactAssessmentTest, ProjectedWidthOnlyRouteMatchesProfileDerivativeAcrossLattices)
 {
     EigenThreads threads;
@@ -119,6 +159,74 @@ TEST(JointCompactAssessmentTest, ProjectedWidthRankKeepsThresholdSensitiveResult
         ASSERT_NE(identified,evidence.end());
         EXPECT_EQ(identified->status,near ? rhbm_gem::JointCheckStatus::Unavailable :
             rank.rank==2 ? rhbm_gem::JointCheckStatus::Passed : rhbm_gem::JointCheckStatus::Failed);
+    }
+}
+
+TEST(JointCompactAssessmentTest, DenseDesignOracleMatchesInteriorFreeDesignFactor)
+{
+    EigenThreads threads;
+    const n::Vector y=n::Vector::Zero(8);
+    auto context=n::CreateContext(y,2); context.rank={8,4,2};
+    for(const auto & [name,separation]:std::array<std::pair<const char *,double>,3>{{
+        {"well-conditioned",.5},{"ill-conditioned-full-rank",1e-8},{"exactly-rank-deficient",0.}}})
+    {
+        SCOPED_TRACE(name);
+        const auto endpoint=RankEndpoint(separation);
+        const auto dense=n::DesignSpectrum(endpoint.x,n::Vector::Ones(y.size()),&context.rank);
+        const auto free=CaptureFreeDesignRank(endpoint,context);
+        ASSERT_TRUE(dense.available);
+        ASSERT_TRUE(free.svd.valid);
+        ASSERT_EQ(free.calls,1u);
+        ASSERT_EQ(free.factor.rows(),4);
+        ASSERT_EQ(free.factor.cols(),4);
+        ASSERT_EQ(free.svd.singular_values.size(),dense.singular_values.size());
+        EXPECT_EQ(free.svd.rank,dense.rank);
+        EXPECT_NEAR(free.svd.threshold,dense.threshold,2e-14*dense.threshold);
+        EXPECT_LE((free.svd.singular_values-dense.singular_values).norm(),
+            2e-12*(1.+dense.singular_values.norm()));
+        EXPECT_EQ(free.prepared.valid,dense.rank==4);
+        EXPECT_EQ(endpoint.beta.minCoeff()>0.,true);
+        for(Eigen::Index column=0;column<endpoint.x.cols();++column)
+            EXPECT_GT(endpoint.x.col(column).norm(),0.);
+    }
+}
+
+TEST(JointCompactAssessmentTest, ActiveAmplitudeFreeRankDoesNotRepresentFullDesign)
+{
+    EigenThreads threads;
+    const n::Vector y=n::Vector::Zero(10);
+    auto context=n::CreateContext(y,3); context.rank={10,6,3};
+    for(const Eigen::Index active_amplitudes:{1,2,3})
+    {
+        auto endpoint=RankEndpoint(.5,3);
+        for(Eigen::Index atom=0;atom<active_amplitudes;++atom) endpoint.beta(2*atom)=0.;
+        const auto dense=n::DesignSpectrum(endpoint.x,n::Vector::Ones(y.size()),&context.rank);
+        const auto free=CaptureFreeDesignRank(endpoint,context);
+        ASSERT_TRUE(dense.available);
+        ASSERT_TRUE(free.svd.valid);
+        ASSERT_EQ(free.calls,1u);
+        EXPECT_EQ(dense.columns,6);
+        EXPECT_LT(free.svd.singular_values.size(),dense.columns);
+        EXPECT_EQ(free.factor.cols(),free.svd.singular_values.size());
+        EXPECT_EQ(free.svd.rank,free.svd.singular_values.size());
+        EXPECT_TRUE(free.prepared.valid);
+    }
+}
+
+TEST(JointCompactAssessmentTest, StrictGreaterBoundaryControlsNearThresholdRank)
+{
+    EigenThreads threads;
+    const n::RankPolicy policy{8,2,1};
+    const std::array<std::pair<double,Eigen::Index>,3> cases{{
+        {.5,1},{1.,1},{1.5,2}}};
+    for(const auto & [minimum,expected_rank]:cases)
+    {
+        Matrix factor=Matrix::Zero(2,2); factor.diagonal()<<4.,minimum;
+        const auto strict=n::EvaluateRank(factor,{policy,2,1.,n::RankBoundary::StrictGreater});
+        ASSERT_TRUE(strict.valid);
+        EXPECT_EQ(strict.rank,expected_rank);
+        if(minimum==1.) EXPECT_FALSE(n::CompactRankDecisionSafe(strict));
+        else EXPECT_TRUE(n::CompactRankDecisionSafe(strict));
     }
 }
 
