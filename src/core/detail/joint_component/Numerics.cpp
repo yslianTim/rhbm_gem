@@ -1134,12 +1134,28 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
     out.jacobian=CompactSpectrum(correction_svd,context->rank.rows);
     out.gradient=endpoint.gradient.lpNorm<Eigen::Infinity>()<=1e-12 &&
         (reference ? reference->gradient.lpNorm<Eigen::Infinity>()<=1e-12 : replay->gradient_agrees);
-    out.local=correction.allFinite() && correction.lpNorm<Eigen::Infinity>()<=1e-10;
+    if(correction.allFinite())
+    {
+        out.local_correction_inf_norm=correction.lpNorm<Eigen::Infinity>();
+        Eigen::Index free_column{};
+        for(Eigen::Index col=0;col<evaluated->beta.size();++col)
+        {
+            if(col%2==0 && evaluated->beta(col)==0) continue;
+            // Map the same undamped profile step to free A/C coordinates,
+            // including the nonzero-residual coefficient correction.
+            const double step=(prepared.coefficients.row(free_column)+prepared.correction.row(free_column)).dot(correction)/
+                (evaluated->x.col(col).norm()*(1+std::abs(evaluated->beta(col))));
+            if(!std::isfinite(step)) {out.local_correction_inf_norm=std::numeric_limits<double>::infinity(); break;}
+            out.local_correction_inf_norm=std::max(out.local_correction_inf_norm,std::abs(step));
+            ++free_column;
+        }
+    }
+    out.local=std::isfinite(out.local_correction_inf_norm) && out.local_correction_inf_norm<=1e-10;
     out.identified=projected_width_rank==eta.size() && correction_svd.rank==eta.size();
     const bool design_full_rank=out.design->rank==evaluated->x.cols();
     out.qualified=out.endpoint_verified && design_full_rank && out.identified && out.gradient && out.local;
     out.failure=reference && !out.inner ? "inner-solve" : !design_full_rank ? "design-unidentified" :
-        !out.identified ? "width-unidentified" : !out.gradient || !out.local ? "b-not-stationary" :
+        !out.identified ? "width-unidentified" : !out.gradient ? "b-not-stationary" : !out.local ? "local-correction" :
         !out.endpoint_verified ? "endpoint-verification-failed" : "none";
     return out;
 }

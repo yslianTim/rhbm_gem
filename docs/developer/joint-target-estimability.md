@@ -58,6 +58,11 @@ leakage <= 1e-10. Nonunique mapped null directions are unavailable rather than
 treated as zero correction. Width stationarity retains the existing 1e-12
 limit.
 
+Full-parameter local qualification also bounds the mapped free A/C step and
+log-B step by `1e-10`. FixedNeighbor continues its existing bounded updates
+when those A/C corrections fail even if the width step passes. Target evidence
+independently checks the requested coordinates at the final saved state.
+
 ## Target covariance and exports
 
 Target covariance uses the identifiable subspace of the full coupled

@@ -1049,6 +1049,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168ContinuesAfterSweep1
     EXPECT_EQ(short_run.certification_sweeps,(std::vector<std::size_t>{107u,115u}));
     EXPECT_FALSE(short_component.state);
     EXPECT_NE(short_component.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    EXPECT_EQ(short_fit.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Unavailable);
     EXPECT_FALSE(short_fit.assembled_state);
     const auto & extended_fit=extended_run.fit;
     const auto & extended_component=extended_fit.components.front();
@@ -1068,11 +1069,18 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168ContinuesAfterSweep1
             rhbm_gem::JointCheckStatus::Passed);
     }
     ASSERT_TRUE(extended_fit.search_completed);
-    EXPECT_EQ(extended_component.search_sweeps,117u);
-    EXPECT_EQ(extended_run.certification_sweeps,(std::vector<std::size_t>{107u,117u}));
+    EXPECT_EQ(extended_component.search_sweeps,127u);
+    EXPECT_EQ(extended_run.certification_sweeps,(std::vector<std::size_t>{107u,117u,127u}));
+    const auto & width_only=extended_run.certifications[1];
+    EXPECT_EQ(width_only.sweep,117u);
+    EXPECT_TRUE(width_only.certification.verified());
+    EXPECT_LE(width_only.certification.assessment.correction.lpNorm<Eigen::Infinity>(),1e-10);
+    EXPECT_GT(width_only.certification.assessment.local_correction_inf_norm,1e-10);
+    EXPECT_FALSE(width_only.certification.assessment.local);
+    EXPECT_FALSE(width_only.certification.qualified());
     const auto & qualified=extended_run.certifications.back();
     const auto & qualified_assessment=qualified.certification.assessment;
-    EXPECT_EQ(qualified.sweep,117u);
+    EXPECT_EQ(qualified.sweep,127u);
     EXPECT_TRUE(qualified.certification.qualified());
     EXPECT_TRUE(qualified_assessment.qualified);
     EXPECT_TRUE(qualified_assessment.local);
@@ -1082,6 +1090,21 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168ContinuesAfterSweep1
     EXPECT_EQ(qualified_assessment.widths->rank,168);
     EXPECT_TRUE(extended_component.state);
     EXPECT_EQ(extended_component.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    ASSERT_TRUE(extended_component.target_evidence);
+    for(const auto & check:extended_component.target_evidence->checks)
+        EXPECT_EQ(check.status,rhbm_gem::JointCheckStatus::Passed)
+            <<check.name<<" value="<<check.value.value_or(-1)<<" reason="<<check.reason;
+    EXPECT_EQ(extended_component.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    EXPECT_EQ(extended_fit.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    const auto target_correction=std::find_if(extended_component.target_evidence->checks.begin(),
+        extended_component.target_evidence->checks.end(),[](const auto & check){return check.name=="target-local-correction";});
+    ASSERT_NE(target_correction,extended_component.target_evidence->checks.end());
+    ASSERT_TRUE(target_correction->value);
+    EXPECT_LE(*target_correction->value,1e-10);
+    EXPECT_NEAR(qualified_assessment.local_correction_inf_norm,*target_correction->value,1e-14);
+    const auto saved=rhbm_gem::core::CaptureJointAnalysisResult(extended_fit);
+    EXPECT_EQ(saved.target_runtime_convergence,rhbm_gem::JointCheckStatus::Passed);
+    EXPECT_EQ(saved.components.front().target_runtime_convergence,rhbm_gem::JointCheckStatus::Passed);
     EXPECT_TRUE(extended_fit.assembled_state);
     ASSERT_EQ(short_run.trajectory.size(),115u);
     ASSERT_GE(extended_run.trajectory.size(),short_run.trajectory.size());
@@ -1136,6 +1159,13 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168ContinuesAfterSweep1
     const auto legacy_reference=n::EvaluateProfile(data.domain,data.y,early.eta,true,&data.context);
     ASSERT_TRUE(legacy_reference.valid)<<legacy_reference.reason;
     const auto legacy_trust=n::CheckTrust(data.domain,data.y,primary,data.context,legacy_reference);
+    const auto width_only_primary=n::EvaluateState(data.domain,data.y,width_only.eta,width_only.beta,data.context);
+    ASSERT_TRUE(width_only_primary.valid)<<width_only_primary.reason;
+    const auto width_only_reference=n::EvaluateProfile(data.domain,data.y,width_only.eta,true,&data.context);
+    ASSERT_TRUE(width_only_reference.valid)<<width_only_reference.reason;
+    const auto width_only_trust=n::CheckTrust(data.domain,data.y,width_only_primary,data.context,width_only_reference);
+    EXPECT_GT(width_only_trust.coefficient_difference,1e-10);
+    EXPECT_FALSE(width_only_trust.passed);
     const auto qualified_primary=n::EvaluateState(data.domain,data.y,qualified.eta,qualified.beta,data.context);
     ASSERT_TRUE(qualified_primary.valid)<<qualified_primary.reason;
     const auto qualified_replay=n::CheckIndependentReplay(data.domain,data.y,qualified_primary,data.context);
@@ -1145,16 +1175,14 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168ContinuesAfterSweep1
     ASSERT_TRUE(qualified_legacy_reference.valid)<<qualified_legacy_reference.reason;
     const auto qualified_legacy_trust=n::CheckTrust(data.domain,data.y,qualified_primary,data.context,
         qualified_legacy_reference);
-    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,2);
+    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,3);
     EXPECT_LE(qualified_primary.certificate.projected_kkt,1e-10);
     EXPECT_LE(qualified_legacy_reference.certificate.projected_kkt,1e-10);
     EXPECT_LE(std::abs(qualified_primary.certificate.projected_kkt-
         qualified_legacy_reference.certificate.projected_kkt),1e-10);
     EXPECT_EQ(qualified_primary.certificate.active_atoms,qualified_legacy_reference.certificate.active_atoms);
-    // Keep the large fixture's same-width reference discrepancy visible; the small
-    // well-conditioned oracle below remains the strict parameter-equivalence control.
-    EXPECT_GT(qualified_legacy_trust.coefficient_difference,1e-10);
-    EXPECT_FALSE(qualified_legacy_trust.passed);
+    EXPECT_LE(qualified_legacy_trust.coefficient_difference,1e-10);
+    EXPECT_TRUE(qualified_legacy_trust.passed);
     EXPECT_NEAR(primary.certificate.projected_kkt,4.5219e-11,1e-14);
     EXPECT_NEAR(primary.gradient.lpNorm<Eigen::Infinity>(),8.3490e-13,1e-16);
     EXPECT_NEAR((legacy_reference.gradient.lpNorm<Eigen::Infinity>()),1.6499e-12,1e-15);
@@ -1176,7 +1204,10 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168ContinuesAfterSweep1
         <<" independent_objective_difference="<<replay.objective_difference
         <<" design_rank="<<early_assessment.design->rank<<'/'<<early_assessment.design->columns
         <<" projected_width_rank="<<early_assessment.widths->rank<<"/168"
-        <<" local_correction_inf="<<early_assessment.correction.lpNorm<Eigen::Infinity>()
+        <<" width_correction_inf="<<early_assessment.correction.lpNorm<Eigen::Infinity>()
+        <<" local_correction_inf="<<early_assessment.local_correction_inf_norm
+        <<" sweep117_width_correction_inf="<<width_only.certification.assessment.correction.lpNorm<Eigen::Infinity>()
+        <<" sweep117_local_correction_inf="<<width_only.certification.assessment.local_correction_inf_norm
         <<" numerical_identifiability="<<(early_assessment.identified?"passed":"failed")
         <<" legacy_same_width_coefficient_difference="<<legacy_trust.coefficient_difference
         <<" legacy_reference_width_gradient="<<legacy_reference.gradient.lpNorm<Eigen::Infinity>()
@@ -1198,7 +1229,9 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168ContinuesAfterSweep1
         <<" max200_design_rank="<<qualified_assessment.design->rank<<'/'<<qualified_assessment.design->columns
         <<" max200_projected_width_rank="<<qualified_assessment.widths->rank<<"/168"
         <<" max200_design_condition="<<qualified_assessment.design->condition
-        <<" max200_local_correction_inf="<<qualified_assessment.correction.lpNorm<Eigen::Infinity>()
+        <<" max200_width_correction_inf="<<qualified_assessment.correction.lpNorm<Eigen::Infinity>()
+        <<" max200_local_correction_inf="<<qualified_assessment.local_correction_inf_norm
+        <<" max200_target_correction_inf="<<*target_correction->value
         <<" max200_numerical_identifiability="<<(qualified_assessment.identified?"passed":"failed")
         <<" max200_legacy_same_width_coefficient_difference="<<qualified_legacy_trust.coefficient_difference
         <<" max200_legacy_width_gradient="<<qualified_legacy_reference.gradient.lpNorm<Eigen::Infinity>()
@@ -1224,6 +1257,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168ContinuesAfterSweep1
         <<" max200_component_state="<<(extended_component.state?"available":"unavailable")
         <<" max200_assembled_state="<<(extended_fit.assembled_state?"available":"unavailable")
         <<" max200_runtime_convergence_status="<<static_cast<int>(extended_component.RuntimeConvergence())
+        <<" max200_target_runtime_convergence_status="<<static_cast<int>(extended_fit.TargetRuntimeConvergence())
         <<" max200_certification_sweeps=";
     for(std::size_t k=0;k<extended_run.certification_sweeps.size();++k)
         std::cout<<(k ? ",":"")<<extended_run.certification_sweeps[k];

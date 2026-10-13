@@ -99,7 +99,7 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
             a.design ? std::optional<double>(static_cast<double>(a.design->rank)) : std::nullopt,
             a.design ? std::optional<double>(static_cast<double>(a.design->columns)) : std::nullopt));
         out.push_back(check("local-correction",a.jacobian.has_value(),a.local,
-            a.correction.size() ? std::optional<double>(a.correction.lpNorm<Eigen::Infinity>()) : std::nullopt,1e-10));
+            std::isfinite(a.local_correction_inf_norm) ? std::optional<double>(a.local_correction_inf_norm) : std::nullopt,1e-10));
         out.push_back(check("numerical-identifiability",a.widths.has_value(),a.identified));
     }
     else
@@ -113,7 +113,7 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
             valid && a.primary.gradient.size() ? std::optional<double>(std::max(a.primary.gradient.lpNorm<Eigen::Infinity>(),
                 a.reference.gradient.lpNorm<Eigen::Infinity>())) : std::nullopt,1e-12));
         out.push_back(check("local-correction",a.jacobian.has_value(),a.local,
-            a.correction.size() ? std::optional<double>(a.correction.lpNorm<Eigen::Infinity>()) : std::nullopt,1e-10));
+            std::isfinite(a.local_correction_inf_norm) ? std::optional<double>(a.local_correction_inf_norm) : std::nullopt,1e-10));
         out.push_back(check("numerical-identifiability",a.widths.has_value(),a.identified));
     }
     if(a.reference_free && a.verification_memory_estimate.stage==n::MemoryStage::EndpointVerification)

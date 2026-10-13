@@ -64,6 +64,11 @@ Successful production stopping additionally requires endpoint verification and
 complete numerical qualification, including design and projected-width rank,
 local correction and numerical identifiability. A verified candidate that is
 not qualified is never exposed as a scientific component or assembled state.
+Local correction takes the maximum of the undamped log-B step and the mapped
+free A/C steps scaled by `1 + abs(coefficient)`, including the nonzero-residual
+profile correction. Each must satisfy the existing `1e-10` limit before a
+successful stop, so a passing width step alone cannot leave a failing target
+parameter correction at the saved endpoint.
 Recoverable numerical qualification failures continue through the same bounded
 block updates; resource-limited assessment stops retries without reporting
 convergence. An unqualified endpoint at the sweep limit reports budget

@@ -192,8 +192,6 @@ j::value SpectrumJson(const std::optional<n::Spectrum> & spectrum)
 }
 j::object AssessmentJson(const n::Assessment & assessment,const n::TrustEvidence & trust)
 {
-    const double correction=assessment.correction.size()==0 ? std::numeric_limits<double>::infinity() :
-        assessment.correction.lpNorm<Eigen::Infinity>();
     const auto & replay=assessment.independent_replay;
     return {{"endpoint_verified",assessment.endpoint_verified},{"numerically_qualified",assessment.qualified},
         {"primary_ac_kkt_passed",replay.primary_kkt_passed},
@@ -217,7 +215,7 @@ j::object AssessmentJson(const n::Assessment & assessment,const n::TrustEvidence
         {"assessment_stage_telemetry",AssessmentStagesJson()},
         {"primary_gradient_inf_norm",assessment.primary.gradient.size() ?
             Number(assessment.primary.gradient.lpNorm<Eigen::Infinity>()) : j::value(nullptr)},
-        {"local_correction_inf_norm",Number(correction)},
+        {"local_correction_inf_norm",Number(assessment.local_correction_inf_norm)},
         {"projected_width",SpectrumJson(assessment.widths)},
         {"corrected_jacobian",SpectrumJson(assessment.jacobian)},
         {"normalized_width",SpectrumJson(assessment.normalized_widths)},
