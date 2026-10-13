@@ -249,7 +249,7 @@ TEST(CommandApiPipelineTest, PotentialAnalysisFixedPoliciesMatchDirectTwoStageWo
     ASSERT_NE(command_model, nullptr);
     ASSERT_EQ(command_model->GetNumberOfAtom(), 1u);
     ASSERT_EQ(command_model->GetSelectedAtomCount(), 1u);
-    EXPECT_EQ(command_model->GetSelectedAtoms().front()->GetElement(), rg::Element::CARBON);
+    EXPECT_EQ(command_model->GetSelectedAtoms().front()->GetElement(), Element::CARBON);
 
     auto direct_map{ rg::ReadMap(map_path) };
     auto direct_model{ rg::ReadModel(model_path) };
@@ -258,12 +258,12 @@ TEST(CommandApiPipelineTest, PotentialAnalysisFixedPoliciesMatchDirectTwoStageWo
     ASSERT_TRUE(direct_map->MapValueArrayNormalization());
     direct_model->SelectAtoms([](const rg::AtomObject & atom)
     {
-        return atom.GetElement() != rg::Element::HYDROGEN;
+        return atom.GetElement() != Element::HYDROGEN;
     });
     rgc::FitOptions direct_options;
     direct_options.thread_size = 1;
     direct_options.estimator = rgc::PotentialEstimator::TWO_STAGE;
-    direct_options.sampling_method = rg::SphereSamplingMethod::FibonacciDeterministic;
+    direct_options.sampling_method = SphereSamplingMethod::FibonacciDeterministic;
     direct_options.exclude_hydrogen = true;
     direct_options.enable_second_stage_failed_only_refinement = true;
     direct_options.quiet_mode = true;
@@ -332,7 +332,7 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
     ASSERT_TRUE(map->MapValueArrayNormalization());
     model->SelectAtoms([](const rg::AtomObject & atom)
     {
-        return atom.GetElement() != rg::Element::HYDROGEN && atom.GetChainID() == "A";
+        return atom.GetElement() != Element::HYDROGEN && atom.GetChainID() == "A";
     });
     const auto target_problem=rgc::BuildJointProblem(*map,*model);
     EXPECT_EQ(saved.row_ids,target_problem.Input().row_ids);
@@ -341,7 +341,7 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
     rgc::FitOptions direct_options;
     direct_options.thread_size=1;
     direct_options.estimator=rgc::PotentialEstimator::JOINT_COMPONENTS;
-    direct_options.sampling_method=rg::SphereSamplingMethod::FibonacciDeterministic;
+    direct_options.sampling_method=SphereSamplingMethod::FibonacciDeterministic;
     direct_options.exclude_hydrogen=true;
     direct_options.enable_second_stage_failed_only_refinement=true;
     direct_options.quiet_mode=true;
@@ -371,9 +371,8 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
         auto simulated=request; simulated.simulation_flag=true; simulated.simulated_map_resolution=.5;
         simulated.saved_key_tag="simulation";
         ASSERT_TRUE(rgc::RunCommand(simulated).succeeded);
-        rg::DataRepository repository{request.database_path};
-        const auto saved=repository.LoadModel("simulation");
-        const auto & metadata=saved->GetAnalysisView().GetJointResult()->metadata;
+        const auto simulation_model=repository.LoadModel("simulation");
+        const auto & metadata=simulation_model->GetAnalysisView().GetJointResult()->metadata;
         ASSERT_TRUE(metadata.map_normalization);
         EXPECT_FALSE(metadata.map_normalization->requested);
         EXPECT_FALSE(metadata.map_normalization->applied);
@@ -410,7 +409,7 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
     umap.model_key_tag=request.saved_key_tag; umap.verbosity=0;
     EXPECT_FALSE(rgc::RunCommand(umap).succeeded);
 #endif
-    auto loaded=repository.LoadModel(request.saved_key_tag);
+    loaded=repository.LoadModel(request.saved_key_tag);
     {
         rgc::JointProblemInput missing_input; missing_input.atom_ids={"1","2"}; missing_input.support.resize(2);
         missing_input.selection_domain=rg::JointSelectionDomain{}; missing_input.selection_domain->target_indices={0};
