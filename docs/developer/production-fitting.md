@@ -36,8 +36,10 @@ checks. Invalid, underdetermined, or rank-deficient data remain unqualified and
 cannot be promoted. First-stage fitting, alpha training, group solvers, and
 generic local/MDPDE calls remain native.
 
-The production switch `--second-stage-failed-only-refinement false` selects
-native-only behavior. Refinement uses the same Powell hybrid method in
+PotentialAnalysis always enables failed-only refinement. Direct fitting callers
+can select native-only behavior with
+`FitOptions::enable_second_stage_failed_only_refinement = false`. Refinement
+uses the same Powell hybrid method in
 `(beta0, log(beta1), log(variance))`, a central-difference Jacobian,
 `xtol=1e-12`, and a 128-equation budget.
 

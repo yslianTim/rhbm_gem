@@ -37,20 +37,17 @@ Command-specific fields:
 - `database_path`
 - `model_file_path`
 - `map_file_path`
+- `selected_chain_ids` (empty means all chains)
 - `simulation_flag`
-- `map_normalization_flag`
-- `exclude_hydrogen`
 - `simulated_map_resolution`
 - `saved_key_tag`
-- `asymmetry_flag`
-- `sampling_method`
-- `enable_second_stage_failed_only_refinement`
 
-`sampling_method` uses the shared `SphereSamplingMethod` enum and is exposed
-through the `--sampling-method` CLI flag.
-Alpha training is always enabled for potential analysis. Initial local/group
-alpha values are internal command defaults set to `0.0` and are not exposed as
-request fields or CLI options.
+The request catalog generates both CLI options and Python bindings. Potential
+analysis fixes map normalization, hydrogen exclusion, sampling and failed-only
+refinement as command policies; those policies are not request fields. The
+shared `SphereSamplingMethod` enum remains available to generic fitting APIs.
+Alpha training is enabled, with initial local/group alpha values set internally
+to `0.0`.
 
 ## Execution Contract
 
@@ -67,35 +64,86 @@ Expected result contract:
 The anonymous-namespace `NormalizeAndValidateRequest(...)` phase handles field validation:
 
 - validates required model and map paths
-- leaves map normalization as an execution-time choice: simulation requests always skip it,
-  and non-simulation requests use `map_normalization_flag`
+- trims and deduplicates selected chain IDs and rejects empty IDs
 - rejects invalid scalar inputs that this command cannot safely recover from
 - rejects an empty `saved_key_tag`
 
 `ValidatePreparedRequest(...)` performs semantic checks after normalization:
 
 - `--simulation` requires positive simulated resolution
-- fit ranges must be ordered correctly
+- loads the model once, verifies requested chain IDs and requires at least one
+  non-hydrogen target before map preprocessing or fitting
 
 `ExecutePreparedRequest(...)`:
 
-- loads command-owned model and map objects through `ReadModel(...)` and `ReadMap(...)`
+- reuses the validated model and loads the map through `ReadMap(...)`
 - optionally switches the model object into simulation mode
-- optionally runs map normalization, then runs model preprocessing
+- skips map normalization for simulation requests and always attempts it for
+  other requests
+- computes Q-scores and fits the target selection without removing atoms from
+  the model
 - delegates atom sampling to `MapSampler`, then performs alpha training and fitting
+- uses Fibonacci deterministic sampling, permanently excludes hydrogen, and
+  enables failed-only second-stage refinement
 - persists the prepared model through `DataRepository::SaveModel(...)`
 - writes to the repository using `request.saved_key_tag` as the persisted key
 - clears sampled local-potential distance/value buffers after persistence to keep runtime state lean
 
 `CommandRunner` creates `output_dir` during filesystem preflight when needed.
 
+## Target chains and fixed policies
+
+With no chain selection, all non-hydrogen atoms in the complete model are
+targets, including side-chain atoms and chains that share an entity with other
+chains. `--select-chain` narrows the target set while preserving the full
+`ModelObject`. Chain IDs are compared case-sensitively using
+`AtomObject::GetChainID()`, which for mmCIF input prefers `label_asym_id` and
+falls back to `auth_asym_id`. Unknown IDs, empty CSV tokens and selections with
+no non-hydrogen targets fail before Q-score preprocessing and fitting. Repeated
+IDs are deduplicated; token whitespace is trimmed.
+
+C++ callers can assign `request.selected_chain_ids = {"A", "B", "C"}`;
+Python callers can assign `request.selected_chain_ids = ["A", "B", "C"]`.
+An empty vector or list selects every non-hydrogen atom in the model.
+
+For Joint Components, selected chains define targets and their voxel
+observations. Other non-hydrogen atoms remain eligible as halo contributors
+when their support overlaps those observations. Chain selection does not crop
+the contributor model or change the target/halo distinction.
+
+Simulation maps skip normalization. Every non-simulation map is normalized by
+its standard deviation when that operation succeeds; no mean is subtracted. A
+zero-SD map records `requested: true`, `applied: false`, and `divisor: 1`.
+
+```sh
+# Default: all non-hydrogen atoms in all chains
+rhbm_gem potential_analysis \
+    --estimator joint-components \
+    --model model.cif \
+    --map map.mrc
+
+# One target chain
+rhbm_gem potential_analysis \
+    --estimator joint-components \
+    --model model.cif \
+    --map map.mrc \
+    --select-chain A
+
+# Several target chains
+rhbm_gem potential_analysis \
+    --estimator joint-components \
+    --model model.cif \
+    --map map.mrc \
+    --select-chain A,B,C
+```
+
 ## Failed-only endpoint refinement
 
-Second-stage shape fitting enables failed-only refinement by default. Disable it
-with `--second-stage-failed-only-refinement false`, or set the request field
-`enable_second_stage_failed_only_refinement` to `false` in C++ or `False` in
-Python. Direct fitting callers use the matching `FitOptions` field.
-First-stage fitting, alpha training, group estimation and the generic
+Potential analysis always enables failed-only refinement for second-stage shape
+fitting. The PotentialAnalysis request and CLI do not expose a switch. Direct
+fitting callers retain the generic
+`FitOptions::enable_second_stage_failed_only_refinement` control. First-stage
+fitting, alpha training, group estimation and the generic
 `EstimateLocalGaussian` / `EstimateBetaMDPDE` entrypoints keep their native behavior.
 
 A native successful solve is used unchanged, without a fresh-equation evaluation.
@@ -180,21 +228,19 @@ keeps its model-copy and target writeback behavior.
 The solver contracts remain `guarded-joint-ls-v1`,
 `parent-normalized-half-rss-v1`, and `sphere-fma-v1`.
 
-Joint uses selected non-hydrogen targets and the complete fixed-domain halo
-closure, deterministic Fibonacci initialization and one worker. Hydrogen is
-excluded regardless of `--exclude-hydrogen`. Backbone-only and asymmetry flags
-select targets; unselected non-hydrogen atoms remain eligible contributors.
-Non-Fibonacci initialization requests are rejected. `-j` values greater
-than one produce a notice that joint uses one worker. The second-stage refinement
-option applies only to the two-stage estimator. Map normalization and Q-score
-preprocessing retain the existing command semantics: simulation skips map
-normalization; other requests honor `--map-normalization`.
+Both estimators use the selected non-hydrogen atoms as targets. Sampling is
+always Fibonacci deterministic, and PotentialAnalysis always enables
+failed-only second-stage refinement. Joint Components uses one worker; `-j`
+values greater than one produce a notice. Its complete contributor closure may
+include unselected chains, while `selection_domain.target_indices` and `row_ids`
+continue to describe only the selected targets and their observations.
 
 ```cpp
 rhbm_gem::core::PotentialAnalysisRequest request;
 request.estimator = rhbm_gem::core::PotentialEstimator::JOINT_COMPONENTS;
 request.model_file_path = "model.cif";
 request.map_file_path = "map.mrc";
+request.selected_chain_ids = {"A"}; // omit this or use {} for every non-hydrogen chain
 request.database_path = "joint.sqlite"; // new v19 database
 request.saved_key_tag = "example";
 auto completed = rhbm_gem::core::RunCommand(request);
@@ -206,6 +252,7 @@ request = gem.PotentialAnalysisRequest()
 request.estimator = gem.PotentialEstimator.JOINT_COMPONENTS
 request.model_file_path = "model.cif"
 request.map_file_path = "map.mrc"
+request.selected_chain_ids = ["A"]  # [] selects all non-hydrogen atoms
 request.database_path = "joint.sqlite"
 request.saved_key_tag = "example"
 assert gem.RunCommand(request).succeeded  # execution/persistence, not convergence
@@ -281,9 +328,11 @@ converts historical provenance into the current contract.
 
 `metadata.map_normalization` is `{requested, applied, divisor}`. The operation is
 `fit_map = input_map / divisor`, with no mean subtraction. An applied operation
-records the actual pre-normalization standard deviation, including SD=1. Disabled
-normalization, zero-SD maps and simulation requests use `applied=false, divisor=1`;
-`requested` preserves the user's flag, and `simulation` identifies that bypass.
+records the actual pre-normalization standard deviation, including SD=1.
+`requested` records the fixed command policy: false for simulation requests and
+true otherwise. `applied` records whether normalization succeeded; a zero-SD
+non-simulation map therefore records `requested=true, applied=false, divisor=1`.
+Simulation requests record `requested=false, applied=false, divisor=1`.
 Pure in-memory API callers may leave the normalization record and input hashes
 null; unknown provenance does not imply an identity transform.
 

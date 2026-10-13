@@ -19,8 +19,8 @@ def main() -> int:
         local_model = root / "input.cif"
         shutil.copyfile(model, local_model)
         local_model.write_text(local_model.read_text().rsplit("#", 1)[0] +
-            "ATOM 2 C CB . ALA A 1 1.2 0.0 0.0 1.0 0.0 1\n"
-            "ATOM 3 C CB . ALA A 2 12.0 0.0 0.0 1.0 0.0 1\n#\n")
+            "ATOM 2 C CB . ALA B 1 1.2 0.0 0.0 1.0 0.0 1\n"
+            "ATOM 3 C CB . ALA C 2 12.0 0.0 0.0 1.0 0.0 1\n#\n")
         model = local_model
 
         def run(*args: object, succeeds: bool = True) -> None:
@@ -32,20 +32,19 @@ def main() -> int:
         map_path = next(root.glob("*.map"))
         generator = json.loads(Path(str(map_path) + ".simulation.json").read_text())["generator"]
         database = root / "joint.sqlite"
-        run("potential_analysis", "--estimator", "joint-components", "--only-backbone", "true", "-a", model,
-            "-m", map_path, "-d", database, "-k", "example", "--map-normalization", "false", "-v", "0")
+        run("potential_analysis", "--estimator", "joint-components", "--select-chain", "A", "-a", model,
+            "-m", map_path, "-d", database, "-k", "example", "-v", "0")
         run("potential_analysis", "--estimator", "joint-components",
-            "--only-backbone", "true", "-a", model, "-m", map_path, "-d", database, "-k", "fixed",
-            "--map-normalization", "false", "-v", "0")
+            "--select-chain", "A", "-a", model, "-m", map_path, "-d", database, "-k", "fixed", "-v", "0")
         model_hash = hashlib.sha256(model.read_bytes()).hexdigest()
         map_hash = hashlib.sha256(map_path.read_bytes()).hexdigest()
         # The same path with different bytes must produce a different fingerprint.
         model.write_text(model.read_text() + "\n# provenance test\n")
-        run("potential_analysis", "--estimator", "joint-components", "--only-backbone", "true", "-a", model,
-            "-m", map_path, "-d", database, "-k", "changed", "--map-normalization", "false", "-v", "0")
+        run("potential_analysis", "--estimator", "joint-components", "--select-chain", "A", "-a", model,
+            "-m", map_path, "-d", database, "-k", "changed", "-v", "0")
         changed_hash = hashlib.sha256(model.read_bytes()).hexdigest()
-        run("potential_analysis", "--estimator", "joint-components", "--only-backbone", "true", "-a", model,
-            "-m", map_path, "-d", database, "-k", "example.contributions", "--map-normalization", "false", "-v", "0")
+        run("potential_analysis", "--estimator", "joint-components", "--select-chain", "A", "-a", model,
+            "-m", map_path, "-d", database, "-k", "example.contributions", "-v", "0")
         map_path.unlink()
         model.unlink()
         run("result_dump", "--printer", "joint", "-d", database, "-k", "example", "-o", root)
@@ -111,13 +110,16 @@ def main() -> int:
         assert saved["initialization"]["data_scope"] == "contributor-local-sampling-may-read-outside-target-domain"
         csv = (root / "joint_atoms_example.csv").read_text().splitlines()
         assert csv[0].endswith(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,ParameterIdentifiability")
-        assert ',target,FullABC,"",' in csv[1] and ',halo,FullABC,"",' in csv[2]
+        assert ',target,FullABC,"",' in csv[1]
+        assert ',halo,FullABC,"",' in csv[2]
         assert 'target_runtime_convergence' in saved
         metadata = saved["metadata"]
         assert metadata["model_sha256"] == model_hash
         assert metadata["map_sha256"] == map_hash
         assert changed["metadata"]["model_sha256"] == changed_hash != model_hash
-        assert metadata["map_normalization"] == {"requested": False, "applied": False, "divisor": 1}
+        assert metadata["map_normalization"]["requested"] is True
+        assert metadata["map_normalization"]["applied"] is True
+        assert metadata["map_normalization"]["divisor"] > 0
         assert metadata["units"]["A"] == "fit-map-unit*angstrom^3"
         assert metadata["units"]["C"] == "fit-map-unit*angstrom"
         for key in ("source_sha256", "configuration_sha256", "build_sha256"):

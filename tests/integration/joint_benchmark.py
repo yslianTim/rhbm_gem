@@ -149,8 +149,8 @@ def command_for_profile(args, output, build):
     database = output / 'joint.sqlite'
     export = output / 'export'
     analysis = [str(cli), 'potential_analysis', '--estimator', 'joint-components',
-                '--only-backbone', 'true', '-a', str(args.model), '-m', str(args.map_path),
-                '-d', str(database), '-k', args.case, '--map-normalization', 'false', '-v', '0']
+                '-a', str(args.model), '-m', str(args.map_path),
+                '-d', str(database), '-k', args.case, '-v', '0']
     dump = [str(cli), 'result_dump', '--printer', 'joint', '-d', str(database),
             '-k', args.case, '-o', str(export)]
     return analysis, dump, database, export

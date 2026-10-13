@@ -115,25 +115,22 @@ def assert_request_objects_are_usable() -> None:
 
     analysis = m.PotentialAnalysisRequest()
     assert analysis.estimator == m.PotentialEstimator.TWO_STAGE
-    assert analysis.enable_second_stage_failed_only_refinement is True
-    analysis.enable_second_stage_failed_only_refinement = False
-    assert analysis.enable_second_stage_failed_only_refinement is False
-    assert analysis.map_normalization_flag is True
-    assert analysis.exclude_hydrogen is False
-    assert analysis.only_backbone is False
-    analysis.map_normalization_flag = False
-    analysis.exclude_hydrogen = True
-    analysis.only_backbone = True
-    assert analysis.map_normalization_flag is False
-    assert analysis.exclude_hydrogen is True
-    assert analysis.only_backbone is True
-    for field_name in (
+    assert analysis.selected_chain_ids == []
+    analysis.selected_chain_ids = ["A", "B", "C"]
+    assert analysis.selected_chain_ids == ["A", "B", "C"]
+    analysis.selected_chain_ids = []
+    assert analysis.selected_chain_ids == []
+    for removed_field_name in (
         "map_normalization_flag",
         "exclude_hydrogen",
         "only_backbone",
+        "asymmetry_flag",
         "sampling_method",
+        "enable_second_stage_failed_only_refinement",
     ):
-        assert hasattr(analysis, field_name), f"PotentialAnalysisRequest missing {field_name}"
+        assert not hasattr(analysis, removed_field_name), (
+            f"PotentialAnalysisRequest still exposes {removed_field_name}"
+        )
     for removed_field_name in (
         "sampling_profile_choice",
         "sampling_size",
@@ -151,16 +148,6 @@ def assert_request_objects_are_usable() -> None:
         assert not hasattr(analysis, removed_field_name), (
             f"PotentialAnalysisRequest still exposes {removed_field_name}"
         )
-    assert (
-        analysis.sampling_method
-        == m.SphereSamplingMethod.FIBONACCI_DETERMINISTIC
-    )
-    analysis.sampling_method = m.SphereSamplingMethod.VOLUME_UNIFORM_RANDOM
-    assert (
-        analysis.sampling_method
-        == m.SphereSamplingMethod.VOLUME_UNIFORM_RANDOM
-    )
-
     display = m.PotentialDisplayRequest()
     assert not hasattr(display, "map_file_path")
     display.painter_choice = m.PainterType.GAUS
@@ -228,7 +215,11 @@ def assert_joint_workflow() -> None:
         simulation = m.MapSimulationRequest()
         local_model = root / "input.cif"
         shutil.copyfile(PROJECT_ROOT / "tests" / "fixtures" / "test_model.cif", local_model)
-        local_model.write_text(local_model.read_text().rsplit("#", 1)[0] + "ATOM 2 C CB . ALA A 1 1.2 0.0 0.0 1.0 0.0 1\n#\n")
+        local_model.write_text(
+            local_model.read_text().rsplit("#", 1)[0]
+            + "ATOM 2 C CB . ALA B 1 1.2 0.0 0.0 1.0 0.0 1\n"
+            + "ATOM 3 C CB . ALA C 2 12.0 0.0 0.0 1.0 0.0 1\n#\n"
+        )
         simulation.model_file_path = local_model
         simulation.output_dir = root
         simulation.potential_model_choice = m.PotentialModel.SINGLE_GAUS
@@ -238,11 +229,10 @@ def assert_joint_workflow() -> None:
         assert m.RunCommand(simulation).succeeded
         analysis = m.PotentialAnalysisRequest()
         analysis.estimator = m.PotentialEstimator.JOINT_COMPONENTS
-        analysis.only_backbone = True
+        analysis.selected_chain_ids = ["A"]
         analysis.model_file_path = simulation.model_file_path
         analysis.map_file_path = next(root.glob("*.map"))
         analysis.database_path = root / "joint.sqlite"
-        analysis.map_normalization_flag = False
         analysis.verbosity = 0
         assert m.RunCommand(analysis).succeeded
         model_hash = hashlib.sha256(local_model.read_bytes()).hexdigest()
@@ -262,7 +252,10 @@ def assert_joint_workflow() -> None:
         assert saved["atom_ids"] == ["1", "2"]
         assert saved["metadata"]["model_sha256"] == model_hash
         assert saved["metadata"]["map_sha256"] == map_hash
-        assert saved["metadata"]["map_normalization"] == {"requested": False, "applied": False, "divisor": 1}
+        normalization = saved["metadata"]["map_normalization"]
+        assert normalization["requested"] is True
+        assert normalization["applied"] is True
+        assert normalization["divisor"] > 0
         assert len(saved["metadata"]["software"]["build_sha256"]) == 64
         assert saved["regular_certificate"] == "not-run"
         assert saved["assembled_state"] is not None
