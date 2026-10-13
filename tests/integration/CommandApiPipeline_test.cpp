@@ -1,6 +1,7 @@
 #include "utils/domain/FileFingerprint.hpp"
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -230,18 +231,66 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
 
 }
 
+TEST(CommandApiPipelineTest, PotentialAnalysisFixedPoliciesMatchDirectTwoStageWorkflow)
+{
+    command_test::ScopedTempDir directory{ "potential_analysis_fixed_policies" };
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+    const auto map_path{ command_test::GenerateMapFile(directory.path() / "maps", model_path) };
+    rgc::PotentialAnalysisRequest request;
+    request.database_path = directory.path() / "analysis.sqlite";
+    request.model_file_path = model_path;
+    request.map_file_path = map_path;
+    request.saved_key_tag = "fixed-policies";
+    request.verbosity = 0;
+    ASSERT_TRUE(rgc::RunCommand(request).succeeded);
+
+    rg::DataRepository repository{ request.database_path };
+    const auto command_model{ repository.LoadModel(request.saved_key_tag) };
+    ASSERT_NE(command_model, nullptr);
+    ASSERT_EQ(command_model->GetNumberOfAtom(), 1u);
+    ASSERT_EQ(command_model->GetSelectedAtomCount(), 1u);
+    EXPECT_EQ(command_model->GetSelectedAtoms().front()->GetElement(), rg::Element::CARBON);
+
+    auto direct_map{ rg::ReadMap(map_path) };
+    auto direct_model{ rg::ReadModel(model_path) };
+    ASSERT_NE(direct_map, nullptr);
+    ASSERT_NE(direct_model, nullptr);
+    ASSERT_TRUE(direct_map->MapValueArrayNormalization());
+    direct_model->SelectAtoms([](const rg::AtomObject & atom)
+    {
+        return atom.GetElement() != rg::Element::HYDROGEN;
+    });
+    rgc::FitOptions direct_options;
+    direct_options.thread_size = 1;
+    direct_options.estimator = rgc::PotentialEstimator::TWO_STAGE;
+    direct_options.sampling_method = rg::SphereSamplingMethod::FibonacciDeterministic;
+    direct_options.exclude_hydrogen = true;
+    direct_options.enable_second_stage_failed_only_refinement = true;
+    direct_options.quiet_mode = true;
+    rgc::RunPotentialFittingWorkflow(*direct_map, *direct_model, direct_options);
+
+    const auto & command_atom{ *command_model->FindAtomPtr(1) };
+    const auto & direct_atom{ *direct_model->FindAtomPtr(1) };
+    for (const auto stage : { rg::FittingStage::First, rg::FittingStage::Second })
+    {
+        const auto & command_fit{ rg::AtomLocalPotentialView::For(command_atom).GetFinalModel(stage) };
+        const auto & direct_fit{ rg::AtomLocalPotentialView::For(direct_atom).GetFinalModel(stage) };
+        EXPECT_DOUBLE_EQ(command_fit.GetAmplitude(), direct_fit.GetAmplitude());
+        EXPECT_DOUBLE_EQ(command_fit.GetWidth(), direct_fit.GetWidth());
+        EXPECT_DOUBLE_EQ(command_fit.GetOffset(), direct_fit.GetOffset());
+        EXPECT_DOUBLE_EQ(
+            rg::AtomLocalPotentialView::For(command_atom).GetAlphaR(stage),
+            rg::AtomLocalPotentialView::For(direct_atom).GetAlphaR(stage));
+    }
+}
+
 TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSourceInputs)
 {
     command_test::ScopedTempDir directory{"joint_command_pipeline"};
     rgc::MapSimulationRequest simulation;
     simulation.model_file_path=directory.path()/"input.cif";
-    std::filesystem::copy_file(command_test::TestDataPath("test_model.cif"),simulation.model_file_path);
-    {
-        std::ifstream original(simulation.model_file_path);
-        std::string text((std::istreambuf_iterator<char>(original)),{});
-        text.insert(text.rfind('#'),"ATOM 2 C CB . ALA A 1 1.2 0.0 0.0 1.0 0.0 1\n");
-        std::ofstream model(simulation.model_file_path); model << text;
-    }
+    std::filesystem::copy_file(
+        command_test::TestDataPath("potential_analysis_multichain.cif"), simulation.model_file_path);
     simulation.output_dir=directory.path(); simulation.grid_spacing=.3;
     simulation.potential_model_choice=rgc::PotentialModel::SINGLE_GAUS;
     simulation.blurring_width_list={.5}; simulation.verbosity=0;
@@ -249,54 +298,66 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
     const auto map_path=FindGeneratedMap(directory.path()); ASSERT_FALSE(map_path.empty());
     rgc::PotentialAnalysisRequest request;
     request.model_file_path=simulation.model_file_path; request.map_file_path=map_path;
-    request.estimator=rgc::PotentialEstimator::JOINT_COMPONENTS; request.only_backbone=true;
+    request.estimator=rgc::PotentialEstimator::JOINT_COMPONENTS; request.selected_chain_ids={"A"};
     request.database_path=directory.path()/"joint.sqlite"; request.saved_key_tag="joint/model";
     request.verbosity=0;
-    for(bool normalization:{false,true})
+    ASSERT_TRUE(rgc::RunCommand(request).succeeded);
+    rg::DataRepository repository{request.database_path};
+    auto loaded=repository.LoadModel(request.saved_key_tag);
+    ASSERT_NE(loaded, nullptr);
+    ASSERT_EQ(loaded->GetNumberOfAtom(), 8u);
+    EXPECT_EQ(loaded->GetSelectedAtomCount(), 2u);
+    ASSERT_TRUE(loaded->GetAnalysisView().GetJointResult());
+    const auto & saved=*loaded->GetAnalysisView().GetJointResult();
+    ASSERT_TRUE(saved.metadata.map_normalization); ASSERT_TRUE(saved.metadata.software);
+    ASSERT_TRUE(saved.selection_domain);
+    EXPECT_EQ(saved.selection_domain->target_indices,(std::vector<std::size_t>{0,1}));
+    EXPECT_EQ(saved.atom_ids.front(), "1");
+    EXPECT_EQ(saved.atom_ids[1], "2");
+    const auto has_contributor = [&saved](const std::string & id)
     {
-        request.map_normalization_flag=normalization;
-        ASSERT_TRUE(rgc::RunCommand(request).succeeded);
-        rg::DataRepository repository{request.database_path};
-        auto loaded=repository.LoadModel(request.saved_key_tag);
-        ASSERT_TRUE(loaded->GetAnalysisView().GetJointResult());
-        const auto & saved=*loaded->GetAnalysisView().GetJointResult();
-        ASSERT_TRUE(saved.metadata.map_normalization); ASSERT_TRUE(saved.metadata.software);
-        ASSERT_TRUE(saved.selection_domain); EXPECT_EQ(saved.selection_domain->target_indices,(std::vector<std::size_t>{0}));
-        EXPECT_EQ(saved.atom_ids,(std::vector<std::string>{"1","2"}));
-        EXPECT_EQ(loaded->GetSelectedAtomCount(),1);
-        EXPECT_EQ(saved.metadata.map_normalization->requested,normalization);
-        EXPECT_EQ(saved.metadata.map_normalization->applied,normalization);
-        EXPECT_EQ(saved.metadata.model_sha256,rg::FileSha256(request.model_file_path));
-        EXPECT_EQ(saved.metadata.map_sha256,rg::FileSha256(map_path));
-        const double sd=rg::ReadMap(map_path)->GetMapValueSD();
-        EXPECT_DOUBLE_EQ(saved.metadata.map_normalization->divisor,normalization ? sd : 1);
-        auto map=rg::ReadMap(map_path); auto model=rg::ReadModel(request.model_file_path);
-        model->SelectAllAtoms(); model->ApplyBackboneSelection(true); if(normalization) map->MapValueArrayNormalization();
-        rgc::FitOptions direct_options;
-        direct_options.estimator=rgc::PotentialEstimator::JOINT_COMPONENTS;
-        direct_options.quiet_mode=true;
-        rgc::RunPotentialFittingWorkflow(*map,*model,direct_options);
-        ASSERT_TRUE(model->GetAnalysisView().GetJointResult());
-        auto expected=*model->GetAnalysisView().GetJointResult();
-        expected.metadata=saved.metadata; expected.costs=saved.costs;
-        EXPECT_EQ(rg::joint_result_io::Encode(expected),rg::joint_result_io::Encode(saved));
-    }
-    for(int option=0;option<3;++option)
+        return std::find(saved.atom_ids.begin(), saved.atom_ids.end(), id) != saved.atom_ids.end();
+    };
+    for (const auto * halo_id : {"3", "4", "5", "6"}) EXPECT_TRUE(has_contributor(halo_id));
+    EXPECT_FALSE(has_contributor("7"));
+    EXPECT_FALSE(has_contributor("8"));
+    EXPECT_TRUE(saved.metadata.map_normalization->requested);
+    EXPECT_TRUE(saved.metadata.map_normalization->applied);
+    EXPECT_EQ(saved.metadata.model_sha256,rg::FileSha256(request.model_file_path));
+    EXPECT_EQ(saved.metadata.map_sha256,rg::FileSha256(map_path));
+    const double sd=rg::ReadMap(map_path)->GetMapValueSD();
+    EXPECT_DOUBLE_EQ(saved.metadata.map_normalization->divisor, sd);
+    auto map=rg::ReadMap(map_path); auto model=rg::ReadModel(request.model_file_path);
+    ASSERT_NE(map, nullptr); ASSERT_NE(model, nullptr);
+    ASSERT_TRUE(map->MapValueArrayNormalization());
+    model->SelectAtoms([](const rg::AtomObject & atom)
     {
-        auto invalid=request;
-        if(option==0) invalid.only_backbone=true;
-        if(option==1) invalid.asymmetry_flag=true;
-        if(option==2) invalid.sampling_method=SphereSamplingMethod::VolumeUniformRandom;
-        EXPECT_EQ(rgc::RunCommand(invalid).succeeded,option!=2);
-    }
+        return atom.GetElement() != rg::Element::HYDROGEN && atom.GetChainID() == "A";
+    });
+    const auto target_problem=rgc::BuildJointProblem(*map,*model);
+    EXPECT_EQ(saved.row_ids,target_problem.Input().row_ids);
+    EXPECT_EQ(target_problem.Input().selection_domain->target_indices,
+        (std::vector<std::size_t>{0,1}));
+    rgc::FitOptions direct_options;
+    direct_options.thread_size=1;
+    direct_options.estimator=rgc::PotentialEstimator::JOINT_COMPONENTS;
+    direct_options.sampling_method=rg::SphereSamplingMethod::FibonacciDeterministic;
+    direct_options.exclude_hydrogen=true;
+    direct_options.enable_second_stage_failed_only_refinement=true;
+    direct_options.quiet_mode=true;
+    rgc::RunPotentialFittingWorkflow(*map,*model,direct_options);
+    ASSERT_TRUE(model->GetAnalysisView().GetJointResult());
+    auto expected=*model->GetAnalysisView().GetJointResult();
+    expected.metadata=saved.metadata; expected.costs=saved.costs;
+    EXPECT_EQ(rg::joint_result_io::Encode(expected),rg::joint_result_io::Encode(saved));
+
     {
         auto zero_map=rg::ReadMap(map_path);
         zero_map->SetMapValueArray(std::make_unique<double[]>(zero_map->GetMapValueArraySize()));
         const auto zero_path=directory.path()/"zero.mrc"; rg::WriteMap(zero_path,*zero_map);
         auto zero_request=request; zero_request.map_file_path=zero_path;
-        zero_request.map_normalization_flag=true; zero_request.saved_key_tag="zero";
+        zero_request.saved_key_tag="zero";
         ASSERT_TRUE(rgc::RunCommand(zero_request).succeeded);
-        rg::DataRepository repository{request.database_path};
         auto zero_model=repository.LoadModel("zero");
         ASSERT_TRUE(zero_model->GetAnalysisView().GetJointResult());
         const auto & zero=*zero_model->GetAnalysisView().GetJointResult();
@@ -314,7 +375,7 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
         const auto saved=repository.LoadModel("simulation");
         const auto & metadata=saved->GetAnalysisView().GetJointResult()->metadata;
         ASSERT_TRUE(metadata.map_normalization);
-        EXPECT_TRUE(metadata.map_normalization->requested);
+        EXPECT_FALSE(metadata.map_normalization->requested);
         EXPECT_FALSE(metadata.map_normalization->applied);
         EXPECT_DOUBLE_EQ(metadata.map_normalization->divisor,1);
     }
@@ -349,7 +410,6 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
     umap.model_key_tag=request.saved_key_tag; umap.verbosity=0;
     EXPECT_FALSE(rgc::RunCommand(umap).succeeded);
 #endif
-    rg::DataRepository repository{request.database_path};
     auto loaded=repository.LoadModel(request.saved_key_tag);
     {
         rgc::JointProblemInput missing_input; missing_input.atom_ids={"1","2"}; missing_input.support.resize(2);

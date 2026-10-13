@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "support/CommandTestHelpers.hpp"
@@ -137,6 +138,27 @@ std::filesystem::path FindGeneratedMapPath(const std::filesystem::path & output_
     return {};
 }
 
+int RunCli(std::vector<std::string> args)
+{
+    std::vector<char *> argv;
+    argv.reserve(args.size());
+    for (auto & arg : args)
+    {
+        argv.push_back(arg.data());
+    }
+    return RunCommandCLI(static_cast<int>(argv.size()), argv.data());
+}
+
+std::vector<int> SelectedSerialIds(const ModelObject & model)
+{
+    std::vector<int> serial_ids;
+    for (const auto * atom : model.GetSelectedAtoms())
+    {
+        serial_ids.push_back(atom->GetSerialID());
+    }
+    return serial_ids;
+}
+
 PotentialAnalysisRequest MakeNormalizationScenarioRequest(
     const std::filesystem::path & temp_dir,
     const std::filesystem::path & map_path)
@@ -176,25 +198,11 @@ TEST(CommandScenariosTest, PotentialAnalysisRequiresPositiveResolutionWhenSimula
     EXPECT_TRUE(HasDiagnosticForOption(result.issues, "request"));
 }
 
-TEST(CommandScenariosTest, PotentialAnalysisDefaultsMapNormalizationOn)
+TEST(CommandScenariosTest, PotentialAnalysisDefaultsToAllChains)
 {
     PotentialAnalysisRequest request{};
 
-    EXPECT_TRUE(request.map_normalization_flag);
-}
-
-TEST(CommandScenariosTest, PotentialAnalysisDefaultsToIncludingHydrogen)
-{
-    PotentialAnalysisRequest request{};
-
-    EXPECT_FALSE(request.exclude_hydrogen);
-}
-
-TEST(CommandScenariosTest, PotentialAnalysisDefaultsToAllAtoms)
-{
-    PotentialAnalysisRequest request{};
-
-    EXPECT_FALSE(request.only_backbone);
+    EXPECT_TRUE(request.selected_chain_ids.empty());
 }
 
 TEST(CommandScenariosTest, MapSimulationDefaultsToIncludingHydrogen)
@@ -209,28 +217,6 @@ TEST(CommandScenariosTest, MapSimulationDefaultsToAllAtoms)
     MapSimulationRequest request{};
 
     EXPECT_FALSE(request.only_backbone);
-}
-
-TEST(CommandScenariosTest, PotentialAnalysisDefaultsToFibonacciSamplingMethod)
-{
-    PotentialAnalysisRequest request{};
-
-    EXPECT_EQ(
-        SphereSamplingMethod::FibonacciDeterministic,
-        request.sampling_method);
-}
-
-TEST(CommandScenariosTest, PotentialAnalysisRejectsInvalidSamplingMethodAtParse)
-{
-    PotentialAnalysisRequest request{};
-    request.model_file_path = command_test::TestDataPath("test_model.cif");
-    request.map_file_path = command_test::TestDataPath("test_model.cif");
-    request.sampling_method = static_cast<SphereSamplingMethod>(99);
-
-    const auto result{ RunCommand(request) };
-
-    EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--sampling-method"));
 }
 
 TEST(CommandScenariosTest, PotentialAnalysisRejectsEmptySavedKeyAtParse)
@@ -256,82 +242,10 @@ TEST(CommandScenariosTest, PotentialAnalysisFailsWhenStandardQScoreIsOutsideMap)
     EXPECT_FALSE(std::filesystem::exists(request.database_path));
 }
 
-TEST(CommandScenariosTest, PotentialAnalysisCliAcceptsExcludeHydrogen)
+TEST(CommandScenariosTest, PotentialAnalysisSelectsAllChainsAndExcludesHydrogen)
 {
-    command_test::ScopedTempDir temp_dir{ "potential_analysis_exclude_hydrogen_cli" };
-    const auto model_path{ WriteCarbonHydrogenModelFixture(temp_dir.path() / "models") };
-    const auto map_path{
-        command_test::GenerateMapFile(temp_dir.path() / "maps", model_path)
-    };
-
-    std::vector<std::string> args{
-        "RHBM-GEM",
-        "potential_analysis",
-        "--database",
-        (temp_dir.path() / "analysis.sqlite").string(),
-        "--model",
-        model_path.string(),
-        "--map",
-        map_path.string(),
-        "--folder",
-        (temp_dir.path() / "analysis_output").string(),
-        "--save-key",
-        "exclude_hydrogen_cli",
-        "--exclude-hydrogen",
-        "true",
-    };
-    std::vector<char *> argv;
-    argv.reserve(args.size());
-    for (auto & arg : args)
-    {
-        argv.push_back(arg.data());
-    }
-
-    const auto result{ RunCommandCLI(static_cast<int>(argv.size()), argv.data()) };
-
-    EXPECT_EQ(result, 0);
-}
-
-TEST(CommandScenariosTest, PotentialAnalysisCliAcceptsOnlyBackbone)
-{
-    command_test::ScopedTempDir temp_dir{ "potential_analysis_only_backbone_cli" };
-    const auto model_path{ WriteBackboneSideChainModelFixture(temp_dir.path() / "models") };
-    const auto map_path{
-        command_test::GenerateMapFile(temp_dir.path() / "maps", model_path)
-    };
-
-    std::vector<std::string> args{
-        "RHBM-GEM",
-        "potential_analysis",
-        "--database",
-        (temp_dir.path() / "analysis.sqlite").string(),
-        "--model",
-        model_path.string(),
-        "--map",
-        map_path.string(),
-        "--folder",
-        (temp_dir.path() / "analysis_output").string(),
-        "--save-key",
-        "only_backbone_cli",
-        "--only-backbone",
-        "true",
-    };
-    std::vector<char *> argv;
-    argv.reserve(args.size());
-    for (auto & arg : args)
-    {
-        argv.push_back(arg.data());
-    }
-
-    const auto result{ RunCommandCLI(static_cast<int>(argv.size()), argv.data()) };
-
-    EXPECT_EQ(result, 0);
-}
-
-TEST(CommandScenariosTest, PotentialAnalysisExcludeHydrogenFiltersOnlyHydrogenAtoms)
-{
-    command_test::ScopedTempDir temp_dir{ "potential_analysis_exclude_hydrogen_behavior" };
-    const auto model_path{ WriteCarbonHydrogenModelFixture(temp_dir.path() / "models") };
+    command_test::ScopedTempDir temp_dir{ "potential_analysis_all_chains" };
+    const auto model_path{ command_test::TestDataPath("potential_analysis_multichain.cif") };
     const auto map_path{
         command_test::GenerateMapFile(temp_dir.path() / "maps", model_path)
     };
@@ -342,29 +256,27 @@ TEST(CommandScenariosTest, PotentialAnalysisExcludeHydrogenFiltersOnlyHydrogenAt
     include_request.database_path = database_path;
     include_request.model_file_path = model_path;
     include_request.map_file_path = map_path;
-    include_request.saved_key_tag = "include_hydrogen";
-    include_request.exclude_hydrogen = false;
+    include_request.saved_key_tag = "all_chains";
+    include_request.verbosity = 0;
     ASSERT_TRUE(RunCommand(include_request).succeeded);
 
-    PotentialAnalysisRequest exclude_request{ include_request };
-    exclude_request.saved_key_tag = "exclude_hydrogen";
-    exclude_request.exclude_hydrogen = true;
-    ASSERT_TRUE(RunCommand(exclude_request).succeeded);
-
     DataRepository repository{ database_path };
-    auto include_model{ repository.LoadModel("include_hydrogen") };
-    auto exclude_model{ repository.LoadModel("exclude_hydrogen") };
-    ASSERT_NE(include_model, nullptr);
-    ASSERT_NE(exclude_model, nullptr);
-
-    EXPECT_EQ(include_model->GetSelectedAtomCount(), 2u);
-    ASSERT_EQ(exclude_model->GetSelectedAtomCount(), 1u);
-    EXPECT_EQ(exclude_model->GetSelectedAtoms().front()->GetElement(), Element::CARBON);
+    auto model{ repository.LoadModel("all_chains") };
+    ASSERT_NE(model, nullptr);
+    ASSERT_EQ(model->GetNumberOfAtom(), 8u);
+    ASSERT_EQ(model->GetSelectedAtomCount(), 6u);
+    std::vector<int> selected_ids;
+    for (const auto * atom : model->GetSelectedAtoms())
+    {
+        EXPECT_NE(atom->GetElement(), Element::HYDROGEN);
+        selected_ids.push_back(atom->GetSerialID());
+    }
+    EXPECT_EQ(selected_ids, (std::vector<int>{ 1, 2, 3, 4, 5, 6 }));
 }
 
-TEST(CommandScenariosTest, PotentialAnalysisOnlyBackboneFiltersOnlyBackboneAtoms)
+TEST(CommandScenariosTest, PotentialAnalysisSelectsBackboneAndSideChainAtoms)
 {
-    command_test::ScopedTempDir temp_dir{ "potential_analysis_only_backbone_behavior" };
+    command_test::ScopedTempDir temp_dir{ "potential_analysis_backbone_and_sidechain" };
     const auto model_path{ WriteBackboneSideChainModelFixture(temp_dir.path() / "models") };
     const auto map_path{
         command_test::GenerateMapFile(temp_dir.path() / "maps", model_path)
@@ -377,23 +289,15 @@ TEST(CommandScenariosTest, PotentialAnalysisOnlyBackboneFiltersOnlyBackboneAtoms
     all_atom_request.model_file_path = model_path;
     all_atom_request.map_file_path = map_path;
     all_atom_request.saved_key_tag = "all_atoms";
-    all_atom_request.only_backbone = false;
+    all_atom_request.verbosity = 0;
     ASSERT_TRUE(RunCommand(all_atom_request).succeeded);
-
-    PotentialAnalysisRequest backbone_request{ all_atom_request };
-    backbone_request.saved_key_tag = "only_backbone";
-    backbone_request.only_backbone = true;
-    ASSERT_TRUE(RunCommand(backbone_request).succeeded);
 
     DataRepository repository{ database_path };
     auto all_atom_model{ repository.LoadModel("all_atoms") };
-    auto backbone_model{ repository.LoadModel("only_backbone") };
     ASSERT_NE(all_atom_model, nullptr);
-    ASSERT_NE(backbone_model, nullptr);
-
-    EXPECT_EQ(all_atom_model->GetSelectedAtomCount(), 2u);
-    ASSERT_EQ(backbone_model->GetSelectedAtomCount(), 1u);
-    EXPECT_EQ(backbone_model->GetSelectedAtoms().front()->GetSpot(), Spot::CA);
+    ASSERT_EQ(all_atom_model->GetSelectedAtomCount(), 2u);
+    EXPECT_EQ(all_atom_model->GetSelectedAtoms()[0]->GetSpot(), Spot::CA);
+    EXPECT_EQ(all_atom_model->GetSelectedAtoms()[1]->GetSpot(), Spot::CB);
 
     auto normalized_map{ ReadMap(map_path) };
     ASSERT_NE(normalized_map, nullptr);
@@ -405,24 +309,176 @@ TEST(CommandScenariosTest, PotentialAnalysisOnlyBackboneFiltersOnlyBackboneAtoms
     const auto expected_average{
         CalculateAverageQScores(
             *normalized_map,
-            *backbone_model,
+            *all_atom_model,
             expected_reference_height,
             expected_reference_offset,
             expected_q_scores)
     };
     EXPECT_DOUBLE_EQ(
-        backbone_model->GetStandardAverageQScore(),
+        all_atom_model->GetStandardAverageQScore(),
         expected_average);
     EXPECT_DOUBLE_EQ(all_atom_model->GetReferenceHeight(), expected_reference_height);
     EXPECT_DOUBLE_EQ(all_atom_model->GetReferenceOffset(), expected_reference_offset);
-    EXPECT_DOUBLE_EQ(backbone_model->GetReferenceHeight(), expected_reference_height);
-    EXPECT_DOUBLE_EQ(backbone_model->GetReferenceOffset(), expected_reference_offset);
-    ASSERT_EQ(expected_q_scores.size(), backbone_model->GetNumberOfAtom());
-    for (const auto & atom : backbone_model->GetAtomList())
+    ASSERT_EQ(expected_q_scores.size(), all_atom_model->GetNumberOfAtom());
+    for (const auto & atom : all_atom_model->GetAtomList())
     {
         EXPECT_DOUBLE_EQ(
             atom->GetStandardQScore(),
             expected_q_scores.at(atom->GetSerialID()));
+    }
+}
+
+TEST(CommandScenariosTest, PotentialAnalysisCliSelectsCommaSeparatedTargetChains)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_analysis_cli_chain_selection" };
+    const auto model_path{ command_test::TestDataPath("potential_analysis_multichain.cif") };
+    const auto map_path{
+        command_test::GenerateMapFile(temp_dir.path() / "maps", model_path)
+    };
+    const auto database_path{ temp_dir.path() / "analysis.sqlite" };
+    const auto result{ RunCli({
+        "RHBM-GEM", "potential_analysis",
+        "--model", model_path.string(), "--map", map_path.string(),
+        "--database", database_path.string(), "--folder", (temp_dir.path() / "out").string(),
+        "--save-key", "cli", "--select-chain", "C, A", "--verbose", "0" }) };
+    ASSERT_EQ(result, 0);
+
+    DataRepository repository{ database_path };
+    const auto model{ repository.LoadModel("cli") };
+    ASSERT_NE(model, nullptr);
+    EXPECT_EQ(model->GetNumberOfAtom(), 8u);
+    EXPECT_EQ(SelectedSerialIds(*model), (std::vector<int>{ 1, 2, 5, 6 }));
+}
+
+TEST(CommandScenariosTest, PotentialAnalysisChainSelectionNormalizesAndKeepsModelOrder)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_analysis_chain_selection_order" };
+    const auto model_path{ command_test::TestDataPath("potential_analysis_multichain.cif") };
+    const auto map_path{
+        command_test::GenerateMapFile(temp_dir.path() / "maps", model_path)
+    };
+    const auto database_path{ temp_dir.path() / "analysis.sqlite" };
+    PotentialAnalysisRequest request{};
+    request.database_path = database_path;
+    request.model_file_path = model_path;
+    request.map_file_path = map_path;
+    request.verbosity = 0;
+    request.selected_chain_ids = { " C ", "A", "C" };
+    request.saved_key_tag = "first";
+    ASSERT_TRUE(RunCommand(request).succeeded);
+
+    request.selected_chain_ids = { "A", "C" };
+    request.saved_key_tag = "reordered";
+    ASSERT_TRUE(RunCommand(request).succeeded);
+
+    DataRepository repository{ database_path };
+    const auto first{ repository.LoadModel("first") };
+    const auto reordered{ repository.LoadModel("reordered") };
+    ASSERT_NE(first, nullptr);
+    ASSERT_NE(reordered, nullptr);
+    EXPECT_EQ(first->GetNumberOfAtom(), 8u);
+    EXPECT_EQ(SelectedSerialIds(*first), (std::vector<int>{ 1, 2, 5, 6 }));
+    EXPECT_EQ(SelectedSerialIds(*reordered), SelectedSerialIds(*first));
+}
+
+TEST(CommandScenariosTest, PotentialAnalysisRejectsInvalidChainSelectionsBeforeFitting)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_analysis_invalid_chain_selection" };
+    const auto model_path{ command_test::TestDataPath("potential_analysis_multichain.cif") };
+    const auto map_path{
+        command_test::GenerateMapFile(temp_dir.path() / "maps", model_path)
+    };
+    PotentialAnalysisRequest request{};
+    request.database_path = temp_dir.path() / "analysis.sqlite";
+    request.model_file_path = model_path;
+    request.map_file_path = map_path;
+    request.verbosity = 0;
+
+    request.selected_chain_ids = { "A", "X" };
+    auto result{ RunCommand(request) };
+    ASSERT_FALSE(result.succeeded);
+    ASSERT_TRUE(HasDiagnosticForOption(result.issues, "--select-chain"));
+    EXPECT_NE(result.issues.front().message.find("X"), std::string::npos);
+
+    request.selected_chain_ids = { "a" };
+    result = RunCommand(request);
+    ASSERT_FALSE(result.succeeded);
+    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--select-chain"));
+
+    request.selected_chain_ids = { "D" };
+    result = RunCommand(request);
+    ASSERT_FALSE(result.succeeded);
+    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--select-chain"));
+    EXPECT_NE(result.issues.back().message.find("non-hydrogen"), std::string::npos);
+
+    request.selected_chain_ids = { "A", "" };
+    result = RunCommand(request);
+    EXPECT_FALSE(result.succeeded);
+    EXPECT_TRUE(HasDiagnosticForOption(result.issues, "--select-chain"));
+    EXPECT_FALSE(std::filesystem::exists(request.database_path));
+}
+
+TEST(CommandScenariosTest, PotentialAnalysisCliRejectsEmptyChainTokens)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_analysis_empty_chain_tokens" };
+    const auto model_path{ command_test::TestDataPath("potential_analysis_multichain.cif") };
+    const auto map_path{
+        command_test::GenerateMapFile(temp_dir.path() / "maps", model_path)
+    };
+    const auto database_path{ temp_dir.path() / "analysis.sqlite" };
+    const std::vector<std::string> invalid_values{ "", ",", "A,,B", "A,B," };
+    for (std::size_t index = 0; index < invalid_values.size(); ++index)
+    {
+        const auto result{ RunCli({
+            "RHBM-GEM", "potential_analysis",
+            "--model", model_path.string(), "--map", map_path.string(),
+            "--database", database_path.string(), "--folder", (temp_dir.path() / "out").string(),
+            "--save-key", "invalid", "--select-chain", invalid_values[index], "--verbose", "0" }) };
+        EXPECT_NE(result, 0) << index;
+        EXPECT_FALSE(std::filesystem::exists(database_path)) << invalid_values[index];
+    }
+}
+
+TEST(CommandScenariosTest, PotentialAnalysisNoLongerAcceptsRemovedOptions)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_analysis_removed_options" };
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+    const auto map_path{
+        command_test::GenerateMapFile(temp_dir.path() / "maps", model_path)
+    };
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    const auto help_result{ RunCli({ "RHBM-GEM", "potential_analysis", "--help" }) };
+    const auto help_output{ testing::internal::GetCapturedStdout()
+        + testing::internal::GetCapturedStderr() };
+    ASSERT_EQ(help_result, 0);
+    EXPECT_NE(help_output.find("--select-chain"), std::string::npos);
+    for (const auto * option : {
+        "--map-normalization", "--exclude-hydrogen", "--only-backbone", "--asymmetry",
+        "--sampling-method", "--second-stage-failed-only-refinement" })
+    {
+        EXPECT_EQ(help_output.find(option), std::string::npos) << option;
+    }
+
+    const std::vector<std::pair<std::string, std::string>> removed_options{
+        { "--map-normalization", "false" },
+        { "--exclude-hydrogen", "true" },
+        { "--only-backbone", "true" },
+        { "--asymmetry", "true" },
+        { "--sampling-method", "fibonacci" },
+        { "--second-stage-failed-only-refinement", "false" },
+    };
+    for (std::size_t index = 0; index < removed_options.size(); ++index)
+    {
+        const auto database_path{ temp_dir.path() / ("removed_" + std::to_string(index) + ".sqlite") };
+        const auto result{ RunCli({
+            "RHBM-GEM", "potential_analysis",
+            "--model", model_path.string(), "--map", map_path.string(),
+            "--database", database_path.string(), "--folder", (temp_dir.path() / "out").string(),
+            "--save-key", "removed", removed_options[index].first, removed_options[index].second,
+            "--verbose", "0" }) };
+        EXPECT_NE(result, 0) << removed_options[index].first;
+        EXPECT_FALSE(std::filesystem::exists(database_path)) << removed_options[index].first;
     }
 }
 
@@ -826,11 +882,3 @@ TEST(CommandScenariosTest, PositionEstimationDoesNotRequireDatabaseConfiguration
 }
 
 #endif
-
-TEST(CommandScenariosTest, FailedOnlyRefinementDefaultsOnAndCanBeDisabled)
-{
-    rhbm_gem::core::PotentialAnalysisRequest request;
-    EXPECT_TRUE(request.enable_second_stage_failed_only_refinement);
-    request.enable_second_stage_failed_only_refinement = false;
-    EXPECT_FALSE(request.enable_second_stage_failed_only_refinement);
-}

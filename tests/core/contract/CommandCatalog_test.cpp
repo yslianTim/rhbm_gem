@@ -217,6 +217,26 @@ TEST(CommandCatalogTest, PainterTypeDoesNotExposeRemovedModelAliases)
     EXPECT_EQ(cli_map.find("1"), cli_map.end());
 }
 
+TEST(CommandCatalogTest, PotentialAnalysisCatalogExposesOnlyCurrentSelectionAndPolicies)
+{
+    std::set<std::string> analysis_options;
+    command_internal::RequestFieldCatalog<PotentialAnalysisRequest>::Visit(
+        [&](const auto & field) { analysis_options.insert(field.cli_flags); });
+    for (const auto * removed_option : {
+        "--map-normalization", "--exclude-hydrogen", "--only-backbone", "--asymmetry",
+        "--sampling-method", "--second-stage-failed-only-refinement" })
+    {
+        EXPECT_EQ(analysis_options.count(removed_option), 0u) << removed_option;
+    }
+    EXPECT_EQ(analysis_options.count("--select-chain"), 1u);
+
+    std::set<std::string> simulation_options;
+    command_internal::RequestFieldCatalog<MapSimulationRequest>::Visit(
+        [&](const auto & field) { simulation_options.insert(field.cli_flags); });
+    EXPECT_EQ(simulation_options.count("--exclude-hydrogen"), 1u);
+    EXPECT_EQ(simulation_options.count("--only-backbone"), 1u);
+}
+
 TYPED_TEST(CommandEnumMappingTest, CliAndBindingMappingsStayInSync)
 {
     AssertEnumMappingsStayInSync<TypeParam>();
