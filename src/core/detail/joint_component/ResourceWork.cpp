@@ -255,11 +255,13 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
     {
         const auto columns=shape.component_design_columns;
         // Conservative experimental allowance for column-sized pivot data, dense
-        // worst-case R/work arrays, dense row-column workspace, and sparse copies.
+        // worst-case R/work arrays, dense row-column workspace, sparse copies and
+        // a 5% allocation margin for Eigen/allocator overhead.
         ok=AddProduct2D(temporary,columns,columns,3*sizeof(double)+6*sizeof(Eigen::Index)) &&
             AddProduct2D(temporary,rows,columns,sizeof(double)) &&
             AddProduct(temporary,shape.component_structural_nonzeros,6*(sizeof(double)+sizeof(Eigen::Index))) &&
             AddProduct(temporary,columns,16*(sizeof(double)+sizeof(Eigen::Index)));
+        if(ok) ok=CheckedAddBytes(temporary,temporary/20,temporary);
         break;
     }
     case MemoryStage::DesignSpectrum:

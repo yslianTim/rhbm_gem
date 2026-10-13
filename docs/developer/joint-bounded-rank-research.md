@@ -91,6 +91,15 @@ relative threshold is below 1. Zero columns and near-threshold cases remain
 unavailable to this experimental numerical path; structural evidence handles
 zero columns separately.
 
+On the 5,938,087 × 74,812 synthetic full design, the streaming scan completed
+in 0.00718 s. It reported `lambda_min_lower = -2.41421`,
+`lambda_max_upper = 4.41421` and a 6.82843 gap, so the estimate did not prove
+full rank. The scan's estimated peak was 678,017,655 bytes; sampled RSS was
+674,004,992 bytes before and 675,790,848 bytes after, with a 675,790,848-byte
+process peak. This is a completed estimate, not a timeout or a resource
+rejection, and its numerical status remains experimental because the
+accumulation has no certified enclosure.
+
 ## Evidence states
 
 Research reports distinguish an exact numerical SVD result, a structural rank
@@ -109,3 +118,96 @@ certificate. Compensated summation alone does not establish that enclosure.
 SparseQR's pivot-diagonal rank is retained as an experimental estimate. Its
 threshold is not the SVD singular-value threshold, so comparisons record
 disagreements rather than adjusting the production policy.
+
+## SparseQR feasibility experiment
+
+The offline helper accepts an already normalized sparse design, applies the
+unchanged `tau = epsilon * max(N, P) * sigma_max` value as Eigen's pivot
+threshold, and records the resulting pivot-diagonal rank. It times
+`analyzePattern()` and `factorize()` separately and records R storage, fill
+ratio, the conservative resource estimate, RSS and status. Natural ordering
+and Eigen COLAMD run in separate serial test processes so one ordering's
+allocator high-water mark does not contaminate the other. The estimate reserves
+`8 * N * P` bytes for worst-case row-column workspace, additional P-square and
+input-sparse terms, then a 5% allocation margin. It is a preflight bound; it
+does not prove that a passing SparseQR call stays below an operating-system
+limit.
+
+### Small SVD comparisons
+
+Eight small controls were compared under both orderings: well-conditioned full
+rank, ill-conditioned full rank, exact duplicate columns, strong A/C coupling,
+mixed target/halo, and three near-threshold cases. The dense SVD oracle used the
+same normalized sparse matrix and original row count. The near-threshold cases
+had `sigma_min / tau` of 0.5, 1.0 and 2.0. Dense SVD ranks were 1, 1 and 2;
+SparseQR ranks were 1, 2 and 2 under both orderings. Thus both orderings
+disagreed with the strict SVD boundary at equality (2 disagreements among 16
+ordering comparisons). The other five controls matched the oracle under both
+orderings. No threshold was adjusted to hide the mismatch.
+
+### Chain and cube topology measurements
+
+Topology rank values below are SparseQR estimates. Dense SVD was deliberately
+not run on these tall matrices, so these rows do not establish exact numerical
+rank. `N/C` means Natural/COLAMD. Memory values are decimal MB; the planned peak
+uses the 5% margin and the observed value is process peak RSS from that isolated
+test process.
+
+| Case | Matrix rows × columns | Input nonzeros | QR rank estimate N/C | R nonzeros N/C | Fill ratio N/C |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| chain-128 | 58,300 × 256 | 131,840 | 256 / 256 | 18,029 / 18,029 | 0.137 / 0.137 |
+| cube-128 | 47,792 × 256 | 131,840 | 256 / 256 | 31,062 / 23,186 | 0.236 / 0.176 |
+| chain-256 | 116,540 × 512 | 263,680 | 512 / 512 | 71,554 / 71,554 | 0.271 / 0.271 |
+| cube-256 | 93,431 × 512 | 263,680 | 512 / 512 | 123,752 / 97,399 | 0.469 / 0.369 |
+| chain-512 | 233,020 × 1,024 | 527,360 | 1,024 / 1,024 | 285,101 / 285,101 | 0.541 / 0.541 |
+| cube-512 | 183,040 × 1,024 | 527,360 | 1,024 / 1,024 | 493,084 / 367,413 | 0.935 / 0.697 |
+| chain-1024 | 465,980 × 2,048 | 1,054,720 | Unavailable / Unavailable | NotRun / NotRun | NotRun / NotRun |
+| cube-1024 | 361,867 × 2,048 | 1,054,720 | Unavailable / Unavailable | NotRun / NotRun | NotRun / NotRun |
+
+| Case | R factor bytes N/C | Symbolic seconds N/C | Numeric seconds N/C | Planned peak MB N/C | Observed process peak MB N/C | Result |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| chain-128 | 217,376 / 217,376 | 0.00023 / 0.00098 | 0.663 / 0.683 | 177.97 / 177.92 | 152.04 / 151.99 | Completed |
+| cube-128 | 373,772 / 279,260 | 0.00021 / 0.00141 | 0.713 / 0.623 | 154.99 / 154.93 | 143.28 / 143.28 | Completed |
+| chain-256 | 860,700 / 860,700 | 0.00040 / 0.00209 | 4.917 / 5.119 | 590.66 / 590.68 | 491.24 / 435.99 | Completed |
+| cube-256 | 1,487,076 / 1,170,840 | 0.00041 / 0.00329 | 5.127 / 4.975 | 490.42 / 490.45 | 470.01 / 444.06 | Completed |
+| chain-512 | 3,425,312 / 3,425,312 | 0.00082 / 0.00440 | 39.867 / 40.325 | 2,199.01 / 2,199.05 | 1,392.15 / 1,308.25 | Completed |
+| cube-512 | 5,921,108 / 4,413,056 | 0.00084 / 0.01050 | 42.272 / 35.780 | 1,767.16 / 1,767.12 | 1,166.62 / 1,164.25 | Completed |
+| chain-1024 | Not allocated | NotRun / NotRun | NotRun / NotRun | 8,539.39 / 8,539.46 | 99.14 / 99.21 | ResourceLimit; factorization NotRun |
+| cube-1024 | Not allocated | NotRun / NotRun | NotRun / NotRun | 6,744.24 / 6,744.27 | 95.06 / 95.09 | ResourceLimit; factorization NotRun |
+
+For completed cases, both ordering estimates were full rank, but no exact
+topology SVD comparison was run. COLAMD reduced cube R nonzeros by about 25%,
+21% and 25% at 128, 256 and 512 atoms; chain R nonzeros were unchanged. The
+completed 512 cases stayed below the 3.2 GB planning budget and observed peaks
+were 1.16–1.39 GB. The 1,024-atom chain and cube estimates exceeded budget at
+about 8.54 GB and 6.74 GB, so all four ordering runs returned `ResourceLimit`
+before factorization. These are expected safe resource outcomes, not rank
+failures or timeouts.
+
+The giant 5,938,087 × 74,812 full-design shape has 149,622 input nonzeros. Its
+SparseQR preflight estimates 4,154,773,326,379 temporary bytes and a
+4,155,449,133,611-byte peak including resident data, then rejects the call
+without factorization. The observed process peak was 675,823,616 bytes while
+the input and preflight were resident. This estimate is intentionally
+conservative; it does not establish what unbounded Eigen SparseQR would
+allocate. At 512 atoms, observed SparseQR RSS was higher than the current dense
+tiled `DesignSpectrum` memory estimate for the same shape; the 1,024 cases
+were not factorized. SparseQR therefore showed no production memory advantage
+over the existing tiled dense rank planner in this study.
+
+### Qualification decision
+
+The production one-way structural obstruction is retained: a zero design
+column or a proven upper bound below the full-design column count marks design
+rank qualification `Failed`, without an exact rank or fabricated spectrum.
+Structural matching remains research evidence; full matching is not a
+numerical-rank result. The scalar streaming pass remains experimental because
+compensated accumulation does not provide a rigorous floating-point enclosure;
+only the exact disjoint signed-unit-column case is certified. SparseQR remains
+experimental because its pivot rank disagrees at the strict SVD boundary,
+large topology rows were not checked against SVD, and its conservative memory
+plan rejects 1,024-atom cases. No method in this study qualifies the global
+design as a full production replacement for `DesignSpectrum()`.
+
+Projected-width assessment, local correction and target identifiability keep
+their existing resource bottlenecks and were not redesigned in this study.

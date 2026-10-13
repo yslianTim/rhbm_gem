@@ -175,11 +175,14 @@ void ReportSparseQRTopology(const char * topology,int atoms,
     {
         EXPECT_EQ(preflight.status,n::MemoryStatus::Reject);
         EXPECT_EQ(preflight.reason,"estimated-peak-exceeds-budget");
+        const auto process_peak=n::ProcessPeakRssBytes();
         std::cout<<"sparseqr-topology-result case="<<topology<<"-"<<atoms
             <<" ordering="<<second_stage_test::bounded_rank::SparseQROrderingName(ordering)
             <<" rank_estimate=Unavailable"
             <<" estimated_temporary_bytes="<<preflight.temporary_bytes
             <<" estimated_peak_bytes="<<preflight.estimated_peak_bytes
+            <<" resident_bytes="<<preflight.resident_bytes
+            <<" process_peak_rss_bytes="<<(process_peak ? std::to_string(*process_peak) : "unavailable")
             <<" status=ResourceLimit reason="<<preflight.reason
             <<" factorization=NotRun\n";
         return;
@@ -194,6 +197,10 @@ void ReportSparseQRTopology(const char * topology,int atoms,
             <<" ordering="<<result.ordering<<" rank_estimate=Unavailable"
             <<" estimated_temporary_bytes="<<result.estimated_temporary_bytes
             <<" estimated_peak_bytes="<<result.estimated_peak_bytes
+            <<" resident_bytes="<<(result.current_rss_before_bytes ?
+                std::to_string(*result.current_rss_before_bytes) : "unavailable")
+            <<" process_peak_rss_bytes="<<(result.process_peak_rss_bytes ?
+                std::to_string(*result.process_peak_rss_bytes) : "unavailable")
             <<" status="<<result.status<<" reason="<<result.reason
             <<" factorization=NotRun\n";
         return;
@@ -489,6 +496,9 @@ TEST(JointComponentSparseQRResearchTest, LargePreflightRejectsBeforeFactorizatio
         <<" temporary_bytes="<<estimate.temporary_bytes<<" estimated_peak_bytes="<<estimate.estimated_peak_bytes
         <<" budget_bytes="<<estimate.budget_bytes<<" status="<<n::MemoryStatusName(estimate.status)
         <<" reason="<<estimate.reason<<" factorization=NotRun\n";
+    n::MemoryShape overflow; overflow.component_observations=1;
+    overflow.component_design_columns=std::numeric_limits<std::size_t>::max();
+    EXPECT_EQ(n::PlanMemory(overflow,n::MemoryStage::SparseQRResearch).status,n::MemoryStatus::Overflow);
 }
 
 #define JOINT_SPARSEQR_TOPOLOGY_TEST(test_name,topology_name,atom_count,ordering) \

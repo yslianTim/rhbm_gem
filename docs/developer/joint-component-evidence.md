@@ -110,10 +110,16 @@ The complete concise record of those FixedNeighbor choices is in
   4.5219e-11; the sweep-150 difference was 2.8179e-12. These values are not
   results from replaying the new production contract and do not prove parameter
   accuracy from KKT alone.
-- Bounded rank and projected-width/tail prototypes matched completed small
-  controls, but large reconstructions or resource gates remained incomplete.
-  Unavailable and timed-out results do not establish deficient rank or
-  numerical failure.
+- Earlier bounded-rank and projected-width/tail prototypes matched completed
+  small controls, but large reconstructions or resource gates remained
+  incomplete. The current bounded-rank study proves the 37,406-row versus
+  74,812-column synthetic full-design obstruction by structural row count and
+  keeps that one-way failure check in production. Its general streaming
+  floating-point bounds remain experimental. Eigen SparseQR disagreed with
+  dense SVD at the strict near-threshold equality and its 1,024-atom controls
+  were stopped by memory preflight; it was not promoted. Full results,
+  per-ordering fill and RSS measurements, and the promotion decision are in
+  [bounded global rank research](joint-bounded-rank-research.md).
 - An opt-in affected-row candidate replay experiment compared the incremental
   objective/residual delta with the existing full replay on one-sweep synthetic
   chain/cube workloads from 128 through 1024 atoms. Across 339 candidate

@@ -82,7 +82,14 @@ A/C design column count. `sigma_max` is measured after the existing column
 normalization, and singular values count as rank only when they are strictly
 greater than `tau`. The structural obstruction runs before that dense method;
 it does not change the threshold or remove unsupported observation rows from
-`N`.
+`N`. If `U` is the number of rows with an actual nonzero design entry, then
+`rank(X) <= min(U, P)`. A zero design column or `U < P` therefore proves that
+full-design rank cannot pass. When no obstruction is found, production still
+uses `DesignSpectrum()`; structural matching, streaming estimates and
+SparseQR pivot rank do not certify numerical full rank. Full A/C design rank
+and the smaller free A/C active-face rank use different column domains, and a
+full-design obstruction does not by itself classify target-specific
+identifiability.
 
 The local numerical primitive is named **Profile LM** (Levenberg–Marquardt
 optimization of the profiled width objective). `SearchProfile()` optimizes

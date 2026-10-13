@@ -115,17 +115,18 @@ process-wide high-water mark, not a stage-local allocation.
 
 | Stage | Elapsed | Current RSS before → after | Process peak RSS | Status |
 | --- | ---: | ---: | ---: | --- |
-| Primary endpoint evaluation | 0.023681 s | 474,431,488 → 478,773,248 bytes | 478,773,248 bytes | Entered; completed |
-| Independent streaming replay | 0.054572 s | 478,773,248 → 622,592,000 bytes | 622,592,000 bytes | Entered; completed |
-| Rank assessment | 0.004313 s | 622,592,000 → 622,592,000 bytes | 622,592,000 bytes | Preflight rejected |
-| Target memory preflight calculation | 0.005581 s | 622,608,384 → 622,624,768 bytes | 622,624,768 bytes | Preflight rejected |
+| Primary endpoint evaluation | 0.016791 s | 474,726,400 → 479,019,008 bytes | 479,019,008 bytes | Entered; completed |
+| Independent streaming replay | 0.049350 s | 479,019,008 → 622,542,848 bytes | 622,542,848 bytes | Entered; completed |
+| Rank assessment and structural check | 0.003648 s | 622,542,848 → 624,967,680 bytes | 624,967,680 bytes | Structural deficiency proven; dense preflight rejected |
+| Repeated structural check on retained fixture | 0.003758 s | 675,872,768 → 678,363,136 bytes | 678,363,136 bytes | Upper bound confirmed |
+| Target memory preflight calculation | 0.006283 s | 678,395,904 → 678,412,288 bytes | 678,412,288 bytes | Preflight rejected |
 | DesignSpectrum factorization | NotRun | Not sampled | Not allocated | ResourceLimit |
 | Projected-width factorization | NotRun | Not sampled | Not allocated | ResourceLimit |
 | Local-correction factorization | NotRun | Not sampled | Not allocated | ResourceLimit |
 | Target geometry / target-local correction | NotRun | Not sampled | Not allocated | ResourceLimit |
 
-The final process peak was 622,624,768 bytes (0.623 GB), about
-316,799,454,491 bytes below the largest estimate. That gap is expected here:
+The final process peak was 678,412,288 bytes (0.678 GB), about
+316,743,666,971 bytes below the largest estimate. That gap is expected here:
 the 317.422 GB target estimate and the 189.484 GB rank estimate were rejected,
 so those allocations never happened. The observed RSS is evidence for the
 input, preparation, streaming verification and preflight path only; it cannot
@@ -157,6 +158,41 @@ rather than returning zero. macOS and Linux readers are centralized in
 `ResourceWork`; Windows uses the unavailable path. The Windows/MSVC build was
 not run in this environment.
 
-The next research step is to evaluate ways to bound the dense rank and target
-geometry stages while preserving the current numerical contracts. No bounded
-rank method is introduced here.
+## Experimental SparseQR measurements
+
+Natural and COLAMD ran in isolated serial processes on the synthetic
+chain/cube designs. The conservative SparseQR preflight includes a dense
+worst-case `N × P` workspace term and 5% for Eigen and allocator overhead.
+The completed 512 cases stayed under the 3.2 GB planning budget, but their
+observed process peaks were higher than `DesignSpectrum`'s estimated peak on
+the same shape. That comparison is an observed SparseQR peak against an
+unexecuted dense-rank estimate, not a direct factorization-to-factorization
+measurement.
+
+| Case | Planned peak, Natural / COLAMD | Observed peak RSS, Natural / COLAMD | Outcome |
+| --- | ---: | ---: | --- |
+| chain-128 | 177,972,838 / 177,923,686 bytes | 152,043,520 / 151,994,368 bytes | Completed |
+| cube-128 | 154,999,603 / 154,934,067 bytes | 143,278,080 / 143,278,080 bytes | Completed |
+| chain-256 | 590,659,584 / 590,675,968 bytes | 491,241,472 / 435,994,624 bytes | Completed |
+| cube-256 | 490,420,428 / 490,453,196 bytes | 470,007,808 / 444,055,552 bytes | Completed |
+| chain-512 | 2,199,014,604 / 2,199,047,372 bytes | 1,392,148,480 / 1,308,246,016 bytes | Completed |
+| cube-512 | 1,767,156,940 / 1,767,124,172 bytes | 1,166,622,720 / 1,164,247,040 bytes | Completed |
+| chain-1024 | 8,539,393,228 / 8,539,458,764 bytes | 99,139,584 / 99,205,120 bytes | ResourceLimit; factorization NotRun |
+| cube-1024 | 6,744,236,851 / 6,744,269,619 bytes | 95,059,968 / 95,092,736 bytes | ResourceLimit; factorization NotRun |
+
+The 1,024-atom shapes were rejected before `analyzePattern()` or
+`factorize()`. Those RSS readings cover synthetic input construction and the
+preflight only; they are not SparseQR factor peaks. The fixed 37,406-atom
+shape has 5,938,087 rows, 74,812 columns and 149,622 actual nonzeros. The
+production-fixture SparseQR preflight estimated 4,154,773,326,379 temporary
+bytes and a 4,155,449,133,611-byte peak with its measured resident state; its
+process peak RSS remained 675,823,616 bytes because factorization was `NotRun`.
+A separate 600,000,000-byte resident-control preflight estimates a
+4,155,373,326,379-byte peak after the 5% margin. The production fixture
+separately proves full-design deficiency from its 37,406 supported rows
+before any rank factorization.
+
+Full per-ordering rank, fill, factor storage and timing data are in the
+[bounded global rank research report](joint-bounded-rank-research.md). The
+next stage remains memory-bounded projected-width assessment and target
+identifiability; those algorithms are unchanged here.

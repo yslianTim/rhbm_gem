@@ -107,7 +107,12 @@ a benchmark result does not replace those tests. Bounded-rank controls compare
 the dense SVD oracle with the unchanged row, column-normalization and strict
 threshold contract. Production structural evidence is a one-way rank-failure
 check; matching and streaming estimates remain research diagnostics unless
-their stronger proof requirements are met.
+their stronger proof requirements are met. The `joint:offline` SparseQR
+research tests run Natural and COLAMD in isolated serial processes for
+chain/cube sizes 128, 256, 512 and 1,024, with a memory preflight before any
+factorization. Small SVD comparisons record pivot-rank disagreements; 1,024
+cases above the planning budget report `ResourceLimit` and `NotRun`. These
+tests characterize a research path and do not add a production solver option.
 
 ## Historical decisions
 
