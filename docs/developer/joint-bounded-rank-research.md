@@ -71,6 +71,26 @@ The active state has 37,406 free A/C columns. Those columns have the same
 deficiency. The C-only graph has a perfect 37,406 by 37,406 matching; this is
 still structural evidence, not a numerical full-rank certificate.
 
+## Streaming scalar Gershgorin study
+
+The experimental streaming pass retains column norm sums, row absolute sums
+and one radius per column. For normalized `Z`, it estimates
+`rho_i = sum_r |Z_ri| * (sum_j |Z_rj| - |Z_ri|)`, then
+`lambda_min >= min_i(1-rho_i)` and
+`lambda_max <= max_i(1+rho_i)`. It uses compensated sums and O(N+P) working
+arrays; `ResourceWork` preflights those arrays before allocation.
+
+The bound calculation uses ordinary floating-point normalization and
+accumulation. Compensated summation reduces error but does not enclose it, so a
+passing estimate for a general matrix remains `Unavailable` and is never a
+full-rank certificate. The current exact certificate is deliberately narrow:
+each column has one exact `+1` or `-1`, and those entries occupy distinct rows.
+The normalized columns are then a signed permutation of identity, so every
+singular value is exactly 1. It qualifies as full rank only when the unchanged
+relative threshold is below 1. Zero columns and near-threshold cases remain
+unavailable to this experimental numerical path; structural evidence handles
+zero columns separately.
+
 ## Evidence states
 
 Research reports distinguish an exact numerical SVD result, a structural rank

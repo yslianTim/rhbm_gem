@@ -288,6 +288,7 @@ add_dependencies(tests_all rhbm_tests)
 # Test-only helpers contain no historical runner or multiprecision orchestration.
 add_library(joint_test_support STATIC
     support/JointSyntheticWorkload.cpp
+    support/BoundedRankResearch.cpp
     support/JointBlockCoordinate.cpp
     support/JointTestGeometry.cpp support/JointTestNumerics.cpp support/JointDenseReference.cpp
     support/JointTestContext.cpp support/JointComponentChecks.cpp
@@ -369,11 +370,19 @@ rhbm_gem_collect_gtest_patterns(joint_numerical_patterns ${JOINT_COMPONENT_NUMER
 list(JOIN joint_numerical_patterns ":" joint_numerical_filter)
 string(APPEND joint_numerical_filter
     "-JointComponentNumericsTest.CompactJacobianGramIdentityDiagnosticsAcrossLattices"
-    ":JointFixedNeighborBlockCoordinateTest.ProductionScaleSingleComponentPreparationStaysBelowBudget")
+    ":JointFixedNeighborBlockCoordinateTest.ProductionScaleSingleComponentPreparationStaysBelowBudget"
+    ":JointComponentBoundedRankTest.StreamingGershgorinControlsNeverOverstateTheirEvidence")
 add_test(NAME rhbm_tests_joint_component_numerical
     COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes --gtest_filter=${joint_numerical_filter})
 set_tests_properties(rhbm_tests_joint_component_numerical PROPERTIES
     LABELS "core;domain:core;intent:algorithm;joint:numerical" TIMEOUT 900
+    ENVIRONMENT "OMP_NUM_THREADS=1")
+
+add_test(NAME joint_bounded_rank_streaming_controls
+    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
+        --gtest_filter=JointComponentBoundedRankTest.StreamingGershgorinControlsNeverOverstateTheirEvidence)
+set_tests_properties(joint_bounded_rank_streaming_controls PROPERTIES
+    LABELS "core;domain:core;intent:algorithm;joint:numerical;joint:offline;long" TIMEOUT 900
     ENVIRONMENT "OMP_NUM_THREADS=1")
 
 add_test(NAME joint_component_gram_scalability

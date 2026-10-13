@@ -382,6 +382,28 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     EXPECT_EQ(free_structure.columns,37'406);
     EXPECT_EQ(free_structure.supported_rows,37'406);
     EXPECT_EQ(free_structure.matching_size,37'406);
+    std::vector<Eigen::Triplet<double>> full_design_entries; full_design_entries.reserve(2*(*support_entries));
+    for(Eigen::Index atom=0;atom<static_cast<Eigen::Index>(atoms);++atom)
+        for(const auto & support:endpoint_domain.atoms[static_cast<std::size_t>(atom)])
+        {
+            const auto basis=n::EvaluateKernel(support.square,.55,2.5);
+            if(basis.gaussian!=0) full_design_entries.emplace_back(support.row,2*atom,basis.gaussian);
+            if(basis.charge!=0) full_design_entries.emplace_back(support.row,2*atom+1,basis.charge);
+        }
+    n::Sparse full_design(rows,2*static_cast<Eigen::Index>(atoms));
+    full_design.setFromTriplets(full_design_entries.begin(),full_design_entries.end()); full_design.makeCompressed();
+    std::size_t full_design_bytes{},full_design_outer{};
+    ASSERT_TRUE(n::CheckedMultiplyBytes(static_cast<std::size_t>(full_design.nonZeros()),
+        sizeof(double)+sizeof(Eigen::Index),full_design_bytes));
+    ASSERT_TRUE(n::CheckedAddBytes(static_cast<std::size_t>(full_design.outerSize()),1,full_design_outer));
+    ASSERT_TRUE(n::CheckedMultiplyBytes(full_design_outer,sizeof(Eigen::Index),full_design_outer));
+    ASSERT_TRUE(n::CheckedAddBytes(full_design_bytes,full_design_outer,full_design_bytes));
+    ASSERT_TRUE(n::CheckedAddBytes(full_design_bytes,free_face_bytes,full_design_bytes));
+    const auto giant_streaming=second_stage_test::bounded_rank::ScalarGershgorin(full_design,
+        endpoint_context.rank,full_design_bytes);
+    EXPECT_TRUE(giant_streaming.available);
+    EXPECT_FALSE(giant_streaming.certified_full_rank);
+    EXPECT_LE(giant_streaming.estimated_peak_bytes,n::JointMemoryPlanningBudgetBytes);
     const auto rank_evidence=n::AssessmentEvidence(certification.assessment,rhbm_gem::JointEvidenceScope::ComponentLocal);
     const auto design_check=std::find_if(rank_evidence.begin(),rank_evidence.end(),[](const auto & check) {
         return check.name=="design-identifiability";
@@ -468,6 +490,15 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
         <<" free_face_matching="<<free_structure.matching_size
         <<" free_face_structural_status="<<free_structure.reason
         <<" free_face_memory_estimate_bytes="<<free_structure.memory_estimate_bytes
+        <<" streaming_lambda_min_lower="<<giant_streaming.lambda_min_lower
+        <<" streaming_lambda_max_upper="<<giant_streaming.lambda_max_upper
+        <<" streaming_bound_gap="<<giant_streaming.bound_gap
+        <<" streaming_status="<<giant_streaming.reason
+        <<" streaming_estimated_peak_bytes="<<giant_streaming.estimated_peak_bytes
+        <<" streaming_rss_before_bytes="<<(giant_streaming.current_rss_before_bytes ? std::to_string(*giant_streaming.current_rss_before_bytes) : "unavailable")
+        <<" streaming_rss_after_bytes="<<(giant_streaming.current_rss_after_bytes ? std::to_string(*giant_streaming.current_rss_after_bytes) : "unavailable")
+        <<" streaming_process_peak_rss_bytes="<<(giant_streaming.process_peak_rss_bytes ? std::to_string(*giant_streaming.process_peak_rss_bytes) : "unavailable")
+        <<" streaming_seconds="<<giant_streaming.seconds
         <<" endpoint_estimated_peak_bytes="<<endpoint_memory.estimated_peak_bytes
         <<" rank_estimated_peak_bytes="<<certification.assessment.rank_memory_estimate.estimated_peak_bytes
         <<" design_spectrum_peak_bytes="<<rank_stages[0].estimated_peak_bytes

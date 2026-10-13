@@ -246,9 +246,8 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
     {
         std::size_t columns=shape.component_design_columns;
         if(!columns) columns=shape.component_free_columns;
-        ok=AddProduct(temporary,rows,sizeof(double)) &&
-            AddProduct(temporary,columns,3*sizeof(double)) &&
-            AddProduct(temporary,shape.component_structural_nonzeros,sizeof(Eigen::Index));
+        ok=AddProduct(temporary,rows,2*sizeof(double)) &&
+            AddProduct(temporary,columns,4*sizeof(double)+2*sizeof(Eigen::Index)+sizeof(std::uint8_t));
         break;
     }
     case MemoryStage::DesignSpectrum:

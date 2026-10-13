@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/CompactSvd.hpp"
 #include "core/detail/joint_component/Numerics.hpp"
+#include "support/BoundedRankResearch.hpp"
 #include <Eigen/SVD>
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <limits>
 #include <string>
 #include <utility>
@@ -212,6 +214,86 @@ TEST(JointComponentBoundedRankTest, StructuralMemoryPreflightRejectsBeforeGraphA
     overflow.component_structural_nonzeros=std::numeric_limits<std::size_t>::max();
     overflow.component_structural_matching=true;
     EXPECT_EQ(n::PlanMemory(overflow,n::MemoryStage::StructuralRank).status,n::MemoryStatus::Overflow);
+}
+
+TEST(JointComponentBoundedRankTest, StreamingGershgorinControlsNeverOverstateTheirEvidence)
+{
+    const auto limited=second_stage_test::bounded_rank::ScalarGershgorin(
+        SparseFrom(Matrix::Identity(4,4)),{4,4,0},0,0);
+    EXPECT_FALSE(limited.available);
+    EXPECT_EQ(limited.reason,"streaming-memory-limit");
+
+    std::size_t exact_full_rank_cases{},certified{},unavailable{},false_certifications{};
+    for(const auto & fixture:ReferenceFixtures())
+    {
+        SCOPED_TRACE(fixture.name);
+        const n::RankPolicy policy{fixture.design.rows(),fixture.design.cols(),0};
+        const auto oracle=n::ComputeSpectrum(fixture.design,policy,fixture.design.cols(),true);
+        ASSERT_TRUE(oracle.available)<<oracle.reason;
+        const auto sparse=SparseFrom(fixture.design);
+        const auto estimate=second_stage_test::bounded_rank::ScalarGershgorin(sparse,policy);
+        if(oracle.rank==oracle.columns) ++exact_full_rank_cases;
+        if(!estimate.certified_full_rank) ++unavailable;
+        if(estimate.certified_full_rank)
+        {
+            ++certified;
+            if(oracle.rank!=oracle.columns) ++false_certifications;
+        }
+        EXPECT_FALSE(estimate.certified_full_rank && oracle.rank!=oracle.columns);
+        if(fixture.name=="full-rank-well-conditioned")
+        {
+            EXPECT_TRUE(estimate.available);
+            EXPECT_TRUE(estimate.gershgorin_suggests_full_rank);
+            EXPECT_TRUE(estimate.certified_full_rank);
+        }
+        if(fixture.name=="structurally-full-numerically-deficient" ||
+            fixture.name=="connected-rank-deficient" || fixture.name=="near-threshold")
+            EXPECT_FALSE(estimate.certified_full_rank);
+        std::cout<<"streaming-control fixture="<<fixture.name
+            <<" rows="<<fixture.design.rows()<<" columns="<<fixture.design.cols()
+            <<" nonzeros="<<sparse.nonZeros()<<" oracle_rank="<<oracle.rank
+            <<" sigma_max="<<oracle.singular_values(0)<<" sigma_min="<<oracle.minimum
+            <<" rank_threshold="<<oracle.threshold
+            <<" lambda_min_lower_estimate="<<estimate.lambda_min_lower
+            <<" lambda_max_upper_estimate="<<estimate.lambda_max_upper
+            <<" bound_gap="<<estimate.bound_gap
+            <<" estimated_full_rank="<<estimate.gershgorin_suggests_full_rank
+            <<" certified_full_rank="<<estimate.certified_full_rank
+            <<" status="<<estimate.reason
+            <<" estimated_peak_bytes="<<estimate.estimated_peak_bytes
+            <<" rss_before_bytes="<<(estimate.current_rss_before_bytes ? std::to_string(*estimate.current_rss_before_bytes) : "unavailable")
+            <<" rss_after_bytes="<<(estimate.current_rss_after_bytes ? std::to_string(*estimate.current_rss_after_bytes) : "unavailable")
+            <<" process_peak_rss_bytes="<<(estimate.process_peak_rss_bytes ? std::to_string(*estimate.process_peak_rss_bytes) : "unavailable")
+            <<" seconds="<<estimate.seconds<<"\n";
+    }
+    constexpr Eigen::Index original_rows=1000;
+    const n::RankPolicy near_policy{original_rows,2,0};
+    const double tau=near_policy.Absolute(2,1.0);
+    for(const auto & item:std::vector<std::pair<const char *,double>>{{"below",.5},{"near",1.0},{"above",2.0}})
+    {
+        const double angle=std::sqrt(2.0)*item.second*tau;
+        Matrix x(2,2); x<<1,std::cos(angle),0,std::sin(angle);
+        const auto oracle=n::ComputeSpectrum(x,near_policy,2,true);
+        const auto estimate=second_stage_test::bounded_rank::ScalarGershgorin(SparseFrom(x),near_policy);
+        ASSERT_TRUE(oracle.available);
+        EXPECT_FALSE(estimate.certified_full_rank);
+        std::cout<<"streaming-near-threshold case="<<item.first
+            <<" rows="<<original_rows<<" columns=2 sigma_min="<<oracle.minimum
+            <<" rank_threshold="<<oracle.threshold
+            <<" lambda_min_lower_estimate="<<estimate.lambda_min_lower
+            <<" lambda_max_upper_estimate="<<estimate.lambda_max_upper
+            <<" status="<<estimate.reason<<" certified_full_rank="<<estimate.certified_full_rank<<"\n";
+    }
+    std::cout<<"streaming-summary full_rank_cases="<<exact_full_rank_cases
+        <<" certified_full_rank_cases="<<certified<<" unavailable_cases="<<unavailable
+        <<" near_threshold_unavailable_cases=3 false_certifications="<<false_certifications<<"\n";
+    EXPECT_GT(exact_full_rank_cases,0u);
+    EXPECT_EQ(certified,1u);
+    EXPECT_EQ(false_certifications,0u);
+    RecordProperty("full_rank_cases",std::to_string(exact_full_rank_cases));
+    RecordProperty("certified_full_rank_cases",std::to_string(certified));
+    RecordProperty("unavailable_cases",std::to_string(unavailable));
+    RecordProperty("false_certifications",std::to_string(false_certifications));
 }
 
 } // namespace
