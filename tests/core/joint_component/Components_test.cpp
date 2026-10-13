@@ -322,10 +322,14 @@ TEST(JointComponentChecksTest, LocalProfileBudgetAndInvalidStartRetainHonestAvai
     const auto healthy=p::FitComponent(part.components[0],initial,c);
     auto limited=c; limited.profile_budget=1;
     const auto exhausted=p::FitComponent(part.components[1],initial,limited);
-    EXPECT_FALSE(exhausted.at("search_success").as_bool()); EXPECT_TRUE(exhausted.at("usable_state").as_bool());
+    EXPECT_FALSE(exhausted.at("search_success").as_bool()); EXPECT_FALSE(exhausted.at("usable_state").as_bool());
+    EXPECT_TRUE(exhausted.at("candidate_available").as_bool());
+    EXPECT_TRUE(exhausted.at("candidate_state").is_object());
     EXPECT_EQ(exhausted.at("stop_reason"),"block-sweep-budget");
     const auto assembled=p::Assemble(domain,f.y,part,c,boost::json::array{healthy,exhausted});
-    EXPECT_TRUE(assembled.at("prediction_available").as_bool()); EXPECT_NE(assembled.at("runtime_convergence"),"passed");
+    EXPECT_FALSE(assembled.at("prediction_available").as_bool());
+    EXPECT_TRUE(assembled.at("prediction").is_null());
+    EXPECT_NE(assembled.at("runtime_convergence"),"passed");
     EXPECT_TRUE(assembled.at("search_stopped_without_convergence").as_bool());
     Vector invalid=initial; invalid(1)=0;
     const auto failure=p::FitComponent(part.components[1],invalid,c);

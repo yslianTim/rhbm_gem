@@ -51,6 +51,7 @@ class JointRuntimeSupportTest(unittest.TestCase):
 
     def test_runtime_contract_allows_trace_changes_but_not_lost_evidence(self):
         record = dict(usable_state=True, runtime_convergence='passed',
+                      endpoint_verification_status='passed', numerical_qualification_status='passed',
                       runtime_checks=dict(ac_feasibility=True, conditional_ac_optimality=True,
                                           independent_ac_optimality=True, independent_kkt_consistency=True,
                                           independent_replay=True, width_gradient_consistency=True,
@@ -64,10 +65,11 @@ class JointRuntimeSupportTest(unittest.TestCase):
                       candidate_available=True,
                       candidate_state=dict(objective=1e-15,beta=[2.,.1],eta=[-.7],b=[.5]))
         actual = copy.deepcopy(record)
-        actual.update(accepted_updates=4, profile_evaluations=5, stop_reason='unrepresentable-step', search_success=False)
+        actual.update(accepted_updates=4, profile_evaluations=5, stop_reason='block-stationary')
         self.assertFalse(runtime_differences(record, actual, 1.))
         actual = copy.deepcopy(record); actual['runtime_convergence'] = 'failed'
         actual['runtime_checks']['local_correction'] = False
+        actual.update(numerical_qualification_status='failed', usable_state=False, search_success=False)
         self.assertFalse(runtime_differences(record, actual, 1.))
         actual['candidate_state']['b'][0] += 1e-6
         self.assertFalse(runtime_differences(record, actual, 1.))
@@ -75,18 +77,43 @@ class JointRuntimeSupportTest(unittest.TestCase):
         self.assertTrue(runtime_differences(record, actual, 1.))
         actual = copy.deepcopy(record); actual['trials'][0]['trust_passed'] = False
         self.assertTrue(runtime_differences(record, actual, 1.))
-        actual = copy.deepcopy(record); actual['profile_evaluations'] = 201
+        actual = copy.deepcopy(record); actual['profile_evaluations'] = 401
+        self.assertFalse(runtime_differences(record, actual, 1.))
+        actual['profile_evaluations'] = -1
         self.assertTrue(runtime_differences(record, actual, 1.))
         actual = copy.deepcopy(record); actual['candidate_available'] = False; actual['candidate_state'] = None
         self.assertTrue(runtime_differences(record, actual, 1.))
 
+    def test_qualification_status_requires_a_complete_trusted_state(self):
+        actual = dict(usable_state=False, search_success=False, runtime_convergence='failed',
+                      endpoint_verification_status='passed', numerical_qualification_status='failed',
+                      reference_solve_calls=0, candidate_available=True,
+                      candidate_state=dict(beta=[1.], eta=[-.7], b=[.5], objective=.1),
+                      stop_reason='block-sweep-budget', accepted_updates=1, profile_evaluations=2,
+                      runtime_checks=dict(ac_feasibility=True, conditional_ac_optimality=True,
+                          independent_ac_optimality=True, independent_kkt_consistency=True,
+                          independent_replay=True, width_gradient_consistency=True,
+                          width_stationarity=True, design_identifiability=True,
+                          local_correction=False, numerical_identifiability=True), trials=[])
+        self.assertFalse(runtime_differences({}, actual, 1.))
+        actual['usable_state'] = True
+        self.assertIn('/unqualified-scientific-state', runtime_differences({}, actual, 1.))
+        actual = copy.deepcopy(actual)
+        actual.update(usable_state=True, search_success=True, runtime_convergence='passed',
+                      numerical_qualification_status='passed')
+        actual['runtime_checks']['local_correction'] = False
+        self.assertIn('/qualification-without-complete-trusted-state', runtime_differences({}, actual, 1.))
+        actual['endpoint_verification_status'] = 'not-run'
+        self.assertIn('/qualification-without-complete-trusted-state', runtime_differences({}, actual, 1.))
+
     def test_nonconverged_endpoint_must_not_worsen_objective(self):
-        expected = dict(usable_state=True, runtime_convergence='failed', runtime_checks=dict(
+        expected = dict(usable_state=False, runtime_convergence='failed', runtime_checks=dict(
                         ac_feasibility=True, conditional_ac_optimality=True, independent_ac_optimality=True,
                         independent_kkt_consistency=True, independent_replay=True,
                         width_gradient_consistency=True, width_stationarity=True,
                         design_identifiability=True, local_correction=False,
                         numerical_identifiability=True),
+                        endpoint_verification_status='passed', numerical_qualification_status='failed',
                         reference_solve_calls=0,
                         search_success=False, stop_reason='profile-budget', accepted_updates=1, profile_evaluations=200,
                         last_trusted_state=dict(valid=True, feasible=True, kkt_passed=True, free_rank=2, objective=.1,

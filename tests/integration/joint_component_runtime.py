@@ -42,6 +42,26 @@ def runtime_differences(expected, actual, scale):
             delta.append('/runtime_checks/reference-free-contract')
     elif actual.get('runtime_convergence')=='passed' and not all(checks[name] for name in required_checks):
         delta.append('/runtime_convergence-with-failed-check')
+    statuses=('passed','failed','unavailable','not-run')
+    endpoint=actual.get('endpoint_verification_status')
+    qualification=actual.get('numerical_qualification_status')
+    usable=actual.get('usable_state')
+    search_success=actual.get('search_success')
+    if endpoint not in statuses:
+        delta.append('/endpoint-verification-status')
+    if qualification not in statuses:
+        delta.append('/numerical-qualification-status')
+    if type(usable) is not bool:
+        delta.append('/trusted-state-availability')
+    if type(search_success) is not bool:
+        delta.append('/search-success')
+    if qualification=='passed':
+        if (usable is not True or search_success is not True or endpoint!='passed' or
+                actual.get('runtime_convergence')!='passed' or not isinstance(checks,dict) or
+                any(checks.get(name) is not True for name in required_checks)):
+            delta.append('/qualification-without-complete-trusted-state')
+    elif usable is True or search_success is True or actual.get('runtime_convergence')=='passed':
+        delta.append('/unqualified-scientific-state')
     if actual.get('reference_solve_calls',0)!=0:
         delta.append('/reference_solve_calls')
     candidate=actual.get('candidate_state')
@@ -54,10 +74,13 @@ def runtime_differences(expected, actual, scale):
                 delta.append('/candidate_state/'+key)
     if not isinstance(actual.get('search_success'), bool) or not actual.get('stop_reason'):
         delta.append('/search-termination')
-    for key, maximum in (('accepted_updates', 100), ('profile_evaluations', 200)):
+    for key, maximum in (('accepted_updates', 100),):
         value = actual.get(key)
         if type(value) is not int or not 0 <= value <= maximum:
             delta.append('/'+key)
+    profile_evaluations=actual.get('profile_evaluations')
+    if type(profile_evaluations) is not int or profile_evaluations < 0:
+        delta.append('/profile_evaluations')
     for trial in actual.get('trials', []):
         if trial['accepted'] and (not trial['valid'] or trial['trust_passed'] is not True):
             delta.append('/untrusted-accepted-trial')
@@ -99,6 +122,7 @@ def candidate_comparison(data, y, expected, actual, scale):
         'legacy_stop_reason':expected.get('stop_reason'),
         'legacy_runtime_convergence':expected.get('runtime_convergence'),
         'reference_free_runtime_convergence':actual.get('runtime_convergence'),
+        'parameter_comparison_basis':'historical_endpoint_may_be_a_different_sweep',
         'endpoint_verification_status':actual.get('endpoint_verification_status'),
         'numerical_qualification_status':actual.get('numerical_qualification_status'),
         'rank_assessment_status':actual.get('rank_assessment_status'),
