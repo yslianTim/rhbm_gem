@@ -190,6 +190,7 @@ def normalize_result(profile, raw):
                 'search_seconds': fixed.get('search_seconds'),
                 'resource_census': fixed.get('resource_census'),
                 'rss_checkpoints': fixed.get('rss_checkpoints'),
+                'assessment_stage_telemetry': fixed.get('assessment_stage_telemetry'),
                 'fixed_neighbor_work': fixed.get('fixed_neighbor_work'),
                 'incremental_replay_validation': fixed.get('incremental_replay_validation'),
                 'candidate_replay_fraction': fixed.get('candidate_replay_fraction'),
@@ -218,6 +219,10 @@ def normalize_result(profile, raw):
                 'candidate_replay_fraction': fixed.get('candidate_replay_fraction'),
                 'local_profile_fraction': fixed.get('local_profile_fraction'),
                 'assessment_seconds': fixed.get('assessment_seconds'),
+                'endpoint_assessment': fixed.get('endpoint_assessment'),
+                'assessment_stage_telemetry': fixed.get('assessment_stage_telemetry'),
+                'production_reference_solve_calls': fixed.get('production_reference_solve_calls'),
+                'reference_qr_factorization_calls_total': fixed.get('reference_qr_factorization_calls_total'),
                 'sweeps': fixed.get('sweeps'),
                 'block_solves': sum(item.get('block_solves', 0) for item in fixed.get('sweep_telemetry', [])),
                 'profile_evaluations': sum(item.get('profile_evaluations', 0)

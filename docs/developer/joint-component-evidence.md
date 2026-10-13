@@ -51,10 +51,12 @@ The complete concise record of those FixedNeighbor choices is in
   conditional solve remains EIGEN SparseQR. The independent global reference
   solver remains only an offline/test oracle; production does not build its
   dense reference `R`.
-- For 37,406 atoms, a hypothetical 74,812-column reference `R` alone would be
-  about 44.775 GB (41.7 GiB). Production avoids that work. Current rank and
-  target identifiability still report unavailable when their stage estimates
-  exceed budget; no approximate spectral result is treated as a certificate.
+- For 37,406 atoms, a 74,812-column DesignSpectrum `ReferenceQR` factor alone
+  is estimated at 44.775 GB (41.7 GiB). Production no longer runs a global
+  independent reference solve, but DesignSpectrum remains the dense rank
+  primitive when preflight permits it. Large rank and target assessments
+  report unavailable when their stage estimates exceed budget; no approximate
+  spectral result is treated as a certificate.
 - A deterministic 37,406-atom, 5,938,087-row single-chain fixture has 74,811
   support memberships and 3,118 blocks. It records 2,892,736 prepared-mapping
   bytes and an 876,119,666-byte global-evaluation estimated peak. A direct
@@ -62,6 +64,14 @@ The complete concise record of those FixedNeighbor choices is in
   0.442 GiB). The fixture disables sweeps and endpoint certification; it does
   not represent the unknown physical support graph or qualify the full
   physical search and certification.
+- A separate serial census adds endpoint streaming and both memory preflights.
+  The same synthetic shape estimates DesignSpectrum at 189,484,131,163 bytes,
+  projected-width and local correction at 61,453,268,315 bytes each, and
+  target identifiability at 317,422,079,259 bytes. It rejects the dense stages
+  before allocation; its process peak is 622,624,768 bytes. This RSS covers the
+  input, preparation, verification and rejected preflights only. Per-stage
+  shape, timing and RSS details are in the
+  [component memory census](joint-component-memory-census.md).
 - Historical fixed-state compact-SVD checks passed their recorded numerical
   gates. The campaign showed substantial reductions in selected compact
   reference and derivative calculations, but did not establish a current

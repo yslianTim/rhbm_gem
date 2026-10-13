@@ -776,7 +776,7 @@ Assessment AssessProfile(const Domain & domain,VectorRef y,const Vector & eta,co
     if(verification_memory.estimated_peak_bytes>verification_memory.budget_bytes/2)
         LogMemoryEstimate(verification_memory);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    AssessmentStageTimerForTesting primary_stage("endpoint-primary-evaluation",y.size(),eta.size());
+    AssessmentStageTimerForTesting primary_stage("endpoint-primary-evaluation",y.size(),eta.size(),&verification_memory);
 #endif
     const auto primary_started=std::chrono::steady_clock::now();
     const auto endpoint=supplied_beta ? EvaluateStateStreaming(domain,y,eta,*supplied_beta,policy) :
@@ -784,7 +784,7 @@ Assessment AssessProfile(const Domain & domain,VectorRef y,const Vector & eta,co
     const double primary_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-primary_started).count();
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     primary_stage.Finish();
-    AssessmentStageTimerForTesting replay_stage("independent-streaming-replay",y.size(),eta.size());
+    AssessmentStageTimerForTesting replay_stage("independent-streaming-replay",y.size(),eta.size(),&verification_memory);
 #endif
     const auto replay_started=std::chrono::steady_clock::now();
     const auto replay=CheckIndependentReplay(domain,y,endpoint,policy,assembled_prediction,assembled_rows);
@@ -810,7 +810,7 @@ AssessmentStageWork & AssessmentStage(const std::string & name)
     auto & stages=AssessmentWorkForTesting().stages;
     const auto found=std::find_if(stages.begin(),stages.end(),[&](const auto & stage){return stage.name==name;});
     if(found!=stages.end()) return *found;
-    stages.push_back({name}); return stages.back();
+    AssessmentStageWork stage; stage.name=name; stages.push_back(std::move(stage)); return stages.back();
 }
 void NotifyAssessmentStageObserver()
 {
@@ -819,10 +819,27 @@ void NotifyAssessmentStageObserver()
 }
 void SetAssessmentStageObserverForTesting(AssessmentStageObserverForTesting observer,void * context)
 {AssessmentStageObserver()=observer; AssessmentStageObserverContext()=context;}
-void BeginAssessmentStageForTesting(const std::string & name,Eigen::Index rows,Eigen::Index columns)
+void BeginAssessmentStageForTesting(const std::string & name,Eigen::Index rows,Eigen::Index columns,
+    const MemoryEstimate * estimate)
 {
     auto & work=AssessmentWorkForTesting(); auto & stage=AssessmentStage(name);
     ++stage.calls; stage.rows=rows; stage.columns=columns;
+    if(estimate)
+    {
+        stage.memory_estimate_available=true; stage.memory_stage=estimate->stage; stage.memory_status=estimate->status;
+        stage.estimated_resident_bytes=estimate->resident_bytes; stage.estimated_temporary_bytes=estimate->temporary_bytes;
+        stage.estimated_peak_bytes=estimate->estimated_peak_bytes; stage.budget_bytes=estimate->budget_bytes;
+        stage.memory_preflight_reason=estimate->reason;
+        stage.sparse_design_bytes=estimate->sparse_design_bytes; stage.dense_factor_bytes=estimate->dense_factor_bytes;
+        stage.factor_workspace_bytes=estimate->factor_workspace_bytes;
+        stage.right_singular_vector_bytes=estimate->right_singular_vector_bytes;
+        stage.right_null_space_bytes=estimate->right_null_space_bytes;
+        stage.factor_rows=estimate->factor_rows; stage.factor_columns=estimate->factor_columns;
+        stage.maximum_tile_rows=estimate->shape.maximum_tile_rows;
+        stage.attributed_memory_stages=estimate->attributed_stages;
+    }
+    stage.current_rss_before_bytes=CurrentRssBytes();
+    stage.process_peak_rss_bytes=ProcessPeakRssBytes();
     work.stage_stack.push_back(name); work.active_stage=name; work.last_stage=name;
     NotifyAssessmentStageObserver();
 }
@@ -830,15 +847,19 @@ void FinishAssessmentStageForTesting(const std::string & name,double seconds,boo
 {
     auto & work=AssessmentWorkForTesting(); auto & stage=AssessmentStage(name);
     stage.seconds+=seconds; if(completed) ++stage.completed_calls;
+    stage.current_rss_after_bytes=CurrentRssBytes();
+    const auto peak=ProcessPeakRssBytes();
+    if(peak && (!stage.process_peak_rss_bytes || *peak>*stage.process_peak_rss_bytes)) stage.process_peak_rss_bytes=peak;
     if(!work.stage_stack.empty()) work.stage_stack.pop_back();
     work.active_stage=work.stage_stack.empty() ? std::string{} : work.stage_stack.back();
     work.last_stage=name;
     NotifyAssessmentStageObserver();
 }
-AssessmentStageTimerForTesting::AssessmentStageTimerForTesting(std::string name,Eigen::Index rows,Eigen::Index columns)
+AssessmentStageTimerForTesting::AssessmentStageTimerForTesting(std::string name,Eigen::Index rows,Eigen::Index columns,
+    const MemoryEstimate * estimate)
     :name_(std::move(name)),uncaught_exceptions_(std::uncaught_exceptions())
 {
-    BeginAssessmentStageForTesting(name_,rows,columns);
+    BeginAssessmentStageForTesting(name_,rows,columns,estimate);
     started_=std::chrono::steady_clock::now();
 }
 AssessmentStageTimerForTesting::~AssessmentStageTimerForTesting()
@@ -867,6 +888,19 @@ MemoryEstimate RankAssessmentMemoryEstimate(const Domain & domain,VectorRef,cons
 {
     MemoryShape shape; shape.component_atoms=domain.atoms.size(); shape.component_observations=static_cast<std::size_t>(domain.rows);
     shape.component_target_columns=context.target_columns;
+    if(context.target_columns%3==0 && context.target_columns/3<=shape.component_atoms)
+    {
+        shape.component_target_atoms=context.target_columns/3;
+        shape.component_halo_atoms=shape.component_atoms-shape.component_target_atoms;
+    }
+    shape.component_width_columns=shape.component_atoms;
+    shape.maximum_tile_rows=8192;
+    if(!CheckedMultiplyBytes(shape.component_atoms,2,shape.component_design_columns) ||
+        !CheckedMultiplyBytes(shape.component_atoms,3,shape.component_jacobian_columns))
+    {
+        auto estimate=PlanMemory(shape,MemoryStage::RankAssessment);
+        estimate.status=MemoryStatus::Overflow; estimate.reason="size-overflow"; return estimate;
+    }
     const auto overflow=[&] {
         auto estimate=PlanMemory(shape,MemoryStage::RankAssessment);
         estimate.status=MemoryStatus::Overflow; estimate.reason="size-overflow"; return estimate;
@@ -933,6 +967,16 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
         {value=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();}
     } rank_timer{out.rank_assessment_seconds};
     out.rank_memory_estimate=RankAssessmentMemoryEstimate(domain,y,endpoint,reference,policy,resident_override);
+    const auto design_memory=PlanMemory(out.rank_memory_estimate.shape,MemoryStage::DesignSpectrum,
+        out.rank_memory_estimate.budget_bytes);
+    const auto projected_memory=PlanMemory(out.rank_memory_estimate.shape,MemoryStage::ProjectedWidthAssessment,
+        out.rank_memory_estimate.budget_bytes);
+    const auto correction_memory=PlanMemory(out.rank_memory_estimate.shape,MemoryStage::LocalCorrection,
+        out.rank_memory_estimate.budget_bytes);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    AssessmentStageTimerForTesting identifiability_stage("numerical-identifiability",y.size(),
+        static_cast<Eigen::Index>(out.rank_memory_estimate.shape.component_design_columns),&out.rank_memory_estimate);
+#endif
     if(out.rank_memory_estimate.status!=MemoryStatus::Pass ||
         out.rank_memory_estimate.estimated_peak_bytes>out.rank_memory_estimate.budget_bytes/2)
         LogMemoryEstimate(out.rank_memory_estimate);
@@ -947,7 +991,7 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
         evaluated=&rebuilt;
     }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    AssessmentStageTimerForTesting design_stage("design-spectrum",evaluated->x.rows(),evaluated->x.cols());
+    AssessmentStageTimerForTesting design_stage("design-spectrum",evaluated->x.rows(),evaluated->x.cols(),&design_memory);
 #endif
     out.design=DesignSpectrum(evaluated->x,Vector::Ones(y.size()),&policy.rank);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -956,13 +1000,17 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
     out.inner=reference ? out.coefficient_difference<=1e-10 && out.design->rank==evaluated->x.cols() :
         replay->primary_kkt_passed && replay->independent_kkt_passed;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    AssessmentStageTimerForTesting prepare_stage("derivative-preparation",evaluated->derivative.rows(),evaluated->derivative.cols());
+    AssessmentStageTimerForTesting projected_overall("projected-width-assessment",evaluated->x.rows(),eta.size(),
+        &projected_memory);
+    AssessmentStageTimerForTesting prepare_stage("derivative-preparation",evaluated->derivative.rows(),
+        evaluated->derivative.cols(),&projected_memory);
     ++AssessmentWorkForTesting().compact_attempts;
 #endif
     const auto prepared=PrepareDerivativeCompact(*evaluated,scale,context);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     prepare_stage.Finish();
-    AssessmentStageTimerForTesting reduce_stage("derivative-reduction",prepared.raw.rows(),prepared.raw.cols());
+    AssessmentStageTimerForTesting reduce_stage("derivative-reduction",prepared.raw.rows(),prepared.raw.cols(),
+        &projected_memory);
 #endif
     bool compact_differential=!prepared.reference_order;
     ReducedDifferential differential;
@@ -993,12 +1041,14 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
     CompactSvdResult widths,normalized_svd;
     const auto width_spectra=[&]() {
         {
-            AssessmentStageTimerForTesting width_stage("projected-width-spectrum",differential.projected.rows(),differential.projected.cols());
+            AssessmentStageTimerForTesting width_stage("projected-width-spectrum",differential.projected.rows(),
+                differential.projected.cols(),&projected_memory);
             widths=Decompose(differential.projected,context->rank.rows,CompactSvdVectors::Right);
         }
         if(!widths.valid) return false;
         {
-            AssessmentStageTimerForTesting normalized_stage("normalized-width-spectrum",differential.projected.rows(),differential.projected.cols());
+            AssessmentStageTimerForTesting normalized_stage("normalized-width-spectrum",differential.projected.rows(),
+                differential.projected.cols(),&projected_memory);
             Matrix normalized=differential.projected;
             for(Eigen::Index k=0;k<differential.projected_norms.size();++k)
                 if(differential.projected_norms(k)>0) normalized.col(k)/=differential.projected_norms(k);
@@ -1007,7 +1057,7 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
         return normalized_svd.valid;
     };
 #else
-    const auto widths=Decompose(differential.projected,context->rank.rows,CompactSvdVectors::Right);
+    auto widths=Decompose(differential.projected,context->rank.rows,CompactSvdVectors::Right);
 #endif
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(!width_spectra()) {out.failure="spectrum-factorization-failed"; return out;}
@@ -1025,6 +1075,7 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
     if(!normalized_svd.valid) {out.failure="spectrum-factorization-failed"; return out;}
     out.normalized_widths=CompactSpectrum(normalized_svd,context->rank.rows);
 #endif
+    const auto projected_width_rank=widths.rank;
     out.weak_directions.resize(eta.size(),std::min<Eigen::Index>(3,widths.right_vectors.cols()));
     for(Eigen::Index k=0;k<out.weak_directions.cols();++k)
     {
@@ -1032,11 +1083,20 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
         Eigen::Index sign{}; direction.cwiseAbs().maxCoeff(&sign); if(direction(sign)<0) direction=-direction;
         out.weak_directions.col(k)=direction;
     }
+    Matrix{}.swap(widths.right_vectors);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    projected_overall.Finish();
+#endif
     Vector response=-differential.response;
     CompactSvdResult correction_svd;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    AssessmentStageTimerForTesting correction_overall("local-correction",differential.jacobian.rows(),
+        differential.jacobian.cols(),&correction_memory);
+#endif
     {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        AssessmentStageTimerForTesting correction_stage("correction-jacobian-spectrum",differential.jacobian.rows(),differential.jacobian.cols());
+        AssessmentStageTimerForTesting correction_stage("correction-jacobian-spectrum",
+            differential.jacobian.rows(),differential.jacobian.cols(),&correction_memory);
 #endif
         correction_svd=Decompose(differential.jacobian,context->rank.rows,CompactSvdVectors::None,&response);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -1052,7 +1112,8 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
         if(!differential.valid) {out.failure=differential.reason; return out;}
         response=-differential.response;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        AssessmentStageTimerForTesting fallback_stage("correction-jacobian-spectrum",differential.jacobian.rows(),differential.jacobian.cols());
+        AssessmentStageTimerForTesting fallback_stage("correction-jacobian-spectrum",
+            differential.jacobian.rows(),differential.jacobian.cols(),&correction_memory);
 #endif
         correction_svd=Decompose(differential.jacobian,context->rank.rows,CompactSvdVectors::None,&response);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -1065,13 +1126,16 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
         ++AssessmentWorkForTesting().compact_accepted;
 #endif
     }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    correction_overall.Finish();
+#endif
     if(!correction_svd.valid) {out.failure="spectrum-factorization-failed"; return out;}
     const Vector & correction=correction_svd.solution; out.correction=correction;
     out.jacobian=CompactSpectrum(correction_svd,context->rank.rows);
     out.gradient=endpoint.gradient.lpNorm<Eigen::Infinity>()<=1e-12 &&
         (reference ? reference->gradient.lpNorm<Eigen::Infinity>()<=1e-12 : replay->gradient_agrees);
     out.local=correction.allFinite() && correction.lpNorm<Eigen::Infinity>()<=1e-10;
-    out.identified=widths.rank==eta.size() && correction_svd.rank==eta.size();
+    out.identified=projected_width_rank==eta.size() && correction_svd.rank==eta.size();
     const bool design_full_rank=out.design->rank==evaluated->x.cols();
     out.qualified=out.endpoint_verified && design_full_rank && out.identified && out.gradient && out.local;
     out.failure=reference && !out.inner ? "inner-solve" : !design_full_rank ? "design-unidentified" :

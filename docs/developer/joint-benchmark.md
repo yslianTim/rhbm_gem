@@ -82,6 +82,17 @@ bytes, observed process peak RSS, the diagnostic sweep cap and the unchanged
 production solver policy. Use --repeat, --warmup, --timeout and
 --rss-limit to control the measurement process.
 
+Solve output also includes `assessment_stage_telemetry`: stage entry and
+completion counts, dimensions, elapsed seconds, preflight status and byte
+breakdowns, current RSS before/after, and process peak RSS. The two RSS fields
+are labeled separately because process peak RSS is a process-wide high-water
+mark, not a stage-local allocation. Missing platform readings are JSON `null`.
+`production_reference_solve_calls` counts the removed global reference-solve
+path; `reference_qr_factorization_calls_total` counts calls to the `ReferenceQR`
+primitive, including DesignSpectrum's dense rank factorization. A zero in the
+first field does not imply zero dense QR work. The large synthetic stage results
+are documented in the [component memory census](joint-component-memory-census.md).
+
 The wrapper modes describe different measurement scopes; they do not select
 different estimator policies. There is no backend selector or alternate
 solver route. EIGEN is the only current sparse backend.

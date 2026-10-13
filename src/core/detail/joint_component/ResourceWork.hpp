@@ -35,15 +35,28 @@ struct SearchStageWork
 
 inline constexpr std::size_t JointMemoryHardLimitBytes=4'000'000'000;
 inline constexpr std::size_t JointMemoryPlanningBudgetBytes=3'200'000'000;
-enum class MemoryStage {ProblemConstruction,StructuralConstruction,FixedNeighborPreparation,GlobalStateEvaluation,EndpointVerification,ReferenceSolve,RankAssessment,TargetIdentifiability};
+enum class MemoryStage {ProblemConstruction,StructuralConstruction,FixedNeighborPreparation,GlobalStateEvaluation,
+    EndpointVerification,ReferenceSolve,RankAssessment,DesignSpectrum,ProjectedWidthAssessment,LocalCorrection,
+    TargetIdentifiability,TargetGeometry,TargetLocalCorrection};
 enum class MemoryStatus {Pass,Reject,Overflow};
 struct MemoryShape
 {
     std::size_t component_atoms{},component_observations{},component_support_entries{},component_blocks{},
         affected_row_entries{},component_neighbor_entries{},maximum_block_rows{},maximum_block_support_entries{},
         total_block_support_entries{},maximum_neighbor_atoms{},component_free_columns{},component_target_columns{},
-        identity_validation_bytes{},resident_bytes{};
+        identity_validation_bytes{},resident_bytes{},component_design_columns{},component_width_columns{},
+        component_jacobian_columns{},component_target_atoms{},component_halo_atoms{},maximum_tile_rows{8192};
     bool problem_scope{};
+};
+struct MemoryStageEstimate
+{
+    MemoryStage stage{MemoryStage::ProblemConstruction};
+    std::size_t resident_bytes{},temporary_bytes{},estimated_peak_bytes{},budget_bytes{JointMemoryPlanningBudgetBytes},
+        sparse_design_bytes{},dense_factor_bytes{},factor_workspace_bytes{},right_singular_vector_bytes{},right_null_space_bytes{},
+        maximum_tile_rows{};
+    std::size_t factor_rows{},factor_columns{};
+    MemoryStatus status{MemoryStatus::Pass};
+    std::string reason;
 };
 struct MemoryEstimate
 {
@@ -52,6 +65,9 @@ struct MemoryEstimate
     std::size_t resident_bytes{},temporary_bytes{},estimated_peak_bytes{},budget_bytes{JointMemoryPlanningBudgetBytes};
     MemoryStatus status{MemoryStatus::Pass};
     std::string reason;
+    std::size_t sparse_design_bytes{},dense_factor_bytes{},factor_workspace_bytes{},right_singular_vector_bytes{},right_null_space_bytes{},
+        factor_rows{},factor_columns{};
+    std::vector<MemoryStageEstimate> attributed_stages;
 };
 struct ReferenceFeasibility
 {
@@ -69,6 +85,8 @@ MemoryEstimate PlanMemory(const MemoryShape &,MemoryStage,std::size_t=JointMemor
 ReferenceFeasibility AssessReferenceFeasibility(const MemoryShape &,std::size_t=JointMemoryPlanningBudgetBytes);
 const char * MemoryStageName(MemoryStage);
 const char * MemoryStatusName(MemoryStatus);
+std::optional<std::size_t> ProcessPeakRssBytes();
+std::optional<std::size_t> CurrentRssBytes();
 std::string FormatMemoryEstimate(const MemoryEstimate &);
 void LogMemoryEstimate(const MemoryEstimate &);
 

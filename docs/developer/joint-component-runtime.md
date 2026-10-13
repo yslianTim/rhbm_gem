@@ -297,6 +297,28 @@ RSS or a promise about the operating system's process limit. A rejected stage
 returns an unavailable resource result with a `resource-limit:<stage>` reason;
 it is not recorded as numerical nonconvergence.
 
+Rank assessment attributes its existing estimate to DesignSpectrum,
+projected-width assessment and local correction. Target identifiability
+attributes geometry and target-local correction separately. The parent peak is
+the maximum of the sequential stage peaks with each stage's resident data; it
+does not add all stage temporaries together. The assessment telemetry records
+whether a stage was entered and completed, its dimensions, elapsed time,
+preflight status and byte breakdown. Current RSS is sampled at stage entry and
+exit; process peak RSS is the process-wide high-water mark. Neither RSS value
+is the stage's attributed allocation. On platforms without an RSS source the
+fields are unavailable. Full right-vector storage is counted once; the
+right-null-space byte field describes a subset of that storage and is not an
+additional term.
+
+The rank and target preflight byte formulas and the synthetic 37,406-atom
+census are recorded in the [component memory census](joint-component-memory-census.md).
+That run estimates 189,484,131,163 bytes for DesignSpectrum and
+317,422,079,259 bytes for target identifiability, so neither stage runs. The
+streaming endpoint path does run; its isolated test process peaked at
+622,624,768 bytes. That observed peak covers the input, preparation,
+verification and rejected preflights only, not the hypothetical rank/target
+allocations.
+
 Prepared row mappings store sorted parent/local row pairs only for each block's
 affected rows, plus cached local support indices. Their structural cost follows
 the sum of affected rows and support memberships, not
@@ -306,15 +328,18 @@ traverses support entries and keeps vector state; it does not build the global
 assessment still use their existing sparse design matrices.
 
 Production endpoint verification is O(N+P) and does not build a global design
-matrix or run a global reference QR. The old independent solver remains an
-offline/test oracle. Rank assessment and target identifiability retain their
-dense QR/SVD definitions and return unavailable when their estimated workspaces
-exceed budget. A direct Release test process for the synthetic no-sweep fixture
-recorded 474,546,176 bytes peak RSS (0.475 GB, 0.442 GiB) before endpoint
-verification was added; its global-evaluation estimated peak was 876,119,666
-bytes. The updated synthetic scalability test runs primary and independent
-streaming endpoint verification, then confirms rank assessment is unavailable.
-No full physical map/model search has been measured.
+matrix or run a global reference solve. The old independent solver remains an
+offline/test oracle. DesignSpectrum still uses `ReferenceQR` as its dense rank
+factorization primitive when its preflight passes; zero production reference
+solve calls therefore do not imply zero dense QR work. Rank assessment and
+target identifiability retain their dense QR/SVD definitions and return
+unavailable when their estimated workspaces exceed budget. An earlier
+preparation-only test process recorded 474,546,176 bytes peak RSS
+(0.475 GB, 0.442 GiB) with a global-state estimated peak of 876,119,666 bytes.
+The updated serial census additionally runs primary and independent streaming
+verification, then confirms both large rank and target assessments are safely
+rejected before their matrices are allocated. No physical map/model search has
+been measured.
 
 Uncertainty preparation uses the same `MakeComponentProblemView()` for ordinary
 component covariance and observable target-quotient covariance. It selects the

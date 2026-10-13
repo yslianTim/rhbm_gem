@@ -84,6 +84,19 @@ per-block timings and local profile trials require `--detailed`. No physical
 map/model input is present in this workspace, so driver measurements are
 synthetic and cannot establish physical full-search feasibility.
 
+The 5,938,087-row, 37,406-atom single-component census now continues through
+streaming endpoint verification and both numerical preflights. The synthetic
+input has 74,811 support memberships, 3,118 blocks and 37,406 targets. Its
+DesignSpectrum peak is estimated at 189,484,131,163 bytes; projected-width and
+local-correction peaks are each 61,453,268,315 bytes; target-identifiability
+is 317,422,079,259 bytes. Design and target geometry are rejected before
+factorization, so those stages are `NotRun`; their estimates are not measured
+allocations. Endpoint verification passes with zero production reference solve
+calls. The isolated serial test process peaks at 622,624,768 bytes, while the
+target memory preflight calculation takes about 0.0056 seconds. See the
+[component memory census](joint-component-memory-census.md) for stage
+dimensions, current RSS checkpoints and the estimate/RSS scope.
+
 ## Historical KKT and reference agreement evidence
 
 This section records the retired coefficient-agreement contract. Production

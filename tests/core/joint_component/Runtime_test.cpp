@@ -251,7 +251,8 @@ TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTi
     };
     for(const auto * name:{"total-assessment","endpoint-primary-evaluation","reference-evaluation",
             "design-spectrum","derivative-preparation","derivative-reduction","projected-width-spectrum",
-            "normalized-width-spectrum","correction-jacobian-spectrum","derivative-rows",
+            "normalized-width-spectrum","correction-jacobian-spectrum","projected-width-assessment",
+            "local-correction","numerical-identifiability","derivative-rows",
             "derivative-projected-qr","derivative-compact-jacobian-qr","derivative-norms"})
     {
         const auto & measurement=stage(name);
@@ -262,6 +263,25 @@ TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTi
         EXPECT_GT(measurement.columns,0);
     }
     EXPECT_EQ(stage("total-assessment").calls,1);
+    const auto & design_memory=stage("design-spectrum");
+    EXPECT_TRUE(design_memory.memory_estimate_available);
+    EXPECT_EQ(design_memory.memory_stage,n::MemoryStage::DesignSpectrum);
+    EXPECT_EQ(design_memory.memory_status,n::MemoryStatus::Pass);
+    EXPECT_GT(design_memory.dense_factor_bytes,0u);
+    const auto & identifiability=stage("numerical-identifiability");
+    EXPECT_TRUE(identifiability.memory_estimate_available);
+    EXPECT_EQ(identifiability.memory_status,n::MemoryStatus::Pass);
+    ASSERT_EQ(identifiability.attributed_memory_stages.size(),3u);
+    EXPECT_EQ(identifiability.attributed_memory_stages[0].stage,n::MemoryStage::DesignSpectrum);
+    const auto & width=stage("projected-width-assessment");
+    EXPECT_EQ(width.memory_stage,n::MemoryStage::ProjectedWidthAssessment);
+    EXPECT_EQ(width.memory_status,n::MemoryStatus::Pass);
+    const auto & correction=stage("local-correction");
+    EXPECT_EQ(correction.memory_stage,n::MemoryStage::LocalCorrection);
+    EXPECT_EQ(correction.memory_status,n::MemoryStatus::Pass);
+    EXPECT_GT(correction.right_singular_vector_bytes,0u);
+    if(identifiability.current_rss_before_bytes) EXPECT_GT(*identifiability.current_rss_before_bytes,0u);
+    if(identifiability.process_peak_rss_bytes) EXPECT_GT(*identifiability.process_peak_rss_bytes,0u);
     const auto & derivative=n::DerivativeWorkForTesting();
     EXPECT_EQ(derivative.tile_count,1);
     EXPECT_EQ(derivative.projected_qr.role,"derivative-projected-qr");

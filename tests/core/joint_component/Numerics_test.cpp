@@ -811,11 +811,25 @@ TEST(JointComponentNumericsTest, MemoryPlannerUsesCheckedStageSpecificEstimates)
     EXPECT_LT(verification.estimated_peak_bytes,reference.estimated_peak_bytes);
     EXPECT_EQ(mappings.budget_bytes,3'200'000'000u);
     EXPECT_NE(mappings.estimated_peak_bytes,state.estimated_peak_bytes);
+    EXPECT_EQ(rank.estimated_peak_bytes,189'288'489'472u);
+    EXPECT_EQ(target.estimated_peak_bytes,317'385'746'272u);
+    ASSERT_EQ(rank.attributed_stages.size(),3u);
+    EXPECT_EQ(rank.attributed_stages[0].stage,n::MemoryStage::DesignSpectrum);
+    EXPECT_EQ(rank.attributed_stages[1].stage,n::MemoryStage::ProjectedWidthAssessment);
+    EXPECT_EQ(rank.attributed_stages[2].stage,n::MemoryStage::LocalCorrection);
+    EXPECT_EQ(rank.temporary_bytes,std::max({rank.attributed_stages[0].temporary_bytes,
+        rank.attributed_stages[1].temporary_bytes,rank.attributed_stages[2].temporary_bytes}));
+    ASSERT_EQ(target.attributed_stages.size(),2u);
+    EXPECT_EQ(target.attributed_stages[0].stage,n::MemoryStage::TargetGeometry);
+    EXPECT_EQ(target.attributed_stages[1].stage,n::MemoryStage::TargetLocalCorrection);
 
     auto validation=large; validation.identity_validation_bytes=3'200'000'000;
     EXPECT_EQ(n::PlanMemory(validation,n::MemoryStage::ProblemConstruction).status,n::MemoryStatus::Reject);
     auto overflow=large; overflow.component_blocks=std::numeric_limits<std::size_t>::max();
     EXPECT_EQ(n::PlanMemory(overflow,n::MemoryStage::StructuralConstruction).status,n::MemoryStatus::Overflow);
+    auto tile_overflow=large; tile_overflow.maximum_tile_rows=std::numeric_limits<std::size_t>::max();
+    EXPECT_EQ(n::PlanMemory(tile_overflow,n::MemoryStage::DesignSpectrum).status,n::MemoryStatus::Overflow);
+    EXPECT_EQ(n::PlanMemory(tile_overflow,n::MemoryStage::TargetIdentifiability).status,n::MemoryStatus::Overflow);
 }
 
 TEST(JointComponentNumericsTest, StreamingStateMatchesSparseGlobalEvaluation)

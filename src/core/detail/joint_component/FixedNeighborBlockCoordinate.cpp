@@ -766,13 +766,25 @@ FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
     }
     if(out.verification_memory_estimate.estimated_peak_bytes>out.verification_memory_estimate.budget_bytes/2)
         LogMemoryEstimate(out.verification_memory_estimate);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    AssessmentStageTimerForTesting primary_stage("endpoint-primary-evaluation",y.size(),state.eta.size(),
+        &out.verification_memory_estimate);
+#endif
     const auto primary_started=Clock::now();
     const auto endpoint=EvaluateStateStreaming(domain,y,state.eta,state.beta,context,
         ProfileEvaluationRole::AcceptedEndpoint,profile_work);
     const double primary_seconds=Seconds(primary_started);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    primary_stage.Finish();
+    AssessmentStageTimerForTesting replay_stage("independent-streaming-replay",y.size(),state.eta.size(),
+        &out.verification_memory_estimate);
+#endif
     const auto replay_started=Clock::now();
     const auto replay=CheckIndependentReplay(domain,y,endpoint,context);
     const double replay_seconds=Seconds(replay_started);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    replay_stage.Finish();
+#endif
     out.assessment=AssessEvaluated(domain,y,endpoint,replay,context,true,resident_override);
     out.assessment.verification_memory_estimate=out.verification_memory_estimate;
     out.assessment.primary_endpoint_seconds=primary_seconds;

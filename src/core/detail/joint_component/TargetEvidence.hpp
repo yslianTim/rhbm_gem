@@ -12,6 +12,7 @@ struct TargetGeometry
     bool valid{},boundary{},threshold_sensitive{};
     std::string reason;
 };
+MemoryEstimate TargetIdentifiabilityMemoryEstimate(const JointProblemInput &,const JointParameterLayout &,std::size_t);
 TargetGeometry BuildTargetGeometry(const Domain &,VectorRef,const JointState &,const EvaluationContext &);
 JointTargetEvidence AssessTargetState(const JointProblem &,const JointParameterLayout &,
     const std::optional<JointState> &,const std::vector<JointCheck> &,JointEvidenceScope,std::size_t);

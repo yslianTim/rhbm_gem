@@ -108,9 +108,21 @@ class JointBenchmarkContractTest(unittest.TestCase):
             'search_converged': True, 'search_reason': 'block-stationary',
             'endpoint_certified': True, 'runtime_convergence': 'Passed',
             'objective': .1, 'sweep_telemetry': [],
+            'assessment_stage_telemetry': [{
+                'name': 'numerical-identifiability', 'memory_status': 'REJECT',
+                'estimated_peak_bytes': 189484131163, 'current_rss_before_bytes': None,
+                'process_peak_rss_bytes': 633176064,
+            }],
+            'production_reference_solve_calls': 0,
+            'reference_qr_factorization_calls_total': 0,
         }})
         self.assertTrue(solve['qualified'])
         self.assertNotIn('global_legacy_compact', solve['details'])
+        self.assertEqual(solve['details']['assessment_stage_telemetry'][0]['memory_status'], 'REJECT')
+        self.assertIsNone(solve['details']['assessment_stage_telemetry'][0]['current_rss_before_bytes'])
+        self.assertEqual(solve['details']['assessment_stage_telemetry'][0]['process_peak_rss_bytes'], 633176064)
+        self.assertEqual(solve['details']['production_reference_solve_calls'], 0)
+        self.assertEqual(solve['details']['reference_qr_factorization_calls_total'], 0)
 
 
 def smoke(build):

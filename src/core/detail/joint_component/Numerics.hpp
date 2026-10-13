@@ -231,6 +231,15 @@ struct AssessmentStageWork
     int calls{},completed_calls{};
     Eigen::Index rows{},columns{};
     double seconds{};
+    bool memory_estimate_available{};
+    MemoryStage memory_stage{MemoryStage::ProblemConstruction};
+    MemoryStatus memory_status{MemoryStatus::Pass};
+    std::size_t estimated_resident_bytes{},estimated_temporary_bytes{},estimated_peak_bytes{},budget_bytes{};
+    std::string memory_preflight_reason;
+    std::size_t sparse_design_bytes{},dense_factor_bytes{},factor_workspace_bytes{},right_singular_vector_bytes{},right_null_space_bytes{};
+    std::size_t factor_rows{},factor_columns{},maximum_tile_rows{};
+    std::vector<MemoryStageEstimate> attributed_memory_stages;
+    std::optional<std::size_t> current_rss_before_bytes,current_rss_after_bytes,process_peak_rss_bytes;
 };
 struct AssessmentWork
 {
@@ -243,12 +252,12 @@ struct AssessmentWork
 AssessmentWork & AssessmentWorkForTesting();
 using AssessmentStageObserverForTesting=void (*)(const AssessmentWork &,void *);
 void SetAssessmentStageObserverForTesting(AssessmentStageObserverForTesting,void *);
-void BeginAssessmentStageForTesting(const std::string &,Eigen::Index,Eigen::Index);
+void BeginAssessmentStageForTesting(const std::string &,Eigen::Index,Eigen::Index,const MemoryEstimate * = nullptr);
 void FinishAssessmentStageForTesting(const std::string &,double,bool);
 class AssessmentStageTimerForTesting
 {
 public:
-    AssessmentStageTimerForTesting(std::string,Eigen::Index,Eigen::Index);
+    AssessmentStageTimerForTesting(std::string,Eigen::Index,Eigen::Index,const MemoryEstimate * = nullptr);
     ~AssessmentStageTimerForTesting();
     AssessmentStageTimerForTesting(const AssessmentStageTimerForTesting &)=delete;
     AssessmentStageTimerForTesting & operator=(const AssessmentStageTimerForTesting &)=delete;

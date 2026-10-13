@@ -18,7 +18,7 @@ Matrix SquareCompact(const Matrix & r)
 {
     Matrix out=Matrix::Zero(r.cols(),r.cols()); out.topRows(r.rows())=r; return out;
 }
-MemoryEstimate TargetIdentifiabilityMemoryEstimate(const JointProblemInput & input,const JointParameterLayout & layout,
+MemoryEstimate TargetIdentifiabilityMemoryEstimateImpl(const JointProblemInput & input,const JointParameterLayout & layout,
     std::size_t rows)
 {
     MemoryShape shape; shape.component_atoms=layout.full_atoms.size(); shape.component_observations=rows;
@@ -26,7 +26,17 @@ MemoryEstimate TargetIdentifiabilityMemoryEstimate(const JointProblemInput & inp
         auto estimate=PlanMemory(shape,MemoryStage::TargetIdentifiability);
         estimate.status=MemoryStatus::Overflow; estimate.reason="size-overflow"; return estimate;
     };
-    if(!CheckedMultiplyBytes(shape.component_atoms,3,shape.component_target_columns)) return overflow();
+    if(!CheckedMultiplyBytes(shape.component_atoms,2,shape.component_design_columns) ||
+        !CheckedMultiplyBytes(shape.component_atoms,3,shape.component_jacobian_columns)) return overflow();
+    shape.component_width_columns=shape.component_atoms;
+    shape.maximum_tile_rows=derivative_tile_rows;
+    shape.component_free_columns=shape.component_design_columns;
+    for(const auto atom:layout.full_atoms)
+        if(input.selection_domain && std::binary_search(input.selection_domain->target_indices.begin(),
+            input.selection_domain->target_indices.end(),atom))
+            if(!CheckedAddBytes(shape.component_target_atoms,1,shape.component_target_atoms)) return overflow();
+    shape.component_halo_atoms=shape.component_atoms-shape.component_target_atoms;
+    if(!CheckedMultiplyBytes(shape.component_target_atoms,3,shape.component_target_columns)) return overflow();
     for(const auto atom:layout.full_atoms)
         if(atom>=input.support.size() ||
             !CheckedAddBytes(shape.component_support_entries,input.support[atom].size(),shape.component_support_entries))
@@ -47,6 +57,9 @@ MemoryEstimate TargetIdentifiabilityMemoryEstimate(const JointProblemInput & inp
     return PlanMemory(shape,MemoryStage::TargetIdentifiability);
 }
 }
+MemoryEstimate TargetIdentifiabilityMemoryEstimate(const JointProblemInput & input,const JointParameterLayout & layout,
+    std::size_t rows)
+{return TargetIdentifiabilityMemoryEstimateImpl(input,layout,rows);}
 TargetGeometry BuildTargetGeometry(const Domain & domain,VectorRef y,const JointState & state,const EvaluationContext & context)
 {
     TargetGeometry out;
@@ -113,12 +126,19 @@ JointTargetEvidence AssessTargetState(const JointProblem & problem,const JointPa
             c.name=="assembly-mapping" || c.name=="assembled-consistency" ||
             c.name=="inner" || c.name=="kkt" || c.name=="assembled-profile")
             out.checks.push_back(c);
+    MemoryEstimate target_memory;
     if(state)
     {
-        const auto estimate=TargetIdentifiabilityMemoryEstimate(input,layout,layout.informative_rows.size());
-        if(estimate.status!=MemoryStatus::Pass || estimate.estimated_peak_bytes>estimate.budget_bytes/2)
-            LogMemoryEstimate(estimate);
-        if(estimate.status!=MemoryStatus::Pass)
+        target_memory=TargetIdentifiabilityMemoryEstimate(input,layout,layout.informative_rows.size());
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        AssessmentStageTimerForTesting preflight_stage("target-memory-preflight",
+            static_cast<Eigen::Index>(layout.informative_rows.size()),
+            static_cast<Eigen::Index>(target_memory.shape.component_jacobian_columns),&target_memory);
+        preflight_stage.Finish();
+#endif
+        if(target_memory.status!=MemoryStatus::Pass || target_memory.estimated_peak_bytes>target_memory.budget_bytes/2)
+            LogMemoryEstimate(target_memory);
+        if(target_memory.status!=MemoryStatus::Pass)
         {
             const auto reason=std::string("resource-limit:target-identifiability");
             for(const auto atom:layout.full_atoms) out.atoms.push_back({atom,Status::Unavailable,{},reason});
@@ -128,8 +148,8 @@ JointTargetEvidence AssessTargetState(const JointProblem & problem,const JointPa
             check("target-identifiability",Status::Unavailable,reason);
             check("target-local-correction",Status::Unavailable,reason);
             check("target-memory-preflight",Status::Unavailable,
-                std::string("resource-limit:target-identifiability:")+estimate.reason,
-                static_cast<double>(estimate.estimated_peak_bytes),static_cast<double>(estimate.budget_bytes));
+                std::string("resource-limit:target-identifiability:")+target_memory.reason,
+                static_cast<double>(target_memory.estimated_peak_bytes),static_cast<double>(target_memory.budget_bytes));
             return out;
         }
     }
@@ -137,7 +157,18 @@ JointTargetEvidence AssessTargetState(const JointProblem & problem,const JointPa
     auto context=ProfileContext(data.context,layout,static_cast<Eigen::Index>(original_rows));
     const auto domain=ProfileDomain(data.domain,layout);
     const Vector y=SelectValues(data.y,{layout.informative_rows.begin(),layout.informative_rows.end()});
-    if(state) geometry=BuildTargetGeometry(domain,y,*state,context);
+    if(state)
+    {
+        const auto geometry_memory=PlanMemory(target_memory.shape,MemoryStage::TargetGeometry,target_memory.budget_bytes);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        AssessmentStageTimerForTesting geometry_stage("target-geometry",y.size(),
+            static_cast<Eigen::Index>(target_memory.shape.component_jacobian_columns),&geometry_memory);
+#endif
+        geometry=BuildTargetGeometry(domain,y,*state,context);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        geometry_stage.Finish();
+#endif
+    }
     else geometry.reason="missing-component-state";
     const bool usable=geometry.valid && !geometry.threshold_sensitive;
     bool targets_identified=true; std::size_t targets{};
@@ -178,36 +209,51 @@ JointTargetEvidence AssessTargetState(const JointProblem & problem,const JointPa
         !usable ? geometry.reason : targets_identified ? "" : "target-confounded-with-nuisance");
     if(!usable || !targets_identified)
     {check("target-local-correction",Status::Unavailable,!usable ? geometry.reason : "target-unidentified"); return out;}
+    // The per-atom null-space checks and output copies are complete. Release the
+    // full right-vector matrix before preparing the local correction.
+    geometry.svd=CompactSvdResult{}; geometry.scales=Vector{};
     const auto & e=geometry.endpoint;
-    const auto prepared=PrepareDerivative(e,context.scale,&context);
-    const auto reduced=ReduceDerivative(prepared,e.residual,false);
-    if(!reduced.valid) {check("target-local-correction",Status::Unavailable,reduced.reason); return out;}
-    Matrix compact=SquareCompact(reduced.jacobian);
-    Vector rhs=Vector::Zero(compact.rows()); rhs.head(reduced.response.size())=-reduced.response;
-    const auto step=EvaluateRank(compact,{context.rank,compact.cols()},&rhs,CompactSvdVectors::Right);
-    if(step.valid) out.ranks.push_back({"undamped-full-profile-step",scope,static_cast<std::size_t>(step.rank),step.threshold,Values(step.singular_values)});
-    if(!step.valid || Sensitive(step))
-    {check("target-local-correction",Status::Unavailable,step.valid ? "profile-step-rank-threshold-sensitive" : "profile-step-rank-unavailable"); return out;}
-    double correction{},leakage{};
-    for(std::size_t a=0;a<layout.full_atoms.size();++a)
     {
-        if(!std::binary_search(input.selection_domain->target_indices.begin(),input.selection_domain->target_indices.end(),layout.full_atoms[a])) continue;
-        Matrix map=Matrix::Zero(3,compact.cols());
-        for(int k=0;k<2;++k)
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        const auto correction_memory=PlanMemory(target_memory.shape,MemoryStage::TargetLocalCorrection,
+            target_memory.budget_bytes);
+        AssessmentStageTimerForTesting correction_stage("target-local-correction",
+            static_cast<Eigen::Index>(target_memory.shape.component_width_columns),
+            static_cast<Eigen::Index>(target_memory.shape.component_width_columns),&correction_memory);
+#endif
+        const auto prepared=PrepareDerivative(e,context.scale,&context);
+        const auto reduced=ReduceDerivative(prepared,e.residual,false);
+        if(!reduced.valid) {check("target-local-correction",Status::Unavailable,reduced.reason); return out;}
+        Matrix compact=SquareCompact(reduced.jacobian);
+        Vector rhs=Vector::Zero(compact.rows()); rhs.head(reduced.response.size())=-reduced.response;
+        const auto step=EvaluateRank(compact,{context.rank,compact.cols()},&rhs,CompactSvdVectors::Right);
+        if(step.valid) out.ranks.push_back({"undamped-full-profile-step",scope,static_cast<std::size_t>(step.rank),step.threshold,Values(step.singular_values)});
+        if(!step.valid || Sensitive(step))
         {
-            const auto col=2*static_cast<Eigen::Index>(a)+k;
-            map.row(k)=-(prepared.coefficients.row(col)+prepared.correction.row(col))/
-                (e.x.col(col).norm()*(1+std::abs(e.beta(col))));
+            check("target-local-correction",Status::Unavailable,
+                step.valid ? "profile-step-rank-threshold-sensitive" : "profile-step-rank-unavailable"); return out;
         }
-        map(2,static_cast<Eigen::Index>(a))=1;
-        correction=std::max(correction,(map*step.solution).lpNorm<Eigen::Infinity>());
-        const Matrix null=map*step.right_vectors.rightCols(step.right_vectors.cols()-step.rank);
-        leakage=std::max(leakage,null.norm()/std::max(1.,map.norm()));
+        double correction{},leakage{};
+        for(std::size_t a=0;a<layout.full_atoms.size();++a)
+        {
+            if(!std::binary_search(input.selection_domain->target_indices.begin(),input.selection_domain->target_indices.end(),layout.full_atoms[a])) continue;
+            Matrix map=Matrix::Zero(3,compact.cols());
+            for(int k=0;k<2;++k)
+            {
+                const auto col=2*static_cast<Eigen::Index>(a)+k;
+                map.row(k)=-(prepared.coefficients.row(col)+prepared.correction.row(col))/
+                    (e.x.col(col).norm()*(1+std::abs(e.beta(col))));
+            }
+            map(2,static_cast<Eigen::Index>(a))=1;
+            correction=std::max(correction,(map*step.solution).lpNorm<Eigen::Infinity>());
+            const Matrix null=map*step.right_vectors.rightCols(step.right_vectors.cols()-step.rank);
+            leakage=std::max(leakage,null.norm()/std::max(1.,map.norm()));
+        }
+        check("target-local-correction",leakage>1e-10 ? Status::Unavailable : correction<=1e-10 ? Status::Passed : Status::Failed,
+            leakage>1e-10 ? "nonunique-target-profile-step" : "",correction,1e-10);
+        check("target-step-null-space",leakage<=1e-10 ? Status::Passed : Status::Unavailable,
+            leakage<=1e-10 ? "" : "nonunique-target-profile-step",leakage,1e-10);
     }
-    check("target-local-correction",leakage>1e-10 ? Status::Unavailable : correction<=1e-10 ? Status::Passed : Status::Failed,
-        leakage>1e-10 ? "nonunique-target-profile-step" : "",correction,1e-10);
-    check("target-step-null-space",leakage<=1e-10 ? Status::Passed : Status::Unavailable,
-        leakage<=1e-10 ? "" : "nonunique-target-profile-step",leakage,1e-10);
     return out;
 }
 JointCheckStatus TargetConvergence(const std::optional<JointTargetEvidence> & evidence,bool state)

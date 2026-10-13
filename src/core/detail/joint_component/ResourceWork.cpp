@@ -3,9 +3,19 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <algorithm>
 #include <cstring>
+#include <fstream>
 #include <iomanip>
 #include <limits>
 #include <sstream>
+#if defined(__APPLE__) || defined(__linux__)
+#include <sys/resource.h>
+#endif
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#include <mach/task_info.h>
+#elif defined(__linux__)
+#include <unistd.h>
+#endif
 
 namespace rhbm_gem::core::joint_component {
 bool CheckedAddBytes(std::size_t a,std::size_t b,std::size_t & out)
@@ -27,11 +37,16 @@ bool AddProduct2D(std::size_t & total,std::size_t rows,std::size_t columns,std::
 {
     std::size_t count{}; return CheckedMultiplyBytes(rows,columns,count) && AddProduct(total,count,width);
 }
-bool AddSquare(std::size_t & total,std::size_t n,std::size_t multiplier=1)
+bool AddTileWorkspace(std::size_t & total,std::size_t tile_rows,std::size_t columns)
 {
-    std::size_t square{},bytes{};
-    return CheckedMultiplyBytes(n,n,square) && CheckedMultiplyBytes(square,sizeof(double),bytes) &&
-        CheckedMultiplyBytes(bytes,multiplier,bytes) && CheckedAddBytes(total,bytes,total);
+    std::size_t rows{}; return CheckedMultiplyBytes(tile_rows,2,rows) &&
+        AddProduct2D(total,rows,columns,sizeof(double));
+}
+bool AddTargetGeometryRetained(std::size_t & total,const MemoryShape & shape)
+{
+    return AddProduct(total,shape.component_support_entries,2*(sizeof(double)+sizeof(Eigen::Index))) &&
+        AddProduct(total,shape.component_observations,3*sizeof(double)) &&
+        AddProduct(total,shape.component_atoms,16*sizeof(double)+4*sizeof(Eigen::Index));
 }
 std::string Bytes(std::size_t value)
 {
@@ -41,6 +56,14 @@ std::string Bytes(std::size_t value)
 }
 void Overflow(MemoryEstimate & estimate)
 {estimate.status=MemoryStatus::Overflow; estimate.reason="size-overflow";}
+MemoryStageEstimate Attribute(const MemoryEstimate & estimate)
+{
+    const auto & s=estimate.shape;
+    return {estimate.stage,estimate.resident_bytes,estimate.temporary_bytes,estimate.estimated_peak_bytes,
+        estimate.budget_bytes,estimate.sparse_design_bytes,estimate.dense_factor_bytes,
+        estimate.factor_workspace_bytes,estimate.right_singular_vector_bytes,estimate.right_null_space_bytes,s.maximum_tile_rows,
+        estimate.factor_rows,estimate.factor_columns,estimate.status,estimate.reason};
+}
 }
 std::optional<std::size_t> EstimateSnapshotBytes(const JointProblemInput & input)
 {
@@ -102,7 +125,12 @@ const char * MemoryStageName(MemoryStage stage)
     case MemoryStage::EndpointVerification: return "endpoint-verification";
     case MemoryStage::ReferenceSolve: return "reference-solve";
     case MemoryStage::RankAssessment: return "rank-assessment";
+    case MemoryStage::DesignSpectrum: return "design-spectrum";
+    case MemoryStage::ProjectedWidthAssessment: return "projected-width-assessment";
+    case MemoryStage::LocalCorrection: return "local-correction";
     case MemoryStage::TargetIdentifiability: return "target-identifiability";
+    case MemoryStage::TargetGeometry: return "target-geometry";
+    case MemoryStage::TargetLocalCorrection: return "target-local-correction";
     }
     return "unknown";
 }
@@ -186,29 +214,106 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
     }
     case MemoryStage::RankAssessment:
     {
-        // DesignSpectrum uses the current dense reference QR; derivative assessment then
-        // holds free-column by width arrays and compact projected/Jacobian factors.
-        const auto widths=atoms;
-        std::size_t derivative{},design_columns{},factor{},workspace{},spectrum{};
-        ok=AddProduct2D(derivative,free,widths,3*sizeof(double)) &&
-            AddProduct2D(derivative,widths,widths,2*sizeof(double)) &&
-            AddProduct2D(derivative,2*8192,widths,sizeof(double)) &&
-            AddProduct(derivative,entries,6*(sizeof(double)+sizeof(Eigen::Index))) &&
-            CheckedMultiplyBytes(atoms,2,design_columns) &&
-            CheckedMultiplyBytes(design_columns,design_columns,factor) &&
+        const auto design=PlanMemory(shape,MemoryStage::DesignSpectrum,budget);
+        const auto projected=PlanMemory(shape,MemoryStage::ProjectedWidthAssessment,budget);
+        const auto correction=PlanMemory(shape,MemoryStage::LocalCorrection,budget);
+        if(design.status==MemoryStatus::Overflow || projected.status==MemoryStatus::Overflow ||
+            correction.status==MemoryStatus::Overflow) {ok=false; break;}
+        temporary=std::max({design.temporary_bytes,projected.temporary_bytes,correction.temporary_bytes});
+        out.attributed_stages={Attribute(design),Attribute(projected),Attribute(correction)};
+        break;
+    }
+    case MemoryStage::DesignSpectrum:
+    {
+        // DesignSpectrum calls the dense tiled ReferenceQR rank primitive. These are
+        // sparse copies and dense factor work, not the removed production reference solve.
+        std::size_t columns{},factor{},workspace{},sparse{};
+        columns=shape.component_design_columns;
+        if(!columns) ok=CheckedMultiplyBytes(atoms,2,columns);
+        ok=ok && CheckedMultiplyBytes(columns,columns,factor) &&
             CheckedMultiplyBytes(factor,sizeof(double),factor) &&
             CheckedMultiplyBytes(factor,3,workspace) &&
-            AddProduct(workspace,design_columns,2*8192*sizeof(double)) &&
-            CheckedAddBytes(factor,workspace,spectrum) &&
-            AddProduct(spectrum,entries,4*(sizeof(double)+sizeof(Eigen::Index)));
-        if(ok) temporary=std::max(derivative,spectrum);
+            AddTileWorkspace(workspace,shape.maximum_tile_rows,columns) &&
+            AddProduct(sparse,entries,4*(sizeof(double)+sizeof(Eigen::Index))) &&
+            CheckedAddBytes(factor,workspace,temporary) && CheckedAddBytes(temporary,sparse,temporary);
+        if(ok)
+        {
+            out.sparse_design_bytes=sparse; out.dense_factor_bytes=factor;
+            out.factor_workspace_bytes=workspace; out.factor_rows=columns; out.factor_columns=columns;
+        }
+        break;
+    }
+    case MemoryStage::ProjectedWidthAssessment:
+    case MemoryStage::LocalCorrection:
+    {
+        const auto widths=shape.component_width_columns ? shape.component_width_columns : atoms;
+        std::size_t free_width{},width_factor{},right_vectors{},factor_total{},tile{},sparse{};
+        ok=AddProduct2D(free_width,free,widths,3*sizeof(double)) &&
+            AddProduct2D(width_factor,widths,widths,sizeof(double)) &&
+            AddTileWorkspace(tile,shape.maximum_tile_rows,widths) &&
+            AddProduct(sparse,entries,6*(sizeof(double)+sizeof(Eigen::Index)));
+        right_vectors=width_factor;
+        ok=ok && CheckedAddBytes(width_factor,right_vectors,factor_total) &&
+            CheckedAddBytes(free_width,factor_total,temporary) &&
+            CheckedAddBytes(temporary,tile,temporary) && CheckedAddBytes(temporary,sparse,temporary);
+        if(ok)
+        {
+            out.sparse_design_bytes=sparse; out.dense_factor_bytes=width_factor;
+            out.right_singular_vector_bytes=right_vectors;
+            ok=CheckedAddBytes(free_width,tile,out.factor_workspace_bytes);
+            out.factor_rows=widths; out.factor_columns=widths;
+        }
         break;
     }
     case MemoryStage::TargetIdentifiability:
     {
-        const auto columns=shape.component_target_columns;
-        ok=AddProduct(temporary,entries,6*(sizeof(double)+sizeof(Eigen::Index))) &&
-            AddSquare(temporary,columns,3) && AddProduct(temporary,columns,2*8192*sizeof(double));
+        const auto geometry=PlanMemory(shape,MemoryStage::TargetGeometry,budget);
+        const auto correction=PlanMemory(shape,MemoryStage::TargetLocalCorrection,budget);
+        if(geometry.status==MemoryStatus::Overflow || correction.status==MemoryStatus::Overflow)
+        {ok=false; break;}
+        if(correction.estimated_peak_bytes<out.resident_bytes) {ok=false; break;}
+        temporary=std::max(geometry.temporary_bytes,correction.estimated_peak_bytes-out.resident_bytes);
+        out.attributed_stages={Attribute(geometry),Attribute(correction)};
+        break;
+    }
+    case MemoryStage::TargetGeometry:
+    {
+        auto columns=shape.component_jacobian_columns ? shape.component_jacobian_columns : shape.component_target_columns;
+        std::size_t square{},factor{},tile{},sparse{};
+        ok=CheckedMultiplyBytes(columns,columns,square) &&
+            CheckedMultiplyBytes(square,sizeof(double),factor) && CheckedMultiplyBytes(factor,3,temporary) &&
+            AddTileWorkspace(tile,shape.maximum_tile_rows,columns) &&
+            AddProduct(sparse,entries,6*(sizeof(double)+sizeof(Eigen::Index))) &&
+            CheckedAddBytes(temporary,tile,temporary) && CheckedAddBytes(temporary,sparse,temporary);
+        if(ok)
+        {
+            out.sparse_design_bytes=sparse; out.dense_factor_bytes=factor;
+            out.right_singular_vector_bytes=factor; out.right_null_space_bytes=factor;
+            ok=CheckedAddBytes(factor,tile,out.factor_workspace_bytes);
+            out.factor_rows=columns; out.factor_columns=columns;
+        }
+        break;
+    }
+    case MemoryStage::TargetLocalCorrection:
+    {
+        const auto widths=shape.component_width_columns ? shape.component_width_columns : atoms;
+        std::size_t free_width{},width_factor{},right_vectors{},factor_total{},tile{},sparse{};
+        ok=AddTargetGeometryRetained(out.resident_bytes,shape) &&
+            AddProduct2D(free_width,free,widths,3*sizeof(double)) &&
+            AddProduct2D(width_factor,widths,widths,sizeof(double)) &&
+            AddTileWorkspace(tile,shape.maximum_tile_rows,widths) &&
+            AddProduct(sparse,entries,6*(sizeof(double)+sizeof(Eigen::Index)));
+        right_vectors=width_factor;
+        ok=ok && CheckedAddBytes(width_factor,right_vectors,factor_total) &&
+            CheckedAddBytes(free_width,factor_total,temporary) &&
+            CheckedAddBytes(temporary,tile,temporary) && CheckedAddBytes(temporary,sparse,temporary);
+        if(ok)
+        {
+            out.sparse_design_bytes=sparse; out.dense_factor_bytes=width_factor;
+            out.right_singular_vector_bytes=right_vectors; out.right_null_space_bytes=right_vectors;
+            ok=CheckedAddBytes(free_width,tile,out.factor_workspace_bytes);
+            out.factor_rows=widths; out.factor_columns=widths;
+        }
         break;
     }
     }
@@ -236,6 +341,37 @@ ReferenceFeasibility AssessReferenceFeasibility(const MemoryShape & shape,std::s
     else out.numerical_status="not-validated";
     return out;
 }
+std::optional<std::size_t> ProcessPeakRssBytes()
+{
+#if defined(__APPLE__) || defined(__linux__)
+    rusage usage{}; if(getrusage(RUSAGE_SELF,&usage)!=0 || usage.ru_maxrss<0) return {};
+#if defined(__APPLE__)
+    return static_cast<std::size_t>(usage.ru_maxrss);
+#else
+    std::size_t bytes{};
+    if(!CheckedMultiplyBytes(static_cast<std::size_t>(usage.ru_maxrss),1024,bytes)) return {};
+    return bytes;
+#endif
+#else
+    return {};
+#endif
+}
+std::optional<std::size_t> CurrentRssBytes()
+{
+#if defined(__APPLE__)
+    mach_task_basic_info_data_t info{}; mach_msg_type_number_t count=MACH_TASK_BASIC_INFO_COUNT;
+    if(task_info(mach_task_self(),MACH_TASK_BASIC_INFO,reinterpret_cast<task_info_t>(&info),&count)!=KERN_SUCCESS) return {};
+    return static_cast<std::size_t>(info.resident_size);
+#elif defined(__linux__)
+    std::ifstream statm("/proc/self/statm"); std::size_t total_pages{},resident_pages{};
+    const auto page_bytes=sysconf(_SC_PAGESIZE);
+    if(!(statm>>total_pages>>resident_pages) || page_bytes<=0 ||
+        resident_pages>std::numeric_limits<std::size_t>::max()/static_cast<std::size_t>(page_bytes)) return {};
+    return resident_pages*static_cast<std::size_t>(page_bytes);
+#else
+    return {};
+#endif
+}
 std::string FormatMemoryEstimate(const MemoryEstimate & estimate)
 {
     const auto & s=estimate.shape; std::ostringstream out;
@@ -254,6 +390,11 @@ std::string FormatMemoryEstimate(const MemoryEstimate & estimate)
        <<"  maximum_neighbor_atoms="<<s.maximum_neighbor_atoms<<'\n'
        <<"  free_columns="<<s.component_free_columns<<'\n'
        <<"  target_columns="<<s.component_target_columns<<'\n'
+       <<"  design_columns="<<s.component_design_columns<<'\n'
+       <<"  width_columns="<<s.component_width_columns<<'\n'
+       <<"  full_jacobian_columns="<<s.component_jacobian_columns<<'\n'
+       <<"  target_atoms="<<s.component_target_atoms<<'\n'
+       <<"  halo_atoms="<<s.component_halo_atoms<<'\n'
        <<"  identity_validation_scratch="<<Bytes(s.identity_validation_bytes)<<'\n'
        <<"  resident="<<Bytes(estimate.resident_bytes)<<'\n'
        <<"  temporary="<<Bytes(estimate.temporary_bytes)<<'\n'
@@ -261,6 +402,22 @@ std::string FormatMemoryEstimate(const MemoryEstimate & estimate)
        <<"  budget="<<Bytes(estimate.budget_bytes)<<'\n'
        <<"  preflight="<<MemoryStatusName(estimate.status);
     if(!estimate.reason.empty()) out<<'\n'<<"  reason="<<estimate.reason;
+    for(const auto & stage:estimate.attributed_stages)
+    {
+        out<<'\n'<<"  attributed_stage="<<MemoryStageName(stage.stage)
+           <<" status="<<MemoryStatusName(stage.status)
+           <<" resident="<<Bytes(stage.resident_bytes)
+           <<" temporary="<<Bytes(stage.temporary_bytes)
+           <<" estimated_peak="<<Bytes(stage.estimated_peak_bytes)
+           <<" factor="<<stage.factor_rows<<'x'<<stage.factor_columns
+           <<" factor_bytes="<<Bytes(stage.dense_factor_bytes)
+           <<" workspace_bytes="<<Bytes(stage.factor_workspace_bytes)
+           <<" right_singular_vector_bytes="<<Bytes(stage.right_singular_vector_bytes)
+           <<" right_null_space_bytes="<<Bytes(stage.right_null_space_bytes)
+           <<" sparse_design_bytes="<<Bytes(stage.sparse_design_bytes)
+           <<" maximum_tile_rows="<<stage.maximum_tile_rows;
+        if(!stage.reason.empty()) out<<" reason="<<stage.reason;
+    }
     return out.str();
 }
 void LogMemoryEstimate(const MemoryEstimate & estimate)

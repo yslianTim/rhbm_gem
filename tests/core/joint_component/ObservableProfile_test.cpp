@@ -472,6 +472,24 @@ TEST(JointObservableProfileTest, TargetEvidenceRequiresSelectionMetadata)
     EXPECT_FALSE(fit.target_evidence);
 }
 
+TEST(JointObservableProfileTest, TargetMemoryShapeSeparatesTargetsFromHaloColumns)
+{
+    const auto input=TwoRowHalo(false);
+    const core::JointProblem problem(input);
+    const auto estimate=n::TargetIdentifiabilityMemoryEstimate(input,problem.ParameterLayout(),
+        problem.ParameterLayout().informative_rows.size());
+    EXPECT_EQ(estimate.shape.component_atoms,2u);
+    EXPECT_EQ(estimate.shape.component_target_atoms,1u);
+    EXPECT_EQ(estimate.shape.component_halo_atoms,1u);
+    EXPECT_EQ(estimate.shape.component_design_columns,4u);
+    EXPECT_EQ(estimate.shape.component_width_columns,2u);
+    EXPECT_EQ(estimate.shape.component_target_columns,3u);
+    EXPECT_EQ(estimate.shape.component_jacobian_columns,6u);
+    ASSERT_EQ(estimate.attributed_stages.size(),2u);
+    EXPECT_EQ(estimate.attributed_stages[0].factor_rows,6u);
+    EXPECT_EQ(estimate.attributed_stages[1].factor_rows,2u);
+}
+
 TEST(JointObservableProfileTest, LargeTargetIdentifiabilityPreflightReturnsUnavailableEvidence)
 {
     constexpr std::size_t atoms=37'406;
@@ -488,6 +506,7 @@ TEST(JointObservableProfileTest, LargeTargetIdentifiabilityPreflightReturnsUnava
     const auto & data=core::JointProblemAccess::Get(problem);
     rhbm_gem::JointState state; state.ac.assign(2*atoms,1.0); state.b.assign(atoms,.55);
     state.log_b.assign(atoms,std::log(.55));
+    n::AssessmentWorkForTesting()={};
     const auto evidence=n::AssessTargetState(problem,problem.ParameterLayout(),state,{},
         rhbm_gem::JointEvidenceScope::AssembledGlobal,data.input->observations.size());
     const auto identifiability=std::find_if(evidence.checks.begin(),evidence.checks.end(),[](const auto & check) {
@@ -502,6 +521,24 @@ TEST(JointObservableProfileTest, LargeTargetIdentifiabilityPreflightReturnsUnava
     }));
     EXPECT_TRUE(evidence.ranks.empty());
     EXPECT_EQ(n::TargetConvergence(evidence,true),rhbm_gem::JointCheckStatus::Unavailable);
+    const auto & stages=n::AssessmentWorkForTesting().stages;
+    const auto preflight=std::find_if(stages.begin(),stages.end(),[](const auto & stage) {
+        return stage.name=="target-memory-preflight";
+    });
+    ASSERT_NE(preflight,stages.end());
+    EXPECT_EQ(preflight->memory_status,n::MemoryStatus::Reject);
+    EXPECT_EQ(preflight->calls,1); EXPECT_EQ(preflight->completed_calls,1);
+    EXPECT_GT(preflight->estimated_peak_bytes,preflight->budget_bytes);
+    ASSERT_EQ(preflight->attributed_memory_stages.size(),2u);
+    EXPECT_LT(preflight->attributed_memory_stages[1].resident_bytes,
+        preflight->attributed_memory_stages[0].resident_bytes+
+            preflight->attributed_memory_stages[0].right_null_space_bytes);
+    EXPECT_EQ(std::find_if(stages.begin(),stages.end(),[](const auto & stage) {
+        return stage.name=="target-geometry";
+    }),stages.end());
+    EXPECT_EQ(std::find_if(stages.begin(),stages.end(),[](const auto & stage) {
+        return stage.name=="target-local-correction";
+    }),stages.end());
 }
 
 TEST(JointObservableProfileTest, TargetEvidenceIsUnavailableAtTheRankThreshold)

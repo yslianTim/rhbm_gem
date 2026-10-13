@@ -3,6 +3,7 @@
 #include "support/CommandTestHelpers.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/StructuralPartition.hpp"
+#include "core/detail/joint_component/TargetEvidence.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -11,6 +12,7 @@
 #include <fstream>
 #include "support/JointSyntheticWorkload.hpp"
 #include <cmath>
+#include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -285,6 +287,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
         input->support[atom].push_back({atom,0.0});
         if(atom+1<atoms) input->support[atom].push_back({atom+1,0.0});
     }
+    input->selection_domain.emplace(); input->selection_domain->target_indices.resize(atoms);
+    std::iota(input->selection_domain->target_indices.begin(),input->selection_domain->target_indices.end(),std::size_t{0});
     const std::shared_ptr<const rhbm_gem::core::JointProblemInput> snapshot=input;
     n::Domain domain(snapshot); domain.rows=rows;
     rhbm_gem::JointParameterLayout layout; layout.full_atoms.resize(atoms);
@@ -335,6 +339,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     EXPECT_LT(endpoint_memory.estimated_peak_bytes,n::JointMemoryPlanningBudgetBytes);
     n::BlockCoordinateState accepted; accepted.eta=eta; accepted.beta=n::Vector::Zero(2*atoms);
     n::AssessmentWorkForTesting()={};
+    n::NumericsWorkForTesting()={};
     const auto certification=n::CertifyFixedNeighborEndpoint(endpoint_domain,y,accepted,endpoint_context);
     EXPECT_TRUE(certification.trust.primary_valid)<<certification.trust.reason;
     EXPECT_TRUE(certification.verified())<<certification.trust.reason;
@@ -343,6 +348,49 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     EXPECT_EQ(certification.assessment.rank_memory_estimate.status,n::MemoryStatus::Reject);
     EXPECT_FALSE(certification.assessment.design.has_value());
     EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
+    const auto & rank_stages=certification.assessment.rank_memory_estimate.attributed_stages;
+    ASSERT_EQ(rank_stages.size(),3u);
+    const auto target_rss_before=n::CurrentRssBytes();
+    const auto target_started=std::chrono::steady_clock::now();
+    const auto target_memory=n::TargetIdentifiabilityMemoryEstimate(*snapshot,layout,rows);
+    const double target_preflight_seconds=std::chrono::duration<double>(
+        std::chrono::steady_clock::now()-target_started).count();
+    const auto target_rss_after=n::CurrentRssBytes();
+    const auto target_process_peak=n::ProcessPeakRssBytes();
+    ASSERT_EQ(target_memory.shape.component_target_atoms,atoms);
+    ASSERT_EQ(target_memory.shape.component_halo_atoms,0u);
+    EXPECT_EQ(target_memory.status,n::MemoryStatus::Reject);
+    const auto & assessment_stages=n::AssessmentWorkForTesting().stages;
+    const auto find_assessment_stage=[&](const std::string & name)->const n::AssessmentStageWork * {
+        const auto found=std::find_if(assessment_stages.begin(),assessment_stages.end(),[&](const auto & stage) {
+            return stage.name==name;
+        });
+        return found==assessment_stages.end() ? nullptr : &*found;
+    };
+    const auto rank_aggregate=std::find_if(assessment_stages.begin(),assessment_stages.end(),[](const auto & stage) {
+        return stage.name=="numerical-identifiability";
+    });
+    ASSERT_NE(rank_aggregate,assessment_stages.end());
+    EXPECT_EQ(rank_aggregate->memory_status,n::MemoryStatus::Reject);
+    EXPECT_EQ(rank_aggregate->attributed_memory_stages.size(),3u);
+    EXPECT_EQ(std::find_if(assessment_stages.begin(),assessment_stages.end(),[](const auto & stage) {
+        return stage.name=="design-spectrum";
+    }),assessment_stages.end());
+    EXPECT_EQ(std::find_if(assessment_stages.begin(),assessment_stages.end(),[](const auto & stage) {
+        return stage.name=="projected-width-assessment";
+    }),assessment_stages.end());
+    EXPECT_EQ(std::find_if(assessment_stages.begin(),assessment_stages.end(),[](const auto & stage) {
+        return stage.name=="local-correction";
+    }),assessment_stages.end());
+    const auto current_rss=n::CurrentRssBytes();
+    const auto process_peak_rss=n::ProcessPeakRssBytes();
+    const auto target_geometry=target_memory.attributed_stages.at(0);
+    const auto target_correction=target_memory.attributed_stages.at(1);
+    const auto snapshot_bytes=n::EstimateSnapshotBytes(*snapshot);
+    ASSERT_TRUE(snapshot_bytes);
+    const auto * primary_stage=find_assessment_stage("endpoint-primary-evaluation");
+    const auto * replay_stage=find_assessment_stage("independent-streaming-replay");
+    ASSERT_NE(primary_stage,nullptr); ASSERT_NE(replay_stage,nullptr);
     RecordProperty("synthetic_support_entries",std::to_string(*support_entries));
     RecordProperty("prepared_mapping_bytes",std::to_string(result.prepared_mapping_bytes));
     RecordProperty("estimated_fixed_neighbor_peak_bytes",
@@ -352,6 +400,84 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
         <<" support_entries="<<*support_entries
         <<" endpoint_estimated_peak_bytes="<<endpoint_memory.estimated_peak_bytes
         <<" rank_estimated_peak_bytes="<<certification.assessment.rank_memory_estimate.estimated_peak_bytes
+        <<" design_spectrum_peak_bytes="<<rank_stages[0].estimated_peak_bytes
+        <<" projected_width_peak_bytes="<<rank_stages[1].estimated_peak_bytes
+        <<" local_correction_peak_bytes="<<rank_stages[2].estimated_peak_bytes
+        <<" target_identifiability_peak_bytes="<<target_memory.estimated_peak_bytes
+        <<" target_geometry_peak_bytes="<<target_geometry.estimated_peak_bytes
+        <<" target_local_correction_peak_bytes="<<target_correction.estimated_peak_bytes
+        <<" target_geometry_resident_bytes="<<target_geometry.resident_bytes
+        <<" target_geometry_temporary_bytes="<<target_geometry.temporary_bytes
+        <<" target_geometry_factor_bytes="<<target_geometry.dense_factor_bytes
+        <<" target_geometry_workspace_bytes="<<target_geometry.factor_workspace_bytes
+        <<" target_geometry_right_null_bytes="<<target_geometry.right_null_space_bytes
+        <<" target_geometry_sparse_bytes="<<target_geometry.sparse_design_bytes
+        <<" target_local_resident_bytes="<<target_correction.resident_bytes
+        <<" target_local_temporary_bytes="<<target_correction.temporary_bytes
+        <<" target_local_factor_bytes="<<target_correction.dense_factor_bytes
+        <<" target_local_workspace_bytes="<<target_correction.factor_workspace_bytes
+        <<" target_local_right_null_bytes="<<target_correction.right_null_space_bytes
+        <<" target_local_sparse_bytes="<<target_correction.sparse_design_bytes
+        <<" overall_estimated_peak_bytes="<<std::max({result.memory_estimate.estimated_peak_bytes,
+            result.global_state_memory_estimate.estimated_peak_bytes,endpoint_memory.estimated_peak_bytes,
+            certification.assessment.rank_memory_estimate.estimated_peak_bytes,target_memory.estimated_peak_bytes})
+        <<" problem_resident_bytes="<<*snapshot_bytes
+        <<" preparation_estimated_peak_bytes="<<result.memory_estimate.estimated_peak_bytes
+        <<" global_state_estimated_peak_bytes="<<result.global_state_memory_estimate.estimated_peak_bytes
+        <<" prepared_block_bytes="<<result.prepared_mapping_bytes
+        <<" affected_rows="<<result.memory_estimate.shape.affected_row_entries
+        <<" total_block_support_entries="<<result.memory_estimate.shape.total_block_support_entries
+        <<" maximum_block_rows="<<result.memory_estimate.shape.maximum_block_rows
+        <<" maximum_block_support_entries="<<result.memory_estimate.shape.maximum_block_support_entries
+        <<" blocks="<<result.memory_estimate.shape.component_blocks
+        <<" components=1 target_atoms="<<target_memory.shape.component_target_atoms
+        <<" halo_atoms="<<target_memory.shape.component_halo_atoms
+        <<" free_ac_columns="<<certification.assessment.rank_memory_estimate.shape.component_free_columns
+        <<" design_columns="<<certification.assessment.rank_memory_estimate.shape.component_design_columns
+        <<" width_columns="<<certification.assessment.rank_memory_estimate.shape.component_width_columns
+        <<" target_columns="<<target_memory.shape.component_target_columns
+        <<" jacobian_rows="<<target_memory.shape.component_observations
+        <<" jacobian_columns="<<target_memory.shape.component_jacobian_columns
+        <<" design_factor_dimensions="<<rank_stages[0].factor_rows<<"x"<<rank_stages[0].factor_columns
+        <<" design_dense_factor_bytes="<<rank_stages[0].dense_factor_bytes
+        <<" design_workspace_bytes="<<rank_stages[0].factor_workspace_bytes
+        <<" design_sparse_bytes="<<rank_stages[0].sparse_design_bytes
+        <<" projected_factor_dimensions="<<rank_stages[1].factor_rows<<"x"<<rank_stages[1].factor_columns
+        <<" projected_workspace_bytes="<<rank_stages[1].factor_workspace_bytes
+        <<" projected_right_vector_bytes="<<rank_stages[1].right_singular_vector_bytes
+        <<" correction_factor_dimensions="<<rank_stages[2].factor_rows<<"x"<<rank_stages[2].factor_columns
+        <<" correction_workspace_bytes="<<rank_stages[2].factor_workspace_bytes
+        <<" correction_right_vector_bytes="<<rank_stages[2].right_singular_vector_bytes
+        <<" primary_endpoint_seconds="<<certification.assessment.primary_endpoint_seconds
+        <<" independent_replay_seconds="<<certification.assessment.independent_replay_seconds
+        <<" rank_assessment_seconds="<<certification.assessment.rank_assessment_seconds
+        <<" primary_stage_rss_before_bytes="<<(primary_stage->current_rss_before_bytes ?
+            std::to_string(*primary_stage->current_rss_before_bytes) : "unavailable")
+        <<" primary_stage_rss_after_bytes="<<(primary_stage->current_rss_after_bytes ?
+            std::to_string(*primary_stage->current_rss_after_bytes) : "unavailable")
+        <<" replay_stage_rss_before_bytes="<<(replay_stage->current_rss_before_bytes ?
+            std::to_string(*replay_stage->current_rss_before_bytes) : "unavailable")
+        <<" replay_stage_rss_after_bytes="<<(replay_stage->current_rss_after_bytes ?
+            std::to_string(*replay_stage->current_rss_after_bytes) : "unavailable")
+        <<" rank_preflight_seconds="<<rank_aggregate->seconds
+        <<" rank_preflight_rss_before_bytes="<<(rank_aggregate->current_rss_before_bytes ?
+            std::to_string(*rank_aggregate->current_rss_before_bytes) : "unavailable")
+        <<" rank_preflight_rss_after_bytes="<<(rank_aggregate->current_rss_after_bytes ?
+            std::to_string(*rank_aggregate->current_rss_after_bytes) : "unavailable")
+        <<" target_preflight_seconds="<<target_preflight_seconds
+        <<" target_preflight_rss_before_bytes="<<(target_rss_before ?
+            std::to_string(*target_rss_before) : "unavailable")
+        <<" target_preflight_rss_after_bytes="<<(target_rss_after ?
+            std::to_string(*target_rss_after) : "unavailable")
+        <<" target_preflight_process_peak_rss_bytes="<<(target_process_peak ?
+            std::to_string(*target_process_peak) : "unavailable")
+        <<" current_rss_bytes="<<(current_rss ? std::to_string(*current_rss) : "unavailable")
+        <<" process_peak_rss_bytes="<<(process_peak_rss ? std::to_string(*process_peak_rss) : "unavailable")
+        <<" reference_qr_factorization_calls="<<n::NumericsWorkForTesting().reference
+        <<" endpoint_verification_status=Passed design_rank_status=ResourceLimit"
+        <<" projected_width_status=NotRun local_correction_status=NotRun"
+        <<" numerical_identifiability_status=Unavailable target_identifiability_status=ResourceLimit"
+        <<" runtime_convergence_status=Unavailable physical_input=not-measured"
         <<" endpoint_verification="<<(certification.verified()?"passed":"failed")
         <<" numerical_qualification="<<(certification.assessment.qualified?"passed":"unavailable")
         <<" reference_solve_calls="<<n::AssessmentWorkForTesting().reference_evaluations<<std::endl;

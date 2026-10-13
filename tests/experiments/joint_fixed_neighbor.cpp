@@ -14,16 +14,6 @@
 #include <limits>
 #include <numeric>
 #include <optional>
-#if defined(__APPLE__) || defined(__linux__)
-#include <sys/resource.h>
-#endif
-#if defined(__APPLE__)
-#include <mach/mach.h>
-#include <mach/task_info.h>
-#endif
-#if defined(__linux__)
-#include <unistd.h>
-#endif
 
 namespace {
 namespace n=rhbm_gem::core::joint_component;
@@ -32,34 +22,9 @@ using Clock=std::chrono::steady_clock;
 using Input=rhbm_gem::core::JointProblemInput;
 double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
 std::optional<std::size_t> PeakRssBytes()
-{
- #if defined(__APPLE__) || defined(__linux__)
-    rusage usage{}; if(getrusage(RUSAGE_SELF,&usage)!=0) return {};
-#if defined(__APPLE__)
-    return static_cast<std::size_t>(usage.ru_maxrss);
-#else
-    return static_cast<std::size_t>(usage.ru_maxrss)*1024;
-#endif
- #else
-    return {};
- #endif
-}
+{return n::ProcessPeakRssBytes();}
 std::optional<std::size_t> CurrentRssBytes()
-{
-#if defined(__APPLE__)
-    mach_task_basic_info_data_t info{}; mach_msg_type_number_t count=MACH_TASK_BASIC_INFO_COUNT;
-    if(task_info(mach_task_self(),MACH_TASK_BASIC_INFO,reinterpret_cast<task_info_t>(&info),&count)!=KERN_SUCCESS) return {};
-    return static_cast<std::size_t>(info.resident_size);
-#elif defined(__linux__)
-    std::ifstream statm("/proc/self/statm"); std::size_t total_pages{},resident_pages{};
-    const auto page_bytes=sysconf(_SC_PAGESIZE);
-    if(!(statm>>total_pages>>resident_pages) || page_bytes<=0 ||
-        resident_pages>std::numeric_limits<std::size_t>::max()/static_cast<std::size_t>(page_bytes)) return {};
-    return resident_pages*static_cast<std::size_t>(page_bytes);
-#else
-    return {};
-#endif
-}
+{return n::CurrentRssBytes();}
 const rhbm_gem::JointCheck * FindCheck(const rhbm_gem::core::JointFitResult & fit,const std::string & name)
 {
     const auto found=std::find_if(fit.evidence.begin(),fit.evidence.end(),[&](const auto & check) {
@@ -90,6 +55,27 @@ j::value Number(double value)
 {return std::isfinite(value) ? j::value(value) : j::value(nullptr);}
 j::value BytesValue(std::optional<std::size_t> value)
 {return value ? j::value(*value) : j::value(nullptr);}
+j::object MemoryStageEstimateJson(const n::MemoryStageEstimate & estimate)
+{
+    return {{"stage",n::MemoryStageName(estimate.stage)},
+        {"status",n::MemoryStatusName(estimate.status)},
+        {"reason",estimate.reason},
+        {"resident_bytes",estimate.resident_bytes},
+        {"temporary_bytes",estimate.temporary_bytes},
+        {"estimated_peak_bytes",estimate.estimated_peak_bytes},
+        {"budget_bytes",estimate.budget_bytes},
+        {"sparse_design_bytes",estimate.sparse_design_bytes},
+        {"dense_factor_bytes",estimate.dense_factor_bytes},
+        {"factor_workspace_bytes",estimate.factor_workspace_bytes},
+        {"right_singular_vector_bytes",estimate.right_singular_vector_bytes},
+        {"right_null_space_bytes",estimate.right_null_space_bytes},
+        {"factor_rows",estimate.factor_rows},{"factor_columns",estimate.factor_columns},
+        {"maximum_tile_rows",estimate.maximum_tile_rows}};
+}
+j::array MemoryStageEstimatesJson(const std::vector<n::MemoryStageEstimate> & estimates)
+{
+    j::array out; for(const auto & estimate:estimates) out.push_back(MemoryStageEstimateJson(estimate)); return out;
+}
 j::object MemoryEstimateJson(const n::MemoryEstimate & estimate)
 {
     return {{"stage",n::MemoryStageName(estimate.stage)},
@@ -98,7 +84,58 @@ j::object MemoryEstimateJson(const n::MemoryEstimate & estimate)
         {"resident_bytes",estimate.resident_bytes},
         {"temporary_bytes",estimate.temporary_bytes},
         {"estimated_peak_bytes",estimate.estimated_peak_bytes},
-        {"budget_bytes",estimate.budget_bytes}};
+        {"budget_bytes",estimate.budget_bytes},
+        {"sparse_design_bytes",estimate.sparse_design_bytes},
+        {"dense_factor_bytes",estimate.dense_factor_bytes},
+        {"factor_workspace_bytes",estimate.factor_workspace_bytes},
+        {"right_singular_vector_bytes",estimate.right_singular_vector_bytes},
+        {"right_null_space_bytes",estimate.right_null_space_bytes},
+        {"factor_rows",estimate.factor_rows},{"factor_columns",estimate.factor_columns},
+        {"maximum_tile_rows",estimate.shape.maximum_tile_rows},
+        {"component_atoms",estimate.shape.component_atoms},
+        {"component_rows",estimate.shape.component_observations},
+        {"support_entries",estimate.shape.component_support_entries},
+        {"free_columns",estimate.shape.component_free_columns},
+        {"design_columns",estimate.shape.component_design_columns},
+        {"width_columns",estimate.shape.component_width_columns},
+        {"target_atoms",estimate.shape.component_target_atoms},
+        {"halo_atoms",estimate.shape.component_halo_atoms},
+        {"target_columns",estimate.shape.component_target_columns},
+        {"jacobian_columns",estimate.shape.component_jacobian_columns},
+        {"attributed_stages",MemoryStageEstimatesJson(estimate.attributed_stages)}};
+}
+j::array AssessmentStagesJson()
+{
+    j::array out;
+    for(const auto & stage:n::AssessmentWorkForTesting().stages)
+    {
+        j::object row{{"name",stage.name},{"calls",stage.calls},{"completed_calls",stage.completed_calls},
+            {"rows",stage.rows},{"columns",stage.columns},{"elapsed_seconds",Number(stage.seconds)},
+            {"memory_estimate_available",stage.memory_estimate_available},
+            {"current_rss_before_bytes",BytesValue(stage.current_rss_before_bytes)},
+            {"current_rss_after_bytes",BytesValue(stage.current_rss_after_bytes)},
+            {"process_peak_rss_bytes",BytesValue(stage.process_peak_rss_bytes)}};
+        if(stage.memory_estimate_available)
+        {
+            row["memory_stage"]=n::MemoryStageName(stage.memory_stage);
+            row["memory_status"]=n::MemoryStatusName(stage.memory_status);
+            row["preflight_reason"]=stage.memory_preflight_reason;
+            row["estimated_resident_bytes"]=stage.estimated_resident_bytes;
+            row["estimated_temporary_bytes"]=stage.estimated_temporary_bytes;
+            row["estimated_peak_bytes"]=stage.estimated_peak_bytes;
+            row["budget_bytes"]=stage.budget_bytes;
+            row["sparse_design_bytes"]=stage.sparse_design_bytes;
+            row["dense_factor_bytes"]=stage.dense_factor_bytes;
+            row["factor_workspace_bytes"]=stage.factor_workspace_bytes;
+            row["right_singular_vector_bytes"]=stage.right_singular_vector_bytes;
+            row["right_null_space_bytes"]=stage.right_null_space_bytes;
+            row["factor_rows"]=stage.factor_rows; row["factor_columns"]=stage.factor_columns;
+            row["maximum_tile_rows"]=stage.maximum_tile_rows;
+            row["attributed_stages"]=MemoryStageEstimatesJson(stage.attributed_memory_stages);
+        }
+        out.push_back(std::move(row));
+    }
+    return out;
 }
 j::object ResourceCensusJson(const n::FixedNeighborDiagnosticResult & result)
 {
@@ -177,6 +214,7 @@ j::object AssessmentJson(const n::Assessment & assessment,const n::TrustEvidence
         {"rank_assessment_seconds",Number(assessment.rank_assessment_seconds)},
         {"endpoint_verification_memory",MemoryEstimateJson(assessment.verification_memory_estimate)},
         {"rank_assessment_memory",MemoryEstimateJson(assessment.rank_memory_estimate)},
+        {"assessment_stage_telemetry",AssessmentStagesJson()},
         {"primary_gradient_inf_norm",assessment.primary.gradient.size() ?
             Number(assessment.primary.gradient.lpNorm<Eigen::Infinity>()) : j::value(nullptr)},
         {"local_correction_inf_norm",Number(correction)},
@@ -460,6 +498,8 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"assessment_seconds",Number(neighbor.work.endpoint_verification_seconds)},
         {"reference_solve_seconds",0.0},
         {"reference_solve_calls",neighbor.work.local_profile_work.reference_evaluation.evaluations},
+        {"production_reference_solve_calls",n::AssessmentWorkForTesting().reference_evaluations},
+        {"reference_qr_factorization_calls_total",n::NumericsWorkForTesting().reference},
         {"endpoint_verification_seconds",Number(neighbor.work.endpoint_verification_seconds)},
         {"independent_replay_seconds",Number(neighbor.work.independent_replay_seconds)},
         {"rank_assessment_seconds",Number(neighbor.work.rank_assessment_seconds)},
@@ -484,6 +524,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"total_elapsed_seconds",neighbor_seconds}};
     neighbor_json["local_profile_work"]=ProfileWorkJson(neighbor.work.local_profile_work);
     neighbor_json["resource_census"]=ResourceCensusJson(neighbor);
+    neighbor_json["assessment_stage_telemetry"]=AssessmentStagesJson();
     neighbor_json["incremental_replay_validation"]=IncrementalReplayJson(neighbor.work,neighbor_policy.compare_incremental_replay);
     neighbor_json["rss_checkpoints"]=RssCheckpointsJson(rss_before,rss_after_preparation,rss_after_first_sweep,rss_after_certification);
     const auto peak_rss=PeakRssBytes();
