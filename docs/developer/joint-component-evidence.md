@@ -13,7 +13,8 @@ Gauss-Seidel, at most 200 sweeps, and at most one trusted accepted local update
 per block visit. Endpoint verification uses an independent streaming replay at
 the accepted parameters and constrained A/C KKT; it does not run a second
 global A/C solve. Full numerical qualification separately requires design
-rank, local correction and numerical identifiability. The current thresholds
+rank, projected-width rank and numerical identifiability. Target qualification
+requires target geometry and target identifiability. The current thresholds
 and versioned checks are recorded in the
 [production contract](joint-fixed-neighbor-experimental.md).
 
@@ -69,10 +70,10 @@ The complete concise record of those FixedNeighbor choices is in
   columns but only 37,406 unique supported rows. The production structural
   row-count check therefore proves full-design rank deficiency without QR or
   SVD; it does not give an exact rank or classify the 37,406-column free face.
-  The dense DesignSpectrum estimate remains 189,484,131,163 bytes, projected
-  width and local correction remain 61,453,268,315 bytes each, and target
-  identifiability remains 317,422,079,259 bytes. Those dense and downstream
-  stages are not run. The earlier process peak of 622,624,768 bytes covered
+  The dense DesignSpectrum estimate remains 189,484,131,163 bytes; projected-
+  width assessment is reduced to 39,065,926,939 bytes; target geometry remains
+  317,422,079,259 bytes. Local-correction workspaces are removed. Those dense
+  stages still exceed the planning budget and are not run. The earlier process peak of 622,624,768 bytes covered
   input, preparation, verification and the rejected preflights only. Per-stage
   shape, timing and RSS details are in the
   [component memory census](joint-component-memory-census.md).

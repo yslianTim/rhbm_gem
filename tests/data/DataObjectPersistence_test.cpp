@@ -612,6 +612,9 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
     fixed.metadata.solver=fixed_provenance;
     const auto fixed_json=io::Encode(fixed);
     const auto fixed_object=boost::json::parse(fixed_json).as_object();
+    auto downgraded_schema=fixed_object;
+    downgraded_schema["schema_version"]=7;
+    EXPECT_THROW(io::Decode(boost::json::serialize(downgraded_schema)),std::invalid_argument);
     EXPECT_EQ(fixed_object.at("metadata").as_object().at("solver").as_object()
         .at("fixed_neighbor_local_search").as_string(),"profile-lm");
     const auto fixed_decoded=io::Decode(fixed_json);
@@ -814,6 +817,62 @@ TEST(DataObjectPersistenceTest, JointCodecRejectsMalformedMappingsAndPreservesMi
     EXPECT_THROW(rg::WriteJointAnalysisResult(decoded,dir.path()/"missing"/"result.json",dir.path()/"atoms.csv"),std::runtime_error);
 }
 
+TEST(DataObjectPersistenceTest, SchemaSevenKeepsFailedCorrectionEvidenceAndStatus)
+{
+    namespace io=rg::joint_result_io;
+    auto record=SavedJointExample();
+    rg::JointSolverProvenance previous;
+    previous.search_method="fixed-neighbor";
+    previous.fixed_neighbor_core_atoms=12u;
+    previous.contract_version=rg::JointSolverProvenancePreviousContractVersion;
+    previous.sparse_backend="EIGEN";
+    previous.fixed_neighbor_policy_version=rg::FixedNeighborPreviousPolicyContractVersion;
+    previous.fixed_neighbor_maximum_sweeps=200;
+    previous.fixed_neighbor_order="forward";
+    previous.fixed_neighbor_local_search="profile-lm";
+    record.metadata.solver=previous;
+    auto & component=record.components.front();
+    component.target_runtime_convergence=rg::JointCheckStatus::Failed;
+    rg::JointTargetEvidence target;
+    target.contract="target-estimability-v1";
+    target.original_rows=component.rows.size();
+    target.atoms={{0,rg::JointCheckStatus::Passed,0.0,{}},{1,rg::JointCheckStatus::Passed,0.0,{}}};
+    target.checks={
+        {"conditional-ac-optimality",rg::JointCheckStatus::Passed,rg::JointEvidenceScope::ComponentLocal,{},{},{}},
+        {"independent-replay",rg::JointCheckStatus::Passed,rg::JointEvidenceScope::ComponentLocal,{},{},{}},
+        {"width-stationarity",rg::JointCheckStatus::Passed,rg::JointEvidenceScope::ComponentLocal,{},{},{}},
+        {"design-identifiability",rg::JointCheckStatus::Passed,rg::JointEvidenceScope::ComponentLocal,{},{},{}},
+        {"local-correction",rg::JointCheckStatus::Failed,rg::JointEvidenceScope::ComponentLocal,{},{},{}},
+        {"numerical-identifiability",rg::JointCheckStatus::Passed,rg::JointEvidenceScope::ComponentLocal,{},{},{}},
+        {"target-identifiability",rg::JointCheckStatus::Passed,rg::JointEvidenceScope::ComponentLocal,{},{},{}},
+        {"target-local-correction",rg::JointCheckStatus::Failed,rg::JointEvidenceScope::ComponentLocal,{},{},{}}};
+    component.target_evidence=target;
+    record.target_runtime_convergence=rg::JointCheckStatus::Failed;
+
+    auto saved=boost::json::parse(io::Encode(record)).as_object();
+    saved["schema_version"]=7;
+    const auto decoded=io::Decode(boost::json::serialize(saved));
+    EXPECT_EQ(decoded.components.front().runtime_convergence,rg::JointCheckStatus::Failed);
+    ASSERT_TRUE(decoded.components.front().evidence.size());
+    EXPECT_EQ(decoded.components.front().evidence.front().name,"local-correction");
+    EXPECT_EQ(decoded.components.front().evidence.front().status,rg::JointCheckStatus::Failed);
+    EXPECT_EQ(decoded.target_runtime_convergence,rg::JointCheckStatus::Failed);
+    EXPECT_EQ(decoded.components.front().target_runtime_convergence,rg::JointCheckStatus::Failed);
+    ASSERT_TRUE(decoded.components.front().target_evidence);
+    EXPECT_EQ(decoded.components.front().target_evidence->contract,"target-estimability-v1");
+    const auto target_correction=std::find_if(decoded.components.front().target_evidence->checks.begin(),
+        decoded.components.front().target_evidence->checks.end(),[](const auto & check) {
+            return check.name=="target-local-correction";
+        });
+    ASSERT_NE(target_correction,decoded.components.front().target_evidence->checks.end());
+    EXPECT_EQ(target_correction->status,rg::JointCheckStatus::Failed);
+
+    const auto round_trip=io::Decode(io::Encode(decoded));
+    EXPECT_EQ(round_trip.components.front().runtime_convergence,rg::JointCheckStatus::Failed);
+    EXPECT_EQ(round_trip.target_runtime_convergence,rg::JointCheckStatus::Failed);
+    EXPECT_EQ(round_trip.components.front().target_evidence->contract,"target-estimability-v1");
+}
+
 TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutEnteringScientificExports)
 {
     namespace io=rg::joint_result_io;
@@ -847,7 +906,7 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     record.metadata.solver=provenance;
 
     const auto json=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(json.at("schema_version").as_int64(),7);
+    EXPECT_EQ(json.at("schema_version").as_int64(),8);
     EXPECT_EQ(json.at("components").as_array()[0].at("candidate_diagnostic").at("candidate_status").as_string(),"uncertified");
     const auto decoded=io::Decode(boost::json::serialize(json));
     ASSERT_TRUE(decoded.components.front().candidate_diagnostic);

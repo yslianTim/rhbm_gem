@@ -247,12 +247,14 @@ TEST(JointComponentPartialSelectionTest, InitializationExceptionsKeepProvenanceW
     ASSERT_EQ(fit.components.size(),2);
     for(const auto & component:fit.components)
     {
-        EXPECT_FALSE(component.state);
+        ASSERT_TRUE(component.state);
         ASSERT_TRUE(component.candidate_diagnostic);
         EXPECT_TRUE(component.candidate_diagnostic->candidate_available);
+        EXPECT_EQ(component.candidate_diagnostic->endpoint_verification_status,core::JointCheckStatus::Passed);
+        EXPECT_EQ(component.candidate_diagnostic->numerical_qualification_status,core::JointCheckStatus::Passed);
     }
-    EXPECT_TRUE(initialization.valid); EXPECT_FALSE(fit.objective);
-    EXPECT_NE(fit.RuntimeConvergence(),core::JointCheckStatus::Passed);
+    EXPECT_TRUE(initialization.valid); EXPECT_TRUE(fit.objective);
+    EXPECT_EQ(fit.RuntimeConvergence(),core::JointCheckStatus::Passed);
     EXPECT_EQ(initialization.atoms[0].seed_source,"median-fallback");
     EXPECT_EQ(initialization.atoms[0].donor_count,1);
     EXPECT_FALSE(initialization.atoms[0].original_b);

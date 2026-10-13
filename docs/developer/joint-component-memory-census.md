@@ -1,6 +1,6 @@
 # Joint Component Assessment Memory Census
 
-This report records the current reference-free assessment preflight and the
+This report records the current correction-free assessment preflight and the
 one-way structural rank obstruction for the production-scale synthetic
 single-component shape. The structural check does not change numerical
 thresholds or produce an exact numerical rank.
@@ -34,7 +34,8 @@ thresholds or produce an exact numerical rank.
 The fixture is deliberately sparse: each atom contributes one or two support
 memberships. It is not a physical cryo-EM support graph. The tested state has
 zero amplitudes, so only the 37,406 charge columns are free in the rank-shape
-estimate; target correction conservatively budgets all 74,812 A/C columns.
+estimate; target geometry contains 112,218 columns for the complete A/C/log-B
+parameter vector.
 At the tested widths, each support membership contributes a nonzero Gaussian
 and charge design entry. The unique supported-row count is therefore 37,406,
 not the 40,523 sum of affected-row entries. Since 37,406 is below the 74,812
@@ -62,10 +63,8 @@ storage.
 | Endpoint verification | streaming | — | — | 625,051,683 | Pass |
 | Structural design check | 5,938,087 rows × 74,812 columns | 574,853,787 | 3,665,740 | 578,519,527 | Pass; full-design deficiency proven |
 | DesignSpectrum | 74,812 × 74,812 | 574,853,787 | 188,909,277,376 | 189,484,131,163 | ResourceLimit; NotRun |
-| Projected-width assessment | 37,406 × 37,406 | 574,853,787 | 60,878,414,528 | 61,453,268,315 | ResourceLimit; NotRun |
-| Local correction | 37,406 × 37,406 | 574,853,787 | 60,878,414,528 | 61,453,268,315 | ResourceLimit; NotRun |
+| Projected-width assessment | 37,406 × 37,406 | 574,853,787 | 38,491,073,152 | 39,065,926,939 | ResourceLimit; NotRun |
 | Target geometry | 112,218 × 112,218 | 477,151,131 | 316,944,928,128 | 317,422,079,259 | ResourceLimit; NotRun |
-| Target local correction | 37,406 × 37,406 | 628,044,131 | 94,459,426,592 | 95,087,470,723 | ResourceLimit; NotRun |
 
 The structural check uses support traversal and compact row/column IDs; its
 preflight is O(P + E + U), where U is the unique supported-row count, and includes pair storage,
@@ -86,21 +85,30 @@ or workspace is allocated. Production global reference-solve calls remain
 zero; this does not mean DesignSpectrum would allocate no dense QR when its
 preflight passes.
 
-Projected-width and local-correction estimates include the free-column by
-width arrays, square width factors/right vectors, sparse derivative copies,
-and 8,192-row tiled workspace. For this tested state, each stage estimates
-33,581,012,064 bytes for the three free-column × width arrays,
-22,387,341,376 bytes for the square factor and right-vector pair,
-4,902,879,232 bytes for tiled workspace, and 7,181,856 bytes for sparse
-copies. The full stage peak including resident data is 61.453 GB.
+Projected-width assessment includes one free-column × width coefficient
+array, square width factors/right vectors, sparse derivative copies, and
+8,192-row tiled workspace. For this tested shape it estimates
+11,193,670,688 bytes for that array, 22,387,341,376 bytes for the square
+factor/right-vector pair, 4,902,879,232 bytes for tiled workspace, and
+7,181,856 bytes for sparse copies. The full stage peak including resident data
+is 39.066 GB. Qualification no longer allocates the duplicated projected
+Jacobian or correction workspaces.
 
-After weak directions are copied, the projected-width right-vector matrix is
-released before local correction. Target geometry similarly releases its
-full right-vector matrix and column scales after target leakage evidence is
-copied, before target-local correction begins. The endpoint evaluation remains
-resident for target-local correction because that stage consumes it. Its
-estimate therefore includes endpoint sparse matrices and vectors, but does not
-double count the released geometry null-space matrix.
+The prior LocalCorrection stage estimate was 61,453,268,315 bytes and the
+prior TargetLocalCorrection estimate was 95,087,470,723 bytes; both production
+stages and their factor/step workspaces are removed. The projected-width stage
+remains necessary and drops from 61,453,268,315 to 39,065,926,939 estimated
+bytes. The rank aggregate still peaks at DesignSpectrum (189,484,131,163
+bytes), while target geometry remains the largest target stage (317,422,079,259
+bytes). These are planner estimates, not equivalent Peak RSS reductions:
+preflight rejected the dense stages before they allocated their modeled
+workspaces.
+
+Target geometry is the only target-identifiability stage. Its full Jacobian
+factor is estimated at 100,743,036,192 bytes (100.743 GB); right-vector and
+null-space storage are included in the 317.422 GB stage peak. The endpoint
+evaluation remains resident. The `right_null_space_bytes` field is a subset of
+`right_singular_vector_bytes`; do not add both fields together.
 
 The original aggregate planner regression values are unchanged and asserted
 exactly: 189,288,489,472 bytes for the frozen rank-planner control and
@@ -122,8 +130,7 @@ process-wide high-water mark, not a stage-local allocation.
 | Target memory preflight calculation | 0.006283 s | 678,395,904 → 678,412,288 bytes | 678,412,288 bytes | Preflight rejected |
 | DesignSpectrum factorization | NotRun | Not sampled | Not allocated | ResourceLimit |
 | Projected-width factorization | NotRun | Not sampled | Not allocated | ResourceLimit |
-| Local-correction factorization | NotRun | Not sampled | Not allocated | ResourceLimit |
-| Target geometry / target-local correction | NotRun | Not sampled | Not allocated | ResourceLimit |
+| Target geometry factorization | NotRun | Not sampled | Not allocated | ResourceLimit |
 
 The final process peak was 678,412,288 bytes (0.678 GB), about
 316,743,666,971 bytes below the largest estimate. That gap is expected here:
@@ -133,11 +140,11 @@ input, preparation, streaming verification and preflight path only; it cannot
 validate the predicted RSS of an unexecuted dense stage.
 
 Runtime statuses were: endpoint verification `Passed`; full-design rank
-`Failed` by the structural upper bound; dense design-rank preflight
-`ResourceLimit`; projected-width and local-correction stages `NotRun`;
-numerical identifiability `Unavailable`; target-identifiability preflight
-`ResourceLimit`; target geometry and target-local correction `NotRun`; and
-`RuntimeConvergence` `Unavailable`. The rank preflight recorded zero production
+`Failed` by the structural upper bound; the rank assessment stopped at the
+structural obstruction; projected-width rank and numerical identifiability
+were `Unavailable`; target-geometry preflight was `ResourceLimit`; target
+geometry was `NotRun`; and `RuntimeConvergence` was `Unavailable`. The rank
+preflight recorded zero production
 reference solves and zero `ReferenceQR` factorization calls because it stopped
 before DesignSpectrum. A separate small `chain-8` benchmark records zero
 production reference solves and one `ReferenceQR` call, demonstrating that the

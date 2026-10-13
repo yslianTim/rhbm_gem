@@ -133,7 +133,7 @@ JointTargetEvidence AssessTargetState(const JointProblem & problem,const JointPa
     const std::optional<JointState> & state,const std::vector<JointCheck> & existing,JointEvidenceScope scope,std::size_t original_rows)
 {
     const auto & data=JointProblemAccess::Get(problem); const auto & input=problem.Input();
-    JointTargetEvidence out; out.original_rows=original_rows;
+    JointTargetEvidence out; out.contract="target-estimability-v2"; out.original_rows=original_rows;
     auto check=[&](const char * name,Status status,std::string reason,std::optional<double> value={},std::optional<double> threshold={}) {
         out.checks.push_back({name,status,scope,value,threshold,std::move(reason)});
     };
@@ -229,6 +229,8 @@ JointCheckStatus TargetConvergence(const std::optional<JointTargetEvidence> & ev
 {
     if(!evidence) return Status::NotRun;
     if(!state) return Status::Unavailable;
+    if(evidence->contract!="target-estimability-v1" && evidence->contract!="target-estimability-v2")
+        return Status::Unavailable;
     auto status=Status::Passed;
     const bool reference_free=std::any_of(evidence->checks.begin(),evidence->checks.end(),[](const auto & check) {
         return check.name=="conditional-ac-optimality";
@@ -243,6 +245,12 @@ JointCheckStatus TargetConvergence(const std::optional<JointTargetEvidence> & ev
         const auto found=std::find_if(evidence->checks.begin(),evidence->checks.end(),[&](const auto & c){return c.name==name;});
         status=MergeConvergenceStatus(status,found==evidence->checks.end() ? Status::Unavailable : found->status);
     }
+    if(evidence->contract=="target-estimability-v1")
+        for(const char * name:{"local-correction","target-local-correction"})
+        {
+            const auto found=std::find_if(evidence->checks.begin(),evidence->checks.end(),[&](const auto & c){return c.name==name;});
+            status=MergeConvergenceStatus(status,found==evidence->checks.end() ? Status::Unavailable : found->status);
+        }
     return status;
 }
 void AddTargetEvidence(JointFitResult & fit)

@@ -285,6 +285,9 @@ TEST(JointObservableProfileTest, LegacyV3DoesNotInferReductionAndMalformedLayout
     const auto saved=core::CaptureJointAnalysisResult(core::FitJointComponents(core::JointProblem(input),{.6}));
     auto json=boost::json::parse(rhbm_gem::joint_result_io::Encode(saved)).as_object();
     json["schema_version"]=3; json.erase("layout"); json.erase("parameterization_contract");
+    auto & solver=json.at("metadata").as_object().at("solver").as_object();
+    solver["contract_version"]="joint-solver-provenance-v3";
+    solver["fixed_neighbor_policy_version"]="fixed-neighbor-production-v2";
     const auto old=rhbm_gem::joint_result_io::Decode(boost::json::serialize(json));
     EXPECT_FALSE(old.layout); EXPECT_EQ(old.parameterization_contract,"full-abc-v1");
     const auto reduced=core::CaptureJointAnalysisResult(core::FitJointComponents(core::JointProblem(Input()),{.6,missing_width,missing_width}));
@@ -388,7 +391,10 @@ TEST(JointObservableProfileTest, HaloNonuniquenessDoesNotCertifyItsParameters)
     EXPECT_FALSE(stages.at(1).point); EXPECT_FALSE(stages.at(4).point);
     const auto text=rhbm_gem::joint_result_io::Encode(saved);
     auto value=boost::json::parse(text);
-    EXPECT_EQ(value.at("schema_version").as_int64(),7);
+    EXPECT_EQ(value.at("schema_version").as_int64(),8);
+    auto downgraded=value;
+    downgraded.as_object()["schema_version"]=7;
+    EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(downgraded)),std::invalid_argument);
     const auto restored=rhbm_gem::joint_result_io::Decode(text);
     EXPECT_EQ(restored.target_runtime_convergence,saved.target_runtime_convergence);
     ASSERT_TRUE(restored.components[0].candidate_diagnostic);
@@ -396,6 +402,9 @@ TEST(JointObservableProfileTest, HaloNonuniquenessDoesNotCertifyItsParameters)
         rhbm_gem::JointCheckStatus::Passed);
     EXPECT_FALSE(restored.components[0].state);
     value.as_object()["schema_version"]=4;
+    auto & solver=value.as_object().at("metadata").as_object().at("solver").as_object();
+    solver["contract_version"]="joint-solver-provenance-v4";
+    solver["fixed_neighbor_policy_version"]="fixed-neighbor-production-v3";
     for(auto & component:value.as_object().at("components").as_array())
         component.as_object().erase("candidate_diagnostic");
     const auto old=rhbm_gem::joint_result_io::Decode(boost::json::serialize(value));
@@ -464,6 +473,25 @@ TEST(JointObservableProfileTest, ActiveBoundaryDoesNotAcquireTargetCertificate)
     EXPECT_FALSE(uncertainty.at(1).covariance);
     EXPECT_EQ(uncertainty.at(1).reason,"active-amplitude-boundary");
 }
+TEST(JointObservableProfileTest, TargetContractKeepsCorrectionRequiredOnlyForHistoricalEvidence)
+{
+    using Status=rhbm_gem::JointCheckStatus;
+    using Scope=rhbm_gem::JointEvidenceScope;
+    rhbm_gem::JointTargetEvidence evidence;
+    evidence.contract="target-estimability-v1";
+    evidence.checks={
+        {"conditional-ac-optimality",Status::Passed,Scope::ComponentLocal,{},{},{}},
+        {"independent-replay",Status::Passed,Scope::ComponentLocal,{},{},{}},
+        {"width-stationarity",Status::Passed,Scope::ComponentLocal,{},{},{}},
+        {"design-identifiability",Status::Passed,Scope::ComponentLocal,{},{},{}},
+        {"local-correction",Status::Failed,Scope::ComponentLocal,{},{},{}},
+        {"numerical-identifiability",Status::Passed,Scope::ComponentLocal,{},{},{}},
+        {"target-identifiability",Status::Passed,Scope::ComponentLocal,{},{},{}},
+        {"target-local-correction",Status::Failed,Scope::ComponentLocal,{},{},{}}};
+    EXPECT_EQ(n::TargetConvergence(evidence,true),Status::Failed);
+    evidence.contract="target-estimability-v2";
+    EXPECT_EQ(n::TargetConvergence(evidence,true),Status::Passed);
+}
 TEST(JointObservableProfileTest, TargetEvidenceRequiresSelectionMetadata)
 {
     auto input=Input(); input.atom_ids.resize(1); input.support.resize(1); input.selection_domain.reset();
@@ -480,6 +508,7 @@ TEST(JointObservableProfileTest, ExactSingleComponentTargetEvidenceIsReused)
     ASSERT_EQ(fit.components.size(),1);
     ASSERT_TRUE(fit.components[0].target_evidence);
     ASSERT_TRUE(fit.target_evidence);
+    EXPECT_EQ(fit.target_evidence->contract,"target-estimability-v2");
     auto geometry_calls=[&] {
         const auto & stages=n::AssessmentWorkForTesting().stages;
         const auto found=std::find_if(stages.begin(),stages.end(),[](const auto & stage) {
@@ -616,33 +645,51 @@ TEST(JointObservableProfileTest, TargetEvidenceUsesEveryComponentAndTheSavedStat
     const core::JointProblem problem(input);
     const auto fit=core::FitJointComponents(problem,{.6,missing_width,missing_width,.65,.6,missing_width,missing_width,.65});
     ASSERT_EQ(fit.components.size(),2);
-    EXPECT_FALSE(fit.assembled_state);
-    EXPECT_FALSE(fit.objective);
-    EXPECT_EQ(fit.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Unavailable);
+    ASSERT_TRUE(fit.assembled_state);
+    ASSERT_TRUE(fit.objective);
+    EXPECT_EQ(fit.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    ASSERT_TRUE(fit.target_evidence);
     for(const auto & component:fit.components)
     {
-        EXPECT_FALSE(component.state);
+        ASSERT_TRUE(component.state);
         ASSERT_TRUE(component.candidate_diagnostic);
         EXPECT_TRUE(component.candidate_diagnostic->candidate_available);
         EXPECT_EQ(component.candidate_diagnostic->endpoint_verification_status,rhbm_gem::JointCheckStatus::Passed);
-        EXPECT_NE(component.candidate_diagnostic->numerical_qualification_status,rhbm_gem::JointCheckStatus::Passed);
+        EXPECT_EQ(component.candidate_diagnostic->numerical_qualification_status,rhbm_gem::JointCheckStatus::Passed);
+    }
+    const auto fresh_target=n::AssessTargetState(problem,problem.ParameterLayout(),fit.assembled_state,fit.evidence,
+        rhbm_gem::JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
+    ASSERT_EQ(fit.target_evidence->checks.size(),fresh_target.checks.size());
+    for(std::size_t k=0;k<fresh_target.checks.size();++k)
+    {
+        EXPECT_EQ(fit.target_evidence->checks[k].name,fresh_target.checks[k].name);
+        EXPECT_EQ(fit.target_evidence->checks[k].status,fresh_target.checks[k].status);
+        EXPECT_EQ(fit.target_evidence->checks[k].scope,fresh_target.checks[k].scope);
+        EXPECT_EQ(fit.target_evidence->checks[k].reason,fresh_target.checks[k].reason);
+    }
+    ASSERT_EQ(fit.target_evidence->atoms.size(),fresh_target.atoms.size());
+    for(std::size_t k=0;k<fresh_target.atoms.size();++k)
+    {
+        EXPECT_EQ(fit.target_evidence->atoms[k].atom,fresh_target.atoms[k].atom);
+        EXPECT_EQ(fit.target_evidence->atoms[k].status,fresh_target.atoms[k].status);
+        EXPECT_EQ(fit.target_evidence->atoms[k].null_space_leakage,fresh_target.atoms[k].null_space_leakage);
     }
     const auto saved=core::CaptureJointAnalysisResult(fit);
     const auto covariance=core::detail::ComputeJointUncertainty(problem,saved);
-    EXPECT_FALSE(covariance.at(1).covariance); EXPECT_FALSE(covariance.at(5).covariance);
+    EXPECT_TRUE(covariance.at(1).covariance); EXPECT_TRUE(covariance.at(5).covariance);
     auto json=boost::json::parse(rhbm_gem::joint_result_io::Encode(saved));
-    EXPECT_EQ(json.at("schema_version").as_int64(),7);
+    EXPECT_EQ(json.at("schema_version").as_int64(),8);
     json.at("target_evidence").as_object()["column_scales"]=boost::json::array{1.};
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(json)),std::invalid_argument);
     const auto restored=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved));
-    EXPECT_FALSE(restored.assembled_state);
+    EXPECT_TRUE(restored.assembled_state);
     ASSERT_EQ(restored.components.size(),2);
     for(std::size_t k=0;k<2;++k)
     {
         ASSERT_TRUE(restored.components[k].candidate_diagnostic);
         EXPECT_EQ(restored.components[k].candidate_diagnostic->endpoint_verification_status,
             fit.components[k].candidate_diagnostic->endpoint_verification_status);
-        EXPECT_FALSE(restored.components[k].state);
+        EXPECT_TRUE(restored.components[k].state);
     }
 }
 

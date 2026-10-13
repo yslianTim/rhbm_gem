@@ -103,7 +103,8 @@ TEST(JointCompactAssessmentTest, ProjectedWidthRankKeepsThresholdSensitiveResult
         ASSERT_TRUE(prepared.valid);
         const auto differential=n::ReduceProjectedWidthDerivative(prepared);
         ASSERT_TRUE(differential.valid);
-        const auto rank=n::EvaluateRank(differential.projected,{context.rank,endpoint.eta.size()},
+        const auto rank=n::EvaluateRank(differential.projected,
+            {context.rank,endpoint.eta.size(),-1,n::RankBoundary::StrictGreater},
             nullptr,n::CompactSvdVectors::Right);
         ASSERT_TRUE(rank.valid);
         const bool near=std::string(name)=="just-below" || std::string(name)=="boundary" ||

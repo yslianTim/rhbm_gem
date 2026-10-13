@@ -39,13 +39,14 @@ class JointRuntimeSupportTest(unittest.TestCase):
         self.assertEqual(runtime['runtime_convergence'], 'passed')
         self.assertFalse(runtime['search_success'])
         self.assertNotIn('derivative', runtime['runtime_checks'])
+        self.assertNotIn('local_correction', runtime['runtime_checks'])
         expected['qualification_checks']['local_correction'] = False
-        self.assertEqual(runtime_expected(expected)['runtime_convergence'], 'failed')
+        self.assertEqual(runtime_expected(expected)['runtime_convergence'], 'passed')
         expected['usable_state'] = False
         self.assertEqual(runtime_expected(expected)['runtime_convergence'], 'unavailable')
         expected = copy.deepcopy(original)
         del expected['qualification_checks']['local_correction']
-        self.assertEqual(runtime_expected(expected)['runtime_convergence'], 'unavailable')
+        self.assertEqual(runtime_expected(expected)['runtime_convergence'], 'passed')
         expected['qualification_checks'] = {}
         self.assertEqual(runtime_expected(expected)['runtime_convergence'], 'unavailable')
 
@@ -56,7 +57,7 @@ class JointRuntimeSupportTest(unittest.TestCase):
                                           independent_ac_optimality=True, independent_kkt_consistency=True,
                                           independent_replay=True, width_gradient_consistency=True,
                                           width_stationarity=True, design_identifiability=True,
-                                          local_correction=True, numerical_identifiability=True),
+                                          numerical_identifiability=True),
                       reference_solve_calls=0,
                       search_success=True, stop_reason='native-lm-stop', accepted_updates=3, profile_evaluations=4,
                       trials=[dict(accepted=True, valid=True, trust_passed=True)],
@@ -68,8 +69,10 @@ class JointRuntimeSupportTest(unittest.TestCase):
         actual.update(accepted_updates=4, profile_evaluations=5, stop_reason='block-stationary')
         self.assertFalse(runtime_differences(record, actual, 1.))
         actual = copy.deepcopy(record); actual['runtime_convergence'] = 'failed'
-        actual['runtime_checks']['local_correction'] = False
         actual.update(numerical_qualification_status='failed', usable_state=False, search_success=False)
+        self.assertFalse(runtime_differences(record, actual, 1.))
+        actual = copy.deepcopy(record)
+        actual['runtime_checks']['local_correction'] = False
         self.assertFalse(runtime_differences(record, actual, 1.))
         actual['candidate_state']['b'][0] += 1e-6
         self.assertFalse(runtime_differences(record, actual, 1.))
@@ -94,7 +97,7 @@ class JointRuntimeSupportTest(unittest.TestCase):
                           independent_ac_optimality=True, independent_kkt_consistency=True,
                           independent_replay=True, width_gradient_consistency=True,
                           width_stationarity=True, design_identifiability=True,
-                          local_correction=False, numerical_identifiability=True), trials=[])
+                          numerical_identifiability=True), trials=[])
         self.assertFalse(runtime_differences({}, actual, 1.))
         actual['usable_state'] = True
         self.assertIn('/unqualified-scientific-state', runtime_differences({}, actual, 1.))
@@ -102,7 +105,7 @@ class JointRuntimeSupportTest(unittest.TestCase):
         actual.update(usable_state=True, search_success=True, runtime_convergence='passed',
                       numerical_qualification_status='passed')
         actual['runtime_checks']['local_correction'] = False
-        self.assertIn('/qualification-without-complete-trusted-state', runtime_differences({}, actual, 1.))
+        self.assertFalse(runtime_differences({}, actual, 1.))
         actual['endpoint_verification_status'] = 'not-run'
         self.assertIn('/qualification-without-complete-trusted-state', runtime_differences({}, actual, 1.))
 
@@ -111,7 +114,7 @@ class JointRuntimeSupportTest(unittest.TestCase):
                         ac_feasibility=True, conditional_ac_optimality=True, independent_ac_optimality=True,
                         independent_kkt_consistency=True, independent_replay=True,
                         width_gradient_consistency=True, width_stationarity=True,
-                        design_identifiability=True, local_correction=False,
+                        design_identifiability=True,
                         numerical_identifiability=True),
                         endpoint_verification_status='passed', numerical_qualification_status='failed',
                         reference_solve_calls=0,

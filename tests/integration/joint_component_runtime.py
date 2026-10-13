@@ -21,8 +21,9 @@ def runtime_expected(expected):
     out = {k: v for k, v in expected.items() if k not in ('qualification_checks', 'qualification_failure')}
     checks = expected.get('qualification_checks')
     if checks is not None:
-        out['runtime_checks'] = {k: v for k, v in checks.items() if k != 'derivative'}
-    required = ('inner', 'b_gradient', 'local_correction', 'identified')
+        out['runtime_checks'] = {k: v for k, v in checks.items()
+                                 if k not in ('derivative', 'local_correction')}
+    required = ('inner', 'b_gradient', 'identified')
     values = [checks.get(k) for k in required] if checks is not None else []
     out['runtime_convergence'] = ('unavailable' if not expected['usable_state'] or checks is None
                                   else 'failed' if any(v is False for v in values)
@@ -36,7 +37,7 @@ def runtime_differences(expected, actual, scale):
     checks=actual.get('runtime_checks')
     required_checks=('ac_feasibility','conditional_ac_optimality','independent_ac_optimality',
                      'independent_kkt_consistency','independent_replay','width_gradient_consistency',
-                     'width_stationarity','design_identifiability','local_correction','numerical_identifiability')
+                     'width_stationarity','design_identifiability','numerical_identifiability')
     if not isinstance(checks,dict) or any(type(checks.get(name)) is not bool for name in required_checks):
         if actual.get('endpoint_verification_status')!='not-run' or actual.get('runtime_convergence')!='unavailable':
             delta.append('/runtime_checks/reference-free-contract')

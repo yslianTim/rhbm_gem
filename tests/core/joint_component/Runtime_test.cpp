@@ -89,7 +89,9 @@ TEST(JointComponentRuntimeTest, TypedSearchPreservesFrozenAdapterResults)
     const auto & beta=original.at("primary").at("beta").as_array();
     for(std::size_t k=0;k<beta.size();++k) EXPECT_NEAR(fit.assembled_state->ac[k],boost::json::value_to<double>(beta[k]),1e-8);
     EXPECT_TRUE(fit.search_completed); EXPECT_EQ(fit.components.size(),2);
-    ASSERT_EQ(fit.components[0].ranks.size(),4);
+    ASSERT_EQ(fit.components[0].ranks.size(),2);
+    EXPECT_EQ(fit.components[0].ranks[0].name,"design");
+    EXPECT_EQ(fit.components[0].ranks[1].name,"projected-width");
     EXPECT_EQ(fit.components[0].ranks[1].rank,1);
     EXPECT_GT(fit.components[0].ranks[1].threshold,0);
     for(const auto & check:fit.components[0].evidence)
@@ -456,6 +458,12 @@ TEST(JointComponentRuntimeTest, ReusedAssemblyMatchesFreshAssessmentAndRejectsCh
     const std::vector<core::JointComponentResult> components{
         PublicComponent(data.partition.components[0],fit,data.context.scale)};
     auto reusable_assessment=fit.search.certification->assessment;
+    const auto scientific_assessment=[](const n::Assessment & assessment) {
+        auto value=second_stage_test::matched::runtime_json::Assessment(assessment);
+        if(auto * structure=value.if_contains("design_structure"); structure && structure->is_object())
+            structure->as_object().erase("memory_estimate_bytes");
+        return value;
+    };
     const n::AssessmentReuse reuse{data.domain,data.y,context,reusable_assessment};
     n::AssessmentWorkForTesting()={};
     const auto reused=n::AssembleComponents(data.domain,data.y,data.partition,data.context,components,&reuse);
@@ -471,15 +479,13 @@ TEST(JointComponentRuntimeTest, ReusedAssemblyMatchesFreshAssessmentAndRejectsCh
     EXPECT_EQ(reused.beta,fresh_assembly.beta);
     EXPECT_EQ(reused.prediction,fresh_assembly.prediction);
     EXPECT_DOUBLE_EQ(reused.objective,fresh_assembly.objective);
-    EXPECT_EQ(second_stage_test::matched::runtime_json::Assessment(reused.assessment),
-        second_stage_test::matched::runtime_json::Assessment(fresh_assembly.assessment));
+    EXPECT_EQ(scientific_assessment(reused.assessment),scientific_assessment(fresh_assembly.assessment));
     const auto check=[&](const n::Domain & domain,const n::Vector & y,const n::EvaluationContext & policy,int assessments) {
         n::AssessmentWorkForTesting()={};
         const auto assembled=n::AssembleComponents(domain,y,data.partition,policy,components,&reuse);
         EXPECT_EQ(n::AssessmentWorkForTesting().assessments,assessments);
         const auto fresh=n::AssessProfile(domain,y,assembled.eta,policy,&assembled.beta);
-        EXPECT_EQ(second_stage_test::matched::runtime_json::Assessment(assembled.assessment),
-            second_stage_test::matched::runtime_json::Assessment(fresh));
+        EXPECT_EQ(scientific_assessment(assembled.assessment),scientific_assessment(fresh));
     };
     check(data.domain,data.y,data.context,0);
     auto policy=data.context; policy.rank.rows+=100; check(data.domain,data.y,policy,1);

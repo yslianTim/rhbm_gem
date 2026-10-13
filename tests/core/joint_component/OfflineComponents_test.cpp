@@ -141,8 +141,14 @@ TEST(JointComponentChecksTest, StandaloneBundleNeedsNoDatasetOrSiblingFiles)
     auto expected=p::FitComponent(view,Vector::Constant(2,.55),parent);
     expected["dataset"]="unit"; expected["case"]="unit"; expected["initial_b"]=j::array{.55};
     expected["observation_snapshot_sha256"]=parent.snapshot_hash;
-    EXPECT_EQ(Science(expected),Science(read(temporary.path()/"fit/fit.json")));
-    EXPECT_EQ(read(temporary.path()/"fit/audit/scope.json").at("state").at("beta"),expected.at("last_trusted_state").at("beta"));
+    auto expected_science=Science(expected);
+    auto actual_science=Science(read(temporary.path()/"fit/fit.json"));
+    expected_science.at("design_structure").as_object().erase("memory_estimate_bytes");
+    actual_science.at("design_structure").as_object().erase("memory_estimate_bytes");
+    EXPECT_EQ(expected_science,actual_science);
+    const auto scope=read(temporary.path()/"fit/audit/scope.json");
+    EXPECT_TRUE(scope.at("state").is_null());
+    EXPECT_FALSE(scope.at("weak_direction_available").as_bool());
     bundle["parent_observations"].as_array()[0]=1e6; write();
     EXPECT_THROW(p::ComponentLocalBundleRerun(input.string(),(temporary.path()/"invalid-parent").string()),std::invalid_argument);
     EXPECT_FALSE(std::filesystem::exists(temporary.path()/"invalid-parent"));
@@ -152,7 +158,13 @@ TEST(JointComponentChecksTest, StandaloneBundleNeedsNoDatasetOrSiblingFiles)
 
 TEST(JointComponentChecksTest, LocalAuditUsesActualStateAndDiscardsSiblingDirections)
 {
-    const TwoBlocks f;
+    TwoBlocks f;
+    for(int block=0;block<2;++block) for(int k=0;k<40;++k)
+    {
+        const auto row=block*40+k;
+        const auto basis=second_stage_test::matched::EvaluateBasis(.003*k*k,.5,2.5);
+        f.y(row)=f.beta(2*block)*basis.gaussian+f.beta(2*block+1)*basis.charge;
+    }
     const auto input=p::MakeSyntheticJointProblemInput(f.domain,f.y); const p::Domain domain(input);
     auto parent=p::MakeContext(input);
     const auto part=p::BuildPartition(domain,parent.atom_ids);

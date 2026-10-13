@@ -25,8 +25,8 @@ Certification evaluates that accepted A/C/B state with a primary streaming pass
 and an independent scalar streaming replay. It does not solve a second global
 A/C problem. The replay compares prediction, residual, objective, projected
 KKT and width-gradient evidence at the same parameters. Constrained KKT checks
-fixed-width A/C optimality; replay agreement checks numerical consistency; rank
-and local-correction checks separately qualify parameter identifiability.
+fixed-width A/C optimality; replay agreement checks numerical consistency; full
+design rank and projected-width rank qualify numerical identifiability.
 Endpoint verification is distinct from full numerical qualification: a
 verified endpoint with failed but potentially recoverable numerical checks
 keeps its candidate and may continue through the same block-coordinate
@@ -61,14 +61,18 @@ globally, checked for monotone roundoff-safe acceptance, and contributes to the
 existing global A/C KKT (`1e-10`), width-gradient (`1e-12`) and eta-confirmation
 (`1e-10`) criteria. Meeting these checks makes the endpoint a candidate.
 Successful production stopping additionally requires endpoint verification and
-complete numerical qualification, including design and projected-width rank,
-local correction and numerical identifiability. A verified candidate that is
-not qualified is never exposed as a scientific component or assembled state.
-Local correction takes the maximum of the undamped log-B step and the mapped
-free A/C steps scaled by `1 + abs(coefficient)`, including the nonzero-residual
-profile correction. Each must satisfy the existing `1e-10` limit before a
-successful stop, so a passing width step alone cannot leave a failing target
-parameter correction at the saved endpoint.
+complete numerical qualification, including full design rank and projected-
+width rank. A verified candidate that is not qualified is never exposed as a
+scientific component or assembled state. The full parameter Jacobian is
+`[X_F, D]`, where `X_F` is the free A/C design on the active face and `D` is
+the log-width derivative. Its rank is
+`rank([X_F, D]) = rank(X_F) + rank(P_perp D)`, where `P_perp` projects away
+the column space of `X_F`. The projected-width check assesses the second term;
+the separate full-design check assesses `X`. Both remain required, and a
+threshold-sensitive or unavailable rank never counts as full rank. Numerical
+identifiability describes parameter directions; it does not replace the A/C
+KKT, width-stationarity, eta-confirmation or independent-replay checks that
+establish optimization and endpoint quality.
 Recoverable numerical qualification failures continue through the same bounded
 block updates; resource-limited assessment stops retries without reporting
 convergence. An unqualified endpoint at the sweep limit reports budget
@@ -263,17 +267,19 @@ status from the returned evidence; they do not run numerical work or store anoth
 success flag. Component convergence requires an actual trusted state and current
 qualification checks: A/C feasibility, conditional A/C projected KKT
 (`1e-10`), independent streaming replay, width stationarity (`1e-12`), design
-rank, local correction (`1e-10`) and numerical identifiability. Replay prediction
+rank, projected-width rank and numerical identifiability. Replay prediction
 enclosure remains `2e-12 + 2e-13 |prediction|`; width-gradient agreement remains
 `1e-13 + 2e-9 |gradient|`; normalized KKT agreement remains `1e-13`. Full
 profile derivatives, including the nonzero-residual correction, remain in the
 numerical core.
 
-The previous coefficient-agreement check was a different guarantee and is not
-recreated by KKT: a small residual gradient can coexist with materially different
-coefficients on an ill-conditioned or rank-deficient design. The current
-solver-provenance contract is v4 and the FixedNeighbor policy contract is v3.
-Saved schema-6 checks retain their old reference-agreement meaning.
+Full parameter identifiability is not the same as optimization stationarity: a
+stationary point may still have rank-deficient or unavailable parameter
+evidence. The current solver-provenance contract is v5 and the FixedNeighbor
+policy contract is v4. JSON schema 8 records the correction-free qualification
+contract. Schemas 3 through 7 remain readable; decoding retains their saved
+evidence and convergence statuses, including failed historical correction
+checks, without rerunning those solves.
 
 Global convergence additionally requires every component to be numerically
 qualified, complete assembly, global evidence and assembled mapping plus
@@ -328,8 +334,8 @@ retains the full A/C column domain even when amplitudes are active at the
 boundary.
 
 If those low-cost checks find no obstruction, rank assessment attributes its
-existing estimate to DesignSpectrum, projected-width assessment and local correction. Target identifiability
-attributes geometry and target-local correction separately. The parent peak is
+estimate to DesignSpectrum and projected-width assessment. Target
+identifiability attributes target geometry only. The parent peak is
 the maximum of the sequential stage peaks with each stage's resident data; it
 does not add all stage temporaries together. The assessment telemetry records
 whether a stage was entered and completed, its dimensions, elapsed time,
@@ -342,8 +348,9 @@ additional term.
 
 The rank and target preflight byte formulas and the synthetic 37,406-atom
 census are recorded in the [component memory census](joint-component-memory-census.md).
-That run estimates 189,484,131,163 bytes for DesignSpectrum and
-317,422,079,259 bytes for target identifiability, so neither stage runs. The
+That run estimates 189,484,131,163 bytes for DesignSpectrum,
+39,065,926,939 bytes for projected-width assessment, and 317,422,079,259 bytes
+for target geometry, so those stages exceed the planning budget. The
 streaming endpoint path does run; its isolated test process peaked at
 622,624,768 bytes. That observed peak covers the input, preparation,
 verification and rejected preflights only, not the hypothetical rank/target
@@ -505,18 +512,18 @@ remove it, while `ClearTransientFitStates()` does not.
 
 ### Saved provenance and units
 
-Production outcome JSON writes schema 7 and retains schema 3 through 6 reading
+Production outcome JSON writes schema 8 and retains schema 3 through 7 reading
 (distinct from fixture and offline report schemas). The [observable-halo contract](joint-observable-halo.md)
 describes parameter layouts, nuisance contributions and seed provenance. See the
-[metadata contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schemas-3-through-6).
+[metadata contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schemas-3-through-8).
 `JointAnalysisMetadata` contains optional `JointMapNormalization`, input SHA-256
 values, `JointSoftwareProvenance` and optional `JointSolverProvenance`.
 `JointSolverProvenance` records the current FixedNeighbor estimator and
 preserves solver and local-work fields found in saved records.
 Current writers record the fixed EIGEN sparse backend and the FixedNeighbor policy
-fields; current FixedNeighbor records use `fixed-neighbor-production-v3` with
-intrinsic OneAccepted behavior and the `joint-solver-provenance-v4` contract.
-Schema 7 candidate diagnostics store endpoint-verification and numerical-
+fields; current FixedNeighbor records use `fixed-neighbor-production-v4` with
+intrinsic OneAccepted behavior and the `joint-solver-provenance-v5` contract.
+Schema 8 candidate diagnostics store endpoint-verification and numerical-
 qualification statuses separately. Legacy schemas preserve their saved checks;
 no legacy `inner=Passed` is mapped to a new KKT result and no historical
 reference status is reinterpreted as streaming replay.

@@ -31,9 +31,10 @@ independent scalar replay. The replay verifies prediction, residual, objective,
 KKT and width-gradient consistency; it does not solve a second global A/C
 problem. Conditional A/C optimality, endpoint verification and full numerical
 qualification are separate evidence. Full qualification also requires design
-rank, local correction and numerical identifiability. If rank resources are
-unavailable, the endpoint may be verified while qualification and
-`RuntimeConvergence` remain unavailable. Valid failed endpoints continue normal
+rank, projected-width rank and numerical identifiability. A threshold-sensitive
+or unavailable rank cannot pass. If rank resources are unavailable, the
+endpoint may be verified while qualification and `RuntimeConvergence` remain
+unavailable. Valid failed endpoints continue normal
 updates and retry certification at a bounded interval. Budget exhaustion does
 not increase the sweep count or mark search complete: one final assessment runs
 on the accepted state only if its final sweep has no certification. Runtime
@@ -41,8 +42,9 @@ convergence remains independent of search completion. Prepared structural
 block mappings and workspace reuse do not
 reuse numeric factors, accepted states, or replay results across sweeps. The
 route preserves the objective, local A/C solve, width parameterization, serial
-update semantics and OneAccepted behavior. The reference-free numerical
-contract is versioned separately from legacy evidence. See the
+update semantics and OneAccepted behavior. The correction-free numerical
+contract is solver provenance v5 and FixedNeighbor policy v4, separate from
+schemas 3–7 and their stored evidence. See the
 [Joint runtime contract](joint-component-runtime.md) for the implementation
 details.
 
@@ -87,11 +89,11 @@ synthetic and cannot establish physical full-search feasibility.
 The 5,938,087-row, 37,406-atom single-component census now continues through
 streaming endpoint verification and both numerical preflights. The synthetic
 input has 74,811 support memberships, 3,118 blocks and 37,406 targets. Its
-DesignSpectrum peak is estimated at 189,484,131,163 bytes; projected-width and
-local-correction peaks are each 61,453,268,315 bytes; target-identifiability
-is 317,422,079,259 bytes. Design and target geometry are rejected before
-factorization, so those stages are `NotRun`; their estimates are not measured
-allocations. Endpoint verification passes with zero production reference solve
+DesignSpectrum peak is estimated at 189,484,131,163 bytes; projected-width
+assessment is reduced to 39,065,926,939 bytes; target geometry is estimated at
+317,422,079,259 bytes. Those stages exceed the planning budget, so they are
+`NotRun`; the estimates are not measured allocations. Local-correction
+workspaces are no longer planned. Endpoint verification passes with zero production reference solve
 calls. The isolated serial test process peaks at 622,624,768 bytes, while the
 target memory preflight calculation takes about 0.0056 seconds. See the
 [component memory census](joint-component-memory-census.md) for stage

@@ -344,12 +344,14 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
             p.search_method=="fixed-neighbor","invalid solver search method");
         const bool current_contract=p.contract_version &&
             *p.contract_version==JointSolverProvenanceContractVersion;
+        const bool previous_contract=p.contract_version &&
+            *p.contract_version==JointSolverProvenancePreviousContractVersion;
         const bool reference_contract=p.contract_version &&
             *p.contract_version==JointSolverProvenanceReferenceContractVersion;
         const bool historical_contract=!p.contract_version || reference_contract ||
             *p.contract_version==JointSolverProvenanceHistoricalContractVersion;
-        Require(current_contract || historical_contract,"unsupported solver provenance contract");
-        if(current_contract || reference_contract)
+        Require(current_contract || previous_contract || historical_contract,"unsupported solver provenance contract");
+        if(current_contract || previous_contract || reference_contract)
         {
             Require(p.search_method=="fixed-neighbor",
                 "current solver provenance must use FixedNeighbor");
@@ -363,7 +365,7 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
                 !p.schwarz_storage_bytes && !p.schwarz_scratch_bytes,
                 "current solver provenance contains retired operator controls");
             const auto policy=current_contract ? FixedNeighborPolicyContractVersion :
-                FixedNeighborReferencePolicyContractVersion;
+                previous_contract ? FixedNeighborPreviousPolicyContractVersion : FixedNeighborReferencePolicyContractVersion;
             Require(p.fixed_neighbor_policy_version &&
                 *p.fixed_neighbor_policy_version==policy && !p.fixed_neighbor_local_work,
                 "incomplete FixedNeighbor provenance");
@@ -400,12 +402,14 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
                 "incomplete fixed-neighbor provenance");
             const bool current_policy=current_contract && p.fixed_neighbor_policy_version &&
                 *p.fixed_neighbor_policy_version==FixedNeighborPolicyContractVersion;
+            const bool previous_policy=previous_contract && p.fixed_neighbor_policy_version &&
+                *p.fixed_neighbor_policy_version==FixedNeighborPreviousPolicyContractVersion;
             const bool reference_policy=reference_contract && p.fixed_neighbor_policy_version &&
                 *p.fixed_neighbor_policy_version==FixedNeighborReferencePolicyContractVersion;
             const bool legacy_policy=!p.fixed_neighbor_policy_version ||
                 *p.fixed_neighbor_policy_version==FixedNeighborLegacyPolicyContractVersion;
-            Require(current_policy || reference_policy || legacy_policy,"unsupported fixed-neighbor policy contract");
-            if(current_policy || reference_policy)
+            Require(current_policy || previous_policy || reference_policy || legacy_policy,"unsupported fixed-neighbor policy contract");
+            if(current_policy || previous_policy || reference_policy)
             {
                 if(p.fixed_neighbor_local_work)
                     Require(*p.fixed_neighbor_local_work=="one-accepted",
@@ -556,7 +560,8 @@ void ValidateTarget(const std::optional<JointTargetEvidence> & value,const std::
 {
     if(!value) return;
     const auto & t=*value;
-    Require(selection.has_value() && t.contract=="target-estimability-v1","target evidence contract");
+    Require(selection.has_value() && (t.contract=="target-estimability-v1" || t.contract=="target-estimability-v2"),
+        "target evidence contract");
     Require(t.original_rows==rows,"target rank row context");
     Require(t.column_scales.empty() || t.column_scales.size()==3*full,"target scale dimensions");
     for(double s:t.column_scales) Require(std::isfinite(s) && s>0,"target column scale");
@@ -568,11 +573,25 @@ void ValidateTarget(const std::optional<JointTargetEvidence> & value,const std::
     }
     Require(seen==expected,"incomplete target atom evidence");
 }
-void Validate(const JointAnalysisResult & x)
+void Validate(const JointAnalysisResult & x,int schema_version)
 {
     ValidateMetadata(x.metadata);
+    if(schema_version<8)
+    {
+        Require(!x.metadata.solver || !x.metadata.solver->contract_version ||
+            *x.metadata.solver->contract_version!=JointSolverProvenanceContractVersion,
+            "correction-free solver contract requires schema 8");
+        const auto old_target_contract=[](const auto & evidence) {
+            return !evidence || evidence->contract=="target-estimability-v1";
+        };
+        Require(old_target_contract(x.target_evidence) &&
+            std::all_of(x.components.begin(),x.components.end(),[&](const auto & component) {
+                return old_target_contract(component.target_evidence);
+            }),"target-estimability-v2 requires schema 8");
+    }
     const bool reference_free_contract=x.metadata.solver && x.metadata.solver->contract_version &&
-        *x.metadata.solver->contract_version==JointSolverProvenanceContractVersion;
+        (*x.metadata.solver->contract_version==JointSolverProvenanceContractVersion ||
+         *x.metadata.solver->contract_version==JointSolverProvenancePreviousContractVersion);
     const auto atoms=x.atom_ids.size(), rows=x.row_ids.size();
     Require(!x.selection_domain || x.selection_domain->IsValid(atoms),"selection domain");
     Require(x.initialization.data_scope=="caller-provided-widths" ||
@@ -633,7 +652,7 @@ void Validate(const JointAnalysisResult & x)
 }
 std::string Encode(const JointAnalysisResult & x)
 {
-    Validate(x);
+    Validate(x,8);
     const auto & m=x.metadata; const auto & t=x.costs;
     j::array components;
     for(const auto & c:x.components) components.emplace_back(Object{
@@ -648,7 +667,7 @@ std::string Encode(const JointAnalysisResult & x)
         {"evidence",Checks(c.evidence)},{"ranks",Ranks(c.ranks)},{"regular_certificate",StatusText(c.regular_certificate)},
         { "runtime_convergence",StatusText(c.runtime_convergence)},{"layout",Layout(c.layout)},
         {"target_evidence",Target(c.target_evidence)},{"target_runtime_convergence",StatusText(c.target_runtime_convergence)}});
-    Object out{{"schema_version",7},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
+    Object out{{"schema_version",8},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
         { "support_contract","sphere-fma-v1"},{"parameterization_contract",x.parameterization_contract},{"layout",Layout(x.layout)},{"metadata",Metadata(m)},{"selection_domain",SelectionDomain(x.selection_domain)},
         {"atom_ids",j::value_from(x.atom_ids)},{"row_ids",j::value_from(x.row_ids)},{"initialization",Initialization(x.initialization)},
         {"costs",Object{{"construction_seconds",t.construction_seconds},{"initialization_seconds",t.initialization_seconds},{"search_seconds",t.search_seconds},
@@ -665,8 +684,8 @@ JointAnalysisResult Decode(std::string_view text)
     j::parse_options options; options.numbers=j::number_precision::precise;
     const auto parsed=j::parse(text,{},options); const auto & o=parsed.as_object();
     const int version=Read<int>(o,"schema_version");
-    Require(version==3 || version==4 || version==5 || version==6 || version==7,
-        "unsupported result schema version (expected 3, 4, 5, 6 or 7)");
+    Require(version==3 || version==4 || version==5 || version==6 || version==7 || version==8,
+        "unsupported result schema version (expected 3, 4, 5, 6, 7 or 8)");
     Require(Read<std::string>(o,"estimator")=="joint-components" &&
         Read<std::string>(o,"estimator_contract")=="guarded-joint-ls-v1" &&
         Read<std::string>(o,"objective_contract")=="parent-normalized-half-rss-v1" &&
@@ -711,6 +730,6 @@ JointAnalysisResult Decode(std::string_view text)
     x.search_completed=Read<bool>(o,"search_completed"); x.observation_scale=Read<double>(o,"observation_scale");
     x.regular_certificate=Status(o.at("regular_certificate")); x.runtime_convergence=Status(o.at("runtime_convergence"));
     if(version>=5) {x.target_evidence=ReadTarget(o.at("target_evidence")); x.target_runtime_convergence=Status(o.at("target_runtime_convergence"));}
-    Validate(x); return x;
+    Validate(x,version); return x;
 }
 }

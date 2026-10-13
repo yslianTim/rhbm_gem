@@ -11,8 +11,9 @@ Target qualification is separate from full-parameter runtime convergence.
 Inputs without recorded selection metadata have target convergence
 NotRun; roles are not inferred. Component target convergence requires a saved,
 fully qualified state and passing conditional A/C optimality, independent
-replay, width stationarity, target-identifiability, and target-local-correction
-checks. Endpoint verification alone does not prove identifiable parameters.
+replay, width stationarity, and target-identifiability checks. Endpoint
+verification alone does not prove identifiable parameters. Target local
+correction is not part of the current qualification contract.
 The assembled result additionally requires a complete assembled state and
 prediction, all observation rows, every component target result, and assembled
 mapping plus independent prediction/objective consistency. Search completion
@@ -46,22 +47,14 @@ representatives. A FullABC halo point is withheld from the stage adapter and
 CSV when its parameter coordinates are not identified. Target point states
 remain available with their separate convergence and identifiability statuses.
 
-## Target local correction
+## Numerical evidence and persistence
 
-The local-correction check uses the undamped full profile derivative, including
-the nonzero-residual correction. Its compact SVD uses the same rank dimensions
-and threshold policy; an invalid or threshold-sensitive solve is unavailable.
-The mapped local step measures target A/C corrections scaled by
-1 + abs(coefficient), alongside log-B corrections. A passing target correction
-has infinity norm <= 1e-10, and mapped profile-null directions must also have
-leakage <= 1e-10. Nonunique mapped null directions are unavailable rather than
-treated as zero correction. Width stationarity retains the existing 1e-12
-limit.
-
-Full-parameter local qualification also bounds the mapped free A/C step and
-log-B step by `1e-10`. FixedNeighbor continues its existing bounded updates
-when those A/C corrections fail even if the width step passes. Target evidence
-independently checks the requested coordinates at the final saved state.
+The target certificate is target-estimability-v2. It adds no parameter-step
+correction solve: target-specific qualification is determined by target
+geometry and null-space leakage, together with the saved optimization and
+endpoint evidence. Missing or threshold-sensitive geometry remains
+`Unavailable`; failed target identifiability remains `Failed`. Neither state is
+promoted to `Passed` because another qualification check succeeds.
 
 ## Target covariance and exports
 
@@ -76,11 +69,13 @@ freedom failures retain explicit unavailable reasons. Halo covariance is not
 inferred by selecting an arbitrary representative.
 
 Joint JSON schema 5 introduced target evidence and target-runtime status; schema
-6 adds optional candidate diagnostics and preserves the legacy reference-based
-certification semantics. Schema 7 records reference-free endpoint and
-qualification statuses separately. Readers accept schemas 3 through 7;
-schema 3/4 records retain their original evidence and do not gain target
-certification or inferred candidates. CSV records target/halo/not-recorded
+6 adds optional candidate diagnostics, and schema 7 records reference-free
+endpoint and qualification statuses separately. Schema 8 versions the
+correction-free solver contract. Readers accept schemas 3 through 8; schemas
+3–7 retain their recorded checks and convergence statuses. Historical failed
+target-local-correction evidence remains failed when loaded and is not
+recomputed. Schema 3/4 records retain their original evidence and do not gain
+target certification or inferred candidates. CSV records target/halo/not-recorded
 selection role, target convergence, and parameter identifiability. It preserves
 target point states independently of convergence and leaves unidentified halo
 parameters blank. The command guide owns the full JSON/CSV field list and unit

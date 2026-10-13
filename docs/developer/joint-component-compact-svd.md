@@ -5,17 +5,20 @@ Current SVD and fixed-state measurements use the
 source-pinned provenance are indexed in the
 [canonical historical evidence](joint-component-evidence.md).
 
-Derivative preparation checks the column-normalized free design with a
-singular-values-only decomposition. Projection coefficients and the full
-nonzero-residual correction still use the existing QR and triangular solves.
+Profile LM retains the full derivative, including the nonzero-residual
+correction, through the existing QR and triangular solves. Numerical
+qualification builds only the projected-width derivative needed for its rank
+assessment; it does not form a correction Jacobian or run a correction SVD or
+step solve.
 The independent reference computes its own weighted reduction and retains the
 singular-vector factors needed by its compact free-face least-squares solve.
 
 The private compact helper uses JacobiSVD when the compact dimension is below
 16 and Eigen BDCSVD otherwise. The current EIGEN-backed path uses this dispatch;
 there is no user-facing SVD option or additional dependency. The direct dense
-oracle, block diagnostic, endpoint spectra, local-correction SVD and LM are
-unchanged.
+oracle, block diagnostic and endpoint spectra retain their existing rank
+thresholds. Profile LM's derivative is unchanged; the production correction-
+qualification SVD and solve have been removed.
 
 Rank and solve use the original caller's relative threshold, including the
 original observation dimensions and any absolute-threshold override. Compact
