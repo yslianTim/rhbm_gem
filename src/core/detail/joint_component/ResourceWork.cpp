@@ -301,7 +301,7 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
         std::size_t free_factor{},free_svd_workspace{},projection_coefficients{},width_factor{},width_svd_workspace{};
         std::size_t free_entries{},raw_entries{},triplet_entries{},matrix_entries{},outer_rows{},sparse_matrices{},
             triplets{},sparse_peak{},free_index_bytes{},free_common{},tile_rows{},free_assembled_rows{},
-            width_assembled_rows{},free_qr_workspace{},free_qr_peak{},free_svd_peak{},
+            free_norm_bytes{},width_assembled_rows{},free_qr_workspace{},free_qr_peak{},free_svd_peak{},
             free_phase_peak{},width_qr_workspace{},width_qr_peak{},width_svd_peak{},width_phase_peak{};
         const std::size_t index_bytes=sizeof(Eigen::Index),triplet_bytes=sizeof(double)+2*sizeof(Eigen::Index);
         const auto add_product_bytes=[](std::size_t rows,std::size_t columns,std::size_t width,std::size_t & bytes) {
@@ -333,7 +333,9 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
         }
         if(ok) ok=CheckedAddBytes(sparse_matrices,triplets,sparse_peak) &&
             CheckedMultiplyBytes(free_columns,index_bytes,free_index_bytes) &&
+            CheckedMultiplyBytes(free_columns,sizeof(double),free_norm_bytes) &&
             CheckedAddBytes(sparse_peak,free_index_bytes,free_common) &&
+            CheckedAddBytes(free_common,free_norm_bytes,free_common) &&
             CheckedMultiplyBytes(shape.maximum_tile_rows,1,tile_rows) &&
             CheckedAddBytes(std::min(free_columns,rows),tile_rows,free_assembled_rows) &&
             CheckedAddBytes(std::min(widths,rows),tile_rows,width_assembled_rows) &&

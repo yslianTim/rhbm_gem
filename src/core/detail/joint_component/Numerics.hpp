@@ -114,8 +114,9 @@ void UpdateAcceptedProfileObjective(std::optional<double> &,const Evaluation &,d
 struct Spectrum
 {
     bool available{true};
+    bool threshold_sensitive{};
     std::string reason;
-    Eigen::Index rank{},rows{},columns{};
+    Eigen::Index rank{},rows{},columns{},full_design_columns{};
     Vector singular_values,column_norms;
     double minimum{unavailable},condition{unavailable},threshold{};
 };
@@ -210,7 +211,7 @@ struct Assessment
 {
     Endpoint primary,reference;
     IndependentReplayEvidence independent_replay;
-    std::optional<Spectrum> design,widths;
+    std::optional<Spectrum> design,free_design,widths;
     std::optional<StructuralRankEvidence> design_structure;
     Matrix weak_directions;
     MemoryEstimate verification_memory_estimate,rank_memory_estimate;

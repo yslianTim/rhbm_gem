@@ -180,6 +180,12 @@ TEST(JointCompactAssessmentTest, DenseDesignOracleMatchesInteriorFreeDesignFacto
         ASSERT_EQ(free.factor.rows(),4);
         ASSERT_EQ(free.factor.cols(),4);
         ASSERT_EQ(free.svd.singular_values.size(),dense.singular_values.size());
+        ASSERT_TRUE(free.prepared.free_design_rank.has_value());
+        EXPECT_EQ(free.prepared.free_design_rank->rows,context.rank.rows);
+        EXPECT_EQ(free.prepared.free_design_rank->columns,4);
+        EXPECT_EQ(free.prepared.free_design_rank->full_design_columns,4);
+        EXPECT_EQ(free.prepared.free_design_rank->column_norms.size(),4);
+        EXPECT_FALSE(free.prepared.free_design_rank->threshold_sensitive);
         EXPECT_EQ(free.svd.rank,dense.rank);
         EXPECT_NEAR(free.svd.threshold,dense.threshold,2e-14*dense.threshold);
         EXPECT_LE((free.svd.singular_values-dense.singular_values).norm(),
@@ -207,6 +213,11 @@ TEST(JointCompactAssessmentTest, ActiveAmplitudeFreeRankDoesNotRepresentFullDesi
         ASSERT_EQ(free.calls,1u);
         EXPECT_EQ(dense.columns,6);
         EXPECT_LT(free.svd.singular_values.size(),dense.columns);
+        ASSERT_TRUE(free.prepared.free_design_rank.has_value());
+        EXPECT_EQ(free.prepared.free_design_rank->rows,context.rank.rows);
+        EXPECT_EQ(free.prepared.free_design_rank->columns,free.svd.singular_values.size());
+        EXPECT_EQ(free.prepared.free_design_rank->full_design_columns,dense.columns);
+        EXPECT_EQ(free.prepared.free_design_rank->column_norms.size(),free.svd.singular_values.size());
         EXPECT_EQ(free.factor.cols(),free.svd.singular_values.size());
         EXPECT_EQ(free.svd.rank,free.svd.singular_values.size());
         EXPECT_TRUE(free.prepared.valid);

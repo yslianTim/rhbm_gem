@@ -745,11 +745,11 @@ Spectrum CompactSpectrum(const CompactSvdResult & svd,Eigen::Index rows)
     if(!svd.valid) {out.available=false; out.reason="spectrum-factorization-failed"; return out;}
     out.rank=svd.rank; out.rows=rows; out.columns=v.size(); out.singular_values=v;
     out.minimum=v(v.size()-1); out.condition=v(0)/v(v.size()-1);
-    out.threshold=svd.threshold; return out;
+    out.threshold=svd.threshold; out.threshold_sensitive=!CompactRankDecisionSafe(svd); return out;
 }
 template<class Design> Spectrum SpectrumRecord(const Design & input,const RankPolicy & policy,Eigen::Index columns,bool normalize)
 {
-    Spectrum out; out.rows=policy.rows; out.columns=columns;
+    Spectrum out; out.rows=policy.rows; out.columns=columns; out.full_design_columns=columns;
     if(input.cols()==0) {out.available=false; out.reason="empty-matrix"; return out;}
     if(input.rows()==0) {out.reason="unobserved-columns"; return out;}
     Design x=input; Vector norms(input.cols());
@@ -778,8 +778,10 @@ Spectrum DesignSpectrum(const Sparse & x,const Vector & weights,const RankPolicy
     const auto reduced=ReferenceQR(x,weights,scales,Vector::Zero(x.rows()));
     const auto svd=EvaluateRank(reduced.first,{{policy ? policy->rows : x.rows(),x.cols(),0},x.cols(),-1,RankBoundary::StrictGreater}); const auto & values=svd.singular_values;
     if(!svd.valid) {Spectrum out; out.available=false; out.reason="spectrum-factorization-failed"; return out;}
-    Spectrum out; out.rows=x.rows(); out.columns=x.cols(); out.rank=svd.rank; out.minimum=values.tail(1)(0);
-    out.condition=values(0)/values.tail(1)(0); out.singular_values=values; out.threshold=svd.threshold; return out;
+    Spectrum out; out.rows=policy ? policy->rows : x.rows(); out.columns=x.cols();
+    out.full_design_columns=x.cols(); out.rank=svd.rank; out.minimum=values.tail(1)(0);
+    out.condition=values(0)/values.tail(1)(0); out.singular_values=values; out.column_norms=scales;
+    out.threshold=svd.threshold; out.threshold_sensitive=!CompactRankDecisionSafe(svd); return out;
 }
 Assessment AssessProfile(const Domain & domain,VectorRef y,const Vector & eta,const EvaluationContext & policy,
     const Vector * supplied_beta,const Vector * assembled_prediction,const std::vector<std::size_t> * assembled_rows)
@@ -1034,6 +1036,7 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
         evaluated->derivative.cols(),&projected_memory);
 #endif
     const auto prepared=PrepareProjectedWidthDerivative(*evaluated,scale,context);
+    out.free_design=prepared.free_design_rank;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     prepare_stage.Finish();
     AssessmentStageTimerForTesting reduce_stage("derivative-reduction",prepared.raw.rows(),prepared.raw.cols(),

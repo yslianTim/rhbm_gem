@@ -7,6 +7,7 @@ struct TiledDifferential
 {
     Eigen::SparseMatrix<double,Eigen::RowMajor> free_design,raw;
     Matrix coefficients,correction;
+    std::optional<Spectrum> free_design_rank;
     double scale{};
     bool valid{},reference_order{},projected_only{};
     std::string reason;

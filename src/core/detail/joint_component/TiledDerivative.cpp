@@ -27,6 +27,25 @@ TiledQrTelemetry AccumulateTiledQr(const TiledQrTelemetry & accumulated,const Ti
 }
 #endif
 namespace {
+Spectrum FreeDesignSpectrum(const CompactSvdResult & svd,Eigen::Index rows,Eigen::Index columns,
+    Eigen::Index full_columns,Vector norms)
+{
+    Spectrum out; out.rows=rows; out.columns=columns; out.full_design_columns=full_columns;
+    out.column_norms=std::move(norms);
+    if(!svd.valid)
+    {out.available=false; out.reason="spectrum-factorization-failed"; return out;}
+    out.rank=svd.rank; out.singular_values=svd.singular_values; out.threshold=svd.threshold;
+    out.minimum=out.singular_values(out.singular_values.size()-1);
+    out.condition=out.singular_values(0)/out.minimum;
+    out.threshold_sensitive=!CompactRankDecisionSafe(svd);
+    return out;
+}
+Spectrum UnavailableFreeDesignSpectrum(Eigen::Index rows,Eigen::Index columns,Eigen::Index full_columns,
+    const char * reason)
+{
+    Spectrum out; out.available=false; out.reason=reason; out.rows=rows; out.columns=columns;
+    out.full_design_columns=full_columns; return out;
+}
 TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const EvaluationContext * context,
     double absolute,Eigen::Index tile,bool projected_only)
 {
@@ -44,6 +63,7 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
     for(Eigen::Index k=0;k<e.beta.size();++k) if(k%2 || e.beta(k)>0) free.push_back(k);
     const Eigen::Index n=e.x.rows(),m=e.beta.size()/2,p=static_cast<Eigen::Index>(free.size());
     out.scale=scale; out.free_design.resize(n,p); out.raw.resize(n,m);
+    Vector free_column_norms(projected_only ? p : 0);
     std::vector<Eigen::Triplet<double>> entries,raw;
     Matrix t;
     if(!projected_only)
@@ -67,7 +87,13 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
         for(Eigen::Index col=0;col<p;++col)
         {
             const auto k=free[static_cast<std::size_t>(col)]; const double norm=e.x.col(k).norm();
-            if(!(norm>0)) {out.reason="zero-free-column"; return out;}
+            if(!(norm>0))
+            {
+                if(projected_only) out.free_design_rank=UnavailableFreeDesignSpectrum(
+                    context ? context->rank.rows : n,p,2*m,"zero-free-column");
+                out.reason="zero-free-column"; return out;
+            }
+            if(projected_only) free_column_norms(col)=norm;
             for(Sparse::InnerIterator entry(e.x,k);entry;++entry) entries.emplace_back(entry.row(),col,entry.value()/norm);
             if(!projected_only) t(col,k/2)=e.derivative.col(k).dot(e.residual)/norm;
         }
@@ -134,7 +160,10 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
                 qr.Append(design,Matrix(out.raw.middleRows(first,count)),out.reference_order);
             }
         }
-        const auto svd=EvaluateRank(qr.r,{{context ? context->rank.rows : n,2*m,m},p,absolute});
+        const auto boundary=projected_only ? RankBoundary::StrictGreater : RankBoundary::SvdNative;
+        const auto svd=EvaluateRank(qr.r,{{context ? context->rank.rows : n,2*m,m},p,absolute,boundary});
+        if(projected_only) out.free_design_rank=FreeDesignSpectrum(svd,
+            context ? context->rank.rows : n,p,2*m,free_column_norms);
         if(!svd.valid) {out.reason="nonfinite-derivative"; return false;}
         if(svd.rank!=p) {out.reason="rank-deficient-free-design"; return false;}
         if(projected_only)
