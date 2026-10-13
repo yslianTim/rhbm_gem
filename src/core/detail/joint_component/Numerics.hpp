@@ -144,6 +144,7 @@ Evaluation EvaluateStateStreaming(const Domain &,VectorRef,const Vector &,const 
     ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);
 MemoryEstimate ReferenceSolveMemoryEstimate(const Domain &,VectorRef,const EvaluationContext &,std::size_t resident_override=0);
 MemoryEstimate EndpointVerificationMemoryEstimate(const Domain &,VectorRef,const EvaluationContext &,std::size_t resident_override=0);
+MemoryEstimate TargetCovarianceMemoryEstimate(const Domain &,std::size_t resident_override=0);
 struct IndependentReplayEvidence
 {
     bool available{},valid{},feasible{},primary_valid{},primary_kkt_passed{},independent_kkt_passed{},

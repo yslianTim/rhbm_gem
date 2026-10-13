@@ -11,30 +11,22 @@
 
 namespace rhbm_gem::core::detail {
 namespace {
-StageUncertainty TargetUncertainty(const JointAnalysisComponent & component,
-    const joint_component::ComponentProblemView & view)
-{
-    StageUncertainty out; out.method="iid-ls-target-covariance"; out.status=EvidenceStatus::Unavailable;
-    if(!component.state) {out.reason="missing-component-state"; return out;}
-    const auto & state=*component.state;
-    for(std::size_t a=0;a<view.local_to_parent_atoms.size();++a) if(state.ac.at(2*a)==0)
-    {out.reason="active-amplitude-boundary"; return out;}
-    if(component.target_runtime_convergence!=JointCheckStatus::Passed)
-    {out.reason="targets-not-converged"; return out;}
-    out.reason="covariance-unavailable"; return out;
-}
-StageUncertainty ComponentUncertainty(const JointAnalysisComponent & component,
+StageUncertainty ComponentCovariance(const JointAnalysisComponent & component,
     const joint_component::ComponentProblemView & view,const joint_component::ComponentView & parent_view,
     const std::vector<bool> & requested,
     std::map<std::size_t, Eigen::Matrix3d> & blocks,std::size_t original_rows,double observation_scale,
     joint_component::VectorRef observations)
 {
-    if(component.target_evidence) return TargetUncertainty(component,view);
     StageUncertainty out;
-    out.method = "iid-ls-linearized";
+    out.method = component.target_evidence ? "iid-ls-target-covariance" : "iid-ls-linearized";
     out.status = EvidenceStatus::Unavailable;
     if (!component.state) { out.reason = "missing-component-state"; return out; }
-    if (component.runtime_convergence != JointCheckStatus::Passed)
+    if(component.target_evidence)
+    {
+        if(component.target_runtime_convergence!=JointCheckStatus::Passed)
+        {out.reason="targets-not-converged"; return out;}
+    }
+    else if (component.runtime_convergence != JointCheckStatus::Passed)
     { out.reason = "component-not-converged"; return out; }
     const auto & state = *component.state;
     const auto atoms = view.local_to_parent_atoms.size(), rows = view.local_to_parent_rows.size();
@@ -49,6 +41,10 @@ StageUncertainty ComponentUncertainty(const JointAnalysisComponent & component,
         (!std::equal(component.rows.begin(),component.rows.end(),parent_view.rows.begin(),parent_view.rows.end()) ||
          !std::equal(component.atoms.begin(),component.atoms.end(),parent_view.atoms.begin(),parent_view.atoms.end())))
         throw std::invalid_argument("Joint uncertainty component mapping mismatch.");
+    const auto memory=joint_component::TargetCovarianceMemoryEstimate(view.domain);
+    if(memory.status!=joint_component::MemoryStatus::Pass)
+    {out.reason="resource-limit:target-covariance:"+memory.reason; return out;}
+    if(memory.estimated_peak_bytes>memory.budget_bytes/2) joint_component::LogMemoryEstimate(memory);
     struct Membership {std::size_t atom; Eigen::Index row; double square;};
     std::vector<std::vector<Membership>> tiles((rows + joint_component::derivative_tile_rows - 1) / joint_component::derivative_tile_rows);
     Eigen::VectorXd prediction = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(rows));
@@ -113,6 +109,22 @@ StageUncertainty ComponentUncertainty(const JointAnalysisComponent & component,
     }
     out.status = EvidenceStatus::Available;
     return out;
+}
+StageUncertainty TargetUncertainty(const JointAnalysisComponent & component,
+    const joint_component::ComponentProblemView & view,const joint_component::ComponentView & parent_view,
+    const std::vector<bool> & requested,std::map<std::size_t,Eigen::Matrix3d> & blocks,
+    std::size_t original_rows,double observation_scale,joint_component::VectorRef observations)
+{
+    return ComponentCovariance(component,view,parent_view,requested,blocks,original_rows,observation_scale,observations);
+}
+StageUncertainty ComponentUncertainty(const JointAnalysisComponent & component,
+    const joint_component::ComponentProblemView & view,const joint_component::ComponentView & parent_view,
+    const std::vector<bool> & requested,std::map<std::size_t,Eigen::Matrix3d> & blocks,
+    std::size_t original_rows,double observation_scale,joint_component::VectorRef observations)
+{
+    if(component.target_evidence)
+        return TargetUncertainty(component,view,parent_view,requested,blocks,original_rows,observation_scale,observations);
+    return ComponentCovariance(component,view,parent_view,requested,blocks,original_rows,observation_scale,observations);
 }
 }
 

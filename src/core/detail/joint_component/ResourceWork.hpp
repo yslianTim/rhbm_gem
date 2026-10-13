@@ -37,7 +37,7 @@ inline constexpr std::size_t JointMemoryHardLimitBytes=4'000'000'000;
 inline constexpr std::size_t JointMemoryPlanningBudgetBytes=3'200'000'000;
 enum class MemoryStage {ProblemConstruction,StructuralConstruction,FixedNeighborPreparation,GlobalStateEvaluation,
     EndpointVerification,ReferenceSolve,RankAssessment,StructuralRank,StreamingSpectralBounds,SparseQRResearch,DesignSpectrum,ProjectedWidthAssessment,
-    TargetIdentifiability};
+    TargetIdentifiability,TargetCovariance};
 enum class MemoryStatus {Pass,Reject,Overflow};
 struct MemoryShape
 {
@@ -45,7 +45,8 @@ struct MemoryShape
         affected_row_entries{},component_neighbor_entries{},maximum_block_rows{},maximum_block_support_entries{},
         total_block_support_entries{},maximum_neighbor_atoms{},component_free_columns{},component_target_columns{},
         identity_validation_bytes{},resident_bytes{},component_design_columns{},component_width_columns{},
-        component_target_atoms{},component_halo_atoms{},component_nuisance_atoms{},maximum_tile_rows{8192},
+        component_target_atoms{},component_halo_atoms{},component_nuisance_atoms{},component_covariance_columns{},
+        maximum_tile_rows{8192},
         component_structural_nonzeros{},component_structural_supported_rows{};
     bool problem_scope{},component_structural_matching{};
 };

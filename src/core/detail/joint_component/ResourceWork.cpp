@@ -125,6 +125,7 @@ const char * MemoryStageName(MemoryStage stage)
     case MemoryStage::DesignSpectrum: return "design-spectrum";
     case MemoryStage::ProjectedWidthAssessment: return "projected-width-assessment";
     case MemoryStage::TargetIdentifiability: return "target-identifiability";
+    case MemoryStage::TargetCovariance: return "target-covariance";
     }
     return "unknown";
 }
@@ -310,6 +311,34 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
             CheckedAddBytes(temporary,checks_bytes,temporary);
         break;
     }
+    case MemoryStage::TargetCovariance:
+    {
+        const auto columns=shape.component_covariance_columns;
+        std::size_t factor{},workspace{},tile{},tile_rows{},tile_count{},factor_count{},factor_workspace{};
+        ok=columns>0 && columns<=static_cast<std::size_t>(std::numeric_limits<Eigen::Index>::max()) &&
+            shape.maximum_tile_rows>0 &&
+            CheckedMultiplyBytes(columns,columns,factor_count) &&
+            CheckedMultiplyBytes(factor_count,sizeof(double),factor) &&
+            CheckedMultiplyBytes(factor,2,workspace) &&
+            CheckedMultiplyBytes(shape.maximum_tile_rows,2,tile_rows) &&
+            AddProduct2D(tile,tile_rows,columns,sizeof(double)) &&
+            CheckedAddBytes(temporary,factor,temporary) && CheckedAddBytes(temporary,factor,temporary) &&
+            AddProduct(temporary,shape.component_support_entries,3*sizeof(std::size_t)) &&
+            AddProduct(temporary,rows,4*sizeof(double)+2*sizeof(Eigen::Index)) &&
+            AddProduct(temporary,columns,4*sizeof(double)) &&
+            CheckedAddBytes(rows/shape.maximum_tile_rows,rows%shape.maximum_tile_rows ? 1 : 0,tile_count) &&
+            AddProduct(temporary,tile_count,sizeof(std::vector<std::size_t>)) &&
+            CheckedAddBytes(workspace,tile,factor_workspace) &&
+            CheckedAddBytes(temporary,workspace,temporary) && CheckedAddBytes(temporary,tile,temporary);
+        if(ok)
+        {
+            out.dense_factor_bytes=factor; out.right_singular_vector_bytes=factor;
+            out.factor_workspace_bytes=factor_workspace;
+            out.factor_rows=static_cast<Eigen::Index>(columns);
+            out.factor_columns=static_cast<Eigen::Index>(columns);
+        }
+        break;
+    }
     }
     if(!ok) {Overflow(out); return out;}
     out.temporary_bytes=temporary;
@@ -389,6 +418,7 @@ std::string FormatMemoryEstimate(const MemoryEstimate & estimate)
        <<"  target_atoms="<<s.component_target_atoms<<'\n'
        <<"  halo_atoms="<<s.component_halo_atoms<<'\n'
        <<"  nuisance_atoms="<<s.component_nuisance_atoms<<'\n'
+       <<"  covariance_columns="<<s.component_covariance_columns<<'\n'
        <<"  identity_validation_scratch="<<Bytes(s.identity_validation_bytes)<<'\n'
        <<"  resident="<<Bytes(estimate.resident_bytes)<<'\n'
        <<"  temporary="<<Bytes(estimate.temporary_bytes)<<'\n'

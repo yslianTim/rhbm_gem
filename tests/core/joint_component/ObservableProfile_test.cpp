@@ -305,6 +305,12 @@ TEST(JointObservableProfileTest, ProfileCovarianceMatchesAugmentedJacobian)
 {
     const core::JointProblem problem(Input(true)); const auto fit=core::FitJointComponents(problem,{.65,missing_width,missing_width});
     ASSERT_TRUE(fit.assembled_state); ASSERT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    const auto & data=core::JointProblemAccess::Get(problem);
+    const auto covariance_domain=n::ProfileDomain(data.domain,*fit.components.front().layout);
+    const auto covariance_memory=n::TargetCovarianceMemoryEstimate(covariance_domain);
+    EXPECT_EQ(covariance_memory.stage,n::MemoryStage::TargetCovariance);
+    EXPECT_EQ(covariance_memory.status,n::MemoryStatus::Pass);
+    EXPECT_EQ(covariance_memory.shape.component_covariance_columns,3u);
     const auto result=core::CaptureJointAnalysisResult(fit);
     const auto uncertainties=core::detail::ComputeJointUncertainty(problem,result);
     const auto & uncertainty=uncertainties.at(1); ASSERT_TRUE(uncertainty.covariance) << uncertainty.reason;
@@ -321,6 +327,16 @@ TEST(JointObservableProfileTest, ProfileCovarianceMatchesAugmentedJacobian)
     const n::Matrix factor=svd.matrixV()*svd.singularValues().cwiseInverse().asDiagonal();
     const n::Matrix covariance=*uncertainty.residual_variance*factor*factor.transpose();
     EXPECT_LT(((*uncertainty.covariance-covariance.topLeftCorner<3,3>()).norm()/covariance.topLeftCorner<3,3>().norm()),1e-10);
+    auto unavailable_covariance=uncertainty;
+    unavailable_covariance.status=rhbm_gem::EvidenceStatus::Unavailable;
+    unavailable_covariance.covariance.reset(); unavailable_covariance.reason="resource-limit:target-covariance";
+    rhbm_gem::LocalStageEstimate stage; stage.source.role=rhbm_gem::FittingRole::Target;
+    stage.point=rhbm_gem::GaussianModel3D{state.ac[0],state.b[0],state.ac[1]};
+    stage.uncertainty=unavailable_covariance;
+    const auto group_evidence=core::detail::BuildJointParameterEvidence(stage);
+    EXPECT_TRUE(group_evidence.estimate);
+    EXPECT_EQ(group_evidence.status,rhbm_gem::EvidenceStatus::Unavailable);
+    EXPECT_EQ(group_evidence.reason,"resource-limit:target-covariance");
     // A saved convergence flag cannot bypass the regular interior covariance gate.
     auto boundary=result; boundary.components[0].state->ac[0]=0;
     const auto unavailable=core::detail::ComputeJointUncertainty(problem,boundary);
@@ -829,6 +845,10 @@ TEST(JointObservableProfileTest, LargeDerivedTargetEvidenceHasLinearMemoryAndNoG
     EXPECT_EQ(memory.shape.component_target_atoms,atoms);
     EXPECT_LT(memory.estimated_peak_bytes,50'000'000u);
     EXPECT_EQ(memory.dense_factor_bytes,0u);
+    const auto covariance_memory=n::TargetCovarianceMemoryEstimate(data.domain);
+    EXPECT_EQ(covariance_memory.stage,n::MemoryStage::TargetCovariance);
+    EXPECT_EQ(covariance_memory.status,n::MemoryStatus::Reject);
+    EXPECT_GT(covariance_memory.estimated_peak_bytes,covariance_memory.budget_bytes);
     n::AssessmentWorkForTesting()={};
     const auto evidence=n::AssessTargetState(problem,problem.ParameterLayout(),state,{},{},
         rhbm_gem::JointEvidenceScope::AssembledGlobal,data.input->observations.size());
