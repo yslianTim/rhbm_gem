@@ -4,6 +4,7 @@
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/StructuralPartition.hpp"
 #include "core/detail/joint_component/TargetEvidence.hpp"
+#include "support/BoundedRankResearch.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -404,6 +405,13 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     EXPECT_TRUE(giant_streaming.available);
     EXPECT_FALSE(giant_streaming.certified_full_rank);
     EXPECT_LE(giant_streaming.estimated_peak_bytes,n::JointMemoryPlanningBudgetBytes);
+    const auto giant_sparseqr=second_stage_test::bounded_rank::SparseQRRank(full_design,
+        endpoint_context.rank,1.0,second_stage_test::bounded_rank::SparseQROrdering::COLAMD,
+        n::CurrentRssBytes().value_or(full_design_bytes));
+    EXPECT_FALSE(giant_sparseqr.preflight_passed);
+    EXPECT_FALSE(giant_sparseqr.valid);
+    EXPECT_EQ(giant_sparseqr.status,"ResourceLimit");
+    EXPECT_EQ(giant_sparseqr.reason,"estimated-peak-exceeds-budget");
     const auto rank_evidence=n::AssessmentEvidence(certification.assessment,rhbm_gem::JointEvidenceScope::ComponentLocal);
     const auto design_check=std::find_if(rank_evidence.begin(),rank_evidence.end(),[](const auto & check) {
         return check.name=="design-identifiability";
@@ -499,6 +507,17 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
         <<" streaming_rss_after_bytes="<<(giant_streaming.current_rss_after_bytes ? std::to_string(*giant_streaming.current_rss_after_bytes) : "unavailable")
         <<" streaming_process_peak_rss_bytes="<<(giant_streaming.process_peak_rss_bytes ? std::to_string(*giant_streaming.process_peak_rss_bytes) : "unavailable")
         <<" streaming_seconds="<<giant_streaming.seconds
+        <<" sparseqr_estimated_temporary_bytes="<<giant_sparseqr.estimated_temporary_bytes
+        <<" sparseqr_estimated_peak_bytes="<<giant_sparseqr.estimated_peak_bytes
+        <<" sparseqr_rss_before_bytes="<<(giant_sparseqr.current_rss_before_bytes ?
+            std::to_string(*giant_sparseqr.current_rss_before_bytes) : "unavailable")
+        <<" sparseqr_rss_after_bytes="<<(giant_sparseqr.current_rss_after_bytes ?
+            std::to_string(*giant_sparseqr.current_rss_after_bytes) : "unavailable")
+        <<" sparseqr_process_peak_rss_bytes="<<(giant_sparseqr.process_peak_rss_bytes ?
+            std::to_string(*giant_sparseqr.process_peak_rss_bytes) : "unavailable")
+        <<" sparseqr_status="<<giant_sparseqr.status
+        <<" sparseqr_reason="<<giant_sparseqr.reason
+        <<" sparseqr_factorization=NotRun"
         <<" endpoint_estimated_peak_bytes="<<endpoint_memory.estimated_peak_bytes
         <<" rank_estimated_peak_bytes="<<certification.assessment.rank_memory_estimate.estimated_peak_bytes
         <<" design_spectrum_peak_bytes="<<rank_stages[0].estimated_peak_bytes

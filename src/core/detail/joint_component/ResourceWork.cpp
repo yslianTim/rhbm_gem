@@ -127,6 +127,7 @@ const char * MemoryStageName(MemoryStage stage)
     case MemoryStage::RankAssessment: return "rank-assessment";
     case MemoryStage::StructuralRank: return "structural-rank";
     case MemoryStage::StreamingSpectralBounds: return "streaming-spectral-bounds";
+    case MemoryStage::SparseQRResearch: return "sparseqr-research";
     case MemoryStage::DesignSpectrum: return "design-spectrum";
     case MemoryStage::ProjectedWidthAssessment: return "projected-width-assessment";
     case MemoryStage::LocalCorrection: return "local-correction";
@@ -248,6 +249,17 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
         if(!columns) columns=shape.component_free_columns;
         ok=AddProduct(temporary,rows,2*sizeof(double)) &&
             AddProduct(temporary,columns,4*sizeof(double)+2*sizeof(Eigen::Index)+sizeof(std::uint8_t));
+        break;
+    }
+    case MemoryStage::SparseQRResearch:
+    {
+        const auto columns=shape.component_design_columns;
+        // Conservative experimental allowance for column-sized pivot data, dense
+        // worst-case R/work arrays, dense row-column workspace, and sparse copies.
+        ok=AddProduct2D(temporary,columns,columns,3*sizeof(double)+6*sizeof(Eigen::Index)) &&
+            AddProduct2D(temporary,rows,columns,sizeof(double)) &&
+            AddProduct(temporary,shape.component_structural_nonzeros,6*(sizeof(double)+sizeof(Eigen::Index))) &&
+            AddProduct(temporary,columns,16*(sizeof(double)+sizeof(Eigen::Index)));
         break;
     }
     case MemoryStage::DesignSpectrum:

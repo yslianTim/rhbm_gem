@@ -371,7 +371,8 @@ list(JOIN joint_numerical_patterns ":" joint_numerical_filter)
 string(APPEND joint_numerical_filter
     "-JointComponentNumericsTest.CompactJacobianGramIdentityDiagnosticsAcrossLattices"
     ":JointFixedNeighborBlockCoordinateTest.ProductionScaleSingleComponentPreparationStaysBelowBudget"
-    ":JointComponentBoundedRankTest.StreamingGershgorinControlsNeverOverstateTheirEvidence")
+    ":JointComponentBoundedRankTest.StreamingGershgorinControlsNeverOverstateTheirEvidence"
+    ":JointComponentSparseQRResearchTest.*")
 add_test(NAME rhbm_tests_joint_component_numerical
     COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes --gtest_filter=${joint_numerical_filter})
 set_tests_properties(rhbm_tests_joint_component_numerical PROPERTIES
@@ -384,6 +385,38 @@ add_test(NAME joint_bounded_rank_streaming_controls
 set_tests_properties(joint_bounded_rank_streaming_controls PROPERTIES
     LABELS "core;domain:core;intent:algorithm;joint:numerical;joint:offline;long" TIMEOUT 900
     ENVIRONMENT "OMP_NUM_THREADS=1")
+
+add_test(NAME joint_bounded_rank_sparseqr_controls
+    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
+        --gtest_filter=JointComponentSparseQRResearchTest.SmallControlsCompareBothOrderingsWithDenseSvd:JointComponentSparseQRResearchTest.LargePreflightRejectsBeforeFactorization)
+set_tests_properties(joint_bounded_rank_sparseqr_controls PROPERTIES
+    LABELS "core;domain:core;intent:algorithm;joint:numerical;joint:offline;research" TIMEOUT 900
+    ENVIRONMENT "OMP_NUM_THREADS=1")
+
+function(add_joint_sparseqr_topology_test test_name gtest_name)
+    add_test(NAME ${test_name}
+        COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
+            --gtest_filter=JointComponentSparseQRResearchTest.${gtest_name})
+    set_tests_properties(${test_name} PROPERTIES
+        LABELS "core;domain:core;intent:algorithm;joint:numerical;joint:offline;research"
+        TIMEOUT 900 ENVIRONMENT "OMP_NUM_THREADS=1")
+endfunction()
+add_joint_sparseqr_topology_test(joint_sparseqr_chain_128_natural Chain128Natural)
+add_joint_sparseqr_topology_test(joint_sparseqr_chain_128_colamd Chain128COLAMD)
+add_joint_sparseqr_topology_test(joint_sparseqr_cube_128_natural Cube128Natural)
+add_joint_sparseqr_topology_test(joint_sparseqr_cube_128_colamd Cube128COLAMD)
+add_joint_sparseqr_topology_test(joint_sparseqr_chain_256_natural Chain256Natural)
+add_joint_sparseqr_topology_test(joint_sparseqr_chain_256_colamd Chain256COLAMD)
+add_joint_sparseqr_topology_test(joint_sparseqr_cube_256_natural Cube256Natural)
+add_joint_sparseqr_topology_test(joint_sparseqr_cube_256_colamd Cube256COLAMD)
+add_joint_sparseqr_topology_test(joint_sparseqr_chain_512_natural Chain512Natural)
+add_joint_sparseqr_topology_test(joint_sparseqr_chain_512_colamd Chain512COLAMD)
+add_joint_sparseqr_topology_test(joint_sparseqr_cube_512_natural Cube512Natural)
+add_joint_sparseqr_topology_test(joint_sparseqr_cube_512_colamd Cube512COLAMD)
+add_joint_sparseqr_topology_test(joint_sparseqr_chain_1024_natural Chain1024Natural)
+add_joint_sparseqr_topology_test(joint_sparseqr_chain_1024_colamd Chain1024COLAMD)
+add_joint_sparseqr_topology_test(joint_sparseqr_cube_1024_natural Cube1024Natural)
+add_joint_sparseqr_topology_test(joint_sparseqr_cube_1024_colamd Cube1024COLAMD)
 
 add_test(NAME joint_component_gram_scalability
     COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
