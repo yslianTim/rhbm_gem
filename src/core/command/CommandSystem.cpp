@@ -7,6 +7,8 @@
 #include "detail/CommandEnumCatalog.hpp"
 
 #include <CLI/CLI.hpp>
+#include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <filesystem>
 #include <map>
@@ -176,6 +178,55 @@ void BindVectorCliField(
     }
 }
 
+std::vector<std::string> ParseSelectedChainIds(
+    const std::string & value,
+    const std::string & option_name)
+{
+    std::vector<std::string> chain_ids;
+    std::size_t start{};
+    while (start <= value.size())
+    {
+        const auto end{ value.find(',', start) };
+        const auto token_end{ end == std::string::npos ? value.size() : end };
+        const std::string token{ value.substr(start, token_end - start) };
+        const auto first{ std::find_if_not(token.begin(), token.end(), [](unsigned char character)
+        {
+            return std::isspace(character) != 0;
+        }) };
+        if (first == token.end())
+        {
+            throw CLI::ValidationError(
+                option_name, "Chain IDs must be non-empty comma-separated values.");
+        }
+        const auto last{ std::find_if_not(token.rbegin(), token.rend(), [](unsigned char character)
+        {
+            return std::isspace(character) != 0;
+        }).base() };
+        chain_ids.emplace_back(first, last);
+        if (end == std::string::npos)
+        {
+            break;
+        }
+        start = end + 1;
+    }
+    return chain_ids;
+}
+
+void BindSelectedChainCliField(
+    CLI::App & command,
+    PotentialAnalysisRequest * request,
+    const command_internal::RequestField<PotentialAnalysisRequest, std::vector<std::string>> & field)
+{
+    command.add_option_function<std::string>(
+        field.cli_flags,
+        [request, member = field.member, option_name = std::string(field.cli_flags)](
+            const std::string & value)
+        {
+            request->*member = ParseSelectedChainIds(value, option_name);
+        },
+        field.help);
+}
+
 template <typename Request, typename FieldType>
 void BindEnumCliField(
     CLI::App & command,
@@ -245,7 +296,22 @@ void BindCliField(
     }
     else if constexpr (VectorTraits<FieldType>::kIsVector)
     {
-        BindVectorCliField(command, request, field);
+        if constexpr (std::is_same_v<Request, PotentialAnalysisRequest>
+            && std::is_same_v<FieldType, std::vector<std::string>>)
+        {
+            if (std::string(field.field_name) == "selected_chain_ids")
+            {
+                BindSelectedChainCliField(command, request, field);
+            }
+            else
+            {
+                BindVectorCliField(command, request, field);
+            }
+        }
+        else
+        {
+            BindVectorCliField(command, request, field);
+        }
     }
     else if constexpr (HasCommandEnumTraits<FieldType>)
     {

@@ -81,6 +81,7 @@ struct PotentialAnalysisRequest : public CommandRequestBase
     std::filesystem::path database_path{ GetDefaultDatabasePath() };
     std::filesystem::path model_file_path{};
     std::filesystem::path map_file_path{};
+    std::vector<std::string> selected_chain_ids{};
     bool simulation_flag{ false };
     double simulated_map_resolution{ 0.0 };
     std::string saved_key_tag{ "model" };

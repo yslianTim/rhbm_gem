@@ -17,14 +17,42 @@
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
+#include <algorithm>
 #include <map>
+#include <cctype>
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace rhbm_gem::core {
 
 namespace {
+
+struct PreparedPotentialAnalysisInputs
+{
+    std::unique_ptr<ModelObject> model_object;
+    JointAnalysisMetadata metadata;
+};
+
+std::string TrimChainId(const std::string & chain_id)
+{
+    const auto first{ std::find_if_not(chain_id.begin(), chain_id.end(), [](unsigned char character)
+    {
+        return std::isspace(character) != 0;
+    }) };
+    if (first == chain_id.end())
+    {
+        return {};
+    }
+    const auto last{ std::find_if_not(chain_id.rbegin(), chain_id.rend(), [](unsigned char character)
+    {
+        return std::isspace(character) != 0;
+    }).base() };
+    return std::string(first, last);
+}
 
 std::string BuildAtomCountingSummary(const ModelObject & model_object)
 {
@@ -64,26 +92,43 @@ void NormalizeAndValidateRequest(
         request, &PotentialAnalysisRequest::simulated_map_resolution);
     runner.RequireNonEmptyList(request, &PotentialAnalysisRequest::saved_key_tag);
     runner.RequireEnum(request, &PotentialAnalysisRequest::estimator);
+    std::vector<std::string> selected_chain_ids;
+    std::unordered_set<std::string> unique_chain_ids;
+    bool has_empty_chain_id{};
+    for (const auto & chain_id : request.selected_chain_ids)
+    {
+        auto normalized_chain_id{ TrimChainId(chain_id) };
+        if (normalized_chain_id.empty())
+        {
+            has_empty_chain_id = true;
+        }
+        else if (unique_chain_ids.insert(normalized_chain_id).second)
+        {
+            selected_chain_ids.emplace_back(std::move(normalized_chain_id));
+        }
+    }
+    request.selected_chain_ids = std::move(selected_chain_ids);
+    if (has_empty_chain_id)
+    {
+        runner.AddFieldValidationError(&PotentialAnalysisRequest::selected_chain_ids,
+            "--select-chain cannot contain an empty chain ID.");
+    }
     if (request.estimator==PotentialEstimator::JOINT_COMPONENTS)
     {
         if (request.job_count>1) runner.AddFieldNormalizationWarning(&PotentialAnalysisRequest::job_count,"Joint initialization and fitting use one worker.");
     }
 }
 
-bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
+bool ExecutePreparedRequest(
+    const PotentialAnalysisRequest & request,
+    PreparedPotentialAnalysisInputs inputs)
 {
-    JointAnalysisMetadata metadata;
+    JointAnalysisMetadata metadata{ std::move(inputs.metadata) };
     const bool joint=request.estimator==PotentialEstimator::JOINT_COMPONENTS;
-    std::unique_ptr<ModelObject> model_object;
+    auto model_object{ std::move(inputs.model_object) };
     std::unique_ptr<MapObject> map_object;
     try
     {
-        if (joint)
-        {
-            metadata.model_sha256=FileSha256(request.model_file_path);
-            metadata.map_sha256=FileSha256(request.map_file_path);
-        }
-        model_object = ReadModel(request.model_file_path);
         map_object = ReadMap(request.map_file_path);
         if (joint && (FileSha256(request.model_file_path)!=*metadata.model_sha256 ||
                       FileSha256(request.map_file_path)!=*metadata.map_sha256))
@@ -139,11 +184,6 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
                 + std::string(e.what()));
         return false;
     }
-
-    model_object->SelectAtoms([](const AtomObject & atom)
-    {
-        return atom.GetElement() != Element::HYDROGEN;
-    });
 
     Logger::Log(LogLevel::Info, BuildAtomCountingSummary(*model_object));
 
@@ -207,11 +247,76 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
 
 void ValidatePreparedRequest(
     CommandRunner<PotentialAnalysisRequest> & runner,
-    const PotentialAnalysisRequest & request)
+    const PotentialAnalysisRequest & request,
+    PreparedPotentialAnalysisInputs & inputs)
 {
     runner.RequirePrepareCondition(
         !request.simulation_flag || request.simulated_map_resolution > 0.0,
         "Expected a positive simulated-map resolution when '--simulation true' is selected.");
+    if (request.simulation_flag && request.simulated_map_resolution <= 0.0)
+    {
+        return;
+    }
+
+    const bool joint{ request.estimator == PotentialEstimator::JOINT_COMPONENTS };
+    try
+    {
+        if (joint)
+        {
+            inputs.metadata.model_sha256 = FileSha256(request.model_file_path);
+            inputs.metadata.map_sha256 = FileSha256(request.map_file_path);
+        }
+        inputs.model_object = ReadModel(request.model_file_path);
+    }
+    catch (const std::exception & error)
+    {
+        runner.AddFieldValidationError(&PotentialAnalysisRequest::model_file_path,
+            "Unable to load model for target validation: " + std::string(error.what()));
+        return;
+    }
+    if (inputs.model_object == nullptr)
+    {
+        runner.AddFieldValidationError(&PotentialAnalysisRequest::model_file_path,
+            "Unable to load model for target validation.");
+        return;
+    }
+
+    std::unordered_set<std::string> available_chain_ids;
+    for (const auto & atom : inputs.model_object->GetAtomList())
+    {
+        available_chain_ids.insert(atom->GetChainID());
+    }
+    bool has_unknown_chain{};
+    for (const auto & chain_id : request.selected_chain_ids)
+    {
+        if (available_chain_ids.contains(chain_id))
+        {
+            continue;
+        }
+        has_unknown_chain = true;
+        runner.AddFieldValidationError(&PotentialAnalysisRequest::selected_chain_ids,
+            "Chain ID '" + chain_id + "' specified by --select-chain does not exist in the model.");
+    }
+    if (has_unknown_chain)
+    {
+        return;
+    }
+
+    const std::unordered_set<std::string> selected_chain_ids{
+        request.selected_chain_ids.begin(), request.selected_chain_ids.end()
+    };
+    inputs.model_object->SelectAtoms([&selected_chain_ids](const AtomObject & atom)
+    {
+        return atom.GetElement() != Element::HYDROGEN
+            && (selected_chain_ids.empty() || selected_chain_ids.contains(atom.GetChainID()));
+    });
+    if (inputs.model_object->GetSelectedAtomCount() == 0)
+    {
+        runner.AddFieldValidationError(&PotentialAnalysisRequest::selected_chain_ids,
+            request.selected_chain_ids.empty()
+                ? "The model contains no non-hydrogen target atoms."
+                : "--select-chain selected no non-hydrogen target atoms.");
+    }
 }
 
 } // namespace
@@ -220,13 +325,17 @@ namespace command_internal {
 
 CommandResult ExecutePotentialAnalysisCommand(const PotentialAnalysisRequest & request)
 {
+    PreparedPotentialAnalysisInputs inputs;
     return CommandRunner<PotentialAnalysisRequest>{}.Run(
         request,
         NormalizeAndValidateRequest,
-        ValidatePreparedRequest,
-        [](const PotentialAnalysisRequest & prepared)
+        [&inputs](auto & runner, const auto & prepared)
         {
-            try { return ExecutePreparedRequest(prepared); }
+            ValidatePreparedRequest(runner, prepared, inputs);
+        },
+        [&inputs](const PotentialAnalysisRequest & prepared)
+        {
+            try { return ExecutePreparedRequest(prepared, std::move(inputs)); }
             catch (const std::exception & error)
             {
                 Logger::Log(LogLevel::Error,"PotentialAnalysisCommand : "+std::string(error.what()));
