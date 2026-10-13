@@ -273,7 +273,7 @@ Invalid input/problem construction and persistence errors fail the command.
 
 `result_dump --printer joint` writes `joint_result_<sanitized-key>.json` and
 `joint_atoms_<sanitized-key>.csv`, plus `joint_atoms_<sanitized-key>.contributions.csv`.
-JSON schema 8 includes metadata, identities, parameter layout, nuisance amplitudes, seed provenance,
+JSON schema 9 includes metadata, identities, parameter layout, nuisance amplitudes, seed provenance,
 row mappings/mask, initial values, trusted states, optional parameter-only
 candidate diagnostics, objectives, cost counters, checks, ranks and captured
 convergence. CSV has one row per fitted contributor (including unavailable targets):
@@ -296,7 +296,7 @@ Save upgrades and writes in one transaction, rolling back on failure. Older
 versions, including v16, remain unchanged on rejection. A saved key holds one joint outcome;
 saving a model without a joint result over that key removes the previous outcome.
 
-### Provenance and map units (joint JSON schemas 3 through 8)
+### Provenance and map units (joint JSON schemas 3 through 9)
 
 `metadata.model_sha256` and `map_sha256` fingerprint the original file bytes,
 checked before and after loading. Paths remain descriptive, not content identity.
@@ -346,14 +346,16 @@ the objective only and must not be used for this conversion. CSV retains fitted
 coefficients; its appended `SelectionRole` distinguishes target, halo and not-recorded; keep its companion JSON for units and
 provenance. No conversion is performed during export.
 
-Production joint JSON schemas 3 through 8 are accepted. Earlier joint JSON is rejected
+Production joint JSON schemas 3 through 9 are accepted. Earlier joint JSON is rejected
 with a request to regenerate the outcome, without migration or database writes.
-New Joint result JSON uses schema 8. Schemas 3 through 7 preserve their saved
-evidence and convergence statuses. In particular, failed historical local or
+New Joint result JSON uses schema 9. Schemas 3 through 8 preserve their saved
+evidence and convergence statuses. Schema 9 stores `target-estimability-v3`
+and rank-context identities without computed null-space leakage or full-Jacobian
+column scales. In particular, failed historical local or
 target-local correction checks remain failed on load; the reader does not
-rerun those solves. Schema 8 records the correction-free numerical contract and
-stores endpoint-verification and numerical-qualification diagnostics
-separately. Legacy reference agreement is not mapped to conditional KKT, and
+rerun those solves. Schemas 8 and 9 record the correction-free numerical
+contract and store endpoint-verification and numerical-qualification
+diagnostics separately. Legacy reference agreement is not mapped to conditional KKT, and
 no reference status is mapped to independent replay.
 See the [target contract](../joint-target-estimability.md)
 for target convergence, halo representative availability and covariance. SQLite v19 additionally stores neutral

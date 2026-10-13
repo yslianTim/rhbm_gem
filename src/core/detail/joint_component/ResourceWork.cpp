@@ -334,8 +334,8 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
         {
             out.dense_factor_bytes=factor; out.right_singular_vector_bytes=factor;
             out.factor_workspace_bytes=factor_workspace;
-            out.factor_rows=static_cast<Eigen::Index>(columns);
-            out.factor_columns=static_cast<Eigen::Index>(columns);
+            out.factor_rows=columns;
+            out.factor_columns=columns;
         }
         break;
     }

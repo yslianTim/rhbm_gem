@@ -12,6 +12,11 @@ assessment; it does not form a correction Jacobian or run a correction SVD or
 step solve.
 The independent reference computes its own weighted reduction and retains the
 singular-vector factors needed by its compact free-face least-squares solve.
+Derived Target Identifiability reuses Design Rank and Projected-width Rank and
+does not run a full `(A, C, log B)` Jacobian SVD. The independent uncertainty
+path may run a compact full-rank factorization for covariance only after its
+separate `target-covariance` memory preflight; it does not certify target
+identifiability.
 
 The private compact helper uses JacobiSVD when the compact dimension is below
 16 and Eigen BDCSVD otherwise. The current EIGEN-backed path uses this dispatch;

@@ -44,7 +44,7 @@ reuse numeric factors, accepted states, or replay results across sweeps. The
 route preserves the objective, local A/C solve, width parameterization, serial
 update semantics and OneAccepted behavior. The correction-free numerical
 contract is solver provenance v5 and FixedNeighbor policy v4, separate from
-schemas 3–7 and their stored evidence. See the
+schemas 3–8 and their stored evidence. See the
 [Joint runtime contract](joint-component-runtime.md) for the implementation
 details.
 
@@ -90,14 +90,17 @@ The 5,938,087-row, 37,406-atom single-component census now continues through
 streaming endpoint verification and both numerical preflights. The synthetic
 input has 74,811 support memberships, 3,118 blocks and 37,406 targets. Its
 DesignSpectrum peak is estimated at 189,484,131,163 bytes; projected-width
-assessment is reduced to 39,065,926,939 bytes; target geometry is estimated at
-317,422,079,259 bytes. Those stages exceed the planning budget, so they are
-`NotRun`; the estimates are not measured allocations. Local-correction
-workspaces are no longer planned. Endpoint verification passes with zero production reference solve
-calls. The isolated serial test process peaks at 622,624,768 bytes, while the
-target memory preflight calculation takes about 0.0056 seconds. See the
+assessment is 39,065,926,939 bytes. Both rank stages exceed the planning
+budget and their dense factorizations are `NotRun`; the estimates are not
+measured allocations. Derived Target Identifiability is estimated at about
+482,240,000 bytes and has no dense factor workspace. The independent covariance
+preflight is estimated at about 418,400,000,000 bytes and rejects before
+factorization. In this shape, structural rank deficiency leaves no trusted
+rank evidence, so the target result remains unavailable even though its
+evidence-memory preflight passes. Local-correction workspaces are no longer
+planned. See the
 [component memory census](joint-component-memory-census.md) for stage
-dimensions, current RSS checkpoints and the estimate/RSS scope.
+dimensions and the estimate/RSS scope.
 
 ## Historical KKT and reference agreement evidence
 

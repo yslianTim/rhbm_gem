@@ -455,7 +455,7 @@ TEST(JointObservableProfileTest, HaloNonuniquenessDoesNotCertifyItsParameters)
     EXPECT_FALSE(stages.at(1).point); EXPECT_FALSE(stages.at(4).point);
     const auto text=rhbm_gem::joint_result_io::Encode(saved);
     auto value=boost::json::parse(text);
-    EXPECT_EQ(value.at("schema_version").as_int64(),8);
+    EXPECT_EQ(value.at("schema_version").as_int64(),9);
     auto downgraded=value;
     downgraded.as_object()["schema_version"]=7;
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(downgraded)),std::invalid_argument);
@@ -498,7 +498,7 @@ TEST(JointObservableProfileTest, TwoRowGeometryDoesNotPromoteAnUnqualifiedTarget
     ASSERT_NE(target,evidence.checks.end());
     EXPECT_EQ(target->status,rhbm_gem::JointCheckStatus::Unavailable);
     EXPECT_EQ(evidence.atoms[3].status,rhbm_gem::JointCheckStatus::Unavailable);
-    EXPECT_EQ(evidence.atoms[3].reason,"rank-context-mismatch");
+    EXPECT_EQ(evidence.atoms[3].reason,"nonfinite-parameter-state");
 }
 TEST(JointObservableProfileTest, UnqualifiedHaloRepresentativesDoNotProduceTargetCovariance)
 {
@@ -555,6 +555,8 @@ TEST(JointObservableProfileTest, TargetContractKeepsCorrectionRequiredOnlyForHis
         {"target-local-correction",Status::Failed,Scope::ComponentLocal,{},{},{}}};
     EXPECT_EQ(n::TargetConvergence(evidence,true),Status::Failed);
     evidence.contract="target-estimability-v2";
+    EXPECT_EQ(n::TargetConvergence(evidence,true),Status::Passed);
+    evidence.contract="target-estimability-v3";
     EXPECT_EQ(n::TargetConvergence(evidence,true),Status::Passed);
 }
 TEST(JointObservableProfileTest, TargetEvidenceRequiresSelectionMetadata)
@@ -662,9 +664,16 @@ TEST(JointObservableProfileTest, TargetGeometryNumericalOracleCapturesOldContrac
     EXPECT_EQ(component.target_evidence->ranks[0].rank,2u);
     EXPECT_EQ(component.target_evidence->ranks[1].name,"projected-width");
     EXPECT_EQ(component.target_evidence->ranks[1].rank,1u);
-    ASSERT_EQ(component.target_evidence->atoms.size(),1u);
+    ASSERT_EQ(component.target_evidence->atoms.size(),3u);
     EXPECT_EQ(component.target_evidence->atoms.front().status,Status::Passed);
+    EXPECT_EQ(component.target_evidence->atoms.front().atom,0u);
     EXPECT_FALSE(component.target_evidence->atoms.front().null_space_leakage);
+    for(std::size_t atom=1;atom<component.target_evidence->atoms.size();++atom)
+    {
+        EXPECT_EQ(component.target_evidence->atoms[atom].atom,atom);
+        EXPECT_EQ(component.target_evidence->atoms[atom].status,Status::Unavailable);
+        EXPECT_EQ(component.target_evidence->atoms[atom].reason,"observable-contribution-only");
+    }
     const auto old_nullspace=old_geometry.right_vectors.rightCols(old_geometry.right_vectors.cols()-old_geometry.rank);
     EXPECT_LE(old_nullspace.topRows(3).norm(),1e-10);
     EXPECT_EQ(component.TargetRuntimeConvergence(),Status::Passed);
@@ -709,6 +718,23 @@ TEST(JointObservableProfileTest, TargetGeometryOracleMapsFullAbcHaloCoordinates)
         problem.Input().selection_domain->target_indices.end(),0u));
     EXPECT_FALSE(std::binary_search(problem.Input().selection_domain->target_indices.begin(),
         problem.Input().selection_domain->target_indices.end(),3u));
+    const auto & data=core::JointProblemAccess::Get(problem);
+    const auto & layout=problem.ParameterLayout();
+    const auto domain=n::ProfileDomain(data.domain,layout);
+    const auto context=n::ProfileContext(data.context,layout,data.y.size());
+    const auto y=n::SelectValues(data.y,n::Indices{layout.informative_rows.begin(),layout.informative_rows.end()});
+    const auto old_geometry=OriginalGeometryOracle(domain,y,*fit.assembled_state,context);
+    ASSERT_TRUE(old_geometry.valid)<<old_geometry.reason;
+    EXPECT_FALSE(old_geometry.threshold_sensitive);
+    EXPECT_EQ(old_geometry.rank,6);
+    ASSERT_TRUE(fit.target_evidence);
+    ASSERT_EQ(fit.target_evidence->ranks.size(),2u);
+    EXPECT_EQ(fit.target_evidence->ranks[0].rank,4u);
+    EXPECT_EQ(fit.target_evidence->ranks[1].rank,2u);
+    EXPECT_EQ(target->status,rhbm_gem::JointCheckStatus::Passed);
+    EXPECT_EQ(halo->status,rhbm_gem::JointCheckStatus::Passed);
+    const auto old_nullspace=old_geometry.right_vectors.rightCols(old_geometry.right_vectors.cols()-old_geometry.rank);
+    EXPECT_EQ(old_nullspace.cols(),0);
 }
 
 TEST(JointObservableProfileTest, DerivedTargetEvidenceRequiresMatchingQualifiedRankEvidence)
@@ -736,7 +762,7 @@ TEST(JointObservableProfileTest, DerivedTargetEvidenceRequiresMatchingQualifiedR
 
     const auto derive_with=[&](const std::optional<rhbm_gem::JointState> & state,
         const std::vector<rhbm_gem::JointCheck> & checks,const std::vector<rhbm_gem::JointRankEvidence> & ranks,
-        const core::JointParameterLayout & layout,std::size_t rows) {
+        const rhbm_gem::JointParameterLayout & layout,std::size_t rows) {
         return n::DeriveTargetIdentifiability(problem,layout,state,checks,ranks,Scope::AssembledGlobal,rows);
     };
     const auto derive=[&](const std::optional<rhbm_gem::JointState> & state,
@@ -899,6 +925,9 @@ TEST(JointObservableProfileTest, OldGeometryOracleAndDerivedEvidenceKeepSeparate
     const auto old_near=OriginalGeometryOracle(domain,data.y.head(23),*fit.assembled_state,near_context);
     ASSERT_TRUE(old_near.valid);
     EXPECT_TRUE(old_near.threshold_sensitive);
+    ASSERT_TRUE(fit.target_evidence);
+    EXPECT_EQ(fit.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    EXPECT_EQ(fit.target_evidence->atoms.front().status,rhbm_gem::JointCheckStatus::Passed);
 
     auto near_ranks=fit.ranks;
     const auto design=std::find_if(near_ranks.begin(),near_ranks.end(),[](const auto & rank) {
@@ -963,7 +992,7 @@ TEST(JointObservableProfileTest, TargetEvidenceUsesEveryComponentAndTheSavedStat
     const auto covariance=core::detail::ComputeJointUncertainty(problem,saved);
     EXPECT_TRUE(covariance.at(1).covariance); EXPECT_TRUE(covariance.at(5).covariance);
     auto json=boost::json::parse(rhbm_gem::joint_result_io::Encode(saved));
-    EXPECT_EQ(json.at("schema_version").as_int64(),8);
+    EXPECT_EQ(json.at("schema_version").as_int64(),9);
     json.at("target_evidence").as_object()["column_scales"]=boost::json::array{1.};
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(json)),std::invalid_argument);
     const auto restored=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved));

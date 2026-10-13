@@ -60,7 +60,7 @@ struct JointAtomIdentifiability
 };
 struct JointTargetEvidence
 {
-    std::string contract{"target-estimability-v2"};
+    std::string contract{"target-estimability-v3"};
     std::vector<JointCheck> checks;
     std::vector<JointRankEvidence> ranks;
     std::vector<JointAtomIdentifiability> atoms;
