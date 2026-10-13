@@ -79,7 +79,24 @@ struct FixedNeighborEndpointCertification
     Assessment assessment;
     TrustEvidence trust;
     MemoryEstimate verification_memory_estimate;
-    bool passed() const {return trust.passed;}
+    bool verified() const {return trust.primary_valid && trust.passed && assessment.endpoint_verified;}
+    bool qualified() const {return verified() && assessment.qualified;}
+    bool resource_limited() const
+    {
+        return verification_memory_estimate.status!=MemoryStatus::Pass ||
+            assessment.rank_memory_estimate.status!=MemoryStatus::Pass ||
+            trust.reason.starts_with("resource-limit:") || assessment.failure.starts_with("resource-limit:");
+    }
+    std::string resource_limit_reason() const
+    {
+        if(verification_memory_estimate.status!=MemoryStatus::Pass)
+            return std::string("resource-limit:endpoint-verification:")+verification_memory_estimate.reason;
+        if(assessment.rank_memory_estimate.status!=MemoryStatus::Pass)
+            return std::string("resource-limit:rank-assessment:")+assessment.rank_memory_estimate.reason;
+        if(trust.reason.starts_with("resource-limit:")) return trust.reason;
+        if(assessment.failure.starts_with("resource-limit:")) return assessment.failure;
+        return {};
+    }
 };
 enum class FixedNeighborStationarityState {NotStationary,CandidateStationary,ConfirmedStationary};
 struct FixedNeighborDiagnosticSink

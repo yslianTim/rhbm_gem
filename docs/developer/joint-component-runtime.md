@@ -26,15 +26,21 @@ and an independent scalar streaming replay. It does not solve a second global
 A/C problem. The replay compares prediction, residual, objective, projected
 KKT and width-gradient evidence at the same parameters. Constrained KKT checks
 fixed-width A/C optimality; replay agreement checks numerical consistency; rank
-and local-correction checks separately qualify parameter identifiability. A
-valid endpoint that fails a check keeps its assessment and may continue through
-the same block-coordinate updates. While stationarity requirements remain
-confirmed, another certification is attempted at most once every 10 sweeps. At
-budget exhaustion, if the final sweep has no certification, one bounded
-assessment evaluates the final accepted state. It does not change parameters,
-add a sweep or mark the search complete. Search completion, endpoint
-verification, full numerical qualification, state availability and runtime
-convergence remain separate outcomes.
+and local-correction checks separately qualify parameter identifiability.
+Endpoint verification is distinct from full numerical qualification: a
+verified endpoint with failed but potentially recoverable numerical checks
+keeps its candidate and may continue through the same block-coordinate
+updates. While confirmed stationarity remains intact, certification retries
+remain bounded to one per 10 sweeps; losing stationarity resets eligibility.
+A rank or other assessment resource limit stops further qualification retries
+for that unchanged problem shape and preserves the candidate as uncertified.
+Invalid primary numerical state also stops the search. At budget exhaustion,
+if the final sweep has not been assessed, one bounded assessment evaluates the
+final accepted state. It does not change parameters or add a sweep. That
+assessment only completes the search when the final sweep is confirmed
+stationary and fully qualified; budget exhaustion by itself is not convergence.
+Search completion, endpoint verification, full numerical qualification, state
+availability and runtime convergence remain separate outcomes.
 
 `AssessProfileSearchForDiagnostics()` is a test-support diagnostic for Profile
 search history and trusted historical states. Production components use
@@ -53,13 +59,17 @@ trusted accepted local Profile LM update per block visit. Outside-core
 neighbors remain fixed while a block is solved. Each accepted block is replayed
 globally, checked for monotone roundoff-safe acceptance, and contributes to the
 existing global A/C KKT (`1e-10`), width-gradient (`1e-12`) and eta-confirmation
-(`1e-10`) criteria. Meeting these checks makes the endpoint a candidate; the
-existing independent trust assessment must also pass for successful stopping.
-Valid trust failures remain eligible for bounded retry; invalid primary
-assessments stop, and an untrusted endpoint at the sweep limit reports budget
-exhaustion without a usable state. The at-most-one accepted-update contract is
-intrinsic; diagnostic controls such as reverse order and trajectory capture are
-not production configuration.
+(`1e-10`) criteria. Meeting these checks makes the endpoint a candidate.
+Successful production stopping additionally requires endpoint verification and
+complete numerical qualification, including design and projected-width rank,
+local correction and numerical identifiability. A verified candidate that is
+not qualified is never exposed as a scientific component or assembled state.
+Recoverable numerical qualification failures continue through the same bounded
+block updates; resource-limited assessment stops retries without reporting
+convergence. An unqualified endpoint at the sweep limit reports budget
+exhaustion and remains available only as a candidate diagnostic. The
+at-most-one accepted-update contract is intrinsic; diagnostic controls such as
+reverse order and trajectory capture are not production configuration.
 
 The local numerical primitive is named **Profile LM** (Levenberg–Marquardt
 optimization of the profiled width objective). `SearchProfile()` optimizes

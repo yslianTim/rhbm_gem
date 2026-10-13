@@ -696,20 +696,25 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 if(policy.stop_after_stationarity) break;
                 continue;
             }
-            const bool retry_due=!out.certification || out.certification->passed() || certification_retry_due;
+            const bool retry_due=!out.certification || certification_retry_due;
             if(!retry_due) continue;
             out.certification=certify_endpoint();
             out.certification_sweep=sweep_index+1;
-            if(out.certification->passed())
+            if(out.certification->qualified())
             {
                 out.search_converged=true; out.reason="block-stationary";
                 break;
             }
-            if(!out.certification->trust.primary_valid ||
-                out.certification->trust.reason.starts_with("resource-limit:"))
+            if(out.certification->resource_limited())
             {
-                out.reason=out.certification->trust.reason.empty() ?
-                    "endpoint-certification-invalid-primary" : out.certification->trust.reason;
+                out.reason=out.certification->resource_limit_reason();
+                stop=true;
+            }
+            else if(!out.certification->trust.primary_valid || !out.certification->assessment.primary.valid)
+            {
+                out.reason=!out.certification->trust.reason.empty() ? out.certification->trust.reason :
+                    out.certification->assessment.failure.empty() ? "endpoint-certification-invalid-primary" :
+                        out.certification->assessment.failure;
                 stop=true;
             }
         }
@@ -722,10 +727,18 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         {
             out.certification=certify_endpoint();
             out.certification_sweep=out.sweep_count;
-            if(!out.certification->trust.primary_valid ||
-                out.certification->trust.reason.starts_with("resource-limit:"))
-                out.reason=out.certification->trust.reason.empty() ? "endpoint-certification-invalid-primary" :
-                    out.certification->trust.reason;
+            if(out.certification->qualified() && out.final_sweep &&
+                ClassifyFixedNeighborStationarity(out.final_sweep->global_ac_kkt,
+                    out.final_sweep->global_width_gradient_inf_norm,out.final_sweep->eta_change_inf,
+                    out.final_sweep->coordinate_confirmation_available)==FixedNeighborStationarityState::ConfirmedStationary)
+            {
+                out.search_converged=true; out.reason="block-stationary";
+            }
+            else if(out.certification->resource_limited()) out.reason=out.certification->resource_limit_reason();
+            else if(!out.certification->trust.primary_valid || !out.certification->assessment.primary.valid)
+                out.reason=!out.certification->trust.reason.empty() ? out.certification->trust.reason :
+                    out.certification->assessment.failure.empty() ? "endpoint-certification-invalid-primary" :
+                        out.certification->assessment.failure;
         }
     }
     return out;
@@ -826,6 +839,9 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     policy.core_atoms=production_policy.core_atoms;
     policy.maximum_sweeps=production_policy.maximum_sweeps;
     policy.order=production_policy.order;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(production_policy.configure_search_for_testing) production_policy.configure_search_for_testing(policy);
+#endif
     if(progress_component && observer)
     {
         policy.production_progress=[&observer,progress_component,&production_policy,context](
@@ -846,14 +862,14 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
         };
     }
     out.search=SearchFixedNeighborComponent(prepared.domain,local_layout,local_y,initial_eta,context,policy);
-    const bool certified=out.search.certification && out.search.certification->passed();
-    out.succeeded=out.search.search_converged && certified;
+    const bool qualified=out.search.certification && out.search.certification->qualified();
+    out.succeeded=out.search.search_converged && qualified;
     out.stop_reason=out.search.reason;
     if(progress_component)
         NotifyJointProgress(observer,JointProgressPhase::CertificationStarted,*progress_component,
             static_cast<int>(out.search.total_profile_evaluations),parent_context.profile_budget,
             static_cast<int>(out.search.total_accepted_local_updates),parent_context.update_budget,
-            out.search.search_seconds,out.stop_reason,certified,
+            out.search.search_seconds,out.stop_reason,qualified,
             LastFixedNeighborObjective(out.search),LastFixedNeighborGradient(out.search));
     return out;
 }

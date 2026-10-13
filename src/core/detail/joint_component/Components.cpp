@@ -164,7 +164,7 @@ JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & s
     {
         const auto & certification=*search.certification;
         out.reference_status=JointCheckStatus::NotRun;
-        out.endpoint_verification_status=certification.assessment.endpoint_verified ? JointCheckStatus::Passed :
+        out.endpoint_verification_status=certification.verified() ? JointCheckStatus::Passed :
             certification.verification_memory_estimate.status!=MemoryStatus::Pass ||
                 certification.assessment.failure.starts_with("resource-limit:") ?
                     JointCheckStatus::Unavailable : JointCheckStatus::Failed;
@@ -176,7 +176,7 @@ JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & s
             certification.assessment.identified;
         out.rank_assessment_status=rank_unavailable ? JointCheckStatus::Unavailable :
             rank_identified ? JointCheckStatus::Passed : JointCheckStatus::Failed;
-        out.certification_status=certification.passed() && certification.assessment.qualified ? JointCheckStatus::Passed :
+        out.certification_status=certification.qualified() ? JointCheckStatus::Passed :
             certification.verification_memory_estimate.status!=MemoryStatus::Pass ||
                 certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass ?
                 JointCheckStatus::Unavailable : JointCheckStatus::Failed;
@@ -280,7 +280,7 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
                         static_cast<double>(certification.verification_memory_estimate.estimated_peak_bytes),
                         static_cast<double>(certification.verification_memory_estimate.budget_bytes),
                         std::string("resource-limit:endpoint-verification:")+certification.verification_memory_estimate.reason});
-                if(certification.passed() && certification.assessment.qualified)
+                if(certification.qualified())
                     component.state=ComponentState(certification.assessment.primary,data.context.scale);
             }
         }
@@ -306,7 +306,7 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
                 data.context.update_budget,elapsed,component.stop_reason,component.state.has_value(),
                 accepted_objective,accepted_gradient_inf_norm);
         if(!has_observable_groups && component_count==1 && data.partition.constant_rows.empty() &&
-            fit.search.certification && fit.search.certification->passed() && fit.search.certification->assessment.qualified)
+            fit.search.certification && fit.search.certification->qualified())
             out.single_component_assessment=std::move(fit.search.certification->assessment);
         out.components.push_back(std::move(component));
     }

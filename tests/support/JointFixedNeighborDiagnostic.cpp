@@ -33,7 +33,7 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
 {
     out.assessment=certification.assessment;
     out.endpoint_trust=certification.trust;
-    out.endpoint_certified=certification.passed();
+    out.endpoint_certified=certification.verified();
     const Vector eta=Select(out.state.eta,IndicesOf(layout.full_atoms));
     const Vector beta=SelectBeta(out.state.beta,layout.full_atoms);
     JointCheck assembly_mapping,assembled_consistency;
@@ -51,11 +51,11 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
     component.first_order_stationarity_sweep=out.first_order_stationarity_sweep;
     component.confirmed_stationarity_sweep=out.confirmed_stationarity_sweep;
     component.endpoint_certification_sweep=out.sweeps.size();
-    const bool qualified=certification.passed() && out.assessment.qualified;
+    const bool qualified=certification.qualified();
     if(qualified) component.state=State(out.assessment.primary,context.scale);
     component.evidence=AssessmentEvidence(out.assessment,JointEvidenceScope::ComponentLocal);
     component.ranks=AssessmentRanks(out.assessment,JointEvidenceScope::ComponentLocal);
-    component.evidence.push_back({"endpoint-trust",certification.passed() ? JointCheckStatus::Passed :
+    component.evidence.push_back({"endpoint-trust",certification.verified() ? JointCheckStatus::Passed :
         JointCheckStatus::Failed,JointEvidenceScope::ComponentLocal,{},{},certification.trust.reason});
 
     out.fit.problem=problem; out.fit.layout=layout; out.fit.initialization.valid=true;
