@@ -544,6 +544,105 @@ TEST(JointObservableProfileTest, ExactSingleComponentTargetEvidenceIsReused)
     EXPECT_EQ(data.context.scale,fit.observation_scale);
 }
 
+TEST(JointObservableProfileTest, TargetGeometryNumericalOracleCapturesOldContract)
+{
+    using Status=rhbm_gem::JointCheckStatus;
+    const core::JointProblem problem(Input(true));
+    const auto fit=core::FitJointComponents(problem,{.6,missing_width,missing_width});
+    ASSERT_EQ(fit.components.size(),1u);
+    ASSERT_TRUE(fit.components.front().state);
+    ASSERT_TRUE(fit.components.front().target_evidence);
+    const auto & component=fit.components.front();
+    const auto & layout=*component.layout;
+    const auto & data=core::JointProblemAccess::Get(problem);
+    const auto domain=n::ProfileDomain(data.domain,layout);
+    const auto context=n::ProfileContext(data.context,layout,data.y.size());
+    const n::Vector y=n::SelectValues(data.y,{layout.informative_rows.begin(),layout.informative_rows.end()});
+    const n::Vector eta=Eigen::Map<const n::Vector>(component.state->log_b.data(),
+        static_cast<Eigen::Index>(component.state->log_b.size()));
+    const n::Vector beta=Eigen::Map<const n::Vector>(component.state->ac.data(),
+        static_cast<Eigen::Index>(component.state->ac.size()));
+    const auto endpoint=n::EvaluateState(domain,y,eta,beta,context);
+    ASSERT_TRUE(endpoint.valid);
+    n::Matrix jacobian= n::Matrix::Zero(y.size(),3*static_cast<Eigen::Index>(layout.full_atoms.size()));
+    for(Eigen::Index atom=0;atom<static_cast<Eigen::Index>(layout.full_atoms.size());++atom)
+    {
+        jacobian.middleCols(3*atom,2)=endpoint.x.middleCols(2*atom,2);
+        jacobian.col(3*atom+2)=endpoint.derivative.col(2*atom)*beta(2*atom)+
+            endpoint.derivative.col(2*atom+1)*beta(2*atom+1);
+    }
+    const n::Vector scales=jacobian.colwise().norm();
+    ASSERT_TRUE((scales.array()>0).all());
+    const n::Matrix scaled=jacobian*scales.cwiseInverse().asDiagonal();
+    const Eigen::JacobiSVD<n::Matrix> oracle(scaled,Eigen::ComputeThinU|Eigen::ComputeFullV);
+    const auto geometry=n::BuildTargetGeometry(domain,y,*component.state,context);
+    ASSERT_TRUE(geometry.valid)<<geometry.reason;
+    EXPECT_FALSE(geometry.threshold_sensitive);
+    EXPECT_EQ(geometry.svd.rank,3);
+    EXPECT_GT(geometry.svd.threshold,0);
+    EXPECT_EQ(geometry.scales.size(),3);
+    EXPECT_TRUE(geometry.scales.isApprox(scales,1e-12));
+    ASSERT_EQ(geometry.svd.singular_values.size(),oracle.singularValues().size());
+    EXPECT_TRUE(geometry.svd.singular_values.isApprox(oracle.singularValues(),1e-11));
+    const auto design=std::find_if(component.ranks.begin(),component.ranks.end(),[](const auto & rank) {
+        return rank.name=="design";
+    });
+    const auto widths=std::find_if(component.ranks.begin(),component.ranks.end(),[](const auto & rank) {
+        return rank.name=="projected-width";
+    });
+    ASSERT_NE(design,component.ranks.end()); ASSERT_NE(widths,component.ranks.end());
+    EXPECT_EQ(design->rank,2u); EXPECT_EQ(widths->rank,1u);
+    ASSERT_EQ(component.target_evidence->ranks.size(),1u);
+    EXPECT_EQ(component.target_evidence->ranks.front().name,"column-scaled-observation-jacobian");
+    EXPECT_EQ(component.target_evidence->ranks.front().rank,3u);
+    ASSERT_EQ(component.target_evidence->atoms.size(),1u);
+    EXPECT_EQ(component.target_evidence->atoms.front().status,Status::Passed);
+    ASSERT_TRUE(component.target_evidence->atoms.front().null_space_leakage);
+    EXPECT_LE(*component.target_evidence->atoms.front().null_space_leakage,1e-10);
+    EXPECT_EQ(component.TargetRuntimeConvergence(),Status::Passed);
+    const auto uncertainty=core::detail::ComputeJointUncertainty(problem,core::CaptureJointAnalysisResult(fit));
+    EXPECT_EQ(uncertainty.at(1).status,rhbm_gem::EvidenceStatus::Available);
+    EXPECT_TRUE(uncertainty.at(1).covariance);
+
+    auto boundary=*component.state;
+    boundary.ac[0]=0;
+    const auto boundary_geometry=n::BuildTargetGeometry(domain,y,boundary,context);
+    EXPECT_FALSE(boundary_geometry.valid);
+    EXPECT_EQ(boundary_geometry.reason,"active-amplitude-boundary");
+}
+
+TEST(JointObservableProfileTest, TargetGeometryOracleMapsFullAbcHaloCoordinates)
+{
+    auto input=Input();
+    input.atom_ids.push_back("4"); input.support.emplace_back();
+    for(std::size_t row=0;row<23;++row)
+    {
+        const double square=std::pow(.1+.09*static_cast<double>(row),2);
+        input.support.back().push_back({row,square});
+        const auto basis=n::EvaluateKernel(square,.9,2.5);
+        input.observations[row]+=.7*basis.gaussian+.15*basis.charge;
+    }
+    const core::JointProblem problem(std::move(input));
+    EXPECT_EQ(problem.ParameterLayout().full_atoms,(std::vector<std::size_t>{0,3}));
+    const auto fit=core::FitJointComponents(problem,{.6,missing_width,missing_width,.9});
+    ASSERT_TRUE(fit.assembled_state);
+    ASSERT_TRUE(fit.target_evidence);
+    ASSERT_EQ(fit.target_evidence->atoms.size(),4u);
+    const auto target=std::find_if(fit.target_evidence->atoms.begin(),fit.target_evidence->atoms.end(),[](const auto & atom) {
+        return atom.atom==0;
+    });
+    const auto halo=std::find_if(fit.target_evidence->atoms.begin(),fit.target_evidence->atoms.end(),[](const auto & atom) {
+        return atom.atom==3;
+    });
+    ASSERT_NE(target,fit.target_evidence->atoms.end()); ASSERT_NE(halo,fit.target_evidence->atoms.end());
+    EXPECT_EQ(target->status,rhbm_gem::JointCheckStatus::Passed);
+    EXPECT_EQ(halo->status,rhbm_gem::JointCheckStatus::Passed);
+    EXPECT_TRUE(std::binary_search(problem.Input().selection_domain->target_indices.begin(),
+        problem.Input().selection_domain->target_indices.end(),0u));
+    EXPECT_FALSE(std::binary_search(problem.Input().selection_domain->target_indices.begin(),
+        problem.Input().selection_domain->target_indices.end(),3u));
+}
+
 TEST(JointObservableProfileTest, TargetMemoryShapeSeparatesTargetsFromHaloColumns)
 {
     const auto input=TwoRowHalo(false);
