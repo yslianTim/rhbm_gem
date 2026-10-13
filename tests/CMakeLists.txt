@@ -196,6 +196,7 @@ set(JOINT_COMPONENT_WORKFLOW_TEST_SOURCES
 set(JOINT_COMPONENT_NUMERICAL_TEST_SOURCES
     core/joint_component/FixedNeighborBlockCoordinate_test.cpp
     core/joint_component/Numerics_test.cpp
+    core/joint_component/BoundedRank_test.cpp
 )
 
 set(JOINT_COMPONENT_TEST_SOURCES
