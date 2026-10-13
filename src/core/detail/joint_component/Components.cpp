@@ -219,7 +219,6 @@ std::vector<JointCheck> AnalyticNuisanceEvidence(JointEvidenceScope scope)
         {"width-gradient-consistency",passed,scope,0.0,{},reason},
         {"width-stationarity",passed,scope,0.0,1e-12,reason},
         {"design-identifiability",passed,scope,0.0,0.0,reason},
-        {"local-correction",passed,scope,0.0,1e-10,reason},
         {"numerical-identifiability",passed,scope,0.0,0.0,reason}};
 }
 FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(

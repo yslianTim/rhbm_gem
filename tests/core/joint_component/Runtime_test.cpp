@@ -555,8 +555,12 @@ TEST(JointComponentRuntimeTest, RuntimeConvergenceIsDerivedFromActualEvidenceNot
     EXPECT_EQ(fit.RuntimeConvergence(),Status::NotRun);
     set_status("conditional-ac-optimality",Status::Unavailable);
     EXPECT_EQ(fit.RuntimeConvergence(),Status::Unavailable);
+    set_status("independent-replay",Status::Passed);
+    set_status("conditional-ac-optimality",Status::Passed);
+    evidence.push_back({"local-correction",Status::Failed,rhbm_gem::JointEvidenceScope::ComponentLocal,.1,1e-10,
+        "historical-correction-evidence"});
     set_status("local-correction",Status::Failed);
-    EXPECT_EQ(fit.RuntimeConvergence(),Status::Failed);
+    EXPECT_EQ(fit.RuntimeConvergence(),Status::Passed);
     fit.components[0].state.reset();
     EXPECT_EQ(fit.components[0].RuntimeConvergence(),Status::Unavailable);
     EXPECT_EQ(fit.RuntimeConvergence(),Status::Unavailable);

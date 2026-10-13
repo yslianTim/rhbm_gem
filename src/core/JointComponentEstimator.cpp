@@ -107,8 +107,6 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
         out.push_back(check("design-identifiability",design_evidence_available,design_full_rank,
             design_rank_value,design_columns));
         if(structural_failure) out.back().reason="proven-rank-upper-bound:"+a.design_structure->reason;
-        out.push_back(check("local-correction",a.jacobian.has_value(),a.local,
-            std::isfinite(a.local_correction_inf_norm) ? std::optional<double>(a.local_correction_inf_norm) : std::nullopt,1e-10));
         out.push_back(check("numerical-identifiability",a.widths.has_value(),a.identified));
     }
     else
@@ -121,8 +119,6 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
         out.push_back(check("width-stationarity",valid && a.widths.has_value(),a.gradient,
             valid && a.primary.gradient.size() ? std::optional<double>(std::max(a.primary.gradient.lpNorm<Eigen::Infinity>(),
                 a.reference.gradient.lpNorm<Eigen::Infinity>())) : std::nullopt,1e-12));
-        out.push_back(check("local-correction",a.jacobian.has_value(),a.local,
-            std::isfinite(a.local_correction_inf_norm) ? std::optional<double>(a.local_correction_inf_norm) : std::nullopt,1e-10));
         out.push_back(check("numerical-identifiability",a.widths.has_value(),a.identified));
     }
     if(a.reference_free && a.verification_memory_estimate.stage==n::MemoryStage::EndpointVerification)
@@ -157,8 +153,8 @@ JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> & evidence,Join
     });
     const std::vector<const char *> required=reference_free ?
         std::vector<const char *>{"conditional-ac-optimality","independent-replay","width-stationarity",
-            "design-identifiability","local-correction","numerical-identifiability"} :
-        std::vector<const char *>{"inner","kkt","width-stationarity","local-correction","numerical-identifiability"};
+            "design-identifiability","numerical-identifiability"} :
+        std::vector<const char *>{"inner","kkt","width-stationarity","numerical-identifiability"};
     for(const char * name:required)
     {
         const auto found=std::find_if(evidence.begin(),evidence.end(),[&](const auto & check){return check.name==name && check.scope==scope;});

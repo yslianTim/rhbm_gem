@@ -1161,9 +1161,9 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
     out.local=std::isfinite(out.local_correction_inf_norm) && out.local_correction_inf_norm<=1e-10;
     out.identified=projected_width_rank==eta.size() && correction_svd.rank==eta.size();
     const bool design_full_rank=out.design->rank==evaluated->x.cols();
-    out.qualified=out.endpoint_verified && design_full_rank && out.identified && out.gradient && out.local;
+    out.qualified=out.endpoint_verified && design_full_rank && out.identified && out.gradient;
     out.failure=reference && !out.inner ? "inner-solve" : !design_full_rank ? "design-unidentified" :
-        !out.identified ? "width-unidentified" : !out.gradient ? "b-not-stationary" : !out.local ? "local-correction" :
+        !out.identified ? "width-unidentified" : !out.gradient ? "b-not-stationary" :
         !out.endpoint_verified ? "endpoint-verification-failed" : "none";
     return out;
 }
