@@ -173,6 +173,8 @@ JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & s
         const bool rank_unavailable=!structural_design_failure &&
             (certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass ||
                 !certification.assessment.design || !certification.assessment.widths ||
+                !certification.assessment.design->available ||
+                certification.assessment.design->threshold_sensitive ||
                 certification.assessment.width_rank_threshold_sensitive);
         const bool rank_identified=!rank_unavailable &&
             !structural_design_failure && certification.assessment.design->rank==certification.assessment.design->columns &&
@@ -181,7 +183,7 @@ JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & s
             rank_identified ? JointCheckStatus::Passed : JointCheckStatus::Failed;
         out.certification_status=certification.qualified() ? JointCheckStatus::Passed :
             structural_design_failure ? JointCheckStatus::Failed :
-                certification.assessment.width_rank_threshold_sensitive ? JointCheckStatus::Unavailable :
+                rank_unavailable ? JointCheckStatus::Unavailable :
                 certification.verification_memory_estimate.status!=MemoryStatus::Pass ||
                     certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass ?
                     JointCheckStatus::Unavailable : JointCheckStatus::Failed;

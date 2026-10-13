@@ -89,11 +89,12 @@ TEST(JointComponentRuntimeTest, TypedSearchPreservesFrozenAdapterResults)
     const auto & beta=original.at("primary").at("beta").as_array();
     for(std::size_t k=0;k<beta.size();++k) EXPECT_NEAR(fit.assembled_state->ac[k],boost::json::value_to<double>(beta[k]),1e-8);
     EXPECT_TRUE(fit.search_completed); EXPECT_EQ(fit.components.size(),2);
-    ASSERT_EQ(fit.components[0].ranks.size(),2);
+    ASSERT_EQ(fit.components[0].ranks.size(),3);
     EXPECT_EQ(fit.components[0].ranks[0].name,"design");
-    EXPECT_EQ(fit.components[0].ranks[1].name,"projected-width");
-    EXPECT_EQ(fit.components[0].ranks[1].rank,1);
-    EXPECT_GT(fit.components[0].ranks[1].threshold,0);
+    EXPECT_EQ(fit.components[0].ranks[1].name,"free-design");
+    EXPECT_EQ(fit.components[0].ranks[2].name,"projected-width");
+    EXPECT_EQ(fit.components[0].ranks[2].rank,1);
+    EXPECT_GT(fit.components[0].ranks[2].threshold,0);
     for(const auto & check:fit.components[0].evidence)
         if(check.name=="richardson") EXPECT_EQ(check.status,core::JointCheckStatus::NotRun);
     EXPECT_EQ(fit.regular_certificate,core::JointCheckStatus::NotRun);
@@ -151,8 +152,14 @@ TEST(JointComponentRuntimeTest, InnerEvidenceRemainsAvailableNearBoundary)
     ASSERT_EQ(fit.components.size(),2);
     for(const auto & component:fit.components)
     {
-        ASSERT_TRUE(component.state);
-        EXPECT_NEAR(component.state->ac[0],0,1e-10);
+        EXPECT_FALSE(component.state);
+        ASSERT_TRUE(component.candidate_diagnostic);
+        EXPECT_TRUE(component.candidate_diagnostic->candidate_available);
+        EXPECT_EQ(component.candidate_diagnostic->rank_assessment_status,core::JointCheckStatus::Unavailable);
+        EXPECT_EQ(component.candidate_diagnostic->endpoint_verification_status,core::JointCheckStatus::Passed);
+        EXPECT_EQ(component.candidate_diagnostic->certification_status,core::JointCheckStatus::Unavailable);
+        EXPECT_EQ(component.candidate_diagnostic->numerical_qualification_status,
+            core::JointCheckStatus::Unavailable);
         bool found_optimality=false;
         for(const auto & check:component.evidence) if(check.name=="conditional-ac-optimality")
         {
@@ -162,6 +169,15 @@ TEST(JointComponentRuntimeTest, InnerEvidenceRemainsAvailableNearBoundary)
             EXPECT_LE(*check.value,*check.threshold);
         }
         EXPECT_TRUE(found_optimality);
+        const auto design=std::find_if(component.evidence.begin(),component.evidence.end(),[](const auto & check) {
+            return check.name=="design-identifiability";
+        });
+        ASSERT_NE(design,component.evidence.end());
+        EXPECT_EQ(design->status,core::JointCheckStatus::Unavailable);
+        EXPECT_EQ(design->reason,"active-amplitude-boundary");
+        ASSERT_EQ(component.ranks.size(),2u);
+        EXPECT_EQ(component.ranks[0].name,"free-design");
+        EXPECT_EQ(component.ranks[1].name,"projected-width");
         EXPECT_EQ(component.regular_certificate,core::JointCheckStatus::NotRun);
     }
 }
