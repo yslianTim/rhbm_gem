@@ -55,7 +55,7 @@ MemoryStageEstimate Attribute(const MemoryEstimate & estimate)
     const auto & s=estimate.shape;
     return {estimate.stage,estimate.resident_bytes,estimate.temporary_bytes,estimate.estimated_peak_bytes,
         estimate.budget_bytes,estimate.sparse_design_bytes,estimate.dense_factor_bytes,
-        estimate.factor_workspace_bytes,estimate.right_singular_vector_bytes,estimate.right_null_space_bytes,s.maximum_tile_rows,
+        estimate.factor_workspace_bytes,estimate.right_singular_vector_bytes,s.maximum_tile_rows,
         estimate.factor_rows,estimate.factor_columns,estimate.status,estimate.reason};
 }
 }
@@ -125,7 +125,6 @@ const char * MemoryStageName(MemoryStage stage)
     case MemoryStage::DesignSpectrum: return "design-spectrum";
     case MemoryStage::ProjectedWidthAssessment: return "projected-width-assessment";
     case MemoryStage::TargetIdentifiability: return "target-identifiability";
-    case MemoryStage::TargetGeometry: return "target-geometry";
     }
     return "unknown";
 }
@@ -300,28 +299,15 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
     }
     case MemoryStage::TargetIdentifiability:
     {
-        const auto geometry=PlanMemory(shape,MemoryStage::TargetGeometry,budget);
-        if(geometry.status==MemoryStatus::Overflow) {ok=false; break;}
-        temporary=geometry.temporary_bytes;
-        out.attributed_stages={Attribute(geometry)};
-        break;
-    }
-    case MemoryStage::TargetGeometry:
-    {
-        auto columns=shape.component_jacobian_columns ? shape.component_jacobian_columns : shape.component_target_columns;
-        std::size_t square{},factor{},tile{},sparse{};
-        ok=CheckedMultiplyBytes(columns,columns,square) &&
-            CheckedMultiplyBytes(square,sizeof(double),factor) && CheckedMultiplyBytes(factor,3,temporary) &&
-            AddTileWorkspace(tile,shape.maximum_tile_rows,columns) &&
-            AddProduct(sparse,entries,6*(sizeof(double)+sizeof(Eigen::Index))) &&
-            CheckedAddBytes(temporary,tile,temporary) && CheckedAddBytes(temporary,sparse,temporary);
-        if(ok)
-        {
-            out.sparse_design_bytes=sparse; out.dense_factor_bytes=factor;
-            out.right_singular_vector_bytes=factor; out.right_null_space_bytes=factor;
-            ok=CheckedAddBytes(factor,tile,out.factor_workspace_bytes);
-            out.factor_rows=columns; out.factor_columns=columns;
-        }
+        std::size_t evidence_atoms{},rank_columns{},checks_bytes{};
+        ok=CheckedAddBytes(shape.component_target_atoms,shape.component_halo_atoms,evidence_atoms) &&
+            CheckedAddBytes(evidence_atoms,shape.component_nuisance_atoms,evidence_atoms) &&
+            CheckedAddBytes(shape.component_design_columns,shape.component_width_columns,rank_columns) &&
+            AddProduct(temporary,evidence_atoms,sizeof(JointAtomIdentifiability)+32) &&
+            AddProduct(temporary,rank_columns,sizeof(double)) &&
+            AddProduct(temporary,2,sizeof(JointRankEvidence)+64) &&
+            CheckedMultiplyBytes(8,sizeof(JointCheck)+32,checks_bytes) &&
+            CheckedAddBytes(temporary,checks_bytes,temporary);
         break;
     }
     }
@@ -400,9 +386,9 @@ std::string FormatMemoryEstimate(const MemoryEstimate & estimate)
        <<"  target_columns="<<s.component_target_columns<<'\n'
        <<"  design_columns="<<s.component_design_columns<<'\n'
        <<"  width_columns="<<s.component_width_columns<<'\n'
-       <<"  full_jacobian_columns="<<s.component_jacobian_columns<<'\n'
        <<"  target_atoms="<<s.component_target_atoms<<'\n'
        <<"  halo_atoms="<<s.component_halo_atoms<<'\n'
+       <<"  nuisance_atoms="<<s.component_nuisance_atoms<<'\n'
        <<"  identity_validation_scratch="<<Bytes(s.identity_validation_bytes)<<'\n'
        <<"  resident="<<Bytes(estimate.resident_bytes)<<'\n'
        <<"  temporary="<<Bytes(estimate.temporary_bytes)<<'\n'
@@ -421,7 +407,6 @@ std::string FormatMemoryEstimate(const MemoryEstimate & estimate)
            <<" factor_bytes="<<Bytes(stage.dense_factor_bytes)
            <<" workspace_bytes="<<Bytes(stage.factor_workspace_bytes)
            <<" right_singular_vector_bytes="<<Bytes(stage.right_singular_vector_bytes)
-           <<" right_null_space_bytes="<<Bytes(stage.right_null_space_bytes)
            <<" sparse_design_bytes="<<Bytes(stage.sparse_design_bytes)
            <<" maximum_tile_rows="<<stage.maximum_tile_rows;
         if(!stage.reason.empty()) out<<" reason="<<stage.reason;

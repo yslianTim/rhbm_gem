@@ -68,7 +68,6 @@ j::object MemoryStageEstimateJson(const n::MemoryStageEstimate & estimate)
         {"dense_factor_bytes",estimate.dense_factor_bytes},
         {"factor_workspace_bytes",estimate.factor_workspace_bytes},
         {"right_singular_vector_bytes",estimate.right_singular_vector_bytes},
-        {"right_null_space_bytes",estimate.right_null_space_bytes},
         {"factor_rows",estimate.factor_rows},{"factor_columns",estimate.factor_columns},
         {"maximum_tile_rows",estimate.maximum_tile_rows}};
 }
@@ -89,7 +88,6 @@ j::object MemoryEstimateJson(const n::MemoryEstimate & estimate)
         {"dense_factor_bytes",estimate.dense_factor_bytes},
         {"factor_workspace_bytes",estimate.factor_workspace_bytes},
         {"right_singular_vector_bytes",estimate.right_singular_vector_bytes},
-        {"right_null_space_bytes",estimate.right_null_space_bytes},
         {"factor_rows",estimate.factor_rows},{"factor_columns",estimate.factor_columns},
         {"maximum_tile_rows",estimate.shape.maximum_tile_rows},
         {"component_atoms",estimate.shape.component_atoms},
@@ -100,8 +98,8 @@ j::object MemoryEstimateJson(const n::MemoryEstimate & estimate)
         {"width_columns",estimate.shape.component_width_columns},
         {"target_atoms",estimate.shape.component_target_atoms},
         {"halo_atoms",estimate.shape.component_halo_atoms},
+        {"nuisance_atoms",estimate.shape.component_nuisance_atoms},
         {"target_columns",estimate.shape.component_target_columns},
-        {"jacobian_columns",estimate.shape.component_jacobian_columns},
         {"attributed_stages",MemoryStageEstimatesJson(estimate.attributed_stages)}};
 }
 j::array AssessmentStagesJson()
@@ -128,7 +126,6 @@ j::array AssessmentStagesJson()
             row["dense_factor_bytes"]=stage.dense_factor_bytes;
             row["factor_workspace_bytes"]=stage.factor_workspace_bytes;
             row["right_singular_vector_bytes"]=stage.right_singular_vector_bytes;
-            row["right_null_space_bytes"]=stage.right_null_space_bytes;
             row["factor_rows"]=stage.factor_rows; row["factor_columns"]=stage.factor_columns;
             row["maximum_tile_rows"]=stage.maximum_tile_rows;
             row["attributed_stages"]=MemoryStageEstimatesJson(stage.attributed_memory_stages);

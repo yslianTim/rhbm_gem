@@ -45,6 +45,54 @@ core::JointProblemInput Input(bool noise=false)
     input.observations[23]+=.7;
     return input;
 }
+struct OriginalTargetGeometryOracle
+{
+    n::Vector scales,singular_values;
+    n::Matrix right_vectors;
+    double threshold{};
+    Eigen::Index rank{};
+    bool valid{},threshold_sensitive{};
+    std::string reason;
+};
+OriginalTargetGeometryOracle OriginalGeometryOracle(const n::Domain & domain,n::VectorRef y,
+    const rhbm_gem::JointState & state,const n::EvaluationContext & context)
+{
+    OriginalTargetGeometryOracle out;
+    const auto columns=static_cast<Eigen::Index>(state.b.size());
+    if(!columns || state.ac.size()!=static_cast<std::size_t>(2*columns) ||
+        state.log_b.size()!=static_cast<std::size_t>(columns))
+    {out.reason="missing-full-parameter-state"; return out;}
+    const n::VectorMap eta(state.log_b.data(),columns),beta(state.ac.data(),2*columns);
+    for(Eigen::Index atom=0;atom<columns;++atom)
+        if(beta(2*atom)==0) {out.reason="active-amplitude-boundary"; return out;}
+    const auto endpoint=n::EvaluateState(domain,y,eta,beta,context);
+    if(!endpoint.valid || !endpoint.certificate.kkt_passed) {out.reason="invalid-saved-state"; return out;}
+    n::Matrix jacobian=n::Matrix::Zero(y.size(),3*columns);
+    for(Eigen::Index atom=0;atom<columns;++atom)
+        for(int k=0;k<2;++k)
+        {
+            for(n::Sparse::InnerIterator value(endpoint.x,2*atom+k);value;++value)
+                jacobian(value.row(),3*atom+k)=value.value();
+            for(n::Sparse::InnerIterator value(endpoint.derivative,2*atom+k);value;++value)
+                jacobian(value.row(),3*atom+2)+=value.value()*beta(2*atom+k);
+        }
+    out.scales=jacobian.colwise().norm();
+    if(!out.scales.allFinite()) {out.reason="nonfinite-jacobian"; return out;}
+    for(Eigen::Index col=0;col<out.scales.size();++col)
+    {
+        if(out.scales(col)==0) out.scales(col)=1;
+        jacobian.col(col)/=out.scales(col);
+    }
+    Eigen::JacobiSVD<n::Matrix> svd(jacobian,Eigen::ComputeFullV);
+    if(svd.info()!=Eigen::Success || !svd.singularValues().allFinite())
+    {out.reason="jacobian-factorization-failed"; return out;}
+    svd.setThreshold(context.rank.Relative(jacobian.cols()));
+    out.singular_values=svd.singularValues(); out.right_vectors=svd.matrixV();
+    out.threshold=svd.threshold()*out.singular_values(0); out.rank=svd.rank();
+    out.threshold_sensitive=out.threshold>0 &&
+        ((out.singular_values.array()>=.5*out.threshold) && (out.singular_values.array()<=2*out.threshold)).any();
+    out.valid=true; return out;
+}
 }
 TEST(JointObservableProfileTest, FixedLayoutAndSharedRows)
 {
@@ -107,11 +155,11 @@ TEST(JointObservableProfileTest, ReconstructionAndUnavailableHaloParameters)
     EXPECT_EQ(fit.components[0].candidate_diagnostic->candidate_eta,fit.components[0].state->log_b);
     EXPECT_EQ(fit.components[0].candidate_diagnostic->candidate_ac,fit.components[0].state->ac);
     auto invalid_state=*fit.assembled_state; invalid_state.ac[0]+=.01;
-    const auto invalid=n::AssessTargetState(problem,problem.ParameterLayout(),invalid_state,fit.evidence,
+    const auto invalid=n::AssessTargetState(problem,problem.ParameterLayout(),invalid_state,fit.evidence,fit.ranks,
         rhbm_gem::JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
-    EXPECT_EQ(invalid.atoms[0].reason,"invalid-saved-state");
+    EXPECT_EQ(invalid.atoms[0].reason,"rank-context-mismatch");
     auto inconsistent_state=*fit.assembled_state; inconsistent_state.b[0]*=1.01;
-    const auto inconsistent=n::AssessTargetState(problem,problem.ParameterLayout(),inconsistent_state,fit.evidence,
+    const auto inconsistent=n::AssessTargetState(problem,problem.ParameterLayout(),inconsistent_state,fit.evidence,fit.ranks,
         rhbm_gem::JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
     EXPECT_EQ(inconsistent.atoms[0].reason,"inconsistent-saved-widths");
     EXPECT_EQ(fit.components[0].candidate_diagnostic->certification_status,rhbm_gem::JointCheckStatus::Passed);
@@ -425,15 +473,16 @@ TEST(JointObservableProfileTest, TwoRowGeometryDoesNotPromoteAnUnqualifiedTarget
     candidate_state.log_b=candidate.candidate_eta; candidate_state.b.resize(candidate.candidate_eta.size());
     for(std::size_t k=0;k<candidate.candidate_eta.size();++k)
         candidate_state.b[k]=std::exp(candidate.candidate_eta[k]);
-    const auto evidence=n::AssessTargetState(problem,problem.ParameterLayout(),candidate_state,
-        fit.components[0].evidence,rhbm_gem::JointEvidenceScope::ComponentLocal,fit.components[0].rows.size());
+    const auto evidence=n::AssessTargetState(problem,*fit.components[0].layout,candidate_state,
+        fit.components[0].evidence,fit.components[0].ranks,rhbm_gem::JointEvidenceScope::ComponentLocal,
+        fit.components[0].rows.size());
     const auto target=std::find_if(evidence.checks.begin(),evidence.checks.end(),[](const auto & check) {
         return check.name=="target-identifiability";
     });
     ASSERT_NE(target,evidence.checks.end());
-    EXPECT_EQ(target->status,rhbm_gem::JointCheckStatus::Failed);
-    EXPECT_EQ(evidence.atoms[3].status,rhbm_gem::JointCheckStatus::Failed);
-    EXPECT_EQ(evidence.atoms[3].reason,"nonunique-parameter-directions");
+    EXPECT_EQ(target->status,rhbm_gem::JointCheckStatus::Unavailable);
+    EXPECT_EQ(evidence.atoms[3].status,rhbm_gem::JointCheckStatus::Unavailable);
+    EXPECT_EQ(evidence.atoms[3].reason,"rank-context-mismatch");
 }
 TEST(JointObservableProfileTest, UnqualifiedHaloRepresentativesDoNotProduceTargetCovariance)
 {
@@ -464,7 +513,7 @@ TEST(JointObservableProfileTest, ActiveBoundaryDoesNotAcquireTargetCertificate)
     auto fit=core::FitJointComponents(problem,{.6,missing_width,missing_width});
     ASSERT_TRUE(fit.assembled_state);
     auto state=*fit.assembled_state; state.ac[0]=0;
-    const auto evidence=n::AssessTargetState(problem,problem.ParameterLayout(),state,fit.evidence,
+    const auto evidence=n::AssessTargetState(problem,problem.ParameterLayout(),state,fit.evidence,fit.ranks,
         rhbm_gem::JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
     EXPECT_EQ(n::TargetConvergence(evidence,true),rhbm_gem::JointCheckStatus::Unavailable);
     auto saved=core::CaptureJointAnalysisResult(fit);
@@ -508,24 +557,24 @@ TEST(JointObservableProfileTest, ExactSingleComponentTargetEvidenceIsReused)
     ASSERT_EQ(fit.components.size(),1);
     ASSERT_TRUE(fit.components[0].target_evidence);
     ASSERT_TRUE(fit.target_evidence);
-    EXPECT_EQ(fit.target_evidence->contract,"target-estimability-v2");
-    auto geometry_calls=[&] {
+    EXPECT_EQ(fit.target_evidence->contract,"target-estimability-v3");
+    auto derived_calls=[&] {
         const auto & stages=n::AssessmentWorkForTesting().stages;
         const auto found=std::find_if(stages.begin(),stages.end(),[](const auto & stage) {
-            return stage.name=="target-geometry";
+            return stage.name=="derived-target-identifiability";
         });
         return found==stages.end() ? 0 : found->calls;
     };
-    EXPECT_EQ(geometry_calls(),1);
+    EXPECT_EQ(derived_calls(),1);
     for(const auto & check:fit.target_evidence->checks)
         EXPECT_NE(check.name,"target-local-correction");
     for(const auto & rank:fit.target_evidence->ranks)
         EXPECT_NE(rank.name,"undamped-full-profile-step");
 
     const auto & data=core::JointProblemAccess::Get(problem);
-    const auto fresh=n::AssessTargetState(problem,problem.ParameterLayout(),fit.assembled_state,fit.evidence,
+    const auto fresh=n::AssessTargetState(problem,problem.ParameterLayout(),fit.assembled_state,fit.evidence,fit.ranks,
         rhbm_gem::JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
-    EXPECT_EQ(geometry_calls(),2);
+    EXPECT_EQ(derived_calls(),2);
     ASSERT_EQ(fit.target_evidence->checks.size(),fresh.checks.size());
     for(std::size_t i=0;i<fresh.checks.size();++i)
     {
@@ -575,15 +624,15 @@ TEST(JointObservableProfileTest, TargetGeometryNumericalOracleCapturesOldContrac
     ASSERT_TRUE((scales.array()>0).all());
     const n::Matrix scaled=jacobian*scales.cwiseInverse().asDiagonal();
     const Eigen::JacobiSVD<n::Matrix> oracle(scaled,Eigen::ComputeThinU|Eigen::ComputeFullV);
-    const auto geometry=n::BuildTargetGeometry(domain,y,*component.state,context);
-    ASSERT_TRUE(geometry.valid)<<geometry.reason;
-    EXPECT_FALSE(geometry.threshold_sensitive);
-    EXPECT_EQ(geometry.svd.rank,3);
-    EXPECT_GT(geometry.svd.threshold,0);
-    EXPECT_EQ(geometry.scales.size(),3);
-    EXPECT_TRUE(geometry.scales.isApprox(scales,1e-12));
-    ASSERT_EQ(geometry.svd.singular_values.size(),oracle.singularValues().size());
-    EXPECT_TRUE(geometry.svd.singular_values.isApprox(oracle.singularValues(),1e-11));
+    const auto old_geometry=OriginalGeometryOracle(domain,y,*component.state,context);
+    ASSERT_TRUE(old_geometry.valid)<<old_geometry.reason;
+    EXPECT_FALSE(old_geometry.threshold_sensitive);
+    EXPECT_EQ(old_geometry.rank,3);
+    EXPECT_GT(old_geometry.threshold,0);
+    EXPECT_EQ(old_geometry.scales.size(),3);
+    EXPECT_TRUE(old_geometry.scales.isApprox(scales,1e-12));
+    ASSERT_EQ(old_geometry.singular_values.size(),oracle.singularValues().size());
+    EXPECT_TRUE(old_geometry.singular_values.isApprox(oracle.singularValues(),1e-11));
     const auto design=std::find_if(component.ranks.begin(),component.ranks.end(),[](const auto & rank) {
         return rank.name=="design";
     });
@@ -592,13 +641,16 @@ TEST(JointObservableProfileTest, TargetGeometryNumericalOracleCapturesOldContrac
     });
     ASSERT_NE(design,component.ranks.end()); ASSERT_NE(widths,component.ranks.end());
     EXPECT_EQ(design->rank,2u); EXPECT_EQ(widths->rank,1u);
-    ASSERT_EQ(component.target_evidence->ranks.size(),1u);
-    EXPECT_EQ(component.target_evidence->ranks.front().name,"column-scaled-observation-jacobian");
-    EXPECT_EQ(component.target_evidence->ranks.front().rank,3u);
+    ASSERT_EQ(component.target_evidence->ranks.size(),2u);
+    EXPECT_EQ(component.target_evidence->ranks[0].name,"design");
+    EXPECT_EQ(component.target_evidence->ranks[0].rank,2u);
+    EXPECT_EQ(component.target_evidence->ranks[1].name,"projected-width");
+    EXPECT_EQ(component.target_evidence->ranks[1].rank,1u);
     ASSERT_EQ(component.target_evidence->atoms.size(),1u);
     EXPECT_EQ(component.target_evidence->atoms.front().status,Status::Passed);
-    ASSERT_TRUE(component.target_evidence->atoms.front().null_space_leakage);
-    EXPECT_LE(*component.target_evidence->atoms.front().null_space_leakage,1e-10);
+    EXPECT_FALSE(component.target_evidence->atoms.front().null_space_leakage);
+    const auto old_nullspace=old_geometry.right_vectors.rightCols(old_geometry.right_vectors.cols()-old_geometry.rank);
+    EXPECT_LE(old_nullspace.topRows(3).norm(),1e-10);
     EXPECT_EQ(component.TargetRuntimeConvergence(),Status::Passed);
     const auto uncertainty=core::detail::ComputeJointUncertainty(problem,core::CaptureJointAnalysisResult(fit));
     EXPECT_EQ(uncertainty.at(1).status,rhbm_gem::EvidenceStatus::Available);
@@ -606,7 +658,7 @@ TEST(JointObservableProfileTest, TargetGeometryNumericalOracleCapturesOldContrac
 
     auto boundary=*component.state;
     boundary.ac[0]=0;
-    const auto boundary_geometry=n::BuildTargetGeometry(domain,y,boundary,context);
+    const auto boundary_geometry=OriginalGeometryOracle(domain,y,boundary,context);
     EXPECT_FALSE(boundary_geometry.valid);
     EXPECT_EQ(boundary_geometry.reason,"active-amplitude-boundary");
 }
@@ -748,14 +800,14 @@ TEST(JointObservableProfileTest, TargetMemoryShapeSeparatesTargetsFromHaloColumn
     EXPECT_EQ(estimate.shape.component_halo_atoms,1u);
     EXPECT_EQ(estimate.shape.component_design_columns,4u);
     EXPECT_EQ(estimate.shape.component_width_columns,2u);
-    EXPECT_EQ(estimate.shape.component_target_columns,3u);
-    EXPECT_EQ(estimate.shape.component_jacobian_columns,6u);
-    ASSERT_EQ(estimate.attributed_stages.size(),1u);
-    EXPECT_EQ(estimate.attributed_stages[0].factor_rows,6u);
-    EXPECT_EQ(estimate.attributed_stages[0].stage,n::MemoryStage::TargetGeometry);
+    EXPECT_EQ(estimate.shape.component_nuisance_atoms,2u);
+    EXPECT_EQ(estimate.stage,n::MemoryStage::TargetIdentifiability);
+    EXPECT_TRUE(estimate.attributed_stages.empty());
+    EXPECT_EQ(estimate.dense_factor_bytes,0u);
+    EXPECT_EQ(estimate.right_singular_vector_bytes,0u);
 }
 
-TEST(JointObservableProfileTest, LargeTargetIdentifiabilityPreflightReturnsUnavailableEvidence)
+TEST(JointObservableProfileTest, LargeDerivedTargetEvidenceHasLinearMemoryAndNoGeometryStage)
 {
     constexpr std::size_t atoms=37'406;
     core::JointProblemInput input; input.observations.assign(8,0.0); input.row_ids.reserve(8);
@@ -771,15 +823,21 @@ TEST(JointObservableProfileTest, LargeTargetIdentifiabilityPreflightReturnsUnava
     const auto & data=core::JointProblemAccess::Get(problem);
     rhbm_gem::JointState state; state.ac.assign(2*atoms,1.0); state.b.assign(atoms,.55);
     state.log_b.assign(atoms,std::log(.55));
+    state.width_gradient.assign(atoms,0.0);
+    const auto memory=n::TargetIdentifiabilityMemoryEstimate(problem.Input(),problem.ParameterLayout(),8);
+    EXPECT_EQ(memory.status,n::MemoryStatus::Pass);
+    EXPECT_EQ(memory.shape.component_target_atoms,atoms);
+    EXPECT_LT(memory.estimated_peak_bytes,50'000'000u);
+    EXPECT_EQ(memory.dense_factor_bytes,0u);
     n::AssessmentWorkForTesting()={};
-    const auto evidence=n::AssessTargetState(problem,problem.ParameterLayout(),state,{},
+    const auto evidence=n::AssessTargetState(problem,problem.ParameterLayout(),state,{},{},
         rhbm_gem::JointEvidenceScope::AssembledGlobal,data.input->observations.size());
     const auto identifiability=std::find_if(evidence.checks.begin(),evidence.checks.end(),[](const auto & check) {
         return check.name=="target-identifiability";
     });
     ASSERT_NE(identifiability,evidence.checks.end());
     EXPECT_EQ(identifiability->status,rhbm_gem::JointCheckStatus::Unavailable);
-    EXPECT_EQ(identifiability->reason,"resource-limit:target-identifiability");
+    EXPECT_EQ(identifiability->reason,"missing-rank-evidence");
     EXPECT_EQ(evidence.atoms.size(),atoms);
     EXPECT_TRUE(std::all_of(evidence.atoms.begin(),evidence.atoms.end(),[](const auto & atom) {
         return atom.status==rhbm_gem::JointCheckStatus::Unavailable;
@@ -788,34 +846,48 @@ TEST(JointObservableProfileTest, LargeTargetIdentifiabilityPreflightReturnsUnava
     EXPECT_EQ(n::TargetConvergence(evidence,true),rhbm_gem::JointCheckStatus::Unavailable);
     const auto & stages=n::AssessmentWorkForTesting().stages;
     const auto preflight=std::find_if(stages.begin(),stages.end(),[](const auto & stage) {
-        return stage.name=="target-memory-preflight";
+        return stage.name=="derived-target-memory-preflight";
     });
     ASSERT_NE(preflight,stages.end());
-    EXPECT_EQ(preflight->memory_status,n::MemoryStatus::Reject);
+    EXPECT_EQ(preflight->memory_status,n::MemoryStatus::Pass);
     EXPECT_EQ(preflight->calls,1); EXPECT_EQ(preflight->completed_calls,1);
-    EXPECT_GT(preflight->estimated_peak_bytes,preflight->budget_bytes);
-    ASSERT_EQ(preflight->attributed_memory_stages.size(),1u);
-    EXPECT_EQ(preflight->attributed_memory_stages[0].stage,n::MemoryStage::TargetGeometry);
-    EXPECT_EQ(std::find_if(stages.begin(),stages.end(),[](const auto & stage) {
-        return stage.name=="target-geometry";
-    }),stages.end());
+    EXPECT_LT(preflight->estimated_peak_bytes,preflight->budget_bytes);
+    EXPECT_TRUE(preflight->attributed_memory_stages.empty());
+    const auto derived=std::find_if(stages.begin(),stages.end(),[](const auto & stage) {
+        return stage.name=="derived-target-identifiability";
+    });
+    ASSERT_NE(derived,stages.end());
+    EXPECT_EQ(derived->calls,1); EXPECT_EQ(derived->completed_calls,1);
     EXPECT_EQ(std::find_if(stages.begin(),stages.end(),[](const auto & stage) {
         return stage.name=="target-local-correction";
     }),stages.end());
 }
 
-TEST(JointObservableProfileTest, TargetEvidenceIsUnavailableAtTheRankThreshold)
+TEST(JointObservableProfileTest, OldGeometryOracleAndDerivedEvidenceKeepSeparateThresholdContracts)
 {
     const core::JointProblem problem(Input());
     const auto fit=core::FitJointComponents(problem,{.6,missing_width,missing_width});
     ASSERT_TRUE(fit.assembled_state);
     const auto & data=core::JointProblemAccess::Get(problem); const auto & layout=problem.ParameterLayout();
     auto context=n::ProfileContext(data.context,layout,24);
-    const auto geometry=n::BuildTargetGeometry(n::ProfileDomain(data.domain,layout),data.y.head(23),*fit.assembled_state,context);
-    ASSERT_TRUE(geometry.valid);
-    const auto rows=static_cast<std::size_t>(geometry.svd.singular_values.tail(1)(0)/
-        (std::numeric_limits<double>::epsilon()*geometry.svd.singular_values(0)));
-    const auto evidence=n::AssessTargetState(problem,layout,fit.assembled_state,fit.evidence,rhbm_gem::JointEvidenceScope::AssembledGlobal,rows);
+    const auto domain=n::ProfileDomain(data.domain,layout);
+    const auto old_geometry=OriginalGeometryOracle(domain,data.y.head(23),*fit.assembled_state,context);
+    ASSERT_TRUE(old_geometry.valid);
+    auto near_context=context;
+    near_context.rank.rows=static_cast<Eigen::Index>(old_geometry.singular_values.tail(1)(0)/
+        (std::numeric_limits<double>::epsilon()*old_geometry.singular_values(0)));
+    const auto old_near=OriginalGeometryOracle(domain,data.y.head(23),*fit.assembled_state,near_context);
+    ASSERT_TRUE(old_near.valid);
+    EXPECT_TRUE(old_near.threshold_sensitive);
+
+    auto near_ranks=fit.ranks;
+    const auto design=std::find_if(near_ranks.begin(),near_ranks.end(),[](const auto & rank) {
+        return rank.name=="design";
+    });
+    ASSERT_NE(design,near_ranks.end()); ASSERT_GE(design->singular_values.size(),2u);
+    design->singular_values.back()=std::nextafter(design->threshold,std::numeric_limits<double>::infinity());
+    const auto evidence=n::AssessTargetState(problem,layout,fit.assembled_state,fit.evidence,near_ranks,
+        rhbm_gem::JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
     EXPECT_EQ(n::TargetConvergence(evidence,true),rhbm_gem::JointCheckStatus::Unavailable);
     EXPECT_EQ(evidence.atoms[0].reason,"rank-threshold-sensitive");
 }
@@ -850,7 +922,7 @@ TEST(JointObservableProfileTest, TargetEvidenceUsesEveryComponentAndTheSavedStat
         EXPECT_EQ(component.candidate_diagnostic->endpoint_verification_status,rhbm_gem::JointCheckStatus::Passed);
         EXPECT_EQ(component.candidate_diagnostic->numerical_qualification_status,rhbm_gem::JointCheckStatus::Passed);
     }
-    const auto fresh_target=n::AssessTargetState(problem,problem.ParameterLayout(),fit.assembled_state,fit.evidence,
+    const auto fresh_target=n::AssessTargetState(problem,problem.ParameterLayout(),fit.assembled_state,fit.evidence,fit.ranks,
         rhbm_gem::JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
     ASSERT_EQ(fit.target_evidence->checks.size(),fresh_target.checks.size());
     for(std::size_t k=0;k<fresh_target.checks.size();++k)

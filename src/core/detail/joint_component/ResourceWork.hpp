@@ -37,7 +37,7 @@ inline constexpr std::size_t JointMemoryHardLimitBytes=4'000'000'000;
 inline constexpr std::size_t JointMemoryPlanningBudgetBytes=3'200'000'000;
 enum class MemoryStage {ProblemConstruction,StructuralConstruction,FixedNeighborPreparation,GlobalStateEvaluation,
     EndpointVerification,ReferenceSolve,RankAssessment,StructuralRank,StreamingSpectralBounds,SparseQRResearch,DesignSpectrum,ProjectedWidthAssessment,
-    TargetIdentifiability,TargetGeometry};
+    TargetIdentifiability};
 enum class MemoryStatus {Pass,Reject,Overflow};
 struct MemoryShape
 {
@@ -45,7 +45,7 @@ struct MemoryShape
         affected_row_entries{},component_neighbor_entries{},maximum_block_rows{},maximum_block_support_entries{},
         total_block_support_entries{},maximum_neighbor_atoms{},component_free_columns{},component_target_columns{},
         identity_validation_bytes{},resident_bytes{},component_design_columns{},component_width_columns{},
-        component_jacobian_columns{},component_target_atoms{},component_halo_atoms{},maximum_tile_rows{8192},
+        component_target_atoms{},component_halo_atoms{},component_nuisance_atoms{},maximum_tile_rows{8192},
         component_structural_nonzeros{},component_structural_supported_rows{};
     bool problem_scope{},component_structural_matching{};
 };
@@ -53,7 +53,7 @@ struct MemoryStageEstimate
 {
     MemoryStage stage{MemoryStage::ProblemConstruction};
     std::size_t resident_bytes{},temporary_bytes{},estimated_peak_bytes{},budget_bytes{JointMemoryPlanningBudgetBytes},
-        sparse_design_bytes{},dense_factor_bytes{},factor_workspace_bytes{},right_singular_vector_bytes{},right_null_space_bytes{},
+        sparse_design_bytes{},dense_factor_bytes{},factor_workspace_bytes{},right_singular_vector_bytes{},
         maximum_tile_rows{};
     std::size_t factor_rows{},factor_columns{};
     MemoryStatus status{MemoryStatus::Pass};
@@ -66,7 +66,7 @@ struct MemoryEstimate
     std::size_t resident_bytes{},temporary_bytes{},estimated_peak_bytes{},budget_bytes{JointMemoryPlanningBudgetBytes};
     MemoryStatus status{MemoryStatus::Pass};
     std::string reason;
-    std::size_t sparse_design_bytes{},dense_factor_bytes{},factor_workspace_bytes{},right_singular_vector_bytes{},right_null_space_bytes{},
+    std::size_t sparse_design_bytes{},dense_factor_bytes{},factor_workspace_bytes{},right_singular_vector_bytes{},
         factor_rows{},factor_columns{};
     std::vector<MemoryStageEstimate> attributed_stages;
 };

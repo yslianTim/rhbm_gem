@@ -833,7 +833,6 @@ void BeginAssessmentStageForTesting(const std::string & name,Eigen::Index rows,E
         stage.sparse_design_bytes=estimate->sparse_design_bytes; stage.dense_factor_bytes=estimate->dense_factor_bytes;
         stage.factor_workspace_bytes=estimate->factor_workspace_bytes;
         stage.right_singular_vector_bytes=estimate->right_singular_vector_bytes;
-        stage.right_null_space_bytes=estimate->right_null_space_bytes;
         stage.factor_rows=estimate->factor_rows; stage.factor_columns=estimate->factor_columns;
         stage.maximum_tile_rows=estimate->shape.maximum_tile_rows;
         stage.attributed_memory_stages=estimate->attributed_stages;
@@ -895,8 +894,7 @@ MemoryEstimate RankAssessmentMemoryEstimate(const Domain & domain,VectorRef,cons
     }
     shape.component_width_columns=shape.component_atoms;
     shape.maximum_tile_rows=8192;
-    if(!CheckedMultiplyBytes(shape.component_atoms,2,shape.component_design_columns) ||
-        !CheckedMultiplyBytes(shape.component_atoms,3,shape.component_jacobian_columns))
+    if(!CheckedMultiplyBytes(shape.component_atoms,2,shape.component_design_columns))
     {
         auto estimate=PlanMemory(shape,MemoryStage::RankAssessment);
         estimate.status=MemoryStatus::Overflow; estimate.reason="size-overflow"; return estimate;

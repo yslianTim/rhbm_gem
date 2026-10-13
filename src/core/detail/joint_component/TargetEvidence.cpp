@@ -1,23 +1,15 @@
 #include "TargetEvidence.hpp"
-#include "TiledQR.hpp"
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <algorithm>
 #include <bit>
 #include <chrono>
 #include <cstdint>
 #include <iomanip>
-#include <numeric>
 #include <sstream>
 
 namespace rhbm_gem::core::joint_component {
 namespace {
 using Status=JointCheckStatus;
-std::vector<double> Values(const Vector & v) {return {v.data(),v.data()+v.size()};}
-bool Sensitive(const CompactSvdResult & svd)
-{
-    return svd.threshold>0 && ((svd.singular_values.array()>=.5*svd.threshold) &&
-        (svd.singular_values.array()<=2*svd.threshold)).any();
-}
 bool SameState(const JointState & a,const JointState & b)
 {
     return a.ac==b.ac && a.b==b.b && a.log_b==b.log_b && a.width_gradient==b.width_gradient &&
@@ -101,10 +93,6 @@ bool ValidRankEvidence(const JointRankEvidence & evidence,std::size_t columns,st
     return std::abs(evidence.threshold-expected)<=8*std::numeric_limits<double>::epsilon()*
         std::max({std::numeric_limits<double>::min(),std::abs(expected),std::abs(evidence.threshold)});
 }
-Matrix SquareCompact(const Matrix & r)
-{
-    Matrix out=Matrix::Zero(r.cols(),r.cols()); out.topRows(r.rows())=r; return out;
-}
 MemoryEstimate TargetIdentifiabilityMemoryEstimateImpl(const JointProblemInput & input,const JointParameterLayout & layout,
     std::size_t rows)
 {
@@ -113,33 +101,40 @@ MemoryEstimate TargetIdentifiabilityMemoryEstimateImpl(const JointProblemInput &
         auto estimate=PlanMemory(shape,MemoryStage::TargetIdentifiability);
         estimate.status=MemoryStatus::Overflow; estimate.reason="size-overflow"; return estimate;
     };
-    if(!CheckedMultiplyBytes(shape.component_atoms,2,shape.component_design_columns) ||
-        !CheckedMultiplyBytes(shape.component_atoms,3,shape.component_jacobian_columns)) return overflow();
+    if(!CheckedMultiplyBytes(shape.component_atoms,2,shape.component_design_columns)) return overflow();
     shape.component_width_columns=shape.component_atoms;
-    shape.maximum_tile_rows=derivative_tile_rows;
     shape.component_free_columns=shape.component_design_columns;
     for(const auto atom:layout.full_atoms)
         if(input.selection_domain && std::binary_search(input.selection_domain->target_indices.begin(),
             input.selection_domain->target_indices.end(),atom))
             if(!CheckedAddBytes(shape.component_target_atoms,1,shape.component_target_atoms)) return overflow();
     shape.component_halo_atoms=shape.component_atoms-shape.component_target_atoms;
-    if(!CheckedMultiplyBytes(shape.component_target_atoms,3,shape.component_target_columns)) return overflow();
     for(const auto atom:layout.full_atoms)
         if(atom>=input.support.size() ||
             !CheckedAddBytes(shape.component_support_entries,input.support[atom].size(),shape.component_support_entries))
             return overflow();
+    for(const auto & group:layout.groups)
+        for(const auto atom:group.atoms)
+        {
+            if(atom>=input.support.size() || !CheckedAddBytes(shape.component_nuisance_atoms,1,shape.component_nuisance_atoms) ||
+                !CheckedAddBytes(shape.component_support_entries,input.support[atom].size(),shape.component_support_entries))
+                return overflow();
+        }
     const auto snapshot=EstimateSnapshotBytes(input);
-    std::size_t resident{};
+    std::size_t resident{},rank_columns{};
     const auto add_product=[](std::size_t & total,std::size_t count,std::size_t width) {
         std::size_t bytes{}; return CheckedMultiplyBytes(count,width,bytes) && CheckedAddBytes(total,bytes,total);
     };
-    if(!snapshot) return overflow();
+    if(!snapshot || !CheckedAddBytes(shape.component_free_columns,shape.component_width_columns,rank_columns))
+        return overflow();
     resident=*snapshot;
     if(!add_product(resident,rows,sizeof(double)) ||
         !add_product(resident,shape.component_atoms,4*sizeof(double)) ||
         !add_product(resident,rows,2*sizeof(Eigen::Index)) ||
         !add_product(resident,shape.component_atoms,2*sizeof(Eigen::Index)+sizeof(std::vector<LocalSupportIndex>)) ||
-        !add_product(resident,shape.component_support_entries,sizeof(LocalSupportIndex))) return overflow();
+        !add_product(resident,shape.component_support_entries,sizeof(LocalSupportIndex)) ||
+        !add_product(resident,rank_columns,sizeof(double)) ||
+        !add_product(resident,2,sizeof(JointRankEvidence)+64)) return overflow();
     shape.resident_bytes=resident;
     return PlanMemory(shape,MemoryStage::TargetIdentifiability);
 }
@@ -315,152 +310,56 @@ JointTargetEvidence DeriveTargetIdentifiability(const JointProblem & problem,con
     target_check(JointCheckStatus::Passed,"derived-from-component-identifiability");
     return out;
 }
-TargetGeometry BuildTargetGeometry(const Domain & domain,VectorRef y,const JointState & state,const EvaluationContext & context)
-{
-    TargetGeometry out;
-    const auto m=static_cast<Eigen::Index>(state.b.size());
-    if(!m || state.ac.size()!=static_cast<std::size_t>(2*m) || state.log_b.size()!=static_cast<std::size_t>(m))
-    {out.reason="missing-full-parameter-state"; return out;}
-    const VectorMap eta(state.log_b.data(),m),beta(state.ac.data(),2*m);
-    const Vector widths=eta.array().exp();
-    for(Eigen::Index a=0;a<m;++a)
-        if(!std::isfinite(state.b[static_cast<std::size_t>(a)]) || !(widths(a)>0) ||
-            std::abs(widths(a)-state.b[static_cast<std::size_t>(a)])>8*std::numeric_limits<double>::epsilon()*widths(a))
-        {out.reason="inconsistent-saved-widths"; return out;}
-    out.boundary=false;
-    for(Eigen::Index a=0;a<m;++a) out.boundary |= beta(2*a)==0;
-    if(out.boundary) {out.reason="active-amplitude-boundary"; return out;}
-    out.endpoint=EvaluateState(domain,y,eta,beta,context);
-    if(!out.endpoint.valid || !out.endpoint.certificate.kkt_passed)
-    {out.reason="invalid-saved-state"; return out;}
-    out.boundary=!out.endpoint.certificate.active_atoms.empty();
-    if(out.boundary) {out.reason="active-amplitude-boundary"; return out;}
-    const auto & e=out.endpoint;
-    Sparse z(y.size(),3*m); std::vector<Eigen::Triplet<double>> entries;
-    for(Eigen::Index a=0;a<m;++a)
-    {
-        for(int k=0;k<2;++k)
-        {
-            for(Sparse::InnerIterator v(e.x,2*a+k);v;++v) entries.emplace_back(v.row(),3*a+k,v.value());
-            for(Sparse::InnerIterator v(e.derivative,2*a+k);v;++v)
-                entries.emplace_back(v.row(),3*a+2,v.value()*beta(2*a+k));
-        }
-    }
-    z.setFromTriplets(entries.begin(),entries.end()); out.scales.resize(z.cols());
-    for(Eigen::Index k=0;k<z.cols();++k)
-    {
-        out.scales(k)=z.col(k).norm();
-        if(!std::isfinite(out.scales(k))) {out.reason="nonfinite-jacobian"; return out;}
-        // An exact zero column stays zero; its coordinate is explicitly unidentified.
-        if(out.scales(k)==0) out.scales(k)=1;
-        z.col(k)/=out.scales(k);
-    }
-    TiledQR qr(z.cols(),0);
-    for(Eigen::Index first=0;first<z.rows();first+=derivative_tile_rows)
-    {
-        const auto count=std::min(derivative_tile_rows,z.rows()-first);
-        qr.Append(Matrix(z.middleRows(first,count)),Matrix(count,0));
-    }
-    out.svd=EvaluateRank(SquareCompact(qr.r),{context.rank,z.cols()},nullptr,CompactSvdVectors::Right);
-    if(!out.svd.valid) {out.reason="jacobian-factorization-failed"; return out;}
-    out.threshold_sensitive=Sensitive(out.svd);
-    out.valid=true; out.reason=out.threshold_sensitive ? "rank-threshold-sensitive" : ""; return out;
-}
 JointTargetEvidence AssessTargetState(const JointProblem & problem,const JointParameterLayout & layout,
-    const std::optional<JointState> & state,const std::vector<JointCheck> & existing,JointEvidenceScope scope,std::size_t original_rows)
+    const std::optional<JointState> & state,const std::vector<JointCheck> & existing,
+    const std::vector<JointRankEvidence> & ranks,JointEvidenceScope scope,std::size_t original_rows)
 {
-    const auto & data=JointProblemAccess::Get(problem); const auto & input=problem.Input();
-    JointTargetEvidence out; out.contract="target-estimability-v2"; out.original_rows=original_rows;
-    auto check=[&](const char * name,Status status,std::string reason,std::optional<double> value={},std::optional<double> threshold={}) {
-        out.checks.push_back({name,status,scope,value,threshold,std::move(reason)});
-    };
-    for(const auto & c:existing)
-        if(c.name=="conditional-ac-optimality" || c.name=="independent-replay" ||
-            c.name=="width-stationarity" || c.name=="design-identifiability" ||
-            c.name=="numerical-identifiability" ||
-            c.name=="assembly-mapping" || c.name=="assembled-consistency" ||
-            c.name=="inner" || c.name=="kkt" || c.name=="assembled-profile")
-            out.checks.push_back(c);
-    MemoryEstimate target_memory;
+    const auto & input=problem.Input();
+    const auto target_memory=state ? TargetIdentifiabilityMemoryEstimate(input,layout,layout.informative_rows.size()) :
+        MemoryEstimate{};
     if(state)
     {
-        target_memory=TargetIdentifiabilityMemoryEstimate(input,layout,layout.informative_rows.size());
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        AssessmentStageTimerForTesting preflight_stage("target-memory-preflight",
+        AssessmentStageTimerForTesting preflight_stage("derived-target-memory-preflight",
             static_cast<Eigen::Index>(layout.informative_rows.size()),
-            static_cast<Eigen::Index>(target_memory.shape.component_jacobian_columns),&target_memory);
+            static_cast<Eigen::Index>(layout.full_atoms.size()),&target_memory);
         preflight_stage.Finish();
 #endif
         if(target_memory.status!=MemoryStatus::Pass || target_memory.estimated_peak_bytes>target_memory.budget_bytes/2)
             LogMemoryEstimate(target_memory);
         if(target_memory.status!=MemoryStatus::Pass)
         {
+            JointTargetEvidence out; out.contract="target-estimability-v3"; out.original_rows=original_rows;
+            for(const auto & check:existing)
+                if(check.name=="conditional-ac-optimality" || check.name=="independent-replay" ||
+                    check.name=="width-stationarity" || check.name=="design-identifiability" ||
+                    check.name=="numerical-identifiability" || check.name=="assembly-mapping" ||
+                    check.name=="assembled-consistency" || check.name=="inner" || check.name=="kkt" ||
+                    check.name=="assembled-profile") out.checks.push_back(check);
             const auto reason=std::string("resource-limit:target-identifiability");
             for(const auto atom:layout.full_atoms) out.atoms.push_back({atom,Status::Unavailable,{},reason});
             for(const auto & group:layout.groups) for(const auto atom:group.atoms)
                 out.atoms.push_back({atom,Status::Unavailable,{},"observable-contribution-only"});
             std::sort(out.atoms.begin(),out.atoms.end(),[](const auto & a,const auto & b){return a.atom<b.atom;});
-            check("target-identifiability",Status::Unavailable,reason);
-            check("target-memory-preflight",Status::Unavailable,
-                std::string("resource-limit:target-identifiability:")+target_memory.reason,
-                static_cast<double>(target_memory.estimated_peak_bytes),static_cast<double>(target_memory.budget_bytes));
+            out.checks.push_back({"target-identifiability",Status::Unavailable,scope,{}, {},reason});
+            out.checks.push_back({"derived-target-memory-preflight",Status::Unavailable,scope,
+                static_cast<double>(target_memory.estimated_peak_bytes),static_cast<double>(target_memory.budget_bytes),
+                reason+":"+target_memory.reason});
             return out;
         }
     }
-    TargetGeometry geometry;
-    auto context=ProfileContext(data.context,layout,static_cast<Eigen::Index>(original_rows));
-    const auto domain=ProfileDomain(data.domain,layout);
-    const Vector y=SelectValues(data.y,{layout.informative_rows.begin(),layout.informative_rows.end()});
-    if(state)
-    {
-        const auto geometry_memory=PlanMemory(target_memory.shape,MemoryStage::TargetGeometry,target_memory.budget_bytes);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        AssessmentStageTimerForTesting geometry_stage("target-geometry",y.size(),
-            static_cast<Eigen::Index>(target_memory.shape.component_jacobian_columns),&geometry_memory);
+    AssessmentStageTimerForTesting derived_stage("derived-target-identifiability",
+        static_cast<Eigen::Index>(layout.informative_rows.size()),static_cast<Eigen::Index>(layout.full_atoms.size()),
+        state ? &target_memory : nullptr);
 #endif
-        geometry=BuildTargetGeometry(domain,y,*state,context);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        geometry_stage.Finish();
-#endif
-    }
-    else geometry.reason="missing-component-state";
-    const bool usable=geometry.valid && !geometry.threshold_sensitive;
-    bool targets_identified=true; std::size_t targets{};
-    for(std::size_t k=0;k<layout.full_atoms.size();++k)
-    {
-        const auto atom=layout.full_atoms[k];
-        JointAtomIdentifiability evidence; evidence.atom=atom; evidence.reason=geometry.reason;
-        if(usable)
-        {
-            const auto & svd=geometry.svd;
-            const double leakage=svd.right_vectors.block(3*static_cast<Eigen::Index>(k),svd.rank,3,
-                svd.right_vectors.cols()-svd.rank).norm();
-            evidence.null_space_leakage=leakage;
-            evidence.status=leakage<=1e-10 ? Status::Passed : Status::Failed;
-            evidence.reason=evidence.status==Status::Passed ? "" : "nonunique-parameter-directions";
-        }
-        if(std::binary_search(input.selection_domain->target_indices.begin(),input.selection_domain->target_indices.end(),atom))
-        {++targets; targets_identified &= evidence.status==Status::Passed;}
-        out.atoms.push_back(std::move(evidence));
-    }
-    for(const auto & group:layout.groups) for(auto atom:group.atoms)
-        out.atoms.push_back({atom,Status::Unavailable,{},"observable-contribution-only"});
-    std::sort(out.atoms.begin(),out.atoms.end(),[](const auto & a,const auto & b){return a.atom<b.atom;});
-    if(geometry.valid)
-    {
-        out.column_scales=Values(geometry.scales);
-        out.ranks.push_back({"column-scaled-observation-jacobian",scope,static_cast<std::size_t>(geometry.svd.rank),
-            geometry.svd.threshold,Values(geometry.svd.singular_values)});
-    }
-    // A nuisance-only component has no target coordinates, but its state is still required.
-    if(!targets)
-    {
-        check("target-identifiability",state ? Status::Passed : Status::Unavailable,state ? "no-target-coordinates" : geometry.reason);
-        return out;
-    }
-    check("target-identifiability",!usable ? Status::Unavailable : targets_identified ? Status::Passed : Status::Failed,
-        !usable ? geometry.reason : targets_identified ? "" : "target-confounded-with-nuisance");
+    auto out=DeriveTargetIdentifiability(problem,layout,state,existing,ranks,scope,original_rows);
+    derived_stage.Finish();
     return out;
+#else
+    return DeriveTargetIdentifiability(problem,layout,state,existing,ranks,scope,original_rows);
+#endif
 }
 JointCheckStatus TargetConvergence(const std::optional<JointTargetEvidence> & evidence,bool state)
 {
@@ -500,7 +399,8 @@ void AddTargetEvidence(JointFitResult & fit)
     for(auto & c:fit.components)
     {
         const JointParameterLayout layout=c.layout.value_or(JointParameterLayout{c.atoms,c.rows,{}});
-        c.target_evidence=AssessTargetState(problem,layout,c.state,c.evidence,JointEvidenceScope::ComponentLocal,c.rows.size());
+        c.target_evidence=AssessTargetState(problem,layout,c.state,c.evidence,c.ranks,
+            JointEvidenceScope::ComponentLocal,c.rows.size());
     }
     const auto & global_layout=problem.ParameterLayout();
     bool reused=false;
@@ -541,7 +441,7 @@ void AddTargetEvidence(JointFitResult & fit)
         }
     }
     if(!reused)
-        fit.target_evidence=AssessTargetState(problem,global_layout,fit.assembled_state,fit.evidence,
+        fit.target_evidence=AssessTargetState(problem,global_layout,fit.assembled_state,fit.evidence,fit.ranks,
             JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
     fit.costs.assessment_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
 }

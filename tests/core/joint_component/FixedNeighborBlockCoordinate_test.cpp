@@ -443,7 +443,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     const auto target_process_peak=n::ProcessPeakRssBytes();
     ASSERT_EQ(target_memory.shape.component_target_atoms,atoms);
     ASSERT_EQ(target_memory.shape.component_halo_atoms,0u);
-    EXPECT_EQ(target_memory.status,n::MemoryStatus::Reject);
+    EXPECT_EQ(target_memory.status,n::MemoryStatus::Pass);
     const auto & assessment_stages=n::AssessmentWorkForTesting().stages;
     const auto find_assessment_stage=[&](const std::string & name)->const n::AssessmentStageWork * {
         const auto found=std::find_if(assessment_stages.begin(),assessment_stages.end(),[&](const auto & stage) {
@@ -468,7 +468,9 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     }),assessment_stages.end());
     const auto current_rss=n::CurrentRssBytes();
     const auto process_peak_rss=n::ProcessPeakRssBytes();
-    const auto target_geometry=target_memory.attributed_stages.at(0);
+    EXPECT_TRUE(target_memory.attributed_stages.empty());
+    EXPECT_EQ(target_memory.dense_factor_bytes,0u);
+    EXPECT_EQ(target_memory.right_singular_vector_bytes,0u);
     const auto snapshot_bytes=n::EstimateSnapshotBytes(*snapshot);
     ASSERT_TRUE(snapshot_bytes);
     const auto * primary_stage=find_assessment_stage("endpoint-primary-evaluation");
@@ -522,13 +524,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
         <<" design_spectrum_peak_bytes="<<rank_stages[0].estimated_peak_bytes
         <<" projected_width_peak_bytes="<<rank_stages[1].estimated_peak_bytes
         <<" target_identifiability_peak_bytes="<<target_memory.estimated_peak_bytes
-        <<" target_geometry_peak_bytes="<<target_geometry.estimated_peak_bytes
-        <<" target_geometry_resident_bytes="<<target_geometry.resident_bytes
-        <<" target_geometry_temporary_bytes="<<target_geometry.temporary_bytes
-        <<" target_geometry_factor_bytes="<<target_geometry.dense_factor_bytes
-        <<" target_geometry_workspace_bytes="<<target_geometry.factor_workspace_bytes
-        <<" target_geometry_right_null_bytes="<<target_geometry.right_null_space_bytes
-        <<" target_geometry_sparse_bytes="<<target_geometry.sparse_design_bytes
         <<" overall_estimated_peak_bytes="<<std::max({result.memory_estimate.estimated_peak_bytes,
             result.global_state_memory_estimate.estimated_peak_bytes,endpoint_memory.estimated_peak_bytes,
             certification.assessment.rank_memory_estimate.estimated_peak_bytes,target_memory.estimated_peak_bytes})
@@ -547,8 +542,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
         <<" design_columns="<<certification.assessment.rank_memory_estimate.shape.component_design_columns
         <<" width_columns="<<certification.assessment.rank_memory_estimate.shape.component_width_columns
         <<" target_columns="<<target_memory.shape.component_target_columns
-        <<" jacobian_rows="<<target_memory.shape.component_observations
-        <<" jacobian_columns="<<target_memory.shape.component_jacobian_columns
+        <<" target_evidence_atoms="<<target_memory.shape.component_target_atoms
+        <<" nuisance_atoms="<<target_memory.shape.component_nuisance_atoms
         <<" design_factor_dimensions="<<rank_stages[0].factor_rows<<"x"<<rank_stages[0].factor_columns
         <<" design_dense_factor_bytes="<<rank_stages[0].dense_factor_bytes
         <<" design_workspace_bytes="<<rank_stages[0].factor_workspace_bytes
