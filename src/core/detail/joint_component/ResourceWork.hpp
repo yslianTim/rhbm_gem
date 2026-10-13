@@ -57,6 +57,8 @@ struct MemoryStageEstimate
         sparse_design_bytes{},dense_factor_bytes{},factor_workspace_bytes{},right_singular_vector_bytes{},
         maximum_tile_rows{};
     std::size_t factor_rows{},factor_columns{};
+    std::size_t free_design_factor_bytes{},free_design_svd_workspace_bytes{},projection_coefficient_bytes{},
+        projected_width_factor_bytes{},projected_width_svd_workspace_bytes{},qr_tile_workspace_bytes{};
     MemoryStatus status{MemoryStatus::Pass};
     std::string reason;
 };
@@ -69,6 +71,8 @@ struct MemoryEstimate
     std::string reason;
     std::size_t sparse_design_bytes{},dense_factor_bytes{},factor_workspace_bytes{},right_singular_vector_bytes{},
         factor_rows{},factor_columns{};
+    std::size_t free_design_factor_bytes{},free_design_svd_workspace_bytes{},projection_coefficient_bytes{},
+        projected_width_factor_bytes{},projected_width_svd_workspace_bytes{},qr_tile_workspace_bytes{};
     std::vector<MemoryStageEstimate> attributed_stages;
 };
 struct ReferenceFeasibility

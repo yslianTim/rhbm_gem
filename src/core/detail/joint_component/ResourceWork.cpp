@@ -52,11 +52,22 @@ void Overflow(MemoryEstimate & estimate)
 {estimate.status=MemoryStatus::Overflow; estimate.reason="size-overflow";}
 MemoryStageEstimate Attribute(const MemoryEstimate & estimate)
 {
-    const auto & s=estimate.shape;
-    return {estimate.stage,estimate.resident_bytes,estimate.temporary_bytes,estimate.estimated_peak_bytes,
-        estimate.budget_bytes,estimate.sparse_design_bytes,estimate.dense_factor_bytes,
-        estimate.factor_workspace_bytes,estimate.right_singular_vector_bytes,s.maximum_tile_rows,
-        estimate.factor_rows,estimate.factor_columns,estimate.status,estimate.reason};
+    MemoryStageEstimate out;
+    out.stage=estimate.stage; out.resident_bytes=estimate.resident_bytes; out.temporary_bytes=estimate.temporary_bytes;
+    out.estimated_peak_bytes=estimate.estimated_peak_bytes; out.budget_bytes=estimate.budget_bytes;
+    out.sparse_design_bytes=estimate.sparse_design_bytes; out.dense_factor_bytes=estimate.dense_factor_bytes;
+    out.factor_workspace_bytes=estimate.factor_workspace_bytes;
+    out.right_singular_vector_bytes=estimate.right_singular_vector_bytes;
+    out.maximum_tile_rows=estimate.shape.maximum_tile_rows;
+    out.factor_rows=estimate.factor_rows; out.factor_columns=estimate.factor_columns;
+    out.free_design_factor_bytes=estimate.free_design_factor_bytes;
+    out.free_design_svd_workspace_bytes=estimate.free_design_svd_workspace_bytes;
+    out.projection_coefficient_bytes=estimate.projection_coefficient_bytes;
+    out.projected_width_factor_bytes=estimate.projected_width_factor_bytes;
+    out.projected_width_svd_workspace_bytes=estimate.projected_width_svd_workspace_bytes;
+    out.qr_tile_workspace_bytes=estimate.qr_tile_workspace_bytes;
+    out.status=estimate.status; out.reason=estimate.reason;
+    return out;
 }
 }
 std::optional<std::size_t> EstimateSnapshotBytes(const JointProblemInput & input)
@@ -214,6 +225,13 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
         if(design.status==MemoryStatus::Overflow || projected.status==MemoryStatus::Overflow) {ok=false; break;}
         temporary=std::max(design.temporary_bytes,projected.temporary_bytes);
         out.attributed_stages={Attribute(design),Attribute(projected)};
+        out.sparse_design_bytes=projected.sparse_design_bytes;
+        out.free_design_factor_bytes=projected.free_design_factor_bytes;
+        out.free_design_svd_workspace_bytes=projected.free_design_svd_workspace_bytes;
+        out.projection_coefficient_bytes=projected.projection_coefficient_bytes;
+        out.projected_width_factor_bytes=projected.projected_width_factor_bytes;
+        out.projected_width_svd_workspace_bytes=projected.projected_width_svd_workspace_bytes;
+        out.qr_tile_workspace_bytes=projected.qr_tile_workspace_bytes;
         break;
     }
     case MemoryStage::StructuralRank:
@@ -277,24 +295,89 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
     case MemoryStage::ProjectedWidthAssessment:
     {
         const auto widths=shape.component_width_columns ? shape.component_width_columns : atoms;
-        std::size_t free_width{},width_factor{},right_vectors{},factor_total{},tile{},sparse{};
-        // Qualification retains only the projection coefficients, the compact
-        // projected factor and its right vectors. The profile correction arrays
-        // remain exclusive to the optimizer derivative path.
-        ok=AddProduct2D(free_width,free,widths,sizeof(double)) &&
-            AddProduct2D(width_factor,widths,widths,sizeof(double)) &&
-            AddTileWorkspace(tile,shape.maximum_tile_rows,widths) &&
-            AddProduct(sparse,entries,6*(sizeof(double)+sizeof(Eigen::Index)));
-        right_vectors=width_factor;
-        ok=ok && CheckedAddBytes(width_factor,right_vectors,factor_total) &&
-            CheckedAddBytes(free_width,factor_total,temporary) &&
-            CheckedAddBytes(temporary,tile,temporary) && CheckedAddBytes(temporary,sparse,temporary);
+        std::size_t design_columns=shape.component_design_columns,free_columns=free;
+        if(!design_columns) ok=CheckedMultiplyBytes(atoms,2,design_columns);
+        if(ok && !free_columns) free_columns=design_columns;
+        std::size_t free_factor{},free_svd_workspace{},projection_coefficients{},width_factor{},width_svd_workspace{};
+        std::size_t free_entries{},raw_entries{},triplet_entries{},matrix_entries{},outer_rows{},sparse_matrices{},
+            triplets{},sparse_peak{},free_index_bytes{},free_common{},tile_rows{},free_assembled_rows{},
+            width_assembled_rows{},free_qr_workspace{},free_qr_peak{},free_svd_peak{},
+            free_phase_peak{},width_qr_workspace{},width_qr_peak{},width_svd_peak{},width_phase_peak{};
+        const std::size_t index_bytes=sizeof(Eigen::Index),triplet_bytes=sizeof(double)+2*sizeof(Eigen::Index);
+        const auto add_product_bytes=[](std::size_t rows,std::size_t columns,std::size_t width,std::size_t & bytes) {
+            std::size_t count{}; return CheckedMultiplyBytes(rows,columns,count) && CheckedMultiplyBytes(count,width,bytes);
+        };
+        ok=ok && design_columns>0 && free_columns<=design_columns && widths>0 &&
+            add_product_bytes(free_columns,free_columns,sizeof(double),free_factor) &&
+            CheckedMultiplyBytes(free_factor,3,free_svd_workspace) &&
+            add_product_bytes(free_columns,widths,sizeof(double),projection_coefficients) &&
+            add_product_bytes(widths,widths,sizeof(double),width_factor) &&
+            CheckedMultiplyBytes(width_factor,3,width_svd_workspace);
+        if(ok && entries)
+        {
+            std::size_t scaled_entries{},rounded_entries{},twice_entries{};
+            ok=CheckedMultiplyBytes(entries,free_columns,scaled_entries) &&
+                CheckedAddBytes(scaled_entries,design_columns-1,rounded_entries) &&
+                CheckedMultiplyBytes(entries,2,twice_entries);
+            if(ok)
+            {
+                free_entries=rounded_entries/design_columns; raw_entries=entries;
+                ok=CheckedAddBytes(free_entries,raw_entries,matrix_entries) &&
+                    CheckedMultiplyBytes(matrix_entries,sizeof(double)+index_bytes,sparse_matrices) &&
+                    CheckedAddBytes(rows,1,outer_rows) &&
+                    AddProduct(sparse_matrices,outer_rows,2*index_bytes) &&
+                    CheckedAddBytes(free_entries,twice_entries,triplet_entries) &&
+                    CheckedMultiplyBytes(triplet_entries,triplet_bytes,triplets) &&
+                    CheckedMultiplyBytes(triplets,2,triplets);
+            }
+        }
+        if(ok) ok=CheckedAddBytes(sparse_matrices,triplets,sparse_peak) &&
+            CheckedMultiplyBytes(free_columns,index_bytes,free_index_bytes) &&
+            CheckedAddBytes(sparse_peak,free_index_bytes,free_common) &&
+            CheckedMultiplyBytes(shape.maximum_tile_rows,1,tile_rows) &&
+            CheckedAddBytes(std::min(free_columns,rows),tile_rows,free_assembled_rows) &&
+            CheckedAddBytes(std::min(widths,rows),tile_rows,width_assembled_rows) &&
+            AddProduct(free_qr_workspace,2,free_factor) &&
+            AddProduct(free_qr_workspace,2,projection_coefficients) &&
+            AddProduct2D(free_qr_workspace,tile_rows,free_columns,sizeof(double)) &&
+            AddProduct2D(free_qr_workspace,tile_rows,widths,sizeof(double)) &&
+            AddProduct2D(free_qr_workspace,free_assembled_rows,free_columns,sizeof(double)) &&
+            AddProduct2D(free_qr_workspace,free_assembled_rows,widths,sizeof(double)) &&
+            AddProduct2D(free_qr_workspace,free_assembled_rows,free_columns,sizeof(double)) &&
+            AddProduct(free_qr_workspace,free_assembled_rows,sizeof(double));
+        if(ok) ok=CheckedAddBytes(free_common,free_qr_workspace,free_qr_peak) &&
+            AddProduct(free_svd_peak,4,free_factor) &&
+            CheckedAddBytes(free_svd_peak,projection_coefficients,free_svd_peak) &&
+            AddProduct(free_svd_peak,free_columns,sizeof(double)) &&
+            CheckedAddBytes(free_common,free_svd_peak,free_svd_peak) &&
+            CheckedAddBytes(free_common,free_qr_peak,free_qr_peak) &&
+            AddProduct(width_qr_workspace,2,width_factor) &&
+            AddProduct2D(width_qr_workspace,width_assembled_rows,widths,sizeof(double)) &&
+            AddProduct2D(width_qr_workspace,tile_rows,widths,3*sizeof(double)) &&
+            AddProduct(width_qr_workspace,free_entries,sizeof(double)+index_bytes) &&
+            AddProduct(width_qr_workspace,width_assembled_rows,sizeof(double));
+        if(ok) ok=CheckedAddBytes(sparse_matrices,projection_coefficients,width_qr_peak) &&
+            CheckedAddBytes(width_qr_peak,width_qr_workspace,width_qr_peak) &&
+            AddProduct(width_svd_peak,5,width_factor) &&
+            CheckedAddBytes(width_svd_peak,projection_coefficients,width_svd_peak) &&
+            AddProduct(width_svd_peak,widths,sizeof(double)) &&
+            CheckedAddBytes(sparse_matrices,width_svd_peak,width_svd_peak);
         if(ok)
         {
-            out.sparse_design_bytes=sparse; out.dense_factor_bytes=width_factor;
-            out.right_singular_vector_bytes=right_vectors;
-            ok=CheckedAddBytes(free_width,tile,out.factor_workspace_bytes);
-            out.factor_rows=widths; out.factor_columns=widths;
+            free_phase_peak=std::max(free_qr_peak,free_svd_peak);
+            width_phase_peak=std::max(width_qr_peak,width_svd_peak);
+            temporary=std::max(free_phase_peak,width_phase_peak);
+            out.sparse_design_bytes=sparse_peak;
+            out.free_design_factor_bytes=free_factor;
+            out.free_design_svd_workspace_bytes=free_svd_workspace;
+            out.projection_coefficient_bytes=projection_coefficients;
+            out.projected_width_factor_bytes=width_factor;
+            out.projected_width_svd_workspace_bytes=width_svd_workspace;
+            out.qr_tile_workspace_bytes=std::max(free_qr_workspace,width_qr_workspace);
+            out.dense_factor_bytes=free_factor;
+            out.factor_workspace_bytes=std::max({free_svd_workspace,width_svd_workspace,out.qr_tile_workspace_bytes});
+            out.right_singular_vector_bytes=width_factor;
+            out.factor_rows=free_columns; out.factor_columns=free_columns;
         }
         break;
     }
@@ -423,6 +506,13 @@ std::string FormatMemoryEstimate(const MemoryEstimate & estimate)
        <<"  resident="<<Bytes(estimate.resident_bytes)<<'\n'
        <<"  temporary="<<Bytes(estimate.temporary_bytes)<<'\n'
        <<"  estimated_peak="<<Bytes(estimate.estimated_peak_bytes)<<'\n'
+       <<"  sparse_working_set="<<Bytes(estimate.sparse_design_bytes)<<'\n'
+       <<"  free_design_factor="<<Bytes(estimate.free_design_factor_bytes)<<'\n'
+       <<"  free_design_svd_workspace="<<Bytes(estimate.free_design_svd_workspace_bytes)<<'\n'
+       <<"  projection_coefficients="<<Bytes(estimate.projection_coefficient_bytes)<<'\n'
+       <<"  projected_width_factor="<<Bytes(estimate.projected_width_factor_bytes)<<'\n'
+       <<"  projected_width_svd_workspace="<<Bytes(estimate.projected_width_svd_workspace_bytes)<<'\n'
+       <<"  qr_tile_workspace="<<Bytes(estimate.qr_tile_workspace_bytes)<<'\n'
        <<"  budget="<<Bytes(estimate.budget_bytes)<<'\n'
        <<"  preflight="<<MemoryStatusName(estimate.status);
     if(!estimate.reason.empty()) out<<'\n'<<"  reason="<<estimate.reason;
@@ -437,6 +527,12 @@ std::string FormatMemoryEstimate(const MemoryEstimate & estimate)
            <<" factor_bytes="<<Bytes(stage.dense_factor_bytes)
            <<" workspace_bytes="<<Bytes(stage.factor_workspace_bytes)
            <<" right_singular_vector_bytes="<<Bytes(stage.right_singular_vector_bytes)
+           <<" free_design_factor_bytes="<<Bytes(stage.free_design_factor_bytes)
+           <<" free_design_svd_workspace_bytes="<<Bytes(stage.free_design_svd_workspace_bytes)
+           <<" projection_coefficient_bytes="<<Bytes(stage.projection_coefficient_bytes)
+           <<" projected_width_factor_bytes="<<Bytes(stage.projected_width_factor_bytes)
+           <<" projected_width_svd_workspace_bytes="<<Bytes(stage.projected_width_svd_workspace_bytes)
+           <<" qr_tile_workspace_bytes="<<Bytes(stage.qr_tile_workspace_bytes)
            <<" sparse_design_bytes="<<Bytes(stage.sparse_design_bytes)
            <<" maximum_tile_rows="<<stage.maximum_tile_rows;
         if(!stage.reason.empty()) out<<" reason="<<stage.reason;

@@ -230,6 +230,29 @@ TEST(JointCompactAssessmentTest, StrictGreaterBoundaryControlsNearThresholdRank)
     }
 }
 
+TEST(JointCompactAssessmentTest, SmallProjectedWidthEstimateCanBeComparedWithObservedRss)
+{
+    EigenThreads threads;
+    const c::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
+    const auto & data=c::JointProblemAccess::Get(problem);
+    const auto endpoint=n::EvaluateProfile(data.domain,data.y,n::Vector::Constant(8,std::log(.55)),false,&data.context);
+    ASSERT_TRUE(endpoint.valid);
+    const auto before=n::CurrentRssBytes();
+    const auto assessment=n::AssessEvaluated(data.domain,data.y,endpoint,endpoint,data.context);
+    const auto after=n::CurrentRssBytes();
+    ASSERT_EQ(assessment.rank_memory_estimate.stage,n::MemoryStage::RankAssessment);
+    RecordProperty("small_projected_width_estimate_bytes",
+        std::to_string(assessment.rank_memory_estimate.estimated_peak_bytes));
+    if(before && after)
+    {
+        const auto growth=*after>*before ? *after-*before : 0;
+        RecordProperty("small_projected_width_observed_rss_growth_bytes",std::to_string(growth));
+        RecordProperty("small_projected_width_rss_status","available");
+        EXPECT_LE(growth,assessment.rank_memory_estimate.estimated_peak_bytes);
+    }
+    else RecordProperty("small_projected_width_rss_status","unavailable");
+}
+
 TEST(JointCompactAssessmentTest, ProjectedWidthCancellationFallbackAndActiveFaceRemainValid)
 {
     EigenThreads threads;

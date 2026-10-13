@@ -801,6 +801,7 @@ TEST(JointComponentNumericsTest, MemoryPlannerUsesCheckedStageSpecificEstimates)
     const auto state=n::PlanMemory(large,n::MemoryStage::GlobalStateEvaluation);
     const auto reference=n::AssessReferenceFeasibility(large);
     const auto rank=n::PlanMemory(large,n::MemoryStage::RankAssessment);
+    const auto projected=n::PlanMemory(large,n::MemoryStage::ProjectedWidthAssessment);
     const auto target=n::PlanMemory(large,n::MemoryStage::TargetIdentifiability);
     const auto verification=n::PlanMemory(large,n::MemoryStage::EndpointVerification);
     EXPECT_EQ(mappings.status,n::MemoryStatus::Pass);
@@ -809,18 +810,31 @@ TEST(JointComponentNumericsTest, MemoryPlannerUsesCheckedStageSpecificEstimates)
     EXPECT_EQ(reference.budget_status,n::MemoryStatus::Reject);
     EXPECT_EQ(reference.numerical_status,"unavailable");
     EXPECT_EQ(rank.status,n::MemoryStatus::Reject);
+    EXPECT_EQ(projected.status,n::MemoryStatus::Reject);
     EXPECT_EQ(target.status,n::MemoryStatus::Pass);
     EXPECT_EQ(verification.status,n::MemoryStatus::Pass);
     EXPECT_LT(verification.estimated_peak_bytes,reference.estimated_peak_bytes);
     EXPECT_EQ(mappings.budget_bytes,3'200'000'000u);
     EXPECT_NE(mappings.estimated_peak_bytes,state.estimated_peak_bytes);
-    EXPECT_EQ(rank.estimated_peak_bytes,189'288'489'472u);
+    EXPECT_GE(rank.estimated_peak_bytes,projected.estimated_peak_bytes);
+    EXPECT_EQ(projected.free_design_factor_bytes,74'812ull*74'812ull*sizeof(double));
+    EXPECT_EQ(projected.free_design_svd_workspace_bytes,3*projected.free_design_factor_bytes);
+    EXPECT_EQ(projected.projection_coefficient_bytes,74'812ull*37'406ull*sizeof(double));
+    EXPECT_EQ(projected.projected_width_factor_bytes,37'406ull*37'406ull*sizeof(double));
+    EXPECT_EQ(projected.projected_width_svd_workspace_bytes,3*projected.projected_width_factor_bytes);
+    EXPECT_GT(projected.estimated_peak_bytes,projected.free_design_factor_bytes);
     EXPECT_LT(target.estimated_peak_bytes,300'000'000u);
     ASSERT_EQ(rank.attributed_stages.size(),2u);
     EXPECT_EQ(rank.attributed_stages[0].stage,n::MemoryStage::DesignSpectrum);
     EXPECT_EQ(rank.attributed_stages[1].stage,n::MemoryStage::ProjectedWidthAssessment);
     EXPECT_EQ(rank.temporary_bytes,std::max({rank.attributed_stages[0].temporary_bytes,
         rank.attributed_stages[1].temporary_bytes}));
+    EXPECT_EQ(rank.attributed_stages[1].free_design_factor_bytes,projected.free_design_factor_bytes);
+    auto active=large; active.component_free_columns=37'406;
+    const auto active_projected=n::PlanMemory(active,n::MemoryStage::ProjectedWidthAssessment);
+    EXPECT_EQ(active_projected.status,n::MemoryStatus::Reject);
+    EXPECT_EQ(active_projected.free_design_factor_bytes,37'406ull*37'406ull*sizeof(double));
+    EXPECT_EQ(active_projected.projected_width_factor_bytes,projected.projected_width_factor_bytes);
     EXPECT_TRUE(target.attributed_stages.empty());
     EXPECT_EQ(target.dense_factor_bytes,0u);
     EXPECT_EQ(target.factor_workspace_bytes,0u);
@@ -832,6 +846,7 @@ TEST(JointComponentNumericsTest, MemoryPlannerUsesCheckedStageSpecificEstimates)
     EXPECT_EQ(n::PlanMemory(overflow,n::MemoryStage::StructuralConstruction).status,n::MemoryStatus::Overflow);
     auto tile_overflow=large; tile_overflow.maximum_tile_rows=std::numeric_limits<std::size_t>::max();
     EXPECT_EQ(n::PlanMemory(tile_overflow,n::MemoryStage::DesignSpectrum).status,n::MemoryStatus::Overflow);
+    EXPECT_EQ(n::PlanMemory(tile_overflow,n::MemoryStage::ProjectedWidthAssessment).status,n::MemoryStatus::Overflow);
     EXPECT_EQ(n::PlanMemory(tile_overflow,n::MemoryStage::TargetIdentifiability).status,n::MemoryStatus::Pass);
     auto target_overflow=large; target_overflow.component_target_atoms=std::numeric_limits<std::size_t>::max();
     EXPECT_EQ(n::PlanMemory(target_overflow,n::MemoryStage::TargetIdentifiability).status,n::MemoryStatus::Overflow);
