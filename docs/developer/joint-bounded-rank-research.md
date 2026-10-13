@@ -1,9 +1,12 @@
 # Bounded global rank research
 
-This document records the rank contract and reproducible controls for the
-memory-bounded global design rank study. The dense SVD path is the small-case
-oracle; experimental methods must match its normalized matrix and strict rank
-boundary before they can be considered for production.
+This document records the historical rank contract and controls for the
+memory-bounded global design rank study. `DesignSpectrum()` remains its
+small-case oracle. Current production obtains interior Design Rank from the
+free-design factor in projected-width preparation; see the
+[runtime contract](joint-component-runtime.md). Experimental methods in this
+study must match the oracle's normalized matrix and strict rank boundary before
+they can be considered for production.
 
 ## Existing numerical rank contract
 

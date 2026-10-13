@@ -20,10 +20,14 @@ identifiability.
 
 The private compact helper uses JacobiSVD when the compact dimension is below
 16 and Eigen BDCSVD otherwise. The current EIGEN-backed path uses this dispatch;
-there is no user-facing SVD option or additional dependency. The direct dense
-oracle, block diagnostic and endpoint spectra retain their existing rank
-thresholds. Profile LM's derivative is unchanged; the production correction-
-qualification SVD and solve have been removed.
+there is no user-facing SVD option or additional dependency. The direct dense `DesignSpectrum()` oracle remains available to offline and test
+controls; production endpoint qualification no longer calls it. The one
+free-design SVD in projected-width preparation uses the original observation
+row count and full A/C column count for its relative threshold, even when the
+free face has fewer columns. It applies the original strict `singular_value >
+threshold` rule. Singular values within one representable step of the threshold
+are marked sensitive and cannot qualify. Profile LM's derivative is unchanged;
+the production correction-qualification SVD and solve have been removed.
 
 Rank and solve use the original caller's relative threshold, including the
 original observation dimensions and any absolute-threshold override. Compact
@@ -61,8 +65,12 @@ derivative_inclusive_seconds covers the whole preparation. Reference phase
 wall time includes reference QR, compact reduction, SVD and solve. Retry time
 overlaps its SVD/solve counters; cancellation time overlaps the additional
 tiled reduction and SVD. These inclusive and nested times must not be added.
-SVD counters time decomposition; the reference-solve counter times application
-of the factors. OS peak RSS is not an allocation-level attribution.
+The projected-width preparation counts one free-design TiledQR and one SVD rank
+assessment; that same `R` factor supplies free-design rank evidence and the
+triangular solve for projection coefficients. The separate projected-width
+QR/SVD remains necessary. SVD counters time decomposition; the reference-solve
+counter times application of factors. OS peak RSS is not an allocation-level
+attribution.
 
 ## Current measurement
 

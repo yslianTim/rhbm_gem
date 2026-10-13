@@ -54,12 +54,13 @@ The complete concise record of those FixedNeighbor choices is in
   conditional solve remains EIGEN SparseQR. The independent global reference
   solver remains only an offline/test oracle; production does not build its
   dense reference `R`.
-- For 37,406 atoms, a 74,812-column DesignSpectrum `ReferenceQR` factor alone
-  is estimated at 44.775 GB (41.7 GiB). Production no longer runs a global
-  independent reference solve, but DesignSpectrum remains the dense rank
-  primitive when preflight permits it. Large rank and target assessments
-  report unavailable when their stage estimates exceed budget; no approximate
-  spectral result is treated as a certificate.
+- Production no longer runs a separate dense `DesignSpectrum()` QR/SVD.
+  Projected-width preparation computes one normalized free-design TiledQR and
+  one compact SVD. When all amplitudes are interior, its R factor provides the
+  full-design rank evidence; with an active amplitude it describes only the
+  free face and full Design Rank is unavailable. The original full-design
+  threshold dimensions and strict `>` decision are retained. The dense
+  `DesignSpectrum()` implementation remains an offline/test oracle only.
 - A deterministic 37,406-atom, 5,938,087-row single-chain fixture has 74,811
   support memberships and 3,118 blocks. It records 2,892,736 prepared-mapping
   bytes and an 876,119,666-byte global-evaluation estimated peak. A direct
@@ -72,8 +73,12 @@ The complete concise record of those FixedNeighbor choices is in
   columns but only 37,406 unique supported rows. The production structural
   row-count check therefore proves full-design rank deficiency without QR or
   SVD; it does not give an exact rank or classify the 37,406-column free face.
-  The dense DesignSpectrum estimate remains 189,484,131,163 bytes and
-  projected-width assessment is 39,065,926,939 bytes. Derived Target
+  The previous 189,484,131,163-byte Dense DesignSpectrum estimate and
+  39,065,926,939-byte projected-width estimate describe the retired two-stage
+  planner and are historical only. The current projected-width estimate
+  includes the free-design QR/SVD workspace, sparse inputs, projection
+  coefficients and projected-width QR/SVD. It remains a large-component
+  bottleneck; current totals are in the companion memory census. Derived Target
   Identifiability carries linear-size FullABC/target evidence plus per-atom
   unavailable records for observable-only nuisance contributors; it adds no
   dense factor.

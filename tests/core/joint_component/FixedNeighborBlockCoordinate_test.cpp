@@ -538,20 +538,33 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
         <<" projected_width_assessment_peak_bytes="<<rank_stages[0].estimated_peak_bytes
         <<" all_interior_projected_width_peak_bytes="<<interior_rank_memory.estimated_peak_bytes
         <<" all_interior_resource_status="<<n::MemoryStatusName(interior_rank_memory.status)
+        <<" all_interior_temporary_bytes="<<interior_rank_memory.temporary_bytes
+        <<" all_interior_sparse_design_bytes="<<interior_rank_memory.sparse_design_bytes
+        <<" all_interior_qr_tile_workspace_bytes="<<interior_rank_memory.qr_tile_workspace_bytes
         <<" all_interior_free_design_factor_bytes="<<interior_rank_memory.free_design_factor_bytes
         <<" all_interior_free_design_svd_workspace_bytes="<<interior_rank_memory.free_design_svd_workspace_bytes
         <<" all_interior_projection_coefficient_bytes="<<interior_rank_memory.projection_coefficient_bytes
+        <<" all_interior_projected_width_factor_bytes="<<interior_rank_memory.projected_width_factor_bytes
+        <<" all_interior_projected_width_svd_workspace_bytes="<<interior_rank_memory.projected_width_svd_workspace_bytes
         <<" mixed_active_free_design_columns="<<mixed_rank_memory.shape.component_free_columns
         <<" mixed_active_projected_width_peak_bytes="<<mixed_rank_memory.estimated_peak_bytes
         <<" mixed_active_resource_status="<<n::MemoryStatusName(mixed_rank_memory.status)
+        <<" mixed_active_temporary_bytes="<<mixed_rank_memory.temporary_bytes
+        <<" mixed_active_sparse_design_bytes="<<mixed_rank_memory.sparse_design_bytes
+        <<" mixed_active_qr_tile_workspace_bytes="<<mixed_rank_memory.qr_tile_workspace_bytes
         <<" mixed_active_free_design_factor_bytes="<<mixed_rank_memory.free_design_factor_bytes
         <<" mixed_active_free_design_svd_workspace_bytes="<<mixed_rank_memory.free_design_svd_workspace_bytes
         <<" mixed_active_projection_coefficient_bytes="<<mixed_rank_memory.projection_coefficient_bytes
+        <<" mixed_active_projected_width_factor_bytes="<<mixed_rank_memory.projected_width_factor_bytes
+        <<" mixed_active_projected_width_svd_workspace_bytes="<<mixed_rank_memory.projected_width_svd_workspace_bytes
         <<" free_design_factor_bytes="<<rank_stages[0].free_design_factor_bytes
         <<" free_design_svd_workspace_bytes="<<rank_stages[0].free_design_svd_workspace_bytes
         <<" projection_coefficient_bytes="<<rank_stages[0].projection_coefficient_bytes
         <<" projected_width_factor_bytes="<<rank_stages[0].projected_width_factor_bytes
         <<" projected_width_svd_workspace_bytes="<<rank_stages[0].projected_width_svd_workspace_bytes
+        <<" rank_assessment_temporary_bytes="<<certification.assessment.rank_memory_estimate.temporary_bytes
+        <<" rank_assessment_sparse_design_bytes="<<rank_stages[0].sparse_design_bytes
+        <<" rank_assessment_qr_tile_workspace_bytes="<<rank_stages[0].qr_tile_workspace_bytes
         <<" target_identifiability_peak_bytes="<<target_memory.estimated_peak_bytes
         <<" target_covariance_estimated_peak_bytes="<<covariance_memory.estimated_peak_bytes
         <<" target_covariance_preflight_status="<<n::MemoryStatusName(covariance_memory.status)
@@ -1108,10 +1121,12 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168StopsAtFirstCorrecti
         std::vector<n::FixedNeighborEndpointCertification> certifications;
         std::vector<SweepPoint> trajectory;
         int production_reference_evaluations{};
+        std::size_t production_design_spectrum_calls{};
     };
     const auto run=[&](std::size_t maximum_sweeps,bool stop_after_stationarity) {
         SearchRun result;
         n::AssessmentWorkForTesting()={};
+        n::NumericsWorkForTesting().design_spectrum_calls=0;
         n::FixedNeighborSearchPolicy policy; policy.maximum_sweeps=maximum_sweeps;
         std::size_t current_sweep{};
         policy.configure_search_for_testing=[&](n::FixedNeighborPolicy & search_policy) {
@@ -1131,12 +1146,15 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168StopsAtFirstCorrecti
         };
         result.fit=n::FitFixedNeighborComponents(problem,widths,policy);
         result.production_reference_evaluations=n::AssessmentWorkForTesting().reference_evaluations;
+        result.production_design_spectrum_calls=n::NumericsWorkForTesting().design_spectrum_calls;
         return result;
     };
     const auto qualified_run=run(200,true);
     const auto continued_run=run(127,false);
     EXPECT_EQ(qualified_run.production_reference_evaluations,0);
     EXPECT_EQ(continued_run.production_reference_evaluations,0);
+    EXPECT_EQ(qualified_run.production_design_spectrum_calls,0u);
+    EXPECT_EQ(continued_run.production_design_spectrum_calls,0u);
     ASSERT_EQ(qualified_run.fit.components.size(),1u);
     const auto & component=qualified_run.fit.components.front();
     ASSERT_TRUE(component.candidate_diagnostic);

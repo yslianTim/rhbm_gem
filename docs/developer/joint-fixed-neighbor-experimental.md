@@ -86,21 +86,23 @@ per-block timings and local profile trials require `--detailed`. No physical
 map/model input is present in this workspace, so driver measurements are
 synthetic and cannot establish physical full-search feasibility.
 
-The 5,938,087-row, 37,406-atom single-component census now continues through
-streaming endpoint verification and both numerical preflights. The synthetic
-input has 74,811 support memberships, 3,118 blocks and 37,406 targets. Its
-DesignSpectrum peak is estimated at 189,484,131,163 bytes; projected-width
-assessment is 39,065,926,939 bytes. Both rank stages exceed the planning
-budget and their dense factorizations are `NotRun`; the estimates are not
-measured allocations. Derived Target Identifiability is estimated at about
-482,240,000 bytes and has no dense factor workspace. The independent covariance
-preflight is estimated at about 418,400,000,000 bytes and rejects before
+The 5,938,087-row, 37,406-atom single-component census continues through
+streaming endpoint verification and the combined rank preflight. The synthetic
+input has 74,811 support memberships, 3,118 blocks and 37,406 targets. The
+all-active free-design estimate is 91,400,872,907 bytes; mixed and all-interior
+faces estimate 167,840,033,907 and 266,666,536,155 bytes. All exceed the
+3.2 GB planning budget and factorization is `NotRun`. The earlier
+189,484,131,163-byte Dense DesignSpectrum and 39,065,926,939-byte projected-
+width estimates describe the retired two-stage planner. The current combined
+stage accounts for the free-design QR/SVD, projection coefficients and
+projected-width QR/SVD. Derived Target Identifiability is estimated at
+482,239,947 bytes and has no dense factor workspace. The independent covariance
+preflight is estimated at 418,399,065,443 bytes and rejects before
 factorization. In this shape, structural rank deficiency leaves no trusted
-rank evidence, so the target result remains unavailable even though its
-evidence-memory preflight passes. Local-correction workspaces are no longer
-planned. See the
-[component memory census](joint-component-memory-census.md) for stage
-dimensions and the estimate/RSS scope.
+rank evidence, so target results remain unavailable even though the
+evidence-memory preflight passes. See the
+[component memory census](joint-component-memory-census.md) for the allocation
+breakdown and RSS scope.
 
 ## Historical KKT and reference agreement evidence
 

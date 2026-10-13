@@ -26,8 +26,13 @@ qualification; complete Design Rank and Projected-width Rank evidence; matching
 state, parameter layout, observation rows, selection domain, scope and numerical
 rank context; and no unresolved rank-threshold sensitivity. Rank records carry a
 context identity so evidence for a different state or row domain cannot be
-reused. Every amplitude participating in the implication must be strictly
-interior (`A_i > 0`). An active `A_i = 0` boundary remains `Unavailable`.
+reused. Production obtains Design Rank from the same normalized free-design
+QR/SVD used by projected-width preparation when every amplitude is interior, so
+the free design has all `2P` columns and equals the full A/C design. If any
+`A_i = 0`, the factor has fewer columns and remains evidence about that free
+face only; it cannot certify full Design Rank. That full-design evidence is
+`Unavailable`, and target derivation remains `Unavailable` at the active
+boundary.
 
 Missing evidence and rank deficiency do not prove that every individual target
 is unidentifiable. They produce `Unavailable` target evidence, while the
@@ -41,10 +46,13 @@ Per-atom evidence reports `Passed` with source
 `derived-from-component-identifiability`. Since no null-space calculation is
 performed, `null_space_leakage` and target `column_scales` are absent. The
 certificate uses the component Design Rank and Projected-width Rank
-normalizations and thresholds. That numerical-rank contract is not equivalent
-to the retired full-Jacobian, column-scaled SVD contract: near-threshold results
-may differ. The current evidence contract is `target-estimability-v3`; tests
-retain a small direct-Jacobian oracle to make this difference visible.
+normalizations and thresholds. Both preserve the original observation-row
+count and use a strict `singular_value > threshold` decision; values at the
+threshold do not pass, and a value within one representable step of the
+threshold is marked sensitive and cannot qualify. The contract is
+`target-estimability-v4`, which records the new source and active-boundary
+availability semantics. Tests retain a small direct-Jacobian oracle to make
+the difference from the retired full-Jacobian SVD visible.
 
 ## Target convergence and trusted state
 
@@ -83,21 +91,23 @@ covariance gates.
 
 ## Persistence and limits
 
-Joint JSON schema 9 stores `target-estimability-v3` and the rank context
-identity. It stores no fabricated null-space leakage, full-Jacobian singular
-values, or column scales. Schemas 3 through 8 remain readable. Historical
-`target-estimability-v1` and `target-estimability-v2` evidence keeps its saved
-meaning and statuses; loading never converts an old failed geometry result into
-a derived pass or recomputes runtime or covariance status.
+Joint JSON schema 10 stores new `target-estimability-v4` evidence and the rank
+context identity. It stores no fabricated null-space leakage, full-Jacobian
+singular values, or column scales. Schemas 3 through 9 remain readable;
+historical v1, v2 and v3 evidence keeps its saved meaning and statuses. Loading
+never converts missing or failed historical rank evidence into a pass or
+recomputes runtime or covariance status.
 
 The rank derivation core is `O(P + T)` for `P` FullABC atoms and `T` targets.
 The persisted per-atom evidence also records each observable-contribution-only
 nuisance atom as `Unavailable`; if there are `U` such atoms, total additional
 evidence storage is `O(P + T + U)`. Resident input and mapping storage still
-contribute to its estimate. DesignSpectrum and Projected-width remain the
-large-component rank bottlenecks and can still be rejected by their own
-preflights. A target preflight pass does not imply that either rank stage ran or
-that target evidence passed.
+contribute to its estimate. Projected-width preparation is the remaining
+large-component rank bottleneck: it includes the free-design QR/SVD, projection
+coefficients and projected-width QR/SVD, and can be rejected by its 3.2 GB
+planning-budget preflight. The 4 GB hard limit is a resource ceiling, not proof
+that full qualification fits. A target preflight pass does not imply that the
+rank stage ran or that target evidence passed.
 
 Observable-profile and partial-selection tests cover target selectors,
 FullABC halo mapping, nuisance-only groups, rank-context mismatches, active

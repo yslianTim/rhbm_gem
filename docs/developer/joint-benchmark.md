@@ -87,11 +87,12 @@ completion counts, dimensions, elapsed seconds, preflight status and byte
 breakdowns, current RSS before/after, and process peak RSS. The two RSS fields
 are labeled separately because process peak RSS is a process-wide high-water
 mark, not a stage-local allocation. Missing platform readings are JSON `null`.
-`production_reference_solve_calls` counts the removed global reference-solve
-path; `reference_qr_factorization_calls_total` counts calls to the `ReferenceQR`
-primitive, including DesignSpectrum's dense rank factorization. A zero in the
-first field does not imply zero dense QR work. The large synthetic stage results
-are documented in the [component memory census](joint-component-memory-census.md).
+`production_reference_solve_calls` counts the retired global reference-solve
+path; `reference_qr_factorization_calls_total` counts all calls to the
+`ReferenceQR` primitive, including offline `DesignSpectrum()` oracle calls.
+Production endpoint qualification no longer calls that oracle: its free-design
+TiledQR/SVD is inside projected-width preparation. The large synthetic stage
+results are documented in the [component memory census](joint-component-memory-census.md).
 
 The wrapper modes describe different measurement scopes; they do not select
 different estimator policies. There is no backend selector or alternate

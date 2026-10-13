@@ -224,6 +224,51 @@ TEST(JointCompactAssessmentTest, ActiveAmplitudeFreeRankDoesNotRepresentFullDesi
     }
 }
 
+TEST(JointCompactAssessmentTest, NearThresholdDesignOracleAndFreeFactorKeepStrictBoundary)
+{
+    EigenThreads threads;
+    const n::Vector y=n::Vector::Zero(8);
+    auto context=n::CreateContext(y,2); context.rank={8,4,2};
+    const double relative=context.rank.Relative(4);
+    const double boundary_separation=2.*relative/(1.-relative*relative);
+    for(const auto & [label,separation]:std::array<std::pair<const char *,double>,3>{{
+        {"below",.5*boundary_separation},{"boundary",boundary_separation},{"above",2.*boundary_separation}}})
+    {
+        SCOPED_TRACE(label);
+        const auto endpoint=RankEndpoint(separation);
+        const auto dense=n::DesignSpectrum(endpoint.x,n::Vector::Ones(y.size()),&context.rank);
+        const auto free=CaptureFreeDesignRank(endpoint,context);
+        ASSERT_TRUE(dense.available);
+        ASSERT_TRUE(free.svd.valid);
+        ASSERT_TRUE(free.prepared.free_design_rank);
+        EXPECT_EQ(dense.columns,free.prepared.free_design_rank->full_design_columns);
+        EXPECT_NEAR(free.svd.threshold,dense.threshold,2e-14*dense.threshold);
+        const double scale=std::max(dense.singular_values(0),free.svd.singular_values(0));
+        const double reduction_tolerance=64.*std::numeric_limits<double>::epsilon()*
+            static_cast<double>(std::max(context.rank.rows,context.rank.design_columns))*scale;
+        EXPECT_LE((free.svd.singular_values-dense.singular_values).lpNorm<Eigen::Infinity>(),reduction_tolerance);
+        if(std::string(label)=="below")
+        {
+            EXPECT_LT(dense.rank,dense.columns);
+            EXPECT_EQ(free.svd.rank,dense.rank);
+        }
+        else if(std::string(label)=="above")
+        {
+            EXPECT_EQ(dense.rank,dense.columns);
+            EXPECT_EQ(free.svd.rank,dense.rank);
+        }
+        else
+        {
+            const double boundary_band=std::nextafter(dense.threshold,
+                std::numeric_limits<double>::infinity())-std::nextafter(dense.threshold,0.);
+            const bool dense_sensitive=std::abs(dense.singular_values.tail(1)(0)-dense.threshold)<=boundary_band;
+            const bool free_sensitive=free.prepared.free_design_rank->threshold_sensitive;
+            if(dense.rank!=free.svd.rank) EXPECT_TRUE(free_sensitive || !free.prepared.valid);
+            if(dense_sensitive) EXPECT_TRUE(free_sensitive || !free.prepared.valid);
+        }
+    }
+}
+
 TEST(JointCompactAssessmentTest, StrictGreaterBoundaryControlsNearThresholdRank)
 {
     EigenThreads threads;

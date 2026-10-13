@@ -80,20 +80,24 @@ exhaustion and remains available only as a candidate diagnostic. The
 at-most-one accepted-update contract is intrinsic; diagnostic controls such as
 reverse order and trajectory capture are not production configuration.
 
-The dense global design rank contract remains `tau = epsilon * max(N, P) *
-sigma_max`, with `N` from the original rank policy and `P` equal to the full
-A/C design column count. `sigma_max` is measured after the existing column
-normalization, and singular values count as rank only when they are strictly
-greater than `tau`. The structural obstruction runs before that dense method;
-it does not change the threshold or remove unsupported observation rows from
-`N`. If `U` is the number of rows with an actual nonzero design entry, then
-`rank(X) <= min(U, P)`. A zero design column or `U < P` therefore proves that
-full-design rank cannot pass. When no obstruction is found, production still
-uses `DesignSpectrum()`; structural matching, streaming estimates and
-SparseQR pivot rank do not certify numerical full rank. Full A/C design rank
-and the smaller free A/C active-face rank use different column domains, and a
-full-design obstruction does not by itself classify target-specific
-identifiability.
+The full-design rank contract remains `tau = epsilon * max(N, P) * sigma_max`,
+with `N` from the original rank policy and `P` equal to the full A/C design
+column count. `sigma_max` is measured after the existing column normalization,
+and singular values count as rank only when they are strictly greater than
+`tau`. Production obtains this evidence from the free-design QR/SVD already
+needed by projected-width preparation. When every amplitude is interior, the
+free design has all `P` columns and is the full design, so the same normalized
+factor supplies full Design Rank and projected-width coefficients. A
+threshold-sensitive result is unavailable for qualification. The structural
+obstruction runs first; it does not change the threshold or remove unsupported
+observation rows from `N`. If `U` is the number of rows with an actual nonzero
+design entry, then `rank(X) <= min(U, P)`. A zero design column or `U < P`
+therefore proves that full-design rank cannot pass. Structural matching,
+streaming estimates and SparseQR pivot rank do not certify numerical full
+rank. With any active `A_i = 0`, the free-face factor has fewer than `P`
+columns and cannot certify full Design Rank: production retains the
+free-design diagnostic but marks full Design Rank unavailable. Structural
+deficiency remains a valid full-design failure in either case.
 
 The local numerical primitive is named **Profile LM** (Levenberg–Marquardt
 optimization of the profiled width objective). `SearchProfile()` optimizes
@@ -276,8 +280,8 @@ numerical core.
 Full parameter identifiability is not the same as optimization stationarity: a
 stationary point may still have rank-deficient or unavailable parameter
 evidence. The current solver-provenance contract is v5 and the FixedNeighbor
-policy contract is v4. JSON schema 9 records derived target-identifiability
-evidence. Schemas 3 through 8 remain readable; decoding retains their saved
+policy contract is v4. Target evidence uses `target-estimability-v4`; JSON
+schema 10 records its active-boundary semantics. Schemas 3 through 9 remain readable; decoding retains their saved
 evidence and convergence statuses, including failed historical correction
 checks, without rerunning those solves.
 
@@ -323,7 +327,7 @@ RSS or a promise about the operating system's process limit. A rejected stage
 returns an unavailable resource result with a `resource-limit:<stage>` reason;
 it is not recorded as numerical nonconvergence.
 
-Before the dense rank stages, production counts the actual nonzero support of
+Before numerical rank assessment, production counts the actual nonzero support of
 the full A/C design. A zero design column or fewer unique supported rows than
 full design columns proves that full design cannot have full column rank. This
 one-way result marks design qualification `Failed`; it reports a rank upper
@@ -333,14 +337,16 @@ deficiency; a full matching does not prove numerical full rank. The check
 retains the full A/C column domain even when amplitudes are active at the
 boundary.
 
-If those low-cost checks find no obstruction, rank assessment attributes its
-estimate to DesignSpectrum and projected-width assessment. Target
-identifiability reuses their evidence and plans only rank records, target/halo
-identities and per-atom statuses; it does not build or factor a full target
-Jacobian. Covariance has an independent `target-covariance` preflight for its
-tiled Jacobian and compact factors. The parent peak is the maximum of the
-sequential stage peaks with each stage's resident data; it does not add all
-stage temporaries together. The assessment telemetry records
+If those low-cost checks find no obstruction, the rank preflight covers the
+single projected-width preparation, including its free-design QR/SVD, retained
+projection coefficients and projected-width QR/SVD. There is no separate
+production DesignSpectrum allocation. Target identifiability reuses the full
+design and projected-width rank evidence and plans only rank records,
+target/halo identities and per-atom statuses; it does not build or factor a
+full target Jacobian. Covariance has an independent `target-covariance`
+preflight for its tiled Jacobian and compact factors. The parent peak is the
+maximum of sequential stage peaks with each stage's resident data; it does not
+add all stage temporaries together. The assessment telemetry records
 whether a stage was entered and completed, its dimensions, elapsed time,
 preflight status and byte breakdown. Current RSS is sampled at stage entry and
 exit; process peak RSS is the process-wide high-water mark. Neither RSS value
@@ -350,11 +356,14 @@ covariance stages that compute them.
 
 The rank and target preflight byte formulas and the synthetic 37,406-atom
 census are recorded in the [component memory census](joint-component-memory-census.md).
-DesignSpectrum and projected-width estimates remain 189,484,131,163 and
-39,065,926,939 bytes for that synthetic shape and exceed the planning budget.
-Derived target evidence has no factor or right-vector workspace; large rank
-assessments remain the limiting stages. Covariance has a separate factor
-preflight and may remain unavailable for large components.
+The free-design factor alone scales quadratically with the number of free
+columns. The projected-width stage also retains sparse inputs, projection
+coefficients, tiled QR workspaces and projected-width factors. Both the full
+interior shape and its all-active free face exceed the planning budget in the
+synthetic census; neither full qualification is attempted. These are planned
+allocation estimates, not measured RSS. Derived target evidence has no factor
+or right-vector workspace. Covariance has a separate factor preflight and may
+remain unavailable for large components.
 
 Prepared row mappings store sorted parent/local row pairs only for each block's
 affected rows, plus cached local support indices. Their structural cost follows
@@ -365,17 +374,17 @@ traverses support entries and keeps vector state; it does not build the global
 assessment still use their existing sparse design matrices.
 
 Production endpoint verification is O(N+P) and does not build a global design
-matrix or run a global reference solve. The old independent solver remains an
-offline/test oracle. When structural checks do not prove deficiency,
-DesignSpectrum still uses `ReferenceQR` as its dense rank factorization
-primitive when its preflight passes; zero production reference solve calls
-therefore do not imply zero dense QR work. Component numerical qualification
-retains its DesignSpectrum and projected-width rank calculations; either may be
-unavailable when its own workspace preflight rejects. Derived target
-identifiability reuses those rank records and does not build a target Jacobian,
-QR/SVD factor or null space. Its memory is linear in FullABC and target records,
-plus per-atom records for observable-only nuisance contributors. The serial
-synthetic census rejects the large rank stages, while the derived-target
+matrix or run a global reference solve. The old independent solver and
+`DesignSpectrum()` remain offline/test oracles. Production has no
+`DesignSpectrum()` call and no second full-design QR/SVD: interior full Design
+Rank comes from the free-design `R` factor already produced for projected-width
+preparation. With active amplitudes that factor certifies only the free face;
+full Design Rank is unavailable unless the retained structural obstruction
+proves deficiency. Derived target identifiability consumes only valid
+full-design and projected-width records and does not build a target Jacobian,
+QR/SVD factor or null space. Its memory is linear in FullABC and target
+records, plus per-atom records for observable-only nuisance contributors. The
+serial synthetic census rejects the large rank stage, while the derived-target
 preflight itself passes; no trusted rank evidence exists in that case. No
 physical map/model search has been measured.
 
@@ -513,10 +522,10 @@ remove it, while `ClearTransientFitStates()` does not.
 
 ### Saved provenance and units
 
-Production outcome JSON writes schema 9 and retains schema 3 through 8 reading
+Production outcome JSON writes schema 10 and retains schema 3 through 9 reading
 (distinct from fixture and offline report schemas). The [observable-halo contract](joint-observable-halo.md)
 describes parameter layouts, nuisance contributions and seed provenance. See the
-[metadata contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schemas-3-through-9).
+[metadata contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schemas-3-through-10).
 `JointAnalysisMetadata` contains optional `JointMapNormalization`, input SHA-256
 values, `JointSoftwareProvenance` and optional `JointSolverProvenance`.
 `JointSolverProvenance` records the current FixedNeighbor estimator and
@@ -524,7 +533,7 @@ preserves solver and local-work fields found in saved records.
 Current writers record the fixed EIGEN sparse backend and the FixedNeighbor policy
 fields; current FixedNeighbor records use `fixed-neighbor-production-v4` with
 intrinsic OneAccepted behavior and the `joint-solver-provenance-v5` contract.
-Schema 8 and 9 candidate diagnostics store endpoint-verification and numerical-
+Schema 8 through 10 candidate diagnostics store endpoint-verification and numerical-
 qualification statuses separately. Legacy schemas preserve their saved checks;
 no legacy `inner=Passed` is mapped to a new KKT result and no historical
 reference status is reinterpreted as streaming replay.
