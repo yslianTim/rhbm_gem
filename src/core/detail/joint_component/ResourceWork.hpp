@@ -112,7 +112,7 @@ struct ResourceWork
 struct NumericsWork
 {
     std::size_t reference{},cancellation_reductions{},derivative_preparations{};
-    std::size_t free_design_svds{},reference_svds{},reference_solves{},bdc_svds{},jacobi_retries{};
+    std::size_t free_design_svds{},reference_svds{},reference_solves{},bdc_svds{},jacobi_retries{},design_spectrum_calls{};
     double derivative_seconds{},jacobi_retry_seconds{};
 };
 NumericsWork & NumericsWorkForTesting();

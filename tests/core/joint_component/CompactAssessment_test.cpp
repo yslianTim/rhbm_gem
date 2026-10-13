@@ -264,6 +264,62 @@ TEST(JointCompactAssessmentTest, SmallProjectedWidthEstimateCanBeComparedWithObs
     else RecordProperty("small_projected_width_rss_status","unavailable");
 }
 
+TEST(JointCompactAssessmentTest, ProductionAssessmentReusesFreeDesignAndSkipsDenseOracle)
+{
+    EigenThreads threads;
+    const c::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
+    const auto & data=c::JointProblemAccess::Get(problem);
+    auto context=data.context; context.audit.trial_details=true;
+    const auto endpoint=n::EvaluateProfile(data.domain,data.y,n::Vector::Constant(8,std::log(.55)),false,&context);
+    ASSERT_TRUE(endpoint.valid);
+    const auto replay=n::CheckIndependentReplay(data.domain,data.y,endpoint,context);
+    ASSERT_TRUE(replay.passed)<<replay.reason;
+    n::DerivativeWorkForTesting()={};
+    const auto design_calls=n::NumericsWorkForTesting().design_spectrum_calls;
+    const auto assessment=n::AssessEvaluated(data.domain,data.y,endpoint,replay,context);
+    EXPECT_EQ(n::NumericsWorkForTesting().design_spectrum_calls,design_calls);
+    ASSERT_TRUE(assessment.design);
+    ASSERT_TRUE(assessment.free_design);
+    EXPECT_EQ(assessment.design->rank,assessment.free_design->rank);
+    EXPECT_EQ(assessment.design->singular_values,assessment.free_design->singular_values);
+    EXPECT_EQ(n::DerivativeWorkForTesting().free_design_qr_factorizations,1u);
+    EXPECT_EQ(n::DerivativeWorkForTesting().free_design_rank_assessments,1u);
+    const auto replay_calls=n::NumericsWorkForTesting().design_spectrum_calls;
+    const auto trust=n::CheckReplay(data.domain,data.y,endpoint,context);
+    EXPECT_TRUE(trust.passed)<<trust.reason;
+    EXPECT_EQ(n::NumericsWorkForTesting().design_spectrum_calls,replay_calls);
+    EXPECT_FALSE(trust.design);
+}
+
+TEST(JointCompactAssessmentTest, ActiveBoundaryRetainsOnlyFreeFaceRankEvidence)
+{
+    EigenThreads threads;
+    const n::Vector y=n::Vector::Zero(6);
+    const n::Domain domain(6,{{{0,0.},{1,1.}},{{2,2.},{3,3.}}});
+    auto context=n::CreateContext(y,2); context.rank={6,4,2};
+    const auto endpoint=BoundaryEndpoint(1e-3,true);
+    n::IndependentReplayEvidence replay;
+    replay.available=true; replay.valid=true; replay.passed=true; replay.feasible=true;
+    replay.primary_kkt_passed=true; replay.independent_kkt_passed=true;
+    replay.primary_width_gradient=0.; replay.gradient_agrees=true;
+    const auto assessment=n::AssessEvaluated(domain,y,endpoint,replay,context);
+    ASSERT_TRUE(assessment.free_design);
+    EXPECT_EQ(assessment.free_design->columns,2);
+    EXPECT_EQ(assessment.free_design->full_design_columns,4);
+    EXPECT_FALSE(assessment.design);
+    EXPECT_FALSE(assessment.qualified);
+    const auto checks=n::AssessmentEvidence(assessment,rhbm_gem::JointEvidenceScope::ComponentLocal);
+    const auto design=std::find_if(checks.begin(),checks.end(),[](const auto & check) {
+        return check.name=="design-identifiability";
+    });
+    ASSERT_NE(design,checks.end());
+    EXPECT_EQ(design->status,rhbm_gem::JointCheckStatus::Unavailable);
+    EXPECT_EQ(design->reason,"active-amplitude-boundary");
+    const auto ranks=c::joint_component::AssessmentRanks(assessment,rhbm_gem::JointEvidenceScope::ComponentLocal);
+    EXPECT_EQ(ranks.size(),2u);
+    EXPECT_EQ(ranks.front().name,"free-design");
+}
+
 TEST(JointCompactAssessmentTest, ProjectedWidthCancellationFallbackAndActiveFaceRemainValid)
 {
     EigenThreads threads;

@@ -252,7 +252,7 @@ TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTi
         return *found;
     };
     for(const auto * name:{"total-assessment","endpoint-primary-evaluation","reference-evaluation",
-            "design-spectrum","derivative-preparation","derivative-reduction","projected-width-spectrum",
+            "derivative-preparation","derivative-reduction","projected-width-spectrum",
             "projected-width-assessment","numerical-identifiability","derivative-rows",
             "derivative-projected-qr","derivative-norms"})
     {
@@ -267,16 +267,14 @@ TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTi
             "derivative-jacobian-qr","derivative-compact-jacobian-qr"})
         EXPECT_EQ(std::find_if(stages.begin(),stages.end(),[&](const auto & value){return value.name==name;}),stages.end());
     EXPECT_EQ(stage("total-assessment").calls,1);
-    const auto & design_memory=stage("design-spectrum");
-    EXPECT_TRUE(design_memory.memory_estimate_available);
-    EXPECT_EQ(design_memory.memory_stage,n::MemoryStage::DesignSpectrum);
-    EXPECT_EQ(design_memory.memory_status,n::MemoryStatus::Pass);
-    EXPECT_GT(design_memory.dense_factor_bytes,0u);
+    EXPECT_EQ(std::find_if(stages.begin(),stages.end(),[](const auto & value) {
+        return value.name=="design-spectrum";
+    }),stages.end());
     const auto & identifiability=stage("numerical-identifiability");
     EXPECT_TRUE(identifiability.memory_estimate_available);
     EXPECT_EQ(identifiability.memory_status,n::MemoryStatus::Pass);
-    ASSERT_EQ(identifiability.attributed_memory_stages.size(),2u);
-    EXPECT_EQ(identifiability.attributed_memory_stages[0].stage,n::MemoryStage::DesignSpectrum);
+    ASSERT_EQ(identifiability.attributed_memory_stages.size(),1u);
+    EXPECT_EQ(identifiability.attributed_memory_stages[0].stage,n::MemoryStage::ProjectedWidthAssessment);
     const auto & width=stage("projected-width-assessment");
     EXPECT_EQ(width.memory_stage,n::MemoryStage::ProjectedWidthAssessment);
     EXPECT_EQ(width.memory_status,n::MemoryStatus::Pass);
@@ -288,6 +286,8 @@ TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTi
     EXPECT_EQ(derivative.projected_qr.append_calls,derivative.tile_count);
     EXPECT_EQ(derivative.projected_qr.rows_processed,static_cast<std::size_t>(view.domain.rows));
     EXPECT_EQ(derivative.projected_qr.columns,1); EXPECT_EQ(derivative.projected_qr.responses,0);
+    EXPECT_EQ(derivative.free_design_qr_factorizations,1u);
+    EXPECT_EQ(derivative.free_design_rank_assessments,1u);
     EXPECT_EQ(derivative.jacobian_qr.append_calls,0);
     EXPECT_GT(derivative.projected_qr.maximum_assembled_rows,0);
     EXPECT_GT(derivative.projected_qr.maximum_dense_design_bytes,0);

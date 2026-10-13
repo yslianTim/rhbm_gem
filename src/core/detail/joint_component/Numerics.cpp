@@ -517,8 +517,6 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
     if (!e.valid)
     {
         out.reason="invalid-primary";
-        if(e.x.cols()>0 && e.x.nonZeros()>0 && context->audit.trial_details)
-            out.design=DesignSpectrum(e.x,Vector::Ones(y.size()),&policy.rank);
         return out;
     }
     if(!e.certificate.available || !e.certificate.feasible || !e.certificate.kkt_passed)
@@ -569,7 +567,6 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
     out.prediction_difference=(prediction-original_prediction).lpNorm<Eigen::Infinity>();
     out.gradient_difference=(width_gradient-e.gradient).lpNorm<Eigen::Infinity>();
     out.cancellation_ratio=(absolute.array()/prediction.array().abs().max(1.0)).maxCoeff();
-    if (context->audit.trial_details) out.design=DesignSpectrum(e.x,Vector::Ones(y.size()),&policy.rank);
     out.passed=prediction_ok && gradient_ok && kkt_difference<=1e-13;
     out.reason=out.passed ? "trusted" : "replay-disagreement";
     return out;
@@ -768,6 +765,7 @@ Spectrum ComputeSpectrum(const Matrix & x,const RankPolicy & p,Eigen::Index colu
 {return SpectrumRecord(x,p,columns,normalize);}
 Spectrum DesignSpectrum(const Sparse & x,const Vector & weights,const RankPolicy * policy)
 {
+    ++NumericsWorkForTesting().design_spectrum_calls;
     Vector scales(x.cols());
     for(Eigen::Index k=0;k<x.cols();++k)
     {
@@ -991,8 +989,6 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
         {value=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();}
     } rank_timer{out.rank_assessment_seconds};
     out.rank_memory_estimate=RankAssessmentMemoryEstimate(domain,y,endpoint,reference,policy,resident_override);
-    const auto design_memory=PlanMemory(out.rank_memory_estimate.shape,MemoryStage::DesignSpectrum,
-        out.rank_memory_estimate.budget_bytes);
     const auto projected_memory=PlanMemory(out.rank_memory_estimate.shape,MemoryStage::ProjectedWidthAssessment,
         out.rank_memory_estimate.budget_bytes);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -1021,22 +1017,19 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
         evaluated=&rebuilt;
     }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    AssessmentStageTimerForTesting design_stage("design-spectrum",evaluated->x.rows(),evaluated->x.cols(),&design_memory);
-#endif
-    out.design=DesignSpectrum(evaluated->x,Vector::Ones(y.size()),&policy.rank);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    design_stage.Finish();
-#endif
-    out.inner=reference ? out.coefficient_difference<=1e-10 && out.design->rank==evaluated->x.cols() :
-        replay->primary_kkt_passed && replay->independent_kkt_passed;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     AssessmentStageTimerForTesting projected_overall("projected-width-assessment",evaluated->x.rows(),eta.size(),
         &projected_memory);
     AssessmentStageTimerForTesting prepare_stage("derivative-preparation",evaluated->derivative.rows(),
         evaluated->derivative.cols(),&projected_memory);
 #endif
-    const auto prepared=PrepareProjectedWidthDerivative(*evaluated,scale,context);
-    out.free_design=prepared.free_design_rank;
+    auto prepared=PrepareProjectedWidthDerivative(*evaluated,scale,context);
+    out.free_design=std::move(prepared.free_design_rank);
+    if(out.free_design && out.free_design->columns==out.free_design->full_design_columns)
+        out.design=out.free_design;
+    const bool design_full_rank=out.design && out.design->available &&
+        out.design->rank==out.design->columns && !out.design->threshold_sensitive;
+    out.inner=reference ? out.coefficient_difference<=1e-10 && design_full_rank :
+        replay->primary_kkt_passed && replay->independent_kkt_passed;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     prepare_stage.Finish();
     AssessmentStageTimerForTesting reduce_stage("derivative-reduction",prepared.raw.rows(),prepared.raw.cols(),
@@ -1073,9 +1066,13 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
     out.gradient=endpoint.gradient.lpNorm<Eigen::Infinity>()<=1e-12 &&
         (reference ? reference->gradient.lpNorm<Eigen::Infinity>()<=1e-12 : replay->gradient_agrees);
     out.identified=projected_width_rank==eta.size() && !out.width_rank_threshold_sensitive;
-    const bool design_full_rank=out.design->rank==evaluated->x.cols();
     out.qualified=out.endpoint_verified && design_full_rank && out.identified && out.gradient;
-    out.failure=reference && !out.inner ? "inner-solve" : !design_full_rank ? "design-unidentified" :
+    const bool design_threshold_sensitive=out.design && out.design->available && out.design->threshold_sensitive;
+    const bool active_free_face=out.free_design &&
+        out.free_design->columns<out.free_design->full_design_columns;
+    out.failure=reference && !out.inner ? "inner-solve" : design_threshold_sensitive ? "design-rank-threshold-sensitive" :
+        !out.design && active_free_face ? "design-rank-unavailable:active-amplitude-boundary" :
+        !out.design || !out.design->available ? "design-rank-unavailable" : !design_full_rank ? "design-unidentified" :
         out.width_rank_threshold_sensitive ? "width-rank-threshold-sensitive" :
         !out.identified ? "width-unidentified" : !out.gradient ? "b-not-stationary" :
         !out.endpoint_verified ? "endpoint-verification-failed" : "none";

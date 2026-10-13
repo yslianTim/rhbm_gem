@@ -247,7 +247,7 @@ def assert_joint_workflow() -> None:
         export.output_dir = root
         assert m.RunCommand(export).succeeded
         saved = json.loads((root / "joint_result_model.json").read_text())
-        assert saved["schema_version"] == 9
+        assert saved["schema_version"] == 10
         assert saved["selection_domain"]["target_indices"] == [0]
         assert saved["atom_ids"] == ["1", "2"]
         assert saved["metadata"]["model_sha256"] == model_hash

@@ -564,7 +564,7 @@ void ValidateTarget(const std::optional<JointTargetEvidence> & value,const std::
 {
     if(!value) return;
     const auto & t=*value;
-    const bool derived=t.contract=="target-estimability-v3";
+    const bool derived=t.contract=="target-estimability-v3" || t.contract=="target-estimability-v4";
     Require(selection.has_value() && (t.contract=="target-estimability-v1" || t.contract=="target-estimability-v2" || derived),
         "target evidence contract");
     Require(t.original_rows==rows,"target rank row context");
@@ -614,12 +614,23 @@ void Validate(const JointAnalysisResult & x,int schema_version)
     if(schema_version<9)
     {
         const auto old_target_contract=[](const auto & evidence) {
-            return !evidence || evidence->contract!="target-estimability-v3";
+            return !evidence || (evidence->contract!="target-estimability-v3" &&
+                evidence->contract!="target-estimability-v4");
         };
         Require(old_target_contract(x.target_evidence) &&
             std::all_of(x.components.begin(),x.components.end(),[&](const auto & component) {
                 return old_target_contract(component.target_evidence);
             }),"derived target evidence requires schema 9");
+    }
+    if(schema_version<10)
+    {
+        const auto new_target_contract=[](const auto & evidence) {
+            return !evidence || evidence->contract!="target-estimability-v4";
+        };
+        Require(new_target_contract(x.target_evidence) &&
+            std::all_of(x.components.begin(),x.components.end(),[&](const auto & component) {
+                return new_target_contract(component.target_evidence);
+            }),"target-estimability-v4 requires schema 10");
     }
     if(schema_version<8)
     {
@@ -697,7 +708,7 @@ void Validate(const JointAnalysisResult & x,int schema_version)
 }
 std::string Encode(const JointAnalysisResult & x)
 {
-    Validate(x,9);
+    Validate(x,10);
     const auto & m=x.metadata; const auto & t=x.costs;
     j::array components;
     for(const auto & c:x.components) components.emplace_back(Object{
@@ -712,7 +723,7 @@ std::string Encode(const JointAnalysisResult & x)
         {"evidence",Checks(c.evidence)},{"ranks",Ranks(c.ranks)},{"regular_certificate",StatusText(c.regular_certificate)},
         { "runtime_convergence",StatusText(c.runtime_convergence)},{"layout",Layout(c.layout)},
         {"target_evidence",Target(c.target_evidence)},{"target_runtime_convergence",StatusText(c.target_runtime_convergence)}});
-    Object out{{"schema_version",9},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
+    Object out{{"schema_version",10},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
         { "support_contract","sphere-fma-v1"},{"parameterization_contract",x.parameterization_contract},{"layout",Layout(x.layout)},{"metadata",Metadata(m)},{"selection_domain",SelectionDomain(x.selection_domain)},
         {"atom_ids",j::value_from(x.atom_ids)},{"row_ids",j::value_from(x.row_ids)},{"initialization",Initialization(x.initialization)},
         {"costs",Object{{"construction_seconds",t.construction_seconds},{"initialization_seconds",t.initialization_seconds},{"search_seconds",t.search_seconds},
@@ -729,8 +740,8 @@ JointAnalysisResult Decode(std::string_view text)
     j::parse_options options; options.numbers=j::number_precision::precise;
     const auto parsed=j::parse(text,{},options); const auto & o=parsed.as_object();
     const int version=Read<int>(o,"schema_version");
-    Require(version==3 || version==4 || version==5 || version==6 || version==7 || version==8 || version==9,
-        "unsupported result schema version (expected 3, 4, 5, 6, 7, 8 or 9)");
+    Require(version==3 || version==4 || version==5 || version==6 || version==7 || version==8 || version==9 || version==10,
+        "unsupported result schema version (expected 3, 4, 5, 6, 7, 8, 9 or 10)");
     Require(Read<std::string>(o,"estimator")=="joint-components" &&
         Read<std::string>(o,"estimator_contract")=="guarded-joint-ls-v1" &&
         Read<std::string>(o,"objective_contract")=="parent-normalized-half-rss-v1" &&

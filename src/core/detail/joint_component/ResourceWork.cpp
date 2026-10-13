@@ -220,12 +220,15 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
     }
     case MemoryStage::RankAssessment:
     {
-        const auto design=PlanMemory(shape,MemoryStage::DesignSpectrum,budget);
         const auto projected=PlanMemory(shape,MemoryStage::ProjectedWidthAssessment,budget);
-        if(design.status==MemoryStatus::Overflow || projected.status==MemoryStatus::Overflow) {ok=false; break;}
-        temporary=std::max(design.temporary_bytes,projected.temporary_bytes);
-        out.attributed_stages={Attribute(design),Attribute(projected)};
+        if(projected.status==MemoryStatus::Overflow) {ok=false; break;}
+        temporary=projected.temporary_bytes;
+        out.attributed_stages={Attribute(projected)};
         out.sparse_design_bytes=projected.sparse_design_bytes;
+        out.dense_factor_bytes=projected.dense_factor_bytes;
+        out.factor_workspace_bytes=projected.factor_workspace_bytes;
+        out.right_singular_vector_bytes=projected.right_singular_vector_bytes;
+        out.factor_rows=projected.factor_rows; out.factor_columns=projected.factor_columns;
         out.free_design_factor_bytes=projected.free_design_factor_bytes;
         out.free_design_svd_workspace_bytes=projected.free_design_svd_workspace_bytes;
         out.projection_coefficient_bytes=projected.projection_coefficient_bytes;

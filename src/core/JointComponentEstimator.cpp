@@ -96,10 +96,13 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
             replay.primary_width_gradient<=1e-12,
             std::isfinite(replay.primary_width_gradient) ? std::optional<double>(replay.primary_width_gradient) : std::nullopt,1e-12));
         const bool structural_failure=a.design_structure && a.design_structure->proven_deficient;
-        const bool design_full_rank=!structural_failure && a.design && a.design->rank==a.design->columns;
-        const bool design_evidence_available=a.design.has_value() || structural_failure;
+        const bool design_full_rank=!structural_failure && a.design && a.design->available &&
+            !a.design->threshold_sensitive && a.design->rank==a.design->columns;
+        const bool design_evidence_available=structural_failure ||
+            (a.design && a.design->available && !a.design->threshold_sensitive);
         std::optional<double> design_rank_value,design_columns;
-        if(a.design) {design_rank_value=static_cast<double>(a.design->rank); design_columns=static_cast<double>(a.design->columns);}
+        if(a.design && a.design->available)
+        {design_rank_value=static_cast<double>(a.design->rank); design_columns=static_cast<double>(a.design->columns);}
         else if(structural_failure)
         {
             design_rank_value=static_cast<double>(a.design_structure->rank_upper_bound);
@@ -108,6 +111,11 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
         out.push_back(check("design-identifiability",design_evidence_available,design_full_rank,
             design_rank_value,design_columns));
         if(structural_failure) out.back().reason="proven-rank-upper-bound:"+a.design_structure->reason;
+        else if(a.design && a.design->threshold_sensitive) out.back().reason="rank-threshold-sensitive";
+        else if(a.free_design && a.free_design->columns<a.free_design->full_design_columns)
+            out.back().reason="active-amplitude-boundary";
+        else if(a.design && !a.design->available) out.back().reason=a.design->reason;
+        else if(a.design && a.design->rank<a.design->columns) out.back().reason="rank-deficient";
         out.push_back(check("numerical-identifiability",a.widths.has_value() && !a.width_rank_threshold_sensitive,
             a.identified));
     }
@@ -203,8 +211,8 @@ std::vector<JointRankEvidence> joint_component::AssessmentRanks(const n::Assessm
         context_identity=n::TargetRankContextIdentity(*input,*layout,state,rank_context_rows);
     }
     for(const auto & [name,spectrum]:std::vector<std::pair<std::string,const std::optional<n::Spectrum> *>>{
-        {"design",&a.design},{"projected-width",&a.widths}})
-        if(*spectrum) out.push_back({name,scope,static_cast<std::size_t>((*spectrum)->rank),(*spectrum)->threshold,
+        {"design",&a.design},{"free-design",&a.free_design},{"projected-width",&a.widths}})
+        if(*spectrum && (*spectrum)->available) out.push_back({name,scope,static_cast<std::size_t>((*spectrum)->rank),(*spectrum)->threshold,
             Values((*spectrum)->singular_values),context_identity});
     return out;
 }

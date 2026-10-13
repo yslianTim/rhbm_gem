@@ -36,6 +36,7 @@ struct DerivativeWork
             cancellation_check_seconds{},cancellation_fallback_seconds{};
     } preparation;
     double rows_seconds{},jacobian_qr_seconds{},norms_seconds{},outer_overhead_seconds{};
+    std::size_t free_design_qr_factorizations{},free_design_rank_assessments{};
     Eigen::Index maximum_generated_rows{},maximum_reduction_rows{};
     std::size_t tile_count{};
     TiledQrTelemetry projected_qr,jacobian_qr;

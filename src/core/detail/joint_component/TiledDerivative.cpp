@@ -146,6 +146,9 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
     // bounded by tiled Householder reductions rather than materializing a
     // sparse Q action.
     const auto tiled_solve=[&]() {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(projected_only) ++DerivativeWorkForTesting().free_design_qr_factorizations;
+#endif
         TiledQR qr(p,m);
         {
             for(Eigen::Index first=0;first<n;first+=tile)
@@ -161,6 +164,9 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
             }
         }
         const auto boundary=projected_only ? RankBoundary::StrictGreater : RankBoundary::SvdNative;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(projected_only) ++DerivativeWorkForTesting().free_design_rank_assessments;
+#endif
         const auto svd=EvaluateRank(qr.r,{{context ? context->rank.rows : n,2*m,m},p,absolute,boundary});
         if(projected_only) out.free_design_rank=FreeDesignSpectrum(svd,
             context ? context->rank.rows : n,p,2*m,free_column_norms);

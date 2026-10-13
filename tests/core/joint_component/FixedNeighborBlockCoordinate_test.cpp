@@ -437,7 +437,17 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     ASSERT_TRUE(structural_repeat.proven_deficient);
     EXPECT_EQ(structural_repeat.rank_upper_bound,structure.rank_upper_bound);
     const auto & rank_stages=certification.assessment.rank_memory_estimate.attributed_stages;
-    ASSERT_EQ(rank_stages.size(),2u);
+    ASSERT_EQ(rank_stages.size(),1u);
+    auto interior_rank_shape=certification.assessment.rank_memory_estimate.shape;
+    interior_rank_shape.component_free_columns=interior_rank_shape.component_design_columns;
+    const auto interior_rank_memory=n::PlanMemory(interior_rank_shape,n::MemoryStage::ProjectedWidthAssessment,
+        certification.assessment.rank_memory_estimate.budget_bytes);
+    EXPECT_EQ(interior_rank_memory.status,n::MemoryStatus::Reject);
+    auto mixed_rank_shape=certification.assessment.rank_memory_estimate.shape;
+    mixed_rank_shape.component_free_columns=atoms+atoms/2;
+    const auto mixed_rank_memory=n::PlanMemory(mixed_rank_shape,n::MemoryStage::ProjectedWidthAssessment,
+        certification.assessment.rank_memory_estimate.budget_bytes);
+    EXPECT_EQ(mixed_rank_memory.status,n::MemoryStatus::Reject);
     const auto target_rss_before=n::CurrentRssBytes();
     const auto target_started=std::chrono::steady_clock::now();
     const auto target_memory=n::TargetIdentifiabilityMemoryEstimate(*snapshot,layout,rows);
@@ -460,7 +470,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     });
     ASSERT_NE(rank_aggregate,assessment_stages.end());
     EXPECT_EQ(rank_aggregate->memory_status,n::MemoryStatus::Reject);
-    EXPECT_EQ(rank_aggregate->attributed_memory_stages.size(),2u);
+    EXPECT_EQ(rank_aggregate->attributed_memory_stages.size(),1u);
     EXPECT_EQ(std::find_if(assessment_stages.begin(),assessment_stages.end(),[](const auto & stage) {
         return stage.name=="design-spectrum";
     }),assessment_stages.end());
@@ -525,8 +535,23 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
         <<" sparseqr_factorization=NotRun"
         <<" endpoint_estimated_peak_bytes="<<endpoint_memory.estimated_peak_bytes
         <<" rank_estimated_peak_bytes="<<certification.assessment.rank_memory_estimate.estimated_peak_bytes
-        <<" design_spectrum_peak_bytes="<<rank_stages[0].estimated_peak_bytes
-        <<" projected_width_peak_bytes="<<rank_stages[1].estimated_peak_bytes
+        <<" projected_width_assessment_peak_bytes="<<rank_stages[0].estimated_peak_bytes
+        <<" all_interior_projected_width_peak_bytes="<<interior_rank_memory.estimated_peak_bytes
+        <<" all_interior_resource_status="<<n::MemoryStatusName(interior_rank_memory.status)
+        <<" all_interior_free_design_factor_bytes="<<interior_rank_memory.free_design_factor_bytes
+        <<" all_interior_free_design_svd_workspace_bytes="<<interior_rank_memory.free_design_svd_workspace_bytes
+        <<" all_interior_projection_coefficient_bytes="<<interior_rank_memory.projection_coefficient_bytes
+        <<" mixed_active_free_design_columns="<<mixed_rank_memory.shape.component_free_columns
+        <<" mixed_active_projected_width_peak_bytes="<<mixed_rank_memory.estimated_peak_bytes
+        <<" mixed_active_resource_status="<<n::MemoryStatusName(mixed_rank_memory.status)
+        <<" mixed_active_free_design_factor_bytes="<<mixed_rank_memory.free_design_factor_bytes
+        <<" mixed_active_free_design_svd_workspace_bytes="<<mixed_rank_memory.free_design_svd_workspace_bytes
+        <<" mixed_active_projection_coefficient_bytes="<<mixed_rank_memory.projection_coefficient_bytes
+        <<" free_design_factor_bytes="<<rank_stages[0].free_design_factor_bytes
+        <<" free_design_svd_workspace_bytes="<<rank_stages[0].free_design_svd_workspace_bytes
+        <<" projection_coefficient_bytes="<<rank_stages[0].projection_coefficient_bytes
+        <<" projected_width_factor_bytes="<<rank_stages[0].projected_width_factor_bytes
+        <<" projected_width_svd_workspace_bytes="<<rank_stages[0].projected_width_svd_workspace_bytes
         <<" target_identifiability_peak_bytes="<<target_memory.estimated_peak_bytes
         <<" target_covariance_estimated_peak_bytes="<<covariance_memory.estimated_peak_bytes
         <<" target_covariance_preflight_status="<<n::MemoryStatusName(covariance_memory.status)
@@ -553,13 +578,10 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
         <<" target_columns="<<target_memory.shape.component_target_columns
         <<" target_evidence_atoms="<<target_memory.shape.component_target_atoms
         <<" nuisance_atoms="<<target_memory.shape.component_nuisance_atoms
-        <<" design_factor_dimensions="<<rank_stages[0].factor_rows<<"x"<<rank_stages[0].factor_columns
-        <<" design_dense_factor_bytes="<<rank_stages[0].dense_factor_bytes
-        <<" design_workspace_bytes="<<rank_stages[0].factor_workspace_bytes
-        <<" design_sparse_bytes="<<rank_stages[0].sparse_design_bytes
-        <<" projected_factor_dimensions="<<rank_stages[1].factor_rows<<"x"<<rank_stages[1].factor_columns
-        <<" projected_workspace_bytes="<<rank_stages[1].factor_workspace_bytes
-        <<" projected_right_vector_bytes="<<rank_stages[1].right_singular_vector_bytes
+        <<" rank_factor_dimensions="<<rank_stages[0].factor_rows<<"x"<<rank_stages[0].factor_columns
+        <<" rank_factor_workspace_bytes="<<rank_stages[0].factor_workspace_bytes
+        <<" sparse_design_bytes="<<rank_stages[0].sparse_design_bytes
+        <<" projected_width_right_vector_bytes="<<rank_stages[0].right_singular_vector_bytes
         <<" primary_endpoint_seconds="<<certification.assessment.primary_endpoint_seconds
         <<" independent_replay_seconds="<<certification.assessment.independent_replay_seconds
         <<" rank_assessment_seconds="<<certification.assessment.rank_assessment_seconds

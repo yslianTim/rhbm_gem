@@ -201,7 +201,7 @@ JointTargetEvidence DeriveTargetIdentifiability(const JointProblem & problem,con
     const std::vector<JointRankEvidence> & ranks,JointEvidenceScope scope,std::size_t original_rows)
 {
     const auto & input=problem.Input();
-    JointTargetEvidence out; out.contract="target-estimability-v3"; out.original_rows=original_rows;
+    JointTargetEvidence out; out.contract="target-estimability-v4"; out.original_rows=original_rows;
     for(const auto & check:existing)
         if(check.name=="conditional-ac-optimality" || check.name=="independent-replay" ||
             check.name=="width-stationarity" || check.name=="design-identifiability" ||
@@ -329,7 +329,7 @@ JointTargetEvidence AssessTargetState(const JointProblem & problem,const JointPa
             LogMemoryEstimate(target_memory);
         if(target_memory.status!=MemoryStatus::Pass)
         {
-            JointTargetEvidence out; out.contract="target-estimability-v3"; out.original_rows=original_rows;
+            JointTargetEvidence out; out.contract="target-estimability-v4"; out.original_rows=original_rows;
             for(const auto & check:existing)
                 if(check.name=="conditional-ac-optimality" || check.name=="independent-replay" ||
                     check.name=="width-stationarity" || check.name=="design-identifiability" ||
@@ -366,7 +366,7 @@ JointCheckStatus TargetConvergence(const std::optional<JointTargetEvidence> & ev
     if(!evidence) return Status::NotRun;
     if(!state) return Status::Unavailable;
     if(evidence->contract!="target-estimability-v1" && evidence->contract!="target-estimability-v2" &&
-        evidence->contract!="target-estimability-v3")
+        evidence->contract!="target-estimability-v3" && evidence->contract!="target-estimability-v4")
         return Status::Unavailable;
     auto status=Status::Passed;
     const bool reference_free=std::any_of(evidence->checks.begin(),evidence->checks.end(),[](const auto & check) {

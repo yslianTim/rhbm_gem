@@ -873,13 +873,13 @@ TEST(DataObjectPersistenceTest, SchemaSevenKeepsFailedCorrectionEvidenceAndStatu
     EXPECT_EQ(round_trip.components.front().target_evidence->contract,"target-estimability-v1");
 }
 
-TEST(DataObjectPersistenceTest, SchemaNinePersistsDerivedRanksWithoutInventedGeometryValues)
+TEST(DataObjectPersistenceTest, SchemaTenPersistsLegacyDerivedRanksAndReadsSchemaNine)
 {
     namespace io=rg::joint_result_io;
     auto record=SavedJointExample();
     const std::string context="fnv1a64:0123456789abcdef";
     rg::JointTargetEvidence derived;
-    derived.contract="target-estimability-v3"; derived.original_rows=record.row_ids.size();
+    derived.contract="target-estimability-v4"; derived.original_rows=record.row_ids.size();
     derived.atoms={{0,rg::JointCheckStatus::Passed,{},"derived-from-component-identifiability"},
         {1,rg::JointCheckStatus::Passed,{},"derived-from-component-identifiability"}};
     derived.checks={{"target-identifiability",rg::JointCheckStatus::Passed,
@@ -890,18 +890,24 @@ TEST(DataObjectPersistenceTest, SchemaNinePersistsDerivedRanksWithoutInventedGeo
     record.target_runtime_convergence=rg::JointCheckStatus::Unavailable;
 
     const auto encoded=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(encoded.at("schema_version").as_int64(),9);
+    EXPECT_EQ(encoded.at("schema_version").as_int64(),10);
     const auto & saved_target=encoded.at("target_evidence");
-    EXPECT_EQ(saved_target.at("contract").as_string(),"target-estimability-v3");
+    EXPECT_EQ(saved_target.at("contract").as_string(),"target-estimability-v4");
     EXPECT_TRUE(saved_target.at("column_scales").as_array().empty());
     EXPECT_TRUE(saved_target.at("atoms").as_array()[0].at("null_space_leakage").is_null());
     EXPECT_EQ(saved_target.at("ranks").as_array()[0].at("context_identity").as_string(),context);
     auto downgraded=encoded.as_object(); downgraded["schema_version"]=8;
     EXPECT_THROW(io::Decode(boost::json::serialize(downgraded)),std::invalid_argument);
+    downgraded["schema_version"]=9;
+    EXPECT_THROW(io::Decode(boost::json::serialize(downgraded)),std::invalid_argument);
+    downgraded["target_evidence"].as_object()["contract"]="target-estimability-v3";
+    const auto schema_nine=io::Decode(boost::json::serialize(downgraded));
+    ASSERT_TRUE(schema_nine.target_evidence);
+    EXPECT_EQ(schema_nine.target_evidence->contract,"target-estimability-v3");
 
     const auto decoded=io::Decode(boost::json::serialize(encoded));
     ASSERT_TRUE(decoded.target_evidence);
-    EXPECT_EQ(decoded.target_evidence->contract,"target-estimability-v3");
+    EXPECT_EQ(decoded.target_evidence->contract,"target-estimability-v4");
     EXPECT_TRUE(decoded.target_evidence->column_scales.empty());
     EXPECT_FALSE(decoded.target_evidence->atoms.front().null_space_leakage);
     ASSERT_EQ(decoded.target_evidence->ranks.size(),2u);
@@ -958,7 +964,7 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     record.metadata.solver=provenance;
 
     const auto json=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(json.at("schema_version").as_int64(),9);
+    EXPECT_EQ(json.at("schema_version").as_int64(),10);
     EXPECT_EQ(json.at("components").as_array()[0].at("candidate_diagnostic").at("candidate_status").as_string(),"uncertified");
     const auto decoded=io::Decode(boost::json::serialize(json));
     ASSERT_TRUE(decoded.components.front().candidate_diagnostic);

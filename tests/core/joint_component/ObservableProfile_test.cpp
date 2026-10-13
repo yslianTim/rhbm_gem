@@ -455,7 +455,7 @@ TEST(JointObservableProfileTest, HaloNonuniquenessDoesNotCertifyItsParameters)
     EXPECT_FALSE(stages.at(1).point); EXPECT_FALSE(stages.at(4).point);
     const auto text=rhbm_gem::joint_result_io::Encode(saved);
     auto value=boost::json::parse(text);
-    EXPECT_EQ(value.at("schema_version").as_int64(),9);
+    EXPECT_EQ(value.at("schema_version").as_int64(),10);
     auto downgraded=value;
     downgraded.as_object()["schema_version"]=7;
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(downgraded)),std::invalid_argument);
@@ -558,6 +558,8 @@ TEST(JointObservableProfileTest, TargetContractKeepsCorrectionRequiredOnlyForHis
     EXPECT_EQ(n::TargetConvergence(evidence,true),Status::Passed);
     evidence.contract="target-estimability-v3";
     EXPECT_EQ(n::TargetConvergence(evidence,true),Status::Passed);
+    evidence.contract="target-estimability-v4";
+    EXPECT_EQ(n::TargetConvergence(evidence,true),Status::Passed);
 }
 TEST(JointObservableProfileTest, TargetEvidenceRequiresSelectionMetadata)
 {
@@ -575,7 +577,7 @@ TEST(JointObservableProfileTest, ExactSingleComponentTargetEvidenceIsReused)
     ASSERT_EQ(fit.components.size(),1);
     ASSERT_TRUE(fit.components[0].target_evidence);
     ASSERT_TRUE(fit.target_evidence);
-    EXPECT_EQ(fit.target_evidence->contract,"target-estimability-v3");
+    EXPECT_EQ(fit.target_evidence->contract,"target-estimability-v4");
     auto derived_calls=[&] {
         const auto & stages=n::AssessmentWorkForTesting().stages;
         const auto found=std::find_if(stages.begin(),stages.end(),[](const auto & stage) {
@@ -746,7 +748,7 @@ TEST(JointObservableProfileTest, DerivedTargetEvidenceRequiresMatchingQualifiedR
     ASSERT_TRUE(fit.assembled_state);
     const auto evidence=n::DeriveTargetIdentifiability(problem,problem.ParameterLayout(),fit.assembled_state,
         fit.evidence,fit.ranks,Scope::AssembledGlobal,problem.Input().observations.size());
-    ASSERT_EQ(evidence.contract,"target-estimability-v3");
+    ASSERT_EQ(evidence.contract,"target-estimability-v4");
     ASSERT_TRUE(evidence.column_scales.empty());
     ASSERT_EQ(evidence.ranks.size(),2u);
     EXPECT_EQ(evidence.ranks[0].name,"design");
@@ -992,7 +994,7 @@ TEST(JointObservableProfileTest, TargetEvidenceUsesEveryComponentAndTheSavedStat
     const auto covariance=core::detail::ComputeJointUncertainty(problem,saved);
     EXPECT_TRUE(covariance.at(1).covariance); EXPECT_TRUE(covariance.at(5).covariance);
     auto json=boost::json::parse(rhbm_gem::joint_result_io::Encode(saved));
-    EXPECT_EQ(json.at("schema_version").as_int64(),9);
+    EXPECT_EQ(json.at("schema_version").as_int64(),10);
     json.at("target_evidence").as_object()["column_scales"]=boost::json::array{1.};
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(json)),std::invalid_argument);
     const auto restored=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved));

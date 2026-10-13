@@ -824,17 +824,20 @@ TEST(JointComponentNumericsTest, MemoryPlannerUsesCheckedStageSpecificEstimates)
     EXPECT_EQ(projected.projected_width_svd_workspace_bytes,3*projected.projected_width_factor_bytes);
     EXPECT_GT(projected.estimated_peak_bytes,projected.free_design_factor_bytes);
     EXPECT_LT(target.estimated_peak_bytes,300'000'000u);
-    ASSERT_EQ(rank.attributed_stages.size(),2u);
-    EXPECT_EQ(rank.attributed_stages[0].stage,n::MemoryStage::DesignSpectrum);
-    EXPECT_EQ(rank.attributed_stages[1].stage,n::MemoryStage::ProjectedWidthAssessment);
-    EXPECT_EQ(rank.temporary_bytes,std::max({rank.attributed_stages[0].temporary_bytes,
-        rank.attributed_stages[1].temporary_bytes}));
-    EXPECT_EQ(rank.attributed_stages[1].free_design_factor_bytes,projected.free_design_factor_bytes);
+    ASSERT_EQ(rank.attributed_stages.size(),1u);
+    EXPECT_EQ(rank.attributed_stages[0].stage,n::MemoryStage::ProjectedWidthAssessment);
+    EXPECT_EQ(rank.estimated_peak_bytes,projected.estimated_peak_bytes);
+    EXPECT_EQ(rank.attributed_stages[0].free_design_factor_bytes,projected.free_design_factor_bytes);
     auto active=large; active.component_free_columns=37'406;
     const auto active_projected=n::PlanMemory(active,n::MemoryStage::ProjectedWidthAssessment);
     EXPECT_EQ(active_projected.status,n::MemoryStatus::Reject);
     EXPECT_EQ(active_projected.free_design_factor_bytes,37'406ull*37'406ull*sizeof(double));
     EXPECT_EQ(active_projected.projected_width_factor_bytes,projected.projected_width_factor_bytes);
+    auto mixed=large; mixed.component_free_columns=56'109;
+    const auto mixed_projected=n::PlanMemory(mixed,n::MemoryStage::ProjectedWidthAssessment);
+    EXPECT_EQ(mixed_projected.status,n::MemoryStatus::Reject);
+    EXPECT_EQ(mixed_projected.free_design_factor_bytes,56'109ull*56'109ull*sizeof(double));
+    EXPECT_EQ(mixed_projected.shape.component_free_columns,56'109u);
     EXPECT_TRUE(target.attributed_stages.empty());
     EXPECT_EQ(target.dense_factor_bytes,0u);
     EXPECT_EQ(target.factor_workspace_bytes,0u);
@@ -963,7 +966,7 @@ TEST(JointComponentNumericsTest, IndependentStreamingReplayPreservesActiveBounda
     EXPECT_DOUBLE_EQ(cancellation_replay.objective_difference,0.0);
 }
 
-TEST(JointComponentNumericsTest, RankAssessmentPreflightStopsDenseDesignSpectrum)
+TEST(JointComponentNumericsTest, RankAssessmentPreflightStopsBeforeFreeDesignFactorization)
 {
     constexpr Eigen::Index atoms=4,rows=8;
     std::vector<std::vector<n::Support>> support(static_cast<std::size_t>(atoms));
