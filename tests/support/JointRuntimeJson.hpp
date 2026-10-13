@@ -156,14 +156,18 @@ inline j::object Assessment(const r::Assessment & a)
         out["endpoint_evaluations"]=2;
     }
     if(a.design_structure) out["design_structure"]=StructuralRank(*a.design_structure);
-    if(!a.design) return out;
-    if(!a.reference_free) out["scaled_reference_difference"]=Number(a.coefficient_difference);
-    out["design_spectrum"]=DesignSpectrum(*a.design);
-    if(!a.widths) return out;
-    auto widths=Spectrum(*a.widths); widths["column_norms"]=Values(a.widths->column_norms);
-    widths["active_face_only"]=!a.primary.certificate.active_atoms.empty();
-    j::array weak; for(Eigen::Index k=0;k<a.weak_directions.cols();++k) weak.push_back(Values(a.weak_directions.col(k)));
-    widths["weak_directions"]=weak; out["width_spectrum"]=widths;
+    if(a.design)
+    {
+        if(!a.reference_free) out["scaled_reference_difference"]=Number(a.coefficient_difference);
+        out["design_spectrum"]=DesignSpectrum(*a.design);
+    }
+    if(a.widths)
+    {
+        auto widths=Spectrum(*a.widths); widths["column_norms"]=Values(a.widths->column_norms);
+        widths["active_face_only"]=!a.primary.certificate.active_atoms.empty();
+        j::array weak; for(Eigen::Index k=0;k<a.weak_directions.cols();++k) weak.push_back(Values(a.weak_directions.col(k)));
+        widths["weak_directions"]=weak; out["width_spectrum"]=widths;
+    }
     if(!a.reference_free) out["runtime_checks"]=j::object{{"inner",a.inner},{"b_gradient",a.gradient},
         {"identified",a.identified}};
     return out;

@@ -45,40 +45,33 @@ SparseQRRankResult FactorSparseQR(const runtime::Sparse & x,const runtime::RankP
         auto stage=std::chrono::steady_clock::now();
         qr.analyzePattern(x);
         out.symbolic_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-stage).count();
+        stage=std::chrono::steady_clock::now();
+        qr.factorize(x);
+        out.numeric_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-stage).count();
         if(qr.info()!=Eigen::Success)
         {
-            out.status="Unavailable"; out.reason="symbolic-analysis-failed";
+            out.status="Unavailable"; out.reason="numeric-factorization-failed";
         }
         else
         {
-            stage=std::chrono::steady_clock::now();
-            qr.factorize(x);
-            out.numeric_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-stage).count();
-            if(qr.info()!=Eigen::Success)
+            const auto & r=qr.matrixR();
+            out.rank=qr.rank(); out.r_nonzeros=r.nonZeros();
+            out.fill_in_ratio=out.input_nonzeros>0 ?
+                static_cast<double>(out.r_nonzeros)/static_cast<double>(out.input_nonzeros) :
+                std::numeric_limits<double>::quiet_NaN();
+            std::size_t values{},outer{},total{};
+            if(out.r_nonzeros<0 || !runtime::CheckedMultiplyBytes(static_cast<std::size_t>(out.r_nonzeros),
+                sizeof(double)+sizeof(int),values) ||
+                !runtime::CheckedAddBytes(static_cast<std::size_t>(r.outerSize()),1,outer) ||
+                !runtime::CheckedMultiplyBytes(outer,sizeof(int),outer) ||
+                !runtime::CheckedAddBytes(values,outer,total))
             {
-                out.status="Unavailable"; out.reason="numeric-factorization-failed";
+                out.status="Unavailable"; out.reason="factor-memory-overflow";
             }
             else
             {
-                const auto & r=qr.matrixR();
-                out.rank=qr.rank(); out.r_nonzeros=r.nonZeros();
-                out.fill_in_ratio=out.input_nonzeros>0 ?
-                    static_cast<double>(out.r_nonzeros)/static_cast<double>(out.input_nonzeros) :
-                    std::numeric_limits<double>::quiet_NaN();
-                std::size_t values{},outer{},total{};
-                if(out.r_nonzeros<0 || !runtime::CheckedMultiplyBytes(static_cast<std::size_t>(out.r_nonzeros),
-                    sizeof(double)+sizeof(int),values) ||
-                    !runtime::CheckedAddBytes(static_cast<std::size_t>(r.outerSize()),1,outer) ||
-                    !runtime::CheckedMultiplyBytes(outer,sizeof(int),outer) ||
-                    !runtime::CheckedAddBytes(values,outer,total))
-                {
-                    out.status="Unavailable"; out.reason="factor-memory-overflow";
-                }
-                else
-                {
-                    out.factor_memory_bytes=total; out.valid=true;
-                    out.status="Completed"; out.reason="experimental-pivot-diagonal-rank";
-                }
+                out.factor_memory_bytes=total; out.valid=true;
+                out.status="Completed"; out.reason="experimental-pivot-diagonal-rank";
             }
         }
     }
