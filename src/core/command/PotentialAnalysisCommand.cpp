@@ -63,14 +63,10 @@ void NormalizeAndValidateRequest(
     runner.RequireFiniteNonNegativeScalar(
         request, &PotentialAnalysisRequest::simulated_map_resolution);
     runner.RequireNonEmptyList(request, &PotentialAnalysisRequest::saved_key_tag);
-    runner.RequireEnum(request, &PotentialAnalysisRequest::sampling_method);
     runner.RequireEnum(request, &PotentialAnalysisRequest::estimator);
     if (request.estimator==PotentialEstimator::JOINT_COMPONENTS)
     {
-        if (request.sampling_method!=SphereSamplingMethod::FibonacciDeterministic)
-            runner.AddFieldValidationError(&PotentialAnalysisRequest::sampling_method,"Joint initialization requires Fibonacci sampling.");
         if (request.job_count>1) runner.AddFieldNormalizationWarning(&PotentialAnalysisRequest::job_count,"Joint initialization and fitting use one worker.");
-        request.exclude_hydrogen=true;
     }
 }
 
@@ -108,8 +104,8 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
     {
         model_object->ApplySimulationMetadata(request.simulated_map_resolution);
     }
-    JointMapNormalization normalization{request.map_normalization_flag,false,1};
-    if (!request.simulation_flag && request.map_normalization_flag)
+    JointMapNormalization normalization{!request.simulation_flag,false,1};
+    if (!request.simulation_flag)
     {
         const auto divisor=map_object->MapValueArrayNormalization();
         normalization.applied=divisor.has_value();
@@ -144,19 +140,19 @@ bool ExecutePreparedRequest(const PotentialAnalysisRequest & request)
         return false;
     }
 
-    model_object->SelectAllAtoms();
-    model_object->ApplySymmetrySelection(request.asymmetry_flag);
-    model_object->ApplyElementSelection(Element::HYDROGEN, request.exclude_hydrogen);
-    model_object->ApplyBackboneSelection(request.only_backbone);
+    model_object->SelectAtoms([](const AtomObject & atom)
+    {
+        return atom.GetElement() != Element::HYDROGEN;
+    });
 
     Logger::Log(LogLevel::Info, BuildAtomCountingSummary(*model_object));
 
     FitOptions options;
     options.thread_size = joint ? 1 : request.job_count;
     options.estimator = request.estimator;
-    options.sampling_method = request.sampling_method;
-    options.exclude_hydrogen = request.exclude_hydrogen;
-    options.enable_second_stage_failed_only_refinement = request.enable_second_stage_failed_only_refinement;
+    options.sampling_method = SphereSamplingMethod::FibonacciDeterministic;
+    options.exclude_hydrogen = true;
+    options.enable_second_stage_failed_only_refinement = true;
     try
     {
         RunPotentialFittingWorkflow(*map_object, *model_object, options);

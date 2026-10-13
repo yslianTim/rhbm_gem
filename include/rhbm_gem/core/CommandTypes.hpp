@@ -82,14 +82,8 @@ struct PotentialAnalysisRequest : public CommandRequestBase
     std::filesystem::path model_file_path{};
     std::filesystem::path map_file_path{};
     bool simulation_flag{ false };
-    bool map_normalization_flag{ true };
-    bool exclude_hydrogen{ false };
-    bool only_backbone{ false };
     double simulated_map_resolution{ 0.0 };
     std::string saved_key_tag{ "model" };
-    bool asymmetry_flag{ false };
-    SphereSamplingMethod sampling_method{ SphereSamplingMethod::FibonacciDeterministic };
-    bool enable_second_stage_failed_only_refinement{ true };
 };
 
 struct PotentialDisplayRequest : public CommandRequestBase

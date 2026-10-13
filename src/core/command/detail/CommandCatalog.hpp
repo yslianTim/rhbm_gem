@@ -61,30 +61,12 @@ struct RequestFieldCatalog<PotentialAnalysisRequest>
             RequestField{ "simulation_flag", "--simulation",
                 "Simulation flag",
                 &Self::simulation_flag },
-            RequestField{ "map_normalization_flag", "--map-normalization",
-                "Normalize map values before potential analysis",
-                &Self::map_normalization_flag },
-            RequestField{ "exclude_hydrogen", "--exclude-hydrogen",
-                "Exclude hydrogen atoms from potential analysis",
-                &Self::exclude_hydrogen },
-            RequestField{ "only_backbone", "--only-backbone",
-                "Only analyze backbone atoms",
-                &Self::only_backbone },
             RequestField{ "simulated_map_resolution", "-r,--sim-resolution",
                 "Set simulated map's resolution (blurring width)",
                 &Self::simulated_map_resolution },
             RequestField{ "saved_key_tag", "-k,--save-key",
                 "New key tag for saving ModelObject results into database",
-                &Self::saved_key_tag },
-            RequestField{ "asymmetry_flag", "--asymmetry",
-                "Turn On/Off asymmetry flag",
-                &Self::asymmetry_flag },
-            RequestField{ "sampling_method", "--sampling-method",
-                "Sphere sampling method",
-                &Self::sampling_method },
-            RequestField{ "enable_second_stage_failed_only_refinement", "--second-stage-failed-only-refinement",
-                "Two-stage only: refine failed shape solves with equation and branch verification",
-                &Self::enable_second_stage_failed_only_refinement });
+                &Self::saved_key_tag });
     }
 };
 
