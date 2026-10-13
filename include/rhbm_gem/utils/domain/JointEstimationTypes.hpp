@@ -49,6 +49,7 @@ struct JointRankEvidence
     std::size_t rank{};
     double threshold{};
     std::vector<double> singular_values;
+    std::string context_identity;
 };
 struct JointAtomIdentifiability
 {

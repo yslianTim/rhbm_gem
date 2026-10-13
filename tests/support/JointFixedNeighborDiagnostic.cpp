@@ -54,7 +54,8 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
     const bool qualified=certification.qualified();
     if(qualified) component.state=State(out.assessment.primary,context.scale);
     component.evidence=AssessmentEvidence(out.assessment,JointEvidenceScope::ComponentLocal);
-    component.ranks=AssessmentRanks(out.assessment,JointEvidenceScope::ComponentLocal);
+    component.ranks=AssessmentRanks(out.assessment,JointEvidenceScope::ComponentLocal,
+        data.input.get(),&layout,component_view.rows.size());
     component.evidence.push_back({"endpoint-trust",certification.verified() ? JointCheckStatus::Passed :
         JointCheckStatus::Failed,JointEvidenceScope::ComponentLocal,{},{},certification.trust.reason});
 
@@ -109,7 +110,8 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
     out.fit.evidence=AssessmentEvidence(out.assessment,JointEvidenceScope::AssembledGlobal);
     out.fit.evidence.push_back(std::move(assembly_mapping));
     out.fit.evidence.push_back(std::move(assembled_consistency));
-    out.fit.ranks=AssessmentRanks(out.assessment,JointEvidenceScope::AssembledGlobal);
+    out.fit.ranks=AssessmentRanks(out.assessment,JointEvidenceScope::AssembledGlobal,
+        data.input.get(),&layout,data.input->observations.size());
 
 }
 }

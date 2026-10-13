@@ -1,6 +1,7 @@
 #include "SimulationBuildInfo.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/TargetEvidence.hpp"
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/FittingWorkset.hpp"
@@ -190,12 +191,21 @@ JointCheckStatus JointFitResult::RuntimeConvergence() const
     for(const auto & component:components) status=joint_component::MergeConvergenceStatus(status,component.RuntimeConvergence());
     return status;
 }
-std::vector<JointRankEvidence> joint_component::AssessmentRanks(const n::Assessment & a,JointEvidenceScope scope)
+std::vector<JointRankEvidence> joint_component::AssessmentRanks(const n::Assessment & a,JointEvidenceScope scope,
+    const JointProblemInput * input,const JointParameterLayout * layout,std::size_t rank_context_rows)
 {
     std::vector<JointRankEvidence> out;
+    std::string context_identity;
+    if(input && layout && a.primary.eta.allFinite() && a.primary.beta.allFinite())
+    {
+        JointState state; state.ac=Values(a.primary.beta); state.log_b=Values(a.primary.eta);
+        state.b=Values(a.primary.eta.array().exp());
+        context_identity=n::TargetRankContextIdentity(*input,*layout,state,rank_context_rows);
+    }
     for(const auto & [name,spectrum]:std::vector<std::pair<std::string,const std::optional<n::Spectrum> *>>{
         {"design",&a.design},{"projected-width",&a.widths}})
-        if(*spectrum) out.push_back({name,scope,static_cast<std::size_t>((*spectrum)->rank),(*spectrum)->threshold,Values((*spectrum)->singular_values)});
+        if(*spectrum) out.push_back({name,scope,static_cast<std::size_t>((*spectrum)->rank),(*spectrum)->threshold,
+            Values((*spectrum)->singular_values),context_identity});
     return out;
 }
 JointProblem::JointProblem(JointProblemInput input)
@@ -427,7 +437,8 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
     const auto assembly=n::AssembleComponents(data.domain,data.y,data.partition,data.context,out.components,reuse ? &*reuse : nullptr);
     out.search_completed=assembly.completed; out.available_row_mask=assembly.row_mask;
     out.evidence=n::AssessmentEvidence(assembly.assessment,JointEvidenceScope::AssembledGlobal);
-    out.ranks=n::AssessmentRanks(assembly.assessment,JointEvidenceScope::AssembledGlobal);
+    out.ranks=n::AssessmentRanks(assembly.assessment,JointEvidenceScope::AssembledGlobal,
+        data.input.get(),&data.layout,data.input->observations.size());
     out.evidence.push_back({"assembly-mapping",assembly.mapping_valid ? JointCheckStatus::Passed :
         JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{},{},
         assembly.mapping_valid ? "exact-component-identity-mapping" : "missing-component-state"});

@@ -2,8 +2,12 @@
 #include "TiledQR.hpp"
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <algorithm>
+#include <bit>
 #include <chrono>
+#include <cstdint>
+#include <iomanip>
 #include <numeric>
+#include <sstream>
 
 namespace rhbm_gem::core::joint_component {
 namespace {
@@ -13,13 +17,6 @@ bool Sensitive(const CompactSvdResult & svd)
 {
     return svd.threshold>0 && ((svd.singular_values.array()>=.5*svd.threshold) &&
         (svd.singular_values.array()<=2*svd.threshold)).any();
-}
-bool SameLayout(const JointParameterLayout & a,const JointParameterLayout & b)
-{
-    if(a.full_atoms!=b.full_atoms || a.informative_rows!=b.informative_rows || a.groups.size()!=b.groups.size()) return false;
-    for(std::size_t i=0;i<a.groups.size();++i)
-        if(a.groups[i].row!=b.groups[i].row || a.groups[i].atoms!=b.groups[i].atoms) return false;
-    return true;
 }
 bool SameState(const JointState & a,const JointState & b)
 {
@@ -31,6 +28,78 @@ bool FullRowIdentity(const std::vector<std::size_t> & rows,std::size_t count)
     if(rows.size()!=count) return false;
     for(std::size_t i=0;i<count;++i) if(rows[i]!=i) return false;
     return true;
+}
+void HashBytes(std::uint64_t & hash,const void * data,std::size_t size)
+{
+    const auto * bytes=static_cast<const unsigned char *>(data);
+    for(std::size_t i=0;i<size;++i) {hash^=bytes[i]; hash*=1099511628211ULL;}
+}
+void HashWord(std::uint64_t & hash,std::uint64_t encoded)
+{
+    for(std::size_t i=0;i<sizeof(encoded);++i)
+    {const auto byte=static_cast<unsigned char>(encoded&0xffU); HashBytes(hash,&byte,1); encoded>>=8;}
+}
+void HashSize(std::uint64_t & hash,std::size_t value)
+{HashWord(hash,static_cast<std::uint64_t>(value));}
+void HashText(std::uint64_t & hash,const std::string & value)
+{HashSize(hash,value.size()); HashBytes(hash,value.data(),value.size());}
+void HashDouble(std::uint64_t & hash,double value)
+{HashWord(hash,std::bit_cast<std::uint64_t>(value));}
+bool SameGroup(const JointNuisanceGroup & a,const JointNuisanceGroup & b)
+{return a.row==b.row && a.atoms==b.atoms;}
+bool SameLayout(const JointParameterLayout & a,const JointParameterLayout & b)
+{
+    if(a.full_atoms!=b.full_atoms || a.informative_rows!=b.informative_rows || a.groups.size()!=b.groups.size()) return false;
+    for(std::size_t i=0;i<a.groups.size();++i) if(!SameGroup(a.groups[i],b.groups[i])) return false;
+    return true;
+}
+bool LayoutMatchesScope(const JointProblem & problem,const JointParameterLayout & layout,
+    JointEvidenceScope scope,std::size_t rows)
+{
+    const auto & data=JointProblemAccess::Get(problem);
+    if(scope==JointEvidenceScope::AssembledGlobal)
+        return rows==data.input->observations.size() && SameLayout(layout,data.layout);
+    for(const auto & view:data.partition.components)
+    {
+        if(rows!=view.rows.size()) continue;
+        JointParameterLayout expected;
+        for(auto atom:data.layout.full_atoms) if(view.LocalAtom(static_cast<Eigen::Index>(atom))>=0) expected.full_atoms.push_back(atom);
+        for(auto row:data.layout.informative_rows) if(view.LocalRow(static_cast<Eigen::Index>(row))>=0) expected.informative_rows.push_back(row);
+        for(const auto & group:data.layout.groups)
+            if(view.LocalRow(static_cast<Eigen::Index>(group.row))>=0) expected.groups.push_back(group);
+        if(SameLayout(layout,expected)) return true;
+    }
+    return false;
+}
+const JointCheck * FindCheck(const std::vector<JointCheck> & checks,const char * name,JointEvidenceScope scope)
+{
+    const auto found=std::find_if(checks.begin(),checks.end(),[&](const auto & check) {
+        return check.name==name && check.scope==scope;
+    });
+    return found==checks.end() ? nullptr : &*found;
+}
+bool RankThresholdSensitive(const JointRankEvidence & evidence)
+{
+    if(evidence.singular_values.empty() || !(evidence.threshold>0)) return true;
+    const double lower=std::nextafter(evidence.threshold,0.);
+    const double upper=std::nextafter(evidence.threshold,std::numeric_limits<double>::infinity());
+    return std::any_of(evidence.singular_values.begin(),evidence.singular_values.end(),[&](double value) {
+        return value>=lower && value<=upper;
+    });
+}
+bool ValidRankEvidence(const JointRankEvidence & evidence,std::size_t columns,std::size_t rows)
+{
+    if(evidence.rank!=columns || evidence.singular_values.size()!=columns || !columns || !rows ||
+        !(evidence.threshold>0) || !std::isfinite(evidence.threshold)) return false;
+    if(!std::all_of(evidence.singular_values.begin(),evidence.singular_values.end(),[](double value) {
+        return std::isfinite(value) && value>0;
+    })) return false;
+    for(std::size_t i=1;i<evidence.singular_values.size();++i)
+        if(evidence.singular_values[i]>evidence.singular_values[i-1]) return false;
+    const double expected=std::numeric_limits<double>::epsilon()*static_cast<double>(std::max(rows,columns)) *
+        evidence.singular_values.front();
+    return std::abs(evidence.threshold-expected)<=8*std::numeric_limits<double>::epsilon()*
+        std::max({std::numeric_limits<double>::min(),std::abs(expected),std::abs(evidence.threshold)});
 }
 Matrix SquareCompact(const Matrix & r)
 {
@@ -78,6 +147,174 @@ MemoryEstimate TargetIdentifiabilityMemoryEstimateImpl(const JointProblemInput &
 MemoryEstimate TargetIdentifiabilityMemoryEstimate(const JointProblemInput & input,const JointParameterLayout & layout,
     std::size_t rows)
 {return TargetIdentifiabilityMemoryEstimateImpl(input,layout,rows);}
+std::string TargetRankContextIdentity(const JointProblemInput & input,const JointParameterLayout & layout,
+    const JointState & state,std::size_t rank_rows)
+{
+    const auto atoms=layout.full_atoms.size();
+    if(atoms>std::numeric_limits<std::size_t>::max()/2 || state.ac.size()!=2*atoms ||
+        state.b.size()!=atoms || state.log_b.size()!=atoms ||
+        !std::all_of(state.ac.begin(),state.ac.end(),[](double value){return std::isfinite(value);}) ||
+        !std::all_of(state.b.begin(),state.b.end(),[](double value){return std::isfinite(value) && value>0;}) ||
+        !std::all_of(state.log_b.begin(),state.log_b.end(),[](double value){return std::isfinite(value);})) return {};
+    std::uint64_t hash=14695981039346656037ULL;
+    HashText(hash,"derived-target-rank-context-v1"); HashSize(hash,rank_rows);
+    HashSize(hash,input.atom_ids.size()); HashSize(hash,input.row_ids.size());
+    HashSize(hash,layout.full_atoms.size());
+    for(const auto atom:layout.full_atoms)
+    {
+        if(atom>=input.atom_ids.size() || atom>=input.support.size()) return {};
+        HashSize(hash,atom); HashText(hash,input.atom_ids[atom]);
+        HashSize(hash,input.support[atom].size());
+        for(const auto & support:input.support[atom])
+        {HashSize(hash,support.row); HashDouble(hash,support.squared_distance);}
+    }
+    HashSize(hash,layout.informative_rows.size());
+    for(const auto row:layout.informative_rows)
+    {
+        if(row>=input.row_ids.size() || row>=input.observations.size()) return {};
+        HashSize(hash,row); HashText(hash,input.row_ids[row]); HashDouble(hash,input.observations[row]);
+    }
+    HashSize(hash,layout.groups.size());
+    for(const auto & group:layout.groups)
+    {
+        if(group.row>=input.row_ids.size() || group.row>=input.observations.size()) return {};
+        HashSize(hash,group.row); HashText(hash,input.row_ids[group.row]); HashDouble(hash,input.observations[group.row]);
+        HashSize(hash,group.atoms.size());
+        for(const auto atom:group.atoms)
+        {
+            if(atom>=input.atom_ids.size() || atom>=input.support.size()) return {};
+            HashSize(hash,atom); HashText(hash,input.atom_ids[atom]); HashSize(hash,input.support[atom].size());
+            for(const auto & support:input.support[atom])
+            {HashSize(hash,support.row); HashDouble(hash,support.squared_distance);}
+        }
+    }
+    HashSize(hash,state.ac.size()); for(const auto value:state.ac) HashDouble(hash,value);
+    HashSize(hash,state.b.size()); for(const auto value:state.b) HashDouble(hash,value);
+    HashSize(hash,state.log_b.size()); for(const auto value:state.log_b) HashDouble(hash,value);
+    if(input.selection_domain)
+    {
+        HashText(hash,input.selection_domain->contract); HashText(hash,input.selection_domain->contributor_policy);
+        HashDouble(hash,input.selection_domain->observation_radius); HashDouble(hash,input.selection_domain->support_radius);
+        HashSize(hash,input.selection_domain->target_indices.size());
+        for(const auto atom:input.selection_domain->target_indices) HashSize(hash,atom);
+    }
+    else HashText(hash,"no-selection-domain");
+    std::ostringstream out; out<<"fnv1a64:"<<std::hex<<std::setw(16)<<std::setfill('0')<<hash; return out.str();
+}
+JointTargetEvidence DeriveTargetIdentifiability(const JointProblem & problem,const JointParameterLayout & layout,
+    const std::optional<JointState> & state,const std::vector<JointCheck> & existing,
+    const std::vector<JointRankEvidence> & ranks,JointEvidenceScope scope,std::size_t original_rows)
+{
+    const auto & input=problem.Input();
+    JointTargetEvidence out; out.contract="target-estimability-v3"; out.original_rows=original_rows;
+    for(const auto & check:existing)
+        if(check.name=="conditional-ac-optimality" || check.name=="independent-replay" ||
+            check.name=="width-stationarity" || check.name=="design-identifiability" ||
+            check.name=="numerical-identifiability" || check.name=="assembly-mapping" ||
+            check.name=="assembled-consistency" || check.name=="inner" || check.name=="kkt" ||
+            check.name=="assembled-profile") out.checks.push_back(check);
+    const auto targets=input.selection_domain ? &input.selection_domain->target_indices : nullptr;
+    bool has_target=false;
+    for(const auto atom:layout.full_atoms)
+    {
+        const bool target=targets && std::binary_search(targets->begin(),targets->end(),atom);
+        has_target|=target;
+        out.atoms.push_back({atom,JointCheckStatus::Unavailable,{},"missing-trusted-component-state"});
+    }
+    for(const auto & group:layout.groups) for(const auto atom:group.atoms)
+        out.atoms.push_back({atom,JointCheckStatus::Unavailable,{},"observable-contribution-only"});
+    std::sort(out.atoms.begin(),out.atoms.end(),[](const auto & a,const auto & b){return a.atom<b.atom;});
+    auto target_check=[&](JointCheckStatus status,std::string reason) {
+        out.checks.push_back({"target-identifiability",status,scope,{}, {},std::move(reason)});
+    };
+    auto mark_full=[&](JointCheckStatus status,const std::string & reason) {
+        for(auto & atom:out.atoms) if(std::binary_search(layout.full_atoms.begin(),layout.full_atoms.end(),atom.atom))
+        {atom.status=status; atom.reason=reason;}
+    };
+    if(!targets) {mark_full(JointCheckStatus::Unavailable,"missing-selection-metadata");
+        target_check(JointCheckStatus::Unavailable,"missing-selection-metadata"); return out;}
+    if(scope==JointEvidenceScope::AssembledGlobal && original_rows!=input.observations.size())
+    {mark_full(JointCheckStatus::Unavailable,"observation-domain-mismatch");
+        target_check(JointCheckStatus::Unavailable,"observation-domain-mismatch"); return out;}
+    if(!LayoutMatchesScope(problem,layout,scope,original_rows))
+    {mark_full(JointCheckStatus::Unavailable,"wrong-parameter-layout"); target_check(JointCheckStatus::Unavailable,"wrong-parameter-layout"); return out;}
+    if(!state) {mark_full(JointCheckStatus::Unavailable,"missing-component-state");
+        target_check(JointCheckStatus::Unavailable,"missing-component-state"); return out;}
+    const auto columns=layout.full_atoms.size();
+    if(!columns)
+    {
+        target_check(has_target ? JointCheckStatus::Unavailable : JointCheckStatus::Passed,
+            has_target ? "target-not-in-full-abc-layout" : "no-target-coordinates");
+        return out;
+    }
+    if(state->ac.size()!=2*columns || state->b.size()!=columns || state->log_b.size()!=columns ||
+        state->width_gradient.size()!=columns || !std::isfinite(state->objective) ||
+        !std::all_of(state->ac.begin(),state->ac.end(),[](double value){return std::isfinite(value);}) ||
+        !std::all_of(state->b.begin(),state->b.end(),[](double value){return std::isfinite(value) && value>0;}) ||
+        !std::all_of(state->log_b.begin(),state->log_b.end(),[](double value){return std::isfinite(value);}) ||
+        !std::all_of(state->width_gradient.begin(),state->width_gradient.end(),[](double value){return std::isfinite(value);}))
+    {mark_full(JointCheckStatus::Unavailable,"nonfinite-parameter-state");
+        target_check(JointCheckStatus::Unavailable,"nonfinite-parameter-state"); return out;}
+    for(std::size_t atom=0;atom<columns;++atom)
+        if(std::abs(std::exp(state->log_b[atom])-state->b[atom])>
+            8*std::numeric_limits<double>::epsilon()*state->b[atom])
+        {mark_full(JointCheckStatus::Unavailable,"inconsistent-saved-widths");
+            target_check(JointCheckStatus::Unavailable,"inconsistent-saved-widths"); return out;}
+    for(std::size_t atom=0;atom<columns;++atom) if(state->ac[2*atom]==0)
+    {mark_full(JointCheckStatus::Unavailable,"active-amplitude-boundary");
+        target_check(JointCheckStatus::Unavailable,"active-amplitude-boundary"); return out;}
+    for(std::size_t atom=0;atom<columns;++atom) if(state->ac[2*atom]<0)
+    {mark_full(JointCheckStatus::Unavailable,"invalid-parameter-state");
+        target_check(JointCheckStatus::Unavailable,"invalid-parameter-state"); return out;}
+    const auto context_identity=TargetRankContextIdentity(input,layout,*state,original_rows);
+    if(context_identity.empty()) {mark_full(JointCheckStatus::Unavailable,"missing-rank-context-identity");
+        target_check(JointCheckStatus::Unavailable,"missing-rank-context-identity"); return out;}
+    const auto find_rank=[&](const char * name)->const JointRankEvidence * {
+        const JointRankEvidence * result{};
+        for(const auto & rank:ranks) if(rank.name==name && rank.scope==scope)
+        {if(result) return nullptr; result=&rank;}
+        return result;
+    };
+    const auto * design=find_rank("design"); const auto * widths=find_rank("projected-width");
+    if(!design || !widths) {mark_full(JointCheckStatus::Unavailable,"missing-rank-evidence");
+        target_check(JointCheckStatus::Unavailable,"missing-rank-evidence"); return out;}
+    out.ranks={*design,*widths};
+    if(design->context_identity!=context_identity || widths->context_identity!=context_identity)
+    {mark_full(JointCheckStatus::Unavailable,"rank-context-mismatch");
+        target_check(JointCheckStatus::Unavailable,"rank-context-mismatch"); return out;}
+    if(design->rank<2*columns || widths->rank<columns)
+    {mark_full(JointCheckStatus::Unavailable,"component-rank-deficient");
+        target_check(JointCheckStatus::Unavailable,"component-rank-deficient"); return out;}
+    if(!ValidRankEvidence(*design,2*columns,original_rows) || !ValidRankEvidence(*widths,columns,original_rows))
+    {mark_full(JointCheckStatus::Unavailable,"inconsistent-rank-evidence");
+        target_check(JointCheckStatus::Unavailable,"inconsistent-rank-evidence"); return out;}
+    if(RankThresholdSensitive(*design) || RankThresholdSensitive(*widths))
+    {mark_full(JointCheckStatus::Unavailable,"rank-threshold-sensitive");
+        target_check(JointCheckStatus::Unavailable,"rank-threshold-sensitive"); return out;}
+    for(const char * name:{"conditional-ac-optimality","independent-replay","width-stationarity",
+        "design-identifiability","numerical-identifiability"})
+    {
+        const auto * check=FindCheck(existing,name,scope);
+        if(!check || check->status!=JointCheckStatus::Passed)
+        {
+            const std::string reason=check && check->reason.find("threshold-sensitive")!=std::string::npos ?
+                "rank-threshold-sensitive" : !check ? "missing-component-qualification" : "component-not-qualified";
+            mark_full(JointCheckStatus::Unavailable,reason); target_check(JointCheckStatus::Unavailable,reason); return out;
+        }
+    }
+    if(scope==JointEvidenceScope::AssembledGlobal)
+        for(const char * name:{"assembly-mapping","assembled-consistency"})
+        {
+            const auto * check=FindCheck(existing,name,scope);
+            if(!check || check->status!=JointCheckStatus::Passed)
+            {mark_full(JointCheckStatus::Unavailable,"assembly-not-qualified");
+                target_check(JointCheckStatus::Unavailable,"assembly-not-qualified"); return out;}
+        }
+    for(auto & atom:out.atoms) if(std::binary_search(layout.full_atoms.begin(),layout.full_atoms.end(),atom.atom))
+    {atom.status=JointCheckStatus::Passed; atom.reason="derived-from-component-identifiability";}
+    target_check(JointCheckStatus::Passed,"derived-from-component-identifiability");
+    return out;
+}
 TargetGeometry BuildTargetGeometry(const Domain & domain,VectorRef y,const JointState & state,const EvaluationContext & context)
 {
     TargetGeometry out;
@@ -229,7 +466,8 @@ JointCheckStatus TargetConvergence(const std::optional<JointTargetEvidence> & ev
 {
     if(!evidence) return Status::NotRun;
     if(!state) return Status::Unavailable;
-    if(evidence->contract!="target-estimability-v1" && evidence->contract!="target-estimability-v2")
+    if(evidence->contract!="target-estimability-v1" && evidence->contract!="target-estimability-v2" &&
+        evidence->contract!="target-estimability-v3")
         return Status::Unavailable;
     auto status=Status::Passed;
     const bool reference_free=std::any_of(evidence->checks.begin(),evidence->checks.end(),[](const auto & check) {

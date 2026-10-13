@@ -121,7 +121,8 @@ JointFitResult FitObservableComponents(const JointProblem & problem,const std::v
         const Vector beta=Eigen::Map<const Vector>(state.ac.data(),static_cast<Eigen::Index>(2*count));
         assessment=AssessProfile(domain,y,eta,context,&beta,&prediction,&layout.informative_rows);
         out.evidence=AssessmentEvidence(assessment,JointEvidenceScope::AssembledGlobal);
-        out.ranks=AssessmentRanks(assessment,JointEvidenceScope::AssembledGlobal);
+        out.ranks=AssessmentRanks(assessment,JointEvidenceScope::AssembledGlobal,
+            data.input.get(),&layout,data.input->observations.size());
         profile_replay_passed=assessment.independent_replay.passed;
         if(assessment.primary.valid)
         {

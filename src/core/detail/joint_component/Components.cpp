@@ -277,7 +277,8 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             {
                 const auto & certification=*fit.search.certification;
                 component.evidence=AssessmentEvidence(certification.assessment,JointEvidenceScope::ComponentLocal);
-                component.ranks=AssessmentRanks(certification.assessment,JointEvidenceScope::ComponentLocal);
+                component.ranks=AssessmentRanks(certification.assessment,JointEvidenceScope::ComponentLocal,
+                    data.input.get(),&layout,view.rows.size());
                 if(certification.verification_memory_estimate.status!=MemoryStatus::Pass)
                     component.evidence.push_back({"endpoint-verification-memory",JointCheckStatus::Unavailable,
                         JointEvidenceScope::ComponentLocal,
