@@ -121,6 +121,26 @@ miss brief allocations, while process peak RSS is a whole-process high-water
 mark that includes fixture setup and persistence. None of these readings
 attributes memory to a specific allocation.
 
+The following one-run Release workflow measurements use the deterministic cases
+described in [joint-benchmark.md](joint-benchmark.md). Lookup and workspace
+columns are allocation estimates; RSS columns are measured separately.
+
+| Case | Observations | Targets | Context lookup estimate (MiB) | Workspace payload estimate (MiB) | Sampled workflow peak RSS (MiB) | Process peak RSS (MiB) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| full | 22,650 | 3 | 0.86 | 2.72 | 51.9 | 56.5 |
+| halo | 15,967 | 1 | 0.61 | 1.47 | 46.8 | 50.8 |
+| multi | 67,950 | 9 | 2.59 | 8.15 | 96.2 | 99.7 |
+| noisy | 22,650 | 3 | 0.86 | 2.72 | 52.4 | 57.5 |
+| outlier | 22,650 | 3 | 0.86 | 2.72 | 52.3 | 56.8 |
+| dense | 181,122 | 3 | 6.91 | 21.56 | 263.0 | 263.0 |
+| target-heavy | 27,185 | 6 | 1.04 | 4.74 | 73.0 | 78.1 |
+| connected | 42,558 | 9 | 1.62 | 7.18 | 97.6 | 106.2 |
+
+Every case built one row map, one contributor map and one Joint-stage map.
+Current RSS checkpoints showed monotonic increases through the group phase in
+these runs; they do not isolate the context allocation. The samples were all
+valid, so this benchmark did not measure partial out-of-domain sample handling.
+
 The benchmark cases vary target count, voxel density, and component topology
 within small deterministic synthetic inputs. No large-map or full-atom-set
 post-Joint memory/runtime measurement is available. The 5,938,087-observation

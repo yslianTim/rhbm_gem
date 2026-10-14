@@ -61,6 +61,38 @@ report records actual Joint observations, contributors and targets so these
 workloads can be compared without assuming the row count. `halo` is partial
 selection; `noisy` and `outlier` retain their deterministic perturbations.
 
+## Measured postprocessing cases
+
+One Release run used `build/joint-validation` on AppleClang with
+`OMP_NUM_THREADS=1` and BLAS-family worker counts set to 1. Each case had one
+measurement, a 600-second timeout and a 4 GiB RSS limit. All eight completed;
+all had one observation-row map, one contributor map and one Joint-stage map.
+Every selected target in these fixtures qualified for local evidence, and all
+prepared samples were valid. There is no pre-change runtime baseline, so these
+measurements establish current workload costs and mapping counts, not a measured
+speedup.
+
+| Case | Observations | Contributors / targets | Valid / prepared samples | Driver seconds | Postprocessing seconds | Process peak RSS (MiB) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| full | 22,650 | 3 / 3 | 600 / 600 | 0.663 | 0.019 | 56.5 |
+| halo | 15,967 | 5 / 1 | 200 / 200 | 0.437 | 0.008 | 50.8 |
+| multi | 67,950 | 9 / 9 | 1,800 / 1,800 | 0.977 | 0.059 | 99.7 |
+| noisy | 22,650 | 3 / 3 | 600 / 600 | 0.421 | 0.022 | 57.5 |
+| outlier | 22,650 | 3 / 3 | 600 / 600 | 0.429 | 0.020 | 56.8 |
+| dense | 181,122 | 3 / 3 | 600 / 600 | 1.932 | 0.082 | 263.0 |
+| target-heavy | 27,185 | 6 / 6 | 1,200 / 1,200 | 0.654 | 0.035 | 78.1 |
+| connected | 42,558 | 9 / 9 | 1,800 / 1,800 | 1.070 | 0.057 | 106.2 |
+
+The `dense` run increased observations about 8.0× at three targets; postprocessing
+was 0.082 s. `target-heavy` doubled targets while observations increased by
+about 20%; postprocessing was 0.035 s. These are different synthetic shapes,
+not controlled baseline comparisons. Process peak RSS includes fixture creation
+and persistence; the 5 ms workflow RSS sample and payload estimates are reported
+separately in the [memory census](joint-component-memory-census.md). No sample
+fell outside the Joint observation domain in these generated cases; the
+missing-coverage behavior is covered by the Joint postprocessing regression
+fixture, not by a benchmark timing result.
+
 Workflow JSON reports row, contributor and Joint-stage mapping build counts;
 target/sample counts; context, peeling, charge-correction, local alpha/local
 MDPDE, group alpha and WEB timings; and current-RSS checkpoints. The context
