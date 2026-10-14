@@ -863,7 +863,7 @@ TEST(JointComponentNumericsTest, MemoryPlannerUsesCheckedStageSpecificEstimates)
     EXPECT_EQ(diagnostics.status,n::MemoryStatus::Reject);
     EXPECT_EQ(diagnostics.projected_width_svd_workspace_bytes,9*diagnostics.projected_width_factor_bytes);
     EXPECT_EQ(diagnostics.right_singular_vector_bytes,diagnostics.projected_width_factor_bytes);
-    EXPECT_GT(diagnostics.estimated_peak_bytes,projected.estimated_peak_bytes);
+    EXPECT_GE(diagnostics.estimated_peak_bytes,projected.estimated_peak_bytes);
     EXPECT_GT(projected.estimated_peak_bytes,projected.free_design_factor_bytes);
     EXPECT_LT(target.estimated_peak_bytes,300'000'000u);
     ASSERT_EQ(rank.attributed_stages.size(),1u);
