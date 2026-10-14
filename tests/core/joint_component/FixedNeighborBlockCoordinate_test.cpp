@@ -261,7 +261,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, RankFailureReportsLocalDesignAndHalo
     JointProblem problem(std::move(input));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const auto eta=n::Vector::Constant(2,std::log(.6));
-    const auto context=n::ProfileContext(data.context,data.layout,data.y.size());
+    const auto context=data.context;
     n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=1; policy.collect_diagnostics=true;
     policy.component_index=4; policy.component_id="weak-component";
     policy.halo_census=[](std::size_t & count,std::size_t & minimum,std::size_t & deficient) {
@@ -635,7 +635,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
         <<" width_columns="<<certification.assessment.rank_memory_estimate.shape.component_width_columns
         <<" target_columns="<<target_memory.shape.component_target_columns
         <<" target_evidence_atoms="<<target_memory.shape.component_target_atoms
-        <<" nuisance_atoms="<<target_memory.shape.component_nuisance_atoms
         <<" rank_factor_dimensions="<<rank_stages[0].factor_rows<<"x"<<rank_stages[0].factor_columns
         <<" rank_factor_workspace_bytes="<<rank_stages[0].factor_workspace_bytes
         <<" sparse_design_bytes="<<rank_stages[0].sparse_design_bytes
@@ -791,8 +790,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, SearchResultAndIndependentCertificat
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",32));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector initial_eta=n::Vector::Constant(32,std::log(.55));
-    const n::Domain domain=n::ProfileDomain(data.domain,data.layout);
-    const auto context=n::ProfileContext(data.context,data.layout,data.domain.rows);
+    const n::Domain domain=data.domain;
+    const auto context=data.context;
     n::FixedNeighborPolicy quiet_policy; quiet_policy.core_atoms=16; quiet_policy.maximum_sweeps=3;
     const auto quiet=n::SearchFixedNeighborComponent(domain,data.layout,data.y,initial_eta,context,quiet_policy);
     auto diagnostic_policy=quiet_policy; diagnostic_policy.collect_diagnostics=true;
@@ -1338,8 +1337,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, SameEtaRawPrimaryAndReferenceDiagnos
     const auto search=n::RunFixedNeighborDiagnostic(problem,initial_eta);
     ASSERT_TRUE(search.search_converged);
     const n::Vector eta=search.state.eta,beta=search.state.beta;
-    const n::Domain domain=n::ProfileDomain(data.domain,data.layout);
-    const auto context=n::ProfileContext(data.context,data.layout,data.domain.rows);
+    const n::Domain domain=data.domain;
+    const auto context=data.context;
     const n::Vector y=data.y;
     const auto raw=n::EvaluateState(domain,y,eta,beta,context);
     const auto primary=n::EvaluateProfile(domain,y,eta,false,&context);

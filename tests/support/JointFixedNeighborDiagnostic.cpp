@@ -59,7 +59,7 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
     component.evidence.push_back({"endpoint-trust",certification.verified() ? JointCheckStatus::Passed :
         JointCheckStatus::Failed,JointEvidenceScope::ComponentLocal,{},{},certification.trust.reason});
 
-    out.fit.problem=problem; out.fit.layout=layout; out.fit.initialization.valid=true;
+    out.fit.problem=problem; out.fit.initialization.valid=true;
     out.fit.initialization.reason="valid-widths"; out.fit.initialization.b=Values(out.state.eta.array().exp());
     out.fit.components.push_back(std::move(component)); out.fit.search_completed=out.search_converged;
     out.fit.observation_scale=context.scale;
@@ -130,8 +130,8 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
         if(!(std::exp(initial_eta(a))>0) || !std::isfinite(std::exp(initial_eta(a))))
         {out.reason="block-invalid-partition"; return out;}
 
-    const Domain domain=ProfileDomain(data.domain,layout);
-    const EvaluationContext context=ProfileContext(data.context,layout,data.domain.rows);
+    const Domain domain=data.domain;
+    const EvaluationContext context=data.context;
     const Vector y=Select(data.y,IndicesOf(layout.informative_rows));
     auto run_policy=policy;
     run_policy.collect_diagnostics=policy.collect_diagnostics || policy.retain_diagnostic_records;

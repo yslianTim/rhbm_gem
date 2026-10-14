@@ -58,17 +58,12 @@ struct FixedNeighborComponentBatch
 FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
     const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy &,
     const JointProgressObserver &);
-JointFitResult FitObservableComponents(const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy & = {},
-    const JointProgressObserver & = {});
 JointFitResult FitFixedNeighborComponents(const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy &,
     const JointProgressObserver & = {});
 JointFitResult FitFixedNeighborComponentsImpl(const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy &,
     const JointProgressObserver & = {});
 std::vector<JointRankEvidence> AssessmentRanks(const Assessment &,JointEvidenceScope,
     const JointProblemInput * = nullptr,const JointParameterLayout * = nullptr,std::size_t rank_context_rows=0);
-std::vector<JointCheck> AnalyticNuisanceEvidence(JointEvidenceScope);
-Domain ProfileDomain(const Domain &,const JointParameterLayout &);
-EvaluationContext ProfileContext(const EvaluationContext &,const JointParameterLayout &,Eigen::Index);
 }
 namespace rhbm_gem::core {
 struct JointProblemAccess

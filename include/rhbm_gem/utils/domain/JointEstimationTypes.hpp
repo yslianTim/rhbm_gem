@@ -29,6 +29,8 @@ struct JointNuisanceGroup
     std::vector<std::size_t> atoms;
 };
 // All indices refer to the original immutable problem, including component layouts.
+// Newly constructed problems use every atom and observation row; groups remain
+// solely to decode and re-export historical singleton-profile results.
 struct JointParameterLayout
 {
     std::vector<std::size_t> full_atoms,informative_rows;
@@ -92,6 +94,7 @@ struct JointState
     std::vector<double> ac,b,log_b,width_gradient;
     // 0.5 * squared residual norm / parent ObservationScale() squared.
     double objective{};
+    // Historical singleton-profile amplitudes; current FullABC states leave this empty.
     std::vector<double> nuisance_amplitudes{};
 };
 // A parameter-only snapshot of the latest accepted search candidate. This is

@@ -390,7 +390,6 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
     {
         std::size_t evidence_atoms{},rank_columns{},checks_bytes{};
         ok=CheckedAddBytes(shape.component_target_atoms,shape.component_halo_atoms,evidence_atoms) &&
-            CheckedAddBytes(evidence_atoms,shape.component_nuisance_atoms,evidence_atoms) &&
             CheckedAddBytes(shape.component_design_columns,shape.component_width_columns,rank_columns) &&
             AddProduct(temporary,evidence_atoms,sizeof(JointAtomIdentifiability)+32) &&
             AddProduct(temporary,rank_columns,sizeof(double)) &&
@@ -505,7 +504,6 @@ std::string FormatMemoryEstimate(const MemoryEstimate & estimate)
        <<"  width_columns="<<s.component_width_columns<<'\n'
        <<"  target_atoms="<<s.component_target_atoms<<'\n'
        <<"  halo_atoms="<<s.component_halo_atoms<<'\n'
-       <<"  nuisance_atoms="<<s.component_nuisance_atoms<<'\n'
        <<"  covariance_columns="<<s.component_covariance_columns<<'\n'
        <<"  identity_validation_scratch="<<Bytes(s.identity_validation_bytes)<<'\n'
        <<"  resident="<<Bytes(estimate.resident_bytes)<<'\n'

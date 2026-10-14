@@ -223,7 +223,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         y.size()!=domain.rows || !y.allFinite() || !(context.scale>0) || !std::isfinite(context.scale) ||
         (has_initial_beta && (initial_beta.size()!=2*static_cast<Eigen::Index>(domain.atoms.size()) ||
             !initial_beta.allFinite())) ||
-        policy.core_atoms==0 || layout.groups.size()!=0 || layout.full_atoms.size()!=domain.atoms.size() ||
+        policy.core_atoms==0 || layout.full_atoms.size()!=domain.atoms.size() ||
         layout.informative_rows.size()!=static_cast<std::size_t>(domain.rows) ||
         context.atom_ids.size()!=domain.atoms.size() || context.row_ids.size()!=static_cast<std::size_t>(domain.rows))
     {out.reason="block-invalid-partition"; return out;}
@@ -874,7 +874,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     const auto & local_layout=prepared.local_layout;
     if(local_layout.full_atoms.empty() || local_layout.informative_rows.empty())
     {
-        out.stop_reason=local_layout.full_atoms.empty() ? "analytic-nuisance-only" : "unobserved-full-parameters";
+        out.stop_reason="unobserved-full-parameters";
         return out;
     }
     for(const auto atom:prepared.local_to_parent_atoms)

@@ -98,7 +98,6 @@ j::object MemoryEstimateJson(const n::MemoryEstimate & estimate)
         {"width_columns",estimate.shape.component_width_columns},
         {"target_atoms",estimate.shape.component_target_atoms},
         {"halo_atoms",estimate.shape.component_halo_atoms},
-        {"nuisance_atoms",estimate.shape.component_nuisance_atoms},
         {"covariance_columns",estimate.shape.component_covariance_columns},
         {"target_columns",estimate.shape.component_target_columns},
         {"attributed_stages",MemoryStageEstimatesJson(estimate.attributed_stages)}};

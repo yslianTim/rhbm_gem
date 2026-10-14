@@ -48,7 +48,6 @@ struct JointComponentResult : JointComponentData
 };
 struct JointFitResult
 {
-    std::optional<JointParameterLayout> layout;
     std::optional<JointProblem> problem;
     JointInitialization initialization;
     JointFitCosts costs;

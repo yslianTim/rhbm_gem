@@ -162,17 +162,19 @@ TEST(JointBlockCoordinateTest, StructuralCensusMatchesPreparedCoreMetadata)
     EXPECT_EQ(census.maximum_block_rows,maximum_rows);
     EXPECT_EQ(census.maximum_block_support_entries,maximum_support);
 }
-TEST(JointBlockCoordinateTest, HaloAndContributionOnlyLambdaRowsStayOutOfBlockRows)
+TEST(JointBlockCoordinateTest, SingletonHaloRowsRemainInFullAbcBlockRows)
 {
     const auto input=HaloInput(); const auto layout=n::BuildParameterLayout(input);
     ASSERT_EQ(layout.full_atoms,(std::vector<std::size_t>{0,1,2}));
-    ASSERT_EQ(layout.groups.size(),1U); EXPECT_EQ(layout.groups.front().row,3U);
+    EXPECT_TRUE(layout.groups.empty());
+    EXPECT_EQ(layout.informative_rows.size(),input.observations.size());
     const auto partition=n::BuildStructuralBlockPartition(input,layout,1);
     const auto first=std::find_if(partition.cores.begin(),partition.cores.end(),[](const auto & core){return core.atoms==n::Indices{0};});
     ASSERT_NE(first,partition.cores.end());
     EXPECT_EQ(first->neighbor_atoms,(n::Indices{1}));
     EXPECT_TRUE(std::find(first->affected_rows.begin(),first->affected_rows.end(),3)==first->affected_rows.end());
-    for(const auto & core:partition.cores)
-        EXPECT_TRUE(std::find(core.affected_rows.begin(),core.affected_rows.end(),3)==core.affected_rows.end());
+    const auto singleton=std::find_if(partition.cores.begin(),partition.cores.end(),[](const auto & core){return core.atoms==n::Indices{3};});
+    ASSERT_NE(singleton,partition.cores.end());
+    EXPECT_EQ(singleton->affected_rows,(n::Indices{3}));
     ExerciseConditionalReplacements(input,layout,partition,777);
 }

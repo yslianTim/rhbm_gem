@@ -32,7 +32,6 @@ void ApplyJointSeedFallback(JointInitialization & initialization)
     for(std::size_t i=0;i<initialization.atoms.size();++i)
     {
         auto & atom=initialization.atoms[i];
-        if(atom.reason=="not-required-observable-contribution") continue;
         if(!(std::isfinite(initialization.b[i]) && initialization.b[i]>0) && !donors.empty())
         {initialization.b[i]=median; atom.seed_source="median-fallback"; atom.donor_count=donors.size();}
         const bool valid=std::isfinite(initialization.b[i]) && initialization.b[i]>0;
@@ -64,8 +63,6 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
 {
     if (workset.target_mask.size() != workset.contributors.size())
         throw std::invalid_argument("First-stage workset role count mismatch.");
-    if (workset.initialization_mask.size() != workset.contributors.size())
-        throw std::invalid_argument("First-stage workset parameter count mismatch.");
     JointInitialization initialization;
     initialization.data_scope = "contributor-local-sampling-may-read-outside-target-domain";
     auto editor = model.EditAnalysis();
@@ -79,44 +76,36 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
         record.mdpde = record.ols;
         record.alpha = std::numeric_limits<double>::quiet_NaN();
         double width = std::numeric_limits<double>::quiet_NaN();
-        if (!workset.initialization_mask[index])
+        try
         {
-            record.reason = "not-required-observable-contribution";
-            record.seed_source = "not-required";
+            LocalGaussianResult seed;
+            seed.ols = seed.mdpde = GaussianModel3DWithUncertainty{GaussianModel3D{0, 1, 0}, {}};
+            editor.SetAtomLocalGaussianResult(FittingStage::First, *atom, seed);
+            editor.SetAtomStageEstimate(FittingStage::First, *atom, LocalStageEstimate{});
+            const auto view = AtomLocalPotentialView::For(*atom);
+            record.sample_count = view.GetSamplingEntries(FittingStage::First).size();
+            TrainLocalAlphaForAtom(editor, options, FittingStage::First, *atom);
+            record.alpha = view.GetAlphaR(FittingStage::First);
+            editor.SetAtomLocalGaussianResult(FittingStage::First, *atom, FitFirstStageAtom(*atom, options));
+            auto first = view.GetStageEstimate(FittingStage::First);
+            first.source.role = workset.target_mask[index] ? FittingRole::Target : FittingRole::Halo;
+            editor.SetAtomStageEstimate(FittingStage::First, *atom, first);
+            const auto & local = view.GetGaussianResult(FittingStage::First);
+            const auto ols = local.ols.GetModel().ToVector(), mdpde = local.mdpde.GetModel().ToVector();
+            for (std::size_t k = 0; k < 3; ++k) { record.ols[k] = ols(static_cast<Eigen::Index>(k)); record.mdpde[k] = mdpde(static_cast<Eigen::Index>(k)); }
+            if (local.fit_result) record.native_status = static_cast<int>(local.fit_result->status);
+            width = local.mdpde.GetModel().GetWidth();
+            record.reason = std::isfinite(width) && width > 0 ? "valid-width" : "invalid-width";
         }
-        else
+        catch (const std::exception & error)
         {
-            try
-            {
-                LocalGaussianResult seed;
-                seed.ols = seed.mdpde = GaussianModel3DWithUncertainty{GaussianModel3D{0, 1, 0}, {}};
-                editor.SetAtomLocalGaussianResult(FittingStage::First, *atom, seed);
-                editor.SetAtomStageEstimate(FittingStage::First, *atom, LocalStageEstimate{});
-                const auto view = AtomLocalPotentialView::For(*atom);
-                record.sample_count = view.GetSamplingEntries(FittingStage::First).size();
-                TrainLocalAlphaForAtom(editor, options, FittingStage::First, *atom);
-                record.alpha = view.GetAlphaR(FittingStage::First);
-                editor.SetAtomLocalGaussianResult(FittingStage::First, *atom, FitFirstStageAtom(*atom, options));
-                auto first = view.GetStageEstimate(FittingStage::First);
-                first.source.role = workset.target_mask[index] ? FittingRole::Target : FittingRole::Halo;
-                editor.SetAtomStageEstimate(FittingStage::First, *atom, first);
-                const auto & local = view.GetGaussianResult(FittingStage::First);
-                const auto ols = local.ols.GetModel().ToVector(), mdpde = local.mdpde.GetModel().ToVector();
-                for (std::size_t k = 0; k < 3; ++k) { record.ols[k] = ols(static_cast<Eigen::Index>(k)); record.mdpde[k] = mdpde(static_cast<Eigen::Index>(k)); }
-                if (local.fit_result) record.native_status = static_cast<int>(local.fit_result->status);
-                width = local.mdpde.GetModel().GetWidth();
-                record.reason = std::isfinite(width) && width > 0 ? "valid-width" : "invalid-width";
-            }
-            catch (const std::exception & error)
-            {
-                LocalStageEstimate missing;
-                missing.reason = std::string("initialization-exception: ") + error.what();
-                editor.SetAtomStageEstimate(FittingStage::First, *atom, missing);
-                record.reason = missing.reason;
-            }
-            if (std::isfinite(width)) record.original_b = width;
-            record.seed_source = std::isfinite(width) && width > 0 ? "fitted" : "unavailable";
+            LocalStageEstimate missing;
+            missing.reason = std::string("initialization-exception: ") + error.what();
+            editor.SetAtomStageEstimate(FittingStage::First, *atom, missing);
+            record.reason = missing.reason;
         }
+        if (std::isfinite(width)) record.original_b = width;
+        record.seed_source = std::isfinite(width) && width > 0 ? "fitted" : "unavailable";
         initialization.b.push_back(width);
         initialization.atoms.push_back(std::move(record));
         ++completed_count;
@@ -136,7 +125,7 @@ JointInitialization PrepareJointWidthInitialization(
     {
         Logger::FinishProgressLine();
         Logger::Log(LogLevel::Info, "[Joint] Sampling " +
-            std::to_string(std::count(workset.initialization_mask.begin(), workset.initialization_mask.end(), true)) +
+            std::to_string(workset.contributors.size()) +
             " FullABC contributors");
     }
     const auto atoms = CollectFirstStageAtoms(workset);

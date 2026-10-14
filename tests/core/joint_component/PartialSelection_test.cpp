@@ -445,7 +445,7 @@ TEST(JointComponentPartialSelectionTest, IsolatedProgressCountsSkippedContributo
 {
     auto f = joint_partial_test::Make("partial");
     const core::detail::FittingWorkset workset{
-        {f.model->FindAtomPtr(1), f.model->FindAtomPtr(2)}, {true, false}, {false, true}};
+        {f.model->FindAtomPtr(1), f.model->FindAtomPtr(2)}, {true, false}};
     core::FitOptions options; options.thread_size = 1;
     std::map<std::pair<int, std::string>, int> calls;
     std::map<int, int> sampling_calls;
@@ -464,16 +464,14 @@ TEST(JointComponentPartialSelectionTest, IsolatedProgressCountsSkippedContributo
     core::detail::FirstStageObserverForTesting() = {};
 
     ASSERT_EQ(initialization.atoms.size(), 2);
-    EXPECT_EQ(initialization.atoms[0].reason, "not-required-observable-contribution");
-    EXPECT_EQ(initialization.atoms[0].seed_source, "not-required");
-    EXPECT_FALSE(initialization.atoms[0].original_b);
-    EXPECT_EQ((calls[{1, "first"}]), 0);
+    EXPECT_NE(initialization.atoms[0].reason, "not-required-observable-contribution");
+    EXPECT_EQ((calls[{1, "first"}]), 1);
     EXPECT_EQ((calls[{2, "first"}]), 1);
-    EXPECT_EQ(sampling_calls[1], 0);
+    EXPECT_EQ(sampling_calls[1], 1);
     EXPECT_EQ(sampling_calls[2], 1);
     EXPECT_NE(progress.find("50%"), std::string::npos);
     EXPECT_NE(progress.find("100%"), std::string::npos);
-    EXPECT_EQ(progress.find("Run local alpha training for 1 atoms."), std::string::npos);
+    EXPECT_NE(progress.find("Run local alpha training for 2 atoms."), std::string::npos);
     EXPECT_EQ(std::count(progress.begin(), progress.end(), '\r'), 2);
 
     options.quiet_mode = true;
@@ -482,7 +480,7 @@ TEST(JointComponentPartialSelectionTest, IsolatedProgressCountsSkippedContributo
     EXPECT_TRUE(testing::internal::GetCapturedStdout().empty());
 }
 
-TEST(JointComponentPartialSelectionTest, WorksetSamplingAndFirstFitExcludeContributionOnlyHalo)
+TEST(JointComponentPartialSelectionTest, WorksetSamplesAndInitializesEveryFullAbcContributor)
 {
     std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
     for (int id = 1; id <= 3; ++id)
@@ -512,8 +510,7 @@ TEST(JointComponentPartialSelectionTest, WorksetSamplingAndFirstFitExcludeContri
     const auto workset = core::detail::MakeJointFittingWorkset(model, problem);
     ASSERT_EQ(workset.contributors.size(), 3);
     EXPECT_EQ(workset.target_mask, (std::vector<bool>{true, false, false}));
-    EXPECT_EQ(workset.initialization_mask, (std::vector<bool>{true, true, false}));
-    EXPECT_EQ(problem.ParameterLayout().full_atoms, (std::vector<std::size_t>{0, 1}));
+    EXPECT_EQ(problem.ParameterLayout().full_atoms, (std::vector<std::size_t>{0, 1, 2}));
     const auto selected = model.GetSelectedAtoms();
     const auto bonds = model.GetSelectedBonds();
 
@@ -533,13 +530,12 @@ TEST(JointComponentPartialSelectionTest, WorksetSamplingAndFirstFitExcludeContri
 
     EXPECT_EQ(sampling_calls[1], 1);
     EXPECT_EQ(sampling_calls[2], 1);
-    EXPECT_EQ(sampling_calls[3], 0);
+    EXPECT_EQ(sampling_calls[3], 1);
     EXPECT_EQ(first_fit_calls[1], 1);
     EXPECT_EQ(first_fit_calls[2], 1);
-    EXPECT_EQ(first_fit_calls[3], 0);
+    EXPECT_EQ(first_fit_calls[3], 1);
     ASSERT_EQ(initialization.atoms.size(), 3);
-    EXPECT_EQ(initialization.atoms[2].reason, "not-required-observable-contribution");
-    EXPECT_EQ(initialization.atoms[2].sample_count, 0);
+    EXPECT_NE(initialization.atoms[2].reason, "not-required-observable-contribution");
     EXPECT_EQ(model.GetSelectedAtoms(), selected);
     EXPECT_EQ(model.GetSelectedBonds(), bonds);
 }

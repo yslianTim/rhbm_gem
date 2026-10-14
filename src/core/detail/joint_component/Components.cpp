@@ -130,7 +130,6 @@ JointParameterLayout ComponentLayout(const JointParameterLayout & layout,const C
     JointParameterLayout out;
     for(auto a:layout.full_atoms) if(view.LocalAtom(static_cast<Eigen::Index>(a))>=0) out.full_atoms.push_back(a);
     for(auto r:layout.informative_rows) if(view.LocalRow(static_cast<Eigen::Index>(r))>=0) out.informative_rows.push_back(r);
-    for(const auto & group:layout.groups) if(view.LocalRow(static_cast<Eigen::Index>(group.row))>=0) out.groups.push_back(group);
     return out;
 }
 JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & search,std::size_t atoms)
@@ -209,27 +208,11 @@ JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & s
     return out;
 }
 }
-std::vector<JointCheck> AnalyticNuisanceEvidence(JointEvidenceScope scope)
-{
-    constexpr auto passed=JointCheckStatus::Passed;
-    constexpr auto reason="analytic-nuisance-only";
-    return {
-        {"ac-feasibility",passed,scope,0.0,0.0,reason},
-        {"conditional-ac-optimality",passed,scope,0.0,1e-10,reason},
-        {"independent-ac-optimality",passed,scope,0.0,1e-10,reason},
-        {"independent-kkt-consistency",passed,scope,0.0,1e-13,reason},
-        {"independent-replay",passed,scope,0.0,{},reason},
-        {"width-gradient-consistency",passed,scope,0.0,{},reason},
-        {"width-stationarity",passed,scope,0.0,1e-12,reason},
-        {"design-identifiability",passed,scope,0.0,0.0,reason},
-        {"numerical-identifiability",passed,scope,0.0,0.0,reason}};
-}
 FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
     const JointProblem & problem,const std::vector<double> & initial_b,
     const FixedNeighborSearchPolicy & production_policy,const JointProgressObserver & observer)
 {
     const auto & data=JointProblemAccess::Get(problem);
-    const bool has_observable_groups=!data.layout.groups.empty();
     FixedNeighborComponentBatch out;
     const auto component_count=data.partition.components.size();
     out.components.reserve(component_count);
@@ -250,18 +233,12 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
         JointComponentResult component; component.id=view.id;
         component.atoms.assign(view.atoms.begin(),view.atoms.end());
         component.rows.assign(view.rows.begin(),view.rows.end());
-        if(has_observable_groups) component.layout=layout;
         FixedNeighborComponentResult fit;
         std::optional<double> accepted_objective,accepted_gradient_inf_norm;
         const bool valid=std::all_of(layout.full_atoms.begin(),layout.full_atoms.end(),[&](auto a) {
             return a<initial_b.size() && std::isfinite(initial_b[a]) && initial_b[a]>0;
         });
-        if(has_observable_groups && layout.full_atoms.empty())
-        {
-            component.state.emplace(); component.search_completed=true; component.stop_reason="analytic-nuisance-only";
-            component.evidence=AnalyticNuisanceEvidence(JointEvidenceScope::ComponentLocal);
-        }
-        else if(valid && !layout.informative_rows.empty())
+        if(valid && !layout.informative_rows.empty())
         {
             fit=SolveFixedNeighborComponentView(view,layout,widths,data.context,production_policy,observer,
                 progress_component ? &*progress_component : nullptr);
@@ -312,7 +289,7 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
                 component.profile_evaluations,data.context.profile_budget,component.accepted_updates,
                 data.context.update_budget,elapsed,component.stop_reason,component.state.has_value(),
                 accepted_objective,accepted_gradient_inf_norm);
-        if(!has_observable_groups && component_count==1 && data.partition.constant_rows.empty() &&
+        if(component_count==1 && data.partition.constant_rows.empty() &&
             fit.search.certification && fit.search.certification->qualified())
             out.single_component_assessment=std::move(fit.search.certification->assessment);
         out.components.push_back(std::move(component));

@@ -45,7 +45,7 @@ struct MemoryShape
         affected_row_entries{},component_neighbor_entries{},maximum_block_rows{},maximum_block_support_entries{},
         total_block_support_entries{},maximum_neighbor_atoms{},component_free_columns{},component_target_columns{},
         identity_validation_bytes{},resident_bytes{},component_design_columns{},component_width_columns{},
-        component_target_atoms{},component_halo_atoms{},component_nuisance_atoms{},component_covariance_columns{},
+        component_target_atoms{},component_halo_atoms{},component_covariance_columns{},
         maximum_tile_rows{8192},
         component_structural_nonzeros{},component_structural_supported_rows{};
     bool problem_scope{},component_structural_matching{};

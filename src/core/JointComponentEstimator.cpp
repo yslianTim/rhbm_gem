@@ -465,18 +465,11 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         out.initialization.valid=initial_b.size()==data.domain.atoms.size() &&
             std::all_of(initial_b.begin(),initial_b.end(),[](double b){return std::isfinite(b) && b>0;});
         out.initialization.reason=out.initialization.valid ? "valid-widths" : "invalid-widths";
-        if(!data.layout.groups.empty()) out.layout=data.layout;
         out.available_row_mask.assign(data.input->observations.size(),false);
         out.evidence.push_back({"memory-preflight",JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,
             data.construction_memory.estimated_peak_bytes ? std::optional<double>(static_cast<double>(data.construction_memory.estimated_peak_bytes)) : std::nullopt,
             static_cast<double>(data.construction_memory.budget_bytes),
             "resource-limit:problem-construction:"+data.construction_memory.reason});
-        return out;
-    }
-    if(!problem.ParameterLayout().groups.empty())
-    {
-        auto out=n::FitObservableComponents(problem,initial_b,production_policy,observer);
-        out.solver_provenance=provenance();
         return out;
     }
     JointFitResult out; out.problem=problem;
@@ -547,8 +540,6 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
 {
     if (!fit.problem) throw std::invalid_argument("Cannot capture joint result without problem identities.");
     JointAnalysisResult out;
-    out.layout=fit.layout;
-    if(out.layout) out.parameterization_contract="singleton-halo-profile-v1";
     metadata.software=JointSoftwareProvenance{RHBM_GEM_SIMULATION_VERSION,
         RHBM_GEM_SIMULATION_SOURCE_SHA256,RHBM_GEM_SIMULATION_CONFIG_SHA256,
         RHBM_GEM_SIMULATION_BUILD_SHA256};

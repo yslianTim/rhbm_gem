@@ -24,12 +24,16 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
         std::ofstream json_file, csv_file, contribution_file;
         json_file.exceptions(std::ios::failbit|std::ios::badbit);
         csv_file.exceptions(std::ios::failbit|std::ios::badbit);
-        contribution_file.exceptions(std::ios::failbit|std::ios::badbit);
         json_file.open(json_path); csv_file.open(csv_path);
         json_file << json << '\n';
         auto contribution_path=csv_path; contribution_path.replace_extension(".contributions.csv");
-        contribution_file.open(contribution_path);
-        contribution_file << "GroupID,RowID,AtomIDs,Lambda,StateAvailable\n" << std::setprecision(std::numeric_limits<double>::max_digits10);
+        const bool has_legacy_groups=result.layout && !result.layout->groups.empty();
+        if(has_legacy_groups)
+        {
+            contribution_file.exceptions(std::ios::failbit|std::ios::badbit);
+            contribution_file.open(contribution_path);
+            contribution_file << "GroupID,RowID,AtomIDs,Lambda,StateAvailable\n" << std::setprecision(std::numeric_limits<double>::max_digits10);
+        }
         std::vector<std::string> group_ids(result.atom_ids.size());
         if(result.layout) for(const auto & group:result.layout->groups)
         {
@@ -78,7 +82,8 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
                 << joint_result_io::StatusText(component ? component->target_runtime_convergence : JointCheckStatus::NotRun) << ','
                 << joint_result_io::StatusText(identified) << '\n';
         }
-        json_file.close(); csv_file.close(); contribution_file.close();
+        json_file.close(); csv_file.close();
+        if(contribution_file.is_open()) contribution_file.close();
     }
     catch(const std::ios_base::failure & error)
     {

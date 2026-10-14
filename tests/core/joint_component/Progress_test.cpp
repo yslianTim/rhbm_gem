@@ -519,39 +519,29 @@ TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
 TEST(JointProgressTest, FixedNeighborObservableComponentsShareAssemblyContract)
 {
     const core::JointProblem problem(MakeObservableInput());
-    const std::vector<double> initial{.55,std::numeric_limits<double>::quiet_NaN(),
-        std::numeric_limits<double>::quiet_NaN()};
+    const std::vector<double> initial{.55,.7,.7};
     const auto fit=joint::FitFixedNeighborComponents(problem,initial,{});
-    ASSERT_EQ(problem.ParameterLayout().groups.size(),1u);
+    EXPECT_TRUE(problem.ParameterLayout().groups.empty());
+    EXPECT_EQ(problem.ParameterLayout().full_atoms,(std::vector<std::size_t>{0,1,2}));
     ASSERT_EQ(fit.components.size(),1u);
-    ASSERT_TRUE(fit.components.front().state);
-    ASSERT_TRUE(fit.assembled_state);
-    EXPECT_EQ(fit.components.front().layout->groups.size(),1u);
-    EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    EXPECT_FALSE(fit.components.front().layout);
+    EXPECT_FALSE(fit.assembled_state);
+    EXPECT_NE(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
 }
 
 TEST(JointProgressTest, ObservableComponentsUseTheSameLifecycle)
 {
     const core::JointProblem problem(MakeObservableInput());
-    const std::vector<double> initial{.55, std::numeric_limits<double>::quiet_NaN(),
-        std::numeric_limits<double>::quiet_NaN()};
+    const std::vector<double> initial{.55,.7,.7};
     std::vector<joint::JointProgressEvent> events;
     const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
     const auto fit = joint::FitFixedNeighborComponents(problem, initial, {}, observer);
-    ASSERT_EQ(problem.ParameterLayout().groups.size(), 1);
-    ASSERT_TRUE(fit.assembled_state);
+    EXPECT_TRUE(problem.ParameterLayout().groups.empty());
+    EXPECT_FALSE(fit.assembled_state);
     ExpectLifecycle(problem, fit, events, {});
-    for (std::size_t k = 0; k < fit.components.size(); ++k)
-    {
-        if (fit.components[k].stop_reason != "analytic-nuisance-only") continue;
-        const auto completed = std::find_if(events.begin(), events.end(), [&](const auto & event) {
-            return event.phase == joint::JointProgressPhase::ComponentCompleted
-                && event.component_index == k + 1;
-        });
-        ASSERT_NE(completed, events.end());
-        EXPECT_FALSE(completed->accepted_objective);
-        EXPECT_FALSE(completed->accepted_gradient_inf_norm);
-    }
+    EXPECT_TRUE(std::none_of(fit.components.begin(),fit.components.end(),[](const auto & component) {
+        return component.stop_reason=="analytic-nuisance-only";
+    }));
 }
 
 TEST(JointProgressTest, CliReporterFormatsFixedNeighborConfiguration)
@@ -717,32 +707,25 @@ TEST(JointProgressTest, CliReporterRefreshesWhenAcceptedMetricsBecomeAvailable)
     EXPECT_NE(output.find("obj=3.000e-01 | grad-inf=4.000e-01"), std::string::npos);
 }
 
-TEST(JointProgressTest, AnalyticNuisanceComponentHasNoAcceptedMetrics)
+TEST(JointProgressTest, SingletonOnlyComponentUsesFullAbcSearch)
 {
     const core::JointProblem problem(MakeObservableInputWithAnalyticNuisance());
-    const std::vector<double> initial{.55, std::numeric_limits<double>::quiet_NaN(),
-        std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()};
+    const std::vector<double> initial{.55,.7,.7,.7};
     std::vector<joint::JointProgressEvent> events;
     const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
     const auto fit = joint::FitFixedNeighborComponents(problem, initial, {}, observer);
 
-    const auto analytic = std::find_if(fit.components.begin(), fit.components.end(), [](const auto & component) {
-        return component.stop_reason == "analytic-nuisance-only";
+    const auto singleton = std::find_if(fit.components.begin(), fit.components.end(), [](const auto & component) {
+        return component.atoms==std::vector<std::size_t>{3};
     });
-    ASSERT_NE(analytic, fit.components.end());
-    const auto component_index = static_cast<std::size_t>(analytic - fit.components.begin()) + 1;
-    const auto completed = std::find_if(events.begin(), events.end(), [&](const auto & event) {
-        return event.phase == joint::JointProgressPhase::ComponentCompleted
-            && event.component_index == component_index;
-    });
-    ASSERT_NE(completed, events.end());
-    EXPECT_FALSE(completed->accepted_objective);
-    EXPECT_FALSE(completed->accepted_gradient_inf_norm);
-    EXPECT_EQ(std::find_if(events.begin(), events.end(), [&](const auto & event) {
-        return event.component_index == component_index
-            && (event.phase == joint::JointProgressPhase::SearchProgress
-                || event.phase == joint::JointProgressPhase::CertificationStarted);
+    ASSERT_NE(singleton, fit.components.end());
+    EXPECT_NE(singleton->stop_reason,"analytic-nuisance-only");
+    const auto component_index = static_cast<std::size_t>(singleton - fit.components.begin()) + 1;
+    EXPECT_NE(std::find_if(events.begin(), events.end(), [&](const auto & event) {
+        return event.component_index == component_index && event.phase == joint::JointProgressPhase::SearchProgress;
     }), events.end());
+    for(const auto & component:fit.components) if(component.state)
+        EXPECT_TRUE(component.state->nuisance_amplitudes.empty());
 }
 
 TEST(JointProgressTest, QuietWorkflowSuppressesProgressOutput)
