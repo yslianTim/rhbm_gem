@@ -50,8 +50,8 @@ core::JointProblemInput MakeInput()
 core::JointProblemInput MakeObservableInput()
 {
     core::JointProblemInput input;
-    input.atom_ids = {"1", "2", "3"};
-    input.support.resize(3);
+    input.atom_ids = {"1"};
+    input.support.resize(1);
     input.selection_domain.emplace();
     input.selection_domain->target_indices = {0};
     for (int k = 0; k < 40; ++k)
@@ -62,27 +62,6 @@ core::JointProblemInput MakeObservableInput()
         input.row_ids.push_back(std::to_string(input.observations.size()));
         input.observations.push_back(2 * basis.gaussian + .2 * basis.charge);
     }
-    for (const auto [atom, square, gaussian, charge] : {
-        std::tuple{1, 4.4, .3, .1}, std::tuple{2, 5.1, .2, .15}})
-    {
-        input.support[static_cast<std::size_t>(atom)].push_back({39, square});
-        const auto basis = joint::EvaluateKernel(square, .7, 2.5);
-        input.observations[39] += gaussian * basis.gaussian + charge * basis.charge;
-    }
-    return input;
-}
-
-core::JointProblemInput MakeObservableInputWithAnalyticNuisance()
-{
-    auto input = MakeObservableInput();
-    const auto row = input.observations.size();
-    const double square = .3;
-    const auto basis = joint::EvaluateKernel(square, .7, 2.5);
-    input.atom_ids.push_back("4");
-    input.support.emplace_back();
-    input.support.back().push_back({row, square});
-    input.row_ids.push_back(std::to_string(row));
-    input.observations.push_back(.7 * basis.gaussian + .1 * basis.charge);
     return input;
 }
 
@@ -519,25 +498,25 @@ TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
 TEST(JointProgressTest, FixedNeighborObservableComponentsShareAssemblyContract)
 {
     const core::JointProblem problem(MakeObservableInput());
-    const std::vector<double> initial{.55,.7,.7};
+    const std::vector<double> initial{.55};
     const auto fit=joint::FitFixedNeighborComponents(problem,initial,{});
     EXPECT_TRUE(problem.ParameterLayout().groups.empty());
-    EXPECT_EQ(problem.ParameterLayout().full_atoms,(std::vector<std::size_t>{0,1,2}));
+    EXPECT_EQ(problem.ParameterLayout().full_atoms,(std::vector<std::size_t>{0}));
     ASSERT_EQ(fit.components.size(),1u);
     EXPECT_FALSE(fit.components.front().layout);
-    EXPECT_FALSE(fit.assembled_state);
-    EXPECT_NE(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    ASSERT_TRUE(fit.assembled_state);
+    EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
 }
 
 TEST(JointProgressTest, ObservableComponentsUseTheSameLifecycle)
 {
     const core::JointProblem problem(MakeObservableInput());
-    const std::vector<double> initial{.55,.7,.7};
+    const std::vector<double> initial{.55};
     std::vector<joint::JointProgressEvent> events;
     const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
     const auto fit = joint::FitFixedNeighborComponents(problem, initial, {}, observer);
     EXPECT_TRUE(problem.ParameterLayout().groups.empty());
-    EXPECT_FALSE(fit.assembled_state);
+    ASSERT_TRUE(fit.assembled_state);
     ExpectLifecycle(problem, fit, events, {});
     EXPECT_TRUE(std::none_of(fit.components.begin(),fit.components.end(),[](const auto & component) {
         return component.stop_reason=="analytic-nuisance-only";
@@ -707,16 +686,26 @@ TEST(JointProgressTest, CliReporterRefreshesWhenAcceptedMetricsBecomeAvailable)
     EXPECT_NE(output.find("obj=3.000e-01 | grad-inf=4.000e-01"), std::string::npos);
 }
 
-TEST(JointProgressTest, SingletonOnlyComponentUsesFullAbcSearch)
+TEST(JointProgressTest, IndependentFullAbcComponentUsesSearchLifecycle)
 {
-    const core::JointProblem problem(MakeObservableInputWithAnalyticNuisance());
-    const std::vector<double> initial{.55,.7,.7,.7};
+    auto input=MakeInput();
+    input.atom_ids.push_back("c"); input.support.emplace_back();
+    for(int k=0;k<40;++k)
+    {
+        const double square=.003*k*k;
+        const auto basis=joint::EvaluateKernel(square,.5,2.5);
+        input.support.back().push_back({input.observations.size(),square});
+        input.row_ids.push_back(std::to_string(input.observations.size()));
+        input.observations.push_back(2*basis.gaussian+.2*basis.charge);
+    }
+    const core::JointProblem problem(std::move(input));
+    const std::vector<double> initial{.55,.55,.55};
     std::vector<joint::JointProgressEvent> events;
     const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
     const auto fit = joint::FitFixedNeighborComponents(problem, initial, {}, observer);
 
     const auto singleton = std::find_if(fit.components.begin(), fit.components.end(), [](const auto & component) {
-        return component.atoms==std::vector<std::size_t>{3};
+        return component.atoms==std::vector<std::size_t>{2};
     });
     ASSERT_NE(singleton, fit.components.end());
     EXPECT_NE(singleton->stop_reason,"analytic-nuisance-only");

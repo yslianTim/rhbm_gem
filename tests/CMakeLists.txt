@@ -310,6 +310,14 @@ add_executable(joint_component_runtime tools/joint_component_runtime.cpp support
 target_link_libraries(joint_component_runtime PRIVATE joint_test_support rhbm_gem)
 add_dependencies(tests_all joint_component_runtime)
 
+add_executable(joint_halo_pruning_validation experiments/joint_halo_pruning_validation.cpp)
+target_link_libraries(joint_halo_pruning_validation PRIVATE joint_test_support rhbm_gem)
+add_dependencies(tests_all joint_halo_pruning_validation)
+add_test(NAME joint_halo_pruning_validation COMMAND $<TARGET_FILE:joint_halo_pruning_validation>)
+set_tests_properties(joint_halo_pruning_validation PROPERTIES
+    LABELS "core;domain:core;intent:algorithm;joint:halo-pruning;research"
+    TIMEOUT 900 ENVIRONMENT "OMP_NUM_THREADS=1")
+
 if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
     add_custom_target(research_tools_all)
 endif()

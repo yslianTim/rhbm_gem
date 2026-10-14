@@ -79,9 +79,10 @@ The complete concise record of those FixedNeighbor choices is in
   includes the free-design QR/SVD workspace, sparse inputs, projection
   coefficients and projected-width QR/SVD. It remains a large-component
   bottleneck; current totals are in the companion memory census. Derived Target
-  Identifiability carries linear-size FullABC/target evidence plus per-atom
-  unavailable records for observable-only nuisance contributors; it adds no
-  dense factor.
+  Identifiability carries linear-size evidence for retained FullABC atoms and
+  targets; it adds no dense factor. New excluded-halo provenance is stored
+  separately with O(E) records for E exclusions and is included in the
+  problem-construction preflight.
   An independent covariance preflight still rejects the giant shape before its
   full-rank factorization. The old 317,422,079,259-byte Target Geometry value
   was a planner estimate rejected before allocation; it is not an observed

@@ -87,8 +87,10 @@ quadratic allocations are the free-design `p_F × p_F` QR/SVD work, the
 projection-coefficient `p_F × q` matrix, and the projected-width `q × q`
 QR/SVD/right-vector work, where `p_F` is the number of free A/C columns and `q`
 is the number of width columns. Tiled sparse inputs and row tiles add further
-workspace. Derived Target Identifiability remains linear in FullABC and target
-records, plus observable-only nuisance records; it adds no dense factor.
+workspace. Derived Target Identifiability remains linear in retained FullABC
+and target records; it adds no dense factor. Excluded-halo provenance adds
+O(E) identity and reason records for E exclusions, included in problem
+construction memory preflight.
 Covariance is independent: for 112,218 parameters its preflight estimates
 418,399,065,443 bytes and rejects before factorization.
 

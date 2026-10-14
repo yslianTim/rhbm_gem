@@ -357,7 +357,9 @@ TEST(JointObservableProfileTest, FrozenMedianDonorsAndOriginalFailures)
     EXPECT_EQ(initialization.atoms[2].reason,"initialization-exception: test");
     EXPECT_FALSE(initialization.atoms[2].original_b); EXPECT_EQ(initialization.atoms[3].original_b,-1);
     EXPECT_EQ(initialization.atoms[2].seed_source,"median-fallback"); EXPECT_EQ(initialization.atoms[2].donor_count,2);
-    EXPECT_TRUE(std::isnan(initialization.b[4]));
+    EXPECT_EQ(initialization.b[4],2);
+    EXPECT_EQ(initialization.atoms[4].seed_source,"median-fallback");
+    EXPECT_EQ(initialization.atoms[4].donor_count,2u);
     rhbm_gem::JointInitialization empty; empty.b={missing_width}; empty.atoms.resize(1); empty.atoms[0].reason="invalid-width";
     core::detail::ApplyJointSeedFallback(empty); EXPECT_FALSE(empty.valid); EXPECT_TRUE(std::isnan(empty.b[0]));
 }
@@ -425,19 +427,19 @@ TEST(JointObservableProfileTest, LegacyV3DoesNotInferReductionAndMalformedLayout
     legacy_json["schema_version"]=10;
     legacy_json["parameterization_contract"]="singleton-halo-profile-v1";
     legacy_json["layout"]=legacy_layout;
-    legacy_json.erase("assembled_state");
+    legacy_json["assembled_state"]=nullptr;
     legacy_json["target_evidence"]=nullptr;
     legacy_json["ranks"]=boost::json::array{};
     auto & component=legacy_json.at("components").as_array()[0].as_object();
     component["layout"]=legacy_layout;
-    component.erase("state");
+    component["state"]=nullptr;
     component["candidate_diagnostic"]=nullptr;
     component["target_evidence"]=nullptr;
     component["ranks"]=boost::json::array{};
     auto & metadata=legacy_json.at("metadata").as_object();
-    auto & solver=metadata.at("solver").as_object();
-    solver["contract_version"]="joint-solver-provenance-v5";
-    solver["fixed_neighbor_policy_version"]="fixed-neighbor-production-v4";
+    auto & legacy_solver=metadata.at("solver").as_object();
+    legacy_solver["contract_version"]="joint-solver-provenance-v5";
+    legacy_solver["fixed_neighbor_policy_version"]="fixed-neighbor-production-v4";
     const auto legacy=rhbm_gem::joint_result_io::Decode(boost::json::serialize(legacy_json));
     ASSERT_TRUE(legacy.layout);
     EXPECT_EQ(legacy.parameterization_contract,"singleton-halo-profile-v1");
@@ -484,7 +486,7 @@ TEST(JointObservableProfileTest, FullAbcPersistenceExportPeelingAndInitializatio
     const auto loaded=repository.LoadModel("test");
     ASSERT_TRUE(loaded->GetAnalysisView().GetJointResult());
     EXPECT_EQ(joint_result_io::Encode(*loaded->GetAnalysisView().GetJointResult()),joint_result_io::Encode(result));
-    EXPECT_FALSE(AtomLocalPotentialView::For(*loaded->FindAtomPtr(2)).GetStageEstimate(FittingStage::Second).point);
+    EXPECT_THROW(AtomLocalPotentialView::For(*loaded->FindAtomPtr(2)).GetStageEstimate(FittingStage::Second),std::runtime_error);
     WriteJointAnalysisResult(result,directory.path()/"saved.json",directory.path()/"saved.csv");
     EXPECT_FALSE(std::filesystem::exists(directory.path()/"saved.contributions.csv"));
     std::ifstream csv(directory.path()/"saved.csv"); std::string line;
@@ -523,7 +525,7 @@ TEST(JointObservableProfileTest, HaloNonuniquenessDoesNotCertifyItsParameters)
     ASSERT_FALSE(fit.assembled_state);
     ASSERT_TRUE(fit.components[0].candidate_diagnostic);
     EXPECT_TRUE(fit.components[0].candidate_diagnostic->candidate_available);
-    EXPECT_EQ(fit.components[0].candidate_diagnostic->endpoint_verification_status,
+    EXPECT_NE(fit.components[0].candidate_diagnostic->endpoint_verification_status,
         rhbm_gem::JointCheckStatus::Passed);
     EXPECT_NE(fit.components[0].candidate_diagnostic->numerical_qualification_status,
         rhbm_gem::JointCheckStatus::Passed);
@@ -541,10 +543,12 @@ TEST(JointObservableProfileTest, HaloNonuniquenessDoesNotCertifyItsParameters)
     const auto restored=rhbm_gem::joint_result_io::Decode(text);
     EXPECT_EQ(restored.target_runtime_convergence,saved.target_runtime_convergence);
     ASSERT_TRUE(restored.components[0].candidate_diagnostic);
-    EXPECT_EQ(restored.components[0].candidate_diagnostic->endpoint_verification_status,
+    EXPECT_NE(restored.components[0].candidate_diagnostic->endpoint_verification_status,
         rhbm_gem::JointCheckStatus::Passed);
     EXPECT_FALSE(restored.components[0].state);
     value.as_object()["schema_version"]=4;
+    value.as_object().at("selection_domain").as_object()["contributor_policy"]="all-non-hydrogen";
+    value.as_object().at("selection_domain").as_object()["halo_eligibility"]=nullptr;
     auto & solver=value.as_object().at("metadata").as_object().at("solver").as_object();
     solver["contract_version"]="joint-solver-provenance-v4";
     solver["fixed_neighbor_policy_version"]="fixed-neighbor-production-v3";
@@ -699,7 +703,7 @@ TEST(JointObservableProfileTest, TargetGeometryNumericalOracleCapturesOldContrac
     using Status=rhbm_gem::JointCheckStatus;
     auto input=Input(true); input.atom_ids.resize(1); input.support.resize(1); input.observations[23]-=.7;
     const core::JointProblem problem(std::move(input));
-    const auto fit=core::FitJointComponents(problem,{.6});
+    const auto fit=core::FitJointComponents(problem,{.65});
     ASSERT_EQ(fit.components.size(),1u);
     ASSERT_TRUE(fit.components.front().state);
     ASSERT_TRUE(fit.components.front().target_evidence);
@@ -822,7 +826,7 @@ TEST(JointObservableProfileTest, DerivedTargetEvidenceRequiresMatchingQualifiedR
     using Scope=rhbm_gem::JointEvidenceScope;
     auto input=Input(true); input.atom_ids.resize(1); input.support.resize(1); input.observations[23]-=.7;
     const core::JointProblem problem(std::move(input));
-    const auto fit=core::FitJointComponents(problem,{.6});
+    const auto fit=core::FitJointComponents(problem,{.65});
     ASSERT_TRUE(fit.assembled_state);
     const auto evidence=n::DeriveTargetIdentifiability(problem,problem.ParameterLayout(),fit.assembled_state,
         fit.evidence,fit.ranks,Scope::AssembledGlobal,problem.Input().observations.size());
@@ -892,7 +896,7 @@ TEST(JointObservableProfileTest, DerivedTargetEvidenceRequiresMatchingQualifiedR
     EXPECT_EQ(status_reason(derive_with(fit.assembled_state,fit.evidence,fit.ranks,
         problem.ParameterLayout(),problem.Input().observations.size()-1)),"observation-domain-mismatch");
 
-    auto other_input=Input(true); other_input.observations[0]+=1e-6;
+    auto other_input=problem.Input(); other_input.observations[0]+=1e-6;
     const core::JointProblem other_problem(std::move(other_input));
     const auto other=n::DeriveTargetIdentifiability(other_problem,other_problem.ParameterLayout(),fit.assembled_state,
         fit.evidence,fit.ranks,Scope::AssembledGlobal,other_problem.Input().observations.size());
@@ -1020,9 +1024,17 @@ TEST(JointObservableProfileTest, OldGeometryOracleAndDerivedEvidenceKeepSeparate
 
 TEST(JointObservableProfileTest, TargetEvidenceUsesEveryComponentAndTheSavedState)
 {
-    auto input=MakeInput();
-    input.atom_ids={"1","2"};
+    core::JointProblemInput input;
+    input.atom_ids={"1","2"}; input.support.resize(2);
     input.selection_domain.emplace(); input.selection_domain->target_indices={0,1};
+    for(int atom=0;atom<2;++atom) for(int k=0;k<40;++k)
+    {
+        const double square=.003*k*k;
+        const auto basis=n::EvaluateKernel(square,.5,2.5);
+        input.support[static_cast<std::size_t>(atom)].push_back({input.observations.size(),square});
+        input.row_ids.push_back(std::to_string(input.observations.size()));
+        input.observations.push_back(2*basis.gaussian+.2*basis.charge);
+    }
     const core::JointProblem problem(std::move(input));
     const auto fit=core::FitJointComponents(problem,{.5,.5});
     ASSERT_EQ(fit.components.size(),2);

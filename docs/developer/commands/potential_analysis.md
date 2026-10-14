@@ -231,9 +231,11 @@ The solver contracts remain `guarded-joint-ls-v1`,
 Both estimators use the selected non-hydrogen atoms as targets. Sampling is
 always Fibonacci deterministic, and PotentialAnalysis always enables
 failed-only second-stage refinement. Joint Components uses one worker; `-j`
-values greater than one produce a notice. Its complete contributor closure may
-include unselected chains, while `selection_domain.target_indices` and `row_ids`
-continue to describe only the selected targets and their observations.
+values greater than one produce a notice. Selected targets fix the observation
+rows. Unselected non-hydrogen halo candidates enter Joint fitting only with at
+least three support rows and three exact distinct squared distances. Pruning
+keeps selected observation rows fixed and can change fitted target values
+because excluded signal remains in the observations.
 
 ```cpp
 rhbm_gem::core::PotentialAnalysisRequest request;
@@ -272,8 +274,10 @@ Invalid input/problem construction and persistence errors fail the command.
 `NotRun` offline evidence never implies passing certification.
 
 `result_dump --printer joint` writes `joint_result_<sanitized-key>.json` and
-`joint_atoms_<sanitized-key>.csv`, plus `joint_atoms_<sanitized-key>.contributions.csv`.
-JSON schema 10 includes metadata, identities, parameter layout, nuisance amplitudes, seed provenance,
+`joint_atoms_<sanitized-key>.csv`. It writes the sibling
+`joint_atoms_<sanitized-key>.contributions.csv` only for a historical result
+with nuisance groups. JSON schema 11 includes metadata, identities, contributor
+selection policy and exclusion provenance, parameterization, seed provenance,
 row mappings/mask, initial values, trusted states, optional parameter-only
 candidate diagnostics, objectives, cost counters, checks, ranks and captured
 convergence. CSV has one row per fitted contributor (including unavailable targets):
@@ -296,7 +300,7 @@ Save upgrades and writes in one transaction, rolling back on failure. Older
 versions, including v16, remain unchanged on rejection. A saved key holds one joint outcome;
 saving a model without a joint result over that key removes the previous outcome.
 
-### Provenance and map units (joint JSON schemas 3 through 10)
+### Provenance and map units (joint JSON schemas 3 through 11)
 
 `metadata.model_sha256` and `map_sha256` fingerprint the original file bytes,
 checked before and after loading. Paths remain descriptive, not content identity.
@@ -346,19 +350,20 @@ the objective only and must not be used for this conversion. CSV retains fitted
 coefficients; its appended `SelectionRole` distinguishes target, halo and not-recorded; keep its companion JSON for units and
 provenance. No conversion is performed during export.
 
-Production joint JSON schemas 3 through 10 are accepted. Earlier joint JSON is rejected
+Production joint JSON schemas 3 through 11 are accepted. Earlier joint JSON is rejected
 with a request to regenerate the outcome, without migration or database writes.
-New Joint result JSON uses schema 10. Schemas 3 through 9 preserve their saved
+New Joint result JSON uses schema 11. Schemas 3 through 10 preserve their saved
 evidence and convergence statuses. Schema 10 stores `target-estimability-v4`
 and rank-context identities without computed null-space leakage or full-Jacobian
-column scales. In particular, failed historical local or
+column scales. Schema 11 adds the FullABC halo pruning policy and exclusion
+records. In particular, failed historical local or
 target-local correction checks remain failed on load; the reader does not
-rerun those solves. Schemas 8 through 10 record the correction-free numerical
+rerun those solves. Schemas 8 through 11 record the correction-free numerical
 contract and store endpoint-verification and numerical-qualification
 diagnostics separately. Legacy reference agreement is not mapped to conditional KKT, and
 no reference status is mapped to independent replay.
 See the [target contract](../joint-target-estimability.md)
-for target convergence, halo representative availability and covariance. SQLite v19 additionally stores neutral
+for target convergence, retained halo availability and covariance. SQLite v19 additionally stores neutral
 stages, uncertainty, posterior evidence and sample geometry in `model_stage_result`.
 Legacy sample BLOBs have unavailable geometry; old Joint snapshots do not gain
 recomputed uncertainty, peeling or posterior.
@@ -368,19 +373,25 @@ Consumers must rebuild against the updated public C++ value types.
 
 `selection_domain` records `contract: fixed-selected-voxel-closure-v1`, ordered
 unique `target_indices` into `atom_ids`, `observation_radius: 2.5`,
-`support_radius: 2.5`, and `contributor_policy: all-non-hydrogen`. All other
-contributors are halo atoms. `row_ids` are the fixed target observations. A
-hand-built input without selection metadata retains null; no roles are inferred.
-CSV `SelectionRole` is `target`, `halo`, or `not-recorded`. All contributor states
-and diagnostics are saved, regardless of role or convergence.
+`support_radius: 2.5`, and `contributor_policy:
+fullabc-eligible-halo-pruning-v1`. Its `halo_eligibility` records the minimum
+observation and distinct-distance counts, candidate and retained halo totals,
+and excluded atom IDs with support counts and reasons. Distinct squared
+distances use exact equality with no tolerance. `row_ids` remain the fixed
+selected-target observations, including rows with no retained contributor.
+Selected targets are never removed by halo eligibility. A hand-built input with
+the legacy `all-non-hydrogen` selection contract remains readable; an input
+without selection metadata retains null and no roles are inferred. CSV
+`SelectionRole` is `target`, `halo`, or `not-recorded`; excluded halos appear in
+provenance and are not failed fitted atoms.
 
 `initialization.data_scope` is `caller-provided-widths` or
 `contributor-local-sampling-may-read-outside-target-domain`. Each initialization
 atom retains its reason; a failed component retains an unavailable state while
-independent valid components can run. `initialization.valid` means all required FullABC
-initial widths are valid. Reduced halos are marked `not-required-observable-contribution`;
-invalid FullABC seeds may use the fixed donor median while retaining the original
-width and failure reason. See the [observable-halo contract](../joint-observable-halo.md). `costs.construction_seconds` records builder time;
+independent valid components can run. `initialization.valid` means all required
+retained FullABC initial widths are valid. Invalid seeds may use the fixed donor
+median while retaining the original width and failure reason. See the
+[halo eligibility contract](../joint-observable-halo.md). `costs.construction_seconds` records builder time;
 initializer time includes model-copy setup. Neither storage nor export recomputes
 roles, initialization or numerical evidence. Original selection and halo legacy
 analysis are preserved; successful target first-stage data can be updated.

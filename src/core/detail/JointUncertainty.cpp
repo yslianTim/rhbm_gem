@@ -14,7 +14,7 @@ namespace {
 StageUncertainty ComponentCovariance(const JointAnalysisComponent & component,
     const joint_component::ComponentProblemView & view,const joint_component::ComponentView & parent_view,
     const std::vector<bool> & requested,
-    std::map<std::size_t, Eigen::Matrix3d> & blocks,std::size_t original_rows,double observation_scale,
+    std::map<std::size_t, Eigen::Matrix3d> & blocks,std::size_t original_rows,
     joint_component::VectorRef observations)
 {
     StageUncertainty out;
@@ -113,18 +113,18 @@ StageUncertainty ComponentCovariance(const JointAnalysisComponent & component,
 StageUncertainty TargetUncertainty(const JointAnalysisComponent & component,
     const joint_component::ComponentProblemView & view,const joint_component::ComponentView & parent_view,
     const std::vector<bool> & requested,std::map<std::size_t,Eigen::Matrix3d> & blocks,
-    std::size_t original_rows,double observation_scale,joint_component::VectorRef observations)
+    std::size_t original_rows,joint_component::VectorRef observations)
 {
-    return ComponentCovariance(component,view,parent_view,requested,blocks,original_rows,observation_scale,observations);
+    return ComponentCovariance(component,view,parent_view,requested,blocks,original_rows,observations);
 }
 StageUncertainty ComponentUncertainty(const JointAnalysisComponent & component,
     const joint_component::ComponentProblemView & view,const joint_component::ComponentView & parent_view,
     const std::vector<bool> & requested,std::map<std::size_t,Eigen::Matrix3d> & blocks,
-    std::size_t original_rows,double observation_scale,joint_component::VectorRef observations)
+    std::size_t original_rows,joint_component::VectorRef observations)
 {
     if(component.target_evidence)
-        return TargetUncertainty(component,view,parent_view,requested,blocks,original_rows,observation_scale,observations);
-    return ComponentCovariance(component,view,parent_view,requested,blocks,original_rows,observation_scale,observations);
+        return TargetUncertainty(component,view,parent_view,requested,blocks,original_rows,observations);
+    return ComponentCovariance(component,view,parent_view,requested,blocks,original_rows,observations);
 }
 }
 
@@ -154,8 +154,7 @@ std::map<int, StageUncertainty> ComputeJointUncertainty(const JointProblem & pro
         }
         if(layout.full_atoms.empty()) continue;
         const auto view=joint_component::MakeComponentProblemView(layout,parent_view);
-        const auto status = ComponentUncertainty(component,view,parent_view,requested,blocks,parent_view.rows.size(),
-            result.observation_scale,data.y);
+        const auto status = ComponentUncertainty(component,view,parent_view,requested,blocks,parent_view.rows.size(),data.y);
         for (std::size_t a = 0; a < view.local_to_parent_atoms.size(); ++a)
         {
             const auto atom=static_cast<std::size_t>(view.local_to_parent_atoms[a]);

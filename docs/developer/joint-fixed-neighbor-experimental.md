@@ -10,6 +10,17 @@ from Git history; they are not part of the current production surface.
 `--estimator joint-components`; there is no separate global search-route
 option or automatic routing layer.
 
+Before FixedNeighbor builds components, selected non-hydrogen atoms fix the
+observation rows. Unselected halo candidates enter the model only when their
+support has at least three rows and at least three exactly distinct squared
+distances. All retained atoms use FullABC. The rows and observations stay fixed
+after pruning, and components are rebuilt from retained supports. Excluded
+signal remains in the residual, so this contributor rule changes the additive
+model and can shift target estimates. Selection eligibility and the full
+numerical qualification below are separate gates. See the
+[halo eligibility guide](joint-observable-halo.md) and the
+[target-recovery study](../research/joint-halo-pruning-validation.md).
+
 | Policy | Current value |
 | --- | --- |
 | Outer core | 12 atoms, disjoint mutable blocks |

@@ -520,9 +520,9 @@ std::optional<JointSelectionDomain> ReadSelectionDomain(const j::value & value)
         provenance.minimum_distinct_radial_information=Read<std::size_t>(item,"minimum_distinct_radial_information");
         provenance.candidate_halos=Read<std::size_t>(item,"candidate_halos");
         provenance.retained_halos=Read<std::size_t>(item,"retained_halos");
-        for(const auto & value:item.at("excluded_halos").as_array())
+        for(const auto & excluded_value:item.at("excluded_halos").as_array())
         {
-            const auto & excluded=value.as_object();
+            const auto & excluded=excluded_value.as_object();
             provenance.excluded_halos.push_back({Read<std::string>(excluded,"atom_id"),
                 Read<std::size_t>(excluded,"support_rows"),Read<std::size_t>(excluded,"distinct_radial_distances"),
                 Read<std::string>(excluded,"reason")});

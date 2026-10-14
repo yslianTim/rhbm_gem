@@ -37,10 +37,11 @@ boundary.
 Missing evidence and rank deficiency do not prove that every individual target
 is unidentifiable. They produce `Unavailable` target evidence, while the
 component's existing `Failed` rank qualification remains intact. No selection
-metadata keeps `TargetRuntimeConvergence` at `NotRun`. Observable-contribution-
-only nuisance groups have no independent A/C/B coordinates and remain
-`Unavailable` with reason `observable-contribution-only`; they are distinct
-from FullABC halo atoms.
+metadata keeps `TargetRuntimeConvergence` at `NotRun`. Current production
+problems contain selected targets and retained FullABC halos only. Excluded
+halos have no contributor index, per-atom evidence, point estimate, or
+covariance. The eligibility gate does not imply target accuracy under the
+changed additive model.
 
 Per-atom evidence reports `Passed` with source
 `derived-from-component-identifiability`. Since no null-space calculation is
@@ -67,10 +68,9 @@ and prediction/objective consistency. Search completion is reported
 separately. Target evidence assesses the saved state; it does not reprofile or
 replace it.
 
-For an exact single-component match, the already-qualified component evidence
-is reused only when row identity, parameter layout, saved state, and rank context
-match the assembled result. Multiple components retain their local and global
-evidence scopes; one component's ranks cannot certify another component.
+Assembled target evidence is derived from the assembled state and its global
+rank context. Component-local evidence cannot certify a different assembled
+state or row domain.
 
 ## Covariance and point estimates
 
@@ -84,24 +84,22 @@ covariance. This covariance calculation is not part of target
 identifiability. An unavailable covariance leaves an available point estimate
 intact, while covariance-dependent group evidence is `Unavailable`.
 
-Observable-contribution-only nuisance atoms have no complete point estimate or
-covariance. A FullABC halo point is available when its derived per-atom
+A retained FullABC halo point is available when its derived per-atom
 identifiability evidence passes; its covariance still follows the independent
 covariance gates.
 
 ## Persistence and limits
 
-Joint JSON schema 10 stores new `target-estimability-v4` evidence and the rank
-context identity. It stores no fabricated null-space leakage, full-Jacobian
-singular values, or column scales. Schemas 3 through 9 remain readable;
+Joint JSON schema 11 stores `target-estimability-v4` evidence, rank context
+identity, and halo-pruning provenance. It stores no fabricated null-space
+leakage, full-Jacobian singular values, or column scales. Schemas 3 through 10 remain readable;
 historical v1, v2 and v3 evidence keeps its saved meaning and statuses. Loading
 never converts missing or failed historical rank evidence into a pass or
 recomputes runtime or covariance status.
 
-The rank derivation core is `O(P + T)` for `P` FullABC atoms and `T` targets.
-The persisted per-atom evidence also records each observable-contribution-only
-nuisance atom as `Unavailable`; if there are `U` such atoms, total additional
-evidence storage is `O(P + T + U)`. Resident input and mapping storage still
+The rank derivation core is `O(P + T)` for `P` retained FullABC atoms and `T`
+targets. Exclusion provenance adds `O(E)` records for `E` excluded halos and is
+included in problem memory preflight. Resident input and mapping storage still
 contribute to its estimate. Projected-width preparation is the remaining
 large-component rank bottleneck: it includes the free-design QR/SVD, projection
 coefficients and projected-width QR/SVD, and can be rejected by its 3.2 GB
@@ -109,8 +107,8 @@ planning-budget preflight. The 4 GB hard limit is a resource ceiling, not proof
 that full qualification fits. A target preflight pass does not imply that the
 rank stage ran or that target evidence passed.
 
-Observable-profile and partial-selection tests cover target selectors,
-FullABC halo mapping, nuisance-only groups, rank-context mismatches, active
-boundaries, missing and deficient rank evidence, threshold sensitivity,
-covariance, and historical schema compatibility. Synthetic tests do not
+Partial-selection and target-evidence tests cover target selectors, retained
+FullABC halo mapping, rank-context mismatches, active boundaries, missing and
+deficient rank evidence, threshold sensitivity, covariance, and historical
+schema compatibility. Synthetic tests do not
 establish qualification on a physical cryo-EM model or map.

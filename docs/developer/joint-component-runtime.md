@@ -137,25 +137,18 @@ rebuilds the state-dependent `eta`, `beta`, effective response and numerical
 design; it does not rebuild those structural views. No numeric factor, active
 set or coefficient solution is carried across sweeps.
 
-`JointProblem::ParameterLayout()` is the parameterization authority.
-`OrchestrateFixedNeighborComponents()` projects that layout onto each component
-and owns component traversal, width-seed validation, search, independent
-certification and component progress. The presence of nuisance groups selects
-observable assembly; callers do not pass a separate mode flag. FullABC results
-keep `component.layout` absent, while observable results retain each projected
-layout for reconstruction. The orchestration has no assembly callback. FullABC
-assembly consumes the certified public component states and performs global
-reconstruction and consistency assessment.
-Observable assembly runs after component traversal: it reconstructs each
-component's full-atom contributions, analytically profiles each singleton-halo
-nuisance amplitude as `lambda = observation - current prediction`, updates the
-available-row mask, and checks full prediction/objective consistency. Both paths
-emit the established assembly progress phases once assembly begins. Target
-evidence is added once after assembly finishes.
+`JointProblem::ParameterLayout()` records every retained contributor as a
+FullABC atom. `OrchestrateFixedNeighborComponents()` projects that layout onto
+each post-pruning component and owns component traversal, width-seed validation,
+search, independent certification and component progress. Current production
+problems have no nuisance groups or alternate assembly route. FullABC assembly
+consumes the certified public component states and performs global
+reconstruction and consistency assessment. Historical layouts remain in the
+JSON decoder and exporter only.
 
-`FitFixedNeighborComponentsImpl()` owns the Eigen thread scope, solver
-provenance and FullABC/observable dispatch; `FitFixedNeighborComponents()` adds
-target evidence once after implementation and assembly finish. Public
+`FitFixedNeighborComponentsImpl()` owns the Eigen thread scope and solver
+provenance; `FitFixedNeighborComponents()` adds target evidence after
+implementation and assembly finish. Public
 `FitJointComponents()` and `EstimateJointComponents()` keep their existing
 contracts and do not expose assembly details to callers.
 
@@ -197,23 +190,37 @@ floating-point trajectories within the fixed endpoint contract.
 The Map/Model builder uses selected non-hydrogen atoms as targets S. Their
 2.5 Angstrom spheres fix the unique observation rows V. Selected targets remain
 in the target mapping even if clipping leaves one with no observed support; no
-rows are invented for it. The builder intersects every eligible non-hydrogen
-atom's support with V, retaining every intersecting unselected atom as a halo
-contributor. Contributors follow model order. Halo never adds rows or
-recursively adds its neighbors. Atom centers outside the map are eligible if
-their support intersects V. Empty non-hydrogen selection is rejected. The
+rows are invented for it. Each unselected non-hydrogen atom intersecting V is a
+halo candidate. A candidate is retained only when it has at least three support
+rows and at least three exact distinct squared distances. This is the minimum
+necessary FullABC gate, not a full-component identifiability certificate.
+Selected targets bypass this gate. Pruning never changes V, its row IDs,
+observations, or observation scale; rows with no retained contributor stay in
+the objective as constant residuals. Atom centers outside the map can qualify
+if their support intersects V. Empty non-hydrogen selection is rejected. The
 existing `sphere-fma-v1` arithmetic and negative/zero observations are retained.
-Structural partition runs after closure; a shared or bridge halo has one
-parameter vector and can connect separate target regions.
+Structural partition runs after pruning, so only retained halos can couple
+components or act as bridges.
+
+Pruning changes the additive model: the fitted prediction sums selected targets
+and eligible retained halos. Excluded halo signal remains in the observations
+and can affect residuals and selected-target estimates. The estimator adds no
+background term or omitted-signal correction.
 
 `JointProblemInput.selection_domain` is optional for hand-built frozen inputs
 (null means selection not recorded). The Map/Model builder always records
 `fixed-selected-voxel-closure-v1`, ordered unique `target_indices`, both radii
-(2.5 Angstrom), and `all-non-hydrogen` contributor eligibility. Halo indices are
-the complement within the problem's atom identities. This establishes completeness
+(2.5 Angstrom), the `fullabc-eligible-halo-pruning-v1` policy, and eligibility
+provenance. Distinct squared distances use exact equality; adjacent
+representable values remain distinct, with no tolerance. Provenance records the
+minimum counts, candidate and retained halo totals, and each excluded atom ID,
+support count, distinct-distance count, and reason. Retained halo indices are
+the non-target contributors in the final problem. This establishes completeness
 only for the supplied catalogue and truncated support model. The saved outcome
-retains this domain and atom ordering; stage and CSV metadata report target,
-halo, or not-recorded roles. No role is inferred when selection was not recorded.
+retains the policy and atom ordering; stage and CSV metadata report target and
+retained-contributor roles. Excluded halos do not appear as failed fitted atoms.
+Hand-built inputs may keep the legacy `all-non-hydrogen` selection contract;
+inputs with no selection metadata retain their explicit FullABC semantics.
 
 `EstimateJointComponents` and the production workflow share
 `PrepareJointWidthInitialization()`: it samples only FullABC contributors with
@@ -284,11 +291,13 @@ numerical core.
 
 Full parameter identifiability is not the same as optimization stationarity: a
 stationary point may still have rank-deficient or unavailable parameter
-evidence. The current solver-provenance contract is v5 and the FixedNeighbor
-policy contract is v4. Target evidence uses `target-estimability-v4`; JSON
-schema 10 records its active-boundary semantics. Schemas 3 through 9 remain readable; decoding retains their saved
-evidence and convergence statuses, including failed historical correction
-checks, without rerunning those solves.
+evidence. Eligibility is a model-selection rule; the existing full numerical
+qualification remains required after pruning. The current solver-provenance
+contract is v5 and the FixedNeighbor policy contract is v4. Target evidence
+uses `target-estimability-v4`; JSON schema 11 records its active-boundary
+semantics and halo-pruning provenance. Schemas 3 through 10 remain readable;
+decoding retains their saved evidence and convergence statuses, including
+historical singleton-halo parameterization, without rerunning those solves.
 
 Global convergence additionally requires every component to be numerically
 qualified, complete assembly, global evidence and assembled mapping plus
@@ -387,8 +396,9 @@ preparation. With active amplitudes that factor certifies only the free face;
 full Design Rank is unavailable unless the retained structural obstruction
 proves deficiency. Derived target identifiability consumes only valid
 full-design and projected-width records and does not build a target Jacobian,
-QR/SVD factor or null space. Its memory is linear in FullABC and target
-records, plus per-atom records for observable-only nuisance contributors. The
+QR/SVD factor or null space. Its memory is linear in retained FullABC and target
+records. Excluded-halo provenance is O(E) in the number of exclusions and is
+included in problem memory preflight. The
 serial synthetic census rejects the large rank stage, while the derived-target
 preflight itself passes; no trusted rank evidence exists in that case. No
 physical map/model search has been measured.
@@ -527,10 +537,10 @@ remove it, while `ClearTransientFitStates()` does not.
 
 ### Saved provenance and units
 
-Production outcome JSON writes schema 10 and retains schema 3 through 9 reading
-(distinct from fixture and offline report schemas). The [observable-halo contract](joint-observable-halo.md)
-describes parameter layouts, nuisance contributions and seed provenance. See the
-[metadata contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schemas-3-through-10).
+Production outcome JSON writes schema 11 and retains schema 3 through 10 reading
+(distinct from fixture and offline report schemas). The [halo eligibility contract](joint-observable-halo.md)
+describes selection, model change and provenance. See the
+[metadata contract](commands/potential_analysis.md#provenance-and-map-units-joint-json-schemas-3-through-11).
 `JointAnalysisMetadata` contains optional `JointMapNormalization`, input SHA-256
 values, `JointSoftwareProvenance` and optional `JointSolverProvenance`.
 `JointSolverProvenance` records the current FixedNeighbor estimator and
@@ -566,8 +576,8 @@ The command's default estimator remains two-stage. Joint LS is opt-in and its
 runtime checks do not establish an offline regular certificate.
 
 Permanent [partial-selection tests](../../tests/core/joint_component/PartialSelection_test.cpp)
-cover the fixed observation domain, nonrecursive halo closure, bridge
-parameterization, unavailable target states, and the numerical policy.
+cover the fixed observation domain, pre-construction halo pruning, recomputed
+bridge topology, unavailable target states, and the numerical policy.
 
 ## Joint validation tiers
 

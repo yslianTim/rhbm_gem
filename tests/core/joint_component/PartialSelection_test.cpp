@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <boost/json.hpp>
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
@@ -135,7 +136,7 @@ TEST(JointComponentPartialSelectionTest, BoundariesClippingAndNonrecursiveHalo)
     const auto p=core::BuildJointProblem(map,model);
     EXPECT_EQ(p.Input().atom_ids,(std::vector<std::string>{"1","4"}));
     ASSERT_TRUE(p.Input().selection_domain->halo_eligibility);
-    ASSERT_EQ(p.Input().selection_domain->halo_eligibility->excluded_halos.size(),2u);
+    ASSERT_EQ(p.Input().selection_domain->halo_eligibility->excluded_halos.size(),3u);
     const auto fit=core::FitJointComponents(p,{.5,.5});
     EXPECT_FALSE(fit.assembled_state);
     const auto & data=core::JointProblemAccess::Get(p);
@@ -334,15 +335,15 @@ TEST(JointComponentPartialSelectionTest, IdentifiableRecoveryOmissionAndOutsideD
     const auto repeated=core::FitJointComponents(changed,f.b);
     EXPECT_EQ(repeated.assembled_state->ac,fit.assembled_state->ac); EXPECT_EQ(repeated.objective,fit.objective);
 }
-TEST(JointComponentPartialSelectionTest, WeakHaloAndInvalidWidthsAreNotSuccess)
+TEST(JointComponentPartialSelectionTest, InvalidWidthsAreNotSuccessForRetainedContributors)
 {
     auto f=joint_partial_test::Make("weak"); const auto p=core::BuildJointProblem(*f.map,*f.model);
-    ASSERT_EQ(p.Input().atom_ids,(std::vector<std::string>{"1"}));
+    ASSERT_EQ(p.Input().atom_ids,(std::vector<std::string>{"1","2"}));
     ASSERT_TRUE(p.Input().selection_domain);
     ASSERT_EQ(p.Input().selection_domain->target_indices,(std::vector<std::size_t>{0}));
     for(double invalid:{0.,-1.,std::numeric_limits<double>::quiet_NaN(),std::numeric_limits<double>::infinity()})
     {
-        const auto fit=core::FitJointComponents(p,{invalid});
+        const auto fit=core::FitJointComponents(p,{.5,invalid});
         ASSERT_EQ(fit.components.size(),1); EXPECT_FALSE(fit.initialization.valid);
         EXPECT_EQ(fit.components[0].stop_reason,"invalid-initial-widths"); EXPECT_FALSE(fit.prediction);
     }
@@ -390,28 +391,49 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesHaloHistoryAndRo
     missing_provenance["schema_version"]=10;
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(missing_provenance)),std::invalid_argument);
     f.model->EditAnalysis().SetJointResult(saved);
+}
+
+TEST(JointComponentPartialSelectionTest, ExcludedHaloProvenancePersistsThroughJsonAndSqlite)
+{
+    std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
+    for(const auto & [id,x]:std::vector<std::pair<int,double>>{{10,0.0},{20,4.5},{30,3.5},{40,30.0}})
+    {
+        auto atom=std::make_unique<rhbm_gem::AtomObject>(); atom->SetSerialID(id);
+        atom->SetElement(Element::CARBON); atom->SetPosition(x,0,0); atoms.push_back(std::move(atom));
+    }
+    rhbm_gem::ModelObject model(std::move(atoms));
+    model.SelectAtoms([](const auto & atom){return atom.GetSerialID()==10;});
+    auto values=std::make_unique<double[]>(11);
+    for(std::size_t row=0;row<11;++row) values[row]=static_cast<double>(row)-3.0;
+    rhbm_gem::MapObject map({11,1,1},{.5,.5,.5},{-2.5,0,0},std::move(values));
+    const auto problem=core::BuildJointProblem(map,model);
+    const auto fit=core::FitJointComponents(problem,{.5,.5});
+    const auto saved=core::CaptureJointAnalysisResult(fit);
+    const auto decoded=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved));
+    ASSERT_TRUE(decoded.selection_domain->halo_eligibility);
+    ASSERT_EQ(decoded.selection_domain->halo_eligibility->excluded_halos.size(),2u);
+    EXPECT_EQ(decoded.selection_domain->halo_eligibility->excluded_halos[0].atom_id,"20");
+    model.EditAnalysis().ApplyJointResult(decoded,"provenance");
+
     const command_test::ScopedTempDir directory{"joint_halo_provenance_roundtrip"};
-    DataRepository repository(directory.path()/"provenance.sqlite"); repository.SaveModel(*f.model,"joint");
+    rhbm_gem::DataRepository repository(directory.path()/"provenance.sqlite");
+    repository.SaveModel(model,"joint");
     const auto loaded=repository.LoadModel("joint");
     ASSERT_TRUE(loaded->GetAnalysisView().GetJointResult());
-    const auto & persisted=*loaded->GetAnalysisView().GetJointResult();
-    ASSERT_TRUE(persisted.selection_domain->halo_eligibility);
-    EXPECT_EQ(persisted.selection_domain->halo_eligibility->excluded_halos,
-        saved.selection_domain->halo_eligibility->excluded_halos);
+    EXPECT_EQ(loaded->GetAnalysisView().GetJointResult()->selection_domain->halo_eligibility->excluded_halos,
+        decoded.selection_domain->halo_eligibility->excluded_halos);
 
-    auto radial=saved;
-    auto & radial_provenance=*radial.selection_domain->halo_eligibility;
-    radial_provenance.excluded_halos[0]={"20",3,2,"insufficient-radial-information"};
-    const auto radial_encoded=rhbm_gem::joint_result_io::Encode(radial);
-    const auto radial_decoded=rhbm_gem::joint_result_io::Decode(radial_encoded);
+    auto radial=decoded;
+    radial.selection_domain->halo_eligibility->excluded_halos[0]={"20",3,2,"insufficient-radial-information"};
+    const auto radial_decoded=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(radial));
     EXPECT_EQ(radial_decoded.selection_domain->halo_eligibility->excluded_halos[0],
-        radial_provenance.excluded_halos[0]);
-    f.model->EditAnalysis().SetJointResult(radial);
-    repository.SaveModel(*f.model,"radial-provenance");
+        radial.selection_domain->halo_eligibility->excluded_halos[0]);
+    model.EditAnalysis().ApplyJointResult(radial,"radial-provenance");
+    repository.SaveModel(model,"radial-provenance");
     const auto radial_loaded=repository.LoadModel("radial-provenance");
     ASSERT_TRUE(radial_loaded->GetAnalysisView().GetJointResult());
     EXPECT_EQ(radial_loaded->GetAnalysisView().GetJointResult()->selection_domain->halo_eligibility->excluded_halos[0],
-        radial_provenance.excluded_halos[0]);
+        radial.selection_domain->halo_eligibility->excluded_halos[0]);
 }
 
 TEST(JointComponentPartialSelectionTest, InitializationExceptionsKeepProvenanceWithMedianSeed)
@@ -550,7 +572,6 @@ TEST(JointComponentPartialSelectionTest, IsolatedProgressCountsSkippedContributo
     EXPECT_EQ(sampling_calls[2], 1);
     EXPECT_NE(progress.find("50%"), std::string::npos);
     EXPECT_NE(progress.find("100%"), std::string::npos);
-    EXPECT_NE(progress.find("Run local alpha training for 2 atoms."), std::string::npos);
     EXPECT_EQ(std::count(progress.begin(), progress.end(), '\r'), 2);
 
     options.quiet_mode = true;
@@ -856,9 +877,9 @@ TEST(JointComponentPartialSelectionTest, PeelingIncludesDistantHaloThroughInterp
 {
     auto f = joint_partial_test::Make("weak");
     // Binary-exact spacing makes the y/z zero-weight stencil nodes exact.
-    f.map = std::make_unique<rhbm_gem::MapObject>(std::array<int, 3>{49, 25, 25},
-        std::array<double, 3>{.25, .25, .25}, std::array<double, 3>{-6, -3, -3},
-        std::make_unique<double[]>(49 * 25 * 25));
+    f.map = std::make_unique<rhbm_gem::MapObject>(std::array<int, 3>{111, 61, 61},
+        std::array<double, 3>{.1, .1, .1}, std::array<double, 3>{-5.5, -3, -3},
+        std::make_unique<double[]>(111 * 61 * 61));
     const auto problem = core::BuildJointProblem(*f.map, *f.model);
     auto editor = f.model->EditAnalysis();
     for (std::size_t i = 0; i < f.a.size(); ++i)

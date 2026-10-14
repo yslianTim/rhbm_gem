@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/HaloEligibility.hpp"
+#include "core/detail/joint_component/Numerics.hpp"
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -62,6 +63,16 @@ TEST(JointHaloEligibilityTest, RejectsThreeRowsWithOneOrTwoExactDistances)
     EXPECT_EQ(two_distances.reason,"insufficient-radial-information");
 }
 
+TEST(JointHaloEligibilityTest, RejectsFourRowsWithOnlyTwoExactDistances)
+{
+    auto support=Support({.6,.6,1.2,1.2});
+    const auto result=EvaluateFullABCHaloEligibility(support);
+    EXPECT_FALSE(result.eligible);
+    EXPECT_EQ(result.support_rows,4u);
+    EXPECT_EQ(result.distinct_squared_distances,2u);
+    EXPECT_EQ(result.reason,"insufficient-radial-information");
+}
+
 TEST(JointHaloEligibilityTest, AcceptsThreeRowsWithThreeExactDistances)
 {
     auto support=Support({0.0,1.0,4.0});
@@ -119,4 +130,24 @@ TEST(JointHaloEligibilityTest, RejectsConfiguredObservationMinimumBelowThree)
 {
     auto support=Support({0.0,1.0,4.0});
     EXPECT_THROW(EvaluateFullABCHaloEligibility(support,2),std::invalid_argument);
+}
+
+TEST(JointHaloEligibilityTest, MoreRowsThanACColumnsCanStillHaveSparseQRRankDeficiency)
+{
+    using namespace rhbm_gem::core::joint_component;
+    Sparse design(4,2);
+    const auto basis=EvaluateKernel(.6,.7,2.5);
+    std::vector<Eigen::Triplet<double>> entries;
+    for(Eigen::Index row=0;row<design.rows();++row)
+    {
+        entries.emplace_back(row,0,basis.gaussian);
+        entries.emplace_back(row,1,basis.charge);
+    }
+    design.setFromTriplets(entries.begin(),entries.end());
+    Vector observations=Vector::Ones(design.rows()),weights=Vector::Ones(design.rows());
+    const auto result=SolveLinear(design,observations,weights);
+    EXPECT_GT(design.rows(),design.cols());
+    EXPECT_FALSE(result.valid);
+    EXPECT_EQ(result.rank,1);
+    EXPECT_EQ(result.reason,"rank-deficient");
 }

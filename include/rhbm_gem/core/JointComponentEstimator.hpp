@@ -70,8 +70,9 @@ struct JointFitResult
 };
 // Captures results without retaining the problem snapshot or running numerical checks.
 JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult &, JointAnalysisMetadata = {});
-// Selected non-hydrogen atoms fix the rows; all non-hydrogen contributors on
-// those rows are fitted, including unselected halo atoms.
+// Selected non-hydrogen atoms fix the rows. Unselected halos are retained as
+// FullABC contributors only when they meet the recorded geometry eligibility
+// rule; pruning does not change the selected observation rows.
 JointProblem BuildJointProblem(const MapObject &,const ModelObject &);
 JointFitResult FitJointComponents(const JointProblem &,const std::vector<double> & initial_b);
 // Updates successful targets' first-stage analysis only. Joint estimates are returned, not written

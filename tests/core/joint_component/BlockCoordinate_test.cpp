@@ -162,10 +162,10 @@ TEST(JointBlockCoordinateTest, StructuralCensusMatchesPreparedCoreMetadata)
     EXPECT_EQ(census.maximum_block_rows,maximum_rows);
     EXPECT_EQ(census.maximum_block_support_entries,maximum_support);
 }
-TEST(JointBlockCoordinateTest, SingletonHaloRowsRemainInFullAbcBlockRows)
+TEST(JointBlockCoordinateTest, EveryContributorRemainsInFullAbcBlockRows)
 {
     const auto input=HaloInput(); const auto layout=n::BuildParameterLayout(input);
-    ASSERT_EQ(layout.full_atoms,(std::vector<std::size_t>{0,1,2}));
+    ASSERT_EQ(layout.full_atoms,(std::vector<std::size_t>{0,1,2,3}));
     EXPECT_TRUE(layout.groups.empty());
     EXPECT_EQ(layout.informative_rows.size(),input.observations.size());
     const auto partition=n::BuildStructuralBlockPartition(input,layout,1);
