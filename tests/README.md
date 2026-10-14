@@ -87,6 +87,14 @@ cases, and `joint_component_physical_smoke` checks double/float32 generation
 and CIF/MRC. All required inputs live in `tests/fixtures/joint_component/`; no
 historical archive or external model is loaded.
 
+`SharedPostprocessingContextValidatesIdentityAndBuildsMappingsOnce` and the
+Joint workflow regression assert one snapshot identity check and one complete
+row identity scan per context, one build of each shared mapping, and no increase
+in those counts while preparing multiple targets. They also check per-target
+prepared sample counts and exact peeling/charge-correction parity. Workflow
+benchmark JSON records the same identity-scan and mapping counts for each
+deterministic scaling case.
+
 Run the bounded Joint gates with `joint:contract`, `joint:workflow`, and
 `joint:numerical` labels. Large Gram, production-shape single-component
 mapping-memory, and 256-atom diagnostics are separately listed under

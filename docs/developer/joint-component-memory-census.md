@@ -102,8 +102,11 @@ construction memory preflight.
 
 One immutable `JointPostprocessingContext` owns the per-run observation-row and
 contributor-ID lookups and lives through target peeling and local preparation.
-The workflow benchmark records each lookup build count, Joint stage mapping
-count, target preparation count, and valid/invalid local sample totals.
+Construction validates snapshot contributor and complete observation-row
+identity once per run; target preparation does not repeat the full row scan.
+The workflow benchmark records those identity-validation counts, each lookup
+build count, the Joint stage mapping count, target preparation count, and
+valid/invalid local sample totals.
 Peeling and charge correction prepare one target at a time from const raw
 samples and the paired peeling results. `PostJointLocalSamples` is temporary;
 the workflow retains the local OLS/MDPDE result, diagnostics, fixed charge
@@ -122,24 +125,28 @@ mark that includes fixture setup and persistence. None of these readings
 attributes memory to a specific allocation.
 
 The following one-run Release workflow measurements use the deterministic cases
-described in [joint-benchmark.md](joint-benchmark.md). Lookup and workspace
-columns are allocation estimates; RSS columns are measured separately.
+described in [joint-benchmark.md](joint-benchmark.md). This run used
+`build/joint-validation` at `b42eb0beb21b41915c4677e3927f3aa6ad91b06c` with
+AppleClang 21.0.0.21000334 and numerical thread counts set to 1. Lookup and
+workspace columns are allocation estimates; RSS columns are measured
+separately.
 
 | Case | Observations | Targets | Context lookup estimate (MiB) | Workspace payload estimate (MiB) | Sampled workflow peak RSS (MiB) | Process peak RSS (MiB) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| full | 22,650 | 3 | 0.86 | 2.72 | 51.9 | 56.5 |
-| halo | 15,967 | 1 | 0.61 | 1.47 | 46.8 | 50.8 |
-| multi | 67,950 | 9 | 2.59 | 8.15 | 96.2 | 99.7 |
-| noisy | 22,650 | 3 | 0.86 | 2.72 | 52.4 | 57.5 |
-| outlier | 22,650 | 3 | 0.86 | 2.72 | 52.3 | 56.8 |
-| dense | 181,122 | 3 | 6.91 | 21.56 | 263.0 | 263.0 |
-| target-heavy | 27,185 | 6 | 1.04 | 4.74 | 73.0 | 78.1 |
-| connected | 42,558 | 9 | 1.62 | 7.18 | 97.6 | 106.2 |
+| full | 22,650 | 3 | 0.86 | 2.72 | 51.1 | 56.5 |
+| halo | 15,967 | 1 | 0.61 | 1.47 | 46.1 | 50.5 |
+| multi | 67,950 | 9 | 2.59 | 8.15 | 94.8 | 99.5 |
+| noisy | 22,650 | 3 | 0.86 | 2.72 | 51.5 | 56.8 |
+| outlier | 22,650 | 3 | 0.86 | 2.72 | 51.5 | 56.8 |
+| dense | 181,122 | 3 | 6.91 | 21.56 | 256.7 | 268.3 |
+| target-heavy | 27,185 | 6 | 1.04 | 4.74 | 72.5 | 78.6 |
+| connected | 42,558 | 9 | 1.62 | 7.18 | 96.2 | 106.4 |
 
-Every case built one row map, one contributor map and one Joint-stage map.
-Current RSS checkpoints showed monotonic increases through the group phase in
-these runs; they do not isolate the context allocation. The samples were all
-valid, so this benchmark did not measure partial out-of-domain sample handling.
+Every case recorded one snapshot identity validation, one full-row identity
+scan, one row map, one contributor map and one Joint-stage map. Current RSS
+checkpoints showed monotonic increases through the group phase in these runs;
+they do not isolate the context allocation. The samples were all valid, so this
+benchmark did not measure partial out-of-domain sample handling.
 
 The benchmark cases vary target count, voxel density, and component topology
 within small deterministic synthetic inputs. No large-map or full-atom-set

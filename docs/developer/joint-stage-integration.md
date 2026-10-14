@@ -60,12 +60,19 @@ but do not receive local or group results.
 `RunJointComponentWorkflow` creates one immutable `JointPostprocessingContext`
 after publishing the trusted Joint snapshot and target endpoints. It builds
 the observation-grid-index to row-index lookup and atom-ID to contributor-index
-lookup once for that Joint run. The context reads the saved component
-representatives and endpoint provenance without rebuilding Joint stage
-estimates. It remains alive through peeling and all target-local preparation;
-each target creates only its own support charge lookup and sample workspace.
-The context does not hold a dense observations-by-contributors matrix or a
-per-target copy of contributor state.
+lookup once for that Joint run. Construction checks the snapshot contributor
+IDs and complete observation row IDs against the same `JointProblem` once;
+`BuildPostJointLocalSamples` does not repeat that observation-sized identity
+comparison. It validates the selected target, endpoint and peeling provenance,
+sample pairing and geometry, and that target's support stencils. The context
+reads saved component representatives and endpoint provenance without
+rebuilding Joint stage estimates. Its borrowed map, model endpoints, problem
+input and snapshot must outlive the context and remain unchanged through local
+preparation. It is scoped to one Joint run and is not reused across runs;
+publishing peeling/local derived state does not change those inputs. Each target
+creates only its own support charge lookup and sample workspace. The context
+does not hold a dense observations-by-contributors matrix or a per-target copy
+of contributor state.
 
 The group information for local design `X_i`, log-response `y_i`, and
 working diagonal covariance `Sigma_y_i` is
@@ -93,7 +100,12 @@ with Gaussian offset zero and that member's original `(C_i^J, B_i^J)` profile.
 `A_post G(r; B_post) + C_i^J K(r; B_i^J)`. Group means, priors, and MDPDE
 summaries contain Gaussian parameters only. A group charge median is a
 descriptive statistic and does not define a physical group-level FullABC
-response.
+response. Plots label peeled samples as including the target-own Joint charge
+and group priors/means as Gaussian-only with `C = 0`. Their overlay is a view of
+different signal representations, not a measurement-versus-fit comparison.
+Raw-map and neighbor-signal curves are labeled separately. Plots do not
+reconstruct charge-corrected samples from stored peeling data; a full member
+response uses that member's persisted fixed charge profile.
 
 ## Invalidation and provenance
 

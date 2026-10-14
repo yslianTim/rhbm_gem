@@ -446,7 +446,12 @@ snapshot is published. Its observation-row and contributor-ID lookups are
 shared through peeling and all target-local preparation. It reads the trusted
 snapshot and published endpoint records without reconstructing Joint stage
 estimates per target; each target only builds its own charge support and sample
-workspace. `AssessPostJointLocalResult` supplies the same source, sample,
+workspace. Context construction checks complete snapshot contributor and row
+identity once for the run. Per-target preparation then checks only its selected
+target, endpoint/peeling provenance, paired samples, geometry and support
+stencils. The context borrows the map, model endpoints, problem and snapshot;
+they remain alive and unchanged until that run's target-local preparation ends.
+`AssessPostJointLocalResult` supplies the same source, sample,
 endpoint, numerical and compact-information contract to fitting, atomic batch
 publication, group eligibility and persistence validation.
 
@@ -457,6 +462,13 @@ means and priors are Gaussian-only; the group charge median is descriptive and
 does not define a single FullABC physical response. See the
 [stage-integration guide](joint-stage-integration.md) for the lifecycle and
 invalidation details.
+
+Response plots distinguish these signals in their legends: Joint peeling
+includes the target's fixed charge profile, while a group prior or mean is
+Gaussian-only with zero offset. The curves are shown as different
+representations, not as measurements and a matching fit. Full posterior member
+responses use each member's own persisted Joint charge width through
+`EvaluateGroupMemberResponseAtDistance`.
 
 The fixed Joint charge profile remains unchanged when the local width differs.
 Log-Gaussian fitting filters nonpositive corrected responses according to the
