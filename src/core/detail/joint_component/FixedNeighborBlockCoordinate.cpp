@@ -143,8 +143,9 @@ FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolic
     out.initial_profile_valid=profile.initial.valid;
     out.initial_profile_reason=profile.initial.reason;
     out.initial_profile_trusted=profile.initial_accepted;
-    if(!profile.trials.empty() && profile.trials.front().endpoint.certificate.free_rank)
-        out.local_design_rank=*profile.trials.front().endpoint.certificate.free_rank;
+    const auto design=Design(domain,eta);
+    const auto spectrum=ComputeSpectrum(design,{domain.rows,design.cols(),eta.size()},design.cols(),true);
+    if(spectrum.available) out.local_design_rank=spectrum.rank;
     for(const auto atom:core_atoms)
         if(atom>=0 && static_cast<std::size_t>(atom)<context.atom_ids.size())
             out.core_atom_ids.push_back(context.atom_ids.at(static_cast<std::size_t>(atom)));
@@ -566,7 +567,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             if(!accepted)
             {
                 record.failure_diagnostics=FailureDiagnostics(policy,record,sweep_index,core_atoms,
-                    local_context,local_domain,old_eta,profile_search);
+                    context,local_domain,old_eta,profile_search);
                 Logger::Log(LogLevel::Warning,FormatFailureDiagnostics(*record.failure_diagnostics));
                 record.status="failed"; record.reason="block-search-failed"; out.reason=record.reason;
                 finish_record(std::move(record),block_started); stop=true; break;

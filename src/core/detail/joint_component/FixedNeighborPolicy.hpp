@@ -19,9 +19,7 @@ struct FixedNeighborSearchPolicy
     std::size_t component_index{};
     std::string component_id;
     std::function<void(std::size_t &,std::size_t &,std::size_t &)> halo_census;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     std::function<void(FixedNeighborPolicy &)> configure_search_for_testing;
-#endif
 };
 
 } // namespace rhbm_gem::core::joint_component

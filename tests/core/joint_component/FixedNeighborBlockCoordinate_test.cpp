@@ -254,7 +254,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, LocalTrajectoryTelemetryIsOptInAndDo
 TEST(JointFixedNeighborBlockCoordinateTest, RankFailureReportsLocalDesignAndHaloDiagnostics)
 {
     rhbm_gem::core::JointProblemInput input;
-    input.atom_ids={"target","weak-halo"}; input.row_ids={"r0","r1"};
+    input.atom_ids={"z-target","a-weak-halo"}; input.row_ids={"r0","r1"};
     input.observations={1.0,2.0}; input.support.resize(2);
     input.support[0]={{0,.1},{1,.2}}; input.support[1]={{0,.8},{1,.8}};
     input.selection_domain.emplace(); input.selection_domain->target_indices={0};
@@ -262,7 +262,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, RankFailureReportsLocalDesignAndHalo
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const auto eta=n::Vector::Constant(2,std::log(.6));
     const auto context=n::ProfileContext(data.context,data.layout,data.y.size());
-    n::FixedNeighborPolicy policy; policy.maximum_sweeps=1; policy.collect_diagnostics=true;
+    n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=1; policy.collect_diagnostics=true;
     policy.component_index=4; policy.component_id="weak-component";
     policy.halo_census=[](std::size_t & count,std::size_t & minimum,std::size_t & deficient) {
         count=1; minimum=2; deficient=1;
@@ -281,8 +281,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, RankFailureReportsLocalDesignAndHalo
     EXPECT_EQ(failure.component_index,4u);
     EXPECT_EQ(failure.component_id,"weak-component");
     EXPECT_EQ(failure.sweep_index,1u);
-    EXPECT_EQ(failure.core_atom_ids,(std::vector<std::string>{"target","weak-halo"}));
-    EXPECT_EQ(failure.core_atom_count,2u);
+    EXPECT_EQ(failure.core_atom_ids,(std::vector<std::string>{"a-weak-halo"}));
+    EXPECT_EQ(failure.core_atom_count,1u);
     EXPECT_EQ(failure.affected_row_count,2u);
     EXPECT_EQ(failure.halo_count,1u);
     EXPECT_EQ(failure.minimum_halo_support_rows,2u);
@@ -290,10 +290,10 @@ TEST(JointFixedNeighborBlockCoordinateTest, RankFailureReportsLocalDesignAndHalo
     EXPECT_FALSE(failure.initial_profile_valid);
     EXPECT_FALSE(failure.initial_profile_trusted);
     EXPECT_EQ(failure.local_design_rows,2);
-    EXPECT_EQ(failure.local_design_columns,4);
+    EXPECT_EQ(failure.local_design_columns,2);
     ASSERT_TRUE(failure.local_design_rank);
-    EXPECT_LT(*failure.local_design_rank,failure.local_design_columns);
-    EXPECT_EQ(failure.local_search_stop_reason,"inner-rank-deficient");
+    EXPECT_EQ(*failure.local_design_rank,1);
+    EXPECT_EQ(failure.local_search_stop_reason,"inner-invalid-input");
 }
 
 TEST(JointFixedNeighborBlockCoordinateTest, PreparedRowMappingsScaleWithMembershipsRatherThanRowsTimesBlocks)
