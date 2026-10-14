@@ -7,9 +7,11 @@
 #include "support/JointProfileSearchDiagnostic.hpp"
 #include "support/DataObjectTestSupport.hpp"
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/HaloEligibility.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/FittingWorkset.hpp"
 #include <map>
+#include <utility>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include "support/CommandTestHelpers.hpp"
 #include "data/detail/JointStageAdapter.hpp"
@@ -61,7 +63,12 @@ void CheckReference(const rhbm_gem::MapObject & map,const rhbm_gem::ModelObject 
     for(std::size_t a=0;a<support.size();++a)
     {
         const auto & atom=model.GetAtomList()[a];
-        if(atom->GetElement()==Element::HYDROGEN || (!selected.contains(atom.get()) && support[a].empty())) continue;
+        if(atom->GetElement()==Element::HYDROGEN) continue;
+        if(!selected.contains(atom.get()))
+        {
+            auto candidate_support=support[a];
+            if(!n::EvaluateFullABCHaloEligibility(candidate_support).eligible) continue;
+        }
         const auto k=ids.size(); ids.push_back(std::to_string(atom->GetSerialID()));
         if(selected.contains(atom.get())) targets.push_back(k);
         ASSERT_LT(k,actual.support.size()); ASSERT_EQ(support[a].size(),actual.support[k].size());
@@ -101,13 +108,143 @@ TEST(JointComponentPartialSelectionTest, BoundariesClippingAndNonrecursiveHalo)
     rhbm_gem::MapObject map({11,3,3},{.25,.7,1.1},{0,-.7,-1.1},std::move(values));
     CheckReference(map,model);
     const auto p=core::BuildJointProblem(map,model);
-    EXPECT_EQ(p.Input().atom_ids,(std::vector<std::string>{"1","2","4","5"}));
+    EXPECT_EQ(p.Input().atom_ids,(std::vector<std::string>{"1","4","5"}));
     EXPECT_TRUE(p.Input().support[2].empty());
-    EXPECT_DOUBLE_EQ(p.Input().support[3][0].squared_distance,6.25);
+    EXPECT_DOUBLE_EQ(p.Input().support[2][0].squared_distance,6.25);
     const auto fit=core::FitJointComponents(p,{.5,.5,.5,.5});
     EXPECT_FALSE(fit.assembled_state);
     const auto & data=core::JointProblemAccess::Get(p);
     EXPECT_EQ(data.partition.unobserved_atoms.size(),1);
+}
+TEST(JointComponentPartialSelectionTest, PrunesIneligibleHalosBeforeProblemConstructionAndKeepsFixedRows)
+{
+    std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
+    for(const auto & [id,x]:std::vector<std::pair<int,double>>{{10,0.0},{20,4.5},{30,3.5},{40,30.0}})
+    {
+        auto atom=std::make_unique<rhbm_gem::AtomObject>(); atom->SetSerialID(id);
+        atom->SetElement(Element::CARBON); atom->SetPosition(x,0,0); atoms.push_back(std::move(atom));
+    }
+    rhbm_gem::ModelObject model(std::move(atoms));
+    model.SelectAtoms([](const auto & atom){return atom.GetSerialID()==10;});
+    auto values=std::make_unique<double[]>(11);
+    for(std::size_t row=0;row<11;++row) values[row]=static_cast<double>(row)-3.0;
+    rhbm_gem::MapObject map({11,1,1},{.5,.5,.5},{-2.5,0,0},std::move(values));
+
+    const auto problem=core::BuildJointProblem(map,model);
+    const auto & input=problem.Input();
+    EXPECT_EQ(input.row_ids,(std::vector<std::string>{"0","1","2","3","4","5","6","7","8","9","10"}));
+    EXPECT_EQ(input.observations,(std::vector<double>{-3,-2,-1,0,1,2,3,4,5,6,7}));
+    EXPECT_EQ(input.atom_ids,(std::vector<std::string>{"10","30"}));
+    ASSERT_TRUE(input.selection_domain);
+    EXPECT_EQ(input.selection_domain->target_indices,(std::vector<std::size_t>{0}));
+    ASSERT_EQ(input.support.size(),2u);
+    auto retained= input.support[1];
+    const auto eligibility=n::EvaluateFullABCHaloEligibility(retained);
+    EXPECT_TRUE(eligibility.eligible);
+    EXPECT_EQ(eligibility.support_rows,4u);
+    EXPECT_EQ(eligibility.distinct_squared_distances,4u);
+
+    const auto workset=core::detail::MakeJointFittingWorkset(model,problem);
+    EXPECT_EQ(workset.contributors.size(),input.atom_ids.size());
+    EXPECT_EQ(core::detail::CollectFirstStageAtoms(workset).size(),input.atom_ids.size());
+    const auto & data=core::JointProblemAccess::Get(problem);
+    EXPECT_EQ(data.construction_memory.shape.component_atoms,2u);
+    EXPECT_EQ(data.construction_memory.shape.component_support_entries,15u);
+}
+
+TEST(JointComponentPartialSelectionTest, SelectedTargetWithOneObservationIsAlwaysRetained)
+{
+    auto atom=std::make_unique<rhbm_gem::AtomObject>(); atom->SetSerialID(1);
+    atom->SetElement(Element::CARBON); atom->SetPosition(0,0,0);
+    std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms; atoms.push_back(std::move(atom));
+    rhbm_gem::ModelObject model(std::move(atoms)); model.SelectAllAtoms();
+    rhbm_gem::MapObject map({1,1,1},{1,1,1},{0,0,0});
+    const auto problem=core::BuildJointProblem(map,model);
+    EXPECT_EQ(problem.Input().atom_ids,(std::vector<std::string>{"1"}));
+    ASSERT_TRUE(problem.Input().selection_domain);
+    EXPECT_EQ(problem.Input().selection_domain->target_indices,(std::vector<std::size_t>{0}));
+    EXPECT_EQ(problem.Input().support[0].size(),1u);
+}
+
+TEST(JointComponentPartialSelectionTest, SelectedTargetWithZeroObservationsKeepsIdentity)
+{
+    auto atom=std::make_unique<rhbm_gem::AtomObject>(); atom->SetSerialID(1);
+    atom->SetElement(Element::CARBON); atom->SetPosition(100,0,0);
+    std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms; atoms.push_back(std::move(atom));
+    rhbm_gem::ModelObject model(std::move(atoms)); model.SelectAllAtoms();
+    rhbm_gem::MapObject map({1,1,1},{1,1,1},{0,0,0});
+    const auto problem=core::BuildJointProblem(map,model);
+    EXPECT_EQ(problem.Input().atom_ids,(std::vector<std::string>{"1"}));
+    EXPECT_TRUE(problem.Input().row_ids.empty());
+    EXPECT_TRUE(problem.Input().observations.empty());
+    EXPECT_TRUE(problem.Input().support[0].empty());
+    ASSERT_TRUE(problem.Input().selection_domain);
+    EXPECT_EQ(problem.Input().selection_domain->target_indices,(std::vector<std::size_t>{0}));
+}
+
+TEST(JointComponentPartialSelectionTest, PrunedBridgeRebuildsStructuralComponents)
+{
+    std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
+    for(const auto & [id,x]:std::vector<std::pair<int,double>>{{1,0.0},{2,7.5},{3,3.75}})
+    {
+        auto atom=std::make_unique<rhbm_gem::AtomObject>(); atom->SetSerialID(id);
+        atom->SetElement(Element::CARBON); atom->SetPosition(x,0,0); atoms.push_back(std::move(atom));
+    }
+    rhbm_gem::ModelObject model(std::move(atoms));
+    model.SelectAtoms([](const auto & atom){return atom.GetSerialID()!=3;});
+    rhbm_gem::MapObject map({6,1,1},{2.5,.1,.1},{-2.5,0,0});
+    const auto pruned=core::BuildJointProblem(map,model);
+    EXPECT_EQ(pruned.Input().atom_ids,(std::vector<std::string>{"1","2"}));
+    const auto & after=core::JointProblemAccess::Get(pruned);
+    ASSERT_EQ(after.partition.components.size(),2u);
+
+    core::JointProblemInput unpruned=pruned.Input();
+    unpruned.atom_ids.push_back("3");
+    unpruned.support.emplace_back();
+    for(std::size_t row=0;row<unpruned.row_ids.size();++row)
+    {
+        const double x=-2.5+2.5*static_cast<double>(row);
+        const double squared=(x-3.75)*(x-3.75);
+        if(squared<=6.25) unpruned.support.back().push_back({row,squared});
+    }
+    unpruned.selection_domain->target_indices={0,1};
+    const core::JointProblem unpruned_problem(std::move(unpruned));
+    const auto & before=core::JointProblemAccess::Get(unpruned_problem);
+    EXPECT_EQ(before.partition.components.size(),1u);
+}
+
+TEST(JointComponentPartialSelectionTest, ContributorOrderIsIndependentOfModelTraversal)
+{
+    auto make_model=[](std::vector<int> order) {
+        std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
+        for(const int id:order)
+        {
+            auto atom=std::make_unique<rhbm_gem::AtomObject>(); atom->SetSerialID(id);
+            atom->SetElement(Element::CARBON); atom->SetPosition(id==1 ? 0.0 : id==2 ? 1.0 : 3.5,0,0);
+            atoms.push_back(std::move(atom));
+        }
+        auto model=std::make_unique<rhbm_gem::ModelObject>(std::move(atoms));
+        model->SelectAtoms([](const auto & atom){return atom.GetSerialID()==1;});
+        return model;
+    };
+    auto values=std::make_unique<double[]>(11);
+    rhbm_gem::MapObject map({11,1,1},{.5,.5,.5},{-2.5,0,0},std::move(values));
+    const auto forward=core::BuildJointProblem(map,*make_model({1,2,3}));
+    const auto reverse=core::BuildJointProblem(map,*make_model({3,2,1}));
+    EXPECT_EQ(forward.Input().atom_ids,reverse.Input().atom_ids);
+    EXPECT_EQ(forward.Input().row_ids,reverse.Input().row_ids);
+    EXPECT_EQ(forward.Input().observations,reverse.Input().observations);
+    ASSERT_EQ(forward.Input().support.size(),reverse.Input().support.size());
+    for(std::size_t atom=0;atom<forward.Input().support.size();++atom)
+    {
+        ASSERT_EQ(forward.Input().support[atom].size(),reverse.Input().support[atom].size());
+        for(std::size_t row=0;row<forward.Input().support[atom].size();++row)
+        {
+            EXPECT_EQ(forward.Input().support[atom][row].row,reverse.Input().support[atom][row].row);
+            EXPECT_DOUBLE_EQ(forward.Input().support[atom][row].squared_distance,
+                reverse.Input().support[atom][row].squared_distance);
+        }
+    }
 }
 TEST(JointComponentPartialSelectionTest, BridgeAndMonolithicEquivalence)
 {
@@ -156,18 +293,16 @@ TEST(JointComponentPartialSelectionTest, IdentifiableRecoveryOmissionAndOutsideD
 TEST(JointComponentPartialSelectionTest, WeakHaloAndInvalidWidthsAreNotSuccess)
 {
     auto f=joint_partial_test::Make("weak"); const auto p=core::BuildJointProblem(*f.map,*f.model);
-    ASSERT_EQ(p.Input().atom_ids.size(),2);
-    for(const auto & point:p.Input().support[1]) EXPECT_GT(point.squared_distance,5.0);
-    const auto weak=core::FitJointComponents(p,{.5,.05});
-    EXPECT_NE(weak.RuntimeConvergence(),core::JointCheckStatus::Passed);
-    EXPECT_FALSE(weak.components[0].state);
+    ASSERT_EQ(p.Input().atom_ids,(std::vector<std::string>{"1"}));
+    ASSERT_TRUE(p.Input().selection_domain);
+    ASSERT_EQ(p.Input().selection_domain->target_indices,(std::vector<std::size_t>{0}));
     for(double invalid:{0.,-1.,std::numeric_limits<double>::quiet_NaN(),std::numeric_limits<double>::infinity()})
     {
-        const auto fit=core::FitJointComponents(p,{.5,invalid});
+        const auto fit=core::FitJointComponents(p,{invalid});
         ASSERT_EQ(fit.components.size(),1); EXPECT_FALSE(fit.initialization.valid);
         EXPECT_EQ(fit.components[0].stop_reason,"invalid-initial-widths"); EXPECT_FALSE(fit.prediction);
     }
-    EXPECT_TRUE(core::FitJointComponents(p,{.5}).components.empty());
+    EXPECT_TRUE(core::FitJointComponents(p,{}).components.empty());
 }
 TEST(JointComponentPartialSelectionTest, InitializationPreservesHaloHistoryAndRoles)
 {

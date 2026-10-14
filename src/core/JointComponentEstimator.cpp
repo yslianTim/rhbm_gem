@@ -1,6 +1,7 @@
 #include "SimulationBuildInfo.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/HaloEligibility.hpp"
 #include "core/detail/joint_component/TargetEvidence.hpp"
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
@@ -30,6 +31,9 @@ std::vector<const AtomObject *> EligibleAtoms(const ModelObject & model)
 {
     std::vector<const AtomObject *> atoms;
     for(const auto & atom:model.GetAtomList()) if(atom->GetElement()!=Element::HYDROGEN) atoms.push_back(atom.get());
+    std::sort(atoms.begin(),atoms.end(),[](const auto * left,const auto * right) {
+        return left->GetSerialID()<right->GetSerialID();
+    });
     return atoms;
 }
 template<class Visit> void VisitSupport(const MapObject & map,const AtomObject & atom,Visit visit)
@@ -308,7 +312,7 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
         VisitSupport(map,*atom,[&](auto index,double) {rows.push_back(index);});
     std::sort(rows.begin(),rows.end()); rows.erase(std::unique(rows.begin(),rows.end()),rows.end());
 
-    std::size_t contributors{},support_entries{},maximum_atom_support{};
+    std::size_t maximum_candidate_support{};
     for(const auto * atom:atoms)
     {
         std::size_t memberships{};
@@ -317,14 +321,53 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
                 !n::CheckedAddBytes(memberships,1,memberships))
                 throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
         });
-        if(selected.contains(atom) || memberships)
-        {
-            maximum_atom_support=std::max(maximum_atom_support,memberships);
-            if(!n::CheckedAddBytes(contributors,1,contributors) ||
-                !n::CheckedAddBytes(support_entries,memberships,support_entries))
-                throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
-        }
+        maximum_candidate_support=std::max(maximum_candidate_support,memberships);
     }
+
+    std::size_t eligibility_scratch_bytes{},eligibility_builder_resident{};
+    if(!n::CheckedMultiplyBytes(maximum_candidate_support,sizeof(JointSupport),eligibility_scratch_bytes) ||
+        !n::CheckedAddBytes(builder_resident,eligibility_scratch_bytes,eligibility_builder_resident))
+        throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
+    if(eligibility_builder_resident>n::JointMemoryPlanningBudgetBytes)
+    {
+        n::MemoryShape scan_shape; scan_shape.component_atoms=atoms.size();
+        scan_shape.component_observations=rows.size(); scan_shape.component_support_entries=maximum_candidate_support;
+        scan_shape.resident_bytes=eligibility_builder_resident; scan_shape.problem_scope=true;
+        RejectBuildPreflight(scan_shape,"halo-eligibility-scratch-exceeds-budget");
+    }
+
+    std::size_t contributors=selected.size(),support_entries{},maximum_atom_support{};
+    std::vector<JointSupport> eligibility_support;
+    eligibility_support.reserve(maximum_candidate_support);
+    for(const auto * atom:atoms)
+    {
+        if(selected.contains(atom))
+        {
+            std::size_t memberships{};
+            VisitSupport(map,*atom,[&](auto index,double) {
+                if(std::binary_search(rows.begin(),rows.end(),index) &&
+                    !n::CheckedAddBytes(memberships,1,memberships))
+                    throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
+            });
+            maximum_atom_support=std::max(maximum_atom_support,memberships);
+            if(!n::CheckedAddBytes(support_entries,memberships,support_entries))
+                throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
+            continue;
+        }
+        eligibility_support.clear();
+        VisitSupport(map,*atom,[&](auto index,double square) {
+            const auto row=std::lower_bound(rows.begin(),rows.end(),index);
+            if(row!=rows.end() && *row==index)
+                eligibility_support.push_back({static_cast<std::size_t>(row-rows.begin()),square});
+        });
+        const auto eligibility=n::EvaluateFullABCHaloEligibility(eligibility_support);
+        if(!eligibility.eligible) continue;
+        maximum_atom_support=std::max(maximum_atom_support,eligibility.support_rows);
+        if(!n::CheckedAddBytes(contributors,1,contributors) ||
+            !n::CheckedAddBytes(support_entries,eligibility.support_rows,support_entries))
+            throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
+    }
+    eligibility_support.clear();
     n::MemoryShape shape; shape.problem_scope=true; shape.component_atoms=contributors;
     shape.component_observations=rows.size(); shape.component_support_entries=support_entries;
     const auto target_atoms=selected.size(); std::size_t free_columns{};
@@ -339,6 +382,7 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
         !AddEstimatedBytes(identity_scratch,rows.size(),identity_node+32) ||
         !AddEstimatedBytes(identity_scratch,contributors,2*sizeof(std::string)+identity_node+64) ||
         !AddEstimatedBytes(identity_scratch,maximum_atom_support,sizeof(std::size_t)+4*sizeof(void *)+32) ||
+        !n::CheckedAddBytes(identity_scratch,eligibility_scratch_bytes,identity_scratch) ||
         !AddEstimatedBytes(planned_snapshot,identity_characters,2*sizeof(char)))
         RejectBuildPreflight(shape,"size-overflow");
     shape.identity_validation_bytes=identity_scratch;
@@ -359,14 +403,34 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
     input.selection_domain.emplace();
     for(const auto * atom:atoms)
     {
+        bool selected_target=selected.contains(atom);
         std::vector<JointSupport> support;
-        VisitSupport(map,*atom,[&](auto index,double square) {
-            const auto row=std::lower_bound(rows.begin(),rows.end(),index);
-            if(row!=rows.end() && *row==index) support.push_back({static_cast<std::size_t>(row-rows.begin()),square});
-        });
-        if(selected.contains(atom) || !support.empty())
+        if(selected_target)
         {
-            if(selected.contains(atom)) input.selection_domain->target_indices.push_back(input.atom_ids.size());
+            VisitSupport(map,*atom,[&](auto index,double square) {
+                const auto row=std::lower_bound(rows.begin(),rows.end(),index);
+                if(row!=rows.end() && *row==index) support.push_back({static_cast<std::size_t>(row-rows.begin()),square});
+            });
+        }
+        else
+        {
+            eligibility_support.clear();
+            VisitSupport(map,*atom,[&](auto index,double square) {
+                const auto row=std::lower_bound(rows.begin(),rows.end(),index);
+                if(row!=rows.end() && *row==index)
+                    eligibility_support.push_back({static_cast<std::size_t>(row-rows.begin()),square});
+            });
+            const auto eligibility=n::EvaluateFullABCHaloEligibility(eligibility_support);
+            if(!eligibility.eligible) continue;
+            support.reserve(eligibility.support_rows);
+            VisitSupport(map,*atom,[&](auto index,double square) {
+                const auto row=std::lower_bound(rows.begin(),rows.end(),index);
+                if(row!=rows.end() && *row==index) support.push_back({static_cast<std::size_t>(row-rows.begin()),square});
+            });
+        }
+        if(selected_target || !support.empty())
+        {
+            if(selected_target) input.selection_domain->target_indices.push_back(input.atom_ids.size());
             input.atom_ids.push_back(std::to_string(atom->GetSerialID()));
             input.support.push_back(std::move(support));
         }
