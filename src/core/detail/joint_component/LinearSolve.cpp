@@ -183,7 +183,7 @@ BlockFace SolveBlocks(const Sparse & x,VectorRef y,const Eigen::VectorXd & weigh
 template<class Matrix>
 LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
     const Eigen::VectorXd & weights, bool use_svd, bool blocked_svd, const Eigen::SparseMatrix<double> * sparse_design,
-    const LinearPolicy * policy=nullptr,const std::vector<LinearBlock> * blocks=nullptr)
+    const LinearPolicy * policy=nullptr,const std::vector<LinearBlock> * blocks=nullptr,double observation_scale_override=0)
 {
     LinearResult out; out.reason="invalid-input"; out.beta=Eigen::VectorXd::Zero(x.cols());
     if (x.cols()==0 || x.cols()%2!=0 || x.rows()<=x.cols() || y.size()!=x.rows() || weights.size()!=y.size() ||
@@ -320,16 +320,61 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
         for (Eigen::Index k=0;k<x.cols();k+=2) if (!free[static_cast<std::size_t>(k)] && gradient(k)>largest)
         {release=k; largest=gradient(k);}
         if (release>=0) {free[static_cast<std::size_t>(release)]=true; ++out.releases; continue;}
-        out.beta=b.cwiseQuotient(scales); out.valid=true; out.reason="solved"; return out;
+        out.beta=b.cwiseQuotient(scales);
+        if constexpr (std::is_same_v<Matrix,Sparse>)
+        {
+            constexpr Eigen::Index maximum_dense_elements=1'000'000; // Cap the dense face matrix at 8 MB.
+            const bool unit_weights=(weights.array()==1.0).all();
+            const bool bounded=!columns.empty() && x.rows()<=maximum_dense_elements/
+                static_cast<Eigen::Index>(columns.size());
+            const double observation_scale=observation_scale_override>0 ? observation_scale_override :
+                std::max(1.0,original_rhs_norm);
+            const Certificate initial=!use_svd && unit_weights && bounded ?
+                CertifyLinear(x,y,out.beta,observation_scale) : Certificate{};
+            if(initial.available && !initial.kkt_passed)
+            {
+                Eigen::MatrixXd face(x.rows(),static_cast<Eigen::Index>(columns.size()));
+                Eigen::VectorXd theta(static_cast<Eigen::Index>(columns.size()));
+                for(std::size_t k=0;k<columns.size();++k)
+                {
+                    const auto column=columns[k];
+                    face.col(static_cast<Eigen::Index>(k)).setZero();
+                    for(Sparse::InnerIterator entry(x,column);entry;++entry)
+                        face(entry.row(),static_cast<Eigen::Index>(k))=entry.value()/scales(column);
+                    theta(static_cast<Eigen::Index>(k))=b(column);
+                }
+                RecordDenseShape("ac-bounded-kkt-refinement",face.rows(),face.cols());
+                Eigen::ColPivHouseholderQR<Eigen::MatrixXd> refinement_qr(face);
+                refinement_qr.setThreshold(rank_threshold);
+                if(refinement_qr.rank()==static_cast<Eigen::Index>(columns.size()))
+                {
+                    for(int refinement=0;refinement<8;++refinement)
+                    {
+                        const Eigen::VectorXd correction=refinement_qr.solve(y-face*theta);
+                        ++out.solves;
+                        if(!correction.allFinite()) break;
+                        theta+=correction;
+                        Eigen::VectorXd refined_beta=Eigen::VectorXd::Zero(x.cols());
+                        for(std::size_t k=0;k<columns.size();++k)
+                            refined_beta(columns[k])=theta(static_cast<Eigen::Index>(k))/scales(columns[k]);
+                        const Certificate refined=CertifyLinear(x,y,refined_beta,observation_scale);
+                        if(refined.available && refined.kkt_passed && refined.objective<=initial.objective)
+                        {out.beta=std::move(refined_beta); break;}
+                    }
+                }
+            }
+        }
+        out.valid=true; out.reason="solved"; return out;
     }
     out.reason="active-set-budget-exhausted"; return out;
 }
 
 
 } // namespace
-LinearResult SolveLinear(const Sparse & x,VectorRef y,const Vector & w,bool svd,bool blocked,const Sparse * cache,const LinearPolicy * policy,const std::vector<LinearBlock> * blocks)
-{return WeightedSolveImpl(x,y,w,svd,blocked,cache,policy,blocks);}
+LinearResult SolveLinear(const Sparse & x,VectorRef y,const Vector & w,bool svd,bool blocked,const Sparse * cache,
+    const LinearPolicy * policy,const std::vector<LinearBlock> * blocks,double observation_scale)
+{return WeightedSolveImpl(x,y,w,svd,blocked,cache,policy,blocks,observation_scale);}
 LinearResult SolveLinear(const Matrix & x,VectorRef y,const Vector & w,bool svd,bool blocked,const Sparse * cache,
-    const LinearPolicy * policy)
-{return WeightedSolveImpl(x,y,w,svd,blocked,cache,policy);}
+    const LinearPolicy * policy,double observation_scale)
+{return WeightedSolveImpl(x,y,w,svd,blocked,cache,policy,nullptr,observation_scale);}
 }

@@ -356,7 +356,8 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     const Eigen::Index m=eta.size();
     ResourcePhase linear_solve("linear-solve",true,out.x.rows(),out.x.cols(),static_cast<std::size_t>(out.x.nonZeros()));
     const auto solve_started=std::chrono::steady_clock::now();
-    const auto solved=SolveLinear(out.x,y,Vector::Ones(y.size()),reference,true,nullptr,context ? &context->linear : nullptr,blocks);
+    const auto solved=SolveLinear(out.x,y,Vector::Ones(y.size()),reference,true,nullptr,
+        context ? &context->linear : nullptr,blocks,context ? context->scale : 0);
     if(profile_work)
     {
         telemetry.work.linear_rhs_solve_seconds+=

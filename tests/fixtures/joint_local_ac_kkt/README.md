@@ -9,6 +9,8 @@ The captured block has 881 affected rows, an 881 × 24 local design with 3,368
 nonzero entries, numerical rank 24, and free-face rank 22. The workflow reports
 the failure at sweep 2, block 82 (one-based indexing).
 
-To replay it without rebuilding the full Joint problem, enable the offline audit
-target and run the registered `joint_local_ac_kkt_reproduction` CTest. The
-fixture records doubles with round-trip precision.
+The fixture preserves the pre-fix coefficients and diagnostics. To verify the
+current solver against it without rebuilding the full Joint problem, enable the
+offline audit target and run `joint_local_ac_kkt_recovery` and
+`joint_local_ac_kkt_accuracy`. The fixture records doubles with round-trip
+precision.

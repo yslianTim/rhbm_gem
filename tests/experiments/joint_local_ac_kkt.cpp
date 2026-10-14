@@ -69,14 +69,17 @@ j::value Run(const j::value & fixture)
     const auto search=n::SearchProfile(domain,y,eta.array().exp(),context);
     const auto spectrum=n::ComputeSpectrum(evaluation.x,{domain.rows,evaluation.x.cols(),eta.size()},evaluation.x.cols(),true);
     const auto & original=fixture.at("production_solver");
-    const bool solver_matches=evaluation.certificate.linear_solver_valid==original.at("valid").as_bool() &&
+    std::vector<Eigen::Index> original_active;
+    for(const auto & atom:original.at("active_a_atom_indices").as_array())
+        original_active.push_back(j::value_to<Eigen::Index>(atom));
+    const bool active_face_matches=evaluation.certificate.active_atoms==original_active;
+    const bool recovered=evaluation.valid && evaluation.certificate.linear_solver_valid &&
+        evaluation.certificate.available && evaluation.certificate.feasible && evaluation.certificate.kkt_passed &&
         evaluation.certificate.free_rank.value_or(-1)==j::value_to<int>(original.at("linear_rank")) &&
-        evaluation.certificate.linear_solves.value_or(-1)==j::value_to<int>(original.at("linear_solve_count")) &&
-        evaluation.certificate.linear_releases.value_or(-1)==j::value_to<int>(original.at("active_set_releases"));
-    const bool reproduced=!evaluation.valid && evaluation.reason=="kkt-failed" &&
-        search.stop_reason=="inner-kkt-failed" && solver_matches;
+        evaluation.certificate.linear_releases.value_or(-1)==0 && active_face_matches &&
+        evaluation.certificate.objective<=j::value_to<double>(original.at("objective"));
     return j::object{
-        {"reproduced",reproduced},{"solver_diagnostics_match",solver_matches},
+        {"recovered",recovered},{"same_active_face",active_face_matches},
         {"search_stop_reason",search.stop_reason},{"initial_profile_reason",evaluation.reason},
         {"affected_row_count",fixture.at("identity").at("affected_row_count")},
         {"local_design_rows",evaluation.x.rows()},{"local_design_columns",evaluation.x.cols()},
@@ -339,8 +342,8 @@ j::value Assess(const j::value & fixture)
     const auto eta=VectorFrom(fixture.at("old_eta")); const auto context=ContextFrom(fixture);
     const auto production=n::EvaluateProfile(domain,y,eta,false,&context);
     const n::Vector weights=n::Vector::Ones(y.size()); const n::Matrix dense(production.x);
-    auto dense_qr=n::SolveLinear(dense,y,weights,false,false,nullptr,&context.linear);
-    auto dense_svd=n::SolveLinear(dense,y,weights,true,false,nullptr,&context.linear);
+    auto dense_qr=n::SolveLinear(dense,y,weights,false,false,nullptr,&context.linear,context.scale);
+    auto dense_svd=n::SolveLinear(dense,y,weights,true,false,nullptr,&context.linear,context.scale);
     const auto qr_summary=Summarize(production.x,y,context.linear,context.scale,std::move(dense_qr));
     const auto svd_summary=Summarize(production.x,y,context.linear,context.scale,std::move(dense_svd));
     const auto faces=EnumerateFaces(production.x,y,context);
@@ -363,24 +366,34 @@ j::value Assess(const j::value & fixture)
     const double normalized_local_response_norm=y.norm()/parent_scale;
     scaled_policy.release_response_norm=parent_scale*normalized_local_response_norm;
     const auto parent_summary=Summarize(production.x,y,parent_policy,parent_scale,
-        n::SolveLinear(production.x,y,weights,false,true,nullptr,&parent_policy));
+        n::SolveLinear(production.x,y,weights,false,true,nullptr,&parent_policy,nullptr,parent_scale));
     const auto local_summary=Summarize(production.x,y,local_policy,parent_scale,
-        n::SolveLinear(production.x,y,weights,false,true,nullptr,&local_policy));
+        n::SolveLinear(production.x,y,weights,false,true,nullptr,&local_policy,nullptr,parent_scale));
     const auto scaled_summary=Summarize(production.x,y,scaled_policy,parent_scale,
-        n::SolveLinear(production.x,y,weights,false,true,nullptr,&scaled_policy));
+        n::SolveLinear(production.x,y,weights,false,true,nullptr,&scaled_policy,nullptr,parent_scale));
     n::LinearResult production_result{production.beta,production.certificate.linear_solver_valid,
         production.certificate.linear_solver_reason,production.certificate.free_rank.value_or(0),
         production.certificate.linear_solves.value_or(0),production.certificate.linear_releases.value_or(0),0};
     const auto production_summary=Summarize(production.x,y,context.linear,context.scale,std::move(production_result));
-    const auto refinement=RefineFace(production.x,y,faces.beta,production.beta,context);
-    const auto expected_active=IndicesJson(face_summary.certificate.active_atoms);
-    const bool refinement_active_matches=refinement.size()>2 &&
-        j::serialize(refinement[2].at("active_a_atoms").as_array())==j::serialize(expected_active);
-    const bool assessment_valid=production_summary.linear.valid && !production_summary.certificate.kkt_passed &&
-        faces.valid && faces.faces==4096 && faces.kkt_feasible_faces>0 &&
-        refinement.size()>2 && refinement[2].at("kkt_passed").as_bool() && refinement_active_matches &&
-        refinement[2].at("objective").as_double()<=production_summary.certificate.objective &&
-        parent_summary.linear.releases==0 && local_summary.linear.releases==0 && scaled_summary.linear.releases==0;
+    const auto & original=fixture.at("production_solver");
+    const auto original_beta=VectorFrom(original.at("beta"));
+    const auto refinement=RefineFace(production.x,y,faces.beta,original_beta,context);
+    const double original_objective=j::value_to<double>(original.at("objective"));
+    const bool active_face_matches=production_summary.certificate.active_atoms==face_summary.certificate.active_atoms;
+    const bool policy_cases_pass=parent_summary.certificate.kkt_passed && local_summary.certificate.kkt_passed &&
+        scaled_summary.certificate.kkt_passed && parent_summary.linear.releases==0 &&
+        local_summary.linear.releases==0 && scaled_summary.linear.releases==0 &&
+        parent_summary.certificate.active_atoms==face_summary.certificate.active_atoms &&
+        local_summary.certificate.active_atoms==face_summary.certificate.active_atoms &&
+        scaled_summary.certificate.active_atoms==face_summary.certificate.active_atoms;
+    const bool assessment_valid=production_summary.linear.valid && production_summary.certificate.available &&
+        production_summary.certificate.feasible && production_summary.certificate.kkt_passed &&
+        production_summary.linear.rank==face_summary.linear.rank && production_summary.linear.releases==0 &&
+        production_summary.certificate.objective<=original_objective &&
+        production_summary.certificate.objective<=face_summary.certificate.objective && active_face_matches &&
+        faces.valid && faces.faces==4096 && faces.feasible_faces>0 && policy_cases_pass &&
+        refinement.size()>2 && refinement[2].at("kkt_passed").as_bool() &&
+        refinement[2].at("objective").as_double()<=original_objective;
     j::array table{SummaryJson("Production SparseQR",production_summary),SummaryJson("Dense QR",qr_summary),
         SummaryJson("Dense SVD",svd_summary),SummaryJson("Independent active-face enumeration",face_summary),
         SummaryJson("Dense free-face QR",dense_face_summary),SummaryJson("Long-double free-face QR",alternate_face_summary)};
@@ -437,7 +450,7 @@ int main(int argc,char ** argv)
         if(action=="replay")
         {
             const auto result=Run(Read(argv[2])); std::cout<<j::serialize(result)<<'\n';
-            return result.at("reproduced").as_bool() ? 0 : 1;
+            return result.at("recovered").as_bool() ? 0 : 1;
         }
         if(action=="assess")
         {
