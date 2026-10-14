@@ -180,6 +180,9 @@ void ModelAnalysisEditor::SetAtomPostFitPeeling(const AtomObject & atom, PostFit
     if (raw.size() != value.samples.size()) throw std::invalid_argument("Peeling/raw sample count mismatch.");
     if (!SameSource(value.source, entry.StageEstimate(FittingStage::Second).source))
         throw std::invalid_argument("Peeling source mismatch.");
+    entry.ClearGroupEvidence();
+    entry.ClearGroupMemberResult();
+    InvalidateGroups(ModelAnalysisData::Of(m_model_object), {atom.GetSerialID()});
     entry.SetPostFitPeeling(std::move(value));
 }
 
@@ -302,6 +305,9 @@ void ModelAnalysisEditor::SetAtomLocalRawSamplingEntries(
 {
     auto & entry = EnsureAtomLocalPotential(m_model_object, atom_object);
     entry.ClearPeeling();
+    entry.ClearGroupEvidence();
+    entry.ClearGroupMemberResult();
+    InvalidateGroups(ModelAnalysisData::Of(m_model_object), {atom_object.GetSerialID()});
     entry.SetRawSamplingEntries(std::move(value));
 }
 

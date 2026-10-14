@@ -12,12 +12,26 @@
 
 namespace rhbm_gem::core::detail {
 namespace {
+constexpr const char * LocalUncertaintyMethod = "local-conditional-iid-ls";
+
 bool PositiveDefinite(const Eigen::MatrixXd & matrix)
 {
     if (!matrix.allFinite()) return false;
     Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> spectrum(matrix);
     return spectrum.info() == Eigen::Success && spectrum.eigenvalues()(0) >
         std::numeric_limits<double>::epsilon() * static_cast<double>(matrix.rows()) * spectrum.eigenvalues().maxCoeff();
+}
+bool HasCurrentEvidence(const AtomLocalPotentialView & local, const LocalStageEstimate & stage)
+{
+    const auto & evidence = local.GetGroupEvidence();
+    if (!evidence || evidence->status != EvidenceStatus::Available || !evidence->estimate ||
+        !evidence->covariance || evidence->uncertainty_method != LocalUncertaintyMethod)
+        return false;
+    if (evidence->atom_id != stage.source.atom_id || evidence->component_id != stage.source.component_id ||
+        evidence->source_id != stage.source.run_id || !stage.point ||
+        !evidence->estimate->isApprox(linearization_service::EncodeGaussianToParameterVector(*stage.point), 1.0e-12))
+        throw std::invalid_argument("Joint group evidence source mismatch.");
+    return PositiveDefinite(*evidence->covariance);
 }
 GaussianModel3DWithUncertainty Decode(const Eigen::VectorXd & z, const Eigen::MatrixXd & covariance, double charge)
 {
@@ -43,9 +57,8 @@ void RunJointGroupPotentialFitting(ModelObject & model, const FitOptions & optio
         for (const auto * atom : atoms)
         {
             const auto local = AtomLocalPotentialView::For(*atom);
-            const auto & evidence = local.GetGroupEvidence();
-            if (evidence && evidence->status == EvidenceStatus::Available)
-                members.push_back(local.GetFinalModel(FittingStage::Second));
+            const auto & stage = local.GetStageEstimate(FittingStage::Second);
+            if (HasCurrentEvidence(local, stage)) members.push_back(*stage.point);
         }
         if (members.size() >= 10 && atoms.front()->IsMainChainAtom()) training.push_back(std::move(members));
     }
@@ -72,10 +85,11 @@ void RunJointGroupPotentialFitting(ModelObject & model, const FitOptions & optio
                 all_charges.push_back(stage.point->GetOffset());
             }
             const auto & evidence = local.GetGroupEvidence();
-            if (!evidence || evidence->status != EvidenceStatus::Available || !evidence->estimate || !evidence->covariance)
+            if (!HasCurrentEvidence(local, stage))
             { ++summary.excluded_count; continue; }
-            if (evidence->atom_id != stage.source.atom_id || evidence->source_id != stage.source.run_id)
-                throw std::invalid_argument("Joint group evidence source mismatch.");
+            if (summary.member_ids.empty()) summary.source_id = evidence->source_id;
+            else if (summary.source_id != evidence->source_id)
+                throw std::invalid_argument("Joint group evidence mixes Joint runs.");
             const Eigen::Matrix2d precision = evidence->covariance->ldlt().solve(Eigen::Matrix2d::Identity());
             z.push_back(*evidence->estimate);
             information.push_back({precision, precision * *evidence->estimate});

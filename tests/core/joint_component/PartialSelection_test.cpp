@@ -18,6 +18,7 @@
 #include "data/detail/JointStageAdapter.hpp"
 #include "core/detail/StageSummary.hpp"
 #include "core/detail/PostFitPeeling.hpp"
+#include "core/detail/LocalConditionalCovariance.hpp"
 #include "core/detail/JointUncertainty.hpp"
 #include "core/detail/MapInterpolation.hpp"
 #include "core/detail/MapSampler.hpp"
@@ -983,7 +984,7 @@ TEST(JointComponentPartialSelectionTest, FullComponentUncertaintyMatchesDenseRef
     EXPECT_FALSE(evidence.estimate);
 }
 
-TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesEvidenceWithoutSamplesAndPreservesSecond)
+TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesLocalEvidenceAndPreservesSecond)
 {
     using namespace rhbm_gem;
     std::vector<std::unique_ptr<AtomObject>> atoms;
@@ -1002,39 +1003,71 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesEvidenceWithoutSample
         LocalStageEstimate stage;
         stage.source = {EstimateMethod::JointComponents, std::to_string(i), "component", "evidence-test", FittingRole::Target};
         stage.point = GaussianModel3D(2 + i*0.2, 0.5 + 0.02*(i*i % 7), -0.1*i);
-        stage.uncertainty.status = EvidenceStatus::Available;
-        stage.uncertainty.method = "iid-ls-linearized";
-        stage.uncertainty.covariance = Eigen::Matrix3d::Identity()*0.001;
-        if (i == 3) stage.uncertainty.status = EvidenceStatus::Unavailable;
+        stage.convergence = JointCheckStatus::Passed;
         stages[i] = std::move(stage);
     }
     editor.ApplySecondStageEstimates(stages);
-    for (const auto & [id, stage] : stages)
-        editor.SetAtomGroupEvidence(*model.FindAtomPtr(id), core::detail::BuildJointParameterEvidence(stage));
+    for (const auto & [id, unused] : stages)
+    {
+        (void)unused;
+        const auto & stage = AtomLocalPotentialView::For(*model.FindAtomPtr(id)).GetStageEstimate(FittingStage::Second);
+        LocalPotentialSampleList raw;
+        PostFitPeelingResult peeling;
+        peeling.source = stage.source;
+        for (int sample_index = 0; sample_index < 6; ++sample_index)
+        {
+            const double distance = 0.12 + 0.43 * sample_index;
+            const auto basis = core::joint_component::EvaluateKernel(distance * distance, stage.point->GetWidth(), 2.5);
+            LocalPotentialSample sample;
+            sample.point.distance = distance;
+            sample.response = stage.point->GetAmplitude() * basis.gaussian +
+                stage.point->GetOffset() * basis.charge + 0.01 * std::sin(sample_index + id);
+            raw.push_back(sample);
+            peeling.samples.push_back({sample.response, {}});
+        }
+        if (id == 3)
+        {
+            for (std::size_t i = 2; i < peeling.samples.size(); ++i) peeling.samples[i].response.reset();
+        }
+        editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(id), raw);
+        editor.SetAtomPostFitPeeling(*model.FindAtomPtr(id), peeling);
+        const auto local = AtomLocalPotentialView::For(*model.FindAtomPtr(id));
+        const auto covariance = core::detail::ComputeLocalConditionalCovariance(
+            stage, raw, peeling, local.HasSampleGeometry());
+        editor.SetAtomGroupEvidence(*model.FindAtomPtr(id),
+            core::detail::BuildLocalGroupEvidence(stage, &peeling, covariance));
+    }
     core::FitOptions options; options.estimator = core::PotentialEstimator::JOINT_COMPONENTS; options.quiet_mode = true;
     core::RunGroupPotentialFitting(model, options);
     const auto keys = model.GetAnalysisView().CollectAtomGroupKeys();
     ASSERT_EQ(keys.size(), 1);
-    const auto summary = *model.GetAnalysisView().GetGroupParameterSummary(keys[0]);
+    auto summary = *model.GetAnalysisView().GetGroupParameterSummary(keys[0]);
     ASSERT_EQ(summary.status, EvidenceStatus::Available) << summary.reason;
     EXPECT_EQ(summary.point_count, 5); EXPECT_EQ(summary.eligible_count, 4); EXPECT_EQ(summary.excluded_count, 1);
     EXPECT_EQ(summary.member_ids, (std::vector<int>{1,2,4,5}));
     EXPECT_FALSE(AtomLocalPotentialView::For(*model.FindAtomPtr(3)).GetGroupMemberResult());
+
     const auto first = AtomLocalPotentialView::For(*model.FindAtomPtr(1));
     const auto before = first.GetGroupMemberResult()->posterior.GetModel().ToVector();
     const auto second = first.GetFinalModel(FittingStage::Second).ToVector();
-    auto detached_summary = model.GetAnalysisView().GetGroupParameterSummary(keys[0]);
-    detached_summary->inference->member_results.front().posterior = {};
-    EXPECT_EQ(first.GetGroupMemberResult()->posterior.GetModel().ToVector(), before);
-    EXPECT_EQ(model.GetAnalysisView().GetGroupParameterSummary(keys[0])->inference->member_results.front().posterior.GetModel().ToVector(), before);
-    EXPECT_FALSE(first.GetGroupMemberResult()->charge_inferred);
-    EXPECT_EQ(first.GetGroupMemberResult()->evidence_source_id, "evidence-test");
+    auto legacy_evidence = *AtomLocalPotentialView::For(*model.FindAtomPtr(5)).GetGroupEvidence();
+    legacy_evidence.uncertainty_method = "iid-ls-linearized";
+    editor.SetAtomGroupEvidence(*model.FindAtomPtr(5), legacy_evidence);
+    core::RunGroupPotentialFitting(model, options);
+    EXPECT_EQ(model.GetAnalysisView().GetGroupParameterSummary(keys[0])->eligible_count, 3);
+    legacy_evidence.uncertainty_method = "local-conditional-iid-ls";
+    editor.SetAtomGroupEvidence(*model.FindAtomPtr(5), legacy_evidence);
+    core::RunGroupPotentialFitting(model, options);
+
     {
         const command_test::ScopedTempDir directory{"joint_posterior_roundtrip"};
         DataRepository repository(directory.path()/"posterior.sqlite"); repository.SaveModel(model,"model");
         const auto loaded=repository.LoadModel("model");
         const auto saved=AtomLocalPotentialView::For(*loaded->FindAtomPtr(1));
         ASSERT_TRUE(saved.GetGroupMemberResult());
+        ASSERT_TRUE(saved.GetGroupEvidence());
+        EXPECT_EQ(saved.GetGroupEvidence()->uncertainty_method, "local-conditional-iid-ls");
+        EXPECT_EQ(*saved.GetGroupEvidence()->covariance, *first.GetGroupEvidence()->covariance);
         EXPECT_EQ(saved.GetGroupMemberResult()->posterior.GetModel().ToVector(),before);
         EXPECT_EQ(*saved.GetGroupMemberResult()->parameter_covariance,*first.GetGroupMemberResult()->parameter_covariance);
         EXPECT_FALSE(saved.GetGroupMemberResult()->charge_inferred);
@@ -1047,41 +1080,39 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesEvidenceWithoutSample
         auto changed_editor = changed_model.EditAnalysis();
         const auto changed_view = AtomLocalPotentialView::For(*changed_model.FindAtomPtr(1));
         auto stage = changed_view.GetStageEstimate(FittingStage::Second);
-        stage.uncertainty.covariance = *stage.uncertainty.covariance * 2;
+        stage.point = stage.point->WithAmplitude(stage.point->GetAmplitude() + 0.1);
         changed_editor.SetAtomStageEstimate(FittingStage::Second, *changed_model.FindAtomPtr(1), stage);
         EXPECT_FALSE(changed_view.GetGroupEvidence());
         EXPECT_FALSE(changed_view.GetGroupMemberResult());
         EXPECT_FALSE(changed_model.GetAnalysisView().GetGroupParameterSummary(keys[0]));
         EXPECT_FALSE(AtomLocalPotentialView::For(*changed_model.FindAtomPtr(2)).GetGroupMemberResult());
     }
-    editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1), {{-12345, {0.3, {0,0,0}, true}}});
+    auto changed_evidence = *first.GetGroupEvidence();
+    changed_evidence.covariance = *changed_evidence.covariance * 10.0;
+    editor.SetAtomGroupEvidence(*model.FindAtomPtr(1), changed_evidence);
     core::RunGroupPotentialFitting(model, options);
-    EXPECT_EQ(first.GetGroupMemberResult()->posterior.GetModel().ToVector(), before);
+    EXPECT_FALSE(first.GetGroupMemberResult()->posterior.GetModel().ToVector().isApprox(before, 1.0e-9));
     EXPECT_EQ(first.GetFinalModel(FittingStage::Second).ToVector(), second);
-    auto changed = *first.GetGroupEvidence(); changed.covariance = *changed.covariance * 10;
-    editor.SetAtomGroupEvidence(*model.FindAtomPtr(1), changed);
-    core::RunGroupPotentialFitting(model, options);
-    EXPECT_FALSE(first.GetGroupMemberResult()->posterior.GetModel().ToVector().isApprox(before, 1e-9));
-    for (int i = 2; i <= 5; ++i)
-    {
-        auto evidence = *AtomLocalPotentialView::For(*model.FindAtomPtr(i)).GetGroupEvidence();
-        evidence.status = EvidenceStatus::Unavailable;
-        editor.SetAtomGroupEvidence(*model.FindAtomPtr(i), evidence);
-    }
-    core::RunGroupPotentialFitting(model, options);
-    EXPECT_EQ(model.GetAnalysisView().GetGroupParameterSummary(keys[0])->reason, "single-member");
+
+    auto changed_peeling = *first.GetPostFitPeeling();
+    *changed_peeling.samples[0].response += 0.02;
+    editor.SetAtomPostFitPeeling(*model.FindAtomPtr(1), changed_peeling);
+    EXPECT_FALSE(first.GetGroupEvidence());
     EXPECT_FALSE(first.GetGroupMemberResult());
-    EXPECT_FALSE(model.GetAnalysisView().HasAtomGroupPrior(keys[0]));
-    for (int i = 1; i <= 5; ++i)
-    {
-        auto evidence = *AtomLocalPotentialView::For(*model.FindAtomPtr(i)).GetGroupEvidence();
-        evidence.status = EvidenceStatus::Available;
-        evidence.estimate = Eigen::Vector2d(1, 4);
-        evidence.covariance = Eigen::Matrix2d::Identity() * 0.01;
-        editor.SetAtomGroupEvidence(*model.FindAtomPtr(i), evidence);
-    }
+    const auto raw = first.GetRawSamplingEntries(false);
+    const auto & stage = first.GetStageEstimate(FittingStage::Second);
+    const auto covariance = core::detail::ComputeLocalConditionalCovariance(stage, raw, changed_peeling, true);
+    editor.SetAtomGroupEvidence(*model.FindAtomPtr(1),
+        core::detail::BuildLocalGroupEvidence(stage, &changed_peeling, covariance));
     core::RunGroupPotentialFitting(model, options);
-    EXPECT_EQ(model.GetAnalysisView().GetGroupParameterSummary(keys[0])->reason, "singular-group-covariance");
+
+    editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1), {{-12345, {0.3, {0,0,0}, true}}});
+    EXPECT_FALSE(first.GetPostFitPeeling());
+    EXPECT_FALSE(first.GetGroupEvidence());
+    EXPECT_FALSE(first.GetGroupMemberResult());
+    core::RunGroupPotentialFitting(model, options);
+    EXPECT_EQ(model.GetAnalysisView().GetGroupParameterSummary(keys[0])->eligible_count, 3);
+    EXPECT_EQ(first.GetFinalModel(FittingStage::Second).ToVector(), second);
     EXPECT_FALSE(first.GetGroupMemberResult());
 }
 

@@ -8,7 +8,7 @@
 #include "detail/joint_component/Problem.hpp"
 #include "detail/StageSummary.hpp"
 #include "detail/PostFitPeeling.hpp"
-#include "detail/JointUncertainty.hpp"
+#include "detail/LocalConditionalCovariance.hpp"
 #include "detail/GroupPotentialFitting.hpp"
 #include "detail/second_stage/IterationProcess.hpp"
 #include "data/detail/JointStageAdapter.hpp"
@@ -127,13 +127,20 @@ void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOp
     if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model));
     for (auto & [id, peeling] : BuildPostFitPeelingSamples(map, model, problem, problem.Input().selection_domain->target_indices, &snapshot))
         model.EditAnalysis().SetAtomPostFitPeeling(*model.FindAtomPtr(id), std::move(peeling));
-    for (auto & [id, uncertainty] : ComputeJointUncertainty(problem, snapshot, problem.Input().selection_domain->target_indices))
+    for (const auto index : problem.Input().selection_domain->target_indices)
     {
+        const auto id = std::stoi(problem.Input().atom_ids.at(index));
         auto & atom = *model.FindAtomPtr(id);
-        auto stage = AtomLocalPotentialView::For(atom).GetStageEstimate(FittingStage::Second);
-        stage.uncertainty = std::move(uncertainty);
-        model.EditAnalysis().SetAtomStageEstimate(FittingStage::Second, atom, stage);
-        model.EditAnalysis().SetAtomGroupEvidence(atom, BuildJointParameterEvidence(stage));
+        const auto local = AtomLocalPotentialView::For(atom);
+        const auto & stage = local.GetStageEstimate(FittingStage::Second);
+        const auto & peeling = local.GetPostFitPeeling();
+        const auto raw_samples = local.GetRawSamplingEntries(false);
+        LocalConditionalCovariance covariance;
+        if (peeling)
+            covariance = ComputeLocalConditionalCovariance(stage, raw_samples, *peeling, local.HasSampleGeometry());
+        covariance.source = stage.source;
+        const auto evidence = BuildLocalGroupEvidence(stage, peeling ? &*peeling : nullptr, covariance);
+        model.EditAnalysis().SetAtomGroupEvidence(atom, evidence);
     }
     model.EditAnalysis().SetJointResult(std::move(snapshot));
     RunGroupPotentialFitting(model, options);
