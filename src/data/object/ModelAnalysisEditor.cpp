@@ -231,6 +231,30 @@ void ModelAnalysisEditor::SetAtomPostFitPeeling(const AtomObject & atom, PostFit
     entry.SetPostFitPeeling(std::move(value));
 }
 
+void ModelAnalysisEditor::SetAtomPostJointLocalResult(const AtomObject & atom, PostJointLocalResult value)
+{
+    auto & data = ModelAnalysisData::Of(m_model_object);
+    auto & entry = EnsureAtomLocalPotential(m_model_object, atom);
+    const auto & joint = entry.StageEstimate(FittingStage::Second);
+    if (joint.source.method != EstimateMethod::JointComponents || joint.source.role != FittingRole::Target ||
+        !SameSource(value.source, joint.source))
+        throw std::invalid_argument("Post-Joint local result source mismatch.");
+    if (value.status == EvidenceStatus::Available)
+    {
+        const auto & model = value.fit.mdpde.GetModel();
+        if (!std::isfinite(model.GetAmplitude()) || model.GetAmplitude() <= 0.0 ||
+            !std::isfinite(model.GetWidth()) || model.GetWidth() <= 0.0 || !value.information ||
+            value.information->precision.rows() != 2 || value.information->precision.cols() != 2 ||
+            value.information->moment.size() != 2 || !value.information->precision.allFinite() ||
+            !value.information->moment.allFinite())
+            throw std::invalid_argument("Available post-Joint local result lacks finite measurement information.");
+    }
+    entry.ClearGroupEvidence();
+    entry.ClearGroupMemberResult();
+    InvalidateGroups(data, {atom.GetSerialID()});
+    entry.SetPostJointLocalResult(std::move(value));
+}
+
 void ModelAnalysisEditor::SetAtomGroupEvidence(const AtomObject & atom, GroupParameterEvidence value)
 {
     auto & entry = EnsureAtomLocalPotential(m_model_object, atom);
@@ -364,6 +388,7 @@ void ModelAnalysisEditor::ClearTransientFitStates()
         {
             entry->ClearTransientFitState(FittingStage::First);
             entry->ClearTransientFitState(FittingStage::Second);
+            entry->ClearPostJointTransientFitState();
         }
     }
 }

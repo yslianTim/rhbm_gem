@@ -1792,6 +1792,56 @@ TEST(DataObjectModelAnalysisTest, JointUpdatesInvalidateDependentResultsAcrossTh
     EXPECT_DOUBLE_EQ(view.GetFinalModel(rg::FittingStage::Second).GetAmplitude(), 3);
 }
 
+TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpointLifetime)
+{
+    auto model = data_test::MakeModelWithBond();
+    model->SelectAllAtoms();
+    auto editor = model->EditAnalysis();
+    editor.InitializeFromSelection();
+    const auto & atom = *model->GetSelectedAtoms().front();
+    rg::LocalStageEstimate joint;
+    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "run-1", rg::FittingRole::Target};
+    joint.point = rg::GaussianModel3D{2, .5, -.1};
+    joint.convergence = rg::JointCheckStatus::Passed;
+    editor.SetAtomStageEstimate(rg::FittingStage::Second, atom, joint);
+    editor.SetJointResult(rg::JointAnalysisResult{});
+    editor.SetAtomLocalRawSamplingEntries(atom, {{2, {.1, {0,0,0}, true}}});
+    rg::PostFitPeelingResult peeling;
+    peeling.source = rg::AtomLocalPotentialView::For(atom).GetStageEstimate(rg::FittingStage::Second).source;
+    peeling.samples = {{1.5, {}}};
+    editor.SetAtomPostFitPeeling(atom, peeling);
+
+    rg::PostJointLocalResult local;
+    local.source = peeling.source;
+    local.status = rg::EvidenceStatus::Available;
+    local.reason.clear();
+    local.fit.mdpde = {rg::GaussianModel3D{1.8, .6, 0}, {}};
+    local.fixed_charge = {-0.1, .5};
+    local.information = rg::RHBMInformation{Eigen::Matrix2d::Identity(), Eigen::Vector2d::Ones()};
+    editor.SetAtomPostJointLocalResult(atom, local);
+
+    const auto view = rg::AtomLocalPotentialView::For(atom);
+    ASSERT_TRUE(view.GetPostJointLocalResult());
+    ASSERT_TRUE(model->GetAnalysisView().GetJointResult());
+    EXPECT_DOUBLE_EQ(view.GetFinalModel(rg::FittingStage::Second).GetAmplitude(), 2);
+    EXPECT_DOUBLE_EQ(view.GetPostJointLocalResult()->fit.mdpde.GetModel().GetAmplitude(), 1.8);
+
+    editor.SetAtomLocalRawSamplingEntries(atom, {{3, {.2, {0,0,0}, true}}});
+    EXPECT_FALSE(view.GetPostFitPeeling());
+    EXPECT_FALSE(view.GetPostJointLocalResult());
+    EXPECT_TRUE(model->GetAnalysisView().GetJointResult());
+    EXPECT_DOUBLE_EQ(view.GetFinalModel(rg::FittingStage::Second).GetAmplitude(), 2);
+
+    editor.SetAtomPostFitPeeling(atom, peeling);
+    editor.SetAtomPostJointLocalResult(atom, local);
+    auto changed = view.GetStageEstimate(rg::FittingStage::Second);
+    changed.point = changed.point->WithAmplitude(2.5);
+    editor.SetAtomStageEstimate(rg::FittingStage::Second, atom, changed);
+    EXPECT_FALSE(view.GetPostFitPeeling());
+    EXPECT_FALSE(view.GetPostJointLocalResult());
+    EXPECT_FALSE(model->GetAnalysisView().GetJointResult());
+}
+
 TEST(DataObjectModelAnalysisTest, StageGettersProjectOnePointAndJointSamplesCannotBeOverwrittenIndependently)
 {
     auto model = data_test::MakeModelWithBond();

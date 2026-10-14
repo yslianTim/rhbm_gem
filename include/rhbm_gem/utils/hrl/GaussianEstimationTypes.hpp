@@ -86,6 +86,24 @@ struct LocalGaussianResult
     bool uncertainty_recorded{ true };
 };
 
+struct JointFixedChargeProfile
+{
+    double coefficient{};
+    double width{};
+};
+
+struct PostJointLocalResult
+{
+    EstimateSource source;
+    EvidenceStatus status{ EvidenceStatus::NotRun };
+    std::string reason{ "not-fitted" };
+    LocalGaussianResult fit;
+    JointFixedChargeProfile fixed_charge;
+    std::optional<RHBMInformation> information;
+    std::size_t sample_count{};
+    std::size_t effective_sample_count{};
+};
+
 struct GroupGaussianMemberResult
 {
     GaussianModel3DWithUncertainty posterior{};

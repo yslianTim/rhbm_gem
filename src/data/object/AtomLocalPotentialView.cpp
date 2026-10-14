@@ -98,6 +98,11 @@ const std::optional<PostFitPeelingResult> & AtomLocalPotentialView::GetPostFitPe
     return RequireEntry("Post-fit peeling").PostFitPeeling();
 }
 
+const std::optional<PostJointLocalResult> & AtomLocalPotentialView::GetPostJointLocalResult() const
+{
+    return RequireEntry("Post-Joint local result").PostJointLocalResult();
+}
+
 bool AtomLocalPotentialView::HasSampleGeometry() const
 {
     return IsAvailable() && RequireEntry("Sample geometry").SampleGeometryAvailable();

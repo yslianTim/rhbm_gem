@@ -31,6 +31,7 @@ class LocalPotentialEntry
     LocalPotentialSampleList m_peeling_sampling_entries;
     std::array<StageRecord, 2> m_stages{};
     std::optional<PostFitPeelingResult> m_post_fit_peeling;
+    std::optional<PostJointLocalResult> m_post_joint_local_result;
     bool m_sample_geometry_available{ true };
     std::optional<GroupGaussianMemberResult> m_group_member_result{};
     std::optional<GroupParameterEvidence> m_group_evidence;
@@ -107,9 +108,13 @@ public:
     {
         m_peeling_sampling_entries.clear();
         m_neighbor_count_for_peeling = 0;
+        m_post_joint_local_result.reset();
         m_post_fit_peeling = std::move(value);
     }
     void ClearPostFitPeeling() { m_post_fit_peeling.reset(); }
+    const std::optional<PostJointLocalResult> & PostJointLocalResult() const { return m_post_joint_local_result; }
+    void SetPostJointLocalResult(PostJointLocalResult value) { m_post_joint_local_result = std::move(value); }
+    void ClearPostJointLocalResult() { m_post_joint_local_result.reset(); }
     bool SampleGeometryAvailable() const { return m_sample_geometry_available; }
     void SetSampleGeometryAvailable(bool value) { m_sample_geometry_available = value; }
     void SetGroupMemberResult(GroupGaussianMemberResult value) { m_group_member_result = std::move(value); }
@@ -119,11 +124,16 @@ public:
     void ClearPeeling()
     {
         m_post_fit_peeling.reset();
+        m_post_joint_local_result.reset();
         m_peeling_sampling_entries.clear();
         m_neighbor_count_for_peeling = 0;
     }
     void ClearGroupMemberResult() { m_group_member_result.reset(); }
     void ClearTransientFitState(FittingStage stage) { Record(stage).fit_result.reset(); }
+    void ClearPostJointTransientFitState()
+    {
+        if (m_post_joint_local_result) m_post_joint_local_result->fit.fit_result.reset();
+    }
     int RawSamplingEntryCount() const { return static_cast<int>(m_raw_sampling_entries.size()); }
     int PeelingSamplingEntryCount() const
     {
