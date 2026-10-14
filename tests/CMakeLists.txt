@@ -394,8 +394,15 @@ add_test(NAME joint_projected_width_svd_modes
 add_test(NAME joint_projected_width_operator
     COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
         --gtest_filter=JointComponentProjectedWidthResearchTest.MatrixFreeActionsMatchDenseAndTiledQrOracles:JointComponentProjectedWidthResearchTest.BoundedProjectionPathFailsClosedAtPreflight)
+add_test(NAME joint_projected_width_rank_certificates
+    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
+        --gtest_filter=JointComponentProjectedWidthResearchTest.RankCertificatesRequireStrictEnclosedBounds)
+add_test(NAME joint_projected_width_giant_preflight
+    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
+        --gtest_filter=JointComponentStructuredProjectionResearchTest.GiantComponentPreflightsRejectBeforeAllocation)
 set_tests_properties(joint_projected_width_oracle_controls joint_projected_width_svd_modes
-    joint_projected_width_operator PROPERTIES
+    joint_projected_width_operator joint_projected_width_rank_certificates
+    joint_projected_width_giant_preflight PROPERTIES
     LABELS "core;domain:core;intent:algorithm;joint:numerical;joint:offline;research"
     TIMEOUT 900 ENVIRONMENT "OMP_NUM_THREADS=1")
 

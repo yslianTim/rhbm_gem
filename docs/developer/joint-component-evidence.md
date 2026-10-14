@@ -134,6 +134,14 @@ The complete concise record of those FixedNeighbor choices is in
   were stopped by memory preflight; it was not promoted. Full results,
   per-ordering fill and RSS measurements, and the promotion decision are in
   [bounded global rank research](joint-bounded-rank-research.md).
+- The projected-width follow-up established small exact-oracle forward and
+  adjoint parity, but its matrix-free operator still depends on a dense global
+  basis. The structured sparse normal-equation route completed chain/cube
+  projection controls through 1,024 atoms, but did not provide global
+  singular-value bounds. All 13 width-rank certificate attempts returned
+  `Unavailable`; the giant production and structured preflights rejected the
+  shape before factorization. The full results and promotion decision are in
+  [bounded projected-width research](joint-bounded-rank-research.md).
 - An opt-in affected-row candidate replay experiment compared the incremental
   objective/residual delta with the existing full replay on one-sweep synthetic
   chain/cube workloads from 128 through 1024 atoms. Across 339 candidate

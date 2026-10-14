@@ -128,3 +128,40 @@ not establish that a real 37,406-atom component can be fully qualified within
 4 GB. The full interior, mixed active and all-active estimates above all
 exceed the planning budget, and no large rank factorization or RSS experiment
 was run.
+
+## Projected-width bounded-research preflight
+
+The projected-width study adds small dense-oracle fixtures, exact-oracle
+matrix-free action controls, a test-only sparse normal-equation projection,
+and a rank-envelope contract checker. Results and topology measurements are
+in [bounded projected-width research](joint-bounded-rank-research.md).
+
+The following repeat of the current production planner uses the same giant
+dimensions, 74,811 support memberships, 149,622 structural nonzeros, and an
+explicit 600,000,000 resident-byte assumption. It is a checked shape
+preflight; no dense matrix or factor was allocated. Values differ slightly
+from the earlier sampled-resident census because that run used the then-live
+resident RSS as its input.
+
+| Free columns | Free-design factor | Free-design SVD workspace | Projection coefficients | Projected-width factor | Projected-width SVD workspace | Sparse workset | Tiled QR workspace | Estimated peak | Status |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 74,812 | 44,774,682,752 | 134,324,048,256 | 22,387,341,376 | 11,193,670,688 | 33,581,012,064 | 108,176,144 | 265,872,936,096 | 266,691,682,368 | ResourceLimit |
+| 56,109 | 25,185,759,048 | 75,557,277,144 | 16,790,506,032 | 11,193,670,688 | 33,581,012,064 | 106,979,216 | 167,049,426,200 | 167,865,180,120 | ResourceLimit |
+| 37,406 | 11,193,670,688 | 33,581,012,064 | 11,193,670,688 | 11,193,670,688 | 33,581,012,064 | 105,782,224 | 90,613,257,680 | 91,426,019,120 | ResourceLimit |
+
+The test-only structured projector estimates 359,052,341,856 bytes,
+202,337,211,624 bytes and 90,396,764,144 bytes for those same three free
+column counts. Its checked worst-case sparse Gram/fill workspace bound rejects
+all three before allocation. The matrix-free action-vector preflight estimates
+751,790,728 bytes, which passes the storage budget, but has no validated
+bounded projector and returns numerical status `Unavailable`. Its projection
+call count is zero. The preflight test's 24,494,080-byte process peak records
+only the process that evaluated these shape formulas; it is not an RSS
+measurement for the giant data or an estimate of memory saved by a rejected
+factorization.
+
+The full design's structural upper bound remains 37,406 for 74,812 columns,
+so that design is structurally deficient. This does not supply a numerical
+rank for the free face or the projected width. The giant component remains
+unqualified within both memory limits; no full-rank positive control or real
+4 GB run exists.

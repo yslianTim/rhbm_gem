@@ -1,6 +1,7 @@
 #include "MatrixFreeProjectedWidth.hpp"
 #include <Eigen/SVD>
 #include <algorithm>
+#include <array>
 #include <new>
 
 namespace second_stage_test::projected_width {
@@ -123,6 +124,68 @@ BoundedProjectionPlan PreflightBoundedProjection(std::size_t rows,std::size_t fr
     out.resource_status="Pass";
     out.numerical_status="Unavailable";
     out.reason="no-bounded-global-projector-with-validated-rank-contract";
+    return out;
+}
+
+const char * RankCertificateStatusName(RankCertificateStatus status)
+{
+    switch(status)
+    {
+    case RankCertificateStatus::FullRank: return "ProvenFullRank";
+    case RankCertificateStatus::RankDeficient: return "ProvenDeficient";
+    case RankCertificateStatus::Unavailable: return "Unavailable";
+    }
+    return "Unavailable";
+}
+
+ProjectedRankCertificate ClassifyProjectedRankEnvelope(const runtime::RankPolicy & policy,
+    Eigen::Index width_columns,const ProjectedSpectrumEnvelope & envelope)
+{
+    ProjectedRankCertificate out;
+    const std::array errors{envelope.projection_error_bound,envelope.matrix_vector_error_bound,
+        envelope.spectral_error_bound,envelope.floating_point_error_bound,envelope.normalization_error_bound,
+        envelope.threshold_rounding_error_bound};
+    if(!envelope.error_enclosure_valid || policy.rows<0 || width_columns<=0 ||
+        !std::isfinite(envelope.sigma_min_estimate) || !std::isfinite(envelope.sigma_max_estimate) ||
+        envelope.sigma_min_estimate<0 || envelope.sigma_max_estimate<=0 ||
+        envelope.sigma_min_estimate>envelope.sigma_max_estimate ||
+        !std::all_of(errors.begin(),errors.end(),[](double x){return std::isfinite(x) && x>=0;}))
+    {out.reason="missing-or-invalid-rigorous-enclosure"; return out;}
+
+    const auto upward=[](long double value) {
+        return std::nextafter(value,std::numeric_limits<long double>::infinity());
+    };
+    const auto downward=[](long double value) {
+        return std::nextafter(value,-std::numeric_limits<long double>::infinity());
+    };
+    long double total_error{};
+    for(const auto error:{envelope.projection_error_bound,envelope.matrix_vector_error_bound,
+        envelope.spectral_error_bound,envelope.floating_point_error_bound,envelope.normalization_error_bound})
+        total_error=upward(total_error+static_cast<long double>(error));
+    const long double sigma_min=envelope.sigma_min_estimate,sigma_max=envelope.sigma_max_estimate;
+    const long double sigma_min_lower=std::max(0.0L,downward(sigma_min-total_error));
+    const long double sigma_min_upper=upward(sigma_min+total_error);
+    const long double sigma_max_lower=std::max(0.0L,downward(sigma_max-total_error));
+    const long double sigma_max_upper=upward(sigma_max+total_error);
+    const long double relative=policy.Relative(width_columns);
+    const long double threshold_error=envelope.threshold_rounding_error_bound;
+    const long double threshold_lower=downward(downward(relative*sigma_max_lower)-threshold_error);
+    const long double threshold_upper=upward(upward(relative*sigma_max_upper)+threshold_error);
+    if(!std::isfinite(total_error) || !std::isfinite(sigma_min_upper) || !std::isfinite(sigma_max_upper) ||
+        !std::isfinite(threshold_lower) || !std::isfinite(threshold_upper))
+    {out.reason="spectral-envelope-overflow"; return out;}
+    const auto as_double=[](long double value) {
+        if(value>std::numeric_limits<double>::max()) return std::numeric_limits<double>::infinity();
+        return static_cast<double>(value);
+    };
+    out.sigma_min_lower=as_double(sigma_min_lower); out.sigma_min_upper=as_double(sigma_min_upper);
+    out.sigma_max_lower=as_double(sigma_max_lower); out.sigma_max_upper=as_double(sigma_max_upper);
+    out.threshold_lower=as_double(threshold_lower); out.threshold_upper=as_double(threshold_upper);
+    if(sigma_min_lower>threshold_upper)
+    {out.status=RankCertificateStatus::FullRank; out.reason="lower-minimum-exceeds-upper-threshold";}
+    else if(threshold_lower>=0 && sigma_min_upper<=threshold_lower)
+    {out.status=RankCertificateStatus::RankDeficient; out.reason="upper-minimum-at-or-below-lower-threshold";}
+    else out.reason="spectral-envelope-overlaps-rank-threshold";
     return out;
 }
 }

@@ -18,6 +18,15 @@ struct StructuredProjectionResult
     std::string rank_status{"Unavailable"};
 };
 
+struct StructuredProjectionPreflight
+{
+    std::size_t estimated_peak_bytes{},budget_bytes{};
+    std::string status{"Unavailable"},reason;
+};
+StructuredProjectionPreflight PreflightStructuredProjection(std::size_t rows,std::size_t columns,
+    std::size_t nonzeros,std::size_t resident_bytes,
+    std::size_t budget=runtime::JointMemoryPlanningBudgetBytes);
+
 StructuredProjectionResult ProjectWithSparseNormalEquations(const runtime::Sparse & design,
     const Eigen::Ref<const Vector> & observation_direction,std::size_t resident_bytes=0,
     std::size_t budget=runtime::JointMemoryPlanningBudgetBytes);

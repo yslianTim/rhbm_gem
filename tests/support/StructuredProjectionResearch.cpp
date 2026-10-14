@@ -14,12 +14,6 @@ bool AddProduct(std::size_t & total,std::size_t count,std::size_t width)
 {
     std::size_t bytes{}; return Product(count,width,bytes) && Add(total,bytes,total);
 }
-bool SparseBytes(const runtime::Sparse & x,std::size_t & bytes)
-{
-    if(x.nonZeros()<0 || x.outerSize()<0) return false;
-    return Product(static_cast<std::size_t>(x.nonZeros()),sizeof(double)+sizeof(Eigen::Index),bytes) &&
-        AddProduct(bytes,static_cast<std::size_t>(x.outerSize())+1,sizeof(Eigen::Index));
-}
 void GraphMetrics(const runtime::Sparse & gram,StructuredProjectionResult & out)
 {
     const auto columns=gram.cols();
@@ -100,6 +94,29 @@ void GraphMetrics(const runtime::Sparse & gram,StructuredProjectionResult & out)
 }
 }
 
+StructuredProjectionPreflight PreflightStructuredProjection(std::size_t rows,std::size_t columns,
+    std::size_t nonzeros,std::size_t resident_bytes,std::size_t budget)
+{
+    StructuredProjectionPreflight out; out.budget_bytes=budget;
+    std::size_t input_bytes{},outer{},square_count{},factor_bound{},workspace{},vectors{},estimate{};
+    if(!Add(columns,1,outer) ||
+        !Product(nonzeros,sizeof(double)+sizeof(Eigen::Index),input_bytes) ||
+        !AddProduct(input_bytes,outer,sizeof(Eigen::Index)) ||
+        !Product(columns,columns,square_count) ||
+        !Product(square_count,sizeof(double)+sizeof(Eigen::Index),factor_bound) ||
+        !Product(factor_bound,4,workspace) ||
+        !AddProduct(vectors,rows,5*sizeof(double)) ||
+        !AddProduct(vectors,columns,16*sizeof(double)+8*sizeof(Eigen::Index)) ||
+        !Add(resident_bytes ? resident_bytes : input_bytes,input_bytes,estimate) ||
+        !Add(estimate,workspace,estimate) || !Add(estimate,vectors,estimate))
+    {out.status="ResourceLimit"; out.reason="memory-estimate-overflow"; return out;}
+    out.estimated_peak_bytes=estimate;
+    if(estimate>budget)
+    {out.status="ResourceLimit"; out.reason="estimated-factor-peak-exceeds-planning-budget"; return out;}
+    out.status="Pass"; out.reason="worst-case-sparse-gram-and-fill-bound";
+    return out;
+}
+
 StructuredProjectionResult ProjectWithSparseNormalEquations(const runtime::Sparse & design,
     const Eigen::Ref<const Vector> & observation_direction,std::size_t resident_bytes,std::size_t budget)
 {
@@ -114,19 +131,11 @@ StructuredProjectionResult ProjectWithSparseNormalEquations(const runtime::Spars
     if(design.rows()<=0 || design.cols()<=0 || observation_direction.size()!=design.rows() ||
         !observation_direction.allFinite())
     {out.reason="invalid-shape-or-direction"; finish(); return out;}
-    std::size_t input_bytes{},square_count{},factor_bound{},workspace{},vectors{},estimate{};
-    if(!SparseBytes(design,input_bytes) ||
-        !Product(static_cast<std::size_t>(design.cols()),static_cast<std::size_t>(design.cols()),square_count) ||
-        !Product(square_count,sizeof(double)+sizeof(Eigen::Index),factor_bound) ||
-        !Product(factor_bound,4,workspace) ||
-        !AddProduct(vectors,static_cast<std::size_t>(design.rows()),5*sizeof(double)) ||
-        !AddProduct(vectors,static_cast<std::size_t>(design.cols()),16*sizeof(double)+8*sizeof(Eigen::Index)) ||
-        !Add(resident_bytes ? resident_bytes : input_bytes,input_bytes,estimate) ||
-        !Add(estimate,workspace,estimate) || !Add(estimate,vectors,estimate))
-    {out.status="ResourceLimit"; out.reason="memory-estimate-overflow"; finish(); return out;}
-    out.estimated_peak_bytes=estimate;
-    if(estimate>budget)
-    {out.status="ResourceLimit"; out.reason="estimated-factor-peak-exceeds-planning-budget"; finish(); return out;}
+    const auto preflight=PreflightStructuredProjection(static_cast<std::size_t>(design.rows()),
+        static_cast<std::size_t>(design.cols()),static_cast<std::size_t>(design.nonZeros()),resident_bytes,budget);
+    out.estimated_peak_bytes=preflight.estimated_peak_bytes;
+    if(preflight.status!="Pass")
+    {out.status=preflight.status; out.reason=preflight.reason; finish(); return out;}
     out.preflight_passed=true;
 
     try

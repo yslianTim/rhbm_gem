@@ -224,6 +224,8 @@ observation-row policy and strict singular-value threshold, and retains the
 resulting orthonormal basis `Q`. Its actions are
 
 ```text
+P_Z = Z Z^+
+J_perp = (I - P_Z) D
 Apply(v)        = D v - Q (Q^T D v)
 ApplyAdjoint(u) = D^T (u - Q (Q^T u))
 ```
@@ -279,3 +281,176 @@ projection is reported as unavailable. No rank certificate is produced, even
 when local blocks or the sparse factor appear full rank. The giant synthetic
 shape is handled by the checked preflight only; its structural full-design
 rank obstruction remains unchanged.
+
+### Projected-width measurements and qualification result
+
+The projected-width policy uses the original observation row count `N` and
+width column count `P`:
+
+```text
+tau = epsilon * max(N, P) * sigma_max(J_perp)
+```
+
+Free-design columns are normalized before projection; the width derivative
+uses the existing observation scaling and production column construction. The
+free-design rank path uses its existing strict `>` comparison. The projected
+width SVD keeps Eigen's current rank-boundary behavior, and a singular value
+within one representable step of `tau` is threshold-sensitive and cannot
+qualify `identified`. These controls do not substitute supported rows for
+`N`, alter the threshold, or treat a structural matching as numerical rank.
+
+The deterministic dense oracle contains 13 cases, each with eight matrix rows:
+well- and ill-conditioned full rank, exact projected-width deficiency,
+free-design deficiency, a near-threshold width direction, a connected
+full-rank support graph, local and strong coupling, a weak separator,
+target/halo selection, an active amplitude boundary, multiple components,
+and cancellation-sensitive columns. It reports the normalized design column
+norms, both spectra and thresholds, ranks under both the Eigen and strict
+boundaries, support counts, projection residual and elapsed time. In the
+serial Release run, the width oracle classified 11 of 13 controls as full rank
+and two as deficient. Ten controls had both full design and full projected
+width rank; three failed at least one rank check. The near-threshold case had
+`N=1,000`, `P=3`, `tau=2.220446049250313e-13`, and a minimum singular value
+equal to `tau`: Eigen reported rank 3 while the strict count was 2, and the
+existing threshold-sensitivity guard made it unsuitable for qualification.
+The ill-conditioned full-rank control's minimum singular value was
+`5.0e-15`, about 2.8 times its `1.77636e-15` threshold. The exactly deficient
+width control had singular values approximately
+`[sqrt(3), 1, 2.05e-16]`; the weak-separator control had
+`[1, 0.87287156, 2.81e-16]`. These are small dense references, not evidence
+for a giant component. The isolated oracle test's process peak was 24,772,608
+bytes; this is whole-process RSS, not an allocation-level measurement.
+
+The values-only and thin-right-vector CompactSvd modes agreed on singular
+values, rank, threshold and threshold-sensitivity for all 13 controls. The
+below/equal/above strict-boundary controls returned ranks 2/2/3 in both modes.
+The right-vector output for three width columns occupies 72 bytes in these
+fixtures. Tiny-matrix timings ranged from sub-microsecond values to tens of
+microseconds on first use and were not stable enough to compare; no
+function-level RSS saving was measured. Production still requests the
+thin right vectors because runtime JSON and offline audit tools consume the
+up-to-three weak directions. The directions do not participate in the rank
+decision, but removing them from the current result would change a persisted
+diagnostic contract. This study therefore did not promote a values-only
+production path. For `P=37,406`, the explicit `P × P` output matrix alone is
+11,193,670,688 bytes. Omitting it would remove that allocation in principle,
+but the same all-active production preflight is still 91,426,019,120 bytes;
+this study measured no giant RSS reduction.
+
+The exact-oracle-backed matrix-free operator uses the same orthogonal
+projection for both actions:
+
+```text
+Apply(v)        = D v - Q (Q^T D v)
+ApplyAdjoint(u) = D^T (u - Q (Q^T u))
+```
+
+Here `Q` is the thin-U basis from a dense SVD of normalized free design `Z`.
+Across the controls, forward and adjoint absolute errors were at most
+`5.65e-17` and `5.01e-17`, the adjoint inner-product difference at most
+`4.45e-16`, `Z^T Apply(v)` at most `1.78e-16`, and projection idempotence
+error at most `3.93e-16`. Dense and tiled projected-width singular values
+matched in the controls; the near-threshold case remained marked sensitive.
+These algebra checks use the dense oracle basis and cost `O(N rank(Z))` storage,
+so they are not a bounded projector. The giant action-vector preflight is
+751,790,728 bytes including the assumed 600,000,000 resident bytes and passes
+the 3.2 GB storage budget, but the bounded global projection result is
+`Unavailable`; it performs zero projection calls and supplies no rank evidence.
+
+The test-only structured path factors the full sparse Gram matrix, preserving
+all global couplings. The 8-row weak-separator positive control had one exact
+block, one articulation column, a one-dimensional interface, a two-column
+largest interior, seven factor nonzeros for ten Gram nonzeros, and a dense
+projection difference of `2.37e-16`. The strongly coupled control increased
+the diagonal pivot ratio to about 98.7 and had a `5.93e-16` projection
+difference. A deficient free-design control broke down and returned
+`Unavailable`. Every structured projection leaves rank status `Unavailable`,
+including successful small projections.
+
+Chain/cube scalability cases are sparse free-design projection controls only.
+They do not include a width derivative or a dense SVD, so their numerical
+rank is explicitly unknown. Each was run in a separate serial CTest process;
+RSS is the whole-process high-water mark. MB below is decimal.
+
+| Topology | Atoms | Rows × columns | Gram / factor nonzeros | Maximum factor column | Estimated peak MB | Process peak RSS MB | Projection error / idempotence | Runtime (s) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Chain | 128 | 58,300 × 256 | 1,528 / 892 | 4 | 42.41 | 36.95 | 2.14e-15 / 2.89e-15 | 0.00468 |
+| Cube | 128 | 47,792 × 256 | 6,768 / 9,500 | 72 | 41.64 | 36.72 | 2.03e-15 / 2.59e-15 | 0.00436 |
+| Chain | 256 | 116,540 × 512 | 3,064 / 1,788 | 4 | 68.69 | 45.61 | 2.12e-15 / 2.92e-15 | 0.00589 |
+| Cube | 256 | 93,431 × 512 | 14,728 / 28,816 | 124 | 66.84 | 45.43 | 2.06e-15 / 2.76e-15 | 0.00752 |
+| Chain | 512 | 233,020 × 1,024 | 6,136 / 3,580 | 4 | 146.97 | 68.76 | 2.12e-15 / 2.95e-15 | 0.00945 |
+| Cube | 512 | 183,040 × 1,024 | 31,616 / 105,600 | 282 | 142.97 | 68.04 | 2.03e-15 / 2.60e-15 | 0.01624 |
+| Chain | 1,024 | 465,980 × 2,048 | 12,280 / 7,164 | 4 | 403.37 | 111.87 | 2.12e-15 / 2.92e-15 | 0.01968 |
+| Cube | 1,024 | 361,867 × 2,048 | 65,864 / 327,260 | 442 | 395.04 | 110.17 | 2.06e-15 / 2.68e-15 | 0.04822 |
+
+All eight projection runs completed below the 3.2 GB planning budget. The
+connected chain/cube patterns had one exact block; no separator was used to
+drop edges. Cube factor fill grew from 1.40× Gram nonzeros at 128 atoms to
+4.97× at 1,024 atoms, while chain factor nonzeros stayed below its Gram count.
+These runs record sparse solve completion, projection residual and
+idempotence; they did not compare the large projections with an independent
+dense oracle. Since normal equations square `cond(Z)`, the fill and
+pivot-ratio measurements do not establish stable global rank evidence.
+
+For the giant shape, all estimates below use 5,938,087 rows, 37,406 atoms,
+74,811 support memberships, 149,622 design nonzeros, and an assumed
+600,000,000 resident bytes. No giant factor, Gram matrix, dense design, or
+projection was allocated. The production stage values are from the current
+`PlanMemory` path; the structured estimates are its conservative checked
+four-times dense Gram/fill workspace bound. Peak RSS is only the preflight test
+process, not a giant-data measurement.
+
+| Free columns | Production free factor | Free SVD workspace | Projection coefficients | Width factor | Width SVD workspace | Production estimated peak | Structured estimated peak | Status |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 74,812 | 44,774,682,752 | 134,324,048,256 | 22,387,341,376 | 11,193,670,688 | 33,581,012,064 | 266,691,682,368 | 359,052,341,856 | ResourceLimit |
+| 56,109 | 25,185,759,048 | 75,557,277,144 | 16,790,506,032 | 11,193,670,688 | 33,581,012,064 | 167,865,180,120 | 202,337,211,624 | ResourceLimit |
+| 37,406 | 11,193,670,688 | 33,581,012,064 | 11,193,670,688 | 11,193,670,688 | 33,581,012,064 | 91,426,019,120 | 90,396,764,144 | ResourceLimit |
+
+The matrix-free action estimate is 751,790,728 bytes and passes its storage
+preflight, but projection and rank are `Unavailable`. The structured preflight
+exceeds budget for all three faces before allocation. The structural
+row-count bound proves the giant full design deficient because 37,406
+supported rows are fewer than 74,812 columns. It does not prove active-free
+design rank or projected-width rank. The giant shape is not a full-rank
+positive control and no real 37,406-atom cryo-EM component was tested.
+
+### Rank-certificate contract and promotion gate
+
+`ClassifyProjectedRankEnvelope` is a test-support contract checker, not a
+spectral estimator. It accepts an envelope only when the caller asserts that
+projection, matrix-vector, spectral, floating-point, normalization and
+threshold-rounding errors are rigorously enclosed. It certifies full rank only
+when the lower singular-value bound exceeds the upper threshold, and
+deficiency only when the upper minimum-singular-value bound is at or below the
+lower threshold. Equality is deficient under the existing strict comparison.
+The helper rounds interval arithmetic outward; actual certification still
+requires an independently justified enclosure for every error term.
+Rule-level tests cover full, ill-conditioned, exact deficient, below/equal/
+above threshold and overlapping intervals. The exact threshold and its
+one-ULP neighbors return `Unavailable` when outward-rounded intervals overlap;
+the strict production boundary itself remains checked separately by the
+below/equal/above SVD control. The 13 actual fixture loops supply
+no such enclosures: all 13 returned `Unavailable`, with zero full or deficient
+certificates and zero false certifications. This is not a 0% empirical error
+rate for a completed certification method; no projected-width rank method in
+this study produced certificates.
+
+`ResourceLimit` means a checked memory preflight rejected work before the
+factor or projector allocation. `Unavailable` means the computation lacks a
+valid numerical result or sufficient evidence. Neither status passes rank
+qualification.
+
+| Method | Full-rank evidence | Deficiency evidence | Memory evidence | Decision |
+| --- | --- | --- | --- | --- |
+| Dense SVD oracle | Dense small-matrix reference | Dense small-matrix reference | Small fixtures only; 24.8 MB process peak | Reference |
+| Matrix-free operator | None from the bounded route; exact-oracle algebra only | None from the bounded route | Giant action estimate 751.8 MB; no projector ran | Experimental only |
+| Structured projection | No global SVD bounds | Sparse factor breakdown on a deficient control only | Topologies observed below 112 MB RSS; giant preflight 90.4–359.1 GB | Not worthwhile as current normal-equation route |
+| Projected-width spectral bounds | No rigorous enclosure implemented | No rigorous enclosure implemented | Not measured for a projected-width rank solver | Requires further research |
+
+The dense-oracle operator algebra is correct on the small controls, but
+promoting it would require a bounded, numerically reliable global projector.
+The current structured normal-equation preflight rejects the giant case and
+its conditioning squares. Stronger sparse factorization and/or rigorous
+singular-value enclosures would be a separate research effort. No experimental
+route changes production `AssessEvaluatedImpl()`, Trusted State availability,
+Design Rank, Projected-width Rank, or Derived Target Identifiability.

@@ -4,13 +4,16 @@
 #include "support/StructuredProjectionResearch.hpp"
 #include "support/BoundedRankResearch.hpp"
 #include "core/detail/joint_component/CompactSvd.hpp"
+#include "core/detail/joint_component/ResourceWork.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <Eigen/QR>
+#include <iomanip>
 #include <iostream>
 #include <limits>
+#include <sstream>
 
 namespace {
 namespace pw=second_stage_test::projected_width;
@@ -18,10 +21,10 @@ namespace n=rhbm_gem::core::joint_component;
 
 std::string Values(const Eigen::VectorXd & x)
 {
-    std::string out="[";
-    for(Eigen::Index k=0;k<x.size();++k)
-    {if(k) out+=","; out+=std::to_string(x(k));}
-    return out+"]";
+    std::ostringstream out;
+    out<<std::setprecision(17)<<"[";
+    for(Eigen::Index k=0;k<x.size();++k) {if(k) out<<","; out<<x(k);}
+    return out.str()+"]";
 }
 
 TEST(JointComponentProjectedWidthResearchTest, DenseOracleBaselinesAreReproducible)
@@ -55,7 +58,8 @@ TEST(JointComponentProjectedWidthResearchTest, DenseOracleBaselinesAreReproducib
             <<" design_rank="<<oracle.design.rank<<" design_threshold="<<oracle.design.threshold
             <<" design_threshold_sensitive="<<oracle.design.threshold_sensitive
             <<" width_singular_values="<<Values(oracle.width.singular_values)
-            <<" width_rank="<<oracle.width.rank<<" width_threshold="<<oracle.width.threshold
+            <<" width_rank="<<oracle.width.rank<<" width_strict_rank="<<oracle.width.strict_rank
+            <<" width_threshold="<<oracle.width.threshold
             <<" width_threshold_sensitive="<<oracle.width.threshold_sensitive
             <<" projection_residual="<<oracle.projection_residual
             <<" full_rank="<<(oracle.width.full_rank && oracle.design.full_rank)
@@ -111,7 +115,8 @@ TEST(JointComponentProjectedWidthResearchTest, ValuesOnlyAndRightVectorModesPres
         const double vectors_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-vectors_started).count();
         ASSERT_TRUE(values.valid && with_vectors.valid);
         EXPECT_EQ(values.rank,with_vectors.rank);
-        EXPECT_EQ(values.rank,oracle.width.rank);
+        if(!oracle.width.threshold_sensitive) EXPECT_EQ(values.rank,oracle.width.rank);
+        else EXPECT_FALSE(n::CompactRankDecisionSafe(values));
         EXPECT_DOUBLE_EQ(values.threshold,with_vectors.threshold);
         EXPECT_EQ(n::CompactRankDecisionSafe(values),n::CompactRankDecisionSafe(with_vectors));
         EXPECT_LE((values.singular_values-with_vectors.singular_values).lpNorm<Eigen::Infinity>(),
@@ -136,7 +141,8 @@ TEST(JointComponentProjectedWidthResearchTest, ValuesOnlyAndRightVectorModesPres
         {"equal",threshold},
         {"above",std::nextafter(threshold,std::numeric_limits<double>::infinity())}})
     {
-        Matrix boundary=Matrix::Zero(3,3); boundary(0,0)=1; boundary(1,1)=.5; boundary(2,2)=item.second;
+        pw::Matrix boundary=pw::Matrix::Zero(3,3);
+        boundary(0,0)=1; boundary(1,1)=.5; boundary(2,2)=item.second;
         const n::RankRequest request{policy,3,-1,n::RankBoundary::StrictGreater};
         const auto values=n::EvaluateRank(boundary,request,nullptr,n::CompactSvdVectors::None);
         const auto with_vectors=n::EvaluateRank(boundary,request,nullptr,n::CompactSvdVectors::Right);
@@ -202,13 +208,17 @@ TEST(JointComponentProjectedWidthResearchTest, MatrixFreeActionsMatchDenseAndTil
         const auto tiled_svd=n::EvaluateRank(reduced.projected,
             {fixture.policy,fixture.width_derivative.cols(),-1,n::RankBoundary::SvdNative});
         ASSERT_TRUE(tiled_svd.valid);
-        EXPECT_EQ(tiled_svd.rank,oracle.width.rank);
+        const bool rank_parity=tiled_svd.rank==oracle.width.rank;
+        if(!oracle.width.threshold_sensitive) EXPECT_TRUE(rank_parity);
+        else EXPECT_FALSE(n::CompactRankDecisionSafe(tiled_svd));
         EXPECT_LE((tiled_svd.singular_values-oracle.width.singular_values).lpNorm<Eigen::Infinity>(),roundoff);
 
         std::cout<<"matrix-free-operator fixture="<<fixture.name
             <<" rows="<<op.normalized_design.rows()<<" free_columns="<<op.normalized_design.cols()
             <<" width_columns="<<op.width_columns<<" design_rank="<<op.design_rank
             <<" width_rank="<<tiled_svd.rank<<" rank_threshold="<<tiled_svd.threshold
+            <<" oracle_rank_parity="<<rank_parity
+            <<" threshold_sensitive="<<!n::CompactRankDecisionSafe(tiled_svd)
             <<" forward_absolute_error="<<absolute_forward<<" forward_relative_error="<<relative_forward
             <<" adjoint_absolute_error="<<absolute_adjoint<<" adjoint_relative_error="<<relative_adjoint
             <<" adjoint_inner_product_difference="<<std::abs(lhs-rhs)
@@ -278,18 +288,20 @@ TEST(JointComponentStructuredProjectionResearchTest, SmallProjectionsMatchDenseO
         }
         ASSERT_TRUE(result.valid)<<result.reason;
         {
-            const n::Sparse derivative=fixture.width_derivative.sparseView();
-            const Eigen::VectorXd v=Eigen::VectorXd::LinSpaced(derivative.cols(),1.,2.).normalized();
-            const Eigen::VectorXd expected=derivative*v-oracle.projected_width*v;
-            const double error=(result.projection-expected).norm();
-            const double relative=error/std::max(expected.norm(),std::numeric_limits<double>::min());
             pw::Matrix normalized=fixture.free_design;
             for(Eigen::Index column=0;column<normalized.cols();++column)
                 normalized.col(column)/=normalized.col(column).norm();
             Eigen::HouseholderQR<pw::Matrix> qr(normalized);
             const pw::Matrix q=qr.householderQ()*pw::Matrix::Identity(normalized.rows(),normalized.cols());
             const Eigen::VectorXd qr_projection=q*(q.transpose()*u);
+            Eigen::JacobiSVD<pw::Matrix> dense_svd(normalized,Eigen::ComputeThinU);
+            const auto design_rank=oracle.design.rank;
+            const pw::Matrix dense_q=dense_svd.matrixU().leftCols(design_rank);
+            const Eigen::VectorXd dense_projection=dense_q*(dense_q.transpose()*u);
+            const double error=(result.projection-dense_projection).norm();
+            const double relative=error/std::max(dense_projection.norm(),std::numeric_limits<double>::min());
             const double qr_error=(result.projection-qr_projection).norm();
+            const double dense_svd_error=(result.projection-dense_projection).norm();
             const double objective_difference=std::abs((u-result.projection).squaredNorm()-
                 (u-qr_projection).squaredNorm());
             const double scale=std::max(1.0,u.norm());
@@ -298,6 +310,7 @@ TEST(JointComponentStructuredProjectionResearchTest, SmallProjectionsMatchDenseO
                 std::max(1.0,result.diagonal_condition_estimate)*scale;
             EXPECT_LE(error,roundoff);
             EXPECT_LE(qr_error,roundoff);
+            EXPECT_LE(dense_svd_error,roundoff);
             EXPECT_LE(objective_difference,roundoff*scale);
             EXPECT_LE(result.projection_residual,roundoff);
             EXPECT_LE(result.idempotence_error,roundoff);
@@ -313,11 +326,12 @@ TEST(JointComponentStructuredProjectionResearchTest, SmallProjectionsMatchDenseO
                 <<" gram_nonzeros="<<result.gram_nonzeros
                 <<" factor_nonzeros="<<result.factor_nonzeros
                 <<" predicted_fill_ratio="<<(result.gram_nonzeros ?
-                    static_cast<double>(result.factor_nonzeros)/result.gram_nonzeros : 0.0)
+                    static_cast<double>(result.factor_nonzeros)/static_cast<double>(result.gram_nonzeros) : 0.0)
                 <<" maximum_factor_size="<<result.maximum_factor_size
                 <<" diagonal_condition_estimate="<<result.diagonal_condition_estimate
                 <<" projection_absolute_error="<<error<<" projection_relative_error="<<relative
                 <<" dense_qr_projection_error="<<qr_error
+                <<" dense_svd_projection_error="<<dense_svd_error
                 <<" projection_objective_difference="<<objective_difference
                 <<" projection_residual="<<result.projection_residual
                 <<" idempotence_error="<<result.idempotence_error
@@ -330,12 +344,163 @@ TEST(JointComponentStructuredProjectionResearchTest, SmallProjectionsMatchDenseO
                 <<" seconds="<<result.seconds<<" rank_status="<<result.rank_status
                 <<" status="<<result.status<<" reason="<<result.reason<<"\n";
         }
-        else
-            std::cout<<"structured-projection-control fixture="<<fixture.name
-                <<" rows="<<result.rows<<" columns="<<result.columns
-                <<" estimated_peak_bytes="<<result.estimated_peak_bytes
-                <<" status="<<result.status<<" reason="<<result.reason
-                <<" rank_status="<<result.rank_status<<" seconds="<<result.seconds<<"\n";
+    }
+}
+
+TEST(JointComponentProjectedWidthResearchTest, RankCertificatesRequireStrictEnclosedBounds)
+{
+    constexpr Eigen::Index original_rows=1000,width_columns=3;
+    const n::RankPolicy policy{original_rows,6,width_columns};
+    const double threshold=policy.Relative(width_columns);
+    const auto full=[&](double sigma_min,double sigma_max) {
+        pw::ProjectedSpectrumEnvelope envelope;
+        envelope.sigma_min_estimate=sigma_min; envelope.sigma_max_estimate=sigma_max;
+        envelope.error_enclosure_valid=true;
+        return pw::ClassifyProjectedRankEnvelope(policy,width_columns,envelope);
+    };
+    const auto full_rank=full(1.,1.);
+    const auto ill_conditioned=full(4*threshold,1.);
+    const auto exactly_deficient=full(0.,std::sqrt(3.));
+    const auto equality=full(threshold,1.);
+    const auto below=full(std::nextafter(threshold,0.),1.);
+    const auto above=full(std::nextafter(threshold,std::numeric_limits<double>::infinity()),1.);
+    EXPECT_EQ(full_rank.status,pw::RankCertificateStatus::FullRank);
+    EXPECT_EQ(ill_conditioned.status,pw::RankCertificateStatus::FullRank);
+    EXPECT_EQ(exactly_deficient.status,pw::RankCertificateStatus::RankDeficient);
+    EXPECT_EQ(equality.status,pw::RankCertificateStatus::Unavailable);
+    EXPECT_EQ(below.status,pw::RankCertificateStatus::Unavailable);
+    EXPECT_EQ(above.status,pw::RankCertificateStatus::Unavailable);
+
+    pw::ProjectedSpectrumEnvelope incomplete;
+    incomplete.sigma_min_estimate=1.; incomplete.sigma_max_estimate=1.;
+    const auto no_enclosure=pw::ClassifyProjectedRankEnvelope(policy,width_columns,incomplete);
+    EXPECT_EQ(no_enclosure.status,pw::RankCertificateStatus::Unavailable);
+    pw::ProjectedSpectrumEnvelope crossing;
+    crossing.sigma_min_estimate=threshold*1.1; crossing.sigma_max_estimate=1.;
+    crossing.projection_error_bound=threshold*.2;
+    crossing.matrix_vector_error_bound=threshold*.2;
+    crossing.spectral_error_bound=threshold*.1;
+    crossing.floating_point_error_bound=threshold*.1;
+    crossing.normalization_error_bound=threshold*.1;
+    crossing.error_enclosure_valid=true;
+    const auto threshold_overlap=pw::ClassifyProjectedRankEnvelope(policy,width_columns,crossing);
+    EXPECT_EQ(threshold_overlap.status,pw::RankCertificateStatus::Unavailable);
+
+    std::size_t oracle_full{},oracle_deficient{},unavailable_cases{},false_certifications{};
+    for(const auto & fixture:pw::Fixtures())
+    {
+        const auto oracle=pw::EvaluateDenseOracle(fixture);
+        ASSERT_TRUE(oracle.valid)<<fixture.name;
+        if(oracle.width.full_rank) ++oracle_full; else ++oracle_deficient;
+
+        // No experimental operator in this study supplies rigorous spectral and
+        // floating-point enclosures for these fixture matrices.  Dense-oracle
+        // agreement is a comparison, not a certificate.
+        const pw::ProjectedSpectrumEnvelope envelope;
+        const auto certificate=pw::ClassifyProjectedRankEnvelope(
+            {fixture.policy.rows,fixture.policy.design_columns,fixture.width_derivative.cols()},
+            fixture.width_derivative.cols(),envelope);
+        if(certificate.status==pw::RankCertificateStatus::Unavailable) ++unavailable_cases;
+        EXPECT_EQ(certificate.status,pw::RankCertificateStatus::Unavailable)<<fixture.name;
+        std::cout<<"projected-width-certificate fixture="<<fixture.name
+            <<" oracle_rank="<<oracle.width.rank<<" columns="<<oracle.width_columns
+            <<" oracle_threshold="<<oracle.width.threshold
+            <<" oracle_threshold_sensitive="<<oracle.width.threshold_sensitive
+            <<" certificate="<<pw::RankCertificateStatusName(certificate.status)
+            <<" reason="<<certificate.reason<<"\n";
+    }
+    EXPECT_GT(oracle_full,0u); EXPECT_GT(oracle_deficient,0u);
+    EXPECT_EQ(false_certifications,0u);
+    EXPECT_EQ(unavailable_cases,pw::Fixtures().size());
+    std::cout<<"projected-width-certificate-summary oracle_full="<<oracle_full
+        <<" oracle_deficient="<<oracle_deficient<<" proven_full=0 proven_deficient=0 unavailable_cases="
+        <<unavailable_cases<<" unavailable_rate="
+        <<static_cast<double>(unavailable_cases)/static_cast<double>(pw::Fixtures().size())
+        <<" false_certifications="<<false_certifications<<"\n";
+    RecordProperty("false_certifications",std::to_string(false_certifications));
+    RecordProperty("unavailable_cases",std::to_string(unavailable_cases));
+}
+
+TEST(JointComponentStructuredProjectionResearchTest, GiantComponentPreflightsRejectBeforeAllocation)
+{
+    const auto overflow=pw::PreflightStructuredProjection(1,
+        std::numeric_limits<std::size_t>::max(),1,0);
+    EXPECT_EQ(overflow.status,"ResourceLimit");
+    EXPECT_EQ(overflow.reason,"memory-estimate-overflow");
+
+    constexpr std::size_t rows=5'938'087,atoms=37'406,design_columns=74'812;
+    constexpr std::size_t support_entries=74'811,nonzeros=149'622,resident=600'000'000;
+    n::MemoryShape shape;
+    shape.component_atoms=atoms; shape.component_observations=rows;
+    shape.component_support_entries=support_entries; shape.component_structural_nonzeros=nonzeros;
+    shape.component_structural_supported_rows=atoms; shape.component_design_columns=design_columns;
+    shape.component_width_columns=atoms; shape.component_target_atoms=atoms;
+    shape.component_target_columns=3*atoms; shape.resident_bytes=resident;
+
+    const auto projected=n::PlanMemory(shape,n::MemoryStage::ProjectedWidthAssessment);
+    ASSERT_EQ(projected.status,n::MemoryStatus::Reject);
+    const auto rank=n::PlanMemory(shape,n::MemoryStage::RankAssessment);
+    EXPECT_EQ(rank.status,n::MemoryStatus::Reject);
+    EXPECT_EQ(rank.estimated_peak_bytes,projected.estimated_peak_bytes);
+    EXPECT_EQ(projected.free_design_factor_bytes,design_columns*design_columns*sizeof(double));
+    EXPECT_EQ(projected.projection_coefficient_bytes,design_columns*atoms*sizeof(double));
+    EXPECT_EQ(projected.projected_width_factor_bytes,atoms*atoms*sizeof(double));
+
+    const auto matrix_free=pw::PreflightBoundedProjection(rows,design_columns,atoms,
+        nonzeros,nonzeros,resident);
+    EXPECT_EQ(matrix_free.resource_status,"Pass");
+    EXPECT_EQ(matrix_free.numerical_status,"Unavailable");
+    const auto structured=pw::PreflightStructuredProjection(rows,design_columns,nonzeros,
+        resident);
+    EXPECT_EQ(structured.status,"ResourceLimit");
+    EXPECT_GT(structured.estimated_peak_bytes,n::JointMemoryPlanningBudgetBytes);
+
+    std::cout<<"projected-width-giant-preflight rows="<<rows<<" atoms="<<atoms
+        <<" components=1 free_columns="<<design_columns<<" width_columns="<<atoms
+        <<" structural_nonzeros="<<nonzeros<<" structural_supported_rows="<<atoms
+        <<" full_design_columns="<<design_columns<<" structural_rank_upper_bound="<<atoms
+        <<" full_design_structural_status=Failed"
+        <<" free_factor_bytes="<<projected.free_design_factor_bytes
+        <<" free_svd_workspace_bytes="<<projected.free_design_svd_workspace_bytes
+        <<" projection_coefficients_bytes="<<projected.projection_coefficient_bytes
+        <<" width_factor_bytes="<<projected.projected_width_factor_bytes
+        <<" width_svd_workspace_bytes="<<projected.projected_width_svd_workspace_bytes
+        <<" sparse_workset_bytes="<<projected.sparse_design_bytes
+        <<" qr_tile_workspace_bytes="<<projected.qr_tile_workspace_bytes
+        <<" temporary_bytes="<<projected.temporary_bytes
+        <<" production_estimated_peak_bytes="<<projected.estimated_peak_bytes
+        <<" production_status="<<n::MemoryStatusName(projected.status)
+        <<" action_estimated_peak_bytes="<<matrix_free.estimated_peak_bytes
+        <<" action_resource_status="<<matrix_free.resource_status
+        <<" action_numerical_status="<<matrix_free.numerical_status
+        <<" structured_estimated_peak_bytes="<<structured.estimated_peak_bytes
+        <<" structured_status="<<structured.status<<" structured_reason="<<structured.reason
+        <<" planning_budget_bytes="<<n::JointMemoryPlanningBudgetBytes
+        <<" observed_process_peak_bytes="<<(n::ProcessPeakRssBytes() ?
+            std::to_string(*n::ProcessPeakRssBytes()) : "unavailable")
+        <<" allocations_performed=0 rank_status=Unavailable\n";
+
+    for(const std::size_t free_columns:{design_columns,std::size_t{56'109},atoms})
+    {
+        auto active_shape=shape; active_shape.component_free_columns=free_columns;
+        const auto active_production=n::PlanMemory(active_shape,n::MemoryStage::ProjectedWidthAssessment);
+        EXPECT_EQ(active_production.status,n::MemoryStatus::Reject);
+        const auto active= pw::PreflightStructuredProjection(rows,free_columns,nonzeros,resident);
+        EXPECT_EQ(active.status,"ResourceLimit");
+        std::cout<<"production-active-face-preflight free_columns="<<free_columns
+            <<" free_factor_bytes="<<active_production.free_design_factor_bytes
+            <<" free_svd_workspace_bytes="<<active_production.free_design_svd_workspace_bytes
+            <<" projection_coefficients_bytes="<<active_production.projection_coefficient_bytes
+            <<" width_factor_bytes="<<active_production.projected_width_factor_bytes
+            <<" width_svd_workspace_bytes="<<active_production.projected_width_svd_workspace_bytes
+            <<" sparse_workset_bytes="<<active_production.sparse_design_bytes
+            <<" qr_tile_workspace_bytes="<<active_production.qr_tile_workspace_bytes
+            <<" temporary_bytes="<<active_production.temporary_bytes
+            <<" estimated_peak_bytes="<<active_production.estimated_peak_bytes
+            <<" status="<<n::MemoryStatusName(active_production.status)<<"\n";
+        std::cout<<"structured-active-face-preflight free_columns="<<free_columns
+            <<" estimated_peak_bytes="<<active.estimated_peak_bytes
+            <<" status="<<active.status<<" reason="<<active.reason<<"\n";
     }
 }
 

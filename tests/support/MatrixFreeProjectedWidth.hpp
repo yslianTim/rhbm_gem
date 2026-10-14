@@ -32,4 +32,22 @@ struct BoundedProjectionPlan
 BoundedProjectionPlan PreflightBoundedProjection(std::size_t rows,std::size_t free_columns,
     std::size_t width_columns,std::size_t design_nonzeros,std::size_t derivative_nonzeros,
     std::size_t resident_bytes,std::size_t budget=runtime::JointMemoryPlanningBudgetBytes);
+
+enum class RankCertificateStatus {FullRank,RankDeficient,Unavailable};
+const char * RankCertificateStatusName(RankCertificateStatus);
+struct ProjectedSpectrumEnvelope
+{
+    double sigma_min_estimate{},sigma_max_estimate{};
+    double projection_error_bound{},matrix_vector_error_bound{},spectral_error_bound{},
+        floating_point_error_bound{},normalization_error_bound{},threshold_rounding_error_bound{};
+    bool error_enclosure_valid{};
+};
+struct ProjectedRankCertificate
+{
+    RankCertificateStatus status{RankCertificateStatus::Unavailable};
+    double sigma_min_lower{},sigma_min_upper{},sigma_max_lower{},sigma_max_upper{},threshold_lower{},threshold_upper{};
+    std::string reason;
+};
+ProjectedRankCertificate ClassifyProjectedRankEnvelope(const runtime::RankPolicy &,Eigen::Index width_columns,
+    const ProjectedSpectrumEnvelope &);
 }

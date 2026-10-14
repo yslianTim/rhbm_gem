@@ -18,7 +18,7 @@ struct Fixture
 struct SpectrumOracle
 {
     Vector singular_values;
-    Eigen::Index rank{};
+    Eigen::Index rank{},strict_rank{};
     double threshold{},minimum{};
     bool threshold_sensitive{},full_rank{};
 };

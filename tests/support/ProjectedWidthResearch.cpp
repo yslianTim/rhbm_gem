@@ -37,11 +37,12 @@ bool NearThreshold(const Vector & values,double threshold)
         if(values(k)>=lower && values(k)<=upper) return true;
     return false;
 }
-SpectrumOracle Spectrum(const Vector & values,double threshold,Eigen::Index columns)
+SpectrumOracle Spectrum(const Vector & values,double threshold,Eigen::Index columns,Eigen::Index rank=-1)
 {
     SpectrumOracle out; out.singular_values=values; out.threshold=threshold;
     if(values.size()==0) return out;
-    out.rank=(values.array()>threshold).count();
+    out.strict_rank=(values.array()>threshold).count();
+    out.rank=rank<0 ? out.strict_rank : rank;
     out.minimum=values(values.size()-1); out.full_rank=out.rank==columns;
     out.threshold_sensitive=NearThreshold(values,threshold);
     return out;
@@ -55,7 +56,7 @@ std::vector<Fixture> Fixtures()
     out.push_back(Make("well-conditioned-full-rank",Matrix::Identity(8,4),IndependentWidths()));
 
     Matrix ill=Matrix::Zero(8,3); ill(0,0)=1; ill(1,1)=1; ill(2,2)=1;
-    Matrix ill_d=Matrix::Zero(8,3); ill_d(3,0)=1; ill_d(4,1)=1; ill_d(5,2)=1e-7;
+    Matrix ill_d=Matrix::Zero(8,3); ill_d(3,0)=1; ill_d(4,1)=1; ill_d(5,2)=5e-15;
     out.push_back(Make("ill-conditioned-full-rank",ill,ill_d));
 
     Matrix deficient_d=Matrix::Zero(8,3);
@@ -137,8 +138,9 @@ DenseOracle EvaluateDenseOracle(const Fixture & fixture)
     if(width_svd.info()!=Eigen::Success || !width_svd.singularValues().allFinite())
     {out.reason="projected-width-svd-failed"; return out;}
     const auto width_values=width_svd.singularValues();
-    const double width_tau=fixture.policy.Relative(out.width_columns)*width_values(0);
-    out.width=Spectrum(width_values,width_tau,out.width_columns);
+    width_svd.setThreshold(fixture.policy.Relative(out.width_columns));
+    const double width_tau=width_svd.threshold()*width_values(0);
+    out.width=Spectrum(width_values,width_tau,out.width_columns,width_svd.rank());
     out.projection_residual=(z.transpose()*out.projected_width).norm();
     out.valid=true; return out;
 }
