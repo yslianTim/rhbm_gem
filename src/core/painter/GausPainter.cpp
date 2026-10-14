@@ -971,6 +971,9 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
             auto offset_prior{
                 entry_iter.GetAtomGroupPrior(group_key).GetOffset()
             };
+            const auto group_summary = entry_iter.GetGroupParameterSummary(group_key);
+            if (group_summary && group_summary->descriptive_charge_median)
+                offset_prior = *group_summary->descriptive_charge_median;
             auto offset_error{
                 entry_iter.GetAtomGroupPriorWithUncertainty(group_key)
                     .GetStandardDeviationModel().GetOffset()

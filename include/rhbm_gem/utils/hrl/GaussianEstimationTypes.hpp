@@ -121,6 +121,7 @@ struct GroupGaussianMemberResult
     std::string evidence_source_id;
     bool charge_inferred{ true };
     std::optional<Eigen::Matrix2d> parameter_covariance;
+    std::optional<JointFixedChargeProfile> fixed_charge;
 };
 
 struct GroupGaussianMemberInput
@@ -149,6 +150,7 @@ struct GroupParameterSummary
     std::string correlation_policy{ "block-diagonal-by-atom" };
     std::size_t point_count{}, eligible_count{}, excluded_count{};
     std::optional<GaussianModel3D> descriptive_mean;
+    std::optional<double> descriptive_charge_median;
     std::optional<GroupGaussianResult> inference;
     std::vector<int> member_ids;
 };

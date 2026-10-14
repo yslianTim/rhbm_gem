@@ -1096,6 +1096,12 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
     EXPECT_EQ(summary.point_count, 4); EXPECT_EQ(summary.eligible_count, 4); EXPECT_EQ(summary.excluded_count, 1);
     EXPECT_EQ(summary.member_ids, (std::vector<int>{1,2,4,5}));
     EXPECT_FALSE(AtomLocalPotentialView::For(*model.FindAtomPtr(3)).GetGroupMemberResult());
+    ASSERT_TRUE(summary.descriptive_charge_median);
+    EXPECT_DOUBLE_EQ(*summary.descriptive_charge_median, -0.3);
+    ASSERT_TRUE(summary.inference);
+    EXPECT_DOUBLE_EQ(summary.inference->mean.GetOffset(), 0.0);
+    EXPECT_DOUBLE_EQ(summary.inference->mdpde.GetOffset(), 0.0);
+    EXPECT_DOUBLE_EQ(summary.inference->prior.GetModel().GetOffset(), 0.0);
 
     const auto first = AtomLocalPotentialView::For(*model.FindAtomPtr(1));
     ASSERT_TRUE(first.GetPostJointLocalResult());
@@ -1103,6 +1109,32 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
     const auto local_point = first.GetPostJointLocalResult()->fit.mdpde.GetModel().ToVector();
     EXPECT_FALSE(joint_point.isApprox(local_point, 1.0e-10));
     const auto posterior = first.GetGroupMemberResult()->posterior.GetModel().ToVector();
+    const auto evaluateMember = [](const GroupGaussianMemberResult & member, double distance) {
+        EXPECT_TRUE(member.fixed_charge);
+        if (!member.fixed_charge) return;
+        const auto & gaussian = member.posterior.GetModel();
+        const double charge = core::joint_component::EvaluateKernel(
+            distance * distance, member.fixed_charge->width, 2.5).charge;
+        EXPECT_DOUBLE_EQ(core::EvaluateGroupMemberResponseAtDistance(member, distance),
+            gaussian.SignalAtDistance(distance) + member.fixed_charge->coefficient * charge);
+    };
+    for (const int id : summary.member_ids)
+    {
+        const auto member = AtomLocalPotentialView::For(*model.FindAtomPtr(id)).GetGroupMemberResult();
+        ASSERT_TRUE(member);
+        ASSERT_TRUE(member->fixed_charge);
+        const auto local = AtomLocalPotentialView::For(*model.FindAtomPtr(id)).GetPostJointLocalResult();
+        ASSERT_TRUE(local);
+        EXPECT_DOUBLE_EQ(member->fixed_charge->coefficient, local->fixed_charge.coefficient);
+        EXPECT_DOUBLE_EQ(member->fixed_charge->width, local->fixed_charge.width);
+        EXPECT_DOUBLE_EQ(member->posterior.GetModel().GetOffset(), 0.0);
+        evaluateMember(*member, 0.0);
+        evaluateMember(*member, 1.2);
+        evaluateMember(*member, 2.5);
+        evaluateMember(*member, 2.6);
+    }
+    EXPECT_NE(first.GetGroupMemberResult()->fixed_charge->width,
+        first.GetGroupMemberResult()->posterior.GetModel().GetWidth());
 
     {
         auto stale = *first.GetPostJointLocalResult();
@@ -1144,7 +1176,47 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
             first.GetPostJointLocalResult()->information->precision);
         ASSERT_TRUE(saved.GetGroupMemberResult());
         EXPECT_EQ(saved.GetGroupMemberResult()->posterior.GetModel().ToVector(), posterior);
+        ASSERT_TRUE(saved.GetGroupMemberResult()->fixed_charge);
+        EXPECT_DOUBLE_EQ(saved.GetGroupMemberResult()->fixed_charge->coefficient,
+            first.GetGroupMemberResult()->fixed_charge->coefficient);
+        EXPECT_DOUBLE_EQ(saved.GetGroupMemberResult()->fixed_charge->width,
+            first.GetGroupMemberResult()->fixed_charge->width);
+        EXPECT_DOUBLE_EQ(core::EvaluateGroupMemberResponseAtDistance(*saved.GetGroupMemberResult(), 1.2),
+            core::EvaluateGroupMemberResponseAtDistance(*first.GetGroupMemberResult(), 1.2));
     }
+
+    auto version_three = boost::json::parse(rhbm_gem::stage_result_io::Encode(model)).as_object();
+    version_three["version"] = 3;
+    for (auto & value : version_three["atoms"].as_array())
+    {
+        auto & atom_record = value.as_object();
+        if (atom_record.at("posterior").is_null()) continue;
+        auto & posterior_record = atom_record.at("posterior").as_object();
+        const auto & charge = atom_record.at("post_joint_local").as_object().at("fixed_charge").as_array();
+        posterior_record.at("posterior").as_object().at("point").as_array()[2] = charge[0];
+        posterior_record.erase("fixed_charge");
+    }
+    for (auto & value : version_three["groups"].as_array())
+    {
+        auto & group_record = value.as_object();
+        if (group_record.at("summary").is_null()) continue;
+        auto & summary_record = group_record.at("summary").as_object();
+        if (!summary_record.at("charge_median").is_null())
+        {
+            const auto median = summary_record.at("charge_median");
+            summary_record.at("mean").as_array()[2] = median;
+            auto & inference = summary_record.at("inference").as_object();
+            inference.at("mean").as_array()[2] = median;
+            inference.at("mdpde").as_array()[2] = median;
+            inference.at("prior").as_object().at("point").as_array()[2] = median;
+        }
+        summary_record.erase("charge_median");
+    }
+    ModelObject migrated_v3{model};
+    rhbm_gem::stage_result_io::Decode(
+        migrated_v3, boost::json::serialize(version_three), 4, {});
+    EXPECT_EQ(rhbm_gem::stage_result_io::Encode(migrated_v3),
+        rhbm_gem::stage_result_io::Encode(model));
 
     editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1), {{-12345, {0.3, {0,0,0}, true}}});
     EXPECT_FALSE(first.GetPostFitPeeling());
@@ -1194,6 +1266,36 @@ TEST(JointComponentPartialSelectionTest, TargetOnlyPostprocessingRetainsFullCont
     EXPECT_EQ(f.model->GetAnalysisView().GetJointResult()->objective, snapshot.objective);
     EXPECT_EQ(f.model->GetAnalysisView().GetJointResult()->metadata.model_path, "metadata-only");
     EXPECT_TRUE(rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).HasFinalModel(rhbm_gem::FittingStage::Second));
+}
+
+TEST(JointComponentPartialSelectionTest, FixedChargePosteriorEvaluatorUsesJointWidthAndKernelSupport)
+{
+    const std::array<JointFixedChargeProfile, 4> profiles{{
+        {0.0, 0.6}, {0.4, 0.6}, {-0.3, 0.42}, {0.4, 0.9}}};
+    const std::array<double, 4> posterior_widths{0.6, 0.48, 0.51, 0.48};
+    for (std::size_t i = 0; i < profiles.size(); ++i)
+    {
+        GroupGaussianMemberResult member;
+        member.posterior = {GaussianModel3D{2.3, posterior_widths[i], 0.0}, {}};
+        member.fixed_charge = profiles[i];
+        member.charge_inferred = false;
+        for (const double distance : {0.0, 1.2, 2.5, 2.6})
+        {
+            const double joint_charge = n::EvaluateKernel(
+                distance * distance, profiles[i].width, 2.5).charge;
+            const double expected = member.posterior.GetModel().SignalAtDistance(distance) +
+                profiles[i].coefficient * joint_charge;
+            EXPECT_DOUBLE_EQ(core::EvaluateGroupMemberResponseAtDistance(member, distance), expected);
+        }
+    }
+    EXPECT_NE(profiles[2].width, posterior_widths[2]);
+
+    GroupGaussianMemberResult narrow, broad;
+    narrow.posterior = broad.posterior = {GaussianModel3D{2.3, 0.48, 0.0}, {}};
+    narrow.fixed_charge = JointFixedChargeProfile{0.4, 0.42};
+    broad.fixed_charge = JointFixedChargeProfile{0.4, 0.9};
+    EXPECT_NE(core::EvaluateGroupMemberResponseAtDistance(narrow, 1.2),
+        core::EvaluateGroupMemberResponseAtDistance(broad, 1.2));
 }
 
 TEST(JointComponentPartialSelectionTest, ExistingSampleFirstExecutorUsesOnlyTheExplicitWorkset)

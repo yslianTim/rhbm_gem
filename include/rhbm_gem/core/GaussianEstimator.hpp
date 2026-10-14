@@ -47,6 +47,9 @@ GroupGaussianResult EstimateGroupGaussian(
     double alpha_g,
     const FitOptions & options);
 
+// Reconstructs a Joint group member's posterior signal with its fixed Joint charge profile.
+double EvaluateGroupMemberResponseAtDistance(const GroupGaussianMemberResult &, double distance);
+
 void RunLocalAlphaTraining(
     ModelObject & model_object,
     const FitOptions & options,

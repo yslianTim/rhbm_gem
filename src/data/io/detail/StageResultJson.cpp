@@ -6,6 +6,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <boost/json.hpp>
 #include <cmath>
 #include <algorithm>
@@ -69,6 +70,13 @@ V Pack(const GaussianModel3DWithUncertainty & p)
 {
     const auto & s=p.GetStandardDeviationModel();
     return O{{"point",Pack(p.GetModel())},{"sd",A{NativeNumber(s.GetAmplitude()),NativeNumber(s.GetWidth()),NativeNumber(s.GetOffset())}}};
+}
+V Pack(const JointFixedChargeProfile & p) { return A{NativeNumber(p.coefficient), NativeNumber(p.width)}; }
+JointFixedChargeProfile FixedChargeProfile(const V & v)
+{
+    const auto & a = v.as_array();
+    if (a.size() != 2) throw std::invalid_argument("Invalid fixed charge profile.");
+    return {Number(a[0]), Number(a[1])};
 }
 GaussianModel3DWithUncertainty Uncertain(const V & v)
 {
@@ -196,17 +204,29 @@ void RestoreNative(LocalPotentialEntry & e, FittingStage stage, const V & native
     }
     e.SetStageEstimate(stage,std::move(estimate));
 }
-V Pack(const GroupGaussianMemberResult & m) { return O{{"posterior",Pack(m.posterior)},{"outlier",m.is_outlier},{"distance",m.statistical_distance},{"source",m.evidence_source_id},{"charge_inferred",m.charge_inferred},{"covariance",m.parameter_covariance ? Matrix(*m.parameter_covariance):V{}}}; }
-GroupGaussianMemberResult Member(const V & v) { const auto & o=v.as_object(); GroupGaussianMemberResult m; m.posterior=Uncertain(o.at("posterior")); m.is_outlier=Read<bool>(o,"outlier"); m.statistical_distance=Number(o.at("distance")); m.evidence_source_id=Read<std::string>(o,"source"); m.charge_inferred=Read<bool>(o,"charge_inferred"); if(!o.at("covariance").is_null()) m.parameter_covariance=Matrix<2,2>(o.at("covariance")); return m; }
+V Pack(const GroupGaussianMemberResult & m) { return O{{"posterior",Pack(m.posterior)},{"outlier",m.is_outlier},{"distance",m.statistical_distance},{"source",m.evidence_source_id},{"charge_inferred",m.charge_inferred},{"covariance",m.parameter_covariance ? Matrix(*m.parameter_covariance):V{}},{"fixed_charge",m.fixed_charge ? Pack(*m.fixed_charge):V{}}}; }
+GroupGaussianMemberResult Member(const V & v)
+{
+    const auto & o=v.as_object(); GroupGaussianMemberResult m;
+    m.posterior=Uncertain(o.at("posterior")); m.is_outlier=Read<bool>(o,"outlier");
+    m.statistical_distance=Number(o.at("distance")); m.evidence_source_id=Read<std::string>(o,"source");
+    m.charge_inferred=Read<bool>(o,"charge_inferred");
+    if(!o.at("covariance").is_null()) m.parameter_covariance=Matrix<2,2>(o.at("covariance"));
+    if (const auto fixed = o.find("fixed_charge"); fixed != o.end() && !fixed->value().is_null())
+        m.fixed_charge=FixedChargeProfile(fixed->value());
+    return m;
+}
 V Pack(const GroupParameterSummary & s)
 {
     V inference;
     if(s.inference) { const auto & i=*s.inference; inference=O{{"alpha",i.alpha_g},{"mean",Pack(i.mean)},{"mdpde",Pack(i.mdpde)},{"prior",Pack(i.prior)}}; }
-    return O{{"status",static_cast<int>(s.status)},{"reason",s.reason},{"source",s.source_id},{"correlation",s.correlation_policy},{"points",s.point_count},{"eligible",s.eligible_count},{"excluded",s.excluded_count},{"mean",s.descriptive_mean ? Pack(*s.descriptive_mean):V{}},{"inference",inference},{"ids",j::value_from(s.member_ids)}};
+    return O{{"status",static_cast<int>(s.status)},{"reason",s.reason},{"source",s.source_id},{"correlation",s.correlation_policy},{"points",s.point_count},{"eligible",s.eligible_count},{"excluded",s.excluded_count},{"mean",s.descriptive_mean ? Pack(*s.descriptive_mean):V{}},{"charge_median",OptionalNumber(s.descriptive_charge_median)},{"inference",inference},{"ids",j::value_from(s.member_ids)}};
 }
 GroupParameterSummary Summary(const V & v, bool legacy)
 {
     const auto & o=v.as_object(); GroupParameterSummary s; s.status=Enum<EvidenceStatus>(o.at("status"),3); s.reason=Read<std::string>(o,"reason"); s.source_id=Read<std::string>(o,"source"); s.correlation_policy=Read<std::string>(o,"correlation"); s.point_count=Read<std::size_t>(o,"points"); s.eligible_count=Read<std::size_t>(o,"eligible"); s.excluded_count=Read<std::size_t>(o,"excluded"); s.member_ids=Read<std::vector<int>>(o,"ids");
+    if (const auto charge = o.find("charge_median"); charge != o.end())
+        s.descriptive_charge_median=OptionalNumber(charge->value());
     if(!o.at("mean").is_null()) s.descriptive_mean=Point(o.at("mean"));
     if(!o.at("inference").is_null()) { const auto & i=o.at("inference").as_object(); GroupGaussianResult r; r.alpha_g=Number(i.at("alpha")); r.mean=Point(i.at("mean")); r.mdpde=Point(i.at("mdpde")); r.prior=Uncertain(i.at("prior")); if(legacy) { for(const auto & m:i.at("members").as_array()) r.member_results.push_back(Member(m)); if(r.member_results.size()!=s.member_ids.size()) throw std::invalid_argument("Posterior member count mismatch."); } s.inference=std::move(r); }
     return s;
@@ -237,7 +257,7 @@ std::string Encode(const ModelObject & model)
     }
     const auto & g=data.AtomGroupEntry();
     for(const auto key:g.CollectGroupKeys()) { A ids; for(const auto * a:g.GetMembers(key)) ids.push_back(a->GetSerialID()); groups.push_back(O{{"key",static_cast<std::uint64_t>(key)},{"members",ids},{"alpha",g.GetParameterSummary(key) && !g.GetParameterSummary(key)->inference ? V(g.GetAlphaG(key)):V{}},{"native",g.GetParameterSummary(key) ? V{}:V(O{{"alpha",g.GetAlphaG(key)},{"mean",Pack(g.GetMean(key))},{"mdpde",Pack(g.GetMDPDE(key))},{"prior",Pack(g.GetPriorWithUncertainty(key))}})},{"summary",g.GetParameterSummary(key) ? Pack(*g.GetParameterSummary(key)):V{}}}); }
-    return j::serialize(O{{"version",3},{"atoms",atoms},{"groups",groups}});
+    return j::serialize(O{{"version",4},{"atoms",atoms},{"groups",groups}});
 }
 void Decode(ModelObject & model, const std::string & text, int expected_version, const std::vector<GroupKey> & legacy_groups)
 {
@@ -245,7 +265,7 @@ void Decode(ModelObject & model, const std::string & text, int expected_version,
     const auto document=j::parse(text,{},parse_options); const auto & root=document.as_object();
     const int version=Read<int>(root,"version"); const bool legacy=version==1;
     if ((version==1 && expected_version!=1) ||
-        (version!=1 && (version<2 || version>3 || version>expected_version)))
+        (version!=1 && (version<2 || version>4 || version>expected_version)))
         throw std::invalid_argument("Unsupported neutral stage format.");
     auto & data=ModelAnalysisData::Of(model); std::set<int> seen;
     for(const auto & v:root.at("atoms").as_array())
@@ -295,7 +315,24 @@ void Decode(ModelObject & model, const std::string & text, int expected_version,
             if(Pack(incoming.posterior)!=Pack(old.posterior) || incoming.is_outlier!=old.is_outlier || incoming.statistical_distance!=old.statistical_distance)
                 throw std::invalid_argument("Legacy posterior mismatch.");
         }
-        e.ClearGroupMemberResult(); if(!o.at("posterior").is_null()) e.SetGroupMemberResult(Member(o.at("posterior")));
+        e.ClearGroupMemberResult();
+        if (!o.at("posterior").is_null())
+        {
+            auto member = Member(o.at("posterior"));
+            const auto & stage = e.StageEstimate(FittingStage::Second);
+            if (version == 3 && !member.charge_inferred &&
+                stage.source.method == EstimateMethod::JointComponents && !member.fixed_charge)
+            {
+                const auto & local = e.PostJointLocalResult();
+                if (!local || local->status != EvidenceStatus::Available)
+                    throw std::invalid_argument("Legacy Joint posterior lacks fixed charge evidence.");
+                member.fixed_charge = local->fixed_charge;
+                member.posterior = GaussianModel3DWithUncertainty{
+                    member.posterior.GetModel().WithOffset(0.0),
+                    member.posterior.GetStandardDeviationModel()};
+            }
+            e.SetGroupMemberResult(std::move(member));
+        }
     }
     if(seen.size()!=data.AtomLocalEntries().size()) throw std::invalid_argument("Incomplete neutral local records.");
     auto & groups=data.AtomGroupEntry(); groups.ClearMembers(); std::set<GroupKey> keys;
@@ -342,6 +379,25 @@ void Decode(ModelObject & model, const std::string & text, int expected_version,
             groups.SetGaussianResult(key,result);
         }
         if(!o.at("summary").is_null()) { auto s=Summary(o.at("summary"),legacy);
+            if (version == 3 && joint_group && s.inference)
+            {
+                std::vector<double> charges;
+                for (const auto id : s.member_ids)
+                {
+                    const auto * atom = model.FindAtomPtr(id);
+                    const auto * entry = atom ? data.FindAtomLocalEntry(*atom) : nullptr;
+                    if (entry && entry->PostJointLocalResult() &&
+                        entry->PostJointLocalResult()->status == EvidenceStatus::Available)
+                        charges.push_back(entry->PostJointLocalResult()->fixed_charge.coefficient);
+                }
+                if (!charges.empty()) s.descriptive_charge_median = array_helper::ComputeMedian(charges);
+                if (s.descriptive_mean) s.descriptive_mean = s.descriptive_mean->WithOffset(0.0);
+                s.inference->mean = s.inference->mean.WithOffset(0.0);
+                s.inference->mdpde = s.inference->mdpde.WithOffset(0.0);
+                s.inference->prior = GaussianModel3DWithUncertainty{
+                    s.inference->prior.GetModel().WithOffset(0.0),
+                    s.inference->prior.GetStandardDeviationModel()};
+            }
             if(legacy && std::find(legacy_groups.begin(),legacy_groups.end(),key)!=legacy_groups.end())
             {
                 const GaussianModel3D missing{0,0};
@@ -466,11 +522,31 @@ void Validate(const ModelObject & model)
             if(stage.source.method==EstimateMethod::JointComponents)
             {
                 const auto & local=entry->PostJointLocalResult();
+                const auto & member=*entry->GroupMemberResult();
                 if(stage.source.role!=FittingRole::Target || !local || local->status!=EvidenceStatus::Available ||
-                    !SameSource(local->source,stage.source) || stage.source.run_id!=summary->source_id)
+                    !SameSource(local->source,stage.source) || stage.source.run_id!=summary->source_id ||
+                    member.charge_inferred || !member.fixed_charge ||
+                    member.fixed_charge->coefficient!=local->fixed_charge.coefficient ||
+                    member.fixed_charge->width!=local->fixed_charge.width ||
+                    !std::isfinite(member.fixed_charge->coefficient) ||
+                    !std::isfinite(member.fixed_charge->width) || member.fixed_charge->width<=0.0 ||
+                    member.posterior.GetModel().GetOffset()!=0.0)
                     throw std::invalid_argument("Group posterior lacks current post-Joint local measurement information.");
             }
         }
+        bool joint_group = false;
+        for (const auto id : summary->member_ids)
+        {
+            const auto * atom = model.FindAtomPtr(id);
+            const auto * entry = atom ? data.FindAtomLocalEntry(*atom) : nullptr;
+            joint_group |= entry && entry->StageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents;
+        }
+        if (joint_group && (!summary->descriptive_charge_median ||
+            !std::isfinite(*summary->descriptive_charge_median) ||
+            !summary->descriptive_mean || summary->descriptive_mean->GetOffset()!=0.0 ||
+            summary->inference->mean.GetOffset()!=0.0 || summary->inference->mdpde.GetOffset()!=0.0 ||
+            summary->inference->prior.GetModel().GetOffset()!=0.0))
+            throw std::invalid_argument("Joint group summary conflates Gaussian width and fixed charge profile.");
     }
     if(!data.joint_result) return;
     const auto mapped=data_internal::BuildJointStageEstimates(*data.joint_result,"");

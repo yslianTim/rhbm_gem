@@ -1325,7 +1325,7 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     EXPECT_DOUBLE_EQ(loaded->GetAnalysisView().GetAtomAlphaG(group),.87);
     EXPECT_FALSE(actual.fit_result); ASSERT_TRUE(actual.diagnostics); EXPECT_EQ(actual.diagnostics->iterations.iterations,17);
     EXPECT_EQ(actual.diagnostics->refinement->relative_coordinate_difference,fit.refinement->relative_coordinate_difference);
-    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),3);
+    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),4);
     EXPECT_FALSE(loaded->GetAnalysisView().GetJointResult());
 }
 

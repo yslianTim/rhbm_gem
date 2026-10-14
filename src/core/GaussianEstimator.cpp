@@ -1,6 +1,7 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/GroupPotentialFitting.hpp"
+#include "core/detail/joint_component/Numerics.hpp"
 
 #include "core/detail/gaussian_fit/FittingRanges.hpp"
 #include "core/detail/gaussian_fit/GaussianModelOperations.hpp"
@@ -120,6 +121,15 @@ GroupGaussianResult DecodeGroupGaussianResult(
 }
 
 } // namespace
+
+double EvaluateGroupMemberResponseAtDistance(const GroupGaussianMemberResult & member, double distance)
+{
+    const auto & gaussian = member.posterior.GetModel();
+    if (!member.fixed_charge) return gaussian.ResponseAtDistance(distance);
+    const auto charge = joint_component::EvaluateKernel(
+        distance * distance, member.fixed_charge->width, 2.5).charge;
+    return gaussian.SignalAtDistance(distance) + member.fixed_charge->coefficient * charge;
+}
 
 void detail::RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & options)
 {

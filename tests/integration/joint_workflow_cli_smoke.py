@@ -60,7 +60,7 @@ def main() -> int:
             fixed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='fixed'").fetchone()[0])
             changed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='changed'").fetchone()[0])
             stages = json.loads(connection.execute("SELECT result_json FROM model_stage_result WHERE key_tag='example'").fetchone()[0])
-            assert stages["version"] == 3
+            assert stages["version"] == 4
             assert len(stages["atoms"]) == 2
             assert all(atom["peeled"] is None and atom["second_native"] is None for atom in stages["atoms"])
             for group in stages["groups"]:

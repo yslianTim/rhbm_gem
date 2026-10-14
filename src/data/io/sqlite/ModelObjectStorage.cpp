@@ -1163,7 +1163,7 @@ std::unique_ptr<ModelObject> Load(
         if(rc==SQLiteWrapper::StepRow()) neutral=database.GetColumn<std::string>(0);
         else if(rc!=SQLiteWrapper::StepDone()) throw std::runtime_error("Failed to read stage results.");
     }
-    if(neutral) stage_result_io::Decode(*model_object,*neutral,legacy ? 1:3,legacy_groups);
+    if(neutral) stage_result_io::Decode(*model_object,*neutral,legacy ? 1:4,legacy_groups);
     else if(legacy) stage_result_io::AdaptLegacy(*model_object);
     else throw std::invalid_argument("Missing canonical analysis document.");
     return model_object;

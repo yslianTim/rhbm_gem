@@ -53,14 +53,14 @@ bool HasCurrentPostJointLocal(
 }
 
 GaussianModel3DWithUncertainty Decode(
-    const Eigen::VectorXd & z, const Eigen::MatrixXd & covariance, double charge)
+    const Eigen::VectorXd & z, const Eigen::MatrixXd & covariance)
 {
     const auto decoded = linearization_service::DecodeParameterVector(z, covariance);
     GaussianModel3D::RequireFinitePositiveWidthModel(decoded.GetModel());
     const auto & sd = decoded.GetStandardDeviationModel();
     if (!std::isfinite(sd.GetAmplitude()) || !std::isfinite(sd.GetWidth()))
         throw std::runtime_error("Nonfinite posterior uncertainty.");
-    return {decoded.GetModel().WithOffset(charge),
+    return {decoded.GetModel().WithOffset(0.0),
         GaussianModel3DUncertainty(sd.GetAmplitude(), sd.GetWidth(), std::numeric_limits<double>::quiet_NaN())};
 }
 }
@@ -99,7 +99,7 @@ void RunJointGroupPotentialFitting(ModelObject & model, const FitOptions & optio
         summary.status = EvidenceStatus::Unavailable;
         std::vector<RHBMParameterVector> beta;
         std::vector<RHBMInformation> information;
-        std::vector<double> charges;
+        std::vector<JointFixedChargeProfile> fixed_charges;
         Eigen::Vector2d sums = Eigen::Vector2d::Zero();
         std::size_t target_count{};
         for (const auto * atom : view.GetAtomObjectList(key))
@@ -118,7 +118,7 @@ void RunJointGroupPotentialFitting(ModelObject & model, const FitOptions & optio
             if (!encoded.allFinite()) throw std::invalid_argument("Invalid post-Joint local parameter encoding.");
             beta.push_back(encoded);
             information.push_back(*post_joint.information);
-            charges.push_back(post_joint.fixed_charge.coefficient);
+            fixed_charges.push_back(post_joint.fixed_charge);
             sums += Eigen::Vector2d(point.GetAmplitude(), point.GetWidth());
             summary.member_ids.push_back(atom->GetSerialID());
         }
@@ -128,7 +128,14 @@ void RunJointGroupPotentialFitting(ModelObject & model, const FitOptions & optio
         if (!beta.empty())
             summary.descriptive_mean = GaussianModel3D(
                 sums(0) / static_cast<double>(beta.size()), sums(1) / static_cast<double>(beta.size()),
-                array_helper::ComputeMedian(charges));
+                0.0);
+        if (!fixed_charges.empty())
+        {
+            std::vector<double> coefficients;
+            coefficients.reserve(fixed_charges.size());
+            for (const auto & profile : fixed_charges) coefficients.push_back(profile.coefficient);
+            summary.descriptive_charge_median = array_helper::ComputeMedian(coefficients);
+        }
         if (beta.size() < 2)
             summary.reason = beta.empty() ? "no-eligible-post-joint-local-results" : "single-member";
         else
@@ -145,12 +152,11 @@ void RunJointGroupPotentialFitting(ModelObject & model, const FitOptions & optio
                     const auto web = rhbm_helper::EstimateWEBFromInformation(
                         information, mu.mu_mdpde, mu.member_capital_lambda_list, execution);
                     if (web.status != RHBMEstimationStatus::SUCCESS) throw std::runtime_error("WEB failed.");
-                    const double charge = array_helper::ComputeMedian(charges);
                     GroupGaussianResult group;
                     group.alpha_g = alpha;
-                    group.mean = linearization_service::DecodeParameterVector(mu.mu_mean).WithOffset(charge);
-                    group.mdpde = linearization_service::DecodeParameterVector(mu.mu_mdpde).WithOffset(charge);
-                    group.prior = Decode(web.mu_prior, mu.capital_lambda, charge);
+                    group.mean = linearization_service::DecodeParameterVector(mu.mu_mean).WithOffset(0.0);
+                    group.mdpde = linearization_service::DecodeParameterVector(mu.mu_mdpde).WithOffset(0.0);
+                    group.prior = Decode(web.mu_prior, mu.capital_lambda);
                     const auto distances = rhbm_helper::CalculateMemberStatisticalDistance(
                         web.mu_prior, mu.capital_lambda, web.beta_posterior_matrix);
                     const auto flags = rhbm_helper::CalculateOutlierMemberFlag(2, distances);
@@ -159,12 +165,13 @@ void RunJointGroupPotentialFitting(ModelObject & model, const FitOptions & optio
                         const auto column = static_cast<Eigen::Index>(i);
                         GroupGaussianMemberResult member;
                         member.posterior = Decode(web.beta_posterior_matrix.col(column),
-                            web.capital_sigma_posterior_list[i], charges[i]);
+                            web.capital_sigma_posterior_list[i]);
                         member.is_outlier = flags(column);
                         member.statistical_distance = distances(column);
                         member.evidence_source_id = summary.source_id;
                         member.charge_inferred = false;
                         member.parameter_covariance = web.capital_sigma_posterior_list[i];
+                        member.fixed_charge = fixed_charges[i];
                         group.member_results.push_back(std::move(member));
                     }
                     summary.inference = std::move(group);
