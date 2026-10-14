@@ -153,6 +153,7 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
     #ifdef HAVE_ROOT
     auto entry_iter{ model_object->GetAnalysisView() };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
+    const bool has_joint_result{ entry_iter.GetJointResult().has_value() };
     const int col_size{ 4 };
     const int row_size{ 1 };
     gStyle->SetLineScalePS(1.5);
@@ -303,9 +304,13 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
     root_helper::SetTextAttribute(legend.get(), 25.0f, 133, 12, 0.0);
     legend->SetMargin(0.15f);
     legend->AddEntry(gaus_function[0].get(),
-        "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{c})}", "l");
+        has_joint_result
+            ? "Gaussian-only group prior (C = 0)"
+            : "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{c})}", "l");
     legend->AddEntry(map_value_graph_list[0].at(0).get(),
-        "Map Value", "l");
+        has_joint_result
+            ? "Joint peeling (includes target-own charge)"
+            : "Map Value", "l");
     legend->Draw();
 
     canvas->cd();
@@ -887,6 +892,7 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
     auto entry_iter{ model_object->GetAnalysisView() };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const auto component_key_list{ model_object->GetComponentKeyList() };
+    const bool has_joint_result{ entry_iter.GetJointResult().has_value() };
     auto show_outlier{ false };
     (void)show_outlier;
 
@@ -1118,17 +1124,16 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
             root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
             legend->SetMargin(0.15f);
             legend->SetNColumns(3);
-            //legend->AddEntry(gaus_prior.get(),
-            //    "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
-            //legend->AddEntry(map_value_graph_list.at(0).get(),
-            //    "Members of Value", "l");
             if (gaus_prior) legend->AddEntry(gaus_prior.get(),
-                Form("Group prior, #alpha_{g} = %.1f",
-                    entry_iter.GetAtomAlphaG(group_key)), "l");
+                has_joint_result
+                    ? "Gaussian-only group prior (C = 0)"
+                    : Form("Group prior, #alpha_{g} = %.1f", entry_iter.GetAtomAlphaG(group_key)), "l");
             if (gaus_mean) legend->AddEntry(gaus_mean.get(),
-                "Group mean", "l");
+                has_joint_result ? "Gaussian-only group mean" : "Group mean", "l");
             legend->AddEntry(map_value_graph_list.at(0).get(),
-                "Map Value", "l");
+                has_joint_result
+                    ? "Joint peeling (includes target-own charge)"
+                    : "Map Value", "l");
             legend->Draw();
 
             auto count_text{ root_helper::CreatePaveText(0.45, 0.75, 1.00, 0.90, "nbNDC", false) };
@@ -1547,6 +1552,7 @@ void GausPainter::PaintGroupFittingComparison(
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
     const auto & standard_residue_list{ ChemicalDataHelper::GetStandardAminoAcidList() };
+    const bool has_joint_result{ entry_iter.GetJointResult().has_value() };
     bool show_outlier{ false };
 
     #ifdef HAVE_ROOT
@@ -1731,8 +1737,17 @@ void GausPainter::PaintGroupFittingComparison(
         root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
         legend->SetMargin(0.25f);
         if (gaus_prior_map.contains(Spot::CA) && gaus_prior_map.at(Spot::CA)) legend->AddEntry(gaus_prior_map.at(Spot::CA).get(),
-            "Final group prior #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{C})}", "l");
-        if (!map_value_graph_list_map[0].at(Spot::CA).empty()) legend->AddEntry(map_value_graph_list_map[0].at(Spot::CA).front().get(),
+            has_joint_result ? "Gaussian-only group prior (C = 0)" : "Final group prior #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{C})}", "l");
+        if (has_joint_result)
+        {
+            if (!map_value_graph_list_map[0].at(Spot::CA).empty()) legend->AddEntry(map_value_graph_list_map[0].at(Spot::CA).front().get(),
+                "Raw map response (all contributors)", "l");
+            if (!map_value_graph_list_map[1].at(Spot::CA).empty()) legend->AddEntry(map_value_graph_list_map[1].at(Spot::CA).front().get(),
+                "Joint peeling (includes target-own charge)", "l");
+            if (!map_value_graph_list_map[2].at(Spot::CA).empty()) legend->AddEntry(map_value_graph_list_map[2].at(Spot::CA).front().get(),
+                "Neighbor signal (raw minus peeling)", "l");
+        }
+        else if (!map_value_graph_list_map[0].at(Spot::CA).empty()) legend->AddEntry(map_value_graph_list_map[0].at(Spot::CA).front().get(),
             "Members of Map Value", "l");
         legend->Draw();
 
@@ -1782,6 +1797,7 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
     const auto & standard_residue_list{ ChemicalDataHelper::GetStandardAminoAcidList() };
+    const bool has_joint_result{ entry_iter.GetJointResult().has_value() };
     bool show_outlier{ false };
     (void)standard_residue_list;
     (void)show_outlier;
@@ -1966,12 +1982,14 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
         root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
         legend->SetMargin(0.25f);
         if (gaus_prior_map.contains(Residue::ALA) && gaus_prior_map.at(Residue::ALA)) legend->AddEntry(gaus_prior_map.at(Residue::ALA).get(),
-            "Group prior (available evidence)", "l");
+            has_joint_result ? "Gaussian-only group prior (C = 0)" : "Group prior (available evidence)", "l");
             //Form("Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})} with #alpha_{r} = %.1f, #alpha_{g} = %.1f",
         if (gaus_mean_map.contains(Residue::ALA) && gaus_mean_map.at(Residue::ALA)) legend->AddEntry(gaus_mean_map.at(Residue::ALA).get(),
-            "Group mean", "l");
+            has_joint_result ? "Gaussian-only group mean" : "Group mean", "l");
         if (map_value_graph_list_map.contains(Residue::ALA) && !map_value_graph_list_map.at(Residue::ALA).empty()) legend->AddEntry(map_value_graph_list_map.at(Residue::ALA).front().get(),
-            "Members of Map Value", "l");
+            has_joint_result
+                ? "Joint peeling (includes target-own charge)"
+                : "Members of Map Value", "l");
         legend->Draw();
 
         canvas->cd();
