@@ -1,13 +1,11 @@
 #include "Numerics.hpp"
 #include "ResourceWork.hpp"
 #include "CompactSvd.hpp"
-#include <boost/multiprecision/cpp_dec_float.hpp>
 #include <Eigen/SparseQR>
 #include <Eigen/QR>
 #include <Eigen/SVD>
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
 #include <type_traits>
 
 namespace rhbm_gem::core::joint_component {
@@ -27,84 +25,6 @@ Eigen::VectorXd ColumnNorms(const Sparse & x)
     for(int k=0;k<x.outerSize();++k) for(Sparse::InnerIterator e(x,k);e;++e) out(e.col())+=e.value()*e.value();
     out=out.cwiseSqrt();
     return out;
-}
-using RefinementFloat=boost::multiprecision::cpp_dec_float_50;
-RefinementFloat ExactDouble(double value)
-{
-    if(value==0.0) return 0;
-    int exponent{};
-    const double fraction=std::frexp(std::abs(value),&exponent);
-    const auto mantissa=static_cast<std::uint64_t>(std::ldexp(fraction,std::numeric_limits<double>::digits));
-    RefinementFloat exact=boost::multiprecision::ldexp(RefinementFloat(mantissa),
-        exponent-std::numeric_limits<double>::digits);
-    if(std::signbit(value)) exact=-exact;
-    return exact;
-}
-bool HighPrecisionFaceSolve(const Sparse & x,VectorRef y,const std::vector<Eigen::Index> & columns,
-    const Eigen::VectorXd & scales,Vector & beta)
-{
-    constexpr Eigen::Index maximum_columns=32;
-    constexpr std::uint64_t maximum_products=4'000'000;
-    const auto count=static_cast<Eigen::Index>(columns.size());
-    if(count==0 || count>maximum_columns || x.rows()<=0 ||
-        static_cast<std::uint64_t>(x.rows())>maximum_products/static_cast<std::uint64_t>(count)/
-            static_cast<std::uint64_t>(count)) return false;
-    std::vector<std::vector<RefinementFloat>> normal(static_cast<std::size_t>(count),
-        std::vector<RefinementFloat>(static_cast<std::size_t>(count)+1));
-    std::vector<RefinementFloat> values(static_cast<std::size_t>(count));
-    for(Eigen::Index row=0;row<x.rows();++row)
-    {
-        for(Eigen::Index column=0;column<count;++column)
-        {
-            const auto source=columns[static_cast<std::size_t>(column)];
-            values[static_cast<std::size_t>(column)]=
-                ExactDouble(x.coeff(row,source))/ExactDouble(scales(source));
-        }
-        for(Eigen::Index left=0;left<count;++left)
-        {
-            auto & equation=normal[static_cast<std::size_t>(left)];
-            const auto & lhs=values[static_cast<std::size_t>(left)];
-            equation[static_cast<std::size_t>(count)]+=lhs*ExactDouble(y(row));
-            for(Eigen::Index right=0;right<count;++right)
-                equation[static_cast<std::size_t>(right)]+=lhs*values[static_cast<std::size_t>(right)];
-        }
-    }
-    for(Eigen::Index pivot=0;pivot<count;++pivot)
-    {
-        Eigen::Index selected=pivot;
-        for(Eigen::Index row=pivot+1;row<count;++row)
-            if(boost::multiprecision::abs(normal[static_cast<std::size_t>(row)][static_cast<std::size_t>(pivot)])>
-                boost::multiprecision::abs(normal[static_cast<std::size_t>(selected)][static_cast<std::size_t>(pivot)]))
-                selected=row;
-        if(normal[static_cast<std::size_t>(selected)][static_cast<std::size_t>(pivot)]==0) return false;
-        std::swap(normal[static_cast<std::size_t>(pivot)],normal[static_cast<std::size_t>(selected)]);
-        const auto diagonal=normal[static_cast<std::size_t>(pivot)][static_cast<std::size_t>(pivot)];
-        for(Eigen::Index row=pivot+1;row<count;++row)
-        {
-            auto & equation=normal[static_cast<std::size_t>(row)];
-            const auto factor=equation[static_cast<std::size_t>(pivot)]/diagonal;
-            for(Eigen::Index column=pivot+1;column<=count;++column)
-                equation[static_cast<std::size_t>(column)]-=factor*
-                    normal[static_cast<std::size_t>(pivot)][static_cast<std::size_t>(column)];
-        }
-    }
-    std::vector<RefinementFloat> solution(static_cast<std::size_t>(count));
-    for(Eigen::Index row=count;row-->0;)
-    {
-        RefinementFloat value=normal[static_cast<std::size_t>(row)][static_cast<std::size_t>(count)];
-        for(Eigen::Index column=row+1;column<count;++column)
-            value-=normal[static_cast<std::size_t>(row)][static_cast<std::size_t>(column)]*
-                solution[static_cast<std::size_t>(column)];
-        solution[static_cast<std::size_t>(row)]=value/
-            normal[static_cast<std::size_t>(row)][static_cast<std::size_t>(row)];
-    }
-    beta=Vector::Zero(x.cols());
-    for(Eigen::Index column=0;column<count;++column)
-    {
-        const auto source=columns[static_cast<std::size_t>(column)];
-        beta(source)=(solution[static_cast<std::size_t>(column)]/ExactDouble(scales(source))).convert_to<double>();
-    }
-    return beta.allFinite();
 }
 }
 std::pair<Eigen::MatrixXd,Eigen::VectorXd> ReferenceQR(const Sparse & x,
@@ -428,7 +348,6 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
                 refinement_qr.setThreshold(rank_threshold);
                 if(refinement_qr.rank()==static_cast<Eigen::Index>(columns.size()))
                 {
-                    bool refinement_accepted=false;
                     for(int refinement=0;refinement<8;++refinement)
                     {
                         Eigen::VectorXd residual=y;
@@ -458,19 +377,7 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
                             refined_beta(columns[k])=theta(static_cast<Eigen::Index>(k))/scales(columns[k]);
                         const Certificate refined=CertifyLinear(x,y,refined_beta,observation_scale);
                         if(refined.available && refined.kkt_passed && refined.objective<=initial.objective)
-                        {out.beta=std::move(refined_beta); refinement_accepted=true; break;}
-                    }
-                    if(!refinement_accepted)
-                    {
-                        Eigen::VectorXd high_precision_beta;
-                        if(HighPrecisionFaceSolve(x,y,columns,scales,high_precision_beta))
-                        {
-                            ++out.solves;
-                            const Certificate refined=CertifyLinear(x,y,high_precision_beta,observation_scale);
-                            if(refined.available && refined.kkt_passed && refined.objective<=initial.objective &&
-                                refined.active_atoms==initial.active_atoms)
-                                out.beta=std::move(high_precision_beta);
-                        }
+                        {out.beta=std::move(refined_beta); break;}
                     }
                 }
             }

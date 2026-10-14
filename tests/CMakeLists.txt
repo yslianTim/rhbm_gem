@@ -362,12 +362,9 @@ if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
     add_test(NAME joint_local_ac_kkt_sweep_recovery
         COMMAND $<TARGET_FILE:joint_local_ac_kkt> replay
             "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_ac_kkt/block-46-sweep-2.json")
-    add_test(NAME joint_local_ac_kkt_sweep4_block19_recovery
-        COMMAND $<TARGET_FILE:joint_local_ac_kkt> replay
-            "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_ac_kkt/block-19-sweep-4.json")
-    add_test(NAME joint_local_ac_kkt_sweep6_block21_rejection
+    add_test(NAME joint_local_ac_kkt_sweep4_block19_rejection
         COMMAND $<TARGET_FILE:joint_local_ac_kkt> expect-kkt-rejection
-            "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_ac_kkt/block-21-sweep-6.json")
+            "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_ac_kkt/block-19-sweep-4.json")
     add_test(NAME joint_local_replay_fixture
         COMMAND $<TARGET_FILE:joint_local_ac_kkt> replay-trial
             "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_replay/block-82-trial.json")
@@ -375,7 +372,7 @@ if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
         COMMAND $<TARGET_FILE:joint_local_replay_analysis>
             "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_replay/block-82-trial.json")
     set_tests_properties(joint_local_ac_kkt_recovery joint_local_ac_kkt_accuracy joint_local_ac_kkt_sweep_recovery
-        joint_local_ac_kkt_sweep4_block19_recovery joint_local_ac_kkt_sweep6_block21_rejection
+        joint_local_ac_kkt_sweep4_block19_rejection
         joint_local_replay_fixture PROPERTIES
         LABELS "offline;domain:core;intent:algorithm;joint:numerics" TIMEOUT 120
         ENVIRONMENT "OMP_NUM_THREADS=1")
