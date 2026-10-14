@@ -954,6 +954,60 @@ TEST(JointComponentPartialSelectionTest, PeelingIncludesDistantHaloThroughInterp
     EXPECT_LT(*result.samples[0].response, 0);
 }
 
+TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextBuildsGlobalMappingsOnce)
+{
+    auto f = joint_partial_test::Make("all");
+    const auto problem = core::BuildJointProblem(*f.map, *f.model);
+    const auto snapshot = core::CaptureJointAnalysisResult(core::FitJointComponents(problem, f.b));
+    f.model->EditAnalysis().ApplyJointResult(snapshot, "shared-context-test");
+    for (const auto * atom : f.model->GetSelectedAtoms())
+        f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*atom,
+            core::SampleAtomMapValues(*f.map, *atom, SphereSamplingMethod::FibonacciDeterministic));
+
+    core::detail::JointPostprocessingMetrics metrics;
+    const core::detail::JointPostprocessingContext context(
+        *f.map, *f.model, problem, &snapshot, &metrics);
+    const auto peelings = context.BuildPostFitPeelingSamples(
+        problem.Input().selection_domain->target_indices);
+    ASSERT_EQ(peelings.size(), 2u);
+    EXPECT_EQ(metrics.observation_row_mapping_builds, 1u);
+    EXPECT_EQ(metrics.contributor_mapping_builds, 1u);
+    EXPECT_EQ(metrics.target_preparation_count, 0u);
+
+    const auto standalone_peelings = core::detail::BuildPostFitPeelingSamples(
+        *f.map, *f.model, problem, problem.Input().selection_domain->target_indices, &snapshot);
+    for (const auto * atom : f.model->GetSelectedAtoms())
+    {
+        const int id = atom->GetSerialID();
+        const auto & shared_peeling = peelings.at(id);
+        const auto & standalone_peeling = standalone_peelings.at(id);
+        ASSERT_EQ(shared_peeling.samples.size(), standalone_peeling.samples.size());
+        for (std::size_t i = 0; i < shared_peeling.samples.size(); ++i)
+        {
+            EXPECT_EQ(shared_peeling.samples[i].response, standalone_peeling.samples[i].response);
+            EXPECT_EQ(shared_peeling.samples[i].reason, standalone_peeling.samples[i].reason);
+        }
+
+        const auto shared = context.BuildPostJointLocalSamples(id, shared_peeling);
+        const auto standalone = core::detail::BuildPostJointLocalSamples(
+            *f.map, *f.model, problem, id, standalone_peeling, snapshot);
+        ASSERT_EQ(shared.samples.size(), standalone.samples.size());
+        EXPECT_DOUBLE_EQ(shared.fixed_charge.coefficient, standalone.fixed_charge.coefficient);
+        EXPECT_DOUBLE_EQ(shared.fixed_charge.width, standalone.fixed_charge.width);
+        for (std::size_t i = 0; i < shared.samples.size(); ++i)
+        {
+            EXPECT_EQ(shared.samples[i].fixed_charge_response, standalone.samples[i].fixed_charge_response);
+            EXPECT_EQ(shared.samples[i].gaussian_response, standalone.samples[i].gaussian_response);
+            EXPECT_EQ(shared.samples[i].reason, standalone.samples[i].reason);
+        }
+    }
+    EXPECT_EQ(metrics.observation_row_mapping_builds, 1u);
+    EXPECT_EQ(metrics.contributor_mapping_builds, 1u);
+    EXPECT_EQ(metrics.target_preparation_count, 2u);
+    EXPECT_EQ(metrics.total_prepared_sample_count,
+        metrics.valid_local_sample_count + metrics.invalid_local_sample_count);
+}
+
 TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInformationAndPreservesJoint)
 {
     using namespace rhbm_gem;

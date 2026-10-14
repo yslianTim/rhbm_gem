@@ -43,8 +43,8 @@ bool SameSource(const EstimateSource & a, const EstimateSource & b)
 }
 
 PostJointLocalResult FitPostJointLocalTarget(
-    const MapObject & map, const ModelObject & model, const JointProblem & problem,
-    const JointAnalysisResult & snapshot, int atom_id, const PostFitPeelingResult & peeling,
+    const JointPostprocessingContext & postprocessing, const ModelObject & model,
+    int atom_id, const PostFitPeelingResult & peeling,
     const FitOptions & options)
 {
     const auto atom = model.FindAtomPtr(atom_id);
@@ -65,7 +65,7 @@ PostJointLocalResult FitPostJointLocalTarget(
     if (!SameSource(joint.source, peeling.source))
         throw std::invalid_argument("Post-Joint local fitting source mismatch.");
 
-    const auto prepared_samples = BuildPostJointLocalSamples(map, model, problem, atom_id, peeling, snapshot);
+    const auto prepared_samples = postprocessing.BuildPostJointLocalSamples(atom_id, peeling);
     result.fixed_charge = prepared_samples.fixed_charge;
     for (const auto & sample : prepared_samples.samples)
         if (!sample.reason.empty())
@@ -232,17 +232,19 @@ void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOp
         fit.initialization = initialization;
         return CaptureJointAnalysisResult(fit);
     }();
+    JointPostprocessingMetrics postprocessing_metrics;
+    ++postprocessing_metrics.joint_stage_mapping_builds;
     data_internal::ApplyJointStageEstimates(model, snapshot, boost::uuids::to_string(boost::uuids::random_generator()()));
     if (!options.quiet_mode) LogJointInfo("[Joint] Computing post-fit outputs...");
-    auto peelings = BuildPostFitPeelingSamples(
-        map, model, problem, problem.Input().selection_domain->target_indices, &snapshot);
+    model.EditAnalysis().SetJointResult(std::move(snapshot));
+    const auto & joint_snapshot = *model.GetAnalysisView().GetJointResult();
+    const JointPostprocessingContext postprocessing(map, model, problem, &joint_snapshot, &postprocessing_metrics);
+    auto peelings = postprocessing.BuildPostFitPeelingSamples(problem.Input().selection_domain->target_indices);
     std::vector<std::pair<int, PostFitPeelingResult>> peeling_updates;
     peeling_updates.reserve(peelings.size());
     for (auto & [id, peeling] : peelings)
         peeling_updates.emplace_back(id, std::move(peeling));
     model.EditAnalysis().ApplyPostFitPeelingsBatch(std::move(peeling_updates));
-    model.EditAnalysis().SetJointResult(std::move(snapshot));
-    const auto & joint_snapshot = *model.GetAnalysisView().GetJointResult();
     std::vector<std::pair<int, PostJointLocalResult>> local_updates;
     for (const auto * atom : model.GetSelectedAtoms())
     {
@@ -251,7 +253,8 @@ void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOp
         if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target) continue;
         const auto & peeling = local.GetPostFitPeeling();
         PostJointLocalResult result;
-        if (peeling) result = FitPostJointLocalTarget(map, model, problem, joint_snapshot, atom->GetSerialID(), *peeling, options);
+        if (peeling) result = FitPostJointLocalTarget(
+            postprocessing, model, atom->GetSerialID(), *peeling, options);
         else
         {
             result.source = stage.source;
