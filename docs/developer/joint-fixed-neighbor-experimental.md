@@ -62,6 +62,12 @@ and their stored evidence. See the
 [Joint runtime contract](joint-component-runtime.md) for the implementation
 details.
 
+For accepted trials, the local state cache is rebased from the full candidate
+replay already used for acceptance. Sparse predictions, transpose products,
+derivative reductions and independent scalar replay use compensated double
+arithmetic. Replay and stationarity thresholds remain unchanged; the
+50-digit reference remains confined to offline analysis.
+
 ## Memory planning and large components
 
 FixedNeighbor preflights its actual component rows, support memberships,

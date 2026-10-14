@@ -93,5 +93,29 @@ scale were not the cause: the active dual violations were zero, all release
 scale variants retained the same face, and none released a variable. Plain
 dense QR and SVD did not meet the gate either. The bounded refinement improves
 the certified local solve without changing the objective, rank threshold, or
-KKT threshold. The full 6Z6U search still has a separate independent-replay
-consistency failure; see the [full-data validation](joint-halo-pruning-validation.md#full-data-validation-6z6u).
+KKT threshold.
+
+## Later 6Z6U local KKT captures
+
+The replay correction moved the full-data run past the old sweep 2 / block 82
+replay disagreement. The block 82 trial fixture now passes its local replay
+comparison with prediction difference 0, width-gradient difference
+`7.5871e-15`, and KKT difference 0. The primary profile's scaled projected
+KKT is `5.7795e-12`; the original failed decision is retained in the fixture as
+historical capture evidence.
+
+The bounded double-only refinement also recovers the captured sweep 2 / block
+46 problem: its 2,889 × 24 design has rank 24 and scaled KKT `1.7344e-12`.
+The older sweep 4 / block 19 fixture remains a valid expected rejection at
+`2.3283e-10`; it is not the final full-data trajectory.
+
+The final production 6Z6U run instead stops at component 1, one-based sweep 4,
+block 21. Its failure-only fixture is
+`tests/fixtures/joint_local_ac_kkt/block-21-sweep-4.json`: 930 rows × 24
+columns, 2,894 nonzeros, design rank 24, free rank 23, condition indicator
+`6.6235e10`, feasible A/C coefficients and no active-set releases. The solver
+is valid with reason `solved`, but the scaled projected KKT is
+`4.6566e-10`, above the unchanged `1e-10` gate. The regression requires this
+state to remain rejected. This later KKT failure is unresolved; endpoint
+verification and numerical qualification were not reached. See the
+[full-data validation](joint-halo-pruning-validation.md#full-data-validation-6z6u).

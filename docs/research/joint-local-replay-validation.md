@@ -14,11 +14,15 @@ cmake --build build/joint-validation --target joint_local_replay_analysis --para
   tests/fixtures/joint_local_replay/block-82-trial.json
 ```
 
-The captured trial is component 1, one-based sweep 2, block 82, profile
-evaluation 1. The local design has 881 rows, 24 columns, 1,684 stored support
+The pre-correction captured trial is component 1, one-based sweep 2, block 82,
+profile evaluation 1. The local design has 881 rows, 24 columns, 1,684 stored support
 entries, and A/C scaled KKT `5.820766091346741e-11`. The primary profile
 evaluation is valid and feasible. `CheckReplay` rejects it as
 `replay-disagreement`.
+
+The numerical tables and error decomposition below are the baseline recorded
+before the production corrections. They are retained to explain the original
+failure; they are not measurements of the final arithmetic path.
 
 The analysis used AppleClang 21.0.0 on arm64 with IEEE-754 binary64, fast math
 disabled, and `boost::multiprecision::cpp_dec_float_50` (50 decimal digits) for
@@ -28,7 +32,7 @@ the reference `erf` uses `boost::math::erf` at that precision. On this platform,
 `long double` has 53 binary digits, the same precision as `double`, so it was not
 used as an oracle.
 
-## Results
+## Pre-correction results
 
 | Quantity | Primary | Local replay | 50-digit reference | Primary/replay difference |
 | --- | ---: | ---: | ---: | ---: |
@@ -135,12 +139,95 @@ check alone is not a substitute for that qualification. The cutoff mismatch
 should be corrected as a separate formula-consistency fix. These changes are
 evaluated in the subsequent production-fix and regression commits.
 
-## 6Z6U baseline outcome
+## Pre-correction 6Z6U outcome
 
-The full workflow was run with the provided CIF and map and a backup of the
-SQLite database. It reproduced the failure at component 1, sweep 2, block 82.
-The initial local profile was `qualified-inner`; local trial trust failed as
-`replay-disagreement`. Search did not complete, stationarity and endpoint
-qualification were not confirmed, and there was no assembled scientific state
-or trusted target A/C/B estimate. The CLI's final process status is not treated
-as numerical success.
+The first full workflow run reproduced the failure at component 1, sweep 2,
+block 82. That result is superseded by the post-correction run below.
+
+## Post-correction behavior
+
+The captured block 82 trial now replays as `trusted` with prediction difference
+0, width-gradient difference `7.587070620200531e-15`, and KKT difference 0.
+Its primary evaluation is valid, feasible and has scaled projected KKT
+`5.779504479164199e-12`. The test also confirms that deliberately changed
+coefficients, width gradient and KKT are still rejected. The capture preserves
+the original failed decision (`replay-disagreement`) as historical data; the
+test recomputes the current decision from its exact trial parameters.
+
+The supported production changes were the evidence-backed numerical and path
+corrections: replay derives widths with the same vectorized `exp` evaluation as
+the profile, applies the same 2.5 support cutoff, and keeps scalar kernel
+evaluation and accumulation independent from sparse matrix construction.
+Prediction, transpose products, derivative reductions and replay now use
+compensated binary64 summation with an FMA product-error term. Local free-face
+QR refinement uses the same compensated double residual for at most eight
+correction solves. Accepted FixedNeighbor caches are rebased to the full replay
+prediction, residual and objective already computed for that candidate.
+Independent endpoint replay remains a separate scalar calculation.
+
+The current offline decomposition still measures the alternate matrix-term
+accumulation against the scalar replay: its maximum prediction difference is
+`4.1796e-9`. In that analyzer, the matrix-term primary accumulator is a Kahan
+diagnostic; it is not the exact `StablePrediction()` path used by the current
+trust decision. The trust fixture's production `CheckReplay()` comparison is
+0. The highest-difference diagnostic row is row `5931763`: the absolute
+contributions sum to `5.7363e7`, the 50-digit prediction is `-0.49413534`, and
+the cancellation indicator is `1.161e8`. For that matrix-term primary path,
+the maximum prediction error against the 50-digit reference is `2.118e-8`;
+the scalar replay's is `1.742e-8`. Kernel errors are around `1e-16` before
+coefficient scaling, while their maximum net contribution error reaches
+`1.742e-8`. Accumulation alone is not the only source.
+
+The analyzer's residual cross-check compares the profile residual with that
+alternate matrix-term prediction, so its `4.1796e-9` primary formation delta
+includes the prediction-path difference. The scalar replay residual is formed
+from its own prediction with `2.78e-17` maximum round-trip error. This does not
+indicate a separate residual formula defect. In the pre-correction capture,
+the `6.291e-5` primary/replay width-gradient difference was driven almost
+entirely by the residual difference; swapping derivative kernels alone
+changed the result by about `1.36e-20`.
+
+On the corrected fixture, primary and replay width gradients differ by only
+`7.5871e-15`, but each differs from the 50-digit functional-kernel gradient by
+about `1.5367e-4` absolute. The 50-digit gradient infinity norm is
+`1.5857e-4`; the width gradient is not stationary. The corrected binary64
+primary and replay KKT values both equal `5.7795e-12`, while the 50-digit
+functional-kernel KKT is `1.5760e-10`. Thus the unchanged cross-path trust
+gate confirms agreement between its two binary64 implementations; it is not a
+rigorous enclosure of the exact-function arithmetic error. The fixture is a
+nonstationary LM trial, and this result does not qualify a component endpoint.
+
+No prediction, gradient, KKT, width-stationarity, rank or endpoint threshold was
+relaxed. No error enclosure was adopted: the measured fixture bounds are too
+broad to establish the `1e-12` width-stationarity gate or distinguish correct
+from incorrect trials. The 50-digit Boost calculations remain offline
+research/test support; production does not invoke a multiprecision solver.
+
+The high-precision reference exposes an important limit: for the original
+fixed-state fixture, the exact-kernel A/C KKT estimate is `1.576e-10`, above
+the production `1e-10` threshold, even though the corrected binary64 primary
+and replay certificates agree below that threshold. Cross-path agreement is
+therefore not a proof of exact mathematical stationarity. It remains paired
+with the unchanged production feasibility/KKT checks and does not establish
+component completion or endpoint qualification.
+
+## Final 6Z6U run
+
+With the production multiprecision path removed, the full workflow used the
+provided CIF/map, a fresh SQLite backup, and unique key
+`6z6u_replay_final_14d8c2cd9b`. The original database was not modified. The
+old block 82 replay disagreement did not recur. The search instead stopped at
+component 1, one-based sweep 4, block 21 with `inner-kkt-failed`. The 930 × 24
+local design is full rank (rank 24, free rank 23), but its feasible local A/C
+solution has scaled projected KKT `4.6566128730773926e-10`; no rejected LM
+trial was captured because failure occurred at the inner KKT gate. Its exact
+local inputs are retained in
+`tests/fixtures/joint_local_ac_kkt/block-21-sweep-4.json`.
+
+The process exited 0, but search completion was false. It recorded 5,056
+evaluations and 620 accepted block updates across three completed sweeps before
+the sweep 4 failure. Endpoint verification, numerical rank qualification,
+target estimability and trusted global assembly were not reached. Elapsed wall
+time was 33.442 s and child maximum RSS was 1,447,378,944 bytes (about 1.35
+GiB). Detailed full-data counts and unavailable qualification fields are in
+the [halo-pruning validation](joint-halo-pruning-validation.md#full-data-validation-6z6u).

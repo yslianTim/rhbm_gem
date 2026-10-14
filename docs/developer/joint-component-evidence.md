@@ -230,6 +230,13 @@ not prove parameter recovery or a global optimum.
 
 ## Evidence retention
 
+The 6Z6U Local Profile LM replay study and final post-correction run are
+recorded in [joint-local-replay-validation.md](../research/joint-local-replay-validation.md).
+The captured sweep 2 / block 82 replay now passes its fixture comparison, but
+the final full-data run stops at sweep 4 / block 21 because its full-rank local
+A/C solve has scaled KKT `4.6566e-10` against the unchanged `1e-10` gate. No
+endpoint-qualified or assembled scientific state is available.
+
 Current machine-readable research and diagnosis are retained only where they
 answer an active question: weak-halo diagnosis and noise/mismatch research in
 figures/joint-validation. Permanent fixtures and regression tests remain in

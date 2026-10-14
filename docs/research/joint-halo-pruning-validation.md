@@ -87,27 +87,41 @@ accuracy threshold. The production value remains the minimum geometric gate.
 
 ## Full-data validation: 6Z6U
 
-The validation ran the requested Release workflow against the supplied 0.50 Å
-map. To preserve the user's SQLite database, it used a fresh SQLite backup and
-the unique key `6z6u_gaus_charge1_bw050_kkt_refined_20261014`; the original
-database was not written. The CLI exited 0 and printed `Completed`, but the
-numerical search did not complete. Unavailable measurements are marked
-explicitly; the selected observation domain and pruned additive model are not
-directly comparable to the historical all-contributor objective.
+The final production run used the supplied CIF and map with a fresh SQLite
+backup at `/private/tmp/rhbm-6z6u-corrected-14d8c2cd9b.sqlite` and unique key
+`6z6u_replay_final_14d8c2cd9b`. The source database was not modified. The
+production source was at `c7e6dd5d` (`fix(joint): keep multiprecision out of
+production`); the later test-only block 21 fixture commit did not change solver
+code. The executable was an AppleClang 21.0.0 Release build on arm64.
 
-| Measure | Result |
+| Measure | Final result |
 | --- | --- |
-| Full 6Z6U run | Executed; CLI exit status 0. Numerical completion was not achieved. |
-| Observation / target / candidate / retained / excluded counts | 229,783 / 1,418 / 35,988 / 626 / 35,362. |
-| Excluded support / radial counts | 35,329 with 0 support rows; 20 singletons; 13 with 2 rows. Their q counts are 35,329 / 20 / 13 for q=0 / 1 / 2. All were excluded as `insufficient-observations`; no record was reason-coded only for insufficient radial information. |
-| Components before / after pruning | Before: unavailable in this run's diagnostics. After: 1 component (2,044 atoms, 229,783 rows). |
-| Search status and stop reason | `block-search-failed`, `search_completed=false`; component 1, one-based sweep index 2, block 82 stopped at `untrusted-trial` (`replay-disagreement`). It has 12 core atoms and 881 affected rows. |
-| Local A/C problem | Design 881 × 24, 3,368 nonzeros, numerical rank 24, free rank 22; rank-deficient halo count 0. Active A atoms are 8 and 11. The initial local profile is now `qualified-inner`: feasible, zero releases, scaled projected KKT `5.82077e-11` (passes the unchanged `1e-10` gate). |
-| Independent replay discrepancies | Prediction `1.28373e-08`; width-gradient infinity norm `6.29113e-05`; KKT `1.16415e-10`. Existing replay trust checks reject the trial; no replay or qualification threshold was changed. |
-| Objective / final A/C KKT / log-B gradient | Final qualified metrics unavailable. Candidate-only diagnostics are `uncertified` and are not scientific estimates. |
-| Endpoint verification / global ranks / target estimability | Not run or unavailable because no trusted component state exists. No selected-target recovery is available. |
-| Runtime convergence / global assembly | Runtime convergence and target runtime convergence are unavailable; regular certificate is `not-run`; assembled state is null. |
-| Construction / initialization / search / assessment / assembly | 1.969437 / 5.902256 / 6.276690 / 2.754835 / 0.000008 seconds. Callback time about 21.68 seconds; shell wall time about 21.9 seconds. Measured RSS is unavailable. |
-| Local KKT failure / remaining blocker | The original local KKT failure is resolved. Full estimator qualification remains blocked by the independent replay disagreement, before endpoint verification or target recovery. |
+| Observation / selected target count | 229,783 / 1,418 |
+| Halo candidates / retained / excluded | 35,988 / 626 / 35,362 |
+| Excluded support / radial counts | 35,362 had fewer than 3 rows; 0 were excluded only for radial information |
+| Components after pruning | 1 component (2,044 atoms, 229,783 rows); pre-pruning component count unavailable |
+| Original sweep 2 / block 82 trial | Current replay passes: prediction difference 0, width-gradient difference `7.5871e-15`, KKT difference 0; primary scaled KKT `5.7795e-12` |
+| Final failure | Component 1, one-based sweep 4, block 21; `inner-kkt-failed` before replay trust; no rejected LM trial capture |
+| Failure local design | 930 × 24, 2,894 nonzeros, rank 24, free rank 23, condition indicator `6.6235e10` |
+| Failure local A/C certificate | Feasible; 0 active-set releases; solver reason `solved`; scaled projected KKT `4.656612873e-10`, above unchanged `1e-10` |
+| Search progress | 5,056 evaluations; 620 accepted updates over 3 completed sweeps; sweep 4 stopped at block 21; `search_completed=false` |
+| Accepted-state diagnostics | Objective `2.567e-3`, width-gradient infinity norm `1.756e2`; unqualified and not a scientific result |
+| Final local profile objective | `2.0159238843`; local state did not pass KKT |
+| Global A/C KKT / log-B gradient | Not qualified / unavailable |
+| Endpoint verification / Full Design Rank / free-design rank / projected-width rank | Not run |
+| Target estimability / numerical qualification / trusted assembly | Not reached / failed to establish / unavailable |
+| Process result | CLI exit 0 and printed `Completed`; numerical search incomplete |
+| Stage times: construction / initialization / search / assessment / assembly | 1.970 / 5.891 / 19.126 / 0.918 / 0.000010 s |
+| Estimated peak memory / measured child maximum RSS | Not recorded / 1,447,378,944 bytes (1.447 GB, 1.348 GiB) |
+| Elapsed wall time | 33.442 s |
 
-The result was saved only in `/private/tmp/rhbm-gem-joint-local-ac-kkt-final-20261014.sqlite`. This run is not a numerical success despite the CLI exit status. The local A/C state passes its conditional KKT gate, but independent prediction, width-gradient and KKT comparisons reject its trial; the estimator therefore has no trusted state to verify, qualify or assemble. The diagnostic code records one-based sweep indexes; this capture reports sweep 2, while an earlier summary labeled the block Sweep 1. That prior label discrepancy remains. The failure is localized by component and block identity.
+The run log is `/private/tmp/rhbm-6z6u-corrected-14d8c2cd9b.log`; the
+failure-only local fixture was committed at
+`tests/fixtures/joint_local_ac_kkt/block-21-sweep-4.json`. The 6Z6U failure
+moved beyond the original replay disagreement. It is now blocked by an
+ill-conditioned but full-rank local A/C problem that does not meet the existing
+KKT gate. There is no endpoint certification, qualified numerical state, or
+selected-target A/C/B estimate. The capture records `sweep_index=4` directly.
+The earlier baseline run stopped at sweep 2 / block 82; the block 82 fixture
+now replays as trusted, while the final full-data run stops later at block 21.
+These are distinct decisions and must not be conflated.
