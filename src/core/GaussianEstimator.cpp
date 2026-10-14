@@ -90,6 +90,7 @@ std::vector<GroupGaussianMemberResult> DecodeMemberGaussianResults(
             result.statistical_distance_array(i),
             {},
             true,
+            std::nullopt,
             std::nullopt
         });
     }

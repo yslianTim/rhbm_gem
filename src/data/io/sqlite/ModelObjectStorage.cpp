@@ -895,6 +895,7 @@ void LoadAtomLocalPotentialEntrySubList(
             database.GetColumn<double>(8),
             {},
             true,
+            std::nullopt,
             std::nullopt
         });
     }

@@ -1809,7 +1809,7 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     joint.convergence = rg::JointCheckStatus::Passed;
     editor.SetAtomStageEstimate(rg::FittingStage::Second, atom, joint);
     editor.SetJointResult(rg::JointAnalysisResult{});
-    const std::vector<rg::LocalPotentialSample> raw{
+    const LocalPotentialSampleList raw{
         {2, {.1, {0,0,0}, true}}, {3, {.2, {1,0,0}, true}},
         {4, {.3, {0,1,0}, true}}, {5, {.4, {0,0,1}, true}}};
     editor.SetAtomLocalRawSamplingEntries(atom, raw);

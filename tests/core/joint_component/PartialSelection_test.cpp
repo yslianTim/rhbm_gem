@@ -1023,7 +1023,8 @@ TEST(JointComponentPartialSelectionTest, PostJointEvidenceAssessmentEnforcesAvai
     joint.point = GaussianModel3D{2.0, 0.5, -0.1};
     joint.convergence = JointCheckStatus::Passed;
     LocalPotentialSampleList raw(4);
-    for (std::size_t i = 0; i < raw.size(); ++i) raw[i].point.distance = 0.1 + 0.2 * i;
+    for (std::size_t i = 0; i < raw.size(); ++i)
+        raw[i].point.distance = 0.1 + 0.2 * static_cast<double>(i);
     PostFitPeelingResult peeling;
     peeling.source = joint.source;
     peeling.samples.resize(raw.size());
@@ -1314,8 +1315,34 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
     ModelObject migrated_v3{model};
     rhbm_gem::stage_result_io::Decode(
         migrated_v3, boost::json::serialize(version_three), 4, {});
-    EXPECT_EQ(rhbm_gem::stage_result_io::Encode(migrated_v3),
-        rhbm_gem::stage_result_io::Encode(model));
+    const auto migrated_summary = migrated_v3.GetAnalysisView().GetGroupParameterSummary(keys[0]);
+    ASSERT_TRUE(migrated_summary);
+    ASSERT_TRUE(migrated_summary->inference);
+    EXPECT_EQ(migrated_summary->member_ids, summary.member_ids);
+    EXPECT_DOUBLE_EQ(migrated_summary->descriptive_charge_median.value(),
+        summary.descriptive_charge_median.value());
+    EXPECT_DOUBLE_EQ(migrated_summary->inference->mean.GetOffset(), 0.0);
+    EXPECT_DOUBLE_EQ(migrated_summary->inference->mdpde.GetOffset(), 0.0);
+    for (const int id : summary.member_ids)
+    {
+        const auto original_member = AtomLocalPotentialView::For(*model.FindAtomPtr(id)).GetGroupMemberResult();
+        const auto migrated_member = AtomLocalPotentialView::For(*migrated_v3.FindAtomPtr(id)).GetGroupMemberResult();
+        ASSERT_TRUE(original_member);
+        ASSERT_TRUE(migrated_member);
+        ASSERT_TRUE(original_member->fixed_charge);
+        ASSERT_TRUE(migrated_member->fixed_charge);
+        EXPECT_DOUBLE_EQ(migrated_member->fixed_charge->coefficient,
+            original_member->fixed_charge->coefficient);
+        EXPECT_DOUBLE_EQ(migrated_member->fixed_charge->width,
+            original_member->fixed_charge->width);
+        EXPECT_DOUBLE_EQ(migrated_member->posterior.GetModel().GetAmplitude(),
+            original_member->posterior.GetModel().GetAmplitude());
+        EXPECT_DOUBLE_EQ(migrated_member->posterior.GetModel().GetWidth(),
+            original_member->posterior.GetModel().GetWidth());
+        for (const double distance : {0.0, 1.2, 2.5, 2.6})
+            EXPECT_DOUBLE_EQ(core::EvaluateGroupMemberResponseAtDistance(*migrated_member, distance),
+                core::EvaluateGroupMemberResponseAtDistance(*original_member, distance));
+    }
 
     auto invalid_v4 = boost::json::parse(rhbm_gem::stage_result_io::Encode(model)).as_object();
     for (auto & value : invalid_v4.at("atoms").as_array())
@@ -1382,13 +1409,13 @@ TEST(JointComponentPartialSelectionTest, TargetOnlyPostprocessingRetainsFullCont
 
 TEST(JointComponentPartialSelectionTest, FixedChargePosteriorEvaluatorUsesJointWidthAndKernelSupport)
 {
-    const std::array<JointFixedChargeProfile, 4> profiles{{
+    const std::array<rhbm_gem::JointFixedChargeProfile, 4> profiles{{
         {0.0, 0.6}, {0.4, 0.6}, {-0.3, 0.42}, {0.4, 0.9}}};
     const std::array<double, 4> posterior_widths{0.6, 0.48, 0.51, 0.48};
     for (std::size_t i = 0; i < profiles.size(); ++i)
     {
-        GroupGaussianMemberResult member;
-        member.posterior = {GaussianModel3D{2.3, posterior_widths[i], 0.0}, {}};
+        rhbm_gem::GroupGaussianMemberResult member;
+        member.posterior = {rhbm_gem::GaussianModel3D{2.3, posterior_widths[i], 0.0}, {}};
         member.fixed_charge = profiles[i];
         member.charge_inferred = false;
         for (const double distance : {0.0, 1.2, 2.5, 2.6})
@@ -1402,10 +1429,10 @@ TEST(JointComponentPartialSelectionTest, FixedChargePosteriorEvaluatorUsesJointW
     }
     EXPECT_NE(profiles[2].width, posterior_widths[2]);
 
-    GroupGaussianMemberResult narrow, broad;
-    narrow.posterior = broad.posterior = {GaussianModel3D{2.3, 0.48, 0.0}, {}};
-    narrow.fixed_charge = JointFixedChargeProfile{0.4, 0.42};
-    broad.fixed_charge = JointFixedChargeProfile{0.4, 0.9};
+    rhbm_gem::GroupGaussianMemberResult narrow, broad;
+    narrow.posterior = broad.posterior = {rhbm_gem::GaussianModel3D{2.3, 0.48, 0.0}, {}};
+    narrow.fixed_charge = rhbm_gem::JointFixedChargeProfile{0.4, 0.42};
+    broad.fixed_charge = rhbm_gem::JointFixedChargeProfile{0.4, 0.9};
     EXPECT_NE(core::EvaluateGroupMemberResponseAtDistance(narrow, 1.2),
         core::EvaluateGroupMemberResponseAtDistance(broad, 1.2));
 }
