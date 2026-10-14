@@ -86,7 +86,9 @@ joint_partial_test::Fixture Make(const std::string & name)
             auto atom = std::make_unique<rg::AtomObject>();
             atom->SetSerialID(group * count + k + 1);
             atom->SetElement(Element::CARBON);
-            atom->SetPosition(12.0 * group + atom_spacing * k, 0, 0);
+            const double x = name == "target-heavy" ? 0.7 * static_cast<double>(k % 3) : atom_spacing * k;
+            const double y = name == "target-heavy" ? 0.7 * static_cast<double>(k / 3) : 0.0;
+            atom->SetPosition(12.0 * group + x, y, 0);
             atom->SetChainID("A");
             atom->SetComponentID("ALA");
             atom->SetAtomID("CA");
