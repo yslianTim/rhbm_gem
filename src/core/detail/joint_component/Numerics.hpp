@@ -174,7 +174,13 @@ struct TrustEvidence
         gradient_difference{unavailable},cancellation_ratio{unavailable};
     std::optional<Spectrum> design;
 };
-TrustEvidence CheckReplay(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &);
+struct ReplayDetailsForDiagnostics
+{
+    Vector prediction,residual,width_gradient;
+    double objective{unavailable},scaled_kkt{unavailable};
+};
+TrustEvidence CheckReplay(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &,
+    ReplayDetailsForDiagnostics * = nullptr);
 TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &);
 TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &,const IndependentReplayEvidence &);
 TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &,const Evaluation & reference);

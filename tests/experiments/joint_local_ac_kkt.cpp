@@ -9,6 +9,7 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <numeric>
 
 namespace {
 namespace j=boost::json;
@@ -453,13 +454,76 @@ j::value Assess(const j::value & fixture)
         {"assessment_valid",final_assessment_valid},
         {"long_double_digits",std::numeric_limits<long double>::digits}};
 }
+n::Domain TrialDomainFrom(const j::value & fixture)
+{
+    const auto rows=j::value_to<Eigen::Index>(fixture.at("identity").at("local_observation_count"));
+    std::vector<std::vector<n::Support>> support;
+    for(const auto & atom:fixture.at("local_support").as_array())
+    {
+        std::vector<n::Support> entries;
+        for(const auto & item:atom.as_array()) entries.push_back({
+            j::value_to<Eigen::Index>(item.at("row")),j::value_to<double>(item.at("squared_distance"))});
+        support.push_back(std::move(entries));
+    }
+    return {rows,std::move(support)};
+}
+n::EvaluationContext TrialContextFrom(const j::value & fixture)
+{
+    const auto & value=fixture.at("local_numerical_context"); n::EvaluationContext out;
+    out.scale=j::value_to<double>(value.at("local_observation_scale"));
+    out.linear.rank_relative=j::value_to<double>(value.at("rank_relative"));
+    out.linear.release_factor=j::value_to<double>(value.at("release_factor"));
+    out.linear.release_response_norm=j::value_to<double>(value.at("release_response_norm"));
+    out.linear.active_set_iteration_factor=j::value_to<int>(value.at("active_set_iteration_factor"));
+    out.atom_ids=n::Identities(std::make_shared<const std::vector<std::string>>(StringsFrom(fixture.at("atom_ids"))));
+    out.row_ids=n::Identities(std::make_shared<const std::vector<std::string>>(StringsFrom(fixture.at("row_ids"))));
+    return out;
+}
+double RecordedDifference(n::VectorRef value,const j::value & recorded)
+{
+    const auto expected=VectorFrom(recorded);
+    return value.size()==expected.size() ? (value-expected).lpNorm<Eigen::Infinity>() :
+        std::numeric_limits<double>::infinity();
+}
+j::value ReplayTrialFixture(const j::value & fixture)
+{
+    if(j::value_to<std::string>(fixture.at("format"))!="rhbm-joint-local-replay-trial-v1")
+        throw std::invalid_argument("Unsupported local replay trial fixture format.");
+    const auto domain=TrialDomainFrom(fixture); const auto y=VectorFrom(fixture.at("effective_response"));
+    const auto eta=VectorFrom(fixture.at("trial_eta")),beta=VectorFrom(fixture.at("trial_beta"));
+    const auto context=TrialContextFrom(fixture);
+    const auto primary=n::EvaluateState(domain,y,eta,beta,context);
+    n::ReplayDetailsForDiagnostics replay;
+    const auto trust=n::CheckReplay(domain,y,primary,context,&replay);
+    const auto primary_prediction=(primary.x*primary.beta).eval();
+    const auto reproduced_prediction=RecordedDifference(primary_prediction,fixture.at("primary_prediction"));
+    const auto reproduced_residual=RecordedDifference(primary.residual,fixture.at("primary_residual"));
+    const auto reproduced_gradient=RecordedDifference(primary.gradient,fixture.at("primary_width_gradient"));
+    const auto reproduced_replay_prediction=RecordedDifference(replay.prediction,fixture.at("replay_prediction"));
+    const auto reproduced_replay_residual=RecordedDifference(replay.residual,fixture.at("replay_residual"));
+    const auto reproduced_replay_gradient=RecordedDifference(replay.width_gradient,fixture.at("replay_width_gradient"));
+    return j::object{{"fixture_loaded",true},{"identity",fixture.at("identity")},
+        {"local_support_entries",static_cast<std::uint64_t>(std::accumulate(domain.atoms.begin(),domain.atoms.end(),
+            std::size_t{},[](std::size_t total,const auto & atom){return total+atom.size();}))},
+        {"primary_valid",primary.valid},{"primary_kkt_passed",primary.certificate.kkt_passed},
+        {"primary_scaled_kkt",Number(primary.certificate.projected_kkt)},
+        {"replay_reason",trust.reason},{"replay_passed",trust.passed},
+        {"prediction_difference",Number(trust.prediction_difference)},
+        {"gradient_difference",Number(trust.gradient_difference)},
+        {"kkt_difference",Number(trust.kkt_difference)},
+        {"recomputed_primary_max_differences",j::object{{"prediction",Number(reproduced_prediction)},
+            {"residual",Number(reproduced_residual)},{"width_gradient",Number(reproduced_gradient)}}},
+        {"recomputed_replay_max_differences",j::object{{"prediction",Number(reproduced_replay_prediction)},
+            {"residual",Number(reproduced_replay_residual)},{"width_gradient",Number(reproduced_replay_gradient)}}},
+        {"recorded_trust",fixture.at("trust")}};
+}
 }
 
 int main(int argc,char ** argv)
 {
     try
     {
-        if(argc!=3) throw std::invalid_argument("Usage: joint_local_ac_kkt replay|assess FIXTURE.json");
+        if(argc!=3) throw std::invalid_argument("Usage: joint_local_ac_kkt replay|assess|replay-trial FIXTURE.json");
         const std::string action(argv[1]);
         if(action=="replay")
         {
@@ -471,7 +535,12 @@ int main(int argc,char ** argv)
             const auto result=Assess(Read(argv[2])); std::cout<<j::serialize(result)<<'\n';
             return result.at("assessment_valid").as_bool() ? 0 : 1;
         }
-        throw std::invalid_argument("Usage: joint_local_ac_kkt replay|assess FIXTURE.json");
+        if(action=="replay-trial")
+        {
+            const auto result=ReplayTrialFixture(Read(argv[2])); std::cout<<j::serialize(result)<<'\n';
+            return result.at("primary_valid").as_bool() ? 0 : 1;
+        }
+        throw std::invalid_argument("Usage: joint_local_ac_kkt replay|assess|replay-trial FIXTURE.json");
     }
     catch(const std::exception & error)
     {std::cerr<<error.what()<<'\n'; return 2;}

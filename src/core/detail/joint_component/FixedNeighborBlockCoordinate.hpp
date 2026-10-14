@@ -43,7 +43,7 @@ struct FixedNeighborBlockFailureDiagnostics
         maximum_free_c_gradient_raw,maximum_free_c_gradient_scaled,
         maximum_active_a_complementarity_violation_raw,maximum_active_a_complementarity_violation_scaled,
         replay_prediction_discrepancy,replay_gradient_discrepancy,replay_kkt_discrepancy;
-    std::string failure_capture_status;
+    std::string failure_capture_status,replay_trial_capture_status;
 };
 struct FixedNeighborBlockRecord
 {

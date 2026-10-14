@@ -254,6 +254,134 @@ std::string CaptureLocalFailureFixture(const FixedNeighborBlockFailureDiagnostic
     catch(const std::exception &)
     {return "write-failed";}
 }
+std::string CaptureRejectedTrialFixture(const FixedNeighborBlockFailureDiagnostics & d,const Domain & domain,
+    VectorRef effective_response,const EvaluationContext & parent_context,const EvaluationContext & local_context,
+    const SearchResult & profile)
+{
+    const char * const destination=std::getenv("RHBM_JOINT_LOCAL_TRIAL_CAPTURE");
+    if(!destination || !*destination) return "not-requested";
+    const auto failed=std::find_if(profile.trials.rbegin(),profile.trials.rend(),[](const Trial & trial) {
+        return trial.trust && !trial.trust->passed;
+    });
+    if(failed==profile.trials.rend()) return "no-rejected-trial";
+    std::size_t support_count{};
+    for(const auto & atom:domain.atoms) support_count+=atom.size();
+    if(domain.rows<=0 || domain.rows>4096 || domain.atoms.size()==0 || domain.atoms.size()>256 ||
+        support_count>65536 || effective_response.size()!=domain.rows)
+        return "fixture-size-limit";
+    try
+    {
+        const auto & endpoint=failed->endpoint;
+        const auto primary=EvaluateState(domain,effective_response,endpoint.eta,endpoint.beta,local_context);
+        if(!primary.valid) return "primary-reconstruction-failed";
+        ReplayDetailsForDiagnostics replay;
+        const auto trust=CheckReplay(domain,effective_response,primary,local_context,&replay);
+        const Vector primary_prediction=(primary.x*primary.beta).eval();
+        const Vector widths=endpoint.eta.array().exp();
+        std::vector<std::string> atom_ids,row_ids;
+        for(const auto & id:local_context.atom_ids) atom_ids.push_back(id);
+        for(const auto & id:local_context.row_ids) row_ids.push_back(id);
+        std::ostringstream payload;
+        payload<<std::setprecision(std::numeric_limits<double>::max_digits10);
+        payload<<"{\n  \"format\":\"rhbm-joint-local-replay-trial-v1\",\n  \"identity\":{\"component_id\":";
+        WriteJsonString(payload,d.component_id);
+        payload<<",\"component_index\":"<<d.component_index<<",\"sweep_index\":"<<d.sweep_index
+            <<",\"block_index\":"<<d.block_index<<",\"trial_index\":"
+            <<(profile.trials.size()-1-static_cast<std::size_t>(std::distance(profile.trials.rbegin(),failed)))
+            <<",\"profile_evaluation\":"<<failed->evaluation<<",\"local_observation_count\":"<<domain.rows
+            <<",\"local_atom_count\":"<<domain.atoms.size()<<"},\n  \"atom_ids\":";
+        WriteJsonStrings(payload,atom_ids);
+        payload<<",\n  \"row_ids\":"; WriteJsonStrings(payload,row_ids);
+        payload<<",\n  \"local_support\":[";
+        for(std::size_t atom=0;atom<domain.atoms.size();++atom)
+        {
+            if(atom) payload<<','; payload<<'[';
+            std::size_t item{};
+            for(const auto & support:domain.atoms[atom])
+            {
+                if(item++) payload<<',';
+                payload<<"{\"row\":"<<support.row<<",\"squared_distance\":";
+                WriteJsonNumber(payload,support.square); payload<<'}';
+            }
+            payload<<']';
+        }
+        payload<<"],\n  \"effective_response\":"; WriteJsonVector(payload,effective_response);
+        payload<<",\n  \"local_numerical_context\":{\"parent_observation_scale\":";
+        WriteJsonNumber(payload,parent_context.scale);
+        payload<<",\"local_observation_scale\":"; WriteJsonNumber(payload,local_context.scale);
+        payload<<",\"parent_rank_relative\":"; WriteJsonNumber(payload,parent_context.linear.rank_relative);
+        payload<<",\"rank_relative\":"; WriteJsonNumber(payload,local_context.linear.rank_relative);
+        payload<<",\"release_factor\":"; WriteJsonNumber(payload,local_context.linear.release_factor);
+        payload<<",\"release_response_norm\":"; WriteJsonNumber(payload,local_context.linear.release_response_norm);
+        payload<<",\"active_set_iteration_factor\":"<<local_context.linear.active_set_iteration_factor<<"},\n";
+        payload<<"  \"trial_eta\":"; WriteJsonVector(payload,endpoint.eta);
+        payload<<",\n  \"trial_widths\":"; WriteJsonVector(payload,widths);
+        payload<<",\n  \"trial_beta\":"; WriteJsonVector(payload,endpoint.beta);
+        payload<<",\n  \"primary_prediction\":"; WriteJsonVector(payload,primary_prediction);
+        payload<<",\n  \"primary_residual\":"; WriteJsonVector(payload,primary.residual);
+        payload<<",\n  \"primary_width_gradient\":"; WriteJsonVector(payload,primary.gradient);
+        payload<<",\n  \"primary_objective\":"; WriteJsonNumber(payload,endpoint.certificate.objective);
+        payload<<",\n  \"primary_scaled_kkt\":"; WriteJsonNumber(payload,endpoint.certificate.projected_kkt);
+        payload<<",\n  \"primary_valid\":"<<(endpoint.valid?"true":"false")
+            <<",\n  \"primary_certificate\":{\"available\":"<<(endpoint.certificate.available?"true":"false")
+            <<",\"feasible\":"<<(endpoint.certificate.feasible?"true":"false")
+            <<",\"kkt_passed\":"<<(endpoint.certificate.kkt_passed?"true":"false")
+            <<",\"linear_solver_valid\":"<<(endpoint.certificate.linear_solver_valid?"true":"false")
+            <<",\"reason\":";
+        WriteJsonString(payload,endpoint.reason);
+        payload<<",\"solver_reason\":"; WriteJsonString(payload,endpoint.certificate.linear_solver_reason);
+        payload<<",\"free_rank\":"; WriteOptionalJson(payload,endpoint.certificate.free_rank);
+        payload<<",\"linear_solves\":"; WriteOptionalJson(payload,endpoint.certificate.linear_solves);
+        payload<<",\"linear_releases\":"; WriteOptionalJson(payload,endpoint.certificate.linear_releases);
+        payload<<"},\n  \"replay_prediction\":"; WriteJsonVector(payload,replay.prediction);
+        payload<<",\n  \"replay_residual\":"; WriteJsonVector(payload,replay.residual);
+        payload<<",\n  \"replay_width_gradient\":"; WriteJsonVector(payload,replay.width_gradient);
+        payload<<",\n  \"replay_objective\":"; WriteJsonNumber(payload,replay.objective);
+        payload<<",\n  \"replay_scaled_kkt\":"; WriteJsonNumber(payload,replay.scaled_kkt);
+        payload<<",\n  \"prediction_difference\":"; WriteJsonNumber(payload,trust.prediction_difference);
+        payload<<",\n  \"gradient_difference\":"; WriteJsonNumber(payload,trust.gradient_difference);
+        payload<<",\n  \"kkt_difference\":"; WriteJsonNumber(payload,trust.kkt_difference);
+        payload<<",\n  \"trust\":{\"prediction_passed\":"<<(trust.prediction_passed?"true":"false")
+            <<",\"gradient_passed\":"<<(trust.gradient_passed?"true":"false")
+            <<",\"kkt_agrees\":"<<(trust.kkt_difference<=1e-13?"true":"false")
+            <<",\"trust_passed\":"<<(trust.passed?"true":"false")<<",\"trust_reason\":";
+        WriteJsonString(payload,trust.reason);
+        payload<<"},\n  \"build_metadata\":{\"compiler\":";
+#if defined(__clang__)
+        WriteJsonString(payload,std::string("clang ")+__clang_version__);
+#elif defined(__GNUC__)
+        WriteJsonString(payload,std::string("gcc ")+__VERSION__);
+#else
+        WriteJsonString(payload,"unknown");
+#endif
+#if defined(__aarch64__) || defined(__arm64__)
+        payload<<",\"architecture\":\"arm64\"";
+#elif defined(__x86_64__) || defined(_M_X64)
+        payload<<",\"architecture\":\"x86_64\"";
+#else
+        payload<<",\"architecture\":\"unknown\"";
+#endif
+        payload<<",\"double_digits\":"<<std::numeric_limits<double>::digits
+            <<",\"double_iec559\":"<<(std::numeric_limits<double>::is_iec559?"true":"false");
+#ifdef __FAST_MATH__
+        payload<<",\"fast_math_macro\":true";
+#else
+        payload<<",\"fast_math_macro\":false";
+#endif
+        payload<<"}\n}\n";
+        const auto contents=payload.str();
+        if(contents.size()>16*1024*1024) return "fixture-size-limit";
+        const std::filesystem::path path(destination),temporary(path.string()+".tmp");
+        if(std::filesystem::exists(path)) return "destination-exists";
+        if(std::filesystem::exists(temporary)) return "temporary-exists";
+        {std::ofstream out(temporary,std::ios::binary); out.exceptions(std::ios::failbit|std::ios::badbit); out<<contents;}
+        std::filesystem::create_hard_link(temporary,path);
+        std::filesystem::remove(temporary);
+        return "written";
+    }
+    catch(const std::exception &)
+    {return "write-failed";}
+}
 FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolicy & policy,
     const FixedNeighborBlockRecord & block,std::size_t sweep_index,const Indices & core_atoms,
     const EvaluationContext & context,const EvaluationContext & local_context,const Domain & domain,VectorRef effective_response,
@@ -348,6 +476,7 @@ FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolic
             break;
         }
     out.failure_capture_status=CaptureLocalFailureFixture(out,domain,effective_response,eta,context,local_context,profile.initial);
+    out.replay_trial_capture_status=CaptureRejectedTrialFixture(out,domain,effective_response,context,local_context,profile);
     return out;
 }
 std::string FormatFailureDiagnostics(const FixedNeighborBlockFailureDiagnostics & d)
@@ -393,6 +522,7 @@ std::string FormatFailureDiagnostics(const FixedNeighborBlockFailureDiagnostics 
     out<<" maximum_active_a_complementarity_violation_scaled=";
     if(d.maximum_active_a_complementarity_violation_scaled) out<<*d.maximum_active_a_complementarity_violation_scaled; else out<<"unavailable";
     out<<" failure_capture_status="<<d.failure_capture_status
+       <<" replay_trial_capture_status="<<d.replay_trial_capture_status
        <<" local_search_stop_reason="<<d.local_search_stop_reason;
     if(d.replay_prediction_discrepancy)
         out<<" replay_prediction_discrepancy="<<*d.replay_prediction_discrepancy

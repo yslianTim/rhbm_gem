@@ -489,7 +489,8 @@ TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,
     else if(out.reason=="trusted" && !out.passed) out.reason="reference-disagreement";
     return out;
 }
-TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy)
+TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy,
+    ReplayDetailsForDiagnostics * diagnostic)
 {
     const auto * context=&policy;
     TrustEvidence out; out.primary_valid=e.valid;
@@ -540,6 +541,14 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
         2e-12+2e-13*original_prediction.array().abs()).all();
     const bool gradient_ok=((width_gradient-e.gradient).array().abs()<=1e-13+2e-9*e.gradient.array().abs()).all();
     const double kkt_difference=std::abs(kkt-e.certificate.projected_kkt);
+    if(diagnostic)
+    {
+        diagnostic->prediction=prediction;
+        diagnostic->residual=replay_residual;
+        diagnostic->width_gradient=width_gradient;
+        diagnostic->objective=.5*replay_residual.squaredNorm();
+        diagnostic->scaled_kkt=kkt;
+    }
     out.prediction_passed=prediction_ok;
     out.gradient_passed=gradient_ok;
     out.kkt_difference=kkt_difference;
