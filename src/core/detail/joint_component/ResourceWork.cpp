@@ -87,7 +87,22 @@ std::optional<std::size_t> EstimateSnapshotBytes(const JointProblemInput & input
     {
         std::size_t bytes{}; if(!CheckedAddBytes(id.capacity(),1,bytes) || !AddProduct(total,bytes,sizeof(char))) return {};
     }
-    if(input.selection_domain && !AddProduct(total,input.selection_domain->target_indices.capacity(),sizeof(std::size_t))) return {};
+    if(input.selection_domain)
+    {
+        if(!AddProduct(total,input.selection_domain->target_indices.capacity(),sizeof(std::size_t))) return {};
+        if(input.selection_domain->halo_eligibility)
+        {
+            const auto & provenance=*input.selection_domain->halo_eligibility;
+            if(!AddProduct(total,provenance.excluded_halos.capacity(),sizeof(ExcludedHaloRecord))) return {};
+            for(const auto & excluded:provenance.excluded_halos)
+            {
+                std::size_t id_bytes{},reason_bytes{};
+                if(!CheckedAddBytes(excluded.atom_id.capacity(),1,id_bytes) ||
+                    !CheckedAddBytes(excluded.reason.capacity(),1,reason_bytes) ||
+                    !AddProduct(total,id_bytes,sizeof(char)) || !AddProduct(total,reason_bytes,sizeof(char))) return {};
+            }
+        }
+    }
     return total;
 }
 std::optional<std::size_t> EstimateConstructionScratchBytes(const JointProblemInput & input)

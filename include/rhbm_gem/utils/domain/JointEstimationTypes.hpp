@@ -3,21 +3,57 @@
 #include <cstddef>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace rhbm_gem {
+inline constexpr std::string_view FullABCHaloContributorPolicy="fullabc-eligible-halo-pruning-v1";
+struct ExcludedHaloRecord
+{
+    std::string atom_id;
+    std::size_t support_rows{},distinct_radial_distances{};
+    std::string reason;
+    bool operator==(const ExcludedHaloRecord &) const = default;
+};
+struct JointHaloEligibilityProvenance
+{
+    std::size_t minimum_observations{3},minimum_distinct_radial_information{3};
+    std::size_t candidate_halos{},retained_halos{};
+    std::vector<ExcludedHaloRecord> excluded_halos;
+};
 struct JointSelectionDomain
 {
     std::string contract{"fixed-selected-voxel-closure-v1"};
     std::vector<std::size_t> target_indices;
     double observation_radius{2.5},support_radius{2.5};
     std::string contributor_policy{"all-non-hydrogen"};
+    std::optional<JointHaloEligibilityProvenance> halo_eligibility;
     bool IsValid(std::size_t atoms) const
     {
-        if(contract!="fixed-selected-voxel-closure-v1" || contributor_policy!="all-non-hydrogen" ||
+        if(contract!="fixed-selected-voxel-closure-v1" ||
+            (contributor_policy!="all-non-hydrogen" && contributor_policy!=FullABCHaloContributorPolicy) ||
             observation_radius!=2.5 || support_radius!=2.5 || target_indices.empty()) return false;
         for(std::size_t i=0;i<target_indices.size();++i)
             if(target_indices[i]>=atoms || (i && target_indices[i-1]>=target_indices[i])) return false;
+        if(contributor_policy=="all-non-hydrogen") return !halo_eligibility;
+        if(!halo_eligibility) return false;
+        const auto & policy=*halo_eligibility;
+        if(policy.minimum_observations<3 || policy.minimum_distinct_radial_information!=3 ||
+            policy.retained_halos!=atoms-target_indices.size() ||
+            policy.candidate_halos<policy.retained_halos ||
+            policy.excluded_halos.size()!=policy.candidate_halos-policy.retained_halos) return false;
+        std::string_view previous_id;
+        for(const auto & excluded:policy.excluded_halos)
+        {
+            if(excluded.atom_id.empty() || (!previous_id.empty() && previous_id>=excluded.atom_id)) return false;
+            previous_id=excluded.atom_id;
+            if(excluded.reason=="insufficient-observations")
+            {if(excluded.support_rows>=policy.minimum_observations) return false;}
+            else if(excluded.reason=="insufficient-radial-information")
+            {if(excluded.support_rows<policy.minimum_observations ||
+                excluded.distinct_radial_distances>=policy.minimum_distinct_radial_information) return false;}
+            else return false;
+        }
         return true;
     }
 };

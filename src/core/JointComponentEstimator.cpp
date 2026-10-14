@@ -226,6 +226,21 @@ JointProblem::JointProblem(JointProblemInput input)
         throw std::invalid_argument("Invalid joint problem identities or dimensions.");
     if(input.selection_domain && !input.selection_domain->IsValid(input.atom_ids.size()))
         throw std::invalid_argument("Invalid joint selection domain.");
+    if(input.selection_domain && input.selection_domain->contributor_policy==FullABCHaloContributorPolicy)
+    {
+        const auto & provenance=*input.selection_domain->halo_eligibility;
+        for(const auto & excluded:provenance.excluded_halos)
+            if(std::find(input.atom_ids.begin(),input.atom_ids.end(),excluded.atom_id)!=input.atom_ids.end())
+                throw std::invalid_argument("Excluded halo is present in the retained contributor list.");
+        const auto & targets=input.selection_domain->target_indices;
+        for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
+        {
+            if(std::binary_search(targets.begin(),targets.end(),atom)) continue;
+            auto support=input.support[atom];
+            if(!n::EvaluateFullABCHaloEligibility(support,provenance.minimum_observations).eligible)
+                throw std::invalid_argument("Ineligible halo in a FullABC-pruned joint problem.");
+        }
+    }
     if(!std::all_of(input.observations.begin(),input.observations.end(),[](double value){return std::isfinite(value);}))
         throw std::invalid_argument("Nonfinite joint observations.");
     for(const auto & atom:input.support) for(const auto & s:atom)
@@ -337,6 +352,7 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
     }
 
     std::size_t contributors=selected.size(),support_entries{},maximum_atom_support{};
+    std::size_t candidate_halos{},retained_halos{},excluded_halos{},provenance_bytes{};
     std::vector<JointSupport> eligibility_support;
     eligibility_support.reserve(maximum_candidate_support);
     for(const auto * atom:atoms)
@@ -354,6 +370,8 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
                 throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
             continue;
         }
+        if(!n::CheckedAddBytes(candidate_halos,1,candidate_halos))
+            throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
         eligibility_support.clear();
         VisitSupport(map,*atom,[&](auto index,double square) {
             const auto row=std::lower_bound(rows.begin(),rows.end(),index);
@@ -361,9 +379,16 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
                 eligibility_support.push_back({static_cast<std::size_t>(row-rows.begin()),square});
         });
         const auto eligibility=n::EvaluateFullABCHaloEligibility(eligibility_support);
-        if(!eligibility.eligible) continue;
+        if(!eligibility.eligible)
+        {
+            if(!n::CheckedAddBytes(excluded_halos,1,excluded_halos) ||
+                !AddEstimatedBytes(provenance_bytes,1,sizeof(ExcludedHaloRecord)+64))
+                throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
+            continue;
+        }
         maximum_atom_support=std::max(maximum_atom_support,eligibility.support_rows);
-        if(!n::CheckedAddBytes(contributors,1,contributors) ||
+        if(!n::CheckedAddBytes(retained_halos,1,retained_halos) ||
+            !n::CheckedAddBytes(contributors,1,contributors) ||
             !n::CheckedAddBytes(support_entries,eligibility.support_rows,support_entries))
             throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
     }
@@ -392,6 +417,7 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
         !AddEstimatedBytes(planned_snapshot,rows.size(),2*sizeof(std::string)) ||
         !AddEstimatedBytes(planned_snapshot,support_entries,2*sizeof(JointSupport)) ||
         !AddEstimatedBytes(planned_snapshot,selected.size(),2*sizeof(std::size_t)) ||
+        !n::CheckedAddBytes(planned_snapshot,provenance_bytes,planned_snapshot) ||
         !n::CheckedAddBytes(planned_snapshot,builder_resident,planned_snapshot))
         RejectBuildPreflight(shape,"size-overflow");
     shape.resident_bytes=planned_snapshot;
@@ -401,6 +427,13 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
 
     for(auto index:rows) {input.row_ids.push_back(std::to_string(index)); input.observations.push_back(map.GetMapValue(index));}
     input.selection_domain.emplace();
+    input.selection_domain->contributor_policy=std::string(FullABCHaloContributorPolicy);
+    JointHaloEligibilityProvenance halo_provenance;
+    halo_provenance.minimum_observations=n::FullABCHaloMinimumObservations;
+    halo_provenance.minimum_distinct_radial_information=n::FullABCHaloMinimumDistinctRadialInformation;
+    halo_provenance.candidate_halos=candidate_halos;
+    halo_provenance.retained_halos=retained_halos;
+    halo_provenance.excluded_halos.reserve(excluded_halos);
     for(const auto * atom:atoms)
     {
         bool selected_target=selected.contains(atom);
@@ -421,7 +454,12 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
                     eligibility_support.push_back({static_cast<std::size_t>(row-rows.begin()),square});
             });
             const auto eligibility=n::EvaluateFullABCHaloEligibility(eligibility_support);
-            if(!eligibility.eligible) continue;
+            if(!eligibility.eligible)
+            {
+                halo_provenance.excluded_halos.push_back({std::to_string(atom->GetSerialID()),
+                    eligibility.support_rows,eligibility.distinct_squared_distances,eligibility.reason});
+                continue;
+            }
             support.reserve(eligibility.support_rows);
             VisitSupport(map,*atom,[&](auto index,double square) {
                 const auto row=std::lower_bound(rows.begin(),rows.end(),index);
@@ -435,6 +473,9 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
             input.support.push_back(std::move(support));
         }
     }
+    std::sort(halo_provenance.excluded_halos.begin(),halo_provenance.excluded_halos.end(),
+        [](const auto & left,const auto & right){return left.atom_id<right.atom_id;});
+    input.selection_domain->halo_eligibility=std::move(halo_provenance);
     return JointProblem(std::move(input));
 }
 JointFitResult FitJointComponents(const JointProblem & problem,const std::vector<double> & initial_b)

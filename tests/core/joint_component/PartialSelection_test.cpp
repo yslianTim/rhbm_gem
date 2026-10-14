@@ -60,14 +60,23 @@ void CheckReference(const rhbm_gem::MapObject & map,const rhbm_gem::ModelObject 
         rows.push_back(std::to_string(index)); observations.push_back(map.GetMapValue(index));
     }
     std::vector<std::size_t> targets;
+    std::vector<rhbm_gem::ExcludedHaloRecord> excluded;
+    std::size_t candidate_halos{};
     for(std::size_t a=0;a<support.size();++a)
     {
         const auto & atom=model.GetAtomList()[a];
         if(atom->GetElement()==Element::HYDROGEN) continue;
         if(!selected.contains(atom.get()))
         {
+            ++candidate_halos;
             auto candidate_support=support[a];
-            if(!n::EvaluateFullABCHaloEligibility(candidate_support).eligible) continue;
+            const auto eligibility=n::EvaluateFullABCHaloEligibility(candidate_support);
+            if(!eligibility.eligible)
+            {
+                excluded.push_back({std::to_string(atom->GetSerialID()),eligibility.support_rows,
+                    eligibility.distinct_squared_distances,eligibility.reason});
+                continue;
+            }
         }
         const auto k=ids.size(); ids.push_back(std::to_string(atom->GetSerialID()));
         if(selected.contains(atom.get())) targets.push_back(k);
@@ -80,6 +89,22 @@ void CheckReference(const rhbm_gem::MapObject & map,const rhbm_gem::ModelObject 
     }
     EXPECT_EQ(actual.row_ids,rows); EXPECT_EQ(actual.observations,observations); EXPECT_EQ(actual.atom_ids,ids);
     ASSERT_TRUE(actual.selection_domain); EXPECT_EQ(actual.selection_domain->target_indices,targets);
+    ASSERT_TRUE(actual.selection_domain->halo_eligibility);
+    const auto & provenance=*actual.selection_domain->halo_eligibility;
+    std::sort(excluded.begin(),excluded.end(),[](const auto & a,const auto & b){return a.atom_id<b.atom_id;});
+    EXPECT_EQ(actual.selection_domain->contributor_policy,rhbm_gem::FullABCHaloContributorPolicy);
+    EXPECT_EQ(provenance.minimum_observations,3u);
+    EXPECT_EQ(provenance.minimum_distinct_radial_information,3u);
+    EXPECT_EQ(provenance.candidate_halos,candidate_halos);
+    EXPECT_EQ(provenance.retained_halos,ids.size()-targets.size());
+    ASSERT_EQ(provenance.excluded_halos.size(),excluded.size());
+    for(std::size_t i=0;i<excluded.size();++i)
+    {
+        EXPECT_EQ(provenance.excluded_halos[i].atom_id,excluded[i].atom_id);
+        EXPECT_EQ(provenance.excluded_halos[i].support_rows,excluded[i].support_rows);
+        EXPECT_EQ(provenance.excluded_halos[i].distinct_radial_distances,excluded[i].distinct_radial_distances);
+        EXPECT_EQ(provenance.excluded_halos[i].reason,excluded[i].reason);
+    }
     double square=0; for(double value:observations) square+=value*value;
     EXPECT_NEAR(problem.ObservationScale(),std::max(1.,std::sqrt(square)),1e-12*problem.ObservationScale());
 }
@@ -108,10 +133,10 @@ TEST(JointComponentPartialSelectionTest, BoundariesClippingAndNonrecursiveHalo)
     rhbm_gem::MapObject map({11,3,3},{.25,.7,1.1},{0,-.7,-1.1},std::move(values));
     CheckReference(map,model);
     const auto p=core::BuildJointProblem(map,model);
-    EXPECT_EQ(p.Input().atom_ids,(std::vector<std::string>{"1","4","5"}));
-    EXPECT_TRUE(p.Input().support[2].empty());
-    EXPECT_DOUBLE_EQ(p.Input().support[2][0].squared_distance,6.25);
-    const auto fit=core::FitJointComponents(p,{.5,.5,.5,.5});
+    EXPECT_EQ(p.Input().atom_ids,(std::vector<std::string>{"1","4"}));
+    ASSERT_TRUE(p.Input().selection_domain->halo_eligibility);
+    ASSERT_EQ(p.Input().selection_domain->halo_eligibility->excluded_halos.size(),2u);
+    const auto fit=core::FitJointComponents(p,{.5,.5});
     EXPECT_FALSE(fit.assembled_state);
     const auto & data=core::JointProblemAccess::Get(p);
     EXPECT_EQ(data.partition.unobserved_atoms.size(),1);
@@ -137,6 +162,18 @@ TEST(JointComponentPartialSelectionTest, PrunesIneligibleHalosBeforeProblemConst
     EXPECT_EQ(input.atom_ids,(std::vector<std::string>{"10","30"}));
     ASSERT_TRUE(input.selection_domain);
     EXPECT_EQ(input.selection_domain->target_indices,(std::vector<std::size_t>{0}));
+    ASSERT_TRUE(input.selection_domain->halo_eligibility);
+    const auto & provenance=*input.selection_domain->halo_eligibility;
+    EXPECT_EQ(input.selection_domain->contributor_policy,rhbm_gem::FullABCHaloContributorPolicy);
+    EXPECT_EQ(provenance.candidate_halos,3u);
+    EXPECT_EQ(provenance.retained_halos,1u);
+    ASSERT_EQ(provenance.excluded_halos.size(),2u);
+    EXPECT_EQ(provenance.excluded_halos[0].atom_id,"20");
+    EXPECT_EQ(provenance.excluded_halos[0].support_rows,2u);
+    EXPECT_EQ(provenance.excluded_halos[0].reason,"insufficient-observations");
+    EXPECT_EQ(provenance.excluded_halos[1].atom_id,"40");
+    EXPECT_EQ(provenance.excluded_halos[1].support_rows,0u);
+    EXPECT_EQ(provenance.excluded_halos[1].reason,"insufficient-observations");
     ASSERT_EQ(input.support.size(),2u);
     auto retained= input.support[1];
     const auto eligibility=n::EvaluateFullABCHaloEligibility(retained);
@@ -150,6 +187,9 @@ TEST(JointComponentPartialSelectionTest, PrunesIneligibleHalosBeforeProblemConst
     const auto & data=core::JointProblemAccess::Get(problem);
     EXPECT_EQ(data.construction_memory.shape.component_atoms,2u);
     EXPECT_EQ(data.construction_memory.shape.component_support_entries,15u);
+
+    auto invalid=input; invalid.support[1].resize(1);
+    EXPECT_THROW(core::JointProblem(std::move(invalid)),std::invalid_argument);
 }
 
 TEST(JointComponentPartialSelectionTest, SelectedTargetWithOneObservationIsAlwaysRetained)
@@ -199,6 +239,8 @@ TEST(JointComponentPartialSelectionTest, PrunedBridgeRebuildsStructuralComponent
     ASSERT_EQ(after.partition.components.size(),2u);
 
     core::JointProblemInput unpruned=pruned.Input();
+    unpruned.selection_domain->contributor_policy="all-non-hydrogen";
+    unpruned.selection_domain->halo_eligibility.reset();
     unpruned.atom_ids.push_back("3");
     unpruned.support.emplace_back();
     for(std::size_t row=0;row<unpruned.row_ids.size();++row)
@@ -274,6 +316,8 @@ TEST(JointComponentPartialSelectionTest, IdentifiableRecoveryOmissionAndOutsideD
         EXPECT_NEAR(fit.assembled_state->b[i],f.b[i],1e-10*(1+f.b[i]));
     }
     auto omitted=p.Input(); omitted.atom_ids.resize(1); omitted.support.resize(1);
+    omitted.selection_domain->contributor_policy="all-non-hydrogen";
+    omitted.selection_domain->halo_eligibility.reset();
     const auto wrong=core::FitJointComponents(core::JointProblem(omitted),{f.b[0]});
     ASSERT_FALSE(wrong.objective); ASSERT_FALSE(wrong.assembled_state);
     ASSERT_TRUE(wrong.components[0].candidate_diagnostic);
@@ -329,10 +373,45 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesHaloHistoryAndRo
         EXPECT_EQ(rhbm_gem::AtomLocalPotentialView::For(*atom).GetEstimateMDPDE(rhbm_gem::FittingStage::Second).GetWidth(),.91);
     const auto saved=core::CaptureJointAnalysisResult(fit);
     const auto encoded=rhbm_gem::joint_result_io::Encode(saved);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),11);
     const auto decoded=rhbm_gem::joint_result_io::Decode(encoded);
     ASSERT_TRUE(decoded.selection_domain); EXPECT_EQ(decoded.selection_domain->target_indices,(std::vector<std::size_t>{0}));
+    ASSERT_TRUE(decoded.selection_domain->halo_eligibility);
+    EXPECT_EQ(decoded.selection_domain->halo_eligibility->candidate_halos,
+        saved.selection_domain->halo_eligibility->candidate_halos);
+    EXPECT_EQ(decoded.selection_domain->halo_eligibility->excluded_halos.size(),
+        saved.selection_domain->halo_eligibility->excluded_halos.size());
     EXPECT_EQ(decoded.initialization.data_scope,"contributor-local-sampling-may-read-outside-target-domain");
     EXPECT_EQ(rhbm_gem::joint_result_io::Encode(decoded),encoded);
+    auto missing_provenance=boost::json::parse(encoded).as_object();
+    missing_provenance.at("selection_domain").as_object()["halo_eligibility"]=nullptr;
+    EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(missing_provenance)),std::invalid_argument);
+    missing_provenance=boost::json::parse(encoded).as_object();
+    missing_provenance["schema_version"]=10;
+    EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(missing_provenance)),std::invalid_argument);
+    f.model->EditAnalysis().SetJointResult(saved);
+    const command_test::ScopedTempDir directory{"joint_halo_provenance_roundtrip"};
+    DataRepository repository(directory.path()/"provenance.sqlite"); repository.SaveModel(*f.model,"joint");
+    const auto loaded=repository.LoadModel("joint");
+    ASSERT_TRUE(loaded->GetAnalysisView().GetJointResult());
+    const auto & persisted=*loaded->GetAnalysisView().GetJointResult();
+    ASSERT_TRUE(persisted.selection_domain->halo_eligibility);
+    EXPECT_EQ(persisted.selection_domain->halo_eligibility->excluded_halos,
+        saved.selection_domain->halo_eligibility->excluded_halos);
+
+    auto radial=saved;
+    auto & radial_provenance=*radial.selection_domain->halo_eligibility;
+    radial_provenance.excluded_halos[0]={"20",3,2,"insufficient-radial-information"};
+    const auto radial_encoded=rhbm_gem::joint_result_io::Encode(radial);
+    const auto radial_decoded=rhbm_gem::joint_result_io::Decode(radial_encoded);
+    EXPECT_EQ(radial_decoded.selection_domain->halo_eligibility->excluded_halos[0],
+        radial_provenance.excluded_halos[0]);
+    f.model->EditAnalysis().SetJointResult(radial);
+    repository.SaveModel(*f.model,"radial-provenance");
+    const auto radial_loaded=repository.LoadModel("radial-provenance");
+    ASSERT_TRUE(radial_loaded->GetAnalysisView().GetJointResult());
+    EXPECT_EQ(radial_loaded->GetAnalysisView().GetJointResult()->selection_domain->halo_eligibility->excluded_halos[0],
+        radial_provenance.excluded_halos[0]);
 }
 
 TEST(JointComponentPartialSelectionTest, InitializationExceptionsKeepProvenanceWithMedianSeed)
@@ -546,6 +625,8 @@ TEST(JointComponentPartialSelectionTest, ZeroSignalRankDeficiencyAndInsufficient
     for(int scenario=0;scenario<3;++scenario)
     {
         auto input=p.Input();
+        input.selection_domain->contributor_policy="all-non-hydrogen";
+        input.selection_domain->halo_eligibility.reset();
         if(scenario==0) std::fill(input.observations.begin(),input.observations.end(),0);
         if(scenario==1) input.support[1]=input.support[0];
         if(scenario==2)

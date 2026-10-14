@@ -24,12 +24,6 @@ FullABCHaloEligibility EvaluateFullABCHaloEligibility(
 
     FullABCHaloEligibility out;
     out.support_rows=support.size();
-    if(out.support_rows<minimum_observations)
-    {
-        out.reason="insufficient-observations";
-        return out;
-    }
-
     std::sort(support.begin(),support.end(),[](const auto & left,const auto & right) {
         if(left.squared_distance!=right.squared_distance)
             return left.squared_distance<right.squared_distance;
@@ -39,6 +33,11 @@ FullABCHaloEligibility EvaluateFullABCHaloEligibility(
         std::unique(support.begin(),support.end(),[](const auto & left,const auto & right) {
             return left.squared_distance==right.squared_distance;
         })));
+    if(out.support_rows<minimum_observations)
+    {
+        out.reason="insufficient-observations";
+        return out;
+    }
     if(out.distinct_squared_distances<FullABCHaloMinimumDistinctRadialInformation)
     {
         out.reason="insufficient-radial-information";

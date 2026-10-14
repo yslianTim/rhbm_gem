@@ -534,7 +534,7 @@ TEST(JointObservableProfileTest, HaloNonuniquenessDoesNotCertifyItsParameters)
     EXPECT_FALSE(stages.at(1).point); EXPECT_FALSE(stages.at(4).point);
     const auto text=rhbm_gem::joint_result_io::Encode(saved);
     auto value=boost::json::parse(text);
-    EXPECT_EQ(value.at("schema_version").as_int64(),10);
+    EXPECT_EQ(value.at("schema_version").as_int64(),11);
     auto downgraded=value;
     downgraded.as_object()["schema_version"]=7;
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(downgraded)),std::invalid_argument);
@@ -1059,7 +1059,7 @@ TEST(JointObservableProfileTest, TargetEvidenceUsesEveryComponentAndTheSavedStat
     const auto covariance=core::detail::ComputeJointUncertainty(problem,saved);
     EXPECT_TRUE(covariance.at(1).covariance); EXPECT_TRUE(covariance.at(2).covariance);
     auto json=boost::json::parse(rhbm_gem::joint_result_io::Encode(saved));
-    EXPECT_EQ(json.at("schema_version").as_int64(),10);
+    EXPECT_EQ(json.at("schema_version").as_int64(),11);
     json.at("target_evidence").as_object()["column_scales"]=boost::json::array{1.};
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(json)),std::invalid_argument);
     const auto restored=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved));
