@@ -329,6 +329,7 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
 } // namespace
 LinearResult SolveLinear(const Sparse & x,VectorRef y,const Vector & w,bool svd,bool blocked,const Sparse * cache,const LinearPolicy * policy,const std::vector<LinearBlock> * blocks)
 {return WeightedSolveImpl(x,y,w,svd,blocked,cache,policy,blocks);}
-LinearResult SolveLinear(const Matrix & x,VectorRef y,const Vector & w,bool svd,bool blocked,const Sparse * cache)
-{return WeightedSolveImpl(x,y,w,svd,blocked,cache);}
+LinearResult SolveLinear(const Matrix & x,VectorRef y,const Vector & w,bool svd,bool blocked,const Sparse * cache,
+    const LinearPolicy * policy)
+{return WeightedSolveImpl(x,y,w,svd,blocked,cache,policy);}
 }

@@ -354,7 +354,10 @@ if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
     add_test(NAME joint_local_ac_kkt_reproduction
         COMMAND $<TARGET_FILE:joint_local_ac_kkt> replay
             "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_ac_kkt/block-82.json")
-    set_tests_properties(joint_local_ac_kkt_reproduction PROPERTIES
+    add_test(NAME joint_local_ac_kkt_accuracy
+        COMMAND $<TARGET_FILE:joint_local_ac_kkt> assess
+            "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_ac_kkt/block-82.json")
+    set_tests_properties(joint_local_ac_kkt_reproduction joint_local_ac_kkt_accuracy PROPERTIES
         LABELS "offline;domain:core;intent:algorithm;joint:numerics" TIMEOUT 120
         ENVIRONMENT "OMP_NUM_THREADS=1")
     add_executable(joint_offline_diagnostic experiments/joint_offline_diagnostic.cpp)

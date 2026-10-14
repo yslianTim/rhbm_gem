@@ -230,6 +230,9 @@ std::string CaptureLocalFailureFixture(const FixedNeighborBlockFailureDiagnostic
         out<<",\"linear_rank\":"; WriteOptionalJson(out,initial.certificate.free_rank);
         out<<",\"linear_solve_count\":"; WriteOptionalJson(out,initial.certificate.linear_solves);
         out<<",\"active_set_releases\":"; WriteOptionalJson(out,initial.certificate.linear_releases);
+        std::vector<Eigen::Index> active_a_atoms;
+        for(const auto amplitude:d.active_amplitude_indices) active_a_atoms.push_back(amplitude/2);
+        out<<",\"active_a_atom_indices\":"; WriteJsonIndices(out,active_a_atoms);
         out<<",\"active_amplitude_indices\":"; WriteJsonIndices(out,d.active_amplitude_indices);
         out<<",\"primal_feasibility\":"; WriteOptionalJson(out,d.primal_feasibility);
         out<<",\"scaled_projected_kkt\":"; WriteOptionalJson(out,d.scaled_projected_kkt);
@@ -289,7 +292,8 @@ FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolic
     out.solver_reason=certificate.linear_solver_reason;
     out.linear_rank=certificate.free_rank; out.linear_solve_count=certificate.linear_solves;
     out.active_set_releases=certificate.linear_releases;
-    out.active_amplitude_indices=certificate.active_atoms;
+    out.active_amplitude_indices.clear();
+    for(const auto atom:certificate.active_atoms) out.active_amplitude_indices.push_back(2*atom);
     out.primal_feasibility=0.0;
     for(Eigen::Index column=0;column<profile.initial.beta.size();column+=2)
         *out.primal_feasibility=std::max(*out.primal_feasibility,std::max(0.0,-profile.initial.beta(column)));

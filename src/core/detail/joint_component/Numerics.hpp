@@ -89,7 +89,8 @@ struct LinearResult
 struct LinearBlock {std::vector<Eigen::Index> rows,columns;};
 LinearResult SolveLinear(const Sparse &,VectorRef,const Vector &,bool=false,bool=true,
     const Sparse * = nullptr,const LinearPolicy * = nullptr,const std::vector<LinearBlock> * = nullptr);
-LinearResult SolveLinear(const Matrix &,VectorRef,const Vector &,bool=false,bool=false,const Sparse * = nullptr);
+LinearResult SolveLinear(const Matrix &,VectorRef,const Vector &,bool=false,bool=false,const Sparse * = nullptr,
+    const LinearPolicy * = nullptr);
 std::pair<Matrix,Vector> ReferenceQR(const Sparse &,const Vector &,const Vector &,VectorRef);
 struct Certificate
 {
