@@ -30,6 +30,13 @@ bool PositiveDefinite(const Eigen::Matrix2d & covariance)
 
 } // namespace
 
+std::optional<std::size_t> EstimateLocalConditionalCovarianceWorkspaceBytes(std::size_t observations)
+{
+    constexpr std::size_t bytes_per_observation = 4 * sizeof(double);
+    if (observations > std::numeric_limits<std::size_t>::max() / bytes_per_observation) return std::nullopt;
+    return observations * bytes_per_observation;
+}
+
 LocalConditionalCovariance ComputeLocalConditionalCovariance(
     const LocalStageEstimate & stage, const LocalPotentialSampleList & raw_samples,
     const PostFitPeelingResult & peeling, bool sample_geometry_available)
@@ -60,9 +67,12 @@ LocalConditionalCovariance ComputeLocalConditionalCovariance(
     result.observation_count = static_cast<std::size_t>(available);
     if (available <= 2) { result.reason = "insufficient-observations"; return result; }
     result.degrees_of_freedom = static_cast<std::size_t>(available - 2);
+    const auto workspace_bytes = EstimateLocalConditionalCovarianceWorkspaceBytes(result.observation_count);
+    if (!workspace_bytes) { result.reason = "local-workspace-size-overflow"; return result; }
+    result.temporary_workspace_estimate_bytes = *workspace_bytes;
 
     Eigen::MatrixXd jacobian(available, 2);
-    Eigen::VectorXd residuals(available);
+    long double residual_sum_squares = 0.0L;
     Eigen::Index row = 0;
     for (std::size_t i = 0; i < peeling.samples.size(); ++i)
     {
@@ -76,35 +86,33 @@ LocalConditionalCovariance ComputeLocalConditionalCovariance(
         jacobian(row, 0) = basis.gaussian;
         jacobian(row, 1) =
             (amplitude * basis.gaussian_log_width + charge * basis.charge_log_width) / width;
-        residuals(row) = *sample.response - prediction;
-        if (!std::isfinite(prediction) || !jacobian.row(row).allFinite() || !std::isfinite(residuals(row)))
+        const double residual = *sample.response - prediction;
+        if (!std::isfinite(prediction) || !jacobian.row(row).allFinite() || !std::isfinite(residual))
         { result.reason = "nonfinite-local-design"; return result; }
+        residual_sum_squares += static_cast<long double>(residual) * residual;
         ++row;
     }
 
     const Eigen::Vector2d column_norms = jacobian.colwise().norm();
     if (!column_norms.allFinite() || (column_norms.array() <= 0.0).any())
     { result.reason = "rank-deficient-local-design"; return result; }
-    Eigen::MatrixXd scaled_jacobian = jacobian;
-    scaled_jacobian.col(0) /= column_norms(0);
-    scaled_jacobian.col(1) /= column_norms(1);
+    jacobian.col(0) /= column_norms(0);
+    jacobian.col(1) /= column_norms(1);
 
-    Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr(scaled_jacobian);
+    Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr(jacobian);
     const double relative_threshold = std::numeric_limits<double>::epsilon() *
         static_cast<double>(std::max<Eigen::Index>(available, 2));
     qr.setThreshold(relative_threshold);
     if (qr.rank() != 2)
     { result.reason = "rank-deficient-local-design"; return result; }
 
-    const Eigen::Matrix2d r = qr.matrixR().topLeftCorner<2, 2>().template triangularView<Eigen::Upper>();
+    Eigen::Matrix2d r = qr.matrixR().topLeftCorner<2, 2>().template triangularView<Eigen::Upper>();
+    r(1, 0) = 0.0;
     const Eigen::JacobiSVD<Eigen::Matrix2d> spectrum(r);
     if (spectrum.info() != Eigen::Success || !spectrum.singularValues().allFinite() ||
-        spectrum.singularValues()(0) <= relative_threshold * spectrum.singularValues()(1))
+        spectrum.singularValues()(1) <= relative_threshold * spectrum.singularValues()(0))
     { result.reason = "ill-conditioned-local-design"; return result; }
 
-    long double residual_sum_squares = 0.0L;
-    for (Eigen::Index i = 0; i < residuals.size(); ++i)
-        residual_sum_squares += static_cast<long double>(residuals(i)) * residuals(i);
     const long double variance = residual_sum_squares / static_cast<long double>(result.degrees_of_freedom);
     result.residual_variance = static_cast<double>(variance);
     if (!(variance > 0.0L) || !std::isfinite(variance) || !std::isfinite(*result.residual_variance))
@@ -140,6 +148,8 @@ GroupParameterEvidence BuildLocalGroupEvidence(
     evidence.source_id = stage.source.run_id;
     evidence.uncertainty_method = covariance.method;
     evidence.status = EvidenceStatus::Ineligible;
+    if (stage.source.method != EstimateMethod::JointComponents)
+    { evidence.reason = "not-a-joint-estimate"; return evidence; }
     if (stage.source.role != FittingRole::Target) { evidence.reason = "not-a-target"; return evidence; }
     if (!stage.point) { evidence.reason = "missing-point-state"; return evidence; }
     if (stage.convergence != JointCheckStatus::Passed)

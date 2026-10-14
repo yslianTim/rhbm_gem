@@ -68,7 +68,11 @@ The complete concise record of those FixedNeighbor choices is in
   0.442 GiB). The fixture disables sweeps and endpoint certification; it does
   not represent the unknown physical support graph or qualify the full
   physical search and certification.
-- A separate serial census adds endpoint streaming and both memory preflights.
+- A separate historical serial census added endpoint streaming and the memory
+  preflights that existed in that revision. The global covariance preflight has
+  since been removed; current group covariance uses one atom-local two-column
+  design at a time, as documented in the
+  [memory census](joint-component-memory-census.md).
   On its synthetic single-chain shape, the actual full A/C design has 74,812
   columns but only 37,406 unique supported rows. The production structural
   row-count check therefore proves full-design rank deficiency without QR or
@@ -83,8 +87,9 @@ The complete concise record of those FixedNeighbor choices is in
   targets; it adds no dense factor. New excluded-halo provenance is stored
   separately with O(E) records for E exclusions and is included in the
   problem-construction preflight.
-  An independent covariance preflight still rejects the giant shape before its
-  full-rank factorization. The old 317,422,079,259-byte Target Geometry value
+  The retired global covariance preflight estimated 418,399,065,443 bytes for
+  the giant shape and rejected before its full-rank factorization. The old
+  317,422,079,259-byte Target Geometry value
   was a planner estimate rejected before allocation; it is not an observed
   memory saving. The rank stages still exceed the planning budget and are not
   run. The earlier process peak of 622,624,768 bytes covered

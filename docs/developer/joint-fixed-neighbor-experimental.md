@@ -110,9 +110,12 @@ faces estimate 167,840,033,907 and 266,666,536,155 bytes. All exceed the
 width estimates describe the retired two-stage planner. The current combined
 stage accounts for the free-design QR/SVD, projection coefficients and
 projected-width QR/SVD. Derived Target Identifiability is estimated at
-482,239,947 bytes and has no dense factor workspace. The independent covariance
-preflight is estimated at 418,399,065,443 bytes and rejects before
-factorization. In this shape, structural rank deficiency leaves no trusted
+482,239,947 bytes and has no dense factor workspace. A former global covariance
+preflight estimated 418,399,065,443 bytes and rejected before factorization;
+that path has been removed. Current local conditional covariance uses an
+atom-local two-column design, as documented in the
+[memory census](joint-component-memory-census.md). In this shape, structural
+rank deficiency leaves no trusted
 rank evidence, so target results remain unavailable even though the
 evidence-memory preflight passes. See the
 [component memory census](joint-component-memory-census.md) for the allocation

@@ -8,10 +8,12 @@
 #include <Eigen/Eigenvalues>
 
 #include <cmath>
+#include <limits>
 
 namespace {
 using namespace rhbm_gem;
 using namespace rhbm_gem::core::detail;
+namespace joint_component = rhbm_gem::core::joint_component;
 
 struct Fixture
 {
@@ -83,6 +85,7 @@ TEST(JointLocalConditionalCovarianceTest, MatchesDenseFiniteDifferenceReference)
     EXPECT_EQ(covariance.degrees_of_freedom, fixture.raw.size() - 2);
     EXPECT_TRUE(covariance.covariance->allFinite());
     EXPECT_TRUE(covariance.covariance->isApprox(covariance.covariance->transpose(), 1.0e-12));
+    EXPECT_EQ(covariance.temporary_workspace_estimate_bytes, fixture.raw.size() * 4 * sizeof(double));
     Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> spectrum(*covariance.covariance);
     ASSERT_EQ(spectrum.info(), Eigen::Success);
     EXPECT_GT(spectrum.eigenvalues()(0), 0.0);
@@ -123,11 +126,62 @@ TEST(JointLocalConditionalCovarianceTest, ExcludesUnavailableSamplesAndRejectsSt
     fixture.peeling.source.run_id = "stale-run";
     const auto stale = ComputeLocalConditionalCovariance(fixture.stage, fixture.raw, fixture.peeling, true);
     EXPECT_EQ(stale.reason, "peeling-source-mismatch");
+    const auto stale_evidence = BuildLocalGroupEvidence(fixture.stage, &fixture.peeling, stale);
+    EXPECT_EQ(stale_evidence.status, EvidenceStatus::Unavailable);
+    EXPECT_EQ(stale_evidence.reason, "evidence-source-mismatch");
 
     fixture.peeling.source = fixture.stage.source;
     const auto missing_geometry = ComputeLocalConditionalCovariance(
         fixture.stage, fixture.raw, fixture.peeling, false);
     EXPECT_EQ(missing_geometry.reason, "sample-geometry-unavailable");
+}
+
+TEST(JointLocalConditionalCovarianceTest, SkipsNonfiniteResponsesAndRejectsUnqualifiedOrExactEndpoints)
+{
+    Fixture fixture({0.08, 0.21, 0.39, 0.61, 0.88, 1.17, 1.49, 1.82});
+    fixture.peeling.samples[0].response = std::numeric_limits<double>::infinity();
+    auto covariance = ComputeLocalConditionalCovariance(fixture.stage, fixture.raw, fixture.peeling, true);
+    ASSERT_EQ(covariance.status, EvidenceStatus::Available) << covariance.reason;
+    EXPECT_EQ(covariance.observation_count, 7u);
+
+    for (std::size_t i = 2; i < fixture.peeling.samples.size(); ++i)
+        fixture.peeling.samples[i].response = std::numeric_limits<double>::infinity();
+    EXPECT_EQ(ComputeLocalConditionalCovariance(fixture.stage, fixture.raw, fixture.peeling, true).reason,
+        "insufficient-observations");
+
+    fixture = Fixture({0.08, 0.21, 0.39, 0.61, 0.88, 1.17, 1.49, 1.82});
+    for (std::size_t i = 0; i < fixture.raw.size(); ++i)
+    {
+        const auto distance = fixture.raw[i].point.distance;
+        const auto basis = joint_component::EvaluateKernel(distance * distance, fixture.point.GetWidth(), 2.5);
+        fixture.peeling.samples[i].response = fixture.point.GetAmplitude() * basis.gaussian +
+            fixture.point.GetOffset() * basis.charge;
+    }
+    EXPECT_EQ(ComputeLocalConditionalCovariance(fixture.stage, fixture.raw, fixture.peeling, true).reason,
+        "residual-variance-unavailable");
+
+    fixture.stage.convergence = JointCheckStatus::Failed;
+    covariance = ComputeLocalConditionalCovariance(fixture.stage, fixture.raw, fixture.peeling, true);
+    EXPECT_EQ(covariance.reason, "joint-endpoint-not-converged");
+    const auto evidence = BuildLocalGroupEvidence(fixture.stage, &fixture.peeling, covariance);
+    EXPECT_EQ(evidence.status, EvidenceStatus::Ineligible);
+    EXPECT_EQ(evidence.reason, "joint-endpoint-not-converged");
+}
+
+TEST(JointLocalConditionalCovarianceTest, EstimatesProductionScaleWorkspaceWithoutGlobalFactors)
+{
+    constexpr std::size_t observations = 5'938'087;
+    constexpr std::size_t contributors = 37'406;
+    constexpr std::size_t targets = 37'406;
+    const auto local_workspace = EstimateLocalConditionalCovarianceWorkspaceBytes(observations);
+    ASSERT_TRUE(local_workspace);
+    const std::size_t global_columns = 3 * contributors;
+    const std::size_t global_covariance_bytes = global_columns * global_columns * sizeof(double);
+    const std::size_t target_covariance_bytes = targets * sizeof(Eigen::Matrix2d);
+    EXPECT_EQ(*local_workspace, observations * 4 * sizeof(double));
+    EXPECT_LT(*local_workspace, 4'000'000'000u);
+    EXPECT_LT(target_covariance_bytes, 4'000'000'000u);
+    EXPECT_GT(global_covariance_bytes, 100 * *local_workspace);
 }
 
 } // namespace

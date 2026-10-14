@@ -369,16 +369,16 @@ projection coefficients and projected-width QR/SVD. There is no separate
 production DesignSpectrum allocation. Target identifiability reuses the full
 design and projected-width rank evidence and plans only rank records,
 target/halo identities and per-atom statuses; it does not build or factor a
-full target Jacobian. Covariance has an independent `target-covariance`
-preflight for its tiled Jacobian and compact factors. The parent peak is the
-maximum of sequential stage peaks with each stage's resident data; it does not
-add all stage temporaries together. The assessment telemetry records
+full target Jacobian. The Joint estimator does not compute a global parameter
+covariance. The parent rank peak is the maximum of sequential stage peaks with
+each stage's resident data; it does not add all stage temporaries together.
+The assessment telemetry records
 whether a stage was entered and completed, its dimensions, elapsed time,
 preflight status and byte breakdown. Current RSS is sampled at stage entry and
 exit; process peak RSS is the process-wide high-water mark. Neither RSS value
 is the stage's attributed allocation. On platforms without an RSS source the
-fields are unavailable. Right singular vectors are counted only for rank or
-covariance stages that compute them.
+fields are unavailable. Right singular vectors are counted only for rank
+stages that compute them.
 
 The rank and target preflight byte formulas and the synthetic 37,406-atom
 census are recorded in the [component memory census](joint-component-memory-census.md).
@@ -388,8 +388,8 @@ coefficients, tiled QR workspaces and projected-width factors. Both the full
 interior shape and its all-active free face exceed the planning budget in the
 synthetic census; neither full qualification is attempted. These are planned
 allocation estimates, not measured RSS. Derived target evidence has no factor
-or right-vector workspace. Covariance has a separate factor preflight and may
-remain unavailable for large components.
+or right-vector workspace. This rank limitation remains even though local
+post-fit covariance no longer allocates a component-wide factor.
 
 Prepared row mappings store sorted parent/local row pairs only for each block's
 affected rows, plus cached local support indices. Their structural cost follows
@@ -415,14 +415,26 @@ serial synthetic census rejects the large rank stage, while the derived-target
 preflight itself passes; no trusted rank evidence exists in that case. No
 physical map/model search has been measured.
 
-Uncertainty uses `MakeComponentProblemView()` and has a separate covariance
-preflight. For a converged target component, the preflight gates the independent
-tiled full-component covariance factorization; it does not rerun target
-identifiability. A rejected preflight or covariance gate leaves the point
-estimate available and reports uncertainty as unavailable. Small eligible
-components can still produce covariance. Support membership and identity are
-read through the indexed view without constructing local support ownership or
-synthetic `PartitionMappings`.
+Post-fit local conditional covariance is computed after peeling and is separate
+from Joint numerical qualification. For each eligible target, raw sample
+geometry and paired peeling responses define the local observations. The
+estimator evaluates the complete Gaussian-plus-charge kernel and its A/B
+Jacobian at the fixed Joint endpoint, with neighboring Joint parameters and
+the target's C held fixed. A pivoted QR checks the two-column design; only its
+small 2-by-2 triangular factor is used for the covariance. The residual
+variance uses the local i.i.d. Gaussian working model with `n_i - 2` degrees of
+freedom. The covariance is transformed to Group Fitting's two parameter
+coordinates and stored in `GroupParameterEvidence`; it is not written into the
+Joint stage uncertainty.
+
+The local workspace is atom-local and scales with the available sample count
+`n_i`, not with the square of the component parameter count. The dense local
+design and its QR factor are estimated at 32 bytes per available row, plus the
+raw-sample copy used by the workflow. Only a 2-by-2 covariance and a two-value
+parameter estimate are retained per target. No cross-atom parameter
+covariance or full-component covariance QR/SVD is formed. Rank preflight and
+target qualification retain their existing behavior and can still exceed the
+memory budget independently.
 
 The Map builder collects and sorts relevant voxel indices instead of allocating
 an index array for the entire map. Voxel ordering and support arithmetic remain

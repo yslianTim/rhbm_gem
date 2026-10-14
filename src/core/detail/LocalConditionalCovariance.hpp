@@ -15,7 +15,10 @@ struct LocalConditionalCovariance
     std::optional<double> residual_variance;
     std::size_t observation_count{};
     std::size_t degrees_of_freedom{};
+    std::size_t temporary_workspace_estimate_bytes{};
 };
+
+std::optional<std::size_t> EstimateLocalConditionalCovarianceWorkspaceBytes(std::size_t observations);
 
 LocalConditionalCovariance ComputeLocalConditionalCovariance(
     const LocalStageEstimate &, const LocalPotentialSampleList &,

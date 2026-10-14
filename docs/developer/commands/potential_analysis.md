@@ -211,8 +211,9 @@ sampled and fitted locally; contribution-only halo atoms retain initialization
 provenance without local sampling or fitting. Joint initialization consumes
 those prepared samples in isolation and supplies First B plus seed provenance to
 `FitJointComponents`. Joint estimates then flow through the second-stage mapping,
-target summary, post-fit peeling, uncertainty, and parameter-evidence group
-inference.
+target summary, post-fit peeling, local conditional covariance at each eligible
+fixed endpoint, and parameter-evidence group inference. The local calculation
+does not update the Joint estimates or construct a cross-atom covariance.
 
 `FixedNeighbor` is the sole qualified bounded-memory production route with the fixed
 core-12, forward, one-accepted-local-update policy documented in the
@@ -363,10 +364,11 @@ contract and store endpoint-verification and numerical-qualification
 diagnostics separately. Legacy reference agreement is not mapped to conditional KKT, and
 no reference status is mapped to independent replay.
 See the [target contract](../joint-target-estimability.md)
-for target convergence, retained halo availability and covariance. SQLite v19 additionally stores neutral
-stages, uncertainty, posterior evidence and sample geometry in `model_stage_result`.
-Legacy sample BLOBs have unavailable geometry; old Joint snapshots do not gain
-recomputed uncertainty, peeling or posterior.
+for target convergence, retained halo availability and conditional local
+covariance. SQLite v19 stores estimator-neutral stages, GroupParameterEvidence,
+posterior evidence and sample geometry in `model_stage_result`. Legacy sample
+BLOBs have unavailable geometry; old Joint snapshots do not gain recomputed
+local covariance, peeling or posterior.
 Consumers must rebuild against the updated public C++ value types.
 
 ### Selected-domain and initialization metadata

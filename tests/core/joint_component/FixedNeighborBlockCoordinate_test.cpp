@@ -607,11 +607,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
         <<" rank_assessment_sparse_design_bytes="<<rank_stages[0].sparse_design_bytes
         <<" rank_assessment_qr_tile_workspace_bytes="<<rank_stages[0].qr_tile_workspace_bytes
         <<" target_identifiability_peak_bytes="<<target_memory.estimated_peak_bytes
-        <<" target_covariance_estimated_peak_bytes="<<covariance_memory.estimated_peak_bytes
-        <<" target_covariance_preflight_status="<<n::MemoryStatusName(covariance_memory.status)
-        <<" target_covariance_factor_bytes="<<covariance_memory.dense_factor_bytes
-        <<" target_covariance_right_vector_bytes="<<covariance_memory.right_singular_vector_bytes
-        <<" target_covariance_workspace_bytes="<<covariance_memory.factor_workspace_bytes
         <<" overall_estimated_peak_bytes="<<std::max({result.memory_estimate.estimated_peak_bytes,
             result.global_state_memory_estimate.estimated_peak_bytes,endpoint_memory.estimated_peak_bytes,
             certification.assessment.rank_memory_estimate.estimated_peak_bytes,target_memory.estimated_peak_bytes})

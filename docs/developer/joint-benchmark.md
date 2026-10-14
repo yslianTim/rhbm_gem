@@ -11,7 +11,7 @@ current workflow costs. Its only workflow entry point is
 | search | FixedNeighbor search and local Profile LM work; no endpoint qualification claim | joint_fixed_neighbor_experiment with --scaling-only |
 | solve | Search, global replay, endpoint certification and RuntimeConvergence | joint_fixed_neighbor_experiment with --case |
 | workflow | Complete in-memory Joint workflow and persistence | joint_postprocessing_benchmark |
-| postprocess | Peeling, uncertainty, group processing and persistence | joint_postprocessing_benchmark |
+| postprocess | Peeling, local conditional covariance, group processing and persistence | joint_postprocessing_benchmark |
 | command | CLI analysis, save/reload and Joint export | RHBM-GEM |
 
 Build the search, solve, workflow and postprocess executables with
@@ -49,6 +49,14 @@ are diagnostic evidence, not a production speedup claim.
 Use workflow and postprocess with full, halo or multi cases. Use command with a
 case name plus --model and --map. Reports and temporary outputs belong in the
 build/output tree.
+
+Run `joint_postprocessing_benchmark local-large` to isolate one target's local
+conditional covariance estimator on 5,938,087 synthetic observations, the
+largest local-observation count in the memory census. This reports its peak
+RSS and workspace estimate alongside the raw sample, peeling-response and
+retained covariance storage sizes. The complete postprocess benchmark reports
+peeling and group-fitting phase RSS for its small synthetic cases; the large
+local-only run does not measure those phases or process all 37,406 targets.
 
 ## Fixed production policy
 

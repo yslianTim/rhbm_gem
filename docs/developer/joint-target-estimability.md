@@ -1,7 +1,7 @@
 # Joint target identifiability
 
-This guide defines the current target evidence, target runtime status, and its
-separate covariance behavior.
+This guide defines current target evidence and runtime status. Group covariance
+is computed separately from target identifiability.
 
 ## Derived Target Identifiability
 
@@ -72,21 +72,31 @@ Assembled target evidence is derived from the assembled state and its global
 rank context. Component-local evidence cannot certify a different assembled
 state or row domain.
 
-## Covariance and point estimates
+## Local covariance and Joint points
 
-Identifiability does not provide `(JᵀJ)⁻¹` or a parameter covariance.
-Covariance is computed independently by the existing tiled full-component
-linearization path, with its own `TargetCovariance` memory preflight and
-full-rank, interior-amplitude, residual-variance, and degrees-of-freedom gates.
-Small problems can retain covariance. A preflight rejection or any numerical
-gate returns `Unavailable`; rank evidence is never used to synthesize
-covariance. This covariance calculation is not part of target
-identifiability. An unavailable covariance leaves an available point estimate
-intact, while covariance-dependent group evidence is `Unavailable`.
+Joint estimation publishes the point estimates and performs the existing
+convergence, rank, and target-identifiability checks. After fitting,
+PostFitPeeling pairs each raw sample's geometry with the response left after
+subtracting neighboring Joint contributions. For each eligible target, a
+conditional least-squares covariance is computed at the fixed Joint endpoint:
+the target's A/B derivatives use the full Gaussian-plus-charge kernel, while
+its C and every neighboring parameter remain fixed.
 
-A retained FullABC halo point is available when its derived per-atom
-identifiability evidence passes; its covariance still follows the independent
-covariance gates.
+For the available local observations, the estimator forms the two-column
+Jacobian `J_i = (d f_i / d A_i, d f_i / d B_i)` and the working covariance
+`sigma_i^2 (J_i^T J_i)^-1`, with `sigma_i^2 = RSS_i / (n_i - 2)`. A pivoted QR
+checks rank and near-singularity without adding a ridge or covariance floor.
+The covariance is transformed to Group Fitting coordinates
+`(log A_i - 3/2 log(2 pi B_i^2), B_i^-2)` and stored in
+`GroupParameterEvidence` with method `local-conditional-iid-ls`.
+
+This is a conditional working covariance under an i.i.d. Gaussian residual
+model. It does not include uncertainty in neighboring Joint estimates or
+cross-atom covariance. Group inference uses a by-atom block-diagonal working
+covariance. It is independent of target rank evidence and never updates the
+Joint point. Missing peeling coverage, insufficient local observations,
+rank-deficient curvature, or unavailable residual variance excludes that
+target from Group Fitting while preserving its Joint point.
 
 ## Persistence and limits
 

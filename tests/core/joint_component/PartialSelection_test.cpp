@@ -25,6 +25,7 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <set>
 
 namespace {
@@ -726,6 +727,7 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
     core::detail::PotentialSamplingObserverForTesting() = {};
     ASSERT_TRUE(f.model->GetAnalysisView().GetJointResult());
     const auto & result = *f.model->GetAnalysisView().GetJointResult();
+    const auto expected_stages = rhbm_gem::data_internal::BuildJointStageEstimates(result, "expected-run");
     EXPECT_EQ(f.model->GetSelectedAtoms(), selected);
     EXPECT_EQ(f.model->GetSelectedBonds(), bonds);
     EXPECT_EQ(result.row_ids, problem.Input().row_ids);
@@ -738,13 +740,31 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
         const auto view = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(id));
         EXPECT_DOUBLE_EQ(view.GetFinalModel(rhbm_gem::FittingStage::First).GetWidth(), result.initialization.b[i]);
         EXPECT_FALSE(view.GetRawSamplingEntries(false).empty());
-        const bool target = view.GetStageEstimate(rhbm_gem::FittingStage::Second).source.role == rhbm_gem::FittingRole::Target;
+        const auto & stage = view.GetStageEstimate(rhbm_gem::FittingStage::Second);
+        const auto & expected = expected_stages.at(id);
+        EXPECT_EQ(stage.point.has_value(), expected.point.has_value());
+        if (stage.point && expected.point) EXPECT_EQ(stage.point->ToVector(), expected.point->ToVector());
+        EXPECT_EQ(stage.uncertainty.status, rhbm_gem::EvidenceStatus::NotRun);
+        EXPECT_FALSE(stage.uncertainty.covariance);
+        const bool target = stage.source.role == rhbm_gem::FittingRole::Target;
         EXPECT_EQ(view.GetPostFitPeeling().has_value(), target);
         EXPECT_EQ(view.GetGroupEvidence().has_value(), target);
-        if (target) EXPECT_EQ(view.GetPostFitPeeling()->samples.size(), view.GetRawSamplingEntries(false).size());
+        if (target)
+        {
+            EXPECT_EQ(view.GetPostFitPeeling()->samples.size(), view.GetRawSamplingEntries(false).size());
+            const auto & evidence = *view.GetGroupEvidence();
+            EXPECT_EQ(evidence.uncertainty_method, "local-conditional-iid-ls");
+            EXPECT_EQ(evidence.atom_id, stage.source.atom_id);
+            EXPECT_EQ(evidence.component_id, stage.source.component_id);
+            EXPECT_EQ(evidence.source_id, stage.source.run_id);
+            if (stage.point && evidence.estimate)
+                EXPECT_TRUE(evidence.estimate->isApprox(
+                    rhbm_gem::linearization_service::EncodeGaussianToParameterVector(*stage.point), 1.0e-12));
+        }
         EXPECT_FALSE(view.GetGroupMemberResult());
     }
     const auto direct = n::FitFixedNeighborComponents(problem, result.initialization.b, {});
+    EXPECT_EQ(result.objective, direct.objective);
     ASSERT_EQ(result.components.size(), direct.components.size());
     for (std::size_t c = 0; c < direct.components.size(); ++c)
     {

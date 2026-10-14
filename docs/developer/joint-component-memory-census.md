@@ -91,8 +91,40 @@ workspace. Derived Target Identifiability remains linear in retained FullABC
 and target records; it adds no dense factor. Excluded-halo provenance adds
 O(E) identity and reason records for E exclusions, included in problem
 construction memory preflight.
-Covariance is independent: for 112,218 parameters its preflight estimates
-418,399,065,443 bytes and rejects before factorization.
+
+## Post-fit local covariance workspace
+
+After peeling, local conditional covariance is calculated one eligible target
+at a time. The estimator uses a two-column Jacobian and pivoted QR, with an
+estimated 32 bytes per available local observation for the dense design and QR
+workspace. For the full synthetic observation count, one target's local
+workspace upper bound is `5,938,087 × 32 = 190,018,784` bytes (about 190 MB),
+plus the raw-sample copy already held by the workflow. Actual local observation
+counts vary by target. This estimate is linear in local observations and does
+not include a component-wide covariance factor.
+
+The retained 2-by-2 covariance payload is 32 bytes per target, or 1,196,992
+bytes for 37,406 targets, before estimates and provenance. For comparison, a
+dense covariance for 112,218 Joint parameters would contain 100,743,036,192
+bytes of double values; the current workflow does not form it. These are
+structural estimates. The Joint rank stages above remain the large-component
+memory bottleneck.
+
+The `local-large` isolated benchmark ran one fixed synthetic endpoint across
+all 5,938,087 observations. It produced available covariance in 3.43 seconds
+and measured a 792,363,008-byte peak RSS during the local covariance phase.
+The raw sample and peeling response vectors accounted for 285,028,176 and
+237,523,480 bytes; the 190,018,784-byte local workspace is an estimate. The
+phase RSS includes resident inputs and process baseline as well as temporary
+workspace. It does not run Joint search, rank qualification, real map peeling,
+or 37,406 separate local fits.
+
+A separate three-target `full post` benchmark measured peak RSS of 65,732,608
+bytes for peeling, 66,093,056 bytes for local covariance, and 66,912,256 bytes
+for group fitting. Those phase readings cover the small synthetic workflow
+only; they are not extrapolated to the 37,406-target shape. The large local-only
+experiment isolates covariance, while the existing rank preflight still
+prevents full qualification at this synthetic component scale.
 
 ## Bounded local A/C KKT refinement
 

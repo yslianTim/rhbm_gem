@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <iostream>
 #include <sys/resource.h>
 #include <thread>
@@ -47,6 +48,62 @@ public:
     ~RssMonitor() { m_running=false; m_thread.join(); }
     std::size_t Peak() { Observe(); return m_peak.load(); }
 };
+int RunLargeLocalCovariance()
+{
+    constexpr std::size_t observations=5'938'087, contributors=37'406, targets=37'406;
+    constexpr double amplitude=1.8, width=.65, charge=-.3;
+    rg::LocalStageEstimate stage;
+    stage.point=rg::GaussianModel3D(amplitude,width,charge);
+    stage.source={rg::EstimateMethod::JointComponents,"1","large-local","large-local-run",rg::FittingRole::Target};
+    stage.convergence=rg::JointCheckStatus::Passed;
+    LocalPotentialSampleList raw(observations);
+    rg::PostFitPeelingResult peeling;
+    peeling.source=stage.source;
+    peeling.samples.resize(observations);
+    for(std::size_t i=0;i<observations;++i)
+    {
+        const double distance=.05+2.3*static_cast<double>(i%1024)/1023.0;
+        raw[i].point.distance=distance;
+        const auto basis=n::EvaluateKernel(distance*distance,width,2.5);
+        peeling.samples[i].response=amplitude*basis.gaussian+charge*basis.charge+
+            .001*std::sin(.13*static_cast<double>(i%997));
+    }
+
+    c::detail::LocalConditionalCovariance covariance;
+    const auto covariance_start=Clock::now();
+    std::size_t covariance_peak_rss_bytes{};
+    {
+        RssMonitor rss;
+        covariance=c::detail::ComputeLocalConditionalCovariance(stage,raw,peeling,true);
+        covariance_peak_rss_bytes=rss.Peak();
+    }
+    rusage usage{};
+    getrusage(RUSAGE_SELF,&usage);
+#ifdef __APPLE__
+    const auto process_peak_rss_bytes=static_cast<std::size_t>(usage.ru_maxrss);
+#else
+    const auto process_peak_rss_bytes=static_cast<std::size_t>(usage.ru_maxrss)*1024;
+#endif
+    const auto local_workspace=c::detail::EstimateLocalConditionalCovarianceWorkspaceBytes(observations);
+    const auto global_columns=3*contributors;
+    const auto global_covariance_bytes=global_columns*global_columns*sizeof(double);
+    const auto all_target_covariance_bytes=targets*sizeof(Eigen::Matrix2d);
+    std::cout<<j::serialize(j::object{
+        {"case","large-local"},{"mode","local-covariance"},{"observations",observations},
+        {"global_shape_contributors",contributors},{"global_shape_targets",targets},{"local_targets_processed",1},
+        {"local_observation_count",covariance.observation_count},
+        {"local_covariance_status",static_cast<int>(covariance.status)},{"local_covariance_reason",covariance.reason},
+        {"local_covariance_seconds",Seconds(covariance_start)},
+        {"local_covariance_peak_rss_bytes",covariance_peak_rss_bytes},
+        {"local_covariance_workspace_estimate_bytes",local_workspace ? *local_workspace : 0},
+        {"raw_sample_storage_bytes",raw.size()*sizeof(LocalPotentialSample)},
+        {"peeling_response_storage_bytes",peeling.samples.size()*sizeof(rg::PeelingSampleEstimate)},
+        {"per_target_covariance_storage_bytes",sizeof(Eigen::Matrix2d)},
+        {"all_target_covariance_storage_bytes",all_target_covariance_bytes},
+        {"hypothetical_global_covariance_bytes",global_covariance_bytes},
+        {"process_peak_rss_bytes",process_peak_rss_bytes}})<<'\n';
+    return covariance.status==rg::EvidenceStatus::Available ? 0 : 1;
+}
 joint_partial_test::Fixture Make(const std::string & name)
 {
     joint_partial_test::Fixture f;
@@ -84,7 +141,8 @@ int main(int argc,char ** argv)
 {
     try
     {
-        if(argc!=4) throw std::invalid_argument("Usage: joint_postprocessing_benchmark full|halo|multi workflow|post DATABASE");
+        if(argc==2 && std::string(argv[1])=="local-large") return RunLargeLocalCovariance();
+        if(argc!=4) throw std::invalid_argument("Usage: joint_postprocessing_benchmark full|halo|multi workflow|post DATABASE, or local-large");
         const std::string name=argv[1], mode=argv[2];
         if(name!="full" && name!="halo" && name!="multi") return 2;
         auto f=Make(name); auto editor=f.model->EditAnalysis();
@@ -121,8 +179,10 @@ int main(int argc,char ** argv)
                 if(peeling)
                 {
                     covariance=c::detail::ComputeLocalConditionalCovariance(stage,raw,*peeling,local.HasSampleGeometry());
+                    const auto workspace=c::detail::EstimateLocalConditionalCovarianceWorkspaceBytes(
+                        covariance.observation_count);
                     local_workspace_estimate_bytes=std::max(local_workspace_estimate_bytes,
-                        raw.size()*sizeof(rg::LocalPotentialSample)+covariance.observation_count*5*sizeof(double));
+                        raw.size()*sizeof(LocalPotentialSample)+(workspace ? *workspace : 0));
                 }
                 covariance.source=stage.source;
                 editor.SetAtomGroupEvidence(*selected,c::detail::BuildLocalGroupEvidence(

@@ -9,9 +9,9 @@ semantics are owned by the
 ## Stage estimates and provenance
 
 A local stage record separates its optional point, source, convergence, reason,
-and uncertainty. Its source identifies estimator method, atom, component, run,
-and target role. An unavailable estimate is not encoded as a zero point, and
-Joint points are not stored in OLS or local MDPDE diagnostics.
+and estimator-neutral uncertainty. Its source identifies estimator method,
+atom, component, run, and target role. An unavailable estimate is not encoded as
+a zero point, and Joint points are not stored in OLS or local MDPDE diagnostics.
 
 The Joint adapter maps returned component states through contributor identities.
 It preserves an available point even when runtime convergence fails, with the
@@ -25,6 +25,9 @@ group fitting, displays, and feature/export consumers include only Joint target
 points. Available unconverged target points remain visible and are marked
 unconverged. Charge C is descriptive; group inference uses the eligible target
 parameter evidence and covariance, and does not infer charge uncertainty.
+Joint point estimates do not carry a full-component covariance. Group
+ParameterEvidence stores the separate local conditional covariance used by
+Group Fitting.
 
 ## Workflow ownership
 
@@ -36,10 +39,19 @@ on the saved fixed domain. The second-stage refinement option is for the
 two-stage estimator; the model-only workflow does not accept Joint requests.
 
 After fitting, the workflow publishes the Joint stage estimates, builds
-target-only post-fit peeling from the fixed observation rows, computes eligible
-target uncertainty and group evidence, stores the Joint diagnostic snapshot,
-then runs group fitting. These steps consume the returned Joint state; no
-separate local fit substitutes for a missing component.
+target-only post-fit peeling, computes local conditional covariance at each
+eligible fixed Joint endpoint, builds GroupParameterEvidence, stores the Joint
+diagnostic snapshot, then runs group fitting. Peeling responses paired with raw
+sample geometry supply each atom's local observations; neighboring Joint
+parameters and the atom's Joint charge are fixed. The local estimator only
+computes the A/B curvature and never updates the Joint point. No full-component
+Joint covariance or cross-atom covariance is computed.
+
+For each eligible target, Group Fitting receives the encoded Joint point and a
+2-by-2 covariance in its group parameter coordinates. That covariance is a
+conditional working covariance under an i.i.d. Gaussian residual model; it does
+not include uncertainty in neighboring parameters. Group inference uses a
+by-atom block-diagonal working covariance.
 
 ## Post-fit peeling
 
@@ -49,12 +61,13 @@ optional peeled response with a reason when coverage or a contributor state is
 missing. Ratios require complete paired coverage in their interval and retain
 signed values without clamping. Peeling does not extend the observation domain.
 
-Replacing a Joint endpoint invalidates derived peeling, parameter evidence,
+Replacing a Joint endpoint invalidates derived peeling, local group evidence,
 posterior results, and the saved Joint snapshot for the affected run. A
-second-stage endpoint change clears its uncertainty and group evidence; group
-summaries affected by the changed endpoint are invalidated. Replacing raw
-samples clears peeling while preserving point estimates. The editor enforces
-these source and invalidation relationships.
+second-stage endpoint change clears its estimator-neutral uncertainty and
+group evidence; group summaries affected by the changed endpoint are
+invalidated. Replacing raw samples or peeling responses clears local group
+evidence and affected posterior results while preserving Joint point estimates.
+The editor enforces these source and invalidation relationships.
 
 ## Persistence boundary
 
@@ -67,9 +80,10 @@ contracts are defined in the
 
 ## Permanent coverage
 
-Permanent tests cover Joint-to-stage mapping, target and halo roles, unavailable
-states, target-only summaries and group inference, peeling coverage, and
-invalidation after endpoint or sample changes. The current test lane is
+Permanent tests cover Joint-to-stage mapping and point preservation, target and
+halo roles, local covariance against a finite-difference reference, unavailable
+local designs, target-only summaries and group inference, peeling coverage,
+persistence, and invalidation after endpoint or sample changes. The current test lane is
 documented in [tests/README.md](../../tests/README.md). Historical integration
 results and their boundaries are indexed in the
 [canonical evidence document](joint-component-evidence.md).
