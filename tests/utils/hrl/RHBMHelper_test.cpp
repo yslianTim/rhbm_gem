@@ -760,3 +760,60 @@ TEST(RHBMHelperTest, InformationFormMatchesSampleDomainWEB)
     for (std::size_t i = 0; i < priors.size(); ++i)
         EXPECT_TRUE(sample.capital_sigma_posterior_list[i].isApprox(parameter.capital_sigma_posterior_list[i], 1e-12));
 }
+
+TEST(RHBMHelperTest, PrecomputedInformationGroupPathMatchesDatasetPath)
+{
+    const std::vector<Eigen::Vector2d> beta_values{
+        Eigen::Vector2d(-2.00, 2.00), Eigen::Vector2d(-2.05, 1.92),
+        Eigen::Vector2d(-1.95, 2.10), Eigen::Vector2d(-2.10, 1.97)};
+    std::vector<rg::RHBMMemberDataset> datasets;
+    std::vector<rg::RHBMBetaEstimateResult> fits;
+    std::vector<rg::RHBMParameterVector> beta;
+    std::vector<rg::RHBMInformation> information;
+    for (std::size_t member = 0; member < beta_values.size(); ++member)
+    {
+        Eigen::MatrixXd x(5, 2);
+        const double distances[]{0.1, 0.4, 0.8, 1.3, 1.9};
+        Eigen::VectorXd y(5), variance(5);
+        for (Eigen::Index row = 0; row < 5; ++row)
+        {
+            x(row, 0) = 1.0;
+            x(row, 1) = -0.5 * distances[row] * distances[row];
+            y(row) = x.row(row).dot(beta_values[member]) +
+                0.015 * std::sin(static_cast<double>((member + 1) * (row + 2)));
+            variance(row) = 0.25 + 0.08 * static_cast<double>(row + member);
+        }
+        datasets.push_back({x, y});
+        auto fit = MakeFitResult({beta_values[member](0), beta_values[member](1)}, 0.4,
+            {1, 1, 1, 1, 1}, {variance(0), variance(1), variance(2), variance(3), variance(4)});
+        fits.push_back(fit);
+        beta.push_back(fit.beta_mdpde);
+        const Eigen::VectorXd inverse = variance.cwiseInverse();
+        information.push_back({x.transpose() * inverse.asDiagonal() * x,
+            x.transpose() * (inverse.array() * y.array()).matrix()});
+    }
+    const auto group_input = rg::rhbm_helper::BuildGroupInput(datasets, fits);
+    const rg::RHBMExecutionOptions options{};
+    const double alpha_g = 0.2;
+    const auto dataset_path = rg::rhbm_helper::EstimateGroup(alpha_g, group_input, options);
+    const auto mu = rg::rhbm_helper::EstimateMuMDPDE(alpha_g,
+        rg::rhbm_helper::BuildBetaMatrix(beta), options);
+    ASSERT_EQ(mu.status, rg::RHBMEstimationStatus::SUCCESS);
+    const auto web = rg::rhbm_helper::EstimateWEBFromInformation(
+        information, mu.mu_mdpde, mu.member_capital_lambda_list, options);
+    ASSERT_EQ(web.status, rg::RHBMEstimationStatus::SUCCESS);
+
+    EXPECT_TRUE(dataset_path.mu_mean.isApprox(mu.mu_mean, 1e-12));
+    EXPECT_TRUE(dataset_path.mu_mdpde.isApprox(mu.mu_mdpde, 1e-12));
+    EXPECT_TRUE(dataset_path.mu_prior.isApprox(web.mu_prior, 1e-12));
+    EXPECT_TRUE(dataset_path.capital_lambda.isApprox(mu.capital_lambda, 1e-12));
+    EXPECT_TRUE(dataset_path.beta_posterior_matrix.isApprox(web.beta_posterior_matrix, 1e-12));
+    ASSERT_EQ(dataset_path.capital_sigma_posterior_list.size(), web.capital_sigma_posterior_list.size());
+    for (std::size_t i = 0; i < web.capital_sigma_posterior_list.size(); ++i)
+        EXPECT_TRUE(dataset_path.capital_sigma_posterior_list[i].isApprox(web.capital_sigma_posterior_list[i], 1e-12));
+    EXPECT_TRUE((dataset_path.statistical_distance_array ==
+        rg::rhbm_helper::CalculateMemberStatisticalDistance(web.mu_prior, mu.capital_lambda,
+            web.beta_posterior_matrix)).all());
+    EXPECT_TRUE((dataset_path.outlier_flag_array == rg::rhbm_helper::CalculateOutlierMemberFlag(
+        2, dataset_path.statistical_distance_array)).all());
+}
