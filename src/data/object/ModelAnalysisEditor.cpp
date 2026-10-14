@@ -233,26 +233,54 @@ void ModelAnalysisEditor::SetAtomPostFitPeeling(const AtomObject & atom, PostFit
 
 void ModelAnalysisEditor::SetAtomPostJointLocalResult(const AtomObject & atom, PostJointLocalResult value)
 {
+    ApplyPostJointLocalResultsBatch({{atom.GetSerialID(), std::move(value)}});
+}
+
+void ModelAnalysisEditor::ApplyPostJointLocalResultsBatch(
+    std::vector<std::pair<int, PostJointLocalResult>> results)
+{
     auto & data = ModelAnalysisData::Of(m_model_object);
-    auto & entry = EnsureAtomLocalPotential(m_model_object, atom);
-    const auto & joint = entry.StageEstimate(FittingStage::Second);
-    if (joint.source.method != EstimateMethod::JointComponents || joint.source.role != FittingRole::Target ||
-        !SameSource(value.source, joint.source))
-        throw std::invalid_argument("Post-Joint local result source mismatch.");
-    if (value.status == EvidenceStatus::Available)
+    if (results.empty()) return;
+    std::set<int> ids;
+    std::string run_id;
+    std::vector<std::pair<LocalPotentialEntry *, PostJointLocalResult *>> updates;
+    updates.reserve(results.size());
+    for (auto & [id, value] : results)
     {
-        const auto & model = value.fit.mdpde.GetModel();
-        if (!std::isfinite(model.GetAmplitude()) || model.GetAmplitude() <= 0.0 ||
-            !std::isfinite(model.GetWidth()) || model.GetWidth() <= 0.0 || !value.information ||
-            value.information->precision.rows() != 2 || value.information->precision.cols() != 2 ||
-            value.information->moment.size() != 2 || !value.information->precision.allFinite() ||
-            !value.information->moment.allFinite())
-            throw std::invalid_argument("Available post-Joint local result lacks finite measurement information.");
+        if (!ids.insert(id).second) throw std::invalid_argument("Duplicate post-Joint local result identity.");
+        const AtomObject * atom = nullptr;
+        try { atom = m_model_object.FindAtomPtr(id); }
+        catch (const std::out_of_range &) { throw std::invalid_argument("Post-Joint local target does not belong to model."); }
+        auto * entry = atom ? data.FindAtomLocalEntry(*atom) : nullptr;
+        if (!entry) throw std::invalid_argument("Post-Joint local target has no Joint stage.");
+        const auto & joint = entry->StageEstimate(FittingStage::Second);
+        if (joint.source.method != EstimateMethod::JointComponents || joint.source.role != FittingRole::Target ||
+            joint.source.atom_id != std::to_string(id) || joint.source.component_id.empty() || joint.source.run_id.empty() ||
+            !SameSource(value.source, joint.source))
+            throw std::invalid_argument("Post-Joint local result source mismatch.");
+        if (run_id.empty()) run_id = joint.source.run_id;
+        else if (run_id != joint.source.run_id)
+            throw std::invalid_argument("Post-Joint local results mix Joint runs.");
+        if (value.status == EvidenceStatus::Available)
+        {
+            const auto & model = value.fit.mdpde.GetModel();
+            const auto & information = value.information;
+            if (!std::isfinite(model.GetAmplitude()) || model.GetAmplitude() <= 0.0 ||
+                !std::isfinite(model.GetWidth()) || model.GetWidth() <= 0.0 || !information ||
+                information->precision.rows() != 2 || information->precision.cols() != 2 ||
+                information->moment.size() != 2 || !information->precision.allFinite() ||
+                !information->moment.allFinite())
+                throw std::invalid_argument("Available post-Joint local result lacks finite measurement information.");
+        }
+        updates.emplace_back(entry, &value);
     }
-    entry.ClearGroupEvidence();
-    entry.ClearGroupMemberResult();
-    InvalidateGroups(data, {atom.GetSerialID()});
-    entry.SetPostJointLocalResult(std::move(value));
+    const auto affected_groups = CollectAffectedGroupKeys(data, ids);
+    for (auto & [entry, value] : updates)
+    {
+        entry->ClearGroupMemberResult();
+        entry->SetPostJointLocalResult(std::move(*value));
+    }
+    InvalidateGroupKeys(data, affected_groups);
 }
 
 void ModelAnalysisEditor::SetAtomGroupEvidence(const AtomObject & atom, GroupParameterEvidence value)

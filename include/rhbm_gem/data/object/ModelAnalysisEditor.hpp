@@ -28,6 +28,7 @@ public:
     void SetAtomStageEstimate(FittingStage stage, const AtomObject & atom, LocalStageEstimate value);
     void SetAtomPostFitPeeling(const AtomObject & atom, PostFitPeelingResult value);
     void SetAtomPostJointLocalResult(const AtomObject & atom, PostJointLocalResult value);
+    void ApplyPostJointLocalResultsBatch(std::vector<std::pair<int, PostJointLocalResult>> results);
     void SetAtomGroupEvidence(const AtomObject & atom, GroupParameterEvidence value);
     void ApplyJointPostFitEvidenceBatch(
         std::vector<std::pair<int, PostFitPeelingResult>> peelings,

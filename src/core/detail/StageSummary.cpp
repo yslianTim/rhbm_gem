@@ -64,25 +64,43 @@ std::string BuildSecondStageSpotSummary(const ModelObject & model_object)
         if (joint && view.GetStageEstimate(FittingStage::Second).source.role != FittingRole::Target) continue;
         population.push_back(atom);
         auto & samples = spots[spot];
-        if (!view.HasFinalModel(FittingStage::Second)) { ++samples.unavailable; continue; }
-        const auto & estimate = view.GetStageEstimate(FittingStage::Second);
-        if (joint && estimate.convergence != JointCheckStatus::Passed) ++samples.not_converged;
-        const auto & point = *estimate.point;
-        samples.amplitude_list.push_back(point.GetAmplitude());
-        samples.width_list.push_back(point.GetWidth());
-        samples.offset_list.push_back(point.GetOffset());
+        if (joint)
+        {
+            const auto & local = view.GetPostJointLocalResult();
+            if (!local || local->status != EvidenceStatus::Available)
+            {
+                if (local && (local->status == EvidenceStatus::Ineligible || local->reason == "local-mdpde-unqualified"))
+                    ++samples.not_converged;
+                else ++samples.unavailable;
+                continue;
+            }
+            const auto & point = local->fit.mdpde.GetModel();
+            samples.amplitude_list.push_back(point.GetAmplitude());
+            samples.width_list.push_back(point.GetWidth());
+            samples.offset_list.push_back(local->fixed_charge.coefficient);
+        }
+        else
+        {
+            if (!view.HasFinalModel(FittingStage::Second)) { ++samples.unavailable; continue; }
+            const auto & point = *view.GetStageEstimate(FittingStage::Second).point;
+            samples.amplitude_list.push_back(point.GetAmplitude());
+            samples.width_list.push_back(point.GetWidth());
+            samples.offset_list.push_back(point.GetOffset());
+        }
     }
     std::ostringstream summary;
-    summary << "Second-stage estimate summary by Spot:\nEstimator: "
+    const auto joint = CollectStageProvenance(population).estimator == "joint-components";
+    summary << (joint ? "Post-Joint local estimate summary by Spot:\nEstimator: " : "Second-stage estimate summary by Spot:\nEstimator: ")
         << CollectStageProvenance(population).estimator
-        << "\nPopulation: selected targets; s.d.: between-atom dispersion"
+        << (joint ? "\nPopulation: selected targets; A/B: local MDPDE; C: fixed Joint charge profile; s.d.: between-atom dispersion" :
+            "\nPopulation: selected targets; s.d.: between-atom dispersion")
         << "\n| " << std::left << std::setw(kSpotColumnWidth) << "Spot"
         << " | " << std::setw(kValidColumnWidth) << "valid"
         << " | " << std::setw(kNotConvergedColumnWidth) << "not-converged"
         << " | " << std::setw(kUnavailableColumnWidth) << "unavailable"
         << " | " << std::setw(kParameterColumnWidth) << "A mean / s.d."
         << " | " << std::setw(kParameterColumnWidth) << "B mean / s.d."
-        << " | " << std::setw(kParameterColumnWidth) << "C mean / s.d."
+        << " | " << std::setw(kParameterColumnWidth) << (joint ? "C(J) mean / s.d." : "C mean / s.d.")
         << " |";
     for (const auto & [spot, samples] : spots)
     {

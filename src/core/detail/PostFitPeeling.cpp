@@ -34,7 +34,7 @@ LocalPotentialSampleList PostJointLocalSamples::BuildGaussianSamples(
         if (prepared.raw_sample_index != i || prepared.distance != raw.point.distance ||
             prepared.raw_response != raw.response)
             throw std::invalid_argument("Post-Joint local/raw sample identity mismatch.");
-        if (!prepared.gaussian_response) continue;
+        if (!prepared.gaussian_response || !raw.point.is_selected) continue;
         auto sample = raw;
         sample.response = *prepared.gaussian_response;
         result.push_back(std::move(sample));

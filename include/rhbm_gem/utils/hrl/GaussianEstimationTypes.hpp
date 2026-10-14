@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <rhbm_gem/utils/domain/JointEstimationTypes.hpp>
@@ -92,6 +93,13 @@ struct JointFixedChargeProfile
     double width{};
 };
 
+struct PostJointLocalSampleFailure
+{
+    std::size_t raw_sample_index{};
+    double distance{};
+    std::string reason;
+};
+
 struct PostJointLocalResult
 {
     EstimateSource source;
@@ -102,6 +110,7 @@ struct PostJointLocalResult
     std::optional<RHBMInformation> information;
     std::size_t sample_count{};
     std::size_t effective_sample_count{};
+    std::vector<PostJointLocalSampleFailure> sample_failures;
 };
 
 struct GroupGaussianMemberResult
