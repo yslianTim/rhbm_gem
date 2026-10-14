@@ -147,8 +147,16 @@ TEST(JointComponentChecksTest, StandaloneBundleNeedsNoDatasetOrSiblingFiles)
     actual_science.at("design_structure").as_object().erase("memory_estimate_bytes");
     EXPECT_EQ(expected_science,actual_science);
     const auto scope=read(temporary.path()/"fit/audit/scope.json");
-    EXPECT_TRUE(scope.at("state").is_null());
-    EXPECT_FALSE(scope.at("weak_direction_available").as_bool());
+    const bool expected_usable=expected.at("usable_state").as_bool();
+    EXPECT_EQ(scope.at("state").is_null(),!expected_usable);
+    EXPECT_EQ(scope.at("weak_direction_available").as_bool(),
+        expected_usable && expected.contains("width_spectrum"));
+    if(expected_usable)
+    {
+        const auto & state=expected.at("last_trusted_state");
+        EXPECT_EQ(scope.at("state").at("eta"),state.at("eta"));
+        EXPECT_EQ(scope.at("state").at("beta"),state.at("beta"));
+    }
     bundle["parent_observations"].as_array()[0]=1e6; write();
     EXPECT_THROW(p::ComponentLocalBundleRerun(input.string(),(temporary.path()/"invalid-parent").string()),std::invalid_argument);
     EXPECT_FALSE(std::filesystem::exists(temporary.path()/"invalid-parent"));
