@@ -1,4 +1,5 @@
 #include "support/JointPartialSelection.hpp"
+#include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/joint_component/ResourceWork.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
@@ -10,7 +11,9 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <map>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <sys/resource.h>
@@ -33,12 +36,14 @@ class RssMonitor
 {
     std::atomic<bool> m_running{true};
     std::atomic<std::size_t> m_peak{};
+    std::atomic<bool> m_available{};
     std::thread m_thread;
 
     void Observe()
     {
         const auto rss = n::CurrentRssBytes();
         if (!rss) return;
+        m_available = true;
         auto peak = m_peak.load();
         while (peak < *rss && !m_peak.compare_exchange_weak(peak, *rss)) {}
     }
@@ -59,18 +64,21 @@ public:
         m_thread.join();
     }
 
-    std::size_t Peak()
+    std::optional<std::size_t> Peak()
     {
         Observe();
-        return m_peak.load();
+        return m_available.load() ? std::optional<std::size_t>{m_peak.load()} : std::nullopt;
     }
 };
 
 joint_partial_test::Fixture Make(const std::string & name)
 {
     joint_partial_test::Fixture f;
-    const int components = name == "multi" ? 3 : 1, count = name == "halo" ? 5 : 3;
-    const bool full_selection = name == "full" || name == "noisy" || name == "outlier";
+    const int components = name == "multi" ? 3 : 1;
+    const int count = name == "halo" ? 5 : name == "target-heavy" ? 6 : name == "connected" ? 9 : 3;
+    const bool full_selection = name != "halo";
+    const double grid_spacing = name == "dense" ? 0.08 : 0.16;
+    const double atom_spacing = name == "target-heavy" ? 0.28 : 0.7;
     std::vector<std::unique_ptr<rg::AtomObject>> atoms;
     for (int group = 0; group < components; ++group)
         for (int k = 0; k < count; ++k)
@@ -78,7 +86,7 @@ joint_partial_test::Fixture Make(const std::string & name)
             auto atom = std::make_unique<rg::AtomObject>();
             atom->SetSerialID(group * count + k + 1);
             atom->SetElement(Element::CARBON);
-            atom->SetPosition(12.0 * group + 0.7 * k, 0, 0);
+            atom->SetPosition(12.0 * group + atom_spacing * k, 0, 0);
             atom->SetChainID("A");
             atom->SetComponentID("ALA");
             atom->SetAtomID("CA");
@@ -90,8 +98,10 @@ joint_partial_test::Fixture Make(const std::string & name)
     f.model = std::make_unique<rg::ModelObject>(std::move(atoms));
     f.model->SelectAtoms([&](const auto & atom) { return full_selection || (atom.GetSerialID() - 1) % count == 0; });
     const std::array<int, 3> dims{
-        static_cast<int>((12.0 * (components - 1) + 0.7 * (count - 1) + 6.4) / 0.16) + 1, 41, 41};
-    const std::array<double, 3> spacing{0.16, 0.16, 0.16}, origin{-3.2, -3.2, -3.2};
+        static_cast<int>(std::ceil((12.0 * (components - 1) + atom_spacing * (count - 1) + 6.4) / grid_spacing)) + 1,
+        static_cast<int>(std::ceil(6.4 / grid_spacing)) + 1,
+        static_cast<int>(std::ceil(6.4 / grid_spacing)) + 1};
+    const std::array<double, 3> spacing{grid_spacing, grid_spacing, grid_spacing}, origin{-3.2, -3.2, -3.2};
     auto values = std::make_unique<double[]>(static_cast<std::size_t>(dims[0] * dims[1] * dims[2]));
     for (int z = 0; z < dims[2]; ++z)
         for (int y = 0; y < dims[1]; ++y)
@@ -120,9 +130,10 @@ int main(int argc, char ** argv)
     try
     {
         if (argc != 3) throw std::invalid_argument(
-            "Usage: joint_postprocessing_benchmark full|halo|multi|noisy|outlier DATABASE");
+            "Usage: joint_postprocessing_benchmark full|halo|multi|noisy|outlier|dense|target-heavy|connected DATABASE");
         const std::string name = argv[1];
-        if (name != "full" && name != "halo" && name != "multi" && name != "noisy" && name != "outlier") return 2;
+        if (name != "full" && name != "halo" && name != "multi" && name != "noisy" &&
+            name != "outlier" && name != "dense" && name != "target-heavy" && name != "connected") return 2;
 
         auto f = Make(name);
         c::FitOptions options;
@@ -130,22 +141,30 @@ int main(int argc, char ** argv)
         options.quiet_mode = true;
         options.thread_size = 1;
 
-        const auto start = Clock::now();
-        RssMonitor pipeline_rss;
-        c::RunPotentialFittingWorkflow(*f.map, *f.model, options);
-        const auto pipeline_seconds = Seconds(start);
-        const auto pipeline_peak_rss_bytes = pipeline_rss.Peak();
+        const auto total_start = Clock::now();
+        c::detail::JointPostprocessingMetrics postprocessing_metrics;
+        double pipeline_seconds{};
+        std::optional<std::size_t> pipeline_peak_rss_bytes;
+        {
+            const auto workflow_start = Clock::now();
+            RssMonitor pipeline_rss;
+            c::detail::RunJointComponentWorkflow(*f.map, *f.model, options, &postprocessing_metrics);
+            pipeline_seconds = Seconds(workflow_start);
+            pipeline_peak_rss_bytes = pipeline_rss.Peak();
+        }
 
         const auto save_start = Clock::now();
         { rg::DataRepository repository(argv[2]); repository.SaveModel(*f.model, "model"); }
         const auto save_seconds = Seconds(save_start);
 
         rusage usage{};
-        getrusage(RUSAGE_SELF, &usage);
+        const bool process_peak_available = getrusage(RUSAGE_SELF, &usage) == 0;
 #ifdef __APPLE__
-        const auto process_peak_rss_bytes = static_cast<std::size_t>(usage.ru_maxrss);
+        const auto process_peak_rss_bytes = process_peak_available ?
+            std::optional<std::size_t>{static_cast<std::size_t>(usage.ru_maxrss)} : std::nullopt;
 #else
-        const auto process_peak_rss_bytes = static_cast<std::size_t>(usage.ru_maxrss) * 1024;
+        const auto process_peak_rss_bytes = process_peak_available ?
+            std::optional<std::size_t>{static_cast<std::size_t>(usage.ru_maxrss) * 1024} : std::nullopt;
 #endif
 
         j::array endpoints, targets;
@@ -164,10 +183,14 @@ int main(int argc, char ** argv)
             if (joint.point)
                 joint_point = {joint.point->GetAmplitude(), joint.point->GetWidth(), joint.point->GetOffset()};
             const auto & local = view.GetPostJointLocalResult();
+            j::object failure_reasons;
             if (local)
             {
                 const auto & model = local->fit.mdpde.GetModel();
                 local_point = {model.GetAmplitude(), model.GetWidth()};
+                std::map<std::string, std::size_t> reason_counts;
+                for (const auto & failure : local->sample_failures) ++reason_counts[failure.reason];
+                for (const auto & [reason, count] : reason_counts) failure_reasons[reason] = count;
                 if (local->information)
                 {
                     for (int r = 0; r < 2; ++r)
@@ -179,23 +202,63 @@ int main(int argc, char ** argv)
             }
             targets.push_back(j::object{
                 {"id", atom->GetSerialID()},
+                {"joint_convergence", static_cast<int>(joint.convergence)},
                 {"joint_point", joint_point},
                 {"local_point", local_point},
                 {"local_information", information},
                 {"local_status", local ? static_cast<int>(local->status) : -1},
-                {"local_reason", local ? local->reason : "missing-local-result"}});
+                {"local_reason", local ? local->reason : "missing-local-result"},
+                {"local_sample_failure_reasons", failure_reasons}});
         }
 
         j::object phases{
+            {"postprocessing_seconds", postprocessing_metrics.total_postprocessing_seconds},
+            {"context_construction_seconds", postprocessing_metrics.context_construction_seconds},
+            {"peeling_seconds", postprocessing_metrics.peeling_seconds},
+            {"charge_correction_seconds", postprocessing_metrics.charge_correction_seconds},
+            {"local_alpha_training_seconds", postprocessing_metrics.local_alpha_training_seconds},
+            {"local_mdpde_fitting_seconds", postprocessing_metrics.local_mdpde_fitting_seconds},
+            {"group_alpha_training_seconds", postprocessing_metrics.group_alpha_training_seconds},
+            {"group_web_seconds", postprocessing_metrics.group_web_seconds},
             {"workflow_seconds", pipeline_seconds},
-            {"workflow_peak_rss_bytes", pipeline_peak_rss_bytes},
+            {"workflow_peak_rss_bytes", pipeline_peak_rss_bytes ? j::value(*pipeline_peak_rss_bytes) : j::value{}},
+            {"workflow_peak_rss_available", pipeline_peak_rss_bytes.has_value()},
             {"save_seconds", save_seconds},
-            {"total_seconds", Seconds(start)}};
+            {"total_seconds", Seconds(total_start)}};
+        const j::object preparation{
+            {"observation_count", snapshot.row_ids.size()},
+            {"contributor_count", snapshot.atom_ids.size()},
+            {"target_count", f.model->GetSelectedAtoms().size()},
+            {"row_mapping_build_count", postprocessing_metrics.observation_row_mapping_builds},
+            {"contributor_mapping_build_count", postprocessing_metrics.contributor_mapping_builds},
+            {"joint_stage_mapping_build_count", postprocessing_metrics.joint_stage_mapping_builds},
+            {"target_preparation_count", postprocessing_metrics.target_preparation_count},
+            {"prepared_sample_count", postprocessing_metrics.total_prepared_sample_count},
+            {"valid_local_sample_count", postprocessing_metrics.valid_local_sample_count},
+            {"invalid_local_sample_count", postprocessing_metrics.invalid_local_sample_count}};
+        const j::object memory{
+            {"estimated_context_lookup_bytes", postprocessing_metrics.estimated_context_lookup_bytes},
+            {"estimated_peak_workspace_payload_bytes", postprocessing_metrics.estimated_peak_postprocessing_payload_bytes},
+            {"current_rss_before_postprocessing_bytes", postprocessing_metrics.rss_before_postprocessing_bytes ?
+                j::value(*postprocessing_metrics.rss_before_postprocessing_bytes) : j::value{}},
+            {"current_rss_after_context_bytes", postprocessing_metrics.rss_after_context_bytes ?
+                j::value(*postprocessing_metrics.rss_after_context_bytes) : j::value{}},
+            {"current_rss_after_peeling_bytes", postprocessing_metrics.rss_after_peeling_bytes ?
+                j::value(*postprocessing_metrics.rss_after_peeling_bytes) : j::value{}},
+            {"current_rss_after_local_bytes", postprocessing_metrics.rss_after_local_bytes ?
+                j::value(*postprocessing_metrics.rss_after_local_bytes) : j::value{}},
+            {"current_rss_after_group_bytes", postprocessing_metrics.rss_after_group_bytes ?
+                j::value(*postprocessing_metrics.rss_after_group_bytes) : j::value{}},
+            {"process_peak_rss_bytes", process_peak_rss_bytes ? j::value(*process_peak_rss_bytes) : j::value{}},
+            {"process_peak_rss_available", process_peak_available},
+            {"estimate_scope", "container and sample payload estimate; allocator overhead excluded"},
+            {"rss_scope", "process high-water includes fixture and persistence; sampled workflow peak may miss short spikes"}};
         std::cout << j::serialize(j::object{
             {"case", name},
             {"mode", "workflow"},
             {"phases", phases},
-            {"process_peak_rss_bytes", process_peak_rss_bytes},
+            {"preparation", preparation},
+            {"memory", memory},
             {"objective", snapshot.objective ? j::value(*snapshot.objective) : j::value{}},
             {"endpoints", endpoints},
             {"targets", targets}}) << '\n';

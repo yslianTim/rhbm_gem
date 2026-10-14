@@ -9,6 +9,7 @@
 #include "detail/StageSummary.hpp"
 #include "detail/PostFitPeeling.hpp"
 #include "detail/GroupPotentialFitting.hpp"
+#include "detail/joint_component/ResourceWork.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
 #include "detail/gaussian_fit/FittingRanges.hpp"
 #include "detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
@@ -46,7 +47,7 @@ bool SameSource(const EstimateSource & a, const EstimateSource & b)
 PostJointLocalResult FitPostJointLocalTarget(
     const JointPostprocessingContext & postprocessing, const ModelObject & model,
     int atom_id, const PostFitPeelingResult & peeling,
-    const FitOptions & options)
+    const FitOptions & options, JointPostprocessingMetrics & metrics)
 {
     const auto atom = model.FindAtomPtr(atom_id);
     const auto local = AtomLocalPotentialView::For(*atom);
@@ -66,7 +67,10 @@ PostJointLocalResult FitPostJointLocalTarget(
     if (!SameSource(joint.source, peeling.source))
         throw std::invalid_argument("Post-Joint local fitting source mismatch.");
 
+    auto phase_start = std::chrono::steady_clock::now();
     const auto prepared_samples = postprocessing.BuildPostJointLocalSamples(atom_id, peeling);
+    metrics.charge_correction_seconds += std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - phase_start).count();
     result.fixed_charge = prepared_samples.fixed_charge;
     for (const auto & sample : prepared_samples.samples)
         if (!sample.reason.empty())
@@ -87,10 +91,16 @@ PostJointLocalResult FitPostJointLocalTarget(
     if (dataset.X.cols() != 2 || design_qr.rank() != 2)
     { result.status = EvidenceStatus::Unavailable; result.reason = "rank-deficient-local-design"; return result; }
 
+    phase_start = std::chrono::steady_clock::now();
     const double alpha = TrainAlphaR(gaussian_samples, options);
+    metrics.local_alpha_training_seconds += std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - phase_start).count();
     if (!std::isfinite(alpha) || alpha < 0.0)
     { result.status = EvidenceStatus::Unavailable; result.reason = "local-alpha-training-failed"; return result; }
+    phase_start = std::chrono::steady_clock::now();
     result.fit = EstimateLocalGaussian(gaussian_samples, alpha, options, no_charge);
+    metrics.local_mdpde_fitting_seconds += std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - phase_start).count();
     result.fit.alpha_r = alpha;
     if (!result.fit.fit_result)
     { result.status = EvidenceStatus::Unavailable; result.reason = "local-mdpde-result-unavailable"; return result; }
@@ -179,8 +189,13 @@ void RunTwoStageWorkflow(MapObject & map, ModelObject & model, const FitOptions 
     RunTwoStageFromPreparedSamples(model, workset.contributors, options);
 }
 
-void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOptions & options)
+void RunJointComponentWorkflow(
+    MapObject & map, ModelObject & model, const FitOptions & options,
+    JointPostprocessingMetrics * supplied_metrics)
 {
+    JointPostprocessingMetrics local_metrics;
+    auto & postprocessing_metrics = supplied_metrics ? *supplied_metrics : local_metrics;
+    postprocessing_metrics = {};
     if (!options.quiet_mode) LogJointInfo("[Joint] Building joint problem...");
     const auto construction_start = std::chrono::steady_clock::now();
     const auto problem = BuildJointProblem(map, model);
@@ -237,19 +252,28 @@ void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOp
         fit.initialization = initialization;
         return CaptureJointAnalysisResult(fit);
     }();
-    JointPostprocessingMetrics postprocessing_metrics;
+    const auto postprocessing_start = std::chrono::steady_clock::now();
+    postprocessing_metrics.rss_before_postprocessing_bytes = joint_component::CurrentRssBytes();
     ++postprocessing_metrics.joint_stage_mapping_builds;
     data_internal::ApplyJointStageEstimates(model, snapshot, boost::uuids::to_string(boost::uuids::random_generator()()));
     if (!options.quiet_mode) LogJointInfo("[Joint] Computing post-fit outputs...");
     model.EditAnalysis().SetJointResult(std::move(snapshot));
     const auto & joint_snapshot = *model.GetAnalysisView().GetJointResult();
+    auto phase_start = std::chrono::steady_clock::now();
     const JointPostprocessingContext postprocessing(map, model, problem, &joint_snapshot, &postprocessing_metrics);
+    postprocessing_metrics.context_construction_seconds = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - phase_start).count();
+    postprocessing_metrics.rss_after_context_bytes = joint_component::CurrentRssBytes();
+    phase_start = std::chrono::steady_clock::now();
     auto peelings = postprocessing.BuildPostFitPeelingSamples(problem.Input().selection_domain->target_indices);
     std::vector<std::pair<int, PostFitPeelingResult>> peeling_updates;
     peeling_updates.reserve(peelings.size());
     for (auto & [id, peeling] : peelings)
         peeling_updates.emplace_back(id, std::move(peeling));
     model.EditAnalysis().ApplyPostFitPeelingsBatch(std::move(peeling_updates));
+    postprocessing_metrics.peeling_seconds = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - phase_start).count();
+    postprocessing_metrics.rss_after_peeling_bytes = joint_component::CurrentRssBytes();
     std::vector<std::pair<int, PostJointLocalResult>> local_updates;
     for (const auto * atom : model.GetSelectedAtoms())
     {
@@ -259,7 +283,7 @@ void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOp
         const auto & peeling = local.GetPostFitPeeling();
         PostJointLocalResult result;
         if (peeling) result = FitPostJointLocalTarget(
-            postprocessing, model, atom->GetSerialID(), *peeling, options);
+            postprocessing, model, atom->GetSerialID(), *peeling, options, postprocessing_metrics);
         else
         {
             result.source = stage.source;
@@ -272,8 +296,12 @@ void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOp
         local_updates.emplace_back(atom->GetSerialID(), std::move(result));
     }
     model.EditAnalysis().ApplyPostJointLocalResultsBatch(std::move(local_updates));
+    postprocessing_metrics.rss_after_local_bytes = joint_component::CurrentRssBytes();
     if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model));
-    RunGroupPotentialFitting(model, options);
+    RunJointGroupPotentialFitting(model, options, &postprocessing_metrics);
+    postprocessing_metrics.rss_after_group_bytes = joint_component::CurrentRssBytes();
+    postprocessing_metrics.total_postprocessing_seconds = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - postprocessing_start).count();
     if (!options.quiet_mode) LogJointInfo("[Joint] Completed.");
 }
 

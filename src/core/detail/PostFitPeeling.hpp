@@ -1,7 +1,9 @@
 #pragma once
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
+#include <cstddef>
 #include <map>
+#include <optional>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -16,6 +18,22 @@ struct JointPostprocessingMetrics
     std::size_t total_prepared_sample_count{};
     std::size_t valid_local_sample_count{};
     std::size_t invalid_local_sample_count{};
+    std::size_t estimated_context_lookup_bytes{};
+    std::size_t estimated_peeling_result_bytes{};
+    std::size_t estimated_peak_postprocessing_payload_bytes{};
+    double context_construction_seconds{};
+    double peeling_seconds{};
+    double charge_correction_seconds{};
+    double local_alpha_training_seconds{};
+    double local_mdpde_fitting_seconds{};
+    double group_alpha_training_seconds{};
+    double group_web_seconds{};
+    double total_postprocessing_seconds{};
+    std::optional<std::size_t> rss_before_postprocessing_bytes;
+    std::optional<std::size_t> rss_after_context_bytes;
+    std::optional<std::size_t> rss_after_peeling_bytes;
+    std::optional<std::size_t> rss_after_local_bytes;
+    std::optional<std::size_t> rss_after_group_bytes;
 };
 
 struct PostJointLocalSample

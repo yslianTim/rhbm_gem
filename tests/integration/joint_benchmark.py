@@ -229,15 +229,45 @@ def normalize_result(profile, raw):
         }
     if profile == 'workflow':
         targets = raw.get('targets', [])
+        preparation = raw.get('preparation', {})
+        phases = raw.get('phases', {})
         return {
             'qualified': None,
             'scientific_status': 'workflow-complete',
             'details': {'endpoint_count': len(raw.get('endpoints', [])),
                         'target_count': len(targets),
+                        'observation_count': preparation.get('observation_count'),
+                        'contributor_count': preparation.get('contributor_count'),
                         'eligible_local_count': sum(target.get('local_status') == 1 for target in targets),
                         'local_information_storage_bytes': sum(
                             len(target.get('local_information', [])) * 8 for target in targets),
-                        'workflow_peak_rss_bytes': raw.get('phases', {}).get('workflow_peak_rss_bytes'),
+                        'mapping_build_counts': {
+                            'observation_rows': preparation.get('row_mapping_build_count'),
+                            'contributors': preparation.get('contributor_mapping_build_count'),
+                            'joint_stages': preparation.get('joint_stage_mapping_build_count'),
+                        },
+                        'target_preparation_count': preparation.get('target_preparation_count'),
+                        'prepared_samples': {
+                            'total': preparation.get('prepared_sample_count'),
+                            'valid': preparation.get('valid_local_sample_count'),
+                            'invalid': preparation.get('invalid_local_sample_count'),
+                        },
+                        'local_sample_failure_reasons': {
+                            reason: sum(target.get('local_sample_failure_reasons', {}).get(reason, 0)
+                                        for target in targets)
+                            for reason in {reason for target in targets
+                                           for reason in target.get('local_sample_failure_reasons', {})}
+                        },
+                        'postprocessing_seconds': {
+                            name: phases.get(name) for name in (
+                                'postprocessing_seconds', 'context_construction_seconds',
+                                'peeling_seconds', 'charge_correction_seconds',
+                                'local_alpha_training_seconds', 'local_mdpde_fitting_seconds',
+                                'group_alpha_training_seconds', 'group_web_seconds')
+                        },
+                        'postprocessing_memory': raw.get('memory', {}),
+                        'workflow_peak_rss_bytes': phases.get('workflow_peak_rss_bytes'),
+                        'workflow_peak_rss_available': phases.get('workflow_peak_rss_available'),
                         'objective': raw.get('objective')},
         }
     return {'qualified': None, 'scientific_status': 'command-complete', 'details': {}}
@@ -386,8 +416,9 @@ def validate_args(parser, args):
         parser.error('--detailed is available only for FixedNeighbor search and solve profiles')
     if args.incremental_replay_experiment and args.profile not in ('search', 'solve'):
         parser.error('--incremental-replay-experiment is available only for FixedNeighbor search and solve profiles')
-    if args.profile == 'workflow' and args.case not in ('full', 'halo', 'multi', 'noisy', 'outlier'):
-        parser.error('workflow cases are full, halo, multi, noisy, or outlier')
+    if args.profile == 'workflow' and args.case not in (
+            'full', 'halo', 'multi', 'noisy', 'outlier', 'dense', 'target-heavy', 'connected'):
+        parser.error('workflow cases are full, halo, multi, noisy, outlier, dense, target-heavy, or connected')
     if args.profile == 'command' and not re.fullmatch(r'[A-Za-z0-9._-]+', args.case):
         parser.error('command case names may contain letters, digits, dot, underscore, and hyphen')
     if args.profile in ('search', 'solve') and not synthetic_case(args.case):

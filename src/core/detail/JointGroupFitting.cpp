@@ -9,6 +9,7 @@
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
+#include <chrono>
 #include <limits>
 
 namespace rhbm_gem::core::detail {
@@ -47,7 +48,8 @@ GaussianModel3DWithUncertainty Decode(
 }
 }
 
-void RunJointGroupPotentialFitting(ModelObject & model, const FitOptions & options)
+void RunJointGroupPotentialFitting(
+    ModelObject & model, const FitOptions & options, JointPostprocessingMetrics * metrics)
 {
     const auto view = model.GetAnalysisView();
     auto editor = model.EditAnalysis();
@@ -72,7 +74,11 @@ void RunJointGroupPotentialFitting(ModelObject & model, const FitOptions & optio
         }
         if (members.size() >= 10 && atoms.front()->IsMainChainAtom()) training.push_back(std::move(members));
     }
+    const auto alpha_start = std::chrono::steady_clock::now();
     const double alpha = TrainAlphaG(training, options);
+    if (metrics)
+        metrics->group_alpha_training_seconds = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - alpha_start).count();
     const RHBMExecutionOptions execution{.quiet_mode = options.quiet_mode, .thread_size = options.thread_size};
     for (const auto key : keys)
     {
@@ -131,8 +137,11 @@ void RunJointGroupPotentialFitting(ModelObject & model, const FitOptions & optio
             {
                 try
                 {
+                    const auto web_start = std::chrono::steady_clock::now();
                     const auto web = rhbm_helper::EstimateWEBFromInformation(
                         information, mu.mu_mdpde, mu.member_capital_lambda_list, execution);
+                    if (metrics) metrics->group_web_seconds += std::chrono::duration<double>(
+                        std::chrono::steady_clock::now() - web_start).count();
                     if (web.status != RHBMEstimationStatus::SUCCESS) throw std::runtime_error("WEB failed.");
                     GroupGaussianResult group;
                     group.alpha_g = alpha;

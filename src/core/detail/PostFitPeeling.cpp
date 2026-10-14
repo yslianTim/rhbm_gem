@@ -12,6 +12,13 @@
 
 namespace rhbm_gem::core::detail {
 namespace {
+template<class HashMap>
+std::size_t EstimateHashStorageBytes(const HashMap & values)
+{
+    return values.bucket_count() * sizeof(void *) + values.size() *
+        (sizeof(typename HashMap::value_type) + 2 * sizeof(void *));
+}
+
 bool SameSource(const EstimateSource & a, const EstimateSource & b)
 {
     return a.method == b.method && a.atom_id == b.atom_id && a.component_id == b.component_id &&
@@ -62,7 +69,9 @@ JointPostprocessingContext::JointPostprocessingContext(
     for (std::size_t atom = 0; atom < input.atom_ids.size(); ++atom)
         m_contributor_index_by_id.emplace(std::stoi(input.atom_ids[atom]), atom);
     if (m_metrics) ++m_metrics->contributor_mapping_builds;
-
+    if (m_metrics)
+        m_metrics->estimated_context_lookup_bytes = EstimateHashStorageBytes(m_row_index_by_grid) +
+            EstimateHashStorageBytes(m_contributor_index_by_id);
 }
 
 std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeelingSamples(
@@ -161,6 +170,33 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
         }
         output.neighbor_count = neighbors.size();
     }
+    if (m_metrics)
+    {
+        std::size_t support_entries{};
+        std::size_t requested_support_entries{};
+        std::size_t output_sample_count{};
+        for (std::size_t atom = 0; atom < input.support.size(); ++atom)
+        {
+            support_entries += input.support[atom].size();
+            if (requested[atom]) requested_support_entries += input.support[atom].size();
+        }
+        for (const auto & [unused, output] : results)
+        {
+            (void)unused;
+            output_sample_count += output.samples.size();
+        }
+        m_metrics->estimated_peeling_result_bytes = output_sample_count * sizeof(PeelingSampleEstimate);
+        const auto row_workspace = input.row_ids.size() *
+            (sizeof(std::vector<std::size_t>) + sizeof(double) + sizeof(std::size_t));
+        const auto contributor_workspace = input.atom_ids.size() *
+            (sizeof(std::unordered_map<std::size_t, double>) + sizeof(std::optional<GaussianModel3D>));
+        const auto support_workspace = support_entries * sizeof(std::size_t);
+        const auto own_charge_workspace = requested_support_entries *
+            (sizeof(std::pair<const std::size_t, double>) + 2 * sizeof(void *));
+        m_metrics->estimated_peak_postprocessing_payload_bytes = row_workspace +
+            contributor_workspace + support_workspace + own_charge_workspace +
+            m_metrics->estimated_peeling_result_bytes;
+    }
     return results;
 }
 
@@ -257,6 +293,13 @@ PostJointLocalSamples JointPostprocessingContext::BuildPostJointLocalSamples(
         for (const auto & sample : output.samples)
             if (sample.gaussian_response) ++m_metrics->valid_local_sample_count;
             else ++m_metrics->invalid_local_sample_count;
+        const auto local_payload = output.samples.size() * sizeof(PostJointLocalSample) +
+            raw.size() * (sizeof(LocalPotentialSample) + 5 * sizeof(double)) +
+            input.support[atom_index].size() *
+                (sizeof(std::pair<const std::size_t, double>) + 2 * sizeof(void *));
+        m_metrics->estimated_peak_postprocessing_payload_bytes = std::max(
+            m_metrics->estimated_peak_postprocessing_payload_bytes,
+            m_metrics->estimated_peeling_result_bytes + local_payload);
     }
     return output;
 }

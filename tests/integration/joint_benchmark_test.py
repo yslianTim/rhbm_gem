@@ -53,20 +53,43 @@ class JointBenchmarkContractTest(unittest.TestCase):
                 self.assertEqual(command[3:], ['chain', '8', '--maximum-sweeps', '30'])
                 self.assertEqual(len(command), 7)
 
-    def test_workflow_accepts_deterministic_noise_and_outlier_cases(self):
+    def test_workflow_accepts_deterministic_postprocessing_cases(self):
         parser = benchmark.build_parser()
         with tempfile.TemporaryDirectory() as temporary:
             build = Path(temporary)
             (build / 'bin').mkdir()
             driver = build / 'bin/joint_postprocessing_benchmark'
             driver.touch()
-            for case in ('noisy', 'outlier'):
+            for case in ('noisy', 'outlier', 'dense', 'target-heavy', 'connected'):
                 args = parser.parse_args([
                     '--profile', 'workflow', '--case', case, '--build-dir', str(build),
                     '--output', 'result.json'])
                 benchmark.validate_args(parser, args)
                 command = benchmark.command_for_profile(args, Path('result.json'), build)
                 self.assertEqual(command, [str(driver), case, 'result.json'])
+
+    def test_workflow_normalization_keeps_mapping_timing_and_memory_measurements(self):
+        normalized = benchmark.normalize_result('workflow', {
+            'endpoints': [{}, {}], 'targets': [{'local_status': 1}],
+            'preparation': {
+                'observation_count': 128, 'contributor_count': 4,
+                'row_mapping_build_count': 1, 'contributor_mapping_build_count': 1,
+                'joint_stage_mapping_build_count': 1, 'target_preparation_count': 1,
+                'prepared_sample_count': 8, 'valid_local_sample_count': 7,
+                'invalid_local_sample_count': 1,
+            },
+            'phases': {'postprocessing_seconds': .4, 'group_web_seconds': .1,
+                       'workflow_peak_rss_bytes': 4096, 'workflow_peak_rss_available': True},
+            'memory': {'estimated_peak_workspace_payload_bytes': 2048,
+                       'process_peak_rss_available': True},
+        })['details']
+        self.assertEqual(normalized['observation_count'], 128)
+        self.assertEqual(normalized['mapping_build_counts']['observation_rows'], 1)
+        self.assertEqual(normalized['target_preparation_count'], 1)
+        self.assertEqual(normalized['prepared_samples'], {'total': 8, 'valid': 7, 'invalid': 1})
+        self.assertEqual(normalized['postprocessing_seconds']['group_web_seconds'], .1)
+        self.assertEqual(normalized['postprocessing_memory']['estimated_peak_workspace_payload_bytes'], 2048)
+        self.assertTrue(normalized['workflow_peak_rss_available'])
 
     def test_detailed_option_is_explicit_and_zero_sweeps_is_preparation_only(self):
         parser = benchmark.build_parser()
