@@ -92,6 +92,37 @@ records, plus observable-only nuisance records; it adds no dense factor.
 Covariance is independent: for 112,218 parameters its preflight estimates
 418,399,065,443 bytes and rejects before factorization.
 
+## Projected-width allocation lifetime
+
+The rank stage has two sequential factor phases, but data created during
+preparation remains live as the later phase runs:
+
+| Phase | Retained inputs | Large temporary allocations | Growth |
+| --- | --- | --- | --- |
+| Free-design preparation | sparse free design and raw width derivative | triplet assembly, tiled QR `R`, SVD workspace, `p_F × P` coefficients | `p_F²`, `p_F P`, support nonzeros, tile rows × columns |
+| Projected-width reduction | sparse inputs and coefficients | projected derivative tiles and QR assembly workspace, dense QR `R` | `P²`, tile rows × `P` |
+| Projected-width SVD | projected-width `R` and singular values | SVD workspace and current full right-vector matrix | `P²` |
+
+`free_design` and `raw` are stored sparsely in proportion to support
+nonzeros. Per-tile dense row blocks can be regenerated from those sparse
+matrices. The projection coefficients are retained so each width column can
+be generated as a tiled `raw - free_design * coefficients` action. The
+reduction streams those row tiles into a dense `P × P` QR factor. Production
+currently requests the full thin right-vector matrix before copying at most
+three weak directions; those directions do not affect the rank decision, but
+are emitted for offline diagnostics. Process peak RSS is the whole process
+high-water mark and does not attribute memory to an individual function.
+
+Small dense-SVD controls live in `tests/support/ProjectedWidthResearch.*` and
+`tests/core/joint_component/ProjectedWidthResearch_test.cpp`. They cover
+full-rank, deficient, threshold-adjacent, connected, locally/strongly coupled,
+weak-separator, target/halo, active-face, multiple-component and cancellation
+cases. The test reports normalized design column norms, both singular spectra,
+both thresholds, support counts, projection residual, elapsed time and process
+peak RSS. Its dense QR/SVD oracle is for small controls; it is not a
+memory-bounded algorithm. The 37,406-atom input remains a resource preflight
+and structural-deficiency shape, not a full-rank control.
+
 The planner's 3.2 GB preflight leaves margin under the 4 GB hard limit; it does
 not establish that a real 37,406-atom component can be fully qualified within
 4 GB. The full interior, mixed active and all-active estimates above all

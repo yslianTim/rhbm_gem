@@ -197,6 +197,7 @@ set(JOINT_COMPONENT_NUMERICAL_TEST_SOURCES
     core/joint_component/FixedNeighborBlockCoordinate_test.cpp
     core/joint_component/Numerics_test.cpp
     core/joint_component/BoundedRank_test.cpp
+    core/joint_component/ProjectedWidthResearch_test.cpp
 )
 
 set(JOINT_COMPONENT_TEST_SOURCES
@@ -289,6 +290,7 @@ add_dependencies(tests_all rhbm_tests)
 add_library(joint_test_support STATIC
     support/JointSyntheticWorkload.cpp
     support/BoundedRankResearch.cpp
+    support/ProjectedWidthResearch.cpp
     support/JointBlockCoordinate.cpp
     support/JointTestGeometry.cpp support/JointTestNumerics.cpp support/JointDenseReference.cpp
     support/JointTestContext.cpp support/JointComponentChecks.cpp
