@@ -1,9 +1,13 @@
 #include <gtest/gtest.h>
 #include "support/ProjectedWidthResearch.hpp"
+#include "support/MatrixFreeProjectedWidth.hpp"
 #include "core/detail/joint_component/CompactSvd.hpp"
+#include "core/detail/joint_component/TiledDerivative.hpp"
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <iostream>
+#include <limits>
 
 namespace {
 namespace pw=second_stage_test::projected_width;
@@ -143,5 +147,103 @@ TEST(JointComponentProjectedWidthResearchTest, ValuesOnlyAndRightVectorModesPres
             <<" minimum="<<values.singular_values(2)<<" rank="<<values.rank
             <<" threshold_sensitive="<<!n::CompactRankDecisionSafe(values)<<"\n";
     }
+}
+
+TEST(JointComponentProjectedWidthResearchTest, MatrixFreeActionsMatchDenseAndTiledQrOracles)
+{
+    for(const auto & fixture:pw::Fixtures())
+    {
+        SCOPED_TRACE(fixture.name);
+        const auto started=std::chrono::steady_clock::now();
+        const auto oracle=pw::EvaluateDenseOracle(fixture);
+        ASSERT_TRUE(oracle.valid)<<oracle.reason;
+        const n::Sparse design=fixture.free_design.sparseView();
+        const n::Sparse derivative=fixture.width_derivative.sparseView();
+        auto op=pw::BuildExactOracleOperator(design,derivative,fixture.policy);
+        ASSERT_TRUE(op.available)<<op.reason;
+        EXPECT_EQ(op.status,"Completed");
+
+        const Eigen::VectorXd v=Eigen::VectorXd::LinSpaced(op.width_columns,1.,2.).normalized();
+        const Eigen::VectorXd u=Eigen::VectorXd::LinSpaced(op.normalized_design.rows(),2.,4.).normalized();
+        const Eigen::VectorXd forward=op.Apply(v);
+        const Eigen::VectorXd direct=oracle.projected_width*v;
+        const Eigen::VectorXd adjoint=op.ApplyAdjoint(u);
+        const Eigen::VectorXd direct_adjoint=oracle.projected_width.transpose()*u;
+        const double absolute_forward=(forward-direct).norm();
+        const double absolute_adjoint=(adjoint-direct_adjoint).norm();
+        const double scale=std::max({1.0,derivative.norm()*v.norm(),derivative.norm()*u.norm()});
+        const double roundoff=64*std::numeric_limits<double>::epsilon()*
+            static_cast<double>(std::max(op.normalized_design.rows(),op.normalized_design.cols()))*scale;
+        const double relative_forward=absolute_forward/std::max(direct.norm(),std::numeric_limits<double>::min());
+        const double relative_adjoint=absolute_adjoint/std::max(direct_adjoint.norm(),std::numeric_limits<double>::min());
+        EXPECT_LE(absolute_forward,roundoff);
+        EXPECT_LE(absolute_adjoint,roundoff);
+        EXPECT_LE(op.OrthogonalityResidual(forward),roundoff);
+
+        const Eigen::VectorXd projected=op.Project(u);
+        const Eigen::VectorXd projected_twice=op.Project(projected);
+        const double idempotence=(projected_twice-projected).norm();
+        EXPECT_LE(idempotence,roundoff);
+        const double lhs=forward.dot(u),rhs=v.dot(adjoint);
+        EXPECT_LE(std::abs(lhs-rhs),roundoff);
+
+        n::TiledDifferential differential;
+        differential.free_design=op.normalized_design;
+        differential.raw=derivative;
+        differential.scale=1.; differential.valid=true; differential.projected_only=true;
+        Eigen::JacobiSVD<pw::Matrix> design_svd(pw::Matrix(op.normalized_design),
+            Eigen::ComputeThinU|Eigen::ComputeThinV);
+        differential.coefficients=design_svd.solve(pw::Matrix(derivative));
+        const auto reduced=n::ReduceProjectedWidthDerivative(differential,2);
+        ASSERT_TRUE(reduced.valid)<<reduced.reason;
+        const auto tiled_svd=n::EvaluateRank(reduced.projected,
+            {fixture.policy,fixture.width_derivative.cols(),-1,n::RankBoundary::SvdNative});
+        ASSERT_TRUE(tiled_svd.valid);
+        EXPECT_EQ(tiled_svd.rank,oracle.width.rank);
+        EXPECT_LE((tiled_svd.singular_values-oracle.width.singular_values).lpNorm<Eigen::Infinity>(),roundoff);
+
+        std::cout<<"matrix-free-operator fixture="<<fixture.name
+            <<" rows="<<op.normalized_design.rows()<<" free_columns="<<op.normalized_design.cols()
+            <<" width_columns="<<op.width_columns<<" design_rank="<<op.design_rank
+            <<" width_rank="<<tiled_svd.rank<<" rank_threshold="<<tiled_svd.threshold
+            <<" forward_absolute_error="<<absolute_forward<<" forward_relative_error="<<relative_forward
+            <<" adjoint_absolute_error="<<absolute_adjoint<<" adjoint_relative_error="<<relative_adjoint
+            <<" adjoint_inner_product_difference="<<std::abs(lhs-rhs)
+            <<" orthogonality_residual="<<op.OrthogonalityResidual(forward)
+            <<" projection_idempotence_error="<<idempotence
+            <<" projection_residual="<<oracle.projection_residual
+            <<" roundoff_over_rank_threshold="<<(roundoff/oracle.width.threshold)
+            <<" oracle_width_singular_values="<<Values(oracle.width.singular_values)
+            <<" tiled_width_singular_values="<<Values(tiled_svd.singular_values)
+            <<" estimated_peak_bytes="<<op.estimated_peak_bytes
+            <<" basis_bytes="<<op.basis_bytes
+            <<" projection_calls="<<op.projection_calls
+            <<" forward_calls="<<op.forward_calls<<" adjoint_calls="<<op.adjoint_calls
+            <<" seconds="<<std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count()<<"\n";
+    }
+}
+
+TEST(JointComponentProjectedWidthResearchTest, BoundedProjectionPathFailsClosedAtPreflight)
+{
+    const auto fixture=pw::Fixtures().front();
+    const n::Sparse design=fixture.free_design.sparseView();
+    const n::Sparse derivative=fixture.width_derivative.sparseView();
+    const auto limited=pw::BuildExactOracleOperator(design,derivative,fixture.policy,0,1);
+    EXPECT_FALSE(limited.available);
+    EXPECT_EQ(limited.status,"ResourceLimit");
+    EXPECT_EQ(limited.reason,"estimated-peak-exceeds-planning-budget");
+
+    const auto bounded=pw::PreflightBoundedProjection(5'938'087,74'812,37'406,
+        149'622,149'622,600'000'000);
+    EXPECT_EQ(bounded.resource_status,"Pass");
+    EXPECT_EQ(bounded.numerical_status,"Unavailable");
+    EXPECT_EQ(bounded.reason,"no-bounded-global-projector-with-validated-rank-contract");
+    std::cout<<"matrix-free-giant-action-preflight rows=5,938,087 free_columns=74,812 width_columns=37,406"
+        <<" estimated_action_bytes="<<bounded.estimated_action_bytes
+        <<" estimated_peak_bytes="<<bounded.estimated_peak_bytes
+        <<" planning_budget_bytes="<<bounded.budget_bytes
+        <<" resource_status="<<bounded.resource_status
+        <<" numerical_status="<<bounded.numerical_status<<" reason="<<bounded.reason
+        <<" projection_calls=0\n";
 }
 }

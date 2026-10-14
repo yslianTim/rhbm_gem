@@ -291,6 +291,7 @@ add_library(joint_test_support STATIC
     support/JointSyntheticWorkload.cpp
     support/BoundedRankResearch.cpp
     support/ProjectedWidthResearch.cpp
+    support/MatrixFreeProjectedWidth.cpp
     support/JointBlockCoordinate.cpp
     support/JointTestGeometry.cpp support/JointTestNumerics.cpp support/JointDenseReference.cpp
     support/JointTestContext.cpp support/JointComponentChecks.cpp
@@ -374,12 +375,27 @@ string(APPEND joint_numerical_filter
     "-JointComponentNumericsTest.CompactJacobianGramIdentityDiagnosticsAcrossLattices"
     ":JointFixedNeighborBlockCoordinateTest.ProductionScaleSingleComponentPreparationStaysBelowBudget"
     ":JointComponentBoundedRankTest.StreamingGershgorinControlsNeverOverstateTheirEvidence"
-    ":JointComponentSparseQRResearchTest.*")
+    ":JointComponentSparseQRResearchTest.*"
+    ":JointComponentProjectedWidthResearchTest.*")
 add_test(NAME rhbm_tests_joint_component_numerical
     COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes --gtest_filter=${joint_numerical_filter})
 set_tests_properties(rhbm_tests_joint_component_numerical PROPERTIES
     LABELS "core;domain:core;intent:algorithm;joint:numerical" TIMEOUT 900
     ENVIRONMENT "OMP_NUM_THREADS=1")
+
+add_test(NAME joint_projected_width_oracle_controls
+    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
+        --gtest_filter=JointComponentProjectedWidthResearchTest.DenseOracleBaselinesAreReproducible:JointComponentProjectedWidthResearchTest.ActiveFaceAndHaloDimensionsRemainExplicit)
+add_test(NAME joint_projected_width_svd_modes
+    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
+        --gtest_filter=JointComponentProjectedWidthResearchTest.ValuesOnlyAndRightVectorModesPreserveRankEvidence)
+add_test(NAME joint_projected_width_operator
+    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
+        --gtest_filter=JointComponentProjectedWidthResearchTest.MatrixFreeActionsMatchDenseAndTiledQrOracles:JointComponentProjectedWidthResearchTest.BoundedProjectionPathFailsClosedAtPreflight)
+set_tests_properties(joint_projected_width_oracle_controls joint_projected_width_svd_modes
+    joint_projected_width_operator PROPERTIES
+    LABELS "core;domain:core;intent:algorithm;joint:numerical;joint:offline;research"
+    TIMEOUT 900 ENVIRONMENT "OMP_NUM_THREADS=1")
 
 add_test(NAME joint_bounded_rank_streaming_controls
     COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes

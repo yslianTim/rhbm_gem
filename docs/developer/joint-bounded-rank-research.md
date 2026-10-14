@@ -214,3 +214,41 @@ design as a full production replacement for `DesignSpectrum()`.
 
 Projected-width assessment, local correction and target identifiability keep
 their existing resource bottlenecks and were not redesigned in this study.
+
+## Projected-width matrix-free operator controls
+
+The small research operator uses the same normalized free-design matrix `Z`
+and observation-scaled width derivative `D` as its inputs. An exact-oracle
+build computes a dense thin-U SVD of normalized `Z`, applies the original
+observation-row policy and strict singular-value threshold, and retains the
+resulting orthonormal basis `Q`. Its actions are
+
+```text
+Apply(v)        = D v - Q (Q^T D v)
+ApplyAdjoint(u) = D^T (u - Q (Q^T u))
+```
+
+This applies the same orthogonal projector in both directions. It stores a
+sparse normalized `Z`, sparse `D`, and a dense `N × rank(Z)` basis; each call
+uses observation and parameter vectors. It does not materialize projection
+coefficients, an observation-by-width dense matrix, or a projected-width
+factor. The dense SVD oracle basis is `O(N p_F)` in the full-rank case, so this
+mode is limited to small correctness controls and is not memory-bounded.
+Its conservative preflight includes dense SVD/basis workspace, sparse copies,
+vectors, caller resident bytes and the planning budget before allocation.
+
+The controls compare forward and adjoint actions with the dense oracle, check
+the adjoint inner-product identity, projection idempotence, design
+orthogonality, and the projected-width spectrum from the existing tiled-QR
+reduction. They report absolute and relative action errors, projection
+residual, the original width threshold, estimated workspace, operator calls,
+runtime and process peak RSS. Cancellation-sensitive examples are included;
+reported floating-point parity is not a rigorous operator-error enclosure.
+
+The bounded projection preflight currently reserves only sparse input and
+vector-sized action work. Even when that storage fits the 3.2 GB planning
+budget, it returns numerical status `Unavailable`: this repository has no
+bounded global projector with validated rank behavior. No iterative residual
+or approximate Ritz value is treated as rank evidence. The 37,406-atom shape
+has an action-work estimate only; no projection call or full rank assessment
+was run for it.
