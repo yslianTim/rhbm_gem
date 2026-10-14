@@ -252,3 +252,30 @@ bounded global projector with validated rank behavior. No iterative residual
 or approximate Ritz value is treated as rank evidence. The 37,406-atom shape
 has an action-work estimate only; no projection call or full rank assessment
 was run for it.
+
+## Structured sparse projection feasibility route
+
+A separate test-only route normalizes the free-design sparse matrix, forms the
+global sparse Gram matrix `Z^T Z`, and uses Eigen `SimplicialLDLT` with AMD
+ordering to solve `(Z^T Z) c = Z^T u`; it returns `Z c`. This is a controlled
+projection experiment, not a production solver. It keeps all global column
+couplings in the Gram graph and factorization. It does not drop separator edges
+or combine local rank decisions into a global claim.
+
+Before copying or multiplying matrices, its preflight reserves a worst-case
+quadratic sparse Gram/factor/workspace bound, input copies, graph adjacency,
+and observation/parameter vectors against the existing 3.2 GB planning
+budget. For admitted small cases it records exact graph components,
+articulation-column separator size, largest interior region after removing a
+single articulation, interface dimension, Gram and factor nonzeros, maximum
+factor column size, fill ratio, pivot-diagonal condition estimate, projection
+residual, idempotence error, runtime and whole-process RSS. A separator is a
+measurement only; the full global Gram matrix is still factored.
+
+The normal equations square the condition number of `Z`. A successful sparse
+factor and a small solve residual therefore establish neither the original
+SVD rank contract nor a singular-value bound. Numerical breakdown or a bad
+projection is reported as unavailable. No rank certificate is produced, even
+when local blocks or the sparse factor appear full rank. The giant synthetic
+shape is handled by the checked preflight only; its structural full-design
+rank obstruction remains unchanged.

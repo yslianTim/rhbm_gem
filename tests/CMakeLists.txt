@@ -292,6 +292,7 @@ add_library(joint_test_support STATIC
     support/BoundedRankResearch.cpp
     support/ProjectedWidthResearch.cpp
     support/MatrixFreeProjectedWidth.cpp
+    support/StructuredProjectionResearch.cpp
     support/JointBlockCoordinate.cpp
     support/JointTestGeometry.cpp support/JointTestNumerics.cpp support/JointDenseReference.cpp
     support/JointTestContext.cpp support/JointComponentChecks.cpp
@@ -376,7 +377,8 @@ string(APPEND joint_numerical_filter
     ":JointFixedNeighborBlockCoordinateTest.ProductionScaleSingleComponentPreparationStaysBelowBudget"
     ":JointComponentBoundedRankTest.StreamingGershgorinControlsNeverOverstateTheirEvidence"
     ":JointComponentSparseQRResearchTest.*"
-    ":JointComponentProjectedWidthResearchTest.*")
+    ":JointComponentProjectedWidthResearchTest.*"
+    ":JointComponentStructuredProjectionResearchTest.*")
 add_test(NAME rhbm_tests_joint_component_numerical
     COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes --gtest_filter=${joint_numerical_filter})
 set_tests_properties(rhbm_tests_joint_component_numerical PROPERTIES
@@ -396,6 +398,29 @@ set_tests_properties(joint_projected_width_oracle_controls joint_projected_width
     joint_projected_width_operator PROPERTIES
     LABELS "core;domain:core;intent:algorithm;joint:numerical;joint:offline;research"
     TIMEOUT 900 ENVIRONMENT "OMP_NUM_THREADS=1")
+
+add_test(NAME joint_structured_projection_controls
+    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
+        --gtest_filter=JointComponentStructuredProjectionResearchTest.SmallProjectionsMatchDenseOracleAndPreserveGlobalCoupling)
+set_tests_properties(joint_structured_projection_controls PROPERTIES
+    LABELS "core;domain:core;intent:algorithm;joint:numerical;joint:offline;research"
+    TIMEOUT 900 ENVIRONMENT "OMP_NUM_THREADS=1")
+function(add_joint_structured_projection_test test_name gtest_name)
+    add_test(NAME ${test_name}
+        COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
+            --gtest_filter=JointComponentStructuredProjectionResearchTest.${gtest_name})
+    set_tests_properties(${test_name} PROPERTIES
+        LABELS "core;domain:core;intent:algorithm;joint:numerical;joint:scalability;joint:offline;research"
+        TIMEOUT 1800 ENVIRONMENT "OMP_NUM_THREADS=1")
+endfunction()
+add_joint_structured_projection_test(joint_structured_projection_chain_128 Chain128)
+add_joint_structured_projection_test(joint_structured_projection_cube_128 Cube128)
+add_joint_structured_projection_test(joint_structured_projection_chain_256 Chain256)
+add_joint_structured_projection_test(joint_structured_projection_cube_256 Cube256)
+add_joint_structured_projection_test(joint_structured_projection_chain_512 Chain512)
+add_joint_structured_projection_test(joint_structured_projection_cube_512 Cube512)
+add_joint_structured_projection_test(joint_structured_projection_chain_1024 Chain1024)
+add_joint_structured_projection_test(joint_structured_projection_cube_1024 Cube1024)
 
 add_test(NAME joint_bounded_rank_streaming_controls
     COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes

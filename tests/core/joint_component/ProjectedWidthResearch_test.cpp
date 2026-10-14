@@ -1,11 +1,14 @@
 #include <gtest/gtest.h>
 #include "support/ProjectedWidthResearch.hpp"
 #include "support/MatrixFreeProjectedWidth.hpp"
+#include "support/StructuredProjectionResearch.hpp"
+#include "support/BoundedRankResearch.hpp"
 #include "core/detail/joint_component/CompactSvd.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <Eigen/QR>
 #include <iostream>
 #include <limits>
 
@@ -246,4 +249,127 @@ TEST(JointComponentProjectedWidthResearchTest, BoundedProjectionPathFailsClosedA
         <<" numerical_status="<<bounded.numerical_status<<" reason="<<bounded.reason
         <<" projection_calls=0\n";
 }
+
+TEST(JointComponentStructuredProjectionResearchTest, SmallProjectionsMatchDenseOracleAndPreserveGlobalCoupling)
+{
+    for(const auto & fixture:pw::Fixtures())
+    {
+        SCOPED_TRACE(fixture.name);
+        const auto oracle=pw::EvaluateDenseOracle(fixture);
+        ASSERT_TRUE(oracle.valid)<<oracle.reason;
+        const n::Sparse design=fixture.free_design.sparseView();
+        const auto resident=n::CurrentRssBytes().value_or(0);
+        const Eigen::VectorXd u=Eigen::VectorXd::LinSpaced(design.rows(),1.,2.).normalized();
+        const auto result=pw::ProjectWithSparseNormalEquations(design,u,resident);
+        ASSERT_TRUE(result.preflight_passed)<<result.reason;
+        EXPECT_EQ(result.rank_status,"Unavailable");
+        if(!oracle.design.full_rank)
+        {
+            std::cout<<"structured-projection-control fixture="<<fixture.name
+                <<" rows="<<result.rows<<" columns="<<result.columns
+                <<" exact_blocks="<<result.exact_blocks
+                <<" separator_columns="<<result.separator_columns
+                <<" maximum_interior_columns="<<result.maximum_interior_columns
+                <<" estimated_peak_bytes="<<result.estimated_peak_bytes
+                <<" rank_status="<<result.rank_status
+                <<" status="<<result.status<<" reason="<<result.reason
+                <<" seconds="<<result.seconds<<"\n";
+            continue;
+        }
+        ASSERT_TRUE(result.valid)<<result.reason;
+        {
+            const n::Sparse derivative=fixture.width_derivative.sparseView();
+            const Eigen::VectorXd v=Eigen::VectorXd::LinSpaced(derivative.cols(),1.,2.).normalized();
+            const Eigen::VectorXd expected=derivative*v-oracle.projected_width*v;
+            const double error=(result.projection-expected).norm();
+            const double relative=error/std::max(expected.norm(),std::numeric_limits<double>::min());
+            pw::Matrix normalized=fixture.free_design;
+            for(Eigen::Index column=0;column<normalized.cols();++column)
+                normalized.col(column)/=normalized.col(column).norm();
+            Eigen::HouseholderQR<pw::Matrix> qr(normalized);
+            const pw::Matrix q=qr.householderQ()*pw::Matrix::Identity(normalized.rows(),normalized.cols());
+            const Eigen::VectorXd qr_projection=q*(q.transpose()*u);
+            const double qr_error=(result.projection-qr_projection).norm();
+            const double objective_difference=std::abs((u-result.projection).squaredNorm()-
+                (u-qr_projection).squaredNorm());
+            const double scale=std::max(1.0,u.norm());
+            const double roundoff=32*std::numeric_limits<double>::epsilon()*
+                static_cast<double>(std::max(design.rows(),design.cols()))*
+                std::max(1.0,result.diagonal_condition_estimate)*scale;
+            EXPECT_LE(error,roundoff);
+            EXPECT_LE(qr_error,roundoff);
+            EXPECT_LE(objective_difference,roundoff*scale);
+            EXPECT_LE(result.projection_residual,roundoff);
+            EXPECT_LE(result.idempotence_error,roundoff);
+            if(fixture.name=="weak-separator") EXPECT_GT(result.separator_columns,0);
+            if(fixture.name=="multiple-components") EXPECT_EQ(result.exact_blocks,4);
+            std::cout<<"structured-projection-control fixture="<<fixture.name
+                <<" rows="<<result.rows<<" columns="<<result.columns
+                <<" input_nonzeros="<<result.input_nonzeros<<" exact_blocks="<<result.exact_blocks
+                <<" articulation_columns="<<result.articulation_columns
+                <<" separator_columns="<<result.separator_columns
+                <<" maximum_interior_columns="<<result.maximum_interior_columns
+                <<" interface_dimension="<<result.interface_dimension
+                <<" gram_nonzeros="<<result.gram_nonzeros
+                <<" factor_nonzeros="<<result.factor_nonzeros
+                <<" predicted_fill_ratio="<<(result.gram_nonzeros ?
+                    static_cast<double>(result.factor_nonzeros)/result.gram_nonzeros : 0.0)
+                <<" maximum_factor_size="<<result.maximum_factor_size
+                <<" diagonal_condition_estimate="<<result.diagonal_condition_estimate
+                <<" projection_absolute_error="<<error<<" projection_relative_error="<<relative
+                <<" dense_qr_projection_error="<<qr_error
+                <<" projection_objective_difference="<<objective_difference
+                <<" projection_residual="<<result.projection_residual
+                <<" idempotence_error="<<result.idempotence_error
+                <<" roundoff_over_rank_threshold="<<(roundoff/oracle.width.threshold)
+                <<" estimated_peak_bytes="<<result.estimated_peak_bytes
+                <<" rss_before_bytes="<<(result.current_rss_before_bytes ?
+                    std::to_string(*result.current_rss_before_bytes) : "unavailable")
+                <<" process_peak_rss_bytes="<<(result.process_peak_rss_bytes ?
+                    std::to_string(*result.process_peak_rss_bytes) : "unavailable")
+                <<" seconds="<<result.seconds<<" rank_status="<<result.rank_status
+                <<" status="<<result.status<<" reason="<<result.reason<<"\n";
+        }
+        else
+            std::cout<<"structured-projection-control fixture="<<fixture.name
+                <<" rows="<<result.rows<<" columns="<<result.columns
+                <<" estimated_peak_bytes="<<result.estimated_peak_bytes
+                <<" status="<<result.status<<" reason="<<result.reason
+                <<" rank_status="<<result.rank_status<<" seconds="<<result.seconds<<"\n";
+    }
+}
+
+#define STRUCTURED_TOPOLOGY_CASE(test_name,topology_name,atom_count) \
+TEST(JointComponentStructuredProjectionResearchTest,test_name) \
+{ \
+    const auto design=second_stage_test::bounded_rank::SyntheticDesign(topology_name,atom_count); \
+    const auto resident=n::CurrentRssBytes().value_or(0); \
+    const Eigen::VectorXd u=Eigen::VectorXd::LinSpaced(design.rows(),1.,2.).normalized(); \
+    const auto result=pw::ProjectWithSparseNormalEquations(design,u,resident); \
+    EXPECT_EQ(result.rank_status,"Unavailable"); \
+    if(result.estimated_peak_bytes>n::JointMemoryPlanningBudgetBytes) \
+    {EXPECT_FALSE(result.preflight_passed); EXPECT_EQ(result.status,"ResourceLimit");} \
+    std::cout<<"structured-projection-topology topology="<<topology_name<<" atoms="<<atom_count \
+        <<" rows="<<design.rows()<<" columns="<<design.cols()<<" input_nonzeros="<<design.nonZeros() \
+        <<" exact_blocks="<<result.exact_blocks<<" separator_columns="<<result.separator_columns \
+        <<" maximum_interior_columns="<<result.maximum_interior_columns \
+        <<" interface_dimension="<<result.interface_dimension<<" gram_nonzeros="<<result.gram_nonzeros \
+        <<" factor_nonzeros="<<result.factor_nonzeros<<" maximum_factor_size="<<result.maximum_factor_size \
+        <<" estimated_peak_bytes="<<result.estimated_peak_bytes \
+        <<" rss_before_bytes="<<(result.current_rss_before_bytes ? std::to_string(*result.current_rss_before_bytes) : "unavailable") \
+        <<" rss_after_bytes="<<(result.current_rss_after_bytes ? std::to_string(*result.current_rss_after_bytes) : "unavailable") \
+        <<" process_peak_rss_bytes="<<(result.process_peak_rss_bytes ? std::to_string(*result.process_peak_rss_bytes) : "unavailable") \
+        <<" projection_residual="<<result.projection_residual<<" idempotence_error="<<result.idempotence_error \
+        <<" diagonal_condition_estimate="<<result.diagonal_condition_estimate<<" seconds="<<result.seconds \
+        <<" numerical_rank_status="<<result.rank_status<<" status="<<result.status<<" reason="<<result.reason<<"\n"; \
+}
+STRUCTURED_TOPOLOGY_CASE(Chain128,"chain",128)
+STRUCTURED_TOPOLOGY_CASE(Cube128,"cube",128)
+STRUCTURED_TOPOLOGY_CASE(Chain256,"chain",256)
+STRUCTURED_TOPOLOGY_CASE(Cube256,"cube",256)
+STRUCTURED_TOPOLOGY_CASE(Chain512,"chain",512)
+STRUCTURED_TOPOLOGY_CASE(Cube512,"cube",512)
+STRUCTURED_TOPOLOGY_CASE(Chain1024,"chain",1024)
+STRUCTURED_TOPOLOGY_CASE(Cube1024,"cube",1024)
+#undef STRUCTURED_TOPOLOGY_CASE
 }

@@ -121,7 +121,7 @@ DenseOracle EvaluateDenseOracle(const Fixture & fixture)
         {out.reason="zero-or-nonfinite-design-column"; return out;}
         z.col(k)/=out.design_column_norms(k);
     }
-    const auto design_sparse=z.sparseView(); out.structural_nonzeros=design_sparse.nonZeros();
+    const runtime::Sparse design_sparse=z.sparseView(); out.structural_nonzeros=design_sparse.nonZeros();
     for(Eigen::Index row=0;row<z.rows();++row) if(z.row(row).squaredNorm()>0) ++out.supported_rows;
 
     Eigen::JacobiSVD<Matrix> design_svd(z,Eigen::ComputeThinU);
