@@ -53,9 +53,12 @@ convergence remains independent of search completion. Prepared structural
 block mappings and workspace reuse do not
 reuse numeric factors, accepted states, or replay results across sweeps. The
 route preserves the objective, local A/C solve, width parameterization, serial
-update semantics and OneAccepted behavior. The correction-free numerical
-contract is solver provenance v5 and FixedNeighbor policy v4, separate from
-schemas 3–8 and their stored evidence. See the
+update semantics and OneAccepted behavior. A sparse unit-weight local A/C solve
+that fails its existing KKT gate can use the bounded free-face QR residual
+refinement described in the [Joint runtime contract](joint-component-runtime.md);
+it keeps the same objective, rank threshold and KKT threshold. The solver
+provenance remains v5 and FixedNeighbor policy v4, separate from schemas 3–8
+and their stored evidence. See the
 [Joint runtime contract](joint-component-runtime.md) for the implementation
 details.
 

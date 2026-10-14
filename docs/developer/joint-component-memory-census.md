@@ -94,6 +94,22 @@ construction memory preflight.
 Covariance is independent: for 112,218 parameters its preflight estimates
 418,399,065,443 bytes and rejects before factorization.
 
+## Bounded local A/C KKT refinement
+
+The local constrained solver has a separate, KKT-triggered dense QR refinement
+for sparse unit-weight problems. It allocates only the current free-face
+matrix and runs only after a full-rank SparseQR solve fails the existing KKT
+certificate. The matrix-entry preflight is `rows × free_columns <= 1,000,000`,
+or at most 8,000,000 bytes of double-valued matrix entries; QR workspace is
+additional but remains limited to that local face. At most eight residual
+correction solves are attempted, and a candidate is accepted only through the
+unchanged feasibility, KKT and objective checks.
+
+On the captured 6Z6U block, the face is 881 × 22: 19,382 doubles, or 155,056
+bytes for the dense matrix. This is a local solve allocation, separate from the
+projected-width rank-stage estimates above. Weighted, reference-SVD,
+rank-deficient and over-limit cases do not allocate this matrix.
+
 ## Projected-width allocation lifetime
 
 The rank stage has two sequential factor phases, but data created during

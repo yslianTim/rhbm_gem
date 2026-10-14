@@ -114,6 +114,18 @@ The full profile derivative drives the LM width update. `AssessProfile()` keeps
 its assessment responsibility. Each block visit accepts at most one trusted
 update and replays the candidate against the global state.
 
+For a sparse unit-weight local A/C solve, if the initial full-rank SparseQR
+solution fails the existing KKT certificate, production may run a bounded
+column-normalized QR refinement on that same free face. A preflight limits the
+dense face matrix to at most 1,000,000 double entries (8 MB); the factorization
+workspace is also local to that bounded face. The refinement uses the existing
+rank threshold and performs at most eight residual-correction solves. A result
+is adopted only when the unchanged `CertifyLinear()` check confirms feasibility
+and the existing `1e-10` KKT gate, with objective no greater than the initial
+SparseQR result. Rank-deficient faces, weighted inputs, reference-SVD solves,
+oversized faces, and solutions that already pass KKT skip the refinement. It
+does not build a global dense design or add another solver route.
+
 The production search returns an internal `FixedNeighborComponentResult` with
 the search state and independent endpoint certification. Shared orchestration
 turns that into the certified public `JointComponentResult`, records component

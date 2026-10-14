@@ -87,36 +87,27 @@ accuracy threshold. The production value remains the minimum geometric gate.
 
 ## Full-data validation: 6Z6U
 
-The validation uses the requested local command and writes its saved result to
-the supplied SQLite test database. Report fields come from the command output
-and saved schema-11 result. Unavailable measurements are marked explicitly;
-the selected observation domain and pruned additive model are not directly
-comparable to the historical all-contributor objective.
+The validation ran the requested Release workflow against the supplied 0.50 Å
+map. To preserve the user's SQLite database, it used a fresh SQLite backup and
+the unique key `6z6u_gaus_charge1_bw050_kkt_refined_20261014`; the original
+database was not written. The CLI exited 0 and printed `Completed`, but the
+numerical search did not complete. Unavailable measurements are marked
+explicitly; the selected observation domain and pruned additive model are not
+directly comparable to the historical all-contributor objective.
 
 | Measure | Result |
 | --- | --- |
-| Full 6Z6U run | Completed with the requested Release command; exit status 0. |
+| Full 6Z6U run | Executed; CLI exit status 0. Numerical completion was not achieved. |
 | Observation / target / candidate / retained / excluded counts | 229,783 / 1,418 / 35,988 / 626 / 35,362. |
 | Excluded support / radial counts | 35,329 with 0 support rows; 20 singletons; 13 with 2 rows. Their q counts are 35,329 / 20 / 13 for q=0 / 1 / 2. All were excluded as `insufficient-observations`; no record was reason-coded only for insufficient radial information. |
 | Components before / after pruning | Before: unavailable in this run's diagnostics. After: 1 component (2,044 atoms, 229,783 rows). |
-| Updated search status | `block-search-failed`, `search_completed=false`; the assembled state is unavailable. The failure occurred at sweep 1, block 82, with 12 core atoms, 881 affected rows, and 626 retained halos. |
-| Failed block ranks | Local design: 24 rows, 24 columns, rank 24; rank-deficient halo count 0. The inner KKT check failed (`kkt-failed`). |
-| Objective / A-C KKT / log-B gradient | Final qualified metrics unavailable. Provisional diagnostics showed objective 0.01804, KKT 0.01368, and gradient infinity norm 0.0007427; these do not qualify the result. |
-| Endpoint verification / global design ranks / target estimability | Unavailable; no assembled state or global rank evidence was produced. |
-| Runtime convergence / global assembly | Runtime convergence failed. Global assembly completed as untrusted; regular certificate was `not-run`. |
-| Estimated peak / measured RSS / elapsed time | Estimated total peak unavailable; measured peak RSS 1,227,636,736 bytes (~1.14 GiB); 23.67 seconds real time (23.102 seconds callback time). |
-| Construction / initialization / search / assessment | 2.085 / 6.064 / 6.486 / 2.818 seconds; assembly 0.000014 seconds. |
-| Rank failure resolved / remaining failures | The failed block contained no rank-deficient halo, so the removed low-support halo rank cause was absent there. End-to-end success was not achieved: the inner KKT search failed, leaving global rank and target qualification unavailable. |
+| Search status and stop reason | `block-search-failed`, `search_completed=false`; component 1, one-based sweep index 2, block 82 stopped at `untrusted-trial` (`replay-disagreement`). It has 12 core atoms and 881 affected rows. |
+| Local A/C problem | Design 881 × 24, 3,368 nonzeros, numerical rank 24, free rank 22; rank-deficient halo count 0. Active A atoms are 8 and 11. The initial local profile is now `qualified-inner`: feasible, zero releases, scaled projected KKT `5.82077e-11` (passes the unchanged `1e-10` gate). |
+| Independent replay discrepancies | Prediction `1.28373e-08`; width-gradient infinity norm `6.29113e-05`; KKT `1.16415e-10`. Existing replay trust checks reject the trial; no replay or qualification threshold was changed. |
+| Objective / final A/C KKT / log-B gradient | Final qualified metrics unavailable. Candidate-only diagnostics are `uncertified` and are not scientific estimates. |
+| Endpoint verification / global ranks / target estimability | Not run or unavailable because no trusted component state exists. No selected-target recovery is available. |
+| Runtime convergence / global assembly | Runtime convergence and target runtime convergence are unavailable; regular certificate is `not-run`; assembled state is null. |
+| Construction / initialization / search / assessment / assembly | 1.969437 / 5.902256 / 6.276690 / 2.754835 / 0.000008 seconds. Callback time about 21.68 seconds; shell wall time about 21.9 seconds. Measured RSS is unavailable. |
+| Local KKT failure / remaining blocker | The original local KKT failure is resolved. Full estimator qualification remains blocked by the independent replay disagreement, before endpoint verification or target recovery. |
 
-The existing database row under this key was snapshotted before the run. It
-held a schema-10 result built from a 0.30 Å map, while the requested validation
-used the supplied 0.50 Å map. The prior row is therefore not a same-domain
-baseline, and its component count or failure details are not treated as the
-pre-pruning state for this run. The requested run overwrote that key after the
-snapshot was saved under `/private/tmp/joint_6z6u_database_before.sqlite`.
-
-For the specified map, the pruning diagnostics show that the contributor
-population was sharply reduced before problem construction. The observed
-search failure remains unresolved; the available diagnostics isolate an inner
-KKT failure in a locally full-rank block, while final global convergence and
-target recovery cannot be assessed without an assembled qualified state.
+The result was saved only in `/private/tmp/rhbm-gem-joint-local-ac-kkt-final-20261014.sqlite`. This run is not a numerical success despite the CLI exit status. The local A/C state passes its conditional KKT gate, but independent prediction, width-gradient and KKT comparisons reject its trial; the estimator therefore has no trusted state to verify, qualify or assemble. The diagnostic code records one-based sweep indexes; this capture reports sweep 2, while an earlier summary labeled the block Sweep 1. That prior label discrepancy remains. The failure is localized by component and block identity.

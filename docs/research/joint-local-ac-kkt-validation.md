@@ -35,6 +35,7 @@ but ill-conditioned local problem, not structural or numerical rank loss.
 | Best objective from 4,096-face enumeration | 1.56083675385495 | 4.07454e-10 | Same active atoms 8, 11; fails |
 | Direct dense QR on that free face | 1.56083675425541 | 5.82077e-10 | Fails |
 | Alternate `long double` free-face QR | 1.56083675330617 | 5.82077e-11 | Passes |
+| Production bounded free-face refinement | 1.56083675296648 | 7.56219e-12 | Passes; active atoms 8, 11 |
 
 The `long double` result is not higher precision on this host:
 `std::numeric_limits<long double>::digits` is 53. It is an alternate
@@ -63,22 +64,34 @@ the same coefficients. The raw release tolerance changes from
 The active A dual violations are zero, so an incorrect release decision is not
 the cause.
 
-## Bounded correction experiment
+## Production correction and regression result
 
-Starting from the production coefficients, a dense QR solve restricted to the
-enumerated minimum-objective free face was used only in this offline, 881 × 22
-experiment. Two residual-correction solves reduced the scaled KKT residual to
-the existing threshold while leaving the same active A set. The first
-correction passed KKT but increased the computed objective by 3.89e-10; after
-the second correction KKT was 5.82e-11 and the objective was 6.29e-10 lower
-than the original production result. Further corrections made the computed
-objective fluctuate around this value, so this experiment does not justify
-unconditionally applying an arbitrary number of corrections in production.
-The production fix must select only a KKT-passing candidate whose measured
-objective does not exceed the current candidate, and then be checked through
-the unchanged `CertifyLinear` path.
+The production solve now triggers a column-normalized dense QR refinement only
+for a sparse, unit-weight local A/C problem whose initial full-rank face fails
+the existing KKT certificate. It materializes the free-face matrix only when
+`rows × free_columns <= 1,000,000` (at most 8,000,000 bytes for its double
+entries), uses the existing rank threshold, and performs at most eight
+residual-correction solves. Each candidate is checked through the unchanged
+`CertifyLinear` path; it is adopted only when feasibility and the original
+`1e-10` KKT gate pass and its objective does not exceed the initial SparseQR
+objective. Weighted inputs, reference-SVD solves, rank-deficient faces and
+larger local matrices skip refinement.
 
-This experiment rules out changing the release norm or replacing SparseQR with
-plain dense QR/SVD as sufficient fixes. It supports a bounded free-face
-residual-refinement step, but the production implementation and regression
-evidence are tracked separately from this assessment.
+On the captured 881 × 24 problem, production returns the same active A atoms
+8 and 11, preserves feasibility, and reduces scaled projected KKT to
+`7.56219e-12`. Its objective is below the original SparseQR candidate. The
+independent 4,096-face enumeration selected the same minimum-objective active
+face; the corrected production objective is slightly lower than the enumerated
+face's computed objective, consistent with rounding sensitivity in this
+ill-conditioned problem. Interior, active-boundary, one-release, and
+rank-deficient regressions pass; the rank-deficient case remains
+`rank-deficient`.
+
+These results identify a full-rank but ill-conditioned free face as the cause
+of the original local KKT failure. The active-set release decision and release
+scale were not the cause: the active dual violations were zero, all release
+scale variants retained the same face, and none released a variable. Plain
+dense QR and SVD did not meet the gate either. The bounded refinement improves
+the certified local solve without changing the objective, rank threshold, or
+KKT threshold. The full 6Z6U search still has a separate independent-replay
+consistency failure; see the [full-data validation](joint-halo-pruning-validation.md#full-data-validation-6z6u).
