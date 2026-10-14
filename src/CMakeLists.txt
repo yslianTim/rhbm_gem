@@ -32,6 +32,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/joint_component/Search.cpp
     core/detail/joint_component/Components.cpp
     core/detail/joint_component/TargetEvidence.cpp
+    core/detail/joint_component/HaloEligibility.cpp
     core/detail/joint_component/ObservableProfile.cpp
     core/JointComponentEstimator.cpp
     core/GaussianEstimator.cpp
