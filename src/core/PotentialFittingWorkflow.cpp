@@ -9,6 +9,7 @@
 #include "detail/StageSummary.hpp"
 #include "detail/PostFitPeeling.hpp"
 #include "detail/GroupPotentialFitting.hpp"
+#include "data/detail/PostJointLocalValidation.hpp"
 #include "detail/gaussian_fit/FittingRanges.hpp"
 #include "detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include "detail/second_stage/IterationProcess.hpp"
@@ -98,6 +99,7 @@ PostJointLocalResult FitPostJointLocalTarget(
     const auto reject = [&result](std::string reason) {
         result.status = EvidenceStatus::Unavailable;
         result.reason = std::move(reason);
+        result.information.reset();
         result.fit.fit_result.reset();
         return result;
     };
@@ -135,6 +137,9 @@ PostJointLocalResult FitPostJointLocalTarget(
     result.status = EvidenceStatus::Available;
     result.reason.clear();
     result.fit.fit_result.reset();
+    const auto assessment = data_internal::AssessPostJointLocalResult(
+        result, atom_id, joint, &peeling, raw);
+    if (!assessment.valid) return reject(assessment.reason);
     return result;
 }
 
@@ -260,6 +265,9 @@ void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOp
             result.source = stage.source;
             result.status = EvidenceStatus::Unavailable;
             result.reason = "peeling-unavailable";
+            result.sample_count = local.GetRawSamplingEntriesView().size();
+            if (stage.point)
+                result.fixed_charge = {stage.point->GetOffset(), stage.point->GetWidth()};
         }
         local_updates.emplace_back(atom->GetSerialID(), std::move(result));
     }

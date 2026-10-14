@@ -77,6 +77,7 @@ target_sources(rhbm_gem PRIVATE
     # data
     data/detail/AtomClassifier.cpp
     data/detail/JointStageAdapter.cpp
+    data/detail/PostJointLocalValidation.cpp
     data/object/AtomLocalPotentialView.cpp
     data/object/AtomObject.cpp
     data/io/JointAnalysisFileIO.cpp

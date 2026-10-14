@@ -1751,6 +1751,13 @@ TEST(DataObjectModelAnalysisTest, JointUpdatesInvalidateDependentResultsAcrossTh
         rg::PostFitPeelingResult peeling;
         peeling.source = stage.source; peeling.samples = {{1, {}}, {2, {}}};
         editor.SetAtomPostFitPeeling(*atom, peeling);
+        rg::PostJointLocalResult local;
+        local.source = stage.source;
+        local.status = rg::EvidenceStatus::Unavailable;
+        local.reason = "test-local-evidence-unavailable";
+        local.fixed_charge = {stage.point->GetOffset(), stage.point->GetWidth()};
+        local.sample_count = 2;
+        editor.SetAtomPostJointLocalResult(*atom, local);
     }
     for (const auto key : model->GetAnalysisView().CollectAtomGroupKeys())
     {
@@ -1770,6 +1777,7 @@ TEST(DataObjectModelAnalysisTest, JointUpdatesInvalidateDependentResultsAcrossTh
     std::reverse(raw.begin(), raw.end());
     editor.SetAtomLocalRawSamplingEntries(*atom, raw);
     EXPECT_FALSE(view.GetPostFitPeeling());
+    EXPECT_FALSE(view.GetPostJointLocalResult());
     EXPECT_TRUE(view.GetPeelingSamplingEntries().empty());
     EXPECT_EQ(view.GetFinalModel(rg::FittingStage::Second).ToVector(), point);
     stage.point = stage.point->WithAmplitude(3);
@@ -1778,6 +1786,7 @@ TEST(DataObjectModelAnalysisTest, JointUpdatesInvalidateDependentResultsAcrossTh
     {
         const auto other = rg::AtomLocalPotentialView::For(*member);
         EXPECT_FALSE(other.GetPostFitPeeling());
+        EXPECT_FALSE(other.GetPostJointLocalResult());
         EXPECT_FALSE(other.GetGroupMemberResult());
         EXPECT_FALSE(other.GetStageEstimate(rg::FittingStage::Second).uncertainty.covariance);
     }
@@ -1800,18 +1809,27 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     joint.convergence = rg::JointCheckStatus::Passed;
     editor.SetAtomStageEstimate(rg::FittingStage::Second, atom, joint);
     editor.SetJointResult(rg::JointAnalysisResult{});
-    editor.SetAtomLocalRawSamplingEntries(atom, {{2, {.1, {0,0,0}, true}}});
+    const std::vector<rg::LocalPotentialSample> raw{
+        {2, {.1, {0,0,0}, true}}, {3, {.2, {1,0,0}, true}},
+        {4, {.3, {0,1,0}, true}}, {5, {.4, {0,0,1}, true}}};
+    editor.SetAtomLocalRawSamplingEntries(atom, raw);
     rg::PostFitPeelingResult peeling;
     peeling.source = rg::AtomLocalPotentialView::For(atom).GetStageEstimate(rg::FittingStage::Second).source;
-    peeling.samples = {{1.5, {}}};
+    peeling.samples = {{1.5, {}}, {1.4, {}}, {1.3, {}}, {1.2, {}}};
     editor.SetAtomPostFitPeeling(atom, peeling);
 
     rg::PostJointLocalResult local;
     local.source = peeling.source;
     local.status = rg::EvidenceStatus::Available;
     local.reason.clear();
+    local.sample_count = raw.size();
+    local.effective_sample_count = raw.size();
+    local.fit.alpha_r = 0.2;
+    local.fit.ols = {rg::GaussianModel3D{1.7, .55, 0}, {}};
     local.fit.mdpde = {rg::GaussianModel3D{1.8, .6, 0}, {}};
     local.fixed_charge = {-0.1, .5};
+    local.fit.diagnostics = rg::LocalFitDiagnostics{
+        rg::RHBMEstimationStatus::SUCCESS, 0.1, {8, 1e-8, 1e-8}, {}};
     local.information = rg::RHBMInformation{Eigen::Matrix2d::Identity(), Eigen::Vector2d::Ones()};
     editor.SetAtomPostJointLocalResult(atom, local);
 
@@ -1827,6 +1845,7 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     EXPECT_TRUE(model->GetAnalysisView().GetJointResult());
     EXPECT_DOUBLE_EQ(view.GetFinalModel(rg::FittingStage::Second).GetAmplitude(), 2);
 
+    editor.SetAtomLocalRawSamplingEntries(atom, raw);
     editor.SetAtomPostFitPeeling(atom, peeling);
     editor.SetAtomPostJointLocalResult(atom, local);
     auto changed = view.GetStageEstimate(rg::FittingStage::Second);

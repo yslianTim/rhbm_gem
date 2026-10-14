@@ -1,4 +1,5 @@
 #include "GroupPotentialFitting.hpp"
+#include "data/detail/PostJointLocalValidation.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
@@ -20,36 +21,17 @@ bool PositiveDefinite(const Eigen::MatrixXd & matrix)
         std::numeric_limits<double>::epsilon() * static_cast<double>(matrix.rows()) * spectrum.eigenvalues().maxCoeff();
 }
 
-bool SameSource(const EstimateSource & a, const EstimateSource & b)
-{
-    return a.method == b.method && a.atom_id == b.atom_id && a.component_id == b.component_id &&
-        a.run_id == b.run_id && a.role == b.role;
-}
-
 bool HasCurrentPostJointLocal(
-    const AtomLocalPotentialView & local, const LocalStageEstimate & joint)
+    const AtomLocalPotentialView & local, const LocalStageEstimate & joint, int atom_id)
 {
     const auto & result = local.GetPostJointLocalResult();
     if (!result) return false;
-    if (!SameSource(result->source, joint.source))
-        throw std::invalid_argument("Post-Joint local result source mismatch.");
-    if (result->status != EvidenceStatus::Available) return false;
-    if (joint.source.method != EstimateMethod::JointComponents || joint.source.role != FittingRole::Target ||
-        !joint.point || joint.convergence != JointCheckStatus::Passed ||
-        !SameSource(result->source, joint.source) ||
-        result->fixed_charge.coefficient != joint.point->GetOffset() ||
-        result->fixed_charge.width != joint.point->GetWidth())
-        throw std::invalid_argument("Post-Joint local result source mismatch.");
-    const auto & point = result->fit.mdpde.GetModel();
-    if (!std::isfinite(point.GetAmplitude()) || point.GetAmplitude() <= 0.0 ||
-        !std::isfinite(point.GetWidth()) || point.GetWidth() <= 0.0 ||
-        !std::isfinite(result->fit.alpha_r) || result->fit.alpha_r < 0.0 ||
-        !result->fit.diagnostics || result->fit.diagnostics->status != RHBMEstimationStatus::SUCCESS ||
-        !result->information || result->information->precision.rows() != 2 ||
-        result->information->precision.cols() != 2 || result->information->moment.size() != 2 ||
-        !result->information->moment.allFinite() || !PositiveDefinite(result->information->precision))
-        throw std::invalid_argument("Available post-Joint local result is incomplete.");
-    return true;
+    const auto & peeling = local.GetPostFitPeeling();
+    const auto assessment = data_internal::AssessPostJointLocalResult(
+        *result, atom_id, joint,
+        peeling ? &*peeling : nullptr, local.GetRawSamplingEntriesView());
+    if (!assessment.valid) throw std::invalid_argument(assessment.reason);
+    return assessment.group_eligible;
 }
 
 GaussianModel3DWithUncertainty Decode(
@@ -80,7 +62,7 @@ void RunJointGroupPotentialFitting(ModelObject & model, const FitOptions & optio
         {
             const auto local = AtomLocalPotentialView::For(*atom);
             const auto & joint = local.GetStageEstimate(FittingStage::Second);
-            if (HasCurrentPostJointLocal(local, joint))
+            if (HasCurrentPostJointLocal(local, joint, atom->GetSerialID()))
             {
                 if (training_run_id.empty()) training_run_id = joint.source.run_id;
                 else if (training_run_id != joint.source.run_id)
@@ -111,7 +93,7 @@ void RunJointGroupPotentialFitting(ModelObject & model, const FitOptions & optio
             if (summary.source_id.empty()) summary.source_id = joint.source.run_id;
             else if (summary.source_id != joint.source.run_id)
                 throw std::invalid_argument("Post-Joint group fitting mixes Joint runs.");
-            if (!HasCurrentPostJointLocal(local, joint)) continue;
+            if (!HasCurrentPostJointLocal(local, joint, atom->GetSerialID())) continue;
             const auto & post_joint = *local.GetPostJointLocalResult();
             const auto & point = post_joint.fit.mdpde.GetModel();
             const auto encoded = linearization_service::EncodeGaussianToParameterVector(point);

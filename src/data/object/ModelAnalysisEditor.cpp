@@ -2,6 +2,7 @@
 
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/JointStageAdapter.hpp"
+#include "data/detail/PostJointLocalValidation.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
@@ -248,24 +249,13 @@ void ModelAnalysisEditor::ApplyPostJointLocalResultsBatch(
         auto * entry = atom ? data.FindAtomLocalEntry(*atom) : nullptr;
         if (!entry) throw std::invalid_argument("Post-Joint local target has no Joint stage.");
         const auto & joint = entry->StageEstimate(FittingStage::Second);
-        if (joint.source.method != EstimateMethod::JointComponents || joint.source.role != FittingRole::Target ||
-            joint.source.atom_id != std::to_string(id) || joint.source.component_id.empty() || joint.source.run_id.empty() ||
-            !SameSource(value.source, joint.source))
-            throw std::invalid_argument("Post-Joint local result source mismatch.");
         if (run_id.empty()) run_id = joint.source.run_id;
         else if (run_id != joint.source.run_id)
             throw std::invalid_argument("Post-Joint local results mix Joint runs.");
-        if (value.status == EvidenceStatus::Available)
-        {
-            const auto & model = value.fit.mdpde.GetModel();
-            const auto & information = value.information;
-            if (!std::isfinite(model.GetAmplitude()) || model.GetAmplitude() <= 0.0 ||
-                !std::isfinite(model.GetWidth()) || model.GetWidth() <= 0.0 || !information ||
-                information->precision.rows() != 2 || information->precision.cols() != 2 ||
-                information->moment.size() != 2 || !information->precision.allFinite() ||
-                !information->moment.allFinite())
-                throw std::invalid_argument("Available post-Joint local result lacks finite measurement information.");
-        }
+        const auto & peeling = entry->PostFitPeeling();
+        const auto assessment = data_internal::AssessPostJointLocalResult(
+            value, id, joint, peeling ? &*peeling : nullptr, entry->RawSamplingEntries());
+        if (!assessment.valid) throw std::invalid_argument(assessment.reason);
         updates.emplace_back(entry, &value);
     }
     const auto affected_groups = CollectAffectedGroupKeys(data, ids);

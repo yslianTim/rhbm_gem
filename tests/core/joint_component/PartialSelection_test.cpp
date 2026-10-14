@@ -16,6 +16,7 @@
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include "support/CommandTestHelpers.hpp"
 #include "data/detail/JointStageAdapter.hpp"
+#include "data/detail/PostJointLocalValidation.hpp"
 #include "core/detail/StageSummary.hpp"
 #include "core/detail/PostFitPeeling.hpp"
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
@@ -1008,6 +1009,89 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextBuildsGlobal
         metrics.valid_local_sample_count + metrics.invalid_local_sample_count);
 }
 
+TEST(JointComponentPartialSelectionTest, PostJointEvidenceAssessmentEnforcesAvailableContract)
+{
+    using namespace rhbm_gem;
+    LocalStageEstimate joint;
+    joint.source = {EstimateMethod::JointComponents, "1", "component", "validation-run", FittingRole::Target};
+    joint.point = GaussianModel3D{2.0, 0.5, -0.1};
+    joint.convergence = JointCheckStatus::Passed;
+    LocalPotentialSampleList raw(4);
+    for (std::size_t i = 0; i < raw.size(); ++i) raw[i].point.distance = 0.1 + 0.2 * i;
+    PostFitPeelingResult peeling;
+    peeling.source = joint.source;
+    peeling.samples.resize(raw.size());
+    for (auto & sample : peeling.samples) sample.response = 1.0;
+
+    PostJointLocalResult result;
+    result.source = joint.source;
+    result.status = EvidenceStatus::Available;
+    result.reason.clear();
+    result.fixed_charge = {joint.point->GetOffset(), joint.point->GetWidth()};
+    result.sample_count = raw.size();
+    result.effective_sample_count = 3;
+    result.fit.alpha_r = 0.2;
+    result.fit.ols = {GaussianModel3D{2.1, 0.47, 0.0}, {}};
+    result.fit.mdpde = {GaussianModel3D{2.0, 0.48, 0.0}, {}};
+    result.fit.diagnostics = LocalFitDiagnostics{RHBMEstimationStatus::SUCCESS, 0.1, {8, 1e-8, 1e-8}, {}};
+    RHBMInformation information;
+    information.precision = 20.0 * Eigen::Matrix2d::Identity();
+    information.moment = information.precision *
+        linearization_service::EncodeGaussianToParameterVector(result.fit.mdpde.GetModel());
+    result.information = information;
+
+    const auto assess = [&](const PostJointLocalResult & candidate, const LocalStageEstimate & endpoint,
+                            const PostFitPeelingResult * paired) {
+        return data_internal::AssessPostJointLocalResult(candidate, 1, endpoint, paired, raw);
+    };
+    const auto assessCurrent = [&](const PostJointLocalResult & candidate) {
+        return assess(candidate, joint, &peeling);
+    };
+    const auto valid = assessCurrent(result);
+    EXPECT_TRUE(valid.valid) << valid.reason;
+    EXPECT_TRUE(valid.group_eligible);
+
+    auto bad = result;
+    EXPECT_FALSE(assess(bad, joint, nullptr).valid);
+    auto unqualified = joint;
+    unqualified.convergence = JointCheckStatus::NotRun;
+    EXPECT_FALSE(assess(result, unqualified, &peeling).valid);
+    bad = result; bad.source.run_id = "different-run";
+    EXPECT_FALSE(assessCurrent(bad).valid);
+    auto halo = joint; halo.source.role = FittingRole::Halo;
+    EXPECT_FALSE(assess(result, halo, &peeling).valid);
+    bad = result; bad.fit.mdpde = {GaussianModel3D{
+        std::numeric_limits<double>::quiet_NaN(), 0.48, 0.0}, {}};
+    EXPECT_FALSE(assessCurrent(bad).valid);
+    bad = result; bad.fit.alpha_r = -0.1;
+    EXPECT_FALSE(assessCurrent(bad).valid);
+    bad = result; bad.fit.diagnostics->sigma_square = 0.0;
+    EXPECT_FALSE(assessCurrent(bad).valid);
+    bad = result; bad.effective_sample_count = 2;
+    EXPECT_FALSE(assessCurrent(bad).valid);
+    bad = result; bad.fit.diagnostics.reset();
+    EXPECT_FALSE(assessCurrent(bad).valid);
+    bad = result; bad.information->precision = Eigen::Matrix2d::Zero();
+    EXPECT_FALSE(assessCurrent(bad).valid);
+    bad = result; bad.information->moment(0) = std::numeric_limits<double>::infinity();
+    EXPECT_FALSE(assessCurrent(bad).valid);
+    bad = result;
+    bad.sample_failures = {{0, raw[0].point.distance, "invalid"}, {0, raw[0].point.distance, "duplicate"}};
+    EXPECT_FALSE(assessCurrent(bad).valid);
+    bad = result; bad.fixed_charge.width += 0.01;
+    EXPECT_FALSE(assessCurrent(bad).valid);
+    bad = result; bad.reason = "available-with-reason";
+    EXPECT_FALSE(assessCurrent(bad).valid);
+
+    bad = result;
+    bad.status = EvidenceStatus::Unavailable;
+    bad.reason = "insufficient-positive-responses";
+    bad.information.reset();
+    const auto unavailable = assessCurrent(bad);
+    EXPECT_TRUE(unavailable.valid) << unavailable.reason;
+    EXPECT_FALSE(unavailable.group_eligible);
+}
+
 TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInformationAndPreservesJoint)
 {
     using namespace rhbm_gem;
@@ -1136,6 +1220,15 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
     EXPECT_NE(first.GetGroupMemberResult()->fixed_charge->width,
         first.GetGroupMemberResult()->posterior.GetModel().GetWidth());
 
+    const auto before_invalid_batch = rhbm_gem::stage_result_io::Encode(model);
+    auto invalid_batch = local_results;
+    invalid_batch[0].second.fit.mdpde = {GaussianModel3D(9.0, 0.7, 0.0), {}};
+    invalid_batch[1].second.information->precision << -1.0, 0.0, 0.0, 1.0;
+    EXPECT_THROW(editor.ApplyPostJointLocalResultsBatch(std::move(invalid_batch)), std::invalid_argument);
+    EXPECT_EQ(rhbm_gem::stage_result_io::Encode(model), before_invalid_batch);
+    EXPECT_THROW(editor.ApplyPostJointLocalResultsBatch({local_results[0], local_results[0]}), std::invalid_argument);
+    EXPECT_EQ(rhbm_gem::stage_result_io::Encode(model), before_invalid_batch);
+
     {
         auto stale = *first.GetPostJointLocalResult();
         stale.source.run_id = "stale-run";
@@ -1217,6 +1310,19 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
         migrated_v3, boost::json::serialize(version_three), 4, {});
     EXPECT_EQ(rhbm_gem::stage_result_io::Encode(migrated_v3),
         rhbm_gem::stage_result_io::Encode(model));
+
+    auto invalid_v4 = boost::json::parse(rhbm_gem::stage_result_io::Encode(model)).as_object();
+    for (auto & value : invalid_v4.at("atoms").as_array())
+    {
+        auto & atom_record = value.as_object();
+        if (atom_record.at("id").as_int64() != 1) continue;
+        auto & precision = atom_record.at("post_joint_local").as_object()
+            .at("information").as_object().at("precision").as_array();
+        precision[0] = -1.0; precision[1] = 0.0; precision[2] = 0.0; precision[3] = 1.0;
+    }
+    ModelObject invalid_persistence{model};
+    EXPECT_THROW(rhbm_gem::stage_result_io::Decode(
+        invalid_persistence, boost::json::serialize(invalid_v4), 4, {}), std::invalid_argument);
 
     editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1), {{-12345, {0.3, {0,0,0}, true}}});
     EXPECT_FALSE(first.GetPostFitPeeling());
