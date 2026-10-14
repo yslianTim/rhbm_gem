@@ -461,6 +461,41 @@ TEST(JointObservableProfileTest, FullAbcPersistenceExportPeelingAndInitializatio
     EXPECT_EQ(initialization.atoms.size(),1u);
 }
 
+TEST(JointObservableProfileTest, PostJointLocalSamplesSubtractGridInterpolatedOwnChargeOnce)
+{
+    using namespace rhbm_gem;
+    auto input = Input(); input.atom_ids.resize(1); input.support.resize(1); input.observations[23] -= .7;
+    const core::JointProblem problem(std::move(input));
+    const auto result = core::CaptureJointAnalysisResult(core::FitJointComponents(problem, {.6}));
+    std::vector<std::unique_ptr<AtomObject>> atoms;
+    auto atom = std::make_unique<AtomObject>(); atom->SetSerialID(1); atom->SetElement(Element::CARBON);
+    atom->SetPosition(0, 0, 0); atoms.push_back(std::move(atom));
+    ModelObject model(std::move(atoms)); model.SelectAtoms([](const auto &) { return true; });
+    auto values = std::make_unique<double[]>(24 * 4 * 4);
+    for (std::size_t row = 0; row < 24; ++row) values[row] = problem.Input().observations[row];
+    MapObject map({24, 4, 4}, {1, 1, 1}, {0, 0, 0}, std::move(values));
+    auto editor = model.EditAnalysis(); editor.ApplyJointResult(result, "charge-correction-test");
+    const SamplingPointList points{{23, {23, 0, 0}, true}};
+    const auto raw = core::detail::BuildLocalPotentialSampleList(map, points);
+    editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1), raw);
+    const auto peeling = core::detail::BuildPostFitPeelingSamples(map, model, problem, std::nullopt, &result).at(1);
+    const auto samples = core::detail::BuildPostJointLocalSamples(map, model, problem, 1, peeling, result);
+    ASSERT_EQ(samples.samples.size(), 1u);
+    const auto & sample = samples.samples.front();
+    EXPECT_EQ(sample.raw_sample_index, 0u);
+    EXPECT_DOUBLE_EQ(sample.distance, 23);
+    ASSERT_TRUE(sample.peeled_response);
+    ASSERT_TRUE(sample.fixed_charge_response);
+    ASSERT_TRUE(sample.gaussian_response);
+    const auto point = AtomLocalPotentialView::For(*model.FindAtomPtr(1)).GetFinalModel(FittingStage::Second);
+    const auto own = n::EvaluateKernel(problem.Input().support[0].back().squared_distance, point.GetWidth(), 2.5);
+    EXPECT_NEAR(*sample.fixed_charge_response, point.GetOffset() * own.charge, 1e-12);
+    EXPECT_DOUBLE_EQ(*sample.gaussian_response, *sample.peeled_response - *sample.fixed_charge_response);
+    const auto fitting_samples = samples.BuildGaussianSamples(raw);
+    ASSERT_EQ(fitting_samples.size(), 1u);
+    EXPECT_DOUBLE_EQ(fitting_samples.front().response, *sample.gaussian_response);
+}
+
 namespace {
 core::JointProblemInput TwoRowHalo(bool selected=false,bool noise=false)
 {
