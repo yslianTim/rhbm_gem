@@ -25,6 +25,17 @@ struct FixedNeighborProfileTrial
     double eta_change_inf{},gradient_inf_norm{};
     double profile_seconds{},factor_seconds{},cumulative_factor_seconds{};
 };
+struct FixedNeighborBlockFailureDiagnostics
+{
+    std::size_t component_index{},sweep_index{},block_index{},core_atom_count{},affected_row_count{},halo_count{},
+        minimum_halo_support_rows{},rank_deficient_halo_count{};
+    std::vector<std::string> core_atom_ids;
+    bool initial_profile_valid{},initial_profile_trusted{};
+    std::string component_id,initial_profile_reason,local_search_stop_reason;
+    Eigen::Index local_design_rows{},local_design_columns{};
+    std::optional<Eigen::Index> local_design_rank;
+    std::optional<double> replay_prediction_discrepancy,replay_gradient_discrepancy,replay_kkt_discrepancy;
+};
 struct FixedNeighborBlockRecord
 {
     std::size_t sweep{},block{},affected_rows{};
@@ -35,6 +46,7 @@ struct FixedNeighborBlockRecord
     double search_seconds{},block_seconds{},profile_factor_seconds{};
     int profile_evaluations{},accepted_updates{};
     std::vector<FixedNeighborProfileTrial> profile_trials;
+    std::optional<FixedNeighborBlockFailureDiagnostics> failure_diagnostics;
     bool accepted{};
     std::string status,reason,local_search_stop_reason;
 };
@@ -124,6 +136,9 @@ struct FixedNeighborPolicy
     bool certify_endpoint{true}; // Diagnostic facade only; production components always certify.
     bool collect_telemetry{};
     bool collect_diagnostics{};
+    std::size_t component_index{};
+    std::string component_id;
+    std::function<void(std::size_t &,std::size_t &,std::size_t &)> halo_census;
     std::function<void()> preparation_observer;
     FixedNeighborDiagnosticSink * diagnostic_sink{};
     std::function<void(const FixedNeighborBlockSweep &)> production_progress;

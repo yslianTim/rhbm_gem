@@ -2,11 +2,13 @@
 #include "Problem.hpp"
 #include "ResourceWork.hpp"
 #include "StructuralPartition.hpp"
+#include <rhbm_gem/utils/domain/Logger.hpp>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <limits>
 #include <numeric>
+#include <sstream>
 
 namespace rhbm_gem::core::joint_component {
 double BlockObjectiveReplayEnclosure(double reference)
@@ -128,6 +130,60 @@ Sparse Design(const Domain & domain,VectorRef eta)
 }
 double PredictionDifference(VectorRef a,VectorRef b)
 {return (a-b).lpNorm<Eigen::Infinity>();}
+FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolicy & policy,
+    const FixedNeighborBlockRecord & block,std::size_t sweep_index,const Indices & core_atoms,
+    const EvaluationContext & context,const Domain & domain,const Vector & eta,const SearchResult & profile)
+{
+    FixedNeighborBlockFailureDiagnostics out;
+    out.component_index=policy.component_index; out.component_id=policy.component_id;
+    out.sweep_index=sweep_index+1; out.block_index=block.block;
+    out.core_atom_count=core_atoms.size(); out.affected_row_count=block.affected_rows;
+    out.local_design_rows=domain.rows; out.local_design_columns=2*eta.size();
+    out.local_search_stop_reason=profile.stop_reason;
+    out.initial_profile_valid=profile.initial.valid;
+    out.initial_profile_reason=profile.initial.reason;
+    out.initial_profile_trusted=profile.initial_accepted;
+    if(!profile.trials.empty() && profile.trials.front().endpoint.certificate.free_rank)
+        out.local_design_rank=*profile.trials.front().endpoint.certificate.free_rank;
+    for(const auto atom:core_atoms)
+        if(atom>=0 && static_cast<std::size_t>(atom)<context.atom_ids.size())
+            out.core_atom_ids.push_back(context.atom_ids.at(static_cast<std::size_t>(atom)));
+    if(policy.halo_census)
+        policy.halo_census(out.halo_count,out.minimum_halo_support_rows,out.rank_deficient_halo_count);
+    for(auto trial=profile.trials.rbegin();trial!=profile.trials.rend();++trial)
+        if(trial->trust && !trial->trust->passed)
+        {
+            out.replay_prediction_discrepancy=trial->trust->prediction_difference;
+            out.replay_gradient_discrepancy=trial->trust->gradient_difference;
+            out.replay_kkt_discrepancy=trial->trust->kkt_difference;
+            break;
+        }
+    return out;
+}
+std::string FormatFailureDiagnostics(const FixedNeighborBlockFailureDiagnostics & d)
+{
+    std::ostringstream out;
+    out<<"[Joint] block-search-failed"
+       <<" component_index="<<d.component_index<<" component_id="<<d.component_id
+       <<" sweep_index="<<d.sweep_index<<" block_index="<<d.block_index
+       <<" core_atom_ids=[";
+    for(std::size_t i=0;i<d.core_atom_ids.size();++i) out<<(i ? "," : "")<<d.core_atom_ids[i];
+    out<<"] core_atom_count="<<d.core_atom_count<<" affected_row_count="<<d.affected_row_count
+       <<" halo_count="<<d.halo_count<<" minimum_halo_support_rows="<<d.minimum_halo_support_rows
+       <<" rank_deficient_halo_count="<<d.rank_deficient_halo_count
+       <<" initial_profile_valid="<<(d.initial_profile_valid ? "true" : "false")
+       <<" initial_profile_reason="<<d.initial_profile_reason
+       <<" initial_profile_trusted="<<(d.initial_profile_trusted ? "true" : "false")
+       <<" local_design_rows="<<d.local_design_rows<<" local_design_columns="<<d.local_design_columns
+       <<" local_design_rank=";
+    if(d.local_design_rank) out<<*d.local_design_rank; else out<<"unavailable";
+    out<<" local_search_stop_reason="<<d.local_search_stop_reason;
+    if(d.replay_prediction_discrepancy)
+        out<<" replay_prediction_discrepancy="<<*d.replay_prediction_discrepancy
+           <<" replay_gradient_discrepancy="<<*d.replay_gradient_discrepancy
+           <<" replay_kkt_discrepancy="<<*d.replay_kkt_discrepancy;
+    return out.str();
+}
 double ScaledCoefficientDifference(VectorRef lhs,VectorRef rhs)
 {
     if(lhs.size()!=rhs.size() || lhs.size()==0) return std::numeric_limits<double>::infinity();
@@ -509,6 +565,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 if(it->accepted && it->endpoint.valid && it->trust && it->trust->passed) {accepted=&*it; break;}
             if(!accepted)
             {
+                record.failure_diagnostics=FailureDiagnostics(policy,record,sweep_index,core_atoms,
+                    local_context,local_domain,old_eta,profile_search);
+                Logger::Log(LogLevel::Warning,FormatFailureDiagnostics(*record.failure_diagnostics));
                 record.status="failed"; record.reason="block-search-failed"; out.reason=record.reason;
                 finish_record(std::move(record),block_started); stop=true; break;
             }
@@ -851,6 +910,9 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     policy.core_atoms=production_policy.core_atoms;
     policy.maximum_sweeps=production_policy.maximum_sweeps;
     policy.order=production_policy.order;
+    policy.component_index=production_policy.component_index;
+    policy.component_id=production_policy.component_id;
+    policy.halo_census=production_policy.halo_census;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(production_policy.configure_search_for_testing) production_policy.configure_search_for_testing(policy);
 #endif

@@ -251,6 +251,51 @@ TEST(JointFixedNeighborBlockCoordinateTest, LocalTrajectoryTelemetryIsOptInAndDo
     EXPECT_DOUBLE_EQ(captured.state.objective,quiet.state.objective);
 }
 
+TEST(JointFixedNeighborBlockCoordinateTest, RankFailureReportsLocalDesignAndHaloDiagnostics)
+{
+    rhbm_gem::core::JointProblemInput input;
+    input.atom_ids={"target","weak-halo"}; input.row_ids={"r0","r1"};
+    input.observations={1.0,2.0}; input.support.resize(2);
+    input.support[0]={{0,.1},{1,.2}}; input.support[1]={{0,.8},{1,.8}};
+    input.selection_domain.emplace(); input.selection_domain->target_indices={0};
+    JointProblem problem(std::move(input));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const auto eta=n::Vector::Constant(2,std::log(.6));
+    const auto context=n::ProfileContext(data.context,data.layout,data.y.size());
+    n::FixedNeighborPolicy policy; policy.maximum_sweeps=1; policy.collect_diagnostics=true;
+    policy.component_index=4; policy.component_id="weak-component";
+    policy.halo_census=[](std::size_t & count,std::size_t & minimum,std::size_t & deficient) {
+        count=1; minimum=2; deficient=1;
+    };
+    const auto diagnostic=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,context,policy);
+    auto quiet_policy=policy; quiet_policy.collect_diagnostics=false;
+    const auto quiet=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,context,quiet_policy);
+
+    EXPECT_EQ(diagnostic.reason,"block-search-failed");
+    EXPECT_EQ(quiet.reason,diagnostic.reason);
+    EXPECT_TRUE((quiet.state.eta.array()==diagnostic.state.eta.array()).all());
+    EXPECT_TRUE((quiet.state.beta.array()==diagnostic.state.beta.array()).all());
+    ASSERT_FALSE(diagnostic.blocks.empty());
+    ASSERT_TRUE(diagnostic.blocks.front().failure_diagnostics);
+    const auto & failure=*diagnostic.blocks.front().failure_diagnostics;
+    EXPECT_EQ(failure.component_index,4u);
+    EXPECT_EQ(failure.component_id,"weak-component");
+    EXPECT_EQ(failure.sweep_index,1u);
+    EXPECT_EQ(failure.core_atom_ids,(std::vector<std::string>{"target","weak-halo"}));
+    EXPECT_EQ(failure.core_atom_count,2u);
+    EXPECT_EQ(failure.affected_row_count,2u);
+    EXPECT_EQ(failure.halo_count,1u);
+    EXPECT_EQ(failure.minimum_halo_support_rows,2u);
+    EXPECT_EQ(failure.rank_deficient_halo_count,1u);
+    EXPECT_FALSE(failure.initial_profile_valid);
+    EXPECT_FALSE(failure.initial_profile_trusted);
+    EXPECT_EQ(failure.local_design_rows,2);
+    EXPECT_EQ(failure.local_design_columns,4);
+    ASSERT_TRUE(failure.local_design_rank);
+    EXPECT_LT(*failure.local_design_rank,failure.local_design_columns);
+    EXPECT_EQ(failure.local_search_stop_reason,"inner-rank-deficient");
+}
+
 TEST(JointFixedNeighborBlockCoordinateTest, PreparedRowMappingsScaleWithMembershipsRatherThanRowsTimesBlocks)
 {
     constexpr int atoms=192;

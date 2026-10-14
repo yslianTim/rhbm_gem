@@ -29,6 +29,16 @@ layout, including component layouts.
 Lambda has the same fitted-map units as the observations; multiply it by the
 saved normalization divisor when converting back to input-map units.
 
+`DiagnoseHaloSupport()` provides a diagnostic census without changing the
+layout or solver route. It reports original and profiled support counts,
+distinct squared distances, nonzero Gaussian/charge column norms, the A/C
+structural rank upper bound, fixed-width numerical rank and column-normalized
+condition indicator, singleton status, exact common-response status, and
+whether the observation count is below the three dimensions required for a
+full A/C/B Jacobian. These facts remain separate: two rows do not imply a
+rank-deficient fixed-width A/C design, while fewer than three rows cannot
+support a full three-parameter Jacobian.
+
 For nuisance rows U, the internal solve omits their memberships and uses
 `lambda[r] = y[r] - f[r]`. The objective on remaining rows is exactly the
 profile objective. The immutable input and squared distances are unchanged.

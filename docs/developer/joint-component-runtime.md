@@ -168,6 +168,11 @@ Detailed block records, local trial trajectories, reverse order and local
 certification remain opt-in experiment/test diagnostics. The preparation and
 mapping counters are reported as implementation attribution; they are not
 convergence criteria.
+When a block cannot establish a trusted update, production emits one warning
+with component/sweep/block identity, core atom IDs, affected rows, the halo
+support/rank summary, initial profile status, local design dimensions/rank, and
+the local stop reason. A rejected trust replay also includes its prediction,
+gradient and KKT discrepancies. Successful blocks do not emit this detail.
 
 The whole-problem `RunFixedNeighborDiagnostic()` facade is compiled into test
 support and called only by component tests and the fixed-neighbor experiment.

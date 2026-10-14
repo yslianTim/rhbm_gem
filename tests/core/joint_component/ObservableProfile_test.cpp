@@ -109,6 +109,81 @@ TEST(JointObservableProfileTest, FixedLayoutAndSharedRows)
     auto separate=Input(); separate.support[2][0].row=22;
     EXPECT_EQ(core::JointProblem(separate).ParameterLayout().groups.size(),2);
 }
+TEST(JointObservableProfileTest, HaloSupportCensusSeparatesSupportDistanceAndRankEvidence)
+{
+    core::JointProblemInput input;
+    input.atom_ids={"target","singleton","equal-two","distinct-two","equal-three"};
+    input.row_ids={"r0","r1","r2","r3","r4"}; input.observations.assign(5,0.0);
+    input.support.resize(5);
+    input.support[0]={{0,.1},{1,.2},{2,.3},{3,.4},{4,.5}};
+    input.support[1]={{4,.6}};
+    input.support[2]={{1,.7},{2,.7}};
+    input.support[3]={{0,.2},{1,1.2}};
+    input.support[4]={{2,.9},{3,.9},{4,.9}};
+    input.selection_domain.emplace(); input.selection_domain->target_indices={0};
+
+    const auto layout=n::BuildParameterLayout(input);
+    const auto census=n::DiagnoseHaloSupport(input,layout,{.6,.6,.6,.6,.6});
+    ASSERT_EQ(census.size(),4u);
+    EXPECT_EQ(census[0].selection_role,"halo");
+    EXPECT_EQ(census[0].atom_id,"singleton");
+    EXPECT_TRUE(census[0].singleton);
+    EXPECT_EQ(census[0].original_observation_support_count,1u);
+    EXPECT_EQ(census[0].profiled_observation_support_count,0u);
+    EXPECT_EQ(census[0].distinct_squared_distance_count,1u);
+    EXPECT_TRUE(census[0].exact_common_response);
+    EXPECT_TRUE(census[0].insufficient_full_abc_dimension);
+    ASSERT_TRUE(census[0].fixed_width_ac_numerical_rank);
+    EXPECT_EQ(*census[0].fixed_width_ac_numerical_rank,1u);
+
+    EXPECT_EQ(census[1].original_observation_support_count,2u);
+    EXPECT_EQ(census[1].distinct_squared_distance_count,1u);
+    EXPECT_TRUE(census[1].exact_common_response);
+    EXPECT_TRUE(census[1].insufficient_full_abc_dimension);
+    ASSERT_TRUE(census[1].fixed_width_ac_numerical_rank);
+    EXPECT_EQ(*census[1].fixed_width_ac_numerical_rank,1u);
+
+    EXPECT_EQ(census[2].original_observation_support_count,2u);
+    EXPECT_EQ(census[2].distinct_squared_distance_count,2u);
+    EXPECT_FALSE(census[2].exact_common_response);
+    ASSERT_TRUE(census[2].fixed_width_ac_numerical_rank);
+    EXPECT_EQ(*census[2].fixed_width_ac_numerical_rank,2u);
+    EXPECT_TRUE(census[2].gaussian_column_nonzero_norm.value_or(false));
+    EXPECT_TRUE(census[2].charge_column_nonzero_norm.value_or(false));
+
+    EXPECT_EQ(census[3].original_observation_support_count,3u);
+    EXPECT_EQ(census[3].distinct_squared_distance_count,1u);
+    EXPECT_FALSE(census[3].insufficient_full_abc_dimension);
+    ASSERT_TRUE(census[3].fixed_width_ac_numerical_rank);
+    EXPECT_EQ(*census[3].fixed_width_ac_numerical_rank,1u);
+}
+TEST(JointObservableProfileTest, IndividuallyFullRankHalosCanHaveDeficientJointDesign)
+{
+    core::JointProblemInput input;
+    input.atom_ids={"target","halo-a","halo-b"}; input.observations.assign(3,0.0);
+    input.row_ids={"r0","r1","r2"}; input.support.resize(3);
+    input.support[0]={{0,.1}};
+    input.support[1]={{0,.2},{1,.7},{2,1.3}};
+    input.support[2]=input.support[1];
+    input.selection_domain.emplace(); input.selection_domain->target_indices={0};
+    const auto layout=n::BuildParameterLayout(input);
+    const auto census=n::DiagnoseHaloSupport(input,layout,{.6,.6,.6});
+    ASSERT_EQ(census.size(),2u);
+    ASSERT_TRUE(census[0].fixed_width_ac_numerical_rank);
+    ASSERT_TRUE(census[1].fixed_width_ac_numerical_rank);
+    EXPECT_EQ(*census[0].fixed_width_ac_numerical_rank,2u);
+    EXPECT_EQ(*census[1].fixed_width_ac_numerical_rank,2u);
+
+    n::Matrix joint_design(3,4);
+    for(Eigen::Index row=0;row<3;++row)
+    {
+        const auto basis=n::EvaluateKernel(input.support[1][static_cast<std::size_t>(row)].squared_distance,.6,2.5);
+        joint_design.row(row)<<basis.gaussian,basis.charge,basis.gaussian,basis.charge;
+    }
+    const auto spectrum=n::ComputeSpectrum(joint_design,{3,4,0},4,true);
+    ASSERT_TRUE(spectrum.available);
+    EXPECT_EQ(spectrum.rank,2);
+}
 TEST(JointObservableProfileTest, ExplicitNuisanceAndNonzeroResidualDerivative)
 {
     const core::JointProblem problem(Input(true)); const auto & data=core::JointProblemAccess::Get(problem);
