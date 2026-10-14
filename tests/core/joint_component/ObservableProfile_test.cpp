@@ -7,7 +7,6 @@
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/FittingWorkset.hpp"
-#include "core/detail/JointUncertainty.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include "data/io/detail/JointResultJson.hpp"
 #include <algorithm>
@@ -363,48 +362,6 @@ TEST(JointObservableProfileTest, FrozenMedianDonorsAndOriginalFailures)
     rhbm_gem::JointInitialization empty; empty.b={missing_width}; empty.atoms.resize(1); empty.atoms[0].reason="invalid-width";
     core::detail::ApplyJointSeedFallback(empty); EXPECT_FALSE(empty.valid); EXPECT_TRUE(std::isnan(empty.b[0]));
 }
-TEST(JointObservableProfileTest, ProfileCovarianceMatchesAugmentedJacobian)
-{
-    auto input=Input(true); input.atom_ids.resize(1); input.support.resize(1); input.observations[23]-=.7;
-    const core::JointProblem problem(std::move(input)); const auto fit=core::FitJointComponents(problem,{.65});
-    ASSERT_TRUE(fit.assembled_state); ASSERT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
-    const auto & data=core::JointProblemAccess::Get(problem);
-    const auto covariance_domain=data.domain;
-    const auto covariance_memory=n::TargetCovarianceMemoryEstimate(covariance_domain);
-    EXPECT_EQ(covariance_memory.stage,n::MemoryStage::TargetCovariance);
-    EXPECT_EQ(covariance_memory.status,n::MemoryStatus::Pass);
-    EXPECT_EQ(covariance_memory.shape.component_covariance_columns,3u);
-    const auto result=core::CaptureJointAnalysisResult(fit);
-    const auto uncertainties=core::detail::ComputeJointUncertainty(problem,result);
-    const auto & uncertainty=uncertainties.at(1); ASSERT_TRUE(uncertainty.covariance) << uncertainty.reason;
-    EXPECT_EQ(uncertainty.degrees_of_freedom,21);
-    const auto & state=*fit.assembled_state; n::Matrix jacobian=n::Matrix::Zero(24,3);
-    for(std::size_t r=0;r<24;++r)
-    {
-        const auto basis=n::EvaluateKernel(problem.Input().support[0][r].squared_distance,state.b[0],2.5);
-        jacobian(static_cast<Eigen::Index>(r),0)=basis.gaussian; jacobian(static_cast<Eigen::Index>(r),1)=basis.charge;
-        jacobian(static_cast<Eigen::Index>(r),2)=state.ac[0]*basis.gaussian_log_width+state.ac[1]*basis.charge_log_width;
-    }
-    const Eigen::JacobiSVD<n::Matrix> svd(jacobian,Eigen::ComputeThinV);
-    const n::Matrix factor=svd.matrixV()*svd.singularValues().cwiseInverse().asDiagonal();
-    const n::Matrix covariance=*uncertainty.residual_variance*factor*factor.transpose();
-    EXPECT_LT(((*uncertainty.covariance-covariance.topLeftCorner<3,3>()).norm()/covariance.topLeftCorner<3,3>().norm()),1e-10);
-    auto unavailable_covariance=uncertainty;
-    unavailable_covariance.status=rhbm_gem::EvidenceStatus::Unavailable;
-    unavailable_covariance.covariance.reset(); unavailable_covariance.reason="resource-limit:target-covariance";
-    rhbm_gem::LocalStageEstimate stage; stage.source.role=rhbm_gem::FittingRole::Target;
-    stage.point=rhbm_gem::GaussianModel3D{state.ac[0],state.b[0],state.ac[1]};
-    stage.uncertainty=unavailable_covariance;
-    const auto group_evidence=core::detail::BuildJointParameterEvidence(stage);
-    EXPECT_TRUE(group_evidence.estimate);
-    EXPECT_EQ(group_evidence.status,rhbm_gem::EvidenceStatus::Unavailable);
-    EXPECT_EQ(group_evidence.reason,"resource-limit:target-covariance");
-    // A saved convergence flag cannot bypass the regular interior covariance gate.
-    auto boundary=result; boundary.components[0].state->ac[0]=0;
-    const auto unavailable=core::detail::ComputeJointUncertainty(problem,boundary);
-    EXPECT_FALSE(unavailable.at(1).covariance);
-    EXPECT_EQ(unavailable.at(1).reason,"active-amplitude-boundary");
-}
 TEST(JointObservableProfileTest, LegacyV3DoesNotInferReductionAndMalformedLayoutRejected)
 {
     auto input=Input(); input.atom_ids.resize(1); input.support.resize(1); input.observations[23]-=.7;
@@ -583,7 +540,7 @@ TEST(JointObservableProfileTest, TwoRowGeometryDoesNotPromoteAnUnqualifiedTarget
     EXPECT_EQ(evidence.atoms[3].status,rhbm_gem::JointCheckStatus::Unavailable);
     EXPECT_EQ(evidence.atoms[3].status,rhbm_gem::JointCheckStatus::Unavailable);
 }
-TEST(JointObservableProfileTest, UnqualifiedHaloRepresentativesDoNotProduceTargetCovariance)
+TEST(JointObservableProfileTest, UnqualifiedHaloRepresentativesDoNotBecomePublicEndpoints)
 {
     const core::JointProblem problem(TwoRowHalo(false,true));
     const auto first=core::FitJointComponents(problem,{.6,.7,.8,.65});
@@ -602,9 +559,6 @@ TEST(JointObservableProfileTest, UnqualifiedHaloRepresentativesDoNotProduceTarge
     EXPECT_NEAR(a.candidate_ac[0],b.candidate_ac[0],1e-10);
     EXPECT_NEAR(a.candidate_ac[1],b.candidate_ac[1],1e-10);
     EXPECT_NEAR(std::exp(a.candidate_eta[0]),std::exp(b.candidate_eta[0]),1e-10);
-    const auto ca=core::detail::ComputeJointUncertainty(problem,core::CaptureJointAnalysisResult(first));
-    const auto cb=core::detail::ComputeJointUncertainty(problem,core::CaptureJointAnalysisResult(second));
-    EXPECT_FALSE(ca.at(1).covariance); EXPECT_FALSE(cb.at(1).covariance);
 }
 TEST(JointObservableProfileTest, ActiveBoundaryDoesNotAcquireTargetCertificate)
 {
@@ -616,11 +570,6 @@ TEST(JointObservableProfileTest, ActiveBoundaryDoesNotAcquireTargetCertificate)
     const auto evidence=n::AssessTargetState(problem,problem.ParameterLayout(),state,fit.evidence,fit.ranks,
         rhbm_gem::JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
     EXPECT_EQ(n::TargetConvergence(evidence,true),rhbm_gem::JointCheckStatus::Unavailable);
-    auto saved=core::CaptureJointAnalysisResult(fit);
-    saved.components[0].state->ac[0]=0;
-    const auto uncertainty=core::detail::ComputeJointUncertainty(problem,saved);
-    EXPECT_FALSE(uncertainty.at(1).covariance);
-    EXPECT_EQ(uncertainty.at(1).reason,"active-amplitude-boundary");
 }
 TEST(JointObservableProfileTest, TargetContractKeepsCorrectionRequiredOnlyForHistoricalEvidence)
 {
@@ -759,10 +708,6 @@ TEST(JointObservableProfileTest, TargetGeometryNumericalOracleCapturesOldContrac
     const auto old_nullspace=old_geometry.right_vectors.rightCols(old_geometry.right_vectors.cols()-old_geometry.rank);
     EXPECT_LE(old_nullspace.topRows(3).norm(),1e-10);
     EXPECT_EQ(component.TargetRuntimeConvergence(),Status::Passed);
-    const auto uncertainty=core::detail::ComputeJointUncertainty(problem,core::CaptureJointAnalysisResult(fit));
-    EXPECT_EQ(uncertainty.at(1).status,rhbm_gem::EvidenceStatus::Available);
-    EXPECT_TRUE(uncertainty.at(1).covariance);
-
     auto boundary=*component.state;
     boundary.ac[0]=0;
     const auto boundary_geometry=OriginalGeometryOracle(domain,y,boundary,context);
@@ -951,10 +896,6 @@ TEST(JointObservableProfileTest, LargeDerivedTargetEvidenceHasLinearMemoryAndNoG
     EXPECT_EQ(memory.shape.component_target_atoms,atoms);
     EXPECT_LT(memory.estimated_peak_bytes,50'000'000u);
     EXPECT_EQ(memory.dense_factor_bytes,0u);
-    const auto covariance_memory=n::TargetCovarianceMemoryEstimate(data.domain);
-    EXPECT_EQ(covariance_memory.stage,n::MemoryStage::TargetCovariance);
-    EXPECT_EQ(covariance_memory.status,n::MemoryStatus::Reject);
-    EXPECT_GT(covariance_memory.estimated_peak_bytes,covariance_memory.budget_bytes);
     n::AssessmentWorkForTesting()={};
     const auto evidence=n::AssessTargetState(problem,problem.ParameterLayout(),state,{},{},
         rhbm_gem::JointEvidenceScope::AssembledGlobal,data.input->observations.size());
@@ -1068,8 +1009,6 @@ TEST(JointObservableProfileTest, TargetEvidenceUsesEveryComponentAndTheSavedStat
         EXPECT_EQ(fit.target_evidence->atoms[k].null_space_leakage,fresh_target.atoms[k].null_space_leakage);
     }
     const auto saved=core::CaptureJointAnalysisResult(fit);
-    const auto covariance=core::detail::ComputeJointUncertainty(problem,saved);
-    EXPECT_TRUE(covariance.at(1).covariance); EXPECT_TRUE(covariance.at(2).covariance);
     auto json=boost::json::parse(rhbm_gem::joint_result_io::Encode(saved));
     EXPECT_EQ(json.at("schema_version").as_int64(),11);
     json.at("target_evidence").as_object()["column_scales"]=boost::json::array{1.};

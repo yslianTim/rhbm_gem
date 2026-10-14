@@ -1,6 +1,7 @@
 #include "support/JointPartialSelection.hpp"
 #include "core/detail/PostFitPeeling.hpp"
-#include "core/detail/JointUncertainty.hpp"
+#include "core/detail/LocalConditionalCovariance.hpp"
+#include "core/detail/joint_component/ResourceWork.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/MapSampler.hpp>
@@ -9,15 +10,43 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <boost/json.hpp>
+#include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <iostream>
 #include <sys/resource.h>
+#include <thread>
 namespace {
 namespace rg = rhbm_gem;
 namespace c = rg::core;
+namespace n = c::joint_component;
 namespace j = boost::json;
 using Clock = std::chrono::steady_clock;
 double Seconds(Clock::time_point t) { return std::chrono::duration<double>(Clock::now()-t).count(); }
+class RssMonitor
+{
+    std::atomic<bool> m_running{true};
+    std::atomic<std::size_t> m_peak{};
+    std::thread m_thread;
+    void Observe()
+    {
+        const auto rss=n::CurrentRssBytes();
+        if(!rss) return;
+        auto peak=m_peak.load();
+        while(peak<*rss && !m_peak.compare_exchange_weak(peak,*rss)) {}
+    }
+public:
+    RssMonitor():m_thread([this] {
+        while(m_running.load())
+        {
+            Observe();
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        Observe();
+    }) { Observe(); }
+    ~RssMonitor() { m_running=false; m_thread.join(); }
+    std::size_t Peak() { Observe(); return m_peak.load(); }
+};
 joint_partial_test::Fixture Make(const std::string & name)
 {
     joint_partial_test::Fixture f;
@@ -75,19 +104,38 @@ int main(int argc,char ** argv)
                 editor.SetAtomLocalRawSamplingEntries(*atom,c::SampleAtomMapValues(*f.map,*atom,SphereSamplingMethod::FibonacciDeterministic));
             rg::data_internal::ApplyJointStageEstimates(*f.model,snapshot,"benchmark");
             const auto peeling_start=Clock::now();
+            RssMonitor peeling_rss;
             for(auto & [id, p]:c::detail::BuildPostFitPeelingSamples(*f.map,*f.model,problem)) editor.SetAtomPostFitPeeling(*f.model->FindAtomPtr(id),std::move(p));
             phases["peeling_seconds"]=Seconds(peeling_start);
-            const auto uncertainty_start=Clock::now();
-            for(auto & [id,u]:c::detail::ComputeJointUncertainty(problem,snapshot))
+            phases["post_fit_peeling_peak_rss_bytes"]=peeling_rss.Peak();
+            const auto covariance_start=Clock::now();
+            RssMonitor covariance_rss;
+            std::size_t local_workspace_estimate_bytes=0;
+            for(const auto * selected:f.model->GetSelectedAtoms())
             {
-                auto & atom=*f.model->FindAtomPtr(id); auto stage=rg::AtomLocalPotentialView::For(atom).GetStageEstimate(rg::FittingStage::Second);
-                stage.uncertainty=std::move(u); editor.SetAtomStageEstimate(rg::FittingStage::Second,atom,stage);
-                editor.SetAtomGroupEvidence(atom,c::detail::BuildJointParameterEvidence(stage));
+                const auto local=rg::AtomLocalPotentialView::For(*selected);
+                const auto & stage=local.GetStageEstimate(rg::FittingStage::Second);
+                const auto & peeling=local.GetPostFitPeeling();
+                const auto raw=local.GetRawSamplingEntries(false);
+                c::detail::LocalConditionalCovariance covariance;
+                if(peeling)
+                {
+                    covariance=c::detail::ComputeLocalConditionalCovariance(stage,raw,*peeling,local.HasSampleGeometry());
+                    local_workspace_estimate_bytes=std::max(local_workspace_estimate_bytes,
+                        raw.size()*sizeof(rg::LocalPotentialSample)+covariance.observation_count*5*sizeof(double));
+                }
+                covariance.source=stage.source;
+                editor.SetAtomGroupEvidence(*selected,c::detail::BuildLocalGroupEvidence(
+                    stage,peeling ? &*peeling : nullptr,covariance));
             }
-            phases["uncertainty_seconds"]=Seconds(uncertainty_start);
+            phases["local_covariance_seconds"]=Seconds(covariance_start);
+            phases["local_covariance_peak_rss_bytes"]=covariance_rss.Peak();
+            phases["local_covariance_workspace_estimate_bytes"]=local_workspace_estimate_bytes;
+            phases["per_target_covariance_storage_bytes"]=f.model->GetSelectedAtoms().size()*sizeof(Eigen::Matrix2d);
             editor.SetJointResult(std::move(snapshot));
-            const auto group_start=Clock::now(); c::RunGroupPotentialFitting(*f.model,options);
+            const auto group_start=Clock::now(); RssMonitor group_rss; c::RunGroupPotentialFitting(*f.model,options);
             phases["group_seconds"]=Seconds(group_start);
+            phases["group_fitting_peak_rss_bytes"]=group_rss.Peak();
         }
         else return 2;
         const auto save_start=Clock::now();
@@ -103,10 +151,23 @@ int main(int argc,char ** argv)
         for(const auto * atom:f.model->GetSelectedAtoms())
         {
             const auto view=rg::AtomLocalPotentialView::For(*atom); const auto & stage=view.GetStageEstimate(rg::FittingStage::Second);
-            j::array covariance, peeled;
-            if(stage.uncertainty.covariance) for(int r=0;r<3;++r) for(int col=0;col<3;++col) covariance.push_back((*stage.uncertainty.covariance)(r,col));
+            j::array covariance, estimate, peeled, point;
+            if(stage.point)
+            {
+                point={stage.point->GetAmplitude(),stage.point->GetWidth(),stage.point->GetOffset()};
+            }
+            if(view.GetGroupEvidence())
+            {
+                const auto & evidence=*view.GetGroupEvidence();
+                if(evidence.covariance) for(int r=0;r<2;++r) for(int col=0;col<2;++col) covariance.push_back((*evidence.covariance)(r,col));
+                if(evidence.estimate) for(int k=0;k<2;++k) estimate.push_back((*evidence.estimate)(k));
+            }
             if(view.GetPostFitPeeling()) for(const auto & s:view.GetPostFitPeeling()->samples) peeled.push_back(s.response ? j::value(*s.response):j::value(s.reason));
-            targets.push_back(j::object{{"id",atom->GetSerialID()},{"covariance",covariance},{"uncertainty_reason",stage.uncertainty.reason},{"peeled",peeled}});
+            const auto & evidence=view.GetGroupEvidence();
+            targets.push_back(j::object{{"id",atom->GetSerialID()},{"point",point},
+                {"estimate",estimate},{"covariance",covariance},{"evidence_status",evidence ? static_cast<int>(evidence->status):-1},
+                {"uncertainty_method",evidence ? evidence->uncertainty_method:""},
+                {"uncertainty_reason",evidence ? evidence->reason:"missing-evidence"},{"peeled",peeled}});
         }
 #ifdef __APPLE__
         const auto peak=usage.ru_maxrss;

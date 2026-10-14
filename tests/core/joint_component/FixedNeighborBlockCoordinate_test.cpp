@@ -383,10 +383,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     EXPECT_EQ(endpoint_memory.stage,n::MemoryStage::EndpointVerification);
     EXPECT_EQ(endpoint_memory.status,n::MemoryStatus::Pass);
     EXPECT_LT(endpoint_memory.estimated_peak_bytes,n::JointMemoryPlanningBudgetBytes);
-    const auto covariance_memory=n::TargetCovarianceMemoryEstimate(endpoint_domain);
-    EXPECT_EQ(covariance_memory.stage,n::MemoryStage::TargetCovariance);
-    EXPECT_EQ(covariance_memory.status,n::MemoryStatus::Reject);
-    EXPECT_GT(covariance_memory.estimated_peak_bytes,covariance_memory.budget_bytes);
     n::BlockCoordinateState accepted; accepted.eta=eta; accepted.beta=n::Vector::Zero(2*atoms);
     n::AssessmentWorkForTesting()={};
     n::NumericsWorkForTesting()={};

@@ -21,7 +21,7 @@ SCOPES = {
     'search': 'FixedNeighbor search-only with local Profile LM work',
     'solve': 'FixedNeighbor search, replay, endpoint certification, and RuntimeConvergence',
     'workflow': 'Joint workflow, postprocess, and persistence',
-    'postprocess': 'Joint postprocess, uncertainty, and persistence',
+    'postprocess': 'Peeling, local conditional covariance, group fitting, and persistence',
     'command': 'CLI analysis, SQLite reload, and Joint export',
 }
 

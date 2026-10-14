@@ -19,7 +19,6 @@
 #include "core/detail/StageSummary.hpp"
 #include "core/detail/PostFitPeeling.hpp"
 #include "core/detail/LocalConditionalCovariance.hpp"
-#include "core/detail/JointUncertainty.hpp"
 #include "core/detail/MapInterpolation.hpp"
 #include "core/detail/MapSampler.hpp"
 #include "data/io/detail/JointResultJson.hpp"
@@ -913,77 +912,6 @@ TEST(JointComponentPartialSelectionTest, PeelingIncludesDistantHaloThroughInterp
     EXPECT_LT(*result.samples[0].response, 0);
 }
 
-TEST(JointComponentPartialSelectionTest, FullComponentUncertaintyMatchesDenseReferenceAndReportsGates)
-{
-    auto f = joint_partial_test::Make("all");
-    const auto problem = core::BuildJointProblem(*f.map, *f.model);
-    auto snapshot = core::CaptureJointAnalysisResult(core::FitJointComponents(problem, f.b));
-    auto & component = snapshot.components.front();
-    ASSERT_TRUE(component.state);
-    component.runtime_convergence = core::JointCheckStatus::Passed;
-    // Exercise the legacy full-parameter covariance contract with a synthetic endpoint.
-    component.target_evidence.reset();
-    component.target_runtime_convergence = core::JointCheckStatus::NotRun;
-    // A fixed, slightly perturbed endpoint gives a known nonzero residual variance.
-    component.state->ac[0] += 0.01;
-    const auto & input = problem.Input();
-    Eigen::MatrixXd jacobian = Eigen::MatrixXd::Zero(static_cast<Eigen::Index>(input.observations.size()), 6);
-    Eigen::VectorXd residual = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(input.observations.size()));
-    for (std::size_t a = 0; a < 2; ++a)
-        for (const auto & support : input.support[a])
-        {
-            const auto k = n::EvaluateKernel(support.squared_distance, component.state->b[a], 2.5);
-            const auto A = component.state->ac[2*a], C = component.state->ac[2*a+1];
-            jacobian.row(static_cast<Eigen::Index>(support.row)).segment<3>(static_cast<Eigen::Index>(3*a)) << k.gaussian, k.charge,
-                A*k.gaussian_log_width + C*k.charge_log_width;
-            residual(static_cast<Eigen::Index>(support.row)) += A*k.gaussian + C*k.charge;
-        }
-    for (std::size_t r = 0; r < input.observations.size(); ++r) residual(static_cast<Eigen::Index>(r)) -= input.observations[r];
-    const Eigen::MatrixXd dense = (jacobian.transpose()*jacobian).inverse() *
-        (residual.squaredNorm() / static_cast<double>(input.observations.size()-6));
-    auto uncertainty = core::detail::ComputeJointUncertainty(problem, snapshot);
-    for (int a = 0; a < 2; ++a)
-    {
-        ASSERT_EQ(uncertainty.at(a+1).status, rhbm_gem::EvidenceStatus::Available);
-        ASSERT_TRUE(uncertainty.at(a+1).covariance);
-        EXPECT_TRUE(uncertainty.at(a+1).covariance->isApprox(dense.block<3,3>(3*a,3*a), 1e-8));
-    }
-    auto exact = input;
-    // Use identical arithmetic to the service when constructing a zero-residual fixture.
-    std::fill(exact.observations.begin(), exact.observations.end(), 0.0);
-    for (std::size_t a = 0; a < 2; ++a)
-        for (const auto & support : exact.support[a])
-        {
-            const auto k = n::EvaluateKernel(support.squared_distance, component.state->b[a], 2.5);
-            exact.observations[support.row] += component.state->ac[2*a]*k.gaussian + component.state->ac[2*a+1]*k.charge;
-        }
-    EXPECT_EQ(core::detail::ComputeJointUncertainty(core::JointProblem(exact), snapshot).at(1).reason,
-        "residual-variance-unavailable");
-    auto deficient = input; deficient.support[1] = deficient.support[0];
-    auto deficient_snapshot = snapshot;
-    deficient_snapshot.components[0].rows.clear();
-    for (const auto & support : deficient.support[0]) deficient_snapshot.components[0].rows.push_back(support.row);
-    deficient_snapshot.components[0].state->b[1] = deficient_snapshot.components[0].state->b[0];
-    EXPECT_EQ(core::detail::ComputeJointUncertainty(core::JointProblem(deficient), deficient_snapshot).at(1).reason,
-        "rank-deficient-jacobian");
-    auto short_snapshot = snapshot; short_snapshot.components[0].rows.resize(6);
-    EXPECT_EQ(core::detail::ComputeJointUncertainty(problem, short_snapshot).at(1).reason,
-        "insufficient-residual-degrees-of-freedom");
-    component.runtime_convergence = core::JointCheckStatus::Failed;
-    EXPECT_EQ(core::detail::ComputeJointUncertainty(problem, snapshot).at(1).reason, "component-not-converged");
-    component.runtime_convergence = core::JointCheckStatus::Passed;
-    component.state->ac[0] = 0;
-    EXPECT_EQ(core::detail::ComputeJointUncertainty(problem, snapshot).at(2).reason, "active-amplitude-boundary");
-    component.state.reset();
-    EXPECT_EQ(core::detail::ComputeJointUncertainty(problem, snapshot).at(1).reason, "missing-component-state");
-    rhbm_gem::LocalStageEstimate stage;
-    stage.source.role = rhbm_gem::FittingRole::Target;
-    stage.point = rhbm_gem::GaussianModel3D(0, 0.5);
-    const auto evidence = core::detail::BuildJointParameterEvidence(stage);
-    EXPECT_EQ(evidence.reason, "nonpositive-amplitude");
-    EXPECT_FALSE(evidence.estimate);
-}
-
 TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesLocalEvidenceAndPreservesSecond)
 {
     using namespace rhbm_gem;
@@ -1148,12 +1076,6 @@ TEST(JointComponentPartialSelectionTest, TargetOnlyPostprocessingRetainsFullCont
         EXPECT_EQ(target.at(1).samples[i].response, complete.at(1).samples[i].response);
         EXPECT_EQ(target.at(1).samples[i].reason, complete.at(1).samples[i].reason);
     }
-    const auto target_u = core::detail::ComputeJointUncertainty(problem, snapshot);
-    const auto complete_u = core::detail::ComputeJointUncertainty(problem, snapshot, all);
-    ASSERT_EQ(target_u.size(), 1); ASSERT_EQ(complete_u.size(), 2);
-    EXPECT_EQ(target_u.at(1).status, complete_u.at(1).status);
-    EXPECT_EQ(target_u.at(1).covariance.has_value(), complete_u.at(1).covariance.has_value());
-    if(target_u.at(1).covariance) EXPECT_EQ(*target_u.at(1).covariance, *complete_u.at(1).covariance);
     f.model->EditAnalysis().SetJointResult(snapshot);
     auto metadata = snapshot.metadata; metadata.model_path = "metadata-only";
     f.model->EditAnalysis().UpdateJointMetadata(metadata);

@@ -304,30 +304,6 @@ MemoryEstimate EndpointVerificationMemoryEstimate(const Domain & domain,VectorRe
     shape.resident_bytes=std::max(resident,resident_override);
     return PlanMemory(shape,MemoryStage::EndpointVerification);
 }
-MemoryEstimate TargetCovarianceMemoryEstimate(const Domain & domain,std::size_t resident_override)
-{
-    MemoryShape shape; shape.component_atoms=domain.atoms.size();
-    shape.component_observations=static_cast<std::size_t>(std::max<Eigen::Index>(0,domain.rows));
-    shape.maximum_tile_rows=static_cast<std::size_t>(derivative_tile_rows);
-    const auto overflow=[&] {
-        auto estimate=PlanMemory(shape,MemoryStage::TargetCovariance);
-        estimate.status=MemoryStatus::Overflow; estimate.reason="size-overflow"; return estimate;
-    };
-    if(!CheckedMultiplyBytes(shape.component_atoms,3,shape.component_covariance_columns)) return overflow();
-    for(const auto & atom:domain.atoms)
-        if(!CheckedAddBytes(shape.component_support_entries,atom.size(),shape.component_support_entries)) return overflow();
-    const auto * input=domain.atoms.Storage();
-    const auto snapshot=input ? EstimateSnapshotBytes(*input) : std::optional<std::size_t>{0};
-    std::size_t resident{};
-    const auto add_product=[](std::size_t & total,std::size_t count,std::size_t width) {
-        std::size_t bytes{}; return CheckedMultiplyBytes(count,width,bytes) && CheckedAddBytes(total,bytes,total);
-    };
-    if(!snapshot || !CheckedAddBytes(*snapshot,domain.atoms.LocalSupportIndexBytes(),resident) ||
-        !add_product(resident,shape.component_atoms,4*sizeof(double)+3*sizeof(Eigen::Index)) ||
-        !add_product(resident,shape.component_observations,2*sizeof(Eigen::Index))) return overflow();
-    shape.resident_bytes=std::max(resident,resident_override);
-    return PlanMemory(shape,MemoryStage::TargetCovariance);
-}
 Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,bool reference,const EvaluationContext * context,
     const std::vector<LinearBlock> * blocks,
     ProfileEvaluationRole role,ProfileSearchWork * profile_work)
