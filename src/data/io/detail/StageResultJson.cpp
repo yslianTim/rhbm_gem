@@ -63,16 +63,6 @@ LocalStageEstimate Stage(const V & v)
     if(!u.at("variance").is_null()) t.residual_variance=Number(u.at("variance"));
     return s;
 }
-V Pack(const GroupParameterEvidence & e) { return O{{"atom",e.atom_id},{"component",e.component_id},{"source",e.source_id},{"status",static_cast<int>(e.status)},{"reason",e.reason},{"method",e.uncertainty_method},{"correlation",e.correlation_policy},{"estimate",e.estimate ? Matrix(*e.estimate):V{}},{"covariance",e.covariance ? Matrix(*e.covariance):V{}}}; }
-GroupParameterEvidence Evidence(const V & v)
-{
-    const auto & o=v.as_object(); GroupParameterEvidence e;
-    e.atom_id=Read<std::string>(o,"atom"); e.component_id=Read<std::string>(o,"component"); e.source_id=Read<std::string>(o,"source");
-    e.status=Enum<EvidenceStatus>(o.at("status"),3); e.reason=Read<std::string>(o,"reason"); e.uncertainty_method=Read<std::string>(o,"method"); e.correlation_policy=Read<std::string>(o,"correlation");
-    if(!o.at("estimate").is_null()) e.estimate=Matrix<2,1>(o.at("estimate"));
-    if(!o.at("covariance").is_null()) e.covariance=Matrix<2,2>(o.at("covariance"));
-    return e;
-}
 V Pack(const GaussianModel3DWithUncertainty & p)
 {
     const auto & s=p.GetStandardDeviationModel();
@@ -190,7 +180,7 @@ std::string Encode(const ModelObject & model)
         atoms.push_back(O{{"id",atom->GetSerialID()},{"first",Pack(e->StageEstimate(FittingStage::First))},{"second",Pack(e->StageEstimate(FittingStage::Second))},
             {"first_native",Native(*e,FittingStage::First)},{"second_native",Native(*e,FittingStage::Second)},{"neighbors",(e->PostFitPeeling() || e->StageEstimate(FittingStage::Second).source.method==EstimateMethod::JointComponents) ? V{}:V(e->NeighborCountForPeeling())},
             {"geometry",e->SampleGeometryAvailable()},{"raw",Samples(e->RawSamplingEntries(),e->SampleGeometryAvailable())},{"peeled",(e->PostFitPeeling() || e->StageEstimate(FittingStage::Second).source.method==EstimateMethod::JointComponents) ? V{}:Samples(e->PeelingSamplingEntries(),e->SampleGeometryAvailable())},
-            {"peeling",peeling},{"evidence",e->GroupEvidence() ? Pack(*e->GroupEvidence()):V{}},{"posterior",e->GroupMemberResult() ? Pack(*e->GroupMemberResult()):V{}}});
+            {"peeling",peeling},{"posterior",e->GroupMemberResult() ? Pack(*e->GroupMemberResult()):V{}}});
     }
     const auto & g=data.AtomGroupEntry();
     for(const auto key:g.CollectGroupKeys()) { A ids; for(const auto * a:g.GetMembers(key)) ids.push_back(a->GetSerialID()); groups.push_back(O{{"key",static_cast<std::uint64_t>(key)},{"members",ids},{"alpha",g.GetParameterSummary(key) && !g.GetParameterSummary(key)->inference ? V(g.GetAlphaG(key)):V{}},{"native",g.GetParameterSummary(key) ? V{}:V(O{{"alpha",g.GetAlphaG(key)},{"mean",Pack(g.GetMean(key))},{"mdpde",Pack(g.GetMDPDE(key))},{"prior",Pack(g.GetPriorWithUncertainty(key))}})},{"summary",g.GetParameterSummary(key) ? Pack(*g.GetParameterSummary(key)):V{}}}); }
@@ -241,7 +231,6 @@ void Decode(ModelObject & model, const std::string & text, int expected_version,
         if(!o.at("peeling").is_null()) { const auto & p=o.at("peeling").as_object(); PostFitPeelingResult r; if(legacy && Read<int>(p,"neighbors")!=e.NeighborCountForPeeling()) throw std::invalid_argument("Legacy peeling neighbor count mismatch."); r.source=Source(p.at("source")); r.mode=Read<std::string>(p,"mode"); r.neighbor_count=Read<std::size_t>(p,"neighbors"); for(const auto & sample:p.at("samples").as_array()) { const auto & s=sample.as_object(); PeelingSampleEstimate x; x.reason=Read<std::string>(s,"reason"); if(!s.at("response").is_null()) x.response=Number(s.at("response")); r.samples.push_back(x); } e.SetPostFitPeeling(std::move(r)); }
         if(legacy && e.PostFitPeeling() && Samples(e.PeelingSamplingEntries(),geometry)!=o.at("peeled"))
             throw std::invalid_argument("Legacy paired/compact peeling mismatch.");
-        if(!o.at("evidence").is_null()) e.SetGroupEvidence(Evidence(o.at("evidence")));
         if(legacy && e.GroupMemberResult())
         {
             if(o.at("posterior").is_null()) throw std::invalid_argument("Legacy posterior missing.");
@@ -324,8 +313,6 @@ void MapSnapshot(ModelObject & model)
         auto * atom=model.FindAtomPtr(std::stoi(id)); auto & e=data.EnsureAtomLocalEntry(*atom);
         e.ClearPeeling(); e.ClearGroupMemberResult();
         const auto & stage=e.StageEstimate(FittingStage::Second);
-        GroupParameterEvidence evidence; evidence.atom_id=id; evidence.component_id=stage.source.component_id; evidence.source_id=stage.source.run_id; evidence.reason="not-recorded";
-        e.SetGroupEvidence(evidence);
         if(stage.source.role==FittingRole::Target) {const auto key=data_internal::GetGroupKey(atom); groups.AddMember(key,*atom); GroupParameterSummary s; s.reason="not-recorded"; s.source_id=stage.source.run_id; groups.SetParameterSummary(key,s);}
     }
 }
@@ -337,10 +324,8 @@ void Validate(const ModelObject & model)
     {
         const auto & s=e->StageEstimate(FittingStage::Second);
         if(s.uncertainty.status==EvidenceStatus::Available && (!s.point || !s.uncertainty.covariance || !s.uncertainty.covariance->allFinite())) throw std::invalid_argument("Available uncertainty lacks finite point/covariance.");
-        if(e->GroupEvidence() && e->GroupEvidence()->status==EvidenceStatus::Available && (!e->GroupEvidence()->estimate || !e->GroupEvidence()->covariance || !e->GroupEvidence()->estimate->allFinite() || !e->GroupEvidence()->covariance->allFinite())) throw std::invalid_argument("Available group evidence lacks finite parameters/covariance.");
         if(!s.source.atom_id.empty() && s.source.atom_id!=std::to_string(id)) throw std::invalid_argument("Stage atom identity mismatch.");
         if(e->PostFitPeeling()) {const auto & p=*e->PostFitPeeling(); if(p.samples.size()!=e->RawSamplingEntries().size() || p.source.run_id!=s.source.run_id || p.source.atom_id!=s.source.atom_id) throw std::invalid_argument("Peeling source/shape mismatch.");}
-        if(e->GroupEvidence()) {const auto & g=*e->GroupEvidence(); if(g.atom_id!=s.source.atom_id || g.component_id!=s.source.component_id || g.source_id!=s.source.run_id) throw std::invalid_argument("Group evidence source mismatch.");}
         if(e->GroupMemberResult() && s.source.method==EstimateMethod::JointComponents && e->GroupMemberResult()->evidence_source_id!=s.source.run_id) throw std::invalid_argument("Posterior source mismatch.");
     }
     const auto & groups=data.AtomGroupEntry();

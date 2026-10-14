@@ -192,7 +192,6 @@ set(JOINT_COMPONENT_WORKFLOW_TEST_SOURCES
     core/joint_component/Progress_test.cpp
     core/joint_component/PartialSelection_test.cpp
     core/joint_component/ObservableProfile_test.cpp
-    core/joint_component/LocalConditionalCovariance_test.cpp
 )
 
 set(JOINT_COMPONENT_NUMERICAL_TEST_SOURCES

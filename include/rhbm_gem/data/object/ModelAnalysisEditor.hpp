@@ -27,12 +27,9 @@ public:
     void ApplySecondStageEstimates(std::map<int, LocalStageEstimate> estimates);
     void SetAtomStageEstimate(FittingStage stage, const AtomObject & atom, LocalStageEstimate value);
     void SetAtomPostFitPeeling(const AtomObject & atom, PostFitPeelingResult value);
+    void ApplyPostFitPeelingsBatch(std::vector<std::pair<int, PostFitPeelingResult>> peelings);
     void SetAtomPostJointLocalResult(const AtomObject & atom, PostJointLocalResult value);
     void ApplyPostJointLocalResultsBatch(std::vector<std::pair<int, PostJointLocalResult>> results);
-    void SetAtomGroupEvidence(const AtomObject & atom, GroupParameterEvidence value);
-    void ApplyJointPostFitEvidenceBatch(
-        std::vector<std::pair<int, PostFitPeelingResult>> peelings,
-        std::vector<std::pair<int, GroupParameterEvidence>> evidence);
     void ApplyAtomGroupParameterSummary(GroupKey key, GroupParameterSummary value);
     void Clear();
     void ClearTransientFitStates();

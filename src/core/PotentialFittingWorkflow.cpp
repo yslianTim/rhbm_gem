@@ -8,7 +8,6 @@
 #include "detail/joint_component/Problem.hpp"
 #include "detail/StageSummary.hpp"
 #include "detail/PostFitPeeling.hpp"
-#include "detail/LocalConditionalCovariance.hpp"
 #include "detail/GroupPotentialFitting.hpp"
 #include "detail/gaussian_fit/FittingRanges.hpp"
 #include "detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
@@ -236,23 +235,10 @@ void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOp
     auto peelings = BuildPostFitPeelingSamples(
         map, model, problem, problem.Input().selection_domain->target_indices, &snapshot);
     std::vector<std::pair<int, PostFitPeelingResult>> peeling_updates;
-    std::vector<std::pair<int, GroupParameterEvidence>> evidence_updates;
     peeling_updates.reserve(peelings.size());
-    evidence_updates.reserve(peelings.size());
     for (auto & [id, peeling] : peelings)
-    {
-        auto & atom = *model.FindAtomPtr(id);
-        const auto local = AtomLocalPotentialView::For(atom);
-        const auto & stage = local.GetStageEstimate(FittingStage::Second);
-        const auto & raw_samples = local.GetRawSamplingEntriesView();
-        LocalConditionalCovariance covariance;
-        covariance = ComputeLocalConditionalCovariance(stage, raw_samples, peeling, local.HasSampleGeometry());
-        covariance.source = stage.source;
-        auto evidence = BuildLocalGroupEvidence(stage, &peeling, covariance);
         peeling_updates.emplace_back(id, std::move(peeling));
-        evidence_updates.emplace_back(id, std::move(evidence));
-    }
-    model.EditAnalysis().ApplyJointPostFitEvidenceBatch(std::move(peeling_updates), std::move(evidence_updates));
+    model.EditAnalysis().ApplyPostFitPeelingsBatch(std::move(peeling_updates));
     model.EditAnalysis().SetJointResult(std::move(snapshot));
     const auto & joint_snapshot = *model.GetAnalysisView().GetJointResult();
     std::vector<std::pair<int, PostJointLocalResult>> local_updates;

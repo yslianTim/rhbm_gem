@@ -25,7 +25,6 @@ public:
     const std::optional<PostFitPeelingResult> & GetPostFitPeeling() const;
     const std::optional<PostJointLocalResult> & GetPostJointLocalResult() const;
     bool HasSampleGeometry() const;
-    const std::optional<GroupParameterEvidence> & GetGroupEvidence() const;
     LocalGaussianResult GetGaussianResult(FittingStage stage) const;
     const std::optional<GroupGaussianMemberResult> & GetGroupMemberResult() const;
     const GaussianModel3D & GetEstimateOLS(FittingStage stage) const;

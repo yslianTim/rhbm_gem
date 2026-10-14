@@ -13,8 +13,6 @@
 #include <algorithm>
 #include <cmath>
 #include <set>
-#include <unordered_map>
-#include <unordered_set>
 #include <utility>
 
 namespace rhbm_gem {
@@ -108,7 +106,6 @@ std::set<int> InvalidateJointRuns(ModelAnalysisData & data, const std::set<std::
         if (stage.source.method != EstimateMethod::JointComponents || !runs.contains(stage.source.run_id)) continue;
         stage.uncertainty = {};
         entry->SetStageEstimate(FittingStage::Second, std::move(stage));
-        entry->ClearGroupEvidence();
         entry->ClearGroupMemberResult();
         entry->ClearPeeling();
         affected.insert(id);
@@ -130,7 +127,6 @@ void InvalidateStageChange(ModelAnalysisData & data, int id,
         if (before.source.method == EstimateMethod::JointComponents &&
             SameUncertainty(before.uncertainty, after.uncertainty)) after.uncertainty = {};
         auto & entry = *data.AtomLocalEntries().at(id);
-        entry.ClearGroupEvidence();
         if (!runs.empty()) entry.ClearPeeling();
         entry.ClearGroupMemberResult();
         affected.insert(id);
@@ -138,7 +134,6 @@ void InvalidateStageChange(ModelAnalysisData & data, int id,
     }
     else if (!SameUncertainty(before.uncertainty, after.uncertainty))
     {
-        data.AtomLocalEntries().at(id)->ClearGroupEvidence();
         data.AtomLocalEntries().at(id)->ClearGroupMemberResult();
         InvalidateGroups(data, {id});
     }
@@ -213,7 +208,7 @@ void ModelAnalysisEditor::ApplySecondStageEstimates(std::map<int, LocalStageEsti
     for (auto & [id, estimate] : estimates)
     {
         auto & entry = *data.AtomLocalEntries().at(id);
-        entry.ClearPeeling(); entry.ClearGroupEvidence(); entry.ClearGroupMemberResult();
+        entry.ClearPeeling(); entry.ClearGroupMemberResult();
         entry.SetStageEstimate(FittingStage::Second, std::move(estimate));
     }
 }
@@ -225,7 +220,6 @@ void ModelAnalysisEditor::SetAtomPostFitPeeling(const AtomObject & atom, PostFit
     if (raw.size() != value.samples.size()) throw std::invalid_argument("Peeling/raw sample count mismatch.");
     if (!SameSource(value.source, entry.StageEstimate(FittingStage::Second).source))
         throw std::invalid_argument("Peeling source mismatch.");
-    entry.ClearGroupEvidence();
     entry.ClearGroupMemberResult();
     InvalidateGroups(ModelAnalysisData::Of(m_model_object), {atom.GetSerialID()});
     entry.SetPostFitPeeling(std::move(value));
@@ -283,57 +277,31 @@ void ModelAnalysisEditor::ApplyPostJointLocalResultsBatch(
     InvalidateGroupKeys(data, affected_groups);
 }
 
-void ModelAnalysisEditor::SetAtomGroupEvidence(const AtomObject & atom, GroupParameterEvidence value)
+void ModelAnalysisEditor::ApplyPostFitPeelingsBatch(
+    std::vector<std::pair<int, PostFitPeelingResult>> peelings)
 {
-    auto & entry = EnsureAtomLocalPotential(m_model_object, atom);
-    entry.ClearGroupMemberResult();
-    InvalidateGroups(ModelAnalysisData::Of(m_model_object), {atom.GetSerialID()});
-    entry.SetGroupEvidence(std::move(value));
-}
-
-void ModelAnalysisEditor::ApplyJointPostFitEvidenceBatch(
-    std::vector<std::pair<int, PostFitPeelingResult>> peelings,
-    std::vector<std::pair<int, GroupParameterEvidence>> evidence)
-{
-    if (peelings.size() != evidence.size())
-        throw std::invalid_argument("Peeling/evidence identity mismatch.");
-
     auto & data = ModelAnalysisData::Of(m_model_object);
-    std::unordered_map<int, GroupParameterEvidence *> evidence_by_id;
-    evidence_by_id.reserve(evidence.size());
-    for (auto & [id, value] : evidence)
-        if (!evidence_by_id.emplace(id, &value).second)
-            throw std::invalid_argument("Duplicate group evidence identity.");
-
-    struct PreparedUpdate
-    {
-        int id{};
-        LocalPotentialEntry * entry{};
-        PostFitPeelingResult * peeling{};
-        GroupParameterEvidence * evidence{};
-    };
-    std::vector<PreparedUpdate> updates;
+    std::vector<std::pair<LocalPotentialEntry *, PostFitPeelingResult *>> updates;
     updates.reserve(peelings.size());
-    std::unordered_set<int> ids;
-    ids.reserve(peelings.size());
+    std::set<int> ids;
     std::string run_id;
     for (auto & [id, peeling] : peelings)
     {
         if (!ids.insert(id).second)
-            throw std::invalid_argument("Duplicate post-fit evidence identity.");
+            throw std::invalid_argument("Duplicate post-fit peeling identity.");
         const AtomObject * atom = nullptr;
         try { atom = m_model_object.FindAtomPtr(id); }
-        catch (const std::out_of_range &) { throw std::invalid_argument("Post-fit evidence atom does not belong to model."); }
+        catch (const std::out_of_range &) { throw std::invalid_argument("Post-fit peeling atom does not belong to model."); }
         auto * entry = atom ? data.FindAtomLocalEntry(*atom) : nullptr;
         if (!entry)
-            throw std::invalid_argument("Post-fit evidence atom has no Joint stage.");
+            throw std::invalid_argument("Post-fit peeling atom has no Joint stage.");
         const auto & stage = entry->StageEstimate(FittingStage::Second);
         if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target ||
             stage.source.atom_id != std::to_string(id) || stage.source.component_id.empty() || stage.source.run_id.empty())
-            throw std::invalid_argument("Post-fit evidence source is not a Joint target.");
+            throw std::invalid_argument("Post-fit peeling source is not a Joint target.");
         if (run_id.empty()) run_id = stage.source.run_id;
         else if (run_id != stage.source.run_id)
-            throw std::invalid_argument("Inconsistent Joint run identity in post-fit evidence batch.");
+            throw std::invalid_argument("Inconsistent Joint run identity in post-fit peeling batch.");
         if (!SameSource(peeling.source, stage.source))
             throw std::invalid_argument("Peeling source mismatch.");
         if (entry->RawSamplingEntries().size() != peeling.samples.size())
@@ -341,32 +309,14 @@ void ModelAnalysisEditor::ApplyJointPostFitEvidenceBatch(
         for (const auto & sample : peeling.samples)
             if ((sample.response && !std::isfinite(*sample.response)) || (!sample.response && sample.reason.empty()))
                 throw std::invalid_argument("Invalid post-fit peeling sample.");
-
-        const auto evidence_found = evidence_by_id.find(id);
-        if (evidence_found == evidence_by_id.end())
-            throw std::invalid_argument("Peeling/evidence identity mismatch.");
-        auto * group_evidence = evidence_found->second;
-        if (group_evidence->atom_id != stage.source.atom_id ||
-            group_evidence->component_id != stage.source.component_id ||
-            group_evidence->source_id != stage.source.run_id)
-            throw std::invalid_argument("Group evidence source mismatch.");
-        if (group_evidence->status == EvidenceStatus::Available &&
-            (!group_evidence->estimate || !group_evidence->covariance ||
-                !group_evidence->estimate->allFinite() || !group_evidence->covariance->allFinite()))
-            throw std::invalid_argument("Available group evidence lacks finite parameters/covariance.");
-        updates.push_back({id, entry, &peeling, group_evidence});
+        updates.emplace_back(entry, &peeling);
     }
-    if (evidence_by_id.size() != ids.size())
-        throw std::invalid_argument("Peeling/evidence identity mismatch.");
 
-    std::set<int> affected_ids(ids.begin(), ids.end());
-    const auto affected_groups = CollectAffectedGroupKeys(data, affected_ids);
-    for (auto & update : updates)
+    const auto affected_groups = CollectAffectedGroupKeys(data, ids);
+    for (auto & [entry, peeling] : updates)
     {
-        update.entry->ClearGroupEvidence();
-        update.entry->ClearGroupMemberResult();
-        update.entry->SetPostFitPeeling(std::move(*update.peeling));
-        update.entry->SetGroupEvidence(std::move(*update.evidence));
+        entry->ClearGroupMemberResult();
+        entry->SetPostFitPeeling(std::move(*peeling));
     }
     InvalidateGroupKeys(data, affected_groups);
 }
@@ -483,7 +433,6 @@ void ModelAnalysisEditor::SetAtomLocalRawSamplingEntries(
 {
     auto & entry = EnsureAtomLocalPotential(m_model_object, atom_object);
     entry.ClearPeeling();
-    entry.ClearGroupEvidence();
     entry.ClearGroupMemberResult();
     InvalidateGroups(ModelAnalysisData::Of(m_model_object), {atom_object.GetSerialID()});
     entry.SetRawSamplingEntries(std::move(value));

@@ -21,7 +21,7 @@ SCOPES = {
     'search': 'FixedNeighbor search-only with local Profile LM work',
     'solve': 'FixedNeighbor search, replay, endpoint certification, and RuntimeConvergence',
     'workflow': 'Joint workflow, postprocess, and persistence',
-    'postprocess': 'Peeling, local conditional covariance, group fitting, and persistence',
+    'postprocess': 'Joint peeling, local MDPDE, group inference, and persistence',
     'command': 'CLI analysis, SQLite reload, and Joint export',
 }
 
@@ -165,7 +165,7 @@ def raw_elapsed(profile, raw, process_wall):
     if profile == 'workflow':
         return raw.get('total_seconds', process_wall)
     if profile == 'postprocess':
-        return sum(raw.get('phases', {}).values())
+        return raw.get('total_seconds', process_wall)
     return process_wall
 
 
@@ -239,11 +239,17 @@ def normalize_result(profile, raw):
                         'objective': raw.get('objective')},
         }
     if profile == 'postprocess':
+        targets = raw.get('targets', [])
         return {
             'qualified': None,
             'scientific_status': 'postprocess-complete',
             'details': {'endpoint_count': len(raw.get('endpoints', [])),
-                        'target_count': len(raw.get('targets', [])),
+                        'target_count': len(targets),
+                        'eligible_local_count': sum(target.get('local_status') == 1 for target in targets),
+                        'local_information_storage_bytes': sum(
+                            len(target.get('local_information', [])) * 8 for target in targets),
+                        'post_joint_pipeline_peak_rss_bytes': raw.get('phases', {}).get(
+                            'post_joint_pipeline_peak_rss_bytes'),
                         'objective': raw.get('objective')},
         }
     return {'qualified': None, 'scientific_status': 'command-complete', 'details': {}}

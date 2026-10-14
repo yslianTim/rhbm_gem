@@ -41,7 +41,6 @@ target_sources(rhbm_gem PRIVATE
     core/detail/StageSummary.cpp
     core/detail/FirstStageInitialization.cpp
     core/detail/FittingWorkset.cpp
-    core/detail/LocalConditionalCovariance.cpp
     core/detail/JointGroupFitting.cpp
     core/detail/PostFitPeeling.cpp
     core/detail/gaussian_fit/GaussianModelOperations.cpp

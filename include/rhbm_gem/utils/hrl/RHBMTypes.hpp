@@ -31,16 +31,6 @@ enum class RHBMEstimationStatus
 
 enum class EvidenceStatus { NotRun, Available, Unavailable, Ineligible };
 
-struct GroupParameterEvidence
-{
-    std::string atom_id, component_id, source_id;
-    EvidenceStatus status{ EvidenceStatus::NotRun };
-    std::string reason, uncertainty_method;
-    std::string correlation_policy{ "block-diagonal-by-atom" };
-    std::optional<Eigen::Vector2d> estimate;
-    std::optional<Eigen::Matrix2d> covariance;
-};
-
 struct RHBMInformation
 {
     RHBMGroupCovarianceMatrix precision;

@@ -1168,8 +1168,6 @@ TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesSourcesGeometryAnd
         const auto raw=before.GetRawSamplingEntries(false), saved=after.GetRawSamplingEntries(false);
         ASSERT_EQ(raw.size(),saved.size()); EXPECT_TRUE(after.HasSampleGeometry());
         for(std::size_t i=0;i<raw.size();++i) {EXPECT_EQ(raw[i].point.position,saved[i].point.position); EXPECT_EQ(raw[i].response,saved[i].response); if(after.GetPostFitPeeling()) {EXPECT_EQ(before.GetPostFitPeeling()->samples[i].response,after.GetPostFitPeeling()->samples[i].response); EXPECT_EQ(before.GetPostFitPeeling()->samples[i].reason,after.GetPostFitPeeling()->samples[i].reason);}}
-        EXPECT_EQ(before.GetGroupEvidence().has_value(), after.GetGroupEvidence().has_value());
-        if(after.GetGroupEvidence()) EXPECT_EQ(before.GetGroupEvidence()->status,after.GetGroupEvidence()->status);
         EXPECT_THROW(after.GetEstimateMDPDE(rg::FittingStage::Second),std::runtime_error);
     }
     loaded->EditAnalysis().ClearJointResult();

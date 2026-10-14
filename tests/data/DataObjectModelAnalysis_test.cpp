@@ -1748,9 +1748,6 @@ TEST(DataObjectModelAnalysisTest, JointUpdatesInvalidateDependentResultsAcrossTh
         stage.uncertainty.method = "iid-ls-linearized";
         stage.uncertainty.covariance = Eigen::Matrix3d::Identity();
         editor.SetAtomStageEstimate(rg::FittingStage::Second, *atom, stage);
-        rg::GroupParameterEvidence evidence;
-        evidence.atom_id = stage.source.atom_id; evidence.source_id = "same-run"; evidence.component_id = "component";
-        editor.SetAtomGroupEvidence(*atom, evidence);
         rg::PostFitPeelingResult peeling;
         peeling.source = stage.source; peeling.samples = {{1, {}}, {2, {}}};
         editor.SetAtomPostFitPeeling(*atom, peeling);
@@ -1766,7 +1763,6 @@ TEST(DataObjectModelAnalysisTest, JointUpdatesInvalidateDependentResultsAcrossTh
     auto stage = view.GetStageEstimate(rg::FittingStage::Second);
     stage.uncertainty.covariance = 2 * Eigen::Matrix3d::Identity();
     editor.SetAtomStageEstimate(rg::FittingStage::Second, *atom, stage);
-    EXPECT_FALSE(view.GetGroupEvidence());
     EXPECT_FALSE(view.GetGroupMemberResult());
     ASSERT_TRUE(view.GetPostFitPeeling());
     const auto point = view.GetFinalModel(rg::FittingStage::Second).ToVector();
@@ -1782,7 +1778,6 @@ TEST(DataObjectModelAnalysisTest, JointUpdatesInvalidateDependentResultsAcrossTh
     {
         const auto other = rg::AtomLocalPotentialView::For(*member);
         EXPECT_FALSE(other.GetPostFitPeeling());
-        EXPECT_FALSE(other.GetGroupEvidence());
         EXPECT_FALSE(other.GetGroupMemberResult());
         EXPECT_FALSE(other.GetStageEstimate(rg::FittingStage::Second).uncertainty.covariance);
     }
