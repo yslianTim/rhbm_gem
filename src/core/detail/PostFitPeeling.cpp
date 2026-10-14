@@ -54,8 +54,15 @@ JointPostprocessingContext::JointPostprocessingContext(
     : m_geometry(geometry), m_model(model), m_problem(problem), m_snapshot(snapshot), m_metrics(metrics)
 {
     const auto & input = problem.Input();
-    if (snapshot && (snapshot->atom_ids != input.atom_ids || snapshot->row_ids != input.row_ids))
-        throw std::invalid_argument("Joint peeling snapshot identity mismatch.");
+    if (snapshot)
+    {
+        if (m_metrics) ++m_metrics->snapshot_identity_validation_count;
+        if (snapshot->atom_ids != input.atom_ids)
+            throw std::invalid_argument("Joint peeling snapshot identity mismatch.");
+        if (m_metrics) ++m_metrics->full_row_identity_scan_count;
+        if (snapshot->row_ids != input.row_ids)
+            throw std::invalid_argument("Joint peeling snapshot identity mismatch.");
+    }
     m_row_index_by_grid.reserve(input.row_ids.size());
     for (std::size_t row = 0; row < input.row_ids.size(); ++row)
     {
@@ -205,8 +212,6 @@ PostJointLocalSamples JointPostprocessingContext::BuildPostJointLocalSamples(
 {
     if (!m_snapshot) throw std::invalid_argument("Post-Joint samples require a trusted Joint snapshot.");
     const auto & input = m_problem.Input();
-    if (m_snapshot->atom_ids != input.atom_ids || m_snapshot->row_ids != input.row_ids)
-        throw std::invalid_argument("Post-Joint sample snapshot identity mismatch.");
     const auto atom_found = m_contributor_index_by_id.find(atom_id);
     if (atom_found == m_contributor_index_by_id.end())
         throw std::invalid_argument("Post-Joint sample target is outside the Joint problem.");

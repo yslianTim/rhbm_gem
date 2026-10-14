@@ -11,6 +11,8 @@
 namespace rhbm_gem::core::detail {
 struct JointPostprocessingMetrics
 {
+    std::size_t snapshot_identity_validation_count{};
+    std::size_t full_row_identity_scan_count{};
     std::size_t observation_row_mapping_builds{};
     std::size_t contributor_mapping_builds{};
     std::size_t joint_stage_mapping_builds{};
@@ -56,7 +58,9 @@ struct PostJointLocalSamples
     LocalPotentialSampleList BuildGaussianSamples(const LocalPotentialSampleList &) const;
 };
 
-// Owns compact, immutable lookups shared by all targets in one Joint run.
+// Borrows one immutable Joint run and owns compact lookups shared by its targets.
+// The geometry, model endpoints, problem input, and snapshot must outlive this
+// context and remain unchanged until postprocessing completes.
 class JointPostprocessingContext
 {
 public:
