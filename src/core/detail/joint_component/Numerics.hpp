@@ -216,21 +216,28 @@ struct Assessment
     std::optional<Spectrum> design,free_design,widths;
     std::optional<StructuralRankEvidence> design_structure;
     Matrix weak_directions;
-    MemoryEstimate verification_memory_estimate,rank_memory_estimate;
+    MemoryEstimate verification_memory_estimate,rank_memory_estimate,weak_direction_memory_estimate;
     double primary_endpoint_seconds{},independent_replay_seconds{},rank_assessment_seconds{};
     double coefficient_difference{unavailable};
     bool inner{},gradient{},identified{},endpoint_verified{},qualified{},reference_free{},width_rank_threshold_sensitive{};
-    std::string failure;
+    std::string failure,weak_direction_diagnostics_failure;
 };
 std::vector<JointCheck> AssessmentEvidence(const Assessment &,JointEvidenceScope);
 JointCheckStatus MergeConvergenceStatus(JointCheckStatus,JointCheckStatus);
 JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> &,JointEvidenceScope,bool assembled=false);
 Assessment AssessProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,const Vector * = nullptr,
     const Vector * assembled_prediction=nullptr,const std::vector<std::size_t> * assembled_rows=nullptr);
+Assessment AssessProfileWithWeakDirectionDiagnostics(const Domain &,VectorRef,const Vector &,
+    const EvaluationContext &,const Vector * = nullptr,const Vector * assembled_prediction=nullptr,
+    const std::vector<std::size_t> * assembled_rows=nullptr);
 // Evaluations belong to this exact domain, observations and numerical policy.
 Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const Evaluation &,const EvaluationContext &,bool supplied=false);
 Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const IndependentReplayEvidence &,
     const EvaluationContext &,bool supplied=false,std::size_t resident_override=0);
+Assessment AssessEvaluatedWithWeakDirectionDiagnostics(const Domain &,VectorRef,const Evaluation &,
+    const Evaluation &,const EvaluationContext &,bool supplied=false);
+Assessment AssessEvaluatedWithWeakDirectionDiagnostics(const Domain &,VectorRef,const Evaluation &,
+    const IndependentReplayEvidence &,const EvaluationContext &,bool supplied=false,std::size_t resident_override=0);
 bool SameAssessmentPolicy(const EvaluationContext &,const EvaluationContext &);
 // Borrowed only while the originating immutable problem and report remain alive.
 struct AssessmentReuse

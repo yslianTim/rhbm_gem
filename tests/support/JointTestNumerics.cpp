@@ -42,8 +42,9 @@ j::object Trust(const Domain & d,const Vector & y,const Evaluation & e,const Eva
     const auto fallback=c ? EvaluationContext{} : MakeContext(y,static_cast<Eigen::Index>(d.atoms.size()));
     return runtime_json::Trust(runtime::CheckTrust(d,y,e,c ? *c : fallback));
 }
-j::object Assess(const Domain & d,const Vector & y,const Vector & eta,const EvaluationContext & c,const Vector * beta)
-{return runtime_json::Assessment(runtime::AssessProfile(d,y,eta,c,beta));}
+j::object AssessWithWeakDirectionDiagnostics(const Domain & d,const Vector & y,const Vector & eta,
+    const EvaluationContext & c,const Vector * beta)
+{return runtime_json::Assessment(runtime::AssessProfileWithWeakDirectionDiagnostics(d,y,eta,c,beta));}
 j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,const EvaluationContext * provided)
 {
     const auto fallback=provided ? EvaluationContext{} : MakeContext(y,static_cast<Eigen::Index>(domain.atoms.size()));
@@ -51,7 +52,7 @@ j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,co
     const auto start=std::chrono::steady_clock::now();
     const auto search=runtime::SearchProfile(domain,y,initial_b,context);
     auto out=runtime_json::Search(search,context,y.size());
-    auto assessment=Assess(domain,y,search.eta,context);
+    auto assessment=AssessWithWeakDirectionDiagnostics(domain,y,search.eta,context);
     for(auto & field:assessment) out[field.key()]=std::move(field.value());
     out["seconds"]=Seconds(start); return out;
 }

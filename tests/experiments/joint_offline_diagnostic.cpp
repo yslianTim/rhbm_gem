@@ -81,7 +81,7 @@ void Run(int start, const Path & output)
     const V eta = Vector(fit.assembled_state->log_b);
     const V beta = Vector(fit.assembled_state->ac);
     const auto evaluation = p::AtState(domain, y, eta, beta, data.context);
-    const auto assessment = n::AssessProfile(domain, y, eta, data.context, &beta);
+    const auto assessment = n::AssessProfileWithWeakDirectionDiagnostics(domain, y, eta, data.context, &beta);
     out["actual_state_assessment"] = r::Assessment(assessment);
     out["same_state"] = p::SameState(domain, y, eta, beta, data.partition, data.context);
     const auto dense = p::DenseDifferentiate(evaluation, data.context.scale, &data.context);

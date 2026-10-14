@@ -10,7 +10,8 @@ boost::json::object AssessWithDerivativeAudit(const joint_abc::Domain & domain,c
     const auto * context=&policy; const double scale=policy.scale;
     const auto endpoint=beta ? EvaluateState(domain,y,eta,*beta,policy) : EvaluateProfile(domain,y,eta,false,context);
     const auto reference=EvaluateProfile(domain,y,eta,true,context);
-    const auto assessment=AssessEvaluated(domain,y,endpoint,reference,policy,beta!=nullptr);
+    const auto assessment=AssessEvaluatedWithWeakDirectionDiagnostics(
+        domain,y,endpoint,reference,policy,beta!=nullptr);
     auto out=runtime_json::Assessment(assessment);
     out.erase("runtime_convergence"); out.erase("runtime_checks"); out.erase("runtime_failure");
     out["joint_qualified"]=false; out["qualification_failure"]=assessment.failure;

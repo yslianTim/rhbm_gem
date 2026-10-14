@@ -32,7 +32,7 @@ Differential Differentiate(const Evaluation &, double scale, const EvaluationCon
     double free_design_threshold = -1);
 boost::json::object Trust(const Domain &, const Eigen::VectorXd &, const Evaluation &,
     const EvaluationContext * = nullptr);
-boost::json::object Assess(const Domain &, const Eigen::VectorXd &, const Eigen::VectorXd & eta,
+boost::json::object AssessWithWeakDirectionDiagnostics(const Domain &, const Eigen::VectorXd &, const Eigen::VectorXd & eta,
     const EvaluationContext &, const Eigen::VectorXd * supplied_beta=nullptr);
 boost::json::object Fit(const Domain &, const Eigen::VectorXd & y, const Eigen::VectorXd & initial_b,
     const EvaluationContext * = nullptr);

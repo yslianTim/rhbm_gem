@@ -150,6 +150,7 @@ const char * MemoryStageName(MemoryStage stage)
     case MemoryStage::SparseQRResearch: return "sparseqr-research";
     case MemoryStage::DesignSpectrum: return "design-spectrum";
     case MemoryStage::ProjectedWidthAssessment: return "projected-width-assessment";
+    case MemoryStage::ProjectedWidthDiagnostics: return "projected-width-diagnostics";
     case MemoryStage::TargetIdentifiability: return "target-identifiability";
     }
     return "unknown";
@@ -310,7 +311,9 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
         break;
     }
     case MemoryStage::ProjectedWidthAssessment:
+    case MemoryStage::ProjectedWidthDiagnostics:
     {
+        const bool diagnostics=stage==MemoryStage::ProjectedWidthDiagnostics;
         const auto widths=shape.component_width_columns ? shape.component_width_columns : atoms;
         std::size_t design_columns=shape.component_design_columns,free_columns=free;
         if(!design_columns) ok=CheckedMultiplyBytes(atoms,2,design_columns);
@@ -324,12 +327,15 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
         const auto add_product_bytes=[](std::size_t rows,std::size_t columns,std::size_t width,std::size_t & bytes) {
             std::size_t count{}; return CheckedMultiplyBytes(rows,columns,count) && CheckedMultiplyBytes(count,width,bytes);
         };
+        // Eigen's square BDCSVD keeps the input factor, a copied factor, the
+        // bidiagonalized factor, its computed factor, and three O(n^2) work arrays.
+        // Thin V adds its reconstruction matrix, output matrix, and our copied result.
         ok=ok && design_columns>0 && free_columns<=design_columns && widths>0 &&
             add_product_bytes(free_columns,free_columns,sizeof(double),free_factor) &&
-            CheckedMultiplyBytes(free_factor,3,free_svd_workspace) &&
+            CheckedMultiplyBytes(free_factor,6,free_svd_workspace) &&
             add_product_bytes(free_columns,widths,sizeof(double),projection_coefficients) &&
             add_product_bytes(widths,widths,sizeof(double),width_factor) &&
-            CheckedMultiplyBytes(width_factor,3,width_svd_workspace);
+            CheckedMultiplyBytes(width_factor,diagnostics ? 8 : 6,width_svd_workspace);
         if(ok && entries)
         {
             std::size_t scaled_entries{},rounded_entries{},twice_entries{};
@@ -365,7 +371,7 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
             AddProduct2D(free_qr_workspace,free_assembled_rows,free_columns,sizeof(double)) &&
             AddProduct(free_qr_workspace,free_assembled_rows,sizeof(double));
         if(ok) ok=CheckedAddBytes(free_common,free_qr_workspace,free_qr_peak) &&
-            AddProduct(free_svd_peak,4,free_factor) &&
+            AddProduct(free_svd_peak,7,free_factor) &&
             CheckedAddBytes(free_svd_peak,projection_coefficients,free_svd_peak) &&
             AddProduct(free_svd_peak,free_columns,sizeof(double)) &&
             CheckedAddBytes(free_common,free_svd_peak,free_svd_peak) &&
@@ -377,7 +383,7 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
             AddProduct(width_qr_workspace,width_assembled_rows,sizeof(double));
         if(ok) ok=CheckedAddBytes(sparse_matrices,projection_coefficients,width_qr_peak) &&
             CheckedAddBytes(width_qr_peak,width_qr_workspace,width_qr_peak) &&
-            AddProduct(width_svd_peak,5,width_factor) &&
+            AddProduct(width_svd_peak,diagnostics ? 10 : 7,width_factor) &&
             CheckedAddBytes(width_svd_peak,projection_coefficients,width_svd_peak) &&
             AddProduct(width_svd_peak,widths,sizeof(double)) &&
             CheckedAddBytes(sparse_matrices,width_svd_peak,width_svd_peak);
@@ -395,7 +401,7 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
             out.qr_tile_workspace_bytes=std::max(free_qr_workspace,width_qr_workspace);
             out.dense_factor_bytes=free_factor;
             out.factor_workspace_bytes=std::max({free_svd_workspace,width_svd_workspace,out.qr_tile_workspace_bytes});
-            out.right_singular_vector_bytes=width_factor;
+            out.right_singular_vector_bytes=diagnostics ? width_factor : 0;
             out.factor_rows=free_columns; out.factor_columns=free_columns;
         }
         break;
