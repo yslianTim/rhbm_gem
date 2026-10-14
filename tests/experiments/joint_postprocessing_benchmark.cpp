@@ -163,34 +163,40 @@ int main(int argc,char ** argv)
             rg::data_internal::ApplyJointStageEstimates(*f.model,snapshot,"benchmark");
             const auto peeling_start=Clock::now();
             RssMonitor peeling_rss;
-            for(auto & [id, p]:c::detail::BuildPostFitPeelingSamples(*f.map,*f.model,problem)) editor.SetAtomPostFitPeeling(*f.model->FindAtomPtr(id),std::move(p));
+            auto peelings=c::detail::BuildPostFitPeelingSamples(*f.map,*f.model,problem);
             phases["peeling_seconds"]=Seconds(peeling_start);
             phases["post_fit_peeling_peak_rss_bytes"]=peeling_rss.Peak();
             const auto covariance_start=Clock::now();
             RssMonitor covariance_rss;
             std::size_t local_workspace_estimate_bytes=0;
-            for(const auto * selected:f.model->GetSelectedAtoms())
+            std::size_t avoided_raw_sample_copy_bytes=0;
+            std::vector<std::pair<int,rg::PostFitPeelingResult>> peeling_updates;
+            std::vector<std::pair<int,rg::GroupParameterEvidence>> evidence_updates;
+            peeling_updates.reserve(peelings.size());
+            evidence_updates.reserve(peelings.size());
+            for(auto & [id,peeling]:peelings)
             {
+                const auto * selected=f.model->FindAtomPtr(id);
                 const auto local=rg::AtomLocalPotentialView::For(*selected);
                 const auto & stage=local.GetStageEstimate(rg::FittingStage::Second);
-                const auto & peeling=local.GetPostFitPeeling();
-                const auto raw=local.GetRawSamplingEntries(false);
+                const auto & raw=local.GetRawSamplingEntriesView();
+                avoided_raw_sample_copy_bytes+=raw.size()*sizeof(LocalPotentialSample);
                 c::detail::LocalConditionalCovariance covariance;
-                if(peeling)
-                {
-                    covariance=c::detail::ComputeLocalConditionalCovariance(stage,raw,*peeling,local.HasSampleGeometry());
-                    const auto workspace=c::detail::EstimateLocalConditionalCovarianceWorkspaceBytes(
-                        covariance.observation_count);
-                    local_workspace_estimate_bytes=std::max(local_workspace_estimate_bytes,
-                        raw.size()*sizeof(LocalPotentialSample)+(workspace ? *workspace : 0));
-                }
+                covariance=c::detail::ComputeLocalConditionalCovariance(stage,raw,peeling,local.HasSampleGeometry());
+                const auto workspace=c::detail::EstimateLocalConditionalCovarianceWorkspaceBytes(
+                    covariance.observation_count);
+                local_workspace_estimate_bytes=std::max(local_workspace_estimate_bytes,workspace.value_or(0));
                 covariance.source=stage.source;
-                editor.SetAtomGroupEvidence(*selected,c::detail::BuildLocalGroupEvidence(
-                    stage,peeling ? &*peeling : nullptr,covariance));
+                evidence_updates.emplace_back(id,c::detail::BuildLocalGroupEvidence(stage,&peeling,covariance));
+                peeling_updates.emplace_back(id,std::move(peeling));
             }
             phases["local_covariance_seconds"]=Seconds(covariance_start);
             phases["local_covariance_peak_rss_bytes"]=covariance_rss.Peak();
             phases["local_covariance_workspace_estimate_bytes"]=local_workspace_estimate_bytes;
+            phases["raw_sample_copy_bytes_avoided"]=avoided_raw_sample_copy_bytes;
+            const auto publish_start=Clock::now();
+            editor.ApplyJointPostFitEvidenceBatch(std::move(peeling_updates),std::move(evidence_updates));
+            phases["batch_evidence_publication_seconds"]=Seconds(publish_start);
             phases["per_target_covariance_storage_bytes"]=f.model->GetSelectedAtoms().size()*sizeof(Eigen::Matrix2d);
             editor.SetJointResult(std::move(snapshot));
             const auto group_start=Clock::now(); RssMonitor group_rss; c::RunGroupPotentialFitting(*f.model,options);

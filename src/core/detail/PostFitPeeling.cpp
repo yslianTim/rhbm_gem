@@ -77,7 +77,7 @@ std::map<int, PostFitPeelingResult> BuildPostFitPeelingSamples(
         auto & output = results[id];
         output.source = view.GetStageEstimate(FittingStage::Second).source;
         std::set<std::size_t> neighbors;
-        for (const auto & raw : view.GetRawSamplingEntries(false))
+        for (const auto & raw : view.GetRawSamplingEntriesView())
         {
             PeelingSampleEstimate sample;
             if(result && result->layout && !std::binary_search(result->layout->full_atoms.begin(),result->layout->full_atoms.end(),atom))
