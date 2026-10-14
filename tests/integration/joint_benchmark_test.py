@@ -73,6 +73,7 @@ class JointBenchmarkContractTest(unittest.TestCase):
             'endpoints': [{}, {}], 'targets': [{'local_status': 1}],
             'preparation': {
                 'observation_count': 128, 'contributor_count': 4,
+                'snapshot_identity_validation_count': 1, 'full_row_identity_scan_count': 1,
                 'row_mapping_build_count': 1, 'contributor_mapping_build_count': 1,
                 'joint_stage_mapping_build_count': 1, 'target_preparation_count': 1,
                 'prepared_sample_count': 8, 'valid_local_sample_count': 7,
@@ -84,6 +85,9 @@ class JointBenchmarkContractTest(unittest.TestCase):
                        'process_peak_rss_available': True},
         })['details']
         self.assertEqual(normalized['observation_count'], 128)
+        self.assertEqual(normalized['identity_validation_counts'], {
+            'snapshot': 1, 'full_observation_rows': 1,
+        })
         self.assertEqual(normalized['mapping_build_counts']['observation_rows'], 1)
         self.assertEqual(normalized['target_preparation_count'], 1)
         self.assertEqual(normalized['prepared_samples'], {'total': 8, 'valid': 7, 'invalid': 1})

@@ -231,6 +231,8 @@ int main(int argc, char ** argv)
             {"observation_count", snapshot.row_ids.size()},
             {"contributor_count", snapshot.atom_ids.size()},
             {"target_count", f.model->GetSelectedAtoms().size()},
+            {"snapshot_identity_validation_count", postprocessing_metrics.snapshot_identity_validation_count},
+            {"full_row_identity_scan_count", postprocessing_metrics.full_row_identity_scan_count},
             {"row_mapping_build_count", postprocessing_metrics.observation_row_mapping_builds},
             {"contributor_mapping_build_count", postprocessing_metrics.contributor_mapping_builds},
             {"joint_stage_mapping_build_count", postprocessing_metrics.joint_stage_mapping_builds},

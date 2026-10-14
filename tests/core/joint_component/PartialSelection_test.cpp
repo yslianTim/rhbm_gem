@@ -734,6 +734,8 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
     const auto expected_stages = rhbm_gem::data_internal::BuildJointStageEstimates(result, "expected-run");
     EXPECT_EQ(f.model->GetSelectedAtoms(), selected);
     EXPECT_EQ(f.model->GetSelectedBonds(), bonds);
+    EXPECT_EQ(postprocessing_metrics.snapshot_identity_validation_count, 1u);
+    EXPECT_EQ(postprocessing_metrics.full_row_identity_scan_count, 1u);
     EXPECT_EQ(postprocessing_metrics.observation_row_mapping_builds, 1u);
     EXPECT_EQ(postprocessing_metrics.contributor_mapping_builds, 1u);
     EXPECT_EQ(postprocessing_metrics.joint_stage_mapping_builds, 1u);
@@ -961,7 +963,7 @@ TEST(JointComponentPartialSelectionTest, PeelingIncludesDistantHaloThroughInterp
     EXPECT_LT(*result.samples[0].response, 0);
 }
 
-TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextBuildsGlobalMappingsOnce)
+TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIdentityAndBuildsMappingsOnce)
 {
     auto f = joint_partial_test::Make("all");
     const auto problem = core::BuildJointProblem(*f.map, *f.model);
@@ -974,20 +976,29 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextBuildsGlobal
     core::detail::JointPostprocessingMetrics metrics;
     const core::detail::JointPostprocessingContext context(
         *f.map, *f.model, problem, &snapshot, &metrics);
+    EXPECT_EQ(metrics.snapshot_identity_validation_count, 1u);
+    EXPECT_EQ(metrics.full_row_identity_scan_count, 1u);
+    EXPECT_EQ(metrics.observation_row_mapping_builds, 1u);
+    EXPECT_EQ(metrics.contributor_mapping_builds, 1u);
     const auto peelings = context.BuildPostFitPeelingSamples(
         problem.Input().selection_domain->target_indices);
     ASSERT_EQ(peelings.size(), 2u);
+    EXPECT_EQ(metrics.snapshot_identity_validation_count, 1u);
+    EXPECT_EQ(metrics.full_row_identity_scan_count, 1u);
     EXPECT_EQ(metrics.observation_row_mapping_builds, 1u);
     EXPECT_EQ(metrics.contributor_mapping_builds, 1u);
     EXPECT_EQ(metrics.target_preparation_count, 0u);
 
     const auto standalone_peelings = core::detail::BuildPostFitPeelingSamples(
         *f.map, *f.model, problem, problem.Input().selection_domain->target_indices, &snapshot);
+    std::size_t expected_prepared_samples{};
     for (const auto * atom : f.model->GetSelectedAtoms())
     {
         const int id = atom->GetSerialID();
         const auto & shared_peeling = peelings.at(id);
         const auto & standalone_peeling = standalone_peelings.at(id);
+        const auto local = rhbm_gem::AtomLocalPotentialView::For(*atom);
+        const auto & raw_samples = local.GetRawSamplingEntriesView();
         ASSERT_EQ(shared_peeling.samples.size(), standalone_peeling.samples.size());
         for (std::size_t i = 0; i < shared_peeling.samples.size(); ++i)
         {
@@ -998,6 +1009,7 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextBuildsGlobal
         const auto shared = context.BuildPostJointLocalSamples(id, shared_peeling);
         const auto standalone = core::detail::BuildPostJointLocalSamples(
             *f.map, *f.model, problem, id, standalone_peeling, snapshot);
+        EXPECT_EQ(shared.samples.size(), raw_samples.size());
         ASSERT_EQ(shared.samples.size(), standalone.samples.size());
         EXPECT_DOUBLE_EQ(shared.fixed_charge.coefficient, standalone.fixed_charge.coefficient);
         EXPECT_DOUBLE_EQ(shared.fixed_charge.width, standalone.fixed_charge.width);
@@ -1007,10 +1019,18 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextBuildsGlobal
             EXPECT_EQ(shared.samples[i].gaussian_response, standalone.samples[i].gaussian_response);
             EXPECT_EQ(shared.samples[i].reason, standalone.samples[i].reason);
         }
+        expected_prepared_samples += shared.samples.size();
+        EXPECT_EQ(metrics.snapshot_identity_validation_count, 1u);
+        EXPECT_EQ(metrics.full_row_identity_scan_count, 1u);
+        EXPECT_EQ(metrics.observation_row_mapping_builds, 1u);
+        EXPECT_EQ(metrics.contributor_mapping_builds, 1u);
     }
+    EXPECT_EQ(metrics.snapshot_identity_validation_count, 1u);
+    EXPECT_EQ(metrics.full_row_identity_scan_count, 1u);
     EXPECT_EQ(metrics.observation_row_mapping_builds, 1u);
     EXPECT_EQ(metrics.contributor_mapping_builds, 1u);
     EXPECT_EQ(metrics.target_preparation_count, 2u);
+    EXPECT_EQ(metrics.total_prepared_sample_count, expected_prepared_samples);
     EXPECT_EQ(metrics.total_prepared_sample_count,
         metrics.valid_local_sample_count + metrics.invalid_local_sample_count);
 }
@@ -1422,10 +1442,20 @@ TEST(JointComponentPartialSelectionTest, FixedChargePosteriorEvaluatorUsesJointW
         {
             const double joint_charge = n::EvaluateKernel(
                 distance * distance, profiles[i].width, 2.5).charge;
+            const double gaussian_only = member.posterior.GetModel().SignalAtDistance(distance);
+            const double reconstructed = core::EvaluateGroupMemberResponseAtDistance(member, distance);
             const double expected = member.posterior.GetModel().SignalAtDistance(distance) +
                 profiles[i].coefficient * joint_charge;
-            EXPECT_DOUBLE_EQ(core::EvaluateGroupMemberResponseAtDistance(member, distance), expected);
+            EXPECT_DOUBLE_EQ(reconstructed, expected);
+            if (joint_charge == 0.0 || profiles[i].coefficient == 0.0)
+                EXPECT_DOUBLE_EQ(reconstructed, gaussian_only);
         }
+        const double gaussian_only = member.posterior.GetModel().SignalAtDistance(0.8);
+        const double reconstructed = core::EvaluateGroupMemberResponseAtDistance(member, 0.8);
+        if (profiles[i].coefficient == 0.0)
+            EXPECT_DOUBLE_EQ(reconstructed, gaussian_only);
+        else
+            EXPECT_NE(reconstructed, gaussian_only);
     }
     EXPECT_NE(profiles[2].width, posterior_widths[2]);
 
@@ -1435,6 +1465,10 @@ TEST(JointComponentPartialSelectionTest, FixedChargePosteriorEvaluatorUsesJointW
     broad.fixed_charge = rhbm_gem::JointFixedChargeProfile{0.4, 0.9};
     EXPECT_NE(core::EvaluateGroupMemberResponseAtDistance(narrow, 1.2),
         core::EvaluateGroupMemberResponseAtDistance(broad, 1.2));
+    EXPECT_NE(core::EvaluateGroupMemberResponseAtDistance(narrow, 0.8),
+        narrow.posterior.GetModel().SignalAtDistance(0.8));
+    EXPECT_NE(core::EvaluateGroupMemberResponseAtDistance(broad, 0.8),
+        broad.posterior.GetModel().SignalAtDistance(0.8));
 }
 
 TEST(JointComponentPartialSelectionTest, ExistingSampleFirstExecutorUsesOnlyTheExplicitWorkset)

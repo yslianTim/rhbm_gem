@@ -241,6 +241,10 @@ def normalize_result(profile, raw):
                         'eligible_local_count': sum(target.get('local_status') == 1 for target in targets),
                         'local_information_storage_bytes': sum(
                             len(target.get('local_information', [])) * 8 for target in targets),
+                        'identity_validation_counts': {
+                            'snapshot': preparation.get('snapshot_identity_validation_count'),
+                            'full_observation_rows': preparation.get('full_row_identity_scan_count'),
+                        },
                         'mapping_build_counts': {
                             'observation_rows': preparation.get('row_mapping_build_count'),
                             'contributors': preparation.get('contributor_mapping_build_count'),
