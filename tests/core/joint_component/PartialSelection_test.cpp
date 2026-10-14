@@ -18,9 +18,11 @@
 #include "data/detail/JointStageAdapter.hpp"
 #include "core/detail/StageSummary.hpp"
 #include "core/detail/PostFitPeeling.hpp"
+#include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include "core/detail/MapInterpolation.hpp"
 #include "core/detail/MapSampler.hpp"
 #include "data/io/detail/JointResultJson.hpp"
+#include "data/io/detail/StageResultJson.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -731,6 +733,7 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
     EXPECT_EQ(f.model->GetSelectedBonds(), bonds);
     EXPECT_EQ(result.row_ids, problem.Input().row_ids);
     ASSERT_EQ(result.initialization.atoms.size(), problem.Input().atom_ids.size());
+    std::size_t local_regression_count{};
     for (std::size_t i = 0; i < result.atom_ids.size(); ++i)
     {
         const auto id = std::stoi(result.atom_ids[i]);
@@ -759,9 +762,29 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
                 EXPECT_DOUBLE_EQ(local.fixed_charge.coefficient, stage.point->GetOffset());
                 EXPECT_DOUBLE_EQ(local.fixed_charge.width, stage.point->GetWidth());
             }
+            if (local.status == rhbm_gem::EvidenceStatus::Available)
+            {
+                const auto prepared = core::detail::BuildPostJointLocalSamples(
+                    *f.map, *f.model, problem, id, *view.GetPostFitPeeling(), result);
+                const auto gaussian_only = prepared.BuildGaussianSamples(view.GetRawSamplingEntriesView());
+                const double alpha = core::TrainAlphaR(gaussian_only, options);
+                const auto direct = core::EstimateLocalGaussian(
+                    gaussian_only, alpha, options, rhbm_gem::GaussianModel3D{0.0, 1.0, 0.0});
+                ASSERT_TRUE(direct.fit_result);
+                EXPECT_DOUBLE_EQ(local.fit.alpha_r, direct.alpha_r);
+                EXPECT_EQ(local.fit.ols.GetModel().ToVector(), direct.ols.GetModel().ToVector());
+                EXPECT_EQ(local.fit.mdpde.GetModel().ToVector(), direct.mdpde.GetModel().ToVector());
+                ASSERT_TRUE(local.fit.diagnostics);
+                EXPECT_EQ(local.fit.diagnostics->status, direct.fit_result->status);
+                EXPECT_DOUBLE_EQ(local.fit.diagnostics->sigma_square, direct.fit_result->sigma_square);
+                EXPECT_EQ(local.fit.diagnostics->iterations.iterations, direct.fit_result->diagnostics.iterations);
+                EXPECT_EQ(local.fit.diagnostics->refinement.has_value(), direct.fit_result->refinement.has_value());
+                ++local_regression_count;
+            }
         }
         EXPECT_FALSE(view.GetGroupMemberResult());
     }
+    EXPECT_GT(local_regression_count, 0u);
     const auto direct = n::FitFixedNeighborComponents(problem, result.initialization.b, {});
     EXPECT_EQ(result.objective, direct.objective);
     ASSERT_EQ(result.components.size(), direct.components.size());
@@ -794,7 +817,7 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     EXPECT_EQ(halo.GetStageEstimate(rhbm_gem::FittingStage::Second).source.role, rhbm_gem::FittingRole::Halo);
     auto summary = core::BuildSecondStageSpotSummary(*f.model);
     EXPECT_NE(summary.find("joint-components"), std::string::npos);
-    EXPECT_NE(summary.find("\n| Spot | valid | not-converged | unavailable | A mean / s.d. | B mean / s.d. | C mean / s.d. |"), std::string::npos);
+    EXPECT_NE(summary.find("\n| Spot | valid | not-converged | unavailable | A mean / s.d. | B mean / s.d. | C(J) mean / s.d. |"), std::string::npos);
     EXPECT_NE(summary.find("\n| CA   |"), std::string::npos);
     EXPECT_EQ(summary.find("\n| CB   |"), std::string::npos);
     const auto expectSummaryRowWidths = [](const std::string & output, bool unavailable) {
@@ -823,7 +846,7 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
                 EXPECT_EQ(row[pipe_positions[column] + 9], '/');
         }
     };
-    expectSummaryRowWidths(summary, false);
+    expectSummaryRowWidths(summary, true);
     f.model->EditAnalysis().SetJointResult(result);
     f.model->EditAnalysis().ClearJointResult();
     EXPECT_TRUE(target.HasFinalModel(rhbm_gem::FittingStage::Second));
@@ -982,6 +1005,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
         local.sample_count = 6;
         local.effective_sample_count = 6;
         local.fit.alpha_r = 0.2;
+        local.fit.ols = {GaussianModel3D(1.9 + 0.1 * id, 0.40 + 0.01 * id, 0.0), {}};
         local.fit.mdpde = {GaussianModel3D(2.0 + 0.1 * id, 0.42 + 0.01 * id, 0.0), {}};
         local.fit.diagnostics = LocalFitDiagnostics{RHBMEstimationStatus::SUCCESS, 0.1, {8, 1e-8, 1e-8}, {}};
         if (id == 3)
@@ -1050,6 +1074,23 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
     editor.ApplyPostJointLocalResultsBatch(local_results);
     core::RunGroupPotentialFitting(model, options);
     EXPECT_EQ(first.GetGroupMemberResult()->posterior.GetModel().ToVector(), posterior);
+
+    {
+        const command_test::ScopedTempDir directory{"post_joint_local_group_roundtrip"};
+        DataRepository repository(directory.path() / "model.sqlite");
+        repository.SaveModel(model, "model");
+        const auto loaded = repository.LoadModel("model");
+        EXPECT_EQ(rhbm_gem::stage_result_io::Encode(*loaded), rhbm_gem::stage_result_io::Encode(model));
+        const auto saved = AtomLocalPotentialView::For(*loaded->FindAtomPtr(1));
+        ASSERT_TRUE(saved.GetPostJointLocalResult());
+        EXPECT_EQ(saved.GetPostJointLocalResult()->source.run_id, "local-test-run");
+        EXPECT_EQ(saved.GetPostJointLocalResult()->status, EvidenceStatus::Available);
+        ASSERT_TRUE(saved.GetPostJointLocalResult()->information);
+        EXPECT_EQ(saved.GetPostJointLocalResult()->information->precision,
+            first.GetPostJointLocalResult()->information->precision);
+        ASSERT_TRUE(saved.GetGroupMemberResult());
+        EXPECT_EQ(saved.GetGroupMemberResult()->posterior.GetModel().ToVector(), posterior);
+    }
 
     editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1), {{-12345, {0.3, {0,0,0}, true}}});
     EXPECT_FALSE(first.GetPostFitPeeling());

@@ -394,8 +394,8 @@ coefficients, tiled QR workspaces and projected-width factors. Both the full
 interior shape and its all-active free face exceed the planning budget in the
 synthetic census; neither full qualification is attempted. These are planned
 allocation estimates, not measured RSS. Derived target evidence has no factor
-or right-vector workspace. This rank limitation remains even though local
-post-fit covariance no longer allocates a component-wide factor.
+or right-vector workspace. This rank limitation remains independent of the
+downstream local MDPDE and group information workflow.
 
 Prepared row mappings store sorted parent/local row pairs only for each block's
 affected rows, plus cached local support indices. Their structural cost follows
@@ -421,30 +421,36 @@ serial synthetic census rejects the large rank stage, while the derived-target
 preflight itself passes; no trusted rank evidence exists in that case. No
 physical map/model search has been measured.
 
-Post-fit local conditional covariance is computed after peeling and is separate
-from Joint numerical qualification. For each eligible target, raw sample
-geometry and paired peeling responses define the local observations. The
-estimator evaluates the complete Gaussian-plus-charge kernel and its A/B
-Jacobian at the fixed Joint endpoint, with neighboring Joint parameters and
-the target's C held fixed. A pivoted QR checks the two-column design; only its
-small 2-by-2 triangular factor is used for the covariance. The residual
-variance uses the local i.i.d. Gaussian working model with `n_i - 2` degrees of
-freedom. The covariance is transformed to Group Fitting's two parameter
-coordinates and stored in `GroupParameterEvidence`; it is not written into the
-Joint stage uncertainty.
+After Joint fitting, `BuildPostFitPeelingSamples` subtracts every other
+retained contributor from each selected target's raw samples using the Joint
+grid's tricubic interpolation. `BuildPostJointLocalSamples` then subtracts the
+target's own fixed Joint charge profile `C_i^J K(r; B_i^J)` with the same
+support and interpolation convention. `FitPostJointLocalTarget` trains local
+alpha and runs the existing OLS initialization and local MDPDE on that
+charge-corrected Gaussian data. The resulting local A/B estimates and solver
+qualification are stored separately in `PostJointLocalResult`; they do not
+rewrite or requalify the Joint endpoint.
 
-The local workspace is atom-local and scales with the available sample count
-`n_i`, not with the square of the component parameter count. The dense local
-design and its QR factor are estimated at 32 bytes per available row, plus the
-raw-sample copy used by the workflow. Only a 2-by-2 covariance and a two-value
-parameter estimate are retained per target. No cross-atom parameter
-covariance or full-component covariance QR/SVD is formed. Rank preflight and
-target qualification retain their existing behavior and can still exceed the
-memory budget independently.
+`RunJointGroupPotentialFitting` trains group alpha from qualified local MDPDE
+points, then uses their working observation information `P_i = X_i^T
+Sigma_y_i^-1 X_i` and `h_i = X_i^T Sigma_y_i^-1 y_i`. It reuses the current
+`EstimateMuMDPDE` and `EstimateWEBFromInformation` equations without fitting
+the same local observations again. Each eligible target retains only its
+compact 2-by-2 precision and two-value information moment. Per-sample working
+weights and covariances are temporary; no component-wide or cross-atom
+covariance matrix is formed. Peeling and local sample preparation are bounded
+per target, and group WEB is bounded per group.
+
+The fixed Joint charge profile remains unchanged when the local width differs.
+Log-Gaussian fitting filters nonpositive corrected responses according to the
+existing dataset builder. Local measurement information is a working model;
+it does not propagate uncertainty in other Joint contributors or cross-atom
+errors. Rank preflight and target qualification retain their existing behavior
+and can still exceed the memory budget independently.
 
 The Map builder collects and sorts relevant voxel indices instead of allocating
 an index array for the entire map. Voxel ordering and support arithmetic remain
-unchanged. Current Joint search, solve, workflow, postprocessing and command
+unchanged. Current Joint search, solve, full workflow and command
 measurements are run through the single workflow in the
 [benchmark guide](joint-benchmark.md).
 

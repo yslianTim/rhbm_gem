@@ -182,7 +182,8 @@ Current Joint experiments, build options, validation harnesses and permanent
 test owners are listed in the
 [Joint experiment inventory](../docs/developer/joint-experiments.md). The sole
 benchmark workflow is `tests/integration/joint_benchmark.py`; it includes the
-FixedNeighbor search/solve, workflow/postprocess and complete-command scopes.
+FixedNeighbor search/solve, the complete Joint/local/group workflow, and
+complete-command scopes.
 Partial-selection, weak-halo and noise/mismatch measurements remain current
 feature, diagnosis and research tools. Closed campaign drivers and their
 machine-readable results are not retained in the current tree.

@@ -7,9 +7,11 @@
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/FittingWorkset.hpp"
+#include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include "data/io/detail/JointResultJson.hpp"
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include "core/detail/PostFitPeeling.hpp"
 #include "core/detail/MapSampler.hpp"
@@ -461,39 +463,97 @@ TEST(JointObservableProfileTest, FullAbcPersistenceExportPeelingAndInitializatio
     EXPECT_EQ(initialization.atoms.size(),1u);
 }
 
-TEST(JointObservableProfileTest, PostJointLocalSamplesSubtractGridInterpolatedOwnChargeOnce)
+TEST(JointObservableProfileTest, PostJointLocalSamplesSeparateFixedChargeAndFilterLogResponses)
 {
     using namespace rhbm_gem;
-    auto input = Input(); input.atom_ids.resize(1); input.support.resize(1); input.observations[23] -= .7;
+    auto input = Input();
+    input.atom_ids.resize(1);
+    input.support.resize(1);
+    input.observations[23] -= .7;
+    input.support[0].front().squared_distance = 0.0;
+    input.support[0].back().squared_distance = 6.25;
     const core::JointProblem problem(std::move(input));
-    const auto result = core::CaptureJointAnalysisResult(core::FitJointComponents(problem, {.6}));
+    const auto base = core::CaptureJointAnalysisResult(core::FitJointComponents(problem, {.6}));
+    ASSERT_TRUE(base.components.front().state);
     std::vector<std::unique_ptr<AtomObject>> atoms;
-    auto atom = std::make_unique<AtomObject>(); atom->SetSerialID(1); atom->SetElement(Element::CARBON);
-    atom->SetPosition(0, 0, 0); atoms.push_back(std::move(atom));
-    ModelObject model(std::move(atoms)); model.SelectAtoms([](const auto &) { return true; });
-    auto values = std::make_unique<double[]>(24 * 4 * 4);
-    for (std::size_t row = 0; row < 24; ++row) values[row] = problem.Input().observations[row];
-    MapObject map({24, 4, 4}, {1, 1, 1}, {0, 0, 0}, std::move(values));
-    auto editor = model.EditAnalysis(); editor.ApplyJointResult(result, "charge-correction-test");
-    const SamplingPointList points{{23, {23, 0, 0}, true}};
-    const auto raw = core::detail::BuildLocalPotentialSampleList(map, points);
-    editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1), raw);
-    const auto peeling = core::detail::BuildPostFitPeelingSamples(map, model, problem, std::nullopt, &result).at(1);
-    const auto samples = core::detail::BuildPostJointLocalSamples(map, model, problem, 1, peeling, result);
-    ASSERT_EQ(samples.samples.size(), 1u);
-    const auto & sample = samples.samples.front();
-    EXPECT_EQ(sample.raw_sample_index, 0u);
-    EXPECT_DOUBLE_EQ(sample.distance, 23);
-    ASSERT_TRUE(sample.peeled_response);
-    ASSERT_TRUE(sample.fixed_charge_response);
-    ASSERT_TRUE(sample.gaussian_response);
-    const auto point = AtomLocalPotentialView::For(*model.FindAtomPtr(1)).GetFinalModel(FittingStage::Second);
-    const auto own = n::EvaluateKernel(problem.Input().support[0].back().squared_distance, point.GetWidth(), 2.5);
-    EXPECT_NEAR(*sample.fixed_charge_response, point.GetOffset() * own.charge, 1e-12);
-    EXPECT_DOUBLE_EQ(*sample.gaussian_response, *sample.peeled_response - *sample.fixed_charge_response);
-    const auto fitting_samples = samples.BuildGaussianSamples(raw);
-    ASSERT_EQ(fitting_samples.size(), 1u);
-    EXPECT_DOUBLE_EQ(fitting_samples.front().response, *sample.gaussian_response);
+    auto atom = std::make_unique<AtomObject>();
+    atom->SetSerialID(1);
+    atom->SetElement(Element::CARBON);
+    atom->SetPosition(0, 0, 0);
+    atoms.push_back(std::move(atom));
+    ModelObject model(std::move(atoms));
+    model.SelectAtoms([](const auto &) { return true; });
+    auto editor = model.EditAnalysis();
+
+    constexpr double joint_width = .85;
+    constexpr double local_width = .42;
+    constexpr double local_amplitude = 2.4;
+    constexpr double negative_response = -.1;
+    const std::array<double, 3> charges{0.0, .35, -.35};
+    for (const double charge : charges)
+    {
+        auto result = base;
+        result.components.front().state->b[0] = joint_width;
+        result.components.front().state->log_b[0] = std::log(joint_width);
+        result.components.front().state->ac[0] = 1.7;
+        result.components.front().state->ac[1] = charge;
+        editor.ApplyJointResult(result, "charge-correction-test");
+
+        const auto center_joint = n::EvaluateKernel(0.0, joint_width, 2.5);
+        const auto boundary_joint = n::EvaluateKernel(6.25, joint_width, 2.5);
+        const auto center_local = n::EvaluateKernel(0.0, local_width, 2.5);
+        const auto boundary_local = n::EvaluateKernel(6.25, local_width, 2.5);
+        auto values = std::make_unique<double[]>(24 * 4 * 4);
+        std::fill_n(values.get(), 24 * 4 * 4, 0.0);
+        values[0] = local_amplitude * center_local.gaussian + charge * center_joint.charge;
+        values[23] = local_amplitude * boundary_local.gaussian + charge * boundary_joint.charge;
+        MapObject map({24, 4, 4}, {1, 1, 1}, {0, 0, 0}, std::move(values));
+
+        const SamplingPointList points{
+            {0.0, {0, 0, 0}, true},
+            {2.5, {23, 0, 0}, true},
+            {0.0, {0, 0, 0}, true}};
+        auto raw = core::detail::BuildLocalPotentialSampleList(map, points);
+        raw[2].response = charge * center_joint.charge + negative_response;
+        editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1), raw);
+        const auto peeling = core::detail::BuildPostFitPeelingSamples(
+            map, model, problem, std::nullopt, &result).at(1);
+        const auto prepared = core::detail::BuildPostJointLocalSamples(
+            map, model, problem, 1, peeling, result);
+        ASSERT_EQ(prepared.samples.size(), 3u);
+        EXPECT_DOUBLE_EQ(prepared.fixed_charge.width, joint_width);
+        EXPECT_NE(prepared.fixed_charge.width, local_width);
+        for (std::size_t i = 0; i < prepared.samples.size(); ++i)
+        {
+            const auto & sample = prepared.samples[i];
+            EXPECT_EQ(sample.raw_sample_index, i);
+            EXPECT_DOUBLE_EQ(sample.distance, points[i].distance);
+            ASSERT_TRUE(sample.peeled_response);
+            ASSERT_TRUE(sample.fixed_charge_response);
+            ASSERT_TRUE(sample.gaussian_response);
+            EXPECT_DOUBLE_EQ(*sample.gaussian_response,
+                *sample.peeled_response - *sample.fixed_charge_response);
+        }
+        EXPECT_NEAR(*prepared.samples[0].fixed_charge_response,
+            charge * center_joint.charge, 1e-12);
+        EXPECT_NEAR(*prepared.samples[1].fixed_charge_response,
+            charge * boundary_joint.charge, 1e-12);
+        EXPECT_NEAR(*prepared.samples[0].gaussian_response,
+            local_amplitude * center_local.gaussian, 1e-12);
+        EXPECT_NEAR(*prepared.samples[1].gaussian_response,
+            local_amplitude * boundary_local.gaussian, 1e-12);
+        EXPECT_DOUBLE_EQ(*prepared.samples[2].gaussian_response, negative_response);
+
+        const auto fitting_samples = prepared.BuildGaussianSamples(raw);
+        ASSERT_EQ(fitting_samples.size(), 3u);
+        EXPECT_DOUBLE_EQ(fitting_samples.back().response, negative_response);
+        std::vector<double> responses;
+        for (const auto & sample : fitting_samples) responses.push_back(sample.response);
+        const core::detail::PreparedLocalGaussianDesign design{fitting_samples, 0.0, 2.5};
+        const auto dataset = design.BuildDataset(responses, GaussianModel3D{0.0, 1.0, 0.0});
+        EXPECT_EQ(dataset.y.size(), 2);
+        EXPECT_TRUE(dataset.y.allFinite());
+    }
 }
 
 namespace {

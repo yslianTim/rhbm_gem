@@ -46,7 +46,7 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsNormalizedSchema)
 
     { rg::DataRepository repository{ database_path }; }
 
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 19);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), 20);
     for (const auto table_name : std::array<std::string_view, 9>{
              "model_object",
              "model_joint_result",

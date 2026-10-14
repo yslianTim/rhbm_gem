@@ -21,11 +21,11 @@ void ExpectCurrentSchemaValidationFailure(
     const auto database_path{ temp_dir.path() / database_name };
     if(legacy) data_test::CreateLegacyAnalysisDatabase(database_path);
     else { rg::DataRepository repository{ database_path }; }
-    ASSERT_EQ(data_test::GetUserVersion(database_path), legacy ? 18:19);
+    ASSERT_EQ(data_test::GetUserVersion(database_path), legacy ? 18:20);
 
     mutate_database(database_path);
     EXPECT_THROW((void)rg::DataRepository(database_path), std::runtime_error);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), legacy ? 18:19);
+    EXPECT_EQ(data_test::GetUserVersion(database_path), legacy ? 18:20);
 }
 
 void RecreateChainMapTable(

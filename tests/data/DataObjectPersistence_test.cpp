@@ -4,6 +4,7 @@
 #include <string>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <boost/json.hpp>
 #include <rhbm_gem/data/io/JointAnalysisFileIO.hpp>
 #include "data/io/detail/JointResultJson.hpp"
@@ -1165,6 +1166,29 @@ TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesSourcesGeometryAnd
         EXPECT_EQ(before.GetPostFitPeeling().has_value(), after.GetPostFitPeeling().has_value());
         EXPECT_EQ(after.GetPostFitPeeling().has_value(), b.source.role == rg::FittingRole::Target);
         if (after.GetPostFitPeeling()) EXPECT_EQ(before.GetPostFitPeeling()->mode,after.GetPostFitPeeling()->mode);
+        EXPECT_EQ(before.GetPostJointLocalResult().has_value(),after.GetPostJointLocalResult().has_value());
+        if(before.GetPostJointLocalResult())
+        {
+            const auto & local_before=*before.GetPostJointLocalResult();
+            const auto & local_after=*after.GetPostJointLocalResult();
+            EXPECT_EQ(local_before.source.run_id,local_after.source.run_id);
+            EXPECT_EQ(local_before.status,local_after.status);
+            EXPECT_EQ(local_before.reason,local_after.reason);
+            EXPECT_EQ(local_before.fixed_charge.coefficient,local_after.fixed_charge.coefficient);
+            EXPECT_EQ(local_before.fixed_charge.width,local_after.fixed_charge.width);
+            EXPECT_EQ(local_before.sample_count,local_after.sample_count);
+            EXPECT_EQ(local_before.effective_sample_count,local_after.effective_sample_count);
+            EXPECT_EQ(local_before.sample_failures.size(),local_after.sample_failures.size());
+            if(local_before.information)
+            {
+                ASSERT_TRUE(local_after.information);
+                EXPECT_EQ(local_before.information->precision,local_after.information->precision);
+                EXPECT_EQ(local_before.information->moment,local_after.information->moment);
+            }
+            EXPECT_EQ(local_before.fit.alpha_r,local_after.fit.alpha_r);
+            EXPECT_EQ(local_before.fit.mdpde.GetModel().ToVector(),local_after.fit.mdpde.GetModel().ToVector());
+            EXPECT_EQ(local_before.fit.diagnostics.has_value(),local_after.fit.diagnostics.has_value());
+        }
         const auto raw=before.GetRawSamplingEntries(false), saved=after.GetRawSamplingEntries(false);
         ASSERT_EQ(raw.size(),saved.size()); EXPECT_TRUE(after.HasSampleGeometry());
         for(std::size_t i=0;i<raw.size();++i) {EXPECT_EQ(raw[i].point.position,saved[i].point.position); EXPECT_EQ(raw[i].response,saved[i].response); if(after.GetPostFitPeeling()) {EXPECT_EQ(before.GetPostFitPeeling()->samples[i].response,after.GetPostFitPeeling()->samples[i].response); EXPECT_EQ(before.GetPostFitPeeling()->samples[i].reason,after.GetPostFitPeeling()->samples[i].reason);}}
@@ -1184,6 +1208,49 @@ TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesSourcesGeometryAnd
     EXPECT_THROW(repository.SaveModel(*f.model,"joint"),std::invalid_argument);
     const auto preserved=repository.LoadModel("joint");
     EXPECT_EQ(rg::AtomLocalPotentialView::For(*preserved->FindAtomPtr(1)).GetFinalModel(rg::FittingStage::Second).ToVector(),original.ToVector());
+}
+
+TEST(DataObjectPersistenceTest, VersionTwoJointEvidenceIsInvalidatedDuringNeutralMigration)
+{
+    auto model = data_test::MakeModelWithBond();
+    model->SelectAllAtoms();
+    auto editor = model->EditAnalysis();
+    editor.InitializeFromSelection();
+    std::map<int, rg::LocalStageEstimate> stages;
+    for (const auto & atom : model->GetAtomList())
+    {
+        rg::LocalStageEstimate stage;
+        stage.source = {rg::EstimateMethod::JointComponents, std::to_string(atom->GetSerialID()),
+            "legacy-component", "legacy-v2-run", rg::FittingRole::Target};
+        stage.point = rg::GaussianModel3D(2.0, 0.5, 0.1);
+        stage.convergence = rg::JointCheckStatus::Passed;
+        stages.emplace(atom->GetSerialID(), std::move(stage));
+    }
+    editor.ApplySecondStageEstimates(std::move(stages));
+    auto old_document = boost::json::parse(rg::stage_result_io::Encode(*model)).as_object();
+    old_document["version"] = 2;
+    for (auto & atom : old_document["atoms"].as_array())
+        atom.as_object()["evidence"] = boost::json::object{
+            {"atom", "legacy"}, {"component", "legacy-component"}, {"source", "legacy-v2-run"},
+            {"status", 1}, {"reason", ""}, {"method", "local-conditional-iid-ls"},
+            {"correlation", "block-diagonal-by-atom"}, {"estimate", boost::json::array{1.0, 0.5}},
+            {"covariance", boost::json::array{1.0, 0.0, 0.0, 1.0}}};
+
+    rg::stage_result_io::Decode(*model, boost::json::serialize(old_document), 3, {});
+    for (const auto & atom : model->GetAtomList())
+    {
+        const auto view = rg::AtomLocalPotentialView::For(*atom);
+        EXPECT_FALSE(view.GetPostJointLocalResult());
+        EXPECT_FALSE(view.GetGroupMemberResult());
+    }
+    for (const auto key : model->GetAnalysisView().CollectAtomGroupKeys())
+    {
+        const auto summary = model->GetAnalysisView().GetGroupParameterSummary(key);
+        if (!summary) continue;
+        EXPECT_EQ(summary->status, rg::EvidenceStatus::Unavailable);
+        EXPECT_EQ(summary->reason, "post-joint-local-results-required");
+        EXPECT_FALSE(summary->inference);
+    }
 }
 
 TEST(DataObjectPersistenceTest, LegacyReadsAndMultiKeyMigrationAreAtomic)
@@ -1207,7 +1274,7 @@ TEST(DataObjectPersistenceTest, LegacyReadsAndMultiKeyMigrationAreAtomic)
         EXPECT_EQ(rg::stage_result_io::Encode(*repository.LoadModel("native")),rg::stage_result_io::Encode(*native));
         EXPECT_EQ(rg::stage_result_io::Encode(*repository.LoadModel("joint")),rg::stage_result_io::Encode(*joint));
         repository.SaveModel(*native,"new");
-        EXPECT_EQ(data_test::GetUserVersion(path),19); EXPECT_EQ(data_test::CountRows(path,"model_object"),3);
+        EXPECT_EQ(data_test::GetUserVersion(path),20); EXPECT_EQ(data_test::CountRows(path,"model_object"),3);
         EXPECT_FALSE(data_test::HasTable(path,"model_atom_local_potential"));
         EXPECT_EQ(rg::stage_result_io::Encode(*repository.LoadModel("native")),rg::stage_result_io::Encode(*native));
         EXPECT_EQ(rg::stage_result_io::Encode(*repository.LoadModel("joint")),rg::stage_result_io::Encode(*joint));
@@ -1258,7 +1325,7 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     EXPECT_DOUBLE_EQ(loaded->GetAnalysisView().GetAtomAlphaG(group),.87);
     EXPECT_FALSE(actual.fit_result); ASSERT_TRUE(actual.diagnostics); EXPECT_EQ(actual.diagnostics->iterations.iterations,17);
     EXPECT_EQ(actual.diagnostics->refinement->relative_coordinate_difference,fit.refinement->relative_coordinate_difference);
-    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),2);
+    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),3);
     EXPECT_FALSE(loaded->GetAnalysisView().GetJointResult());
 }
 

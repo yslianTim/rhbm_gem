@@ -19,7 +19,7 @@ namespace {
 
 using namespace std::literals;
 
-constexpr int kCurrentSchemaVersion = 19;
+constexpr int kCurrentSchemaVersion = 20;
 constexpr std::string_view kUserSchemaObjectCountSql =
     "SELECT COUNT(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%';";
 constexpr std::string_view kTableNamesSql =
@@ -264,7 +264,7 @@ void ValidateModelRootForeignKey(
 
 void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
 {
-    const bool canonical = QueryUserVersion(database) == 19;
+    const bool canonical = QueryUserVersion(database) >= 19;
     const bool neutral = QueryUserVersion(database) >= 18;
     std::vector<std::string_view> expected(kModelTableNames.begin(), kModelTableNames.end());
     if(canonical) std::erase_if(expected,[](auto name) {return name=="model_atom_local_potential" || name=="model_atom_posterior" || name=="model_atom_group_potential";});
@@ -387,13 +387,13 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         ValidateCurrentSchema(database);
         return;
     }
-    if (user_version == 17 || user_version == 18 || user_version == kCurrentSchemaVersion)
+    if (user_version == 17 || user_version == 18 || user_version == 19 || user_version == kCurrentSchemaVersion)
     {
         ValidateCurrentSchema(database);
         return;
     }
     throw std::runtime_error(
-        "Unsupported SQLite schema: expected an empty version-0 database or schema v17/v18/v19.");
+        "Unsupported SQLite schema: expected an empty version-0 database or schema v17/v18/v19/v20.");
 }
 
 } // namespace
@@ -439,7 +439,7 @@ void DataRepository::SaveModel(
 {
     std::lock_guard<std::mutex> lock(m_db_mutex);
     SQLiteWrapper::TransactionGuard transaction(*m_database);
-    if (QueryUserVersion(*m_database) < 19) model_storage::UpgradeStageSchema(*m_database);
+    if (QueryUserVersion(*m_database) < kCurrentSchemaVersion) model_storage::UpgradeStageSchema(*m_database);
     model_storage::Save(*m_database, model_object, key_tag);
     transaction.Commit();
 }

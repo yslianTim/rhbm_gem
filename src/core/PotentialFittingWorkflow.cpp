@@ -13,8 +13,10 @@
 #include "detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include "detail/second_stage/IterationProcess.hpp"
 #include "data/detail/JointStageAdapter.hpp"
+#include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <boost/uuid/random_generator.hpp>

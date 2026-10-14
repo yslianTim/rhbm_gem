@@ -25,9 +25,11 @@ singular values, rank, threshold and threshold sensitivity. Weak-direction
 vectors are available only through explicit test/offline diagnostic APIs and
 their separate memory preflight; they do not participate in qualification.
 Full-design and projected-width rank checks remain required. Post-fit peeling
-and local group evidence are prepared together and published in a validated
-batch that traverses membership once and invalidates each affected group once.
-The batch does not change local covariance or group inference inputs.
+and post-Joint local results have separate validated publication steps. Local
+MDPDE results preserve their Joint run provenance and provide group training
+points plus compact measurement information; group fitting does not repeat
+local solves. Batches validate identities and invalidate each affected group
+once.
 
 ## Historical algorithm decisions
 

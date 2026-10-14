@@ -112,7 +112,7 @@ public:
     }
     void ClearPostFitPeeling() { m_post_fit_peeling.reset(); }
     const std::optional<PostJointLocalResult> & PostJointLocalResult() const { return m_post_joint_local_result; }
-    void SetPostJointLocalResult(PostJointLocalResult value) { m_post_joint_local_result = std::move(value); }
+    void SetPostJointLocalResult(rhbm_gem::PostJointLocalResult value) { m_post_joint_local_result = std::move(value); }
     void ClearPostJointLocalResult() { m_post_joint_local_result.reset(); }
     bool SampleGeometryAvailable() const { return m_sample_geometry_available; }
     void SetSampleGeometryAvailable(bool value) { m_sample_geometry_available = value; }

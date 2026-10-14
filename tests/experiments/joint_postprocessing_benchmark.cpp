@@ -70,6 +70,7 @@ joint_partial_test::Fixture Make(const std::string & name)
 {
     joint_partial_test::Fixture f;
     const int components = name == "multi" ? 3 : 1, count = name == "halo" ? 5 : 3;
+    const bool full_selection = name == "full" || name == "noisy" || name == "outlier";
     std::vector<std::unique_ptr<rg::AtomObject>> atoms;
     for (int group = 0; group < components; ++group)
         for (int k = 0; k < count; ++k)
@@ -87,9 +88,7 @@ joint_partial_test::Fixture Make(const std::string & name)
             f.c.push_back(0.1 - 0.02 * k);
         }
     f.model = std::make_unique<rg::ModelObject>(std::move(atoms));
-    f.model->SelectAtoms([&](const auto & atom) {
-        return name == "full" || (atom.GetSerialID() - 1) % count == 0;
-    });
+    f.model->SelectAtoms([&](const auto & atom) { return full_selection || (atom.GetSerialID() - 1) % count == 0; });
     const std::array<int, 3> dims{
         static_cast<int>((12.0 * (components - 1) + 0.7 * (count - 1) + 6.4) / 0.16) + 1, 41, 41};
     const std::array<double, 3> spacing{0.16, 0.16, 0.16}, origin{-3.2, -3.2, -3.2};
@@ -99,7 +98,9 @@ joint_partial_test::Fixture Make(const std::string & name)
             for (int x = 0; x < dims[0]; ++x)
             {
                 const auto position = c::simulation::GridPosition({x, y, z}, spacing, origin);
-                double value = 0.0001 * std::sin(0.7 * x + 0.3 * y + 0.2 * z);
+                const double noise_scale = name == "noisy" ? 0.002 : 0.0001;
+                double value = noise_scale * std::sin(0.7 * x + 0.3 * y + 0.2 * z);
+                if (name == "outlier" && x == 20 && y == 20 && z == 20) value += 0.1;
                 for (std::size_t atom = 0; atom < f.a.size(); ++atom)
                 {
                     const auto kernel = c::joint_component::EvaluateKernel(
@@ -118,11 +119,10 @@ int main(int argc, char ** argv)
 {
     try
     {
-        if (argc != 4) throw std::invalid_argument(
-            "Usage: joint_postprocessing_benchmark full|halo|multi workflow|post DATABASE");
-        const std::string name = argv[1], mode = argv[2];
-        if ((name != "full" && name != "halo" && name != "multi") ||
-            (mode != "workflow" && mode != "post")) return 2;
+        if (argc != 3) throw std::invalid_argument(
+            "Usage: joint_postprocessing_benchmark full|halo|multi|noisy|outlier DATABASE");
+        const std::string name = argv[1];
+        if (name != "full" && name != "halo" && name != "multi" && name != "noisy" && name != "outlier") return 2;
 
         auto f = Make(name);
         c::FitOptions options;
@@ -137,7 +137,7 @@ int main(int argc, char ** argv)
         const auto pipeline_peak_rss_bytes = pipeline_rss.Peak();
 
         const auto save_start = Clock::now();
-        { rg::DataRepository repository(argv[3]); repository.SaveModel(*f.model, "model"); }
+        { rg::DataRepository repository(argv[2]); repository.SaveModel(*f.model, "model"); }
         const auto save_seconds = Seconds(save_start);
 
         rusage usage{};
@@ -187,13 +187,13 @@ int main(int argc, char ** argv)
         }
 
         j::object phases{
-            {"post_joint_pipeline_seconds", pipeline_seconds},
-            {"post_joint_pipeline_peak_rss_bytes", pipeline_peak_rss_bytes},
+            {"workflow_seconds", pipeline_seconds},
+            {"workflow_peak_rss_bytes", pipeline_peak_rss_bytes},
             {"save_seconds", save_seconds},
             {"total_seconds", Seconds(start)}};
         std::cout << j::serialize(j::object{
             {"case", name},
-            {"mode", mode},
+            {"mode", "workflow"},
             {"phases", phases},
             {"process_peak_rss_bytes", process_peak_rss_bytes},
             {"objective", snapshot.objective ? j::value(*snapshot.objective) : j::value{}},

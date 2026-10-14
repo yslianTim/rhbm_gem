@@ -13,11 +13,10 @@ step solve.
 The independent reference computes its own weighted reduction and retains the
 singular-vector factors needed by its compact free-face least-squares solve.
 Derived Target Identifiability reuses Design Rank and Projected-width Rank and
-does not run a full `(A, C, log B)` Jacobian SVD. Group covariance does not use
-a component-wide factorization. Post-fit local conditional covariance uses an
-atom-local two-column A/B Jacobian, a pivoted QR, and a 2-by-2 conditioning
-check. This calculation supplies Group Fitting evidence and is independent of
-Joint rank qualification and target identifiability.
+does not run a full `(A, C, log B)` Jacobian SVD. Group inference consumes
+compact measurement information derived from each eligible post-Joint local
+MDPDE fit. It does not build a component-wide covariance factorization or use
+the Joint endpoint as a local measurement.
 
 The private compact helper uses JacobiSVD when the compact dimension is below
 16 and Eigen BDCSVD otherwise. The current EIGEN-backed path uses this dispatch;

@@ -1,97 +1,113 @@
 # Joint stage integration
 
-This guide owns the current integration between Joint Component fitting and
-estimator-neutral stage results. Numerical fitting rules are owned by the
-[runtime guide](joint-component-runtime.md); SQLite and neutral-document
-semantics are owned by the
-[data I/O architecture](architecture/dataobject-io-architecture.md).
+This guide describes the current Joint-to-group workflow and its data ownership.
+Joint numerical fitting and qualification are defined in the
+[Runtime guide](joint-component-runtime.md); SQLite payload structure is
+documented in the [data I/O architecture](architecture/dataobject-io-architecture.md).
 
-## Stage estimates and provenance
+## Result ownership
 
-A local stage record separates its optional point, source, convergence, reason,
-and estimator-neutral uncertainty. Its source identifies estimator method,
-atom, component, run, and target role. An unavailable estimate is not encoded as
-a zero point, and Joint points are not stored in OLS or local MDPDE diagnostics.
+The estimator-neutral `FittingStage::Second` record remains the Joint endpoint:
+A, B, C, target/halo role, component identity, run identity, convergence,
+qualification and source provenance. It is used to separate overlapping
+signals and to retain Joint diagnostics. Downstream group inference does not
+consume its A/B values as measurements.
 
-The Joint adapter maps returned component states through contributor identities.
-It preserves an available point even when runtime convergence fails, with the
-failure status alongside it. A missing component state yields an unavailable
-estimate with its stop reason. For recorded selection domains, target and halo
-roles come from the saved domain; inputs without selection metadata retain
-not-recorded. Observable-contribution-only halos do not receive a point.
+Each selected target stores a separate `PostJointLocalResult`, keyed by the
+same atom and exact `EstimateSource`. It contains local alpha, OLS and MDPDE
+results, local solver diagnostics, the fixed Joint charge profile, sample
+counts and failures, status, reason, and compact `RHBMInformation` (precision
+and information moment). The local result has its own lifecycle and never
+writes into the Joint endpoint or objective. Halo atoms contribute to peeling
+but do not receive local or group results.
 
-Joint points occupy the neutral Second-stage estimate. The stage summary,
-group fitting, displays, and feature/export consumers include only Joint target
-points. Available unconverged target points remain visible and are marked
-unconverged. Charge C is descriptive; group inference uses the eligible target
-parameter evidence and covariance, and does not infer charge uncertainty.
-Joint point estimates do not carry a full-component covariance. Group
-ParameterEvidence stores the separate local conditional covariance used by
-Group Fitting.
+## Current data flow
 
-## Workflow ownership
+1. `RunJointComponentWorkflow` fits the retained selected targets and eligible
+   halos with the existing FullABC Joint estimator and publishes their Second
+   stage endpoints.
+2. `BuildPostFitPeelingSamples` uses raw sample entries and their saved
+   geometry. For each target sample it subtracts the tricubic interpolation
+   of every other retained contributor on the same Joint observation rows:
+   `y_peel = y_raw - I_k[sum(j != i) fhat_j]`. Each `PostFitPeelingResult`
+   keeps one entry per raw sample, including an unavailable reason when the
+   stencil leaves the Joint domain or a contributor state is missing.
+   `ApplyPostFitPeelingsBatch` validates target, run and sample identities
+   before publishing the peeling results.
+3. `BuildPostJointLocalSamples` makes a per-target `PostJointLocalSamples`
+   view. It keeps raw and peeled values paired by raw sample index and
+   geometry. It computes the target's own fixed nuisance profile
+   `q_i^J(r) = C_i^J K(r; B_i^J)` on Joint grid support and uses the same
+   tricubic interpolation convention as peeling. The Gaussian response is
+   `z_ik = y_peel_ik - I_k[q_i^J]`. The profile's Joint width remains fixed
+   even when the fitted local width differs.
+4. `FitPostJointLocalTarget` passes those charge-corrected samples to the
+   existing `TrainAlphaR`, `PreparedLocalGaussianDesign`, and
+   `EstimateLocalGaussian`. The design is the same log-Gaussian design used by
+   first-stage MDPDE. Nonpositive responses are retained in the paired sample
+   record and excluded by the existing log-response dataset builder.
+   Local rank, positive sample count, positive A/B, native solver status,
+   variance/weights, source identity and numerical diagnostics all contribute
+   to local eligibility. Failed or unqualified fits remain unavailable with
+   explicit reasons.
+5. `RunJointGroupPotentialFitting` trains group alpha from eligible
+   post-Joint local MDPDE points. It uses those same points with the compact
+   information stored by each `PostJointLocalResult`; it does not repeat local
+   MDPDE fitting. `EstimateMuMDPDE` and `EstimateWEBFromInformation` provide
+   group means, prior/posterior parameters, uncertainty and outlier flags.
+   Only selected targets enter group statistics.
 
-The map-aware Joint workflow builds one immutable problem and initializes all
-eligible contributors using their model identities. First-stage initialization
-supplies widths; only those widths seed Joint fitting. Initialization sampling
-may read outside the target observation rows, while the Joint objective remains
-on the saved fixed domain. The second-stage refinement option is for the
-two-stage estimator; the model-only workflow does not accept Joint requests.
+The group information for local design `X_i`, log-response `y_i`, and
+working diagonal covariance `Sigma_y_i` is
+`P_i = X_i^T Sigma_y_i^-1 X_i` and
+`h_i = X_i^T Sigma_y_i^-1 y_i`. It comes from local MDPDE fitting data and
+weights, not a Joint-endpoint conditional least-squares covariance. The
+persisted information is six doubles per eligible target; per-sample
+weights/covariances are transient and are not serialized.
 
-After fitting, the workflow publishes the Joint stage estimates, builds
-target-only post-fit peeling, computes local conditional covariance at each
-eligible fixed Joint endpoint, and builds GroupParameterEvidence in temporary
-results. Peeling and evidence are validated and published together as one
-batch before the Joint snapshot is stored and group fitting runs. The batch
-checks target and run identity, raw/peeled sample counts, finite responses and
-evidence identity before changing the model; it collects affected groups once
-and invalidates each once. The ordinary single-atom setters keep their own
-invalidation behavior.
+## Invalidation and provenance
 
-Peeling responses paired with raw sample geometry supply each atom's local
-observations; neighboring Joint parameters and the atom's Joint charge are
-fixed. Peeling reads the raw sample list through a const view while the model
-is unchanged, so it does not copy the full list per target. The local estimator
-only computes the A/B curvature and never updates the Joint point. No
-full-component Joint covariance or cross-atom covariance is computed.
+All derived records carry the Joint source and run. Editors reject mixed Joint
+runs and mismatched atom, component or role identities.
 
-For each eligible target, Group Fitting receives the encoded Joint point and a
-2-by-2 covariance in its group parameter coordinates. That covariance is a
-conditional working covariance under an i.i.d. Gaussian residual model; it does
-not include uncertainty in neighboring parameters. Group inference uses a
-by-atom block-diagonal working covariance.
+- A Joint endpoint change clears its peeling, post-Joint local result, related
+  group posterior and Joint snapshot for that run.
+- A raw sample change clears peeling, local result and group inference while
+  retaining a still-valid Joint numerical snapshot.
+- A peeling change clears the local result and group inference.
+- A local MDPDE result change clears affected group inference only.
+- A group alpha change clears that group's posterior.
+- Halo results remain peeling contributors and are excluded from local fitting,
+  group alpha training and group membership statistics.
 
-## Post-fit peeling
+These changes are batched by affected group so each group is invalidated once.
+Missing samples never become zero-valued observations.
 
-Peeling subtracts the fitted model on the Joint observation rows, including
-contributions from halo atoms. It preserves each raw sample and stores an
-optional peeled response with a reason when coverage or a contributor state is
-missing. Ratios require complete paired coverage in their interval and retain
-signed values without clamping. Peeling does not extend the observation domain.
+## Resource and numerical limits
 
-Replacing a Joint endpoint invalidates derived peeling, local group evidence,
-posterior results, and the saved Joint snapshot for the affected run. A
-second-stage endpoint change clears its estimator-neutral uncertainty and
-group evidence; group summaries affected by the changed endpoint are
-invalidated. Replacing raw samples or peeling responses clears local group
-evidence and affected posterior results while preserving Joint point estimates.
-The editor enforces these source and invalidation relationships.
+Peeling and charge correction use bounded per-target preparation and avoid a
+dense observations-by-contributors matrix. `PostJointLocalSamples` is temporary;
+only compact fit results, diagnostics, fixed charge profile and 2-by-2
+information are retained. Group WEB works from those per-target summaries.
 
-## Persistence boundary
+The fixed charge correction is an approximation to the FullABC Joint model:
+it holds `C_i^J` and `B_i^J` fixed while the local Gaussian fit estimates its
+own A/B. Tricubic interpolation, finite Joint support and the log transform's
+positive-response requirement remain part of the data contract. The local
+measurement covariance is a working model derived from the local MDPDE
+observations; it does not propagate uncertainty in other Joint contributors or
+cross-atom errors.
 
-The in-memory model owns the neutral stage record and the Joint result snapshot.
-Storage validates and round-trips these values but does not recompute numerical
-evidence. Current database versions, migration, transaction, and JSON payload
-contracts are defined in the
-[data I/O architecture](architecture/dataobject-io-architecture.md) and the
-[potential-analysis command guide](commands/potential_analysis.md).
+## Persistence and coverage
 
-## Permanent coverage
+SQLite schema v20 stores neutral stage-result JSON format 3. It round-trips
+the Joint snapshot, paired peeling, post-Joint local result, fixed charge
+profile, compact information, status/reason, and group posterior. Version-2
+Joint group results based on the previous measurement source are invalidated
+during migration and require the post-Joint local workflow to run again.
+Legacy stage formats remain readable through their existing migration path.
 
-Permanent tests cover Joint-to-stage mapping and point preservation, target and
-halo roles, local covariance against a finite-difference reference, unavailable
-local designs, target-only summaries and group inference, peeling coverage,
-persistence, and invalidation after endpoint or sample changes. The current test lane is
-documented in [tests/README.md](../../tests/README.md). Historical integration
-results and their boundaries are indexed in the
-[canonical evidence document](joint-component-evidence.md).
+Permanent coverage exercises exact grid peeling, fixed-charge correction,
+local MDPDE regression, group information equivalence, identity and
+invalidation checks, persistence, and two-stage compatibility. The complete
+test lane is described in [tests/README.md](../../tests/README.md).

@@ -1,6 +1,6 @@
 # DataObject I/O Architecture
 
-This document describes the current typed file I/O and Model-only SQLite v19
+This document describes the current typed file I/O and Model-only SQLite v20
 boundary.
 
 ## 1. Public Surface
@@ -78,8 +78,8 @@ Each save and load is serialized by the repository mutex and runs inside a trans
 
 The accepted database states are intentionally strict:
 
-1. An empty database with `PRAGMA user_version = 0` is initialized as v19.
-2. Versions 17, 18, and 19 are accepted only after structural validation.
+1. An empty database with `PRAGMA user_version = 0` is initialized as v20.
+2. Versions 17, 18, 19, and 20 are accepted only after structural validation.
 3. Other versions or unexpected structures are rejected without migration.
 
 Opening a v17 or v18 database is read-only. Its legacy analysis tables are
@@ -95,7 +95,7 @@ from child tables to `model_object(key_tag)`.
 
 ## 7. Current table topology
 
-`model_object` is the direct root. Current v19 also has one canonical neutral
+`model_object` is the direct root. Current v20 also has one canonical neutral
 analysis document per model and a separate Joint result payload. The three
 method-specific analysis tables remain only in accepted legacy v17/v18
 databases; they are dropped during first-write migration.
@@ -118,7 +118,7 @@ flowchart TD
     end
 ```
 
-Current v19 contains these nine tables:
+Current v20 contains these nine tables:
 
 - `model_object`;
 - `model_chain_map`;
@@ -137,19 +137,21 @@ child tables. Atom and bond selection is restored from their structure rows.
 Analysis values do not imply selection.
 
 `model_stage_result(key_tag, result_json)` owns the canonical neutral analysis
-document (format version 2). It stores per-atom First/Second stage estimates,
+document (format version 3). It stores per-atom First/Second stage estimates,
 method and run provenance, availability reasons, uncertainty, raw samples and
-geometry, paired peeling, group membership, group evidence and posterior
-summaries. The encoder keeps Joint points separate from native OLS/MDPDE
-diagnostics. Group membership is restored by its saved atom identities; legacy
-group tables are adapted using the restored selection.
+geometry, paired peeling, post-Joint local fits and compact information, group
+membership and posterior summaries. Joint points remain separate from local
+OLS/MDPDE diagnostics. Group membership is restored by its saved atom
+identities; legacy group tables are adapted using the restored selection.
 
 `model_joint_result(key_tag, result_json)` stores the Joint estimator snapshot
 and its JSON schema-11 metadata, contributor selection, evidence, states and optional
 candidate diagnostics. It is
 distinct from the neutral stage view used by downstream analysis. Legacy v17/v18
 analysis rows are read only for adaptation or migration; they are not canonical
-in v19.
+in v20. A v19 database is upgraded by changing the schema version; its old
+format-2 Joint group evidence is invalidated on load because it was based on a
+different measurement source.
 
 ## 9. Save and load flow
 
@@ -157,8 +159,9 @@ in v19.
 
 1. Lock the repository and begin a transaction.
 2. If the database is v17/v18, load and convert every model to neutral
-   document version 2, create `model_stage_result`, drop the three legacy
-   analysis tables, and set schema version 19.
+   document version 3, create `model_stage_result`, drop the three legacy
+   analysis tables, and set schema version 20. If it is v19, upgrade the schema
+   version; stage format 2 is migrated when each model is loaded and saved.
 3. Replace the requested model's child rows and root row.
 4. Write its structure, optional Joint result, and canonical stage document.
 5. Commit the migration and requested model save together.
@@ -167,7 +170,7 @@ in v19.
 
 1. Lock the repository and begin a read transaction.
 2. Read and assemble model structure, metadata, and saved atom/bond selection.
-3. Adapt legacy v17/v18 analysis or decode the canonical v19 stage document.
+3. Adapt legacy v17/v18 analysis or decode the canonical v19/v20 stage document.
 4. Decode the optional Joint snapshot and rebuild group membership.
 5. Return the model and commit the read transaction.
 

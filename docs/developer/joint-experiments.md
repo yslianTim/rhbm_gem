@@ -9,15 +9,15 @@ visit.
 
 | Tool | Current question | Build option | Permanent owner |
 | --- | --- | --- | --- |
-| Joint benchmark | How do current FixedNeighbor search, solve, workflow, postprocessing and command paths perform and use resources? | RHBM_GEM_BUILD_BENCHMARKS | joint_benchmark_contract_test, joint_benchmark_smoke, Joint contract/workflow/numerical tests |
+| Joint benchmark | How do current FixedNeighbor search, solve, full workflow and command paths perform and use resources? | RHBM_GEM_BUILD_BENCHMARKS | joint_benchmark_contract_test, joint_benchmark_smoke, Joint contract/workflow/numerical tests |
 | Partial-selection measurement | What are the current selection, contributor-closure and halo measurement results? | RHBM_GEM_BUILD_BENCHMARKS | PartialSelection_test.cpp and Joint workflow/numerical tests |
 | Statistical research | How do fixed-seed noise and position mismatch affect the current estimator outcomes? | RHBM_GEM_BUILD_RESEARCH_TOOLS | joint_statistical_experiment_contract_test and joint_statistical_experiment_smoke |
 | Offline numerical diagnosis | What does the current weak-halo and local numerical evidence show on immutable inputs? | RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS | joint_offline_diagnostic_smoke, joint_component_evidence_test, joint_component_offline_tests and joint_component_offline_regression |
 
 The single benchmark workflow is tests/integration/joint_benchmark.py. It
-calls the production FixedNeighbor benchmark for search and solve, the
-postprocessing benchmark for workflow and postprocess, and the main command
-for complete-command measurements. An opt-in incremental candidate replay
+calls the production FixedNeighbor benchmark for search and solve, the complete
+Joint/local/group workflow benchmark, and the main command for complete-command
+measurements. An opt-in incremental candidate replay
 mode compares a local objective delta against the existing full replay without
 changing accepted states. The benchmark policy has no custom core, reverse
 order or alternative solver mode.

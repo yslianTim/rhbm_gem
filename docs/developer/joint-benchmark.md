@@ -10,11 +10,10 @@ current workflow costs. Its only workflow entry point is
 | --- | --- | --- |
 | search | FixedNeighbor search and local Profile LM work; no endpoint qualification claim | joint_fixed_neighbor_experiment with --scaling-only |
 | solve | Search, global replay, endpoint certification and RuntimeConvergence | joint_fixed_neighbor_experiment with --case |
-| workflow | Complete in-memory Joint workflow and persistence | joint_postprocessing_benchmark |
-| postprocess | Peeling, local conditional covariance, batched evidence publication, group processing and persistence | joint_postprocessing_benchmark |
+| workflow | Joint fitting, target peeling, post-Joint local MDPDE, group inference and persistence | joint_postprocessing_benchmark |
 | command | CLI analysis, save/reload and Joint export | RHBM-GEM |
 
-Build the search, solve, workflow and postprocess executables with
+Build the search, solve and workflow executables with
 RHBM_GEM_BUILD_BENCHMARKS=ON. The command profile uses the regular CLI build
 and requires --model and --map inputs.
 
@@ -46,20 +45,14 @@ component replay and compares acceptance decisions. It still uses full replay
 as the authority and does not run a different estimator trajectory; results
 are diagnostic evidence, not a production speedup claim.
 
-Use workflow and postprocess with full, halo or multi cases. Use command with a
-case name plus --model and --map. Reports and temporary outputs belong in the
-build/output tree.
-
-Run `joint_postprocessing_benchmark local-large` to isolate one target's local
-conditional covariance estimator on 5,938,087 synthetic observations, the
-largest local-observation count in the memory census. This reports its peak
-RSS and workspace estimate alongside the raw sample, peeling-response and
-retained covariance storage sizes. The complete postprocess benchmark follows
-the production batch transaction and reports peeling, local covariance, batch
-publication, and group-fitting phase RSS. It also reports the raw-sample bytes
-that the former per-target value-returning getter would have copied. The
-complete fixtures remain small; `local-large` isolates covariance and does not
-measure large-map peeling, group fitting, or all 37,406 targets.
+Use workflow with `full`, `halo`, `multi`, `noisy` or `outlier` cases. The last
+two are deterministic full-selection maps with a stronger sinusoidal noise
+field or a single injected central-voxel outlier. The workflow report includes
+Joint endpoints, local fit status, compact local information, workflow runtime
+and observed peak RSS. Use command with a case name plus `--model` and `--map`. Reports and
+temporary outputs belong in the build/output tree. These synthetic fixtures
+exercise the workflow contract but do not establish large-map or full-atom-set
+resource requirements.
 
 Production rank uses values-only projected-width SVD. The diagnostic weak
 direction path is opt-in and has its own `ProjectedWidthDiagnostics` memory
@@ -87,8 +80,7 @@ It exposes no reverse-order mode, arbitrary core size or alternative policy.
 
 Search reports search and structural-preparation work; solve also reports
 primary endpoint, independent replay and rank-assessment time separately.
-Reports state `reference_solve_calls=0` for production and do not count local
-conditional A/C solves as removed reference work. Aggregate timings attribute local Profile LM work,
+Reports state `reference_solve_calls=0` for production. Aggregate timings attribute local Profile LM work,
 old-core and effective-response preparation, candidate replay and copying,
 cache updates, sweep replay and global-state evaluation. Reports also include
 block visits and solves, accepted updates, profile evaluations, full candidate

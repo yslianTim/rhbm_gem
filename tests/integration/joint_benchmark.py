@@ -20,8 +20,7 @@ from joint_runtime_support import read
 SCOPES = {
     'search': 'FixedNeighbor search-only with local Profile LM work',
     'solve': 'FixedNeighbor search, replay, endpoint certification, and RuntimeConvergence',
-    'workflow': 'Joint workflow, postprocess, and persistence',
-    'postprocess': 'Joint peeling, local MDPDE, group inference, and persistence',
+    'workflow': 'Joint peeling, local MDPDE, group inference, and persistence',
     'command': 'CLI analysis, SQLite reload, and Joint export',
 }
 
@@ -136,11 +135,11 @@ def fixed_neighbor_command(args, output, build):
 def command_for_profile(args, output, build):
     if args.profile in ('search', 'solve'):
         return fixed_neighbor_command(args, output, build)
-    if args.profile in ('workflow', 'postprocess'):
+    if args.profile == 'workflow':
         driver = build / 'bin/joint_postprocessing_benchmark'
         if not driver.is_file():
             raise ValueError('Build joint_postprocessing_benchmark with RHBM_GEM_BUILD_BENCHMARKS=ON')
-        return [str(driver), args.case, 'workflow' if args.profile == 'workflow' else 'post', str(output)]
+        return [str(driver), args.case, str(output)]
     cli = args.cli or build / 'bin/RHBM-GEM'
     if not cli.is_file():
         raise ValueError('Build the RHBM-GEM CLI before using the command profile')
@@ -163,8 +162,6 @@ def raw_elapsed(profile, raw, process_wall):
     if profile == 'solve':
         return fixed.get('total_elapsed_seconds', process_wall)
     if profile == 'workflow':
-        return raw.get('total_seconds', process_wall)
-    if profile == 'postprocess':
         return raw.get('total_seconds', process_wall)
     return process_wall
 
@@ -231,25 +228,16 @@ def normalize_result(profile, raw):
             },
         }
     if profile == 'workflow':
-        return {
-            'qualified': None,
-            'scientific_status': 'workflow-complete',
-            'details': {'endpoint_count': len(raw.get('endpoints', [])),
-                        'target_count': len(raw.get('targets', [])),
-                        'objective': raw.get('objective')},
-        }
-    if profile == 'postprocess':
         targets = raw.get('targets', [])
         return {
             'qualified': None,
-            'scientific_status': 'postprocess-complete',
+            'scientific_status': 'workflow-complete',
             'details': {'endpoint_count': len(raw.get('endpoints', [])),
                         'target_count': len(targets),
                         'eligible_local_count': sum(target.get('local_status') == 1 for target in targets),
                         'local_information_storage_bytes': sum(
                             len(target.get('local_information', [])) * 8 for target in targets),
-                        'post_joint_pipeline_peak_rss_bytes': raw.get('phases', {}).get(
-                            'post_joint_pipeline_peak_rss_bytes'),
+                        'workflow_peak_rss_bytes': raw.get('phases', {}).get('workflow_peak_rss_bytes'),
                         'objective': raw.get('objective')},
         }
     return {'qualified': None, 'scientific_status': 'command-complete', 'details': {}}
@@ -296,7 +284,7 @@ def execute_once(args, build, run_root, deadline):
         return {'status': 'unavailable', 'reason': 'command profile requires --model and --map',
                 'elapsed_seconds': None, 'peak_rss_bytes': None, 'raw': None, 'stages': results}
 
-    if args.profile in ('workflow', 'postprocess'):
+    if args.profile == 'workflow':
         driver_output = run_root / 'benchmark.sqlite'
     elif args.profile == 'command':
         driver_output = run_root / 'command-output'
@@ -398,8 +386,8 @@ def validate_args(parser, args):
         parser.error('--detailed is available only for FixedNeighbor search and solve profiles')
     if args.incremental_replay_experiment and args.profile not in ('search', 'solve'):
         parser.error('--incremental-replay-experiment is available only for FixedNeighbor search and solve profiles')
-    if args.profile in ('workflow', 'postprocess') and args.case not in ('full', 'halo', 'multi'):
-        parser.error('workflow and postprocess cases are full, halo, or multi')
+    if args.profile == 'workflow' and args.case not in ('full', 'halo', 'multi', 'noisy', 'outlier'):
+        parser.error('workflow cases are full, halo, multi, noisy, or outlier')
     if args.profile == 'command' and not re.fullmatch(r'[A-Za-z0-9._-]+', args.case):
         parser.error('command case names may contain letters, digits, dot, underscore, and hyphen')
     if args.profile in ('search', 'solve') and not synthetic_case(args.case):
@@ -432,7 +420,7 @@ def main(argv=None):
         }
     if args.profile in ('search', 'solve'):
         driver = build / 'bin/joint_fixed_neighbor_experiment'
-    elif args.profile in ('workflow', 'postprocess'):
+    elif args.profile == 'workflow':
         driver = build / 'bin/joint_postprocessing_benchmark'
     else:
         driver = args.cli or build / 'bin/RHBM-GEM'

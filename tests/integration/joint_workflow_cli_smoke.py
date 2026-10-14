@@ -55,12 +55,12 @@ def main() -> int:
         assert not list(collision.glob("joint_*")), "Collision must fail before writing any result"
         saved = json.loads((root / "joint_result_example.json").read_text())
         with sqlite3.connect(database) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 19
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 20
             payload = connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='example'").fetchone()[0]
             fixed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='fixed'").fetchone()[0])
             changed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='changed'").fetchone()[0])
             stages = json.loads(connection.execute("SELECT result_json FROM model_stage_result WHERE key_tag='example'").fetchone()[0])
-            assert stages["version"] == 2
+            assert stages["version"] == 3
             assert len(stages["atoms"]) == 2
             assert all(atom["peeled"] is None and atom["second_native"] is None for atom in stages["atoms"])
             for group in stages["groups"]:
@@ -72,7 +72,7 @@ def main() -> int:
                     assert atom["peeling"]["mode"] == "grid-consistent"
                 else:
                     assert atom["peeling"] is None
-                    assert atom["evidence"] is None
+                    assert atom["post_joint_local"] is None
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
         assert saved["schema_version"] == 11

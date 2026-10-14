@@ -112,14 +112,14 @@ stage accounts for the free-design QR/SVD, projection coefficients and
 projected-width QR/SVD. Derived Target Identifiability is estimated at
 482,239,947 bytes and has no dense factor workspace. A former global covariance
 preflight estimated 418,399,065,443 bytes and rejected before factorization;
-that path has been removed. Current local conditional covariance uses an
-atom-local two-column design, as documented in the
-[memory census](joint-component-memory-census.md). In this shape, structural
-rank deficiency leaves no trusted
-rank evidence, so target results remain unavailable even though the
-evidence-memory preflight passes. See the
-[component memory census](joint-component-memory-census.md) for the allocation
-breakdown and RSS scope.
+that path has been removed. In this shape, structural rank deficiency leaves
+no trusted rank evidence, so
+target results remain unavailable even though the evidence-memory preflight
+passes. Selected targets with qualified Joint endpoints continue through
+peeling, local MDPDE and group inference. Group measurement information comes
+from those local fits and remains separate from Joint rank qualification. See
+the [component memory census](joint-component-memory-census.md) for the
+allocation breakdown and RSS scope.
 
 ## Historical KKT and reference agreement evidence
 

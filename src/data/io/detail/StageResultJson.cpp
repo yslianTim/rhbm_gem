@@ -44,6 +44,8 @@ template<class T> V Matrix(const T & m) { A a; for (Eigen::Index r=0;r<m.rows();
 template<int R,int C> Eigen::Matrix<double,R,C> Matrix(const V & v) { const auto & a=v.as_array(); if(a.size()!=R*C) throw std::invalid_argument("Stage matrix shape mismatch."); Eigen::Matrix<double,R,C> m; std::size_t i=0; for(int r=0;r<R;++r) for(int c=0;c<C;++c) m(r,c)=Number(a[i++]); return m; }
 V Pack(const EstimateSource & s) { return O{{"method",static_cast<int>(s.method)},{"atom",s.atom_id},{"component",s.component_id},{"run",s.run_id},{"role",static_cast<int>(s.role)}}; }
 EstimateSource Source(const V & v) { const auto & o=v.as_object(); return {Enum<EstimateMethod>(o.at("method"),3),Read<std::string>(o,"atom"),Read<std::string>(o,"component"),Read<std::string>(o,"run"),Enum<FittingRole>(o.at("role"),2)}; }
+bool SameSource(const EstimateSource & a,const EstimateSource & b)
+{ return a.method==b.method && a.atom_id==b.atom_id && a.component_id==b.component_id && a.run_id==b.run_id && a.role==b.role; }
 V Pack(const LocalStageEstimate & s)
 {
     const auto & u=s.uncertainty;
@@ -115,6 +117,56 @@ LocalFitDiagnostics Diagnostics(const V & v)
     }
     return d;
 }
+V Pack(const PostJointLocalResult & result)
+{
+    V information;
+    if (result.information)
+        information=O{{"precision",Matrix(result.information->precision)},
+            {"moment",Matrix(result.information->moment)}};
+    A failures;
+    for (const auto & failure:result.sample_failures)
+        failures.push_back(O{{"index",failure.raw_sample_index},{"distance",failure.distance},{"reason",failure.reason}});
+    return O{{"source",Pack(result.source)}, {"status",static_cast<int>(result.status)}, {"reason",result.reason},
+        {"alpha",result.fit.alpha_r}, {"ols",Pack(result.fit.ols)}, {"mdpde",Pack(result.fit.mdpde)},
+        {"uncertainty_recorded",result.fit.uncertainty_recorded},
+        {"diagnostics",result.fit.diagnostics ? Pack(*result.fit.diagnostics):V{}},
+        {"fixed_charge",A{result.fixed_charge.coefficient,result.fixed_charge.width}},
+        {"information",information}, {"samples",result.sample_count},
+        {"effective_samples",result.effective_sample_count}, {"sample_failures",failures}};
+}
+PostJointLocalResult PostJointLocal(const V & value)
+{
+    const auto & o=value.as_object();
+    PostJointLocalResult result;
+    result.source=Source(o.at("source"));
+    result.status=Enum<EvidenceStatus>(o.at("status"),3);
+    result.reason=Read<std::string>(o,"reason");
+    result.fit.alpha_r=Number(o.at("alpha"));
+    result.fit.ols=Uncertain(o.at("ols"));
+    result.fit.mdpde=Uncertain(o.at("mdpde"));
+    result.fit.uncertainty_recorded=Read<bool>(o,"uncertainty_recorded");
+    if(!o.at("diagnostics").is_null()) result.fit.diagnostics=Diagnostics(o.at("diagnostics"));
+    const auto & charge=o.at("fixed_charge").as_array();
+    if(charge.size()!=2) throw std::invalid_argument("Invalid fixed charge profile.");
+    result.fixed_charge={Number(charge[0]),Number(charge[1])};
+    if(!o.at("information").is_null())
+    {
+        const auto & information=o.at("information").as_object();
+        RHBMInformation parsed;
+        parsed.precision=Matrix<2,2>(information.at("precision"));
+        parsed.moment=Matrix<2,1>(information.at("moment"));
+        result.information=std::move(parsed);
+    }
+    result.sample_count=Read<std::size_t>(o,"samples");
+    result.effective_sample_count=Read<std::size_t>(o,"effective_samples");
+    for(const auto & item:o.at("sample_failures").as_array())
+    {
+        const auto & failure=item.as_object();
+        result.sample_failures.push_back({Read<std::size_t>(failure,"index"),Number(failure.at("distance")),
+            Read<std::string>(failure,"reason")});
+    }
+    return result;
+}
 V Native(const LocalPotentialEntry & e, FittingStage stage)
 {
     if(e.StageEstimate(stage).source.method==EstimateMethod::JointComponents) return {};
@@ -180,18 +232,21 @@ std::string Encode(const ModelObject & model)
         atoms.push_back(O{{"id",atom->GetSerialID()},{"first",Pack(e->StageEstimate(FittingStage::First))},{"second",Pack(e->StageEstimate(FittingStage::Second))},
             {"first_native",Native(*e,FittingStage::First)},{"second_native",Native(*e,FittingStage::Second)},{"neighbors",(e->PostFitPeeling() || e->StageEstimate(FittingStage::Second).source.method==EstimateMethod::JointComponents) ? V{}:V(e->NeighborCountForPeeling())},
             {"geometry",e->SampleGeometryAvailable()},{"raw",Samples(e->RawSamplingEntries(),e->SampleGeometryAvailable())},{"peeled",(e->PostFitPeeling() || e->StageEstimate(FittingStage::Second).source.method==EstimateMethod::JointComponents) ? V{}:Samples(e->PeelingSamplingEntries(),e->SampleGeometryAvailable())},
-            {"peeling",peeling},{"posterior",e->GroupMemberResult() ? Pack(*e->GroupMemberResult()):V{}}});
+            {"peeling",peeling},{"post_joint_local",e->PostJointLocalResult() ? Pack(*e->PostJointLocalResult()):V{}},
+            {"posterior",e->GroupMemberResult() ? Pack(*e->GroupMemberResult()):V{}}});
     }
     const auto & g=data.AtomGroupEntry();
     for(const auto key:g.CollectGroupKeys()) { A ids; for(const auto * a:g.GetMembers(key)) ids.push_back(a->GetSerialID()); groups.push_back(O{{"key",static_cast<std::uint64_t>(key)},{"members",ids},{"alpha",g.GetParameterSummary(key) && !g.GetParameterSummary(key)->inference ? V(g.GetAlphaG(key)):V{}},{"native",g.GetParameterSummary(key) ? V{}:V(O{{"alpha",g.GetAlphaG(key)},{"mean",Pack(g.GetMean(key))},{"mdpde",Pack(g.GetMDPDE(key))},{"prior",Pack(g.GetPriorWithUncertainty(key))}})},{"summary",g.GetParameterSummary(key) ? Pack(*g.GetParameterSummary(key)):V{}}}); }
-    return j::serialize(O{{"version",2},{"atoms",atoms},{"groups",groups}});
+    return j::serialize(O{{"version",3},{"atoms",atoms},{"groups",groups}});
 }
 void Decode(ModelObject & model, const std::string & text, int expected_version, const std::vector<GroupKey> & legacy_groups)
 {
     j::parse_options parse_options; parse_options.numbers=j::number_precision::precise;
     const auto document=j::parse(text,{},parse_options); const auto & root=document.as_object();
     const int version=Read<int>(root,"version"); const bool legacy=version==1;
-    if(version!=expected_version || (version!=1 && version!=2)) throw std::invalid_argument("Unsupported neutral stage format.");
+    if ((version==1 && expected_version!=1) ||
+        (version!=1 && (version<2 || version>3 || version>expected_version)))
+        throw std::invalid_argument("Unsupported neutral stage format.");
     auto & data=ModelAnalysisData::Of(model); std::set<int> seen;
     for(const auto & v:root.at("atoms").as_array())
     {
@@ -231,6 +286,8 @@ void Decode(ModelObject & model, const std::string & text, int expected_version,
         if(!o.at("peeling").is_null()) { const auto & p=o.at("peeling").as_object(); PostFitPeelingResult r; if(legacy && Read<int>(p,"neighbors")!=e.NeighborCountForPeeling()) throw std::invalid_argument("Legacy peeling neighbor count mismatch."); r.source=Source(p.at("source")); r.mode=Read<std::string>(p,"mode"); r.neighbor_count=Read<std::size_t>(p,"neighbors"); for(const auto & sample:p.at("samples").as_array()) { const auto & s=sample.as_object(); PeelingSampleEstimate x; x.reason=Read<std::string>(s,"reason"); if(!s.at("response").is_null()) x.response=Number(s.at("response")); r.samples.push_back(x); } e.SetPostFitPeeling(std::move(r)); }
         if(legacy && e.PostFitPeeling() && Samples(e.PeelingSamplingEntries(),geometry)!=o.at("peeled"))
             throw std::invalid_argument("Legacy paired/compact peeling mismatch.");
+        if(version>=3 && !o.at("post_joint_local").is_null())
+            e.SetPostJointLocalResult(PostJointLocal(o.at("post_joint_local")));
         if(legacy && e.GroupMemberResult())
         {
             if(o.at("posterior").is_null()) throw std::invalid_argument("Legacy posterior missing.");
@@ -248,6 +305,34 @@ void Decode(ModelObject & model, const std::string & text, int expected_version,
         if(!keys.insert(key).second) throw std::invalid_argument("Duplicate neutral group.");
         std::set<int> members;
         for(const int id:Read<std::vector<int>>(o,"members")) {auto * atom=model.FindAtomPtr(id); if(!atom || !members.insert(id).second) throw std::invalid_argument("Invalid group member identity."); groups.AddMember(key,*atom);}
+        const auto & group_atoms=groups.GetMembers(key);
+        const bool joint_group=std::any_of(group_atoms.begin(),group_atoms.end(),[&](const auto * atom) {
+            const auto * entry=data.FindAtomLocalEntry(*atom);
+            if(!entry) return false;
+            const auto & source=entry->StageEstimate(FittingStage::Second).source;
+            return source.method==EstimateMethod::JointComponents && source.role==FittingRole::Target;
+        });
+        if(version==2 && joint_group)
+        {
+            GroupParameterSummary summary;
+            summary.status=EvidenceStatus::Unavailable;
+            summary.reason="post-joint-local-results-required";
+            for(const auto * atom:group_atoms)
+            {
+                auto * entry=data.FindAtomLocalEntry(*atom);
+                entry->ClearGroupMemberResult();
+                const auto & stage=entry->StageEstimate(FittingStage::Second);
+                if(stage.source.method==EstimateMethod::JointComponents && stage.source.role==FittingRole::Target)
+                {
+                    if(summary.source_id.empty()) summary.source_id=stage.source.run_id;
+                    else if(summary.source_id!=stage.source.run_id) throw std::invalid_argument("Legacy Joint group mixes runs.");
+                    ++summary.point_count;
+                    ++summary.excluded_count;
+                }
+            }
+            groups.SetParameterSummary(key,std::move(summary));
+            continue;
+        }
         if(!legacy && !o.at("alpha").is_null()) groups.SetAlphaG(key,Number(o.at("alpha")));
         if(!legacy && !o.at("native").is_null())
         {
@@ -326,6 +411,40 @@ void Validate(const ModelObject & model)
         if(s.uncertainty.status==EvidenceStatus::Available && (!s.point || !s.uncertainty.covariance || !s.uncertainty.covariance->allFinite())) throw std::invalid_argument("Available uncertainty lacks finite point/covariance.");
         if(!s.source.atom_id.empty() && s.source.atom_id!=std::to_string(id)) throw std::invalid_argument("Stage atom identity mismatch.");
         if(e->PostFitPeeling()) {const auto & p=*e->PostFitPeeling(); if(p.samples.size()!=e->RawSamplingEntries().size() || p.source.run_id!=s.source.run_id || p.source.atom_id!=s.source.atom_id) throw std::invalid_argument("Peeling source/shape mismatch.");}
+        if(e->PostJointLocalResult())
+        {
+            const auto & local=*e->PostJointLocalResult();
+            if(s.source.method!=EstimateMethod::JointComponents || s.source.role!=FittingRole::Target ||
+                !SameSource(local.source,s.source) || local.status==EvidenceStatus::NotRun ||
+                local.effective_sample_count>local.sample_count ||
+                (e->PostFitPeeling() && local.sample_count>e->PostFitPeeling()->samples.size()))
+                throw std::invalid_argument("Post-Joint local source or sample count mismatch.");
+            std::set<std::size_t> failure_indices;
+            for(const auto & failure:local.sample_failures)
+                if(failure.raw_sample_index>=e->RawSamplingEntries().size() || !failure_indices.insert(failure.raw_sample_index).second ||
+                    !std::isfinite(failure.distance) || failure.reason.empty())
+                    throw std::invalid_argument("Invalid post-Joint local sample failure.");
+            if(local.status==EvidenceStatus::Available)
+            {
+                const auto & point=local.fit.mdpde.GetModel();
+                const auto & ols=local.fit.ols.GetModel();
+                const auto & information=local.information;
+                if(!s.point || s.convergence!=JointCheckStatus::Passed ||
+                    local.fixed_charge.coefficient!=s.point->GetOffset() || local.fixed_charge.width!=s.point->GetWidth() ||
+                    !std::isfinite(local.fit.alpha_r) || local.fit.alpha_r<0.0 ||
+                    !std::isfinite(point.GetAmplitude()) || point.GetAmplitude()<=0.0 ||
+                    !std::isfinite(point.GetWidth()) || point.GetWidth()<=0.0 ||
+                    !std::isfinite(ols.GetAmplitude()) || ols.GetAmplitude()<=0.0 ||
+                    !std::isfinite(ols.GetWidth()) || ols.GetWidth()<=0.0 ||
+                    !local.fit.diagnostics || local.fit.diagnostics->status!=RHBMEstimationStatus::SUCCESS ||
+                    local.effective_sample_count<=2 || !information ||
+                    information->precision.rows()!=2 || information->precision.cols()!=2 || information->moment.size()!=2 ||
+                    !information->precision.allFinite() || !information->moment.allFinite() ||
+                    !information->precision.isApprox(information->precision.transpose(),1.0e-12) ||
+                    information->precision(0,0)<=0.0 || information->precision.determinant()<=0.0)
+                    throw std::invalid_argument("Available post-Joint local result is incomplete.");
+            }
+        }
         if(e->GroupMemberResult() && s.source.method==EstimateMethod::JointComponents && e->GroupMemberResult()->evidence_source_id!=s.source.run_id) throw std::invalid_argument("Posterior source mismatch.");
     }
     const auto & groups=data.AtomGroupEntry();
@@ -343,6 +462,14 @@ void Validate(const ModelObject & model)
             if(!entry || !entry->GroupMemberResult() || members[i].evidence_source_id!=summary->source_id ||
                 entry->GroupMemberResult()->posterior.GetModel().ToVector()!=members[i].posterior.GetModel().ToVector())
                 throw std::invalid_argument("Group/member posterior source mismatch.");
+            const auto & stage=entry->StageEstimate(FittingStage::Second);
+            if(stage.source.method==EstimateMethod::JointComponents)
+            {
+                const auto & local=entry->PostJointLocalResult();
+                if(stage.source.role!=FittingRole::Target || !local || local->status!=EvidenceStatus::Available ||
+                    !SameSource(local->source,stage.source) || stage.source.run_id!=summary->source_id)
+                    throw std::invalid_argument("Group posterior lacks current post-Joint local measurement information.");
+            }
         }
     }
     if(!data.joint_result) return;

@@ -1093,7 +1093,7 @@ void CreateTables(SQLiteWrapper & database)
         database.Execute(std::string(create_sql));
     }
     CreateStageTable(database);
-    database.Execute("PRAGMA user_version=19;");
+    database.Execute("PRAGMA user_version=20;");
 }
 
 void Save(
@@ -1163,7 +1163,7 @@ std::unique_ptr<ModelObject> Load(
         if(rc==SQLiteWrapper::StepRow()) neutral=database.GetColumn<std::string>(0);
         else if(rc!=SQLiteWrapper::StepDone()) throw std::runtime_error("Failed to read stage results.");
     }
-    if(neutral) stage_result_io::Decode(*model_object,*neutral,legacy ? 1:2,legacy_groups);
+    if(neutral) stage_result_io::Decode(*model_object,*neutral,legacy ? 1:3,legacy_groups);
     else if(legacy) stage_result_io::AdaptLegacy(*model_object);
     else throw std::invalid_argument("Missing canonical analysis document.");
     return model_object;
@@ -1172,6 +1172,13 @@ std::unique_ptr<ModelObject> Load(
 void UpgradeStageSchema(SQLiteWrapper & database)
 {
     // The caller owns the transaction, including its eventual model write.
+    bool canonical_schema{};
+    {
+        database.Prepare("PRAGMA user_version;"); SQLiteWrapper::StatementGuard guard(database);
+        if(database.StepNext()!=SQLiteWrapper::StepRow()) throw std::runtime_error("Missing schema version.");
+        canonical_schema=database.GetColumn<int>(0)>=19;
+    }
+    if(canonical_schema) { database.Execute("PRAGMA user_version=20;"); return; }
     std::vector<std::string> keys;
     {
         database.Prepare("SELECT key_tag FROM model_object ORDER BY key_tag;");
@@ -1194,7 +1201,7 @@ void UpgradeStageSchema(SQLiteWrapper & database)
     database.Execute("DROP TABLE model_atom_local_potential;");
     database.Execute("DROP TABLE model_atom_posterior;");
     database.Execute("DROP TABLE model_atom_group_potential;");
-    database.Execute("PRAGMA user_version=19;");
+    database.Execute("PRAGMA user_version=20;");
 }
 
 } // namespace model_storage

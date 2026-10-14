@@ -210,10 +210,12 @@ workset contains its target and contributor atoms. Only FullABC contributors are
 sampled and fitted locally; contribution-only halo atoms retain initialization
 provenance without local sampling or fitting. Joint initialization consumes
 those prepared samples in isolation and supplies First B plus seed provenance to
-`FitJointComponents`. Joint estimates then flow through the second-stage mapping,
-target summary, post-fit peeling, local conditional covariance at each eligible
-fixed endpoint, and parameter-evidence group inference. The local calculation
-does not update the Joint estimates or construct a cross-atom covariance.
+`FitJointComponents`. Joint estimates then flow through the second-stage
+mapping, target summary, post-fit peeling, fixed Joint charge-profile
+correction, and fresh local alpha/MDPDE fitting for each selected target.
+Group alpha and group WEB consume the qualified local estimates and their
+compact MDPDE-derived information. Local fitting does not update Joint
+estimates or construct a cross-atom covariance.
 
 `FixedNeighbor` is the sole qualified bounded-memory production route with the fixed
 core-12, forward, one-accepted-local-update policy documented in the
@@ -296,7 +298,7 @@ contract and enable only available data. Joint values are not written to OLS or
 local MDPDE columns. UMAP excludes rows missing required features and needs at
 least three valid targets.
 
-SQLite v19 is created for new databases. Reading v17/v18 does not modify them; the first
+SQLite v20 is created for new databases. Reading v17/v18/v19 does not modify them; the first
 Save upgrades and writes in one transaction, rolling back on failure. Older
 versions, including v16, remain unchanged on rejection. A saved key holds one joint outcome;
 saving a model without a joint result over that key removes the previous outcome.
@@ -364,11 +366,12 @@ contract and store endpoint-verification and numerical-qualification
 diagnostics separately. Legacy reference agreement is not mapped to conditional KKT, and
 no reference status is mapped to independent replay.
 See the [target contract](../joint-target-estimability.md)
-for target convergence, retained halo availability and conditional local
-covariance. SQLite v19 stores estimator-neutral stages, GroupParameterEvidence,
-posterior evidence and sample geometry in `model_stage_result`. Legacy sample
-BLOBs have unavailable geometry; old Joint snapshots do not gain recomputed
-local covariance, peeling or posterior.
+for target convergence and retained halo availability. SQLite v20 stores
+estimator-neutral stage format 3, including `PostJointLocalResult`, paired
+peeling, compact local information, posterior evidence and sample geometry in
+`model_stage_result`. Legacy sample BLOBs have unavailable geometry; migrated
+Joint results whose group evidence used the previous measurement source are
+marked unavailable until the new local workflow runs.
 Consumers must rebuild against the updated public C++ value types.
 
 ### Selected-domain and initialization metadata

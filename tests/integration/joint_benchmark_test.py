@@ -14,7 +14,7 @@ class JointBenchmarkContractTest(unittest.TestCase):
         parser = benchmark.build_parser()
         profile_action = next(action for action in parser._actions if action.dest == 'profile')
         self.assertEqual(set(profile_action.choices),
-                         {'search', 'solve', 'workflow', 'postprocess', 'command'})
+                         {'search', 'solve', 'workflow', 'command'})
         options = {option for action in parser._actions for option in action.option_strings}
         self.assertEqual(options, {
             '-h', '--help', '--profile', '--case', '--build-dir', '--output', '--repeat',
@@ -52,6 +52,21 @@ class JointBenchmarkContractTest(unittest.TestCase):
                 self.assertEqual(command[1], mode)
                 self.assertEqual(command[3:], ['chain', '8', '--maximum-sweeps', '30'])
                 self.assertEqual(len(command), 7)
+
+    def test_workflow_accepts_deterministic_noise_and_outlier_cases(self):
+        parser = benchmark.build_parser()
+        with tempfile.TemporaryDirectory() as temporary:
+            build = Path(temporary)
+            (build / 'bin').mkdir()
+            driver = build / 'bin/joint_postprocessing_benchmark'
+            driver.touch()
+            for case in ('noisy', 'outlier'):
+                args = parser.parse_args([
+                    '--profile', 'workflow', '--case', case, '--build-dir', str(build),
+                    '--output', 'result.json'])
+                benchmark.validate_args(parser, args)
+                command = benchmark.command_for_profile(args, Path('result.json'), build)
+                self.assertEqual(command, [str(driver), case, 'result.json'])
 
     def test_detailed_option_is_explicit_and_zero_sweeps_is_preparation_only(self):
         parser = benchmark.build_parser()

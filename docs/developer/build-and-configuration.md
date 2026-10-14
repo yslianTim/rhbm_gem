@@ -151,7 +151,7 @@ cmake --build build-research --target research_tools_all -j4
 ```
 
 Benchmark builds create the current measurement tools: `joint_fixed_neighbor_experiment`
-for search/solve, `joint_postprocessing_benchmark` for workflow/postprocess, and
+for search/solve, `joint_postprocessing_benchmark` for the complete Joint workflow, and
 `joint_partial_selection` for current selection and halo measurements. The
 single benchmark workflow is `tests/integration/joint_benchmark.py`. The
 research option creates only `joint_statistical_experiment`. The offline-audit
