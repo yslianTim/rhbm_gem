@@ -340,7 +340,10 @@ j::value Assess(const j::value & fixture)
 {
     const auto domain=DomainFrom(fixture); const auto y=VectorFrom(fixture.at("effective_response"));
     const auto eta=VectorFrom(fixture.at("old_eta")); const auto context=ContextFrom(fixture);
+    const auto previous_work=n::ResourceWorkForTesting();
+    auto & work=n::ResourceWorkForTesting(); work={}; work.enabled=true;
     const auto production=n::EvaluateProfile(domain,y,eta,false,&context);
+    const auto production_work=work; work=previous_work;
     const n::Vector weights=n::Vector::Ones(y.size()); const n::Matrix dense(production.x);
     auto dense_qr=n::SolveLinear(dense,y,weights,false,false,nullptr,&context.linear,context.scale);
     auto dense_svd=n::SolveLinear(dense,y,weights,true,false,nullptr,&context.linear,context.scale);
@@ -394,6 +397,16 @@ j::value Assess(const j::value & fixture)
         faces.valid && faces.faces==4096 && faces.feasible_faces>0 && policy_cases_pass &&
         refinement.size()>2 && refinement[2].at("kkt_passed").as_bool() &&
         refinement[2].at("objective").as_double()<=original_objective;
+    j::array refinement_shapes;
+    bool bounded_refinement_observed=false;
+    for(const auto & shape:production_work.dense_shapes) if(shape.role=="ac-bounded-kkt-refinement")
+    {
+        refinement_shapes.push_back(j::object{{"phase",shape.phase},{"rows",shape.rows},{"columns",shape.columns},
+            {"observations",shape.observations},{"maximum_bytes",static_cast<std::uint64_t>(shape.maximum_bytes)}});
+        bounded_refinement_observed |= shape.rows==production.x.rows() &&
+            shape.columns==production_summary.linear.rank && shape.maximum_bytes<=8'000'000;
+    }
+    const bool final_assessment_valid=assessment_valid && bounded_refinement_observed;
     j::array table{SummaryJson("Production SparseQR",production_summary),SummaryJson("Dense QR",qr_summary),
         SummaryJson("Dense SVD",svd_summary),SummaryJson("Independent active-face enumeration",face_summary),
         SummaryJson("Dense free-face QR",dense_face_summary),SummaryJson("Long-double free-face QR",alternate_face_summary)};
@@ -410,6 +423,7 @@ j::value Assess(const j::value & fixture)
             {"local_effective_norm",y.norm()},{"parent_to_local_ratio",parent_policy.release_response_norm/y.norm()},
             {"observation_scale",parent_scale},{"normalized_local_norm",normalized_local_response_norm}}},
         {"solver_comparison",table},{"release_policy_comparison",policy_cases},
+        {"bounded_refinement_shapes",refinement_shapes},
         {"face_enumeration",j::object{{"faces_examined",faces.faces},{"full_rank_faces",faces.full_rank_faces},
             {"primal_feasible_faces",faces.feasible_faces},{"best_active_mask",faces.best_active_mask},
             {"best_objective_face_kkt_passed",face_summary.certificate.kkt_passed},
@@ -436,7 +450,7 @@ j::value Assess(const j::value & fixture)
             {"dense_free_face",Number(CoefficientDifference(dense_face.beta,faces.beta))},
             {"long_double",Number(CoefficientDifference(alternate_face.beta,faces.beta))}}},
         {"free_face_iterative_refinement",refinement},
-        {"assessment_valid",assessment_valid},
+        {"assessment_valid",final_assessment_valid},
         {"long_double_digits",std::numeric_limits<long double>::digits}};
 }
 }

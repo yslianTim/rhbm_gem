@@ -545,6 +545,42 @@ TEST(JointComponentNumericsTest, SparseWeightedSolveAndIndependentReferenceMatch
     EXPECT_EQ(n::NumericsWorkForTesting().reference,before+1);
 }
 
+TEST(JointComponentNumericsTest, SparseConstrainedSolvePreservesInteriorBoundaryAndReleaseFaces)
+{
+    namespace n=p::runtime;
+    Matrix x=Matrix::Zero(7,4);
+    x(0,0)=1; x(1,1)=1; x(2,2)=1; x(3,3)=1;
+    const n::Sparse sparse=x.sparseView(); const Vector weights=Vector::Ones(x.rows());
+    for(const Eigen::Vector4d truth:{Eigen::Vector4d(2,-.3,1.5,.4),Eigen::Vector4d(-.5,-.3,1.5,.4)})
+    {
+        const Vector y=x*truth; const auto solved=n::SolveLinear(sparse,y,weights);
+        ASSERT_TRUE(solved.valid);
+        const auto certificate=n::CertifyLinear(sparse,y,solved.beta,std::max(1.0,y.norm()));
+        ASSERT_TRUE(certificate.available); EXPECT_TRUE(certificate.feasible); EXPECT_TRUE(certificate.kkt_passed);
+        EXPECT_EQ(solved.releases,0);
+        if(truth(0)>0) {EXPECT_TRUE(certificate.active_atoms.empty()); EXPECT_NEAR(solved.beta(0),truth(0),1e-12);}
+        else {ASSERT_EQ(certificate.active_atoms,std::vector<Eigen::Index>{0}); EXPECT_EQ(solved.beta(0),0);}
+    }
+
+    Matrix release_design(7,4);
+    release_design<<0,0,-1,2, 0,1,-1,-1, -2,0,-2,-2, 2,-2,-1,0,
+        0,0,2,2, 0,2,-1,0, -1,1,2,-1;
+    const Vector release_y=(Vector(7)<<0,1,2,1,1,2,0).finished();
+    const auto release_sparse=n::Sparse(release_design.sparseView());
+    const auto released=n::SolveLinear(release_sparse,release_y,Vector::Ones(release_y.size()));
+    ASSERT_TRUE(released.valid); EXPECT_EQ(released.releases,1); EXPECT_GT(released.beta(0),0);
+    EXPECT_EQ(released.beta(2),0);
+    const auto released_certificate=n::CertifyLinear(release_sparse,release_y,released.beta,
+        std::max(1.0,release_y.norm()));
+    ASSERT_TRUE(released_certificate.available); EXPECT_TRUE(released_certificate.feasible);
+    EXPECT_TRUE(released_certificate.kkt_passed);
+
+    Matrix deficient=Matrix::Zero(7,4);
+    deficient(0,0)=1; deficient(1,1)=1; deficient(0,2)=1; deficient(2,3)=1;
+    const auto rejected=n::SolveLinear(n::Sparse(deficient.sparseView()),Vector::Ones(7),Vector::Ones(7));
+    EXPECT_FALSE(rejected.valid); EXPECT_EQ(rejected.reason,"rank-deficient"); EXPECT_EQ(rejected.rank,3);
+}
+
 TEST(JointComponentNumericsTest, SparseReferencePreservesSvdRankNearDegeneracy)
 {
     namespace n=p::runtime;
