@@ -125,23 +125,26 @@ void RunJointComponentWorkflow(MapObject & map, ModelObject & model, const FitOp
     data_internal::ApplyJointStageEstimates(model, snapshot, boost::uuids::to_string(boost::uuids::random_generator()()));
     if (!options.quiet_mode) LogJointInfo("[Joint] Computing post-fit outputs...");
     if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model));
-    for (auto & [id, peeling] : BuildPostFitPeelingSamples(map, model, problem, problem.Input().selection_domain->target_indices, &snapshot))
-        model.EditAnalysis().SetAtomPostFitPeeling(*model.FindAtomPtr(id), std::move(peeling));
-    for (const auto index : problem.Input().selection_domain->target_indices)
+    auto peelings = BuildPostFitPeelingSamples(
+        map, model, problem, problem.Input().selection_domain->target_indices, &snapshot);
+    std::vector<std::pair<int, PostFitPeelingResult>> peeling_updates;
+    std::vector<std::pair<int, GroupParameterEvidence>> evidence_updates;
+    peeling_updates.reserve(peelings.size());
+    evidence_updates.reserve(peelings.size());
+    for (auto & [id, peeling] : peelings)
     {
-        const auto id = std::stoi(problem.Input().atom_ids.at(index));
         auto & atom = *model.FindAtomPtr(id);
         const auto local = AtomLocalPotentialView::For(atom);
         const auto & stage = local.GetStageEstimate(FittingStage::Second);
-        const auto & peeling = local.GetPostFitPeeling();
-        const auto raw_samples = local.GetRawSamplingEntries(false);
+        const auto & raw_samples = local.GetRawSamplingEntriesView();
         LocalConditionalCovariance covariance;
-        if (peeling)
-            covariance = ComputeLocalConditionalCovariance(stage, raw_samples, *peeling, local.HasSampleGeometry());
+        covariance = ComputeLocalConditionalCovariance(stage, raw_samples, peeling, local.HasSampleGeometry());
         covariance.source = stage.source;
-        const auto evidence = BuildLocalGroupEvidence(stage, peeling ? &*peeling : nullptr, covariance);
-        model.EditAnalysis().SetAtomGroupEvidence(atom, evidence);
+        auto evidence = BuildLocalGroupEvidence(stage, &peeling, covariance);
+        peeling_updates.emplace_back(id, std::move(peeling));
+        evidence_updates.emplace_back(id, std::move(evidence));
     }
+    model.EditAnalysis().ApplyJointPostFitEvidenceBatch(std::move(peeling_updates), std::move(evidence_updates));
     model.EditAnalysis().SetJointResult(std::move(snapshot));
     RunGroupPotentialFitting(model, options);
     if (!options.quiet_mode) LogJointInfo("[Joint] Completed.");

@@ -30,6 +30,7 @@ public:
     const GaussianModel3D & GetEstimateOLS(FittingStage stage) const;
     const GaussianModel3D & GetEstimateMDPDE(FittingStage stage) const;
     LocalPotentialSampleList GetRawSamplingEntries(bool apply_selection = true) const;
+    const LocalPotentialSampleList & GetRawSamplingEntriesView() const;
     LocalPotentialSampleList GetPeelingSamplingEntries(bool apply_selection = false) const;
     LocalPotentialSampleList GetSamplingEntries(FittingStage stage) const;
     bool HasEnoughSamplingEntriesInRange(

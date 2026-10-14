@@ -140,6 +140,11 @@ LocalPotentialSampleList AtomLocalPotentialView::GetRawSamplingEntries(bool appl
     return ApplySamplingEntrySelection(entry.RawSamplingEntries(), apply_selection);
 }
 
+const LocalPotentialSampleList & AtomLocalPotentialView::GetRawSamplingEntriesView() const
+{
+    return RequireEntry("Local raw sampling entries").RawSamplingEntries();
+}
+
 LocalPotentialSampleList AtomLocalPotentialView::GetPeelingSamplingEntries(bool apply_selection) const
 {
     const auto & entry{ RequireEntry("Local peeling sampling entries") };

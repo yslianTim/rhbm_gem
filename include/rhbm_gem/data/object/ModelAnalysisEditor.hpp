@@ -1,6 +1,9 @@
 #pragma once
 #include <rhbm_gem/data/object/JointAnalysisResult.hpp>
+#include <cstddef>
 #include <map>
+#include <utility>
+#include <vector>
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
@@ -25,6 +28,9 @@ public:
     void SetAtomStageEstimate(FittingStage stage, const AtomObject & atom, LocalStageEstimate value);
     void SetAtomPostFitPeeling(const AtomObject & atom, PostFitPeelingResult value);
     void SetAtomGroupEvidence(const AtomObject & atom, GroupParameterEvidence value);
+    void ApplyJointPostFitEvidenceBatch(
+        std::vector<std::pair<int, PostFitPeelingResult>> peelings,
+        std::vector<std::pair<int, GroupParameterEvidence>> evidence);
     void ApplyAtomGroupParameterSummary(GroupKey key, GroupParameterSummary value);
     void Clear();
     void ClearTransientFitStates();
@@ -66,5 +72,15 @@ private:
     explicit ModelAnalysisEditor(ModelObject & model_object);
     friend class ModelObject;
 };
+
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+struct GroupInvalidationStats
+{
+    std::size_t membership_traversals{};
+    std::size_t groups_invalidated{};
+};
+GroupInvalidationStats GetGroupInvalidationStatsForTesting();
+void ResetGroupInvalidationStatsForTesting();
+#endif
 
 } // namespace rhbm_gem
