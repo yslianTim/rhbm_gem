@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 #include "support/ProjectedWidthResearch.hpp"
+#include "core/detail/joint_component/CompactSvd.hpp"
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 
@@ -84,5 +86,62 @@ TEST(JointComponentProjectedWidthResearchTest, ActiveFaceAndHaloDimensionsRemain
     EXPECT_EQ(active->width_derivative.cols(),active->target_columns);
     EXPECT_EQ(mixed->target_columns,3);
     EXPECT_EQ(mixed->free_design.cols(),4);
+}
+
+TEST(JointComponentProjectedWidthResearchTest, ValuesOnlyAndRightVectorModesPreserveRankEvidence)
+{
+    for(const auto & fixture:pw::Fixtures())
+    {
+        SCOPED_TRACE(fixture.name);
+        const auto oracle=pw::EvaluateDenseOracle(fixture);
+        ASSERT_TRUE(oracle.valid)<<oracle.reason;
+        const n::RankRequest request{fixture.policy,fixture.width_derivative.cols(),-1,n::RankBoundary::SvdNative};
+        const auto started=std::chrono::steady_clock::now();
+        const auto values=n::EvaluateRank(oracle.projected_width,request,nullptr,n::CompactSvdVectors::None);
+        const double values_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
+        const auto vectors_started=std::chrono::steady_clock::now();
+        const auto with_vectors=n::EvaluateRank(oracle.projected_width,request,nullptr,n::CompactSvdVectors::Right);
+        const double vectors_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-vectors_started).count();
+        ASSERT_TRUE(values.valid && with_vectors.valid);
+        EXPECT_EQ(values.rank,with_vectors.rank);
+        EXPECT_EQ(values.rank,oracle.width.rank);
+        EXPECT_DOUBLE_EQ(values.threshold,with_vectors.threshold);
+        EXPECT_EQ(n::CompactRankDecisionSafe(values),n::CompactRankDecisionSafe(with_vectors));
+        EXPECT_LE((values.singular_values-with_vectors.singular_values).lpNorm<Eigen::Infinity>(),
+            2e-12*std::max(1.0,with_vectors.singular_values(0)));
+        EXPECT_EQ(values.right_vectors.size(),0);
+        EXPECT_EQ(with_vectors.right_vectors.cols(),std::min(oracle.rows,oracle.width_columns));
+        const auto vector_bytes=static_cast<std::size_t>(with_vectors.right_vectors.size())*sizeof(double);
+        std::cout<<"projected-width-svd-mode fixture="<<fixture.name
+            <<" rows="<<oracle.rows<<" width_columns="<<oracle.width_columns
+            <<" rank="<<values.rank<<" threshold="<<values.threshold
+            <<" threshold_sensitive="<<!n::CompactRankDecisionSafe(values)
+            <<" right_vector_bytes="<<vector_bytes
+            <<" values_only_seconds="<<values_seconds<<" right_vector_seconds="<<vectors_seconds
+            <<" process_peak_rss_bytes="<<(n::ProcessPeakRssBytes() ?
+                std::to_string(*n::ProcessPeakRssBytes()) : "unavailable")<<"\n";
+    }
+    constexpr Eigen::Index original_rows=1000;
+    const n::RankPolicy policy{original_rows,3,3};
+    const double threshold=policy.Relative(3);
+    for(const auto & item:std::vector<std::pair<const char *,double>>{
+        {"below",std::nextafter(threshold,0.0)},
+        {"equal",threshold},
+        {"above",std::nextafter(threshold,std::numeric_limits<double>::infinity())}})
+    {
+        Matrix boundary=Matrix::Zero(3,3); boundary(0,0)=1; boundary(1,1)=.5; boundary(2,2)=item.second;
+        const n::RankRequest request{policy,3,-1,n::RankBoundary::StrictGreater};
+        const auto values=n::EvaluateRank(boundary,request,nullptr,n::CompactSvdVectors::None);
+        const auto with_vectors=n::EvaluateRank(boundary,request,nullptr,n::CompactSvdVectors::Right);
+        ASSERT_TRUE(values.valid && with_vectors.valid)<<item.first;
+        EXPECT_DOUBLE_EQ(values.threshold,threshold);
+        EXPECT_EQ(values.rank,with_vectors.rank);
+        EXPECT_EQ(values.rank,item.second>threshold ? 3 : 2);
+        EXPECT_EQ(n::CompactRankDecisionSafe(values),n::CompactRankDecisionSafe(with_vectors));
+        std::cout<<"projected-width-svd-boundary case="<<item.first
+            <<" rows="<<original_rows<<" columns=3 threshold="<<values.threshold
+            <<" minimum="<<values.singular_values(2)<<" rank="<<values.rank
+            <<" threshold_sensitive="<<!n::CompactRankDecisionSafe(values)<<"\n";
+    }
 }
 }

@@ -744,6 +744,18 @@ Spectrum CompactSpectrum(const CompactSvdResult & svd,Eigen::Index rows)
     out.minimum=v(v.size()-1); out.condition=v(0)/v(v.size()-1);
     out.threshold=svd.threshold; out.threshold_sensitive=!CompactRankDecisionSafe(svd); return out;
 }
+Matrix WeakDirectionDiagnostics(const Matrix & right_vectors,Eigen::Index atom_count)
+{
+    Matrix out(atom_count,std::min<Eigen::Index>(3,right_vectors.cols()));
+    for(Eigen::Index k=0;k<out.cols();++k)
+    {
+        Vector direction=right_vectors.col(right_vectors.cols()-1-k);
+        Eigen::Index sign{}; direction.cwiseAbs().maxCoeff(&sign);
+        if(direction(sign)<0) direction=-direction;
+        out.col(k)=direction;
+    }
+    return out;
+}
 template<class Design> Spectrum SpectrumRecord(const Design & input,const RankPolicy & policy,Eigen::Index columns,bool normalize)
 {
     Spectrum out; out.rows=policy.rows; out.columns=columns; out.full_design_columns=columns;
@@ -1055,13 +1067,7 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
     out.widths=CompactSpectrum(widths,context->rank.rows);
     out.widths->column_norms=differential.projected_norms;
     const auto projected_width_rank=widths.rank;
-    out.weak_directions.resize(eta.size(),std::min<Eigen::Index>(3,widths.right_vectors.cols()));
-    for(Eigen::Index k=0;k<out.weak_directions.cols();++k)
-    {
-        Vector direction=widths.right_vectors.col(widths.right_vectors.cols()-1-k);
-        Eigen::Index sign{}; direction.cwiseAbs().maxCoeff(&sign); if(direction(sign)<0) direction=-direction;
-        out.weak_directions.col(k)=direction;
-    }
+    out.weak_directions=WeakDirectionDiagnostics(widths.right_vectors,eta.size());
     Matrix{}.swap(widths.right_vectors);
     out.gradient=endpoint.gradient.lpNorm<Eigen::Infinity>()<=1e-12 &&
         (reference ? reference->gradient.lpNorm<Eigen::Infinity>()<=1e-12 : replay->gradient_agrees);

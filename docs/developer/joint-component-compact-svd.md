@@ -72,6 +72,25 @@ QR/SVD remains necessary. SVD counters time decomposition; the reference-solve
 counter times application of factors. OS peak RSS is not an allocation-level
 attribution.
 
+## Projected-width rank and weak-direction diagnostics
+
+Projected-width rank, threshold sensitivity and `identified` use singular
+values only. The right-vector matrix is used only to produce up to three
+weak-direction diagnostics. That helper is now separate from the rank and
+qualification assignments, but current runtime JSON and offline audit tools
+consume those directions, so production still requests Eigen's thin right
+vectors. Removing that request from production would change the present
+diagnostic output contract.
+
+`CompactSvdVectors::None` selects a values-only Eigen mode; `Right` selects a
+thin right-vector mode. The projected-width research control compares their
+singular values, rank, original threshold, and threshold-sensitivity decision,
+including threshold-adjacent inputs. Its reported right-vector byte count is
+the explicit `P × min(N, P)` matrix size. It is not an observed function-level
+RSS reduction: process peak RSS is a whole-process high-water mark, and the
+production diagnostic still retains the right-vector mode. No production
+memory benefit is claimed from this separation.
+
 ## Current measurement
 
 Use the current FixedNeighbor solve profile in the EIGEN-only build:
