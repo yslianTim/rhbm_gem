@@ -948,12 +948,11 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 }
                 (void)candidate_copy_timer;
             }
-            Vector new_core; bool new_core_ready=false;
             std::optional<IncrementalCandidateReplay> incremental;
             if(policy.compare_incremental_replay)
             {
                 const auto incremental_started=Clock::now();
-                new_core=(local_state.x*local_state.beta).eval(); new_core_ready=true;
+                const Vector new_core=(local_state.x*local_state.beta).eval();
                 incremental=EvaluateCandidateDelta(out.state.residual,affected_rows,old_core,new_core,
                     out.state.objective,context.scale);
                 out.work.incremental_candidate_replay_seconds+=Seconds(incremental_started);
@@ -1030,17 +1029,10 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             }
             const bool unchanged=candidate_unchanged;
             const auto cache_started=Clock::now();
-            if(!new_core_ready) new_core=(local_state.x*local_state.beta).eval();
-            double old_squared{},new_squared{};
-            for(std::size_t k=0;k<affected_rows.size();++k)
-            {
-                const auto row=static_cast<Eigen::Index>(affected_rows[k]); const double before=out.state.residual(row);
-                const double change=new_core(static_cast<Eigen::Index>(k))-old_core(static_cast<Eigen::Index>(k));
-                out.state.prediction(row)+=change; out.state.residual(row)+=change;
-                old_squared+=before*before; new_squared+=out.state.residual(row)*out.state.residual(row);
-                if(policy.collect_telemetry) ++out.work.affected_row_updates;
-            }
-            out.state.objective+=(new_squared-old_squared)/(2*context.scale*context.scale);
+            out.state.prediction=std::move(replay.prediction);
+            out.state.residual=std::move(replay.residual);
+            out.state.objective=replay.objective;
+            if(policy.collect_telemetry) out.work.affected_row_updates+=affected_rows.size();
             out.state.eta=std::move(candidate_eta); out.state.beta=std::move(candidate_beta);
             if(policy.collect_telemetry) out.work.cache_update_seconds+=Seconds(cache_started);
             record.accepted=!unchanged; record.status=unchanged ? "unchanged" : "accepted";

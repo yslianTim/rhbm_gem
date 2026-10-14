@@ -1,5 +1,6 @@
 #include "core/detail/joint_component/Numerics.hpp"
 #include <boost/json.hpp>
+#include <boost/multiprecision/cpp_dec_float.hpp>
 #include <Eigen/QR>
 #include <Eigen/SVD>
 #include <algorithm>
@@ -60,6 +61,154 @@ n::EvaluationContext ContextFrom(const j::value & fixture)
     out.independent_search=true; out.update_budget=1;
     return out;
 }
+j::array NumbersJson(n::VectorRef values);
+using MP=boost::multiprecision::cpp_dec_float_50;
+MP ExactInput(double value)
+{
+    if(value==0.0) return 0;
+    int exponent{}; const double fraction=std::frexp(std::abs(value),&exponent);
+    const auto mantissa=static_cast<std::uint64_t>(std::ldexp(fraction,std::numeric_limits<double>::digits));
+    MP exact=boost::multiprecision::ldexp(MP(mantissa),exponent-std::numeric_limits<double>::digits);
+    if(std::signbit(value)) exact=-exact;
+    return exact;
+}
+MP HighPrecisionKkt(const n::Evaluation & evaluation,n::VectorRef y,const std::vector<MP> & beta,
+    const std::vector<Eigen::Index> & free_columns,double scale)
+{
+    std::vector<MP> residual(static_cast<std::size_t>(y.size()));
+    for(Eigen::Index row=0;row<y.size();++row) residual[static_cast<std::size_t>(row)]=-ExactInput(y(row));
+    for(Eigen::Index column=0;column<evaluation.x.cols();++column)
+        for(n::Sparse::InnerIterator entry(evaluation.x,column);entry;++entry)
+            residual[static_cast<std::size_t>(entry.row())]+=ExactInput(entry.value())*beta[static_cast<std::size_t>(column)];
+    std::vector<bool> is_free(static_cast<std::size_t>(evaluation.x.cols()));
+    for(const auto column:free_columns) is_free[static_cast<std::size_t>(column)]=true;
+    MP kkt{};
+    for(Eigen::Index column=0;column<evaluation.x.cols();++column)
+    {
+        MP norm_squared{},gradient{};
+        for(n::Sparse::InnerIterator entry(evaluation.x,column);entry;++entry)
+        {
+            const MP value=ExactInput(entry.value()); norm_squared+=value*value;
+            gradient+=value*residual[static_cast<std::size_t>(entry.row())];
+        }
+        const MP norm=sqrt(norm_squared),u=norm*beta[static_cast<std::size_t>(column)]/MP(scale);
+        const MP scaled_gradient=gradient/norm/MP(scale);
+        const MP unprojected=u-scaled_gradient;
+        const MP projected=is_free[static_cast<std::size_t>(column)] || unprojected>0 ? unprojected : MP(0);
+        const MP error=abs(u-projected);
+        if(error>kkt) kkt=error;
+    }
+    return kkt;
+}
+MP HighPrecisionObjective(const n::Evaluation & evaluation,n::VectorRef y,const std::vector<MP> & beta)
+{
+    std::vector<MP> residual(static_cast<std::size_t>(y.size()));
+    for(Eigen::Index row=0;row<y.size();++row) residual[static_cast<std::size_t>(row)]=-ExactInput(y(row));
+    for(Eigen::Index column=0;column<evaluation.x.cols();++column)
+        for(n::Sparse::InnerIterator entry(evaluation.x,column);entry;++entry)
+            residual[static_cast<std::size_t>(entry.row())]+=ExactInput(entry.value())*beta[static_cast<std::size_t>(column)];
+    MP objective{};
+    for(const auto & value:residual) objective+=value*value;
+    return objective/2;
+}
+j::value HighPrecisionReference(const j::value & fixture)
+{
+    const auto domain=DomainFrom(fixture); const auto y=VectorFrom(fixture.at("effective_response"));
+    const auto eta=VectorFrom(fixture.at("old_eta")); const auto context=ContextFrom(fixture);
+    const auto evaluation=n::EvaluateProfile(domain,y,eta,false,&context);
+    if(evaluation.x.rows()!=y.size() || evaluation.x.cols()!=2*eta.size() ||
+        evaluation.beta.size()!=evaluation.x.cols() || !evaluation.beta.allFinite())
+        throw std::runtime_error("High-precision reference requires a finite profile design and coefficients.");
+    std::vector<Eigen::Index> free_columns;
+    for(Eigen::Index column=0;column<evaluation.x.cols();++column)
+        if(column%2!=0 || evaluation.beta(column)>0) free_columns.push_back(column);
+    constexpr Eigen::Index maximum_dense_elements=1'000'000;
+    if(evaluation.x.rows()>maximum_dense_elements/static_cast<Eigen::Index>(free_columns.size()))
+        throw std::runtime_error("High-precision reference exceeds the bounded local-face budget.");
+    const auto count=static_cast<Eigen::Index>(free_columns.size());
+    std::vector<MP> norms(static_cast<std::size_t>(count));
+    std::vector<std::vector<MP>> normal(static_cast<std::size_t>(count),
+        std::vector<MP>(static_cast<std::size_t>(count)+1));
+    for(Eigen::Index column=0;column<count;++column)
+    {
+        norms[static_cast<std::size_t>(column)]=ExactInput(evaluation.x.col(
+            free_columns[static_cast<std::size_t>(column)]).norm());
+    }
+    for(Eigen::Index row=0;row<evaluation.x.rows();++row)
+    {
+        std::vector<MP> values(static_cast<std::size_t>(count));
+        for(Eigen::Index column=0;column<count;++column)
+            values[static_cast<std::size_t>(column)]=ExactInput(evaluation.x.coeff(row,
+                free_columns[static_cast<std::size_t>(column)]))/norms[static_cast<std::size_t>(column)];
+        for(Eigen::Index left=0;left<count;++left)
+        {
+            auto & equation=normal[static_cast<std::size_t>(left)];
+            equation[static_cast<std::size_t>(count)]+=values[static_cast<std::size_t>(left)]*ExactInput(y(row));
+            for(Eigen::Index right=0;right<count;++right)
+                equation[static_cast<std::size_t>(right)]+=values[static_cast<std::size_t>(left)]*
+                    values[static_cast<std::size_t>(right)];
+        }
+    }
+    for(Eigen::Index pivot=0;pivot<count;++pivot)
+    {
+        Eigen::Index selected=pivot;
+        for(Eigen::Index row=pivot+1;row<count;++row)
+            if(abs(normal[static_cast<std::size_t>(row)][static_cast<std::size_t>(pivot)])>
+               abs(normal[static_cast<std::size_t>(selected)][static_cast<std::size_t>(pivot)])) selected=row;
+        if(normal[static_cast<std::size_t>(selected)][static_cast<std::size_t>(pivot)]==0)
+            throw std::runtime_error("High-precision free face is rank deficient.");
+        std::swap(normal[static_cast<std::size_t>(pivot)],normal[static_cast<std::size_t>(selected)]);
+        const auto diagonal=normal[static_cast<std::size_t>(pivot)][static_cast<std::size_t>(pivot)];
+        for(Eigen::Index row=pivot+1;row<count;++row)
+        {
+            auto & equation=normal[static_cast<std::size_t>(row)];
+            const MP factor=equation[static_cast<std::size_t>(pivot)]/diagonal;
+            for(Eigen::Index column=pivot+1;column<=count;++column)
+                equation[static_cast<std::size_t>(column)]-=factor*
+                    normal[static_cast<std::size_t>(pivot)][static_cast<std::size_t>(column)];
+        }
+    }
+    std::vector<MP> theta(static_cast<std::size_t>(count));
+    for(Eigen::Index row=count;row-->0;)
+    {
+        MP value=normal[static_cast<std::size_t>(row)][static_cast<std::size_t>(count)];
+        for(Eigen::Index column=row+1;column<count;++column)
+            value-=normal[static_cast<std::size_t>(row)][static_cast<std::size_t>(column)]*
+                theta[static_cast<std::size_t>(column)];
+        theta[static_cast<std::size_t>(row)]=value/normal[static_cast<std::size_t>(row)][static_cast<std::size_t>(row)];
+    }
+    std::vector<MP> reference_beta(static_cast<std::size_t>(evaluation.x.cols()));
+    for(Eigen::Index column=0;column<count;++column)
+        reference_beta[static_cast<std::size_t>(free_columns[static_cast<std::size_t>(column)])]=
+            theta[static_cast<std::size_t>(column)]/norms[static_cast<std::size_t>(column)];
+    std::vector<MP> rounded_beta(static_cast<std::size_t>(evaluation.x.cols()));
+    for(Eigen::Index column=0;column<evaluation.beta.size();++column)
+        rounded_beta[static_cast<std::size_t>(column)]=ExactInput(evaluation.beta(column));
+    auto rounded_reference_beta=reference_beta;
+    n::Vector rounded_beta_vector=n::Vector::Zero(evaluation.x.cols());
+    for(std::size_t column=0;column<rounded_reference_beta.size();++column)
+    {
+        const double value=rounded_reference_beta[column].convert_to<double>();
+        rounded_beta_vector(static_cast<Eigen::Index>(column))=value;
+        rounded_reference_beta[column]=ExactInput(value);
+    }
+    const auto rounded_certificate=n::CertifyLinear(evaluation.x,y,rounded_beta_vector,context.scale);
+    const auto text=[](const MP & value) {return value.str(45,std::ios_base::scientific);};
+    j::array rounded_beta_json=NumbersJson(rounded_beta_vector);
+    j::array free_json; for(const auto column:free_columns) free_json.push_back(column);
+    return j::object{{"precision","boost::multiprecision::cpp_dec_float_50"},
+        {"free_columns",std::move(free_json)},
+        {"normal_equations_conditioning_note","50-digit normal equations for fixed double design; 23-column bounded local face"},
+        {"production_beta_exact_design_kkt",text(HighPrecisionKkt(evaluation,y,rounded_beta,free_columns,context.scale))},
+        {"high_precision_solution_kkt",text(HighPrecisionKkt(evaluation,y,reference_beta,free_columns,context.scale))},
+        {"rounded_high_precision_solution_kkt",text(HighPrecisionKkt(evaluation,y,rounded_reference_beta,free_columns,context.scale))},
+        {"production_beta_exact_design_objective",text(HighPrecisionObjective(evaluation,y,rounded_beta))},
+        {"high_precision_solution_objective",text(HighPrecisionObjective(evaluation,y,reference_beta))},
+        {"rounded_high_precision_solution_objective",text(HighPrecisionObjective(evaluation,y,rounded_reference_beta))},
+        {"rounded_high_precision_solution_double_certificate_kkt",rounded_certificate.projected_kkt},
+        {"rounded_high_precision_solution_double_certificate_objective",rounded_certificate.objective},
+        {"rounded_high_precision_beta",std::move(rounded_beta_json)}};
+}
 j::value Run(const j::value & fixture)
 {
     if(j::value_to<std::string>(fixture.at("format"))!="rhbm-joint-local-ac-kkt-v1")
@@ -70,6 +219,8 @@ j::value Run(const j::value & fixture)
     const auto search=n::SearchProfile(domain,y,eta.array().exp(),context);
     const auto spectrum=n::ComputeSpectrum(evaluation.x,{domain.rows,evaluation.x.cols(),eta.size()},evaluation.x.cols(),true);
     const auto & original=fixture.at("production_solver");
+    const auto captured_beta=VectorFrom(original.at("beta"));
+    const auto captured_certificate=n::CertifyLinear(evaluation.x,y,captured_beta,context.scale);
     std::vector<Eigen::Index> original_active;
     for(const auto & atom:original.at("active_a_atom_indices").as_array())
         original_active.push_back(j::value_to<Eigen::Index>(atom));
@@ -77,8 +228,26 @@ j::value Run(const j::value & fixture)
     const bool recovered=evaluation.valid && evaluation.certificate.linear_solver_valid &&
         evaluation.certificate.available && evaluation.certificate.feasible && evaluation.certificate.kkt_passed &&
         evaluation.certificate.free_rank.value_or(-1)==j::value_to<int>(original.at("linear_rank")) &&
-        evaluation.certificate.linear_releases.value_or(-1)==0 && active_face_matches &&
-        evaluation.certificate.objective<=j::value_to<double>(original.at("objective"));
+        evaluation.certificate.linear_releases.value_or(-1)==0 && active_face_matches && captured_certificate.available &&
+        evaluation.certificate.objective<=captured_certificate.objective;
+    double best_neighbor_kkt=evaluation.certificate.projected_kkt;
+    Eigen::Index best_neighbor_column=-1; int best_neighbor_direction=0;
+    for(Eigen::Index column=0;column<evaluation.beta.size();++column)
+    {
+        if(column%2==0 && evaluation.beta(column)==0) continue;
+        for(const double direction:{-std::numeric_limits<double>::infinity(),
+            std::numeric_limits<double>::infinity()})
+        {
+            auto neighbor=evaluation.beta;
+            neighbor(column)=std::nextafter(neighbor(column),direction);
+            const auto certificate=n::CertifyLinear(evaluation.x,y,neighbor,context.scale);
+            if(certificate.available && certificate.feasible && certificate.projected_kkt<best_neighbor_kkt)
+            {
+                best_neighbor_kkt=certificate.projected_kkt; best_neighbor_column=column;
+                best_neighbor_direction=std::signbit(direction) ? -1 : 1;
+            }
+        }
+    }
     return j::object{
         {"recovered",recovered},{"same_active_face",active_face_matches},
         {"search_stop_reason",search.stop_reason},{"initial_profile_reason",evaluation.reason},
@@ -91,6 +260,13 @@ j::value Run(const j::value & fixture)
         {"linear_solve_count",evaluation.certificate.linear_solves ? j::value(*evaluation.certificate.linear_solves) : j::value(nullptr)},
         {"active_set_releases",evaluation.certificate.linear_releases ? j::value(*evaluation.certificate.linear_releases) : j::value(nullptr)},
         {"scaled_projected_kkt",evaluation.certificate.projected_kkt},
+        {"result_objective",evaluation.certificate.objective},
+        {"captured_recorded_objective",j::value_to<double>(original.at("objective"))},
+        {"captured_beta_current_objective",captured_certificate.objective},
+        {"result_beta",NumbersJson(evaluation.beta)},
+        {"best_single_ulp_neighbor_kkt",best_neighbor_kkt},
+        {"best_single_ulp_neighbor_column",best_neighbor_column},
+        {"best_single_ulp_neighbor_direction",best_neighbor_direction},
         {"primal_feasible",evaluation.certificate.feasible},
         {"effective_response_norm",y.norm()},{"parent_observation_scale",context.scale}};
 }
@@ -565,6 +741,24 @@ int main(int argc,char ** argv)
         {
             const auto result=Run(Read(argv[2])); std::cout<<j::serialize(result)<<'\n';
             return result.at("recovered").as_bool() ? 0 : 1;
+        }
+        if(action=="expect-kkt-rejection")
+        {
+            const auto result=Run(Read(argv[2]));
+            const bool rejected=!result.at("recovered").as_bool() &&
+                j::value_to<std::string>(result.at("initial_profile_reason"))=="kkt-failed" &&
+                j::value_to<double>(result.at("scaled_projected_kkt"))>1e-10 &&
+                result.at("primal_feasible").as_bool();
+            std::cout<<j::serialize(j::object{{"expected_kkt_rejection",rejected},
+                {"initial_profile_reason",result.at("initial_profile_reason")},
+                {"scaled_projected_kkt",result.at("scaled_projected_kkt")},
+                {"primal_feasible",result.at("primal_feasible")}})<<'\n';
+            return rejected ? 0 : 1;
+        }
+        if(action=="reference-kkt")
+        {
+            std::cout<<j::serialize(HighPrecisionReference(Read(argv[2])))<<'\n';
+            return 0;
         }
         if(action=="assess")
         {

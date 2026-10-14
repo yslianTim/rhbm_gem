@@ -11,6 +11,18 @@
 
 namespace rhbm_gem::core::joint_component {
 namespace {
+void AddCompensated(double term,double & sum,double & compensation)
+{
+    const double next=sum+term;
+    compensation+=std::abs(sum)>=std::abs(term) ? (sum-next)+term : (term-next)+sum;
+    sum=next;
+}
+void AddCompensatedProduct(double left,double right,double & sum,double & compensation)
+{
+    const double product=left*right;
+    AddCompensated(product,sum,compensation);
+    AddCompensated(std::fma(left,right,-product),sum,compensation);
+}
 void AddRoleWork(ProfileRoleWork & destination,const ProfileRoleWork & source)
 {
     destination.evaluations+=source.evaluations;
@@ -95,10 +107,11 @@ Vector StablePrediction(const Sparse & x,const Vector & beta)
         for(Sparse::InnerIterator entry(x,column);entry;++entry)
         {
             const Eigen::Index row=entry.row();
-            const double term=entry.value()*beta(column),adjusted=term-compensation(row);
-            const double next=prediction(row)+adjusted;
-            compensation(row)=(next-prediction(row))-adjusted; prediction(row)=next;
+            double sum=prediction(row),correction=compensation(row);
+            AddCompensatedProduct(entry.value(),beta(column),sum,correction);
+            prediction(row)=sum; compensation(row)=correction;
         }
+    prediction+=compensation;
     return prediction;
 }
 Vector StableResidual(const Sparse & x,VectorRef y,const Vector & beta)
@@ -112,12 +125,8 @@ Vector StableTransposeProduct(const Sparse & x,VectorRef values)
     {
         double sum{},compensation{};
         for(Sparse::InnerIterator entry(x,column);entry;++entry)
-        {
-            const double term=entry.value()*values(entry.row()),adjusted=term-compensation;
-            const double next=sum+adjusted;
-            compensation=(next-sum)-adjusted; sum=next;
-        }
-        product(column)=sum;
+            AddCompensatedProduct(entry.value(),values(entry.row()),sum,compensation);
+        product(column)=sum+compensation;
     }
     return product;
 }
@@ -125,12 +134,8 @@ double StableColumnDot(const Sparse & x,Eigen::Index column,VectorRef values)
 {
     double sum{},compensation{};
     for(Sparse::InnerIterator entry(x,column);entry;++entry)
-    {
-        const double term=entry.value()*values(entry.row()),adjusted=term-compensation;
-        const double next=sum+adjusted;
-        compensation=(next-sum)-adjusted; sum=next;
-    }
-    return sum;
+        AddCompensatedProduct(entry.value(),values(entry.row()),sum,compensation);
+    return sum+compensation;
 }
 // Full-column TSQR from original rows. RHS columns undergo the same orthogonal
 // transformations. Only the small R and transformed RHS survive each tile.
@@ -550,8 +555,15 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
     Vector prediction=Vector::Zero(y.size()),compensation=prediction,absolute=prediction;
     // Independent scalar forward and compensated summation, using frozen support.
     auto add=[&](Eigen::Index row,double value) {
-        const double increment=value-compensation(row),sum=prediction(row)+increment;
-        compensation(row)=(sum-prediction(row))-increment; prediction(row)=sum; absolute(row)+=std::abs(value);
+        const double sum=prediction(row),next=sum+value;
+        compensation(row)+=std::abs(sum)>=std::abs(value) ? (sum-next)+value : (value-next)+sum;
+        prediction(row)=next; absolute(row)+=std::abs(value);
+    };
+    auto add_product=[&](Eigen::Index row,double coefficient,double kernel) {
+        const double product=coefficient*kernel;
+        const double product_error=std::fma(coefficient,kernel,-product);
+        add(row,product);
+        add(row,product_error); absolute(row)-=std::abs(product_error);
     };
     for (Eigen::Index a=0;a<e.eta.size();++a)
     {
@@ -561,9 +573,10 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
             if(p.square>2.5*2.5) continue;
             const double r=std::sqrt(p.square),g=std::pow(2*M_PI*b*b,-1.5)*std::exp(-p.square/(2*b*b));
             const double k=r<1e-5 ? std::sqrt(2/M_PI)/b : std::erf(r/b/std::sqrt(2.0))/r;
-            add(p.row,e.beta(2*a)*g); add(p.row,e.beta(2*a+1)*k);
+            add_product(p.row,e.beta(2*a),g); add_product(p.row,e.beta(2*a+1),k);
         }
     }
+    prediction+=compensation;
     const Vector replay_residual=prediction-y,original_prediction=StablePrediction(e.x,e.beta);
     Vector norms(e.x.cols());
     for (Eigen::Index k=0;k<e.x.cols();++k) norms(k)=e.x.col(k).norm();
@@ -633,10 +646,14 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
     Vector prediction=Vector::Zero(y.size()),prediction_error=prediction,absolute_sum=prediction;
     Vector column_norms_squared=Vector::Zero(e.beta.size());
     const auto add=[&](Eigen::Index row,double value) {
-        const double adjusted=value-prediction_error(row);
-        const double next=prediction(row)+adjusted;
-        prediction_error(row)=(next-prediction(row))-adjusted;
+        const double sum=prediction(row),next=sum+value;
+        prediction_error(row)+=std::abs(sum)>=std::abs(value) ? (sum-next)+value : (value-next)+sum;
         prediction(row)=next; absolute_sum(row)+=std::abs(value);
+    };
+    const auto add_product=[&](Eigen::Index row,double coefficient,double kernel_value) {
+        const double product=coefficient*kernel_value;
+        const double product_error=std::fma(coefficient,kernel_value,-product);
+        add(row,product); add(row,product_error); absolute_sum(row)-=std::abs(product_error);
     };
     const auto kernel=[&](double square,double width) {
         struct Values {double gaussian{},charge{},gaussian_log_width{},charge_log_width{};};
@@ -657,11 +674,12 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
         for(const auto & support:domain.atoms[static_cast<std::size_t>(atom)])
         {
             const auto basis=kernel(support.square,widths(atom));
-            add(support.row,e.beta(2*atom)*basis.gaussian);
-            add(support.row,e.beta(2*atom+1)*basis.charge);
+            add_product(support.row,e.beta(2*atom),basis.gaussian);
+            add_product(support.row,e.beta(2*atom+1),basis.charge);
             column_norms_squared(2*atom)+=basis.gaussian*basis.gaussian;
             column_norms_squared(2*atom+1)+=basis.charge*basis.charge;
         }
+    prediction+=prediction_error;
     if(!prediction.allFinite() || !column_norms_squared.allFinite())
     {out.reason="nonfinite-replay"; return out;}
 

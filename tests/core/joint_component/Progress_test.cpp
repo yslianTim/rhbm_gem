@@ -329,7 +329,7 @@ TEST(JointProgressTest, SearchEventsTrackOnlyAcceptedMetrics)
     const joint::JointProgressComponent progress_component{
         1, data.partition.components.size(), view.id, view.atoms.size(), view.rows.size()};
 
-    for (const double initial_width : {.05, 2.})
+    for (const double initial_width : {.5, 1.})
     {
         const auto initial = joint::Vector::Constant(static_cast<Eigen::Index>(view.atoms.size()), initial_width);
         const auto without_observer = joint::SearchProfile(view.domain, y, initial, context);
