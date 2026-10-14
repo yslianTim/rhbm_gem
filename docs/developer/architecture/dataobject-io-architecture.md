@@ -137,11 +137,15 @@ child tables. Atom and bond selection is restored from their structure rows.
 Analysis values do not imply selection.
 
 `model_stage_result(key_tag, result_json)` owns the canonical neutral analysis
-document (format version 3). It stores per-atom First/Second stage estimates,
+document (format version 4). It stores per-atom First/Second stage estimates,
 method and run provenance, availability reasons, uncertainty, raw samples and
 geometry, paired peeling, post-Joint local fits and compact information, group
 membership and posterior summaries. Joint points remain separate from local
-OLS/MDPDE diagnostics. Group membership is restored by its saved atom
+OLS/MDPDE diagnostics. Group members store Gaussian posterior A/B separately
+from their fixed per-member Joint charge profile; group charge medians are
+descriptive summaries. Format 3 is accepted and migrated on read by rebuilding
+member charge profiles from available local evidence and removing charge
+offsets from Gaussian-only group values. Group membership is restored by its saved atom
 identities; legacy group tables are adapted using the restored selection.
 
 `model_joint_result(key_tag, result_json)` stores the Joint estimator snapshot
@@ -159,9 +163,10 @@ different measurement source.
 
 1. Lock the repository and begin a transaction.
 2. If the database is v17/v18, load and convert every model to neutral
-   document version 3, create `model_stage_result`, drop the three legacy
+   document version 4, create `model_stage_result`, drop the three legacy
    analysis tables, and set schema version 20. If it is v19, upgrade the schema
-   version; stage format 2 is migrated when each model is loaded and saved.
+   version; prior neutral stage formats are migrated when each model is loaded
+   and saved.
 3. Replace the requested model's child rows and root row.
 4. Write its structure, optional Joint result, and canonical stage document.
 5. Commit the migration and requested model save together.

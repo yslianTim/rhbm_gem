@@ -367,11 +367,13 @@ diagnostics separately. Legacy reference agreement is not mapped to conditional 
 no reference status is mapped to independent replay.
 See the [target contract](../joint-target-estimability.md)
 for target convergence and retained halo availability. SQLite v20 stores
-estimator-neutral stage format 3, including `PostJointLocalResult`, paired
+estimator-neutral stage format 4, including `PostJointLocalResult`, paired
 peeling, compact local information, posterior evidence and sample geometry in
 `model_stage_result`. Legacy sample BLOBs have unavailable geometry; migrated
 Joint results whose group evidence used the previous measurement source are
-marked unavailable until the new local workflow runs.
+marked unavailable until the new local workflow runs. Neutral stage format 3
+is read and converted to format 4 using each available local result's fixed
+Joint charge profile.
 Consumers must rebuild against the updated public C++ value types.
 
 ### Selected-domain and initialization metadata

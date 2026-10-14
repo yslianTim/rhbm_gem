@@ -42,7 +42,7 @@ Required CTest labels:
 Build all test targets:
 
 ```bash
-cmake --build build --target tests_all -j
+cmake --build build --target tests_all --parallel 4
 ```
 
 Build output note:
@@ -55,25 +55,25 @@ Build output note:
 Run all tests:
 
 ```bash
-ctest --test-dir build --output-on-failure
+ctest --test-dir build --output-on-failure --parallel 4
 ```
 
 Run by domain:
 
 ```bash
-ctest --test-dir build -L domain:data --output-on-failure
+ctest --test-dir build -L domain:data --output-on-failure --parallel 4
 ```
 
 Run by intent:
 
 ```bash
-ctest --test-dir build -L intent:algorithm --output-on-failure
+ctest --test-dir build -L intent:algorithm --output-on-failure --parallel 4
 ```
 
 Run repository guards and install consumer smoke (lint lane):
 
 ```bash
-cmake --build build --target lint_repo
+cmake --build build --target lint_repo --parallel 4
 ```
 
 ## Joint component regression

@@ -18,6 +18,7 @@
 #include "data/detail/JointStageAdapter.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
 #include "core/detail/StageSummary.hpp"
+#include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/PostFitPeeling.hpp"
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include "core/detail/MapInterpolation.hpp"
@@ -724,7 +725,8 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
     core::FitOptions options;
     options.estimator = core::PotentialEstimator::JOINT_COMPONENTS;
     options.quiet_mode = true;
-    core::RunPotentialFittingWorkflow(*f.map, *f.model, options);
+    core::detail::JointPostprocessingMetrics postprocessing_metrics;
+    core::detail::RunJointComponentWorkflow(*f.map, *f.model, options, &postprocessing_metrics);
     core::detail::FirstStageObserverForTesting() = {};
     core::detail::PotentialSamplingObserverForTesting() = {};
     ASSERT_TRUE(f.model->GetAnalysisView().GetJointResult());
@@ -732,6 +734,10 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
     const auto expected_stages = rhbm_gem::data_internal::BuildJointStageEstimates(result, "expected-run");
     EXPECT_EQ(f.model->GetSelectedAtoms(), selected);
     EXPECT_EQ(f.model->GetSelectedBonds(), bonds);
+    EXPECT_EQ(postprocessing_metrics.observation_row_mapping_builds, 1u);
+    EXPECT_EQ(postprocessing_metrics.contributor_mapping_builds, 1u);
+    EXPECT_EQ(postprocessing_metrics.joint_stage_mapping_builds, 1u);
+    EXPECT_EQ(postprocessing_metrics.target_preparation_count, selected.size());
     EXPECT_EQ(result.row_ids, problem.Input().row_ids);
     ASSERT_EQ(result.initialization.atoms.size(), problem.Input().atom_ids.size());
     std::size_t local_regression_count{};

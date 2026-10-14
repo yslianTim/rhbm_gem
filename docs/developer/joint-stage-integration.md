@@ -57,6 +57,16 @@ but do not receive local or group results.
    group means, prior/posterior parameters, uncertainty and outlier flags.
    Only selected targets enter group statistics.
 
+`RunJointComponentWorkflow` creates one immutable `JointPostprocessingContext`
+after publishing the trusted Joint snapshot and target endpoints. It builds
+the observation-grid-index to row-index lookup and atom-ID to contributor-index
+lookup once for that Joint run. The context reads the saved component
+representatives and endpoint provenance without rebuilding Joint stage
+estimates. It remains alive through peeling and all target-local preparation;
+each target creates only its own support charge lookup and sample workspace.
+The context does not hold a dense observations-by-contributors matrix or a
+per-target copy of contributor state.
+
 The group information for local design `X_i`, log-response `y_i`, and
 working diagonal covariance `Sigma_y_i` is
 `P_i = X_i^T Sigma_y_i^-1 X_i` and
@@ -65,13 +75,34 @@ weights, not a Joint-endpoint conditional least-squares covariance. The
 persisted information is six doubles per eligible target; per-sample
 weights/covariances are transient and are not serialized.
 
+## Evidence and posterior representation
+
+`AssessPostJointLocalResult` is the shared contract used when fitting local
+evidence, publishing a batch, selecting group observations, and validating
+stage persistence. It checks target/source/run/component identity, Joint
+qualification, paired peeling and raw sample counts, fixed charge equality,
+sample failure indices, finite local A/B and alpha, native MDPDE diagnostics,
+effective sample count, and finite positive-definite compact information.
+Unavailable evidence remains excluded from group inference. Publication
+validates the whole batch before changing any atom or group result.
+
+Group posterior Gaussian parameters and the fixed Joint charge profile are
+stored separately. Each `GroupGaussianMemberResult` contains posterior A/B
+with Gaussian offset zero and that member's original `(C_i^J, B_i^J)` profile.
+`EvaluateGroupMemberResponseAtDistance` evaluates
+`A_post G(r; B_post) + C_i^J K(r; B_i^J)`. Group means, priors, and MDPDE
+summaries contain Gaussian parameters only. A group charge median is a
+descriptive statistic and does not define a physical group-level FullABC
+response.
+
 ## Invalidation and provenance
 
 All derived records carry the Joint source and run. Editors reject mixed Joint
 runs and mismatched atom, component or role identities.
 
-- A Joint endpoint change clears its peeling, post-Joint local result, related
-  group posterior and Joint snapshot for that run.
+- A Joint endpoint change clears the run's peeling, post-Joint local results,
+  group inference and Joint snapshot. Any contributor can affect every target
+  whose peeling subtracts its signal.
 - A raw sample change clears peeling, local result and group inference while
   retaining a still-valid Joint numerical snapshot.
 - A peeling change clears the local result and group inference.
@@ -100,14 +131,17 @@ cross-atom errors.
 
 ## Persistence and coverage
 
-SQLite schema v20 stores neutral stage-result JSON format 3. It round-trips
+SQLite schema v20 stores neutral stage-result JSON format 4. It round-trips
 the Joint snapshot, paired peeling, post-Joint local result, fixed charge
-profile, compact information, status/reason, and group posterior. Version-2
+profile, compact information, status/reason, and group posterior. Version-3
+stage documents are decoded with their per-member fixed charge reconstructed
+from available local evidence, then emitted as format 4. Version-2
 Joint group results based on the previous measurement source are invalidated
 during migration and require the post-Joint local workflow to run again.
 Legacy stage formats remain readable through their existing migration path.
 
-Permanent coverage exercises exact grid peeling, fixed-charge correction,
-local MDPDE regression, group information equivalence, identity and
-invalidation checks, persistence, and two-stage compatibility. The complete
+Permanent coverage exercises shared mapping counts, exact grid peeling,
+fixed-charge correction, local MDPDE regression, group information
+equivalence, available/unavailable evidence, atomic publication, identity and
+cross-target invalidation, persistence, and two-stage compatibility. The complete
 test lane is described in [tests/README.md](../../tests/README.md).

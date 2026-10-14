@@ -100,6 +100,10 @@ construction memory preflight.
 
 ## Post-Joint local and group workspace
 
+One immutable `JointPostprocessingContext` owns the per-run observation-row and
+contributor-ID lookups and lives through target peeling and local preparation.
+The workflow benchmark records each lookup build count, Joint stage mapping
+count, target preparation count, and valid/invalid local sample totals.
 Peeling and charge correction prepare one target at a time from const raw
 samples and the paired peeling results. `PostJointLocalSamples` is temporary;
 the workflow retains the local OLS/MDPDE result, diagnostics, fixed charge
@@ -109,11 +113,20 @@ dense matrix. Group WEB consumes the compact summaries group by group, without
 repeating local MDPDE fitting.
 
 The current workflow benchmark reports observed end-to-end workflow runtime
-and peak RSS for its small synthetic cases. No large-map or full-atom-set
-post-Joint memory/runtime measurement is available. These compact-information
-sizes are structural counts; peak RSS and runtime must be measured on an
-explicit benchmark run and are not inferred from them. The Joint rank stages
-above remain the large-component memory bottleneck.
+and peak RSS for its synthetic cases. The context-lookup and workspace byte
+fields are allocation estimates from container/sample payload sizes; allocator
+overhead and vector/map capacity variation are excluded. Current RSS checkpoints
+and process peak RSS are measured separately. The 5 ms sampled workflow peak can
+miss brief allocations, while process peak RSS is a whole-process high-water
+mark that includes fixture setup and persistence. None of these readings
+attributes memory to a specific allocation.
+
+The benchmark cases vary target count, voxel density, and component topology
+within small deterministic synthetic inputs. No large-map or full-atom-set
+post-Joint memory/runtime measurement is available. The 5,938,087-observation
+rank preflight shape remains blocked before full Joint qualification; that is a
+separate upstream resource limit and provides no post-Joint local measurement.
+The Joint rank stages above remain the large-component memory bottleneck.
 
 ## Bounded local A/C KKT refinement
 

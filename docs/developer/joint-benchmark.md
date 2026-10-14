@@ -14,8 +14,15 @@ current workflow costs. Its only workflow entry point is
 | command | CLI analysis, save/reload and Joint export | RHBM-GEM |
 
 Build the search, solve and workflow executables with
-RHBM_GEM_BUILD_BENCHMARKS=ON. The command profile uses the regular CLI build
-and requires --model and --map inputs.
+`RHBM_GEM_BUILD_BENCHMARKS=ON`, using no more than four jobs:
+
+```sh
+cmake -S . -B build/bench -DBUILD_TESTING=ON -DRHBM_GEM_BUILD_BENCHMARKS=ON
+cmake --build build/bench --target benchmarks_all --parallel 4
+```
+
+The command profile uses the regular CLI build and requires `--model` and
+`--map` inputs.
 
 For small synthetic search and solve measurements:
 
@@ -45,14 +52,37 @@ component replay and compares acceptance decisions. It still uses full replay
 as the authority and does not run a different estimator trajectory; results
 are diagnostic evidence, not a production speedup claim.
 
-Use workflow with `full`, `halo`, `multi`, `noisy` or `outlier` cases. The last
-two are deterministic full-selection maps with a stronger sinusoidal noise
-field or a single injected central-voxel outlier. The workflow report includes
-Joint endpoints, local fit status, compact local information, workflow runtime
-and observed peak RSS. Use command with a case name plus `--model` and `--map`. Reports and
-temporary outputs belong in the build/output tree. These synthetic fixtures
-exercise the workflow contract but do not establish large-map or full-atom-set
-resource requirements.
+Use workflow with `full`, `halo`, `multi`, `noisy`, `outlier`, `dense`,
+`target-heavy`, or `connected` cases. The scaling cases reuse the same driver:
+`full` has three targets, `target-heavy` has six inside the same spatial
+envelope, `dense` keeps three targets and halves voxel spacing, `multi` has
+three small components, and `connected` has one nine-target component. The
+report records actual Joint observations, contributors and targets so these
+workloads can be compared without assuming the row count. `halo` is partial
+selection; `noisy` and `outlier` retain their deterministic perturbations.
+
+Workflow JSON reports row, contributor and Joint-stage mapping build counts;
+target/sample counts; context, peeling, charge-correction, local alpha/local
+MDPDE, group alpha and WEB timings; and current-RSS checkpoints. The context
+and workspace byte counts are estimates of container and sample payloads and
+exclude allocator overhead. The 5 ms sampled workflow peak can miss short
+spikes. Process peak RSS is the whole-process high-water mark, including fixture
+construction and persistence, and does not attribute memory to a phase. RSS
+availability is recorded separately; unsupported measurements are `null`.
+Run the wrapper with explicit bounds for each case, for example:
+
+```sh
+python3 tests/integration/joint_benchmark.py \
+  --profile workflow --case target-heavy \
+  --build-dir build/bench --output build/joint-target-heavy.json \
+  --timeout 600 --rss-limit 4294967296
+```
+
+These synthetic fixtures exercise workflow contracts but do not establish
+large-map or full-atom-set resource requirements. A completed workflow report
+preserves per-target Joint and local statuses; it does not imply every endpoint
+qualified. Use command with a case name plus `--model` and `--map`. Reports and
+temporary outputs belong in the build/output tree.
 
 Production rank uses values-only projected-width SVD. The diagnostic weak
 direction path is opt-in and has its own `ProjectedWidthDiagnostics` memory

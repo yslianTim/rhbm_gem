@@ -441,6 +441,23 @@ weights and covariances are temporary; no component-wide or cross-atom
 covariance matrix is formed. Peeling and local sample preparation are bounded
 per target, and group WEB is bounded per group.
 
+The workflow builds one immutable `JointPostprocessingContext` after the Joint
+snapshot is published. Its observation-row and contributor-ID lookups are
+shared through peeling and all target-local preparation. It reads the trusted
+snapshot and published endpoint records without reconstructing Joint stage
+estimates per target; each target only builds its own charge support and sample
+workspace. `AssessPostJointLocalResult` supplies the same source, sample,
+endpoint, numerical and compact-information contract to fitting, atomic batch
+publication, group eligibility and persistence validation.
+
+Group posterior members retain Gaussian posterior A/B separately from their
+fixed Joint `(C_i^J, B_i^J)` profile. The physical member response evaluates
+the posterior Gaussian at `B_post` and its charge kernel at `B_i^J`. Group
+means and priors are Gaussian-only; the group charge median is descriptive and
+does not define a single FullABC physical response. See the
+[stage-integration guide](joint-stage-integration.md) for the lifecycle and
+invalidation details.
+
 The fixed Joint charge profile remains unchanged when the local width differs.
 Log-Gaussian fitting filters nonpositive corrected responses according to the
 existing dataset builder. Local measurement information is a working model;
@@ -488,8 +505,8 @@ endpoint-certification and `RuntimeConvergence` thresholds remain unchanged.
 
 ```sh
 cmake -S . -B build -DBUILD_TESTING=ON
-cmake --build build --target tests_all -j4
-ctest --test-dir build -L joint:runtime --output-on-failure
+cmake --build build --target tests_all --parallel 4
+ctest --test-dir build -L joint:runtime --output-on-failure --parallel 4
 ```
 
 The runtime test lane protects the estimator behavior and public API. The
@@ -518,8 +535,8 @@ Both options default to `OFF` and require `BUILD_TESTING=ON`:
 cmake -S . -B build -DBUILD_TESTING=ON \
   -DRHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS=ON \
   -DRHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON
-cmake --build build --target tests_all -j4
-ctest --test-dir build -L 'joint:extended|joint:offline' --output-on-failure
+cmake --build build --target tests_all --parallel 4
+ctest --test-dir build -L 'joint:extended|joint:offline' --output-on-failure --parallel 4
 ```
 
 Extended and offline lanes are opt-in and stay separate from the default
@@ -620,10 +637,10 @@ bridge topology, unavailable target states, and the numerical policy.
 Build with at most four jobs, then run the bounded gates from the build tree:
 
 ```sh
-cmake --build build/debug-tests -j4
-ctest --test-dir build/debug-tests -L 'joint:contract'
-ctest --test-dir build/debug-tests -L 'joint:workflow'
-ctest --test-dir build/debug-tests -L 'joint:numerical'
+cmake --build build/debug-tests --parallel 4
+ctest --test-dir build/debug-tests -L 'joint:contract' --parallel 4
+ctest --test-dir build/debug-tests -L 'joint:workflow' --parallel 4
+ctest --test-dir build/debug-tests -L 'joint:numerical' --parallel 4
 ```
 
 Contract covers deterministic component, linear algebra, and small assessment
@@ -637,8 +654,8 @@ numerical solver change also runs each relevant scalability case. Release or
 performance qualification runs Tier 4 for its campaign scope:
 
 ```sh
-ctest --test-dir build/debug-tests -L 'joint:scalability'
-ctest --test-dir build/debug-tests -L 'joint:offline'
+ctest --test-dir build/debug-tests -L 'joint:scalability' --parallel 4
+ctest --test-dir build/debug-tests -L 'joint:offline' --parallel 4
 ```
 
 Tier 4 gives `joint_component_gram_scalability`, the two 256-atom FixedB cases,
