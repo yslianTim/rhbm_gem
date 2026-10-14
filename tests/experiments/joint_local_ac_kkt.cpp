@@ -485,6 +485,21 @@ double RecordedDifference(n::VectorRef value,const j::value & recorded)
     return value.size()==expected.size() ? (value-expected).lpNorm<Eigen::Infinity>() :
         std::numeric_limits<double>::infinity();
 }
+bool ReplayCutoffRegression()
+{
+    const double width=0.7,cutoff=std::nextafter(2.5*2.5,std::numeric_limits<double>::infinity());
+    n::Domain domain{3,{{{0,0.0},{1,1.0},{2,cutoff}}}};
+    n::Vector eta(1),beta(2),y=n::Vector::Zero(3); eta(0)=std::log(width); beta<<1.0,0.0;
+    const double matched_width=std::exp(eta(0));
+    y(0)=n::EvaluateKernel(0.0,matched_width,2.5).gaussian;
+    y(1)=n::EvaluateKernel(1.0,matched_width,2.5).gaussian;
+    n::EvaluationContext context; context.scale=std::max(1.0,y.norm());
+    const auto primary=n::EvaluateState(domain,y,eta,beta,context);
+    n::ReplayDetailsForDiagnostics replay;
+    const auto trust=n::CheckReplay(domain,y,primary,context,&replay);
+    return primary.valid && primary.certificate.kkt_passed && trust.passed &&
+        replay.prediction(2)==0.0 && trust.prediction_difference==0.0;
+}
 j::value ReplayTrialFixture(const j::value & fixture)
 {
     if(j::value_to<std::string>(fixture.at("format"))!="rhbm-joint-local-replay-trial-v1")
@@ -495,7 +510,23 @@ j::value ReplayTrialFixture(const j::value & fixture)
     const auto primary=n::EvaluateState(domain,y,eta,beta,context);
     n::ReplayDetailsForDiagnostics replay;
     const auto trust=n::CheckReplay(domain,y,primary,context,&replay);
+    auto wrong_gradient=primary; wrong_gradient.gradient(0)+=1e-3;
+    const auto wrong_gradient_trust=n::CheckReplay(domain,y,wrong_gradient,context);
+    auto wrong_kkt=primary; wrong_kkt.certificate.projected_kkt+=1e-6;
+    const auto wrong_kkt_trust=n::CheckReplay(domain,y,wrong_kkt,context);
+    n::Vector wrong_beta=beta; wrong_beta(0)*=1.1;
+    const auto wrong_coefficients=n::EvaluateState(domain,y,eta,wrong_beta,context);
+    const auto wrong_coefficients_trust=n::CheckReplay(domain,y,wrong_coefficients,context);
+    const bool cutoff_regression=ReplayCutoffRegression();
     const auto primary_prediction=(primary.x*primary.beta).eval();
+    n::Vector stable_prediction=n::Vector::Zero(primary.x.rows()),stable_compensation=stable_prediction;
+    for(Eigen::Index column=0;column<primary.x.cols();++column)
+        for(n::Sparse::InnerIterator entry(primary.x,column);entry;++entry)
+        {
+            const auto row=entry.row(); const double term=entry.value()*primary.beta(column);
+            const double adjusted=term-stable_compensation(row),next=stable_prediction(row)+adjusted;
+            stable_compensation(row)=(next-stable_prediction(row))-adjusted; stable_prediction(row)=next;
+        }
     const auto reproduced_prediction=RecordedDifference(primary_prediction,fixture.at("primary_prediction"));
     const auto reproduced_residual=RecordedDifference(primary.residual,fixture.at("primary_residual"));
     const auto reproduced_gradient=RecordedDifference(primary.gradient,fixture.at("primary_width_gradient"));
@@ -508,7 +539,12 @@ j::value ReplayTrialFixture(const j::value & fixture)
         {"primary_valid",primary.valid},{"primary_kkt_passed",primary.certificate.kkt_passed},
         {"primary_scaled_kkt",Number(primary.certificate.projected_kkt)},
         {"replay_reason",trust.reason},{"replay_passed",trust.passed},
+        {"cutoff_regression_passed",cutoff_regression},
+        {"wrong_gradient_rejected",!wrong_gradient_trust.passed},
+        {"wrong_kkt_rejected",!wrong_kkt_trust.passed},
+        {"wrong_coefficients_rejected",!wrong_coefficients_trust.passed},
         {"prediction_difference",Number(trust.prediction_difference)},
+        {"stable_sparse_prediction_replay_difference",(stable_prediction-replay.prediction).lpNorm<Eigen::Infinity>()},
         {"gradient_difference",Number(trust.gradient_difference)},
         {"kkt_difference",Number(trust.kkt_difference)},
         {"recomputed_primary_max_differences",j::object{{"prediction",Number(reproduced_prediction)},
@@ -538,7 +574,9 @@ int main(int argc,char ** argv)
         if(action=="replay-trial")
         {
             const auto result=ReplayTrialFixture(Read(argv[2])); std::cout<<j::serialize(result)<<'\n';
-            return result.at("primary_valid").as_bool() ? 0 : 1;
+            return result.at("primary_valid").as_bool() && result.at("replay_passed").as_bool() &&
+                result.at("cutoff_regression_passed").as_bool() && result.at("wrong_gradient_rejected").as_bool() &&
+                result.at("wrong_kkt_rejected").as_bool() && result.at("wrong_coefficients_rejected").as_bool() ? 0 : 1;
         }
         throw std::invalid_argument("Usage: joint_local_ac_kkt replay|assess|replay-trial FIXTURE.json");
     }

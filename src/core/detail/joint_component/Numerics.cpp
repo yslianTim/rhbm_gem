@@ -88,6 +88,50 @@ double ProfileSearchWork::AttributedSeconds() const
 }
 namespace {
 double Difference(const Vector & a,const Vector & b) {return ((a-b).array().abs()/(1+a.array().abs().max(b.array().abs()))).maxCoeff();}
+Vector StablePrediction(const Sparse & x,const Vector & beta)
+{
+    Vector prediction=Vector::Zero(x.rows()),compensation=prediction;
+    for(Eigen::Index column=0;column<x.cols();++column)
+        for(Sparse::InnerIterator entry(x,column);entry;++entry)
+        {
+            const Eigen::Index row=entry.row();
+            const double term=entry.value()*beta(column),adjusted=term-compensation(row);
+            const double next=prediction(row)+adjusted;
+            compensation(row)=(next-prediction(row))-adjusted; prediction(row)=next;
+        }
+    return prediction;
+}
+Vector StableResidual(const Sparse & x,VectorRef y,const Vector & beta)
+{
+    return StablePrediction(x,beta)-y;
+}
+Vector StableTransposeProduct(const Sparse & x,VectorRef values)
+{
+    Vector product=Vector::Zero(x.cols());
+    for(Eigen::Index column=0;column<x.cols();++column)
+    {
+        double sum{},compensation{};
+        for(Sparse::InnerIterator entry(x,column);entry;++entry)
+        {
+            const double term=entry.value()*values(entry.row()),adjusted=term-compensation;
+            const double next=sum+adjusted;
+            compensation=(next-sum)-adjusted; sum=next;
+        }
+        product(column)=sum;
+    }
+    return product;
+}
+double StableColumnDot(const Sparse & x,Eigen::Index column,VectorRef values)
+{
+    double sum{},compensation{};
+    for(Sparse::InnerIterator entry(x,column);entry;++entry)
+    {
+        const double term=entry.value()*values(entry.row()),adjusted=term-compensation;
+        const double next=sum+adjusted;
+        compensation=(next-sum)-adjusted; sum=next;
+    }
+    return sum;
+}
 // Full-column TSQR from original rows. RHS columns undergo the same orthogonal
 // transformations. Only the small R and transformed RHS survive each tile.
 template<class Design>
@@ -143,10 +187,10 @@ BasisValues EvaluateKernel(double square, double width, double cutoff)
 {
     if (!(width>0.0) || !std::isfinite(width)) throw std::invalid_argument("Invalid matched width.");
     if (square > cutoff*cutoff) return {};
-    const double r{std::sqrt(square)}, r2{r*r}, b2{width*width}, exponent{std::exp(-r2/(2.0*b2))};
+    const double r{std::sqrt(square)}, r2{square}, exponent{std::exp(-r2/(2.0*width*width))};
     BasisValues out;
-    out.gaussian = std::pow(2.0*std::numbers::pi*b2,-1.5)*exponent;
-    out.gaussian_log_width = out.gaussian*(r2/b2-3.0);
+    out.gaussian = std::pow(2.0*std::numbers::pi*width*width,-1.5)*exponent;
+    out.gaussian_log_width = out.gaussian*(r2/(width*width)-3.0);
     const double center{std::sqrt(2.0/std::numbers::pi)/width};
     if (r < 1e-5) {out.charge=center; out.charge_log_width=-center;}
     else if (r <= 2.5) {out.charge=std::erf(r/width/std::sqrt(2.0))/r; out.charge_log_width=-center*exponent;}
@@ -159,11 +203,11 @@ Certificate CertifyLinear(const Sparse & x,VectorRef y,const Eigen::VectorXd & b
     Eigen::VectorXd norms(x.cols());
     for (Eigen::Index k=0;k<x.cols();++k) norms(k)=x.col(k).norm();
     if (!norms.allFinite() || (norms.array()<=0).any()) return out;
-    const Eigen::VectorXd residual=x*beta-y;
+    const Eigen::VectorXd residual=StableResidual(x,y,beta);
     if (!residual.allFinite()) return out;
     const double s=observation_scale>0 ? observation_scale : std::max(1.0,y.norm());
     const Eigen::VectorXd u=norms.array()*beta.array()/s;
-    const Eigen::VectorXd gradient=(x.transpose()*residual).array()/norms.array()/s;
+    const Eigen::VectorXd gradient=StableTransposeProduct(x,residual).array()/norms.array()/s;
     Eigen::VectorXd projected=u-gradient; std::vector<Eigen::Index> active; bool feasible=true;
     for (Eigen::Index k=0;k<beta.size();k+=2)
     {
@@ -350,10 +394,10 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     if(blocks) out.certificate.block_factorizations=solved.block_factorizations;
     if (!solved.valid) {out.reason=solved.reason; return out;}
     if (!out.certificate.kkt_passed) {out.reason="kkt-failed"; return out;}
-    out.residual=out.x*out.beta-y; out.gradient=Vector::Zero(m);
+    out.residual=StableResidual(out.x,y,out.beta); out.gradient=Vector::Zero(m);
     const double scale=context ? context->scale : std::max(1.0,y.norm());
     for (Eigen::Index k=0;k<2*m;++k)
-        out.gradient(k/2)+=out.beta(k)*out.derivative.col(k).dot(out.residual)/scale/scale;
+        out.gradient(k/2)+=out.beta(k)*StableColumnDot(out.derivative,k,out.residual)/scale/scale;
     out.valid=out.residual.allFinite() && out.gradient.allFinite();
     out.reason=out.valid ? "qualified-inner" : "nonfinite-residual"; return out;
 }
@@ -369,13 +413,13 @@ Evaluation EvaluateState(const Domain & domain,VectorRef y,const Vector & eta,co
         std::chrono::duration<double>(std::chrono::steady_clock::now()-basis_started).count();
     if(!out.valid) return out; out.valid=false;
     if(beta.size()!=out.x.cols() || !beta.allFinite()) {out.reason="invalid-coefficients"; return out;}
-    out.beta=beta; out.residual=out.x*beta-y; out.gradient=Vector::Zero(eta.size());
+    out.beta=beta; out.residual=StableResidual(out.x,y,beta); out.gradient=Vector::Zero(eta.size());
     const auto certificate_started=std::chrono::steady_clock::now();
     out.certificate=CertifyLinear(out.x,y,beta,context.scale);
     if(profile_work) telemetry.work.linear_certificate_seconds+=
         std::chrono::duration<double>(std::chrono::steady_clock::now()-certificate_started).count();
     for(Eigen::Index k=0;k<beta.size();++k)
-        out.gradient(k/2)+=beta(k)*out.derivative.col(k).dot(out.residual)/context.scale/context.scale;
+        out.gradient(k/2)+=beta(k)*StableColumnDot(out.derivative,k,out.residual)/context.scale/context.scale;
     out.valid=out.residual.allFinite() && out.gradient.allFinite(); out.reason=out.valid ? "raw-state" : "nonfinite-state";
     return out;
 }
@@ -502,6 +546,7 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
     if(!e.certificate.available || !e.certificate.feasible || !e.certificate.kkt_passed)
     {out.reason="kkt-failed"; return out;}
     const double scale=context->scale;
+    const Vector widths=e.eta.array().exp();
     Vector prediction=Vector::Zero(y.size()),compensation=prediction,absolute=prediction;
     // Independent scalar forward and compensated summation, using frozen support.
     auto add=[&](Eigen::Index row,double value) {
@@ -510,28 +555,30 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
     };
     for (Eigen::Index a=0;a<e.eta.size();++a)
     {
-        const double b=std::exp(e.eta(a));
+        const double b=widths(a);
         for (const auto & p:domain.atoms[static_cast<std::size_t>(a)])
         {
+            if(p.square>2.5*2.5) continue;
             const double r=std::sqrt(p.square),g=std::pow(2*M_PI*b*b,-1.5)*std::exp(-p.square/(2*b*b));
             const double k=r<1e-5 ? std::sqrt(2/M_PI)/b : std::erf(r/b/std::sqrt(2.0))/r;
             add(p.row,e.beta(2*a)*g); add(p.row,e.beta(2*a+1)*k);
         }
     }
-    const Vector replay_residual=prediction-y,original_prediction=e.x*e.beta;
+    const Vector replay_residual=prediction-y,original_prediction=StablePrediction(e.x,e.beta);
     Vector norms(e.x.cols());
     for (Eigen::Index k=0;k<e.x.cols();++k) norms(k)=e.x.col(k).norm();
     const Vector u=norms.array()*e.beta.array()/scale;
-    const Vector gradient=(e.x.transpose()*replay_residual).array()/norms.array()/scale;
+    const Vector gradient=StableTransposeProduct(e.x,replay_residual).array()/norms.array()/scale;
     Vector projected=u-gradient;
     for (Eigen::Index k=0;k<e.beta.size();k+=2) projected(k)=std::max(0.0,projected(k));
     const double kkt=(u-projected).lpNorm<Eigen::Infinity>();
     Vector width_gradient=Vector::Zero(e.eta.size());
     for (Eigen::Index a=0;a<e.eta.size();++a)
     {
-        const double b=std::exp(e.eta(a));
+        const double b=widths(a);
         for (const auto & p:domain.atoms[static_cast<std::size_t>(a)])
         {
+            if(p.square>2.5*2.5) continue;
             const double g=std::pow(2*M_PI*b*b,-1.5)*std::exp(-p.square/(2*b*b));
             const double dk=-std::sqrt(2/M_PI)/b*(p.square<1e-10 ? 1 : std::exp(-p.square/(2*b*b)));
             width_gradient(a)+=(e.beta(2*a)*g*(p.square/(b*b)-3)+e.beta(2*a+1)*dk)*replay_residual(p.row)/scale/scale;
@@ -555,8 +602,9 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
     out.prediction_difference=(prediction-original_prediction).lpNorm<Eigen::Infinity>();
     out.gradient_difference=(width_gradient-e.gradient).lpNorm<Eigen::Infinity>();
     out.cancellation_ratio=(absolute.array()/prediction.array().abs().max(1.0)).maxCoeff();
-    out.passed=prediction_ok && gradient_ok && kkt_difference<=1e-13;
-    out.reason=out.passed ? "trusted" : "replay-disagreement";
+    const bool independent_kkt_ok=kkt<=1e-10;
+    out.passed=prediction_ok && gradient_ok && independent_kkt_ok && kkt_difference<=1e-13;
+    out.reason=out.passed ? "trusted" : !independent_kkt_ok ? "independent-kkt-failed" : "replay-disagreement";
     return out;
 }
 

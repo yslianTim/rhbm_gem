@@ -49,7 +49,7 @@ Kernel ReplayKernel(double square,double width,bool cutoff=false)
     Kernel out;
     if(cutoff && square>2.5*2.5) return out;
     const double radius=std::sqrt(square),width_squared=width*width;
-    const double exponential=std::exp(-square/(2*width_squared));
+    const double exponential=std::exp(-square/(2*width*width));
     out.g=std::pow(2*M_PI*width*width,-1.5)*exponential;
     out.k=radius<1e-5 ? std::sqrt(2/M_PI)/width : std::erf(radius/width/std::sqrt(2.0))/radius;
     out.dg=out.g*(square/width_squared-3.0);
@@ -136,7 +136,12 @@ j::value Run(const j::value & fixture)
         support.push_back(std::move(values));
     }
     n::Domain domain{rows,std::move(support)}; const V y=VectorFrom(fixture.at("effective_response"));
-    const V eta=VectorFrom(fixture.at("trial_eta")),beta=VectorFrom(fixture.at("trial_beta"));
+    const V eta=VectorFrom(fixture.at("trial_eta")),beta=VectorFrom(fixture.at("trial_beta")),
+        widths=VectorFrom(fixture.at("trial_widths"));
+    double max_width_transform_difference{};
+    for(Eigen::Index atom=0;atom<eta.size();++atom)
+        max_width_transform_difference=std::max(max_width_transform_difference,
+            std::abs(widths(atom)-std::exp(eta(atom))));
     const auto & saved_context=fixture.at("local_numerical_context"); n::EvaluationContext context;
     context.scale=j::value_to<double>(saved_context.at("local_observation_scale"));
     context.linear.rank_relative=j::value_to<double>(saved_context.at("rank_relative"));
@@ -144,22 +149,36 @@ j::value Run(const j::value & fixture)
     const auto primary=n::EvaluateState(domain,y,eta,beta,context);
     n::ReplayDetailsForDiagnostics replay_details;
     const auto trust=n::CheckReplay(domain,y,primary,context,&replay_details);
-    const V primary_prediction=(primary.x*primary.beta).eval();
+    const V sparse_prediction=(primary.x*primary.beta).eval();
+    V matrix_kahan=V::Zero(rows),matrix_compensation=matrix_kahan;
+    for(Eigen::Index column=0;column<primary.x.cols();++column)
+        for(n::Sparse::InnerIterator entry(primary.x,column);entry;++entry)
+        {
+            const double term=entry.value()*beta(column),adjusted=term-matrix_compensation(entry.row());
+            const double next=matrix_kahan(entry.row())+adjusted;
+            matrix_compensation(entry.row())=(next-matrix_kahan(entry.row()))-adjusted;
+            matrix_kahan(entry.row())=next;
+        }
+    const V primary_prediction=matrix_kahan;
     const std::size_t atoms=domain.atoms.size();
     std::vector<Entry> entries; entries.reserve(static_cast<std::size_t>(primary.x.nonZeros()));
     std::vector<std::vector<double>> primary_terms(static_cast<std::size_t>(rows)),replay_terms(static_cast<std::size_t>(rows));
     std::vector<double> primary_absolute(static_cast<std::size_t>(rows)),replay_absolute(static_cast<std::size_t>(rows));
     std::vector<MP> reference_prediction(static_cast<std::size_t>(rows),MP(0)),reference_absolute(static_cast<std::size_t>(rows),MP(0));
+    std::vector<MP> binary_prediction(static_cast<std::size_t>(rows),MP(0)),
+        binary_norm_squared(static_cast<std::size_t>(beta.size()),MP(0)),
+        binary_ac_gradient(static_cast<std::size_t>(beta.size()),MP(0)),
+        binary_width_gradient(atoms,MP(0));
     std::vector<MP> primary_kernel_error(static_cast<std::size_t>(rows),MP(0)),replay_kernel_error(static_cast<std::size_t>(rows),MP(0));
     std::vector<MP> primary_rounded_sum(static_cast<std::size_t>(rows),MP(0)),replay_rounded_sum(static_cast<std::size_t>(rows),MP(0));
     std::vector<MP> primary_kernel_delta(static_cast<std::size_t>(rows),MP(0)),replay_kernel_delta(static_cast<std::size_t>(rows),MP(0));
     std::vector<MP> primary_product_delta(static_cast<std::size_t>(rows),MP(0)),replay_product_delta(static_cast<std::size_t>(rows),MP(0));
     std::vector<MP> primary_kernel_abs(static_cast<std::size_t>(rows),MP(0)),replay_kernel_abs(static_cast<std::size_t>(rows),MP(0));
     std::vector<MP> primary_product_abs(static_cast<std::size_t>(rows),MP(0)),replay_product_abs(static_cast<std::size_t>(rows),MP(0));
-    std::size_t above_cutoff{};
+    std::size_t above_cutoff{}; double matrix_kernel_difference{};
     for(std::size_t atom=0;atom<atoms;++atom)
     {
-        const double width=std::exp(eta(static_cast<Eigen::Index>(atom)));
+        const double width=widths(static_cast<Eigen::Index>(atom));
         const double a=beta(static_cast<Eigen::Index>(2*atom)),c=beta(static_cast<Eigen::Index>(2*atom+1));
         for(const auto & item:domain.atoms[atom])
         {
@@ -167,6 +186,9 @@ j::value Run(const j::value & fixture)
             const Kernel p{basis.gaussian,basis.charge,basis.gaussian_log_width,basis.charge_log_width};
             const auto r=ReplayKernel(item.square,width);
             const auto ref=ReferenceKernel(item.square,width); Entry entry{item.row,atom,item.square,p,r,ref}; entries.push_back(entry);
+            matrix_kernel_difference=std::max(matrix_kernel_difference,
+                std::max(std::abs(primary.x.coeff(item.row,static_cast<Eigen::Index>(2*atom))-p.g),
+                    std::abs(primary.x.coeff(item.row,static_cast<Eigen::Index>(2*atom+1))-p.k)));
             if(item.square>2.5*2.5) ++above_cutoff;
             auto & pt=primary_terms[static_cast<std::size_t>(item.row)];
             auto & rt=replay_terms[static_cast<std::size_t>(item.row)];
@@ -185,6 +207,9 @@ j::value Run(const j::value & fixture)
             const MP primary_product_abs_term=abs(primary_rounded_a-primary_a)+abs(primary_rounded_c-primary_c);
             const MP replay_product_abs_term=abs(replay_rounded_a-replay_a)+abs(replay_rounded_c-replay_c);
             reference_prediction[static_cast<std::size_t>(item.row)]+=exact;
+            binary_prediction[static_cast<std::size_t>(item.row)]+=primary_a+primary_c;
+            binary_norm_squared[2*atom]+=MP(p.g)*MP(p.g);
+            binary_norm_squared[2*atom+1]+=MP(p.k)*MP(p.k);
             reference_absolute[static_cast<std::size_t>(item.row)]+=abs(exact_a)+abs(exact_c);
             const auto row=static_cast<std::size_t>(item.row);
             primary_rounded_sum[row]+=primary_rounded_a+primary_rounded_c;
@@ -205,6 +230,8 @@ j::value Run(const j::value & fixture)
     std::vector<MP> residual_reference(static_cast<std::size_t>(rows));
     std::vector<MP> primary_accumulation_delta(row_count),replay_accumulation_delta(row_count);
     double max_prediction_error_primary{},max_prediction_error_replay{},max_prediction_difference{},
+        max_kahan_primary_replay_difference{},max_kahan_primary_sparse_difference{},
+        max_matrix_kahan_primary_terms_difference{},max_matrix_kahan_replay_difference{},
         max_residual_formation_error_primary{},max_residual_formation_error_replay{},max_residual_error_primary{},
         max_residual_error_replay{},max_objective_error_primary{},max_objective_error_replay{};
     MP reference_objective=0; double primary_objective=0,replay_objective=0;
@@ -216,6 +243,14 @@ j::value Run(const j::value & fixture)
         naive_primary[idx]=std::accumulate(pt.begin(),pt.end(),0.0);
         kahan_primary[idx]=Kahan(pt); neumaier_primary[idx]=Neumaier(pt); pairwise_primary[idx]=Pairwise(pt,0,pt.size());
         kahan_replay[idx]=Kahan(rt); neumaier_replay[idx]=Neumaier(rt); pairwise_replay[idx]=Pairwise(rt,0,rt.size());
+        max_kahan_primary_replay_difference=std::max(max_kahan_primary_replay_difference,
+            std::abs(kahan_primary[idx]-replay_details.prediction(row)));
+        max_kahan_primary_sparse_difference=std::max(max_kahan_primary_sparse_difference,
+            std::abs(kahan_primary[idx]-sparse_prediction(row)));
+        max_matrix_kahan_primary_terms_difference=std::max(max_matrix_kahan_primary_terms_difference,
+            std::abs(matrix_kahan(row)-kahan_primary[idx]));
+        max_matrix_kahan_replay_difference=std::max(max_matrix_kahan_replay_difference,
+            std::abs(matrix_kahan(row)-replay_details.prediction(row)));
         const MP exact_residual=reference_prediction[idx]-MP(y(row)); residual_reference[idx]=exact_residual;
         const MP primary_error=MP(primary_prediction(row))-reference_prediction[idx];
         const MP replay_error=MP(replay_details.prediction(row))-reference_prediction[idx];
@@ -281,6 +316,16 @@ j::value Run(const j::value & fixture)
         reference_gradient[atom]=exact_sum;
     }
     const V primary_width_gradient=primary.gradient,replay_width_gradient=replay_details.width_gradient;
+    for(const auto & entry:entries)
+    {
+        const auto row=static_cast<std::size_t>(entry.row),atom=entry.atom;
+        const MP residual=binary_prediction[row]-MP(y(entry.row));
+        const MP a=MP(beta(static_cast<Eigen::Index>(2*atom))),c=MP(beta(static_cast<Eigen::Index>(2*atom+1)));
+        binary_ac_gradient[2*atom]+=MP(entry.primary.g)*residual;
+        binary_ac_gradient[2*atom+1]+=MP(entry.primary.k)*residual;
+        binary_width_gradient[atom]+=(a*MP(entry.primary.dg)+c*MP(entry.primary.dk))*residual/
+            (MP(scale)*MP(scale));
+    }
     V primary_cross=Eigen::Map<V>(separate_dot_gradients[0].data(),static_cast<Eigen::Index>(atoms));
     V replay_cross=Eigen::Map<V>(separate_dot_gradients[3].data(),static_cast<Eigen::Index>(atoms));
     std::array<V,4> separate_vectors,grouped_vectors;
@@ -430,7 +475,7 @@ j::value Run(const j::value & fixture)
         ++atom_terms[atom];
     }
     double high_precision_kkt{},max_column_norm_error{},max_raw_gradient_error_primary{},max_raw_gradient_error_replay{},
-        max_primary_scaled_ac_gradient_error{},max_replay_scaled_ac_gradient_error{};
+        max_primary_scaled_ac_gradient_error{},max_replay_scaled_ac_gradient_error{},binary_design_kkt{};
     for(Eigen::Index column=0;column<beta.size();++column)
     {
         const auto index=static_cast<std::size_t>(column),atom=index/2;
@@ -440,6 +485,13 @@ j::value Run(const j::value & fixture)
         const MP violation=(column%2==0 && beta(column)==0) ?
             (negative_gradient>0 ? negative_gradient : MP(0)) : abs(exact_scaled_gradient);
         high_precision_kkt=std::max(high_precision_kkt,violation.convert_to<double>());
+        const MP binary_norm=sqrt(binary_norm_squared[index]);
+        const MP binary_scaled=MP(beta(column))*binary_norm/MP(scale);
+        const MP binary_gradient=binary_ac_gradient[index]/binary_norm/MP(scale);
+        const MP binary_projected=(column%2==0 && beta(column)==0) ?
+            (binary_scaled-binary_gradient>0 ? binary_scaled-binary_gradient : MP(0)) :
+            binary_scaled-binary_gradient;
+        binary_design_kkt=std::max(binary_design_kkt,abs(binary_scaled-binary_projected).convert_to<double>());
         max_column_norm_error=std::max(max_column_norm_error,
             abs(MP(column_norms(column))-exact_norm).convert_to<double>());
         max_raw_gradient_error_primary=std::max(max_raw_gradient_error_primary,
@@ -457,10 +509,15 @@ j::value Run(const j::value & fixture)
     }
     double max_width_bound_violation_primary{},max_width_bound_violation_replay{},
         max_width_bound_primary{},max_width_bound_replay{};
+    double binary_width_gradient_inf{},binary_width_gradient_error{};
     for(std::size_t atom=0;atom<atoms;++atom)
     {
         max_width_bound_primary=std::max(max_width_bound_primary,exact_width_bound_primary[atom].convert_to<double>());
         max_width_bound_replay=std::max(max_width_bound_replay,exact_width_bound_replay[atom].convert_to<double>());
+        binary_width_gradient_inf=std::max(binary_width_gradient_inf,
+            abs(binary_width_gradient[atom]).convert_to<double>());
+        binary_width_gradient_error=std::max(binary_width_gradient_error,
+            abs(MP(primary_width_gradient(static_cast<Eigen::Index>(atom)))-binary_width_gradient[atom]).convert_to<double>());
         max_width_bound_violation_primary=std::max(max_width_bound_violation_primary,
             std::max(0.0,std::abs(primary_width_gradient(static_cast<Eigen::Index>(atom))-high_gradient(static_cast<Eigen::Index>(atom)))-
                 exact_width_bound_primary[atom].convert_to<double>()));
@@ -520,14 +577,17 @@ j::value Run(const j::value & fixture)
         {"replay_production_vs_combined_term_order",Number(Difference(replay_width_gradient,grouped_vectors[3]))},
         {"separate_vs_combined_same_kernels_residual",Number(Difference(separate_vectors[0],grouped_vectors[0]))}};
     j::object kernel_checks{{"support_entries_above_cutoff",above_cutoff},
+        {"matrix_kernel_max_difference",matrix_kernel_difference},
         {"sqrt_then_square_max_absolute_error",max_square_roundtrip},
         {"pi_constants_equal",pi_primary==pi_replay},{"pi_reference",pi.convert_to<double>()},
         {"center_and_threshold_kernel_errors",j::object{{"primary",error_json(center_errors[0])},
             {"local_replay",error_json(center_errors[1])}}},
         {"nextafter_above_cutoff",cutoff_next},{"production_gaussian_above_cutoff",Number(cutoff_primary.gaussian)},
         {"production_charge_above_cutoff",Number(cutoff_primary.charge)},
-        {"local_replay_gaussian_above_cutoff",Number(cutoff_replay.g)},
-        {"local_replay_charge_above_cutoff",Number(cutoff_replay.k)},
+        {"legacy_local_replay_gaussian_above_cutoff",Number(cutoff_replay.g)},
+        {"legacy_local_replay_charge_above_cutoff",Number(cutoff_replay.k)},
+        {"corrected_local_replay_gaussian_above_cutoff",Number(cutoff_endpoint.g)},
+        {"corrected_local_replay_charge_above_cutoff",Number(cutoff_endpoint.k)},
         {"endpoint_replay_charge_above_cutoff",Number(cutoff_endpoint.k)},
         {"fma_vs_separate_max_contribution_difference",max_fma_path_difference},
         {"fma_max_abs_error_vs_reference",max_fma_error_reference}};
@@ -535,11 +595,17 @@ j::value Run(const j::value & fixture)
         {"format","rhbm-joint-local-replay-analysis-v1"},{"identity",fixture.at("identity")},
         {"high_precision_reference",j::object{{"type","boost::multiprecision::cpp_dec_float_50"},
             {"decimal_digits",std::numeric_limits<MP>::digits10},{"long_double_digits",std::numeric_limits<long double>::digits},
-            {"source_doubles_preserved",true},{"erf","boost::math::erf(cpp_dec_float_50)"}}},
+            {"source_doubles_preserved",true},{"widths_from_fixture",true},
+            {"max_abs_primary_width_vs_scalar_exp_eta",max_width_transform_difference},
+            {"erf","boost::math::erf(cpp_dec_float_50)"}}},
         {"kernel_errors",KernelErrors(entries)},{"kernel_checks",kernel_checks},
         {"prediction",j::object{{"primary_max_abs_error_vs_reference",max_prediction_error_primary},
             {"replay_max_abs_error_vs_reference",max_prediction_error_replay},
             {"primary_replay_max_difference",max_prediction_difference},
+            {"compensated_primary_replay_max_difference",max_kahan_primary_replay_difference},
+            {"compensated_primary_sparse_max_difference",max_kahan_primary_sparse_difference},
+            {"matrix_kahan_primary_terms_max_difference",max_matrix_kahan_primary_terms_difference},
+            {"matrix_kahan_replay_max_difference",max_matrix_kahan_replay_difference},
             {"max_abs_net_error_source",j::object{
                 {"primary_kernel_evaluation",max_mp_abs(primary_kernel_delta)},
                 {"primary_product_rounding",max_mp_abs(primary_product_delta)},
@@ -588,6 +654,9 @@ j::value Run(const j::value & fixture)
         {"ac_kkt",j::object{{"primary_scaled_kkt",Number(primary.certificate.projected_kkt)},
             {"replay_scaled_kkt",Number(replay_details.scaled_kkt)},
             {"high_precision_scaled_kkt",high_precision_kkt},
+            {"exact_binary64_design_scaled_kkt",binary_design_kkt},
+            {"exact_binary64_design_width_gradient_inf",binary_width_gradient_inf},
+            {"primary_width_gradient_max_error_vs_exact_binary64_design",binary_width_gradient_error},
             {"primary_kkt_passed_1e-10",primary.certificate.projected_kkt<=1e-10},
             {"replay_kkt_passed_1e-10",replay_details.scaled_kkt<=1e-10},
             {"primary_replay_difference",Number(trust.kkt_difference)},
