@@ -82,6 +82,55 @@ n::Evaluation RankEndpoint(double separation,Eigen::Index atoms=2)
     return endpoint;
 }
 
+n::IndependentReplayEvidence PassingReplay()
+{
+    n::IndependentReplayEvidence replay;
+    replay.available=true; replay.valid=true; replay.passed=true; replay.feasible=true;
+    replay.primary_kkt_passed=true; replay.independent_kkt_passed=true;
+    replay.gradient_agrees=true; replay.primary_width_gradient=0.;
+    return replay;
+}
+
+void ExpectSameAssessmentQualification(const n::Assessment & production,const n::Assessment & diagnostic)
+{
+    ASSERT_TRUE(production.free_design); ASSERT_TRUE(diagnostic.free_design);
+    ASSERT_TRUE(production.widths); ASSERT_TRUE(diagnostic.widths);
+    EXPECT_EQ(production.design.has_value(),diagnostic.design.has_value());
+    if(production.design && diagnostic.design)
+    {
+        EXPECT_EQ(production.design->available,diagnostic.design->available);
+        EXPECT_EQ(production.design->rank,diagnostic.design->rank);
+        EXPECT_EQ(production.design->threshold,diagnostic.design->threshold);
+        EXPECT_EQ(production.design->threshold_sensitive,diagnostic.design->threshold_sensitive);
+    }
+    EXPECT_EQ(production.free_design->rank,diagnostic.free_design->rank);
+    EXPECT_EQ(production.free_design->threshold,diagnostic.free_design->threshold);
+    EXPECT_EQ(production.free_design->threshold_sensitive,diagnostic.free_design->threshold_sensitive);
+    ASSERT_EQ(production.free_design->singular_values.size(),diagnostic.free_design->singular_values.size());
+    EXPECT_LE((production.free_design->singular_values-diagnostic.free_design->singular_values).lpNorm<Eigen::Infinity>(),
+        2e-12*std::max(1.0,diagnostic.free_design->singular_values(0)));
+    EXPECT_EQ(production.widths->rank,diagnostic.widths->rank);
+    EXPECT_EQ(production.widths->threshold,diagnostic.widths->threshold);
+    EXPECT_EQ(production.widths->threshold_sensitive,diagnostic.widths->threshold_sensitive);
+    ASSERT_EQ(production.widths->singular_values.size(),diagnostic.widths->singular_values.size());
+    EXPECT_LE((production.widths->singular_values-diagnostic.widths->singular_values).lpNorm<Eigen::Infinity>(),
+        2e-12*std::max(1.0,diagnostic.widths->singular_values(0)));
+    EXPECT_EQ(production.width_rank_threshold_sensitive,diagnostic.width_rank_threshold_sensitive);
+    EXPECT_EQ(production.identified,diagnostic.identified);
+    EXPECT_EQ(production.endpoint_verified,diagnostic.endpoint_verified);
+    EXPECT_EQ(production.gradient,diagnostic.gradient);
+    EXPECT_EQ(production.qualified,diagnostic.qualified);
+    EXPECT_EQ(production.failure,diagnostic.failure);
+    EXPECT_TRUE(production.weak_directions.size()==0);
+    EXPECT_TRUE(production.weak_direction_diagnostics_failure.empty());
+    EXPECT_EQ(production.rank_memory_estimate.right_singular_vector_bytes,0u);
+    EXPECT_EQ(diagnostic.weak_direction_memory_estimate.status,n::MemoryStatus::Pass);
+    EXPECT_EQ(diagnostic.weak_direction_memory_estimate.right_singular_vector_bytes,
+        diagnostic.rank_memory_estimate.projected_width_factor_bytes);
+    ASSERT_EQ(diagnostic.weak_directions.rows(),diagnostic.primary.eta.size());
+    EXPECT_GT(diagnostic.weak_directions.cols(),0);
+}
+
 struct CapturedFreeDesignRank
 {
     n::TiledDifferential prepared;
@@ -160,6 +209,65 @@ TEST(JointCompactAssessmentTest, ProjectedWidthRankKeepsThresholdSensitiveResult
         EXPECT_EQ(identified->status,near ? rhbm_gem::JointCheckStatus::Unavailable :
             rank.rank==2 ? rhbm_gem::JointCheckStatus::Passed : rhbm_gem::JointCheckStatus::Failed);
     }
+}
+
+TEST(JointCompactAssessmentTest, ValuesOnlyQualificationMatchesOptInWeakDirectionDiagnostics)
+{
+    EigenThreads threads;
+    struct RestoreCapture
+    {
+        n::CompactSvdCapture saved{n::CompactSvdCaptureForTesting()};
+        ~RestoreCapture() {n::CompactSvdCaptureForTesting()=std::move(saved);}
+    } restore;
+    const n::Vector y=n::Vector::Zero(6);
+    const n::Domain domain(6,{{{0,0.0},{1,1.0}},{{2,2.0},{3,3.0}}});
+    auto context=n::CreateContext(y,2); context.rank={6,4,2};
+    const auto replay=PassingReplay();
+    const double threshold=context.rank.Relative(2);
+    const std::array<std::pair<const char *,double>,7> cases{{
+        {"full-rank",.5},
+        {"ill-conditioned",1e-8},
+        {"rank-deficient",0.},
+        {"near-below",std::nextafter(threshold,0.)},
+        {"near-boundary",threshold},
+        {"near-above",std::nextafter(threshold,std::numeric_limits<double>::infinity())},
+        {"well-conditioned",2.*threshold}}};
+    for(const auto & [name,minimum]:cases)
+    {
+        SCOPED_TRACE(name);
+        const auto endpoint=BoundaryEndpoint(minimum);
+        std::vector<std::size_t> production_vector_columns;
+        n::CompactSvdCaptureForTesting()=[&](const Matrix &,double,double,const n::Vector *,
+            const n::CompactSvdResult & result) {
+            production_vector_columns.push_back(static_cast<std::size_t>(result.right_vectors.cols()));
+        };
+        const auto production=n::AssessEvaluated(domain,y,endpoint,replay,context);
+        ASSERT_FALSE(production_vector_columns.empty());
+        EXPECT_TRUE(std::all_of(production_vector_columns.begin(),production_vector_columns.end(),
+            [](std::size_t columns){return columns==0;}));
+
+        std::vector<std::size_t> diagnostic_vector_columns;
+        n::CompactSvdCaptureForTesting()=[&](const Matrix &,double,double,const n::Vector *,
+            const n::CompactSvdResult & result) {
+            diagnostic_vector_columns.push_back(static_cast<std::size_t>(result.right_vectors.cols()));
+        };
+        const auto diagnostic=n::AssessEvaluatedWithWeakDirectionDiagnostics(domain,y,endpoint,replay,context);
+        ExpectSameAssessmentQualification(production,diagnostic);
+        EXPECT_TRUE(std::any_of(diagnostic_vector_columns.begin(),diagnostic_vector_columns.end(),
+            [](std::size_t columns){return columns>0;}));
+    }
+    n::CompactSvdCaptureForTesting()={};
+    const c::JointProblem connected(second_stage_test::SyntheticJointWorkload("chain",8));
+    const auto & data=c::JointProblemAccess::Get(connected);
+    const auto eta=n::Vector::Constant(8,std::log(.55));
+    const auto endpoint=n::EvaluateProfile(data.domain,data.y,eta,false,&data.context);
+    ASSERT_TRUE(endpoint.valid);
+    const auto connected_replay=n::CheckIndependentReplay(data.domain,data.y,endpoint,data.context);
+    ASSERT_TRUE(connected_replay.available && connected_replay.valid)<<connected_replay.reason;
+    const auto production=n::AssessEvaluated(data.domain,data.y,endpoint,connected_replay,data.context);
+    const auto diagnostic=n::AssessEvaluatedWithWeakDirectionDiagnostics(
+        data.domain,data.y,endpoint,connected_replay,data.context);
+    ExpectSameAssessmentQualification(production,diagnostic);
 }
 
 TEST(JointCompactAssessmentTest, DenseDesignOracleMatchesInteriorFreeDesignFactor)

@@ -853,12 +853,20 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewCanApplyRawSamplingSelec
     const auto view{ rg::AtomLocalPotentialView::For(*atom) };
     const auto raw_selected_entries{ view.GetRawSamplingEntries() };
     const auto raw_all_entries{ view.GetRawSamplingEntries(false) };
+    const auto & raw_entries_view{ view.GetRawSamplingEntriesView() };
 
     ASSERT_EQ(raw_selected_entries.size(), 2u);
     EXPECT_DOUBLE_EQ(raw_selected_entries.at(0).response, 6.0);
     EXPECT_DOUBLE_EQ(raw_selected_entries.at(1).response, 2.0);
     ASSERT_EQ(raw_all_entries.size(), 3u);
     EXPECT_FALSE(raw_all_entries.at(1).point.is_selected);
+    ASSERT_EQ(raw_entries_view.size(), raw_all_entries.size());
+    for (std::size_t i = 0; i < raw_all_entries.size(); ++i)
+    {
+        EXPECT_EQ(raw_entries_view[i].response, raw_all_entries[i].response);
+        EXPECT_EQ(raw_entries_view[i].point.position, raw_all_entries[i].point.position);
+        EXPECT_EQ(raw_entries_view[i].point.is_selected, raw_all_entries[i].point.is_selected);
+    }
 }
 
 TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewCanApplyPeelingSamplingSelection)

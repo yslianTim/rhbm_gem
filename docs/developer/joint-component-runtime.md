@@ -377,8 +377,14 @@ whether a stage was entered and completed, its dimensions, elapsed time,
 preflight status and byte breakdown. Current RSS is sampled at stage entry and
 exit; process peak RSS is the process-wide high-water mark. Neither RSS value
 is the stage's attributed allocation. On platforms without an RSS source the
-fields are unavailable. Right singular vectors are counted only for rank
-stages that compute them.
+fields are unavailable. Production projected-width rank assessment uses a
+values-only compact SVD and does not allocate the full right-singular-vector
+matrix. Its planner models six square-factor equivalents of Eigen BDC SVD
+workspace, plus the input factor in the peak. Explicit weak-direction
+diagnostics use a separate `ProjectedWidthDiagnostics` preflight and a second
+SVD with thin right vectors; the diagnostic workspace model includes the
+vector matrix and copied diagnostic result. This opt-in path does not change
+rank or qualification decisions.
 
 The rank and target preflight byte formulas and the synthetic 37,406-atom
 census are recorded in the [component memory census](joint-component-memory-census.md).

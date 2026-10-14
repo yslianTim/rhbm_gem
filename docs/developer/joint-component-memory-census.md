@@ -27,23 +27,26 @@ No physical model or map is represented.
 ## Current rank assessment estimates
 
 The production rank stage is `ProjectedWidthAssessment`. It contains the
-free-design tiled QR and compact SVD, projection coefficients, projected-width
-tiled QR and compact SVD, sparse inputs, and concurrent QR workspace. The
-planning budget is 3.2 GB, so each case below is rejected before a large factor
-is allocated.
+free-design tiled QR and values-only compact SVD, projection coefficients,
+projected-width tiled QR and values-only compact SVD, sparse inputs, and
+concurrent QR workspace. The following rows use an explicit 600,000,000-byte
+resident-input assumption. Eigen's square values-only BDC SVD estimate uses
+six factor-sized internal workspaces; the peak also includes the input factor.
+The planning budget is 3.2 GB, so each case below is rejected before a large
+factor is allocated.
 
 | Amplitude face | Free columns | Free-design factor | Free-design SVD workspace | Projection coefficients | Projected-width factor | Projected-width SVD workspace | Estimated peak | Status |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| All amplitudes interior | 74,812 | 44,774,682,752 | 134,324,048,256 | 22,387,341,376 | 11,193,670,688 | 33,581,012,064 | 266,666,536,155 | ResourceLimit; factorization NotRun |
-| Half of amplitudes at the bound (`A_i = 0`) | 56,109 | 25,185,759,048 | 75,557,277,144 | 16,790,506,032 | 11,193,670,688 | 33,581,012,064 | 167,840,033,907 | ResourceLimit; factorization NotRun |
-| All amplitudes at the bound (`A_i = 0`) | 37,406 | 11,193,670,688 | 33,581,012,064 | 11,193,670,688 | 11,193,670,688 | 33,581,012,064 | 91,400,872,907 | ResourceLimit; factorization NotRun |
+| All amplitudes interior | 74,812 | 44,774,682,752 | 268,648,096,512 | 22,387,341,376 | 11,193,670,688 | 67,162,024,128 | 336,520,092,272 | ResourceLimit; factorization NotRun |
+| Half of amplitudes at the bound (`A_i = 0`) | 56,109 | 25,185,759,048 | 151,114,554,288 | 16,790,506,032 | 11,193,670,688 | 67,162,024,128 | 193,799,145,200 | ResourceLimit; factorization NotRun |
+| All amplitudes at the bound (`A_i = 0`) | 37,406 | 11,193,670,688 | 67,162,024,128 | 11,193,670,688 | 11,193,670,688 | 67,162,024,128 | 91,426,019,120 | ResourceLimit; factorization NotRun |
 
 The stage totals include these additional sparse and tile allocations:
 
 | Amplitude face | Sparse design workset | Tiled QR workspace peak | Temporary bytes |
 | --- | ---: | ---: | ---: |
-| All amplitudes interior | 108,176,144 | 265,872,936,096 | 266,091,682,368 |
-| Half of amplitudes at the bound | 106,979,216 | 167,049,426,200 | 167,265,180,120 |
+| All amplitudes interior | 108,176,144 | 265,872,936,096 | 335,920,092,272 |
+| Half of amplitudes at the bound | 106,979,216 | 167,049,426,200 | 193,199,145,200 |
 | All amplitudes at the bound | 105,782,224 | 90,613,257,680 | 90,826,019,120 |
 
 The sparse workset includes the free-design and raw-width sparse matrices,
@@ -80,14 +83,17 @@ valid full-design deficiency result before factorization. The free-face
 matching check has size 37,406, but that structural matching does not prove
 numerical free-design rank. Projected-width qualification is also `NotRun` after
 the preflight rejection. No exact free-design or projected-width spectrum is
-claimed for this fixture.
+claimed for this fixture. Production still requires full-design rank and
+projected-width rank; only right-vector retention is opt-in.
 
 The production Dense DesignSpectrum factorization has been removed. Remaining
 quadratic allocations are the free-design `p_F × p_F` QR/SVD work, the
 projection-coefficient `p_F × q` matrix, and the projected-width `q × q`
-QR/SVD/right-vector work, where `p_F` is the number of free A/C columns and `q`
-is the number of width columns. Tiled sparse inputs and row tiles add further
-workspace. Derived Target Identifiability remains linear in retained FullABC
+QR/SVD work, where `p_F` is the number of free A/C columns and `q` is the
+number of width columns. Production SVDs request singular values only; an
+opt-in diagnostics stage separately accounts for the complete right-vector
+matrix. Tiled sparse inputs and row tiles add further workspace. Derived
+Target Identifiability remains linear in retained FullABC
 and target records; it adds no dense factor. Excluded-halo provenance adds
 O(E) identity and reason records for E exclusions, included in problem
 construction memory preflight.
@@ -98,17 +104,19 @@ After peeling, local conditional covariance is calculated one eligible target
 at a time. The estimator uses a two-column Jacobian and pivoted QR, with an
 estimated 32 bytes per available local observation for the dense design and QR
 workspace. For the full synthetic observation count, one target's local
-workspace upper bound is `5,938,087 × 32 = 190,018,784` bytes (about 190 MB),
-plus the raw-sample copy already held by the workflow. Actual local observation
-counts vary by target. This estimate is linear in local observations and does
-not include a component-wide covariance factor.
+workspace upper bound is `5,938,087 × 32 = 190,018,784` bytes (about 190 MB).
+Raw sample and peeled-response vectors remain stored model data, not temporary
+workspace. Actual local observation counts vary by target. This estimate is
+linear in local observations and does not include a component-wide covariance
+factor.
 
 The retained 2-by-2 covariance payload is 32 bytes per target, or 1,196,992
 bytes for 37,406 targets, before estimates and provenance. For comparison, a
 dense covariance for 112,218 Joint parameters would contain 100,743,036,192
-bytes of double values; the current workflow does not form it. These are
-structural estimates. The Joint rank stages above remain the large-component
-memory bottleneck.
+bytes of double values; the current workflow does not form it. Peeling and local
+covariance read raw samples through const references and no longer hold an
+additional full raw-sample list copy per target. These are structural estimates.
+The Joint rank stages above remain the large-component memory bottleneck.
 
 The `local-large` isolated benchmark ran one fixed synthetic endpoint across
 all 5,938,087 observations. It produced available covariance in 3.43 seconds
@@ -151,17 +159,20 @@ preparation remains live as the later phase runs:
 | --- | --- | --- | --- |
 | Free-design preparation | sparse free design and raw width derivative | triplet assembly, tiled QR `R`, SVD workspace, `p_F × P` coefficients | `p_F²`, `p_F P`, support nonzeros, tile rows × columns |
 | Projected-width reduction | sparse inputs and coefficients | projected derivative tiles and QR assembly workspace, dense QR `R` | `P²`, tile rows × `P` |
-| Projected-width SVD | projected-width `R` and singular values | SVD workspace and current full right-vector matrix | `P²` |
+| Projected-width SVD | projected-width `R` and singular values | values-only SVD workspace | `P²` |
 
 `free_design` and `raw` are stored sparsely in proportion to support
 nonzeros. Per-tile dense row blocks can be regenerated from those sparse
 matrices. The projection coefficients are retained so each width column can
 be generated as a tiled `raw - free_design * coefficients` action. The
 reduction streams those row tiles into a dense `P × P` QR factor. Production
-currently requests the full thin right-vector matrix before copying at most
-three weak directions; those directions do not affect the rank decision, but
-are emitted for offline diagnostics. Process peak RSS is the whole process
-high-water mark and does not attribute memory to an individual function.
+uses values-only SVD for rank, threshold and threshold-sensitivity decisions;
+it does not allocate right vectors. An explicit weak-direction diagnostic
+assessment repeats the projected-width SVD with thin right vectors only after
+its separate memory preflight passes. For `P = 37,406`, that diagnostic mode
+accounts for 11,193,670,688 bytes of right vectors and 100,743,036,192 bytes of
+internal SVD workspace. Process peak RSS is the whole process high-water mark
+and does not attribute memory to an individual function.
 
 Small dense-SVD controls live in `tests/support/ProjectedWidthResearch.*` and
 `tests/core/joint_component/ProjectedWidthResearch_test.cpp`. They cover
@@ -195,9 +206,9 @@ resident RSS as its input.
 
 | Free columns | Free-design factor | Free-design SVD workspace | Projection coefficients | Projected-width factor | Projected-width SVD workspace | Sparse workset | Tiled QR workspace | Estimated peak | Status |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| 74,812 | 44,774,682,752 | 134,324,048,256 | 22,387,341,376 | 11,193,670,688 | 33,581,012,064 | 108,176,144 | 265,872,936,096 | 266,691,682,368 | ResourceLimit |
-| 56,109 | 25,185,759,048 | 75,557,277,144 | 16,790,506,032 | 11,193,670,688 | 33,581,012,064 | 106,979,216 | 167,049,426,200 | 167,865,180,120 | ResourceLimit |
-| 37,406 | 11,193,670,688 | 33,581,012,064 | 11,193,670,688 | 11,193,670,688 | 33,581,012,064 | 105,782,224 | 90,613,257,680 | 91,426,019,120 | ResourceLimit |
+| 74,812 | 44,774,682,752 | 268,648,096,512 | 22,387,341,376 | 11,193,670,688 | 67,162,024,128 | 108,176,144 | 265,872,936,096 | 336,520,092,272 | ResourceLimit |
+| 56,109 | 25,185,759,048 | 151,114,554,288 | 16,790,506,032 | 11,193,670,688 | 67,162,024,128 | 106,979,216 | 167,049,426,200 | 193,799,145,200 | ResourceLimit |
+| 37,406 | 11,193,670,688 | 67,162,024,128 | 11,193,670,688 | 11,193,670,688 | 67,162,024,128 | 105,782,224 | 90,613,257,680 | 91,426,019,120 | ResourceLimit |
 
 The test-only structured projector estimates 359,052,341,856 bytes,
 202,337,211,624 bytes and 90,396,764,144 bytes for those same three free

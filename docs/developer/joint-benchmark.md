@@ -11,7 +11,7 @@ current workflow costs. Its only workflow entry point is
 | search | FixedNeighbor search and local Profile LM work; no endpoint qualification claim | joint_fixed_neighbor_experiment with --scaling-only |
 | solve | Search, global replay, endpoint certification and RuntimeConvergence | joint_fixed_neighbor_experiment with --case |
 | workflow | Complete in-memory Joint workflow and persistence | joint_postprocessing_benchmark |
-| postprocess | Peeling, local conditional covariance, group processing and persistence | joint_postprocessing_benchmark |
+| postprocess | Peeling, local conditional covariance, batched evidence publication, group processing and persistence | joint_postprocessing_benchmark |
 | command | CLI analysis, save/reload and Joint export | RHBM-GEM |
 
 Build the search, solve, workflow and postprocess executables with
@@ -54,9 +54,17 @@ Run `joint_postprocessing_benchmark local-large` to isolate one target's local
 conditional covariance estimator on 5,938,087 synthetic observations, the
 largest local-observation count in the memory census. This reports its peak
 RSS and workspace estimate alongside the raw sample, peeling-response and
-retained covariance storage sizes. The complete postprocess benchmark reports
-peeling and group-fitting phase RSS for its small synthetic cases; the large
-local-only run does not measure those phases or process all 37,406 targets.
+retained covariance storage sizes. The complete postprocess benchmark follows
+the production batch transaction and reports peeling, local covariance, batch
+publication, and group-fitting phase RSS. It also reports the raw-sample bytes
+that the former per-target value-returning getter would have copied. The
+complete fixtures remain small; `local-large` isolates covariance and does not
+measure large-map peeling, group fitting, or all 37,406 targets.
+
+Production rank uses values-only projected-width SVD. The diagnostic weak
+direction path is opt-in and has its own `ProjectedWidthDiagnostics` memory
+estimate; the benchmark does not run it unless a separate diagnostic tool is
+invoked.
 
 ## Fixed production policy
 

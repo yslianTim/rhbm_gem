@@ -20,6 +20,15 @@ build a target Jacobian or right null space. The current thresholds and
 versioned checks are recorded in the
 [production contract](joint-fixed-neighbor-experimental.md).
 
+Production projected-width assessment uses a values-only compact SVD for
+singular values, rank, threshold and threshold sensitivity. Weak-direction
+vectors are available only through explicit test/offline diagnostic APIs and
+their separate memory preflight; they do not participate in qualification.
+Full-design and projected-width rank checks remain required. Post-fit peeling
+and local group evidence are prepared together and published in a validated
+batch that traverses membership once and invalidates each affected group once.
+The batch does not change local covariance or group inference inputs.
+
 ## Historical algorithm decisions
 
 - Fixed-B conditional block updates and replay accounting were numerically
@@ -44,6 +53,13 @@ The complete concise record of those FixedNeighbor choices is in
   3,200,000,000-byte (3.200 GB, 2.980 GiB) estimated-peak budget, leaving 20%
   below the nominal 4 GB limit. The estimate is not process RSS. A resource
   rejection is reported as `Unavailable` with a stage-specific reason.
+- The current square values-only Eigen BDC SVD planner budgets six
+  factor-sized internal workspaces plus the input factor in peak memory. For
+  37,406 projected-width columns, this is 67,162,024,128 bytes of workspace
+  and 78,355,694,816 bytes at the isolated SVD peak before retained sparse
+  inputs and the projection coefficients. Opt-in thin-right-vector diagnostics
+  use a separate 9-factor workspace and 10-factor peak. Neither diagnostic
+  change nor production values-only SVD relaxes a rank threshold.
 - Compact prepared row mappings remove the old `rows × blocks` allocation.
   At 5,938,087 rows and 3,118 blocks, that old index map alone is
   148,119,642,128 bytes (148.120 GB, about 137.9 GiB). The replacement's exact

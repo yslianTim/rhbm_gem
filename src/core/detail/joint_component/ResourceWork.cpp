@@ -335,7 +335,7 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
             CheckedMultiplyBytes(free_factor,6,free_svd_workspace) &&
             add_product_bytes(free_columns,widths,sizeof(double),projection_coefficients) &&
             add_product_bytes(widths,widths,sizeof(double),width_factor) &&
-            CheckedMultiplyBytes(width_factor,diagnostics ? 8 : 6,width_svd_workspace);
+            CheckedMultiplyBytes(width_factor,diagnostics ? 9 : 6,width_svd_workspace);
         if(ok && entries)
         {
             std::size_t scaled_entries{},rounded_entries{},twice_entries{};

@@ -40,12 +40,20 @@ two-stage estimator; the model-only workflow does not accept Joint requests.
 
 After fitting, the workflow publishes the Joint stage estimates, builds
 target-only post-fit peeling, computes local conditional covariance at each
-eligible fixed Joint endpoint, builds GroupParameterEvidence, stores the Joint
-diagnostic snapshot, then runs group fitting. Peeling responses paired with raw
-sample geometry supply each atom's local observations; neighboring Joint
-parameters and the atom's Joint charge are fixed. The local estimator only
-computes the A/B curvature and never updates the Joint point. No full-component
-Joint covariance or cross-atom covariance is computed.
+eligible fixed Joint endpoint, and builds GroupParameterEvidence in temporary
+results. Peeling and evidence are validated and published together as one
+batch before the Joint snapshot is stored and group fitting runs. The batch
+checks target and run identity, raw/peeled sample counts, finite responses and
+evidence identity before changing the model; it collects affected groups once
+and invalidates each once. The ordinary single-atom setters keep their own
+invalidation behavior.
+
+Peeling responses paired with raw sample geometry supply each atom's local
+observations; neighboring Joint parameters and the atom's Joint charge are
+fixed. Peeling reads the raw sample list through a const view while the model
+is unchanged, so it does not copy the full list per target. The local estimator
+only computes the A/B curvature and never updates the Joint point. No
+full-component Joint covariance or cross-atom covariance is computed.
 
 For each eligible target, Group Fitting receives the encoded Joint point and a
 2-by-2 covariance in its group parameter coordinates. That covariance is a
