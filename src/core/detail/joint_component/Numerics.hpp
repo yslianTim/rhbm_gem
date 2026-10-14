@@ -94,10 +94,12 @@ std::pair<Matrix,Vector> ReferenceQR(const Sparse &,const Vector &,const Vector 
 struct Certificate
 {
     bool evaluated{},available{},feasible{},kkt_passed{};
+    bool linear_solver_valid{};
+    std::string linear_solver_reason;
     double projected_kkt{unavailable},rss{unavailable},objective{unavailable},residual_scale{unavailable},
         residual_rmse{unavailable},residual_max{unavailable},relative_residual{unavailable};
     std::vector<Eigen::Index> active_atoms;
-    std::optional<int> linear_solves,free_rank,block_factorizations;
+    std::optional<int> linear_solves,linear_releases,free_rank,block_factorizations;
 };
 Certificate CertifyLinear(const Sparse &,VectorRef,const Vector &,double=0);
 struct Endpoint

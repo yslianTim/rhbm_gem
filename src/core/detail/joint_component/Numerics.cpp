@@ -367,7 +367,9 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     out.certificate=CertifyLinear(out.x,y,out.beta,context ? context->scale : 0);
     if(profile_work) telemetry.work.linear_certificate_seconds+=
         std::chrono::duration<double>(std::chrono::steady_clock::now()-certificate_started).count();
-    out.certificate.linear_solves=solved.solves; out.certificate.free_rank=solved.rank;
+    out.certificate.linear_solver_valid=solved.valid; out.certificate.linear_solver_reason=solved.reason;
+    out.certificate.linear_solves=solved.solves; out.certificate.linear_releases=solved.releases;
+    out.certificate.free_rank=solved.rank;
     if(blocks) out.certificate.block_factorizations=solved.block_factorizations;
     if (!solved.valid) {out.reason=solved.reason; return out;}
     if (!out.certificate.kkt_passed) {out.reason="kkt-failed"; return out;}

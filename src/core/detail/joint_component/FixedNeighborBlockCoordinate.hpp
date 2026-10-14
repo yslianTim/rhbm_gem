@@ -28,13 +28,22 @@ struct FixedNeighborProfileTrial
 struct FixedNeighborBlockFailureDiagnostics
 {
     std::size_t component_index{},sweep_index{},block_index{},core_atom_count{},affected_row_count{},halo_count{},
-        minimum_halo_support_rows{},rank_deficient_halo_count{};
+        minimum_halo_support_rows{},rank_deficient_halo_count{},local_design_nonzero_entries{};
     std::vector<std::string> core_atom_ids;
-    bool initial_profile_valid{},initial_profile_trusted{};
-    std::string component_id,initial_profile_reason,local_search_stop_reason;
+    std::vector<double> local_column_norms;
+    bool initial_profile_valid{},initial_profile_trusted{},solver_valid{};
+    std::string component_id,initial_profile_reason,local_search_stop_reason,solver_reason;
     Eigen::Index local_design_rows{},local_design_columns{};
     std::optional<Eigen::Index> local_design_rank;
-    std::optional<double> replay_prediction_discrepancy,replay_gradient_discrepancy,replay_kkt_discrepancy;
+    std::optional<int> linear_rank,linear_solve_count,active_set_releases;
+    std::vector<Eigen::Index> active_amplitude_indices;
+    std::optional<double> local_response_norm,local_response_min,local_response_max,parent_observation_scale,
+        parent_response_norm,parent_rank_relative,release_factor,rank_relative,active_set_iteration_factor,condition_indicator,
+        primal_feasibility,scaled_projected_kkt,maximum_free_a_gradient_raw,maximum_free_a_gradient_scaled,
+        maximum_free_c_gradient_raw,maximum_free_c_gradient_scaled,
+        maximum_active_a_complementarity_violation_raw,maximum_active_a_complementarity_violation_scaled,
+        replay_prediction_discrepancy,replay_gradient_discrepancy,replay_kkt_discrepancy;
+    std::string failure_capture_status;
 };
 struct FixedNeighborBlockRecord
 {

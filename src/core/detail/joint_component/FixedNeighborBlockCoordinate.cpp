@@ -6,6 +6,10 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <limits>
 #include <numeric>
 #include <sstream>
@@ -130,9 +134,127 @@ Sparse Design(const Domain & domain,VectorRef eta)
 }
 double PredictionDifference(VectorRef a,VectorRef b)
 {return (a-b).lpNorm<Eigen::Infinity>();}
+void WriteJsonString(std::ostream & out,const std::string & value)
+{
+    out<<'"';
+    for(const char byte:value)
+    {
+        const auto character=static_cast<unsigned char>(byte);
+        if(character=='"' || character=='\\') out<<'\\'<<character;
+        else if(character=='\n') out<<"\\n";
+        else if(character=='\r') out<<"\\r";
+        else if(character=='\t') out<<"\\t";
+        else if(character<0x20) out<<"\\u00"<<std::hex<<std::setw(2)<<std::setfill('0')<<static_cast<int>(character)<<std::dec<<std::setfill(' ');
+        else out<<character;
+    }
+    out<<'"';
+}
+void WriteJsonNumber(std::ostream & out,double value)
+{if(std::isfinite(value)) out<<value; else out<<"null";}
+void WriteJsonVector(std::ostream & out,VectorRef values)
+{
+    out<<'['; for(Eigen::Index k=0;k<values.size();++k) {if(k) out<<','; WriteJsonNumber(out,values(k));} out<<']';
+}
+void WriteJsonStrings(std::ostream & out,const std::vector<std::string> & values)
+{
+    out<<'['; for(std::size_t k=0;k<values.size();++k) {if(k) out<<','; WriteJsonString(out,values[k]);} out<<']';
+}
+void WriteJsonIndices(std::ostream & out,const std::vector<Eigen::Index> & values)
+{
+    out<<'['; for(std::size_t k=0;k<values.size();++k) {if(k) out<<','; out<<values[k];} out<<']';
+}
+void WriteOptionalJson(std::ostream & out,const std::optional<double> & value)
+{if(value) WriteJsonNumber(out,*value); else out<<"null";}
+void WriteOptionalJson(std::ostream & out,const std::optional<int> & value)
+{if(value) out<<*value; else out<<"null";}
+void WriteOptionalJson(std::ostream & out,const std::optional<Eigen::Index> & value)
+{if(value) out<<*value; else out<<"null";}
+std::string CaptureLocalFailureFixture(const FixedNeighborBlockFailureDiagnostics & d,const Domain & domain,
+    VectorRef effective_response,VectorRef eta,const EvaluationContext & parent_context,
+    const EvaluationContext & local_context,const Endpoint & initial)
+{
+    const char * const destination=std::getenv("RHBM_JOINT_LOCAL_FAILURE_CAPTURE");
+    if(!destination || !*destination) return "not-requested";
+    try
+    {
+        const std::filesystem::path path(destination);
+        if(std::filesystem::exists(path)) return "destination-exists";
+        std::ofstream out(path,std::ios::binary);
+        if(!out) return "open-failed";
+        out<<std::setprecision(std::numeric_limits<double>::max_digits10);
+        out<<"{\n  \"format\":\"rhbm-joint-local-ac-kkt-v1\",\n  \"identity\":{\"component_id\":";
+        WriteJsonString(out,d.component_id);
+        out<<",\"component_index\":"<<d.component_index<<",\"sweep_index\":"<<d.sweep_index
+           <<",\"block_index\":"<<d.block_index<<",\"core_atom_count\":"<<d.core_atom_count
+           <<",\"core_atom_ids\":"; WriteJsonStrings(out,d.core_atom_ids);
+        out<<",\"affected_row_count\":"<<d.affected_row_count<<",\"local_design_rows\":"<<d.local_design_rows
+           <<",\"local_design_columns\":"<<d.local_design_columns<<",\"local_design_nonzero_entries\":"
+           <<d.local_design_nonzero_entries<<",\"local_design_rank\":";
+        WriteOptionalJson(out,d.local_design_rank);
+        out<<"},\n  \"atom_ids\":"; std::vector<std::string> atom_ids;
+        for(const auto & id:local_context.atom_ids) atom_ids.push_back(id);
+        WriteJsonStrings(out,atom_ids);
+        out<<",\n  \"row_ids\":"; std::vector<std::string> row_ids;
+        for(const auto & id:local_context.row_ids) row_ids.push_back(id);
+        WriteJsonStrings(out,row_ids);
+        out<<",\n  \"effective_response\":"; WriteJsonVector(out,effective_response);
+        out<<",\n  \"old_eta\":"; WriteJsonVector(out,eta);
+        out<<",\n  \"old_widths\":"; const Vector widths=eta.array().exp(); WriteJsonVector(out,widths);
+        out<<",\n  \"support\":[";
+        for(std::size_t atom=0;atom<domain.atoms.size();++atom)
+        {
+            if(atom) out<<','; out<<'['; std::size_t support_index{};
+            for(const auto support:domain.atoms[atom])
+            {
+                if(support_index++) out<<',';
+                out<<"{\"row\":"<<support.row<<",\"squared_distance\":";
+                WriteJsonNumber(out,support.square); out<<'}';
+            }
+            out<<']';
+        }
+        out<<"],\n  \"numerical_context\":{\"parent_observation_scale\":";
+        WriteJsonNumber(out,parent_context.scale);
+        out<<",\"parent_response_norm\":"; WriteJsonNumber(out,parent_context.linear.release_response_norm);
+        out<<",\"local_effective_response_norm\":"; WriteJsonNumber(out,effective_response.norm());
+        out<<",\"local_response_min\":"; WriteJsonNumber(out,effective_response.minCoeff());
+        out<<",\"local_response_max\":"; WriteJsonNumber(out,effective_response.maxCoeff());
+        out<<",\"parent_rank_relative\":"; WriteJsonNumber(out,parent_context.linear.rank_relative);
+        out<<",\"rank_relative\":"; WriteJsonNumber(out,local_context.linear.rank_relative);
+        out<<",\"release_factor\":"; WriteJsonNumber(out,local_context.linear.release_factor);
+        out<<",\"release_response_norm\":"; WriteJsonNumber(out,local_context.linear.release_response_norm);
+        out<<",\"active_set_iteration_factor\":"<<local_context.linear.active_set_iteration_factor<<"},\n  \"production_solver\":{\"valid\":"
+           <<(initial.certificate.linear_solver_valid ? "true" : "false")<<",\"reason\":";
+        WriteJsonString(out,initial.reason);
+        out<<",\"solver_reason\":"; WriteJsonString(out,initial.certificate.linear_solver_reason);
+        out<<",\"beta\":"; WriteJsonVector(out,initial.beta);
+        out<<",\"linear_rank\":"; WriteOptionalJson(out,initial.certificate.free_rank);
+        out<<",\"linear_solve_count\":"; WriteOptionalJson(out,initial.certificate.linear_solves);
+        out<<",\"active_set_releases\":"; WriteOptionalJson(out,initial.certificate.linear_releases);
+        out<<",\"active_amplitude_indices\":"; WriteJsonIndices(out,d.active_amplitude_indices);
+        out<<",\"primal_feasibility\":"; WriteOptionalJson(out,d.primal_feasibility);
+        out<<",\"scaled_projected_kkt\":"; WriteOptionalJson(out,d.scaled_projected_kkt);
+        out<<",\"column_norms\":"; const Sparse design=Design(domain,eta);
+        out<<'['; for(Eigen::Index k=0;k<design.cols();++k) {if(k) out<<','; WriteJsonNumber(out,design.col(k).norm());} out<<']';
+        out<<",\"raw_gradient\":";
+        const Vector residual=design*initial.beta-effective_response;
+        const Vector raw_gradient=design.transpose()*residual;
+        WriteJsonVector(out,raw_gradient);
+        out<<",\"scaled_gradient\":";
+        const Vector column_norms=[&] {Vector value(design.cols()); for(Eigen::Index k=0;k<design.cols();++k) value(k)=design.col(k).norm(); return value;}();
+        const Vector scaled_gradient=raw_gradient.array()/column_norms.array()/parent_context.scale;
+        WriteJsonVector(out,scaled_gradient);
+        out<<",\"objective\":"; WriteJsonNumber(out,initial.certificate.objective);
+        out<<"}\n}\n";
+        out.close();
+        return out ? "written" : "write-failed";
+    }
+    catch(const std::exception &)
+    {return "write-failed";}
+}
 FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolicy & policy,
     const FixedNeighborBlockRecord & block,std::size_t sweep_index,const Indices & core_atoms,
-    const EvaluationContext & context,const Domain & domain,const Vector & eta,const SearchResult & profile)
+    const EvaluationContext & context,const EvaluationContext & local_context,const Domain & domain,VectorRef effective_response,
+    const Vector & eta,const SearchResult & profile)
 {
     FixedNeighborBlockFailureDiagnostics out;
     out.component_index=policy.component_index; out.component_id=policy.component_id;
@@ -143,9 +265,71 @@ FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolic
     out.initial_profile_valid=profile.initial.valid;
     out.initial_profile_reason=profile.initial.reason;
     out.initial_profile_trusted=profile.initial_accepted;
+    out.local_response_norm=effective_response.norm();
+    if(effective_response.size())
+    {
+        out.local_response_min=effective_response.minCoeff(); out.local_response_max=effective_response.maxCoeff();
+    }
+    out.parent_observation_scale=context.scale;
+    out.parent_response_norm=context.linear.release_response_norm;
+    out.parent_rank_relative=context.linear.rank_relative;
+    out.release_factor=local_context.linear.release_factor;
+    out.rank_relative=local_context.linear.rank_relative;
+    out.active_set_iteration_factor=local_context.linear.active_set_iteration_factor;
     const auto design=Design(domain,eta);
     const auto spectrum=ComputeSpectrum(design,{domain.rows,design.cols(),eta.size()},design.cols(),true);
     if(spectrum.available) out.local_design_rank=spectrum.rank;
+    out.local_design_nonzero_entries=static_cast<std::size_t>(design.nonZeros());
+    if(spectrum.available) out.condition_indicator=spectrum.condition;
+    out.local_column_norms.reserve(static_cast<std::size_t>(design.cols()));
+    for(Eigen::Index column=0;column<design.cols();++column)
+        out.local_column_norms.push_back(design.col(column).norm());
+    const auto & certificate=profile.initial.certificate;
+    out.solver_valid=certificate.linear_solver_valid;
+    out.solver_reason=certificate.linear_solver_reason;
+    out.linear_rank=certificate.free_rank; out.linear_solve_count=certificate.linear_solves;
+    out.active_set_releases=certificate.linear_releases;
+    out.active_amplitude_indices=certificate.active_atoms;
+    out.primal_feasibility=0.0;
+    for(Eigen::Index column=0;column<profile.initial.beta.size();column+=2)
+        *out.primal_feasibility=std::max(*out.primal_feasibility,std::max(0.0,-profile.initial.beta(column)));
+    if(certificate.available) out.scaled_projected_kkt=certificate.projected_kkt;
+    if(profile.initial.beta.size()==design.cols() && effective_response.size()==design.rows() &&
+        !out.local_column_norms.empty())
+    {
+        const Vector residual=design*profile.initial.beta-effective_response;
+        const Vector raw_gradient=design.transpose()*residual;
+        for(Eigen::Index atom=0;atom<eta.size();++atom)
+        {
+            const Eigen::Index amplitude=2*atom;
+            const double scaled_a=raw_gradient(amplitude)/out.local_column_norms[static_cast<std::size_t>(amplitude)]/context.scale;
+            if(profile.initial.beta(amplitude)>0)
+            {
+                const double raw=std::abs(raw_gradient(amplitude));
+                const double scaled=std::abs(scaled_a);
+                out.maximum_free_a_gradient_raw=out.maximum_free_a_gradient_raw ?
+                    std::max(*out.maximum_free_a_gradient_raw,raw) : raw;
+                out.maximum_free_a_gradient_scaled=out.maximum_free_a_gradient_scaled ?
+                    std::max(*out.maximum_free_a_gradient_scaled,scaled) : scaled;
+            }
+            else
+            {
+                const double raw=std::max(0.0,-raw_gradient(amplitude));
+                const double scaled=std::max(0.0,-scaled_a);
+                out.maximum_active_a_complementarity_violation_raw=out.maximum_active_a_complementarity_violation_raw ?
+                    std::max(*out.maximum_active_a_complementarity_violation_raw,raw) : raw;
+                out.maximum_active_a_complementarity_violation_scaled=out.maximum_active_a_complementarity_violation_scaled ?
+                    std::max(*out.maximum_active_a_complementarity_violation_scaled,scaled) : scaled;
+            }
+            const Eigen::Index charge=amplitude+1;
+            const double raw=std::abs(raw_gradient(charge));
+            const double scaled=raw/out.local_column_norms[static_cast<std::size_t>(charge)]/context.scale;
+            out.maximum_free_c_gradient_raw=out.maximum_free_c_gradient_raw ?
+                std::max(*out.maximum_free_c_gradient_raw,raw) : raw;
+            out.maximum_free_c_gradient_scaled=out.maximum_free_c_gradient_scaled ?
+                std::max(*out.maximum_free_c_gradient_scaled,scaled) : scaled;
+        }
+    }
     for(const auto atom:core_atoms)
         if(atom>=0 && static_cast<std::size_t>(atom)<context.atom_ids.size())
             out.core_atom_ids.push_back(context.atom_ids.at(static_cast<std::size_t>(atom)));
@@ -159,11 +343,13 @@ FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolic
             out.replay_kkt_discrepancy=trial->trust->kkt_difference;
             break;
         }
+    out.failure_capture_status=CaptureLocalFailureFixture(out,domain,effective_response,eta,context,local_context,profile.initial);
     return out;
 }
 std::string FormatFailureDiagnostics(const FixedNeighborBlockFailureDiagnostics & d)
 {
     std::ostringstream out;
+    out<<std::setprecision(std::numeric_limits<double>::max_digits10);
     out<<"[Joint] block-search-failed"
        <<" component_index="<<d.component_index<<" component_id="<<d.component_id
        <<" sweep_index="<<d.sweep_index<<" block_index="<<d.block_index
@@ -176,9 +362,34 @@ std::string FormatFailureDiagnostics(const FixedNeighborBlockFailureDiagnostics 
        <<" initial_profile_reason="<<d.initial_profile_reason
        <<" initial_profile_trusted="<<(d.initial_profile_trusted ? "true" : "false")
        <<" local_design_rows="<<d.local_design_rows<<" local_design_columns="<<d.local_design_columns
+       <<" local_design_nonzero_entries="<<d.local_design_nonzero_entries
        <<" local_design_rank=";
     if(d.local_design_rank) out<<*d.local_design_rank; else out<<"unavailable";
-    out<<" local_search_stop_reason="<<d.local_search_stop_reason;
+    out<<" condition_indicator="; if(d.condition_indicator) out<<*d.condition_indicator; else out<<"unavailable";
+    out<<" local_response_norm="; if(d.local_response_norm) out<<*d.local_response_norm; else out<<"unavailable";
+    out<<" local_response_min="; if(d.local_response_min) out<<*d.local_response_min; else out<<"unavailable";
+    out<<" local_response_max="; if(d.local_response_max) out<<*d.local_response_max; else out<<"unavailable";
+    out<<" parent_observation_scale="; if(d.parent_observation_scale) out<<*d.parent_observation_scale; else out<<"unavailable";
+    out<<" parent_response_norm="; if(d.parent_response_norm) out<<*d.parent_response_norm; else out<<"unavailable";
+    out<<" rank_relative="; if(d.rank_relative) out<<*d.rank_relative; else out<<"unavailable";
+    out<<" parent_rank_relative="; if(d.parent_rank_relative) out<<*d.parent_rank_relative; else out<<"unavailable";
+    out<<" release_factor="; if(d.release_factor) out<<*d.release_factor; else out<<"unavailable";
+    out<<" solver_valid="<<(d.solver_valid ? "true" : "false")<<" solver_reason="<<d.solver_reason;
+    out<<" linear_rank="; if(d.linear_rank) out<<*d.linear_rank; else out<<"unavailable";
+    out<<" linear_solve_count="; if(d.linear_solve_count) out<<*d.linear_solve_count; else out<<"unavailable";
+    out<<" active_set_releases="; if(d.active_set_releases) out<<*d.active_set_releases; else out<<"unavailable";
+    out<<" primal_feasibility="; if(d.primal_feasibility) out<<*d.primal_feasibility; else out<<"unavailable";
+    out<<" scaled_projected_kkt="; if(d.scaled_projected_kkt) out<<*d.scaled_projected_kkt; else out<<"unavailable";
+    out<<" maximum_free_a_gradient_raw="; if(d.maximum_free_a_gradient_raw) out<<*d.maximum_free_a_gradient_raw; else out<<"unavailable";
+    out<<" maximum_free_a_gradient_scaled="; if(d.maximum_free_a_gradient_scaled) out<<*d.maximum_free_a_gradient_scaled; else out<<"unavailable";
+    out<<" maximum_free_c_gradient_raw="; if(d.maximum_free_c_gradient_raw) out<<*d.maximum_free_c_gradient_raw; else out<<"unavailable";
+    out<<" maximum_free_c_gradient_scaled="; if(d.maximum_free_c_gradient_scaled) out<<*d.maximum_free_c_gradient_scaled; else out<<"unavailable";
+    out<<" maximum_active_a_complementarity_violation_raw=";
+    if(d.maximum_active_a_complementarity_violation_raw) out<<*d.maximum_active_a_complementarity_violation_raw; else out<<"unavailable";
+    out<<" maximum_active_a_complementarity_violation_scaled=";
+    if(d.maximum_active_a_complementarity_violation_scaled) out<<*d.maximum_active_a_complementarity_violation_scaled; else out<<"unavailable";
+    out<<" failure_capture_status="<<d.failure_capture_status
+       <<" local_search_stop_reason="<<d.local_search_stop_reason;
     if(d.replay_prediction_discrepancy)
         out<<" replay_prediction_discrepancy="<<*d.replay_prediction_discrepancy
            <<" replay_gradient_discrepancy="<<*d.replay_gradient_discrepancy
@@ -567,7 +778,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             if(!accepted)
             {
                 record.failure_diagnostics=FailureDiagnostics(policy,record,sweep_index,core_atoms,
-                    context,local_domain,old_eta,profile_search);
+                    context,local_context,local_domain,local_y,old_eta,profile_search);
                 Logger::Log(LogLevel::Warning,FormatFailureDiagnostics(*record.failure_diagnostics));
                 record.status="failed"; record.reason="block-search-failed"; out.reason=record.reason;
                 finish_record(std::move(record),block_started); stop=true; break;
