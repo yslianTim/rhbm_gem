@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CURRENT_EXPERIMENT_SOURCES = {
     "joint_fixed_neighbor.cpp",
     "joint_halo_pruning_validation.cpp",
+    "joint_local_ac_kkt.cpp",
     "joint_offline_diagnostic.cpp",
     "joint_partial_selection.cpp",
     "joint_postprocessing_benchmark.cpp",
