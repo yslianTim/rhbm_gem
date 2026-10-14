@@ -351,6 +351,8 @@ if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
     target_link_libraries(joint_component_audit PRIVATE joint_offline_support rhbm_gem)
     add_executable(joint_local_ac_kkt experiments/joint_local_ac_kkt.cpp)
     target_link_libraries(joint_local_ac_kkt PRIVATE joint_test_support rhbm_gem)
+    add_executable(joint_local_replay_analysis experiments/joint_local_replay_analysis.cpp)
+    target_link_libraries(joint_local_replay_analysis PRIVATE joint_test_support rhbm_gem)
     add_test(NAME joint_local_ac_kkt_recovery
         COMMAND $<TARGET_FILE:joint_local_ac_kkt> replay
             "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_ac_kkt/block-82.json")
@@ -360,7 +362,13 @@ if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
     add_test(NAME joint_local_replay_fixture
         COMMAND $<TARGET_FILE:joint_local_ac_kkt> replay-trial
             "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_replay/block-82-trial.json")
+    add_test(NAME joint_local_replay_numerical_analysis
+        COMMAND $<TARGET_FILE:joint_local_replay_analysis>
+            "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_replay/block-82-trial.json")
     set_tests_properties(joint_local_ac_kkt_recovery joint_local_ac_kkt_accuracy joint_local_replay_fixture PROPERTIES
+        LABELS "offline;domain:core;intent:algorithm;joint:numerics" TIMEOUT 120
+        ENVIRONMENT "OMP_NUM_THREADS=1")
+    set_tests_properties(joint_local_replay_numerical_analysis PROPERTIES
         LABELS "offline;domain:core;intent:algorithm;joint:numerics" TIMEOUT 120
         ENVIRONMENT "OMP_NUM_THREADS=1")
     add_executable(joint_offline_diagnostic experiments/joint_offline_diagnostic.cpp)
