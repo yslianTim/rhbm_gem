@@ -44,8 +44,14 @@ GaussianModel3D Point(const V & v, bool positive_width=true)
 }
 template<class T> V Matrix(const T & m) { A a; for (Eigen::Index r=0;r<m.rows();++r) for (Eigen::Index c=0;c<m.cols();++c) a.push_back(m(r,c)); return a; }
 template<int R,int C> Eigen::Matrix<double,R,C> Matrix(const V & v) { const auto & a=v.as_array(); if(a.size()!=R*C) throw std::invalid_argument("Stage matrix shape mismatch."); Eigen::Matrix<double,R,C> m; std::size_t i=0; for(int r=0;r<R;++r) for(int c=0;c<C;++c) m(r,c)=Number(a[i++]); return m; }
-V Pack(const EstimateSource & s) { return O{{"method",static_cast<int>(s.method)},{"atom",s.atom_id},{"component",s.component_id},{"run",s.run_id},{"role",static_cast<int>(s.role)}}; }
-EstimateSource Source(const V & v) { const auto & o=v.as_object(); return {Enum<EstimateMethod>(o.at("method"),3),Read<std::string>(o,"atom"),Read<std::string>(o,"component"),Read<std::string>(o,"run"),Enum<FittingRole>(o.at("role"),2)}; }
+V Pack(const EstimateSource & s)
+{
+    O out{{"method",static_cast<int>(s.method)},{"atom",s.atom_id},{"component",s.component_id},
+        {"run",s.run_id},{"role",static_cast<int>(s.role)}};
+    if(s.fixed_from_first_stage) out.emplace("fixed_from_first_stage",true);
+    return out;
+}
+EstimateSource Source(const V & v) { const auto & o=v.as_object(); return {Enum<EstimateMethod>(o.at("method"),3),Read<std::string>(o,"atom"),Read<std::string>(o,"component"),Read<std::string>(o,"run"),Enum<FittingRole>(o.at("role"),2),o.contains("fixed_from_first_stage") && Read<bool>(o,"fixed_from_first_stage")}; }
 V Pack(const LocalStageEstimate & s)
 {
     const auto & u=s.uncertainty;
@@ -532,7 +538,8 @@ void Validate(const ModelObject & model)
         const auto * e=data.FindAtomLocalEntry(*model.FindAtomPtr(id));
         if(!e || e->StageEstimate(FittingStage::Second).source.method!=EstimateMethod::JointComponents) throw std::invalid_argument("Joint snapshot lacks a matching Second record.");
         const auto & actual=e->StageEstimate(FittingStage::Second);
-        if(actual.convergence!=expected.convergence || actual.source.component_id!=expected.source.component_id || actual.source.role!=expected.source.role || actual.point.has_value()!=expected.point.has_value() ||
+        if(actual.convergence!=expected.convergence || actual.source.component_id!=expected.source.component_id || actual.source.role!=expected.source.role ||
+            actual.source.fixed_from_first_stage!=expected.source.fixed_from_first_stage || actual.point.has_value()!=expected.point.has_value() ||
             (actual.point && actual.point->ToVector()!=expected.point->ToVector())) throw std::invalid_argument("Joint snapshot/Second mismatch.");
     }
 }

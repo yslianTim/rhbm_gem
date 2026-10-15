@@ -22,7 +22,7 @@ std::size_t EstimateHashStorageBytes(const HashMap & values)
 bool SameSource(const EstimateSource & a, const EstimateSource & b)
 {
     return a.method == b.method && a.atom_id == b.atom_id && a.component_id == b.component_id &&
-        a.run_id == b.run_id && a.role == b.role;
+        a.run_id == b.run_id && a.role == b.role && a.fixed_from_first_stage==b.fixed_from_first_stage;
 }
 }
 
@@ -86,7 +86,7 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
 {
     const auto & input = m_problem.Input();
     const auto * result = m_snapshot;
-    const auto requested = JointOutputMask(input, outputs);
+    auto requested = JointOutputMask(input, outputs);
     std::vector<std::vector<std::size_t>> contributors(input.row_ids.size());
     std::vector<double> prediction(input.row_ids.size());
     std::vector<std::size_t> missing(input.row_ids.size());
@@ -94,11 +94,49 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
     // Internal representatives reconstruct the observation prediction even when
     // a nonunique halo has no public atom-wise point estimate.
     std::vector<std::optional<GaussianModel3D>> represented(input.atom_ids.size());
+    const bool fixed_target_only=result &&
+        result->parameterization_contract==JointTargetOnlyFixedHaloParameterizationContract;
+    if(fixed_target_only && (!result->selection_domain ||
+        result->selection_domain->contributor_policy!=FixedHaloContributorPolicy || result->layout))
+        throw std::invalid_argument("Invalid fixed-halo peeling contract.");
+    if(fixed_target_only)
+        for(std::size_t atom=0;atom<requested.size();++atom)
+            if(!std::binary_search(result->selection_domain->target_indices.begin(),
+                result->selection_domain->target_indices.end(),atom)) requested[atom]=false;
     if (result) for (const auto & c : result->components) if (c.state)
     {
         const auto & full = c.layout ? c.layout->full_atoms : c.atoms;
         for (std::size_t k = 0; k < full.size(); ++k)
+        {
+            if(full[k]>=represented.size() || (fixed_target_only &&
+                !std::binary_search(result->selection_domain->target_indices.begin(),
+                    result->selection_domain->target_indices.end(),full[k])) || represented[full[k]])
+                throw std::invalid_argument("Invalid target-only component mapping in peeling snapshot.");
             represented[full[k]] = GaussianModel3D{c.state->ac[2*k], c.state->b[k], c.state->ac[2*k+1]};
+        }
+    }
+    if(fixed_target_only)
+    {
+        std::size_t previous{};
+        for(std::size_t k=0;k<result->fixed_halos.size();++k)
+        {
+            const auto & fixed=result->fixed_halos[k];
+            if(fixed.contributor_index>=represented.size() || (k && fixed.contributor_index<=previous) ||
+                result->atom_ids[fixed.contributor_index]!=fixed.atom_id || represented[fixed.contributor_index] ||
+                std::binary_search(result->selection_domain->target_indices.begin(),
+                    result->selection_domain->target_indices.end(),fixed.contributor_index) ||
+                !std::isfinite(fixed.amplitude) || fixed.amplitude<0 ||
+                !std::isfinite(fixed.width) || fixed.width<=0 || fixed.charge!=0.0 ||
+                !fixed.first_stage_status || *fixed.first_stage_status!=static_cast<int>(RHBMEstimationStatus::SUCCESS) ||
+                !fixed.first_stage_fit_qualified || fixed.source_contract!=FixedHaloParameterSourceContractVersion)
+                throw std::invalid_argument("Invalid fixed FirstStage halo in peeling snapshot.");
+            previous=fixed.contributor_index;
+            represented[fixed.contributor_index]=GaussianModel3D{fixed.amplitude,fixed.width,0.0};
+        }
+        if(result->assembled_state)
+            for(std::size_t atom=0;atom<represented.size();++atom)
+                if(!represented[atom])
+                    throw std::invalid_argument("Fitted peeling snapshot has an unmapped target or fixed halo.");
     }
     std::vector<bool> has_point;
     for (std::size_t atom = 0; atom < input.atom_ids.size(); ++atom)

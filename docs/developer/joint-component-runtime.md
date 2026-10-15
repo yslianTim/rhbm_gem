@@ -187,9 +187,14 @@ Current point evidence uses `target-point-validation-v1`. Historical
 `target-estimability-v1` through `target-estimability-v4` keeps its saved
 meaning and is never converted into point-quality evidence. Historical rank
 records remain decoding-only provenance; they are not reinterpreted as local
-conditioning or stability. Joint results retain the complete FullABC state
-for selected targets and retained halos. Post-Joint local MDPDE qualification,
-covariance, peeling, and group fitting keep their own contracts.
+conditioning or stability. Joint results store the FullABC state for selected
+targets and fixed FirstStage halo parameters separately under
+`target-only-fixed-halo-v1` (Joint JSON schema 14). Earlier schemas retain their
+original parameterization and are not reinterpreted. Stage records mark fixed
+halos as FirstStage-sourced and not Joint-optimized. Post-fit peeling
+reconstructs the complete target-plus-halo prediction; Post-Joint local MDPDE
+and group fitting remain limited to selected targets and keep their own
+qualification contracts.
 
 The runtime regression harness is `tests/integration/joint_component_runtime.py`.
 The ordinary Joint CTest groups cover component contracts, workflow,

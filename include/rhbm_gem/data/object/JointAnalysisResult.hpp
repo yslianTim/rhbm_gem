@@ -64,6 +64,7 @@ struct JointAnalysisComponent : JointComponentData
     JointCheckStatus runtime_convergence{JointCheckStatus::Unavailable};
     JointCheckStatus target_runtime_convergence{JointCheckStatus::NotRun};
 };
+inline constexpr std::string_view JointTargetOnlyFixedHaloParameterizationContract="target-only-fixed-halo-v1";
 // A saved outcome with optional parameter-only candidate diagnostics, not an
 // audit/restart bundle. Convergence is captured and never inferred by storage.
 struct JointAnalysisResult
@@ -73,6 +74,7 @@ struct JointAnalysisResult
     JointAnalysisMetadata metadata;
     std::vector<std::string> atom_ids, row_ids;
     std::optional<JointSelectionDomain> selection_domain;
+    std::vector<JointFixedHaloParameter> fixed_halos;
     JointInitialization initialization;
     JointFitCosts costs;
     std::vector<JointAnalysisComponent> components;

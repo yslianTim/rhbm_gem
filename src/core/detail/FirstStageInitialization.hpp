@@ -1,6 +1,7 @@
 #pragma once
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include "joint_component/JointProgress.hpp"
 #include <optional>
 #include <string_view>
 #include <vector>
@@ -25,6 +26,9 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
     ModelObject &, const FittingWorkset &, const FitOptions &);
 JointInitialization PrepareJointWidthInitialization(
     MapObject &, ModelObject &, const FittingWorkset &, const FitOptions &);
+JointFitResult FitJointComponentsInitializedWithProgress(
+    const JointProblem &, const JointInitialization &,
+    const joint_component::JointProgressObserver &);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 using FirstStageObserver = std::function<void(int, std::string_view)>;
 FirstStageObserver & FirstStageObserverForTesting();

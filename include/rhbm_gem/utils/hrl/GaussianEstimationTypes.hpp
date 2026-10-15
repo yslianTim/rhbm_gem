@@ -26,6 +26,7 @@ struct EstimateSource
     EstimateMethod method{ EstimateMethod::Unspecified };
     std::string atom_id, component_id, run_id;
     FittingRole role{ FittingRole::NotRecorded };
+    bool fixed_from_first_stage{};
 };
 
 struct StageUncertainty

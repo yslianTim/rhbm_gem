@@ -1,89 +1,74 @@
-# Joint FullABC halo eligibility
+# Joint fixed-halo contributor model
 
-## Production contributor model
+## Production contract
 
-Selected non-hydrogen atoms define the fixed observation domain
-`V = union(support(target))`. The builder reads each unselected non-hydrogen
-atom's support on those same rows and treats it as a halo candidate. Selected
-targets are always retained, including targets with zero or insufficient
-support. A halo is included in `JointProblemInput` only when it passes the
-geometry-based FullABC eligibility rule:
+Selected non-hydrogen atoms define the unchanged observation domain
+`V = union(support(target))`. Every unselected non-hydrogen atom with at least
+one support row on `V` is retained as a fixed halo. Atoms with no support on
+`V` are omitted because they cannot change the target objective. Observation
+support count and radial diversity do not prune a halo.
 
-```text
-m_h = number of halo support rows on V
-q_h = number of exactly distinct squared distances on those rows
-eligible(h) = (m_h >= 3) and (q_h >= 3)
-```
-
-Squared-distance equality is exact and deterministic. No tolerance or
-numerical-distinguishability claim is used; adjacent representable distances
-count as distinct. The production minimum is three observations, the smallest
-possible for the three FullABC parameters `(A, C, log(B))`. The threshold is not
-a measured optimum and does not assert identifiability.
-
-All retained contributors use
+Each retained halo uses a validated FirstStage local MDPDE snapshot:
 
 ```text
-f_i(r) = A_i G(r; B_i) + C_i K(r; B_i)
-A_i >= 0, B_i > 0, C_i unrestricted
+(A_h, B_h, C_h) = (A_h_FirstStage, B_h_FirstStage, 0)
+A_h is finite and >= 0; B_h is finite and > 0
 ```
 
-`C` multiplies the charge kernel and is not a constant background offset.
-Production has no singleton-halo nuisance amplitude, nuisance-only component,
-or alternate profiling route.
+The snapshot records contributor identity, FirstStage sample count and status,
+fit qualification, and the source contract. Joint-domain support count remains
+available separately in the contributor geometry. A failed or invalid
+FirstStage fit does not silently become a zero halo or median-width fallback;
+the Joint fit reports `fixed-halo-initialization-unavailable`.
 
-## Fixed rows and changed model
+Only selected targets have free `(A, B, C)` parameters. Structural components,
+FixedNeighbor cores, local conditioning, parameter stability, and numerical
+convergence use targets only. A halo that overlaps observations from several
+disconnected target components remains one problem-level fixed snapshot and
+does not connect those components.
 
-Halo eligibility only selects contributors. It does not rebuild the selected
-row set, remove rows, or change observations, row IDs, radii, or observation
-scale. A row with no retained contributor remains in the objective as a
-constant residual. Structural components and bridge relationships are built
-after pruning from the retained contributors.
+## Objective and complete prediction
 
-Pruning changes the fitted additive model. The observations still contain any
-excluded halo signal, while the fitted prediction contains only selected
-targets and eligible retained halos. An excluded signal can therefore increase
-residuals or shift selected-target estimates. Production adds no background
-term, regularizer, pseudo-observation, or redistribution of that signal.
+For a halo support row `v`, the estimator evaluates the existing Gaussian
+kernel only on stored support entries:
 
-## Selection and point quality
+```text
+H_v = sum_h A_h_FirstStage * G(r_vh; B_h_FirstStage)
+y*_v = y_v - H_v
+```
 
-The gate uses geometry before first-stage width seeds exist. `m_h >= 3` and
-`q_h >= 3` are necessary local conditions only. Repeated radii can limit the
-local Jacobian rank to `q_h`; passing the gate does not prove that the halo's
-fixed-width A/C columns are independent or that its full `(A, C, B)` parameters
-are identifiable in the complete component.
+Targets are fit to `y*`, while the normalization scale stays
+`max(1, ||y_V||_2)` using the original observations. The complete prediction is
+`H_v + prediction_targets`; its residual and objective must replay the
+target-only residual and objective. Fixed halo gradients do not enter target
+KKT or width stationarity checks.
 
-`DiagnoseHaloSupport()` remains a geometry/support diagnostic. The Joint state
-is accepted by global numerical convergence and independent endpoint replay.
-Local block conditioning can report poor conditional A/C, projected-width, or
-profile derivative behavior; parameter stability can report sensitivity.
-These point-quality warnings do not exclude an eligible retained halo or
-cancel a converged component. They do not establish global identifiability.
+The selected observation rows, row IDs, and scale do not change with the number
+of halos. Rows without a free target contribution remain in the objective as
+constant rows. The full contributor representation is retained for prediction
+replay and PostFitPeeling.
 
-## Exclusion provenance
+## Saved results and downstream use
 
-New Map/Model problems record the contributor policy
-`fullabc-eligible-halo-pruning-v1` in `JointSelectionDomain`. The provenance
-stores the minimum observation and distinct-distance counts, candidate and
-retained halo counts, plus each excluded atom's identity, support-row count,
-distinct squared-distance count, and reason (`insufficient-observations` or
-`insufficient-radial-information`). Excluded atoms are not fitted failures and
-receive no A/C/B estimate or covariance.
+New results use contributor policy `first-stage-fixed-halo-v1`, parameterization
+contract `target-only-fixed-halo-v1`, and Joint JSON schema 14. The snapshot
+stores fixed halo parameters independently from target component state. Target
+stage estimates are marked as Joint targets; fixed halo estimates preserve the
+FirstStage source and are not labeled as Joint-optimized convergence. Schemas
+3 through 13 remain readable with their original free-halo or pruned-halo
+meaning; decoding an older result does not reinterpret it as fixed-halo state.
 
-Joint JSON schema 12 stores this provenance. Schemas 3 through 11 remain
-readable, including saved singleton-halo layouts and nuisance amplitudes; old
-results retain their original parameterization when re-encoded. Current CSV
-atom rows contain retained contributors. The nuisance contribution CSV is
-written only when exporting a historical result that has nuisance groups.
+PostFitPeeling reconstructs each target component plus the problem-level fixed
+halos, subtracts other target and halo contributions once, and preserves the
+target's existing self-Gaussian/self-charge behavior. Post-Joint local MDPDE and
+group fitting remain target-only. Fixed halos are contributors to the Joint
+prediction, not members of downstream target inference.
 
-## Regression and scientific sensitivity
+## Historical pruning research
 
-Builder regressions cover fixed rows, selected-target retention, exclusion,
-first-stage contributor mapping, and component rebuilding after a bridge halo
-is removed. SparseQR rank regression includes a design with more rows than
-columns that remains rank deficient. The deterministic weak, strong low-support,
-overlapping-halo cases and the 3/4/6/8/12 observation sweep are reported in the
-[halo pruning validation study](../research/joint-halo-pruning-validation.md).
-Those measurements separate numerical convergence from selected-target
-parameter error; they do not establish a universally best threshold.
+`fullabc-eligible-halo-pruning-v1` and its support/radial thresholds describe
+older FullABC results only. The former policy used minimum observation and
+distinct-distance counts to remove halos before fitting. It is retained for
+historical JSON decoding and old research records, but is not a production
+selection route. The [halo pruning validation study](../research/joint-halo-pruning-validation.md)
+records the measurements and assumptions of that retired policy.

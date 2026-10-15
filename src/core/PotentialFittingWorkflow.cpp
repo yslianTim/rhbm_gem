@@ -246,10 +246,9 @@ void RunJointComponentWorkflow(
         observer = reporter->Observer();
     }
     auto snapshot = [&] {
-        auto fit = joint_component::FitFixedNeighborComponents(problem, initialization.b, {}, observer);
+        auto fit = FitJointComponentsInitializedWithProgress(problem, initialization, observer);
         fit.costs.construction_seconds = construction_seconds;
         fit.costs.initialization_seconds = initialization_seconds;
-        fit.initialization = initialization;
         return CaptureJointAnalysisResult(fit);
     }();
     const auto postprocessing_start = std::chrono::steady_clock::now();

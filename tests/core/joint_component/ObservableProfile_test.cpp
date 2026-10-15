@@ -332,6 +332,7 @@ TEST(JointObservableProfileTest, TwoRowInnerRankDeficiencyStillRejectsEndpoint)
 TEST(JointObservableProfileTest, FrozenMedianDonorsAndOriginalFailures)
 {
     rhbm_gem::JointInitialization initialization; initialization.b={1,3,missing_width,-1,missing_width}; initialization.atoms.resize(5);
+    for(auto & atom:initialization.atoms) atom.target=true;
     for(std::size_t k=0;k<2;++k)
     {auto & atom=initialization.atoms[k]; atom.original_b=initialization.b[k]; atom.reason="valid-width"; atom.seed_source="fitted";}
     initialization.atoms[2].reason="initialization-exception: test";
@@ -345,7 +346,8 @@ TEST(JointObservableProfileTest, FrozenMedianDonorsAndOriginalFailures)
     EXPECT_EQ(initialization.b[4],2);
     EXPECT_EQ(initialization.atoms[4].seed_source,"median-fallback");
     EXPECT_EQ(initialization.atoms[4].donor_count,2u);
-    rhbm_gem::JointInitialization empty; empty.b={missing_width}; empty.atoms.resize(1); empty.atoms[0].reason="invalid-width";
+    rhbm_gem::JointInitialization empty; empty.b={missing_width}; empty.atoms.resize(1);
+    empty.atoms[0].target=true; empty.atoms[0].reason="invalid-width";
     core::detail::ApplyJointSeedFallback(empty); EXPECT_FALSE(empty.valid); EXPECT_TRUE(std::isnan(empty.b[0]));
 }
 TEST(JointObservableProfileTest, LegacyV3DoesNotInferReductionAndMalformedLayoutRejected)
@@ -574,7 +576,7 @@ TEST(JointObservableProfileTest, HaloNonuniquenessDoesNotCertifyItsParameters)
     EXPECT_FALSE(stages.at(1).point); EXPECT_FALSE(stages.at(4).point);
     const auto text=rhbm_gem::joint_result_io::Encode(saved);
     auto value=boost::json::parse(text);
-    EXPECT_EQ(value.at("schema_version").as_int64(),13);
+    EXPECT_EQ(value.at("schema_version").as_int64(),14);
     auto downgraded=value;
     UseHistoricalGlobalRankKeys(downgraded.as_object());
     downgraded.as_object()["schema_version"]=7;
@@ -912,7 +914,7 @@ TEST(JointObservableProfileTest, TargetEvidenceUsesEveryComponentAndTheSavedStat
     }
     const auto saved=core::CaptureJointAnalysisResult(fit);
     auto json=boost::json::parse(rhbm_gem::joint_result_io::Encode(saved));
-    EXPECT_EQ(json.at("schema_version").as_int64(),13);
+    EXPECT_EQ(json.at("schema_version").as_int64(),14);
     json.at("target_evidence").as_object()["column_scales"]=boost::json::array{1.};
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(json)),std::invalid_argument);
     const auto restored=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved));

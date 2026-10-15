@@ -1,5 +1,6 @@
 #include "JointResultJson.hpp"
 #include <boost/json.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -417,6 +418,30 @@ j::value OptionalInt(std::optional<int> value)
 {return value ? j::value(*value) : j::value(nullptr);}
 std::optional<int> ReadOptionalInt(const j::value & value)
 {return value.is_null() ? std::nullopt : std::optional<int>(j::value_to<int>(value));}
+j::array FixedHalos(const std::vector<JointFixedHaloParameter> & values)
+{
+    j::array out;
+    for(const auto & value:values)
+        out.emplace_back(Object{{"contributor_index",value.contributor_index},{"atom_id",value.atom_id},
+            {"amplitude",value.amplitude},{"width",value.width},{"charge",value.charge},
+            {"first_stage_sample_count",value.first_stage_sample_count},
+            {"first_stage_status",OptionalInt(value.first_stage_status)},
+            {"source_contract",value.source_contract},{"first_stage_fit_qualified",value.first_stage_fit_qualified}});
+    return out;
+}
+std::vector<JointFixedHaloParameter> ReadFixedHalos(const j::value & value)
+{
+    std::vector<JointFixedHaloParameter> out;
+    for(const auto & item:value.as_array())
+    {
+        const auto & object=item.as_object();
+        out.push_back({Read<std::size_t>(object,"contributor_index"),Read<std::string>(object,"atom_id"),
+            Read<double>(object,"amplitude"),Read<double>(object,"width"),Read<double>(object,"charge"),
+            Read<std::size_t>(object,"first_stage_sample_count"),ReadOptionalInt(object.at("first_stage_status")),
+            Read<std::string>(object,"source_contract"),Read<bool>(object,"first_stage_fit_qualified")});
+    }
+    return out;
+}
 Object Units()
 {
     return {{"contract","joint-kernel-map-units-v1"},{"map_value","fit-map-unit"},
@@ -990,8 +1015,11 @@ void Validate(const JointAnalysisResult & x,int schema_version)
         x.selection_domain->contributor_policy==FullABCHaloContributorPolicy;
     const bool fixed_halo_policy=x.selection_domain &&
         x.selection_domain->contributor_policy==FixedHaloContributorPolicy;
+    const bool target_only_fixed_halo=x.parameterization_contract==JointTargetOnlyFixedHaloParameterizationContract;
     Require(schema_version>=11 || !pruned_policy,"halo pruning policy requires schema 11");
     Require(schema_version>=13 || !fixed_halo_policy,"fixed-halo policy requires schema 13");
+    Require(schema_version>=14 || (!target_only_fixed_halo && x.fixed_halos.empty()),
+        "target-only fixed-halo state requires schema 14");
     if(pruned_policy)
     {
         Require(x.selection_domain->halo_eligibility.has_value(),"halo pruning requires eligibility provenance");
@@ -1012,7 +1040,40 @@ void Validate(const JointAnalysisResult & x,int schema_version)
     Require(x.available_row_mask.size()==rows,"row mask dimensions");
     Require(std::isfinite(x.observation_scale) && x.observation_scale>=1,"observation scale");
     Require(!x.objective || std::isfinite(*x.objective),"nonfinite objective");
-    Require(x.parameterization_contract==(x.layout ? "singleton-halo-profile-v1" : "full-abc-v1"),"parameterization contract");
+    if(target_only_fixed_halo)
+        Require(fixed_halo_policy && !x.layout,"target-only fixed-halo parameterization contract");
+    else
+    {
+        Require(x.parameterization_contract==(x.layout ? "singleton-halo-profile-v1" : "full-abc-v1"),"parameterization contract");
+        Require(x.fixed_halos.empty(),"fixed-halo parameters require target-only parameterization");
+    }
+    if(target_only_fixed_halo)
+    {
+        const auto & targets=x.selection_domain->target_indices;
+        std::vector<std::size_t> expected_halos;
+        for(std::size_t atom=0;atom<atoms;++atom)
+            if(!std::binary_search(targets.begin(),targets.end(),atom)) expected_halos.push_back(atom);
+        Require(x.fixed_halos.empty() || x.fixed_halos.size()==expected_halos.size(),"incomplete fixed-halo state");
+        if(!x.fixed_halos.empty())
+            for(std::size_t k=0;k<x.fixed_halos.size();++k)
+            {
+                const auto & fixed=x.fixed_halos[k];
+                Require(fixed.contributor_index==expected_halos[k] && fixed.atom_id==x.atom_ids[expected_halos[k]],
+                    "fixed-halo identity mapping");
+                Require(std::isfinite(fixed.amplitude) && fixed.amplitude>=0 &&
+                    std::isfinite(fixed.width) && fixed.width>0 && fixed.charge==0.0,
+                    "invalid fixed-halo parameters");
+                Require(fixed.first_stage_status &&
+                    *fixed.first_stage_status==static_cast<int>(RHBMEstimationStatus::SUCCESS) &&
+                    fixed.first_stage_fit_qualified &&
+                    fixed.source_contract==FixedHaloParameterSourceContractVersion,
+                    "invalid fixed-halo FirstStage provenance");
+            }
+        Require(x.fixed_halos.size()==expected_halos.size() ||
+            (!x.assembled_state && !x.objective && x.components.empty() &&
+                x.runtime_convergence!=JointCheckStatus::Passed),
+            "fitted target-only result requires every fixed halo");
+    }
     if(x.layout)
     {
         std::vector<std::size_t> all_atoms(atoms),all_rows(rows);
@@ -1021,15 +1082,22 @@ void Validate(const JointAnalysisResult & x,int schema_version)
         ValidateLayout(*x.layout,all_atoms,all_rows,x.selection_domain ? &*x.selection_domain : nullptr);
     }
     std::vector<std::size_t> all(atoms); std::iota(all.begin(),all.end(),0);
-    const auto & full_atoms=x.layout ? x.layout->full_atoms : all;
-    ValidateTarget(x.target_evidence,all,full_atoms,x.selection_domain,x.layout ? x.layout->full_atoms.size() : atoms,rows);
-    if(x.assembled_state) ValidateState(*x.assembled_state,x.layout ? x.layout->full_atoms.size() : atoms,x.layout ? x.layout->groups.size() : 0);
+    const auto & full_atoms=target_only_fixed_halo ? x.selection_domain->target_indices :
+        x.layout ? x.layout->full_atoms : all;
+    ValidateTarget(x.target_evidence,target_only_fixed_halo ? full_atoms : all,full_atoms,x.selection_domain,
+        target_only_fixed_halo ? full_atoms.size() : x.layout ? x.layout->full_atoms.size() : atoms,rows);
+    if(x.assembled_state) ValidateState(*x.assembled_state,
+        target_only_fixed_halo ? full_atoms.size() : x.layout ? x.layout->full_atoms.size() : atoms,
+        x.layout ? x.layout->groups.size() : 0);
     if(x.initialization.valid)
     {
-        Require(x.initialization.b.size()==atoms,"initial width dimensions");
-        for(std::size_t a=0;a<atoms;++a)
-            if(!x.layout || std::binary_search(x.layout->full_atoms.begin(),x.layout->full_atoms.end(),a))
-                Require(std::isfinite(x.initialization.b[a]) && x.initialization.b[a]>0,"invalid initial width");
+        Require(x.initialization.b.size()==(target_only_fixed_halo ? full_atoms.size() : atoms),"initial width dimensions");
+        if(target_only_fixed_halo)
+            for(const double width:x.initialization.b)
+                Require(std::isfinite(width) && width>0,"invalid initial width");
+        else for(std::size_t atom=0;atom<atoms;++atom)
+            if(!x.layout || std::binary_search(x.layout->full_atoms.begin(),x.layout->full_atoms.end(),atom))
+                Require(std::isfinite(x.initialization.b[atom]) && x.initialization.b[atom]>0,"invalid initial width");
     }
     Require(x.initialization.atoms.size()<=atoms,"initialization dimensions");
     std::set<std::size_t> used_atoms,used_rows;
@@ -1040,6 +1108,10 @@ void Validate(const JointAnalysisResult & x,int schema_version)
         for(auto a:c.atoms) Require(a<atoms && used_atoms.insert(a).second,"component atom mapping");
         for(auto r:c.rows) Require(r<rows && used_rows.insert(r).second,"component row mapping");
         Require(c.layout.has_value()==x.layout.has_value(),"component layout contract");
+        if(target_only_fixed_halo)
+            for(const auto atom:c.atoms)
+                Require(std::binary_search(x.selection_domain->target_indices.begin(),
+                    x.selection_domain->target_indices.end(),atom),"fixed halo cannot enter target component");
         if(c.layout)
         {
             ValidateLayout(*c.layout,c.atoms,c.rows,x.selection_domain ? &*x.selection_domain : nullptr);
@@ -1066,7 +1138,7 @@ void Validate(const JointAnalysisResult & x,int schema_version)
 }
 std::string Encode(const JointAnalysisResult & x)
 {
-    Validate(x,13);
+    Validate(x,14);
     const auto & m=x.metadata; const auto & t=x.costs;
     j::array components;
     for(const auto & c:x.components)
@@ -1092,8 +1164,9 @@ std::string Encode(const JointAnalysisResult & x)
             component.emplace("legacy_candidate_evidence",LegacyCandidateEvidence(c.legacy_candidate_evidence));
         components.emplace_back(std::move(component));
     }
-    Object out{{"schema_version",13},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
+    Object out{{"schema_version",14},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
         { "support_contract","sphere-fma-v1"},{"parameterization_contract",x.parameterization_contract},{"layout",Layout(x.layout)},{"metadata",Metadata(m)},{"selection_domain",SelectionDomain(x.selection_domain)},
+        {"fixed_halos",FixedHalos(x.fixed_halos)},
         {"atom_ids",j::value_from(x.atom_ids)},{"row_ids",j::value_from(x.row_ids)},{"initialization",Initialization(x.initialization)},
         {"costs",Object{{"construction_seconds",t.construction_seconds},{"initialization_seconds",t.initialization_seconds},{"search_seconds",t.search_seconds},
             {"search_reference_seconds",t.search_reference_seconds},{"assessment_seconds",t.assessment_seconds},{"assembly_seconds",t.assembly_seconds}}},
@@ -1110,8 +1183,8 @@ JointAnalysisResult Decode(std::string_view text)
     j::parse_options options; options.numbers=j::number_precision::precise;
     const auto parsed=j::parse(text,{},options); const auto & o=parsed.as_object();
     const int version=Read<int>(o,"schema_version");
-    Require(version==3 || version==4 || version==5 || version==6 || version==7 || version==8 || version==9 || version==10 || version==11 || version==12 || version==13,
-        "unsupported result schema version (expected 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 or 13)");
+    Require(version==3 || version==4 || version==5 || version==6 || version==7 || version==8 || version==9 || version==10 || version==11 || version==12 || version==13 || version==14,
+        "unsupported result schema version (expected 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 or 14)");
     Require(Read<std::string>(o,"estimator")=="joint-components" &&
         Read<std::string>(o,"estimator_contract")=="guarded-joint-ls-v1" &&
         Read<std::string>(o,"objective_contract")=="parent-normalized-half-rss-v1" &&
@@ -1120,6 +1193,7 @@ JointAnalysisResult Decode(std::string_view text)
     if(version>=4) {x.layout=ReadLayout(o); x.parameterization_contract=Read<std::string>(o,"parameterization_contract");}
     x.metadata=ReadMetadata(o.at("metadata").as_object());
     x.selection_domain=ReadSelectionDomain(o.at("selection_domain"));
+    if(version>=14) x.fixed_halos=ReadFixedHalos(o.at("fixed_halos"));
     x.atom_ids=Read<std::vector<std::string>>(o,"atom_ids"); x.row_ids=Read<std::vector<std::string>>(o,"row_ids");
     x.initialization=ReadInitialization(o.at("initialization"));
     const auto & t=o.at("costs").as_object();

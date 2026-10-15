@@ -108,6 +108,31 @@ void CheckReference(const rhbm_gem::MapObject & map,const rhbm_gem::ModelObject 
     double square=0; for(double value:observations) square+=value*value;
     EXPECT_NEAR(problem.ObservationScale(),std::max(1.,std::sqrt(square)),1e-12*problem.ObservationScale());
 }
+void SetFixedHaloExactMap(joint_partial_test::Fixture & f)
+{
+    const auto dims=f.map->GetGridSize();
+    const auto spacing=f.map->GetGridSpacing(),origin=f.map->GetOrigin();
+    auto values=std::make_unique<double[]>(f.map->GetMapValueArraySize());
+    for(int z=0;z<dims[2];++z) for(int y=0;y<dims[1];++y) for(int x=0;x<dims[0];++x)
+    {
+        const auto position=sim::GridPosition({x,y,z},spacing,origin);
+        double value{};
+        for(std::size_t atom=0;atom<f.a.size();++atom)
+        {
+            const auto squared=sim::SupportSquare(position,f.model->GetAtomList()[atom]->GetPosition());
+            if(squared>6.25) continue;
+            const auto basis=n::EvaluateKernel(squared,f.b[atom],2.5);
+            value+=f.a[atom]*basis.gaussian+(atom==0 ? f.c[atom]*basis.charge : 0.0);
+        }
+        values[static_cast<std::size_t>(x+dims[0]*(y+dims[1]*z))]=value;
+    }
+    f.map->SetMapValueArray(std::move(values));
+}
+rhbm_gem::JointFixedHaloParameter FixedHaloFor(const joint_partial_test::Fixture & f,std::size_t index)
+{
+    return {index,std::to_string(f.model->GetAtomList()[index]->GetSerialID()),f.a[index],f.b[index],0.0,17,0,
+        std::string(rhbm_gem::FixedHaloParameterSourceContractVersion),true};
+}
 }
 TEST(JointComponentPartialSelectionTest, FullCatalogueReferenceAndFixedRows)
 {
@@ -233,6 +258,111 @@ TEST(JointComponentPartialSelectionTest, FixedHaloDoesNotConnectTargetComponents
     EXPECT_EQ(data.partition.components[1].atoms.size(),1u);
 }
 
+TEST(JointComponentPartialSelectionTest, SharedFixedHaloPersistsOutsideTargetComponents)
+{
+    auto f=joint_partial_test::Make("bridge");
+    const auto dims=f.map->GetGridSize();
+    const auto spacing=f.map->GetGridSpacing(),origin=f.map->GetOrigin();
+    auto values=std::make_unique<double[]>(f.map->GetMapValueArraySize());
+    for(int z=0;z<dims[2];++z) for(int y=0;y<dims[1];++y) for(int x=0;x<dims[0];++x)
+    {
+        const auto position=sim::GridPosition({x,y,z},spacing,origin);
+        double value{};
+        for(std::size_t atom=0;atom<f.a.size();++atom)
+        {
+            const auto squared=sim::SupportSquare(position,f.model->GetAtomList()[atom]->GetPosition());
+            if(squared>6.25) continue;
+            const auto basis=n::EvaluateKernel(squared,f.b[atom],2.5);
+            value+=f.a[atom]*basis.gaussian+(atom<2 ? f.c[atom]*basis.charge : 0.0);
+        }
+        values[static_cast<std::size_t>(x+dims[0]*(y+dims[1]*z))]=value;
+    }
+    f.map->SetMapValueArray(std::move(values));
+    const auto problem=core::BuildJointProblem(*f.map,*f.model);
+    ASSERT_EQ(problem.Input().atom_ids,(std::vector<std::string>{"1","2","3"}));
+    const auto & input=problem.Input();
+    auto overlaps=[&](std::size_t a,std::size_t b) {
+        return std::any_of(input.support[a].begin(),input.support[a].end(),[&](const auto & left) {
+            return std::any_of(input.support[b].begin(),input.support[b].end(),[&](const auto & right) {
+                return left.row==right.row;
+            });
+        });
+    };
+    EXPECT_FALSE(overlaps(0,1));
+    EXPECT_TRUE(overlaps(0,2));
+    EXPECT_TRUE(overlaps(1,2));
+    const auto fixed=std::vector<rhbm_gem::JointFixedHaloParameter>{{
+        2,"3",f.a[2],f.b[2],0.0,17,0,
+        std::string(rhbm_gem::FixedHaloParameterSourceContractVersion),true}};
+    const auto initialized=problem.WithFixedHalos(fixed);
+    const auto & data=core::JointProblemAccess::Get(initialized);
+    ASSERT_EQ(data.partition.components.size(),2u);
+    EXPECT_EQ(data.domain.atoms.size(),2u);
+    ASSERT_EQ(data.partition.components[0].atoms.size(),1u);
+    ASSERT_EQ(data.partition.components[1].atoms.size(),1u);
+    EXPECT_EQ(data.partition.components[0].atoms.front(),0);
+    EXPECT_EQ(data.partition.components[1].atoms.front(),1);
+    EXPECT_EQ(data.fixed_halos,fixed);
+
+    const auto fit=core::FitJointComponents(initialized,{f.b[0],f.b[1]});
+    EXPECT_EQ(fit.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    ASSERT_EQ(fit.components.size(),2u);
+    ASSERT_TRUE(fit.assembled_state);
+    EXPECT_EQ(fit.assembled_state->b.size(),2u);
+    const auto saved=core::CaptureJointAnalysisResult(fit);
+    EXPECT_EQ(saved.fixed_halos,fixed);
+    for(const auto & component:saved.components)
+    {
+        ASSERT_EQ(component.atoms.size(),1u);
+        EXPECT_LT(component.atoms.front(),2u);
+    }
+    const auto decoded=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved));
+    EXPECT_EQ(decoded.fixed_halos,fixed);
+    rhbm_gem::data_internal::ApplyJointStageEstimates(*f.model,decoded,"shared-fixed-halo");
+    const auto halo_stage=rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(3))
+        .GetStageEstimate(rhbm_gem::FittingStage::Second);
+    ASSERT_TRUE(halo_stage.point);
+    EXPECT_EQ(halo_stage.source.role,rhbm_gem::FittingRole::Halo);
+    EXPECT_TRUE(halo_stage.source.fixed_from_first_stage);
+    EXPECT_EQ(halo_stage.convergence,rhbm_gem::JointCheckStatus::NotRun);
+
+    const std::array<std::pair<int,double>,2> samples{{{1,-1.2},{2,1.2}}};
+    for(const auto & [target_id,x]:samples)
+    {
+        const SamplingPointList point{{0.0,{x,0.0,0.0},true}};
+        const auto raw=core::detail::BuildLocalPotentialSampleList(*f.map,point);
+        f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*f.model->FindAtomPtr(target_id),raw);
+        const auto peelings=core::detail::BuildPostFitPeelingSamples(
+            *f.map,*f.model,problem,std::nullopt,&decoded);
+        const auto & peeled=peelings.at(target_id);
+        ASSERT_EQ(peeled.neighbor_count,1u);
+        ASSERT_TRUE(peeled.samples.front().response) << peeled.samples.front().reason;
+        const auto squared=sim::SupportSquare(point.front().position,f.model->FindAtomPtr(3)->GetPosition());
+        const auto basis=n::EvaluateKernel(squared,fixed.front().width,2.5);
+        EXPECT_NEAR(*peeled.samples.front().response,raw.front().response-fixed.front().amplitude*basis.gaussian,1e-11);
+        const auto prepared=core::detail::BuildPostJointLocalSamples(
+            *f.map,*f.model,problem,target_id,peeled,decoded);
+        EXPECT_EQ(prepared.samples.size(),1u);
+        EXPECT_THROW(core::detail::BuildPostJointLocalSamples(
+            *f.map,*f.model,problem,3,peeled,decoded),std::invalid_argument);
+    }
+    f.model->SelectAllAtoms();
+    f.model->EditAnalysis().InitializeFromSelection();
+    rhbm_gem::data_internal::ApplyJointStageEstimates(*f.model,decoded,"shared-fixed-halo");
+    core::FitOptions group_options; group_options.estimator=core::PotentialEstimator::JOINT_COMPONENTS;
+    group_options.quiet_mode=true;
+    core::RunGroupPotentialFitting(*f.model,group_options);
+    std::size_t target_exclusions{};
+    for(const auto & key:f.model->GetAnalysisView().CollectAtomGroupKeys())
+    {
+        const auto summary=f.model->GetAnalysisView().GetGroupParameterSummary(key);
+        ASSERT_TRUE(summary);
+        target_exclusions+=summary->excluded_count;
+        EXPECT_EQ(std::find(summary->member_ids.begin(),summary->member_ids.end(),3),summary->member_ids.end());
+    }
+    EXPECT_EQ(target_exclusions,2u);
+}
+
 TEST(JointComponentPartialSelectionTest, FixedHaloResponseUsesRawScaleAndReplaysFullResidual)
 {
     auto f=joint_partial_test::Make("partial");
@@ -336,6 +466,46 @@ TEST(JointComponentPartialSelectionTest, FixedHaloResponseUsesRawScaleAndReplays
         std::abs(fixed_halo_charge_gradient),std::abs(fixed_halo_width_gradient)});
     EXPECT_GT(fixed_halo_gradient,1e-12);
     EXPECT_EQ(noisy_fixed.FixedHalos(),fixed);
+
+    auto snapshot=core::CaptureJointAnalysisResult(fit);
+    EXPECT_EQ(snapshot.parameterization_contract,rhbm_gem::JointTargetOnlyFixedHaloParameterizationContract);
+    EXPECT_EQ(snapshot.fixed_halos,fixed);
+    ASSERT_TRUE(snapshot.assembled_state);
+    ASSERT_EQ(snapshot.assembled_state->b.size(),1u);
+    const auto decoded=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(snapshot));
+    EXPECT_EQ(decoded.parameterization_contract,rhbm_gem::JointTargetOnlyFixedHaloParameterizationContract);
+    EXPECT_EQ(decoded.fixed_halos,fixed);
+    ASSERT_TRUE(decoded.assembled_state);
+    ASSERT_EQ(decoded.assembled_state->b.size(),1u);
+
+    rhbm_gem::data_internal::ApplyJointStageEstimates(*f.model,decoded,"fixed-halo-roundtrip");
+    const auto target_stage=rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1))
+        .GetStageEstimate(rhbm_gem::FittingStage::Second);
+    ASSERT_TRUE(target_stage.point);
+    EXPECT_EQ(target_stage.source.role,rhbm_gem::FittingRole::Target);
+    EXPECT_FALSE(target_stage.source.fixed_from_first_stage);
+    const auto halo_stage=rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(2))
+        .GetStageEstimate(rhbm_gem::FittingStage::Second);
+    ASSERT_TRUE(halo_stage.point);
+    EXPECT_DOUBLE_EQ(halo_stage.point->GetAmplitude(),fixed[0].amplitude);
+    EXPECT_DOUBLE_EQ(halo_stage.point->GetWidth(),fixed[0].width);
+    EXPECT_DOUBLE_EQ(halo_stage.point->GetOffset(),0.0);
+    EXPECT_EQ(halo_stage.reason,"fixed-from-first-stage");
+    EXPECT_EQ(halo_stage.convergence,rhbm_gem::JointCheckStatus::NotRun);
+    EXPECT_EQ(halo_stage.source.role,rhbm_gem::FittingRole::Halo);
+    EXPECT_TRUE(halo_stage.source.fixed_from_first_stage);
+
+    const SamplingPointList center{{0.0,{0.0,0.0,0.0},true}};
+    auto raw=core::detail::BuildLocalPotentialSampleList(*f.map,center);
+    f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*f.model->FindAtomPtr(1),raw);
+    const auto peeled=core::detail::BuildPostFitPeelingSamples(
+        *f.map,*f.model,problem,std::nullopt,&decoded).at(1);
+    ASSERT_EQ(peeled.samples.size(),1u);
+    ASSERT_TRUE(peeled.samples[0].response) << peeled.samples[0].reason;
+    EXPECT_EQ(peeled.neighbor_count,1u);
+    const auto halo_square=sim::SupportSquare(center[0].position,f.model->FindAtomPtr(2)->GetPosition());
+    const auto halo_basis=n::EvaluateKernel(halo_square,fixed[0].width,2.5);
+    EXPECT_NEAR(*peeled.samples[0].response,raw[0].response-fixed[0].amplitude*halo_basis.gaussian,1e-12);
 }
 
 TEST(JointComponentPartialSelectionTest, NonleadingTargetMapsBackToFullContributorIdentity)
@@ -502,7 +672,7 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesHaloHistoryAndRo
         EXPECT_EQ(rhbm_gem::AtomLocalPotentialView::For(*atom).GetEstimateMDPDE(rhbm_gem::FittingStage::Second).GetWidth(),.91);
     const auto saved=core::CaptureJointAnalysisResult(fit);
     const auto encoded=rhbm_gem::joint_result_io::Encode(saved);
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),13);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),14);
     const auto decoded=rhbm_gem::joint_result_io::Decode(encoded);
     ASSERT_TRUE(decoded.selection_domain); EXPECT_EQ(decoded.selection_domain->target_indices,(std::vector<std::size_t>{0}));
     ASSERT_TRUE(decoded.selection_domain->fixed_halo_selection);
@@ -541,11 +711,12 @@ TEST(JointComponentPartialSelectionTest, FixedHaloSelectionPersistsThroughJsonAn
     rhbm_gem::MapObject map({11,1,1},{.5,.5,.5},{-2.5,0,0},std::move(values));
     const auto problem=core::BuildJointProblem(map,model);
     const auto initialized=problem.WithFixedHalos({
-        {1,"20",2.,.5,0.,17,0,std::string(rhbm_gem::FixedHaloParameterSourceContractVersion)},
-        {2,"30",2.,.5,0.,17,0,std::string(rhbm_gem::FixedHaloParameterSourceContractVersion)}});
+        {1,"20",2.,.5,0.,17,0,std::string(rhbm_gem::FixedHaloParameterSourceContractVersion),true},
+        {2,"30",2.,.5,0.,17,0,std::string(rhbm_gem::FixedHaloParameterSourceContractVersion),true}});
     const auto fit=core::FitJointComponents(initialized,{.5,.5,.5});
     const auto saved=core::CaptureJointAnalysisResult(fit);
     const auto decoded=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved));
+    EXPECT_EQ(decoded.fixed_halos,initialized.FixedHalos());
     ASSERT_TRUE(decoded.selection_domain->fixed_halo_selection);
     EXPECT_EQ(decoded.selection_domain->fixed_halo_selection->candidate_halos,3u);
     EXPECT_EQ(decoded.selection_domain->fixed_halo_selection->retained_halos,2u);
@@ -556,8 +727,19 @@ TEST(JointComponentPartialSelectionTest, FixedHaloSelectionPersistsThroughJsonAn
     repository.SaveModel(model,"joint");
     const auto loaded=repository.LoadModel("joint");
     ASSERT_TRUE(loaded->GetAnalysisView().GetJointResult());
+    EXPECT_EQ(loaded->GetAnalysisView().GetJointResult()->fixed_halos,decoded.fixed_halos);
     EXPECT_EQ(loaded->GetAnalysisView().GetJointResult()->selection_domain->fixed_halo_selection,
         decoded.selection_domain->fixed_halo_selection);
+    const auto loaded_target=rhbm_gem::AtomLocalPotentialView::For(*loaded->FindAtomPtr(10))
+        .GetStageEstimate(rhbm_gem::FittingStage::Second);
+    EXPECT_EQ(loaded_target.source.role,rhbm_gem::FittingRole::Target);
+    EXPECT_FALSE(loaded_target.source.fixed_from_first_stage);
+    const auto loaded_halo=rhbm_gem::AtomLocalPotentialView::For(*loaded->FindAtomPtr(20))
+        .GetStageEstimate(rhbm_gem::FittingStage::Second);
+    EXPECT_EQ(loaded_halo.source.role,rhbm_gem::FittingRole::Halo);
+    EXPECT_TRUE(loaded_halo.source.fixed_from_first_stage);
+    ASSERT_TRUE(loaded_halo.point);
+    EXPECT_EQ(loaded_halo.reason,"fixed-from-first-stage");
 
     auto radial=decoded;
     radial.selection_domain->fixed_halo_selection->zero_support_halos=1;
@@ -845,7 +1027,11 @@ TEST(JointComponentPartialSelectionTest, OriginalBondSelectionIsPreserved)
 
 TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWithoutChangingSelection)
 {
-    auto f = joint_partial_test::Make("partial");
+    auto f = joint_partial_test::Make("weak");
+    f.map=std::make_unique<rhbm_gem::MapObject>(std::array<int,3>{101,41,41},
+        std::array<double,3>{.3,.3,.3},std::array<double,3>{-9,-6,-6},
+        std::make_unique<double[]>(101*41*41));
+    SetFixedHaloExactMap(f);
     const auto selected = f.model->GetSelectedAtoms();
     const auto bonds = f.model->GetSelectedBonds();
     const auto problem = core::BuildJointProblem(*f.map, *f.model);
@@ -864,6 +1050,9 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
     core::detail::PotentialSamplingObserverForTesting() = {};
     ASSERT_TRUE(f.model->GetAnalysisView().GetJointResult());
     const auto & result = *f.model->GetAnalysisView().GetJointResult();
+    ASSERT_TRUE(result.assembled_state) << result.initialization.reason << " components=" << result.components.size()
+        << (result.components.empty() ? std::string{} : ", stop="+result.components.front().stop_reason);
+    ASSERT_EQ(result.fixed_halos.size(),1u);
     const auto expected_stages = rhbm_gem::data_internal::BuildJointStageEstimates(result, "expected-run");
     EXPECT_EQ(f.model->GetSelectedAtoms(), selected);
     EXPECT_EQ(f.model->GetSelectedBonds(), bonds);
@@ -882,7 +1071,8 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
         EXPECT_EQ((calls[{id, "first"}]), 1);
         EXPECT_EQ(sampling_calls[id], 1);
         const auto view = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(id));
-        EXPECT_DOUBLE_EQ(view.GetFinalModel(rhbm_gem::FittingStage::First).GetWidth(), result.initialization.b[i]);
+        EXPECT_DOUBLE_EQ(view.GetFinalModel(rhbm_gem::FittingStage::First).GetWidth(),
+            result.initialization.atoms[i].mdpde[1]);
         EXPECT_FALSE(view.GetRawSamplingEntries(false).empty());
         const auto & stage = view.GetStageEstimate(rhbm_gem::FittingStage::Second);
         const auto & expected = expected_stages.at(id);
@@ -927,7 +1117,8 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
         EXPECT_FALSE(view.GetGroupMemberResult());
     }
     EXPECT_GT(local_regression_count, 0u);
-    const auto direct = n::FitFixedNeighborComponents(problem, result.initialization.b, {});
+    const auto initialized_problem=problem.WithFixedHalos(result.fixed_halos);
+    const auto direct = core::FitJointComponents(initialized_problem, result.initialization.b);
     EXPECT_EQ(result.objective, direct.objective);
     ASSERT_EQ(result.components.size(), direct.components.size());
     for (std::size_t c = 0; c < direct.components.size(); ++c)
@@ -1004,12 +1195,15 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
 TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesGridOperatorAndRetainsMissingCoverage)
 {
     auto f = joint_partial_test::Make("partial");
+    SetFixedHaloExactMap(f);
     const auto problem = core::BuildJointProblem(*f.map, *f.model);
-    auto snapshot = core::CaptureJointAnalysisResult(core::FitJointComponents(problem, f.b));
+    const auto initialized=problem.WithFixedHalos({FixedHaloFor(f,1)});
+    const auto fit=core::FitJointComponents(initialized,{f.b[0]});
+    ASSERT_TRUE(fit.assembled_state) << fit.initialization.reason << " search=" << fit.search_completed
+        << " components=" << fit.components.size()
+        << (fit.components.empty() ? std::string{} : ", stop="+fit.components.front().stop_reason);
+    const auto snapshot=core::CaptureJointAnalysisResult(fit);
     ASSERT_TRUE(snapshot.components.front().state);
-    // Make the neighbor contribution strictly negative, including zero Gaussian A.
-    snapshot.components.front().state->ac[2] = 0;
-    snapshot.components.front().state->ac[3] = -0.4;
     rhbm_gem::data_internal::ApplyJointStageEstimates(*f.model, snapshot, "peeling-test");
     auto * atom = f.model->FindAtomPtr(1);
     auto editor = f.model->EditAnalysis();
@@ -1021,11 +1215,11 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesGridOperatorAndRetain
     editor.SetAtomLocalRawSamplingEntries(*atom, raw);
     const auto view = rhbm_gem::AtomLocalPotentialView::For(*atom);
     const auto before = view.GetFinalModel(rhbm_gem::FittingStage::Second).ToVector();
-    const auto outputs = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem);
+    const auto outputs = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot);
     const auto & output = outputs.at(1);
     ASSERT_EQ(output.samples.size(), raw.size());
     ASSERT_TRUE(output.samples[0].response);
-    EXPECT_GT(*output.samples[0].response, raw[0].response);
+    EXPECT_LT(*output.samples[0].response, raw[0].response);
     const auto & neighbor = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(2))
         .GetFinalModel(rhbm_gem::FittingStage::Second);
     const auto stencil = core::detail::MakeTricubicStencil(*f.map, points[0].position);
@@ -1039,7 +1233,7 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesGridOperatorAndRetain
     EXPECT_EQ(output.samples[2].reason, "outside-joint-domain");
     editor.SetAtomPostFitPeeling(*atom, output);
     ASSERT_TRUE(view.GetLocalFittingPeelingRatio(0, 1));
-    EXPECT_LT(*view.GetLocalFittingPeelingRatio(0, 1), 0);
+    EXPECT_GT(*view.GetLocalFittingPeelingRatio(0, 1), 0);
     EXPECT_FALSE(view.GetLocalFittingPeelingRatio(0, 3));
     EXPECT_EQ(view.GetFinalModel(rhbm_gem::FittingStage::Second).ToVector(), before);
     const auto after = view.GetRawSamplingEntries(false);
@@ -1536,16 +1730,25 @@ TEST(JointComponentPartialSelectionTest, SummaryReportsMixedSourcesWithoutSnapsh
 TEST(JointComponentPartialSelectionTest, TargetOnlyPostprocessingRetainsFullContributorCoupling)
 {
     auto f = joint_partial_test::Make("partial");
+    SetFixedHaloExactMap(f);
     const auto problem = core::BuildJointProblem(*f.map, *f.model);
-    const auto snapshot = core::CaptureJointAnalysisResult(core::FitJointComponents(problem, f.b));
+    const auto initialized=problem.WithFixedHalos({FixedHaloFor(f,1)});
+    const auto fit=core::FitJointComponents(initialized,{f.b[0]});
+    ASSERT_TRUE(fit.assembled_state) << fit.initialization.reason << " search=" << fit.search_completed
+        << " components=" << fit.components.size()
+        << (fit.components.empty() ? std::string{} : ", stop="+fit.components.front().stop_reason);
+    const auto snapshot = core::CaptureJointAnalysisResult(fit);
     rhbm_gem::data_internal::ApplyJointStageEstimates(*f.model, snapshot, "output-scope");
+    const auto target_stage=rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1))
+        .GetStageEstimate(rhbm_gem::FittingStage::Second);
+    ASSERT_TRUE(target_stage.point) << target_stage.reason;
     for (const auto & atom : f.model->GetAtomList())
         f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*atom,
             core::SampleAtomMapValues(*f.map, *atom, SphereSamplingMethod::FibonacciDeterministic));
     const std::vector<std::size_t> all{0, 1};
-    const auto target = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem);
-    const auto complete = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem, all);
-    ASSERT_EQ(target.size(), 1); ASSERT_EQ(complete.size(), 2);
+    const auto target = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot);
+    const auto complete = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem,all,&snapshot);
+    ASSERT_EQ(target.size(), 1); ASSERT_EQ(complete.size(), 1);
     EXPECT_EQ(target.at(1).neighbor_count, complete.at(1).neighbor_count);
     for (std::size_t i=0; i<target.at(1).samples.size(); ++i)
     {

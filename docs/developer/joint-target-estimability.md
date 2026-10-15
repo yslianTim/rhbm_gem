@@ -1,17 +1,20 @@
 # Joint target point validation
 
-Current target evidence uses `target-point-validation-v1`. It reports whether
-the selected target or retained halo has an available point estimate from a
-converged Joint component, whether its parameters are valid, and what local
-conditioning and parameter stability diagnostics observed.
+Current target evidence uses `target-point-validation-v1` and describes selected
+targets only. It reports whether each target has an available point estimate
+from a converged Joint component, whether its parameters are valid, and what
+target-only local conditioning and parameter stability diagnostics observed.
+Supported halos use validated FirstStage `(A, B, 0)` snapshots and do not have
+Joint target point evidence.
 
 ## Current point contract
 
 The required statuses are component convergence, parameter validity, and target
 point validation. A target can receive a converged Joint point estimate when
-its component has a valid state. Poor local conditioning, an unstable bounded
-probe, or an unassessed probe is carried as point-quality evidence; it does not
-silently exclude the target or retained halo from the component.
+its component has a valid state under the fixed FirstStage halo contribution.
+Poor local conditioning, an unstable bounded probe, or an unassessed probe is
+carried as point-quality evidence; it does not silently exclude the target from
+the component. This qualification does not certify FirstStage halo accuracy.
 
 Per-atom quality records contain the component status, parameter validity,
 local-conditioning status and block IDs, parameter-stability status and block
@@ -20,11 +23,11 @@ FixedNeighbor blocks at the accepted endpoint. They do not establish global
 identifiability, estimate marginal parameter uncertainty, or replace a global
 multi-start analysis.
 
-`JointStageAdapter` reads these records and passes valid target and retained
-halo points onward. `PostJointLocalValidation` still applies the existing local
-qualification before publishing post-Joint local fits. Local MDPDE covariance
-and group information remain based on those local fits; Joint does not produce
-a global covariance.
+`JointStageAdapter` reads these records for targets and separately publishes
+fixed halo values with FirstStage source provenance. `PostJointLocalValidation`
+still applies the existing local qualification before publishing post-Joint
+local fits. Local MDPDE covariance and group information remain based on those
+target-local fits; Joint does not produce a global covariance.
 
 ## Historical target-estimability records
 

@@ -14,6 +14,10 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
     const JointAnalysisResult & result, const std::string & run_id)
 {
     std::map<int, LocalStageEstimate> estimates;
+    const bool fixed_target_only=result.parameterization_contract==JointTargetOnlyFixedHaloParameterizationContract;
+    if(fixed_target_only && (!result.selection_domain ||
+        result.selection_domain->contributor_policy!=FixedHaloContributorPolicy || result.layout))
+        throw std::invalid_argument("Invalid target-only fixed-halo result contract.");
     std::vector<int> identities;
     for (std::size_t i = 0; i < result.atom_ids.size(); ++i)
     {
@@ -27,8 +31,10 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
         if (result.selection_domain)
         {
             const auto & targets = result.selection_domain->target_indices;
-            estimate.source.role = std::binary_search(targets.begin(), targets.end(), i) ?
+            const bool target=std::binary_search(targets.begin(), targets.end(), i);
+            estimate.source.role = target ?
                 FittingRole::Target : FittingRole::Halo;
+            estimate.source.fixed_from_first_stage=fixed_target_only && !target;
         }
         estimate.reason = "missing-component-state";
         estimate.convergence = JointCheckStatus::Unavailable;
@@ -91,6 +97,42 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
                 throw std::invalid_argument("Invalid joint point estimate.");
             estimate.point = GaussianModel3D{a, b, c};
             estimate.reason.clear();
+        }
+    }
+    if(fixed_target_only)
+    {
+        std::size_t previous{};
+        for(std::size_t k=0;k<result.fixed_halos.size();++k)
+        {
+            const auto & fixed=result.fixed_halos[k];
+            if(fixed.contributor_index>=identities.size() ||
+                (k && fixed.contributor_index<=previous) ||
+                result.atom_ids[fixed.contributor_index]!=fixed.atom_id ||
+                std::binary_search(result.selection_domain->target_indices.begin(),
+                    result.selection_domain->target_indices.end(),fixed.contributor_index) ||
+                !std::isfinite(fixed.amplitude) || fixed.amplitude<0 ||
+                !std::isfinite(fixed.width) || fixed.width<=0 || fixed.charge!=0.0 ||
+                !fixed.first_stage_status || *fixed.first_stage_status!=static_cast<int>(RHBMEstimationStatus::SUCCESS) ||
+                !fixed.first_stage_fit_qualified || fixed.source_contract!=FixedHaloParameterSourceContractVersion)
+                throw std::invalid_argument("Invalid fixed FirstStage halo source.");
+            previous=fixed.contributor_index;
+            auto & estimate=estimates.at(identities[fixed.contributor_index]);
+            estimate.point=GaussianModel3D{fixed.amplitude,fixed.width,0.0};
+            estimate.reason="fixed-from-first-stage";
+            estimate.convergence=JointCheckStatus::NotRun;
+        }
+        for(std::size_t atom=0;atom<identities.size();++atom)
+        {
+            if(std::binary_search(result.selection_domain->target_indices.begin(),
+                result.selection_domain->target_indices.end(),atom)) continue;
+            auto & estimate=estimates.at(identities[atom]);
+            if(estimate.point) continue;
+            const auto initialized=std::find_if(result.initialization.atoms.begin(),result.initialization.atoms.end(),
+                [&](const auto & value){return value.id==result.atom_ids[atom];});
+            estimate.reason=initialized!=result.initialization.atoms.end() && !initialized->reason.empty() ?
+                "fixed-halo-initialization-unavailable:"+initialized->reason :
+                "fixed-halo-initialization-unavailable";
+            estimate.convergence=JointCheckStatus::Unavailable;
         }
     }
     return estimates;

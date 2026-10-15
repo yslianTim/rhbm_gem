@@ -8,17 +8,19 @@ experiments](joint-experiments.md) and [Joint component runtime](joint-component
 
 Production uses FixedNeighbor with core size 12, forward serial Gauss-Seidel,
 at most 200 sweeps, and at most one trusted accepted Profile LM update per
-block visit. The objective remains the parent-normalized FullABC least-squares
-objective. Global projected A/C KKT, width-gradient stationarity, complete
-sweep confirmation, monotone global-objective acceptance, trust checks, and
-independent endpoint replay define numerical convergence.
+block visit. Selected targets are the only free FullABC parameters. Supported
+halos contribute validated FirstStage `(A, B, 0)` values as fixed responses;
+the parent-normalized objective uses original observations for its scale.
+Target-only projected A/C KKT, width-gradient stationarity, complete sweep
+confirmation, monotone global-objective acceptance, trust checks, and
+independent full-prediction endpoint replay define numerical convergence.
 
 A converged endpoint becomes the component state even when local conditioning
 is poor or parameter probes show sensitivity. Local conditioning describes
-free A/C, projected-width, and full profile-derivative behavior within each
-FixedNeighbor block while outside neighbors are held fixed. Parameter stability
-summarizes recent sweeps and bounded local perturbation probes. Neither provides
-a global identifiability certificate.
+target free A/C, projected-width, and full profile-derivative behavior within
+each FixedNeighbor block while outside targets and fixed halos are held fixed.
+Parameter stability perturbs targets only. Neither provides a global
+identifiability certificate.
 
 Conditioning classes distinguish full-rank/ill-conditioned matrices from
 well-conditioned matrices using the provisional column-normalized
@@ -38,10 +40,12 @@ runtime convergence.
 
 Target records use `target-point-validation-v1` to report component convergence,
 parameter validity, local conditioning, parameter stability, point quality, and
-reasons. Historical `target-estimability-v1` through `v4` and their rank
-records keep their original meanings in persistence and are not converted to
-new evidence. Post-fit peeling, local MDPDE covariance, and group fitting keep
-their own validation and qualification steps.
+reasons conditional on the fixed FirstStage halo contribution. This numerical
+qualification does not certify halo statistical accuracy. Historical
+`target-estimability-v1` through `v4` and their rank records keep their original
+meanings in persistence and are not converted to new evidence. Post-fit
+peeling, local MDPDE covariance, and group fitting keep their own validation
+and qualification steps.
 
 ## Current memory controls
 

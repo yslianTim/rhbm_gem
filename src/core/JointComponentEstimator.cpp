@@ -771,6 +771,12 @@ JointFitResult FitJointComponents(const JointProblem & problem,const std::vector
 }
 JointFitResult FitJointComponentsInitialized(const JointProblem & problem,const JointInitialization & initialization)
 {
+    return detail::FitJointComponentsInitializedWithProgress(problem,initialization,{});
+}
+JointFitResult detail::FitJointComponentsInitializedWithProgress(
+    const JointProblem & problem,const JointInitialization & initialization,
+    const joint_component::JointProgressObserver & observer)
+{
     const auto & input=problem.Input();
     const auto invalid=[&](std::string reason) {
         JointFitResult out; out.problem=problem; out.initialization=initialization;
@@ -812,7 +818,7 @@ JointFitResult FitJointComponentsInitialized(const JointProblem & problem,const 
     {return invalid(std::string("fixed-halo-initialization-unavailable:")+error.what());}
     std::vector<double> target_widths; target_widths.reserve(targets.size());
     for(const auto contributor:targets) target_widths.push_back(initialization.b[contributor]);
-    auto out=FitJointComponents(initialized_problem,target_widths);
+    auto out=n::FitFixedNeighborComponents(initialized_problem,target_widths,{},observer);
     out.initialization=initialization;
     return out;
 }
@@ -847,6 +853,20 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
             data.construction_memory.estimated_peak_bytes ? std::optional<double>(static_cast<double>(data.construction_memory.estimated_peak_bytes)) : std::nullopt,
             static_cast<double>(data.construction_memory.budget_bytes),
             "resource-limit:problem-construction:"+data.construction_memory.reason});
+        return out;
+    }
+    const bool fixed_halo_policy=data.input->selection_domain &&
+        data.input->selection_domain->contributor_policy==FixedHaloContributorPolicy;
+    if(fixed_halo_policy && data.fixed_halos.size()!=
+        data.input->atom_ids.size()-data.input->selection_domain->target_indices.size())
+    {
+        JointFitResult out; out.problem=problem; out.solver_provenance=provenance();
+        out.observation_scale=data.context.scale; out.initialization.b=initial_b;
+        out.initialization.valid=false;
+        out.initialization.reason="fixed-halo-initialization-unavailable:missing-validated-first-stage-snapshot";
+        out.available_row_mask.assign(data.input->observations.size(),false);
+        out.evidence.push_back({"fixed-halo-initialization",JointCheckStatus::Unavailable,
+            JointEvidenceScope::AssembledGlobal,{},{},out.initialization.reason});
         return out;
     }
     JointFitResult out; out.problem=problem;
@@ -895,8 +915,6 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
     if(assembly.available)
     {
         const auto & state=assembly.raw;
-        const bool fixed_halo_policy=data.input->selection_domain &&
-            data.input->selection_domain->contributor_policy==FixedHaloContributorPolicy;
         if(fixed_halo_policy)
         {
             full_replay=ReplayFixedHaloFullModel(data,assembly);
@@ -992,7 +1010,18 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
         std::optional<JointSolverProvenance>{fit.solver_provenance};
     out.atom_ids=fit.problem->Input().atom_ids; out.row_ids=fit.problem->Input().row_ids;
     out.selection_domain=fit.problem->Input().selection_domain;
-    out.initialization=fit.initialization; out.costs=fit.costs;
+    out.fixed_halos=fit.problem->FixedHalos();
+    if(out.selection_domain && out.selection_domain->contributor_policy==FixedHaloContributorPolicy)
+        out.parameterization_contract=std::string(JointTargetOnlyFixedHaloParameterizationContract);
+    out.initialization=fit.initialization;
+    if(out.selection_domain && out.selection_domain->contributor_policy==FixedHaloContributorPolicy &&
+        out.initialization.b.size()==out.atom_ids.size())
+    {
+        std::vector<double> target_widths; target_widths.reserve(out.selection_domain->target_indices.size());
+        for(const auto target:out.selection_domain->target_indices) target_widths.push_back(out.initialization.b[target]);
+        out.initialization.b=std::move(target_widths);
+    }
+    out.costs=fit.costs;
     for (const auto & component:fit.components)
     {
         JointAnalysisComponent saved;

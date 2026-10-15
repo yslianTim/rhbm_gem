@@ -965,7 +965,7 @@ TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSche
     record.target_runtime_convergence=rg::JointCheckStatus::Unavailable;
 
     const auto encoded=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(encoded.at("schema_version").as_int64(),13);
+    EXPECT_EQ(encoded.at("schema_version").as_int64(),14);
     EXPECT_FALSE(encoded.as_object().contains("ranks"));
     EXPECT_EQ(encoded.at("legacy_global_rank_evidence").as_array().size(),1u);
     const auto & saved_component=encoded.at("components").as_array()[0];
@@ -1119,7 +1119,7 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     record.metadata.solver=provenance;
 
     const auto json=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(json.at("schema_version").as_int64(),13);
+    EXPECT_EQ(json.at("schema_version").as_int64(),14);
     EXPECT_EQ(json.at("components").as_array()[0].at("candidate_diagnostic").at("candidate_status").as_string(),"uncertified");
     const auto decoded=io::Decode(boost::json::serialize(json));
     ASSERT_TRUE(decoded.components.front().candidate_diagnostic);
@@ -1319,8 +1319,10 @@ TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesSourcesGeometryAnd
         const auto after=rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(id));
         const auto & a=before.GetStageEstimate(rg::FittingStage::Second);
         const auto & b=after.GetStageEstimate(rg::FittingStage::Second);
-        ASSERT_TRUE(b.point); EXPECT_EQ(a.point->ToVector(),b.point->ToVector());
+        EXPECT_EQ(a.point.has_value(),b.point.has_value());
+        if(a.point) EXPECT_EQ(a.point->ToVector(),b.point->ToVector());
         EXPECT_EQ(a.source.run_id,b.source.run_id); EXPECT_EQ(a.source.role,b.source.role);
+        EXPECT_EQ(a.source.fixed_from_first_stage,b.source.fixed_from_first_stage);
         EXPECT_EQ(a.uncertainty.status,b.uncertainty.status); EXPECT_EQ(a.uncertainty.reason,b.uncertainty.reason);
         EXPECT_EQ(a.uncertainty.covariance.has_value(),b.uncertainty.covariance.has_value());
         if(a.uncertainty.covariance) EXPECT_EQ(*a.uncertainty.covariance,*b.uncertainty.covariance);
@@ -1361,14 +1363,19 @@ TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesSourcesGeometryAnd
     EXPECT_FALSE(data_test::HasTable(dir.path()/"result.sqlite","model_atom_local_potential"));
     auto * target=f.model->FindAtomPtr(1);
     auto changed=rg::AtomLocalPotentialView::For(*target).GetStageEstimate(rg::FittingStage::Second);
-    const auto original=*changed.point; changed.point=original.WithAmplitude(original.GetAmplitude()+1);
     const auto snapshot = *f.model->GetAnalysisView().GetJointResult();
-    f.model->EditAnalysis().SetAtomStageEstimate(rg::FittingStage::Second,*target,changed);
-    EXPECT_FALSE(f.model->GetAnalysisView().GetJointResult());
-    f.model->EditAnalysis().SetJointResult(snapshot); // An explicitly reattached stale snapshot must still fail validation.
-    EXPECT_THROW(repository.SaveModel(*f.model,"joint"),std::invalid_argument);
-    const auto preserved=repository.LoadModel("joint");
-    EXPECT_EQ(rg::AtomLocalPotentialView::For(*preserved->FindAtomPtr(1)).GetFinalModel(rg::FittingStage::Second).ToVector(),original.ToVector());
+    if(changed.point)
+    {
+        const auto original=*changed.point;
+        changed.point=original.WithAmplitude(original.GetAmplitude()+1);
+        f.model->EditAnalysis().SetAtomStageEstimate(rg::FittingStage::Second,*target,changed);
+        EXPECT_FALSE(f.model->GetAnalysisView().GetJointResult());
+        f.model->EditAnalysis().SetJointResult(snapshot); // An explicitly reattached stale snapshot must still fail validation.
+        EXPECT_THROW(repository.SaveModel(*f.model,"joint"),std::invalid_argument);
+        const auto preserved=repository.LoadModel("joint");
+        EXPECT_EQ(rg::AtomLocalPotentialView::For(*preserved->FindAtomPtr(1))
+            .GetFinalModel(rg::FittingStage::Second).ToVector(),original.ToVector());
+    }
 }
 
 TEST(DataObjectPersistenceTest, VersionTwoJointEvidenceIsInvalidatedDuringNeutralMigration)

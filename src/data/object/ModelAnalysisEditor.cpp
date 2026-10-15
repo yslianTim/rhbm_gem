@@ -41,7 +41,7 @@ LocalPotentialEntry & EnsureAtomLocalPotential(
 bool SameSource(const EstimateSource & a, const EstimateSource & b)
 {
     return a.method == b.method && a.atom_id == b.atom_id && a.component_id == b.component_id &&
-        a.run_id == b.run_id && a.role == b.role;
+        a.run_id == b.run_id && a.role == b.role && a.fixed_from_first_stage==b.fixed_from_first_stage;
 }
 
 bool SameEndpoint(const LocalStageEstimate & a, const LocalStageEstimate & b)
