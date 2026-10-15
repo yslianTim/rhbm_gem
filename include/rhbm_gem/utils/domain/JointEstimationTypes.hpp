@@ -123,10 +123,22 @@ struct JointInitializationAtom
     double alpha{};
     std::size_t sample_count{};
     std::optional<int> native_status;
+    bool target{},first_stage_fit_qualified{};
     std::string reason;
     std::optional<double> original_b,used_b;
     std::string seed_source{"not-recorded"};
     std::size_t donor_count{};
+};
+inline constexpr std::string_view FixedHaloParameterSourceContractVersion="first-stage-mdpde-fixed-halo-v1";
+struct JointFixedHaloParameter
+{
+    std::size_t contributor_index{};
+    std::string atom_id;
+    double amplitude{},width{},charge{};
+    std::size_t first_stage_sample_count{};
+    std::optional<int> first_stage_status;
+    std::string source_contract{FixedHaloParameterSourceContractVersion};
+    bool operator==(const JointFixedHaloParameter &) const = default;
 };
 struct JointInitialization
 {

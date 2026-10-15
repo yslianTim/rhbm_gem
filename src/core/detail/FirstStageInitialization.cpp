@@ -41,6 +41,39 @@ void ApplyJointSeedFallback(JointInitialization & initialization)
     initialization.reason=initialization.valid ? "valid-widths" : "invalid-widths";
 }
 
+std::optional<JointFixedHaloParameter> MakeFixedHaloParameter(
+    const JointInitializationAtom & atom, std::size_t contributor_index,
+    std::string_view expected_atom_id, std::string & failure_reason)
+{
+    failure_reason.clear();
+    if (expected_atom_id.empty() || atom.id.empty())
+        failure_reason = "missing-atom-identity";
+    else if (atom.id != expected_atom_id)
+        failure_reason = "contributor-identity-mismatch";
+    else if (atom.target)
+        failure_reason = "target-is-not-fixed-halo";
+    else if (atom.seed_source == "median-fallback")
+        failure_reason = "median-width-fallback";
+    else if (!atom.native_status || !atom.first_stage_fit_qualified)
+        failure_reason = "first-stage-fitting-failure";
+    else if (!std::isfinite(atom.mdpde[0]) || !std::isfinite(atom.mdpde[1]))
+        failure_reason = "non-finite-parameters";
+    else if (atom.mdpde[0] < 0.0)
+        failure_reason = "invalid-amplitude";
+    else if (!(atom.mdpde[1] > 0.0))
+        failure_reason = "invalid-width";
+    if (!failure_reason.empty()) return std::nullopt;
+    JointFixedHaloParameter parameter;
+    parameter.contributor_index = contributor_index;
+    parameter.atom_id = atom.id;
+    parameter.amplitude = atom.mdpde[0];
+    parameter.width = atom.mdpde[1];
+    parameter.charge = 0.0;
+    parameter.first_stage_sample_count = atom.sample_count;
+    parameter.first_stage_status = atom.native_status;
+    return parameter;
+}
+
 LocalGaussianResult FitFirstStageAtom(const AtomObject & atom, const FitOptions & options)
 {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -72,6 +105,7 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
         auto * atom = workset.contributors[index];
         JointInitializationAtom record;
         record.id = std::to_string(atom->GetSerialID());
+        record.target = workset.target_mask[index];
         record.ols.fill(std::numeric_limits<double>::quiet_NaN());
         record.mdpde = record.ols;
         record.alpha = std::numeric_limits<double>::quiet_NaN();
@@ -93,7 +127,13 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
             const auto & local = view.GetGaussianResult(FittingStage::First);
             const auto ols = local.ols.GetModel().ToVector(), mdpde = local.mdpde.GetModel().ToVector();
             for (std::size_t k = 0; k < 3; ++k) { record.ols[k] = ols(static_cast<Eigen::Index>(k)); record.mdpde[k] = mdpde(static_cast<Eigen::Index>(k)); }
-            if (local.fit_result) record.native_status = static_cast<int>(local.fit_result->status);
+            if (local.fit_result)
+            {
+                record.native_status = static_cast<int>(local.fit_result->status);
+                record.first_stage_fit_qualified =
+                    local.fit_result->status == RHBMEstimationStatus::SUCCESS &&
+                    local.fit_result->Qualification() != RHBMSolveQualification::Unqualified;
+            }
             width = local.mdpde.GetModel().GetWidth();
             record.reason = std::isfinite(width) && width > 0 ? "valid-width" : "invalid-width";
         }
