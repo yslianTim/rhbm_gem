@@ -100,3 +100,21 @@ eta changes, local objective reduction, LM actual/predicted reductions and
 ratio, local A/C rank and condition, projected-width singular values, active
 nonnegative-A state, and A/C contribution cancellation ratio. Capture remains
 bounded by the explicit event, atom, and row limits.
+
+## Weak-width trial safeguard
+
+The production profile search now performs a detailed width-Jacobian check
+only when an LM proposal changes a log-width by more than `ln(10)`. It projects
+the proposed step onto the right-singular subspace below the existing local
+rank threshold. The step is rejected only when at least 95% lies in that weak
+subspace and its local objective decrease is no larger than the existing
+objective-replay enclosure (`1e-12 + 2e-12 |F_before|`). LM then shrinks its
+trust-region radius and retries; the candidate does not replace the accepted
+state. There is no width bound or objective change.
+
+This rule deliberately does not veto the captured Sweep 3 update: its local
+objective decrease was about `9.23e-6`, far above the replay enclosure, even
+though the endpoint's projected-width information was weak. The trajectory now
+records the proposed step's weak-subspace fraction and whether this narrow
+replay-scale rejection fired. This preserves material descent while stopping
+only large moves whose apparent improvement is within replay uncertainty.

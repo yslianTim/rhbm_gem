@@ -340,6 +340,21 @@ TEST(JointFixedNeighborBlockCoordinateTest, FixedWidthOracleOptimizesAcWithoutCh
     EXPECT_GT(result.final_sweep->global_width_gradient_inf_norm,1e-12);
 }
 
+TEST(JointFixedNeighborBlockCoordinateTest, WeakWidthSafeguardRequiresLargeWeakAndReplayScaleStep)
+{
+    n::Matrix jacobian=n::Matrix::Zero(2,2); jacobian(0,0)=1; jacobian(1,1)=1e-16;
+    n::Vector step(2); step<<0,12;
+    const n::RankPolicy rank{100,2,2};
+    const auto assessment=n::AssessWeakWidthStep(jacobian,step,rank);
+    ASSERT_TRUE(assessment.available);
+    EXPECT_NEAR(assessment.weak_step_fraction,1.0,1e-14);
+    EXPECT_TRUE(n::RejectWeakWidthTrial(12,assessment.weak_step_fraction,1.0,1.0));
+    EXPECT_FALSE(n::RejectWeakWidthTrial(12,assessment.weak_step_fraction,1.0,0.99));
+    EXPECT_FALSE(n::RejectWeakWidthTrial(2,assessment.weak_step_fraction,1.0,1.0));
+    EXPECT_FALSE(n::RejectWeakWidthTrial(12,0.0,1.0,1.0));
+    EXPECT_FALSE(n::RejectWeakWidthTrial(12,assessment.weak_step_fraction,1.0,1.01));
+}
+
 TEST(JointFixedNeighborBlockCoordinateTest, FailedBlockReportsLocalDesignAndHaloSupportDiagnostics)
 {
     rhbm_gem::core::JointProblemInput input;

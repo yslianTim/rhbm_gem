@@ -28,7 +28,9 @@ struct FixedNeighborProfileTrial
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     double lm_actual_decrease{unavailable},lm_predicted_decrease{unavailable},lm_ratio{unavailable};
     double accepted_local_objective_improvement{unavailable},accepted_global_objective_improvement{unavailable};
+    double weak_width_step_fraction{unavailable};
     bool lm_proposed_acceptance{};
+    bool weak_width_guard_rejected{};
     std::vector<double> projected_width_singular_values;
     std::string acceptance_reason;
     struct AtomState

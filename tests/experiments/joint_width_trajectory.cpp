@@ -104,6 +104,8 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
                 {"lm_actual_decrease",Number(trial.lm_actual_decrease)},
                 {"lm_predicted_decrease",Number(trial.lm_predicted_decrease)},
                 {"lm_ratio",Number(trial.lm_ratio)},{"lm_proposed_acceptance",trial.lm_proposed_acceptance},
+                {"weak_width_step_fraction",Number(trial.weak_width_step_fraction)},
+                {"weak_width_guard_rejected",trial.weak_width_guard_rejected},
                 {"projected_width_singular_values",[&] {
                     json::array values;
                     for(const auto value:trial.projected_width_singular_values) values.push_back(Number(value));

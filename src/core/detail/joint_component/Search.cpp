@@ -1,12 +1,40 @@
 #include "Numerics.hpp"
+#include "CompactSvd.hpp"
 #include "ResourceWork.hpp"
 #include "InstrumentedLM.hpp"
 #include "TiledDerivative.hpp"
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <ctime>
 
 namespace rhbm_gem::core::joint_component {
+WeakWidthStepAssessment AssessWeakWidthStep(const Matrix & jacobian,VectorRef step,const RankPolicy & policy)
+{
+    WeakWidthStepAssessment out;
+    if(jacobian.rows()!=jacobian.cols() || jacobian.cols()!=step.size() ||
+        jacobian.rows()==0 || !jacobian.allFinite() || !step.allFinite()) return out;
+    const auto svd=EvaluateRank(jacobian,{policy,jacobian.cols(),-1,RankBoundary::StrictGreater},
+        nullptr,CompactSvdVectors::Right);
+    if(!svd.valid || svd.right_vectors.cols()!=step.size() || svd.singular_values.size()!=step.size()) return out;
+    const auto weak=step.size()-svd.rank;
+    const double norm=step.norm();
+    if(!(norm>0) || !std::isfinite(norm)) return out;
+    const double weak_norm=weak ? (svd.right_vectors.rightCols(weak).transpose()*step).norm() : 0.0;
+    out.weak_step_fraction=weak_norm/norm; out.available=std::isfinite(out.weak_step_fraction);
+    return out;
+}
+bool RejectWeakWidthTrial(double step_inf,double weak_step_fraction,double objective_before,double objective_after)
+{
+    constexpr double large_log_width_step=2.302585092994046; // one decade in width
+    constexpr double weak_direction_fraction=.95;
+    if(!std::isfinite(step_inf) || step_inf<=large_log_width_step ||
+        !std::isfinite(weak_step_fraction) || weak_step_fraction<weak_direction_fraction ||
+        !std::isfinite(objective_before) || !std::isfinite(objective_after)) return false;
+    const double improvement=objective_before-objective_after;
+    const double replay_enclosure=1e-12+2e-12*std::abs(objective_before);
+    return improvement>=0 && improvement<=replay_enclosure;
+}
 namespace {
 double Seconds(std::chrono::steady_clock::time_point start)
 {return std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();}
@@ -60,9 +88,34 @@ struct Profile
             }
             trusted=evidence.passed; row.trust=std::move(evidence);
         }
+        if(proposed && trusted && step.lpNorm<Eigen::Infinity>()>2.302585092994046)
+        {
+            const auto prepared=PrepareDerivative(cached,scale,&context);
+            const auto differential=ReduceDerivative(prepared,cached.residual,false);
+            if(differential.valid)
+            {
+                Matrix jacobian=differential.jacobian;
+                if(fixed_width_mask && fixed_width_mask->size()==static_cast<std::size_t>(jacobian.cols()))
+                    for(Eigen::Index column=0;column<jacobian.cols();++column)
+                        if((*fixed_width_mask)[static_cast<std::size_t>(column)]) jacobian.col(column).setZero();
+                const auto assessment=AssessWeakWidthStep(jacobian,step,context.rank);
+                if(assessment.available)
+                {
+                    row.weak_width_step_fraction=assessment.weak_step_fraction;
+                    const double candidate_objective=cached.certificate.objective/(scale*scale);
+                    const double old_objective=accepted_objective.value_or(candidate_objective);
+                    if(RejectWeakWidthTrial(step.lpNorm<Eigen::Infinity>(),assessment.weak_step_fraction,
+                        old_objective,candidate_objective))
+                    {
+                        row.rejection_reason="weak-width-identifiability-limited";
+                        trusted=false;
+                    }
+                }
+            }
+        }
         if(!proposed || !trusted)
             UpdateAcceptedProfileObjective(accepted_objective,cached,context.scale,false);
-        if(!trusted) failure="untrusted-trial";
+        if(!trusted) failure=row.rejection_reason.empty() ? "untrusted-trial" : row.rejection_reason;
         return trusted;
     }
     int values() const {return static_cast<int>(domain.rows);}

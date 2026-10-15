@@ -204,7 +204,10 @@ void CaptureWidthTrajectory(FixedNeighborBlockRecord & record,const SearchResult
             destination->lm_ratio=trial.lm->ratio;
             destination->lm_proposed_acceptance=trial.lm->proposed_acceptance;
         }
+        destination->weak_width_step_fraction=trial.weak_width_step_fraction;
+        destination->weak_width_guard_rejected=trial.rejection_reason=="weak-width-identifiability-limited";
         destination->acceptance_reason=!trial.endpoint.valid ? trial.endpoint.reason :
+            !trial.rejection_reason.empty() ? trial.rejection_reason :
             trial.trust && !trial.trust->passed ? "untrusted:"+trial.trust->reason :
             trial.lm && !trial.lm->proposed_acceptance ? "lm-rejected" :
             trial.accepted && trial.accepted_update.value_or(0)==0 ? "initial-profile" :

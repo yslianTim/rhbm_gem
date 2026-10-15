@@ -185,7 +185,17 @@ struct Trial
     double seconds{},factor_seconds{};
     std::optional<LmTrial> lm;
     std::optional<TrustEvidence> trust;
+    double weak_width_step_fraction{unavailable};
+    std::string rejection_reason;
 };
+struct WeakWidthStepAssessment
+{
+    double weak_step_fraction{unavailable};
+    bool available{};
+};
+WeakWidthStepAssessment AssessWeakWidthStep(const Matrix &,VectorRef,const RankPolicy &);
+bool RejectWeakWidthTrial(double step_inf,double weak_step_fraction,double objective_before,
+    double objective_after);
 struct SearchResult
 {
     Endpoint initial;
