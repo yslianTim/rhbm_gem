@@ -22,11 +22,12 @@ persistence tests.
 
 After convergence, local conditioning describes the accepted state within each
 FixedNeighbor block while external neighbors are held fixed. Parameter
-stability combines recent sweep changes with bounded local perturbations of
-sensitive blocks. These diagnostics can identify conditional numerical weakness
-or parameter sensitivity. They do not certify global parameter
-identifiability, and local perturbations do not replace global multi-start or
-block-order studies.
+stability combines recent sweep changes with bounded, sensitivity-ranked local
+perturbations of selected blocks. Conditioning and stability can identify
+conditional numerical weakness or parameter sensitivity. Target point
+validation maps block evidence through compact atom-to-block indexes. These
+diagnostics do not certify global parameter identifiability, and local
+perturbations do not replace global multi-start or block-order studies.
 
 Retired global-rank and weak-direction tools are not current entry points.
 Historical rank records remain readable with their original meaning. They are

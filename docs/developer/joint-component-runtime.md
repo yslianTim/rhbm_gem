@@ -75,22 +75,58 @@ deficiency, active amplitudes, nonfinite values, and unavailable decompositions
 remain explicit diagnostic outcomes. The accepted state and global objective
 are read-only during this assessment.
 
+Each design and Jacobian is column-normalized before its spectrum is summarized,
+so the reported condition numbers are dimensionless within their own matrix.
+The provisional warning classifies a full-rank matrix as ill-conditioned when
+`kappa * epsilon_double >= 1e-8` (roughly `kappa >= 4.5e7`). This is a binary64
+roundoff-amplification indicator, not a bound on parameter error or statistical
+uncertainty. Exact rank loss remains `Singular`; an active amplitude boundary
+remains `ActiveFace`; threshold-near cases retain their rank margin and
+threshold-sensitive flag. These classifications do not enter convergence.
+
 ## Parameter stability and point quality
 
 Cross-sweep telemetry retains only the most recent three complete-sweep
 changes. Fewer than three sweeps is reported as insufficient history; the
 trajectory summary is evidence, not a convergence threshold.
 
-Bounded local perturbation probes are limited to at most eight sensitive blocks
-per component fit. Each probe changes one block's log widths by `+/- 1e-3`,
-holds outside neighbors fixed, and uses at most 12 profile evaluations per
-seed, six accepted updates, and a two-second CPU budget per block. Both seeds
-run in temporary local state and retain the FullABC constraints, trust checks,
-objective evaluation, local KKT check, and width-stationarity check. The
-assessment records parameter changes, local prediction change, objective
-consistency, solve/evaluation counts, elapsed time, and estimated workspace.
-Blocks not probed remain `NotAssessed`; a budget limit is never reported as
-stable.
+Blocks are ranked after local conditioning by class (singular, ill-conditioned,
+active-face, then well-conditioned), descending maximum available
+`log10(condition number)`, and stable block identity. Exact free A/C rank loss
+is skipped when the local constrained refit cannot support a width probe. At
+most eight blocks are probed per fit, with at most one well-conditioned
+reference block per component.
+
+Within a selected block, unique directions are tried in this order: the weakest
+right singular direction of the column-normalized projected-width Jacobian,
+the coordinate with the largest component in that vector, and the normalized
+common mode. Equivalent directions are deduplicated; a missing weak-width
+direction stays unavailable. A/C singular vectors are never converted into
+width directions. Each direction gets positive and negative `1e-3` log-width
+seeds, with outside neighbors fixed and temporary local state. Each seed is
+limited to 12 profile evaluations including its final endpoint evaluation, six
+accepted updates, and the remaining portion of a two-second CPU budget per
+block. The total caps are 24 directions, 48 seeds, 576 profile evaluations,
+and 16 CPU seconds across eight selected blocks. Memory preflight remains
+block-local.
+
+Parameter and prediction changes use separate normalized summaries and a
+provisional `1e-8` warning tolerance; the objective difference is recorded
+separately, while objective consistency continues to mean the independent
+replay check. `Stable` requires every available direction to finish and both
+parameter summaries and prediction change to stay within their tolerances.
+Parameter change with similar predictions is `Sensitive`; changed predictions
+are `Unstable`. Failed or unselected probes remain `Unavailable` or
+`NotAssessed`, never `Stable`. These probes measure conditional local behavior,
+not global identifiability.
+
+Target point validation builds compact atom-to-block indexes for conditioning
+and stability once, then maps points and selected targets through those
+indexes. Its diagnostic mapping work is `O(P + B + M)`, where `P` is point
+count, `B` is block count, and `M` is the total number of block-core
+memberships. Duplicate identities, duplicate memberships, missing mappings,
+and out-of-range atom indices are reported as mapping evidence; they do not
+become convergence gates.
 
 The `target-point-validation-v1` evidence reports component convergence,
 parameter validity, local conditioning, parameter stability, point quality,
@@ -113,8 +149,10 @@ stage and reason.
 Production endpoint verification streams over support and does not allocate a
 global dense design or global rank factor. Local conditioning allocates only
 bounded block workspace. Parameter stability has its own local workspace
-estimate and bounded solve counts. Construction and FixedNeighbor preparation
-remain separate possible large-input bottlenecks.
+estimate and bounded solve counts. Target evidence stores two compact
+atom-to-block indexes proportional to points and core memberships; it does not
+build a global rank matrix. Construction and FixedNeighbor preparation remain
+separate possible large-input bottlenecks.
 
 ## Persistence and downstream use
 

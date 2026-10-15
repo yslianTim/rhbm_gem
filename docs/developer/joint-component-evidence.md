@@ -20,6 +20,22 @@ FixedNeighbor block while outside neighbors are held fixed. Parameter stability
 summarizes recent sweeps and bounded local perturbation probes. Neither provides
 a global identifiability certificate.
 
+Conditioning classes distinguish full-rank/ill-conditioned matrices from
+well-conditioned matrices using the provisional column-normalized
+`kappa * epsilon_double >= 1e-8` warning. The condition number describes local
+roundoff amplification; it is not an estimate of statistical parameter error.
+Stability selection sorts eligible blocks by conditioning class, available
+local condition score, and block identity. Selected blocks probe a weak
+projected-width direction, a related coordinate direction, and common mode,
+subject to the fixed block, seed, evaluation, and CPU budgets. Parameter and
+prediction changes are reported separately, and an incomplete probe is never
+reported as stable.
+
+Target point validation uses atom-to-block indexes with work proportional to
+points, blocks, and core memberships rather than scanning all blocks for every
+point. Invalid diagnostic mappings are separately reported and do not change
+runtime convergence.
+
 Target records use `target-point-validation-v1` to report component convergence,
 parameter validity, local conditioning, parameter stability, point quality, and
 reasons. Historical `target-estimability-v1` through `v4` and their rank

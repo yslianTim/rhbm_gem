@@ -33,9 +33,27 @@ the physical support graph. Its estimated peak and observed RSS are different
 measurements and should not be compared as if they described the same
 allocation.
 
+The current `ProductionScaleSingleComponentPreparationStaysBelowBudget`
+regression was rerun with 5,938,087 rows, 37,406 contributors, 74,811 support
+entries, and 3,118 blocks. It reported a 972,989,100-byte preparation peak
+estimate and a 625,051,683-byte endpoint-verification peak estimate. The whole
+test process measured 622,460,928 bytes peak RSS and completed in 263 ms. The
+synthetic test performs a no-sweep preparation check and a zero-coefficient
+streaming endpoint check; it does not fit the component or execute local
+conditioning and stability over all blocks. No physical input was used.
+
 The preparation test retains actual support and affected-row counts and
 checks the planner before expensive allocation. A synthetic passing preflight
 does not claim that a physical-data fit completed.
+
+The point-diagnostics regression separately exercises 37,406 point identities
+and 3,118 blocks. It compares component-local with assembled-global evidence
+and verifies exact linear work counts: `4P` membership visits while building
+both indexes and `3P` atom lookups for conditioning, stability, and selected
+targets. That fixture has one observation row; it isolates the point-mapping
+cost and is not a 5,938,087-row fit or a peak-RSS measurement. The test prints
+the two construction times for reference, while operation counts remain the
+deterministic complexity check.
 
 ## Retired global-rank estimates
 

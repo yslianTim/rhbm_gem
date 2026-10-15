@@ -201,7 +201,9 @@ same direct cascading model-root foreign key as other child tables. Its schema-1
 JSON codec is shared by SQLite and the public Joint file exporter; readers accept
 schemas 3 through 12. Legacy global-rank evidence remains distinguishable from
 target evidence, while schema 12 adds local conditioning and parameter-stability
-diagnostics. New contributor-selection provenance is stored with the
+diagnostics. Schema 12 may also include additive per-direction stability probes
+and work counters; older schema-12 payloads without those optional fields
+remain readable. New contributor-selection provenance is stored with the
 fixed selected observation domain. Candidate diagnostics contain parameter vectors and separate
 endpoint-verification and qualification statuses; they do not change trusted
 scientific-state availability. Legacy schemas retain their saved evidence
