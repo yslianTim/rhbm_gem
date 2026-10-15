@@ -1,9 +1,13 @@
 #include <gtest/gtest.h>
+#include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
 #include "core/detail/joint_component/ParameterStability.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "support/JointSyntheticWorkload.hpp"
+#include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <string>
+#include <utility>
 
 namespace {
 namespace n=rhbm_gem::core::joint_component;
@@ -90,6 +94,36 @@ TEST(JointParameterStabilityTest, ResourceBudgetExhaustionIsUnavailableWithoutSo
     EXPECT_EQ(result.evidence.reason.rfind("resource-limit:parameter-stability:",0),0u);
     EXPECT_EQ(result.evidence.perturbation_solves,0u);
     EXPECT_EQ(result.evidence.perturbation_evaluations,0u);
+}
+
+TEST(JointParameterStabilityTest, ProbePriorityIsSensitivityBasedAndIndependentOfInputOrder)
+{
+    const auto block=[](std::string id,std::string classification,double condition) {
+        rhbm_gem::JointBlockConditioning value; value.block_id=std::move(id);
+        value.conditioning_classification=std::move(classification);
+        value.free_ac_condition=condition; value.free_ac_rank=2; value.free_ac_columns=2;
+        return value;
+    };
+    std::vector<rhbm_gem::JointBlockConditioning> forward{
+        block("block-a-well","WellConditioned",1e2),
+        block("block-b-moderate","IllConditioned",1e7),
+        block("block-z-highly-sensitive","IllConditioned",1e10),
+        block("block-c-unavailable","Unavailable",0.)};
+    const auto identities=[](const auto & blocks,const auto & order) {
+        std::vector<std::string> out;
+        for(const auto index:order) out.push_back(blocks.at(index).block_id);
+        return out;
+    };
+    const auto forward_order=n::RankFixedNeighborStabilityProbesForTesting(forward);
+    ASSERT_FALSE(forward_order.empty());
+    EXPECT_EQ(forward.at(forward_order.front()).block_id,"block-z-highly-sensitive");
+    EXPECT_EQ(std::find_if(forward_order.begin(),forward_order.end(),[&](std::size_t index) {
+        return forward[index].block_id=="block-c-unavailable";
+    }),forward_order.end());
+    const auto expected_order=identities(forward,forward_order);
+    std::reverse(forward.begin(),forward.end());
+    const auto reverse_order=n::RankFixedNeighborStabilityProbesForTesting(forward);
+    EXPECT_EQ(identities(forward,reverse_order),expected_order);
 }
 
 TEST(JointParameterStabilityTest, ComponentFitHonorsPerturbationClaimBudgetAndPreservesPoint)

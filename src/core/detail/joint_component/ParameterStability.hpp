@@ -5,6 +5,7 @@
 namespace rhbm_gem::core::joint_component {
 inline constexpr std::size_t MaximumLocalPerturbationProfileEvaluations=12;
 inline constexpr std::size_t MaximumPerturbedBlocksPerFit=8;
+inline constexpr std::size_t MaximumRepresentativeLocalStabilityProbesPerComponent=1;
 inline constexpr double LocalWidthPerturbation=1e-3;
 inline constexpr double MaximumLocalPerturbationCpuSeconds=2.0;
 struct LocalParameterStabilityAssessment

@@ -241,4 +241,8 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
 std::optional<double> LastFixedNeighborObjective(const FixedNeighborSearchResult &);
 std::optional<double> LastFixedNeighborGradient(const FixedNeighborSearchResult &);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+std::vector<std::size_t> RankFixedNeighborStabilityProbesForTesting(
+    const std::vector<JointBlockConditioning> &);
+#endif
 }
