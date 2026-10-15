@@ -53,6 +53,10 @@ j::value Number(std::optional<double> x)
 }
 std::optional<double> OptionalNumber(const j::value & v)
 {return v.is_null() ? std::nullopt : std::optional<double>(j::value_to<double>(v));}
+j::value OptionalBoolean(std::optional<bool> value)
+{return value ? j::value(*value) : j::value(nullptr);}
+std::optional<bool> ReadOptionalBoolean(const j::value & value)
+{return value.is_null() ? std::nullopt : std::optional<bool>(j::value_to<bool>(value));}
 // Initialization diagnostics may contain failed/nonfinite estimates. These are
 // explicitly null on disk; a decoded null remains unavailable (NaN), never zero.
 template<class Range> j::array Diagnostics(const Range & values)
@@ -245,16 +249,31 @@ j::array BlockConditioning(const std::vector<JointBlockConditioning> & values)
 {
     j::array out;
     for(const auto & x:values) out.emplace_back(Object{{"block_id",x.block_id},{"status",x.status},{"reason",x.reason},
+        {"conditioning_classification",x.conditioning_classification},
         {"core_atoms",j::value_from(x.core_atoms)},{"core_atom_count",x.core_atom_count},
         {"affected_row_count",x.affected_row_count},{"free_ac_columns",x.free_ac_columns},
         {"active_amplitude_count",x.active_amplitude_count},{"free_ac_rank",OptionalSize(x.free_ac_rank)},
         {"projected_width_rank",OptionalSize(x.projected_width_rank)},{"profile_rank",OptionalSize(x.profile_rank)},
         {"workspace_peak_memory_estimate_bytes",OptionalSize(x.workspace_peak_memory_estimate_bytes)},
         {"free_ac_sigma_min",Number(x.free_ac_sigma_min)},{"free_ac_sigma_max",Number(x.free_ac_sigma_max)},
+        {"free_ac_rank_threshold",Number(x.free_ac_rank_threshold)},
+        {"free_ac_rank_threshold_margin_relative",Number(x.free_ac_rank_threshold_margin_relative)},
+        {"free_ac_threshold_sensitive",OptionalBoolean(x.free_ac_threshold_sensitive)},
         {"free_ac_condition",Number(x.free_ac_condition)},{"projected_width_condition",Number(x.projected_width_condition)},
+        {"projected_width_sigma_min",Number(x.projected_width_sigma_min)},
+        {"projected_width_sigma_max",Number(x.projected_width_sigma_max)},
+        {"projected_width_rank_threshold",Number(x.projected_width_rank_threshold)},
+        {"projected_width_rank_threshold_margin_relative",Number(x.projected_width_rank_threshold_margin_relative)},
+        {"projected_width_threshold_sensitive",OptionalBoolean(x.projected_width_threshold_sensitive)},
+        {"profile_sigma_min",Number(x.profile_sigma_min)},{"profile_sigma_max",Number(x.profile_sigma_max)},
+        {"profile_rank_threshold",Number(x.profile_rank_threshold)},
+        {"profile_rank_threshold_margin_relative",Number(x.profile_rank_threshold_margin_relative)},
+        {"profile_threshold_sensitive",OptionalBoolean(x.profile_threshold_sensitive)},
         {"profile_condition",Number(x.profile_condition)},{"free_ac_status",x.free_ac_status},
         {"free_ac_reason",x.free_ac_reason},{"projected_width_status",x.projected_width_status},
-        {"projected_width_reason",x.projected_width_reason},{"profile_status",x.profile_status},
+        {"projected_width_reason",x.projected_width_reason},{"free_ac_conditioning",x.free_ac_conditioning},
+        {"projected_width_conditioning",x.projected_width_conditioning},{"profile_conditioning",x.profile_conditioning},
+        {"profile_status",x.profile_status},
         {"profile_reason",x.profile_reason}});
     return out;
 }
@@ -266,6 +285,8 @@ std::vector<JointBlockConditioning> ReadBlockConditioning(const j::value & value
         const auto & o=item.as_object(); JointBlockConditioning x;
         x.block_id=Read<std::string>(o,"block_id"); x.status=Read<std::string>(o,"status");
         x.reason=Read<std::string>(o,"reason"); x.core_atoms=Read<std::vector<std::size_t>>(o,"core_atoms");
+        if(o.contains("conditioning_classification"))
+            x.conditioning_classification=Read<std::string>(o,"conditioning_classification");
         x.core_atom_count=Read<std::size_t>(o,"core_atom_count");
         x.affected_row_count=Read<std::size_t>(o,"affected_row_count");
         x.free_ac_columns=Read<std::size_t>(o,"free_ac_columns");
@@ -277,11 +298,35 @@ std::vector<JointBlockConditioning> ReadBlockConditioning(const j::value & value
         x.free_ac_sigma_min=OptionalNumber(o.at("free_ac_sigma_min"));
         x.free_ac_sigma_max=OptionalNumber(o.at("free_ac_sigma_max"));
         x.free_ac_condition=OptionalNumber(o.at("free_ac_condition"));
+        if(o.contains("free_ac_rank_threshold")) x.free_ac_rank_threshold=OptionalNumber(o.at("free_ac_rank_threshold"));
+        if(o.contains("free_ac_rank_threshold_margin_relative"))
+            x.free_ac_rank_threshold_margin_relative=OptionalNumber(o.at("free_ac_rank_threshold_margin_relative"));
+        if(o.contains("free_ac_threshold_sensitive"))
+            x.free_ac_threshold_sensitive=ReadOptionalBoolean(o.at("free_ac_threshold_sensitive"));
         x.projected_width_condition=OptionalNumber(o.at("projected_width_condition"));
+        if(o.contains("projected_width_sigma_min")) x.projected_width_sigma_min=OptionalNumber(o.at("projected_width_sigma_min"));
+        if(o.contains("projected_width_sigma_max")) x.projected_width_sigma_max=OptionalNumber(o.at("projected_width_sigma_max"));
+        if(o.contains("projected_width_rank_threshold"))
+            x.projected_width_rank_threshold=OptionalNumber(o.at("projected_width_rank_threshold"));
+        if(o.contains("projected_width_rank_threshold_margin_relative"))
+            x.projected_width_rank_threshold_margin_relative=OptionalNumber(o.at("projected_width_rank_threshold_margin_relative"));
+        if(o.contains("projected_width_threshold_sensitive"))
+            x.projected_width_threshold_sensitive=ReadOptionalBoolean(o.at("projected_width_threshold_sensitive"));
         x.profile_condition=OptionalNumber(o.at("profile_condition"));
+        if(o.contains("profile_sigma_min")) x.profile_sigma_min=OptionalNumber(o.at("profile_sigma_min"));
+        if(o.contains("profile_sigma_max")) x.profile_sigma_max=OptionalNumber(o.at("profile_sigma_max"));
+        if(o.contains("profile_rank_threshold")) x.profile_rank_threshold=OptionalNumber(o.at("profile_rank_threshold"));
+        if(o.contains("profile_rank_threshold_margin_relative"))
+            x.profile_rank_threshold_margin_relative=OptionalNumber(o.at("profile_rank_threshold_margin_relative"));
+        if(o.contains("profile_threshold_sensitive"))
+            x.profile_threshold_sensitive=ReadOptionalBoolean(o.at("profile_threshold_sensitive"));
         x.free_ac_status=Read<std::string>(o,"free_ac_status"); x.free_ac_reason=Read<std::string>(o,"free_ac_reason");
         x.projected_width_status=Read<std::string>(o,"projected_width_status");
         x.projected_width_reason=Read<std::string>(o,"projected_width_reason");
+        if(o.contains("free_ac_conditioning")) x.free_ac_conditioning=Read<std::string>(o,"free_ac_conditioning");
+        if(o.contains("projected_width_conditioning"))
+            x.projected_width_conditioning=Read<std::string>(o,"projected_width_conditioning");
+        if(o.contains("profile_conditioning")) x.profile_conditioning=Read<std::string>(o,"profile_conditioning");
         x.profile_status=Read<std::string>(o,"profile_status"); x.profile_reason=Read<std::string>(o,"profile_reason");
         out.push_back(std::move(x));
     }
@@ -609,11 +654,23 @@ void ValidateBlockConditioning(const JointBlockConditioning & x)
 {
     Require(!x.block_id.empty() && !x.status.empty() && !x.free_ac_status.empty() &&
         !x.projected_width_status.empty() && !x.profile_status.empty(),"local conditioning identity/status");
+    const auto valid_conditioning_class=[](const std::string & value) {
+        return value=="WellConditioned" || value=="IllConditioned" || value=="Singular" ||
+            value=="ActiveFace" || value=="Unavailable" || value=="NotAssessed";
+    };
+    Require(valid_conditioning_class(x.conditioning_classification) &&
+        valid_conditioning_class(x.free_ac_conditioning) &&
+        valid_conditioning_class(x.projected_width_conditioning) &&
+        valid_conditioning_class(x.profile_conditioning),"local conditioning classification");
     Require(!x.free_ac_rank || *x.free_ac_rank<=x.free_ac_columns,"local free-AC rank");
     Require(!x.projected_width_rank || *x.projected_width_rank<=x.core_atom_count,"local projected-width rank");
     Require(!x.profile_rank || *x.profile_rank<=x.core_atom_count,"local profile rank");
     for(const auto * value:{&x.free_ac_sigma_min,&x.free_ac_sigma_max,&x.free_ac_condition,
-        &x.projected_width_condition,&x.profile_condition})
+        &x.free_ac_rank_threshold,&x.free_ac_rank_threshold_margin_relative,
+        &x.projected_width_sigma_min,&x.projected_width_sigma_max,&x.projected_width_condition,
+        &x.projected_width_rank_threshold,&x.projected_width_rank_threshold_margin_relative,
+        &x.profile_sigma_min,&x.profile_sigma_max,&x.profile_condition,
+        &x.profile_rank_threshold,&x.profile_rank_threshold_margin_relative})
         Require(!*value || (std::isfinite(**value) && **value>=0),"local conditioning value");
 }
 void ValidateStabilityBlock(const JointBlockParameterStability & x)

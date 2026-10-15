@@ -15,8 +15,9 @@ double Seconds(Clock::time_point start)
 
 struct LocalSpectrum
 {
-    Eigen::Index rank{};
-    double minimum{unavailable},maximum{unavailable},condition{unavailable};
+    Eigen::Index rank{},columns{};
+    double minimum{unavailable},maximum{unavailable},condition{unavailable},threshold{unavailable},
+        threshold_margin_relative{unavailable};
     bool available{},threshold_sensitive{};
     std::string status{"unavailable"},reason;
 };
@@ -26,12 +27,28 @@ LocalSpectrum SpectrumOf(const Matrix & factor,Eigen::Index rows,Eigen::Index co
     LocalSpectrum out;
     if(rows<=0 || columns<=0 || factor.cols()!=columns || factor.rows()==0)
     {out.reason="empty-design"; return out;}
-    const auto svd=EvaluateRank(factor,{policy,columns,-1,RankBoundary::StrictGreater});
+    Matrix normalized=factor;
+    for(Eigen::Index column=0;column<columns;++column)
+    {
+        const double norm=normalized.col(column).norm();
+        if(norm>0) normalized.col(column)/=norm;
+    }
+    const auto svd=EvaluateRank(normalized,{policy,columns,-1,RankBoundary::StrictGreater});
     if(!svd.valid || svd.singular_values.size()==0 || !svd.singular_values.allFinite())
     {out.reason="spectrum-factorization-failed"; return out;}
-    out.available=true; out.rank=svd.rank; out.maximum=svd.singular_values(0);
+    out.available=true; out.rank=svd.rank; out.columns=columns; out.maximum=svd.singular_values(0);
     out.minimum=rows<columns ? 0.0 : svd.singular_values(svd.singular_values.size()-1);
-    out.threshold_sensitive=!CompactRankDecisionSafe(svd) && out.maximum>0;
+    out.threshold=svd.threshold;
+    if(out.maximum>0)
+    {
+        double distance=std::numeric_limits<double>::infinity();
+        for(Eigen::Index k=0;k<svd.singular_values.size();++k)
+            distance=std::min(distance,std::abs(svd.singular_values(k)-svd.threshold));
+        out.threshold_margin_relative=distance/out.maximum;
+        const double roundoff_margin=64*std::numeric_limits<double>::epsilon()*
+            static_cast<double>(std::max(normalized.rows(),normalized.cols()))*out.maximum;
+        out.threshold_sensitive=!CompactRankDecisionSafe(svd) || distance<=roundoff_margin;
+    }
     if(out.rank==columns && out.minimum>0)
     {
         out.condition=out.maximum/out.minimum;
@@ -46,20 +63,39 @@ LocalSpectrum SpectrumOf(const Matrix & factor,Eigen::Index rows,Eigen::Index co
     return out;
 }
 
+std::string ConditioningClass(const LocalSpectrum & spectrum,bool zero_column=false)
+{
+    if(zero_column) return "Singular";
+    if(!spectrum.available) return "Unavailable";
+    if(spectrum.rank<spectrum.columns || spectrum.minimum==0) return "Singular";
+    if(!std::isfinite(spectrum.condition)) return "Unavailable";
+    return spectrum.threshold_sensitive || spectrum.condition*std::numeric_limits<double>::epsilon()>=
+        LocalConditioningRoundoffAmplificationWarning ? "IllConditioned" : "WellConditioned";
+}
+
 void MarkUnavailable(JointBlockConditioning & evidence,const std::string & reason)
 {
     evidence.status="unavailable"; evidence.reason=reason;
     evidence.free_ac_status=evidence.projected_width_status=evidence.profile_status="unavailable";
     evidence.free_ac_reason=evidence.projected_width_reason=evidence.profile_reason=reason;
+    evidence.free_ac_conditioning=evidence.projected_width_conditioning=evidence.profile_conditioning="Unavailable";
+    evidence.conditioning_classification="Unavailable";
 }
 
 void SetSpectrum(std::string & status,std::string & reason,std::optional<std::size_t> & rank,
-    std::optional<double> & condition,const LocalSpectrum & spectrum)
+    std::optional<double> & minimum,std::optional<double> & maximum,std::optional<double> & condition,
+    std::optional<double> & threshold,std::optional<double> & threshold_margin,
+    std::optional<bool> & threshold_sensitive,const LocalSpectrum & spectrum)
 {
     status=spectrum.status; reason=spectrum.reason;
     if(!spectrum.available) return;
     rank=static_cast<std::size_t>(spectrum.rank);
+    if(std::isfinite(spectrum.minimum)) minimum=spectrum.minimum;
+    if(std::isfinite(spectrum.maximum)) maximum=spectrum.maximum;
     if(std::isfinite(spectrum.condition)) condition=spectrum.condition;
+    if(std::isfinite(spectrum.threshold)) threshold=spectrum.threshold;
+    if(std::isfinite(spectrum.threshold_margin_relative)) threshold_margin=spectrum.threshold_margin_relative;
+    threshold_sensitive=spectrum.threshold_sensitive;
 }
 }
 
@@ -148,7 +184,12 @@ LocalConditioningAssessment AssessFixedNeighborLocalConditioning(
         if(std::isfinite(ac_spectrum.minimum)) evidence.free_ac_sigma_min=ac_spectrum.minimum;
         if(std::isfinite(ac_spectrum.maximum)) evidence.free_ac_sigma_max=ac_spectrum.maximum;
         if(std::isfinite(ac_spectrum.condition)) evidence.free_ac_condition=ac_spectrum.condition;
+        if(std::isfinite(ac_spectrum.threshold)) evidence.free_ac_rank_threshold=ac_spectrum.threshold;
+        if(std::isfinite(ac_spectrum.threshold_margin_relative))
+            evidence.free_ac_rank_threshold_margin_relative=ac_spectrum.threshold_margin_relative;
+        evidence.free_ac_threshold_sensitive=ac_spectrum.threshold_sensitive;
     }
+    evidence.free_ac_conditioning=ConditioningClass(ac_spectrum,zero_column);
 
     const auto projected_prepared=PrepareProjectedWidthDerivative(state,context.scale,&context,-1,
         derivative_tile_rows,true);
@@ -159,7 +200,11 @@ LocalConditioningAssessment AssessFixedNeighborLocalConditioning(
         {
             const auto spectrum=SpectrumOf(projected.projected,domain.rows,eta.size(),context.rank);
             SetSpectrum(evidence.projected_width_status,evidence.projected_width_reason,
-                evidence.projected_width_rank,evidence.projected_width_condition,spectrum);
+                evidence.projected_width_rank,evidence.projected_width_sigma_min,
+                evidence.projected_width_sigma_max,evidence.projected_width_condition,
+                evidence.projected_width_rank_threshold,evidence.projected_width_rank_threshold_margin_relative,
+                evidence.projected_width_threshold_sensitive,spectrum);
+            evidence.projected_width_conditioning=ConditioningClass(spectrum);
             if(evidence.active_amplitude_count && spectrum.available)
             {
                 evidence.projected_width_status="active-face-"+evidence.projected_width_status;
@@ -170,16 +215,19 @@ LocalConditioningAssessment AssessFixedNeighborLocalConditioning(
     }
     else evidence.projected_width_reason=projected_prepared.reason;
     if(evidence.projected_width_status=="not-assessed") evidence.projected_width_status="unavailable";
+    if(evidence.projected_width_conditioning=="NotAssessed") evidence.projected_width_conditioning="Unavailable";
 
     if(evidence.active_amplitude_count)
     {
         evidence.profile_status="active-set-boundary";
         evidence.profile_reason="profile-derivative-may-switch-active-face";
+        evidence.profile_conditioning="ActiveFace";
     }
     else if(!ac_spectrum.available || ac_spectrum.rank!=p)
     {
         evidence.profile_status="unavailable";
         evidence.profile_reason="free-ac-rank-deficient";
+        evidence.profile_conditioning=ac_spectrum.available ? "Singular" : "Unavailable";
     }
     else
     {
@@ -188,6 +236,7 @@ LocalConditioningAssessment AssessFixedNeighborLocalConditioning(
         {
             evidence.profile_status="unavailable";
             evidence.profile_reason=prepared.reason;
+            evidence.profile_conditioning="Unavailable";
         }
         else
         {
@@ -196,12 +245,16 @@ LocalConditioningAssessment AssessFixedNeighborLocalConditioning(
             {
                 evidence.profile_status="unavailable";
                 evidence.profile_reason=reduced.reason;
+                evidence.profile_conditioning="Unavailable";
             }
             else
             {
                 const auto spectrum=SpectrumOf(reduced.jacobian,domain.rows,eta.size(),context.rank);
                 SetSpectrum(evidence.profile_status,evidence.profile_reason,
-                    evidence.profile_rank,evidence.profile_condition,spectrum);
+                    evidence.profile_rank,evidence.profile_sigma_min,evidence.profile_sigma_max,
+                    evidence.profile_condition,evidence.profile_rank_threshold,
+                    evidence.profile_rank_threshold_margin_relative,evidence.profile_threshold_sensitive,spectrum);
+                evidence.profile_conditioning=ConditioningClass(spectrum);
                 if(ac_spectrum.threshold_sensitive && spectrum.available)
                 {
                     evidence.profile_status="conditional-free-ac-near-singular";
@@ -214,6 +267,18 @@ LocalConditioningAssessment AssessFixedNeighborLocalConditioning(
     if(evidence.free_ac_status=="unavailable" || evidence.projected_width_status=="unavailable" ||
         evidence.profile_status=="unavailable")
     {evidence.status="partial"; evidence.reason="one-or-more-local-diagnostics-unavailable";}
+    if(evidence.free_ac_conditioning=="Singular" || evidence.projected_width_conditioning=="Singular" ||
+        evidence.profile_conditioning=="Singular")
+        evidence.conditioning_classification="Singular";
+    else if(evidence.active_amplitude_count)
+        evidence.conditioning_classification="ActiveFace";
+    else if(evidence.free_ac_conditioning=="IllConditioned" ||
+        evidence.projected_width_conditioning=="IllConditioned" || evidence.profile_conditioning=="IllConditioned")
+        evidence.conditioning_classification="IllConditioned";
+    else if(evidence.free_ac_conditioning=="Unavailable" ||
+        evidence.projected_width_conditioning=="Unavailable" || evidence.profile_conditioning=="Unavailable")
+        evidence.conditioning_classification="Unavailable";
+    else evidence.conditioning_classification="WellConditioned";
     out.seconds=Seconds(started); return out;
 }
 }

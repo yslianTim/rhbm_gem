@@ -3,6 +3,8 @@
 #include "Problem.hpp"
 
 namespace rhbm_gem::core::joint_component {
+// Provisional roundoff-amplification warning; this is diagnostic evidence only.
+inline constexpr double LocalConditioningRoundoffAmplificationWarning=1e-8;
 struct LocalConditioningAssessment
 {
     JointBlockConditioning evidence;

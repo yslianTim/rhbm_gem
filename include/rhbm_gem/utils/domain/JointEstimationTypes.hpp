@@ -161,14 +161,22 @@ struct JointCandidateDiagnostic
 struct JointBlockConditioning
 {
     std::string block_id,status{"not-assessed"},reason;
+    std::string conditioning_classification{"NotAssessed"};
     std::vector<std::size_t> core_atoms;
     std::size_t core_atom_count{},affected_row_count{},free_ac_columns{},active_amplitude_count{};
     std::optional<std::size_t> free_ac_rank,projected_width_rank,profile_rank,workspace_peak_memory_estimate_bytes;
     std::optional<double> free_ac_sigma_min,free_ac_sigma_max,free_ac_condition,
-        projected_width_condition,profile_condition;
+        free_ac_rank_threshold,free_ac_rank_threshold_margin_relative,
+        projected_width_sigma_min,projected_width_sigma_max,projected_width_condition,
+        projected_width_rank_threshold,projected_width_rank_threshold_margin_relative,
+        profile_sigma_min,profile_sigma_max,profile_condition,
+        profile_rank_threshold,profile_rank_threshold_margin_relative;
+    std::optional<bool> free_ac_threshold_sensitive,projected_width_threshold_sensitive,profile_threshold_sensitive;
     std::string free_ac_status{"not-assessed"},free_ac_reason,
         projected_width_status{"not-assessed"},projected_width_reason,
         profile_status{"not-assessed"},profile_reason;
+    std::string free_ac_conditioning{"NotAssessed"},projected_width_conditioning{"NotAssessed"},
+        profile_conditioning{"NotAssessed"};
 };
 struct JointBlockParameterStability
 {

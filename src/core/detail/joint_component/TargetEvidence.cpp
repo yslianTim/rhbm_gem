@@ -58,11 +58,10 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
             if(std::find(block.core_atoms.begin(),block.core_atoms.end(),atom)==block.core_atoms.end()) continue;
             matched=true; block_ids.push_back(block.block_id);
             if(block.status=="unavailable" || block.status=="not-assessed" ||
-                block.free_ac_status=="unavailable" || block.projected_width_status=="unavailable" ||
-                block.profile_status=="unavailable") unavailable=true;
-            adequate &= block.status=="assessed" && block.active_amplitude_count==0 &&
-                block.free_ac_status=="full-rank" && block.projected_width_status=="full-rank" &&
-                block.profile_status=="full-rank";
+                block.conditioning_classification=="Unavailable" ||
+                block.conditioning_classification=="NotAssessed") unavailable=true;
+            adequate &= block.status=="assessed" &&
+                block.conditioning_classification=="WellConditioned";
         }
         if(!matched) return std::string("NotAssessed");
         if(unavailable) return std::string("Unavailable");

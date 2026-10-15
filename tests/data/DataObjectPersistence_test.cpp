@@ -904,10 +904,21 @@ TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSche
         {"old-component-global",rg::JointEvidenceScope::ComponentLocal,1,1e-12,{1},context}};
     rg::JointBlockConditioning conditioning;
     conditioning.block_id="block-0"; conditioning.status="assessed"; conditioning.reason="";
+    conditioning.conditioning_classification="IllConditioned";
     conditioning.core_atoms={0}; conditioning.core_atom_count=1; conditioning.affected_row_count=2;
     conditioning.free_ac_columns=2; conditioning.free_ac_rank=2; conditioning.projected_width_rank=1;
     conditioning.profile_rank=1; conditioning.workspace_peak_memory_estimate_bytes=1234;
     conditioning.free_ac_sigma_min=.2; conditioning.free_ac_sigma_max=1.5; conditioning.free_ac_condition=7.5;
+    conditioning.free_ac_rank_threshold=1e-14; conditioning.free_ac_rank_threshold_margin_relative=.1;
+    conditioning.free_ac_threshold_sensitive=false; conditioning.free_ac_conditioning="WellConditioned";
+    conditioning.projected_width_sigma_min=.02; conditioning.projected_width_sigma_max=1.2;
+    conditioning.projected_width_rank_threshold=1e-14;
+    conditioning.projected_width_rank_threshold_margin_relative=.01;
+    conditioning.projected_width_threshold_sensitive=true;
+    conditioning.projected_width_conditioning="IllConditioned";
+    conditioning.profile_sigma_min=.1; conditioning.profile_sigma_max=.9;
+    conditioning.profile_rank_threshold=1e-14; conditioning.profile_rank_threshold_margin_relative=.05;
+    conditioning.profile_threshold_sensitive=false; conditioning.profile_conditioning="ActiveFace";
     conditioning.projected_width_condition=4.; conditioning.profile_condition=5.;
     conditioning.free_ac_status="full-rank"; conditioning.projected_width_status="rank-deficient";
     conditioning.profile_status="active-set-boundary";
@@ -994,6 +1005,9 @@ TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSche
     EXPECT_EQ(decoded.components.front().local_conditioning.front().block_id,"block-0");
     EXPECT_EQ(decoded.components.front().local_conditioning.front().free_ac_rank,2u);
     EXPECT_EQ(decoded.components.front().local_conditioning.front().free_ac_status,"full-rank");
+    EXPECT_EQ(decoded.components.front().local_conditioning.front().conditioning_classification,"IllConditioned");
+    EXPECT_EQ(decoded.components.front().local_conditioning.front().projected_width_sigma_min,.02);
+    EXPECT_EQ(decoded.components.front().local_conditioning.front().projected_width_threshold_sensitive,true);
     EXPECT_DOUBLE_EQ(decoded.components.front().local_conditioning_seconds,.125);
     EXPECT_EQ(decoded.components.front().local_conditioning_peak_memory_estimate_bytes,2048u);
     ASSERT_TRUE(decoded.components.front().parameter_stability);
@@ -1001,6 +1015,19 @@ TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSche
     ASSERT_TRUE(decoded.components.front().legacy_candidate_evidence);
     EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->reference_status,rg::JointCheckStatus::Failed);
     EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->rank_assessment_status,rg::JointCheckStatus::Unavailable);
+
+    auto old_schema_twelve=encoded.as_object();
+    auto & old_conditioning=old_schema_twelve["components"].as_array()[0].as_object()
+        ["local_conditioning"].as_array()[0].as_object();
+    for(const char * key:{"conditioning_classification","free_ac_rank_threshold",
+        "free_ac_rank_threshold_margin_relative","free_ac_threshold_sensitive","projected_width_sigma_min",
+        "projected_width_sigma_max","projected_width_rank_threshold","projected_width_rank_threshold_margin_relative",
+        "projected_width_threshold_sensitive","profile_sigma_min","profile_sigma_max","profile_rank_threshold",
+        "profile_rank_threshold_margin_relative","profile_threshold_sensitive","free_ac_conditioning",
+        "projected_width_conditioning","profile_conditioning"}) old_conditioning.erase(key);
+    const auto decoded_old_twelve=io::Decode(boost::json::serialize(old_schema_twelve));
+    EXPECT_EQ(decoded_old_twelve.components.front().local_conditioning.front().conditioning_classification,"NotAssessed");
+    EXPECT_EQ(decoded_old_twelve.components.front().local_conditioning.front().free_ac_condition,7.5);
 
     auto schema_eleven=encoded.as_object(); UseHistoricalGlobalRankKeys(schema_eleven);
     schema_eleven["schema_version"]=11;

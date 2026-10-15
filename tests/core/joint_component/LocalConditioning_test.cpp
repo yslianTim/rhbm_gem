@@ -2,6 +2,7 @@
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
 #include "core/detail/joint_component/LocalConditioning.hpp"
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/TargetEvidence.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include <cmath>
@@ -31,6 +32,11 @@ TEST(JointLocalConditioningTest, FullRankBlockUsesCompleteProfileDerivative)
     ASSERT_TRUE(result.evidence.free_ac_condition);
     EXPECT_TRUE(std::isfinite(*result.evidence.free_ac_condition));
     EXPECT_EQ(result.evidence.free_ac_status,"full-rank");
+    EXPECT_GT(*result.evidence.free_ac_rank_threshold,0.0);
+    EXPECT_TRUE(result.evidence.free_ac_threshold_sensitive.has_value());
+    EXPECT_TRUE(std::isfinite(*result.evidence.projected_width_sigma_min));
+    EXPECT_TRUE(std::isfinite(*result.evidence.profile_sigma_max));
+    EXPECT_EQ(result.evidence.conditioning_classification,"WellConditioned");
     ASSERT_TRUE(result.evidence.projected_width_rank);
     EXPECT_EQ(*result.evidence.projected_width_rank,1u);
     ASSERT_TRUE(result.evidence.projected_width_condition);
@@ -64,6 +70,7 @@ TEST(JointLocalConditioningTest, ExactSingularityIsReportedWithoutInventingACond
     EXPECT_LT(*result.evidence.free_ac_rank,result.evidence.free_ac_columns);
     EXPECT_FALSE(result.evidence.free_ac_condition);
     EXPECT_EQ(result.evidence.free_ac_status,"rank-deficient");
+    EXPECT_EQ(result.evidence.conditioning_classification,"Singular");
     ASSERT_TRUE(result.evidence.projected_width_rank);
     EXPECT_EQ(*result.evidence.projected_width_rank,2u);
     EXPECT_TRUE(result.evidence.projected_width_condition);
@@ -84,6 +91,47 @@ TEST(JointLocalConditioningTest, NearSingularityRetainsTheMeasuredSpectrum)
     ASSERT_TRUE(result.evidence.free_ac_condition);
     EXPECT_EQ(*result.evidence.free_ac_rank,result.evidence.free_ac_columns);
     EXPECT_GT(*result.evidence.free_ac_condition,1e3);
+    EXPECT_TRUE(result.evidence.free_ac_rank_threshold_margin_relative.has_value());
+}
+
+TEST(JointLocalConditioningTest, FullRankButIllConditionedBlockIsClassifiedSeparately)
+{
+    constexpr double offset=1e-8;
+    n::Domain domain(5,{{{0,.1},{1,.5},{2,1.0},{3,1.5},{4,2.0}},
+        {{0,.1+offset},{1,.5-offset},{2,1.0+offset},{3,1.5-offset},{4,2.0+offset}}});
+    n::Vector y=n::Vector::Zero(5),eta=n::Vector::Constant(2,std::log(.7)),beta(4);
+    beta<<1.0,.2,1.4,-.1;
+    auto context=n::CreateContext(y,2);
+    const auto result=Assess(domain,y,eta,beta,context);
+    ASSERT_TRUE(result.evidence.free_ac_rank);
+    ASSERT_TRUE(result.evidence.free_ac_condition);
+    EXPECT_EQ(*result.evidence.free_ac_rank,result.evidence.free_ac_columns);
+    EXPECT_GT(*result.evidence.free_ac_condition,1e7);
+    EXPECT_EQ(result.evidence.free_ac_status,"full-rank");
+    EXPECT_EQ(result.evidence.free_ac_conditioning,"IllConditioned");
+    EXPECT_EQ(result.evidence.conditioning_classification,"IllConditioned");
+}
+
+TEST(JointLocalConditioningTest, IllConditioningWarnsOnPointQualityWithoutChangingConvergence)
+{
+    rhbm_gem::core::JointProblemInput input;
+    input.atom_ids={"a","b"}; input.row_ids={"0","1","2","3","4"};
+    input.observations.assign(5,0.0);
+    input.support={{{0,.1},{1,.5},{2,1.0},{3,1.5},{4,2.0}},
+        {{0,.1+1e-8},{1,.5-1e-8},{2,1.0+1e-8},{3,1.5-1e-8},{4,2.0+1e-8}}};
+    input.selection_domain.emplace(); input.selection_domain->target_indices={0,1};
+    const rhbm_gem::core::JointProblem problem(std::move(input));
+    rhbm_gem::JointState state; state.ac={1.0,.2,1.4,-.1}; state.b={.7,.7};
+    state.log_b={std::log(.7),std::log(.7)}; state.width_gradient={0.,0.}; state.objective=0.;
+    rhbm_gem::JointBlockConditioning conditioning; conditioning.block_id="component/block-1";
+    conditioning.status="assessed"; conditioning.core_atoms={0,1};
+    conditioning.conditioning_classification="IllConditioned";
+    const auto evidence=n::AssessTargetPointState(problem,problem.ParameterLayout(),state,
+        rhbm_gem::JointCheckStatus::Passed,{conditioning},{},rhbm_gem::JointEvidenceScope::AssembledGlobal,5);
+    ASSERT_EQ(evidence.point_atoms.size(),2u);
+    EXPECT_EQ(evidence.point_atoms[0].local_conditioning,"Warning");
+    EXPECT_EQ(evidence.point_atoms[0].point_quality,"Warning");
+    EXPECT_EQ(n::TargetConvergence(evidence,true),rhbm_gem::JointCheckStatus::Passed);
 }
 
 TEST(JointLocalConditioningTest, ActiveAmplitudeBoundaryIsKeptAsConditionalEvidence)
@@ -98,6 +146,19 @@ TEST(JointLocalConditioningTest, ActiveAmplitudeBoundaryIsKeptAsConditionalEvide
     EXPECT_EQ(result.evidence.profile_status,"active-set-boundary");
     EXPECT_EQ(result.evidence.profile_reason,"profile-derivative-may-switch-active-face");
     EXPECT_EQ(result.evidence.projected_width_status,"active-face-full-rank");
+    EXPECT_EQ(result.evidence.profile_conditioning,"ActiveFace");
+    EXPECT_EQ(result.evidence.conditioning_classification,"ActiveFace");
+}
+
+TEST(JointLocalConditioningTest, ZeroColumnIsReportedAsSingular)
+{
+    n::Domain domain(5,{{}});
+    n::Vector y=n::Vector::Zero(5),eta(1),beta(2); eta<<std::log(.7); beta<<0.,0.;
+    auto context=n::CreateContext(y,1);
+    const auto result=Assess(domain,y,eta,beta,context);
+    EXPECT_EQ(result.evidence.free_ac_status,"zero-column");
+    EXPECT_EQ(result.evidence.free_ac_conditioning,"Singular");
+    EXPECT_EQ(result.evidence.conditioning_classification,"Singular");
 }
 
 TEST(JointLocalConditioningTest, ZeroSupportAndNonfiniteInputAreUnavailable)
@@ -122,6 +183,7 @@ TEST(JointLocalConditioningTest, ZeroSupportAndNonfiniteInputAreUnavailable)
     EXPECT_EQ(decomposition.evidence.free_ac_status,"full-rank");
     EXPECT_EQ(decomposition.evidence.projected_width_status,"unavailable");
     EXPECT_EQ(decomposition.evidence.projected_width_reason,"nonfinite-derivative");
+    EXPECT_EQ(decomposition.evidence.conditioning_classification,"Unavailable");
 }
 
 TEST(JointLocalConditioningTest, MultiBlockDiagnosticsLeaveTheAcceptedFitUnchanged)
