@@ -732,7 +732,7 @@ void ValidateParameterStability(const JointParameterStability & x)
 j::value SelectionDomain(const std::optional<JointSelectionDomain> & domain)
 {
     if(!domain) return nullptr;
-    j::value halo_eligibility=nullptr;
+    j::value halo_eligibility=nullptr,fixed_halo_selection=nullptr;
     if(domain->halo_eligibility)
     {
         const auto & provenance=*domain->halo_eligibility; j::array excluded;
@@ -744,9 +744,17 @@ j::value SelectionDomain(const std::optional<JointSelectionDomain> & domain)
             {"candidate_halos",provenance.candidate_halos},{"retained_halos",provenance.retained_halos},
             {"excluded_halos",std::move(excluded)}};
     }
+    if(domain->fixed_halo_selection)
+    {
+        const auto & provenance=*domain->fixed_halo_selection;
+        fixed_halo_selection=Object{{"minimum_observations",provenance.minimum_observations},
+            {"candidate_halos",provenance.candidate_halos},{"retained_halos",provenance.retained_halos},
+            {"zero_support_halos",provenance.zero_support_halos}};
+    }
     return Object{{"contract",domain->contract},{"target_indices",j::value_from(domain->target_indices)},
         {"observation_radius",domain->observation_radius},{"support_radius",domain->support_radius},
-        {"contributor_policy",domain->contributor_policy},{"halo_eligibility",std::move(halo_eligibility)}};
+        {"contributor_policy",domain->contributor_policy},{"halo_eligibility",std::move(halo_eligibility)},
+        {"fixed_halo_selection",std::move(fixed_halo_selection)}};
 }
 std::optional<JointSelectionDomain> ReadSelectionDomain(const j::value & value)
 {
@@ -773,6 +781,13 @@ std::optional<JointSelectionDomain> ReadSelectionDomain(const j::value & value)
                 Read<std::string>(excluded,"reason")});
         }
         out.halo_eligibility=std::move(provenance);
+    }
+    if(o.contains("fixed_halo_selection") && !o.at("fixed_halo_selection").is_null())
+    {
+        const auto & item=o.at("fixed_halo_selection").as_object();
+        out.fixed_halo_selection=JointFixedHaloSelectionProvenance{
+            Read<std::size_t>(item,"minimum_observations"),Read<std::size_t>(item,"candidate_halos"),
+            Read<std::size_t>(item,"retained_halos"),Read<std::size_t>(item,"zero_support_halos")};
     }
     return out;
 }
@@ -973,7 +988,10 @@ void Validate(const JointAnalysisResult & x,int schema_version)
     Require(!x.selection_domain || x.selection_domain->IsValid(atoms),"selection domain");
     const bool pruned_policy=x.selection_domain &&
         x.selection_domain->contributor_policy==FullABCHaloContributorPolicy;
+    const bool fixed_halo_policy=x.selection_domain &&
+        x.selection_domain->contributor_policy==FixedHaloContributorPolicy;
     Require(schema_version>=11 || !pruned_policy,"halo pruning policy requires schema 11");
+    Require(schema_version>=13 || !fixed_halo_policy,"fixed-halo policy requires schema 13");
     if(pruned_policy)
     {
         Require(x.selection_domain->halo_eligibility.has_value(),"halo pruning requires eligibility provenance");
@@ -1048,7 +1066,7 @@ void Validate(const JointAnalysisResult & x,int schema_version)
 }
 std::string Encode(const JointAnalysisResult & x)
 {
-    Validate(x,12);
+    Validate(x,13);
     const auto & m=x.metadata; const auto & t=x.costs;
     j::array components;
     for(const auto & c:x.components)
@@ -1074,7 +1092,7 @@ std::string Encode(const JointAnalysisResult & x)
             component.emplace("legacy_candidate_evidence",LegacyCandidateEvidence(c.legacy_candidate_evidence));
         components.emplace_back(std::move(component));
     }
-    Object out{{"schema_version",12},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
+    Object out{{"schema_version",13},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
         { "support_contract","sphere-fma-v1"},{"parameterization_contract",x.parameterization_contract},{"layout",Layout(x.layout)},{"metadata",Metadata(m)},{"selection_domain",SelectionDomain(x.selection_domain)},
         {"atom_ids",j::value_from(x.atom_ids)},{"row_ids",j::value_from(x.row_ids)},{"initialization",Initialization(x.initialization)},
         {"costs",Object{{"construction_seconds",t.construction_seconds},{"initialization_seconds",t.initialization_seconds},{"search_seconds",t.search_seconds},
@@ -1092,8 +1110,8 @@ JointAnalysisResult Decode(std::string_view text)
     j::parse_options options; options.numbers=j::number_precision::precise;
     const auto parsed=j::parse(text,{},options); const auto & o=parsed.as_object();
     const int version=Read<int>(o,"schema_version");
-    Require(version==3 || version==4 || version==5 || version==6 || version==7 || version==8 || version==9 || version==10 || version==11 || version==12,
-        "unsupported result schema version (expected 3, 4, 5, 6, 7, 8, 9, 10, 11 or 12)");
+    Require(version==3 || version==4 || version==5 || version==6 || version==7 || version==8 || version==9 || version==10 || version==11 || version==12 || version==13,
+        "unsupported result schema version (expected 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 or 13)");
     Require(Read<std::string>(o,"estimator")=="joint-components" &&
         Read<std::string>(o,"estimator_contract")=="guarded-joint-ls-v1" &&
         Read<std::string>(o,"objective_contract")=="parent-normalized-half-rss-v1" &&

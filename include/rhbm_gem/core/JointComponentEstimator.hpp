@@ -27,9 +27,12 @@ class JointProblem
 public:
     explicit JointProblem(JointProblemInput);
     const JointProblemInput & Input() const;
+    const std::vector<JointFixedHaloParameter> & FixedHalos() const;
+    JointProblem WithFixedHalos(std::vector<JointFixedHaloParameter>) const;
     double ObservationScale() const;
     const JointParameterLayout & ParameterLayout() const;
 private:
+    explicit JointProblem(std::shared_ptr<const joint_component::ProblemData>);
     std::shared_ptr<const joint_component::ProblemData> m_data;
     friend struct JointProblemAccess;
 };
@@ -68,11 +71,11 @@ struct JointFitResult
 };
 // Captures results without retaining the problem snapshot or running numerical checks.
 JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult &, JointAnalysisMetadata = {});
-// Selected non-hydrogen atoms fix the rows. Unselected halos are retained as
-// FullABC contributors only when they meet the recorded geometry eligibility
-// rule; pruning does not change the selected observation rows.
+// Selected non-hydrogen atoms fix the rows. Every unselected non-hydrogen atom
+// with at least one support entry on those rows is retained as a fixed halo.
 JointProblem BuildJointProblem(const MapObject &,const ModelObject &);
 JointFitResult FitJointComponents(const JointProblem &,const std::vector<double> & initial_b);
+JointFitResult FitJointComponentsInitialized(const JointProblem &,const JointInitialization &);
 // Updates successful targets' first-stage analysis only. Joint estimates are returned, not written
 // into the existing second-stage or group-fitting result fields. Replacing raw samples
 // invalidates sample-derived peeling, while fixed Second and group results are retained.

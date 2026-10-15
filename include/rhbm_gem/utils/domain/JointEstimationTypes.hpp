@@ -8,6 +8,7 @@
 
 namespace rhbm_gem {
 inline constexpr std::string_view FullABCHaloContributorPolicy="fullabc-eligible-halo-pruning-v1";
+inline constexpr std::string_view FixedHaloContributorPolicy="first-stage-fixed-halo-v1";
 struct ExcludedHaloRecord
 {
     std::string atom_id;
@@ -21,6 +22,12 @@ struct JointHaloEligibilityProvenance
     std::size_t candidate_halos{},retained_halos{};
     std::vector<ExcludedHaloRecord> excluded_halos;
 };
+struct JointFixedHaloSelectionProvenance
+{
+    std::size_t minimum_observations{1};
+    std::size_t candidate_halos{},retained_halos{},zero_support_halos{};
+    bool operator==(const JointFixedHaloSelectionProvenance &) const = default;
+};
 struct JointSelectionDomain
 {
     std::string contract{"fixed-selected-voxel-closure-v1"};
@@ -28,15 +35,26 @@ struct JointSelectionDomain
     double observation_radius{2.5},support_radius{2.5};
     std::string contributor_policy{"all-non-hydrogen"};
     std::optional<JointHaloEligibilityProvenance> halo_eligibility;
+    std::optional<JointFixedHaloSelectionProvenance> fixed_halo_selection;
     bool IsValid(std::size_t atoms) const
     {
         if(contract!="fixed-selected-voxel-closure-v1" ||
-            (contributor_policy!="all-non-hydrogen" && contributor_policy!=FullABCHaloContributorPolicy) ||
+            (contributor_policy!="all-non-hydrogen" && contributor_policy!=FullABCHaloContributorPolicy &&
+                contributor_policy!=FixedHaloContributorPolicy) ||
             observation_radius!=2.5 || support_radius!=2.5 || target_indices.empty()) return false;
         for(std::size_t i=0;i<target_indices.size();++i)
             if(target_indices[i]>=atoms || (i && target_indices[i-1]>=target_indices[i])) return false;
-        if(contributor_policy=="all-non-hydrogen") return !halo_eligibility;
-        if(!halo_eligibility) return false;
+        if(contributor_policy=="all-non-hydrogen") return !halo_eligibility && !fixed_halo_selection;
+        if(contributor_policy==FixedHaloContributorPolicy)
+        {
+            if(halo_eligibility || !fixed_halo_selection) return false;
+            const auto & policy=*fixed_halo_selection;
+            return policy.minimum_observations==1 &&
+                policy.retained_halos==atoms-target_indices.size() &&
+                policy.candidate_halos>=policy.retained_halos &&
+                policy.zero_support_halos==policy.candidate_halos-policy.retained_halos;
+        }
+        if(!halo_eligibility || fixed_halo_selection) return false;
         const auto & policy=*halo_eligibility;
         if(policy.minimum_observations<3 || policy.minimum_distinct_radial_information!=3 ||
             policy.retained_halos!=atoms-target_indices.size() ||

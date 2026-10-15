@@ -23,7 +23,8 @@ void ApplyJointSeedFallback(JointInitialization & initialization)
 {
     std::vector<double> donors;
     for(const auto & atom:initialization.atoms)
-        if(atom.reason=="valid-width" && atom.original_b && std::isfinite(*atom.original_b) && *atom.original_b>0)
+        if(atom.target && atom.reason=="valid-width" && atom.original_b &&
+            std::isfinite(*atom.original_b) && *atom.original_b>0)
             donors.push_back(*atom.original_b);
     std::sort(donors.begin(),donors.end());
     const double median=donors.empty() ? 0 : donors.size()%2 ? donors[donors.size()/2] :
@@ -32,13 +33,24 @@ void ApplyJointSeedFallback(JointInitialization & initialization)
     for(std::size_t i=0;i<initialization.atoms.size();++i)
     {
         auto & atom=initialization.atoms[i];
-        if(!(std::isfinite(initialization.b[i]) && initialization.b[i]>0) && !donors.empty())
+        if(atom.target && !(std::isfinite(initialization.b[i]) && initialization.b[i]>0) && !donors.empty())
         {initialization.b[i]=median; atom.seed_source="median-fallback"; atom.donor_count=donors.size();}
         const bool valid=std::isfinite(initialization.b[i]) && initialization.b[i]>0;
         if(valid) atom.used_b=initialization.b[i];
-        initialization.valid &= valid;
+        if(atom.target) initialization.valid &= valid;
+        else
+        {
+            std::string failure;
+            if(!MakeFixedHaloParameter(atom,i,atom.id,failure))
+            {
+                atom.reason=failure;
+                initialization.valid=false;
+                initialization.reason="fixed-halo-initialization-unavailable:"+failure;
+            }
+        }
     }
-    initialization.reason=initialization.valid ? "valid-widths" : "invalid-widths";
+    if(initialization.reason.empty())
+        initialization.reason=initialization.valid ? "valid-widths" : "invalid-widths";
 }
 
 std::optional<JointFixedHaloParameter> MakeFixedHaloParameter(

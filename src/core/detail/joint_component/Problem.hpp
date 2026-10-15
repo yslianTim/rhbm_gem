@@ -9,13 +9,16 @@ JointInitialization InitializeContributors(MapObject &,ModelObject &,const Joint
 struct ProblemData
 {
     std::shared_ptr<const JointProblemInput> input;
+    std::vector<JointFixedHaloParameter> fixed_halos;
     Domain domain{0,{}};
     VectorMap y;
     EvaluationContext context;
     ComponentPartition partition;
     JointParameterLayout layout;
     MemoryEstimate construction_memory;
-    explicit ProblemData(std::shared_ptr<const JointProblemInput> snapshot):input(std::move(snapshot)),domain(input),
+    explicit ProblemData(std::shared_ptr<const JointProblemInput> snapshot,
+        std::vector<JointFixedHaloParameter> fixed={})
+        :input(std::move(snapshot)),fixed_halos(std::move(fixed)),domain(input),
         y(input->observations.data(),static_cast<Eigen::Index>(input->observations.size())) {}
 };
 struct HaloSupportDiagnostic

@@ -216,6 +216,13 @@ JointProblem::JointProblem(JointProblemInput input)
                 throw std::invalid_argument("Ineligible halo in a FullABC-pruned joint problem.");
         }
     }
+    if(input.selection_domain && input.selection_domain->contributor_policy==FixedHaloContributorPolicy)
+    {
+        const auto & targets=input.selection_domain->target_indices;
+        for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
+            if(!std::binary_search(targets.begin(),targets.end(),atom) && input.support[atom].empty())
+                throw std::invalid_argument("Zero-support halo is present in a fixed-halo joint problem.");
+    }
     if(!std::all_of(input.observations.begin(),input.observations.end(),[](double value){return std::isfinite(value);}))
         throw std::invalid_argument("Nonfinite joint observations.");
     for(const auto & atom:input.support) for(const auto & s:atom)
@@ -263,6 +270,36 @@ JointProblem::JointProblem(JointProblemInput input)
     m_data=std::move(data);
 }
 const JointProblemInput & JointProblem::Input() const {return *m_data->input;}
+JointProblem::JointProblem(std::shared_ptr<const n::ProblemData> data):m_data(std::move(data)) {}
+const std::vector<JointFixedHaloParameter> & JointProblem::FixedHalos() const {return m_data->fixed_halos;}
+JointProblem JointProblem::WithFixedHalos(std::vector<JointFixedHaloParameter> fixed_halos) const
+{
+    const auto & input=*m_data->input;
+    if(!input.selection_domain || input.selection_domain->contributor_policy!=FixedHaloContributorPolicy)
+        throw std::invalid_argument("Fixed halos require the fixed-halo contributor policy.");
+    const auto & targets=input.selection_domain->target_indices;
+    if(fixed_halos.size()!=input.atom_ids.size()-targets.size())
+        throw std::invalid_argument("Fixed-halo initialization is incomplete.");
+    std::size_t previous{};
+    for(std::size_t k=0;k<fixed_halos.size();++k)
+    {
+        const auto & fixed=fixed_halos[k];
+        if(fixed.contributor_index>=input.atom_ids.size() ||
+            std::binary_search(targets.begin(),targets.end(),fixed.contributor_index) ||
+            input.atom_ids[fixed.contributor_index]!=fixed.atom_id || input.support[fixed.contributor_index].empty() ||
+            (k && fixed.contributor_index<=previous) || !std::isfinite(fixed.amplitude) || fixed.amplitude<0 ||
+            !std::isfinite(fixed.width) || !(fixed.width>0) || fixed.charge!=0.0 ||
+            !fixed.first_stage_status || fixed.source_contract!=FixedHaloParameterSourceContractVersion)
+            throw std::invalid_argument("Invalid fixed-halo parameter snapshot.");
+        previous=fixed.contributor_index;
+    }
+    auto data=std::make_shared<n::ProblemData>(m_data->input,std::move(fixed_halos));
+    data->context=m_data->context;
+    data->layout=m_data->layout;
+    data->partition=m_data->partition;
+    data->construction_memory=m_data->construction_memory;
+    return JointProblem(std::move(data));
+}
 double JointProblem::ObservationScale() const {return m_data->context.scale;}
 const JointParameterLayout & JointProblem::ParameterLayout() const {return m_data->layout;}
 JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
@@ -325,7 +362,7 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
     }
 
     std::size_t contributors=selected.size(),support_entries{},maximum_atom_support{};
-    std::size_t candidate_halos{},retained_halos{},excluded_halos{},provenance_bytes{};
+    std::size_t candidate_halos{},retained_halos{},zero_support_halos{};
     std::vector<JointSupport> eligibility_support;
     eligibility_support.reserve(maximum_candidate_support);
     for(const auto * atom:atoms)
@@ -351,18 +388,17 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
             if(row!=rows.end() && *row==index)
                 eligibility_support.push_back({static_cast<std::size_t>(row-rows.begin()),square});
         });
-        const auto eligibility=n::EvaluateFullABCHaloEligibility(eligibility_support);
-        if(!eligibility.eligible)
+        const auto memberships=eligibility_support.size();
+        if(memberships==0)
         {
-            if(!n::CheckedAddBytes(excluded_halos,1,excluded_halos) ||
-                !AddEstimatedBytes(provenance_bytes,1,sizeof(ExcludedHaloRecord)+64))
+            if(!n::CheckedAddBytes(zero_support_halos,1,zero_support_halos))
                 throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
             continue;
         }
-        maximum_atom_support=std::max(maximum_atom_support,eligibility.support_rows);
+        maximum_atom_support=std::max(maximum_atom_support,memberships);
         if(!n::CheckedAddBytes(retained_halos,1,retained_halos) ||
             !n::CheckedAddBytes(contributors,1,contributors) ||
-            !n::CheckedAddBytes(support_entries,eligibility.support_rows,support_entries))
+            !n::CheckedAddBytes(support_entries,memberships,support_entries))
             throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
     }
     eligibility_support.clear();
@@ -389,7 +425,6 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
         !AddEstimatedBytes(planned_snapshot,rows.size(),2*sizeof(std::string)) ||
         !AddEstimatedBytes(planned_snapshot,support_entries,2*sizeof(JointSupport)) ||
         !AddEstimatedBytes(planned_snapshot,selected.size(),2*sizeof(std::size_t)) ||
-        !n::CheckedAddBytes(planned_snapshot,provenance_bytes,planned_snapshot) ||
         !n::CheckedAddBytes(planned_snapshot,builder_resident,planned_snapshot))
         RejectBuildPreflight(shape,"size-overflow");
     shape.resident_bytes=planned_snapshot;
@@ -399,13 +434,9 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
 
     for(auto index:rows) {input.row_ids.push_back(std::to_string(index)); input.observations.push_back(map.GetMapValue(index));}
     input.selection_domain.emplace();
-    input.selection_domain->contributor_policy=std::string(FullABCHaloContributorPolicy);
-    JointHaloEligibilityProvenance halo_provenance;
-    halo_provenance.minimum_observations=n::FullABCHaloMinimumObservations;
-    halo_provenance.minimum_distinct_radial_information=n::FullABCHaloMinimumDistinctRadialInformation;
-    halo_provenance.candidate_halos=candidate_halos;
-    halo_provenance.retained_halos=retained_halos;
-    halo_provenance.excluded_halos.reserve(excluded_halos);
+    input.selection_domain->contributor_policy=std::string(FixedHaloContributorPolicy);
+    input.selection_domain->fixed_halo_selection=JointFixedHaloSelectionProvenance{
+        1,candidate_halos,retained_halos,zero_support_halos};
     for(const auto * atom:atoms)
     {
         bool selected_target=selected.contains(atom);
@@ -425,18 +456,7 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
                 if(row!=rows.end() && *row==index)
                     eligibility_support.push_back({static_cast<std::size_t>(row-rows.begin()),square});
             });
-            const auto eligibility=n::EvaluateFullABCHaloEligibility(eligibility_support);
-            if(!eligibility.eligible)
-            {
-                halo_provenance.excluded_halos.push_back({std::to_string(atom->GetSerialID()),
-                    eligibility.support_rows,eligibility.distinct_squared_distances,eligibility.reason});
-                continue;
-            }
-            support.reserve(eligibility.support_rows);
-            VisitSupport(map,*atom,[&](auto index,double square) {
-                const auto row=std::lower_bound(rows.begin(),rows.end(),index);
-                if(row!=rows.end() && *row==index) support.push_back({static_cast<std::size_t>(row-rows.begin()),square});
-            });
+            support=eligibility_support;
         }
         if(selected_target || !support.empty())
         {
@@ -445,13 +465,66 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
             input.support.push_back(std::move(support));
         }
     }
-    std::sort(halo_provenance.excluded_halos.begin(),halo_provenance.excluded_halos.end(),
-        [](const auto & left,const auto & right){return left.atom_id<right.atom_id;});
-    input.selection_domain->halo_eligibility=std::move(halo_provenance);
     return JointProblem(std::move(input));
 }
 JointFitResult FitJointComponents(const JointProblem & problem,const std::vector<double> & initial_b)
-{return n::FitFixedNeighborComponents(problem,initial_b,{});}
+{
+    const auto & input=problem.Input();
+    if(input.selection_domain && input.selection_domain->contributor_policy==FixedHaloContributorPolicy &&
+        problem.FixedHalos().size()!=input.atom_ids.size()-input.selection_domain->target_indices.size())
+    {
+        JointFitResult out; out.problem=problem; out.initialization.b=initial_b;
+        out.initialization.valid=false; out.initialization.reason="fixed-halo-initialization-unavailable";
+        out.observation_scale=problem.ObservationScale();
+        out.available_row_mask.assign(input.observations.size(),false);
+        out.evidence.push_back({"fixed-halo-initialization",JointCheckStatus::Unavailable,
+            JointEvidenceScope::AssembledGlobal,{}, {},out.initialization.reason});
+        return out;
+    }
+    return n::FitFixedNeighborComponents(problem,initial_b,{});
+}
+JointFitResult FitJointComponentsInitialized(const JointProblem & problem,const JointInitialization & initialization)
+{
+    const auto & input=problem.Input();
+    const auto invalid=[&](std::string reason) {
+        JointFitResult out; out.problem=problem; out.initialization=initialization;
+        out.initialization.valid=false; out.initialization.reason=std::move(reason);
+        out.observation_scale=problem.ObservationScale();
+        out.available_row_mask.assign(input.observations.size(),false);
+        out.evidence.push_back({"fixed-halo-initialization",JointCheckStatus::Unavailable,
+            JointEvidenceScope::AssembledGlobal,{}, {},out.initialization.reason});
+        return out;
+    };
+    if(!input.selection_domain || input.selection_domain->contributor_policy!=FixedHaloContributorPolicy)
+        return invalid("fixed-halo-initialization-unavailable:missing-fixed-halo-policy");
+    if(initialization.atoms.size()!=input.atom_ids.size() || initialization.b.size()!=input.atom_ids.size())
+        return invalid("fixed-halo-initialization-unavailable:contributor-mapping-mismatch");
+    if(!initialization.valid)
+        return invalid(initialization.reason.starts_with("fixed-halo-initialization-unavailable:") ?
+            initialization.reason : "fixed-halo-initialization-unavailable:"+initialization.reason);
+
+    const auto & targets=input.selection_domain->target_indices;
+    std::vector<JointFixedHaloParameter> fixed_halos;
+    fixed_halos.reserve(input.atom_ids.size()-targets.size());
+    for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
+    {
+        const auto & record=initialization.atoms[atom];
+        if(record.id!=input.atom_ids[atom])
+            return invalid("fixed-halo-initialization-unavailable:contributor-identity-mismatch");
+        const bool target=std::binary_search(targets.begin(),targets.end(),atom);
+        if(record.target!=target)
+            return invalid("fixed-halo-initialization-unavailable:contributor-role-mismatch");
+        if(target) continue;
+        std::string failure;
+        auto fixed=detail::MakeFixedHaloParameter(record,atom,input.atom_ids[atom],failure);
+        if(!fixed) return invalid("fixed-halo-initialization-unavailable:"+failure);
+        fixed_halos.push_back(std::move(*fixed));
+    }
+    auto initialized_problem=problem.WithFixedHalos(std::move(fixed_halos));
+    auto out=FitJointComponents(initialized_problem,initialization.b);
+    out.initialization=initialization;
+    return out;
+}
 JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,const std::vector<double> & initial_b,
     const n::FixedNeighborSearchPolicy & production_policy,const n::JointProgressObserver & observer)
 {
@@ -610,7 +683,7 @@ JointFitResult EstimateJointComponents(MapObject & map,ModelObject & model)
     const auto initialization_start=Clock::now();
     auto initialization=n::InitializeContributors(map,model,problem);
     const double initialization_seconds=Seconds(initialization_start);
-    auto out=FitJointComponents(problem,initialization.b); out.costs.initialization_seconds=initialization_seconds;
+    auto out=FitJointComponentsInitialized(problem,initialization); out.costs.initialization_seconds=initialization_seconds;
     out.costs.construction_seconds=construction_seconds;
     out.initialization=std::move(initialization);
     return out;

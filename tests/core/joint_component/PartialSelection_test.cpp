@@ -41,6 +41,16 @@ void ResetProgressPercentForTest()
     Logger::ProgressPercent(0, 1);
     testing::internal::GetCapturedStdout();
 }
+core::JointProblem FullContributorProblem(const core::JointProblem & problem)
+{
+    auto input=problem.Input();
+    if(input.selection_domain)
+    {
+        input.selection_domain->contributor_policy="all-non-hydrogen";
+        input.selection_domain->fixed_halo_selection.reset();
+    }
+    return core::JointProblem(std::move(input));
+}
 // Exhaust the whole map/catalogue independently of the builder's bounding boxes.
 void CheckReference(const rhbm_gem::MapObject & map,const rhbm_gem::ModelObject & model)
 {
@@ -65,8 +75,7 @@ void CheckReference(const rhbm_gem::MapObject & map,const rhbm_gem::ModelObject 
         rows.push_back(std::to_string(index)); observations.push_back(map.GetMapValue(index));
     }
     std::vector<std::size_t> targets;
-    std::vector<rhbm_gem::ExcludedHaloRecord> excluded;
-    std::size_t candidate_halos{};
+    std::size_t candidate_halos{},retained_halos{},zero_support_halos{};
     for(std::size_t a=0;a<support.size();++a)
     {
         const auto & atom=model.GetAtomList()[a];
@@ -74,14 +83,8 @@ void CheckReference(const rhbm_gem::MapObject & map,const rhbm_gem::ModelObject 
         if(!selected.contains(atom.get()))
         {
             ++candidate_halos;
-            auto candidate_support=support[a];
-            const auto eligibility=n::EvaluateFullABCHaloEligibility(candidate_support);
-            if(!eligibility.eligible)
-            {
-                excluded.push_back({std::to_string(atom->GetSerialID()),eligibility.support_rows,
-                    eligibility.distinct_squared_distances,eligibility.reason});
-                continue;
-            }
+            if(support[a].empty()) {++zero_support_halos; continue;}
+            ++retained_halos;
         }
         const auto k=ids.size(); ids.push_back(std::to_string(atom->GetSerialID()));
         if(selected.contains(atom.get())) targets.push_back(k);
@@ -94,22 +97,13 @@ void CheckReference(const rhbm_gem::MapObject & map,const rhbm_gem::ModelObject 
     }
     EXPECT_EQ(actual.row_ids,rows); EXPECT_EQ(actual.observations,observations); EXPECT_EQ(actual.atom_ids,ids);
     ASSERT_TRUE(actual.selection_domain); EXPECT_EQ(actual.selection_domain->target_indices,targets);
-    ASSERT_TRUE(actual.selection_domain->halo_eligibility);
-    const auto & provenance=*actual.selection_domain->halo_eligibility;
-    std::sort(excluded.begin(),excluded.end(),[](const auto & a,const auto & b){return a.atom_id<b.atom_id;});
-    EXPECT_EQ(actual.selection_domain->contributor_policy,rhbm_gem::FullABCHaloContributorPolicy);
-    EXPECT_EQ(provenance.minimum_observations,3u);
-    EXPECT_EQ(provenance.minimum_distinct_radial_information,3u);
+    ASSERT_TRUE(actual.selection_domain->fixed_halo_selection);
+    const auto & provenance=*actual.selection_domain->fixed_halo_selection;
+    EXPECT_EQ(actual.selection_domain->contributor_policy,rhbm_gem::FixedHaloContributorPolicy);
+    EXPECT_EQ(provenance.minimum_observations,1u);
     EXPECT_EQ(provenance.candidate_halos,candidate_halos);
-    EXPECT_EQ(provenance.retained_halos,ids.size()-targets.size());
-    ASSERT_EQ(provenance.excluded_halos.size(),excluded.size());
-    for(std::size_t i=0;i<excluded.size();++i)
-    {
-        EXPECT_EQ(provenance.excluded_halos[i].atom_id,excluded[i].atom_id);
-        EXPECT_EQ(provenance.excluded_halos[i].support_rows,excluded[i].support_rows);
-        EXPECT_EQ(provenance.excluded_halos[i].distinct_radial_distances,excluded[i].distinct_radial_distances);
-        EXPECT_EQ(provenance.excluded_halos[i].reason,excluded[i].reason);
-    }
+    EXPECT_EQ(provenance.retained_halos,retained_halos);
+    EXPECT_EQ(provenance.zero_support_halos,zero_support_halos);
     double square=0; for(double value:observations) square+=value*value;
     EXPECT_NEAR(problem.ObservationScale(),std::max(1.,std::sqrt(square)),1e-12*problem.ObservationScale());
 }
@@ -138,15 +132,15 @@ TEST(JointComponentPartialSelectionTest, BoundariesClippingAndNonrecursiveHalo)
     rhbm_gem::MapObject map({11,3,3},{.25,.7,1.1},{0,-.7,-1.1},std::move(values));
     CheckReference(map,model);
     const auto p=core::BuildJointProblem(map,model);
-    EXPECT_EQ(p.Input().atom_ids,(std::vector<std::string>{"1","4"}));
-    ASSERT_TRUE(p.Input().selection_domain->halo_eligibility);
-    ASSERT_EQ(p.Input().selection_domain->halo_eligibility->excluded_halos.size(),3u);
+    EXPECT_EQ(p.Input().atom_ids,(std::vector<std::string>{"1","2","4","5"}));
+    ASSERT_TRUE(p.Input().selection_domain->fixed_halo_selection);
+    EXPECT_EQ(p.Input().selection_domain->fixed_halo_selection->zero_support_halos,1u);
     const auto fit=core::FitJointComponents(p,{.5,.5});
     EXPECT_FALSE(fit.assembled_state);
     const auto & data=core::JointProblemAccess::Get(p);
     EXPECT_EQ(data.partition.unobserved_atoms.size(),1);
 }
-TEST(JointComponentPartialSelectionTest, PrunesIneligibleHalosBeforeProblemConstructionAndKeepsFixedRows)
+TEST(JointComponentPartialSelectionTest, RetainsEverySupportedHaloAndKeepsFixedRows)
 {
     std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
     for(const auto & [id,x]:std::vector<std::pair<int,double>>{{10,0.0},{20,4.5},{30,3.5},{40,30.0}})
@@ -164,36 +158,27 @@ TEST(JointComponentPartialSelectionTest, PrunesIneligibleHalosBeforeProblemConst
     const auto & input=problem.Input();
     EXPECT_EQ(input.row_ids,(std::vector<std::string>{"0","1","2","3","4","5","6","7","8","9","10"}));
     EXPECT_EQ(input.observations,(std::vector<double>{-3,-2,-1,0,1,2,3,4,5,6,7}));
-    EXPECT_EQ(input.atom_ids,(std::vector<std::string>{"10","30"}));
+    EXPECT_EQ(input.atom_ids,(std::vector<std::string>{"10","20","30"}));
     ASSERT_TRUE(input.selection_domain);
     EXPECT_EQ(input.selection_domain->target_indices,(std::vector<std::size_t>{0}));
-    ASSERT_TRUE(input.selection_domain->halo_eligibility);
-    const auto & provenance=*input.selection_domain->halo_eligibility;
-    EXPECT_EQ(input.selection_domain->contributor_policy,rhbm_gem::FullABCHaloContributorPolicy);
+    ASSERT_TRUE(input.selection_domain->fixed_halo_selection);
+    const auto & provenance=*input.selection_domain->fixed_halo_selection;
+    EXPECT_EQ(input.selection_domain->contributor_policy,rhbm_gem::FixedHaloContributorPolicy);
     EXPECT_EQ(provenance.candidate_halos,3u);
-    EXPECT_EQ(provenance.retained_halos,1u);
-    ASSERT_EQ(provenance.excluded_halos.size(),2u);
-    EXPECT_EQ(provenance.excluded_halos[0].atom_id,"20");
-    EXPECT_EQ(provenance.excluded_halos[0].support_rows,2u);
-    EXPECT_EQ(provenance.excluded_halos[0].reason,"insufficient-observations");
-    EXPECT_EQ(provenance.excluded_halos[1].atom_id,"40");
-    EXPECT_EQ(provenance.excluded_halos[1].support_rows,0u);
-    EXPECT_EQ(provenance.excluded_halos[1].reason,"insufficient-observations");
-    ASSERT_EQ(input.support.size(),2u);
-    auto retained= input.support[1];
-    const auto eligibility=n::EvaluateFullABCHaloEligibility(retained);
-    EXPECT_TRUE(eligibility.eligible);
-    EXPECT_EQ(eligibility.support_rows,4u);
-    EXPECT_EQ(eligibility.distinct_squared_distances,4u);
+    EXPECT_EQ(provenance.retained_halos,2u);
+    EXPECT_EQ(provenance.zero_support_halos,1u);
+    ASSERT_EQ(input.support.size(),3u);
+    EXPECT_EQ(input.support[1].size(),2u);
+    EXPECT_EQ(input.support[2].size(),4u);
 
     const auto workset=core::detail::MakeJointFittingWorkset(model,problem);
     EXPECT_EQ(workset.contributors.size(),input.atom_ids.size());
     EXPECT_EQ(core::detail::CollectFirstStageAtoms(workset).size(),input.atom_ids.size());
     const auto & data=core::JointProblemAccess::Get(problem);
-    EXPECT_EQ(data.construction_memory.shape.component_atoms,2u);
-    EXPECT_EQ(data.construction_memory.shape.component_support_entries,15u);
+    EXPECT_EQ(data.construction_memory.shape.component_atoms,3u);
+    EXPECT_EQ(data.construction_memory.shape.component_support_entries,17u);
 
-    auto invalid=input; invalid.support[1].resize(1);
+    auto invalid=input; invalid.support[2].clear();
     EXPECT_THROW(core::JointProblem(std::move(invalid)),std::invalid_argument);
 }
 
@@ -227,7 +212,7 @@ TEST(JointComponentPartialSelectionTest, SelectedTargetWithZeroObservationsKeeps
     EXPECT_EQ(problem.Input().selection_domain->target_indices,(std::vector<std::size_t>{0}));
 }
 
-TEST(JointComponentPartialSelectionTest, PrunedBridgeRebuildsStructuralComponents)
+TEST(JointComponentPartialSelectionTest, RetainsSupportedBridgeInStructuralComponents)
 {
     std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
     for(const auto & [id,x]:std::vector<std::pair<int,double>>{{1,0.0},{2,7.5},{3,3.75}})
@@ -238,26 +223,9 @@ TEST(JointComponentPartialSelectionTest, PrunedBridgeRebuildsStructuralComponent
     rhbm_gem::ModelObject model(std::move(atoms));
     model.SelectAtoms([](const auto & atom){return atom.GetSerialID()!=3;});
     rhbm_gem::MapObject map({6,1,1},{2.5,.1,.1},{-2.5,0,0});
-    const auto pruned=core::BuildJointProblem(map,model);
-    EXPECT_EQ(pruned.Input().atom_ids,(std::vector<std::string>{"1","2"}));
-    const auto & after=core::JointProblemAccess::Get(pruned);
-    ASSERT_EQ(after.partition.components.size(),2u);
-
-    core::JointProblemInput unpruned=pruned.Input();
-    unpruned.selection_domain->contributor_policy="all-non-hydrogen";
-    unpruned.selection_domain->halo_eligibility.reset();
-    unpruned.atom_ids.push_back("3");
-    unpruned.support.emplace_back();
-    for(std::size_t row=0;row<unpruned.row_ids.size();++row)
-    {
-        const double x=-2.5+2.5*static_cast<double>(row);
-        const double squared=(x-3.75)*(x-3.75);
-        if(squared<=6.25) unpruned.support.back().push_back({row,squared});
-    }
-    unpruned.selection_domain->target_indices={0,1};
-    const core::JointProblem unpruned_problem(std::move(unpruned));
-    const auto & before=core::JointProblemAccess::Get(unpruned_problem);
-    EXPECT_EQ(before.partition.components.size(),1u);
+    const auto problem=core::BuildJointProblem(map,model);
+    EXPECT_EQ(problem.Input().atom_ids,(std::vector<std::string>{"1","2","3"}));
+    EXPECT_EQ(core::JointProblemAccess::Get(problem).partition.components.size(),1u);
 }
 
 TEST(JointComponentPartialSelectionTest, ContributorOrderIsIndependentOfModelTraversal)
@@ -296,7 +264,7 @@ TEST(JointComponentPartialSelectionTest, ContributorOrderIsIndependentOfModelTra
 TEST(JointComponentPartialSelectionTest, BridgeAndMonolithicEquivalence)
 {
     auto f=joint_partial_test::Make("bridge"); CheckReference(*f.map,*f.model);
-    const auto p=core::BuildJointProblem(*f.map,*f.model); const auto & data=core::JointProblemAccess::Get(p);
+    const auto p=FullContributorProblem(core::BuildJointProblem(*f.map,*f.model)); const auto & data=core::JointProblemAccess::Get(p);
     ASSERT_EQ(data.partition.components.size(),1);
     auto without=p.Input(); without.selection_domain.reset(); without.atom_ids.pop_back(); without.support.pop_back();
     const core::JointProblem disconnected(without);
@@ -311,7 +279,7 @@ TEST(JointComponentPartialSelectionTest, BridgeAndMonolithicEquivalence)
 }
 TEST(JointComponentPartialSelectionTest, IdentifiableRecoveryOmissionAndOutsideDomain)
 {
-    auto f=joint_partial_test::Make("partial"); const auto p=core::BuildJointProblem(*f.map,*f.model);
+    auto f=joint_partial_test::Make("partial"); const auto p=FullContributorProblem(core::BuildJointProblem(*f.map,*f.model));
     const auto fit=core::FitJointComponents(p,f.b);
     ASSERT_EQ(fit.RuntimeConvergence(),core::JointCheckStatus::Passed); ASSERT_TRUE(fit.assembled_state);
     for(std::size_t i=0;i<f.b.size();++i)
@@ -334,14 +302,14 @@ TEST(JointComponentPartialSelectionTest, IdentifiableRecoveryOmissionAndOutsideD
     auto values=std::make_unique<double[]>(f.map->GetMapValueArraySize());
     for(std::size_t i=0;i<f.map->GetMapValueArraySize();++i) values[i]=rows.contains(std::to_string(i)) ? f.map->GetMapValue(i) : 12345;
     f.map->SetMapValueArray(std::move(values));
-    const auto changed=core::BuildJointProblem(*f.map,*f.model);
+    const auto changed=FullContributorProblem(core::BuildJointProblem(*f.map,*f.model));
     EXPECT_EQ(changed.Input().observations,p.Input().observations);
     const auto repeated=core::FitJointComponents(changed,f.b);
     EXPECT_EQ(repeated.assembled_state->ac,fit.assembled_state->ac); EXPECT_EQ(repeated.objective,fit.objective);
 }
 TEST(JointComponentPartialSelectionTest, InvalidWidthsAreNotSuccessForRetainedContributors)
 {
-    auto f=joint_partial_test::Make("weak"); const auto p=core::BuildJointProblem(*f.map,*f.model);
+    auto f=joint_partial_test::Make("weak"); const auto p=FullContributorProblem(core::BuildJointProblem(*f.map,*f.model));
     ASSERT_EQ(p.Input().atom_ids,(std::vector<std::string>{"1","2"}));
     ASSERT_TRUE(p.Input().selection_domain);
     ASSERT_EQ(p.Input().selection_domain->target_indices,(std::vector<std::size_t>{0}));
@@ -378,18 +346,15 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesHaloHistoryAndRo
         EXPECT_EQ(rhbm_gem::AtomLocalPotentialView::For(*atom).GetEstimateMDPDE(rhbm_gem::FittingStage::Second).GetWidth(),.91);
     const auto saved=core::CaptureJointAnalysisResult(fit);
     const auto encoded=rhbm_gem::joint_result_io::Encode(saved);
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),12);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),13);
     const auto decoded=rhbm_gem::joint_result_io::Decode(encoded);
     ASSERT_TRUE(decoded.selection_domain); EXPECT_EQ(decoded.selection_domain->target_indices,(std::vector<std::size_t>{0}));
-    ASSERT_TRUE(decoded.selection_domain->halo_eligibility);
-    EXPECT_EQ(decoded.selection_domain->halo_eligibility->candidate_halos,
-        saved.selection_domain->halo_eligibility->candidate_halos);
-    EXPECT_EQ(decoded.selection_domain->halo_eligibility->excluded_halos.size(),
-        saved.selection_domain->halo_eligibility->excluded_halos.size());
+    ASSERT_TRUE(decoded.selection_domain->fixed_halo_selection);
+    EXPECT_EQ(decoded.selection_domain->fixed_halo_selection,saved.selection_domain->fixed_halo_selection);
     EXPECT_EQ(decoded.initialization.data_scope,"contributor-local-sampling-may-read-outside-target-domain");
     EXPECT_EQ(rhbm_gem::joint_result_io::Encode(decoded),encoded);
     auto missing_provenance=boost::json::parse(encoded).as_object();
-    missing_provenance.at("selection_domain").as_object()["halo_eligibility"]=nullptr;
+    missing_provenance.at("selection_domain").as_object()["fixed_halo_selection"]=nullptr;
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(missing_provenance)),std::invalid_argument);
     missing_provenance=boost::json::parse(encoded).as_object();
     missing_provenance["ranks"]=missing_provenance.at("legacy_global_rank_evidence");
@@ -405,7 +370,7 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesHaloHistoryAndRo
     f.model->EditAnalysis().SetJointResult(saved);
 }
 
-TEST(JointComponentPartialSelectionTest, ExcludedHaloProvenancePersistsThroughJsonAndSqlite)
+TEST(JointComponentPartialSelectionTest, FixedHaloSelectionPersistsThroughJsonAndSqlite)
 {
     std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
     for(const auto & [id,x]:std::vector<std::pair<int,double>>{{10,0.0},{20,4.5},{30,3.5},{40,30.0}})
@@ -419,12 +384,15 @@ TEST(JointComponentPartialSelectionTest, ExcludedHaloProvenancePersistsThroughJs
     for(std::size_t row=0;row<11;++row) values[row]=static_cast<double>(row)-3.0;
     rhbm_gem::MapObject map({11,1,1},{.5,.5,.5},{-2.5,0,0},std::move(values));
     const auto problem=core::BuildJointProblem(map,model);
-    const auto fit=core::FitJointComponents(problem,{.5,.5});
+    const auto initialized=problem.WithFixedHalos({
+        {1,"20",2.,.5,0.,17,0,std::string(rhbm_gem::FixedHaloParameterSourceContractVersion)},
+        {2,"30",2.,.5,0.,17,0,std::string(rhbm_gem::FixedHaloParameterSourceContractVersion)}});
+    const auto fit=core::FitJointComponents(initialized,{.5,.5,.5});
     const auto saved=core::CaptureJointAnalysisResult(fit);
     const auto decoded=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved));
-    ASSERT_TRUE(decoded.selection_domain->halo_eligibility);
-    ASSERT_EQ(decoded.selection_domain->halo_eligibility->excluded_halos.size(),2u);
-    EXPECT_EQ(decoded.selection_domain->halo_eligibility->excluded_halos[0].atom_id,"20");
+    ASSERT_TRUE(decoded.selection_domain->fixed_halo_selection);
+    EXPECT_EQ(decoded.selection_domain->fixed_halo_selection->candidate_halos,3u);
+    EXPECT_EQ(decoded.selection_domain->fixed_halo_selection->retained_halos,2u);
     model.EditAnalysis().ApplyJointResult(decoded,"provenance");
 
     const command_test::ScopedTempDir directory{"joint_halo_provenance_roundtrip"};
@@ -432,20 +400,19 @@ TEST(JointComponentPartialSelectionTest, ExcludedHaloProvenancePersistsThroughJs
     repository.SaveModel(model,"joint");
     const auto loaded=repository.LoadModel("joint");
     ASSERT_TRUE(loaded->GetAnalysisView().GetJointResult());
-    EXPECT_EQ(loaded->GetAnalysisView().GetJointResult()->selection_domain->halo_eligibility->excluded_halos,
-        decoded.selection_domain->halo_eligibility->excluded_halos);
+    EXPECT_EQ(loaded->GetAnalysisView().GetJointResult()->selection_domain->fixed_halo_selection,
+        decoded.selection_domain->fixed_halo_selection);
 
     auto radial=decoded;
-    radial.selection_domain->halo_eligibility->excluded_halos[0]={"20",3,2,"insufficient-radial-information"};
+    radial.selection_domain->fixed_halo_selection->zero_support_halos=1;
     const auto radial_decoded=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(radial));
-    EXPECT_EQ(radial_decoded.selection_domain->halo_eligibility->excluded_halos[0],
-        radial.selection_domain->halo_eligibility->excluded_halos[0]);
+    EXPECT_EQ(radial_decoded.selection_domain->fixed_halo_selection,radial.selection_domain->fixed_halo_selection);
     model.EditAnalysis().ApplyJointResult(radial,"radial-provenance");
     repository.SaveModel(model,"radial-provenance");
     const auto radial_loaded=repository.LoadModel("radial-provenance");
     ASSERT_TRUE(radial_loaded->GetAnalysisView().GetJointResult());
-    EXPECT_EQ(radial_loaded->GetAnalysisView().GetJointResult()->selection_domain->halo_eligibility->excluded_halos[0],
-        radial.selection_domain->halo_eligibility->excluded_halos[0]);
+    EXPECT_EQ(radial_loaded->GetAnalysisView().GetJointResult()->selection_domain->fixed_halo_selection,
+        radial.selection_domain->fixed_halo_selection);
 }
 
 TEST(JointComponentPartialSelectionTest, InitializationExceptionsKeepProvenanceWithMedianSeed)
@@ -660,6 +627,7 @@ TEST(JointComponentPartialSelectionTest, ZeroSignalRankDeficiencyAndInsufficient
         auto input=p.Input();
         input.selection_domain->contributor_policy="all-non-hydrogen";
         input.selection_domain->halo_eligibility.reset();
+        input.selection_domain->fixed_halo_selection.reset();
         if(scenario==0) std::fill(input.observations.begin(),input.observations.end(),0);
         if(scenario==1) input.support[1]=input.support[0];
         if(scenario==2)
