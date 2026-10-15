@@ -74,6 +74,10 @@ TEST(JointParameterStabilityTest, ExactLocalFitIsStableAndDeterministic)
     ASSERT_TRUE(second.evidence.log_width_parameter_change_inf);
     EXPECT_DOUBLE_EQ(*first.evidence.log_width_parameter_change_inf,
         *second.evidence.log_width_parameter_change_inf);
+    ASSERT_TRUE(first.evidence.scaled_ac_parameter_change_inf);
+    EXPECT_LE(*first.evidence.log_width_parameter_change_inf,n::LocalParameterChangeWarning);
+    EXPECT_LE(*first.evidence.scaled_ac_parameter_change_inf,n::LocalParameterChangeWarning);
+    EXPECT_LE(*first.evidence.local_prediction_change_relative,n::LocalPredictionChangeWarning);
 }
 
 TEST(JointParameterStabilityTest, UsesWeakLocalWidthDirectionsWithinTheBoundedBudget)
@@ -115,12 +119,30 @@ TEST(JointParameterStabilityTest, UsesWeakLocalWidthDirectionsWithinTheBoundedBu
         n::LocalPerturbationSeedsPerDirection*n::MaximumLocalPerturbationDirectionsPerBlock);
     EXPECT_LE(first.evidence.perturbation_evaluations,
         first.evidence.perturbation_seeds*n::MaximumLocalPerturbationProfileEvaluations);
+    ASSERT_TRUE(first.evidence.log_width_parameter_change_inf);
+    ASSERT_TRUE(first.evidence.scaled_ac_parameter_change_inf);
+    ASSERT_TRUE(first.evidence.local_prediction_change_relative);
+    if(first.evidence.status!="Unavailable")
+    {
+        if(*first.evidence.local_prediction_change_relative>n::LocalPredictionChangeWarning)
+            EXPECT_EQ(first.evidence.status,"Unstable");
+        else if(*first.evidence.log_width_parameter_change_inf>n::LocalParameterChangeWarning ||
+            *first.evidence.scaled_ac_parameter_change_inf>n::LocalParameterChangeWarning)
+            EXPECT_EQ(first.evidence.status,"Sensitive");
+        else EXPECT_EQ(first.evidence.status,"Stable");
+    }
     for(const auto & probe:first.evidence.probes)
     {
         if(probe.unit_direction.empty()) continue;
         ASSERT_EQ(probe.unit_direction.size(),2u);
         EXPECT_NEAR(std::hypot(probe.unit_direction[0],probe.unit_direction[1]),1.,1e-12);
         EXPECT_LE(probe.evaluations,2*n::MaximumLocalPerturbationProfileEvaluations);
+        if(probe.status=="Assessed")
+        {
+            ASSERT_TRUE(probe.parameter_change);
+            ASSERT_TRUE(probe.prediction_change);
+            ASSERT_TRUE(probe.objective_change);
+        }
     }
     const auto second=n::AssessLocalParameterStability(domain,y,eta,beta,context,"two-atom-block");
     ASSERT_EQ(first.evidence.probes.size(),second.evidence.probes.size());

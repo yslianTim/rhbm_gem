@@ -269,12 +269,12 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
     evidence.scaled_ac_parameter_change_inf=maximum_ac_change;
     evidence.local_prediction_change_relative=maximum_prediction_change;
     evidence.objective_difference=maximum_objective_difference;
-    evidence.prediction_status=maximum_prediction_change<=1e-8 ? "Stable" : "Changed";
-    if(maximum_prediction_change>1e-8)
+    evidence.prediction_status=maximum_prediction_change<=LocalPredictionChangeWarning ? "Stable" : "Changed";
+    if(maximum_prediction_change>LocalPredictionChangeWarning)
         evidence.status="Unstable";
     else if(any_search_failure || !all_directions_assessed)
         evidence.status="Unavailable";
-    else if(maximum_width_change<=1e-8 && maximum_ac_change<=1e-8)
+    else if(maximum_width_change<=LocalParameterChangeWarning && maximum_ac_change<=LocalParameterChangeWarning)
         evidence.status="Stable";
     else evidence.status="Sensitive";
     if(evidence.reason.empty()) evidence.reason="bounded-local-directional-perturbation-assessed";

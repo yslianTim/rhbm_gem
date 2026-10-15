@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
 #include "core/detail/joint_component/LocalConditioning.hpp"
+#include "core/detail/joint_component/ParameterStability.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/TargetEvidence.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
@@ -92,6 +93,9 @@ TEST(JointLocalConditioningTest, NearSingularityRetainsTheMeasuredSpectrum)
     EXPECT_EQ(*result.evidence.free_ac_rank,result.evidence.free_ac_columns);
     EXPECT_GT(*result.evidence.free_ac_condition,1e3);
     EXPECT_TRUE(result.evidence.free_ac_rank_threshold_margin_relative.has_value());
+    EXPECT_LT(*result.evidence.free_ac_condition*std::numeric_limits<double>::epsilon(),
+        n::LocalConditioningRoundoffAmplificationWarning);
+    EXPECT_EQ(result.evidence.free_ac_conditioning,"WellConditioned");
 }
 
 TEST(JointLocalConditioningTest, FullRankButIllConditionedBlockIsClassifiedSeparately)
@@ -107,9 +111,27 @@ TEST(JointLocalConditioningTest, FullRankButIllConditionedBlockIsClassifiedSepar
     ASSERT_TRUE(result.evidence.free_ac_condition);
     EXPECT_EQ(*result.evidence.free_ac_rank,result.evidence.free_ac_columns);
     EXPECT_GT(*result.evidence.free_ac_condition,1e7);
+    EXPECT_GE(*result.evidence.free_ac_condition*std::numeric_limits<double>::epsilon(),
+        n::LocalConditioningRoundoffAmplificationWarning);
     EXPECT_EQ(result.evidence.free_ac_status,"full-rank");
     EXPECT_EQ(result.evidence.free_ac_conditioning,"IllConditioned");
     EXPECT_EQ(result.evidence.conditioning_classification,"IllConditioned");
+}
+
+TEST(JointLocalConditioningTest, ExactSingularityRemainsSeparateFromRoundoffConditionWarning)
+{
+    const std::vector<std::vector<n::Support>> supports{
+        {{0,0.0},{1,.5},{2,1.0},{3,1.5},{4,2.0}},
+        {{0,0.0},{1,.5},{2,1.0},{3,1.5},{4,2.0}}};
+    n::Domain domain(5,supports);
+    n::Vector y=n::Vector::Zero(5),eta=n::Vector::Constant(2,std::log(.7)),beta(4);
+    beta<<1.0,.2,1.4,-.1;
+    const auto context=n::CreateContext(y,2);
+    const auto result=Assess(domain,y,eta,beta,context);
+    ASSERT_TRUE(result.evidence.free_ac_rank);
+    EXPECT_LT(*result.evidence.free_ac_rank,result.evidence.free_ac_columns);
+    EXPECT_FALSE(result.evidence.free_ac_condition);
+    EXPECT_EQ(result.evidence.free_ac_conditioning,"Singular");
 }
 
 TEST(JointLocalConditioningTest, IllConditioningWarnsOnPointQualityWithoutChangingConvergence)
