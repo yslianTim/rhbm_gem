@@ -2,8 +2,13 @@
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <algorithm>
 #include <chrono>
+#include <unordered_map>
+#include <utility>
 
 namespace rhbm_gem::core::joint_component {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+TargetEvidenceWork & TargetEvidenceWorkForTesting() {static thread_local TargetEvidenceWork work; return work;}
+#endif
 namespace {
 using Status=JointCheckStatus;
 bool SameLayout(const JointParameterLayout & a,const JointParameterLayout & b)
@@ -26,6 +31,81 @@ bool LayoutMatchesScope(const JointProblem & problem,const JointParameterLayout 
     }
     return false;
 }
+
+template<class Blocks>
+struct DiagnosticAtomIndex
+{
+    std::vector<std::size_t> offsets,block_indices;
+    std::vector<bool> invalid_atoms;
+    bool invalid{};
+    std::string reason;
+
+    std::size_t Count(std::size_t atom) const
+    {return atom<invalid_atoms.size() ? offsets[atom+1]-offsets[atom] : 0;}
+    bool Invalid(std::size_t atom) const
+    {return atom>=invalid_atoms.size() || invalid_atoms[atom];}
+    std::pair<std::size_t,std::size_t> Range(std::size_t atom) const
+    {return atom<invalid_atoms.size() ? std::pair{offsets[atom],offsets[atom+1]} : std::pair<std::size_t,std::size_t>{0,0};}
+};
+
+void MappingError(bool & invalid,std::string & reason,const char * message)
+{invalid=true; if(reason.empty()) reason=message;}
+
+template<class Blocks>
+DiagnosticAtomIndex<Blocks> BuildDiagnosticAtomIndex(std::size_t atom_count,const Blocks & blocks)
+{
+    DiagnosticAtomIndex<Blocks> index;
+    index.offsets.assign(atom_count+1,0); index.invalid_atoms.assign(atom_count,false);
+    std::unordered_map<std::string,std::size_t> identity_counts;
+    identity_counts.reserve(blocks.size());
+    for(const auto & block:blocks) if(!block.block_id.empty()) ++identity_counts[block.block_id];
+    std::vector<bool> invalid_blocks(blocks.size());
+    for(std::size_t block_index=0;block_index<blocks.size();++block_index)
+    {
+        const auto & block=blocks[block_index];
+        if(block.block_id.empty())
+        {
+            invalid_blocks[block_index]=true;
+            MappingError(index.invalid,index.reason,"empty-diagnostic-block-identity");
+        }
+        else if(identity_counts[block.block_id]>1)
+        {
+            invalid_blocks[block_index]=true;
+            MappingError(index.invalid,index.reason,"duplicate-diagnostic-block-identity");
+        }
+        for(const auto atom:block.core_atoms)
+        {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            ++TargetEvidenceWorkForTesting().memberships_indexed;
+#endif
+            if(atom>=atom_count)
+            {
+                MappingError(index.invalid,index.reason,"diagnostic-core-atom-out-of-range");
+                continue;
+            }
+            ++index.offsets[atom+1];
+            if(invalid_blocks[block_index]) index.invalid_atoms[atom]=true;
+        }
+    }
+    for(std::size_t atom=1;atom<index.offsets.size();++atom) index.offsets[atom]+=index.offsets[atom-1];
+    index.block_indices.resize(index.offsets.back());
+    auto next=index.offsets;
+    for(std::size_t block_index=0;block_index<blocks.size();++block_index)
+        for(const auto atom:blocks[block_index].core_atoms)
+        {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            ++TargetEvidenceWorkForTesting().memberships_indexed;
+#endif
+            if(atom<atom_count) index.block_indices[next[atom]++]=block_index;
+        }
+    for(std::size_t atom=0;atom<atom_count;++atom)
+        if(index.Count(atom)>1)
+        {
+            index.invalid_atoms[atom]=true;
+            MappingError(index.invalid,index.reason,"duplicate-diagnostic-core-membership");
+        }
+    return index;
+}
 }
 JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const JointParameterLayout & layout,
     const std::optional<JointState> & state,JointCheckStatus convergence,
@@ -40,6 +120,21 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
     const bool dimensions=state && layout_valid && layout.full_atoms.size()<=std::numeric_limits<std::size_t>::max()/2 &&
         state->ac.size()==2*layout.full_atoms.size() && state->b.size()==layout.full_atoms.size() &&
         state->log_b.size()==layout.full_atoms.size();
+    auto conditioning_index=BuildDiagnosticAtomIndex(input.atom_ids.size(),conditioning);
+    auto stability_index=BuildDiagnosticAtomIndex(input.atom_ids.size(),stability);
+    const auto mark_missing_membership=[&](auto & index,const auto & blocks) {
+        if(blocks.empty()) return;
+        for(const auto atom:layout.full_atoms)
+            if(atom>=input.atom_ids.size())
+                MappingError(index.invalid,index.reason,"diagnostic-layout-atom-out-of-range");
+            else if(index.Count(atom)==0)
+            {
+                index.invalid_atoms[atom]=true;
+                MappingError(index.invalid,index.reason,"missing-diagnostic-core-membership");
+            }
+    };
+    mark_missing_membership(conditioning_index,conditioning);
+    mark_missing_membership(stability_index,stability);
     const auto parameter_validity=[&](std::size_t index) {
         if(!dimensions) return JointCheckStatus::Unavailable;
         const double amplitude=state->ac[2*index],width=state->b[index],log_width=state->log_b[index];
@@ -51,11 +146,16 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
             std::abs(exp_width-width)<=8*std::numeric_limits<double>::epsilon()*width ?
                 JointCheckStatus::Passed : JointCheckStatus::Failed;
     };
-    const auto local_status=[&](std::size_t atom,std::vector<std::string> & block_ids) {
+    const auto local_status=[&](std::size_t atom,std::vector<std::string> & block_ids,bool & mapping_invalid) {
         bool matched=false,unavailable=false,adequate=true;
-        for(const auto & block:conditioning)
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        ++TargetEvidenceWorkForTesting().atom_lookups;
+#endif
+        const auto [first,last]=conditioning_index.Range(atom);
+        mapping_invalid=conditioning_index.Invalid(atom) || (!conditioning.empty() && first==last);
+        for(std::size_t position=first;position<last;++position)
         {
-            if(std::find(block.core_atoms.begin(),block.core_atoms.end(),atom)==block.core_atoms.end()) continue;
+            const auto & block=conditioning[conditioning_index.block_indices[position]];
             matched=true; block_ids.push_back(block.block_id);
             if(block.status=="unavailable" || block.status=="not-assessed" ||
                 block.conditioning_classification=="Unavailable" ||
@@ -63,17 +163,23 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
             adequate &= block.status=="assessed" &&
                 block.conditioning_classification=="WellConditioned";
         }
+        if(mapping_invalid) return std::string("Unavailable");
         if(!matched) return std::string("NotAssessed");
         if(unavailable) return std::string("Unavailable");
         return adequate ? std::string("Adequate") : std::string("Warning");
     };
-    const auto stability_status=[&](std::size_t atom,std::vector<std::string> & block_ids) {
+    const auto stability_status=[&](std::size_t atom,std::vector<std::string> & block_ids,bool & mapping_invalid) {
         bool matched=false,not_assessed=false;
         int worst{};
         std::string status="NotAssessed";
-        for(const auto & block:stability)
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        ++TargetEvidenceWorkForTesting().atom_lookups;
+#endif
+        const auto [first,last]=stability_index.Range(atom);
+        mapping_invalid=stability_index.Invalid(atom) || (!stability.empty() && first==last);
+        for(std::size_t position=first;position<last;++position)
         {
-            if(std::find(block.core_atoms.begin(),block.core_atoms.end(),atom)==block.core_atoms.end()) continue;
+            const auto & block=stability[stability_index.block_indices[position]];
             matched=true; block_ids.push_back(block.block_id);
             const int severity=block.status=="Unstable" ? 4 : block.status=="Sensitive" ? 3 :
                 block.status=="Unavailable" ? 2 : block.status=="Stable" ? 1 : 0;
@@ -83,6 +189,7 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
                 worst=severity; status=block.status;
             }
         }
+        if(mapping_invalid) return std::string("Unavailable");
         if(!matched || (not_assessed && worst<=1)) return std::string("NotAssessed");
         return status;
     };
@@ -90,18 +197,23 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
     bool selection_targets_valid=targets!=nullptr;
     JointCheckStatus all_parameter_status=JointCheckStatus::Passed;
     if(!dimensions || layout.full_atoms.empty()) all_parameter_status=JointCheckStatus::Unavailable;
+    bool point_mapping_invalid=false;
     for(std::size_t index=0;index<layout.full_atoms.size();++index)
     {
         JointAtomPointValidation point; point.atom=layout.full_atoms[index];
         point.component_convergence=convergence;
         point.parameter_validity=parameter_validity(index);
-        point.local_conditioning=local_status(point.atom,point.local_conditioning_blocks);
-        point.parameter_stability=stability_status(point.atom,point.parameter_stability_blocks);
+        bool invalid_conditioning_mapping{},invalid_stability_mapping{};
+        point.local_conditioning=local_status(point.atom,point.local_conditioning_blocks,invalid_conditioning_mapping);
+        point.parameter_stability=stability_status(point.atom,point.parameter_stability_blocks,invalid_stability_mapping);
+        point_mapping_invalid|=invalid_conditioning_mapping || invalid_stability_mapping;
         all_parameter_status=MergeConvergenceStatus(all_parameter_status,point.parameter_validity);
         if(point.component_convergence!=JointCheckStatus::Passed)
         {point.point_quality="Unavailable"; point.reason="component-not-converged";}
         else if(point.parameter_validity!=JointCheckStatus::Passed)
         {point.point_quality="Unavailable"; point.reason="invalid-or-unavailable-parameters";}
+        else if(invalid_conditioning_mapping || invalid_stability_mapping)
+        {point.point_quality="Warning"; point.reason="invalid-diagnostic-block-mapping";}
         else if(point.local_conditioning=="Warning" || point.local_conditioning=="Unavailable" ||
             point.parameter_stability=="Unstable" || point.parameter_stability=="Sensitive" ||
             point.parameter_stability=="Unavailable")
@@ -114,21 +226,29 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
     }
     JointCheckStatus target_status=targets ? convergence : JointCheckStatus::Unavailable;
     if(targets)
+    {
+        std::size_t point_cursor{},layout_cursor{};
+        if(!std::is_sorted(targets->begin(),targets->end())) selection_targets_valid=false;
         for(const auto atom:*targets)
         {
-            const auto found=std::lower_bound(out.point_atoms.begin(),out.point_atoms.end(),atom,
-                [](const auto & point,std::size_t index){return point.atom<index;});
-            if(found==out.point_atoms.end() || found->atom!=atom)
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            ++TargetEvidenceWorkForTesting().atom_lookups;
+#endif
+            while(point_cursor<out.point_atoms.size() && out.point_atoms[point_cursor].atom<atom) ++point_cursor;
+            while(layout_cursor<layout.full_atoms.size() && layout.full_atoms[layout_cursor]<atom) ++layout_cursor;
+            const bool target_in_scope=layout_cursor<layout.full_atoms.size() && layout.full_atoms[layout_cursor]==atom;
+            if(point_cursor==out.point_atoms.size() || out.point_atoms[point_cursor].atom!=atom)
             {
-                if(scope==JointEvidenceScope::ComponentLocal &&
-                    !std::binary_search(layout.full_atoms.begin(),layout.full_atoms.end(),atom)) continue;
+                if(scope==JointEvidenceScope::ComponentLocal && !target_in_scope) continue;
                 selection_targets_valid=false;
                 target_status=MergeConvergenceStatus(target_status,JointCheckStatus::Unavailable);
                 continue;
             }
-            target_status=MergeConvergenceStatus(target_status,found->component_convergence);
-            target_status=MergeConvergenceStatus(target_status,found->parameter_validity);
+            const auto & found=out.point_atoms[point_cursor];
+            target_status=MergeConvergenceStatus(target_status,found.component_convergence);
+            target_status=MergeConvergenceStatus(target_status,found.parameter_validity);
         }
+    }
     if(!layout_valid || (scope==JointEvidenceScope::AssembledGlobal && original_rows!=input.observations.size()))
     {
         all_parameter_status=JointCheckStatus::Unavailable;
@@ -141,6 +261,11 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
         all_parameter_status==JointCheckStatus::Passed ? "all-full-abc-parameters-valid" : "invalid-or-unavailable-parameters"});
     out.checks.push_back({"target-point-validation",target_status,scope,{},{},
         target_status==JointCheckStatus::Passed ? "selected-target-points-valid" : "selected-target-point-unavailable"});
+    const bool diagnostic_mapping_valid=!conditioning_index.invalid && !stability_index.invalid && !point_mapping_invalid;
+    const auto mapping_reason=!conditioning_index.reason.empty() ? conditioning_index.reason :
+        !stability_index.reason.empty() ? stability_index.reason : "invalid-diagnostic-atom-mapping";
+    out.checks.push_back({"diagnostic-block-mapping",diagnostic_mapping_valid ? JointCheckStatus::Passed :
+        JointCheckStatus::Unavailable,scope,{},{},diagnostic_mapping_valid ? "unique-atom-to-block-mapping" : mapping_reason});
     return out;
 }
 JointCheckStatus TargetConvergence(const std::optional<JointTargetEvidence> & evidence,bool state)
