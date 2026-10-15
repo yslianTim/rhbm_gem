@@ -3,6 +3,7 @@
 #include "FixedNeighborPolicy.hpp"
 #include "ResourceWork.hpp"
 #include <functional>
+#include <utility>
 
 namespace rhbm_gem::core::joint_component {
 struct ComponentProblemView;
@@ -24,6 +25,26 @@ struct FixedNeighborProfileTrial
     double local_objective_before{},local_objective_after{},objective_reduction{};
     double eta_change_inf{},gradient_inf_norm{};
     double profile_seconds{},factor_seconds{},cumulative_factor_seconds{};
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    double lm_actual_decrease{unavailable},lm_predicted_decrease{unavailable},lm_ratio{unavailable};
+    double accepted_local_objective_improvement{unavailable},accepted_global_objective_improvement{unavailable};
+    bool lm_proposed_acceptance{};
+    std::string acceptance_reason;
+    struct AtomState
+    {
+        std::string atom_id,numerical_status;
+        double first_stage_width{unavailable},block_entry_width{unavailable},lm_proposed_width{unavailable},
+            accepted_width{unavailable},width_before{unavailable},width_after{unavailable},
+            eta_before{unavailable},eta_after{unavailable},eta_step_inf{unavailable},
+            amplitude_a{unavailable},amplitude_c{unavailable},gaussian_column_norm{unavailable},
+            charge_column_norm{unavailable},normalized_a{unavailable},normalized_c{unavailable},
+            gaussian_contribution_norm{unavailable},charge_contribution_norm{unavailable},
+            basis_correlation{unavailable},local_kkt{unavailable},width_gradient{unavailable},
+            local_design_condition{unavailable};
+        Eigen::Index local_design_rank{-1};
+    };
+    std::vector<AtomState> tracked_atoms;
+#endif
 };
 struct FixedNeighborBlockFailureDiagnostics
 {
@@ -55,6 +76,10 @@ struct FixedNeighborBlockRecord
     double search_seconds{},block_seconds{},profile_factor_seconds{};
     int profile_evaluations{},accepted_updates{};
     std::vector<FixedNeighborProfileTrial> profile_trials;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    std::size_t component_index{};
+    std::string component_id;
+#endif
     std::optional<FixedNeighborBlockFailureDiagnostics> failure_diagnostics;
     bool accepted{};
     std::string status,reason,local_search_stop_reason;
@@ -125,6 +150,14 @@ struct FixedNeighborDiagnosticSink
     std::function<void(const FixedNeighborBlockRecord &)> block;
     std::function<void(const FixedNeighborBlockSweep &)> sweep;
 };
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+struct FixedNeighborWidthTrajectoryCapture
+{
+    std::vector<std::pair<std::string,double>> atom_initial_widths;
+    std::size_t maximum_events{1024},maximum_atoms{32},maximum_rows{4096},events_emitted{};
+    bool accepted_updates_only{};
+};
+#endif
 struct PreparedFixedNeighborBlock
 {
     std::size_t block{};
@@ -153,6 +186,7 @@ struct FixedNeighborPolicy
     std::function<void(const FixedNeighborBlockSweep &)> production_progress;
     std::function<void(const FixedNeighborBlockSweep &)> sweep_observer;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    FixedNeighborWidthTrajectoryCapture * width_trajectory{};
     // Test-only fault injection; compiled out of production targets.
     std::function<FixedNeighborEndpointCertification(const Domain &,VectorRef,const BlockCoordinateState &,
         const EvaluationContext &,ProfileSearchWork *)> certification_for_testing;

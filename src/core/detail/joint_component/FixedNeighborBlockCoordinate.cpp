@@ -132,6 +132,140 @@ Sparse Design(const Domain & domain,VectorRef eta)
     }
     out.setFromTriplets(entries.begin(),entries.end()); return out;
 }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+double SparseColumnDot(const Sparse & x,Eigen::Index left,Eigen::Index right)
+{
+    double out{};
+    Sparse::InnerIterator a(x,left),b(x,right);
+    while(a && b)
+    {
+        if(a.row()==b.row()) {out+=a.value()*b.value(); ++a; ++b;}
+        else if(a.row()<b.row()) ++a;
+        else ++b;
+    }
+    return out;
+}
+void CaptureWidthTrajectory(FixedNeighborBlockRecord & record,const SearchResult & search,
+    const Domain & domain,VectorRef response,VectorRef block_entry_eta,const EvaluationContext & context,
+    FixedNeighborWidthTrajectoryCapture & capture)
+{
+    if(capture.maximum_events==0 || capture.maximum_atoms==0 || capture.atom_initial_widths.empty()) return;
+    std::vector<std::pair<Eigen::Index,double>> tracked;
+    const auto count=std::min(capture.maximum_atoms,capture.atom_initial_widths.size());
+    for(std::size_t atom_index=0;atom_index<context.atom_ids.size();++atom_index)
+    {
+        const auto atom=static_cast<Eigen::Index>(atom_index);
+        const auto & id=context.atom_ids[atom_index];
+        const auto initial=std::find_if(capture.atom_initial_widths.begin(),
+            capture.atom_initial_widths.begin()+static_cast<std::ptrdiff_t>(count),
+            [&](const auto & value){return value.first==id;});
+        if(initial!=capture.atom_initial_widths.begin()+static_cast<std::ptrdiff_t>(count))
+            tracked.emplace_back(atom,initial->second);
+    }
+    if(tracked.empty()) return;
+    double previous_accepted_objective=record.local_objective_before;
+    for(std::size_t trial_index=0;trial_index<search.trials.size();++trial_index)
+    {
+        if(capture.events_emitted>=capture.maximum_events) break;
+        const auto & trial=search.trials[trial_index];
+        if(capture.accepted_updates_only &&
+            (!trial.accepted || trial.accepted_update.value_or(0)==0)) continue;
+        FixedNeighborProfileTrial * destination=nullptr;
+        const auto existing=std::find_if(record.profile_trials.begin(),record.profile_trials.end(),
+            [&](const auto & value){return value.profile_evaluation==trial.evaluation;});
+        if(existing!=record.profile_trials.end()) destination=&*existing;
+        else
+        {
+            record.profile_trials.emplace_back(); destination=&record.profile_trials.back();
+            destination->trial_index=trial_index; destination->profile_evaluation=trial.evaluation;
+            destination->accepted=trial.accepted; destination->accepted_update=trial.accepted_update;
+            destination->profile_seconds=trial.seconds; destination->factor_seconds=trial.factor_seconds;
+            destination->local_objective_before=previous_accepted_objective;
+            destination->local_objective_after=trial.endpoint.certificate.available ?
+                trial.endpoint.certificate.objective/(context.scale*context.scale) : unavailable;
+            destination->objective_reduction=std::isfinite(destination->local_objective_before) &&
+                std::isfinite(destination->local_objective_after) ?
+                destination->local_objective_before-destination->local_objective_after : unavailable;
+            destination->eta_change_inf=trial.endpoint.eta.size()==block_entry_eta.size() ?
+                (trial.endpoint.eta-block_entry_eta).lpNorm<Eigen::Infinity>() : unavailable;
+            destination->gradient_inf_norm=trial.endpoint.gradient.size() ?
+                trial.endpoint.gradient.lpNorm<Eigen::Infinity>() : unavailable;
+        }
+        destination->tracked_atoms.clear();
+        const auto objective=trial.endpoint.certificate.available ?
+            trial.endpoint.certificate.objective/(context.scale*context.scale) : unavailable;
+        if(trial.lm)
+        {
+            destination->lm_actual_decrease=trial.lm->actual_decrease;
+            destination->lm_predicted_decrease=trial.lm->predicted_decrease;
+            destination->lm_ratio=trial.lm->ratio;
+            destination->lm_proposed_acceptance=trial.lm->proposed_acceptance;
+        }
+        destination->acceptance_reason=!trial.endpoint.valid ? trial.endpoint.reason :
+            trial.trust && !trial.trust->passed ? "untrusted:"+trial.trust->reason :
+            trial.lm && !trial.lm->proposed_acceptance ? "lm-rejected" :
+            trial.accepted && trial.accepted_update.value_or(0)==0 ? "initial-profile" :
+            trial.accepted ? "accepted" : "not-selected";
+        if(trial.accepted)
+        {
+            destination->accepted_local_objective_improvement=trial.accepted_update.value_or(0)>0 &&
+                std::isfinite(previous_accepted_objective) && std::isfinite(objective) ?
+                previous_accepted_objective-objective : unavailable;
+            if(std::isfinite(objective)) previous_accepted_objective=objective;
+        }
+
+        Evaluation state;
+        Spectrum spectrum;
+        const bool within_row_limit=static_cast<std::size_t>(domain.rows)<=capture.maximum_rows;
+        if(within_row_limit && trial.endpoint.eta.size()==block_entry_eta.size() &&
+            trial.endpoint.beta.size()==2*block_entry_eta.size())
+        {
+            state=EvaluateState(domain,response,trial.endpoint.eta,trial.endpoint.beta,context);
+            if(state.valid) spectrum=ComputeSpectrum(state.x,context.rank,state.x.cols(),true);
+        }
+        for(const auto & [atom,initial_width]:tracked)
+        {
+            if(destination->tracked_atoms.size()>=capture.maximum_atoms) break;
+            FixedNeighborProfileTrial::AtomState value;
+            value.atom_id=context.atom_ids[static_cast<std::size_t>(atom)];
+            value.first_stage_width=initial_width;
+            value.block_entry_width=std::exp(block_entry_eta(atom));
+            const double before=trial.lm && trial.lm->accepted_eta.size()==block_entry_eta.size() ?
+                trial.lm->accepted_eta(atom) : block_entry_eta(atom);
+            const double proposed=trial.endpoint.eta.size()==block_entry_eta.size() ? trial.endpoint.eta(atom) : unavailable;
+            const double after=trial.accepted ? proposed : before;
+            value.eta_before=before; value.eta_after=after;
+            value.width_before=std::exp(before); value.width_after=std::exp(after);
+            value.lm_proposed_width=std::isfinite(proposed) ? std::exp(proposed) : unavailable;
+            value.accepted_width=std::isfinite(after) ? std::exp(after) : unavailable;
+            value.eta_step_inf=trial.lm ? trial.lm->step.lpNorm<Eigen::Infinity>() : 0.0;
+            if(trial.endpoint.beta.size()==2*block_entry_eta.size())
+            {
+                value.amplitude_a=trial.endpoint.beta(2*atom);
+                value.amplitude_c=trial.endpoint.beta(2*atom+1);
+            }
+            if(state.valid)
+            {
+                const double gnorm=state.x.col(2*atom).norm(),knorm=state.x.col(2*atom+1).norm();
+                value.gaussian_column_norm=gnorm; value.charge_column_norm=knorm;
+                value.normalized_a=value.amplitude_a*gnorm; value.normalized_c=value.amplitude_c*knorm;
+                value.gaussian_contribution_norm=std::abs(value.normalized_a);
+                value.charge_contribution_norm=std::abs(value.normalized_c);
+                const double denominator=gnorm*knorm;
+                if(denominator>0) value.basis_correlation=SparseColumnDot(state.x,2*atom,2*atom+1)/denominator;
+                value.local_kkt=state.certificate.projected_kkt;
+                if(state.gradient.size()>atom) value.width_gradient=std::abs(state.gradient(atom));
+                value.local_design_rank=spectrum.available ? spectrum.rank : -1;
+                value.local_design_condition=spectrum.available ? spectrum.condition : unavailable;
+                value.numerical_status=state.certificate.available ? "evaluated" : "certificate-unavailable";
+            }
+            else value.numerical_status=within_row_limit ? "state-evaluation-unavailable" : "row-limit";
+            destination->tracked_atoms.push_back(std::move(value));
+        }
+        if(!destination->tracked_atoms.empty()) ++capture.events_emitted;
+    }
+}
+#endif
 double PredictionDifference(VectorRef a,VectorRef b)
 {return (a-b).lpNorm<Eigen::Infinity>();}
 void WriteJsonString(std::ostream & out,const std::string & value)
@@ -784,7 +918,11 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     }
     if(policy.preparation_observer) policy.preparation_observer();
     const bool retain_diagnostics=policy.collect_diagnostics || policy.capture_local_trajectory ||
-        static_cast<bool>(policy.state_observer);
+        static_cast<bool>(policy.state_observer)
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        || policy.width_trajectory
+#endif
+        ;
     bool stop=false;
     std::size_t next_certification_retry_sweep{};
     for(std::size_t sweep_index=0;sweep_index<policy.maximum_sweeps && !stop;++sweep_index)
@@ -817,6 +955,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             const auto local_atoms=prepared.local_atoms; const auto block_started=Clock::now(); FixedNeighborBlockRecord record;
             record.sweep=sweep_index+1; record.block=block_index+1; record.core_atoms=core_atoms;
             record.affected_rows=affected_rows.size(); record.objective_before=out.state.objective;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            record.component_index=policy.component_index; record.component_id=policy.component_id;
+#endif
 
             Vector old_eta(local_atoms),old_beta(2*local_atoms),old_core;
             {
@@ -900,6 +1041,11 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 }
                 record.profile_factor_seconds=cumulative_factor_seconds;
             }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            if(policy.width_trajectory)
+                CaptureWidthTrajectory(record,profile_search,local_domain,local_y,old_eta,local_context,
+                    *policy.width_trajectory);
+#endif
             ++sweep.block_solves; ++out.total_block_solves;
             if(policy.collect_telemetry) ++out.work.block_solves;
             sweep.profile_evaluations+=static_cast<std::size_t>(profile_search.evaluations);
@@ -1037,6 +1183,11 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             if(policy.collect_telemetry) out.work.cache_update_seconds+=Seconds(cache_started);
             record.accepted=!unchanged; record.status=unchanged ? "unchanged" : "accepted";
             record.reason=unchanged ? "block-unchanged" : "";
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            if(policy.width_trajectory && !unchanged)
+                for(auto & trial:record.profile_trials) if(trial.profile_evaluation==accepted->evaluation)
+                    trial.accepted_global_objective_improvement=record.objective_before-record.objective_after;
+#endif
             finish_record(std::move(record),block_started);
         }
         if(stop) break;
