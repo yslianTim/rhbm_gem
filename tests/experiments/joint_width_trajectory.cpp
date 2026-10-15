@@ -31,17 +31,20 @@ std::vector<std::string> Split(const std::string & value)
 }
 json::object AtomJson(const joint::FixedNeighborProfileTrial::AtomState & atom)
 {
-    return {{"atom_id",atom.atom_id},{"first_stage_width",Number(atom.first_stage_width)},
+    return {{"atom_id",atom.atom_id},{"amplitude_active",atom.amplitude_active},
+        {"first_stage_width",Number(atom.first_stage_width)},
         {"block_entry_width",Number(atom.block_entry_width)},{"lm_proposed_width",Number(atom.lm_proposed_width)},
         {"accepted_width",Number(atom.accepted_width)},{"width_before",Number(atom.width_before)},
         {"width_after",Number(atom.width_after)},{"eta_before",Number(atom.eta_before)},
-        {"eta_after",Number(atom.eta_after)},{"eta_step_inf",Number(atom.eta_step_inf)},
+        {"eta_after",Number(atom.eta_after)},{"proposed_eta_step",Number(atom.proposed_eta_step)},
+        {"accepted_eta_step",Number(atom.accepted_eta_step)},{"eta_step_inf",Number(atom.eta_step_inf)},
         {"A",Number(atom.amplitude_a)},{"C",Number(atom.amplitude_c)},
         {"gaussian_column_norm",Number(atom.gaussian_column_norm)},
         {"charge_column_norm",Number(atom.charge_column_norm)},
         {"normalized_A",Number(atom.normalized_a)},{"normalized_C",Number(atom.normalized_c)},
         {"gaussian_contribution_norm",Number(atom.gaussian_contribution_norm)},
         {"charge_contribution_norm",Number(atom.charge_contribution_norm)},
+        {"ac_cancellation_ratio",Number(atom.ac_cancellation_ratio)},
         {"basis_correlation",Number(atom.basis_correlation)},
         {"local_kkt",Number(atom.local_kkt)},{"width_gradient_magnitude",Number(atom.width_gradient)},
         {"local_design_rank",atom.local_design_rank<0 ? json::value(nullptr) : json::value(atom.local_design_rank)},
@@ -80,6 +83,8 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
     }
     std::ofstream trajectory(output/"width-trajectory.jsonl");
     trajectory.exceptions(std::ios::failbit|std::ios::badbit);
+    std::ofstream sweeps(output/"sweeps.jsonl");
+    sweeps.exceptions(std::ios::failbit|std::ios::badbit);
     joint::FixedNeighborDiagnosticSink sink;
     sink.block=[&](const joint::FixedNeighborBlockRecord & block) {
         for(const auto & trial:block.profile_trials)
@@ -99,10 +104,28 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
                 {"lm_actual_decrease",Number(trial.lm_actual_decrease)},
                 {"lm_predicted_decrease",Number(trial.lm_predicted_decrease)},
                 {"lm_ratio",Number(trial.lm_ratio)},{"lm_proposed_acceptance",trial.lm_proposed_acceptance},
+                {"projected_width_singular_values",[&] {
+                    json::array values;
+                    for(const auto value:trial.projected_width_singular_values) values.push_back(Number(value));
+                    return values;
+                }()},
                 {"accepted",trial.accepted},{"accepted_update",trial.accepted_update ?
                     json::value(*trial.accepted_update) : json::value(nullptr)},
                 {"acceptance_reason",trial.acceptance_reason},{"atoms",std::move(atoms)}})<<'\n';
         }
+    };
+    sink.sweep=[&](const joint::FixedNeighborBlockSweep & sweep) {
+        sweeps<<json::serialize(json::object{{"sweep",sweep.sweep},
+            {"objective_before",Number(sweep.objective_before)},
+            {"objective_after",Number(sweep.objective_after)},
+            {"global_ac_kkt",Number(sweep.global_ac_kkt)},
+            {"global_width_gradient_inf_norm",Number(sweep.global_width_gradient_inf_norm)},
+            {"eta_change_inf",Number(sweep.eta_change_inf)},
+            {"beta_scaled_change",Number(sweep.beta_scaled_change)},
+            {"cache_replay_error",Number(sweep.cache_replay_error)},
+            {"objective_replay_error",Number(sweep.objective_replay_error)},
+            {"accepted_blocks",sweep.accepted_blocks},{"unchanged_blocks",sweep.unchanged_blocks},
+            {"accepted_local_updates",sweep.accepted_local_updates}})<<'\n';
     };
     joint::FixedNeighborSearchPolicy policy;
     policy.core_atoms=12; policy.maximum_sweeps=200; policy.order=joint::FixedNeighborBlockOrder::Forward;
@@ -111,7 +134,7 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
     };
     const auto started=Clock::now();
     const auto fit=joint::FitFixedNeighborComponentsImpl(problem,initialization.b,policy);
-    trajectory.close();
+    trajectory.close(); sweeps.close();
     json::array initial_widths;
     for(const auto & [id,width]:capture.atom_initial_widths)
         initial_widths.push_back(json::object{{"atom_id",id},{"width",width}});

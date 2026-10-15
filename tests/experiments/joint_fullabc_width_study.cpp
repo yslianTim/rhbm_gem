@@ -455,11 +455,22 @@ j::object HighPrecisionReference(const n::Domain & domain,const n::Vector & y,co
 }
 j::array ProfileRows(const n::Domain & domain,const n::Vector & y,const n::Vector & base_eta,
     const n::EvaluationContext & context,const std::vector<std::string> & atom_ids,Eigen::Index atom,
-    double log_min,double log_max,double log_step,double extra_width)
+    double log_min,double log_max,double log_step,double extra_width,
+    const std::vector<double> * prescribed_widths=nullptr)
 {
     j::array rows;
     const auto hp_y=MpVector(y);
-    const auto points=ProfileLogGrid(log_min,log_max,log_step,base_eta(atom),std::log(extra_width));
+    std::vector<double> points;
+    if(prescribed_widths)
+    {
+        for(const auto width:*prescribed_widths)
+            if(width>0 && std::isfinite(width)) points.push_back(std::log(width));
+        std::sort(points.begin(),points.end());
+        points.erase(std::unique(points.begin(),points.end(),[](double a,double b) {
+            return std::abs(a-b)<1e-12;
+        }),points.end());
+    }
+    else points=ProfileLogGrid(log_min,log_max,log_step,base_eta(atom),std::log(extra_width));
     for(const double log_width:points)
     {
         auto eta=base_eta; eta(atom)=log_width;
@@ -689,13 +700,56 @@ void Run(const char * fixture_path,const std::filesystem::path & output)
     std::ofstream out(output/"summary.json"); out.exceptions(std::ios::failbit|std::ios::badbit);
     out<<j::serialize(summary)<<'\n'; out.close();
 }
+void RunTarget(const char * fixture_path,const std::filesystem::path & output,const std::string & atom_id)
+{
+    if(std::filesystem::exists(output)) throw std::runtime_error("Use a new output directory for this bounded study.");
+    std::filesystem::create_directories(output);
+    const auto fixture=Read(fixture_path);
+    if(j::value_to<std::string>(fixture.at("format"))!="rhbm-joint-local-ac-kkt-v1")
+        throw std::runtime_error("Unsupported local A/C fixture.");
+    const auto domain=DomainFrom(fixture); const auto y=VectorFrom(fixture.at("effective_response"));
+    const auto eta=VectorFrom(fixture.at("old_eta")); const auto context=ContextFrom(fixture);
+    const auto atom_ids=StringsFrom(fixture.at("atom_ids")); const auto atom=FindAtom(atom_ids,atom_id);
+    auto widths=std::vector<double>{.1,.2,.3,.5,1,2,5,10,100,1000,std::exp(eta(atom)),
+        std::exp(eta(atom)-.25),std::exp(eta(atom)+.25)};
+    const auto profile=ProfileRows(domain,y,eta,context,atom_ids,atom,.0,.0,.0,.5,&widths);
+    std::ofstream csv(output/"target-width-profile.csv");
+    csv.exceptions(std::ios::failbit|std::ios::badbit);
+    csv<<"atom_id,width,profile_loss,inner_kkt,profile_valid,profile_reason,local_full_rank,local_full_condition,A,C,normalized_A,normalized_C,normalized_pair_condition,functional_kernel_hp_kkt\n";
+    for(const auto & row:profile)
+    {
+        const auto & value=row.as_object(); const auto & pair=value.at("pair").as_object();
+        const auto print=[&](const char * key) {return value.at(key).is_null() ? std::string("nan") : j::serialize(value.at(key));};
+        csv<<j::serialize(value.at("atom_id"))<<','<<print("width")<<','<<print("profile_loss")<<','
+            <<print("inner_kkt")<<','<<j::serialize(value.at("profile_valid"))<<','
+            <<j::serialize(value.at("profile_reason"))<<','<<print("local_full_rank")<<','
+            <<print("local_full_condition")<<','<<print("A")<<','<<print("C")<<','
+            <<print("normalized_A")<<','<<print("normalized_C")<<','
+            <<(pair.at("normalized_pair_condition").is_null() ? "nan" : j::serialize(pair.at("normalized_pair_condition")))<<','
+            <<j::serialize(value.at("functional_kernel_hp_kkt"))<<'\n';
+    }
+    csv.close();
+    j::array points; for(const auto & row:profile) points.push_back(row);
+    const auto identity=fixture.at("identity");
+    std::ofstream summary(output/"target-width-profile.json");
+    summary.exceptions(std::ios::failbit|std::ios::badbit);
+    summary<<j::serialize(j::object{{"atom_id",atom_id},{"component_id",identity.at("component_id")},
+        {"block_index",identity.at("block_index")},{"fixture_width",std::exp(eta(atom))},
+        {"specified_widths",j::array{.1,.2,.3,.5,1,2,5,10,100,1000}},
+        {"half_step_profile_curvature",ProfileCurvature(profile,eta(atom),.5)},
+        {"profile_points",std::move(points)},
+        {"scope","Conditional target width slice; other block widths held fixed and constrained A/C re-solved at each point."}})<<'\n';
+    summary.close();
+}
 }
 int main(int argc,char ** argv)
 {
     try
     {
-        if(argc!=3) throw std::invalid_argument("Usage: joint_fullabc_width_study BLOCK21_FIXTURE.json NEW_OUTPUT_DIR");
-        Run(argv[1],argv[2]); return 0;
+        if(argc==3) Run(argv[1],argv[2]);
+        else if(argc==5 && std::string(argv[3])=="--target") RunTarget(argv[1],argv[2],argv[4]);
+        else throw std::invalid_argument("Usage: joint_fullabc_width_study FIXTURE.json NEW_OUTPUT_DIR [--target ATOM_ID]");
+        return 0;
     }
     catch(const std::exception & error) {std::cerr<<error.what()<<'\n'; return 1;}
 }

@@ -31,6 +31,7 @@ struct Profile
     int accepted_updates{};
     std::optional<double> accepted_objective;
     std::optional<double> accepted_gradient_inf_norm;
+    const std::vector<bool> * fixed_width_mask{};
     void Report() const
     {
         if(!progress_component) return;
@@ -147,6 +148,13 @@ struct Profile
             telemetry->Add(last_role,work);
         }
         if(!differential.valid) {failure=differential.reason; return -1;}
+        if(fixed_width_mask && fixed_width_mask->size()==static_cast<std::size_t>(differential.jacobian.cols()))
+            for(Eigen::Index column=0;column<differential.jacobian.cols();++column)
+                if((*fixed_width_mask)[static_cast<std::size_t>(column)])
+                {
+                    differential.jacobian.col(column).setZero();
+                    differential.jacobian_norms(column)=0.0;
+                }
         factor=std::move(differential.jacobian); response=std::move(differential.response);
         norms=std::move(differential.jacobian_norms); return 0;
     }
@@ -165,13 +173,15 @@ struct Profile
 }
 SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
     const EvaluationContext & context,const JointProgressObserver & observer,
-    const JointProgressComponent * progress_component,ProfileSearchWork * telemetry)
+    const JointProgressComponent * progress_component,ProfileSearchWork * telemetry,
+    const std::vector<bool> * fixed_width_mask)
 {
     ResourcePhase phase("search",true,domain.rows,initial_b.size());
     const auto start=std::chrono::steady_clock::now();
     ProfileSearchWork local_work;
     Profile profile{domain,y,context.scale,context,{}, {},0,0,{},telemetry ? &local_work : nullptr,
         ProfileEvaluationRole::Unspecified,observer,progress_component,start,std::clock(),0,{}, {}};
+    profile.fixed_width_mask=fixed_width_mask;
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
         lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;

@@ -290,6 +290,56 @@ TEST(JointFixedNeighborBlockCoordinateTest, WidthTrajectoryCaptureHonorsAtomEven
     }
 }
 
+TEST(JointFixedNeighborBlockCoordinateTest, WidthTrajectoryRecordsLocalIdentifiabilityAndCancellation)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    n::FixedNeighborWidthTrajectoryCapture capture;
+    capture.atom_initial_widths.emplace_back(data.input->atom_ids.front(),.55);
+    capture.maximum_events=8; capture.maximum_atoms=1; capture.maximum_rows=4096;
+    n::FixedNeighborDiagnosticSink sink; std::size_t observed{};
+    sink.block=[&](const n::FixedNeighborBlockRecord & block) {
+        for(const auto & trial:block.profile_trials) if(!trial.tracked_atoms.empty())
+        {
+            ++observed;
+            ASSERT_EQ(trial.tracked_atoms.size(),1u);
+            const auto & atom=trial.tracked_atoms.front();
+            EXPECT_EQ(atom.atom_id,data.input->atom_ids.front());
+            EXPECT_TRUE(std::isfinite(atom.proposed_eta_step));
+            EXPECT_TRUE(std::isfinite(atom.accepted_eta_step));
+            EXPECT_DOUBLE_EQ(atom.accepted_eta_step,trial.accepted ? atom.proposed_eta_step : 0.0);
+            EXPECT_TRUE(std::isfinite(atom.ac_cancellation_ratio));
+            EXPECT_GE(atom.ac_cancellation_ratio,1.0-1e-12);
+            EXPECT_FALSE(trial.projected_width_singular_values.empty());
+            for(const auto singular:trial.projected_width_singular_values)
+                EXPECT_TRUE(std::isfinite(singular));
+        }
+    };
+    n::FixedNeighborSearchPolicy policy; policy.maximum_sweeps=1;
+    policy.configure_search_for_testing=[&](n::FixedNeighborPolicy & local) {
+        local.width_trajectory=&capture; local.diagnostic_sink=&sink;
+    };
+    const auto traced=n::FitFixedNeighborComponents(problem,std::vector<double>(2,.55),policy);
+    EXPECT_EQ(observed,capture.events_emitted);
+    EXPECT_GT(observed,0u);
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, FixedWidthOracleOptimizesAcWithoutChangingTheRestrictedModel)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",1));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector initial_eta=n::Vector::Constant(1,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.maximum_sweeps=4; policy.certify_endpoint=false;
+    policy.fixed_width_atom_ids=data.input->atom_ids;
+    const auto result=n::RunFixedNeighborDiagnostic(problem,initial_eta,policy);
+    EXPECT_TRUE(result.search_converged);
+    EXPECT_FALSE(result.endpoint_certified);
+    EXPECT_TRUE((result.state.eta.array()==initial_eta.array()).all());
+    ASSERT_TRUE(result.final_sweep.has_value());
+    EXPECT_LE(result.final_sweep->global_ac_kkt,1e-10);
+    EXPECT_GT(result.final_sweep->global_width_gradient_inf_norm,1e-12);
+}
+
 TEST(JointFixedNeighborBlockCoordinateTest, FailedBlockReportsLocalDesignAndHaloSupportDiagnostics)
 {
     rhbm_gem::core::JointProblemInput input;

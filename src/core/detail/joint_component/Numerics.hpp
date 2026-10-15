@@ -200,7 +200,8 @@ struct SearchResult
     ProfileSearchWork profile_work;
 };
 SearchResult SearchProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,
-    const JointProgressObserver & = {},const JointProgressComponent * = nullptr,ProfileSearchWork * = nullptr);
+    const JointProgressObserver & = {},const JointProgressComponent * = nullptr,ProfileSearchWork * = nullptr,
+    const std::vector<bool> * fixed_width_mask=nullptr);
 struct Assessment
 {
     Endpoint primary;

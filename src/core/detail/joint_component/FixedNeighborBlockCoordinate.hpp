@@ -29,17 +29,20 @@ struct FixedNeighborProfileTrial
     double lm_actual_decrease{unavailable},lm_predicted_decrease{unavailable},lm_ratio{unavailable};
     double accepted_local_objective_improvement{unavailable},accepted_global_objective_improvement{unavailable};
     bool lm_proposed_acceptance{};
+    std::vector<double> projected_width_singular_values;
     std::string acceptance_reason;
     struct AtomState
     {
         std::string atom_id,numerical_status;
+        bool amplitude_active{};
         double first_stage_width{unavailable},block_entry_width{unavailable},lm_proposed_width{unavailable},
             accepted_width{unavailable},width_before{unavailable},width_after{unavailable},
-            eta_before{unavailable},eta_after{unavailable},eta_step_inf{unavailable},
+            eta_before{unavailable},eta_after{unavailable},proposed_eta_step{unavailable},
+            accepted_eta_step{unavailable},eta_step_inf{unavailable},
             amplitude_a{unavailable},amplitude_c{unavailable},gaussian_column_norm{unavailable},
             charge_column_norm{unavailable},normalized_a{unavailable},normalized_c{unavailable},
             gaussian_contribution_norm{unavailable},charge_contribution_norm{unavailable},
-            basis_correlation{unavailable},local_kkt{unavailable},width_gradient{unavailable},
+            ac_cancellation_ratio{unavailable},basis_correlation{unavailable},local_kkt{unavailable},width_gradient{unavailable},
             local_design_condition{unavailable};
         Eigen::Index local_design_rank{-1};
     };
@@ -164,6 +167,9 @@ struct PreparedFixedNeighborBlock
     Domain domain{0,{}};
     EvaluationContext context;
     Eigen::Index local_atoms{};
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    std::vector<bool> fixed_width_mask;
+#endif
 };
 struct FixedNeighborPolicy
 {
@@ -188,6 +194,7 @@ struct FixedNeighborPolicy
     std::function<void(const FixedNeighborBlockSweep &)> sweep_observer;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     FixedNeighborWidthTrajectoryCapture * width_trajectory{};
+    std::vector<std::string> fixed_width_atom_ids;
     // Test-only fault injection; compiled out of production targets.
     std::function<FixedNeighborEndpointCertification(const Domain &,VectorRef,const BlockCoordinateState &,
         const EvaluationContext &,ProfileSearchWork *)> certification_for_testing;

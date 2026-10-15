@@ -183,7 +183,9 @@ contract tests.
 and additional frozen cases. `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS` builds the
 separate derivative, multiprecision, boundary and local-certification tools.
 Both default to OFF and require `BUILD_TESTING=ON`. They do not change the
-installed estimator.
+installed estimator. The offline-audit build includes `joint_width_trajectory`,
+`joint_fullabc_width_study`, and `joint_fixed_width_oracle` for bounded local
+trajectory, profile, and fixed-width controls.
 See the [runtime validation commands](joint-component-runtime.md).
 
 ## Static Quality Checks (Targeted)
