@@ -123,19 +123,21 @@ json::object RunCase(const std::string & name,const joint::ProblemData & data,
     const auto replay=joint::CheckIndependentReplay(data.domain,data.y,primary,data.context);
     const auto objective=joint::NormalizedProfileObjective(primary,data.context.scale);
     double target_gradient=joint::unavailable,free_target_gradient=joint::unavailable,
-        all_width_gradient=joint::unavailable;
+        free_width_gradient=joint::unavailable,all_width_gradient=joint::unavailable;
     if(primary.gradient.size()==static_cast<Eigen::Index>(data.input->support.size()))
     {
-        target_gradient=0.0; free_target_gradient=0.0; all_width_gradient=0.0;
+        target_gradient=0.0; free_target_gradient=0.0; free_width_gradient=0.0; all_width_gradient=0.0;
         for(std::size_t atom=0;atom<data.input->support.size();++atom)
         {
             const double gradient=std::abs(primary.gradient(static_cast<Eigen::Index>(atom)));
             all_width_gradient=std::max(all_width_gradient,gradient);
+            const bool fixed=std::find(fixed_width_ids.begin(),fixed_width_ids.end(),data.input->atom_ids[atom])!=
+                fixed_width_ids.end();
+            if(!fixed) free_width_gradient=std::max(free_width_gradient,gradient);
             if(targets[atom])
             {
                 target_gradient=std::max(target_gradient,gradient);
-                if(std::find(fixed_width_ids.begin(),fixed_width_ids.end(),data.input->atom_ids[atom])==
-                    fixed_width_ids.end()) free_target_gradient=std::max(free_target_gradient,gradient);
+                if(!fixed) free_target_gradient=std::max(free_target_gradient,gradient);
             }
         }
     }
@@ -170,11 +172,12 @@ json::object RunCase(const std::string & name,const joint::ProblemData & data,
         else ++block_failures;
     const auto block_visits=block_successes+block_failures;
     const bool ac_kkt_passed=primary.certificate.available && primary.certificate.projected_kkt<=1e-10;
-    const bool free_width_gradient_passed=free_target_gradient<=1e-12;
+    const bool free_width_gradient_passed=free_width_gradient<=1e-12;
     const bool confirmed=fit.search.search_converged && ac_kkt_passed && free_width_gradient_passed && replay.passed;
     return { {"name",name},{"fixed_width_atoms",fixed_width_ids.size()},
-        {"restricted_search_converged",fit.search.search_converged},{"formal_joint_converged",false},
-        {"restricted_fit_qualified",confirmed},{"stop_reason",fit.stop_reason},
+        {"restricted_parameter_space",!fixed_width_ids.empty()},
+        {"search_stationarity_qualified",confirmed},{"formal_joint_converged",false},
+        {"stop_reason",fit.stop_reason},
         {"sweeps",fit.search.sweep_count},{"block_visits",fit.search.total_block_solves},
         {"block_successes",block_successes},{"block_failures",block_failures},
         {"recovery_attempts",fit.search.recovery_attempts},
@@ -187,6 +190,7 @@ json::object RunCase(const std::string & name,const joint::ProblemData & data,
         {"all_width_gradient_inf_norm",Number(all_width_gradient)},
         {"target_width_gradient_inf_norm",Number(target_gradient)},
         {"free_target_width_gradient_inf_norm",Number(free_target_gradient)},
+        {"free_width_gradient_inf_norm",Number(free_width_gradient)},
         {"independent_replay_passed",replay.passed},{"independent_replay_reason",replay.reason},
         {"target_count",target.a_count},{"halo_count",halo.a_count},
         {"target_rmse_A",Number(Rmse(target,true))},{"target_relative_rmse_A",Number(RelativeRmse(target,true))},
@@ -235,15 +239,17 @@ void Run(const std::filesystem::path & model_path,const std::filesystem::path & 
         if(!targets[atom]) oracle_halo_widths[atom]=true_widths[atom];
     const std::vector<double> seed_halo_widths=initialization.b;
     json::array experiments;
-    experiments.push_back(RunCase("all-widths-oracle",data,truths,targets,true_widths,
-        std::move(all_ids),maximum_sweeps,output));
+    experiments.push_back(RunCase("full-abc",data,truths,targets,initialization.b,
+        {},maximum_sweeps,output));
     experiments.push_back(RunCase("oracle-halo-widths",data,truths,targets,oracle_halo_widths,
-        std::move(halo_ids),maximum_sweeps,output));
+        halo_ids,maximum_sweeps,output));
     std::vector<std::string> seed_halo_ids;
     for(std::size_t atom=0;atom<targets.size();++atom)
         if(!targets[atom]) seed_halo_ids.push_back(data.input->atom_ids[atom]);
     experiments.push_back(RunCase("seed-halo-widths",data,truths,targets,seed_halo_widths,
         std::move(seed_halo_ids),maximum_sweeps,output));
+    experiments.push_back(RunCase("all-widths-oracle",data,truths,targets,true_widths,
+        std::move(all_ids),maximum_sweeps,output));
     std::ofstream summary(output/"summary.json"); summary.exceptions(std::ios::failbit|std::ios::badbit);
     summary<<json::serialize(json::object{{"model",model_path.string()},{"map",map_path.string()},
         {"simulation_metadata",map_path.string()+".simulation.json"},{"selected_targets",data.input->selection_domain->target_indices.size()},

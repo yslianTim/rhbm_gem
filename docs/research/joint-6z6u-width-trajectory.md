@@ -85,13 +85,17 @@ build/bin/joint_fixed_width_oracle \
   /private/tmp/6z6u-fixed-width-oracle
 ```
 
-It runs (1) all-contributor oracle widths with A/C block-coordinate fitting,
-(2) oracle halo widths with target A/C/B fitting, and (3) first-stage halo
-widths with target A/C/B fitting. It uses the sidecar's element-scaled width,
-charge, and atomic-number truth. These restricted-model endpoints report their
-own free-parameter stationarity and independent replay; they are never marked
-as formal unconstrained Joint convergence. Per-atom estimates and the summary
-are written under the fresh output directory.
+It compares (1) a FullABC baseline initialized from first-stage widths,
+(2) target A/C/B fitting with oracle halo widths, (3) target A/C/B fitting
+with first-stage halo widths, and (4) all-contributor oracle widths with A/C
+block-coordinate fitting. The sidecar supplies element-scaled width, charge,
+and atomic-number truth. Each run reports stationarity in its own free-parameter
+space plus independent replay; none is marked as formal Joint convergence.
+Per-atom estimates and the summary are written under the fresh output
+directory. The tool also reports target and halo A/C/B RMSE, objective,
+prediction contribution norms, solver activity, estimated memory, and runtime.
+The shared process peak RSS is a high-water mark across the sequential cases,
+not an isolated per-model measurement.
 
 ## Capture fields
 
