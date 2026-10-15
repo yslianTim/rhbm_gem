@@ -1829,7 +1829,7 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     local.fit.mdpde = {rg::GaussianModel3D{1.8, .6, 0}, {}};
     local.fixed_charge = {-0.1, .5};
     local.fit.diagnostics = rg::LocalFitDiagnostics{
-        rg::RHBMEstimationStatus::SUCCESS, 0.1, {8, 1e-8, 1e-8}, {}};
+        rg::RHBMEstimationStatus::SUCCESS, 0.1, {8, 1e-8, 1e-8}, {}, std::nullopt};
     local.information = rg::RHBMInformation{Eigen::Matrix2d::Identity(), Eigen::Vector2d::Ones()};
     editor.SetAtomPostJointLocalResult(atom, local);
 

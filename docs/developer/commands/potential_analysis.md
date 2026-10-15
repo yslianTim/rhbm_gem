@@ -142,9 +142,11 @@ rhbm_gem potential_analysis \
 Potential analysis always enables failed-only refinement for second-stage shape
 fitting. The PotentialAnalysis request and CLI do not expose a switch. Direct
 fitting callers retain the generic
-`FitOptions::enable_second_stage_failed_only_refinement` control. First-stage
-fitting, alpha training, group estimation and the generic
-`EstimateLocalGaussian` / `EstimateBetaMDPDE` entrypoints keep their native behavior.
+`FitOptions::enable_second_stage_failed_only_refinement` control. In the Joint
+Components workflow only, a failed FirstStage fit for a fixed halo also uses
+bounded recovery during initialization; target FirstStage fits, alpha training,
+group estimation and generic `EstimateLocalGaussian` / `EstimateBetaMDPDE`
+entrypoints keep their native behavior.
 
 A native successful solve is used unchanged, without a fresh-equation evaluation.
 A failed solve may be refined from its own endpoint. Acceptance requires fresh
@@ -153,19 +155,34 @@ denominator checks, and agreement with a fixed-point continuation from the
 original endpoint. The reference must reach `1e-10`; transformed coordinates and
 weights must agree within `1e-6`, with identical weight-floor activation.
 
-The candidate budget is 128 equation evaluations including verification. Reference
-continuation is separate work, capped at 10,000 total fixed-point updates including
-the native iterations. These constants are not public tuning options. Exact-fit
-variance boundaries are not promoted to successful solves. Rejection preserves
-the original numerical result; the reference is never used as a fallback.
+The endpoint-refinement candidate budget is 128 equation evaluations including
+verification. Reference continuation is separate work, capped at 10,000 total
+fixed-point updates including the native iterations. These constants are not
+public tuning options. Exact-fit variance boundaries are not promoted to
+successful solves. Rejection preserves the original numerical result; the
+reference is never used as a fallback.
+
+For failed fixed-halo FirstStage fits, Joint initialization first attempts that
+same endpoint refinement. If it is rejected and the native status is
+`MAX_ITERATIONS_REACHED`, initialization retries the native fixed-point solver
+with a hard 300-iteration cap and the existing tolerances and weight floor. The
+retry is accepted only when that solver reports its normal `SUCCESS`; its
+diagnostics record retry status, iterations, beta and variance stopping changes,
+equation residual and runtime. The original native status and diagnostics remain
+unchanged, and the result is identified as `RefinedSuccess`. Other failures stay
+unqualified. Successful FirstStage halo fits run no recovery work. Fixed halos
+remain immutable at FirstStage A/B with C=0.
 
 `RHBMBetaEstimateResult.status` and `diagnostics` retain native solver history.
 Use `Qualification()` to distinguish `NativeSuccess`, `RefinedSuccess` and
 `Unqualified`. The optional `refinement` diagnostics record acceptance, rejection
-reason, residuals, branch differences and candidate/reference work. Audit shape
-records retain effective `status` for existing consumers and additionally expose
-`native_status`, `qualification` and optional `refinement` evidence. No database
-schema change is required.
+reason, residuals, branch differences and candidate/reference work. Failed-only
+recovery diagnostics separately record endpoint-refinement evidence and any
+bounded native retry. Joint snapshots persist fixed-halo qualification and
+recovery provenance in schema 15; older Joint result schemas remain readable.
+Audit shape records retain effective `status` for existing consumers and
+additionally expose `native_status`, `qualification` and optional
+refinement/recovery evidence.
 
 Recovery continues to require qualified inner endpoints. Refinement does not
 relax outer convergence, offset IRLS or the best-objective bound, and does not

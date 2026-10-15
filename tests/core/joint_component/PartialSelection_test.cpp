@@ -291,9 +291,22 @@ TEST(JointComponentPartialSelectionTest, SharedFixedHaloPersistsOutsideTargetCom
     EXPECT_FALSE(overlaps(0,1));
     EXPECT_TRUE(overlaps(0,2));
     EXPECT_TRUE(overlaps(1,2));
-    const auto fixed=std::vector<rhbm_gem::JointFixedHaloParameter>{{
-        2,"3",f.a[2],f.b[2],0.0,17,0,
-        std::string(rhbm_gem::FixedHaloParameterSourceContractVersion),true}};
+    rhbm_gem::JointFixedHaloParameter recovered_fixed{
+        2,"3",f.a[2],f.b[2],0.0,17,
+        static_cast<int>(rhbm_gem::RHBMEstimationStatus::MAX_ITERATIONS_REACHED),
+        std::string(rhbm_gem::FixedHaloParameterSourceContractVersion),true};
+    recovered_fixed.first_stage_qualification=rhbm_gem::RHBMSolveQualification::RefinedSuccess;
+    rhbm_gem::RHBMFailedOnlyRecoveryDiagnostics recovery;
+    recovery.accepted=true;
+    recovery.reason="endpoint-refinement-accepted";
+    recovery.endpoint_refinement.emplace();
+    recovery.endpoint_refinement->accepted=true;
+    recovery.endpoint_refinement->reason="accepted";
+    recovery.endpoint_refinement->candidate_residual=1e-14;
+    recovery.endpoint_refinement->reference_residual=1e-11;
+    recovery.endpoint_refinement->floor_masks_equal=true;
+    recovered_fixed.first_stage_recovery=recovery;
+    const std::vector<rhbm_gem::JointFixedHaloParameter> fixed{recovered_fixed};
     const auto initialized=problem.WithFixedHalos(fixed);
     const auto & data=core::JointProblemAccess::Get(initialized);
     ASSERT_EQ(data.partition.components.size(),2u);
@@ -318,6 +331,12 @@ TEST(JointComponentPartialSelectionTest, SharedFixedHaloPersistsOutsideTargetCom
     }
     const auto decoded=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved));
     EXPECT_EQ(decoded.fixed_halos,fixed);
+    EXPECT_EQ(decoded.fixed_halos.front().first_stage_status,
+        static_cast<int>(rhbm_gem::RHBMEstimationStatus::MAX_ITERATIONS_REACHED));
+    EXPECT_EQ(decoded.fixed_halos.front().first_stage_qualification,
+        rhbm_gem::RHBMSolveQualification::RefinedSuccess);
+    ASSERT_TRUE(decoded.fixed_halos.front().first_stage_recovery);
+    EXPECT_EQ(decoded.fixed_halos.front().first_stage_recovery->reason,"endpoint-refinement-accepted");
     rhbm_gem::data_internal::ApplyJointStageEstimates(*f.model,decoded,"shared-fixed-halo");
     const auto halo_stage=rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(3))
         .GetStageEstimate(rhbm_gem::FittingStage::Second);
@@ -672,7 +691,7 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesHaloHistoryAndRo
         EXPECT_EQ(rhbm_gem::AtomLocalPotentialView::For(*atom).GetEstimateMDPDE(rhbm_gem::FittingStage::Second).GetWidth(),.91);
     const auto saved=core::CaptureJointAnalysisResult(fit);
     const auto encoded=rhbm_gem::joint_result_io::Encode(saved);
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),14);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),15);
     const auto decoded=rhbm_gem::joint_result_io::Decode(encoded);
     ASSERT_TRUE(decoded.selection_domain); EXPECT_EQ(decoded.selection_domain->target_indices,(std::vector<std::size_t>{0}));
     ASSERT_TRUE(decoded.selection_domain->fixed_halo_selection);
@@ -717,6 +736,27 @@ TEST(JointComponentPartialSelectionTest, FixedHaloSelectionPersistsThroughJsonAn
     const auto saved=core::CaptureJointAnalysisResult(fit);
     const auto decoded=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved));
     EXPECT_EQ(decoded.fixed_halos,initialized.FixedHalos());
+    auto historical=boost::json::parse(rhbm_gem::joint_result_io::Encode(saved)).as_object();
+    historical["schema_version"]=14;
+    for(auto & item:historical.at("fixed_halos").as_array())
+    {
+        auto & fixed=item.as_object();
+        fixed.erase("first_stage_qualification");
+        fixed.erase("first_stage_recovery");
+    }
+    for(auto & item:historical.at("initialization").as_object().at("atoms").as_array())
+    {
+        auto & atom=item.as_object();
+        atom.erase("first_stage_fit_qualified");
+        atom.erase("first_stage_qualification");
+        atom.erase("first_stage_recovery");
+    }
+    auto malformed_current=historical;
+    malformed_current["schema_version"]=15;
+    EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(malformed_current)),std::invalid_argument);
+    const auto legacy_decoded=rhbm_gem::joint_result_io::Decode(boost::json::serialize(historical));
+    ASSERT_EQ(legacy_decoded.fixed_halos.size(),initialized.FixedHalos().size());
+    EXPECT_TRUE(rhbm_gem::IsQualifiedFirstStageFixedHalo(legacy_decoded.fixed_halos.front()));
     ASSERT_TRUE(decoded.selection_domain->fixed_halo_selection);
     EXPECT_EQ(decoded.selection_domain->fixed_halo_selection->candidate_halos,3u);
     EXPECT_EQ(decoded.selection_domain->fixed_halo_selection->retained_halos,2u);
@@ -1432,7 +1472,7 @@ TEST(JointComponentPartialSelectionTest, PostJointEvidenceAssessmentEnforcesAvai
     result.fit.alpha_r = 0.2;
     result.fit.ols = {GaussianModel3D{2.1, 0.47, 0.0}, {}};
     result.fit.mdpde = {GaussianModel3D{2.0, 0.48, 0.0}, {}};
-    result.fit.diagnostics = LocalFitDiagnostics{RHBMEstimationStatus::SUCCESS, 0.1, {8, 1e-8, 1e-8}, {}};
+    result.fit.diagnostics = LocalFitDiagnostics{RHBMEstimationStatus::SUCCESS, 0.1, {8, 1e-8, 1e-8}, {}, std::nullopt};
     RHBMInformation information;
     information.precision = 20.0 * Eigen::Matrix2d::Identity();
     information.moment = information.precision *
@@ -1544,7 +1584,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
         local.fit.alpha_r = 0.2;
         local.fit.ols = {GaussianModel3D(1.9 + 0.1 * id, 0.40 + 0.01 * id, 0.0), {}};
         local.fit.mdpde = {GaussianModel3D(2.0 + 0.1 * id, 0.42 + 0.01 * id, 0.0), {}};
-        local.fit.diagnostics = LocalFitDiagnostics{RHBMEstimationStatus::SUCCESS, 0.1, {8, 1e-8, 1e-8}, {}};
+        local.fit.diagnostics = LocalFitDiagnostics{RHBMEstimationStatus::SUCCESS, 0.1, {8, 1e-8, 1e-8}, {}, std::nullopt};
         if (id == 3)
         {
             local.status = EvidenceStatus::Unavailable;

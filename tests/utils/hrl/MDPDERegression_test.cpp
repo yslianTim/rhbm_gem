@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
 #include "support/MDPDETestSupport.hpp"
 #include "support/EndpointRefinementTestSupport.hpp"
+#include "core/detail/FirstStageInitialization.hpp"
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
+#include <rhbm_gem/utils/domain/JointEstimationTypes.hpp>
 #include <boost/json.hpp>
 #include <algorithm>
 #include <cmath>
@@ -413,6 +415,15 @@ TEST(EndpointRefinementTest, Captured6Z6UFirstStageFailuresHaveReproducibleRecov
             for (std::size_t k = 0; k < 2; ++k)
                 EXPECT_NEAR(extended.beta_mdpde(static_cast<Eigen::Index>(k)),
                     boost::json::value_to<double>(expected_extended_beta[k]), 1e-12);
+            if (budget == 300)
+            {
+                const auto native_success_unchanged = rhbm_gem::core::detail::RecoverFailedFirstStageEstimate(
+                    dataset, alpha, options, extended);
+                EXPECT_EQ(native_success_unchanged.Qualification(), rhbm_gem::RHBMSolveQualification::NativeSuccess);
+                EXPECT_FALSE(native_success_unchanged.failed_only_recovery);
+                EXPECT_EQ(native_success_unchanged.diagnostics.iterations, extended.diagnostics.iterations);
+                EXPECT_TRUE(native_success_unchanged.beta_mdpde.isApprox(extended.beta_mdpde, 0.0));
+            }
             if (budget == 1000)
             {
                 const auto & trajectory = halo.at("native_fixed_point_trajectory_to_1000");
@@ -448,5 +459,56 @@ TEST(EndpointRefinementTest, Captured6Z6UFirstStageFailuresHaveReproducibleRecov
             EXPECT_TRUE((recovered.beta_mdpde.array() == baseline.beta_mdpde.array()).all());
             EXPECT_DOUBLE_EQ(recovered.sigma_square, baseline.sigma_square);
         }
+
+        const auto production_recovery = rhbm_gem::core::detail::RecoverFailedFirstStageEstimate(
+            dataset, alpha, options, baseline);
+        EXPECT_EQ(production_recovery.status, baseline.status)
+            << halo.at("atom_id").as_string();
+        ASSERT_TRUE(production_recovery.failed_only_recovery);
+        ASSERT_TRUE(production_recovery.failed_only_recovery->accepted)
+            << halo.at("atom_id").as_string() << ": "
+            << production_recovery.failed_only_recovery->reason;
+        EXPECT_EQ(production_recovery.Qualification(), rhbm_gem::RHBMSolveQualification::RefinedSuccess);
+        if (halo.at("atom_id").as_string() == "16664")
+        {
+            EXPECT_FALSE(production_recovery.failed_only_recovery->endpoint_refinement->accepted);
+            ASSERT_TRUE(production_recovery.failed_only_recovery->bounded_native_retry);
+            EXPECT_EQ(production_recovery.failed_only_recovery->bounded_native_retry->max_iterations, 300);
+            EXPECT_EQ(production_recovery.failed_only_recovery->bounded_native_retry->native_status,
+                static_cast<int>(rhbm_gem::RHBMEstimationStatus::SUCCESS));
+            EXPECT_EQ(production_recovery.failed_only_recovery->bounded_native_retry->iterations, 268);
+            ASSERT_TRUE(production_recovery.failed_only_recovery->bounded_native_retry->squared_beta_change);
+            EXPECT_LT(*production_recovery.failed_only_recovery->bounded_native_retry->squared_beta_change,
+                options.tolerance);
+            ASSERT_TRUE(production_recovery.failed_only_recovery->bounded_native_retry->relative_variance_change);
+            EXPECT_LT(*production_recovery.failed_only_recovery->bounded_native_retry->relative_variance_change,
+                options.tolerance);
+            ASSERT_TRUE(production_recovery.failed_only_recovery->bounded_native_retry->equation_residual);
+            EXPECT_GT(*production_recovery.failed_only_recovery->bounded_native_retry->equation_residual, 1e-8);
+        }
+        else
+        {
+            ASSERT_TRUE(production_recovery.failed_only_recovery->endpoint_refinement);
+            EXPECT_TRUE(production_recovery.failed_only_recovery->endpoint_refinement->accepted);
+            EXPECT_FALSE(production_recovery.failed_only_recovery->bounded_native_retry);
+        }
+
+        rhbm_gem::JointInitializationAtom initialization_atom;
+        initialization_atom.id = halo.at("atom_id").as_string().c_str();
+        initialization_atom.target = false;
+        initialization_atom.mdpde = {
+            production_recovery.beta_mdpde(0), production_recovery.beta_mdpde(1), 0.0};
+        initialization_atom.native_status = static_cast<int>(production_recovery.status);
+        initialization_atom.first_stage_fit_qualified = true;
+        initialization_atom.first_stage_qualification = production_recovery.Qualification();
+        initialization_atom.first_stage_recovery = production_recovery.failed_only_recovery;
+        std::string failure_reason;
+        const auto fixed_halo = rhbm_gem::core::detail::MakeFixedHaloParameter(
+            initialization_atom, 0, initialization_atom.id, failure_reason);
+        ASSERT_TRUE(fixed_halo) << failure_reason;
+        EXPECT_EQ(fixed_halo->first_stage_status,
+            static_cast<int>(rhbm_gem::RHBMEstimationStatus::MAX_ITERATIONS_REACHED));
+        EXPECT_DOUBLE_EQ(fixed_halo->charge, 0.0);
+        EXPECT_TRUE(rhbm_gem::IsQualifiedFirstStageFixedHalo(*fixed_halo));
     }
 }

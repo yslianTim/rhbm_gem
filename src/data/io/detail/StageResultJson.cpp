@@ -91,6 +91,68 @@ GaussianModel3DWithUncertainty Uncertain(const V & v)
 }
 V OptionalNumber(const std::optional<double> & v) { return v ? NativeNumber(*v) : V{}; }
 std::optional<double> OptionalNumber(const V & v) { return v.is_null() ? std::nullopt : std::optional<double>{NativeNumber(v)}; }
+V Pack(const RHBMEndpointRefinementDiagnostics & r)
+{
+    V coordinates;
+    if(r.relative_coordinate_difference)
+        coordinates=A{NativeNumber((*r.relative_coordinate_difference)[0]),NativeNumber((*r.relative_coordinate_difference)[1]),
+            NativeNumber((*r.relative_coordinate_difference)[2])};
+    return O{{"accepted",r.accepted},{"reason",r.reason},{"evaluations",r.candidate_equation_evaluations},
+        {"updates",r.reference_updates},{"stop",r.reference_stop},{"original",OptionalNumber(r.original_residual)},
+        {"candidate",OptionalNumber(r.candidate_residual)},{"reference",OptionalNumber(r.reference_residual)},
+        {"coordinate_difference",std::move(coordinates)},{"weight_difference",OptionalNumber(r.weight_max_difference)},
+        {"floor_masks_equal",r.floor_masks_equal ? V(*r.floor_masks_equal):V{}}};
+}
+RHBMEndpointRefinementDiagnostics ReadEndpointRefinement(const V & value)
+{
+    const auto & r=value.as_object(); RHBMEndpointRefinementDiagnostics x;
+    x.accepted=Read<bool>(r,"accepted"); x.reason=Read<std::string>(r,"reason");
+    x.candidate_equation_evaluations=Read<int>(r,"evaluations"); x.reference_updates=Read<int>(r,"updates");
+    x.reference_stop=Read<std::string>(r,"stop"); x.original_residual=OptionalNumber(r.at("original"));
+    x.candidate_residual=OptionalNumber(r.at("candidate")); x.reference_residual=OptionalNumber(r.at("reference"));
+    if(!r.at("coordinate_difference").is_null())
+    {
+        const auto & a=r.at("coordinate_difference").as_array();
+        if(a.size()!=3) throw std::invalid_argument("Invalid refinement coordinate shape.");
+        x.relative_coordinate_difference=std::array<double,3>{NativeNumber(a[0]),NativeNumber(a[1]),NativeNumber(a[2])};
+    }
+    x.weight_max_difference=OptionalNumber(r.at("weight_difference"));
+    if(!r.at("floor_masks_equal").is_null()) x.floor_masks_equal=Read<bool>(r,"floor_masks_equal");
+    return x;
+}
+V Pack(const RHBMFailedOnlyRecoveryDiagnostics & r)
+{
+    V endpoint, retry;
+    if(r.endpoint_refinement) endpoint=Pack(*r.endpoint_refinement);
+    if(r.bounded_native_retry)
+    {
+        const auto & x=*r.bounded_native_retry;
+        retry=O{{"max_iterations",x.max_iterations},{"native_status",x.native_status ? V(*x.native_status):V{}},
+            {"iterations",x.iterations},{"squared_beta_change",OptionalNumber(x.squared_beta_change)},
+            {"relative_variance_change",OptionalNumber(x.relative_variance_change)},
+            {"equation_residual",OptionalNumber(x.equation_residual)},{"seconds",NativeNumber(x.seconds)}};
+    }
+    return O{{"accepted",r.accepted},{"reason",r.reason},{"endpoint_refinement_seconds",NativeNumber(r.endpoint_refinement_seconds)},
+        {"endpoint_refinement",std::move(endpoint)},{"bounded_native_retry",std::move(retry)}};
+}
+RHBMFailedOnlyRecoveryDiagnostics ReadFailedOnlyRecovery(const V & value)
+{
+    const auto & r=value.as_object(); RHBMFailedOnlyRecoveryDiagnostics x;
+    x.accepted=Read<bool>(r,"accepted"); x.reason=Read<std::string>(r,"reason");
+    x.endpoint_refinement_seconds=NativeNumber(r.at("endpoint_refinement_seconds"));
+    if(!r.at("endpoint_refinement").is_null()) x.endpoint_refinement=ReadEndpointRefinement(r.at("endpoint_refinement"));
+    if(!r.at("bounded_native_retry").is_null())
+    {
+        const auto & item=r.at("bounded_native_retry").as_object(); RHBMNativeRetryDiagnostics retry;
+        retry.max_iterations=Read<int>(item,"max_iterations");
+        if(!item.at("native_status").is_null()) retry.native_status=Read<int>(item,"native_status");
+        retry.iterations=Read<int>(item,"iterations"); retry.squared_beta_change=OptionalNumber(item.at("squared_beta_change"));
+        retry.relative_variance_change=OptionalNumber(item.at("relative_variance_change"));
+        retry.equation_residual=OptionalNumber(item.at("equation_residual")); retry.seconds=NativeNumber(item.at("seconds"));
+        x.bounded_native_retry=std::move(retry);
+    }
+    return x;
+}
 V Pack(const LocalFitDiagnostics & d)
 {
     V refinement;
@@ -103,9 +165,11 @@ V Pack(const LocalFitDiagnostics & d)
             {"coordinate_difference",r.relative_coordinate_difference ? V(A{NativeNumber((*r.relative_coordinate_difference)[0]),NativeNumber((*r.relative_coordinate_difference)[1]),NativeNumber((*r.relative_coordinate_difference)[2])}):V{}},
             {"weight_difference",OptionalNumber(r.weight_max_difference)},{"floor_masks_equal",r.floor_masks_equal ? V(*r.floor_masks_equal):V{}}};
     }
+    V failed_only_recovery;
+    if(d.failed_only_recovery) failed_only_recovery=Pack(*d.failed_only_recovery);
     return O{{"status",static_cast<int>(d.status)},{"variance",NativeNumber(d.sigma_square)},{"iterations",d.iterations.iterations},
         {"beta_change",OptionalNumber(d.iterations.squared_beta_change)},{"variance_change",OptionalNumber(d.iterations.relative_variance_change)},
-        {"refinement",refinement}};
+        {"refinement",refinement},{"failed_only_recovery",std::move(failed_only_recovery)}};
 }
 LocalFitDiagnostics Diagnostics(const V & v)
 {
@@ -114,20 +178,10 @@ LocalFitDiagnostics Diagnostics(const V & v)
     d.iterations={Read<int>(o,"iterations"),OptionalNumber(o.at("beta_change")),OptionalNumber(o.at("variance_change"))};
     if (!o.at("refinement").is_null())
     {
-        const auto & r=o.at("refinement").as_object(); RHBMEndpointRefinementDiagnostics x;
-        x.accepted=Read<bool>(r,"accepted"); x.reason=Read<std::string>(r,"reason"); x.candidate_equation_evaluations=Read<int>(r,"evaluations");
-        x.reference_updates=Read<int>(r,"updates"); x.reference_stop=Read<std::string>(r,"stop");
-        x.original_residual=OptionalNumber(r.at("original")); x.candidate_residual=OptionalNumber(r.at("candidate")); x.reference_residual=OptionalNumber(r.at("reference"));
-        if (!r.at("coordinate_difference").is_null())
-        {
-            const auto & a=r.at("coordinate_difference").as_array();
-            if(a.size()!=3) throw std::invalid_argument("Invalid refinement coordinate shape.");
-            x.relative_coordinate_difference=std::array<double,3>{NativeNumber(a[0]),NativeNumber(a[1]),NativeNumber(a[2])};
-        }
-        x.weight_max_difference=OptionalNumber(r.at("weight_difference"));
-        if (!r.at("floor_masks_equal").is_null()) x.floor_masks_equal=Read<bool>(r,"floor_masks_equal");
-        d.refinement=std::move(x);
+        d.refinement=ReadEndpointRefinement(o.at("refinement"));
     }
+    if(o.contains("failed_only_recovery") && !o.at("failed_only_recovery").is_null())
+        d.failed_only_recovery=ReadFailedOnlyRecovery(o.at("failed_only_recovery"));
     return d;
 }
 V Pack(const PostJointLocalResult & result)

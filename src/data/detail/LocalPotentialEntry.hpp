@@ -72,7 +72,7 @@ public:
         record.diagnostics = std::move(value.diagnostics);
         if (value.fit_result)
             record.diagnostics = LocalFitDiagnostics{value.fit_result->status, value.fit_result->sigma_square,
-                value.fit_result->diagnostics, value.fit_result->refinement};
+                value.fit_result->diagnostics, value.fit_result->refinement, value.fit_result->failed_only_recovery};
         record.fit_result = std::move(value.fit_result);
     }
     const LocalStageEstimate & StageEstimate(FittingStage stage) const { return Record(stage).estimate; }

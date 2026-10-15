@@ -75,6 +75,27 @@ struct RHBMEndpointRefinementDiagnostics
     std::optional<std::array<double, 3>> relative_coordinate_difference{};
     std::optional<double> weight_max_difference{};
     std::optional<bool> floor_masks_equal{};
+    bool operator==(const RHBMEndpointRefinementDiagnostics &) const = default;
+};
+
+struct RHBMNativeRetryDiagnostics
+{
+    int max_iterations{};
+    std::optional<int> native_status{};
+    int iterations{};
+    std::optional<double> squared_beta_change{}, relative_variance_change{}, equation_residual{};
+    double seconds{};
+    bool operator==(const RHBMNativeRetryDiagnostics &) const = default;
+};
+
+struct RHBMFailedOnlyRecoveryDiagnostics
+{
+    bool accepted{};
+    std::string reason;
+    double endpoint_refinement_seconds{};
+    std::optional<RHBMEndpointRefinementDiagnostics> endpoint_refinement{};
+    std::optional<RHBMNativeRetryDiagnostics> bounded_native_retry{};
+    bool operator==(const RHBMFailedOnlyRecoveryDiagnostics &) const = default;
 };
 
 inline RHBMSolveQualification GetSolveQualification(
@@ -98,8 +119,15 @@ struct RHBMBetaEstimateResult
     RHBMDiagonalMatrix data_covariance;
     RHBMBetaDiagnostics diagnostics{};
     std::optional<RHBMEndpointRefinementDiagnostics> refinement{};
+    std::optional<RHBMFailedOnlyRecoveryDiagnostics> failed_only_recovery{};
 
-    RHBMSolveQualification Qualification() const { return GetSolveQualification(status, refinement); }
+    RHBMSolveQualification Qualification() const
+    {
+        if (failed_only_recovery)
+            return failed_only_recovery->accepted ? RHBMSolveQualification::RefinedSuccess :
+                RHBMSolveQualification::Unqualified;
+        return GetSolveQualification(status, refinement);
+    }
 };
 
 struct RHBMGroupEstimationInput

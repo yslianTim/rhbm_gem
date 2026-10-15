@@ -19,7 +19,9 @@ void ApplyJointSeedFallback(JointInitialization &);
 std::optional<JointFixedHaloParameter> MakeFixedHaloParameter(
     const JointInitializationAtom &, std::size_t contributor_index,
     std::string_view expected_atom_id, std::string & failure_reason);
-LocalGaussianResult FitFirstStageAtom(const AtomObject &, const FitOptions &);
+RHBMBetaEstimateResult RecoverFailedFirstStageEstimate(const RHBMMemberDataset &, double alpha,
+    const RHBMExecutionOptions &, const RHBMBetaEstimateResult & native);
+LocalGaussianResult FitFirstStageAtom(const AtomObject &, const FitOptions &, bool enable_fixed_halo_recovery = false);
 void RunBatchFirstStageFromPreparedSamples(
     ModelObject &, const std::vector<AtomObject *> &, const FitOptions &);
 JointInitialization RunJointFirstStageInitializationFromPreparedSamples(

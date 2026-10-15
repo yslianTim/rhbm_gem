@@ -70,6 +70,7 @@ struct LocalFitDiagnostics
     double sigma_square{};
     RHBMBetaDiagnostics iterations;
     std::optional<RHBMEndpointRefinementDiagnostics> refinement;
+    std::optional<RHBMFailedOnlyRecoveryDiagnostics> failed_only_recovery;
 };
 
 struct LocalGaussianResult

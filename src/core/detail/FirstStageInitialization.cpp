@@ -1,15 +1,22 @@
 #include "FirstStageInitialization.hpp"
 #include "FittingWorkset.hpp"
+#include "gaussian_fit/FittingRanges.hpp"
+#include "gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
+#include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
+#include "utils/hrl/MDPDEEndpointRefinement.hpp"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <vector>
 
 namespace rhbm_gem::core::detail {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -66,7 +73,8 @@ std::optional<JointFixedHaloParameter> MakeFixedHaloParameter(
         failure_reason = "target-is-not-fixed-halo";
     else if (atom.seed_source == "median-fallback")
         failure_reason = "median-width-fallback";
-    else if (!atom.native_status || !atom.first_stage_fit_qualified)
+    else if (!IsQualifiedFirstStageEstimate(atom.native_status, atom.first_stage_fit_qualified,
+        atom.first_stage_qualification, atom.first_stage_recovery))
         failure_reason = "first-stage-fitting-failure";
     else if (!std::isfinite(atom.mdpde[0]) || !std::isfinite(atom.mdpde[1]))
         failure_reason = "non-finite-parameters";
@@ -84,17 +92,96 @@ std::optional<JointFixedHaloParameter> MakeFixedHaloParameter(
     parameter.first_stage_sample_count = atom.sample_count;
     parameter.first_stage_status = atom.native_status;
     parameter.first_stage_fit_qualified = atom.first_stage_fit_qualified;
+    parameter.first_stage_qualification = FirstStageQualification(atom.native_status,
+        atom.first_stage_fit_qualified, atom.first_stage_qualification, atom.first_stage_recovery);
+    parameter.first_stage_recovery = atom.first_stage_recovery;
     return parameter;
 }
 
-LocalGaussianResult FitFirstStageAtom(const AtomObject & atom, const FitOptions & options)
+RHBMBetaEstimateResult RecoverFailedFirstStageEstimate(const RHBMMemberDataset & dataset, double alpha,
+    const RHBMExecutionOptions & native_options, const RHBMBetaEstimateResult & native)
+{
+    if (native.status == RHBMEstimationStatus::SUCCESS) return native;
+    RHBMFailedOnlyRecoveryDiagnostics recovery;
+    const auto refinement_start = std::chrono::steady_clock::now();
+    auto refined = mdpde_detail::ApplyFailedOnlyRefinement(dataset, alpha, native_options, native);
+    recovery.endpoint_refinement_seconds = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - refinement_start).count();
+    recovery.endpoint_refinement = refined.refinement;
+    auto qualified = refined;
+    if (refined.Qualification() == RHBMSolveQualification::RefinedSuccess)
+    {
+        recovery.accepted = true;
+        recovery.reason = "endpoint-refinement-accepted";
+    }
+    else if (native.status == RHBMEstimationStatus::MAX_ITERATIONS_REACHED)
+    {
+        auto retry_options = native_options;
+        retry_options.max_iterations = 300;
+        const auto retry_start = std::chrono::steady_clock::now();
+        const auto retried = rhbm_helper::EstimateBetaMDPDE(alpha, dataset, retry_options);
+        RHBMNativeRetryDiagnostics retry;
+        retry.max_iterations = retry_options.max_iterations;
+        retry.native_status = static_cast<int>(retried.status);
+        retry.iterations = retried.diagnostics.iterations;
+        retry.squared_beta_change = retried.diagnostics.squared_beta_change;
+        retry.relative_variance_change = retried.diagnostics.relative_variance_change;
+        const auto equations = mdpde_detail::EvaluateMDPDEEquations(dataset, alpha,
+            retried.beta_mdpde, retried.sigma_square, retry_options.data_weight_min);
+        if (equations.valid && equations.scaled.allFinite())
+            retry.equation_residual = equations.scaled.lpNorm<Eigen::Infinity>();
+        retry.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - retry_start).count();
+        recovery.bounded_native_retry = retry;
+        if (retried.status == RHBMEstimationStatus::SUCCESS)
+        {
+            qualified = retried;
+            qualified.status = native.status;
+            qualified.diagnostics = native.diagnostics;
+            qualified.refinement = refined.refinement;
+            recovery.accepted = true;
+            recovery.reason = "bounded-native-retry-accepted";
+        }
+        else
+        {
+            qualified = native;
+            qualified.refinement = refined.refinement;
+            recovery.reason = "bounded-native-retry-unqualified";
+        }
+    }
+    else recovery.reason = refined.refinement ? refined.refinement->reason : "endpoint-refinement-unavailable";
+
+    qualified.failed_only_recovery = std::move(recovery);
+    return qualified;
+}
+
+LocalGaussianResult FitFirstStageAtom(const AtomObject & atom, const FitOptions & options,
+    bool enable_fixed_halo_recovery)
 {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if (FirstStageObserverForTesting()) FirstStageObserverForTesting()(atom.GetSerialID(), "first");
 #endif
     const auto view = AtomLocalPotentialView::For(atom);
-    return EstimateLocalGaussian(view.GetSamplingEntries(FittingStage::First), view.GetAlphaR(FittingStage::First),
+    const auto samples = view.GetSamplingEntries(FittingStage::First);
+    auto result = EstimateLocalGaussian(samples, view.GetAlphaR(FittingStage::First),
         options, view.GetEstimateMDPDE(FittingStage::First));
+    if (!enable_fixed_halo_recovery || !result.fit_result ||
+        result.fit_result->status == RHBMEstimationStatus::SUCCESS)
+        return result;
+
+    std::vector<double> responses;
+    responses.reserve(samples.size());
+    for (const auto & sample : samples) responses.push_back(sample.response);
+    const PreparedLocalGaussianDesign design{samples, 0.0, kSignalDistanceMax};
+    const auto dataset = design.BuildDataset(responses, view.GetEstimateMDPDE(FittingStage::First));
+    RHBMExecutionOptions native_options{.thread_size = options.thread_size};
+    auto qualified = RecoverFailedFirstStageEstimate(dataset, view.GetAlphaR(FittingStage::First),
+        native_options, *result.fit_result);
+    result.mdpde = GaussianModel3DWithUncertainty{
+        linearization_service::DecodeParameterVector(qualified.beta_mdpde), GaussianModel3DUncertainty{}};
+    result.fit_result = std::move(qualified);
+    result.diagnostics = LocalFitDiagnostics{result.fit_result->status, result.fit_result->sigma_square,
+        result.fit_result->diagnostics, result.fit_result->refinement, result.fit_result->failed_only_recovery};
+    return result;
 }
 
 void RunBatchFirstStageFromPreparedSamples(
@@ -133,7 +220,8 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
             record.sample_count = view.GetSamplingEntries(FittingStage::First).size();
             TrainLocalAlphaForAtom(editor, options, FittingStage::First, *atom);
             record.alpha = view.GetAlphaR(FittingStage::First);
-            editor.SetAtomLocalGaussianResult(FittingStage::First, *atom, FitFirstStageAtom(*atom, options));
+            editor.SetAtomLocalGaussianResult(FittingStage::First, *atom,
+                FitFirstStageAtom(*atom, options, !workset.target_mask[index]));
             auto first = view.GetStageEstimate(FittingStage::First);
             first.source.role = workset.target_mask[index] ? FittingRole::Target : FittingRole::Halo;
             editor.SetAtomStageEstimate(FittingStage::First, *atom, first);
@@ -143,12 +231,22 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
             if (local.fit_result)
             {
                 record.native_status = static_cast<int>(local.fit_result->status);
-                record.first_stage_fit_qualified =
-                    local.fit_result->status == RHBMEstimationStatus::SUCCESS &&
-                    local.fit_result->Qualification() != RHBMSolveQualification::Unqualified;
+                record.first_stage_qualification = local.fit_result->Qualification();
+                record.first_stage_recovery = local.fit_result->failed_only_recovery;
+                record.first_stage_fit_qualified = record.first_stage_qualification !=
+                    RHBMSolveQualification::Unqualified;
             }
             width = local.mdpde.GetModel().GetWidth();
-            record.reason = std::isfinite(width) && width > 0 ? "valid-width" : "invalid-width";
+            if (!record.target && record.first_stage_qualification == RHBMSolveQualification::Unqualified)
+            {
+                if (record.first_stage_recovery)
+                    record.reason = "first-stage-recovery-unqualified:" + record.first_stage_recovery->reason;
+                else if (record.native_status)
+                    record.reason = "first-stage-native-unqualified:" + std::to_string(*record.native_status);
+                else
+                    record.reason = "first-stage-result-unavailable";
+            }
+            else record.reason = std::isfinite(width) && width > 0 ? "valid-width" : "invalid-width";
         }
         catch (const std::exception & error)
         {

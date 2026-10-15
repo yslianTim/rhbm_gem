@@ -5,6 +5,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 
 namespace rhbm_gem {
 inline constexpr std::string_view FullABCHaloContributorPolicy="fullabc-eligible-halo-pruning-v1";
@@ -146,6 +147,8 @@ struct JointInitializationAtom
     std::optional<double> original_b,used_b;
     std::string seed_source{"not-recorded"};
     std::size_t donor_count{};
+    std::optional<RHBMSolveQualification> first_stage_qualification{};
+    std::optional<RHBMFailedOnlyRecoveryDiagnostics> first_stage_recovery{};
 };
 inline constexpr std::string_view FixedHaloParameterSourceContractVersion="first-stage-mdpde-fixed-halo-v1";
 struct JointFixedHaloParameter
@@ -157,8 +160,52 @@ struct JointFixedHaloParameter
     std::optional<int> first_stage_status;
     std::string source_contract{FixedHaloParameterSourceContractVersion};
     bool first_stage_fit_qualified{};
-    bool operator==(const JointFixedHaloParameter &) const = default;
+    std::optional<RHBMSolveQualification> first_stage_qualification{};
+    std::optional<RHBMFailedOnlyRecoveryDiagnostics> first_stage_recovery{};
+    bool operator==(const JointFixedHaloParameter & other) const;
 };
+inline RHBMSolveQualification FirstStageQualification(
+    std::optional<int> native_status, bool fit_qualified,
+    const std::optional<RHBMSolveQualification> & qualification,
+    const std::optional<RHBMFailedOnlyRecoveryDiagnostics> & recovery)
+{
+    if (qualification) return *qualification;
+    if (recovery) return recovery->accepted ? RHBMSolveQualification::RefinedSuccess :
+        RHBMSolveQualification::Unqualified;
+    return fit_qualified && native_status && *native_status == static_cast<int>(RHBMEstimationStatus::SUCCESS) ?
+        RHBMSolveQualification::NativeSuccess : RHBMSolveQualification::Unqualified;
+}
+inline bool IsQualifiedFirstStageEstimate(
+    std::optional<int> native_status, bool fit_qualified,
+    const std::optional<RHBMSolveQualification> & qualification,
+    const std::optional<RHBMFailedOnlyRecoveryDiagnostics> & recovery)
+{
+    if (!fit_qualified || !native_status) return false;
+    const auto effective = FirstStageQualification(native_status, fit_qualified, qualification, recovery);
+    if (effective == RHBMSolveQualification::NativeSuccess)
+        return *native_status == static_cast<int>(RHBMEstimationStatus::SUCCESS);
+    return effective == RHBMSolveQualification::RefinedSuccess &&
+        *native_status != static_cast<int>(RHBMEstimationStatus::SUCCESS) &&
+        recovery && recovery->accepted;
+}
+inline bool JointFixedHaloParameter::operator==(const JointFixedHaloParameter & other) const
+{
+    return contributor_index==other.contributor_index && atom_id==other.atom_id &&
+        amplitude==other.amplitude && width==other.width && charge==other.charge &&
+        first_stage_sample_count==other.first_stage_sample_count &&
+        first_stage_status==other.first_stage_status && source_contract==other.source_contract &&
+        first_stage_fit_qualified==other.first_stage_fit_qualified &&
+        FirstStageQualification(first_stage_status,first_stage_fit_qualified,
+            first_stage_qualification,first_stage_recovery)==
+            FirstStageQualification(other.first_stage_status,other.first_stage_fit_qualified,
+                other.first_stage_qualification,other.first_stage_recovery) &&
+        first_stage_recovery==other.first_stage_recovery;
+}
+inline bool IsQualifiedFirstStageFixedHalo(const JointFixedHaloParameter & fixed)
+{
+    return IsQualifiedFirstStageEstimate(fixed.first_stage_status,
+        fixed.first_stage_fit_qualified, fixed.first_stage_qualification, fixed.first_stage_recovery);
+}
 struct JointInitialization
 {
     bool valid{};

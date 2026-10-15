@@ -105,7 +105,8 @@ PostJointLocalResult FitPostJointLocalTarget(
     if (!result.fit.fit_result)
     { result.status = EvidenceStatus::Unavailable; result.reason = "local-mdpde-result-unavailable"; return result; }
     auto & fit = *result.fit.fit_result;
-    result.fit.diagnostics = LocalFitDiagnostics{fit.status, fit.sigma_square, fit.diagnostics, fit.refinement};
+    result.fit.diagnostics = LocalFitDiagnostics{fit.status, fit.sigma_square, fit.diagnostics,
+        fit.refinement, fit.failed_only_recovery};
     const auto reject = [&result](std::string reason) {
         result.status = EvidenceStatus::Unavailable;
         result.reason = std::move(reason);

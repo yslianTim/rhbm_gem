@@ -233,5 +233,35 @@ Therefore no finite unqualified endpoint is needed: the evidence supports a
 failed-only, bounded 300-iteration retry, with existing endpoint refinement
 attempted first and the bounded retry used only if refinement is rejected.
 Successful FirstStage fits retain their current 100-iteration path and do no
-recovery work. This is the P1 implementation candidate; the fixed-halo model
-and `C=0` rule are unchanged.
+recovery work. The fixed-halo model and `C=0` rule are unchanged.
+
+## P1 failed-only FirstStage recovery
+
+The implementation runs recovery only for non-target fixed halos whose native
+FirstStage solver did not return `SUCCESS`. It attempts the existing endpoint
+refinement first. Only when that result is rejected and native status is
+`MAX_ITERATIONS_REACHED` does it retry the same native fixed-point solver with a
+300-iteration cap and unchanged tolerance and weight floor. A retry must return
+native `SUCCESS`. In either recovery path, the persisted native status remains
+`MAX_ITERATIONS_REACHED`; the fixed parameters remain the accepted FirstStage
+A/B and C=0.
+
+The formal 6Z6U chain-A initialization reported `valid-widths`, retained all 659
+supported halos, and entered the target-only solver with a 1,418-target
+component. The saved schema-15 snapshot contains 655 `NativeSuccess` and 4
+`RefinedSuccess` fixed halos, all qualified, each with C=0. Recovery was tried
+for 4/4 previously failed halos: endpoint refinement accepted 3; the remaining
+atom 16664 used the bounded native retry and succeeded at iteration 268. Its
+native beta change squared was `2.058e-10`, relative variance change was
+`9.822e-6`, and diagnostic estimating-equation residual was `8.378e-6`.
+The latter is retained as diagnostic evidence and is not tested against the
+stricter endpoint-refinement root residual gate. The 300-iteration native retry
+returned `SUCCESS` under FirstStage's existing stopping rule; the 1,000-iteration
+control had already established that it reaches the same endpoint.
+
+The four recoveries took 3.04 ms total; the largest per-halo recovery time was
+1.50 ms. Fixed-halo JSON round-trip and historical schema-14 decoding pass.
+Targeted recovery, fixed-halo validation, Joint snapshot and SQLite persistence
+tests pass. When an initialization record remains unqualified, its per-atom
+reason now records the recovery failure or native status along with its atom
+identity and recovery diagnostics; it is not silently promoted or removed.

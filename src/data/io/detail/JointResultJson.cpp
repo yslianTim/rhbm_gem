@@ -58,6 +58,92 @@ j::value OptionalBoolean(std::optional<bool> value)
 {return value ? j::value(*value) : j::value(nullptr);}
 std::optional<bool> ReadOptionalBoolean(const j::value & value)
 {return value.is_null() ? std::nullopt : std::optional<bool>(j::value_to<bool>(value));}
+const char * QualificationText(RHBMSolveQualification qualification)
+{
+    switch(qualification)
+    {
+    case RHBMSolveQualification::NativeSuccess: return "NativeSuccess";
+    case RHBMSolveQualification::RefinedSuccess: return "RefinedSuccess";
+    case RHBMSolveQualification::Unqualified: return "Unqualified";
+    }
+    throw std::invalid_argument("Invalid FirstStage solve qualification.");
+}
+RHBMSolveQualification Qualification(const j::value & value)
+{
+    const auto text=j::value_to<std::string>(value);
+    if(text=="NativeSuccess") return RHBMSolveQualification::NativeSuccess;
+    if(text=="RefinedSuccess") return RHBMSolveQualification::RefinedSuccess;
+    if(text=="Unqualified") return RHBMSolveQualification::Unqualified;
+    throw std::invalid_argument("Invalid saved FirstStage solve qualification.");
+}
+j::value EndpointRefinement(const RHBMEndpointRefinementDiagnostics & r)
+{
+    j::value coordinates=nullptr;
+    if(r.relative_coordinate_difference)
+        coordinates=j::array{(*r.relative_coordinate_difference)[0],(*r.relative_coordinate_difference)[1],
+            (*r.relative_coordinate_difference)[2]};
+    return Object{{"accepted",r.accepted},{"reason",r.reason},
+        {"candidate_equation_evaluations",r.candidate_equation_evaluations},
+        {"reference_updates",r.reference_updates},{"reference_stop",r.reference_stop},
+        {"original_residual",Number(r.original_residual)},{"candidate_residual",Number(r.candidate_residual)},
+        {"reference_residual",Number(r.reference_residual)},{"relative_coordinate_difference",std::move(coordinates)},
+        {"weight_max_difference",Number(r.weight_max_difference)},
+        {"floor_masks_equal",OptionalBoolean(r.floor_masks_equal)}};
+}
+RHBMEndpointRefinementDiagnostics ReadEndpointRefinement(const j::value & value)
+{
+    const auto & o=value.as_object(); RHBMEndpointRefinementDiagnostics r;
+    r.accepted=Read<bool>(o,"accepted"); r.reason=Read<std::string>(o,"reason");
+    r.candidate_equation_evaluations=Read<int>(o,"candidate_equation_evaluations");
+    r.reference_updates=Read<int>(o,"reference_updates"); r.reference_stop=Read<std::string>(o,"reference_stop");
+    r.original_residual=OptionalNumber(o.at("original_residual"));
+    r.candidate_residual=OptionalNumber(o.at("candidate_residual"));
+    r.reference_residual=OptionalNumber(o.at("reference_residual"));
+    if(!o.at("relative_coordinate_difference").is_null())
+    {
+        const auto & a=o.at("relative_coordinate_difference").as_array();
+        if(a.size()!=3) throw std::invalid_argument("Invalid endpoint refinement coordinate shape.");
+        r.relative_coordinate_difference=std::array<double,3>{j::value_to<double>(a[0]),
+            j::value_to<double>(a[1]),j::value_to<double>(a[2])};
+    }
+    r.weight_max_difference=OptionalNumber(o.at("weight_max_difference"));
+    r.floor_masks_equal=ReadOptionalBoolean(o.at("floor_masks_equal"));
+    return r;
+}
+j::value FailedOnlyRecovery(const RHBMFailedOnlyRecoveryDiagnostics & r)
+{
+    j::value endpoint=nullptr, retry=nullptr;
+    if(r.endpoint_refinement) endpoint=EndpointRefinement(*r.endpoint_refinement);
+    if(r.bounded_native_retry)
+    {
+        const auto & value=*r.bounded_native_retry;
+        retry=Object{{"max_iterations",value.max_iterations},{"native_status",value.native_status ? j::value(*value.native_status) : j::value(nullptr)},
+            {"iterations",value.iterations},{"squared_beta_change",Number(value.squared_beta_change)},
+            {"relative_variance_change",Number(value.relative_variance_change)},
+            {"equation_residual",Number(value.equation_residual)},{"seconds",value.seconds}};
+    }
+    return Object{{"accepted",r.accepted},{"reason",r.reason},
+        {"endpoint_refinement_seconds",r.endpoint_refinement_seconds},
+        {"endpoint_refinement",std::move(endpoint)},{"bounded_native_retry",std::move(retry)}};
+}
+RHBMFailedOnlyRecoveryDiagnostics ReadFailedOnlyRecovery(const j::value & value)
+{
+    const auto & o=value.as_object(); RHBMFailedOnlyRecoveryDiagnostics r;
+    r.accepted=Read<bool>(o,"accepted"); r.reason=Read<std::string>(o,"reason");
+    r.endpoint_refinement_seconds=Read<double>(o,"endpoint_refinement_seconds");
+    if(!o.at("endpoint_refinement").is_null()) r.endpoint_refinement=ReadEndpointRefinement(o.at("endpoint_refinement"));
+    if(!o.at("bounded_native_retry").is_null())
+    {
+        const auto & retry=o.at("bounded_native_retry").as_object(); RHBMNativeRetryDiagnostics x;
+        x.max_iterations=Read<int>(retry,"max_iterations");
+        if(!retry.at("native_status").is_null()) x.native_status=Read<int>(retry,"native_status");
+        x.iterations=Read<int>(retry,"iterations"); x.squared_beta_change=OptionalNumber(retry.at("squared_beta_change"));
+        x.relative_variance_change=OptionalNumber(retry.at("relative_variance_change"));
+        x.equation_residual=OptionalNumber(retry.at("equation_residual")); x.seconds=Read<double>(retry,"seconds");
+        r.bounded_native_retry=std::move(x);
+    }
+    return r;
+}
 // Initialization diagnostics may contain failed/nonfinite estimates. These are
 // explicitly null on disk; a decoded null remains unavailable (NaN), never zero.
 template<class Range> j::array Diagnostics(const Range & values)
@@ -203,7 +289,12 @@ Object Initialization(const JointInitialization & x)
     for(const auto & a:x.atoms) atoms.emplace_back(Object{{"id",a.id},{"ols",Diagnostics(a.ols)},{"mdpde",Diagnostics(a.mdpde)},
         {"alpha",std::isfinite(a.alpha) ? j::value(a.alpha) : j::value(nullptr)},{"sample_count",a.sample_count},
         { "native_status",a.native_status ? j::value(*a.native_status) : j::value(nullptr)},{"reason",a.reason},
-        {"original_b",Number(a.original_b)},{"used_b",Number(a.used_b)},{"seed_source",a.seed_source},{"donor_count",a.donor_count}});
+        {"original_b",Number(a.original_b)},{"used_b",Number(a.used_b)},{"seed_source",a.seed_source},{"donor_count",a.donor_count},
+        {"first_stage_fit_qualified",a.first_stage_fit_qualified},
+        {"first_stage_qualification",a.first_stage_qualification ?
+            j::value(QualificationText(*a.first_stage_qualification)) : j::value(nullptr)},
+        {"first_stage_recovery",a.first_stage_recovery ?
+            FailedOnlyRecovery(*a.first_stage_recovery) : j::value(nullptr)}});
     return {{"valid",x.valid},{"reason",x.reason},{"b",Diagnostics(x.b)},{"atoms",std::move(atoms)},{"data_scope",x.data_scope}};
 }
 JointInitialization ReadInitialization(const j::value & v)
@@ -220,6 +311,11 @@ JointInitialization ReadInitialization(const j::value & v)
         std::copy(ols.begin(),ols.end(),atom.ols.begin()); std::copy(mdpde.begin(),mdpde.end(),atom.mdpde.begin());
         atom.alpha=OptionalNumber(a.at("alpha")).value_or(std::numeric_limits<double>::quiet_NaN());
         atom.sample_count=Read<std::size_t>(a,"sample_count");
+        if(a.contains("first_stage_fit_qualified")) atom.first_stage_fit_qualified=Read<bool>(a,"first_stage_fit_qualified");
+        if(a.contains("first_stage_qualification") && !a.at("first_stage_qualification").is_null())
+            atom.first_stage_qualification=Qualification(a.at("first_stage_qualification"));
+        if(a.contains("first_stage_recovery") && !a.at("first_stage_recovery").is_null())
+            atom.first_stage_recovery=ReadFailedOnlyRecovery(a.at("first_stage_recovery"));
         if(a.contains("seed_source"))
         {
             atom.original_b=OptionalNumber(a.at("original_b")); atom.used_b=OptionalNumber(a.at("used_b"));
@@ -426,7 +522,11 @@ j::array FixedHalos(const std::vector<JointFixedHaloParameter> & values)
             {"amplitude",value.amplitude},{"width",value.width},{"charge",value.charge},
             {"first_stage_sample_count",value.first_stage_sample_count},
             {"first_stage_status",OptionalInt(value.first_stage_status)},
-            {"source_contract",value.source_contract},{"first_stage_fit_qualified",value.first_stage_fit_qualified}});
+            {"source_contract",value.source_contract},{"first_stage_fit_qualified",value.first_stage_fit_qualified},
+            {"first_stage_qualification",QualificationText(FirstStageQualification(value.first_stage_status,
+                value.first_stage_fit_qualified,value.first_stage_qualification,value.first_stage_recovery))},
+            {"first_stage_recovery",value.first_stage_recovery ?
+                FailedOnlyRecovery(*value.first_stage_recovery) : j::value(nullptr)}});
     return out;
 }
 std::vector<JointFixedHaloParameter> ReadFixedHalos(const j::value & value)
@@ -435,10 +535,15 @@ std::vector<JointFixedHaloParameter> ReadFixedHalos(const j::value & value)
     for(const auto & item:value.as_array())
     {
         const auto & object=item.as_object();
-        out.push_back({Read<std::size_t>(object,"contributor_index"),Read<std::string>(object,"atom_id"),
+        JointFixedHaloParameter fixed{Read<std::size_t>(object,"contributor_index"),Read<std::string>(object,"atom_id"),
             Read<double>(object,"amplitude"),Read<double>(object,"width"),Read<double>(object,"charge"),
             Read<std::size_t>(object,"first_stage_sample_count"),ReadOptionalInt(object.at("first_stage_status")),
-            Read<std::string>(object,"source_contract"),Read<bool>(object,"first_stage_fit_qualified")});
+            Read<std::string>(object,"source_contract"),Read<bool>(object,"first_stage_fit_qualified")};
+        if(object.contains("first_stage_qualification") && !object.at("first_stage_qualification").is_null())
+            fixed.first_stage_qualification=Qualification(object.at("first_stage_qualification"));
+        if(object.contains("first_stage_recovery") && !object.at("first_stage_recovery").is_null())
+            fixed.first_stage_recovery=ReadFailedOnlyRecovery(object.at("first_stage_recovery"));
+        out.push_back(std::move(fixed));
     }
     return out;
 }
@@ -1063,9 +1168,7 @@ void Validate(const JointAnalysisResult & x,int schema_version)
                 Require(std::isfinite(fixed.amplitude) && fixed.amplitude>=0 &&
                     std::isfinite(fixed.width) && fixed.width>0 && fixed.charge==0.0,
                     "invalid fixed-halo parameters");
-                Require(fixed.first_stage_status &&
-                    *fixed.first_stage_status==static_cast<int>(RHBMEstimationStatus::SUCCESS) &&
-                    fixed.first_stage_fit_qualified &&
+                Require(IsQualifiedFirstStageFixedHalo(fixed) &&
                     fixed.source_contract==FixedHaloParameterSourceContractVersion,
                     "invalid fixed-halo FirstStage provenance");
             }
@@ -1138,7 +1241,7 @@ void Validate(const JointAnalysisResult & x,int schema_version)
 }
 std::string Encode(const JointAnalysisResult & x)
 {
-    Validate(x,14);
+    Validate(x,15);
     const auto & m=x.metadata; const auto & t=x.costs;
     j::array components;
     for(const auto & c:x.components)
@@ -1164,7 +1267,7 @@ std::string Encode(const JointAnalysisResult & x)
             component.emplace("legacy_candidate_evidence",LegacyCandidateEvidence(c.legacy_candidate_evidence));
         components.emplace_back(std::move(component));
     }
-    Object out{{"schema_version",14},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
+    Object out{{"schema_version",15},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
         { "support_contract","sphere-fma-v1"},{"parameterization_contract",x.parameterization_contract},{"layout",Layout(x.layout)},{"metadata",Metadata(m)},{"selection_domain",SelectionDomain(x.selection_domain)},
         {"fixed_halos",FixedHalos(x.fixed_halos)},
         {"atom_ids",j::value_from(x.atom_ids)},{"row_ids",j::value_from(x.row_ids)},{"initialization",Initialization(x.initialization)},
@@ -1183,8 +1286,12 @@ JointAnalysisResult Decode(std::string_view text)
     j::parse_options options; options.numbers=j::number_precision::precise;
     const auto parsed=j::parse(text,{},options); const auto & o=parsed.as_object();
     const int version=Read<int>(o,"schema_version");
-    Require(version==3 || version==4 || version==5 || version==6 || version==7 || version==8 || version==9 || version==10 || version==11 || version==12 || version==13 || version==14,
-        "unsupported result schema version (expected 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 or 14)");
+    Require(version==3 || version==4 || version==5 || version==6 || version==7 || version==8 || version==9 || version==10 || version==11 || version==12 || version==13 || version==14 || version==15,
+        "unsupported result schema version (expected 3 through 15)");
+    if(version>=15)
+        for(const auto & fixed:o.at("fixed_halos").as_array())
+            Require(fixed.as_object().contains("first_stage_qualification"),
+                "schema 15 fixed halo requires qualification provenance");
     Require(Read<std::string>(o,"estimator")=="joint-components" &&
         Read<std::string>(o,"estimator_contract")=="guarded-joint-ls-v1" &&
         Read<std::string>(o,"objective_contract")=="parent-normalized-half-rss-v1" &&

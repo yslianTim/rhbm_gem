@@ -112,8 +112,8 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
                     result.selection_domain->target_indices.end(),fixed.contributor_index) ||
                 !std::isfinite(fixed.amplitude) || fixed.amplitude<0 ||
                 !std::isfinite(fixed.width) || fixed.width<=0 || fixed.charge!=0.0 ||
-                !fixed.first_stage_status || *fixed.first_stage_status!=static_cast<int>(RHBMEstimationStatus::SUCCESS) ||
-                !fixed.first_stage_fit_qualified || fixed.source_contract!=FixedHaloParameterSourceContractVersion)
+                !IsQualifiedFirstStageFixedHalo(fixed) ||
+                fixed.source_contract!=FixedHaloParameterSourceContractVersion)
                 throw std::invalid_argument("Invalid fixed FirstStage halo source.");
             previous=fixed.contributor_index;
             auto & estimate=estimates.at(identities[fixed.contributor_index]);

@@ -66,6 +66,16 @@ TEST(JointFixedHaloInitializationTest, RejectsFailedFitAndMedianWidthFallback)
     atom.seed_source = "median-fallback";
     EXPECT_FALSE(rhbm_gem::core::detail::MakeFixedHaloParameter(atom, 0, "42", reason));
     EXPECT_EQ(reason, "median-width-fallback");
+
+    atom = FirstStageHalo();
+    atom.native_status = static_cast<int>(rhbm_gem::RHBMEstimationStatus::MAX_ITERATIONS_REACHED);
+    atom.first_stage_qualification = rhbm_gem::RHBMSolveQualification::NativeSuccess;
+    EXPECT_FALSE(rhbm_gem::core::detail::MakeFixedHaloParameter(atom, 0, "42", reason));
+    EXPECT_EQ(reason, "first-stage-fitting-failure");
+
+    atom.first_stage_qualification = rhbm_gem::RHBMSolveQualification::RefinedSuccess;
+    EXPECT_FALSE(rhbm_gem::core::detail::MakeFixedHaloParameter(atom, 0, "42", reason));
+    EXPECT_EQ(reason, "first-stage-fitting-failure");
 }
 
 TEST(JointFixedHaloInitializationTest, RejectsNonFiniteOrInvalidFirstStageAmplitudeAndWidth)
