@@ -357,6 +357,10 @@ if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
     target_link_libraries(joint_width_trajectory PRIVATE joint_test_support rhbm_gem_test CompilerFlags)
     target_compile_definitions(joint_width_trajectory PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
     add_dependencies(tests_all joint_width_trajectory)
+    add_executable(joint_fullabc_width_study experiments/joint_fullabc_width_study.cpp)
+    target_link_libraries(joint_fullabc_width_study PRIVATE joint_test_support rhbm_gem_test CompilerFlags)
+    target_compile_definitions(joint_fullabc_width_study PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
+    add_dependencies(tests_all joint_fullabc_width_study)
     add_test(NAME joint_local_ac_kkt_recovery
         COMMAND $<TARGET_FILE:joint_local_ac_kkt> replay
             "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_ac_kkt/block-82.json")
