@@ -71,7 +71,7 @@ distinct squared-distance count, and reason (`insufficient-observations` or
 `insufficient-radial-information`). Excluded atoms are not fitted failures and
 receive no A/C/B estimate or covariance.
 
-Joint JSON schema 11 stores this provenance. Schemas 3 through 10 remain
+Joint JSON schema 12 stores this provenance. Schemas 3 through 11 remain
 readable, including saved singleton-halo layouts and nuisance amplitudes; old
 results retain their original parameterization when re-encoded. Current CSV
 atom rows contain retained contributors. The nuisance contribution CSV is

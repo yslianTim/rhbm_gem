@@ -27,7 +27,8 @@ void Write(const fs::path & path,const j::value & value)
 j::array Values(const std::vector<double> & v) {j::array out; for(double x:v) out.push_back(runtime_json::Number(x)); return out;}
 Vector Parse(const j::value & v) {Vector out(static_cast<Eigen::Index>(v.as_array().size())); for(Eigen::Index k=0;k<out.size();++k) out(k)=j::value_to<double>(v.at(static_cast<std::size_t>(k))); return out;}
 j::object State(const core::JointState & s)
-{return {{"valid",true},{"beta",Values(s.ac)},{"eta",Values(s.log_b)},{"b",Values(s.b)}};}
+{return {{"valid",true},{"beta",Values(s.ac)},{"eta",Values(s.log_b)},{"b",Values(s.b)},
+    {"b_gradient",Values(s.width_gradient)}};}
 j::object ComponentFit(const core::JointComponentResult & c,const std::string & name,const std::string & dataset,double scale)
 {
     j::object out{{"schema_version",2},{"component_id",c.id},{"case",name},{"dataset",dataset},{"residual_scale",scale},

@@ -279,11 +279,13 @@ Invalid input/problem construction and persistence errors fail the command.
 `result_dump --printer joint` writes `joint_result_<sanitized-key>.json` and
 `joint_atoms_<sanitized-key>.csv`. It writes the sibling
 `joint_atoms_<sanitized-key>.contributions.csv` only for a historical result
-with nuisance groups. JSON schema 11 includes metadata, identities, contributor
+with nuisance groups. JSON schema 12 includes metadata, identities, contributor
 selection policy and exclusion provenance, parameterization, seed provenance,
 row mappings/mask, initial values, trusted states, optional parameter-only
-candidate diagnostics, objectives, cost counters, checks, ranks and captured
-convergence. CSV has one row per fitted contributor (including unavailable targets):
+candidate diagnostics, objectives, cost counters, checks, legacy global-rank
+evidence, local block-conditioning and parameter-stability diagnostics, and captured
+convergence. Target-estimability rank evidence remains under target evidence.
+CSV has one row per fitted contributor (including unavailable targets):
 `AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate,SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,ParameterIdentifiability`.
 A/C follow the joint kernel convention, with signed C; B is the width, not log-B.
 Available but unconverged trusted states are retained. Uncertified candidate
@@ -303,7 +305,7 @@ Save upgrades and writes in one transaction, rolling back on failure. Older
 versions, including v16, remain unchanged on rejection. A saved key holds one joint outcome;
 saving a model without a joint result over that key removes the previous outcome.
 
-### Provenance and map units (joint JSON schemas 3 through 11)
+### Provenance and map units (joint JSON schemas 3 through 12)
 
 `metadata.model_sha256` and `map_sha256` fingerprint the original file bytes,
 checked before and after loading. Paths remain descriptive, not content identity.
@@ -353,9 +355,9 @@ the objective only and must not be used for this conversion. CSV retains fitted
 coefficients; its appended `SelectionRole` distinguishes target, halo and not-recorded; keep its companion JSON for units and
 provenance. No conversion is performed during export.
 
-Production joint JSON schemas 3 through 11 are accepted. Earlier joint JSON is rejected
+Production joint JSON schemas 3 through 12 are accepted. Earlier joint JSON is rejected
 with a request to regenerate the outcome, without migration or database writes.
-New Joint result JSON uses schema 11. Schemas 3 through 10 preserve their saved
+New Joint result JSON uses schema 12. Schemas 3 through 11 preserve their saved
 evidence and convergence statuses. Schema 10 stores `target-estimability-v4`
 and rank-context identities without computed null-space leakage or full-Jacobian
 column scales. Schema 11 adds the FullABC halo pruning policy and exclusion

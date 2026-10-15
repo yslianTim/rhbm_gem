@@ -149,7 +149,7 @@ offsets from Gaussian-only group values. Group membership is restored by its sav
 identities; legacy group tables are adapted using the restored selection.
 
 `model_joint_result(key_tag, result_json)` stores the Joint estimator snapshot
-and its JSON schema-11 metadata, contributor selection, evidence, states and optional
+and its JSON schema-12 metadata, contributor selection, evidence, states and optional
 candidate diagnostics. It is
 distinct from the neutral stage view used by downstream analysis. Legacy v17/v18
 analysis rows are read only for adaptation or migration; they are not canonical
@@ -197,9 +197,11 @@ error; it does not produce an empty model.
 ## Joint result payload
 
 `model_joint_result(key_tag TEXT PRIMARY KEY, result_json TEXT NOT NULL)` has the
-same direct cascading model-root foreign key as other child tables. Its schema-11
+same direct cascading model-root foreign key as other child tables. Its schema-12
 JSON codec is shared by SQLite and the public Joint file exporter; readers accept
-schemas 3 through 11. New contributor-selection provenance is stored with the
+schemas 3 through 12. Legacy global-rank evidence remains distinguishable from
+target evidence, while schema 12 adds local conditioning and parameter-stability
+diagnostics. New contributor-selection provenance is stored with the
 fixed selected observation domain. Candidate diagnostics contain parameter vectors and separate
 endpoint-verification and qualification statuses; they do not change trusted
 scientific-state availability. Legacy schemas retain their saved evidence

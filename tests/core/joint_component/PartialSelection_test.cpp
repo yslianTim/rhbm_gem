@@ -378,7 +378,7 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesHaloHistoryAndRo
         EXPECT_EQ(rhbm_gem::AtomLocalPotentialView::For(*atom).GetEstimateMDPDE(rhbm_gem::FittingStage::Second).GetWidth(),.91);
     const auto saved=core::CaptureJointAnalysisResult(fit);
     const auto encoded=rhbm_gem::joint_result_io::Encode(saved);
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),11);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),12);
     const auto decoded=rhbm_gem::joint_result_io::Decode(encoded);
     ASSERT_TRUE(decoded.selection_domain); EXPECT_EQ(decoded.selection_domain->target_indices,(std::vector<std::size_t>{0}));
     ASSERT_TRUE(decoded.selection_domain->halo_eligibility);
@@ -392,6 +392,14 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesHaloHistoryAndRo
     missing_provenance.at("selection_domain").as_object()["halo_eligibility"]=nullptr;
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(missing_provenance)),std::invalid_argument);
     missing_provenance=boost::json::parse(encoded).as_object();
+    missing_provenance["ranks"]=missing_provenance.at("legacy_global_rank_evidence");
+    missing_provenance.erase("legacy_global_rank_evidence");
+    for(auto & item:missing_provenance.at("components").as_array())
+    {
+        auto & component=item.as_object();
+        component["ranks"]=component.at("legacy_global_rank_evidence");
+        component.erase("legacy_global_rank_evidence");
+    }
     missing_provenance["schema_version"]=10;
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(missing_provenance)),std::invalid_argument);
     f.model->EditAnalysis().SetJointResult(saved);

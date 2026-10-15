@@ -241,6 +241,107 @@ j::value OptionalSize(std::optional<std::size_t> value)
 {return value ? j::value(*value) : j::value(nullptr);}
 std::optional<std::size_t> ReadOptionalSize(const j::value & value)
 {return value.is_null() ? std::nullopt : std::optional<std::size_t>(j::value_to<std::size_t>(value));}
+j::array BlockConditioning(const std::vector<JointBlockConditioning> & values)
+{
+    j::array out;
+    for(const auto & x:values) out.emplace_back(Object{{"block_id",x.block_id},{"status",x.status},{"reason",x.reason},
+        {"core_atoms",j::value_from(x.core_atoms)},{"core_atom_count",x.core_atom_count},
+        {"affected_row_count",x.affected_row_count},{"free_ac_columns",x.free_ac_columns},
+        {"active_amplitude_count",x.active_amplitude_count},{"free_ac_rank",OptionalSize(x.free_ac_rank)},
+        {"projected_width_rank",OptionalSize(x.projected_width_rank)},{"profile_rank",OptionalSize(x.profile_rank)},
+        {"workspace_peak_memory_estimate_bytes",OptionalSize(x.workspace_peak_memory_estimate_bytes)},
+        {"free_ac_sigma_min",Number(x.free_ac_sigma_min)},{"free_ac_sigma_max",Number(x.free_ac_sigma_max)},
+        {"free_ac_condition",Number(x.free_ac_condition)},{"projected_width_condition",Number(x.projected_width_condition)},
+        {"profile_condition",Number(x.profile_condition)},{"free_ac_status",x.free_ac_status},
+        {"free_ac_reason",x.free_ac_reason},{"projected_width_status",x.projected_width_status},
+        {"projected_width_reason",x.projected_width_reason},{"profile_status",x.profile_status},
+        {"profile_reason",x.profile_reason}});
+    return out;
+}
+std::vector<JointBlockConditioning> ReadBlockConditioning(const j::value & value)
+{
+    std::vector<JointBlockConditioning> out;
+    for(const auto & item:value.as_array())
+    {
+        const auto & o=item.as_object(); JointBlockConditioning x;
+        x.block_id=Read<std::string>(o,"block_id"); x.status=Read<std::string>(o,"status");
+        x.reason=Read<std::string>(o,"reason"); x.core_atoms=Read<std::vector<std::size_t>>(o,"core_atoms");
+        x.core_atom_count=Read<std::size_t>(o,"core_atom_count");
+        x.affected_row_count=Read<std::size_t>(o,"affected_row_count");
+        x.free_ac_columns=Read<std::size_t>(o,"free_ac_columns");
+        x.active_amplitude_count=Read<std::size_t>(o,"active_amplitude_count");
+        x.free_ac_rank=ReadOptionalSize(o.at("free_ac_rank"));
+        x.projected_width_rank=ReadOptionalSize(o.at("projected_width_rank"));
+        x.profile_rank=ReadOptionalSize(o.at("profile_rank"));
+        x.workspace_peak_memory_estimate_bytes=ReadOptionalSize(o.at("workspace_peak_memory_estimate_bytes"));
+        x.free_ac_sigma_min=OptionalNumber(o.at("free_ac_sigma_min"));
+        x.free_ac_sigma_max=OptionalNumber(o.at("free_ac_sigma_max"));
+        x.free_ac_condition=OptionalNumber(o.at("free_ac_condition"));
+        x.projected_width_condition=OptionalNumber(o.at("projected_width_condition"));
+        x.profile_condition=OptionalNumber(o.at("profile_condition"));
+        x.free_ac_status=Read<std::string>(o,"free_ac_status"); x.free_ac_reason=Read<std::string>(o,"free_ac_reason");
+        x.projected_width_status=Read<std::string>(o,"projected_width_status");
+        x.projected_width_reason=Read<std::string>(o,"projected_width_reason");
+        x.profile_status=Read<std::string>(o,"profile_status"); x.profile_reason=Read<std::string>(o,"profile_reason");
+        out.push_back(std::move(x));
+    }
+    return out;
+}
+j::object StabilityBlock(const JointBlockParameterStability & x)
+{
+    return {{"block_id",x.block_id},{"status",x.status},{"reason",x.reason},
+        {"core_atoms",j::value_from(x.core_atoms)},{"prediction_status",x.prediction_status},
+        {"objective_consistency_status",x.objective_consistency_status},
+        {"log_width_parameter_change_inf",Number(x.log_width_parameter_change_inf)},
+        {"scaled_ac_parameter_change_inf",Number(x.scaled_ac_parameter_change_inf)},
+        {"local_prediction_change_relative",Number(x.local_prediction_change_relative)},
+        {"objective_difference",Number(x.objective_difference)},{"cpu_seconds",x.cpu_seconds},
+        {"perturbation_solves",x.perturbation_solves},{"perturbation_evaluations",x.perturbation_evaluations}};
+}
+JointBlockParameterStability ReadStabilityBlock(const j::value & value)
+{
+    const auto & o=value.as_object(); JointBlockParameterStability x;
+    x.block_id=Read<std::string>(o,"block_id"); x.status=Read<std::string>(o,"status");
+    x.reason=Read<std::string>(o,"reason"); x.core_atoms=Read<std::vector<std::size_t>>(o,"core_atoms");
+    x.prediction_status=Read<std::string>(o,"prediction_status");
+    x.objective_consistency_status=Read<std::string>(o,"objective_consistency_status");
+    x.log_width_parameter_change_inf=OptionalNumber(o.at("log_width_parameter_change_inf"));
+    x.scaled_ac_parameter_change_inf=OptionalNumber(o.at("scaled_ac_parameter_change_inf"));
+    x.local_prediction_change_relative=OptionalNumber(o.at("local_prediction_change_relative"));
+    x.objective_difference=OptionalNumber(o.at("objective_difference"));
+    x.cpu_seconds=Read<double>(o,"cpu_seconds");
+    x.perturbation_solves=Read<std::size_t>(o,"perturbation_solves");
+    x.perturbation_evaluations=Read<std::size_t>(o,"perturbation_evaluations");
+    return x;
+}
+j::value ParameterStability(const std::optional<JointParameterStability> & value)
+{
+    if(!value) return nullptr;
+    const auto & x=*value; j::array blocks;
+    for(const auto & block:x.blocks) blocks.emplace_back(StabilityBlock(block));
+    return Object{{"recent_sweep_count",x.recent_sweep_count},{"maximum_eta_change",Number(x.maximum_eta_change)},
+        {"maximum_scaled_ac_change",Number(x.maximum_scaled_ac_change)},
+        {"trajectory_stability_status",x.trajectory_stability_status},{"perturbation_status",x.perturbation_status},
+        {"blocks",std::move(blocks)},{"seconds",x.seconds},{"cpu_seconds",x.cpu_seconds},
+        {"perturbation_solves",x.perturbation_solves},{"perturbation_evaluations",x.perturbation_evaluations},
+        {"workspace_peak_memory_estimate_bytes",OptionalSize(x.workspace_peak_memory_estimate_bytes)}};
+}
+std::optional<JointParameterStability> ReadParameterStability(const j::value & value)
+{
+    if(value.is_null()) return std::nullopt;
+    const auto & o=value.as_object(); JointParameterStability x;
+    x.recent_sweep_count=Read<std::size_t>(o,"recent_sweep_count");
+    x.maximum_eta_change=OptionalNumber(o.at("maximum_eta_change"));
+    x.maximum_scaled_ac_change=OptionalNumber(o.at("maximum_scaled_ac_change"));
+    x.trajectory_stability_status=Read<std::string>(o,"trajectory_stability_status");
+    x.perturbation_status=Read<std::string>(o,"perturbation_status");
+    for(const auto & block:o.at("blocks").as_array()) x.blocks.push_back(ReadStabilityBlock(block));
+    x.seconds=Read<double>(o,"seconds"); x.cpu_seconds=Read<double>(o,"cpu_seconds");
+    x.perturbation_solves=Read<std::size_t>(o,"perturbation_solves");
+    x.perturbation_evaluations=Read<std::size_t>(o,"perturbation_evaluations");
+    x.workspace_peak_memory_estimate_bytes=ReadOptionalSize(o.at("workspace_peak_memory_estimate_bytes"));
+    return x;
+}
 j::value OptionalInt(std::optional<int> value)
 {return value ? j::value(*value) : j::value(nullptr);}
 std::optional<int> ReadOptionalInt(const j::value & value)
@@ -504,6 +605,35 @@ void ValidateCandidateDiagnostic(const JointCandidateDiagnostic & x,std::size_t 
             "verified candidate is unavailable");
     }
 }
+void ValidateBlockConditioning(const JointBlockConditioning & x)
+{
+    Require(!x.block_id.empty() && !x.status.empty() && !x.free_ac_status.empty() &&
+        !x.projected_width_status.empty() && !x.profile_status.empty(),"local conditioning identity/status");
+    Require(!x.free_ac_rank || *x.free_ac_rank<=x.free_ac_columns,"local free-AC rank");
+    Require(!x.projected_width_rank || *x.projected_width_rank<=x.core_atom_count,"local projected-width rank");
+    Require(!x.profile_rank || *x.profile_rank<=x.core_atom_count,"local profile rank");
+    for(const auto * value:{&x.free_ac_sigma_min,&x.free_ac_sigma_max,&x.free_ac_condition,
+        &x.projected_width_condition,&x.profile_condition})
+        Require(!*value || (std::isfinite(**value) && **value>=0),"local conditioning value");
+}
+void ValidateStabilityBlock(const JointBlockParameterStability & x)
+{
+    Require(!x.block_id.empty() && !x.status.empty() && !x.prediction_status.empty() &&
+        !x.objective_consistency_status.empty(),"local stability identity/status");
+    Require(std::isfinite(x.cpu_seconds) && x.cpu_seconds>=0,"local stability CPU time");
+    for(const auto * value:{&x.log_width_parameter_change_inf,&x.scaled_ac_parameter_change_inf,
+        &x.local_prediction_change_relative,&x.objective_difference})
+        Require(!*value || (std::isfinite(**value) && **value>=0),"local stability value");
+}
+void ValidateParameterStability(const JointParameterStability & x)
+{
+    Require(!x.trajectory_stability_status.empty() && !x.perturbation_status.empty(),"parameter stability status");
+    Require(std::isfinite(x.seconds) && x.seconds>=0 && std::isfinite(x.cpu_seconds) && x.cpu_seconds>=0,
+        "parameter stability time");
+    for(const auto * value:{&x.maximum_eta_change,&x.maximum_scaled_ac_change})
+        Require(!*value || (std::isfinite(**value) && **value>=0),"parameter stability trajectory value");
+    for(const auto & block:x.blocks) ValidateStabilityBlock(block);
+}
 j::value SelectionDomain(const std::optional<JointSelectionDomain> & domain)
 {
     if(!domain) return nullptr;
@@ -750,8 +880,11 @@ void Validate(const JointAnalysisResult & x,int schema_version)
         x.selection_domain->contributor_policy==FullABCHaloContributorPolicy;
     Require(schema_version>=11 || !pruned_policy,"halo pruning policy requires schema 11");
     if(pruned_policy)
+    {
+        Require(x.selection_domain->halo_eligibility.has_value(),"halo pruning requires eligibility provenance");
         Require(!x.layout && x.parameterization_contract=="full-abc-v1",
             "halo pruning results require FullABC parameterization");
+    }
     Require(x.initialization.data_scope=="caller-provided-widths" ||
         x.initialization.data_scope=="contributor-local-sampling-may-read-outside-target-domain","initialization data scope");
     std::set<std::string> initialized;
@@ -808,6 +941,10 @@ void Validate(const JointAnalysisResult & x,int schema_version)
         const auto & component_full_atoms=c.layout ? c.layout->full_atoms : c.atoms;
         ValidateTarget(c.target_evidence,c.atoms,component_full_atoms,x.selection_domain,
             c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.rows.size());
+        Require(std::isfinite(c.local_conditioning_seconds) && c.local_conditioning_seconds>=0,
+            "local conditioning time");
+        for(const auto & block:c.local_conditioning) ValidateBlockConditioning(block);
+        if(c.parameter_stability) ValidateParameterStability(*c.parameter_stability);
         if(c.state) ValidateState(*c.state,c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.layout ? c.layout->groups.size() : 0);
         if(c.candidate_diagnostic) ValidateCandidateDiagnostic(*c.candidate_diagnostic,
             c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.state.has_value(),reference_free_contract);
@@ -816,10 +953,12 @@ void Validate(const JointAnalysisResult & x,int schema_version)
 }
 std::string Encode(const JointAnalysisResult & x)
 {
-    Validate(x,11);
+    Validate(x,12);
     const auto & m=x.metadata; const auto & t=x.costs;
     j::array components;
-    for(const auto & c:x.components) components.emplace_back(Object{
+    for(const auto & c:x.components)
+    {
+        Object component{
         {"id",c.id},{"stop_reason",c.stop_reason},{"atoms",j::value_from(c.atoms)},{"rows",j::value_from(c.rows)},
         {"search_completed",c.search_completed},{"search_sweeps",c.search_sweeps},
         {"first_order_stationarity_sweep",c.first_order_stationarity_sweep},
@@ -828,19 +967,26 @@ std::string Encode(const JointAnalysisResult & x)
         {"profile_evaluations",c.profile_evaluations},{"reference_evaluations",c.reference_evaluations},
         {"accepted_updates",c.accepted_updates},{"native_status",c.native_status},{"state",OptionalState(c.state)},
         {"candidate_diagnostic",c.candidate_diagnostic ? j::value(CandidateDiagnostic(*c.candidate_diagnostic)) : j::value(nullptr)},
-        {"legacy_candidate_evidence",LegacyCandidateEvidence(c.legacy_candidate_evidence)},
-        {"evidence",Checks(c.evidence)},{"ranks",Ranks(c.legacy_global_rank_evidence)},
+        {"evidence",Checks(c.evidence)},{"legacy_global_rank_evidence",Ranks(c.legacy_global_rank_evidence)},
+        {"local_conditioning",BlockConditioning(c.local_conditioning)},
+        {"local_conditioning_seconds",Number(c.local_conditioning_seconds)},
+        {"local_conditioning_peak_memory_estimate_bytes",OptionalSize(c.local_conditioning_peak_memory_estimate_bytes)},
+        {"parameter_stability",ParameterStability(c.parameter_stability)},
         {"regular_certificate",StatusText(c.regular_certificate)},
         { "runtime_convergence",StatusText(c.runtime_convergence)},{"layout",Layout(c.layout)},
-        {"target_evidence",Target(c.target_evidence)},{"target_runtime_convergence",StatusText(c.target_runtime_convergence)}});
-    Object out{{"schema_version",11},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
+        {"target_evidence",Target(c.target_evidence)},{"target_runtime_convergence",StatusText(c.target_runtime_convergence)}};
+        if(c.legacy_candidate_evidence)
+            component.emplace("legacy_candidate_evidence",LegacyCandidateEvidence(c.legacy_candidate_evidence));
+        components.emplace_back(std::move(component));
+    }
+    Object out{{"schema_version",12},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
         { "support_contract","sphere-fma-v1"},{"parameterization_contract",x.parameterization_contract},{"layout",Layout(x.layout)},{"metadata",Metadata(m)},{"selection_domain",SelectionDomain(x.selection_domain)},
         {"atom_ids",j::value_from(x.atom_ids)},{"row_ids",j::value_from(x.row_ids)},{"initialization",Initialization(x.initialization)},
         {"costs",Object{{"construction_seconds",t.construction_seconds},{"initialization_seconds",t.initialization_seconds},{"search_seconds",t.search_seconds},
             {"search_reference_seconds",t.search_reference_seconds},{"assessment_seconds",t.assessment_seconds},{"assembly_seconds",t.assembly_seconds}}},
         {"components",std::move(components)},{"assembled_state",OptionalState(x.assembled_state)},{"objective",Number(x.objective)},
         {"available_row_mask",j::value_from(x.available_row_mask)},{"evidence",Checks(x.evidence)},
-        {"ranks",Ranks(x.legacy_global_rank_evidence)},
+        {"legacy_global_rank_evidence",Ranks(x.legacy_global_rank_evidence)},
         {"search_completed",x.search_completed},{"observation_scale",x.observation_scale},
         {"regular_certificate",StatusText(x.regular_certificate)},{"runtime_convergence",StatusText(x.runtime_convergence)},
         {"target_evidence",Target(x.target_evidence)},{"target_runtime_convergence",StatusText(x.target_runtime_convergence)}};
@@ -851,8 +997,8 @@ JointAnalysisResult Decode(std::string_view text)
     j::parse_options options; options.numbers=j::number_precision::precise;
     const auto parsed=j::parse(text,{},options); const auto & o=parsed.as_object();
     const int version=Read<int>(o,"schema_version");
-    Require(version==3 || version==4 || version==5 || version==6 || version==7 || version==8 || version==9 || version==10 || version==11,
-        "unsupported result schema version (expected 3, 4, 5, 6, 7, 8, 9, 10 or 11)");
+    Require(version==3 || version==4 || version==5 || version==6 || version==7 || version==8 || version==9 || version==10 || version==11 || version==12,
+        "unsupported result schema version (expected 3, 4, 5, 6, 7, 8, 9, 10, 11 or 12)");
     Require(Read<std::string>(o,"estimator")=="joint-components" &&
         Read<std::string>(o,"estimator_contract")=="guarded-joint-ls-v1" &&
         Read<std::string>(o,"objective_contract")=="parent-normalized-half-rss-v1" &&
@@ -891,7 +1037,15 @@ JointAnalysisResult Decode(std::string_view text)
             component.legacy_candidate_evidence=ReadLegacyCandidateEvidence(c);
         }
         component.evidence=ReadChecks(c.at("evidence"));
-        component.legacy_global_rank_evidence=ReadRanks(c.at("ranks"),version>=9);
+        component.legacy_global_rank_evidence=ReadRanks(c.at(version>=12 ? "legacy_global_rank_evidence" : "ranks"),version>=9);
+        if(version>=12)
+        {
+            component.local_conditioning=ReadBlockConditioning(c.at("local_conditioning"));
+            component.local_conditioning_seconds=Read<double>(c,"local_conditioning_seconds");
+            component.local_conditioning_peak_memory_estimate_bytes=
+                ReadOptionalSize(c.at("local_conditioning_peak_memory_estimate_bytes"));
+            component.parameter_stability=ReadParameterStability(c.at("parameter_stability"));
+        }
         component.regular_certificate=Status(c.at("regular_certificate")); component.runtime_convergence=Status(c.at("runtime_convergence"));
         if(version>=5) {component.target_evidence=ReadTarget(c.at("target_evidence"),version); component.target_runtime_convergence=Status(c.at("target_runtime_convergence"));}
         x.components.push_back(std::move(component));
@@ -899,7 +1053,7 @@ JointAnalysisResult Decode(std::string_view text)
     if(!o.at("assembled_state").is_null()) x.assembled_state=ReadState(o.at("assembled_state"));
     x.objective=OptionalNumber(o.at("objective")); x.available_row_mask=Read<std::vector<bool>>(o,"available_row_mask");
     x.evidence=ReadChecks(o.at("evidence"));
-    x.legacy_global_rank_evidence=ReadRanks(o.at("ranks"),version>=9);
+    x.legacy_global_rank_evidence=ReadRanks(o.at(version>=12 ? "legacy_global_rank_evidence" : "ranks"),version>=9);
     x.search_completed=Read<bool>(o,"search_completed"); x.observation_scale=Read<double>(o,"observation_scale");
     x.regular_certificate=Status(o.at("regular_certificate")); x.runtime_convergence=Status(o.at("runtime_convergence"));
     if(version>=5) {x.target_evidence=ReadTarget(o.at("target_evidence"),version); x.target_runtime_convergence=Status(o.at("target_runtime_convergence"));}

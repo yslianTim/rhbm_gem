@@ -460,6 +460,23 @@ TEST(DataObjectPersistenceTest, GroupWriteFailureRollsBackAnalysisReplacement)
 }
 
 namespace {
+void UseHistoricalGlobalRankKeys(boost::json::object & json)
+{
+    if(json.contains("legacy_global_rank_evidence"))
+    {
+        json["ranks"]=json.at("legacy_global_rank_evidence");
+        json.erase("legacy_global_rank_evidence");
+    }
+    for(auto & item:json.at("components").as_array())
+    {
+        auto & component=item.as_object();
+        if(component.contains("legacy_global_rank_evidence"))
+        {
+            component["ranks"]=component.at("legacy_global_rank_evidence");
+            component.erase("legacy_global_rank_evidence");
+        }
+    }
+}
 rg::JointAnalysisResult SavedJointExample()
 {
     rg::JointAnalysisResult result;
@@ -614,6 +631,7 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
     const auto fixed_json=io::Encode(fixed);
     const auto fixed_object=boost::json::parse(fixed_json).as_object();
     auto downgraded_schema=fixed_object;
+    UseHistoricalGlobalRankKeys(downgraded_schema);
     downgraded_schema["schema_version"]=7;
     EXPECT_THROW(io::Decode(boost::json::serialize(downgraded_schema)),std::invalid_argument);
     EXPECT_EQ(fixed_object.at("metadata").as_object().at("solver").as_object()
@@ -800,6 +818,7 @@ TEST(DataObjectPersistenceTest, JointCodecRejectsMalformedMappingsAndPreservesMi
     auto invalid=record; invalid.components[0].atoms[0]=99;
     EXPECT_THROW(io::Encode(invalid),std::invalid_argument);
     auto json=boost::json::parse(io::Encode(record)).as_object();
+    UseHistoricalGlobalRankKeys(json);
     json["schema_version"]=99; EXPECT_THROW(io::Decode(boost::json::serialize(json)),std::invalid_argument);
     json["schema_version"]=3; json.erase("runtime_convergence");
     EXPECT_THROW(io::Decode(boost::json::serialize(json)),std::exception);
@@ -851,6 +870,7 @@ TEST(DataObjectPersistenceTest, SchemaSevenKeepsFailedCorrectionEvidenceAndStatu
     record.target_runtime_convergence=rg::JointCheckStatus::Failed;
 
     auto saved=boost::json::parse(io::Encode(record)).as_object();
+    UseHistoricalGlobalRankKeys(saved);
     saved["schema_version"]=7;
     const auto decoded=io::Decode(boost::json::serialize(saved));
     EXPECT_EQ(decoded.components.front().runtime_convergence,rg::JointCheckStatus::Failed);
@@ -874,11 +894,51 @@ TEST(DataObjectPersistenceTest, SchemaSevenKeepsFailedCorrectionEvidenceAndStatu
     EXPECT_EQ(round_trip.components.front().target_evidence->contract,"target-estimability-v1");
 }
 
-TEST(DataObjectPersistenceTest, SchemaElevenPersistsLegacyDerivedRanksAndReadsSchemaNine)
+TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSchemaEleven)
 {
     namespace io=rg::joint_result_io;
     auto record=SavedJointExample();
     const std::string context="fnv1a64:0123456789abcdef";
+    record.legacy_global_rank_evidence={{"old-top-global",rg::JointEvidenceScope::AssembledGlobal,1,1e-12,{1},context}};
+    record.components.front().legacy_global_rank_evidence={
+        {"old-component-global",rg::JointEvidenceScope::ComponentLocal,1,1e-12,{1},context}};
+    rg::JointBlockConditioning conditioning;
+    conditioning.block_id="block-0"; conditioning.status="assessed"; conditioning.reason="";
+    conditioning.core_atoms={0}; conditioning.core_atom_count=1; conditioning.affected_row_count=2;
+    conditioning.free_ac_columns=2; conditioning.free_ac_rank=2; conditioning.projected_width_rank=1;
+    conditioning.profile_rank=1; conditioning.workspace_peak_memory_estimate_bytes=1234;
+    conditioning.free_ac_sigma_min=.2; conditioning.free_ac_sigma_max=1.5; conditioning.free_ac_condition=7.5;
+    conditioning.projected_width_condition=4.; conditioning.profile_condition=5.;
+    conditioning.free_ac_status="full-rank"; conditioning.projected_width_status="rank-deficient";
+    conditioning.profile_status="active-set-boundary";
+    record.components.front().local_conditioning={conditioning};
+    record.components.front().local_conditioning_seconds=.125;
+    record.components.front().local_conditioning_peak_memory_estimate_bytes=2048;
+    rg::JointParameterStability stability;
+    stability.recent_sweep_count=3; stability.maximum_eta_change=.01; stability.maximum_scaled_ac_change=.02;
+    stability.trajectory_stability_status="stable-trajectory"; stability.perturbation_status="assessed";
+    stability.seconds=.25; stability.cpu_seconds=.2; stability.perturbation_solves=2;
+    stability.perturbation_evaluations=8; stability.workspace_peak_memory_estimate_bytes=4096;
+    rg::JointBlockParameterStability stability_block;
+    stability_block.block_id="block-0"; stability_block.status="Sensitive"; stability_block.reason="bounded-local-perturbation-assessed";
+    stability_block.core_atoms={0}; stability_block.prediction_status="Stable";
+    stability_block.objective_consistency_status="Passed";
+    stability_block.log_width_parameter_change_inf=.03; stability_block.scaled_ac_parameter_change_inf=.04;
+    stability_block.local_prediction_change_relative=1e-10; stability_block.objective_difference=1e-12;
+    stability_block.cpu_seconds=.1; stability_block.perturbation_solves=2; stability_block.perturbation_evaluations=8;
+    stability.blocks={stability_block};
+    record.components.front().parameter_stability=stability;
+    rg::JointCandidateDiagnostic candidate;
+    candidate.candidate_available=true; candidate.candidate_eta=record.components.front().state->log_b;
+    candidate.candidate_ac=record.components.front().state->ac; candidate.candidate_objective=record.components.front().state->objective;
+    candidate.candidate_ac_kkt=0.; candidate.candidate_width_gradient_inf_norm=0.; candidate.candidate_feasible=true;
+    candidate.certification_status=rg::JointCheckStatus::Passed;
+    candidate.endpoint_verification_status=rg::JointCheckStatus::Passed;
+    candidate.numerical_qualification_status=rg::JointCheckStatus::Passed;
+    candidate.verification_reason="verified";
+    record.components.front().candidate_diagnostic=candidate;
+    record.components.front().legacy_candidate_evidence=rg::JointAnalysisComponent::LegacyCandidateEvidence{
+        rg::JointCheckStatus::Failed,rg::JointCheckStatus::Unavailable};
     rg::JointTargetEvidence derived;
     derived.contract="target-estimability-v4"; derived.original_rows=record.row_ids.size();
     derived.atoms={{0,rg::JointCheckStatus::Passed,{},"derived-from-component-identifiability"},
@@ -891,17 +951,29 @@ TEST(DataObjectPersistenceTest, SchemaElevenPersistsLegacyDerivedRanksAndReadsSc
     record.target_runtime_convergence=rg::JointCheckStatus::Unavailable;
 
     const auto encoded=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(encoded.at("schema_version").as_int64(),11);
+    EXPECT_EQ(encoded.at("schema_version").as_int64(),12);
+    EXPECT_FALSE(encoded.as_object().contains("ranks"));
+    EXPECT_EQ(encoded.at("legacy_global_rank_evidence").as_array().size(),1u);
+    const auto & saved_component=encoded.at("components").as_array()[0];
+    EXPECT_FALSE(saved_component.as_object().contains("ranks"));
+    EXPECT_EQ(saved_component.at("legacy_global_rank_evidence").as_array().size(),1u);
+    EXPECT_EQ(saved_component.at("local_conditioning").as_array().size(),1u);
+    EXPECT_EQ(saved_component.at("parameter_stability").at("blocks").as_array().size(),1u);
+    EXPECT_EQ(saved_component.at("legacy_candidate_evidence").at("reference_status").as_string(),"failed");
     const auto & saved_target=encoded.at("target_evidence");
     EXPECT_EQ(saved_target.at("contract").as_string(),"target-estimability-v4");
     EXPECT_TRUE(saved_target.at("column_scales").as_array().empty());
     EXPECT_TRUE(saved_target.at("atoms").as_array()[0].at("null_space_leakage").is_null());
     EXPECT_EQ(saved_target.at("ranks").as_array()[0].at("context_identity").as_string(),context);
-    auto downgraded=encoded.as_object(); downgraded["schema_version"]=8;
+    auto downgraded=encoded.as_object(); UseHistoricalGlobalRankKeys(downgraded); downgraded["schema_version"]=8;
     EXPECT_THROW(io::Decode(boost::json::serialize(downgraded)),std::invalid_argument);
     downgraded["schema_version"]=9;
     EXPECT_THROW(io::Decode(boost::json::serialize(downgraded)),std::invalid_argument);
     downgraded["target_evidence"].as_object()["contract"]="target-estimability-v3";
+    downgraded["components"].as_array()[0].as_object().erase("local_conditioning");
+    downgraded["components"].as_array()[0].as_object().erase("local_conditioning_seconds");
+    downgraded["components"].as_array()[0].as_object().erase("local_conditioning_peak_memory_estimate_bytes");
+    downgraded["components"].as_array()[0].as_object().erase("parameter_stability");
     const auto schema_nine=io::Decode(boost::json::serialize(downgraded));
     ASSERT_TRUE(schema_nine.target_evidence);
     EXPECT_EQ(schema_nine.target_evidence->contract,"target-estimability-v3");
@@ -914,6 +986,41 @@ TEST(DataObjectPersistenceTest, SchemaElevenPersistsLegacyDerivedRanksAndReadsSc
     ASSERT_EQ(decoded.target_evidence->ranks.size(),2u);
     EXPECT_EQ(decoded.target_evidence->ranks.front().context_identity,context);
     EXPECT_EQ(decoded.target_runtime_convergence,rg::JointCheckStatus::Unavailable);
+    ASSERT_EQ(decoded.legacy_global_rank_evidence.size(),1u);
+    EXPECT_EQ(decoded.legacy_global_rank_evidence.front().name,"old-top-global");
+    ASSERT_EQ(decoded.components.front().legacy_global_rank_evidence.size(),1u);
+    EXPECT_EQ(decoded.components.front().legacy_global_rank_evidence.front().name,"old-component-global");
+    ASSERT_EQ(decoded.components.front().local_conditioning.size(),1u);
+    EXPECT_EQ(decoded.components.front().local_conditioning.front().block_id,"block-0");
+    EXPECT_EQ(decoded.components.front().local_conditioning.front().free_ac_rank,2u);
+    EXPECT_EQ(decoded.components.front().local_conditioning.front().free_ac_status,"full-rank");
+    EXPECT_DOUBLE_EQ(decoded.components.front().local_conditioning_seconds,.125);
+    EXPECT_EQ(decoded.components.front().local_conditioning_peak_memory_estimate_bytes,2048u);
+    ASSERT_TRUE(decoded.components.front().parameter_stability);
+    EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().status,"Sensitive");
+    ASSERT_TRUE(decoded.components.front().legacy_candidate_evidence);
+    EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->reference_status,rg::JointCheckStatus::Failed);
+    EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->rank_assessment_status,rg::JointCheckStatus::Unavailable);
+
+    auto schema_eleven=encoded.as_object(); UseHistoricalGlobalRankKeys(schema_eleven);
+    schema_eleven["schema_version"]=11;
+    auto & old_component=schema_eleven["components"].as_array()[0].as_object();
+    old_component.erase("local_conditioning"); old_component.erase("local_conditioning_seconds");
+    old_component.erase("local_conditioning_peak_memory_estimate_bytes"); old_component.erase("parameter_stability");
+    old_component.erase("legacy_candidate_evidence");
+    old_component["candidate_diagnostic"].as_object()["reference_status"]="failed";
+    old_component["candidate_diagnostic"].as_object()["rank_assessment_status"]="unavailable";
+    const auto decoded_eleven=io::Decode(boost::json::serialize(schema_eleven));
+    ASSERT_EQ(decoded_eleven.legacy_global_rank_evidence.size(),1u);
+    EXPECT_EQ(decoded_eleven.legacy_global_rank_evidence.front().name,"old-top-global");
+    ASSERT_EQ(decoded_eleven.components.front().legacy_global_rank_evidence.size(),1u);
+    EXPECT_EQ(decoded_eleven.components.front().legacy_global_rank_evidence.front().name,"old-component-global");
+    EXPECT_TRUE(decoded_eleven.components.front().local_conditioning.empty());
+    EXPECT_FALSE(decoded_eleven.components.front().parameter_stability);
+    ASSERT_TRUE(decoded_eleven.components.front().legacy_candidate_evidence);
+    EXPECT_EQ(decoded_eleven.components.front().legacy_candidate_evidence->reference_status,rg::JointCheckStatus::Failed);
+    EXPECT_EQ(decoded_eleven.components.front().legacy_candidate_evidence->rank_assessment_status,
+        rg::JointCheckStatus::Unavailable);
 
     auto historical=record;
     historical.target_evidence->contract="target-estimability-v2";
@@ -923,6 +1030,7 @@ TEST(DataObjectPersistenceTest, SchemaElevenPersistsLegacyDerivedRanksAndReadsSc
     historical.target_evidence->atoms={{0,rg::JointCheckStatus::Failed,.25,"target-confounded-with-nuisance"},
         {1,rg::JointCheckStatus::Passed,0.0,{}}};
     auto schema_eight=boost::json::parse(io::Encode(historical)).as_object();
+    UseHistoricalGlobalRankKeys(schema_eight);
     schema_eight["schema_version"]=8;
     const auto decoded_historical=io::Decode(boost::json::serialize(schema_eight));
     ASSERT_TRUE(decoded_historical.target_evidence);
@@ -965,7 +1073,7 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     record.metadata.solver=provenance;
 
     const auto json=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(json.at("schema_version").as_int64(),11);
+    EXPECT_EQ(json.at("schema_version").as_int64(),12);
     EXPECT_EQ(json.at("components").as_array()[0].at("candidate_diagnostic").at("candidate_status").as_string(),"uncertified");
     const auto decoded=io::Decode(boost::json::serialize(json));
     ASSERT_TRUE(decoded.components.front().candidate_diagnostic);
@@ -1009,6 +1117,7 @@ TEST(DataObjectPersistenceTest, SchemaSixEvidenceRetainsLegacyReferenceMeaning)
     component.evidence.push_back({"inner",rg::JointCheckStatus::Passed,
         rg::JointEvidenceScope::ComponentLocal,2e-12,1e-10,"legacy-reference-coefficient-agreement"});
     auto legacy=boost::json::parse(io::Encode(record)).as_object();
+    UseHistoricalGlobalRankKeys(legacy);
     legacy["schema_version"]=6;
     auto & diagnostic=legacy.at("components").as_array()[0].as_object().at("candidate_diagnostic").as_object();
     diagnostic["reference_status"]="passed";
@@ -1064,6 +1173,7 @@ TEST(DataObjectPersistenceTest, SchemaFiveRecordsDoNotInferCandidateDiagnostics)
     candidate.certification_status=rg::JointCheckStatus::Passed;
     record.components.front().candidate_diagnostic=candidate;
     auto json=boost::json::parse(io::Encode(record)).as_object();
+    UseHistoricalGlobalRankKeys(json);
     json["schema_version"]=5;
     for(auto & component:json.at("components").as_array()) component.as_object().erase("candidate_diagnostic");
     const auto decoded=io::Decode(boost::json::serialize(json));

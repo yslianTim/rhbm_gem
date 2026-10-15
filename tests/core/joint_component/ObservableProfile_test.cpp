@@ -28,6 +28,23 @@
 namespace {
 namespace core=rhbm_gem::core;
 namespace n=core::joint_component;
+void UseHistoricalGlobalRankKeys(boost::json::object & json)
+{
+    if(json.contains("legacy_global_rank_evidence"))
+    {
+        json["ranks"]=json.at("legacy_global_rank_evidence");
+        json.erase("legacy_global_rank_evidence");
+    }
+    for(auto & item:json.at("components").as_array())
+    {
+        auto & component=item.as_object();
+        if(component.contains("legacy_global_rank_evidence"))
+        {
+            component["ranks"]=component.at("legacy_global_rank_evidence");
+            component.erase("legacy_global_rank_evidence");
+        }
+    }
+}
 constexpr double missing_width=std::numeric_limits<double>::quiet_NaN();
 n::Domain FullDomain(const n::Domain & domain,const rhbm_gem::JointParameterLayout & layout)
 {
@@ -336,6 +353,7 @@ TEST(JointObservableProfileTest, LegacyV3DoesNotInferReductionAndMalformedLayout
     auto input=Input(); input.atom_ids.resize(1); input.support.resize(1); input.observations[23]-=.7;
     const auto saved=core::CaptureJointAnalysisResult(core::FitJointComponents(core::JointProblem(input),{.6}));
     auto json=boost::json::parse(rhbm_gem::joint_result_io::Encode(saved)).as_object();
+    UseHistoricalGlobalRankKeys(json);
     json["schema_version"]=3; json.erase("layout"); json.erase("parameterization_contract");
     auto & solver=json.at("metadata").as_object().at("solver").as_object();
     solver["contract_version"]="joint-solver-provenance-v3";
@@ -346,6 +364,7 @@ TEST(JointObservableProfileTest, LegacyV3DoesNotInferReductionAndMalformedLayout
     const core::JointProblem legacy_problem(legacy_input);
     const auto current=core::CaptureJointAnalysisResult(core::FitJointComponents(legacy_problem,{.6,.7,.8}));
     auto legacy_json=boost::json::parse(rhbm_gem::joint_result_io::Encode(current)).as_object();
+    UseHistoricalGlobalRankKeys(legacy_json);
     boost::json::array full_atoms{0};
     boost::json::array informative_rows; for(std::size_t row=0;row<23;++row) informative_rows.push_back(row);
     boost::json::array groups{boost::json::object{{"row",23},{"atoms",boost::json::array{1,2}}}};
@@ -555,8 +574,9 @@ TEST(JointObservableProfileTest, HaloNonuniquenessDoesNotCertifyItsParameters)
     EXPECT_FALSE(stages.at(1).point); EXPECT_FALSE(stages.at(4).point);
     const auto text=rhbm_gem::joint_result_io::Encode(saved);
     auto value=boost::json::parse(text);
-    EXPECT_EQ(value.at("schema_version").as_int64(),11);
+    EXPECT_EQ(value.at("schema_version").as_int64(),12);
     auto downgraded=value;
+    UseHistoricalGlobalRankKeys(downgraded.as_object());
     downgraded.as_object()["schema_version"]=7;
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(downgraded)),std::invalid_argument);
     const auto restored=rhbm_gem::joint_result_io::Decode(text);
@@ -565,6 +585,7 @@ TEST(JointObservableProfileTest, HaloNonuniquenessDoesNotCertifyItsParameters)
     EXPECT_NE(restored.components[0].candidate_diagnostic->endpoint_verification_status,
         rhbm_gem::JointCheckStatus::Passed);
     EXPECT_FALSE(restored.components[0].state);
+    UseHistoricalGlobalRankKeys(value.as_object());
     value.as_object()["schema_version"]=4;
     value.as_object().at("selection_domain").as_object()["contributor_policy"]="all-non-hydrogen";
     value.as_object().at("selection_domain").as_object()["halo_eligibility"]=nullptr;
@@ -891,7 +912,7 @@ TEST(JointObservableProfileTest, TargetEvidenceUsesEveryComponentAndTheSavedStat
     }
     const auto saved=core::CaptureJointAnalysisResult(fit);
     auto json=boost::json::parse(rhbm_gem::joint_result_io::Encode(saved));
-    EXPECT_EQ(json.at("schema_version").as_int64(),11);
+    EXPECT_EQ(json.at("schema_version").as_int64(),12);
     json.at("target_evidence").as_object()["column_scales"]=boost::json::array{1.};
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(json)),std::invalid_argument);
     const auto restored=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved));
