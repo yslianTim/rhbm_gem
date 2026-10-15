@@ -326,9 +326,10 @@ processes against the same raw 229,783-row observation domain, original scale
 FixedNeighbor solver, unchanged gates, and 200-sweep maximum. The production
 and Charge Oracle cases use the qualified 659-halo FirstStage A/B snapshot;
 the two Gaussian Oracle cases replace halo A/B with simulation truth. All
-Joint fixed-halo entries still have C=0. The Charge Oracle's truth charge is
-represented only by research-side effective observations; no production halo
-charge parameter or optimization is introduced. Per-sweep trajectories and
+Joint fixed-halo entries still have C=0. The Charge Oracle and Full Oracle
+truth charge signals are represented only by research-side effective
+observations; no production halo charge parameter or optimization is
+introduced. Per-sweep trajectories and
 isolated process wall time and peak RSS are recorded in
 [`fixed-halo-target-only-6z6u-model-error.json`](fixed-halo-target-only-6z6u-model-error.json).
 
@@ -394,3 +395,38 @@ the Full Oracle case converges with the same target solver. This is better
 observed search stability on this workload, but the production C=0 fit itself
 still stops at a stationarity plateau. No evidence from these runs justifies
 changing FixedNeighbor, SparseQR, or Profile LM convergence settings.
+
+## P4 API and integration closeout
+
+The public API comments and developer guide now distinguish a raw
+`BuildJointProblem` from a problem carrying a qualified FirstStage fixed-halo
+snapshot. They state that `FitJointComponents` widths belong to selected
+targets only, `FitJointComponentsInitialized` attaches qualified FirstStage
+halos before fitting, and initialization validity is separate from target
+convergence. `EstimateJointComponents` is documented as the construction,
+initialization, and target-only fitting convenience path. Historical Free-Halo
+JSON remains readable under its stored contract and is not treated as a new
+fixed-halo snapshot.
+
+The final Release build passed with `cmake --build build --parallel 4`. The
+first complete test run exposed stale contract assertions: current-schema
+writers now emit schema 15, the CLI returns 3 for a saved but unqualified
+Joint fit, and the experiment cleanup test needed the FirstStage diagnostic
+source in its allowlist. Those expectations were updated; the five affected
+CTest entries then passed, followed by the final full suite:
+
+| Verification | Result |
+| --- | ---: |
+| Release build, max parallelism 4 | Passed |
+| Affected workflow, persistence/schema, cleanup, and CLI smoke tests | 5 / 5 passed |
+| Complete CTest, `--parallel 4` | 40 / 40 passed in 73.84 s |
+| Fixed-halo initialization and schema round-trip | Passed; current schema 15, historical schema 14 remains readable |
+| PostFitPeeling / Local / Group integration coverage | Passed in Joint workflow and persistence tests |
+| Large component memory preparation regression | Passed (`joint_component_mapping_memory_scalability`) |
+
+The large memory test is a preparation/preflight regression, not a full
+27,406-target fit. Its documented synthetic input remains 5,938,087
+observations, 37,406 contributors, 27,406 targets, and 10,000 fixed halos;
+the earlier recorded process peak was 1,585,790,976 bytes. The persistence
+schema 15 assertions verify new writes while the historical schema 14 decode
+paths continue to be exercised separately.

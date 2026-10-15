@@ -24,9 +24,12 @@ def main() -> int:
             "ATOM 3 C CB . ALA C 2 12.0 0.0 0.0 1.0 0.0 1\n#\n")
         model = local_model
 
-        def run(*args: object, succeeds: bool = True) -> None:
+        def run(*args: object, expected_exit: int | None = 0) -> None:
             result = subprocess.run([executable, *map(str, args)], capture_output=True, text=True)
-            assert (result.returncode == 0) == succeeds, result.stdout + result.stderr
+            if expected_exit is None:
+                assert result.returncode != 0, result.stdout + result.stderr
+            else:
+                assert result.returncode == expected_exit, result.stdout + result.stderr
 
         run("map_simulation", "-a", model, "-o", root, "--potential-model", "single",
             "--blurring-width", ".5", "-g", ".3", "-v", "0")
@@ -34,25 +37,26 @@ def main() -> int:
         generator = json.loads(Path(str(map_path) + ".simulation.json").read_text())["generator"]
         database = root / "joint.sqlite"
         run("potential_analysis", "--estimator", "joint-components", "--select-chain", "A", "-a", model,
-            "-m", map_path, "-d", database, "-k", "example", "-v", "0")
+            "-m", map_path, "-d", database, "-k", "example", "-v", "0", expected_exit=3)
         run("potential_analysis", "--estimator", "joint-components",
-            "--select-chain", "A", "-a", model, "-m", map_path, "-d", database, "-k", "fixed", "-v", "0")
+            "--select-chain", "A", "-a", model, "-m", map_path, "-d", database, "-k", "fixed", "-v", "0",
+            expected_exit=3)
         model_hash = hashlib.sha256(model.read_bytes()).hexdigest()
         map_hash = hashlib.sha256(map_path.read_bytes()).hexdigest()
         # The same path with different bytes must produce a different fingerprint.
         model.write_text(model.read_text() + "\n# provenance test\n")
         run("potential_analysis", "--estimator", "joint-components", "--select-chain", "A", "-a", model,
-            "-m", map_path, "-d", database, "-k", "changed", "-v", "0")
+            "-m", map_path, "-d", database, "-k", "changed", "-v", "0", expected_exit=3)
         changed_hash = hashlib.sha256(model.read_bytes()).hexdigest()
         run("potential_analysis", "--estimator", "joint-components", "--select-chain", "A", "-a", model,
-            "-m", map_path, "-d", database, "-k", "example.contributions", "-v", "0")
+            "-m", map_path, "-d", database, "-k", "example.contributions", "-v", "0", expected_exit=3)
         map_path.unlink()
         model.unlink()
         run("result_dump", "--printer", "joint", "-d", database, "-k", "example", "-o", root)
         collision = root / "collision"
         collision.mkdir()
         run("result_dump", "--printer", "joint", "-d", database, "-k", "example", "example.contributions",
-            "-o", collision, succeeds=False)
+            "-o", collision, expected_exit=None)
         assert not list(collision.glob("joint_*")), "Collision must fail before writing any result"
         saved = json.loads((root / "joint_result_example.json").read_text())
         with sqlite3.connect(database) as connection:
@@ -76,7 +80,7 @@ def main() -> int:
                     assert atom["post_joint_local"] is None
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
-        assert saved["schema_version"] == 14
+        assert saved["schema_version"] == 15
         assert saved["parameterization_contract"] == "target-only-fixed-halo-v1"
         assert saved["metadata"]["solver"]["search_method"] == "fixed-neighbor"
         default_solver = saved["metadata"]["solver"]

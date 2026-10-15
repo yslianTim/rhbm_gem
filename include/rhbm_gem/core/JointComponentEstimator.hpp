@@ -22,12 +22,17 @@ struct JointProblemInput
     std::optional<JointSelectionDomain> selection_domain;
 };
 // Owns a validated immutable snapshot. Construction never reads historical fits.
+// BuildJointProblem returns an uninitialized fixed-halo problem; initial target
+// widths alone do not create its required FirstStage halo snapshot.
 class JointProblem
 {
 public:
     explicit JointProblem(JointProblemInput);
     const JointProblemInput & Input() const;
     const std::vector<JointFixedHaloParameter> & FixedHalos() const;
+    // Attaches exactly one qualified FirstStage (A,B,0) value for every
+    // supported non-target contributor. The returned problem keeps that
+    // snapshot immutable during target-only fitting.
     JointProblem WithFixedHalos(std::vector<JointFixedHaloParameter>) const;
     double ObservationScale() const;
     const JointParameterLayout & ParameterLayout() const;
@@ -74,8 +79,16 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult &, JointAnal
 // Selected non-hydrogen atoms fix the rows. Every unselected non-hydrogen atom
 // with at least one support entry on those rows is retained as a fixed halo.
 JointProblem BuildJointProblem(const MapObject &,const ModelObject &);
+// Fits only selected targets. For a fixed-halo problem, initial_b has one
+// width per selected target and the problem must already own its complete
+// qualified fixed-halo snapshot.
 JointFitResult FitJointComponents(const JointProblem &,const std::vector<double> & initial_b);
+// Validates FirstStage initialization and snapshots its qualified fixed halos
+// before fitting selected targets. A raw BuildJointProblem result without
+// qualified initialization cannot proceed to target optimization.
 JointFitResult FitJointComponentsInitialized(const JointProblem &,const JointInitialization &);
+// Builds the problem, performs FirstStage initialization, and then fits targets
+// only. Inspect initialization validity separately from target convergence.
 // Updates successful targets' first-stage analysis only. Joint estimates are returned, not written
 // into the existing second-stage or group-fitting result fields. Replacing raw samples
 // invalidates sample-derived peeling, while fixed Second and group results are retained.

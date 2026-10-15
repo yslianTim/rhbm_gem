@@ -965,7 +965,7 @@ TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSche
     record.target_runtime_convergence=rg::JointCheckStatus::Unavailable;
 
     const auto encoded=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(encoded.at("schema_version").as_int64(),14);
+    EXPECT_EQ(encoded.at("schema_version").as_int64(),15);
     EXPECT_FALSE(encoded.as_object().contains("ranks"));
     EXPECT_EQ(encoded.at("legacy_global_rank_evidence").as_array().size(),1u);
     const auto & saved_component=encoded.at("components").as_array()[0];
@@ -1119,7 +1119,7 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     record.metadata.solver=provenance;
 
     const auto json=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(json.at("schema_version").as_int64(),14);
+    EXPECT_EQ(json.at("schema_version").as_int64(),15);
     EXPECT_EQ(json.at("components").as_array()[0].at("candidate_diagnostic").at("candidate_status").as_string(),"uncertified");
     const auto decoded=io::Decode(boost::json::serialize(json));
     ASSERT_TRUE(decoded.components.front().candidate_diagnostic);

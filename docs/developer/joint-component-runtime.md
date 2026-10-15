@@ -6,9 +6,29 @@ The installed API uses the production Joint estimator directly.
 ```cpp
 model.SelectAllAtoms();
 auto result = rhbm_gem::core::EstimateJointComponents(map, model);
-auto problem = rhbm_gem::core::BuildJointProblem(map, model);
-auto repeated = rhbm_gem::core::FitJointComponents(problem, initial_b);
+if (result.problem && result.initialization.valid) {
+    auto repeated = rhbm_gem::core::FitJointComponentsInitialized(
+        *result.problem, result.initialization);
+}
 ```
+
+`BuildJointProblem` creates the raw observation domain and contributor mapping;
+it does not create a qualified fixed-halo snapshot. A width vector by itself
+cannot initialize the supported halos. `FitJointComponents` accepts one
+initial width per selected target and requires a problem that already owns the
+complete qualified FirstStage `(A, B, 0)` snapshot. `FitJointComponentsInitialized`
+checks the supplied FirstStage records and attaches that snapshot before fitting.
+FirstStage initialization has its own qualification result, independent of
+whether the subsequent Joint target fit converges. `EstimateJointComponents`
+is the convenience API that performs problem construction, FirstStage
+initialization, and target-only fitting in sequence.
+
+`JointProblem::WithFixedHalos` accepts exactly the supported non-target
+contributors. Each value must carry qualified FirstStage provenance and C=0;
+the returned snapshot stays constant during optimization. Structural
+components, FixedNeighbor blocks, KKT, width gradients, conditioning, and
+stability cover selected targets only. Full prediction, independent replay,
+and PostFitPeeling include the fixed halo signal.
 
 ## Objective and production search
 
@@ -101,6 +121,11 @@ are read-only during this assessment.
 
 For fixed-halo problems, these blocks contain targets only; fixed halo columns
 are not included in conditioning or parameter-stability probes.
+
+Historical Free-Halo FullABC result JSON remains readable under its saved
+schema and parameterization contract. Loading that data does not reinterpret
+the free halo estimates as a FirstStage fixed-halo snapshot; a new fixed-halo
+fit must pass its own FirstStage qualification.
 
 Each design and Jacobian is column-normalized before its spectrum is summarized,
 so the reported condition numbers are dimensionless within their own matrix.
