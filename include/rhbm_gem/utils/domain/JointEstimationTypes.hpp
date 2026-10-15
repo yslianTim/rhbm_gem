@@ -178,15 +178,23 @@ struct JointBlockConditioning
     std::string free_ac_conditioning{"NotAssessed"},projected_width_conditioning{"NotAssessed"},
         profile_conditioning{"NotAssessed"};
 };
+struct JointStabilityProbe
+{
+    std::string direction,source,status;
+    std::vector<double> unit_direction;
+    std::size_t evaluations{};
+    std::optional<double> parameter_change,prediction_change,objective_change;
+};
 struct JointBlockParameterStability
 {
     std::string block_id,status{"NotAssessed"},reason;
     std::vector<std::size_t> core_atoms;
+    std::vector<JointStabilityProbe> probes;
     std::string prediction_status{"NotAssessed"},objective_consistency_status{"NotAssessed"};
     std::optional<double> log_width_parameter_change_inf,scaled_ac_parameter_change_inf,
         local_prediction_change_relative,objective_difference;
     double cpu_seconds{};
-    std::size_t perturbation_solves{},perturbation_evaluations{};
+    std::size_t perturbation_directions{},perturbation_seeds{},perturbation_solves{},perturbation_evaluations{};
 };
 struct JointParameterStability
 {
@@ -195,7 +203,7 @@ struct JointParameterStability
     std::string trajectory_stability_status{"insufficient-history"},perturbation_status{"NotAssessed"};
     std::vector<JointBlockParameterStability> blocks;
     double seconds{},cpu_seconds{};
-    std::size_t perturbation_solves{},perturbation_evaluations{};
+    std::size_t perturbation_directions{},perturbation_seeds{},perturbation_solves{},perturbation_evaluations{};
     std::optional<std::size_t> workspace_peak_memory_estimate_bytes;
 };
 struct JointComponentData

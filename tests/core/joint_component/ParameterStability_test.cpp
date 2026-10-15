@@ -58,9 +58,14 @@ TEST(JointParameterStabilityTest, ExactLocalFitIsStableAndDeterministic)
     EXPECT_EQ(first.evidence.prediction_status,"Stable");
     EXPECT_EQ(first.evidence.objective_consistency_status,"Passed");
     EXPECT_EQ(first.evidence.perturbation_solves,2u);
+    EXPECT_EQ(first.evidence.perturbation_directions,1u);
+    EXPECT_EQ(first.evidence.perturbation_seeds,2u);
+    ASSERT_EQ(first.evidence.probes.size(),1u);
+    EXPECT_EQ(first.evidence.probes.front().direction,"weak-singular");
+    EXPECT_NE(first.evidence.probes.front().source.find("normalized-all-width-direction"),std::string::npos);
     EXPECT_LE(first.cpu_seconds,n::MaximumLocalPerturbationCpuSeconds);
     EXPECT_LE(first.evidence.perturbation_evaluations,
-        2*n::MaximumLocalPerturbationProfileEvaluations+2);
+        first.evidence.perturbation_seeds*n::MaximumLocalPerturbationProfileEvaluations);
     ASSERT_TRUE(first.evidence.local_prediction_change_relative);
     ASSERT_TRUE(second.evidence.local_prediction_change_relative);
     EXPECT_DOUBLE_EQ(*first.evidence.local_prediction_change_relative,
@@ -69,6 +74,61 @@ TEST(JointParameterStabilityTest, ExactLocalFitIsStableAndDeterministic)
     ASSERT_TRUE(second.evidence.log_width_parameter_change_inf);
     EXPECT_DOUBLE_EQ(*first.evidence.log_width_parameter_change_inf,
         *second.evidence.log_width_parameter_change_inf);
+}
+
+TEST(JointParameterStabilityTest, UsesWeakLocalWidthDirectionsWithinTheBoundedBudget)
+{
+    std::vector<n::Support> first_support,second_support;
+    for(Eigen::Index row=0;row<12;++row)
+    {
+        first_support.push_back({row,.22*static_cast<double>(row)});
+        const double radius=.12*static_cast<double>(row)+.31;
+        second_support.push_back({row,radius*radius});
+    }
+    n::Domain domain(12,{first_support,second_support});
+    n::Vector eta(2),beta(4),y(12);
+    eta<<std::log(.72),std::log(1.08);
+    beta<<1.25,.19,.83,.11;
+    for(Eigen::Index row=0;row<y.size();++row)
+    {
+        double value{};
+        for(Eigen::Index atom=0;atom<2;++atom)
+        {
+            const auto & support=domain.atoms[static_cast<std::size_t>(atom)];
+            const double radius=std::sqrt(support[static_cast<std::size_t>(row)].square);
+            const double width=std::exp(eta(atom));
+            const double gaussian=std::exp(-radius*radius/(2*width*width)) /
+                std::pow(2*std::numbers::pi*width*width,1.5);
+            const double charge=radius<1e-5 ? std::sqrt(2/std::numbers::pi)/width :
+                std::erf(radius/(std::sqrt(2.0)*width))/radius;
+            value+=beta(2*atom)*gaussian+beta(2*atom+1)*charge;
+        }
+        y(row)=value;
+    }
+    const auto context=n::CreateContext(y,1);
+    const auto first=n::AssessLocalParameterStability(domain,y,eta,beta,context,"two-atom-block");
+    ASSERT_FALSE(first.evidence.probes.empty());
+    EXPECT_EQ(first.evidence.probes.front().direction,"weak-singular");
+    EXPECT_GE(first.evidence.perturbation_directions,2u);
+    EXPECT_LE(first.evidence.perturbation_directions,n::MaximumLocalPerturbationDirectionsPerBlock);
+    EXPECT_LE(first.evidence.perturbation_seeds,
+        n::LocalPerturbationSeedsPerDirection*n::MaximumLocalPerturbationDirectionsPerBlock);
+    EXPECT_LE(first.evidence.perturbation_evaluations,
+        first.evidence.perturbation_seeds*n::MaximumLocalPerturbationProfileEvaluations);
+    for(const auto & probe:first.evidence.probes)
+    {
+        if(probe.unit_direction.empty()) continue;
+        ASSERT_EQ(probe.unit_direction.size(),2u);
+        EXPECT_NEAR(std::hypot(probe.unit_direction[0],probe.unit_direction[1]),1.,1e-12);
+        EXPECT_LE(probe.evaluations,2*n::MaximumLocalPerturbationProfileEvaluations);
+    }
+    const auto second=n::AssessLocalParameterStability(domain,y,eta,beta,context,"two-atom-block");
+    ASSERT_EQ(first.evidence.probes.size(),second.evidence.probes.size());
+    for(std::size_t index=0;index<first.evidence.probes.size();++index)
+    {
+        EXPECT_EQ(first.evidence.probes[index].direction,second.evidence.probes[index].direction);
+        EXPECT_EQ(first.evidence.probes[index].unit_direction,second.evidence.probes[index].unit_direction);
+    }
 }
 
 TEST(JointParameterStabilityTest, ProfileSearchHonorsCpuBudget)

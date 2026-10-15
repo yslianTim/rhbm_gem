@@ -1458,6 +1458,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 block_id,out.global_state_memory_estimate.shape.resident_bytes);
             evidence=std::move(assessment.evidence);
             evidence.core_atoms.assign(prepared.core_atoms.begin(),prepared.core_atoms.end());
+            stability.perturbation_directions+=evidence.perturbation_directions;
+            stability.perturbation_seeds+=evidence.perturbation_seeds;
             stability.perturbation_solves+=evidence.perturbation_solves;
             stability.perturbation_evaluations+=evidence.perturbation_evaluations;
             stability.cpu_seconds+=evidence.cpu_seconds;

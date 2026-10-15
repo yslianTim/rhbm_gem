@@ -3,6 +3,8 @@
 #include "Problem.hpp"
 
 namespace rhbm_gem::core::joint_component {
+inline constexpr std::size_t MaximumLocalPerturbationDirectionsPerBlock=3;
+inline constexpr std::size_t LocalPerturbationSeedsPerDirection=2;
 inline constexpr std::size_t MaximumLocalPerturbationProfileEvaluations=12;
 inline constexpr std::size_t MaximumPerturbedBlocksPerFit=8;
 inline constexpr std::size_t MaximumRepresentativeLocalStabilityProbesPerComponent=1;

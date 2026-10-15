@@ -929,6 +929,7 @@ TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSche
     stability.recent_sweep_count=3; stability.maximum_eta_change=.01; stability.maximum_scaled_ac_change=.02;
     stability.trajectory_stability_status="stable-trajectory"; stability.perturbation_status="assessed";
     stability.seconds=.25; stability.cpu_seconds=.2; stability.perturbation_solves=2;
+    stability.perturbation_directions=1; stability.perturbation_seeds=2;
     stability.perturbation_evaluations=8; stability.workspace_peak_memory_estimate_bytes=4096;
     rg::JointBlockParameterStability stability_block;
     stability_block.block_id="block-0"; stability_block.status="Sensitive"; stability_block.reason="bounded-local-perturbation-assessed";
@@ -936,7 +937,9 @@ TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSche
     stability_block.objective_consistency_status="Passed";
     stability_block.log_width_parameter_change_inf=.03; stability_block.scaled_ac_parameter_change_inf=.04;
     stability_block.local_prediction_change_relative=1e-10; stability_block.objective_difference=1e-12;
-    stability_block.cpu_seconds=.1; stability_block.perturbation_solves=2; stability_block.perturbation_evaluations=8;
+    stability_block.cpu_seconds=.1; stability_block.perturbation_directions=1; stability_block.perturbation_seeds=2;
+    stability_block.perturbation_solves=2; stability_block.perturbation_evaluations=8;
+    stability_block.probes={{"common-mode","normalized-all-width-direction","Assessed",{1.},4,.03,1e-10,1e-12}};
     stability.blocks={stability_block};
     record.components.front().parameter_stability=stability;
     rg::JointCandidateDiagnostic candidate;
@@ -1012,6 +1015,12 @@ TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSche
     EXPECT_EQ(decoded.components.front().local_conditioning_peak_memory_estimate_bytes,2048u);
     ASSERT_TRUE(decoded.components.front().parameter_stability);
     EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().status,"Sensitive");
+    EXPECT_EQ(decoded.components.front().parameter_stability->perturbation_directions,1u);
+    EXPECT_EQ(decoded.components.front().parameter_stability->perturbation_seeds,2u);
+    ASSERT_EQ(decoded.components.front().parameter_stability->blocks.front().probes.size(),1u);
+    EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().probes.front().direction,"common-mode");
+    EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().probes.front().unit_direction,
+        (std::vector<double>{1.}));
     ASSERT_TRUE(decoded.components.front().legacy_candidate_evidence);
     EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->reference_status,rg::JointCheckStatus::Failed);
     EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->rank_assessment_status,rg::JointCheckStatus::Unavailable);
@@ -1028,6 +1037,16 @@ TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSche
     const auto decoded_old_twelve=io::Decode(boost::json::serialize(old_schema_twelve));
     EXPECT_EQ(decoded_old_twelve.components.front().local_conditioning.front().conditioning_classification,"NotAssessed");
     EXPECT_EQ(decoded_old_twelve.components.front().local_conditioning.front().free_ac_condition,7.5);
+    auto & old_stability=old_schema_twelve["components"].as_array()[0].as_object()
+        ["parameter_stability"].as_object();
+    old_stability.erase("perturbation_directions"); old_stability.erase("perturbation_seeds");
+    auto & old_stability_block=old_stability["blocks"].as_array()[0].as_object();
+    old_stability_block.erase("probes"); old_stability_block.erase("perturbation_directions");
+    old_stability_block.erase("perturbation_seeds");
+    const auto decoded_old_stability=io::Decode(boost::json::serialize(old_schema_twelve));
+    ASSERT_TRUE(decoded_old_stability.components.front().parameter_stability);
+    EXPECT_TRUE(decoded_old_stability.components.front().parameter_stability->blocks.front().probes.empty());
+    EXPECT_EQ(decoded_old_stability.components.front().parameter_stability->perturbation_directions,0u);
 
     auto schema_eleven=encoded.as_object(); UseHistoricalGlobalRankKeys(schema_eleven);
     schema_eleven["schema_version"]=11;

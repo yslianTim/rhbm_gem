@@ -334,6 +334,12 @@ std::vector<JointBlockConditioning> ReadBlockConditioning(const j::value & value
 }
 j::object StabilityBlock(const JointBlockParameterStability & x)
 {
+    j::array probes;
+    for(const auto & probe:x.probes)
+        probes.emplace_back(Object{{"direction",probe.direction},{"source",probe.source},{"status",probe.status},
+            {"unit_direction",j::value_from(probe.unit_direction)},{"evaluations",probe.evaluations},
+            {"parameter_change",Number(probe.parameter_change)},{"prediction_change",Number(probe.prediction_change)},
+            {"objective_change",Number(probe.objective_change)}});
     return {{"block_id",x.block_id},{"status",x.status},{"reason",x.reason},
         {"core_atoms",j::value_from(x.core_atoms)},{"prediction_status",x.prediction_status},
         {"objective_consistency_status",x.objective_consistency_status},
@@ -341,6 +347,8 @@ j::object StabilityBlock(const JointBlockParameterStability & x)
         {"scaled_ac_parameter_change_inf",Number(x.scaled_ac_parameter_change_inf)},
         {"local_prediction_change_relative",Number(x.local_prediction_change_relative)},
         {"objective_difference",Number(x.objective_difference)},{"cpu_seconds",x.cpu_seconds},
+        {"probes",std::move(probes)},
+        {"perturbation_directions",x.perturbation_directions},{"perturbation_seeds",x.perturbation_seeds},
         {"perturbation_solves",x.perturbation_solves},{"perturbation_evaluations",x.perturbation_evaluations}};
 }
 JointBlockParameterStability ReadStabilityBlock(const j::value & value)
@@ -355,6 +363,21 @@ JointBlockParameterStability ReadStabilityBlock(const j::value & value)
     x.local_prediction_change_relative=OptionalNumber(o.at("local_prediction_change_relative"));
     x.objective_difference=OptionalNumber(o.at("objective_difference"));
     x.cpu_seconds=Read<double>(o,"cpu_seconds");
+    if(o.contains("probes"))
+        for(const auto & probe_value:o.at("probes").as_array())
+        {
+            const auto & p=probe_value.as_object(); JointStabilityProbe probe;
+            probe.direction=Read<std::string>(p,"direction"); probe.source=Read<std::string>(p,"source");
+            probe.status=Read<std::string>(p,"status");
+            probe.unit_direction=Read<std::vector<double>>(p,"unit_direction");
+            probe.evaluations=Read<std::size_t>(p,"evaluations");
+            probe.parameter_change=OptionalNumber(p.at("parameter_change"));
+            probe.prediction_change=OptionalNumber(p.at("prediction_change"));
+            probe.objective_change=OptionalNumber(p.at("objective_change"));
+            x.probes.push_back(std::move(probe));
+        }
+    if(o.contains("perturbation_directions")) x.perturbation_directions=Read<std::size_t>(o,"perturbation_directions");
+    if(o.contains("perturbation_seeds")) x.perturbation_seeds=Read<std::size_t>(o,"perturbation_seeds");
     x.perturbation_solves=Read<std::size_t>(o,"perturbation_solves");
     x.perturbation_evaluations=Read<std::size_t>(o,"perturbation_evaluations");
     return x;
@@ -368,6 +391,7 @@ j::value ParameterStability(const std::optional<JointParameterStability> & value
         {"maximum_scaled_ac_change",Number(x.maximum_scaled_ac_change)},
         {"trajectory_stability_status",x.trajectory_stability_status},{"perturbation_status",x.perturbation_status},
         {"blocks",std::move(blocks)},{"seconds",x.seconds},{"cpu_seconds",x.cpu_seconds},
+        {"perturbation_directions",x.perturbation_directions},{"perturbation_seeds",x.perturbation_seeds},
         {"perturbation_solves",x.perturbation_solves},{"perturbation_evaluations",x.perturbation_evaluations},
         {"workspace_peak_memory_estimate_bytes",OptionalSize(x.workspace_peak_memory_estimate_bytes)}};
 }
@@ -382,6 +406,8 @@ std::optional<JointParameterStability> ReadParameterStability(const j::value & v
     x.perturbation_status=Read<std::string>(o,"perturbation_status");
     for(const auto & block:o.at("blocks").as_array()) x.blocks.push_back(ReadStabilityBlock(block));
     x.seconds=Read<double>(o,"seconds"); x.cpu_seconds=Read<double>(o,"cpu_seconds");
+    if(o.contains("perturbation_directions")) x.perturbation_directions=Read<std::size_t>(o,"perturbation_directions");
+    if(o.contains("perturbation_seeds")) x.perturbation_seeds=Read<std::size_t>(o,"perturbation_seeds");
     x.perturbation_solves=Read<std::size_t>(o,"perturbation_solves");
     x.perturbation_evaluations=Read<std::size_t>(o,"perturbation_evaluations");
     x.workspace_peak_memory_estimate_bytes=ReadOptionalSize(o.at("workspace_peak_memory_estimate_bytes"));
@@ -681,6 +707,18 @@ void ValidateStabilityBlock(const JointBlockParameterStability & x)
     for(const auto * value:{&x.log_width_parameter_change_inf,&x.scaled_ac_parameter_change_inf,
         &x.local_prediction_change_relative,&x.objective_difference})
         Require(!*value || (std::isfinite(**value) && **value>=0),"local stability value");
+    for(const auto & probe:x.probes)
+    {
+        Require(!probe.direction.empty() && !probe.source.empty() &&
+            (probe.status=="Assessed" || probe.status=="SolverFailed" ||
+                probe.status=="BudgetExhausted" || probe.status=="Unavailable"),"local stability probe status");
+        double norm{};
+        for(const double value:probe.unit_direction)
+        {Require(std::isfinite(value),"local stability probe direction"); norm=std::hypot(norm,value);}
+        Require(probe.unit_direction.empty() || std::abs(norm-1.)<=1e-10,"local stability probe unit direction");
+        for(const auto * value:{&probe.parameter_change,&probe.prediction_change,&probe.objective_change})
+            Require(!*value || (std::isfinite(**value) && **value>=0),"local stability probe value");
+    }
 }
 void ValidateParameterStability(const JointParameterStability & x)
 {
