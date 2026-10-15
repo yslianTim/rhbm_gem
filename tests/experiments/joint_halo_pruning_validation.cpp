@@ -205,7 +205,9 @@ FitRecord Run(const Scenario & scenario,std::size_t threshold)
     out.construction_peak_bytes=data.construction_memory.estimated_peak_bytes;
     for(const auto & component:fit.components)
     {
-        if(component.stop_reason=="block-search-failed") ++out.block_search_failures;
+        if(component.stop_reason=="block-search-failed" ||
+            component.stop_reason=="block-recovery-exhausted" ||
+            component.stop_reason=="block-recovery-sweep-budget") ++out.block_search_failures;
         if(!component.state) ++out.failed_components;
     }
     if(fit.prediction)

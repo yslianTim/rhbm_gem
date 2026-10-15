@@ -51,6 +51,7 @@ namespace {
 using Clock=std::chrono::steady_clock;
 constexpr double EtaChangeConfirmationThreshold=1e-10;
 constexpr std::size_t EndpointCertificationRetryInterval=10;
+constexpr std::size_t MaximumBlockFailureVisits=2;
 double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
 struct OptionalPhaseTimer
 {
@@ -1010,11 +1011,13 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         ;
     bool stop=false;
     std::size_t next_certification_retry_sweep{};
+    std::vector<std::size_t> block_failure_visits(partition.cores.size());
     for(std::size_t sweep_index=0;sweep_index<policy.maximum_sweeps && !stop;++sweep_index)
     {
         const auto sweep_started=Clock::now(); FixedNeighborBlockSweep sweep; sweep.sweep=sweep_index+1;
         const Vector eta_before=out.state.eta,beta_before=out.state.beta;
         sweep.objective_before=out.state.objective;
+        bool sweep_had_block_failure=false;
         auto finish_record=[&](FixedNeighborBlockRecord record,Clock::time_point block_started) {
             record.block_seconds=Seconds(block_started);
             if(policy.collect_telemetry)
@@ -1040,6 +1043,12 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             const auto local_atoms=prepared.local_atoms; const auto block_started=Clock::now(); FixedNeighborBlockRecord record;
             record.sweep=sweep_index+1; record.block=block_index+1; record.core_atoms=core_atoms;
             record.affected_rows=affected_rows.size(); record.objective_before=out.state.objective;
+            record.recovery_retry=block_failure_visits[block_index]>0;
+            if(record.recovery_retry)
+            {
+                record.recovery_attempt=block_failure_visits[block_index];
+                ++out.recovery_attempts;
+            }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             record.component_index=policy.component_index; record.component_id=policy.component_id;
 #endif
@@ -1144,15 +1153,33 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             sweep.maximum_block_rows=std::max(sweep.maximum_block_rows,static_cast<std::size_t>(local_domain.rows));
             sweep.maximum_block_columns=std::max(sweep.maximum_block_columns,static_cast<std::size_t>(2*local_atoms));
             const Trial * accepted=nullptr;
-            for(auto it=profile_search.trials.rbegin();it!=profile_search.trials.rend();++it)
-                if(it->accepted && it->endpoint.valid && it->trust && it->trust->passed) {accepted=&*it; break;}
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            const bool force_no_trusted_profile=policy.force_no_trusted_profile_for_testing &&
+                policy.force_no_trusted_profile_for_testing(block_index,sweep_index);
+#else
+            const bool force_no_trusted_profile=false;
+#endif
+            if(!force_no_trusted_profile)
+                for(auto it=profile_search.trials.rbegin();it!=profile_search.trials.rend();++it)
+                    if(it->accepted && it->endpoint.valid && it->trust && it->trust->passed) {accepted=&*it; break;}
             if(!accepted)
             {
                 record.failure_diagnostics=FailureDiagnostics(policy,record,sweep_index,core_atoms,
                     context,local_context,local_domain,local_y,old_eta,profile_search);
                 Logger::Log(LogLevel::Warning,FormatFailureDiagnostics(*record.failure_diagnostics));
-                record.status="failed"; record.reason="block-search-failed"; out.reason=record.reason;
-                finish_record(std::move(record),block_started); stop=true; break;
+                ++block_failure_visits[block_index]; sweep_had_block_failure=true;
+                if(block_failure_visits[block_index]>=MaximumBlockFailureVisits)
+                {
+                    record.status="failed"; record.reason="block-recovery-exhausted";
+                    out.reason=record.reason; stop=true;
+                }
+                else
+                {
+                    record.status="retry-pending"; record.reason="block-retry-pending";
+                }
+                finish_record(std::move(record),block_started);
+                if(stop) break;
+                continue;
             }
             const auto local_state_started=Clock::now();
             const auto local_state=EvaluateState(local_domain,local_y,accepted->endpoint.eta,accepted->endpoint.beta,local_context,
@@ -1169,8 +1196,13 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             record.local_objective_after=local_state.certificate.objective/(context.scale*context.scale);
             if(record.local_objective_after>record.local_objective_before)
             {
-                record.status="unchanged"; record.reason="block-objective-increase";
-                record.objective_after=record.objective_before; finish_record(std::move(record),block_started); continue;
+                record.status=record.recovery_retry ? "failed" : "unchanged";
+                record.reason=record.recovery_retry ? "block-recovery-exhausted" : "block-objective-increase";
+                record.objective_after=record.objective_before;
+                if(record.recovery_retry) {out.reason=record.reason; stop=true;}
+                finish_record(std::move(record),block_started);
+                if(stop) break;
+                continue;
             }
             Vector candidate_eta,candidate_beta;
             {
@@ -1261,8 +1293,12 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             if(record.global_replay_delta>0 && !(record.local_objective_after<=record.local_objective_before &&
                 record.global_replay_delta<=record.objective_replay_enclosure))
             {
-                record.status="unchanged"; record.reason="block-objective-increase";
-                finish_record(std::move(record),block_started); continue;
+                record.status=record.recovery_retry ? "failed" : "unchanged";
+                record.reason=record.recovery_retry ? "block-recovery-exhausted" : "block-objective-increase";
+                if(record.recovery_retry) {out.reason=record.reason; stop=true;}
+                finish_record(std::move(record),block_started);
+                if(stop) break;
+                continue;
             }
             const bool unchanged=candidate_unchanged;
             const auto cache_started=Clock::now();
@@ -1279,6 +1315,12 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 for(auto & trial:record.profile_trials) if(trial.profile_evaluation==accepted->evaluation)
                     trial.accepted_global_objective_improvement=record.objective_before-record.objective_after;
 #endif
+            if(record.recovery_retry)
+            {
+                ++out.recovery_successes;
+                block_failure_visits[block_index]=0;
+                record.recovery_success=true;
+            }
             finish_record(std::move(record),block_started);
         }
         if(stop) break;
@@ -1343,8 +1385,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             }
         }
 #endif
-        const auto stationarity=ClassifyFixedNeighborStationarity(sweep.global_ac_kkt,
-            stationarity_width_gradient,stationarity_eta_change,sweep.coordinate_confirmation_available);
+        const auto stationarity=sweep_had_block_failure ? FixedNeighborStationarityState::NotStationary :
+            ClassifyFixedNeighborStationarity(sweep.global_ac_kkt,stationarity_width_gradient,
+                stationarity_eta_change,sweep.coordinate_confirmation_available);
         if(stationarity!=FixedNeighborStationarityState::NotStationary && out.first_order_stationarity_sweep==0)
             out.first_order_stationarity_sweep=sweep_index+1;
         const bool certification_retry_due=ShouldAttemptFixedNeighborCertification(
@@ -1383,8 +1426,10 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     }
     if(!out.search_converged && !stop)
     {
-        out.reason="block-sweep-budget";
-        if(policy.stop_after_stationarity && policy.certify_endpoint && out.sweep_count &&
+        const bool recovery_pending=std::any_of(block_failure_visits.begin(),block_failure_visits.end(),
+            [](std::size_t visits){return visits>0;});
+        out.reason=recovery_pending ? "block-recovery-sweep-budget" : "block-sweep-budget";
+        if(!recovery_pending && policy.stop_after_stationarity && policy.certify_endpoint && out.sweep_count &&
             out.certification_sweep!=out.sweep_count)
         {
             out.certification=certify_endpoint();

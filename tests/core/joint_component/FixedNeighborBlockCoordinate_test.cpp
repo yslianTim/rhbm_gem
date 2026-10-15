@@ -355,6 +355,64 @@ TEST(JointFixedNeighborBlockCoordinateTest, WeakWidthSafeguardRequiresLargeWeakA
     EXPECT_FALSE(n::RejectWeakWidthTrial(12,assessment.weak_step_fraction,1.0,1.01));
 }
 
+TEST(JointFixedNeighborBlockCoordinateTest, FailedBlockRetriesAfterLaterBlocksUpdateTheNeighborState)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=6;
+    policy.force_no_trusted_profile_for_testing=[](std::size_t block,std::size_t sweep) {
+        return block==0 && sweep==0;
+    };
+    std::optional<n::BlockCoordinateState> first_sweep_state;
+    policy.state_observer=[&](std::size_t sweep,const auto & state,const auto &,const auto &) {
+        if(sweep==1) first_sweep_state=state;
+    };
+    const auto result=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,
+        initial_eta,data.context,policy);
+    ASSERT_TRUE(first_sweep_state.has_value());
+    EXPECT_GT(first_sweep_state->beta.norm(),0.0);
+    EXPECT_EQ(result.recovery_attempts,1u);
+    EXPECT_EQ(result.recovery_successes,1u);
+    const auto first_failure=std::find_if(result.blocks.begin(),result.blocks.end(),[](const auto & block) {
+        return block.block==1 && block.sweep==1;
+    });
+    ASSERT_NE(first_failure,result.blocks.end());
+    EXPECT_EQ(first_failure->status,"retry-pending");
+    const auto retried=std::find_if(result.blocks.begin(),result.blocks.end(),[](const auto & block) {
+        return block.block==1 && block.sweep==2;
+    });
+    ASSERT_NE(retried,result.blocks.end());
+    EXPECT_TRUE(retried->recovery_retry);
+    EXPECT_EQ(retried->recovery_attempt,1u);
+    EXPECT_DOUBLE_EQ(retried->objective_before,first_sweep_state->objective);
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, ExhaustedBlockRecoveryLeavesTheLastAcceptedComponentStateUntouched)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=6;
+    policy.force_no_trusted_profile_for_testing=[](std::size_t block,std::size_t) {return block==0;};
+    std::optional<n::BlockCoordinateState> last_complete_sweep_state;
+    policy.state_observer=[&](std::size_t sweep,const auto & state,const auto &,const auto &) {
+        if(sweep==1) last_complete_sweep_state=state;
+    };
+    const auto result=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,
+        initial_eta,data.context,policy);
+    ASSERT_TRUE(last_complete_sweep_state.has_value());
+    EXPECT_FALSE(result.search_converged);
+    EXPECT_EQ(result.reason,"block-recovery-exhausted");
+    EXPECT_EQ(result.recovery_attempts,1u);
+    EXPECT_EQ(result.recovery_successes,0u);
+    EXPECT_EQ(result.sweep_count,1u);
+    EXPECT_EQ(result.first_order_stationarity_sweep,0u);
+    EXPECT_TRUE((result.state.eta.array()==last_complete_sweep_state->eta.array()).all());
+    EXPECT_TRUE((result.state.beta.array()==last_complete_sweep_state->beta.array()).all());
+    EXPECT_FALSE(result.certification.has_value());
+}
+
 TEST(JointFixedNeighborBlockCoordinateTest, FailedBlockReportsLocalDesignAndHaloSupportDiagnostics)
 {
     rhbm_gem::core::JointProblemInput input;
@@ -375,12 +433,14 @@ TEST(JointFixedNeighborBlockCoordinateTest, FailedBlockReportsLocalDesignAndHalo
     auto quiet_policy=policy; quiet_policy.collect_diagnostics=false;
     const auto quiet=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,context,quiet_policy);
 
-    EXPECT_EQ(diagnostic.reason,"block-search-failed");
+    EXPECT_EQ(diagnostic.reason,"block-recovery-sweep-budget");
     EXPECT_EQ(quiet.reason,diagnostic.reason);
     EXPECT_TRUE((quiet.state.eta.array()==diagnostic.state.eta.array()).all());
     EXPECT_TRUE((quiet.state.beta.array()==diagnostic.state.beta.array()).all());
     ASSERT_FALSE(diagnostic.blocks.empty());
     ASSERT_TRUE(diagnostic.blocks.front().failure_diagnostics);
+    EXPECT_EQ(diagnostic.blocks.front().status,"retry-pending");
+    EXPECT_EQ(diagnostic.blocks.front().reason,"block-retry-pending");
     const auto & failure=*diagnostic.blocks.front().failure_diagnostics;
     EXPECT_EQ(failure.component_index,4u);
     EXPECT_EQ(failure.component_id,"weak-component");

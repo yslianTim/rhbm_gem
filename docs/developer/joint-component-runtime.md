@@ -32,6 +32,14 @@ block solve. Every accepted update passes the existing trust checks and a full
 global-objective monotonic replay. The local constrained A/C solve uses
 SparseQR and keeps the nonnegative-amplitude active set.
 
+When a block visit produces no trusted local profile, FixedNeighbor preserves
+the current accepted component state, records the failure, and completes the
+remaining blocks in that sweep. It retries that block once on the next sweep,
+rebuilding the effective response from the then-current neighbor state. A
+second failed visit stops with `block-recovery-exhausted`; reaching the sweep
+budget with a pending retry stops with `block-recovery-sweep-budget`. Any sweep
+containing a failed block is excluded from stationarity confirmation.
+
 ## Global numerical convergence
 
 A component becomes a trusted scientific state only after a confirmed

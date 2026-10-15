@@ -74,6 +74,7 @@ struct FixedNeighborBlockFailureDiagnostics
 struct FixedNeighborBlockRecord
 {
     std::size_t sweep{},block{},affected_rows{};
+    std::size_t recovery_attempt{};
     Indices core_atoms;
     double objective_before{},objective_after{},local_objective_before{},local_objective_after{};
     double global_replay_delta{},local_global_delta_error{},objective_replay_enclosure{};
@@ -86,7 +87,7 @@ struct FixedNeighborBlockRecord
     std::string component_id;
 #endif
     std::optional<FixedNeighborBlockFailureDiagnostics> failure_diagnostics;
-    bool accepted{};
+    bool accepted{},recovery_retry{},recovery_success{};
     std::string status,reason,local_search_stop_reason;
 };
 struct FixedNeighborBlockSweep
@@ -197,6 +198,7 @@ struct FixedNeighborPolicy
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     FixedNeighborWidthTrajectoryCapture * width_trajectory{};
     std::vector<std::string> fixed_width_atom_ids;
+    std::function<bool(std::size_t,std::size_t)> force_no_trusted_profile_for_testing;
     // Test-only fault injection; compiled out of production targets.
     std::function<FixedNeighborEndpointCertification(const Domain &,VectorRef,const BlockCoordinateState &,
         const EvaluationContext &,ProfileSearchWork *)> certification_for_testing;
@@ -218,6 +220,7 @@ struct FixedNeighborSearchResult
     std::string reason;
     std::size_t first_order_stationarity_sweep{},confirmed_stationarity_sweep{},certification_sweep{};
     std::size_t sweep_count{},total_block_solves{},total_profile_evaluations{},total_accepted_local_updates{},
+        recovery_attempts{},recovery_successes{},
         block_preparations{},domain_preparations{},mapping_preparations{};
     std::size_t prepared_mapping_entries{},prepared_mapping_bytes{};
     MemoryEstimate memory_estimate,global_state_memory_estimate;

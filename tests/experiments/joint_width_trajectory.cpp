@@ -85,14 +85,20 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
     trajectory.exceptions(std::ios::failbit|std::ios::badbit);
     std::ofstream sweeps(output/"sweeps.jsonl");
     sweeps.exceptions(std::ios::failbit|std::ios::badbit);
+    std::size_t recovery_attempts{},recovery_successes{};
     joint::FixedNeighborDiagnosticSink sink;
     sink.block=[&](const joint::FixedNeighborBlockRecord & block) {
+        if(block.recovery_retry) ++recovery_attempts;
+        if(block.recovery_success) ++recovery_successes;
         for(const auto & trial:block.profile_trials)
         {
             if(trial.tracked_atoms.empty()) continue;
             json::array atoms; for(const auto & atom:trial.tracked_atoms) atoms.push_back(AtomJson(atom));
             trajectory<<json::serialize(json::object{{"component_index",block.component_index},
                 {"component_id",block.component_id},{"sweep",block.sweep},{"block",block.block},
+                {"block_status",block.status},{"block_reason",block.reason},
+                {"recovery_retry",block.recovery_retry},{"recovery_attempt",block.recovery_attempt},
+                {"recovery_success",block.recovery_success},
                 {"trial_index",trial.trial_index},{"profile_evaluation",trial.profile_evaluation},
                 {"profile_objective_before",Number(trial.local_objective_before)},
                 {"profile_objective_after",Number(trial.local_objective_after)},
@@ -149,6 +155,7 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
         {"selected_chain","A"},{"core_atoms",12},{"block_order","forward"},{"maximum_sweeps",200},
         {"maximum_events",capture.maximum_events},{"maximum_rows",capture.maximum_rows},
         {"accepted_updates_only",capture.accepted_updates_only},
+        {"recovery_attempts",recovery_attempts},{"recovery_successes",recovery_successes},
         {"events_emitted",capture.events_emitted},{"first_stage_initial_widths",std::move(initial_widths)},
         {"initialization_seconds",initialization_seconds},{"search_completed",fit.search_completed},
         {"global_state_available",fit.assembled_state.has_value()},{"components",std::move(components)},
