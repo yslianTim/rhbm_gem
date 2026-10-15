@@ -183,3 +183,55 @@ The final `Release` build completed with `cmake --build build --parallel 4`.
 The complete CTest suite passed 40/40 in 75.20 s with parallelism 4. The final
 6Z6U CLI and result export both exited 0; the large synthetic resource
 regression passed separately.
+
+## P0 follow-up: failed FirstStage endpoint diagnostics
+
+The four failures were reproduced with the formal chain-A input and the CLI's
+map normalization (`MapValueArrayNormalization()` before sampling). Source
+SHA-256 values:
+
+| Input | SHA-256 |
+| --- | --- |
+| `/Users/yslian/data/6z6u.cif` | `349ca6da5546b7d8bae53e6edaca9a65985b69f8e6c24316378c4ea04404a4aa` |
+| `sim_map_gaus_grid0.50_charge1_width_6Z6U_bw0.50.map` | `6d7771a9fd584e562550da473d624307b22d20396f11a2a79a064bff2551682a` |
+
+The normalization divisor was `0.44031545732594374`; the sampled Joint domain
+again had 229,783 observations, 1,418 targets, and 659 supported halos. The
+fixture in `tests/fixtures/mdpde/6z6u-fixed-halo-first-stage.json` records all
+raw sample distances, responses and selection flags for each failed halo, the
+resulting positive-response log dataset and design matrix, local alpha, OLS
+start, solver options, fixed-point trace, and both recovery comparisons. Its
+replay test is independent of the local source files.
+
+| Atom | Joint rows | Samples / dataset rows | Alpha | Native 100: beta change² / relative variance change | Native 300 / 1,000 | Existing failed-only refinement |
+| ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 16664 | 73 | 63 / 45 | 0.7 | `1.0213e-7` / `1.2630e-4` | SUCCESS at 268; same endpoint at 1,000 | Rejected: root residual `1.2620e-4` exceeds `1e-8`; root Jacobian condition `6.996e6` |
+| 57190 | 1 | 140 / 68 | 0.4 | `1.0506e-9` / `5.9137e-5` | SUCCESS at 122; same endpoint at 1,000 | RefinedSuccess; fresh residual `2.08e-16`; reference residual `9.54e-11`; branch and weight-floor checks pass |
+| 62463 | 81 | 99 / 72 | 0.3 | `8.4141e-7` / `3.6159e-4` | SUCCESS at 237; same endpoint at 1,000 | RefinedSuccess; fresh residual `5.47e-16`; reference residual `9.91e-11`; branch and weight-floor checks pass |
+| 63216 | 50 | 71 / 53 | 0.7 | `1.7638e-9` / `3.9099e-5` | SUCCESS at 129; same endpoint at 1,000 | RefinedSuccess; fresh residual `8.77e-16`; reference residual `9.83e-11`; branch and weight-floor checks pass |
+
+All four 100-iteration endpoints meet the beta-change criterion but fail the
+relative-variance-change criterion (`1e-5`). Extending the unchanged native
+fixed-point algorithm to a hard cap of 300 iterations qualified all four;
+the 1,000-iteration control stopped at the same iteration and endpoint for
+each. The amplitude/width design matrices have rank 2 and condition numbers
+12.6–16.3. The MDPDE estimating-equation effective rank is 2, and all
+variances remain above `1.9e-3` (weight floor `1e-8`). The OLS residuals are
+not at the roundoff-exact-fit boundary. No non-finite intermediate values
+occurred. The 16664 variance path had two direction reversals but no amplitude
+or width reversals and then converged; the other three variance paths had no
+direction reversals. This is consistent with a slow variance fixed point, not
+a persistent oscillation, exact-fit boundary, or singular local design.
+
+For 57190, 62463, and 63216, the endpoint refiner's root residual, independently
+continued fixed-point reference, positive covariance, branch coordinate check,
+weight consistency and floor mask all pass. For 16664, the root solve stopped
+without a reference residual and failed its equation residual gate; its large
+root-Jacobian condition and remaining-coordinate error reject that candidate.
+The qualified 300-iteration native endpoint remains available for this atom.
+Therefore no finite unqualified endpoint is needed: the evidence supports a
+failed-only, bounded 300-iteration retry, with existing endpoint refinement
+attempted first and the bounded retry used only if refinement is rejected.
+Successful FirstStage fits retain their current 100-iteration path and do no
+recovery work. This is the P1 implementation candidate; the fixed-halo model
+and `C=0` rule are unchanged.

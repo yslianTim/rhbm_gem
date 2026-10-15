@@ -363,6 +363,9 @@ if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
     add_executable(joint_fixed_halo_validation experiments/joint_fixed_halo_validation.cpp)
     target_link_libraries(joint_fixed_halo_validation PRIVATE joint_test_support rhbm_gem CompilerFlags)
     add_dependencies(tests_all joint_fixed_halo_validation)
+    add_executable(fixed_halo_first_stage_diagnostic experiments/fixed_halo_first_stage_diagnostic.cpp)
+    target_link_libraries(fixed_halo_first_stage_diagnostic PRIVATE joint_test_support rhbm_gem CompilerFlags)
+    add_dependencies(tests_all fixed_halo_first_stage_diagnostic)
     add_test(NAME joint_local_ac_kkt_recovery
         COMMAND $<TARGET_FILE:joint_local_ac_kkt> replay
             "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_ac_kkt/block-82.json")
