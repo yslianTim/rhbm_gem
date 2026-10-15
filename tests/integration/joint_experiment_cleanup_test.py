@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 CURRENT_EXPERIMENT_SOURCES = {
+    "joint_fullabc_width_study.cpp",
     "joint_fixed_neighbor.cpp",
     "joint_halo_pruning_validation.cpp",
     "joint_local_ac_kkt.cpp",
@@ -13,6 +14,7 @@ CURRENT_EXPERIMENT_SOURCES = {
     "joint_partial_selection.cpp",
     "joint_postprocessing_benchmark.cpp",
     "joint_statistical_experiment.cpp",
+    "joint_width_trajectory.cpp",
 }
 
 CURRENT_PYTHON_EXPERIMENTS = {

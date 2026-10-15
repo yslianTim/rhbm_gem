@@ -681,10 +681,8 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
 
     if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
         add_test(NAME joint_offline_diagnostic_smoke
-            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_offline_diagnostic.py"
-                --work-dir "${PROJECT_BINARY_DIR}/joint-offline-diagnostic"
-                --executable $<TARGET_FILE:joint_offline_diagnostic>
-                --output "${PROJECT_BINARY_DIR}/joint-offline-diagnostic/weak-halo.json")
+            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_offline_diagnostic_test.py"
+                --executable $<TARGET_FILE:joint_offline_diagnostic>)
         set_tests_properties(joint_offline_diagnostic_smoke
             PROPERTIES LABELS "offline;domain:integration;intent:algorithm;joint:offline;long" TIMEOUT 3600
             ENVIRONMENT "OMP_NUM_THREADS=1")
