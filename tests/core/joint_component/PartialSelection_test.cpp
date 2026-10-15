@@ -660,7 +660,8 @@ TEST(JointComponentPartialSelectionTest, ZeroSignalRankDeficiencyAndInsufficient
             for(auto & support:input.support) support={{0,0},{1,1}};
         }
         const auto fit=core::FitJointComponents(core::JointProblem(input),{.5,.5});
-        EXPECT_NE(fit.RuntimeConvergence(),core::JointCheckStatus::Passed);
+        if(scenario==0) EXPECT_EQ(fit.RuntimeConvergence(),core::JointCheckStatus::Passed);
+        else EXPECT_NE(fit.RuntimeConvergence(),core::JointCheckStatus::Passed);
         EXPECT_EQ(fit.regular_certificate,core::JointCheckStatus::NotRun);
         if(scenario>0) EXPECT_FALSE(fit.assembled_state);
     }

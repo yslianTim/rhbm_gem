@@ -325,6 +325,7 @@ struct FixedNeighborComponentResult;
 struct AssemblyResult
 {
     bool available{},completed{true},mapping_valid{},consistency_passed{};
+    std::string mapping_reason;
     std::vector<bool> row_mask;
     Vector eta,beta,prediction;
     double objective{unavailable};

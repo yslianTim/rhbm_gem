@@ -404,7 +404,17 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
             state.ac.assign(beta.data(),beta.data()+beta.size());
             state.b.assign(b.data(),b.data()+b.size());
             state.log_b.assign(eta.data(),eta.data()+eta.size());
+            const auto gradient=Parse(endpoint.at("b_gradient"));
+            state.width_gradient.assign(gradient.data(),gradient.data()+gradient.size());
             child.state=std::move(state);
+            const auto status=runtime_json::ParseStatus(fit.at("runtime_convergence"));
+            for(const char * name:{"ac-feasibility","conditional-ac-optimality","independent-ac-optimality",
+                "independent-kkt-consistency","independent-replay","width-gradient-consistency",
+                "width-stationarity","endpoint-verification","numerical-qualification"})
+                child.evidence.push_back({name,status,rhbm_gem::core::JointEvidenceScope::ComponentLocal,{},{},{}});
+            child.evidence.push_back({"complete-sweep-stationarity",child.search_completed ?
+                rhbm_gem::core::JointCheckStatus::Passed : rhbm_gem::core::JointCheckStatus::Unavailable,
+                rhbm_gem::core::JointEvidenceScope::ComponentLocal,{},{},{}});
         }
         children.push_back(std::move(child));
     }

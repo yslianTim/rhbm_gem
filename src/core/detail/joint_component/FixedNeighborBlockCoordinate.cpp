@@ -1321,6 +1321,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 "/block-"+std::to_string(prepared.block+1);
             auto conditioning=AssessFixedNeighborLocalConditioning(prepared.domain,local_y,eta,beta,
                 prepared.context,block_id,out.global_state_memory_estimate.shape.resident_bytes);
+            conditioning.evidence.core_atoms.assign(prepared.core_atoms.begin(),prepared.core_atoms.end());
             out.work.local_conditioning_seconds+=conditioning.seconds;
             if(conditioning.evidence.workspace_peak_memory_estimate_bytes)
                 out.work.local_conditioning_peak_memory_estimate_bytes=std::max(
@@ -1350,6 +1351,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             const auto block_id=(policy.component_id.empty() ? std::string("component") : policy.component_id)+
                 "/block-"+std::to_string(prepared.block+1);
             JointBlockParameterStability evidence; evidence.block_id=block_id;
+            evidence.core_atoms.assign(prepared.core_atoms.begin(),prepared.core_atoms.end());
             const bool has_conditioning=index<out.local_conditioning.size();
             const auto * conditioning=has_conditioning ? &out.local_conditioning[index] : nullptr;
             const bool high_sensitivity=!conditioning || conditioning->free_ac_status!="full-rank" ||
@@ -1379,6 +1381,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             auto assessment=AssessLocalParameterStability(prepared.domain,local_y,eta,beta,prepared.context,
                 block_id,out.global_state_memory_estimate.shape.resident_bytes);
             evidence=std::move(assessment.evidence);
+            evidence.core_atoms.assign(prepared.core_atoms.begin(),prepared.core_atoms.end());
             stability.perturbation_solves+=evidence.perturbation_solves;
             stability.perturbation_evaluations+=evidence.perturbation_evaluations;
             stability.cpu_seconds+=evidence.cpu_seconds;

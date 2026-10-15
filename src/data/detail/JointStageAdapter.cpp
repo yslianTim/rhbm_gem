@@ -56,12 +56,28 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
             }
             if(component.target_evidence)
             {
-                const auto & atoms=component.target_evidence->atoms;
-                const auto identified=std::find_if(atoms.begin(),atoms.end(),[&](const auto & a){return a.atom==global;});
-                if(estimate.source.role==FittingRole::Halo && (identified==atoms.end() || identified->status!=JointCheckStatus::Passed))
+                if(component.target_evidence->contract==JointTargetPointValidationContractVersion)
                 {
-                    estimate.reason=identified==atoms.end() ? "missing-identifiability" : identified->reason;
-                    estimate.convergence=JointCheckStatus::Unavailable; continue;
+                    const auto & points=component.target_evidence->point_atoms;
+                    const auto point=std::find_if(points.begin(),points.end(),[&](const auto & value) {
+                        return value.atom==global;
+                    });
+                    if(point==points.end() || point->parameter_validity!=JointCheckStatus::Passed ||
+                        point->component_convergence!=JointCheckStatus::Passed)
+                    {
+                        estimate.reason=point==points.end() ? "missing-point-validation" : point->reason;
+                        estimate.convergence=JointCheckStatus::Unavailable; continue;
+                    }
+                }
+                else if(estimate.source.role==FittingRole::Halo)
+                {
+                    const auto & atoms=component.target_evidence->atoms;
+                    const auto identified=std::find_if(atoms.begin(),atoms.end(),[&](const auto & a){return a.atom==global;});
+                    if(identified==atoms.end() || identified->status!=JointCheckStatus::Passed)
+                    {
+                        estimate.reason=identified==atoms.end() ? "missing-identifiability" : identified->reason;
+                        estimate.convergence=JointCheckStatus::Unavailable; continue;
+                    }
                 }
             }
             estimate.convergence = component.state ?

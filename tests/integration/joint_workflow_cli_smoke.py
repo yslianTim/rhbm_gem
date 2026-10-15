@@ -109,7 +109,7 @@ def main() -> int:
         assert saved["atom_ids"] == ["1", "2"]
         assert saved["initialization"]["data_scope"] == "contributor-local-sampling-may-read-outside-target-domain"
         csv = (root / "joint_atoms_example.csv").read_text().splitlines()
-        assert csv[0].endswith(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,ParameterIdentifiability")
+        assert csv[0].endswith(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality")
         assert ',target,FullABC,"",' in csv[1]
         assert ',halo,FullABC,"",' in csv[2]
         assert 'target_runtime_convergence' in saved
@@ -142,7 +142,13 @@ def main() -> int:
                 assert checks["independent-replay"]["status"] == "passed"
                 assert checks["width-gradient-consistency"]["status"] == "passed"
                 assert checks["width-stationarity"]["status"] == "passed"
-                assert checks["design-identifiability"]["status"] == "passed"
+                assert checks["numerical-qualification"]["status"] == "passed"
+                assert "design-identifiability" not in checks
+                assert "numerical-identifiability" not in checks
+                point = component["target_evidence"]
+                assert point["contract"] == "target-point-validation-v1"
+                assert not point["ranks"] and not point["atoms"]
+                assert point["point_atoms"]
         assert "prediction" not in saved and "observations" not in saved
         assert (root / "joint_atoms_example.csv").read_text().startswith("AtomID,ComponentID,A,B,C,")
         run("result_dump", "--printer", "gaus", "-d", database, "-k", "example", "-o", root)

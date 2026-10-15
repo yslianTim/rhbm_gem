@@ -289,7 +289,7 @@ TEST(JointTestNumericsTest, BoundaryAndChangingActiveFaceRebuildDerivative)
     EXPECT_TRUE(active && interior);
 }
 
-TEST(JointTestNumericsTest, RankFailureInvalidBAndUninformativeWidthCannotQualify)
+TEST(JointTestNumericsTest, InvalidBStillFailsAndUninformativeWidthCanConverge)
 {
     Sample sample; auto duplicate=sample.atoms; duplicate[1].position=duplicate[0].position;
     const p::Domain bad(sample.grid,duplicate),good(sample.grid,sample.atoms);
@@ -300,7 +300,7 @@ TEST(JointTestNumericsTest, RankFailureInvalidBAndUninformativeWidthCannotQualif
     EXPECT_FALSE(p::Evaluate(good,sample.y,Vector::Constant(2,1000)).valid);
     EXPECT_FALSE(p::Evaluate(good,sample.y,Vector::Constant(2,-1000)).valid);
     const auto zero=p::Fit(good,Vector::Zero(sample.y.size()),Vector::Constant(2,.5));
-    EXPECT_NE(zero.at("runtime_convergence"),"passed");
+    EXPECT_EQ(zero.at("runtime_convergence"),"passed");
     EXPECT_TRUE(zero.at("primary").at("kkt_passed").as_bool());
     EXPECT_EQ(zero.at("primary").at("rss"),0.0);
     EXPECT_EQ(zero.at("width_spectrum").at("rank"),0);

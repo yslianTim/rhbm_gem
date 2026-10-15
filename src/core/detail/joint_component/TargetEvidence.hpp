@@ -9,6 +9,9 @@ JointTargetEvidence DeriveTargetIdentifiability(const JointProblem &,const Joint
 JointTargetEvidence AssessTargetState(const JointProblem &,const JointParameterLayout &,
     const std::optional<JointState> &,const std::vector<JointCheck> &,const std::vector<JointRankEvidence> &,
     JointEvidenceScope,std::size_t);
+JointTargetEvidence AssessTargetPointState(const JointProblem &,const JointParameterLayout &,
+    const std::optional<JointState> &,JointCheckStatus,const std::vector<JointBlockConditioning> &,
+    const std::vector<JointBlockParameterStability> &,JointEvidenceScope,std::size_t);
 JointCheckStatus TargetConvergence(const std::optional<JointTargetEvidence> &,bool);
 void AddTargetEvidence(JointFitResult &);
 }

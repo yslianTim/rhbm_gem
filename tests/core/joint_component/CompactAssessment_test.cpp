@@ -87,7 +87,7 @@ n::IndependentReplayEvidence PassingReplay()
     n::IndependentReplayEvidence replay;
     replay.available=true; replay.valid=true; replay.passed=true; replay.feasible=true;
     replay.primary_kkt_passed=true; replay.independent_kkt_passed=true;
-    replay.gradient_agrees=true; replay.primary_width_gradient=0.;
+    replay.gradient_agrees=true; replay.primary_width_gradient=0.; replay.independent_width_gradient=0.;
     return replay;
 }
 
@@ -170,7 +170,7 @@ TEST(JointCompactAssessmentTest, ProjectedWidthOnlyRouteMatchesProfileDerivative
     }
 }
 
-TEST(JointCompactAssessmentTest, ProjectedWidthRankKeepsThresholdSensitiveResultsUnavailable)
+TEST(JointCompactAssessmentTest, ProjectedWidthRankThresholdDoesNotGateNumericalEndpointQualification)
 {
     EigenThreads threads;
     const n::Vector y=n::Vector::Zero(6);
@@ -200,14 +200,17 @@ TEST(JointCompactAssessmentTest, ProjectedWidthRankKeepsThresholdSensitiveResult
             std::string(name)=="just-above";
         EXPECT_EQ(n::CompactRankDecisionSafe(rank),!near);
         EXPECT_EQ(rank.rank,minimum>cutoff ? 2 : 1);
-        const auto assessment=n::AssessEvaluated(domain,y,endpoint,endpoint,context);
+        const auto assessment=n::VerifyJointEndpoint(domain,y,endpoint,PassingReplay(),context);
+        EXPECT_TRUE(assessment.numerical_qualified);
         const auto evidence=n::AssessmentEvidence(assessment,rhbm_gem::JointEvidenceScope::ComponentLocal);
-        const auto identified=std::find_if(evidence.begin(),evidence.end(),[](const auto & check) {
-            return check.name=="numerical-identifiability";
+        EXPECT_EQ(std::find_if(evidence.begin(),evidence.end(),[](const auto & check) {
+            return check.name=="numerical-identifiability" || check.name=="design-identifiability";
+        }),evidence.end());
+        const auto numerical=std::find_if(evidence.begin(),evidence.end(),[](const auto & check) {
+            return check.name=="numerical-qualification";
         });
-        ASSERT_NE(identified,evidence.end());
-        EXPECT_EQ(identified->status,near ? rhbm_gem::JointCheckStatus::Unavailable :
-            rank.rank==2 ? rhbm_gem::JointCheckStatus::Passed : rhbm_gem::JointCheckStatus::Failed);
+        ASSERT_NE(numerical,evidence.end());
+        EXPECT_EQ(numerical->status,rhbm_gem::JointCheckStatus::Passed);
     }
 }
 

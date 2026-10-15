@@ -48,7 +48,7 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
             if(amplitude) contribution_file << *amplitude;
             contribution_file << ',' << amplitude.has_value() << '\n';
         }
-        csv_file << "AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate,SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,ParameterIdentifiability\n"
+        csv_file << "AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate,SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality\n"
             << std::setprecision(std::numeric_limits<double>::max_digits10);
         std::vector<std::pair<const JointAnalysisComponent *,std::size_t>> mapping(result.atom_ids.size());
         for(const auto & component:result.components)
@@ -62,9 +62,26 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
                 index=static_cast<std::size_t>(std::find(component->layout->full_atoms.begin(),component->layout->full_atoms.end(),atom)-component->layout->full_atoms.begin());
             const bool target=result.selection_domain && std::binary_search(result.selection_domain->target_indices.begin(),result.selection_domain->target_indices.end(),atom);
             JointCheckStatus identified=JointCheckStatus::NotRun;
+            std::string point_quality="NotAssessed";
+            bool point_valid=false;
             if(component && component->target_evidence)
-                for(const auto & a:component->target_evidence->atoms) if(a.atom==atom) identified=a.status;
-            const bool export_point=full && (target || !component || !component->target_evidence || identified==JointCheckStatus::Passed);
+            {
+                if(component->target_evidence->contract==JointTargetPointValidationContractVersion)
+                {
+                    const auto & points=component->target_evidence->point_atoms;
+                    const auto point=std::find_if(points.begin(),points.end(),[&](const auto & a){return a.atom==atom;});
+                    if(point!=points.end())
+                    {
+                        point_quality=point->point_quality;
+                        point_valid=point->parameter_validity==JointCheckStatus::Passed &&
+                            point->component_convergence==JointCheckStatus::Passed;
+                    }
+                }
+                else
+                    for(const auto & a:component->target_evidence->atoms) if(a.atom==atom)
+                    {identified=a.status; point_valid=target || a.status==JointCheckStatus::Passed;}
+            }
+            const bool export_point=full && (target || !component || !component->target_evidence || point_valid);
             csv_file << CsvText(result.atom_ids[atom]) << ',' << CsvText(component ? component->id : "") << ',';
             if(component && component->state && export_point)
             {
@@ -80,7 +97,9 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
                     std::binary_search(result.selection_domain->target_indices.begin(),result.selection_domain->target_indices.end(),atom) ? "target" : "halo") << ',' << (full ? "FullABC" : "ObservableContributionOnly")
                 << ',' << CsvText(group_ids[atom]) << ','
                 << joint_result_io::StatusText(component ? component->target_runtime_convergence : JointCheckStatus::NotRun) << ','
-                << joint_result_io::StatusText(identified) << '\n';
+                << (component && component->target_evidence &&
+                    component->target_evidence->contract==JointTargetPointValidationContractVersion ?
+                    point_quality : joint_result_io::StatusText(identified)) << '\n';
         }
         json_file.close(); csv_file.close();
         if(contribution_file.is_open()) contribution_file.close();

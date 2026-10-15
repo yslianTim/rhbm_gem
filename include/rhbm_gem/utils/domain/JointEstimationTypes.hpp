@@ -89,6 +89,7 @@ struct JointRankEvidence
     std::vector<double> singular_values;
     std::string context_identity;
 };
+inline constexpr std::string_view JointTargetPointValidationContractVersion="target-point-validation-v1";
 struct JointAtomIdentifiability
 {
     std::size_t atom{};
@@ -96,12 +97,22 @@ struct JointAtomIdentifiability
     std::optional<double> null_space_leakage;
     std::string reason;
 };
+struct JointAtomPointValidation
+{
+    std::size_t atom{};
+    JointCheckStatus component_convergence{JointCheckStatus::Unavailable},parameter_validity{JointCheckStatus::Unavailable};
+    std::string local_conditioning{"NotAssessed"},parameter_stability{"NotAssessed"},point_quality{"Unavailable"};
+    std::vector<std::string> local_conditioning_blocks,parameter_stability_blocks;
+    std::string reason;
+};
 struct JointTargetEvidence
 {
-    std::string contract{"target-estimability-v4"};
+    std::string contract{JointTargetPointValidationContractVersion};
     std::vector<JointCheck> checks;
     std::vector<JointRankEvidence> ranks;
+    // Historical target-estimability evidence retains its original meaning.
     std::vector<JointAtomIdentifiability> atoms;
+    std::vector<JointAtomPointValidation> point_atoms;
     std::vector<double> column_scales;
     std::size_t original_rows{};
 };
@@ -152,6 +163,7 @@ struct JointCandidateDiagnostic
 struct JointBlockConditioning
 {
     std::string block_id,status{"not-assessed"},reason;
+    std::vector<std::size_t> core_atoms;
     std::size_t core_atom_count{},affected_row_count{},free_ac_columns{},active_amplitude_count{};
     std::optional<std::size_t> free_ac_rank,projected_width_rank,profile_rank,workspace_peak_memory_estimate_bytes;
     std::optional<double> free_ac_sigma_min,free_ac_sigma_max,free_ac_condition,
@@ -163,6 +175,7 @@ struct JointBlockConditioning
 struct JointBlockParameterStability
 {
     std::string block_id,status{"NotAssessed"},reason;
+    std::vector<std::size_t> core_atoms;
     std::string prediction_status{"NotAssessed"},objective_consistency_status{"NotAssessed"};
     std::optional<double> log_width_parameter_change_inf,scaled_ac_parameter_change_inf,
         local_prediction_change_relative,objective_difference;

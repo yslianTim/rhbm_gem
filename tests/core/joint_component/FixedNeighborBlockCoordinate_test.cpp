@@ -991,10 +991,11 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168StopsAtFirstCorrecti
             "complete-sweep-stationarity"})
         EXPECT_EQ(evidence_status(name),rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(component.target_evidence);
-    const auto target_identifiability=std::find_if(component.target_evidence->checks.begin(),
-        component.target_evidence->checks.end(),[](const auto & check){return check.name=="target-identifiability";});
-    ASSERT_NE(target_identifiability,component.target_evidence->checks.end());
-    EXPECT_EQ(target_identifiability->status,rhbm_gem::JointCheckStatus::Passed);
+    const auto target_validation=std::find_if(component.target_evidence->checks.begin(),
+        component.target_evidence->checks.end(),[](const auto & check){return check.name=="target-point-validation";});
+    ASSERT_NE(target_validation,component.target_evidence->checks.end());
+    EXPECT_EQ(target_validation->status,rhbm_gem::JointCheckStatus::Passed);
+    EXPECT_EQ(component.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
 
     ASSERT_EQ(continued_run.trajectory.size(),127u);
     EXPECT_TRUE(continued_run.certification_sweeps.empty());
@@ -1023,17 +1024,14 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168StopsAtFirstCorrecti
     const auto sweep127_certification=n::CertifyFixedNeighborEndpoint(data.domain,data.y,old_qualified,data.context);
     EXPECT_TRUE(sweep127_certification.verified());
     EXPECT_TRUE(sweep127_certification.qualified());
-    ASSERT_TRUE(sweep127_certification.assessment.design && sweep127_certification.assessment.widths);
-    EXPECT_EQ(sweep127_certification.assessment.design->rank,336);
-    EXPECT_EQ(sweep127_certification.assessment.widths->rank,168);
+    EXPECT_FALSE(sweep127_certification.assessment.design);
+    EXPECT_FALSE(sweep127_certification.assessment.widths);
 
     const auto & early=qualified_run.trajectory.back().state;
     const auto & early_assessment=qualified_run.certifications.front().assessment;
-    ASSERT_TRUE(early_assessment.design && early_assessment.widths);
-    EXPECT_EQ(early_assessment.design->rank,336);
-    EXPECT_EQ(early_assessment.widths->rank,168);
-    EXPECT_TRUE(early_assessment.identified);
-    EXPECT_TRUE(early_assessment.qualified);
+    EXPECT_FALSE(early_assessment.design);
+    EXPECT_FALSE(early_assessment.widths);
+    EXPECT_TRUE(early_assessment.numerical_qualified);
     const auto early_primary=n::EvaluateState(data.domain,data.y,early.eta,early.beta,data.context);
     ASSERT_TRUE(early_primary.valid)<<early_primary.reason;
     const auto early_replay=n::CheckIndependentReplay(data.domain,data.y,early_primary,data.context);
@@ -1079,8 +1077,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168StopsAtFirstCorrecti
     RecordProperty("correction_free_168_width_gradient",std::to_string(early_primary.gradient.lpNorm<Eigen::Infinity>()));
     RecordProperty("correction_free_168_replay_prediction_difference",std::to_string(early_replay.prediction_difference));
     RecordProperty("correction_free_168_replay_objective_difference",std::to_string(early_replay.objective_difference));
-    RecordProperty("correction_free_168_design_rank",std::to_string(early_assessment.design->rank));
-    RecordProperty("correction_free_168_projected_width_rank",std::to_string(early_assessment.widths->rank));
+    RecordProperty("correction_free_168_design_rank","not-assessed");
+    RecordProperty("correction_free_168_projected_width_rank","not-assessed");
     EXPECT_EQ(component.candidate_diagnostic->endpoint_verification_status,rhbm_gem::JointCheckStatus::Passed);
     EXPECT_TRUE(component.state);
     EXPECT_TRUE(qualified_run.fit.assembled_state);

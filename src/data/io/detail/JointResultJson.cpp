@@ -572,11 +572,18 @@ void ValidateLayout(const JointParameterLayout & layout,const std::vector<std::s
 j::value Target(const std::optional<JointTargetEvidence> & value)
 {
     if(!value) return nullptr;
-    const auto & t=*value; j::array atoms;
+    const auto & t=*value; j::array atoms,point_atoms;
     for(const auto & a:t.atoms) atoms.emplace_back(Object{{"atom",a.atom},{"status",StatusText(a.status)},
         {"null_space_leakage",Number(a.null_space_leakage)},{"reason",a.reason}});
+    for(const auto & a:t.point_atoms)
+        point_atoms.emplace_back(Object{{"atom",a.atom},{"component_convergence",StatusText(a.component_convergence)},
+            {"parameter_validity",StatusText(a.parameter_validity)},{"local_conditioning",a.local_conditioning},
+            {"parameter_stability",a.parameter_stability},{"point_quality",a.point_quality},
+            {"local_conditioning_blocks",j::value_from(a.local_conditioning_blocks)},
+            {"parameter_stability_blocks",j::value_from(a.parameter_stability_blocks)},{"reason",a.reason}});
     return Object{{"contract",t.contract},{"checks",Checks(t.checks)},{"ranks",Ranks(t.ranks)},
-        {"atoms",atoms},{"column_scales",j::value_from(t.column_scales)},{"original_rows",t.original_rows}};
+        {"atoms",atoms},{"point_atoms",point_atoms},{"column_scales",j::value_from(t.column_scales)},
+        {"original_rows",t.original_rows}};
 }
 std::optional<JointTargetEvidence> ReadTarget(const j::value & value,int schema_version)
 {
@@ -590,17 +597,50 @@ std::optional<JointTargetEvidence> ReadTarget(const j::value & value,int schema_
         const auto & a=value_tmp.as_object();
         t.atoms.push_back({Read<std::size_t>(a,"atom"),Status(a.at("status")),OptionalNumber(a.at("null_space_leakage")),Read<std::string>(a,"reason")});
     }
+    if(o.contains("point_atoms")) for(const auto & value_tmp:o.at("point_atoms").as_array())
+    {
+        const auto & a=value_tmp.as_object(); JointAtomPointValidation point;
+        point.atom=Read<std::size_t>(a,"atom");
+        point.component_convergence=Status(a.at("component_convergence"));
+        point.parameter_validity=Status(a.at("parameter_validity"));
+        point.local_conditioning=Read<std::string>(a,"local_conditioning");
+        point.parameter_stability=Read<std::string>(a,"parameter_stability");
+        point.point_quality=Read<std::string>(a,"point_quality");
+        point.local_conditioning_blocks=Read<std::vector<std::string>>(a,"local_conditioning_blocks");
+        point.parameter_stability_blocks=Read<std::vector<std::string>>(a,"parameter_stability_blocks");
+        point.reason=Read<std::string>(a,"reason"); t.point_atoms.push_back(std::move(point));
+    }
     return t;
 }
 void ValidateTarget(const std::optional<JointTargetEvidence> & value,const std::vector<std::size_t> & atoms,
-    const std::optional<JointSelectionDomain> & selection,std::size_t full,std::size_t rows)
+    const std::vector<std::size_t> & full_atoms,const std::optional<JointSelectionDomain> & selection,
+    std::size_t full,std::size_t rows)
 {
     if(!value) return;
     const auto & t=*value;
     const bool derived=t.contract=="target-estimability-v3" || t.contract=="target-estimability-v4";
-    Require(selection.has_value() && (t.contract=="target-estimability-v1" || t.contract=="target-estimability-v2" || derived),
+    const bool point_contract=t.contract==JointTargetPointValidationContractVersion;
+    Require(selection.has_value() && (t.contract=="target-estimability-v1" || t.contract=="target-estimability-v2" || derived || point_contract),
         "target evidence contract");
     Require(t.original_rows==rows,"target rank row context");
+    if(point_contract)
+    {
+        Require(t.ranks.empty() && t.atoms.empty() && t.column_scales.empty(),"point evidence cannot contain rank evidence");
+        std::set<std::size_t> expected(full_atoms.begin(),full_atoms.end()),seen;
+        for(const auto & point:t.point_atoms)
+        {
+            Require(expected.contains(point.atom) && seen.insert(point.atom).second,"point atom mapping");
+            Require(point.local_conditioning=="Adequate" || point.local_conditioning=="Warning" ||
+                point.local_conditioning=="Unavailable" || point.local_conditioning=="NotAssessed","point local conditioning status");
+            Require(point.parameter_stability=="Stable" || point.parameter_stability=="Sensitive" ||
+                point.parameter_stability=="Unstable" || point.parameter_stability=="Unavailable" ||
+                point.parameter_stability=="NotAssessed","point parameter stability status");
+            Require(point.point_quality=="Available" || point.point_quality=="Warning" ||
+                point.point_quality=="Unavailable" || point.point_quality=="NotAssessed","point quality status");
+            Require(!point.reason.empty(),"point quality reason");
+        }
+        Require(seen==expected,"incomplete point atom evidence");
+    }
     if(derived)
     {
         Require(t.column_scales.empty(),"derived target evidence cannot contain column scales");
@@ -633,13 +673,16 @@ void ValidateTarget(const std::optional<JointTargetEvidence> & value,const std::
     }
     Require(t.column_scales.empty() || t.column_scales.size()==3*full,"target scale dimensions");
     for(double s:t.column_scales) Require(std::isfinite(s) && s>0,"target column scale");
-    std::set<std::size_t> expected(atoms.begin(),atoms.end()),seen;
-    for(const auto & a:t.atoms)
+    if(!point_contract)
     {
-        Require(expected.contains(a.atom) && seen.insert(a.atom).second,"target atom mapping");
-        if(a.null_space_leakage) Require(std::isfinite(*a.null_space_leakage) && *a.null_space_leakage>=0,"target null space leakage");
+        std::set<std::size_t> expected(atoms.begin(),atoms.end()),seen;
+        for(const auto & a:t.atoms)
+        {
+            Require(expected.contains(a.atom) && seen.insert(a.atom).second,"target atom mapping");
+            if(a.null_space_leakage) Require(std::isfinite(*a.null_space_leakage) && *a.null_space_leakage>=0,"target null space leakage");
+        }
+        Require(seen==expected,"incomplete target atom evidence");
     }
-    Require(seen==expected,"incomplete target atom evidence");
 }
 void Validate(const JointAnalysisResult & x,int schema_version)
 {
@@ -712,7 +755,8 @@ void Validate(const JointAnalysisResult & x,int schema_version)
         ValidateLayout(*x.layout,all_atoms,all_rows,x.selection_domain ? &*x.selection_domain : nullptr);
     }
     std::vector<std::size_t> all(atoms); std::iota(all.begin(),all.end(),0);
-    ValidateTarget(x.target_evidence,all,x.selection_domain,x.layout ? x.layout->full_atoms.size() : atoms,rows);
+    const auto & full_atoms=x.layout ? x.layout->full_atoms : all;
+    ValidateTarget(x.target_evidence,all,full_atoms,x.selection_domain,x.layout ? x.layout->full_atoms.size() : atoms,rows);
     if(x.assembled_state) ValidateState(*x.assembled_state,x.layout ? x.layout->full_atoms.size() : atoms,x.layout ? x.layout->groups.size() : 0);
     if(x.initialization.valid)
     {
@@ -741,7 +785,9 @@ void Validate(const JointAnalysisResult & x,int schema_version)
                 Require(found!=x.layout->groups.end() && found->atoms==group.atoms,"component nuisance group disagreement");
             }
         }
-        ValidateTarget(c.target_evidence,c.atoms,x.selection_domain,c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.rows.size());
+        const auto & component_full_atoms=c.layout ? c.layout->full_atoms : c.atoms;
+        ValidateTarget(c.target_evidence,c.atoms,component_full_atoms,x.selection_domain,
+            c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.rows.size());
         if(c.state) ValidateState(*c.state,c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.layout ? c.layout->groups.size() : 0);
         if(c.candidate_diagnostic) ValidateCandidateDiagnostic(*c.candidate_diagnostic,
             c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.state.has_value(),reference_free_contract);

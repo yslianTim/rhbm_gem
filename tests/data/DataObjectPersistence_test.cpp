@@ -1129,7 +1129,7 @@ TEST(DataObjectPersistenceTest, JointSelectionMetadataValidationAndCsvRoles)
     }
     rg::WriteJointAnalysisResult(saved,dir.path()/"out.json",dir.path()/"out.csv");
     std::ifstream csv(dir.path()/"out.csv"); std::string line;
-    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,ParameterIdentifiability"));
+    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality"));
     std::getline(csv,line); EXPECT_TRUE(line.ends_with(",target,FullABC,\"\",not-run,not-run"));
     std::getline(csv,line); EXPECT_TRUE(line.ends_with(",halo,FullABC,\"\",not-run,not-run"));
     auto raw=saved; raw.selection_domain.reset();

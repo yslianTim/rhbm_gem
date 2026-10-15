@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cmath>
 #include <chrono>
+#include <limits>
 #include <set>
 #include <string_view>
 #include <stdexcept>
@@ -28,6 +29,26 @@ namespace n=joint_component;
 using Clock=std::chrono::steady_clock;
 double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
 std::vector<double> Values(const n::Vector & v) {return {v.data(),v.data()+v.size()};}
+bool ValidJointState(const JointState & state,std::size_t atoms)
+{
+    if(atoms>std::numeric_limits<std::size_t>::max()/2 || state.ac.size()!=2*atoms ||
+        state.b.size()!=atoms || state.log_b.size()!=atoms || state.width_gradient.size()!=atoms ||
+        !std::isfinite(state.objective) || state.objective<0 ||
+        !std::all_of(state.ac.begin(),state.ac.end(),[](double value){return std::isfinite(value);}) ||
+        !std::all_of(state.b.begin(),state.b.end(),[](double value){return std::isfinite(value) && value>0;}) ||
+        !std::all_of(state.log_b.begin(),state.log_b.end(),[](double value){return std::isfinite(value);}) ||
+        !std::all_of(state.width_gradient.begin(),state.width_gradient.end(),[](double value){return std::isfinite(value);}))
+        return false;
+    for(std::size_t atom=0;atom<atoms;++atom)
+    {
+        const double amplitude=state.ac[2*atom],width=state.b[atom];
+        if(amplitude<0) return false;
+        const double saved_width=std::exp(state.log_b[atom]);
+        if(!std::isfinite(saved_width) || !(saved_width>0) ||
+            std::abs(saved_width-width)>8*std::numeric_limits<double>::epsilon()*width) return false;
+    }
+    return true;
+}
 std::vector<const AtomObject *> EligibleAtoms(const ModelObject & model)
 {
     std::vector<const AtomObject *> atoms;
@@ -197,7 +218,8 @@ JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> & evidence,Join
 }
 JointCheckStatus JointComponentResult::RuntimeConvergence() const
 {
-    if(!state) return JointCheckStatus::Unavailable;
+    if(!state || !ValidJointState(*state,layout ? layout->full_atoms.size() : atoms.size()))
+        return JointCheckStatus::Unavailable;
     auto status=joint_component::ConvergenceStatus(evidence,JointEvidenceScope::ComponentLocal);
     const auto stationary=std::find_if(evidence.begin(),evidence.end(),[](const auto & check) {
         return check.name=="complete-sweep-stationarity" && check.scope==JointEvidenceScope::ComponentLocal;
@@ -208,7 +230,11 @@ JointCheckStatus JointComponentResult::RuntimeConvergence() const
 JointCheckStatus JointFitResult::RuntimeConvergence() const
 {
     if(!assembled_state || !prediction || !objective || components.empty() ||
-        std::any_of(components.begin(),components.end(),[](const auto & c){return !c.state;}) ||
+        !ValidJointState(*assembled_state,assembled_state->b.size()) || !std::isfinite(*objective) || *objective<0 ||
+        std::abs(assembled_state->objective-*objective)>8*std::numeric_limits<double>::epsilon()*
+            std::max(1.0,std::abs(*objective)) ||
+        prediction->size()!=available_row_mask.size() ||
+        !std::all_of(prediction->begin(),prediction->end(),[](double value){return std::isfinite(value);}) ||
         !std::all_of(available_row_mask.begin(),available_row_mask.end(),[](bool available){return available;}))
         return JointCheckStatus::Unavailable;
     auto status=joint_component::ConvergenceStatus(evidence,JointEvidenceScope::AssembledGlobal,true);
@@ -567,7 +593,8 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         data.input.get(),&data.layout,data.input->observations.size());
     out.evidence.push_back({"assembly-mapping",assembly.mapping_valid ? JointCheckStatus::Passed :
         JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{},{},
-        assembly.mapping_valid ? "exact-component-identity-mapping" : "missing-component-state"});
+        assembly.mapping_valid ? "exact-component-identity-mapping" :
+            assembly.mapping_reason.empty() ? "missing-component-state" : assembly.mapping_reason});
     if(assembly.available)
     {
         const auto & state=assembly.raw;

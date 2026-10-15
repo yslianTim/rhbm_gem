@@ -44,6 +44,8 @@ core::JointComponentResult PublicComponent(const n::ComponentView & view,const n
         const auto values=[](const n::Vector & v) {return std::vector<double>(v.data(),v.data()+v.size());};
         out.state=rhbm_gem::JointState{values(endpoint.beta),values(endpoint.eta.array().exp()),
             values(endpoint.eta),values(endpoint.gradient),endpoint.certificate.objective/(scale*scale),{}};
+        out.evidence=n::AssessmentEvidence(fit.search.certification->assessment,
+            rhbm_gem::JointEvidenceScope::ComponentLocal);
         out.evidence.push_back({"complete-sweep-stationarity",rhbm_gem::JointCheckStatus::Passed,
             rhbm_gem::JointEvidenceScope::ComponentLocal,
             static_cast<double>(fit.search.confirmed_stationarity_sweep),{},"confirmed"});
@@ -92,12 +94,7 @@ TEST(JointComponentRuntimeTest, TypedSearchPreservesFrozenAdapterResults)
     const auto & beta=original.at("primary").at("beta").as_array();
     for(std::size_t k=0;k<beta.size();++k) EXPECT_NEAR(fit.assembled_state->ac[k],boost::json::value_to<double>(beta[k]),1e-8);
     EXPECT_TRUE(fit.search_completed); EXPECT_EQ(fit.components.size(),2);
-    ASSERT_EQ(fit.components[0].ranks.size(),3);
-    EXPECT_EQ(fit.components[0].ranks[0].name,"design");
-    EXPECT_EQ(fit.components[0].ranks[1].name,"free-design");
-    EXPECT_EQ(fit.components[0].ranks[2].name,"projected-width");
-    EXPECT_EQ(fit.components[0].ranks[2].rank,1);
-    EXPECT_GT(fit.components[0].ranks[2].threshold,0);
+    EXPECT_TRUE(fit.components[0].ranks.empty());
     for(const auto & check:fit.components[0].evidence)
         if(check.name=="richardson") EXPECT_EQ(check.status,core::JointCheckStatus::NotRun);
     EXPECT_EQ(fit.regular_certificate,core::JointCheckStatus::NotRun);
@@ -155,14 +152,15 @@ TEST(JointComponentRuntimeTest, InnerEvidenceRemainsAvailableNearBoundary)
     ASSERT_EQ(fit.components.size(),2);
     for(const auto & component:fit.components)
     {
-        EXPECT_FALSE(component.state);
+        EXPECT_TRUE(component.state);
         ASSERT_TRUE(component.candidate_diagnostic);
         EXPECT_TRUE(component.candidate_diagnostic->candidate_available);
         EXPECT_EQ(component.candidate_diagnostic->rank_assessment_status,core::JointCheckStatus::NotRun);
         EXPECT_EQ(component.candidate_diagnostic->endpoint_verification_status,core::JointCheckStatus::Passed);
-        EXPECT_EQ(component.candidate_diagnostic->certification_status,core::JointCheckStatus::Unavailable);
+        EXPECT_EQ(component.candidate_diagnostic->certification_status,core::JointCheckStatus::Passed);
         EXPECT_EQ(component.candidate_diagnostic->numerical_qualification_status,
-            core::JointCheckStatus::Unavailable);
+            core::JointCheckStatus::Passed);
+        EXPECT_EQ(component.RuntimeConvergence(),core::JointCheckStatus::Passed);
         bool found_optimality=false;
         for(const auto & check:component.evidence) if(check.name=="conditional-ac-optimality")
         {
@@ -224,6 +222,32 @@ TEST(JointComponentRuntimeTest, AssemblyPreservesSuppliedCoefficientsWithoutGlob
         2e-12+2e-13*assembled.prediction.lpNorm<Eigen::Infinity>());
 }
 
+TEST(JointComponentRuntimeTest, AssemblyRejectsMappingMismatchAndMissingNumericalState)
+{
+    const core::JointProblem problem(Snapshot()); const auto & data=core::JointProblemAccess::Get(problem);
+    const auto fit=core::FitJointComponents(problem,{.55,.55});
+    ASSERT_EQ(fit.components.size(),2u);
+    auto mapping_mismatch=fit.components;
+    mapping_mismatch.front().atoms.front()=mapping_mismatch.back().atoms.front();
+    const auto bad_mapping=n::AssembleComponents(data.domain,data.y,data.partition,data.context,mapping_mismatch);
+    EXPECT_FALSE(bad_mapping.available);
+    EXPECT_FALSE(bad_mapping.mapping_valid);
+    EXPECT_EQ(bad_mapping.mapping_reason,"component-identity-mapping-mismatch");
+
+    auto missing_state=fit.components;
+    missing_state.front().state.reset();
+    const auto incomplete=n::AssembleComponents(data.domain,data.y,data.partition,data.context,missing_state);
+    EXPECT_FALSE(incomplete.available);
+    EXPECT_TRUE(incomplete.mapping_valid);
+    EXPECT_EQ(incomplete.mapping_reason,"missing-component-state");
+
+    auto unconverged=fit.components;
+    std::erase_if(unconverged.front().evidence,[](const auto & check){return check.name=="endpoint-verification";});
+    const auto rejected=n::AssembleComponents(data.domain,data.y,data.partition,data.context,unconverged);
+    EXPECT_FALSE(rejected.available);
+    EXPECT_EQ(rejected.mapping_reason,"component-not-converged");
+}
+
 TEST(JointComponentRuntimeTest, AssessmentWorkIsSharedOnlyForIdenticalScopes)
 {
     auto input=Snapshot(); input.atom_ids.resize(1); input.support.resize(1);
@@ -231,7 +255,7 @@ TEST(JointComponentRuntimeTest, AssessmentWorkIsSharedOnlyForIdenticalScopes)
     n::AssessmentWorkForTesting()={};
     const auto fit=core::FitJointComponents(core::JointProblem(input),{.55});
     ASSERT_TRUE(fit.assembled_state);
-    EXPECT_EQ(n::AssessmentWorkForTesting().assessments,1);
+    EXPECT_EQ(n::AssessmentWorkForTesting().assessments,0);
     EXPECT_EQ(fit.components[0].reference_evaluations,0);
     EXPECT_EQ(fit.costs.search_reference_seconds,0);
     EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
@@ -239,12 +263,12 @@ TEST(JointComponentRuntimeTest, AssessmentWorkIsSharedOnlyForIdenticalScopes)
     n::AssessmentWorkForTesting()={};
     const auto constant=core::FitJointComponents(core::JointProblem(input),{.55});
     ASSERT_TRUE(constant.assembled_state);
-    EXPECT_EQ(n::AssessmentWorkForTesting().assessments,2);
+    EXPECT_EQ(n::AssessmentWorkForTesting().assessments,0);
     EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
     n::AssessmentWorkForTesting()={};
     const auto multiple=core::FitJointComponents(core::JointProblem(Snapshot()),{.55,.55});
     ASSERT_TRUE(multiple.assembled_state);
-    EXPECT_EQ(n::AssessmentWorkForTesting().assessments,3);
+    EXPECT_EQ(n::AssessmentWorkForTesting().assessments,0);
     EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
 }
 
@@ -472,11 +496,17 @@ TEST(JointComponentRuntimeTest, ReusedAssemblyMatchesFreshAssessmentAndRejectsCh
     const std::vector<core::JointComponentResult> components{
         PublicComponent(data.partition.components[0],fit,data.context.scale)};
     auto reusable_assessment=fit.search.certification->assessment;
-    const auto scientific_assessment=[](const n::Assessment & assessment) {
-        auto value=second_stage_test::matched::runtime_json::Assessment(assessment);
-        if(auto * structure=value.if_contains("design_structure"); structure && structure->is_object())
-            structure->as_object().erase("memory_estimate_bytes");
-        return value;
+    const auto same_numerical_assessment=[](const n::Assessment & left,const n::Assessment & right) {
+        EXPECT_EQ(left.primary.valid,right.primary.valid);
+        EXPECT_EQ(left.primary.certificate.available,right.primary.certificate.available);
+        EXPECT_EQ(left.primary.certificate.feasible,right.primary.certificate.feasible);
+        EXPECT_EQ(left.primary.certificate.kkt_passed,right.primary.certificate.kkt_passed);
+        EXPECT_EQ(left.endpoint_verified,right.endpoint_verified);
+        EXPECT_EQ(left.numerical_qualified,right.numerical_qualified);
+        EXPECT_DOUBLE_EQ(left.primary.certificate.objective,right.primary.certificate.objective);
+        EXPECT_DOUBLE_EQ(left.primary.certificate.projected_kkt,right.primary.certificate.projected_kkt);
+        EXPECT_EQ(left.independent_replay.available,right.independent_replay.available);
+        EXPECT_EQ(left.independent_replay.passed,right.independent_replay.passed);
     };
     const n::AssessmentReuse reuse{data.domain,data.y,context,reusable_assessment};
     n::AssessmentWorkForTesting()={};
@@ -487,28 +517,28 @@ TEST(JointComponentRuntimeTest, ReusedAssemblyMatchesFreshAssessmentAndRejectsCh
     n::AssessmentWorkForTesting()={};
     const auto fresh_assembly=n::AssembleComponents(data.domain,data.y,data.partition,data.context,components);
     ASSERT_TRUE(fresh_assembly.available);
-    EXPECT_EQ(n::AssessmentWorkForTesting().assessments,1);
+    EXPECT_EQ(n::AssessmentWorkForTesting().assessments,0);
     EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
     EXPECT_EQ(reused.eta,fresh_assembly.eta);
     EXPECT_EQ(reused.beta,fresh_assembly.beta);
     EXPECT_EQ(reused.prediction,fresh_assembly.prediction);
     EXPECT_DOUBLE_EQ(reused.objective,fresh_assembly.objective);
-    EXPECT_EQ(scientific_assessment(reused.assessment),scientific_assessment(fresh_assembly.assessment));
+    same_numerical_assessment(reused.assessment,fresh_assembly.assessment);
     const auto check=[&](const n::Domain & domain,const n::Vector & y,const n::EvaluationContext & policy,int assessments) {
         n::AssessmentWorkForTesting()={};
         const auto assembled=n::AssembleComponents(domain,y,data.partition,policy,components,&reuse);
         EXPECT_EQ(n::AssessmentWorkForTesting().assessments,assessments);
         const auto fresh=n::AssessProfile(domain,y,assembled.eta,policy,&assembled.beta);
-        EXPECT_EQ(scientific_assessment(assembled.assessment),scientific_assessment(fresh));
+        same_numerical_assessment(assembled.assessment,fresh);
     };
     check(data.domain,data.y,data.context,0);
-    auto policy=data.context; policy.rank.rows+=100; check(data.domain,data.y,policy,1);
-    policy=data.context; policy.scale*=2; check(data.domain,data.y,policy,1);
-    policy=data.context; policy.linear.release_factor*=2; check(data.domain,data.y,policy,1);
+    auto policy=data.context; policy.rank.rows+=100; check(data.domain,data.y,policy,0);
+    policy=data.context; policy.scale*=2; check(data.domain,data.y,policy,0);
+    policy=data.context; policy.linear.release_factor*=2; check(data.domain,data.y,policy,0);
     policy=data.context; policy.audit.directions=n::Matrix::Ones(1,3); check(data.domain,data.y,policy,0);
-    n::Vector y=data.y; y(0)+=.01; check(data.domain,y,data.context,1);
-    auto support=data.domain.CopySupport(); support[0][1].square+=.001; n::Domain domain(data.domain.rows,std::move(support)); check(domain,data.y,data.context,1);
-    reusable_assessment.primary.beta(0)+=.1; check(data.domain,data.y,data.context,1);
+    n::Vector y=data.y; y(0)+=.01; check(data.domain,y,data.context,0);
+    auto support=data.domain.CopySupport(); support[0][1].square+=.001; n::Domain domain(data.domain.rows,std::move(support)); check(domain,data.y,data.context,0);
+    reusable_assessment.primary.beta(0)+=.1; check(data.domain,data.y,data.context,0);
 }
 
 TEST(JointComponentRuntimeTest, ActualAssessmentFollowsFallbackAndLocalDirections)
