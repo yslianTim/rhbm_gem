@@ -24,10 +24,13 @@ enum class JointProgressPhase
 struct JointFixedNeighborProgress
 {
     std::size_t sweep{},maximum_sweeps{},block_solves{},accepted_blocks{},local_accepted_updates{};
+    std::size_t profile_evaluations{},unchanged_blocks{},failed_blocks{},recovery_attempts{},recovery_successes{};
     double objective{std::numeric_limits<double>::quiet_NaN()};
     double global_ac_kkt{std::numeric_limits<double>::quiet_NaN()};
     double width_gradient_inf_norm{std::numeric_limits<double>::quiet_NaN()};
     double eta_change_inf{std::numeric_limits<double>::quiet_NaN()};
+    double maximum_accepted_log_width_step{std::numeric_limits<double>::quiet_NaN()};
+    double maximum_target_width{std::numeric_limits<double>::quiet_NaN()};
 };
 
 struct JointProgressEvent

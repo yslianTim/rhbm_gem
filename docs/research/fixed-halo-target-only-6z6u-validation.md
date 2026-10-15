@@ -265,3 +265,55 @@ Targeted recovery, fixed-halo validation, Joint snapshot and SQLite persistence
 tests pass. When an initialization record remains unqualified, its per-atom
 reason now records the recovery failure or native status along with its atom
 identity and recovery diagnostics; it is not silently promoted or removed.
+
+## P2 formal target-only validation
+
+The supported CLI was rerun with the 6Z6U CIF, normalized map, saved database,
+chain-A selection, and one worker. Initialization passed with 659/659 qualified
+fixed halos (655 `NativeSuccess`, 4 `RefinedSuccess`), all C=0. The solver
+entered one target-only component with 1,418 targets and 229,783 observations.
+This is an initialization pass only; the target fit did not qualify.
+
+| Measure | Formal result |
+| --- | ---: |
+| Completed sweeps / budget | 200 / 200 |
+| Target-only blocks per sweep | 142 |
+| Block visits: accepted / unchanged / failed | 15,310 / 13,090 / 0 |
+| Accepted local updates | 13,123 |
+| Profile evaluations | 56,490 |
+| Recovery attempts / successes | 0 / 0 |
+| Final candidate objective | 0.0041020821175608135 |
+| Target A/C KKT | `2.682679252e-10` (required `<=1e-10`) |
+| Target width-gradient infinity norm | `7.214524806e-12` (required `<=1e-12`) |
+| Maximum target B | `0.6392831793` |
+| Independent replay | Failed; no trusted endpoint |
+| Converged components / available target estimates | 0 / 0 |
+| Solver search time / whole CLI wall time | 519.0 s / 530.266 s |
+| Peak RSS | 1,249,853,440 bytes |
+| CLI exit / saved API outcome | 3 / `JointNotConverged` |
+
+The sweep-by-sweep values are preserved in
+[`fixed-halo-target-only-6z6u-sweep-trajectory.csv`](fixed-halo-target-only-6z6u-sweep-trajectory.csv).
+The run used the existing 12-atom forward Gauss-Seidel cores, one trusted local
+update per block visit, existing constrained A/C solve and Profile LM, width
+safeguards, bounded block recovery, and independent verification. The gates
+were unchanged. No block failed or needed recovery. B settled near 0.6393 with
+no runaway. The objective flattened near 0.004102; in the last 25 sweeps KKT
+varied from `2.214e-10` to `2.683e-10` and the reported width gradient stayed
+at `7.215e-12`. The search therefore stopped on a stationarity
+plateau at the sweep budget, not on an initialization, local-block, memory, or
+width-runaway failure. Endpoint evidence records primary KKT failure and
+independent width-gradient consistency failure (`per-coordinate-replay-enclosure`).
+The candidate contains finite values for the selected targets, but none is a
+qualified Joint estimate. Increasing the sweep cap alone is unsupported by
+this trajectory; further target-stationarity diagnostics are needed before a
+solver change can be justified.
+
+The CLI now separates process completion from estimator qualification:
+`CommandResult.succeeded` is true when the diagnostic is saved, while
+`CommandResult.outcome` reports `JointNotConverged`; the CLI exits 3. A failed
+initialization exits 2 after saving its diagnostic, and a qualified Joint fit
+exits 0. The Python and C++ API and the CLI integration test cover these
+outcomes. The reported exit 3 was captured from the CLI process itself; the
+macOS `time -l` wrapper could not query `kern.clockrate` in this sandbox, so
+wall time and RSS were measured by a Python child-process wrapper.

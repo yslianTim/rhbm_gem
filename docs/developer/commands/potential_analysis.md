@@ -55,9 +55,19 @@ to `0.0`.
 
 Expected result contract:
 
-- `result.succeeded == true` when the command completes
+- `result.succeeded == true` when execution completes and saves its result,
+  including a Joint diagnostic result whose fitting did not qualify
 - `result.succeeded == false` when normalization, validation, preflight, or execution stops the command
+- `result.outcome` is `Completed` for ordinary command completion,
+  `JointInitializationFailed` when Joint setup failed, `JointNotConverged` when
+  fitting did not qualify, or `JointQualified` after all runtime gates passed
 - `result.issues` reports public validation diagnostics as option/message pairs
+
+The CLI uses exit code 1 when execution or saving fails, 2 when it saves a Joint
+result after initialization failure, 3 when it saves an unqualified Joint fit,
+and 0 for a qualified Joint fit or ordinary non-Joint command completion. Thus
+an automation can distinguish a saved diagnostic result from a qualified
+estimate without treating every saved file as a successful fit.
 
 ## Command Behavior
 
@@ -88,6 +98,8 @@ The anonymous-namespace `NormalizeAndValidateRequest(...)` phase handles field v
 - persists the prepared model through `DataRepository::SaveModel(...)`
 - writes to the repository using `request.saved_key_tag` as the persisted key
 - clears sampled local-potential distance/value buffers after persistence to keep runtime state lean
+- returns a numerical `CommandOutcome` after persistence so the API and CLI
+  distinguish saved diagnostics from a qualified Joint result
 
 `CommandRunner` creates `output_dir` during filesystem preflight when needed.
 

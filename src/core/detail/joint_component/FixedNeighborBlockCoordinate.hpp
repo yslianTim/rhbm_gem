@@ -95,10 +95,10 @@ struct FixedNeighborBlockSweep
     std::size_t sweep{};
     double objective_before{},objective_after{},global_a_feasibility{},global_ac_kkt{};
     double global_width_gradient_inf_norm{},cache_replay_error{},objective_replay_error{},wall_seconds{};
-    double eta_change_inf{},beta_scaled_change{};
+    double eta_change_inf{},beta_scaled_change{},maximum_accepted_log_width_step{},maximum_target_width{};
     bool coordinate_confirmation_available{};
     std::size_t block_solves{},profile_evaluations{},maximum_block_rows{},maximum_block_columns{},
-        accepted_blocks{},unchanged_blocks{},accepted_local_updates{};
+        accepted_blocks{},unchanged_blocks{},accepted_local_updates{},recovery_attempts{},recovery_successes{};
 };
 struct IncrementalCandidateReplay
 {

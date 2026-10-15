@@ -7,6 +7,7 @@
 #include <fstream>
 #include <string>
 #include <sstream>
+#include <vector>
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/CommandSystem.hpp>
@@ -51,6 +52,14 @@ std::size_t CountRegularFiles(const std::filesystem::path & directory)
         }
     }
     return count;
+}
+
+int RunCli(std::vector<std::string> arguments)
+{
+    std::vector<char *> argv;
+    argv.reserve(arguments.size());
+    for (auto & argument : arguments) argv.push_back(argument.data());
+    return rgc::RunCommandCLI(static_cast<int>(argv.size()), argv.data());
 }
 
 void ExpectSelectedAtomsHaveFiniteNonNegativeAlphaR(const rg::ModelObject & model)
@@ -242,7 +251,9 @@ TEST(CommandApiPipelineTest, PotentialAnalysisFixedPoliciesMatchDirectTwoStageWo
     request.map_file_path = map_path;
     request.saved_key_tag = "fixed-policies";
     request.verbosity = 0;
-    ASSERT_TRUE(rgc::RunCommand(request).succeeded);
+    const auto api_result=rgc::RunCommand(request);
+    ASSERT_TRUE(api_result.succeeded);
+    EXPECT_EQ(api_result.outcome,rgc::CommandOutcome::Completed);
 
     rg::DataRepository repository{ request.database_path };
     const auto command_model{ repository.LoadModel(request.saved_key_tag) };
@@ -301,7 +312,8 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
     request.estimator=rgc::PotentialEstimator::JOINT_COMPONENTS; request.selected_chain_ids={"A"};
     request.database_path=directory.path()/"joint.sqlite"; request.saved_key_tag="joint/model";
     request.verbosity=0;
-    ASSERT_TRUE(rgc::RunCommand(request).succeeded);
+    const auto api_result=rgc::RunCommand(request);
+    ASSERT_TRUE(api_result.succeeded);
     rg::DataRepository repository{request.database_path};
     auto loaded=repository.LoadModel(request.saved_key_tag);
     ASSERT_NE(loaded, nullptr);
@@ -309,6 +321,11 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
     EXPECT_EQ(loaded->GetSelectedAtomCount(), 2u);
     ASSERT_TRUE(loaded->GetAnalysisView().GetJointResult());
     const auto & saved=*loaded->GetAnalysisView().GetJointResult();
+    const auto expected_outcome = !saved.initialization.valid ? rgc::CommandOutcome::JointInitializationFailed :
+        saved.search_completed && saved.runtime_convergence==rg::JointCheckStatus::Passed &&
+            saved.target_runtime_convergence==rg::JointCheckStatus::Passed ? rgc::CommandOutcome::JointQualified :
+            rgc::CommandOutcome::JointNotConverged;
+    EXPECT_EQ(api_result.outcome,expected_outcome);
     ASSERT_TRUE(saved.metadata.map_normalization); ASSERT_TRUE(saved.metadata.software);
     ASSERT_TRUE(saved.selection_domain);
     EXPECT_EQ(saved.selection_domain->target_indices,(std::vector<std::size_t>{0,1}));
@@ -357,11 +374,14 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
         const auto zero_path=directory.path()/"zero.mrc"; rg::WriteMap(zero_path,*zero_map);
         auto zero_request=request; zero_request.map_file_path=zero_path;
         zero_request.saved_key_tag="zero";
-        ASSERT_TRUE(rgc::RunCommand(zero_request).succeeded);
+        const auto zero_result=rgc::RunCommand(zero_request);
+        ASSERT_TRUE(zero_result.succeeded);
         auto zero_model=repository.LoadModel("zero");
         ASSERT_TRUE(zero_model->GetAnalysisView().GetJointResult());
         const auto & zero=*zero_model->GetAnalysisView().GetJointResult();
         EXPECT_NE(zero.runtime_convergence,rg::JointCheckStatus::Passed);
+        EXPECT_EQ(zero_result.outcome,!zero.initialization.valid ? rgc::CommandOutcome::JointInitializationFailed :
+            rgc::CommandOutcome::JointNotConverged);
         ASSERT_TRUE(zero.metadata.map_normalization);
         EXPECT_TRUE(zero.metadata.map_normalization->requested);
         EXPECT_FALSE(zero.metadata.map_normalization->applied);
@@ -378,6 +398,21 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
         EXPECT_FALSE(metadata.map_normalization->applied);
         EXPECT_DOUBLE_EQ(metadata.map_normalization->divisor,1);
     }
+    const auto cli_database=directory.path()/"cli.sqlite";
+    const auto cli_output=directory.path()/"cli-output";
+    const int cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
+        "--model",request.model_file_path.string(),"--map",map_path.string(),
+        "--database",cli_database.string(),"--save-key","cli-joint","--select-chain","A",
+        "--folder",cli_output.string(),"--verbose","0"});
+    rg::DataRepository cli_repository{cli_database};
+    const auto cli_model=cli_repository.LoadModel("cli-joint");
+    ASSERT_NE(cli_model,nullptr);
+    ASSERT_TRUE(cli_model->GetAnalysisView().GetJointResult());
+    const auto & cli_fit=*cli_model->GetAnalysisView().GetJointResult();
+    const int expected_cli_status=!cli_fit.initialization.valid ? 2 :
+        cli_fit.search_completed && cli_fit.runtime_convergence==rg::JointCheckStatus::Passed &&
+            cli_fit.target_runtime_convergence==rg::JointCheckStatus::Passed ? 0 : 3;
+    EXPECT_EQ(cli_status,expected_cli_status);
     std::filesystem::remove(map_path);
     std::filesystem::remove(request.model_file_path);
     rgc::ResultDumpRequest dump; dump.database_path=request.database_path;

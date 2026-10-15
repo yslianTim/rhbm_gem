@@ -65,9 +65,15 @@ void JointCliProgressReporter::ShowProgress(const JointProgressEvent & event, bo
         const auto & progress=*event.fixed_neighbor;
         output << " | sweep=" << progress.sweep << '/' << progress.maximum_sweeps
             << " | blocks=" << progress.block_solves << " | accepted-blocks=" << progress.accepted_blocks
+            << " | unchanged-blocks=" << progress.unchanged_blocks
+            << " | failed-blocks=" << progress.failed_blocks
             << " | local-accepted=" << progress.local_accepted_updates
+            << " | profile-evals=" << progress.profile_evaluations
+            << " | recovery=" << progress.recovery_attempts << '/' << progress.recovery_successes
             << " | kkt=" << Scientific(progress.global_ac_kkt)
             << " | width-grad=" << Scientific(progress.width_gradient_inf_norm)
+            << " | max-log-width-step=" << Scientific(progress.maximum_accepted_log_width_step)
+            << " | max-B=" << Scientific(progress.maximum_target_width)
             << " | eta-change=" << Scientific(progress.eta_change_inf)
             << " | objective=" << Scientific(progress.objective);
     }

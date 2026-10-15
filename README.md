@@ -38,8 +38,13 @@ RHBM-GEM result_dump --printer joint -d joint.sqlite -k example -o results
 ```
 
 Joint output contains A/B/C, component availability, runtime convergence and
-separate offline-certificate status. A successful command means the outcome was
-saved, including incomplete or unconverged outcomes. See the
+separate offline-certificate status. The C++/Python `CommandResult.succeeded`
+field reports whether execution completed and the result was saved; its
+`outcome` distinguishes Joint initialization failure, an unqualified fit, and a
+qualified fit. CLI exit codes are `1` for execution or saving failure, `2` when
+Joint initialization failed after saving diagnostics, `3` when Joint fitting
+did not qualify after saving diagnostics, and `0` for a qualified Joint fit (or
+a completed non-Joint command). See the
 [joint workflow contract](docs/developer/commands/potential_analysis.md#joint-component-opt-in)
 for options, C++/Python examples and JSON/CSV output. Joint endpoints populate the
 common Second stage. Plots, comparisons, Gaussian/outlier dumps and UMAP use the

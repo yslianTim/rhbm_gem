@@ -62,10 +62,19 @@ struct CommandDiagnostic
     std::string message;
 };
 
+enum class CommandOutcome
+{
+    Completed,
+    JointInitializationFailed,
+    JointNotConverged,
+    JointQualified
+};
+
 struct CommandResult
 {
     bool succeeded{ false };
     std::vector<CommandDiagnostic> issues{};
+    CommandOutcome outcome{ CommandOutcome::Completed };
 };
 
 struct CommandRequestBase

@@ -121,7 +121,8 @@ void NormalizeAndValidateRequest(
 
 bool ExecutePreparedRequest(
     const PotentialAnalysisRequest & request,
-    PreparedPotentialAnalysisInputs inputs)
+    PreparedPotentialAnalysisInputs inputs,
+    CommandOutcome & outcome)
 {
     JointAnalysisMetadata metadata{ std::move(inputs.metadata) };
     const bool joint=request.estimator==PotentialEstimator::JOINT_COMPONENTS;
@@ -240,6 +241,22 @@ bool ExecutePreparedRequest(
             ", target_runtime_convergence="+std::string(joint_result_io::StatusText(fit.target_runtime_convergence))+
             ", regular_certificate="+std::string(joint_result_io::StatusText(fit.regular_certificate)));
         if (!fit.initialization.valid) Logger::Log(LogLevel::Warning,"Joint initialization unavailable: "+fit.initialization.reason);
+        if (!fit.initialization.valid)
+        {
+            outcome = CommandOutcome::JointInitializationFailed;
+            Logger::Log(LogLevel::Warning,"Joint initialization failed; diagnostic result was saved (CLI exit 2).");
+        }
+        else if (!fit.search_completed || fit.runtime_convergence != JointCheckStatus::Passed ||
+            fit.target_runtime_convergence != JointCheckStatus::Passed)
+        {
+            outcome = CommandOutcome::JointNotConverged;
+            Logger::Log(LogLevel::Warning,"Joint fitting did not converge; diagnostic result was saved (CLI exit 3).");
+        }
+        else
+        {
+            outcome = CommandOutcome::JointQualified;
+            Logger::Log(LogLevel::Info,"Joint fitting qualified.");
+        }
     }
     model_object->EditAnalysis().ClearTransientFitStates();
     return true;
@@ -326,22 +343,25 @@ namespace command_internal {
 CommandResult ExecutePotentialAnalysisCommand(const PotentialAnalysisRequest & request)
 {
     PreparedPotentialAnalysisInputs inputs;
-    return CommandRunner<PotentialAnalysisRequest>{}.Run(
+    CommandOutcome outcome{CommandOutcome::Completed};
+    auto result = CommandRunner<PotentialAnalysisRequest>{}.Run(
         request,
         NormalizeAndValidateRequest,
         [&inputs](auto & runner, const auto & prepared)
         {
             ValidatePreparedRequest(runner, prepared, inputs);
         },
-        [&inputs](const PotentialAnalysisRequest & prepared)
+        [&inputs,&outcome](const PotentialAnalysisRequest & prepared)
         {
-            try { return ExecutePreparedRequest(prepared, std::move(inputs)); }
+            try { return ExecutePreparedRequest(prepared, std::move(inputs), outcome); }
             catch (const std::exception & error)
             {
                 Logger::Log(LogLevel::Error,"PotentialAnalysisCommand : "+std::string(error.what()));
                 return false;
             }
         });
+    result.outcome = outcome;
+    return result;
 }
 
 } // namespace command_internal

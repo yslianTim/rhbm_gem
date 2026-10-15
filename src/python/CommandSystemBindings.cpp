@@ -36,6 +36,12 @@ void BindCommandTypes(py::module_ & module)
         .def_readonly("option_name", &CommandDiagnostic::option_name)
         .def_readonly("message", &CommandDiagnostic::message);
 
+    py::enum_<CommandOutcome>(module, "CommandOutcome")
+        .value("COMPLETED", CommandOutcome::Completed)
+        .value("JOINT_INITIALIZATION_FAILED", CommandOutcome::JointInitializationFailed)
+        .value("JOINT_NOT_CONVERGED", CommandOutcome::JointNotConverged)
+        .value("JOINT_QUALIFIED", CommandOutcome::JointQualified);
+
     auto painter_type{ py::enum_<PainterType>(module, "PainterType") };
     BindEnumEntries(painter_type);
     py::implicitly_convertible<int, PainterType>();
@@ -79,6 +85,7 @@ void BindCommandSystem(py::module_ & module)
     py::class_<CommandResult>(module, "CommandResult")
         .def(py::init<>())
         .def_readonly("succeeded", &CommandResult::succeeded)
+        .def_readonly("outcome", &CommandResult::outcome)
         .def_readonly("issues", &CommandResult::issues);
 
     command_internal::VisitCommandCatalog([&](const auto & entry)

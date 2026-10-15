@@ -33,6 +33,8 @@ DATABASE_REQUEST_TYPES = {
 def assert_module_surface() -> None:
     assert hasattr(m, "CommandDiagnostic")
     assert hasattr(m, "CommandResult")
+    assert hasattr(m, "CommandOutcome")
+    assert hasattr(m.CommandOutcome, "JOINT_NOT_CONVERGED")
     assert hasattr(m, "RunCommand")
     assert hasattr(m, "PainterType")
     assert not hasattr(m.PainterType, "QSCORE")
@@ -226,7 +228,9 @@ def assert_joint_workflow() -> None:
         simulation.blurring_width_list = [.5]
         simulation.grid_spacing = .3
         simulation.verbosity = 0
-        assert m.RunCommand(simulation).succeeded
+        simulation_result = m.RunCommand(simulation)
+        assert simulation_result.succeeded
+        assert simulation_result.outcome == m.CommandOutcome.COMPLETED
         analysis = m.PotentialAnalysisRequest()
         analysis.estimator = m.PotentialEstimator.JOINT_COMPONENTS
         analysis.selected_chain_ids = ["A"]
@@ -234,7 +238,13 @@ def assert_joint_workflow() -> None:
         analysis.map_file_path = next(root.glob("*.map"))
         analysis.database_path = root / "joint.sqlite"
         analysis.verbosity = 0
-        assert m.RunCommand(analysis).succeeded
+        analysis_result = m.RunCommand(analysis)
+        assert analysis_result.succeeded
+        assert analysis_result.outcome in {
+            m.CommandOutcome.JOINT_INITIALIZATION_FAILED,
+            m.CommandOutcome.JOINT_NOT_CONVERGED,
+            m.CommandOutcome.JOINT_QUALIFIED,
+        }
         model_hash = hashlib.sha256(local_model.read_bytes()).hexdigest()
         map_path = Path(analysis.map_file_path)
         map_hash = hashlib.sha256(map_path.read_bytes()).hexdigest()
@@ -247,7 +257,7 @@ def assert_joint_workflow() -> None:
         export.output_dir = root
         assert m.RunCommand(export).succeeded
         saved = json.loads((root / "joint_result_model.json").read_text())
-        assert saved["schema_version"] == 14
+        assert saved["schema_version"] == 15
         assert saved["selection_domain"]["target_indices"] == [0]
         assert saved["atom_ids"] == ["1", "2"]
         assert saved["metadata"]["model_sha256"] == model_hash

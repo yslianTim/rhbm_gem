@@ -1048,6 +1048,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             {
                 record.recovery_attempt=block_failure_visits[block_index];
                 ++out.recovery_attempts;
+                ++sweep.recovery_attempts;
             }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             record.component_index=policy.component_index; record.component_id=policy.component_id;
@@ -1301,6 +1302,11 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 continue;
             }
             const bool unchanged=candidate_unchanged;
+            if(!unchanged)
+                for(const auto atom:core_atoms)
+                    sweep.maximum_accepted_log_width_step=std::max(sweep.maximum_accepted_log_width_step,
+                        std::abs(candidate_eta(static_cast<Eigen::Index>(atom))-
+                            out.state.eta(static_cast<Eigen::Index>(atom))));
             const auto cache_started=Clock::now();
             out.state.prediction=std::move(replay.prediction);
             out.state.residual=std::move(replay.residual);
@@ -1318,6 +1324,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             if(record.recovery_retry)
             {
                 ++out.recovery_successes;
+                ++sweep.recovery_successes;
                 block_failure_visits[block_index]=0;
                 record.recovery_success=true;
             }
@@ -1347,6 +1354,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         sweep.global_width_gradient_inf_norm=global.gradient.lpNorm<Eigen::Infinity>();
         sweep.eta_change_inf=(out.state.eta-eta_before).lpNorm<Eigen::Infinity>();
         sweep.beta_scaled_change=ScaledCoefficientDifference(out.state.beta,beta_before);
+        sweep.maximum_target_width=out.state.eta.size() ? std::exp(out.state.eta.maxCoeff()) : 0.0;
         sweep.coordinate_confirmation_available=sweep_index>0;
         sweep.wall_seconds=Seconds(sweep_started); out.search_seconds+=sweep.wall_seconds;
         ++out.sweep_count; out.final_sweep=sweep;
@@ -1740,10 +1748,24 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
             event.elapsed_seconds=sweep.wall_seconds;
             event.accepted_objective=sweep.objective_after;
             event.accepted_gradient_inf_norm=sweep.global_width_gradient_inf_norm;
-            event.fixed_neighbor=JointFixedNeighborProgress{
-                sweep.sweep,production_policy.maximum_sweeps,sweep.block_solves,sweep.accepted_blocks,
-                sweep.accepted_local_updates,
-                sweep.objective_after,sweep.global_ac_kkt,sweep.global_width_gradient_inf_norm,sweep.eta_change_inf};
+            JointFixedNeighborProgress progress;
+            progress.sweep=sweep.sweep;
+            progress.maximum_sweeps=production_policy.maximum_sweeps;
+            progress.block_solves=sweep.block_solves;
+            progress.accepted_blocks=sweep.accepted_blocks;
+            progress.local_accepted_updates=sweep.accepted_local_updates;
+            progress.profile_evaluations=sweep.profile_evaluations;
+            progress.unchanged_blocks=sweep.unchanged_blocks;
+            progress.failed_blocks=sweep.block_solves-sweep.accepted_blocks-sweep.unchanged_blocks;
+            progress.recovery_attempts=sweep.recovery_attempts;
+            progress.recovery_successes=sweep.recovery_successes;
+            progress.objective=sweep.objective_after;
+            progress.global_ac_kkt=sweep.global_ac_kkt;
+            progress.width_gradient_inf_norm=sweep.global_width_gradient_inf_norm;
+            progress.eta_change_inf=sweep.eta_change_inf;
+            progress.maximum_accepted_log_width_step=sweep.maximum_accepted_log_width_step;
+            progress.maximum_target_width=sweep.maximum_target_width;
+            event.fixed_neighbor=std::move(progress);
             observer(event);
         };
     }

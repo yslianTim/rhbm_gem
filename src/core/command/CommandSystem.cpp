@@ -376,6 +376,10 @@ int RunCommandCLI(int argc, char * argv[])
             ScopeTimer timer("Command CLI callback");
             const auto result{ execute(*request) };
             if (!result.succeeded) throw CLI::RuntimeError(1);
+            if (result.outcome == CommandOutcome::JointInitializationFailed)
+                throw CLI::RuntimeError(2);
+            if (result.outcome == CommandOutcome::JointNotConverged)
+                throw CLI::RuntimeError(3);
         });
     });
 

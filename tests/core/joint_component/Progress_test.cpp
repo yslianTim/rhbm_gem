@@ -176,6 +176,14 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
             {
                 fixed_neighbor_progress = true;
                 EXPECT_EQ(progress.update_budget, static_cast<int>(progress.fixed_neighbor->block_solves));
+                EXPECT_EQ(progress.profile_evaluations,
+                    static_cast<int>(progress.fixed_neighbor->profile_evaluations));
+                EXPECT_EQ(progress.fixed_neighbor->accepted_blocks + progress.fixed_neighbor->unchanged_blocks +
+                    progress.fixed_neighbor->failed_blocks, progress.fixed_neighbor->block_solves);
+                EXPECT_LE(progress.fixed_neighbor->recovery_successes,
+                    progress.fixed_neighbor->recovery_attempts);
+                EXPECT_GE(progress.fixed_neighbor->maximum_accepted_log_width_step, 0.0);
+                EXPECT_GT(progress.fixed_neighbor->maximum_target_width, 0.0);
             }
             else EXPECT_EQ(progress.update_budget, data.context.update_budget);
             EXPECT_GE(progress.profile_evaluations, last_evaluation);
