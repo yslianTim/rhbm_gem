@@ -686,6 +686,7 @@ j::value ReplayTrialFixture(const j::value & fixture)
     const auto primary=n::EvaluateState(domain,y,eta,beta,context);
     n::ReplayDetailsForDiagnostics replay;
     const auto trust=n::CheckReplay(domain,y,primary,context,&replay);
+    const auto independent=n::CheckIndependentReplay(domain,y,primary,context);
     auto wrong_gradient=primary; wrong_gradient.gradient(0)+=1e-3;
     const auto wrong_gradient_trust=n::CheckReplay(domain,y,wrong_gradient,context);
     auto wrong_kkt=primary; wrong_kkt.certificate.projected_kkt+=1e-6;
@@ -715,6 +716,11 @@ j::value ReplayTrialFixture(const j::value & fixture)
         {"primary_valid",primary.valid},{"primary_kkt_passed",primary.certificate.kkt_passed},
         {"primary_scaled_kkt",Number(primary.certificate.projected_kkt)},
         {"replay_reason",trust.reason},{"replay_passed",trust.passed},
+        {"independent_replay_reason",independent.reason},{"independent_replay_passed",independent.passed},
+        {"primary_width_gradient_inf",primary.gradient.lpNorm<Eigen::Infinity>()},
+        {"replay_consistent_but_nonstationary_trial",trust.passed &&
+            primary.gradient.lpNorm<Eigen::Infinity>()>1e-12},
+        {"independent_ac_kkt",Number(independent.independent_ac_kkt)},
         {"cutoff_regression_passed",cutoff_regression},
         {"wrong_gradient_rejected",!wrong_gradient_trust.passed},
         {"wrong_kkt_rejected",!wrong_kkt_trust.passed},
@@ -769,6 +775,9 @@ int main(int argc,char ** argv)
         {
             const auto result=ReplayTrialFixture(Read(argv[2])); std::cout<<j::serialize(result)<<'\n';
             return result.at("primary_valid").as_bool() && result.at("replay_passed").as_bool() &&
+                result.at("independent_replay_reason").as_string()=="independent-kkt-failed" &&
+                result.at("replay_consistent_but_nonstationary_trial").as_bool() &&
+                j::value_to<double>(result.at("independent_ac_kkt"))>1e-10 &&
                 result.at("cutoff_regression_passed").as_bool() && result.at("wrong_gradient_rejected").as_bool() &&
                 result.at("wrong_kkt_rejected").as_bool() && result.at("wrong_coefficients_rejected").as_bool() ? 0 : 1;
         }

@@ -325,3 +325,20 @@ asserting that every extreme width is invalid. It does not establish scientific
 accuracy of any component A/C/B estimate or provide the full-component rank,
 projected-width-rank, target-estimability, endpoint, or global-assembly
 evidence required for downstream inference.
+
+## Permanent regression coverage
+
+The Release CTest suite includes the bounded offline
+`joint_fullabc_width_precision_regression`. It checks a well-conditioned
+conditional profile against constrained 50-digit QR, the captured large-width
+and small-width controls, full-rank Block 21 KKT rejection, severe A/C
+cancellation, and the near-threshold binary64/50-digit discrepancy. The
+`joint_local_ac_kkt_sweep4_block21_rejection` fixture keeps the production
+block rejected. The `joint_local_replay_fixture` regression requires the
+captured Block 82 trial's `CheckReplay()` to pass while independently reporting
+the scalar-kernel A/C KKT failure, and retains wrong-gradient, wrong-KKT and
+wrong-coefficient rejection checks. The `AccurateProfileTrialCanRemainWidthNonstationary`
+test uses a separate well-conditioned synthetic problem where both binary64
+replay paths pass with a nonstationary width derivative. Resource-limited and
+threshold-sensitive rank tests continue to require `Unavailable` rather than
+converting missing evidence to rank deficiency or success.

@@ -119,3 +119,31 @@ is valid with reason `solved`, but the scaled projected KKT is
 state to remain rejected. This later KKT failure is unresolved; endpoint
 verification and numerical qualification were not reached. See the
 [full-data validation](joint-halo-pruning-validation.md#full-data-validation-6z6u).
+
+## FullABC width and precision follow-up
+
+The Block 21 local design is numerically full rank (24/24), with a 23/23 free
+face and condition indicator `6.6235e10`. Its production constrained A/C
+candidate remains rejected at scaled KKT `4.656612873e-10`; the unchanged gate
+is `1e-10`. Dense QR, SVD, active-face enumeration and free-face QR also miss
+that gate. A bounded 50-digit, column-normalized Householder QR reference keeps
+the active constraint on atom index 5 and reaches KKT `2.9989e-66` on the
+rounded double design. Evaluating the production coefficients at 50 digits
+gives KKT `4.8461e-10`. This identifies a binary64 solve/certificate error in
+a full-rank but ill-conditioned problem; it does not establish structural rank
+deficiency.
+
+The constrained reference objective differs from the production objective by
+only about `2.34e-19` after objective scaling, while the maximum
+column-norm-scaled coefficient difference is `3.63e3`. The atom 11721 G/K
+terms have magnitudes about `+9.23e8` and `-9.23e8`; atom 11650's captured
+Gaussian column norm is `2.10e-38`. A separate conditional width scan shows a
+flat large-width profile and small-width binary64 information loss. Those
+findings are detailed in the [FullABC width-degeneracy study](joint-fullabc-width-degeneracy.md).
+
+Rounding the 50-digit fixed-design solution to double yields a binary64 KKT
+of `5.47e-11` (pass), while its exact rounded coefficients and design give
+50-digit KKT `1.1120e-10` (fail). Binary64 agreement therefore does not prove
+precision-independent stationarity. The permanent Block 21 regression keeps
+the production result rejected and compares it to the bounded constrained QR
+reference without normal equations.

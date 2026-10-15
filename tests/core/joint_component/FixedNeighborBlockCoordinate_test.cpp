@@ -251,6 +251,46 @@ TEST(JointFixedNeighborBlockCoordinateTest, LocalTrajectoryTelemetryIsOptInAndDo
     EXPECT_DOUBLE_EQ(captured.state.objective,quiet.state.objective);
 }
 
+TEST(JointFixedNeighborBlockCoordinateTest, WidthTrajectoryCaptureHonorsAtomEventAndRowLimits)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    ASSERT_FALSE(data.input->atom_ids.empty());
+    n::FixedNeighborWidthTrajectoryCapture capture;
+    capture.atom_initial_widths.emplace_back(data.input->atom_ids.front(),.55);
+    capture.maximum_events=1; capture.maximum_atoms=1; capture.maximum_rows=0;
+    n::FixedNeighborDiagnosticSink sink; std::size_t observed_events{};
+    sink.block=[&](const n::FixedNeighborBlockRecord & block) {
+        for(const auto & trial:block.profile_trials) if(!trial.tracked_atoms.empty())
+        {
+            ++observed_events;
+            EXPECT_EQ(trial.tracked_atoms.size(),1u);
+            EXPECT_EQ(trial.tracked_atoms.front().atom_id,data.input->atom_ids.front());
+            EXPECT_EQ(trial.tracked_atoms.front().local_design_rank,-1);
+        }
+    };
+    n::FixedNeighborSearchPolicy policy; policy.maximum_sweeps=1;
+    policy.configure_search_for_testing=[&](n::FixedNeighborPolicy & local) {
+        local.width_trajectory=&capture; local.diagnostic_sink=&sink;
+    };
+    const auto traced=n::FitFixedNeighborComponents(problem,std::vector<double>(8,.55),policy);
+    n::FixedNeighborSearchPolicy quiet_policy; quiet_policy.maximum_sweeps=1;
+    const auto quiet=n::FitFixedNeighborComponents(problem,std::vector<double>(8,.55),quiet_policy);
+    EXPECT_EQ(capture.events_emitted,1u);
+    EXPECT_EQ(observed_events,1u);
+    ASSERT_EQ(traced.components.size(),1u);
+    ASSERT_EQ(quiet.components.size(),1u);
+    EXPECT_EQ(traced.components.front().stop_reason,quiet.components.front().stop_reason);
+    EXPECT_EQ(traced.components.front().search_sweeps,quiet.components.front().search_sweeps);
+    EXPECT_EQ(traced.components.front().state.has_value(),quiet.components.front().state.has_value());
+    EXPECT_EQ(traced.assembled_state.has_value(),quiet.assembled_state.has_value());
+    if(traced.components.front().state && quiet.components.front().state)
+    {
+        EXPECT_EQ(traced.components.front().state->log_b,quiet.components.front().state->log_b);
+        EXPECT_EQ(traced.components.front().state->ac,quiet.components.front().state->ac);
+    }
+}
+
 TEST(JointFixedNeighborBlockCoordinateTest, RankFailureReportsLocalDesignAndHaloDiagnostics)
 {
     rhbm_gem::core::JointProblemInput input;

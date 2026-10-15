@@ -708,6 +708,13 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         set_tests_properties(joint_component_offline_regression
             PROPERTIES LABELS "offline;domain:integration;intent:algorithm;joint:offline;long" TIMEOUT 3600
             ENVIRONMENT "OMP_NUM_THREADS=1")
+        add_test(NAME joint_fullabc_width_precision_regression
+            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fullabc_width_precision_test.py"
+                --executable $<TARGET_FILE:joint_fullabc_width_study>
+                --fixture "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_ac_kkt/block-21-sweep-4.json")
+        set_tests_properties(joint_fullabc_width_precision_regression PROPERTIES
+            LABELS "offline;domain:integration;intent:algorithm;joint:offline;long" TIMEOUT 3600 RUN_SERIAL TRUE
+            ENVIRONMENT "OMP_NUM_THREADS=1")
     endif()
     if(RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS)
         add_test(NAME joint_component_extended_regression

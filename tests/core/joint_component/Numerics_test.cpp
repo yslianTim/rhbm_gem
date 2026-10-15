@@ -967,6 +967,27 @@ TEST(JointComponentNumericsTest, IndependentStreamingReplayMatchesLegacyMatrixRe
     }
 }
 
+TEST(JointComponentNumericsTest, AccurateProfileTrialCanRemainWidthNonstationary)
+{
+    using rhbm_gem::core::JointProblem;
+    using rhbm_gem::core::JointProblemAccess;
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",1));
+    const auto & data=JointProblemAccess::Get(problem);
+    const Vector eta=Vector::Constant(1,std::log(.8));
+    const auto primary=n::EvaluateProfile(data.domain,data.y,eta,false,&data.context);
+    ASSERT_TRUE(primary.valid)<<primary.reason;
+    ASSERT_TRUE(primary.certificate.kkt_passed);
+    ASSERT_GT(primary.gradient.lpNorm<Eigen::Infinity>(),1e-12);
+    const auto trust=n::CheckReplay(data.domain,data.y,primary,data.context);
+    const auto independent=n::CheckIndependentReplay(data.domain,data.y,primary,data.context);
+    EXPECT_TRUE(trust.passed)<<trust.reason;
+    ASSERT_TRUE(independent.available && independent.valid)<<independent.reason;
+    EXPECT_TRUE(independent.passed)<<independent.reason;
+    EXPECT_TRUE(independent.primary_kkt_passed);
+    EXPECT_TRUE(independent.independent_kkt_passed);
+    EXPECT_GT(independent.independent_width_gradient,1e-12);
+}
+
 TEST(JointComponentNumericsTest, IndependentStreamingReplayPreservesActiveBoundaryAndCancellation)
 {
     constexpr Eigen::Index rows=33;

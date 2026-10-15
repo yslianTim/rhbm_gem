@@ -211,6 +211,34 @@ therefore not a proof of exact mathematical stationarity. It remains paired
 with the unchanged production feasibility/KKT checks and does not establish
 component completion or endpoint qualification.
 
+## Replay path independence and stationarity scope
+
+The checks provide different amounts of independent evidence. `CheckReplay()`
+recomputes the scalar-kernel prediction, residual and width derivative with
+compensated accumulation and an FMA product-error term. For its A/C KKT check,
+it reuses the primary sparse design's column norms and transpose product, then
+compares that KKT with the primary certificate. `CheckIndependentReplay()`
+performs a separate scalar-kernel traversal and independently rebuilds
+prediction, residual, objective, column norms, A/C gradients/KKT and width
+gradient; it does not solve another constrained A/C problem. Both paths use
+the same fixed support, rounded parameters, objective, binary64 math library
+and deterministic kernel formulas. They are independent evaluation paths, not
+independent high-precision references. The Block 21 QR audit and the offline
+50-digit functional-kernel calculation supply the separate accuracy evidence.
+
+The captured Block 82 trial passes `CheckReplay()` while its width-gradient
+magnitude is greater than the endpoint stationarity threshold `1e-12`, but
+`CheckIndependentReplay()` returns `independent-kkt-failed` for its recomputed
+A/C KKT (`1.1641532e-10`). The former reports KKT `5.7795e-12` using
+primary-design columns; the latter independently rebuilds the columns from
+scalar kernels. A 50-digit functional-kernel audit reports KKT `1.576e-10`.
+This fixture therefore preserves evidence that replay agreement and primary
+KKT are not enough to prove precision-independent local optimality. A separate
+well-conditioned synthetic trial now verifies that both replay paths can pass
+while the width gradient remains nonstationary, as expected for an LM trial.
+Deliberately changed width gradient, KKT certificate and coefficient fixtures
+continue to be rejected.
+
 ## Final 6Z6U run
 
 With the production multiprecision path removed, the full workflow used the
