@@ -1066,6 +1066,14 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
     if(reference) out.coefficient_difference=Difference(endpoint.beta,reference->beta);
     out.endpoint_verified=replay && replay->passed && replay->primary_kkt_passed && replay->independent_kkt_passed &&
         replay->primary_width_gradient<=1e-12;
+    if(replay)
+    {
+        out.inner=replay->feasible && replay->primary_kkt_passed && replay->independent_kkt_passed;
+        out.gradient=endpoint.gradient.size()==eta.size() && endpoint.gradient.allFinite() &&
+            endpoint.gradient.lpNorm<Eigen::Infinity>()<=1e-12 && replay->primary_width_gradient<=1e-12 &&
+            replay->independent_width_gradient<=1e-12 && replay->gradient_agrees;
+        out.numerical_qualified=out.endpoint_verified && out.inner && out.gradient;
+    }
     struct RankAssessmentTimer
     {
         double & value;
@@ -1144,6 +1152,8 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
         (reference ? reference->gradient.lpNorm<Eigen::Infinity>()<=1e-12 : replay->gradient_agrees);
     out.identified=projected_width_rank==eta.size() && !out.width_rank_threshold_sensitive;
     out.qualified=out.endpoint_verified && design_full_rank && out.identified && out.gradient;
+    if(reference)
+        out.numerical_qualified=out.inner && endpoint.certificate.kkt_passed && out.gradient;
     const bool design_threshold_sensitive=out.design && out.design->available && out.design->threshold_sensitive;
     const bool active_free_face=out.free_design &&
         out.free_design->columns<out.free_design->full_design_columns;
@@ -1172,6 +1182,43 @@ Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluatio
 #endif
     return out;
 }
+}
+Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluation & endpoint,
+    const IndependentReplayEvidence & replay,const EvaluationContext &)
+{
+    Assessment out; out.primary=endpoint; out.independent_replay=replay; out.reference_free=true;
+    const auto atom_count=static_cast<Eigen::Index>(domain.atoms.size());
+    bool valid=domain.rows==y.size() && y.allFinite() && endpoint.valid &&
+        endpoint.eta.size()==atom_count && endpoint.beta.size()==2*atom_count &&
+        endpoint.gradient.size()==atom_count && endpoint.eta.allFinite() && endpoint.beta.allFinite() &&
+        endpoint.gradient.allFinite();
+    if(valid)
+        for(Eigen::Index atom=0;atom<atom_count;++atom)
+        {
+            const double width=std::exp(endpoint.eta(atom));
+            valid &= endpoint.beta(2*atom)>=0 && std::isfinite(width) && width>0;
+        }
+    if(!valid)
+    {
+        out.primary.valid=false;
+        out.primary.reason="invalid-accepted-parameter-state";
+        out.failure=out.primary.reason;
+        return out;
+    }
+    if(!replay.available || !replay.valid)
+    {
+        out.failure=replay.reason.empty() ? "endpoint-replay-unavailable" : replay.reason;
+        return out;
+    }
+    out.inner=replay.feasible && replay.primary_kkt_passed && replay.independent_kkt_passed;
+    out.gradient=endpoint.gradient.lpNorm<Eigen::Infinity>()<=1e-12 &&
+        replay.primary_width_gradient<=1e-12 && replay.independent_width_gradient<=1e-12 && replay.gradient_agrees;
+    out.endpoint_verified=replay.passed && out.inner;
+    out.numerical_qualified=out.endpoint_verified && out.gradient;
+    out.failure=out.numerical_qualified ? "none" : !out.inner ? "global-ac-kkt-failed" :
+        !out.gradient ? "global-width-gradient-failed" :
+        replay.reason.empty() ? "endpoint-verification-failed" : replay.reason;
+    return out;
 }
 Assessment AssessEvaluated(const Domain & domain,VectorRef y,const Evaluation & endpoint,const Evaluation & reference,
     const EvaluationContext & policy,bool supplied)

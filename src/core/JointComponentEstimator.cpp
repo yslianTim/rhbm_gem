@@ -99,29 +99,34 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
         out.push_back(check("width-stationarity",evidence_available && a.primary.valid && a.primary.gradient.size()>0,
             replay.primary_width_gradient<=1e-12,
             std::isfinite(replay.primary_width_gradient) ? std::optional<double>(replay.primary_width_gradient) : std::nullopt,1e-12));
-        const bool structural_failure=a.design_structure && a.design_structure->proven_deficient;
-        const bool design_full_rank=!structural_failure && a.design && a.design->available &&
-            !a.design->threshold_sensitive && a.design->rank==a.design->columns;
-        const bool design_evidence_available=structural_failure ||
-            (a.design && a.design->available && !a.design->threshold_sensitive);
-        std::optional<double> design_rank_value,design_columns;
-        if(a.design && a.design->available)
-        {design_rank_value=static_cast<double>(a.design->rank); design_columns=static_cast<double>(a.design->columns);}
-        else if(structural_failure)
+        out.push_back(check("endpoint-verification",evidence_available,a.endpoint_verified));
+        if(a.design || a.design_structure)
         {
-            design_rank_value=static_cast<double>(a.design_structure->rank_upper_bound);
-            design_columns=static_cast<double>(a.design_structure->columns);
+            const bool structural_failure=a.design_structure && a.design_structure->proven_deficient;
+            const bool design_full_rank=!structural_failure && a.design && a.design->available &&
+                !a.design->threshold_sensitive && a.design->rank==a.design->columns;
+            const bool design_evidence_available=structural_failure ||
+                (a.design && a.design->available && !a.design->threshold_sensitive);
+            std::optional<double> design_rank_value,design_columns;
+            if(a.design && a.design->available)
+            {design_rank_value=static_cast<double>(a.design->rank); design_columns=static_cast<double>(a.design->columns);}
+            else if(structural_failure)
+            {
+                design_rank_value=static_cast<double>(a.design_structure->rank_upper_bound);
+                design_columns=static_cast<double>(a.design_structure->columns);
+            }
+            out.push_back(check("design-identifiability",design_evidence_available,design_full_rank,
+                design_rank_value,design_columns));
+            if(structural_failure) out.back().reason="proven-rank-upper-bound:"+a.design_structure->reason;
+            else if(a.design && a.design->threshold_sensitive) out.back().reason="rank-threshold-sensitive";
+            else if(a.free_design && a.free_design->columns<a.free_design->full_design_columns)
+                out.back().reason="active-amplitude-boundary";
+            else if(a.design && !a.design->available) out.back().reason=a.design->reason;
+            else if(a.design && a.design->rank<a.design->columns) out.back().reason="rank-deficient";
+            if(a.widths)
+                out.push_back(check("numerical-identifiability",!a.width_rank_threshold_sensitive,a.identified));
         }
-        out.push_back(check("design-identifiability",design_evidence_available,design_full_rank,
-            design_rank_value,design_columns));
-        if(structural_failure) out.back().reason="proven-rank-upper-bound:"+a.design_structure->reason;
-        else if(a.design && a.design->threshold_sensitive) out.back().reason="rank-threshold-sensitive";
-        else if(a.free_design && a.free_design->columns<a.free_design->full_design_columns)
-            out.back().reason="active-amplitude-boundary";
-        else if(a.design && !a.design->available) out.back().reason=a.design->reason;
-        else if(a.design && a.design->rank<a.design->columns) out.back().reason="rank-deficient";
-        out.push_back(check("numerical-identifiability",a.widths.has_value() && !a.width_rank_threshold_sensitive,
-            a.identified));
+        out.push_back(check("numerical-qualification",evidence_available,a.numerical_qualified));
     }
     else
     {
@@ -133,8 +138,7 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
         out.push_back(check("width-stationarity",valid && a.widths.has_value(),a.gradient,
             valid && a.primary.gradient.size() ? std::optional<double>(std::max(a.primary.gradient.lpNorm<Eigen::Infinity>(),
                 a.reference.gradient.lpNorm<Eigen::Infinity>())) : std::nullopt,1e-12));
-        out.push_back(check("numerical-identifiability",a.widths.has_value() && !a.width_rank_threshold_sensitive,
-            a.identified));
+        out.push_back(check("numerical-qualification",a.primary.valid,a.numerical_qualified));
     }
     if(a.reference_free && a.verification_memory_estimate.stage==n::MemoryStage::EndpointVerification)
         out.push_back({"endpoint-verification-memory",
@@ -164,12 +168,13 @@ JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> & evidence,Join
 {
     auto status=JointCheckStatus::Passed;
     const bool reference_free=std::any_of(evidence.begin(),evidence.end(),[&](const auto & check) {
-        return check.name=="conditional-ac-optimality" && check.scope==scope;
+        return check.name=="endpoint-verification" && check.scope==scope;
     });
     const std::vector<const char *> required=reference_free ?
-        std::vector<const char *>{"conditional-ac-optimality","independent-replay","width-stationarity",
-            "design-identifiability","numerical-identifiability"} :
-        std::vector<const char *>{"inner","kkt","width-stationarity","numerical-identifiability"};
+        std::vector<const char *>{"ac-feasibility","conditional-ac-optimality","independent-ac-optimality",
+            "independent-kkt-consistency","independent-replay","width-gradient-consistency",
+            "width-stationarity","endpoint-verification","numerical-qualification"} :
+        std::vector<const char *>{"inner","kkt","width-stationarity","numerical-qualification"};
     for(const char * name:required)
     {
         const auto found=std::find_if(evidence.begin(),evidence.end(),[&](const auto & check){return check.name==name && check.scope==scope;});
@@ -191,7 +196,13 @@ JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> & evidence,Join
 }
 JointCheckStatus JointComponentResult::RuntimeConvergence() const
 {
-    return state ? joint_component::ConvergenceStatus(evidence,JointEvidenceScope::ComponentLocal) : JointCheckStatus::Unavailable;
+    if(!state) return JointCheckStatus::Unavailable;
+    auto status=joint_component::ConvergenceStatus(evidence,JointEvidenceScope::ComponentLocal);
+    const auto stationary=std::find_if(evidence.begin(),evidence.end(),[](const auto & check) {
+        return check.name=="complete-sweep-stationarity" && check.scope==JointEvidenceScope::ComponentLocal;
+    });
+    return joint_component::MergeConvergenceStatus(status,stationary==evidence.end() ?
+        JointCheckStatus::Unavailable : stationary->status);
 }
 JointCheckStatus JointFitResult::RuntimeConvergence() const
 {
@@ -565,7 +576,7 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
                 static_cast<double>(assembly.verification_memory_estimate.estimated_peak_bytes),
                 static_cast<double>(assembly.verification_memory_estimate.budget_bytes),
                 std::string("resource-limit:endpoint-verification:")+assembly.verification_memory_estimate.reason});
-        if(assembly.assessment.qualified && assembly.consistency_passed)
+        if(assembly.assessment.numerical_qualified && assembly.consistency_passed)
         {
             out.assembled_state=State(state,data.context.scale);
             out.prediction=Values(assembly.prediction);

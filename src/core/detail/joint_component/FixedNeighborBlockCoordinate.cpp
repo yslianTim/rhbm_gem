@@ -1298,8 +1298,23 @@ FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
 {
     FixedNeighborEndpointCertification out;
     const auto atom_count=static_cast<Eigen::Index>(domain.atoms.size());
-    if(state.eta.size()!=atom_count || state.beta.size()!=2*atom_count || y.size()!=domain.rows)
+    if(state.eta.size()!=atom_count || state.beta.size()!=2*atom_count || y.size()!=domain.rows ||
+        !state.eta.allFinite() || !state.beta.allFinite())
+    {
+        out.trust.reason="invalid-primary";
         return out;
+    }
+    for(Eigen::Index atom=0;atom<atom_count;++atom)
+    {
+        const double width=std::exp(state.eta(atom));
+        if(state.beta(2*atom)<0 || !std::isfinite(width) || !(width>0))
+        {
+            out.trust.reason="invalid-primary";
+            out.assessment.failure="invalid-accepted-parameter-state";
+            out.assessment.primary.reason=out.assessment.failure;
+            return out;
+        }
+    }
     out.verification_memory_estimate=EndpointVerificationMemoryEstimate(domain,y,context,resident_override);
     if(out.verification_memory_estimate.status!=MemoryStatus::Pass)
     {
@@ -1333,7 +1348,7 @@ FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     replay_stage.Finish();
 #endif
-    out.assessment=AssessEvaluated(domain,y,endpoint,replay,context,true,resident_override);
+    out.assessment=VerifyJointEndpoint(domain,y,endpoint,replay,context);
     out.assessment.verification_memory_estimate=out.verification_memory_estimate;
     out.assessment.primary_endpoint_seconds=primary_seconds;
     out.assessment.independent_replay_seconds=replay_seconds;

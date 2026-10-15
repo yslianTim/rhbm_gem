@@ -44,6 +44,9 @@ core::JointComponentResult PublicComponent(const n::ComponentView & view,const n
         const auto values=[](const n::Vector & v) {return std::vector<double>(v.data(),v.data()+v.size());};
         out.state=rhbm_gem::JointState{values(endpoint.beta),values(endpoint.eta.array().exp()),
             values(endpoint.eta),values(endpoint.gradient),endpoint.certificate.objective/(scale*scale),{}};
+        out.evidence.push_back({"complete-sweep-stationarity",rhbm_gem::JointCheckStatus::Passed,
+            rhbm_gem::JointEvidenceScope::ComponentLocal,
+            static_cast<double>(fit.search.confirmed_stationarity_sweep),{},"confirmed"});
     }
     return out;
 }
@@ -155,7 +158,7 @@ TEST(JointComponentRuntimeTest, InnerEvidenceRemainsAvailableNearBoundary)
         EXPECT_FALSE(component.state);
         ASSERT_TRUE(component.candidate_diagnostic);
         EXPECT_TRUE(component.candidate_diagnostic->candidate_available);
-        EXPECT_EQ(component.candidate_diagnostic->rank_assessment_status,core::JointCheckStatus::Unavailable);
+        EXPECT_EQ(component.candidate_diagnostic->rank_assessment_status,core::JointCheckStatus::NotRun);
         EXPECT_EQ(component.candidate_diagnostic->endpoint_verification_status,core::JointCheckStatus::Passed);
         EXPECT_EQ(component.candidate_diagnostic->certification_status,core::JointCheckStatus::Unavailable);
         EXPECT_EQ(component.candidate_diagnostic->numerical_qualification_status,
@@ -169,15 +172,10 @@ TEST(JointComponentRuntimeTest, InnerEvidenceRemainsAvailableNearBoundary)
             EXPECT_LE(*check.value,*check.threshold);
         }
         EXPECT_TRUE(found_optimality);
-        const auto design=std::find_if(component.evidence.begin(),component.evidence.end(),[](const auto & check) {
-            return check.name=="design-identifiability";
-        });
-        ASSERT_NE(design,component.evidence.end());
-        EXPECT_EQ(design->status,core::JointCheckStatus::Unavailable);
-        EXPECT_EQ(design->reason,"active-amplitude-boundary");
-        ASSERT_EQ(component.ranks.size(),2u);
-        EXPECT_EQ(component.ranks[0].name,"free-design");
-        EXPECT_EQ(component.ranks[1].name,"projected-width");
+        EXPECT_EQ(std::find_if(component.evidence.begin(),component.evidence.end(),[](const auto & check) {
+            return check.name=="design-identifiability" || check.name=="numerical-identifiability";
+        }),component.evidence.end());
+        EXPECT_TRUE(component.ranks.empty());
         EXPECT_EQ(component.regular_certificate,core::JointCheckStatus::NotRun);
     }
 }

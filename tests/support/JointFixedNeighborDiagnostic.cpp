@@ -54,6 +54,9 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
     const bool qualified=certification.qualified();
     if(qualified) component.state=State(out.assessment.primary,context.scale);
     component.evidence=AssessmentEvidence(out.assessment,JointEvidenceScope::ComponentLocal);
+    if(out.confirmed_stationarity_sweep)
+        component.evidence.push_back({"complete-sweep-stationarity",JointCheckStatus::Passed,
+            JointEvidenceScope::ComponentLocal,static_cast<double>(out.confirmed_stationarity_sweep),{},"confirmed"});
     component.ranks=AssessmentRanks(out.assessment,JointEvidenceScope::ComponentLocal,
         data.input.get(),&layout,component_view.rows.size());
     component.evidence.push_back({"endpoint-trust",certification.verified() ? JointCheckStatus::Passed :

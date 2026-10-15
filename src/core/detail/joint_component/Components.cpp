@@ -167,32 +167,14 @@ JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & s
             certification.verification_memory_estimate.status!=MemoryStatus::Pass ||
                 certification.assessment.failure.starts_with("resource-limit:") ?
                     JointCheckStatus::Unavailable : JointCheckStatus::Failed;
-        const bool structural_design_failure=certification.assessment.design_structure &&
-            certification.assessment.design_structure->proven_deficient;
-        const bool rank_unavailable=!structural_design_failure &&
-            (certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass ||
-                !certification.assessment.design || !certification.assessment.widths ||
-                !certification.assessment.design->available ||
-                certification.assessment.design->threshold_sensitive ||
-                certification.assessment.width_rank_threshold_sensitive);
-        const bool rank_identified=!rank_unavailable &&
-            !structural_design_failure && certification.assessment.design->rank==certification.assessment.design->columns &&
-            certification.assessment.identified;
-        out.rank_assessment_status=rank_unavailable ? JointCheckStatus::Unavailable :
-            rank_identified ? JointCheckStatus::Passed : JointCheckStatus::Failed;
+        out.rank_assessment_status=JointCheckStatus::NotRun;
         out.certification_status=certification.qualified() ? JointCheckStatus::Passed :
-            structural_design_failure ? JointCheckStatus::Failed :
-                rank_unavailable ? JointCheckStatus::Unavailable :
-                certification.verification_memory_estimate.status!=MemoryStatus::Pass ||
-                    certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass ?
-                    JointCheckStatus::Unavailable : JointCheckStatus::Failed;
+            certification.resource_limited() ? JointCheckStatus::Unavailable : JointCheckStatus::Failed;
         out.numerical_qualification_status=out.certification_status;
         out.verification_reason=!certification.trust.reason.empty() ? certification.trust.reason :
             certification.assessment.failure;
         if(certification.verification_memory_estimate.status!=MemoryStatus::Pass)
             out.resource_limit_reason="resource-limit:endpoint-verification:"+certification.verification_memory_estimate.reason;
-        else if(!structural_design_failure && certification.assessment.rank_memory_estimate.status!=MemoryStatus::Pass)
-            out.resource_limit_reason="resource-limit:rank-assessment:"+certification.assessment.rank_memory_estimate.reason;
     }
     else if(out.candidate_available && search.reason.starts_with("resource-limit:"))
     {
@@ -256,8 +238,10 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             {
                 const auto & certification=*fit.search.certification;
                 component.evidence=AssessmentEvidence(certification.assessment,JointEvidenceScope::ComponentLocal);
-                component.ranks=AssessmentRanks(certification.assessment,JointEvidenceScope::ComponentLocal,
-                    data.input.get(),&layout,view.rows.size());
+                if(fit.search.confirmed_stationarity_sweep)
+                    component.evidence.push_back({"complete-sweep-stationarity",JointCheckStatus::Passed,
+                        JointEvidenceScope::ComponentLocal,
+                        static_cast<double>(fit.search.confirmed_stationarity_sweep),{},"confirmed"});
                 if(certification.verification_memory_estimate.status!=MemoryStatus::Pass)
                     component.evidence.push_back({"endpoint-verification-memory",JointCheckStatus::Unavailable,
                         JointEvidenceScope::ComponentLocal,
@@ -436,13 +420,10 @@ AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const Compon
     }
     if(same)
     {
-        out.assessment=reuse->assessment;
-        out.assessment.independent_replay=out.replay;
-        out.assessment.endpoint_verified=out.replay.passed && out.replay.primary_width_gradient<=1e-12;
-        out.assessment.primary=raw;
+        out.assessment=VerifyJointEndpoint(domain,y,raw,out.replay,context);
     }
     else
-        out.assessment=AssessEvaluated(domain,y,raw,out.replay,context,true);
+        out.assessment=VerifyJointEndpoint(domain,y,raw,out.replay,context);
     out.assessment.verification_memory_estimate=out.verification_memory_estimate;
     out.assessment.primary_endpoint_seconds=primary_seconds;
     out.assessment.independent_replay_seconds=replay_seconds;

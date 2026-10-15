@@ -225,7 +225,7 @@ struct Assessment
     MemoryEstimate verification_memory_estimate,rank_memory_estimate,weak_direction_memory_estimate;
     double primary_endpoint_seconds{},independent_replay_seconds{},rank_assessment_seconds{};
     double coefficient_difference{unavailable};
-    bool inner{},gradient{},identified{},endpoint_verified{},qualified{},reference_free{},width_rank_threshold_sensitive{};
+    bool inner{},gradient{},identified{},endpoint_verified{},qualified{},numerical_qualified{},reference_free{},width_rank_threshold_sensitive{};
     std::string failure,weak_direction_diagnostics_failure;
 };
 std::vector<JointCheck> AssessmentEvidence(const Assessment &,JointEvidenceScope);
@@ -240,6 +240,10 @@ Assessment AssessProfileWithWeakDirectionDiagnostics(const Domain &,VectorRef,co
 Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const Evaluation &,const EvaluationContext &,bool supplied=false);
 Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const IndependentReplayEvidence &,
     const EvaluationContext &,bool supplied=false,std::size_t resident_override=0);
+// Verifies an accepted endpoint using only the streaming objective, KKT,
+// width-gradient, and independent replay evidence. It never assesses global rank.
+Assessment VerifyJointEndpoint(const Domain &,VectorRef,const Evaluation &,
+    const IndependentReplayEvidence &,const EvaluationContext &);
 Assessment AssessEvaluatedWithWeakDirectionDiagnostics(const Domain &,VectorRef,const Evaluation &,
     const Evaluation &,const EvaluationContext &,bool supplied=false);
 Assessment AssessEvaluatedWithWeakDirectionDiagnostics(const Domain &,VectorRef,const Evaluation &,
