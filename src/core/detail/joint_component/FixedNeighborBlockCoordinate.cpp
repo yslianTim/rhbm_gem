@@ -601,8 +601,7 @@ FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolic
     for(const auto atom:core_atoms)
         if(atom>=0 && static_cast<std::size_t>(atom)<context.atom_ids.size())
             out.core_atom_ids.push_back(context.atom_ids.at(static_cast<std::size_t>(atom)));
-    if(policy.halo_census)
-        policy.halo_census(out.halo_count,out.minimum_halo_support_rows,out.rank_deficient_halo_count);
+    if(policy.halo_census) policy.halo_census(out.halo_count,out.minimum_halo_support_rows);
     for(auto trial=profile.trials.rbegin();trial!=profile.trials.rend();++trial)
         if(trial->trust && !trial->trust->passed)
         {
@@ -626,7 +625,6 @@ std::string FormatFailureDiagnostics(const FixedNeighborBlockFailureDiagnostics 
     for(std::size_t i=0;i<d.core_atom_ids.size();++i) out<<(i ? "," : "")<<d.core_atom_ids[i];
     out<<"] core_atom_count="<<d.core_atom_count<<" affected_row_count="<<d.affected_row_count
        <<" halo_count="<<d.halo_count<<" minimum_halo_support_rows="<<d.minimum_halo_support_rows
-       <<" rank_deficient_halo_count="<<d.rank_deficient_halo_count
        <<" initial_profile_valid="<<(d.initial_profile_valid ? "true" : "false")
        <<" initial_profile_reason="<<d.initial_profile_reason
        <<" initial_profile_trusted="<<(d.initial_profile_trusted ? "true" : "false")
@@ -715,7 +713,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     auto structural_timer=Measure(policy.collect_telemetry,out.work.structural_preparation_seconds);
     MemoryShape memory_shape; memory_shape.component_atoms=domain.atoms.size();
     memory_shape.component_observations=static_cast<std::size_t>(domain.rows);
-    memory_shape.component_target_columns=context.target_columns;
     if(!CheckedMultiplyBytes(memory_shape.component_atoms,2,memory_shape.component_free_columns))
     {out.memory_estimate.stage=MemoryStage::StructuralConstruction; out.memory_estimate.status=MemoryStatus::Overflow;
         out.memory_estimate.reason="size-overflow"; out.reason="resource-limit:structural-construction:size-overflow"; return out;}
@@ -839,7 +836,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             {
                 out.work.primary_endpoint_seconds+=certification.assessment.primary_endpoint_seconds;
                 out.work.independent_replay_seconds+=certification.assessment.independent_replay_seconds;
-                out.work.rank_assessment_seconds+=certification.assessment.rank_assessment_seconds;
             }
             return certification;
         };
@@ -1444,7 +1440,6 @@ FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
         const auto reason=std::string("resource-limit:endpoint-verification:")+out.verification_memory_estimate.reason;
         out.assessment.primary.eta=state.eta; out.assessment.primary.reason=reason;
         out.assessment.failure=reason;
-        out.assessment.reference_free=true;
         out.assessment.verification_memory_estimate=out.verification_memory_estimate;
         out.trust.reason=reason;
         return out;
@@ -1514,16 +1509,6 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     auto context=parent_context;
     context.atom_ids=prepared.atom_ids; context.row_ids=prepared.row_ids;
     context.independent_search=true;
-    context.target_columns=0;
-    if(const auto * input=prepared.domain.atoms.Storage(); input && input->selection_domain)
-    {
-        std::size_t targets{};
-        for(const auto atom:prepared.local_to_parent_atoms)
-            targets+=std::binary_search(input->selection_domain->target_indices.begin(),
-                input->selection_domain->target_indices.end(),static_cast<std::size_t>(atom));
-        if(!CheckedMultiplyBytes(targets,3,context.target_columns))
-            context.target_columns=std::numeric_limits<std::size_t>::max();
-    }
     const auto atom_count=static_cast<Eigen::Index>(local_layout.full_atoms.size());
     context.rank={prepared.parent_row_count,2*atom_count,atom_count};
     context.linear.rank_relative=context.rank.Relative(2*atom_count);

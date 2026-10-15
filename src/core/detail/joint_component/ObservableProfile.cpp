@@ -14,8 +14,7 @@ JointParameterLayout BuildParameterLayout(const JointProblemInput & input)
     return out;
 }
 std::vector<HaloSupportDiagnostic> DiagnoseHaloSupport(const JointProblemInput & input,
-    const JointParameterLayout & layout,const std::vector<double> & widths,
-    const std::vector<Eigen::Index> * component_atoms,Eigen::Index rank_context_rows)
+    const JointParameterLayout & layout,const std::vector<Eigen::Index> * component_atoms)
 {
     std::vector<HaloSupportDiagnostic> out;
     if(!input.selection_domain) return out;
@@ -43,30 +42,6 @@ std::vector<HaloSupportDiagnostic> DiagnoseHaloSupport(const JointProblemInput &
         distances.erase(std::unique(distances.begin(),distances.end()),distances.end());
         diagnostic.distinct_squared_distance_count=distances.size();
         diagnostic.exact_common_response=!support.empty() && distances.size()==1;
-        const auto nonzero_columns=std::min<std::size_t>(support.size(),2);
-        diagnostic.ac_structural_rank_upper_bound=nonzero_columns;
-        if(atom<widths.size() && widths[atom]>0 && std::isfinite(widths[atom]) && !support.empty())
-        {
-            Eigen::MatrixXd design(static_cast<Eigen::Index>(support.size()),2);
-            for(std::size_t row=0;row<support.size();++row)
-            {
-                const auto basis=EvaluateKernel(support[row].squared_distance,widths[atom],2.5);
-                design(static_cast<Eigen::Index>(row),0)=basis.gaussian;
-                design(static_cast<Eigen::Index>(row),1)=basis.charge;
-            }
-            const auto spectrum=ComputeSpectrum(design,
-                {rank_context_rows>=0 ? rank_context_rows : static_cast<Eigen::Index>(input.observations.size()),2,0},2,true);
-            if(spectrum.available)
-            {
-                diagnostic.gaussian_column_nonzero_norm=spectrum.column_norms(0)>0;
-                diagnostic.charge_column_nonzero_norm=spectrum.column_norms(1)>0;
-                diagnostic.fixed_width_ac_numerical_rank=static_cast<std::size_t>(spectrum.rank);
-                diagnostic.column_normalized_condition_indicator=spectrum.condition;
-                diagnostic.ac_structural_rank_upper_bound=std::min<std::size_t>(support.size(),
-                    static_cast<std::size_t>(*diagnostic.gaussian_column_nonzero_norm)+
-                    static_cast<std::size_t>(*diagnostic.charge_column_nonzero_norm));
-            }
-        }
         out.push_back(std::move(diagnostic));
     }
     return out;

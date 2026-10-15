@@ -28,7 +28,7 @@ def build_fingerprint(root):
     source = Path(next(line.split('=', 1)[1] for line in cache.splitlines()
                        if line.startswith('CMAKE_HOME_DIRECTORY:')))
     binaries = [root / 'bin/joint_fixed_neighbor_experiment', root / 'bin/joint_component_runtime',
-                root / 'bin/joint_offline_diagnostic', root / 'bin/joint_statistical_experiment',
+                root / 'bin/joint_statistical_experiment',
                 root / 'bin/RHBM-GEM', *sorted((root / 'src').glob('librhbm_gem.*'))]
     return dict(source_root=str(source), source_sha256=source_hash(source), cache=cache,
                 binaries={str(p.relative_to(root)): sha(p) for p in binaries if p.is_file()},

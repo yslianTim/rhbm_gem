@@ -150,10 +150,6 @@ std::pair<Matrix,Matrix> Reduce(const Design & x,const Matrix & rhs)
     }
     return {std::move(reduced.r),std::move(reduced.target)};
 }
-CompactSvdResult Decompose(const Matrix & r,Eigen::Index rows,CompactSvdVectors vectors=CompactSvdVectors::None,const Vector * rhs=nullptr)
-{
-    return EvaluateRank(r,{{rows,0,0},r.cols()},rhs,vectors);
-}
 }
 JointSolverConfiguration ResolveJointSolverConfiguration(const FixedNeighborSearchPolicy & policy)
 {return {policy.core_atoms};}
@@ -176,8 +172,6 @@ EvaluationContext CreateContext(std::shared_ptr<const JointProblemInput> input,c
     const auto & y=*c.observations; const auto atoms=static_cast<Eigen::Index>(input->atom_ids.size());
     c.scale=std::max(1.0,y.norm()); c.rank={y.size(),2*atoms,atoms};
     c.linear.rank_relative=c.rank.Relative(2*atoms); c.linear.release_response_norm=y.norm(); c.audit=plan;
-    if(input->selection_domain && !CheckedMultiplyBytes(input->selection_domain->target_indices.size(),3,c.target_columns))
-        c.target_columns=std::numeric_limits<std::size_t>::max();
     c.atom_ids=Identities(std::shared_ptr<const std::vector<std::string>>(input,&input->atom_ids));
     c.row_ids=Identities(std::shared_ptr<const std::vector<std::string>>(input,&input->row_ids)); return c;
 }
@@ -299,11 +293,10 @@ Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
     out.valid=true; return out;
 }
 }
-MemoryEstimate ReferenceSolveMemoryEstimate(const Domain & domain,VectorRef,const EvaluationContext & context,
+MemoryEstimate ReferenceSolveMemoryEstimate(const Domain & domain,VectorRef,const EvaluationContext &,
     std::size_t resident_override)
 {
     MemoryShape shape; shape.component_atoms=domain.atoms.size(); shape.component_observations=static_cast<std::size_t>(domain.rows);
-    shape.component_target_columns=context.target_columns;
     const auto overflow=[&] {
         auto estimate=PlanMemory(shape,MemoryStage::ReferenceSolve);
         estimate.status=MemoryStatus::Overflow; estimate.reason="size-overflow"; return estimate;
@@ -326,12 +319,11 @@ MemoryEstimate ReferenceSolveMemoryEstimate(const Domain & domain,VectorRef,cons
     shape.resident_bytes=std::max(view_bytes,resident_override);
     return PlanMemory(shape,MemoryStage::ReferenceSolve);
 }
-MemoryEstimate EndpointVerificationMemoryEstimate(const Domain & domain,VectorRef y,const EvaluationContext & context,
+MemoryEstimate EndpointVerificationMemoryEstimate(const Domain & domain,VectorRef y,const EvaluationContext &,
     std::size_t resident_override)
 {
     MemoryShape shape; shape.component_atoms=domain.atoms.size();
     shape.component_observations=static_cast<std::size_t>(domain.rows);
-    shape.component_target_columns=context.target_columns;
     for(std::size_t atom=0;atom<domain.atoms.size();++atom)
         if(!CheckedAddBytes(shape.component_support_entries,domain.atoms[atom].size(),shape.component_support_entries))
         {
@@ -790,26 +782,6 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
 }
 
 namespace {
-Spectrum CompactSpectrum(const CompactSvdResult & svd,Eigen::Index rows)
-{
-    const auto & v=svd.singular_values; Spectrum out;
-    if(!svd.valid) {out.available=false; out.reason="spectrum-factorization-failed"; return out;}
-    out.rank=svd.rank; out.rows=rows; out.columns=v.size(); out.singular_values=v;
-    out.minimum=v(v.size()-1); out.condition=v(0)/v(v.size()-1);
-    out.threshold=svd.threshold; out.threshold_sensitive=!CompactRankDecisionSafe(svd); return out;
-}
-Matrix WeakDirectionDiagnostics(const Matrix & right_vectors,Eigen::Index atom_count)
-{
-    Matrix out(atom_count,std::min<Eigen::Index>(3,right_vectors.cols()));
-    for(Eigen::Index k=0;k<out.cols();++k)
-    {
-        Vector direction=right_vectors.col(right_vectors.cols()-1-k);
-        Eigen::Index sign{}; direction.cwiseAbs().maxCoeff(&sign);
-        if(direction(sign)<0) direction=-direction;
-        out.col(k)=direction;
-    }
-    return out;
-}
 template<class Design> Spectrum SpectrumRecord(const Design & input,const RankPolicy & policy,Eigen::Index columns,bool normalize)
 {
     Spectrum out; out.rows=policy.rows; out.columns=columns; out.full_design_columns=columns;
@@ -829,28 +801,9 @@ Spectrum ComputeSpectrum(const Sparse & x,const RankPolicy & p,Eigen::Index colu
 {return SpectrumRecord(x,p,columns,normalize);}
 Spectrum ComputeSpectrum(const Matrix & x,const RankPolicy & p,Eigen::Index columns,bool normalize)
 {return SpectrumRecord(x,p,columns,normalize);}
-Spectrum DesignSpectrum(const Sparse & x,const Vector & weights,const RankPolicy * policy)
-{
-    ++NumericsWorkForTesting().design_spectrum_calls;
-    Vector scales(x.cols());
-    for(Eigen::Index k=0;k<x.cols();++k)
-    {
-        double sum{}; for(Sparse::InnerIterator e(x,k);e;++e) sum+=weights(e.row())*e.value()*e.value();
-        scales(k)=std::sqrt(sum);
-    }
-    for(Eigen::Index k=0;k<x.cols();++k) if(scales(k)==0) scales(k)=1;
-    const auto reduced=ReferenceQR(x,weights,scales,Vector::Zero(x.rows()));
-    const auto svd=EvaluateRank(reduced.first,{{policy ? policy->rows : x.rows(),x.cols(),0},x.cols(),-1,RankBoundary::StrictGreater}); const auto & values=svd.singular_values;
-    if(!svd.valid) {Spectrum out; out.available=false; out.reason="spectrum-factorization-failed"; return out;}
-    Spectrum out; out.rows=policy ? policy->rows : x.rows(); out.columns=x.cols();
-    out.full_design_columns=x.cols(); out.rank=svd.rank; out.minimum=values.tail(1)(0);
-    out.condition=values(0)/values.tail(1)(0); out.singular_values=values; out.column_norms=scales;
-    out.threshold=svd.threshold; out.threshold_sensitive=!CompactRankDecisionSafe(svd); return out;
-}
 namespace {
 Assessment AssessProfileImpl(const Domain & domain,VectorRef y,const Vector & eta,const EvaluationContext & policy,
-    const Vector * supplied_beta,const Vector * assembled_prediction,const std::vector<std::size_t> * assembled_rows,
-    bool include_weak_direction_diagnostics)
+    const Vector * supplied_beta,const Vector * assembled_prediction,const std::vector<std::size_t> * assembled_rows)
 {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     AssessmentStageTimerForTesting total_stage("total-assessment",y.size(),eta.size());
@@ -858,12 +811,9 @@ Assessment AssessProfileImpl(const Domain & domain,VectorRef y,const Vector & et
     const auto verification_memory=EndpointVerificationMemoryEstimate(domain,y,policy);
     if(verification_memory.status!=MemoryStatus::Pass)
     {
-        Evaluation primary; primary.eta=eta;
-        primary.reason="resource-limit:endpoint-verification:"+verification_memory.reason;
-        IndependentReplayEvidence replay; replay.reason=primary.reason;
-        auto assessment=include_weak_direction_diagnostics ?
-            AssessEvaluatedWithWeakDirectionDiagnostics(domain,y,primary,replay,policy,supplied_beta!=nullptr) :
-            AssessEvaluated(domain,y,primary,replay,policy,supplied_beta!=nullptr);
+        Assessment assessment; assessment.primary.eta=eta;
+        assessment.primary.reason="resource-limit:endpoint-verification:"+verification_memory.reason;
+        assessment.failure=assessment.primary.reason;
         assessment.verification_memory_estimate=verification_memory;
         return assessment;
     }
@@ -886,9 +836,7 @@ Assessment AssessProfileImpl(const Domain & domain,VectorRef y,const Vector & et
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     replay_stage.Finish();
 #endif
-    auto assessment=include_weak_direction_diagnostics ?
-        AssessEvaluatedWithWeakDirectionDiagnostics(domain,y,endpoint,replay,policy,supplied_beta!=nullptr) :
-        AssessEvaluated(domain,y,endpoint,replay,policy,supplied_beta!=nullptr);
+    auto assessment=VerifyJointEndpoint(domain,y,endpoint,replay,policy);
     assessment.verification_memory_estimate=verification_memory;
     assessment.primary_endpoint_seconds=primary_seconds;
     assessment.independent_replay_seconds=replay_seconds;
@@ -898,13 +846,7 @@ Assessment AssessProfileImpl(const Domain & domain,VectorRef y,const Vector & et
 Assessment AssessProfile(const Domain & domain,VectorRef y,const Vector & eta,const EvaluationContext & policy,
     const Vector * supplied_beta,const Vector * assembled_prediction,const std::vector<std::size_t> * assembled_rows)
 {
-    return AssessProfileImpl(domain,y,eta,policy,supplied_beta,assembled_prediction,assembled_rows,false);
-}
-Assessment AssessProfileWithWeakDirectionDiagnostics(const Domain & domain,VectorRef y,const Vector & eta,
-    const EvaluationContext & policy,const Vector * supplied_beta,const Vector * assembled_prediction,
-    const std::vector<std::size_t> * assembled_rows)
-{
-    return AssessProfileImpl(domain,y,eta,policy,supplied_beta,assembled_prediction,assembled_rows,true);
+    return AssessProfileImpl(domain,y,eta,policy,supplied_beta,assembled_prediction,assembled_rows);
 }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 AssessmentWork & AssessmentWorkForTesting() {static thread_local AssessmentWork work; return work;}
@@ -940,10 +882,8 @@ void BeginAssessmentStageForTesting(const std::string & name,Eigen::Index rows,E
         stage.memory_preflight_reason=estimate->reason;
         stage.sparse_design_bytes=estimate->sparse_design_bytes; stage.dense_factor_bytes=estimate->dense_factor_bytes;
         stage.factor_workspace_bytes=estimate->factor_workspace_bytes;
-        stage.right_singular_vector_bytes=estimate->right_singular_vector_bytes;
         stage.factor_rows=estimate->factor_rows; stage.factor_columns=estimate->factor_columns;
         stage.maximum_tile_rows=estimate->shape.maximum_tile_rows;
-        stage.attributed_memory_stages=estimate->attributed_stages;
     }
     stage.current_rss_before_bytes=CurrentRssBytes();
     stage.process_peak_rss_bytes=ProcessPeakRssBytes();
@@ -989,204 +929,10 @@ bool SameAssessmentPolicy(const EvaluationContext & a,const EvaluationContext & 
         a.linear.active_set_iteration_factor==b.linear.active_set_iteration_factor && a.linear.release_factor==b.linear.release_factor &&
         a.linear.release_response_norm==b.linear.release_response_norm && a.atom_ids==b.atom_ids && a.row_ids==b.row_ids;
 }
-namespace {
-MemoryEstimate RankAssessmentMemoryEstimate(const Domain & domain,VectorRef,const Evaluation & endpoint,
-    const Evaluation * reference,const EvaluationContext & context,std::size_t resident_override)
-{
-    MemoryShape shape; shape.component_atoms=domain.atoms.size(); shape.component_observations=static_cast<std::size_t>(domain.rows);
-    shape.component_target_columns=context.target_columns;
-    if(context.target_columns%3==0 && context.target_columns/3<=shape.component_atoms)
-    {
-        shape.component_target_atoms=context.target_columns/3;
-        shape.component_halo_atoms=shape.component_atoms-shape.component_target_atoms;
-    }
-    shape.component_width_columns=shape.component_atoms;
-    shape.maximum_tile_rows=8192;
-    if(!CheckedMultiplyBytes(shape.component_atoms,2,shape.component_design_columns))
-    {
-        auto estimate=PlanMemory(shape,MemoryStage::RankAssessment);
-        estimate.status=MemoryStatus::Overflow; estimate.reason="size-overflow"; return estimate;
-    }
-    const auto overflow=[&] {
-        auto estimate=PlanMemory(shape,MemoryStage::RankAssessment);
-        estimate.status=MemoryStatus::Overflow; estimate.reason="size-overflow"; return estimate;
-    };
-    for(Eigen::Index k=0;k<endpoint.beta.size();++k)
-        if(k%2 || endpoint.beta(k)>0)
-            if(!CheckedAddBytes(shape.component_free_columns,1,shape.component_free_columns)) return overflow();
-    for(std::size_t atom=0;atom<domain.atoms.size();++atom)
-        if(!CheckedAddBytes(shape.component_support_entries,domain.atoms[atom].size(),shape.component_support_entries))
-            return overflow();
-    const auto * input=domain.atoms.Storage();
-    const auto snapshot=input ? EstimateSnapshotBytes(*input) : std::nullopt;
-    std::size_t resident{};
-    const auto add_product=[](std::size_t & total,std::size_t count,std::size_t width) {
-        std::size_t bytes{}; return CheckedMultiplyBytes(count,width,bytes) && CheckedAddBytes(total,bytes,total);
-    };
-    const auto add_sparse=[&](const Sparse & matrix) {
-        std::size_t outer{};
-        return matrix.outerSize()>=0 && matrix.nonZeros()>=0 &&
-            CheckedAddBytes(static_cast<std::size_t>(matrix.outerSize()),1,outer) &&
-            add_product(resident,static_cast<std::size_t>(matrix.nonZeros()),sizeof(double)+sizeof(Eigen::Index)) &&
-            add_product(resident,outer,sizeof(Eigen::Index));
-    };
-    if(!snapshot || !CheckedAddBytes(*snapshot,domain.atoms.LocalSupportIndexBytes(),resident) ||
-        !add_product(resident,static_cast<std::size_t>(std::max<Eigen::Index>(0,domain.rows)),3*sizeof(double)) ||
-        !add_product(resident,shape.component_atoms,16*sizeof(double)+4*sizeof(Eigen::Index)) ||
-        !add_product(resident,shape.component_observations,2*sizeof(Eigen::Index)) ||
-        !add_product(resident,shape.component_atoms,2*sizeof(Eigen::Index)) ||
-        !add_sparse(endpoint.x) || !add_sparse(endpoint.derivative) ||
-        (reference && (!add_sparse(reference->x) || !add_sparse(reference->derivative)))) return overflow();
-    shape.resident_bytes=std::max(resident,resident_override);
-    return PlanMemory(shape,MemoryStage::RankAssessment);
-}
-}
-namespace {
-Assessment AssessEvaluatedImpl(const Domain & domain,VectorRef y,const Evaluation & endpoint,const Evaluation * reference,
-    const IndependentReplayEvidence * replay,const EvaluationContext & policy,bool supplied,std::size_t resident_override,
-    bool include_weak_direction_diagnostics)
-{
-    ResourcePhase phase("assessment");
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    ++AssessmentWorkForTesting().assessments;
-#endif
-    const auto * context=&policy; const double scale=context->scale; const auto & eta=endpoint.eta; Assessment out;
-    out.primary=endpoint;
-    out.reference_free=reference==nullptr;
-    if(reference) out.reference=*reference;
-    if(replay) out.independent_replay=*replay;
-    if(supplied && endpoint.valid && !endpoint.certificate.kkt_passed && !replay)
-    {out.primary.valid=false; out.primary.reason="assembled-kkt-failed";}
-    if(!out.primary.valid || (reference && !reference->valid) ||
-        (replay && (!replay->available || !replay->valid)))
-    {
-        out.failure=reference && !reference->valid ? reference->reason : replay && !replay->valid ? replay->reason : "inner-solve";
-        return out;
-    }
-    if(reference) out.coefficient_difference=Difference(endpoint.beta,reference->beta);
-    out.endpoint_verified=replay && replay->passed && replay->primary_kkt_passed && replay->independent_kkt_passed &&
-        replay->primary_width_gradient<=1e-12;
-    if(replay)
-    {
-        out.inner=replay->feasible && replay->primary_kkt_passed && replay->independent_kkt_passed;
-        out.gradient=endpoint.gradient.size()==eta.size() && endpoint.gradient.allFinite() &&
-            endpoint.gradient.lpNorm<Eigen::Infinity>()<=1e-12 && replay->primary_width_gradient<=1e-12 &&
-            replay->independent_width_gradient<=1e-12 && replay->gradient_agrees;
-        out.numerical_qualified=out.endpoint_verified && out.inner && out.gradient;
-    }
-    struct RankAssessmentTimer
-    {
-        double & value;
-        std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
-        ~RankAssessmentTimer()
-        {value=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();}
-    } rank_timer{out.rank_assessment_seconds};
-    out.rank_memory_estimate=RankAssessmentMemoryEstimate(domain,y,endpoint,reference,policy,resident_override);
-    const auto projected_memory=PlanMemory(out.rank_memory_estimate.shape,MemoryStage::ProjectedWidthAssessment,
-        out.rank_memory_estimate.budget_bytes);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    AssessmentStageTimerForTesting identifiability_stage("numerical-identifiability",y.size(),
-        static_cast<Eigen::Index>(out.rank_memory_estimate.shape.component_design_columns),&out.rank_memory_estimate);
-#endif
-    out.design_structure=AssessDesignStructuralRank(domain,eta,out.rank_memory_estimate.resident_bytes,
-        out.rank_memory_estimate.budget_bytes,false);
-    if(out.design_structure->proven_deficient)
-    {
-        out.inner=false;
-        out.failure="design-unidentified:"+out.design_structure->reason;
-        return out;
-    }
-    if(out.rank_memory_estimate.status!=MemoryStatus::Pass ||
-        out.rank_memory_estimate.estimated_peak_bytes>out.rank_memory_estimate.budget_bytes/2)
-        LogMemoryEstimate(out.rank_memory_estimate);
-    if(out.rank_memory_estimate.status!=MemoryStatus::Pass)
-    {out.failure="resource-limit:rank-assessment"; return out;}
-    Evaluation rebuilt;
-    const Evaluation * evaluated=&endpoint;
-    if(endpoint.x.cols()==0 || endpoint.derivative.cols()==0)
-    {
-        rebuilt=EvaluateState(domain,y,endpoint.eta,endpoint.beta,policy);
-        if(!rebuilt.valid) {out.failure=rebuilt.reason; return out;}
-        evaluated=&rebuilt;
-    }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    AssessmentStageTimerForTesting projected_overall("projected-width-assessment",evaluated->x.rows(),eta.size(),
-        &projected_memory);
-    AssessmentStageTimerForTesting prepare_stage("derivative-preparation",evaluated->derivative.rows(),
-        evaluated->derivative.cols(),&projected_memory);
-#endif
-    auto prepared=PrepareProjectedWidthDerivative(*evaluated,scale,context);
-    out.free_design=std::move(prepared.free_design_rank);
-    if(out.free_design && out.free_design->columns==out.free_design->full_design_columns)
-        out.design=out.free_design;
-    const bool design_full_rank=out.design && out.design->available &&
-        out.design->rank==out.design->columns && !out.design->threshold_sensitive;
-    out.inner=reference ? out.coefficient_difference<=1e-10 && design_full_rank :
-        replay->primary_kkt_passed && replay->independent_kkt_passed;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    prepare_stage.Finish();
-    AssessmentStageTimerForTesting reduce_stage("derivative-reduction",prepared.raw.rows(),prepared.raw.cols(),
-        &projected_memory);
-#endif
-    const auto differential=ReduceProjectedWidthDerivative(prepared);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    reduce_stage.Finish();
-#endif
-    if(!differential.valid) {out.failure=differential.reason; return out;}
-    CompactSvdResult widths;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    {
-        AssessmentStageTimerForTesting width_stage("projected-width-spectrum",differential.projected.rows(),
-            differential.projected.cols(),&projected_memory);
-        widths=Decompose(differential.projected,context->rank.rows);
-    }
-#else
-    widths=Decompose(differential.projected,context->rank.rows);
-#endif
-    if(!widths.valid) {out.failure="spectrum-factorization-failed"; return out;}
-    out.width_rank_threshold_sensitive=!CompactRankDecisionSafe(widths);
-    out.widths=CompactSpectrum(widths,context->rank.rows);
-    out.widths->column_norms=differential.projected_norms;
-    const auto projected_width_rank=widths.rank;
-    out.gradient=endpoint.gradient.lpNorm<Eigen::Infinity>()<=1e-12 &&
-        (reference ? reference->gradient.lpNorm<Eigen::Infinity>()<=1e-12 : replay->gradient_agrees);
-    out.identified=projected_width_rank==eta.size() && !out.width_rank_threshold_sensitive;
-    out.qualified=out.endpoint_verified && design_full_rank && out.identified && out.gradient;
-    if(reference)
-        out.numerical_qualified=out.inner && endpoint.certificate.kkt_passed && out.gradient;
-    const bool design_threshold_sensitive=out.design && out.design->available && out.design->threshold_sensitive;
-    const bool active_free_face=out.free_design &&
-        out.free_design->columns<out.free_design->full_design_columns;
-    out.failure=reference && !out.inner ? "inner-solve" : design_threshold_sensitive ? "design-rank-threshold-sensitive" :
-        !out.design && active_free_face ? "design-rank-unavailable:active-amplitude-boundary" :
-        !out.design || !out.design->available ? "design-rank-unavailable" : !design_full_rank ? "design-unidentified" :
-        out.width_rank_threshold_sensitive ? "width-rank-threshold-sensitive" :
-        !out.identified ? "width-unidentified" : !out.gradient ? "b-not-stationary" :
-        !out.endpoint_verified ? "endpoint-verification-failed" : "none";
-    if(include_weak_direction_diagnostics)
-    {
-        out.weak_direction_memory_estimate=PlanMemory(out.rank_memory_estimate.shape,
-            MemoryStage::ProjectedWidthDiagnostics,out.rank_memory_estimate.budget_bytes);
-        if(out.weak_direction_memory_estimate.status!=MemoryStatus::Pass)
-            out.weak_direction_diagnostics_failure="resource-limit:weak-direction-diagnostics";
-        else
-        {
-            const auto diagnostic_widths=Decompose(differential.projected,context->rank.rows,CompactSvdVectors::Right);
-            if(diagnostic_widths.valid)
-                out.weak_directions=WeakDirectionDiagnostics(diagnostic_widths.right_vectors,eta.size());
-            else out.weak_direction_diagnostics_failure="weak-direction-spectrum-factorization-failed";
-        }
-    }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    projected_overall.Finish();
-#endif
-    return out;
-}
-}
 Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluation & endpoint,
     const IndependentReplayEvidence & replay,const EvaluationContext &)
 {
-    Assessment out; out.primary=endpoint; out.independent_replay=replay; out.reference_free=true;
+    Assessment out; out.primary=endpoint; out.independent_replay=replay;
     const auto atom_count=static_cast<Eigen::Index>(domain.atoms.size());
     bool valid=domain.rows==y.size() && y.allFinite() && endpoint.valid &&
         endpoint.eta.size()==atom_count && endpoint.beta.size()==2*atom_count &&
@@ -1220,17 +966,29 @@ Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluatio
         replay.reason.empty() ? "endpoint-verification-failed" : replay.reason;
     return out;
 }
-Assessment AssessEvaluated(const Domain & domain,VectorRef y,const Evaluation & endpoint,const Evaluation & reference,
-    const EvaluationContext & policy,bool supplied)
-{return AssessEvaluatedImpl(domain,y,endpoint,&reference,nullptr,policy,supplied,0,false);}
+Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation & endpoint,const Evaluation & reference,
+    const EvaluationContext &,bool)
+{
+    Assessment out; out.primary=endpoint;
+    if(!endpoint.valid || !reference.valid)
+    {
+        out.failure=!endpoint.valid ? endpoint.reason : reference.reason;
+        return out;
+    }
+    const bool coefficients_agree=endpoint.beta.size()==reference.beta.size() &&
+        (endpoint.beta-reference.beta).lpNorm<Eigen::Infinity>()<=1e-10;
+    out.inner=endpoint.certificate.feasible && endpoint.certificate.kkt_passed &&
+        reference.certificate.feasible && reference.certificate.kkt_passed && coefficients_agree;
+    out.gradient=endpoint.gradient.size()==endpoint.eta.size() && endpoint.gradient.allFinite() &&
+        endpoint.gradient.lpNorm<Eigen::Infinity>()<=1e-12 && reference.gradient.size()==reference.eta.size() &&
+        reference.gradient.allFinite() && reference.gradient.lpNorm<Eigen::Infinity>()<=1e-12;
+    out.endpoint_verified=out.inner;
+    out.numerical_qualified=out.inner && out.gradient;
+    out.failure=out.numerical_qualified ? "none" : !out.inner ? "inner-solve" : "global-width-gradient-failed";
+    return out;
+}
 Assessment AssessEvaluated(const Domain & domain,VectorRef y,const Evaluation & endpoint,
-    const IndependentReplayEvidence & replay,const EvaluationContext & policy,bool supplied,std::size_t resident_override)
-{return AssessEvaluatedImpl(domain,y,endpoint,nullptr,&replay,policy,supplied,resident_override,false);}
-Assessment AssessEvaluatedWithWeakDirectionDiagnostics(const Domain & domain,VectorRef y,const Evaluation & endpoint,
-    const Evaluation & reference,const EvaluationContext & policy,bool supplied)
-{return AssessEvaluatedImpl(domain,y,endpoint,&reference,nullptr,policy,supplied,0,true);}
-Assessment AssessEvaluatedWithWeakDirectionDiagnostics(const Domain & domain,VectorRef y,const Evaluation & endpoint,
-    const IndependentReplayEvidence & replay,const EvaluationContext & policy,bool supplied,std::size_t resident_override)
-{return AssessEvaluatedImpl(domain,y,endpoint,nullptr,&replay,policy,supplied,resident_override,true);}
+    const IndependentReplayEvidence & replay,const EvaluationContext & policy,bool,std::size_t)
+{return VerifyJointEndpoint(domain,y,endpoint,replay,policy);}
 
 }

@@ -1,258 +1,107 @@
-# Joint component historical evidence
+# Joint component evidence and historical findings
 
-This document keeps the conclusions needed to understand the current Joint
-estimator and its numerical limits. Current tools, permanent test owners and
-production behavior are listed in [Joint experiments](joint-experiments.md)
-and [Joint FixedNeighbor](joint-fixed-neighbor-experimental.md).
+This document separates the current production contract from retained research
+conclusions. Current implementation and test owners are listed in [Joint
+experiments](joint-experiments.md) and [Joint component runtime](joint-component-runtime.md).
 
 ## Current estimator
 
-The production route is Joint → FixedNeighbor → local Profile LM → conditional
-A/C profile solve → EIGEN SparseQR. Its policy is core 12, Forward serial
-Gauss-Seidel, at most 200 sweeps, and at most one trusted accepted local update
-per block visit. Endpoint verification uses an independent streaming replay at
-the accepted parameters and constrained A/C KKT; it does not run a second
-global A/C solve. Full numerical qualification separately requires design
-rank, projected-width rank and numerical identifiability. Target
-identifiability is derived from qualified rank evidence under the interior-
-amplitude and matching-context preconditions. Target qualification does not
-build a target Jacobian or right null space. The current thresholds and
-versioned checks are recorded in the
-[production contract](joint-fixed-neighbor-experimental.md).
+Production uses FixedNeighbor with core size 12, forward serial Gauss-Seidel,
+at most 200 sweeps, and at most one trusted accepted Profile LM update per
+block visit. The objective remains the parent-normalized FullABC least-squares
+objective. Global projected A/C KKT, width-gradient stationarity, complete
+sweep confirmation, monotone global-objective acceptance, trust checks, and
+independent endpoint replay define numerical convergence.
 
-Production projected-width assessment uses a values-only compact SVD for
-singular values, rank, threshold and threshold sensitivity. Weak-direction
-vectors are available only through explicit test/offline diagnostic APIs and
-their separate memory preflight; they do not participate in qualification.
-Full-design and projected-width rank checks remain required. Post-fit peeling
-and post-Joint local results have separate validated publication steps. Local
-MDPDE results preserve their Joint run provenance and provide group training
-points plus compact measurement information; group fitting does not repeat
-local solves. Batches validate identities and invalidate each affected group
-once.
+A converged endpoint becomes the component state even when local conditioning
+is poor or parameter probes show sensitivity. Local conditioning describes
+free A/C, projected-width, and full profile-derivative behavior within each
+FixedNeighbor block while outside neighbors are held fixed. Parameter stability
+summarizes recent sweeps and bounded local perturbation probes. Neither provides
+a global identifiability certificate.
 
-## Historical algorithm decisions
+Target records use `target-point-validation-v1` to report component convergence,
+parameter validity, local conditioning, parameter stability, point quality, and
+reasons. Historical `target-estimability-v1` through `v4` and their rank
+records keep their original meanings in persistence and are not converted to
+new evidence. Post-fit peeling, local MDPDE covariance, and group fitting keep
+their own validation and qualification steps.
 
-- Fixed-B conditional block updates and replay accounting were numerically
-  feasible, but Fixed-B was not promoted. FixedNeighbor superseded it.
-- Repeated qualification selected core 12 over tested larger cores. Across the
-  recorded chain/cube 512 and 1024 cases, core 12 reduced median search time
-  by 33.0%–64.3% against the historical core-64 control. These are decision
-  measurements, not a current benchmark option.
-- Forward became the production serial Gauss-Seidel order. Reverse was a
-  qualification diagnostic only.
-- OneAccepted was selected over Full and TwoAccepted local updates. The
-  at-most-one trusted accepted update is now an intrinsic production rule.
-- Prepared mappings remain covered by deterministic tests; preparation does
-  not add a convergence rule or reuse numeric factors across sweeps.
+## Current memory controls
 
-The complete concise record of those FixedNeighbor choices is in
-[joint-fixed-neighbor-experimental.md](joint-fixed-neighbor-experimental.md).
+`ResourceWork` preflights problem construction, structural construction,
+FixedNeighbor preparation, global streaming evaluation, endpoint verification,
+reference solves, local conditioning, and parameter stability. It uses checked
+byte arithmetic and a 3,200,000,000-byte estimated peak budget below the
+4,000,000,000-byte hard limit. The estimate is not observed RSS.
 
-## Numerical and resource findings
+The search and endpoint checks stream predictions, residuals, KKT reductions,
+and width gradients over support entries. Production does not allocate global
+free-design factors, projection coefficients, or projected-width factors.
+Local conditioning and perturbation stability use bounded block workspaces.
+Construction and FixedNeighbor preparation remain independent memory risks.
 
-- Current `ResourceWork` preflights use actual support memberships and a
-  3,200,000,000-byte (3.200 GB, 2.980 GiB) estimated-peak budget, leaving 20%
-  below the nominal 4 GB limit. The estimate is not process RSS. A resource
-  rejection is reported as `Unavailable` with a stage-specific reason.
-- The current square values-only Eigen BDC SVD planner budgets six
-  factor-sized internal workspaces plus the input factor in peak memory. For
-  37,406 projected-width columns, this is 67,162,024,128 bytes of workspace
-  and 78,355,694,816 bytes at the isolated SVD peak before retained sparse
-  inputs and the projection coefficients. Opt-in thin-right-vector diagnostics
-  use a separate 9-factor workspace and 10-factor peak. Neither diagnostic
-  change nor production values-only SVD relaxes a rank threshold.
-- Compact prepared row mappings remove the old `rows × blocks` allocation.
-  At 5,938,087 rows and 3,118 blocks, that old index map alone is
-  148,119,642,128 bytes (148.120 GB, about 137.9 GiB). The replacement's exact
-  bytes require the actual affected-row and support-membership counts; those
-  counts cannot be derived from rows and atoms alone.
-- Global sweep stationarity and endpoint verification stream prediction,
-  residual, A/C and width reductions from support entries. The local
-  conditional solve remains EIGEN SparseQR. The independent global reference
-  solver remains only an offline/test oracle; production does not build its
-  dense reference `R`.
-- Production no longer runs a separate dense `DesignSpectrum()` QR/SVD.
-  Projected-width preparation computes one normalized free-design TiledQR and
-  one compact SVD. When all amplitudes are interior, its R factor provides the
-  full-design rank evidence; with an active amplitude it describes only the
-  free face and full Design Rank is unavailable. The original full-design
-  threshold dimensions and strict `>` decision are retained. The dense
-  `DesignSpectrum()` implementation remains an offline/test oracle only.
-- A deterministic 37,406-atom, 5,938,087-row single-chain fixture has 74,811
-  support memberships and 3,118 blocks. It records 2,892,736 prepared-mapping
-  bytes and an 876,119,666-byte global-evaluation estimated peak. A direct
-  no-sweep test process recorded 474,546,176 bytes peak RSS (0.475 GB,
-  0.442 GiB). The fixture disables sweeps and endpoint certification; it does
-  not represent the unknown physical support graph or qualify the full
-  physical search and certification.
-- A separate historical serial census added endpoint streaming and the memory
-  preflights that existed in that revision. The global covariance preflight has
-  since been removed; current group covariance uses one atom-local two-column
-  design at a time, as documented in the
-  [memory census](joint-component-memory-census.md).
-  On its synthetic single-chain shape, the actual full A/C design has 74,812
-  columns but only 37,406 unique supported rows. The production structural
-  row-count check therefore proves full-design rank deficiency without QR or
-  SVD; it does not give an exact rank or classify the 37,406-column free face.
-  The previous 189,484,131,163-byte Dense DesignSpectrum estimate and
-  39,065,926,939-byte projected-width estimate describe the retired two-stage
-  planner and are historical only. The current projected-width estimate
-  includes the free-design QR/SVD workspace, sparse inputs, projection
-  coefficients and projected-width QR/SVD. It remains a large-component
-  bottleneck; current totals are in the companion memory census. Derived Target
-  Identifiability carries linear-size evidence for retained FullABC atoms and
-  targets; it adds no dense factor. New excluded-halo provenance is stored
-  separately with O(E) records for E exclusions and is included in the
-  problem-construction preflight.
-  The retired global covariance preflight estimated 418,399,065,443 bytes for
-  the giant shape and rejected before its full-rank factorization. The old
-  317,422,079,259-byte Target Geometry value
-  was a planner estimate rejected before allocation; it is not an observed
-  memory saving. The rank stages still exceed the planning budget and are not
-  run. The earlier process peak of 622,624,768 bytes covered
-  input, preparation, verification and the rejected preflights only. Per-stage
-  shape, timing and RSS details are in the
-  [component memory census](joint-component-memory-census.md).
-- Historical fixed-state compact-SVD checks passed their recorded numerical
-  gates. The campaign showed substantial reductions in selected compact
-  reference and derivative calculations, but did not establish a current
-  end-to-end speedup.
-- A tiled derivative study reduced sampled peak RSS from 1,252 MiB to 359 MiB
-  on one heterogeneous-168 input. That is a host- and case-specific storage
-  result, not a general scalability guarantee.
-- Fixed normal actions used two Q/Q′ calls versus six in the composed
-  comparison. This fixed-state result did not justify a different global
-  search route.
-- Same-width endpoint reprofiling could remove an inner coefficient
-  disagreement at one checkpoint without passing the width-gradient and
-  local-correction endpoint gates. Later checkpoints passed with the raw
-  state and no profile write-back. A/C polish alone was therefore not a
-  sufficient repair.
-- Per-block CertifiedLocal rejected both first-sweep candidates in the
-  recorded chain-256 and cube-256 studies; it did not pass the unchanged
-  endpoint and RuntimeConvergence gates. It was not promoted.
-- Persistent workspace residency did not produce a material wall-time gain in
-  the repeated chain/cube 256–1024 study and increased sampled RSS. Exact
-  numeric-factor reuse opportunities were limited to initial-profile
-  evaluations; no factor-cache policy was adopted.
-- Tested derivative tile sizes did not reach the 10% improvement gate. The
-  production local solver remains Profile LM.
-- The legacy endpoint-reference comparison passed its recorded fixed-state audits.
-  On its historical host, single-512 analysis/export changed from 307.805 s
-  to 300.564 s and sampled peak RSS from 2.500 GiB to 1.872 GiB. This
-  incremental comparison is not a current performance guarantee.
-- The historical 168-atom reference diagnostics remain useful evidence that
-  KKT and coefficient agreement are distinct numerical guarantees. The
-  sweep-107 coefficient difference was 1.2573e-9 while primary KKT was
-  4.5219e-11; the sweep-150 difference was 2.8179e-12. These values are not
-  results from replaying the new production contract and do not prove parameter
-  accuracy from KKT alone.
-- Earlier bounded-rank and projected-width/tail prototypes matched completed
-  small controls, but large reconstructions or resource gates remained
-  incomplete. The current bounded-rank study proves the 37,406-row versus
-  74,812-column synthetic full-design obstruction by structural row count and
-  keeps that one-way failure check in production. Its general streaming
-  floating-point bounds remain experimental. Eigen SparseQR disagreed with
-  dense SVD at the strict near-threshold equality and its 1,024-atom controls
-  were stopped by memory preflight; it was not promoted. Full results,
-  per-ordering fill and RSS measurements, and the promotion decision are in
-  [bounded global rank research](joint-bounded-rank-research.md).
-- The projected-width follow-up established small exact-oracle forward and
-  adjoint parity, but its matrix-free operator still depends on a dense global
-  basis. The structured sparse normal-equation route completed chain/cube
-  projection controls through 1,024 atoms, but did not provide global
-  singular-value bounds. All 13 width-rank certificate attempts returned
-  `Unavailable`; the giant production and structured preflights rejected the
-  shape before factorization. The full results and promotion decision are in
-  [bounded projected-width research](joint-bounded-rank-research.md).
-- An opt-in affected-row candidate replay experiment compared the incremental
-  objective/residual delta with the existing full replay on one-sweep synthetic
-  chain/cube workloads from 128 through 1024 atoms. Across 339 candidate
-  comparisons, all acceptance decisions agreed; the maximum absolute objective
-  difference was `1.85e-14`, the maximum residual difference was `1.12e-15`,
-  and the maximum sweep-end cache replay error was `1.12e-15`. At 1024 atoms,
-  full candidate replay took 1.463 s (chain) and 1.618 s (cube), compared with
-  0.00243 s and 0.00245 s for the incremental calculation, including local
-  core prediction. Those are candidate-phase timings from a Release synthetic
-  benchmark, not measured total-search savings: every run still performed the
-  full replay oracle. The experiment did not execute a separate no-oracle
-  trajectory or cover borderline acceptance, weak-signal, rank-deficient and
-  active-amplitude-boundary searches. Incremental replay remains experimental;
-  production acceptance continues to use full replay.
+A deterministic synthetic shape with 5,938,087 rows, 37,406 contributors,
+and 3,118 blocks previously measured 2,892,736 prepared-mapping bytes and an
+876,119,666-byte global-evaluation estimate. A no-sweep preparation test
+process recorded 474,546,176 bytes peak RSS. These results cover the synthetic
+fixture only; they do not measure a physical-data fitting run or its unknown
+support graph. See the [memory census](joint-component-memory-census.md) for
+which historical measurements have been retired.
 
-The sparse-backend and global OperatorPcg/Schwarz conclusions, including the
-bounded EIGEN/SPQR timing and memory comparison, are summarized in
-[joint-operator-search.md](joint-operator-search.md). SPQR passed bounded
-parity and was faster on completed 128/256 probes; EIGEN used less peak RSS
-there. Both bounded 512 probes timed out. The original wall-time-first
-qualification selected SPQR; later production policy prioritized memory,
-dependency simplicity and maintenance, so EIGEN became the sole backend.
+## Historical FixedNeighbor decisions
 
-## Structural, workflow and scientific limits
+- Fixed-B conditional updates were feasible but were not promoted; FixedNeighbor
+  superseded them.
+- Recorded chain/cube experiments selected core size 12. Against the historic
+  core-64 control, median search time improved by 33.0%–64.3% at 512 and 1024
+  atoms. These are selection measurements, not a current benchmark guarantee.
+- Forward was adopted as the serial Gauss-Seidel order. Reverse was an offline
+  comparison only.
+- OneAccepted was selected over Full and TwoAccepted local update policies and
+  remains intrinsic to each block visit.
+- Prepared mappings remain covered by deterministic tests. They do not reuse
+  numerical factors or accepted states across sweeps.
 
-The historical full-ABC 6Z6U study found 20 singleton halo atoms whose A and C
-columns were proportional, bounding the design rank at 4,314 of 4,334 for
-that fixed support. Observable-halo profiling removed that diagnosed initial
-obstruction without changing the observation rows, but a complete 6Z6U
-solve and qualification were not established.
+Further historical choices are in [Joint FixedNeighbor](joint-fixed-neighbor-experimental.md).
 
-Weak-halo evidence shows that a numerically full-rank design can still have
-poor practical sensitivity. The active weak-halo diagnosis remains available
-under [joint-validation](figures/joint-validation/weak-halo.json); its
-interpretation and limits are described in the
-[weak-halo guide](joint-weak-halo-attribution.md).
+## Retired global-rank research
 
-Small partial-selection controls showed that omitting halo contributors could
-cause target compensation, while complete contributor closure recovered
-near-zero objective and target errors. They did not establish large-scale
-performance. Current partial-selection behavior has a current measurement
-driver and permanent test coverage.
+The former global rank qualification pipeline and its memory planner have been
+removed. Earlier dense, bounded, projected-width, and weak-direction studies
+remain available as research records in [bounded global rank research](joint-bounded-rank-research.md)
+and [Joint component memory census](joint-component-memory-census.md). Their
+rank thresholds, allocation estimates, and unavailable outcomes describe the
+retired pipeline. They are not current runtime checks, memory estimates, or
+production prerequisites.
 
-Historical stage and persistence comparisons preserved explicit unavailable
-states and downstream invalidation. They did not establish a general
-postprocessing speedup. Current persistence compatibility is owned by the
-ordinary workflow and schema tests, not by historical experiment receipts.
+Historical profile-derivative and high-precision tests still cover local
+numerical primitives. Local SparseQR active-set checks, CompactSvd, KKT, and
+profile derivative utilities remain in the production solver where they are
+needed.
 
-The active noise/mismatch research is documented in
+## Scientific and workflow limits
+
+Local full rank does not rule out cross-block degeneracy. A bounded local
+perturbation study does not replace a global multi-start or block-order study.
+Joint point-estimate error can propagate through peeling. The Joint fit does
+not produce a global parameter covariance; local MDPDE covariance and group
+fitting retain their separate workflows.
+
+Historical weak-halo observations showed that a numerically full-rank design
+can still have poor practical sensitivity. Small partial-selection controls
+showed that omitted halo contributors can shift target estimates. The retained
+noise and mismatch research is documented in
 [joint-noise-mismatch-validation.md](joint-noise-mismatch-validation.md), with
-its current machine-readable results under
-[figures/joint-validation](figures/joint-validation/). The fixed-seed pilot is
-unbalanced, covers one noise-correlation length and one position-mismatch
-type, and is not a population success-rate, coverage, or real-data validity
-study.
+its current receipts in `figures/joint-validation/`.
 
-Historical connected-component probes did not establish a completed 6Z6U
-workflow or a general large-component scalability bound. A timeout or resource
-stop is neither a numerical failure nor a convergence result. Process
-completion alone is not scientific qualification, and lower objective does
-not prove parameter recovery or a global optimum.
+The 6Z6U Local Profile LM replay study and FullABC width study are bounded to
+their recorded inputs and host. They document a sweep 4 / block 21 local A/C
+KKT failure and an accepted large-width step followed by severe cancellation.
+Neither study established a full-data converged endpoint or target recovery.
+See [local replay validation](../research/joint-local-replay-validation.md)
+and the [FullABC width study](../research/joint-fullabc-width-degeneracy.md).
 
-## Evidence retention
-
-The 6Z6U Local Profile LM replay study and final post-correction run are
-recorded in [joint-local-replay-validation.md](../research/joint-local-replay-validation.md).
-The captured sweep 2 / block 82 replay now passes its fixture comparison, but
-the final full-data run stops at sweep 4 / block 21 because its full-rank local
-A/C solve has scaled KKT `4.6566e-10` against the unchanged `1e-10` gate. No
-endpoint-qualified or assembled scientific state is available.
-
-The separate [FullABC width study](../research/joint-fullabc-width-degeneracy.md)
-traces atom 11721 from a normal first-stage seed to 85,164 Å in one accepted
-sweep 3 / block 21 update. That update passed its local checks and reduced the
-original objective; severe A/C cancellation appeared in a later conditional
-solve. The Block 21 design remains full rank, while its binary64 constrained
-solution misses KKT and differs materially in coefficients from the bounded
-50-digit reference. The component therefore remains rejected; neither
-full-component identifiability nor target recovery was reached.
-
-Current machine-readable research and diagnosis are retained only where they
-answer an active question: weak-halo diagnosis and noise/mismatch research in
-figures/joint-validation. Permanent fixtures and regression tests remain in
-their ordinary test locations.
-
-Closed experiment implementations, campaign drivers, analysis JSON, CSV,
-manifests and raw outputs are intentionally absent from the current tree.
-Git history is the archive; retrieve a historical file with git show
-COMMIT:path. These historical results are bounded to their recorded source,
-host and cases and are not current performance claims.
+Closed campaign code and raw receipts are archived in Git history. Historical
+results apply to their saved source, host, and cases; they are not current
+performance claims.

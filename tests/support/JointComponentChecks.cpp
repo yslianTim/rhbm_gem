@@ -69,8 +69,6 @@ Sparse Free(const Evaluation & e)
     {for(Sparse::InnerIterator v(e.x,k);v;++v) entries.emplace_back(v.row(),count,v.value()); ++count;}
     Sparse out(e.x.rows(),count); out.setFromTriplets(entries.begin(),entries.end()); return out;
 }
-double Maximum(const j::object & spectrum)
-{return spectrum.at("available").as_bool() && !spectrum.at("singular_values").as_array().empty() ? j::value_to<double>(spectrum.at("singular_values").at(0)) : 0;}
 double Relative(const Matrix & a,const Matrix & b)
 {return (a-b).norm()/std::max({1e-12,a.norm(),b.norm()});}
 double Scaled(const Vector & a,const Vector & b)
@@ -108,30 +106,6 @@ j::object FaceEvidence(const Domain & domain,const Vector & y,const Evaluation &
     return {{"stable",stable},{"directions",saved},{"probes",probes},
         {"rule","Both declared legacy step sizes must preserve the canonical active face in primary and reference solves."}};
 }
-// Every spectrum is judged at the same current global threshold. Individual
-// block ranks are deliberately ignored, including at repeated singular values.
-j::object CompareSpectra(const j::object & global,const std::vector<j::object> & blocks)
-{
-    if(!global.at("available").as_bool()) return {{"available",false},{"reason","empty-global-matrix"}};
-    std::vector<double> merged; j::array records;
-    for(const auto & block:blocks)
-    {
-        if(!block.at("available").as_bool()) return {{"available",false},{"reason","empty-block-matrix"}};
-        records.push_back(block);
-        for(const auto & v:block.at("singular_values").as_array()) merged.push_back(j::value_to<double>(v));
-    }
-    const auto & expected=global.at("singular_values").as_array();
-    std::sort(merged.begin(),merged.end(),std::greater<double>()); merged.resize(expected.size(),0);
-    const double maximum=Maximum(global),threshold=j::value_to<double>(global.at("rank_threshold"));
-    double difference{}; std::size_t rank{}; j::array values;
-    for(std::size_t k=0;k<merged.size();++k)
-    {difference=std::max(difference,std::abs(merged[k]-j::value_to<double>(expected[k]))); rank+=merged[k]>threshold; values.push_back(merged[k]);}
-    const double error=maximum>0 ? difference/maximum : difference;
-    const bool same_rank=rank==j::value_to<std::size_t>(global.at("rank"));
-    return {{"available",true},{"passed",error<=1e-10 && same_rank},{"global",global},{"blocks",records},
-        {"merged_singular_values",values},{"merged_rank",rank},{"shared_absolute_threshold",threshold},
-        {"normalized_spectrum_difference",error},{"threshold_disagreement",!same_rank}};
-}
 }
 
 Evaluation EvaluatePartitioned(const Domain & domain,const Vector & y,const Vector & eta,
@@ -158,7 +132,9 @@ Differential DifferentiatePartitioned(const Evaluation & e,const ComponentPartit
     for(const auto & view:partition.components)
     {
         local.push_back(ComponentEvaluation(e,view)); const auto free=Free(local.back()); columns+=free.cols();
-        maximum=std::max(maximum,Maximum(MatrixSpectrum(free,context.rank,free.cols(),true)));
+        const auto spectrum=runtime::ComputeSpectrum(free,context.rank,free.cols(),true);
+        if(spectrum.available && spectrum.singular_values.size())
+            maximum=std::max(maximum,spectrum.singular_values(0));
     }
     const double threshold=context.rank.Absolute(columns,maximum);
     out.projected=Matrix::Zero(e.x.rows(),e.eta.size()); out.jacobian=out.projected;
@@ -182,11 +158,9 @@ j::object SameState(const Domain & domain,const Vector & y,const Vector & eta,co
     const auto raw=AtState(domain,y,eta,beta,context);
     if(!raw.valid) {out["raw"]=State(raw); out["reason"]="raw-state-unavailable"; return out;}
     Vector prediction=Vector::Zero(y.size()); double loss{}; double basis_error{},basis_derivative_error{};
-    std::vector<j::object> design_blocks; const auto design_spectrum=MatrixSpectrum(raw.x,context.rank,raw.x.cols(),true);
     for(const auto & view:partition.components)
     {
-        if(view.rows.empty())
-        {design_blocks.push_back(MatrixSpectrum(Slice(raw.x,view,Coefficients(view)),context.rank,raw.x.cols(),true)); continue;}
+        if(view.rows.empty()) continue;
         const auto child=ComponentContext(context,view,false);
         const auto e=AtState(view.domain,Select(y,view.rows),Select(eta,view.atoms),Select(beta,Coefficients(view)),child);
         if(!e.valid) {out["passed"]=false; out["reason"]="block-raw-unavailable"; return out;}
@@ -194,7 +168,6 @@ j::object SameState(const Domain & domain,const Vector & y,const Vector & eta,co
         loss+=e.residual.squaredNorm()/2;
         basis_error=std::max(basis_error,(e.x-Slice(raw.x,view,Coefficients(view))).norm());
         basis_derivative_error=std::max(basis_derivative_error,(e.derivative-Slice(raw.derivative,view,Coefficients(view))).norm());
-        design_blocks.push_back(identity ? design_spectrum : MatrixSpectrum(e.x,context.rank,raw.x.cols(),true));
     }
     double constant{}; for(auto r:partition.constant_rows) constant+=y(r)*y(r)/2; loss+=constant;
     const Vector original=raw.x*raw.beta; const double pred_error=(prediction-original).lpNorm<Eigen::Infinity>();
@@ -205,8 +178,6 @@ j::object SameState(const Domain & domain,const Vector & y,const Vector & eta,co
         {"basis_derivative_difference",basis_derivative_error},{"prediction_inf_difference",pred_error},
         {"rss",raw.residual.squaredNorm()},{"partitioned_rss",2*loss},{"constant_objective",constant},
         {"normalized_objective_difference",objective_error}}; passed &= raw_pass;
-    j::object spectra; spectra["column_normalized_design"]=CompareSpectra(design_spectrum,design_blocks);
-    passed &= spectra.at("column_normalized_design").at("passed").as_bool();
     j::array solves;
     for(bool reference:{false,true})
     {
@@ -244,45 +215,19 @@ j::object SameState(const Domain & domain,const Vector & y,const Vector & eta,co
                     const double proj=Relative(da.projected,db.projected),jac=Relative(da.jacobian,db.jacobian);
                     derivative["projected_relative_difference"]=proj; derivative["jacobian_relative_difference"]=jac;
                     derivative["passed"]=proj<=1e-8 && jac<=1e-8; passed &= derivative.at("passed").as_bool();
-                    std::vector<j::object> frees,projected,normalized,jacobians;
-                    const auto free=Free(a);
-                    const auto free_spectrum=MatrixSpectrum(free,context.rank,free.cols(),true);
-                    const auto projected_spectrum=MatrixSpectrum(da.projected,context.rank,eta.size(),false);
-                    const auto normalized_spectrum=MatrixSpectrum(da.projected,context.rank,eta.size(),true);
-                    const auto jacobian_spectrum=MatrixSpectrum(da.jacobian,context.rank,eta.size(),false);
-                    for(const auto & view:partition.components)
-                    {
-                        if(identity) {frees.push_back(free_spectrum); projected.push_back(projected_spectrum);
-                            normalized.push_back(normalized_spectrum); jacobians.push_back(jacobian_spectrum); continue;}
-                        const auto e=ComponentEvaluation(a,view);
-                        Matrix p(static_cast<Eigen::Index>(view.rows.size()),static_cast<Eigen::Index>(view.atoms.size())),jacobian=p;
-                        for(std::size_t r=0;r<view.rows.size();++r) for(std::size_t k=0;k<view.atoms.size();++k)
-                        {p(static_cast<Eigen::Index>(r),static_cast<Eigen::Index>(k))=db.projected(view.rows[r],view.atoms[k]);
-                         jacobian(static_cast<Eigen::Index>(r),static_cast<Eigen::Index>(k))=db.jacobian(view.rows[r],view.atoms[k]);}
-                        frees.push_back(MatrixSpectrum(Free(e),context.rank,free.cols(),true));
-                        projected.push_back(MatrixSpectrum(p,context.rank,eta.size(),false));
-                        normalized.push_back(MatrixSpectrum(p,context.rank,eta.size(),true));
-                        jacobians.push_back(MatrixSpectrum(jacobian,context.rank,eta.size(),false));
-                    }
-                    spectra["free_design"]=CompareSpectra(free_spectrum,frees);
-                    spectra["projected_width"]=CompareSpectra(projected_spectrum,projected);
-                    spectra["normalized_projected_width"]=CompareSpectra(normalized_spectrum,normalized);
-                    spectra["profile_jacobian"]=CompareSpectra(jacobian_spectrum,jacobians);
-                    const auto ca=LocalCorrection(a,da,context),cb=identity ? ca : LocalCorrection(a,db,context,
-                        j::value_to<double>(spectra.at("profile_jacobian").at("shared_absolute_threshold")));
+                    const auto ca=LocalCorrection(a,da,context),cb=identity ? ca : LocalCorrection(a,db,context);
                     derivative["local_correction_available"]=ca.size()>0 && cb.size()>0;
                     if(ca.size()>0 && cb.size()>0) derivative["local_correction_scaled_difference"]=Scaled(ca,cb);
                     out["full_equivalence"]=ca.size()>0 && cb.size()>0;
-                    if(ca.size()==0 || cb.size()==0) derivative["limitation"]="rank-deficient profile Jacobian; local correction unavailable";
+                    if(ca.size()==0 || cb.size()==0) derivative["limitation"]="local profile correction unavailable";
                 }
                 out["derivative"]=derivative;
             }
         }
         solves.push_back(pair);
     }
-    for(const auto & entry:spectra) passed &= entry.value().at("available").as_bool() && entry.value().at("passed").as_bool();
     for(const auto & pair:solves) if(pair.as_object().if_contains("same_face") && !pair.at("same_face").as_bool()) out["full_equivalence"]=false;
-    out["profile_solves"]=solves; out["spectra"]=spectra; out["passed"]=passed;
+    out["profile_solves"]=solves; out["passed"]=passed;
     out["full_equivalence"]=passed && out.at("full_equivalence").as_bool(); return out;
 }
 runtime::FixedNeighborComponentResult SolveFixedNeighborComponentForTesting(const ComponentView & view,

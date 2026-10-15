@@ -1,141 +1,86 @@
 # FixedNeighbor Joint: current contract and evidence
 
-This is the concise overview for the production FixedNeighbor route. Historical
-execution telemetry and retired campaign implementations remain recoverable
-from Git history; they are not part of the current production surface.
+This guide records the current production route and the historical studies that
+selected its search policy. Retired global-rank certification code and its
+campaign tools are not part of the current estimator.
 
 ## Current production contract
 
-`FixedNeighbor` is the sole Joint estimator. It is selected by
-`--estimator joint-components`; there is no separate global search-route
-option or automatic routing layer.
-
-Before FixedNeighbor builds components, selected non-hydrogen atoms fix the
-observation rows. Unselected halo candidates enter the model only when their
-support has at least three rows and at least three exactly distinct squared
-distances. All retained atoms use FullABC. The rows and observations stay fixed
-after pruning, and components are rebuilt from retained supports. Excluded
-signal remains in the residual, so this contributor rule changes the additive
-model and can shift target estimates. Selection eligibility and the full
-numerical qualification below are separate gates. See the
-[halo eligibility guide](joint-observable-halo.md) and the
-[target-recovery study](../research/joint-halo-pruning-validation.md).
+`FixedNeighbor` is the sole Joint estimator selected by
+`--estimator joint-components`. Selected non-hydrogen atoms fix observation
+rows. An unselected halo enters the contributor model only when its support
+contains at least three rows and three exactly distinct squared distances.
+All retained atoms use FullABC. Rows and observations remain fixed after halo
+selection; excluded halo signal remains in the residual and can shift target
+estimates. See the [halo eligibility guide](joint-observable-halo.md).
 
 | Policy | Current value |
 | --- | --- |
-| Outer core | 12 atoms, disjoint mutable blocks |
+| Mutable core | 12 atoms, disjoint blocks |
 | Block order | Forward serial Gauss-Seidel |
-| Maximum sweeps | 200 |
+| Maximum sweeps | 200 complete sweeps |
 | Local search | Profile LM (`fixed_neighbor_local_search=profile-lm`) |
-| Local update contract | At most one trusted accepted Profile LM update per block visit |
-| Acceptance | Existing replay and roundoff-safe monotone acceptance |
-| Candidate stationarity | A/C KKT `≤ 1e-10` and width-gradient infinity norm `≤ 1e-12` |
-| Confirmation | A previous complete sweep exists and eta-change infinity norm is `≤ 1e-10` |
-| Endpoint | Primary streaming evaluation and independent streaming replay must pass |
-| Certification retry | Valid failed endpoints continue; retry every 10 confirmed sweeps while all stationarity requirements hold; any failed requirement resets eligibility |
-| Exhaustion | One bounded assessment certifies the last accepted state if its final sweep has not already been certified; a trusted state may remain available while search is incomplete |
+| Accepted local update | At most one trusted update per block visit |
+| Acceptance | Existing trust checks and roundoff-safe monotone global objective |
+| A/C stationarity | Global projected KKT `<= 1e-10` |
+| Width stationarity | Global log-width gradient infinity norm `<= 1e-12` |
+| Sweep confirmation | Prior complete sweep and log-width change `<= 1e-10` |
+| Endpoint | Primary streaming evaluation and independent streaming replay |
 
-The unchanged thresholds are A/C projected KKT `1e-10`, width stationarity
-`1e-12`, and eta confirmation `1e-10`. A confirmed stationary endpoint is
-checked at the accepted parameters by a primary streaming evaluation and an
-independent scalar replay. The replay verifies prediction, residual, objective,
-KKT and width-gradient consistency; it does not solve a second global A/C
-problem. Conditional A/C optimality, endpoint verification and full numerical
-qualification are separate evidence. Full qualification also requires design
-rank, projected-width rank and numerical identifiability. A threshold-sensitive
-or unavailable rank cannot pass. If rank resources are unavailable, the
-endpoint may be verified while qualification and `RuntimeConvergence` remain
-unavailable. Valid failed endpoints continue normal
-updates and retry certification at a bounded interval. Budget exhaustion does
-not increase the sweep count or mark search complete: one final assessment runs
-on the accepted state only if its final sweep has no certification. Runtime
-convergence remains independent of search completion. Prepared structural
-block mappings and workspace reuse do not
-reuse numeric factors, accepted states, or replay results across sweeps. The
-route preserves the objective, local A/C solve, width parameterization, serial
-update semantics and OneAccepted behavior. A sparse unit-weight local A/C solve
-that fails its existing KKT gate can use the bounded free-face QR residual
-refinement described in the [Joint runtime contract](joint-component-runtime.md);
-it keeps the same objective, rank threshold and KKT threshold. The solver
-provenance remains v5 and FixedNeighbor policy v4, separate from schemas 3–8
-and their stored evidence. See the
-[Joint runtime contract](joint-component-runtime.md) for the implementation
-details.
+A confirmed stationary endpoint becomes the component state only after
+numerical endpoint verification. Replay checks feasibility, prediction,
+residual, objective, A/C KKT, and width-gradient consistency at the accepted
+parameters; it does not solve a second global A/C problem. Recoverable numerical
+verification failures can be retried at a bounded interval. Invalid primary
+state and endpoint-verification resource limits stop the search. Maximum
+sweeps means budget exhaustion and does not imply convergence. If the last
+sweep has not been checked, one final bounded check still requires that sweep
+to meet stationarity.
+
+After convergence, each fixed-neighbor block receives local conditioning
+evidence at the final accepted state. It reports free A/C, conditional
+projected-width, and full profile-derivative conditioning. Bounded parameter
+perturbation probes run only for up to eight sensitive blocks, with explicit
+profile-evaluation, update, workspace, and CPU budgets. These diagnostics do
+not change accepted parameters, objective, or convergence status. Their
+warnings are point-quality evidence, not global identifiability claims.
+
+The objective, local Profile LM, A/C active-set solve, global objective
+acceptance, and independent endpoint replay retain their existing contracts.
+The full derivative keeps the nonzero-residual coefficient correction. The
+width search has no hard minimum or maximum. A poor local condition does not
+impose an arbitrary width bound or reject a converged component.
 
 For accepted trials, the local state cache is rebased from the full candidate
 replay already used for acceptance. Sparse predictions, transpose products,
-derivative reductions and independent scalar replay use compensated double
-arithmetic. Replay and stationarity thresholds remain unchanged; the
-50-digit reference remains confined to offline analysis.
-
-The production width search has no hard minimum or maximum width. Extreme
-widths remain eligible only through the existing Profile LM, local KKT, trust,
-and full-objective replay checks. If a later local profile fails the unchanged
-KKT threshold, that block and component remain unqualified. The 6Z6U study
-found that the accepted large-width step decreased the original objective and
-passed its local checks at the time; subsequent A/C cancellation made a later
-conditional solve inaccurate. The available evidence does not justify
-rejecting width steps by width magnitude or conditioning alone. See the
-[FullABC width study](../research/joint-fullabc-width-degeneracy.md).
+derivative reductions, and independent scalar replay use compensated double
+arithmetic. The 50-digit reference remains confined to offline precision
+controls.
 
 ## Memory planning and large components
 
-FixedNeighbor preflights its actual component rows, support memberships,
-affected rows, neighbor lists and largest block before preparing block views.
-The accepted global sweep evaluation uses support iteration and vector
-reductions; it avoids a full component design and width-derivative matrix. This
-does not make the local profile solve or rank assessment matrix-free. Production
-endpoint verification uses O(N+P) streaming passes and does not construct a
-global design matrix.
+`ResourceWork` preserves preflights for construction, structural construction,
+FixedNeighbor preparation, global streaming evaluation, endpoint verification,
+reference solves, local conditioning, and parameter stability. The planning
+budget is 3,200,000,000 estimated peak bytes below a 4,000,000,000-byte hard
+limit. These are allocation estimates, not observed process RSS. Current local
+conditioning and perturbation workspace follow block dimensions; the global
+rank factors and projection coefficients from the retired pipeline are gone.
 
-The old per-block row map would use 148,119,642,128 bytes (148.120 GB, about
-137.9 GiB) for 5,938,087 rows and 3,118 blocks, before any other data. The
-current prepared mapping stores two indices per affected row and a
-`LocalSupportIndex` per retained support membership. Its exact reported bytes
-depend on `sum(block.affected_rows)` and the actual support memberships and
-capacities; observations and atom counts alone cannot determine that number.
-The deterministic large chain fixture has 74,811 support memberships and
-3,118 blocks; it reports 2,892,736 prepared-mapping bytes. Its global-evaluation
-estimated peak is 876,119,666 bytes, and a direct no-sweep test process recorded
-474,546,176 bytes peak RSS (0.475 GB, 0.442 GiB). The fixture disables sweeps
-and endpoint certification and does not materialize a global dense matrix.
+A deterministic shape with 5,938,087 rows, 37,406 contributors, 74,811 support
+memberships, and 3,118 blocks previously reported 2,892,736 prepared-mapping
+bytes and an 876,119,666-byte streaming-evaluation estimated peak. A direct
+no-sweep test process recorded 474,546,176 bytes peak RSS. The run disabled
+sweeps and endpoint verification; it does not measure a full physical-data fit.
+The exact preparation estimate depends on actual affected rows and support
+memberships. See the [memory census](joint-component-memory-census.md) for the
+measurement scope and retired rank estimates.
 
-The planner rejects estimated peaks above 3,200,000,000 bytes (3.200 GB,
-2.980 GiB), below the nominal 4,000,000,000-byte limit. This is an allocation
-estimate with safety margin, not observed peak RSS. It does not establish that a
-full physical search fits within 4 GB: real support count and neighborhood shape
-are required, and rank and target assessments remain unavailable when their
-own stage estimates exceed budget.
-
-The benchmark driver reports the structural census, estimated preparation and
-global-state peaks, RSS before and after preparation, RSS after the first sweep
-and after certification when those stages run, and process peak RSS. Its
-preparation-only (`--maximum-sweeps 0`), one-sweep and bounded multi-sweep
-modes are diagnostic harness settings. Aggregate counters are the default;
-per-block timings and local profile trials require `--detailed`. No physical
-map/model input is present in this workspace, so driver measurements are
-synthetic and cannot establish physical full-search feasibility.
-
-The 5,938,087-row, 37,406-atom single-component census continues through
-streaming endpoint verification and the combined rank preflight. The synthetic
-input has 74,811 support memberships, 3,118 blocks and 37,406 targets. The
-all-active free-design estimate is 91,400,872,907 bytes; mixed and all-interior
-faces estimate 167,840,033,907 and 266,666,536,155 bytes. All exceed the
-3.2 GB planning budget and factorization is `NotRun`. The earlier
-189,484,131,163-byte Dense DesignSpectrum and 39,065,926,939-byte projected-
-width estimates describe the retired two-stage planner. The current combined
-stage accounts for the free-design QR/SVD, projection coefficients and
-projected-width QR/SVD. Derived Target Identifiability is estimated at
-482,239,947 bytes and has no dense factor workspace. A former global covariance
-preflight estimated 418,399,065,443 bytes and rejected before factorization;
-that path has been removed. In this shape, structural rank deficiency leaves
-no trusted rank evidence, so
-target results remain unavailable even though the evidence-memory preflight
-passes. Selected targets with qualified Joint endpoints continue through
-peeling, local MDPDE and group inference. Group measurement information comes
-from those local fits and remains separate from Joint rank qualification. See
-the [component memory census](joint-component-memory-census.md) for the
-allocation breakdown and RSS scope.
+The benchmark driver reports structural counts, estimates, available RSS
+checkpoints, and process peak RSS. Preparation-only, one-sweep, and bounded
+multi-sweep modes are measurement harness settings; they do not represent a
+physical full-search result. Per-block timings and profile trials require the
+`--detailed` option.
 
 ## Historical KKT and reference agreement evidence
 

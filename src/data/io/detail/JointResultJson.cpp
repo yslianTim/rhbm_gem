@@ -93,8 +93,6 @@ Object CandidateDiagnostic(const JointCandidateDiagnostic & x)
         {"candidate_ac_kkt",Number(x.candidate_ac_kkt)},
         {"candidate_width_gradient_inf_norm",Number(x.candidate_width_gradient_inf_norm)},
         {"candidate_feasible",x.candidate_feasible ? j::value(*x.candidate_feasible) : j::value(nullptr)},
-        {"reference_status",StatusText(x.reference_status)},
-        {"rank_assessment_status",StatusText(x.rank_assessment_status)},
         {"certification_status",StatusText(x.certification_status)},
         {"endpoint_verification_status",StatusText(x.endpoint_verification_status)},
         {"numerical_qualification_status",StatusText(x.numerical_qualification_status)},
@@ -113,8 +111,6 @@ std::optional<JointCandidateDiagnostic> ReadCandidateDiagnostic(const j::value &
     x.candidate_width_gradient_inf_norm=OptionalNumber(o.at("candidate_width_gradient_inf_norm"));
     x.candidate_feasible=o.at("candidate_feasible").is_null() ? std::nullopt :
         std::optional<bool>(Read<bool>(o,"candidate_feasible"));
-    x.reference_status=Status(o.at("reference_status"));
-    x.rank_assessment_status=Status(o.at("rank_assessment_status"));
     x.certification_status=Status(o.at("certification_status"));
     if(reference_free_schema)
     {
@@ -127,6 +123,30 @@ std::optional<JointCandidateDiagnostic> ReadCandidateDiagnostic(const j::value &
     if(candidate_status!=CandidateStatusText(x))
         throw std::invalid_argument("Invalid saved joint candidate status: "+candidate_status);
     return x;
+}
+std::optional<JointAnalysisComponent::LegacyCandidateEvidence> ReadLegacyCandidateEvidence(const j::object & component)
+{
+    const j::object * source{};
+    if(component.contains("legacy_candidate_evidence") && !component.at("legacy_candidate_evidence").is_null())
+        source=&component.at("legacy_candidate_evidence").as_object();
+    else if(component.contains("candidate_diagnostic") && !component.at("candidate_diagnostic").is_null())
+        source=&component.at("candidate_diagnostic").as_object();
+    if(!source) return {};
+    JointAnalysisComponent::LegacyCandidateEvidence out;
+    if(source->contains("reference_status")) out.reference_status=Status(source->at("reference_status"));
+    else if(source->contains("legacy_reference_status")) out.reference_status=Status(source->at("legacy_reference_status"));
+    if(source->contains("rank_assessment_status")) out.rank_assessment_status=Status(source->at("rank_assessment_status"));
+    else if(source->contains("legacy_rank_assessment_status")) out.rank_assessment_status=Status(source->at("legacy_rank_assessment_status"));
+    if(!out.reference_status && !out.rank_assessment_status) return {};
+    return out;
+}
+Object LegacyCandidateEvidence(const std::optional<JointAnalysisComponent::LegacyCandidateEvidence> & x)
+{
+    Object out;
+    if(!x) return out;
+    if(x->reference_status) out.emplace("reference_status",StatusText(*x->reference_status));
+    if(x->rank_assessment_status) out.emplace("rank_assessment_status",StatusText(*x->rank_assessment_status));
+    return out;
 }
 j::array Checks(const std::vector<JointCheck> & values)
 {
@@ -808,7 +828,9 @@ std::string Encode(const JointAnalysisResult & x)
         {"profile_evaluations",c.profile_evaluations},{"reference_evaluations",c.reference_evaluations},
         {"accepted_updates",c.accepted_updates},{"native_status",c.native_status},{"state",OptionalState(c.state)},
         {"candidate_diagnostic",c.candidate_diagnostic ? j::value(CandidateDiagnostic(*c.candidate_diagnostic)) : j::value(nullptr)},
-        {"evidence",Checks(c.evidence)},{"ranks",Ranks(c.ranks)},{"regular_certificate",StatusText(c.regular_certificate)},
+        {"legacy_candidate_evidence",LegacyCandidateEvidence(c.legacy_candidate_evidence)},
+        {"evidence",Checks(c.evidence)},{"ranks",Ranks(c.legacy_global_rank_evidence)},
+        {"regular_certificate",StatusText(c.regular_certificate)},
         { "runtime_convergence",StatusText(c.runtime_convergence)},{"layout",Layout(c.layout)},
         {"target_evidence",Target(c.target_evidence)},{"target_runtime_convergence",StatusText(c.target_runtime_convergence)}});
     Object out{{"schema_version",11},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
@@ -817,7 +839,8 @@ std::string Encode(const JointAnalysisResult & x)
         {"costs",Object{{"construction_seconds",t.construction_seconds},{"initialization_seconds",t.initialization_seconds},{"search_seconds",t.search_seconds},
             {"search_reference_seconds",t.search_reference_seconds},{"assessment_seconds",t.assessment_seconds},{"assembly_seconds",t.assembly_seconds}}},
         {"components",std::move(components)},{"assembled_state",OptionalState(x.assembled_state)},{"objective",Number(x.objective)},
-        {"available_row_mask",j::value_from(x.available_row_mask)},{"evidence",Checks(x.evidence)},{"ranks",Ranks(x.ranks)},
+        {"available_row_mask",j::value_from(x.available_row_mask)},{"evidence",Checks(x.evidence)},
+        {"ranks",Ranks(x.legacy_global_rank_evidence)},
         {"search_completed",x.search_completed},{"observation_scale",x.observation_scale},
         {"regular_certificate",StatusText(x.regular_certificate)},{"runtime_convergence",StatusText(x.runtime_convergence)},
         {"target_evidence",Target(x.target_evidence)},{"target_runtime_convergence",StatusText(x.target_runtime_convergence)}};
@@ -862,15 +885,21 @@ JointAnalysisResult Decode(std::string_view text)
         component.reference_evaluations=Read<int>(c,"reference_evaluations"); component.accepted_updates=Read<int>(c,"accepted_updates");
         component.native_status=Read<int>(c,"native_status");
         if(!c.at("state").is_null()) component.state=ReadState(c.at("state"));
-        if(version>=6) component.candidate_diagnostic=ReadCandidateDiagnostic(c.at("candidate_diagnostic"),version>=7);
-        component.evidence=ReadChecks(c.at("evidence")); component.ranks=ReadRanks(c.at("ranks"),version>=9);
+        if(version>=6)
+        {
+            component.candidate_diagnostic=ReadCandidateDiagnostic(c.at("candidate_diagnostic"),version>=7);
+            component.legacy_candidate_evidence=ReadLegacyCandidateEvidence(c);
+        }
+        component.evidence=ReadChecks(c.at("evidence"));
+        component.legacy_global_rank_evidence=ReadRanks(c.at("ranks"),version>=9);
         component.regular_certificate=Status(c.at("regular_certificate")); component.runtime_convergence=Status(c.at("runtime_convergence"));
         if(version>=5) {component.target_evidence=ReadTarget(c.at("target_evidence"),version); component.target_runtime_convergence=Status(c.at("target_runtime_convergence"));}
         x.components.push_back(std::move(component));
     }
     if(!o.at("assembled_state").is_null()) x.assembled_state=ReadState(o.at("assembled_state"));
     x.objective=OptionalNumber(o.at("objective")); x.available_row_mask=Read<std::vector<bool>>(o,"available_row_mask");
-    x.evidence=ReadChecks(o.at("evidence")); x.ranks=ReadRanks(o.at("ranks"),version>=9);
+    x.evidence=ReadChecks(o.at("evidence"));
+    x.legacy_global_rank_evidence=ReadRanks(o.at("ranks"),version>=9);
     x.search_completed=Read<bool>(o,"search_completed"); x.observation_scale=Read<double>(o,"observation_scale");
     x.regular_certificate=Status(o.at("regular_certificate")); x.runtime_convergence=Status(o.at("runtime_convergence"));
     if(version>=5) {x.target_evidence=ReadTarget(o.at("target_evidence"),version); x.target_runtime_convergence=Status(o.at("target_runtime_convergence"));}

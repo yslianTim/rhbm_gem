@@ -98,82 +98,36 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
         return JointCheck{std::move(name),available ? (pass ? Status::Passed : Status::Failed) : Status::Unavailable,scope,value,threshold,{}};
     };
     std::vector<JointCheck> out;
-    if(a.reference_free)
-    {
-        const auto & replay=a.independent_replay;
-        const bool resource_unavailable=a.failure.starts_with("resource-limit:");
-        const bool evidence_available=replay.available || (!a.primary.valid && !resource_unavailable);
-        out.push_back(check("ac-feasibility",evidence_available,replay.feasible,
-            evidence_available ? std::optional<double>(replay.feasible ? 0.0 : 1.0) : std::nullopt,0.0));
-        out.push_back(check("conditional-ac-optimality",evidence_available,
-            replay.primary_kkt_passed && replay.feasible,
-            std::isfinite(replay.primary_ac_kkt) ? std::optional<double>(replay.primary_ac_kkt) : std::nullopt,1e-10));
-        out.push_back(check("independent-ac-optimality",evidence_available,
-            replay.independent_kkt_passed && replay.feasible,
-            std::isfinite(replay.independent_ac_kkt) ? std::optional<double>(replay.independent_ac_kkt) : std::nullopt,1e-10));
-        out.push_back(check("independent-kkt-consistency",evidence_available,replay.kkt_agrees,
-            std::isfinite(replay.kkt_difference) ? std::optional<double>(replay.kkt_difference) : std::nullopt,1e-13));
-        out.push_back(check("independent-replay",evidence_available,replay.valid && replay.passed));
-        out.back().reason=replay.reason.empty() ? a.failure : replay.reason;
-        out.push_back(check("width-gradient-consistency",evidence_available,replay.gradient_agrees,
-            std::isfinite(replay.gradient_difference) ? std::optional<double>(replay.gradient_difference) : std::nullopt));
-        out.back().reason=replay.reason.empty() ? "per-coordinate-replay-enclosure" : replay.reason;
-        out.push_back(check("width-stationarity",evidence_available && a.primary.valid && a.primary.gradient.size()>0,
-            replay.primary_width_gradient<=1e-12,
-            std::isfinite(replay.primary_width_gradient) ? std::optional<double>(replay.primary_width_gradient) : std::nullopt,1e-12));
-        out.push_back(check("endpoint-verification",evidence_available,a.endpoint_verified));
-        if(a.design || a.design_structure)
-        {
-            const bool structural_failure=a.design_structure && a.design_structure->proven_deficient;
-            const bool design_full_rank=!structural_failure && a.design && a.design->available &&
-                !a.design->threshold_sensitive && a.design->rank==a.design->columns;
-            const bool design_evidence_available=structural_failure ||
-                (a.design && a.design->available && !a.design->threshold_sensitive);
-            std::optional<double> design_rank_value,design_columns;
-            if(a.design && a.design->available)
-            {design_rank_value=static_cast<double>(a.design->rank); design_columns=static_cast<double>(a.design->columns);}
-            else if(structural_failure)
-            {
-                design_rank_value=static_cast<double>(a.design_structure->rank_upper_bound);
-                design_columns=static_cast<double>(a.design_structure->columns);
-            }
-            out.push_back(check("design-identifiability",design_evidence_available,design_full_rank,
-                design_rank_value,design_columns));
-            if(structural_failure) out.back().reason="proven-rank-upper-bound:"+a.design_structure->reason;
-            else if(a.design && a.design->threshold_sensitive) out.back().reason="rank-threshold-sensitive";
-            else if(a.free_design && a.free_design->columns<a.free_design->full_design_columns)
-                out.back().reason="active-amplitude-boundary";
-            else if(a.design && !a.design->available) out.back().reason=a.design->reason;
-            else if(a.design && a.design->rank<a.design->columns) out.back().reason="rank-deficient";
-            if(a.widths)
-                out.push_back(check("numerical-identifiability",!a.width_rank_threshold_sensitive,a.identified));
-        }
-        out.push_back(check("numerical-qualification",evidence_available,a.numerical_qualified));
-    }
-    else
-    {
-        const bool valid=a.primary.valid && a.reference.valid;
-        out.push_back(check("inner",a.design.has_value(),a.inner,
-            std::isfinite(a.coefficient_difference) ? std::optional<double>(a.coefficient_difference) : std::nullopt,1e-10));
-        out.push_back(check("kkt",a.primary.certificate.available,a.primary.certificate.kkt_passed,
-            a.primary.certificate.available ? std::optional<double>(a.primary.certificate.projected_kkt) : std::nullopt,1e-10));
-        out.push_back(check("width-stationarity",valid && a.widths.has_value(),a.gradient,
-            valid && a.primary.gradient.size() ? std::optional<double>(std::max(a.primary.gradient.lpNorm<Eigen::Infinity>(),
-                a.reference.gradient.lpNorm<Eigen::Infinity>())) : std::nullopt,1e-12));
-        out.push_back(check("numerical-qualification",a.primary.valid,a.numerical_qualified));
-    }
-    if(a.reference_free && a.verification_memory_estimate.stage==n::MemoryStage::EndpointVerification)
+    const auto & replay=a.independent_replay;
+    const bool resource_unavailable=a.failure.starts_with("resource-limit:");
+    const bool evidence_available=replay.available || (!a.primary.valid && !resource_unavailable);
+    out.push_back(check("ac-feasibility",evidence_available,replay.feasible,
+        evidence_available ? std::optional<double>(replay.feasible ? 0.0 : 1.0) : std::nullopt,0.0));
+    out.push_back(check("conditional-ac-optimality",evidence_available,
+        replay.primary_kkt_passed && replay.feasible,
+        std::isfinite(replay.primary_ac_kkt) ? std::optional<double>(replay.primary_ac_kkt) : std::nullopt,1e-10));
+    out.push_back(check("independent-ac-optimality",evidence_available,
+        replay.independent_kkt_passed && replay.feasible,
+        std::isfinite(replay.independent_ac_kkt) ? std::optional<double>(replay.independent_ac_kkt) : std::nullopt,1e-10));
+    out.push_back(check("independent-kkt-consistency",evidence_available,replay.kkt_agrees,
+        std::isfinite(replay.kkt_difference) ? std::optional<double>(replay.kkt_difference) : std::nullopt,1e-13));
+    out.push_back(check("independent-replay",evidence_available,replay.valid && replay.passed));
+    out.back().reason=replay.reason.empty() ? a.failure : replay.reason;
+    out.push_back(check("width-gradient-consistency",evidence_available,replay.gradient_agrees,
+        std::isfinite(replay.gradient_difference) ? std::optional<double>(replay.gradient_difference) : std::nullopt));
+    out.back().reason=replay.reason.empty() ? "per-coordinate-replay-enclosure" : replay.reason;
+    out.push_back(check("width-stationarity",evidence_available && a.primary.valid && a.primary.gradient.size()>0,
+        replay.primary_width_gradient<=1e-12,
+        std::isfinite(replay.primary_width_gradient) ? std::optional<double>(replay.primary_width_gradient) : std::nullopt,1e-12));
+    out.push_back(check("endpoint-verification",evidence_available,a.endpoint_verified));
+    out.push_back(check("numerical-qualification",a.primary.valid,a.numerical_qualified));
+    if(a.verification_memory_estimate.stage==n::MemoryStage::EndpointVerification)
         out.push_back({"endpoint-verification-memory",
             a.verification_memory_estimate.status==n::MemoryStatus::Pass ? Status::Passed : Status::Unavailable,
             scope,static_cast<double>(a.verification_memory_estimate.estimated_peak_bytes),
             static_cast<double>(a.verification_memory_estimate.budget_bytes),
             a.verification_memory_estimate.reason.empty() ? "" :
                 std::string("resource-limit:endpoint-verification:")+a.verification_memory_estimate.reason});
-    if(a.rank_memory_estimate.status!=n::MemoryStatus::Pass)
-        out.push_back({"rank-memory-preflight",Status::Unavailable,scope,
-            static_cast<double>(a.rank_memory_estimate.estimated_peak_bytes),
-            static_cast<double>(a.rank_memory_estimate.budget_bytes),
-            std::string("resource-limit:rank-assessment:")+a.rank_memory_estimate.reason});
     for(const char * name:{"two-step-derivative","richardson","precision-50-100","boundary-audit","regular-certificate"})
         out.push_back({name,Status::NotRun,scope,{},{},"offline-audit-not-run"});
     for(auto & evidence:out) if(evidence.status==Status::Unavailable && evidence.reason.empty())
@@ -241,23 +195,6 @@ JointCheckStatus JointFitResult::RuntimeConvergence() const
     for(const auto & component:components) status=joint_component::MergeConvergenceStatus(status,component.RuntimeConvergence());
     return status;
 }
-std::vector<JointRankEvidence> joint_component::AssessmentRanks(const n::Assessment & a,JointEvidenceScope scope,
-    const JointProblemInput * input,const JointParameterLayout * layout,std::size_t rank_context_rows)
-{
-    std::vector<JointRankEvidence> out;
-    std::string context_identity;
-    if(input && layout && a.primary.eta.allFinite() && a.primary.beta.allFinite())
-    {
-        JointState state; state.ac=Values(a.primary.beta); state.log_b=Values(a.primary.eta);
-        state.b=Values(a.primary.eta.array().exp());
-        context_identity=n::TargetRankContextIdentity(*input,*layout,state,rank_context_rows);
-    }
-    for(const auto & [name,spectrum]:std::vector<std::pair<std::string,const std::optional<n::Spectrum> *>>{
-        {"design",&a.design},{"free-design",&a.free_design},{"projected-width",&a.widths}})
-        if(*spectrum && (*spectrum)->available) out.push_back({name,scope,static_cast<std::size_t>((*spectrum)->rank),(*spectrum)->threshold,
-            Values((*spectrum)->singular_values),context_identity});
-    return out;
-}
 JointProblem::JointProblem(JointProblemInput input)
 {
     if(input.atom_ids.empty() || input.support.size()!=input.atom_ids.size() || input.row_ids.size()!=input.observations.size())
@@ -291,10 +228,8 @@ JointProblem::JointProblem(JointProblemInput input)
     const auto support_entries=n::CountSupportEntries(input);
     const auto resident=n::EstimateSnapshotBytes(input);
     const auto construction_scratch=n::EstimateConstructionScratchBytes(input);
-    std::size_t free_columns{},target_columns{};
-    const auto target_atoms=input.selection_domain ? input.selection_domain->target_indices.size() : 0;
-    const bool dimensions_ok=n::CheckedMultiplyBytes(input.atom_ids.size(),2,free_columns) &&
-        n::CheckedMultiplyBytes(target_atoms,3,target_columns);
+    std::size_t free_columns{};
+    const bool dimensions_ok=n::CheckedMultiplyBytes(input.atom_ids.size(),2,free_columns);
     n::MemoryEstimate construction_memory;
     if(!support_entries || !resident || !construction_scratch || !dimensions_ok)
     {
@@ -308,7 +243,7 @@ JointProblem::JointProblem(JointProblemInput input)
     {
         shape.component_support_entries=*support_entries; shape.resident_bytes=*resident;
         shape.identity_validation_bytes=*construction_scratch;
-        shape.component_free_columns=free_columns; shape.component_target_columns=target_columns;
+        shape.component_free_columns=free_columns;
         construction_memory=n::PlanMemory(shape,n::MemoryStage::ProblemConstruction);
     }
     if(construction_memory.status!=n::MemoryStatus::Pass ||
@@ -433,9 +368,8 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
     eligibility_support.clear();
     n::MemoryShape shape; shape.problem_scope=true; shape.component_atoms=contributors;
     shape.component_observations=rows.size(); shape.component_support_entries=support_entries;
-    const auto target_atoms=selected.size(); std::size_t free_columns{};
-    if(!n::CheckedMultiplyBytes(contributors,2,free_columns) ||
-        !n::CheckedMultiplyBytes(target_atoms,3,shape.component_target_columns))
+    std::size_t free_columns{};
+    if(!n::CheckedMultiplyBytes(contributors,2,free_columns))
         RejectBuildPreflight(shape,"size-overflow");
     shape.component_free_columns=free_columns;
     std::size_t planned_snapshot{};
@@ -589,8 +523,6 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
     const auto assembly=n::AssembleComponents(data.domain,data.y,data.partition,data.context,out.components,reuse ? &*reuse : nullptr);
     out.search_completed=assembly.completed; out.available_row_mask=assembly.row_mask;
     out.evidence=n::AssessmentEvidence(assembly.assessment,JointEvidenceScope::AssembledGlobal);
-    out.ranks=n::AssessmentRanks(assembly.assessment,JointEvidenceScope::AssembledGlobal,
-        data.input.get(),&data.layout,data.input->observations.size());
     out.evidence.push_back({"assembly-mapping",assembly.mapping_valid ? JointCheckStatus::Passed :
         JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{},{},
         assembly.mapping_valid ? "exact-component-identity-mapping" :
@@ -646,7 +578,7 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
         out.components.push_back(std::move(saved));
     }
     out.assembled_state=fit.assembled_state; out.objective=fit.objective;
-    out.available_row_mask=fit.available_row_mask; out.evidence=fit.evidence; out.ranks=fit.ranks;
+    out.available_row_mask=fit.available_row_mask; out.evidence=fit.evidence;
     out.search_completed=fit.search_completed; out.observation_scale=fit.observation_scale;
     out.runtime_convergence=fit.RuntimeConvergence(); out.regular_certificate=fit.regular_certificate;
     out.target_evidence=fit.target_evidence; out.target_runtime_convergence=fit.TargetRuntimeConvergence();

@@ -27,7 +27,6 @@ target_sources(rhbm_gem PRIVATE
     core/detail/joint_component/ParameterStability.cpp
     core/detail/joint_component/LinearSolve.cpp
     core/detail/joint_component/CompactSvd.cpp
-    core/detail/joint_component/StructuralRank.cpp
     core/detail/joint_component/ResourceWork.cpp
     core/detail/joint_component/StructuralPartition.cpp
     core/detail/joint_component/FixedNeighborBlockCoordinate.cpp

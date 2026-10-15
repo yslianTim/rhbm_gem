@@ -164,7 +164,6 @@ void RunFrozenFixture(const fs::path & path,const std::string & name,const fs::p
     const auto & public_candidate=*result.components[0].candidate_diagnostic;
     record["endpoint_verification_status"]=runtime_json::Status(public_candidate.endpoint_verification_status);
     record["numerical_qualification_status"]=runtime_json::Status(public_candidate.numerical_qualification_status);
-    record["rank_assessment_status"]=runtime_json::Status(public_candidate.rank_assessment_status);
     record["verification_reason"]=public_candidate.verification_reason;
     if(!record.contains("reference_solve_calls")) record["reference_solve_calls"]=0;
     const bool available=result.components[0].state.has_value();

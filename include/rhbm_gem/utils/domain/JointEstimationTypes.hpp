@@ -152,8 +152,6 @@ struct JointCandidateDiagnostic
     std::vector<double> candidate_eta,candidate_ac;
     std::optional<double> candidate_objective,candidate_ac_kkt,candidate_width_gradient_inf_norm;
     std::optional<bool> candidate_feasible;
-    JointCheckStatus reference_status{JointCheckStatus::NotRun};
-    JointCheckStatus rank_assessment_status{JointCheckStatus::NotRun};
     JointCheckStatus certification_status{JointCheckStatus::NotRun};
     JointCheckStatus endpoint_verification_status{JointCheckStatus::NotRun};
     JointCheckStatus numerical_qualification_status{JointCheckStatus::NotRun};
@@ -203,7 +201,6 @@ struct JointComponentData
     std::optional<JointState> state;
     std::optional<JointCandidateDiagnostic> candidate_diagnostic;
     std::vector<JointCheck> evidence;
-    std::vector<JointRankEvidence> ranks;
     std::vector<JointBlockConditioning> local_conditioning;
     double local_conditioning_seconds{};
     std::optional<std::size_t> local_conditioning_peak_memory_estimate_bytes;

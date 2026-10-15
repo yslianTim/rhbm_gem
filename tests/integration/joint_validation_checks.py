@@ -96,12 +96,6 @@ def scientific_parity(left,right):
     for key in ('runtime_convergence','runtime_checks','runtime_failure'):
         if a.get(key)!=b.get(key): failures.append(key)
     if a.get('runtime_convergence')=='passed' and not isinstance(a.get('runtime_checks'),dict): failures.append('runtime_checks/missing')
-    for key in ('design_spectrum','width_spectrum','profile_jacobian_spectrum'):
-        if (key in a)!=(key in b): failures.append(key+'/availability')
-        if a.get('runtime_convergence')=='passed' and key not in a: failures.append(key+'/missing')
-        for record in (a,b):
-            if key in record and (not isinstance(record[key],dict) or type(record[key].get('rank')) is not int or record[key]['rank']<0): failures.append(key+'/invalid')
-        if isinstance(a.get(key,{}),dict) and isinstance(b.get(key,{}),dict) and a.get(key,{}).get('rank')!=b.get(key,{}).get('rank'): failures.append(key+'/rank')
     sa,sb=left['returned_state'],right['returned_state']
     if len(sa['b'])!=len(sb['b']): failures.append('state-dimensions')
     if sa.get('active_atoms')!=sb.get('active_atoms'): failures.append('active-face')

@@ -23,16 +23,12 @@ struct HaloSupportDiagnostic
     std::size_t atom_index{};
     std::string atom_id,selection_role{"halo"};
     std::size_t original_observation_support_count{},profiled_observation_support_count{},
-        distinct_squared_distance_count{},ac_structural_rank_upper_bound{};
+        distinct_squared_distance_count{};
     bool singleton{},exact_common_response{},insufficient_full_abc_dimension{};
-    std::optional<bool> gaussian_column_nonzero_norm,charge_column_nonzero_norm;
-    std::optional<std::size_t> fixed_width_ac_numerical_rank;
-    std::optional<double> column_normalized_condition_indicator;
 };
 JointParameterLayout BuildParameterLayout(const JointProblemInput &);
 std::vector<HaloSupportDiagnostic> DiagnoseHaloSupport(const JointProblemInput &,
-    const JointParameterLayout &,const std::vector<double> & widths,
-    const std::vector<Eigen::Index> * component_atoms=nullptr,Eigen::Index rank_context_rows=-1);
+    const JointParameterLayout &,const std::vector<Eigen::Index> * component_atoms=nullptr);
 struct ComponentProblemView
 {
     JointParameterLayout local_layout;
@@ -62,8 +58,6 @@ JointFitResult FitFixedNeighborComponents(const JointProblem &,const std::vector
     const JointProgressObserver & = {});
 JointFitResult FitFixedNeighborComponentsImpl(const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy &,
     const JointProgressObserver & = {});
-std::vector<JointRankEvidence> AssessmentRanks(const Assessment &,JointEvidenceScope,
-    const JointProblemInput * = nullptr,const JointParameterLayout * = nullptr,std::size_t rank_context_rows=0);
 }
 namespace rhbm_gem::core {
 struct JointProblemAccess

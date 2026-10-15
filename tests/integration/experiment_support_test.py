@@ -147,8 +147,7 @@ class JointComparisonTest(unittest.TestCase):
     def search_result():
         return dict(stage='complete', search_completed=True, search=dict(residual_scale=2),
                     returned_assessment=dict(runtime_convergence='passed', runtime_failure='none',
-                        runtime_checks=dict(inner=True), design_spectrum=dict(rank=2),
-                        width_spectrum=dict(rank=1), profile_jacobian_spectrum=dict(rank=1)),
+                        runtime_checks=dict(numerical_qualification=True)),
                     returned_state=dict(objective=.04, beta=[2., .2], b=[.5], active_atoms=[]))
 
     def test_sparse_and_compact_parity_keep_rank_spectrum_and_unavailability(self):

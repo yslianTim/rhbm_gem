@@ -162,12 +162,10 @@ JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & s
     if(search.certification)
     {
         const auto & certification=*search.certification;
-        out.reference_status=JointCheckStatus::NotRun;
         out.endpoint_verification_status=certification.verified() ? JointCheckStatus::Passed :
             certification.verification_memory_estimate.status!=MemoryStatus::Pass ||
                 certification.assessment.failure.starts_with("resource-limit:") ?
                     JointCheckStatus::Unavailable : JointCheckStatus::Failed;
-        out.rank_assessment_status=JointCheckStatus::NotRun;
         out.certification_status=certification.qualified() ? JointCheckStatus::Passed :
             certification.resource_limited() ? JointCheckStatus::Unavailable : JointCheckStatus::Failed;
         out.numerical_qualification_status=out.certification_status;
@@ -311,7 +309,6 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
     {out.stop_reason="block-invalid-partition"; out.search.reason=out.stop_reason; return out;}
     MemoryShape shape; shape.component_atoms=component_layout.full_atoms.size();
     shape.component_observations=component_layout.informative_rows.size();
-    shape.component_target_columns=parent_context.target_columns;
     shape.component_blocks=shape.component_atoms;
     std::size_t support_entries{};
     for(const auto atom:component_layout.full_atoms)
@@ -362,18 +359,12 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
     diagnostic_policy.component_index=static_cast<std::size_t>(view.component_index);
     diagnostic_policy.component_id=view.id;
     const auto input_owner=view.domain.atoms.Snapshot();
-    diagnostic_policy.halo_census=[input_owner,&component_layout,&view,&initial_b](
-        std::size_t & halo_count,std::size_t & minimum_support,std::size_t & rank_deficient_count) {
-        const auto census=DiagnoseHaloSupport(*input_owner,component_layout,
-            {initial_b.data(),initial_b.data()+initial_b.size()},&view.atoms,
-            static_cast<Eigen::Index>(view.rows.size()));
+    diagnostic_policy.halo_census=[input_owner,&component_layout,&view](
+        std::size_t & halo_count,std::size_t & minimum_support) {
+        const auto census=DiagnoseHaloSupport(*input_owner,component_layout,&view.atoms);
         halo_count=census.size(); minimum_support=census.empty() ? 0 : std::numeric_limits<std::size_t>::max();
         for(const auto & halo:census)
-        {
             minimum_support=std::min(minimum_support,halo.original_observation_support_count);
-            rank_deficient_count+=halo.ac_structural_rank_upper_bound<2 ||
-                (halo.fixed_width_ac_numerical_rank && *halo.fixed_width_ac_numerical_rank<2);
-        }
     };
     out=SolveFixedNeighborComponent(prepared,initial_b,parent_context,
         diagnostic_policy,observer,progress_component);
@@ -493,7 +484,6 @@ AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const Compon
     if(out.verification_memory_estimate.status!=MemoryStatus::Pass)
     {
         LogMemoryEstimate(out.verification_memory_estimate);
-        out.assessment.reference_free=true;
         out.assessment.failure="resource-limit:endpoint-verification:"+out.verification_memory_estimate.reason;
         out.assessment.verification_memory_estimate=out.verification_memory_estimate;
         out.assessment.primary.eta=out.eta; out.assessment.primary.reason=out.assessment.failure;

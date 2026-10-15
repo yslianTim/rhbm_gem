@@ -50,7 +50,6 @@ struct EvaluationContext
     bool independent_search{};
     int profile_budget{200},update_budget{100};
     double profile_cpu_budget_seconds{};
-    std::size_t target_columns{};
 };
 enum class ProfileEvaluationRole {Unspecified,InitialProfile,TrialProfile,AcceptedEndpoint,Reference};
 const char * ProfileEvaluationRoleName(ProfileEvaluationRole);
@@ -124,19 +123,6 @@ struct Spectrum
     Vector singular_values,column_norms;
     double minimum{unavailable},condition{unavailable},threshold{};
 };
-struct StructuralRankEvidence
-{
-    bool available{},matching_available{},proven_deficient{},structurally_full_rank{};
-    Eigen::Index rows{},columns{},nonzero_entries{},supported_rows{},supported_columns{},matching_size{},rank_upper_bound{};
-    Eigen::Index identical_support_pattern_groups{};
-    std::size_t memory_estimate_bytes{};
-    std::string reason;
-};
-StructuralRankEvidence AssessStructuralRank(const Sparse &,std::size_t resident_bytes=0,
-    std::size_t budget=JointMemoryPlanningBudgetBytes);
-StructuralRankEvidence AssessDesignStructuralRank(const Domain &,VectorRef eta,std::size_t resident_bytes=0,
-    std::size_t budget=JointMemoryPlanningBudgetBytes,bool attempt_matching=true);
-Spectrum DesignSpectrum(const Sparse &,const Vector &,const RankPolicy * = nullptr);
 Spectrum ComputeSpectrum(const Sparse &,const RankPolicy &,Eigen::Index,bool);
 Spectrum ComputeSpectrum(const Matrix &,const RankPolicy &,Eigen::Index,bool);
 Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,bool,const EvaluationContext *,
@@ -173,7 +159,6 @@ struct TrustEvidence
     std::string reason;
     double coefficient_difference{unavailable},kkt_difference{unavailable},prediction_difference{unavailable},
         gradient_difference{unavailable},cancellation_ratio{unavailable};
-    std::optional<Spectrum> design;
 };
 struct ReplayDetailsForDiagnostics
 {
@@ -218,37 +203,27 @@ SearchResult SearchProfile(const Domain &,VectorRef,const Vector &,const Evaluat
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr,ProfileSearchWork * = nullptr);
 struct Assessment
 {
-    Endpoint primary,reference;
+    Endpoint primary;
     IndependentReplayEvidence independent_replay;
-    std::optional<Spectrum> design,free_design,widths;
-    std::optional<StructuralRankEvidence> design_structure;
-    Matrix weak_directions;
-    MemoryEstimate verification_memory_estimate,rank_memory_estimate,weak_direction_memory_estimate;
-    double primary_endpoint_seconds{},independent_replay_seconds{},rank_assessment_seconds{};
-    double coefficient_difference{unavailable};
-    bool inner{},gradient{},identified{},endpoint_verified{},qualified{},numerical_qualified{},reference_free{},width_rank_threshold_sensitive{};
-    std::string failure,weak_direction_diagnostics_failure;
+    MemoryEstimate verification_memory_estimate;
+    double primary_endpoint_seconds{},independent_replay_seconds{};
+    bool inner{},gradient{},endpoint_verified{},numerical_qualified{};
+    std::string failure;
 };
 std::vector<JointCheck> AssessmentEvidence(const Assessment &,JointEvidenceScope);
 JointCheckStatus MergeConvergenceStatus(JointCheckStatus,JointCheckStatus);
 JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> &,JointEvidenceScope,bool assembled=false);
 Assessment AssessProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,const Vector * = nullptr,
     const Vector * assembled_prediction=nullptr,const std::vector<std::size_t> * assembled_rows=nullptr);
-Assessment AssessProfileWithWeakDirectionDiagnostics(const Domain &,VectorRef,const Vector &,
-    const EvaluationContext &,const Vector * = nullptr,const Vector * assembled_prediction=nullptr,
-    const std::vector<std::size_t> * assembled_rows=nullptr);
+Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const Evaluation &,
+    const EvaluationContext &,bool supplied=false);
 // Evaluations belong to this exact domain, observations and numerical policy.
-Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const Evaluation &,const EvaluationContext &,bool supplied=false);
 Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const IndependentReplayEvidence &,
     const EvaluationContext &,bool supplied=false,std::size_t resident_override=0);
 // Verifies an accepted endpoint using only the streaming objective, KKT,
 // width-gradient, and independent replay evidence. It never assesses global rank.
 Assessment VerifyJointEndpoint(const Domain &,VectorRef,const Evaluation &,
     const IndependentReplayEvidence &,const EvaluationContext &);
-Assessment AssessEvaluatedWithWeakDirectionDiagnostics(const Domain &,VectorRef,const Evaluation &,
-    const Evaluation &,const EvaluationContext &,bool supplied=false);
-Assessment AssessEvaluatedWithWeakDirectionDiagnostics(const Domain &,VectorRef,const Evaluation &,
-    const IndependentReplayEvidence &,const EvaluationContext &,bool supplied=false,std::size_t resident_override=0);
 bool SameAssessmentPolicy(const EvaluationContext &,const EvaluationContext &);
 // Borrowed only while the originating immutable problem and report remain alive.
 struct AssessmentReuse
@@ -270,9 +245,8 @@ struct AssessmentStageWork
     MemoryStatus memory_status{MemoryStatus::Pass};
     std::size_t estimated_resident_bytes{},estimated_temporary_bytes{},estimated_peak_bytes{},budget_bytes{};
     std::string memory_preflight_reason;
-    std::size_t sparse_design_bytes{},dense_factor_bytes{},factor_workspace_bytes{},right_singular_vector_bytes{};
+    std::size_t sparse_design_bytes{},dense_factor_bytes{},factor_workspace_bytes{};
     std::size_t factor_rows{},factor_columns{},maximum_tile_rows{};
-    std::vector<MemoryStageEstimate> attributed_memory_stages;
     std::optional<std::size_t> current_rss_before_bytes,current_rss_after_bytes,process_peak_rss_bytes;
 };
 struct AssessmentWork

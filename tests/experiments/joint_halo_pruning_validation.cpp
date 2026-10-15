@@ -40,7 +40,7 @@ struct FitRecord
     bool search_completed{},numerically_converged{};
     rhbm_gem::JointCheckStatus target_status{rhbm_gem::JointCheckStatus::Unavailable};
     std::optional<double> objective,target_a_error,target_c_error,target_b_error,residual_rms,global_kkt,global_width_gradient;
-    std::optional<std::size_t> design_rank,free_design_rank,projected_width_rank,construction_peak_bytes;
+    std::optional<std::size_t> construction_peak_bytes;
     double elapsed_seconds{};
 };
 
@@ -60,14 +60,6 @@ std::optional<double> CheckValue(const core::JointFitResult & fit,const std::str
     });
     if(found==fit.evidence.end()) return {};
     return found->value;
-}
-std::optional<std::size_t> RankValue(const core::JointFitResult & fit,const std::string & name)
-{
-    const auto found=std::find_if(fit.ranks.begin(),fit.ranks.end(),[&](const auto & rank) {
-        return rank.name==name && rank.scope==rhbm_gem::JointEvidenceScope::AssembledGlobal;
-    });
-    if(found==fit.ranks.end()) return {};
-    return found->rank;
 }
 Support MakeSupport(std::initializer_list<std::size_t> rows,std::size_t salt)
 {
@@ -210,8 +202,6 @@ FitRecord Run(const Scenario & scenario,std::size_t threshold)
     out.target_status=fit.TargetRuntimeConvergence(); out.objective=fit.objective;
     out.global_kkt=CheckValue(fit,"conditional-ac-optimality");
     out.global_width_gradient=CheckValue(fit,"width-stationarity");
-    out.design_rank=RankValue(fit,"design"); out.free_design_rank=RankValue(fit,"free-design");
-    out.projected_width_rank=RankValue(fit,"projected-width");
     out.construction_peak_bytes=data.construction_memory.estimated_peak_bytes;
     for(const auto & component:fit.components)
     {
@@ -249,8 +239,7 @@ void Print(const FitRecord & result)
         <<(result.search_completed?"true":"false")<<','<<(result.numerically_converged?"true":"false")<<','
         <<StatusName(result.target_status)<<',';
     PrintOptional(result.objective); std::cout<<','; PrintOptional(result.global_kkt); std::cout<<',';
-    PrintOptional(result.global_width_gradient); std::cout<<','; PrintOptional(result.design_rank); std::cout<<',';
-    PrintOptional(result.free_design_rank); std::cout<<','; PrintOptional(result.projected_width_rank); std::cout<<',';
+    PrintOptional(result.global_width_gradient); std::cout<<',';
     PrintOptional(result.target_a_error); std::cout<<','; PrintOptional(result.target_c_error); std::cout<<',';
     PrintOptional(result.target_b_error); std::cout<<','; PrintOptional(result.residual_rms); std::cout<<',';
     PrintOptional(result.construction_peak_bytes); std::cout<<','<<std::setprecision(9)<<result.elapsed_seconds<<'\n';
@@ -261,7 +250,7 @@ int main()
 {
     try
     {
-        std::cout<<"scenario,minimum_observations,observation_rows,target_count,candidate_halos,retained_halos,excluded_halos,excluded_insufficient_rows,excluded_insufficient_radial,q_below_three_candidates,retention_ratio,components_before,components_after,block_search_failures,components_without_state,search_completed,numerical_success,target_status,objective,global_ac_kkt,global_logb_gradient,design_rank,free_design_rank,projected_width_rank,target_delta_a,target_delta_c,target_delta_b,residual_rms,construction_preflight_peak_bytes,elapsed_seconds\n";
+        std::cout<<"scenario,minimum_observations,observation_rows,target_count,candidate_halos,retained_halos,excluded_halos,excluded_insufficient_rows,excluded_insufficient_radial,q_below_three_candidates,retention_ratio,components_before,components_after,block_search_failures,components_without_state,search_completed,numerical_success,target_status,objective,global_ac_kkt,global_logb_gradient,target_delta_a,target_delta_c,target_delta_b,residual_rms,construction_preflight_peak_bytes,elapsed_seconds\n";
         for(const auto & scenario:Scenarios())
             for(const std::size_t threshold:std::initializer_list<std::size_t>{3,4,6,8,12}) Print(Run(scenario,threshold));
         std::cerr<<"process_peak_rss_bytes=";

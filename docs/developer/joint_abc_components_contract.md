@@ -5,10 +5,10 @@ procedures below describe the frozen baseline, not the current daily workflow.
 Use the [runtime guide](joint-component-runtime.md) for current commands and the
 [evidence index](joint-component-evidence.md) for archived evidence.
 
-Historical search/reference evidence below predates the endpoint-only runtime
-reference policy. Current search uses KKT plus scalar replay; actual returned
-endpoints, including fallbacks, require reference certification. See the runtime
-guide for this policy; the archived results are unchanged.
+The procedures below are a frozen research contract. The current production
+route uses global stationarity and scalar endpoint replay; it does not require
+reference-solver agreement or global rank certification. See the runtime guide
+for the current policy; the archived results are unchanged.
 
 This testing-only experiment extends the frozen `d9f22026` certification results.
 It has three sequential gates: unchanged monolithic evaluation/certification and

@@ -1,12 +1,12 @@
 # Bounded global rank research
 
-This document records the historical rank contract and controls for the
-memory-bounded global design rank study. `DesignSpectrum()` remains its
-small-case oracle. Current production obtains interior Design Rank from the
-free-design factor in projected-width preparation; see the
-[runtime contract](joint-component-runtime.md). Experimental methods in this
-study must match the oracle's normalized matrix and strict rank boundary before
-they can be considered for production.
+This document records the retired Global Rank Certification contract and
+research controls. The production rank pipeline, `DesignSpectrum()` oracle,
+and its experiment drivers are no longer in the current estimator. The
+equations below explain historical results only; they are not current runtime
+checks, gates, or resource estimates. See the
+[runtime contract](joint-component-runtime.md) for the current convergence,
+conditioning, and stability architecture.
 
 ## Existing numerical rank contract
 

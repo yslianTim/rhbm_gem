@@ -77,7 +77,7 @@ struct Direct
 struct CompactJacobianDiagnostics
 {
     double ztp_relative{},ztr_relative{},ztr_relative_all{},gram_absolute{},gram_relative{},gram_elementwise{};
-    double orthogonal_gram_relative{},spectrum_relative{},weak_projector_difference{};
+    double orthogonal_gram_relative{},spectrum_relative{};
     double response_norm_difference{},response_gradient_difference{},correction_difference{};
     double ztp_absolute{},ztr_absolute{},ztr_scaled{};
     Eigen::Index exact_rank{},compact_rank{};
@@ -174,11 +174,6 @@ void CheckCompactJacobianIdentity(const n::Evaluation & e,const n::EvaluationCon
         result.rank_parity=exact.rank==compact.rank;
         result.spectrum_relative=(exact.singular_values-compact.singular_values).lpNorm<Eigen::Infinity>()/
             std::max(1e-30,exact.singular_values(0));
-        const Eigen::Index weak=std::min<Eigen::Index>(3,exact.right_vectors.cols());
-        const n::Matrix exact_weak=exact.right_vectors.rightCols(weak),compact_weak=compact.right_vectors.rightCols(weak);
-        result.weak_projector_difference=(exact_weak*exact_weak.transpose()-compact_weak*compact_weak.transpose()).norm()/
-            std::sqrt(static_cast<double>(weak));
-
         const n::Vector exact_rhs=-reduced.response,compact_rhs=-compact_qr.target.col(0);
         const auto exact_solve=n::EvaluateRank(reduced.jacobian,request,&exact_rhs);
         const auto compact_solve=n::EvaluateRank(compact_qr.r,request,&compact_rhs);
@@ -212,7 +207,6 @@ void CheckCompactJacobianIdentity(const n::Evaluation & e,const n::EvaluationCon
     {
         maximum.orthogonal_gram_relative=std::max(maximum.orthogonal_gram_relative,result.orthogonal_gram_relative);
         maximum.spectrum_relative=std::max(maximum.spectrum_relative,result.spectrum_relative);
-        maximum.weak_projector_difference=std::max(maximum.weak_projector_difference,result.weak_projector_difference);
         maximum.response_norm_difference=std::max(maximum.response_norm_difference,result.response_norm_difference);
         maximum.response_gradient_difference=std::max(maximum.response_gradient_difference,result.response_gradient_difference);
         maximum.correction_difference=std::max(maximum.correction_difference,result.correction_difference);
@@ -303,7 +297,7 @@ TEST(JointTestNumericsTest, InvalidBStillFailsAndUninformativeWidthCanConverge)
     EXPECT_EQ(zero.at("runtime_convergence"),"passed");
     EXPECT_TRUE(zero.at("primary").at("kkt_passed").as_bool());
     EXPECT_EQ(zero.at("primary").at("rss"),0.0);
-    EXPECT_EQ(zero.at("width_spectrum").at("rank"),0);
+    EXPECT_TRUE(zero.at("numerical_convergence_passed").as_bool());
     // Geometry and observations are immutable across all evaluations.
     EXPECT_EQ(good.rows,sample.y.size()); EXPECT_EQ(good.atoms[0].size(),p::Domain(sample.grid,sample.atoms).atoms[0].size());
 }
@@ -396,7 +390,6 @@ TEST(JointComponentNumericsTest, CompactJacobianGramIdentityDiagnosticsAcrossLat
     record("max_full_gram_max_elementwise_error",summary.maximum.gram_elementwise);
     record("max_orthogonality_only_gram_relative_error",summary.maximum.orthogonal_gram_relative);
     record("max_compact_candidate_spectrum_relative_error",summary.maximum.spectrum_relative);
-    record("max_weak_direction_projector_difference",summary.maximum.weak_projector_difference);
     record("max_response_coordinate_norm_difference",summary.maximum.response_norm_difference);
     record("max_response_gradient_difference",summary.maximum.response_gradient_difference);
     record("max_correction_difference",summary.maximum.correction_difference);
@@ -810,7 +803,7 @@ TEST(JointComponentNumericsTest, SharedRankContractPreservesBothBoundaryRules)
     EXPECT_FALSE(n::EvaluateRank(Matrix::Constant(4,4,n::unavailable),{{1000,8,4},4}).valid);
 }
 
-TEST(JointComponentNumericsTest, MemoryPlannerUsesCheckedStageSpecificEstimates)
+TEST(JointComponentNumericsTest, MemoryPlannerRetainsNonRankStagesAndLocalBudgets)
 {
     using rhbm_gem::core::JointProblemInput;
     std::size_t bytes{};
@@ -828,75 +821,35 @@ TEST(JointComponentNumericsTest, MemoryPlannerUsesCheckedStageSpecificEstimates)
     large.component_support_entries=2'000'000; large.component_blocks=3'118;
     large.affected_row_entries=3'000'000; large.component_free_columns=74'812;
     large.maximum_block_rows=8'000; large.maximum_block_support_entries=80'000;
-    large.component_target_columns=112'218; large.resident_bytes=256'000'000;
-    large.component_target_atoms=37'406;
-    large.component_design_columns=74'812;
-    large.component_width_columns=37'406;
-    const auto mappings=n::PlanMemory(large,n::MemoryStage::FixedNeighborPreparation);
+    large.maximum_neighbor_atoms=12; large.component_width_columns=12;
+    large.maximum_tile_rows=8192; large.resident_bytes=256'000'000;
+    const auto construction=n::PlanMemory(large,n::MemoryStage::ProblemConstruction);
     const auto structural=n::PlanMemory(large,n::MemoryStage::StructuralConstruction);
+    const auto preparation=n::PlanMemory(large,n::MemoryStage::FixedNeighborPreparation);
     const auto state=n::PlanMemory(large,n::MemoryStage::GlobalStateEvaluation);
-    const auto reference=n::AssessReferenceFeasibility(large);
-    const auto rank=n::PlanMemory(large,n::MemoryStage::RankAssessment);
-    const auto projected=n::PlanMemory(large,n::MemoryStage::ProjectedWidthAssessment);
-    const auto diagnostics=n::PlanMemory(large,n::MemoryStage::ProjectedWidthDiagnostics);
-    const auto target=n::PlanMemory(large,n::MemoryStage::TargetIdentifiability);
-    const auto verification=n::PlanMemory(large,n::MemoryStage::EndpointVerification);
-    EXPECT_EQ(mappings.status,n::MemoryStatus::Pass);
+    const auto endpoint=n::PlanMemory(large,n::MemoryStage::EndpointVerification);
+    const auto reference=n::PlanMemory(large,n::MemoryStage::ReferenceSolve);
+    auto local=large; local.component_free_columns=24;
+    const auto conditioning=n::PlanMemory(local,n::MemoryStage::LocalConditioning);
+    local.component_stability_evaluations=2;
+    const auto stability=n::PlanMemory(local,n::MemoryStage::ParameterStability);
+    EXPECT_EQ(construction.status,n::MemoryStatus::Pass);
     EXPECT_EQ(structural.status,n::MemoryStatus::Pass);
+    EXPECT_EQ(preparation.status,n::MemoryStatus::Pass);
     EXPECT_EQ(state.status,n::MemoryStatus::Pass);
-    EXPECT_EQ(reference.budget_status,n::MemoryStatus::Reject);
-    EXPECT_EQ(reference.numerical_status,"unavailable");
-    EXPECT_EQ(rank.status,n::MemoryStatus::Reject);
-    EXPECT_EQ(projected.status,n::MemoryStatus::Reject);
-    EXPECT_EQ(target.status,n::MemoryStatus::Pass);
-    EXPECT_EQ(verification.status,n::MemoryStatus::Pass);
-    EXPECT_LT(verification.estimated_peak_bytes,reference.estimated_peak_bytes);
-    EXPECT_EQ(mappings.budget_bytes,3'200'000'000u);
-    EXPECT_NE(mappings.estimated_peak_bytes,state.estimated_peak_bytes);
-    EXPECT_GE(rank.estimated_peak_bytes,projected.estimated_peak_bytes);
-    EXPECT_EQ(projected.free_design_factor_bytes,74'812ull*74'812ull*sizeof(double));
-    EXPECT_EQ(projected.free_design_svd_workspace_bytes,6*projected.free_design_factor_bytes);
-    EXPECT_EQ(projected.projection_coefficient_bytes,74'812ull*37'406ull*sizeof(double));
-    EXPECT_EQ(projected.projected_width_factor_bytes,37'406ull*37'406ull*sizeof(double));
-    EXPECT_EQ(projected.projected_width_svd_workspace_bytes,6*projected.projected_width_factor_bytes);
-    EXPECT_EQ(projected.right_singular_vector_bytes,0u);
-    EXPECT_EQ(diagnostics.status,n::MemoryStatus::Reject);
-    EXPECT_EQ(diagnostics.projected_width_svd_workspace_bytes,9*diagnostics.projected_width_factor_bytes);
-    EXPECT_EQ(diagnostics.right_singular_vector_bytes,diagnostics.projected_width_factor_bytes);
-    EXPECT_GE(diagnostics.estimated_peak_bytes,projected.estimated_peak_bytes);
-    EXPECT_GT(projected.estimated_peak_bytes,projected.free_design_factor_bytes);
-    EXPECT_LT(target.estimated_peak_bytes,300'000'000u);
-    ASSERT_EQ(rank.attributed_stages.size(),1u);
-    EXPECT_EQ(rank.attributed_stages[0].stage,n::MemoryStage::ProjectedWidthAssessment);
-    EXPECT_EQ(rank.estimated_peak_bytes,projected.estimated_peak_bytes);
-    EXPECT_EQ(rank.attributed_stages[0].free_design_factor_bytes,projected.free_design_factor_bytes);
-    auto active=large; active.component_free_columns=37'406;
-    const auto active_projected=n::PlanMemory(active,n::MemoryStage::ProjectedWidthAssessment);
-    EXPECT_EQ(active_projected.status,n::MemoryStatus::Reject);
-    EXPECT_EQ(active_projected.free_design_factor_bytes,37'406ull*37'406ull*sizeof(double));
-    EXPECT_EQ(active_projected.free_design_svd_workspace_bytes,6*active_projected.free_design_factor_bytes);
-    EXPECT_EQ(active_projected.projected_width_factor_bytes,projected.projected_width_factor_bytes);
-    auto mixed=large; mixed.component_free_columns=56'109;
-    const auto mixed_projected=n::PlanMemory(mixed,n::MemoryStage::ProjectedWidthAssessment);
-    EXPECT_EQ(mixed_projected.status,n::MemoryStatus::Reject);
-    EXPECT_EQ(mixed_projected.free_design_factor_bytes,56'109ull*56'109ull*sizeof(double));
-    EXPECT_EQ(mixed_projected.free_design_svd_workspace_bytes,6*mixed_projected.free_design_factor_bytes);
-    EXPECT_EQ(mixed_projected.shape.component_free_columns,56'109u);
-    EXPECT_TRUE(target.attributed_stages.empty());
-    EXPECT_EQ(target.dense_factor_bytes,0u);
-    EXPECT_EQ(target.factor_workspace_bytes,0u);
-    EXPECT_EQ(target.right_singular_vector_bytes,0u);
+    EXPECT_EQ(endpoint.status,n::MemoryStatus::Pass);
+    EXPECT_EQ(reference.status,n::MemoryStatus::Reject);
+    EXPECT_EQ(conditioning.status,n::MemoryStatus::Pass);
+    EXPECT_EQ(stability.status,n::MemoryStatus::Pass);
+    EXPECT_GT(stability.estimated_peak_bytes,conditioning.estimated_peak_bytes);
+    EXPECT_EQ(conditioning.factor_rows,24);
+    EXPECT_EQ(conditioning.factor_columns,24);
+    EXPECT_EQ(conditioning.budget_bytes,n::JointMemoryPlanningBudgetBytes);
 
-    auto validation=large; validation.identity_validation_bytes=3'200'000'000;
-    EXPECT_EQ(n::PlanMemory(validation,n::MemoryStage::ProblemConstruction).status,n::MemoryStatus::Reject);
-    auto overflow=large; overflow.component_blocks=std::numeric_limits<std::size_t>::max();
-    EXPECT_EQ(n::PlanMemory(overflow,n::MemoryStage::StructuralConstruction).status,n::MemoryStatus::Overflow);
+    auto overflow=large; overflow.component_free_columns=std::numeric_limits<std::size_t>::max();
+    EXPECT_EQ(n::PlanMemory(overflow,n::MemoryStage::LocalConditioning).status,n::MemoryStatus::Overflow);
     auto tile_overflow=large; tile_overflow.maximum_tile_rows=std::numeric_limits<std::size_t>::max();
-    EXPECT_EQ(n::PlanMemory(tile_overflow,n::MemoryStage::DesignSpectrum).status,n::MemoryStatus::Overflow);
-    EXPECT_EQ(n::PlanMemory(tile_overflow,n::MemoryStage::ProjectedWidthAssessment).status,n::MemoryStatus::Overflow);
-    EXPECT_EQ(n::PlanMemory(tile_overflow,n::MemoryStage::TargetIdentifiability).status,n::MemoryStatus::Pass);
-    auto target_overflow=large; target_overflow.component_target_atoms=std::numeric_limits<std::size_t>::max();
-    EXPECT_EQ(n::PlanMemory(target_overflow,n::MemoryStage::TargetIdentifiability).status,n::MemoryStatus::Overflow);
+    EXPECT_EQ(n::PlanMemory(tile_overflow,n::MemoryStage::LocalConditioning).status,n::MemoryStatus::Overflow);
 }
 
 TEST(JointComponentNumericsTest, StreamingStateMatchesSparseGlobalEvaluation)
@@ -1029,29 +982,4 @@ TEST(JointComponentNumericsTest, IndependentStreamingReplayPreservesActiveBounda
     EXPECT_TRUE(cancellation_replay.passed)<<cancellation_replay.reason;
     EXPECT_GT(cancellation_replay.cancellation_ratio,1e10);
     EXPECT_DOUBLE_EQ(cancellation_replay.objective_difference,0.0);
-}
-
-TEST(JointComponentNumericsTest, RankAssessmentPreflightStopsBeforeFreeDesignFactorization)
-{
-    constexpr Eigen::Index atoms=4,rows=8;
-    std::vector<std::vector<n::Support>> support(static_cast<std::size_t>(atoms));
-    for(auto & atom:support) for(Eigen::Index row=0;row<rows;++row) atom.push_back({row,0});
-    const n::Domain domain(rows,std::move(support));
-    const Vector y=Vector::Zero(rows);
-    const auto context=n::CreateContext(y,atoms);
-    n::Evaluation endpoint; endpoint.eta=Vector::Zero(atoms); endpoint.beta=Vector::Zero(2*atoms);
-    endpoint.gradient=Vector::Zero(atoms); endpoint.residual=Vector::Zero(rows); endpoint.valid=true;
-    endpoint.certificate.available=true; endpoint.certificate.kkt_passed=true;
-    endpoint.x.resize(rows,2*atoms); endpoint.derivative.resize(rows,2*atoms);
-    n::IndependentReplayEvidence replay; replay.available=true; replay.valid=true;
-    const auto assessment=n::AssessEvaluated(domain,y,endpoint,replay,context,false,n::JointMemoryPlanningBudgetBytes);
-    EXPECT_EQ(assessment.failure,"resource-limit:rank-assessment");
-    EXPECT_EQ(assessment.rank_memory_estimate.stage,n::MemoryStage::RankAssessment);
-    EXPECT_EQ(assessment.rank_memory_estimate.status,n::MemoryStatus::Reject);
-    EXPECT_TRUE(assessment.primary.valid);
-    EXPECT_TRUE(assessment.primary.certificate.available);
-    EXPECT_FALSE(assessment.design.has_value());
-    ASSERT_TRUE(assessment.design_structure.has_value());
-    EXPECT_FALSE(assessment.design_structure->proven_deficient);
-    EXPECT_FALSE(assessment.widths.has_value());
 }

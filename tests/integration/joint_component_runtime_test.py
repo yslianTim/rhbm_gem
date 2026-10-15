@@ -28,7 +28,7 @@ class JointRuntimeSupportTest(unittest.TestCase):
                                      'state': {'objective': .2}, 'regular': False}),
                          {'state': {'objective': .2}, 'regular': False})
 
-    def test_runtime_projection_preserves_search_and_separates_derivative_audit(self):
+    def test_legacy_runtime_projection_is_labeled_and_separates_derivative_audit(self):
         expected = {'usable_state': True, 'search_success': False,
                     'qualification_checks': dict(inner=True, b_gradient=True, local_correction=True,
                                                  identified=True, derivative=False),
@@ -36,19 +36,19 @@ class JointRuntimeSupportTest(unittest.TestCase):
         original = copy.deepcopy(expected)
         runtime = runtime_expected(expected)
         self.assertEqual(expected, original)
-        self.assertEqual(runtime['runtime_convergence'], 'passed')
+        self.assertEqual(runtime['legacy_runtime_convergence'], 'passed')
         self.assertFalse(runtime['search_success'])
-        self.assertNotIn('derivative', runtime['runtime_checks'])
-        self.assertNotIn('local_correction', runtime['runtime_checks'])
+        self.assertNotIn('derivative', runtime['legacy_runtime_checks'])
+        self.assertNotIn('local_correction', runtime['legacy_runtime_checks'])
         expected['qualification_checks']['local_correction'] = False
-        self.assertEqual(runtime_expected(expected)['runtime_convergence'], 'passed')
+        self.assertEqual(runtime_expected(expected)['legacy_runtime_convergence'], 'passed')
         expected['usable_state'] = False
-        self.assertEqual(runtime_expected(expected)['runtime_convergence'], 'unavailable')
+        self.assertEqual(runtime_expected(expected)['legacy_runtime_convergence'], 'unavailable')
         expected = copy.deepcopy(original)
         del expected['qualification_checks']['local_correction']
-        self.assertEqual(runtime_expected(expected)['runtime_convergence'], 'passed')
+        self.assertEqual(runtime_expected(expected)['legacy_runtime_convergence'], 'passed')
         expected['qualification_checks'] = {}
-        self.assertEqual(runtime_expected(expected)['runtime_convergence'], 'unavailable')
+        self.assertEqual(runtime_expected(expected)['legacy_runtime_convergence'], 'unavailable')
 
     def test_runtime_contract_allows_trace_changes_but_not_lost_evidence(self):
         record = dict(usable_state=True, runtime_convergence='passed',
@@ -56,8 +56,7 @@ class JointRuntimeSupportTest(unittest.TestCase):
                       runtime_checks=dict(ac_feasibility=True, conditional_ac_optimality=True,
                                           independent_ac_optimality=True, independent_kkt_consistency=True,
                                           independent_replay=True, width_gradient_consistency=True,
-                                          width_stationarity=True, design_identifiability=True,
-                                          numerical_identifiability=True),
+                                          width_stationarity=True, numerical_qualification=True),
                       reference_solve_calls=0,
                       search_success=True, stop_reason='native-lm-stop', accepted_updates=3, profile_evaluations=4,
                       trials=[dict(accepted=True, valid=True, trust_passed=True)],
@@ -72,8 +71,9 @@ class JointRuntimeSupportTest(unittest.TestCase):
         actual.update(numerical_qualification_status='failed', usable_state=False, search_success=False)
         self.assertFalse(runtime_differences(record, actual, 1.))
         actual = copy.deepcopy(record)
-        actual['runtime_checks']['local_correction'] = False
-        self.assertFalse(runtime_differences(record, actual, 1.))
+        actual['runtime_checks']['numerical_qualification'] = False
+        self.assertIn('/runtime_convergence-with-failed-check', runtime_differences(record, actual, 1.))
+        actual = copy.deepcopy(record)
         actual['candidate_state']['b'][0] += 1e-6
         self.assertFalse(runtime_differences(record, actual, 1.))
         actual = copy.deepcopy(record); del actual['runtime_checks']['independent_replay']
@@ -96,16 +96,15 @@ class JointRuntimeSupportTest(unittest.TestCase):
                       runtime_checks=dict(ac_feasibility=True, conditional_ac_optimality=True,
                           independent_ac_optimality=True, independent_kkt_consistency=True,
                           independent_replay=True, width_gradient_consistency=True,
-                          width_stationarity=True, design_identifiability=True,
-                          numerical_identifiability=True), trials=[])
+                          width_stationarity=True, numerical_qualification=True), trials=[])
         self.assertFalse(runtime_differences({}, actual, 1.))
         actual['usable_state'] = True
         self.assertIn('/unqualified-scientific-state', runtime_differences({}, actual, 1.))
         actual = copy.deepcopy(actual)
         actual.update(usable_state=True, search_success=True, runtime_convergence='passed',
                       numerical_qualification_status='passed')
-        actual['runtime_checks']['local_correction'] = False
-        self.assertFalse(runtime_differences({}, actual, 1.))
+        actual['runtime_checks']['numerical_qualification'] = False
+        self.assertIn('/runtime_convergence-with-failed-check', runtime_differences({}, actual, 1.))
         actual['endpoint_verification_status'] = 'not-run'
         self.assertIn('/qualification-without-complete-trusted-state', runtime_differences({}, actual, 1.))
 
@@ -114,8 +113,7 @@ class JointRuntimeSupportTest(unittest.TestCase):
                         ac_feasibility=True, conditional_ac_optimality=True, independent_ac_optimality=True,
                         independent_kkt_consistency=True, independent_replay=True,
                         width_gradient_consistency=True, width_stationarity=True,
-                        design_identifiability=True,
-                        numerical_identifiability=True),
+                        numerical_qualification=True),
                         endpoint_verification_status='passed', numerical_qualification_status='failed',
                         reference_solve_calls=0,
                         search_success=False, stop_reason='profile-budget', accepted_updates=1, profile_evaluations=200,

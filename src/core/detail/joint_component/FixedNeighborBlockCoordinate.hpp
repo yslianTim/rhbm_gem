@@ -49,7 +49,7 @@ struct FixedNeighborProfileTrial
 struct FixedNeighborBlockFailureDiagnostics
 {
     std::size_t component_index{},sweep_index{},block_index{},core_atom_count{},affected_row_count{},halo_count{},
-        minimum_halo_support_rows{},rank_deficient_halo_count{},local_design_nonzero_entries{};
+        minimum_halo_support_rows{},local_design_nonzero_entries{};
     std::vector<std::string> core_atom_ids;
     std::vector<double> local_column_norms;
     bool initial_profile_valid{},initial_profile_trusted{},solver_valid{};
@@ -105,8 +105,7 @@ IncrementalCandidateReplay EvaluateCandidateDelta(VectorRef current_residual,
 struct FixedNeighborWork
 {
     double structural_preparation_seconds{},endpoint_verification_seconds{},local_conditioning_seconds{},parameter_stability_seconds{},primary_endpoint_seconds{},
-        independent_replay_seconds{},
-        rank_assessment_seconds{},old_core_seconds{},
+        independent_replay_seconds{},old_core_seconds{},
         effective_response_seconds{},local_search_seconds{},local_state_seconds{},
         candidate_copy_seconds{},candidate_replay_seconds{},cache_update_seconds{},sweep_replay_seconds{},
         sweep_global_state_seconds{},maximum_block_seconds{},incremental_candidate_replay_seconds{},
@@ -181,7 +180,7 @@ struct FixedNeighborPolicy
     bool assess_parameter_stability{};
     std::size_t component_index{};
     std::string component_id;
-    std::function<void(std::size_t &,std::size_t &,std::size_t &)> halo_census;
+    std::function<void(std::size_t &,std::size_t &)> halo_census;
     std::function<void()> preparation_observer;
     std::function<bool()> claim_parameter_stability_block;
     FixedNeighborDiagnosticSink * diagnostic_sink{};

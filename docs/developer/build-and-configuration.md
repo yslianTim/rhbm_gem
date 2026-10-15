@@ -155,10 +155,11 @@ for search/solve, `joint_postprocessing_benchmark` for the complete Joint workfl
 `joint_partial_selection` for current selection and halo measurements. The
 single benchmark workflow is `tests/integration/joint_benchmark.py`. The
 research option creates only `joint_statistical_experiment`. The offline-audit
-option creates `joint_component_audit`, `joint_offline_diagnostic`, and their
-current offline tests. Complete-command measurements use the same benchmark
-workflow with `--profile command`; they require the regular CLI build and
-explicit model/map inputs. No per-stage CMake switches are needed.
+option creates local precision, KKT, replay, trajectory, and FullABC width
+controls. It no longer creates global-rank or weak-direction certification
+tools. Complete-command measurements use the same benchmark workflow with
+`--profile command`; they require the regular CLI build and explicit model/map
+inputs. No per-stage CMake switches are needed.
 
 CTest labels include `core`, `offline`, `extended`, `external`, `benchmark`, and
 `research`. The default configuration registers only core tests. Turning a

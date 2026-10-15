@@ -36,7 +36,6 @@ private:
 using ::rhbm_gem::JointCheckStatus;
 using ::rhbm_gem::JointEvidenceScope;
 using ::rhbm_gem::JointCheck;
-using ::rhbm_gem::JointRankEvidence;
 using ::rhbm_gem::JointInitializationAtom;
 using ::rhbm_gem::JointInitialization;
 using ::rhbm_gem::JointState;
@@ -58,7 +57,6 @@ struct JointFitResult
     std::optional<double> objective;
     std::vector<bool> available_row_mask;
     std::vector<JointCheck> evidence;
-    std::vector<JointRankEvidence> ranks;
     bool search_completed{};
     double observation_scale{1};
     JointCheckStatus regular_certificate{JointCheckStatus::NotRun};

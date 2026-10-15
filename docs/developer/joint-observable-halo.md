@@ -46,7 +46,7 @@ targets and eligible retained halos. An excluded signal can therefore increase
 residuals or shift selected-target estimates. Production adds no background
 term, regularizer, pseudo-observation, or redistribution of that signal.
 
-## Numerical qualification
+## Selection and point quality
 
 The gate uses geometry before first-stage width seeds exist. `m_h >= 3` and
 `q_h >= 3` are necessary local conditions only. Repeated radii can limit the
@@ -54,12 +54,12 @@ local Jacobian rank to `q_h`; passing the gate does not prove that the halo's
 fixed-width A/C columns are independent or that its full `(A, C, B)` parameters
 are identifiable in the complete component.
 
-`DiagnoseHaloSupport()` remains a diagnostic. Its fixed-width A/C numerical
-rank and condition indicator are distinct from the full FullABC Jacobian and
-from the component rank checks. Existing endpoint replay, constrained A/C KKT,
-width stationarity, full design rank, projected-width rank, and target
-estimability requirements remain unchanged. A retained but rank-deficient
-component can still fail numerical qualification.
+`DiagnoseHaloSupport()` remains a geometry/support diagnostic. The Joint state
+is accepted by global numerical convergence and independent endpoint replay.
+Local block conditioning can report poor conditional A/C, projected-width, or
+profile derivative behavior; parameter stability can report sensitivity.
+These point-quality warnings do not exclude an eligible retained halo or
+cancel a converged component. They do not establish global identifiability.
 
 ## Exclusion provenance
 

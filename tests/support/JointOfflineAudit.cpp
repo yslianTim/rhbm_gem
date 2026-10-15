@@ -34,7 +34,7 @@ void Audit(const joint_abc::Domain & domain,const Vector & y,const j::object & f
     const auto * context=provided ? provided : &fallback;
     const auto start=std::chrono::steady_clock::now();
     j::object audit{{"schema_version",2},{"case",fit.at("case")},{"dataset",fit.at("dataset")},
-        {"legacy_joint_qualified",fit.at("joint_qualified")},{"derivative_status","unavailable"},
+        {"numerical_convergence_passed",fit.at("numerical_convergence_passed")},{"derivative_status","unavailable"},
         {"derivative_verified",false},{"reason","invalid-endpoint"}};
     if(!fit.contains("primary")) {audit["reason"]="initialization-failed"; Write(output,audit); return;}
     const auto & primary=fit.at("primary");
@@ -50,16 +50,15 @@ void Audit(const joint_abc::Domain & domain,const Vector & y,const j::object & f
     for (Eigen::Index k=0;k<e.beta.size();k+=2) slack.push_back(j::object{{"atom",k/2},{"scaled_a",Number(u(k))},
         {"dual",Number(dual(k))},{"complementarity",Number(u(k)*dual(k))},{"exactly_active",e.beta(k)==0}});
     audit["constraint_evidence"]=slack;
-    if (!fit.contains("width_spectrum")) {audit["reason"]="missing-width-spectrum"; Write(output,audit); return;}
     const auto d=joint_abc::Differentiate(e,scale,context);
     if(!d.valid) {audit["reason"]=d.reason; Write(output,audit); return;}
     Matrix directions(e.eta.size(),3); directions.col(0)=Vector::Ones(e.eta.size()).normalized();
     for(Eigen::Index k=0;k<e.eta.size();++k) directions(k,1)=k%2 ? -1 : 1;
-    directions.col(1).normalize(); directions.col(2)=Parse(fit.at("width_spectrum").at("weak_directions").at(0));
+    directions.col(1).normalize(); directions.col(2)=Vector::Unit(e.eta.size(),0);
     if(context->audit.directions.size()) directions=context->audit.directions;
     const bool precision=context->audit.precision;
     if(precision) audit["precision"]=PrecisionAudit(domain,y,e,directions,context,context->audit.block_precision);
-    const bool old_verified=fit.at("derivative_verified").as_bool();
+    const bool old_verified=fit.if_contains("derivative_verified") && fit.at("derivative_verified").as_bool();
     bool verified=old_verified; bool crossed{},missing_interval{};
     j::array ladders;
     const bool expanded_audit=context->audit.expanded_if_unverified && (!old_verified || precision);

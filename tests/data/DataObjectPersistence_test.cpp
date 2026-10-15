@@ -941,20 +941,20 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     component.state.reset(); record.assembled_state.reset(); record.objective.reset();
     component.runtime_convergence=rg::JointCheckStatus::Unavailable;
     record.runtime_convergence=rg::JointCheckStatus::Unavailable;
-    component.ranks.clear(); component.target_evidence.reset(); record.target_evidence.reset();
+    component.legacy_global_rank_evidence.clear(); component.target_evidence.reset(); record.target_evidence.reset();
     rg::JointCandidateDiagnostic candidate;
     candidate.candidate_available=true;
     candidate.candidate_eta={-.7,-.5}; candidate.candidate_ac={999.125,-.3,4,.2};
     candidate.candidate_objective=.0123; candidate.candidate_ac_kkt=.1;
     candidate.candidate_width_gradient_inf_norm=.2; candidate.candidate_feasible=true;
-    candidate.reference_status=rg::JointCheckStatus::Unavailable;
-    candidate.rank_assessment_status=rg::JointCheckStatus::Unavailable;
     candidate.certification_status=rg::JointCheckStatus::Unavailable;
     candidate.endpoint_verification_status=rg::JointCheckStatus::Passed;
     candidate.numerical_qualification_status=rg::JointCheckStatus::Unavailable;
     candidate.verification_reason="rank-assessment-unavailable";
     candidate.resource_limit_reason="resource-limit:rank-assessment:budget-exceeded";
     component.candidate_diagnostic=candidate;
+    component.legacy_candidate_evidence=rg::JointAnalysisComponent::LegacyCandidateEvidence{
+        rg::JointCheckStatus::Unavailable,rg::JointCheckStatus::Unavailable};
     rg::JointSolverProvenance provenance{"fixed-neighbor",12u,std::nullopt};
     provenance.contract_version=rg::JointSolverProvenanceContractVersion;
     provenance.sparse_backend="EIGEN";
@@ -978,13 +978,14 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     ASSERT_TRUE(decoded.metadata.software);
     EXPECT_EQ(decoded.metadata.software->configuration_sha256,record.metadata.software->configuration_sha256);
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->candidate_ac,candidate.candidate_ac);
-    EXPECT_EQ(decoded.components.front().candidate_diagnostic->reference_status,rg::JointCheckStatus::Unavailable);
-    EXPECT_EQ(decoded.components.front().candidate_diagnostic->rank_assessment_status,rg::JointCheckStatus::Unavailable);
+    ASSERT_TRUE(decoded.components.front().legacy_candidate_evidence);
+    EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->reference_status,rg::JointCheckStatus::Unavailable);
+    EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->rank_assessment_status,rg::JointCheckStatus::Unavailable);
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->certification_status,rg::JointCheckStatus::Unavailable);
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->endpoint_verification_status,rg::JointCheckStatus::Passed);
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->numerical_qualification_status,rg::JointCheckStatus::Unavailable);
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->verification_reason,"rank-assessment-unavailable");
-    EXPECT_TRUE(decoded.components.front().ranks.empty());
+    EXPECT_TRUE(decoded.components.front().legacy_global_rank_evidence.empty());
     EXPECT_FALSE(decoded.components.front().target_evidence);
 
     rg::WriteJointAnalysisResult(decoded,dir.path()/"result.json",dir.path()/"atoms.csv");
@@ -1002,20 +1003,24 @@ TEST(DataObjectPersistenceTest, SchemaSixEvidenceRetainsLegacyReferenceMeaning)
     component.candidate_diagnostic->candidate_eta={-.7,-.5};
     component.candidate_diagnostic->candidate_ac={2,-.3,4,.2};
     component.candidate_diagnostic->candidate_objective=.02;
-    component.candidate_diagnostic->reference_status=rg::JointCheckStatus::Passed;
+    component.legacy_candidate_evidence=rg::JointAnalysisComponent::LegacyCandidateEvidence{
+        rg::JointCheckStatus::Passed,{}};
     component.candidate_diagnostic->certification_status=rg::JointCheckStatus::Passed;
     component.evidence.push_back({"inner",rg::JointCheckStatus::Passed,
         rg::JointEvidenceScope::ComponentLocal,2e-12,1e-10,"legacy-reference-coefficient-agreement"});
     auto legacy=boost::json::parse(io::Encode(record)).as_object();
     legacy["schema_version"]=6;
     auto & diagnostic=legacy.at("components").as_array()[0].as_object().at("candidate_diagnostic").as_object();
+    diagnostic["reference_status"]="passed";
     diagnostic.erase("endpoint_verification_status");
     diagnostic.erase("numerical_qualification_status");
     diagnostic.erase("verification_reason");
+    legacy.at("components").as_array()[0].as_object().erase("legacy_candidate_evidence");
     const auto decoded=io::Decode(boost::json::serialize(legacy));
     const auto & saved=*decoded.components.front().candidate_diagnostic;
-    EXPECT_EQ(saved.reference_status,rg::JointCheckStatus::Passed);
     EXPECT_EQ(saved.certification_status,rg::JointCheckStatus::Passed);
+    ASSERT_TRUE(decoded.components.front().legacy_candidate_evidence);
+    EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->reference_status,rg::JointCheckStatus::Passed);
     EXPECT_EQ(saved.endpoint_verification_status,rg::JointCheckStatus::NotRun);
     EXPECT_EQ(saved.numerical_qualification_status,rg::JointCheckStatus::NotRun);
     const auto old_inner=std::find_if(decoded.components.front().evidence.begin(),decoded.components.front().evidence.end(),

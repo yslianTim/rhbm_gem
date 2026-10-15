@@ -4,7 +4,6 @@
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/StructuralPartition.hpp"
 #include "core/detail/joint_component/TargetEvidence.hpp"
-#include "support/BoundedRankResearch.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -291,7 +290,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, WidthTrajectoryCaptureHonorsAtomEven
     }
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, RankFailureReportsLocalDesignAndHaloDiagnostics)
+TEST(JointFixedNeighborBlockCoordinateTest, FailedBlockReportsLocalDesignAndHaloSupportDiagnostics)
 {
     rhbm_gem::core::JointProblemInput input;
     input.atom_ids={"z-target","a-weak-halo"}; input.row_ids={"r0","r1"};
@@ -304,8 +303,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, RankFailureReportsLocalDesignAndHalo
     const auto context=data.context;
     n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=1; policy.collect_diagnostics=true;
     policy.component_index=4; policy.component_id="weak-component";
-    policy.halo_census=[](std::size_t & count,std::size_t & minimum,std::size_t & deficient) {
-        count=1; minimum=2; deficient=1;
+    policy.halo_census=[](std::size_t & count,std::size_t & minimum) {
+        count=1; minimum=2;
     };
     const auto diagnostic=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,context,policy);
     auto quiet_policy=policy; quiet_policy.collect_diagnostics=false;
@@ -326,7 +325,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, RankFailureReportsLocalDesignAndHalo
     EXPECT_EQ(failure.affected_row_count,2u);
     EXPECT_EQ(failure.halo_count,1u);
     EXPECT_EQ(failure.minimum_halo_support_rows,2u);
-    EXPECT_EQ(failure.rank_deficient_halo_count,1u);
     EXPECT_FALSE(failure.initial_profile_valid);
     EXPECT_FALSE(failure.initial_profile_trusted);
     EXPECT_EQ(failure.local_design_rows,2);
@@ -381,7 +379,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     std::iota(layout.full_atoms.begin(),layout.full_atoms.end(),std::size_t{0});
     layout.informative_rows.resize(static_cast<std::size_t>(rows));
     std::iota(layout.informative_rows.begin(),layout.informative_rows.end(),Eigen::Index{0});
-    n::EvaluationContext context; context.scale=1; context.target_columns=3*atoms;
+    n::EvaluationContext context; context.scale=1;
     context.rank={rows,2*static_cast<Eigen::Index>(atoms),static_cast<Eigen::Index>(atoms)};
     context.linear.rank_relative=context.rank.Relative(context.rank.design_columns);
     context.observations=n::Observe(snapshot);
@@ -405,14 +403,9 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     ASSERT_TRUE(certification.qualified())<<certification.assessment.failure;
     EXPECT_TRUE(certification.assessment.numerical_qualified);
     EXPECT_TRUE(certification.assessment.endpoint_verified);
-    EXPECT_EQ(certification.assessment.rank_assessment_seconds,0.0);
-    EXPECT_TRUE(certification.assessment.design_structure==std::nullopt);
-    EXPECT_TRUE(certification.assessment.design==std::nullopt);
-    EXPECT_TRUE(certification.assessment.widths==std::nullopt);
-    EXPECT_EQ(n::NumericsWorkForTesting().design_spectrum_calls,0u);
     const auto & stages=n::AssessmentWorkForTesting().stages;
     EXPECT_EQ(std::find_if(stages.begin(),stages.end(),[](const auto & stage) {
-        return stage.name=="numerical-identifiability" || stage.name=="projected-width-assessment";
+        return stage.name=="global-rank-assessment" || stage.name=="projected-width-rank-assessment";
     }),stages.end());
     const auto evidence=n::AssessmentEvidence(certification.assessment,rhbm_gem::JointEvidenceScope::ComponentLocal);
     EXPECT_EQ(n::ConvergenceStatus(evidence,rhbm_gem::JointEvidenceScope::ComponentLocal),
@@ -429,9 +422,9 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
         <<" endpoint_peak_estimate_bytes="<<certification.verification_memory_estimate.estimated_peak_bytes
         <<" observed_current_rss_bytes="<<(rss ? std::to_string(*rss) : "unavailable")
         <<" observed_process_peak_rss_bytes="<<(peak ? std::to_string(*peak) : "unavailable")
-        <<" production_global_rank_assessment=NotRun physical_input=not-measured"<<std::endl;
+        <<" global_rank_workspace=removed physical_input=not-measured"<<std::endl;
 }
-TEST(JointFixedNeighborBlockCoordinateTest, EndpointReplayDoesNotDependOnGlobalRankAssessment)
+TEST(JointFixedNeighborBlockCoordinateTest, EndpointReplayUsesStreamingVerificationForLargeComponents)
 {
     constexpr Eigen::Index atoms=37'406;
     std::vector<std::vector<n::Support>> support(static_cast<std::size_t>(atoms));
@@ -458,9 +451,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, EndpointReplayDoesNotDependOnGlobalR
     EXPECT_TRUE(certification.assessment.endpoint_verified);
     EXPECT_TRUE(certification.assessment.numerical_qualified);
     EXPECT_TRUE(certification.qualified());
-    EXPECT_FALSE(certification.assessment.rank_memory_estimate.stage==n::MemoryStage::RankAssessment);
-    EXPECT_FALSE(certification.assessment.design.has_value());
-    EXPECT_FALSE(certification.assessment.widths.has_value());
     EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
 }
 TEST(JointFixedNeighborBlockCoordinateTest, AggregateWorkTelemetryIsOptInAndDoesNotChangeSearchState)
@@ -777,7 +767,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, InvalidEndpointCertificationStopsWit
         result.assessment.independent_replay.passed=false;
         result.assessment.independent_replay.reason="invalid-primary";
         result.assessment.endpoint_verified=false;
-        result.assessment.qualified=false;
+        result.assessment.numerical_qualified=false;
         return result;
     };
     const auto search=n::RunFixedNeighborDiagnostic(problem,n::Vector::Constant(8,std::log(.55)),policy);
@@ -833,42 +823,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, RecoverableWidthStationarityFailureR
     EXPECT_TRUE(search.fit.components.front().state);
     EXPECT_EQ(search.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
 }
-TEST(JointFixedNeighborBlockCoordinateTest, RankResourceLimitDoesNotBlockNumericalQualification)
-{
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
-    n::FixedNeighborSearchPolicy production_policy; production_policy.maximum_sweeps=40;
-    std::size_t current_sweep{},attempts{};
-    production_policy.configure_search_for_testing=[&](n::FixedNeighborPolicy & policy) {
-        policy.sweep_observer=[&](const auto & sweep){current_sweep=sweep.sweep;};
-        policy.certification_for_testing=[&](const auto & domain,n::VectorRef y,
-            const n::BlockCoordinateState & state,const n::EvaluationContext & context,
-            n::ProfileSearchWork * work) {
-            ++attempts;
-            auto result=n::CertifyFixedNeighborEndpoint(domain,y,state,context,work);
-            result.assessment.rank_memory_estimate.status=n::MemoryStatus::Reject;
-            result.assessment.rank_memory_estimate.reason="estimated-peak-exceeds-budget";
-            return result;
-        };
-    };
-    const auto fit=n::FitFixedNeighborComponents(problem,std::vector<double>(8,.55),production_policy);
-    ASSERT_EQ(fit.components.size(),1u);
-    const auto & component=fit.components.front();
-    EXPECT_TRUE(fit.search_completed);
-    EXPECT_TRUE(component.search_completed);
-    EXPECT_EQ(component.stop_reason,"block-stationary");
-    EXPECT_EQ(attempts,1u);
-    EXPECT_EQ(current_sweep,component.confirmed_stationarity_sweep);
-    EXPECT_EQ(component.endpoint_certification_sweep,component.confirmed_stationarity_sweep);
-    ASSERT_TRUE(component.candidate_diagnostic);
-    EXPECT_TRUE(component.candidate_diagnostic->candidate_available);
-    EXPECT_TRUE(component.candidate_diagnostic->resource_limit_reason.empty());
-    EXPECT_EQ(component.candidate_diagnostic->endpoint_verification_status,rhbm_gem::JointCheckStatus::Passed);
-    EXPECT_EQ(component.candidate_diagnostic->rank_assessment_status,rhbm_gem::JointCheckStatus::NotRun);
-    EXPECT_EQ(component.candidate_diagnostic->numerical_qualification_status,rhbm_gem::JointCheckStatus::Passed);
-    EXPECT_TRUE(component.state);
-    EXPECT_TRUE(fit.assembled_state);
-    EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
-}
 TEST(JointFixedNeighborBlockCoordinateTest, CertificationAtLastBudgetSweepIsNotRepeated)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
@@ -889,7 +843,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, CertificationAtLastBudgetSweepIsNotR
         result.assessment.independent_replay.passed=false;
         result.assessment.independent_replay.reason=result.trust.reason;
         result.assessment.endpoint_verified=false;
-        result.assessment.qualified=false;
+        result.assessment.numerical_qualified=false;
         return result;
     };
     const auto budget=n::RunFixedNeighborDiagnostic(problem,eta,policy);
@@ -922,12 +876,10 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168StopsAtFirstCorrecti
         std::vector<n::FixedNeighborEndpointCertification> certifications;
         std::vector<SweepPoint> trajectory;
         int production_reference_evaluations{};
-        std::size_t production_design_spectrum_calls{};
     };
     const auto run=[&](std::size_t maximum_sweeps,bool stop_after_stationarity) {
         SearchRun result;
         n::AssessmentWorkForTesting()={};
-        n::NumericsWorkForTesting().design_spectrum_calls=0;
         n::FixedNeighborSearchPolicy policy; policy.maximum_sweeps=maximum_sweeps;
         std::size_t current_sweep{};
         policy.configure_search_for_testing=[&](n::FixedNeighborPolicy & search_policy) {
@@ -947,15 +899,12 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168StopsAtFirstCorrecti
         };
         result.fit=n::FitFixedNeighborComponents(problem,widths,policy);
         result.production_reference_evaluations=n::AssessmentWorkForTesting().reference_evaluations;
-        result.production_design_spectrum_calls=n::NumericsWorkForTesting().design_spectrum_calls;
         return result;
     };
     const auto qualified_run=run(200,true);
     const auto continued_run=run(127,false);
     EXPECT_EQ(qualified_run.production_reference_evaluations,0);
     EXPECT_EQ(continued_run.production_reference_evaluations,0);
-    EXPECT_EQ(qualified_run.production_design_spectrum_calls,0u);
-    EXPECT_EQ(continued_run.production_design_spectrum_calls,0u);
     ASSERT_EQ(qualified_run.fit.components.size(),1u);
     const auto & component=qualified_run.fit.components.front();
     ASSERT_TRUE(component.candidate_diagnostic);
@@ -1024,13 +973,9 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168StopsAtFirstCorrecti
     const auto sweep127_certification=n::CertifyFixedNeighborEndpoint(data.domain,data.y,old_qualified,data.context);
     EXPECT_TRUE(sweep127_certification.verified());
     EXPECT_TRUE(sweep127_certification.qualified());
-    EXPECT_FALSE(sweep127_certification.assessment.design);
-    EXPECT_FALSE(sweep127_certification.assessment.widths);
 
     const auto & early=qualified_run.trajectory.back().state;
     const auto & early_assessment=qualified_run.certifications.front().assessment;
-    EXPECT_FALSE(early_assessment.design);
-    EXPECT_FALSE(early_assessment.widths);
     EXPECT_TRUE(early_assessment.numerical_qualified);
     const auto early_primary=n::EvaluateState(data.domain,data.y,early.eta,early.beta,data.context);
     ASSERT_TRUE(early_primary.valid)<<early_primary.reason;
@@ -1064,10 +1009,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168StopsAtFirstCorrecti
     RecordProperty("correction_baseline_168_old_replay_prediction_difference","3.5527136788005009e-15");
     RecordProperty("correction_baseline_168_old_replay_residual_difference","3.5527136788005009e-15");
     RecordProperty("correction_baseline_168_old_replay_objective_difference","1.3676001633950818e-21");
-    RecordProperty("correction_baseline_168_old_design_rank","336/336");
-    RecordProperty("correction_baseline_168_old_projected_width_rank","168/168");
-    RecordProperty("correction_baseline_168_old_target_identifiability","passed");
-    RecordProperty("correction_baseline_168_old_target_local_correction","3.1549147319454434e-11");
     RecordProperty("correction_free_168_max_amplitude_difference",std::to_string(amplitude_difference));
     RecordProperty("correction_free_168_max_charge_difference",std::to_string(charge_difference));
     RecordProperty("correction_free_168_max_width_difference",std::to_string(width_difference));
@@ -1077,8 +1018,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168StopsAtFirstCorrecti
     RecordProperty("correction_free_168_width_gradient",std::to_string(early_primary.gradient.lpNorm<Eigen::Infinity>()));
     RecordProperty("correction_free_168_replay_prediction_difference",std::to_string(early_replay.prediction_difference));
     RecordProperty("correction_free_168_replay_objective_difference",std::to_string(early_replay.objective_difference));
-    RecordProperty("correction_free_168_design_rank","not-assessed");
-    RecordProperty("correction_free_168_projected_width_rank","not-assessed");
     EXPECT_EQ(component.candidate_diagnostic->endpoint_verification_status,rhbm_gem::JointCheckStatus::Passed);
     EXPECT_TRUE(component.state);
     EXPECT_TRUE(qualified_run.fit.assembled_state);
@@ -1086,7 +1025,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168StopsAtFirstCorrecti
     EXPECT_EQ(saved.components.front().runtime_convergence,rhbm_gem::JointCheckStatus::Passed);
     EXPECT_EQ(saved.runtime_convergence,rhbm_gem::JointCheckStatus::Passed);
 }
-TEST(JointFixedNeighborBlockCoordinateTest, SameEtaRawPrimaryAndReferenceDiagnosticsPreserveSearchState)
+TEST(JointFixedNeighborBlockCoordinateTest, SameEtaNumericalAssessmentsPreserveSearchState)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -1094,9 +1033,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, SameEtaRawPrimaryAndReferenceDiagnos
     const auto search=n::RunFixedNeighborDiagnostic(problem,initial_eta);
     ASSERT_TRUE(search.search_converged);
     const n::Vector eta=search.state.eta,beta=search.state.beta;
-    const n::Domain domain=data.domain;
-    const auto context=data.context;
-    const n::Vector y=data.y;
+    const auto & domain=data.domain; const auto & context=data.context; const auto & y=data.y;
     const auto raw=n::EvaluateState(domain,y,eta,beta,context);
     const auto primary=n::EvaluateProfile(domain,y,eta,false,&context);
     const auto reference=n::EvaluateProfile(domain,y,eta,true,&context);
@@ -1112,67 +1049,22 @@ TEST(JointFixedNeighborBlockCoordinateTest, SameEtaRawPrimaryAndReferenceDiagnos
     EXPECT_TRUE((primary.eta.array()==eta.array()).all());
     EXPECT_TRUE((reference.eta.array()==eta.array()).all());
     EXPECT_TRUE(raw.valid); EXPECT_TRUE(primary.valid); EXPECT_TRUE(reference.valid);
-    EXPECT_TRUE(std::isfinite(raw.gradient.lpNorm<Eigen::Infinity>()));
-    EXPECT_TRUE(std::isfinite(primary.gradient.lpNorm<Eigen::Infinity>()));
-    EXPECT_TRUE(std::isfinite(reference.gradient.lpNorm<Eigen::Infinity>()));
+    ASSERT_TRUE(raw.certificate.available && reference.certificate.available);
     const auto difference=[](const n::Vector & lhs,const n::Vector & rhs) {
         return ((lhs-rhs).array().abs()/(1+lhs.array().abs().max(rhs.array().abs()))).maxCoeff();
     };
-    EXPECT_TRUE(std::isfinite(difference(beta,primary.beta)));
-    EXPECT_TRUE(std::isfinite(difference(primary.beta,reference.beta)));
-    EXPECT_TRUE(std::isfinite(difference(beta,reference.beta)));
-    ASSERT_TRUE(raw.certificate.available && reference.certificate.available);
-    ASSERT_TRUE(raw_trust.reference.has_value());
-    ASSERT_TRUE(raw_assessment.design && raw_assessment.widths);
-    EXPECT_EQ(raw_assessment.design->rank,raw_assessment.design->columns);
-    EXPECT_TRUE(std::isfinite(raw_assessment.design->condition));
-    EXPECT_LE(raw_assessment.design->condition,1e8);
-    EXPECT_EQ(raw.certificate.feasible,reference.certificate.feasible);
-    EXPECT_EQ(raw.certificate.active_atoms,reference.certificate.active_atoms);
-    EXPECT_LE((raw.beta-reference.beta).lpNorm<Eigen::Infinity>(),1e-10*(1.+reference.beta.lpNorm<Eigen::Infinity>()));
-    EXPECT_LE(std::abs(raw.certificate.objective-reference.certificate.objective),
-        1e-12*(1.+std::abs(reference.certificate.objective)));
-    EXPECT_LE((raw.residual-reference.residual).norm(),1e-10*(1.+reference.residual.norm()));
+    EXPECT_LE(difference(beta,primary.beta),1e-10);
+    EXPECT_LE(difference(primary.beta,reference.beta),1e-10);
+    EXPECT_LE(difference(beta,reference.beta),1e-10);
+    EXPECT_TRUE(raw_assessment.inner && primary_assessment.inner && reference_assessment.inner);
+    EXPECT_TRUE(raw_assessment.gradient && primary_assessment.gradient && reference_assessment.gradient);
+    EXPECT_TRUE(raw_assessment.numerical_qualified && primary_assessment.numerical_qualified &&
+        reference_assessment.numerical_qualified);
+    EXPECT_TRUE(raw_trust.passed && primary_trust.passed && reference_trust.passed);
     EXPECT_LE(raw.certificate.projected_kkt,1e-10);
     EXPECT_LE(reference.certificate.projected_kkt,1e-10);
     EXPECT_LE(raw.gradient.lpNorm<Eigen::Infinity>(),1e-12);
     EXPECT_LE(reference.gradient.lpNorm<Eigen::Infinity>(),1e-12);
-    EXPECT_LE(raw_trust.coefficient_difference,1e-10);
-    EXPECT_LE(raw_trust.kkt_difference,1e-13);
-    EXPECT_LE(raw_trust.prediction_difference,2e-12+2e-13*(raw.x*raw.beta).cwiseAbs().maxCoeff());
-    EXPECT_LE(raw_trust.gradient_difference,1e-13+2e-9*raw.gradient.lpNorm<Eigen::Infinity>());
-    EXPECT_EQ(raw_assessment.design->rank,raw.x.cols());
-    EXPECT_EQ(raw_assessment.widths->rank,eta.size());
-    EXPECT_TRUE(raw_assessment.inner);
-    EXPECT_TRUE(raw_assessment.identified);
-    EXPECT_TRUE(raw_assessment.gradient);
-    EXPECT_TRUE(raw_trust.passed);
-    const auto number=[](double value) {
-        std::ostringstream out; out<<std::setprecision(17)<<value; return out.str();
-    };
-    RecordProperty("legacy_primary_ac_kkt",number(raw.certificate.projected_kkt));
-    RecordProperty("legacy_primary_width_gradient",number(raw.gradient.lpNorm<Eigen::Infinity>()));
-    RecordProperty("legacy_primary_feasibility",raw.certificate.feasible ? "true" : "false");
-    RecordProperty("legacy_reference_ac_kkt",number(reference.certificate.projected_kkt));
-    RecordProperty("legacy_reference_width_gradient",number(reference.gradient.lpNorm<Eigen::Infinity>()));
-    RecordProperty("legacy_reference_coefficient_difference",number(raw_trust.coefficient_difference));
-    RecordProperty("legacy_independent_prediction_difference",number(raw_trust.prediction_difference));
-    RecordProperty("legacy_independent_kkt_difference",number(raw_trust.kkt_difference));
-    RecordProperty("legacy_independent_gradient_difference",number(raw_trust.gradient_difference));
-    RecordProperty("legacy_design_rank",std::to_string(raw_assessment.design->rank));
-    RecordProperty("legacy_projected_width_rank",std::to_string(raw_assessment.widths->rank));
-    RecordProperty("legacy_numerical_identifiability",raw_assessment.identified ? "passed" : "failed");
-    RecordProperty("legacy_endpoint_trust",raw_trust.passed ? "passed" : "failed");
-    RecordProperty("legacy_runtime_convergence",raw_assessment.identified && raw_assessment.inner &&
-        raw_assessment.gradient && raw_trust.passed ? "passed" : "failed");
-    for(const auto * assessment:{&raw_assessment,&primary_assessment,&reference_assessment})
-    {
-        EXPECT_TRUE(assessment->primary.valid);
-        EXPECT_TRUE(assessment->reference.valid);
-        EXPECT_TRUE(assessment->design.has_value());
-        EXPECT_TRUE(assessment->widths.has_value());
-        EXPECT_EQ(assessment->gradient,assessment->primary.gradient.lpNorm<Eigen::Infinity>()<=1e-12 &&
-            assessment->reference.gradient.lpNorm<Eigen::Infinity>()<=1e-12);
-    }
-    EXPECT_TRUE(raw_trust.primary_valid); EXPECT_TRUE(primary_trust.primary_valid); EXPECT_TRUE(reference_trust.primary_valid);
+    RecordProperty("numerical_qualification",raw_assessment.numerical_qualified ? "passed" : "failed");
+    RecordProperty("endpoint_replay",raw_trust.passed ? "passed" : "failed");
 }

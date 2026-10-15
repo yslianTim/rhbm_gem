@@ -1,7 +1,10 @@
 # Weak-halo attribution within a fixed problem
 
-Status: **complete with numerical and inference limitations**. No solver defect
-was established and no solver, kernel, objective, budget or tolerance was changed.
+Status: **historical study, complete with numerical and inference limitations**.
+Its global weak-direction runner was retired with Global Rank Certification.
+The retained receipt is historical evidence; it does not describe the current
+runtime contract. No solver defect was established and no solver, kernel,
+objective, budget or tolerance was changed in that study.
 The observations, memberships, identities and scale are the existing `weak`
 partial-selection fixture, not the historical `weak-1e-4` dataset.
 
@@ -71,26 +74,14 @@ coexist. The verified decrease rules out the claim that *all* remaining descent
 is unresolvable in double precision. The high-precision correction rules out
 relabeling this endpoint as converged.
 
-## Reproduction and boundaries
+## Scope and boundaries
 
-Build and run the opt-in offline diagnostic:
-
-```sh
-cmake -S . -B build/offline -DBUILD_TESTING=ON \
-  -DRHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON
-cmake --build build/offline --target joint_offline_diagnostic
-python3 tests/integration/joint_offline_diagnostic.py \
-  --work-dir build/joint-diagnostic/run-01 \
-  --executable build/offline/bin/joint_offline_diagnostic \
-  --output build/joint-diagnostic/report/weak-halo.json
-```
-
-The output is a numerical/identifiability diagnosis, not a production validation
-gate. Each available state uses
-both signs of log-width steps `1e-6` through `1e-1`, along the correction and weakest
-width direction. Every point reprofiles all A/C; steps `±1e-3` and `±1e-1` also
-have independent 50/100-digit reprofiled controls. High precision promotes the
-same stored double observations and distances rather than regenerating data.
+The saved report used both signs of log-width steps `1e-6` through `1e-1`,
+along a correction direction and the historical weakest width direction. Each
+point reprofiled A/C; selected steps also had independent 50/100-digit controls.
+High precision promoted the same stored double observations and distances
+rather than regenerating data. The original runner and commands were removed
+when global weak-direction diagnostics were retired.
 
 This is a bounded diagnostic of one geometry. It does not justify dropping halo,
 fixing its coefficients, changing runtime gates, or asserting global optimality.

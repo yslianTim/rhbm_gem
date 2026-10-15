@@ -1,14 +1,6 @@
 #pragma once
 #include "Problem.hpp"
 namespace rhbm_gem::core::joint_component {
-MemoryEstimate TargetIdentifiabilityMemoryEstimate(const JointProblemInput &,const JointParameterLayout &,std::size_t);
-std::string TargetRankContextIdentity(const JointProblemInput &,const JointParameterLayout &,const JointState &,std::size_t);
-JointTargetEvidence DeriveTargetIdentifiability(const JointProblem &,const JointParameterLayout &,
-    const std::optional<JointState> &,const std::vector<JointCheck> &,const std::vector<JointRankEvidence> &,
-    JointEvidenceScope,std::size_t);
-JointTargetEvidence AssessTargetState(const JointProblem &,const JointParameterLayout &,
-    const std::optional<JointState> &,const std::vector<JointCheck> &,const std::vector<JointRankEvidence> &,
-    JointEvidenceScope,std::size_t);
 JointTargetEvidence AssessTargetPointState(const JointProblem &,const JointParameterLayout &,
     const std::optional<JointState> &,JointCheckStatus,const std::vector<JointBlockConditioning> &,
     const std::vector<JointBlockParameterStability> &,JointEvidenceScope,std::size_t);

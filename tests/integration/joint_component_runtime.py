@@ -18,16 +18,17 @@ def execute(executable, *args):
 
 
 def runtime_expected(expected):
-    out = {k: v for k, v in expected.items() if k not in ('qualification_checks', 'qualification_failure')}
+    out = {k: v for k, v in expected.items()
+           if k not in ('qualification_checks', 'qualification_failure', 'runtime_convergence')}
     checks = expected.get('qualification_checks')
     if checks is not None:
-        out['runtime_checks'] = {k: v for k, v in checks.items()
-                                 if k not in ('derivative', 'local_correction')}
+        out['legacy_runtime_checks'] = {k: v for k, v in checks.items()
+                                        if k not in ('derivative', 'local_correction')}
     required = ('inner', 'b_gradient', 'identified')
     values = [checks.get(k) for k in required] if checks is not None else []
-    out['runtime_convergence'] = ('unavailable' if not expected['usable_state'] or checks is None
-                                  else 'failed' if any(v is False for v in values)
-                                  else 'passed' if all(v is True for v in values) else 'unavailable')
+    out['legacy_runtime_convergence'] = ('unavailable' if not expected['usable_state'] or checks is None
+                                         else 'failed' if any(v is False for v in values)
+                                         else 'passed' if all(v is True for v in values) else 'unavailable')
     return out
 
 
@@ -37,7 +38,7 @@ def runtime_differences(expected, actual, scale):
     checks=actual.get('runtime_checks')
     required_checks=('ac_feasibility','conditional_ac_optimality','independent_ac_optimality',
                      'independent_kkt_consistency','independent_replay','width_gradient_consistency',
-                     'width_stationarity','design_identifiability','numerical_identifiability')
+                     'width_stationarity','numerical_qualification')
     if not isinstance(checks,dict) or any(type(checks.get(name)) is not bool for name in required_checks):
         if actual.get('endpoint_verification_status')!='not-run' or actual.get('runtime_convergence')!='unavailable':
             delta.append('/runtime_checks/reference-free-contract')
@@ -91,7 +92,8 @@ def runtime_differences(expected, actual, scale):
     if right is None:
         return delta+['/candidate_state']
     a, b = left['objective']/scale**2, right['objective']/scale**2
-    objective_error=abs(a-b) if expected['runtime_convergence']=='passed' else b-a
+    legacy_convergence=expected.get('legacy_runtime_convergence',expected.get('runtime_convergence'))
+    objective_error=abs(a-b) if legacy_convergence=='passed' else b-a
     if not np.isfinite(b) or objective_error > 1e-12:
         delta.append('/normalized-objective')
     for key in ('beta','eta','b'):
@@ -121,12 +123,11 @@ def candidate_comparison(data, y, expected, actual, scale):
         'legacy_profile_evaluations':expected.get('profile_evaluations'),
         'search_stop_reason':actual.get('stop_reason'),
         'legacy_stop_reason':expected.get('stop_reason'),
-        'legacy_runtime_convergence':expected.get('runtime_convergence'),
+        'legacy_runtime_convergence':expected.get('legacy_runtime_convergence'),
         'reference_free_runtime_convergence':actual.get('runtime_convergence'),
         'parameter_comparison_basis':'historical_endpoint_may_be_a_different_sweep',
         'endpoint_verification_status':actual.get('endpoint_verification_status'),
         'numerical_qualification_status':actual.get('numerical_qualification_status'),
-        'rank_assessment_status':actual.get('rank_assessment_status'),
         'verification_reason':actual.get('verification_reason'),
         'early_stop':actual.get('accepted_updates',0)<expected.get('accepted_updates',0)}
     if old is None:
@@ -177,15 +178,15 @@ def regression(args):
             if not args.strict_history:
                 for parity in actual['derivative_parity'].values():
                     require(parity['status'] != 'failed', 'Same-state derivative parity failed: '+str(parity))
-                    if expected['runtime_convergence'] == 'passed':
+                    if expected['legacy_runtime_convergence'] == 'passed':
                         require(parity['status'] == 'passed', 'Missing derivative parity for a converged endpoint')
             require(actual['api_contract_passed'] and not delta, dataset+'/'+case+': '+str(delta[:20]))
             old_state = expected.get('last_trusted_state')
             comparison=candidate_comparison(data,y,expected,actual['record'],scale)
             results.append(dict(dataset=dataset, case=case, passed=True,
-                                legacy_runtime_convergence=expected['runtime_convergence'],
+                                legacy_runtime_convergence=expected['legacy_runtime_convergence'],
                                 reference_free_runtime_convergence=actual['record']['runtime_convergence'],
-                                convergence_status_changed=expected['runtime_convergence']!=actual['record']['runtime_convergence'],
+                                convergence_status_changed=expected['legacy_runtime_convergence']!=actual['record']['runtime_convergence'],
                                 endpoint_same_active_face=(old_state['active_atoms'] == state['active_atoms']) if old_state and state and 'active_atoms' in state else None,
                                 numerical_comparison=comparison))
     require(results, 'No regression cases selected')

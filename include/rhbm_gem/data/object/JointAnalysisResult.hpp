@@ -55,6 +55,12 @@ struct JointAnalysisMetadata
 };
 struct JointAnalysisComponent : JointComponentData
 {
+    std::vector<JointRankEvidence> legacy_global_rank_evidence;
+    struct LegacyCandidateEvidence
+    {
+        std::optional<JointCheckStatus> reference_status,rank_assessment_status;
+    };
+    std::optional<LegacyCandidateEvidence> legacy_candidate_evidence;
     JointCheckStatus runtime_convergence{JointCheckStatus::Unavailable};
     JointCheckStatus target_runtime_convergence{JointCheckStatus::NotRun};
 };
@@ -74,7 +80,7 @@ struct JointAnalysisResult
     std::optional<double> objective;
     std::vector<bool> available_row_mask;
     std::vector<JointCheck> evidence;
-    std::vector<JointRankEvidence> ranks;
+    std::vector<JointRankEvidence> legacy_global_rank_evidence;
     bool search_completed{};
     double observation_scale{1};
     JointCheckStatus runtime_convergence{JointCheckStatus::Unavailable};

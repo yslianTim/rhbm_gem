@@ -80,20 +80,6 @@ void ExpectSameChecks(const std::vector<rhbm_gem::JointCheck> & left,
     }
 }
 
-void ExpectSameRanks(const std::vector<rhbm_gem::JointRankEvidence> & left,
-    const std::vector<rhbm_gem::JointRankEvidence> & right)
-{
-    ASSERT_EQ(left.size(), right.size());
-    for (std::size_t k = 0; k < left.size(); ++k)
-    {
-        EXPECT_EQ(left[k].name, right[k].name);
-        EXPECT_EQ(left[k].scope, right[k].scope);
-        EXPECT_EQ(left[k].rank, right[k].rank);
-        EXPECT_DOUBLE_EQ(left[k].threshold, right[k].threshold);
-        EXPECT_EQ(left[k].singular_values, right[k].singular_values);
-    }
-}
-
 void ExpectSameState(const rhbm_gem::JointState & left, const rhbm_gem::JointState & right)
 {
     EXPECT_EQ(left.ac, right.ac);
@@ -118,7 +104,6 @@ void ExpectSameFitNumerics(const core::JointFitResult & left, const core::JointF
     ASSERT_EQ(left.assembled_state.has_value(), right.assembled_state.has_value());
     if (left.assembled_state) ExpectSameState(*left.assembled_state, *right.assembled_state);
     ExpectSameChecks(left.evidence, right.evidence);
-    ExpectSameRanks(left.ranks, right.ranks);
 
     ASSERT_EQ(left.components.size(), right.components.size());
     for (std::size_t k = 0; k < left.components.size(); ++k)
@@ -137,7 +122,6 @@ void ExpectSameFitNumerics(const core::JointFitResult & left, const core::JointF
         ASSERT_EQ(a.state.has_value(), b.state.has_value());
         if (a.state) ExpectSameState(*a.state, *b.state);
         ExpectSameChecks(a.evidence, b.evidence);
-        ExpectSameRanks(a.ranks, b.ranks);
     }
 }
 

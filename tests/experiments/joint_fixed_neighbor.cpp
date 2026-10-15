@@ -55,26 +55,6 @@ j::value Number(double value)
 {return std::isfinite(value) ? j::value(value) : j::value(nullptr);}
 j::value BytesValue(std::optional<std::size_t> value)
 {return value ? j::value(*value) : j::value(nullptr);}
-j::object MemoryStageEstimateJson(const n::MemoryStageEstimate & estimate)
-{
-    return {{"stage",n::MemoryStageName(estimate.stage)},
-        {"status",n::MemoryStatusName(estimate.status)},
-        {"reason",estimate.reason},
-        {"resident_bytes",estimate.resident_bytes},
-        {"temporary_bytes",estimate.temporary_bytes},
-        {"estimated_peak_bytes",estimate.estimated_peak_bytes},
-        {"budget_bytes",estimate.budget_bytes},
-        {"sparse_design_bytes",estimate.sparse_design_bytes},
-        {"dense_factor_bytes",estimate.dense_factor_bytes},
-        {"factor_workspace_bytes",estimate.factor_workspace_bytes},
-        {"right_singular_vector_bytes",estimate.right_singular_vector_bytes},
-        {"factor_rows",estimate.factor_rows},{"factor_columns",estimate.factor_columns},
-        {"maximum_tile_rows",estimate.maximum_tile_rows}};
-}
-j::array MemoryStageEstimatesJson(const std::vector<n::MemoryStageEstimate> & estimates)
-{
-    j::array out; for(const auto & estimate:estimates) out.push_back(MemoryStageEstimateJson(estimate)); return out;
-}
 j::object MemoryEstimateJson(const n::MemoryEstimate & estimate)
 {
     return {{"stage",n::MemoryStageName(estimate.stage)},
@@ -87,19 +67,16 @@ j::object MemoryEstimateJson(const n::MemoryEstimate & estimate)
         {"sparse_design_bytes",estimate.sparse_design_bytes},
         {"dense_factor_bytes",estimate.dense_factor_bytes},
         {"factor_workspace_bytes",estimate.factor_workspace_bytes},
-        {"right_singular_vector_bytes",estimate.right_singular_vector_bytes},
         {"factor_rows",estimate.factor_rows},{"factor_columns",estimate.factor_columns},
         {"maximum_tile_rows",estimate.shape.maximum_tile_rows},
         {"component_atoms",estimate.shape.component_atoms},
         {"component_rows",estimate.shape.component_observations},
         {"support_entries",estimate.shape.component_support_entries},
         {"free_columns",estimate.shape.component_free_columns},
-        {"design_columns",estimate.shape.component_design_columns},
         {"width_columns",estimate.shape.component_width_columns},
-        {"target_atoms",estimate.shape.component_target_atoms},
-        {"halo_atoms",estimate.shape.component_halo_atoms},
-        {"target_columns",estimate.shape.component_target_columns},
-        {"attributed_stages",MemoryStageEstimatesJson(estimate.attributed_stages)}};
+        {"component_blocks",estimate.shape.component_blocks},
+        {"maximum_block_rows",estimate.shape.maximum_block_rows},
+        {"maximum_neighbor_atoms",estimate.shape.maximum_neighbor_atoms}};
 }
 j::array AssessmentStagesJson()
 {
@@ -124,10 +101,8 @@ j::array AssessmentStagesJson()
             row["sparse_design_bytes"]=stage.sparse_design_bytes;
             row["dense_factor_bytes"]=stage.dense_factor_bytes;
             row["factor_workspace_bytes"]=stage.factor_workspace_bytes;
-            row["right_singular_vector_bytes"]=stage.right_singular_vector_bytes;
             row["factor_rows"]=stage.factor_rows; row["factor_columns"]=stage.factor_columns;
             row["maximum_tile_rows"]=stage.maximum_tile_rows;
-            row["attributed_stages"]=MemoryStageEstimatesJson(stage.attributed_memory_stages);
         }
         out.push_back(std::move(row));
     }
@@ -180,16 +155,10 @@ j::array ProfileTrialsJson(const std::vector<n::FixedNeighborProfileTrial> & tri
             {"cumulative_factor_seconds",Number(trial.cumulative_factor_seconds)}});
     return out;
 }
-j::value SpectrumJson(const std::optional<n::Spectrum> & spectrum)
-{
-    if(!spectrum) return nullptr;
-    return j::object{{"rank",spectrum->rank},{"minimum_singular_value",Number(spectrum->minimum)},
-        {"rank_threshold",Number(spectrum->threshold)},{"condition_estimate",Number(spectrum->condition)}};
-}
 j::object AssessmentJson(const n::Assessment & assessment,const n::TrustEvidence & trust)
 {
     const auto & replay=assessment.independent_replay;
-    return {{"endpoint_verified",assessment.endpoint_verified},{"numerically_qualified",assessment.qualified},
+    return {{"endpoint_verified",assessment.endpoint_verified},{"numerically_qualified",assessment.numerical_qualified},
         {"primary_ac_kkt_passed",replay.primary_kkt_passed},
         {"independent_ac_kkt_passed",replay.independent_kkt_passed},
         {"ac_feasible",replay.feasible},{"independent_replay_passed",replay.passed},
@@ -201,17 +170,13 @@ j::object AssessmentJson(const n::Assessment & assessment,const n::TrustEvidence
         {"width_gradient_difference",Number(replay.gradient_difference)},
         {"prediction_difference",Number(replay.prediction_difference)},
         {"objective_difference",Number(replay.objective_difference)},
-        {"numerical_identifiability_passed",assessment.identified},
         {"failure",assessment.failure},{"verification_reason",replay.reason},
         {"primary_endpoint_seconds",Number(assessment.primary_endpoint_seconds)},
         {"independent_replay_seconds",Number(assessment.independent_replay_seconds)},
-        {"rank_assessment_seconds",Number(assessment.rank_assessment_seconds)},
         {"endpoint_verification_memory",MemoryEstimateJson(assessment.verification_memory_estimate)},
-        {"rank_assessment_memory",MemoryEstimateJson(assessment.rank_memory_estimate)},
         {"assessment_stage_telemetry",AssessmentStagesJson()},
         {"primary_gradient_inf_norm",assessment.primary.gradient.size() ?
             Number(assessment.primary.gradient.lpNorm<Eigen::Infinity>()) : j::value(nullptr)},
-        {"projected_width",SpectrumJson(assessment.widths)},
         {"endpoint_verification",j::object{{"passed",trust.passed},{"reason",trust.reason}}},
         {"reference_solve_calls",0}};
 }
@@ -236,7 +201,6 @@ j::object WorkJson(const n::FixedNeighborWork & work)
         {"endpoint_verification_seconds",Number(work.endpoint_verification_seconds)},
         {"primary_endpoint_seconds",Number(work.primary_endpoint_seconds)},
         {"independent_replay_seconds",Number(work.independent_replay_seconds)},
-        {"rank_assessment_seconds",Number(work.rank_assessment_seconds)},
         {"old_core_seconds",Number(work.old_core_seconds)},
         {"effective_response_seconds",Number(work.effective_response_seconds)},
         {"local_profile_seconds",Number(work.local_search_seconds)},
@@ -480,7 +444,6 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"width_gradient_consistency",CheckValue(neighbor.fit,"width-gradient-consistency")},
         {"ac_feasibility",CheckValue(neighbor.fit,"ac-feasibility")},
         {"width_gradient_inf_norm",Number(WidthGradient(neighbor.fit))},
-        {"assessment_identified",CheckValue(neighbor.fit,"numerical-identifiability")},
         {"endpoint_assessment",std::move(endpoint_assessment)},
         {"runtime_convergence",CheckName(neighbor.fit.RuntimeConvergence())},
         {"sweep_telemetry",sweeps},{"block_telemetry",blocks},
@@ -492,9 +455,7 @@ j::object Run(const std::string & topology,int atoms,const std::filesystem::path
         {"reference_qr_factorization_calls_total",n::NumericsWorkForTesting().reference},
         {"endpoint_verification_seconds",Number(neighbor.work.endpoint_verification_seconds)},
         {"independent_replay_seconds",Number(neighbor.work.independent_replay_seconds)},
-        {"rank_assessment_seconds",Number(neighbor.work.rank_assessment_seconds)},
-        {"estimated_peak_bytes",std::max(neighbor.assessment.verification_memory_estimate.estimated_peak_bytes,
-            neighbor.assessment.rank_memory_estimate.estimated_peak_bytes)},
+        {"estimated_peak_bytes",neighbor.assessment.verification_memory_estimate.estimated_peak_bytes},
         {"observed_peak_rss_bytes",BytesValue(PeakRssBytes())},
         {"total_search_seconds",neighbor_search_seconds},
         {"total_assessment_seconds",Number(neighbor.work.endpoint_verification_seconds)},

@@ -284,17 +284,6 @@ TEST(JointComponentChecksTest, BlockBackendSharesConstrainedActiveSet)
     }
 }
 
-TEST(JointComponentChecksTest, RankEvidenceUsesGlobalDimensionsAndCurrentSpectrum)
-{
-    const auto c=p::MakeContext(Vector::Ones(1000),2);
-    Eigen::MatrixXd small(2,2); small<<1,0,0,1e-14;
-    const auto global=p::MatrixSpectrum(small,c.rank,4,false);
-    const p::RankPolicy local{2,2,1}; const auto block=p::MatrixSpectrum(small,local,2,false);
-    EXPECT_EQ(global.at("rank"),1); EXPECT_EQ(block.at("rank"),2);
-    const auto changed=p::MatrixSpectrum(Eigen::MatrixXd(2*small),c.rank,4,false);
-    EXPECT_DOUBLE_EQ(boost::json::value_to<double>(changed.at("rank_threshold")),2*boost::json::value_to<double>(global.at("rank_threshold")));
-}
-
 TEST(JointComponentChecksTest, FailureIsolationDoesNotFillMissingRowsWithZero)
 {
     TwoBlocks f(2,0); auto support=f.domain.CopySupport(); support.push_back(support[1]); f.domain=p::Domain(f.domain.rows,std::move(support));

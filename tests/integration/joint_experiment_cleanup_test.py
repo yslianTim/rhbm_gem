@@ -10,7 +10,6 @@ CURRENT_EXPERIMENT_SOURCES = {
     "joint_halo_pruning_validation.cpp",
     "joint_local_ac_kkt.cpp",
     "joint_local_replay_analysis.cpp",
-    "joint_offline_diagnostic.cpp",
     "joint_partial_selection.cpp",
     "joint_postprocessing_benchmark.cpp",
     "joint_statistical_experiment.cpp",
@@ -19,13 +18,11 @@ CURRENT_EXPERIMENT_SOURCES = {
 
 CURRENT_PYTHON_EXPERIMENTS = {
     "joint_benchmark.py",
-    "joint_offline_diagnostic.py",
     "joint_partial_selection.py",
     "joint_statistical_experiment.py",
 }
 
 CURRENT_PYTHON_VALIDATION_RUNNERS = {
-    "joint_component_audit.py",
     "joint_component_runtime.py",
     "joint_workflow_cli_smoke.py",
 }
@@ -38,6 +35,30 @@ RETIRED_REPOSITORY_FILES = (
     "tests/core/joint_component/ProjectedTailQr_test.cpp",
     "src/core/detail/joint_component/SparseFactor.hpp",
     "src/core/detail/joint_component/SparseFactor.cpp",
+    "tests/core/joint_component/BoundedRank_test.cpp",
+    "tests/core/joint_component/ProjectedWidthResearch_test.cpp",
+    "tests/core/joint_component/OfflineComponents_test.cpp",
+    "tests/tools/joint_component_audit.cpp",
+    "tests/integration/joint_component_audit.py",
+    "tests/experiments/joint_offline_diagnostic.cpp",
+    "tests/integration/joint_offline_diagnostic.py",
+    "tests/integration/joint_offline_diagnostic_test.py",
+    "tests/integration/joint_component_evidence_test.py",
+    "tests/integration/joint_offline_support.py",
+    "tests/support/BoundedRankResearch.cpp",
+    "tests/support/BoundedRankResearch.hpp",
+    "tests/support/ProjectedWidthResearch.cpp",
+    "tests/support/ProjectedWidthResearch.hpp",
+    "tests/support/MatrixFreeProjectedWidth.cpp",
+    "tests/support/MatrixFreeProjectedWidth.hpp",
+    "tests/support/StructuredProjectionResearch.cpp",
+    "tests/support/StructuredProjectionResearch.hpp",
+    "tests/support/JointOfflineTools.cpp",
+    "tests/support/JointOfflineTools.hpp",
+    "tests/support/JointLocalEvidence.cpp",
+    "tests/support/JointLocalEvidence.hpp",
+    "tests/support/JointDerivativeAudit.cpp",
+    "tests/support/JointDerivativeAudit.hpp",
 )
 
 RETIRED_PYTHON_CAMPAIGNS = (
@@ -127,8 +148,6 @@ def main():
     fixed_neighbor_source = (ROOT / "tests/experiments/joint_fixed_neighbor.cpp").read_text()
     benchmark_driver = (integration / "joint_benchmark.py").read_text()
     runtime_runner = (integration / "joint_component_runtime.py").read_text()
-    audit_source = (ROOT / "tests/tools/joint_component_audit.cpp").read_text()
-    audit_runner = (integration / "joint_component_audit.py").read_text()
     gitignore = (ROOT / ".gitignore").read_text()
     active_sources = "\n".join(path.read_text() for path in integration.glob("*.py"))
     active_paths = [path for path in (ROOT / "src/core").rglob("*") if path.is_file()]
@@ -243,9 +262,6 @@ def main():
         assert token not in fixed_neighbor_source, f"retired benchmark mode returned: {token}"
     for token in ("--fixed-core-atoms", "fixed_neighbor_policy = custom"):
         assert token not in benchmark_driver, f"custom benchmark policy returned: {token}"
-    for token in ("two-step-fixture", "--two-step-only"):
-        assert token not in audit_source and token not in audit_runner, (
-            f"historical two-step audit mode returned: {token}")
     for token in (
         "FixedNeighborLocalWork",
         "TwoAcceptedUpdates",

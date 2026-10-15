@@ -199,8 +199,6 @@ set(JOINT_COMPONENT_NUMERICAL_TEST_SOURCES
     core/joint_component/LocalConditioning_test.cpp
     core/joint_component/ParameterStability_test.cpp
     core/joint_component/Numerics_test.cpp
-    core/joint_component/BoundedRank_test.cpp
-    core/joint_component/ProjectedWidthResearch_test.cpp
 )
 
 set(JOINT_COMPONENT_TEST_SOURCES
@@ -292,10 +290,6 @@ add_dependencies(tests_all rhbm_tests)
 # Test-only helpers contain no historical runner or multiprecision orchestration.
 add_library(joint_test_support STATIC
     support/JointSyntheticWorkload.cpp
-    support/BoundedRankResearch.cpp
-    support/ProjectedWidthResearch.cpp
-    support/MatrixFreeProjectedWidth.cpp
-    support/StructuredProjectionResearch.cpp
     support/JointBlockCoordinate.cpp
     support/JointTestGeometry.cpp support/JointTestNumerics.cpp support/JointDenseReference.cpp
     support/JointTestContext.cpp support/JointComponentChecks.cpp
@@ -343,14 +337,11 @@ endif()
 
 if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
     add_library(joint_offline_support STATIC support/JointOfflineAudit.cpp
-        support/JointPrecisionAudit.cpp support/JointOfflineTools.cpp
-        support/JointLocalEvidence.cpp support/JointDerivativeAudit.cpp)
+        support/JointPrecisionAudit.cpp)
     target_link_libraries(joint_offline_support PUBLIC joint_test_support)
 endif()
 
 if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
-    add_executable(joint_component_audit tools/joint_component_audit.cpp)
-    target_link_libraries(joint_component_audit PRIVATE joint_offline_support rhbm_gem)
     add_executable(joint_local_ac_kkt experiments/joint_local_ac_kkt.cpp)
     target_link_libraries(joint_local_ac_kkt PRIVATE joint_test_support rhbm_gem)
     add_executable(joint_local_replay_analysis experiments/joint_local_replay_analysis.cpp)
@@ -392,16 +383,14 @@ if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
     set_tests_properties(joint_local_replay_numerical_analysis PROPERTIES
         LABELS "offline;domain:core;intent:algorithm;joint:numerics" TIMEOUT 120
         ENVIRONMENT "OMP_NUM_THREADS=1")
-    add_executable(joint_offline_diagnostic experiments/joint_offline_diagnostic.cpp)
-    target_link_libraries(joint_offline_diagnostic PRIVATE joint_offline_support rhbm_gem)
     add_executable(joint_offline_tests core/joint_component/Precision_test.cpp
-        core/joint_component/OfflineComponents_test.cpp)
+    )
     target_link_libraries(joint_offline_tests PRIVATE joint_offline_support rhbm_gem ${GTEST_MAIN_TARGET})
     add_test(NAME joint_component_offline_tests COMMAND joint_offline_tests)
     set_tests_properties(joint_component_offline_tests PROPERTIES
         LABELS "offline;domain:core;intent:algorithm;joint:offline;long" TIMEOUT 3600
         ENVIRONMENT "OMP_NUM_THREADS=1")
-    add_dependencies(tests_all joint_component_audit joint_offline_diagnostic joint_offline_tests)
+    add_dependencies(tests_all joint_offline_tests)
 endif()
 
 if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
@@ -426,99 +415,12 @@ rhbm_gem_collect_gtest_patterns(joint_numerical_patterns ${JOINT_COMPONENT_NUMER
 list(JOIN joint_numerical_patterns ":" joint_numerical_filter)
 string(APPEND joint_numerical_filter
     "-JointComponentNumericsTest.CompactJacobianGramIdentityDiagnosticsAcrossLattices"
-    ":JointFixedNeighborBlockCoordinateTest.ProductionScaleSingleComponentPreparationStaysBelowBudget"
-    ":JointComponentBoundedRankTest.StreamingGershgorinControlsNeverOverstateTheirEvidence"
-    ":JointComponentSparseQRResearchTest.*"
-    ":JointComponentProjectedWidthResearchTest.*"
-    ":JointComponentStructuredProjectionResearchTest.*")
+    ":JointFixedNeighborBlockCoordinateTest.ProductionScaleSingleComponentPreparationStaysBelowBudget")
 add_test(NAME rhbm_tests_joint_component_numerical
     COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes --gtest_filter=${joint_numerical_filter})
 set_tests_properties(rhbm_tests_joint_component_numerical PROPERTIES
     LABELS "core;domain:core;intent:algorithm;joint:numerical" TIMEOUT 900
     ENVIRONMENT "OMP_NUM_THREADS=1")
-
-add_test(NAME joint_projected_width_oracle_controls
-    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
-        --gtest_filter=JointComponentProjectedWidthResearchTest.DenseOracleBaselinesAreReproducible:JointComponentProjectedWidthResearchTest.ActiveFaceAndHaloDimensionsRemainExplicit)
-add_test(NAME joint_projected_width_svd_modes
-    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
-        --gtest_filter=JointComponentProjectedWidthResearchTest.ValuesOnlyAndRightVectorModesPreserveRankEvidence)
-add_test(NAME joint_projected_width_operator
-    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
-        --gtest_filter=JointComponentProjectedWidthResearchTest.MatrixFreeActionsMatchDenseAndTiledQrOracles:JointComponentProjectedWidthResearchTest.BoundedProjectionPathFailsClosedAtPreflight)
-add_test(NAME joint_projected_width_rank_certificates
-    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
-        --gtest_filter=JointComponentProjectedWidthResearchTest.RankCertificatesRequireStrictEnclosedBounds)
-add_test(NAME joint_projected_width_giant_preflight
-    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
-        --gtest_filter=JointComponentStructuredProjectionResearchTest.GiantComponentPreflightsRejectBeforeAllocation)
-set_tests_properties(joint_projected_width_oracle_controls joint_projected_width_svd_modes
-    joint_projected_width_operator joint_projected_width_rank_certificates
-    joint_projected_width_giant_preflight PROPERTIES
-    LABELS "core;domain:core;intent:algorithm;joint:numerical;joint:offline;research"
-    TIMEOUT 900 ENVIRONMENT "OMP_NUM_THREADS=1")
-
-add_test(NAME joint_structured_projection_controls
-    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
-        --gtest_filter=JointComponentStructuredProjectionResearchTest.SmallProjectionsMatchDenseOracleAndPreserveGlobalCoupling)
-set_tests_properties(joint_structured_projection_controls PROPERTIES
-    LABELS "core;domain:core;intent:algorithm;joint:numerical;joint:offline;research"
-    TIMEOUT 900 ENVIRONMENT "OMP_NUM_THREADS=1")
-function(add_joint_structured_projection_test test_name gtest_name)
-    add_test(NAME ${test_name}
-        COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
-            --gtest_filter=JointComponentStructuredProjectionResearchTest.${gtest_name})
-    set_tests_properties(${test_name} PROPERTIES
-        LABELS "core;domain:core;intent:algorithm;joint:numerical;joint:scalability;joint:offline;research"
-        TIMEOUT 1800 ENVIRONMENT "OMP_NUM_THREADS=1")
-endfunction()
-add_joint_structured_projection_test(joint_structured_projection_chain_128 Chain128)
-add_joint_structured_projection_test(joint_structured_projection_cube_128 Cube128)
-add_joint_structured_projection_test(joint_structured_projection_chain_256 Chain256)
-add_joint_structured_projection_test(joint_structured_projection_cube_256 Cube256)
-add_joint_structured_projection_test(joint_structured_projection_chain_512 Chain512)
-add_joint_structured_projection_test(joint_structured_projection_cube_512 Cube512)
-add_joint_structured_projection_test(joint_structured_projection_chain_1024 Chain1024)
-add_joint_structured_projection_test(joint_structured_projection_cube_1024 Cube1024)
-
-add_test(NAME joint_bounded_rank_streaming_controls
-    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
-        --gtest_filter=JointComponentBoundedRankTest.StreamingGershgorinControlsNeverOverstateTheirEvidence)
-set_tests_properties(joint_bounded_rank_streaming_controls PROPERTIES
-    LABELS "core;domain:core;intent:algorithm;joint:numerical;joint:offline;long" TIMEOUT 900
-    ENVIRONMENT "OMP_NUM_THREADS=1")
-
-add_test(NAME joint_bounded_rank_sparseqr_controls
-    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
-        --gtest_filter=JointComponentSparseQRResearchTest.SmallControlsCompareBothOrderingsWithDenseSvd:JointComponentSparseQRResearchTest.LargePreflightRejectsBeforeFactorization)
-set_tests_properties(joint_bounded_rank_sparseqr_controls PROPERTIES
-    LABELS "core;domain:core;intent:algorithm;joint:numerical;joint:offline;research" TIMEOUT 900
-    ENVIRONMENT "OMP_NUM_THREADS=1")
-
-function(add_joint_sparseqr_topology_test test_name gtest_name)
-    add_test(NAME ${test_name}
-        COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
-            --gtest_filter=JointComponentSparseQRResearchTest.${gtest_name})
-    set_tests_properties(${test_name} PROPERTIES
-        LABELS "core;domain:core;intent:algorithm;joint:numerical;joint:offline;research"
-        TIMEOUT 900 ENVIRONMENT "OMP_NUM_THREADS=1")
-endfunction()
-add_joint_sparseqr_topology_test(joint_sparseqr_chain_128_natural Chain128Natural)
-add_joint_sparseqr_topology_test(joint_sparseqr_chain_128_colamd Chain128COLAMD)
-add_joint_sparseqr_topology_test(joint_sparseqr_cube_128_natural Cube128Natural)
-add_joint_sparseqr_topology_test(joint_sparseqr_cube_128_colamd Cube128COLAMD)
-add_joint_sparseqr_topology_test(joint_sparseqr_chain_256_natural Chain256Natural)
-add_joint_sparseqr_topology_test(joint_sparseqr_chain_256_colamd Chain256COLAMD)
-add_joint_sparseqr_topology_test(joint_sparseqr_cube_256_natural Cube256Natural)
-add_joint_sparseqr_topology_test(joint_sparseqr_cube_256_colamd Cube256COLAMD)
-add_joint_sparseqr_topology_test(joint_sparseqr_chain_512_natural Chain512Natural)
-add_joint_sparseqr_topology_test(joint_sparseqr_chain_512_colamd Chain512COLAMD)
-add_joint_sparseqr_topology_test(joint_sparseqr_cube_512_natural Cube512Natural)
-add_joint_sparseqr_topology_test(joint_sparseqr_cube_512_colamd Cube512COLAMD)
-add_joint_sparseqr_topology_test(joint_sparseqr_chain_1024_natural Chain1024Natural)
-add_joint_sparseqr_topology_test(joint_sparseqr_chain_1024_colamd Chain1024COLAMD)
-add_joint_sparseqr_topology_test(joint_sparseqr_cube_1024_natural Cube1024Natural)
-add_joint_sparseqr_topology_test(joint_sparseqr_cube_1024_colamd Cube1024COLAMD)
 
 add_test(NAME joint_component_gram_scalability
     COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
@@ -653,8 +555,6 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     set_tests_properties(joint_experiment_cleanup_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:contract" TIMEOUT 180
         ENVIRONMENT "OMP_NUM_THREADS=1")
-    add_test(NAME joint_component_evidence_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_evidence_test.py")
     add_test(NAME joint_component_runtime_runner_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime_test.py")
     add_test(NAME joint_component_regression
@@ -663,9 +563,6 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     add_test(NAME joint_component_physical_smoke
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime.py"
             physical-smoke --executable $<TARGET_FILE:joint_component_runtime>)
-    set_tests_properties(joint_component_evidence_test
-        PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:contract" TIMEOUT 180
-        ENVIRONMENT "OMP_NUM_THREADS=1")
     set_tests_properties(
         joint_component_runtime_runner_test
         joint_component_regression joint_component_physical_smoke
@@ -681,15 +578,6 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
             ENVIRONMENT "OMP_NUM_THREADS=1")
     endif()
 
-    if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
-        add_test(NAME joint_offline_diagnostic_smoke
-            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_offline_diagnostic_test.py"
-                --executable $<TARGET_FILE:joint_offline_diagnostic>)
-        set_tests_properties(joint_offline_diagnostic_smoke
-            PROPERTIES LABELS "offline;domain:integration;intent:algorithm;joint:offline;long" TIMEOUT 3600
-            ENVIRONMENT "OMP_NUM_THREADS=1")
-    endif()
-
     if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
         add_test(NAME joint_statistical_experiment_contract_test
             COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_statistical_experiment_test.py")
@@ -702,12 +590,6 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     endif()
 
     if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
-        add_test(NAME joint_component_offline_regression
-            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_audit.py"
-                --executable $<TARGET_FILE:joint_component_audit> --work-dir "${PROJECT_BINARY_DIR}/joint-offline")
-        set_tests_properties(joint_component_offline_regression
-            PROPERTIES LABELS "offline;domain:integration;intent:algorithm;joint:offline;long" TIMEOUT 3600
-            ENVIRONMENT "OMP_NUM_THREADS=1")
         add_test(NAME joint_fullabc_width_precision_regression
             COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fullabc_width_precision_test.py"
                 --executable $<TARGET_FILE:joint_fullabc_width_study>
@@ -840,17 +722,9 @@ elseif(TARGET joint_statistical_experiment OR TARGET research_tools_all)
 endif()
 
 if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
-    if(NOT TARGET joint_component_audit OR NOT TARGET joint_offline_tests)
-        message(FATAL_ERROR "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS did not create its audit targets")
+    if(NOT TARGET joint_offline_tests)
+        message(FATAL_ERROR "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS did not create its precision tests")
     endif()
-elseif(TARGET joint_component_audit OR TARGET joint_offline_tests)
-    message(FATAL_ERROR "Offline audit targets exist while RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=OFF")
-endif()
-
-if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
-    if(NOT TARGET joint_offline_diagnostic OR NOT TARGET joint_offline_support)
-        message(FATAL_ERROR "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS did not create its diagnostic support")
-    endif()
-elseif(TARGET joint_offline_diagnostic OR TARGET joint_offline_support)
-    message(FATAL_ERROR "Offline diagnostic targets exist while RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=OFF")
+elseif(TARGET joint_offline_tests)
+    message(FATAL_ERROR "Offline precision tests exist while RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=OFF")
 endif()

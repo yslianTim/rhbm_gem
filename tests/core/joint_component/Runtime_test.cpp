@@ -94,7 +94,6 @@ TEST(JointComponentRuntimeTest, TypedSearchPreservesFrozenAdapterResults)
     const auto & beta=original.at("primary").at("beta").as_array();
     for(std::size_t k=0;k<beta.size();++k) EXPECT_NEAR(fit.assembled_state->ac[k],boost::json::value_to<double>(beta[k]),1e-8);
     EXPECT_TRUE(fit.search_completed); EXPECT_EQ(fit.components.size(),2);
-    EXPECT_TRUE(fit.components[0].ranks.empty());
     for(const auto & check:fit.components[0].evidence)
         if(check.name=="richardson") EXPECT_EQ(check.status,core::JointCheckStatus::NotRun);
     EXPECT_EQ(fit.regular_certificate,core::JointCheckStatus::NotRun);
@@ -155,7 +154,6 @@ TEST(JointComponentRuntimeTest, InnerEvidenceRemainsAvailableNearBoundary)
         EXPECT_TRUE(component.state);
         ASSERT_TRUE(component.candidate_diagnostic);
         EXPECT_TRUE(component.candidate_diagnostic->candidate_available);
-        EXPECT_EQ(component.candidate_diagnostic->rank_assessment_status,core::JointCheckStatus::NotRun);
         EXPECT_EQ(component.candidate_diagnostic->endpoint_verification_status,core::JointCheckStatus::Passed);
         EXPECT_EQ(component.candidate_diagnostic->certification_status,core::JointCheckStatus::Passed);
         EXPECT_EQ(component.candidate_diagnostic->numerical_qualification_status,
@@ -173,7 +171,6 @@ TEST(JointComponentRuntimeTest, InnerEvidenceRemainsAvailableNearBoundary)
         EXPECT_EQ(std::find_if(component.evidence.begin(),component.evidence.end(),[](const auto & check) {
             return check.name=="design-identifiability" || check.name=="numerical-identifiability";
         }),component.evidence.end());
-        EXPECT_TRUE(component.ranks.empty());
         EXPECT_EQ(component.regular_certificate,core::JointCheckStatus::NotRun);
     }
 }
@@ -272,7 +269,7 @@ TEST(JointComponentRuntimeTest, AssessmentWorkIsSharedOnlyForIdenticalScopes)
     EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
 }
 
-TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTimes)
+TEST(JointComponentRuntimeTest, EndpointVerificationStagesRecordDimensionsAndNonnegativeTimes)
 {
     const core::JointProblem problem(Snapshot()); const auto & data=core::JointProblemAccess::Get(problem);
     const auto & view=data.partition.components[0]; const auto y=n::SelectValues(data.y,view.rows);
@@ -282,17 +279,13 @@ TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTi
     n::DerivativeWorkForTesting()={};
     n::SetAssessmentStageObserverForTesting(nullptr,nullptr);
     n::AssessProfileSearchForDiagnostics(view.domain,y,context,search);
-    EXPECT_EQ(n::AssessmentWorkForTesting().assessments,1);
     const auto & stages=n::AssessmentWorkForTesting().stages;
     const auto stage=[&](const std::string & name)->const n::AssessmentStageWork & {
         const auto found=std::find_if(stages.begin(),stages.end(),[&](const auto & value){return value.name==name;});
         EXPECT_NE(found,stages.end());
         return *found;
     };
-    for(const auto * name:{"total-assessment","endpoint-primary-evaluation","reference-evaluation",
-            "derivative-preparation","derivative-reduction","projected-width-spectrum",
-            "projected-width-assessment","numerical-identifiability","derivative-rows",
-            "derivative-projected-qr","derivative-norms"})
+    for(const auto * name:{"total-assessment","endpoint-primary-evaluation","reference-evaluation"})
     {
         const auto & measurement=stage(name);
         EXPECT_GE(measurement.seconds,0);
@@ -301,39 +294,7 @@ TEST(JointComponentRuntimeTest, AssessmentStagesRecordDimensionsAndNonnegativeTi
         EXPECT_GT(measurement.rows,0);
         EXPECT_GT(measurement.columns,0);
     }
-    for(const auto * name:{"normalized-width-spectrum","correction-jacobian-spectrum","local-correction",
-            "derivative-jacobian-qr","derivative-compact-jacobian-qr"})
-        EXPECT_EQ(std::find_if(stages.begin(),stages.end(),[&](const auto & value){return value.name==name;}),stages.end());
     EXPECT_EQ(stage("total-assessment").calls,1);
-    EXPECT_EQ(std::find_if(stages.begin(),stages.end(),[](const auto & value) {
-        return value.name=="design-spectrum";
-    }),stages.end());
-    const auto & identifiability=stage("numerical-identifiability");
-    EXPECT_TRUE(identifiability.memory_estimate_available);
-    EXPECT_EQ(identifiability.memory_status,n::MemoryStatus::Pass);
-    ASSERT_EQ(identifiability.attributed_memory_stages.size(),1u);
-    EXPECT_EQ(identifiability.attributed_memory_stages[0].stage,n::MemoryStage::ProjectedWidthAssessment);
-    const auto & width=stage("projected-width-assessment");
-    EXPECT_EQ(width.memory_stage,n::MemoryStage::ProjectedWidthAssessment);
-    EXPECT_EQ(width.memory_status,n::MemoryStatus::Pass);
-    if(identifiability.current_rss_before_bytes) EXPECT_GT(*identifiability.current_rss_before_bytes,0u);
-    if(identifiability.process_peak_rss_bytes) EXPECT_GT(*identifiability.process_peak_rss_bytes,0u);
-    const auto & derivative=n::DerivativeWorkForTesting();
-    EXPECT_EQ(derivative.tile_count,1);
-    EXPECT_EQ(derivative.projected_qr.role,"projected-width-only-qr");
-    EXPECT_EQ(derivative.projected_qr.append_calls,derivative.tile_count);
-    EXPECT_EQ(derivative.projected_qr.rows_processed,static_cast<std::size_t>(view.domain.rows));
-    EXPECT_EQ(derivative.projected_qr.columns,1); EXPECT_EQ(derivative.projected_qr.responses,0);
-    EXPECT_EQ(derivative.free_design_qr_factorizations,1u);
-    EXPECT_EQ(derivative.free_design_rank_assessments,1u);
-    EXPECT_EQ(derivative.jacobian_qr.append_calls,0);
-    EXPECT_GT(derivative.projected_qr.maximum_assembled_rows,0);
-    EXPECT_GT(derivative.projected_qr.maximum_dense_design_bytes,0);
-    EXPECT_EQ(derivative.projected_qr.maximum_dense_response_bytes,0u);
-    EXPECT_GE(derivative.projected_qr.qr_seconds,0);
-    EXPECT_EQ(stage("derivative-rows").calls,derivative.tile_count);
-    EXPECT_EQ(stage("derivative-projected-qr").calls,derivative.projected_qr.append_calls);
-    EXPECT_EQ(stage("derivative-norms").calls,derivative.tile_count);
 }
 
 TEST(JointComponentRuntimeTest, AssessmentMicroStageCheckpointKeepsInterruptedStage)
@@ -466,7 +427,7 @@ TEST(JointComponentRuntimeTest, FallbackCertifiesSavedCoefficientsNewestFirst)
     EXPECT_EQ(fit.trusted_trial,accepted[accepted.size()-2]);
     EXPECT_EQ(fit.trusted_state->eta,expected.eta); EXPECT_EQ(fit.trusted_state->beta,expected.beta);
     EXPECT_EQ(fit.trusted_assessment->primary.beta,expected.beta);
-    EXPECT_LE(fit.trusted_assessment->coefficient_difference,1e-10);
+    EXPECT_TRUE(fit.trusted_assessment->numerical_qualified);
     EXPECT_FALSE(fit.search_success); EXPECT_TRUE(fit.search.stopped);
     EXPECT_EQ(fit.search.stop_reason,"endpoint-certification-failed");
     EXPECT_FALSE(fit.assessment.primary.valid);
@@ -565,7 +526,7 @@ TEST(JointComponentRuntimeTest, ActualAssessmentFollowsFallbackAndLocalDirection
     const auto fresh=n::AssessProfile(view.domain,y,directed.trusted_state->eta,
         n::ChildContext(data.context,view,true),&directed.trusted_state->beta);
     EXPECT_EQ(directed.trusted_assessment->primary.beta,fresh.primary.beta);
-    EXPECT_EQ(directed.trusted_assessment->weak_directions,fresh.weak_directions);
+    EXPECT_EQ(directed.trusted_assessment->numerical_qualified,fresh.numerical_qualified);
 }
 
 TEST(JointComponentRuntimeTest, RuntimeConvergenceIsDerivedFromActualEvidenceNotTermination)
