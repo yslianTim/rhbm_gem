@@ -234,6 +234,11 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             component.profile_evaluations=static_cast<int>(fit.search.total_profile_evaluations);
             component.accepted_updates=static_cast<int>(fit.search.total_accepted_local_updates);
             component.candidate_diagnostic=CandidateDiagnostic(fit.search,layout.full_atoms.size());
+            component.local_conditioning=fit.search.local_conditioning;
+            component.local_conditioning_seconds=fit.search.work.local_conditioning_seconds;
+            if(fit.search.work.local_conditioning_peak_memory_estimate_bytes)
+                component.local_conditioning_peak_memory_estimate_bytes=
+                    fit.search.work.local_conditioning_peak_memory_estimate_bytes;
             if(fit.search.certification)
             {
                 const auto & certification=*fit.search.certification;

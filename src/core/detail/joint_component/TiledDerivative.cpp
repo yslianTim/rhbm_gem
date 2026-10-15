@@ -47,7 +47,7 @@ Spectrum UnavailableFreeDesignSpectrum(Eigen::Index rows,Eigen::Index columns,Ei
     out.full_design_columns=full_columns; return out;
 }
 TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const EvaluationContext * context,
-    double absolute,Eigen::Index tile,bool projected_only)
+    double absolute,Eigen::Index tile,bool projected_only,bool allow_rank_deficient=false)
 {
     auto & work=NumericsWorkForTesting(); ++work.derivative_preparations;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -89,12 +89,16 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
             const auto k=free[static_cast<std::size_t>(col)]; const double norm=e.x.col(k).norm();
             if(!(norm>0))
             {
-                if(projected_only) out.free_design_rank=UnavailableFreeDesignSpectrum(
-                    context ? context->rank.rows : n,p,2*m,"zero-free-column");
-                out.reason="zero-free-column"; return out;
+                if(!(projected_only && allow_rank_deficient))
+                {
+                    if(projected_only) out.free_design_rank=UnavailableFreeDesignSpectrum(
+                        context ? context->rank.rows : n,p,2*m,"zero-free-column");
+                    out.reason="zero-free-column"; return out;
+                }
             }
             if(projected_only) free_column_norms(col)=norm;
-            for(Sparse::InnerIterator entry(e.x,k);entry;++entry) entries.emplace_back(entry.row(),col,entry.value()/norm);
+            if(norm>0) for(Sparse::InnerIterator entry(e.x,k);entry;++entry)
+                entries.emplace_back(entry.row(),col,entry.value()/norm);
             if(!projected_only) t(col,k/2)=e.derivative.col(k).dot(e.residual)/norm;
         }
     }
@@ -167,15 +171,33 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(projected_only) ++DerivativeWorkForTesting().free_design_rank_assessments;
 #endif
-        const auto svd=EvaluateRank(qr.r,{{context ? context->rank.rows : n,2*m,m},p,absolute,boundary});
+        const auto svd=EvaluateRank(qr.r,{{context ? context->rank.rows : n,2*m,m},p,absolute,boundary},
+            nullptr,projected_only && allow_rank_deficient ? CompactSvdVectors::Right : CompactSvdVectors::None);
         if(projected_only) out.free_design_rank=FreeDesignSpectrum(svd,
             context ? context->rank.rows : n,p,2*m,free_column_norms);
         if(!svd.valid) {out.reason="nonfinite-derivative"; return false;}
-        if(svd.rank!=p) {out.reason="rank-deficient-free-design"; return false;}
+        if(svd.rank!=p && !(projected_only && allow_rank_deficient))
+        {out.reason="rank-deficient-free-design"; return false;}
         if(projected_only)
         {
-            qr.r.triangularView<Eigen::Upper>().solveInPlace(qr.target);
-            out.coefficients=std::move(qr.target);
+            if(svd.rank==p)
+            {
+                qr.r.triangularView<Eigen::Upper>().solveInPlace(qr.target);
+                out.coefficients=std::move(qr.target);
+            }
+            else
+            {
+                out.coefficients=Matrix::Zero(p,m);
+                if(svd.rank)
+                {
+                    const Matrix right=svd.right_vectors.leftCols(svd.rank);
+                    Matrix left=qr.r*right;
+                    for(Eigen::Index k=0;k<svd.rank;++k) left.col(k)/=svd.singular_values(k);
+                    Matrix response=left.transpose()*qr.target;
+                    for(Eigen::Index k=0;k<svd.rank;++k) response.row(k)/=svd.singular_values(k);
+                    out.coefficients=right*response;
+                }
+            }
         }
         else
         {
@@ -208,8 +230,8 @@ TiledDifferential PrepareDerivative(const Evaluation & e,double scale,const Eval
     double absolute,Eigen::Index tile)
 {return PrepareDerivativeImpl(e,scale,context,absolute,tile,false);}
 TiledDifferential PrepareProjectedWidthDerivative(const Evaluation & e,double scale,const EvaluationContext * context,
-    double absolute,Eigen::Index tile)
-{return PrepareDerivativeImpl(e,scale,context,absolute,tile,true);}
+    double absolute,Eigen::Index tile,bool allow_rank_deficient)
+{return PrepareDerivativeImpl(e,scale,context,absolute,tile,true,allow_rank_deficient);}
 void TiledDifferential::Rows(Eigen::Index first,Eigen::Index count,Matrix & projected,Matrix & jacobian) const
 {
     if(reference_order)

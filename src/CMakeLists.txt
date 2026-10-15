@@ -23,6 +23,7 @@ target_sources(rhbm_gem PRIVATE
     core/EstimatorTester.cpp
     core/detail/joint_component/Numerics.cpp
     core/detail/joint_component/TiledDerivative.cpp
+    core/detail/joint_component/LocalConditioning.cpp
     core/detail/joint_component/LinearSolve.cpp
     core/detail/joint_component/CompactSvd.cpp
     core/detail/joint_component/StructuralRank.cpp

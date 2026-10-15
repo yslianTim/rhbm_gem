@@ -1,4 +1,5 @@
 #include "FixedNeighborBlockCoordinate.hpp"
+#include "LocalConditioning.hpp"
 #include "Problem.hpp"
 #include "ResourceWork.hpp"
 #include "StructuralPartition.hpp"
@@ -1289,6 +1290,42 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                         out.certification->assessment.failure;
         }
     }
+    if(policy.assess_local_conditioning && out.search_converged && out.certification &&
+        out.certification->qualified())
+    {
+        out.local_conditioning.reserve(prepared_blocks.size());
+        for(const auto & prepared:prepared_blocks)
+        {
+            const auto local_atoms=prepared.local_atoms;
+            Vector eta(local_atoms),beta(2*local_atoms);
+            for(std::size_t k=0;k<prepared.core_atoms.size();++k)
+            {
+                const auto atom=static_cast<Eigen::Index>(prepared.core_atoms[k]);
+                eta(static_cast<Eigen::Index>(k))=out.state.eta(atom);
+                beta.segment<2>(2*static_cast<Eigen::Index>(k))=out.state.beta.segment<2>(2*atom);
+            }
+            Vector local_y(static_cast<Eigen::Index>(prepared.affected_rows.size()));
+            {
+                const Sparse design=Design(prepared.domain,eta);
+                const Vector local_core=(design*beta).eval();
+                for(std::size_t k=0;k<prepared.affected_rows.size();++k)
+                {
+                    const auto row=static_cast<Eigen::Index>(prepared.affected_rows[k]);
+                    local_y(static_cast<Eigen::Index>(k))=local_core(static_cast<Eigen::Index>(k))-out.state.residual(row);
+                }
+            }
+            const auto block_id=(policy.component_id.empty() ? std::string("component") : policy.component_id)+
+                "/block-"+std::to_string(prepared.block+1);
+            auto conditioning=AssessFixedNeighborLocalConditioning(prepared.domain,local_y,eta,beta,
+                prepared.context,block_id,out.global_state_memory_estimate.shape.resident_bytes);
+            out.work.local_conditioning_seconds+=conditioning.seconds;
+            if(conditioning.evidence.workspace_peak_memory_estimate_bytes)
+                out.work.local_conditioning_peak_memory_estimate_bytes=std::max(
+                    out.work.local_conditioning_peak_memory_estimate_bytes,
+                    *conditioning.evidence.workspace_peak_memory_estimate_bytes);
+            out.local_conditioning.push_back(std::move(conditioning.evidence));
+        }
+    }
     return out;
 }
 
@@ -1417,6 +1454,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     policy.component_index=production_policy.component_index;
     policy.component_id=production_policy.component_id;
     policy.halo_census=production_policy.halo_census;
+    policy.assess_local_conditioning=true;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(production_policy.configure_search_for_testing) production_policy.configure_search_for_testing(policy);
 #endif

@@ -104,7 +104,7 @@ IncrementalCandidateReplay EvaluateCandidateDelta(VectorRef current_residual,
     double current_objective,double scale);
 struct FixedNeighborWork
 {
-    double structural_preparation_seconds{},endpoint_verification_seconds{},primary_endpoint_seconds{},
+    double structural_preparation_seconds{},endpoint_verification_seconds{},local_conditioning_seconds{},primary_endpoint_seconds{},
         independent_replay_seconds{},
         rank_assessment_seconds{},old_core_seconds{},
         effective_response_seconds{},local_search_seconds{},local_state_seconds{},
@@ -117,6 +117,7 @@ struct FixedNeighborWork
         incremental_acceptance_mismatches{},candidate_state_full_copies{},affected_row_updates{},
         old_core_basis_builds{};
     std::size_t local_problem_count{},minimum_local_atoms{},maximum_local_atoms{};
+    std::size_t local_conditioning_peak_memory_estimate_bytes{};
     double total_local_atoms{};
     ProfileSearchWork local_profile_work;
 };
@@ -175,6 +176,7 @@ struct FixedNeighborPolicy
     bool certify_endpoint{true}; // Diagnostic facade only; production components always certify.
     bool collect_telemetry{};
     bool collect_diagnostics{};
+    bool assess_local_conditioning{};
     std::size_t component_index{};
     std::string component_id;
     std::function<void(std::size_t &,std::size_t &,std::size_t &)> halo_census;
@@ -196,6 +198,7 @@ struct FixedNeighborSearchResult
 {
     BlockCoordinateState state;
     std::optional<FixedNeighborEndpointCertification> certification;
+    std::vector<JointBlockConditioning> local_conditioning;
     std::vector<FixedNeighborBlockRecord> blocks;
     std::vector<FixedNeighborBlockSweep> sweeps;
     bool search_converged{};

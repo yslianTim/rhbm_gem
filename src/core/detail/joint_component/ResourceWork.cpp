@@ -151,6 +151,7 @@ const char * MemoryStageName(MemoryStage stage)
     case MemoryStage::DesignSpectrum: return "design-spectrum";
     case MemoryStage::ProjectedWidthAssessment: return "projected-width-assessment";
     case MemoryStage::ProjectedWidthDiagnostics: return "projected-width-diagnostics";
+    case MemoryStage::LocalConditioning: return "local-conditioning";
     case MemoryStage::TargetIdentifiability: return "target-identifiability";
     }
     return "unknown";
@@ -403,6 +404,42 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
             out.factor_workspace_bytes=std::max({free_svd_workspace,width_svd_workspace,out.qr_tile_workspace_bytes});
             out.right_singular_vector_bytes=diagnostics ? width_factor : 0;
             out.factor_rows=free_columns; out.factor_columns=free_columns;
+        }
+        break;
+    }
+    case MemoryStage::LocalConditioning:
+    {
+        const auto local_rows=shape.maximum_block_rows ? shape.maximum_block_rows : rows;
+        const auto local_entries=shape.maximum_block_support_entries ? shape.maximum_block_support_entries : entries;
+        const auto local_atoms=shape.maximum_neighbor_atoms ? shape.maximum_neighbor_atoms : atoms;
+        std::size_t free_columns=shape.component_free_columns,two_widths{},tile_columns{},free_square{},projection{},
+            width_square{},free_square_bytes{},projection_bytes{},width_square_bytes{};
+        const auto width_columns=shape.component_width_columns ? shape.component_width_columns : local_atoms;
+        if(!free_columns) ok=CheckedMultiplyBytes(local_atoms,2,free_columns);
+        ok=ok && CheckedMultiplyBytes(width_columns,2,two_widths) &&
+            CheckedAddBytes(free_columns,two_widths,tile_columns) &&
+            AddProduct(temporary,local_rows,5*sizeof(double)) &&
+            AddProduct(temporary,local_entries,12*(sizeof(double)+sizeof(Eigen::Index))) &&
+            AddProduct(temporary,local_atoms,48*sizeof(double)+8*sizeof(Eigen::Index)) &&
+            AddProduct2D(temporary,free_columns,free_columns,8*sizeof(double)) &&
+            AddProduct2D(temporary,free_columns,width_columns,4*sizeof(double)) &&
+            AddProduct2D(temporary,width_columns,width_columns,9*sizeof(double)) &&
+            AddProduct2D(temporary,shape.maximum_tile_rows,tile_columns,6*sizeof(double)) &&
+            CheckedMultiplyBytes(free_columns,free_columns,free_square) &&
+            CheckedMultiplyBytes(free_columns,width_columns,projection) &&
+            CheckedMultiplyBytes(width_columns,width_columns,width_square) &&
+            CheckedMultiplyBytes(free_square,sizeof(double),free_square_bytes) &&
+            CheckedMultiplyBytes(projection,sizeof(double),projection_bytes) &&
+            CheckedMultiplyBytes(width_square,sizeof(double),width_square_bytes);
+        if(ok)
+        {
+            out.factor_rows=free_columns; out.factor_columns=free_columns;
+            out.free_design_factor_bytes=free_square_bytes;
+            out.projection_coefficient_bytes=projection_bytes;
+            out.projected_width_factor_bytes=width_square_bytes;
+            std::size_t tile_cells{};
+            ok=CheckedMultiplyBytes(shape.maximum_tile_rows,tile_columns,tile_cells) &&
+                CheckedMultiplyBytes(tile_cells,6*sizeof(double),out.qr_tile_workspace_bytes);
         }
         break;
     }

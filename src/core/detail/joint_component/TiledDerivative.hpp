@@ -23,7 +23,7 @@ struct ReducedDifferential
 TiledDifferential PrepareDerivative(const Evaluation &,double,const EvaluationContext *,double=-1,
     Eigen::Index=derivative_tile_rows);
 TiledDifferential PrepareProjectedWidthDerivative(const Evaluation &,double,const EvaluationContext *,double=-1,
-    Eigen::Index=derivative_tile_rows);
+    Eigen::Index=derivative_tile_rows,bool=false);
 ReducedDifferential ReduceDerivative(const TiledDifferential &,VectorRef,bool=true,Eigen::Index=derivative_tile_rows);
 ReducedDifferential ReduceProjectedWidthDerivative(const TiledDifferential &,Eigen::Index=derivative_tile_rows);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
