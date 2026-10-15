@@ -241,21 +241,19 @@ continue to be rejected.
 
 ## Final 6Z6U run
 
-With the production multiprecision path removed, the full workflow used the
-provided CIF/map, a fresh SQLite backup, and unique key
-`6z6u_replay_final_14d8c2cd9b`. The original database was not modified. The
-old block 82 replay disagreement did not recur. The search instead stopped at
-component 1, one-based sweep 4, block 21 with `inner-kkt-failed`. The 930 × 24
-local design is full rank (rank 24, free rank 23), but its feasible local A/C
-solution has scaled projected KKT `4.6566128730773926e-10`; no rejected LM
-trial was captured because failure occurred at the inner KKT gate. Its exact
-local inputs are retained in
-`tests/fixtures/joint_local_ac_kkt/block-21-sweep-4.json`.
+The current validation run used source HEAD `b53c1d8bf90bf73b2b3920d4d6a4a94beafae5fc`,
+a fresh read-only-source SQLite backup at
+`/private/tmp/rhbm-6z6u-width-stability-measure2-b53c1d8b.sqlite`, and unique
+key `6z6u_width_measure2_b53c1d8b`. The old block 82 `CheckReplay()`
+disagreement did not recur. Search stopped at component 1, one-based sweep 4,
+block 21 with `inner-kkt-failed`. Its 930 × 24 design is full rank (rank 24,
+free rank 23), but the feasible local A/C candidate has scaled KKT
+`4.656612873e-10`. No endpoint verification, global rank qualification,
+target estimability or trusted assembly was reached.
 
-The process exited 0, but search completion was false. It recorded 5,056
-evaluations and 620 accepted block updates across three completed sweeps before
-the sweep 4 failure. Endpoint verification, numerical rank qualification,
-target estimability and trusted global assembly were not reached. Elapsed wall
-time was 33.442 s and child maximum RSS was 1,447,378,944 bytes (about 1.35
-GiB). Detailed full-data counts and unavailable qualification fields are in
-the [halo-pruning validation](joint-halo-pruning-validation.md#full-data-validation-6z6u).
+The CLI exited 0, but search completion was false. It recorded 5,056
+evaluations and 620 accepted block updates over three completed sweeps. The
+wrapper measured 33.645 s wall time and macOS `ru_maxrss` reported child peak
+RSS of 1,340,866,560 bytes. The detailed full-data counts, width identities
+and unavailable qualification states are in the
+[halo-pruning validation](joint-halo-pruning-validation.md#full-data-validation-6z6u).

@@ -87,41 +87,67 @@ accuracy threshold. The production value remains the minimum geometric gate.
 
 ## Full-data validation: 6Z6U
 
-The final production run used the supplied CIF and map with a fresh SQLite
-backup at `/private/tmp/rhbm-6z6u-corrected-14d8c2cd9b.sqlite` and unique key
-`6z6u_replay_final_14d8c2cd9b`. The source database was not modified. The
-production source was at `c7e6dd5d` (`fix(joint): keep multiprecision out of
-production`); the later test-only block 21 fixture commit did not change solver
-code. The executable was an AppleClang 21.0.0 Release build on arm64.
+The full workflow used source HEAD `b53c1d8bf90bf73b2b3920d4d6a4a94beafae5fc`
+on `develop`, the supplied CIF and map, and a fresh SQLite backup at
+`/private/tmp/rhbm-6z6u-width-stability-measure2-b53c1d8b.sqlite` with unique
+key `6z6u_width_measure2_b53c1d8b`. The source database was opened read-only
+for the backup and was not modified. The executable was an AppleClang 21.0.0
+Release build on arm64 with `-O3 -DNDEBUG` and
+`RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON`.
 
-| Measure | Final result |
+| Measure | Current run |
 | --- | --- |
-| Observation / selected target count | 229,783 / 1,418 |
+| Observations / selected targets | 229,783 / 1,418 |
 | Halo candidates / retained / excluded | 35,988 / 626 / 35,362 |
-| Excluded support / radial counts | 35,362 had fewer than 3 rows; 0 were excluded only for radial information |
-| Components after pruning | 1 component (2,044 atoms, 229,783 rows); pre-pruning component count unavailable |
-| Original sweep 2 / block 82 trial | Current replay passes: prediction difference 0, width-gradient difference `7.5871e-15`, KKT difference 0; primary scaled KKT `5.7795e-12` |
-| Final failure | Component 1, one-based sweep 4, block 21; `inner-kkt-failed` before replay trust; no rejected LM trial capture |
-| Failure local design | 930 × 24, 2,894 nonzeros, rank 24, free rank 23, condition indicator `6.6235e10` |
-| Failure local A/C certificate | Feasible; 0 active-set releases; solver reason `solved`; scaled projected KKT `4.656612873e-10`, above unchanged `1e-10` |
-| Search progress | 5,056 evaluations; 620 accepted updates over 3 completed sweeps; sweep 4 stopped at block 21; `search_completed=false` |
-| Accepted-state diagnostics | Objective `2.567e-3`, width-gradient infinity norm `1.756e2`; unqualified and not a scientific result |
-| Final local profile objective | `2.0159238843`; local state did not pass KKT |
-| Global A/C KKT / log-B gradient | Not qualified / unavailable |
-| Endpoint verification / Full Design Rank / free-design rank / projected-width rank | Not run |
-| Target estimability / numerical qualification / trusted assembly | Not reached / failed to establish / unavailable |
-| Process result | CLI exit 0 and printed `Completed`; numerical search incomplete |
-| Stage times: construction / initialization / search / assessment / assembly | 1.970 / 5.891 / 19.126 / 0.918 / 0.000010 s |
-| Estimated peak memory / measured child maximum RSS | Not recorded / 1,447,378,944 bytes (1.447 GB, 1.348 GiB) |
-| Elapsed wall time | 33.442 s |
+| Exclusion reason | 35,362 had fewer than 3 support rows; 0 excluded only for radial information; production remains `m_min=3`, `q_min=3` |
+| Connected components after pruning | 1 component, 2,044 contributors, 229,783 rows; pre-pruning component count unavailable |
+| Search | 5,056 profile evaluations; 620 accepted updates across 3 completed sweeps; stopped in one-based sweep 4 / block 21; `search_completed=false` |
+| First blocking failure | `inner-kkt-failed`; local A/C design 930 × 24, 2,894 nonzeros, rank 24, free rank 23, condition `6.6234727e10` |
+| Local constrained A/C qualification | Feasible, no active-set releases, solver `solved`; KKT `4.656612873e-10` (Fail against unchanged `1e-10`) |
+| Accepted-state width stationarity | Fail; gradient infinity norm `1.756e2` against `1e-12`; search stopped before stationarity |
+| Endpoint verification / global Full Design Rank / projected-width rank | NotRun / NotRun / NotRun |
+| Target estimability / full numerical qualification | NotRun / Unavailable |
+| Global assembled state / selected-target A/C/B recovery | Unavailable / Unavailable |
+| Estimated peak memory / measured child maximum RSS | Not recorded / 1,340,866,560 bytes (1.341 GB, 1.249 GiB) |
+| CLI result / numerical result | Exit 0 and printed `Completed`; search incomplete, no qualified state |
+| Wall time | 33.645 s wrapper; CLI callback `33.479 s` |
 
-The run log is `/private/tmp/rhbm-6z6u-corrected-14d8c2cd9b.log`; the
-failure-only local fixture was committed at
-`tests/fixtures/joint_local_ac_kkt/block-21-sweep-4.json`. The 6Z6U failure
-moved beyond the original replay disagreement. It is now blocked by an
-ill-conditioned but full-rank local A/C problem that does not meet the existing
-KKT gate. There is no endpoint certification, qualified numerical state, or
-selected-target A/C/B estimate. The capture records `sweep_index=4` directly.
-The earlier baseline run stopped at sweep 2 / block 82; the block 82 fixture
-now replays as trusted, while the final full-data run stops later at block 21.
-These are distinct decisions and must not be conflated.
+The bounded accepted-update trace recorded all 620 updates from the 2,044-atom
+component. For reporting, “extreme width” here means an observed accepted
+width of at least 10,000 Å; it is only a report filter, not a solver bound.
+Each row gives first-stage width, maximum accepted width, and its one-based
+sweep/block:
+
+| Atom ID | Initial B (Å) | Maximum accepted B (Å) | Sweep / block |
+| ---: | ---: | ---: | ---: |
+| 11483 | 0.4690891689 | 44,291.5791 | 3 / 19 |
+| 11721 | 0.5107510641 | 85,164.2930 | 3 / 21 |
+| 11724 | 0.5268537435 | 113,195.6873 | 3 / 25 |
+| 16409 | 0.4576126073 | 369,272.3596 | 3 / 58 |
+| 16610 | 0.4422681954 | 18,768.1336 | 3 / 63 |
+| 17007 | 0.5425051850 | 160,916.1571 | 3 / 70 |
+| 17247 | 0.4715698279 | 239,833.7129 | 2 / 78 |
+| 55975 | 0.5015657953 | 23,358.7370 | 3 / 82 |
+| 63256 | 0.4518990389 | 20,102.6638 | 3 / 177 |
+| 70821 | 0.4208963272 | 68,150.5152 | 3 / 184 |
+| 73371 | 0.4159698614 | 406,905.5114 | 3 / 120 |
+
+Across the accepted trace, the largest observed local condition indicator was
+about `1.0503e12` at atom 17247's block 78. The largest normalized A/C
+cancellation ratio, defined as
+\(\frac{\max(|A|\|\mathbf g\|_2,|C|\|\mathbf k\|_2)}{\left|A\|\mathbf g\|_2+C\|\mathbf k\|_2\right|}\),
+was `8.3764e10` at atom 17247, sweep 2 / block 78, with normalized terms
+`+1.15177471e10` and `-1.15177471e10`. The largest individual normalized
+coefficient term was `1.55850578e10` at the same atom in sweep 3 / block 78.
+For atom 11721, the accepted sweep 3 step moved B from `0.4942385633` to
+`85,164.2929583` Å; at that accepted point A/C cancellation was not yet
+present. At the later failing sweep 4 / block 21 state, the terms were
+`+9.23067447e8` and `-9.23067446e8`. Atom 11650 moved from `0.4101723088` to
+`0.1232364573` Å and its observed Gaussian norm was `2.10279e-38`.
+
+The run logs are
+`/private/tmp/rhbm-6z6u-width-stability-measure2-b53c1d8b.log` and the
+failure fixture is `tests/fixtures/joint_local_ac_kkt/block-21-sweep-4.json`.
+The failure occurs before replay trust for that local profile, endpoint
+verification, global rank qualification, target estimability, or trusted
+assembly. The CLI exit code is not a numerical success signal.
