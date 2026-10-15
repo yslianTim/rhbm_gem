@@ -25,6 +25,16 @@ There is no global regularizer, prior, pseudo-observation, or added width bound.
 The objective and FixedNeighbor update strategy are unchanged by the diagnostic
 architecture.
 
+For `first-stage-fixed-halo-v1` selected-target problems, only selected targets
+have free Joint parameters. Every supported halo contributes its qualified
+FirstStage `(A, B, 0)` snapshot as a fixed response; the solver fits targets to
+the raw observations after subtracting that response, with the scale still
+computed from the raw observations. Numerical convergence therefore certifies
+the target optimization conditional on those fixed halo values. It does not
+establish statistical accuracy of the FirstStage halo parameters. Halo
+parameter validity and target point quality are reported separately; halo model
+error requires truth-controlled simulation evidence.
+
 Production uses disjoint mutable cores of 12 atoms, forward serial
 Gauss-Seidel sweeps, at most 200 complete sweeps, and at most one trusted
 Profile LM update per block visit. Neighbor parameters stay fixed during each
@@ -49,6 +59,12 @@ are global projected A/C KKT `<= 1e-10`, log-width gradient infinity norm
 complete prior sweep. At the accepted endpoint, a primary streaming evaluation
 and an independent streaming replay check feasibility, prediction, residual,
 objective, KKT and width-gradient consistency.
+
+For fixed-halo problems, the final endpoint check also rebuilds the complete
+contributor prediction from the original observations and immutable halo
+snapshots. It verifies the full/effective residual and objective identities,
+original row and contributor mappings, and target-only projected KKT and
+log-width gradients. Fixed halo gradients are not convergence conditions.
 
 Endpoint replay alone does not establish convergence. A valid replay with a
 recoverable numerical failure can be retried at a bounded interval while
@@ -82,6 +98,9 @@ rule out global parameter identifiability. Zero columns, exact or near rank
 deficiency, active amplitudes, nonfinite values, and unavailable decompositions
 remain explicit diagnostic outcomes. The accepted state and global objective
 are read-only during this assessment.
+
+For fixed-halo problems, these blocks contain targets only; fixed halo columns
+are not included in conditioning or parameter-stability probes.
 
 Each design and Jacobian is column-normalized before its spectrum is summarized,
 so the reported condition numbers are dimensionless within their own matrix.

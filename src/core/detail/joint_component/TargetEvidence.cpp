@@ -19,15 +19,29 @@ bool LayoutMatchesScope(const JointProblem & problem,const JointParameterLayout 
     JointEvidenceScope scope,std::size_t rows)
 {
     const auto & data=JointProblemAccess::Get(problem);
+    JointParameterLayout optimization_layout=layout;
+    if(data.input->selection_domain &&
+        data.input->selection_domain->contributor_policy==FixedHaloContributorPolicy)
+    {
+        optimization_layout.full_atoms.clear();
+        optimization_layout.full_atoms.reserve(layout.full_atoms.size());
+        for(const auto contributor:layout.full_atoms)
+        {
+            if(contributor>=data.contributor_to_target.size()) return false;
+            const auto target=data.contributor_to_target[contributor];
+            if(target==std::numeric_limits<std::size_t>::max()) return false;
+            optimization_layout.full_atoms.push_back(target);
+        }
+    }
     if(scope==JointEvidenceScope::AssembledGlobal)
-        return rows==data.input->observations.size() && SameLayout(layout,data.layout);
+        return rows==data.input->observations.size() && SameLayout(optimization_layout,data.layout);
     for(const auto & view:data.partition.components)
     {
         if(rows!=view.rows.size()) continue;
         JointParameterLayout expected;
         for(auto atom:data.layout.full_atoms) if(view.LocalAtom(static_cast<Eigen::Index>(atom))>=0) expected.full_atoms.push_back(atom);
         for(auto row:data.layout.informative_rows) if(view.LocalRow(static_cast<Eigen::Index>(row))>=0) expected.informative_rows.push_back(row);
-        if(SameLayout(layout,expected)) return true;
+        if(SameLayout(optimization_layout,expected)) return true;
     }
     return false;
 }
@@ -258,7 +272,7 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
     out.checks.push_back({"component-convergence",convergence,scope,{},{},
         convergence==JointCheckStatus::Passed ? "global-numerical-convergence" : "component-not-converged"});
     out.checks.push_back({"parameter-validity",all_parameter_status,scope,{},{},
-        all_parameter_status==JointCheckStatus::Passed ? "all-full-abc-parameters-valid" : "invalid-or-unavailable-parameters"});
+        all_parameter_status==JointCheckStatus::Passed ? "all-optimized-parameters-valid" : "invalid-or-unavailable-parameters"});
     out.checks.push_back({"target-point-validation",target_status,scope,{},{},
         target_status==JointCheckStatus::Passed ? "selected-target-points-valid" : "selected-target-point-unavailable"});
     const bool diagnostic_mapping_valid=!conditioning_index.invalid && !stability_index.invalid && !point_mapping_invalid;
@@ -314,6 +328,7 @@ void AddTargetEvidence(JointFitResult & fit)
     if(!fit.problem || !fit.problem->Input().selection_domain) return;
     const auto started=std::chrono::steady_clock::now();
     const auto & problem=*fit.problem;
+    const auto & data=JointProblemAccess::Get(problem);
     for(auto & c:fit.components)
     {
         const JointParameterLayout layout=c.layout.value_or(JointParameterLayout{c.atoms,c.rows,{}});
@@ -322,7 +337,9 @@ void AddTargetEvidence(JointFitResult & fit)
         c.target_evidence=AssessTargetPointState(problem,layout,c.state,c.RuntimeConvergence(),
             c.local_conditioning,stability,JointEvidenceScope::ComponentLocal,c.rows.size());
     }
-    const auto & global_layout=problem.ParameterLayout();
+    auto global_layout=problem.ParameterLayout();
+    if(data.input->selection_domain->contributor_policy==FixedHaloContributorPolicy)
+        global_layout.full_atoms=data.target_to_contributor;
     std::vector<JointBlockConditioning> conditioning;
     std::vector<JointBlockParameterStability> stability;
     for(const auto & component:fit.components)
@@ -342,8 +359,7 @@ JointFitResult FitFixedNeighborComponents(const JointProblem & problem,const std
     auto out=FitFixedNeighborComponentsImpl(problem,b,policy,observer);
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
     const auto & input=problem.Input();
-    if(!input.selection_domain || input.selection_domain->contributor_policy!=FixedHaloContributorPolicy)
-        AddTargetEvidence(out);
+    if(input.selection_domain) AddTargetEvidence(out);
     return out;
 }
 }
@@ -356,6 +372,12 @@ JointCheckStatus JointFitResult::TargetRuntimeConvergence() const
     if(!assembled_state || !prediction || !objective || components.empty() ||
         !std::all_of(available_row_mask.begin(),available_row_mask.end(),[](bool b){return b;})) return JointCheckStatus::Unavailable;
     auto status=joint_component::TargetConvergence(target_evidence,true);
+    const bool fixed_halo_replay=std::any_of(evidence.begin(),evidence.end(),[](const auto & check) {
+        return check.name=="fixed-halo-replay" && check.scope==JointEvidenceScope::AssembledGlobal;
+    });
+    if(fixed_halo_replay)
+        status=joint_component::MergeConvergenceStatus(status,
+            joint_component::ConvergenceStatus(evidence,JointEvidenceScope::AssembledGlobal,true));
     for(const auto & c:components) status=joint_component::MergeConvergenceStatus(status,c.TargetRuntimeConvergence());
     for(const char * name:{"assembly-mapping","assembled-consistency"})
     {

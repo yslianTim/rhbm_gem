@@ -129,19 +129,35 @@ void ConfigureOptimizationDomain(n::ProblemData & data)
 }
 struct FullReplay
 {
-    bool passed{};
+    bool passed{},residual_passed{},halo_passed{},objective_passed{},mapping_passed{},
+        observation_identities_passed{},fixed_parameters_passed{},target_feasible{},
+        target_ac_passed{},target_width_passed{};
     std::vector<double> prediction;
-    double residual_difference{},halo_difference{},objective_difference{},objective{};
+    double residual_difference{},halo_difference{},objective_difference{},objective{},tolerance{},
+        objective_tolerance{},target_ac_kkt{},target_width_gradient{};
     std::string reason;
 };
 FullReplay ReplayFixedHaloFullModel(const n::ProblemData & data,const n::AssemblyResult & assembly)
 {
     FullReplay out;
+    out.fixed_parameters_passed=true;
     const auto & input=*data.input;
     if(!assembly.available || !assembly.raw.valid || assembly.prediction.size()!=data.y.size() ||
         data.target_to_contributor.size()!=data.domain.atoms.size() ||
         data.contributor_to_target.size()!=input.atom_ids.size())
     {out.reason="missing-target-assembly"; return out;}
+    out.mapping_passed=true;
+    for(std::size_t target=0;target<data.target_to_contributor.size();++target)
+    {
+        const auto contributor=data.target_to_contributor[target];
+        if(contributor>=input.atom_ids.size() || data.contributor_to_target[contributor]!=target ||
+            data.context.atom_ids.size()!=data.target_to_contributor.size() ||
+            data.context.atom_ids[target]!=input.atom_ids[contributor])
+        {out.mapping_passed=false; break;}
+    }
+    out.observation_identities_passed=data.context.row_ids.size()==input.row_ids.size();
+    for(std::size_t row=0;out.observation_identities_passed && row<input.row_ids.size();++row)
+        out.observation_identities_passed=data.context.row_ids[row]==input.row_ids[row];
     out.prediction.assign(input.observations.size(),0.0);
     std::vector<double> target_prediction(input.observations.size()),halo_prediction(input.observations.size());
     std::size_t fixed_cursor{};
@@ -165,6 +181,13 @@ FullReplay ReplayFixedHaloFullModel(const n::ProblemData & data,const n::Assembl
                 data.fixed_halos[fixed_cursor].contributor_index!=contributor)
             {out.reason="fixed-halo-state-mapping-mismatch"; return out;}
             const auto & fixed=data.fixed_halos[fixed_cursor++];
+            out.fixed_parameters_passed &= fixed.atom_id==input.atom_ids[contributor] &&
+                std::isfinite(fixed.amplitude) && fixed.amplitude>=0 &&
+                std::isfinite(fixed.width) && fixed.width>0 && fixed.charge==0.0 &&
+                fixed.first_stage_status &&
+                *fixed.first_stage_status==static_cast<int>(RHBMEstimationStatus::SUCCESS) &&
+                fixed.first_stage_fit_qualified &&
+                fixed.source_contract==FixedHaloParameterSourceContractVersion;
             amplitude=fixed.amplitude; width=fixed.width; charge=0;
         }
         if(!std::isfinite(amplitude) || amplitude<0 || !std::isfinite(width) || !(width>0) ||
@@ -185,6 +208,9 @@ FullReplay ReplayFixedHaloFullModel(const n::ProblemData & data,const n::Assembl
         }
     }
     if(fixed_cursor!=data.fixed_halos.size()) {out.reason="unused-fixed-halo-state"; return out;}
+    if(!data.fixed_halos.empty() && !out.fixed_parameters_passed)
+    {out.reason="invalid-fixed-halo-provenance"; return out;}
+    if(!data.fixed_halos.empty()) out.fixed_parameters_passed=true;
     double full_rss{},effective_rss{},full_compensation{},effective_compensation{};
     double maximum_scale=1;
     for(std::size_t row=0;row<input.observations.size();++row)
@@ -207,16 +233,77 @@ FullReplay ReplayFixedHaloFullModel(const n::ProblemData & data,const n::Assembl
         const double effective_next=effective_rss+effective_term;
         effective_compensation=(effective_next-effective_rss)-effective_term; effective_rss=effective_next;
     }
-    const double tolerance=2e-12*maximum_scale;
+    out.tolerance=2e-12*maximum_scale;
     const double assembled_objective=.5*effective_rss;
     const double replay_objective=.5*full_rss;
-    out.objective_difference=std::abs(replay_objective-assembled_objective);
+    out.objective_tolerance=2e-12*std::max(1.0,assembled_objective);
+    out.objective_difference=std::max(std::abs(replay_objective-assembled_objective),
+        std::abs(assembled_objective-assembly.objective));
     out.objective=replay_objective/(data.context.scale*data.context.scale);
-    out.passed=out.residual_difference<=tolerance && out.halo_difference<=tolerance &&
-        out.objective_difference<=2e-12*std::max(1.0,assembled_objective) &&
-        std::isfinite(replay_objective) &&
-        std::abs(assembled_objective-assembly.objective)<=2e-12*std::max(1.0,assembled_objective);
-    if(!out.passed) out.reason="full-and-effective-objectives-disagree";
+    out.residual_passed=out.residual_difference<=out.tolerance;
+    out.halo_passed=out.halo_difference<=out.tolerance;
+    out.objective_passed=std::isfinite(replay_objective) && out.objective_difference<=out.objective_tolerance;
+
+    const auto target_count=data.target_to_contributor.size();
+    std::vector<long double> ac_gradient(2*target_count),column_norm_squared(2*target_count),
+        gaussian_width_gradient(target_count),charge_width_gradient(target_count);
+    out.target_feasible=true;
+    for(std::size_t target=0;target<target_count;++target)
+    {
+        const auto contributor=data.target_to_contributor[target];
+        const double amplitude=assembly.raw.beta(static_cast<Eigen::Index>(2*target));
+        const double charge=assembly.raw.beta(static_cast<Eigen::Index>(2*target+1));
+        const double width=std::exp(assembly.raw.eta(static_cast<Eigen::Index>(target)));
+        out.target_feasible &= std::isfinite(amplitude) && amplitude>=0 && std::isfinite(charge) &&
+            std::isfinite(width) && width>0;
+        for(const auto & support:input.support[contributor])
+        {
+            const auto basis=n::EvaluateKernel(support.squared_distance,width,2.5);
+            const long double residual=out.prediction[support.row]-input.observations[support.row];
+            ac_gradient[2*target]+=static_cast<long double>(basis.gaussian)*residual;
+            ac_gradient[2*target+1]+=static_cast<long double>(basis.charge)*residual;
+            column_norm_squared[2*target]+=static_cast<long double>(basis.gaussian)*basis.gaussian;
+            column_norm_squared[2*target+1]+=static_cast<long double>(basis.charge)*basis.charge;
+            gaussian_width_gradient[target]+=static_cast<long double>(basis.gaussian_log_width)*residual;
+            charge_width_gradient[target]+=static_cast<long double>(basis.charge_log_width)*residual;
+        }
+    }
+    const long double scale=data.context.scale;
+    out.target_ac_kkt=0;
+    out.target_width_gradient=0;
+    for(std::size_t target=0;target<target_count;++target)
+    {
+        const double amplitude=assembly.raw.beta(static_cast<Eigen::Index>(2*target));
+        const double charge=assembly.raw.beta(static_cast<Eigen::Index>(2*target+1));
+        for(std::size_t coefficient=0;coefficient<2;++coefficient)
+        {
+            const auto index=2*target+coefficient;
+            const double norm=std::sqrt(static_cast<double>(column_norm_squared[index]));
+            if(!std::isfinite(norm) || !(norm>0))
+            {out.target_feasible=false; out.target_ac_kkt=std::numeric_limits<double>::infinity(); continue;}
+            const double beta=coefficient==0 ? amplitude : charge;
+            const double scaled_beta=norm*beta/static_cast<double>(scale);
+            const double scaled_gradient=static_cast<double>(ac_gradient[index]/norm/scale);
+            double projected=scaled_beta-scaled_gradient;
+            if(coefficient==0) projected=std::max(0.0,projected);
+            out.target_ac_kkt=std::max(out.target_ac_kkt,std::abs(scaled_beta-projected));
+        }
+        const double width_gradient=static_cast<double>((amplitude*gaussian_width_gradient[target]+
+            charge*charge_width_gradient[target])/(scale*scale));
+        out.target_width_gradient=std::max(out.target_width_gradient,std::abs(width_gradient));
+    }
+    out.target_ac_passed=out.target_feasible && std::isfinite(out.target_ac_kkt) && out.target_ac_kkt<=1e-10;
+    out.target_width_passed=std::isfinite(out.target_width_gradient) && out.target_width_gradient<=1e-12;
+    out.passed=out.mapping_passed && out.observation_identities_passed && out.fixed_parameters_passed &&
+        out.residual_passed && out.halo_passed && out.objective_passed && out.target_ac_passed && out.target_width_passed;
+    if(!out.passed) out.reason=!out.mapping_passed ? "target-contributor-mapping-mismatch" :
+        !out.observation_identities_passed ? "original-observation-identity-mismatch" :
+        !out.fixed_parameters_passed ? "invalid-fixed-halo-provenance" :
+        !out.residual_passed ? "full-and-effective-residuals-disagree" :
+        !out.halo_passed ? "fixed-halo-replay-disagrees" :
+        !out.objective_passed ? "full-and-effective-objectives-disagree" :
+        !out.target_feasible ? "target-parameters-infeasible" :
+        !out.target_ac_passed ? "target-ac-kkt-failed" : "target-width-gradient-failed";
     return out;
 }
 }
@@ -288,9 +375,17 @@ JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> & evidence,Join
     }
     if(assembled)
     {
-        const std::vector<const char *> assembly_required=reference_free ?
+        std::vector<const char *> assembly_required=reference_free ?
             std::vector<const char *>{"assembly-mapping","assembled-consistency"} :
             std::vector<const char *>{"assembled-profile"};
+        const bool fixed_halo_replay=std::any_of(evidence.begin(),evidence.end(),[&](const auto & check) {
+            return check.name=="fixed-halo-replay" && check.scope==scope;
+        });
+        if(fixed_halo_replay)
+            for(const char * name:{"full-observation-replay","fixed-halo-replay","full-objective-replay",
+                "target-ac-feasibility","target-ac-optimality","target-width-stationarity",
+                "target-contributor-mapping","original-observation-identities","fixed-halo-provenance"})
+                assembly_required.push_back(name);
         for(const char * name:assembly_required)
         {
             const auto found=std::find_if(evidence.begin(),evidence.end(),[&](const auto & check){return check.name==name && check.scope==scope;});
@@ -805,12 +900,42 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         if(fixed_halo_policy)
         {
             full_replay=ReplayFixedHaloFullModel(data,assembly);
-            out.evidence.push_back({"full-observation-replay",full_replay->passed ? JointCheckStatus::Passed :
+            out.evidence.push_back({"full-observation-replay",full_replay->residual_passed ? JointCheckStatus::Passed :
                 JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
-                full_replay->residual_difference,2e-12,full_replay->reason});
-            out.evidence.push_back({"fixed-halo-replay",full_replay->passed ? JointCheckStatus::Passed :
+                full_replay->residual_difference,full_replay->tolerance,full_replay->residual_passed ?
+                    "full-and-effective-residuals-agree" : full_replay->reason});
+            out.evidence.push_back({"fixed-halo-replay",full_replay->halo_passed ? JointCheckStatus::Passed :
                 JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
-                full_replay->halo_difference,2e-12,full_replay->passed ? "immutable-first-stage-snapshot" : full_replay->reason});
+                full_replay->halo_difference,full_replay->tolerance,full_replay->halo_passed ?
+                    "immutable-first-stage-snapshot" : full_replay->reason});
+            out.evidence.push_back({"full-objective-replay",full_replay->objective_passed ? JointCheckStatus::Passed :
+                JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
+                full_replay->objective_difference,full_replay->objective_tolerance,full_replay->objective_passed ?
+                    "full-and-effective-objectives-agree" : full_replay->reason});
+            out.evidence.push_back({"target-ac-feasibility",full_replay->target_feasible ? JointCheckStatus::Passed :
+                JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
+                full_replay->target_feasible ? 0.0 : 1.0,0.0,full_replay->target_feasible ?
+                    "target-parameters-feasible" : full_replay->reason});
+            out.evidence.push_back({"target-ac-optimality",full_replay->target_ac_passed ? JointCheckStatus::Passed :
+                JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
+                full_replay->target_ac_kkt,1e-10,full_replay->target_ac_passed ?
+                    "target-only-projected-kkt" : full_replay->reason});
+            out.evidence.push_back({"target-width-stationarity",full_replay->target_width_passed ? JointCheckStatus::Passed :
+                JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
+                full_replay->target_width_gradient,1e-12,full_replay->target_width_passed ?
+                    "target-only-log-width-gradient" : full_replay->reason});
+            out.evidence.push_back({"target-contributor-mapping",full_replay->mapping_passed ? JointCheckStatus::Passed :
+                JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
+                full_replay->mapping_passed ? 0.0 : 1.0,0.0,full_replay->mapping_passed ?
+                    "target-contributor-identity" : full_replay->reason});
+            out.evidence.push_back({"original-observation-identities",full_replay->observation_identities_passed ?
+                JointCheckStatus::Passed : JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
+                full_replay->observation_identities_passed ? 0.0 : 1.0,0.0,full_replay->observation_identities_passed ?
+                    "original-row-identity" : full_replay->reason});
+            out.evidence.push_back({"fixed-halo-provenance",full_replay->fixed_parameters_passed ?
+                JointCheckStatus::Passed : JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
+                full_replay->fixed_parameters_passed ? 0.0 : 1.0,0.0,full_replay->fixed_parameters_passed ?
+                    "qualified-first-stage-fixed-parameters" : full_replay->reason});
         }
         const bool replay_passed=assembly.consistency_passed && (!full_replay || full_replay->passed);
         const auto consistency_status=replay_passed ? JointCheckStatus::Passed :

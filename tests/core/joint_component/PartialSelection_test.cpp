@@ -271,6 +271,8 @@ TEST(JointComponentPartialSelectionTest, FixedHaloResponseUsesRawScaleAndReplays
             data.fixed_prediction(static_cast<Eigen::Index>(row)));
 
     const auto fit=core::FitJointComponents(initialized,{f.b[0]});
+    EXPECT_EQ(fit.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(fit.assembled_state);
     ASSERT_TRUE(fit.prediction);
     ASSERT_TRUE(fit.objective);
@@ -283,6 +285,16 @@ TEST(JointComponentPartialSelectionTest, FixedHaloResponseUsesRawScaleAndReplays
     });
     ASSERT_NE(replay,fit.evidence.end());
     EXPECT_EQ(replay->status,rhbm_gem::JointCheckStatus::Passed);
+    for(const auto * name:{"fixed-halo-replay","full-objective-replay","target-ac-feasibility",
+        "target-ac-optimality","target-width-stationarity","target-contributor-mapping",
+        "original-observation-identities","fixed-halo-provenance"})
+    {
+        const auto check=std::find_if(fit.evidence.begin(),fit.evidence.end(),[&](const auto & item) {
+            return item.name==name;
+        });
+        ASSERT_NE(check,fit.evidence.end()) << name;
+        EXPECT_EQ(check->status,rhbm_gem::JointCheckStatus::Passed) << name;
+    }
 
     double rss{};
     for(std::size_t row=0;row<problem.Input().observations.size();++row)
@@ -300,6 +312,30 @@ TEST(JointComponentPartialSelectionTest, FixedHaloResponseUsesRawScaleAndReplays
         rss+=full_residual*full_residual;
     }
     EXPECT_NEAR(*fit.objective,rss/(2*problem.ObservationScale()*problem.ObservationScale()),1e-12);
+
+    auto noisy_input=problem.Input();
+    const auto noisy_row=noisy_input.support[1].front().row;
+    noisy_input.observations[noisy_row]+=.05;
+    const core::JointProblem noisy_problem(std::move(noisy_input));
+    const auto noisy_fixed=noisy_problem.WithFixedHalos(fixed);
+    const auto noisy_fit=core::FitJointComponents(noisy_fixed,{f.b[0]});
+    EXPECT_EQ(noisy_fit.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    ASSERT_TRUE(noisy_fit.assembled_state);
+    ASSERT_TRUE(noisy_fit.prediction);
+    double fixed_halo_amplitude_gradient{},fixed_halo_charge_gradient{},fixed_halo_width_gradient{};
+    for(const auto & support:noisy_problem.Input().support[1])
+    {
+        const auto basis=n::EvaluateKernel(support.squared_distance,fixed[0].width,2.5);
+        const double residual=noisy_fit.prediction->at(support.row)-noisy_problem.Input().observations[support.row];
+        fixed_halo_amplitude_gradient+=basis.gaussian*residual;
+        fixed_halo_charge_gradient+=basis.charge*residual;
+        fixed_halo_width_gradient+=fixed[0].amplitude*basis.gaussian_log_width*residual;
+    }
+    fixed_halo_width_gradient/=std::pow(noisy_problem.ObservationScale(),2);
+    const double fixed_halo_gradient=std::max({std::abs(fixed_halo_amplitude_gradient),
+        std::abs(fixed_halo_charge_gradient),std::abs(fixed_halo_width_gradient)});
+    EXPECT_GT(fixed_halo_gradient,1e-12);
+    EXPECT_EQ(noisy_fixed.FixedHalos(),fixed);
 }
 
 TEST(JointComponentPartialSelectionTest, NonleadingTargetMapsBackToFullContributorIdentity)
@@ -332,9 +368,17 @@ TEST(JointComponentPartialSelectionTest, NonleadingTargetMapsBackToFullContribut
     EXPECT_EQ(data.target_to_contributor,(std::vector<std::size_t>{1}));
     EXPECT_EQ(data.context.atom_ids,(std::vector<std::string>{"2"}));
     const auto fit=core::FitJointComponents(initialized,{f.b[1]});
+    EXPECT_EQ(fit.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(fit.assembled_state);
     ASSERT_EQ(fit.components.size(),1u);
     EXPECT_EQ(fit.components[0].atoms,(std::vector<std::size_t>{1}));
+    ASSERT_TRUE(fit.target_evidence);
+    ASSERT_EQ(fit.target_evidence->point_atoms.size(),1u);
+    EXPECT_EQ(fit.target_evidence->point_atoms[0].atom,1u);
+    for(const auto & block:fit.components[0].local_conditioning)
+        EXPECT_EQ(block.core_atoms,(std::vector<std::size_t>{1}));
+    ASSERT_TRUE(fit.problem);
+    EXPECT_EQ(fit.problem->FixedHalos(),initialized.FixedHalos());
     EXPECT_NEAR(fit.assembled_state->ac[0],f.a[1],1e-9*(1+f.a[1]));
     EXPECT_NEAR(fit.assembled_state->ac[1],f.c[1],1e-9*(1+std::abs(f.c[1])));
     EXPECT_NEAR(fit.assembled_state->b[0],f.b[1],1e-9*(1+f.b[1]));
