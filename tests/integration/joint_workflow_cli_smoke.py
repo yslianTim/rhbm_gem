@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import csv
 import shutil
 import json
 from pathlib import Path
@@ -76,6 +77,7 @@ def main() -> int:
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
         assert saved["schema_version"] == 14
+        assert saved["parameterization_contract"] == "target-only-fixed-halo-v1"
         assert saved["metadata"]["solver"]["search_method"] == "fixed-neighbor"
         default_solver = saved["metadata"]["solver"]
         assert {key: default_solver[key] for key in (
@@ -106,12 +108,26 @@ def main() -> int:
             "fixed_neighbor_local_search": "profile-lm",
         }
         assert saved["selection_domain"]["target_indices"] == [0]
+        assert saved["selection_domain"]["contributor_policy"] == "first-stage-fixed-halo-v1"
         assert saved["atom_ids"] == ["1", "2"]
+        assert len(saved["fixed_halos"]) == 1
+        fixed_halo = saved["fixed_halos"][0]
+        assert fixed_halo["atom_id"] == "2"
+        assert fixed_halo["charge"] == 0
+        assert fixed_halo["source_contract"] == "first-stage-mdpde-fixed-halo-v1"
         assert saved["initialization"]["data_scope"] == "contributor-local-sampling-may-read-outside-target-domain"
-        csv = (root / "joint_atoms_example.csv").read_text().splitlines()
-        assert csv[0].endswith(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality")
-        assert ',target,FullABC,"",' in csv[1]
-        assert ',halo,FullABC,"",' in csv[2]
+        csv_lines = (root / "joint_atoms_example.csv").read_text().splitlines()
+        assert csv_lines[0].endswith(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality")
+        csv_rows = {row["SelectionRole"]: row for row in csv.DictReader(csv_lines)}
+        assert csv_rows["target"]["Parameterization"] == "TargetOnlyUnestimated"
+        assert csv_rows["target"]["StateAvailable"] == "0"
+        assert csv_rows["target"]["PointQuality"] == "Unavailable"
+        assert csv_rows["halo"]["Parameterization"] == "FixedFromFirstStage"
+        assert csv_rows["halo"]["StateAvailable"] == "1"
+        assert csv_rows["halo"]["StopReason"] == "fixed-from-first-stage"
+        assert float(csv_rows["halo"]["A"]) == fixed_halo["amplitude"]
+        assert float(csv_rows["halo"]["B"]) == fixed_halo["width"]
+        assert float(csv_rows["halo"]["C"]) == 0
         assert 'target_runtime_convergence' in saved
         metadata = saved["metadata"]
         assert metadata["model_sha256"] == model_hash
@@ -126,29 +142,16 @@ def main() -> int:
             assert len(metadata["software"][key]) == 64
         assert metadata["software"] == generator
         assert saved["regular_certificate"] == "not-run"
-        assert saved["components"] and saved["assembled_state"] is not None
+        assert saved["components"] and saved["assembled_state"] is None
         for component in saved["components"]:
-            if component["search_sweeps"]:
-                assert component["search_completed"]
-                assert component["state"] is not None
-                assert 0 < component["first_order_stationarity_sweep"] <= component["confirmed_stationarity_sweep"]
-                assert component["confirmed_stationarity_sweep"] <= component["endpoint_certification_sweep"]
-                assert component["endpoint_certification_sweep"] == component["search_sweeps"] <= 200
-                checks = {check["name"]: check for check in component["evidence"]}
-                assert checks["ac-feasibility"]["status"] == "passed"
-                assert checks["conditional-ac-optimality"]["status"] == "passed"
-                assert checks["independent-ac-optimality"]["status"] == "passed"
-                assert checks["independent-kkt-consistency"]["status"] == "passed"
-                assert checks["independent-replay"]["status"] == "passed"
-                assert checks["width-gradient-consistency"]["status"] == "passed"
-                assert checks["width-stationarity"]["status"] == "passed"
-                assert checks["numerical-qualification"]["status"] == "passed"
-                assert "design-identifiability" not in checks
-                assert "numerical-identifiability" not in checks
-                point = component["target_evidence"]
-                assert point["contract"] == "target-point-validation-v1"
-                assert not point["ranks"] and not point["atoms"]
-                assert point["point_atoms"]
+            assert not component["search_completed"]
+            assert component["state"] is None
+            assert component["stop_reason"] == "block-sweep-budget"
+            assert 0 < component["search_sweeps"] <= 200
+            point = component["target_evidence"]
+            assert point["contract"] == "target-point-validation-v1"
+            assert not point["ranks"] and not point["atoms"]
+            assert point["point_atoms"]
         assert "prediction" not in saved and "observations" not in saved
         assert (root / "joint_atoms_example.csv").read_text().startswith("AtomID,ComponentID,A,B,C,")
         run("result_dump", "--printer", "gaus", "-d", database, "-k", "example", "-o", root)

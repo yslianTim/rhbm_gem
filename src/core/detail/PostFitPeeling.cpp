@@ -171,6 +171,7 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
         if (!requested[atom]) continue;
         const auto id = std::stoi(input.atom_ids[atom]);
         const auto view = AtomLocalPotentialView::For(*m_model.FindAtomPtr(id));
+        if (fixed_target_only && view.GetStageEstimate(FittingStage::Second).source.component_id.empty()) continue;
         auto & output = results[id];
         output.source = view.GetStageEstimate(FittingStage::Second).source;
         std::set<std::size_t> neighbors;

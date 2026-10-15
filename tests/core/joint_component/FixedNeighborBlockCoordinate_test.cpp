@@ -486,31 +486,55 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
 {
     constexpr Eigen::Index rows=5'938'087;
     constexpr std::size_t atoms=37'406;
+    constexpr std::size_t target_atoms=27'406;
+    constexpr std::size_t halo_atoms=atoms-target_atoms;
     auto input=std::make_shared<rhbm_gem::core::JointProblemInput>();
     input->observations.assign(static_cast<std::size_t>(rows),0.0);
     input->row_ids.resize(static_cast<std::size_t>(rows));
     input->atom_ids.reserve(atoms); input->support.resize(atoms);
-    for(std::size_t atom=0;atom<atoms;++atom)
+    for(std::size_t atom=0;atom<target_atoms;++atom)
     {
-        input->atom_ids.push_back("atom-"+std::to_string(atom));
+        input->atom_ids.push_back("target-"+std::to_string(atom));
         input->support[atom].push_back({atom,0.0});
-        if(atom+1<atoms) input->support[atom].push_back({atom+1,0.0});
+        input->support[atom].push_back({atom+1,0.0});
     }
-    input->selection_domain.emplace(); input->selection_domain->target_indices.resize(atoms);
+    for(std::size_t halo=0;halo<halo_atoms;++halo)
+    {
+        const auto atom=target_atoms+halo;
+        input->atom_ids.push_back("halo-"+std::to_string(halo));
+        input->support[atom].push_back({0,0.0});
+        input->support[atom].push_back({target_atoms,0.0});
+    }
+    input->selection_domain.emplace();
+    input->selection_domain->contributor_policy=std::string(rhbm_gem::FixedHaloContributorPolicy);
+    input->selection_domain->fixed_halo_selection=rhbm_gem::JointFixedHaloSelectionProvenance{
+        1,halo_atoms,halo_atoms,0};
+    input->selection_domain->target_indices.resize(target_atoms);
     std::iota(input->selection_domain->target_indices.begin(),input->selection_domain->target_indices.end(),std::size_t{0});
     const std::shared_ptr<const rhbm_gem::core::JointProblemInput> snapshot=input;
-    n::Domain domain(snapshot); domain.rows=rows;
-    rhbm_gem::JointParameterLayout layout; layout.full_atoms.resize(atoms);
+    n::Domain all_contributors(snapshot); all_contributors.rows=rows;
+    n::Indices target_indices(target_atoms);
+    std::iota(target_indices.begin(),target_indices.end(),Eigen::Index{0});
+    const auto domain=all_contributors.Select(target_indices,rows,n::CompactRowMapping::Identity(rows));
+    rhbm_gem::JointParameterLayout layout; layout.full_atoms.resize(target_atoms);
     std::iota(layout.full_atoms.begin(),layout.full_atoms.end(),std::size_t{0});
     layout.informative_rows.resize(static_cast<std::size_t>(rows));
     std::iota(layout.informative_rows.begin(),layout.informative_rows.end(),Eigen::Index{0});
     n::EvaluationContext context; context.scale=1;
-    context.rank={rows,2*static_cast<Eigen::Index>(atoms),static_cast<Eigen::Index>(atoms)};
+    context.rank={rows,2*static_cast<Eigen::Index>(target_atoms),static_cast<Eigen::Index>(target_atoms)};
     context.linear.rank_relative=context.rank.Relative(context.rank.design_columns);
-    context.observations=n::Observe(snapshot);
-    context.atom_ids=n::Identities(std::shared_ptr<const std::vector<std::string>>(snapshot,&snapshot->atom_ids));
+    auto effective=std::make_shared<std::vector<double>>(input->observations);
+    const std::shared_ptr<const std::vector<double>> effective_snapshot=effective;
+    context.observations=n::Observe(effective_snapshot);
+    context.atom_ids=n::Identities(std::shared_ptr<const std::vector<std::string>>(snapshot,&snapshot->atom_ids))
+        .Select(target_indices);
     context.row_ids=n::Identities(std::shared_ptr<const std::vector<std::string>>(snapshot,&snapshot->row_ids));
-    const n::Vector y=n::Vector::Zero(rows),eta=n::Vector::Constant(static_cast<Eigen::Index>(atoms),std::log(.55));
+    n::VectorMap y(effective->data(),rows);
+    const n::Vector eta=n::Vector::Constant(static_cast<Eigen::Index>(target_atoms),std::log(.55));
+    const Eigen::VectorXd fixed_prediction=Eigen::VectorXd::Zero(rows);
+    const auto target_partition=n::Partition(domain,context.atom_ids);
+    ASSERT_EQ(target_partition.components.size(),1u);
+    EXPECT_EQ(target_partition.components.front().atoms.size(),target_atoms);
     n::FixedNeighborPolicy policy; policy.core_atoms=12; policy.maximum_sweeps=0; policy.certify_endpoint=false;
     const auto preparation=n::SearchFixedNeighborComponent(domain,layout,y,eta,context,policy);
     EXPECT_EQ(preparation.reason,"block-sweep-budget");
@@ -518,11 +542,18 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     EXPECT_EQ(preparation.global_state_memory_estimate.status,n::MemoryStatus::Pass);
     EXPECT_LE(preparation.global_state_memory_estimate.estimated_peak_bytes,n::JointMemoryPlanningBudgetBytes);
     EXPECT_EQ(preparation.sweep_count,0u);
-    EXPECT_EQ(preparation.memory_estimate.shape.component_blocks,3'118u);
+    EXPECT_EQ(preparation.memory_estimate.shape.component_free_columns,2*target_atoms);
+    EXPECT_EQ(preparation.memory_estimate.shape.component_blocks,
+        (target_atoms+policy.core_atoms-1)/policy.core_atoms);
 
     const auto support_entries=n::CountSupportEntries(*snapshot);
     ASSERT_TRUE(support_entries);
-    n::BlockCoordinateState accepted; accepted.eta=eta; accepted.beta=n::Vector::Zero(2*atoms);
+    EXPECT_EQ(*support_entries,2*atoms);
+    std::size_t target_support_entries{};
+    for(std::size_t atom=0;atom<target_atoms;++atom) target_support_entries+=input->support[atom].size();
+    EXPECT_EQ(target_support_entries,2*target_atoms);
+    n::BlockCoordinateState accepted; accepted.eta=eta; accepted.beta=n::Vector::Zero(2*target_atoms);
+    EXPECT_EQ(static_cast<std::size_t>(accepted.eta.size()+accepted.beta.size()),3*target_atoms);
     n::AssessmentWorkForTesting()={}; n::NumericsWorkForTesting()={};
     const auto certification=n::CertifyFixedNeighborEndpoint(domain,y,accepted,context);
     ASSERT_TRUE(certification.qualified())<<certification.assessment.failure;
@@ -539,15 +570,27 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     const auto rss=n::CurrentRssBytes();
     const auto peak=n::ProcessPeakRssBytes();
     RecordProperty("synthetic_support_entries",std::to_string(*support_entries));
+    RecordProperty("target_count",std::to_string(target_atoms));
+    RecordProperty("fixed_halo_count",std::to_string(halo_atoms));
+    RecordProperty("target_only_blocks",std::to_string(preparation.memory_estimate.shape.component_blocks));
     RecordProperty("estimated_endpoint_verification_peak_bytes",
         std::to_string(certification.verification_memory_estimate.estimated_peak_bytes));
     std::cout<<"joint-large-synthetic observations="<<rows<<" contributors="<<atoms
-        <<" support_entries="<<*support_entries
+        <<" targets="<<target_atoms<<" fixed_halos="<<halo_atoms
+        <<" target_components="<<target_partition.components.size()
+        <<" target_only_blocks="<<preparation.memory_estimate.shape.component_blocks
+        <<" ac_design_columns="<<2*target_atoms
+        <<" target_parameters="<<3*target_atoms
+        <<" fixed_halo_prediction_bytes="<<static_cast<std::size_t>(fixed_prediction.size())*sizeof(double)
+        <<" effective_observation_bytes="<<effective->size()*sizeof(double)
+        <<" support_entries="<<*support_entries<<" target_support_entries="<<target_support_entries
         <<" preparation_peak_estimate_bytes="<<preparation.global_state_memory_estimate.estimated_peak_bytes
+        <<" preflight_status="<<(preparation.global_state_memory_estimate.status==n::MemoryStatus::Pass ? "pass" : "fail")
+        <<" preflight_budget_bytes="<<n::JointMemoryPlanningBudgetBytes
         <<" endpoint_peak_estimate_bytes="<<certification.verification_memory_estimate.estimated_peak_bytes
         <<" observed_current_rss_bytes="<<(rss ? std::to_string(*rss) : "unavailable")
         <<" observed_process_peak_rss_bytes="<<(peak ? std::to_string(*peak) : "unavailable")
-        <<" global_rank_workspace=removed physical_input=not-measured"<<std::endl;
+        <<" global_dense_matrix=none"<<std::endl;
 }
 TEST(JointFixedNeighborBlockCoordinateTest, EndpointReplayUsesStreamingVerificationForLargeComponents)
 {

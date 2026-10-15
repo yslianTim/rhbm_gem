@@ -53,9 +53,15 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
         std::vector<std::pair<const JointAnalysisComponent *,std::size_t>> mapping(result.atom_ids.size());
         for(const auto & component:result.components)
             for(std::size_t i=0;i<component.atoms.size();++i) mapping[component.atoms[i]]={&component,i};
+        const bool target_only_fixed_halo=
+            result.parameterization_contract==JointTargetOnlyFixedHaloParameterizationContract;
+        std::vector<const JointFixedHaloParameter *> fixed_halos(result.atom_ids.size());
+        if(target_only_fixed_halo)
+            for(const auto & halo:result.fixed_halos) fixed_halos.at(halo.contributor_index)=&halo;
         for(std::size_t atom=0;atom<result.atom_ids.size();++atom)
         {
             const auto [component,original_index]=mapping[atom];
+            const auto * fixed_halo=fixed_halos[atom];
             auto index=original_index;
             const bool full=group_ids[atom].empty();
             if(component && component->layout && full)
@@ -82,24 +88,43 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
                     {identified=a.status; point_valid=target || a.status==JointCheckStatus::Passed;}
             }
             const bool export_point=full && (target || !component || !component->target_evidence || point_valid);
+            const bool state_available=fixed_halo || (component && component->state && export_point);
+            const char * parameterization=full ? "FullABC" : "ObservableContributionOnly";
+            if(target_only_fixed_halo)
+                parameterization=fixed_halo ? "FixedFromFirstStage" : target ?
+                    state_available ? "JointEstimated" : "TargetOnlyUnestimated" : "FixedHaloUnavailable";
+            const std::string stop_reason=fixed_halo ? "fixed-from-first-stage" :
+                target_only_fixed_halo && !target ? "fixed-halo-unavailable" :
+                component ? component->stop_reason : result.initialization.reason;
+            const auto runtime_convergence=fixed_halo ? JointCheckStatus::NotRun :
+                component && full ? component->runtime_convergence : JointCheckStatus::Unavailable;
+            const auto regular_certificate=fixed_halo ? JointCheckStatus::NotRun :
+                component ? component->regular_certificate : result.regular_certificate;
+            const auto target_convergence=fixed_halo ? JointCheckStatus::NotRun :
+                component ? component->target_runtime_convergence : JointCheckStatus::NotRun;
+            const std::string point_quality_output=target_only_fixed_halo && !target ? "NotApplicable" :
+                component && component->target_evidence &&
+                component->target_evidence->contract==JointTargetPointValidationContractVersion ?
+                point_quality : std::string(joint_result_io::StatusText(identified));
             csv_file << CsvText(result.atom_ids[atom]) << ',' << CsvText(component ? component->id : "") << ',';
-            if(component && component->state && export_point)
+            if(fixed_halo)
+                csv_file << fixed_halo->amplitude << ',' << fixed_halo->width << ',' << fixed_halo->charge;
+            else if(component && component->state && export_point)
             {
                 const auto & state=*component->state;
                 csv_file << state.ac[2*index] << ',' << state.b[index] << ',' << state.ac[2*index+1];
             }
             else csv_file << ",,";
-            csv_file << ',' << (component && component->state.has_value() && export_point) << ',' << (component && component->search_completed)
-                << ',' << CsvText(component ? component->stop_reason : result.initialization.reason)
-                << ',' << joint_result_io::StatusText(component && full ? component->runtime_convergence : JointCheckStatus::Unavailable)
-                << ',' << joint_result_io::StatusText(component ? component->regular_certificate : result.regular_certificate)
+            csv_file << ',' << state_available << ',' << (component && component->search_completed)
+                << ',' << CsvText(stop_reason)
+                << ',' << joint_result_io::StatusText(runtime_convergence)
+                << ',' << joint_result_io::StatusText(regular_certificate)
                 << ',' << (!result.selection_domain ? "not-recorded" :
-                    std::binary_search(result.selection_domain->target_indices.begin(),result.selection_domain->target_indices.end(),atom) ? "target" : "halo") << ',' << (full ? "FullABC" : "ObservableContributionOnly")
+                    target ? "target" : "halo") << ',' <<
+                    parameterization
                 << ',' << CsvText(group_ids[atom]) << ','
-                << joint_result_io::StatusText(component ? component->target_runtime_convergence : JointCheckStatus::NotRun) << ','
-                << (component && component->target_evidence &&
-                    component->target_evidence->contract==JointTargetPointValidationContractVersion ?
-                    point_quality : joint_result_io::StatusText(identified)) << '\n';
+                << joint_result_io::StatusText(target_convergence) << ','
+                << point_quality_output << '\n';
         }
         json_file.close(); csv_file.close();
         if(contribution_file.is_open()) contribution_file.close();

@@ -258,7 +258,14 @@ def assert_joint_workflow() -> None:
         assert normalization["divisor"] > 0
         assert len(saved["metadata"]["software"]["build_sha256"]) == 64
         assert saved["regular_certificate"] == "not-run"
-        assert saved["assembled_state"] is not None
+        assert saved["parameterization_contract"] == "target-only-fixed-halo-v1"
+        assert saved["assembled_state"] is None
+        assert len(saved["fixed_halos"]) == 1
+        assert saved["fixed_halos"][0]["atom_id"] == "2"
+        assert saved["fixed_halos"][0]["charge"] == 0
+        assert saved["components"]
+        assert saved["components"][0]["state"] is None
+        assert saved["components"][0]["stop_reason"] == "block-sweep-budget"
         assert saved["runtime_convergence"] in {"passed", "failed", "unavailable", "not-run"}
 
 

@@ -278,7 +278,8 @@ void RunJointComponentWorkflow(
     {
         const auto local = AtomLocalPotentialView::For(*atom);
         const auto & stage = local.GetStageEstimate(FittingStage::Second);
-        if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target) continue;
+        if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target ||
+            stage.source.component_id.empty()) continue;
         const auto & peeling = local.GetPostFitPeeling();
         PostJointLocalResult result;
         if (peeling) result = FitPostJointLocalTarget(

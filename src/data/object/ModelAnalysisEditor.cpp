@@ -288,7 +288,11 @@ void ModelAnalysisEditor::ApplyPostFitPeelingsBatch(
         const auto & stage = entry->StageEstimate(FittingStage::Second);
         if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target ||
             stage.source.atom_id != std::to_string(id) || stage.source.component_id.empty() || stage.source.run_id.empty())
-            throw std::invalid_argument("Post-fit peeling source is not a Joint target.");
+            throw std::invalid_argument("Post-fit peeling source is not a Joint target: atom=" +
+                std::to_string(id) + ", method=" + std::to_string(static_cast<int>(stage.source.method)) +
+                ", role=" + std::to_string(static_cast<int>(stage.source.role)) +
+                ", source_atom=" + stage.source.atom_id + ", component=" + stage.source.component_id +
+                ", run=" + stage.source.run_id + ".");
         if (run_id.empty()) run_id = stage.source.run_id;
         else if (run_id != stage.source.run_id)
             throw std::invalid_argument("Inconsistent Joint run identity in post-fit peeling batch.");

@@ -1131,6 +1131,51 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsEachContributorOnceWi
     }
 }
 
+TEST(JointComponentPartialSelectionTest, UnassignedTargetDoesNotEnterPostFitPeelingBatch)
+{
+    auto f = joint_partial_test::Make("weak");
+    std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
+    for (const auto & atom : f.model->GetAtomList())
+        atoms.push_back(std::make_unique<rhbm_gem::AtomObject>(*atom));
+    auto unobserved = std::make_unique<rhbm_gem::AtomObject>();
+    unobserved->SetSerialID(3); unobserved->SetElement(Element::CARBON);
+    unobserved->SetPosition(100.0, 0.0, 0.0); unobserved->SetChainID("A");
+    unobserved->SetComponentID("ALA"); unobserved->SetAtomID("CG");
+    atoms.push_back(std::move(unobserved));
+    f.model = std::make_unique<rhbm_gem::ModelObject>(std::move(atoms));
+    f.model->SelectAtoms([](const auto & atom) { return atom.GetSerialID() != 2; });
+
+    const auto problem = core::BuildJointProblem(*f.map, *f.model);
+    ASSERT_EQ(problem.Input().atom_ids, (std::vector<std::string>{"1", "2", "3"}));
+    ASSERT_TRUE(problem.Input().selection_domain);
+    EXPECT_EQ(problem.Input().selection_domain->target_indices, (std::vector<std::size_t>{0, 2}));
+
+    rhbm_gem::JointAnalysisResult result;
+    result.parameterization_contract = std::string(rhbm_gem::JointTargetOnlyFixedHaloParameterizationContract);
+    result.atom_ids = problem.Input().atom_ids;
+    result.row_ids = problem.Input().row_ids;
+    result.selection_domain = problem.Input().selection_domain;
+    result.fixed_halos = {FixedHaloFor(f, 1)};
+    rhbm_gem::JointAnalysisComponent component;
+    component.id = "target-component"; component.atoms = {0};
+    component.state = rhbm_gem::JointState{{f.a[0], f.c[0]}, {f.b[0]}, {std::log(f.b[0])}, {0.0}, 0.0};
+    result.components.push_back(component);
+
+    f.model->EditAnalysis().ApplySecondStageEstimates(
+        rhbm_gem::data_internal::BuildJointStageEstimates(result, "unassigned-target-test"));
+    f.model->EditAnalysis().SetJointResult(result);
+    const core::detail::JointPostprocessingContext postprocessing(*f.map, *f.model, problem, &result);
+    auto peelings = postprocessing.BuildPostFitPeelingSamples();
+    ASSERT_EQ(peelings.size(), 1u);
+    EXPECT_TRUE(peelings.contains(1));
+    EXPECT_FALSE(peelings.contains(3));
+    std::vector<std::pair<int, rhbm_gem::PostFitPeelingResult>> updates;
+    for (auto & [id, peeling] : peelings) updates.emplace_back(id, std::move(peeling));
+    EXPECT_NO_THROW(f.model->EditAnalysis().ApplyPostFitPeelingsBatch(std::move(updates)));
+    EXPECT_TRUE(rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).GetPostFitPeeling());
+    EXPECT_FALSE(rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(3)).GetPostFitPeeling());
+}
+
 TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissingStates)
 {
     auto f = joint_partial_test::Make("all");
