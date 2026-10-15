@@ -317,3 +317,80 @@ exits 0. The Python and C++ API and the CLI integration test cover these
 outcomes. The reported exit 3 was captured from the CLI process itself; the
 macOS `time -l` wrapper could not query `kern.clockrate` in this sandbox, so
 wall time and RSS were measured by a Python child-process wrapper.
+
+## P3 controlled fixed-halo model-error study
+
+The four controlled scenarios were run sequentially in isolated research
+processes against the same raw 229,783-row observation domain, original scale
+`s = 346.7839502619515`, 1,418 targets, target initial widths, target-only
+FixedNeighbor solver, unchanged gates, and 200-sweep maximum. The production
+and Charge Oracle cases use the qualified 659-halo FirstStage A/B snapshot;
+the two Gaussian Oracle cases replace halo A/B with simulation truth. All
+Joint fixed-halo entries still have C=0. The Charge Oracle's truth charge is
+represented only by research-side effective observations; no production halo
+charge parameter or optimization is introduced. Per-sweep trajectories and
+isolated process wall time and peak RSS are recorded in
+[`fixed-halo-target-only-6z6u-model-error.json`](fixed-halo-target-only-6z6u-model-error.json).
+
+The halo-field error decomposition is:
+
+| Signal comparison | L2 error | Per-row RMSE |
+| --- | ---: | ---: |
+| FirstStage A/B, C=0 vs truth halo signal | 37.56479 | 0.07836498 |
+| Truth A/B, C=0 vs truth halo signal (missing charge) | 38.81258 | 0.08096802 |
+| FirstStage A/B, truth C vs truth halo signal (Gaussian A/B error) | 13.59347 | 0.02835772 |
+| Truth A/B/C vs truth halo signal | 0 | 0 |
+
+Across the 659 halos, FirstStage parameter RMSE was 1.63253 for A and 0.031577
+for B. With widths held at truth, the isolated Gaussian amplitude-error
+contribution had L2/RMSE `14.06620 / 0.0293439`; the subsequent width-error
+contribution had L2/RMSE `5.95145 / 0.0124155`. The missing charge signal
+(`38.81258 / 0.0809680`) is larger than the combined FirstStage Gaussian
+signal error (`13.59347 / 0.0283577`). These vector errors are not orthogonal:
+the production total (`37.56479 / 0.0783650`) includes their interaction and
+partial cancellation. The decomposition identity's maximum absolute residual
+was `9.99e-16`.
+
+| Halo scenario | Qualification | Sweeps | Candidate/verified target RMSE A / B / C | Target prediction RMSE | Full prediction RMSE | Objective | Scenario halo-signal RMSE | Process wall / fit seconds | Peak RSS |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Production: FirstStage A/B, C=0 | Finite candidate, unqualified | 200 | candidate `0.509995 / 0.011678 / 0.065912` | candidate `0.043347` | candidate `0.065527` | candidate `0.00410208` | 0.07836498 | 532.08 / 522.24 | 804,798,464 B |
+| Gaussian Oracle A/B, C=0 | Finite candidate, unqualified | 200 | candidate `0.548196 / 0.012362 / 0.071264` | candidate `0.046432` | candidate `0.066625` | candidate `0.00424079` | 0.08096802 | 530.24 / 521.29 | 807,845,888 B |
+| FirstStage A/B, Oracle C | Finite candidate, unqualified | 200 | candidate `0.066842 / 0.001588 / 0.011621` | candidate `0.006845` | candidate `0.027509` | candidate `0.00072299` | 0.02835772 | 551.97 / 543.00 | 805,224,448 B |
+| Full Oracle A/B/C | Converged and verified | 143 | verified `4.74e-8 / 2.47e-9 / 2.65e-9` | verified `6.41e-9` | verified `1.72e-8` | `2.81935e-16` | 0 | 580.28 / 571.31 | 809,385,984 B |
+
+The three unqualified cases had zero available formal target estimates and
+1,418 finite candidate values each. Their candidate KKT values were
+`2.174e-10`, `4.857e-10`, and `1.837e-10`; width-gradient values were
+`2.184e-12`, `4.991e-12`, and `1.163e-12`, respectively. These miss one or
+both unchanged gates (`1e-10` and `1e-12`); all three exhausted the sweep
+budget, and no trusted full-observation replay was available. Their target
+RMSE, target/full prediction RMSE, and objective entries above are explicitly
+candidate-only and cannot quantify final target bias. All cases had zero
+failed blocks and zero block-recovery attempts.
+
+Full Oracle completed one target component and passed full-sweep confirmation
+and independent replay. Its final target KKT was `1.494e-11`, width-gradient
+infinity norm `6.927e-14`, and maximum accepted log-width step on the final
+sweep `9.129e-11`; all are within their existing gates. It recovered the
+simulation target parameters to near floating-point accuracy. Thus the
+target-only solver can converge on this observation domain when the fixed
+halo model matches the generating signal. This does not validate the other
+three models' unqualified target candidates.
+
+For the model-error attribution, the signal-level evidence shows that omitting
+halo charge causes the larger fixed-halo error in this simulation. The
+finite-candidate comparison also moves substantially when truth charge is
+supplied, but it is not a qualified target-bias estimate. FirstStage A/B's
+target-accuracy effect therefore remains unquantified; the production versus
+Gaussian-Oracle candidates are both unqualified and do not establish which
+target estimates are more accurate. The experiment does not establish that
+the production C=0 assumption is scientifically acceptable. The required
+production C=0 contract remains unchanged pending a converged comparison under
+that model.
+
+Compared with the historical Free-Halo FullABC run, the new target-only
+trajectory has no block failures, no recovery attempts, and no width runaway;
+the Full Oracle case converges with the same target solver. This is better
+observed search stability on this workload, but the production C=0 fit itself
+still stops at a stationarity plateau. No evidence from these runs justifies
+changing FixedNeighbor, SparseQR, or Profile LM convergence settings.

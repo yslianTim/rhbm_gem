@@ -33,8 +33,7 @@ using Clock=std::chrono::steady_clock;
 struct Truth {double a{},c{},b{};};
 struct Fields
 {
-    std::vector<double> first,truth,truth_charge,mixed,reduced,target_truth;
-    std::size_t reduced_halos{};
+    std::vector<double> first,truth,truth_gaussian,truth_charge,mixed,first_amplitude_truth_width,target_truth;
     std::array<std::size_t,4> support_counts{},low_support_qualified{},low_support_failed{};
     std::array<std::size_t,4> first_stage_samples_min{},first_stage_samples_max{};
     std::array<double,4> support_error_rmse{};
@@ -112,8 +111,9 @@ Fields BuildFields(const core::JointProblem & problem,const core::JointInitializ
     std::array<std::vector<double>,4> first_by_support,truth_by_support;
     for(std::size_t bucket=0;bucket<4;++bucket)
     {first_by_support[bucket].assign(rows,0.0); truth_by_support[bucket].assign(rows,0.0);}
-    Fields out; out.first.assign(rows,0); out.truth.assign(rows,0); out.truth_charge.assign(rows,0);
-    out.mixed.assign(rows,0); out.reduced.assign(rows,0); out.target_truth.assign(rows,0);
+    Fields out; out.first.assign(rows,0); out.truth.assign(rows,0); out.truth_gaussian.assign(rows,0);
+    out.truth_charge.assign(rows,0); out.mixed.assign(rows,0); out.first_amplitude_truth_width.assign(rows,0);
+    out.target_truth.assign(rows,0);
     out.first_stage_samples_min.fill(std::numeric_limits<std::size_t>::max());
     for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
     {
@@ -133,12 +133,11 @@ Fields BuildFields(const core::JointProblem & problem,const core::JointInitializ
             throw std::runtime_error("No finite FirstStage A/B candidate for halo "+input.atom_ids[atom]);
         AddContribution(out.first,input,atom,a,b,0.0);
         AddContribution(out.truth,input,atom,t.a,t.b,t.c);
+        AddContribution(out.truth_gaussian,input,atom,t.a,t.b,0.0);
         AddContribution(out.truth_charge,input,atom,0.0,t.b,t.c);
+        AddContribution(out.first_amplitude_truth_width,input,atom,a,t.b,0.0);
         AddContribution(first_by_support[bucket],input,atom,a,b,0.0);
         AddContribution(truth_by_support[bucket],input,atom,t.a,t.b,t.c);
-        const bool legacy_eligible=support_count>=3 && RadialCount(input.support[atom])>=3;
-        if(legacy_eligible)
-        {AddContribution(out.reduced,input,atom,a,b,0.0); ++out.reduced_halos;}
     }
     for(std::size_t row=0;row<rows;++row) out.mixed[row]=out.first[row]+out.truth_charge[row];
     for(std::size_t bucket=0;bucket<4;++bucket)
@@ -150,7 +149,7 @@ std::optional<double> EvidenceValue(const std::vector<rhbm_gem::JointCheck> & ch
 json::object RunCase(const std::string & name,const core::JointProblem & original,
     const core::JointInitialization & original_init,const std::unordered_map<std::string,Truth> & truths,
     const std::vector<double> & fixed_field,const std::vector<double> & scenario_field,bool oracle,
-    bool reduced,const Fields & fields)
+    const Fields & fields)
 {
     const auto & source=original.Input(); auto input=source;
     const double original_scale=original.ObservationScale();
@@ -161,31 +160,47 @@ json::object RunCase(const std::string & name,const core::JointProblem & origina
     for(auto & value:adjusted) value*=adjustment;
     input.observations=std::move(adjusted);
     core::JointProblem problem(std::move(input));
-    auto init=original_init; init.valid=true; init.reason.clear();
+    if(std::abs(problem.ObservationScale()-original_scale)>1e-12*std::max(1.0,original_scale))
+        throw std::runtime_error("controlled scenario changed the original observation scale");
+    auto init=original_init;
     for(std::size_t atom=0;atom<init.atoms.size();++atom)
     {
         auto & record=init.atoms[atom];
         if(std::binary_search(source.selection_domain->target_indices.begin(),source.selection_domain->target_indices.end(),atom)) continue;
         const auto & t=truths.at(source.atom_ids[atom]);
-        if(oracle) {record.mdpde[0]=t.a; record.mdpde[1]=t.b;}
-        else if(reduced && !(source.support[atom].size()>=3 && RadialCount(source.support[atom])>=3))
-            record.mdpde[0]=0.0;
+        if(oracle)
+        {
+            record.mdpde[0]=t.a; record.mdpde[1]=t.b;
+            record.native_status=static_cast<int>(rhbm_gem::RHBMEstimationStatus::SUCCESS);
+            record.first_stage_fit_qualified=true;
+            record.first_stage_qualification=rhbm_gem::RHBMSolveQualification::NativeSuccess;
+            record.first_stage_recovery.reset();
+        }
         record.mdpde[0]*=adjustment;
-        record.native_status=static_cast<int>(rhbm_gem::RHBMEstimationStatus::SUCCESS);
-        record.first_stage_fit_qualified=true;
     }
-    std::map<std::size_t,std::size_t> block_count,last_sweep;
+    std::map<std::size_t,std::size_t> block_count;
+    json::array trajectory;
     const auto observer=[&](const auto & event) {
         if(!event.fixed_neighbor) return;
         const auto index=event.component_index;
         block_count[index]=std::max(block_count[index],event.fixed_neighbor->block_solves);
-        if(last_sweep[index]!=event.fixed_neighbor->sweep)
-        {
-            last_sweep[index]=event.fixed_neighbor->sweep;
-            std::cout<<"case="<<name<<" sweep="<<event.fixed_neighbor->sweep
-                <<" blocks="<<event.fixed_neighbor->block_solves<<" kkt="<<event.fixed_neighbor->global_ac_kkt
-                <<" width_gradient="<<event.fixed_neighbor->width_gradient_inf_norm<<std::endl;
-        }
+        const auto & sweep=*event.fixed_neighbor;
+        trajectory.emplace_back(json::object{{"sweep",sweep.sweep},{"objective",Number(sweep.objective)},
+            {"target_ac_kkt",Number(sweep.global_ac_kkt)},
+            {"target_width_gradient_inf_norm",Number(sweep.width_gradient_inf_norm)},
+            {"maximum_accepted_log_width_step",Number(sweep.maximum_accepted_log_width_step)},
+            {"maximum_target_width",Number(sweep.maximum_target_width)},
+            {"accepted_blocks",sweep.accepted_blocks},{"unchanged_blocks",sweep.unchanged_blocks},
+            {"failed_blocks",sweep.failed_blocks},{"accepted_local_updates",sweep.local_accepted_updates},
+            {"profile_evaluations",sweep.profile_evaluations},{"recovery_attempts",sweep.recovery_attempts},
+            {"recovery_successes",sweep.recovery_successes},{"sweep_seconds",Number(event.elapsed_seconds)}});
+        std::cout<<"case="<<name<<" sweep="<<sweep.sweep<<" objective="<<sweep.objective
+            <<" kkt="<<sweep.global_ac_kkt<<" width_gradient="<<sweep.width_gradient_inf_norm
+            <<" accepted="<<sweep.accepted_blocks<<" unchanged="<<sweep.unchanged_blocks
+            <<" failed="<<sweep.failed_blocks<<" profiles="<<sweep.profile_evaluations
+            <<" recovery="<<sweep.recovery_attempts<<'/'<<sweep.recovery_successes
+            <<" max_log_width_step="<<sweep.maximum_accepted_log_width_step
+            <<" max_B="<<sweep.maximum_target_width<<" seconds="<<event.elapsed_seconds<<std::endl;
     };
     std::vector<rhbm_gem::JointFixedHaloParameter> fixed_halos;
     for(std::size_t atom=0;atom<init.atoms.size();++atom)
@@ -193,11 +208,12 @@ json::object RunCase(const std::string & name,const core::JointProblem & origina
             source.selection_domain->target_indices.end(),atom))
             fixed_halos.push_back({atom,source.atom_ids[atom],init.atoms[atom].mdpde[0],init.atoms[atom].mdpde[1],0.0,
                 init.atoms[atom].sample_count,init.atoms[atom].native_status,
-                std::string(rhbm_gem::FixedHaloParameterSourceContractVersion),true});
+                std::string(rhbm_gem::FixedHaloParameterSourceContractVersion),init.atoms[atom].first_stage_fit_qualified,
+                init.atoms[atom].first_stage_qualification,init.atoms[atom].first_stage_recovery});
     const auto initialized_problem=problem.WithFixedHalos(std::move(fixed_halos));
     std::vector<double> target_widths; target_widths.reserve(source.selection_domain->target_indices.size());
     for(const auto target:source.selection_domain->target_indices) target_widths.push_back(init.b.at(target));
-    joint::FixedNeighborSearchPolicy policy; policy.core_atoms=12; policy.maximum_sweeps=8;
+    joint::FixedNeighborSearchPolicy policy; policy.core_atoms=12; policy.maximum_sweeps=200;
     const auto start=Clock::now();
     const auto fit=joint::FitFixedNeighborComponents(initialized_problem,target_widths,policy,observer);
     const double seconds=std::chrono::duration<double>(Clock::now()-start).count();
@@ -300,6 +316,9 @@ json::object RunCase(const std::string & name,const core::JointProblem & origina
     const auto replay=std::find_if(fit.evidence.begin(),fit.evidence.end(),[](const auto & check) {
         return check.name=="full-observation-replay";
     });
+    const bool verified=complete && converged==fit.components.size() &&
+        target_convergence==rhbm_gem::JointCheckStatus::Passed && replay!=fit.evidence.end() &&
+        replay->status==rhbm_gem::JointCheckStatus::Passed;
     return {{"name",name},{"research_only",true},{"maximum_sweeps",policy.maximum_sweeps},
         {"source_first_stage_failed_halos",std::count_if(original_init.atoms.begin(),original_init.atoms.end(),
             [](const auto & record) {return !record.target && !record.first_stage_fit_qualified;})},
@@ -312,20 +331,23 @@ json::object RunCase(const std::string & name,const core::JointProblem & origina
         {"profile_evaluations",profiles},{"accepted_updates",accepted},{"completed_sweeps",sweeps},
         {"converged_components",converged},{"available_target_estimates",available_count},
         {"target_convergence",static_cast<int>(target_convergence)},
+        {"convergence_status",verified ? "converged-and-verified" : candidate_count ?
+            "finite-candidate-but-unqualified" : "unavailable"},
         {"target_ac_kkt",kkt ? Number(*kkt) : json::value(nullptr)},
         {"target_width_gradient",width ? Number(*width) : json::value(nullptr)},
         {"independent_replay",replay==fit.evidence.end() ? "unavailable" :
             replay->status==rhbm_gem::JointCheckStatus::Passed ? "passed" :
             replay->status==rhbm_gem::JointCheckStatus::Failed ? "failed" : "unavailable"},
-        {"target_parameter_rmse_status",complete && converged==fit.components.size() ? "qualified" : "candidate"},
-        {"target_rmse_A",available_count ? Number(std::sqrt(target_squared_a/static_cast<double>(available_count))) : json::value(nullptr)},
-        {"target_rmse_B",available_count ? Number(std::sqrt(target_squared_b/static_cast<double>(available_count))) : json::value(nullptr)},
-        {"target_rmse_C",available_count ? Number(std::sqrt(target_squared_c/static_cast<double>(available_count))) : json::value(nullptr)},
-        {"target_prediction_rmse",complete ? Number(Rmse(predicted_target,fields.target_truth)) : json::value(nullptr)},
-        {"full_prediction_rmse",complete ? Number(full_rmse) : json::value(nullptr)},
-        {"objective",complete ? Number(objective) : json::value(nullptr)},
+        {"target_parameter_rmse_status",verified ? "qualified" : candidate_count ?
+            "finite-candidate-but-unqualified" : "unavailable"},
+        {"target_rmse_A",verified ? Number(std::sqrt(target_squared_a/static_cast<double>(available_count))) : json::value(nullptr)},
+        {"target_rmse_B",verified ? Number(std::sqrt(target_squared_b/static_cast<double>(available_count))) : json::value(nullptr)},
+        {"target_rmse_C",verified ? Number(std::sqrt(target_squared_c/static_cast<double>(available_count))) : json::value(nullptr)},
+        {"target_prediction_rmse",verified ? Number(Rmse(predicted_target,fields.target_truth)) : json::value(nullptr)},
+        {"full_prediction_rmse",verified ? Number(full_rmse) : json::value(nullptr)},
+        {"objective",verified ? Number(objective) : json::value(nullptr)},
         {"candidate_available_target_estimates",candidate_count},
-        {"candidate_status","unqualified-candidate"},
+        {"candidate_status",candidate_count ? "finite-candidate-unqualified" : "unavailable"},
         {"candidate_ac_kkt",candidate_kkt ? Number(*candidate_kkt) : json::value(nullptr)},
         {"candidate_width_gradient",candidate_width_gradient ? Number(*candidate_width_gradient) : json::value(nullptr)},
         {"candidate_rmse_A",candidate_count ? Number(std::sqrt(candidate_squared_a/static_cast<double>(candidate_count))) : json::value(nullptr)},
@@ -334,6 +356,9 @@ json::object RunCase(const std::string & name,const core::JointProblem & origina
         {"candidate_target_prediction_rmse",candidate_complete ? Number(Rmse(candidate_target,fields.target_truth)) : json::value(nullptr)},
         {"candidate_full_prediction_rmse",candidate_complete ? Number(candidate_full_rmse) : json::value(nullptr)},
         {"candidate_objective",candidate_complete ? Number(candidate_objective) : json::value(nullptr)},
+        {"scenario_halo_signal_l2_error",Number(DifferenceNorm(scenario_field,fields.truth))},
+        {"scenario_halo_signal_rmse",Number(Rmse(scenario_field,fields.truth))},
+        {"trajectory",std::move(trajectory)},
         {"target_conditioning_blocks_assessed",conditioning_blocks},{"target_stability_blocks_assessed",stability_blocks},
         {"wall_seconds",seconds},{"process_peak_rss_bytes",PeakRss()},{"components",std::move(comp)}};
 }
@@ -342,8 +367,14 @@ int main(int argc,char ** argv)
 {
     try
     {
-        if(argc!=4) throw std::invalid_argument("Usage: joint_fixed_halo_validation MODEL MAP OUTPUT.json");
+        if(argc!=4 && argc!=5) throw std::invalid_argument(
+            "Usage: joint_fixed_halo_validation MODEL MAP OUTPUT.json [production|gaussian-oracle|charge-oracle|full-oracle]");
         const std::filesystem::path model_path=argv[1],map_path=argv[2],output_path=argv[3];
+        const std::string scenario=argc==5 ? argv[4] : "all";
+        const auto selected=[&](const std::string & name) {return scenario=="all" || scenario==name;};
+        if(scenario!="all" && scenario!="production" && scenario!="gaussian-oracle" &&
+            scenario!="charge-oracle" && scenario!="full-oracle")
+            throw std::invalid_argument("Unknown controlled scenario: "+scenario);
         auto model=rhbm_gem::ReadModel(model_path.string()); auto map=rhbm_gem::ReadMap(map_path.string());
         model->SelectAtoms([](const rhbm_gem::AtomObject & atom) {
             return atom.GetElement()!=Element::HYDROGEN && atom.GetChainID()=="A";
@@ -365,24 +396,20 @@ int main(int argc,char ** argv)
                     {"distinct_radial_support",RadialCount(input.support[atom])},
                     {"first_stage_samples",record.sample_count},{"A",Number(record.mdpde[0])},{"B",Number(record.mdpde[1])}});
         }
-        auto formal=core::FitJointComponentsInitialized(problem,initialization);
-        case_results.emplace_back(json::object{{"name","production-fixed-first-stage"},{"research_only",false},
-            {"initialization_valid",initialization.valid},{"failure_reason",initialization.reason},
-            {"component_count",formal.components.size()},{"objective",formal.objective ? Number(*formal.objective) : json::value(nullptr)},
-            {"target_convergence",static_cast<int>(formal.TargetRuntimeConvergence())}});
-        const auto first_case=RunCase("first-stage-finite-candidate",problem,initialization,truth,
-            fields.first,fields.first,false,false,fields);
-        case_results.emplace_back(first_case);
-        std::vector<double> truth_gaussian(fields.truth.size());
-        for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
-            if(!std::binary_search(input.selection_domain->target_indices.begin(),input.selection_domain->target_indices.end(),atom))
-            {const auto & t=truth.at(input.atom_ids[atom]); AddContribution(truth_gaussian,input,atom,t.a,t.b,0.0);}
-        case_results.emplace_back(RunCase("oracle-fixed-halo",problem,initialization,truth,
-            truth_gaussian,fields.truth,true,false,fields));
-        case_results.emplace_back(RunCase("first-stage-ab-oracle-charge",problem,initialization,truth,
-            fields.first,fields.mixed,false,false,fields));
-        case_results.emplace_back(RunCase("reduced-legacy-halo-set",problem,initialization,truth,
-            fields.reduced,fields.reduced,false,true,fields));
+        if(!initialization.valid)
+            throw std::runtime_error("P3 controlled fits require a valid FirstStage fixed-halo snapshot: "+initialization.reason);
+        if(selected("production"))
+            case_results.emplace_back(RunCase("production-first-stage-ab-c0",problem,initialization,truth,
+                fields.first,fields.first,false,fields));
+        if(selected("gaussian-oracle"))
+            case_results.emplace_back(RunCase("gaussian-oracle-ab-c0",problem,initialization,truth,
+                fields.truth_gaussian,fields.truth_gaussian,true,fields));
+        if(selected("charge-oracle"))
+            case_results.emplace_back(RunCase("charge-oracle-first-stage-ab-truth-c",problem,initialization,truth,
+                fields.first,fields.mixed,false,fields));
+        if(selected("full-oracle"))
+            case_results.emplace_back(RunCase("full-oracle-ab-c",problem,initialization,truth,
+                fields.truth_gaussian,fields.truth,true,fields));
         json::array low_support;
         for(std::size_t bucket=0;bucket<4;++bucket)
         {
@@ -395,7 +422,15 @@ int main(int argc,char ** argv)
                 {"contribution_error_rmse",fields.support_counts[bucket] ?
                     Number(fields.support_error_rmse[bucket]) : json::value(nullptr)}});
         }
-        json::object out{{"contract","fixed-halo-target-only-p5-study-v1"},{"model",model_path.string()},
+        const double amplitude_error=DifferenceNorm(fields.first_amplitude_truth_width,fields.truth_gaussian);
+        const double width_error=DifferenceNorm(fields.first,fields.first_amplitude_truth_width);
+        const double fixed_delta_error=DifferenceNorm(fields.first,fields.truth);
+        double identity_error{};
+        for(std::size_t row=0;row<input.observations.size();++row)
+            identity_error=std::max(identity_error,std::abs((fields.truth[row]-fields.first[row])-
+                ((fields.truth_gaussian[row]-fields.first[row])+fields.truth_charge[row])));
+        json::object out{{"contract","fixed-halo-target-only-model-error-study-v2"},{"scenario_filter",scenario},
+            {"model",model_path.string()},
             {"map",map_path.string()},{"simulation_truth",map_path.string()+".simulation.json"},
             {"targets",input.selection_domain->target_indices.size()},
             {"contributors",input.atom_ids.size()},{"fixed_halos",input.atom_ids.size()-input.selection_domain->target_indices.size()},
@@ -403,19 +438,27 @@ int main(int argc,char ** argv)
             {"initialization_valid",initialization.valid},{"initialization_reason",initialization.reason},
             {"unqualified_first_stage_halos",failed},{"failed_halos",std::move(failures)},
             {"first_stage_halo_accuracy_status",failed ? "candidate-only" : "qualified"},
-            {"reduced_legacy_halo_count",fields.reduced_halos},
             {"first_stage_halo_A_rmse",nullptr},{"first_stage_halo_B_rmse",nullptr},
             {"first_stage_fixed_halo_prediction_rmse",Number(fixed_error)},
             {"first_stage_fixed_halo_l2_error",Number(DifferenceNorm(fields.first,fields.truth))},
             {"first_stage_truth_halo_l2_norm",Number(truth_norm)},
             {"first_stage_fixed_halo_relative_error",Ratio(DifferenceNorm(fields.first,fields.truth),truth_norm)},
+            {"first_stage_gaussian_amplitude_error_l2",Number(amplitude_error)},
+            {"first_stage_gaussian_amplitude_error_rmse",Number(amplitude_error/std::sqrt(static_cast<double>(input.observations.size())))},
+            {"first_stage_gaussian_width_error_l2",Number(width_error)},
+            {"first_stage_gaussian_width_error_rmse",Number(width_error/std::sqrt(static_cast<double>(input.observations.size())))},
+            {"missing_halo_charge_l2",Number(Norm(fields.truth_charge))},
+            {"missing_halo_charge_rmse",Number(Norm(fields.truth_charge)/std::sqrt(static_cast<double>(input.observations.size())))},
+            {"fixed_halo_delta_h_l2",Number(fixed_delta_error)},
+            {"fixed_halo_delta_h_rmse",Number(fixed_delta_error/std::sqrt(static_cast<double>(input.observations.size())))},
+            {"delta_h_decomposition_max_abs_error",Number(identity_error)},
             {"first_stage_fixed_halo_max_abs_error",[&] {
                 double m{};
                 for(std::size_t i=0;i<fields.first.size();++i) m=std::max(m,std::abs(fields.first[i]-fields.truth[i]));
                 return m;
             }()},
             {"low_support",std::move(low_support)},{"cases",std::move(case_results)},
-            {"study_note","Every fit except production-fixed-first-stage is a research-only candidate; oracle values never enter production."},
+            {"study_note","All four cases use the same observation rows, raw-data scale, target set, target widths, FixedNeighbor solver and 200-sweep budget. The Gaussian, charge and full oracle cases exist only in this research executable; oracle values never enter production."},
             {"process_peak_rss_bytes",PeakRss()}};
         double aa{},bb{}; std::size_t halos{};
         for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
