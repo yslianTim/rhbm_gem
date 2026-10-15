@@ -28,9 +28,10 @@ summary.json and profile-slices.csv to a fresh output directory:
       tests/fixtures/joint_local_ac_kkt/block-21-sweep-4.json \
       /private/tmp/joint-fullabc-width-study
 
-The two slices contain 35 widths for atom 11721 (0.1 Å to approximately
-1e6 Å, log step 0.5, plus the captured and pre-run widths) and 20 widths for
-atom 11650 (0.01 Å to 0.8 Å, log step 0.25, plus its first-stage width).
+The two slices contain 39 widths for atom 11721 (0.1 Å to approximately
+1e6 Å, log step 0.5, plus the captured, pre-run and centered-difference widths)
+and 24 widths for atom 11650 (0.01 Å to 0.8 Å, log step 0.25, plus its
+first-stage and centered-difference widths).
 Each point records the production binary64 constrained profile and a bounded
 50-digit, column-normalized Householder-QR constrained reference for both
 the rounded double design and the functional kernels. The reference uses an
@@ -231,8 +232,8 @@ projected-width-rank, or target-estimability qualification.
 The width scans keep the other 11 local widths fixed and re-solve all local
 A/C coefficients at every grid point. The 50-digit references satisfy
 constrained KKT at every recorded point. The binary64 result remains separately
-marked: for atom 11721, 27 of 35 points pass the current inner KKT check; for
-atom 11650, only 2 of 20 pass because the same local A/C problem still contains
+marked: for atom 11721, 27 of 39 points pass the current inner KKT check; for
+atom 11650, only 2 of 24 pass because the same local A/C problem still contains
 the ill-conditioned atom 11721 direction.
 
 Selected atom 11721 points:

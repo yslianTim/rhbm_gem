@@ -237,6 +237,15 @@ the final full-data run stops at sweep 4 / block 21 because its full-rank local
 A/C solve has scaled KKT `4.6566e-10` against the unchanged `1e-10` gate. No
 endpoint-qualified or assembled scientific state is available.
 
+The separate [FullABC width study](../research/joint-fullabc-width-degeneracy.md)
+traces atom 11721 from a normal first-stage seed to 85,164 Å in one accepted
+sweep 3 / block 21 update. That update passed its local checks and reduced the
+original objective; severe A/C cancellation appeared in a later conditional
+solve. The Block 21 design remains full rank, while its binary64 constrained
+solution misses KKT and differs materially in coefficients from the bounded
+50-digit reference. The component therefore remains rejected; neither
+full-component identifiability nor target recovery was reached.
+
 Current machine-readable research and diagnosis are retained only where they
 answer an active question: weak-halo diagnosis and noise/mismatch research in
 figures/joint-validation. Permanent fixtures and regression tests remain in

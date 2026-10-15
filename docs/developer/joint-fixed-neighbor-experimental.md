@@ -68,6 +68,16 @@ derivative reductions and independent scalar replay use compensated double
 arithmetic. Replay and stationarity thresholds remain unchanged; the
 50-digit reference remains confined to offline analysis.
 
+The production width search has no hard minimum or maximum width. Extreme
+widths remain eligible only through the existing Profile LM, local KKT, trust,
+and full-objective replay checks. If a later local profile fails the unchanged
+KKT threshold, that block and component remain unqualified. The 6Z6U study
+found that the accepted large-width step decreased the original objective and
+passed its local checks at the time; subsequent A/C cancellation made a later
+conditional solve inaccurate. The available evidence does not justify
+rejecting width steps by width magnitude or conditioning alone. See the
+[FullABC width study](../research/joint-fullabc-width-degeneracy.md).
+
 ## Memory planning and large components
 
 FixedNeighbor preflights its actual component rows, support memberships,

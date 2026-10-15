@@ -114,6 +114,17 @@ The full profile derivative drives the LM width update. `AssessProfile()` keeps
 its assessment responsibility. Each block visit accepts at most one trusted
 update and replays the candidate against the global state.
 
+There is no hard width clamp or width prior in this route. A profile LM step is
+judged by its existing local solve/trust checks and the unchanged global
+objective replay. An extreme width can be accepted when those checks pass; a
+later local A/C solve that misses the `1e-10` KKT gate is rejected, and the
+component is not endpoint-qualified. The captured 6Z6U width trajectory shows
+one objective-decreasing accepted step followed by a later full-rank but
+ill-conditioned Block 21 KKT failure. The conditional FullABC study found a
+flat width profile and severe A/C cancellation, but did not support a
+conditioning-only width veto or arbitrary bound. See the
+[width-degeneracy study](../research/joint-fullabc-width-degeneracy.md).
+
 After a candidate passes replay and monotone-acceptance checks, the accepted
 prediction, residual and objective are rebased from that full candidate replay.
 This avoids accumulating incremental cache drift and does not add another
