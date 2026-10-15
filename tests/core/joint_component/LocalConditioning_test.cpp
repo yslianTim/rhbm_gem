@@ -131,6 +131,7 @@ TEST(JointLocalConditioningTest, MultiBlockDiagnosticsLeaveTheAcceptedFitUnchang
         n::FixedNeighborSearchPolicy policy; policy.core_atoms=1;
         policy.configure_search_for_testing=[diagnostics](n::FixedNeighborPolicy & search) {
             search.assess_local_conditioning=diagnostics;
+            search.assess_parameter_stability=false;
         };
         return n::FitFixedNeighborComponents(problem,{.55,.55},policy);
     };

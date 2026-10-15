@@ -160,6 +160,25 @@ struct JointBlockConditioning
         projected_width_status{"not-assessed"},projected_width_reason,
         profile_status{"not-assessed"},profile_reason;
 };
+struct JointBlockParameterStability
+{
+    std::string block_id,status{"NotAssessed"},reason;
+    std::string prediction_status{"NotAssessed"},objective_consistency_status{"NotAssessed"};
+    std::optional<double> log_width_parameter_change_inf,scaled_ac_parameter_change_inf,
+        local_prediction_change_relative,objective_difference;
+    double cpu_seconds{};
+    std::size_t perturbation_solves{},perturbation_evaluations{};
+};
+struct JointParameterStability
+{
+    std::size_t recent_sweep_count{};
+    std::optional<double> maximum_eta_change,maximum_scaled_ac_change;
+    std::string trajectory_stability_status{"insufficient-history"},perturbation_status{"NotAssessed"};
+    std::vector<JointBlockParameterStability> blocks;
+    double seconds{},cpu_seconds{};
+    std::size_t perturbation_solves{},perturbation_evaluations{};
+    std::optional<std::size_t> workspace_peak_memory_estimate_bytes;
+};
 struct JointComponentData
 {
     std::string id,stop_reason;
@@ -175,6 +194,7 @@ struct JointComponentData
     std::vector<JointBlockConditioning> local_conditioning;
     double local_conditioning_seconds{};
     std::optional<std::size_t> local_conditioning_peak_memory_estimate_bytes;
+    std::optional<JointParameterStability> parameter_stability;
     JointCheckStatus regular_certificate{JointCheckStatus::NotRun};
     // Absent means the historical identity layout (all component atoms are FullABC).
     std::optional<JointParameterLayout> layout;

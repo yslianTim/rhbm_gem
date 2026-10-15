@@ -4,6 +4,7 @@
 #include "core/detail/joint_component/HaloEligibility.hpp"
 #include "core/detail/joint_component/TargetEvidence.hpp"
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
+#include "core/detail/joint_component/ParameterStability.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/FittingWorkset.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
@@ -536,7 +537,15 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         return out;
     }
     const auto component_count=data.partition.components.size();
-    auto component_batch=n::OrchestrateFixedNeighborComponents(problem,initial_b,production_policy,observer);
+    auto bounded_policy=production_policy;
+    std::size_t remaining_perturbation_blocks=n::MaximumPerturbedBlocksPerFit;
+    const auto request_perturbation_block=production_policy.claim_parameter_stability_block;
+    bounded_policy.claim_parameter_stability_block=[&remaining_perturbation_blocks,request_perturbation_block] {
+        if(!remaining_perturbation_blocks ||
+            (request_perturbation_block && !request_perturbation_block())) return false;
+        --remaining_perturbation_blocks; return true;
+    };
+    auto component_batch=n::OrchestrateFixedNeighborComponents(problem,initial_b,bounded_policy,observer);
     out.components=std::move(component_batch.components);
     out.costs.search_seconds+=component_batch.costs.search_seconds;
     out.costs.assessment_seconds+=component_batch.costs.assessment_seconds;

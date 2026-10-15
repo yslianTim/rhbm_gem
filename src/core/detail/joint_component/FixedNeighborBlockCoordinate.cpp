@@ -1,5 +1,6 @@
 #include "FixedNeighborBlockCoordinate.hpp"
 #include "LocalConditioning.hpp"
+#include "ParameterStability.hpp"
 #include "Problem.hpp"
 #include "ResourceWork.hpp"
 #include "StructuralPartition.hpp"
@@ -1230,6 +1231,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         if(sweep.cache_replay_error>2e-12+2e-13*std::max(1.0,replay.prediction.cwiseAbs().maxCoeff()) ||
             !WithinBlockObjectiveReplay(sweep.objective_replay_error,replay.objective))
         {out.reason="block-cache-replay-failed"; stop=true; break;}
+        out.recent_sweep_changes.emplace_back(sweep.eta_change_inf,sweep.beta_scaled_change);
+        if(out.recent_sweep_changes.size()>3) out.recent_sweep_changes.erase(out.recent_sweep_changes.begin());
         const auto stationarity=ClassifyFixedNeighborStationarity(sweep.global_ac_kkt,
             sweep.global_width_gradient_inf_norm,sweep.eta_change_inf,sweep.coordinate_confirmation_available);
         if(stationarity!=FixedNeighborStationarityState::NotStationary && out.first_order_stationarity_sweep==0)
@@ -1325,6 +1328,85 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                     *conditioning.evidence.workspace_peak_memory_estimate_bytes);
             out.local_conditioning.push_back(std::move(conditioning.evidence));
         }
+    }
+    if(policy.assess_parameter_stability && out.search_converged && out.certification &&
+        out.certification->qualified())
+    {
+        const auto started=Clock::now(); JointParameterStability stability;
+        stability.recent_sweep_count=out.recent_sweep_changes.size();
+        if(stability.recent_sweep_count)
+        {
+            double maximum_eta{},maximum_ac{};
+            for(const auto & [eta_change,ac_change]:out.recent_sweep_changes)
+            {maximum_eta=std::max(maximum_eta,eta_change); maximum_ac=std::max(maximum_ac,ac_change);}
+            stability.maximum_eta_change=maximum_eta;
+            stability.maximum_scaled_ac_change=maximum_ac;
+        }
+        stability.trajectory_stability_status=stability.recent_sweep_count>=3 ? "observed" : "insufficient-history";
+        stability.blocks.reserve(prepared_blocks.size());
+        for(std::size_t index=0;index<prepared_blocks.size();++index)
+        {
+            const auto & prepared=prepared_blocks[index];
+            const auto block_id=(policy.component_id.empty() ? std::string("component") : policy.component_id)+
+                "/block-"+std::to_string(prepared.block+1);
+            JointBlockParameterStability evidence; evidence.block_id=block_id;
+            const bool has_conditioning=index<out.local_conditioning.size();
+            const auto * conditioning=has_conditioning ? &out.local_conditioning[index] : nullptr;
+            const bool high_sensitivity=!conditioning || conditioning->free_ac_status!="full-rank" ||
+                conditioning->projected_width_status!="full-rank" || conditioning->profile_status!="full-rank";
+            if(!high_sensitivity)
+            {evidence.reason="local-conditioning-not-sensitive"; stability.blocks.push_back(std::move(evidence)); continue;}
+            if(!policy.claim_parameter_stability_block || !policy.claim_parameter_stability_block())
+            {evidence.reason="perturbation-budget-exhausted"; stability.blocks.push_back(std::move(evidence)); continue;}
+            const auto local_atoms=prepared.local_atoms;
+            Vector eta(local_atoms),beta(2*local_atoms);
+            for(std::size_t k=0;k<prepared.core_atoms.size();++k)
+            {
+                const auto atom=static_cast<Eigen::Index>(prepared.core_atoms[k]);
+                eta(static_cast<Eigen::Index>(k))=out.state.eta(atom);
+                beta.segment<2>(2*static_cast<Eigen::Index>(k))=out.state.beta.segment<2>(2*atom);
+            }
+            Vector local_y(static_cast<Eigen::Index>(prepared.affected_rows.size()));
+            {
+                const Sparse design=Design(prepared.domain,eta);
+                const Vector local_core=(design*beta).eval();
+                for(std::size_t k=0;k<prepared.affected_rows.size();++k)
+                {
+                    const auto row=static_cast<Eigen::Index>(prepared.affected_rows[k]);
+                    local_y(static_cast<Eigen::Index>(k))=local_core(static_cast<Eigen::Index>(k))-out.state.residual(row);
+                }
+            }
+            auto assessment=AssessLocalParameterStability(prepared.domain,local_y,eta,beta,prepared.context,
+                block_id,out.global_state_memory_estimate.shape.resident_bytes);
+            evidence=std::move(assessment.evidence);
+            stability.perturbation_solves+=evidence.perturbation_solves;
+            stability.perturbation_evaluations+=evidence.perturbation_evaluations;
+            stability.cpu_seconds+=evidence.cpu_seconds;
+            if(assessment.memory_estimate.status!=MemoryStatus::Overflow)
+                stability.workspace_peak_memory_estimate_bytes=std::max(
+                    stability.workspace_peak_memory_estimate_bytes.value_or(0),
+                    assessment.memory_estimate.estimated_peak_bytes);
+            out.work.perturbation_solves+=evidence.perturbation_solves;
+            out.work.perturbation_evaluations+=evidence.perturbation_evaluations;
+            if(assessment.memory_estimate.status!=MemoryStatus::Overflow)
+                out.work.parameter_stability_peak_memory_estimate_bytes=std::max(
+                    out.work.parameter_stability_peak_memory_estimate_bytes,
+                    assessment.memory_estimate.estimated_peak_bytes);
+            stability.blocks.push_back(std::move(evidence));
+        }
+        int worst{}; bool all_assessed=true;
+        for(const auto & block:stability.blocks)
+        {
+            all_assessed&=block.status!="NotAssessed";
+            const int severity=block.status=="Unstable" ? 4 : block.status=="Sensitive" ? 3 :
+                block.status=="Unavailable" ? 2 : block.status=="Stable" ? 1 : 0;
+            worst=std::max(worst,severity);
+        }
+        stability.perturbation_status=worst==4 ? "Unstable" : worst==3 ? "Sensitive" :
+            worst==2 ? "Unavailable" : worst==1 && all_assessed ? "Stable" : "NotAssessed";
+        stability.seconds=Seconds(started);
+        out.work.parameter_stability_seconds+=stability.seconds;
+        out.parameter_stability=std::move(stability);
     }
     return out;
 }
@@ -1455,6 +1537,8 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     policy.component_id=production_policy.component_id;
     policy.halo_census=production_policy.halo_census;
     policy.assess_local_conditioning=true;
+    policy.assess_parameter_stability=true;
+    policy.claim_parameter_stability_block=production_policy.claim_parameter_stability_block;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(production_policy.configure_search_for_testing) production_policy.configure_search_for_testing(policy);
 #endif

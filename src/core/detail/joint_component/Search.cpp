@@ -4,11 +4,14 @@
 #include "TiledDerivative.hpp"
 #include <algorithm>
 #include <chrono>
+#include <ctime>
 
 namespace rhbm_gem::core::joint_component {
 namespace {
 double Seconds(std::chrono::steady_clock::time_point start)
 {return std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();}
+double CpuSeconds(std::clock_t start)
+{return static_cast<double>(std::clock()-start)/static_cast<double>(CLOCKS_PER_SEC);}
 struct Profile
 {
     const Domain & domain;
@@ -24,6 +27,7 @@ struct Profile
     const JointProgressObserver & observer;
     const JointProgressComponent * progress_component{};
     std::chrono::steady_clock::time_point search_start;
+    std::clock_t cpu_start{};
     int accepted_updates{};
     std::optional<double> accepted_objective;
     std::optional<double> accepted_gradient_inf_norm;
@@ -63,6 +67,9 @@ struct Profile
     int values() const {return static_cast<int>(domain.rows);}
     bool Get(const Vector & eta)
     {
+        if(context.profile_cpu_budget_seconds>0 &&
+            CpuSeconds(cpu_start)>=context.profile_cpu_budget_seconds)
+        {failure="cpu-time-budget"; return false;}
         if(cached.valid && cached.eta.size()==eta.size() && (cached.eta.array()==eta.array()).all()) return true;
         if(evaluations>=context.profile_budget) {failure="profile-budget"; return false;}
         failure.clear();
@@ -80,6 +87,9 @@ struct Profile
     {if(!Get(eta)) return -1; residual=cached.residual/scale; return 0;}
     int linearize(const Vector & eta,const Vector &,Matrix & factor,Vector & response,Vector & norms)
     {
+        if(context.profile_cpu_budget_seconds>0 &&
+            CpuSeconds(cpu_start)>=context.profile_cpu_budget_seconds)
+        {failure="cpu-time-budget"; return -1;}
         if(!Get(eta)) return -1;
         const auto prepare_started=std::chrono::steady_clock::now();
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -161,7 +171,7 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     const auto start=std::chrono::steady_clock::now();
     ProfileSearchWork local_work;
     Profile profile{domain,y,context.scale,context,{}, {},0,0,{},telemetry ? &local_work : nullptr,
-        ProfileEvaluationRole::Unspecified,observer,progress_component,start,0,{}, {}};
+        ProfileEvaluationRole::Unspecified,observer,progress_component,start,std::clock(),0,{}, {}};
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
         lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;

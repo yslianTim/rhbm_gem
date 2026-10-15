@@ -239,6 +239,7 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             if(fit.search.work.local_conditioning_peak_memory_estimate_bytes)
                 component.local_conditioning_peak_memory_estimate_bytes=
                     fit.search.work.local_conditioning_peak_memory_estimate_bytes;
+            component.parameter_stability=fit.search.parameter_stability;
             if(fit.search.certification)
             {
                 const auto & certification=*fit.search.certification;

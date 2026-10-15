@@ -152,6 +152,7 @@ const char * MemoryStageName(MemoryStage stage)
     case MemoryStage::ProjectedWidthAssessment: return "projected-width-assessment";
     case MemoryStage::ProjectedWidthDiagnostics: return "projected-width-diagnostics";
     case MemoryStage::LocalConditioning: return "local-conditioning";
+    case MemoryStage::ParameterStability: return "parameter-stability";
     case MemoryStage::TargetIdentifiability: return "target-identifiability";
     }
     return "unknown";
@@ -441,6 +442,21 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
             ok=CheckedMultiplyBytes(shape.maximum_tile_rows,tile_columns,tile_cells) &&
                 CheckedMultiplyBytes(tile_cells,6*sizeof(double),out.qr_tile_workspace_bytes);
         }
+        break;
+    }
+    case MemoryStage::ParameterStability:
+    {
+        const auto local=PlanMemory(shape,MemoryStage::LocalConditioning,budget);
+        if(local.status==MemoryStatus::Overflow) {ok=false; break;}
+        temporary=local.temporary_bytes;
+        out.free_design_factor_bytes=local.free_design_factor_bytes;
+        out.projection_coefficient_bytes=local.projection_coefficient_bytes;
+        out.projected_width_factor_bytes=local.projected_width_factor_bytes;
+        out.qr_tile_workspace_bytes=local.qr_tile_workspace_bytes;
+        out.factor_rows=local.factor_rows; out.factor_columns=local.factor_columns;
+        const auto local_atoms=shape.maximum_neighbor_atoms ? shape.maximum_neighbor_atoms : atoms;
+        ok=AddProduct2D(temporary,shape.component_stability_evaluations,local_atoms,
+            8*sizeof(double)+2*sizeof(Eigen::Index));
         break;
     }
     case MemoryStage::TargetIdentifiability:
