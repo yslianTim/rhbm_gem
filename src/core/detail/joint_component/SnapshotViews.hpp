@@ -19,6 +19,16 @@ inline bool SafeMultiply(std::size_t a,std::size_t b,std::size_t & out)
 struct CompactRowMapping
 {
     Indices parent_rows,local_rows;
+    static std::shared_ptr<const CompactRowMapping> Identity(Eigen::Index rows)
+    {
+        auto mapping=std::make_shared<CompactRowMapping>();
+        if(rows<0) throw std::invalid_argument("Negative row mapping size.");
+        mapping->parent_rows.resize(static_cast<std::size_t>(rows));
+        mapping->local_rows.resize(static_cast<std::size_t>(rows));
+        std::iota(mapping->parent_rows.begin(),mapping->parent_rows.end(),0);
+        std::iota(mapping->local_rows.begin(),mapping->local_rows.end(),0);
+        return mapping;
+    }
     static std::shared_ptr<const CompactRowMapping> FromParentRows(const Indices & rows)
     {
         auto mapping=std::make_shared<CompactRowMapping>();
@@ -53,6 +63,11 @@ inline std::shared_ptr<const VectorMap> Observe(std::shared_ptr<const JointProbl
 {
     auto * map=new VectorMap(input->observations.data(),static_cast<Eigen::Index>(input->observations.size()));
     return {map,[input=std::move(input)](const VectorMap * p){delete p;}};
+}
+inline std::shared_ptr<const VectorMap> Observe(std::shared_ptr<const std::vector<double>> values)
+{
+    auto * map=new VectorMap(values->data(),static_cast<Eigen::Index>(values->size()));
+    return {map,[values=std::move(values)](const VectorMap * p){delete p;}};
 }
 class Identities
 {

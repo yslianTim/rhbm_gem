@@ -12,6 +12,7 @@
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/FittingWorkset.hpp"
 #include <map>
+#include <numeric>
 #include <utility>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include "support/CommandTestHelpers.hpp"
@@ -175,7 +176,7 @@ TEST(JointComponentPartialSelectionTest, RetainsEverySupportedHaloAndKeepsFixedR
     EXPECT_EQ(workset.contributors.size(),input.atom_ids.size());
     EXPECT_EQ(core::detail::CollectFirstStageAtoms(workset).size(),input.atom_ids.size());
     const auto & data=core::JointProblemAccess::Get(problem);
-    EXPECT_EQ(data.construction_memory.shape.component_atoms,3u);
+    EXPECT_EQ(data.construction_memory.shape.component_atoms,1u);
     EXPECT_EQ(data.construction_memory.shape.component_support_entries,17u);
 
     auto invalid=input; invalid.support[2].clear();
@@ -212,7 +213,7 @@ TEST(JointComponentPartialSelectionTest, SelectedTargetWithZeroObservationsKeeps
     EXPECT_EQ(problem.Input().selection_domain->target_indices,(std::vector<std::size_t>{0}));
 }
 
-TEST(JointComponentPartialSelectionTest, RetainsSupportedBridgeInStructuralComponents)
+TEST(JointComponentPartialSelectionTest, FixedHaloDoesNotConnectTargetComponents)
 {
     std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
     for(const auto & [id,x]:std::vector<std::pair<int,double>>{{1,0.0},{2,7.5},{3,3.75}})
@@ -225,7 +226,118 @@ TEST(JointComponentPartialSelectionTest, RetainsSupportedBridgeInStructuralCompo
     rhbm_gem::MapObject map({6,1,1},{2.5,.1,.1},{-2.5,0,0});
     const auto problem=core::BuildJointProblem(map,model);
     EXPECT_EQ(problem.Input().atom_ids,(std::vector<std::string>{"1","2","3"}));
-    EXPECT_EQ(core::JointProblemAccess::Get(problem).partition.components.size(),1u);
+    const auto & data=core::JointProblemAccess::Get(problem);
+    ASSERT_EQ(data.domain.atoms.size(),2u);
+    ASSERT_EQ(data.partition.components.size(),2u);
+    EXPECT_EQ(data.partition.components[0].atoms.size(),1u);
+    EXPECT_EQ(data.partition.components[1].atoms.size(),1u);
+}
+
+TEST(JointComponentPartialSelectionTest, FixedHaloResponseUsesRawScaleAndReplaysFullResidual)
+{
+    auto f=joint_partial_test::Make("partial");
+    const auto dims=f.map->GetGridSize();
+    const auto spacing=f.map->GetGridSpacing(),origin=f.map->GetOrigin();
+    auto values=std::make_unique<double[]>(f.map->GetMapValueArraySize());
+    for(int z=0;z<dims[2];++z) for(int y=0;y<dims[1];++y) for(int x=0;x<dims[0];++x)
+    {
+        const auto position=sim::GridPosition({x,y,z},spacing,origin);
+        double value{};
+        for(std::size_t atom=0;atom<f.a.size();++atom)
+        {
+            const auto squared=sim::SupportSquare(position,f.model->GetAtomList()[atom]->GetPosition());
+            if(squared>6.25) continue;
+            const auto basis=n::EvaluateKernel(squared,f.b[atom],2.5);
+            value+=f.a[atom]*basis.gaussian+(atom==0 ? f.c[atom]*basis.charge : 0.0);
+        }
+        values[static_cast<std::size_t>(x+dims[0]*(y+dims[1]*z))]=value;
+    }
+    f.map->SetMapValueArray(std::move(values));
+    const auto problem=core::BuildJointProblem(*f.map,*f.model);
+    ASSERT_EQ(problem.Input().atom_ids,(std::vector<std::string>{"1","2"}));
+    const std::vector<rhbm_gem::JointFixedHaloParameter> fixed{{1,"2",f.a[1],f.b[1],0.,17,0,
+        std::string(rhbm_gem::FixedHaloParameterSourceContractVersion),true}};
+    const auto initialized=problem.WithFixedHalos(fixed);
+    const auto & data=core::JointProblemAccess::Get(initialized);
+    ASSERT_EQ(data.domain.atoms.size(),1u);
+    ASSERT_EQ(data.layout.full_atoms,(std::vector<std::size_t>{0}));
+    ASSERT_EQ(data.partition.components.size(),1u);
+    EXPECT_NEAR(problem.ObservationScale(),std::max(1.0,std::sqrt(std::inner_product(
+        problem.Input().observations.begin(),problem.Input().observations.end(),
+        problem.Input().observations.begin(),0.0))),1e-12*problem.ObservationScale());
+    ASSERT_EQ(data.fixed_halos,fixed);
+    for(std::size_t row=0;row<problem.Input().observations.size();++row)
+        EXPECT_DOUBLE_EQ(data.y(static_cast<Eigen::Index>(row)),problem.Input().observations[row]-
+            data.fixed_prediction(static_cast<Eigen::Index>(row)));
+
+    const auto fit=core::FitJointComponents(initialized,{f.b[0]});
+    ASSERT_TRUE(fit.assembled_state);
+    ASSERT_TRUE(fit.prediction);
+    ASSERT_TRUE(fit.objective);
+    ASSERT_EQ(fit.assembled_state->b.size(),1u);
+    ASSERT_EQ(fit.components.size(),1u);
+    EXPECT_EQ(fit.components[0].atoms,(std::vector<std::size_t>{0}));
+    EXPECT_EQ(initialized.FixedHalos(),fixed);
+    const auto replay=std::find_if(fit.evidence.begin(),fit.evidence.end(),[](const auto & check) {
+        return check.name=="full-observation-replay";
+    });
+    ASSERT_NE(replay,fit.evidence.end());
+    EXPECT_EQ(replay->status,rhbm_gem::JointCheckStatus::Passed);
+
+    double rss{};
+    for(std::size_t row=0;row<problem.Input().observations.size();++row)
+    {
+        double target_prediction{};
+        for(const auto & support:problem.Input().support[0]) if(support.row==row)
+        {
+            const auto basis=n::EvaluateKernel(support.squared_distance,fit.assembled_state->b[0],2.5);
+            target_prediction=fit.assembled_state->ac[0]*basis.gaussian+
+                fit.assembled_state->ac[1]*basis.charge;
+        }
+        const double effective_residual=target_prediction-data.y(static_cast<Eigen::Index>(row));
+        const double full_residual=fit.prediction->at(row)-problem.Input().observations[row];
+        EXPECT_NEAR(full_residual,effective_residual,2e-12*(1+std::abs(full_residual)));
+        rss+=full_residual*full_residual;
+    }
+    EXPECT_NEAR(*fit.objective,rss/(2*problem.ObservationScale()*problem.ObservationScale()),1e-12);
+}
+
+TEST(JointComponentPartialSelectionTest, NonleadingTargetMapsBackToFullContributorIdentity)
+{
+    auto f=joint_partial_test::Make("partial");
+    f.model->SelectAtoms([](const auto & atom){return atom.GetSerialID()==2;});
+    const auto dims=f.map->GetGridSize();
+    const auto spacing=f.map->GetGridSpacing(),origin=f.map->GetOrigin();
+    auto values=std::make_unique<double[]>(f.map->GetMapValueArraySize());
+    for(int z=0;z<dims[2];++z) for(int y=0;y<dims[1];++y) for(int x=0;x<dims[0];++x)
+    {
+        const auto position=sim::GridPosition({x,y,z},spacing,origin);
+        double value{};
+        for(std::size_t atom=0;atom<f.a.size();++atom)
+        {
+            const auto squared=sim::SupportSquare(position,f.model->GetAtomList()[atom]->GetPosition());
+            if(squared>6.25) continue;
+            const auto basis=n::EvaluateKernel(squared,f.b[atom],2.5);
+            value+=f.a[atom]*basis.gaussian+(atom==1 ? f.c[atom]*basis.charge : 0.0);
+        }
+        values[static_cast<std::size_t>(x+dims[0]*(y+dims[1]*z))]=value;
+    }
+    f.map->SetMapValueArray(std::move(values));
+    const auto problem=core::BuildJointProblem(*f.map,*f.model);
+    EXPECT_EQ(problem.Input().atom_ids,(std::vector<std::string>{"1","2"}));
+    ASSERT_EQ(problem.Input().selection_domain->target_indices,(std::vector<std::size_t>{1}));
+    const auto initialized=problem.WithFixedHalos({{0,"1",f.a[0],f.b[0],0.,17,0,
+        std::string(rhbm_gem::FixedHaloParameterSourceContractVersion),true}});
+    const auto & data=core::JointProblemAccess::Get(initialized);
+    EXPECT_EQ(data.target_to_contributor,(std::vector<std::size_t>{1}));
+    EXPECT_EQ(data.context.atom_ids,(std::vector<std::string>{"2"}));
+    const auto fit=core::FitJointComponents(initialized,{f.b[1]});
+    ASSERT_TRUE(fit.assembled_state);
+    ASSERT_EQ(fit.components.size(),1u);
+    EXPECT_EQ(fit.components[0].atoms,(std::vector<std::size_t>{1}));
+    EXPECT_NEAR(fit.assembled_state->ac[0],f.a[1],1e-9*(1+f.a[1]));
+    EXPECT_NEAR(fit.assembled_state->ac[1],f.c[1],1e-9*(1+std::abs(f.c[1])));
+    EXPECT_NEAR(fit.assembled_state->b[0],f.b[1],1e-9*(1+f.b[1]));
 }
 
 TEST(JointComponentPartialSelectionTest, ContributorOrderIsIndependentOfModelTraversal)

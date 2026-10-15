@@ -156,6 +156,7 @@ struct JointFixedHaloParameter
     std::size_t first_stage_sample_count{};
     std::optional<int> first_stage_status;
     std::string source_contract{FixedHaloParameterSourceContractVersion};
+    bool first_stage_fit_qualified{};
     bool operator==(const JointFixedHaloParameter &) const = default;
 };
 struct JointInitialization

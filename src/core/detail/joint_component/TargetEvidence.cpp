@@ -341,7 +341,9 @@ JointFitResult FitFixedNeighborComponents(const JointProblem & problem,const std
 {
     auto out=FitFixedNeighborComponentsImpl(problem,b,policy,observer);
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
-    AddTargetEvidence(out);
+    const auto & input=problem.Input();
+    if(!input.selection_domain || input.selection_domain->contributor_policy!=FixedHaloContributorPolicy)
+        AddTargetEvidence(out);
     return out;
 }
 }

@@ -69,9 +69,11 @@ ComponentProblemView MakeComponentProblemView(const JointParameterLayout & paren
     ComponentProblemView out; out.parent_row_count=static_cast<Eigen::Index>(view.rows.size());
     Indices view_to_local_rows;
     Indices local_to_view_atoms;
+    Indices identity_parent_atoms;
     out.local_to_parent_atoms.reserve(parent_layout.full_atoms.size());
     out.local_to_parent_rows.reserve(parent_layout.informative_rows.size());
     local_to_view_atoms.reserve(parent_layout.full_atoms.size());
+    identity_parent_atoms.reserve(parent_layout.full_atoms.size());
     for(std::size_t k=0;k<parent_layout.informative_rows.size();++k)
     {
         const auto row=parent_layout.informative_rows[k];
@@ -88,13 +90,14 @@ ComponentProblemView MakeComponentProblemView(const JointParameterLayout & paren
         if(component_atom<0) throw std::invalid_argument("Component atom is outside its view.");
         out.local_to_parent_atoms.push_back(static_cast<Eigen::Index>(atom));
         local_to_view_atoms.push_back(component_atom);
+        identity_parent_atoms.push_back(static_cast<Eigen::Index>(view.domain.atoms.ParentAtom(static_cast<std::size_t>(component_atom))));
         out.local_layout.full_atoms.push_back(k);
     }
     const auto row_mapping=CompactRowMapping::FromParentRows(view_to_local_rows);
     out.domain=view.domain.Select(local_to_view_atoms,static_cast<Eigen::Index>(out.local_layout.informative_rows.size()),row_mapping);
     const Identities parent_atoms(std::shared_ptr<const std::vector<std::string>>(parent,&parent->atom_ids));
     const Identities parent_rows(std::shared_ptr<const std::vector<std::string>>(parent,&parent->row_ids));
-    out.atom_ids=parent_atoms.Select(out.local_to_parent_atoms);
+    out.atom_ids=parent_atoms.Select(identity_parent_atoms);
     out.row_ids=parent_rows.Select(out.local_to_parent_rows);
     return out;
 }
@@ -361,6 +364,9 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
     const auto input_owner=view.domain.atoms.Snapshot();
     diagnostic_policy.halo_census=[input_owner,&component_layout,&view](
         std::size_t & halo_count,std::size_t & minimum_support) {
+        if(input_owner->selection_domain &&
+            input_owner->selection_domain->contributor_policy==FixedHaloContributorPolicy)
+        {halo_count=0; minimum_support=0; return;}
         const auto census=DiagnoseHaloSupport(*input_owner,component_layout,&view.atoms);
         halo_count=census.size(); minimum_support=census.empty() ? 0 : std::numeric_limits<std::size_t>::max();
         for(const auto & halo:census)

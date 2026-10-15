@@ -83,6 +83,7 @@ std::optional<JointFixedHaloParameter> MakeFixedHaloParameter(
     parameter.charge = 0.0;
     parameter.first_stage_sample_count = atom.sample_count;
     parameter.first_stage_status = atom.native_status;
+    parameter.first_stage_fit_qualified = atom.first_stage_fit_qualified;
     return parameter;
 }
 

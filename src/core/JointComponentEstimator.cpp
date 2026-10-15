@@ -19,6 +19,7 @@
 #include <cmath>
 #include <chrono>
 #include <limits>
+#include <numeric>
 #include <set>
 #include <string_view>
 #include <stdexcept>
@@ -89,6 +90,135 @@ bool AddEstimatedBytes(std::size_t & total,std::size_t count,std::size_t width)
 }
 JointState State(const n::Endpoint & e,double scale)
 {return {Values(e.beta),Values(e.eta.array().exp()),Values(e.eta),Values(e.gradient),e.certificate.objective/(scale*scale)};}
+void ConfigureOptimizationDomain(n::ProblemData & data)
+{
+    const auto & input=*data.input;
+    data.context=n::CreateContext(data.input);
+    if(!input.selection_domain || input.selection_domain->contributor_policy!=FixedHaloContributorPolicy)
+    {
+        data.target_to_contributor.resize(input.atom_ids.size());
+        std::iota(data.target_to_contributor.begin(),data.target_to_contributor.end(),0);
+        data.contributor_to_target.resize(input.atom_ids.size());
+        std::iota(data.contributor_to_target.begin(),data.contributor_to_target.end(),0);
+        data.layout=n::BuildParameterLayout(input);
+        data.partition=n::Partition(data.domain,input.atom_ids);
+        return;
+    }
+
+    const auto & targets=input.selection_domain->target_indices;
+    n::Indices selected; selected.reserve(targets.size());
+    data.target_to_contributor=targets;
+    data.contributor_to_target.assign(input.atom_ids.size(),std::numeric_limits<std::size_t>::max());
+    for(std::size_t local=0;local<targets.size();++local)
+    {
+        selected.push_back(static_cast<Eigen::Index>(targets[local]));
+        data.contributor_to_target[targets[local]]=local;
+    }
+    data.domain=data.domain.Select(selected,static_cast<Eigen::Index>(input.observations.size()),
+        n::CompactRowMapping::Identity(static_cast<Eigen::Index>(input.observations.size())));
+    data.context.atom_ids=data.context.atom_ids.Select(selected);
+    const auto rows=static_cast<Eigen::Index>(input.observations.size());
+    const auto atoms=static_cast<Eigen::Index>(targets.size());
+    data.context.rank={rows,2*atoms,atoms};
+    data.context.linear.rank_relative=data.context.rank.Relative(2*atoms);
+    data.layout.full_atoms.resize(targets.size());
+    std::iota(data.layout.full_atoms.begin(),data.layout.full_atoms.end(),0);
+    data.layout.informative_rows.resize(input.observations.size());
+    std::iota(data.layout.informative_rows.begin(),data.layout.informative_rows.end(),0);
+    data.partition=n::Partition(data.domain,data.context.atom_ids);
+}
+struct FullReplay
+{
+    bool passed{};
+    std::vector<double> prediction;
+    double residual_difference{},halo_difference{},objective_difference{},objective{};
+    std::string reason;
+};
+FullReplay ReplayFixedHaloFullModel(const n::ProblemData & data,const n::AssemblyResult & assembly)
+{
+    FullReplay out;
+    const auto & input=*data.input;
+    if(!assembly.available || !assembly.raw.valid || assembly.prediction.size()!=data.y.size() ||
+        data.target_to_contributor.size()!=data.domain.atoms.size() ||
+        data.contributor_to_target.size()!=input.atom_ids.size())
+    {out.reason="missing-target-assembly"; return out;}
+    out.prediction.assign(input.observations.size(),0.0);
+    std::vector<double> target_prediction(input.observations.size()),halo_prediction(input.observations.size());
+    std::size_t fixed_cursor{};
+    const auto unassigned=std::numeric_limits<std::size_t>::max();
+    for(std::size_t contributor=0;contributor<input.atom_ids.size();++contributor)
+    {
+        const auto target=data.contributor_to_target[contributor];
+        double amplitude{},width{},charge{};
+        if(target!=unassigned)
+        {
+            if(target>=static_cast<std::size_t>(assembly.raw.eta.size()) ||
+                2*target+1>=static_cast<std::size_t>(assembly.raw.beta.size()))
+            {out.reason="target-state-mapping-mismatch"; return out;}
+            amplitude=assembly.raw.beta(static_cast<Eigen::Index>(2*target));
+            charge=assembly.raw.beta(static_cast<Eigen::Index>(2*target+1));
+            width=std::exp(assembly.raw.eta(static_cast<Eigen::Index>(target)));
+        }
+        else
+        {
+            if(fixed_cursor>=data.fixed_halos.size() ||
+                data.fixed_halos[fixed_cursor].contributor_index!=contributor)
+            {out.reason="fixed-halo-state-mapping-mismatch"; return out;}
+            const auto & fixed=data.fixed_halos[fixed_cursor++];
+            amplitude=fixed.amplitude; width=fixed.width; charge=0;
+        }
+        if(!std::isfinite(amplitude) || amplitude<0 || !std::isfinite(width) || !(width>0) ||
+            !std::isfinite(charge))
+        {out.reason="invalid-full-model-parameters"; return out;}
+        for(const auto & support:input.support[contributor])
+        {
+            const auto basis=n::EvaluateKernel(support.squared_distance,width,2.5);
+            const double value=amplitude*basis.gaussian+charge*basis.charge;
+            const auto row=support.row;
+            const double updated=out.prediction[row]+value;
+            if(!std::isfinite(value) || !std::isfinite(updated))
+            {out.reason="nonfinite-full-model-prediction"; return out;}
+            out.prediction[row]=updated;
+            auto & part=target==unassigned ? halo_prediction[row] : target_prediction[row];
+            part+=target==unassigned ? amplitude*basis.gaussian : value;
+            if(!std::isfinite(part)) {out.reason="nonfinite-full-model-prediction"; return out;}
+        }
+    }
+    if(fixed_cursor!=data.fixed_halos.size()) {out.reason="unused-fixed-halo-state"; return out;}
+    double full_rss{},effective_rss{},full_compensation{},effective_compensation{};
+    double maximum_scale=1;
+    for(std::size_t row=0;row<input.observations.size();++row)
+    {
+        const double raw_residual=out.prediction[row]-input.observations[row];
+        const double effective_residual=target_prediction[row]-data.y(static_cast<Eigen::Index>(row));
+        const double expected_full=target_prediction[row]+halo_prediction[row];
+        out.residual_difference=std::max(out.residual_difference,std::abs(raw_residual-effective_residual));
+        out.halo_difference=std::max(out.halo_difference,
+            std::abs(halo_prediction[row]-data.fixed_prediction(static_cast<Eigen::Index>(row))));
+        out.halo_difference=std::max(out.halo_difference,
+            std::abs(expected_full-assembly.prediction(static_cast<Eigen::Index>(row))-
+                data.fixed_prediction(static_cast<Eigen::Index>(row))));
+        maximum_scale=std::max({maximum_scale,std::abs(raw_residual),std::abs(effective_residual),
+            std::abs(out.prediction[row]),std::abs(input.observations[row])});
+        const double full_term=raw_residual*raw_residual-full_compensation;
+        const double full_next=full_rss+full_term;
+        full_compensation=(full_next-full_rss)-full_term; full_rss=full_next;
+        const double effective_term=effective_residual*effective_residual-effective_compensation;
+        const double effective_next=effective_rss+effective_term;
+        effective_compensation=(effective_next-effective_rss)-effective_term; effective_rss=effective_next;
+    }
+    const double tolerance=2e-12*maximum_scale;
+    const double assembled_objective=.5*effective_rss;
+    const double replay_objective=.5*full_rss;
+    out.objective_difference=std::abs(replay_objective-assembled_objective);
+    out.objective=replay_objective/(data.context.scale*data.context.scale);
+    out.passed=out.residual_difference<=tolerance && out.halo_difference<=tolerance &&
+        out.objective_difference<=2e-12*std::max(1.0,assembled_objective) &&
+        std::isfinite(replay_objective) &&
+        std::abs(assembled_objective-assembly.objective)<=2e-12*std::max(1.0,assembled_objective);
+    if(!out.passed) out.reason="full-and-effective-objectives-disagree";
+    return out;
+}
 }
 namespace joint_component {
 std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceScope scope)
@@ -228,15 +358,19 @@ JointProblem::JointProblem(JointProblemInput input)
     for(const auto & atom:input.support) for(const auto & s:atom)
         if(s.row>=input.observations.size() || !std::isfinite(s.squared_distance) || s.squared_distance<0 || s.squared_distance>6.25)
             throw std::invalid_argument("Invalid joint contributor row.");
+    const bool fixed_halo_policy=input.selection_domain &&
+        input.selection_domain->contributor_policy==FixedHaloContributorPolicy;
+    const std::size_t optimization_atoms=fixed_halo_policy ?
+        input.selection_domain->target_indices.size() : input.atom_ids.size();
     n::MemoryShape shape;
-    shape.component_atoms=input.atom_ids.size();
+    shape.component_atoms=optimization_atoms;
     shape.component_observations=input.observations.size();
     shape.problem_scope=true;
     const auto support_entries=n::CountSupportEntries(input);
     const auto resident=n::EstimateSnapshotBytes(input);
     const auto construction_scratch=n::EstimateConstructionScratchBytes(input);
     std::size_t free_columns{};
-    const bool dimensions_ok=n::CheckedMultiplyBytes(input.atom_ids.size(),2,free_columns);
+    const bool dimensions_ok=n::CheckedMultiplyBytes(optimization_atoms,2,free_columns);
     n::MemoryEstimate construction_memory;
     if(!support_entries || !resident || !construction_scratch || !dimensions_ok)
     {
@@ -249,9 +383,36 @@ JointProblem::JointProblem(JointProblemInput input)
     else
     {
         shape.component_support_entries=*support_entries; shape.resident_bytes=*resident;
+        if(fixed_halo_policy)
+        {
+            std::size_t future_fixed_bytes{},optimization_view_bytes{},target_support_entries{};
+            for(const auto target:input.selection_domain->target_indices)
+                if(!n::CheckedAddBytes(target_support_entries,input.support[target].size(),target_support_entries))
+                {future_fixed_bytes=std::numeric_limits<std::size_t>::max(); break;}
+            const auto halo_count=input.atom_ids.size()-optimization_atoms;
+            if(future_fixed_bytes!=std::numeric_limits<std::size_t>::max() &&
+                (!AddEstimatedBytes(future_fixed_bytes,halo_count,sizeof(JointFixedHaloParameter)) ||
+                    !AddEstimatedBytes(future_fixed_bytes,input.observations.size(),2*sizeof(double)) ||
+                    !AddEstimatedBytes(future_fixed_bytes,input.observations.size(),2*sizeof(Eigen::Index)) ||
+                    !AddEstimatedBytes(future_fixed_bytes,optimization_atoms,sizeof(std::vector<n::LocalSupportIndex>)) ||
+                    !AddEstimatedBytes(future_fixed_bytes,target_support_entries,sizeof(n::LocalSupportIndex)) ||
+                    !AddEstimatedBytes(future_fixed_bytes,optimization_atoms+input.atom_ids.size(),sizeof(std::size_t))))
+                future_fixed_bytes=std::numeric_limits<std::size_t>::max();
+            if(future_fixed_bytes==std::numeric_limits<std::size_t>::max() ||
+                !n::CheckedAddBytes(shape.resident_bytes,future_fixed_bytes,optimization_view_bytes))
+            {
+                construction_memory.shape=shape;
+                construction_memory.stage=n::MemoryStage::ProblemConstruction;
+                construction_memory.status=n::MemoryStatus::Overflow;
+                construction_memory.reason="size-overflow";
+                construction_memory.budget_bytes=n::JointMemoryPlanningBudgetBytes;
+            }
+            else shape.resident_bytes=optimization_view_bytes;
+        }
         shape.identity_validation_bytes=*construction_scratch;
         shape.component_free_columns=free_columns;
-        construction_memory=n::PlanMemory(shape,n::MemoryStage::ProblemConstruction);
+        if(construction_memory.status!=n::MemoryStatus::Overflow)
+            construction_memory=n::PlanMemory(shape,n::MemoryStage::ProblemConstruction);
     }
     if(construction_memory.status!=n::MemoryStatus::Pass ||
         construction_memory.estimated_peak_bytes>n::JointMemoryPlanningBudgetBytes/2)
@@ -262,11 +423,7 @@ JointProblem::JointProblem(JointProblemInput input)
     auto data=std::make_shared<n::ProblemData>(std::make_shared<const JointProblemInput>(std::move(input)));
     data->construction_memory=construction_memory;
     if(data->construction_memory.status==n::MemoryStatus::Pass)
-    {
-        data->context=n::CreateContext(data->input);
-        data->layout=n::BuildParameterLayout(*data->input);
-        data->partition=n::Partition(data->domain,data->input->atom_ids);
-    }
+        ConfigureOptimizationDomain(*data);
     m_data=std::move(data);
 }
 const JointProblemInput & JointProblem::Input() const {return *m_data->input;}
@@ -289,15 +446,42 @@ JointProblem JointProblem::WithFixedHalos(std::vector<JointFixedHaloParameter> f
             input.atom_ids[fixed.contributor_index]!=fixed.atom_id || input.support[fixed.contributor_index].empty() ||
             (k && fixed.contributor_index<=previous) || !std::isfinite(fixed.amplitude) || fixed.amplitude<0 ||
             !std::isfinite(fixed.width) || !(fixed.width>0) || fixed.charge!=0.0 ||
-            !fixed.first_stage_status || fixed.source_contract!=FixedHaloParameterSourceContractVersion)
+            !fixed.first_stage_status ||
+            *fixed.first_stage_status!=static_cast<int>(RHBMEstimationStatus::SUCCESS) ||
+            !fixed.first_stage_fit_qualified || fixed.source_contract!=FixedHaloParameterSourceContractVersion)
             throw std::invalid_argument("Invalid fixed-halo parameter snapshot.");
         previous=fixed.contributor_index;
     }
-    auto data=std::make_shared<n::ProblemData>(m_data->input,std::move(fixed_halos));
+    Eigen::VectorXd fixed_prediction=Eigen::VectorXd::Zero(static_cast<Eigen::Index>(input.observations.size()));
+    for(const auto & fixed:fixed_halos)
+        for(const auto & support:input.support[fixed.contributor_index])
+        {
+            const auto basis=n::EvaluateKernel(support.squared_distance,fixed.width,2.5);
+            const double contribution=fixed.amplitude*basis.gaussian;
+            const auto row=static_cast<Eigen::Index>(support.row);
+            const double updated=fixed_prediction(row)+contribution;
+            if(!std::isfinite(contribution) || !std::isfinite(updated))
+                throw std::invalid_argument("Nonfinite fixed-halo prediction.");
+            fixed_prediction(row)=updated;
+        }
+    auto effective=std::make_shared<std::vector<double>>(input.observations.size());
+    for(std::size_t row=0;row<effective->size();++row)
+    {
+        (*effective)[row]=input.observations[row]-fixed_prediction(static_cast<Eigen::Index>(row));
+        if(!std::isfinite((*effective)[row]))
+            throw std::invalid_argument("Nonfinite effective observation.");
+    }
+    std::shared_ptr<const std::vector<double>> effective_snapshot=effective;
+    auto data=std::make_shared<n::ProblemData>(m_data->input,std::move(fixed_halos),effective_snapshot);
+    data->target_to_contributor=m_data->target_to_contributor;
+    data->contributor_to_target=m_data->contributor_to_target;
+    data->domain=m_data->domain;
     data->context=m_data->context;
+    data->context.observations=n::Observe(effective_snapshot);
     data->layout=m_data->layout;
     data->partition=m_data->partition;
     data->construction_memory=m_data->construction_memory;
+    data->fixed_prediction=std::move(fixed_prediction);
     return JointProblem(std::move(data));
 }
 double JointProblem::ObservationScale() const {return m_data->context.scale;}
@@ -402,20 +586,21 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
             throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
     }
     eligibility_support.clear();
-    n::MemoryShape shape; shape.problem_scope=true; shape.component_atoms=contributors;
+    n::MemoryShape shape; shape.problem_scope=true; shape.component_atoms=selected.size();
     shape.component_observations=rows.size(); shape.component_support_entries=support_entries;
     std::size_t free_columns{};
-    if(!n::CheckedMultiplyBytes(contributors,2,free_columns))
+    if(!n::CheckedMultiplyBytes(selected.size(),2,free_columns))
         RejectBuildPreflight(shape,"size-overflow");
     shape.component_free_columns=free_columns;
     std::size_t planned_snapshot{};
-    std::size_t identity_characters{},identity_scratch{};
+    std::size_t identity_characters{},identity_scratch{},identity_map_entries{};
     const auto identity_node=sizeof(std::string)+4*sizeof(void *)+32;
     if(!AddEstimatedBytes(identity_characters,contributors,32) || !AddEstimatedBytes(identity_characters,rows.size(),32) ||
         !AddEstimatedBytes(identity_scratch,rows.size(),identity_node+32) ||
         !AddEstimatedBytes(identity_scratch,contributors,2*sizeof(std::string)+identity_node+64) ||
         !AddEstimatedBytes(identity_scratch,maximum_atom_support,sizeof(std::size_t)+4*sizeof(void *)+32) ||
         !n::CheckedAddBytes(identity_scratch,eligibility_scratch_bytes,identity_scratch) ||
+        !n::CheckedAddBytes(contributors,selected.size(),identity_map_entries) ||
         !AddEstimatedBytes(planned_snapshot,identity_characters,2*sizeof(char)))
         RejectBuildPreflight(shape,"size-overflow");
     shape.identity_validation_bytes=identity_scratch;
@@ -425,6 +610,12 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
         !AddEstimatedBytes(planned_snapshot,rows.size(),2*sizeof(std::string)) ||
         !AddEstimatedBytes(planned_snapshot,support_entries,2*sizeof(JointSupport)) ||
         !AddEstimatedBytes(planned_snapshot,selected.size(),2*sizeof(std::size_t)) ||
+        !AddEstimatedBytes(planned_snapshot,retained_halos,sizeof(JointFixedHaloParameter)) ||
+        !AddEstimatedBytes(planned_snapshot,rows.size(),2*sizeof(double)) ||
+        !AddEstimatedBytes(planned_snapshot,rows.size(),2*sizeof(Eigen::Index)) ||
+        !AddEstimatedBytes(planned_snapshot,selected.size(),sizeof(std::vector<n::LocalSupportIndex>)) ||
+        !AddEstimatedBytes(planned_snapshot,selected_support_entries,sizeof(n::LocalSupportIndex)) ||
+        !AddEstimatedBytes(planned_snapshot,identity_map_entries,sizeof(std::size_t)) ||
         !n::CheckedAddBytes(planned_snapshot,builder_resident,planned_snapshot))
         RejectBuildPreflight(shape,"size-overflow");
     shape.resident_bytes=planned_snapshot;
@@ -520,8 +711,13 @@ JointFitResult FitJointComponentsInitialized(const JointProblem & problem,const 
         if(!fixed) return invalid("fixed-halo-initialization-unavailable:"+failure);
         fixed_halos.push_back(std::move(*fixed));
     }
-    auto initialized_problem=problem.WithFixedHalos(std::move(fixed_halos));
-    auto out=FitJointComponents(initialized_problem,initialization.b);
+    JointProblem initialized_problem=problem;
+    try {initialized_problem=problem.WithFixedHalos(std::move(fixed_halos));}
+    catch(const std::exception & error)
+    {return invalid(std::string("fixed-halo-initialization-unavailable:")+error.what());}
+    std::vector<double> target_widths; target_widths.reserve(targets.size());
+    for(const auto contributor:targets) target_widths.push_back(initialization.b[contributor]);
+    auto out=FitJointComponents(initialized_problem,target_widths);
     out.initialization=initialization;
     return out;
 }
@@ -600,10 +796,24 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{},{},
         assembly.mapping_valid ? "exact-component-identity-mapping" :
             assembly.mapping_reason.empty() ? "missing-component-state" : assembly.mapping_reason});
+    std::optional<FullReplay> full_replay;
     if(assembly.available)
     {
         const auto & state=assembly.raw;
-        const auto consistency_status=assembly.consistency_passed ? JointCheckStatus::Passed :
+        const bool fixed_halo_policy=data.input->selection_domain &&
+            data.input->selection_domain->contributor_policy==FixedHaloContributorPolicy;
+        if(fixed_halo_policy)
+        {
+            full_replay=ReplayFixedHaloFullModel(data,assembly);
+            out.evidence.push_back({"full-observation-replay",full_replay->passed ? JointCheckStatus::Passed :
+                JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
+                full_replay->residual_difference,2e-12,full_replay->reason});
+            out.evidence.push_back({"fixed-halo-replay",full_replay->passed ? JointCheckStatus::Passed :
+                JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
+                full_replay->halo_difference,2e-12,full_replay->passed ? "immutable-first-stage-snapshot" : full_replay->reason});
+        }
+        const bool replay_passed=assembly.consistency_passed && (!full_replay || full_replay->passed);
+        const auto consistency_status=replay_passed ? JointCheckStatus::Passed :
             !state.valid && assembly.verification_memory_estimate.status!=n::MemoryStatus::Pass ?
                 JointCheckStatus::Unavailable : JointCheckStatus::Failed;
         out.evidence.push_back({"assembled-consistency",consistency_status,
@@ -617,13 +827,29 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
                 static_cast<double>(assembly.verification_memory_estimate.estimated_peak_bytes),
                 static_cast<double>(assembly.verification_memory_estimate.budget_bytes),
                 std::string("resource-limit:endpoint-verification:")+assembly.verification_memory_estimate.reason});
-        if(assembly.assessment.numerical_qualified && assembly.consistency_passed)
+        if(assembly.assessment.numerical_qualified && replay_passed)
         {
             out.assembled_state=State(state,data.context.scale);
-            out.prediction=Values(assembly.prediction);
-            out.objective=assembly.objective/(data.context.scale*data.context.scale);
+            out.prediction=full_replay ? std::move(full_replay->prediction) : Values(assembly.prediction);
+            out.objective=full_replay ? full_replay->objective :
+                assembly.objective/(data.context.scale*data.context.scale);
+            if(full_replay) out.assembled_state->objective=*out.objective;
         }
     }
+    if(data.input->selection_domain && data.input->selection_domain->contributor_policy==FixedHaloContributorPolicy)
+        for(auto & component:out.components)
+        {
+            const auto remap=[&](std::size_t & atom) {
+                if(atom>=data.target_to_contributor.size()) return false;
+                atom=data.target_to_contributor[atom]; return true;
+            };
+            for(auto & atom:component.atoms) remap(atom);
+            const auto remap_blocks=[&](auto & blocks) {
+                for(auto & block:blocks) for(auto & atom:block.core_atoms) remap(atom);
+            };
+            remap_blocks(component.local_conditioning);
+            if(component.parameter_stability) remap_blocks(component.parameter_stability->blocks);
+        }
     out.costs.assembly_seconds=Seconds(assembly_start);
     n::NotifyJointAssemblyProgress(observer,n::JointProgressPhase::AssemblyCompleted,component_count,
         out.costs.assembly_seconds,assembly.available && assembly.raw.valid);
