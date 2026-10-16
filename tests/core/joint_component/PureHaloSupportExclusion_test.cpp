@@ -4,7 +4,9 @@
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/MapSampler.hpp"
 #include "core/detail/PostFitPeeling.hpp"
+#include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/command/detail/SimulationGeometry.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include "data/io/detail/JointResultJson.hpp"
@@ -12,6 +14,8 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
+#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
@@ -119,6 +123,54 @@ MapFixture BoundaryFixture()
     auto values=std::make_unique<double[]>(11);
     for (std::size_t row=0;row<11;++row) values[row]=static_cast<double>(row+1);
     MapObject map({11,1,1},{.5,.5,.5},{-2.5,0,0},std::move(values));
+    return {std::move(model),std::move(map)};
+}
+
+MapFixture WorkflowFixture()
+{
+    std::vector<std::unique_ptr<AtomObject>> atoms;
+    const auto add_atom=[&](int serial,double x,int component,int atom_key) {
+        auto atom=std::make_unique<AtomObject>();
+        atom->SetSerialID(serial);
+        atom->SetElement(Element::CARBON);
+        atom->SetComponentKey(static_cast<ComponentKey>(component));
+        atom->SetAtomKey(static_cast<AtomKey>(atom_key));
+        atom->SetChainID("A");
+        atom->SetComponentID("ALA");
+        atom->SetAtomID(serial==1 ? "CA" : serial==2 ? "CB" : "CG");
+        atom->SetPosition(x,0,0);
+        atoms.push_back(std::move(atom));
+    };
+    add_atom(1,0.0,1,7);
+    add_atom(2,4.5,1,7);
+    add_atom(3,4.8,3,8);
+    ModelObject model(std::move(atoms));
+    model.SelectAtoms([](const auto & atom){return atom.GetSerialID()==1;});
+
+    constexpr std::array<int,3> dimensions{45,45,45};
+    constexpr std::array<double,3> spacing{.3,.3,.3};
+    constexpr std::array<double,3> origin{-6.6,-6.6,-6.6};
+    const std::array<std::array<double,3>,3> positions{{{0,0,0},{4.5,0,0},{4.8,0,0}}};
+    const std::array<double,3> amplitudes{{2.0,.4,.3}};
+    const std::array<double,3> widths{{.65,.8,.9}};
+    const std::array<double,3> charges{{-.2,.1,-.1}};
+    auto values=std::make_unique<double[]>(static_cast<std::size_t>(dimensions[0])*dimensions[1]*dimensions[2]);
+    for (int z=0;z<dimensions[2];++z) for (int y=0;y<dimensions[1];++y) for (int x=0;x<dimensions[0];++x)
+    {
+        const auto position=core::simulation::GridPosition({x,y,z},spacing,origin);
+        double value{};
+        for (std::size_t atom=0;atom<positions.size();++atom)
+        {
+            const auto square=core::simulation::SupportSquare(position,positions[atom]);
+            if (square>6.25) continue;
+            const auto basis=core::joint_component::EvaluateKernel(square,widths[atom],2.5);
+            value+=amplitudes[atom]*basis.gaussian+charges[atom]*basis.charge;
+        }
+        const auto index=static_cast<std::size_t>(x)+static_cast<std::size_t>(dimensions[0]) *
+            (static_cast<std::size_t>(y)+static_cast<std::size_t>(dimensions[1])*static_cast<std::size_t>(z));
+        values[index]=value;
+    }
+    MapObject map(dimensions,spacing,origin,std::move(values));
     return {std::move(model),std::move(map)};
 }
 }
@@ -233,4 +285,51 @@ TEST(PureHaloSupportExclusionTest, PersistsVersionedDualDomainAndMedianProvenanc
     EXPECT_EQ(decoded.fitting_to_original_contributors,problem.FittingToOriginalContributors());
     ASSERT_TRUE(decoded.halo_median_reconstruction);
     EXPECT_EQ(decoded.halo_median_reconstruction->halos,snapshot.halo_median_reconstruction->halos);
+}
+
+TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGroupAndGlobalHaloSources)
+{
+    auto fixture=WorkflowFixture();
+    FitOptions options;
+    options.estimator=PotentialEstimator::JOINT_COMPONENTS;
+    options.quiet_mode=true;
+    options.thread_size=1;
+    core::detail::JointPostprocessingMetrics metrics;
+    ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
+        fixture.map,fixture.model,options,&metrics,true));
+    const auto result=fixture.model.GetAnalysisView().GetJointResult();
+    ASSERT_TRUE(result);
+    EXPECT_EQ(result->parameterization_contract,JointPureHaloSupportExclusionParameterizationContract);
+    ASSERT_TRUE(result->halo_median_reconstruction);
+    EXPECT_EQ(result->halo_median_reconstruction->halos.size(),2u);
+    EXPECT_EQ(metrics.halo_median_valid_target_count,1u);
+    EXPECT_EQ(metrics.halo_median_same_group_halos,1u);
+    EXPECT_EQ(metrics.halo_median_fallback_halos,1u);
+    EXPECT_GT(metrics.halo_median_fallback_support_rows,0u);
+    const auto target=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(1));
+    EXPECT_TRUE(target.GetPostFitPeeling());
+    EXPECT_TRUE(target.GetPostJointLocalResult());
+    EXPECT_EQ(target.GetStageEstimate(FittingStage::Second).source.role,FittingRole::Target);
+    const auto halo=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(2));
+    EXPECT_EQ(halo.GetStageEstimate(FittingStage::Second).source.role,FittingRole::Halo);
+    EXPECT_FALSE(halo.GetStageEstimate(FittingStage::Second).point);
+}
+
+TEST(PureHaloSupportExclusionTest, RunsPureWorkflowWithoutHalos)
+{
+    auto fixture=WorkflowFixture();
+    fixture.model.SelectAllAtoms();
+    FitOptions options;
+    options.estimator=PotentialEstimator::JOINT_COMPONENTS;
+    options.quiet_mode=true;
+    options.thread_size=1;
+    core::detail::JointPostprocessingMetrics metrics;
+    ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
+        fixture.map,fixture.model,options,&metrics,true));
+    const auto result=fixture.model.GetAnalysisView().GetJointResult();
+    ASSERT_TRUE(result);
+    ASSERT_TRUE(result->selection_domain);
+    EXPECT_EQ(result->selection_domain->target_indices.size(),result->atom_ids.size());
+    EXPECT_FALSE(result->halo_median_reconstruction);
+    EXPECT_EQ(metrics.halo_median_fallback_halos,0u);
 }

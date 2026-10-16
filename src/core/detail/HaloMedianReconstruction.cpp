@@ -104,11 +104,12 @@ bool SameSelectionDomain(const JointSelectionDomain & left, const JointSelection
         left.halo_eligibility.has_value()==right.halo_eligibility.has_value() && same_fixed && same_pure;
 }
 
-void ValidatePoint(const GaussianModel3D & point)
+bool ValidPoint(const GaussianModel3D & point)
 {
     if (!std::isfinite(point.GetAmplitude()) || point.GetAmplitude()<0 ||
         !std::isfinite(point.GetWidth()) || point.GetWidth()<=0 || !std::isfinite(point.GetOffset()))
-        throw std::invalid_argument("Invalid Joint target donor parameters.");
+        return false;
+    return true;
 }
 }
 
@@ -129,7 +130,7 @@ HaloMedianBuildResult BuildHaloMedianReconstruction(
         if (!QualifiedTarget(result,target)) continue;
         const auto found=points.find(target);
         if (found==points.end()) continue;
-        ValidatePoint(found->second);
+        if (!ValidPoint(found->second)) continue;
         const auto * atom=model.FindAtomPtr(std::stoi(input.atom_ids[target]));
         if (!atom) throw std::invalid_argument("halo-median-unknown-target");
         const auto key=data_internal::GetGroupKey(atom);

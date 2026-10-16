@@ -6,6 +6,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
 #include <memory>
+#include <limits>
 #include <vector>
 
 namespace {
@@ -111,6 +112,33 @@ TEST(HaloMedianReconstructionTest, AcceptsNotAssessedStabilityButRejectsUnqualif
     EXPECT_EQ(built.snapshot.global_median[0],4.0);
     EXPECT_EQ(built.snapshot.global_median[1],2.5);
     EXPECT_EQ(built.snapshot.global_median[2],6.5);
+}
+
+TEST(HaloMedianReconstructionTest, ExcludesInvalidWidthAndNonfiniteDonors)
+{
+    auto invalid_width=MakeFixture();
+    invalid_width.result.components.front().state->b[0]=0.0;
+    const auto width_built=BuildHaloMedianReconstruction(
+        invalid_width.model,invalid_width.problem,invalid_width.result,"invalid-width");
+    EXPECT_EQ(width_built.snapshot.valid_target_count,2u);
+    EXPECT_EQ(width_built.snapshot.global_median[0],4.0);
+
+    auto nonfinite=MakeFixture();
+    nonfinite.result.components.front().state->ac[3]=std::numeric_limits<double>::quiet_NaN();
+    const auto nonfinite_built=BuildHaloMedianReconstruction(
+        nonfinite.model,nonfinite.problem,nonfinite.result,"nonfinite-charge");
+    EXPECT_EQ(nonfinite_built.snapshot.valid_target_count,2u);
+    EXPECT_EQ(nonfinite_built.snapshot.global_median[0],3.0);
+    EXPECT_EQ(nonfinite_built.snapshot.global_median[2],5.0);
+}
+
+TEST(HaloMedianReconstructionTest, PreservesMixedSignChargeMedian)
+{
+    auto fixture=MakeFixture();
+    fixture.result.components.front().state->ac={1.0,-2.0,3.0,4.0,5.0,6.0};
+    const auto built=BuildHaloMedianReconstruction(fixture.model,fixture.problem,fixture.result,"mixed-sign");
+    EXPECT_EQ(built.snapshot.global_median[2],4.0);
+    EXPECT_EQ(built.snapshot.halos.front().charge,4.0);
 }
 
 TEST(HaloMedianReconstructionTest, EmptyQualifiedTargetPoolIsExplicitlyRejected)
