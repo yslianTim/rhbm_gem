@@ -418,6 +418,10 @@ if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
     add_executable(joint_halo_observation_exclusion_fit experiments/joint_halo_observation_exclusion_fit.cpp)
     target_link_libraries(joint_halo_observation_exclusion_fit PRIVATE joint_test_support rhbm_gem)
     add_dependencies(research_tools_all joint_halo_observation_exclusion_fit)
+
+    add_executable(joint_halo_observation_exclusion_metrics experiments/joint_halo_observation_exclusion_metrics.cpp)
+    target_link_libraries(joint_halo_observation_exclusion_metrics PRIVATE joint_test_support rhbm_gem)
+    add_dependencies(research_tools_all joint_halo_observation_exclusion_metrics)
 endif()
 
 add_rhbm_gtest_group(rhbm_tests_joint_component_contract
