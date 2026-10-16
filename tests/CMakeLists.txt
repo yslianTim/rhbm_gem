@@ -187,6 +187,7 @@ set(JOINT_COMPONENT_CONTRACT_TEST_SOURCES
     core/joint_component/HaloEligibility_test.cpp
     core/joint_component/HaloObservationExclusion_test.cpp
     core/joint_component/FixedHaloInitialization_test.cpp
+    core/joint_component/DynamicHaloMean_test.cpp
 )
 
 set(JOINT_COMPONENT_WORKFLOW_TEST_SOURCES
@@ -296,7 +297,8 @@ add_library(joint_test_support STATIC
     support/JointBlockCoordinate.cpp
     support/JointTestGeometry.cpp support/JointTestNumerics.cpp support/JointDenseReference.cpp
     support/JointTestContext.cpp support/JointComponentChecks.cpp
-    support/JointFixtureSupport.cpp support/JointHaloObservationExclusion.cpp)
+    support/JointFixtureSupport.cpp support/JointHaloObservationExclusion.cpp
+    support/DynamicHaloMean.cpp)
 target_compile_features(joint_test_support PUBLIC cxx_std_20)
 target_link_libraries(joint_test_support PUBLIC rhbm_gem_dependencies CompilerFlags)
 target_include_directories(joint_test_support PUBLIC
@@ -316,6 +318,10 @@ add_test(NAME joint_halo_pruning_validation COMMAND $<TARGET_FILE:joint_halo_pru
 set_tests_properties(joint_halo_pruning_validation PROPERTIES
     LABELS "core;domain:core;intent:algorithm;joint:halo-pruning;research"
     TIMEOUT 900 ENVIRONMENT "OMP_NUM_THREADS=1")
+
+add_executable(joint_dynamic_halo_mean experiments/joint_dynamic_halo_mean.cpp)
+target_link_libraries(joint_dynamic_halo_mean PRIVATE joint_test_support rhbm_gem CompilerFlags)
+add_dependencies(tests_all joint_dynamic_halo_mean)
 
 if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
     add_custom_target(research_tools_all)
