@@ -574,6 +574,18 @@ TEST(JointComponentNumericsTest, SparseConstrainedSolvePreservesInteriorBoundary
     EXPECT_FALSE(rejected.valid); EXPECT_EQ(rejected.reason,"rank-deficient"); EXPECT_EQ(rejected.rank,3);
 }
 
+TEST(JointComponentNumericsTest, LocalLinearCertificateKeepsItsStrictKktLimit)
+{
+    n::Sparse design(2,2);
+    design.insert(0,0)=1.0; design.insert(1,1)=1.0; design.makeCompressed();
+    Vector beta=Vector::Ones(2),observations(2);
+    observations<<1.0-2e-7,1.0;
+    const auto certificate=n::CertifyLinear(design,observations,beta,observations.norm());
+    ASSERT_TRUE(certificate.available);
+    EXPECT_GT(certificate.projected_kkt,n::PracticalJointConvergenceCriteria.global_ac_kkt);
+    EXPECT_FALSE(certificate.kkt_passed);
+}
+
 TEST(JointComponentNumericsTest, SparseReferencePreservesSvdRankNearDegeneracy)
 {
     namespace n=p::runtime;
@@ -918,6 +930,68 @@ TEST(JointComponentNumericsTest, IndependentStreamingReplayMatchesLegacyMatrixRe
         EXPECT_LE(independent.gradient_difference,1e-13+2e-9*streaming.gradient.lpNorm<Eigen::Infinity>());
         EXPECT_TRUE(std::isfinite(independent.cancellation_ratio));
     }
+}
+
+TEST(JointComponentNumericsTest, PracticalStationarityCannotHidePerCoordinateReplayDisagreement)
+{
+    constexpr Eigen::Index rows=4;
+    std::vector<std::vector<n::Support>> support(1);
+    n::Vector y(rows),eta= n::Vector::Constant(1,std::log(.55)),beta(2);
+    beta<<1.5,-.1;
+    for(Eigen::Index row=0;row<rows;++row)
+    {
+        const double square=std::array<double,4>{0.0,.36,1.44,4.0}[static_cast<std::size_t>(row)];
+        support[0].push_back({row,square});
+        const auto basis=n::EvaluateKernel(square,.55,2.5);
+        y(row)=beta(0)*basis.gaussian+beta(1)*basis.charge;
+    }
+    const n::Domain domain(rows,std::move(support));
+    auto context=n::CreateContext(y,1);
+    context.atom_ids=n::Identities({"target-42"});
+    context.row_ids=n::Identities({"row-1","row-2","row-3","row-4"});
+    auto primary=n::EvaluateStateStreaming(domain,y,eta,beta,context);
+    ASSERT_TRUE(primary.valid)<<primary.reason;
+    auto original=n::CheckIndependentReplay(domain,y,primary,context,nullptr,nullptr,
+        n::PracticalJointConvergenceCriteria);
+    ASSERT_TRUE(original.passed)<<original.reason;
+
+    primary.gradient(0)+=5e-10;
+    const auto replay=n::CheckIndependentReplay(domain,y,primary,context,nullptr,nullptr,
+        n::PracticalJointConvergenceCriteria);
+    ASSERT_TRUE(replay.valid)<<replay.reason;
+    EXPECT_TRUE(replay.primary_kkt_passed);
+    EXPECT_TRUE(replay.independent_kkt_passed);
+    EXPECT_TRUE(replay.prediction_passed);
+    EXPECT_TRUE(replay.residual_passed);
+    EXPECT_TRUE(replay.objective_passed);
+    EXPECT_TRUE(replay.kkt_agrees);
+    EXPECT_FALSE(replay.gradient_agrees);
+    EXPECT_FALSE(replay.passed);
+    EXPECT_EQ(replay.reason,"per-coordinate-replay-enclosure");
+    EXPECT_GT(replay.primary_width_gradient,n::StrictJointConvergenceCriteria.global_width_gradient);
+    EXPECT_LE(replay.primary_width_gradient,n::PracticalJointConvergenceCriteria.global_width_gradient);
+    EXPECT_EQ(replay.maximum_gradient_difference_atom_id,"target-42");
+    EXPECT_EQ(replay.gradient_enclosure_failure_atom_id,"target-42");
+    EXPECT_DOUBLE_EQ(replay.gradient_enclosure_failure_primary,primary.gradient(0));
+    EXPECT_TRUE(std::isfinite(replay.gradient_enclosure_failure_independent));
+    EXPECT_DOUBLE_EQ(replay.gradient_enclosure_failure_difference,
+        std::abs(replay.gradient_enclosure_failure_independent-primary.gradient(0)));
+    EXPECT_DOUBLE_EQ(replay.gradient_difference,replay.gradient_enclosure_failure_difference);
+    EXPECT_DOUBLE_EQ(replay.primary_width_gradient,std::abs(primary.gradient(0)));
+    EXPECT_DOUBLE_EQ(replay.independent_width_gradient,std::abs(replay.gradient_enclosure_failure_independent));
+    EXPECT_DOUBLE_EQ(replay.gradient_enclosure_failure_bound,
+        1e-13+2e-9*std::abs(primary.gradient(0)));
+    EXPECT_DOUBLE_EQ(replay.gradient_enclosure_failure_ratio,
+        replay.gradient_enclosure_failure_difference/replay.gradient_enclosure_failure_bound);
+    EXPECT_GT(replay.gradient_enclosure_failure_ratio,1.0);
+    EXPECT_DOUBLE_EQ(replay.primary_objective,primary.certificate.objective);
+    EXPECT_DOUBLE_EQ(replay.primary_residual_norm,primary.residual.norm());
+    EXPECT_DOUBLE_EQ(replay.independent_residual_norm,std::sqrt(2.0*replay.independent_objective));
+
+    const auto assessment=n::VerifyJointEndpoint(domain,y,primary,replay,context,
+        n::PracticalJointConvergenceCriteria);
+    EXPECT_FALSE(assessment.numerical_qualified);
+    EXPECT_EQ(assessment.failure,"per-coordinate-replay-enclosure");
 }
 
 TEST(JointComponentNumericsTest, AccurateProfileTrialCanRemainWidthNonstationary)

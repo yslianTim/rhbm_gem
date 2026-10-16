@@ -147,8 +147,13 @@ struct IndependentReplayEvidence
         kkt_difference{unavailable},gradient_difference{unavailable},cancellation_ratio{unavailable},
         assembled_prediction_difference{unavailable},assembled_prediction_error_ratio{unavailable},
         assembled_objective_difference{unavailable},
+        primary_objective{unavailable},primary_residual_norm{unavailable},independent_residual_norm{unavailable},
         primary_ac_kkt{unavailable},independent_ac_kkt{unavailable},primary_width_gradient{unavailable},
         independent_width_gradient{unavailable};
+    std::string maximum_gradient_difference_atom_id,gradient_enclosure_failure_atom_id;
+    double gradient_enclosure_failure_primary{unavailable},gradient_enclosure_failure_independent{unavailable},
+        gradient_enclosure_failure_difference{unavailable},gradient_enclosure_failure_bound{unavailable},
+        gradient_enclosure_failure_ratio{unavailable};
 };
 IndependentReplayEvidence CheckIndependentReplay(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &,
     const Vector * assembled_prediction=nullptr,const std::vector<std::size_t> * assembled_rows=nullptr,

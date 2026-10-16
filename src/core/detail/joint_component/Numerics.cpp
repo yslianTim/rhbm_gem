@@ -758,9 +758,11 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
     out.independent_width_gradient=width_gradient.lpNorm<Eigen::Infinity>();
     out.prediction_difference=prediction_difference; out.residual_difference=residual_difference;
     out.independent_objective=.5*rss;
+    out.primary_objective=e.certificate.objective;
+    out.primary_residual_norm=e.residual.norm();
+    out.independent_residual_norm=std::sqrt(rss);
     out.objective_difference=std::abs(out.independent_objective-e.certificate.objective);
     out.kkt_difference=std::abs(out.independent_ac_kkt-out.primary_ac_kkt);
-    out.gradient_difference=(width_gradient-e.gradient).lpNorm<Eigen::Infinity>();
     out.cancellation_ratio=cancellation_ratio;
     if(assembled_prediction)
     {
@@ -780,13 +782,44 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
     out.residual_passed=residual_ok;
     out.objective_passed=out.objective_difference<=1e-12+2e-12*std::abs(e.certificate.objective);
     out.kkt_agrees=out.kkt_difference<=1e-13;
-    out.gradient_agrees=((width_gradient-e.gradient).array().abs()<=
-        1e-13+2e-9*e.gradient.array().abs()).all();
+    out.gradient_agrees=true;
+    double maximum_gradient_difference{};
+    for(Eigen::Index atom=0;atom<atoms;++atom)
+    {
+        const double primary=e.gradient(atom),independent=width_gradient(atom);
+        const double difference=std::abs(independent-primary);
+        const double enclosure=1e-13+2e-9*std::abs(primary);
+        if(atom==0 || difference>maximum_gradient_difference)
+        {
+            maximum_gradient_difference=difference;
+            if(static_cast<std::size_t>(atom)<policy.atom_ids.size())
+                out.maximum_gradient_difference_atom_id=policy.atom_ids[static_cast<std::size_t>(atom)];
+        }
+        if(difference>enclosure)
+        {
+            out.gradient_agrees=false;
+            const double ratio=difference/enclosure;
+            if(out.gradient_enclosure_failure_atom_id.empty() || ratio>out.gradient_enclosure_failure_ratio)
+            {
+                out.gradient_enclosure_failure_primary=primary;
+                out.gradient_enclosure_failure_independent=independent;
+                out.gradient_enclosure_failure_difference=difference;
+                out.gradient_enclosure_failure_bound=enclosure;
+                out.gradient_enclosure_failure_ratio=ratio;
+                if(static_cast<std::size_t>(atom)<policy.atom_ids.size())
+                    out.gradient_enclosure_failure_atom_id=policy.atom_ids[static_cast<std::size_t>(atom)];
+            }
+        }
+    }
+    out.gradient_difference=maximum_gradient_difference;
     out.passed=out.primary_kkt_passed && out.independent_kkt_passed && out.prediction_passed &&
         out.residual_passed && out.objective_passed && out.kkt_agrees && out.gradient_agrees &&
         (!assembled_prediction || (out.assembled_prediction_passed && out.assembled_objective_passed));
     out.reason=out.passed ? "verified" : !out.primary_kkt_passed ? "primary-kkt-failed" :
-        !out.independent_kkt_passed ? "independent-kkt-failed" :
+        !out.independent_kkt_passed ? "independent-kkt-failed" : !out.prediction_passed ?
+        "prediction-replay-disagreement" : !out.residual_passed ? "residual-replay-disagreement" :
+        !out.objective_passed ? "objective-replay-disagreement" : !out.kkt_agrees ?
+        "independent-kkt-disagreement" : !out.gradient_agrees ? "per-coordinate-replay-enclosure" :
         assembled_prediction && !out.assembled_prediction_passed ? "assembled-prediction-disagreement" :
         assembled_prediction && !out.assembled_objective_passed ? "assembled-objective-disagreement" :
         "replay-disagreement";
@@ -974,13 +1007,20 @@ Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluatio
         out.failure=replay.reason.empty() ? "endpoint-replay-unavailable" : replay.reason;
         return out;
     }
-    out.inner=replay.feasible && replay.primary_kkt_passed && replay.independent_kkt_passed;
+    out.inner=replay.feasible && replay.primary_kkt_passed &&
+        MeetsJointThreshold(replay.primary_ac_kkt,criteria.global_ac_kkt) &&
+        replay.independent_kkt_passed && MeetsJointThreshold(replay.independent_ac_kkt,criteria.global_ac_kkt);
     out.gradient=MeetsJointThreshold(endpoint.gradient.lpNorm<Eigen::Infinity>(),criteria.global_width_gradient) &&
         MeetsJointThreshold(replay.primary_width_gradient,criteria.global_width_gradient) &&
         MeetsJointThreshold(replay.independent_width_gradient,criteria.global_width_gradient) && replay.gradient_agrees;
-    out.endpoint_verified=replay.passed && out.inner;
+    const bool replay_consistent=replay.valid && replay.prediction_passed && replay.residual_passed &&
+        replay.objective_passed && replay.kkt_agrees && replay.gradient_agrees &&
+        (!replay.assembled_prediction_available ||
+            (replay.assembled_prediction_passed && replay.assembled_objective_passed));
+    out.endpoint_verified=replay.passed && replay_consistent && out.inner;
     out.numerical_qualified=out.endpoint_verified && out.gradient;
     out.failure=out.numerical_qualified ? "none" : !out.inner ? "global-ac-kkt-failed" :
+        !replay_consistent ? (replay.reason.empty() ? "endpoint-verification-failed" : replay.reason) :
         !out.gradient ? "global-width-gradient-failed" :
         replay.reason.empty() ? "endpoint-verification-failed" : replay.reason;
     return out;

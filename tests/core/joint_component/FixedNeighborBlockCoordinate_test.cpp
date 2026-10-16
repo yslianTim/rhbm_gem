@@ -777,6 +777,92 @@ TEST(JointFixedNeighborBlockCoordinateTest, EtaConfirmationUsesInclusiveExisting
         std::numeric_limits<double>::infinity()),true));
     EXPECT_FALSE(n::IsFixedNeighborEtaChangeConfirmed(std::numeric_limits<double>::quiet_NaN(),true));
 }
+TEST(JointFixedNeighborBlockCoordinateTest, StrictAndPracticalStationarityCriteriaHaveInclusiveFiniteBoundaries)
+{
+    const auto & strict=n::StrictJointConvergenceCriteria;
+    const auto & practical=n::PracticalJointConvergenceCriteria;
+    EXPECT_TRUE(n::IsValidJointConvergenceCriteria(strict));
+    EXPECT_TRUE(n::IsValidJointConvergenceCriteria(practical));
+
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(5e-8,0,0,true,strict),
+        n::FixedNeighborStationarityState::NotStationary);
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(5e-8,0,0,true,practical),
+        n::FixedNeighborStationarityState::ConfirmedStationary);
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,5e-10,0,true,strict),
+        n::FixedNeighborStationarityState::NotStationary);
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,5e-10,0,true,practical),
+        n::FixedNeighborStationarityState::ConfirmedStationary);
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,0,5e-7,true,strict),
+        n::FixedNeighborStationarityState::CandidateStationary);
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,0,5e-7,true,practical),
+        n::FixedNeighborStationarityState::ConfirmedStationary);
+
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(practical.global_ac_kkt,0,0,true,practical),
+        n::FixedNeighborStationarityState::ConfirmedStationary);
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(
+        std::nextafter(practical.global_ac_kkt,0.0),0,0,true,practical),
+        n::FixedNeighborStationarityState::ConfirmedStationary);
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(
+        std::nextafter(practical.global_ac_kkt,std::numeric_limits<double>::infinity()),0,0,true,practical),
+        n::FixedNeighborStationarityState::NotStationary);
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,practical.global_width_gradient,0,true,practical),
+        n::FixedNeighborStationarityState::ConfirmedStationary);
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,
+        std::nextafter(practical.global_width_gradient,0.0),0,true,practical),
+        n::FixedNeighborStationarityState::ConfirmedStationary);
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,
+        std::nextafter(practical.global_width_gradient,std::numeric_limits<double>::infinity()),0,true,practical),
+        n::FixedNeighborStationarityState::NotStationary);
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,0,practical.confirmed_log_width_change,true,practical),
+        n::FixedNeighborStationarityState::ConfirmedStationary);
+    EXPECT_TRUE(n::IsFixedNeighborEtaChangeConfirmed(
+        std::nextafter(practical.confirmed_log_width_change,0.0),true,practical));
+    EXPECT_FALSE(n::IsFixedNeighborEtaChangeConfirmed(
+        std::nextafter(practical.confirmed_log_width_change,std::numeric_limits<double>::infinity()),true,practical));
+
+    const double nan=std::numeric_limits<double>::quiet_NaN();
+    const double infinity=std::numeric_limits<double>::infinity();
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(nan,0,0,true,practical),
+        n::FixedNeighborStationarityState::NotStationary);
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,infinity,0,true,practical),
+        n::FixedNeighborStationarityState::NotStationary);
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(-1,0,0,true,practical),
+        n::FixedNeighborStationarityState::NotStationary);
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,-1,0,true,practical),
+        n::FixedNeighborStationarityState::NotStationary);
+    EXPECT_FALSE(n::IsFixedNeighborEtaChangeConfirmed(-1,true,practical));
+    EXPECT_FALSE(n::IsFixedNeighborEtaChangeConfirmed(infinity,true,practical));
+    EXPECT_FALSE(n::IsFixedNeighborEtaChangeConfirmed(nan,true,practical));
+    EXPECT_NE(n::ClassifyFixedNeighborStationarity(0,0,-1,true,practical),
+        n::FixedNeighborStationarityState::ConfirmedStationary);
+    EXPECT_NE(n::ClassifyFixedNeighborStationarity(0,0,nan,true,practical),
+        n::FixedNeighborStationarityState::ConfirmedStationary);
+
+    auto invalid=practical; invalid.global_ac_kkt=nan;
+    EXPECT_FALSE(n::IsValidJointConvergenceCriteria(invalid));
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,0,0,true,invalid),
+        n::FixedNeighborStationarityState::NotStationary);
+    invalid=practical; invalid.global_width_gradient=infinity;
+    EXPECT_FALSE(n::IsValidJointConvergenceCriteria(invalid));
+    invalid=practical; invalid.confirmed_log_width_change=-1;
+    EXPECT_FALSE(n::IsValidJointConvergenceCriteria(invalid));
+}
+TEST(JointFixedNeighborBlockCoordinateTest, PracticalCriteriaDoNotQualifySweepsWithFailedBlocks)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=6;
+    policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
+    policy.force_no_trusted_profile_for_testing=[](std::size_t block,std::size_t) {return block==0;};
+    const auto result=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,
+        initial_eta,data.context,policy);
+    EXPECT_FALSE(result.search_converged);
+    EXPECT_EQ(result.reason,"block-recovery-exhausted");
+    EXPECT_EQ(result.first_order_stationarity_sweep,0u);
+    EXPECT_EQ(result.confirmed_stationarity_sweep,0u);
+    EXPECT_FALSE(result.certification.has_value());
+}
 TEST(JointFixedNeighborBlockCoordinateTest, CertificationRetryWaitsTenSweepsWhileStationarityPersists)
 {
     std::size_t next_retry_sweep{};
