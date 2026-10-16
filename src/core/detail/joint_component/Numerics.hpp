@@ -153,7 +153,9 @@ struct IndependentReplayEvidence
     std::string maximum_gradient_difference_atom_id,gradient_enclosure_failure_atom_id;
     double gradient_enclosure_failure_primary{unavailable},gradient_enclosure_failure_independent{unavailable},
         gradient_enclosure_failure_difference{unavailable},gradient_enclosure_failure_bound{unavailable},
-        gradient_enclosure_failure_ratio{unavailable};
+        gradient_enclosure_failure_ratio{unavailable},maximum_gradient_difference_primary{unavailable},
+        maximum_gradient_difference_independent{unavailable},maximum_gradient_difference_bound{unavailable},
+        maximum_gradient_difference_ratio{unavailable};
 };
 IndependentReplayEvidence CheckIndependentReplay(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &,
     const Vector * assembled_prediction=nullptr,const std::vector<std::size_t> * assembled_rows=nullptr,

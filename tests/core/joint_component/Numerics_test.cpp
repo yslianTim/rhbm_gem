@@ -977,6 +977,10 @@ TEST(JointComponentNumericsTest, PracticalStationarityCannotHidePerCoordinateRep
     EXPECT_DOUBLE_EQ(replay.gradient_enclosure_failure_difference,
         std::abs(replay.gradient_enclosure_failure_independent-primary.gradient(0)));
     EXPECT_DOUBLE_EQ(replay.gradient_difference,replay.gradient_enclosure_failure_difference);
+    EXPECT_DOUBLE_EQ(replay.maximum_gradient_difference_primary,primary.gradient(0));
+    EXPECT_DOUBLE_EQ(replay.maximum_gradient_difference_independent,replay.gradient_enclosure_failure_independent);
+    EXPECT_DOUBLE_EQ(replay.maximum_gradient_difference_bound,replay.gradient_enclosure_failure_bound);
+    EXPECT_DOUBLE_EQ(replay.maximum_gradient_difference_ratio,replay.gradient_enclosure_failure_ratio);
     EXPECT_DOUBLE_EQ(replay.primary_width_gradient,std::abs(primary.gradient(0)));
     EXPECT_DOUBLE_EQ(replay.independent_width_gradient,std::abs(replay.gradient_enclosure_failure_independent));
     EXPECT_DOUBLE_EQ(replay.gradient_enclosure_failure_bound,

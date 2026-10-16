@@ -792,6 +792,10 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
         if(atom==0 || difference>maximum_gradient_difference)
         {
             maximum_gradient_difference=difference;
+            out.maximum_gradient_difference_primary=primary;
+            out.maximum_gradient_difference_independent=independent;
+            out.maximum_gradient_difference_bound=enclosure;
+            out.maximum_gradient_difference_ratio=difference/enclosure;
             if(static_cast<std::size_t>(atom)<policy.atom_ids.size())
                 out.maximum_gradient_difference_atom_id=policy.atom_ids[static_cast<std::size_t>(atom)];
         }

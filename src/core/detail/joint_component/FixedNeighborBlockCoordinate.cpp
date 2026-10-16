@@ -1740,6 +1740,11 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     policy.assess_local_conditioning=true;
     policy.assess_parameter_stability=true;
     policy.claim_parameter_stability_block=production_policy.claim_parameter_stability_block;
+    if(production_policy.state_observer)
+        policy.state_observer=[&production_policy](std::size_t sweep,const BlockCoordinateState & state,
+            const FixedNeighborBlockSweep & record,const std::vector<FixedNeighborBlockRecord> &) {
+            production_policy.state_observer(production_policy.component_index,sweep,state,record);
+        };
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(production_policy.configure_search_for_testing) production_policy.configure_search_for_testing(policy);
 #endif

@@ -430,3 +430,144 @@ observations, 37,406 contributors, 27,406 targets, and 10,000 fixed halos;
 the earlier recorded process peak was 1,585,790,976 bytes. The persistence
 schema 15 assertions verify new writes while the historical schema 14 decode
 paths continue to be exercised separately.
+
+## P2 Practical global convergence validation (2026-10-16)
+
+The same chain-A CIF, mode-2 float32 map, simulation sidecar, CLI map
+normalization, FirstStage initialization, support selection, component
+partition, initial target widths, 12-atom core, forward Gauss-Seidel order,
+one trusted update per block visit, and 200-sweep budget were used for all four
+re-runs. The normalized observation scale was `787.5806867375935`; the map
+normalization divisor was `0.44031545732594374`. Outputs de-normalize A/C back
+to the original map units before parameter comparisons. The production
+scenario used 659/659 qualified FirstStage A/B halos with immutable C=0 and
+1,418 target atoms in one component across 229,783 observations. Both
+production Strict and Practical runs preserved the original observation
+scale; the controlled-scenario scale factor was `1.0000000000000164` in the
+Practical run.
+
+The Strict production endpoint is an extended-search **candidate**. It
+exhausted 200 sweeps and failed strict global KKT and width-gradient
+qualification; its 1,418 parameter values are not a qualified reference. The
+Practical production run completed full-sweep confirmation at sweep 79 and
+passed endpoint verification, independent replay, full-observation replay,
+and target availability checks. All 1,418 target estimates were qualified in
+this controlled production scenario.
+
+| Production FirstStage A/B, fixed C=0 | Strict candidate | Practical qualified |
+| --- | ---: | ---: |
+| Completed / confirmed / certified sweep | 200 / none / 200 | 79 / 79 / 79 |
+| Candidate objective | 0.004102082117560809 | 0.004102082117643850 |
+| Global A/C KKT | 3.568481e-10 | 9.197902e-8 |
+| Global width-gradient infinity norm | 2.580471e-12 | 4.231091e-10 |
+| Complete-sweep `max |Δlog B|` | Not saved for this unqualified candidate; the 200-sweep trajectory recorded a max accepted width step of 7.78516e-11 | 5.666148e-7 |
+| Available qualified target estimates | 0 | 1,418 |
+| Independent component replay | Ran; stationarity gates failed, consistency gates passed | Passed all stationarity and consistency gates |
+| Full-observation / fixed-halo replay | Unavailable for unqualified endpoint | Passed |
+| Failed blocks / maximum final target B | 0 / 0.639283 | 0 / 0.639283 |
+| Profile evaluations / accepted updates | 56,745 / 13,093 | 22,439 / 10,785 |
+| Search wall time / process peak RSS | 529.65 s / 682,672,128 B | 343.88 s / 665,731,072 B |
+
+The Practical run used 121 fewer sweeps and saved 185.77 seconds (35.1%) of
+search wall time versus the Strict 200-sweep candidate. Both runs reached the
+same objective plateau to about `8.3e-14` absolute difference. Search time
+here is measured inside the controlled fitting process; the Strict candidate
+is not formal ground truth.
+
+### A/B/C stability against the extended-search candidate
+
+Differences below compare all 1,418 Practical parameters with the 200-sweep
+Strict candidate after conversion to original-map A/C units. B remains in its
+physical width units. This measures numerical stability only; it does not
+measure scientific estimation error for the misspecified fixed-halo C=0
+model.
+
+| Parameter | Mean absolute difference | Median | P95 | P99 | Maximum | Atoms >0.0025 / >0.005 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| A | 7.224e-7 | 5.600e-8 | 2.788e-6 | 1.288e-5 | 5.453e-5 | 0 / 0 |
+| B | 2.307e-8 | 1.448e-9 | 8.038e-8 | 4.413e-7 | 1.945e-6 | 0 / 0 |
+| C | 1.488e-7 | 8.490e-9 | 4.703e-7 | 2.878e-6 | 1.756e-5 | 0 / 0 |
+| Combined A/B/C values | 2.981e-7 | 9.461e-9 | 9.371e-7 | 5.530e-6 | 5.453e-5 | 0 atoms / 0 atoms |
+
+No atom exceeded either parameter-difference limit. The largest per-atom
+difference was atom 400: `|ΔA|=5.453e-5`, `|ΔB|=1.870e-6`,
+`|ΔC|=1.183e-5`. Its block 36 was classified WellConditioned with full-rank
+free A/C design condition 6.91 and projected-width/profile condition about
+1.24. Across all 142 Practical blocks, every block was WellConditioned and
+full rank; the maximum free A/C condition was 7.014 and maximum projected
+width/profile condition was 1.264. There are no problematic atoms above the
+requested 0.0025 threshold.
+
+Target and full prediction differences between the Practical endpoint and
+Strict candidate were identical up to their shared fixed-halo signal: maximum
+absolute difference `2.6794e-5`, mean absolute difference `1.3475e-7`, and
+RMSE difference `6.6924e-7`, in CLI-normalized map units. The candidate
+objective difference was `8.3040e-14`.
+
+### Independent replay and the previous coordinate-enclosure report
+
+At the Practical production endpoint, primary and independent values were:
+
+| Gate / diagnostic | Primary | Independent | Result |
+| --- | ---: | ---: | --- |
+| Global A/C KKT | 9.197902e-8 | 9.197902e-8 | Both ≤ 1e-7; difference 0 |
+| Width-gradient infinity norm | 4.231091e-10 | 4.231091e-10 | Both ≤ 1e-9; coordinate agreement passed |
+| Prediction replay max difference | — | 1.066e-14 | Passed |
+| Residual replay max difference | — | 1.066e-14 | Passed |
+| Objective replay difference | 2544.4531891830266 | 2544.4531891830156 | Difference 1.0914e-11; original objective enclosure passed |
+| Parameter feasibility | — | — | Passed |
+| Full observation assembly including fixed halos | — | — | Passed |
+
+The largest Practical per-coordinate width-gradient difference was
+`1.1411e-18` at atom 2497, against its unchanged `1.0000e-13` enclosure
+(ratio `1.1411e-5`). The 200-sweep Strict candidate's primary and independent
+KKT differed by `1.7347e-18`; its maximum coordinate width-gradient
+difference was `1.2602e-18` at atom 2656. KKT agreement, gradient agreement,
+prediction, residual, objective, and parameter-feasibility consistency all
+passed on that candidate, but both Strict stationarity gates failed, so its
+overall replay qualification and full-observation assembly remained
+unavailable. The earlier `per-coordinate-replay-enclosure` failure was not
+reproduced in these re-runs; no failed coordinate or failure ratio exists in
+the current Strict/Practical evidence. The P1 regression still demonstrates
+that a deliberately perturbed coordinate fails the unchanged enclosure.
+This change did not loosen any replay-consistency bound.
+
+### Full Oracle control
+
+Full Oracle replaces the research scenario's fixed halo A/B with simulation
+truth while fixed halo C remains zero; truth halo charge is represented only
+in the research effective observations. Practical and Strict both passed
+full-sweep confirmation and independent/full-observation replay, with all
+1,418 target states available.
+
+| Full Oracle A/B/C | Strict | Practical |
+| --- | ---: | ---: |
+| Sweeps / wall time | 143 / 599.79 s | 79 / 343.34 s |
+| Objective | 2.81935e-16 | 7.95680e-14 |
+| Candidate A/B/C RMSE to truth | 4.740e-8 / 2.466e-9 / 2.652e-9 | 3.273e-6 / 1.158e-7 / 8.201e-7 |
+| Independent replay | Passed | Passed |
+| Failed blocks / full-observation replay | 0 / passed | 0 / passed |
+
+Practical Full Oracle parameters differed from the Strict qualified endpoint
+by at most `5.320e-5` in A, `1.900e-6` in B, and `1.714e-5` in C; no target
+exceeded 0.0025. The Practical objective is larger by `7.929e-14`, while
+target A/B/C truth errors remain below `3.3e-6`. This is no material loss of
+near-truth recovery at the requested parameter precision.
+
+The fixed C=0 model error remains a separate scientific concern. The
+Practical convergence result does not change that model contract or establish
+that production target bias is below 0.01.
+
+The complete four-run sweep trajectories, raw-unit parameter checkpoints,
+compact replay/fit summary, and local-conditioning diagnostics are saved in:
+
+- [`fixed-halo-target-only-6z6u-practical-trajectories.csv`](fixed-halo-target-only-6z6u-practical-trajectories.csv)
+- [`fixed-halo-target-only-6z6u-practical-checkpoints.csv`](fixed-halo-target-only-6z6u-practical-checkpoints.csv)
+- [`fixed-halo-target-only-6z6u-practical-summary.json`](fixed-halo-target-only-6z6u-practical-summary.json)
+
+**P2 decision:** the practical global criteria passed the 6Z6U production and
+Full Oracle controls, preserved independent replay checks, and met the
+0.0025 A/B/C early-stop stability target. The Strict production 200-sweep
+candidate remains unqualified. This evidence permits the conditional P3
+production promotion; it does not claim statistical accuracy for the
+misspecified C=0 model.
