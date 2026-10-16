@@ -86,6 +86,10 @@ struct Profile
                 work.replay_trust_seconds=Seconds(replay_started);
                 telemetry->Add(last_role,work);
             }
+            if(telemetry && evidence.reason=="independent-kkt-failed")
+                ++telemetry->local_replay_kkt_rejections;
+            else if(telemetry && !evidence.passed)
+                ++telemetry->local_replay_disagreements;
             trusted=evidence.passed; row.trust=std::move(evidence);
         }
         if(proposed && trusted && step.lpNorm<Eigen::Infinity>()>2.302585092994046)
@@ -107,6 +111,7 @@ struct Profile
                     if(RejectWeakWidthTrial(step.lpNorm<Eigen::Infinity>(),assessment.weak_step_fraction,
                         old_objective,candidate_objective))
                     {
+                        if(telemetry) ++telemetry->width_safeguard_rejections;
                         row.rejection_reason="weak-width-identifiability-limited";
                         trusted=false;
                     }
@@ -200,7 +205,8 @@ struct Profile
 #endif
             telemetry->Add(last_role,work);
         }
-        if(!differential.valid) {failure=differential.reason; return -1;}
+        if(!differential.valid)
+        {if(telemetry) ++telemetry->invalid_gradient_stops; failure=differential.reason; return -1;}
         if(fixed_width_mask && fixed_width_mask->size()==static_cast<std::size_t>(differential.jacobian.cols()))
             for(Eigen::Index column=0;column<differential.jacobian.cols();++column)
                 if((*fixed_width_mask)[static_cast<std::size_t>(column)])
@@ -266,6 +272,17 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     out.seconds=Seconds(start);
     if(telemetry)
     {
+        if(out.lm_status>=0 && static_cast<std::size_t>(out.lm_status)<local_work.lm_status_counts.size())
+            ++local_work.lm_status_counts[static_cast<std::size_t>(out.lm_status)];
+        for(const auto & trial:out.trials)
+        {
+            if(trial.accepted) ++local_work.accepted_profile_trials;
+            else ++local_work.rejected_profile_trials;
+        }
+        if(out.stop_reason=="accepted-update-budget") ++local_work.accepted_update_budget_stops;
+        else if(out.stop_reason=="profile-budget") ++local_work.profile_budget_stops;
+        else if(out.stop_reason=="cpu-time-budget") ++local_work.cpu_budget_stops;
+        else if(out.stop_reason=="native-lm-stop") ++local_work.native_lm_stops;
         local_work.total_seconds=out.seconds;
         local_work.lm_overhead_seconds=std::max(0.0,out.seconds-local_work.AttributedSeconds());
         out.profile_work=std::move(local_work);

@@ -1734,6 +1734,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     policy.maximum_sweeps=production_policy.maximum_sweeps;
     policy.convergence_criteria=production_policy.convergence_criteria;
     policy.order=production_policy.order;
+    policy.collect_telemetry=production_policy.collect_telemetry;
     policy.component_index=production_policy.component_index;
     policy.component_id=production_policy.component_id;
     policy.halo_census=production_policy.halo_census;

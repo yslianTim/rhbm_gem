@@ -93,6 +93,67 @@ long PeakRssBytes()
 }
 json::value PeakRss()
 {const auto value=PeakRssBytes(); return value>=0 ? json::value(value) : json::value(nullptr);}
+json::object LinearWorkJson(const joint::LinearSolveWork & work)
+{
+    const auto mean=[](double sum,std::size_t count) {return count ? Number(sum/static_cast<double>(count)) : json::value(nullptr);};
+    return { {"solve_calls",work.solve_calls},{"valid_solves",work.valid_solves},{"invalid_solves",work.invalid_solves},
+        {"invalid_input_solves",work.invalid_input_solves},{"rank_deficient_solves",work.rank_deficient_solves},
+        {"nonfinite_solves",work.nonfinite_solves},
+        {"active_set_budget_exhausted_solves",work.active_set_budget_exhausted_solves},
+        {"other_invalid_solves",work.other_invalid_solves},{"factorization_solves",work.factorization_solves},
+        {"active_set_iterations",work.active_set_iterations},{"active_set_releases",work.active_set_releases},
+        {"initial_kkt_count",work.initial_kkt_count},{"initial_kkt_mean",mean(work.initial_kkt_sum,work.initial_kkt_count)},
+        {"initial_kkt_max",work.initial_kkt_count ? Number(work.initial_kkt_max) : json::value(nullptr)},
+        {"initial_kkt_le_1e-10",work.initial_kkt_le_1e10},{"initial_kkt_le_1e-8",work.initial_kkt_le_1e8},
+        {"initial_kkt_le_1e-7",work.initial_kkt_le_1e7},{"final_kkt_count",work.final_kkt_count},
+        {"final_kkt_mean",mean(work.final_kkt_sum,work.final_kkt_count)},
+        {"final_kkt_max",work.final_kkt_count ? Number(work.final_kkt_max) : json::value(nullptr)},
+        {"final_kkt_le_1e-10",work.final_kkt_le_1e10},{"final_kkt_le_1e-8",work.final_kkt_le_1e8},
+        {"final_kkt_le_1e-7",work.final_kkt_le_1e7},
+        {"refinement_eligibility_count",work.refinement_eligibility_count},
+        {"refinement_trigger_count",work.refinement_trigger_count},{"refinement_iterations",work.refinement_iterations},
+        {"refinement_success_count",work.refinement_success_count},{"refinement_failure_count",work.refinement_failure_count},
+        {"refinement_factorizations",work.refinement_factorizations},{"refinement_seconds",work.refinement_seconds},
+        {"refinement_before_kkt_mean",mean(work.refinement_before_kkt_sum,work.refinement_trigger_count)},
+        {"refinement_before_kkt_max",work.refinement_trigger_count ? Number(work.refinement_before_kkt_max) : json::value(nullptr)},
+        {"refinement_after_kkt_mean",mean(work.refinement_after_kkt_sum,work.refinement_trigger_count)},
+        {"refinement_after_kkt_max",work.refinement_trigger_count ? Number(work.refinement_after_kkt_max) : json::value(nullptr)},
+        {"refinement_before_objective_mean",mean(work.refinement_before_objective_sum,work.refinement_trigger_count)},
+        {"refinement_after_objective_mean",mean(work.refinement_after_objective_sum,work.refinement_trigger_count)}};
+}
+json::object SearchWorkJson(const joint::FixedNeighborSearchResult & search)
+{
+    const auto & work=search.work; const auto & profile=work.local_profile_work;
+    json::array status_counts;
+    for(std::size_t i=0;i<profile.lm_status_counts.size();++i)
+        if(profile.lm_status_counts[i]) status_counts.emplace_back(json::object{{"status_code",i},
+            {"count",profile.lm_status_counts[i]}});
+    std::size_t failed_blocks{};
+    for(const auto & sweep:search.sweeps)
+        failed_blocks+=sweep.block_solves-sweep.accepted_blocks-sweep.unchanged_blocks;
+    return { {"total_block_visits",work.block_visits},{"total_block_solves",search.total_block_solves},
+        {"total_accepted_updates",search.total_accepted_local_updates},{"failed_blocks",failed_blocks},
+        {"global_sweeps",search.sweep_count},{"profile_evaluations",search.total_profile_evaluations},
+        {"profile_accepted_trials",profile.accepted_profile_trials},
+        {"profile_rejected_trials",profile.rejected_profile_trials},
+        {"local_kkt_rejections",profile.total.local_kkt_rejections+profile.local_replay_kkt_rejections},
+        {"local_profile_kkt_rejections",profile.total.local_kkt_rejections},
+        {"local_replay_kkt_rejections",profile.local_replay_kkt_rejections},
+        {"local_replay_disagreements",profile.local_replay_disagreements},
+        {"invalid_gradient_stops",profile.invalid_gradient_stops},
+        {"width_safeguard_rejections",profile.width_safeguard_rejections},
+        {"accepted_update_budget_stops",profile.accepted_update_budget_stops},
+        {"profile_budget_stops",profile.profile_budget_stops},{"cpu_budget_stops",profile.cpu_budget_stops},
+        {"native_lm_stops",profile.native_lm_stops},{"lm_status_counts",std::move(status_counts)},
+        {"local_solver",LinearWorkJson(profile.total.linear_solve)},
+        {"local_solver_seconds",profile.total.linear_rhs_solve_seconds},
+        {"local_refinement_seconds",profile.total.linear_solve.refinement_seconds},
+        {"local_profile_seconds",work.local_search_seconds},{"local_state_seconds",work.local_state_seconds},
+        {"global_state_seconds",work.sweep_global_state_seconds},
+        {"endpoint_verification_seconds",work.endpoint_verification_seconds},
+        {"independent_replay_seconds",work.independent_replay_seconds},
+        {"search_seconds",search.search_seconds}};
+}
 std::size_t RadialCount(const std::vector<core::JointSupport> & support)
 {std::set<double> values; for(const auto & item:support) values.insert(item.squared_distance); return values.size();}
 void AddContribution(std::vector<double> & field,const core::JointProblemInput & input,std::size_t atom,
@@ -226,6 +287,11 @@ json::object RunCase(const std::string & name,const core::JointProblem & origina
     for(const auto target:source.selection_domain->target_indices) target_widths.push_back(init.b.at(target));
     joint::FixedNeighborSearchPolicy policy; policy.core_atoms=12; policy.maximum_sweeps=200;
     policy.convergence_criteria=criteria;
+    json::value numerical_work{nullptr};
+    policy.collect_telemetry=true;
+    policy.search_result_observer=[&](const joint::FixedNeighborSearchResult & search) {
+        numerical_work=SearchWorkJson(search);
+    };
     policy.state_observer=[&](std::size_t component_index,std::size_t sweep,const joint::BlockCoordinateState & state,
         const joint::FixedNeighborBlockSweep & record) {
         const auto found=checkpoints.find(sweep); if(found==checkpoints.end()) return;
@@ -512,6 +578,7 @@ json::object RunCase(const std::string & name,const core::JointProblem & origina
         {"scenario_halo_signal_rmse",Number(Rmse(scenario_field,fields.truth))},
         {"trajectory",std::move(trajectory)},
         {"target_conditioning_blocks_assessed",conditioning_blocks},{"target_stability_blocks_assessed",stability_blocks},
+        {"numerical_work",std::move(numerical_work)},
         {"wall_seconds",seconds},{"process_peak_rss_bytes",PeakRss()},{"components",std::move(comp)}};
 }
 }

@@ -237,6 +237,8 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
         {
             fit=SolveFixedNeighborComponentView(view,layout,widths,data.context,production_policy,observer,
                 progress_component ? &*progress_component : nullptr);
+            if(production_policy.search_result_observer)
+                production_policy.search_result_observer(fit.search);
             accepted_objective=LastFixedNeighborObjective(fit.search);
             accepted_gradient_inf_norm=LastFixedNeighborGradient(fit.search);
             component.search_completed=fit.succeeded; component.stop_reason=fit.stop_reason;

@@ -23,12 +23,47 @@ void AddCompensatedProduct(double left,double right,double & sum,double & compen
     AddCompensated(product,sum,compensation);
     AddCompensated(std::fma(left,right,-product),sum,compensation);
 }
+void AddLinearSolveWork(LinearSolveWork & destination,const LinearSolveWork & source)
+{
+#define ADD_COUNT(name) destination.name+=source.name
+    ADD_COUNT(solve_calls); ADD_COUNT(valid_solves); ADD_COUNT(invalid_solves); ADD_COUNT(invalid_input_solves);
+    ADD_COUNT(rank_deficient_solves); ADD_COUNT(nonfinite_solves); ADD_COUNT(active_set_budget_exhausted_solves);
+    ADD_COUNT(other_invalid_solves); ADD_COUNT(factorization_solves); ADD_COUNT(active_set_iterations);
+    ADD_COUNT(active_set_releases); ADD_COUNT(initial_kkt_count); ADD_COUNT(initial_kkt_le_1e10);
+    ADD_COUNT(initial_kkt_le_1e8); ADD_COUNT(initial_kkt_le_1e7); ADD_COUNT(final_kkt_count);
+    ADD_COUNT(final_kkt_le_1e10); ADD_COUNT(final_kkt_le_1e8); ADD_COUNT(final_kkt_le_1e7);
+    ADD_COUNT(refinement_eligibility_count); ADD_COUNT(refinement_trigger_count); ADD_COUNT(refinement_iterations);
+    ADD_COUNT(refinement_success_count); ADD_COUNT(refinement_failure_count); ADD_COUNT(refinement_factorizations);
+#undef ADD_COUNT
+    destination.initial_kkt_sum+=source.initial_kkt_sum;
+    destination.initial_kkt_max=std::max(destination.initial_kkt_max,source.initial_kkt_max);
+    destination.final_kkt_sum+=source.final_kkt_sum;
+    destination.final_kkt_max=std::max(destination.final_kkt_max,source.final_kkt_max);
+    destination.refinement_seconds+=source.refinement_seconds;
+    destination.refinement_before_kkt_sum+=source.refinement_before_kkt_sum;
+    destination.refinement_before_kkt_max=std::max(destination.refinement_before_kkt_max,source.refinement_before_kkt_max);
+    destination.refinement_after_kkt_sum+=source.refinement_after_kkt_sum;
+    destination.refinement_after_kkt_max=std::max(destination.refinement_after_kkt_max,source.refinement_after_kkt_max);
+    destination.refinement_before_objective_sum+=source.refinement_before_objective_sum;
+    destination.refinement_after_objective_sum+=source.refinement_after_objective_sum;
+}
+void AddKktSample(double value,std::size_t & count,std::size_t & le_1e10,std::size_t & le_1e8,
+    std::size_t & le_1e7,double & sum,double & maximum)
+{
+    if(!std::isfinite(value) || value<0) return;
+    ++count; sum+=value; maximum=std::max(maximum,value);
+    if(value<=1e-10) ++le_1e10;
+    if(value<=1e-8) ++le_1e8;
+    if(value<=1e-7) ++le_1e7;
+}
 void AddRoleWork(ProfileRoleWork & destination,const ProfileRoleWork & source)
 {
     destination.evaluations+=source.evaluations;
     destination.derivative_preparations+=source.derivative_preparations;
     destination.derivative_reductions+=source.derivative_reductions;
     destination.replay_checks+=source.replay_checks;
+    destination.local_kkt_rejections+=source.local_kkt_rejections;
+    AddLinearSolveWork(destination.linear_solve,source.linear_solve);
     destination.evaluation_seconds+=source.evaluation_seconds;
     destination.basis_seconds+=source.basis_seconds;
     destination.linear_matrix_preparation_seconds+=source.linear_matrix_preparation_seconds;
@@ -100,6 +135,17 @@ void ProfileSearchWork::Merge(const ProfileSearchWork & other)
     AddRoleWork(total,other.total); AddRoleWork(initial_profile,other.initial_profile);
     AddRoleWork(trial_profile,other.trial_profile); AddRoleWork(accepted_endpoint,other.accepted_endpoint);
     AddRoleWork(reference_evaluation,other.reference_evaluation);
+    accepted_profile_trials+=other.accepted_profile_trials;
+    rejected_profile_trials+=other.rejected_profile_trials;
+    local_replay_kkt_rejections+=other.local_replay_kkt_rejections;
+    local_replay_disagreements+=other.local_replay_disagreements;
+    invalid_gradient_stops+=other.invalid_gradient_stops;
+    width_safeguard_rejections+=other.width_safeguard_rejections;
+    accepted_update_budget_stops+=other.accepted_update_budget_stops;
+    profile_budget_stops+=other.profile_budget_stops;
+    cpu_budget_stops+=other.cpu_budget_stops;
+    native_lm_stops+=other.native_lm_stops;
+    for(std::size_t i=0;i<lm_status_counts.size();++i) lm_status_counts[i]+=other.lm_status_counts[i];
     total_seconds+=other.total_seconds; lm_overhead_seconds+=other.lm_overhead_seconds;
 }
 double ProfileSearchWork::AttributedSeconds() const
@@ -387,6 +433,40 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
         context ? &context->linear : nullptr,blocks,context ? context->scale : 0);
     if(profile_work)
     {
+        auto & stats=telemetry.work.linear_solve;
+        ++stats.solve_calls;
+        stats.factorization_solves+=static_cast<std::size_t>(std::max(0,solved.solves));
+        stats.active_set_iterations+=solved.active_set_iterations;
+        stats.active_set_releases+=static_cast<std::size_t>(std::max(0,solved.releases));
+        stats.refinement_eligibility_count+=solved.refinement_eligibility_count;
+        stats.refinement_trigger_count+=solved.refinement_trigger_count;
+        stats.refinement_iterations+=solved.refinement_iterations;
+        stats.refinement_success_count+=solved.refinement_success_count;
+        stats.refinement_failure_count+=solved.refinement_failure_count;
+        stats.refinement_factorizations+=solved.refinement_factorizations;
+        stats.refinement_seconds+=solved.refinement_seconds;
+        AddKktSample(solved.initial_projected_kkt,stats.initial_kkt_count,stats.initial_kkt_le_1e10,
+            stats.initial_kkt_le_1e8,stats.initial_kkt_le_1e7,stats.initial_kkt_sum,stats.initial_kkt_max);
+        if(solved.refinement_trigger_count)
+        {
+            stats.refinement_before_kkt_sum+=solved.initial_projected_kkt;
+            stats.refinement_before_kkt_max=std::max(stats.refinement_before_kkt_max,solved.initial_projected_kkt);
+            stats.refinement_before_objective_sum+=solved.refinement_before_objective;
+            stats.refinement_after_objective_sum+=solved.refinement_after_objective;
+        }
+        if(solved.valid) ++stats.valid_solves;
+        else
+        {
+            ++stats.invalid_solves;
+            if(solved.reason=="invalid-input") ++stats.invalid_input_solves;
+            else if(solved.reason.starts_with("rank-deficient")) ++stats.rank_deficient_solves;
+            else if(solved.reason=="nonfinite") ++stats.nonfinite_solves;
+            else if(solved.reason=="active-set-budget-exhausted") ++stats.active_set_budget_exhausted_solves;
+            else ++stats.other_invalid_solves;
+        }
+    }
+    if(profile_work)
+    {
         telemetry.work.linear_rhs_solve_seconds+=
             std::chrono::duration<double>(std::chrono::steady_clock::now()-solve_started).count();
     }
@@ -399,8 +479,20 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     out.certificate.linear_solves=solved.solves; out.certificate.linear_releases=solved.releases;
     out.certificate.free_rank=solved.rank;
     if(blocks) out.certificate.block_factorizations=solved.block_factorizations;
+    if(profile_work && out.certificate.available)
+    {
+        auto & stats=telemetry.work.linear_solve;
+        AddKktSample(out.certificate.projected_kkt,stats.final_kkt_count,stats.final_kkt_le_1e10,
+            stats.final_kkt_le_1e8,stats.final_kkt_le_1e7,stats.final_kkt_sum,stats.final_kkt_max);
+        if(solved.refinement_trigger_count)
+        {
+            stats.refinement_after_kkt_sum+=out.certificate.projected_kkt;
+            stats.refinement_after_kkt_max=std::max(stats.refinement_after_kkt_max,out.certificate.projected_kkt);
+        }
+    }
     if (!solved.valid) {out.reason=solved.reason; return out;}
-    if (!out.certificate.kkt_passed) {out.reason="kkt-failed"; return out;}
+    if (!out.certificate.kkt_passed)
+    {if(profile_work) ++telemetry.work.local_kkt_rejections; out.reason="kkt-failed"; return out;}
     out.residual=StableResidual(out.x,y,out.beta); out.gradient=Vector::Zero(m);
     const double scale=context ? context->scale : std::max(1.0,y.norm());
     for (Eigen::Index k=0;k<2*m;++k)

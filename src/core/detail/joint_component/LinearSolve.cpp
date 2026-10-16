@@ -5,6 +5,7 @@
 #include <Eigen/QR>
 #include <Eigen/SVD>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <type_traits>
 
@@ -217,6 +218,7 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
     // release blocked ones when the dual gradient requires it (mixed NNLS).
     for (Eigen::Index iteration=0; iteration<(policy ? policy->active_set_iteration_factor : 20)*x.cols()*x.cols(); ++iteration)
     {
+        ++out.active_set_iterations;
         std::vector<Eigen::Index> columns;
         for (Eigen::Index k=0;k<x.cols();++k) if (free[static_cast<std::size_t>(k)]) columns.push_back(k);
         Eigen::MatrixXd a;
@@ -331,8 +333,19 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
                 std::max(1.0,original_rhs_norm);
             const Certificate initial=!use_svd && unit_weights && bounded ?
                 CertifyLinear(x,y,out.beta,observation_scale) : Certificate{};
+            if(initial.available)
+            {
+                ++out.refinement_eligibility_count;
+                out.initial_projected_kkt=initial.projected_kkt;
+                out.final_projected_kkt=initial.projected_kkt;
+            }
             if(initial.available && !initial.kkt_passed)
             {
+                ++out.refinement_trigger_count;
+                out.refinement_before_objective=initial.objective;
+                out.refinement_after_objective=initial.objective;
+                const auto refinement_started=std::chrono::steady_clock::now();
+                bool refinement_succeeded{};
                 Eigen::MatrixXd face(x.rows(),static_cast<Eigen::Index>(columns.size()));
                 Eigen::VectorXd theta(static_cast<Eigen::Index>(columns.size()));
                 for(std::size_t k=0;k<columns.size();++k)
@@ -346,6 +359,7 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
                 RecordDenseShape("ac-bounded-kkt-refinement",face.rows(),face.cols());
                 Eigen::ColPivHouseholderQR<Eigen::MatrixXd> refinement_qr(face);
                 refinement_qr.setThreshold(rank_threshold);
+                ++out.refinement_factorizations;
                 if(refinement_qr.rank()==static_cast<Eigen::Index>(columns.size()))
                 {
                     for(int refinement=0;refinement<8;++refinement)
@@ -369,7 +383,7 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
                             residual(row)-=prediction+compensation;
                         }
                         const Eigen::VectorXd correction=refinement_qr.solve(residual);
-                        ++out.solves;
+                        ++out.solves; ++out.refinement_iterations;
                         if(!correction.allFinite()) break;
                         theta+=correction;
                         Eigen::VectorXd refined_beta=Eigen::VectorXd::Zero(x.cols());
@@ -377,9 +391,19 @@ LinearResult WeightedSolveImpl(const Matrix & x, VectorRef y,
                             refined_beta(columns[k])=theta(static_cast<Eigen::Index>(k))/scales(columns[k]);
                         const Certificate refined=CertifyLinear(x,y,refined_beta,observation_scale);
                         if(refined.available && refined.kkt_passed && refined.objective<=initial.objective)
-                        {out.beta=std::move(refined_beta); break;}
+                        {
+                            out.beta=std::move(refined_beta);
+                            out.final_projected_kkt=refined.projected_kkt;
+                            out.refinement_after_objective=refined.objective;
+                            ++out.refinement_success_count;
+                            refinement_succeeded=true;
+                            break;
+                        }
                     }
                 }
+                if(!refinement_succeeded) ++out.refinement_failure_count;
+                out.refinement_seconds=std::chrono::duration<double>(
+                    std::chrono::steady_clock::now()-refinement_started).count();
             }
         }
         out.valid=true; out.reason="solved"; return out;

@@ -7,6 +7,7 @@
 #include "ConvergenceCriteria.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <Eigen/SparseCore>
+#include <array>
 #include <memory>
 #include <optional>
 #include <string>
@@ -54,9 +55,25 @@ struct EvaluationContext
 };
 enum class ProfileEvaluationRole {Unspecified,InitialProfile,TrialProfile,AcceptedEndpoint,Reference};
 const char * ProfileEvaluationRoleName(ProfileEvaluationRole);
+struct LinearSolveWork
+{
+    std::size_t solve_calls{},valid_solves{},invalid_solves{},invalid_input_solves{},rank_deficient_solves{},
+        nonfinite_solves{},active_set_budget_exhausted_solves{},other_invalid_solves{};
+    std::size_t factorization_solves{},active_set_iterations{},active_set_releases{};
+    std::size_t initial_kkt_count{},initial_kkt_le_1e10{},initial_kkt_le_1e8{},initial_kkt_le_1e7{};
+    std::size_t final_kkt_count{},final_kkt_le_1e10{},final_kkt_le_1e8{},final_kkt_le_1e7{};
+    std::size_t refinement_eligibility_count{},refinement_trigger_count{},refinement_iterations{},
+        refinement_success_count{},refinement_failure_count{},refinement_factorizations{};
+    double initial_kkt_sum{},initial_kkt_max{},final_kkt_sum{},final_kkt_max{};
+    double refinement_seconds{},refinement_before_kkt_sum{},refinement_before_kkt_max{},
+        refinement_after_kkt_sum{},refinement_after_kkt_max{},refinement_before_objective_sum{},
+        refinement_after_objective_sum{};
+};
 struct ProfileRoleWork
 {
     std::size_t evaluations{},derivative_preparations{},derivative_reductions{},replay_checks{};
+    std::size_t local_kkt_rejections{};
+    LinearSolveWork linear_solve;
     double evaluation_seconds{},basis_seconds{},linear_matrix_preparation_seconds{},linear_rhs_solve_seconds{},
         linear_certificate_seconds{},derivative_prepare_seconds{},
         derivative_reduce_seconds{},derivative_raw_assembly_seconds{},derivative_free_design_assembly_seconds{},
@@ -70,6 +87,10 @@ struct ProfileRoleWork
 struct ProfileSearchWork
 {
     ProfileRoleWork total,initial_profile,trial_profile,accepted_endpoint,reference_evaluation;
+    std::size_t accepted_profile_trials{},rejected_profile_trials{},local_replay_kkt_rejections{},
+        local_replay_disagreements{},invalid_gradient_stops{},width_safeguard_rejections{};
+    std::size_t accepted_update_budget_stops{},profile_budget_stops{},cpu_budget_stops{},native_lm_stops{};
+    std::array<std::size_t,16> lm_status_counts{};
     double total_seconds{},lm_overhead_seconds{};
     ProfileRoleWork & Role(ProfileEvaluationRole);
     void Add(ProfileEvaluationRole,const ProfileRoleWork &);
@@ -86,6 +107,10 @@ struct LinearResult
     bool valid{};
     std::string reason;
     int rank{},solves{},releases{},block_factorizations{};
+    std::size_t active_set_iterations{},refinement_eligibility_count{},refinement_trigger_count{},
+        refinement_iterations{},refinement_success_count{},refinement_failure_count{},refinement_factorizations{};
+    double initial_projected_kkt{unavailable},final_projected_kkt{unavailable},refinement_seconds{},
+        refinement_before_objective{unavailable},refinement_after_objective{unavailable};
 };
 struct LinearBlock {std::vector<Eigen::Index> rows,columns;};
 LinearResult SolveLinear(const Sparse &,VectorRef,const Vector &,bool=false,bool=true,
