@@ -292,21 +292,32 @@ Stationarity GlobalStationarity(const core::JointProblemInput & input,const dyn:
         for(const auto target:targets)
         {
             const auto & parameter=state.contributors[target];
-            double squared_a{},dot_a{},squared_c{},dot_c{},width_dot{};
+            std::unordered_map<std::size_t,double> column_a,column_c;
+            column_a.reserve(input.support[target].size());
+            column_c.reserve(input.support[target].size());
             const auto add_amplitude=[&](std::size_t atom,double width,double share,bool halo) {
                 for(const auto & support:input.support[atom])
                 {
                     const auto basis=joint::EvaluateKernel(support.squared_distance,width,2.5);
-                    const auto row=static_cast<Eigen::Index>(support.row);
-                    const double g=share*basis.gaussian,k=share*basis.charge;
-                    squared_a+=g*g; dot_a+=g*residual(row);
-                    if(!halo || mode!=dyn::Mode::AB) {squared_c+=k*k; dot_c+=k*residual(row);}
+                    column_a[support.row]+=share*basis.gaussian;
+                    if(!halo || mode!=dyn::Mode::AB) column_c[support.row]+=share*basis.charge;
                 }
             };
             add_amplitude(target,parameter.b,1.0,false);
             const double share=1.0/static_cast<double>(targets.size());
             if(mode!=dyn::Mode::StaticABC)
                 for(const auto halo:ownership.block_halos[block]) add_amplitude(halo,mean.b,share,true);
+            double squared_a{},dot_a{},squared_c{},dot_c{},width_dot{};
+            for(const auto & [row,value]:column_a)
+            {
+                squared_a+=value*value;
+                dot_a+=value*residual(static_cast<Eigen::Index>(row));
+            }
+            for(const auto & [row,value]:column_c)
+            {
+                squared_c+=value*value;
+                dot_c+=value*residual(static_cast<Eigen::Index>(row));
+            }
             const double norm_a=std::sqrt(squared_a),norm_c=std::sqrt(squared_c);
             if(norm_a>0.0)
             {
@@ -584,6 +595,14 @@ int Run(const std::filesystem::path & model_path,const std::filesystem::path & m
     if(groups.empty()) throw std::invalid_argument("Group filter must be all, E1, E2, or E3.");
     const auto baseline=ReadJson(baseline_summary);
     const auto & baseline_p1=baseline.at("p1");
+    const auto & e0_prediction=baseline_p1.at("models").as_array().front();
+    const auto & ownership_summary=baseline.at("ownership");
+    constexpr std::size_t large_observations=5'938'087,large_contributors=37'406,core_targets=12;
+    const auto large_global_design=dyn::DenseBytes(large_observations,2*large_contributors).value();
+    const auto observed_local_design=dyn::DenseBytes(
+        json::value_to<std::size_t>(ownership_summary.at("maximum_dynamic_block_rows")),2*core_targets).value();
+    const auto two_global_buffers=dyn::DenseBytes(large_observations,2).value();
+    const auto row_block_headers=large_observations*sizeof(std::vector<std::size_t>);
     const auto add_improvements=[&](json::object & group) {
         const auto improvement=[&](const char * key,const char * baseline_key) {
             const double reference=json::value_to<double>(baseline_p1.at(baseline_key));
@@ -605,17 +624,46 @@ int Run(const std::filesystem::path & model_path,const std::filesystem::path & m
     std::filesystem::create_directories(output_dir);
     json::object summary{{"contract","joint-dynamic-halo-mean-coupled-candidate-v1"},
         {"baseline_commit",baseline_commit},{"model_sha256",baseline.at("model_sha256")},
-        {"map_sha256",baseline.at("map_sha256")},{"normalization_divisor",*divisor},
+        {"map_sha256",baseline.at("map_sha256")},
+        {"simulation_truth_sha256",baseline.at("simulation_truth_sha256")},
+        {"normalization_divisor",*divisor},
         {"observation_scale",scale},{"observation_rows",input.observations.size()},
         {"target_atoms",input.selection_domain->target_indices.size()},{"halo_atoms",ownership.halos.size()},
         {"block_count",ownership.blocks.size()},{"maximum_sweeps",maximum_sweeps},
+        {"group_filter",group_filter},{"block_order","forward"},
         {"starting_target_state","A=C=0, B=qualified FirstStage width for every target"},
+        {"E0_production",json::object{{"status",baseline.at("p0").at("convergence_status")},
+            {"objective",e0_prediction.at("objective")},
+            {"target_A_rmse_raw_units",baseline_p1.at("target_rmse_A_raw_units")},
+            {"target_B_rmse_angstrom",baseline_p1.at("target_rmse_B_angstrom")},
+            {"target_C_rmse_raw_units",baseline_p1.at("target_rmse_C_raw_units")},
+            {"halo_prediction_rmse_raw_map_units",e0_prediction.at("halo_field_rmse_raw_map_units")},
+            {"target_prediction_rmse_raw_map_units",e0_prediction.at("target_prediction_rmse_raw_map_units")},
+            {"full_prediction_rmse_raw_map_units",e0_prediction.at("full_prediction_rmse_raw_map_units")},
+            {"sweeps",baseline.at("p0").at("sweeps")},
+            {"profile_evaluations",baseline.at("p0").at("profile_evaluations")},
+            {"accepted_updates",baseline.at("p0").at("accepted_updates")}}},
         {"initialization_truth_used",false},{"ownership_truth_used",false},
+        {"halo_mean_scope","whole owner core; physical arithmetic mean of A/B and, for ABC, C"},
+        {"ownership",json::object{{"shared_halos",ownership_summary.at("shared_halos")},
+            {"cross_component_halos",ownership_summary.at("cross_component_halos")},
+            {"row_to_block_memberships",ownership_summary.at("row_to_block_memberships")},
+            {"target_block_rows",ownership_summary.at("total_target_block_rows")},
+            {"dynamic_affected_rows",ownership_summary.at("total_dynamic_affected_rows")},
+            {"maximum_dynamic_block_rows",ownership_summary.at("maximum_dynamic_block_rows")},
+            {"maximum_row_expansion",ownership_summary.at("maximum_affected_row_expansion")}}},
         {"groups",std::move(group_summaries)},
         {"qualified_groups",qualified_groups},
         {"memory",json::object{{"peak_rss_bytes",PeakRssBytes()},
             {"local_design_dense","per block only: dynamic affected rows × 2 × core target count"},
-            {"global_design_dense",false}}}};
+            {"global_design_dense",false},
+            {"observed_6z6u_local_design_bytes_at_max_rows",observed_local_design},
+            {"large_component_arithmetic_preflight",json::object{
+                {"observations",large_observations},{"contributors",large_contributors},
+                {"forbidden_global_dense_design_bytes",large_global_design},
+                {"two_prediction_or_residual_buffers_bytes",two_global_buffers},
+                {"row_to_block_vector_headers_bytes",row_block_headers},
+                {"status","arithmetic-only; large input unavailable; excludes input/support/allocator storage"}}}}}};
     std::ofstream out(output_dir/"summary.json"); out.exceptions(std::ios::failbit|std::ios::badbit);
     out<<json::serialize(summary)<<'\n';
     std::ofstream params(output_dir/"targets.csv"); params.exceptions(std::ios::failbit|std::ios::badbit);

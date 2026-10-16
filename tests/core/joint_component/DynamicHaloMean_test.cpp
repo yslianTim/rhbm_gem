@@ -118,6 +118,19 @@ TEST(DynamicHaloMeanTest, NoHaloDesignMatchesTargetOnlyKernelColumns)
         }
 }
 
+TEST(DynamicHaloMeanTest, EffectiveAmplitudeColumnSumsTargetAndHaloBeforeTakingNorm)
+{
+    const auto input=Input();
+    const auto ownership=BuildOwnership(input,{{"whole",0,{0,1}}});
+    const std::vector<Parameters> targets{{1.0,0.5,0.0},{1.0,0.7,0.0},{0.0,1.0,0.0}};
+    const auto design=BuildAugmentedDesign(input,ownership,0,targets,Mode::AB);
+    const auto mean_width=0.6;
+    const auto target_basis=rhbm_gem::core::joint_component::EvaluateKernel(0.2,0.5,2.5);
+    const auto halo_basis=rhbm_gem::core::joint_component::EvaluateKernel(0.5,mean_width,2.5);
+    const auto row=std::find(design.rows.begin(),design.rows.end(),1)-design.rows.begin();
+    EXPECT_DOUBLE_EQ(design.values(static_cast<Eigen::Index>(row),0),target_basis.gaussian+0.5*halo_basis.gaussian);
+}
+
 TEST(DynamicHaloMeanTest, SharedHaloAddsItsRemoteSupportRowsToOnlyItsOwnersBlock)
 {
     const auto input=Input();

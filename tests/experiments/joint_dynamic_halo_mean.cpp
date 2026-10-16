@@ -7,6 +7,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include "utils/domain/FileFingerprint.hpp"
 #include <boost/json.hpp>
 #include <algorithm>
 #include <array>
@@ -540,6 +541,7 @@ int Run(const std::filesystem::path & model_path,const std::filesystem::path & m
         {"model_sha256",production.at("metadata").at("model_sha256")},
         {"map_sha256",production.at("metadata").at("map_sha256")},
         {"simulation_truth_sidecar",map_path.string()+".simulation.json"},
+        {"simulation_truth_sha256",rhbm_gem::FileSha256(map_path.string()+".simulation.json")},
         {"normalization_divisor",*divisor},{"observation_scale",problem.ObservationScale()},
         {"observation_rows",rows},{"target_atoms",input.selection_domain->target_indices.size()},
         {"halo_atoms",ownership.halos.size()},{"block_count",ownership.blocks.size()},
@@ -596,6 +598,7 @@ int Run(const std::filesystem::path & model_path,const std::filesystem::path & m
         {"branch","develop"},{"baseline_commit",baseline_commit},
         {"model_sha256",production.at("metadata").at("model_sha256")},
         {"map_sha256",production.at("metadata").at("map_sha256")},
+        {"simulation_truth_sha256",rhbm_gem::FileSha256(map_path.string()+".simulation.json")},
         {"observation_scale",problem.ObservationScale()},{"normalization_divisor",*divisor},
         {"row_identity_file","rows.csv"},{"support_mapping_file","supports.csv"},
         {"parameter_and_owner_file","contributors.csv"},{"observation_rows",rows},
