@@ -73,12 +73,17 @@ containing a failed block is excluded from stationarity confirmation.
 ## Global numerical convergence
 
 A component becomes a trusted scientific state only after a confirmed
-stationary sweep and endpoint verification. The unchanged stationarity limits
-are global projected A/C KKT `<= 1e-10`, log-width gradient infinity norm
-`<= 1e-12`, and confirmed log-width change `<= 1e-10`. Confirmation requires a
-complete prior sweep. At the accepted endpoint, a primary streaming evaluation
-and an independent streaming replay check feasibility, prediction, residual,
-objective, KKT and width-gradient consistency.
+stationary sweep and endpoint verification. Production still defaults to the
+strict global criteria: projected A/C KKT `<= 1e-10`, log-width gradient
+infinity norm `<= 1e-12`, and confirmed log-width change `<= 1e-10`. The internal
+research policy can explicitly select practical criteria of `1e-7`, `1e-9`,
+and `1e-6`, respectively. Both policies require finite, nonnegative measures
+and inclusive thresholds; confirmation requires a complete prior sweep.
+Changing the global criteria does not change the local SparseQR/active-set
+qualification, profile trust checks, or replay-consistency enclosures. At the
+accepted endpoint, a primary streaming evaluation and an independent streaming
+replay check feasibility, prediction, residual, objective, KKT and
+width-gradient consistency under the selected global stationarity criteria.
 
 For fixed-halo problems, the final endpoint check also rebuilds the complete
 contributor prediction from the original observations and immutable halo

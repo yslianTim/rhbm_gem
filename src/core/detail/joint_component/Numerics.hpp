@@ -4,6 +4,7 @@
 #include "SolverConfiguration.hpp"
 #include "SnapshotViews.hpp"
 #include "ResourceWork.hpp"
+#include "ConvergenceCriteria.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <Eigen/SparseCore>
 #include <memory>
@@ -150,7 +151,8 @@ struct IndependentReplayEvidence
         independent_width_gradient{unavailable};
 };
 IndependentReplayEvidence CheckIndependentReplay(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &,
-    const Vector * assembled_prediction=nullptr,const std::vector<std::size_t> * assembled_rows=nullptr);
+    const Vector * assembled_prediction=nullptr,const std::vector<std::size_t> * assembled_rows=nullptr,
+    const JointConvergenceCriteria & = StrictJointConvergenceCriteria);
 struct TrustEvidence
 {
     std::optional<Endpoint> reference;
@@ -217,6 +219,7 @@ struct Assessment
     Endpoint primary;
     IndependentReplayEvidence independent_replay;
     MemoryEstimate verification_memory_estimate;
+    JointConvergenceCriteria convergence_criteria{StrictJointConvergenceCriteria};
     double primary_endpoint_seconds{},independent_replay_seconds{};
     bool inner{},gradient{},endpoint_verified{},numerical_qualified{};
     std::string failure;
@@ -234,7 +237,8 @@ Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const Ind
 // Verifies an accepted endpoint using only the streaming objective, KKT,
 // width-gradient, and independent replay evidence. It never assesses global rank.
 Assessment VerifyJointEndpoint(const Domain &,VectorRef,const Evaluation &,
-    const IndependentReplayEvidence &,const EvaluationContext &);
+    const IndependentReplayEvidence &,const EvaluationContext &,
+    const JointConvergenceCriteria & = StrictJointConvergenceCriteria);
 bool SameAssessmentPolicy(const EvaluationContext &,const EvaluationContext &);
 // Borrowed only while the originating immutable problem and report remain alive.
 struct AssessmentReuse
@@ -320,5 +324,6 @@ struct AssemblyResult
     MemoryEstimate verification_memory_estimate;
 };
 AssemblyResult AssembleComponents(const Domain &,VectorRef,const ComponentPartition &,const EvaluationContext &,
-    const std::vector<JointComponentResult> &,const AssessmentReuse * = nullptr);
+    const std::vector<JointComponentResult> &,const AssessmentReuse * = nullptr,
+    const JointConvergenceCriteria & = StrictJointConvergenceCriteria);
 }

@@ -377,12 +377,15 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
     return out;
 }
 AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const ComponentPartition & partition,
-    const EvaluationContext & context,const std::vector<JointComponentResult> & components,const AssessmentReuse * reuse)
+    const EvaluationContext & context,const std::vector<JointComponentResult> & components,const AssessmentReuse * reuse,
+    const JointConvergenceCriteria & convergence_criteria)
 {
     ResourcePhase phase("assembly");
+    AssemblyResult out; out.assessment.convergence_criteria=convergence_criteria;
     if(components.size()!=partition.components.size())
-    {AssemblyResult out; out.mapping_reason="missing-component-result"; return out;}
-    AssemblyResult out; out.available=true; out.row_mask.assign(static_cast<std::size_t>(domain.rows),false);
+    {out.mapping_reason="missing-component-result"; return out;}
+    out.available=true;
+    out.row_mask.assign(static_cast<std::size_t>(domain.rows),false);
     out.eta=Vector::Constant(static_cast<Eigen::Index>(domain.atoms.size()),unavailable);
     out.beta=Vector::Constant(2*out.eta.size(),unavailable);
     if(domain.rows<0 || y.size()!=domain.rows || !partition.mappings ||
@@ -503,7 +506,7 @@ AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const Compon
     const double primary_seconds=Seconds(primary_started);
     out.raw=raw;
     const auto replay_started=Clock::now();
-    out.replay=CheckIndependentReplay(domain,y,raw,context);
+    out.replay=CheckIndependentReplay(domain,y,raw,context,nullptr,nullptr,convergence_criteria);
     const double replay_seconds=Seconds(replay_started);
     out.consistency_passed=out.replay.passed;
     bool same=reuse && SameAssessmentPolicy(reuse->context,context) && reuse->domain.rows==domain.rows &&
@@ -519,10 +522,10 @@ AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const Compon
     }
     if(same)
     {
-        out.assessment=VerifyJointEndpoint(domain,y,raw,out.replay,context);
+        out.assessment=VerifyJointEndpoint(domain,y,raw,out.replay,context,convergence_criteria);
     }
     else
-        out.assessment=VerifyJointEndpoint(domain,y,raw,out.replay,context);
+        out.assessment=VerifyJointEndpoint(domain,y,raw,out.replay,context,convergence_criteria);
     out.assessment.verification_memory_estimate=out.verification_memory_estimate;
     out.assessment.primary_endpoint_seconds=primary_seconds;
     out.assessment.independent_replay_seconds=replay_seconds;

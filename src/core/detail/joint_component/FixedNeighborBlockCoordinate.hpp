@@ -177,6 +177,7 @@ struct PreparedFixedNeighborBlock
 struct FixedNeighborPolicy
 {
     std::size_t core_atoms{12},maximum_sweeps{30};
+    JointConvergenceCriteria convergence_criteria{StrictJointConvergenceCriteria};
     FixedNeighborBlockOrder order{FixedNeighborBlockOrder::Forward};
     bool stop_after_stationarity{true};
     bool capture_local_trajectory{};
@@ -236,9 +237,11 @@ struct FixedNeighborComponentResult
     std::string stop_reason;
 };
 
-bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_complete_sweep);
+bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_complete_sweep,
+    const JointConvergenceCriteria & = StrictJointConvergenceCriteria);
 FixedNeighborStationarityState ClassifyFixedNeighborStationarity(
-    double ac_kkt,double width_gradient_inf,double eta_change_inf,bool has_previous_complete_sweep);
+    double ac_kkt,double width_gradient_inf,double eta_change_inf,bool has_previous_complete_sweep,
+    const JointConvergenceCriteria & = StrictJointConvergenceCriteria);
 bool ShouldAttemptFixedNeighborCertification(FixedNeighborStationarityState,std::size_t sweep,
     std::size_t & next_retry_sweep);
 FixedNeighborSearchResult SearchFixedNeighborComponent(
@@ -247,7 +250,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     Vector initial_beta = {});
 FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
     const Domain &,VectorRef y,const BlockCoordinateState &,const EvaluationContext &,
-    ProfileSearchWork * = nullptr,std::size_t resident_override=0);
+    ProfileSearchWork * = nullptr,std::size_t resident_override=0,
+    const JointConvergenceCriteria & = StrictJointConvergenceCriteria);
 FixedNeighborComponentResult SolveFixedNeighborComponent(
     const ComponentProblemView &,VectorRef initial_b,const EvaluationContext &,const FixedNeighborSearchPolicy &,
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr);

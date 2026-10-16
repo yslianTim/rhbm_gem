@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <functional>
 #include <string>
+#include "ConvergenceCriteria.hpp"
 
 namespace rhbm_gem::core::joint_component {
 
@@ -15,6 +16,7 @@ struct FixedNeighborSearchPolicy
 {
     std::size_t core_atoms{12};
     std::size_t maximum_sweeps{200};
+    JointConvergenceCriteria convergence_criteria{StrictJointConvergenceCriteria};
     FixedNeighborBlockOrder order{FixedNeighborBlockOrder::Forward};
     std::size_t component_index{};
     std::string component_id;

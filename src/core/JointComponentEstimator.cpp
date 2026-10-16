@@ -137,7 +137,8 @@ struct FullReplay
         objective_tolerance{},target_ac_kkt{},target_width_gradient{};
     std::string reason;
 };
-FullReplay ReplayFixedHaloFullModel(const n::ProblemData & data,const n::AssemblyResult & assembly)
+FullReplay ReplayFixedHaloFullModel(const n::ProblemData & data,const n::AssemblyResult & assembly,
+    const n::JointConvergenceCriteria & convergence_criteria)
 {
     FullReplay out;
     out.fixed_parameters_passed=true;
@@ -290,8 +291,10 @@ FullReplay ReplayFixedHaloFullModel(const n::ProblemData & data,const n::Assembl
             charge*charge_width_gradient[target])/(scale*scale));
         out.target_width_gradient=std::max(out.target_width_gradient,std::abs(width_gradient));
     }
-    out.target_ac_passed=out.target_feasible && std::isfinite(out.target_ac_kkt) && out.target_ac_kkt<=1e-10;
-    out.target_width_passed=std::isfinite(out.target_width_gradient) && out.target_width_gradient<=1e-12;
+    out.target_ac_passed=out.target_feasible && std::isfinite(out.target_ac_kkt) &&
+        out.target_ac_kkt<=convergence_criteria.global_ac_kkt;
+    out.target_width_passed=std::isfinite(out.target_width_gradient) &&
+        out.target_width_gradient<=convergence_criteria.global_width_gradient;
     out.passed=out.mapping_passed && out.observation_identities_passed && out.fixed_parameters_passed &&
         out.residual_passed && out.halo_passed && out.objective_passed && out.target_ac_passed && out.target_width_passed;
     if(!out.passed) out.reason=!out.mapping_passed ? "target-contributor-mapping-mismatch" :
@@ -320,10 +323,12 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
         evidence_available ? std::optional<double>(replay.feasible ? 0.0 : 1.0) : std::nullopt,0.0));
     out.push_back(check("conditional-ac-optimality",evidence_available,
         replay.primary_kkt_passed && replay.feasible,
-        std::isfinite(replay.primary_ac_kkt) ? std::optional<double>(replay.primary_ac_kkt) : std::nullopt,1e-10));
+        std::isfinite(replay.primary_ac_kkt) ? std::optional<double>(replay.primary_ac_kkt) : std::nullopt,
+        a.convergence_criteria.global_ac_kkt));
     out.push_back(check("independent-ac-optimality",evidence_available,
         replay.independent_kkt_passed && replay.feasible,
-        std::isfinite(replay.independent_ac_kkt) ? std::optional<double>(replay.independent_ac_kkt) : std::nullopt,1e-10));
+        std::isfinite(replay.independent_ac_kkt) ? std::optional<double>(replay.independent_ac_kkt) : std::nullopt,
+        a.convergence_criteria.global_ac_kkt));
     out.push_back(check("independent-kkt-consistency",evidence_available,replay.kkt_agrees,
         std::isfinite(replay.kkt_difference) ? std::optional<double>(replay.kkt_difference) : std::nullopt,1e-13));
     out.push_back(check("independent-replay",evidence_available,replay.valid && replay.passed));
@@ -332,8 +337,9 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
         std::isfinite(replay.gradient_difference) ? std::optional<double>(replay.gradient_difference) : std::nullopt));
     out.back().reason=replay.reason.empty() ? "per-coordinate-replay-enclosure" : replay.reason;
     out.push_back(check("width-stationarity",evidence_available && a.primary.valid && a.primary.gradient.size()>0,
-        replay.primary_width_gradient<=1e-12,
-        std::isfinite(replay.primary_width_gradient) ? std::optional<double>(replay.primary_width_gradient) : std::nullopt,1e-12));
+        replay.primary_width_gradient<=a.convergence_criteria.global_width_gradient,
+        std::isfinite(replay.primary_width_gradient) ? std::optional<double>(replay.primary_width_gradient) : std::nullopt,
+        a.convergence_criteria.global_width_gradient));
     out.push_back(check("endpoint-verification",evidence_available,a.endpoint_verified));
     out.push_back(check("numerical-qualification",a.primary.valid,a.numerical_qualified));
     if(a.verification_memory_estimate.stage==n::MemoryStage::EndpointVerification)
@@ -901,7 +907,8 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         reuse_context=n::ChildContext(data.context,view,true);
         reuse.emplace(n::AssessmentReuse{view.domain,data.y,*reuse_context,*component_batch.single_component_assessment});
     }
-    const auto assembly=n::AssembleComponents(data.domain,data.y,data.partition,data.context,out.components,reuse ? &*reuse : nullptr);
+    const auto assembly=n::AssembleComponents(data.domain,data.y,data.partition,data.context,out.components,
+        reuse ? &*reuse : nullptr,bounded_policy.convergence_criteria);
     out.search_completed=assembly.completed; out.available_row_mask=assembly.row_mask;
     out.evidence=n::AssessmentEvidence(assembly.assessment,JointEvidenceScope::AssembledGlobal);
     out.evidence.push_back({"assembly-mapping",assembly.mapping_valid ? JointCheckStatus::Passed :
@@ -914,7 +921,7 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         const auto & state=assembly.raw;
         if(fixed_halo_policy)
         {
-            full_replay=ReplayFixedHaloFullModel(data,assembly);
+            full_replay=ReplayFixedHaloFullModel(data,assembly,bounded_policy.convergence_criteria);
             out.evidence.push_back({"full-observation-replay",full_replay->residual_passed ? JointCheckStatus::Passed :
                 JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
                 full_replay->residual_difference,full_replay->tolerance,full_replay->residual_passed ?
@@ -933,11 +940,12 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
                     "target-parameters-feasible" : full_replay->reason});
             out.evidence.push_back({"target-ac-optimality",full_replay->target_ac_passed ? JointCheckStatus::Passed :
                 JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
-                full_replay->target_ac_kkt,1e-10,full_replay->target_ac_passed ?
+                full_replay->target_ac_kkt,bounded_policy.convergence_criteria.global_ac_kkt,full_replay->target_ac_passed ?
                     "target-only-projected-kkt" : full_replay->reason});
             out.evidence.push_back({"target-width-stationarity",full_replay->target_width_passed ? JointCheckStatus::Passed :
                 JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
-                full_replay->target_width_gradient,1e-12,full_replay->target_width_passed ?
+                full_replay->target_width_gradient,bounded_policy.convergence_criteria.global_width_gradient,
+                full_replay->target_width_passed ?
                     "target-only-log-width-gradient" : full_replay->reason});
             out.evidence.push_back({"target-contributor-mapping",full_replay->mapping_passed ? JointCheckStatus::Passed :
                 JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,

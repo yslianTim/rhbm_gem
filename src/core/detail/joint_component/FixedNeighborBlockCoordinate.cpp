@@ -49,7 +49,6 @@ IncrementalCandidateReplay EvaluateCandidateDelta(VectorRef current_residual,
 
 namespace {
 using Clock=std::chrono::steady_clock;
-constexpr double EtaChangeConfirmationThreshold=1e-10;
 constexpr std::size_t EndpointCertificationRetryInterval=10;
 constexpr std::size_t MaximumBlockFailureVisits=2;
 double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
@@ -749,17 +748,22 @@ std::vector<std::size_t> RankFixedNeighborStabilityProbesForTesting(
     const std::vector<JointBlockConditioning> & conditioning)
 {return StabilityProbeOrder(conditioning);}
 #endif
-bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_complete_sweep)
+bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_complete_sweep,
+    const JointConvergenceCriteria & criteria)
 {
-    return has_previous_complete_sweep && std::isfinite(eta_change_inf) && eta_change_inf>=0.0 &&
-        eta_change_inf<=EtaChangeConfirmationThreshold;
+    return IsValidJointConvergenceCriteria(criteria) && has_previous_complete_sweep &&
+        std::isfinite(eta_change_inf) && eta_change_inf>=0.0 &&
+        eta_change_inf<=criteria.confirmed_log_width_change;
 }
 FixedNeighborStationarityState ClassifyFixedNeighborStationarity(
-    double ac_kkt,double width_gradient_inf,double eta_change_inf,bool has_previous_complete_sweep)
+    double ac_kkt,double width_gradient_inf,double eta_change_inf,bool has_previous_complete_sweep,
+    const JointConvergenceCriteria & criteria)
 {
-    if(!(ac_kkt<=1e-10) || !(width_gradient_inf<=1e-12))
+    if(!IsValidJointConvergenceCriteria(criteria) || !std::isfinite(ac_kkt) || ac_kkt<0.0 ||
+        ac_kkt>criteria.global_ac_kkt || !std::isfinite(width_gradient_inf) || width_gradient_inf<0.0 ||
+        width_gradient_inf>criteria.global_width_gradient)
         return FixedNeighborStationarityState::NotStationary;
-    return IsFixedNeighborEtaChangeConfirmed(eta_change_inf,has_previous_complete_sweep) ?
+    return IsFixedNeighborEtaChangeConfirmed(eta_change_inf,has_previous_complete_sweep,criteria) ?
         FixedNeighborStationarityState::ConfirmedStationary : FixedNeighborStationarityState::CandidateStationary;
 }
 bool ShouldAttemptFixedNeighborCertification(FixedNeighborStationarityState stationarity,std::size_t sweep,
@@ -927,7 +931,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             !AddMemoryBytes(certification_resident,memory_shape.component_atoms,8*sizeof(double)))
             certification_resident=std::numeric_limits<std::size_t>::max();
         return record_assessment_work(CertifyFixedNeighborEndpoint(domain,y,out.state,context,profile_work,
-            certification_resident));
+            certification_resident,policy.convergence_criteria));
     };
 
     out.state.eta=initial_eta;
@@ -1395,7 +1399,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 #endif
         const auto stationarity=sweep_had_block_failure ? FixedNeighborStationarityState::NotStationary :
             ClassifyFixedNeighborStationarity(sweep.global_ac_kkt,stationarity_width_gradient,
-                stationarity_eta_change,sweep.coordinate_confirmation_available);
+                stationarity_eta_change,sweep.coordinate_confirmation_available,policy.convergence_criteria);
         if(stationarity!=FixedNeighborStationarityState::NotStationary && out.first_order_stationarity_sweep==0)
             out.first_order_stationarity_sweep=sweep_index+1;
         const bool certification_retry_due=ShouldAttemptFixedNeighborCertification(
@@ -1445,7 +1449,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             if(out.certification->qualified() && out.final_sweep &&
                 ClassifyFixedNeighborStationarity(out.final_sweep->global_ac_kkt,
                     out.final_sweep->global_width_gradient_inf_norm,out.final_sweep->eta_change_inf,
-                    out.final_sweep->coordinate_confirmation_available)==FixedNeighborStationarityState::ConfirmedStationary)
+                    out.final_sweep->coordinate_confirmation_available,policy.convergence_criteria)==
+                        FixedNeighborStationarityState::ConfirmedStationary)
             {
                 out.search_converged=true; out.reason="block-stationary";
             }
@@ -1618,7 +1623,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 
 FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
     const Domain & domain,VectorRef y,const BlockCoordinateState & state,const EvaluationContext & context,
-    ProfileSearchWork * profile_work,std::size_t resident_override)
+    ProfileSearchWork * profile_work,std::size_t resident_override,
+    const JointConvergenceCriteria & convergence_criteria)
 {
     FixedNeighborEndpointCertification out;
     const auto atom_count=static_cast<Eigen::Index>(domain.atoms.size());
@@ -1666,12 +1672,12 @@ FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
         &out.verification_memory_estimate);
 #endif
     const auto replay_started=Clock::now();
-    const auto replay=CheckIndependentReplay(domain,y,endpoint,context);
+    const auto replay=CheckIndependentReplay(domain,y,endpoint,context,nullptr,nullptr,convergence_criteria);
     const double replay_seconds=Seconds(replay_started);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     replay_stage.Finish();
 #endif
-    out.assessment=VerifyJointEndpoint(domain,y,endpoint,replay,context);
+    out.assessment=VerifyJointEndpoint(domain,y,endpoint,replay,context,convergence_criteria);
     out.assessment.verification_memory_estimate=out.verification_memory_estimate;
     out.assessment.primary_endpoint_seconds=primary_seconds;
     out.assessment.independent_replay_seconds=replay_seconds;
@@ -1726,6 +1732,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     FixedNeighborPolicy policy;
     policy.core_atoms=production_policy.core_atoms;
     policy.maximum_sweeps=production_policy.maximum_sweeps;
+    policy.convergence_criteria=production_policy.convergence_criteria;
     policy.order=production_policy.order;
     policy.component_index=production_policy.component_index;
     policy.component_id=production_policy.component_id;

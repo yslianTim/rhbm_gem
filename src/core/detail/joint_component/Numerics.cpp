@@ -56,6 +56,16 @@ void AddRoleWork(ProfileRoleWork & destination,const ProfileRoleWork & source)
     destination.replay_trust_seconds+=source.replay_trust_seconds;
 }
 }
+bool IsValidJointConvergenceCriteria(const JointConvergenceCriteria & criteria)
+{
+    return std::isfinite(criteria.global_ac_kkt) && criteria.global_ac_kkt>=0.0 &&
+        std::isfinite(criteria.global_width_gradient) && criteria.global_width_gradient>=0.0 &&
+        std::isfinite(criteria.confirmed_log_width_change) && criteria.confirmed_log_width_change>=0.0;
+}
+namespace {
+bool MeetsJointThreshold(double value,double threshold)
+{return std::isfinite(value) && value>=0.0 && value<=threshold;}
+}
 const char * ProfileEvaluationRoleName(ProfileEvaluationRole role)
 {
     switch(role)
@@ -614,10 +624,13 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
 }
 
 IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef y,const Evaluation & e,
-    const EvaluationContext & policy,const Vector * assembled_prediction,const std::vector<std::size_t> * assembled_rows)
+    const EvaluationContext & policy,const Vector * assembled_prediction,const std::vector<std::size_t> * assembled_rows,
+    const JointConvergenceCriteria & criteria)
 {
     constexpr double pi=std::numbers::pi;
     IndependentReplayEvidence out; out.primary_valid=e.valid;
+    if(!IsValidJointConvergenceCriteria(criteria))
+    {out.reason="invalid-convergence-criteria"; return out;}
     if(!e.valid || domain.rows!=y.size() || e.residual.size()!=y.size() ||
         e.eta.size()!=static_cast<Eigen::Index>(domain.atoms.size()) || e.beta.size()!=2*e.eta.size())
     {out.reason="invalid-primary"; return out;}
@@ -759,8 +772,10 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
         out.assembled_objective_passed=std::isfinite(out.assembled_objective_difference) &&
             out.assembled_objective_difference<=1e-12+2e-12*std::abs(.5*rss);
     }
-    out.primary_kkt_passed=e.certificate.feasible && e.certificate.kkt_passed && out.primary_ac_kkt<=1e-10;
-    out.independent_kkt_passed=feasible && out.independent_ac_kkt<=1e-10;
+    out.primary_kkt_passed=e.certificate.feasible &&
+        MeetsJointThreshold(out.primary_ac_kkt,criteria.global_ac_kkt);
+    out.independent_kkt_passed=feasible &&
+        MeetsJointThreshold(out.independent_ac_kkt,criteria.global_ac_kkt);
     out.prediction_passed=prediction_ok;
     out.residual_passed=residual_ok;
     out.objective_passed=out.objective_difference<=1e-12+2e-12*std::abs(e.certificate.objective);
@@ -930,9 +945,12 @@ bool SameAssessmentPolicy(const EvaluationContext & a,const EvaluationContext & 
         a.linear.release_response_norm==b.linear.release_response_norm && a.atom_ids==b.atom_ids && a.row_ids==b.row_ids;
 }
 Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluation & endpoint,
-    const IndependentReplayEvidence & replay,const EvaluationContext &)
+    const IndependentReplayEvidence & replay,const EvaluationContext &,
+    const JointConvergenceCriteria & criteria)
 {
-    Assessment out; out.primary=endpoint; out.independent_replay=replay;
+    Assessment out; out.primary=endpoint; out.independent_replay=replay; out.convergence_criteria=criteria;
+    if(!IsValidJointConvergenceCriteria(criteria))
+    {out.failure="invalid-convergence-criteria"; return out;}
     const auto atom_count=static_cast<Eigen::Index>(domain.atoms.size());
     bool valid=domain.rows==y.size() && y.allFinite() && endpoint.valid &&
         endpoint.eta.size()==atom_count && endpoint.beta.size()==2*atom_count &&
@@ -957,8 +975,9 @@ Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluatio
         return out;
     }
     out.inner=replay.feasible && replay.primary_kkt_passed && replay.independent_kkt_passed;
-    out.gradient=endpoint.gradient.lpNorm<Eigen::Infinity>()<=1e-12 &&
-        replay.primary_width_gradient<=1e-12 && replay.independent_width_gradient<=1e-12 && replay.gradient_agrees;
+    out.gradient=MeetsJointThreshold(endpoint.gradient.lpNorm<Eigen::Infinity>(),criteria.global_width_gradient) &&
+        MeetsJointThreshold(replay.primary_width_gradient,criteria.global_width_gradient) &&
+        MeetsJointThreshold(replay.independent_width_gradient,criteria.global_width_gradient) && replay.gradient_agrees;
     out.endpoint_verified=replay.passed && out.inner;
     out.numerical_qualified=out.endpoint_verified && out.gradient;
     out.failure=out.numerical_qualified ? "none" : !out.inner ? "global-ac-kkt-failed" :
