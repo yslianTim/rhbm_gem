@@ -440,6 +440,9 @@ if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
     add_executable(joint_halo_support_exclusion_synthetic experiments/joint_halo_support_exclusion_synthetic.cpp)
     target_link_libraries(joint_halo_support_exclusion_synthetic PRIVATE joint_test_support rhbm_gem)
     add_dependencies(research_tools_all joint_halo_support_exclusion_synthetic)
+    add_executable(joint_halo_support_weighting_reference experiments/joint_halo_support_weighting_reference.cpp)
+    target_link_libraries(joint_halo_support_weighting_reference PRIVATE joint_test_support rhbm_gem)
+    add_dependencies(research_tools_all joint_halo_support_weighting_reference)
 endif()
 
 add_rhbm_gtest_group(rhbm_tests_joint_component_contract
