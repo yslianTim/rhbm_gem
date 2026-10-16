@@ -78,11 +78,16 @@ def metrics(outcome, prediction, values, clean, rows):
                   residual_neighbor_correlation=None)
     if result['state_available']:
         state = outcome['assembled_state']
-        ac = np.array(state['ac']).reshape(2, 2)
-        parameters = np.column_stack([ac[:, 0], state['b'], ac[:, 1]])
+        ac = np.array(state['ac']).reshape(len(state['b']), 2)
+        target_parameters = np.column_stack([ac[:, 0], state['b'], ac[:, 1]])
+        halo_parameters = np.array([[halo['amplitude'], halo['width'], halo['charge']]
+                                    for halo in outcome.get('fixed_halos', [])], dtype=float).reshape(-1, 3)
+        parameters = np.vstack([target_parameters, halo_parameters])
         prediction = np.array(prediction)
         residual = prediction - values[rows]
-        result.update(parameters=parameters.tolist(), errors=(parameters - TRUTH).tolist(),
+        result.update(parameters=parameters.tolist(), target_parameters=target_parameters.tolist(),
+                      halo_parameters=halo_parameters.tolist(),
+                      errors=(parameters - TRUTH[:len(parameters)]).tolist(),
                       prediction_rmse=float(np.sqrt(np.mean((prediction - clean[rows]) ** 2))),
                       residual_rmse=float(np.sqrt(np.mean(residual ** 2))))
         lookup = {int(row): i for i, row in enumerate(rows)}
@@ -249,7 +254,7 @@ def write_report(receipt, output):
         stats = row['all_available']
         rmse = stats['rmse']
         fmt = lambda values: ' / '.join(f'{value:.3g}' for value in values) if values is not None else 'unavailable'
-        lines.append(f"| {row['distance']} | {row['shift']} | {row['noise']} / {row['sigma_fraction']} | {row['mode']} | {stats['n']} / {row['attempted_cases']} | {row['qualified_cases']} | {fmt(rmse[0] if rmse else None)} | {fmt(rmse[1] if rmse else None)} |")
+        lines.append(f"| {row['distance']} | {row['shift']} | {row['noise']} / {row['sigma_fraction']} | {row['mode']} | {stats['n']} / {row['attempted_cases']} | {row['qualified_cases']} | {fmt(rmse[0] if rmse else None)} | {fmt(rmse[1] if rmse is not None and len(rmse) > 1 else None)} |")
     (output / 'noise-table.md').write_text('\n'.join(lines) + '\n')
     files = sorted(path for path in output.iterdir() if path.is_file() and path.name != 'manifest.json')
     write(output / 'manifest.json', dict(schema_version=1, files={path.name: sha(path) for path in files},

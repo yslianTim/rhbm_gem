@@ -327,6 +327,10 @@ add_executable(joint_dynamic_halo_joint experiments/joint_dynamic_halo_joint.cpp
 target_link_libraries(joint_dynamic_halo_joint PRIVATE joint_test_support rhbm_gem CompilerFlags)
 add_dependencies(tests_all joint_dynamic_halo_joint)
 
+add_executable(joint_dynamic_halo_synthetic_robustness experiments/joint_dynamic_halo_synthetic_robustness.cpp)
+target_link_libraries(joint_dynamic_halo_synthetic_robustness PRIVATE joint_test_support rhbm_gem CompilerFlags)
+add_dependencies(tests_all joint_dynamic_halo_synthetic_robustness)
+
 if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
     add_custom_target(research_tools_all)
 endif()

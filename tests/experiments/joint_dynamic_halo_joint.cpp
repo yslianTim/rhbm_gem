@@ -143,21 +143,8 @@ dyn::FullState IndependentState(const core::JointProblemInput & input,const dyn:
     std::span<const dyn::Parameters> targets,dyn::Mode mode,double scale)
 {
     dyn::FullState state;
-    state.contributors.assign(targets.begin(),targets.end());
-    if(mode!=dyn::Mode::StaticABC)
-        for(const auto & owner:ownership.halos)
-        {
-            const auto & members=ownership.blocks[owner.owner_block].targets;
-            dyn::Parameters mean{0.0,0.0,0.0};
-            for(const auto target:members)
-            {
-                mean.a+=targets[target].a;
-                mean.b+=targets[target].b;
-                if(mode==dyn::Mode::ABC) mean.c+=targets[target].c;
-            }
-            const double count=static_cast<double>(members.size());
-            state.contributors[owner.halo]={mean.a/count,mean.b/count,mode==dyn::Mode::ABC?mean.c/count:0.0};
-        }
+    state.contributors=mode==dyn::Mode::StaticABC ? std::vector<dyn::Parameters>(targets.begin(),targets.end()) :
+        dyn::DeriveHalos(input,ownership,targets,mode);
     state.prediction.assign(input.observations.size(),0.0);
     // Independent endpoint replay traverses contributor support directly, without using a block design.
     for(std::size_t atom=0;atom<state.contributors.size();++atom)
@@ -286,9 +273,6 @@ Stationarity GlobalStationarity(const core::JointProblemInput & input,const dyn:
     for(std::size_t block=0;block<ownership.blocks.size();++block)
     {
         const auto & targets=ownership.blocks[block].targets;
-        std::vector<dyn::Parameters> members;
-        for(const auto target:targets) members.push_back(state.contributors[target]);
-        const auto mean=dyn::Mean(members,mode!=dyn::Mode::AB);
         for(const auto target:targets)
         {
             const auto & parameter=state.contributors[target];
@@ -304,9 +288,18 @@ Stationarity GlobalStationarity(const core::JointProblemInput & input,const dyn:
                 }
             };
             add_amplitude(target,parameter.b,1.0,false);
-            const double share=1.0/static_cast<double>(targets.size());
             if(mode!=dyn::Mode::StaticABC)
-                for(const auto halo:ownership.block_halos[block]) add_amplitude(halo,mean.b,share,true);
+                for(const auto halo:ownership.block_halos[block])
+                {
+                    const auto owner=std::lower_bound(ownership.halos.begin(),ownership.halos.end(),halo,
+                        [](const dyn::HaloOwner & item,std::size_t value) {return item.halo<value;});
+                    if(owner==ownership.halos.end() || owner->halo!=halo)
+                        throw std::logic_error("Owned Dynamic Halo metadata is missing.");
+                    const auto & mean_targets=dyn::MeanTargets(ownership,*owner);
+                    if(std::find(mean_targets.begin(),mean_targets.end(),target)!=mean_targets.end())
+                        add_amplitude(halo,state.contributors[halo].b,
+                            1.0/static_cast<double>(mean_targets.size()),true);
+                }
             double squared_a{},dot_a{},squared_c{},dot_c{},width_dot{};
             for(const auto & [row,value]:column_a)
             {
@@ -343,8 +336,16 @@ Stationarity GlobalStationarity(const core::JointProblemInput & input,const dyn:
             }
             if(mode!=dyn::Mode::StaticABC)
             {
-                const double chain=parameter.b*share/mean.b;
                 for(const auto halo:ownership.block_halos[block])
+                {
+                    const auto owner=std::lower_bound(ownership.halos.begin(),ownership.halos.end(),halo,
+                        [](const dyn::HaloOwner & item,std::size_t value) {return item.halo<value;});
+                    if(owner==ownership.halos.end() || owner->halo!=halo)
+                        throw std::logic_error("Owned Dynamic Halo metadata is missing.");
+                    const auto & mean_targets=dyn::MeanTargets(ownership,*owner);
+                    if(std::find(mean_targets.begin(),mean_targets.end(),target)==mean_targets.end()) continue;
+                    const auto & mean=state.contributors[halo];
+                    const double chain=parameter.b/(static_cast<double>(mean_targets.size())*mean.b);
                     for(const auto & support:input.support[halo])
                     {
                         const auto basis=joint::EvaluateKernel(support.squared_distance,mean.b,2.5);
@@ -352,6 +353,7 @@ Stationarity GlobalStationarity(const core::JointProblemInput & input,const dyn:
                         width_dot+=chain*(mean.a*basis.gaussian_log_width+charge)*
                             residual(static_cast<Eigen::Index>(support.row));
                     }
+                }
             }
             result.width=std::max(result.width,std::abs(width_dot)/(scale*scale));
             result.eta_change=std::max(result.eta_change,std::abs(std::log(parameter.b/previous[target].b)));
@@ -373,9 +375,7 @@ double MeanConsistency(const dyn::Ownership & ownership,const dyn::FullState & s
                 std::abs(actual.c-reference.c)});
             continue;
         }
-        std::vector<dyn::Parameters> targets;
-        for(const auto target:ownership.blocks[owner.owner_block].targets) targets.push_back(state.contributors[target]);
-        const auto mean=dyn::Mean(targets,mode!=dyn::Mode::AB);
+        const auto mean=dyn::HaloMean(ownership,owner,state.contributors,mode!=dyn::Mode::AB);
         const auto actual=state.contributors[owner.halo];
         maximum=std::max({maximum,std::abs(mean.a-actual.a),std::abs(mean.b-actual.b),std::abs(mean.c-actual.c)});
     }
@@ -384,7 +384,7 @@ double MeanConsistency(const dyn::Ownership & ownership,const dyn::FullState & s
 
 GroupResult RunGroup(const core::JointProblemInput & input,const dyn::Ownership & ownership,
     const std::vector<dyn::Parameters> & initial,dyn::Mode mode,std::string name,double scale,
-    const joint::EvaluationContext & context,std::size_t maximum_sweeps)
+    const joint::EvaluationContext & context,std::size_t maximum_sweeps,bool reverse_order)
 {
     GroupResult result; result.name=std::move(name); result.mode=mode;
     result.state=IndependentState(input,ownership,initial,mode,scale);
@@ -393,8 +393,9 @@ GroupResult RunGroup(const core::JointProblemInput & input,const dyn::Ownership 
     for(std::size_t sweep=0;sweep<maximum_sweeps;++sweep)
     {
         const auto sweep_state=result.state.contributors;
-        for(std::size_t block=0;block<ownership.blocks.size();++block)
+        for(std::size_t visit=0;visit<ownership.blocks.size();++visit)
         {
+            const auto block=reverse_order?ownership.blocks.size()-visit-1:visit;
             const auto & targets=ownership.blocks[block].targets;
             const auto & rows=ownership.block_dynamic_rows[block];
             auto design=dyn::BuildAugmentedDesign(input,ownership,block,result.state.contributors,mode);
@@ -555,7 +556,8 @@ json::object SummarizeGroup(const core::JointProblemInput & input,const dyn::Own
 
 int Run(const std::filesystem::path & model_path,const std::filesystem::path & map_path,
     const std::filesystem::path & baseline_summary,const std::filesystem::path & output_dir,
-    const std::string & baseline_commit,std::size_t maximum_sweeps,const std::string & group_filter)
+    const std::string & baseline_commit,std::size_t maximum_sweeps,const std::string & group_filter,
+    const std::string & block_order,const std::string & mean_scope,const std::string & owner_selection)
 {
     auto model=rhbm_gem::ReadModel(model_path.string()); auto map=rhbm_gem::ReadMap(map_path.string());
     const auto divisor=map->MapValueArrayNormalization();
@@ -568,8 +570,29 @@ int Run(const std::filesystem::path & model_path,const std::filesystem::path & m
     const auto initialization=joint::InitializeContributors(*map,*model,problem);
     if(!initialization.valid) throw std::runtime_error("FirstStage initialization is not qualified.");
     const auto & input=problem.Input();
-    const auto ownership=dyn::BuildOwnership(input,BuildBlocks(problem));
+    const auto owner_policy=owner_selection=="max-overlap" ? dyn::OwnerSelection::MaximumOverlap :
+        owner_selection=="second-overlap" ? dyn::OwnerSelection::SecondBestOverlap :
+        throw std::invalid_argument("Owner selection must be max-overlap or second-overlap.");
+    auto ownership=dyn::BuildOwnership(input,BuildBlocks(problem),owner_policy);
+    if(mean_scope=="whole-core") ownership.mean_scope=dyn::MeanScope::WholeCore;
+    else if(mean_scope=="overlapping-targets") ownership.mean_scope=dyn::MeanScope::OverlappingTargets;
+    else throw std::invalid_argument("Mean scope must be whole-core or overlapping-targets.");
     if(ownership.cross_component_halos) throw std::runtime_error("unsupported-cross-component-halo-coupling");
+    std::size_t shared_halos{},dynamic_affected_rows{},maximum_dynamic_rows{},maximum_row_expansion{};
+    for(const auto & owner:ownership.halos)
+        if(owner.intersecting_blocks.size()>1) ++shared_halos;
+    for(std::size_t block=0;block<ownership.blocks.size();++block)
+    {
+        std::vector<std::size_t> target_rows;
+        for(const auto target:ownership.blocks[block].targets)
+            for(const auto & support:input.support[target]) target_rows.push_back(support.row);
+        std::sort(target_rows.begin(),target_rows.end());
+        target_rows.erase(std::unique(target_rows.begin(),target_rows.end()),target_rows.end());
+        const auto affected=ownership.block_dynamic_rows[block].size();
+        dynamic_affected_rows+=affected;
+        maximum_dynamic_rows=std::max(maximum_dynamic_rows,affected);
+        maximum_row_expansion=std::max(maximum_row_expansion,affected-target_rows.size());
+    }
     const auto truth=ReadTruth(map_path.string()+".simulation.json");
     const double scale=problem.ObservationScale();
     std::vector<dyn::Parameters> initial(input.atom_ids.size());
@@ -580,27 +603,28 @@ int Run(const std::filesystem::path & model_path,const std::filesystem::path & m
         initial[atom]={0.0,initialization.b[atom],0.0};
     }
     const auto context=joint::CreateContext(std::make_shared<core::JointProblemInput>(input));
+    if(block_order!="forward" && block_order!="reverse")
+        throw std::invalid_argument("Block order must be forward or reverse.");
+    const bool reverse_order=block_order=="reverse";
     const bool run_all=group_filter=="all";
     std::vector<GroupResult> groups;
     if(run_all || group_filter=="E1")
-        groups.push_back(RunGroup(input,ownership,initial,dyn::Mode::AB,"E1 Dynamic AB",scale,context,maximum_sweeps));
+        groups.push_back(RunGroup(input,ownership,initial,dyn::Mode::AB,"E1 Dynamic AB",scale,context,maximum_sweeps,reverse_order));
     if(run_all || group_filter=="E2")
-        groups.push_back(RunGroup(input,ownership,initial,dyn::Mode::ABC,"E2 Dynamic ABC",scale,context,maximum_sweeps));
+        groups.push_back(RunGroup(input,ownership,initial,dyn::Mode::ABC,"E2 Dynamic ABC",scale,context,maximum_sweeps,reverse_order));
     if(run_all || group_filter=="E3")
     {
         const auto static_initial=dyn::DeriveHalos(input,ownership,initial,dyn::Mode::StaticABC);
         groups.push_back(RunGroup(input,ownership,static_initial,dyn::Mode::StaticABC,
-            "E3 Static Mean ABC",scale,context,maximum_sweeps));
+            "E3 Static Mean ABC",scale,context,maximum_sweeps,reverse_order));
     }
     if(groups.empty()) throw std::invalid_argument("Group filter must be all, E1, E2, or E3.");
     const auto baseline=ReadJson(baseline_summary);
     const auto & baseline_p1=baseline.at("p1");
     const auto & e0_prediction=baseline_p1.at("models").as_array().front();
-    const auto & ownership_summary=baseline.at("ownership");
     constexpr std::size_t large_observations=5'938'087,large_contributors=37'406,core_targets=12;
     const auto large_global_design=dyn::DenseBytes(large_observations,2*large_contributors).value();
-    const auto observed_local_design=dyn::DenseBytes(
-        json::value_to<std::size_t>(ownership_summary.at("maximum_dynamic_block_rows")),2*core_targets).value();
+    const auto observed_local_design=dyn::DenseBytes(maximum_dynamic_rows,2*core_targets).value();
     const auto two_global_buffers=dyn::DenseBytes(large_observations,2).value();
     const auto row_block_headers=large_observations*sizeof(std::vector<std::size_t>);
     const auto add_improvements=[&](json::object & group) {
@@ -621,6 +645,19 @@ int Run(const std::filesystem::path & model_path,const std::filesystem::path & m
         if(group.qualified) qualified_groups.emplace_back(group.name);
         group_summaries.emplace_back(std::move(group_summary));
     }
+    json::array halo_owner_summaries;
+    for(const auto & owner:ownership.halos)
+    {
+        json::array intersecting_blocks;
+        for(const auto block:owner.intersecting_blocks)
+            intersecting_blocks.emplace_back(ownership.blocks[block].id);
+        halo_owner_summaries.emplace_back(json::object{
+            {"contributor_index",owner.halo},{"atom_id",input.atom_ids[owner.halo]},
+            {"owner_block",ownership.blocks[owner.owner_block].id},{"owner_overlap_rows",owner.owner_overlap},
+            {"support_rows",input.support[owner.halo].size()},
+            {"intersecting_blocks",std::move(intersecting_blocks)},
+            {"owner_mean_target_count",dyn::MeanTargets(ownership,owner).size()}});
+    }
     std::filesystem::create_directories(output_dir);
     json::object summary{{"contract","joint-dynamic-halo-mean-coupled-candidate-v1"},
         {"baseline_commit",baseline_commit},{"model_sha256",baseline.at("model_sha256")},
@@ -630,7 +667,8 @@ int Run(const std::filesystem::path & model_path,const std::filesystem::path & m
         {"observation_scale",scale},{"observation_rows",input.observations.size()},
         {"target_atoms",input.selection_domain->target_indices.size()},{"halo_atoms",ownership.halos.size()},
         {"block_count",ownership.blocks.size()},{"maximum_sweeps",maximum_sweeps},
-        {"group_filter",group_filter},{"block_order","forward"},
+        {"group_filter",group_filter},{"block_order",block_order},
+        {"owner_selection",owner_selection},
         {"starting_target_state","A=C=0, B=qualified FirstStage width for every target"},
         {"E0_production",json::object{{"status",baseline.at("p0").at("convergence_status")},
             {"objective",e0_prediction.at("objective")},
@@ -644,14 +682,15 @@ int Run(const std::filesystem::path & model_path,const std::filesystem::path & m
             {"profile_evaluations",baseline.at("p0").at("profile_evaluations")},
             {"accepted_updates",baseline.at("p0").at("accepted_updates")}}},
         {"initialization_truth_used",false},{"ownership_truth_used",false},
-        {"halo_mean_scope","whole owner core; physical arithmetic mean of A/B and, for ABC, C"},
-        {"ownership",json::object{{"shared_halos",ownership_summary.at("shared_halos")},
-            {"cross_component_halos",ownership_summary.at("cross_component_halos")},
-            {"row_to_block_memberships",ownership_summary.at("row_to_block_memberships")},
-            {"target_block_rows",ownership_summary.at("total_target_block_rows")},
-            {"dynamic_affected_rows",ownership_summary.at("total_dynamic_affected_rows")},
-            {"maximum_dynamic_block_rows",ownership_summary.at("maximum_dynamic_block_rows")},
-            {"maximum_row_expansion",ownership_summary.at("maximum_affected_row_expansion")}}},
+        {"halo_mean_scope",mean_scope+"; physical arithmetic mean of A/B and, for ABC, C"},
+        {"ownership",json::object{{"shared_halos",shared_halos},
+            {"cross_component_halos",ownership.cross_component_halos},
+            {"row_to_block_memberships",ownership.row_block_entries},
+            {"target_block_rows",ownership.row_block_entries},
+            {"dynamic_affected_rows",dynamic_affected_rows},
+            {"maximum_dynamic_block_rows",maximum_dynamic_rows},
+            {"maximum_row_expansion",maximum_row_expansion}}},
+        {"halo_owners",std::move(halo_owner_summaries)},
         {"groups",std::move(group_summaries)},
         {"qualified_groups",qualified_groups},
         {"memory",json::object{{"peak_rss_bytes",PeakRssBytes()},
@@ -693,11 +732,15 @@ int main(int argc,char ** argv)
 {
     try
     {
-        if(argc<6 || argc>8) throw std::invalid_argument(
-            "Usage: joint_dynamic_halo_joint MODEL MAP P1_SUMMARY OUTPUT_DIR BASELINE_COMMIT [MAX_SWEEPS] [all|E1|E2|E3]");
+        if(argc<6 || argc>11) throw std::invalid_argument(
+            "Usage: joint_dynamic_halo_joint MODEL MAP P1_SUMMARY OUTPUT_DIR BASELINE_COMMIT [MAX_SWEEPS] [all|E1|E2|E3] [forward|reverse] [whole-core|overlapping-targets] [max-overlap|second-overlap]");
         const auto sweeps=argc>=7?static_cast<std::size_t>(std::stoul(argv[6])):79u;
-        const auto group_filter=argc==8?argv[7]:"all";
-        return Run(argv[1],argv[2],argv[3],argv[4],argv[5],sweeps,group_filter);
+        const auto selected_group=argc>=8?argv[7]:"all";
+        const auto block_order=argc>=9?argv[8]:"forward";
+        const auto mean_scope=argc>=10?argv[9]:"whole-core";
+        const auto owner_selection=argc>=11?argv[10]:"max-overlap";
+        return Run(argv[1],argv[2],argv[3],argv[4],argv[5],sweeps,selected_group,block_order,mean_scope,
+            owner_selection);
     }
     catch(const std::exception & error) {std::cerr<<error.what()<<'\n'; return 1;}
 }

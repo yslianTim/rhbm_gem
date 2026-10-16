@@ -44,6 +44,15 @@ TEST(DynamicHaloMeanTest, TieBreakDoesNotDependOnBlockTraversalOrder)
     EXPECT_EQ(reverse.blocks[reverse.halos[0].owner_block].id,"a-block");
 }
 
+TEST(DynamicHaloMeanTest, SecondBestOverlapPolicyProvidesDeterministicSensitivityOwner)
+{
+    const auto input=Input();
+    const auto result=BuildOwnership(input,{{"z-block",0,{0}},{"a-block",0,{1}}},
+        OwnerSelection::SecondBestOverlap);
+    ASSERT_EQ(result.halos.size(),1u);
+    EXPECT_EQ(result.blocks[result.halos[0].owner_block].id,"z-block");
+}
+
 TEST(DynamicHaloMeanTest, FlagsHaloThatCouplesSeparateComponents)
 {
     auto input=Input();
@@ -155,6 +164,36 @@ TEST(DynamicHaloMeanTest, OneRowHaloAndMixedSignChargeRemainValidInAbcMode)
     Eigen::VectorXd beta(4); beta<<targets[0].a,targets[0].c,targets[1].a,targets[1].c;
     const auto jacobian=CoupledWidthJacobian(input,ownership,0,targets,beta,Mode::ABC);
     EXPECT_TRUE(jacobian.allFinite());
+}
+
+TEST(DynamicHaloMeanTest, OverlappingTargetMeanUsesOnlyOwnerTargetsSharingHaloRows)
+{
+    auto input=Input();
+    input.support[2]={{0,0.4}};
+    auto ownership=BuildOwnership(input,{{"whole",0,{0,1}}});
+    ownership.mean_scope=MeanScope::OverlappingTargets;
+    const std::vector<Parameters> targets{{2.0,0.45,-0.3},{4.0,0.75,0.5},{0.0,1.0,0.0}};
+    const auto mean=DeriveHalos(input,ownership,targets,Mode::ABC);
+    EXPECT_DOUBLE_EQ(mean[2].a,2.0);
+    EXPECT_DOUBLE_EQ(mean[2].b,0.45);
+    EXPECT_DOUBLE_EQ(mean[2].c,-0.3);
+
+    const auto design=BuildAugmentedDesign(input,ownership,0,targets,Mode::ABC);
+    Eigen::VectorXd beta(4); beta<<targets[0].a,targets[0].c,targets[1].a,targets[1].c;
+    const auto jacobian=CoupledWidthJacobian(input,ownership,0,targets,beta,Mode::ABC);
+    constexpr double epsilon=1e-5;
+    for(std::size_t target=0;target<2;++target)
+    {
+        auto plus=targets,minus=targets;
+        plus[target].b*=std::exp(epsilon);
+        minus[target].b*=std::exp(-epsilon);
+        const auto plus_design=BuildAugmentedDesign(input,ownership,0,plus,Mode::ABC);
+        const auto minus_design=BuildAugmentedDesign(input,ownership,0,minus,Mode::ABC);
+        const auto finite_difference=(plus_design.values*beta-minus_design.values*beta)/(2*epsilon);
+        EXPECT_TRUE(finite_difference.isApprox(jacobian.col(static_cast<Eigen::Index>(target)),2e-6));
+    }
+    EXPECT_DOUBLE_EQ(design.values(0,2),0.0);
+    EXPECT_DOUBLE_EQ(design.values(0,3),0.0);
 }
 
 TEST(DynamicHaloMeanTest, RejectedCandidateRollsBackTargetAndDerivedHaloTogether)

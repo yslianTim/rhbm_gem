@@ -25,7 +25,11 @@ struct HaloOwner
     std::size_t owner_overlap{};
     std::vector<std::size_t> intersecting_blocks;
     std::vector<std::size_t> overlapping_targets;
+    std::vector<std::size_t> owner_mean_targets;
 };
+
+enum class MeanScope {WholeCore,OverlappingTargets};
+enum class OwnerSelection {MaximumOverlap,SecondBestOverlap};
 
 struct Ownership
 {
@@ -35,9 +39,11 @@ struct Ownership
     std::vector<std::vector<std::size_t>> block_dynamic_rows;
     std::size_t cross_component_halos{};
     std::size_t row_block_entries{};
+    MeanScope mean_scope{MeanScope::WholeCore};
 };
 
-Ownership BuildOwnership(const rhbm_gem::core::JointProblemInput &, std::vector<Block>);
+Ownership BuildOwnership(const rhbm_gem::core::JointProblemInput &,std::vector<Block>,
+    OwnerSelection selection=OwnerSelection::MaximumOverlap);
 
 struct Parameters
 {
@@ -70,6 +76,8 @@ bool CommitMonotone(FullState &,FullState &&);
 std::optional<std::size_t> DenseBytes(std::size_t rows,std::size_t columns);
 
 Parameters Mean(std::span<const Parameters>, bool include_charge);
+const std::vector<std::size_t> & MeanTargets(const Ownership &,const HaloOwner &);
+Parameters HaloMean(const Ownership &,const HaloOwner &,std::span<const Parameters>,bool include_charge);
 double MeanWidthLogDerivative(double target_width, std::size_t core_size);
 
 }

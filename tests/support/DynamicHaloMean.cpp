@@ -12,6 +12,14 @@
 namespace joint_test::dynamic_halo {
 namespace {
 bool IncludesCharge(const Mode mode) {return mode!=Mode::AB;}
+const HaloOwner & FindHalo(const Ownership & ownership,std::size_t atom)
+{
+    const auto found=std::lower_bound(ownership.halos.begin(),ownership.halos.end(),atom,
+        [](const HaloOwner & item,std::size_t value) {return item.halo<value;});
+    if(found==ownership.halos.end() || found->halo!=atom)
+        throw std::logic_error("Owned Dynamic Halo metadata is missing.");
+    return *found;
+}
 std::vector<std::size_t> UniqueRows(const rhbm_gem::core::JointProblemInput & input,
     std::size_t atom)
 {
@@ -24,7 +32,8 @@ std::vector<std::size_t> UniqueRows(const rhbm_gem::core::JointProblemInput & in
 }
 }
 
-Ownership BuildOwnership(const rhbm_gem::core::JointProblemInput & input, std::vector<Block> blocks)
+Ownership BuildOwnership(const rhbm_gem::core::JointProblemInput & input,std::vector<Block> blocks,
+    OwnerSelection selection)
 {
     if(!input.selection_domain || input.atom_ids.size()!=input.support.size() ||
         input.row_ids.size()!=input.observations.size())
@@ -105,10 +114,13 @@ Ownership BuildOwnership(const rhbm_gem::core::JointProblemInput & input, std::v
         if(intersecting.empty())
             throw std::invalid_argument("Supported Dynamic Halo has no target block owner.");
 
-        auto owner=intersecting.front();
-        for(const auto block:intersecting)
-            if(overlap[block]>overlap[owner] || (overlap[block]==overlap[owner] &&
-                result.blocks[block].id<result.blocks[owner].id)) owner=block;
+        auto candidates=intersecting;
+        std::sort(candidates.begin(),candidates.end(),[&](std::size_t left,std::size_t right) {
+            if(overlap[left]!=overlap[right]) return overlap[left]>overlap[right];
+            return result.blocks[left].id<result.blocks[right].id;
+        });
+        const auto owner_rank=selection==OwnerSelection::SecondBestOverlap && candidates.size()>1 ? 1u : 0u;
+        const auto owner=candidates[owner_rank];
 
         std::vector<std::size_t> components;
         for(const auto block:intersecting) components.push_back(result.blocks[block].component);
@@ -133,8 +145,16 @@ Ownership BuildOwnership(const rhbm_gem::core::JointProblemInput & input, std::v
         overlapping_targets.erase(std::unique(overlapping_targets.begin(),overlapping_targets.end()),
             overlapping_targets.end());
 
+        std::vector<std::size_t> owner_mean_targets;
+        for(const auto target:result.blocks[owner].targets)
+            if(std::binary_search(overlapping_targets.begin(),overlapping_targets.end(),target))
+                owner_mean_targets.push_back(target);
+        std::sort(owner_mean_targets.begin(),owner_mean_targets.end());
+        if(owner_mean_targets.empty())
+            throw std::logic_error("Halo owner has no overlapping Target for an overlap mean.");
+
         result.halos.push_back({halo,owner,overlap[owner],std::move(intersecting),
-            std::move(overlapping_targets)});
+            std::move(overlapping_targets),std::move(owner_mean_targets)});
         result.block_halos[owner].push_back(halo);
         auto & dynamic_rows=result.block_dynamic_rows[owner];
         dynamic_rows.insert(dynamic_rows.end(),halo_rows.begin(),halo_rows.end());
@@ -179,15 +199,18 @@ AugmentedDesign BuildAugmentedDesign(const rhbm_gem::core::JointProblemInput & i
     };
     for(std::size_t slot=0;slot<targets.size();++slot)
         add(targets[slot],slot,target_parameters[targets[slot]].b,1.0);
-    std::vector<Parameters> members;
-    members.reserve(targets.size());
-    for(const auto target:targets) members.push_back(target_parameters[target]);
     if(mode!=Mode::StaticABC)
     {
-        const auto mean=Mean(members,IncludesCharge(mode));
-        const double share=1.0/static_cast<double>(targets.size());
         for(const auto halo:halos)
-            for(std::size_t slot=0;slot<targets.size();++slot) add(halo,slot,mean.b,share);
+        {
+            const auto & owner=FindHalo(ownership,halo);
+            const auto & mean_targets=MeanTargets(ownership,owner);
+            const auto mean=HaloMean(ownership,owner,target_parameters,IncludesCharge(mode));
+            const double share=1.0/static_cast<double>(mean_targets.size());
+            for(std::size_t slot=0;slot<targets.size();++slot)
+                if(std::find(mean_targets.begin(),mean_targets.end(),targets[slot])!=mean_targets.end())
+                    add(halo,slot,mean.b,share);
+        }
     }
     return result;
 }
@@ -223,17 +246,18 @@ Eigen::MatrixXd CoupledWidthJacobian(const rhbm_gem::core::JointProblemInput & i
     }
     if(!halos.empty() && mode!=Mode::StaticABC)
     {
-        std::vector<Parameters> members;
-        members.reserve(targets.size());
-        for(const auto target:targets) members.push_back(target_parameters[target]);
-        const auto mean=Mean(members,IncludesCharge(mode));
-        const double share=1.0/static_cast<double>(targets.size());
-        for(std::size_t slot=0;slot<targets.size();++slot)
+        for(const auto halo:halos)
         {
-            const double chain=target_parameters[targets[slot]].b*share/mean.b;
-            const double halo_a=mean.a;
-            const double halo_c=mode==Mode::AB ? 0.0 : mean.c;
-            for(const auto halo:halos)
+            const auto & owner=FindHalo(ownership,halo);
+            const auto & mean_targets=MeanTargets(ownership,owner);
+            const auto mean=HaloMean(ownership,owner,target_parameters,IncludesCharge(mode));
+            const double share=1.0/static_cast<double>(mean_targets.size());
+            for(std::size_t slot=0;slot<targets.size();++slot)
+            {
+                if(std::find(mean_targets.begin(),mean_targets.end(),targets[slot])==mean_targets.end()) continue;
+                const double chain=target_parameters[targets[slot]].b*share/mean.b;
+                const double halo_a=mean.a;
+                const double halo_c=mode==Mode::AB ? 0.0 : mean.c;
                 for(const auto & support:input.support.at(halo))
                 {
                     const auto row=local_rows.at(support.row);
@@ -241,6 +265,7 @@ Eigen::MatrixXd CoupledWidthJacobian(const rhbm_gem::core::JointProblemInput & i
                     result(row,static_cast<Eigen::Index>(slot))+=chain*(halo_a*basis.gaussian_log_width+
                         halo_c*basis.charge_log_width);
                 }
+            }
         }
     }
     return result;
@@ -254,11 +279,7 @@ std::vector<Parameters> DeriveHalos(const rhbm_gem::core::JointProblemInput & in
     auto result=std::vector<Parameters>(target_parameters.begin(),target_parameters.end());
     for(const auto & owner:ownership.halos)
     {
-        const auto & targets=ownership.blocks.at(owner.owner_block).targets;
-        std::vector<Parameters> members;
-        members.reserve(targets.size());
-        for(const auto target:targets) members.push_back(target_parameters[target]);
-        result[owner.halo]=Mean(members,IncludesCharge(mode));
+        result[owner.halo]=HaloMean(ownership,owner,target_parameters,IncludesCharge(mode));
     }
     return result;
 }
@@ -335,6 +356,27 @@ Parameters Mean(std::span<const Parameters> values, bool include_charge)
     const double count=static_cast<double>(values.size());
     result.a/=count; result.b/=count; result.c=include_charge ? result.c/count : 0.0;
     return result;
+}
+
+const std::vector<std::size_t> & MeanTargets(const Ownership & ownership,const HaloOwner & halo)
+{
+    return ownership.mean_scope==MeanScope::WholeCore ?
+        ownership.blocks.at(halo.owner_block).targets : halo.owner_mean_targets;
+}
+
+Parameters HaloMean(const Ownership & ownership,const HaloOwner & halo,
+    std::span<const Parameters> target_parameters,bool include_charge)
+{
+    if(target_parameters.empty()) throw std::invalid_argument("Dynamic Halo mean has no Target state.");
+    const auto & targets=MeanTargets(ownership,halo);
+    std::vector<Parameters> members;
+    members.reserve(targets.size());
+    for(const auto target:targets)
+    {
+        if(target>=target_parameters.size()) throw std::invalid_argument("Dynamic Halo mean Target is out of range.");
+        members.push_back(target_parameters[target]);
+    }
+    return Mean(members,include_charge);
 }
 
 double MeanWidthLogDerivative(double target_width, std::size_t core_size)
