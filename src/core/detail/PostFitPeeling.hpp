@@ -16,6 +16,10 @@ struct JointPostprocessingMetrics
     std::size_t observation_row_mapping_builds{};
     std::size_t contributor_mapping_builds{};
     std::size_t joint_stage_mapping_builds{};
+    std::size_t halo_median_valid_target_count{};
+    std::size_t halo_median_same_group_halos{};
+    std::size_t halo_median_fallback_halos{};
+    std::size_t halo_median_fallback_support_rows{};
     std::size_t target_preparation_count{};
     std::size_t total_prepared_sample_count{};
     std::size_t valid_local_sample_count{};

@@ -18,6 +18,6 @@ void RunTwoStageFromPreparedSamples(
 
 void RunJointComponentWorkflow(
     MapObject & map, ModelObject & model, const FitOptions & options,
-    JointPostprocessingMetrics * metrics = nullptr);
+    JointPostprocessingMetrics * metrics = nullptr, bool pure_exclusion = false);
 
 } // namespace rhbm_gem::core::detail

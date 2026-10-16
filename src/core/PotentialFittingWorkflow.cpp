@@ -6,6 +6,7 @@
 #include "detail/FittingWorkset.hpp"
 #include "detail/PotentialFittingWorkflow.hpp"
 #include "detail/joint_component/Problem.hpp"
+#include "detail/HaloMedianReconstruction.hpp"
 #include "detail/StageSummary.hpp"
 #include "detail/PostFitPeeling.hpp"
 #include "detail/GroupPotentialFitting.hpp"
@@ -192,14 +193,15 @@ void RunTwoStageWorkflow(MapObject & map, ModelObject & model, const FitOptions 
 
 void RunJointComponentWorkflow(
     MapObject & map, ModelObject & model, const FitOptions & options,
-    JointPostprocessingMetrics * supplied_metrics)
+    JointPostprocessingMetrics * supplied_metrics, bool pure_exclusion)
 {
     JointPostprocessingMetrics local_metrics;
     auto & postprocessing_metrics = supplied_metrics ? *supplied_metrics : local_metrics;
     postprocessing_metrics = {};
     if (!options.quiet_mode) LogJointInfo("[Joint] Building joint problem...");
     const auto construction_start = std::chrono::steady_clock::now();
-    const auto problem = BuildJointProblem(map, model);
+    const auto problem = pure_exclusion ?
+        BuildPureHaloSupportExclusionProblem(map, model) : BuildJointProblem(map, model);
     const auto construction_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - construction_start).count();
     if (!options.quiet_mode)
@@ -255,7 +257,22 @@ void RunJointComponentWorkflow(
     const auto postprocessing_start = std::chrono::steady_clock::now();
     postprocessing_metrics.rss_before_postprocessing_bytes = joint_component::CurrentRssBytes();
     ++postprocessing_metrics.joint_stage_mapping_builds;
-    data_internal::ApplyJointStageEstimates(model, snapshot, boost::uuids::to_string(boost::uuids::random_generator()()));
+    const auto joint_run_id=boost::uuids::to_string(boost::uuids::random_generator()());
+    if (pure_exclusion)
+    {
+        const auto & original=problem.OriginalInput();
+        const auto target_count=original.selection_domain ? original.selection_domain->target_indices.size() : 0;
+        if (original.atom_ids.size()>target_count)
+        {
+            const auto built=BuildHaloMedianReconstruction(model,problem,snapshot,joint_run_id);
+            snapshot.halo_median_reconstruction=built.snapshot;
+            postprocessing_metrics.halo_median_valid_target_count=built.audit.valid_target_count;
+            postprocessing_metrics.halo_median_same_group_halos=built.audit.same_group_halos;
+            postprocessing_metrics.halo_median_fallback_halos=built.audit.fallback_halos;
+            postprocessing_metrics.halo_median_fallback_support_rows=built.audit.fallback_support_rows;
+        }
+    }
+    data_internal::ApplyJointStageEstimates(model, snapshot, joint_run_id);
     if (!options.quiet_mode) LogJointInfo("[Joint] Computing post-fit outputs...");
     model.EditAnalysis().SetJointResult(std::move(snapshot));
     const auto & joint_snapshot = *model.GetAnalysisView().GetJointResult();
@@ -265,7 +282,8 @@ void RunJointComponentWorkflow(
         std::chrono::steady_clock::now() - phase_start).count();
     postprocessing_metrics.rss_after_context_bytes = joint_component::CurrentRssBytes();
     phase_start = std::chrono::steady_clock::now();
-    auto peelings = postprocessing.BuildPostFitPeelingSamples(problem.Input().selection_domain->target_indices);
+    const auto & postprocessing_input=pure_exclusion ? problem.OriginalInput() : problem.Input();
+    auto peelings = postprocessing.BuildPostFitPeelingSamples(postprocessing_input.selection_domain->target_indices);
     std::vector<std::pair<int, PostFitPeelingResult>> peeling_updates;
     peeling_updates.reserve(peelings.size());
     for (auto & [id, peeling] : peelings)
