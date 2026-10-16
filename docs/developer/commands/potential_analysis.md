@@ -254,6 +254,13 @@ computation; it is not an automatic fallback or size-based route. Use
 `--estimator joint-components`; no separate
 Joint search option is required.
 
+Production uses practical-v1 global stopping limits: projected A/C KKT
+`1e-7`, width-gradient infinity norm `1e-9`, and complete-sweep log-width
+change `1e-6`. Endpoint certification and independent replay remain required;
+local SparseQR/active-set and replay-consistency tolerances are unchanged. Each
+component candidate diagnostic records the criteria identifier, thresholds,
+and achieved KKT, width-gradient, and final-sweep log-width-change values.
+
 The standalone `EstimateJointComponents` convenience API remains available and
 keeps its model-copy and target writeback behavior.
 
@@ -385,15 +392,17 @@ the objective only and must not be used for this conversion. CSV retains fitted
 coefficients; its appended `SelectionRole` distinguishes target, halo and not-recorded; keep its companion JSON for units and
 provenance. No conversion is performed during export.
 
-Production joint JSON schemas 3 through 14 are accepted. Earlier joint JSON is rejected
+Production joint JSON schemas 3 through 16 are accepted. Earlier joint JSON is rejected
 with a request to regenerate the outcome, without migration or database writes.
-New Joint result JSON uses schema 14. Schemas 3 through 13 preserve their saved
+New Joint result JSON uses schema 16. Schemas 3 through 13 preserve their saved
 evidence and convergence statuses. Schema 10 stores `target-estimability-v4`
 and rank-context identities without computed null-space leakage or full-Jacobian
 column scales. Schema 11 adds the retired FullABC halo pruning policy and
 exclusion records. Schema 13 identifies the FirstStage fixed-halo contributor
 policy; schema 14 stores validated fixed `(A, B, 0)` halo snapshots separately
-from target component states using `target-only-fixed-halo-v1`. In particular,
+from target component states using `target-only-fixed-halo-v1`. Schema 16 stores
+the global convergence criteria provenance in candidate diagnostics; schema 15
+payloads remain readable with their historical strict criteria defaults. In particular,
 failed historical local or
 target-local correction checks remain failed on load; the reader does not
 rerun those solves. Schemas 8 through 11 record the correction-free numerical

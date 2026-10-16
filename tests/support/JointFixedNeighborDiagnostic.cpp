@@ -29,7 +29,8 @@ JointState State(const Endpoint & endpoint,double scale)
 }
 void AssembleResult(const JointProblem & problem,const ProblemData & data,const JointParameterLayout & layout,
     const Domain & domain,VectorRef y,const EvaluationContext & context,
-    const FixedNeighborEndpointCertification & certification,FixedNeighborDiagnosticResult & out)
+    const FixedNeighborEndpointCertification & certification,const JointConvergenceCriteria & convergence_criteria,
+    FixedNeighborDiagnosticResult & out)
 {
     out.assessment=certification.assessment;
     out.endpoint_trust=certification.trust;
@@ -70,7 +71,7 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
         std::fill(out.fit.available_row_mask.begin(),out.fit.available_row_mask.end(),true);
         out.fit.assembled_state=out.fit.components.front().state;
         const auto assembled=EvaluateStateStreaming(domain,y,eta,beta,context);
-        const auto replay=CheckIndependentReplay(domain,y,assembled,context);
+        const auto replay=CheckIndependentReplay(domain,y,assembled,context,nullptr,nullptr,convergence_criteria);
         bool prediction_agrees=assembled.valid && assembled.residual.size()==out.state.prediction.size();
         if(prediction_agrees) for(Eigen::Index row=0;row<assembled.residual.size();++row)
         {
@@ -160,15 +161,18 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
         if(search.certification)
         {
             out.work=search.work;
-            AssembleResult(problem,data,layout,domain,y,context,*search.certification,out);
+            AssembleResult(problem,data,layout,domain,y,context,*search.certification,
+                policy.convergence_criteria,out);
         }
         else if(!policy.stop_after_stationarity && search.search_converged &&
             search.state.eta.size()==static_cast<Eigen::Index>(domain.atoms.size()))
         {
             const auto certification=CertifyFixedNeighborEndpoint(domain,y,search.state,context,
-                policy.collect_telemetry ? &search.work.local_profile_work : nullptr);
+                policy.collect_telemetry ? &search.work.local_profile_work : nullptr,0,
+                policy.convergence_criteria);
             out.work=search.work;
-            AssembleResult(problem,data,layout,domain,y,context,certification,out);
+            AssembleResult(problem,data,layout,domain,y,context,certification,
+                policy.convergence_criteria,out);
         }
     }
     return out;

@@ -489,7 +489,7 @@ json::object RunCase(const std::string & name,const core::JointProblem & origina
         {"full_prediction_rmse",verified ? Number(full_rmse) : json::value(nullptr)},
         {"objective",verified ? Number(objective) : json::value(nullptr)},
         {"candidate_available_target_estimates",candidate_count},
-        {"candidate_status",candidate_count ? "finite-candidate-unqualified" : "unavailable"},
+        {"candidate_status",verified ? "qualified" : candidate_count ? "finite-candidate-unqualified" : "unavailable"},
         {"candidate_ac_kkt",candidate_kkt ? Number(*candidate_kkt) : json::value(nullptr)},
         {"candidate_width_gradient",candidate_width_gradient ? Number(*candidate_width_gradient) : json::value(nullptr)},
         {"candidate_rmse_A",candidate_count ? Number(std::sqrt(candidate_squared_a/static_cast<double>(candidate_count))) : json::value(nullptr)},

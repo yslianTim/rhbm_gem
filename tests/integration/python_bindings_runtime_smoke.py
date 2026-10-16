@@ -240,11 +240,7 @@ def assert_joint_workflow() -> None:
         analysis.verbosity = 0
         analysis_result = m.RunCommand(analysis)
         assert analysis_result.succeeded
-        assert analysis_result.outcome in {
-            m.CommandOutcome.JOINT_INITIALIZATION_FAILED,
-            m.CommandOutcome.JOINT_NOT_CONVERGED,
-            m.CommandOutcome.JOINT_QUALIFIED,
-        }
+        assert analysis_result.outcome == m.CommandOutcome.JOINT_QUALIFIED
         model_hash = hashlib.sha256(local_model.read_bytes()).hexdigest()
         map_path = Path(analysis.map_file_path)
         map_hash = hashlib.sha256(map_path.read_bytes()).hexdigest()
@@ -257,7 +253,7 @@ def assert_joint_workflow() -> None:
         export.output_dir = root
         assert m.RunCommand(export).succeeded
         saved = json.loads((root / "joint_result_model.json").read_text())
-        assert saved["schema_version"] == 15
+        assert saved["schema_version"] == 16
         assert saved["selection_domain"]["target_indices"] == [0]
         assert saved["atom_ids"] == ["1", "2"]
         assert saved["metadata"]["model_sha256"] == model_hash
@@ -269,14 +265,15 @@ def assert_joint_workflow() -> None:
         assert len(saved["metadata"]["software"]["build_sha256"]) == 64
         assert saved["regular_certificate"] == "not-run"
         assert saved["parameterization_contract"] == "target-only-fixed-halo-v1"
-        assert saved["assembled_state"] is None
+        assert saved["assembled_state"] is not None
         assert len(saved["fixed_halos"]) == 1
         assert saved["fixed_halos"][0]["atom_id"] == "2"
         assert saved["fixed_halos"][0]["charge"] == 0
         assert saved["components"]
-        assert saved["components"][0]["state"] is None
-        assert saved["components"][0]["stop_reason"] == "block-sweep-budget"
-        assert saved["runtime_convergence"] in {"passed", "failed", "unavailable", "not-run"}
+        assert saved["components"][0]["state"] is not None
+        assert saved["components"][0]["stop_reason"] == "block-stationary"
+        assert saved["components"][0]["candidate_diagnostic"]["convergence_criteria_id"] == "practical-v1"
+        assert saved["runtime_convergence"] == "passed"
 
 
 def main() -> int:

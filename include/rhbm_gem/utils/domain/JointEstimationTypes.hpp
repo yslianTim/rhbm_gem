@@ -229,6 +229,10 @@ struct JointCandidateDiagnostic
     bool candidate_available{};
     std::vector<double> candidate_eta,candidate_ac;
     std::optional<double> candidate_objective,candidate_ac_kkt,candidate_width_gradient_inf_norm;
+    std::string convergence_criteria_id;
+    std::optional<double> global_ac_kkt_threshold,global_width_gradient_threshold,
+        confirmed_log_width_change_threshold;
+    std::optional<double> candidate_log_width_change_inf_norm;
     std::optional<bool> candidate_feasible;
     JointCheckStatus certification_status{JointCheckStatus::NotRun};
     JointCheckStatus endpoint_verification_status{JointCheckStatus::NotRun};

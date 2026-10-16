@@ -571,3 +571,61 @@ Full Oracle controls, preserved independent replay checks, and met the
 candidate remains unqualified. This evidence permits the conditional P3
 production promotion; it does not claim statistical accuracy for the
 misspecified C=0 model.
+
+### P3 production promotion and CLI verification
+
+Production now selects `practical-v1` by default while retaining the Strict
+research reference. The target-only search configuration remains core 12,
+forward Gauss-Seidel, one trusted update per block visit, and a 200-sweep cap.
+Local SparseQR/active-set and profile checks, endpoint replay enclosures, and
+full-observation consistency limits are unchanged. JSON schema 16 records the
+criteria identifier, thresholds, and achieved global measures; schema 15 and
+older supported payloads remain readable with historical Strict defaults.
+
+The Release CLI was run on the original chain-A CIF and float32 map, with normal
+CLI map normalization and the real FirstStage fixed-halo workflow. It returned
+a qualified Joint result and saved SQLite v20 / Joint JSON schema 16. The
+persisted result has one component, 1,418/1,418 target states, and 659/659
+qualified immutable FirstStage halos, each with C=0. Its search stopped after
+79 complete sweeps and stored `practical-v1` provenance. The normalized map
+divisor was `0.44031545732594374`.
+
+| Production CLI measure | Persisted result |
+| --- | ---: |
+| CLI outcome / runtime convergence | JointQualified / passed |
+| Targets / qualified target states | 1,418 / 1,418 |
+| Qualified fixed halos / charge contract | 659 / 659, all C=0 |
+| Sweeps / profile evaluations / accepted updates | 79 / 22,436 / 10,796 |
+| Candidate objective | 0.004102082117643847 |
+| Global A/C KKT | 9.197885e-8 (threshold 1e-7) |
+| Global width-gradient infinity norm | 4.231148e-10 (threshold 1e-9) |
+| Complete-sweep max `|Δlog B|` | 5.666472e-7 (threshold 1e-6) |
+| Endpoint / independent replay / full observation replay | Passed / passed / passed |
+| Total CLI wall time / search time | 357.62 s / 337.88 s |
+| Peak RSS for the full CLI process | Not captured by `/usr/bin/time -l` in this sandbox |
+
+Every target has finite feasible A/B/C state; all component and target runtime
+statuses pass. The persisted independent replay, width-gradient consistency,
+endpoint verification, full-observation replay including fixed halos, and
+assembled consistency checks pass. No C value or halo parameter was optimized.
+The CLI endpoint matches the P2 Practical sweep-79 checkpoint in original-map
+units to maximum absolute differences of `1.353e-7` for A, `5.614e-9` for B,
+and `2.116e-8` for C; none approaches the 0.0025 stability limit. The largest
+target B is `0.6392831788`.
+
+The research summary's candidate label was also corrected: a candidate is now
+reported as `qualified` when the result passed complete-sweep confirmation,
+endpoint verification, replay, and target availability; it remains
+`finite-candidate-unqualified` when those gates fail. This corrects a label in
+the summary output, not any fitted value or qualification decision.
+
+After promotion, the Release build succeeded and complete CTest passed 40/40.
+The suite covers target-only numerics and replay, fixed-halo initialization,
+partial selection, persistence and historical JSON decoding, PostFitPeeling,
+CLI outcomes, and large-component memory preflight.
+
+**P3 decision:** Practical criteria are promoted as the production default.
+The production CLI produced 1,418 formally qualified target estimates with all
+659 fixed halos preserved. This establishes numerical convergence and replay
+validity for the fixed C=0 contract; it does not resolve the separate scientific
+model-bias question.

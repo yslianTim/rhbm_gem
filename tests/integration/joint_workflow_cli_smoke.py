@@ -37,19 +37,19 @@ def main() -> int:
         generator = json.loads(Path(str(map_path) + ".simulation.json").read_text())["generator"]
         database = root / "joint.sqlite"
         run("potential_analysis", "--estimator", "joint-components", "--select-chain", "A", "-a", model,
-            "-m", map_path, "-d", database, "-k", "example", "-v", "0", expected_exit=3)
+            "-m", map_path, "-d", database, "-k", "example", "-v", "0", expected_exit=0)
         run("potential_analysis", "--estimator", "joint-components",
             "--select-chain", "A", "-a", model, "-m", map_path, "-d", database, "-k", "fixed", "-v", "0",
-            expected_exit=3)
+            expected_exit=0)
         model_hash = hashlib.sha256(model.read_bytes()).hexdigest()
         map_hash = hashlib.sha256(map_path.read_bytes()).hexdigest()
         # The same path with different bytes must produce a different fingerprint.
         model.write_text(model.read_text() + "\n# provenance test\n")
         run("potential_analysis", "--estimator", "joint-components", "--select-chain", "A", "-a", model,
-            "-m", map_path, "-d", database, "-k", "changed", "-v", "0", expected_exit=3)
+            "-m", map_path, "-d", database, "-k", "changed", "-v", "0", expected_exit=0)
         changed_hash = hashlib.sha256(model.read_bytes()).hexdigest()
         run("potential_analysis", "--estimator", "joint-components", "--select-chain", "A", "-a", model,
-            "-m", map_path, "-d", database, "-k", "example.contributions", "-v", "0", expected_exit=3)
+            "-m", map_path, "-d", database, "-k", "example.contributions", "-v", "0", expected_exit=0)
         map_path.unlink()
         model.unlink()
         run("result_dump", "--printer", "joint", "-d", database, "-k", "example", "-o", root)
@@ -80,7 +80,7 @@ def main() -> int:
                     assert atom["post_joint_local"] is None
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
-        assert saved["schema_version"] == 15
+        assert saved["schema_version"] == 16
         assert saved["parameterization_contract"] == "target-only-fixed-halo-v1"
         assert saved["metadata"]["solver"]["search_method"] == "fixed-neighbor"
         default_solver = saved["metadata"]["solver"]
@@ -123,9 +123,9 @@ def main() -> int:
         csv_lines = (root / "joint_atoms_example.csv").read_text().splitlines()
         assert csv_lines[0].endswith(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality")
         csv_rows = {row["SelectionRole"]: row for row in csv.DictReader(csv_lines)}
-        assert csv_rows["target"]["Parameterization"] == "TargetOnlyUnestimated"
-        assert csv_rows["target"]["StateAvailable"] == "0"
-        assert csv_rows["target"]["PointQuality"] == "Unavailable"
+        assert csv_rows["target"]["Parameterization"] == "JointEstimated"
+        assert csv_rows["target"]["StateAvailable"] == "1"
+        assert csv_rows["target"]["TargetRuntimeConvergence"] == "passed"
         assert csv_rows["halo"]["Parameterization"] == "FixedFromFirstStage"
         assert csv_rows["halo"]["StateAvailable"] == "1"
         assert csv_rows["halo"]["StopReason"] == "fixed-from-first-stage"
@@ -146,12 +146,18 @@ def main() -> int:
             assert len(metadata["software"][key]) == 64
         assert metadata["software"] == generator
         assert saved["regular_certificate"] == "not-run"
-        assert saved["components"] and saved["assembled_state"] is None
+        assert saved["components"] and saved["assembled_state"] is not None
         for component in saved["components"]:
-            assert not component["search_completed"]
-            assert component["state"] is None
-            assert component["stop_reason"] == "block-sweep-budget"
+            assert component["search_completed"]
+            assert component["state"] is not None
+            assert component["stop_reason"] == "block-stationary"
             assert 0 < component["search_sweeps"] <= 200
+            diagnostic = component["candidate_diagnostic"]
+            assert diagnostic["convergence_criteria_id"] == "practical-v1"
+            assert diagnostic["global_ac_kkt_threshold"] == 1e-7
+            assert diagnostic["global_width_gradient_threshold"] == 1e-9
+            assert diagnostic["confirmed_log_width_change_threshold"] == 1e-6
+            assert diagnostic["candidate_log_width_change_inf_norm"] <= 1e-6
             point = component["target_evidence"]
             assert point["contract"] == "target-point-validation-v1"
             assert not point["ranks"] and not point["atoms"]

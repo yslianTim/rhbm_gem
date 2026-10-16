@@ -691,7 +691,7 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesHaloHistoryAndRo
         EXPECT_EQ(rhbm_gem::AtomLocalPotentialView::For(*atom).GetEstimateMDPDE(rhbm_gem::FittingStage::Second).GetWidth(),.91);
     const auto saved=core::CaptureJointAnalysisResult(fit);
     const auto encoded=rhbm_gem::joint_result_io::Encode(saved);
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),15);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),16);
     const auto decoded=rhbm_gem::joint_result_io::Decode(encoded);
     ASSERT_TRUE(decoded.selection_domain); EXPECT_EQ(decoded.selection_domain->target_indices,(std::vector<std::size_t>{0}));
     ASSERT_TRUE(decoded.selection_domain->fixed_halo_selection);

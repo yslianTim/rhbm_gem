@@ -43,6 +43,7 @@ void CheckSingleBlock(const std::string & topology,int atoms)
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(atoms,std::log(.55));
     n::FixedNeighborPolicy policy; policy.maximum_sweeps=30;
+    policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
     std::vector<n::FixedNeighborBlockSweep> observed;
     n::BlockCoordinateState observed_state; std::size_t state_callbacks{};
     policy.sweep_observer=[&](const auto & sweep){observed.push_back(sweep);};
@@ -56,7 +57,7 @@ void CheckSingleBlock(const std::string & topology,int atoms)
     ASSERT_TRUE(result.endpoint_certified)<<result.endpoint_trust.reason;
     EXPECT_GE(result.sweeps.size(),2u);
     EXPECT_GT(result.first_order_stationarity_sweep,0u);
-    EXPECT_GT(result.confirmed_stationarity_sweep,result.first_order_stationarity_sweep);
+    EXPECT_GE(result.confirmed_stationarity_sweep,result.first_order_stationarity_sweep);
     ASSERT_EQ(result.fit.components.size(),1u);
     EXPECT_EQ(result.fit.components.front().search_sweeps,result.sweeps.size());
     EXPECT_EQ(result.fit.components.front().first_order_stationarity_sweep,result.first_order_stationarity_sweep);
@@ -68,8 +69,8 @@ void CheckSingleBlock(const std::string & topology,int atoms)
     EXPECT_TRUE((observed_state.eta.array()==result.state.eta.array()).all());
     EXPECT_TRUE((observed_state.beta.array()==result.state.beta.array()).all());
     EXPECT_DOUBLE_EQ(observed.back().global_ac_kkt,result.sweeps.back().global_ac_kkt);
-    EXPECT_LE(result.sweeps.back().global_ac_kkt,1e-10);
-    EXPECT_LE(result.sweeps.back().global_width_gradient_inf_norm,1e-12);
+    EXPECT_LE(result.sweeps.back().global_ac_kkt,policy.convergence_criteria.global_ac_kkt);
+    EXPECT_LE(result.sweeps.back().global_width_gradient_inf_norm,policy.convergence_criteria.global_width_gradient);
     EXPECT_LE(result.sweeps.back().cache_replay_error,2e-12);
     EXPECT_TRUE(result.assessment.primary.valid);
     EXPECT_TRUE(result.assessment.independent_replay.passed);
@@ -77,6 +78,8 @@ void CheckSingleBlock(const std::string & topology,int atoms)
     EXPECT_TRUE(result.fit.search_completed);
     const auto production=rhbm_gem::core::FitJointComponents(problem,std::vector<double>(static_cast<std::size_t>(atoms),.55));
     ASSERT_EQ(production.components.size(),1u);
+    ASSERT_TRUE(production.components.front().candidate_diagnostic);
+    EXPECT_EQ(production.components.front().candidate_diagnostic->convergence_criteria_id,"practical-v1");
     ASSERT_TRUE(production.components.front().state);
     ASSERT_TRUE(result.fit.components.front().state);
     ASSERT_TRUE(production.objective && result.fit.objective);
@@ -863,6 +866,18 @@ TEST(JointFixedNeighborBlockCoordinateTest, PracticalCriteriaDoNotQualifySweepsW
     EXPECT_EQ(result.confirmed_stationarity_sweep,0u);
     EXPECT_FALSE(result.certification.has_value());
 }
+TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchDefaultsToValidatedPracticalCriteria)
+{
+    const auto production=n::FixedNeighborSearchPolicy{}.convergence_criteria;
+    EXPECT_DOUBLE_EQ(production.global_ac_kkt,n::PracticalJointConvergenceCriteria.global_ac_kkt);
+    EXPECT_DOUBLE_EQ(production.global_width_gradient,n::PracticalJointConvergenceCriteria.global_width_gradient);
+    EXPECT_DOUBLE_EQ(production.confirmed_log_width_change,
+        n::PracticalJointConvergenceCriteria.confirmed_log_width_change);
+    const auto local=n::FixedNeighborPolicy{}.convergence_criteria;
+    EXPECT_DOUBLE_EQ(local.global_ac_kkt,n::StrictJointConvergenceCriteria.global_ac_kkt);
+    EXPECT_DOUBLE_EQ(local.global_width_gradient,n::StrictJointConvergenceCriteria.global_width_gradient);
+    EXPECT_DOUBLE_EQ(local.confirmed_log_width_change,n::StrictJointConvergenceCriteria.confirmed_log_width_change);
+}
 TEST(JointFixedNeighborBlockCoordinateTest, CertificationRetryWaitsTenSweepsWhileStationarityPersists)
 {
     std::size_t next_retry_sweep{};
@@ -1135,6 +1150,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReferenceFree168StopsAtFirstCorrecti
         SearchRun result;
         n::AssessmentWorkForTesting()={};
         n::FixedNeighborSearchPolicy policy; policy.maximum_sweeps=maximum_sweeps;
+        policy.convergence_criteria=n::StrictJointConvergenceCriteria;
         std::size_t current_sweep{};
         policy.configure_search_for_testing=[&](n::FixedNeighborPolicy & search_policy) {
             search_policy.stop_after_stationarity=stop_after_stationarity;

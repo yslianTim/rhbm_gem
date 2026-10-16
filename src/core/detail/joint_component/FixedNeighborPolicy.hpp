@@ -18,7 +18,7 @@ struct FixedNeighborSearchPolicy
 {
     std::size_t core_atoms{12};
     std::size_t maximum_sweeps{200};
-    JointConvergenceCriteria convergence_criteria{StrictJointConvergenceCriteria};
+    JointConvergenceCriteria convergence_criteria{PracticalJointConvergenceCriteria};
     FixedNeighborBlockOrder order{FixedNeighborBlockOrder::Forward};
     std::size_t component_index{};
     std::string component_id;

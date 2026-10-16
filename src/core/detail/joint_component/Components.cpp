@@ -135,9 +135,20 @@ JointParameterLayout ComponentLayout(const JointParameterLayout & layout,const C
     for(auto r:layout.informative_rows) if(view.LocalRow(static_cast<Eigen::Index>(r))>=0) out.informative_rows.push_back(r);
     return out;
 }
-JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & search,std::size_t atoms)
+JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & search,std::size_t atoms,
+    const JointConvergenceCriteria & criteria)
 {
     JointCandidateDiagnostic out;
+    out.convergence_criteria_id=criteria.global_ac_kkt==PracticalJointConvergenceCriteria.global_ac_kkt &&
+        criteria.global_width_gradient==PracticalJointConvergenceCriteria.global_width_gradient &&
+        criteria.confirmed_log_width_change==PracticalJointConvergenceCriteria.confirmed_log_width_change ?
+            "practical-v1" : criteria.global_ac_kkt==StrictJointConvergenceCriteria.global_ac_kkt &&
+                criteria.global_width_gradient==StrictJointConvergenceCriteria.global_width_gradient &&
+                criteria.confirmed_log_width_change==StrictJointConvergenceCriteria.confirmed_log_width_change ?
+                    "strict-v1" : "custom-v1";
+    out.global_ac_kkt_threshold=criteria.global_ac_kkt;
+    out.global_width_gradient_threshold=criteria.global_width_gradient;
+    out.confirmed_log_width_change_threshold=criteria.confirmed_log_width_change;
     const auto & state=search.state;
     bool finite_widths=state.eta.size()==static_cast<Eigen::Index>(atoms) && state.eta.allFinite();
     if(finite_widths) for(Eigen::Index atom=0;atom<state.eta.size();++atom)
@@ -160,6 +171,7 @@ JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & s
         if(std::isfinite(sweep.global_ac_kkt)) out.candidate_ac_kkt=sweep.global_ac_kkt;
         if(std::isfinite(sweep.global_width_gradient_inf_norm))
             out.candidate_width_gradient_inf_norm=sweep.global_width_gradient_inf_norm;
+        if(std::isfinite(sweep.eta_change_inf)) out.candidate_log_width_change_inf_norm=sweep.eta_change_inf;
         if(std::isfinite(sweep.global_a_feasibility)) out.candidate_feasible=sweep.global_a_feasibility==0;
     }
     if(search.certification)
@@ -234,7 +246,8 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             component.endpoint_certification_sweep=fit.search.certification_sweep;
             component.profile_evaluations=static_cast<int>(fit.search.total_profile_evaluations);
             component.accepted_updates=static_cast<int>(fit.search.total_accepted_local_updates);
-            component.candidate_diagnostic=CandidateDiagnostic(fit.search,layout.full_atoms.size());
+            component.candidate_diagnostic=CandidateDiagnostic(fit.search,layout.full_atoms.size(),
+                production_policy.convergence_criteria);
             component.local_conditioning=fit.search.local_conditioning;
             const auto remap_core_atoms=[&](auto & blocks) {
                 for(auto & block:blocks)

@@ -965,7 +965,7 @@ TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSche
     record.target_runtime_convergence=rg::JointCheckStatus::Unavailable;
 
     const auto encoded=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(encoded.at("schema_version").as_int64(),15);
+    EXPECT_EQ(encoded.at("schema_version").as_int64(),16);
     EXPECT_FALSE(encoded.as_object().contains("ranks"));
     EXPECT_EQ(encoded.at("legacy_global_rank_evidence").as_array().size(),1u);
     const auto & saved_component=encoded.at("components").as_array()[0];
@@ -1101,6 +1101,9 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     candidate.candidate_eta={-.7,-.5}; candidate.candidate_ac={999.125,-.3,4,.2};
     candidate.candidate_objective=.0123; candidate.candidate_ac_kkt=.1;
     candidate.candidate_width_gradient_inf_norm=.2; candidate.candidate_feasible=true;
+    candidate.convergence_criteria_id="practical-v1";
+    candidate.global_ac_kkt_threshold=1e-7; candidate.global_width_gradient_threshold=1e-9;
+    candidate.confirmed_log_width_change_threshold=1e-6; candidate.candidate_log_width_change_inf_norm=5e-7;
     candidate.certification_status=rg::JointCheckStatus::Unavailable;
     candidate.endpoint_verification_status=rg::JointCheckStatus::Passed;
     candidate.numerical_qualification_status=rg::JointCheckStatus::Unavailable;
@@ -1119,8 +1122,14 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     record.metadata.solver=provenance;
 
     const auto json=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(json.at("schema_version").as_int64(),15);
-    EXPECT_EQ(json.at("components").as_array()[0].at("candidate_diagnostic").at("candidate_status").as_string(),"uncertified");
+    EXPECT_EQ(json.at("schema_version").as_int64(),16);
+    const auto & saved_candidate=json.at("components").as_array()[0].at("candidate_diagnostic");
+    EXPECT_EQ(saved_candidate.at("candidate_status").as_string(),"uncertified");
+    EXPECT_EQ(saved_candidate.at("convergence_criteria_id").as_string(),"practical-v1");
+    EXPECT_DOUBLE_EQ(saved_candidate.at("global_ac_kkt_threshold").as_double(),1e-7);
+    EXPECT_DOUBLE_EQ(saved_candidate.at("global_width_gradient_threshold").as_double(),1e-9);
+    EXPECT_DOUBLE_EQ(saved_candidate.at("confirmed_log_width_change_threshold").as_double(),1e-6);
+    EXPECT_DOUBLE_EQ(saved_candidate.at("candidate_log_width_change_inf_norm").as_double(),5e-7);
     const auto decoded=io::Decode(boost::json::serialize(json));
     ASSERT_TRUE(decoded.components.front().candidate_diagnostic);
     EXPECT_EQ(decoded.components.front().id,component.id);
@@ -1138,9 +1147,40 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->certification_status,rg::JointCheckStatus::Unavailable);
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->endpoint_verification_status,rg::JointCheckStatus::Passed);
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->numerical_qualification_status,rg::JointCheckStatus::Unavailable);
+    EXPECT_EQ(decoded.components.front().candidate_diagnostic->convergence_criteria_id,"practical-v1");
+    ASSERT_TRUE(decoded.components.front().candidate_diagnostic->global_ac_kkt_threshold);
+    EXPECT_DOUBLE_EQ(*decoded.components.front().candidate_diagnostic->global_ac_kkt_threshold,1e-7);
+    ASSERT_TRUE(decoded.components.front().candidate_diagnostic->global_width_gradient_threshold);
+    EXPECT_DOUBLE_EQ(*decoded.components.front().candidate_diagnostic->global_width_gradient_threshold,1e-9);
+    ASSERT_TRUE(decoded.components.front().candidate_diagnostic->confirmed_log_width_change_threshold);
+    EXPECT_DOUBLE_EQ(*decoded.components.front().candidate_diagnostic->confirmed_log_width_change_threshold,1e-6);
+    ASSERT_TRUE(decoded.components.front().candidate_diagnostic->candidate_log_width_change_inf_norm);
+    EXPECT_DOUBLE_EQ(*decoded.components.front().candidate_diagnostic->candidate_log_width_change_inf_norm,5e-7);
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->verification_reason,"rank-assessment-unavailable");
     EXPECT_TRUE(decoded.components.front().legacy_global_rank_evidence.empty());
     EXPECT_FALSE(decoded.components.front().target_evidence);
+
+    auto historical=json.as_object(); historical["schema_version"]=15;
+    auto & historical_candidate=historical.at("components").as_array()[0].as_object()
+        .at("candidate_diagnostic").as_object();
+    historical_candidate.erase("convergence_criteria_id");
+    historical_candidate.erase("global_ac_kkt_threshold");
+    historical_candidate.erase("global_width_gradient_threshold");
+    historical_candidate.erase("confirmed_log_width_change_threshold");
+    historical_candidate.erase("candidate_log_width_change_inf_norm");
+    const auto legacy=io::Decode(boost::json::serialize(historical));
+    ASSERT_TRUE(legacy.components.front().candidate_diagnostic);
+    EXPECT_EQ(legacy.components.front().candidate_diagnostic->convergence_criteria_id,"strict-v1");
+    ASSERT_TRUE(legacy.components.front().candidate_diagnostic->global_ac_kkt_threshold);
+    EXPECT_DOUBLE_EQ(*legacy.components.front().candidate_diagnostic->global_ac_kkt_threshold,1e-10);
+    ASSERT_TRUE(legacy.components.front().candidate_diagnostic->global_width_gradient_threshold);
+    EXPECT_DOUBLE_EQ(*legacy.components.front().candidate_diagnostic->global_width_gradient_threshold,1e-12);
+    ASSERT_TRUE(legacy.components.front().candidate_diagnostic->confirmed_log_width_change_threshold);
+    EXPECT_DOUBLE_EQ(*legacy.components.front().candidate_diagnostic->confirmed_log_width_change_threshold,1e-10);
+    auto missing_current_criteria=json.as_object();
+    missing_current_criteria.at("components").as_array()[0].as_object()
+        .at("candidate_diagnostic").as_object().erase("convergence_criteria_id");
+    EXPECT_ANY_THROW(io::Decode(boost::json::serialize(missing_current_criteria)));
 
     rg::WriteJointAnalysisResult(decoded,dir.path()/"result.json",dir.path()/"atoms.csv");
     std::ifstream csv(dir.path()/"atoms.csv"); std::string line;

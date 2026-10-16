@@ -74,11 +74,14 @@ containing a failed block is excluded from stationarity confirmation.
 
 A component becomes a trusted scientific state only after a confirmed
 stationary sweep and endpoint verification. Production still defaults to the
-strict global criteria: projected A/C KKT `<= 1e-10`, log-width gradient
-infinity norm `<= 1e-12`, and confirmed log-width change `<= 1e-10`. The internal
-research policy can explicitly select practical criteria of `1e-7`, `1e-9`,
-and `1e-6`, respectively. Both policies require finite, nonnegative measures
-and inclusive thresholds; confirmation requires a complete prior sweep.
+practical global criteria (practical-v1): projected A/C KKT `<= 1e-7`,
+log-width gradient infinity norm `<= 1e-9`, and confirmed log-width change
+`<= 1e-6`. Strict research reference criteria (strict-v1) remain available at
+`1e-10`, `1e-12`, and `1e-10`, respectively. Result candidate diagnostics save
+the criteria identifier, all three thresholds, and the final complete-sweep
+log-width change alongside the achieved KKT and width-gradient values. Both
+policies require finite, nonnegative measures and inclusive thresholds;
+confirmation requires a complete prior sweep.
 Changing the global criteria does not change the local SparseQR/active-set
 qualification, profile trust checks, or replay-consistency enclosures. At the
 accepted endpoint, a primary streaming evaluation and an independent streaming
