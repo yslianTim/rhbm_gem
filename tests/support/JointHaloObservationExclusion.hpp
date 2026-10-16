@@ -57,9 +57,17 @@ struct LocalDesignMetrics
     double minimum_projected_width_fraction{};
 };
 
+struct MaskedInput
+{
+    rhbm_gem::core::JointProblemInput input;
+    std::vector<std::size_t> source_contributors;
+};
+
 std::vector<double> NearestHaloDistances(std::span<const Position> observations,
     std::span<const Position> halos);
 RowMask RetainedRows(std::span<const double> nearest_halo_distances, double radius);
+MaskedInput BuildMaskedInput(const rhbm_gem::core::JointProblemInput &,
+    std::span<const std::uint8_t> retained_rows, bool retain_halos);
 CoverageSummary AnalyzeCoverage(const rhbm_gem::core::JointProblemInput &,
     std::span<const std::uint8_t> retained_rows, std::span<const double> target_halo_distances,
     std::span<const double> observation_halo_distances);

@@ -114,6 +114,58 @@ RowMask RetainedRows(std::span<const double> nearest_halo_distances, double radi
     return retained;
 }
 
+MaskedInput BuildMaskedInput(const rhbm_gem::core::JointProblemInput & source,
+    std::span<const std::uint8_t> retained_rows, bool retain_halos)
+{
+    if (!source.selection_domain || retained_rows.size() != source.observations.size() ||
+        source.support.size() != source.atom_ids.size())
+        throw std::invalid_argument("Invalid masked joint problem dimensions.");
+
+    MaskedInput result;
+    auto & input = result.input;
+    std::vector<std::size_t> row_map(source.observations.size(), std::numeric_limits<std::size_t>::max());
+    for (std::size_t row = 0; row < retained_rows.size(); ++row)
+    {
+        if (!retained_rows[row]) continue;
+        row_map[row] = input.observations.size();
+        input.observations.push_back(source.observations[row]);
+        input.row_ids.push_back(source.row_ids[row]);
+    }
+
+    const auto & targets = source.selection_domain->target_indices;
+    std::vector<bool> is_target(source.atom_ids.size());
+    for (const auto target : targets) is_target.at(target) = true;
+    std::vector<std::size_t> source_to_masked(source.atom_ids.size(), std::numeric_limits<std::size_t>::max());
+    for (std::size_t contributor = 0; contributor < source.atom_ids.size(); ++contributor)
+    {
+        std::vector<rhbm_gem::core::JointSupport> support;
+        support.reserve(source.support[contributor].size());
+        for (const auto & entry : source.support[contributor])
+            if (retained_rows[entry.row]) support.push_back({row_map[entry.row], entry.squared_distance});
+        if (!is_target[contributor] && (!retain_halos || support.empty())) continue;
+
+        source_to_masked[contributor] = input.atom_ids.size();
+        result.source_contributors.push_back(contributor);
+        input.atom_ids.push_back(source.atom_ids[contributor]);
+        input.support.push_back(std::move(support));
+    }
+
+    input.selection_domain.emplace();
+    input.selection_domain->target_indices.reserve(targets.size());
+    for (const auto target : targets)
+        input.selection_domain->target_indices.push_back(source_to_masked.at(target));
+    if (retain_halos)
+    {
+        const auto & prior = source.selection_domain->fixed_halo_selection;
+        if (!prior) throw std::invalid_argument("Original problem lacks fixed-halo selection provenance.");
+        const auto retained_halo_count = input.atom_ids.size() - targets.size();
+        input.selection_domain->contributor_policy = std::string(rhbm_gem::FixedHaloContributorPolicy);
+        input.selection_domain->fixed_halo_selection = rhbm_gem::JointFixedHaloSelectionProvenance{
+            1, prior->candidate_halos, retained_halo_count, prior->candidate_halos - retained_halo_count};
+    }
+    return result;
+}
+
 CoverageSummary AnalyzeCoverage(const rhbm_gem::core::JointProblemInput & input,
     std::span<const std::uint8_t> retained_rows, std::span<const double> target_halo_distances,
     std::span<const double> observation_halo_distances)
