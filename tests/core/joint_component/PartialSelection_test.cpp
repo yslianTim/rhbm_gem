@@ -5,6 +5,7 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <algorithm>
 #include "support/JointPartialSelection.hpp"
+#include "support/JointHaloObservationExclusion.hpp"
 #include "support/JointProfileSearchDiagnostic.hpp"
 #include "support/DataObjectTestSupport.hpp"
 #include "core/detail/joint_component/Problem.hpp"
@@ -1334,6 +1335,37 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesGridOperatorAndRetain
     const auto incomplete = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem);
     EXPECT_FALSE(incomplete.at(1).samples[0].response);
     EXPECT_EQ(incomplete.at(1).samples[0].reason, "missing-contributor-state");
+}
+
+TEST(JointComponentPartialSelectionTest, ExcludedFitRowsAreUnavailableToPostFitPeeling)
+{
+    auto f=joint_partial_test::Make("partial");
+    SetFixedHaloExactMap(f);
+    const auto original=core::BuildJointProblem(*f.map,*f.model);
+    const auto retained=joint_test::halo_exclusion::HaloSupportExclusionRows(original.Input());
+    auto masked=joint_test::halo_exclusion::BuildMaskedInput(original.Input(),retained,false);
+    auto fit_problem=core::JointProblem(std::move(masked.input));
+    fit_problem=core::JointProblemAccess::WithReferenceNormalization(fit_problem,original);
+    ASSERT_LT(fit_problem.Input().row_ids.size(),original.Input().row_ids.size());
+
+    const auto fit=core::FitJointComponents(fit_problem,{f.b[0]});
+    ASSERT_TRUE(fit.assembled_state) << fit.initialization.reason;
+    ASSERT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    ASSERT_EQ(fit.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    const auto snapshot=core::CaptureJointAnalysisResult(fit);
+    f.model->EditAnalysis().ApplyJointResult(snapshot,"masked-post-fit-domain-test");
+    const SamplingPointList points{{0.0,{0.0,0.0,0.0},true}};
+    f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*f.model->FindAtomPtr(1),
+        core::detail::BuildLocalPotentialSampleList(*f.map,points));
+
+    const core::detail::JointPostprocessingContext context(*f.map,*f.model,fit_problem,&snapshot);
+    const auto peelings=context.BuildPostFitPeelingSamples();
+    ASSERT_TRUE(peelings.contains(1));
+    ASSERT_EQ(peelings.at(1).samples.size(),1u);
+    EXPECT_FALSE(peelings.at(1).samples.front().response);
+    EXPECT_EQ(peelings.at(1).samples.front().reason,"outside-joint-domain");
+    EXPECT_THROW((core::detail::JointPostprocessingContext(*f.map,*f.model,original,&snapshot)),
+        std::invalid_argument);
 }
 
 TEST(JointComponentPartialSelectionTest, PeelingIncludesDistantHaloThroughInterpolationStencil)
