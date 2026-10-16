@@ -891,8 +891,11 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
             JointEvidenceScope::AssembledGlobal,{}, {},out.initialization.reason});
         return out;
     };
-    if(!input.selection_domain || input.selection_domain->contributor_policy!=FixedHaloContributorPolicy)
-        return invalid("fixed-halo-initialization-unavailable:missing-fixed-halo-policy");
+    const auto policy=input.selection_domain ? input.selection_domain->contributor_policy : std::string{};
+    const bool fixed_halo_policy=policy==FixedHaloContributorPolicy;
+    const bool pure_exclusion_policy=policy==PureHaloSupportExclusionContributorPolicy;
+    if(!fixed_halo_policy && !pure_exclusion_policy)
+        return invalid("fixed-halo-initialization-unavailable:missing-joint-initialization-policy");
     if(initialization.atoms.size()!=input.atom_ids.size() || initialization.b.size()!=input.atom_ids.size())
         return invalid("fixed-halo-initialization-unavailable:contributor-mapping-mismatch");
     if(!initialization.valid)
@@ -900,6 +903,18 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
             initialization.reason : "fixed-halo-initialization-unavailable:"+initialization.reason);
 
     const auto & targets=input.selection_domain->target_indices;
+    if(pure_exclusion_policy)
+    {
+        for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
+        {
+            const auto & record=initialization.atoms[atom];
+            if(record.id!=input.atom_ids[atom] || !record.target)
+                return invalid("fixed-halo-initialization-unavailable:target-contributor-mapping-mismatch");
+        }
+        auto out=n::FitFixedNeighborComponents(problem,initialization.b,{},observer);
+        out.initialization=initialization;
+        return out;
+    }
     std::vector<JointFixedHaloParameter> fixed_halos;
     fixed_halos.reserve(input.atom_ids.size()-targets.size());
     for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
