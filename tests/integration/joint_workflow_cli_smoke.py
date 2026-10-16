@@ -80,8 +80,8 @@ def main() -> int:
                     assert atom["post_joint_local"] is None
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
-        assert saved["schema_version"] == 16
-        assert saved["parameterization_contract"] == "target-only-fixed-halo-v1"
+        assert saved["schema_version"] == 17
+        assert saved["parameterization_contract"] == "target-only-pure-halo-support-exclusion-v1"
         assert saved["metadata"]["solver"]["search_method"] == "fixed-neighbor"
         default_solver = saved["metadata"]["solver"]
         assert {key: default_solver[key] for key in (
@@ -112,13 +112,14 @@ def main() -> int:
             "fixed_neighbor_local_search": "profile-lm",
         }
         assert saved["selection_domain"]["target_indices"] == [0]
-        assert saved["selection_domain"]["contributor_policy"] == "first-stage-fixed-halo-v1"
+        assert saved["selection_domain"]["contributor_policy"] == "pure-halo-support-exclusion-v1"
         assert saved["atom_ids"] == ["1", "2"]
-        assert len(saved["fixed_halos"]) == 1
-        fixed_halo = saved["fixed_halos"][0]
-        assert fixed_halo["atom_id"] == "2"
-        assert fixed_halo["charge"] == 0
-        assert fixed_halo["source_contract"] == "first-stage-mdpde-fixed-halo-v1"
+        assert not saved["fixed_halos"]
+        assert len(saved["halo_median_reconstruction"]["halos"]) == 1
+        median_halo = saved["halo_median_reconstruction"]["halos"][0]
+        assert median_halo["atom_id"] == "2"
+        assert median_halo["source"] in ("group-key-median", "global-target-median")
+        assert median_halo["donor_count"] == 1
         assert saved["initialization"]["data_scope"] == "contributor-local-sampling-may-read-outside-target-domain"
         csv_lines = (root / "joint_atoms_example.csv").read_text().splitlines()
         assert csv_lines[0].endswith(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality")
@@ -126,12 +127,12 @@ def main() -> int:
         assert csv_rows["target"]["Parameterization"] == "JointEstimated"
         assert csv_rows["target"]["StateAvailable"] == "1"
         assert csv_rows["target"]["TargetRuntimeConvergence"] == "passed"
-        assert csv_rows["halo"]["Parameterization"] == "FixedFromFirstStage"
+        assert csv_rows["halo"]["Parameterization"] == "HaloMedianReconstructed"
         assert csv_rows["halo"]["StateAvailable"] == "1"
-        assert csv_rows["halo"]["StopReason"] == "fixed-from-first-stage"
-        assert float(csv_rows["halo"]["A"]) == fixed_halo["amplitude"]
-        assert float(csv_rows["halo"]["B"]) == fixed_halo["width"]
-        assert float(csv_rows["halo"]["C"]) == 0
+        assert csv_rows["halo"]["StopReason"] == median_halo["source"]
+        assert float(csv_rows["halo"]["A"]) == median_halo["amplitude"]
+        assert float(csv_rows["halo"]["B"]) == median_halo["width"]
+        assert float(csv_rows["halo"]["C"]) == median_halo["charge"]
         assert 'target_runtime_convergence' in saved
         metadata = saved["metadata"]
         assert metadata["model_sha256"] == model_hash

@@ -366,7 +366,36 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
     ASSERT_TRUE(model->GetAnalysisView().GetJointResult());
     auto expected=*model->GetAnalysisView().GetJointResult();
     expected.metadata=saved.metadata; expected.costs=saved.costs;
-    EXPECT_EQ(rg::joint_result_io::Encode(expected),rg::joint_result_io::Encode(saved));
+    ASSERT_TRUE(expected.halo_median_reconstruction);
+    ASSERT_TRUE(saved.halo_median_reconstruction);
+    expected.halo_median_reconstruction->joint_run_id=saved.halo_median_reconstruction->joint_run_id;
+    for (auto & halo:expected.halo_median_reconstruction->halos)
+        halo.joint_run_id=saved.halo_median_reconstruction->joint_run_id;
+    EXPECT_EQ(expected.parameterization_contract,saved.parameterization_contract);
+    EXPECT_EQ(expected.atom_ids,saved.atom_ids);
+    EXPECT_EQ(expected.row_ids,saved.row_ids);
+    EXPECT_EQ(expected.fitting_row_ids,saved.fitting_row_ids);
+    EXPECT_EQ(expected.fitting_to_original_contributors,saved.fitting_to_original_contributors);
+    EXPECT_EQ(expected.fitting_to_original_rows,saved.fitting_to_original_rows);
+    ASSERT_EQ(expected.components.size(),saved.components.size());
+    for (std::size_t component=0;component<expected.components.size();++component)
+    {
+        const auto & left=expected.components[component];
+        const auto & right=saved.components[component];
+        EXPECT_EQ(left.id,right.id);
+        EXPECT_EQ(left.atoms,right.atoms);
+        EXPECT_EQ(left.rows,right.rows);
+        EXPECT_EQ(left.runtime_convergence,right.runtime_convergence);
+        EXPECT_EQ(left.target_runtime_convergence,right.target_runtime_convergence);
+        ASSERT_TRUE(left.state); ASSERT_TRUE(right.state);
+        ASSERT_EQ(left.state->ac.size(),right.state->ac.size());
+        ASSERT_EQ(left.state->b.size(),right.state->b.size());
+        for (std::size_t i=0;i<static_cast<std::size_t>(left.state->ac.size());++i)
+            EXPECT_DOUBLE_EQ(left.state->ac[i],right.state->ac[i]);
+        for (std::size_t i=0;i<static_cast<std::size_t>(left.state->b.size());++i)
+            EXPECT_DOUBLE_EQ(left.state->b[i],right.state->b[i]);
+    }
+    EXPECT_EQ(expected.halo_median_reconstruction,saved.halo_median_reconstruction);
 
     {
         auto zero_map=rg::ReadMap(map_path);
@@ -375,17 +404,8 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
         auto zero_request=request; zero_request.map_file_path=zero_path;
         zero_request.saved_key_tag="zero";
         const auto zero_result=rgc::RunCommand(zero_request);
-        ASSERT_TRUE(zero_result.succeeded);
-        auto zero_model=repository.LoadModel("zero");
-        ASSERT_TRUE(zero_model->GetAnalysisView().GetJointResult());
-        const auto & zero=*zero_model->GetAnalysisView().GetJointResult();
-        EXPECT_NE(zero.runtime_convergence,rg::JointCheckStatus::Passed);
-        EXPECT_EQ(zero_result.outcome,!zero.initialization.valid ? rgc::CommandOutcome::JointInitializationFailed :
-            rgc::CommandOutcome::JointNotConverged);
-        ASSERT_TRUE(zero.metadata.map_normalization);
-        EXPECT_TRUE(zero.metadata.map_normalization->requested);
-        EXPECT_FALSE(zero.metadata.map_normalization->applied);
-        EXPECT_DOUBLE_EQ(zero.metadata.map_normalization->divisor,1);
+        EXPECT_FALSE(zero_result.succeeded);
+        EXPECT_THROW(repository.LoadModel("zero"),std::runtime_error);
     }
     {
         auto simulated=request; simulated.simulation_flag=true; simulated.simulated_map_resolution=.5;

@@ -333,3 +333,20 @@ TEST(PureHaloSupportExclusionTest, RunsPureWorkflowWithoutHalos)
     EXPECT_FALSE(result->halo_median_reconstruction);
     EXPECT_EQ(metrics.halo_median_fallback_halos,0u);
 }
+
+TEST(PureHaloSupportExclusionTest, ProductionWorkflowUsesPureExclusionDefault)
+{
+    auto fixture=WorkflowFixture();
+    FitOptions options;
+    options.estimator=PotentialEstimator::JOINT_COMPONENTS;
+    options.quiet_mode=true;
+    options.thread_size=1;
+    ASSERT_NO_THROW(core::RunPotentialFittingWorkflow(fixture.map,fixture.model,options));
+    const auto result=fixture.model.GetAnalysisView().GetJointResult();
+    ASSERT_TRUE(result);
+    EXPECT_EQ(result->parameterization_contract,JointPureHaloSupportExclusionParameterizationContract);
+    ASSERT_TRUE(result->selection_domain);
+    EXPECT_EQ(result->selection_domain->contributor_policy,PureHaloSupportExclusionContributorPolicy);
+    ASSERT_TRUE(result->halo_median_reconstruction);
+    EXPECT_EQ(result->halo_median_reconstruction->halos.size(),2u);
+}

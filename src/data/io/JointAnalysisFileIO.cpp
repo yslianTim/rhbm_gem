@@ -55,13 +55,20 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
             for(std::size_t i=0;i<component.atoms.size();++i) mapping[component.atoms[i]]={&component,i};
         const bool target_only_fixed_halo=
             result.parameterization_contract==JointTargetOnlyFixedHaloParameterizationContract;
+        const bool pure_exclusion=
+            result.parameterization_contract==JointPureHaloSupportExclusionParameterizationContract;
         std::vector<const JointFixedHaloParameter *> fixed_halos(result.atom_ids.size());
         if(target_only_fixed_halo)
             for(const auto & halo:result.fixed_halos) fixed_halos.at(halo.contributor_index)=&halo;
+        std::vector<const JointHaloMedianReconstruction *> median_halos(result.atom_ids.size());
+        if(pure_exclusion && result.halo_median_reconstruction)
+            for(const auto & halo:result.halo_median_reconstruction->halos)
+                median_halos.at(halo.halo_contributor_index)=&halo;
         for(std::size_t atom=0;atom<result.atom_ids.size();++atom)
         {
             const auto [component,original_index]=mapping[atom];
             const auto * fixed_halo=fixed_halos[atom];
+            const auto * median_halo=median_halos[atom];
             auto index=original_index;
             const bool full=group_ids[atom].empty();
             if(component && component->layout && full)
@@ -88,27 +95,34 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
                     {identified=a.status; point_valid=target || a.status==JointCheckStatus::Passed;}
             }
             const bool export_point=full && (target || !component || !component->target_evidence || point_valid);
-            const bool state_available=fixed_halo || (component && component->state && export_point);
+            const bool state_available=fixed_halo || median_halo || (component && component->state && export_point);
             const char * parameterization=full ? "FullABC" : "ObservableContributionOnly";
             if(target_only_fixed_halo)
                 parameterization=fixed_halo ? "FixedFromFirstStage" : target ?
                     state_available ? "JointEstimated" : "TargetOnlyUnestimated" : "FixedHaloUnavailable";
-            const std::string stop_reason=fixed_halo ? "fixed-from-first-stage" :
+            if(pure_exclusion)
+                parameterization=median_halo ? "HaloMedianReconstructed" : target ?
+                    state_available ? "JointEstimated" : "TargetOnlyUnestimated" : "HaloReconstructionUnavailable";
+            const std::string stop_reason=fixed_halo ? "fixed-from-first-stage" : median_halo ?
+                median_halo->source==HaloMedianSource::GroupKeyMedian ? "group-key-median" : "global-target-median" :
                 target_only_fixed_halo && !target ? "fixed-halo-unavailable" :
+                pure_exclusion && !target ? "halo-reconstruction-unavailable" :
                 component ? component->stop_reason : result.initialization.reason;
-            const auto runtime_convergence=fixed_halo ? JointCheckStatus::NotRun :
+            const auto runtime_convergence=fixed_halo || median_halo ? JointCheckStatus::NotRun :
                 component && full ? component->runtime_convergence : JointCheckStatus::Unavailable;
-            const auto regular_certificate=fixed_halo ? JointCheckStatus::NotRun :
+            const auto regular_certificate=fixed_halo || median_halo ? JointCheckStatus::NotRun :
                 component ? component->regular_certificate : result.regular_certificate;
-            const auto target_convergence=fixed_halo ? JointCheckStatus::NotRun :
+            const auto target_convergence=fixed_halo || median_halo ? JointCheckStatus::NotRun :
                 component ? component->target_runtime_convergence : JointCheckStatus::NotRun;
-            const std::string point_quality_output=target_only_fixed_halo && !target ? "NotApplicable" :
+            const std::string point_quality_output=(target_only_fixed_halo || pure_exclusion) && !target ? "NotApplicable" :
                 component && component->target_evidence &&
                 component->target_evidence->contract==JointTargetPointValidationContractVersion ?
                 point_quality : std::string(joint_result_io::StatusText(identified));
             csv_file << CsvText(result.atom_ids[atom]) << ',' << CsvText(component ? component->id : "") << ',';
             if(fixed_halo)
                 csv_file << fixed_halo->amplitude << ',' << fixed_halo->width << ',' << fixed_halo->charge;
+            else if(median_halo)
+                csv_file << median_halo->amplitude << ',' << median_halo->width << ',' << median_halo->charge;
             else if(component && component->state && export_point)
             {
                 const auto & state=*component->state;

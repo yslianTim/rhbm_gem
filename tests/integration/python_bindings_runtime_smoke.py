@@ -253,7 +253,7 @@ def assert_joint_workflow() -> None:
         export.output_dir = root
         assert m.RunCommand(export).succeeded
         saved = json.loads((root / "joint_result_model.json").read_text())
-        assert saved["schema_version"] == 16
+        assert saved["schema_version"] == 17
         assert saved["selection_domain"]["target_indices"] == [0]
         assert saved["atom_ids"] == ["1", "2"]
         assert saved["metadata"]["model_sha256"] == model_hash
@@ -264,11 +264,11 @@ def assert_joint_workflow() -> None:
         assert normalization["divisor"] > 0
         assert len(saved["metadata"]["software"]["build_sha256"]) == 64
         assert saved["regular_certificate"] == "not-run"
-        assert saved["parameterization_contract"] == "target-only-fixed-halo-v1"
+        assert saved["parameterization_contract"] == "target-only-pure-halo-support-exclusion-v1"
         assert saved["assembled_state"] is not None
-        assert len(saved["fixed_halos"]) == 1
-        assert saved["fixed_halos"][0]["atom_id"] == "2"
-        assert saved["fixed_halos"][0]["charge"] == 0
+        assert not saved["fixed_halos"]
+        assert len(saved["halo_median_reconstruction"]["halos"]) == 1
+        assert saved["halo_median_reconstruction"]["halos"][0]["atom_id"] == "2"
         assert saved["components"]
         assert saved["components"][0]["state"] is not None
         assert saved["components"][0]["stop_reason"] == "block-stationary"

@@ -319,6 +319,16 @@ void RunJointComponentWorkflow(
     if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model));
     RunJointGroupPotentialFitting(model, options, &postprocessing_metrics);
     postprocessing_metrics.rss_after_group_bytes = joint_component::CurrentRssBytes();
+    if (!options.quiet_mode && pure_exclusion)
+    {
+        std::ostringstream message;
+        message << "[Joint] Halo median audit: valid_targets="
+            << postprocessing_metrics.halo_median_valid_target_count
+            << ", same_group_halos=" << postprocessing_metrics.halo_median_same_group_halos
+            << ", global_fallback_halos=" << postprocessing_metrics.halo_median_fallback_halos
+            << ", fallback_support_rows=" << postprocessing_metrics.halo_median_fallback_support_rows;
+        LogJointInfo(message.str());
+    }
     postprocessing_metrics.total_postprocessing_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - postprocessing_start).count();
     if (!options.quiet_mode) LogJointInfo("[Joint] Completed.");
@@ -336,7 +346,7 @@ void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const Fit
         detail::RunTwoStageWorkflow(map, model, options);
         return;
     case PotentialEstimator::JOINT_COMPONENTS:
-        detail::RunJointComponentWorkflow(map, model, options);
+        detail::RunJointComponentWorkflow(map, model, options, nullptr, true);
         return;
     }
     throw std::invalid_argument("Unsupported potential estimator.");
