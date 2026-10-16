@@ -208,7 +208,9 @@ void Run(const Path & model_path, const Path & map_path, const Path & sidecar_pa
         const auto & run = run_value.as_object();
         const std::string method = json::value_to<std::string>(run.at("method"));
         const double radius = run.at("radius_angstrom").as_double();
-        const auto retained = method == "A" ? audit::RowMask(row_count, 1) : audit::RetainedRows(nearest_rows, radius);
+        const auto retained = method == "A" ? audit::RowMask(row_count, 1) :
+            method == "B" && radius == 2.5 ? audit::HaloSupportExclusionRows(input) :
+            audit::RetainedRows(nearest_rows, radius);
         std::vector<std::string> retained_ids;
         retained_ids.reserve(row_count);
         for (std::size_t row = 0; row < row_count; ++row) if (retained[row]) retained_ids.push_back(input.row_ids[row]);
@@ -219,6 +221,17 @@ void Run(const Path & model_path, const Path & map_path, const Path & sidecar_pa
         std::vector<double> estimated_target(row_count);
         std::vector<double> run_first_stage_halo(row_count);
         std::size_t fixed_halo_count{};
+        std::map<std::string, std::array<double, 2>> run_fixed_halos;
+        if (const auto * fixed_values = run.if_contains("fixed_halos"))
+            for (const auto & fixed_value : fixed_values->as_array())
+            {
+                const auto & fixed = fixed_value.as_object();
+                if (!fixed.at("first_stage_fit_qualified").as_bool() ||
+                    fixed.at("charge").as_double() != 0.0)
+                    throw std::runtime_error("Controlled fit contains an unqualified fixed Halo.");
+                run_fixed_halos.emplace(json::value_to<std::string>(fixed.at("atom_id")),
+                    std::array<double, 2>{fixed.at("amplitude").as_double(), fixed.at("width").as_double()});
+            }
         if (method == "A" || method == "C")
             for (std::size_t contributor = 0; contributor < input.atom_ids.size(); ++contributor)
             {
@@ -228,51 +241,90 @@ void Run(const Path & model_path, const Path & map_path, const Path & sidecar_pa
                     std::any_of(support.begin(), support.end(), [&](const auto & entry) { return retained[entry.row]; });
                 if (!retained_support) continue;
                 ++fixed_halo_count;
-                const auto & seed = initialization.atoms.at(contributor);
+                const auto found = run_fixed_halos.find(input.atom_ids[contributor]);
+                const double amplitude = found != run_fixed_halos.end() ? found->second[0] :
+                    initialization.atoms.at(contributor).mdpde[0];
+                const double width = found != run_fixed_halos.end() ? found->second[1] :
+                    initialization.atoms.at(contributor).mdpde[1];
                 for (const auto & entry : support)
-                    run_first_stage_halo[entry.row] += seed.mdpde[0] *
-                        joint::EvaluateKernel(entry.squared_distance, seed.mdpde[1], 2.5).gaussian;
+                    run_first_stage_halo[entry.row] += amplitude *
+                        joint::EvaluateKernel(entry.squared_distance, width, 2.5).gaussian;
             }
         std::map<std::string, std::array<double, 3>> estimates;
-        std::map<std::string, std::string> point_quality;
+        std::map<std::string, std::string> point_quality, parameter_validity, local_conditioning, parameter_stability;
         for (const auto & target_value : run.at("targets").as_array())
         {
             const auto & target = target_value.as_object();
             const std::string id = json::value_to<std::string>(target.at("atom_id"));
-            if (target.at("amplitude").is_null() || target.at("charge").is_null() || target.at("width").is_null())
-                throw std::runtime_error("Controlled fit contains a target without a final estimate.");
-            estimates[id] = {target.at("amplitude").as_double(), target.at("charge").as_double(), target.at("width").as_double()};
+            if (!target.at("amplitude").is_null() && !target.at("charge").is_null() && !target.at("width").is_null())
+                estimates[id] = {target.at("amplitude").as_double(), target.at("charge").as_double(), target.at("width").as_double()};
             point_quality[id] = json::value_to<std::string>(target.at("point_quality"));
+            parameter_validity[id] = json::value_to<std::string>(target.at("parameter_validity"));
+            local_conditioning[id] = json::value_to<std::string>(target.at("local_conditioning"));
+            parameter_stability[id] = json::value_to<std::string>(target.at("parameter_stability"));
         }
-        std::map<std::string, std::size_t> quality_counts;
-        for (const auto & [id, quality] : point_quality) { (void)id; ++quality_counts[quality]; }
-        json::object quality_count_json;
-        for (const auto & [quality, count] : quality_counts) quality_count_json[quality] = count;
+        const auto count_statuses = [](const auto & statuses) {
+            std::map<std::string, std::size_t> counts;
+            for (const auto & [id, status] : statuses) { (void)id; ++counts[status]; }
+            json::object result;
+            for (const auto & [status, count] : counts) result[status] = count;
+            return result;
+        };
 
         std::vector<double> amplitude_errors, width_errors, charge_errors;
+        std::vector<double> qualified_amplitude_errors, qualified_width_errors, qualified_charge_errors;
         std::map<std::string, std::vector<double>> strata_a, strata_b, strata_c;
         json::array target_records;
+        std::size_t targets_without_estimate{}, qualified_target_estimates{};
+        bool complete_target_estimate_set = true;
         for (std::size_t target = 0; target < target_indices.size(); ++target)
         {
             const auto contributor = target_indices[target];
             const auto & id = input.atom_ids.at(contributor);
-            const auto estimate = estimates.at(id);
             const auto & reference = truth.at(id);
-            const double error_a = estimate[0] * map_divisor - reference.element;
-            const double error_c = estimate[1] * map_divisor - reference.charge;
-            const double error_b = estimate[2] - reference.width;
             const double distance = target_halo_distances.at(target);
             const std::string stratum = DistanceStratum(distance);
-            amplitude_errors.push_back(error_a); width_errors.push_back(error_b); charge_errors.push_back(error_c);
-            strata_a[stratum].push_back(error_a); strata_b[stratum].push_back(error_b); strata_c[stratum].push_back(error_c);
-            target_records.emplace_back(json::object{{"atom_id", id}, {"nearest_halo_distance", Number(distance)},
+            const auto found = estimates.find(id);
+            complete_target_estimate_set &= found != estimates.end();
+            if (found == estimates.end()) ++targets_without_estimate;
+            const bool qualified = found != estimates.end() && point_quality.at(id) == "Available" &&
+                parameter_validity.at(id) == "Passed" && local_conditioning.at(id) == "Adequate" &&
+                parameter_stability.at(id) == "Stable";
+            if (qualified) ++qualified_target_estimates;
+            json::object record{{"atom_id", id}, {"nearest_halo_distance", Number(distance)},
                 {"distance_stratum", stratum}, {"point_quality", point_quality.at(id)},
-                {"A_error_raw_units", error_a}, {"B_error_angstrom", error_b}, {"C_error_raw_units", error_c}});
-            for (const auto & support : input.support[contributor])
+                {"parameter_validity", parameter_validity.at(id)},
+                {"local_conditioning", local_conditioning.at(id)},
+                {"parameter_stability", parameter_stability.at(id)},
+                {"qualified_estimate", qualified},
+                {"A_truth_raw_units", reference.element},
+                {"B_truth_angstrom", reference.width},
+                {"C_truth_raw_units", reference.charge},
+                {"A_estimate_raw_units", nullptr}, {"B_estimate_angstrom", nullptr},
+                {"C_estimate_raw_units", nullptr}, {"A_error_raw_units", nullptr},
+                {"B_error_angstrom", nullptr}, {"C_error_raw_units", nullptr}};
+            if (found != estimates.end())
             {
-                const auto basis = joint::EvaluateKernel(support.squared_distance, estimate[2], 2.5);
-                estimated_target[support.row] += estimate[0] * basis.gaussian + estimate[1] * basis.charge;
+                const auto & estimate = found->second;
+                const double error_a = estimate[0] * map_divisor - reference.element;
+                const double error_c = estimate[1] * map_divisor - reference.charge;
+                const double error_b = estimate[2] - reference.width;
+                amplitude_errors.push_back(error_a); width_errors.push_back(error_b); charge_errors.push_back(error_c);
+                strata_a[stratum].push_back(error_a); strata_b[stratum].push_back(error_b); strata_c[stratum].push_back(error_c);
+                if (qualified)
+                {
+                    qualified_amplitude_errors.push_back(error_a);
+                    qualified_width_errors.push_back(error_b);
+                    qualified_charge_errors.push_back(error_c);
+                }
+                record["A_estimate_raw_units"] = estimate[0] * map_divisor;
+                record["B_estimate_angstrom"] = estimate[2];
+                record["C_estimate_raw_units"] = estimate[1] * map_divisor;
+                record["A_error_raw_units"] = error_a;
+                record["B_error_angstrom"] = error_b;
+                record["C_error_raw_units"] = error_c;
             }
+            target_records.emplace_back(std::move(record));
         }
         json::object strata;
         for (const auto & [name, ignored] : strata_a)
@@ -286,6 +338,7 @@ void Run(const Path & model_path, const Path & map_path, const Path & sidecar_pa
             retained_target_error, excluded_target_error;
         for (std::size_t row = 0; row < row_count; ++row)
         {
+            if (!complete_target_estimate_set) break;
             const double halo = run_first_stage_halo[row];
             const double actual_residual = estimated_target[row] + halo - input.observations[row];
             const double oracle_residual = estimated_target[row] + true_halo[row] - input.observations[row];
@@ -308,10 +361,19 @@ void Run(const Path & model_path, const Path & map_path, const Path & sidecar_pa
         const auto target_quality = run.at("target_runtime_convergence");
         runs.emplace_back(json::object{{"method", method}, {"radius_angstrom", radius},
             {"runtime_convergence", quality}, {"target_runtime_convergence", target_quality},
+            {"elapsed_seconds", run.at("elapsed_seconds")}, {"peak_rss_bytes", run.at("peak_rss_bytes")},
             {"observation_count", retained_ids.size()}, {"excluded_count", row_count - retained_ids.size()},
             {"target_count", target_indices.size()}, {"fixed_halo_count", fixed_halo_count},
-            {"point_quality_counts", std::move(quality_count_json)},
-            {"parameter_errors", ErrorStatistics(amplitude_errors, width_errors, charge_errors)},
+            {"targets_without_finite_estimate", targets_without_estimate},
+            {"qualified_target_estimate_count", qualified_target_estimates},
+            {"prediction_diagnostics_available", complete_target_estimate_set},
+            {"point_quality_counts", count_statuses(point_quality)},
+            {"parameter_validity_counts", count_statuses(parameter_validity)},
+            {"local_conditioning_counts", count_statuses(local_conditioning)},
+            {"parameter_stability_counts", count_statuses(parameter_stability)},
+            {"finite_candidate_parameter_errors", ErrorStatistics(amplitude_errors, width_errors, charge_errors)},
+            {"qualified_parameter_errors", ErrorStatistics(qualified_amplitude_errors,
+                qualified_width_errors, qualified_charge_errors)},
             {"target_halo_distance_strata", std::move(strata)}, {"per_target_errors", std::move(target_records)},
             {"prediction_errors_normalized_map_units", json::object{
                 {"target_only_original", StatisticsJson(Summarize(target_prediction_error))},
@@ -329,7 +391,8 @@ void Run(const Path & model_path, const Path & map_path, const Path & sidecar_pa
         {"model_sha256", json::value_to<std::string>(sidecar.at("source").as_object().at("model_sha256"))},
         {"map_sha256", json::value_to<std::string>(sidecar.at("output").as_object().at("map_sha256"))},
         {"map_normalization_divisor", map_divisor}, {"original_observation_count", row_count},
-        {"original_observation_scale", problem.ObservationScale()}, {"target_count", target_indices.size()},
+        {"original_observation_scale", problem.ObservationScale()}, {"fit_noise", fits.at("noise")},
+        {"target_count", target_indices.size()},
         {"supported_halo_count", input.atom_ids.size() - target_indices.size()},
         {"sidecar_truth_reconstruction_rmse_normalized_map_units", truth_rmse},
         {"distance_strata_angstrom", json::array{"<2.5", "2.5-5.0", ">=5.0"}},

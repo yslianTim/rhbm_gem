@@ -65,11 +65,18 @@ struct MaskedInput
     std::vector<std::size_t> source_contributors;
 };
 
+struct NoiseSummary
+{
+    double mean{}, standard_deviation{};
+};
+
 std::vector<double> NearestHaloDistances(std::span<const Position> observations,
     std::span<const Position> halos);
 RowMask RetainedRows(std::span<const double> nearest_halo_distances, double radius);
 // A row is excluded exactly when a non-target contributor has support on it.
 RowMask HaloSupportExclusionRows(const rhbm_gem::core::JointProblemInput &);
+NoiseSummary FillGaussianNoise(std::span<const double> source, std::span<double> destination,
+    double sigma, std::uint64_t seed);
 MaskedInput BuildMaskedInput(const rhbm_gem::core::JointProblemInput &,
     std::span<const std::uint8_t> retained_rows, bool retain_halos);
 CoverageSummary AnalyzeCoverage(const rhbm_gem::core::JointProblemInput &,

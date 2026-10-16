@@ -6,9 +6,11 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <boost/json.hpp>
+#include <boost/hash2/sha2.hpp>
 #include <Eigen/Core>
 #include <algorithm>
 #include <chrono>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -19,8 +21,10 @@
 #include <limits>
 #include <map>
 #include <numeric>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
+#include <string_view>
 #ifndef _WIN32
 #include <sys/resource.h>
 #endif
@@ -33,6 +37,12 @@ namespace joint = core::joint_component;
 using Path = std::filesystem::path;
 using Clock = std::chrono::steady_clock;
 constexpr std::array<double, 3> ExperimentRadii{1.0, 2.0, 2.5};
+
+struct NoiseSettings
+{
+    double sigma{};
+    std::uint64_t seed{};
+};
 
 json::value Number(double value)
 { return std::isfinite(value) ? json::value(value) : json::value(nullptr); }
@@ -72,6 +82,41 @@ std::uint64_t RowIdentityHash(const std::vector<std::string> & row_ids)
     return hash;
 }
 
+struct AppliedNoise
+{
+    std::string digest;
+    audit::NoiseSummary summary;
+};
+
+AppliedNoise AddNormalizedMapNoise(rhbm_gem::MapObject & map, const NoiseSettings & settings)
+{
+    if (!std::isfinite(settings.sigma) || settings.sigma < 0.0)
+        throw std::invalid_argument("Noise sigma must be finite and nonnegative.");
+    boost::hash2::sha2_256 hash;
+    constexpr std::string_view tag = "normalized-full-map-voxels-gaussian-noise-v1";
+    hash.update(tag.data(), tag.size());
+    for (unsigned shift = 0; shift < 64; shift += 8)
+    {
+        const auto byte = static_cast<unsigned char>((settings.seed >> shift) & 0xff);
+        hash.update(&byte, 1);
+    }
+    const std::size_t voxel_count = map.GetMapValueArraySize();
+    auto array = std::make_unique<double[]>(voxel_count);
+    const auto summary = audit::FillGaussianNoise(
+        std::span<const double>(map.GetMapValueArray(), voxel_count),
+        std::span<double>(array.get(), voxel_count), settings.sigma, settings.seed);
+    for (std::size_t index = 0; index < voxel_count; ++index)
+    {
+        const auto bits = std::bit_cast<std::uint64_t>(array[index]);
+        std::array<unsigned char, 8> bytes{};
+        for (unsigned byte = 0; byte < bytes.size(); ++byte)
+            bytes[byte] = static_cast<unsigned char>((bits >> (8 * byte)) & 0xff);
+        hash.update(bytes.data(), bytes.size());
+    }
+    map.SetMapValueArray(std::move(array));
+    return {boost::hash2::to_string(hash.result()), summary};
+}
+
 std::size_t PeakRssBytes()
 {
 #ifdef _WIN32
@@ -109,7 +154,7 @@ json::object FitJson(const std::string & method, double radius, const core::Join
 {
     const auto & input = problem.Input();
     std::size_t sweeps{};
-    json::array components, evidence, targets;
+    json::array components, evidence, targets, fixed_halos;
     for (const auto & component : fit.components)
     {
         sweeps += component.search_sweeps;
@@ -178,6 +223,12 @@ json::object FitJson(const std::string & method, double radius, const core::Join
             {"value", check.value ? Number(*check.value) : json::value(nullptr)},
             {"threshold", check.threshold ? Number(*check.threshold) : json::value(nullptr)},
             {"reason", check.reason}});
+    for (const auto & fixed : problem.FixedHalos())
+        fixed_halos.emplace_back(json::object{{"atom_id", fixed.atom_id},
+            {"contributor_index", fixed.contributor_index}, {"amplitude", fixed.amplitude},
+            {"width", fixed.width}, {"charge", fixed.charge},
+            {"first_stage_sample_count", fixed.first_stage_sample_count},
+            {"first_stage_fit_qualified", fixed.first_stage_fit_qualified}});
 
     const auto & target_indices = input.selection_domain->target_indices;
     for (std::size_t target = 0; target < target_indices.size(); ++target)
@@ -227,6 +278,7 @@ json::object FitJson(const std::string & method, double radius, const core::Join
     return {{"method", method}, {"radius_angstrom", radius}, {"observation_count", input.observations.size()},
         {"target_count", target_indices.size()}, {"halo_count", retained_halos},
         {"contributor_policy", input.selection_domain->contributor_policy},
+        {"fixed_halos", std::move(fixed_halos)},
         {"row_ids_fnv1a64", row_hash.str()}, {"observation_scale", problem.ObservationScale()},
         {"elapsed_seconds", elapsed_seconds}, {"peak_rss_bytes", PeakRssBytes()},
         {"search_completed", fit.search_completed}, {"search_sweeps", sweeps},
@@ -245,11 +297,20 @@ json::object FitJson(const std::string & method, double radius, const core::Join
 json::object ExceptionJson(const std::string & method, double radius, const std::string & message)
 { return {{"method", method}, {"radius_angstrom", radius}, {"status", "exception"}, {"error", message}}; }
 
-void Run(const Path & model_path, const Path & map_path, const Path & output_path)
+void Run(const Path & model_path, const Path & map_path, const Path & output_path,
+    std::optional<NoiseSettings> noise = std::nullopt)
 {
     auto model = rhbm_gem::ReadModel(model_path);
     auto map = rhbm_gem::ReadMap(map_path);
     const auto normalization = map->MapValueArrayNormalization();
+    std::optional<std::string> noise_digest;
+    std::optional<audit::NoiseSummary> noise_summary;
+    if (noise)
+    {
+        const auto applied = AddNormalizedMapNoise(*map, *noise);
+        noise_digest = applied.digest;
+        noise_summary = applied.summary;
+    }
     model->SelectAtoms([](const rhbm_gem::AtomObject & atom) {
         return atom.GetElement() != Element::HYDROGEN && atom.GetChainID() == "A";
     });
@@ -280,6 +341,12 @@ void Run(const Path & model_path, const Path & map_path, const Path & output_pat
         {"target_count", targets.size()}, {"halo_count", halos.size()},
         {"original_observation_count", original_input.observations.size()},
         {"original_observation_scale", original_problem.ObservationScale()},
+        {"noise", noise ? json::value(json::object{{"layer", "full normalized map voxels before FirstStage and Joint construction"},
+            {"distribution", "independent N(0,sigma^2)"}, {"sigma_normalized_map_units", noise->sigma},
+            {"seed", noise->seed}, {"realization_sha256", *noise_digest},
+            {"realized_mean", noise_summary->mean},
+            {"realized_standard_deviation", noise_summary->standard_deviation},
+            {"first_stage_uses_same_noisy_map", true}}) : json::value(nullptr)},
         {"first_stage_initialization_valid", initialization.valid},
         {"first_stage_initialization_reason", initialization.reason},
         {"first_stage_halos_qualified", static_cast<std::size_t>(std::count_if(initialization.atoms.begin(), initialization.atoms.end(),
@@ -322,9 +389,25 @@ void Run(const Path & model_path, const Path & map_path, const Path & output_pat
     std::iota(original_contributors.begin(), original_contributors.end(), 0);
     execute("A", 0.0, original_contributors,
         [&] { return core::FitJointComponentsInitialized(original_problem, initialization); });
-    for (const double radius : ExperimentRadii)
+    if (noise)
     {
-        const auto retained = audit::RetainedRows(halo_distances, radius);
+        const std::array<std::pair<std::string, audit::RowMask>, 2> comparisons{{
+            {"B", audit::HaloSupportExclusionRows(original_input)},
+            {"R2", audit::RetainedRows(halo_distances, 2.0)}}};
+        for (const auto & [method, retained] : comparisons)
+        {
+            const double radius = method == "B" ? 2.5 : 2.0;
+            auto targets_only = audit::BuildMaskedInput(original_input, retained, false);
+            auto b_problem = core::JointProblem(std::move(targets_only.input));
+            b_problem = core::JointProblemAccess::WithReferenceNormalization(b_problem, original_problem);
+            execute(method, radius, targets_only.source_contributors,
+                [&] { return core::FitJointComponents(b_problem, widths); });
+        }
+    }
+    else for (const double radius : ExperimentRadii)
+    {
+        const auto retained = radius == 2.5 ? audit::HaloSupportExclusionRows(original_input) :
+            audit::RetainedRows(halo_distances, radius);
         auto targets_only = audit::BuildMaskedInput(original_input, retained, false);
         auto b_problem = core::JointProblem(std::move(targets_only.input));
         b_problem = core::JointProblemAccess::WithReferenceNormalization(b_problem, original_problem);
@@ -359,8 +442,11 @@ int main(int argc, char ** argv)
     try
     {
         Eigen::setNbThreads(1);
-        if (argc != 4) throw std::invalid_argument("Usage: joint_halo_observation_exclusion_fit MODEL MAP OUTPUT.json");
-        Run(argv[1], argv[2], argv[3]);
+        if (argc != 4 && argc != 6)
+            throw std::invalid_argument("Usage: joint_halo_observation_exclusion_fit MODEL MAP OUTPUT.json [NOISE_SIGMA SEED]");
+        std::optional<NoiseSettings> noise;
+        if (argc == 6) noise = NoiseSettings{std::stod(argv[4]), std::stoull(argv[5])};
+        Run(argv[1], argv[2], argv[3], noise);
         return 0;
     }
     catch (const std::exception & error)

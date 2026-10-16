@@ -5,6 +5,7 @@
 #include <Eigen/SVD>
 #include <limits>
 #include <numeric>
+#include <random>
 #include <stdexcept>
 
 namespace joint_test::halo_exclusion {
@@ -134,6 +135,29 @@ RowMask HaloSupportExclusionRows(const rhbm_gem::core::JointProblemInput & input
         }
     }
     return retained;
+}
+
+NoiseSummary FillGaussianNoise(std::span<const double> source, std::span<double> destination,
+    double sigma, std::uint64_t seed)
+{
+    if (source.size() != destination.size() || !std::isfinite(sigma) || sigma < 0.0 ||
+        !std::all_of(source.begin(), source.end(), [](double value) { return std::isfinite(value); }))
+        throw std::invalid_argument("Invalid Gaussian observation-noise input.");
+    std::mt19937_64 generator(seed);
+    std::normal_distribution<double> normal(0.0, sigma > 0.0 ? sigma : 1.0);
+    long double sum{}, sum_square{};
+    for (std::size_t index = 0; index < source.size(); ++index)
+    {
+        const double perturbation = sigma == 0.0 ? 0.0 : normal(generator);
+        destination[index] = source[index] + perturbation;
+        sum += perturbation;
+        sum_square += static_cast<long double>(perturbation) * perturbation;
+    }
+    if (source.empty()) return {};
+    const long double count = static_cast<long double>(source.size());
+    const double mean = static_cast<double>(sum / count);
+    const double variance = std::max(0.0, static_cast<double>(sum_square / count) - mean * mean);
+    return {mean, std::sqrt(variance)};
 }
 
 MaskedInput BuildMaskedInput(const rhbm_gem::core::JointProblemInput & source,

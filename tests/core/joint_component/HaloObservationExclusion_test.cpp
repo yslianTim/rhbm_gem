@@ -116,6 +116,19 @@ TEST(JointHaloObservationExclusionTest, ExactSupportMaskCanFragmentSharedTargetR
     EXPECT_EQ(summary.targets[1].retained_rows, 1u);
 }
 
+TEST(JointHaloObservationExclusionTest, GaussianNoiseIsPairedAndReproducibleForAFixedSeed)
+{
+    const std::vector<double> clean(10000, 0.0);
+    std::vector<double> first(clean.size()), repeated(clean.size()), other_seed(clean.size());
+    const auto summary = FillGaussianNoise(clean, first, 0.05, 17);
+    EXPECT_EQ(FillGaussianNoise(clean, repeated, 0.05, 17).standard_deviation, summary.standard_deviation);
+    EXPECT_EQ(first, repeated);
+    FillGaussianNoise(clean, other_seed, 0.05, 19);
+    EXPECT_NE(first, other_seed);
+    EXPECT_NEAR(summary.mean, 0.0, 0.001);
+    EXPECT_NEAR(summary.standard_deviation, 0.05, 0.001);
+}
+
 TEST(JointHaloObservationExclusionTest, CoverageCountsSharedRowsMixedRowsRadialShellsAndFragmentation)
 {
     rhbm_gem::core::JointProblemInput input;
