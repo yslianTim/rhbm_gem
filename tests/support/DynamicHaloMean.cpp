@@ -1,14 +1,17 @@
 #include "DynamicHaloMean.hpp"
+#include "core/detail/joint_component/Numerics.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <set>
 #include <stdexcept>
+#include <unordered_map>
 #include <utility>
 
 namespace joint_test::dynamic_halo {
 namespace {
+bool IncludesCharge(const Mode mode) {return mode!=Mode::AB;}
 std::vector<std::size_t> UniqueRows(const rhbm_gem::core::JointProblemInput & input,
     std::size_t atom)
 {
@@ -146,6 +149,165 @@ Ownership BuildOwnership(const rhbm_gem::core::JointProblemInput & input, std::v
         return a.halo<b.halo;
     });
     return result;
+}
+
+AugmentedDesign BuildAugmentedDesign(const rhbm_gem::core::JointProblemInput & input,
+    const Ownership & ownership,std::size_t block,std::span<const Parameters> target_parameters,Mode mode)
+{
+    if(block>=ownership.blocks.size() || target_parameters.size()!=input.atom_ids.size())
+        throw std::invalid_argument("Invalid Dynamic Halo block design input.");
+    const auto & targets=ownership.blocks[block].targets;
+    const auto & halos=ownership.block_halos[block];
+    AugmentedDesign result;
+    result.rows=ownership.block_dynamic_rows.at(block);
+    result.values=Eigen::MatrixXd::Zero(static_cast<Eigen::Index>(result.rows.size()),
+        static_cast<Eigen::Index>(2*targets.size()));
+    std::unordered_map<std::size_t,Eigen::Index> local_rows;
+    local_rows.reserve(result.rows.size());
+    for(std::size_t row=0;row<result.rows.size();++row)
+        local_rows.emplace(result.rows[row],static_cast<Eigen::Index>(row));
+    const auto add=[&](std::size_t atom,std::size_t target_slot,double width,double amplitude_share) {
+        for(const auto & support:input.support.at(atom))
+        {
+            const auto row=local_rows.find(support.row);
+            if(row==local_rows.end()) throw std::logic_error("Dynamic Halo block omitted a supported row.");
+            const auto basis=rhbm_gem::core::joint_component::EvaluateKernel(support.squared_distance,width,2.5);
+            result.values(row->second,static_cast<Eigen::Index>(2*target_slot))+=amplitude_share*basis.gaussian;
+            if(mode==Mode::ABC || atom==targets[target_slot])
+                result.values(row->second,static_cast<Eigen::Index>(2*target_slot+1))+=amplitude_share*basis.charge;
+        }
+    };
+    for(std::size_t slot=0;slot<targets.size();++slot)
+        add(targets[slot],slot,target_parameters[targets[slot]].b,1.0);
+    std::vector<Parameters> members;
+    members.reserve(targets.size());
+    for(const auto target:targets) members.push_back(target_parameters[target]);
+    if(mode!=Mode::StaticABC)
+    {
+        const auto mean=Mean(members,IncludesCharge(mode));
+        const double share=1.0/static_cast<double>(targets.size());
+        for(const auto halo:halos)
+            for(std::size_t slot=0;slot<targets.size();++slot) add(halo,slot,mean.b,share);
+    }
+    return result;
+}
+
+Eigen::MatrixXd CoupledWidthJacobian(const rhbm_gem::core::JointProblemInput & input,
+    const Ownership & ownership,std::size_t block,std::span<const Parameters> target_parameters,
+    const Eigen::VectorXd & beta,Mode mode)
+{
+    if(block>=ownership.blocks.size() || target_parameters.size()!=input.atom_ids.size())
+        throw std::invalid_argument("Invalid Dynamic Halo width Jacobian input.");
+    const auto & targets=ownership.blocks[block].targets;
+    if(beta.size()!=static_cast<Eigen::Index>(2*targets.size()))
+        throw std::invalid_argument("Dynamic Halo width Jacobian coefficient dimension mismatch.");
+    const auto & halos=ownership.block_halos[block];
+    const auto & rows=ownership.block_dynamic_rows[block];
+    Eigen::MatrixXd result=Eigen::MatrixXd::Zero(static_cast<Eigen::Index>(rows.size()),
+        static_cast<Eigen::Index>(targets.size()));
+    std::unordered_map<std::size_t,Eigen::Index> local_rows;
+    local_rows.reserve(rows.size());
+    for(std::size_t row=0;row<rows.size();++row)
+        local_rows.emplace(rows[row],static_cast<Eigen::Index>(row));
+    for(std::size_t slot=0;slot<targets.size();++slot)
+    {
+        const auto target=targets[slot];
+        for(const auto & support:input.support.at(target))
+        {
+            const auto row=local_rows.at(support.row);
+            const auto basis=rhbm_gem::core::joint_component::EvaluateKernel(support.squared_distance,
+                target_parameters[target].b,2.5);
+            result(row,static_cast<Eigen::Index>(slot))+=beta(static_cast<Eigen::Index>(2*slot))*basis.gaussian_log_width+
+                beta(static_cast<Eigen::Index>(2*slot+1))*basis.charge_log_width;
+        }
+    }
+    if(!halos.empty() && mode!=Mode::StaticABC)
+    {
+        std::vector<Parameters> members;
+        members.reserve(targets.size());
+        for(const auto target:targets) members.push_back(target_parameters[target]);
+        const auto mean=Mean(members,IncludesCharge(mode));
+        const double share=1.0/static_cast<double>(targets.size());
+        for(std::size_t slot=0;slot<targets.size();++slot)
+        {
+            const double chain=target_parameters[targets[slot]].b*share/mean.b;
+            const double halo_a=mean.a;
+            const double halo_c=mode==Mode::AB ? 0.0 : mean.c;
+            for(const auto halo:halos)
+                for(const auto & support:input.support.at(halo))
+                {
+                    const auto row=local_rows.at(support.row);
+                    const auto basis=rhbm_gem::core::joint_component::EvaluateKernel(support.squared_distance,mean.b,2.5);
+                    result(row,static_cast<Eigen::Index>(slot))+=chain*(halo_a*basis.gaussian_log_width+
+                        halo_c*basis.charge_log_width);
+                }
+        }
+    }
+    return result;
+}
+
+std::vector<Parameters> DeriveHalos(const rhbm_gem::core::JointProblemInput & input,
+    const Ownership & ownership,std::span<const Parameters> target_parameters,Mode mode)
+{
+    if(target_parameters.size()!=input.atom_ids.size())
+        throw std::invalid_argument("Dynamic Halo state does not cover every contributor.");
+    auto result=std::vector<Parameters>(target_parameters.begin(),target_parameters.end());
+    for(const auto & owner:ownership.halos)
+    {
+        const auto & targets=ownership.blocks.at(owner.owner_block).targets;
+        std::vector<Parameters> members;
+        members.reserve(targets.size());
+        for(const auto target:targets) members.push_back(target_parameters[target]);
+        result[owner.halo]=Mean(members,IncludesCharge(mode));
+    }
+    return result;
+}
+
+std::vector<double> ReplayPrediction(const rhbm_gem::core::JointProblemInput & input,
+    std::span<const Parameters> parameters)
+{
+    if(parameters.size()!=input.atom_ids.size())
+        throw std::invalid_argument("Dynamic Halo replay state does not cover every contributor.");
+    std::vector<double> result(input.observations.size());
+    for(std::size_t atom=0;atom<parameters.size();++atom)
+    {
+        const auto & parameter=parameters[atom];
+        for(const auto & support:input.support[atom])
+        {
+            const auto basis=rhbm_gem::core::joint_component::EvaluateKernel(support.squared_distance,parameter.b,2.5);
+            result[support.row]+=parameter.a*basis.gaussian+parameter.c*basis.charge;
+        }
+    }
+    return result;
+}
+
+FullState BuildState(const rhbm_gem::core::JointProblemInput & input,const Ownership & ownership,
+    std::span<const Parameters> targets,Mode mode,double scale)
+{
+    if(!(scale>0.0) || !std::isfinite(scale)) throw std::invalid_argument("Invalid Dynamic Halo observation scale.");
+    FullState result;
+    result.contributors=DeriveHalos(input,ownership,targets,mode);
+    result.prediction=ReplayPrediction(input,result.contributors);
+    long double squared{};
+    for(std::size_t row=0;row<input.observations.size();++row)
+    {
+        const long double residual=static_cast<long double>(result.prediction[row])-input.observations[row];
+        squared+=residual*residual;
+    }
+    result.objective=static_cast<double>(0.5L*squared/(static_cast<long double>(scale)*scale));
+    if(!std::isfinite(result.objective)) throw std::runtime_error("Dynamic Halo replay objective is nonfinite.");
+    return result;
+}
+
+bool CommitMonotone(FullState & current,FullState && candidate)
+{
+    if(candidate.contributors.size()!=current.contributors.size() ||
+        candidate.prediction.size()!=current.prediction.size() || !std::isfinite(candidate.objective))
+        throw std::invalid_argument("Dynamic Halo transaction state dimensions do not match.");
+    const double enclosure=1e-12+2e-12*std::abs(current.objective);
+    if(candidate.objective>current.objective+enclosure) return false;
+    current=std::move(candidate);
+    return true;
 }
 
 Parameters Mean(std::span<const Parameters> values, bool include_charge)

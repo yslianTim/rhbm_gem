@@ -1,6 +1,7 @@
 #pragma once
 
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include <Eigen/Dense>
 #include <array>
 #include <cstddef>
 #include <span>
@@ -41,6 +42,30 @@ struct Parameters
 {
     double a{}, b{1}, c{};
 };
+
+enum class Mode {AB,ABC,StaticABC};
+struct AugmentedDesign
+{
+    std::vector<std::size_t> rows;
+    Eigen::MatrixXd values;
+};
+struct FullState
+{
+    std::vector<Parameters> contributors;
+    std::vector<double> prediction;
+    double objective{};
+};
+
+AugmentedDesign BuildAugmentedDesign(const rhbm_gem::core::JointProblemInput &,const Ownership &,
+    std::size_t,std::span<const Parameters>,Mode);
+Eigen::MatrixXd CoupledWidthJacobian(const rhbm_gem::core::JointProblemInput &,const Ownership &,
+    std::size_t,std::span<const Parameters>,const Eigen::VectorXd &,Mode);
+std::vector<Parameters> DeriveHalos(const rhbm_gem::core::JointProblemInput &,const Ownership &,
+    std::span<const Parameters>,Mode);
+std::vector<double> ReplayPrediction(const rhbm_gem::core::JointProblemInput &,std::span<const Parameters>);
+FullState BuildState(const rhbm_gem::core::JointProblemInput &,const Ownership &,
+    std::span<const Parameters>,Mode,double);
+bool CommitMonotone(FullState &,FullState &&);
 
 Parameters Mean(std::span<const Parameters>, bool include_charge);
 double MeanWidthLogDerivative(double target_width, std::size_t core_size);
