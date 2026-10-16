@@ -71,3 +71,25 @@ TEST(JointHaloObservationExclusionTest, EmptyRetainedDomainIsReportedWithoutInve
     EXPECT_EQ(summary.target_components, 1u);
     EXPECT_EQ(summary.radial[0].retained, 0u);
 }
+
+TEST(JointHaloObservationExclusionTest, LocalDesignReportsRankDeficiencyAndProjectedWidthLoss)
+{
+    Eigen::MatrixXd ac(4, 4), width(4, 2);
+    ac << 1,0,1,0,
+          0,1,0,1,
+          1,1,1,1,
+          2,1,2,1;
+    width << 1,1,
+             0,0,
+             1,1,
+             2,2;
+    const auto result = AnalyzeLocalDesign(ac, width);
+    ASSERT_TRUE(result.ac.available);
+    ASSERT_TRUE(result.abc.available);
+    ASSERT_TRUE(result.projected_width.available);
+    EXPECT_EQ(result.ac.rank, 2u);
+    EXPECT_LT(result.ac.rank, result.ac.columns);
+    EXPECT_LT(result.abc.rank, result.abc.columns);
+    EXPECT_LT(result.projected_width.rank, result.projected_width.columns);
+    EXPECT_NEAR(result.minimum_projected_width_fraction, 0.0, 1e-14);
+}

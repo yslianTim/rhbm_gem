@@ -1,6 +1,7 @@
 #pragma once
 
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include <Eigen/Core>
 #include <array>
 #include <cstdint>
 #include <span>
@@ -42,11 +43,26 @@ struct CoverageSummary
     std::vector<TargetCoverage> targets;
 };
 
+struct DesignSpectrum
+{
+    std::size_t rows{}, columns{}, rank{};
+    double minimum_singular_value{}, maximum_singular_value{};
+    double condition{};
+    bool available{}, full_rank{}, ill_conditioned{};
+};
+
+struct LocalDesignMetrics
+{
+    DesignSpectrum ac, abc, projected_width;
+    double minimum_projected_width_fraction{};
+};
+
 std::vector<double> NearestHaloDistances(std::span<const Position> observations,
     std::span<const Position> halos);
 RowMask RetainedRows(std::span<const double> nearest_halo_distances, double radius);
 CoverageSummary AnalyzeCoverage(const rhbm_gem::core::JointProblemInput &,
     std::span<const std::uint8_t> retained_rows, std::span<const double> target_halo_distances,
     std::span<const double> observation_halo_distances);
+LocalDesignMetrics AnalyzeLocalDesign(const Eigen::MatrixXd & ac, const Eigen::MatrixXd & log_width);
 
 }

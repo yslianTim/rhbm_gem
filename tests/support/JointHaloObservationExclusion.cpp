@@ -1,6 +1,8 @@
 #include "JointHaloObservationExclusion.hpp"
+#include "core/detail/joint_component/LocalConditioning.hpp"
 #include <algorithm>
 #include <cmath>
+#include <Eigen/SVD>
 #include <limits>
 #include <numeric>
 #include <stdexcept>
@@ -33,6 +35,45 @@ public:
     }
 };
 
+Eigen::MatrixXd NormalizeColumns(const Eigen::MatrixXd & matrix)
+{
+    Eigen::MatrixXd normalized = matrix;
+    for (Eigen::Index column = 0; column < matrix.cols(); ++column)
+    {
+        const double norm = normalized.col(column).norm();
+        if (norm > 0.0) normalized.col(column) /= norm;
+    }
+    return normalized;
+}
+
+DesignSpectrum Spectrum(const Eigen::MatrixXd & matrix)
+{
+    DesignSpectrum result;
+    result.rows = static_cast<std::size_t>(matrix.rows());
+    result.columns = static_cast<std::size_t>(matrix.cols());
+    if (matrix.rows() == 0 || matrix.cols() == 0 || !matrix.allFinite()) return result;
+    const Eigen::MatrixXd normalized = NormalizeColumns(matrix);
+    Eigen::JacobiSVD<Eigen::MatrixXd> svd(normalized);
+    if (svd.info() != Eigen::Success || svd.singularValues().size() == 0 || !svd.singularValues().allFinite())
+        return result;
+    const auto singular = svd.singularValues();
+    const double maximum = singular(0);
+    const double threshold = std::numeric_limits<double>::epsilon() *
+        static_cast<double>(std::max(normalized.rows(), normalized.cols())) * maximum;
+    result.available = true;
+    result.maximum_singular_value = maximum;
+    result.minimum_singular_value = normalized.rows() < normalized.cols() ? 0.0 : singular(singular.size() - 1);
+    result.rank = static_cast<std::size_t>((singular.array() > threshold).count());
+    result.full_rank = normalized.rows() >= normalized.cols() && result.rank == result.columns &&
+        result.minimum_singular_value > 0.0;
+    if (result.full_rank)
+    {
+        result.condition = maximum / result.minimum_singular_value;
+        result.ill_conditioned = result.condition * std::numeric_limits<double>::epsilon() >=
+            rhbm_gem::core::joint_component::LocalConditioningRoundoffAmplificationWarning;
+    }
+    return result;
+}
 }
 
 std::vector<double> NearestHaloDistances(std::span<const Position> observations,
@@ -162,4 +203,36 @@ CoverageSummary AnalyzeCoverage(const rhbm_gem::core::JointProblemInput & input,
     return result;
 }
 
+LocalDesignMetrics AnalyzeLocalDesign(const Eigen::MatrixXd & ac, const Eigen::MatrixXd & log_width)
+{
+    if (ac.rows() != log_width.rows() || ac.cols() != 2 * log_width.cols())
+        throw std::invalid_argument("Invalid local A/C and width design dimensions.");
+    LocalDesignMetrics result;
+    result.ac = Spectrum(ac);
+    const Eigen::MatrixXd normalized_ac = NormalizeColumns(ac);
+    const Eigen::MatrixXd normalized_width = NormalizeColumns(log_width);
+    Eigen::MatrixXd full(ac.rows(), ac.cols() + log_width.cols());
+    full << normalized_ac, normalized_width;
+    result.abc = Spectrum(full);
+    if (ac.rows() == 0 || log_width.cols() == 0 || !normalized_ac.allFinite() || !normalized_width.allFinite())
+        return result;
+    Eigen::JacobiSVD<Eigen::MatrixXd> ac_svd(normalized_ac, Eigen::ComputeThinU);
+    if (ac_svd.info() != Eigen::Success || !ac_svd.singularValues().allFinite()) return result;
+    const double maximum = ac_svd.singularValues().size() ? ac_svd.singularValues()(0) : 0.0;
+    const double threshold = std::numeric_limits<double>::epsilon() *
+        static_cast<double>(std::max(normalized_ac.rows(), normalized_ac.cols())) * maximum;
+    const auto ac_rank = static_cast<Eigen::Index>((ac_svd.singularValues().array() > threshold).count());
+    Eigen::MatrixXd projected = normalized_width;
+    if (ac_rank > 0)
+    {
+        const Eigen::MatrixXd q = ac_svd.matrixU().leftCols(ac_rank);
+        projected.noalias() -= q * (q.transpose() * normalized_width);
+    }
+    result.minimum_projected_width_fraction = std::numeric_limits<double>::infinity();
+    for (Eigen::Index column = 0; column < projected.cols(); ++column)
+        result.minimum_projected_width_fraction = std::min(result.minimum_projected_width_fraction,
+            projected.col(column).norm());
+    result.projected_width = Spectrum(projected);
+    return result;
+}
 }
