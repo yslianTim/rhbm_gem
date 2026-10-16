@@ -1,0 +1,149 @@
+#include <gtest/gtest.h>
+
+#include "core/detail/HaloMedianReconstruction.hpp"
+#include "core/detail/joint_component/Problem.hpp"
+#include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
+
+#include <memory>
+#include <vector>
+
+namespace {
+using namespace rhbm_gem;
+using namespace rhbm_gem::core;
+using namespace rhbm_gem::core::detail;
+
+struct Fixture
+{
+    ModelObject model;
+    JointProblem problem;
+    JointAnalysisResult result;
+};
+
+Fixture MakeFixture(std::size_t target_count=3)
+{
+    std::vector<std::unique_ptr<AtomObject>> atoms;
+    for (int id=1;id<=5;++id)
+    {
+        auto atom=std::make_unique<AtomObject>();
+        atom->SetSerialID(id);
+        atom->SetElement(Element::CARBON);
+        atom->SetComponentKey(id<=4 ? 1 : 3);
+        atom->SetAtomKey(id<=3 ? 7 : id==4 ? 7 : 8);
+        atom->SetPosition(static_cast<double>(id),0,0);
+        atoms.push_back(std::move(atom));
+    }
+    ModelObject model(std::move(atoms));
+    JointProblemInput input;
+    input.atom_ids={"1","2","3","4","5"};
+    input.row_ids={"0","1","2","3","4"};
+    input.observations={0,0,0,0,0};
+    input.support={{{0,0}},{{1,0}},{{2,0}},{{3,0}},{{4,0}}};
+    input.selection_domain.emplace();
+    input.selection_domain->contributor_policy=std::string(PureHaloSupportExclusionContributorPolicy);
+    input.selection_domain->target_indices={0,1,2};
+    input.selection_domain->pure_halo_support_exclusion=JointPureHaloSupportExclusionProvenance{
+        5,5,0,2,2,0};
+    JointProblem problem(std::move(input));
+
+    JointAnalysisResult result;
+    result.parameterization_contract=std::string(JointPureHaloSupportExclusionParameterizationContract);
+    result.atom_ids=problem.Input().atom_ids;
+    result.row_ids=problem.Input().row_ids;
+    result.selection_domain=problem.Input().selection_domain;
+    result.runtime_convergence=JointCheckStatus::Passed;
+    result.target_runtime_convergence=JointCheckStatus::Passed;
+    result.initialization.valid=true;
+    result.initialization.b={1,1,1};
+    result.components.emplace_back();
+    auto & component=result.components.back();
+    component.id="component";
+    component.atoms={0,1,2};
+    component.rows={0,1,2,3,4};
+    component.runtime_convergence=JointCheckStatus::Passed;
+    component.target_runtime_convergence=JointCheckStatus::Passed;
+    component.state=JointState{{1.0,2.0,3.0,5.0,5.0,8.0},{1,2,3},{0,0,0},{0,0,0},0,{}};
+    result.assembled_state=component.state;
+    result.target_evidence.emplace();
+    result.target_evidence->contract=std::string(JointTargetPointValidationContractVersion);
+    result.target_evidence->original_rows=5;
+    for (std::size_t atom=0;atom<target_count;++atom)
+    {
+        JointAtomPointValidation point;
+        point.atom=atom;
+        point.component_convergence=JointCheckStatus::Passed;
+        point.parameter_validity=JointCheckStatus::Passed;
+        point.local_conditioning="Adequate";
+        point.parameter_stability="NotAssessed";
+        point.point_quality="NotAssessed";
+        point.reason="test";
+        result.target_evidence->point_atoms.push_back(std::move(point));
+    }
+    return {std::move(model),std::move(problem),std::move(result)};
+}
+}
+
+TEST(HaloMedianReconstructionTest, ComputesSeparateComponentAndWidthAndChargeMedians)
+{
+    auto fixture=MakeFixture();
+    const auto built=BuildHaloMedianReconstruction(fixture.model,fixture.problem,fixture.result,"run-1");
+    ASSERT_EQ(built.snapshot.halos.size(),2u);
+    EXPECT_EQ(built.audit.valid_target_count,3u);
+    EXPECT_EQ(built.audit.same_group_halos,1u);
+    EXPECT_EQ(built.audit.fallback_halos,1u);
+    EXPECT_EQ(built.snapshot.halos[0].source,HaloMedianSource::GroupKeyMedian);
+    EXPECT_DOUBLE_EQ(built.snapshot.halos[0].amplitude,3.0);
+    EXPECT_DOUBLE_EQ(built.snapshot.halos[0].width,2.0);
+    EXPECT_DOUBLE_EQ(built.snapshot.halos[0].charge,5.0);
+    EXPECT_EQ(built.snapshot.halos[0].donor_count,3u);
+    EXPECT_EQ(built.snapshot.halos[1].source,HaloMedianSource::GlobalTargetMedian);
+    EXPECT_DOUBLE_EQ(built.snapshot.halos[1].amplitude,3.0);
+    EXPECT_DOUBLE_EQ(built.snapshot.halos[1].width,2.0);
+    EXPECT_DOUBLE_EQ(built.snapshot.halos[1].charge,5.0);
+}
+
+TEST(HaloMedianReconstructionTest, AcceptsNotAssessedStabilityButRejectsUnqualifiedDonor)
+{
+    auto fixture=MakeFixture();
+    fixture.result.target_evidence->point_atoms[0].parameter_validity=JointCheckStatus::Failed;
+    const auto built=BuildHaloMedianReconstruction(fixture.model,fixture.problem,fixture.result,"run-2");
+    EXPECT_EQ(built.snapshot.valid_target_count,2u);
+    EXPECT_EQ(built.snapshot.global_median[0],4.0);
+    EXPECT_EQ(built.snapshot.global_median[1],2.5);
+    EXPECT_EQ(built.snapshot.global_median[2],6.5);
+}
+
+TEST(HaloMedianReconstructionTest, EmptyQualifiedTargetPoolIsExplicitlyRejected)
+{
+    auto fixture=MakeFixture();
+    for (auto & point:fixture.result.target_evidence->point_atoms)
+        point.local_conditioning="Warning";
+    try
+    {
+        (void)BuildHaloMedianReconstruction(fixture.model,fixture.problem,fixture.result,"run-3");
+        FAIL() << "expected explicit no-donor rejection";
+    }
+    catch (const std::invalid_argument & error)
+    { EXPECT_STREQ(error.what(),"halo-median-no-valid-targets"); }
+}
+
+TEST(HaloMedianReconstructionTest, ResultIsIndependentOfModelAtomTraversalOrder)
+{
+    auto first=MakeFixture();
+    auto second=MakeFixture();
+    auto atoms=std::vector<std::unique_ptr<AtomObject>>{};
+    for (int id=5;id>=1;--id)
+    {
+        auto atom=std::make_unique<AtomObject>();
+        atom->SetSerialID(id);
+        atom->SetElement(Element::CARBON);
+        atom->SetComponentKey(id<=4 ? 1 : 3);
+        atom->SetAtomKey(id<=3 ? 7 : id==4 ? 7 : 8);
+        atom->SetPosition(static_cast<double>(id),0,0);
+        atoms.push_back(std::move(atom));
+    }
+    ModelObject reversed(std::move(atoms));
+    const auto left=BuildHaloMedianReconstruction(first.model,first.problem,first.result,"run-4");
+    const auto right=BuildHaloMedianReconstruction(reversed,second.problem,second.result,"run-4");
+    EXPECT_EQ(left.snapshot,right.snapshot);
+}

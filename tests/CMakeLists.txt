@@ -186,6 +186,7 @@ set(JOINT_COMPONENT_CONTRACT_TEST_SOURCES
     core/joint_component/Components_test.cpp
     core/joint_component/HaloEligibility_test.cpp
     core/joint_component/HaloObservationExclusion_test.cpp
+    core/joint_component/HaloMedianReconstruction_test.cpp
     core/joint_component/FixedHaloInitialization_test.cpp
     core/joint_component/DynamicHaloMean_test.cpp
 )

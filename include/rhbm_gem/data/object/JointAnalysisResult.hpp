@@ -73,6 +73,8 @@ struct JointAnalysisResult
     std::optional<JointParameterLayout> layout;
     JointAnalysisMetadata metadata;
     std::vector<std::string> atom_ids, row_ids;
+    std::vector<std::string> fitting_row_ids;
+    std::vector<std::size_t> fitting_to_original_rows;
     std::optional<JointSelectionDomain> selection_domain;
     std::vector<JointFixedHaloParameter> fixed_halos;
     JointInitialization initialization;
@@ -89,5 +91,6 @@ struct JointAnalysisResult
     JointCheckStatus regular_certificate{JointCheckStatus::NotRun};
     std::optional<JointTargetEvidence> target_evidence;
     JointCheckStatus target_runtime_convergence{JointCheckStatus::NotRun};
+    std::optional<JointHaloMedianSnapshot> halo_median_reconstruction;
 };
 }

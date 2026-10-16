@@ -29,11 +29,17 @@ class JointProblem
 public:
     explicit JointProblem(JointProblemInput);
     const JointProblemInput & Input() const;
+    const JointProblemInput & OriginalInput() const;
+    const std::vector<std::size_t> & FittingToOriginalContributors() const;
+    const std::vector<std::size_t> & FittingToOriginalRows() const;
     const std::vector<JointFixedHaloParameter> & FixedHalos() const;
     // Attaches exactly one qualified FirstStage (A,B,0) value for every
     // supported non-target contributor. The returned problem keeps that
     // snapshot immutable during target-only fitting.
     JointProblem WithFixedHalos(std::vector<JointFixedHaloParameter>) const;
+    JointProblem WithReconstructionDomain(JointProblemInput original,
+        std::vector<std::size_t> fitting_to_original_contributors,
+        std::vector<std::size_t> fitting_to_original_rows) const;
     double ObservationScale() const;
     const JointParameterLayout & ParameterLayout() const;
 private:
@@ -79,6 +85,9 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult &, JointAnal
 // Selected non-hydrogen atoms fix the rows. Every unselected non-hydrogen atom
 // with at least one support entry on those rows is retained as a fixed halo.
 JointProblem BuildJointProblem(const MapObject &,const ModelObject &);
+// Production target-only problem. Halo support is used only to exclude fitting
+// rows; reconstruction keeps the original-domain input in OriginalInput().
+JointProblem BuildPureHaloSupportExclusionProblem(const MapObject &,const ModelObject &);
 // Fits only selected targets. For a fixed-halo problem, initial_b has one
 // width per selected target and the problem must already own its complete
 // qualified fixed-halo snapshot.

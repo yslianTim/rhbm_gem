@@ -526,6 +526,11 @@ JointProblem::JointProblem(JointProblemInput input)
     m_data=std::move(data);
 }
 const JointProblemInput & JointProblem::Input() const {return *m_data->input;}
+const JointProblemInput & JointProblem::OriginalInput() const {return *m_data->original_input;}
+const std::vector<std::size_t> & JointProblem::FittingToOriginalContributors() const
+{return m_data->fitting_to_original_contributors;}
+const std::vector<std::size_t> & JointProblem::FittingToOriginalRows() const
+{return m_data->fitting_to_original_rows;}
 JointProblem::JointProblem(std::shared_ptr<const n::ProblemData> data):m_data(std::move(data)) {}
 const std::vector<JointFixedHaloParameter> & JointProblem::FixedHalos() const {return m_data->fixed_halos;}
 JointProblem JointProblem::WithFixedHalos(std::vector<JointFixedHaloParameter> fixed_halos) const
@@ -580,6 +585,42 @@ JointProblem JointProblem::WithFixedHalos(std::vector<JointFixedHaloParameter> f
     data->partition=m_data->partition;
     data->construction_memory=m_data->construction_memory;
     data->fixed_prediction=std::move(fixed_prediction);
+    return JointProblem(std::move(data));
+}
+JointProblem JointProblem::WithReconstructionDomain(
+    JointProblemInput original, std::vector<std::size_t> fitting_to_original_contributors,
+    std::vector<std::size_t> fitting_to_original_rows) const
+{
+    const auto & fitting=*m_data->input;
+    if (original.atom_ids.empty() || original.support.size()!=original.atom_ids.size() ||
+        original.row_ids.size()!=original.observations.size() ||
+        fitting_to_original_contributors.size()!=fitting.atom_ids.size() ||
+        fitting_to_original_rows.size()!=fitting.row_ids.size())
+        throw std::invalid_argument("Invalid Joint reconstruction domain dimensions.");
+    for (std::size_t atom=0;atom<fitting.atom_ids.size();++atom)
+    {
+        const auto original_atom=fitting_to_original_contributors[atom];
+        if (original_atom>=original.atom_ids.size() || fitting.atom_ids[atom]!=original.atom_ids[original_atom])
+            throw std::invalid_argument("Invalid fitting-to-original contributor mapping.");
+    }
+    for (std::size_t row=0;row<fitting.row_ids.size();++row)
+    {
+        const auto original_row=fitting_to_original_rows[row];
+        if (original_row>=original.row_ids.size() || fitting.row_ids[row]!=original.row_ids[original_row])
+            throw std::invalid_argument("Invalid fitting-to-original row mapping.");
+    }
+    if (!std::all_of(original.observations.begin(),original.observations.end(),
+            [](double value){return std::isfinite(value);}))
+        throw std::invalid_argument("Nonfinite Joint reconstruction observations.");
+    auto data=std::make_shared<n::ProblemData>(*m_data);
+    data->original_input=std::make_shared<const JointProblemInput>(std::move(original));
+    data->fitting_to_original_contributors=std::move(fitting_to_original_contributors);
+    data->fitting_to_original_rows=std::move(fitting_to_original_rows);
+    const Eigen::Map<const Eigen::VectorXd> original_values(
+        data->original_input->observations.data(),static_cast<Eigen::Index>(data->original_input->observations.size()));
+    const double original_norm=original_values.norm();
+    data->context.scale=std::max(1.0,original_norm);
+    data->context.linear.release_response_norm=original_norm;
     return JointProblem(std::move(data));
 }
 double JointProblem::ObservationScale() const {return m_data->context.scale;}
@@ -755,6 +796,66 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
         }
     }
     return JointProblem(std::move(input));
+}
+JointProblem BuildPureHaloSupportExclusionProblem(const MapObject & map,const ModelObject & model)
+{
+    const auto fixed_problem=BuildJointProblem(map,model);
+    const auto & source=fixed_problem.Input();
+    if (!source.selection_domain || source.selection_domain->contributor_policy!=FixedHaloContributorPolicy ||
+        !source.selection_domain->fixed_halo_selection)
+        throw std::invalid_argument("Pure Halo exclusion requires the selected voxel closure.");
+    const auto & targets=source.selection_domain->target_indices;
+    std::vector<bool> retained(source.observations.size(),true);
+    for (std::size_t atom=0;atom<source.support.size();++atom)
+    {
+        if (std::binary_search(targets.begin(),targets.end(),atom)) continue;
+        for (const auto & support:source.support[atom])
+        {
+            if (support.row>=retained.size()) throw std::invalid_argument("Invalid Halo support incidence.");
+            retained[support.row]=false;
+        }
+    }
+    const auto retained_count=static_cast<std::size_t>(std::count(retained.begin(),retained.end(),true));
+    if (!retained_count) throw std::invalid_argument("Pure Halo exclusion leaves an empty fitting domain.");
+    JointProblemInput fitting;
+    fitting.selection_domain.emplace();
+    fitting.selection_domain->contributor_policy=std::string(PureHaloSupportExclusionContributorPolicy);
+    fitting.selection_domain->pure_halo_support_exclusion=JointPureHaloSupportExclusionProvenance{
+        source.observations.size(),retained_count,source.observations.size()-retained_count,0,0,0};
+    std::vector<std::size_t> fitting_rows;
+    fitting_rows.reserve(retained_count);
+    std::vector<std::size_t> original_to_fitting(source.observations.size(),std::numeric_limits<std::size_t>::max());
+    for (std::size_t row=0;row<retained.size();++row) if (retained[row])
+    {
+        original_to_fitting[row]=fitting_rows.size();
+        fitting_rows.push_back(row);
+        fitting.row_ids.push_back(source.row_ids[row]);
+        fitting.observations.push_back(source.observations[row]);
+    }
+    fitting.atom_ids.reserve(targets.size());
+    fitting.support.reserve(targets.size());
+    fitting.selection_domain->target_indices.resize(targets.size());
+    std::iota(fitting.selection_domain->target_indices.begin(),fitting.selection_domain->target_indices.end(),0);
+    for (const auto original_atom:targets)
+    {
+        fitting.atom_ids.push_back(source.atom_ids[original_atom]);
+        std::vector<JointSupport> support;
+        support.reserve(source.support[original_atom].size());
+        for (const auto entry:source.support[original_atom]) if (retained[entry.row])
+            support.push_back({original_to_fitting[entry.row],entry.squared_distance});
+        if (support.empty()) throw std::invalid_argument("Pure Halo exclusion removes all observations for a Target.");
+        fitting.support.push_back(std::move(support));
+    }
+    auto original=source;
+    original.selection_domain->contributor_policy=std::string(PureHaloSupportExclusionContributorPolicy);
+    original.selection_domain->fixed_halo_selection.reset();
+    const auto fixed=&*source.selection_domain->fixed_halo_selection;
+    original.selection_domain->pure_halo_support_exclusion=JointPureHaloSupportExclusionProvenance{
+        source.observations.size(),retained_count,source.observations.size()-retained_count,
+        fixed->candidate_halos,fixed->retained_halos,fixed->zero_support_halos};
+    std::vector<std::size_t> fitting_to_original_contributors=targets;
+    return JointProblem(std::move(fitting)).WithReconstructionDomain(
+        std::move(original),std::move(fitting_to_original_contributors),std::move(fitting_rows));
 }
 JointFitResult FitJointComponents(const JointProblem & problem,const std::vector<double> & initial_b)
 {

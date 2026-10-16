@@ -5,11 +5,17 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 
 namespace rhbm_gem {
 inline constexpr std::string_view FullABCHaloContributorPolicy="fullabc-eligible-halo-pruning-v1";
 inline constexpr std::string_view FixedHaloContributorPolicy="first-stage-fixed-halo-v1";
+inline constexpr std::string_view PureHaloSupportExclusionContributorPolicy="pure-halo-support-exclusion-v1";
+inline constexpr std::string_view JointPureHaloSupportExclusionParameterizationContract=
+    "target-only-pure-halo-support-exclusion-v1";
+inline constexpr std::string_view HaloMedianReconstructionContractVersion=
+    "group-key-target-median-v1";
 struct ExcludedHaloRecord
 {
     std::string atom_id;
@@ -29,6 +35,12 @@ struct JointFixedHaloSelectionProvenance
     std::size_t candidate_halos{},retained_halos{},zero_support_halos{};
     bool operator==(const JointFixedHaloSelectionProvenance &) const = default;
 };
+struct JointPureHaloSupportExclusionProvenance
+{
+    std::size_t original_rows{},fit_rows{},excluded_rows{};
+    std::size_t candidate_halos{},retained_halos{},zero_support_halos{};
+    bool operator==(const JointPureHaloSupportExclusionProvenance &) const = default;
+};
 struct JointSelectionDomain
 {
     std::string contract{"fixed-selected-voxel-closure-v1"};
@@ -37,25 +49,37 @@ struct JointSelectionDomain
     std::string contributor_policy{"all-non-hydrogen"};
     std::optional<JointHaloEligibilityProvenance> halo_eligibility;
     std::optional<JointFixedHaloSelectionProvenance> fixed_halo_selection;
+    std::optional<JointPureHaloSupportExclusionProvenance> pure_halo_support_exclusion;
     bool IsValid(std::size_t atoms) const
     {
         if(contract!="fixed-selected-voxel-closure-v1" ||
             (contributor_policy!="all-non-hydrogen" && contributor_policy!=FullABCHaloContributorPolicy &&
-                contributor_policy!=FixedHaloContributorPolicy) ||
+                contributor_policy!=FixedHaloContributorPolicy &&
+                contributor_policy!=PureHaloSupportExclusionContributorPolicy) ||
             observation_radius!=2.5 || support_radius!=2.5 || target_indices.empty()) return false;
         for(std::size_t i=0;i<target_indices.size();++i)
             if(target_indices[i]>=atoms || (i && target_indices[i-1]>=target_indices[i])) return false;
         if(contributor_policy=="all-non-hydrogen") return !halo_eligibility && !fixed_halo_selection;
         if(contributor_policy==FixedHaloContributorPolicy)
         {
-            if(halo_eligibility || !fixed_halo_selection) return false;
+            if(halo_eligibility || pure_halo_support_exclusion || !fixed_halo_selection) return false;
             const auto & policy=*fixed_halo_selection;
             return policy.minimum_observations==1 &&
                 policy.retained_halos==atoms-target_indices.size() &&
                 policy.candidate_halos>=policy.retained_halos &&
                 policy.zero_support_halos==policy.candidate_halos-policy.retained_halos;
         }
-        if(!halo_eligibility || fixed_halo_selection) return false;
+        if(contributor_policy==PureHaloSupportExclusionContributorPolicy)
+        {
+            if(halo_eligibility || fixed_halo_selection || !pure_halo_support_exclusion) return false;
+            const auto & policy=*pure_halo_support_exclusion;
+            return policy.original_rows>=policy.fit_rows && policy.excluded_rows==policy.original_rows-policy.fit_rows &&
+                policy.retained_halos==atoms-target_indices.size() &&
+                policy.candidate_halos>=policy.retained_halos &&
+                policy.zero_support_halos==policy.candidate_halos-policy.retained_halos &&
+                policy.fit_rows>0;
+        }
+        if(!halo_eligibility || fixed_halo_selection || pure_halo_support_exclusion) return false;
         const auto & policy=*halo_eligibility;
         if(policy.minimum_observations<3 || policy.minimum_distinct_radial_information!=3 ||
             policy.retained_halos!=atoms-target_indices.size() ||
@@ -206,6 +230,28 @@ inline bool IsQualifiedFirstStageFixedHalo(const JointFixedHaloParameter & fixed
     return IsQualifiedFirstStageEstimate(fixed.first_stage_status,
         fixed.first_stage_fit_qualified, fixed.first_stage_qualification, fixed.first_stage_recovery);
 }
+enum class HaloMedianSource { GroupKeyMedian, GlobalTargetMedian };
+struct JointHaloMedianReconstruction
+{
+    std::size_t halo_contributor_index{};
+    std::string atom_id;
+    GroupKey group_key{};
+    double amplitude{},width{},charge{};
+    HaloMedianSource source{HaloMedianSource::GlobalTargetMedian};
+    std::size_t donor_count{};
+    std::string joint_run_id;
+    std::string contract{HaloMedianReconstructionContractVersion};
+    bool operator==(const JointHaloMedianReconstruction &) const = default;
+};
+struct JointHaloMedianSnapshot
+{
+    std::string contract{HaloMedianReconstructionContractVersion};
+    std::string joint_run_id;
+    std::array<double,3> global_median{};
+    std::size_t valid_target_count{};
+    std::vector<JointHaloMedianReconstruction> halos;
+    bool operator==(const JointHaloMedianSnapshot &) const = default;
+};
 struct JointInitialization
 {
     bool valid{};

@@ -9,9 +9,11 @@ JointInitialization InitializeContributors(MapObject &,ModelObject &,const Joint
 struct ProblemData
 {
     std::shared_ptr<const JointProblemInput> input;
+    std::shared_ptr<const JointProblemInput> original_input;
     std::shared_ptr<const std::vector<double>> optimization_observations;
     std::vector<JointFixedHaloParameter> fixed_halos;
     std::vector<std::size_t> target_to_contributor,contributor_to_target;
+    std::vector<std::size_t> fitting_to_original_contributors,fitting_to_original_rows;
     Domain domain{0,{}};
     VectorMap y;
     Eigen::VectorXd fixed_prediction;
@@ -22,11 +24,18 @@ struct ProblemData
     explicit ProblemData(std::shared_ptr<const JointProblemInput> snapshot,
         std::vector<JointFixedHaloParameter> fixed={},
         std::shared_ptr<const std::vector<double>> observations={})
-        :input(std::move(snapshot)),optimization_observations(observations ? std::move(observations) :
+        :input(std::move(snapshot)),original_input(input),
+        optimization_observations(observations ? std::move(observations) :
             std::shared_ptr<const std::vector<double>>(input,&input->observations)),
         fixed_halos(std::move(fixed)),domain(input),
         y(optimization_observations->data(),static_cast<Eigen::Index>(optimization_observations->size())),
-        fixed_prediction(Eigen::VectorXd::Zero(static_cast<Eigen::Index>(input->observations.size()))) {}
+        fixed_prediction(Eigen::VectorXd::Zero(static_cast<Eigen::Index>(input->observations.size())))
+    {
+        fitting_to_original_contributors.resize(input->atom_ids.size());
+        std::iota(fitting_to_original_contributors.begin(),fitting_to_original_contributors.end(),0);
+        fitting_to_original_rows.resize(input->row_ids.size());
+        std::iota(fitting_to_original_rows.begin(),fitting_to_original_rows.end(),0);
+    }
 };
 struct HaloSupportDiagnostic
 {
