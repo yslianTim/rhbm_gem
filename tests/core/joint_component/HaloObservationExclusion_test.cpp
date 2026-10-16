@@ -51,6 +51,71 @@ TEST(JointHaloObservationExclusionTest, PositiveRadiusCanExcludeEveryObservation
     EXPECT_EQ(RetainedRows(std::array<double, 4>{0.0, 0.25, 1.0, 2.5}, 3.0), (RowMask{0,0,0,0}));
 }
 
+TEST(JointHaloObservationExclusionTest, ExactSupportMaskHasNoEffectWithoutSupportedHalos)
+{
+    rhbm_gem::core::JointProblemInput input;
+    input.atom_ids = {"t0", "unsupported-halo"};
+    input.row_ids = {"10", "11"};
+    input.observations = {1.0, 2.0};
+    input.support = {{{0,0.0},{1,6.25}}, {}};
+    input.selection_domain.emplace();
+    input.selection_domain->target_indices = {0};
+    EXPECT_EQ(HaloSupportExclusionRows(input), (RowMask{1,1}));
+}
+
+TEST(JointHaloObservationExclusionTest, ExactSupportMaskExcludesEveryRowSupportedByOneHalo)
+{
+    rhbm_gem::core::JointProblemInput input;
+    input.atom_ids = {"target", "halo"};
+    input.row_ids = {"10", "11", "12"};
+    input.observations = {1.0, 2.0, 3.0};
+    input.support = {{{0,0.0},{1,0.25},{2,0.5}}, {{1,0.25}}};
+    input.selection_domain.emplace();
+    input.selection_domain->target_indices = {0};
+    EXPECT_EQ(HaloSupportExclusionRows(input), (RowMask{1,0,1}));
+}
+
+TEST(JointHaloObservationExclusionTest, ExactSupportMaskExcludesSingleAndMultipleHaloIncidencesAtBoundary)
+{
+    rhbm_gem::core::JointProblemInput input;
+    input.atom_ids = {"t0", "t1", "h0", "h1"};
+    input.row_ids = {"10", "11", "12", "13"};
+    input.observations = {1.0, 2.0, 3.0, 4.0};
+    input.support = {{{0,0.0},{1,0.25}}, {{1,0.25},{2,0.5},{3,1.0}},
+        {{1,6.25},{3,6.25}}, {{2,0.0}}};
+    input.selection_domain.emplace();
+    input.selection_domain->target_indices = {0,1};
+
+    const auto retained = HaloSupportExclusionRows(input);
+    EXPECT_EQ(retained, (RowMask{1,0,0,0}));
+    for (std::size_t row = 0; row < retained.size(); ++row)
+        if (retained[row])
+            for (std::size_t atom = 0; atom < input.support.size(); ++atom)
+                if (!std::binary_search(input.selection_domain->target_indices.begin(),
+                        input.selection_domain->target_indices.end(), atom))
+                    EXPECT_FALSE(std::any_of(input.support[atom].begin(), input.support[atom].end(),
+                        [&](const auto & edge) { return edge.row == row; }));
+}
+
+TEST(JointHaloObservationExclusionTest, ExactSupportMaskCanFragmentSharedTargetRows)
+{
+    rhbm_gem::core::JointProblemInput input;
+    input.atom_ids = {"t0", "t1", "halo"};
+    input.row_ids = {"10", "11", "12"};
+    input.observations = {1.0, 2.0, 3.0};
+    input.support = {{{0,0.0},{1,0.25}}, {{1,0.25},{2,0.5}}, {{1,6.25}}};
+    input.selection_domain.emplace();
+    input.selection_domain->target_indices = {0,1};
+
+    const auto retained = HaloSupportExclusionRows(input);
+    const auto summary = AnalyzeCoverage(input, retained, std::array<double,2>{3.0,3.0},
+        std::array<double,3>{3.0,3.0,3.0});
+    EXPECT_EQ(retained, (RowMask{1,0,1}));
+    EXPECT_EQ(summary.target_components, 2u);
+    EXPECT_EQ(summary.targets[0].retained_rows, 1u);
+    EXPECT_EQ(summary.targets[1].retained_rows, 1u);
+}
+
 TEST(JointHaloObservationExclusionTest, CoverageCountsSharedRowsMixedRowsRadialShellsAndFragmentation)
 {
     rhbm_gem::core::JointProblemInput input;
@@ -127,6 +192,7 @@ TEST(JointHaloObservationExclusionTest, MaskedInputsKeepOriginalRowsAndDropZeroS
 
     const auto targets_only = BuildMaskedInput(input, RowMask{1,0,1,0}, false);
     EXPECT_EQ(targets_only.input.row_ids, (std::vector<std::string>{"10", "12"}));
+    EXPECT_EQ(targets_only.source_rows, (std::vector<std::size_t>{0, 2}));
     EXPECT_EQ(targets_only.input.observations, (std::vector<double>{1, 3}));
     EXPECT_EQ(targets_only.input.atom_ids, (std::vector<std::string>{"t0", "t1"}));
     EXPECT_EQ(targets_only.input.support[0].size(), 1u);
@@ -143,6 +209,22 @@ TEST(JointHaloObservationExclusionTest, MaskedInputsKeepOriginalRowsAndDropZeroS
     EXPECT_EQ(fixed_halo.input.selection_domain->fixed_halo_selection->zero_support_halos, 1u);
     EXPECT_EQ(fixed_halo.input.support[1].size(), 1u);
     EXPECT_EQ(fixed_halo.source_contributors, (std::vector<std::size_t>{0, 1, 2}));
+}
+
+TEST(JointHaloObservationExclusionTest, EmptyDomainAndTargetWithoutRowsAreRejected)
+{
+    rhbm_gem::core::JointProblemInput input;
+    input.atom_ids = {"t0", "t1", "halo"};
+    input.row_ids = {"10", "11"};
+    input.observations = {1.0, 2.0};
+    input.support = {{{0,0.0}}, {{1,0.25}}, {{0,0.25},{1,0.25}}};
+    input.selection_domain.emplace();
+    input.selection_domain->target_indices = {0,1};
+
+    const auto all_halo_supported = HaloSupportExclusionRows(input);
+    EXPECT_EQ(all_halo_supported, (RowMask{0,0}));
+    EXPECT_THROW(BuildMaskedInput(input, all_halo_supported, false), std::invalid_argument);
+    EXPECT_THROW(BuildMaskedInput(input, RowMask{1,0}, false), std::invalid_argument);
 }
 
 TEST(JointHaloObservationExclusionTest, MaskedFitRetainsOriginalObservationNormalization)

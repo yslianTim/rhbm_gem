@@ -114,12 +114,39 @@ RowMask RetainedRows(std::span<const double> nearest_halo_distances, double radi
     return retained;
 }
 
+RowMask HaloSupportExclusionRows(const rhbm_gem::core::JointProblemInput & input)
+{
+    if (input.support.size() != input.atom_ids.size() || input.row_ids.size() != input.observations.size() ||
+        !input.selection_domain || !input.selection_domain->IsValid(input.atom_ids.size()))
+        throw std::invalid_argument("Invalid original joint observation domain.");
+
+    RowMask retained(input.observations.size(), 1);
+    const auto & targets = input.selection_domain->target_indices;
+    for (std::size_t contributor = 0; contributor < input.support.size(); ++contributor)
+    {
+        if (std::binary_search(targets.begin(), targets.end(), contributor)) continue;
+        for (const auto & edge : input.support[contributor])
+        {
+            if (edge.row >= retained.size() || !std::isfinite(edge.squared_distance) ||
+                edge.squared_distance < 0.0 || edge.squared_distance > 6.25)
+                throw std::invalid_argument("Invalid contributor support incidence.");
+            retained[edge.row] = 0;
+        }
+    }
+    return retained;
+}
+
 MaskedInput BuildMaskedInput(const rhbm_gem::core::JointProblemInput & source,
     std::span<const std::uint8_t> retained_rows, bool retain_halos)
 {
-    if (!source.selection_domain || retained_rows.size() != source.observations.size() ||
+    if (!source.selection_domain || !source.selection_domain->IsValid(source.atom_ids.size()) ||
+        retained_rows.size() != source.observations.size() || source.row_ids.size() != source.observations.size() ||
         source.support.size() != source.atom_ids.size())
         throw std::invalid_argument("Invalid masked joint problem dimensions.");
+    for (const auto & support : source.support)
+        for (const auto & edge : support)
+            if (edge.row >= source.observations.size())
+                throw std::invalid_argument("Invalid masked joint support row.");
 
     MaskedInput result;
     auto & input = result.input;
@@ -128,9 +155,12 @@ MaskedInput BuildMaskedInput(const rhbm_gem::core::JointProblemInput & source,
     {
         if (!retained_rows[row]) continue;
         row_map[row] = input.observations.size();
+        result.source_rows.push_back(row);
         input.observations.push_back(source.observations[row]);
         input.row_ids.push_back(source.row_ids[row]);
     }
+    if (input.observations.empty())
+        throw std::invalid_argument("Masked fitting domain contains no observations.");
 
     const auto & targets = source.selection_domain->target_indices;
     std::vector<bool> is_target(source.atom_ids.size());
@@ -153,7 +183,14 @@ MaskedInput BuildMaskedInput(const rhbm_gem::core::JointProblemInput & source,
     input.selection_domain.emplace();
     input.selection_domain->target_indices.reserve(targets.size());
     for (const auto target : targets)
+    {
+        if (source.support.at(target).size() == 0 ||
+            std::none_of(source.support[target].begin(), source.support[target].end(),
+                [&](const auto & edge) { return retained_rows[edge.row] != 0; }))
+            throw std::invalid_argument("Masked fitting domain leaves target without observations: " +
+                source.atom_ids.at(target));
         input.selection_domain->target_indices.push_back(source_to_masked.at(target));
+    }
     if (retain_halos)
     {
         const auto & prior = source.selection_domain->fixed_halo_selection;

@@ -14,6 +14,9 @@
 #include <limits>
 #include <chrono>
 #include <cmath>
+#include <iomanip>
+#include <sstream>
+#include <cstdint>
 #include <cstdlib>
 #include <optional>
 #include <string>
@@ -115,6 +118,21 @@ std::vector<ComponentBlocks> ExistingBlocks(const joint::ProblemData & data)
         result.push_back({std::move(view), std::move(partition)});
     }
     return result;
+}
+
+std::string RowIdentityDigest(const core::JointProblemInput & input, const audit::RowMask & retained)
+{
+    std::uint64_t hash = 14695981039346656037ull;
+    for (std::size_t row = 0; row < retained.size(); ++row)
+    {
+        if (!retained[row]) continue;
+        for (const char character : input.row_ids.at(row))
+        { hash ^= static_cast<unsigned char>(character); hash *= 1099511628211ull; }
+        hash ^= '\n'; hash *= 1099511628211ull;
+    }
+    std::ostringstream result;
+    result << std::hex << std::setw(16) << std::setfill('0') << hash;
+    return result.str();
 }
 
 audit::LocalDesignMetrics TargetDesign(const core::JointProblemInput & input,
@@ -352,6 +370,36 @@ void Run(const Path & model_path, const Path & map_path, const Path & output_pat
     }
     const auto nearest_rows = audit::NearestHaloDistances(observations, halos);
     const auto nearest_targets = audit::NearestHaloDistances(target_positions, halos);
+    const auto exact_retained = audit::HaloSupportExclusionRows(input);
+    const auto geometric_25 = audit::RetainedRows(nearest_rows, 2.5);
+    std::size_t geometry_only_rows{}, exact_only_rows{}, retained_halo_support_violations{};
+    std::size_t halo_support_boundary_entries{};
+    std::vector<std::uint8_t> halo_support_rows(input.observations.size());
+    for (std::size_t atom = 0; atom < input.support.size(); ++atom)
+        if (!std::binary_search(target_indices.begin(), target_indices.end(), atom))
+            for (const auto & edge : input.support[atom])
+            {
+                halo_support_rows[edge.row] = 1;
+                if (edge.squared_distance == 6.25) ++halo_support_boundary_entries;
+            }
+    for (std::size_t row = 0; row < exact_retained.size(); ++row)
+    {
+        if (geometric_25[row] && !exact_retained[row]) ++geometry_only_rows;
+        if (exact_retained[row] && !geometric_25[row]) ++exact_only_rows;
+        if (exact_retained[row] && halo_support_rows[row]) ++retained_halo_support_violations;
+    }
+    const auto exact_summary = audit::AnalyzeCoverage(input, exact_retained, nearest_targets, nearest_rows);
+    json::array exact_target_rows;
+    for (const auto target : target_indices)
+    {
+        const auto & support = input.support.at(target);
+        const auto geometry_count = static_cast<std::size_t>(std::count_if(support.begin(), support.end(),
+            [&](const auto & edge) { return geometric_25[edge.row] != 0; }));
+        const auto exact_count = static_cast<std::size_t>(std::count_if(support.begin(), support.end(),
+            [&](const auto & edge) { return exact_retained[edge.row] != 0; }));
+        exact_target_rows.emplace_back(json::object{{"atom_id", input.atom_ids.at(target)},
+            {"geometry_retained_rows", geometry_count}, {"exact_retained_rows", exact_count}});
+    }
     json::array radius_results;
     for (const double radius : audit::DefaultRadii)
     {
@@ -371,6 +419,21 @@ void Run(const Path & model_path, const Path & map_path, const Path & output_pat
         {"first_stage_halos_qualified", qualified_halos}, {"first_stage_halos_unqualified", unqualified_halos},
         {"unqualified_halo_atom_ids", std::move(unqualified_halo_ids)},
         {"original_target_components", core::JointProblemAccess::Get(problem).partition.components.size()},
+        {"exact_halo_support_exclusion", json::object{
+            {"contract", "exclude-every-row-with-non-target-contributor-support-v1"},
+            {"support_radius_angstrom", 2.5}, {"original_rows", input.observations.size()},
+            {"retained_rows", exact_summary.retained_rows}, {"excluded_rows", exact_summary.excluded_rows},
+            {"row_ids_fnv1a64", RowIdentityDigest(input, exact_retained)},
+            {"geometry_r25_row_ids_fnv1a64", RowIdentityDigest(input, geometric_25)},
+            {"same_row_identity_set_as_geometry_r25", geometry_only_rows == 0 && exact_only_rows == 0},
+            {"geometry_only_rows", geometry_only_rows}, {"exact_only_rows", exact_only_rows},
+            {"halo_support_boundary_entries_at_2_5_angstrom", halo_support_boundary_entries},
+            {"retained_halo_support_violations", retained_halo_support_violations},
+            {"target_components", exact_summary.target_components},
+            {"targets_without_retained_rows", exact_summary.targets_without_retained_rows},
+            {"per_target_rows", std::move(exact_target_rows)},
+            {"coverage", CoverageJson(2.5, exact_summary)},
+            {"identifiability", IdentifiabilityJson(2.5, exact_summary, problem, initialization, blocks, exact_retained)}}},
         {"thread_settings", json::object{{"Eigen", Eigen::nbThreads()}, {"OpenMP", std::getenv("OMP_NUM_THREADS") ? std::getenv("OMP_NUM_THREADS") : "unset"},
             {"OpenBLAS", std::getenv("OPENBLAS_NUM_THREADS") ? std::getenv("OPENBLAS_NUM_THREADS") : "unset"},
             {"Accelerate", std::getenv("VECLIB_MAXIMUM_THREADS") ? std::getenv("VECLIB_MAXIMUM_THREADS") : "unset"}}},

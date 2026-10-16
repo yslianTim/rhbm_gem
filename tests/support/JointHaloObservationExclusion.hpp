@@ -60,12 +60,16 @@ struct LocalDesignMetrics
 struct MaskedInput
 {
     rhbm_gem::core::JointProblemInput input;
+    // Each compact fitting row maps back to its stable row in the original domain.
+    std::vector<std::size_t> source_rows;
     std::vector<std::size_t> source_contributors;
 };
 
 std::vector<double> NearestHaloDistances(std::span<const Position> observations,
     std::span<const Position> halos);
 RowMask RetainedRows(std::span<const double> nearest_halo_distances, double radius);
+// A row is excluded exactly when a non-target contributor has support on it.
+RowMask HaloSupportExclusionRows(const rhbm_gem::core::JointProblemInput &);
 MaskedInput BuildMaskedInput(const rhbm_gem::core::JointProblemInput &,
     std::span<const std::uint8_t> retained_rows, bool retain_halos);
 CoverageSummary AnalyzeCoverage(const rhbm_gem::core::JointProblemInput &,
