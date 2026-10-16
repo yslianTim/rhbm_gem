@@ -310,6 +310,15 @@ bool CommitMonotone(FullState & current,FullState && candidate)
     return true;
 }
 
+std::optional<std::size_t> DenseBytes(std::size_t rows,std::size_t columns)
+{
+    constexpr auto bytes_per_value=sizeof(double);
+    if(columns!=0 && rows>std::numeric_limits<std::size_t>::max()/columns) return std::nullopt;
+    const auto values=rows*columns;
+    if(values>std::numeric_limits<std::size_t>::max()/bytes_per_value) return std::nullopt;
+    return values*bytes_per_value;
+}
+
 Parameters Mean(std::span<const Parameters> values, bool include_charge)
 {
     if(values.empty()) throw std::invalid_argument("Cannot compute an empty Target mean.");

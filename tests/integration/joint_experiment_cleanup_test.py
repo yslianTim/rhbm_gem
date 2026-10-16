@@ -9,6 +9,7 @@ CURRENT_EXPERIMENT_SOURCES = {
     "joint_fixed_width_oracle.cpp",
     "joint_fixed_halo_validation.cpp",
     "joint_dynamic_halo_mean.cpp",
+    "joint_dynamic_halo_joint.cpp",
     "fixed_halo_first_stage_diagnostic.cpp",
     "joint_fixed_neighbor.cpp",
     "joint_halo_pruning_validation.cpp",

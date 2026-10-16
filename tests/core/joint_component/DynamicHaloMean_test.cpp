@@ -4,6 +4,7 @@
 #include "core/detail/joint_component/Numerics.hpp"
 
 #include <algorithm>
+#include <limits>
 
 using namespace joint_test::dynamic_halo;
 
@@ -161,6 +162,23 @@ TEST(DynamicHaloMeanTest, RejectedCandidateRollsBackTargetAndDerivedHaloTogether
     EXPECT_DOUBLE_EQ(accepted.contributors[2].a,before.contributors[2].a);
 }
 
+TEST(DynamicHaloMeanTest, AcceptedCandidateCommitsTargetAndDerivedHaloTogether)
+{
+    auto input=Input();
+    const auto ownership=BuildOwnership(input,{{"whole",0,{0,1}}});
+    std::vector<Parameters> current{{0.0,0.5,0.0},{0.0,0.6,0.0},{0.0,1.0,0.0}};
+    auto proposal=current;
+    proposal[0].a=1.0;
+    input.observations=ReplayPrediction(input,DeriveHalos(input,ownership,proposal,Mode::ABC));
+    auto accepted=BuildState(input,ownership,current,Mode::ABC,1.0);
+    auto candidate=BuildState(input,ownership,proposal,Mode::ABC,1.0);
+    ASSERT_LT(candidate.objective,accepted.objective);
+    EXPECT_TRUE(CommitMonotone(accepted,std::move(candidate)));
+    EXPECT_DOUBLE_EQ(accepted.contributors[0].a,1.0);
+    EXPECT_DOUBLE_EQ(accepted.contributors[2].a,0.5);
+    EXPECT_DOUBLE_EQ(accepted.objective,0.0);
+}
+
 TEST(DynamicHaloMeanTest, FullReplayRebuildsHaloStateFromTargets)
 {
     auto input=Input();
@@ -190,4 +208,20 @@ TEST(DynamicHaloMeanTest, StaticMeanUsesInitialTargetStateAndDoesNotEnterLocalDe
     EXPECT_DOUBLE_EQ(fixed[2].a,0.0);
     EXPECT_DOUBLE_EQ(fixed[2].b,0.6);
     EXPECT_DOUBLE_EQ(fixed[2].c,0.0);
+}
+
+TEST(DynamicHaloMeanTest, LargeComponentPreflightKeepsDesignLocalAndBelowFourGiB)
+{
+    constexpr std::size_t observations=5'938'087,contributors=37'406,core_targets=12;
+    const auto forbidden_global_design=DenseBytes(observations,2*contributors);
+    const auto local_design=DenseBytes(4'929,2*core_targets);
+    ASSERT_TRUE(forbidden_global_design.has_value());
+    ASSERT_TRUE(local_design.has_value());
+    EXPECT_GT(*forbidden_global_design,4ULL*1024*1024*1024);
+    EXPECT_EQ(*local_design,946'368u);
+    const auto row_block_headers=observations*sizeof(std::vector<std::size_t>);
+    const auto two_prediction_buffers=DenseBytes(observations,2);
+    ASSERT_TRUE(two_prediction_buffers.has_value());
+    EXPECT_LT(row_block_headers+*two_prediction_buffers+*local_design,4ULL*1024*1024*1024);
+    EXPECT_FALSE(DenseBytes(std::numeric_limits<std::size_t>::max(),2).has_value());
 }

@@ -268,6 +268,8 @@ json::object FieldMetrics(const std::string & name,const std::vector<double> & h
     {full[row]=halo[row]+target[row]; full_truth[row]=halo_truth[row]+target_truth[row];}
     return {{"name",name},{"halo_field_rmse_normalized_map_units",Rmse(halo,halo_truth)},
         {"halo_field_rmse_raw_map_units",Rmse(halo,halo_truth)*normalization_divisor},
+        {"target_prediction_rmse_normalized_map_units",Rmse(target,target_truth)},
+        {"target_prediction_rmse_raw_map_units",Rmse(target,target_truth)*normalization_divisor},
         {"full_prediction_rmse_normalized_map_units",Rmse(full,full_truth)},
         {"full_prediction_rmse_raw_map_units",Rmse(full,full_truth)*normalization_divisor},
         {"objective",Objective(full,input,scale)},

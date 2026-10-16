@@ -4,6 +4,7 @@
 #include <Eigen/Dense>
 #include <array>
 #include <cstddef>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -66,6 +67,7 @@ std::vector<double> ReplayPrediction(const rhbm_gem::core::JointProblemInput &,s
 FullState BuildState(const rhbm_gem::core::JointProblemInput &,const Ownership &,
     std::span<const Parameters>,Mode,double);
 bool CommitMonotone(FullState &,FullState &&);
+std::optional<std::size_t> DenseBytes(std::size_t rows,std::size_t columns);
 
 Parameters Mean(std::span<const Parameters>, bool include_charge);
 double MeanWidthLogDerivative(double target_width, std::size_t core_size);
