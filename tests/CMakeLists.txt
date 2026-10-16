@@ -185,6 +185,7 @@ set(JOINT_COMPONENT_CONTRACT_TEST_SOURCES
     core/joint_component/CompactAssessment_test.cpp
     core/joint_component/Components_test.cpp
     core/joint_component/HaloEligibility_test.cpp
+    core/joint_component/HaloObservationExclusion_test.cpp
     core/joint_component/FixedHaloInitialization_test.cpp
 )
 
@@ -295,7 +296,7 @@ add_library(joint_test_support STATIC
     support/JointBlockCoordinate.cpp
     support/JointTestGeometry.cpp support/JointTestNumerics.cpp support/JointDenseReference.cpp
     support/JointTestContext.cpp support/JointComponentChecks.cpp
-    support/JointFixtureSupport.cpp)
+    support/JointFixtureSupport.cpp support/JointHaloObservationExclusion.cpp)
 target_compile_features(joint_test_support PUBLIC cxx_std_20)
 target_link_libraries(joint_test_support PUBLIC rhbm_gem_dependencies CompilerFlags)
 target_include_directories(joint_test_support PUBLIC
@@ -409,6 +410,10 @@ if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
     add_executable(joint_statistical_experiment experiments/joint_statistical_experiment.cpp)
     target_link_libraries(joint_statistical_experiment PRIVATE joint_test_support rhbm_gem)
     add_dependencies(research_tools_all joint_statistical_experiment)
+
+    add_executable(joint_halo_observation_exclusion experiments/joint_halo_observation_exclusion.cpp)
+    target_link_libraries(joint_halo_observation_exclusion PRIVATE joint_test_support rhbm_gem)
+    add_dependencies(research_tools_all joint_halo_observation_exclusion)
 endif()
 
 add_rhbm_gtest_group(rhbm_tests_joint_component_contract
