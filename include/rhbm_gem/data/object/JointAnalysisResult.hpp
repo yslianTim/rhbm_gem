@@ -74,6 +74,7 @@ struct JointAnalysisResult
     JointAnalysisMetadata metadata;
     std::vector<std::string> atom_ids, row_ids;
     std::vector<std::string> fitting_row_ids;
+    std::vector<std::size_t> fitting_to_original_contributors;
     std::vector<std::size_t> fitting_to_original_rows;
     std::optional<JointSelectionDomain> selection_domain;
     std::vector<JointFixedHaloParameter> fixed_halos;

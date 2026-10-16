@@ -50,6 +50,46 @@ bool ValidJointState(const JointState & state,std::size_t atoms)
     }
     return true;
 }
+void RemapAtomIndex(std::size_t & value,const std::vector<std::size_t> & mapping)
+{
+    if(value>=mapping.size()) throw std::invalid_argument("Invalid fitting-to-original atom mapping.");
+    value=mapping[value];
+}
+void RemapRowIndex(std::size_t & value,const std::vector<std::size_t> & mapping)
+{
+    if(value>=mapping.size()) throw std::invalid_argument("Invalid fitting-to-original row mapping.");
+    value=mapping[value];
+}
+void RemapTargetEvidence(std::optional<JointTargetEvidence> & evidence,
+    const std::vector<std::size_t> & atom_mapping,std::size_t original_rows)
+{
+    if(!evidence) return;
+    for(auto & atom:evidence->atoms) RemapAtomIndex(atom.atom,atom_mapping);
+    for(auto & point:evidence->point_atoms) RemapAtomIndex(point.atom,atom_mapping);
+    evidence->original_rows=original_rows;
+}
+void RemapComponentForOriginalDomain(JointAnalysisComponent & component,
+    const std::vector<std::size_t> & atom_mapping,const std::vector<std::size_t> & row_mapping)
+{
+    for(auto & atom:component.atoms) RemapAtomIndex(atom,atom_mapping);
+    for(auto & row:component.rows) RemapRowIndex(row,row_mapping);
+    if(component.layout)
+    {
+        for(auto & atom:component.layout->full_atoms) RemapAtomIndex(atom,atom_mapping);
+        for(auto & row:component.layout->informative_rows) RemapRowIndex(row,row_mapping);
+        for(auto & group:component.layout->groups)
+        {
+            RemapRowIndex(group.row,row_mapping);
+            for(auto & atom:group.atoms) RemapAtomIndex(atom,atom_mapping);
+        }
+    }
+    for(auto & block:component.local_conditioning)
+        for(auto & atom:block.core_atoms) RemapAtomIndex(atom,atom_mapping);
+    if(component.parameter_stability)
+        for(auto & block:component.parameter_stability->blocks)
+            for(auto & atom:block.core_atoms) RemapAtomIndex(atom,atom_mapping);
+    RemapTargetEvidence(component.target_evidence,atom_mapping,component.rows.size());
+}
 std::vector<const AtomObject *> EligibleAtoms(const ModelObject & model)
 {
     std::vector<const AtomObject *> atoms;
@@ -1122,6 +1162,12 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
 JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, JointAnalysisMetadata metadata)
 {
     if (!fit.problem) throw std::invalid_argument("Cannot capture joint result without problem identities.");
+    const auto & fitting_input=fit.problem->Input();
+    const auto & original_input=fit.problem->OriginalInput();
+    const bool pure_exclusion_policy=fitting_input.selection_domain &&
+        fitting_input.selection_domain->contributor_policy==PureHaloSupportExclusionContributorPolicy;
+    const auto captured_runtime=fit.RuntimeConvergence();
+    const auto captured_target_runtime=fit.TargetRuntimeConvergence();
     JointAnalysisResult out;
     metadata.software=JointSoftwareProvenance{RHBM_GEM_SIMULATION_VERSION,
         RHBM_GEM_SIMULATION_SOURCE_SHA256,RHBM_GEM_SIMULATION_CONFIG_SHA256,
@@ -1129,10 +1175,18 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
     out.metadata=std::move(metadata);
     out.metadata.solver=fit.solver_provenance.search_method.empty() ? std::nullopt :
         std::optional<JointSolverProvenance>{fit.solver_provenance};
-    out.atom_ids=fit.problem->Input().atom_ids; out.row_ids=fit.problem->Input().row_ids;
-    out.selection_domain=fit.problem->Input().selection_domain;
+    out.atom_ids=pure_exclusion_policy ? original_input.atom_ids : fitting_input.atom_ids;
+    out.row_ids=pure_exclusion_policy ? original_input.row_ids : fitting_input.row_ids;
+    out.selection_domain=pure_exclusion_policy ? original_input.selection_domain : fitting_input.selection_domain;
     out.fixed_halos=fit.problem->FixedHalos();
-    if(out.selection_domain && out.selection_domain->contributor_policy==FixedHaloContributorPolicy)
+    if(pure_exclusion_policy)
+    {
+        out.parameterization_contract=std::string(JointPureHaloSupportExclusionParameterizationContract);
+        out.fitting_row_ids=fitting_input.row_ids;
+        out.fitting_to_original_contributors=fit.problem->FittingToOriginalContributors();
+        out.fitting_to_original_rows=fit.problem->FittingToOriginalRows();
+    }
+    else if(out.selection_domain && out.selection_domain->contributor_policy==FixedHaloContributorPolicy)
         out.parameterization_contract=std::string(JointTargetOnlyFixedHaloParameterizationContract);
     out.initialization=fit.initialization;
     if(out.selection_domain && out.selection_domain->contributor_policy==FixedHaloContributorPolicy &&
@@ -1147,15 +1201,35 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
     {
         JointAnalysisComponent saved;
         static_cast<JointComponentData &>(saved)=component;
+        if(pure_exclusion_policy)
+            RemapComponentForOriginalDomain(saved,fit.problem->FittingToOriginalContributors(),
+                fit.problem->FittingToOriginalRows());
         saved.runtime_convergence=component.RuntimeConvergence();
         saved.target_runtime_convergence=component.TargetRuntimeConvergence();
         out.components.push_back(std::move(saved));
     }
     out.assembled_state=fit.assembled_state; out.objective=fit.objective;
-    out.available_row_mask=fit.available_row_mask; out.evidence=fit.evidence;
+    if(pure_exclusion_policy)
+    {
+        out.available_row_mask.assign(original_input.row_ids.size(),false);
+        if(fit.available_row_mask.size()!=fit.problem->FittingToOriginalRows().size())
+            throw std::invalid_argument("Invalid Pure Exclusion fitting row mask.");
+        for(std::size_t row=0;row<fit.available_row_mask.size();++row)
+        {
+            const auto original_row=fit.problem->FittingToOriginalRows()[row];
+            if(original_row>=out.available_row_mask.size())
+                throw std::invalid_argument("Invalid Pure Exclusion fitting row mapping.");
+            out.available_row_mask[original_row]=fit.available_row_mask[row];
+        }
+    }
+    else out.available_row_mask=fit.available_row_mask;
+    out.evidence=fit.evidence;
     out.search_completed=fit.search_completed; out.observation_scale=fit.observation_scale;
-    out.runtime_convergence=fit.RuntimeConvergence(); out.regular_certificate=fit.regular_certificate;
+    out.runtime_convergence=captured_runtime; out.regular_certificate=fit.regular_certificate;
     out.target_evidence=fit.target_evidence; out.target_runtime_convergence=fit.TargetRuntimeConvergence();
+    if(pure_exclusion_policy)
+        RemapTargetEvidence(out.target_evidence,fit.problem->FittingToOriginalContributors(),original_input.row_ids.size());
+    out.target_runtime_convergence=captured_target_runtime;
     return out;
 }
 JointInitialization joint_component::InitializeContributors(MapObject & map,ModelObject & model,const JointProblem & problem)

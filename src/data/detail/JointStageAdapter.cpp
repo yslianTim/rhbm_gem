@@ -15,9 +15,14 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
 {
     std::map<int, LocalStageEstimate> estimates;
     const bool fixed_target_only=result.parameterization_contract==JointTargetOnlyFixedHaloParameterizationContract;
+    const bool pure_exclusion=result.parameterization_contract==JointPureHaloSupportExclusionParameterizationContract;
     if(fixed_target_only && (!result.selection_domain ||
         result.selection_domain->contributor_policy!=FixedHaloContributorPolicy || result.layout))
         throw std::invalid_argument("Invalid target-only fixed-halo result contract.");
+    if(pure_exclusion && (!result.selection_domain ||
+        result.selection_domain->contributor_policy!=PureHaloSupportExclusionContributorPolicy ||
+        result.layout || !result.fixed_halos.empty()))
+        throw std::invalid_argument("Invalid target-only Pure Exclusion result contract.");
     std::vector<int> identities;
     for (std::size_t i = 0; i < result.atom_ids.size(); ++i)
     {
@@ -34,7 +39,7 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
             const bool target=std::binary_search(targets.begin(), targets.end(), i);
             estimate.source.role = target ?
                 FittingRole::Target : FittingRole::Halo;
-            estimate.source.fixed_from_first_stage=fixed_target_only && !target;
+        estimate.source.fixed_from_first_stage=fixed_target_only && !target;
         }
         estimate.reason = "missing-component-state";
         estimate.convergence = JointCheckStatus::Unavailable;

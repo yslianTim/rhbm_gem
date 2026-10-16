@@ -1,10 +1,17 @@
 #include <gtest/gtest.h>
+#include <boost/json.hpp>
 
 #include "core/detail/FirstStageInitialization.hpp"
+#include "core/detail/MapSampler.hpp"
+#include "core/detail/PostFitPeeling.hpp"
 #include "core/detail/joint_component/Problem.hpp"
+#include "data/detail/AtomClassifier.hpp"
+#include "data/detail/JointStageAdapter.hpp"
+#include "data/io/detail/JointResultJson.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
@@ -15,6 +22,7 @@
 namespace {
 using namespace rhbm_gem;
 using namespace rhbm_gem::core;
+namespace core=rhbm_gem::core;
 
 JointProblemInput PureInput()
 {
@@ -50,6 +58,41 @@ JointInitialization TargetInitialization()
     initialization.atoms.push_back(std::move(atom));
     initialization.reason="valid-widths";
     return initialization;
+}
+
+JointAnalysisResult PurePeelingSnapshot(const JointProblem & problem,const ModelObject & model)
+{
+    JointAnalysisResult result;
+    result.parameterization_contract=std::string(JointPureHaloSupportExclusionParameterizationContract);
+    result.atom_ids=problem.OriginalInput().atom_ids;
+    result.row_ids=problem.OriginalInput().row_ids;
+    result.fitting_row_ids=problem.Input().row_ids;
+    result.fitting_to_original_contributors=problem.FittingToOriginalContributors();
+    result.fitting_to_original_rows=problem.FittingToOriginalRows();
+    result.selection_domain=problem.OriginalInput().selection_domain;
+    result.available_row_mask.assign(result.row_ids.size(),false);
+    for (const auto row:problem.FittingToOriginalRows()) result.available_row_mask[row]=true;
+    result.runtime_convergence=JointCheckStatus::Passed;
+    result.target_runtime_convergence=JointCheckStatus::Passed;
+    JointAnalysisComponent component;
+    component.id="pure-component";
+    component.atoms={0};
+    component.rows=problem.FittingToOriginalRows();
+    component.runtime_convergence=JointCheckStatus::Passed;
+    component.target_runtime_convergence=JointCheckStatus::Passed;
+    component.state=JointState{{1.0,0.0},{1.0},{0.0},{0.0},0.0,{}};
+    result.components.push_back(component);
+    result.assembled_state=component.state;
+    JointHaloMedianSnapshot medians;
+    medians.joint_run_id="pure-peeling-run";
+    medians.valid_target_count=1;
+    medians.global_median={.5,.8,0.0};
+    const auto * halo=model.FindAtomPtr(2);
+    medians.halos.push_back({1,"2",data_internal::GetGroupKey(halo),.5,.8,0.0,
+        HaloMedianSource::GlobalTargetMedian,1,"pure-peeling-run",
+        std::string(HaloMedianReconstructionContractVersion)});
+    result.halo_median_reconstruction=std::move(medians);
+    return result;
 }
 
 struct MapFixture
@@ -124,4 +167,70 @@ TEST(PureHaloSupportExclusionTest, FitsTargetOnlyWithoutFixedHaloSnapshot)
     EXPECT_FALSE(std::any_of(fit.evidence.begin(),fit.evidence.end(),[](const auto & check) {
         return check.name=="fixed-halo-replay";
     }));
+}
+
+TEST(PureHaloSupportExclusionTest, CapturesOriginalAndFittingIdentitiesSeparately)
+{
+    auto fixture=BoundaryFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    const auto snapshot=CaptureJointAnalysisResult(FitJointComponents(problem,{.65}));
+    EXPECT_EQ(snapshot.parameterization_contract,JointPureHaloSupportExclusionParameterizationContract);
+    EXPECT_EQ(snapshot.atom_ids,problem.OriginalInput().atom_ids);
+    EXPECT_EQ(snapshot.row_ids,problem.OriginalInput().row_ids);
+    EXPECT_EQ(snapshot.fitting_row_ids,problem.Input().row_ids);
+    EXPECT_EQ(snapshot.fitting_to_original_contributors,problem.FittingToOriginalContributors());
+    EXPECT_EQ(snapshot.fitting_to_original_rows,problem.FittingToOriginalRows());
+    ASSERT_EQ(snapshot.available_row_mask.size(),snapshot.row_ids.size());
+    EXPECT_FALSE(snapshot.available_row_mask.back());
+    for (const auto & component:snapshot.components)
+    {
+        for (const auto atom:component.atoms) EXPECT_LT(atom,snapshot.atom_ids.size());
+        for (const auto row:component.rows) EXPECT_LT(row,snapshot.row_ids.size());
+    }
+}
+
+TEST(PureHaloSupportExclusionTest, PeelingUsesOriginalRowsAndReconstructedHalo)
+{
+    auto fixture=BoundaryFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    auto snapshot=PurePeelingSnapshot(problem,fixture.model);
+    data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"pure-peeling-run");
+    const SamplingPointList points{{2.5,{2.5,0,0},true}};
+    fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),
+        core::detail::BuildLocalPotentialSampleList(fixture.map,points));
+    const core::detail::JointPostprocessingContext context(
+        fixture.map,fixture.model,problem,&snapshot);
+    const auto peelings=context.BuildPostFitPeelingSamples(std::vector<std::size_t>{0});
+    ASSERT_TRUE(peelings.contains(1));
+    ASSERT_EQ(peelings.at(1).samples.size(),1u);
+    EXPECT_TRUE(peelings.at(1).samples.front().response);
+    EXPECT_TRUE(peelings.at(1).samples.front().reason.empty());
+    const auto prepared=context.BuildPostJointLocalSamples(1,peelings.at(1));
+    ASSERT_EQ(prepared.samples.size(),1u);
+    EXPECT_TRUE(prepared.samples.front().fixed_charge_response);
+    EXPECT_TRUE(prepared.samples.front().gaussian_response);
+}
+
+TEST(PureHaloSupportExclusionTest, PeelingRejectsFitReconstructionIdentityMismatch)
+{
+    auto fixture=BoundaryFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    auto snapshot=PurePeelingSnapshot(problem,fixture.model);
+    snapshot.fitting_row_ids.front()="stale";
+    EXPECT_THROW((core::detail::JointPostprocessingContext(fixture.map,fixture.model,problem,&snapshot)),
+        std::invalid_argument);
+}
+
+TEST(PureHaloSupportExclusionTest, PersistsVersionedDualDomainAndMedianProvenance)
+{
+    auto fixture=BoundaryFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    const auto snapshot=PurePeelingSnapshot(problem,fixture.model);
+    const auto encoded=joint_result_io::Encode(snapshot);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),17);
+    const auto decoded=joint_result_io::Decode(encoded);
+    EXPECT_EQ(decoded.parameterization_contract,JointPureHaloSupportExclusionParameterizationContract);
+    EXPECT_EQ(decoded.fitting_to_original_contributors,problem.FittingToOriginalContributors());
+    ASSERT_TRUE(decoded.halo_median_reconstruction);
+    EXPECT_EQ(decoded.halo_median_reconstruction->halos,snapshot.halo_median_reconstruction->halos);
 }

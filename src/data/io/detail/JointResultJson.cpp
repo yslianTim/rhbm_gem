@@ -48,6 +48,22 @@ JointEvidenceScope Scope(const Object & o)
     if(s=="assembled-global") return JointEvidenceScope::AssembledGlobal;
     throw std::invalid_argument("Invalid saved joint evidence scope: "+s);
 }
+const char * HaloMedianSourceText(HaloMedianSource source)
+{
+    switch(source)
+    {
+    case HaloMedianSource::GroupKeyMedian: return "group-key-median";
+    case HaloMedianSource::GlobalTargetMedian: return "global-target-median";
+    }
+    throw std::invalid_argument("Invalid Halo median source.");
+}
+HaloMedianSource HaloMedianSourceValue(const j::value & value)
+{
+    const auto source=j::value_to<std::string>(value);
+    if(source=="group-key-median") return HaloMedianSource::GroupKeyMedian;
+    if(source=="global-target-median") return HaloMedianSource::GlobalTargetMedian;
+    throw std::invalid_argument("Invalid saved Halo median source: "+source);
+}
 j::value Number(std::optional<double> x)
 {
     if(x && !std::isfinite(*x)) throw std::invalid_argument("Nonfinite joint result number.");
@@ -572,6 +588,37 @@ std::vector<JointFixedHaloParameter> ReadFixedHalos(const j::value & value)
     }
     return out;
 }
+j::value HaloMedianSnapshot(const std::optional<JointHaloMedianSnapshot> & value)
+{
+    if(!value) return nullptr;
+    const auto & snapshot=*value; j::array halos;
+    for(const auto & halo:snapshot.halos)
+        halos.emplace_back(Object{{"halo_contributor_index",halo.halo_contributor_index},
+            {"atom_id",halo.atom_id},{"group_key",halo.group_key},{"amplitude",halo.amplitude},
+            {"width",halo.width},{"charge",halo.charge},{"source",HaloMedianSourceText(halo.source)},
+            {"donor_count",halo.donor_count},{"joint_run_id",halo.joint_run_id},{"contract",halo.contract}});
+    return Object{{"contract",snapshot.contract},{"joint_run_id",snapshot.joint_run_id},
+        {"global_median",j::value_from(snapshot.global_median)},
+        {"valid_target_count",snapshot.valid_target_count},{"halos",std::move(halos)}};
+}
+std::optional<JointHaloMedianSnapshot> ReadHaloMedianSnapshot(const j::value & value)
+{
+    if(value.is_null()) return std::nullopt;
+    const auto & object=value.as_object(); JointHaloMedianSnapshot snapshot;
+    snapshot.contract=Read<std::string>(object,"contract");
+    snapshot.joint_run_id=Read<std::string>(object,"joint_run_id");
+    snapshot.global_median=Read<std::array<double,3>>(object,"global_median");
+    snapshot.valid_target_count=Read<std::size_t>(object,"valid_target_count");
+    for(const auto & value_tmp:object.at("halos").as_array())
+    {
+        const auto & halo=value_tmp.as_object();
+        snapshot.halos.push_back({Read<std::size_t>(halo,"halo_contributor_index"),Read<std::string>(halo,"atom_id"),
+            Read<GroupKey>(halo,"group_key"),Read<double>(halo,"amplitude"),Read<double>(halo,"width"),
+            Read<double>(halo,"charge"),HaloMedianSourceValue(halo.at("source")),Read<std::size_t>(halo,"donor_count"),
+            Read<std::string>(halo,"joint_run_id"),Read<std::string>(halo,"contract")});
+    }
+    return snapshot;
+}
 Object Units()
 {
     return {{"contract","joint-kernel-map-units-v1"},{"map_value","fit-map-unit"},
@@ -916,7 +963,7 @@ void ValidateParameterStability(const JointParameterStability & x)
 j::value SelectionDomain(const std::optional<JointSelectionDomain> & domain)
 {
     if(!domain) return nullptr;
-    j::value halo_eligibility=nullptr,fixed_halo_selection=nullptr;
+    j::value halo_eligibility=nullptr,fixed_halo_selection=nullptr,pure_halo_support_exclusion=nullptr;
     if(domain->halo_eligibility)
     {
         const auto & provenance=*domain->halo_eligibility; j::array excluded;
@@ -935,10 +982,21 @@ j::value SelectionDomain(const std::optional<JointSelectionDomain> & domain)
             {"candidate_halos",provenance.candidate_halos},{"retained_halos",provenance.retained_halos},
             {"zero_support_halos",provenance.zero_support_halos}};
     }
-    return Object{{"contract",domain->contract},{"target_indices",j::value_from(domain->target_indices)},
+    if(domain->pure_halo_support_exclusion)
+    {
+        const auto & provenance=*domain->pure_halo_support_exclusion;
+        pure_halo_support_exclusion=Object{{"original_rows",provenance.original_rows},
+            {"fit_rows",provenance.fit_rows},{"excluded_rows",provenance.excluded_rows},
+            {"candidate_halos",provenance.candidate_halos},{"retained_halos",provenance.retained_halos},
+            {"zero_support_halos",provenance.zero_support_halos}};
+    }
+    Object out{{"contract",domain->contract},{"target_indices",j::value_from(domain->target_indices)},
         {"observation_radius",domain->observation_radius},{"support_radius",domain->support_radius},
         {"contributor_policy",domain->contributor_policy},{"halo_eligibility",std::move(halo_eligibility)},
         {"fixed_halo_selection",std::move(fixed_halo_selection)}};
+    if(domain->pure_halo_support_exclusion)
+        out.emplace("pure_halo_support_exclusion",std::move(pure_halo_support_exclusion));
+    return out;
 }
 std::optional<JointSelectionDomain> ReadSelectionDomain(const j::value & value)
 {
@@ -971,6 +1029,14 @@ std::optional<JointSelectionDomain> ReadSelectionDomain(const j::value & value)
         const auto & item=o.at("fixed_halo_selection").as_object();
         out.fixed_halo_selection=JointFixedHaloSelectionProvenance{
             Read<std::size_t>(item,"minimum_observations"),Read<std::size_t>(item,"candidate_halos"),
+            Read<std::size_t>(item,"retained_halos"),Read<std::size_t>(item,"zero_support_halos")};
+    }
+    if(o.contains("pure_halo_support_exclusion") && !o.at("pure_halo_support_exclusion").is_null())
+    {
+        const auto & item=o.at("pure_halo_support_exclusion").as_object();
+        out.pure_halo_support_exclusion=JointPureHaloSupportExclusionProvenance{
+            Read<std::size_t>(item,"original_rows"),Read<std::size_t>(item,"fit_rows"),
+            Read<std::size_t>(item,"excluded_rows"),Read<std::size_t>(item,"candidate_halos"),
             Read<std::size_t>(item,"retained_halos"),Read<std::size_t>(item,"zero_support_halos")};
     }
     return out;
@@ -1174,9 +1240,15 @@ void Validate(const JointAnalysisResult & x,int schema_version)
         x.selection_domain->contributor_policy==FullABCHaloContributorPolicy;
     const bool fixed_halo_policy=x.selection_domain &&
         x.selection_domain->contributor_policy==FixedHaloContributorPolicy;
+    const bool pure_exclusion_policy=x.selection_domain &&
+        x.selection_domain->contributor_policy==PureHaloSupportExclusionContributorPolicy;
     const bool target_only_fixed_halo=x.parameterization_contract==JointTargetOnlyFixedHaloParameterizationContract;
+    const bool target_only_pure_exclusion=x.parameterization_contract==
+        JointPureHaloSupportExclusionParameterizationContract;
     Require(schema_version>=11 || !pruned_policy,"halo pruning policy requires schema 11");
     Require(schema_version>=13 || !fixed_halo_policy,"fixed-halo policy requires schema 13");
+    Require(schema_version>=17 || !pure_exclusion_policy,"Pure Exclusion policy requires schema 17");
+    Require(schema_version>=17 || !target_only_pure_exclusion,"Pure Exclusion parameterization requires schema 17");
     Require(schema_version>=14 || (!target_only_fixed_halo && x.fixed_halos.empty()),
         "target-only fixed-halo state requires schema 14");
     if(pruned_policy)
@@ -1201,6 +1273,9 @@ void Validate(const JointAnalysisResult & x,int schema_version)
     Require(!x.objective || std::isfinite(*x.objective),"nonfinite objective");
     if(target_only_fixed_halo)
         Require(fixed_halo_policy && !x.layout,"target-only fixed-halo parameterization contract");
+    else if(target_only_pure_exclusion)
+        Require(pure_exclusion_policy && !x.layout && x.fixed_halos.empty(),
+            "target-only Pure Exclusion parameterization contract");
     else
     {
         Require(x.parameterization_contract==(x.layout ? "singleton-halo-profile-v1" : "full-abc-v1"),"parameterization contract");
@@ -1231,6 +1306,62 @@ void Validate(const JointAnalysisResult & x,int schema_version)
                 x.runtime_convergence!=JointCheckStatus::Passed),
             "fitted target-only result requires every fixed halo");
     }
+    if(target_only_pure_exclusion)
+    {
+        const auto & targets=x.selection_domain->target_indices;
+        const auto & provenance=*x.selection_domain->pure_halo_support_exclusion;
+        Require(provenance.original_rows==rows,"Pure Exclusion original row provenance");
+        Require(x.fitting_row_ids.size()==x.fitting_to_original_rows.size() &&
+            x.fitting_row_ids.size()==provenance.fit_rows && !x.fitting_row_ids.empty(),
+            "Pure Exclusion fitting identity dimensions");
+        std::set<std::size_t> fitting_rows;
+        for(std::size_t k=0;k<x.fitting_row_ids.size();++k)
+        {
+            const auto row=x.fitting_to_original_rows[k];
+            Require(row<rows && fitting_rows.insert(row).second && x.fitting_row_ids[k]==x.row_ids[row],
+                "Pure Exclusion fitting row identity");
+        }
+        Require(x.fitting_to_original_contributors.size()==targets.size(),
+            "Pure Exclusion fitting contributor dimensions");
+        for(std::size_t k=0;k<targets.size();++k)
+            Require(x.fitting_to_original_contributors[k]<atoms &&
+                x.fitting_to_original_contributors[k]==targets[k],
+                "Pure Exclusion fitting contributor mapping");
+        const bool has_halos=atoms>targets.size();
+        if(has_halos)
+        {
+            Require(x.halo_median_reconstruction.has_value(),"Pure Exclusion Halo median snapshot");
+            const auto & snapshot=*x.halo_median_reconstruction;
+            Require(snapshot.contract==HaloMedianReconstructionContractVersion &&
+                !snapshot.joint_run_id.empty() && snapshot.valid_target_count>0,
+                "Pure Exclusion Halo median snapshot contract");
+            for(const double value:snapshot.global_median)
+                Require(std::isfinite(value),"Pure Exclusion global median finiteness");
+            Require(snapshot.global_median[0]>=0 && snapshot.global_median[1]>0,
+                "Pure Exclusion global median validity");
+            Require(snapshot.halos.size()==atoms-targets.size(),"Pure Exclusion Halo median coverage");
+            std::size_t previous{}; bool first=true;
+            for(const auto & halo:snapshot.halos)
+            {
+                Require(halo.halo_contributor_index<atoms && (first || previous<halo.halo_contributor_index) &&
+                    x.atom_ids[halo.halo_contributor_index]==halo.atom_id &&
+                    !std::binary_search(targets.begin(),targets.end(),halo.halo_contributor_index),
+                    "Pure Exclusion Halo median identity");
+                Require(halo.contract==HaloMedianReconstructionContractVersion &&
+                    halo.joint_run_id==snapshot.joint_run_id && halo.donor_count>0,
+                    "Pure Exclusion Halo median provenance");
+                Require(std::isfinite(halo.amplitude) && halo.amplitude>=0 &&
+                    std::isfinite(halo.width) && halo.width>0 && std::isfinite(halo.charge),
+                    "Pure Exclusion Halo median parameters");
+                if(halo.source==HaloMedianSource::GlobalTargetMedian)
+                    Require(halo.donor_count==snapshot.valid_target_count,
+                        "Pure Exclusion global median donor count");
+                previous=halo.halo_contributor_index; first=false;
+            }
+        }
+        else Require(!x.halo_median_reconstruction,"Pure Exclusion no-Halo median snapshot");
+    }
+    else Require(!x.halo_median_reconstruction,"unexpected Halo median snapshot");
     if(x.layout)
     {
         std::vector<std::size_t> all_atoms(atoms),all_rows(rows);
@@ -1239,17 +1370,18 @@ void Validate(const JointAnalysisResult & x,int schema_version)
         ValidateLayout(*x.layout,all_atoms,all_rows,x.selection_domain ? &*x.selection_domain : nullptr);
     }
     std::vector<std::size_t> all(atoms); std::iota(all.begin(),all.end(),0);
-    const auto & full_atoms=target_only_fixed_halo ? x.selection_domain->target_indices :
+    const bool target_only_parameters=target_only_fixed_halo || target_only_pure_exclusion;
+    const auto & full_atoms=target_only_parameters ? x.selection_domain->target_indices :
         x.layout ? x.layout->full_atoms : all;
-    ValidateTarget(x.target_evidence,target_only_fixed_halo ? full_atoms : all,full_atoms,x.selection_domain,
-        target_only_fixed_halo ? full_atoms.size() : x.layout ? x.layout->full_atoms.size() : atoms,rows);
+    ValidateTarget(x.target_evidence,target_only_parameters ? full_atoms : all,full_atoms,x.selection_domain,
+        target_only_parameters ? full_atoms.size() : x.layout ? x.layout->full_atoms.size() : atoms,rows);
     if(x.assembled_state) ValidateState(*x.assembled_state,
-        target_only_fixed_halo ? full_atoms.size() : x.layout ? x.layout->full_atoms.size() : atoms,
+        target_only_parameters ? full_atoms.size() : x.layout ? x.layout->full_atoms.size() : atoms,
         x.layout ? x.layout->groups.size() : 0);
     if(x.initialization.valid)
     {
-        Require(x.initialization.b.size()==(target_only_fixed_halo ? full_atoms.size() : atoms),"initial width dimensions");
-        if(target_only_fixed_halo)
+        Require(x.initialization.b.size()==(target_only_parameters ? full_atoms.size() : atoms),"initial width dimensions");
+        if(target_only_parameters)
             for(const double width:x.initialization.b)
                 Require(std::isfinite(width) && width>0,"invalid initial width");
         else for(std::size_t atom=0;atom<atoms;++atom)
@@ -1265,7 +1397,7 @@ void Validate(const JointAnalysisResult & x,int schema_version)
         for(auto a:c.atoms) Require(a<atoms && used_atoms.insert(a).second,"component atom mapping");
         for(auto r:c.rows) Require(r<rows && used_rows.insert(r).second,"component row mapping");
         Require(c.layout.has_value()==x.layout.has_value(),"component layout contract");
-        if(target_only_fixed_halo)
+        if(target_only_parameters)
             for(const auto atom:c.atoms)
                 Require(std::binary_search(x.selection_domain->target_indices.begin(),
                     x.selection_domain->target_indices.end(),atom),"fixed halo cannot enter target component");
@@ -1295,7 +1427,8 @@ void Validate(const JointAnalysisResult & x,int schema_version)
 }
 std::string Encode(const JointAnalysisResult & x)
 {
-    Validate(x,15);
+    const bool pure_exclusion=x.parameterization_contract==JointPureHaloSupportExclusionParameterizationContract;
+    Validate(x,pure_exclusion ? 17 : 16);
     const auto & m=x.metadata; const auto & t=x.costs;
     j::array components;
     for(const auto & c:x.components)
@@ -1321,7 +1454,7 @@ std::string Encode(const JointAnalysisResult & x)
             component.emplace("legacy_candidate_evidence",LegacyCandidateEvidence(c.legacy_candidate_evidence));
         components.emplace_back(std::move(component));
     }
-    Object out{{"schema_version",16},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
+    Object out{{"schema_version",pure_exclusion ? 17 : 16},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
         { "support_contract","sphere-fma-v1"},{"parameterization_contract",x.parameterization_contract},{"layout",Layout(x.layout)},{"metadata",Metadata(m)},{"selection_domain",SelectionDomain(x.selection_domain)},
         {"fixed_halos",FixedHalos(x.fixed_halos)},
         {"atom_ids",j::value_from(x.atom_ids)},{"row_ids",j::value_from(x.row_ids)},{"initialization",Initialization(x.initialization)},
@@ -1333,6 +1466,13 @@ std::string Encode(const JointAnalysisResult & x)
         {"search_completed",x.search_completed},{"observation_scale",x.observation_scale},
         {"regular_certificate",StatusText(x.regular_certificate)},{"runtime_convergence",StatusText(x.runtime_convergence)},
         {"target_evidence",Target(x.target_evidence)},{"target_runtime_convergence",StatusText(x.target_runtime_convergence)}};
+    if(pure_exclusion)
+    {
+        out.emplace("fitting_row_ids",j::value_from(x.fitting_row_ids));
+        out.emplace("fitting_to_original_contributors",j::value_from(x.fitting_to_original_contributors));
+        out.emplace("fitting_to_original_rows",j::value_from(x.fitting_to_original_rows));
+        out.emplace("halo_median_reconstruction",HaloMedianSnapshot(x.halo_median_reconstruction));
+    }
     return j::serialize(out);
 }
 JointAnalysisResult Decode(std::string_view text)
@@ -1340,8 +1480,8 @@ JointAnalysisResult Decode(std::string_view text)
     j::parse_options options; options.numbers=j::number_precision::precise;
     const auto parsed=j::parse(text,{},options); const auto & o=parsed.as_object();
     const int version=Read<int>(o,"schema_version");
-    Require(version==3 || version==4 || version==5 || version==6 || version==7 || version==8 || version==9 || version==10 || version==11 || version==12 || version==13 || version==14 || version==15 || version==16,
-        "unsupported result schema version (expected 3 through 16)");
+    Require(version==3 || version==4 || version==5 || version==6 || version==7 || version==8 || version==9 || version==10 || version==11 || version==12 || version==13 || version==14 || version==15 || version==16 || version==17,
+        "unsupported result schema version (expected 3 through 17)");
     if(version>=15)
         for(const auto & fixed:o.at("fixed_halos").as_array())
             Require(fixed.as_object().contains("first_stage_qualification"),
@@ -1356,6 +1496,13 @@ JointAnalysisResult Decode(std::string_view text)
     x.selection_domain=ReadSelectionDomain(o.at("selection_domain"));
     if(version>=14) x.fixed_halos=ReadFixedHalos(o.at("fixed_halos"));
     x.atom_ids=Read<std::vector<std::string>>(o,"atom_ids"); x.row_ids=Read<std::vector<std::string>>(o,"row_ids");
+    if(version>=17)
+    {
+        x.fitting_row_ids=Read<std::vector<std::string>>(o,"fitting_row_ids");
+        x.fitting_to_original_contributors=Read<std::vector<std::size_t>>(o,"fitting_to_original_contributors");
+        x.fitting_to_original_rows=Read<std::vector<std::size_t>>(o,"fitting_to_original_rows");
+        x.halo_median_reconstruction=ReadHaloMedianSnapshot(o.at("halo_median_reconstruction"));
+    }
     x.initialization=ReadInitialization(o.at("initialization"));
     const auto & t=o.at("costs").as_object();
     x.costs={Read<double>(t,"initialization_seconds"),Read<double>(t,"search_seconds"),Read<double>(t,"search_reference_seconds"),
