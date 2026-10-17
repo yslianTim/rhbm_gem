@@ -131,11 +131,14 @@ int main(int argc, char ** argv)
 {
     try
     {
-        if (argc != 3) throw std::invalid_argument(
-            "Usage: joint_postprocessing_benchmark full|halo|multi|noisy|outlier|dense|target-heavy|connected DATABASE");
+        if (argc != 3 && argc != 4) throw std::invalid_argument(
+            "Usage: joint_postprocessing_benchmark full|halo|multi|noisy|outlier|dense|target-heavy|connected DATABASE [fixed|pure]");
         const std::string name = argv[1];
         if (name != "full" && name != "halo" && name != "multi" && name != "noisy" &&
             name != "outlier" && name != "dense" && name != "target-heavy" && name != "connected") return 2;
+        const std::string policy = argc == 4 ? argv[3] : "fixed";
+        if (policy != "fixed" && policy != "pure") return 2;
+        const bool pure_exclusion = policy == "pure";
 
         auto f = Make(name);
         c::FitOptions options;
@@ -150,7 +153,7 @@ int main(int argc, char ** argv)
         {
             const auto workflow_start = Clock::now();
             RssMonitor pipeline_rss;
-            c::detail::RunJointComponentWorkflow(*f.map, *f.model, options, &postprocessing_metrics);
+            c::detail::RunJointComponentWorkflow(*f.map, *f.model, options, &postprocessing_metrics, pure_exclusion);
             pipeline_seconds = Seconds(workflow_start);
             pipeline_peak_rss_bytes = pipeline_rss.Peak();
         }
@@ -239,7 +242,20 @@ int main(int argc, char ** argv)
             {"target_preparation_count", postprocessing_metrics.target_preparation_count},
             {"prepared_sample_count", postprocessing_metrics.total_prepared_sample_count},
             {"valid_local_sample_count", postprocessing_metrics.valid_local_sample_count},
-            {"invalid_local_sample_count", postprocessing_metrics.invalid_local_sample_count}};
+            {"invalid_local_sample_count", postprocessing_metrics.invalid_local_sample_count},
+            {"raw_peeling_sample_count", postprocessing_metrics.raw_peeling_sample_count},
+            {"nonzero_stencil_node_count", postprocessing_metrics.nonzero_stencil_node_count},
+            {"available_peeling_sample_count", postprocessing_metrics.available_peeling_sample_count},
+            {"unavailable_peeling_sample_count", postprocessing_metrics.unavailable_peeling_sample_count},
+            {"map_geometry_boundary_samples", postprocessing_metrics.map_geometry_boundary_samples},
+            {"map_geometry_boundary_nodes", postprocessing_metrics.map_geometry_boundary_nodes},
+            {"original_support_boundary_samples", postprocessing_metrics.original_support_boundary_samples},
+            {"original_support_boundary_nodes", postprocessing_metrics.original_support_boundary_nodes},
+            {"fitting_mask_only_intersection_samples", postprocessing_metrics.fitting_mask_only_intersection_samples},
+            {"fitting_mask_only_intersection_nodes", postprocessing_metrics.fitting_mask_only_intersection_nodes},
+            {"mapping_mismatch_samples", postprocessing_metrics.mapping_mismatch_samples},
+            {"missing_contributor_samples", postprocessing_metrics.missing_contributor_samples},
+            {"other_peeling_failure_samples", postprocessing_metrics.other_peeling_failure_samples}};
         const j::object memory{
             {"estimated_context_lookup_bytes", postprocessing_metrics.estimated_context_lookup_bytes},
             {"estimated_peak_workspace_payload_bytes", postprocessing_metrics.estimated_peak_postprocessing_payload_bytes},
@@ -260,6 +276,7 @@ int main(int argc, char ** argv)
         std::cout << j::serialize(j::object{
             {"case", name},
             {"mode", "workflow"},
+            {"joint_policy", policy},
             {"phases", phases},
             {"preparation", preparation},
             {"memory", memory},

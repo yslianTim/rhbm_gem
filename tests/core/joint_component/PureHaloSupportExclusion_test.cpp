@@ -173,6 +173,17 @@ MapFixture WorkflowFixture()
     MapObject map(dimensions,spacing,origin,std::move(values));
     return {std::move(model),std::move(map)};
 }
+
+MapFixture WideBoundaryFixture()
+{
+    auto fixture=BoundaryFixture();
+    constexpr std::array<int,3> dimensions{21,9,9};
+    auto values=std::make_unique<double[]>(static_cast<std::size_t>(dimensions[0])*dimensions[1]*dimensions[2]);
+    for (std::size_t i=0;i<static_cast<std::size_t>(dimensions[0])*dimensions[1]*dimensions[2];++i)
+        values[i]=static_cast<double>(i);
+    MapObject map(dimensions,{.5,.5,.5},{-5,-2,-2},std::move(values));
+    return {std::move(fixture.model),std::move(map)};
+}
 }
 
 TEST(PureHaloSupportExclusionTest, ExcludesExactBoundarySupportAndPreservesOriginalDomain)
@@ -261,6 +272,42 @@ TEST(PureHaloSupportExclusionTest, PeelingUsesOriginalRowsAndReconstructedHalo)
     ASSERT_EQ(prepared.samples.size(),1u);
     EXPECT_TRUE(prepared.samples.front().fixed_charge_response);
     EXPECT_TRUE(prepared.samples.front().gaussian_response);
+}
+
+TEST(PureHaloSupportExclusionTest, ClassifiesPeelingGeometrySupportAndMaskIntersections)
+{
+    auto fixture=WideBoundaryFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    auto snapshot=PurePeelingSnapshot(problem,fixture.model);
+    data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"peeling-domain-audit");
+    const SamplingPointList points{
+        {1.75,{1.75,0,0},true},
+        {2.25,{2.25,0,0},true},
+        {10.0,{10.0,0,0},true}};
+    fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),
+        core::detail::BuildLocalPotentialSampleList(fixture.map,points));
+    core::detail::JointPostprocessingMetrics metrics;
+    const core::detail::JointPostprocessingContext context(
+        fixture.map,fixture.model,problem,&snapshot,&metrics);
+    const auto peelings=context.BuildPostFitPeelingSamples(std::vector<std::size_t>{0});
+    const auto & samples=peelings.at(1).samples;
+    ASSERT_EQ(samples.size(),3u);
+    EXPECT_TRUE(samples[0].response);
+    EXPECT_FALSE(samples[1].response);
+    EXPECT_FALSE(samples[2].response);
+    EXPECT_EQ(samples[1].reason,"outside-joint-domain");
+    EXPECT_EQ(samples[2].reason,"outside-joint-domain");
+    EXPECT_EQ(metrics.raw_peeling_sample_count,3u);
+    EXPECT_EQ(metrics.available_peeling_sample_count,1u);
+    EXPECT_EQ(metrics.unavailable_peeling_sample_count,2u);
+    EXPECT_EQ(metrics.map_geometry_boundary_samples,1u);
+    EXPECT_EQ(metrics.original_support_boundary_samples,1u);
+    EXPECT_EQ(metrics.mapping_mismatch_samples,0u);
+    EXPECT_GE(metrics.fitting_mask_only_intersection_samples,1u);
+    EXPECT_GT(metrics.nonzero_stencil_node_count,0u);
+    EXPECT_GT(metrics.map_geometry_boundary_nodes,0u);
+    EXPECT_GT(metrics.original_support_boundary_nodes,0u);
+    EXPECT_GT(metrics.fitting_mask_only_intersection_nodes,0u);
 }
 
 TEST(PureHaloSupportExclusionTest, PeelingRejectsFitReconstructionIdentityMismatch)
