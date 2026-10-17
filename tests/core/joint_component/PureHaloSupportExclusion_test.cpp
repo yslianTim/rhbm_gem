@@ -437,3 +437,21 @@ TEST(PureHaloSupportExclusionTest, ProductionWorkflowUsesPureExclusionDefault)
     ASSERT_TRUE(result->halo_median_reconstruction);
     EXPECT_EQ(result->halo_median_reconstruction->halos.size(),2u);
 }
+
+TEST(PureHaloSupportExclusionTest, PublicEstimatorEntrypointsDeclareTheirPolicies)
+{
+    auto production_fixture=WorkflowFixture();
+    const auto production=EstimateJointComponents(production_fixture.map,production_fixture.model);
+    ASSERT_TRUE(production.problem);
+    ASSERT_TRUE(production.problem->Input().selection_domain);
+    EXPECT_EQ(production.problem->Input().selection_domain->contributor_policy,
+        PureHaloSupportExclusionContributorPolicy);
+    EXPECT_EQ(production.problem->Input().atom_ids.size(),1u);
+
+    auto legacy_fixture=WorkflowFixture();
+    const auto legacy=EstimateJointComponentsFixedHalo(legacy_fixture.map,legacy_fixture.model);
+    ASSERT_TRUE(legacy.problem);
+    ASSERT_TRUE(legacy.problem->Input().selection_domain);
+    EXPECT_EQ(legacy.problem->Input().selection_domain->contributor_policy,FixedHaloContributorPolicy);
+    EXPECT_EQ(legacy.problem->Input().atom_ids.size(),3u);
+}

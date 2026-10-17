@@ -680,7 +680,7 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesHaloHistoryAndRo
     for(const auto & atom:f.model->GetAtomList())
         for(auto stage:{rhbm_gem::FittingStage::First,rhbm_gem::FittingStage::Second})
             f.model->EditAnalysis().SetAtomLocalGaussianResult(stage,*atom,sentinel);
-    const auto fit=core::EstimateJointComponents(*f.map,*f.model);
+    const auto fit=core::EstimateJointComponentsFixedHalo(*f.map,*f.model);
     ASSERT_EQ(fit.initialization.atoms.size(),2); ASSERT_TRUE(fit.initialization.valid) << fit.initialization.reason;
     EXPECT_EQ(f.model->GetSelectedAtomCount(),1); EXPECT_EQ(f.model->GetSelectedAtoms()[0]->GetSerialID(),1);
     EXPECT_EQ(f.model->GetSelectedBonds(),selected_bonds);
@@ -1059,7 +1059,7 @@ TEST(JointComponentPartialSelectionTest, OriginalBondSelectionIsPreserved)
     {
         model->SelectAllBonds(selected);
         const auto before=model->GetSelectedBonds();
-        const auto fit=core::EstimateJointComponents(*fixture.map,*model);
+        const auto fit=core::EstimateJointComponentsFixedHalo(*fixture.map,*model);
         EXPECT_EQ(model->GetSelectedBonds(),before);
         EXPECT_EQ(model->GetSelectedAtomCount(),1);
         EXPECT_EQ(fit.initialization.atoms.size(),2);

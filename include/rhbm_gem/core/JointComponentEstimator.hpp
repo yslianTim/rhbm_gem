@@ -22,8 +22,8 @@ struct JointProblemInput
     std::optional<JointSelectionDomain> selection_domain;
 };
 // Owns a validated immutable snapshot. Construction never reads historical fits.
-// BuildJointProblem returns an uninitialized fixed-halo problem; initial target
-// widths alone do not create its required FirstStage halo snapshot.
+// BuildJointProblem is the historical low-level fixed-halo research builder;
+// initial target widths alone do not create its required FirstStage halo snapshot.
 class JointProblem
 {
 public:
@@ -82,9 +82,10 @@ struct JointFitResult
 };
 // Captures results without retaining the problem snapshot or running numerical checks.
 JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult &, JointAnalysisMetadata = {});
-// Selected non-hydrogen atoms fix the rows. Every unselected non-hydrogen atom
-// with at least one support entry on those rows is retained as a fixed halo.
+// Historical fixed-halo problem builder. New research call sites should use
+// the explicit BuildFixedHaloResearchProblem name.
 JointProblem BuildJointProblem(const MapObject &,const ModelObject &);
+JointProblem BuildFixedHaloResearchProblem(const MapObject &,const ModelObject &);
 // Production target-only problem. Halo support is used only to exclude fitting
 // rows; reconstruction keeps the original-domain input in OriginalInput().
 JointProblem BuildPureHaloSupportExclusionProblem(const MapObject &,const ModelObject &);
@@ -96,11 +97,14 @@ JointFitResult FitJointComponents(const JointProblem &,const std::vector<double>
 // before fitting selected targets. A raw BuildJointProblem result without
 // qualified initialization cannot proceed to target optimization.
 JointFitResult FitJointComponentsInitialized(const JointProblem &,const JointInitialization &);
-// Builds the problem, performs FirstStage initialization, and then fits targets
-// only. Inspect initialization validity separately from target convergence.
+// Builds the Production Pure Exclusion problem, performs FirstStage
+// initialization, and then fits targets only. Inspect initialization validity
+// separately from target convergence.
 // Updates successful targets' first-stage analysis only. Joint estimates are returned, not written
 // into the existing second-stage or group-fitting result fields. Replacing raw samples
 // invalidates sample-derived peeling, while fixed Second and group results are retained.
 JointFitResult EstimateJointComponents(MapObject &,ModelObject &);
+// Explicit historical Fixed Halo research/compatibility entry point.
+JointFitResult EstimateJointComponentsFixedHalo(MapObject &,ModelObject &);
 }
 }

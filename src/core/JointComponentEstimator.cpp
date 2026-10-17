@@ -837,6 +837,11 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
     }
     return JointProblem(std::move(input));
 }
+
+JointProblem BuildFixedHaloResearchProblem(const MapObject & map,const ModelObject & model)
+{
+    return BuildJointProblem(map,model);
+}
 JointProblem BuildPureHaloSupportExclusionProblem(const MapObject & map,const ModelObject & model)
 {
     const auto fixed_problem=BuildJointProblem(map,model);
@@ -1250,10 +1255,24 @@ JointInitialization joint_component::InitializeContributors(MapObject & map,Mode
     }
     return initialization;
 }
-JointFitResult EstimateJointComponents(MapObject & map,ModelObject & model)
+JointFitResult EstimateJointComponentsFixedHalo(MapObject & map,ModelObject & model)
 {
     const auto construction_start=Clock::now();
     const auto problem=BuildJointProblem(map,model);
+    const double construction_seconds=Seconds(construction_start);
+    const auto initialization_start=Clock::now();
+    auto initialization=n::InitializeContributors(map,model,problem);
+    const double initialization_seconds=Seconds(initialization_start);
+    auto out=FitJointComponentsInitialized(problem,initialization); out.costs.initialization_seconds=initialization_seconds;
+    out.costs.construction_seconds=construction_seconds;
+    out.initialization=std::move(initialization);
+    return out;
+}
+
+JointFitResult EstimateJointComponents(MapObject & map,ModelObject & model)
+{
+    const auto construction_start=Clock::now();
+    const auto problem=BuildPureHaloSupportExclusionProblem(map,model);
     const double construction_seconds=Seconds(construction_start);
     const auto initialization_start=Clock::now();
     auto initialization=n::InitializeContributors(map,model,problem);
