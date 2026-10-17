@@ -381,6 +381,46 @@ TEST(PureHaloSupportExclusionTest, RunsPureWorkflowWithoutHalos)
     EXPECT_EQ(metrics.halo_median_fallback_halos,0u);
 }
 
+TEST(PureHaloSupportExclusionTest, FullWorkflowRetainsMultipleMemberGroupContract)
+{
+    auto fixture=WorkflowFixture();
+    fixture.model.SelectAllAtoms();
+    fixture.model.FindAtomPtr(3)->SetComponentKey(static_cast<ComponentKey>(1));
+    fixture.model.FindAtomPtr(3)->SetAtomKey(static_cast<AtomKey>(7));
+    FitOptions options;
+    options.estimator=PotentialEstimator::JOINT_COMPONENTS;
+    options.quiet_mode=true;
+    options.thread_size=1;
+    core::detail::JointPostprocessingMetrics metrics;
+    ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
+        fixture.map,fixture.model,options,&metrics,true));
+    const auto result=fixture.model.GetAnalysisView().GetJointResult();
+    ASSERT_TRUE(result);
+    ASSERT_TRUE(result->selection_domain);
+    EXPECT_EQ(result->selection_domain->target_indices.size(),3u);
+    EXPECT_FALSE(result->halo_median_reconstruction);
+    const auto keys=fixture.model.GetAnalysisView().CollectAtomGroupKeys();
+    bool found_multi_member=false;
+    for (const auto key:keys)
+    {
+        const auto summary=fixture.model.GetAnalysisView().GetGroupParameterSummary(key);
+        if (!summary) continue;
+        const auto & members=fixture.model.GetAnalysisView().GetAtomObjectList(key);
+        if (members.size()!=3) continue;
+        found_multi_member=true;
+        EXPECT_EQ(summary->member_ids,(std::vector<int>{1,2,3}));
+        EXPECT_EQ(summary->point_count,summary->eligible_count);
+        EXPECT_EQ(summary->excluded_count,0u);
+        EXPECT_EQ(summary->status,EvidenceStatus::Available) << summary->reason;
+        ASSERT_TRUE(summary->inference);
+        EXPECT_TRUE(std::isfinite(summary->inference->mdpde.GetAmplitude()));
+        EXPECT_TRUE(std::isfinite(summary->inference->mdpde.GetWidth()));
+    }
+    EXPECT_TRUE(found_multi_member);
+    EXPECT_EQ(metrics.halo_median_same_group_halos,0u);
+    EXPECT_EQ(metrics.halo_median_fallback_halos,0u);
+}
+
 TEST(PureHaloSupportExclusionTest, ProductionWorkflowUsesPureExclusionDefault)
 {
     auto fixture=WorkflowFixture();
