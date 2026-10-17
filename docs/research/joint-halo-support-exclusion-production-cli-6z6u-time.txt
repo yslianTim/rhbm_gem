@@ -1,0 +1,30 @@
+Command (macOS, serial fitting; exit code 0):
+env OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 \
+/usr/bin/time -l ./build/bin/RHBM-GEM potential_analysis \
+  --estimator joint-components --jobs 4 --verbose 3 \
+  --folder /private/tmp/rhbm-6z6u-production-cli-rss \
+  --database /private/tmp/rhbm-6z6u-production-cli-rss/production.sqlite \
+  --model /Users/yslian/data/6z6u.cif \
+  --map /Users/yslian/Documents/simulation/sim_map_gaus_grid0.50_charge1_width_6Z6U_bw0.50.map \
+  --select-chain A --save-key production
+
+Raw stderr/time output:
+[Warning] [validation] Option -j,--jobs: Joint initialization and fitting use one worker.
+      309.14 real       307.94 user         0.78 sys
+           986136576  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               92566  page reclaims
+                 132  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  37  voluntary context switches
+                7817  involuntary context switches
+       4954190646372  instructions retired
+        970294617714  cycles elapsed
+           881429952  peak memory footprint

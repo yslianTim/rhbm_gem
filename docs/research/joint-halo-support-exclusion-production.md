@@ -11,6 +11,10 @@
 
 本報告記錄 Pure Halo-Support Exclusion 正式整合、Production default promotion，以及 6Z6U full workflow smoke 的實際結果。未在本次執行中量測的數值明確標示為 `未量測`；歷史研究結果不當作本次 Production CLI 的重新測量。
 
+> Closure note: sections 5–10 describe the pre-P0 production-promotion snapshot. The
+> P0–P4 closure measurements below supersede their earlier `未量測` and boundary
+> wording; historical statements are retained for provenance.
+
 ## 1. Production Architecture
 
 正式資料流為：
@@ -247,3 +251,221 @@ Production log 會輸出 `valid_targets`、`same_group_halos`、`global_fallback
 * 本次 CLI peak RSS 未由外部 sampler 測量，只有 persisted memory estimate 與既有 6Z6U reference RSS。
 
 上述項目沒有造成 Pure Exclusion 的 fitting/reconstruction identity mismatch，也沒有要求放寬 numerical criteria；因此不構成此次 Production default promotion 的 correctness blocker。
+
+## 11. P0–P4 Final Closure Addendum
+
+本節是本次任務的 certification record。狀態詞的意義為：`Measured` 代表由
+當次 executable 產生並核對的數值；`Estimated` 代表 preflight/planner 結果；
+`NotRun`、`NotAssessed` 與 `Unavailable` 不解讀為成功。
+
+### 11.1 Audit inputs and controlled experiment
+
+使用的本機 simulation inputs 為：
+
+* `/Users/yslian/data/6z6u.cif`；
+* `sim_map_gaus_grid0.50_charge1_width_6Z6U_bw0.50.map`；
+* 相鄰的 `.map.simulation.json` truth sidecar。
+
+sidecar 查證為 schema 2、`single-gaus-v1`、sphere support、`r² <= 6.25 Å²`，
+且 `C` 是 charge coefficient，不是 spatial background。simulation map 本身沒有
+normalization；production-style runner 使用 map divisor
+`0.44031545732594374`，並以 truth scale `2.2710990117699854` 將 A/C 轉到
+normalized production units。Gaussian/charge width、support 與 raw sampling
+positions 均由同一套 implementation 產生；runner 設定 Eigen/OpenMP/OpenBLAS/
+Accelerate = 1，workflow thread size = 1。
+
+可重現 runner 與完整 per-target/per-halo structured artifact 為
+[joint_halo_support_exclusion_validation.cpp](../../tests/experiments/joint_halo_support_exclusion_validation.cpp)
+與
+[joint-halo-support-exclusion-validation-6z6u.json](joint-halo-support-exclusion-validation-6z6u.json)。
+6Z6U run 使用 1,418 targets、2,077 original contributors、229,783 original
+rows、180,478 fitting rows，retained supported halos = 659。
+
+B/C/D 的固定 endpoint contract 已核對：三者 target A/B/C、fitting rows、raw
+map、sampling geometry、initialization 與 group membership 完全相同；只替換
+peeling halo reconstruction。A 是獨立 Fixed Halo full workflow baseline，不能
+與 B/C/D 的 shared endpoint 混為一個 paired endpoint。
+
+### 11.2 P0 scientific accuracy (`Measured`)
+
+Joint target truth RMSE（B/C/D 完全相同；順序 A / B(Å) / C）如下：
+
+| strategy | A RMSE | B RMSE | C RMSE |
+| --- | ---: | ---: | ---: |
+| A Fixed Halo baseline | 1.15824906 | 0.01167836 | 0.14969372 |
+| B GroupKey + global fallback | 9.508723e-6 | 1.464838e-7 | 2.921096e-6 |
+| C global median only | 9.508723e-6 | 1.464838e-7 | 2.921096e-6 |
+| D oracle halo reconstruction | 9.508723e-6 | 1.464838e-7 | 2.921096e-6 |
+
+The common Pure endpoint passed runtime convergence, target convergence and
+independent replay. Halo field RMSE over supported halo field samples was:
+
+| strategy/source | field RMSE |
+| --- | ---: |
+| A Fixed FirstStage | 0.41708130 |
+| B aggregate | 0.36867647 |
+| B Same GroupKey | 0.00975849 |
+| B global fallback | 0.48062877 |
+| C all global | 0.52222007 |
+| D oracle | 0 (floating-point reference) |
+
+The median audit re-established `453` Same GroupKey halos and `206` fallback
+halos, with `40,286` fallback support rows. The artifact retains a record for
+each halo, including source, support count, bias, median absolute error, P95 and
+maximum absolute error. The fallback subgroup is therefore a measured 206-halo
+population, not an inherited count.
+
+Peeling RMSE used the production tricubic stencil and the same raw sample
+positions. Statistics are also available for the common intersection; all three
+Pure variants had the same available intersection here.
+
+| strategy | raw | available | unavailable | RMSE | bias | P95 abs. error |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| A Fixed Halo | 283,600 | 262,260 | 21,340 | 0.13913976 | 0.00461506 | 0.25011721 |
+| B GroupKey + fallback | 283,600 | 262,260 | 21,340 | 0.03968451 | 0.00714560 | 0.03415698 |
+| C global only | 283,600 | 262,260 | 21,340 | 0.05383146 | 0.00463867 | 0.06141229 |
+| D oracle | 283,600 | 262,260 | 21,340 | 3.025840e-6 | 8.378475e-9 | 2.845229e-6 |
+
+B improves over C on this truth realization, while the 206 fallback halos remain
+the dominant measured approximation error. D shows the available improvement
+space without feeding truth back into Joint optimization.
+
+Post-Joint Local MDPDE truth RMSE (A/B) was A baseline `1.38568677 / 0.02449630`,
+B `8.63036240 / 0.05838103`, C `8.62460807 / 0.05834945`, and D
+`8.65029006 / 0.05850265`. All four had 1,418/1,418 local results `Available`.
+These absolute truth errors include the full finite-support/model realization and
+must not be read as halo-only error. Relative to the Oracle peeling pipeline,
+B deviated by `0.29185217 / 0.00535726` RMSE and C by
+`0.34531804 / 0.00627566`; D is zero by construction. Local information was
+validated by the existing numerical qualification and covariance checks, but a
+separate per-target covariance summary is `NotAssessed` in this runner.
+
+Group Fitting reported 173 groups, 147 `Available`, 26 `Unavailable`, 21
+single-member groups and 5 singular-covariance groups for A/B/C/D. Group A/B
+truth comparisons and member-level records are in the artifact; Group C is not
+invented because the estimator contract has no Group C parameter. The five
+singular groups and 21 single-member groups were unchanged across strategies,
+and all 1,418 local inputs were available, so there is no evidence that median
+peeling created new invalid local covariance in this run.
+
+### 11.3 P1 peeling availability classification (`Measured`)
+
+The original `outside-joint-domain = 21,340` count is now split by primary
+deterministic reason. Fixed and Pure used the same 6Z6U raw map, model selection
+and sampling method:
+
+| reason/metric | Fixed Halo | Pure Exclusion B |
+| --- | ---: | ---: |
+| raw samples | 283,600 | 283,600 |
+| nonzero stencil nodes | 18,118,384 | 18,118,384 |
+| valid peeling samples | 262,260 | 262,260 |
+| unavailable samples | 21,340 | 21,340 |
+| A: outside map geometry | 0 | 0 |
+| B: inside map, outside Original Joint support | 21,340 | 21,340 |
+| C: fitting-mask-only intersections | 0 | 103,991 |
+| D: identity mapping mismatch | 0 | 0 |
+| E: missing contributor/other failure | 0 | 0 |
+
+The Pure `103,991` C count is a node/sample intersection diagnostic, not a
+failure count: every such sample remained available. The old serialized sample
+reason `outside-joint-domain` remains for schema compatibility, while the new
+metrics distinguish map geometry from Original Joint support. Thus none of the
+21,340 losses is a fitting-mask-only loss, and no identity defect was observed.
+The deterministic regression also covers a true map-boundary stencil, a
+map-internal Original-support boundary, a mask-only intersection, and an
+identity mismatch rejection.
+
+### 11.4 P2 Group Fitting regression (`Passed`)
+
+The synthetic full workflow now has three targets sharing one GroupKey and runs
+the complete chain:
+
+```text
+Pure Joint → no-halo median state → original-domain peeling
+→ local MDPDE → multi-member Group Fitting
+```
+
+The test asserts target endpoint convergence, finite local results and effective
+sample counts, group membership `{1,2,3}`, `Available` group status, finite
+group A/B estimates, zero excluded members, and no mutation of the Joint target
+contract. Existing regression coverage retains the formal rejection behavior for
+single-member and singular-covariance groups, result roundtrip, invalid local
+information, median fallback, and atom-order determinism.
+
+### 11.5 P3 public API policy matrix (`Passed`)
+
+| entrypoint | policy after audit | status |
+| --- | --- | --- |
+| `RunPotentialFittingWorkflow(JOINT_COMPONENTS)` | Pure Exclusion | Production |
+| `RunJointComponentWorkflow(..., true)` | Pure Exclusion | Production workflow |
+| `RunJointComponentWorkflow(..., false)` | Fixed Halo | Explicit historical research path |
+| `EstimateJointComponents` | Pure Exclusion | Public Production API |
+| `EstimateJointComponentsFixedHalo` | Fixed Halo | Compatibility/research API |
+| `BuildPureHaloSupportExclusionProblem` | Pure Exclusion | Explicit production builder |
+| `BuildJointProblem` | Fixed Halo | Historical low-level compatibility builder |
+| `BuildFixedHaloResearchProblem` | Fixed Halo | Explicit research builder |
+| `FitJointComponents` / `FitJointComponentsInitialized` | policy of supplied problem | Shared numerical endpoint |
+| CLI `potential_analysis --estimator joint-components` | Pure Exclusion | Production |
+| pybind/CLI smoke surface | no stale direct Fixed API callsite | CTest passed |
+
+The statistical research experiment was updated to call the explicit Fixed Halo
+compatibility API; it no longer relies on the Production API's old accidental
+semantics. Schema 17, independent replay and historical Fixed Halo result
+reading remain intact.
+
+### 11.6 P4 memory, Release and final validation
+
+The final production CLI command was run serially with `--jobs 4` and
+Eigen/OpenMP/OpenBLAS/Accelerate set to 1. The valid macOS `/usr/bin/time -l`
+run exited 0, saved the SQLite result, and logged `Joint fitting qualified`.
+The measured whole-process high-water mark was:
+
+```text
+maximum resident set size: 986,136,576 bytes
+                       = 940.45 MiB = 0.918 GiB
+```
+
+This is a measured 6Z6U chain-A production run (1,418 selected targets,
+180,478 compact fitting rows and 229,783 original rows), not a claim about the
+37,406-target synthetic shape. It is below the 4 GiB target. The complete raw
+command used the model/map paths in §11.1, `--folder`, `--database`,
+`--select-chain A`, `--save-key production`, and
+`--estimator joint-components`.
+
+For the 37,406-target/5,938,087-row large-component shape, current repository
+evidence remains synthetic and is labeled `Estimated`/`Measured` by scope:
+972,989,100-byte preparation estimate, 625,051,683-byte endpoint-verification
+estimate, and 622,460,928-byte synthetic whole-process RSS. No full physical
+37,406-target fit was run (`NotRun`), and no claim is made that its full local
+conditioning/stability workflow completed. No No-Halo zero-copy refactor was
+introduced: the measured production run is below budget, and changing ownership
+semantics would add complexity without a demonstrated budget failure.
+
+Final validation commands and outcomes:
+
+| command | result |
+| --- | --- |
+| `cmake --build build --parallel 4` | Passed; Release build, CLI, pybind11, research and benchmark targets linked |
+| `ctest --test-dir build --output-on-failure -j 4` | **43/43 Passed**, 0 Failed, 0 Skipped |
+| CLI smoke tests | Passed in CTest and direct 6Z6U CLI |
+| pybind11 smoke | Passed in CTest (`bindings_runtime_smoke_test`, Python examples) |
+| schema/result roundtrip | Passed in contract/persistence tests and research runner |
+| numerical qualification | Passed for direct 6Z6U production endpoint |
+| independent replay | Passed for direct endpoint and B/C/D shared endpoint |
+
+Git certification before the documentation commit was `develop` at
+`3c4dd18c`; no branch or worktree was created, and all task commits were direct
+on `develop`. The final report commit is the commit that adds this addendum.
+
+### 11.7 Final decision
+
+**B — Production Stable, Research Limitations Remaining.**
+
+The Production Pure Exclusion workflow, median policy, original-domain peeling,
+Group Fitting qualification, public API contract, schema compatibility,
+independent replay, measured 6Z6U RSS and full 43-test Release validation are
+stable with no known correctness regression. Remaining limitations are the
+unrun full physical 37,406-target fit, per-target local information summary not
+being aggregated by the P0 runner, and the accepted finite-support/model truth
+limitations. These are explicitly labeled rather than treated as evidence for
+an algorithm redesign or as Passed measurements.
