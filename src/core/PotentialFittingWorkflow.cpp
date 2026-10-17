@@ -163,6 +163,13 @@ void LogJointInfo(const std::string & message)
 
 }
 
+PostJointLocalResult FitPostJointLocalTargetForResearch(
+    const JointPostprocessingContext & postprocessing, const ModelObject & model, int atom_id,
+    const PostFitPeelingResult & peeling, const FitOptions & options, JointPostprocessingMetrics & metrics)
+{
+    return FitPostJointLocalTarget(postprocessing, model, atom_id, peeling, options, metrics);
+}
+
 void RunTwoStageFromPreparedSamples(
     ModelObject & model, const std::vector<AtomObject *> & atoms, const FitOptions & options)
 {

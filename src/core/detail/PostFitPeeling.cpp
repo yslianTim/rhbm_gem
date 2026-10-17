@@ -25,6 +25,69 @@ bool SameSource(const EstimateSource & a, const EstimateSource & b)
     return a.method == b.method && a.atom_id == b.atom_id && a.component_id == b.component_id &&
         a.run_id == b.run_id && a.role == b.role && a.fixed_from_first_stage==b.fixed_from_first_stage;
 }
+
+struct StencilAudit
+{
+    std::size_t nonzero_nodes{};
+    std::size_t map_boundary_nodes{};
+    std::size_t original_support_boundary_nodes{};
+    std::size_t fitting_mask_only_nodes{};
+    bool map_boundary{};
+    bool original_support_boundary{};
+    bool mapping_mismatch{};
+    bool fitting_mask_only{};
+};
+
+StencilAudit AuditStencil(const TricubicStencil & stencil, const MapObject & geometry,
+    const std::vector<std::string> & original_row_ids,
+    const std::unordered_map<std::size_t, std::size_t> & original_rows,
+    const std::unordered_map<std::size_t, std::size_t> & fitting_rows)
+{
+    const auto dimensions = geometry.GetGridSize();
+    std::array<std::array<double, 4>, 3> weights{};
+    for (std::size_t axis = 0; axis < 3; ++axis)
+        for (std::size_t node = 0; node < 4; ++node)
+            weights[axis][node] = CubicInterpolate(
+                node == 0, node == 1, node == 2, node == 3, stencil.local[axis]);
+
+    StencilAudit audit;
+    for (int i = -1; i < 3; ++i) for (int j = -1; j < 3; ++j) for (int k = -1; k < 3; ++k)
+    {
+        const double weight = weights[0][static_cast<std::size_t>(i + 1)] *
+            weights[1][static_cast<std::size_t>(j + 1)] *
+            weights[2][static_cast<std::size_t>(k + 1)];
+        if (weight == 0.0) continue;
+        ++audit.nonzero_nodes;
+        const auto raw_node = stencil.UnclampedNode(i, j, k);
+        const bool in_bounds = raw_node[0] >= 0 && raw_node[1] >= 0 && raw_node[2] >= 0 &&
+            raw_node[0] < dimensions[0] && raw_node[1] < dimensions[1] && raw_node[2] < dimensions[2];
+        if (!in_bounds)
+        {
+            audit.map_boundary = true;
+            ++audit.map_boundary_nodes;
+            continue;
+        }
+        const auto grid = stencil.Index(raw_node);
+        const auto found = original_rows.find(grid);
+        if (found == original_rows.end())
+        {
+            audit.original_support_boundary = true;
+            ++audit.original_support_boundary_nodes;
+            continue;
+        }
+        if (found->second >= original_row_ids.size() || original_row_ids[found->second] != std::to_string(grid))
+        {
+            audit.mapping_mismatch = true;
+            continue;
+        }
+        if (!fitting_rows.contains(grid))
+        {
+            audit.fitting_mask_only = true;
+            ++audit.fitting_mask_only_nodes;
+        }
+    }
+    return audit;
+}
 }
 
 LocalPotentialSampleList PostJointLocalSamples::BuildGaussianSamples(
@@ -88,9 +151,23 @@ JointPostprocessingContext::JointPostprocessingContext(
     {
         const auto grid = std::stoull(input.row_ids[row]);
         if (grid >= geometry.GetMapValueArraySize()) throw std::invalid_argument("Joint row outside map geometry.");
-        m_row_index_by_grid.emplace(grid, row);
+        const auto [unused, inserted] = m_row_index_by_grid.emplace(grid, row);
+        (void)unused;
+        if (!inserted || input.row_ids[row] != std::to_string(grid))
+            throw std::invalid_argument("Joint original-domain row mapping mismatch.");
     }
     if (m_metrics) ++m_metrics->observation_row_mapping_builds;
+
+    const auto & fitting_input = problem.Input();
+    m_fitting_row_index_by_grid.reserve(fitting_input.row_ids.size());
+    for (std::size_t row = 0; row < fitting_input.row_ids.size(); ++row)
+    {
+        const auto grid = std::stoull(fitting_input.row_ids[row]);
+        const auto [unused, inserted] = m_fitting_row_index_by_grid.emplace(grid, row);
+        (void)unused;
+        if (!inserted || fitting_input.row_ids[row] != std::to_string(grid))
+            throw std::invalid_argument("Joint fitting-domain row mapping mismatch.");
+    }
 
     m_contributor_index_by_id.reserve(input.atom_ids.size());
     for (std::size_t atom = 0; atom < input.atom_ids.size(); ++atom)
@@ -98,6 +175,7 @@ JointPostprocessingContext::JointPostprocessingContext(
     if (m_metrics) ++m_metrics->contributor_mapping_builds;
     if (m_metrics)
         m_metrics->estimated_context_lookup_bytes = EstimateHashStorageBytes(m_row_index_by_grid) +
+            EstimateHashStorageBytes(m_fitting_row_index_by_grid) +
             EstimateHashStorageBytes(m_contributor_index_by_id);
 }
 
@@ -234,6 +312,22 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
             missing.at(group.row) -= group.atoms.size();
         }
     std::map<int, PostFitPeelingResult> results;
+    const auto record_sample = [&](const PeelingSampleEstimate & sample, const StencilAudit & audit) {
+        if (!m_metrics) return;
+        ++m_metrics->raw_peeling_sample_count;
+        m_metrics->nonzero_stencil_node_count += audit.nonzero_nodes;
+        m_metrics->map_geometry_boundary_nodes += audit.map_boundary_nodes;
+        m_metrics->original_support_boundary_nodes += audit.original_support_boundary_nodes;
+        m_metrics->fitting_mask_only_intersection_nodes += audit.fitting_mask_only_nodes;
+        if (audit.map_boundary) ++m_metrics->map_geometry_boundary_samples;
+        else if (audit.mapping_mismatch) ++m_metrics->mapping_mismatch_samples;
+        else if (audit.original_support_boundary) ++m_metrics->original_support_boundary_samples;
+        else if (sample.reason == "missing-contributor-state") ++m_metrics->missing_contributor_samples;
+        else if (!sample.response) ++m_metrics->other_peeling_failure_samples;
+        if (audit.fitting_mask_only) ++m_metrics->fitting_mask_only_intersection_samples;
+        if (sample.response) ++m_metrics->available_peeling_sample_count;
+        else ++m_metrics->unavailable_peeling_sample_count;
+    };
     for (std::size_t atom = 0; atom < input.atom_ids.size(); ++atom)
     {
         if (!requested[atom]) continue;
@@ -246,17 +340,21 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
         for (const auto & raw : view.GetRawSamplingEntriesView())
         {
             PeelingSampleEstimate sample;
+            StencilAudit audit;
             if (result && result->layout && !std::binary_search(
                     result->layout->full_atoms.begin(), result->layout->full_atoms.end(), atom))
-            { sample.reason = "observable-contribution-only"; output.samples.push_back(sample); continue; }
+            { sample.reason = "observable-contribution-only"; record_sample(sample, audit); output.samples.push_back(sample); continue; }
             if (result)
             {
                 const auto & estimate = view.GetStageEstimate(FittingStage::Second);
                 if (!estimate.point)
-                { sample.reason = estimate.reason; output.samples.push_back(sample); continue; }
+                { sample.reason = estimate.reason; record_sample(sample, audit); output.samples.push_back(sample); continue; }
             }
-            if (!view.HasSampleGeometry()) { sample.reason = "sample-geometry-unavailable"; output.samples.push_back(sample); continue; }
+            if (!view.HasSampleGeometry())
+            { sample.reason = "sample-geometry-unavailable"; record_sample(sample, audit); output.samples.push_back(sample); continue; }
             const auto stencil = MakeTricubicStencil(m_geometry, raw.point.position);
+            audit = AuditStencil(stencil, m_geometry, input.row_ids, m_row_index_by_grid,
+                m_fitting_row_index_by_grid);
             for (const auto & [grid, weight] : TricubicWeights(stencil))
             {
                 if (weight == 0) continue;
@@ -280,6 +378,7 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
                 if (std::isfinite(response)) sample.response = response;
                 else sample.reason = "nonfinite-response";
             }
+            record_sample(sample, audit);
             output.samples.push_back(std::move(sample));
         }
         output.neighbor_count = neighbors.size();

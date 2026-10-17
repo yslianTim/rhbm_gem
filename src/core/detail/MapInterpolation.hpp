@@ -9,6 +9,10 @@ struct TricubicStencil
 {
     std::array<int, 3> base, dimensions;
     std::array<double, 3> local;
+    std::array<int, 3> UnclampedNode(int i, int j, int k) const
+    {
+        return {base[0] + i, base[1] + j, base[2] + k};
+    }
     std::array<int, 3> Node(int i, int j, int k) const
     {
         return {std::clamp(base[0] + i, 0, dimensions[0] - 1),
