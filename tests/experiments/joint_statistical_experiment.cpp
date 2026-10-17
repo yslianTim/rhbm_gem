@@ -105,7 +105,7 @@ void Run(const Path & input, const Path & output)
     for (const auto & mode : spec.at("modes").as_array())
     {
         const auto fit = mode == "fixed" ? c::FitJointComponents(problem, {.6, .6}) :
-                                            c::EstimateJointComponents(map, *model);
+                                            c::EstimateJointComponentsFixedHalo(map, *model);
         j::object record{{"outcome", Outcome(fit)}, {"prediction", nullptr}};
         if (fit.prediction) record["prediction"] = j::value_from(*fit.prediction);
         out[std::string(mode.as_string())] = std::move(record);

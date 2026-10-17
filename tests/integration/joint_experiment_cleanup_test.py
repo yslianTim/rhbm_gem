@@ -18,6 +18,7 @@ CURRENT_EXPERIMENT_SOURCES = {
     "joint_halo_observation_exclusion_fit.cpp",
     "joint_halo_observation_exclusion_metrics.cpp",
     "joint_halo_support_exclusion_synthetic.cpp",
+    "joint_halo_support_exclusion_validation.cpp",
     "joint_halo_support_weighting_reference.cpp",
     "joint_local_ac_kkt.cpp",
     "joint_local_replay_analysis.cpp",
