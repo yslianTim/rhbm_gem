@@ -1,5 +1,7 @@
 # Joint width stabilization study and production gate
 
+> **Superseded:** Use [the corrected scoped and scale-aligned study](joint-width-trust-corrected-study.md) and its [paired results](joint-width-trust-corrected-results.json) for current findings. The runs below applied the width-trust callback outside the intended serial-1032 core when tracked evidence was absent, and compared normalized simulation estimates against original-domain A/C truth. Their 27k rejection counts and simulation A/C RMSE are retained as historical evidence of those defects, not valid strategy results.
+
 ## Decision
 
 No width bound, objective penalty, qualification-threshold change, or reduced

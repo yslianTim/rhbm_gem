@@ -100,10 +100,18 @@ std::vector<std::array<double,3>> SyntheticAtoms()
     return positions;
 }
 
+bool IsSyntheticDataset(const std::string & dataset)
+{
+    return dataset.ends_with("-synthetic");
+}
+
 ExperimentInput BuildSynthetic(const std::string & dataset,std::uint64_t seed)
 {
-    const bool weak=dataset=="weak-synthetic";
-    if(!weak && dataset!="well-synthetic") throw std::invalid_argument("Unknown synthetic dataset.");
+    const bool well=dataset=="well-synthetic",weak=dataset=="weak-synthetic",
+        moderate=dataset=="moderate-synthetic",noise_high=dataset=="noise-high-synthetic",
+        mixed_width=dataset=="mixed-width-synthetic",ac_correlated=dataset=="ac-correlated-synthetic";
+    if(!well && !weak && !moderate && !noise_high && !mixed_width && !ac_correlated)
+        throw std::invalid_argument("Unknown synthetic dataset.");
     const auto positions=SyntheticAtoms();
     const std::size_t atom_count=positions.size();
     core::JointProblemInput input;
@@ -120,6 +128,12 @@ ExperimentInput BuildSynthetic(const std::string & dataset,std::uint64_t seed)
     {
         if(weak) truth[atom]={1.0+0.03*static_cast<double>(atom),8.0+0.1*static_cast<double>(atom),
             -0.5-0.01*static_cast<double>(atom)};
+        else if(moderate) truth[atom]={1.4+0.04*static_cast<double>(atom),
+            1.8+0.04*static_cast<double>(atom),0.12+0.005*static_cast<double>(atom)};
+        else if(mixed_width) truth[atom]={1.4+0.04*static_cast<double>(atom),
+            0.55+0.16*static_cast<double>(atom),0.12+0.005*static_cast<double>(atom)};
+        else if(ac_correlated) truth[atom]={6.0+0.1*static_cast<double>(atom),
+            3.2+0.03*static_cast<double>(atom),-0.05-0.001*static_cast<double>(atom)};
         else truth[atom]={1.4+0.04*static_cast<double>(atom),0.72+0.01*static_cast<double>(atom),
             0.12+0.005*static_cast<double>(atom)};
     }
@@ -135,7 +149,7 @@ ExperimentInput BuildSynthetic(const std::string & dataset,std::uint64_t seed)
         }
         if(supported) rows.push_back(position);
     }
-    const double noise_sigma=weak ? 1e-5 : 5e-4;
+    const double noise_sigma=weak ? 1e-5 : noise_high ? 5e-3 : 5e-4;
     std::mt19937_64 generator(seed);
     std::normal_distribution<double> noise(0.0,noise_sigma);
     for(const auto & position:rows)
@@ -233,7 +247,8 @@ struct RunMetrics
         maximum_cancellation{joint::unavailable},minimum_projected_width_singular_value{joint::unavailable};
     double maximum_observed_width{joint::unavailable},maximum_observed_condition{joint::unavailable},
         maximum_observed_cancellation{joint::unavailable},
-        minimum_observed_projected_width_singular_value{joint::unavailable};
+        minimum_observed_projected_width_singular_value{joint::unavailable},
+        maximum_observed_abs_ac_basis_correlation{joint::unavailable};
     std::optional<std::size_t> first_rejection_sweep,first_rejection_block;
     json::array objective_trajectory,block_update_trace;
 };
@@ -260,8 +275,7 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
 {
     const auto & data=core::JointProblemAccess::Get(experiment.problem);
     const auto & policy_name=trust::Name(policy_kind);
-    const bool synthetic=experiment.source.starts_with("well-synthetic:") ||
-        experiment.source.starts_with("weak-synthetic:");
+    const bool synthetic=IsSyntheticDataset(experiment.source.substr(0,experiment.source.find(':')));
     std::vector<std::string> policy_target_ids;
     if(synthetic)
         for(const auto atom:data.input->selection_domain->target_indices)
@@ -313,6 +327,7 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
                     Max(metrics.maximum_observed_width,atom.accepted_width);
                     Max(metrics.maximum_observed_condition,atom.local_design_condition);
                     Max(metrics.maximum_observed_cancellation,atom.ac_cancellation_ratio);
+                    Max(metrics.maximum_observed_abs_ac_basis_correlation,std::abs(atom.basis_correlation));
                 }
                 for(const auto value:trial.projected_width_singular_values) Min(
                     metrics.minimum_observed_projected_width_singular_value,value);
@@ -324,6 +339,7 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
                         Max(metrics.maximum_width,atom.accepted_width);
                         Max(metrics.maximum_condition,atom.local_design_condition);
                         Max(metrics.maximum_cancellation,atom.ac_cancellation_ratio);
+                        Max(metrics.maximum_observed_abs_ac_basis_correlation,std::abs(atom.basis_correlation));
                     }
                     for(const auto value:trial.projected_width_singular_values) Min(
                         metrics.minimum_projected_width_singular_value,value);
@@ -395,6 +411,10 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
         return check.name=="independent-replay";
     });
     const auto runtime=fit.RuntimeConvergence();
+    const std::string accuracy_metric_status=!experiment.truth_available ? "N/A — no truth" :
+        runtime==rhbm_gem::JointCheckStatus::Passed ? "qualified-estimate" : "unqualified-candidate-metrics";
+    const std::string prediction_metric_status=!candidate_available ? "Unavailable" :
+        runtime==rhbm_gem::JointCheckStatus::Passed ? "qualified-fit" : "unqualified-candidate";
     json::array policy_scope_json;
     for(const auto & block:policy_scope)
     {
@@ -427,10 +447,14 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
         {"policy_scope",std::move(policy_scope_json)},
         {"diagnostic_scope",synthetic ? "all-selected-targets" : "serial-1032-only"},
         {"runtime_convergence",Status(runtime)},
+        {"component_qualification",Status(component.RuntimeConvergence())},
+        {"global_qualification",Status(fit.RuntimeConvergence())},
         {"search_completed",fit.search_completed},
         {"component_stop_reason",component.stop_reason},
         {"independent_replay",independent_replay==fit.evidence.end() ? "NotMeasured" : Status(independent_replay->status)},
         {"candidate_available",candidate_available},
+        {"accuracy_metric_status",accuracy_metric_status},
+        {"prediction_metric_status",prediction_metric_status},
         {"candidate_objective",diagnostic && diagnostic->candidate_objective ? Number(*diagnostic->candidate_objective) : json::value(nullptr)},
         {"candidate_ac_kkt",diagnostic && diagnostic->candidate_ac_kkt ? Number(*diagnostic->candidate_ac_kkt) : json::value(nullptr)},
         {"candidate_width_gradient_inf_norm",diagnostic && diagnostic->candidate_width_gradient_inf_norm ? Number(*diagnostic->candidate_width_gradient_inf_norm) : json::value(nullptr)},
@@ -445,6 +469,7 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
         {"maximum_observed_width_A",Number(metrics.maximum_observed_width)},
         {"maximum_observed_local_ac_condition",Number(metrics.maximum_observed_condition)},
         {"maximum_observed_ac_cancellation_ratio",Number(metrics.maximum_observed_cancellation)},
+        {"maximum_observed_abs_ac_basis_correlation",Number(metrics.maximum_observed_abs_ac_basis_correlation)},
         {"minimum_observed_projected_width_singular_value",Number(
             metrics.minimum_observed_projected_width_singular_value)},
         {"extreme_width_incident",metrics.maximum_observed_width>=10000.0},
@@ -492,7 +517,7 @@ void Run(const std::string & dataset,const std::filesystem::path & output,const 
         policy_name=="B1" ? trust::Policy::ConditioningAware :
         policy_name=="B2" ? trust::Policy::ConditioningAndCancellationAware :
         throw std::invalid_argument("Policy must be A, B1, or B2.");
-    ExperimentInput experiment=dataset=="well-synthetic" || dataset=="weak-synthetic" ?
+    ExperimentInput experiment=IsSyntheticDataset(dataset) ?
         BuildSynthetic(dataset,seed) : BuildReal(dataset,model_path,map_path);
     Write(output/"result.json",RunOne(experiment,policy));
 }
