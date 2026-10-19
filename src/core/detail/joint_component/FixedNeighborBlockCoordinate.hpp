@@ -160,6 +160,7 @@ struct FixedNeighborWidthTrajectoryCapture
     std::vector<std::pair<std::string,double>> atom_initial_widths;
     std::size_t maximum_events{1024},maximum_atoms{32},maximum_rows{4096},events_emitted{};
     bool accepted_updates_only{};
+    std::function<void(std::size_t,const BlockCoordinateState &,const FixedNeighborBlockSweep &)> state_observer;
 };
 #endif
 struct PreparedFixedNeighborBlock

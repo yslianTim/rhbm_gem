@@ -1008,11 +1008,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     }
     if(policy.preparation_observer) policy.preparation_observer();
     const bool retain_diagnostics=policy.collect_diagnostics || policy.capture_local_trajectory ||
-        static_cast<bool>(policy.state_observer)
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        || policy.width_trajectory
-#endif
-        ;
+        static_cast<bool>(policy.state_observer);
     bool stop=false;
     std::size_t next_certification_retry_sweep{};
     std::vector<std::size_t> block_failure_visits(partition.cores.size());
@@ -1371,6 +1367,10 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             policy.sweep_observer(observed);
         }
         if(policy.state_observer) policy.state_observer(sweep_index+1,out.state,out.sweeps.back(),out.blocks);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(policy.width_trajectory && policy.width_trajectory->state_observer)
+            policy.width_trajectory->state_observer(sweep_index+1,out.state,sweep);
+#endif
         if(sweep.cache_replay_error>2e-12+2e-13*std::max(1.0,replay.prediction.cwiseAbs().maxCoeff()) ||
             !WithinBlockObjectiveReplay(sweep.objective_replay_error,replay.objective))
         {out.reason="block-cache-replay-failed"; stop=true; break;}

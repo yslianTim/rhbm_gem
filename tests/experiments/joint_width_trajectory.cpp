@@ -1,18 +1,25 @@
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/HaloEligibility.hpp"
+#include "core/detail/joint_component/StructuralPartition.hpp"
+#include "support/JointPrecisionAudit.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <boost/json.hpp>
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 #ifndef _WIN32
@@ -75,6 +82,290 @@ std::vector<std::string> Split(const std::string & value)
     while(std::getline(input,part,',')) if(!part.empty()) out.push_back(part);
     return out;
 }
+
+struct ReplaySetup
+{
+    core::JointProblem problem;
+    std::vector<double> initial_widths;
+};
+
+ReplaySetup BuildFullABCReplaySetup(
+    const rhbm_gem::ModelObject & model, const core::JointProblem & fixed_problem,
+    const rhbm_gem::JointInitialization & initialization)
+{
+    const auto & source=fixed_problem.Input();
+    if(!source.selection_domain ||
+        source.selection_domain->contributor_policy!=rhbm_gem::FixedHaloContributorPolicy ||
+        !source.selection_domain->fixed_halo_selection)
+        throw std::invalid_argument("FullABC replay requires the fixed-halo selection domain.");
+    if(initialization.b.size()!=source.atom_ids.size())
+        throw std::invalid_argument("FullABC replay initialization dimensions do not match contributors.");
+
+    std::unordered_map<std::string,double> initial_by_id;
+    std::unordered_set<std::string> source_ids;
+    for(std::size_t atom=0;atom<source.atom_ids.size();++atom)
+    {
+        initial_by_id.emplace(source.atom_ids[atom],initialization.b[atom]);
+        source_ids.insert(source.atom_ids[atom]);
+    }
+    const auto & source_domain=*source.selection_domain;
+    const auto & fixed=*source_domain.fixed_halo_selection;
+    core::JointProblemInput full;
+    full.row_ids=source.row_ids;
+    full.observations=source.observations;
+    full.selection_domain=source_domain;
+    full.selection_domain->contributor_policy=std::string(rhbm_gem::FullABCHaloContributorPolicy);
+    full.selection_domain->fixed_halo_selection.reset();
+    full.selection_domain->halo_eligibility.emplace();
+    auto & eligibility=*full.selection_domain->halo_eligibility;
+    eligibility.minimum_observations=joint::FullABCHaloMinimumObservations;
+    eligibility.minimum_distinct_radial_information=joint::FullABCHaloMinimumDistinctRadialInformation;
+    eligibility.candidate_halos=fixed.candidate_halos;
+
+    std::set<int> selected_serials;
+    for(const auto * atom:model.GetSelectedAtoms())
+        if(atom->GetElement()!=Element::HYDROGEN) selected_serials.insert(atom->GetSerialID());
+    std::vector<double> initial_widths;
+    for(std::size_t old=0;old<source.atom_ids.size();++old)
+    {
+        const bool target=std::binary_search(source_domain.target_indices.begin(),
+            source_domain.target_indices.end(),old);
+        if(!target)
+        {
+            auto support=source.support[old];
+            const auto halo=joint::EvaluateFullABCHaloEligibility(
+                support,joint::FullABCHaloMinimumObservations);
+            if(!halo.eligible)
+            {
+                eligibility.excluded_halos.push_back({source.atom_ids[old],halo.support_rows,
+                    halo.distinct_squared_distances,halo.reason});
+                continue;
+            }
+        }
+        const auto new_index=full.atom_ids.size();
+        if(target) full.selection_domain->target_indices.push_back(new_index);
+        full.atom_ids.push_back(source.atom_ids[old]);
+        full.support.push_back(source.support[old]);
+        initial_widths.push_back(initial_by_id.at(source.atom_ids[old]));
+    }
+    for(const auto & atom_ptr:model.GetAtomList())
+    {
+        const auto * atom=atom_ptr.get();
+        if(atom->GetElement()==Element::HYDROGEN || selected_serials.contains(atom->GetSerialID())) continue;
+        const auto id=std::to_string(atom->GetSerialID());
+        if(!source_ids.contains(id))
+            eligibility.excluded_halos.push_back({id,0,0,"insufficient-observations"});
+    }
+    std::sort(eligibility.excluded_halos.begin(),eligibility.excluded_halos.end(),
+        [](const auto & left,const auto & right){return left.atom_id<right.atom_id;});
+    eligibility.retained_halos=full.atom_ids.size()-full.selection_domain->target_indices.size();
+    if(eligibility.retained_halos+eligibility.excluded_halos.size()!=eligibility.candidate_halos)
+        throw std::invalid_argument("FullABC replay halo eligibility dimensions do not match candidates.");
+    return {core::JointProblem(std::move(full)),std::move(initial_widths)};
+}
+
+ReplaySetup BuildReplaySetup(rhbm_gem::MapObject & map,rhbm_gem::ModelObject & model,bool pure_exclusion)
+{
+    if(pure_exclusion)
+    {
+        auto problem=core::BuildPureHaloSupportExclusionProblem(map,model);
+        const auto initialization=joint::InitializeContributors(map,model,problem);
+        if(!initialization.valid) throw std::runtime_error("First-stage initialization failed: "+initialization.reason);
+        return {std::move(problem),initialization.b};
+    }
+    auto fixed_problem=core::BuildJointProblem(map,model);
+    const auto initialization=joint::InitializeContributors(map,model,fixed_problem);
+    if(!initialization.valid) throw std::runtime_error("First-stage initialization failed: "+initialization.reason);
+    return BuildFullABCReplaySetup(model,fixed_problem,initialization);
+}
+
+json::object ProfilePairMetrics(const joint::Evaluation & evaluation,Eigen::Index atom)
+{
+    if(!evaluation.x.rows() || atom<0 || 2*atom+1>=evaluation.x.cols())
+        return { {"available",false} };
+    const auto gaussian=evaluation.x.col(2*atom),charge=evaluation.x.col(2*atom+1);
+    const double gaussian_norm=gaussian.norm(),charge_norm=charge.norm();
+    const double a=evaluation.beta.size()>2*atom ? evaluation.beta(2*atom) : joint::unavailable;
+    const double c=evaluation.beta.size()>2*atom+1 ? evaluation.beta(2*atom+1) : joint::unavailable;
+    const double normalized_a=std::isfinite(a) ? a*gaussian_norm : joint::unavailable;
+    const double normalized_c=std::isfinite(c) ? c*charge_norm : joint::unavailable;
+    const auto contribution=(gaussian*a+charge*c).eval();
+    const double contribution_norm=contribution.norm();
+    const double contribution_sum=std::abs(normalized_a)+std::abs(normalized_c);
+    const double cancellation=contribution_norm>0 ? contribution_sum/contribution_norm :
+        contribution_sum==0 ? 1.0 : joint::unavailable;
+    const double correlation=gaussian_norm>0 && charge_norm>0 ?
+        gaussian.dot(charge)/(gaussian_norm*charge_norm) : joint::unavailable;
+    return { {"available",true},{"gaussian_column_norm",Number(gaussian_norm)},
+        {"charge_column_norm",Number(charge_norm)},
+        {"normalized_A",Number(normalized_a)}, {"normalized_C",Number(normalized_c)},
+        {"gaussian_contribution_norm",Number(std::abs(normalized_a))},
+        {"charge_contribution_norm",Number(std::abs(normalized_c))},
+        {"ac_cancellation_ratio",Number(cancellation)}, {"basis_correlation",Number(correlation)} };
+}
+
+json::object BuildConditionalProfile(const core::joint_component::ProblemData & data,
+    std::size_t component_index,const joint::BlockCoordinateState & state,
+    const std::vector<double> & captured_singular_values,
+    const std::map<std::size_t,joint::BlockCoordinateState> & sweep_states,
+    const std::string & requested_atom_id,std::size_t sweep)
+{
+    const auto & component=data.partition.components.at(component_index);
+    const auto prepared=joint::MakeComponentProblemView(data.layout,component);
+    const auto parent_atom=std::find(data.input->atom_ids.begin(),data.input->atom_ids.end(),requested_atom_id);
+    if(parent_atom==data.input->atom_ids.end()) throw std::invalid_argument("Conditional profile atom is absent.");
+    const auto parent_atom_index=static_cast<Eigen::Index>(parent_atom-data.input->atom_ids.begin());
+    const auto local_atom=std::find(prepared.local_to_parent_atoms.begin(),prepared.local_to_parent_atoms.end(),parent_atom_index);
+    if(local_atom==prepared.local_to_parent_atoms.end()) throw std::invalid_argument("Conditional profile atom is outside its component.");
+    const auto local_atom_index=static_cast<Eigen::Index>(local_atom-prepared.local_to_parent_atoms.begin());
+
+    auto context=data.context;
+    context.atom_ids=prepared.atom_ids; context.row_ids=prepared.row_ids;
+    context.independent_search=true;
+    const auto component_atoms=static_cast<Eigen::Index>(prepared.local_layout.full_atoms.size());
+    context.rank={prepared.parent_row_count,2*component_atoms,component_atoms};
+    context.linear.rank_relative=context.rank.Relative(2*component_atoms);
+
+    joint::StructuralTopology topology(prepared.domain,context.atom_ids,prepared.local_layout);
+    const auto partition=topology.BuildCores(12,true);
+    std::size_t block_index{};
+    const joint::StructuralCore * target_core=nullptr;
+    for(std::size_t index=0;index<partition.cores.size();++index)
+        if(std::find(partition.cores[index].atoms.begin(),partition.cores[index].atoms.end(),local_atom_index)!=
+            partition.cores[index].atoms.end())
+        {block_index=index; target_core=&partition.cores[index]; break;}
+    if(!target_core) throw std::invalid_argument("Conditional profile block is absent.");
+    const auto & core_atoms=target_core->atoms;
+    const auto target_core_atom=static_cast<Eigen::Index>(std::find(core_atoms.begin(),core_atoms.end(),local_atom_index)-core_atoms.begin());
+    const auto row_mapping=joint::CompactRowMapping::FromParentRows(target_core->affected_rows);
+    const auto profile_domain=prepared.domain.Select(core_atoms,
+        static_cast<Eigen::Index>(target_core->affected_rows.size()),row_mapping);
+    auto profile_context=context;
+    profile_context.atom_ids=context.atom_ids.Select(core_atoms);
+    profile_context.row_ids=context.row_ids.Select(target_core->affected_rows);
+    profile_context.rank={profile_domain.rows,2*static_cast<Eigen::Index>(core_atoms.size()),
+        static_cast<Eigen::Index>(core_atoms.size())};
+    profile_context.linear.rank_relative=profile_context.rank.Relative(2*static_cast<Eigen::Index>(core_atoms.size()));
+    profile_context.update_budget=1;
+
+    joint::Vector base_eta(static_cast<Eigen::Index>(core_atoms.size()));
+    joint::Vector base_beta(2*static_cast<Eigen::Index>(core_atoms.size()));
+    for(std::size_t k=0;k<core_atoms.size();++k)
+    {
+        const auto atom=core_atoms[k];
+        base_eta(static_cast<Eigen::Index>(k))=state.eta(atom);
+        base_beta.segment<2>(2*static_cast<Eigen::Index>(k))=state.beta.segment<2>(2*atom);
+    }
+    const auto predict=[&](const joint::Vector & eta,const joint::Vector & beta) {
+        joint::Vector prediction=joint::Vector::Zero(profile_domain.rows);
+        for(std::size_t atom=0;atom<core_atoms.size();++atom)
+        {
+            const auto width=std::exp(eta(static_cast<Eigen::Index>(atom)));
+            for(const auto support:profile_domain.atoms[atom])
+            {
+                const auto basis=joint::EvaluateKernel(support.square,width,2.5);
+                prediction(support.row)+=beta(2*static_cast<Eigen::Index>(atom))*basis.gaussian+
+                    beta(2*static_cast<Eigen::Index>(atom)+1)*basis.charge;
+            }
+        }
+        return prediction;
+    };
+    const auto base_prediction=predict(base_eta,base_beta);
+    joint::Vector local_y(profile_domain.rows);
+    for(std::size_t k=0;k<target_core->affected_rows.size();++k)
+        local_y(static_cast<Eigen::Index>(k))=base_prediction(static_cast<Eigen::Index>(k))-
+            state.residual(target_core->affected_rows[k]);
+    const auto base_evaluation=joint::EvaluateState(profile_domain,local_y,base_eta,base_beta,profile_context);
+    const auto base_width=std::exp(base_eta(target_core_atom));
+    std::vector<double> scan_widths={0.05,0.1,0.2,0.3,0.4,base_width,0.5,0.75,1.0,2.0,4.0,8.0,
+        16.0,64.0,256.0,1024.0,4096.0,8192.0,7.647783566,1365.304216,6099.810066};
+    std::sort(scan_widths.begin(),scan_widths.end());
+    scan_widths.erase(std::unique(scan_widths.begin(),scan_widths.end(),[](double a,double b) {
+        return std::abs(a-b)<=1e-12*std::max({1.0,std::abs(a),std::abs(b)});
+    }),scan_widths.end());
+    json::array profile_rows;
+    for(const auto width:scan_widths)
+    {
+        auto eta=base_eta; eta(target_core_atom)=std::log(width);
+        const auto evaluation=joint::EvaluateProfile(profile_domain,local_y,eta,false,&profile_context);
+        const auto spectrum=evaluation.x.rows() ? joint::ComputeSpectrum(evaluation.x,profile_context.rank,
+            evaluation.x.cols(),true) : joint::Spectrum{};
+        const auto pair=ProfilePairMetrics(evaluation,target_core_atom);
+        const auto prediction=evaluation.residual.size()==local_y.size() ? evaluation.residual+local_y : joint::Vector{};
+        const auto objective=evaluation.certificate.available ? evaluation.certificate.objective/
+            (profile_context.scale*profile_context.scale) : joint::unavailable;
+        const auto prediction_difference=prediction.size()==base_prediction.size() ?
+            (prediction-base_prediction).norm() : joint::unavailable;
+        const auto parameter_difference=evaluation.beta.size()==base_beta.size() ?
+            (evaluation.beta-base_beta).lpNorm<Eigen::Infinity>() : joint::unavailable;
+        profile_rows.push_back(json::object{
+            {"width",Number(width)}, {"log_width",Number(std::log(width))},
+            {"profile_objective",Number(objective)},
+            {"objective_delta_from_sweep_state",Number(objective-base_evaluation.certificate.objective/
+                (profile_context.scale*profile_context.scale))},
+            {"profile_valid",evaluation.valid},{"profile_reason",evaluation.reason},
+            {"local_kkt",Number(evaluation.certificate.projected_kkt)},
+            {"profile_gradient_inf_norm",Number(joint::ProfileGradientInfinityNorm(evaluation).value_or(joint::unavailable))},
+            {"target_width_gradient",Number(evaluation.gradient.size()>target_core_atom ?
+                std::abs(evaluation.gradient(target_core_atom)) : joint::unavailable)},
+            {"active_a_atom_indices",[&] {json::array values; for(const auto atom:evaluation.certificate.active_atoms) values.push_back(atom); return values;}()},
+            {"local_design_rank",spectrum.available ? json::value(spectrum.rank) : json::value(nullptr)},
+            {"local_design_condition",Number(spectrum.condition)},
+            {"A",evaluation.beta.size()>2*target_core_atom ? Number(evaluation.beta(2*target_core_atom)) : json::value(nullptr)},
+            {"C",evaluation.beta.size()>2*target_core_atom+1 ? Number(evaluation.beta(2*target_core_atom+1)) : json::value(nullptr)},
+            {"prediction_difference_norm",Number(prediction_difference)},
+            {"parameter_difference_inf_norm",Number(parameter_difference)}, {"pair",pair}});
+    }
+    json::array captured_singular_values_json;
+    for(const auto value:captured_singular_values) captured_singular_values_json.push_back(Number(value));
+    json::array neighbor_changes;
+    const auto is_core=[&](Eigen::Index atom) {return std::find(core_atoms.begin(),core_atoms.end(),atom)!=core_atoms.end();};
+    for(const auto transition:std::array<std::pair<std::size_t,std::size_t>,2>{{{6,7},{7,8}}})
+    {
+        const auto before=sweep_states.find(transition.first),after=sweep_states.find(transition.second);
+        if(before==sweep_states.end() || after==sweep_states.end()) continue;
+        double eta_change{},beta_change{}; std::size_t changed{};
+        for(Eigen::Index atom=0;atom<before->second.eta.size();++atom) if(!is_core(atom))
+        {
+            eta_change=std::max(eta_change,std::abs(after->second.eta(atom)-before->second.eta(atom)));
+            for(Eigen::Index coefficient=0;coefficient<2;++coefficient)
+            {
+                const auto lhs=before->second.beta(2*atom+coefficient),rhs=after->second.beta(2*atom+coefficient);
+                beta_change=std::max(beta_change,std::abs(rhs-lhs)/(1.0+std::max(std::abs(lhs),std::abs(rhs))));
+            }
+            if(std::abs(after->second.eta(atom)-before->second.eta(atom))>1e-14 ||
+                (after->second.beta.segment<2>(2*atom)-before->second.beta.segment<2>(2*atom)).lpNorm<Eigen::Infinity>()>1e-14) ++changed;
+        }
+        neighbor_changes.push_back(json::object{{"from_sweep",transition.first},{"to_sweep",transition.second},
+            {"changed_external_atoms",changed},{"external_eta_change_inf",Number(eta_change)},
+            {"external_beta_scaled_change_inf",Number(beta_change)}});
+    }
+    json::array high_precision;
+    for(const auto width:{base_width,0.5,6099.810066})
+    {
+        auto eta=base_eta; eta(target_core_atom)=std::log(width);
+        try
+        {
+            high_precision.push_back(json::object{{"width",Number(width)},
+                {"reference",second_stage_test::matched::certification::PrecisionProfileComparison(
+                    profile_domain,local_y,base_eta,eta,profile_context)}});
+        }
+        catch(const std::exception & error)
+        {high_precision.push_back(json::object{{"width",Number(width)},
+            {"error",error.what()}});}
+    }
+    json::array core_ids; for(const auto atom:core_atoms)
+        core_ids.push_back(json::value(context.atom_ids[static_cast<std::size_t>(atom)]));
+    return json::object{{"requested_atom_id",requested_atom_id},{"component_index",component_index},
+        {"sweep",sweep},{"block",block_index+1},{"core_atom_ids",std::move(core_ids)},
+        {"affected_row_count",target_core->affected_rows.size()},{"base_width",Number(base_width)},
+        {"base_local_kkt",Number(base_evaluation.certificate.projected_kkt)},
+        {"base_profile_objective",Number(base_evaluation.certificate.objective/(profile_context.scale*profile_context.scale))},
+        {"captured_projected_width_singular_values",std::move(captured_singular_values_json)},
+        {"external_neighbor_state_changes",std::move(neighbor_changes)},
+        {"profile_rows",std::move(profile_rows)},{"high_precision_reference",std::move(high_precision)}};
+}
+
 json::object AtomJson(const joint::FixedNeighborProfileTrial::AtomState & atom,bool target)
 {
     return {{"atom_id",atom.atom_id},{"role",target ? "target" : "halo"},
@@ -99,7 +390,8 @@ json::object AtomJson(const joint::FixedNeighborProfileTrial::AtomState & atom,b
         {"numerical_status",atom.numerical_status}};
 }
 void Run(const std::string & model_path,const std::string & map_path,const std::filesystem::path & output,
-    const std::vector<std::string> & requested_atom_ids,std::size_t maximum_events,bool accepted_updates_only)
+    const std::vector<std::string> & requested_atom_ids,std::size_t maximum_events,
+    bool accepted_updates_only,bool pure_exclusion)
 {
     if(requested_atom_ids.empty() || requested_atom_ids.size()>2048 || maximum_events>10000)
         throw std::invalid_argument("Track 1–2,048 atom IDs and at most 10,000 events.");
@@ -109,13 +401,16 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
     model->SelectAtoms([](const rhbm_gem::AtomObject & atom) {
         return atom.GetElement()!=Element::HYDROGEN && atom.GetChainID()=="A";
     });
-    const auto problem=core::BuildJointProblem(*map,*model);
     const auto initialization_started=Clock::now();
-    const auto initialization=joint::InitializeContributors(*map,*model,problem);
+    auto replay=BuildReplaySetup(*map,*model,pure_exclusion);
+    auto problem=std::move(replay.problem);
     const double initialization_seconds=std::chrono::duration<double>(Clock::now()-initialization_started).count();
-    if(!initialization.valid) throw std::runtime_error("First-stage initialization failed: "+initialization.reason);
     const auto & data=core::JointProblemAccess::Get(problem);
     const auto & target_indices=data.input->selection_domain->target_indices;
+    const auto original_observation_count=data.original_input ? data.original_input->observations.size() :
+        data.input->observations.size();
+    const auto fitting_observation_count=data.input->observations.size();
+    const auto excluded_observation_count=original_observation_count-fitting_observation_count;
     std::unordered_set<std::string> target_ids;
     target_ids.reserve(target_indices.size());
     for(const auto atom:target_indices) target_ids.insert(data.input->atom_ids.at(atom));
@@ -130,7 +425,7 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
         const auto found=std::find(data.input->atom_ids.begin(),data.input->atom_ids.end(),id);
         if(found==data.input->atom_ids.end()) throw std::runtime_error("Tracked atom is not a FullABC contributor: "+id);
         const auto index=static_cast<std::size_t>(found-data.input->atom_ids.begin());
-        capture.atom_initial_widths.emplace_back(id,initialization.b.at(index));
+        capture.atom_initial_widths.emplace_back(id,replay.initial_widths.at(index));
     }
     std::ofstream trajectory(output/"width-trajectory.jsonl");
     trajectory.exceptions(std::ios::failbit|std::ios::badbit);
@@ -145,11 +440,19 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
     std::unordered_map<std::string,double> maximum_width_by_atom;
     std::unordered_map<std::string,double> maximum_cancellation_by_atom,maximum_condition_by_atom;
     json::array objective_trajectory;
+    std::vector<double> sweep_eight_projected_width_singular_values;
+    std::map<std::size_t,joint::BlockCoordinateState> sweep_states;
+    std::optional<json::object> conditional_profile;
+    std::string conditional_profile_error;
     const auto update_max=[](double & current,double value) {
         if(std::isfinite(value) && (!std::isfinite(current) || value>current)) current=value;
     };
     joint::FixedNeighborDiagnosticSink sink;
     sink.block=[&](const joint::FixedNeighborBlockRecord & block) {
+        if(block.sweep==8)
+            for(const auto & trial:block.profile_trials)
+                if(trial.accepted && !trial.projected_width_singular_values.empty())
+                    sweep_eight_projected_width_singular_values=trial.projected_width_singular_values;
         if(block.recovery_retry) ++recovery_attempts;
         if(block.recovery_success) ++recovery_successes;
         for(const auto & trial:block.profile_trials)
@@ -236,6 +539,10 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
             {"accepted_blocks",sweep.accepted_blocks},{"unchanged_blocks",sweep.unchanged_blocks},
             {"accepted_local_updates",sweep.accepted_local_updates}})<<'\n';
     };
+    capture.state_observer=[&](std::size_t sweep,const joint::BlockCoordinateState & state,
+        const joint::FixedNeighborBlockSweep &) {
+        if(sweep==6 || sweep==7 || sweep==8) sweep_states[sweep]=state;
+    };
     joint::FixedNeighborSearchPolicy policy;
     policy.core_atoms=12; policy.maximum_sweeps=200; policy.order=joint::FixedNeighborBlockOrder::Forward;
     policy.configure_search_for_testing=[&](joint::FixedNeighborPolicy & local) {
@@ -243,9 +550,25 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
     };
     const auto cpu_before=ProcessCpuSeconds();
     const auto started=Clock::now();
-    const auto fit=joint::FitFixedNeighborComponentsImpl(problem,initialization.b,policy);
+    const auto fit=joint::FitFixedNeighborComponentsImpl(problem,replay.initial_widths,policy);
     const auto cpu_after=ProcessCpuSeconds();
     trajectory.close(); sweeps.close();
+    if(const auto state=sweep_states.find(8); state!=sweep_states.end())
+    {
+        try
+        {
+            const auto profile_atom=requested_atom_ids.size()==1 && requested_atom_ids.front()!="all" ?
+                requested_atom_ids.front() : std::string("1032");
+            conditional_profile=BuildConditionalProfile(data,0,state->second,sweep_eight_projected_width_singular_values,sweep_states,
+                profile_atom,8);
+        }
+        catch(const std::exception & error) {conditional_profile_error=error.what();}
+    }
+    if(conditional_profile)
+        Write(output/"conditional-profile.json",*conditional_profile);
+    else
+        Write(output/"conditional-profile.json",json::object{{"status","Unavailable"},
+            {"reason",conditional_profile_error.empty() ? "sweep-8-state-unavailable" : conditional_profile_error}});
     json::array initial_widths;
     for(const auto & [id,width]:capture.atom_initial_widths)
         initial_widths.push_back(json::object{{"atom_id",id},{"width",width}});
@@ -265,11 +588,11 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
         if(component.candidate_diagnostic)
         {
             endpoint_status=component.candidate_diagnostic->endpoint_verification_status;
-            const auto replay=std::find_if(component.evidence.begin(),component.evidence.end(),[](const auto & check) {
+            const auto replay_check=std::find_if(component.evidence.begin(),component.evidence.end(),[](const auto & check) {
                 return check.name=="independent-replay";
             });
-            if(endpoint_status!=rhbm_gem::JointCheckStatus::NotRun && replay!=component.evidence.end())
-                replay_status=replay->status;
+            if(endpoint_status!=rhbm_gem::JointCheckStatus::NotRun && replay_check!=component.evidence.end())
+                replay_status=replay_check->status;
         }
         if(replay_status!=rhbm_gem::JointCheckStatus::Passed) all_independent_replays_passed=false;
         if(replay_status==rhbm_gem::JointCheckStatus::Failed) any_independent_replay_failed=true;
@@ -326,7 +649,10 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
         capture.events_emitted<capture.maximum_events;
     const bool accepted_update_capture_complete=capture.events_emitted<capture.maximum_events;
     Write(output/"summary.json",json::object{{"source_model",model_path},{"source_map",map_path},
-        {"selected_chain","A"},{"core_atoms",12},{"block_order","forward"},{"maximum_sweeps",200},
+        {"selected_chain","A"},{"replay_parameterization",pure_exclusion ? "PureExclusion" : "FullABC"},
+        {"target_count",target_indices.size()},{"original_observation_count",original_observation_count},
+        {"fitting_observation_count",fitting_observation_count},{"excluded_observation_count",excluded_observation_count},
+        {"core_atoms",12},{"block_order","forward"},{"maximum_sweeps",200},
         {"maximum_events",capture.maximum_events},{"maximum_rows",capture.maximum_rows},
         {"accepted_updates_only",capture.accepted_updates_only},
         {"recovery_attempts",recovery_attempts},{"recovery_successes",recovery_successes},
@@ -350,6 +676,9 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
         {"extreme_width_atoms",std::move(extreme_atoms)},
         {"top_ac_cancellation_atoms",std::move(cancellation_atoms)},
         {"objective_trajectory",std::move(objective_trajectory)},
+        {"conditional_profile_status",conditional_profile ? "Captured" : "Unavailable"},
+        {"conditional_profile_reason",conditional_profile ? "sweep-8-state-profile" :
+            conditional_profile_error.empty() ? "sweep-8-state-state-unavailable" : conditional_profile_error},
         {"events_emitted",capture.events_emitted},{"first_stage_initial_widths",std::move(initial_widths)},
         {"initialization_seconds",initialization_seconds},{"search_completed",fit.search_completed},
         {"global_state_available",fit.assembled_state.has_value()},{"components",std::move(components)},
@@ -367,12 +696,14 @@ int main(int argc,char ** argv)
     try
     {
         if(argc<5 || argc>7)
-            throw std::invalid_argument("Usage: joint_width_trajectory MODEL MAP OUTPUT_DIR ATOM_ID[,ATOM_ID...]|all [MAX_EVENTS] [accepted-updates-only]");
+            throw std::invalid_argument("Usage: joint_width_trajectory MODEL MAP OUTPUT_DIR ATOM_ID[,ATOM_ID...]|all [MAX_EVENTS] [accepted-updates-only|pure|pure-accepted-updates-only]");
         const auto atom_ids=Split(argv[4]);
         const auto maximum_events=argc>=6 ? static_cast<std::size_t>(std::stoull(argv[5])) : 1024;
-        const bool accepted_only=argc==7 && std::string(argv[6])=="accepted-updates-only";
-        if(argc==7 && !accepted_only) throw std::invalid_argument("Unknown width trajectory mode.");
-        Run(argv[1],argv[2],argv[3],atom_ids,maximum_events,accepted_only); return 0;
+        const auto mode=argc==7 ? std::string(argv[6]) : std::string{};
+        const bool accepted_only=mode=="accepted-updates-only" || mode=="pure-accepted-updates-only";
+        const bool pure_exclusion=mode=="pure" || mode=="pure-accepted-updates-only";
+        if(argc==7 && !accepted_only && !pure_exclusion) throw std::invalid_argument("Unknown width trajectory mode.");
+        Run(argv[1],argv[2],argv[3],atom_ids,maximum_events,accepted_only,pure_exclusion); return 0;
     }
     catch(const std::exception & error) {std::cerr<<error.what()<<'\n'; return 1;}
 }

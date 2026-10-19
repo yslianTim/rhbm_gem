@@ -262,6 +262,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, WidthTrajectoryCaptureHonorsAtomEven
     capture.atom_initial_widths.emplace_back(data.input->atom_ids.front(),.55);
     capture.maximum_events=1; capture.maximum_atoms=1; capture.maximum_rows=0;
     n::FixedNeighborDiagnosticSink sink; std::size_t observed_events{};
+    std::size_t retained_blocks{},retained_sweeps{};
     sink.block=[&](const n::FixedNeighborBlockRecord & block) {
         for(const auto & trial:block.profile_trials) if(!trial.tracked_atoms.empty())
         {
@@ -275,11 +276,16 @@ TEST(JointFixedNeighborBlockCoordinateTest, WidthTrajectoryCaptureHonorsAtomEven
     policy.configure_search_for_testing=[&](n::FixedNeighborPolicy & local) {
         local.width_trajectory=&capture; local.diagnostic_sink=&sink;
     };
+    policy.search_result_observer=[&](const n::FixedNeighborSearchResult & result) {
+        retained_blocks=result.blocks.size(); retained_sweeps=result.sweeps.size();
+    };
     const auto traced=n::FitFixedNeighborComponents(problem,std::vector<double>(8,.55),policy);
     n::FixedNeighborSearchPolicy quiet_policy; quiet_policy.maximum_sweeps=1;
     const auto quiet=n::FitFixedNeighborComponents(problem,std::vector<double>(8,.55),quiet_policy);
     EXPECT_EQ(capture.events_emitted,1u);
     EXPECT_EQ(observed_events,1u);
+    EXPECT_EQ(retained_blocks,0u);
+    EXPECT_EQ(retained_sweeps,0u);
     ASSERT_EQ(traced.components.size(),1u);
     ASSERT_EQ(quiet.components.size(),1u);
     EXPECT_EQ(traced.components.front().stop_reason,quiet.components.front().stop_reason);

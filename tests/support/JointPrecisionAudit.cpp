@@ -11,6 +11,7 @@
 #include <sys/resource.h>
 #include <sstream>
 #include <iomanip>
+#include <cstdint>
 
 namespace second_stage_test::matched::certification {
 namespace {
@@ -23,6 +24,14 @@ using P50=boost::multiprecision::cpp_dec_float_50;
 using P100=boost::multiprecision::cpp_dec_float_100;
 template<class T> std::string String(const T & v) {return v.str(std::numeric_limits<T>::max_digits10,std::ios_base::scientific);}
 j::value Number(double v) {return std::isfinite(v) ? j::value(v) : j::value(nullptr);}
+template<class T> T ExactInput(double value)
+{
+    if(value==0.0) return 0;
+    int exponent{}; const double fraction=std::frexp(std::abs(value),&exponent);
+    const auto mantissa=static_cast<std::uint64_t>(std::ldexp(fraction,std::numeric_limits<double>::digits));
+    const T exact=boost::multiprecision::ldexp(T(mantissa),exponent-std::numeric_limits<double>::digits);
+    return std::signbit(value) ? -exact : exact;
+}
 j::array Values(const Vector & v) {j::array a; for(double x:v) a.push_back(Number(x)); return a;}
 long PeakRSS()
 {
@@ -356,10 +365,11 @@ j::object PrecisionNormalization(const Vector & y)
     return {{"parent_rows",y.size()},{"scale50",String(a)},{"scale100",String(b)}};
 }
 namespace {
-template<class T> j::object ProfileChange(const joint_abc::Domain & domain,const Vector & y,const Vector & base_eta,const Vector & eta)
+template<class T> j::object ProfileChange(const joint_abc::Domain & domain,const Vector & y,
+    const Vector & base_eta,const Vector & eta,double scale_override)
 {
     const auto response=Promote<T>(y);
-    const T scale=std::max(T(1),T(response.norm()));
+    const T scale=std::isfinite(scale_override) ? ExactInput<T>(scale_override) : std::max(T(1),T(response.norm()));
     const auto base_x=Design(domain,Promote<T>(base_eta)),x=Design(domain,Promote<T>(eta));
     const auto base=Constrained(base_x,response,{},scale),fit=Constrained(x,response,{},scale);
     if(!base.valid || !fit.valid) return {{"valid",false}};
@@ -369,11 +379,55 @@ template<class T> j::object ProfileChange(const joint_abc::Domain & domain,const
         {"prediction_change_norm",String(T((fit.residual-base.residual).norm()))},
         {"beta",Values(Demote(fit.beta))},{"kkt",String(fit.kkt)}};
 }
+template<class T> j::object ProfileChange(const joint_abc::Domain & domain,const Vector & y,
+    const Vector & base_eta,const Vector & eta)
+{
+    return ProfileChange<T>(domain,y,base_eta,eta,std::numeric_limits<double>::quiet_NaN());
+}
+template<class T> M<T> RoundedDesign(const joint_abc::Sparse & design)
+{
+    M<T> out=M<T>::Zero(design.rows(),design.cols());
+    for(Eigen::Index column=0;column<design.cols();++column)
+        for(joint_abc::Sparse::InnerIterator value(design,column);value;++value)
+            out(value.row(),column)=ExactInput<T>(value.value());
+    return out;
+}
+template<class T> j::object FixedBinary64ProfileChange(const joint_abc::Domain & domain,const Vector & y,
+    const Vector & base_eta,const Vector & eta,const joint_abc::EvaluationContext & context)
+{
+    const auto base_evaluation=joint_abc::Evaluate(domain,y,base_eta,false,&context);
+    const auto evaluation=joint_abc::Evaluate(domain,y,eta,false,&context);
+    if(!base_evaluation.valid || !evaluation.valid) return {{"valid",false}};
+    std::set<Eigen::Index> active;
+    for(Eigen::Index atom=0;atom<base_evaluation.beta.size();atom+=2)
+        if(base_evaluation.beta(atom)==0) active.insert(atom/2);
+    const auto response=Promote<T>(y);
+    const auto base=Constrained(RoundedDesign<T>(base_evaluation.x),response,active,ExactInput<T>(context.scale));
+    const auto fit=Constrained(RoundedDesign<T>(evaluation.x),response,active,ExactInput<T>(context.scale));
+    if(!base.valid || !fit.valid) return {{"valid",false}};
+    const T denominator=ExactInput<T>(context.scale)*ExactInput<T>(context.scale);
+    const T objective=fit.residual.squaredNorm()/(2*denominator);
+    const T change=(fit.residual.squaredNorm()-base.residual.squaredNorm())/(2*denominator);
+    return {{"valid",true},{"objective",String(objective)},{"objective_change",String(change)},
+        {"prediction_change_norm",String(T((fit.residual-base.residual).norm()))},{"kkt",String(fit.kkt)}};
+}
 }
 j::object PrecisionProfileChange(const joint_abc::Domain & domain,const Vector & y,const Vector & base_eta,const Vector & eta)
 {
     return {{"precision50",ProfileChange<P50>(domain,y,base_eta,eta)},
         {"precision100",ProfileChange<P100>(domain,y,base_eta,eta)}};
+}
+j::object PrecisionProfileComparison(const joint_abc::Domain & domain,const Vector & y,
+    const Vector & base_eta,const Vector & eta,const joint_abc::EvaluationContext & context)
+{
+    return {
+        {"fixed_binary64_design",j::object{
+            {"precision50",FixedBinary64ProfileChange<P50>(domain,y,base_eta,eta,context)},
+            {"precision100",FixedBinary64ProfileChange<P100>(domain,y,base_eta,eta,context)}}},
+        {"functional_kernel",j::object{
+            {"precision50",ProfileChange<P50>(domain,y,base_eta,eta,context.scale)},
+            {"precision100",ProfileChange<P100>(domain,y,base_eta,eta,context.scale)}}}
+    };
 }
 j::object PrecisionAudit(const joint_abc::Domain & domain,const Vector & y,const joint_abc::Evaluation & e,const Matrix & directions,const joint_abc::EvaluationContext * context,bool blocks)
 {
