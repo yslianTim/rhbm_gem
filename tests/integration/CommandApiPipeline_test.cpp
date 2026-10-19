@@ -15,6 +15,7 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include "core/detail/PotentialFittingWorkflow.hpp"
+#include "core/detail/FirstStageInitialization.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include "data/io/detail/JointResultJson.hpp"
@@ -82,6 +83,23 @@ void InjectJointNoDonors(rgc::JointFitResult & fit)
         if (component.target_evidence)
             for (auto & point:component.target_evidence->point_atoms)
                 point.local_conditioning="Warning";
+}
+
+void ReplaceJointFitWithBoundedCandidate(rgc::JointFitResult & fit)
+{
+    if(!fit.problem) throw std::runtime_error("Joint workflow test hook lacks a problem snapshot.");
+    auto bounded=rgc::detail::FitJointComponentsInitializedBoundedWithProgress(
+        *fit.problem,fit.initialization,{});
+    if(!bounded.search_completed || bounded.RuntimeConvergence()!=rg::JointCheckStatus::Passed)
+        throw std::runtime_error("Bounded Joint candidate failed in end-to-end test hook.");
+    fit=std::move(bounded);
+}
+
+void ReplaceJointFitWithBoundedCandidateEvenIfUnqualified(rgc::JointFitResult & fit)
+{
+    if(!fit.problem) throw std::runtime_error("Joint workflow test hook lacks a problem snapshot.");
+    fit=rgc::detail::FitJointComponentsInitializedBoundedWithProgress(
+        *fit.problem,fit.initialization,{});
 }
 
 struct ScopedJointWorkflowFitHook
@@ -649,4 +667,143 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
     }
     EXPECT_EQ(cli_status,4);
     ASSERT_TRUE(rg::DataRepository{request.database_path}.LoadModel(request.saved_key_tag));
+}
+
+TEST(CommandApiPipelineTest, BoundedJointCandidatePersistsReloadsAndFeedsPostprocessing)
+{
+    command_test::ScopedTempDir directory{"bounded_joint_downstream"};
+    const auto model_path=directory.path()/"bounded-input.cif";
+    const auto template_path=command_test::TestDataPath("test_model.cif");
+    std::ifstream template_file(template_path);
+    ASSERT_TRUE(template_file);
+    const std::string template_text{std::istreambuf_iterator<char>{template_file},
+        std::istreambuf_iterator<char>{}};
+    const auto atom_marker=template_text.find("ATOM 1 C CA . ALA A 1");
+    ASSERT_NE(atom_marker,std::string::npos);
+    std::ofstream model_file(model_path);
+    ASSERT_TRUE(model_file);
+    model_file << template_text.substr(0,atom_marker);
+    for(int index=0;index<25;++index)
+    {
+        const int serial=index+1;
+        const int x=3+7*(index%5),y=3+7*(index/5);
+        model_file << "ATOM " << serial << " C CA . ALA A " << serial << ' '
+            << x << ' ' << y << " 3.0 1.0 0.0 1\n";
+    }
+    model_file << "#\n";
+    model_file.close();
+
+    const auto maps_dir=directory.path()/"maps";
+    std::filesystem::create_directories(maps_dir);
+    rgc::MapSimulationRequest simulation;
+    simulation.model_file_path=model_path;
+    simulation.output_dir=maps_dir;
+    simulation.grid_spacing=.5;
+    simulation.potential_model_choice=rgc::PotentialModel::SINGLE_GAUS;
+    simulation.blurring_width_list={.55};
+    simulation.verbosity=0;
+    ASSERT_TRUE(rgc::RunCommand(simulation).succeeded);
+    const auto map_path=FindGeneratedMap(maps_dir);
+    ASSERT_FALSE(map_path.empty());
+
+    const auto database_path=directory.path()/"bounded.sqlite";
+    constexpr const char * key="bounded-joint";
+    int cli_status{};
+    {
+        ScopedJointWorkflowFitHook hook{&ReplaceJointFitWithBoundedCandidate};
+        cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
+            "--model",model_path.string(),"--map",map_path.string(),
+            "--database",database_path.string(),"--save-key",key,
+            "--select-chain","A","--verbose","0"});
+    }
+    ASSERT_EQ(cli_status,0);
+
+    rg::DataRepository repository{database_path};
+    const auto loaded=repository.LoadModel(key);
+    ASSERT_NE(loaded,nullptr);
+    const auto & stored=*loaded->GetAnalysisView().GetJointResult();
+    ASSERT_TRUE(rg::IsQualifiedJointAnalysisResult(stored));
+    ASSERT_TRUE(stored.selection_domain);
+    EXPECT_EQ(stored.selection_domain->contributor_policy,"pure-halo-support-exclusion-v1");
+    EXPECT_EQ(stored.selection_domain->target_indices.size(),25u);
+    ASSERT_TRUE(stored.metadata.solver);
+    EXPECT_EQ(stored.metadata.solver->search_method,"fixed-neighbor");
+    const auto calibration=std::find_if(stored.evidence.begin(),stored.evidence.end(),[](const auto & item) {
+        return item.name=="global-width-calibration";
+    });
+    ASSERT_NE(calibration,stored.evidence.end());
+    EXPECT_EQ(calibration->status,rg::JointCheckStatus::Passed);
+    EXPECT_NE(calibration->reason.find("global-first-stage-p95-k4"),std::string::npos);
+    ASSERT_TRUE(calibration->value && calibration->threshold);
+    EXPECT_NEAR(*calibration->threshold,4.0*(*calibration->value),1e-12);
+    const auto donor_coverage=std::find_if(stored.evidence.begin(),stored.evidence.end(),[](const auto & item) {
+        return item.name=="qualified-first-stage-donor-coverage";
+    });
+    ASSERT_NE(donor_coverage,stored.evidence.end());
+    ASSERT_TRUE(donor_coverage->value && donor_coverage->threshold);
+    EXPECT_GE(*donor_coverage->value,*donor_coverage->threshold);
+    ASSERT_FALSE(stored.components.empty());
+    EXPECT_TRUE(std::any_of(stored.components.begin(),stored.components.end(),[](const auto & component) {
+        return std::any_of(component.evidence.begin(),component.evidence.end(),[](const auto & item) {
+            return item.name=="active-set-lm-subproblems" && item.status==rg::JointCheckStatus::Passed;
+        });
+    }));
+
+    std::size_t target_count{},peeling_count{},local_result_count{},local_available_count{},group_member_count{};
+    for(const auto * atom:loaded->GetSelectedAtoms())
+    {
+        const auto local=rg::AtomLocalPotentialView::For(*atom);
+        const auto & second=local.GetStageEstimate(rg::FittingStage::Second);
+        if(second.source.method!=rg::EstimateMethod::JointComponents || second.source.role!=rg::FittingRole::Target)
+            continue;
+        ++target_count;
+        EXPECT_TRUE(second.point);
+        peeling_count+=local.GetPostFitPeeling().has_value();
+        local_result_count+=local.GetPostJointLocalResult().has_value();
+        if(local.GetPostJointLocalResult() && local.GetPostJointLocalResult()->status==rg::EvidenceStatus::Available)
+            ++local_available_count;
+        group_member_count+=local.GetGroupMemberResult().has_value();
+    }
+    EXPECT_EQ(target_count,25u);
+    EXPECT_EQ(peeling_count,target_count);
+    EXPECT_EQ(local_result_count,target_count);
+    EXPECT_GT(local_available_count,0u);
+    EXPECT_GT(group_member_count,0u);
+
+    const auto small_maps_dir=directory.path()/"small-maps";
+    std::filesystem::create_directories(small_maps_dir);
+    auto small_simulation=simulation;
+    small_simulation.model_file_path=template_path;
+    small_simulation.output_dir=small_maps_dir;
+    ASSERT_TRUE(rgc::RunCommand(small_simulation).succeeded);
+    const auto small_map_path=FindGeneratedMap(small_maps_dir);
+    ASSERT_FALSE(small_map_path.empty());
+    const auto small_database_path=directory.path()/"small-bounded.sqlite";
+    constexpr const char * small_key="small-bounded-joint";
+    int small_cli_status{};
+    {
+        ScopedJointWorkflowFitHook hook{&ReplaceJointFitWithBoundedCandidateEvenIfUnqualified};
+        small_cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
+            "--model",template_path.string(),"--map",small_map_path.string(),
+            "--database",small_database_path.string(),"--save-key",small_key,
+            "--select-chain","A","--verbose","0"});
+    }
+    EXPECT_NE(small_cli_status,0);
+    rg::DataRepository small_repository{small_database_path};
+    const auto small_loaded=small_repository.LoadModel(small_key);
+    ASSERT_NE(small_loaded,nullptr);
+    const auto & small_stored=*small_loaded->GetAnalysisView().GetJointResult();
+    EXPECT_FALSE(rg::IsQualifiedJointAnalysisResult(small_stored));
+    const auto unavailable_calibration=std::find_if(small_stored.evidence.begin(),small_stored.evidence.end(),
+        [](const auto & item) {return item.name=="global-width-calibration";});
+    ASSERT_NE(unavailable_calibration,small_stored.evidence.end());
+    EXPECT_EQ(unavailable_calibration->status,rg::JointCheckStatus::Unavailable);
+    for(const auto * atom:small_loaded->GetSelectedAtoms())
+    {
+        const auto local=rg::AtomLocalPotentialView::For(*atom);
+        EXPECT_FALSE(local.GetStageEstimate(rg::FittingStage::Second).point);
+        EXPECT_FALSE(local.GetPostFitPeeling());
+        EXPECT_FALSE(local.GetPostJointLocalResult());
+        EXPECT_FALSE(local.GetGroupMemberResult());
+    }
 }
