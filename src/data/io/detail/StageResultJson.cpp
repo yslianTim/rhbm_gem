@@ -586,6 +586,7 @@ void Validate(const ModelObject & model)
             throw std::invalid_argument("Joint group summary conflates Gaussian width and fixed charge profile.");
     }
     if(!data.joint_result) return;
+    if(!IsQualifiedJointAnalysisResult(*data.joint_result)) return;
     const auto mapped=data_internal::BuildJointStageEstimates(*data.joint_result,"");
     for(const auto & [id,expected]:mapped)
     {

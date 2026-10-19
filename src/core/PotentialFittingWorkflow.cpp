@@ -265,23 +265,53 @@ void RunJointComponentWorkflow(
     postprocessing_metrics.rss_before_postprocessing_bytes = joint_component::CurrentRssBytes();
     ++postprocessing_metrics.joint_stage_mapping_builds;
     const auto joint_run_id=boost::uuids::to_string(boost::uuids::random_generator()());
+    const auto finish_without_downstream = [&] {
+        postprocessing_metrics.total_postprocessing_seconds = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - postprocessing_start).count();
+    };
+    if (!IsQualifiedJointAnalysisResult(snapshot))
+    {
+        if (!options.quiet_mode)
+            LogJointInfo("[Joint] Qualification failed; preserving diagnostics and skipping downstream processing.");
+        model.EditAnalysis().SetJointResult(std::move(snapshot));
+        finish_without_downstream();
+        return;
+    }
+    bool halo_reconstruction_unavailable{};
     if (pure_exclusion)
     {
         const auto & original=problem.OriginalInput();
         const auto target_count=original.selection_domain ? original.selection_domain->target_indices.size() : 0;
         if (original.atom_ids.size()>target_count)
         {
-            const auto built=BuildHaloMedianReconstruction(model,problem,snapshot,joint_run_id);
-            snapshot.halo_median_reconstruction=built.snapshot;
-            postprocessing_metrics.halo_median_valid_target_count=built.audit.valid_target_count;
-            postprocessing_metrics.halo_median_same_group_halos=built.audit.same_group_halos;
-            postprocessing_metrics.halo_median_fallback_halos=built.audit.fallback_halos;
-            postprocessing_metrics.halo_median_fallback_support_rows=built.audit.fallback_support_rows;
+            try
+            {
+                const auto built=BuildHaloMedianReconstruction(model,problem,snapshot,joint_run_id);
+                snapshot.halo_median_reconstruction=built.snapshot;
+                postprocessing_metrics.halo_median_valid_target_count=built.audit.valid_target_count;
+                postprocessing_metrics.halo_median_same_group_halos=built.audit.same_group_halos;
+                postprocessing_metrics.halo_median_fallback_halos=built.audit.fallback_halos;
+                postprocessing_metrics.halo_median_fallback_support_rows=built.audit.fallback_support_rows;
+            }
+            catch (const std::invalid_argument & error)
+            {
+                if (std::string_view(error.what()) != "halo-median-no-valid-targets") throw;
+                snapshot.evidence.push_back({std::string(JointHaloMedianReconstructionEvidenceName),
+                    JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{}, {},error.what()});
+                halo_reconstruction_unavailable=true;
+                if (!options.quiet_mode)
+                    LogJointInfo("[Joint] Halo median reconstruction unavailable: " + std::string(error.what()));
+            }
         }
     }
     data_internal::ApplyJointStageEstimates(model, snapshot, joint_run_id);
     if (!options.quiet_mode) LogJointInfo("[Joint] Computing post-fit outputs...");
     model.EditAnalysis().SetJointResult(std::move(snapshot));
+    if (halo_reconstruction_unavailable)
+    {
+        finish_without_downstream();
+        return;
+    }
     const auto & joint_snapshot = *model.GetAnalysisView().GetJointResult();
     auto phase_start = std::chrono::steady_clock::now();
     const JointPostprocessingContext postprocessing(map, model, problem, &joint_snapshot, &postprocessing_metrics);

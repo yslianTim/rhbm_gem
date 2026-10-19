@@ -94,4 +94,23 @@ struct JointAnalysisResult
     JointCheckStatus target_runtime_convergence{JointCheckStatus::NotRun};
     std::optional<JointHaloMedianSnapshot> halo_median_reconstruction;
 };
+
+inline constexpr std::string_view JointHaloMedianReconstructionEvidenceName =
+    "halo-median-reconstruction";
+
+inline bool IsQualifiedJointAnalysisResult(const JointAnalysisResult & result)
+{
+    return result.initialization.valid && result.search_completed &&
+        result.runtime_convergence == JointCheckStatus::Passed &&
+        result.target_runtime_convergence == JointCheckStatus::Passed;
+}
+
+inline bool HasUnavailableJointHaloMedianReconstruction(const JointAnalysisResult & result)
+{
+    for (const auto & check : result.evidence)
+        if (check.name == JointHaloMedianReconstructionEvidenceName &&
+            check.status == JointCheckStatus::Unavailable && !check.reason.empty())
+            return true;
+    return false;
+}
 }
