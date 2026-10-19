@@ -12,10 +12,18 @@
 #include <chrono>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
+#include <limits>
+#include <map>
 #include <stdexcept>
+#include <unordered_map>
+#ifndef _WIN32
+#include <sys/resource.h>
+#endif
 
 namespace {
 namespace core=rhbm_gem::core;
@@ -26,6 +34,139 @@ void Write(const std::filesystem::path & path,const json::value & value)
     std::ofstream output(path);
     output.exceptions(std::ios::failbit|std::ios::badbit);
     output<<json::serialize(value)<<'\n';
+}
+
+const char * Status(rhbm_gem::JointCheckStatus status);
+
+long PeakRssBytes()
+{
+#ifdef _WIN32
+    return -1;
+#else
+    rusage usage{};
+    if(getrusage(RUSAGE_SELF,&usage)!=0) return -1;
+#ifdef __APPLE__
+    return usage.ru_maxrss;
+#else
+    return usage.ru_maxrss*1024;
+#endif
+#endif
+}
+
+json::object ParameterMetrics(const core::JointFitResult & fit,const core::JointProblem & problem,
+    const std::filesystem::path & map_path,double normalization_divisor)
+{
+    json::object out;
+    if(!fit.assembled_state || !fit.assembled_state->b.size()) return out;
+    const auto & input=core::JointProblemAccess::Get(problem).input;
+    const auto calibration=std::find_if(fit.evidence.begin(),fit.evidence.end(),[](const auto & check) {
+        return check.name=="global-width-calibration";
+    });
+    if(calibration==fit.evidence.end() || !calibration->threshold) return out;
+    const double bmax=*calibration->threshold,eta_max=std::log(bmax);
+    double min_width=std::numeric_limits<double>::infinity(),max_width=0.0,maximum_violation{};
+    std::size_t active{};
+    double serial_1032_width{};
+    for(std::size_t atom=0;atom<fit.assembled_state->b.size();++atom)
+    {
+        const double width=fit.assembled_state->b[atom];
+        const double eta=fit.assembled_state->log_b[atom];
+        min_width=std::min(min_width,width); max_width=std::max(max_width,width);
+        maximum_violation=std::max(maximum_violation,std::max(0.0,eta-eta_max));
+        active+=eta>=eta_max-64.0*std::numeric_limits<double>::epsilon()*std::max(1.0,std::abs(eta_max));
+        if(input->atom_ids[atom]=="1032") serial_1032_width=width;
+    }
+    out["global_bmax_angstrom"]=bmax;
+    out["minimum_width_angstrom"]=min_width;
+    out["maximum_width_angstrom"]=max_width;
+    out["serial_1032_width_angstrom"]=serial_1032_width>0.0 ? json::value(serial_1032_width) : json::value(nullptr);
+    out["active_bound_atoms"]=active;
+    out["maximum_bound_violation_log_width"]=maximum_violation;
+    out["truth_used_for_calibration"]=false;
+
+    const auto truth_path=std::filesystem::path(map_path.string()+".simulation.json");
+    if(!std::filesystem::exists(truth_path)) return out;
+    std::ifstream truth_file(truth_path);
+    json::parse_options parse_options; parse_options.numbers=json::number_precision::precise;
+    const auto truth_root=json::parse(std::string(std::istreambuf_iterator<char>(truth_file),{}),{},parse_options);
+    struct Truth {double amplitude{},width{},charge{};};
+    std::unordered_map<std::string,Truth> truth_by_id;
+    for(const auto & atom:truth_root.at("atoms").as_array())
+        truth_by_id.emplace(std::to_string(json::value_to<std::uint64_t>(atom.at("serial_id"))),
+            Truth{static_cast<double>(json::value_to<int>(atom.at("element"))),
+                json::value_to<double>(atom.at("effective_gaussian_width")),
+                json::value_to<double>(atom.at("charge_used"))});
+    long double sum_a{},sum_b{},sum_c{};
+    std::size_t covered{};
+    for(std::size_t atom=0;atom<fit.assembled_state->b.size();++atom)
+    {
+        const auto & truth=truth_by_id.at(input->atom_ids[atom]);
+        const double da=fit.assembled_state->ac[2*atom]*normalization_divisor-truth.amplitude;
+        const double db=fit.assembled_state->b[atom]-truth.width;
+        const double dc=fit.assembled_state->ac[2*atom+1]*normalization_divisor-truth.charge;
+        sum_a+=static_cast<long double>(da)*da;
+        sum_b+=static_cast<long double>(db)*db;
+        sum_c+=static_cast<long double>(dc)*dc;
+        covered+=truth.width<=bmax;
+    }
+    const double count=static_cast<double>(fit.assembled_state->b.size());
+    out["truth_coverage"]=static_cast<double>(covered)/count;
+    out["truth_outside_bound_atoms"]=fit.assembled_state->b.size()-covered;
+    out["A_rmse"]=std::sqrt(static_cast<double>(sum_a/count));
+    out["B_rmse_angstrom"]=std::sqrt(static_cast<double>(sum_b/count));
+    out["C_rmse"]=std::sqrt(static_cast<double>(sum_c/count));
+    return out;
+}
+
+json::object TargetQualityMetrics(const core::JointFitResult & fit)
+{
+    std::map<std::string,std::size_t> quality_counts,quality_reason_counts,stability_counts,conditioning_counts;
+    std::size_t available{};
+    if(fit.target_evidence)
+        for(const auto & point:fit.target_evidence->point_atoms)
+        {
+            ++quality_counts[point.point_quality];
+            ++quality_reason_counts[point.reason];
+            ++stability_counts[point.parameter_stability];
+            ++conditioning_counts[point.local_conditioning];
+            available+=point.point_quality=="Available";
+        }
+    const auto Counts=[](const std::map<std::string,std::size_t> & counts) {
+        json::object result;
+        for(const auto & [name,count]:counts) result[name]=count;
+        return result;
+    };
+    json::array component_stability;
+    for(const auto & component:fit.components)
+    {
+        if(!component.parameter_stability)
+        {
+            component_stability.push_back(json::object{{"component_id",component.id},
+                {"perturbation_status","NotAssessed"},{"trajectory_status","NotAssessed"}});
+            continue;
+        }
+        std::map<std::string,std::size_t> block_counts,block_reason_counts;
+        for(const auto & block:component.parameter_stability->blocks)
+        {
+            ++block_counts[block.status];
+            ++block_reason_counts[block.reason];
+        }
+        component_stability.push_back(json::object{{"component_id",component.id},
+            {"perturbation_status",component.parameter_stability->perturbation_status},
+            {"trajectory_status",component.parameter_stability->trajectory_stability_status},
+            {"blocks",component.parameter_stability->blocks.size()},
+            {"block_status_counts",Counts(block_counts)},
+            {"block_reason_counts",Counts(block_reason_counts)},
+            {"perturbation_solves",component.parameter_stability->perturbation_solves},
+            {"perturbation_evaluations",component.parameter_stability->perturbation_evaluations}});
+    }
+    return {{"target_runtime_convergence",Status(fit.TargetRuntimeConvergence())},
+        {"target_count",fit.target_evidence ? fit.target_evidence->point_atoms.size() : 0},
+        {"point_quality_available",available},{"point_quality_counts",Counts(quality_counts)},
+        {"point_quality_reason_counts",Counts(quality_reason_counts)},
+        {"parameter_stability_counts",Counts(stability_counts)},
+        {"local_conditioning_counts",Counts(conditioning_counts)},
+        {"components",std::move(component_stability)}};
 }
 
 const char * Status(rhbm_gem::JointCheckStatus status)
@@ -95,19 +236,35 @@ void Run(const std::filesystem::path & model_path,const std::filesystem::path & 
             {"threshold",check.threshold && std::isfinite(*check.threshold) ?
                 json::value(*check.threshold) : json::value(nullptr)},
             {"reason",check.reason}});
+    double prediction_rmse=std::numeric_limits<double>::quiet_NaN();
+    if(fit.prediction && fit.prediction->size()==data.input->observations.size())
+    {
+        long double squared_error{};
+        for(std::size_t row=0;row<fit.prediction->size();++row)
+        {
+            const double error=fit.prediction->at(row)-data.input->observations[row];
+            squared_error+=static_cast<long double>(error)*error;
+        }
+        prediction_rmse=std::sqrt(static_cast<double>(squared_error/
+            static_cast<long double>(fit.prediction->size())));
+    }
     Write(output/"summary.json",json::object{
         {"execution_role","production-bounded-candidate-no-instrumentation"},
         {"instrumentation_enabled",false},
         {"target_count",data.input->selection_domain->target_indices.size()},
         {"observation_count",data.input->observations.size()},
         {"formal_runtime_convergence",Status(fit.RuntimeConvergence())},
+        {"target_quality",TargetQualityMetrics(fit)},
         {"search_completed",fit.search_completed},
         {"objective",fit.objective ? json::value(*fit.objective) : json::value(nullptr)},
+        {"prediction_rmse",std::isfinite(prediction_rmse) ? json::value(prediction_rmse) : json::value(nullptr)},
         {"initialization_valid",fit.initialization.valid},
         {"initialization_reason",fit.initialization.reason},
         {"components",std::move(components)},
         {"evidence",std::move(evidence)},
+        {"parameter_metrics",ParameterMetrics(fit,*fit.problem,map_path,*normalization)},
         {"fingerprints",fingerprints},
+        {"peak_rss_bytes",PeakRssBytes()},
         {"wall_seconds",std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count()}});
 }
 }
