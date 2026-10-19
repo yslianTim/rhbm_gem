@@ -376,10 +376,21 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
     out.push_back(check("width-gradient-consistency",evidence_available,replay.gradient_agrees,
         std::isfinite(replay.gradient_difference) ? std::optional<double>(replay.gradient_difference) : std::nullopt));
     out.back().reason=replay.reason.empty() ? "per-coordinate-replay-enclosure" : replay.reason;
+    const double width_stationarity_value=replay.width_bound_applied ?
+        std::max(replay.primary_width_projected_kkt,replay.independent_width_projected_kkt) :
+        replay.primary_width_gradient;
+    const bool width_stationarity_passed=replay.width_bound_applied ?
+        replay.width_bound_feasible && replay.primary_width_kkt_passed && replay.independent_width_kkt_passed &&
+            std::isfinite(replay.primary_width_projected_kkt) &&
+            std::isfinite(replay.independent_width_projected_kkt) &&
+            replay.primary_width_projected_kkt<=a.convergence_criteria.global_width_gradient &&
+            replay.independent_width_projected_kkt<=a.convergence_criteria.global_width_gradient :
+        replay.primary_width_gradient<=a.convergence_criteria.global_width_gradient;
     out.push_back(check("width-stationarity",evidence_available && a.primary.valid && a.primary.gradient.size()>0,
-        replay.primary_width_gradient<=a.convergence_criteria.global_width_gradient,
-        std::isfinite(replay.primary_width_gradient) ? std::optional<double>(replay.primary_width_gradient) : std::nullopt,
+        width_stationarity_passed,
+        std::isfinite(width_stationarity_value) ? std::optional<double>(width_stationarity_value) : std::nullopt,
         a.convergence_criteria.global_width_gradient));
+    if(replay.width_bound_applied) out.back().reason="independent-bound-aware-projected-width-kkt";
     out.push_back(check("endpoint-verification",evidence_available,a.endpoint_verified));
     out.push_back(check("numerical-qualification",a.primary.valid,a.numerical_qualified));
     if(a.verification_memory_estimate.stage==n::MemoryStage::EndpointVerification)

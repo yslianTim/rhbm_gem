@@ -1106,6 +1106,15 @@ TEST(JointComponentNumericsTest, BoundedReplayUsesProjectedWidthKktAndChecksFeas
     EXPECT_DOUBLE_EQ(outward_replay.complementarity_residual,0.0);
     const auto bounded_assessment=n::VerifyJointEndpoint(domain,outward_y,outward,outward_replay,outward_context);
     EXPECT_TRUE(bounded_assessment.numerical_qualified)<<bounded_assessment.failure;
+    const auto bounded_evidence=n::AssessmentEvidence(bounded_assessment,
+        rhbm_gem::JointEvidenceScope::AssembledGlobal);
+    const auto width_stationarity=std::find_if(bounded_evidence.begin(),bounded_evidence.end(),[](const auto & check) {
+        return check.name=="width-stationarity";
+    });
+    ASSERT_NE(width_stationarity,bounded_evidence.end());
+    EXPECT_EQ(width_stationarity->status,rhbm_gem::JointCheckStatus::Passed);
+    ASSERT_TRUE(width_stationarity->value.has_value());
+    EXPECT_DOUBLE_EQ(*width_stationarity->value,0.0);
 
     auto [inward_y,inward_context,inward,inward_replay]=evaluate(.3);
     ASSERT_TRUE(inward.valid);
