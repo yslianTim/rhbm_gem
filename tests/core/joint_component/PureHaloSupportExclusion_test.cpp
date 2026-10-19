@@ -177,6 +177,58 @@ MapFixture WorkflowFixture()
     return {std::move(model),std::move(map)};
 }
 
+MapFixture MultiTargetHaloWorkflowFixture()
+{
+    std::vector<std::unique_ptr<AtomObject>> atoms;
+    const auto add_atom=[&](int serial,double x,int component,int atom_key,
+        const char * atom_id) {
+        auto atom=std::make_unique<AtomObject>();
+        atom->SetSerialID(serial);
+        atom->SetElement(Element::CARBON);
+        atom->SetComponentKey(static_cast<ComponentKey>(component));
+        atom->SetAtomKey(static_cast<AtomKey>(atom_key));
+        atom->SetChainID("A");
+        atom->SetComponentID("ALA");
+        atom->SetAtomID(atom_id);
+        atom->SetPosition(x,0,0);
+        atoms.push_back(std::move(atom));
+    };
+    add_atom(1,0.0,1,7,"CA");
+    add_atom(2,3.5,1,7,"C");
+    add_atom(3,7.0,1,7,"N");
+    add_atom(4,10.0,1,7,"O");
+    add_atom(5,-4.5,3,8,"CB");
+    ModelObject model(std::move(atoms));
+    model.SelectAtoms([](const auto & atom){return atom.GetSerialID()<=3;});
+
+    constexpr std::array<int,3> dimensions{70,25,25};
+    constexpr std::array<double,3> spacing{.3,.3,.3};
+    constexpr std::array<double,3> origin{-7.5,-3.75,-3.75};
+    const std::array<std::array<double,3>,5> positions{{
+        {0,0,0},{3.5,0,0},{7.0,0,0},{10.0,0,0},{-4.5,0,0}}};
+    const std::array<double,5> amplitudes{{2.0,1.6,1.2,.5,.3}};
+    const std::array<double,5> widths{{.65,.75,.85,.8,1.0}};
+    const std::array<double,5> charges{{-.2,.15,-.1,.3,-.25}};
+    auto values=std::make_unique<double[]>(static_cast<std::size_t>(dimensions[0])*dimensions[1]*dimensions[2]);
+    for (int z=0;z<dimensions[2];++z) for (int y=0;y<dimensions[1];++y) for (int x=0;x<dimensions[0];++x)
+    {
+        const auto position=core::simulation::GridPosition({x,y,z},spacing,origin);
+        double value{};
+        for (std::size_t atom=0;atom<positions.size();++atom)
+        {
+            const auto square=core::simulation::SupportSquare(position,positions[atom]);
+            if (square>6.25) continue;
+            const auto basis=core::joint_component::EvaluateKernel(square,widths[atom],2.5);
+            value+=amplitudes[atom]*basis.gaussian+charges[atom]*basis.charge;
+        }
+        const auto index=static_cast<std::size_t>(x)+static_cast<std::size_t>(dimensions[0]) *
+            (static_cast<std::size_t>(y)+static_cast<std::size_t>(dimensions[1])*static_cast<std::size_t>(z));
+        values[index]=value;
+    }
+    MapObject map(dimensions,spacing,origin,std::move(values));
+    return {std::move(model),std::move(map)};
+}
+
 MapFixture WideBoundaryFixture()
 {
     auto fixture=BoundaryFixture();
@@ -662,6 +714,74 @@ TEST(PureHaloSupportExclusionTest, FullWorkflowRetainsMultipleMemberGroupContrac
     EXPECT_TRUE(found_multi_member);
     EXPECT_EQ(metrics.halo_median_same_group_halos,0u);
     EXPECT_EQ(metrics.halo_median_fallback_halos,0u);
+}
+
+TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithMultipleTargetsAndHaloGroupSources)
+{
+    auto fixture=MultiTargetHaloWorkflowFixture();
+    FitOptions options;
+    options.estimator=PotentialEstimator::JOINT_COMPONENTS;
+    options.quiet_mode=true;
+    options.thread_size=1;
+    core::detail::JointPostprocessingMetrics metrics;
+    ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
+        fixture.map,fixture.model,options,&metrics,true));
+
+    const auto result=fixture.model.GetAnalysisView().GetJointResult();
+    ASSERT_TRUE(result);
+    ASSERT_TRUE(result->selection_domain);
+    EXPECT_EQ(result->selection_domain->target_indices,(std::vector<std::size_t>{0,1,2}));
+    ASSERT_TRUE(result->halo_median_reconstruction);
+    ASSERT_EQ(result->halo_median_reconstruction->halos.size(),2u);
+    EXPECT_EQ(result->halo_median_reconstruction->valid_target_count,3u);
+    EXPECT_EQ(metrics.halo_median_valid_target_count,3u);
+    EXPECT_EQ(metrics.halo_median_same_group_halos,1u);
+    EXPECT_EQ(metrics.halo_median_fallback_halos,1u);
+
+    const auto same_group_halo=std::find_if(result->halo_median_reconstruction->halos.begin(),
+        result->halo_median_reconstruction->halos.end(),
+        [](const auto & halo){return halo.atom_id=="4";});
+    const auto fallback_halo=std::find_if(result->halo_median_reconstruction->halos.begin(),
+        result->halo_median_reconstruction->halos.end(),
+        [](const auto & halo){return halo.atom_id=="5";});
+    ASSERT_NE(same_group_halo,result->halo_median_reconstruction->halos.end());
+    ASSERT_NE(fallback_halo,result->halo_median_reconstruction->halos.end());
+    EXPECT_EQ(same_group_halo->source,HaloMedianSource::GroupKeyMedian);
+    EXPECT_EQ(same_group_halo->donor_count,3u);
+    EXPECT_EQ(fallback_halo->source,HaloMedianSource::GlobalTargetMedian);
+    EXPECT_EQ(fallback_halo->donor_count,3u);
+    EXPECT_TRUE(std::isfinite(same_group_halo->amplitude));
+    EXPECT_TRUE(std::isfinite(fallback_halo->amplitude));
+
+    double local_amplitude_sum{};
+    double local_width_sum{};
+    for (const int atom_id:{1,2,3})
+    {
+        const auto local=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(atom_id)).GetPostJointLocalResult();
+        ASSERT_TRUE(local);
+        EXPECT_EQ(local->status,EvidenceStatus::Available) << local->reason;
+        EXPECT_GT(local->sample_count,0u);
+        EXPECT_TRUE(std::isfinite(local->fit.mdpde.GetModel().GetAmplitude()));
+        EXPECT_TRUE(std::isfinite(local->fit.mdpde.GetModel().GetWidth()));
+        EXPECT_TRUE(std::isfinite(local->fixed_charge.coefficient));
+        local_amplitude_sum+=local->fit.mdpde.GetModel().GetAmplitude();
+        local_width_sum+=local->fit.mdpde.GetModel().GetWidth();
+    }
+
+    const auto group_key=data_internal::GetGroupKey(fixture.model.FindAtomPtr(1));
+    const auto summary=fixture.model.GetAnalysisView().GetGroupParameterSummary(group_key);
+    ASSERT_TRUE(summary);
+    EXPECT_EQ(summary->member_ids,(std::vector<int>{1,2,3}));
+    EXPECT_EQ(summary->point_count,3u);
+    EXPECT_EQ(summary->eligible_count,3u);
+    EXPECT_EQ(summary->excluded_count,0u);
+    EXPECT_EQ(summary->status,EvidenceStatus::Available) << summary->reason;
+    ASSERT_TRUE(summary->descriptive_mean);
+    EXPECT_NEAR(summary->descriptive_mean->GetAmplitude(),local_amplitude_sum/3.0,1e-12);
+    EXPECT_NEAR(summary->descriptive_mean->GetWidth(),local_width_sum/3.0,1e-12);
+    ASSERT_TRUE(summary->inference);
+    EXPECT_TRUE(std::isfinite(summary->inference->mdpde.GetAmplitude()));
+    EXPECT_TRUE(std::isfinite(summary->inference->mdpde.GetWidth()));
 }
 
 TEST(PureHaloSupportExclusionTest, ProductionWorkflowUsesPureExclusionDefault)
