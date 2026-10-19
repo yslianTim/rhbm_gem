@@ -937,6 +937,18 @@ TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSche
     stability_block.objective_consistency_status="Passed";
     stability_block.log_width_parameter_change_inf=.03; stability_block.scaled_ac_parameter_change_inf=.04;
     stability_block.local_prediction_change_relative=1e-10; stability_block.objective_difference=1e-12;
+    stability_block.baseline_local_ac_kkt=4e-11; stability_block.baseline_projected_width_kkt=2e-12;
+    stability_block.baseline_width_bound_slack=.25; stability_block.baseline_local_objective=1e-8;
+    stability_block.baseline_local_residual_rmse_normalized=3e-5; stability_block.baseline_active_ac_constraints=1;
+    stability_block.baseline_active_width_bound_targets=2;
+    stability_block.baseline_independent_replay_status="Passed";
+    stability_block.conditional_reprofile_status="StrictlyQualified";
+    stability_block.conditional_reprofile_local_ac_kkt=2e-12;
+    stability_block.conditional_reprofile_projected_width_kkt=4e-12;
+    stability_block.conditional_reprofile_objective_difference=1e-14;
+    stability_block.conditional_reprofile_scaled_ac_parameter_difference=2e-7;
+    stability_block.conditional_reprofile_prediction_change_relative=3e-8;
+    stability_block.conditional_reprofile_independent_replay_status="Passed";
     stability_block.cpu_seconds=.1; stability_block.perturbation_directions=1; stability_block.perturbation_seeds=2;
     stability_block.perturbation_solves=2; stability_block.perturbation_evaluations=8;
     stability_block.probes={{"common-mode","normalized-all-width-direction","Assessed",{1.},4,.03,1e-10,1e-12}};
@@ -1021,6 +1033,12 @@ TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSche
     EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().probes.front().direction,"common-mode");
     EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().probes.front().unit_direction,
         (std::vector<double>{1.}));
+    EXPECT_DOUBLE_EQ(*decoded.components.front().parameter_stability->blocks.front().baseline_local_ac_kkt,4e-11);
+    EXPECT_DOUBLE_EQ(*decoded.components.front().parameter_stability->blocks.front().conditional_reprofile_local_ac_kkt,2e-12);
+    EXPECT_EQ(*decoded.components.front().parameter_stability->blocks.front().baseline_active_width_bound_targets,2u);
+    EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().baseline_independent_replay_status,"Passed");
+    EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().conditional_reprofile_status,
+        "StrictlyQualified");
     ASSERT_TRUE(decoded.components.front().legacy_candidate_evidence);
     EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->reference_status,rg::JointCheckStatus::Failed);
     EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->rank_assessment_status,rg::JointCheckStatus::Unavailable);

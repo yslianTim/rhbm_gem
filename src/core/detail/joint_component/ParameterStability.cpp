@@ -131,7 +131,7 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
     shape.component_free_columns=2*domain.atoms.size(); shape.component_width_columns=domain.atoms.size();
     shape.maximum_block_rows=shape.component_observations; shape.maximum_neighbor_atoms=domain.atoms.size();
     shape.maximum_tile_rows=static_cast<std::size_t>(derivative_tile_rows);
-    shape.component_stability_evaluations=LocalPerturbationSeedsPerDirection*
+    shape.component_stability_evaluations=1+LocalPerturbationSeedsPerDirection*
         MaximumLocalPerturbationDirectionsPerBlock*MaximumLocalPerturbationProfileEvaluations;
     shape.resident_bytes=resident_bytes;
     for(const auto & support:domain.atoms)
@@ -151,6 +151,68 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
     {Unavailable(evidence,"nonfinite-local-input"); return finish();}
 
     const auto baseline=EvaluateState(domain,y,eta,beta,context,ProfileEvaluationRole::AcceptedEndpoint);
+    if(baseline.certificate.available)
+    {
+        evidence.baseline_local_ac_kkt=baseline.certificate.projected_kkt;
+        evidence.baseline_active_ac_constraints=baseline.certificate.active_atoms.size();
+        evidence.baseline_active_width_bound_targets=baseline.certificate.active_width_bound_count;
+        evidence.baseline_local_objective=baseline.certificate.objective/(context.scale*context.scale);
+        evidence.baseline_local_residual_rmse_normalized=baseline.certificate.residual_rmse/context.scale;
+        if(context.eta_upper_bound && eta.size())
+            evidence.baseline_width_bound_slack=*context.eta_upper_bound-eta.maxCoeff();
+        const auto width_gradient=ProfileGradientInfinityNorm(baseline,context);
+        if(width_gradient) evidence.baseline_projected_width_kkt=*width_gradient;
+    }
+    if(baseline.valid && baseline.certificate.available)
+    {
+        const auto replay=CheckIndependentReplay(domain,y,baseline,context,nullptr,nullptr,
+            PracticalJointConvergenceCriteria);
+        evidence.baseline_independent_replay_status=replay.passed ? "Passed" : "Failed";
+        evidence.baseline_independent_replay_reason=replay.reason;
+
+        const auto reprofiled_profile=EvaluateProfile(domain,y,eta,false,&context,nullptr,
+            ProfileEvaluationRole::AcceptedEndpoint);
+        if(reprofiled_profile.certificate.available && reprofiled_profile.certificate.feasible &&
+            reprofiled_profile.beta.size()==beta.size())
+        {
+            const auto reprofiled=EvaluateState(domain,y,eta,reprofiled_profile.beta,context,
+                ProfileEvaluationRole::AcceptedEndpoint);
+            if(!reprofiled.valid || !reprofiled.certificate.available)
+            {
+                evidence.conditional_reprofile_status="Unavailable";
+                evidence.conditional_reprofile_independent_replay_reason=reprofiled.reason;
+            }
+            else
+            {
+                evidence.conditional_reprofile_status=reprofiled.certificate.kkt_passed ? "StrictlyQualified" :
+                    "StrictKktFailed";
+                evidence.conditional_reprofile_local_ac_kkt=reprofiled.certificate.projected_kkt;
+                const auto reprofiled_width_gradient=ProfileGradientInfinityNorm(reprofiled,context);
+                if(reprofiled_width_gradient)
+                    evidence.conditional_reprofile_projected_width_kkt=*reprofiled_width_gradient;
+                evidence.conditional_reprofile_objective_difference=std::abs(
+                    reprofiled.certificate.objective-baseline.certificate.objective)/(context.scale*context.scale);
+                Vector column_norms(reprofiled.x.cols());
+                for(Eigen::Index k=0;k<column_norms.size();++k) column_norms(k)=reprofiled.x.col(k).norm();
+                evidence.conditional_reprofile_scaled_ac_parameter_difference=
+                    (((reprofiled.beta-beta).array()*column_norms.array()).abs()/context.scale).maxCoeff();
+                const Vector baseline_prediction=(baseline.x*baseline.beta).eval();
+                const Vector reprofiled_prediction=(reprofiled.x*reprofiled.beta).eval();
+                evidence.conditional_reprofile_prediction_change_relative=
+                    (reprofiled_prediction-baseline_prediction).norm()/std::max(1.0,baseline_prediction.norm());
+                const auto reprofile_replay=CheckIndependentReplay(domain,y,reprofiled,context,nullptr,nullptr,
+                    PracticalJointConvergenceCriteria);
+                evidence.conditional_reprofile_independent_replay_status=reprofile_replay.passed ? "Passed" : "Failed";
+                evidence.conditional_reprofile_independent_replay_reason=reprofile_replay.reason;
+            }
+        }
+        else
+        {
+            evidence.conditional_reprofile_status="Unavailable";
+            evidence.conditional_reprofile_independent_replay_status="NotRun";
+            evidence.conditional_reprofile_independent_replay_reason=reprofiled_profile.reason;
+        }
+    }
     if(!baseline.valid || !baseline.certificate.available || !baseline.certificate.feasible ||
         !baseline.certificate.kkt_passed)
     {Unavailable(evidence,"baseline-local-kkt-failed"); return finish();}

@@ -146,10 +146,58 @@ json::object TargetQualityMetrics(const core::JointFitResult & fit)
             continue;
         }
         std::map<std::string,std::size_t> block_counts,block_reason_counts;
+        json::array block_audit;
         for(const auto & block:component.parameter_stability->blocks)
         {
             ++block_counts[block.status];
             ++block_reason_counts[block.reason];
+            const auto number=[](const std::optional<double> & value)->json::value {
+                return value ? json::value(*value) : json::value(nullptr);
+            };
+            const auto size=[](const std::optional<std::size_t> & value)->json::value {
+                return value ? json::value(*value) : json::value(nullptr);
+            };
+            const auto conditioning=std::find_if(component.local_conditioning.begin(),component.local_conditioning.end(),
+                [&](const auto & value){return value.block_id==block.block_id;});
+            block_audit.emplace_back(json::object{{"block_id",block.block_id},{"status",block.status},
+                {"reason",block.reason},{"baseline_local_ac_kkt",number(block.baseline_local_ac_kkt)},
+                {"baseline_projected_width_kkt",number(block.baseline_projected_width_kkt)},
+                {"baseline_width_bound_slack",number(block.baseline_width_bound_slack)},
+                {"baseline_local_objective",number(block.baseline_local_objective)},
+                {"baseline_local_residual_rmse_normalized",number(block.baseline_local_residual_rmse_normalized)},
+                {"baseline_active_ac_constraints",size(block.baseline_active_ac_constraints)},
+                {"baseline_active_width_bound_targets",size(block.baseline_active_width_bound_targets)},
+                {"core_atoms",json::value_from(block.core_atoms)},
+                {"local_conditioning_classification",conditioning==component.local_conditioning.end() ?
+                    json::value(nullptr) : json::value(conditioning->conditioning_classification)},
+                {"local_free_ac_rank",conditioning==component.local_conditioning.end() ?
+                    json::value(nullptr) : size(conditioning->free_ac_rank)},
+                {"local_free_ac_columns",conditioning==component.local_conditioning.end() ?
+                    json::value(nullptr) : json::value(conditioning->free_ac_columns)},
+                {"local_free_ac_condition",conditioning==component.local_conditioning.end() ?
+                    json::value(nullptr) : number(conditioning->free_ac_condition)},
+                {"local_projected_width_condition",conditioning==component.local_conditioning.end() ?
+                    json::value(nullptr) : number(conditioning->projected_width_condition)},
+                {"local_profile_condition",conditioning==component.local_conditioning.end() ?
+                    json::value(nullptr) : number(conditioning->profile_condition)},
+                {"local_active_amplitude_count",conditioning==component.local_conditioning.end() ?
+                    json::value(nullptr) : json::value(conditioning->active_amplitude_count)},
+                {"baseline_independent_replay_status",block.baseline_independent_replay_status},
+                {"baseline_independent_replay_reason",block.baseline_independent_replay_reason},
+                {"conditional_reprofile_status",block.conditional_reprofile_status},
+                {"conditional_reprofile_local_ac_kkt",number(block.conditional_reprofile_local_ac_kkt)},
+                {"conditional_reprofile_projected_width_kkt",number(block.conditional_reprofile_projected_width_kkt)},
+                {"conditional_reprofile_objective_difference",number(block.conditional_reprofile_objective_difference)},
+                {"conditional_reprofile_scaled_ac_parameter_difference",
+                    number(block.conditional_reprofile_scaled_ac_parameter_difference)},
+                {"conditional_reprofile_prediction_change_relative",
+                    number(block.conditional_reprofile_prediction_change_relative)},
+                {"conditional_reprofile_independent_replay_status",
+                    block.conditional_reprofile_independent_replay_status},
+                {"conditional_reprofile_independent_replay_reason",
+                    block.conditional_reprofile_independent_replay_reason},
+                {"cpu_seconds",block.cpu_seconds},{"perturbation_solves",block.perturbation_solves},
+                {"perturbation_evaluations",block.perturbation_evaluations}});
         }
         component_stability.push_back(json::object{{"component_id",component.id},
             {"perturbation_status",component.parameter_stability->perturbation_status},
@@ -157,6 +205,7 @@ json::object TargetQualityMetrics(const core::JointFitResult & fit)
             {"blocks",component.parameter_stability->blocks.size()},
             {"block_status_counts",Counts(block_counts)},
             {"block_reason_counts",Counts(block_reason_counts)},
+            {"block_audit",std::move(block_audit)},
             {"perturbation_solves",component.parameter_stability->perturbation_solves},
             {"perturbation_evaluations",component.parameter_stability->perturbation_evaluations}});
     }

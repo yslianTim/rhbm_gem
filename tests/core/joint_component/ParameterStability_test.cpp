@@ -45,6 +45,7 @@ struct StabilityFixture
 TEST(JointParameterStabilityTest, ExactLocalFitIsStableAndDeterministic)
 {
     StabilityFixture fixture;
+    const auto accepted_beta=fixture.beta;
     rhbm_gem::JointBlockParameterStability no_history;
     EXPECT_EQ(no_history.status,"NotAssessed");
     EXPECT_EQ(no_history.prediction_status,"NotAssessed");
@@ -57,6 +58,18 @@ TEST(JointParameterStabilityTest, ExactLocalFitIsStableAndDeterministic)
     EXPECT_EQ(first.evidence.status,"Stable");
     EXPECT_EQ(first.evidence.prediction_status,"Stable");
     EXPECT_EQ(first.evidence.objective_consistency_status,"Passed");
+    ASSERT_TRUE(first.evidence.baseline_local_ac_kkt);
+    EXPECT_LE(*first.evidence.baseline_local_ac_kkt,1e-10);
+    ASSERT_TRUE(first.evidence.baseline_projected_width_kkt);
+    EXPECT_LE(*first.evidence.baseline_projected_width_kkt,1e-12);
+    EXPECT_EQ(first.evidence.baseline_independent_replay_status,"Passed");
+    EXPECT_EQ(first.evidence.conditional_reprofile_status,"StrictlyQualified");
+    EXPECT_EQ(first.evidence.conditional_reprofile_independent_replay_status,"Passed");
+    ASSERT_TRUE(first.evidence.conditional_reprofile_objective_difference);
+    EXPECT_LE(*first.evidence.conditional_reprofile_objective_difference,1e-15);
+    ASSERT_TRUE(first.evidence.conditional_reprofile_scaled_ac_parameter_difference);
+    EXPECT_LE(*first.evidence.conditional_reprofile_scaled_ac_parameter_difference,1e-10);
+    EXPECT_TRUE(fixture.beta.isApprox(accepted_beta,0.));
     EXPECT_EQ(first.evidence.perturbation_solves,2u);
     EXPECT_EQ(first.evidence.perturbation_directions,1u);
     EXPECT_EQ(first.evidence.perturbation_seeds,2u);
@@ -151,6 +164,45 @@ TEST(JointParameterStabilityTest, UsesWeakLocalWidthDirectionsWithinTheBoundedBu
         EXPECT_EQ(first.evidence.probes[index].direction,second.evidence.probes[index].direction);
         EXPECT_EQ(first.evidence.probes[index].unit_direction,second.evidence.probes[index].unit_direction);
     }
+}
+
+TEST(JointParameterStabilityTest, AuditsPracticalBaselineThatFailsStrictLocalAcKkt)
+{
+    StabilityFixture fixture;
+    n::Vector accepted_beta;
+    bool found{};
+    for(int angle=0;angle<720 && !found;++angle)
+    {
+        const double radians=std::numbers::pi*static_cast<double>(angle)/360.;
+        n::Vector direction(2); direction<<std::cos(radians),std::sin(radians);
+        for(const double magnitude:{1e-9,1e-8,1e-7,1e-6})
+        {
+            const n::Vector beta=fixture.beta+magnitude*direction;
+            const auto state=n::EvaluateState(fixture.domain,fixture.y,fixture.eta,beta,fixture.context);
+            const auto width_kkt=n::ProfileGradientInfinityNorm(state,fixture.context);
+            if(!state.valid || !state.certificate.available || !state.certificate.feasible ||
+                !(state.certificate.projected_kkt>1e-10 && state.certificate.projected_kkt<=1e-7) ||
+                !width_kkt || *width_kkt>1e-9) continue;
+            const auto replay=n::CheckIndependentReplay(fixture.domain,fixture.y,state,fixture.context,
+                nullptr,nullptr,n::PracticalJointConvergenceCriteria);
+            if(!replay.passed) continue;
+            accepted_beta=beta; found=true; break;
+        }
+    }
+    ASSERT_TRUE(found);
+    const auto assessment=n::AssessLocalParameterStability(fixture.domain,fixture.y,fixture.eta,accepted_beta,
+        fixture.context,"practical-baseline/block-1");
+    EXPECT_EQ(assessment.evidence.status,"Unavailable");
+    EXPECT_EQ(assessment.evidence.reason,"baseline-local-kkt-failed");
+    ASSERT_TRUE(assessment.evidence.baseline_local_ac_kkt);
+    EXPECT_GT(*assessment.evidence.baseline_local_ac_kkt,1e-10);
+    EXPECT_LE(*assessment.evidence.baseline_local_ac_kkt,1e-7);
+    ASSERT_TRUE(assessment.evidence.baseline_projected_width_kkt);
+    EXPECT_LE(*assessment.evidence.baseline_projected_width_kkt,1e-9);
+    EXPECT_EQ(assessment.evidence.baseline_independent_replay_status,"Passed");
+    EXPECT_EQ(assessment.evidence.conditional_reprofile_status,"StrictlyQualified");
+    EXPECT_EQ(assessment.evidence.conditional_reprofile_independent_replay_status,"Passed");
+    EXPECT_EQ(assessment.evidence.perturbation_solves,0u);
 }
 
 TEST(JointParameterStabilityTest, ProfileSearchHonorsCpuBudget)

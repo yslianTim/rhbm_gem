@@ -321,6 +321,14 @@ struct JointBlockParameterStability
     std::string prediction_status{"NotAssessed"},objective_consistency_status{"NotAssessed"};
     std::optional<double> log_width_parameter_change_inf,scaled_ac_parameter_change_inf,
         local_prediction_change_relative,objective_difference;
+    std::optional<double> baseline_local_ac_kkt,baseline_projected_width_kkt,baseline_width_bound_slack,
+        baseline_local_objective,baseline_local_residual_rmse_normalized,conditional_reprofile_local_ac_kkt,
+        conditional_reprofile_projected_width_kkt,conditional_reprofile_objective_difference,
+        conditional_reprofile_scaled_ac_parameter_difference,conditional_reprofile_prediction_change_relative;
+    std::optional<std::size_t> baseline_active_ac_constraints,baseline_active_width_bound_targets;
+    std::string baseline_independent_replay_status{"NotRun"},baseline_independent_replay_reason,
+        conditional_reprofile_status{"NotRun"},conditional_reprofile_independent_replay_status{"NotRun"},
+        conditional_reprofile_independent_replay_reason;
     double cpu_seconds{};
     std::size_t perturbation_directions{},perturbation_seeds{},perturbation_solves{},perturbation_evaluations{};
 };

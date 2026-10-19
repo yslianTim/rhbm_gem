@@ -485,6 +485,25 @@ j::object StabilityBlock(const JointBlockParameterStability & x)
         {"scaled_ac_parameter_change_inf",Number(x.scaled_ac_parameter_change_inf)},
         {"local_prediction_change_relative",Number(x.local_prediction_change_relative)},
         {"objective_difference",Number(x.objective_difference)},{"cpu_seconds",x.cpu_seconds},
+        {"baseline_local_ac_kkt",Number(x.baseline_local_ac_kkt)},
+        {"baseline_projected_width_kkt",Number(x.baseline_projected_width_kkt)},
+        {"baseline_width_bound_slack",Number(x.baseline_width_bound_slack)},
+        {"baseline_local_objective",Number(x.baseline_local_objective)},
+        {"baseline_local_residual_rmse_normalized",Number(x.baseline_local_residual_rmse_normalized)},
+        {"baseline_active_ac_constraints",OptionalSize(x.baseline_active_ac_constraints)},
+        {"baseline_active_width_bound_targets",OptionalSize(x.baseline_active_width_bound_targets)},
+        {"baseline_independent_replay_status",x.baseline_independent_replay_status},
+        {"baseline_independent_replay_reason",x.baseline_independent_replay_reason},
+        {"conditional_reprofile_status",x.conditional_reprofile_status},
+        {"conditional_reprofile_local_ac_kkt",Number(x.conditional_reprofile_local_ac_kkt)},
+        {"conditional_reprofile_projected_width_kkt",Number(x.conditional_reprofile_projected_width_kkt)},
+        {"conditional_reprofile_objective_difference",Number(x.conditional_reprofile_objective_difference)},
+        {"conditional_reprofile_scaled_ac_parameter_difference",
+            Number(x.conditional_reprofile_scaled_ac_parameter_difference)},
+        {"conditional_reprofile_prediction_change_relative",
+            Number(x.conditional_reprofile_prediction_change_relative)},
+        {"conditional_reprofile_independent_replay_status",x.conditional_reprofile_independent_replay_status},
+        {"conditional_reprofile_independent_replay_reason",x.conditional_reprofile_independent_replay_reason},
         {"probes",std::move(probes)},
         {"perturbation_directions",x.perturbation_directions},{"perturbation_seeds",x.perturbation_seeds},
         {"perturbation_solves",x.perturbation_solves},{"perturbation_evaluations",x.perturbation_evaluations}};
@@ -501,6 +520,43 @@ JointBlockParameterStability ReadStabilityBlock(const j::value & value)
     x.local_prediction_change_relative=OptionalNumber(o.at("local_prediction_change_relative"));
     x.objective_difference=OptionalNumber(o.at("objective_difference"));
     x.cpu_seconds=Read<double>(o,"cpu_seconds");
+    if(o.contains("baseline_local_ac_kkt")) x.baseline_local_ac_kkt=OptionalNumber(o.at("baseline_local_ac_kkt"));
+    if(o.contains("baseline_projected_width_kkt"))
+        x.baseline_projected_width_kkt=OptionalNumber(o.at("baseline_projected_width_kkt"));
+    if(o.contains("baseline_width_bound_slack"))
+        x.baseline_width_bound_slack=OptionalNumber(o.at("baseline_width_bound_slack"));
+    if(o.contains("baseline_local_objective"))
+        x.baseline_local_objective=OptionalNumber(o.at("baseline_local_objective"));
+    if(o.contains("baseline_local_residual_rmse_normalized"))
+        x.baseline_local_residual_rmse_normalized=OptionalNumber(o.at("baseline_local_residual_rmse_normalized"));
+    if(o.contains("baseline_active_ac_constraints"))
+        x.baseline_active_ac_constraints=ReadOptionalSize(o.at("baseline_active_ac_constraints"));
+    if(o.contains("baseline_active_width_bound_targets"))
+        x.baseline_active_width_bound_targets=ReadOptionalSize(o.at("baseline_active_width_bound_targets"));
+    if(o.contains("baseline_independent_replay_status"))
+        x.baseline_independent_replay_status=Read<std::string>(o,"baseline_independent_replay_status");
+    if(o.contains("baseline_independent_replay_reason"))
+        x.baseline_independent_replay_reason=Read<std::string>(o,"baseline_independent_replay_reason");
+    if(o.contains("conditional_reprofile_status"))
+        x.conditional_reprofile_status=Read<std::string>(o,"conditional_reprofile_status");
+    if(o.contains("conditional_reprofile_local_ac_kkt"))
+        x.conditional_reprofile_local_ac_kkt=OptionalNumber(o.at("conditional_reprofile_local_ac_kkt"));
+    if(o.contains("conditional_reprofile_projected_width_kkt"))
+        x.conditional_reprofile_projected_width_kkt=OptionalNumber(o.at("conditional_reprofile_projected_width_kkt"));
+    if(o.contains("conditional_reprofile_objective_difference"))
+        x.conditional_reprofile_objective_difference=OptionalNumber(o.at("conditional_reprofile_objective_difference"));
+    if(o.contains("conditional_reprofile_scaled_ac_parameter_difference"))
+        x.conditional_reprofile_scaled_ac_parameter_difference=
+            OptionalNumber(o.at("conditional_reprofile_scaled_ac_parameter_difference"));
+    if(o.contains("conditional_reprofile_prediction_change_relative"))
+        x.conditional_reprofile_prediction_change_relative=
+            OptionalNumber(o.at("conditional_reprofile_prediction_change_relative"));
+    if(o.contains("conditional_reprofile_independent_replay_status"))
+        x.conditional_reprofile_independent_replay_status=
+            Read<std::string>(o,"conditional_reprofile_independent_replay_status");
+    if(o.contains("conditional_reprofile_independent_replay_reason"))
+        x.conditional_reprofile_independent_replay_reason=
+            Read<std::string>(o,"conditional_reprofile_independent_replay_reason");
     if(o.contains("probes"))
         for(const auto & probe_value:o.at("probes").as_array())
         {
@@ -936,8 +992,14 @@ void ValidateStabilityBlock(const JointBlockParameterStability & x)
         !x.objective_consistency_status.empty(),"local stability identity/status");
     Require(std::isfinite(x.cpu_seconds) && x.cpu_seconds>=0,"local stability CPU time");
     for(const auto * value:{&x.log_width_parameter_change_inf,&x.scaled_ac_parameter_change_inf,
-        &x.local_prediction_change_relative,&x.objective_difference})
+        &x.local_prediction_change_relative,&x.objective_difference,&x.baseline_local_ac_kkt,
+        &x.baseline_projected_width_kkt,&x.baseline_local_objective,&x.baseline_local_residual_rmse_normalized,
+        &x.conditional_reprofile_local_ac_kkt,&x.conditional_reprofile_projected_width_kkt,
+        &x.conditional_reprofile_objective_difference,&x.conditional_reprofile_scaled_ac_parameter_difference,
+        &x.conditional_reprofile_prediction_change_relative})
         Require(!*value || (std::isfinite(**value) && **value>=0),"local stability value");
+    Require(!x.baseline_width_bound_slack || std::isfinite(*x.baseline_width_bound_slack),
+        "local stability bound slack");
     for(const auto & probe:x.probes)
     {
         Require(!probe.direction.empty() && !probe.source.empty() &&
