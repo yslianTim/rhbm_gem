@@ -26,6 +26,8 @@ CURRENT_EXPERIMENT_SOURCES = {
     "joint_postprocessing_benchmark.cpp",
     "joint_statistical_experiment.cpp",
     "joint_width_trajectory.cpp",
+    "joint_width_repro_no_instrumentation.cpp",
+    "joint_width_trust_experiment.cpp",
 }
 
 CURRENT_PYTHON_EXPERIMENTS = {

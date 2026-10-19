@@ -212,6 +212,8 @@ void CaptureWidthTrajectory(FixedNeighborBlockRecord & record,const SearchResult
             trial.lm && !trial.lm->proposed_acceptance ? "lm-rejected" :
             trial.accepted && trial.accepted_update.value_or(0)==0 ? "initial-profile" :
             trial.accepted ? "accepted" : "not-selected";
+        if(capture.policy_evidence_only && trial_index!=0 && trial.accepted_update.value_or(0)==0)
+            continue;
         if(trial.accepted)
         {
             destination->accepted_local_objective_improvement=trial.accepted_update.value_or(0)>0 &&
@@ -1162,7 +1164,30 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 #endif
             if(!force_no_trusted_profile)
                 for(auto it=profile_search.trials.rbegin();it!=profile_search.trials.rend();++it)
-                    if(it->accepted && it->endpoint.valid && it->trust && it->trust->passed) {accepted=&*it; break;}
+                {
+                    if(!it->accepted || !it->endpoint.valid || !it->trust || !it->trust->passed) continue;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                    if(policy.width_trial_trust_for_testing && it->accepted_update.value_or(0)>0)
+                    {
+                        const auto candidate=std::find_if(record.profile_trials.begin(),record.profile_trials.end(),
+                            [&](const auto & value){return value.profile_evaluation==it->evaluation;});
+                        const auto baseline=std::find_if(record.profile_trials.begin(),record.profile_trials.end(),
+                            [](const auto & value){return value.trial_index==0;});
+                        if(candidate!=record.profile_trials.end() && baseline!=record.profile_trials.end())
+                        {
+                            const auto reason=policy.width_trial_trust_for_testing(
+                                block_index,sweep_index,*candidate,*baseline);
+                            if(!reason.empty())
+                            {
+                                candidate->width_trust_policy_rejected=true;
+                                candidate->width_trust_policy_reason=reason;
+                                continue;
+                            }
+                        }
+                    }
+#endif
+                    accepted=&*it; break;
+                }
             if(!accepted)
             {
                 record.failure_diagnostics=FailureDiagnostics(policy,record,sweep_index,core_atoms,
