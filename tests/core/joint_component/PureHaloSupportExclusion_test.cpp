@@ -19,8 +19,11 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace {
@@ -184,6 +187,159 @@ MapFixture WideBoundaryFixture()
     MapObject map(dimensions,{.5,.5,.5},{-5,-2,-2},std::move(values));
     return {std::move(fixture.model),std::move(map)};
 }
+
+struct IndexedChargeCorrectionFixture
+{
+    ModelObject model;
+    MapObject map;
+    JointProblem problem;
+};
+
+IndexedChargeCorrectionFixture MakeIndexedChargeCorrectionFixture()
+{
+    std::vector<std::unique_ptr<AtomObject>> atoms;
+    for (int serial = 1; serial <= 3; ++serial)
+    {
+        auto atom = std::make_unique<AtomObject>();
+        atom->SetSerialID(serial);
+        atom->SetElement(Element::CARBON);
+        atom->SetPosition(static_cast<double>(serial + 3), 0, 0);
+        atoms.push_back(std::move(atom));
+    }
+    ModelObject model(std::move(atoms));
+    model.SelectAtoms([](const auto & atom) { return atom.GetSerialID() != 1; });
+
+    auto values = std::make_unique<double[]>(10);
+    std::fill_n(values.get(), 10, 0.0);
+    MapObject map({10, 1, 1}, {1, 1, 1}, {0, 0, 0}, std::move(values));
+
+    JointProblemInput original;
+    original.atom_ids = {"1", "2", "3"};
+    original.row_ids = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+    original.observations.assign(original.row_ids.size(), 0.0);
+    original.support = {
+        {{1, .3}, {4, 1.1}, {7, 2.2}},
+        {{0, .2}, {2, 1.3}, {5, 2.1}, {8, .7}},
+        {{3, .4}, {6, 1.7}, {9, 2.8}}
+    };
+    original.selection_domain.emplace();
+    original.selection_domain->contributor_policy = std::string(PureHaloSupportExclusionContributorPolicy);
+    original.selection_domain->target_indices = {1, 2};
+    original.selection_domain->pure_halo_support_exclusion =
+        JointPureHaloSupportExclusionProvenance{10, 7, 3, 1, 1, 0};
+
+    JointProblemInput fitting;
+    fitting.atom_ids = {"2", "3"};
+    fitting.row_ids = {"0", "2", "3", "5", "6", "8", "9"};
+    fitting.observations.assign(fitting.row_ids.size(), 0.0);
+    fitting.support = {
+        {{0, .2}, {1, 1.3}, {3, 2.1}, {5, .7}},
+        {{2, .4}, {4, 1.7}, {6, 2.8}}
+    };
+    fitting.selection_domain.emplace();
+    fitting.selection_domain->contributor_policy = std::string(PureHaloSupportExclusionContributorPolicy);
+    fitting.selection_domain->target_indices = {0, 1};
+    fitting.selection_domain->pure_halo_support_exclusion =
+        JointPureHaloSupportExclusionProvenance{7, 7, 0, 0, 0, 0};
+
+    const auto problem = JointProblem(std::move(fitting)).WithReconstructionDomain(
+        std::move(original), {1, 2}, {0, 2, 3, 5, 6, 8, 9});
+    return {std::move(model), std::move(map), std::move(problem)};
+}
+
+JointAnalysisResult IndexedChargeCorrectionSnapshot(
+    const JointProblem & problem, const ModelObject & model, double first_charge,
+    double second_charge, double halo_charge = .2)
+{
+    const auto & original = problem.OriginalInput();
+    JointAnalysisResult result;
+    result.parameterization_contract = std::string(JointPureHaloSupportExclusionParameterizationContract);
+    result.atom_ids = original.atom_ids;
+    result.row_ids = original.row_ids;
+    result.fitting_row_ids = problem.Input().row_ids;
+    result.fitting_to_original_contributors = problem.FittingToOriginalContributors();
+    result.fitting_to_original_rows = problem.FittingToOriginalRows();
+    result.selection_domain = original.selection_domain;
+    result.available_row_mask.assign(result.row_ids.size(), false);
+    for (const auto row : result.fitting_to_original_rows) result.available_row_mask[row] = true;
+    result.runtime_convergence = JointCheckStatus::Passed;
+    result.target_runtime_convergence = JointCheckStatus::Passed;
+
+    JointAnalysisComponent component;
+    component.id = "indexed-target-component";
+    component.atoms = {1, 2};
+    component.rows = result.fitting_to_original_rows;
+    component.runtime_convergence = JointCheckStatus::Passed;
+    component.target_runtime_convergence = JointCheckStatus::Passed;
+    component.state = JointState{
+        {2.0, first_charge, 1.4, second_charge},
+        {.65, 1.15},
+        {std::log(.65), std::log(1.15)},
+        {0.0, 0.0},
+        0.0,
+        {}};
+    result.components.push_back(component);
+    result.assembled_state = component.state;
+
+    JointHaloMedianSnapshot median;
+    median.joint_run_id = "indexed-charge-run";
+    median.valid_target_count = 2;
+    median.global_median = {.5, .8, halo_charge};
+    const auto * halo = model.FindAtomPtr(1);
+    median.halos.push_back({0, "1", data_internal::GetGroupKey(halo), .5, .8, halo_charge,
+        HaloMedianSource::GlobalTargetMedian, 2, "indexed-charge-run",
+        std::string(HaloMedianReconstructionContractVersion)});
+    result.halo_median_reconstruction = std::move(median);
+    return result;
+}
+
+double ReferenceCubic(double p0, double p1, double p2, double p3, double t)
+{
+    const double a0 = p1;
+    const double a1 = .5 * (p2 - p0);
+    const double a2 = .5 * (-p3 + 4.0 * p2 - 5.0 * p1 + 2.0 * p0);
+    const double a3 = .5 * (p3 - 3.0 * p2 + 3.0 * p1 - p0);
+    return a3 * t * t * t + a2 * t * t + a1 * t + a0;
+}
+
+double ReferenceTricubicCharge(
+    const MapObject & map, const std::vector<double> & original_charge,
+    const std::array<double, 3> & position)
+{
+    const auto dimensions = map.GetGridSize();
+    const auto spacing = map.GetGridSpacing();
+    const auto origin = map.GetOrigin();
+    std::array<int, 3> base{};
+    std::array<double, 3> local{};
+    for (std::size_t axis = 0; axis < 3; ++axis)
+    {
+        const double coordinate = (position[axis] - origin[axis]) / spacing[axis];
+        base[axis] = static_cast<int>(std::floor(coordinate));
+        local[axis] = coordinate - static_cast<double>(base[axis]);
+    }
+    const auto read = [&](int x, int y, int z) {
+        x = std::clamp(x, 0, dimensions[0] - 1);
+        y = std::clamp(y, 0, dimensions[1] - 1);
+        z = std::clamp(z, 0, dimensions[2] - 1);
+        const auto index = static_cast<std::size_t>(x) + static_cast<std::size_t>(dimensions[0]) *
+            (static_cast<std::size_t>(y) + static_cast<std::size_t>(dimensions[1]) *
+                static_cast<std::size_t>(z));
+        return original_charge[index];
+    };
+    std::array<std::array<std::array<double, 4>, 4>, 4> values{};
+    for (int i = -1; i < 3; ++i) for (int j = -1; j < 3; ++j) for (int k = -1; k < 3; ++k)
+        values[static_cast<std::size_t>(i + 1)][static_cast<std::size_t>(j + 1)][static_cast<std::size_t>(k + 1)] =
+            read(base[0] + i, base[1] + j, base[2] + k);
+    std::array<std::array<double, 4>, 4> along_x{};
+    for (std::size_t j = 0; j < 4; ++j) for (std::size_t k = 0; k < 4; ++k)
+        along_x[j][k] = ReferenceCubic(
+            values[0][j][k], values[1][j][k], values[2][j][k], values[3][j][k], local[0]);
+    std::array<double, 4> along_y{};
+    for (std::size_t k = 0; k < 4; ++k)
+        along_y[k] = ReferenceCubic(
+            along_x[0][k], along_x[1][k], along_x[2][k], along_x[3][k], local[1]);
+    return ReferenceCubic(along_y[0], along_y[1], along_y[2], along_y[3], local[2]);
+}
 }
 
 TEST(PureHaloSupportExclusionTest, ExcludesExactBoundarySupportAndPreservesOriginalDomain)
@@ -272,6 +428,93 @@ TEST(PureHaloSupportExclusionTest, PeelingUsesOriginalRowsAndReconstructedHalo)
     ASSERT_EQ(prepared.samples.size(),1u);
     EXPECT_TRUE(prepared.samples.front().fixed_charge_response);
     EXPECT_TRUE(prepared.samples.front().gaussian_response);
+}
+
+TEST(PureHaloSupportExclusionTest, ReproducesPostJointLocalChargeCorrectionDomainMismatch)
+{
+    auto fixture = MakeIndexedChargeCorrectionFixture();
+    const auto & original = fixture.problem.OriginalInput();
+    const auto & fitting = fixture.problem.Input();
+    ASSERT_EQ(fixture.problem.FittingToOriginalContributors(), (std::vector<std::size_t>{1, 2}));
+    ASSERT_EQ(fixture.problem.FittingToOriginalRows(),
+        (std::vector<std::size_t>{0, 2, 3, 5, 6, 8, 9}));
+    ASSERT_NE(fixture.problem.FittingToOriginalContributors()[0], 0u);
+    ASSERT_NE(fixture.problem.FittingToOriginalRows()[1], 1u);
+    ASSERT_EQ(original.support[1][2].row, 5u);
+    ASSERT_EQ(fitting.support[0][2].row, 3u);
+
+    const auto result = IndexedChargeCorrectionSnapshot(fixture.problem, fixture.model, .35, -.45);
+    data_internal::ApplyJointStageEstimates(fixture.model, result, "indexed-charge-run");
+    fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(2),
+        core::detail::BuildLocalPotentialSampleList(fixture.map,
+            SamplingPointList{{0.0, {5.25, 0.0, 0.0}, true}}));
+    fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(3),
+        core::detail::BuildLocalPotentialSampleList(fixture.map,
+            SamplingPointList{{0.0, {6.25, 0.0, 0.0}, true}}));
+
+    core::detail::JointPostprocessingContext context(
+        fixture.map, fixture.model, fixture.problem, &result);
+    const auto peelings = context.BuildPostFitPeelingSamples(std::vector<std::size_t>{1, 2});
+    ASSERT_TRUE(peelings.contains(2));
+    ASSERT_TRUE(peelings.contains(3));
+
+    const auto target_one = context.BuildPostJointLocalSamples(2, peelings.at(2));
+    ASSERT_EQ(target_one.samples.size(), 1u);
+    ASSERT_TRUE(target_one.samples.front().peeled_response);
+    ASSERT_TRUE(target_one.samples.front().fixed_charge_response);
+    ASSERT_TRUE(target_one.samples.front().gaussian_response);
+    std::vector<double> target_one_charge(original.row_ids.size(), 0.0);
+    for (const auto & support : original.support[1])
+        target_one_charge[support.row] = .35 * core::joint_component::EvaluateKernel(
+            support.squared_distance, .65, 2.5).charge;
+    const double expected_target_one_charge = ReferenceTricubicCharge(
+        fixture.map, target_one_charge, {5.25, 0.0, 0.0});
+    EXPECT_NEAR(*target_one.samples.front().fixed_charge_response,
+        expected_target_one_charge, 1e-12);
+    EXPECT_NEAR(*target_one.samples.front().gaussian_response,
+        *target_one.samples.front().peeled_response - expected_target_one_charge, 1e-12);
+    EXPECT_GT(std::abs(expected_target_one_charge), 1e-8);
+
+    const auto target_two = context.BuildPostJointLocalSamples(3, peelings.at(3));
+    ASSERT_EQ(target_two.samples.size(), 1u);
+    ASSERT_TRUE(target_two.samples.front().peeled_response);
+    ASSERT_TRUE(target_two.samples.front().fixed_charge_response);
+    ASSERT_TRUE(target_two.samples.front().gaussian_response);
+    std::vector<double> target_two_charge(original.row_ids.size(), 0.0);
+    for (const auto & support : original.support[2])
+        target_two_charge[support.row] = -.45 * core::joint_component::EvaluateKernel(
+            support.squared_distance, 1.15, 2.5).charge;
+    const double expected_target_two_charge = ReferenceTricubicCharge(
+        fixture.map, target_two_charge, {6.25, 0.0, 0.0});
+    EXPECT_NEAR(*target_two.samples.front().fixed_charge_response,
+        expected_target_two_charge, 1e-12);
+    EXPECT_NEAR(*target_two.samples.front().gaussian_response,
+        *target_two.samples.front().peeled_response - expected_target_two_charge, 1e-12);
+    EXPECT_LT(expected_target_two_charge, -1e-8);
+
+    auto zero_charge_result = result;
+    zero_charge_result.components.front().state->ac[1] = 0.0;
+    data_internal::ApplyJointStageEstimates(fixture.model, zero_charge_result, "indexed-charge-run");
+    const core::detail::JointPostprocessingContext zero_context(
+        fixture.map, fixture.model, fixture.problem, &zero_charge_result);
+    const auto zero_peelings = zero_context.BuildPostFitPeelingSamples(std::vector<std::size_t>{1});
+    const auto zero_target = zero_context.BuildPostJointLocalSamples(2, zero_peelings.at(2));
+    ASSERT_TRUE(zero_target.samples.front().fixed_charge_response);
+    EXPECT_DOUBLE_EQ(*zero_target.samples.front().fixed_charge_response, 0.0);
+
+    auto changed_halo_result = result;
+    changed_halo_result.halo_median_reconstruction->global_median[2] = 1.7;
+    changed_halo_result.halo_median_reconstruction->halos.front().charge = 1.7;
+    data_internal::ApplyJointStageEstimates(fixture.model, changed_halo_result, "indexed-charge-run");
+    const core::detail::JointPostprocessingContext changed_halo_context(
+        fixture.map, fixture.model, fixture.problem, &changed_halo_result);
+    const auto changed_halo_peelings =
+        changed_halo_context.BuildPostFitPeelingSamples(std::vector<std::size_t>{1});
+    const auto changed_halo_target = changed_halo_context.BuildPostJointLocalSamples(
+        2, changed_halo_peelings.at(2));
+    ASSERT_TRUE(changed_halo_target.samples.front().fixed_charge_response);
+    EXPECT_DOUBLE_EQ(*changed_halo_target.samples.front().fixed_charge_response,
+        *target_one.samples.front().fixed_charge_response);
 }
 
 TEST(PureHaloSupportExclusionTest, ClassifiesPeelingGeometrySupportAndMaskIntersections)
