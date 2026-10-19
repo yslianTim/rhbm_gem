@@ -380,6 +380,8 @@ int RunCommandCLI(int argc, char * argv[])
                 throw CLI::RuntimeError(2);
             if (result.outcome == CommandOutcome::JointNotConverged)
                 throw CLI::RuntimeError(3);
+            if (result.outcome == CommandOutcome::JointDownstreamUnavailable)
+                throw CLI::RuntimeError(4);
         });
     });
 

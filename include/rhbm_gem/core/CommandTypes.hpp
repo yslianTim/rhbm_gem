@@ -67,7 +67,8 @@ enum class CommandOutcome
     Completed,
     JointInitializationFailed,
     JointNotConverged,
-    JointQualified
+    JointQualified,
+    JointDownstreamUnavailable
 };
 
 struct CommandResult

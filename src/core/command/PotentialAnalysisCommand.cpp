@@ -246,11 +246,17 @@ bool ExecutePreparedRequest(
             outcome = CommandOutcome::JointInitializationFailed;
             Logger::Log(LogLevel::Warning,"Joint initialization failed; diagnostic result was saved (CLI exit 2).");
         }
-        else if (!fit.search_completed || fit.runtime_convergence != JointCheckStatus::Passed ||
-            fit.target_runtime_convergence != JointCheckStatus::Passed)
+        else if (!IsQualifiedJointAnalysisResult(fit))
         {
             outcome = CommandOutcome::JointNotConverged;
             Logger::Log(LogLevel::Warning,"Joint fitting did not converge; diagnostic result was saved (CLI exit 3).");
+        }
+        else if (HasUnavailableJointHaloMedianReconstruction(fit))
+        {
+            outcome = CommandOutcome::JointDownstreamUnavailable;
+            Logger::Log(LogLevel::Warning,
+                "Joint fitting qualified but Halo median reconstruction was unavailable; "
+                "diagnostic result was saved (CLI exit 4).");
         }
         else
         {

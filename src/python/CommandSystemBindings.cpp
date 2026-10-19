@@ -40,6 +40,7 @@ void BindCommandTypes(py::module_ & module)
         .value("COMPLETED", CommandOutcome::Completed)
         .value("JOINT_INITIALIZATION_FAILED", CommandOutcome::JointInitializationFailed)
         .value("JOINT_NOT_CONVERGED", CommandOutcome::JointNotConverged)
+        .value("JOINT_DOWNSTREAM_UNAVAILABLE", CommandOutcome::JointDownstreamUnavailable)
         .value("JOINT_QUALIFIED", CommandOutcome::JointQualified);
 
     auto painter_type{ py::enum_<PainterType>(module, "PainterType") };

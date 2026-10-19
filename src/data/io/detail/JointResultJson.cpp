@@ -1328,9 +1328,8 @@ void Validate(const JointAnalysisResult & x,int schema_version)
                 x.fitting_to_original_contributors[k]==targets[k],
                 "Pure Exclusion fitting contributor mapping");
         const bool has_halos=atoms>targets.size();
-        if(has_halos)
+        if(has_halos && x.halo_median_reconstruction)
         {
-            Require(x.halo_median_reconstruction.has_value(),"Pure Exclusion Halo median snapshot");
             const auto & snapshot=*x.halo_median_reconstruction;
             Require(snapshot.contract==HaloMedianReconstructionContractVersion &&
                 !snapshot.joint_run_id.empty() && snapshot.valid_target_count>0,
@@ -1358,6 +1357,12 @@ void Validate(const JointAnalysisResult & x,int schema_version)
                         "Pure Exclusion global median donor count");
                 previous=halo.halo_contributor_index; first=false;
             }
+        }
+        else if(has_halos)
+        {
+            Require(!IsQualifiedJointAnalysisResult(x) ||
+                HasUnavailableJointHaloMedianReconstruction(x),
+                "Pure Exclusion unavailable Halo median reconstruction");
         }
         else Require(!x.halo_median_reconstruction,"Pure Exclusion no-Halo median snapshot");
     }
