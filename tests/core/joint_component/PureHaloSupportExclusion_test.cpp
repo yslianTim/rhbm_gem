@@ -102,6 +102,17 @@ JointAnalysisResult PurePeelingSnapshot(const JointProblem & problem,const Model
     return result;
 }
 
+JointAnalysisResult QualifiedPurePeelingSnapshot(const JointProblem & problem,const ModelObject & model)
+{
+    auto result=PurePeelingSnapshot(problem,model);
+    result.initialization=TargetInitialization();
+    result.search_completed=true;
+    result.components.front().search_completed=true;
+    result.components.front().stop_reason="converged";
+    result.objective=0.0;
+    return result;
+}
+
 struct MapFixture
 {
     ModelObject model;
@@ -629,6 +640,86 @@ TEST(PureHaloSupportExclusionTest, PersistsVersionedDualDomainAndMedianProvenanc
     EXPECT_EQ(decoded.halo_median_reconstruction->halos,snapshot.halo_median_reconstruction->halos);
 }
 
+TEST(PureHaloSupportExclusionTest, PersistsUnqualifiedFailureDiagnosticsWithoutFormalEstimate)
+{
+    auto fixture=BoundaryFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    auto result=PurePeelingSnapshot(problem,fixture.model);
+    result.initialization.valid=false;
+    result.initialization.reason="target-width-initialization-failed";
+    result.initialization.b.clear();
+    result.initialization.atoms.clear();
+    result.search_completed=false;
+    result.runtime_convergence=JointCheckStatus::Failed;
+    result.target_runtime_convergence=JointCheckStatus::NotRun;
+    result.assembled_state.reset();
+    result.objective.reset();
+    result.halo_median_reconstruction.reset();
+    result.components.front().state.reset();
+    result.components.front().search_completed=false;
+    result.components.front().runtime_convergence=JointCheckStatus::Failed;
+    result.components.front().stop_reason="block-recovery-exhausted";
+
+    const auto decoded=joint_result_io::Decode(joint_result_io::Encode(result));
+    EXPECT_FALSE(IsQualifiedJointAnalysisResult(decoded));
+    EXPECT_EQ(decoded.initialization.reason,"target-width-initialization-failed");
+    EXPECT_EQ(decoded.components.front().stop_reason,"block-recovery-exhausted");
+    EXPECT_FALSE(decoded.components.front().state);
+    EXPECT_FALSE(decoded.halo_median_reconstruction);
+}
+
+TEST(PureHaloSupportExclusionTest, PersistsSearchFailureWithValidInitializationWithoutEstimate)
+{
+    auto fixture=BoundaryFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    auto result=QualifiedPurePeelingSnapshot(problem,fixture.model);
+    result.search_completed=false;
+    result.runtime_convergence=JointCheckStatus::Failed;
+    result.target_runtime_convergence=JointCheckStatus::NotRun;
+    result.assembled_state.reset();
+    result.objective.reset();
+    result.halo_median_reconstruction.reset();
+    result.components.front().state.reset();
+    result.components.front().search_completed=false;
+    result.components.front().runtime_convergence=JointCheckStatus::Failed;
+    result.components.front().target_runtime_convergence=JointCheckStatus::NotRun;
+    result.components.front().stop_reason="block-recovery-exhausted";
+
+    const auto decoded=joint_result_io::Decode(joint_result_io::Encode(result));
+    EXPECT_TRUE(decoded.initialization.valid);
+    EXPECT_FALSE(IsQualifiedJointAnalysisResult(decoded));
+    EXPECT_EQ(decoded.components.front().stop_reason,"block-recovery-exhausted");
+    EXPECT_FALSE(decoded.components.front().state);
+    EXPECT_FALSE(decoded.halo_median_reconstruction);
+}
+
+TEST(PureHaloSupportExclusionTest, PersistsQualifiedNoDonorAsExplicitDownstreamUnavailable)
+{
+    auto fixture=BoundaryFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    auto result=QualifiedPurePeelingSnapshot(problem,fixture.model);
+    result.halo_median_reconstruction.reset();
+    result.evidence.push_back({std::string(JointHaloMedianReconstructionEvidenceName),
+        JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{}, {},
+        "halo-median-no-valid-targets"});
+
+    ASSERT_TRUE(IsQualifiedJointAnalysisResult(result));
+    ASSERT_TRUE(HasUnavailableJointHaloMedianReconstruction(result));
+    const auto decoded=joint_result_io::Decode(joint_result_io::Encode(result));
+    EXPECT_TRUE(IsQualifiedJointAnalysisResult(decoded));
+    EXPECT_TRUE(HasUnavailableJointHaloMedianReconstruction(decoded));
+    EXPECT_FALSE(decoded.halo_median_reconstruction);
+}
+
+TEST(PureHaloSupportExclusionTest, RejectsQualifiedHaloResultWithoutMedianOrUnavailableEvidence)
+{
+    auto fixture=BoundaryFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    auto result=QualifiedPurePeelingSnapshot(problem,fixture.model);
+    result.halo_median_reconstruction.reset();
+    EXPECT_THROW(joint_result_io::Encode(result),std::invalid_argument);
+}
+
 TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGroupAndGlobalHaloSources)
 {
     auto fixture=WorkflowFixture();
@@ -674,6 +765,27 @@ TEST(PureHaloSupportExclusionTest, RunsPureWorkflowWithoutHalos)
     EXPECT_EQ(result->selection_domain->target_indices.size(),result->atom_ids.size());
     EXPECT_FALSE(result->halo_median_reconstruction);
     EXPECT_EQ(metrics.halo_median_fallback_halos,0u);
+}
+
+TEST(PureHaloSupportExclusionTest, SkipsDownstreamWhenJointQualificationFails)
+{
+    auto fixture=WorkflowFixture();
+    fixture.map.ClearMapValueArray();
+    FitOptions options;
+    options.estimator=PotentialEstimator::JOINT_COMPONENTS;
+    options.quiet_mode=true;
+    options.thread_size=1;
+    core::detail::JointPostprocessingMetrics metrics;
+    ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
+        fixture.map,fixture.model,options,&metrics,true));
+    const auto result=fixture.model.GetAnalysisView().GetJointResult();
+    ASSERT_TRUE(result);
+    EXPECT_FALSE(result->initialization.valid);
+    ASSERT_FALSE(IsQualifiedJointAnalysisResult(*result));
+    EXPECT_FALSE(result->halo_median_reconstruction);
+    const auto target=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(1));
+    EXPECT_FALSE(target.GetPostFitPeeling());
+    EXPECT_FALSE(target.GetPostJointLocalResult());
 }
 
 TEST(PureHaloSupportExclusionTest, FullWorkflowRetainsMultipleMemberGroupContract)

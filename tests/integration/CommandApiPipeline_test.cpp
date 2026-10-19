@@ -322,9 +322,9 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
     ASSERT_TRUE(loaded->GetAnalysisView().GetJointResult());
     const auto & saved=*loaded->GetAnalysisView().GetJointResult();
     const auto expected_outcome = !saved.initialization.valid ? rgc::CommandOutcome::JointInitializationFailed :
-        saved.search_completed && saved.runtime_convergence==rg::JointCheckStatus::Passed &&
-            saved.target_runtime_convergence==rg::JointCheckStatus::Passed ? rgc::CommandOutcome::JointQualified :
-            rgc::CommandOutcome::JointNotConverged;
+        !rg::IsQualifiedJointAnalysisResult(saved) ? rgc::CommandOutcome::JointNotConverged :
+        rg::HasUnavailableJointHaloMedianReconstruction(saved) ? rgc::CommandOutcome::JointDownstreamUnavailable :
+        rgc::CommandOutcome::JointQualified;
     EXPECT_EQ(api_result.outcome,expected_outcome);
     ASSERT_TRUE(saved.metadata.map_normalization); ASSERT_TRUE(saved.metadata.software);
     ASSERT_TRUE(saved.selection_domain);
@@ -404,8 +404,32 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
         auto zero_request=request; zero_request.map_file_path=zero_path;
         zero_request.saved_key_tag="zero";
         const auto zero_result=rgc::RunCommand(zero_request);
-        EXPECT_FALSE(zero_result.succeeded);
-        EXPECT_THROW(repository.LoadModel("zero"),std::runtime_error);
+        ASSERT_TRUE(zero_result.succeeded);
+        EXPECT_EQ(zero_result.outcome,rgc::CommandOutcome::JointInitializationFailed);
+        const auto zero_model=repository.LoadModel("zero");
+        ASSERT_TRUE(zero_model->GetAnalysisView().GetJointResult());
+        EXPECT_FALSE(zero_model->GetAnalysisView().GetJointResult()->initialization.valid);
+    }
+    {
+        auto sparse_map=rg::ReadMap(map_path);
+        auto values=std::make_unique<double[]>(sparse_map->GetMapValueArraySize());
+        values[sparse_map->GetMapValueArraySize()-1]=1.0;
+        sparse_map->SetMapValueArray(std::move(values));
+        const auto sparse_path=directory.path()/"sparse.mrc"; rg::WriteMap(sparse_path,*sparse_map);
+        auto sparse_request=request; sparse_request.map_file_path=sparse_path;
+        sparse_request.saved_key_tag="sparse";
+        const auto sparse_result=rgc::RunCommand(sparse_request);
+        ASSERT_TRUE(sparse_result.succeeded);
+        EXPECT_EQ(sparse_result.outcome,rgc::CommandOutcome::JointInitializationFailed);
+        const auto sparse_model=repository.LoadModel("sparse");
+        ASSERT_TRUE(sparse_model->GetAnalysisView().GetJointResult());
+        EXPECT_FALSE(sparse_model->GetAnalysisView().GetJointResult()->initialization.valid);
+        const auto sparse_cli_database=directory.path()/"sparse-cli.sqlite";
+        const int sparse_cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
+            "--model",request.model_file_path.string(),"--map",sparse_path.string(),
+            "--database",sparse_cli_database.string(),"--save-key","sparse-cli","--select-chain","A",
+            "--verbose","0"});
+        EXPECT_EQ(sparse_cli_status,2);
     }
     {
         auto simulated=request; simulated.simulation_flag=true; simulated.simulated_map_resolution=.5;
@@ -430,8 +454,8 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
     ASSERT_TRUE(cli_model->GetAnalysisView().GetJointResult());
     const auto & cli_fit=*cli_model->GetAnalysisView().GetJointResult();
     const int expected_cli_status=!cli_fit.initialization.valid ? 2 :
-        cli_fit.search_completed && cli_fit.runtime_convergence==rg::JointCheckStatus::Passed &&
-            cli_fit.target_runtime_convergence==rg::JointCheckStatus::Passed ? 0 : 3;
+        !rg::IsQualifiedJointAnalysisResult(cli_fit) ? 3 :
+        rg::HasUnavailableJointHaloMedianReconstruction(cli_fit) ? 4 : 0;
     EXPECT_EQ(cli_status,expected_cli_status);
     std::filesystem::remove(map_path);
     std::filesystem::remove(request.model_file_path);
