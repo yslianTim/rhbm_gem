@@ -760,7 +760,7 @@ void Run(const std::string & dataset,const std::filesystem::path & output,const 
     {
         if(experiment.calibration.status!="Available")
             throw std::runtime_error("Cannot run bounded group: "+experiment.calibration.unavailable_reason);
-        projected=joint::MakeBoundedInitializationForResearch(*experiment.first_stage_initialization,
+        projected=joint::MakeBoundedInitialization(*experiment.first_stage_initialization,
             experiment.calibration,bound2 ? joint::GlobalWidthBoundMultiplier::TwoP95 :
                 joint::GlobalWidthBoundMultiplier::FourP95);
         if(!projected.available) throw std::runtime_error("Bounded initialization unavailable: "+projected.reason);

@@ -1,4 +1,5 @@
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/FirstStageInitialization.hpp"
 #include "support/JointReproducibilityFingerprint.hpp"
 
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
@@ -9,6 +10,7 @@
 #include <boost/json.hpp>
 
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -51,12 +53,14 @@ void Run(const std::filesystem::path & model_path,const std::filesystem::path & 
     });
     model->EditAnalysis().InitializeFromSelection();
     const auto started=std::chrono::steady_clock::now();
-    auto fit=core::EstimateJointComponents(*map,*model);
+    const auto problem=core::BuildPureHaloSupportExclusionProblem(*map,*model);
+    auto initialization=core::joint_component::InitializeContributors(*map,*model,problem);
+    auto fit=core::detail::FitJointComponentsInitializedBoundedWithProgress(problem,initialization,{});
     if(!fit.problem) throw std::runtime_error("Production fit did not retain its problem snapshot.");
     const auto & data=core::JointProblemAccess::Get(*fit.problem);
     const auto fingerprints=rhbm_gem::joint_reproducibility::WriteFingerprint(output,
         model_path,map_path,*normalization,*map,*model,*fit.problem,fit.initialization.b,
-        {"production-no-instrumentation",false});
+        {"production-bounded-candidate-no-instrumentation",false});
     json::array components;
     for(const auto & component:fit.components)
         components.push_back(json::object{
@@ -73,8 +77,16 @@ void Run(const std::filesystem::path & model_path,const std::filesystem::path & 
                 json::value(*component.candidate_diagnostic->candidate_ac_kkt) : json::value(nullptr)},
             {"candidate_width_gradient_inf_norm",component.candidate_diagnostic && component.candidate_diagnostic->candidate_width_gradient_inf_norm ?
                 json::value(*component.candidate_diagnostic->candidate_width_gradient_inf_norm) : json::value(nullptr)}});
+    json::array evidence;
+    for(const auto & check:fit.evidence)
+        evidence.push_back(json::object{{"name",check.name},{"status",Status(check.status)},
+            {"scope",static_cast<int>(check.scope)},
+            {"value",check.value && std::isfinite(*check.value) ? json::value(*check.value) : json::value(nullptr)},
+            {"threshold",check.threshold && std::isfinite(*check.threshold) ?
+                json::value(*check.threshold) : json::value(nullptr)},
+            {"reason",check.reason}});
     Write(output/"summary.json",json::object{
-        {"execution_role","production-no-instrumentation"},
+        {"execution_role","production-bounded-candidate-no-instrumentation"},
         {"instrumentation_enabled",false},
         {"target_count",data.input->selection_domain->target_indices.size()},
         {"observation_count",data.input->observations.size()},
@@ -84,6 +96,7 @@ void Run(const std::filesystem::path & model_path,const std::filesystem::path & 
         {"initialization_valid",fit.initialization.valid},
         {"initialization_reason",fit.initialization.reason},
         {"components",std::move(components)},
+        {"evidence",std::move(evidence)},
         {"fingerprints",fingerprints},
         {"wall_seconds",std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count()}});
 }

@@ -7,6 +7,9 @@
 
 namespace rhbm_gem::core::joint_component {
 namespace {
+constexpr std::size_t MinimumQualifiedWidthDonors=20;
+constexpr double MinimumQualifiedDonorCoverage=0.95;
+
 double QuantileType7(const std::vector<double> & sorted, double probability)
 {
     const double position=static_cast<double>(sorted.size()-1)*probability;
@@ -43,6 +46,14 @@ WidthBoundCalibration CalibrateGlobalWidth(
         return result;
     }
 
+    for(std::size_t i=0;i<initialization.atoms.size();++i)
+        if(initialization.atoms[i].target &&
+            (!std::isfinite(initialization.b[i]) || !(initialization.b[i]>0.0)))
+        {
+            result.unavailable_reason="invalid-target-initial-width";
+            return result;
+        }
+
     std::vector<double> donors;
     donors.reserve(initialization.atoms.size());
     for(const auto & atom:initialization.atoms)
@@ -75,9 +86,21 @@ WidthBoundCalibration CalibrateGlobalWidth(
     }
 
     result.qualified_donor_count=donors.size();
+    result.qualified_donor_coverage=result.target_count ?
+        static_cast<double>(result.qualified_donor_count)/static_cast<double>(result.target_count) : 0.0;
     if(donors.empty())
     {
         result.unavailable_reason="no-qualified-first-stage-target-widths";
+        return result;
+    }
+    if(donors.size()<MinimumQualifiedWidthDonors)
+    {
+        result.unavailable_reason="too-few-qualified-first-stage-target-widths";
+        return result;
+    }
+    if(result.qualified_donor_coverage<MinimumQualifiedDonorCoverage)
+    {
+        result.unavailable_reason="qualified-first-stage-target-coverage-below-0.95";
         return result;
     }
 
@@ -114,7 +137,7 @@ WidthBoundCalibration CalibrateGlobalWidth(
     return result;
 }
 
-BoundedInitialization MakeBoundedInitializationForResearch(
+BoundedInitialization MakeBoundedInitialization(
     const JointInitialization & initialization, const WidthBoundCalibration & calibration,
     GlobalWidthBoundMultiplier multiplier)
 {

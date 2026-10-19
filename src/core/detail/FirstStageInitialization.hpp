@@ -31,6 +31,12 @@ JointInitialization PrepareJointWidthInitialization(
 JointFitResult FitJointComponentsInitializedWithProgress(
     const JointProblem &, const JointInitialization &,
     const joint_component::JointProgressObserver &);
+JointFitResult FitJointComponentsInitializedBoundedWithProgress(
+    const JointProblem &, const JointInitialization &,
+    const joint_component::JointProgressObserver &);
+JointFitResult FitJointComponentsInitializedWithProgress(
+    const JointProblem &, const JointInitialization &,
+    const joint_component::JointProgressObserver &, bool use_bounded_candidate);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 using FirstStageObserver = std::function<void(int, std::string_view)>;
 FirstStageObserver & FirstStageObserverForTesting();

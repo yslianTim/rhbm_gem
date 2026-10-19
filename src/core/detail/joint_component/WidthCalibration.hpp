@@ -16,6 +16,7 @@ struct WidthBoundCalibration
     std::string status{"CalibrationUnavailable"};
     std::string unavailable_reason;
     std::size_t target_count{}, qualified_donor_count{};
+    double qualified_donor_coverage{};
     std::size_t native_success_count{}, refined_success_count{}, unqualified_count{};
     std::size_t invalid_width_count{}, fallback_count{}, initialization_failure_count{};
     std::map<std::string,std::size_t> excluded_donor_reasons;
@@ -48,9 +49,9 @@ struct BoundedInitialization
 // deliberately has no simulation-truth input.
 WidthBoundCalibration CalibrateGlobalWidth(const JointInitialization &, std::string dataset_identity);
 
-// Builds a research-only feasible starting vector without changing the stored
-// FirstStage estimates or the caller's JointInitialization.
-BoundedInitialization MakeBoundedInitializationForResearch(
+// Builds a feasible working vector without changing the captured FirstStage
+// estimates or the caller's JointInitialization.
+BoundedInitialization MakeBoundedInitialization(
     const JointInitialization &, const WidthBoundCalibration &, GlobalWidthBoundMultiplier);
 
 } // namespace rhbm_gem::core::joint_component

@@ -4,6 +4,7 @@
 #include "core/detail/joint_component/HaloEligibility.hpp"
 #include "core/detail/joint_component/TargetEvidence.hpp"
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
+#include "core/detail/joint_component/WidthCalibration.hpp"
 #include "core/detail/joint_component/ParameterStability.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/FittingWorkset.hpp"
@@ -937,6 +938,18 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
     const JointProblem & problem,const JointInitialization & initialization,
     const joint_component::JointProgressObserver & observer)
 {
+    return detail::FitJointComponentsInitializedWithProgress(problem,initialization,observer,false);
+}
+JointFitResult detail::FitJointComponentsInitializedBoundedWithProgress(
+    const JointProblem & problem,const JointInitialization & initialization,
+    const joint_component::JointProgressObserver & observer)
+{
+    return detail::FitJointComponentsInitializedWithProgress(problem,initialization,observer,true);
+}
+JointFitResult detail::FitJointComponentsInitializedWithProgress(
+    const JointProblem & problem,const JointInitialization & initialization,
+    const joint_component::JointProgressObserver & observer,bool use_bounded_candidate)
+{
     const auto & input=problem.Input();
     const auto invalid=[&](std::string reason) {
         JointFitResult out; out.problem=problem; out.initialization=initialization;
@@ -959,6 +972,48 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
             initialization.reason : "fixed-halo-initialization-unavailable:"+initialization.reason);
 
     const auto & targets=input.selection_domain->target_indices;
+    for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
+    {
+        const auto & record=initialization.atoms[atom];
+        const bool target=std::binary_search(targets.begin(),targets.end(),atom);
+        if(record.id!=input.atom_ids[atom] || record.target!=target)
+            return invalid("fixed-halo-initialization-unavailable:contributor-mapping-mismatch");
+    }
+    joint_component::WidthBoundCalibration calibration;
+    joint_component::BoundedInitialization bounded;
+    if(use_bounded_candidate)
+    {
+        calibration=joint_component::CalibrateGlobalWidth(initialization,"joint-target-widths");
+        bounded=joint_component::MakeBoundedInitialization(initialization,calibration,
+            joint_component::GlobalWidthBoundMultiplier::FourP95);
+        if(!bounded.available)
+        {
+            JointFitResult out; out.problem=problem; out.initialization=initialization;
+            out.observation_scale=problem.ObservationScale();
+            out.available_row_mask.assign(input.observations.size(),false);
+            out.evidence.push_back({"global-width-calibration",JointCheckStatus::Unavailable,
+                JointEvidenceScope::AssembledGlobal,static_cast<double>(calibration.qualified_donor_count),
+                static_cast<double>(calibration.target_count),"calibration-unavailable:"+bounded.reason});
+            return out;
+        }
+    }
+    else {bounded.available=true; bounded.widths=initialization.b;}
+    joint_component::FixedNeighborSearchPolicy solver_policy;
+    if(use_bounded_candidate) solver_policy.eta_upper_bound=calibration.eta_max4;
+    const auto record_calibration=[&](JointFitResult & fit) {
+        if(!use_bounded_candidate) return;
+        fit.evidence.push_back({"global-width-calibration",JointCheckStatus::Passed,
+            JointEvidenceScope::AssembledGlobal,calibration.p95,bounded.bmax,
+            "global-first-stage-p95-k4; qualified-donors="+
+                std::to_string(calibration.qualified_donor_count)+"/"+std::to_string(calibration.target_count)});
+        fit.evidence.push_back({"qualified-first-stage-donor-coverage",JointCheckStatus::Passed,
+            JointEvidenceScope::AssembledGlobal,calibration.qualified_donor_coverage,0.95,
+            "target-only-qualified-first-stage-widths"});
+        fit.evidence.push_back({"bounded-initialization-projection",JointCheckStatus::Passed,
+            JointEvidenceScope::AssembledGlobal,static_cast<double>(bounded.projection_count),{},
+            "projected-target-widths="+std::to_string(bounded.projection_count)+
+                "; maximum-projection-angstroms="+std::to_string(bounded.maximum_projection_magnitude)});
+    };
     if(pure_exclusion_policy)
     {
         for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
@@ -967,8 +1022,9 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
             if(record.id!=input.atom_ids[atom] || !record.target)
                 return invalid("fixed-halo-initialization-unavailable:target-contributor-mapping-mismatch");
         }
-        auto out=n::FitFixedNeighborComponents(problem,initialization.b,{},observer);
+        auto out=n::FitFixedNeighborComponents(problem,bounded.widths,solver_policy,observer);
         out.initialization=initialization;
+        record_calibration(out);
         return out;
     }
     std::vector<JointFixedHaloParameter> fixed_halos;
@@ -992,9 +1048,10 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
     catch(const std::exception & error)
     {return invalid(std::string("fixed-halo-initialization-unavailable:")+error.what());}
     std::vector<double> target_widths; target_widths.reserve(targets.size());
-    for(const auto contributor:targets) target_widths.push_back(initialization.b[contributor]);
-    auto out=n::FitFixedNeighborComponents(initialized_problem,target_widths,{},observer);
+    for(const auto contributor:targets) target_widths.push_back(bounded.widths[contributor]);
+    auto out=n::FitFixedNeighborComponents(initialized_problem,target_widths,solver_policy,observer);
     out.initialization=initialization;
+    record_calibration(out);
     return out;
 }
 JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,const std::vector<double> & initial_b,

@@ -453,6 +453,23 @@ TEST(PureHaloSupportExclusionTest, FitsTargetOnlyWithoutFixedHaloSnapshot)
     }));
 }
 
+TEST(PureHaloSupportExclusionTest, BoundedCandidateRejectsTooFewQualifiedTargets)
+{
+    const JointProblem problem(PureInput());
+    const auto fit=core::detail::FitJointComponentsInitializedBoundedWithProgress(
+        problem,TargetInitialization(),{});
+    EXPECT_FALSE(fit.assembled_state);
+    EXPECT_FALSE(fit.search_completed);
+    EXPECT_NE(fit.RuntimeConvergence(),JointCheckStatus::Passed);
+    EXPECT_TRUE(fit.available_row_mask==std::vector<bool>(problem.Input().row_ids.size(),false));
+    const auto calibration=std::find_if(fit.evidence.begin(),fit.evidence.end(),[](const auto & check) {
+        return check.name=="global-width-calibration";
+    });
+    ASSERT_NE(calibration,fit.evidence.end());
+    EXPECT_EQ(calibration->status,JointCheckStatus::Unavailable);
+    EXPECT_EQ(calibration->reason,"calibration-unavailable:no-qualified-first-stage-target-widths");
+}
+
 TEST(PureHaloSupportExclusionTest, CapturesOriginalAndFittingIdentitiesSeparately)
 {
     auto fixture=BoundaryFixture();
