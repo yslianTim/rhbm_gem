@@ -1,5 +1,6 @@
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/joint_component/Numerics.hpp"
+#include "core/detail/joint_component/ParameterStability.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/WidthCalibration.hpp"
 
@@ -14,6 +15,7 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <memory>
 #include <stdexcept>
 #include <vector>
@@ -152,6 +154,7 @@ void Run()
 
     std::size_t active{}, outside_truth{};
     double maximum_bound_violation{};
+    double minimum_bound_slack=std::numeric_limits<double>::infinity();
     std::vector<double> amplitude_errors, width_errors, charge_errors,
         prediction_errors, truth_prediction_errors, truth_signal;
     const auto & problem_input = core::JointProblemAccess::Get(*fit.problem).input;
@@ -159,6 +162,7 @@ void Run()
     for (std::size_t atom = 0; atom < fit.assembled_state->b.size(); ++atom)
     {
         const double estimate = fit.assembled_state->b[atom];
+        minimum_bound_slack=std::min(minimum_bound_slack,bound-estimate);
         maximum_bound_violation = std::max(maximum_bound_violation, std::max(0.0, estimate - bound));
         if (estimate > bound + 1e-10 * std::max(1.0, bound))
             throw std::runtime_error("Synthetic estimate violated the global Width bound.");
@@ -204,6 +208,62 @@ void Run()
                     active_set_solves += static_cast<std::size_t>(std::stoull(item.reason.substr(marker + 7)));
             }
     if (!active_set) throw std::runtime_error("Synthetic active-set LM evidence unavailable.");
+    std::map<std::string,std::size_t> stability_status_counts;
+    std::size_t stability_blocks{},stability_selected{},stability_selected_bound_active{},
+        stability_selected_condition_bound_active{},stability_assessed{},
+        stability_solves{},stability_evaluations{},conditioning_bound_active_blocks{};
+    std::string selected_probe_ids,conditioning_bound_active_ids;
+    double stability_cpu_seconds{},stability_wall_seconds{};
+    std::size_t stability_memory_estimate{};
+    for(const auto & component:fit.components)
+    {
+        conditioning_bound_active_blocks+=static_cast<std::size_t>(std::count_if(component.local_conditioning.begin(),
+            component.local_conditioning.end(),[](const auto & block) {
+                return block.active_width_bound_targets && *block.active_width_bound_targets>0;
+            }));
+        for(const auto & block:component.local_conditioning)
+            if(block.active_width_bound_targets && *block.active_width_bound_targets>0)
+            {
+                if(!conditioning_bound_active_ids.empty()) conditioning_bound_active_ids+=',';
+                conditioning_bound_active_ids+=block.block_id;
+            }
+        if(component.parameter_stability)
+        {
+            stability_wall_seconds+=component.parameter_stability->seconds;
+            stability_cpu_seconds+=component.parameter_stability->cpu_seconds;
+            if(component.parameter_stability->workspace_peak_memory_estimate_bytes)
+                stability_memory_estimate=std::max(stability_memory_estimate,
+                    *component.parameter_stability->workspace_peak_memory_estimate_bytes);
+            stability_solves+=component.parameter_stability->perturbation_solves;
+            stability_evaluations+=component.parameter_stability->perturbation_evaluations;
+            for(std::size_t index=0;index<component.parameter_stability->blocks.size();++index)
+            {
+                const auto & block=component.parameter_stability->blocks[index];
+                ++stability_blocks; ++stability_status_counts[block.status];
+                stability_selected+=block.probe_selected ? 1u : 0u;
+                if(block.probe_selected)
+                {
+                    if(!selected_probe_ids.empty()) selected_probe_ids+=',';
+                    selected_probe_ids+=block.block_id;
+                }
+                stability_selected_bound_active+=(block.probe_selected && block.baseline_active_width_bound_targets &&
+                    *block.baseline_active_width_bound_targets>0) ? 1u : 0u;
+                const auto condition=std::find_if(component.local_conditioning.begin(),
+                    component.local_conditioning.end(),[&](const auto & candidate) {
+                        return candidate.block_id==block.block_id;
+                    });
+                stability_selected_condition_bound_active+=(block.probe_selected &&
+                    condition!=component.local_conditioning.end() && condition->active_width_bound_targets &&
+                    *condition->active_width_bound_targets>0) ? 1u : 0u;
+                stability_assessed+=(block.status=="Stable" || block.status=="Sensitive" ||
+                    block.status=="Unstable") ? 1u : 0u;
+            }
+        }
+    }
+    if(stability_selected>joint::MaximumPerturbedBlocksPerFit)
+        throw std::runtime_error("Synthetic local stability exceeded its per-fit probe-block budget.");
+    if(conditioning_bound_active_blocks>0 && stability_selected_condition_bound_active==0)
+        throw std::runtime_error("Synthetic local stability did not select a Width-bound-active block.");
     std::cout << "targets=" << fit.assembled_state->b.size()
         << " donors=" << calibration.qualified_donor_count
         << " coverage=" << calibration.qualified_donor_coverage
@@ -213,6 +273,7 @@ void Run()
         << " truth_coverage=" << 1.0 - static_cast<double>(outside_truth) /
             static_cast<double>(fit.assembled_state->b.size())
         << " active_estimates=" << active
+        << " minimum_bound_slack=" << minimum_bound_slack
         << " maximum_bound_violation=" << maximum_bound_violation
         << " objective=" << fit.objective.value_or(std::numeric_limits<double>::quiet_NaN())
         << " ac_kkt=" << (ac_kkt && ac_kkt->value ? *ac_kkt->value : -1.0)
@@ -231,7 +292,25 @@ void Run()
         << " search_completed=" << fit.search_completed
         << " replay=Passed"
         << " truth_used_for_calibration=false"
-        << " runtime_convergence=Passed\n";
+        << " runtime_convergence=Passed"
+        << " local_stability_blocks=" << stability_blocks
+        << " local_stability_selected=" << stability_selected
+        << " local_stability_selected_bound_active=" << stability_selected_bound_active
+        << " local_stability_selected_condition_bound_active=" << stability_selected_condition_bound_active
+        << " local_conditioning_bound_active_blocks=" << conditioning_bound_active_blocks
+        << " local_conditioning_bound_active_ids=" << conditioning_bound_active_ids
+        << " local_stability_selected_ids=" << selected_probe_ids
+        << " local_stability_assessed=" << stability_assessed
+        << " local_stability_stable=" << stability_status_counts["Stable"]
+        << " local_stability_sensitive=" << stability_status_counts["Sensitive"]
+        << " local_stability_unstable=" << stability_status_counts["Unstable"]
+        << " local_stability_unavailable=" << stability_status_counts["Unavailable"]
+        << " local_stability_not_assessed=" << stability_status_counts["NotAssessed"]
+        << " local_stability_solves=" << stability_solves
+        << " local_stability_evaluations=" << stability_evaluations
+        << " local_stability_cpu_seconds=" << stability_cpu_seconds
+        << " local_stability_wall_seconds=" << stability_wall_seconds
+        << " local_stability_memory_estimate_bytes=" << stability_memory_estimate << '\n';
 }
 }
 

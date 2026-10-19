@@ -330,7 +330,14 @@ TEST(JointParameterStabilityTest, ProbePriorityIsSensitivityBasedAndIndependentO
         block("block-a-well","WellConditioned",1e2),
         block("block-b-moderate","IllConditioned",1e7),
         block("block-z-highly-sensitive","IllConditioned",1e10),
-        block("block-c-unavailable","Unavailable",0.)};
+        block("block-c-unavailable","Unavailable",0.),
+        block("block-d-near-kkt","WellConditioned",1e2),
+        block("block-e-bound-active","WellConditioned",1e2),
+        block("block-f-active-amplitude","ActiveFace",1e2)};
+    forward[4].local_ac_projected_kkt=8e-8;
+    forward[5].active_width_bound_targets=2;
+    forward[5].free_ac_rank=1;
+    forward[6].active_amplitude_count=1;
     const auto identities=[](const auto & blocks,const auto & order) {
         std::vector<std::string> out;
         for(const auto index:order) out.push_back(blocks.at(index).block_id);
@@ -338,7 +345,9 @@ TEST(JointParameterStabilityTest, ProbePriorityIsSensitivityBasedAndIndependentO
     };
     const auto forward_order=n::RankFixedNeighborStabilityProbesForTesting(forward);
     ASSERT_FALSE(forward_order.empty());
-    EXPECT_EQ(forward.at(forward_order.front()).block_id,"block-z-highly-sensitive");
+    EXPECT_EQ(forward.at(forward_order.front()).block_id,"block-e-bound-active");
+    EXPECT_EQ(forward.at(forward_order.at(1)).block_id,"block-d-near-kkt");
+    EXPECT_EQ(forward.at(forward_order.at(2)).block_id,"block-z-highly-sensitive");
     EXPECT_EQ(std::find_if(forward_order.begin(),forward_order.end(),[&](std::size_t index) {
         return forward[index].block_id=="block-c-unavailable";
     }),forward_order.end());
@@ -348,12 +357,29 @@ TEST(JointParameterStabilityTest, ProbePriorityIsSensitivityBasedAndIndependentO
     EXPECT_EQ(identities(forward,reverse_order),expected_order);
 }
 
+TEST(JointParameterStabilityTest, RepresentativeProbesSpanCoreAtomPositions)
+{
+    const auto block=[](std::string id,std::size_t start) {
+        rhbm_gem::JointBlockConditioning value; value.block_id=std::move(id);
+        value.conditioning_classification="WellConditioned"; value.core_atoms={start,start+1};
+        value.core_atom_count=2; value.affected_row_count=20; value.free_ac_rank=4; value.free_ac_columns=4;
+        return value;
+    };
+    std::vector<rhbm_gem::JointBlockConditioning> blocks;
+    for(std::size_t index=0;index<7;++index) blocks.push_back(block("block-"+std::to_string(index),10*index));
+    std::vector<std::size_t> candidates{0,1,2,3,4,5,6};
+    EXPECT_EQ(n::SelectFixedNeighborRepresentativeStabilityProbesForTesting(blocks,candidates,3),
+        (std::vector<std::size_t>{0,3,6}));
+    EXPECT_EQ(n::SelectFixedNeighborRepresentativeStabilityProbesForTesting(blocks,candidates,1),
+        (std::vector<std::size_t>{3}));
+}
+
 TEST(JointParameterStabilityTest, ComponentFitHonorsPerturbationClaimBudgetAndPreservesPoint)
 {
     const rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
     n::FixedNeighborSearchPolicy policy; policy.core_atoms=1;
     std::size_t claims{};
-    policy.claim_parameter_stability_block=[&] {return ++claims<=1;};
+    policy.claim_parameter_stability_block=[&](int) {return ++claims<=1;};
     policy.configure_search_for_testing=[](n::FixedNeighborPolicy & search) {
         search.assess_parameter_stability=true;
     };

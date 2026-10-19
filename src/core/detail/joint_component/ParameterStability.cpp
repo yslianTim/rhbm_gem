@@ -378,7 +378,8 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
             if(!trust.passed || !trust.independent || !trust.independent->objective_passed)
             {
                 direction_failed=true; failure_reason="perturbation-independent-replay-failed";
-                seed_status="IndependentReplayFailed"; seed_reason=failure_reason;
+                seed_status="IndependentReplayFailed";
+                seed_reason=trust.independent ? trust.independent->reason : trust.reason;
                 evidence.objective_consistency_status="Failed";
                 break;
             }

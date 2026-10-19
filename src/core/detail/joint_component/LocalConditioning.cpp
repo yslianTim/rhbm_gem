@@ -150,6 +150,14 @@ LocalConditioningAssessment AssessFixedNeighborLocalConditioning(
     if(!state.valid)
     {MarkUnavailable(evidence,state.reason.empty() ? "local-state-evaluation-failed" : state.reason);
         out.seconds=Seconds(started); return out;}
+    if(state.certificate.available)
+    {
+        evidence.local_ac_projected_kkt=state.certificate.projected_kkt;
+        if(context.eta_upper_bound)
+            evidence.active_width_bound_targets=state.certificate.active_width_bound_count;
+    }
+    const auto local_width_kkt=ProfileGradientInfinityNorm(state,context);
+    if(local_width_kkt) evidence.local_projected_width_kkt=*local_width_kkt;
 
     const auto p=static_cast<Eigen::Index>(free_columns.size());
     Vector norms(p);

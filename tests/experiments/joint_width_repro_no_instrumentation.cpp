@@ -147,10 +147,14 @@ json::object TargetQualityMetrics(const core::JointFitResult & fit)
         }
         std::map<std::string,std::size_t> block_counts,block_reason_counts;
         json::array block_audit;
+        std::size_t selected_probe_count{},successfully_assessed_count{};
         for(const auto & block:component.parameter_stability->blocks)
         {
             ++block_counts[block.status];
             ++block_reason_counts[block.reason];
+            selected_probe_count+=block.probe_selected ? 1u : 0u;
+            successfully_assessed_count+=(block.status=="Stable" || block.status=="Sensitive" ||
+                block.status=="Unstable") ? 1u : 0u;
             const auto number=[](const std::optional<double> & value)->json::value {
                 return value ? json::value(*value) : json::value(nullptr);
             };
@@ -169,7 +173,8 @@ json::object TargetQualityMetrics(const core::JointFitResult & fit)
                     {"plus_requested_displacement_inf",number(probe.plus_requested_displacement_inf)},
                     {"plus_effective_displacement_inf",number(probe.plus_effective_displacement_inf)}});
             block_audit.emplace_back(json::object{{"block_id",block.block_id},{"status",block.status},
-                {"reason",block.reason},{"baseline_local_ac_kkt",number(block.baseline_local_ac_kkt)},
+                {"reason",block.reason},{"probe_selected",block.probe_selected},
+                {"baseline_local_ac_kkt",number(block.baseline_local_ac_kkt)},
                 {"baseline_projected_width_kkt",number(block.baseline_projected_width_kkt)},
                 {"baseline_width_bound_slack",number(block.baseline_width_bound_slack)},
                 {"baseline_local_objective",number(block.baseline_local_objective)},
@@ -191,6 +196,12 @@ json::object TargetQualityMetrics(const core::JointFitResult & fit)
                     json::value(nullptr) : number(conditioning->profile_condition)},
                 {"local_active_amplitude_count",conditioning==component.local_conditioning.end() ?
                     json::value(nullptr) : json::value(conditioning->active_amplitude_count)},
+                {"local_active_width_bound_targets",conditioning==component.local_conditioning.end() ?
+                    json::value(nullptr) : size(conditioning->active_width_bound_targets)},
+                {"local_ac_projected_kkt",conditioning==component.local_conditioning.end() ?
+                    json::value(nullptr) : number(conditioning->local_ac_projected_kkt)},
+                {"local_projected_width_kkt",conditioning==component.local_conditioning.end() ?
+                    json::value(nullptr) : number(conditioning->local_projected_width_kkt)},
                 {"baseline_independent_replay_status",block.baseline_independent_replay_status},
                 {"baseline_independent_replay_reason",block.baseline_independent_replay_reason},
                 {"baseline_numerical_validity_status",block.baseline_numerical_validity_status},
@@ -219,9 +230,17 @@ json::object TargetQualityMetrics(const core::JointFitResult & fit)
             {"blocks",component.parameter_stability->blocks.size()},
             {"block_status_counts",Counts(block_counts)},
             {"block_reason_counts",Counts(block_reason_counts)},
+            {"selected_probe_blocks",selected_probe_count},
+            {"successfully_assessed_blocks",successfully_assessed_count},
             {"block_audit",std::move(block_audit)},
             {"perturbation_solves",component.parameter_stability->perturbation_solves},
-            {"perturbation_evaluations",component.parameter_stability->perturbation_evaluations}});
+            {"perturbation_evaluations",component.parameter_stability->perturbation_evaluations},
+            {"cpu_seconds",component.parameter_stability->cpu_seconds},
+            {"wall_seconds",component.parameter_stability->seconds},
+            {"workspace_peak_memory_estimate_bytes",
+                component.parameter_stability->workspace_peak_memory_estimate_bytes ?
+                    json::value(*component.parameter_stability->workspace_peak_memory_estimate_bytes) :
+                    json::value(nullptr)}});
     }
     return {{"target_runtime_convergence",Status(fit.TargetRuntimeConvergence())},
         {"target_count",fit.target_evidence ? fit.target_evidence->point_atoms.size() : 0},

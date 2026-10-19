@@ -292,9 +292,11 @@ struct JointBlockConditioning
     std::string conditioning_classification{"NotAssessed"};
     std::vector<std::size_t> core_atoms;
     std::size_t core_atom_count{},affected_row_count{},free_ac_columns{},active_amplitude_count{};
-    std::optional<std::size_t> free_ac_rank,projected_width_rank,profile_rank,workspace_peak_memory_estimate_bytes;
+    std::optional<std::size_t> free_ac_rank,projected_width_rank,profile_rank,active_width_bound_targets,
+        workspace_peak_memory_estimate_bytes;
     std::optional<double> free_ac_sigma_min,free_ac_sigma_max,free_ac_condition,
         free_ac_rank_threshold,free_ac_rank_threshold_margin_relative,
+        local_ac_projected_kkt,local_projected_width_kkt,
         projected_width_sigma_min,projected_width_sigma_max,projected_width_condition,
         projected_width_rank_threshold,projected_width_rank_threshold_margin_relative,
         profile_sigma_min,profile_sigma_max,profile_condition,
@@ -320,6 +322,7 @@ struct JointStabilityProbe
 struct JointBlockParameterStability
 {
     std::string block_id,status{"NotAssessed"},reason;
+    bool probe_selected{};
     std::vector<std::size_t> core_atoms;
     std::vector<JointStabilityProbe> probes;
     std::string prediction_status{"NotAssessed"},objective_consistency_status{"NotAssessed"};

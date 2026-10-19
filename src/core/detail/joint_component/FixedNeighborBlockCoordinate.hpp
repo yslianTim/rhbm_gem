@@ -210,7 +210,7 @@ struct FixedNeighborPolicy
     std::string component_id;
     std::function<void(std::size_t &,std::size_t &)> halo_census;
     std::function<void()> preparation_observer;
-    std::function<bool()> claim_parameter_stability_block;
+    std::function<bool(int)> claim_parameter_stability_block;
     FixedNeighborDiagnosticSink * diagnostic_sink{};
     std::function<void(const FixedNeighborBlockSweep &)> production_progress;
     std::function<void(const FixedNeighborBlockSweep &)> sweep_observer;
@@ -284,5 +284,7 @@ std::optional<double> LastFixedNeighborGradient(const FixedNeighborSearchResult 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 std::vector<std::size_t> RankFixedNeighborStabilityProbesForTesting(
     const std::vector<JointBlockConditioning> &);
+std::vector<std::size_t> SelectFixedNeighborRepresentativeStabilityProbesForTesting(
+    const std::vector<JointBlockConditioning> &,const std::vector<std::size_t> &,std::size_t);
 #endif
 }

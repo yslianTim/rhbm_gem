@@ -46,6 +46,12 @@ TEST(JointLocalConditioningTest, FullRankBlockUsesCompleteProfileDerivative)
 
     const auto state=n::EvaluateState(domain,y,eta,beta,context);
     ASSERT_TRUE(state.valid);
+    const auto width_kkt=n::ProfileGradientInfinityNorm(state,context);
+    ASSERT_TRUE(result.evidence.local_ac_projected_kkt);
+    ASSERT_TRUE(result.evidence.local_projected_width_kkt);
+    ASSERT_TRUE(width_kkt);
+    EXPECT_DOUBLE_EQ(*result.evidence.local_ac_projected_kkt,state.certificate.projected_kkt);
+    EXPECT_DOUBLE_EQ(*result.evidence.local_projected_width_kkt,*width_kkt);
     const auto complete=n::PrepareDerivative(state,context.scale,&context);
     const auto projected=n::PrepareProjectedWidthDerivative(state,context.scale,&context);
     ASSERT_TRUE(complete.valid); ASSERT_TRUE(projected.valid);

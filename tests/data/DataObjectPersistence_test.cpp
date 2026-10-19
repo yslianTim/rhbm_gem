@@ -511,6 +511,7 @@ TEST(DataObjectPersistenceTest, LocalStabilityBoundedProbeDiagnosticsRoundTrip)
     block.baseline_numerical_validity_status="Valid";
     block.baseline_conditional_optimality_status="PracticalOnly";
     block.baseline_eligibility_status="Eligible";
+    block.probe_selected=true;
     rg::JointStabilityProbe probe; probe.direction="common-mode";
     probe.source="normalized-all-width-direction"; probe.status="OneSidedAssessed";
     probe.unit_direction={1.}; probe.minus_seed_status="Assessed";
@@ -525,6 +526,7 @@ TEST(DataObjectPersistenceTest, LocalStabilityBoundedProbeDiagnosticsRoundTrip)
     const auto & saved=decoded.components.front().parameter_stability->blocks.front();
     EXPECT_EQ(saved.baseline_conditional_optimality_status,"PracticalOnly");
     EXPECT_EQ(saved.baseline_eligibility_status,"Eligible");
+    EXPECT_TRUE(saved.probe_selected);
     ASSERT_EQ(saved.probes.size(),1u);
     EXPECT_EQ(saved.probes.front().status,"OneSidedAssessed");
     EXPECT_EQ(saved.probes.front().plus_seed_status,"ZeroDisplacement");
@@ -937,7 +939,9 @@ TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSche
     conditioning.conditioning_classification="IllConditioned";
     conditioning.core_atoms={0}; conditioning.core_atom_count=1; conditioning.affected_row_count=2;
     conditioning.free_ac_columns=2; conditioning.free_ac_rank=2; conditioning.projected_width_rank=1;
-    conditioning.profile_rank=1; conditioning.workspace_peak_memory_estimate_bytes=1234;
+    conditioning.profile_rank=1; conditioning.active_width_bound_targets=1;
+    conditioning.local_ac_projected_kkt=5e-8; conditioning.local_projected_width_kkt=7e-10;
+    conditioning.workspace_peak_memory_estimate_bytes=1234;
     conditioning.free_ac_sigma_min=.2; conditioning.free_ac_sigma_max=1.5; conditioning.free_ac_condition=7.5;
     conditioning.free_ac_rank_threshold=1e-14; conditioning.free_ac_rank_threshold_margin_relative=.1;
     conditioning.free_ac_threshold_sensitive=false; conditioning.free_ac_conditioning="WellConditioned";
@@ -1062,6 +1066,9 @@ TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSche
     EXPECT_EQ(decoded.components.front().local_conditioning.front().free_ac_rank,2u);
     EXPECT_EQ(decoded.components.front().local_conditioning.front().free_ac_status,"full-rank");
     EXPECT_EQ(decoded.components.front().local_conditioning.front().conditioning_classification,"IllConditioned");
+    EXPECT_EQ(decoded.components.front().local_conditioning.front().active_width_bound_targets,1u);
+    EXPECT_DOUBLE_EQ(*decoded.components.front().local_conditioning.front().local_ac_projected_kkt,5e-8);
+    EXPECT_DOUBLE_EQ(*decoded.components.front().local_conditioning.front().local_projected_width_kkt,7e-10);
     EXPECT_EQ(decoded.components.front().local_conditioning.front().projected_width_sigma_min,.02);
     EXPECT_EQ(decoded.components.front().local_conditioning.front().projected_width_threshold_sensitive,true);
     EXPECT_DOUBLE_EQ(decoded.components.front().local_conditioning_seconds,.125);
