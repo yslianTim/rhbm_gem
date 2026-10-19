@@ -13,9 +13,8 @@
 #pragma once
 #include <unsupported/Eigen/NonLinearOptimization>
 #include "ResourceWork.hpp"
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
 #include "ActiveSetBoundedLM.hpp"
-#endif
+#include <cmath>
 
 // Adapted from Eigen 5.0.1 NonLinearOptimization/LevenbergMarquardt.h.
 // Trial instrumentation/rejection and compact QR input are added; trust-region
@@ -232,6 +231,10 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
     if constexpr (requires(FunctorType &f,const JacobianType &j,const FVectorType &r,
         const FVectorType &v) { f.solve_bounded_step(j,r,v,v,Scalar{},Scalar{}); }) {
       if(bounded_step_enabled) {
+        if(!std::isfinite(par) || par<Scalar(0.) || !std::isfinite(delta) || !(delta>Scalar(0.))) {
+          functor.failure="invalid-bounded-lm-trust-state";
+          return LevenbergMarquardtSpace::UserAsked;
+        }
         const auto bounded=functor.solve_bounded_step(bounded_jacobian,bounded_response,x,diag,delta,par);
         if(!bounded.valid) {
           functor.failure="bounded-subproblem:"+bounded.status;
@@ -239,8 +242,15 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
         }
         wa1=bounded.step;
         par=static_cast<Scalar>(bounded.damping);
-        if(bounded.scaled_step_norm<=Scalar(64)*NumTraits<Scalar>::epsilon()*(std::max)(Scalar(1),delta))
+        if(!wa1.allFinite() || !std::isfinite(par) || par<Scalar(0.) ||
+            !std::isfinite(bounded.scaled_step_norm)) {
+          functor.failure="non-finite-bounded-step";
+          return LevenbergMarquardtSpace::UserAsked;
+        }
+        if(bounded.scaled_step_norm<=Scalar(64)*NumTraits<Scalar>::epsilon()*(std::max)(Scalar(1),delta)) {
+          functor.failure="bounded-tiny-step";
           return LevenbergMarquardtSpace::CosinusTooSmall;
+        }
       } else {
         internal::lmpar2<Scalar>(qrfac, diag, qtf, delta, par, wa1);
         wa1=-wa1;
@@ -253,6 +263,10 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
     /* store the direction p and x + p. calculate the norm of the scaled step. */
     wa2 = x + wa1;
     pnorm = diag.cwiseProduct(wa1).stableNorm();
+    if(!wa2.allFinite() || !std::isfinite(pnorm) || (bounded_step_enabled && !std::isfinite(par))) {
+      functor.failure="non-finite-lm-step";
+      return LevenbergMarquardtSpace::UserAsked;
+    }
 
     /* on the first iteration, adjust the initial step bound. */
     if (iter == 1) delta = (std::min)(delta, pnorm);
@@ -270,6 +284,10 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
     }
     ++nfev;
     fnorm1 = wa4.stableNorm();
+    if(!std::isfinite(fnorm1)) {
+      functor.failure="non-finite-trial-residual";
+      return LevenbergMarquardtSpace::UserAsked;
+    }
 
     /* compute the scaled actual reduction. */
     actred = -1.;
@@ -282,11 +300,20 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
     temp2 = numext::abs2(sqrt(par) * pnorm / fnorm);
     prered = temp1 + temp2 / Scalar(.5);
     dirder = -(temp1 + temp2);
+    if(!std::isfinite(prered) || prered<Scalar(0.) || !std::isfinite(dirder) ||
+        (bounded_step_enabled && !(prered>Scalar(0.)))) {
+      functor.failure=bounded_step_enabled ? "invalid-bounded-predicted-reduction" : "invalid-predicted-reduction";
+      return LevenbergMarquardtSpace::UserAsked;
+    }
 
     /* compute the ratio of the actual to the predicted */
     /* reduction. */
     ratio = 0.;
     if (prered != 0.) ratio = actred / prered;
+    if(!std::isfinite(ratio)) {
+      functor.failure="non-finite-trust-ratio";
+      return LevenbergMarquardtSpace::UserAsked;
+    }
 
     const bool trusted = functor.Trial(x, wa1, diag, delta, par, actred, prered, ratio,
                                       ratio >= Scalar(1e-4));

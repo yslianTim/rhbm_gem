@@ -186,10 +186,8 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
             if(CpuSeconds(cpu_started)>=MaximumLocalPerturbationCpuSeconds)
             {direction_assessed=false; failure_reason="cpu-time-budget-exhausted"; break;}
             Vector seed=eta+sign*LocalWidthPerturbation*direction.unit;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(context.eta_upper_bound_for_research)
-                seed=seed.cwiseMin(Vector::Constant(seed.size(),*context.eta_upper_bound_for_research));
-#endif
+            if(context.eta_upper_bound)
+                seed=seed.cwiseMin(Vector::Constant(seed.size(),*context.eta_upper_bound));
             const Vector widths=seed.array().exp();
             if(!seed.allFinite() || !widths.allFinite() || (widths.array()<=0).any())
             {direction_assessed=false; failure_reason="unrepresentable-perturbation-width"; break;}

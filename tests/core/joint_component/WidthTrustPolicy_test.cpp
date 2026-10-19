@@ -187,9 +187,9 @@ TEST(JointWidthTrustPolicyTest, BoundedAssemblyUsesProjectedWidthStationarity)
     const double eta_max=std::log(.4);
     joint::FixedNeighborSearchPolicy policy;
     policy.maximum_sweeps=200;
-    policy.eta_upper_bound_for_research=eta_max;
+    policy.eta_upper_bound=eta_max;
     policy.configure_search_for_testing=[&](joint::FixedNeighborPolicy & local) {
-        local.eta_upper_bound_for_research=eta_max;
+        local.eta_upper_bound=eta_max;
     };
     const auto fit=joint::FitFixedNeighborComponentsImpl(problem,std::vector<double>(3,.4),policy);
     const auto stationarity=std::find_if(fit.evidence.begin(),fit.evidence.end(),[](const auto & check) {

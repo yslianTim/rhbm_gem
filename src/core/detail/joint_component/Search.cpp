@@ -3,9 +3,7 @@
 #include "ResourceWork.hpp"
 #include "InstrumentedLM.hpp"
 #include "TiledDerivative.hpp"
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
 #include "ActiveSetBoundedLM.hpp"
-#endif
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -63,26 +61,23 @@ struct Profile
     std::optional<double> accepted_objective;
     std::optional<double> accepted_gradient_inf_norm;
     const std::vector<bool> * fixed_width_mask{};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    std::optional<double> research_eta_max;
     std::optional<ActiveSetStep> last_bounded_subproblem;
-    bool has_bounded_step() const {return research_eta_max.has_value();}
+    bool has_bounded_step() const {return context.eta_upper_bound.has_value();}
     ActiveSetStep solve_bounded_step(const Matrix & jacobian,VectorRef response,VectorRef eta,
         VectorRef diagonal,double radius,double damping)
     {
         ActiveSetStep failed_step;
-        if(!research_eta_max || !std::isfinite(*research_eta_max))
+        if(!context.eta_upper_bound || !std::isfinite(*context.eta_upper_bound))
         {failed_step.status="invalid-width-upper-bound"; last_bounded_subproblem=failed_step; return failed_step;}
         for(Eigen::Index i=0;i<eta.size();++i)
-            if(eta(i)>*research_eta_max)
+            if(eta(i)>*context.eta_upper_bound)
             {failed_step.status="infeasible-current-width"; last_bounded_subproblem=failed_step; return failed_step;}
-        const Vector upper=Vector::Constant(eta.size(),*research_eta_max)-eta;
+        const Vector upper=Vector::Constant(eta.size(),*context.eta_upper_bound)-eta;
         auto result=SolveBoundedTrustRegionStep(jacobian,response,diagonal,upper,radius,damping,
             fixed_width_mask ? *fixed_width_mask : std::vector<bool>{});
         last_bounded_subproblem=result;
         return result;
     }
-#endif
     void Report() const
     {
         if(!progress_component) return;
@@ -192,10 +187,9 @@ struct Profile
     }
     int operator()(const Vector & eta,Vector & residual)
     {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(research_eta_max && (eta.array()>*research_eta_max).any())
-        {failure="bounded-step-feasibility-failed"; return -1;}
-#endif
+        if(context.eta_upper_bound && (!std::isfinite(*context.eta_upper_bound) ||
+            (eta.array()>*context.eta_upper_bound).any()))
+        {failure="bounded-step-infeasible"; return -1;}
         if(!Get(eta)) return -1;
         residual=cached.residual/scale; return 0;
     }
@@ -287,7 +281,7 @@ struct Profile
 }
 namespace {
 SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & initial_b,
-    const EvaluationContext & context,std::optional<double> eta_max,const JointProgressObserver & observer,
+    const EvaluationContext & context,const JointProgressObserver & observer,
     const JointProgressComponent * progress_component,ProfileSearchWork * telemetry,
     const std::vector<bool> * fixed_width_mask)
 {
@@ -295,31 +289,11 @@ SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & 
     const auto start=std::chrono::steady_clock::now();
     ProfileSearchWork local_work;
     EvaluationContext search_context=context;
-    std::optional<double> active_eta_max=eta_max;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(eta_max)
-    {
-        if(search_context.eta_upper_bound_for_research &&
-            *search_context.eta_upper_bound_for_research!=*eta_max)
-        {SearchResult out; out.stop_reason="conflicting-research-width-upper-bounds"; out.stopped=true; return out;}
-        search_context.eta_upper_bound_for_research=eta_max;
-    }
-    active_eta_max=search_context.eta_upper_bound_for_research;
-#else
-    (void)eta_max;
-#endif
+    const auto active_eta_max=search_context.eta_upper_bound;
     Profile profile{domain,y,search_context.scale,search_context,{}, {},0,0,{},telemetry ? &local_work : nullptr,
-        ProfileEvaluationRole::Unspecified,observer,progress_component,start,std::clock(),0,{}, {},
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        {},{},{}
-#else
-        {}
-#endif
+        ProfileEvaluationRole::Unspecified,observer,progress_component,start,std::clock(),0,{}, {},nullptr,{}
     };
     profile.fixed_width_mask=fixed_width_mask;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    profile.research_eta_max=search_context.eta_upper_bound_for_research;
-#endif
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
         lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;
@@ -386,22 +360,7 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     const JointProgressComponent * progress_component,ProfileSearchWork * telemetry,
     const std::vector<bool> * fixed_width_mask)
 {
-    std::optional<double> eta_max;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    eta_max=context.eta_upper_bound_for_research;
-#endif
-    return SearchProfileImpl(domain,y,initial_b,context,eta_max,observer,
+    return SearchProfileImpl(domain,y,initial_b,context,observer,
         progress_component,telemetry,fixed_width_mask);
 }
-
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-SearchResult SearchProfileBounded(const Domain & domain,VectorRef y,const Vector & initial_b,
-    const EvaluationContext & context,double eta_max,const JointProgressObserver & observer,
-    const JointProgressComponent * progress_component,ProfileSearchWork * telemetry,
-    const std::vector<bool> * fixed_width_mask)
-{
-    return SearchProfileImpl(domain,y,initial_b,context,eta_max,observer,
-        progress_component,telemetry,fixed_width_mask);
-}
-#endif
 }

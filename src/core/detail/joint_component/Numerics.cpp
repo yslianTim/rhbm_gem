@@ -90,17 +90,16 @@ void AddRoleWork(ProfileRoleWork & destination,const ProfileRoleWork & source)
     destination.tiled_qr_rhs_transform_seconds+=source.tiled_qr_rhs_transform_seconds;
     destination.replay_trust_seconds+=source.replay_trust_seconds;
 }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-struct ResearchWidthKkt
+struct WidthBoundKkt
 {
     bool feasible{};
     double projected{std::numeric_limits<double>::infinity()},violation{},
         boundary_gradient{unavailable},multiplier{},complementarity{};
     std::size_t active{};
 };
-ResearchWidthKkt CalculateResearchWidthKkt(const Vector & eta,const Vector & gradient,double upper)
+WidthBoundKkt CalculateWidthBoundKkt(const Vector & eta,const Vector & gradient,double upper)
 {
-    ResearchWidthKkt out;
+    WidthBoundKkt out;
     if(!std::isfinite(upper) || eta.size()==0 || eta.size()!=gradient.size() ||
         !eta.allFinite() || !gradient.allFinite()) return out;
     const double tolerance=64.0*std::numeric_limits<double>::epsilon()*std::max(1.0,std::abs(upper));
@@ -124,21 +123,20 @@ ResearchWidthKkt CalculateResearchWidthKkt(const Vector & eta,const Vector & gra
     }
     return out;
 }
-void CaptureResearchWidthKkt(Certificate & certificate,const Vector & eta,const Vector & gradient,
+void CaptureWidthBoundKkt(Certificate & certificate,const Vector & eta,const Vector & gradient,
     const EvaluationContext & context)
 {
-    if(!context.eta_upper_bound_for_research) return;
-    const auto kkt=CalculateResearchWidthKkt(eta,gradient,*context.eta_upper_bound_for_research);
-    certificate.research_width_bound_applied=true;
-    certificate.research_width_feasible=kkt.feasible;
-    certificate.research_width_projected_kkt=kkt.projected;
-    certificate.research_maximum_bound_violation=kkt.violation;
-    certificate.research_boundary_gradient_max=kkt.boundary_gradient;
-    certificate.research_boundary_multiplier_max=kkt.multiplier;
-    certificate.research_complementarity=kkt.complementarity;
-    certificate.research_active_bound_count=kkt.active;
+    if(!context.eta_upper_bound) return;
+    const auto kkt=CalculateWidthBoundKkt(eta,gradient,*context.eta_upper_bound);
+    certificate.width_bound_applied=true;
+    certificate.width_bound_feasible=kkt.feasible;
+    certificate.width_bound_projected_kkt=kkt.projected;
+    certificate.maximum_width_bound_violation=kkt.violation;
+    certificate.boundary_gradient_max=kkt.boundary_gradient;
+    certificate.boundary_multiplier_max=kkt.multiplier;
+    certificate.width_bound_complementarity=kkt.complementarity;
+    certificate.active_width_bound_count=kkt.active;
 }
-#endif
 }
 bool IsValidJointConvergenceCriteria(const JointConvergenceCriteria & criteria)
 {
@@ -347,18 +345,14 @@ std::optional<double> ProfileGradientInfinityNorm(const Evaluation & evaluation)
 
 std::optional<double> ProfileGradientInfinityNorm(const Evaluation & evaluation,const EvaluationContext & context)
 {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(context.eta_upper_bound_for_research)
+    if(context.eta_upper_bound)
     {
         if(!evaluation.valid || evaluation.eta.size()!=evaluation.gradient.size()) return std::nullopt;
-        const auto kkt=CalculateResearchWidthKkt(evaluation.eta,evaluation.gradient,
-            *context.eta_upper_bound_for_research);
+        const auto kkt=CalculateWidthBoundKkt(evaluation.eta,evaluation.gradient,
+            *context.eta_upper_bound);
         if(!std::isfinite(kkt.projected)) return std::nullopt;
         return kkt.projected;
     }
-#else
-    (void)context;
-#endif
     return ProfileGradientInfinityNorm(evaluation);
 }
 
@@ -563,9 +557,7 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     const double scale=context ? context->scale : std::max(1.0,y.norm());
     for (Eigen::Index k=0;k<2*m;++k)
         out.gradient(k/2)+=out.beta(k)*StableColumnDot(out.derivative,k,out.residual)/scale/scale;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(context) CaptureResearchWidthKkt(out.certificate,out.eta,out.gradient,*context);
-#endif
+    if(context) CaptureWidthBoundKkt(out.certificate,out.eta,out.gradient,*context);
     out.valid=out.residual.allFinite() && out.gradient.allFinite();
     out.reason=out.valid ? "qualified-inner" : "nonfinite-residual"; return out;
 }
@@ -588,9 +580,7 @@ Evaluation EvaluateState(const Domain & domain,VectorRef y,const Vector & eta,co
         std::chrono::duration<double>(std::chrono::steady_clock::now()-certificate_started).count();
     for(Eigen::Index k=0;k<beta.size();++k)
         out.gradient(k/2)+=beta(k)*StableColumnDot(out.derivative,k,out.residual)/context.scale/context.scale;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    CaptureResearchWidthKkt(out.certificate,out.eta,out.gradient,context);
-#endif
+    CaptureWidthBoundKkt(out.certificate,out.eta,out.gradient,context);
     out.valid=out.residual.allFinite() && out.gradient.allFinite(); out.reason=out.valid ? "raw-state" : "nonfinite-state";
     return out;
 }
@@ -663,9 +653,7 @@ Evaluation EvaluateStateStreaming(const Domain & domain,VectorRef y,const Vector
     certificate.residual_rmse=out.residual.norm()/std::sqrt(static_cast<double>(y.size()));
     certificate.residual_max=out.residual.cwiseAbs().maxCoeff();
     certificate.relative_residual=out.residual.norm()/certificate_scale;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    CaptureResearchWidthKkt(certificate,eta,out.gradient,context);
-#endif
+    CaptureWidthBoundKkt(certificate,eta,out.gradient,context);
     out.certificate=std::move(certificate);
     out.valid=out.residual.allFinite() && out.gradient.allFinite();
     out.reason=out.valid ? "raw-state" : "nonfinite-state";
@@ -687,9 +675,7 @@ TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation & e,const Eva
     out.cancellation_ratio=replay.cancellation_ratio;
     out.passed=replay.passed;
     out.reason=replay.reason;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     out.width_bound_feasible=replay.width_bound_feasible;
-#endif
     return out;
 }
 TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy,const Evaluation & reference)
@@ -769,13 +755,11 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
             width_gradient(a)+=(e.beta(2*a)*g*(p.square/(b*b)-3)+e.beta(2*a+1)*dk)*replay_residual(p.row)/scale/scale;
         }
     }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(context->eta_upper_bound_for_research)
+    if(context->eta_upper_bound)
     {
-        const auto bound=CalculateResearchWidthKkt(e.eta,width_gradient,*context->eta_upper_bound_for_research);
+        const auto bound=CalculateWidthBoundKkt(e.eta,width_gradient,*context->eta_upper_bound);
         out.width_bound_feasible=bound.feasible;
     }
-#endif
     const bool prediction_ok=((prediction-original_prediction).array().abs()<=
         2e-12+2e-13*original_prediction.array().abs()).all();
     const bool gradient_ok=((width_gradient-e.gradient).array().abs()<=1e-13+2e-9*e.gradient.array().abs()).all();
@@ -795,16 +779,11 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
     out.gradient_difference=(width_gradient-e.gradient).lpNorm<Eigen::Infinity>();
     out.cancellation_ratio=(absolute.array()/prediction.array().abs().max(1.0)).maxCoeff();
     const bool independent_kkt_ok=kkt<=1e-10;
-    out.passed=prediction_ok && gradient_ok && independent_kkt_ok && kkt_difference<=1e-13
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        && out.width_bound_feasible
-#endif
-        ;
+    out.passed=prediction_ok && gradient_ok && independent_kkt_ok && kkt_difference<=1e-13 &&
+        out.width_bound_feasible;
     if(out.passed) out.reason="trusted";
     else if(!independent_kkt_ok) out.reason="independent-kkt-failed";
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     else if(!out.width_bound_feasible) out.reason="width-bound-infeasible";
-#endif
     else out.reason="replay-disagreement";
     return out;
 }
@@ -942,11 +921,10 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
     out.independent_ac_kkt=(scaled_beta-projected).lpNorm<Eigen::Infinity>();
     out.primary_width_gradient=e.gradient.lpNorm<Eigen::Infinity>();
     out.independent_width_gradient=width_gradient.lpNorm<Eigen::Infinity>();
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(policy.eta_upper_bound_for_research)
+    if(policy.eta_upper_bound)
     {
-        const auto primary_width=CalculateResearchWidthKkt(e.eta,e.gradient,*policy.eta_upper_bound_for_research);
-        const auto independent_width=CalculateResearchWidthKkt(e.eta,width_gradient,*policy.eta_upper_bound_for_research);
+        const auto primary_width=CalculateWidthBoundKkt(e.eta,e.gradient,*policy.eta_upper_bound);
+        const auto independent_width=CalculateWidthBoundKkt(e.eta,width_gradient,*policy.eta_upper_bound);
         out.width_bound_applied=true;
         out.width_bound_feasible=primary_width.feasible && independent_width.feasible;
         out.primary_width_projected_kkt=primary_width.projected;
@@ -961,7 +939,6 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
         out.complementarity_residual=independent_width.complementarity;
         out.active_width_bounds=independent_width.active;
     }
-#endif
     out.prediction_difference=prediction_difference; out.residual_difference=residual_difference;
     out.independent_objective=.5*rss;
     out.primary_objective=e.certificate.objective;
@@ -1024,21 +1001,17 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
     out.gradient_difference=maximum_gradient_difference;
     out.passed=out.primary_kkt_passed && out.independent_kkt_passed && out.prediction_passed &&
         out.residual_passed && out.objective_passed && out.kkt_agrees && out.gradient_agrees &&
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
         (!out.width_bound_applied || (out.width_bound_feasible && out.primary_width_kkt_passed &&
             out.independent_width_kkt_passed)) &&
-#endif
         (!assembled_prediction || (out.assembled_prediction_passed && out.assembled_objective_passed));
     out.reason=out.passed ? "verified" : !out.primary_kkt_passed ? "primary-kkt-failed" :
         !out.independent_kkt_passed ? "independent-kkt-failed" : !out.prediction_passed ?
         "prediction-replay-disagreement" : !out.residual_passed ? "residual-replay-disagreement" :
         !out.objective_passed ? "objective-replay-disagreement" : !out.kkt_agrees ?
         "independent-kkt-disagreement" : !out.gradient_agrees ? "per-coordinate-replay-enclosure" :
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
         out.width_bound_applied && !out.width_bound_feasible ? "width-bound-infeasible" :
         out.width_bound_applied && !out.primary_width_kkt_passed ? "primary-bounded-width-kkt-failed" :
         out.width_bound_applied && !out.independent_width_kkt_passed ? "independent-bounded-width-kkt-failed" :
-#endif
         assembled_prediction && !out.assembled_prediction_passed ? "assembled-prediction-disagreement" :
         assembled_prediction && !out.assembled_objective_passed ? "assembled-objective-disagreement" :
         "replay-disagreement";
@@ -1195,11 +1168,7 @@ bool SameAssessmentPolicy(const EvaluationContext & a,const EvaluationContext & 
         a.rank.width_columns==b.rank.width_columns && a.linear.rank_relative==b.linear.rank_relative &&
         a.linear.active_set_iteration_factor==b.linear.active_set_iteration_factor && a.linear.release_factor==b.linear.release_factor &&
         a.linear.release_response_norm==b.linear.release_response_norm && a.atom_ids==b.atom_ids && a.row_ids==b.row_ids;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    return same && a.eta_upper_bound_for_research==b.eta_upper_bound_for_research;
-#else
-    return same;
-#endif
+    return same && a.eta_upper_bound==b.eta_upper_bound;
 }
 Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluation & endpoint,
     const IndependentReplayEvidence & replay,const EvaluationContext & context,
@@ -1237,15 +1206,11 @@ Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluatio
     out.gradient=MeetsJointThreshold(endpoint.gradient.lpNorm<Eigen::Infinity>(),criteria.global_width_gradient) &&
         MeetsJointThreshold(replay.primary_width_gradient,criteria.global_width_gradient) &&
         MeetsJointThreshold(replay.independent_width_gradient,criteria.global_width_gradient) && replay.gradient_agrees;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(context.eta_upper_bound_for_research)
+    if(context.eta_upper_bound)
         out.gradient=replay.width_bound_applied && replay.width_bound_feasible && replay.primary_width_kkt_passed &&
             replay.independent_width_kkt_passed &&
             MeetsJointThreshold(replay.primary_width_projected_kkt,criteria.global_width_gradient) &&
             MeetsJointThreshold(replay.independent_width_projected_kkt,criteria.global_width_gradient) && replay.gradient_agrees;
-#else
-    (void)context;
-#endif
     const bool replay_consistent=replay.valid && replay.prediction_passed && replay.residual_passed &&
         replay.objective_passed && replay.kkt_agrees && replay.gradient_agrees &&
         (!replay.assembled_prediction_available ||

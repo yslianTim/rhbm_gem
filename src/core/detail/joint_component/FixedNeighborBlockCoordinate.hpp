@@ -105,11 +105,11 @@ struct FixedNeighborBlockSweep
     double objective_before{},objective_after{},global_a_feasibility{},global_ac_kkt{};
     double global_width_gradient_inf_norm{},cache_replay_error{},objective_replay_error{},wall_seconds{};
     double eta_change_inf{},beta_scaled_change{},maximum_accepted_log_width_step{},maximum_target_width{};
-    bool research_width_bound_applied{};
-    double research_projected_width_gradient_inf_norm{unavailable},research_maximum_bound_violation{},
-        research_boundary_gradient_max{},research_boundary_multiplier_max{},research_complementarity{unavailable},
-        research_stationarity_width_gradient_inf_norm{unavailable};
-    std::size_t research_active_bound_count{};
+    bool width_bound_applied{};
+    double projected_width_gradient_inf_norm{unavailable},maximum_width_bound_violation{},
+        boundary_gradient_max{},boundary_multiplier_max{},width_bound_complementarity{unavailable},
+        stationarity_width_gradient_inf_norm{unavailable};
+    std::size_t active_width_bound_count{};
     bool coordinate_confirmation_available{};
     std::size_t block_solves{},profile_evaluations{},maximum_block_rows{},maximum_block_columns{},
         accepted_blocks{},unchanged_blocks{},accepted_local_updates{},recovery_attempts{},recovery_successes{};
@@ -214,9 +214,9 @@ struct FixedNeighborPolicy
     FixedNeighborDiagnosticSink * diagnostic_sink{};
     std::function<void(const FixedNeighborBlockSweep &)> production_progress;
     std::function<void(const FixedNeighborBlockSweep &)> sweep_observer;
+    std::optional<double> eta_upper_bound;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     FixedNeighborWidthTrajectoryCapture * width_trajectory{};
-    std::optional<double> eta_upper_bound_for_research;
     std::vector<std::string> fixed_width_atom_ids;
     std::function<bool(std::size_t,std::size_t)> force_no_trusted_profile_for_testing;
     // Test-only research hook. An empty string accepts the candidate; a

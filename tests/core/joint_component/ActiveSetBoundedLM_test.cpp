@@ -2,6 +2,8 @@
 
 #include "core/detail/joint_component/ActiveSetBoundedLM.hpp"
 
+#include <limits>
+
 namespace {
 namespace joint=rhbm_gem::core::joint_component;
 
@@ -61,6 +63,20 @@ TEST(ActiveSetBoundedLMTest, EnforcesSeveralUpperBoundsAndChecksTheirMultipliers
     EXPECT_NEAR(result.multipliers(1),2.5,1e-14);
 }
 
+TEST(ActiveSetBoundedLMTest, PreservesANearBoundaryStepAndVerifiesItsMultiplier)
+{
+    Eigen::MatrixXd j=Eigen::MatrixXd::Identity(1,1);
+    Eigen::VectorXd r(1),d(1),upper(1);
+    r<<-1.0; d<<1.0; upper<<1e-15;
+    const auto result=joint::SolveBoundedDampedLeastSquares(j,r,d,upper,0.25);
+    ASSERT_TRUE(result.valid)<<result.status;
+    EXPECT_TRUE(result.active[0]);
+    EXPECT_DOUBLE_EQ(result.step(0),upper(0));
+    EXPECT_LT(result.gradient(0),0.0);
+    EXPECT_GT(result.multipliers(0),0.0);
+    EXPECT_LE(result.kkt_inf_norm,1e-10);
+}
+
 TEST(ActiveSetBoundedLMTest, SolvesConstrainedTrustRegionWithTheReturnedDamping)
 {
     Eigen::Matrix2d j=Eigen::Matrix2d::Identity();
@@ -100,6 +116,17 @@ TEST(ActiveSetBoundedLMTest, FixedCoordinatesRemainFixed)
     ASSERT_TRUE(result.valid)<<result.status;
     EXPECT_DOUBLE_EQ(result.step(0),0.0);
     EXPECT_DOUBLE_EQ(result.step(1),2.0);
+}
+
+TEST(ActiveSetBoundedLMTest, RejectsNonfiniteSubproblemCoefficients)
+{
+    Eigen::MatrixXd j=Eigen::MatrixXd::Identity(1,1);
+    j(0,0)=std::numeric_limits<double>::quiet_NaN();
+    Eigen::VectorXd r=Eigen::VectorXd::Zero(1),d=Eigen::VectorXd::Ones(1),
+        upper=Eigen::VectorXd::Ones(1);
+    const auto result=joint::SolveBoundedDampedLeastSquares(j,r,d,upper,0.5);
+    EXPECT_FALSE(result.valid);
+    EXPECT_EQ(result.status,"invalid-subproblem-input");
 }
 
 } // namespace

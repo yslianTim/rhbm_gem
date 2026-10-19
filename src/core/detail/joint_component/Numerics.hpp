@@ -52,7 +52,7 @@ struct EvaluationContext
     bool independent_search{};
     int profile_budget{200},update_budget{100};
     double profile_cpu_budget_seconds{};
-    std::optional<double> eta_upper_bound_for_research;
+    std::optional<double> eta_upper_bound;
 };
 enum class ProfileEvaluationRole {Unspecified,InitialProfile,TrialProfile,AcceptedEndpoint,Reference};
 const char * ProfileEvaluationRoleName(ProfileEvaluationRole);
@@ -128,10 +128,10 @@ struct Certificate
         residual_rmse{unavailable},residual_max{unavailable},relative_residual{unavailable};
     std::vector<Eigen::Index> active_atoms;
     std::optional<int> linear_solves,linear_releases,free_rank,block_factorizations;
-    bool research_width_bound_applied{},research_width_feasible{true};
-    double research_width_projected_kkt{unavailable},research_maximum_bound_violation{},
-        research_boundary_gradient_max{},research_boundary_multiplier_max{},research_complementarity{unavailable};
-    std::size_t research_active_bound_count{};
+    bool width_bound_applied{},width_bound_feasible{true};
+    double width_bound_projected_kkt{unavailable},maximum_width_bound_violation{},
+        boundary_gradient_max{},boundary_multiplier_max{},width_bound_complementarity{unavailable};
+    std::size_t active_width_bound_count{};
 };
 Certificate CertifyLinear(const Sparse &,VectorRef,const Vector &,double=0);
 struct Endpoint
@@ -265,11 +265,6 @@ struct SearchResult
 SearchResult SearchProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr,ProfileSearchWork * = nullptr,
     const std::vector<bool> * fixed_width_mask=nullptr);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-SearchResult SearchProfileBounded(const Domain &,VectorRef,const Vector &,const EvaluationContext &,double eta_max,
-    const JointProgressObserver & = {},const JointProgressComponent * = nullptr,ProfileSearchWork * = nullptr,
-    const std::vector<bool> * fixed_width_mask=nullptr);
-#endif
 struct Assessment
 {
     Endpoint primary;

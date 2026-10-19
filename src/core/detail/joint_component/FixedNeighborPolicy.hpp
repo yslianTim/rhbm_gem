@@ -2,9 +2,7 @@
 
 #include <cstddef>
 #include <functional>
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
 #include <optional>
-#endif
 #include <string>
 #include "ConvergenceCriteria.hpp"
 
@@ -33,9 +31,7 @@ struct FixedNeighborSearchPolicy
         const FixedNeighborBlockSweep &)> state_observer;
     std::function<void(const FixedNeighborSearchResult &)> search_result_observer;
     std::function<void(FixedNeighborPolicy &)> configure_search_for_testing;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    std::optional<double> eta_upper_bound_for_research;
-#endif
+    std::optional<double> eta_upper_bound;
 };
 
 } // namespace rhbm_gem::core::joint_component

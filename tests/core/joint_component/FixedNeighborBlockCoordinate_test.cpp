@@ -158,7 +158,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ResearchBoundedSearchReleasesTheStar
     policy.certify_endpoint=false;
     policy.stop_after_stationarity=false;
     policy.capture_local_trajectory=true;
-    policy.eta_upper_bound_for_research=eta_max;
+    policy.eta_upper_bound=eta_max;
     const auto result=n::RunFixedNeighborDiagnostic(problem,initial,policy);
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     ASSERT_EQ(result.blocks.size(),1u)<<result.reason;
@@ -176,8 +176,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, ResearchBoundedSearchReleasesTheStar
     EXPECT_TRUE(bounded_subproblem_seen);
     EXPECT_TRUE(released);
     ASSERT_TRUE(result.final_sweep);
-    EXPECT_TRUE(result.final_sweep->research_width_bound_applied);
-    auto context=data.context; context.eta_upper_bound_for_research=eta_max;
+    EXPECT_TRUE(result.final_sweep->width_bound_applied);
+    auto context=data.context; context.eta_upper_bound=eta_max;
     const auto primary=n::EvaluateStateStreaming(data.domain,data.y,result.state.eta,result.state.beta,context);
     ASSERT_TRUE(primary.valid)<<primary.reason;
     const auto replay=n::CheckIndependentReplay(data.domain,data.y,primary,context);
@@ -186,11 +186,11 @@ TEST(JointFixedNeighborBlockCoordinateTest, ResearchBoundedSearchReleasesTheStar
     EXPECT_TRUE(replay.width_bound_feasible);
     EXPECT_DOUBLE_EQ(result.final_sweep->global_width_gradient_inf_norm,
         primary.gradient.lpNorm<Eigen::Infinity>());
-    EXPECT_DOUBLE_EQ(result.final_sweep->research_projected_width_gradient_inf_norm,
+    EXPECT_DOUBLE_EQ(result.final_sweep->projected_width_gradient_inf_norm,
         replay.independent_width_projected_kkt);
-    EXPECT_DOUBLE_EQ(result.final_sweep->research_stationarity_width_gradient_inf_norm,
-        result.final_sweep->research_projected_width_gradient_inf_norm);
-    EXPECT_EQ(result.final_sweep->research_active_bound_count,replay.active_width_bounds);
+    EXPECT_DOUBLE_EQ(result.final_sweep->stationarity_width_gradient_inf_norm,
+        result.final_sweep->projected_width_gradient_inf_norm);
+    EXPECT_EQ(result.final_sweep->active_width_bound_count,replay.active_width_bounds);
 }
 
 void CheckMultiBlockBudgetFailure(const std::string & topology)

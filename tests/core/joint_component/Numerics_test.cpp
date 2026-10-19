@@ -1080,7 +1080,7 @@ TEST(JointComponentNumericsTest, BoundedReplayUsesProjectedWidthKktAndChecksFeas
             y(row)=2.0*basis.gaussian+.5*basis.charge;
         }
         auto context=n::CreateContext(y,1);
-        context.eta_upper_bound_for_research=std::log(.55);
+        context.eta_upper_bound=std::log(.55);
         const auto primary=n::EvaluateProfile(domain,y,eta,false,&context);
         EXPECT_TRUE(primary.valid)<<primary.reason;
         const auto replay=n::CheckIndependentReplay(domain,y,primary,context,nullptr,nullptr,

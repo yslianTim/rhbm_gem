@@ -214,6 +214,7 @@ TEST(JointComponentSearchTest, BoundedLmStopsAtAValidBoundaryKktPoint)
     EXPECT_NEAR(x(0),10.2,1e-12);
     EXPECT_NEAR(x(1),0.0,1e-8);
     EXPECT_EQ(status,Eigen::LevenbergMarquardtSpace::CosinusTooSmall);
+    EXPECT_EQ(functor.failure,"bounded-tiny-step");
 }
 
 TEST(JointComponentSearchTest, DisabledBoundedHookRetainsTheOriginalLmStep)
@@ -237,10 +238,11 @@ TEST(JointComponentSearchTest, BoundedProfileSearchKeepsEveryEvaluatedWidthFeasi
 {
     Sample sample;
     const p::Domain domain(sample.grid,sample.atoms);
-    const auto context=joint::CreateContext(sample.y,static_cast<Eigen::Index>(sample.atoms.size()));
+    auto context=joint::CreateContext(sample.y,static_cast<Eigen::Index>(sample.atoms.size()));
     const Vector initial=Eigen::Vector2d(.48,.59);
     const double eta_max=std::log(.6);
-    const auto search=joint::SearchProfileBounded(domain,sample.y,initial,context,eta_max);
+    context.eta_upper_bound=eta_max;
+    const auto search=joint::SearchProfile(domain,sample.y,initial,context);
     EXPECT_FALSE(search.trials.empty())<<search.stop_reason;
     bool reached_bound=false;
     for(const auto & trial:search.trials)

@@ -493,13 +493,13 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
     joint::FixedNeighborSearchPolicy production_policy;
     production_policy.core_atoms=12; production_policy.maximum_sweeps=200;
     production_policy.order=joint::FixedNeighborBlockOrder::Forward;
-    if(eta_max) production_policy.eta_upper_bound_for_research=eta_max;
+    if(eta_max) production_policy.eta_upper_bound=eta_max;
     production_policy.configure_search_for_testing=[&](joint::FixedNeighborPolicy & local) {
         local.capture_local_trajectory=true;
         local.collect_telemetry=true;
         local.diagnostic_sink=&sink;
         local.width_trajectory=compact ? nullptr : &capture;
-        if(eta_max) local.eta_upper_bound_for_research=eta_max;
+        if(eta_max) local.eta_upper_bound=eta_max;
         if(policy_kind!=trust::Policy::Baseline)
             local.width_trial_trust_for_testing=trust::Make(policy_kind,policy_scope,
                 local.component_index,&metrics.policy_statistics);
