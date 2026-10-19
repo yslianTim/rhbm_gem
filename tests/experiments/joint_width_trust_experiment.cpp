@@ -1,5 +1,6 @@
 #include "core/detail/joint_component/Problem.hpp"
 #include "support/JointWidthTrustPolicy.hpp"
+#include "support/JointWidthTrustTruth.hpp"
 
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -34,10 +35,7 @@ namespace json=boost::json;
 namespace trust=joint_test::width_trust;
 using Clock=std::chrono::steady_clock;
 
-struct Truth
-{
-    double amplitude{},width{},charge{};
-};
+using Truth=trust::Truth;
 
 struct ExperimentInput
 {
@@ -45,9 +43,12 @@ struct ExperimentInput
     std::vector<double> initial_widths;
     std::vector<Truth> truth;
     bool truth_available{};
+    bool normalization_applied{};
     std::string normalization_operation{"not-applicable"};
     double normalization_divisor{1};
     std::string source;
+    std::string simulation_mode{"not-applicable"},truth_source{"none"},truth_scale{"N/A — no truth"},
+        estimate_scale{"original-domain-A/C; physical-width-B"},comparison_scale{"N/A — no truth"};
 };
 
 json::value Number(double value)
@@ -158,7 +159,10 @@ ExperimentInput BuildSynthetic(const std::string & dataset,std::uint64_t seed)
         input.observations.size(),input.observations.size(),0,0,0,0};
     std::vector<double> initial(atom_count,weak ? 0.9 : 0.81);
     return {core::JointProblem(std::move(input)),std::move(initial),std::move(truth),true,
-        "not-applicable",1,dataset+":"+std::to_string(seed)};
+        false,"none",1,dataset+":"+std::to_string(seed),"synthetic-truth-controlled",
+        "joint_width_trust_experiment synthetic generator",
+        "original-domain-A/C; physical-width-B","original-domain-A/C; physical-width-B",
+        "original-domain-A/C; physical-width-B"};
 }
 
 json::value ReadJson(const std::filesystem::path & path)
@@ -211,8 +215,14 @@ ExperimentInput BuildReal(const std::string & dataset,const std::filesystem::pat
             truth[atom]=found->second;
         }
     }
+    const bool normalized=normalization.has_value();
+    const std::string normalized_scale="normalized-domain-A/C; physical-width-B";
     return {std::move(problem),initialization.b,std::move(truth),truth_available,
-        "MapValueArrayNormalization",*normalization,map_path.string()};
+        normalized,"MapValueArrayNormalization",*normalization,map_path.string(),
+        truth_available ? "normalized-simulation-research" : "real-map-production-normalized",
+        truth_available ? map_path.string()+".simulation.json" : "none",
+        truth_available ? "original-domain-A/C; physical-width-B" : "N/A — no truth",
+        normalized_scale,truth_available ? normalized_scale : "N/A — no truth"};
 }
 
 struct RunMetrics
@@ -370,7 +380,9 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
             }
             if(experiment.truth_available)
             {
-                const auto & truth=experiment.truth.at(atom);
+                const auto truth=experiment.normalization_applied ?
+                    trust::ToNormalizedDomain(experiment.truth.at(atom),experiment.normalization_divisor) :
+                    experiment.truth.at(atom);
                 parameter_error_a.push_back(a-truth.amplitude);
                 parameter_error_b.push_back(b-truth.width);
                 parameter_error_c.push_back(c-truth.charge);
@@ -401,8 +413,12 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
         rejections_by_block[block]=count;
     return {
         {"strategy",policy_name},{"dataset",experiment.source},{"source",experiment.source},
-        {"normalization",json::object{{"operation",experiment.normalization_operation},
+        {"simulation_mode",experiment.simulation_mode},
+        {"normalization",json::object{{"applied",experiment.normalization_applied},
+            {"operation",experiment.normalization_operation},
             {"divisor",Number(experiment.normalization_divisor)}}},
+        {"truth_source",experiment.truth_source},{"truth_scale",experiment.truth_scale},
+        {"estimate_scale",experiment.estimate_scale},{"comparison_scale",experiment.comparison_scale},
         {"seed",experiment.source.find(':')==std::string::npos ? json::value(nullptr) :
             json::value(experiment.source.substr(experiment.source.find(':')+1))},
         {"target_count",data.input->selection_domain->target_indices.size()},

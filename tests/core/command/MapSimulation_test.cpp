@@ -279,6 +279,7 @@ TEST_F(MapSimulationTest, ManifestReconstructsSavedVoxelsAndRecordsExactSettings
         EXPECT_EQ(std::bit_cast<std::uint64_t>(widths[0]), std::bit_cast<std::uint64_t>(request.blurring_width_list[0]));
         const double width{ json::value_to<double>(settings.at("blurring_width")) };
         EXPECT_TRUE(width == widths[0] || width == widths[1]);
+        EXPECT_FALSE(settings.at("normalization_applied").as_bool());
         EXPECT_DOUBLE_EQ(json::value_to<double>(manifest.at("kernel").at("charge_term_cutoff")), 2.5);
         EXPECT_FALSE(manifest.at("kernel").as_object().contains("effective_charge_width"));
         EXPECT_EQ(manifest.at("support").at("version"), "sphere-fma-v1");

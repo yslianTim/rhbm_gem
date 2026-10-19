@@ -202,6 +202,7 @@ set(JOINT_COMPONENT_WORKFLOW_TEST_SOURCES
 
 set(JOINT_COMPONENT_NUMERICAL_TEST_SOURCES
     core/joint_component/FixedNeighborBlockCoordinate_test.cpp
+    core/joint_component/JointWidthTrustTruth_test.cpp
     core/joint_component/WidthTrustPolicy_test.cpp
     core/joint_component/LocalConditioning_test.cpp
     core/joint_component/ParameterStability_test.cpp
