@@ -63,6 +63,9 @@ TEST(JointParameterStabilityTest, ExactLocalFitIsStableAndDeterministic)
     ASSERT_TRUE(first.evidence.baseline_projected_width_kkt);
     EXPECT_LE(*first.evidence.baseline_projected_width_kkt,1e-12);
     EXPECT_EQ(first.evidence.baseline_independent_replay_status,"Passed");
+    EXPECT_EQ(first.evidence.baseline_numerical_validity_status,"Valid");
+    EXPECT_EQ(first.evidence.baseline_conditional_optimality_status,"StrictlyQualified");
+    EXPECT_EQ(first.evidence.baseline_eligibility_status,"Eligible");
     EXPECT_EQ(first.evidence.conditional_reprofile_status,"StrictlyQualified");
     EXPECT_EQ(first.evidence.conditional_reprofile_independent_replay_status,"Passed");
     ASSERT_TRUE(first.evidence.conditional_reprofile_objective_difference);
@@ -75,6 +78,11 @@ TEST(JointParameterStabilityTest, ExactLocalFitIsStableAndDeterministic)
     EXPECT_EQ(first.evidence.perturbation_seeds,2u);
     ASSERT_EQ(first.evidence.probes.size(),1u);
     EXPECT_EQ(first.evidence.probes.front().direction,"weak-singular");
+    EXPECT_EQ(first.evidence.probes.front().status,"Assessed");
+    EXPECT_EQ(first.evidence.probes.front().minus_seed_status,"Assessed");
+    EXPECT_EQ(first.evidence.probes.front().plus_seed_status,"Assessed");
+    ASSERT_TRUE(first.evidence.probes.front().minus_effective_displacement_inf);
+    EXPECT_NEAR(*first.evidence.probes.front().minus_effective_displacement_inf,n::LocalWidthPerturbation,1e-15);
     EXPECT_NE(first.evidence.probes.front().source.find("normalized-all-width-direction"),std::string::npos);
     EXPECT_LE(first.cpu_seconds,n::MaximumLocalPerturbationCpuSeconds);
     EXPECT_LE(first.evidence.perturbation_evaluations,
@@ -122,7 +130,8 @@ TEST(JointParameterStabilityTest, UsesWeakLocalWidthDirectionsWithinTheBoundedBu
         }
         y(row)=value;
     }
-    const auto context=n::CreateContext(y,1);
+    auto context=n::CreateContext(y,1);
+    context.eta_upper_bound=eta(1);
     const auto first=n::AssessLocalParameterStability(domain,y,eta,beta,context,"two-atom-block");
     ASSERT_FALSE(first.evidence.probes.empty());
     EXPECT_EQ(first.evidence.probes.front().direction,"weak-singular");
@@ -150,13 +159,25 @@ TEST(JointParameterStabilityTest, UsesWeakLocalWidthDirectionsWithinTheBoundedBu
         ASSERT_EQ(probe.unit_direction.size(),2u);
         EXPECT_NEAR(std::hypot(probe.unit_direction[0],probe.unit_direction[1]),1.,1e-12);
         EXPECT_LE(probe.evaluations,2*n::MaximumLocalPerturbationProfileEvaluations);
-        if(probe.status=="Assessed")
+        if(probe.status=="Assessed" || probe.status=="OneSidedAssessed")
         {
             ASSERT_TRUE(probe.parameter_change);
             ASSERT_TRUE(probe.prediction_change);
             ASSERT_TRUE(probe.objective_change);
         }
+        EXPECT_TRUE(probe.minus_seed_status=="Assessed" || probe.minus_seed_status=="BoundInfeasibleDirection" ||
+            probe.minus_seed_status=="ZeroDisplacement" || probe.minus_seed_status=="LocalAcKktFailed" ||
+            probe.minus_seed_status=="IndependentReplayFailed" || probe.minus_seed_status=="WidthStationarityFailed" ||
+            probe.minus_seed_status=="SolverFailed" || probe.minus_seed_status=="BudgetExhausted");
+        EXPECT_TRUE(probe.plus_seed_status=="Assessed" || probe.plus_seed_status=="BoundInfeasibleDirection" ||
+            probe.plus_seed_status=="ZeroDisplacement" || probe.plus_seed_status=="LocalAcKktFailed" ||
+            probe.plus_seed_status=="IndependentReplayFailed" || probe.plus_seed_status=="WidthStationarityFailed" ||
+            probe.plus_seed_status=="SolverFailed" || probe.plus_seed_status=="BudgetExhausted");
     }
+    EXPECT_TRUE(std::any_of(first.evidence.probes.begin(),first.evidence.probes.end(),[](const auto & probe) {
+        return probe.minus_seed_status=="BoundInfeasibleDirection" ||
+            probe.plus_seed_status=="BoundInfeasibleDirection";
+    }));
     const auto second=n::AssessLocalParameterStability(domain,y,eta,beta,context,"two-atom-block");
     ASSERT_EQ(first.evidence.probes.size(),second.evidence.probes.size());
     for(std::size_t index=0;index<first.evidence.probes.size();++index)
@@ -166,7 +187,7 @@ TEST(JointParameterStabilityTest, UsesWeakLocalWidthDirectionsWithinTheBoundedBu
     }
 }
 
-TEST(JointParameterStabilityTest, AuditsPracticalBaselineThatFailsStrictLocalAcKkt)
+TEST(JointParameterStabilityTest, AssessesPracticalBaselineThatFailsStrictLocalAcKkt)
 {
     StabilityFixture fixture;
     n::Vector accepted_beta;
@@ -192,8 +213,9 @@ TEST(JointParameterStabilityTest, AuditsPracticalBaselineThatFailsStrictLocalAcK
     ASSERT_TRUE(found);
     const auto assessment=n::AssessLocalParameterStability(fixture.domain,fixture.y,fixture.eta,accepted_beta,
         fixture.context,"practical-baseline/block-1");
-    EXPECT_EQ(assessment.evidence.status,"Unavailable");
-    EXPECT_EQ(assessment.evidence.reason,"baseline-local-kkt-failed");
+    EXPECT_EQ(assessment.evidence.baseline_numerical_validity_status,"Valid");
+    EXPECT_EQ(assessment.evidence.baseline_conditional_optimality_status,"PracticalOnly");
+    EXPECT_EQ(assessment.evidence.baseline_eligibility_status,"Eligible");
     ASSERT_TRUE(assessment.evidence.baseline_local_ac_kkt);
     EXPECT_GT(*assessment.evidence.baseline_local_ac_kkt,1e-10);
     EXPECT_LE(*assessment.evidence.baseline_local_ac_kkt,1e-7);
@@ -202,7 +224,73 @@ TEST(JointParameterStabilityTest, AuditsPracticalBaselineThatFailsStrictLocalAcK
     EXPECT_EQ(assessment.evidence.baseline_independent_replay_status,"Passed");
     EXPECT_EQ(assessment.evidence.conditional_reprofile_status,"StrictlyQualified");
     EXPECT_EQ(assessment.evidence.conditional_reprofile_independent_replay_status,"Passed");
+    EXPECT_GT(assessment.evidence.perturbation_solves,0u);
+}
+
+TEST(JointParameterStabilityTest, WidthBoundUsesOneSidedInwardProbeAndRejectsZeroDisplacement)
+{
+    StabilityFixture fixture;
+    auto context=fixture.context;
+    context.eta_upper_bound=fixture.eta(0);
+    const auto assessment=n::AssessLocalParameterStability(fixture.domain,fixture.y,fixture.eta,fixture.beta,
+        context,"bound-active/block-1");
+    ASSERT_EQ(assessment.evidence.baseline_eligibility_status,"Eligible");
+    ASSERT_EQ(assessment.evidence.probes.size(),1u);
+    const auto & probe=assessment.evidence.probes.front();
+    EXPECT_EQ(probe.status,"OneSidedAssessed");
+    EXPECT_EQ(probe.minus_seed_status,"Assessed");
+    EXPECT_EQ(probe.plus_seed_status,"ZeroDisplacement");
+    EXPECT_EQ(probe.plus_seed_reason,"upper-bound-projection-produced-zero-displacement");
+    ASSERT_TRUE(probe.plus_effective_displacement_inf);
+    EXPECT_DOUBLE_EQ(*probe.plus_effective_displacement_inf,0.);
+    EXPECT_EQ(assessment.evidence.perturbation_solves,1u);
+}
+
+TEST(JointParameterStabilityTest, PracticalLocalWidthCriterionKeepsEvaluationScaling)
+{
+    StabilityFixture fixture;
+    auto baseline=n::AssessLocalParameterStability(fixture.domain,fixture.y,fixture.eta,fixture.beta,
+        fixture.context,"scale-baseline/block-1");
+    n::Vector scaled_y=fixture.y*1e6,scaled_beta=fixture.beta*1e6;
+    const auto scaled_context=n::CreateContext(scaled_y,1);
+    const auto scaled=n::AssessLocalParameterStability(fixture.domain,scaled_y,fixture.eta,scaled_beta,
+        scaled_context,"scale-scaled/block-1");
+    ASSERT_TRUE(baseline.evidence.baseline_projected_width_kkt);
+    ASSERT_TRUE(scaled.evidence.baseline_projected_width_kkt);
+    EXPECT_NEAR(*baseline.evidence.baseline_projected_width_kkt,*scaled.evidence.baseline_projected_width_kkt,1e-12);
+    EXPECT_EQ(baseline.evidence.baseline_eligibility_status,"Eligible");
+    EXPECT_EQ(scaled.evidence.baseline_eligibility_status,"Eligible");
+}
+
+TEST(JointParameterStabilityTest, IndependentReplayFailureCannotBeClassifiedStable)
+{
+    StabilityFixture fixture;
+    auto context=fixture.context;
+    context.eta_upper_bound=fixture.eta(0)-.1;
+    const auto assessment=n::AssessLocalParameterStability(fixture.domain,fixture.y,fixture.eta,fixture.beta,
+        context,"infeasible-baseline/block-1");
+    EXPECT_EQ(assessment.evidence.baseline_independent_replay_status,"Failed");
+    EXPECT_EQ(assessment.evidence.baseline_eligibility_status,"Unavailable");
+    EXPECT_TRUE(assessment.evidence.baseline_eligibility_reason=="baseline-independent-replay-failed" ||
+        assessment.evidence.baseline_eligibility_reason=="baseline-width-practical-stationarity-failed" ||
+        assessment.evidence.baseline_eligibility_reason=="baseline-width-bound-infeasible");
+    EXPECT_EQ(assessment.evidence.status,"Unavailable");
     EXPECT_EQ(assessment.evidence.perturbation_solves,0u);
+}
+
+TEST(JointParameterStabilityTest, LocalAcSolveFailureCannotProduceFalseStableResult)
+{
+    StabilityFixture fixture;
+    auto context=fixture.context;
+    context.linear.rank_relative=1.;
+    const auto assessment=n::AssessLocalParameterStability(fixture.domain,fixture.y,fixture.eta,fixture.beta,
+        context,"rank-rejected/block-1");
+    EXPECT_EQ(assessment.evidence.baseline_eligibility_status,"Eligible");
+    EXPECT_NE(assessment.evidence.status,"Stable");
+    EXPECT_TRUE(std::any_of(assessment.evidence.probes.begin(),assessment.evidence.probes.end(),[](const auto & probe) {
+        return probe.minus_seed_status=="LocalAcKktFailed" || probe.plus_seed_status=="LocalAcKktFailed" ||
+            probe.minus_seed_status=="SolverFailed" || probe.plus_seed_status=="SolverFailed";
+    }));
 }
 
 TEST(JointParameterStabilityTest, ProfileSearchHonorsCpuBudget)

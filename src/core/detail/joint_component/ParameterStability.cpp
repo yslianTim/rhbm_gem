@@ -15,6 +15,7 @@ double Seconds(Clock::time_point start)
 {return std::chrono::duration<double>(Clock::now()-start).count();}
 double CpuSeconds(std::clock_t start)
 {return static_cast<double>(std::clock()-start)/static_cast<double>(CLOCKS_PER_SEC);}
+constexpr double MinimumEffectiveLocalWidthPerturbation=1e-12;
 
 void Unavailable(JointBlockParameterStability & evidence,const std::string & reason)
 {
@@ -151,6 +152,8 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
     {Unavailable(evidence,"nonfinite-local-input"); return finish();}
 
     const auto baseline=EvaluateState(domain,y,eta,beta,context,ProfileEvaluationRole::AcceptedEndpoint);
+    std::optional<double> baseline_width_gradient;
+    bool baseline_replay_passed{};
     if(baseline.certificate.available)
     {
         evidence.baseline_local_ac_kkt=baseline.certificate.projected_kkt;
@@ -160,8 +163,8 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
         evidence.baseline_local_residual_rmse_normalized=baseline.certificate.residual_rmse/context.scale;
         if(context.eta_upper_bound && eta.size())
             evidence.baseline_width_bound_slack=*context.eta_upper_bound-eta.maxCoeff();
-        const auto width_gradient=ProfileGradientInfinityNorm(baseline,context);
-        if(width_gradient) evidence.baseline_projected_width_kkt=*width_gradient;
+        baseline_width_gradient=ProfileGradientInfinityNorm(baseline,context);
+        if(baseline_width_gradient) evidence.baseline_projected_width_kkt=*baseline_width_gradient;
     }
     if(baseline.valid && baseline.certificate.available)
     {
@@ -169,6 +172,7 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
             PracticalJointConvergenceCriteria);
         evidence.baseline_independent_replay_status=replay.passed ? "Passed" : "Failed";
         evidence.baseline_independent_replay_reason=replay.reason;
+        baseline_replay_passed=replay.passed;
 
         const auto reprofiled_profile=EvaluateProfile(domain,y,eta,false,&context,nullptr,
             ProfileEvaluationRole::AcceptedEndpoint);
@@ -213,15 +217,43 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
             evidence.conditional_reprofile_independent_replay_reason=reprofiled_profile.reason;
         }
     }
-    if(!baseline.valid || !baseline.certificate.available || !baseline.certificate.feasible ||
-        !baseline.certificate.kkt_passed)
-    {Unavailable(evidence,"baseline-local-kkt-failed"); return finish();}
-    const auto baseline_trust=CheckTrust(domain,y,baseline,context);
-    if(!baseline_trust.passed || !baseline_trust.independent || !baseline_trust.independent->objective_passed)
-    {Unavailable(evidence,"baseline-independent-replay-failed"); return finish();}
-    const auto baseline_gradient=ProfileGradientInfinityNorm(baseline,context);
-    if(!baseline_gradient || !(*baseline_gradient<=1e-12))
-    {Unavailable(evidence,"baseline-width-stationarity-failed"); return finish();}
+    const bool baseline_numerically_valid=baseline.valid && baseline.certificate.available &&
+        baseline.certificate.feasible && (!baseline.certificate.width_bound_applied ||
+            baseline.certificate.width_bound_feasible) && std::isfinite(baseline.certificate.projected_kkt);
+    evidence.baseline_numerical_validity_status=baseline_numerically_valid ? "Valid" :
+        baseline.valid && baseline.certificate.available ? "Infeasible" : "Invalid";
+    if(baseline_numerically_valid && baseline_width_gradient)
+    {
+        const bool strict_local_optimum=baseline.certificate.projected_kkt<=
+            StrictJointConvergenceCriteria.global_ac_kkt &&
+            *baseline_width_gradient<=StrictJointConvergenceCriteria.global_width_gradient;
+        const bool practical_local_optimum=baseline.certificate.projected_kkt<=
+            PracticalJointConvergenceCriteria.global_ac_kkt &&
+            *baseline_width_gradient<=PracticalJointConvergenceCriteria.global_width_gradient;
+        evidence.baseline_conditional_optimality_status=strict_local_optimum ? "StrictlyQualified" :
+            practical_local_optimum ? "PracticalOnly" : "Failed";
+    }
+    else evidence.baseline_conditional_optimality_status="Unavailable";
+
+    if(!baseline_numerically_valid)
+        evidence.baseline_eligibility_reason=evidence.baseline_numerical_validity_status=="Infeasible" ?
+            !baseline.certificate.width_bound_feasible ? "baseline-width-bound-infeasible" : "baseline-ac-infeasible" :
+            "baseline-numerical-validity-failed";
+    else if(!baseline_width_gradient)
+        evidence.baseline_eligibility_reason="baseline-projected-width-kkt-unavailable";
+    else if(baseline.certificate.projected_kkt>PracticalJointConvergenceCriteria.global_ac_kkt)
+        evidence.baseline_eligibility_reason="baseline-local-ac-practical-kkt-failed";
+    else if(*baseline_width_gradient>PracticalJointConvergenceCriteria.global_width_gradient)
+        evidence.baseline_eligibility_reason="baseline-width-practical-stationarity-failed";
+    else if(!baseline_replay_passed)
+        evidence.baseline_eligibility_reason="baseline-independent-replay-failed";
+    else evidence.baseline_eligibility_status="Eligible";
+    if(evidence.baseline_eligibility_status!="Eligible")
+    {
+        evidence.baseline_eligibility_status="Unavailable";
+        Unavailable(evidence,evidence.baseline_eligibility_reason);
+        return finish();
+    }
     if(CpuSeconds(cpu_started)>=MaximumLocalPerturbationCpuSeconds)
     {Unavailable(evidence,"cpu-time-budget-exhausted"); return finish();}
     const Vector baseline_prediction=(baseline.x*baseline.beta).eval();
@@ -231,7 +263,11 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
 
     const auto directions=BuildDirections(baseline,eta,context);
     if(!directions.weak_direction_available && eta.size()>1)
-        evidence.probes.push_back({"weak-singular",directions.weak_direction_reason,"Unavailable",{},0,{},{},{}});
+    {
+        JointStabilityProbe unavailable_probe; unavailable_probe.direction="weak-singular";
+        unavailable_probe.source=directions.weak_direction_reason; unavailable_probe.status="Unavailable";
+        evidence.probes.push_back(std::move(unavailable_probe));
+    }
     double maximum_width_change{},maximum_ac_change{},maximum_prediction_change{},maximum_objective_difference{};
     bool all_directions_assessed=directions.weak_direction_available || eta.size()==1;
     bool any_search_failure{};
@@ -241,21 +277,68 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
         probe.direction=direction.direction; probe.source=direction.source;
         probe.unit_direction.assign(direction.unit.data(),direction.unit.data()+direction.unit.size());
         double direction_parameter_change{},direction_prediction_change{},direction_objective_change{};
-        bool direction_assessed=true;
+        std::size_t assessed_seed_count{};
+        bool direction_failed{},boundary_limited{};
         std::string failure_reason;
         for(const double sign:{-1.0,1.0})
         {
-            if(CpuSeconds(cpu_started)>=MaximumLocalPerturbationCpuSeconds)
-            {direction_assessed=false; failure_reason="cpu-time-budget-exhausted"; break;}
-            Vector seed=eta+sign*LocalWidthPerturbation*direction.unit;
+            const bool negative=sign<0;
+            auto & seed_status=negative ? probe.minus_seed_status : probe.plus_seed_status;
+            auto & requested_displacement=negative ? probe.minus_requested_displacement_inf :
+                probe.plus_requested_displacement_inf;
+            auto & effective_displacement=negative ? probe.minus_effective_displacement_inf :
+                probe.plus_effective_displacement_inf;
+            auto & seed_reason=negative ? probe.minus_seed_reason : probe.plus_seed_reason;
+            const Vector requested=sign*LocalWidthPerturbation*direction.unit;
+            requested_displacement=requested.lpNorm<Eigen::Infinity>();
+            const Vector unprojected_seed=eta+requested;
+            Vector seed=unprojected_seed;
+            bool crosses_width_bound{};
             if(context.eta_upper_bound)
+            {
+                crosses_width_bound=(unprojected_seed.array()>*context.eta_upper_bound).any();
                 seed=seed.cwiseMin(Vector::Constant(seed.size(),*context.eta_upper_bound));
+            }
+            effective_displacement=(seed-eta).lpNorm<Eigen::Infinity>();
+            if(crosses_width_bound)
+            {
+                boundary_limited=true;
+                if(*effective_displacement<=MinimumEffectiveLocalWidthPerturbation)
+                {
+                    seed_status="ZeroDisplacement";
+                    seed_reason="upper-bound-projection-produced-zero-displacement";
+                }
+                else
+                {
+                    seed_status="BoundInfeasibleDirection";
+                    seed_reason="requested-step-crosses-width-upper-bound";
+                }
+                continue;
+            }
+            if(*effective_displacement<=MinimumEffectiveLocalWidthPerturbation)
+            {
+                boundary_limited=true; seed_status="ZeroDisplacement";
+                seed_reason="effective-perturbation-below-numerical-resolution";
+                continue;
+            }
+            seed_status="Pending";
+            if(CpuSeconds(cpu_started)>=MaximumLocalPerturbationCpuSeconds)
+            {
+                direction_failed=true; failure_reason="cpu-time-budget-exhausted";
+                seed_status="BudgetExhausted"; seed_reason=failure_reason; break;
+            }
             const Vector widths=seed.array().exp();
             if(!seed.allFinite() || !widths.allFinite() || (widths.array()<=0).any())
-            {direction_assessed=false; failure_reason="unrepresentable-perturbation-width"; break;}
+            {
+                direction_failed=true; failure_reason="unrepresentable-perturbation-width";
+                seed_status="SolverFailed"; seed_reason=failure_reason; break;
+            }
             const double remaining_cpu=MaximumLocalPerturbationCpuSeconds-CpuSeconds(cpu_started);
             if(!(remaining_cpu>0))
-            {direction_assessed=false; failure_reason="cpu-time-budget-exhausted"; break;}
+            {
+                direction_failed=true; failure_reason="cpu-time-budget-exhausted";
+                seed_status="BudgetExhausted"; seed_reason=failure_reason; break;
+            }
             auto bounded_context=context;
             bounded_context.profile_budget=static_cast<int>(MaximumLocalPerturbationProfileEvaluations-1);
             bounded_context.update_budget=6;
@@ -267,29 +350,49 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
             probe.evaluations+=search_evaluations;
             if(search.stop_reason=="cpu-time-budget" ||
                 CpuSeconds(cpu_started)>=MaximumLocalPerturbationCpuSeconds)
-            {direction_assessed=false; failure_reason="cpu-time-budget-exhausted"; break;}
+            {
+                direction_failed=true; failure_reason="cpu-time-budget-exhausted";
+                seed_status="BudgetExhausted"; seed_reason=failure_reason; break;
+            }
             if(search.eta.size()!=eta.size() || !search.eta.allFinite())
-            {direction_assessed=false; failure_reason="perturbation-search-invalid"; break;}
+            {
+                direction_failed=true; failure_reason="perturbation-search-invalid";
+                seed_status="SolverFailed"; seed_reason=failure_reason; break;
+            }
             const auto candidate=EvaluateProfile(domain,y,search.eta,false,&bounded_context,nullptr,
                 ProfileEvaluationRole::AcceptedEndpoint);
             ++evidence.perturbation_evaluations; ++probe.evaluations;
             if(CpuSeconds(cpu_started)>=MaximumLocalPerturbationCpuSeconds)
-            {direction_assessed=false; failure_reason="cpu-time-budget-exhausted"; break;}
+            {
+                direction_failed=true; failure_reason="cpu-time-budget-exhausted";
+                seed_status="BudgetExhausted"; seed_reason=failure_reason; break;
+            }
             if(!candidate.valid || !candidate.certificate.available || !candidate.certificate.feasible ||
                 !candidate.certificate.kkt_passed)
-            {direction_assessed=false; failure_reason="perturbation-local-kkt-failed"; break;}
+            {
+                direction_failed=true; failure_reason="perturbation-local-kkt-failed";
+                seed_status="LocalAcKktFailed"; seed_reason=failure_reason; break;
+            }
+            // Keep the strict independent solver/replay gate for every perturbation endpoint.
             const auto trust=CheckTrust(domain,y,candidate,bounded_context);
             if(!trust.passed || !trust.independent || !trust.independent->objective_passed)
             {
-                direction_assessed=false; failure_reason="perturbation-independent-replay-failed";
+                direction_failed=true; failure_reason="perturbation-independent-replay-failed";
+                seed_status="IndependentReplayFailed"; seed_reason=failure_reason;
                 evidence.objective_consistency_status="Failed";
                 break;
             }
             const auto gradient=ProfileGradientInfinityNorm(candidate,bounded_context);
-            if(!gradient || !(*gradient<=1e-12))
-            {direction_assessed=false; failure_reason="perturbation-width-stationarity-failed"; break;}
+            if(!gradient || !(*gradient<=PracticalJointConvergenceCriteria.global_width_gradient))
+            {
+                direction_failed=true; failure_reason="perturbation-width-practical-stationarity-failed";
+                seed_status="WidthStationarityFailed"; seed_reason=failure_reason; break;
+            }
             if(CpuSeconds(cpu_started)>=MaximumLocalPerturbationCpuSeconds)
-            {direction_assessed=false; failure_reason="cpu-time-budget-exhausted"; break;}
+            {
+                direction_failed=true; failure_reason="cpu-time-budget-exhausted";
+                seed_status="BudgetExhausted"; seed_reason=failure_reason; break;
+            }
             const double width_change=(candidate.eta-eta).lpNorm<Eigen::Infinity>();
             const double ac_change=(((candidate.beta-beta).array()*column_norms.array()).abs()/context.scale).maxCoeff();
             const Vector candidate_prediction=(candidate.x*candidate.beta).eval();
@@ -303,10 +406,12 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
             maximum_ac_change=std::max(maximum_ac_change,ac_change);
             maximum_prediction_change=std::max(maximum_prediction_change,prediction_change);
             maximum_objective_difference=std::max(maximum_objective_difference,std::abs(objective-baseline_objective));
+            ++assessed_seed_count; seed_status="Assessed"; seed_reason="bounded-perturbation-solved-and-replayed";
         }
+        const bool direction_assessed=assessed_seed_count>0 && !direction_failed;
         if(direction_assessed)
         {
-            probe.status="Assessed";
+            probe.status=boundary_limited ? "OneSidedAssessed" : "Assessed";
             probe.parameter_change=direction_parameter_change;
             probe.prediction_change=direction_prediction_change;
             probe.objective_change=direction_objective_change;
@@ -314,8 +419,10 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
         else
         {
             any_search_failure=true; all_directions_assessed=false;
-            probe.status=failure_reason=="cpu-time-budget-exhausted" ? "BudgetExhausted" : "SolverFailed";
-            probe.source+="; "+failure_reason;
+            if(!direction_failed) failure_reason="no-feasible-effective-perturbation";
+            probe.status=failure_reason=="cpu-time-budget-exhausted" ? "BudgetExhausted" :
+                assessed_seed_count==0 && boundary_limited ? "Unavailable" : "SolverFailed";
+            if(!failure_reason.empty()) probe.source+="; "+failure_reason;
             if(evidence.reason.empty()) evidence.reason=failure_reason;
         }
         evidence.probes.push_back(std::move(probe));

@@ -159,6 +159,15 @@ json::object TargetQualityMetrics(const core::JointFitResult & fit)
             };
             const auto conditioning=std::find_if(component.local_conditioning.begin(),component.local_conditioning.end(),
                 [&](const auto & value){return value.block_id==block.block_id;});
+            json::array probe_audit;
+            for(const auto & probe:block.probes)
+                probe_audit.emplace_back(json::object{{"direction",probe.direction},{"status",probe.status},
+                    {"minus_seed_status",probe.minus_seed_status},{"minus_seed_reason",probe.minus_seed_reason},
+                    {"minus_requested_displacement_inf",number(probe.minus_requested_displacement_inf)},
+                    {"minus_effective_displacement_inf",number(probe.minus_effective_displacement_inf)},
+                    {"plus_seed_status",probe.plus_seed_status},{"plus_seed_reason",probe.plus_seed_reason},
+                    {"plus_requested_displacement_inf",number(probe.plus_requested_displacement_inf)},
+                    {"plus_effective_displacement_inf",number(probe.plus_effective_displacement_inf)}});
             block_audit.emplace_back(json::object{{"block_id",block.block_id},{"status",block.status},
                 {"reason",block.reason},{"baseline_local_ac_kkt",number(block.baseline_local_ac_kkt)},
                 {"baseline_projected_width_kkt",number(block.baseline_projected_width_kkt)},
@@ -184,6 +193,10 @@ json::object TargetQualityMetrics(const core::JointFitResult & fit)
                     json::value(nullptr) : json::value(conditioning->active_amplitude_count)},
                 {"baseline_independent_replay_status",block.baseline_independent_replay_status},
                 {"baseline_independent_replay_reason",block.baseline_independent_replay_reason},
+                {"baseline_numerical_validity_status",block.baseline_numerical_validity_status},
+                {"baseline_conditional_optimality_status",block.baseline_conditional_optimality_status},
+                {"baseline_eligibility_status",block.baseline_eligibility_status},
+                {"baseline_eligibility_reason",block.baseline_eligibility_reason},
                 {"conditional_reprofile_status",block.conditional_reprofile_status},
                 {"conditional_reprofile_local_ac_kkt",number(block.conditional_reprofile_local_ac_kkt)},
                 {"conditional_reprofile_projected_width_kkt",number(block.conditional_reprofile_projected_width_kkt)},
@@ -196,6 +209,7 @@ json::object TargetQualityMetrics(const core::JointFitResult & fit)
                     block.conditional_reprofile_independent_replay_status},
                 {"conditional_reprofile_independent_replay_reason",
                     block.conditional_reprofile_independent_replay_reason},
+                {"probes",std::move(probe_audit)},
                 {"cpu_seconds",block.cpu_seconds},{"perturbation_solves",block.perturbation_solves},
                 {"perturbation_evaluations",block.perturbation_evaluations}});
         }

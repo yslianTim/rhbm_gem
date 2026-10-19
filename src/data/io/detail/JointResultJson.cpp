@@ -475,9 +475,15 @@ j::object StabilityBlock(const JointBlockParameterStability & x)
     j::array probes;
     for(const auto & probe:x.probes)
         probes.emplace_back(Object{{"direction",probe.direction},{"source",probe.source},{"status",probe.status},
+            {"minus_seed_status",probe.minus_seed_status},{"plus_seed_status",probe.plus_seed_status},
+            {"minus_seed_reason",probe.minus_seed_reason},{"plus_seed_reason",probe.plus_seed_reason},
             {"unit_direction",j::value_from(probe.unit_direction)},{"evaluations",probe.evaluations},
             {"parameter_change",Number(probe.parameter_change)},{"prediction_change",Number(probe.prediction_change)},
-            {"objective_change",Number(probe.objective_change)}});
+            {"objective_change",Number(probe.objective_change)},
+            {"minus_requested_displacement_inf",Number(probe.minus_requested_displacement_inf)},
+            {"minus_effective_displacement_inf",Number(probe.minus_effective_displacement_inf)},
+            {"plus_requested_displacement_inf",Number(probe.plus_requested_displacement_inf)},
+            {"plus_effective_displacement_inf",Number(probe.plus_effective_displacement_inf)}});
     return {{"block_id",x.block_id},{"status",x.status},{"reason",x.reason},
         {"core_atoms",j::value_from(x.core_atoms)},{"prediction_status",x.prediction_status},
         {"objective_consistency_status",x.objective_consistency_status},
@@ -492,6 +498,10 @@ j::object StabilityBlock(const JointBlockParameterStability & x)
         {"baseline_local_residual_rmse_normalized",Number(x.baseline_local_residual_rmse_normalized)},
         {"baseline_active_ac_constraints",OptionalSize(x.baseline_active_ac_constraints)},
         {"baseline_active_width_bound_targets",OptionalSize(x.baseline_active_width_bound_targets)},
+        {"baseline_numerical_validity_status",x.baseline_numerical_validity_status},
+        {"baseline_conditional_optimality_status",x.baseline_conditional_optimality_status},
+        {"baseline_eligibility_status",x.baseline_eligibility_status},
+        {"baseline_eligibility_reason",x.baseline_eligibility_reason},
         {"baseline_independent_replay_status",x.baseline_independent_replay_status},
         {"baseline_independent_replay_reason",x.baseline_independent_replay_reason},
         {"conditional_reprofile_status",x.conditional_reprofile_status},
@@ -533,6 +543,14 @@ JointBlockParameterStability ReadStabilityBlock(const j::value & value)
         x.baseline_active_ac_constraints=ReadOptionalSize(o.at("baseline_active_ac_constraints"));
     if(o.contains("baseline_active_width_bound_targets"))
         x.baseline_active_width_bound_targets=ReadOptionalSize(o.at("baseline_active_width_bound_targets"));
+    if(o.contains("baseline_numerical_validity_status"))
+        x.baseline_numerical_validity_status=Read<std::string>(o,"baseline_numerical_validity_status");
+    if(o.contains("baseline_conditional_optimality_status"))
+        x.baseline_conditional_optimality_status=Read<std::string>(o,"baseline_conditional_optimality_status");
+    if(o.contains("baseline_eligibility_status"))
+        x.baseline_eligibility_status=Read<std::string>(o,"baseline_eligibility_status");
+    if(o.contains("baseline_eligibility_reason"))
+        x.baseline_eligibility_reason=Read<std::string>(o,"baseline_eligibility_reason");
     if(o.contains("baseline_independent_replay_status"))
         x.baseline_independent_replay_status=Read<std::string>(o,"baseline_independent_replay_status");
     if(o.contains("baseline_independent_replay_reason"))
@@ -563,11 +581,23 @@ JointBlockParameterStability ReadStabilityBlock(const j::value & value)
             const auto & p=probe_value.as_object(); JointStabilityProbe probe;
             probe.direction=Read<std::string>(p,"direction"); probe.source=Read<std::string>(p,"source");
             probe.status=Read<std::string>(p,"status");
+            if(p.contains("minus_seed_status")) probe.minus_seed_status=Read<std::string>(p,"minus_seed_status");
+            if(p.contains("plus_seed_status")) probe.plus_seed_status=Read<std::string>(p,"plus_seed_status");
+            if(p.contains("minus_seed_reason")) probe.minus_seed_reason=Read<std::string>(p,"minus_seed_reason");
+            if(p.contains("plus_seed_reason")) probe.plus_seed_reason=Read<std::string>(p,"plus_seed_reason");
             probe.unit_direction=Read<std::vector<double>>(p,"unit_direction");
             probe.evaluations=Read<std::size_t>(p,"evaluations");
             probe.parameter_change=OptionalNumber(p.at("parameter_change"));
             probe.prediction_change=OptionalNumber(p.at("prediction_change"));
             probe.objective_change=OptionalNumber(p.at("objective_change"));
+            if(p.contains("minus_requested_displacement_inf"))
+                probe.minus_requested_displacement_inf=OptionalNumber(p.at("minus_requested_displacement_inf"));
+            if(p.contains("minus_effective_displacement_inf"))
+                probe.minus_effective_displacement_inf=OptionalNumber(p.at("minus_effective_displacement_inf"));
+            if(p.contains("plus_requested_displacement_inf"))
+                probe.plus_requested_displacement_inf=OptionalNumber(p.at("plus_requested_displacement_inf"));
+            if(p.contains("plus_effective_displacement_inf"))
+                probe.plus_effective_displacement_inf=OptionalNumber(p.at("plus_effective_displacement_inf"));
             x.probes.push_back(std::move(probe));
         }
     if(o.contains("perturbation_directions")) x.perturbation_directions=Read<std::size_t>(o,"perturbation_directions");
@@ -1003,7 +1033,7 @@ void ValidateStabilityBlock(const JointBlockParameterStability & x)
     for(const auto & probe:x.probes)
     {
         Require(!probe.direction.empty() && !probe.source.empty() &&
-            (probe.status=="Assessed" || probe.status=="SolverFailed" ||
+            (probe.status=="Assessed" || probe.status=="OneSidedAssessed" || probe.status=="SolverFailed" ||
                 probe.status=="BudgetExhausted" || probe.status=="Unavailable"),"local stability probe status");
         double norm{};
         for(const double value:probe.unit_direction)
@@ -1011,6 +1041,11 @@ void ValidateStabilityBlock(const JointBlockParameterStability & x)
         Require(probe.unit_direction.empty() || std::abs(norm-1.)<=1e-10,"local stability probe unit direction");
         for(const auto * value:{&probe.parameter_change,&probe.prediction_change,&probe.objective_change})
             Require(!*value || (std::isfinite(**value) && **value>=0),"local stability probe value");
+        for(const auto * value:{&probe.minus_requested_displacement_inf,&probe.minus_effective_displacement_inf,
+            &probe.plus_requested_displacement_inf,&probe.plus_effective_displacement_inf})
+            Require(!*value || (std::isfinite(**value) && **value>=0),"local stability probe displacement");
+        Require(!probe.minus_seed_status.empty() && !probe.plus_seed_status.empty(),
+            "local stability probe seed status");
     }
 }
 void ValidateParameterStability(const JointParameterStability & x)

@@ -501,6 +501,36 @@ rg::JointAnalysisResult SavedJointExample()
 }
 }
 
+TEST(DataObjectPersistenceTest, LocalStabilityBoundedProbeDiagnosticsRoundTrip)
+{
+    namespace io=rg::joint_result_io;
+    auto record=SavedJointExample();
+    rg::JointParameterStability stability;
+    rg::JointBlockParameterStability block; block.block_id="component-0/block-1";
+    block.status="Sensitive"; block.reason="bounded-local-directional-perturbation-assessed";
+    block.baseline_numerical_validity_status="Valid";
+    block.baseline_conditional_optimality_status="PracticalOnly";
+    block.baseline_eligibility_status="Eligible";
+    rg::JointStabilityProbe probe; probe.direction="common-mode";
+    probe.source="normalized-all-width-direction"; probe.status="OneSidedAssessed";
+    probe.unit_direction={1.}; probe.minus_seed_status="Assessed";
+    probe.minus_requested_displacement_inf=.001; probe.minus_effective_displacement_inf=.001;
+    probe.plus_seed_status="ZeroDisplacement";
+    probe.plus_seed_reason="upper-bound-projection-produced-zero-displacement";
+    probe.plus_requested_displacement_inf=.001; probe.plus_effective_displacement_inf=0.;
+    block.probes.push_back(probe); stability.blocks.push_back(block);
+    record.components.front().parameter_stability=stability;
+    const auto decoded=io::Decode(io::Encode(record));
+    ASSERT_TRUE(decoded.components.front().parameter_stability);
+    const auto & saved=decoded.components.front().parameter_stability->blocks.front();
+    EXPECT_EQ(saved.baseline_conditional_optimality_status,"PracticalOnly");
+    EXPECT_EQ(saved.baseline_eligibility_status,"Eligible");
+    ASSERT_EQ(saved.probes.size(),1u);
+    EXPECT_EQ(saved.probes.front().status,"OneSidedAssessed");
+    EXPECT_EQ(saved.probes.front().plus_seed_status,"ZeroDisplacement");
+    EXPECT_DOUBLE_EQ(*saved.probes.front().plus_effective_displacement_inf,0.);
+}
+
 TEST(DataObjectPersistenceTest, JointResultsRoundTripCopyClearAndReplaceAtomically)
 {
     const command_test::ScopedTempDir dir{"joint_persistence"};
@@ -942,6 +972,9 @@ TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSche
     stability_block.baseline_local_residual_rmse_normalized=3e-5; stability_block.baseline_active_ac_constraints=1;
     stability_block.baseline_active_width_bound_targets=2;
     stability_block.baseline_independent_replay_status="Passed";
+    stability_block.baseline_numerical_validity_status="Valid";
+    stability_block.baseline_conditional_optimality_status="PracticalOnly";
+    stability_block.baseline_eligibility_status="Eligible";
     stability_block.conditional_reprofile_status="StrictlyQualified";
     stability_block.conditional_reprofile_local_ac_kkt=2e-12;
     stability_block.conditional_reprofile_projected_width_kkt=4e-12;
@@ -951,7 +984,15 @@ TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSche
     stability_block.conditional_reprofile_independent_replay_status="Passed";
     stability_block.cpu_seconds=.1; stability_block.perturbation_directions=1; stability_block.perturbation_seeds=2;
     stability_block.perturbation_solves=2; stability_block.perturbation_evaluations=8;
-    stability_block.probes={{"common-mode","normalized-all-width-direction","Assessed",{1.},4,.03,1e-10,1e-12}};
+    rhbm_gem::JointStabilityProbe probe; probe.direction="common-mode";
+    probe.source="normalized-all-width-direction"; probe.status="OneSidedAssessed";
+    probe.unit_direction={1.}; probe.evaluations=4; probe.parameter_change=.03;
+    probe.prediction_change=1e-10; probe.objective_change=1e-12;
+    probe.minus_seed_status="Assessed"; probe.minus_requested_displacement_inf=.001;
+    probe.minus_effective_displacement_inf=.001; probe.plus_seed_status="ZeroDisplacement";
+    probe.plus_seed_reason="upper-bound-projection-produced-zero-displacement";
+    probe.plus_requested_displacement_inf=.001; probe.plus_effective_displacement_inf=0.;
+    stability_block.probes={probe};
     stability.blocks={stability_block};
     record.components.front().parameter_stability=stability;
     rg::JointCandidateDiagnostic candidate;
@@ -1037,8 +1078,14 @@ TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSche
     EXPECT_DOUBLE_EQ(*decoded.components.front().parameter_stability->blocks.front().conditional_reprofile_local_ac_kkt,2e-12);
     EXPECT_EQ(*decoded.components.front().parameter_stability->blocks.front().baseline_active_width_bound_targets,2u);
     EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().baseline_independent_replay_status,"Passed");
+    EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().baseline_eligibility_status,"Eligible");
     EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().conditional_reprofile_status,
         "StrictlyQualified");
+    EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().probes.front().status,
+        "OneSidedAssessed");
+    EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().probes.front().plus_seed_status,
+        "ZeroDisplacement");
+    EXPECT_DOUBLE_EQ(*decoded.components.front().parameter_stability->blocks.front().probes.front().plus_effective_displacement_inf,0.);
     ASSERT_TRUE(decoded.components.front().legacy_candidate_evidence);
     EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->reference_status,rg::JointCheckStatus::Failed);
     EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->rank_assessment_status,rg::JointCheckStatus::Unavailable);

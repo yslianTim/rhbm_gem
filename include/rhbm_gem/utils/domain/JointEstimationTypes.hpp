@@ -309,9 +309,13 @@ struct JointBlockConditioning
 struct JointStabilityProbe
 {
     std::string direction,source,status;
+    std::string minus_seed_status{"NotAssessed"},plus_seed_status{"NotAssessed"},
+        minus_seed_reason,plus_seed_reason;
     std::vector<double> unit_direction;
     std::size_t evaluations{};
     std::optional<double> parameter_change,prediction_change,objective_change;
+    std::optional<double> minus_requested_displacement_inf,minus_effective_displacement_inf,
+        plus_requested_displacement_inf,plus_effective_displacement_inf;
 };
 struct JointBlockParameterStability
 {
@@ -326,6 +330,9 @@ struct JointBlockParameterStability
         conditional_reprofile_projected_width_kkt,conditional_reprofile_objective_difference,
         conditional_reprofile_scaled_ac_parameter_difference,conditional_reprofile_prediction_change_relative;
     std::optional<std::size_t> baseline_active_ac_constraints,baseline_active_width_bound_targets;
+    std::string baseline_numerical_validity_status{"NotAssessed"},
+        baseline_conditional_optimality_status{"NotAssessed"},baseline_eligibility_status{"NotAssessed"},
+        baseline_eligibility_reason;
     std::string baseline_independent_replay_status{"NotRun"},baseline_independent_replay_reason,
         conditional_reprofile_status{"NotRun"},conditional_reprofile_independent_replay_status{"NotRun"},
         conditional_reprofile_independent_replay_reason;
