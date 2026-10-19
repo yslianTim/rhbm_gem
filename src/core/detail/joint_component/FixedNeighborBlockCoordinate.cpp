@@ -152,27 +152,58 @@ void CaptureWidthTrajectory(FixedNeighborBlockRecord & record,const SearchResult
     const Domain & domain,VectorRef response,VectorRef block_entry_eta,const EvaluationContext & context,
     FixedNeighborWidthTrajectoryCapture & capture)
 {
-    if(capture.maximum_events==0 || capture.maximum_atoms==0 || capture.atom_initial_widths.empty()) return;
+    if(capture.atom_initial_widths.empty()) return;
+    const auto eligible=[&](std::size_t trial_index) {
+        const auto & trial=search.trials[trial_index];
+        if(capture.accepted_updates_only && (!trial.accepted || trial.accepted_update.value_or(0)==0)) return false;
+        if(capture.policy_evidence_only && trial_index!=0 && trial.accepted_update.value_or(0)==0) return false;
+        return true;
+    };
+    const auto mark_unavailable=[&](std::size_t trial_index,const char * reason) {
+        const auto & trial=search.trials[trial_index];
+        const auto found=std::find_if(record.profile_trials.begin(),record.profile_trials.end(),
+            [&](const auto & value){return value.profile_evaluation==trial.evaluation;});
+        if(found!=record.profile_trials.end()) found->width_trust_evidence_unavailable_reason=reason;
+    };
     std::vector<std::pair<Eigen::Index,double>> tracked;
     const auto count=std::min(capture.maximum_atoms,capture.atom_initial_widths.size());
+    bool requested_atom_excluded_by_limit=false;
     for(std::size_t atom_index=0;atom_index<context.atom_ids.size();++atom_index)
     {
         const auto atom=static_cast<Eigen::Index>(atom_index);
         const auto & id=context.atom_ids[atom_index];
-        const auto initial=std::find_if(capture.atom_initial_widths.begin(),
-            capture.atom_initial_widths.begin()+static_cast<std::ptrdiff_t>(count),
+        const auto initial=std::find_if(capture.atom_initial_widths.begin(),capture.atom_initial_widths.end(),
             [&](const auto & value){return value.first==id;});
-        if(initial!=capture.atom_initial_widths.begin()+static_cast<std::ptrdiff_t>(count))
+        if(initial==capture.atom_initial_widths.end()) continue;
+        if(static_cast<std::size_t>(std::distance(capture.atom_initial_widths.begin(),initial))<count)
             tracked.emplace_back(atom,initial->second);
+        else requested_atom_excluded_by_limit=true;
     }
-    if(tracked.empty()) return;
+    if(requested_atom_excluded_by_limit)
+    {
+        for(std::size_t trial_index=0;trial_index<search.trials.size();++trial_index) if(eligible(trial_index))
+        {mark_unavailable(trial_index,"capture-atom-limit-exhausted"); ++capture.events_skipped_due_to_atom_limit;}
+        return;
+    }
+    if(tracked.empty())
+        return;
+    if(capture.maximum_events==0)
+    {
+        for(std::size_t trial_index=0;trial_index<search.trials.size();++trial_index) if(eligible(trial_index))
+        {mark_unavailable(trial_index,"capture-event-limit-exhausted"); ++capture.events_skipped_due_to_event_limit;}
+        return;
+    }
     double previous_accepted_objective=record.local_objective_before;
     for(std::size_t trial_index=0;trial_index<search.trials.size();++trial_index)
     {
-        if(capture.events_emitted>=capture.maximum_events) break;
+        if(capture.events_emitted>=capture.maximum_events)
+        {
+            for(std::size_t skipped=trial_index;skipped<search.trials.size();++skipped) if(eligible(skipped))
+            {mark_unavailable(skipped,"capture-event-limit-exhausted"); ++capture.events_skipped_due_to_event_limit;}
+            break;
+        }
         const auto & trial=search.trials[trial_index];
-        if(capture.accepted_updates_only &&
-            (!trial.accepted || trial.accepted_update.value_or(0)==0)) continue;
+        if(!eligible(trial_index)) continue;
         FixedNeighborProfileTrial * destination=nullptr;
         const auto existing=std::find_if(record.profile_trials.begin(),record.profile_trials.end(),
             [&](const auto & value){return value.profile_evaluation==trial.evaluation;});
@@ -225,6 +256,13 @@ void CaptureWidthTrajectory(FixedNeighborBlockRecord & record,const SearchResult
         Evaluation state;
         Spectrum spectrum;
         const bool within_row_limit=static_cast<std::size_t>(domain.rows)<=capture.maximum_rows;
+        if(!trial.endpoint.valid)
+            destination->width_trust_evidence_unavailable_reason="candidate-invalid";
+        else if(!within_row_limit)
+        {
+            destination->width_trust_evidence_unavailable_reason="row-limit";
+            ++capture.events_unavailable_due_to_row_limit;
+        }
         if(within_row_limit && trial.endpoint.eta.size()==block_entry_eta.size() &&
             trial.endpoint.beta.size()==2*block_entry_eta.size())
         {
@@ -247,6 +285,12 @@ void CaptureWidthTrajectory(FixedNeighborBlockRecord & record,const SearchResult
                     }
                 }
             }
+        }
+        if(trial.endpoint.valid && within_row_limit &&
+            (destination->projected_width_singular_values.empty() || !state.valid))
+        {
+            destination->width_trust_evidence_unavailable_reason="spectrum-unavailable";
+            ++capture.events_unavailable_due_to_spectrum;
         }
         for(const auto & [atom,initial_width]:tracked)
         {
@@ -300,6 +344,12 @@ void CaptureWidthTrajectory(FixedNeighborBlockRecord & record,const SearchResult
             else value.numerical_status=within_row_limit ? "state-evaluation-unavailable" : "row-limit";
             destination->tracked_atoms.push_back(std::move(value));
         }
+        if(destination->width_trust_evidence_unavailable_reason.empty())
+            for(const auto & atom:destination->tracked_atoms)
+                if(!std::isfinite(atom.local_design_condition) || !(atom.local_design_condition>0) ||
+                    !std::isfinite(atom.gaussian_column_norm) || !(atom.gaussian_column_norm>0) ||
+                    !std::isfinite(atom.charge_column_norm) || !(atom.charge_column_norm>0))
+                {destination->width_trust_evidence_unavailable_reason="data-fields-incomplete"; break;}
         if(!destination->tracked_atoms.empty()) ++capture.events_emitted;
     }
 }

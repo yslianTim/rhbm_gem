@@ -33,6 +33,7 @@ struct FixedNeighborProfileTrial
     bool weak_width_guard_rejected{};
     bool width_trust_policy_rejected{};
     std::string width_trust_policy_reason;
+    std::string width_trust_evidence_unavailable_reason;
     std::vector<double> projected_width_singular_values;
     std::string acceptance_reason;
     struct AtomState
@@ -160,7 +161,9 @@ struct FixedNeighborDiagnosticSink
 struct FixedNeighborWidthTrajectoryCapture
 {
     std::vector<std::pair<std::string,double>> atom_initial_widths;
-    std::size_t maximum_events{1024},maximum_atoms{32},maximum_rows{4096},events_emitted{};
+    std::size_t maximum_events{1024},maximum_atoms{32},maximum_rows{4096},events_emitted{},
+        events_skipped_due_to_event_limit{},events_skipped_due_to_atom_limit{},
+        events_unavailable_due_to_row_limit{},events_unavailable_due_to_spectrum{};
     bool accepted_updates_only{};
     bool policy_evidence_only{};
     std::function<void(std::size_t,const BlockCoordinateState &,const FixedNeighborBlockSweep &)> state_observer;

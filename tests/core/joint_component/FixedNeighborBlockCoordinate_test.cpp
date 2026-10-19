@@ -270,6 +270,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, WidthTrajectoryCaptureHonorsAtomEven
             EXPECT_EQ(trial.tracked_atoms.size(),1u);
             EXPECT_EQ(trial.tracked_atoms.front().atom_id,data.input->atom_ids.front());
             EXPECT_EQ(trial.tracked_atoms.front().local_design_rank,-1);
+            EXPECT_EQ(trial.width_trust_evidence_unavailable_reason,"row-limit");
         }
     };
     n::FixedNeighborSearchPolicy policy; policy.maximum_sweeps=1;

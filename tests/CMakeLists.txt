@@ -202,6 +202,7 @@ set(JOINT_COMPONENT_WORKFLOW_TEST_SOURCES
 
 set(JOINT_COMPONENT_NUMERICAL_TEST_SOURCES
     core/joint_component/FixedNeighborBlockCoordinate_test.cpp
+    core/joint_component/WidthTrustPolicy_test.cpp
     core/joint_component/LocalConditioning_test.cpp
     core/joint_component/ParameterStability_test.cpp
     core/joint_component/Numerics_test.cpp
@@ -274,7 +275,7 @@ target_include_directories(rhbm_gem_test PRIVATE "${PROJECT_SOURCE_DIR}/tests")
 target_compile_definitions(rhbm_gem_test PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
 
 add_executable(rhbm_tests ${RHBM_GEM_ALL_GTEST_SOURCES})
-target_sources(rhbm_tests PRIVATE support/SecondStageTestSupport.cpp)
+target_sources(rhbm_tests PRIVATE support/SecondStageTestSupport.cpp support/JointWidthTrustPolicy.cpp)
 target_compile_definitions(rhbm_tests PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
 set_target_properties(rhbm_tests PROPERTIES
     OUTPUT_NAME "${PROJECT_DISPLAY_NAME}-TEST"

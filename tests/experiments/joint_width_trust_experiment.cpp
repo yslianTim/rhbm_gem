@@ -217,6 +217,7 @@ ExperimentInput BuildReal(const std::string & dataset,const std::filesystem::pat
 
 struct RunMetrics
 {
+    trust::PolicyStatistics policy_statistics;
     std::size_t policy_rejections{},accepted_width_updates{},sweeps{},profile_evaluations{};
     double maximum_width{joint::unavailable},maximum_condition{joint::unavailable},
         maximum_cancellation{joint::unavailable},minimum_projected_width_singular_value{joint::unavailable};
@@ -224,7 +225,7 @@ struct RunMetrics
         maximum_observed_cancellation{joint::unavailable},
         minimum_observed_projected_width_singular_value{joint::unavailable};
     std::optional<std::size_t> first_rejection_sweep,first_rejection_block;
-    json::array objective_trajectory;
+    json::array objective_trajectory,block_update_trace;
 };
 
 void Max(double & value,double candidate)
@@ -249,6 +250,15 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
 {
     const auto & data=core::JointProblemAccess::Get(experiment.problem);
     const auto & policy_name=trust::Name(policy_kind);
+    const bool synthetic=experiment.source.starts_with("well-synthetic:") ||
+        experiment.source.starts_with("weak-synthetic:");
+    std::vector<std::string> policy_target_ids;
+    if(synthetic)
+        for(const auto atom:data.input->selection_domain->target_indices)
+            policy_target_ids.push_back(data.input->atom_ids.at(atom));
+    else
+        policy_target_ids.emplace_back("1032");
+    const auto policy_scope=trust::LocateMutableCoreScope(experiment.problem,policy_target_ids,12);
     joint::FixedNeighborWidthTrajectoryCapture capture;
     capture.maximum_events=100000;
     capture.maximum_atoms=32;
@@ -256,14 +266,13 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
     capture.accepted_updates_only=policy_kind==trust::Policy::Baseline;
     capture.policy_evidence_only=policy_kind!=trust::Policy::Baseline;
     std::vector<std::size_t> tracked_indices;
-    const bool synthetic=experiment.source.starts_with("well-synthetic:") || experiment.source.starts_with("weak-synthetic:");
     if(synthetic)
-        for(std::size_t atom=0;atom<data.input->atom_ids.size();++atom) tracked_indices.push_back(atom);
+        tracked_indices=data.input->selection_domain->target_indices;
     else
     {
         const auto found=std::find(data.input->atom_ids.begin(),data.input->atom_ids.end(),"1032");
-        tracked_indices.push_back(found==data.input->atom_ids.end() ? 0 :
-            static_cast<std::size_t>(found-data.input->atom_ids.begin()));
+        if(found==data.input->atom_ids.end()) throw std::runtime_error("Serial 1032 is not a Joint contributor.");
+        tracked_indices.push_back(static_cast<std::size_t>(found-data.input->atom_ids.begin()));
     }
     for(const auto atom:tracked_indices)
         capture.atom_initial_widths.emplace_back(data.input->atom_ids.at(atom),experiment.initial_widths.at(atom));
@@ -271,6 +280,11 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
     RunMetrics metrics;
     joint::FixedNeighborDiagnosticSink sink;
     sink.block=[&](const joint::FixedNeighborBlockRecord & block) {
+        metrics.block_update_trace.push_back(json::object{
+            {"component_index",block.component_index},{"component_id",block.component_id},
+            {"sweep",block.sweep},{"block",block.block},{"accepted",block.accepted},
+            {"accepted_updates",block.accepted_updates},{"objective_before",Number(block.objective_before)},
+            {"objective_after",Number(block.objective_after)},{"status",block.status}});
         for(const auto & trial:block.profile_trials)
         {
             if(trial.width_trust_policy_rejected)
@@ -324,12 +338,17 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
         local.collect_telemetry=true;
         local.diagnostic_sink=&sink;
         local.width_trajectory=&capture;
-        local.width_trial_trust_for_testing=trust::Make(policy_kind);
+        local.width_trial_trust_for_testing=trust::Make(policy_kind,policy_scope,
+            local.component_index,&metrics.policy_statistics);
     };
     const auto started=Clock::now();
     const auto fit=joint::FitFixedNeighborComponentsImpl(experiment.problem,experiment.initial_widths,production_policy);
     const double wall_seconds=std::chrono::duration<double>(Clock::now()-started).count();
     if(fit.components.size()!=1) throw std::runtime_error("P2 runner expects one component.");
+    if(metrics.policy_rejections!=metrics.policy_statistics.in_scope_rejected_trials)
+        throw std::runtime_error("Width-trust policy rejection audit does not match block records.");
+    if(metrics.policy_statistics.out_of_scope_interventions!=0)
+        throw std::runtime_error("Width-trust policy intervened outside its declared scope.");
     const auto & component=fit.components.front();
     metrics.profile_evaluations=static_cast<std::size_t>(component.profile_evaluations);
     const auto & diagnostic=component.candidate_diagnostic;
@@ -364,6 +383,22 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
         return check.name=="independent-replay";
     });
     const auto runtime=fit.RuntimeConvergence();
+    json::array policy_scope_json;
+    for(const auto & block:policy_scope)
+    {
+        json::array atom_ids;
+        for(const auto & atom_id:block.core_atom_ids) atom_ids.emplace_back(atom_id);
+        policy_scope_json.emplace_back(json::object{{"component_index",block.component_index},
+            {"component_id",block.component_id},{"block_index_zero_based",block.block_index},
+            {"block_number_one_based",block.block_index+1},{"mutable_core_atom_ids",std::move(atom_ids)}});
+    }
+    json::object unavailable_by_reason,rejections_by_reason,rejections_by_block;
+    for(const auto & [reason,count]:metrics.policy_statistics.evidence_unavailable_by_reason)
+        unavailable_by_reason[reason]=count;
+    for(const auto & [reason,count]:metrics.policy_statistics.rejections_by_reason)
+        rejections_by_reason[reason]=count;
+    for(const auto & [block,count]:metrics.policy_statistics.rejections_by_block)
+        rejections_by_block[block]=count;
     return {
         {"strategy",policy_name},{"dataset",experiment.source},{"source",experiment.source},
         {"normalization",json::object{{"operation",experiment.normalization_operation},
@@ -373,7 +408,8 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
         {"target_count",data.input->selection_domain->target_indices.size()},
         {"observation_count",data.input->observations.size()},
         {"truth_available",experiment.truth_available},
-        {"diagnostic_scope",synthetic ? "all-targets" : "serial-1032-target-only"},
+        {"policy_scope",std::move(policy_scope_json)},
+        {"diagnostic_scope",synthetic ? "all-selected-targets" : "serial-1032-only"},
         {"runtime_convergence",Status(runtime)},
         {"search_completed",fit.search_completed},
         {"component_stop_reason",component.stop_reason},
@@ -397,12 +433,35 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
             metrics.minimum_observed_projected_width_singular_value)},
         {"extreme_width_incident",metrics.maximum_observed_width>=10000.0},
         {"policy_rejected_trials",metrics.policy_rejections},
+        {"policy_statistics",json::object{
+            {"in_scope_evaluated_trials",metrics.policy_statistics.in_scope_evaluated_trials},
+            {"in_scope_rejected_trials",metrics.policy_statistics.in_scope_rejected_trials},
+            {"out_of_scope_evaluated_trials",metrics.policy_statistics.out_of_scope_evaluated_trials},
+            {"out_of_scope_interventions",metrics.policy_statistics.out_of_scope_interventions},
+            {"evidence_unavailable_trials",metrics.policy_statistics.evidence_unavailable_trials},
+            {"evidence_unavailable_by_reason",std::move(unavailable_by_reason)},
+            {"rejections_by_reason",std::move(rejections_by_reason)},
+            {"rejections_by_block",std::move(rejections_by_block)},
+            {"first_rejection_sweep",metrics.policy_statistics.first_rejection_sweep ?
+                json::value(*metrics.policy_statistics.first_rejection_sweep) : json::value(nullptr)},
+            {"first_rejection_block",metrics.policy_statistics.first_rejection_block ?
+                json::value(*metrics.policy_statistics.first_rejection_block) : json::value(nullptr)},
+            {"first_rejection_component",metrics.policy_statistics.first_rejection_component ?
+                json::value(*metrics.policy_statistics.first_rejection_component) : json::value(nullptr)}}},
+        {"diagnostic_capture_limits",json::object{
+            {"maximum_events",capture.maximum_events},{"maximum_atoms",capture.maximum_atoms},
+            {"maximum_rows",capture.maximum_rows},{"events_emitted",capture.events_emitted},
+            {"events_skipped_due_to_event_limit",capture.events_skipped_due_to_event_limit},
+            {"events_skipped_due_to_atom_limit",capture.events_skipped_due_to_atom_limit},
+            {"events_unavailable_due_to_row_limit",capture.events_unavailable_due_to_row_limit},
+            {"events_unavailable_due_to_spectrum",capture.events_unavailable_due_to_spectrum}}},
         {"first_policy_rejection_sweep",metrics.first_rejection_sweep ? json::value(*metrics.first_rejection_sweep) : json::value(nullptr)},
         {"first_policy_rejection_block",metrics.first_rejection_block ? json::value(*metrics.first_rejection_block) : json::value(nullptr)},
         {"accepted_width_updates",metrics.accepted_width_updates},
         {"search_sweeps",metrics.sweeps},
         {"profile_evaluations",metrics.profile_evaluations},
         {"objective_trajectory",std::move(metrics.objective_trajectory)},
+        {"block_update_trace",std::move(metrics.block_update_trace)},
         {"wall_seconds",wall_seconds},
         {"process_peak_rss_bytes",PeakRssBytes()}
     };
