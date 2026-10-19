@@ -154,11 +154,12 @@ rhbm_gem potential_analysis \
 Potential analysis always enables failed-only refinement for second-stage shape
 fitting. The PotentialAnalysis request and CLI do not expose a switch. Direct
 fitting callers retain the generic
-`FitOptions::enable_second_stage_failed_only_refinement` control. In the Joint
-Components workflow only, a failed FirstStage fit for a fixed halo also uses
-bounded recovery during initialization; target FirstStage fits, alpha training,
-group estimation and generic `EstimateLocalGaussian` / `EstimateBetaMDPDE`
-entrypoints keep their native behavior.
+`FitOptions::enable_second_stage_failed_only_refinement` control. The explicit
+Fixed-Halo compatibility path may additionally use bounded recovery for a
+failed FirstStage halo initialization; the production Pure Exclusion path has
+no FirstStage halo parameters to recover. Target FirstStage fits, alpha
+training, group estimation and generic `EstimateLocalGaussian` /
+`EstimateBetaMDPDE` entrypoints keep their native behavior.
 
 A native successful solve is used unchanged, without a fresh-equation evaluation.
 A failed solve may be refined from its own endpoint. Acceptance requires fresh
@@ -174,8 +175,8 @@ public tuning options. Exact-fit variance boundaries are not promoted to
 successful solves. Rejection preserves the original numerical result; the
 reference is never used as a fallback.
 
-For failed fixed-halo FirstStage fits, Joint initialization first attempts that
-same endpoint refinement. If it is rejected and the native status is
+For the explicit Fixed-Halo compatibility path, a failed FirstStage halo fit
+first attempts that same endpoint refinement. If it is rejected and the native status is
 `MAX_ITERATIONS_REACHED`, initialization retries the native fixed-point solver
 with a hard 300-iteration cap and the existing tolerances and weight floor. The
 retry is accepted only when that solver reports its normal `SUCCESS`; its
@@ -190,8 +191,9 @@ Use `Qualification()` to distinguish `NativeSuccess`, `RefinedSuccess` and
 `Unqualified`. The optional `refinement` diagnostics record acceptance, rejection
 reason, residuals, branch differences and candidate/reference work. Failed-only
 recovery diagnostics separately record endpoint-refinement evidence and any
-bounded native retry. Joint snapshots persist fixed-halo qualification and
-recovery provenance in schema 15; older Joint result schemas remain readable.
+bounded native retry. Explicit Fixed-Halo Joint snapshots persist fixed-halo
+qualification and recovery provenance in their historical schemas; older Joint
+result schemas remain readable.
 Audit shape records retain effective `status` for existing consumers and
 additionally expose `native_status`, `qualification` and optional
 refinement/recovery evidence.
@@ -315,10 +317,11 @@ Invalid input/problem construction and persistence errors fail the command.
 `result_dump --printer joint` writes `joint_result_<sanitized-key>.json` and
 `joint_atoms_<sanitized-key>.csv`. It writes the sibling
 `joint_atoms_<sanitized-key>.contributions.csv` only for a historical result
-with nuisance groups. Joint JSON schema 14 includes metadata, identities,
-contributor-selection policy and provenance, target-only parameterization,
-FirstStage fixed-halo snapshots, seed provenance, row mappings/mask, initial
-values, target-only trusted states, optional parameter-only
+with nuisance groups. Current Pure Exclusion Joint JSON schema 17 includes
+metadata, identities, contributor-selection policy and provenance, target-only
+parameterization, original/fitting row mappings, seed provenance, row
+availability mask, initial values, target-only trusted states, optional
+parameter-only
 candidate diagnostics, objectives, cost counters, checks, legacy global-rank
 evidence, local block-conditioning and parameter-stability diagnostics, and captured
 convergence. Target-estimability rank evidence remains under target evidence.
@@ -392,15 +395,17 @@ the objective only and must not be used for this conversion. CSV retains fitted
 coefficients; its appended `SelectionRole` distinguishes target, halo and not-recorded; keep its companion JSON for units and
 provenance. No conversion is performed during export.
 
-Production joint JSON schemas 3 through 16 are accepted. Earlier joint JSON is rejected
+Production joint JSON schemas 3 through 17 are accepted. Earlier joint JSON is rejected
 with a request to regenerate the outcome, without migration or database writes.
-New Joint result JSON uses schema 16. Schemas 3 through 13 preserve their saved
+New Pure Exclusion Joint result JSON uses schema 17. Schemas 3 through 13 preserve their saved
 evidence and convergence statuses. Schema 10 stores `target-estimability-v4`
 and rank-context identities without computed null-space leakage or full-Jacobian
 column scales. Schema 11 adds the retired FullABC halo pruning policy and
 exclusion records. Schema 13 identifies the FirstStage fixed-halo contributor
 policy; schema 14 stores validated fixed `(A, B, 0)` halo snapshots separately
-from target component states using `target-only-fixed-halo-v1`. Schema 16 stores
+from target component states using `target-only-fixed-halo-v1`. Schema 17 stores
+the Pure Halo-Support Exclusion policy, original/fitting row mappings, and the
+target-only `target-only-pure-halo-support-exclusion-v1` contract. Schema 16 stores
 the global convergence criteria provenance in candidate diagnostics; schema 15
 payloads remain readable with their historical strict criteria defaults. In particular,
 failed historical local or
@@ -422,29 +427,32 @@ Consumers must rebuild against the updated public C++ value types.
 
 ### Selected-domain and initialization metadata
 
-Current `selection_domain` records `contract: fixed-selected-voxel-closure-v1`,
+Production `selection_domain` records `contract: fixed-selected-voxel-closure-v1`,
 ordered unique `target_indices` into `atom_ids`, `observation_radius: 2.5`,
 `support_radius: 2.5`, and `contributor_policy:
-first-stage-fixed-halo-v1`. Every non-hydrogen halo with at least one support
-row on the unchanged selected-target observation domain is retained. Its
-validated FirstStage amplitude and width, fixed zero charge, sample count,
-status, and source contract are stored in the result's `fixed_halos` array.
-Observation support counts remain separate from FirstStage sampling counts.
+pure-halo-support-exclusion-v1`. Every retained non-hydrogen halo with support
+on the selected-target observation domain is represented for exact row
+exclusion; it is not a Joint parameter and does not have a FirstStage snapshot
+in the production result. Schema 17 stores the original row IDs, fitting row
+IDs, and fit-to-original mappings needed for reconstruction and peeling.
+Explicit Fixed-Halo results retain the separate `first-stage-fixed-halo-v1`
+selection and `fixed_halos` contract.
 Older payloads carrying `fullabc-eligible-halo-pruning-v1` and exclusion
 records retain their original free-halo meaning. A hand-built input with the legacy `all-non-hydrogen` selection
 contract remains readable; an input without selection metadata retains null and
 no roles are inferred. CSV `SelectionRole` is `target`, `halo`, or
-`not-recorded`; halos in current fixed-halo results are FirstStage-sourced and
+`not-recorded`; halos in explicit Fixed-Halo results are FirstStage-sourced and
 are not Joint-optimized estimates.
 
 `initialization.data_scope` is `caller-provided-widths` or
 `contributor-local-sampling-may-read-outside-target-domain`. Each initialization
 atom retains its reason; a failed component retains an unavailable state while
-independent valid components can run. Current fixed-halo results require valid
-FirstStage halo amplitudes and widths; an invalid halo is reported as
+independent valid components can run. Production initialization requires valid
+target widths only; target fallback diagnostics retain their existing
+provenance. Explicit Fixed-Halo results require valid FirstStage halo
+amplitudes and widths; an invalid halo is reported as
 `fixed-halo-initialization-unavailable`, never replaced by zero or a median
-width. Target initial-width fallback diagnostics retain their existing
-provenance. See the
+width. See the
 [halo eligibility contract](../joint-observable-halo.md). `costs.construction_seconds` records builder time;
 initializer time includes model-copy setup. Neither storage nor export recomputes
 roles, initialization or numerical evidence. Original selection and halo legacy

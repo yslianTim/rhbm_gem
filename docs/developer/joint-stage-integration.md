@@ -23,9 +23,14 @@ but do not receive local or group results.
 
 ## Current data flow
 
-1. `RunJointComponentWorkflow` fits the retained selected targets and eligible
-   halos with the existing FullABC Joint estimator and publishes their Second
-   stage endpoints.
+1. The production `RunJointComponentWorkflow` builds
+   `BuildPureHaloSupportExclusionProblem`. Supported non-target atoms are used
+   only to exclude their support rows from the fitting domain; they are not
+   Joint parameters and no FirstStage halo `(A, B, 0)` snapshot is required.
+   Joint fits the selected targets' FullABC `(A, B, C)` endpoints and publishes
+   their Second-stage diagnostics. The explicit
+   `EstimateJointComponentsFixedHalo` / `BuildFixedHaloResearchProblem` APIs
+   remain historical Fixed-Halo research/compatibility paths.
 2. `BuildPostFitPeelingSamples` uses raw sample entries and their saved
    geometry. For each target sample it subtracts the tricubic interpolation
    of every other retained contributor on the same Joint observation rows:
@@ -125,6 +130,23 @@ runs and mismatched atom, component or role identities.
 
 These changes are batched by affected group so each group is invalidated once.
 Missing samples never become zero-valued observations.
+
+## Qualification and downstream availability
+
+Initialization validity, Joint search completion, endpoint verification,
+independent replay, and target qualification are evaluated before any
+qualified-dependent downstream stage. An initialization failure or an
+unqualified Joint endpoint is saved with its diagnostics and stop reason; Halo
+median reconstruction, peeling, Post-Joint Local, and Group Fitting are not
+started. An unqualified candidate never becomes a formal target estimate.
+
+For a qualified Pure Exclusion result, Halo median reconstruction is a
+separate original-domain step used only to build peeling responses. If no
+qualified target donor can produce a valid median, the Joint endpoint remains
+qualified but the reconstruction evidence is `Unavailable`; downstream
+reconstruction-dependent stages are skipped with that explicit reason. This
+state is distinct from Joint numerical non-convergence. A qualified result
+with no Halo contributors does not require a median snapshot.
 
 ## Resource and numerical limits
 

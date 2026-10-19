@@ -35,11 +35,18 @@ not converted into local conditioning or stability evidence.
 
 ## Downstream boundaries
 
-Selected target points use the converged target-only Joint state conditional on
-validated FirstStage fixed-halo parameters. Halo stage values retain their
-FirstStage source and are not Joint-converged estimates. Point-quality warnings
-do not silently remove target contributors. Post-fit peeling reconstructs
-target and fixed-halo contributions; local MDPDE covariance and group fitting
-remain target-only and retain their own qualification and resource controls.
-Joint results do not supply a global parameter covariance or certify fixed-halo
+Production selected target points use the qualified target-only Joint state
+from Pure Halo-Support Exclusion. Retained non-target atoms exclude fitting
+rows and do not provide Joint parameters or FirstStage halo values. Point-
+quality warnings do not silently remove target contributors. After a qualified
+endpoint, Halo median reconstruction is a separate availability-checked step
+for original-domain peeling; local MDPDE covariance and Group Fitting remain
+target-only and retain their own qualification and resource controls.
+
+An unqualified candidate keeps diagnostics and stop reason but never becomes a
+formal target estimate and does not start downstream inference. A qualified
+Pure Exclusion endpoint can still have unavailable Halo reconstruction when no
+qualified target donor exists. The explicit Fixed-Halo research/compatibility
+APIs retain their separate FirstStage `(A, B, 0)` conditional contract. Joint
+results do not supply a global parameter covariance or certify FirstStage halo
 statistical accuracy.

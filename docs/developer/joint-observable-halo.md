@@ -1,6 +1,14 @@
 # Joint fixed-halo contributor model
 
-## Production contract
+This document describes the explicit Fixed-Halo research/compatibility
+parameterization. It is not the production command contract. Production uses
+Pure Halo-Support Exclusion: retained non-target support rows are excluded
+from the Joint fitting domain, no FirstStage halo parameters enter the Joint
+objective, and qualified target donors are used later for Halo reconstruction.
+See the [stage integration guide](joint-stage-integration.md) and the [runtime
+guide](joint-component-runtime.md) for the production flow.
+
+## Explicit Fixed-Halo compatibility contract
 
 Selected non-hydrogen atoms define the unchanged observation domain
 `V = union(support(target))`. Every unselected non-hydrogen atom with at least
@@ -50,13 +58,14 @@ replay and PostFitPeeling.
 
 ## Saved results and downstream use
 
-New results use contributor policy `first-stage-fixed-halo-v1`, parameterization
-contract `target-only-fixed-halo-v1`, and Joint JSON schema 14. The snapshot
-stores fixed halo parameters independently from target component state. Target
-stage estimates are marked as Joint targets; fixed halo estimates preserve the
-FirstStage source and are not labeled as Joint-optimized convergence. Schemas
-3 through 13 remain readable with their original free-halo or pruned-halo
-meaning; decoding an older result does not reinterpret it as fixed-halo state.
+Explicit Fixed-Halo results use contributor policy `first-stage-fixed-halo-v1`,
+parameterization contract `target-only-fixed-halo-v1`, and Joint JSON schema 14
+for that historical result family. The snapshot stores fixed halo parameters
+independently from target component state. Target stage estimates are marked as
+Joint targets; fixed halo estimates preserve the FirstStage source and are not
+labeled as Joint-optimized convergence. Schemas 3 through 13 remain readable
+with their original free-halo or pruned-halo meaning; decoding an older result
+does not reinterpret it as fixed-halo state.
 
 PostFitPeeling reconstructs each target component plus the problem-level fixed
 halos, subtracts other target and halo contributions once, and preserves the

@@ -199,13 +199,16 @@ error; it does not produce an empty model.
 `model_joint_result(key_tag TEXT PRIMARY KEY, result_json TEXT NOT NULL)` has the
 same direct cascading model-root foreign key as other child tables. Its JSON
 codec is shared by SQLite and the public Joint file exporter; readers accept
-schemas 3 through 14. Legacy global-rank evidence remains distinguishable from
+schemas 3 through 17. Legacy global-rank evidence remains distinguishable from
 target evidence, while schema 12 added local conditioning and parameter-stability
 diagnostics. Schema 12 may also include additive per-direction stability probes
 and work counters; older schema-12 payloads without those optional fields
 remain readable. Schema 14 stores validated FirstStage fixed-halo parameters
-separately from target-only component states. New contributor-selection
-provenance is stored with the fixed selected observation domain. Candidate diagnostics contain parameter vectors and separate
+separately from target-only component states for the explicit Fixed-Halo
+compatibility contract. Schema 17 stores the production Pure Halo-Support
+Exclusion policy, original/fitting row mappings, and target-only parameterization.
+New contributor-selection provenance is stored with the fixed selected observation
+domain. Candidate diagnostics contain parameter vectors and separate
 endpoint-verification and qualification statuses; they do not change trusted
 scientific-state availability. Legacy schemas retain their saved evidence
 semantics. Finite doubles use precise parsing for round-trip
