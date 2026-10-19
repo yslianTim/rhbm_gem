@@ -1115,6 +1115,11 @@ TEST(JointComponentNumericsTest, BoundedReplayUsesProjectedWidthKktAndChecksFeas
     EXPECT_EQ(width_stationarity->status,rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(width_stationarity->value.has_value());
     EXPECT_DOUBLE_EQ(*width_stationarity->value,0.0);
+    const auto bound_feasibility=std::find_if(bounded_evidence.begin(),bounded_evidence.end(),[](const auto & check) {
+        return check.name=="width-bound-feasibility";
+    });
+    ASSERT_NE(bound_feasibility,bounded_evidence.end());
+    EXPECT_EQ(bound_feasibility->status,rhbm_gem::JointCheckStatus::Passed);
 
     auto [inward_y,inward_context,inward,inward_replay]=evaluate(.3);
     ASSERT_TRUE(inward.valid);
@@ -1134,6 +1139,15 @@ TEST(JointComponentNumericsTest, BoundedReplayUsesProjectedWidthKktAndChecksFeas
     EXPECT_FALSE(infeasible_replay.width_bound_feasible);
     EXPECT_FALSE(infeasible_replay.passed);
     EXPECT_NEAR(infeasible_replay.maximum_width_bound_violation,1e-8,1e-12);
+    const auto infeasible_assessment=n::VerifyJointEndpoint(domain,outward_y,infeasible,
+        infeasible_replay,outward_context);
+    const auto infeasible_evidence=n::AssessmentEvidence(infeasible_assessment,
+        rhbm_gem::JointEvidenceScope::AssembledGlobal);
+    const auto infeasible_bound=std::find_if(infeasible_evidence.begin(),infeasible_evidence.end(),[](const auto & check) {
+        return check.name=="width-bound-feasibility";
+    });
+    ASSERT_NE(infeasible_bound,infeasible_evidence.end());
+    EXPECT_EQ(infeasible_bound->status,rhbm_gem::JointCheckStatus::Failed);
     const auto infeasible_trial_trust=n::CheckReplay(domain,outward_y,infeasible,outward_context);
     EXPECT_FALSE(infeasible_trial_trust.passed);
     EXPECT_EQ(infeasible_trial_trust.reason,"width-bound-infeasible");

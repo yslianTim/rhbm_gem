@@ -199,6 +199,12 @@ TEST(JointWidthTrustPolicyTest, BoundedAssemblyUsesProjectedWidthStationarity)
     ASSERT_NE(stationarity,fit.evidence.end());
     EXPECT_EQ(stationarity->reason,"independent-bound-aware-projected-width-kkt");
     ASSERT_TRUE(stationarity->value.has_value());
+    const auto bound_feasibility=std::find_if(fit.evidence.begin(),fit.evidence.end(),[](const auto & check) {
+        return check.name=="width-bound-feasibility" &&
+            check.scope==rhbm_gem::JointEvidenceScope::AssembledGlobal;
+    });
+    ASSERT_NE(bound_feasibility,fit.evidence.end());
+    EXPECT_EQ(bound_feasibility->status,rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(fit.assembled_state.has_value());
     double projected_inf{},raw_inf{};
     bool active_bound{};

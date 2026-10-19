@@ -404,6 +404,13 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
         std::isfinite(width_stationarity_value) ? std::optional<double>(width_stationarity_value) : std::nullopt,
         a.convergence_criteria.global_width_gradient));
     if(replay.width_bound_applied) out.back().reason="independent-bound-aware-projected-width-kkt";
+    if(replay.width_bound_applied)
+    {
+        out.push_back(check("width-bound-feasibility",evidence_available,
+            replay.width_bound_feasible,
+            replay.width_bound_feasible ? 0.0 : 1.0,0.0));
+        out.back().reason="primary-and-independent-eta-upper-bound";
+    }
     out.push_back(check("endpoint-verification",evidence_available,a.endpoint_verified));
     out.push_back(check("numerical-qualification",a.primary.valid,a.numerical_qualified));
     if(a.verification_memory_estimate.stage==n::MemoryStage::EndpointVerification)
@@ -460,6 +467,15 @@ JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> & evidence,Join
             const auto found=std::find_if(evidence.begin(),evidence.end(),[&](const auto & check){return check.name==name && check.scope==scope;});
             status=MergeConvergenceStatus(status,found==evidence.end() ? JointCheckStatus::Unavailable : found->status);
         }
+    }
+    if(std::any_of(evidence.begin(),evidence.end(),[&](const auto & check) {
+        return check.name=="width-bound-feasibility" && check.scope==scope;
+    }))
+    {
+        const auto found=std::find_if(evidence.begin(),evidence.end(),[&](const auto & check) {
+            return check.name=="width-bound-feasibility" && check.scope==scope;
+        });
+        status=MergeConvergenceStatus(status,found->status);
     }
     return status;
 }
