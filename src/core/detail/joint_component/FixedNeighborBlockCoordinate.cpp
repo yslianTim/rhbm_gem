@@ -234,6 +234,13 @@ void CaptureWidthTrajectory(FixedNeighborBlockRecord & record,const SearchResult
             destination->lm_predicted_decrease=trial.lm->predicted_decrease;
             destination->lm_ratio=trial.lm->ratio;
             destination->lm_proposed_acceptance=trial.lm->proposed_acceptance;
+            destination->bounded_subproblem=trial.lm->bounded_subproblem;
+            destination->bounded_subproblem_status=trial.lm->subproblem_status;
+            destination->lm_subproblem_kkt_inf_norm=trial.lm->subproblem_kkt_inf_norm;
+            destination->active_set_iterations=trial.lm->active_set_iterations;
+            destination->active_set_releases=trial.lm->active_set_releases;
+            destination->active_bound_indices=trial.lm->active_bound_indices;
+            destination->active_bound_multipliers=trial.lm->active_bound_multipliers;
         }
         destination->weak_width_step_fraction=trial.weak_width_step_fraction;
         destination->weak_width_guard_rejected=trial.rejection_reason=="weak-width-identifiability-limited";
@@ -1150,13 +1157,17 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 }
             }
             const auto old_widths=old_eta.array().exp().eval();
-            const auto profile_search=SearchProfile(local_domain,local_y,old_widths,local_context,{},nullptr,profile_work,
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                prepared.fixed_width_mask.empty() ? nullptr : &prepared.fixed_width_mask
+            const auto profile_search=policy.eta_upper_bound_for_research ?
+                SearchProfileBounded(local_domain,local_y,old_widths,local_context,
+                    *policy.eta_upper_bound_for_research,{},nullptr,profile_work,
+                    prepared.fixed_width_mask.empty() ? nullptr : &prepared.fixed_width_mask) :
+                SearchProfile(local_domain,local_y,old_widths,local_context,{},nullptr,profile_work,
+                    prepared.fixed_width_mask.empty() ? nullptr : &prepared.fixed_width_mask);
 #else
-                nullptr
+            const auto profile_search=SearchProfile(local_domain,local_y,old_widths,local_context,{},nullptr,profile_work,
+                nullptr);
 #endif
-            );
             if(policy.collect_telemetry) out.work.local_profile_work.Merge(profile_search.profile_work);
             record.search_seconds=Seconds(search_started); record.profile_evaluations=profile_search.evaluations;
             if(policy.collect_telemetry) out.work.local_search_seconds+=record.search_seconds;
@@ -1185,6 +1196,22 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                     telemetry.profile_seconds=trial.seconds; telemetry.factor_seconds=trial.factor_seconds;
                     cumulative_factor_seconds+=trial.factor_seconds;
                     telemetry.cumulative_factor_seconds=cumulative_factor_seconds;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                    if(trial.lm)
+                    {
+                        telemetry.lm_actual_decrease=trial.lm->actual_decrease;
+                        telemetry.lm_predicted_decrease=trial.lm->predicted_decrease;
+                        telemetry.lm_ratio=trial.lm->ratio;
+                        telemetry.lm_proposed_acceptance=trial.lm->proposed_acceptance;
+                        telemetry.bounded_subproblem=trial.lm->bounded_subproblem;
+                        telemetry.bounded_subproblem_status=trial.lm->subproblem_status;
+                        telemetry.lm_subproblem_kkt_inf_norm=trial.lm->subproblem_kkt_inf_norm;
+                        telemetry.active_set_iterations=trial.lm->active_set_iterations;
+                        telemetry.active_set_releases=trial.lm->active_set_releases;
+                        telemetry.active_bound_indices=trial.lm->active_bound_indices;
+                        telemetry.active_bound_multipliers=trial.lm->active_bound_multipliers;
+                    }
+#endif
                     record.profile_trials.push_back(std::move(telemetry));
                     if(trial.accepted && std::isfinite(objective))
                     {

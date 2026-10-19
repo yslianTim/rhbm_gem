@@ -9,6 +9,7 @@
 namespace {
 namespace m=second_stage_test::matched;
 namespace p=m::joint_abc;
+namespace joint=rhbm_gem::core::joint_component;
 namespace j=boost::json;
 using Vector=Eigen::VectorXd;
 struct Sample
@@ -116,6 +117,45 @@ struct LinearResidual
     bool Trial(const Vector &,const Vector & s,const Vector &,double,double,double a,double p0,double r,bool)
     {step=s; actual=a; predicted=p0; ratio=r; return true;}
 };
+
+struct BoundedLinearResidual
+{
+    Eigen::MatrixXd design;
+    Vector target,upper_eta;
+    Vector step;
+    double radius{},damping{},actual{},predicted{},ratio{};
+    bool enabled{};
+    std::string failure;
+    explicit BoundedLinearResidual(bool use_bound):design(2,2),target(2),upper_eta(2),enabled(use_bound)
+    {design.setIdentity(); target<<20.0,0.0; upper_eta<<10.2,100.0;}
+    int values() const {return 2;}
+    bool retry() const {return false;}
+    int operator()(const Vector & x,Vector & residual) {residual=design*x-target; return 0;}
+    int linearize(const Vector &,const Vector & residual,Eigen::MatrixXd & factor,Vector & response,Vector & norms)
+    {factor=design; response=residual; norms=design.colwise().blueNorm(); return 0;}
+    bool has_bounded_step() const {return enabled;}
+    joint::ActiveSetStep solve_bounded_step(const Eigen::MatrixXd & j,const Vector & response,
+        const Vector & x,const Vector & diagonal,double trust_radius,double lambda)
+    {return joint::SolveBoundedTrustRegionStep(j,response,diagonal,upper_eta-x,trust_radius,lambda);}
+    bool Trial(const Vector &,const Vector & proposed_step,const Vector &,double used_radius,double used_damping,
+        double used_actual,double used_predicted,double used_ratio,bool)
+    {step=proposed_step; radius=used_radius; damping=used_damping; actual=used_actual;
+        predicted=used_predicted; ratio=used_ratio; return true;}
+};
+
+struct PlainIdentityResidual
+{
+    Vector target{Eigen::Vector2d(20.0,0.0)},step;
+    double actual{},predicted{},ratio{};
+    std::string failure;
+    int values() const {return 2;}
+    bool retry() const {return false;}
+    int operator()(const Vector & x,Vector & residual) {residual=x-target; return 0;}
+    int linearize(const Vector &,const Vector & residual,Eigen::MatrixXd & factor,Vector & response,Vector & norms)
+    {factor=Eigen::Matrix2d::Identity(); response=residual; norms=Vector::Ones(2); return 0;}
+    bool Trial(const Vector &,const Vector & s,const Vector &,double,double,double a,double p0,double r,bool)
+    {step=s; actual=a; predicted=p0; ratio=r; return true;}
+};
 }
 TEST(JointComponentSearchTest, CompactLinearizationPreservesStepAndFullResidualReduction)
 {
@@ -131,4 +171,71 @@ TEST(JointComponentSearchTest, CompactLinearizationPreservesStepAndFullResidualR
     EXPECT_NEAR(b.fnorm,(tiled.design*y-tiled.target).stableNorm(),1e-12);
     EXPECT_GT(b.fnorm,1); // Nonzero orthogonal residual must survive row reduction.
     EXPECT_EQ(b.fjac.rows(),2);
+}
+
+TEST(JointComponentSearchTest, InstrumentedLmUsesTheConstrainedStepForTrustRatio)
+{
+    BoundedLinearResidual functor(true);
+    p::InstrumentedLM<BoundedLinearResidual> lm(functor);
+    Vector x(2); x<<10.0,10.0;
+    lm.parameters.factor=.1;
+    ASSERT_EQ(lm.minimizeInit(x),Eigen::LevenbergMarquardtSpace::NotStarted);
+    const auto status=lm.minimizeOneStep(x);
+    EXPECT_TRUE(status==Eigen::LevenbergMarquardtSpace::Running ||
+        status==Eigen::LevenbergMarquardtSpace::RelativeErrorTooSmall ||
+        status==Eigen::LevenbergMarquardtSpace::RelativeReductionTooSmall ||
+        status==Eigen::LevenbergMarquardtSpace::RelativeErrorAndReductionTooSmall);
+    ASSERT_EQ(functor.step.size(),2);
+    EXPECT_NEAR(functor.step(0),.2,1e-13);
+    EXPECT_LE(functor.step.norm(),functor.radius+1e-13);
+    const Vector initial_residual=Eigen::Vector2d(-10.0,10.0);
+    const double expected_actual=1.0-(initial_residual+functor.step).squaredNorm()/initial_residual.squaredNorm();
+    const double expected_predicted=(functor.step.squaredNorm()+
+        2.0*functor.damping*functor.step.squaredNorm())/initial_residual.squaredNorm();
+    EXPECT_NEAR(functor.actual,expected_actual,1e-13);
+    EXPECT_NEAR(functor.predicted,expected_predicted,1e-13)<<"step="<<functor.step.transpose()
+        <<" damping="<<functor.damping<<" radius="<<functor.radius;
+    EXPECT_NEAR(functor.ratio,expected_actual/expected_predicted,1e-12)<<"step="<<functor.step.transpose()
+        <<" damping="<<functor.damping<<" radius="<<functor.radius;
+}
+
+TEST(JointComponentSearchTest, DisabledBoundedHookRetainsTheOriginalLmStep)
+{
+    BoundedLinearResidual research_hook(false);
+    PlainIdentityResidual baseline;
+    p::InstrumentedLM<BoundedLinearResidual> instrumented(research_hook);
+    p::InstrumentedLM<PlainIdentityResidual> original(baseline);
+    Vector x(2),y(2); x<<.5,-.25; y=x;
+    instrumented.parameters.factor=original.parameters.factor=.1;
+    instrumented.minimizeInit(x); original.minimizeInit(y);
+    EXPECT_EQ(instrumented.minimizeOneStep(x),original.minimizeOneStep(y));
+    EXPECT_LT((x-y).norm(),1e-13);
+    EXPECT_LT((research_hook.step-baseline.step).norm(),1e-13);
+    EXPECT_NEAR(research_hook.predicted,baseline.predicted,1e-13);
+    EXPECT_NEAR(research_hook.actual,baseline.actual,1e-13);
+    EXPECT_NEAR(research_hook.ratio,baseline.ratio,1e-13);
+}
+
+TEST(JointComponentSearchTest, BoundedProfileSearchKeepsEveryEvaluatedWidthFeasible)
+{
+    Sample sample;
+    const p::Domain domain(sample.grid,sample.atoms);
+    const auto context=joint::CreateContext(sample.y,static_cast<Eigen::Index>(sample.atoms.size()));
+    const Vector initial=Eigen::Vector2d(.48,.59);
+    const double eta_max=std::log(.6);
+    const auto search=joint::SearchProfileBounded(domain,sample.y,initial,context,eta_max);
+    EXPECT_FALSE(search.trials.empty())<<search.stop_reason;
+    bool reached_bound=false;
+    for(const auto & trial:search.trials)
+    {
+        if(trial.endpoint.eta.size()) EXPECT_LE(trial.endpoint.eta.maxCoeff(),eta_max+1e-14);
+        if(trial.lm && trial.lm->bounded_subproblem)
+        {
+            EXPECT_EQ(trial.lm->subproblem_status,"solved");
+            EXPECT_LE(trial.lm->subproblem_kkt_inf_norm,1e-9);
+            EXPECT_LE(trial.lm->diagonal.cwiseProduct(trial.lm->step).norm(),trial.lm->radius+1e-12);
+            reached_bound|=!trial.lm->active_bound_indices.empty();
+        }
+    }
+    EXPECT_TRUE(reached_bound)<<search.stop_reason;
 }

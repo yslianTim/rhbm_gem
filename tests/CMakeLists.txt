@@ -208,6 +208,7 @@ set(JOINT_COMPONENT_NUMERICAL_TEST_SOURCES
     core/joint_component/ParameterStability_test.cpp
     core/joint_component/Numerics_test.cpp
     core/joint_component/WidthCalibration_test.cpp
+    core/joint_component/ActiveSetBoundedLM_test.cpp
 )
 
 set(JOINT_COMPONENT_TEST_SOURCES

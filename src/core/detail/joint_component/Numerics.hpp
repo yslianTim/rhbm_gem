@@ -209,6 +209,12 @@ struct LmTrial
     Vector accepted_eta,step,diagonal;
     double radius{},damping{},actual_decrease{unavailable},predicted_decrease{},ratio{unavailable};
     bool proposed_acceptance{};
+    bool bounded_subproblem{};
+    std::string subproblem_status;
+    double subproblem_kkt_inf_norm{unavailable};
+    std::size_t active_set_iterations{},active_set_releases{};
+    std::vector<std::size_t> active_bound_indices;
+    std::vector<double> active_bound_multipliers;
 };
 struct Trial
 {
@@ -246,6 +252,11 @@ struct SearchResult
 SearchResult SearchProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr,ProfileSearchWork * = nullptr,
     const std::vector<bool> * fixed_width_mask=nullptr);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+SearchResult SearchProfileBounded(const Domain &,VectorRef,const Vector &,const EvaluationContext &,double eta_max,
+    const JointProgressObserver & = {},const JointProgressComponent * = nullptr,ProfileSearchWork * = nullptr,
+    const std::vector<bool> * fixed_width_mask=nullptr);
+#endif
 struct Assessment
 {
     Endpoint primary;

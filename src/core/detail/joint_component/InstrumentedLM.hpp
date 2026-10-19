@@ -13,6 +13,9 @@
 #pragma once
 #include <unsupported/Eigen/NonLinearOptimization>
 #include "ResourceWork.hpp"
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include "ActiveSetBoundedLM.hpp"
+#endif
 
 // Adapted from Eigen 5.0.1 NonLinearOptimization/LevenbergMarquardt.h.
 // Trial instrumentation/rejection and compact QR input are added; trust-region
@@ -175,6 +178,17 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
   else
     njev++;
 
+  bool bounded_step_enabled=false;
+  JacobianType bounded_jacobian;
+  FVectorType bounded_response;
+  if constexpr (requires(FunctorType &f) { f.has_bounded_step(); }) {
+    bounded_step_enabled=functor.has_bounded_step();
+    if(bounded_step_enabled) {
+      bounded_jacobian=fjac;
+      bounded_response=reduced_response;
+    }
+  }
+
   /* compute the qr factorization of the jacobian. */
   ColPivHouseholderQR<JacobianType> qrfac(fjac);
   fjac = qrfac.matrixQR();
@@ -214,11 +228,27 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
 
   bool rejected_invalid = false;
   do {
-    /* determine the levenberg-marquardt parameter. */
-    internal::lmpar2<Scalar>(qrfac, diag, qtf, delta, par, wa1);
+    /* determine the LM step using either the original or bounded subproblem. */
+    if constexpr (requires(FunctorType &f,const JacobianType &j,const FVectorType &r,
+        const FVectorType &v) { f.solve_bounded_step(j,r,v,v,Scalar{},Scalar{}); }) {
+      if(bounded_step_enabled) {
+        const auto bounded=functor.solve_bounded_step(bounded_jacobian,bounded_response,x,diag,delta,par);
+        if(!bounded.valid) {
+          functor.failure="bounded-subproblem:"+bounded.status;
+          return LevenbergMarquardtSpace::UserAsked;
+        }
+        wa1=bounded.step;
+        par=static_cast<Scalar>(bounded.damping);
+      } else {
+        internal::lmpar2<Scalar>(qrfac, diag, qtf, delta, par, wa1);
+        wa1=-wa1;
+      }
+    } else {
+      internal::lmpar2<Scalar>(qrfac, diag, qtf, delta, par, wa1);
+      wa1=-wa1;
+    }
 
-    /* store the direction p and x + p. calculate the norm of p. */
-    wa1 = -wa1;
+    /* store the direction p and x + p. calculate the norm of the scaled step. */
     wa2 = x + wa1;
     pnorm = diag.cwiseProduct(wa1).stableNorm();
 

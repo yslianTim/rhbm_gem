@@ -146,6 +146,36 @@ TEST(JointFixedNeighborBlockCoordinateTest, IncrementalCandidateExperimentMatche
         EXPECT_TRUE(result.sweeps.empty())<<topology;
     }
 }
+
+TEST(JointFixedNeighborBlockCoordinateTest, ResearchBoundedSearchReleasesTheStartingUpperFace)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const double eta_max=std::log(.55);
+    const n::Vector initial=n::Vector::Constant(3,eta_max);
+    n::FixedNeighborPolicy policy;
+    policy.core_atoms=4;
+    policy.maximum_sweeps=1;
+    policy.certify_endpoint=false;
+    policy.stop_after_stationarity=false;
+    policy.capture_local_trajectory=true;
+    policy.eta_upper_bound_for_research=eta_max;
+    const auto result=n::RunFixedNeighborDiagnostic(problem,initial,policy);
+    ASSERT_EQ(result.blocks.size(),1u)<<result.reason;
+    ASSERT_EQ(result.state.eta.size(),3);
+    EXPECT_LE(result.state.eta.maxCoeff(),eta_max+1e-14);
+    bool bounded_subproblem_seen=false,released=false;
+    for(const auto & trial:result.blocks.front().profile_trials)
+        if(trial.bounded_subproblem)
+        {
+            bounded_subproblem_seen=true;
+            EXPECT_EQ(trial.bounded_subproblem_status,"solved");
+            EXPECT_LE(trial.lm_subproblem_kkt_inf_norm,1e-9);
+            released|=trial.active_set_releases>0;
+        }
+    EXPECT_TRUE(bounded_subproblem_seen);
+    EXPECT_TRUE(released);
+}
+
 void CheckMultiBlockBudgetFailure(const std::string & topology)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload(topology,32));

@@ -3,6 +3,9 @@
 #include "ResourceWork.hpp"
 #include "InstrumentedLM.hpp"
 #include "TiledDerivative.hpp"
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include "ActiveSetBoundedLM.hpp"
+#endif
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -60,6 +63,26 @@ struct Profile
     std::optional<double> accepted_objective;
     std::optional<double> accepted_gradient_inf_norm;
     const std::vector<bool> * fixed_width_mask{};
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    std::optional<double> research_eta_max;
+    std::optional<ActiveSetStep> last_bounded_subproblem;
+    bool has_bounded_step() const {return research_eta_max.has_value();}
+    ActiveSetStep solve_bounded_step(const Matrix & jacobian,VectorRef response,VectorRef eta,
+        VectorRef diagonal,double radius,double damping)
+    {
+        ActiveSetStep failed_step;
+        if(!research_eta_max || !std::isfinite(*research_eta_max))
+        {failed_step.status="invalid-width-upper-bound"; last_bounded_subproblem=failed_step; return failed_step;}
+        for(Eigen::Index i=0;i<eta.size();++i)
+            if(eta(i)>*research_eta_max)
+            {failed_step.status="infeasible-current-width"; last_bounded_subproblem=failed_step; return failed_step;}
+        const Vector upper=Vector::Constant(eta.size(),*research_eta_max)-eta;
+        auto result=SolveBoundedTrustRegionStep(jacobian,response,diagonal,upper,radius,damping,
+            fixed_width_mask ? *fixed_width_mask : std::vector<bool>{});
+        last_bounded_subproblem=result;
+        return result;
+    }
+#endif
     void Report() const
     {
         if(!progress_component) return;
@@ -73,8 +96,33 @@ struct Profile
     {
         if(trace.empty()) return false;
         auto & row=trace.back();
-        row.lm=LmTrial{accepted,step,diagonal,radius,damping,cached.valid ? actual : unavailable,predicted,
-            cached.valid ? ratio : unavailable,proposed};
+        LmTrial lm;
+        lm.accepted_eta=accepted; lm.step=step; lm.diagonal=diagonal;
+        lm.radius=radius; lm.damping=damping;
+        lm.actual_decrease=cached.valid ? actual : unavailable;
+        lm.predicted_decrease=predicted; lm.ratio=cached.valid ? ratio : unavailable;
+        lm.proposed_acceptance=proposed;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(last_bounded_subproblem)
+        {
+            lm.bounded_subproblem=true;
+            lm.subproblem_status=last_bounded_subproblem->status;
+            lm.subproblem_kkt_inf_norm=last_bounded_subproblem->kkt_inf_norm;
+            lm.active_set_iterations=last_bounded_subproblem->iterations;
+            lm.active_set_releases=last_bounded_subproblem->releases;
+            for(std::size_t i=0;i<last_bounded_subproblem->active.size();++i)
+            {
+                if(!last_bounded_subproblem->active[i] ||
+                    (fixed_width_mask && fixed_width_mask->size()==last_bounded_subproblem->active.size() &&
+                        (*fixed_width_mask)[i])) continue;
+                lm.active_bound_indices.push_back(i);
+                lm.active_bound_multipliers.push_back(last_bounded_subproblem->multipliers(
+                    static_cast<Eigen::Index>(i)));
+            }
+            last_bounded_subproblem.reset();
+        }
+#endif
+        row.lm=std::move(lm);
         bool trusted=cached.valid;
         if(proposed || context.audit.trial_details)
         {
@@ -143,7 +191,14 @@ struct Profile
         return cached.valid;
     }
     int operator()(const Vector & eta,Vector & residual)
-    {if(!Get(eta)) return -1; residual=cached.residual/scale; return 0;}
+    {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(research_eta_max && (eta.array()>*research_eta_max).any())
+        {failure="bounded-step-feasibility-failed"; return -1;}
+#endif
+        if(!Get(eta)) return -1;
+        residual=cached.residual/scale; return 0;
+    }
     int linearize(const Vector & eta,const Vector &,Matrix & factor,Vector & response,Vector & norms)
     {
         if(context.profile_cpu_budget_seconds>0 &&
@@ -230,8 +285,9 @@ struct Profile
     }
 };
 }
-SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
-    const EvaluationContext & context,const JointProgressObserver & observer,
+namespace {
+SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & initial_b,
+    const EvaluationContext & context,std::optional<double> eta_max,const JointProgressObserver & observer,
     const JointProgressComponent * progress_component,ProfileSearchWork * telemetry,
     const std::vector<bool> * fixed_width_mask)
 {
@@ -239,8 +295,19 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     const auto start=std::chrono::steady_clock::now();
     ProfileSearchWork local_work;
     Profile profile{domain,y,context.scale,context,{}, {},0,0,{},telemetry ? &local_work : nullptr,
-        ProfileEvaluationRole::Unspecified,observer,progress_component,start,std::clock(),0,{}, {}};
+        ProfileEvaluationRole::Unspecified,observer,progress_component,start,std::clock(),0,{}, {},
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        {},{},{}
+#else
+        {}
+#endif
+    };
     profile.fixed_width_mask=fixed_width_mask;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    profile.research_eta_max=eta_max;
+#else
+    (void)eta_max;
+#endif
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
         lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;
@@ -260,7 +327,17 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
         }
         return status;
     };
-    InstrumentedLM<Profile> lm(profile); const auto status=search(lm);
+    Eigen::LevenbergMarquardtSpace::Status status;
+    if(eta_max && (!std::isfinite(*eta_max) || (eta.array()>*eta_max).any()))
+    {
+        profile.failure=std::isfinite(*eta_max) ? "bounded-initial-width-infeasible" : "invalid-width-upper-bound";
+        status=Eigen::LevenbergMarquardtSpace::UserAsked;
+    }
+    else
+    {
+        InstrumentedLM<Profile> lm(profile);
+        status=search(lm);
+    }
     SearchResult out; out.initial=profile.trace.empty() ? static_cast<Endpoint>(profile.cached) : profile.trace.front().endpoint;
     out.initial_accepted=!profile.trace.empty() && profile.trace.front().accepted;
     out.trials=std::move(profile.trace); out.eta=eta; out.lm_status=static_cast<int>(status);
@@ -289,4 +366,25 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     }
     return out;
 }
+}
+
+SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
+    const EvaluationContext & context,const JointProgressObserver & observer,
+    const JointProgressComponent * progress_component,ProfileSearchWork * telemetry,
+    const std::vector<bool> * fixed_width_mask)
+{
+    return SearchProfileImpl(domain,y,initial_b,context,std::nullopt,observer,
+        progress_component,telemetry,fixed_width_mask);
+}
+
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+SearchResult SearchProfileBounded(const Domain & domain,VectorRef y,const Vector & initial_b,
+    const EvaluationContext & context,double eta_max,const JointProgressObserver & observer,
+    const JointProgressComponent * progress_component,ProfileSearchWork * telemetry,
+    const std::vector<bool> * fixed_width_mask)
+{
+    return SearchProfileImpl(domain,y,initial_b,context,eta_max,observer,
+        progress_component,telemetry,fixed_width_mask);
+}
+#endif
 }

@@ -27,6 +27,12 @@ struct FixedNeighborProfileTrial
     double profile_seconds{},factor_seconds{},cumulative_factor_seconds{};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     double lm_actual_decrease{unavailable},lm_predicted_decrease{unavailable},lm_ratio{unavailable};
+    double lm_subproblem_kkt_inf_norm{unavailable};
+    bool bounded_subproblem{};
+    std::string bounded_subproblem_status;
+    std::size_t active_set_iterations{},active_set_releases{};
+    std::vector<std::size_t> active_bound_indices;
+    std::vector<double> active_bound_multipliers;
     double accepted_local_objective_improvement{unavailable},accepted_global_objective_improvement{unavailable};
     double weak_width_step_fraction{unavailable};
     bool lm_proposed_acceptance{};
@@ -205,6 +211,7 @@ struct FixedNeighborPolicy
     std::function<void(const FixedNeighborBlockSweep &)> sweep_observer;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     FixedNeighborWidthTrajectoryCapture * width_trajectory{};
+    std::optional<double> eta_upper_bound_for_research;
     std::vector<std::string> fixed_width_atom_ids;
     std::function<bool(std::size_t,std::size_t)> force_no_trusted_profile_for_testing;
     // Test-only research hook. An empty string accepts the candidate; a
