@@ -654,6 +654,85 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
         <<" observed_process_peak_rss_bytes="<<(peak ? std::to_string(*peak) : "unavailable")
         <<" global_dense_matrix=none"<<std::endl;
 }
+TEST(JointFixedNeighborBlockCoordinateTest, BoundedAllTargetLargeShapePreflightStaysBelowBudget)
+{
+    const auto baseline_rss=n::CurrentRssBytes();
+    constexpr Eigen::Index rows=5'938'087;
+    constexpr std::size_t atoms=37'406;
+    auto input=std::make_shared<rhbm_gem::core::JointProblemInput>();
+    input->observations.assign(static_cast<std::size_t>(rows),0.0);
+    input->row_ids.resize(static_cast<std::size_t>(rows));
+    input->atom_ids.reserve(atoms);
+    input->support.resize(atoms);
+    for(std::size_t atom=0;atom<atoms;++atom)
+    {
+        input->atom_ids.push_back("target-"+std::to_string(atom));
+        input->support[atom].push_back({atom,0.0});
+        input->support[atom].push_back({atom+1,0.0});
+    }
+    input->selection_domain.emplace();
+    input->selection_domain->contributor_policy=std::string(rhbm_gem::PureHaloSupportExclusionContributorPolicy);
+    input->selection_domain->target_indices.resize(atoms);
+    std::iota(input->selection_domain->target_indices.begin(),input->selection_domain->target_indices.end(),std::size_t{0});
+    const std::shared_ptr<const rhbm_gem::core::JointProblemInput> snapshot=input;
+    n::Domain all_contributors(snapshot); all_contributors.rows=rows;
+    n::Indices target_indices(atoms);
+    std::iota(target_indices.begin(),target_indices.end(),Eigen::Index{0});
+    const auto domain=all_contributors.Select(target_indices,rows,n::CompactRowMapping::Identity(rows));
+    rhbm_gem::JointParameterLayout layout; layout.full_atoms.resize(atoms);
+    std::iota(layout.full_atoms.begin(),layout.full_atoms.end(),std::size_t{0});
+    layout.informative_rows.resize(static_cast<std::size_t>(rows));
+    std::iota(layout.informative_rows.begin(),layout.informative_rows.end(),Eigen::Index{0});
+    n::EvaluationContext context; context.scale=1; context.eta_upper_bound=std::log(4.0);
+    context.rank={rows,2*static_cast<Eigen::Index>(atoms),static_cast<Eigen::Index>(atoms)};
+    context.linear.rank_relative=context.rank.Relative(context.rank.design_columns);
+    auto effective=std::make_shared<std::vector<double>>(input->observations);
+    const std::shared_ptr<const std::vector<double>> effective_snapshot=effective;
+    context.observations=n::Observe(effective_snapshot);
+    context.atom_ids=n::Identities(std::shared_ptr<const std::vector<std::string>>(snapshot,&snapshot->atom_ids))
+        .Select(target_indices);
+    context.row_ids=n::Identities(std::shared_ptr<const std::vector<std::string>>(snapshot,&snapshot->row_ids));
+    n::VectorMap y(effective->data(),rows);
+    const n::Vector eta=n::Vector::Constant(static_cast<Eigen::Index>(atoms),std::log(.55));
+    const auto partition=n::Partition(domain,context.atom_ids);
+    ASSERT_EQ(partition.components.size(),1u);
+    EXPECT_EQ(partition.components.front().atoms.size(),atoms);
+
+    n::FixedNeighborPolicy policy; policy.core_atoms=12; policy.maximum_sweeps=0;
+    policy.certify_endpoint=false; policy.eta_upper_bound=context.eta_upper_bound;
+    const auto preparation=n::SearchFixedNeighborComponent(domain,layout,y,eta,context,policy);
+    EXPECT_EQ(preparation.reason,"block-sweep-budget");
+    EXPECT_EQ(preparation.memory_estimate.status,n::MemoryStatus::Pass);
+    EXPECT_EQ(preparation.global_state_memory_estimate.status,n::MemoryStatus::Pass);
+    EXPECT_LE(preparation.global_state_memory_estimate.estimated_peak_bytes,n::JointMemoryPlanningBudgetBytes);
+    EXPECT_EQ(preparation.sweep_count,0u);
+    EXPECT_EQ(preparation.memory_estimate.shape.component_blocks,(atoms+11)/12);
+
+    n::BlockCoordinateState accepted; accepted.eta=eta; accepted.beta=n::Vector::Zero(2*static_cast<Eigen::Index>(atoms));
+    const auto certification=n::CertifyFixedNeighborEndpoint(domain,y,accepted,context);
+    ASSERT_TRUE(certification.qualified())<<certification.assessment.failure;
+    const auto support_entries=n::CountSupportEntries(*snapshot);
+    ASSERT_TRUE(support_entries);
+    const auto current_rss=n::CurrentRssBytes();
+    const auto peak_rss=n::ProcessPeakRssBytes();
+    RecordProperty("bounded_synthetic_observations",std::to_string(rows));
+    RecordProperty("bounded_synthetic_targets",std::to_string(atoms));
+    RecordProperty("bounded_synthetic_support_entries",std::to_string(*support_entries));
+    RecordProperty("bounded_synthetic_endpoint_peak_bytes",
+        std::to_string(certification.verification_memory_estimate.estimated_peak_bytes));
+    std::cout<<"joint-bounded-large-synthetic observations="<<rows
+        <<" contributors="<<atoms<<" targets="<<atoms<<" components="<<partition.components.size()
+        <<" blocks="<<preparation.memory_estimate.shape.component_blocks
+        <<" support_entries="<<*support_entries
+        <<" fixed_neighbor_preparation_peak_estimate_bytes="<<preparation.memory_estimate.estimated_peak_bytes
+        <<" global_state_evaluation_peak_estimate_bytes="<<preparation.global_state_memory_estimate.estimated_peak_bytes
+        <<" preflight_budget_bytes="<<n::JointMemoryPlanningBudgetBytes
+        <<" endpoint_peak_estimate_bytes="<<certification.verification_memory_estimate.estimated_peak_bytes
+        <<" baseline_rss_bytes="<<(baseline_rss ? std::to_string(*baseline_rss) : "unavailable")
+        <<" observed_current_rss_bytes="<<(current_rss ? std::to_string(*current_rss) : "unavailable")
+        <<" observed_process_peak_rss_bytes="<<(peak_rss ? std::to_string(*peak_rss) : "unavailable")
+        <<" search_sweeps=0 active_set_subproblem_solves=0 global_dense_matrix=none"<<std::endl;
+}
 TEST(JointFixedNeighborBlockCoordinateTest, EndpointReplayUsesStreamingVerificationForLargeComponents)
 {
     constexpr Eigen::Index atoms=37'406;
