@@ -1,6 +1,9 @@
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/WidthCalibration.hpp"
+#include "support/JointSyntheticWorkload.hpp"
 #include "support/JointWidthTrustPolicy.hpp"
 #include "support/JointWidthTrustTruth.hpp"
+#include "utils/domain/FileFingerprint.hpp"
 
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -8,9 +11,11 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <boost/json.hpp>
+#include <boost/hash2/sha2.hpp>
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -18,9 +23,11 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <numbers>
 #include <optional>
 #include <random>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -49,6 +56,9 @@ struct ExperimentInput
     std::string source;
     std::string simulation_mode{"not-applicable"},truth_source{"none"},truth_scale{"N/A — no truth"},
         estimate_scale{"original-domain-A/C; physical-width-B"},comparison_scale{"N/A — no truth"};
+    std::optional<rhbm_gem::JointInitialization> first_stage_initialization;
+    joint::WidthBoundCalibration calibration;
+    std::string problem_fingerprint, model_fingerprint, map_fingerprint;
 };
 
 json::value Number(double value)
@@ -59,6 +69,67 @@ void Write(const std::filesystem::path & path,const json::value & value)
     std::ofstream output(path);
     output.exceptions(std::ios::failbit|std::ios::badbit);
     output<<json::serialize(value)<<'\n';
+}
+
+std::string WidthVectorFingerprint(const std::vector<double> & values)
+{
+    boost::hash2::sha2_256 hash;
+    const auto integer=[&](std::uint64_t value) {
+        std::array<unsigned char,8> bytes{};
+        for(unsigned k=0;k<8;++k) bytes[k]=static_cast<unsigned char>((value>>(8*k))&255);
+        hash.update(bytes.data(),bytes.size());
+    };
+    integer(values.size());
+    for(const auto value:values) integer(std::bit_cast<std::uint64_t>(value));
+    return boost::hash2::to_string(hash.result());
+}
+
+json::object CalibrationJson(const joint::WidthBoundCalibration & calibration)
+{
+    json::object excluded;
+    for(const auto & [reason,count]:calibration.excluded_donor_reasons) excluded[reason]=count;
+    return {
+        {"dataset_identity",calibration.dataset_identity},{"status",calibration.status},
+        {"unavailable_reason",calibration.unavailable_reason},
+        {"target_count",calibration.target_count},{"qualified_donor_count",calibration.qualified_donor_count},
+        {"native_success_count",calibration.native_success_count},
+        {"refined_success_count",calibration.refined_success_count},
+        {"unqualified_count",calibration.unqualified_count},
+        {"invalid_width_count",calibration.invalid_width_count},
+        {"fallback_count",calibration.fallback_count},
+        {"initialization_failure_count",calibration.initialization_failure_count},
+        {"excluded_donor_reasons",std::move(excluded)},
+        {"minimum_width",calibration.minimum_width ? Number(*calibration.minimum_width) : json::value(nullptr)},
+        {"median_width",calibration.median_width ? Number(*calibration.median_width) : json::value(nullptr)},
+        {"p90",calibration.p90 ? Number(*calibration.p90) : json::value(nullptr)},
+        {"p95",calibration.p95 ? Number(*calibration.p95) : json::value(nullptr)},
+        {"p99",calibration.p99 ? Number(*calibration.p99) : json::value(nullptr)},
+        {"maximum_width",calibration.maximum_width ? Number(*calibration.maximum_width) : json::value(nullptr)},
+        {"bmax2",calibration.bmax2 ? Number(*calibration.bmax2) : json::value(nullptr)},
+        {"bmax4",calibration.bmax4 ? Number(*calibration.bmax4) : json::value(nullptr)},
+        {"p95_convention","Hyndman-Fan Type 7; sorted linear interpolation"},
+        {"initial_violations2",calibration.initial_violations2},
+        {"initial_violations4",calibration.initial_violations4}
+    };
+}
+
+json::object TruthCoverage(const ExperimentInput & experiment)
+{
+    if(!experiment.truth_available || experiment.calibration.status!="Available")
+        return {{"coverage2",nullptr},{"coverage4",nullptr},
+            {"reason",!experiment.truth_available ? "no-simulation-truth" : "calibration-unavailable"}};
+    std::size_t covered2{},covered4{};
+    for(const auto & truth:experiment.truth)
+    {
+        covered2+=truth.width<=*experiment.calibration.bmax2;
+        covered4+=truth.width<=*experiment.calibration.bmax4;
+    }
+    const double count=static_cast<double>(experiment.truth.size());
+    return {{"coverage2",count>0 ? json::value(static_cast<double>(covered2)/count) : json::value(nullptr)},
+        {"coverage4",count>0 ? json::value(static_cast<double>(covered4)/count) : json::value(nullptr)},
+        {"targets",experiment.truth.size()},{"truth_outside_bmax2",experiment.truth.size()-covered2},
+        {"truth_outside_bmax4",experiment.truth.size()-covered4},
+        {"truth_source",experiment.truth_source}};
 }
 
 std::string Status(rhbm_gem::JointCheckStatus status)
@@ -72,6 +143,23 @@ std::string Status(rhbm_gem::JointCheckStatus status)
     case S::NotRun:return "NotRun";
     }
     return "NotRun";
+}
+
+const rhbm_gem::JointCheck * FindCheck(const core::JointFitResult & fit,const std::string & name)
+{
+    const auto found=std::find_if(fit.evidence.begin(),fit.evidence.end(),[&](const auto & check) {
+        return check.name==name && check.scope==rhbm_gem::JointEvidenceScope::AssembledGlobal;
+    });
+    return found==fit.evidence.end() ? nullptr : &*found;
+}
+
+json::value CheckValue(const core::JointFitResult & fit,const std::string & name)
+{
+    const auto * check=FindCheck(fit,name);
+    return check ? json::value{{"status",Status(check->status)},
+        {"value",check->value ? json::value(*check->value) : json::value(nullptr)},
+        {"threshold",check->threshold ? json::value(*check->threshold) : json::value(nullptr)},
+        {"reason",check->reason}} : json::value(nullptr);
 }
 
 std::uint64_t Seed(const std::string & value)
@@ -172,11 +260,18 @@ ExperimentInput BuildSynthetic(const std::string & dataset,std::uint64_t seed)
     input.selection_domain->pure_halo_support_exclusion=rhbm_gem::JointPureHaloSupportExclusionProvenance{
         input.observations.size(),input.observations.size(),0,0,0,0};
     std::vector<double> initial(atom_count,weak ? 0.9 : 0.81);
-    return {core::JointProblem(std::move(input)),std::move(initial),std::move(truth),true,
+    ExperimentInput result{core::JointProblem(std::move(input)),std::move(initial),std::move(truth),true,
         false,"none",1,dataset+":"+std::to_string(seed),"synthetic-truth-controlled",
         "joint_width_trust_experiment synthetic generator",
         "original-domain-A/C; physical-width-B","original-domain-A/C; physical-width-B",
-        "original-domain-A/C; physical-width-B"};
+        "original-domain-A/C; physical-width-B",std::nullopt,{}, {},{}, {}};
+    result.calibration.dataset_identity=result.source;
+    result.calibration.unavailable_reason="synthetic-workload-has-no-first-stage-sample-provenance";
+    result.calibration.target_count=atom_count;
+    result.problem_fingerprint=second_stage_test::SyntheticJointWorkloadHash(
+        core::JointProblemAccess::Get(result.problem).input ?
+            *core::JointProblemAccess::Get(result.problem).input : core::JointProblemInput{});
+    return result;
 }
 
 json::value ReadJson(const std::filesystem::path & path)
@@ -216,6 +311,7 @@ ExperimentInput BuildReal(const std::string & dataset,const std::filesystem::pat
     auto problem=core::BuildPureHaloSupportExclusionProblem(*map,*model);
     const auto initialization=joint::InitializeContributors(*map,*model,problem);
     if(!initialization.valid) throw std::runtime_error("First-stage initialization failed: "+initialization.reason);
+    const auto calibration=joint::CalibrateGlobalWidth(initialization,dataset+":"+map_path.string());
     const auto & data=core::JointProblemAccess::Get(problem);
     std::vector<Truth> truth(data.input->atom_ids.size());
     bool truth_available=dataset=="6z6u-simulation";
@@ -231,12 +327,19 @@ ExperimentInput BuildReal(const std::string & dataset,const std::filesystem::pat
     }
     const bool normalized=normalization.has_value();
     const std::string normalized_scale="normalized-domain-A/C; physical-width-B";
-    return {std::move(problem),initialization.b,std::move(truth),truth_available,
+    ExperimentInput result{std::move(problem),initialization.b,std::move(truth),truth_available,
         normalized,"MapValueArrayNormalization",*normalization,map_path.string(),
         truth_available ? "normalized-simulation-research" : "real-map-production-normalized",
         truth_available ? map_path.string()+".simulation.json" : "none",
         truth_available ? "original-domain-A/C; physical-width-B" : "N/A — no truth",
-        normalized_scale,truth_available ? normalized_scale : "N/A — no truth"};
+        normalized_scale,truth_available ? normalized_scale : "N/A — no truth",
+        std::nullopt,{}, {},{}, {}};
+    result.first_stage_initialization=initialization;
+    result.calibration=calibration;
+    result.problem_fingerprint=second_stage_test::SyntheticJointWorkloadHash(*data.input);
+    result.model_fingerprint=rhbm_gem::FileSha256(model_path);
+    result.map_fingerprint=rhbm_gem::FileSha256(map_path);
+    return result;
 }
 
 struct RunMetrics
@@ -251,6 +354,10 @@ struct RunMetrics
         maximum_observed_abs_ac_basis_correlation{joint::unavailable};
     std::optional<std::size_t> first_rejection_sweep,first_rejection_block;
     json::array objective_trajectory,block_update_trace;
+    std::size_t active_set_transitions{},bound_hits{},bound_releases{},active_set_iterations{},
+        active_set_failures{};
+    double maximum_subproblem_kkt{joint::unavailable};
+    std::map<std::pair<std::size_t,std::size_t>,std::set<std::size_t>> prior_active_sets;
 };
 
 void Max(double & value,double candidate)
@@ -271,10 +378,13 @@ double Rmse(const std::vector<double> & values)
     return std::sqrt(static_cast<double>(sum/static_cast<long double>(values.size())));
 }
 
-json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind)
+json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind,
+    std::optional<double> eta_max={},const std::vector<double> * initial_widths=nullptr,bool compact=false)
 {
     const auto & data=core::JointProblemAccess::Get(experiment.problem);
-    const auto & policy_name=trust::Name(policy_kind);
+    const auto & run_widths=initial_widths ? *initial_widths : experiment.initial_widths;
+    const std::string policy_name=compact ? (eta_max ? "active-set-bounded-lm" : "production-profile-lm") :
+        trust::Name(policy_kind);
     const bool synthetic=IsSyntheticDataset(experiment.source.substr(0,experiment.source.find(':')));
     std::vector<std::string> policy_target_ids;
     if(synthetic)
@@ -282,7 +392,8 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
             policy_target_ids.push_back(data.input->atom_ids.at(atom));
     else
         policy_target_ids.emplace_back("1032");
-    const auto policy_scope=trust::LocateMutableCoreScope(experiment.problem,policy_target_ids,12);
+    const auto policy_scope=policy_kind==trust::Policy::Baseline ? std::vector<trust::BlockScope>{} :
+        trust::LocateMutableCoreScope(experiment.problem,policy_target_ids,12);
     joint::FixedNeighborWidthTrajectoryCapture capture;
     capture.maximum_events=100000;
     capture.maximum_atoms=32;
@@ -299,18 +410,41 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
         tracked_indices.push_back(static_cast<std::size_t>(found-data.input->atom_ids.begin()));
     }
     for(const auto atom:tracked_indices)
-        capture.atom_initial_widths.emplace_back(data.input->atom_ids.at(atom),experiment.initial_widths.at(atom));
+        capture.atom_initial_widths.emplace_back(data.input->atom_ids.at(atom),run_widths.at(atom));
 
     RunMetrics metrics;
     joint::FixedNeighborDiagnosticSink sink;
     sink.block=[&](const joint::FixedNeighborBlockRecord & block) {
-        metrics.block_update_trace.push_back(json::object{
-            {"component_index",block.component_index},{"component_id",block.component_id},
-            {"sweep",block.sweep},{"block",block.block},{"accepted",block.accepted},
-            {"accepted_updates",block.accepted_updates},{"objective_before",Number(block.objective_before)},
-            {"objective_after",Number(block.objective_after)},{"status",block.status}});
+        if(!compact)
+            metrics.block_update_trace.push_back(json::object{
+                {"component_index",block.component_index},{"component_id",block.component_id},
+                {"sweep",block.sweep},{"block",block.block},{"accepted",block.accepted},
+                {"accepted_updates",block.accepted_updates},{"objective_before",Number(block.objective_before)},
+                {"objective_after",Number(block.objective_after)},{"status",block.status}});
         for(const auto & trial:block.profile_trials)
         {
+            if(trial.bounded_subproblem)
+            {
+                metrics.active_set_iterations+=trial.active_set_iterations;
+                Max(metrics.maximum_subproblem_kkt,trial.lm_subproblem_kkt_inf_norm);
+                if(trial.bounded_subproblem_status!="solved") ++metrics.active_set_failures;
+                const std::set<std::size_t> active(trial.active_bound_indices.begin(),trial.active_bound_indices.end());
+                const auto key=std::pair{block.component_index,block.block};
+                const auto previous=metrics.prior_active_sets.find(key);
+                if(previous!=metrics.prior_active_sets.end())
+                {
+                    for(const auto index:active) if(!previous->second.contains(index))
+                    {++metrics.bound_hits; ++metrics.active_set_transitions;}
+                    for(const auto index:previous->second) if(!active.contains(index))
+                    {++metrics.bound_releases; ++metrics.active_set_transitions;}
+                }
+                else
+                {
+                    metrics.bound_hits+=active.size();
+                    metrics.active_set_transitions+=active.size();
+                }
+                metrics.prior_active_sets[key]=active;
+            }
             if(trial.width_trust_policy_rejected)
             {
                 ++metrics.policy_rejections;
@@ -349,7 +483,7 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
     };
     sink.sweep=[&](const joint::FixedNeighborBlockSweep & sweep) {
         metrics.sweeps=sweep.sweep;
-        metrics.objective_trajectory.push_back(json::object{
+        if(!compact) metrics.objective_trajectory.push_back(json::object{
             {"sweep",sweep.sweep},{"objective_before",Number(sweep.objective_before)},
             {"objective_after",Number(sweep.objective_after)},
             {"global_ac_kkt",Number(sweep.global_ac_kkt)},
@@ -363,12 +497,14 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
         local.capture_local_trajectory=true;
         local.collect_telemetry=true;
         local.diagnostic_sink=&sink;
-        local.width_trajectory=&capture;
-        local.width_trial_trust_for_testing=trust::Make(policy_kind,policy_scope,
-            local.component_index,&metrics.policy_statistics);
+        local.width_trajectory=compact ? nullptr : &capture;
+        if(eta_max) local.eta_upper_bound_for_research=eta_max;
+        if(policy_kind!=trust::Policy::Baseline)
+            local.width_trial_trust_for_testing=trust::Make(policy_kind,policy_scope,
+                local.component_index,&metrics.policy_statistics);
     };
     const auto started=Clock::now();
-    const auto fit=joint::FitFixedNeighborComponentsImpl(experiment.problem,experiment.initial_widths,production_policy);
+    const auto fit=joint::FitFixedNeighborComponentsImpl(experiment.problem,run_widths,production_policy);
     const double wall_seconds=std::chrono::duration<double>(Clock::now()-started).count();
     if(fit.components.size()!=1) throw std::runtime_error("P2 runner expects one component.");
     if(metrics.policy_rejections!=metrics.policy_statistics.in_scope_rejected_trials)
@@ -378,7 +514,9 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
     const auto & component=fit.components.front();
     metrics.profile_evaluations=static_cast<std::size_t>(component.profile_evaluations);
     const auto & diagnostic=component.candidate_diagnostic;
-    std::vector<double> parameter_error_a,parameter_error_b,parameter_error_c,prediction_error;
+    std::vector<double> parameter_error_a,parameter_error_b,parameter_error_c,prediction_error,
+        inside_error_a,inside_error_b,inside_error_c;
+    std::size_t truth_outside_bound_count{};
     bool candidate_available=diagnostic && diagnostic->candidate_available &&
         diagnostic->candidate_eta.size()==data.input->atom_ids.size() &&
         diagnostic->candidate_ac.size()==2*data.input->atom_ids.size();
@@ -402,6 +540,13 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
                 parameter_error_a.push_back(a-truth.amplitude);
                 parameter_error_b.push_back(b-truth.width);
                 parameter_error_c.push_back(c-truth.charge);
+                if(!eta_max || truth.width<=std::exp(*eta_max))
+                {
+                    inside_error_a.push_back(a-truth.amplitude);
+                    inside_error_b.push_back(b-truth.width);
+                    inside_error_c.push_back(c-truth.charge);
+                }
+                else ++truth_outside_bound_count;
             }
         }
         for(std::size_t row=0;row<prediction_error.size();++row)
@@ -415,6 +560,50 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
         runtime==rhbm_gem::JointCheckStatus::Passed ? "qualified-estimate" : "unqualified-candidate-metrics";
     const std::string prediction_metric_status=!candidate_available ? "Unavailable" :
         runtime==rhbm_gem::JointCheckStatus::Passed ? "qualified-fit" : "unqualified-candidate";
+    std::size_t final_active_bound_count{};
+    double maximum_bound_violation{},projected_gradient_inf=joint::unavailable,
+        boundary_gradient_violation{},boundary_multiplier_max{},complementarity_residual=joint::unavailable;
+    double serial_1032_width=joint::unavailable;
+    if(candidate_available)
+    {
+        if(!synthetic)
+        {
+            const auto found=std::find(data.input->atom_ids.begin(),data.input->atom_ids.end(),"1032");
+            if(found!=data.input->atom_ids.end())
+                serial_1032_width=std::exp(diagnostic->candidate_eta.at(
+                    static_cast<std::size_t>(found-data.input->atom_ids.begin())));
+        }
+        if(eta_max)
+        {
+            const double feasibility_tolerance=64.0*std::numeric_limits<double>::epsilon()*
+                std::max(1.0,std::abs(*eta_max));
+            double projected_inf{};
+            double complementarity{};
+            for(std::size_t atom=0;atom<diagnostic->candidate_eta.size();++atom)
+            {
+                const double eta=diagnostic->candidate_eta[atom];
+                const double violation=std::max(0.0,eta-*eta_max);
+                maximum_bound_violation=std::max(maximum_bound_violation,violation);
+                const bool active=eta>=*eta_max-feasibility_tolerance;
+                final_active_bound_count+=active;
+                if(fit.assembled_state && atom<fit.assembled_state->width_gradient.size())
+                {
+                    const double gradient=fit.assembled_state->width_gradient[atom];
+                    const double projected=eta-std::min(eta-gradient,*eta_max);
+                    projected_inf=std::max(projected_inf,std::abs(projected));
+                    if(active)
+                    {
+                        boundary_gradient_violation=std::max(boundary_gradient_violation,std::max(0.0,gradient));
+                        const double multiplier=std::max(0.0,-gradient);
+                        boundary_multiplier_max=std::max(boundary_multiplier_max,multiplier);
+                        complementarity=std::max(complementarity,multiplier*std::max(0.0,*eta_max-eta));
+                    }
+                }
+            }
+            projected_gradient_inf=projected_inf;
+            complementarity_residual=complementarity;
+        }
+    }
     json::array policy_scope_json;
     for(const auto & block:policy_scope)
     {
@@ -453,15 +642,34 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
         {"component_stop_reason",component.stop_reason},
         {"independent_replay",independent_replay==fit.evidence.end() ? "NotMeasured" : Status(independent_replay->status)},
         {"candidate_available",candidate_available},
+        {"global_eta_upper_bound",eta_max ? Number(*eta_max) : json::value(nullptr)},
+        {"global_width_upper_bound",eta_max ? Number(std::exp(*eta_max)) : json::value(nullptr)},
+        {"initial_width_projection_count",initial_widths ?
+            std::count_if(run_widths.begin(),run_widths.end(),[&,i=std::size_t{0}](double width) mutable {
+                const bool projected=width!=experiment.initial_widths.at(i++); return projected;
+            }) : 0},
         {"accuracy_metric_status",accuracy_metric_status},
         {"prediction_metric_status",prediction_metric_status},
         {"candidate_objective",diagnostic && diagnostic->candidate_objective ? Number(*diagnostic->candidate_objective) : json::value(nullptr)},
         {"candidate_ac_kkt",diagnostic && diagnostic->candidate_ac_kkt ? Number(*diagnostic->candidate_ac_kkt) : json::value(nullptr)},
         {"candidate_width_gradient_inf_norm",diagnostic && diagnostic->candidate_width_gradient_inf_norm ? Number(*diagnostic->candidate_width_gradient_inf_norm) : json::value(nullptr)},
+        {"width_stationarity",CheckValue(fit,"width-stationarity")},
+        {"independent_replay_check",CheckValue(fit,"independent-replay")},
+        {"final_active_bound_atoms",final_active_bound_count},
+        {"maximum_bound_violation_log_width",Number(maximum_bound_violation)},
+        {"projected_width_gradient_inf_norm",Number(projected_gradient_inf)},
+        {"boundary_gradient_sign_violation",Number(boundary_gradient_violation)},
+        {"boundary_multiplier_max",Number(boundary_multiplier_max)},
+        {"boundary_complementarity_residual",Number(complementarity_residual)},
+        {"serial_1032_width_angstrom",Number(serial_1032_width)},
         {"A_rmse",experiment.truth_available ? Number(Rmse(parameter_error_a)) : json::value(nullptr)},
         {"B_rmse_angstrom",experiment.truth_available ? Number(Rmse(parameter_error_b)) : json::value(nullptr)},
         {"C_rmse",experiment.truth_available ? Number(Rmse(parameter_error_c)) : json::value(nullptr)},
         {"prediction_rmse",candidate_available ? Number(Rmse(prediction_error)) : json::value(nullptr)},
+        {"truth_inside_bound_A_rmse",experiment.truth_available && !inside_error_a.empty() ? Number(Rmse(inside_error_a)) : json::value(nullptr)},
+        {"truth_inside_bound_B_rmse_angstrom",experiment.truth_available && !inside_error_b.empty() ? Number(Rmse(inside_error_b)) : json::value(nullptr)},
+        {"truth_inside_bound_C_rmse",experiment.truth_available && !inside_error_c.empty() ? Number(Rmse(inside_error_c)) : json::value(nullptr)},
+        {"truth_outside_bound_count",experiment.truth_available && eta_max ? json::value(truth_outside_bound_count) : json::value(nullptr)},
         {"maximum_accepted_width_A",Number(metrics.maximum_width)},
         {"maximum_local_ac_condition",Number(metrics.maximum_condition)},
         {"maximum_ac_cancellation_ratio",Number(metrics.maximum_cancellation)},
@@ -499,6 +707,12 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
         {"first_policy_rejection_sweep",metrics.first_rejection_sweep ? json::value(*metrics.first_rejection_sweep) : json::value(nullptr)},
         {"first_policy_rejection_block",metrics.first_rejection_block ? json::value(*metrics.first_rejection_block) : json::value(nullptr)},
         {"accepted_width_updates",metrics.accepted_width_updates},
+        {"active_set_transition_count",metrics.active_set_transitions},
+        {"active_set_bound_hits",metrics.bound_hits},
+        {"active_set_bound_releases",metrics.bound_releases},
+        {"active_set_iterations",metrics.active_set_iterations},
+        {"active_set_subproblem_failures",metrics.active_set_failures},
+        {"maximum_active_set_subproblem_kkt_inf_norm",Number(metrics.maximum_subproblem_kkt)},
         {"search_sweeps",metrics.sweeps},
         {"profile_evaluations",metrics.profile_evaluations},
         {"objective_trajectory",std::move(metrics.objective_trajectory)},
@@ -508,6 +722,7 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
     };
 }
 
+#ifndef RHBM_GLOBAL_WIDTH_BOUND_EXPERIMENT
 void Run(const std::string & dataset,const std::filesystem::path & output,const std::string & policy_name,
     std::uint64_t seed,const std::filesystem::path & model_path,const std::filesystem::path & map_path)
 {
@@ -521,12 +736,94 @@ void Run(const std::string & dataset,const std::filesystem::path & output,const 
         BuildSynthetic(dataset,seed) : BuildReal(dataset,model_path,map_path);
     Write(output/"result.json",RunOne(experiment,policy));
 }
+#endif
+
+[[maybe_unused]] void RunGlobalWidthBoundGroup(const std::string & dataset,const std::filesystem::path & output,
+    const std::string & group,std::uint64_t seed,const std::filesystem::path & model_path,
+    const std::filesystem::path & map_path)
+{
+    const auto total_started=Clock::now();
+    if(std::filesystem::exists(output)) throw std::runtime_error("Use a fresh P3 group output directory.");
+    std::filesystem::create_directories(output);
+    ExperimentInput experiment=IsSyntheticDataset(dataset) ? BuildSynthetic(dataset,seed) :
+        BuildReal(dataset,model_path,map_path);
+
+    std::optional<double> eta_max;
+    const std::vector<double> * initial_override=nullptr;
+    joint::BoundedInitialization projected;
+    bool formal_group=group=="A" || group=="B2" || group=="B4";
+    const bool bound2=group=="B2" || group=="Aproj2";
+    const bool bound4=group=="B4" || group=="Aproj4";
+    if(group!="A" && !bound2 && !bound4) throw std::invalid_argument("Group must be A, B2, B4, Aproj2, or Aproj4.");
+    if(bound2 || bound4)
+    {
+        if(experiment.calibration.status!="Available")
+            throw std::runtime_error("Cannot run bounded group: "+experiment.calibration.unavailable_reason);
+        projected=joint::MakeBoundedInitializationForResearch(*experiment.first_stage_initialization,
+            experiment.calibration,bound2 ? joint::GlobalWidthBoundMultiplier::TwoP95 :
+                joint::GlobalWidthBoundMultiplier::FourP95);
+        if(!projected.available) throw std::runtime_error("Bounded initialization unavailable: "+projected.reason);
+        initial_override=&projected.widths;
+        if(group=="B2") eta_max=experiment.calibration.eta_max2;
+        else if(group=="B4") eta_max=experiment.calibration.eta_max4;
+    }
+    const auto run=RunOne(experiment,trust::Policy::Baseline,eta_max,initial_override,true);
+    json::object result=run;
+    const auto & data=core::JointProblemAccess::Get(experiment.problem);
+    result["group"]=group;
+    result["formal_group"]=formal_group;
+    result["dataset_identity"]=experiment.source;
+    result["target_count"]=data.input->selection_domain ? data.input->selection_domain->target_indices.size() : 0;
+    result["observation_count"]=data.input->observations.size();
+    result["input_fingerprint"]=experiment.problem_fingerprint;
+    result["first_stage_initialization_fingerprint"]=WidthVectorFingerprint(experiment.initial_widths);
+    result["effective_initialization_fingerprint"]=WidthVectorFingerprint(
+        initial_override ? *initial_override : experiment.initial_widths);
+    result["model_sha256"]=experiment.model_fingerprint.empty() ? json::value(nullptr) :
+        json::value(experiment.model_fingerprint);
+    result["map_sha256"]=experiment.map_fingerprint.empty() ? json::value(nullptr) :
+        json::value(experiment.map_fingerprint);
+    result["simulation_truth_sha256"]=experiment.truth_available && !map_path.empty() ?
+        json::value(rhbm_gem::FileSha256(map_path.string()+".simulation.json")) : json::value(nullptr);
+    result["initialization_provenance"]=experiment.first_stage_initialization ?
+        "FirstStage::InitializeContributors" : "synthetic-joint-initial-vector-no-firststage";
+    result["calibration_input"]=experiment.first_stage_initialization ? "qualified-first-stage-target-widths" :
+        "unavailable-no-first-stage-sample-provenance";
+    result["truth_leakage"]=false;
+    result["normalization_divisor"]=Number(experiment.normalization_divisor);
+    result["pure_halo_support_exclusion"]=true;
+    result["chain_selection"]=dataset.starts_with("6z6u-") ? "Chain A non-hydrogen" : "synthetic-selected-targets";
+    result["core_atoms"]=12;
+    result["maximum_sweeps"]=200;
+    result["block_order"]="forward";
+    result["global_width_bound_multiplier"]=group=="B2" || group=="Aproj2" ? 2 :
+        group=="B4" || group=="Aproj4" ? 4 : 0;
+    result["initial_width_projection_count"]=initial_override ? projected.projection_count : 0;
+    result["maximum_initial_projection_angstrom"]=initial_override ?
+        Number(projected.maximum_projection_magnitude) : json::value(0.0);
+    result["truth_coverage_after_calibration"]=TruthCoverage(experiment);
+    result["calibration"]=CalibrationJson(experiment.calibration);
+    result["problem_objective"]="existing Joint profile objective; unchanged A/C constrained solver";
+    result["total_wall_seconds"]=std::chrono::duration<double>(Clock::now()-total_started).count();
+    result["runtime_rss_scope"]="isolated group process";
+    Write(output/"group.json",result);
+    Write(output/"calibration.json",CalibrationJson(experiment.calibration));
+}
 }
 
 int main(int argc,char ** argv)
 {
     try
     {
+#ifdef RHBM_GLOBAL_WIDTH_BOUND_EXPERIMENT
+        if(argc!=5 && argc!=7)
+            throw std::invalid_argument("Usage: joint_global_width_bound_experiment DATASET OUTPUT A|B2|B4|Aproj2|Aproj4 SEED [MODEL MAP]");
+        const auto dataset=std::string(argv[1]);
+        RunGlobalWidthBoundGroup(dataset,argv[2],argv[3],Seed(argv[4]),
+            argc==7 ? std::filesystem::path(argv[5]) : std::filesystem::path{},
+            argc==7 ? std::filesystem::path(argv[6]) : std::filesystem::path{});
+        return 0;
+#else
         if(argc!=5 && argc!=7)
             throw std::invalid_argument("Usage: joint_width_trust_experiment DATASET OUTPUT A|B1|B2 SEED [MODEL MAP]");
         const auto dataset=std::string(argv[1]);
@@ -534,6 +831,7 @@ int main(int argc,char ** argv)
         Run(dataset,argv[2],argv[3],seed,argc==7 ? std::filesystem::path(argv[5]) : std::filesystem::path{},
             argc==7 ? std::filesystem::path(argv[6]) : std::filesystem::path{});
         return 0;
+#endif
     }
     catch(const std::exception & error)
     {

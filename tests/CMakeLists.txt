@@ -380,6 +380,12 @@ if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
     target_link_libraries(joint_width_trust_experiment PRIVATE joint_test_support rhbm_gem_test CompilerFlags)
     target_compile_definitions(joint_width_trust_experiment PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
     add_dependencies(tests_all joint_width_trust_experiment)
+    add_executable(joint_global_width_bound_experiment experiments/joint_width_trust_experiment.cpp
+        support/JointWidthTrustPolicy.cpp)
+    target_link_libraries(joint_global_width_bound_experiment PRIVATE joint_test_support rhbm_gem_test CompilerFlags)
+    target_compile_definitions(joint_global_width_bound_experiment PRIVATE
+        RHBM_GEM_TEST_INSTRUMENTATION RHBM_GLOBAL_WIDTH_BOUND_EXPERIMENT)
+    add_dependencies(tests_all joint_global_width_bound_experiment)
     add_executable(joint_width_repro_no_instrumentation experiments/joint_width_repro_no_instrumentation.cpp)
     target_link_libraries(joint_width_repro_no_instrumentation PRIVATE joint_test_support rhbm_gem CompilerFlags)
     add_dependencies(tests_all joint_width_repro_no_instrumentation)
@@ -612,6 +618,8 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_benchmark_test.py")
     add_test(NAME joint_experiment_cleanup_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_experiment_cleanup_test.py")
+    add_test(NAME joint_global_width_bound_experiment_test
+        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_global_width_bound_experiment_test.py")
     set_tests_properties(experiment_support_test experiment_runner_dependency_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm")
     set_tests_properties(joint_benchmark_contract_test
