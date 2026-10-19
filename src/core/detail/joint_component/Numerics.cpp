@@ -90,13 +90,7 @@ void AddRoleWork(ProfileRoleWork & destination,const ProfileRoleWork & source)
     destination.tiled_qr_rhs_transform_seconds+=source.tiled_qr_rhs_transform_seconds;
     destination.replay_trust_seconds+=source.replay_trust_seconds;
 }
-struct WidthBoundKkt
-{
-    bool feasible{};
-    double projected{std::numeric_limits<double>::infinity()},violation{},
-        boundary_gradient{unavailable},multiplier{},complementarity{};
-    std::size_t active{};
-};
+}
 WidthBoundKkt CalculateWidthBoundKkt(const Vector & eta,const Vector & gradient,double upper)
 {
     WidthBoundKkt out;
@@ -123,6 +117,7 @@ WidthBoundKkt CalculateWidthBoundKkt(const Vector & eta,const Vector & gradient,
     }
     return out;
 }
+namespace {
 void CaptureWidthBoundKkt(Certificate & certificate,const Vector & eta,const Vector & gradient,
     const EvaluationContext & context)
 {
@@ -177,11 +172,23 @@ void ProfileSearchWork::Add(ProfileEvaluationRole role,const ProfileRoleWork & w
     if(role!=ProfileEvaluationRole::Unspecified) AddRoleWork(Role(role),work);
     AddRoleWork(total,work);
 }
+void BoundedLmWork::Merge(const BoundedLmWork & other)
+{
+    subproblem_solves+=other.subproblem_solves;
+    failed_subproblems+=other.failed_subproblems;
+    active_set_iterations+=other.active_set_iterations;
+    releases+=other.releases;
+    active_bound_occurrences+=other.active_bound_occurrences;
+    if(std::isfinite(other.maximum_subproblem_kkt))
+        maximum_subproblem_kkt=std::isfinite(maximum_subproblem_kkt) ?
+            std::max(maximum_subproblem_kkt,other.maximum_subproblem_kkt) : other.maximum_subproblem_kkt;
+}
 void ProfileSearchWork::Merge(const ProfileSearchWork & other)
 {
     AddRoleWork(total,other.total); AddRoleWork(initial_profile,other.initial_profile);
     AddRoleWork(trial_profile,other.trial_profile); AddRoleWork(accepted_endpoint,other.accepted_endpoint);
     AddRoleWork(reference_evaluation,other.reference_evaluation);
+    bounded_lm.Merge(other.bounded_lm);
     accepted_profile_trials+=other.accepted_profile_trials;
     rejected_profile_trials+=other.rejected_profile_trials;
     local_replay_kkt_rejections+=other.local_replay_kkt_rejections;

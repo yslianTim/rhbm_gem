@@ -172,14 +172,14 @@ struct FullReplay
 {
     bool passed{},residual_passed{},halo_passed{},objective_passed{},mapping_passed{},
         observation_identities_passed{},fixed_parameters_passed{},target_feasible{},
-        target_ac_passed{},target_width_passed{};
+        target_ac_passed{},target_width_passed{},width_bound_applied{},width_bound_feasible{true};
     std::vector<double> prediction;
     double residual_difference{},halo_difference{},objective_difference{},objective{},tolerance{},
         objective_tolerance{},target_ac_kkt{},target_width_gradient{};
     std::string reason;
 };
 FullReplay ReplayFixedHaloFullModel(const n::ProblemData & data,const n::AssemblyResult & assembly,
-    const n::JointConvergenceCriteria & convergence_criteria)
+    const n::JointConvergenceCriteria & convergence_criteria,std::optional<double> eta_upper_bound)
 {
     FullReplay out;
     out.fixed_parameters_passed=true;
@@ -287,6 +287,8 @@ FullReplay ReplayFixedHaloFullModel(const n::ProblemData & data,const n::Assembl
     const auto target_count=data.target_to_contributor.size();
     std::vector<long double> ac_gradient(2*target_count),column_norm_squared(2*target_count),
         gaussian_width_gradient(target_count),charge_width_gradient(target_count);
+    n::Vector target_eta(static_cast<Eigen::Index>(target_count)),target_width_gradient(
+        static_cast<Eigen::Index>(target_count));
     out.target_feasible=true;
     for(std::size_t target=0;target<target_count;++target)
     {
@@ -294,6 +296,7 @@ FullReplay ReplayFixedHaloFullModel(const n::ProblemData & data,const n::Assembl
         const double amplitude=assembly.raw.beta(static_cast<Eigen::Index>(2*target));
         const double charge=assembly.raw.beta(static_cast<Eigen::Index>(2*target+1));
         const double width=std::exp(assembly.raw.eta(static_cast<Eigen::Index>(target)));
+        target_eta(static_cast<Eigen::Index>(target))=assembly.raw.eta(static_cast<Eigen::Index>(target));
         out.target_feasible &= std::isfinite(amplitude) && amplitude>=0 && std::isfinite(charge) &&
             std::isfinite(width) && width>0;
         for(const auto & support:input.support[contributor])
@@ -330,11 +333,19 @@ FullReplay ReplayFixedHaloFullModel(const n::ProblemData & data,const n::Assembl
         }
         const double width_gradient=static_cast<double>((amplitude*gaussian_width_gradient[target]+
             charge*charge_width_gradient[target])/(scale*scale));
-        out.target_width_gradient=std::max(out.target_width_gradient,std::abs(width_gradient));
+        target_width_gradient(static_cast<Eigen::Index>(target))=width_gradient;
     }
+    if(eta_upper_bound)
+    {
+        const auto width_kkt=n::CalculateWidthBoundKkt(target_eta,target_width_gradient,*eta_upper_bound);
+        out.width_bound_applied=true;
+        out.width_bound_feasible=width_kkt.feasible;
+        out.target_width_gradient=width_kkt.projected;
+    }
+    else out.target_width_gradient=target_width_gradient.lpNorm<Eigen::Infinity>();
     out.target_ac_passed=out.target_feasible && std::isfinite(out.target_ac_kkt) &&
         out.target_ac_kkt<=convergence_criteria.global_ac_kkt;
-    out.target_width_passed=std::isfinite(out.target_width_gradient) &&
+    out.target_width_passed=out.width_bound_feasible && std::isfinite(out.target_width_gradient) &&
         out.target_width_gradient<=convergence_criteria.global_width_gradient;
     out.passed=out.mapping_passed && out.observation_identities_passed && out.fixed_parameters_passed &&
         out.residual_passed && out.halo_passed && out.objective_passed && out.target_ac_passed && out.target_width_passed;
@@ -345,7 +356,8 @@ FullReplay ReplayFixedHaloFullModel(const n::ProblemData & data,const n::Assembl
         !out.halo_passed ? "fixed-halo-replay-disagrees" :
         !out.objective_passed ? "full-and-effective-objectives-disagree" :
         !out.target_feasible ? "target-parameters-infeasible" :
-        !out.target_ac_passed ? "target-ac-kkt-failed" : "target-width-gradient-failed";
+        !out.target_ac_passed ? "target-ac-kkt-failed" :
+        !out.width_bound_feasible ? "target-width-bound-infeasible" : "target-width-gradient-failed";
     return out;
 }
 }
@@ -440,7 +452,8 @@ JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> & evidence,Join
         if(fixed_halo_replay)
             for(const char * name:{"full-observation-replay","fixed-halo-replay","full-objective-replay",
                 "target-ac-feasibility","target-ac-optimality","target-width-stationarity",
-                "target-contributor-mapping","original-observation-identities","fixed-halo-provenance"})
+                "target-width-bound-feasibility","target-contributor-mapping","original-observation-identities",
+                "fixed-halo-provenance"})
                 assembly_required.push_back(name);
         for(const char * name:assembly_required)
         {
@@ -459,8 +472,13 @@ JointCheckStatus JointComponentResult::RuntimeConvergence() const
     const auto stationary=std::find_if(evidence.begin(),evidence.end(),[](const auto & check) {
         return check.name=="complete-sweep-stationarity" && check.scope==JointEvidenceScope::ComponentLocal;
     });
-    return joint_component::MergeConvergenceStatus(status,stationary==evidence.end() ?
+    status=joint_component::MergeConvergenceStatus(status,stationary==evidence.end() ?
         JointCheckStatus::Unavailable : stationary->status);
+    const auto active_set=std::find_if(evidence.begin(),evidence.end(),[](const auto & check) {
+        return check.name=="active-set-lm-subproblems" && check.scope==JointEvidenceScope::ComponentLocal;
+    });
+    if(active_set!=evidence.end()) status=joint_component::MergeConvergenceStatus(status,active_set->status);
+    return status;
 }
 JointCheckStatus JointFitResult::RuntimeConvergence() const
 {
@@ -1153,7 +1171,8 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         const auto & state=assembly.raw;
         if(fixed_halo_policy)
         {
-            full_replay=ReplayFixedHaloFullModel(data,assembly,bounded_policy.convergence_criteria);
+            full_replay=ReplayFixedHaloFullModel(data,assembly,bounded_policy.convergence_criteria,
+                bounded_policy.eta_upper_bound);
             out.evidence.push_back({"full-observation-replay",full_replay->residual_passed ? JointCheckStatus::Passed :
                 JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
                 full_replay->residual_difference,full_replay->tolerance,full_replay->residual_passed ?
@@ -1178,7 +1197,13 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
                 JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
                 full_replay->target_width_gradient,bounded_policy.convergence_criteria.global_width_gradient,
                 full_replay->target_width_passed ?
-                    "target-only-log-width-gradient" : full_replay->reason});
+                    (full_replay->width_bound_applied ? "target-only-projected-width-kkt" :
+                        "target-only-log-width-gradient") : full_replay->reason});
+            out.evidence.push_back({"target-width-bound-feasibility",
+                full_replay->width_bound_feasible ? JointCheckStatus::Passed : JointCheckStatus::Failed,
+                JointEvidenceScope::AssembledGlobal,
+                full_replay->width_bound_feasible ? 0.0 : 1.0,0.0,
+                full_replay->width_bound_applied ? "independent-full-model-bound-check" : "no-global-width-bound"});
             out.evidence.push_back({"target-contributor-mapping",full_replay->mapping_passed ? JointCheckStatus::Passed :
                 JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
                 full_replay->mapping_passed ? 0.0 : 1.0,0.0,full_replay->mapping_passed ?

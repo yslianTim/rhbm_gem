@@ -296,6 +296,25 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             Assessment missing; missing.failure=component.stop_reason;
             component.evidence=AssessmentEvidence(missing,JointEvidenceScope::ComponentLocal);
         }
+        if(production_policy.eta_upper_bound)
+        {
+            const auto & work=fit.search.work.local_profile_work.bounded_lm;
+            const bool certified_without_steps=work.subproblem_solves==0 && fit.search.certification &&
+                fit.search.certification->qualified();
+            const auto status=work.subproblem_solves==0 ?
+                (certified_without_steps ? JointCheckStatus::Passed : JointCheckStatus::Unavailable) :
+                work.failed_subproblems ? JointCheckStatus::Failed : JointCheckStatus::Passed;
+            component.evidence.push_back({"active-set-lm-subproblems",status,
+                JointEvidenceScope::ComponentLocal,
+                std::isfinite(work.maximum_subproblem_kkt) ?
+                    std::optional<double>(work.maximum_subproblem_kkt) : std::nullopt,{},
+                "solves="+std::to_string(work.subproblem_solves)+
+                    "; failed="+std::to_string(work.failed_subproblems)+
+                    "; active-set-iterations="+std::to_string(work.active_set_iterations)+
+                    "; releases="+std::to_string(work.releases)+
+                    "; active-bound-occurrences="+std::to_string(work.active_bound_occurrences)+
+                    (certified_without_steps ? "; no-step-endpoint-certified" : "")});
+        }
         if(fit.search.memory_estimate.status!=MemoryStatus::Pass)
             component.evidence.push_back({"memory-preflight",JointCheckStatus::Unavailable,JointEvidenceScope::ComponentLocal,
                 static_cast<double>(fit.search.memory_estimate.estimated_peak_bytes),

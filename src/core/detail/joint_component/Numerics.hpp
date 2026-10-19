@@ -56,6 +56,12 @@ struct EvaluationContext
 };
 enum class ProfileEvaluationRole {Unspecified,InitialProfile,TrialProfile,AcceptedEndpoint,Reference};
 const char * ProfileEvaluationRoleName(ProfileEvaluationRole);
+struct BoundedLmWork
+{
+    std::size_t subproblem_solves{},failed_subproblems{},active_set_iterations{},releases{},active_bound_occurrences{};
+    double maximum_subproblem_kkt{unavailable};
+    void Merge(const BoundedLmWork &);
+};
 struct LinearSolveWork
 {
     std::size_t solve_calls{},valid_solves{},invalid_solves{},invalid_input_solves{},rank_deficient_solves{},
@@ -88,6 +94,7 @@ struct ProfileRoleWork
 struct ProfileSearchWork
 {
     ProfileRoleWork total,initial_profile,trial_profile,accepted_endpoint,reference_evaluation;
+    BoundedLmWork bounded_lm;
     std::size_t accepted_profile_trials{},rejected_profile_trials{},local_replay_kkt_rejections{},
         local_replay_disagreements{},invalid_gradient_stops{},width_safeguard_rejections{};
     std::size_t accepted_update_budget_stops{},profile_budget_stops{},cpu_budget_stops{},native_lm_stops{};
@@ -155,6 +162,14 @@ struct Spectrum
     Vector singular_values,column_norms;
     double minimum{unavailable},condition{unavailable},threshold{};
 };
+struct WidthBoundKkt
+{
+    bool feasible{};
+    double projected{std::numeric_limits<double>::infinity()},violation{},
+        boundary_gradient{unavailable},multiplier{},complementarity{};
+    std::size_t active{};
+};
+WidthBoundKkt CalculateWidthBoundKkt(const Vector &,const Vector &,double);
 Spectrum ComputeSpectrum(const Sparse &,const RankPolicy &,Eigen::Index,bool);
 Spectrum ComputeSpectrum(const Matrix &,const RankPolicy &,Eigen::Index,bool);
 Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,bool,const EvaluationContext *,

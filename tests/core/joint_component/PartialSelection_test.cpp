@@ -420,7 +420,15 @@ TEST(JointComponentPartialSelectionTest, FixedHaloResponseUsesRawScaleAndReplays
         EXPECT_DOUBLE_EQ(data.y(static_cast<Eigen::Index>(row)),problem.Input().observations[row]-
             data.fixed_prediction(static_cast<Eigen::Index>(row)));
 
-    const auto fit=core::FitJointComponents(initialized,{f.b[0]});
+    n::FixedNeighborSearchPolicy bounded_policy;
+    bounded_policy.eta_upper_bound=std::log(.45);
+    const auto fit=n::FitFixedNeighborComponents(initialized,{.45},bounded_policy);
+    const auto active_set_status=std::find_if(fit.components.front().evidence.begin(),
+        fit.components.front().evidence.end(),[](const auto & check) {
+            return check.name=="active-set-lm-subproblems";
+        });
+    ASSERT_NE(active_set_status,fit.components.front().evidence.end())<<fit.components.front().stop_reason;
+    EXPECT_EQ(active_set_status->status,rhbm_gem::JointCheckStatus::Passed)<<active_set_status->reason;
     EXPECT_EQ(fit.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(fit.assembled_state);
@@ -436,7 +444,7 @@ TEST(JointComponentPartialSelectionTest, FixedHaloResponseUsesRawScaleAndReplays
     ASSERT_NE(replay,fit.evidence.end());
     EXPECT_EQ(replay->status,rhbm_gem::JointCheckStatus::Passed);
     for(const auto * name:{"fixed-halo-replay","full-objective-replay","target-ac-feasibility",
-        "target-ac-optimality","target-width-stationarity","target-contributor-mapping",
+        "target-ac-optimality","target-width-stationarity","target-width-bound-feasibility","target-contributor-mapping",
         "original-observation-identities","fixed-halo-provenance"})
     {
         const auto check=std::find_if(fit.evidence.begin(),fit.evidence.end(),[&](const auto & item) {
@@ -445,6 +453,14 @@ TEST(JointComponentPartialSelectionTest, FixedHaloResponseUsesRawScaleAndReplays
         ASSERT_NE(check,fit.evidence.end()) << name;
         EXPECT_EQ(check->status,rhbm_gem::JointCheckStatus::Passed) << name;
     }
+    EXPECT_NEAR(fit.assembled_state->b.front(),.45,1e-10);
+    const auto saved=core::CaptureJointAnalysisResult(fit);
+    const auto round_trip=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved));
+    const auto saved_width_bound=std::find_if(round_trip.evidence.begin(),round_trip.evidence.end(),[](const auto & check) {
+        return check.name=="target-width-bound-feasibility";
+    });
+    ASSERT_NE(saved_width_bound,round_trip.evidence.end());
+    EXPECT_EQ(saved_width_bound->status,rhbm_gem::JointCheckStatus::Passed);
 
     double rss{};
     for(std::size_t row=0;row<problem.Input().observations.size();++row)

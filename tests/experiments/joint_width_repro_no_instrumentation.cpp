@@ -10,6 +10,7 @@
 #include <boost/json.hpp>
 
 #include <chrono>
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -63,6 +64,10 @@ void Run(const std::filesystem::path & model_path,const std::filesystem::path & 
         {"production-bounded-candidate-no-instrumentation",false});
     json::array components;
     for(const auto & component:fit.components)
+    {
+        const auto bounded_lm=std::find_if(component.evidence.begin(),component.evidence.end(),[](const auto & check) {
+            return check.name=="active-set-lm-subproblems";
+        });
         components.push_back(json::object{
             {"component_id",component.id},
             {"search_sweeps",component.search_sweeps},
@@ -76,7 +81,12 @@ void Run(const std::filesystem::path & model_path,const std::filesystem::path & 
             {"candidate_ac_kkt",component.candidate_diagnostic && component.candidate_diagnostic->candidate_ac_kkt ?
                 json::value(*component.candidate_diagnostic->candidate_ac_kkt) : json::value(nullptr)},
             {"candidate_width_gradient_inf_norm",component.candidate_diagnostic && component.candidate_diagnostic->candidate_width_gradient_inf_norm ?
-                json::value(*component.candidate_diagnostic->candidate_width_gradient_inf_norm) : json::value(nullptr)}});
+                json::value(*component.candidate_diagnostic->candidate_width_gradient_inf_norm) : json::value(nullptr)},
+            {"active_set_lm_status",bounded_lm==component.evidence.end() ? "NotRun" : Status(bounded_lm->status)},
+            {"active_set_lm_kkt",bounded_lm!=component.evidence.end() && bounded_lm->value ?
+                json::value(*bounded_lm->value) : json::value(nullptr)},
+            {"active_set_lm_work",bounded_lm==component.evidence.end() ? "not-recorded" : bounded_lm->reason}});
+    }
     json::array evidence;
     for(const auto & check:fit.evidence)
         evidence.push_back(json::object{{"name",check.name},{"status",Status(check.status)},

@@ -468,6 +468,14 @@ TEST(PureHaloSupportExclusionTest, BoundedCandidateRejectsTooFewQualifiedTargets
     ASSERT_NE(calibration,fit.evidence.end());
     EXPECT_EQ(calibration->status,JointCheckStatus::Unavailable);
     EXPECT_EQ(calibration->reason,"calibration-unavailable:no-qualified-first-stage-target-widths");
+    const auto saved=core::CaptureJointAnalysisResult(fit);
+    const auto decoded=joint_result_io::Decode(joint_result_io::Encode(saved));
+    EXPECT_FALSE(IsQualifiedJointAnalysisResult(decoded));
+    const auto saved_calibration=std::find_if(decoded.evidence.begin(),decoded.evidence.end(),[](const auto & check) {
+        return check.name=="global-width-calibration";
+    });
+    ASSERT_NE(saved_calibration,decoded.evidence.end());
+    EXPECT_EQ(saved_calibration->status,JointCheckStatus::Unavailable);
 }
 
 TEST(PureHaloSupportExclusionTest, CapturesOriginalAndFittingIdentitiesSeparately)

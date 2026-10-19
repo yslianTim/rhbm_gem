@@ -62,20 +62,37 @@ struct Profile
     std::optional<double> accepted_gradient_inf_norm;
     const std::vector<bool> * fixed_width_mask{};
     std::optional<ActiveSetStep> last_bounded_subproblem;
+    BoundedLmWork bounded_lm_work;
     bool has_bounded_step() const {return context.eta_upper_bound.has_value();}
+    void RecordBoundedSubproblem(const ActiveSetStep & step)
+    {
+        ++bounded_lm_work.subproblem_solves;
+        if(!step.valid) {++bounded_lm_work.failed_subproblems; return;}
+        bounded_lm_work.active_set_iterations+=step.iterations;
+        bounded_lm_work.releases+=step.releases;
+        for(std::size_t i=0;i<step.active.size();++i)
+            if(step.active[i] && (!fixed_width_mask || fixed_width_mask->size()!=step.active.size() ||
+                !(*fixed_width_mask)[i])) ++bounded_lm_work.active_bound_occurrences;
+        if(std::isfinite(step.kkt_inf_norm))
+            bounded_lm_work.maximum_subproblem_kkt=std::isfinite(bounded_lm_work.maximum_subproblem_kkt) ?
+                std::max(bounded_lm_work.maximum_subproblem_kkt,step.kkt_inf_norm) : step.kkt_inf_norm;
+    }
     ActiveSetStep solve_bounded_step(const Matrix & jacobian,VectorRef response,VectorRef eta,
         VectorRef diagonal,double radius,double damping)
     {
         ActiveSetStep failed_step;
         if(!context.eta_upper_bound || !std::isfinite(*context.eta_upper_bound))
-        {failed_step.status="invalid-width-upper-bound"; last_bounded_subproblem=failed_step; return failed_step;}
+        {failed_step.status="invalid-width-upper-bound"; last_bounded_subproblem=failed_step;
+            RecordBoundedSubproblem(failed_step); return failed_step;}
         for(Eigen::Index i=0;i<eta.size();++i)
             if(eta(i)>*context.eta_upper_bound)
-            {failed_step.status="infeasible-current-width"; last_bounded_subproblem=failed_step; return failed_step;}
+            {failed_step.status="infeasible-current-width"; last_bounded_subproblem=failed_step;
+                RecordBoundedSubproblem(failed_step); return failed_step;}
         const Vector upper=Vector::Constant(eta.size(),*context.eta_upper_bound)-eta;
         auto result=SolveBoundedTrustRegionStep(jacobian,response,diagonal,upper,radius,damping,
             fixed_width_mask ? *fixed_width_mask : std::vector<bool>{});
         last_bounded_subproblem=result;
+        RecordBoundedSubproblem(result);
         return result;
     }
     void Report() const
@@ -114,9 +131,9 @@ struct Profile
                 lm.active_bound_multipliers.push_back(last_bounded_subproblem->multipliers(
                     static_cast<Eigen::Index>(i)));
             }
-            last_bounded_subproblem.reset();
         }
 #endif
+        last_bounded_subproblem.reset();
         row.lm=std::move(lm);
         bool trusted=cached.valid;
         if(proposed || context.audit.trial_details)
@@ -291,7 +308,7 @@ SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & 
     EvaluationContext search_context=context;
     const auto active_eta_max=search_context.eta_upper_bound;
     Profile profile{domain,y,search_context.scale,search_context,{}, {},0,0,{},telemetry ? &local_work : nullptr,
-        ProfileEvaluationRole::Unspecified,observer,progress_component,start,std::clock(),0,{}, {},nullptr,{}
+        ProfileEvaluationRole::Unspecified,observer,progress_component,start,std::clock(),0,{}, {},nullptr,{},{}
     };
     profile.fixed_width_mask=fixed_width_mask;
     Vector eta=initial_b.array().log(); int accepted{};
@@ -347,10 +364,12 @@ SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & 
         else if(out.stop_reason=="profile-budget") ++local_work.profile_budget_stops;
         else if(out.stop_reason=="cpu-time-budget") ++local_work.cpu_budget_stops;
         else if(out.stop_reason=="native-lm-stop") ++local_work.native_lm_stops;
+        local_work.bounded_lm=profile.bounded_lm_work;
         local_work.total_seconds=out.seconds;
         local_work.lm_overhead_seconds=std::max(0.0,out.seconds-local_work.AttributedSeconds());
         out.profile_work=std::move(local_work);
     }
+    else out.profile_work.bounded_lm=profile.bounded_lm_work;
     return out;
 }
 }

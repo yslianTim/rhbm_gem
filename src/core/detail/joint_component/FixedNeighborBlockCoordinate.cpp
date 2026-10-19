@@ -982,7 +982,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         out.memory_estimate=out.global_state_memory_estimate;
         out.reason="resource-limit:global-state-evaluation:"+out.memory_estimate.reason; return out;
     }
-    auto * const profile_work=policy.collect_telemetry ? &out.work.local_profile_work : nullptr;
+    auto * const profile_work=policy.collect_telemetry || context.eta_upper_bound ?
+        &out.work.local_profile_work : nullptr;
     const auto certify_endpoint=[&] {
         const auto assessment_timer=Measure(policy.collect_telemetry,out.work.endpoint_verification_seconds);
         const auto record_assessment_work=[&](FixedNeighborEndpointCertification certification) {
@@ -1175,7 +1176,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 #endif
             const auto profile_search=SearchProfile(local_domain,local_y,old_widths,local_context,{},nullptr,profile_work,
                 fixed_width_mask);
-            if(policy.collect_telemetry) out.work.local_profile_work.Merge(profile_search.profile_work);
+            if(policy.collect_telemetry || local_context.eta_upper_bound)
+                out.work.local_profile_work.Merge(profile_search.profile_work);
             record.search_seconds=Seconds(search_started); record.profile_evaluations=profile_search.evaluations;
             if(policy.collect_telemetry) out.work.local_search_seconds+=record.search_seconds;
             record.accepted_updates=profile_search.accepted; record.local_search_stop_reason=profile_search.stop_reason;

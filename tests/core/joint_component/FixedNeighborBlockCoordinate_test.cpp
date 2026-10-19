@@ -147,7 +147,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, IncrementalCandidateExperimentMatche
     }
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, ResearchBoundedSearchReleasesTheStartingUpperFace)
+TEST(JointFixedNeighborBlockCoordinateTest, ProductionBoundedSearchReleasesTheStartingUpperFace)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const double eta_max=std::log(.55);
@@ -161,6 +161,11 @@ TEST(JointFixedNeighborBlockCoordinateTest, ResearchBoundedSearchReleasesTheStar
     policy.eta_upper_bound=eta_max;
     const auto result=n::RunFixedNeighborDiagnostic(problem,initial,policy);
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const auto & bounded_lm=result.work.local_profile_work.bounded_lm;
+    EXPECT_GT(bounded_lm.subproblem_solves,0u);
+    EXPECT_EQ(bounded_lm.failed_subproblems,0u);
+    EXPECT_GT(bounded_lm.active_set_iterations,0u);
+    EXPECT_TRUE(std::isfinite(bounded_lm.maximum_subproblem_kkt));
     ASSERT_EQ(result.blocks.size(),1u)<<result.reason;
     ASSERT_EQ(result.state.eta.size(),3);
     EXPECT_LE(result.state.eta.maxCoeff(),eta_max+1e-14);
