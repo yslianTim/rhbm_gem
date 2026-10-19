@@ -1,0 +1,11 @@
+No component bond entry found in the CIF file. Build default component bond entries.
+LoadAtomSiteBlock parsed rows = 74030, skipped rows = 0.
+Construct 34704 bonds (total 34704).
+CIF Header Information:
+#Entities = 4
+[4] : YA,ZA,AB,BB,CB,DB,EB,FB,GB,HB,IB,JB,KB,LB,MB,NB,OB,PB,QB,RB,SB,TB,UB,VB
+[3] : BA,IA
+[2] : Y,Z,AA,CA,DA,EA,FA,GA,HA,JA,KA,LA,MA,NA,OA,PA,QA,RA,SA,TA,UA,VA,WA,XA
+[1] : A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X
+#Elementry types = 7
+Element type list : C,H,Mg,N,Na,O,S
