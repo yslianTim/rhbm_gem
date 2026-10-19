@@ -60,14 +60,24 @@ Expected result contract:
 - `result.succeeded == false` when normalization, validation, preflight, or execution stops the command
 - `result.outcome` is `Completed` for ordinary command completion,
   `JointInitializationFailed` when Joint setup failed, `JointNotConverged` when
-  fitting did not qualify, or `JointQualified` after all runtime gates passed
+  fitting did not qualify, `JointDownstreamUnavailable` when Joint qualified but
+  Halo reconstruction is unavailable, or `JointQualified` after all runtime
+  gates passed
 - `result.issues` reports public validation diagnostics as option/message pairs
 
-The CLI uses exit code 1 when execution or saving fails, 2 when it saves a Joint
-result after initialization failure, 3 when it saves an unqualified Joint fit,
-and 0 for a qualified Joint fit or ordinary non-Joint command completion. Thus
-an automation can distinguish a saved diagnostic result from a qualified
-estimate without treating every saved file as a successful fit.
+The CLI uses the following exit codes:
+
+| Exit | Meaning |
+| ---: | --- |
+| 0 | Qualified Joint result or ordinary command success |
+| 1 | Execution or persistence failure |
+| 2 | Joint initialization failure was saved |
+| 3 | Joint numerical non-convergence was saved |
+| 4 | Joint qualified, but downstream Halo reconstruction was unavailable |
+
+Thus an automation can distinguish saved diagnostics and unavailable downstream
+outputs from a qualified Joint estimate without treating every saved file as a
+successful fit.
 
 ## Command Behavior
 

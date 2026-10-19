@@ -10,6 +10,7 @@
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include "data/io/detail/JointResultJson.hpp"
+#include "data/io/detail/StageResultJson.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -23,6 +24,7 @@
 #include <array>
 #include <cmath>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -786,6 +788,54 @@ TEST(PureHaloSupportExclusionTest, SkipsDownstreamWhenJointQualificationFails)
     const auto target=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(1));
     EXPECT_FALSE(target.GetPostFitPeeling());
     EXPECT_FALSE(target.GetPostJointLocalResult());
+}
+
+TEST(PureHaloSupportExclusionTest, RejectsUnqualifiedJointSnapshotWithCurrentJointDownstreamState)
+{
+    auto fixture=WorkflowFixture();
+    FitOptions options;
+    options.estimator=PotentialEstimator::JOINT_COMPONENTS;
+    options.quiet_mode=true;
+    options.thread_size=1;
+    ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
+        fixture.map,fixture.model,options,nullptr,true));
+    ASSERT_TRUE(fixture.model.GetAnalysisView().GetJointResult());
+
+    auto stale=*fixture.model.GetAnalysisView().GetJointResult();
+    stale.search_completed=false;
+    stale.runtime_convergence=JointCheckStatus::Failed;
+    stale.target_runtime_convergence=JointCheckStatus::NotRun;
+    stale.halo_median_reconstruction.reset();
+    for (auto & component:stale.components)
+    {
+        component.search_completed=false;
+        component.runtime_convergence=JointCheckStatus::Failed;
+        component.target_runtime_convergence=JointCheckStatus::NotRun;
+    }
+    fixture.model.EditAnalysis().SetJointResult(std::move(stale));
+
+    EXPECT_THROW(stage_result_io::Encode(fixture.model),std::invalid_argument);
+}
+
+TEST(PureHaloSupportExclusionTest, RejectsMixedCurrentJointRunIdentities)
+{
+    auto fixture=WorkflowFixture();
+    FitOptions options;
+    options.estimator=PotentialEstimator::JOINT_COMPONENTS;
+    options.quiet_mode=true;
+    options.thread_size=1;
+    ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
+        fixture.map,fixture.model,options,nullptr,true));
+    ASSERT_TRUE(fixture.model.GetAnalysisView().GetJointResult());
+    auto snapshot=*fixture.model.GetAnalysisView().GetJointResult();
+    snapshot.halo_median_reconstruction.reset();
+    const auto * atom=fixture.model.FindAtomPtr(1);
+    auto changed=AtomLocalPotentialView::For(*atom).GetStageEstimate(FittingStage::Second);
+    changed.source.run_id="different-joint-run";
+    fixture.model.EditAnalysis().SetAtomStageEstimate(FittingStage::Second,*atom,changed);
+    fixture.model.EditAnalysis().SetJointResult(std::move(snapshot));
+
+    EXPECT_THROW(stage_result_io::Encode(fixture.model),std::invalid_argument);
 }
 
 TEST(PureHaloSupportExclusionTest, FullWorkflowRetainsMultipleMemberGroupContract)

@@ -7,12 +7,14 @@
 #include <fstream>
 #include <string>
 #include <sstream>
+#include <stdexcept>
 #include <vector>
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/CommandSystem.hpp>
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include "core/detail/PotentialFittingWorkflow.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include "data/io/detail/JointResultJson.hpp"
@@ -61,6 +63,38 @@ int RunCli(std::vector<std::string> arguments)
     for (auto & argument : arguments) argv.push_back(argument.data());
     return rgc::RunCommandCLI(static_cast<int>(argv.size()), argv.data());
 }
+
+void InjectJointSearchFailure(rgc::JointFitResult & fit)
+{
+    fit.search_completed=false;
+    for (auto & component:fit.components)
+    {
+        component.search_completed=false;
+        component.stop_reason="block-recovery-exhausted";
+    }
+}
+
+void InjectJointNoDonors(rgc::JointFitResult & fit)
+{
+    if (!fit.target_evidence) throw std::runtime_error("Test fixture lacks target evidence.");
+    for (auto & point:fit.target_evidence->point_atoms) point.local_conditioning="Warning";
+    for (auto & component:fit.components)
+        if (component.target_evidence)
+            for (auto & point:component.target_evidence->point_atoms)
+                point.local_conditioning="Warning";
+}
+
+struct ScopedJointWorkflowFitHook
+{
+    explicit ScopedJointWorkflowFitHook(rgc::detail::JointWorkflowFitHook hook)
+    {
+        rgc::detail::JointWorkflowFitHookForTesting()=hook;
+    }
+    ~ScopedJointWorkflowFitHook()
+    {
+        rgc::detail::JointWorkflowFitHookForTesting()=nullptr;
+    }
+};
 
 void ExpectSelectedAtomsHaveFiniteNonNegativeAlphaR(const rg::ModelObject & model)
 {
@@ -509,4 +543,110 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
     EXPECT_FALSE(rgc::RunCommand(dump).succeeded);
     loaded->EditAnalysis().ClearJointResult(); repository.SaveModel(*loaded,"legacy");
     dump.model_key_tag_list={"legacy"}; EXPECT_FALSE(rgc::RunCommand(dump).succeeded);
+}
+
+TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApiCliAndReload)
+{
+    command_test::ScopedTempDir directory{"joint_failure_outcomes"};
+    const auto maps_dir=directory.path()/"maps";
+    std::filesystem::create_directories(maps_dir);
+    const auto model_path=directory.path()/"input.cif";
+    std::filesystem::copy_file(
+        command_test::TestDataPath("potential_analysis_multichain.cif"),model_path);
+
+    rgc::MapSimulationRequest simulation;
+    simulation.model_file_path=model_path;
+    simulation.output_dir=maps_dir;
+    simulation.grid_spacing=.3;
+    simulation.potential_model_choice=rgc::PotentialModel::SINGLE_GAUS;
+    simulation.blurring_width_list={.5};
+    simulation.verbosity=0;
+    ASSERT_TRUE(rgc::RunCommand(simulation).succeeded);
+    const auto map_path=FindGeneratedMap(maps_dir);
+    ASSERT_FALSE(map_path.empty());
+
+    rgc::PotentialAnalysisRequest request;
+    request.model_file_path=model_path;
+    request.map_file_path=map_path;
+    request.estimator=rgc::PotentialEstimator::JOINT_COMPONENTS;
+    request.selected_chain_ids={"A"};
+    request.verbosity=0;
+
+    request.database_path=directory.path()/"search-failure.sqlite";
+    request.saved_key_tag="search-failure";
+    {
+        ScopedJointWorkflowFitHook hook{&InjectJointSearchFailure};
+        const auto result=rgc::RunCommand(request);
+        ASSERT_TRUE(result.succeeded);
+        EXPECT_EQ(result.outcome,rgc::CommandOutcome::JointNotConverged);
+    }
+    {
+        rg::DataRepository repository{request.database_path};
+        const auto loaded=repository.LoadModel(request.saved_key_tag);
+        ASSERT_NE(loaded,nullptr);
+        const auto & fit=*loaded->GetAnalysisView().GetJointResult();
+        ASSERT_TRUE(fit.initialization.valid);
+        EXPECT_FALSE(rg::IsQualifiedJointAnalysisResult(fit));
+        ASSERT_FALSE(fit.components.empty());
+        EXPECT_EQ(fit.components.front().stop_reason,"block-recovery-exhausted");
+        for (const auto * atom:loaded->GetSelectedAtoms())
+        {
+            const auto view=rg::AtomLocalPotentialView::For(*atom);
+            EXPECT_FALSE(view.GetStageEstimate(rg::FittingStage::Second).point);
+            EXPECT_FALSE(view.GetPostFitPeeling());
+            EXPECT_FALSE(view.GetPostJointLocalResult());
+            EXPECT_FALSE(view.GetGroupMemberResult());
+        }
+    }
+
+    request.database_path=directory.path()/"search-failure-cli.sqlite";
+    request.saved_key_tag="search-failure-cli";
+    int cli_status{};
+    {
+        ScopedJointWorkflowFitHook hook{&InjectJointSearchFailure};
+        cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
+            "--model",model_path.string(),"--map",map_path.string(),
+            "--database",request.database_path.string(),"--save-key",request.saved_key_tag,
+            "--select-chain","A","--verbose","0"});
+    }
+    EXPECT_EQ(cli_status,3);
+    ASSERT_TRUE(rg::DataRepository{request.database_path}.LoadModel(request.saved_key_tag));
+
+    request.database_path=directory.path()/"no-donor.sqlite";
+    request.saved_key_tag="no-donor";
+    {
+        ScopedJointWorkflowFitHook hook{&InjectJointNoDonors};
+        const auto result=rgc::RunCommand(request);
+        ASSERT_TRUE(result.succeeded);
+        EXPECT_EQ(result.outcome,rgc::CommandOutcome::JointDownstreamUnavailable);
+    }
+    {
+        rg::DataRepository repository{request.database_path};
+        const auto loaded=repository.LoadModel(request.saved_key_tag);
+        ASSERT_NE(loaded,nullptr);
+        const auto & fit=*loaded->GetAnalysisView().GetJointResult();
+        EXPECT_TRUE(rg::IsQualifiedJointAnalysisResult(fit));
+        EXPECT_TRUE(rg::HasUnavailableJointHaloMedianReconstruction(fit));
+        EXPECT_FALSE(fit.halo_median_reconstruction);
+        for (const auto * atom:loaded->GetSelectedAtoms())
+        {
+            const auto view=rg::AtomLocalPotentialView::For(*atom);
+            EXPECT_TRUE(view.GetStageEstimate(rg::FittingStage::Second).point);
+            EXPECT_FALSE(view.GetPostFitPeeling());
+            EXPECT_FALSE(view.GetPostJointLocalResult());
+            EXPECT_FALSE(view.GetGroupMemberResult());
+        }
+    }
+
+    request.database_path=directory.path()/"no-donor-cli.sqlite";
+    request.saved_key_tag="no-donor-cli";
+    {
+        ScopedJointWorkflowFitHook hook{&InjectJointNoDonors};
+        cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
+            "--model",model_path.string(),"--map",map_path.string(),
+            "--database",request.database_path.string(),"--save-key",request.saved_key_tag,
+            "--select-chain","A","--verbose","0"});
+    }
+    EXPECT_EQ(cli_status,4);
+    ASSERT_TRUE(rg::DataRepository{request.database_path}.LoadModel(request.saved_key_tag));
 }

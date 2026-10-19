@@ -5,7 +5,14 @@
 
 #include <vector>
 
+namespace rhbm_gem::core { struct JointFitResult; }
+
 namespace rhbm_gem::core::detail {
+
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+using JointWorkflowFitHook = void (*)(JointFitResult &);
+JointWorkflowFitHook & JointWorkflowFitHookForTesting();
+#endif
 
 void RunTwoStageFromPreparedSamples(
     ModelObject & model,

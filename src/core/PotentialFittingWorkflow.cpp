@@ -163,6 +163,14 @@ void LogJointInfo(const std::string & message)
 
 }
 
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+JointWorkflowFitHook & JointWorkflowFitHookForTesting()
+{
+    static thread_local JointWorkflowFitHook hook{};
+    return hook;
+}
+#endif
+
 PostJointLocalResult FitPostJointLocalTargetForResearch(
     const JointPostprocessingContext & postprocessing, const ModelObject & model, int atom_id,
     const PostFitPeelingResult & peeling, const FitOptions & options, JointPostprocessingMetrics & metrics)
@@ -257,6 +265,9 @@ void RunJointComponentWorkflow(
     }
     auto snapshot = [&] {
         auto fit = FitJointComponentsInitializedWithProgress(problem, initialization, observer);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if (const auto hook = JointWorkflowFitHookForTesting()) hook(fit);
+#endif
         fit.costs.construction_seconds = construction_seconds;
         fit.costs.initialization_seconds = initialization_seconds;
         return CaptureJointAnalysisResult(fit);

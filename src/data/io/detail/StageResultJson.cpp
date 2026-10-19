@@ -12,6 +12,7 @@
 #include <cmath>
 #include <algorithm>
 #include <limits>
+#include <optional>
 #include <set>
 
 namespace rhbm_gem::stage_result_io {
@@ -520,9 +521,25 @@ void MapSnapshot(ModelObject & model)
 void Validate(const ModelObject & model)
 {
     const auto & data=ModelAnalysisData::Of(model);
+    const auto * joint_snapshot=data.joint_result ? &*data.joint_result : nullptr;
+    const bool unqualified_joint=joint_snapshot && !IsQualifiedJointAnalysisResult(*joint_snapshot);
+    std::optional<std::string> joint_run_id;
     for(const auto & [id,e]:data.AtomLocalEntries())
     {
         const auto & s=e->StageEstimate(FittingStage::Second);
+        if (s.source.method == EstimateMethod::JointComponents && !s.source.run_id.empty())
+        {
+            if (!joint_run_id) joint_run_id=s.source.run_id;
+            else if (*joint_run_id != s.source.run_id)
+                throw std::invalid_argument("Mixed Joint run identities.");
+            if (joint_snapshot && joint_snapshot->halo_median_reconstruction &&
+                s.source.run_id != joint_snapshot->halo_median_reconstruction->joint_run_id)
+                throw std::invalid_argument("Joint stage and Halo median run identities differ.");
+        }
+        const bool formal_joint_point = s.point && s.convergence == JointCheckStatus::Passed;
+        if (unqualified_joint && s.source.method == EstimateMethod::JointComponents &&
+            (formal_joint_point || e->PostFitPeeling() || e->PostJointLocalResult() || e->GroupMemberResult()))
+            throw std::invalid_argument("Unqualified Joint snapshot conflicts with current Joint stage state.");
         if(s.uncertainty.status==EvidenceStatus::Available && (!s.point || !s.uncertainty.covariance || !s.uncertainty.covariance->allFinite())) throw std::invalid_argument("Available uncertainty lacks finite point/covariance.");
         if(!s.source.atom_id.empty() && s.source.atom_id!=std::to_string(id)) throw std::invalid_argument("Stage atom identity mismatch.");
         if(e->PostFitPeeling()) {const auto & p=*e->PostFitPeeling(); if(p.samples.size()!=e->RawSamplingEntries().size() || p.source.run_id!=s.source.run_id || p.source.atom_id!=s.source.atom_id) throw std::invalid_argument("Peeling source/shape mismatch.");}
@@ -541,6 +558,17 @@ void Validate(const ModelObject & model)
     {
         const auto & summary=groups.GetParameterSummary(key); if(!summary) continue;
         if(summary->eligible_count!=summary->member_ids.size()) throw std::invalid_argument("Group eligibility count mismatch.");
+        if (unqualified_joint && summary->inference)
+        {
+            const bool has_joint_member=std::any_of(summary->member_ids.begin(),summary->member_ids.end(),
+                [&](const int id) {
+                    const auto * atom=model.FindAtomPtr(id);
+                    const auto * entry=atom ? data.FindAtomLocalEntry(*atom) : nullptr;
+                    return entry && entry->StageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents;
+                });
+            if (has_joint_member)
+                throw std::invalid_argument("Unqualified Joint snapshot conflicts with current group inference.");
+        }
         if(!summary->inference) continue;
         const auto members=model.GetAnalysisView().GetGroupParameterSummary(key)->inference->member_results;
         if(members.size()!=summary->member_ids.size()) throw std::invalid_argument("Group posterior count mismatch.");
