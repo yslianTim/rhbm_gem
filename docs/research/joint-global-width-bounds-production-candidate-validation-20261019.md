@@ -47,6 +47,7 @@ OpenMP and BLAS inner threads were set to one for each run.
 | Qualified donors | 1,415 (99.788%) | 1,405 (99.083%) |
 | P95 (Å) | 0.5689788338510722 | 0.8021089204681596 |
 | Bmax = 4×P95 (Å) | 2.2759153354042887 | 3.2084356818726385 |
+| Initial projection count / maximum (Å) | 0 / 0 | 1 / 1.606375 |
 | Active bound atoms | 0 | 2 |
 | Maximum log-width bound violation | 0 | 0 |
 | Search sweeps / profile evaluations | 83 / 22,908 | 124 / 34,848 |
@@ -54,7 +55,9 @@ OpenMP and BLAS inner threads were set to one for each run.
 | Active-set solves / failures | 11,454 / 0 | 17,488 / 0 |
 | Maximum active-set subproblem KKT | 1.96512e-19 | 1.62630e-19 |
 | Projected Width KKT (threshold 1e-9) | 8.77651e-10 | 9.40273e-10 |
-| A/C KKT (threshold 1e-7) | 9.43457e-8 | 8.17416e-8 |
+| Conditional / independent A/C KKT (threshold 1e-7) | 9.43457e-8 / 9.43457e-8 | 8.17416e-8 / 8.17416e-8 |
+| Independent KKT consistency (threshold 1e-13) | 1.73472e-18 | 1.73472e-18 |
+| Assembled consistency (threshold 2e-12) | 1.06581e-14 | 1.42109e-14 |
 | Independent replay / RuntimeConvergence | Passed / Passed | Passed / Passed |
 | Objective | 1.2330854370811315e-13 | 0.018417539368903946 |
 | Prediction RMSE | 9.20650e-7 | See paired research record below |
@@ -72,6 +75,12 @@ The unsharpened map has no truth. The candidate returned serial-1032 at its
 evaluations match research B4. The research paired record reports prediction
 RMSE 0.9260391 for B4; this is a residual description, not a parameter-accuracy
 claim. Its A baseline was unqualified and is not treated as an estimate.
+Against the research B4 record, the P95 and cap are exactly the same; the
+serial-1032 width, two final active atoms, profile evaluations, sweeps,
+projected KKT and replay status match. The objective differs by
+1.43e-16 (research 0.018417539368903803; production
+0.018417539368903946). The retained paired report does not store the full
+per-atom Width vector, so vector-wise equality is not claimed.
 
 The production candidate also retains point-level quality diagnostics. Both
 maps had adequate local conditioning for all 1,418 targets. Parameter-stability
