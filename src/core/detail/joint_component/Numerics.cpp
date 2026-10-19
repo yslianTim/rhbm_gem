@@ -262,7 +262,7 @@ std::pair<Matrix,Matrix> Reduce(const Design & x,const Matrix & rhs)
 }
 }
 JointSolverConfiguration ResolveJointSolverConfiguration(const FixedNeighborSearchPolicy & policy)
-{return {policy.core_atoms};}
+{return {policy.core_atoms,policy.eta_upper_bound.has_value()};}
 std::string_view FixedNeighborBlockOrderName(FixedNeighborBlockOrder order)
 {
     switch(order)

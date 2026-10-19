@@ -9,6 +9,8 @@
 #include <rhbm_gem/data/io/JointAnalysisFileIO.hpp>
 #include "data/io/detail/JointResultJson.hpp"
 #include "data/io/detail/StageResultJson.hpp"
+#include "core/detail/FirstStageInitialization.hpp"
+#include "core/detail/PotentialFittingWorkflow.hpp"
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
@@ -689,6 +691,12 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
     EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_max_block_atoms);
     EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_storage_bytes);
     EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_scratch_bytes);
+
+    auto bounded=fixed;
+    bounded.metadata.solver->fixed_neighbor_local_search="active-set-lm";
+    const auto bounded_decoded=io::Decode(io::Encode(bounded));
+    ASSERT_TRUE(bounded_decoded.metadata.solver);
+    EXPECT_EQ(bounded_decoded.metadata.solver->fixed_neighbor_local_search,"active-set-lm");
 
     auto saved_current=boost::json::parse(fixed_json).as_object();
     saved_current.at("metadata").as_object().at("solver").as_object()["fixed_neighbor_local_search"]=
@@ -1415,11 +1423,33 @@ TEST(DataObjectPersistenceTest, JointSelectionMetadataValidationAndCsvRoles)
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
+namespace {
+void FitPersistenceFixtureWithInternalUnboundedOracle(rg::core::JointFitResult & fit)
+{
+    if (!fit.problem) throw std::runtime_error("Persistence test hook lacks a Joint problem snapshot.");
+    fit=rg::core::detail::FitJointComponentsInitializedWithProgress(
+        *fit.problem,fit.initialization,{},false);
+}
+
+struct ScopedPersistenceUnboundedOracle
+{
+    ScopedPersistenceUnboundedOracle()
+    {
+        rg::core::detail::JointWorkflowFitHookForTesting()=&FitPersistenceFixtureWithInternalUnboundedOracle;
+    }
+    ~ScopedPersistenceUnboundedOracle()
+    {
+        rg::core::detail::JointWorkflowFitHookForTesting()=nullptr;
+    }
+};
+}
+
 TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesSourcesGeometryAndUnavailableStates)
 {
     const command_test::ScopedTempDir dir{"joint_neutral_roundtrip"};
     auto f=joint_partial_test::Make("partial");
     rg::core::FitOptions options; options.estimator=rg::core::PotentialEstimator::JOINT_COMPONENTS; options.quiet_mode=true;
+    ScopedPersistenceUnboundedOracle unbounded_test_solver;
     rg::core::RunPotentialFittingWorkflow(*f.map,*f.model,options);
     rg::DataRepository repository(dir.path()/"result.sqlite");
     repository.SaveModel(*f.model,"joint");

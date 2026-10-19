@@ -41,6 +41,7 @@ inline constexpr std::string_view FixedNeighborPolicyContractVersion="fixed-neig
 inline constexpr std::string_view FixedNeighborPreviousPolicyContractVersion="fixed-neighbor-production-v3";
 inline constexpr std::string_view FixedNeighborReferencePolicyContractVersion="fixed-neighbor-production-v2";
 inline constexpr std::string_view FixedNeighborLocalSearchName="profile-lm";
+inline constexpr std::string_view FixedNeighborBoundedLocalSearchName="active-set-lm";
 struct JointAnalysisMetadata
 {
     std::string model_path, map_path;

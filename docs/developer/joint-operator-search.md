@@ -44,7 +44,7 @@ does not recreate the removed solver.
 
 | Topic | Conclusion |
 | --- | --- |
-| OperatorPcg and Schwarz | Investigated for large connected components, but the required promotion campaign did not complete all large-case gates. They were not adopted. The current estimator is FixedNeighbor with local Profile LM and EIGEN. |
+| OperatorPcg and Schwarz | Investigated for large connected components, but the required promotion campaign did not complete all large-case gates. They were not adopted. Production uses bounded Active-set LM with FixedNeighbor and EIGEN; Profile LM remains in Fixed-Halo compatibility. |
 | Factor ownership and residency | Factor-sharing and persistent-workspace variants did not justify a current route or factor cache. Some 2048 Schwarz diagnostics exceeded the 4 GiB process limit while constructing the SPQR factor, before search PCG began. |
 | Bounded rank budget | Small cases matched dense controls, but representative large SPQR prototypes returned Unavailable before reconstruction completed. No large-case rank or scaling guarantee was established. |
 | Projected width and tail | Completed cases showed numerical parity and some faster assessment phases, but the projected-width candidate exceeded the 4 GiB limit on both 512-atom topologies; projected-tail symbolic work exceeded the limit on cube-512. Neither was promoted. |

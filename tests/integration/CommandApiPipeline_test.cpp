@@ -85,23 +85,6 @@ void InjectJointNoDonors(rgc::JointFitResult & fit)
                 point.local_conditioning="Warning";
 }
 
-void ReplaceJointFitWithBoundedCandidate(rgc::JointFitResult & fit)
-{
-    if(!fit.problem) throw std::runtime_error("Joint workflow test hook lacks a problem snapshot.");
-    auto bounded=rgc::detail::FitJointComponentsInitializedBoundedWithProgress(
-        *fit.problem,fit.initialization,{});
-    if(!bounded.search_completed || bounded.RuntimeConvergence()!=rg::JointCheckStatus::Passed)
-        throw std::runtime_error("Bounded Joint candidate failed in end-to-end test hook.");
-    fit=std::move(bounded);
-}
-
-void ReplaceJointFitWithBoundedCandidateEvenIfUnqualified(rgc::JointFitResult & fit)
-{
-    if(!fit.problem) throw std::runtime_error("Joint workflow test hook lacks a problem snapshot.");
-    fit=rgc::detail::FitJointComponentsInitializedBoundedWithProgress(
-        *fit.problem,fit.initialization,{});
-}
-
 struct ScopedJointWorkflowFitHook
 {
     explicit ScopedJointWorkflowFitHook(rgc::detail::JointWorkflowFitHook hook)
@@ -347,7 +330,7 @@ TEST(CommandApiPipelineTest, PotentialAnalysisFixedPoliciesMatchDirectTwoStageWo
     }
 }
 
-TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSourceInputs)
+TEST(CommandApiPipelineTest, JointOptInPersistsSmallSelectionCalibrationFailureAndExportsWithoutSourceInputs)
 {
     command_test::ScopedTempDir directory{"joint_command_pipeline"};
     rgc::MapSimulationRequest simulation;
@@ -399,6 +382,13 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
     auto map=rg::ReadMap(map_path); auto model=rg::ReadModel(request.model_file_path);
     ASSERT_NE(map, nullptr); ASSERT_NE(model, nullptr);
     ASSERT_TRUE(map->MapValueArrayNormalization());
+    EXPECT_FALSE(rg::IsQualifiedJointAnalysisResult(saved));
+    const auto calibration=std::find_if(saved.evidence.begin(),saved.evidence.end(),[](const auto & item) {
+        return item.name=="global-width-calibration";
+    });
+    ASSERT_NE(calibration,saved.evidence.end());
+    EXPECT_EQ(calibration->status,rg::JointCheckStatus::Unavailable);
+    EXPECT_TRUE(saved.components.empty());
     model->SelectAtoms([](const rg::AtomObject & atom)
     {
         return atom.GetElement() != Element::HYDROGEN && atom.GetChainID() == "A";
@@ -407,47 +397,6 @@ TEST(CommandApiPipelineTest, JointOptInSavesTheDirectEndpointAndExportsWithoutSo
     EXPECT_EQ(saved.row_ids,target_problem.Input().row_ids);
     EXPECT_EQ(target_problem.Input().selection_domain->target_indices,
         (std::vector<std::size_t>{0,1}));
-    rgc::FitOptions direct_options;
-    direct_options.thread_size=1;
-    direct_options.estimator=rgc::PotentialEstimator::JOINT_COMPONENTS;
-    direct_options.sampling_method=SphereSamplingMethod::FibonacciDeterministic;
-    direct_options.exclude_hydrogen=true;
-    direct_options.enable_second_stage_failed_only_refinement=true;
-    direct_options.quiet_mode=true;
-    rgc::RunPotentialFittingWorkflow(*map,*model,direct_options);
-    ASSERT_TRUE(model->GetAnalysisView().GetJointResult());
-    auto expected=*model->GetAnalysisView().GetJointResult();
-    expected.metadata=saved.metadata; expected.costs=saved.costs;
-    ASSERT_TRUE(expected.halo_median_reconstruction);
-    ASSERT_TRUE(saved.halo_median_reconstruction);
-    expected.halo_median_reconstruction->joint_run_id=saved.halo_median_reconstruction->joint_run_id;
-    for (auto & halo:expected.halo_median_reconstruction->halos)
-        halo.joint_run_id=saved.halo_median_reconstruction->joint_run_id;
-    EXPECT_EQ(expected.parameterization_contract,saved.parameterization_contract);
-    EXPECT_EQ(expected.atom_ids,saved.atom_ids);
-    EXPECT_EQ(expected.row_ids,saved.row_ids);
-    EXPECT_EQ(expected.fitting_row_ids,saved.fitting_row_ids);
-    EXPECT_EQ(expected.fitting_to_original_contributors,saved.fitting_to_original_contributors);
-    EXPECT_EQ(expected.fitting_to_original_rows,saved.fitting_to_original_rows);
-    ASSERT_EQ(expected.components.size(),saved.components.size());
-    for (std::size_t component=0;component<expected.components.size();++component)
-    {
-        const auto & left=expected.components[component];
-        const auto & right=saved.components[component];
-        EXPECT_EQ(left.id,right.id);
-        EXPECT_EQ(left.atoms,right.atoms);
-        EXPECT_EQ(left.rows,right.rows);
-        EXPECT_EQ(left.runtime_convergence,right.runtime_convergence);
-        EXPECT_EQ(left.target_runtime_convergence,right.target_runtime_convergence);
-        ASSERT_TRUE(left.state); ASSERT_TRUE(right.state);
-        ASSERT_EQ(left.state->ac.size(),right.state->ac.size());
-        ASSERT_EQ(left.state->b.size(),right.state->b.size());
-        for (std::size_t i=0;i<static_cast<std::size_t>(left.state->ac.size());++i)
-            EXPECT_DOUBLE_EQ(left.state->ac[i],right.state->ac[i]);
-        for (std::size_t i=0;i<static_cast<std::size_t>(left.state->b.size());++i)
-            EXPECT_DOUBLE_EQ(left.state->b[i],right.state->b[i]);
-    }
-    EXPECT_EQ(expected.halo_median_reconstruction,saved.halo_median_reconstruction);
 
     {
         auto zero_map=rg::ReadMap(map_path);
@@ -569,15 +518,33 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
     const auto maps_dir=directory.path()/"maps";
     std::filesystem::create_directories(maps_dir);
     const auto model_path=directory.path()/"input.cif";
-    std::filesystem::copy_file(
-        command_test::TestDataPath("potential_analysis_multichain.cif"),model_path);
+    const auto template_path=command_test::TestDataPath("test_model.cif");
+    std::ifstream template_file(template_path);
+    ASSERT_TRUE(template_file);
+    const std::string template_text{std::istreambuf_iterator<char>{template_file},
+        std::istreambuf_iterator<char>{}};
+    const auto atom_marker=template_text.find("ATOM 1 C CA . ALA A 1");
+    ASSERT_NE(atom_marker,std::string::npos);
+    std::ofstream model_file(model_path);
+    ASSERT_TRUE(model_file);
+    model_file << template_text.substr(0,atom_marker);
+    for(int index=0;index<25;++index)
+    {
+        const int serial=index+1;
+        const int x=3+7*(index%5),y=3+7*(index/5);
+        model_file << "ATOM " << serial << " C CA . ALA A " << serial << ' '
+            << x << ' ' << y << " 3.0 1.0 0.0 1\n";
+    }
+    model_file << "ATOM 26 C CA . ALA B 1 3 6.5 3.0 1.0 0.0 1\n";
+    model_file << "#\n";
+    model_file.close();
 
     rgc::MapSimulationRequest simulation;
     simulation.model_file_path=model_path;
     simulation.output_dir=maps_dir;
-    simulation.grid_spacing=.3;
+    simulation.grid_spacing=.5;
     simulation.potential_model_choice=rgc::PotentialModel::SINGLE_GAUS;
-    simulation.blurring_width_list={.5};
+    simulation.blurring_width_list={.55};
     simulation.verbosity=0;
     ASSERT_TRUE(rgc::RunCommand(simulation).succeeded);
     const auto map_path=FindGeneratedMap(maps_dir);
@@ -669,7 +636,7 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
     ASSERT_TRUE(rg::DataRepository{request.database_path}.LoadModel(request.saved_key_tag));
 }
 
-TEST(CommandApiPipelineTest, BoundedJointCandidatePersistsReloadsAndFeedsPostprocessing)
+TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeedsPostprocessing)
 {
     command_test::ScopedTempDir directory{"bounded_joint_downstream"};
     const auto model_path=directory.path()/"bounded-input.cif";
@@ -709,13 +676,10 @@ TEST(CommandApiPipelineTest, BoundedJointCandidatePersistsReloadsAndFeedsPostpro
     const auto database_path=directory.path()/"bounded.sqlite";
     constexpr const char * key="bounded-joint";
     int cli_status{};
-    {
-        ScopedJointWorkflowFitHook hook{&ReplaceJointFitWithBoundedCandidate};
-        cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
-            "--model",model_path.string(),"--map",map_path.string(),
-            "--database",database_path.string(),"--save-key",key,
-            "--select-chain","A","--verbose","0"});
-    }
+    cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
+        "--model",model_path.string(),"--map",map_path.string(),
+        "--database",database_path.string(),"--save-key",key,
+        "--select-chain","A","--verbose","0"});
     ASSERT_EQ(cli_status,0);
 
     rg::DataRepository repository{database_path};
@@ -728,6 +692,7 @@ TEST(CommandApiPipelineTest, BoundedJointCandidatePersistsReloadsAndFeedsPostpro
     EXPECT_EQ(stored.selection_domain->target_indices.size(),25u);
     ASSERT_TRUE(stored.metadata.solver);
     EXPECT_EQ(stored.metadata.solver->search_method,"fixed-neighbor");
+    EXPECT_EQ(stored.metadata.solver->fixed_neighbor_local_search,"active-set-lm");
     const auto calibration=std::find_if(stored.evidence.begin(),stored.evidence.end(),[](const auto & item) {
         return item.name=="global-width-calibration";
     });
@@ -781,13 +746,10 @@ TEST(CommandApiPipelineTest, BoundedJointCandidatePersistsReloadsAndFeedsPostpro
     const auto small_database_path=directory.path()/"small-bounded.sqlite";
     constexpr const char * small_key="small-bounded-joint";
     int small_cli_status{};
-    {
-        ScopedJointWorkflowFitHook hook{&ReplaceJointFitWithBoundedCandidateEvenIfUnqualified};
-        small_cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
-            "--model",template_path.string(),"--map",small_map_path.string(),
-            "--database",small_database_path.string(),"--save-key",small_key,
-            "--select-chain","A","--verbose","0"});
-    }
+    small_cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
+        "--model",template_path.string(),"--map",small_map_path.string(),
+        "--database",small_database_path.string(),"--save-key",small_key,
+        "--select-chain","A","--verbose","0"});
     EXPECT_NE(small_cli_status,0);
     rg::DataRepository small_repository{small_database_path};
     const auto small_loaded=small_repository.LoadModel(small_key);

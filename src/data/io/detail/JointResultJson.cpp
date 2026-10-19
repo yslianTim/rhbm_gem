@@ -922,6 +922,7 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
                     "invalid fixed-neighbor block order");
             if(p.fixed_neighbor_local_search)
                 Require(*p.fixed_neighbor_local_search==FixedNeighborLocalSearchName ||
+                    *p.fixed_neighbor_local_search==FixedNeighborBoundedLocalSearchName ||
                     *p.fixed_neighbor_local_search=="legacy-compact",
                     "invalid fixed-neighbor local search");
         }

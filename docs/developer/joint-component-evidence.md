@@ -8,13 +8,16 @@ experiments](joint-experiments.md) and [Joint component runtime](joint-component
 
 Production uses Pure Halo-Support Exclusion with FixedNeighbor core size 12,
 forward serial Gauss-Seidel, at most 200 sweeps, and at most one trusted
-accepted Profile LM update per block visit. Selected targets are the only free
-FullABC parameters. Retained non-target support excludes fitting rows; it does
-not contribute FirstStage halo parameters to the Joint objective. The
-normalized objective uses the retained fitting observations for its scale.
-Target-only projected A/C KKT, width-gradient stationarity, complete sweep
-confirmation, monotone global-objective acceptance, trust checks, and
-independent endpoint replay define numerical convergence.
+accepted bounded Active-set LM update per block visit. The global width bound
+is `4 * Q95` of qualified FirstStage target widths, with at least 20 donors
+and 95% coverage. Selected targets are the only free FullABC parameters.
+Retained non-target support excludes fitting rows; it does not contribute
+FirstStage halo parameters to the Joint objective. The normalized objective
+uses the retained fitting observations for its scale. Target-only projected
+A/C KKT, projected Width KKT, complete-sweep confirmation, monotone
+global-objective acceptance, trust checks, and independent endpoint replay
+define numerical convergence. Fixed-Halo compatibility retains Profile LM and
+does not use this calibration.
 
 A converged endpoint becomes the component state even when local conditioning
 is poor or parameter probes show sensitivity. Local conditioning describes

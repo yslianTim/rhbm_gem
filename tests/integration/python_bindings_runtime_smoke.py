@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import shutil
 import json
 import os
 import tempfile
@@ -216,17 +215,20 @@ def assert_joint_workflow() -> None:
         root = Path(directory)
         simulation = m.MapSimulationRequest()
         local_model = root / "input.cif"
-        shutil.copyfile(PROJECT_ROOT / "tests" / "fixtures" / "test_model.cif", local_model)
-        local_model.write_text(
-            local_model.read_text().rsplit("#", 1)[0]
-            + "ATOM 2 C CB . ALA B 1 1.2 0.0 0.0 1.0 0.0 1\n"
-            + "ATOM 3 C CB . ALA C 2 12.0 0.0 0.0 1.0 0.0 1\n#\n"
-        )
+        template_text = (PROJECT_ROOT / "tests" / "fixtures" / "test_model.cif").read_text()
+        atom_marker = template_text.find("ATOM 1 C CA . ALA A 1")
+        assert atom_marker >= 0
+        atoms = []
+        for index in range(25):
+            serial = index + 1
+            x, y = 3 + 7 * (index % 5), 3 + 7 * (index // 5)
+            atoms.append(f"ATOM {serial} C CA . ALA A {serial} {x} {y} 3.0 1.0 0.0 1")
+        local_model.write_text(template_text[:atom_marker] + "\n".join(atoms) + "\n#\n")
         simulation.model_file_path = local_model
         simulation.output_dir = root
         simulation.potential_model_choice = m.PotentialModel.SINGLE_GAUS
         simulation.blurring_width_list = [.5]
-        simulation.grid_spacing = .3
+        simulation.grid_spacing = .5
         simulation.verbosity = 0
         simulation_result = m.RunCommand(simulation)
         assert simulation_result.succeeded
@@ -254,8 +256,8 @@ def assert_joint_workflow() -> None:
         assert m.RunCommand(export).succeeded
         saved = json.loads((root / "joint_result_model.json").read_text())
         assert saved["schema_version"] == 17
-        assert saved["selection_domain"]["target_indices"] == [0]
-        assert saved["atom_ids"] == ["1", "2"]
+        assert saved["selection_domain"]["target_indices"] == list(range(25))
+        assert saved["atom_ids"] == [str(index) for index in range(1, 26)]
         assert saved["metadata"]["model_sha256"] == model_hash
         assert saved["metadata"]["map_sha256"] == map_hash
         normalization = saved["metadata"]["map_normalization"]
@@ -267,13 +269,17 @@ def assert_joint_workflow() -> None:
         assert saved["parameterization_contract"] == "target-only-pure-halo-support-exclusion-v1"
         assert saved["assembled_state"] is not None
         assert not saved["fixed_halos"]
-        assert len(saved["halo_median_reconstruction"]["halos"]) == 1
-        assert saved["halo_median_reconstruction"]["halos"][0]["atom_id"] == "2"
+        if saved["halo_median_reconstruction"] is not None:
+            assert saved["halo_median_reconstruction"]["halos"] == []
         assert saved["components"]
         assert saved["components"][0]["state"] is not None
         assert saved["components"][0]["stop_reason"] == "block-stationary"
         assert saved["components"][0]["candidate_diagnostic"]["convergence_criteria_id"] == "practical-v1"
         assert saved["runtime_convergence"] == "passed"
+        assert saved["metadata"]["solver"]["fixed_neighbor_local_search"] == "active-set-lm"
+        calibration = next(item for item in saved["evidence"] if item["name"] == "global-width-calibration")
+        assert calibration["status"] == "passed"
+        assert "global-first-stage-p95-k4" in calibration["reason"]
 
 
 def main() -> int:

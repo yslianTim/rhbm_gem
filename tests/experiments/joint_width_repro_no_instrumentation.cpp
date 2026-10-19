@@ -284,7 +284,7 @@ void Run(const std::filesystem::path & model_path,const std::filesystem::path & 
     const auto & data=core::JointProblemAccess::Get(*fit.problem);
     const auto fingerprints=rhbm_gem::joint_reproducibility::WriteFingerprint(output,
         model_path,map_path,*normalization,*map,*model,*fit.problem,fit.initialization.b,
-        {"production-bounded-candidate-no-instrumentation",false});
+        {"production-bounded-candidate-no-instrumentation",false,"active-set-lm"});
     json::array components;
     for(const auto & component:fit.components)
     {

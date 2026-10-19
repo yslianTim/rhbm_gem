@@ -972,7 +972,11 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
     const JointProblem & problem,const JointInitialization & initialization,
     const joint_component::JointProgressObserver & observer)
 {
-    return detail::FitJointComponentsInitializedWithProgress(problem,initialization,observer,false);
+    const auto & input=problem.Input();
+    const bool production_pure_exclusion=input.selection_domain &&
+        input.selection_domain->contributor_policy==PureHaloSupportExclusionContributorPolicy;
+    return detail::FitJointComponentsInitializedWithProgress(
+        problem,initialization,observer,production_pure_exclusion);
 }
 JointFitResult detail::FitJointComponentsInitializedBoundedWithProgress(
     const JointProblem & problem,const JointInitialization & initialization,
@@ -1103,7 +1107,8 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         out.fixed_neighbor_policy_version=std::string(FixedNeighborPolicyContractVersion);
         out.fixed_neighbor_maximum_sweeps=production_policy.maximum_sweeps;
         out.fixed_neighbor_order=std::string(n::FixedNeighborBlockOrderName(production_policy.order));
-        out.fixed_neighbor_local_search=std::string(FixedNeighborLocalSearchName);
+        out.fixed_neighbor_local_search=std::string(production_policy.eta_upper_bound ?
+            FixedNeighborBoundedLocalSearchName : FixedNeighborLocalSearchName);
         return out;
     };
     const auto & data=JointProblemAccess::Get(problem);

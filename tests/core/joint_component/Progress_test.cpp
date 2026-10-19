@@ -481,6 +481,7 @@ TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
     EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(events.front().solver_configuration);
     EXPECT_EQ(events.front().solver_configuration->fixed_neighbor_core_atoms,12u);
+    EXPECT_FALSE(events.front().solver_configuration->bounded_width_profile);
     ASSERT_TRUE(std::any_of(events.begin(),events.end(),[](const auto & event) {
         return event.fixed_neighbor && event.fixed_neighbor->sweep>0;
     }));
@@ -536,6 +537,17 @@ TEST(JointProgressTest, CliReporterFormatsFixedNeighborConfiguration)
     const auto fixed_line_end = output.find('\n', fixed);
     EXPECT_EQ(output.substr(fixed, fixed_line_end - fixed).find("local-work="), std::string::npos);
     EXPECT_EQ(output.find("LegacyCompact (reference)"), std::string::npos);
+
+    Logger::SetLogLevel(LogLevel::Info);
+    Logger::FinishProgressLine();
+    testing::internal::CaptureStdout();
+    joint::FixedNeighborSearchPolicy bounded_policy;
+    bounded_policy.eta_upper_bound=1.0;
+    event.solver_configuration=joint::ResolveJointSolverConfiguration(bounded_policy);
+    reporter.OnProgress(event);
+    const auto bounded_output=testing::internal::GetCapturedStdout();
+    Logger::SetLogLevel(previous_level);
+    EXPECT_NE(bounded_output.find("local-search=active-set-lm"),std::string::npos);
 }
 
 TEST(JointProgressTest, CliReporterRefreshesPhasesAndFinishesLines)

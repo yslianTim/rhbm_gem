@@ -1,7 +1,9 @@
 # Joint benchmark
 
-The current benchmark measures the production FixedNeighbor estimator and
-current workflow costs. Its only workflow entry point is
+The benchmark covers FixedNeighbor search and workflow costs. Its search and
+solve profiles use the Profile LM diagnostic harness and do not measure the
+bounded Active-set LM Production route; the command profile invokes the regular
+CLI. Its only workflow entry point is
 [tests/integration/joint_benchmark.py](../../tests/integration/joint_benchmark.py).
 
 ## Profiles
@@ -148,25 +150,28 @@ Every report records the frozen estimator policy:
 | Core | 12 atoms |
 | Block order | Forward |
 | Maximum sweeps | 200 |
-| Local search | Profile LM |
+| Local search | Profile LM diagnostic harness |
 | Provenance | `fixed_neighbor_local_search=profile-lm` |
 | Accepted local updates | OneAccepted: at most one trusted update per block visit |
 | Sparse backend | EIGEN |
 
-Search and solve are the only FixedNeighbor measurement modes. The C++ driver
+This policy table applies to the FixedNeighbor search and solve diagnostic
+harness. The production Pure Exclusion CLI/API records bounded Active-set LM
+in solver provenance. Search and solve are the only FixedNeighbor measurement
+modes. The C++ driver
 accepts --scaling-only for search measurement or --case for solve measurement.
 It exposes no reverse-order mode, arbitrary core size or alternative policy.
 
 Search reports search and structural-preparation work; solve also reports
 primary endpoint, independent replay and rank-assessment time separately.
-Reports state `reference_solve_calls=0` for production. Aggregate timings attribute local Profile LM work,
+Reports state `reference_solve_calls=0`. Aggregate timings attribute local Profile LM work,
 old-core and effective-response preparation, candidate replay and copying,
 cache updates, sweep replay and global-state evaluation. Reports also include
 block visits and solves, accepted updates, profile evaluations, full candidate
 replays/copies and maximum block time. The Python wrapper records process
 status, elapsed time, source/build metadata, endpoint evidence, estimated peak
-bytes, observed process peak RSS, the diagnostic sweep cap and the unchanged
-production solver policy. Use --repeat, --warmup, --timeout and
+bytes, observed process peak RSS, the diagnostic sweep cap and diagnostic
+solver policy. Use --repeat, --warmup, --timeout and
 --rss-limit to control the measurement process.
 
 Solve output also includes `assessment_stage_telemetry`: stage entry and

@@ -107,7 +107,8 @@ void JointCliProgressReporter::OnProgress(const JointProgressEvent & event)
         std::ostringstream output;
         output << "[Joint] Solver: FixedNeighbor | sparse=EIGEN"
             << " | core=" << configuration.fixed_neighbor_core_atoms
-            << " | local-search=" << FixedNeighborLocalSearchName;
+            << " | local-search=" << (configuration.bounded_width_profile ?
+                FixedNeighborBoundedLocalSearchName : FixedNeighborLocalSearchName);
         LogJointInfo(output.str());
         return;
     }

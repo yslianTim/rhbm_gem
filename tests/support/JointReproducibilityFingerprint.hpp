@@ -13,6 +13,7 @@ struct FingerprintOptions
 {
     std::string execution_role;
     bool instrumentation_enabled{};
+    std::string fixed_neighbor_local_search{"profile-lm"};
 };
 
 boost::json::object WriteFingerprint(

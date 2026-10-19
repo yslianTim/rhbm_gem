@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import hashlib
 import csv
-import shutil
 import json
 from pathlib import Path
 import sqlite3
@@ -18,10 +17,15 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="rhbm_joint_cli_") as directory:
         root = Path(directory)
         local_model = root / "input.cif"
-        shutil.copyfile(model, local_model)
-        local_model.write_text(local_model.read_text().rsplit("#", 1)[0] +
-            "ATOM 2 C CB . ALA B 1 1.2 0.0 0.0 1.0 0.0 1\n"
-            "ATOM 3 C CB . ALA C 2 12.0 0.0 0.0 1.0 0.0 1\n#\n")
+        template_text = model.read_text()
+        atom_marker = template_text.find("ATOM 1 C CA . ALA A 1")
+        assert atom_marker >= 0
+        atoms = []
+        for index in range(25):
+            serial = index + 1
+            x, y = 3 + 7 * (index % 5), 3 + 7 * (index // 5)
+            atoms.append(f"ATOM {serial} C CA . ALA A {serial} {x} {y} 3.0 1.0 0.0 1")
+        local_model.write_text(template_text[:atom_marker] + "\n".join(atoms) + "\n#\n")
         model = local_model
 
         def run(*args: object, expected_exit: int | None = 0) -> None:
@@ -32,7 +36,7 @@ def main() -> int:
                 assert result.returncode == expected_exit, result.stdout + result.stderr
 
         run("map_simulation", "-a", model, "-o", root, "--potential-model", "single",
-            "--blurring-width", ".5", "-g", ".3", "-v", "0")
+            "--blurring-width", ".5", "-g", ".5", "-v", "0")
         map_path = next(root.glob("*.map"))
         generator = json.loads(Path(str(map_path) + ".simulation.json").read_text())["generator"]
         database = root / "joint.sqlite"
@@ -66,7 +70,7 @@ def main() -> int:
             changed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='changed'").fetchone()[0])
             stages = json.loads(connection.execute("SELECT result_json FROM model_stage_result WHERE key_tag='example'").fetchone()[0])
             assert stages["version"] == 4
-            assert len(stages["atoms"]) == 2
+            assert len(stages["atoms"]) == 25
             assert all(atom["peeled"] is None and atom["second_native"] is None for atom in stages["atoms"])
             for group in stages["groups"]:
                 if group["summary"] and group["summary"]["inference"]:
@@ -95,7 +99,7 @@ def main() -> int:
             "fixed_neighbor_policy_version": "fixed-neighbor-production-v4",
             "fixed_neighbor_maximum_sweeps": 200,
             "fixed_neighbor_order": "forward",
-            "fixed_neighbor_local_search": "profile-lm",
+            "fixed_neighbor_local_search": "active-set-lm",
         }
         fixed_solver = fixed["metadata"]["solver"]
         assert {key: fixed_solver[key] for key in (
@@ -109,17 +113,14 @@ def main() -> int:
             "fixed_neighbor_policy_version": "fixed-neighbor-production-v4",
             "fixed_neighbor_maximum_sweeps": 200,
             "fixed_neighbor_order": "forward",
-            "fixed_neighbor_local_search": "profile-lm",
+            "fixed_neighbor_local_search": "active-set-lm",
         }
-        assert saved["selection_domain"]["target_indices"] == [0]
+        assert saved["selection_domain"]["target_indices"] == list(range(25))
         assert saved["selection_domain"]["contributor_policy"] == "pure-halo-support-exclusion-v1"
-        assert saved["atom_ids"] == ["1", "2"]
+        assert saved["atom_ids"] == [str(index) for index in range(1, 26)]
         assert not saved["fixed_halos"]
-        assert len(saved["halo_median_reconstruction"]["halos"]) == 1
-        median_halo = saved["halo_median_reconstruction"]["halos"][0]
-        assert median_halo["atom_id"] == "2"
-        assert median_halo["source"] in ("group-key-median", "global-target-median")
-        assert median_halo["donor_count"] == 1
+        if saved["halo_median_reconstruction"] is not None:
+            assert saved["halo_median_reconstruction"]["halos"] == []
         assert saved["initialization"]["data_scope"] == "contributor-local-sampling-may-read-outside-target-domain"
         csv_lines = (root / "joint_atoms_example.csv").read_text().splitlines()
         assert csv_lines[0].endswith(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality")
@@ -127,12 +128,10 @@ def main() -> int:
         assert csv_rows["target"]["Parameterization"] == "JointEstimated"
         assert csv_rows["target"]["StateAvailable"] == "1"
         assert csv_rows["target"]["TargetRuntimeConvergence"] == "passed"
-        assert csv_rows["halo"]["Parameterization"] == "HaloMedianReconstructed"
-        assert csv_rows["halo"]["StateAvailable"] == "1"
-        assert csv_rows["halo"]["StopReason"] == median_halo["source"]
-        assert float(csv_rows["halo"]["A"]) == median_halo["amplitude"]
-        assert float(csv_rows["halo"]["B"]) == median_halo["width"]
-        assert float(csv_rows["halo"]["C"]) == median_halo["charge"]
+        calibration = next(item for item in saved["evidence"] if item["name"] == "global-width-calibration")
+        assert calibration["status"] == "passed"
+        assert "global-first-stage-p95-k4" in calibration["reason"]
+        assert abs(calibration["threshold"] - 4.0 * calibration["value"]) <= 1e-12
         assert 'target_runtime_convergence' in saved
         metadata = saved["metadata"]
         assert metadata["model_sha256"] == model_hash

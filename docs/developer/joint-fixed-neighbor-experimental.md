@@ -19,18 +19,18 @@ estimates. See the [halo eligibility guide](joint-observable-halo.md).
 | Mutable core | 12 atoms, disjoint blocks |
 | Block order | Forward serial Gauss-Seidel |
 | Maximum sweeps | 200 complete sweeps |
-| Local search | Profile LM (`fixed_neighbor_local_search=profile-lm`) |
+| Local search | Bounded Active-set LM (`fixed_neighbor_local_search=active-set-lm`) |
 | Accepted local update | At most one trusted update per block visit |
 | Acceptance | Existing trust checks and roundoff-safe monotone global objective |
-| A/C stationarity | Global projected KKT `<= 1e-10` |
-| Width stationarity | Global log-width gradient infinity norm `<= 1e-12` |
-| Sweep confirmation | Prior complete sweep and log-width change `<= 1e-10` |
+| A/C stationarity | Global projected KKT `<= 1e-7` |
+| Width stationarity | Global projected Width KKT `<= 1e-9` |
+| Sweep confirmation | Prior complete sweep and log-width change `<= 1e-6` |
 | Endpoint | Primary streaming evaluation and independent streaming replay |
 
 A confirmed stationary endpoint becomes the component state only after
 numerical endpoint verification. Replay checks feasibility, prediction,
-residual, objective, A/C KKT, and width-gradient consistency at the accepted
-parameters; it does not solve a second global A/C problem. Recoverable numerical
+residual, objective, A/C KKT, and projected Width KKT consistency at the
+accepted parameters; it does not solve a second global A/C problem. Recoverable numerical
 verification failures can be retried at a bounded interval. Invalid primary
 state and endpoint-verification resource limits stop the search. Maximum
 sweeps means budget exhaustion and does not imply convergence. If the last
@@ -45,11 +45,14 @@ profile-evaluation, update, workspace, and CPU budgets. These diagnostics do
 not change accepted parameters, objective, or convergence status. Their
 warnings are point-quality evidence, not global identifiability claims.
 
-The objective, local Profile LM, A/C active-set solve, global objective
-acceptance, and independent endpoint replay retain their existing contracts.
-The full derivative keeps the nonzero-residual coefficient correction. The
-width search has no hard minimum or maximum. A poor local condition does not
-impose an arbitrary width bound or reject a converged component.
+The objective, constrained A/C solve, global objective acceptance, and
+independent endpoint replay retain their existing contracts. The full
+derivative keeps the nonzero-residual coefficient correction. Pure Exclusion
+Production bounds every target width by `4 * Q95` of qualified FirstStage
+target widths; calibration needs at least 20 donors and 95% target coverage.
+Projected Width KKT certifies an active upper boundary. Calibration failure
+persists an unavailable result and does not fall back to unbounded search.
+Fixed-Halo compatibility retains the unbounded Profile LM path.
 
 For accepted trials, the local state cache is rebased from the full candidate
 replay already used for acceptance. Sparse predictions, transpose products,
@@ -73,8 +76,11 @@ bytes and an 876,119,666-byte streaming-evaluation estimated peak. A direct
 no-sweep test process recorded 474,546,176 bytes peak RSS. The run disabled
 sweeps and endpoint verification; it does not measure a full physical-data fit.
 The exact preparation estimate depends on actual affected rows and support
-memberships. See the [memory census](joint-component-memory-census.md) for the
-measurement scope and retired rank estimates.
+memberships. The more recent 37,406-target bounded preflight is recorded in the
+[bounded resource validation](../research/joint-bounded-giant-component-resource-validation-20261020.md);
+it also did not run a full fit, so the 4 GB full-workflow gate remains open. See
+the [memory census](joint-component-memory-census.md) for the measurement scope
+and retired rank estimates.
 
 The benchmark driver reports structural counts, estimates, available RSS
 checkpoints, and process peak RSS. Preparation-only, one-sweep, and bounded
@@ -135,7 +141,7 @@ accuracy under the current reference-free contract.
 | Fixed-B | Conditional block updates and replay accounting were numerically feasible, but Fixed-B was not promoted as the estimator. Nonlinear FixedNeighbor superseded it. |
 | Core size | Repeated correctness-checked qualification selected core 12. Against the historical core-64 control, measured median search improved by 33.0%–64.3% across chain/cube at 512 and 1024 atoms. Larger cores did not justify their added local problem size. |
 | Block order | Forward was adopted as the production serial Gauss-Seidel order. Reverse was a qualification diagnostic; the largest fully checked parameter differences stayed below existing interpretation bounds. |
-| Stationarity | Eta-only confirmation was selected with the frozen `1e-10` threshold and requires a previous complete sweep. Current tests retain the KKT `1e-10` and width-gradient `1e-12` gates. |
+| Stationarity | Eta-only confirmation was selected with the historical `1e-10` threshold and requires a previous complete sweep. The bounded production route uses practical-v1 projected A/C KKT `1e-7`, projected Width KKT `1e-9`, and log-width change `1e-6`; the stricter values remain in legacy numerical controls. |
 | Prepared blocks | Structural block, domain and mapping preparation is checked by a deterministic test. Preparation adds no convergence criterion and does not reuse numeric factors across sweeps. |
 | Local update | OneAccepted was selected over Full and TwoAccepted local updates; the at-most-one trusted accepted update is now intrinsic to production. |
 | Optimized/frontier variants | The historical OneAccepted/core-64 and alternative-route frontiers were superseded by the qualified core-12 production policy. |

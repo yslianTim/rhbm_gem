@@ -1,10 +1,12 @@
 # Joint experiment and validation surface
 
 The production estimator is FixedNeighbor with core size 12, forward serial
-Gauss-Seidel, at most 200 complete sweeps, Profile LM, and at most one trusted
-accepted update per block visit. Global numerical convergence determines
-whether the Joint point is saved. Local conditioning and bounded parameter
-stability provide separate point-quality evidence.
+Gauss-Seidel, at most 200 complete sweeps, and at most one trusted accepted
+bounded Active-set LM update per block visit for the Pure Exclusion policy.
+Its global width ceiling is four times the qualified FirstStage target-width
+P95. Global numerical convergence determines whether the Joint point is saved.
+Local conditioning and bounded parameter stability provide separate
+point-quality evidence. Fixed-Halo compatibility retains Profile LM.
 
 ## Current reproducible tools
 

@@ -250,21 +250,27 @@ For JOINT_COMPONENTS, the problem fixes the observation voxel domain and the
 workset contains its target and contributor atoms. Only FullABC contributors are
 sampled and fitted locally; contribution-only halo atoms retain initialization
 provenance without local sampling or fitting. Joint initialization consumes
-those prepared samples in isolation and supplies First B plus seed provenance to
-`FitJointComponents`. Joint estimates then flow through the second-stage
-mapping, target summary, post-fit peeling, fixed Joint charge-profile
-correction, and fresh local alpha/MDPDE fitting for each selected target.
+those prepared samples in isolation and supplies FirstStage qualification,
+width-donor evidence and a feasible start to the Joint fit. Joint estimates
+then flow through the second-stage mapping, target summary, post-fit peeling,
+fixed Joint charge-profile correction, and fresh local alpha/MDPDE fitting for
+each selected target.
 Group alpha and group WEB consume the qualified local estimates and their
 compact MDPDE-derived information. Local fitting does not update Joint
 estimates or construct a cross-atom covariance.
 
-`FixedNeighbor` is the sole qualified bounded-memory production route with the fixed
+`FixedNeighbor` is the qualified bounded-memory production route with the fixed
 core-12, forward, one-accepted-local-update policy documented in the
-[joint runtime contract](../joint-component-runtime.md). Its local profile
-solver is Profile LM, the existing profiled-width Levenberg–Marquardt
-computation; it is not an automatic fallback or size-based route. Use
-`--estimator joint-components`; no separate
-Joint search option is required.
+[joint runtime contract](../joint-component-runtime.md). The production Pure
+Halo-Support Exclusion workflow uses bounded Active-set LM and the global bound
+`Bmax = 4 * Q95(qualified FirstStage target widths)`. Calibration requires at
+least 20 qualified donors and at least 95% coverage. The initial widths are
+projected to the feasible range; boundary stationarity uses projected Width
+KKT, and endpoint certification plus Independent Replay remain required.
+Calibration failure is persisted as Unavailable and skips downstream fitting;
+the workflow does not retry with unbounded LM. Fixed-Halo compatibility retains
+its separate Profile LM parameterization and does not inherit this calibration.
+Use `--estimator joint-components`; no solver or bound CLI option is exposed.
 
 Production uses practical-v1 global stopping limits: projected A/C KKT
 `1e-7`, width-gradient infinity norm `1e-9`, and complete-sweep log-width
@@ -272,6 +278,12 @@ change `1e-6`. Endpoint certification and independent replay remain required;
 local SparseQR/active-set and replay-consistency tolerances are unchanged. Each
 component candidate diagnostic records the criteria identifier, thresholds,
 and achieved KKT, width-gradient, and final-sweep log-width-change values.
+
+Local Conditioning and Parameter Stability remain diagnostics; they do not
+replace global qualification or relax solver and replay gates. The 37,406-target
+full fitting RSS has not yet been measured; the giant-component preflight peak
+is not a full-workflow memory qualification. See the [bounded resource
+validation](../../research/joint-bounded-giant-component-resource-validation-20261020.md).
 
 The standalone `EstimateJointComponents` convenience API remains available and
 keeps its model-copy and target writeback behavior.
@@ -366,13 +378,15 @@ version or access either input file.
 
 `metadata.solver` records the current `fixed-neighbor` estimator. FixedNeighbor records
 `fixed_neighbor_core_atoms: 12` and the intrinsic at-most-one trusted accepted
-Profile LM update per block visit. Current writers use
+local update per block visit. Current writers use
 `fixed-neighbor-production-v4`; `fixed_neighbor_local_work` is absent or null,
 because it is legacy provenance rather than a current policy input. They also
 persist the `joint-solver-provenance-v5` contract, fixed EIGEN sparse
-backend, and FixedNeighbor's maximum sweeps, forward order and
-`fixed_neighbor_local_search: profile-lm` local search. Readers accept
-`legacy-compact` as the previous v3 value for that local-search field.
+backend, and FixedNeighbor's maximum sweeps and forward order. The bounded
+Pure Exclusion production route records
+`fixed_neighbor_local_search: active-set-lm`; Fixed-Halo compatibility records
+`profile-lm`. Readers accept `legacy-compact` as the previous v3 value for that
+local-search field.
 Operator, rank, preconditioner and Schwarz
 controls are historical provenance only and are not emitted by current
 writers. Historical `joint-solver-provenance-v2` records, including

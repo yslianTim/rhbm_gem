@@ -130,7 +130,8 @@ std::string WriteMaterial(const std::filesystem::path & path,
 
     Token(policy,options.execution_role);
     policy<<options.instrumentation_enabled<<'\n';
-    policy<<12<<'\n'<<200<<'\n'<<"forward\n"<<"fixed-neighbor\n"<<"profile-lm\n";
+    policy<<12<<'\n'<<200<<'\n'<<"forward\n"<<"fixed-neighbor\n"
+        <<options.fixed_neighbor_local_search<<'\n';
     Bits(policy,joint::PracticalJointConvergenceCriteria.global_ac_kkt);
     Bits(policy,joint::PracticalJointConvergenceCriteria.global_width_gradient);
     Bits(policy,joint::PracticalJointConvergenceCriteria.confirmed_log_width_change);

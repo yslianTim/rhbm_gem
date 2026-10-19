@@ -14,7 +14,10 @@ numeric factorization.
 Derivative preparation and reduction accounted for roughly 82%–86% of search
 time in the measured cases. The result did not justify a workspace-policy
 switch, numeric-factor cache, or candidate-replay optimization. Production
-semantics remain the frozen core-12 FixedNeighbor route with local Profile LM.
+semantics remain the frozen core-12 FixedNeighbor block policy. The production
+Pure Exclusion route now uses bounded Active-set LM; the workspace results above
+are measurements of the earlier Profile LM experiments and do not measure the
+bounded production path.
 
 This concise conclusion is the retained record. Closed campaign drivers and
 machine-readable outputs are recoverable from Git history and are intentionally

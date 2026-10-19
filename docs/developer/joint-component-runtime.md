@@ -64,9 +64,20 @@ observation-domain objective is
 0.5 * ||prediction - observations||^2 / max(1, ||observations||)^2
 ```
 
-There is no global regularizer, prior, pseudo-observation, or added width bound.
-The objective and FixedNeighbor update strategy are unchanged by the diagnostic
-architecture.
+There is no global regularizer, prior, or pseudo-observation. The production
+Pure Halo-Support Exclusion path derives a global width ceiling from qualified
+target FirstStage donors:
+
+```text
+Bmax = 4 * Q95(qualified FirstStage target widths)
+```
+
+Calibration requires at least 20 qualified donors and at least 95% target
+coverage. The initialized target widths are projected into the feasible global
+range, and Active-set LM keeps every trial within `B <= Bmax`. If calibration
+cannot be established, the Joint result is Unavailable and downstream fitting
+is skipped; Production never falls back to unbounded LM. There is no public
+solver or bound option. This bound does not change the physical objective.
 
 For the production `pure-halo-support-exclusion-v1` policy, only selected
 targets have free Joint parameters and the fitting rows exclude retained
@@ -79,14 +90,22 @@ free Joint parameters and every supported halo contributes its qualified
 FirstStage `(A, B, 0)` snapshot as a fixed response. Numerical convergence then
 certifies the target optimization conditional on those fixed values, not the
 statistical accuracy of the FirstStage halo parameters. This is a research or
-compatibility contract, not the production command path.
+compatibility contract, not the production command path. Its parameterization
+and solver entry remain separate; the Pure Exclusion FirstStage-P95 calibration
+is not applied to this path.
+
+For the production Pure Exclusion policy, width profiling uses bounded
+Active-set Levenberg–Marquardt (Active-set LM). Boundary stationarity is checked
+with the projected Width KKT and the independently replayed endpoint. A/C
+feasibility and solver qualification remain unchanged.
 
 Production uses disjoint mutable cores of 12 atoms, forward serial
 Gauss-Seidel sweeps, at most 200 complete sweeps, and at most one trusted
-Profile LM update per block visit. Neighbor parameters stay fixed during each
-block solve. Every accepted update passes the existing trust checks and a full
-global-objective monotonic replay. The local constrained A/C solve uses
-SparseQR and keeps the nonnegative-amplitude active set.
+Active-set LM update per block visit on the bounded Pure Exclusion route.
+Neighbor parameters stay fixed during each block solve. Every accepted update
+passes the existing trust checks and a full global-objective monotonic replay.
+The local constrained A/C solve uses SparseQR and keeps the nonnegative-amplitude
+active set. Fixed-Halo compatibility retains the unbounded Profile LM path.
 
 When a block visit produces no trusted local profile, FixedNeighbor preserves
 the current accepted component state, records the failure, and completes the
