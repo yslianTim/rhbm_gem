@@ -417,7 +417,7 @@ PostJointLocalSamples JointPostprocessingContext::BuildPostJointLocalSamples(
     int atom_id, const PostFitPeelingResult & peeling) const
 {
     if (!m_snapshot) throw std::invalid_argument("Post-Joint samples require a trusted Joint snapshot.");
-    const auto & input = m_problem.Input();
+    const auto & input = m_problem.OriginalInput();
     const auto atom_found = m_contributor_index_by_id.find(atom_id);
     if (atom_found == m_contributor_index_by_id.end())
         throw std::invalid_argument("Post-Joint sample target is outside the Joint problem.");
