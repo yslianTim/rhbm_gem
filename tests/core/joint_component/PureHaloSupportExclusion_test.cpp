@@ -755,8 +755,11 @@ TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithMultipleTargetsAndHal
 
     double local_amplitude_sum{};
     double local_width_sum{};
-    for (const int atom_id:{1,2,3})
+    const std::array<double,3> expected_amplitudes{{2.0,1.6,1.2}};
+    const std::array<double,3> expected_widths{{.65,.75,.85}};
+    for (std::size_t target=0;target<3;++target)
     {
+        const int atom_id=static_cast<int>(target+1);
         const auto local=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(atom_id)).GetPostJointLocalResult();
         ASSERT_TRUE(local);
         EXPECT_EQ(local->status,EvidenceStatus::Available) << local->reason;
@@ -764,6 +767,8 @@ TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithMultipleTargetsAndHal
         EXPECT_TRUE(std::isfinite(local->fit.mdpde.GetModel().GetAmplitude()));
         EXPECT_TRUE(std::isfinite(local->fit.mdpde.GetModel().GetWidth()));
         EXPECT_TRUE(std::isfinite(local->fixed_charge.coefficient));
+        EXPECT_NEAR(local->fit.mdpde.GetModel().GetAmplitude(),expected_amplitudes[target],.25);
+        EXPECT_NEAR(local->fit.mdpde.GetModel().GetWidth(),expected_widths[target],.08);
         local_amplitude_sum+=local->fit.mdpde.GetModel().GetAmplitude();
         local_width_sum+=local->fit.mdpde.GetModel().GetWidth();
     }
