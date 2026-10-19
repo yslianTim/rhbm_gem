@@ -300,13 +300,15 @@ add_library(joint_test_support STATIC
     support/JointTestGeometry.cpp support/JointTestNumerics.cpp support/JointDenseReference.cpp
     support/JointTestContext.cpp support/JointComponentChecks.cpp
     support/JointFixtureSupport.cpp support/JointHaloObservationExclusion.cpp
-    support/DynamicHaloMean.cpp)
+    support/DynamicHaloMean.cpp support/JointReproducibilityFingerprint.cpp)
 target_compile_features(joint_test_support PUBLIC cxx_std_20)
 target_link_libraries(joint_test_support PUBLIC rhbm_gem_dependencies CompilerFlags)
 target_include_directories(joint_test_support PUBLIC
     "${PROJECT_SOURCE_DIR}/include"
     "${PROJECT_SOURCE_DIR}/src"
     "${PROJECT_SOURCE_DIR}/tests")
+target_include_directories(joint_test_support PRIVATE
+    "${PROJECT_BINARY_DIR}/generated/$<CONFIG>")
 target_link_libraries(rhbm_tests PRIVATE joint_test_support)
 
 add_executable(joint_component_runtime tools/joint_component_runtime.cpp support/JointComponentRuntime.cpp)
@@ -369,6 +371,9 @@ if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
     target_link_libraries(joint_width_trajectory PRIVATE joint_test_support joint_offline_support rhbm_gem_test CompilerFlags)
     target_compile_definitions(joint_width_trajectory PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
     add_dependencies(tests_all joint_width_trajectory)
+    add_executable(joint_width_repro_no_instrumentation experiments/joint_width_repro_no_instrumentation.cpp)
+    target_link_libraries(joint_width_repro_no_instrumentation PRIVATE joint_test_support rhbm_gem CompilerFlags)
+    add_dependencies(tests_all joint_width_repro_no_instrumentation)
     add_executable(joint_fullabc_width_study experiments/joint_fullabc_width_study.cpp)
     target_link_libraries(joint_fullabc_width_study PRIVATE joint_test_support rhbm_gem_test CompilerFlags)
     target_compile_definitions(joint_fullabc_width_study PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)

@@ -1,10 +1,12 @@
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/HaloEligibility.hpp"
 #include "core/detail/joint_component/StructuralPartition.hpp"
+#include "support/JointReproducibilityFingerprint.hpp"
 #include "support/JointPrecisionAudit.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <boost/json.hpp>
 #include <algorithm>
@@ -398,15 +400,21 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
     if(std::filesystem::exists(output)) throw std::runtime_error("Use a fresh trajectory output directory.");
     std::filesystem::create_directories(output);
     auto model=rhbm_gem::ReadModel(model_path); auto map=rhbm_gem::ReadMap(map_path);
+    const auto normalization=map->MapValueArrayNormalization();
+    if(!normalization) throw std::runtime_error("Map normalization unavailable.");
     model->SelectAtoms([](const rhbm_gem::AtomObject & atom) {
         return atom.GetElement()!=Element::HYDROGEN && atom.GetChainID()=="A";
     });
+    model->EditAnalysis().InitializeFromSelection();
     const auto initialization_started=Clock::now();
     auto replay=BuildReplaySetup(*map,*model,pure_exclusion);
     auto problem=std::move(replay.problem);
     const double initialization_seconds=std::chrono::duration<double>(Clock::now()-initialization_started).count();
     const auto & data=core::JointProblemAccess::Get(problem);
     const auto & target_indices=data.input->selection_domain->target_indices;
+    const auto fingerprints=rhbm_gem::joint_reproducibility::WriteFingerprint(output,
+        model_path,map_path,*normalization,*map,*model,problem,replay.initial_widths,
+        {"diagnostic-instrumented",true});
     const auto original_observation_count=data.original_input ? data.original_input->observations.size() :
         data.input->observations.size();
     const auto fitting_observation_count=data.input->observations.size();
@@ -680,6 +688,7 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
         {"conditional_profile_reason",conditional_profile ? "sweep-8-state-profile" :
             conditional_profile_error.empty() ? "sweep-8-state-state-unavailable" : conditional_profile_error},
         {"events_emitted",capture.events_emitted},{"first_stage_initial_widths",std::move(initial_widths)},
+        {"fingerprints",fingerprints},
         {"initialization_seconds",initialization_seconds},{"search_completed",fit.search_completed},
         {"global_state_available",fit.assembled_state.has_value()},{"components",std::move(components)},
         {"problem_construction_preflight_peak_bytes",data.construction_memory.estimated_peak_bytes},
