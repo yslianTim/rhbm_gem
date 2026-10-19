@@ -181,6 +181,42 @@ TEST(JointWidthTrustPolicyTest, ExhaustedCaptureBudgetPreservesProductionSearch)
     EXPECT_EQ(statistics.out_of_scope_interventions,0u);
 }
 
+TEST(JointWidthTrustPolicyTest, BoundedAssemblyUsesProjectedWidthStationarity)
+{
+    auto problem=SelectedChain(3);
+    const double eta_max=std::log(.4);
+    joint::FixedNeighborSearchPolicy policy;
+    policy.maximum_sweeps=200;
+    policy.eta_upper_bound_for_research=eta_max;
+    policy.configure_search_for_testing=[&](joint::FixedNeighborPolicy & local) {
+        local.eta_upper_bound_for_research=eta_max;
+    };
+    const auto fit=joint::FitFixedNeighborComponentsImpl(problem,std::vector<double>(3,.4),policy);
+    const auto stationarity=std::find_if(fit.evidence.begin(),fit.evidence.end(),[](const auto & check) {
+        return check.name=="width-stationarity" &&
+            check.scope==rhbm_gem::JointEvidenceScope::AssembledGlobal;
+    });
+    ASSERT_NE(stationarity,fit.evidence.end());
+    EXPECT_EQ(stationarity->reason,"independent-bound-aware-projected-width-kkt");
+    ASSERT_TRUE(stationarity->value.has_value());
+    ASSERT_TRUE(fit.assembled_state.has_value());
+    double projected_inf{},raw_inf{};
+    bool active_bound{};
+    for(std::size_t atom=0;atom<fit.assembled_state->log_b.size();++atom)
+    {
+        const double eta=fit.assembled_state->log_b[atom];
+        const double gradient=fit.assembled_state->width_gradient[atom];
+        projected_inf=std::max(projected_inf,std::abs(eta-std::min(eta-gradient,eta_max)));
+        raw_inf=std::max(raw_inf,std::abs(gradient));
+        active_bound|=eta>=eta_max-1e-12;
+    }
+    EXPECT_TRUE(active_bound);
+    EXPECT_GT(raw_inf,policy.convergence_criteria.global_width_gradient);
+    EXPECT_NEAR(*stationarity->value,projected_inf,1e-12);
+    EXPECT_LE(*stationarity->value,policy.convergence_criteria.global_width_gradient);
+    EXPECT_EQ(stationarity->status,rhbm_gem::JointCheckStatus::Passed);
+}
+
 TEST(JointWidthTrustPolicyTest, BaselinePolicyCreatesNoAcceptanceCallback)
 {
     trust::PolicyStatistics statistics;

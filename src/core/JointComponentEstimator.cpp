@@ -1057,6 +1057,13 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
     }
     const auto component_count=data.partition.components.size();
     auto bounded_policy=production_policy;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    auto assembly_context=data.context;
+    if(bounded_policy.eta_upper_bound_for_research)
+        assembly_context.eta_upper_bound_for_research=bounded_policy.eta_upper_bound_for_research;
+#else
+    const auto & assembly_context=data.context;
+#endif
     std::size_t remaining_perturbation_blocks=n::MaximumPerturbedBlocksPerFit;
     const auto request_perturbation_block=production_policy.claim_parameter_stability_block;
     bounded_policy.claim_parameter_stability_block=[&remaining_perturbation_blocks,request_perturbation_block] {
@@ -1076,10 +1083,10 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
     {
         const auto & view=data.partition.components[0];
         // A single full component has identity row/atom mappings in this immutable snapshot.
-        reuse_context=n::ChildContext(data.context,view,true);
+        reuse_context=n::ChildContext(assembly_context,view,true);
         reuse.emplace(n::AssessmentReuse{view.domain,data.y,*reuse_context,*component_batch.single_component_assessment});
     }
-    const auto assembly=n::AssembleComponents(data.domain,data.y,data.partition,data.context,out.components,
+    const auto assembly=n::AssembleComponents(data.domain,data.y,data.partition,assembly_context,out.components,
         reuse ? &*reuse : nullptr,bounded_policy.convergence_criteria);
     out.search_completed=assembly.completed; out.available_row_mask=assembly.row_mask;
     out.evidence=n::AssessmentEvidence(assembly.assessment,JointEvidenceScope::AssembledGlobal);

@@ -493,6 +493,7 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
     joint::FixedNeighborSearchPolicy production_policy;
     production_policy.core_atoms=12; production_policy.maximum_sweeps=200;
     production_policy.order=joint::FixedNeighborBlockOrder::Forward;
+    if(eta_max) production_policy.eta_upper_bound_for_research=eta_max;
     production_policy.configure_search_for_testing=[&](joint::FixedNeighborPolicy & local) {
         local.capture_local_trajectory=true;
         local.collect_telemetry=true;
