@@ -239,6 +239,8 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
         }
         wa1=bounded.step;
         par=static_cast<Scalar>(bounded.damping);
+        if(bounded.scaled_step_norm<=Scalar(64)*NumTraits<Scalar>::epsilon()*(std::max)(Scalar(1),delta))
+          return LevenbergMarquardtSpace::CosinusTooSmall;
       } else {
         internal::lmpar2<Scalar>(qrfac, diag, qtf, delta, par, wa1);
         wa1=-wa1;

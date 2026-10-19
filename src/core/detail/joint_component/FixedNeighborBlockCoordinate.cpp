@@ -835,10 +835,21 @@ bool ShouldAttemptFixedNeighborCertification(FixedNeighborStationarityState stat
     return true;
 }
 FixedNeighborSearchResult SearchFixedNeighborComponent(
-    const Domain & domain,const JointParameterLayout & layout,VectorRef y,VectorRef initial_eta,const EvaluationContext & context,
+    const Domain & domain,const JointParameterLayout & layout,VectorRef y,VectorRef initial_eta,const EvaluationContext & parent_context,
     const FixedNeighborPolicy & policy,Vector initial_beta)
 {
     FixedNeighborSearchResult out;
+    EvaluationContext context=parent_context;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(policy.eta_upper_bound_for_research)
+    {
+        if(!std::isfinite(*policy.eta_upper_bound_for_research) ||
+            (context.eta_upper_bound_for_research &&
+                *context.eta_upper_bound_for_research!=*policy.eta_upper_bound_for_research))
+        {out.reason="invalid-research-width-upper-bound"; return out;}
+        context.eta_upper_bound_for_research=policy.eta_upper_bound_for_research;
+    }
+#endif
     const bool has_initial_beta=initial_beta.size()!=0;
     if(initial_eta.size()!=static_cast<Eigen::Index>(domain.atoms.size()) || !initial_eta.allFinite() ||
         y.size()!=domain.rows || !y.allFinite() || !(context.scale>0) || !std::isfinite(context.scale) ||
@@ -851,6 +862,11 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     for(Eigen::Index a=0;a<initial_eta.size();++a)
         if(!(std::exp(initial_eta(a))>0) || !std::isfinite(std::exp(initial_eta(a))))
         {out.reason="block-invalid-partition"; return out;}
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(context.eta_upper_bound_for_research &&
+        (initial_eta.array()>*context.eta_upper_bound_for_research).any())
+    {out.reason="bounded-initial-width-infeasible"; return out;}
+#endif
 
     auto structural_timer=Measure(policy.collect_telemetry,out.work.structural_preparation_seconds);
     MemoryShape memory_shape; memory_shape.component_atoms=domain.atoms.size();
@@ -1454,10 +1470,52 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         sweep.global_a_feasibility=global.certificate.feasible ? 0.0 : 1.0;
         sweep.global_ac_kkt=global.certificate.projected_kkt;
         sweep.global_width_gradient_inf_norm=global.gradient.lpNorm<Eigen::Infinity>();
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        sweep.research_width_bound_applied=global.certificate.research_width_bound_applied;
+        sweep.research_projected_width_gradient_inf_norm=global.certificate.research_width_bound_applied ?
+            global.certificate.research_width_projected_kkt : sweep.global_width_gradient_inf_norm;
+        sweep.research_maximum_bound_violation=global.certificate.research_maximum_bound_violation;
+        sweep.research_boundary_gradient_max=global.certificate.research_boundary_gradient_max;
+        sweep.research_boundary_multiplier_max=global.certificate.research_boundary_multiplier_max;
+        sweep.research_complementarity=global.certificate.research_complementarity;
+        sweep.research_active_bound_count=global.certificate.research_active_bound_count;
+#endif
         sweep.eta_change_inf=(out.state.eta-eta_before).lpNorm<Eigen::Infinity>();
         sweep.beta_scaled_change=ScaledCoefficientDifference(out.state.beta,beta_before);
         sweep.maximum_target_width=out.state.eta.size() ? std::exp(out.state.eta.maxCoeff()) : 0.0;
         sweep.coordinate_confirmation_available=sweep_index>0;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        double stationarity_width_gradient=sweep.research_projected_width_gradient_inf_norm;
+#else
+        double stationarity_width_gradient=sweep.global_width_gradient_inf_norm;
+#endif
+        double stationarity_eta_change=sweep.eta_change_inf;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(!policy.fixed_width_atom_ids.empty())
+        {
+            stationarity_width_gradient=0.0; stationarity_eta_change=0.0;
+            const auto count=std::min({static_cast<std::size_t>(global.gradient.size()),
+                static_cast<std::size_t>(out.state.eta.size()),context.atom_ids.size()});
+            for(std::size_t atom=0;atom<count;++atom)
+            {
+                const auto & id=context.atom_ids[atom];
+                if(std::find(policy.fixed_width_atom_ids.begin(),policy.fixed_width_atom_ids.end(),id)!=
+                    policy.fixed_width_atom_ids.end()) continue;
+                double gradient=global.gradient(static_cast<Eigen::Index>(atom));
+                if(context.eta_upper_bound_for_research)
+                    gradient=out.state.eta(static_cast<Eigen::Index>(atom))-
+                        std::min(out.state.eta(static_cast<Eigen::Index>(atom))-gradient,
+                            *context.eta_upper_bound_for_research);
+                stationarity_width_gradient=std::max(stationarity_width_gradient,std::abs(gradient));
+                stationarity_eta_change=std::max(stationarity_eta_change,
+                    std::abs(out.state.eta(static_cast<Eigen::Index>(atom))-
+                        eta_before(static_cast<Eigen::Index>(atom))));
+            }
+        }
+        if(sweep.research_width_bound_applied && !global.certificate.research_width_feasible)
+            stationarity_width_gradient=std::numeric_limits<double>::infinity();
+        sweep.research_stationarity_width_gradient_inf_norm=stationarity_width_gradient;
+#endif
         sweep.wall_seconds=Seconds(sweep_started); out.search_seconds+=sweep.wall_seconds;
         ++out.sweep_count; out.final_sweep=sweep;
         if(policy.diagnostic_sink && policy.diagnostic_sink->sweep) policy.diagnostic_sink->sweep(sweep);
@@ -1478,27 +1536,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         {out.reason="block-cache-replay-failed"; stop=true; break;}
         out.recent_sweep_changes.emplace_back(sweep.eta_change_inf,sweep.beta_scaled_change);
         if(out.recent_sweep_changes.size()>3) out.recent_sweep_changes.erase(out.recent_sweep_changes.begin());
-        double stationarity_width_gradient=sweep.global_width_gradient_inf_norm;
-        double stationarity_eta_change=sweep.eta_change_inf;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(!policy.fixed_width_atom_ids.empty())
-        {
-            stationarity_width_gradient=0.0; stationarity_eta_change=0.0;
-            const auto count=std::min({static_cast<std::size_t>(global.gradient.size()),
-                static_cast<std::size_t>(out.state.eta.size()),context.atom_ids.size()});
-            for(std::size_t atom=0;atom<count;++atom)
-            {
-                const auto & id=context.atom_ids[atom];
-                if(std::find(policy.fixed_width_atom_ids.begin(),policy.fixed_width_atom_ids.end(),id)!=
-                    policy.fixed_width_atom_ids.end()) continue;
-                stationarity_width_gradient=std::max(stationarity_width_gradient,
-                    std::abs(global.gradient(static_cast<Eigen::Index>(atom))));
-                stationarity_eta_change=std::max(stationarity_eta_change,
-                    std::abs(out.state.eta(static_cast<Eigen::Index>(atom))-
-                        eta_before(static_cast<Eigen::Index>(atom))));
-            }
-        }
-#endif
         const auto stationarity=sweep_had_block_failure ? FixedNeighborStationarityState::NotStationary :
             ClassifyFixedNeighborStationarity(sweep.global_ac_kkt,stationarity_width_gradient,
                 stationarity_eta_change,sweep.coordinate_confirmation_available,policy.convergence_criteria);
@@ -1550,7 +1587,11 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             out.certification_sweep=out.sweep_count;
             if(out.certification->qualified() && out.final_sweep &&
                 ClassifyFixedNeighborStationarity(out.final_sweep->global_ac_kkt,
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                    out.final_sweep->research_stationarity_width_gradient_inf_norm,out.final_sweep->eta_change_inf,
+#else
                     out.final_sweep->global_width_gradient_inf_norm,out.final_sweep->eta_change_inf,
+#endif
                     out.final_sweep->coordinate_confirmation_available,policy.convergence_criteria)==
                         FixedNeighborStationarityState::ConfirmedStationary)
             {

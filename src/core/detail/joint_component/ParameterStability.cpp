@@ -157,7 +157,7 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
     const auto baseline_trust=CheckTrust(domain,y,baseline,context);
     if(!baseline_trust.passed || !baseline_trust.independent || !baseline_trust.independent->objective_passed)
     {Unavailable(evidence,"baseline-independent-replay-failed"); return finish();}
-    const auto baseline_gradient=ProfileGradientInfinityNorm(baseline);
+    const auto baseline_gradient=ProfileGradientInfinityNorm(baseline,context);
     if(!baseline_gradient || !(*baseline_gradient<=1e-12))
     {Unavailable(evidence,"baseline-width-stationarity-failed"); return finish();}
     if(CpuSeconds(cpu_started)>=MaximumLocalPerturbationCpuSeconds)
@@ -185,7 +185,11 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
         {
             if(CpuSeconds(cpu_started)>=MaximumLocalPerturbationCpuSeconds)
             {direction_assessed=false; failure_reason="cpu-time-budget-exhausted"; break;}
-            const Vector seed=eta+sign*LocalWidthPerturbation*direction.unit;
+            Vector seed=eta+sign*LocalWidthPerturbation*direction.unit;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            if(context.eta_upper_bound_for_research)
+                seed=seed.cwiseMin(Vector::Constant(seed.size(),*context.eta_upper_bound_for_research));
+#endif
             const Vector widths=seed.array().exp();
             if(!seed.allFinite() || !widths.allFinite() || (widths.array()<=0).any())
             {direction_assessed=false; failure_reason="unrepresentable-perturbation-width"; break;}
@@ -221,7 +225,7 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
                 evidence.objective_consistency_status="Failed";
                 break;
             }
-            const auto gradient=ProfileGradientInfinityNorm(candidate);
+            const auto gradient=ProfileGradientInfinityNorm(candidate,bounded_context);
             if(!gradient || !(*gradient<=1e-12))
             {direction_assessed=false; failure_reason="perturbation-width-stationarity-failed"; break;}
             if(CpuSeconds(cpu_started)>=MaximumLocalPerturbationCpuSeconds)

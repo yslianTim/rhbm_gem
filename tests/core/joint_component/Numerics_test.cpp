@@ -11,6 +11,7 @@
 #include <iomanip>
 #include <limits>
 #include <sstream>
+#include <tuple>
 
 namespace {
 namespace m=second_stage_test::matched;
@@ -1060,4 +1061,71 @@ TEST(JointComponentNumericsTest, IndependentStreamingReplayPreservesActiveBounda
     EXPECT_TRUE(cancellation_replay.passed)<<cancellation_replay.reason;
     EXPECT_GT(cancellation_replay.cancellation_ratio,1e10);
     EXPECT_DOUBLE_EQ(cancellation_replay.objective_difference,0.0);
+}
+
+TEST(JointComponentNumericsTest, BoundedReplayUsesProjectedWidthKktAndChecksFeasibility)
+{
+    constexpr Eigen::Index rows=17;
+    std::vector<std::vector<n::Support>> support(1);
+    Vector eta=Vector::Constant(1,std::log(.55));
+    for(Eigen::Index row=0;row<rows;++row)
+        support[0].push_back({row,6.25*static_cast<double>(row)/static_cast<double>(rows-1)});
+    const n::Domain domain(rows,std::move(support));
+    auto evaluate=[&](double truth_width) {
+        Vector y(rows);
+        for(Eigen::Index row=0;row<rows;++row)
+        {
+            const double square=6.25*static_cast<double>(row)/static_cast<double>(rows-1);
+            const auto basis=n::EvaluateKernel(square,truth_width,2.5);
+            y(row)=2.0*basis.gaussian+.5*basis.charge;
+        }
+        auto context=n::CreateContext(y,1);
+        context.eta_upper_bound_for_research=std::log(.55);
+        const auto primary=n::EvaluateProfile(domain,y,eta,false,&context);
+        EXPECT_TRUE(primary.valid)<<primary.reason;
+        const auto replay=n::CheckIndependentReplay(domain,y,primary,context,nullptr,nullptr,
+            n::StrictJointConvergenceCriteria);
+        return std::tuple{y,context,primary,replay};
+    };
+
+    auto [outward_y,outward_context,outward,outward_replay]=evaluate(1.2);
+    ASSERT_TRUE(outward.valid);
+    ASSERT_TRUE(outward_replay.available && outward_replay.valid)<<outward_replay.reason;
+    EXPECT_LT(outward.gradient(0),0.0);
+    EXPECT_TRUE(outward_replay.width_bound_applied);
+    EXPECT_TRUE(outward_replay.width_bound_feasible);
+    EXPECT_TRUE(outward_replay.primary_width_kkt_passed);
+    EXPECT_TRUE(outward_replay.independent_width_kkt_passed)<<outward_replay.reason;
+    EXPECT_GT(outward_replay.primary_width_gradient,1e-12);
+    EXPECT_DOUBLE_EQ(outward_replay.primary_width_projected_kkt,0.0);
+    EXPECT_DOUBLE_EQ(outward_replay.independent_width_projected_kkt,0.0);
+    EXPECT_DOUBLE_EQ(*n::ProfileGradientInfinityNorm(outward,outward_context),0.0);
+    EXPECT_EQ(outward_replay.active_width_bounds,1u);
+    EXPECT_GT(outward_replay.boundary_multiplier_max,0.0);
+    EXPECT_LE(outward_replay.boundary_gradient_max,0.0);
+    EXPECT_DOUBLE_EQ(outward_replay.complementarity_residual,0.0);
+    const auto bounded_assessment=n::VerifyJointEndpoint(domain,outward_y,outward,outward_replay,outward_context);
+    EXPECT_TRUE(bounded_assessment.numerical_qualified)<<bounded_assessment.failure;
+
+    auto [inward_y,inward_context,inward,inward_replay]=evaluate(.3);
+    ASSERT_TRUE(inward.valid);
+    ASSERT_TRUE(inward_replay.available && inward_replay.valid)<<inward_replay.reason;
+    EXPECT_GT(inward.gradient(0),0.0);
+    EXPECT_FALSE(inward_replay.primary_width_kkt_passed);
+    EXPECT_FALSE(inward_replay.independent_width_kkt_passed);
+    EXPECT_FALSE(inward_replay.passed);
+    const auto rejected=n::VerifyJointEndpoint(domain,inward_y,inward,inward_replay,inward_context);
+    EXPECT_FALSE(rejected.numerical_qualified);
+
+    const Vector infeasible_eta=Vector::Constant(1,std::log(.55)+1e-8);
+    const auto infeasible=n::EvaluateProfile(domain,outward_y,infeasible_eta,false,&outward_context);
+    ASSERT_TRUE(infeasible.valid);
+    const auto infeasible_replay=n::CheckIndependentReplay(domain,outward_y,infeasible,outward_context);
+    ASSERT_TRUE(infeasible_replay.available && infeasible_replay.valid);
+    EXPECT_FALSE(infeasible_replay.width_bound_feasible);
+    EXPECT_FALSE(infeasible_replay.passed);
+    EXPECT_NEAR(infeasible_replay.maximum_width_bound_violation,1e-8,1e-12);
+    const auto infeasible_trial_trust=n::CheckReplay(domain,outward_y,infeasible,outward_context);
+    EXPECT_FALSE(infeasible_trial_trust.passed);
+    EXPECT_EQ(infeasible_trial_trust.reason,"width-bound-infeasible");
 }

@@ -199,6 +199,23 @@ TEST(JointComponentSearchTest, InstrumentedLmUsesTheConstrainedStepForTrustRatio
         <<" damping="<<functor.damping<<" radius="<<functor.radius;
 }
 
+TEST(JointComponentSearchTest, BoundedLmStopsAtAValidBoundaryKktPoint)
+{
+    BoundedLinearResidual functor(true);
+    p::InstrumentedLM<BoundedLinearResidual> lm(functor);
+    Vector x(2); x<<10.0,10.0;
+    lm.parameters.factor=.1; lm.parameters.maxfev=200;
+    ASSERT_EQ(lm.minimizeInit(x),Eigen::LevenbergMarquardtSpace::NotStarted);
+    auto status=Eigen::LevenbergMarquardtSpace::Running;
+    for(int iteration=0;iteration<100 && status==Eigen::LevenbergMarquardtSpace::Running;++iteration)
+        status=lm.minimizeOneStep(x);
+    EXPECT_NE(status,Eigen::LevenbergMarquardtSpace::UserAsked)<<functor.failure;
+    EXPECT_NE(functor.failure,"unrepresentable-step");
+    EXPECT_NEAR(x(0),10.2,1e-12);
+    EXPECT_NEAR(x(1),0.0,1e-8);
+    EXPECT_EQ(status,Eigen::LevenbergMarquardtSpace::CosinusTooSmall);
+}
+
 TEST(JointComponentSearchTest, DisabledBoundedHookRetainsTheOriginalLmStep)
 {
     BoundedLinearResidual research_hook(false);

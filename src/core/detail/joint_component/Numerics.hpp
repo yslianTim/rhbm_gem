@@ -52,6 +52,7 @@ struct EvaluationContext
     bool independent_search{};
     int profile_budget{200},update_budget{100};
     double profile_cpu_budget_seconds{};
+    std::optional<double> eta_upper_bound_for_research;
 };
 enum class ProfileEvaluationRole {Unspecified,InitialProfile,TrialProfile,AcceptedEndpoint,Reference};
 const char * ProfileEvaluationRoleName(ProfileEvaluationRole);
@@ -127,6 +128,10 @@ struct Certificate
         residual_rmse{unavailable},residual_max{unavailable},relative_residual{unavailable};
     std::vector<Eigen::Index> active_atoms;
     std::optional<int> linear_solves,linear_releases,free_rank,block_factorizations;
+    bool research_width_bound_applied{},research_width_feasible{true};
+    double research_width_projected_kkt{unavailable},research_maximum_bound_violation{},
+        research_boundary_gradient_max{},research_boundary_multiplier_max{},research_complementarity{unavailable};
+    std::size_t research_active_bound_count{};
 };
 Certificate CertifyLinear(const Sparse &,VectorRef,const Vector &,double=0);
 struct Endpoint
@@ -139,6 +144,7 @@ struct Endpoint
 struct Evaluation : Endpoint {Vector residual; Sparse x,derivative;};
 std::optional<double> NormalizedProfileObjective(const Evaluation &,double scale);
 std::optional<double> ProfileGradientInfinityNorm(const Evaluation &);
+std::optional<double> ProfileGradientInfinityNorm(const Evaluation &,const EvaluationContext &);
 void UpdateAcceptedProfileObjective(std::optional<double> &,const Evaluation &,double scale,bool accepted);
 struct Spectrum
 {
@@ -181,6 +187,12 @@ struct IndependentReplayEvidence
         gradient_enclosure_failure_ratio{unavailable},maximum_gradient_difference_primary{unavailable},
         maximum_gradient_difference_independent{unavailable},maximum_gradient_difference_bound{unavailable},
         maximum_gradient_difference_ratio{unavailable};
+    bool width_bound_applied{},width_bound_feasible{true},primary_width_kkt_passed{true},
+        independent_width_kkt_passed{true};
+    double primary_width_projected_kkt{unavailable},independent_width_projected_kkt{unavailable},
+        maximum_width_bound_violation{},boundary_gradient_max{},boundary_multiplier_max{},
+        complementarity_residual{unavailable};
+    std::size_t active_width_bounds{};
 };
 IndependentReplayEvidence CheckIndependentReplay(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &,
     const Vector * assembled_prediction=nullptr,const std::vector<std::size_t> * assembled_rows=nullptr,
@@ -193,6 +205,7 @@ struct TrustEvidence
     std::string reason;
     double coefficient_difference{unavailable},kkt_difference{unavailable},prediction_difference{unavailable},
         gradient_difference{unavailable},cancellation_ratio{unavailable};
+    bool width_bound_feasible{true};
 };
 struct ReplayDetailsForDiagnostics
 {
