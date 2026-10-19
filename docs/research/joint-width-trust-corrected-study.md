@@ -105,8 +105,17 @@ On the unsharpened map, B1 does not reduce accepted width or improve prediction 
 
 All real map capture runs emitted at most 400 events, with no event/atom/row-limit exhaustion and no unavailable spectra. Capture limits therefore did not silently alter any run. No global dense matrix, full-length per-block row mapping, or global covariance was added. Full-target 6Z6U policy was not attempted: the scoped real B2 case reduces width but still fails qualification and replay, so the evidence does not justify widening the intervention. Synthetic full-target tests are limited to the 12-atom controlled component.
 
-## P2 結論與 P3 gate
+## P3：Production promotion 決策
 
-The corrected evidence separates numerical convergence, parameter identifiability and scientific accuracy. B1/B2 can increase qualification in weak synthetic cases and reduce width in extreme A/C-cancellation cases, but they worsen parameter accuracy in weak cases, reduce qualification in the moderate profile, and do not resolve the real unsharpened block failure. B2's strongest real width reduction still consumes twice the runtime and fails the unchanged budget/replay gates. B2 provides an independent cancellation effect in high-cancellation cases, but not a qualified endpoint.
+**決策：拒絕將 B1 或 B2 升級至 Production；維持現有 estimator、objective 與 qualification gates。**
 
-P3 promotion decision is recorded in the follow-up commit after reviewing this P2 result. Until then, the Production estimator remains unchanged.
+實驗未達 promotion gate：
+
+- Weak synthetic 的 qualification 從 A 的 2/5 提升至 B1/B2 的 5/5，但 A/B/C RMSE 都變差，prediction RMSE 幾乎不變。較高的數值收斂率沒有帶來較準確的參數估計。
+- Moderate synthetic 的 qualification 從 A 的 5/5 降至 B1/B2 的 2/5，最大 accepted width 和 prediction RMSE 沒有改善。
+- A/C correlation stress 的三種策略皆為 0/5 qualified。B2 雖大幅降低 runaway candidate width，仍沒有產生可用的 qualified estimate。
+- 6Z6U simulation 的 B1/B2 保留 qualification 與 replay，但參數和 prediction RMSE 幾乎等同 A；B2 cancellation-aware multiplier 沒帶來可觀測收益。
+- 6Z6U unsharpened map 上，B1 沒降低 accepted width，也沒有改善 prediction。B2 把最大 accepted width 從 6,099.81 Å 降至 7.64778 Å，但搜尋耗盡 200-sweep budget、independent replay 失敗，objective 與 prediction RMSE 小幅退步，執行時間約為 A 的兩倍；此 map 也沒有 parameter truth 可證明準確度提升。
+- 實驗只將 policy 限於 serial 1032 的 selected core，尚無全目標 real-map evidence 支持擴大介入範圍。
+
+因此保留目前 Production estimator，不增加公開設定，也不變更數值策略、objective 或 qualification thresholds。後續研究應先處理 A/C 的數值穩定性與參數可識別性，並區分有限精度 cancellation 和資料本身的不可識別性，再以更多有 truth 的資料及真實 map 重做 gate 評估；這些工作不在本次變更範圍內。
