@@ -72,6 +72,7 @@ struct PeelingRatioAssessment
     std::size_t peeling_samples{};
     double raw_response_sum{};
     double peeled_response_sum{};
+    double valid_raw_response_sum{};
     std::string reason;
 };
 

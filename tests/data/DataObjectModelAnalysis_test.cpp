@@ -922,13 +922,13 @@ TEST(
         LocalPotentialSample{ 100.0, SamplingPoint{ non_finite_distance } }
     });
     analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
-        LocalPotentialSample{ 5.0, SamplingPoint{ 0.5 } },
-        LocalPotentialSample{ 2.0, SamplingPoint{ 1.0 } },
+        LocalPotentialSample{ 3.0, SamplingPoint{ 2.0 } },
         LocalPotentialSample{
             1.0,
             SamplingPoint{ 1.5, { 0.0, 0.0, 0.0 }, false } },
-        LocalPotentialSample{ 3.0, SamplingPoint{ 2.0 } },
         LocalPotentialSample{ 50.0, SamplingPoint{ 2.5 } },
+        LocalPotentialSample{ 2.0, SamplingPoint{ 1.0 } },
+        LocalPotentialSample{ 5.0, SamplingPoint{ 0.5 } },
         LocalPotentialSample{ 50.0, SamplingPoint{ non_finite_distance } }
     });
 
@@ -1057,6 +1057,38 @@ TEST(DataObjectModelAnalysisTest, PeelingRatioAssessmentReportsUnavailableCauses
     });
     assessment = view.AssessLocalFittingPeelingRatio(1.0, 2.0);
     EXPECT_EQ(assessment.reason, "joint-qualification-failed");
+}
+
+TEST(DataObjectModelAnalysisTest, PeelingRatioRequiresExactTwoStageSampleIdentity)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().at(0).get() };
+    auto analysis{ model->EditAnalysis() };
+    analysis.SetAtomLocalRawSamplingEntries(*atom, {
+        LocalPotentialSample{ 4.0, SamplingPoint{ 1.25, { 1.0, 2.0, 3.0 }, true } },
+        LocalPotentialSample{ 6.0, SamplingPoint{ 1.75, { 4.0, 5.0, 6.0 }, false } }
+    });
+    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
+        LocalPotentialSample{ 2.0, SamplingPoint{ 1.75, { 4.0, 5.0, 6.0 }, false } },
+        LocalPotentialSample{ 1.0, SamplingPoint{ 1.25, { 1.0, 2.0, 3.0 }, true } }
+    });
+
+    auto assessment{ rg::AtomLocalPotentialView::For(*atom).AssessLocalFittingPeelingRatio(1.0, 2.0) };
+    ASSERT_TRUE(assessment.ratio);
+    EXPECT_DOUBLE_EQ(*assessment.ratio, 0.7);
+    EXPECT_EQ(assessment.total_samples, 2u);
+    EXPECT_EQ(assessment.valid_samples, 2u);
+    EXPECT_DOUBLE_EQ(assessment.valid_raw_response_sum, 10.0);
+
+    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
+        LocalPotentialSample{ 2.0, SamplingPoint{ 1.75, { 4.0, 5.0, 6.0 }, false } },
+        LocalPotentialSample{ 1.0, SamplingPoint{ 1.25, { 1.0, 2.0, 3.5 }, true } }
+    });
+    assessment = rg::AtomLocalPotentialView::For(*atom).AssessLocalFittingPeelingRatio(1.0, 2.0);
+    EXPECT_FALSE(assessment.ratio);
+    EXPECT_EQ(assessment.reason, "peeling-sample-identity-mismatch");
+    EXPECT_EQ(assessment.total_samples, 2u);
+    EXPECT_EQ(assessment.valid_samples, 1u);
 }
 
 TEST(

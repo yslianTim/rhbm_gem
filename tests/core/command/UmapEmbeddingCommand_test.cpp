@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <boost/json.hpp>
 
 #include <rhbm_gem/core/CommandSystem.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
@@ -342,6 +343,10 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         "amplitude 2nd,width 2nd,offset 2nd,"
         "amplitude rank 2nd,width rank 2nd,offset rank 2nd,umap x,umap y");
     EXPECT_EQ(kOutputColumnCount, 15u);
+    const auto metadata_lines{ ReadLines(output_path.string() + ".metadata.json") };
+    const auto metadata{ boost::json::parse(metadata_lines.at(0)) };
+    EXPECT_EQ(metadata.at("column_semantics").at("offset 2nd").as_string(),
+        "Gaussian constant offset");
     for (std::size_t row = 1; row < output_lines.size(); ++row)
     {
         const auto fields{ SplitFields(output_lines[row]) };
@@ -790,7 +795,6 @@ TEST(UmapEmbeddingCommandTest, ExcludesMissingRequiredFeaturesAndAllowsMissingAn
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include "data/detail/JointStageAdapter.hpp"
 #include "core/detail/joint_component/Numerics.hpp"
-#include <boost/json.hpp>
 TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNoInputFiles)
 {
     command_test::ScopedTempDir dir{"joint_umap_saved"}; auto model=BuildFeatureModel();
@@ -838,6 +842,8 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     const auto metadata=boost::json::parse(metadata_lines.at(0));
     EXPECT_EQ(metadata.at("estimator").as_string(),"joint-components");
     EXPECT_EQ(metadata.at("peeling_mode").as_string(),"grid-consistent");
+    EXPECT_NE(metadata.at("column_semantics").at("offset 2nd").as_string().find("charge-kernel coefficient C"),
+        std::string::npos);
     EXPECT_EQ(metadata.at("included_rows").as_int64(),6);
     EXPECT_EQ(metadata.at("features").as_array().size(),3);
     EXPECT_FALSE(metadata.at("exclusions").as_object().empty());

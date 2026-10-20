@@ -456,8 +456,11 @@ bool WriteEmbedding(
     boost::json::object exclusions;
     for(const auto & [reason,count]:prepared.exclusions) exclusions[reason]=count;
     std::ofstream metadata(prepared.output_path.string()+".metadata.json");
+    const bool joint_estimator{ prepared.estimator == "joint-components" };
     metadata << boost::json::serialize(boost::json::object{{"estimator",prepared.estimator},{"features",features},
         {"peeling_mode",prepared.peeling_mode},{"map_normalization",prepared.map_normalization=="unavailable" ? boost::json::value{}:boost::json::parse(prepared.map_normalization)},
+        {"column_semantics",boost::json::object{{"amplitude 2nd","Gaussian amplitude"},{"width 2nd","Gaussian width"},
+            {"offset 2nd",joint_estimator ? "Joint charge-kernel coefficient C (not a Gaussian constant offset)" : "Gaussian constant offset"}}},
         {"standardization","sample-z-score; constant columns zero"},{"included_rows",prepared.feature_rows.size()},{"excluded_rows",prepared.excluded_rows},{"exclusions",exclusions}});
     metadata.close();
     if(!metadata) { error_message="Failed to write UMAP metadata."; return false; }
