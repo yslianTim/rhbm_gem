@@ -15,6 +15,7 @@ CURRENT_EXPERIMENT_SOURCES = {
     "joint_width_trajectory.cpp",
     "joint_width_repro_no_instrumentation.cpp",
     "joint_production_bounded_synthetic.cpp",
+    "joint_label_free_halo_policy.cpp",
 }
 
 CURRENT_PYTHON_EXPERIMENTS = {

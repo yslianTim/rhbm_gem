@@ -74,6 +74,10 @@ distance, three-dimensional position, and selection state; sample counts alone
 do not establish identity. A missing or mismatched sample makes the strict
 ratio unavailable, with the reason recorded in the metadata exclusions. The
 ratio is `1 - peeled sum / raw sum`; a zero raw denominator remains unavailable.
+For Joint rows, the saved Tail Peeling Ratio is derived from paired raw and
+label-free peeled samples. Halo reconstruction uses qualified Target points
+selected by geometry; residue, element, atom name, and group labels do not
+enter that ratio. Those labels remain available for CSV and plot annotations.
 Each rank compares
 the current atom with all other selected atoms within an inclusive 2 Å radius,
 using second-stage amplitude, width, or offset. The largest value has rank 1;

@@ -31,7 +31,15 @@ Exclusion.
 Structural components, FixedNeighbor blocks, KKT, width gradients,
 conditioning, and stability cover selected targets only. Pure Exclusion
 reconstruction is a separate qualified-result step; it uses qualified target
-donors to build an immutable Halo median snapshot for original-domain peeling.
+donors to build an immutable Halo reconstruction snapshot for original-domain
+peeling. Each Halo uses the componentwise median of its four nearest qualified
+Joint Target A/B/C points by Euclidean distance in Å. Search has no radius
+limit; equal distances use Atom ID as a deterministic tie-break. The same donor
+index and policy estimate any eligible contributor outside the Original
+Observation Domain. The contributor universe is supplied before peeling and
+carries the existing non-hydrogen eligibility decision for all model atoms.
+The postprocessing path does not read chemical labels. Group Fitting continues
+to use GroupKey after local fitting.
 
 ## FirstStage diagnostic semantics
 
@@ -254,13 +262,22 @@ that an excluded halo has a fitted Joint estimate. Historical
 meaning and is never converted into point-quality evidence. Historical rank
 records remain decoding-only provenance; they are not reinterpreted as local
 conditioning or stability. Production Joint results store the selected-target
-state under `target-only-pure-halo-support-exclusion-v1` (Joint JSON schema
-17). Earlier schemas retain their original parameterization and are not
+state under `target-only-pure-halo-support-exclusion-v1`. A result with the
+geometry-local Halo reconstruction contract uses Joint JSON schema 18; a
+result without that snapshot and historical GroupKey snapshots remain schema
+17. Earlier schemas retain their original parameterization and are not
 reinterpreted. Historical FixedHalo results preserve the separate
 `target-only-fixed-halo-v1` contract and FirstStage-sourced halo parameters
-through the compatibility decoder only. Production post-fit peeling uses the qualified Pure Exclusion
-reconstruction snapshot; Post-Joint local MDPDE and Group Fitting remain
-limited to selected targets and keep their own qualification contracts.
+through the compatibility decoder only. Production post-fit peeling uses the
+qualified Pure Exclusion reconstruction snapshot; Post-Joint local MDPDE and
+Group Fitting remain limited to selected targets and keep their own
+qualification contracts. The geometry contract records the neighbor count,
+unbounded search and tie policy, qualified Target donor IDs, per-Halo source
+and donor count, A/B/C, and Joint run identity. Historical
+`group-key-target-median-v1` snapshots remain readable and round-trip as legacy
+results; new Peeling rejects them instead of treating them as geometry-local
+estimates. SQLite remains schema v20, so this JSON payload change requires no
+database migration.
 
 The runtime regression harness is `tests/integration/joint_component_runtime.py`.
 The ordinary Joint CTest groups cover component contracts, workflow,

@@ -149,7 +149,7 @@ offsets from Gaussian-only group values. Group membership is restored by its sav
 identities; legacy group tables are adapted using the restored selection.
 
 `model_joint_result(key_tag, result_json)` stores the Joint estimator snapshot
-and its JSON schema-12 metadata, contributor selection, evidence, states and optional
+and its versioned JSON metadata, contributor selection, evidence, states and optional
 candidate diagnostics. It is
 distinct from the neutral stage view used by downstream analysis. Legacy v17/v18
 analysis rows are read only for adaptation or migration; they are not canonical
@@ -199,7 +199,7 @@ error; it does not produce an empty model.
 `model_joint_result(key_tag TEXT PRIMARY KEY, result_json TEXT NOT NULL)` has the
 same direct cascading model-root foreign key as other child tables. Its JSON
 codec is shared by SQLite and the public Joint file exporter; readers accept
-schemas 3 through 17. Legacy global-rank evidence remains distinguishable from
+schemas 3 through 18. Legacy global-rank evidence remains distinguishable from
 target evidence, while schema 12 added local conditioning and parameter-stability
 diagnostics. Schema 12 may also include additive per-direction stability probes
 and work counters; older schema-12 payloads without those optional fields
@@ -208,6 +208,12 @@ separately from target-only component states. This data remains available for
 decoding, validation, display, and supported round-trip only; it cannot start
 new estimation. Schema 17 stores the production Pure Halo-Support
 Exclusion policy, original/fitting row mappings, and target-only parameterization.
+Schema 18 stores the geometry-local Halo reconstruction contract, its unbounded
+kNN-4 donor policy, donor Atom IDs, per-Halo source and donor count, A/B/C, and
+Joint run identity. Schema 17 GroupKey median snapshots remain readable and
+round-trip under their legacy contract; they are not reinterpreted as
+geometry-local snapshots. SQLite remains at schema v20 and requires no
+migration for the Joint JSON version change.
 New contributor-selection provenance is stored with the fixed selected observation
 domain. Candidate diagnostics contain parameter vectors and separate
 endpoint-verification and qualification statuses; they do not change trusted

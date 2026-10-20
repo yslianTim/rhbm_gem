@@ -37,14 +37,18 @@ Values below summarize the same rows.
 | Global Target median | 1.203 / 0.180 / 0.302 | 0.160 (0.165 / 0.306) | 0.0447 | 1.139 | 0.0622 / 0.0121 | 0.1068 |
 | Geometry kNN-1 | 1.300 / 0.250 / 0.285 | 0.154 (0.162 / 0.377) | 0.0444 | 1.130 | 0.0622 / 0.0121 | 0.1068 |
 | Geometry kNN-2 | 1.237 / 0.212 / 0.251 | 0.144 (0.124 / 0.470) | 0.0336 | 0.732 | 0.0650 / 0.0132 | 0.1083 |
+| Geometry kNN-4 (min(4, 3) donors) | 1.203 / 0.180 / 0.302 | 0.160 (0.165 / 0.306) | 0.0447 | 1.139 | 0.0622 / 0.0121 | 0.1068 |
 | Observation A/C, kNN-2 width | 0.877 / 0.212 / 0.0047 | 0.0199 (0.00025 / 0.178) | 0.0194 | 0.231 | 0.0593 / 0.0115 | 0.1049 |
 
-All five policies had complete Peeling coverage. The fixed Joint endpoint and
+All policies had complete Peeling coverage. The fixed Joint endpoint and
 100 effective samples per Target were retained. Each candidate evaluated 148
 reconstruction-only nodes with a 148-entry peak cache and an estimated
-166,688-byte Peeling workspace. The observation fit used a separate dense
+167,282-byte Peeling workspace. The observation fit used a separate dense
 design; its additional factorization workspace is not included in that Peeling
 estimate.
+The follow-up kNN-4 row is identical to the GroupKey and global rows in this
+fixture because it has three qualified Targets, all in the same GroupKey, so
+both kNN-4 and the historical baseline use the median of all three donors.
 
 Observation-driven A/C had the lowest Halo signal and Peeling RMSE in this
 case. It also lowered Tail Ratio error. Local A/B errors improved slightly and
@@ -64,7 +68,7 @@ more favorable because signal depends jointly on A, B and C.
 
 ## Decision
 
-No production policy is selected from this evidence. Phase 2 tested ten
+No production policy is selected from this Phase 3 fixture alone. Phase 2 tested ten
 geometry and label configurations: observation A/C lowered signal error in
 nine, but was unavailable for the overlapping-Halo case (design rank 2 of 4).
 The one noisy end-to-end replay supports its promise, but does not establish
@@ -74,12 +78,14 @@ carried into production under the memory constraints. Geometry kNN has bounded
 lookup cost and no label reads, but the ten-case sweep did not consistently
 lower worst-case error.
 
-The plan gives no numerical acceptance threshold for Halo signal, Peeling, or
-downstream bias. I therefore do not treat one favorable fixture as sufficient
-to replace the production estimator. Phase 4 can isolate the Peeling runtime
-from chemical fields and preserve explicit unavailability for unresolved
-reconstruction, but a general label-free estimate still needs a bounded-memory
-observation study and an agreed science threshold before it can be promoted.
+The project gives no absolute acceptance threshold for Halo signal, Peeling,
+or downstream bias. Phase 4 selected geometry kNN-4 using the broader paired
+sweep, where mean, median, and worst signal RMSE were slightly below the
+GroupKey baseline and all donors were available. In this three-Target case,
+kNN-4 matches the baseline because both use the same three donors. This is a
+baseline-level operational choice, not a certification of general scientific
+accuracy. Observation-driven reconstruction still needs a bounded-memory
+design and an agreed science threshold before production use.
 
 ## Limitations
 

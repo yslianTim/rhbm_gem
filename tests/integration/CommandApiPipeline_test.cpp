@@ -730,6 +730,18 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     ASSERT_TRUE(rg::IsQualifiedJointAnalysisResult(stored));
     ASSERT_TRUE(stored.selection_domain);
     EXPECT_EQ(stored.selection_domain->contributor_policy,"pure-halo-support-exclusion-v1");
+    ASSERT_TRUE(stored.halo_median_reconstruction);
+    const auto & halo_reconstruction=*stored.halo_median_reconstruction;
+    EXPECT_EQ(halo_reconstruction.contract,rg::HaloMedianReconstructionContractVersion);
+    EXPECT_EQ(halo_reconstruction.neighbor_count,rg::GeometryLocalTargetMedianNeighborCount);
+    EXPECT_EQ(halo_reconstruction.donor_policy,rg::GeometryLocalTargetMedianDonorPolicy);
+    EXPECT_EQ(halo_reconstruction.joint_run_id,
+        rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1))
+            .GetStageEstimate(rg::FittingStage::Second).source.run_id);
+    ASSERT_EQ(halo_reconstruction.halos.size(),1u);
+    EXPECT_EQ(halo_reconstruction.halos.front().source,rg::HaloMedianSource::GeometryLocalTargetMedian);
+    EXPECT_EQ(halo_reconstruction.halos.front().donor_atom_ids.size(),halo_reconstruction.halos.front().donor_count);
+    EXPECT_LE(halo_reconstruction.halos.front().donor_count,rg::GeometryLocalTargetMedianNeighborCount);
     EXPECT_EQ(stored.selection_domain->target_indices.size(),25u);
     EXPECT_EQ(stored.atom_ids.size(),26u);
     const auto halo_id=std::find(stored.atom_ids.begin(),stored.atom_ids.end(),"26");

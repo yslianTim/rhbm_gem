@@ -1,7 +1,8 @@
 # Joint Peeling Chemical-label Audit
 
-This audit records the production dependency baseline before changing the Halo
-reconstruction policy. The reference tree is `develop` at `76d52c94096f38fa8eeaba7e8245ddc92c62087f`.
+The baseline section records the production dependency before the Halo policy
+change. The reference tree was `develop` at
+`76d52c94096f38fa8eeaba7e8245ddc92c62087f`.
 
 ## Call graph and label use
 
@@ -80,6 +81,35 @@ persisted as a separate production audit. The Phase 2 research runner records
 synthetic per-Halo signal errors, donor coverage, availability, runtime and
 workspace estimates in its CSV output.
 
-No production algorithm changes in this phase. The tests intentionally capture
-the current dependence as a control; Phase 4 will change them to assert the
-invariance contract.
+## Current production boundary
+
+`BuildHaloMedianReconstruction` now builds its donor pool only from qualified
+Joint Target point estimates, then uses a KD-tree over target positions to
+select the four nearest donors for each Original-Domain Halo. Componentwise
+medians produce A/B/C; equal-distance ordering uses Atom ID. The exact search
+policy is recorded in the Joint JSON schema-18 reconstruction snapshot.
+
+`BuildJointPeelingContributorUniverse` is run before postprocessing and carries
+every model atom, its position and identity, any Original-Domain index and
+Target/Halo role, and the already decided non-hydrogen eligibility. The
+universe includes eligible contributors outside the Joint domain. Peeling
+uses the same qualified Target donor index for those contributors and the
+saved Halo profiles, so the two paths share one policy. Missing qualified
+donors leave reconstruction unavailable; no parameter or sample is filled
+with zero.
+
+The production Joint Halo and Peeling files no longer include or call
+`AtomClassifier`; `GetElement()` is read only while the upstream contributor
+universe freezes the existing hydrogen-exclusion decision. Atom ID is used
+for identity, attribution, self-contribution exclusion, and deterministic
+ties. `RunJointGroupPotentialFitting` still uses GroupKey after local fitting.
+UMAP continues to export and display residue/element/spot labels, while its
+Tail Peeling Ratio uses the already paired, label-free peeling values.
+
+The Phase 4 invariance tests change ComponentKey, AtomKey, ComponentID,
+Element (between non-hydrogen elements), and other contributor labels while
+holding map, coordinates, identity, roles, eligible universe, endpoint and
+sampling fixed. They compare Halo A/B/C, peeling response, Tail Ratio,
+charge-corrected Gaussian response, and Post-Joint local samples. Legacy
+GroupKey snapshots decode and round-trip as schema 17; the new Peeling path
+rejects them instead of interpreting them under the geometry contract.

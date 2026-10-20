@@ -31,16 +31,27 @@ but do not receive local or group results.
    their Second-stage diagnostics. FixedHalo estimation entry points are
    retired; the persistence codec preserves historical FixedHalo result data
    without making it executable.
-2. `BuildPostFitPeelingSamples` uses raw sample entries and their saved
+2. `RunJointComponentWorkflow` first supplies an immutable contributor
+   universe containing every model atom, its Atom ID and position, its
+   Original-Domain index and Target/Halo role when present, plus the already
+   decided reconstruction eligibility. This retains the upstream
+   non-hydrogen policy and includes legal off-domain contributors. Peeling
+   does not inspect Element, Residue, AtomKey, ComponentKey, Spot, or GroupKey.
+   `BuildPostFitPeelingSamples` uses raw sample entries and their saved
    geometry. For each target sample it subtracts the tricubic interpolation
    of every other retained contributor:
    `y_peel = y_raw - I_k[sum(j != i) fhat_j]`. Nonzero stencil nodes in the
    Original Observation Domain use their existing predictions, including rows
    omitted only from the Fitting Domain. A node outside that domain but inside
-   legal map geometry is evaluated on demand from all nearby heavy-atom
-   contributors with nonzero support. Qualified target FullABC points and the
-   existing GroupKey halo median (with the existing global fallback) provide
-   their parameters; the target's own contribution is removed before
+   legal map geometry is evaluated on demand from all nearby eligible
+   contributors with nonzero support. Qualified Joint Target FullABC points
+   provide their own parameters. Each original-domain Halo and each off-domain
+   contributor without a Joint point uses the componentwise median of its four
+   nearest qualified Target A/B/C points, using unbounded Euclidean distance
+   in Å and Atom ID for equal-distance ordering. Fewer than four donors uses
+   every available qualified donor; no qualified donor leaves reconstruction
+   unavailable. The same donor index and rule are used for both domains. The
+   target's own contribution is removed before
    interpolation. The support radius remains 2.5 Å, and map-edge stencils keep
    MapSampler's clamping and node-merging rules. Each `PostFitPeelingResult`
    keeps one entry per raw sample, including an unavailable reason when map
@@ -171,11 +182,11 @@ measurement covariance is a working model derived from the local MDPDE
 observations; it does not propagate uncertainty in other Joint contributors or
 cross-atom errors.
 
-Reconstruction-only lookup storage is linear in the number of heavy-atom model
-contributors. Its node cache is capped at 4,096 entries; only missing stencil
-nodes are evaluated, and each sample keeps a bounded tricubic node workspace.
-The reconstruction does not add Joint fitting parameters or change the Joint
-objective.
+Reconstruction-only lookup storage is linear in the number of eligible model
+contributors and qualified Joint Targets. Its node cache is capped at 4,096
+entries; only missing stencil nodes are evaluated, and each sample keeps a
+bounded tricubic node workspace. The reconstruction does not add Joint fitting
+parameters or change the Joint objective.
 
 ## Persistence and coverage
 
@@ -187,6 +198,11 @@ from available local evidence, then emitted as format 4. Version-2
 Joint group results based on the previous measurement source are invalidated
 during migration and require the post-Joint local workflow to run again.
 Legacy stage formats remain readable through their existing migration path.
+Joint JSON schema 18 carries the geometry-local Halo contract and donor
+identities. Schema 17 GroupKey median snapshots remain readable and
+round-trip with their original contract; rerunning Peeling requires a new
+qualified endpoint and geometry-local reconstruction. The database remains
+SQLite v20, so this change does not require a database migration.
 
 Permanent coverage exercises shared mapping counts, exact grid peeling,
 fixed-charge correction, local MDPDE regression, group information

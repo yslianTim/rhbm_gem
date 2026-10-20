@@ -170,7 +170,8 @@ def main() -> int:
             rejected = subprocess.run([executable, "umap_embedding", "-d", str(database), "--model-key", "example"],
                                       capture_output=True, text=True)
             assert rejected.returncode != 0
-            assert "at least 3 data rows" in rejected.stdout + rejected.stderr
+            assert "All 3 selected UMAP feature columns are constant" in rejected.stdout + rejected.stderr, (
+                rejected.stdout + rejected.stderr)
     return 0
 
 
