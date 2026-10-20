@@ -1,5 +1,9 @@
 # RHBM-GEM — Pure Halo-Support Exclusion Production Validation
 
+> Historical comparison runners used during promotion have been retired. Their
+> numerical conclusions and saved artifacts remain available in this report;
+> current Production regressions live in the Joint component test suite.
+
 | 項目 | 結果 |
 | --- | --- |
 | 日期 | 2026-10-17 |
@@ -274,10 +278,9 @@ normalized production units。Gaussian/charge width、support 與 raw sampling
 positions 均由同一套 implementation 產生；runner 設定 Eigen/OpenMP/OpenBLAS/
 Accelerate = 1，workflow thread size = 1。
 
-可重現 runner 與完整 per-target/per-halo structured artifact 為
-[joint_halo_support_exclusion_validation.cpp](../../tests/experiments/joint_halo_support_exclusion_validation.cpp)
-與
+完整 per-target/per-halo structured artifact 為
 [joint-halo-support-exclusion-validation-6z6u.json](joint-halo-support-exclusion-validation-6z6u.json)。
+歷史 runner 已在研究結案後退役，原始程式可由 Git history 追溯。
 6Z6U run 使用 1,418 targets、2,077 original contributors、229,783 original
 rows、180,478 fitting rows，retained supported halos = 659。
 

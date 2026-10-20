@@ -1,5 +1,9 @@
 # Joint Component Estimator — Halo-Aware Observation Exclusion Feasibility and Controlled Experiments
 
+> Historical comparison runners are retired after the policy decision. Results
+> remain here as research evidence. The old statistical campaign runner and its
+> smoke test are also retired; their earlier test outcome below is historical.
+
 | 日期 | 分支 | 資料 |
 | --- | --- | --- |
 | 2026-10-16 | develop | 6Z6U chain A；non-hydrogen targets |

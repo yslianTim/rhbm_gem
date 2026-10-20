@@ -10,7 +10,6 @@ RUNNERS = {
     'joint_component_runtime',
     'joint_benchmark',
     'joint_partial_selection',
-    'joint_statistical_experiment',
     'simulation_contract',
 }
 

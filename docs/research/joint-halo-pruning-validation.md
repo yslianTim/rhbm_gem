@@ -1,5 +1,10 @@
 # Joint halo-pruning validation
 
+> Historical validation: the threshold-sweep executable was retired after this
+> study closed. Its results below remain the research record; current Halo
+> eligibility and Pure Exclusion behavior are covered by
+> `HaloEligibility_test.cpp` and `PureHaloSupportExclusion_test.cpp`.
+
 ## Production rule under study
 
 Production uses `m_min = 3` and requires both at least three halo support rows

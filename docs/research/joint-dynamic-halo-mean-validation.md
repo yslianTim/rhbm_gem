@@ -1,5 +1,10 @@
 # Dynamic Halo Mean Joint Estimator Research
 
+> Historical study: its Dynamic Halo implementation and runners have been
+> retired. The results below are retained as research evidence. Current
+> Production behavior is documented in
+> [`joint-bounded-active-set-production-promotion-20261020.md`](joint-bounded-active-set-production-promotion-20261020.md).
+
 ## Scope and current status
 
 This research keeps the production estimator unchanged. Production continues to use qualified FirstStage fixed Halo parameters `(A, B, C) = (A_FirstStage, B_FirstStage, 0)`, 12-target FixedNeighbor cores, and the `practical-v1` convergence criteria. The dynamic implementation is research-only.

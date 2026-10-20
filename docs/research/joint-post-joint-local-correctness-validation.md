@@ -1,5 +1,10 @@
 # RHBM-GEM — Post-Joint Local Domain Correctness Validation
 
+> The historical downstream validation executable has been retired after the
+> study closed. Its numerical results remain in the linked JSON artifact and
+> this report; current workflow behavior is covered by CLI and persistence
+> regressions.
+
 | 項目 | 結果 |
 | --- | --- |
 | 日期 | 2026-10-19 |

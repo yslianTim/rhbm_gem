@@ -1,5 +1,10 @@
 # Joint Component Estimator — Halo-Support Exclusion Validation
 
+> Historical strategy-comparison tools have been retired after the study
+> closed. This report and its result artifacts remain the research record;
+> current Pure Exclusion and Fixed-Halo behavior are covered by the production
+> regression tests.
+
 | 日期 | 分支 | 基準 HEAD | 範圍 |
 | --- | --- | --- | --- |
 | 2026-10-16 | develop | `5de15aa10e6f08a3d65aa55d110d53df59520577` | P0 exact support-incidence contract |

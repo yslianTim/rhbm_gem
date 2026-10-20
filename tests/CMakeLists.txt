@@ -189,7 +189,6 @@ set(JOINT_COMPONENT_CONTRACT_TEST_SOURCES
     core/joint_component/HaloMedianReconstruction_test.cpp
     core/joint_component/PureHaloSupportExclusion_test.cpp
     core/joint_component/FixedHaloInitialization_test.cpp
-    core/joint_component/DynamicHaloMean_test.cpp
 )
 
 set(JOINT_COMPONENT_WORKFLOW_TEST_SOURCES
@@ -303,7 +302,7 @@ add_library(joint_test_support STATIC
     support/JointTestGeometry.cpp support/JointTestNumerics.cpp support/JointDenseReference.cpp
     support/JointTestContext.cpp support/JointComponentChecks.cpp
     support/JointFixtureSupport.cpp support/JointHaloObservationExclusion.cpp
-    support/DynamicHaloMean.cpp support/JointReproducibilityFingerprint.cpp)
+    support/JointReproducibilityFingerprint.cpp)
 target_compile_features(joint_test_support PUBLIC cxx_std_20)
 target_link_libraries(joint_test_support PUBLIC rhbm_gem_dependencies CompilerFlags)
 target_include_directories(joint_test_support PUBLIC
@@ -317,30 +316,6 @@ target_link_libraries(rhbm_tests PRIVATE joint_test_support)
 add_executable(joint_component_runtime tools/joint_component_runtime.cpp support/JointComponentRuntime.cpp)
 target_link_libraries(joint_component_runtime PRIVATE joint_test_support rhbm_gem)
 add_dependencies(tests_all joint_component_runtime)
-
-add_executable(joint_halo_pruning_validation experiments/joint_halo_pruning_validation.cpp)
-target_link_libraries(joint_halo_pruning_validation PRIVATE joint_test_support rhbm_gem)
-add_dependencies(tests_all joint_halo_pruning_validation)
-add_test(NAME joint_halo_pruning_validation COMMAND $<TARGET_FILE:joint_halo_pruning_validation>)
-set_tests_properties(joint_halo_pruning_validation PROPERTIES
-    LABELS "core;domain:core;intent:algorithm;joint:halo-pruning;research"
-    TIMEOUT 900 ENVIRONMENT "OMP_NUM_THREADS=1")
-
-add_executable(joint_dynamic_halo_mean experiments/joint_dynamic_halo_mean.cpp)
-target_link_libraries(joint_dynamic_halo_mean PRIVATE joint_test_support rhbm_gem CompilerFlags)
-add_dependencies(tests_all joint_dynamic_halo_mean)
-
-add_executable(joint_dynamic_halo_joint experiments/joint_dynamic_halo_joint.cpp)
-target_link_libraries(joint_dynamic_halo_joint PRIVATE joint_test_support rhbm_gem CompilerFlags)
-add_dependencies(tests_all joint_dynamic_halo_joint)
-
-add_executable(joint_dynamic_halo_synthetic_robustness experiments/joint_dynamic_halo_synthetic_robustness.cpp)
-target_link_libraries(joint_dynamic_halo_synthetic_robustness PRIVATE joint_test_support rhbm_gem CompilerFlags)
-add_dependencies(tests_all joint_dynamic_halo_synthetic_robustness)
-
-if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
-    add_custom_target(research_tools_all)
-endif()
 
 if(RHBM_GEM_BUILD_BENCHMARKS)
     add_custom_target(benchmarks_all)
@@ -392,9 +367,6 @@ if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
     add_executable(joint_fixed_halo_validation experiments/joint_fixed_halo_validation.cpp)
     target_link_libraries(joint_fixed_halo_validation PRIVATE joint_test_support rhbm_gem CompilerFlags)
     add_dependencies(tests_all joint_fixed_halo_validation)
-    add_executable(fixed_halo_first_stage_diagnostic experiments/fixed_halo_first_stage_diagnostic.cpp)
-    target_link_libraries(fixed_halo_first_stage_diagnostic PRIVATE joint_test_support rhbm_gem CompilerFlags)
-    add_dependencies(tests_all fixed_halo_first_stage_diagnostic)
     add_test(NAME joint_local_ac_kkt_recovery
         COMMAND $<TARGET_FILE:joint_local_ac_kkt> replay
             "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_ac_kkt/block-82.json")
@@ -432,34 +404,6 @@ if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
         LABELS "offline;domain:core;intent:algorithm;joint:offline;long" TIMEOUT 3600
         ENVIRONMENT "OMP_NUM_THREADS=1")
     add_dependencies(tests_all joint_offline_tests)
-endif()
-
-if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
-    add_executable(joint_statistical_experiment experiments/joint_statistical_experiment.cpp)
-    target_link_libraries(joint_statistical_experiment PRIVATE joint_test_support rhbm_gem)
-    add_dependencies(research_tools_all joint_statistical_experiment)
-
-    add_executable(joint_halo_observation_exclusion experiments/joint_halo_observation_exclusion.cpp)
-    target_link_libraries(joint_halo_observation_exclusion PRIVATE joint_test_support rhbm_gem)
-    add_dependencies(research_tools_all joint_halo_observation_exclusion)
-
-    add_executable(joint_halo_observation_exclusion_fit experiments/joint_halo_observation_exclusion_fit.cpp)
-    target_link_libraries(joint_halo_observation_exclusion_fit PRIVATE joint_test_support rhbm_gem)
-    add_dependencies(research_tools_all joint_halo_observation_exclusion_fit)
-
-    add_executable(joint_halo_observation_exclusion_metrics experiments/joint_halo_observation_exclusion_metrics.cpp)
-    target_link_libraries(joint_halo_observation_exclusion_metrics PRIVATE joint_test_support rhbm_gem)
-    add_dependencies(research_tools_all joint_halo_observation_exclusion_metrics)
-
-    add_executable(joint_halo_support_exclusion_synthetic experiments/joint_halo_support_exclusion_synthetic.cpp)
-    target_link_libraries(joint_halo_support_exclusion_synthetic PRIVATE joint_test_support rhbm_gem)
-    add_dependencies(research_tools_all joint_halo_support_exclusion_synthetic)
-    add_executable(joint_halo_support_exclusion_validation experiments/joint_halo_support_exclusion_validation.cpp)
-    target_link_libraries(joint_halo_support_exclusion_validation PRIVATE joint_test_support rhbm_gem)
-    add_dependencies(research_tools_all joint_halo_support_exclusion_validation)
-    add_executable(joint_halo_support_weighting_reference experiments/joint_halo_support_weighting_reference.cpp)
-    target_link_libraries(joint_halo_support_weighting_reference PRIVATE joint_test_support rhbm_gem)
-    add_dependencies(research_tools_all joint_halo_support_weighting_reference)
 endif()
 
 add_rhbm_gtest_group(rhbm_tests_joint_component_contract
@@ -610,7 +554,11 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_benchmark_test.py")
     add_test(NAME joint_experiment_cleanup_test
         COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_experiment_cleanup_test.py")
+    add_test(NAME fixed_seed_joint_noise_generator_test
+        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/fixed_seed_joint_noise_generator_test.py")
     set_tests_properties(experiment_support_test experiment_runner_dependency_test
+        PROPERTIES LABELS "core;domain:integration;intent:algorithm")
+    set_tests_properties(fixed_seed_joint_noise_generator_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm")
     set_tests_properties(joint_benchmark_contract_test
         PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:numerical" TIMEOUT 300
@@ -639,17 +587,6 @@ if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
         set_tests_properties(joint_benchmark_smoke PROPERTIES
             LABELS "benchmark;domain:integration;intent:benchmark;joint:numerical" TIMEOUT 300
             ENVIRONMENT "OMP_NUM_THREADS=1")
-    endif()
-
-    if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
-        add_test(NAME joint_statistical_experiment_contract_test
-            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_statistical_experiment_test.py")
-        add_test(NAME joint_statistical_experiment_smoke
-            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_statistical_experiment.py"
-                --smoke --work-dir "${PROJECT_BINARY_DIR}/joint-statistical-smoke"
-                --executable $<TARGET_FILE:joint_statistical_experiment>)
-        set_tests_properties(joint_statistical_experiment_contract_test joint_statistical_experiment_smoke
-            PROPERTIES LABELS "research;domain:integration;intent:algorithm;joint:research")
     endif()
 
     if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
@@ -753,8 +690,7 @@ get_target_property(_tests_all_dependencies tests_all MANUALLY_ADDED_DEPENDENCIE
 foreach(_optional_target IN ITEMS
     joint_partial_selection
     joint_postprocessing_benchmark
-    joint_fixed_neighbor_experiment
-    joint_statistical_experiment)
+    joint_fixed_neighbor_experiment)
     if(_optional_target IN_LIST _tests_all_dependencies)
         message(FATAL_ERROR "Optional target ${_optional_target} must not be a tests_all dependency")
     endif()
@@ -772,16 +708,6 @@ else()
             message(FATAL_ERROR "${_target} exists while RHBM_GEM_BUILD_BENCHMARKS=OFF")
         endif()
     endforeach()
-endif()
-
-if(RHBM_GEM_BUILD_RESEARCH_TOOLS)
-    foreach(_target IN ITEMS joint_statistical_experiment research_tools_all)
-        if(NOT TARGET ${_target})
-            message(FATAL_ERROR "RHBM_GEM_BUILD_RESEARCH_TOOLS did not create ${_target}")
-        endif()
-    endforeach()
-elseif(TARGET joint_statistical_experiment OR TARGET research_tools_all)
-    message(FATAL_ERROR "Research targets exist while RHBM_GEM_BUILD_RESEARCH_TOOLS=OFF")
 endif()
 
 if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)

@@ -8,23 +8,11 @@ CURRENT_EXPERIMENT_SOURCES = {
     "joint_fullabc_width_study.cpp",
     "joint_fixed_width_oracle.cpp",
     "joint_fixed_halo_validation.cpp",
-    "joint_dynamic_halo_mean.cpp",
-    "joint_dynamic_halo_joint.cpp",
-    "joint_dynamic_halo_synthetic_robustness.cpp",
-    "fixed_halo_first_stage_diagnostic.cpp",
     "joint_fixed_neighbor.cpp",
-    "joint_halo_pruning_validation.cpp",
-    "joint_halo_observation_exclusion.cpp",
-    "joint_halo_observation_exclusion_fit.cpp",
-    "joint_halo_observation_exclusion_metrics.cpp",
-    "joint_halo_support_exclusion_synthetic.cpp",
-    "joint_halo_support_exclusion_validation.cpp",
-    "joint_halo_support_weighting_reference.cpp",
     "joint_local_ac_kkt.cpp",
     "joint_local_replay_analysis.cpp",
     "joint_partial_selection.cpp",
     "joint_postprocessing_benchmark.cpp",
-    "joint_statistical_experiment.cpp",
     "joint_width_trajectory.cpp",
     "joint_width_repro_no_instrumentation.cpp",
     "joint_production_bounded_synthetic.cpp",
@@ -33,7 +21,6 @@ CURRENT_EXPERIMENT_SOURCES = {
 CURRENT_PYTHON_EXPERIMENTS = {
     "joint_benchmark.py",
     "joint_partial_selection.py",
-    "joint_statistical_experiment.py",
 }
 
 CURRENT_PYTHON_VALIDATION_RUNNERS = {
@@ -80,6 +67,24 @@ RETIRED_REPOSITORY_FILES = (
     "tests/support/JointWidthTrustPolicy.cpp",
     "tests/support/JointWidthTrustPolicy.hpp",
     "tests/core/joint_component/WidthTrustPolicy_test.cpp",
+    "tests/experiments/joint_dynamic_halo_mean.cpp",
+    "tests/experiments/joint_dynamic_halo_joint.cpp",
+    "tests/experiments/joint_dynamic_halo_synthetic_robustness.cpp",
+    "tests/experiments/joint_halo_pruning_validation.cpp",
+    "tests/experiments/joint_halo_observation_exclusion.cpp",
+    "tests/experiments/joint_halo_observation_exclusion_fit.cpp",
+    "tests/experiments/joint_halo_observation_exclusion_metrics.cpp",
+    "tests/experiments/joint_halo_support_exclusion_synthetic.cpp",
+    "tests/experiments/joint_halo_support_exclusion_validation.cpp",
+    "tests/experiments/joint_halo_support_weighting_reference.cpp",
+    "tests/experiments/fixed_halo_first_stage_diagnostic.cpp",
+    "tests/experiments/joint_statistical_experiment.cpp",
+    "tests/experiments/summarize_joint_halo_noise.py",
+    "tests/core/joint_component/DynamicHaloMean_test.cpp",
+    "tests/support/DynamicHaloMean.cpp",
+    "tests/support/DynamicHaloMean.hpp",
+    "tests/integration/joint_statistical_experiment.py",
+    "tests/integration/joint_statistical_experiment_test.py",
 )
 
 RETIRED_PYTHON_CAMPAIGNS = (
@@ -266,6 +271,18 @@ def main():
     ):
         assert token not in cmake, f"retired Width-trust CMake entry returned: {token}"
         assert token not in active_code, f"retired Width-trust tool or hook returned: {token}"
+    for token in (
+        "joint_dynamic_halo_",
+        "joint_halo_pruning_validation",
+        "joint_halo_observation_exclusion",
+        "joint_halo_support_exclusion_synthetic",
+        "joint_halo_support_exclusion_validation",
+        "joint_halo_support_weighting_reference",
+        "joint_statistical_experiment",
+        "DynamicHaloMean",
+    ):
+        assert token not in cmake, f"retired Halo research CMake entry returned: {token}"
+        assert token not in active_code, f"retired Halo research tool or helper returned: {token}"
     figure_root = ROOT / "docs/developer/figures"
     figure_dirs = {path.name for path in figure_root.iterdir() if path.is_dir()}
     unexpected_figure_dirs = sorted(figure_dirs - {"joint-validation"})
