@@ -105,6 +105,19 @@ void CheckSingleBlock(const std::string & topology,int atoms)
         EXPECT_LE(sweep.objective_after,sweep.objective_before+n::BlockObjectiveReplayEnclosure(sweep.objective_before));
     EXPECT_EQ(data.partition.components.size(),1u);
 }
+
+JointProblem PureExclusionChain(std::size_t atoms)
+{
+    auto input=second_stage_test::SyntheticJointWorkload("chain",static_cast<int>(atoms));
+    input.selection_domain.emplace();
+    input.selection_domain->contributor_policy=std::string(rhbm_gem::PureHaloSupportExclusionContributorPolicy);
+    input.selection_domain->target_indices.resize(atoms);
+    std::iota(input.selection_domain->target_indices.begin(),input.selection_domain->target_indices.end(),0);
+    input.selection_domain->pure_halo_support_exclusion=rhbm_gem::JointPureHaloSupportExclusionProvenance{
+        input.observations.size(),input.observations.size(),0,0,0,0};
+    return JointProblem(std::move(input));
+}
+
 TEST(JointFixedNeighborBlockCoordinateTest, IncrementalCandidateDeltaMatchesAffectedRowFullReplay)
 {
     n::Vector residual(4); residual<<1.25,-.75,2e-8,-2.0;
@@ -196,6 +209,45 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionBoundedSearchReleasesTheSt
     EXPECT_DOUBLE_EQ(result.final_sweep->stationarity_width_gradient_inf_norm,
         result.final_sweep->projected_width_gradient_inf_norm);
     EXPECT_EQ(result.final_sweep->active_width_bound_count,replay.active_width_bounds);
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, AssembledBoundedWidthStationarityUsesIndependentProjectedKkt)
+{
+    auto problem=PureExclusionChain(3);
+    const double eta_max=std::log(.4);
+    n::FixedNeighborSearchPolicy policy;
+    policy.maximum_sweeps=200;
+    policy.eta_upper_bound=eta_max;
+    const auto fit=n::FitFixedNeighborComponentsImpl(problem,std::vector<double>(3,.4),policy);
+    const auto stationarity=std::find_if(fit.evidence.begin(),fit.evidence.end(),[](const auto & check) {
+        return check.name=="width-stationarity" &&
+            check.scope==rhbm_gem::JointEvidenceScope::AssembledGlobal;
+    });
+    ASSERT_NE(stationarity,fit.evidence.end());
+    EXPECT_EQ(stationarity->reason,"independent-bound-aware-projected-width-kkt");
+    ASSERT_TRUE(stationarity->value.has_value());
+    const auto bound_feasibility=std::find_if(fit.evidence.begin(),fit.evidence.end(),[](const auto & check) {
+        return check.name=="width-bound-feasibility" &&
+            check.scope==rhbm_gem::JointEvidenceScope::AssembledGlobal;
+    });
+    ASSERT_NE(bound_feasibility,fit.evidence.end());
+    EXPECT_EQ(bound_feasibility->status,rhbm_gem::JointCheckStatus::Passed);
+    ASSERT_TRUE(fit.assembled_state.has_value());
+    double projected_inf{},raw_inf{};
+    bool active_bound{};
+    for(std::size_t atom=0;atom<fit.assembled_state->log_b.size();++atom)
+    {
+        const double eta=fit.assembled_state->log_b[atom];
+        const double gradient=fit.assembled_state->width_gradient[atom];
+        projected_inf=std::max(projected_inf,std::abs(eta-std::min(eta-gradient,eta_max)));
+        raw_inf=std::max(raw_inf,std::abs(gradient));
+        active_bound|=eta>=eta_max-1e-12;
+    }
+    EXPECT_TRUE(active_bound);
+    EXPECT_GT(raw_inf,policy.convergence_criteria.global_width_gradient);
+    EXPECT_NEAR(*stationarity->value,projected_inf,1e-12);
+    EXPECT_LE(*stationarity->value,policy.convergence_criteria.global_width_gradient);
+    EXPECT_EQ(stationarity->status,rhbm_gem::JointCheckStatus::Passed);
 }
 
 void CheckMultiBlockBudgetFailure(const std::string & topology)

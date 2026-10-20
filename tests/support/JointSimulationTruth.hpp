@@ -3,7 +3,7 @@
 #include <cmath>
 #include <stdexcept>
 
-namespace joint_test::width_trust {
+namespace joint_test::simulation {
 
 struct Truth
 {
@@ -28,4 +28,4 @@ inline Truth ToOriginalDomain(Truth truth,double divisor)
     return truth;
 }
 
-} // namespace joint_test::width_trust
+} // namespace joint_test::simulation

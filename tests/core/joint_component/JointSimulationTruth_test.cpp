@@ -1,32 +1,32 @@
 #include <gtest/gtest.h>
 
 #include "core/detail/joint_component/Numerics.hpp"
-#include "support/JointWidthTrustTruth.hpp"
+#include "support/JointSimulationTruth.hpp"
 
 #include <cmath>
 
 namespace {
 namespace joint=rhbm_gem::core::joint_component;
-namespace trust=joint_test::width_trust;
+namespace simulation=joint_test::simulation;
 
-TEST(JointWidthTrustTruthTest, MapScalingDividesACAndPreservesPhysicalWidth)
+TEST(JointSimulationTruthTest, MapScalingDividesACAndPreservesPhysicalWidth)
 {
-    const trust::Truth original{12.0,1.25,-0.75};
-    const auto normalized=trust::ToNormalizedDomain(original,4.0);
+    const simulation::Truth original{12.0,1.25,-0.75};
+    const auto normalized=simulation::ToNormalizedDomain(original,4.0);
     EXPECT_DOUBLE_EQ(normalized.amplitude,3.0);
     EXPECT_DOUBLE_EQ(normalized.width,original.width);
     EXPECT_DOUBLE_EQ(normalized.charge,-0.1875);
-    const auto reconstructed=trust::ToOriginalDomain(normalized,4.0);
+    const auto reconstructed=simulation::ToOriginalDomain(normalized,4.0);
     EXPECT_DOUBLE_EQ(reconstructed.amplitude,original.amplitude);
     EXPECT_DOUBLE_EQ(reconstructed.width,original.width);
     EXPECT_DOUBLE_EQ(reconstructed.charge,original.charge);
 }
 
-TEST(JointWidthTrustTruthTest, PredictionsReconstructInOriginalAndNormalizedDomains)
+TEST(JointSimulationTruthTest, PredictionsReconstructInOriginalAndNormalizedDomains)
 {
-    const trust::Truth original{6.0,0.8,-0.3};
+    const simulation::Truth original{6.0,0.8,-0.3};
     const double divisor=3.0;
-    const auto normalized=trust::ToNormalizedDomain(original,divisor);
+    const auto normalized=simulation::ToNormalizedDomain(original,divisor);
     double original_prediction{},normalized_prediction{};
     for(const double square:{0.0,0.25,1.0,6.25})
     {
@@ -37,7 +37,7 @@ TEST(JointWidthTrustTruthTest, PredictionsReconstructInOriginalAndNormalizedDoma
             normalized.charge*normalized_basis.charge;
     }
     EXPECT_NEAR(normalized_prediction,original_prediction/divisor,1e-14);
-    const auto restored=trust::ToOriginalDomain(normalized,divisor);
+    const auto restored=simulation::ToOriginalDomain(normalized,divisor);
     double restored_prediction{};
     for(const double square:{0.0,0.25,1.0,6.25})
     {
@@ -47,11 +47,11 @@ TEST(JointWidthTrustTruthTest, PredictionsReconstructInOriginalAndNormalizedDoma
     EXPECT_NEAR(restored_prediction,original_prediction,1e-14);
 }
 
-TEST(JointWidthTrustTruthTest, ParameterRmseUsesTheDeclaredComparisonScale)
+TEST(JointSimulationTruthTest, ParameterRmseUsesTheDeclaredComparisonScale)
 {
-    const trust::Truth sidecar_truth{9.0,1.1,-1.5};
-    const auto comparison_truth=trust::ToNormalizedDomain(sidecar_truth,3.0);
-    const trust::Truth estimate{3.0,1.1,-0.5};
+    const simulation::Truth sidecar_truth{9.0,1.1,-1.5};
+    const auto comparison_truth=simulation::ToNormalizedDomain(sidecar_truth,3.0);
+    const simulation::Truth estimate{3.0,1.1,-0.5};
     const double rmse_a=std::sqrt(std::pow(estimate.amplitude-comparison_truth.amplitude,2));
     const double rmse_b=std::sqrt(std::pow(estimate.width-comparison_truth.width,2));
     const double rmse_c=std::sqrt(std::pow(estimate.charge-comparison_truth.charge,2));

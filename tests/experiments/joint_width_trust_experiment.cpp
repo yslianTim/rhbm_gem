@@ -2,7 +2,7 @@
 #include "core/detail/joint_component/WidthCalibration.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include "support/JointWidthTrustPolicy.hpp"
-#include "support/JointWidthTrustTruth.hpp"
+#include "support/JointSimulationTruth.hpp"
 #include "utils/domain/FileFingerprint.hpp"
 
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
@@ -39,10 +39,10 @@ namespace {
 namespace core=rhbm_gem::core;
 namespace joint=core::joint_component;
 namespace json=boost::json;
-namespace trust=joint_test::width_trust;
+namespace simulation=joint_test::simulation;
 using Clock=std::chrono::steady_clock;
 
-using Truth=trust::Truth;
+using Truth=simulation::Truth;
 
 struct ExperimentInput
 {
@@ -536,7 +536,7 @@ json::object RunOne(const ExperimentInput & experiment,trust::Policy policy_kind
             if(experiment.truth_available)
             {
                 const auto truth=experiment.normalization_applied ?
-                    trust::ToNormalizedDomain(experiment.truth.at(atom),experiment.normalization_divisor) :
+                    simulation::ToNormalizedDomain(experiment.truth.at(atom),experiment.normalization_divisor) :
                     experiment.truth.at(atom);
                 parameter_error_a.push_back(a-truth.amplitude);
                 parameter_error_b.push_back(b-truth.width);
