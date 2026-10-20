@@ -7,7 +7,12 @@
 
 #include <memory>
 #include <limits>
+#include <numeric>
 #include <vector>
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <string>
 
 namespace {
 using namespace rhbm_gem;
@@ -133,6 +138,130 @@ Fixture MakeObservationCountFixture(bool all_fixed=false,bool all_free=false,boo
     result.target_evidence->original_rows=input.observations.size();
     return {std::move(model),std::move(problem),std::move(result)};
 }
+
+struct FullABCFixture
+{
+    ModelObject model;
+    JointProblem problem;
+    JointAnalysisResult result;
+    std::array<double,3> free_truth{};
+    double zero_row_residual_square{};
+};
+
+FullABCFixture MakeFullABCFixture(std::size_t free_support_count=30)
+{
+    constexpr std::size_t target_count=20,row_count=32;
+    constexpr std::array<double,3> target_point{1.0,.8,.1};
+    constexpr std::array<double,3> free_truth{1.4,.95,-.12};
+    const std::array<double,3> fixed_point=target_point;
+    std::vector<std::unique_ptr<AtomObject>> atoms;
+    for (int id=1;id<=23;++id)
+    {
+        auto atom=std::make_unique<AtomObject>();
+        atom->SetSerialID(id);
+        atom->SetElement(Element::CARBON);
+        atom->SetPosition(4.0*static_cast<double>(id),0,0);
+        atoms.push_back(std::move(atom));
+    }
+    ModelObject model(std::move(atoms));
+    JointProblemInput input;
+    input.row_ids.reserve(row_count);
+    input.observations.assign(row_count,0.0);
+    input.atom_ids.reserve(target_count+2);
+    input.support.resize(target_count+2);
+    for (std::size_t row=0;row<row_count;++row)
+    {
+        input.row_ids.push_back(std::to_string(row));
+        const double target_square=.03*static_cast<double>(row);
+        const auto target_basis=joint_component::EvaluateKernel(target_square,target_point[1],2.5);
+        input.observations[row]=static_cast<double>(target_count)*
+            (target_point[0]*target_basis.gaussian+target_point[2]*target_basis.charge);
+        for (std::size_t target=0;target<target_count;++target)
+            input.support[target].push_back({row,target_square});
+    }
+    for (std::size_t target=0;target<target_count;++target)
+        input.atom_ids.push_back(std::to_string(target+1));
+    input.atom_ids.push_back("21");
+    input.atom_ids.push_back("22");
+    for (std::size_t row=0;row<free_support_count;++row)
+    {
+        const double square=free_support_count==1 ? .2 :
+            .02+6.2*static_cast<double>(row)/static_cast<double>(free_support_count-1);
+        input.support[target_count].push_back({row,square});
+        const auto basis=joint_component::EvaluateKernel(square,free_truth[1],2.5);
+        input.observations[row]+=free_truth[0]*basis.gaussian+free_truth[2]*basis.charge;
+    }
+    for (const auto [row,square]:std::array<std::pair<std::size_t,double>,2>{{{3,.35},{7,.8}}})
+    {
+        input.support[target_count+1].push_back({row,square});
+        const auto basis=joint_component::EvaluateKernel(square,fixed_point[1],2.5);
+        input.observations[row]+=fixed_point[0]*basis.gaussian+fixed_point[2]*basis.charge;
+    }
+    input.observations[30]+=.25;
+    input.observations[31]-=.2;
+    input.selection_domain.emplace();
+    input.selection_domain->contributor_policy=std::string(PureHaloSupportExclusionContributorPolicy);
+    input.selection_domain->target_indices.resize(target_count);
+    std::iota(input.selection_domain->target_indices.begin(),input.selection_domain->target_indices.end(),0);
+    input.selection_domain->pure_halo_support_exclusion=JointPureHaloSupportExclusionProvenance{
+        row_count,row_count,0,3,2,1};
+    JointProblem problem(input);
+
+    JointAnalysisResult result;
+    result.parameterization_contract=std::string(JointPureHaloSupportExclusionParameterizationContract);
+    result.atom_ids=input.atom_ids;
+    result.row_ids=input.row_ids;
+    result.selection_domain=input.selection_domain;
+    result.initialization.valid=true;
+    result.initialization.reason="test-qualified-first-stage-widths";
+    result.initialization.data_scope="first-stage-target-widths";
+    result.initialization.b.assign(target_count,.7);
+    for (std::size_t target=0;target<target_count;++target)
+    {
+        JointInitializationAtom initialized;
+        initialized.id=input.atom_ids[target];
+        initialized.target=true;
+        initialized.first_stage_fit_qualified=true;
+        initialized.native_status=static_cast<int>(RHBMEstimationStatus::SUCCESS);
+        initialized.first_stage_qualification=RHBMSolveQualification::NativeSuccess;
+        initialized.mdpde={target_point[0],.7,target_point[2]};
+        result.initialization.atoms.push_back(std::move(initialized));
+    }
+    result.search_completed=true;
+    result.runtime_convergence=JointCheckStatus::Passed;
+    result.target_runtime_convergence=JointCheckStatus::Passed;
+    JointAnalysisComponent component;
+    component.id="frozen-targets";
+    component.atoms=input.selection_domain->target_indices;
+    component.state.emplace();
+    component.state->b.assign(target_count,target_point[1]);
+    component.state->ac.resize(2*target_count);
+    component.state->log_b.assign(target_count,std::log(target_point[1]));
+    component.state->width_gradient.assign(target_count,0.0);
+    result.target_evidence.emplace();
+    for (std::size_t target=0;target<target_count;++target)
+    {
+        component.state->ac[2*target]=target_point[0];
+        component.state->ac[2*target+1]=target_point[2];
+        JointAtomPointValidation point;
+        point.atom=target;
+        point.component_convergence=JointCheckStatus::Passed;
+        point.parameter_validity=JointCheckStatus::Passed;
+        point.local_conditioning="Adequate";
+        point.point_quality="Available";
+        result.target_evidence->point_atoms.push_back(std::move(point));
+    }
+    component.runtime_convergence=JointCheckStatus::Passed;
+    component.target_runtime_convergence=JointCheckStatus::Passed;
+    result.components.push_back(std::move(component));
+    result.assembled_state=result.components.front().state;
+    result.target_evidence->contract=std::string(JointTargetPointValidationContractVersion);
+    result.target_evidence->original_rows=row_count;
+    const double raw_norm=std::sqrt(std::inner_product(input.observations.begin(),input.observations.end(),
+        input.observations.begin(),0.0));
+    return {std::move(model),std::move(problem),std::move(result),free_truth,
+        (.25*.25+.2*.2)/(2.0*std::max(1.0,raw_norm)*std::max(1.0,raw_norm))};
+}
 }
 
 TEST(HaloMedianReconstructionTest, ComputesSeparateComponentAndWidthAndChargeMedians)
@@ -246,6 +375,139 @@ TEST(HaloMedianReconstructionTest, ChemicalLabelsDoNotChangeGeometryLocalHaloEst
         relabeled.model,relabeled.problem,relabeled.result,"label-baseline");
 
     EXPECT_EQ(original.snapshot,changed.snapshot);
+}
+
+TEST(HaloFullABCJointEstimationTest, FitsFreeHaloOnOriginalRowsAfterFrozenTargetAndFixedHaloSubtraction)
+{
+    auto fixture=MakeFullABCFixture();
+    const auto target_before=fixture.result.components.front().state;
+    const auto estimated=EstimateHaloFullABCJoint(
+        fixture.model,fixture.problem,fixture.result,"fullabc-test-run");
+    ASSERT_TRUE(estimated.available) << estimated.unavailable_reason;
+    ASSERT_TRUE(estimated.diagnostics.solver_invoked);
+    ASSERT_TRUE(estimated.diagnostics.solver_qualified);
+    ASSERT_EQ(estimated.diagnostics.solver_status,JointCheckStatus::Passed);
+    ASSERT_EQ(estimated.diagnostics.original_observation_rows,32u);
+    EXPECT_EQ(estimated.diagnostics.zero_sensitivity_rows,2u);
+    ASSERT_EQ(estimated.fixed_halo_count,2u);
+    ASSERT_EQ(estimated.free_halo_count,1u);
+    ASSERT_EQ(estimated.diagnostics.qualified_first_stage_width_donors,20u);
+    ASSERT_DOUBLE_EQ(*estimated.diagnostics.width_upper_bound,2.8);
+    const auto free=std::find_if(estimated.halos.begin(),estimated.halos.end(),[](const auto & halo) {
+        return halo.classification.atom_id=="21";
+    });
+    ASSERT_NE(free,estimated.halos.end());
+    ASSERT_TRUE(free->reconstructed_parameters);
+    EXPECT_NEAR((*free->reconstructed_parameters)[0],fixture.free_truth[0],2e-3);
+    EXPECT_NEAR((*free->reconstructed_parameters)[1],fixture.free_truth[1],2e-3);
+    EXPECT_NEAR((*free->reconstructed_parameters)[2],fixture.free_truth[2],2e-3);
+    ASSERT_TRUE(estimated.diagnostics.objective);
+    EXPECT_GE(*estimated.diagnostics.objective,fixture.zero_row_residual_square-1e-14);
+    EXPECT_EQ(fixture.result.components.front().state->ac,target_before->ac);
+    EXPECT_EQ(fixture.result.components.front().state->b,target_before->b);
+    const auto zero=std::find_if(estimated.halos.begin(),estimated.halos.end(),[](const auto & halo) {
+        return halo.classification.atom_id=="23";
+    });
+    ASSERT_NE(zero,estimated.halos.end());
+    EXPECT_EQ(zero->classification.distinct_original_observations,0u);
+    ASSERT_TRUE(zero->reconstructed_parameters);
+    EXPECT_EQ(*zero->reconstructed_parameters,*estimated.global_target_median);
+}
+
+TEST(HaloFullABCJointEstimationTest, AllFixedHalosSkipTheFullABCOptimizer)
+{
+    auto fixture=MakeFullABCFixture(2);
+    const auto estimated=EstimateHaloFullABCJoint(
+        fixture.model,fixture.problem,fixture.result,"all-fixed-run");
+    ASSERT_TRUE(estimated.available) << estimated.unavailable_reason;
+    EXPECT_EQ(estimated.fixed_halo_count,3u);
+    EXPECT_EQ(estimated.free_halo_count,0u);
+    EXPECT_FALSE(estimated.diagnostics.solver_invoked);
+    EXPECT_EQ(estimated.diagnostics.solver_status,JointCheckStatus::NotRun);
+    for (const auto & halo:estimated.halos)
+    {
+        ASSERT_TRUE(halo.reconstructed_parameters);
+        EXPECT_EQ(*halo.reconstructed_parameters,*estimated.global_target_median);
+    }
+}
+
+TEST(HaloFullABCJointEstimationTest, ThreeObservationsAreFreeAndNoDonorsAreUnavailable)
+{
+    auto fixture=MakeFullABCFixture(3);
+    auto estimated=EstimateHaloFullABCJoint(fixture.model,fixture.problem,fixture.result,"three-row-run");
+    ASSERT_EQ(estimated.free_halo_count,1u);
+    const auto free=std::find_if(estimated.halos.begin(),estimated.halos.end(),[](const auto & halo) {
+        return halo.classification.atom_id=="21";
+    });
+    ASSERT_NE(free,estimated.halos.end());
+    EXPECT_EQ(free->classification.distinct_original_observations,3u);
+    EXPECT_EQ(free->classification.role,HaloFullABCRole::FreeFullABC);
+    EXPECT_TRUE(estimated.diagnostics.solver_invoked);
+
+    for (auto & point:fixture.result.target_evidence->point_atoms) point.local_conditioning="Warning";
+    const auto unavailable=EstimateHaloFullABCJoint(
+        fixture.model,fixture.problem,fixture.result,"no-donor-run");
+    EXPECT_FALSE(unavailable.available);
+    EXPECT_EQ(unavailable.unavailable_reason,"no-qualified-joint-target-donors");
+    for (const auto & halo:unavailable.halos) EXPECT_FALSE(halo.reconstructed_parameters);
+}
+
+TEST(HaloFullABCJointEstimationTest, NoHaloCandidatesRequireNoMedianOrSolver)
+{
+    auto fixture=MakeFullABCFixture();
+    auto input=fixture.problem.OriginalInput();
+    input.atom_ids.resize(20);
+    input.support.resize(20);
+    input.selection_domain->pure_halo_support_exclusion=
+        JointPureHaloSupportExclusionProvenance{32,32,0,0,0,0};
+    JointProblem target_problem(input);
+    auto result=fixture.result;
+    result.atom_ids=input.atom_ids;
+    result.selection_domain=input.selection_domain;
+    std::vector<std::unique_ptr<AtomObject>> targets;
+    for (int id=1;id<=20;++id)
+    {
+        auto atom=std::make_unique<AtomObject>();
+        atom->SetSerialID(id);
+        atom->SetElement(Element::CARBON);
+        atom->SetPosition(4.0*static_cast<double>(id),0,0);
+        targets.push_back(std::move(atom));
+    }
+    ModelObject target_model(std::move(targets));
+    const auto estimated=EstimateHaloFullABCJoint(target_model,target_problem,result,"no-halo-run");
+    EXPECT_TRUE(estimated.available);
+    EXPECT_TRUE(estimated.halos.empty());
+    EXPECT_FALSE(estimated.global_target_median);
+    EXPECT_FALSE(estimated.diagnostics.solver_invoked);
+}
+
+TEST(HaloFullABCJointEstimationTest, ChemicalLabelsDoNotAffectTheHaloJointEstimate)
+{
+    auto baseline=MakeFullABCFixture();
+    auto relabeled=MakeFullABCFixture();
+    for (const int id:{3,7,21,22})
+    {
+        auto * atom=relabeled.model.FindAtomPtr(id);
+        atom->SetElement(Element::OXYGEN);
+        atom->SetComponentKey(static_cast<ComponentKey>(id%3+1));
+        atom->SetAtomKey(static_cast<AtomKey>(id+100));
+        atom->SetResidue(Residue::GLY);
+    }
+    const auto left=EstimateHaloFullABCJoint(
+        baseline.model,baseline.problem,baseline.result,"label-invariant-run");
+    const auto right=EstimateHaloFullABCJoint(
+        relabeled.model,relabeled.problem,relabeled.result,"label-invariant-run");
+    ASSERT_TRUE(left.available) << left.unavailable_reason;
+    ASSERT_TRUE(right.available) << right.unavailable_reason;
+    ASSERT_EQ(left.halos.size(),right.halos.size());
+    for (std::size_t index=0;index<left.halos.size();++index)
+    {
+        EXPECT_EQ(left.halos[index].classification.atom_id,right.halos[index].classification.atom_id);
+        EXPECT_EQ(left.halos[index].classification.role,right.halos[index].classification.role);
+        EXPECT_EQ(left.halos[index].classification.distinct_original_observations,
+            right.halos[index].classification.distinct_original_observations);
+        EXPECT_EQ(left.halos[index].reconstructed_parameters,right.halos[index].reconstructed_parameters);
+    }
 }
 
 TEST(HaloMedianReconstructionTest, ClassifiesDistinctOriginalObservationsAtThreeOnly)

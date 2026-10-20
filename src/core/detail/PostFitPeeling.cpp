@@ -9,6 +9,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <set>
 #include <unordered_map>
 
@@ -157,18 +158,19 @@ LocalPotentialSampleList PostJointLocalSamples::BuildGaussianSamples(
 JointPostprocessingContext::JointPostprocessingContext(
     const MapObject & geometry, const ModelObject & model, const JointProblem & problem,
     const JointAnalysisResult * snapshot, JointPostprocessingMetrics * metrics,
-    const HaloMedianBuildResult * halo_medians)
+    const HaloMedianBuildResult * halo_medians,const HaloFullABCReconstructionResult * halo_fullabc)
     : JointPostprocessingContext(geometry,model,problem,snapshot,metrics,halo_medians,
-        BuildJointPeelingContributorUniverse(model,problem,snapshot))
+        BuildJointPeelingContributorUniverse(model,problem,snapshot),halo_fullabc)
 {
 }
 
 JointPostprocessingContext::JointPostprocessingContext(
     const MapObject & geometry,const ModelObject & model,const JointProblem & problem,
     const JointAnalysisResult * snapshot,JointPostprocessingMetrics * metrics,
-    const HaloMedianBuildResult * halo_medians,JointPeelingContributorUniverse contributors)
+    const HaloMedianBuildResult * halo_medians,JointPeelingContributorUniverse contributors,
+    const HaloFullABCReconstructionResult * halo_fullabc)
     : m_geometry(geometry), m_model(model), m_problem(problem), m_snapshot(snapshot), m_metrics(metrics),
-      m_halo_medians(halo_medians),m_contributors(std::move(contributors))
+      m_halo_medians(halo_medians),m_halo_fullabc(halo_fullabc),m_contributors(std::move(contributors))
 {
     const auto & input = problem.OriginalInput();
     const bool pure_exclusion=input.selection_domain &&
@@ -277,7 +279,8 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
         result->atom_ids.size()>result->selection_domain->target_indices.size();
     if(pure_exclusion && (!result->selection_domain ||
         result->selection_domain->contributor_policy!=PureHaloSupportExclusionContributorPolicy ||
-        result->layout || !result->fixed_halos.empty() || (pure_has_halos && !result->halo_median_reconstruction)))
+        result->layout || !result->fixed_halos.empty() ||
+        (pure_has_halos && !result->halo_median_reconstruction && !m_halo_fullabc)))
         throw std::invalid_argument("Invalid Pure Exclusion peeling contract.");
     if (pure_exclusion && !pure_has_halos && result->halo_median_reconstruction)
         throw std::invalid_argument("Pure Exclusion Halo medians exist without original-domain Halos.");
@@ -295,7 +298,7 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
             represented[full[k]] = GaussianModel3D{c.state->ac[2*k], c.state->b[k], c.state->ac[2*k+1]};
         }
     }
-    if(pure_exclusion && pure_has_halos)
+    if(pure_exclusion && pure_has_halos && !m_halo_fullabc)
     {
         const auto & snapshot=*result->halo_median_reconstruction;
         if (snapshot.contract!=HaloMedianReconstructionContractVersion || snapshot.joint_run_id.empty() ||
@@ -352,9 +355,112 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
             throw std::invalid_argument("Invalid Joint Peeling contributor universe run provenance.");
     }
 
+    std::unordered_map<int,GaussianModel3D> fullabc_points;
+    if (pure_exclusion && m_halo_fullabc)
+    {
+        const auto & reconstruction=*m_halo_fullabc;
+        const auto valid_point=[](const std::array<double,3> & point) {
+            return std::isfinite(point[0]) && point[0]>=0 && std::isfinite(point[1]) && point[1]>0 &&
+                std::isfinite(point[2]);
+        };
+        const auto has_global_pass=[&](std::string_view name) {
+            return std::any_of(reconstruction.diagnostics.evidence.begin(),
+                reconstruction.diagnostics.evidence.end(),[&](const auto & check) {
+                    return check.name==name && check.scope==JointEvidenceScope::AssembledGlobal &&
+                        check.status==JointCheckStatus::Passed;
+                });
+        };
+        const auto expected_halo_count=static_cast<std::size_t>(std::count_if(
+            m_contributors.contributors.begin(),m_contributors.contributors.end(),[](const auto & contributor) {
+                return contributor.reconstruction_eligible && !contributor.target;
+            }));
+        std::unordered_map<int,std::size_t> original_indices;
+        original_indices.reserve(input.atom_ids.size());
+        for (std::size_t index=0;index<input.atom_ids.size();++index)
+            original_indices.emplace(std::stoi(input.atom_ids[index]),index);
+        if (!reconstruction.available || reconstruction.joint_run_id.empty() ||
+            reconstruction.joint_run_id!=expected_joint_run_id ||
+            (!m_contributors.joint_run_id.empty() && reconstruction.joint_run_id!=m_contributors.joint_run_id) ||
+            reconstruction.halos.size()!=expected_halo_count)
+            throw std::invalid_argument("Invalid Halo FullABC reconstruction provenance or coverage.");
+        if (!reconstruction.halos.empty() && (!reconstruction.global_target_median ||
+            !valid_point(*reconstruction.global_target_median)))
+            throw std::invalid_argument("Invalid Halo FullABC global Target median.");
+        std::size_t fixed_count{},free_count{};
+        for (const auto & halo:reconstruction.halos)
+        {
+            const int id=std::stoi(halo.classification.atom_id);
+            const auto * atom=m_model.FindAtomPtr(id);
+            const auto contributor=halo.classification.original_contributor_index;
+            const auto original_index=original_indices.find(id);
+            const std::optional<std::size_t> expected_index=original_index==original_indices.end() ?
+                std::nullopt : std::optional<std::size_t>{original_index->second};
+            const bool contributor_is_target=contributor && std::binary_search(
+                result->selection_domain->target_indices.begin(),result->selection_domain->target_indices.end(),
+                *contributor);
+            if (!atom || atom->GetElement()==Element::HYDROGEN || contributor_is_target ||
+                contributor!=expected_index ||
+                (contributor && (*contributor>=result->atom_ids.size() || result->atom_ids[*contributor]!=
+                    halo.classification.atom_id)) ||
+                (contributor ? DistinctOriginalSupportRows(input.support[*contributor]).size() : 0)!=
+                    halo.classification.distinct_original_observations || !halo.reconstructed_parameters ||
+                !valid_point(*halo.reconstructed_parameters) ||
+                !fullabc_points.emplace(id,GaussianModel3D{(*halo.reconstructed_parameters)[0],
+                    (*halo.reconstructed_parameters)[1],(*halo.reconstructed_parameters)[2]}).second)
+                throw std::invalid_argument("Invalid Halo FullABC reconstruction parameters.");
+            if (halo.classification.role==HaloFullABCRole::FixedGlobalTargetMedian)
+            {
+                ++fixed_count;
+                if (halo.classification.distinct_original_observations>=3 ||
+                    !reconstruction.global_target_median ||
+                    *halo.reconstructed_parameters!=*reconstruction.global_target_median)
+                    throw std::invalid_argument("Invalid fixed Halo FullABC classification.");
+            }
+            else
+            {
+                ++free_count;
+                const auto width_bound=reconstruction.diagnostics.width_upper_bound;
+                const auto width_p95=reconstruction.diagnostics.first_stage_width_p95;
+                if (halo.classification.distinct_original_observations<3 || !contributor ||
+                    !width_bound || !width_p95 ||
+                    std::abs(*width_bound-4.0*(*width_p95))>64.0*std::numeric_limits<double>::epsilon()*
+                        std::max(1.0,std::abs(*width_bound)) ||
+                    (*halo.reconstructed_parameters)[1]>*width_bound+64.0*
+                        std::numeric_limits<double>::epsilon()*std::max(1.0,*width_bound))
+                    throw std::invalid_argument("Invalid free Halo FullABC classification.");
+            }
+        }
+        if (fixed_count!=reconstruction.fixed_halo_count || free_count!=reconstruction.free_halo_count ||
+            (free_count && (!reconstruction.global_target_median ||
+                !reconstruction.diagnostics.solver_invoked || !reconstruction.diagnostics.solver_qualified ||
+                reconstruction.diagnostics.solver_status!=JointCheckStatus::Passed ||
+                !has_global_pass("independent-replay") || !has_global_pass("width-stationarity") ||
+                !has_global_pass("width-bound-feasibility") ||
+                !has_global_pass("endpoint-verification") || !has_global_pass("numerical-qualification") ||
+                !has_global_pass("assembly-mapping") || !has_global_pass("assembled-consistency"))) ||
+            (!free_count && reconstruction.diagnostics.solver_invoked))
+            throw std::invalid_argument("Invalid Halo FullABC solver qualification.");
+        for (const auto & contributor:m_contributors.contributors)
+            if (contributor.reconstruction_eligible && !contributor.target &&
+                !fullabc_points.contains(contributor.atom_id))
+                throw std::invalid_argument("Missing Halo FullABC reconstruction contributor.");
+        for (std::size_t index=0;index<input.atom_ids.size();++index)
+        {
+            if (std::binary_search(result->selection_domain->target_indices.begin(),
+                    result->selection_domain->target_indices.end(),index)) continue;
+            const auto found=fullabc_points.find(std::stoi(input.atom_ids[index]));
+            if (found==fullabc_points.end())
+                throw std::invalid_argument("Missing OriginalInput Halo FullABC parameters.");
+            represented[index]=found->second;
+        }
+        for (const auto target:result->selection_domain->target_indices)
+            if (target>=represented.size() || !represented[target])
+                throw std::invalid_argument("Missing frozen Joint Target parameters for Halo FullABC peeling.");
+    }
+
     std::optional<HaloMedianBuildResult> rebuilt_halo_medians;
     const HaloMedianBuildResult * halo_medians=m_halo_medians;
-    if (pure_exclusion && !halo_medians && result->target_evidence)
+    if (pure_exclusion && !m_halo_fullabc && !halo_medians && result->target_evidence)
     {
         try
         {
@@ -409,7 +515,12 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
                 if (!target || QualifiedTargetPoint(*result,*source.contributor_index))
                     candidate.point=represented[*source.contributor_index];
             }
-            if (!candidate.point && !candidate.contributor_index && !target_donors.empty())
+            if (!candidate.point && !candidate.contributor_index && m_halo_fullabc)
+            {
+                const auto found=fullabc_points.find(candidate.atom_id);
+                if (found!=fullabc_points.end()) candidate.point=found->second;
+            }
+            if (!candidate.point && !candidate.contributor_index && !m_halo_fullabc && !target_donors.empty())
             {
                 const auto selected=target_donor_index.Query(candidate.position);
                 if (!selected.empty())

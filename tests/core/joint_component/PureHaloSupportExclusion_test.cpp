@@ -962,6 +962,58 @@ TEST(PureHaloSupportExclusionTest, ReconstructsMissingNodesFromAllQualifiedHaloC
         *peeling.samples[1].response-expected_charge,1e-12);
 }
 
+TEST(PureHaloSupportExclusionTest, ExplicitFullABCHaloProfilesReachReconstructionOnlyPeelingNodes)
+{
+    auto fixture=ReconstructionOnlyFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
+    data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"reconstruction-only-run");
+    auto preclassification=core::detail::BuildHaloFullABCPreclassification(
+        fixture.model,problem,snapshot);
+    ASSERT_TRUE(preclassification.available);
+    ASSERT_EQ(preclassification.halos.size(),2u);
+    core::detail::HaloFullABCReconstructionResult reconstruction;
+    reconstruction.available=true;
+    reconstruction.joint_run_id="reconstruction-only-run";
+    reconstruction.global_target_median=preclassification.global_target_median;
+    reconstruction.fixed_halo_count=preclassification.fixed_halo_count;
+    reconstruction.free_halo_count=preclassification.free_halo_count;
+    reconstruction.diagnostics.solver_status=JointCheckStatus::NotRun;
+    for (const auto & classification:preclassification.halos)
+        reconstruction.halos.push_back({classification,classification.parameter_profile});
+
+    const SamplingPointList points{{1.6,{1.6,0.0,0.0},true},{1.9,{1.9,0.0,0.0},true}};
+    const auto raw=core::detail::BuildLocalPotentialSampleList(fixture.map,points);
+    fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),raw);
+    const core::detail::JointPostprocessingContext context(
+        fixture.map,fixture.model,problem,&snapshot,nullptr,nullptr,&reconstruction);
+    const auto peelings=context.BuildPostFitPeelingSamples(std::vector<std::size_t>{0});
+    ASSERT_EQ(peelings.at(1).samples.size(),points.size());
+
+    std::vector<double> fullabc_halo_field(fixture.map.GetMapValueArraySize());
+    for (std::size_t grid=0;grid<fullabc_halo_field.size();++grid)
+    {
+        const auto position=fixture.map.GetGridPosition(grid);
+        for (const int id:{2,3})
+        {
+            const auto * halo=fixture.model.FindAtomPtr(id);
+            const auto square=core::simulation::SupportSquare(position,halo->GetPosition());
+            if (square>6.25) continue;
+            const auto & median=*reconstruction.global_target_median;
+            const auto basis=core::joint_component::EvaluateKernel(square,median[1],2.5);
+            fullabc_halo_field[grid]+=median[0]*basis.gaussian+median[2]*basis.charge;
+        }
+    }
+    for (std::size_t sample=0;sample<points.size();++sample)
+    {
+        ASSERT_TRUE(peelings.at(1).samples[sample].response)
+            << peelings.at(1).samples[sample].reason;
+        const double expected=raw[sample].response-ReferenceTricubicCharge(
+            fixture.map,fullabc_halo_field,points[sample].position);
+        EXPECT_NEAR(*peelings.at(1).samples[sample].response,expected,1e-12);
+    }
+}
+
 TEST(PureHaloSupportExclusionTest, PeelingIsInvariantToExtraContributorChemicalLabels)
 {
     struct Output
