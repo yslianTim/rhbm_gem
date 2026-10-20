@@ -25,8 +25,8 @@ fallback downloads.
 
 ## SQLite Model Contract
 
-The database must already exist, be a regular file, and use the currently
-supported SQLite schema (schema v17 or v18). `--model-key` must identify exactly one
+The database must already exist, be a regular file, and use a supported SQLite
+schema (v17 through v20). `--model-key` must identify exactly one
 model saved by `potential_analysis`; the command neither enumerates nor combines
 models.
 
@@ -40,8 +40,10 @@ interpolation coverage makes a peeling ratio unavailable, not zero.
 
 The adjacent `.csv.metadata.json` records estimator, feature names, peeling mode,
 map normalization (null when unknown), standardization, included/excluded row
-counts and exclusions by reason. The existing standardization uses only retained
-rows; constant columns remain zero.
+counts and exclusions by reason. Its `column_semantics` field identifies
+`offset 2nd` as the Joint charge-kernel coefficient C for Joint estimates and
+the Gaussian constant offset for Two Stage estimates. The existing
+standardization uses only retained rows; constant columns remain zero.
 
 For each selected atom, the command reconstructs the same 10 features used by
 the local-fitting CSV:
@@ -64,9 +66,15 @@ distinct atoms at the same position have distance zero. A selected hydrogen atom
 also queries non-hydrogen neighbors. This feature always excludes hydrogen
 candidates; no eligible neighbor makes the feature unavailable.
 
-Each peeling ratio is
-`(raw sum - peeling sum) / raw sum`, using samples with finite distances within
-its inclusive distance range. Each rank compares
+Each peeling ratio uses the same valid sample population in its raw and peeled
+sums. Samples must have finite distances in the inclusive range, finite raw and
+peeled responses, and a provable raw/peeled identity. Joint peeling is paired
+one-to-one by the saved PostFit contract. Two Stage peeling is paired by exact
+distance, three-dimensional position, and selection state; sample counts alone
+do not establish identity. A missing or mismatched sample makes the strict
+ratio unavailable, with the reason recorded in the metadata exclusions. The
+ratio is `1 - peeled sum / raw sum`; a zero raw denominator remains unavailable.
+Each rank compares
 the current atom with all other selected atoms within an inclusive 2 Å radius,
 using second-stage amplitude, width, or offset. The largest value has rank 1;
 each rank is one plus the number of neighbors with a strictly larger value.
@@ -121,7 +129,7 @@ CLI option.
 
 Each selected feature is independently standardized with a population Z-score
 before UMAP runs. A constant selected feature is replaced with zeros and
-reported as a warning. If all 10 selected features are constant, the command
+reported as a warning. If all 3 selected UMAP features are constant, the command
 fails without writing an output file.
 
 Unlike the legacy CSV input path, features are restored directly from SQLite as
@@ -129,7 +137,7 @@ full `double` values and are not quantized to two decimal places. The output
 uses round-trip-safe floating-point precision for continuous features and UMAP
 coordinates.
 
-The CSV contains the identifiers `serial id,residue,spot`, all 12 reconstructed
+The CSV contains the identifiers `serial id,residue,spot`, all 10 reconstructed
 features, and `umap x,umap y`: 15 columns in total. Its name is
 `<folder>/umap_embedding_<sanitized-model-key>.csv`. ASCII letters, digits,
 `.`, `_`, and `-` are retained in the key; other bytes become `_`.

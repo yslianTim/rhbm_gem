@@ -1,10 +1,12 @@
 #include "utils/domain/FileFingerprint.hpp"
 #include <gtest/gtest.h>
+#include <boost/json.hpp>
 
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
 #include <sstream>
 #include <stdexcept>
@@ -83,6 +85,24 @@ void InjectJointNoDonors(rgc::JointFitResult & fit)
         if (component.target_evidence)
             for (auto & point:component.target_evidence->point_atoms)
                 point.local_conditioning="Warning";
+}
+
+std::optional<rg::JointAnalysisResult> pre_postprocessing_joint_result;
+
+void CapturePrePostprocessingJointResult(rgc::JointFitResult & fit)
+{
+    pre_postprocessing_joint_result=rgc::CaptureJointAnalysisResult(fit);
+}
+
+void ExpectJointNumericalResultPreserved(
+    const rg::JointAnalysisResult & before,
+    const rg::JointAnalysisResult & after)
+{
+    auto comparable_before=before;
+    comparable_before.metadata=after.metadata;
+    comparable_before.costs=after.costs;
+    comparable_before.halo_median_reconstruction=after.halo_median_reconstruction;
+    EXPECT_EQ(rg::joint_result_io::Encode(comparable_before),rg::joint_result_io::Encode(after));
 }
 
 struct ScopedJointWorkflowFitHook
@@ -653,10 +673,12 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     for(int index=0;index<25;++index)
     {
         const int serial=index+1;
-        const int x=3+7*(index%5),y=3+7*(index/5);
+        const int x=index==0 ? 3 : index==1 ? 4 : 10+7*((index-2)%5);
+        const int y=index<2 ? 3 : 3+7*((index-2)/5);
         model_file << "ATOM " << serial << " C CA . ALA A " << serial << ' '
             << x << ' ' << y << " 3.0 1.0 0.0 1\n";
     }
+    model_file << "ATOM 26 C CA . ALA B 26 3.5 4.5 3.0 1.0 0.0 1\n";
     model_file << "#\n";
     model_file.close();
 
@@ -676,20 +698,56 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     const auto database_path=directory.path()/"bounded.sqlite";
     constexpr const char * key="bounded-joint";
     int cli_status{};
-    cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
-        "--model",model_path.string(),"--map",map_path.string(),
-        "--database",database_path.string(),"--save-key",key,
-        "--select-chain","A","--verbose","0"});
-    ASSERT_EQ(cli_status,0);
+    pre_postprocessing_joint_result.reset();
+    std::string joint_log;
+    {
+        ScopedJointWorkflowFitHook hook{&CapturePrePostprocessingJointResult};
+        testing::internal::CaptureStdout();
+        cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
+            "--model",model_path.string(),"--map",map_path.string(),
+            "--database",database_path.string(),"--save-key",key,
+            "--select-chain","A","--verbose","3"});
+        joint_log=testing::internal::GetCapturedStdout();
+    }
+    ASSERT_EQ(cli_status,0) << joint_log;
+    ASSERT_TRUE(pre_postprocessing_joint_result);
+    const auto reconstruction_marker=joint_log.find("Reconstruction-only lookup:");
+    ASSERT_NE(reconstruction_marker,std::string::npos) << joint_log;
+    const auto evaluation_marker=joint_log.find("node_evaluations=",reconstruction_marker);
+    ASSERT_NE(evaluation_marker,std::string::npos) << joint_log;
+    const auto evaluation_begin=evaluation_marker+std::string("node_evaluations=").size();
+    const auto evaluation_end=joint_log.find(',',evaluation_begin);
+    ASSERT_NE(evaluation_end,std::string::npos) << joint_log;
+    const auto reconstruction_node_evaluations=std::stoull(
+        joint_log.substr(evaluation_begin,evaluation_end-evaluation_begin));
+    EXPECT_GT(reconstruction_node_evaluations,0u);
 
     rg::DataRepository repository{database_path};
     const auto loaded=repository.LoadModel(key);
     ASSERT_NE(loaded,nullptr);
     const auto & stored=*loaded->GetAnalysisView().GetJointResult();
+    ExpectJointNumericalResultPreserved(*pre_postprocessing_joint_result,stored);
     ASSERT_TRUE(rg::IsQualifiedJointAnalysisResult(stored));
     ASSERT_TRUE(stored.selection_domain);
     EXPECT_EQ(stored.selection_domain->contributor_policy,"pure-halo-support-exclusion-v1");
     EXPECT_EQ(stored.selection_domain->target_indices.size(),25u);
+    EXPECT_EQ(stored.atom_ids.size(),26u);
+    const auto halo_id=std::find(stored.atom_ids.begin(),stored.atom_ids.end(),"26");
+    ASSERT_NE(halo_id,stored.atom_ids.end());
+    const auto halo_index=static_cast<std::size_t>(std::distance(stored.atom_ids.begin(),halo_id));
+    EXPECT_EQ(std::find(stored.selection_domain->target_indices.begin(),
+        stored.selection_domain->target_indices.end(),halo_index),
+        stored.selection_domain->target_indices.end());
+    ASSERT_NE(loaded->FindAtomPtr(1),nullptr);
+    ASSERT_NE(loaded->FindAtomPtr(2),nullptr);
+    ASSERT_NE(loaded->FindAtomPtr(26),nullptr);
+    const auto target_one=loaded->FindAtomPtr(1)->GetPosition();
+    const auto target_two=loaded->FindAtomPtr(2)->GetPosition();
+    const auto halo_position=loaded->FindAtomPtr(26)->GetPosition();
+    EXPECT_DOUBLE_EQ(std::hypot(target_one[0]-target_two[0],target_one[1]-target_two[1],
+        target_one[2]-target_two[2]),1.0);
+    EXPECT_LT(std::hypot(target_one[0]-halo_position[0],target_one[1]-halo_position[1],
+        target_one[2]-halo_position[2]),2.5);
     ASSERT_TRUE(stored.metadata.solver);
     EXPECT_EQ(stored.metadata.solver->search_method,"fixed-neighbor");
     EXPECT_EQ(stored.metadata.solver->fixed_neighbor_local_search,"active-set-lm");
@@ -734,6 +792,87 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     EXPECT_EQ(local_result_count,target_count);
     EXPECT_GT(local_available_count,0u);
     EXPECT_GT(group_member_count,0u);
+
+    std::vector<std::pair<int, double>> valid_tail_ratios;
+    std::size_t tail_raw_sample_count{};
+    std::size_t tail_valid_sample_count{};
+    std::size_t complete_tail_target_count{};
+    for(const auto * atom:loaded->GetSelectedAtoms())
+    {
+        const auto view=rg::AtomLocalPotentialView::For(*atom);
+        const auto assessment=view.AssessLocalFittingPeelingRatio(1.0,2.0);
+        tail_raw_sample_count+=assessment.total_samples;
+        tail_valid_sample_count+=assessment.valid_samples;
+        if(assessment.total_samples && assessment.valid_samples==assessment.total_samples)
+            ++complete_tail_target_count;
+        if(assessment.ratio)
+        {
+            EXPECT_EQ(assessment.valid_samples,assessment.total_samples);
+            valid_tail_ratios.emplace_back(atom->GetSerialID(),*assessment.ratio);
+        }
+    }
+    ASSERT_GE(valid_tail_ratios.size(),3u);
+    EXPECT_EQ(complete_tail_target_count,25u);
+    EXPECT_EQ(tail_valid_sample_count,tail_raw_sample_count);
+    EXPECT_EQ(valid_tail_ratios.size(),25u);
+    RecordProperty("joint_target_count",static_cast<int>(target_count));
+    RecordProperty("halo_contributor_count",static_cast<int>(stored.atom_ids.size()-target_count));
+    RecordProperty("reconstruction_only_node_evaluations",
+        static_cast<long long>(reconstruction_node_evaluations));
+    RecordProperty("tail_complete_targets",static_cast<long long>(complete_tail_target_count));
+    RecordProperty("tail_raw_samples",static_cast<long long>(tail_raw_sample_count));
+    RecordProperty("tail_valid_samples",static_cast<long long>(tail_valid_sample_count));
+    RecordProperty("tail_ratio_available_targets",static_cast<long long>(valid_tail_ratios.size()));
+
+#ifdef RHBM_GEM_ENABLE_UMAP
+    rgc::UmapEmbeddingRequest umap;
+    umap.database_path=database_path;
+    umap.model_key_tag=key;
+    umap.output_dir=directory.path()/"umap";
+    umap.num_neighbors=5;
+    umap.num_epochs=5;
+    umap.random_seed=42;
+    umap.verbosity=0;
+    ASSERT_TRUE(rgc::RunCommand(umap).succeeded);
+    const auto csv_path=umap.output_dir/"umap_embedding_bounded-joint.csv";
+    std::ifstream csv_file(csv_path);
+    ASSERT_TRUE(csv_file);
+    std::string csv_contents{std::istreambuf_iterator<char>{csv_file},std::istreambuf_iterator<char>{}};
+    ASSERT_NE(csv_contents.find("tail peeling ratio"),std::string::npos);
+    const auto first_newline=csv_contents.find('\n');
+    ASSERT_NE(first_newline,std::string::npos);
+    std::size_t embedded_row_count{};
+    for(std::size_t offset=first_newline+1;offset<csv_contents.size();++offset)
+        if(csv_contents[offset]=='\n') ++embedded_row_count;
+    EXPECT_EQ(embedded_row_count,25u);
+    RecordProperty("umap_included_rows",static_cast<long long>(embedded_row_count));
+    const auto metadata_path=csv_path.string()+".metadata.json";
+    std::ifstream metadata_file(metadata_path);
+    ASSERT_TRUE(metadata_file);
+    const std::string metadata_text{std::istreambuf_iterator<char>{metadata_file},std::istreambuf_iterator<char>{}};
+    const auto metadata=boost::json::parse(metadata_text);
+    EXPECT_EQ(metadata.at("estimator").as_string(),"joint-components");
+    EXPECT_EQ(metadata.at("peeling_mode").as_string(),"grid-consistent");
+    EXPECT_EQ(metadata.at("included_rows").as_int64(),static_cast<std::int64_t>(embedded_row_count));
+
+    ASSERT_TRUE(rgc::RunCommand(umap).succeeded);
+    std::ifstream repeated_csv_file(csv_path);
+    ASSERT_TRUE(repeated_csv_file);
+    const std::string repeated_csv{std::istreambuf_iterator<char>{repeated_csv_file},std::istreambuf_iterator<char>{}};
+    EXPECT_EQ(repeated_csv,csv_contents);
+    RecordProperty("umap_csv_reproducible",repeated_csv==csv_contents ? "true" : "false");
+#endif
+
+    const auto reloaded_again=repository.LoadModel(key);
+    ASSERT_NE(reloaded_again,nullptr);
+    for(const auto & [serial_id,expected_ratio]:valid_tail_ratios)
+    {
+        const auto * atom=reloaded_again->FindAtomPtr(serial_id);
+        ASSERT_NE(atom,nullptr);
+        const auto ratio=rg::AtomLocalPotentialView::For(*atom).GetLocalFittingPeelingRatio(1.0,2.0);
+        ASSERT_TRUE(ratio);
+        EXPECT_DOUBLE_EQ(*ratio,expected_ratio);
+    }
 
     const auto small_maps_dir=directory.path()/"small-maps";
     std::filesystem::create_directories(small_maps_dir);

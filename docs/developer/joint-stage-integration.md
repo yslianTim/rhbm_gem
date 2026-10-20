@@ -33,10 +33,18 @@ but do not receive local or group results.
    without making it executable.
 2. `BuildPostFitPeelingSamples` uses raw sample entries and their saved
    geometry. For each target sample it subtracts the tricubic interpolation
-   of every other retained contributor on the same Joint observation rows:
-   `y_peel = y_raw - I_k[sum(j != i) fhat_j]`. Each `PostFitPeelingResult`
-   keeps one entry per raw sample, including an unavailable reason when the
-   stencil leaves the Joint domain or a contributor state is missing.
+   of every other retained contributor:
+   `y_peel = y_raw - I_k[sum(j != i) fhat_j]`. Nonzero stencil nodes in the
+   Original Observation Domain use their existing predictions, including rows
+   omitted only from the Fitting Domain. A node outside that domain but inside
+   legal map geometry is evaluated on demand from all nearby heavy-atom
+   contributors with nonzero support. Qualified target FullABC points and the
+   existing GroupKey halo median (with the existing global fallback) provide
+   their parameters; the target's own contribution is removed before
+   interpolation. The support radius remains 2.5 Å, and map-edge stencils keep
+   MapSampler's clamping and node-merging rules. Each `PostFitPeelingResult`
+   keeps one entry per raw sample, including an unavailable reason when map
+   geometry, a contributor state, or sample geometry is unavailable.
    `ApplyPostFitPeelingsBatch` validates target, run and sample identities
    before publishing the peeling results.
 3. `BuildPostJointLocalSamples` makes a per-target `PostJointLocalSamples`
@@ -162,6 +170,12 @@ positive-response requirement remain part of the data contract. The local
 measurement covariance is a working model derived from the local MDPDE
 observations; it does not propagate uncertainty in other Joint contributors or
 cross-atom errors.
+
+Reconstruction-only lookup storage is linear in the number of heavy-atom model
+contributors. Its node cache is capped at 4,096 entries; only missing stencil
+nodes are evaluated, and each sample keeps a bounded tricubic node workspace.
+The reconstruction does not add Joint fitting parameters or change the Joint
+objective.
 
 ## Persistence and coverage
 
