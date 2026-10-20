@@ -203,9 +203,10 @@ schemas 3 through 17. Legacy global-rank evidence remains distinguishable from
 target evidence, while schema 12 added local conditioning and parameter-stability
 diagnostics. Schema 12 may also include additive per-direction stability probes
 and work counters; older schema-12 payloads without those optional fields
-remain readable. Schema 14 stores validated FirstStage fixed-halo parameters
-separately from target-only component states for the explicit Fixed-Halo
-compatibility contract. Schema 17 stores the production Pure Halo-Support
+remain readable. Schema 14 stores historical FirstStage fixed-halo parameters
+separately from target-only component states. This data remains available for
+decoding, validation, display, and supported round-trip only; it cannot start
+new estimation. Schema 17 stores the production Pure Halo-Support
 Exclusion policy, original/fitting row mappings, and target-only parameterization.
 New contributor-selection provenance is stored with the fixed selected observation
 domain. Candidate diagnostics contain parameter vectors and separate

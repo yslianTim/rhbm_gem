@@ -3,7 +3,7 @@
 > Historical study: its Dynamic Halo implementation and runners have been
 > retired. The results below are retained as research evidence. Current
 > Production behavior is documented in
-> [`joint-bounded-active-set-production-promotion-20261020.md`](joint-bounded-active-set-production-promotion-20261020.md).
+> [the Joint component runtime guide](../developer/joint-component-runtime.md).
 
 ## Scope and current status
 
@@ -182,7 +182,13 @@ Target B was held at its truth width in this controlled A/C solve, so these synt
 
 ### Recommendation
 
-Retain the current Production fixed-Halo estimator. E2 is numerically qualified and materially improves Target A/B truth RMSE, but it worsens C truth RMSE, all three prediction RMSEs, and the observation objective. The runner-up order and mean-scope experiments do not remove that tradeoff. P3's large real input was unavailable; the deterministic preflight and synthetic cases are the documented substitute, with no claim of measured RSS at 5,938,087 rows.
+At the time of this study, retain the then-current Production FixedHalo
+estimator. E2 is numerically qualified and materially improves Target A/B truth
+RMSE, but it worsens C truth RMSE, all three prediction RMSEs, and the
+observation objective. The runner-up order and mean-scope experiments do not
+remove that tradeoff. P3's large real input was unavailable; the deterministic
+preflight and synthetic cases are the documented substitute, with no claim of
+measured RSS at 5,938,087 rows.
 
 ## Reproduction, artifacts, and verification
 

@@ -28,8 +28,9 @@ Exclusion path, `PostJointLocalValidation` still applies the existing local
 qualification before publishing post-Joint local fits; it does not infer halo
 estimates from the excluded contributors. Local MDPDE covariance and group
 information remain based on those target-local fits; Joint does not produce a
-global covariance. Explicit Fixed-Halo compatibility results retain their
-separate FirstStage-source records.
+global covariance. Historical FixedHalo results retain their separate
+FirstStage-source records in persistence; they are not produced by current
+estimation.
 
 ## Historical target-estimability records
 

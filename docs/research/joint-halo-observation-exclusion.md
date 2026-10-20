@@ -3,6 +3,8 @@
 > Historical comparison runners are retired after the policy decision. Results
 > remain here as research evidence. The old statistical campaign runner and its
 > smoke test are also retired; their earlier test outcome below is historical.
+> The FixedHalo implementation described in this report has since been retired;
+> it is not a current Production path.
 
 | 日期 | 分支 | 資料 |
 | --- | --- | --- |
@@ -24,7 +26,7 @@ R=2.5 Å 移除了 49,305 / 229,783 個 observations（21.46%）。P1 沒有發�
 
 ### Original domain、contributors 與 blocks
 
-Production 的 BuildJointProblem 先建立 selected targets 的 2.5 Å support union；每個 observation row 保留原 map voxel index 作為 identity。Targets 可以共用 rows：本例 178,360 / 229,783 rows 至少由兩個 targets 支持，最多一列由 11 個 targets 支持。Original target graph 是一個 component。
+報告當時的 Production `BuildJointProblem` 先建立 selected targets 的 2.5 Å support union；每個 observation row 保留原 map voxel index 作為 identity。Targets 可以共用 rows：本例 178,360 / 229,783 rows 至少由兩個 targets 支持，最多一列由 11 個 targets 支持。Original target graph 是一個 component。該 builder 已隨 FixedHalo estimator 一併移除。
 
 Halo 是 target support union 中有非空 contributor support 的 eligible non-target；本例 659 個 supported halos。Halo identification 以這個原始 domain 為準。Production 先建立完整問題與 FirstStage initialization，再建立 fixed-halo prediction、從 observations 扣除該 prediction，並以 target-only contributors 建立 FixedNeighbor blocks。Halo snapshot 使用 FirstStage A/B、C=0，整段 Joint fit 中固定。Objective、全域 practical convergence、local conditioning、parameter stability 與 independent replay 都沿用同一個 Joint problem row domain 和 row mapping。
 

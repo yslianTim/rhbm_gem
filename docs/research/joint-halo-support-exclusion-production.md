@@ -18,6 +18,9 @@
 > Closure note: sections 5–10 describe the pre-P0 production-promotion snapshot. The
 > P0–P4 closure measurements below supersede their earlier `未量測` and boundary
 > wording; historical statements are retained for provenance.
+> FixedHalo estimation was retired after this report. Its former API and
+> research-tool descriptions below are historical; current persistence keeps
+> only legacy result compatibility.
 
 ## 1. Production Architecture
 
@@ -240,11 +243,14 @@ Production log 會輸出 `valid_targets`、`same_group_halos`、`global_fallback
 
 **已正式升格。** `RunPotentialFittingWorkflow()` 的 `JOINT_COMPONENTS` production entry 目前明確使用 Pure Halo-Support Exclusion；Halo FirstStage 不再是 Joint fitting prerequisite。PostFitPeelingSamples 使用同 GroupKey median，無同組 donor 時使用本次同一 Joint run 的 Global Target median；Group Fitting estimation algorithm 未改寫。
 
-舊功能仍保留：
+本報告發佈時的舊功能狀態：
 
-* Fixed-Halo schema 16 結果仍可讀取；
-* Fixed-Halo parameterization 與研究入口保留供歷史結果、研究工具與 regression tests 使用；
-* legacy detail workflow 的 explicit non-Pure entry 保留，不是 Production default。
+* Fixed-Halo schema 16 結果可讀取；
+* Fixed-Halo parameterization 與研究入口仍供舊研究工具及 regression tests 使用；
+* legacy detail workflow 的 explicit non-Pure entry 存在，但不是 Production default。
+
+後續退役移除了全部 FixedHalo estimator／workflow 入口與測試工具；schema
+相容性仍保留為歷史資料讀取與 round-trip 支援。
 
 已知且被本次決策接受的風險：
 
@@ -395,26 +401,31 @@ contract. Existing regression coverage retains the formal rejection behavior for
 single-member and singular-covariance groups, result roundtrip, invalid local
 information, median fallback, and atom-order determinism.
 
-### 11.5 P3 public API policy matrix (`Passed`)
+### 11.5 Historical P3 public API policy matrix (passed at the recorded audit)
+
+The following matrix records the API surface at the time of this audit. The
+FixedHalo rows were retired afterward; they do not describe the current
+repository API.
 
 | entrypoint | policy after audit | status |
 | --- | --- | --- |
 | `RunPotentialFittingWorkflow(JOINT_COMPONENTS)` | Pure Exclusion | Production |
 | `RunJointComponentWorkflow(..., true)` | Pure Exclusion | Production workflow |
-| `RunJointComponentWorkflow(..., false)` | Fixed Halo | Explicit historical research path |
+| `RunJointComponentWorkflow(..., false)` | Fixed Halo | Historical API; subsequently removed |
 | `EstimateJointComponents` | Pure Exclusion | Public Production API |
-| `EstimateJointComponentsFixedHalo` | Fixed Halo | Compatibility/research API |
+| `EstimateJointComponentsFixedHalo` | Fixed Halo | Historical API; subsequently removed |
 | `BuildPureHaloSupportExclusionProblem` | Pure Exclusion | Explicit production builder |
-| `BuildJointProblem` | Fixed Halo | Historical low-level compatibility builder |
-| `BuildFixedHaloResearchProblem` | Fixed Halo | Explicit research builder |
-| `FitJointComponents` / `FitJointComponentsInitialized` | policy of supplied problem | Shared numerical endpoint |
+| `BuildJointProblem` | Fixed Halo | Historical builder; subsequently removed |
+| `BuildFixedHaloResearchProblem` | Fixed Halo | Historical builder; subsequently removed |
+| `FitJointComponents` / `FitJointComponentsInitialized` | Pure Exclusion | Current production-only fitting |
 | CLI `potential_analysis --estimator joint-components` | Pure Exclusion | Production |
 | pybind/CLI smoke surface | no stale direct Fixed API callsite | CTest passed |
 
-The statistical research experiment was updated to call the explicit Fixed Halo
-compatibility API; it no longer relies on the Production API's old accidental
-semantics. Schema 17, independent replay and historical Fixed Halo result
-reading remain intact.
+At the time of this report, the statistical research experiment called the
+explicit FixedHalo compatibility API rather than relying on the Production
+API's old accidental semantics. That estimator and its experiment were
+subsequently retired. Schema 17, independent replay and historical FixedHalo
+result reading remain intact.
 
 ### 11.6 P4 memory, Release and final validation
 

@@ -22,15 +22,11 @@ mapping remain attached for later reconstruction and peeling. The production
 `EstimateJointComponents` convenience API performs this construction,
 target-width initialization, and target-only fitting in sequence.
 
-`BuildJointProblem` and `BuildFixedHaloResearchProblem` retain the explicit
-Fixed-Halo compatibility parameterization. `EstimateJointComponentsFixedHalo`
-and `FitJointComponentsInitialized` can be used with that policy for
-compatibility. In that policy, `JointProblem::WithFixedHalos` accepts exactly
-the supported non-target contributors; each value must carry qualified
-FirstStage provenance and C=0, and the snapshot stays constant during
-optimization. The shared numerical endpoint is policy-dependent: Pure
-Exclusion fits selected targets only, while an explicit Fixed-Halo problem
-fits targets conditional on its immutable halo snapshot.
+FixedHalo estimation builders, fitters, and snapshots have been retired.
+Historical JSON/SQLite results retain their saved FixedHalo parameterization
+and FirstStage provenance for decoding, validation, display, and supported
+round-trip only. They cannot initialize a new fit or be reinterpreted as Pure
+Exclusion.
 
 Structural components, FixedNeighbor blocks, KKT, width gradients,
 conditioning, and stability cover selected targets only. Pure Exclusion
@@ -39,21 +35,14 @@ donors to build an immutable Halo median snapshot for original-domain peeling.
 
 ## FirstStage diagnostic semantics
 
-FirstStage diagnostics keep three facts distinct: the native regression solver
-status, validity of the decoded Gaussian parameterization, and qualification of
-the FirstStage estimate. A native `SUCCESS` is not sufficient when the
-log-quadratic width coefficient does not imply `1 / B^2 > 0`; the decoded width
-must still be finite and strictly positive. `B = 0`, a non-finite width, or an
-invalid amplitude is unavailable for the explicit Fixed-Halo contract and is
-never changed into a valid width.
-
-Target-only median fallback remains a seed diagnostic for Joint initialization.
-It is not a qualified FirstStage estimate and cannot be used to create a fixed
-halo. The production Pure Exclusion path does not require FirstStage halo
-parameters at all; these fixed-halo validation rules apply when the explicit
-compatibility API is selected. Fixed-Halo compatibility retains the Profile LM
-solver and is covered by initialization, qualification, persistence, and
-provenance tests.
+FirstStage diagnostics keep the native regression solver status, decoded
+Gaussian parameter validity, and FirstStage qualification distinct. A native
+`SUCCESS` is not sufficient when the log-quadratic width coefficient does not
+imply `1 / B^2 > 0`; the decoded width must still be finite and strictly
+positive. Target-only median fallback remains a seed diagnostic for Joint
+initialization and is not a qualified FirstStage estimate. Production Joint
+uses target FirstStage widths for its global bound and requires no FirstStage
+halo parameters.
 
 ## Objective and production search
 
@@ -87,15 +76,6 @@ non-target support. No halo A/B/C values enter the Joint objective. Numerical
 convergence certifies the target optimization on that reduced row domain; it
 does not certify the excluded halo signal or the later reconstruction.
 
-For the explicit `first-stage-fixed-halo-v1` policy, only selected targets have
-free Joint parameters and every supported halo contributes its qualified
-FirstStage `(A, B, 0)` snapshot as a fixed response. Numerical convergence then
-certifies the target optimization conditional on those fixed values, not the
-statistical accuracy of the FirstStage halo parameters. This is a research or
-compatibility contract, not the production command path. Its parameterization
-and solver entry remain separate; the Pure Exclusion FirstStage-P95 calibration
-is not applied to this path.
-
 For the production Pure Exclusion policy, width profiling uses bounded
 Active-set Levenberg–Marquardt (Active-set LM). Boundary stationarity is checked
 with the projected Width KKT and the independently replayed endpoint. A/C
@@ -107,7 +87,8 @@ Active-set LM update per block visit on the bounded Pure Exclusion route.
 Neighbor parameters stay fixed during each block solve. Every accepted update
 passes the existing trust checks and a full global-objective monotonic replay.
 The local constrained A/C solve uses SparseQR and keeps the nonnegative-amplitude
-active set. Fixed-Halo compatibility retains the unbounded Profile LM path.
+active set. Profile LM is the bounded local profiled operation inside
+Active-set LM.
 
 When a block visit produces no trusted local profile, FixedNeighbor preserves
 the current accepted component state, records the failure, and completes the
@@ -134,13 +115,6 @@ qualification, profile trust checks, or replay-consistency enclosures. At the
 accepted endpoint, a primary streaming evaluation and an independent streaming
 replay check feasibility, prediction, residual, objective, KKT and
 width-gradient consistency under the selected global stationarity criteria.
-
-For explicit fixed-halo problems, the final endpoint check also rebuilds the
-complete contributor prediction from the original observations and immutable
-halo snapshots. It verifies the full/effective residual and objective
-identities, original row and contributor mappings, and target-only projected
-KKT and log-width gradients. Fixed halo gradients are not convergence
-conditions.
 
 Endpoint replay alone does not establish convergence. A valid replay with a
 recoverable numerical failure can be retried at a bounded interval while
@@ -184,15 +158,13 @@ deficiency, active amplitudes, nonfinite values, and unavailable decompositions
 remain explicit diagnostic outcomes. The accepted state and global objective
 are read-only during this assessment.
 
-For explicit fixed-halo problems, these blocks contain targets only; fixed halo
-columns are not included in conditioning or parameter-stability probes. Pure
-Exclusion blocks likewise contain target columns only because excluded halos
-do not enter the fitting domain.
+Pure Exclusion blocks contain target columns only because excluded halos do not
+enter the fitting domain.
 
 Historical Free-Halo FullABC result JSON remains readable under its saved
 schema and parameterization contract. Loading that data does not reinterpret
-the free halo estimates as a FirstStage fixed-halo snapshot; a new fixed-halo
-fit must pass its own FirstStage qualification.
+the free halo estimates as a FirstStage fixed-halo snapshot or make the retired
+FixedHalo estimator available.
 
 Each design and Jacobian is column-normalized before its spectrum is summarized,
 so the reported condition numbers are dimensionless within their own matrix.
@@ -284,9 +256,9 @@ records remain decoding-only provenance; they are not reinterpreted as local
 conditioning or stability. Production Joint results store the selected-target
 state under `target-only-pure-halo-support-exclusion-v1` (Joint JSON schema
 17). Earlier schemas retain their original parameterization and are not
-reinterpreted. Explicit Fixed-Halo results use the separate
-`target-only-fixed-halo-v1` contract and preserve FirstStage-sourced halo
-parameters. Production post-fit peeling uses the qualified Pure Exclusion
+reinterpreted. Historical FixedHalo results preserve the separate
+`target-only-fixed-halo-v1` contract and FirstStage-sourced halo parameters
+through the compatibility decoder only. Production post-fit peeling uses the qualified Pure Exclusion
 reconstruction snapshot; Post-Joint local MDPDE and Group Fitting remain
 limited to selected targets and keep their own qualification contracts.
 

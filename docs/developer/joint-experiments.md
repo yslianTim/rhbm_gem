@@ -6,7 +6,10 @@ bounded Active-set LM update per block visit for the Pure Exclusion policy.
 Its global width ceiling is four times the qualified FirstStage target-width
 P95. Global numerical convergence determines whether the Joint point is saved.
 Local conditioning and bounded parameter stability provide separate
-point-quality evidence. Fixed-Halo compatibility retains Profile LM.
+point-quality evidence. Pure Halo-Support Exclusion is the only current Joint
+halo policy; FixedHalo is a retired historical method.
+Profile LM is the bounded local profiled operation inside Active-set LM; the
+unbounded FixedHalo route has been retired.
 
 ## Current reproducible tools
 
@@ -40,9 +43,10 @@ The Joint runtime harness is a validation tool, not a benchmark. Optional
 precision controls are local numerical tests; they do not issue a production
 rank certificate.
 
-Fixed-Halo compatibility remains covered by `FixedHaloInitialization_test`,
-the fixed-halo observation-exclusion contract, persistence/provenance tests,
-and the optional `joint_fixed_halo_validation` tool. It retains Profile LM.
+FixedHalo estimation tests and tools have been retired. The JSON/SQLite codec
+still reads and round-trips historical FixedHalo results without exposing an
+estimator path. The saved parameterization and solver evidence retain their
+historical meaning.
 The fixed-seed statistical study and its saved outcomes are historical; its old
 fitting campaign used an earlier solver path and is not evidence for the
 current Active-set LM. Only its deterministic noise generator contract remains
@@ -82,7 +86,7 @@ Production regression.
 | OperatorPcg and Schwarz | Investigated for large components but not adopted. | Historical research record |
 | Global rank qualification | Removed from production, output, and resource planning. | Convergence, conditioning, and stability tests |
 | Global width bound | Global FirstStage P95 × 4 selected for Production; A/B comparison runner retired. | Width calibration and bound-active Production regression |
-| Halo policy comparisons | Pure Halo-Support Exclusion selected; Dynamic Halo and completed strategy runners retired. | Pure Exclusion and Fixed-Halo compatibility tests |
+| Halo policy comparisons | Pure Halo-Support Exclusion selected; Dynamic Halo and FixedHalo estimation retired. | Pure Exclusion tests and legacy persistence tests |
 
 Global-rank and weak-direction research receipts remain historical. Their
 thresholds, budgets, and rank outcomes do not describe current runtime behavior.

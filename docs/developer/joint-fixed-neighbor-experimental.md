@@ -8,8 +8,8 @@ Width-trust and global-bound comparison runners, Dynamic Halo implementations,
 and completed Halo strategy campaigns have also been retired. Their numerical
 decisions remain in `docs/research/`; current benchmarks use the Production
 FixedNeighbor path, while optional numerical audits retain independent A/C,
-Profile, width, and replay references. Fixed-Halo compatibility remains a
-supported Profile LM path with dedicated tests.
+Profile, width, and replay references. FixedHalo is a retired historical
+method; only its saved-result compatibility remains.
 
 ## Current production contract
 
@@ -59,7 +59,8 @@ Production bounds every target width by `4 * Q95` of qualified FirstStage
 target widths; calibration needs at least 20 donors and 95% target coverage.
 Projected Width KKT certifies an active upper boundary. Calibration failure
 persists an unavailable result and does not fall back to unbounded search.
-Fixed-Halo compatibility retains the unbounded Profile LM path.
+Profile LM remains the local profiled numerical operation inside bounded
+Active-set LM. There is no unbounded FixedHalo estimation route.
 
 For accepted trials, the local state cache is rebased from the full candidate
 replay already used for acceptance. Sparse predictions, transpose products,

@@ -1,5 +1,8 @@
 # 6Z6U Local A/C KKT Cost Profile
 
+> Historical profile of the retired FixedHalo estimator. These measurements
+> describe the saved 2026-10-16 run, not the current Pure Exclusion runtime.
+
 Date: 2026-10-16
 
 Repository revision: `e1b8cb7c25c2043f29e2246c914c0959444e2cc3`

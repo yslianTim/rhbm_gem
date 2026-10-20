@@ -49,7 +49,8 @@ target-only and retain their own qualification and resource controls.
 An unqualified candidate keeps diagnostics and stop reason but never becomes a
 formal target estimate and does not start downstream inference. A qualified
 Pure Exclusion endpoint can still have unavailable Halo reconstruction when no
-qualified target donor exists. The explicit Fixed-Halo research/compatibility
-APIs retain their separate FirstStage `(A, B, 0)` conditional contract. Joint
-results do not supply a global parameter covariance or certify FirstStage halo
-statistical accuracy.
+qualified target donor exists. FixedHalo is a retired historical
+parameterization; its saved results remain readable with their original
+FirstStage provenance and cannot start new estimation. Joint results do not
+supply a global parameter covariance or certify FirstStage halo statistical
+accuracy.

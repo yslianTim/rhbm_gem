@@ -250,7 +250,7 @@ build/bin/RHBM-GEM potential_analysis \
   --select-chain A --save-key post-joint-local-fix
 ```
 
-實際 run 輸出 `Joint fitting qualified`，保存約 76 MB SQLite，1,418 selected targets、659 retained halos，並通過 production Pure Exclusion default。`EstimateJointComponentsFixedHalo()` 仍是明確 Fixed Halo research entry；schema 17、GroupKey classification、Global fallback、Independent Replay 與 bindings/CLI smoke tests 均在 CTest 中通過。
+當時的 run 輸出 `Joint fitting qualified`，保存約 76 MB SQLite，1,418 selected targets、659 retained halos，並通過 production Pure Exclusion default。該報告撰寫時 `EstimateJointComponentsFixedHalo()` 仍是明確的 research entry；後續 FixedHalo 退役已移除其估計入口。Schema 17、GroupKey classification、Global fallback、Independent Replay 與 bindings/CLI smoke tests 是該次歷史驗證的結果。
 
 ### RSS
 
@@ -301,7 +301,7 @@ Apple clang 21.0.0 (clang-2100.3.34.2), arm64-apple-darwin25.6.0
 | Charge correction correctness | Pass | independent tricubic fixed-charge 與 Gaussian-only `1e-12` |
 | Local scientific accuracy | Partial | D Oracle Peeling 幾乎 exact，但 Local A/B 仍 `0.709793/0.021414` |
 | Group scientific accuracy | Partial/Pass for data flow | P3 Halo-aware multi-member regression pass；6Z6U truth RMSE 仍有 residual |
-| Production regression | Pass | Pure default、Fixed Halo API、schema 17、Replay、CLI/bindings smoke pass |
+| Historical production regression | Pass at report revision | Pure default、Fixed Halo API、schema 17、Replay、CLI/bindings smoke pass; the Fixed Halo API was retired afterward |
 | Final validation | Pass | Release build、43/43 CTest |
 
 ### 最終結論：B — Production Functional, Scientific Limitations Remaining

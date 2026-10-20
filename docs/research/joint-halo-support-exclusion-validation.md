@@ -1,9 +1,9 @@
 # Joint Component Estimator — Halo-Support Exclusion Validation
 
 > Historical strategy-comparison tools have been retired after the study
-> closed. This report and its result artifacts remain the research record;
-> current Pure Exclusion and Fixed-Halo behavior are covered by the production
-> regression tests.
+> closed. This report and its result artifacts remain the research record.
+> Current production regressions cover Pure Exclusion; FixedHalo execution is
+> retired and only historical result decoding remains.
 
 | 日期 | 分支 | 基準 HEAD | 範圍 |
 | --- | --- | --- | --- |
@@ -124,6 +124,6 @@ Matching support 下，σ=0.02 的 Pure Exclusion 對 A、C 優於 Fixed Halo，
 
 ## P4 — Promotion decision
 
-**Outcome C：目前不可以升格；保留 Fixed-Halo Production default。** P1 matching-support noise、明確的 support-mismatch bias 以及 P3 的 post-fit domain failure 均不足以支持全面升格。未放寬 Global Practical Criteria 或 Independent Replay，未改變 Production estimator、public CLI 或 Dynamic Halo Mean 的程式/結果。P2 僅為 reference，不新增 Production weighting policy。
+**Outcome C（報告當時）：不升格 Pure Exclusion，保留當時的 Fixed-Halo Production default。** P1 matching-support noise、明確的 support-mismatch bias 以及 P3 的 post-fit domain failure 均不足以支持全面升格。未放寬 Global Practical Criteria 或 Independent Replay，未改變當時的 Production estimator、public CLI 或 Dynamic Halo Mean 的程式/結果。後續 Pure Exclusion 升格 Production，FixedHalo 估計路徑也已退役。
 
 本報告的 6Z6U 十組 paired summary、低 coverage 統計、stability coverage、RSS/thread settings 已固定於上述 artifacts。十組是預先指定的初始 empirical sample，足以揭示本次 matching-support controlled regime 的 variance 與兩次 Fixed-Halo initialization failure，但不代表所有 geometry/noise 的 sampling variance 已收斂；support-mismatch 與 P3 workflow failure 仍使 Promotion Gate 不通過。

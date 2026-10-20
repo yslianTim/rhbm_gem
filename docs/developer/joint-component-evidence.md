@@ -16,8 +16,8 @@ FirstStage halo parameters to the Joint objective. The normalized objective
 uses the retained fitting observations for its scale. Target-only projected
 A/C KKT, projected Width KKT, complete-sweep confirmation, monotone
 global-objective acceptance, trust checks, and independent endpoint replay
-define numerical convergence. Fixed-Halo compatibility retains Profile LM and
-does not use this calibration.
+define numerical convergence. FixedHalo is retired; its historical result
+codec does not provide another solver or parameterization route.
 
 A converged endpoint becomes the component state even when local conditioning
 is poor or parameter probes show sensitivity. Local conditioning describes

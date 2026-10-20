@@ -151,8 +151,8 @@ Benchmark builds create the current measurement tools: `joint_fixed_neighbor_exp
 for search/solve, `joint_postprocessing_benchmark` for the complete Joint workflow, and
 `joint_partial_selection` for current selection and halo measurements. The
 single benchmark workflow is `tests/integration/joint_benchmark.py`. The
-offline-audit option creates local precision, KKT, replay, trajectory,
-Fixed-Halo validation, and FullABC width controls. The bound-active Production
+offline-audit option creates local precision, KKT, replay, trajectory, and
+FullABC width controls. FixedHalo estimation validation has been retired. The bound-active Production
 synthetic runs with ordinary `BUILD_TESTING`. Complete-command measurements use
 the same benchmark workflow with
 `--profile command`; they require the regular CLI build and explicit model/map

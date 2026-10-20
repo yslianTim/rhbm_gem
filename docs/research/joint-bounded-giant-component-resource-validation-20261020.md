@@ -1,5 +1,9 @@
 # Bounded Joint giant-component resource validation — 2026-10-20
 
+> Historical comparison note: the prior FixedHalo-specific synthetic test was
+> migrated into a target-domain memory regression with 10,000 non-target
+> contributors. The migrated test no longer models fixed predictions.
+
 ## Decision
 
 The exact requested shape now has a synthetic, single-component preparation
@@ -39,9 +43,11 @@ accepted state has zero A/C coefficients on a zero-valued synthetic observation
 vector; independent endpoint replay therefore validates the certification
 path, not a fitted high-scale estimate. Four isolated all-target preflight
 invocations measured process peaks from 1,286,668,288 to 1,471,479,808 bytes;
-no complete-fit RSS was measured. The existing
-`ProductionScaleSingleComponentPreparationStaysBelowBudget` test for 27,406
-targets plus 10,000 Fixed Halos remains unchanged and separate.
+no complete-fit RSS was measured. At the time of this report,
+`ProductionScaleSingleComponentPreparationStaysBelowBudget` tested 27,406
+targets plus 10,000 Fixed Halos separately. That test was later migrated into
+a target-domain memory regression retaining 10,000 non-target contributors;
+it no longer constructs a fixed prediction.
 
 The run allocates a 47,504,696-byte effective observation vector and retains
 row identities, sparse support, target state, compact block mappings, and
@@ -49,11 +55,11 @@ endpoint replay workspaces. No global dense observation-by-target matrix is
 allocated. Such a matrix for 5,938,087 rows by 74,812 A/C columns would require
 3,553,921,317,152 bytes before other storage.
 
-The preserved Fixed-Halo comparison test also passed independently at 27,406
+The historical FixedHalo comparison setup also passed independently at 27,406
 targets plus 10,000 halos: its preparation estimate was 969,975,622 bytes,
 endpoint estimate 624,026,451 bytes, and measured process peak RSS
-1,458,044,928 bytes. This retains the previous fixed-halo memory regression
-while adding the all-target shape; neither test runs a search sweep.
+1,458,044,928 bytes. Those measurements describe that saved test revision;
+the current migrated regression runs no fixed prediction or search sweep.
 
 ## What was and was not measured
 

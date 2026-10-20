@@ -28,9 +28,9 @@ but do not receive local or group results.
    only to exclude their support rows from the fitting domain; they are not
    Joint parameters and no FirstStage halo `(A, B, 0)` snapshot is required.
    Joint fits the selected targets' FullABC `(A, B, C)` endpoints and publishes
-   their Second-stage diagnostics. The explicit
-   `EstimateJointComponentsFixedHalo` / `BuildFixedHaloResearchProblem` APIs
-   remain historical Fixed-Halo research/compatibility paths.
+   their Second-stage diagnostics. FixedHalo estimation entry points are
+   retired; the persistence codec preserves historical FixedHalo result data
+   without making it executable.
 2. `BuildPostFitPeelingSamples` uses raw sample entries and their saved
    geometry. For each target sample it subtracts the tricubic interpolation
    of every other retained contributor on the same Joint observation rows:

@@ -1,5 +1,8 @@
 # Bounded Active-set LM Production Promotion — 2026-10-20
 
+> Historical promotion report. FixedHalo estimation was retired in a later
+> change; the current repository keeps only legacy result compatibility.
+
 ## Decision
 
 The production Pure Halo-Support Exclusion Joint path now defaults to the
@@ -7,8 +10,8 @@ bounded Active-set LM candidate. Calibration uses
 `Bmax = 4 * Q95(qualified FirstStage target widths)` and requires at least 20
 qualified donors with at least 95% target coverage. A failed calibration is
 persisted as Unavailable, skips downstream processing, and never retries the
-unbounded solver. Fixed-Halo compatibility retains its separate Profile LM
-path and does not inherit the Pure Exclusion calibration.
+unbounded solver. At the time of this promotion, the Fixed-Halo Profile LM
+compatibility path still existed; it was retired afterward.
 
 This promotion was carried out on `develop` at the user's explicit request.
 The complete 37,406-target fitting RSS gate remains open: the exact-shape
@@ -23,15 +26,15 @@ prior candidate runs are not presented as post-promotion results.
 - The ordinary initialized entry selects bounded Active-set LM for the
   `pure-halo-support-exclusion-v1` policy. Calibration failure returns an
   unavailable result; there is no silent unbounded fallback.
-- The `first-stage-fixed-halo-v1` compatibility route remains unbounded and
-  keeps its prior parameterization.
+- The `first-stage-fixed-halo-v1` compatibility route existed at the time of
+  this report and kept its prior parameterization; it has since been removed.
 - Active-set LM retains boundary feasibility, projected Width KKT, the
   existing constrained A/C solve, endpoint certification, Independent Replay,
   global practical convergence limits, and downstream qualification rules.
   No correctness or replay tolerance was loosened.
 - Solver provenance and CLI progress identify the bounded route as
-  `active-set-lm`; Fixed-Halo compatibility continues to identify as
-  `profile-lm`. JSON persistence accepts and reloads the new method value.
+  `active-set-lm`; JSON persistence accepts and reloads the new method value.
+  Historical `profile-lm` solver metadata remains preserved by the decoder.
 - No public solver or width-bound CLI option was added. No Notion content was
   changed.
 

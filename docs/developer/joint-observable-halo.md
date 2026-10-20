@@ -1,14 +1,15 @@
-# Joint fixed-halo contributor model
+# Historical Joint FixedHalo contributor model (retired)
 
-This document describes the explicit Fixed-Halo research/compatibility
-parameterization. It is not the production command contract. Production uses
-Pure Halo-Support Exclusion: retained non-target support rows are excluded
-from the Joint fitting domain, no FirstStage halo parameters enter the Joint
-objective, and qualified target donors are used later for Halo reconstruction.
-See the [stage integration guide](joint-stage-integration.md) and the [runtime
-guide](joint-component-runtime.md) for the production flow.
+> This document records the behavior of the retired FixedHalo estimator.
+> Its builders, optimizer, and downstream inference route have been removed.
+> Current Production uses Pure Halo-Support Exclusion: retained non-target
+> support rows are excluded from the Joint fitting domain, no FirstStage halo
+> parameters enter the Joint objective, and qualified target donors are used
+> later for Halo reconstruction. Historical result data remains readable.
+> See the [stage integration guide](joint-stage-integration.md) and the
+> [runtime guide](joint-component-runtime.md) for the current production flow.
 
-## Explicit Fixed-Halo compatibility contract
+## Historical FixedHalo contract
 
 Selected non-hydrogen atoms define the unchanged observation domain
 `V = union(support(target))`. Every unselected non-hydrogen atom with at least

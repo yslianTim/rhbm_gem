@@ -1,5 +1,10 @@
 # Fixed-Halo / Target-Only 6Z6U Validation
 
+> Historical validation of the retired FixedHalo estimator. Numerical results,
+> schemas, and run outputs below describe that saved implementation; current
+> Production uses Pure Halo-Support Exclusion, and only legacy result decoding
+> remains for FixedHalo data.
+
 Date: 2026-10-15  
 Production input: `/Users/yslian/data/6z6u.cif` and
 `/Users/yslian/Documents/simulation/sim_map_gaus_grid0.50_charge1_width_6Z6U_bw0.50.map`  
