@@ -175,3 +175,30 @@ TEST(HaloMedianReconstructionTest, ResultIsIndependentOfModelAtomTraversalOrder)
     const auto right=BuildHaloMedianReconstruction(reversed,second.problem,second.result,"run-4");
     EXPECT_EQ(left.snapshot,right.snapshot);
 }
+
+TEST(HaloMedianReconstructionTest, CurrentGroupKeyPolicyChangesHaloEstimateWhenOnlyTargetLabelsChange)
+{
+    auto baseline=MakeFixture();
+    auto relabeled=MakeFixture();
+    relabeled.model.FindAtomPtr(3)->SetComponentKey(2);
+
+    const auto original=BuildHaloMedianReconstruction(
+        baseline.model,baseline.problem,baseline.result,"label-baseline");
+    const auto changed=BuildHaloMedianReconstruction(
+        relabeled.model,relabeled.problem,relabeled.result,"label-baseline");
+
+    ASSERT_EQ(original.snapshot.halos.size(),2u);
+    ASSERT_EQ(changed.snapshot.halos.size(),2u);
+    EXPECT_EQ(original.snapshot.global_median,(std::array<double,3>{3.0,2.0,5.0}));
+    EXPECT_EQ(changed.snapshot.global_median,original.snapshot.global_median);
+    EXPECT_EQ(original.snapshot.halos[0].atom_id,"4");
+    EXPECT_EQ(changed.snapshot.halos[0].atom_id,"4");
+    EXPECT_EQ(original.snapshot.halos[0].source,HaloMedianSource::GroupKeyMedian);
+    EXPECT_EQ(changed.snapshot.halos[0].source,HaloMedianSource::GroupKeyMedian);
+    EXPECT_EQ((std::array<double,3>{original.snapshot.halos[0].amplitude,
+        original.snapshot.halos[0].width,original.snapshot.halos[0].charge}),
+        (std::array<double,3>{3.0,2.0,5.0}));
+    EXPECT_EQ((std::array<double,3>{changed.snapshot.halos[0].amplitude,
+        changed.snapshot.halos[0].width,changed.snapshot.halos[0].charge}),
+        (std::array<double,3>{2.0,1.5,3.5}));
+}

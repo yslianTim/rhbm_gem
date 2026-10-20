@@ -943,6 +943,35 @@ TEST(PureHaloSupportExclusionTest, ReconstructsMissingNodesFromAllQualifiedHaloC
         *peeling.samples[1].response-expected_charge,1e-12);
 }
 
+TEST(PureHaloSupportExclusionTest, CurrentReconstructionOnlyPolicyChangesPredictionWhenExtraContributorGroupChanges)
+{
+    const auto peel_sample=[](MapFixture & fixture) {
+        const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+        auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
+        data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"reconstruction-only-run");
+        const SamplingPointList points{{2.8,{2.8,0.0,0.0},true}};
+        fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),
+            core::detail::BuildLocalPotentialSampleList(fixture.map,points));
+        const core::detail::JointPostprocessingContext context(
+            fixture.map,fixture.model,problem,&snapshot);
+        return context.BuildPostFitPeelingSamples(std::vector<std::size_t>{0})
+            .at(1).samples.front().response;
+    };
+    auto baseline=ReconstructionOnlyFixture();
+    auto relabeled=ReconstructionOnlyFixture();
+    for (const int id:{2,3})
+    {
+        relabeled.model.FindAtomPtr(id)->SetComponentKey(2);
+        relabeled.model.FindAtomPtr(id)->SetAtomKey(9);
+    }
+
+    const auto original_response=peel_sample(baseline);
+    const auto relabeled_response=peel_sample(relabeled);
+    ASSERT_TRUE(original_response);
+    ASSERT_TRUE(relabeled_response);
+    EXPECT_GT(std::abs(*original_response-*relabeled_response),1e-6);
+}
+
 TEST(PureHaloSupportExclusionTest, MissingHaloMedianKeepsOffDomainContributorUnavailable)
 {
     auto fixture=ReconstructionOnlyFixture();
