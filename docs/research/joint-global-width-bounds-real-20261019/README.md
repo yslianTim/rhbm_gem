@@ -1,5 +1,7 @@
 # Global FirstStage Width Bounds: Real-map Phase (P3b)
 
+> **Archived workflow:** The paired A/B2/B4 executable and runner used for this study have been retired. The result tables and records below remain historical evidence; reproduction commands describe the former toolchain.
+
 ## Result
 
 The paired audit passes for both the 6Z6U simulation map and the unsharpened EMDB map. The simulation pair passed in the initial run; after a test-only evidence-context correction, the unsharpened pair also passed. The simulation comparison had no active width bounds, so it confirms compatibility but does not show a bounded-search effect. On the unsharpened map, B2 and B4 stop the serial-1032 width runaway at their calibrated caps and pass independent replay and projected-width stationarity. The unsharpened A baseline remains an unqualified candidate with a failed replay.

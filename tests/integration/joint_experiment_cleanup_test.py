@@ -28,7 +28,6 @@ CURRENT_EXPERIMENT_SOURCES = {
     "joint_width_trajectory.cpp",
     "joint_width_repro_no_instrumentation.cpp",
     "joint_production_bounded_synthetic.cpp",
-    "joint_width_trust_experiment.cpp",
 }
 
 CURRENT_PYTHON_EXPERIMENTS = {
@@ -74,6 +73,13 @@ RETIRED_REPOSITORY_FILES = (
     "tests/support/JointLocalEvidence.hpp",
     "tests/support/JointDerivativeAudit.cpp",
     "tests/support/JointDerivativeAudit.hpp",
+    "tests/experiments/joint_width_trust_experiment.cpp",
+    "tests/experiments/run_joint_width_trust_paired.py",
+    "tests/experiments/run_joint_global_width_bound_paired.py",
+    "tests/integration/joint_global_width_bound_experiment_test.py",
+    "tests/support/JointWidthTrustPolicy.cpp",
+    "tests/support/JointWidthTrustPolicy.hpp",
+    "tests/core/joint_component/WidthTrustPolicy_test.cpp",
 )
 
 RETIRED_PYTHON_CAMPAIGNS = (
@@ -251,6 +257,15 @@ def main():
     assert not present_files, f"retired Operator files returned: {present_files}"
     assert not present_campaigns, f"retired qualification drivers/tests returned: {present_campaigns}"
     assert not present_retired_tests, f"retired sparse tests returned: {present_retired_tests}"
+    for token in (
+        "joint_width_trust_experiment",
+        "joint_global_width_bound_experiment",
+        "JointWidthTrustPolicy",
+        "width_trial_trust_for_testing",
+        "width_trust_policy_rejected",
+    ):
+        assert token not in cmake, f"retired Width-trust CMake entry returned: {token}"
+        assert token not in active_code, f"retired Width-trust tool or hook returned: {token}"
     figure_root = ROOT / "docs/developer/figures"
     figure_dirs = {path.name for path in figure_root.iterdir() if path.is_dir()}
     unexpected_figure_dirs = sorted(figure_dirs - {"joint-validation"})

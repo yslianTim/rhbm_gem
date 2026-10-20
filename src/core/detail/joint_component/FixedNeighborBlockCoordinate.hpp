@@ -37,9 +37,6 @@ struct FixedNeighborProfileTrial
     double weak_width_step_fraction{unavailable};
     bool lm_proposed_acceptance{};
     bool weak_width_guard_rejected{};
-    bool width_trust_policy_rejected{};
-    std::string width_trust_policy_reason;
-    std::string width_trust_evidence_unavailable_reason;
     std::vector<double> projected_width_singular_values;
     std::string acceptance_reason;
     struct AtomState
@@ -174,9 +171,8 @@ struct FixedNeighborWidthTrajectoryCapture
     std::vector<std::pair<std::string,double>> atom_initial_widths;
     std::size_t maximum_events{1024},maximum_atoms{32},maximum_rows{4096},events_emitted{},
         events_skipped_due_to_event_limit{},events_skipped_due_to_atom_limit{},
-        events_unavailable_due_to_row_limit{},events_unavailable_due_to_spectrum{};
+        events_unavailable_due_to_row_limit{};
     bool accepted_updates_only{};
-    bool policy_evidence_only{};
     std::function<void(std::size_t,const BlockCoordinateState &,const FixedNeighborBlockSweep &)> state_observer;
 };
 #endif
@@ -219,11 +215,6 @@ struct FixedNeighborPolicy
     FixedNeighborWidthTrajectoryCapture * width_trajectory{};
     std::vector<std::string> fixed_width_atom_ids;
     std::function<bool(std::size_t,std::size_t)> force_no_trusted_profile_for_testing;
-    // Test-only research hook. An empty string accepts the candidate; a
-    // non-empty string records a policy rejection and selects an earlier
-    // trusted profile trial.
-    std::function<std::string(std::size_t,std::size_t,const FixedNeighborProfileTrial &,
-        const FixedNeighborProfileTrial &)> width_trial_trust_for_testing;
     // Test-only fault injection; compiled out of production targets.
     std::function<FixedNeighborEndpointCertification(const Domain &,VectorRef,const BlockCoordinateState &,
         const EvaluationContext &,ProfileSearchWork *)> certification_for_testing;

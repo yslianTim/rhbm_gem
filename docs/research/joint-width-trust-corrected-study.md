@@ -1,24 +1,12 @@
 # Joint Component Width Trust：修正後的配對實驗
 
+> **工具狀態：** 本文結論與配對結果仍作為封存研究證據保留；Width-trust executable、paired runners、專用 acceptance callback 與比較測試已退役，不再提供重跑流程。原始程式仍可由 Git history 追溯。
+
 ## 範圍與重現方式
 
 本研究在 `develop` 上依序完成 P0 scope 修正、P1 truth normalization 修正，再使用同一組 observations、initialization、12-target forward FixedNeighbor partition、200-sweep budget、objective、qualification gates 與 independent replay，比較 A（Production baseline）、B1（conditioning-aware）及 B2（conditioning + cancellation-aware）。B1/B2 只改變研究用的 accepted-width-trial callback；沒有修改 Production 數值策略或 qualification thresholds。
 
-實驗程式為 `tests/experiments/joint_width_trust_experiment.cpp`；配對執行、scope audit 與摘要程式為 `tests/experiments/run_joint_width_trust_paired.py`。完整 32 cases / 96 runs 的逐 case、逐策略指標、commands、輸入 hashes 與 scope audit 在 [paired results JSON](joint-width-trust-corrected-results.json)。Raw per-run trace 與 log 保留於 `/private/tmp/rhbm-joint-width-trust-corrected-20261019`；它們不包含在 Git commit。
-
-可重跑完整批次的命令：
-
-```sh
-python3 tests/experiments/run_joint_width_trust_paired.py \
-  build/bin/joint_width_trust_experiment \
-  /private/tmp/rhbm-joint-width-trust-rerun \
-  /Users/yslian/data/6z6u.cif \
-  /Users/yslian/Documents/simulation/sim_map_gaus_grid0.50_charge1_width_6Z6U_bw0.50.map \
-  /Users/yslian/data/emd_11103_unsharpened.map \
-  --seeds 1001 1002 1003 1004 1005
-```
-
-P2 synthetic seeds 1001–1003 原樣保留；1004–1005 是額外 evaluation seeds。策略設定沒有依 evaluation 結果調整，沒有另外建立 calibration set。Synthetic 六種 profile 各跑五 seeds；兩個 6Z6U 固定輸入各跑 A/B1/B2。
+完整 32 cases / 96 runs 的逐 case、逐策略指標、commands、輸入 hashes 與 scope audit 在 [paired results JSON](joint-width-trust-corrected-results.json)。Raw per-run trace 與 log 保留於 `/private/tmp/rhbm-joint-width-trust-corrected-20261019`；它們不包含在 Git commit。P2 synthetic seeds 1001–1003 原樣保留；1004–1005 是額外 evaluation seeds。策略設定沒有依 evaluation 結果調整，沒有另外建立 calibration set。Synthetic 六種 profile 各跑五 seeds；兩個 6Z6U 固定輸入各跑 A/B1/B2。
 
 外部輸入 SHA-256：
 

@@ -1,5 +1,7 @@
 # P4 Assessment: Global FirstStage-Calibrated Width Bounds
 
+> **Historical decision record:** This assessment predates the 2026-10-20 production promotion. The A/B2/B4 comparison executable and paired runner are retired; its results below remain evidence for the decision history. See [the production promotion record](joint-bounded-active-set-production-promotion-20261020.md) for current policy.
+
 ## Decision
 
 **Insufficient Evidence for production promotion.** Keep the production numerical default unchanged. The research-only B2/B4 bounded solver passed its active-bound KKT and replay checks on one unsharpened 6Z6U map, but the prescribed synthetic campaign could not produce contract-consistent FirstStage donors, and the truth-bearing simulation did not activate either bound.

@@ -1,5 +1,7 @@
 # Global FirstStage Width Bounds: Synthetic Phase (P3a)
 
+> **Archived workflow:** The paired A/B2/B4 executable and runner used for this study have been retired. The result tables and records below remain historical evidence; reproduction commands describe the former toolchain.
+
 ## Scope and outcome
 
 The prescribed synthetic cases and seeds 1001–1005 were run with the existing Joint truth-controlled generator. The generator provides synthetic observations and scoring truth, but it does not provide FirstStage sampling observations, a FirstStage MDPDE fit, or a qualified FirstStage donor record. No contract-consistent FirstStage calibration could be produced from these inputs, so P95, B2, B4, and truth coverage under those bounds are unavailable. B2/B4 were not run.

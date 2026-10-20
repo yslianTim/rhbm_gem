@@ -374,7 +374,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, WidthTrajectoryCaptureHonorsAtomEven
             EXPECT_EQ(trial.tracked_atoms.size(),1u);
             EXPECT_EQ(trial.tracked_atoms.front().atom_id,data.input->atom_ids.front());
             EXPECT_EQ(trial.tracked_atoms.front().local_design_rank,-1);
-            EXPECT_EQ(trial.width_trust_evidence_unavailable_reason,"row-limit");
+            EXPECT_EQ(trial.tracked_atoms.front().numerical_status,"row-limit");
         }
     };
     n::FixedNeighborSearchPolicy policy; policy.maximum_sweeps=1;
@@ -404,7 +404,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, WidthTrajectoryCaptureHonorsAtomEven
     }
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, WidthTrajectoryRecordsLocalIdentifiabilityAndCancellation)
+TEST(JointFixedNeighborBlockCoordinateTest, WidthTrajectoryRecordsLocalDesignMetricsAndCancellation)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -424,6 +424,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, WidthTrajectoryRecordsLocalIdentifia
             EXPECT_DOUBLE_EQ(atom.accepted_eta_step,trial.accepted ? atom.proposed_eta_step : 0.0);
             EXPECT_TRUE(std::isfinite(atom.ac_cancellation_ratio));
             EXPECT_GE(atom.ac_cancellation_ratio,1.0-1e-12);
+            EXPECT_GE(atom.local_design_rank,0);
+            EXPECT_TRUE(std::isfinite(atom.local_design_condition));
             EXPECT_FALSE(trial.projected_width_singular_values.empty());
             for(const auto singular:trial.projected_width_singular_values)
                 EXPECT_TRUE(std::isfinite(singular));

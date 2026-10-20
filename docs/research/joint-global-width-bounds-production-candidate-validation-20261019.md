@@ -1,5 +1,7 @@
 # Global P95 × 4 bounded LM: production candidate validation
 
+> **Historical validation record:** This report predates the production promotion. The A/B2/B4 comparison test and runner referenced by its commands are retired; saved measurements remain historical evidence. See [the production promotion record](joint-bounded-active-set-production-promotion-20261020.md) for the current route.
+
 ## Decision
 
 The Release, non-instrumented bounded candidate passed the checks below on the
