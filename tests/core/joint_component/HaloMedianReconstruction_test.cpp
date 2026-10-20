@@ -82,6 +82,57 @@ Fixture MakeFixture(std::size_t target_count=3)
     }
     return {std::move(model),std::move(problem),std::move(result)};
 }
+
+Fixture MakeObservationCountFixture(bool all_fixed=false,bool all_free=false,bool include_zero_halo=true,
+    bool reverse_model=false)
+{
+    auto base=MakeFixture();
+    JointProblemInput input;
+    input.atom_ids={"1","2","3","4","5","6","7"};
+    input.row_ids={"0","1","2","3","4","5","6","7","8"};
+    input.observations.assign(input.row_ids.size(),0.0);
+    input.support={{{0,0}},{{1,0}},{{2,0}},{{3,.1}},{{3,.3},{4,.4}},
+        {{5,.5},{6,.6},{7,.7}},{{5,.8},{6,.9},{7,1.0},{8,1.1}}};
+    if(all_fixed)
+    {
+        input.support[5]={{5,.5},{6,.6}};
+        input.support[6]={{7,.8}};
+    }
+    if(all_free)
+    {
+        input.support[3]={{3,.1},{4,.2},{5,.3}};
+        input.support[4]={{3,.4},{4,.5},{5,.6},{6,.7}};
+    }
+    input.selection_domain.emplace();
+    input.selection_domain->contributor_policy=std::string(PureHaloSupportExclusionContributorPolicy);
+    input.selection_domain->target_indices={0,1,2};
+    const std::size_t candidate_halos=include_zero_halo?5:4;
+    input.selection_domain->pure_halo_support_exclusion=JointPureHaloSupportExclusionProvenance{
+        input.observations.size(),input.observations.size()-3,3,candidate_halos,4,
+        candidate_halos-4};
+    JointProblem problem(input);
+
+    std::vector<std::unique_ptr<AtomObject>> atoms;
+    const int maximum_id=include_zero_halo?8:7;
+    for(int step=0;step<maximum_id;++step)
+    {
+        const int id=reverse_model ? maximum_id-step : step+1;
+        auto atom=std::make_unique<AtomObject>();
+        atom->SetSerialID(id);
+        atom->SetElement(Element::CARBON);
+        atom->SetComponentKey(id%2?1:2);
+        atom->SetAtomKey(static_cast<AtomKey>(id));
+        atom->SetPosition(static_cast<double>(id),0,0);
+        atoms.push_back(std::move(atom));
+    }
+    ModelObject model(std::move(atoms));
+    auto result=std::move(base.result);
+    result.atom_ids=input.atom_ids;
+    result.row_ids=input.row_ids;
+    result.selection_domain=input.selection_domain;
+    result.target_evidence->original_rows=input.observations.size();
+    return {std::move(model),std::move(problem),std::move(result)};
+}
 }
 
 TEST(HaloMedianReconstructionTest, ComputesSeparateComponentAndWidthAndChargeMedians)
@@ -195,4 +246,79 @@ TEST(HaloMedianReconstructionTest, ChemicalLabelsDoNotChangeGeometryLocalHaloEst
         relabeled.model,relabeled.problem,relabeled.result,"label-baseline");
 
     EXPECT_EQ(original.snapshot,changed.snapshot);
+}
+
+TEST(HaloMedianReconstructionTest, ClassifiesDistinctOriginalObservationsAtThreeOnly)
+{
+    auto fixture=MakeObservationCountFixture();
+    const auto classified=BuildHaloFullABCPreclassification(
+        fixture.model,fixture.problem,fixture.result);
+    ASSERT_TRUE(classified.available);
+    ASSERT_TRUE(classified.global_target_median);
+    EXPECT_EQ(*classified.global_target_median,(std::array<double,3>{3.0,2.0,5.0}));
+    ASSERT_EQ(classified.halos.size(),5u);
+    EXPECT_EQ(classified.fixed_halo_count,3u);
+    EXPECT_EQ(classified.free_halo_count,2u);
+    EXPECT_EQ(classified.halos[0].atom_id,"4");
+    EXPECT_EQ(classified.halos[0].distinct_original_observations,1u);
+    EXPECT_EQ(classified.halos[0].original_support_rows,(std::vector<std::size_t>{3}));
+    EXPECT_EQ(classified.halos[0].role,HaloFullABCRole::FixedGlobalTargetMedian);
+    EXPECT_EQ(classified.halos[1].distinct_original_observations,2u);
+    EXPECT_EQ(classified.halos[1].role,HaloFullABCRole::FixedGlobalTargetMedian);
+    EXPECT_EQ(classified.halos[2].distinct_original_observations,3u);
+    EXPECT_EQ(classified.halos[2].role,HaloFullABCRole::FreeFullABC);
+    EXPECT_EQ(classified.halos[3].distinct_original_observations,4u);
+    EXPECT_EQ(classified.halos[3].role,HaloFullABCRole::FreeFullABC);
+    EXPECT_EQ(classified.halos[4].distinct_original_observations,0u);
+    EXPECT_FALSE(classified.halos[4].original_contributor_index);
+    EXPECT_EQ(classified.halos[4].role,HaloFullABCRole::FixedGlobalTargetMedian);
+    for(const auto & halo:classified.halos)
+        EXPECT_EQ(halo.parameter_profile,*classified.global_target_median);
+}
+
+TEST(HaloMedianReconstructionTest, DuplicateSupportEntriesDoNotIncreaseDistinctObservationCount)
+{
+    EXPECT_EQ(DistinctOriginalSupportRows({{7,.25},{7,1.0},{9,2.0}}),
+        (std::vector<std::size_t>{7,9}));
+}
+
+TEST(HaloMedianReconstructionTest, AllFixedAndAllFreeClassificationsDoNotUseRankGates)
+{
+    auto all_fixed=MakeObservationCountFixture(true,false,true);
+    const auto fixed=BuildHaloFullABCPreclassification(all_fixed.model,all_fixed.problem,all_fixed.result);
+    ASSERT_TRUE(fixed.available);
+    EXPECT_EQ(fixed.free_halo_count,0u);
+    EXPECT_EQ(fixed.fixed_halo_count,fixed.halos.size());
+
+    auto all_free=MakeObservationCountFixture(false,true,false);
+    const auto free=BuildHaloFullABCPreclassification(all_free.model,all_free.problem,all_free.result);
+    ASSERT_TRUE(free.available);
+    EXPECT_EQ(free.fixed_halo_count,0u);
+    EXPECT_EQ(free.free_halo_count,free.halos.size());
+}
+
+TEST(HaloMedianReconstructionTest, ClassificationIsIndependentOfTraversalAndChemicalLabels)
+{
+    auto baseline=MakeObservationCountFixture();
+    auto changed=MakeObservationCountFixture(false,false,true,true);
+    changed.model.FindAtomPtr(5)->SetComponentKey(77);
+    changed.model.FindAtomPtr(5)->SetAtomKey(1001);
+    changed.model.FindAtomPtr(5)->SetElement(Element::OXYGEN);
+    const auto first=BuildHaloFullABCPreclassification(baseline.model,baseline.problem,baseline.result);
+    const auto second=BuildHaloFullABCPreclassification(changed.model,changed.problem,changed.result);
+    EXPECT_EQ(first,second);
+}
+
+TEST(HaloMedianReconstructionTest, MissingQualifiedTargetDonorsRemainUnavailableWithoutDefaultParameters)
+{
+    auto fixture=MakeObservationCountFixture();
+    for(auto & point:fixture.result.target_evidence->point_atoms)
+        point.local_conditioning="Warning";
+    const auto classified=BuildHaloFullABCPreclassification(
+        fixture.model,fixture.problem,fixture.result);
+    EXPECT_FALSE(classified.available);
+    EXPECT_EQ(classified.unavailable_reason,"no-qualified-joint-target-donors");
+    EXPECT_FALSE(classified.global_target_median);
+    EXPECT_EQ(classified.halos.size(),5u);
+    for(const auto & halo:classified.halos) EXPECT_FALSE(halo.parameter_profile);
 }

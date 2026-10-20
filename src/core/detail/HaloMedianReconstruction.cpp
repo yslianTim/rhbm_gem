@@ -12,6 +12,8 @@
 #include <map>
 #include <set>
 #include <stdexcept>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace rhbm_gem::core::detail {
 namespace {
@@ -169,9 +171,18 @@ std::array<double,3> GeometryLocalTargetMedian(
     return Median(donors);
 }
 
-HaloMedianBuildResult BuildHaloMedianReconstruction(
-    const ModelObject & model,const JointProblem & problem,const JointAnalysisResult & result,
-    std::string_view joint_run_id)
+std::vector<std::size_t> DistinctOriginalSupportRows(const std::vector<JointSupport> & support)
+{
+    std::vector<std::size_t> rows;
+    rows.reserve(support.size());
+    for(const auto & entry:support) rows.push_back(entry.row);
+    std::sort(rows.begin(),rows.end());
+    rows.erase(std::unique(rows.begin(),rows.end()),rows.end());
+    return rows;
+}
+
+std::vector<HaloMedianTargetDonor> QualifiedJointTargetDonors(
+    const ModelObject & model,const JointProblem & problem,const JointAnalysisResult & result)
 {
     const auto & input=problem.OriginalInput();
     if (!input.selection_domain || input.selection_domain->target_indices.empty())
@@ -180,10 +191,7 @@ HaloMedianBuildResult BuildHaloMedianReconstruction(
         !SameSelectionDomain(*result.selection_domain,*input.selection_domain))
         throw std::invalid_argument("halo-median-joint-run-identity-mismatch");
     const auto points=TargetPoints(result);
-    HaloMedianBuildResult out;
-    out.snapshot.joint_run_id=std::string(joint_run_id);
-    out.snapshot.neighbor_count=GeometryLocalTargetMedianNeighborCount;
-    out.snapshot.donor_policy=std::string(GeometryLocalTargetMedianDonorPolicy);
+    std::vector<HaloMedianTargetDonor> out;
     for (const auto target:input.selection_domain->target_indices)
     {
         if (!QualifiedTarget(result,target)) continue;
@@ -195,15 +203,101 @@ HaloMedianBuildResult BuildHaloMedianReconstruction(
         const auto position=atom->GetPosition();
         if (!std::all_of(position.begin(),position.end(),[](double value){return std::isfinite(value);}))
             throw std::invalid_argument("halo-median-nonfinite-target-position");
-        out.target_donors.push_back({target,atom_id,position,Point(found->second)});
+        out.push_back({target,atom_id,position,Point(found->second)});
     }
-    if (out.target_donors.empty()) throw std::invalid_argument("halo-median-no-valid-targets");
-    std::sort(out.target_donors.begin(),out.target_donors.end(),[](const auto & left,const auto & right) {
+    std::sort(out.begin(),out.end(),[](const auto & left,const auto & right) {
         return left.atom_id<right.atom_id;
     });
+    return out;
+}
+
+HaloFullABCPreclassification BuildHaloFullABCPreclassification(
+    const ModelObject & model,const JointProblem & problem,const JointAnalysisResult & result)
+{
+    const auto & input=problem.OriginalInput();
+    if(!input.selection_domain || input.selection_domain->target_indices.empty())
+        throw std::invalid_argument("halo-median-no-selection");
+    const auto donors=QualifiedJointTargetDonors(model,problem,result);
+    HaloFullABCPreclassification out;
+    if(donors.empty()) out.unavailable_reason="no-qualified-joint-target-donors";
+    else
+    {
+        std::vector<const HaloMedianTargetDonor *> donor_refs;
+        donor_refs.reserve(donors.size());
+        for(const auto & donor:donors) donor_refs.push_back(&donor);
+        const auto median=GeometryLocalTargetMedian(donor_refs);
+        if(!std::isfinite(median[0]) || median[0]<0 || !std::isfinite(median[1]) || !(median[1]>0) ||
+            !std::isfinite(median[2]))
+            out.unavailable_reason="invalid-qualified-joint-target-median";
+        else
+        {
+            out.available=true;
+            out.global_target_median=median;
+        }
+    }
+
+    std::unordered_set<int> target_ids;
+    for(const auto target:input.selection_domain->target_indices)
+        target_ids.insert(std::stoi(input.atom_ids.at(target)));
+    std::unordered_map<int,std::size_t> contributor_indices;
+    contributor_indices.reserve(input.atom_ids.size());
+    for(std::size_t index=0;index<input.atom_ids.size();++index)
+        contributor_indices.emplace(std::stoi(input.atom_ids[index]),index);
+    std::vector<const AtomObject *> candidates;
+    for(const auto & atom:model.GetAtomList())
+        if(atom->GetElement()!=Element::HYDROGEN && !target_ids.contains(atom->GetSerialID()))
+            candidates.push_back(atom.get());
+    std::sort(candidates.begin(),candidates.end(),[](const auto * left,const auto * right) {
+        return left->GetSerialID()<right->GetSerialID();
+    });
+    out.halos.reserve(candidates.size());
+    for(const auto * atom:candidates)
+    {
+        HaloFullABCClassificationRecord record;
+        record.atom_id=std::to_string(atom->GetSerialID());
+        if(const auto found=contributor_indices.find(atom->GetSerialID());found!=contributor_indices.end())
+        {
+            record.original_contributor_index=found->second;
+            record.original_support_rows=DistinctOriginalSupportRows(input.support.at(found->second));
+            for(const auto row:record.original_support_rows)
+            {
+                if(row>=input.row_ids.size())
+                    throw std::invalid_argument("Invalid Halo observation support row.");
+            }
+        }
+        record.distinct_original_observations=record.original_support_rows.size();
+        if(record.distinct_original_observations<3)
+        {
+            record.role=HaloFullABCRole::FixedGlobalTargetMedian;
+            ++out.fixed_halo_count;
+        }
+        else
+        {
+            record.role=HaloFullABCRole::FreeFullABC;
+            ++out.free_halo_count;
+        }
+        if(out.available) record.parameter_profile=*out.global_target_median;
+        out.halos.push_back(std::move(record));
+    }
+    return out;
+}
+
+HaloMedianBuildResult BuildHaloMedianReconstruction(
+    const ModelObject & model,const JointProblem & problem,const JointAnalysisResult & result,
+    std::string_view joint_run_id)
+{
+    const auto & input=problem.OriginalInput();
+    if (!input.selection_domain || input.selection_domain->target_indices.empty())
+        throw std::invalid_argument("halo-median-no-selection");
+    HaloMedianBuildResult out;
+    out.target_donors=QualifiedJointTargetDonors(model,problem,result);
+    if(out.target_donors.empty()) throw std::invalid_argument("halo-median-no-valid-targets");
+    out.snapshot.joint_run_id=std::string(joint_run_id);
+    out.snapshot.neighbor_count=GeometryLocalTargetMedianNeighborCount;
+    out.snapshot.donor_policy=std::string(GeometryLocalTargetMedianDonorPolicy);
     std::vector<const HaloMedianTargetDonor *> all_donors;
     all_donors.reserve(out.target_donors.size());
-    for (const auto & donor:out.target_donors) all_donors.push_back(&donor);
+    for(const auto & donor:out.target_donors) all_donors.push_back(&donor);
     out.snapshot.valid_target_count=all_donors.size();
     out.snapshot.global_median=Median(all_donors);
     out.audit.valid_target_count=all_donors.size();

@@ -1,9 +1,11 @@
 #pragma once
 
+#include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <rhbm_gem/data/object/JointAnalysisResult.hpp>
 #include <cstddef>
 #include <array>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -45,6 +47,28 @@ struct HaloMedianBuildResult
     std::vector<HaloMedianTargetDonor> target_donors;
 };
 
+enum class HaloFullABCRole {FixedGlobalTargetMedian,FreeFullABC};
+struct HaloFullABCClassificationRecord
+{
+    std::string atom_id;
+    std::optional<std::size_t> original_contributor_index;
+    std::size_t distinct_original_observations{};
+    HaloFullABCRole role{HaloFullABCRole::FixedGlobalTargetMedian};
+    std::vector<std::size_t> original_support_rows;
+    std::optional<std::array<double,3>> parameter_profile;
+    bool operator==(const HaloFullABCClassificationRecord &) const = default;
+};
+struct HaloFullABCPreclassification
+{
+    bool available{};
+    std::string unavailable_reason;
+    std::optional<std::array<double,3>> global_target_median;
+    std::size_t fixed_halo_count{},free_halo_count{};
+    std::vector<HaloFullABCClassificationRecord> halos;
+    bool operator==(const HaloFullABCPreclassification &) const = default;
+};
+std::vector<std::size_t> DistinctOriginalSupportRows(const std::vector<JointSupport> &);
+
 class GeometryLocalTargetDonorIndex
 {
 public:
@@ -60,6 +84,10 @@ private:
 };
 std::array<double,3> GeometryLocalTargetMedian(
     const std::vector<const HaloMedianTargetDonor *> &);
+std::vector<HaloMedianTargetDonor> QualifiedJointTargetDonors(
+    const ModelObject &,const JointProblem &,const JointAnalysisResult &);
+HaloFullABCPreclassification BuildHaloFullABCPreclassification(
+    const ModelObject &,const JointProblem &,const JointAnalysisResult &);
 
 // Builds the immutable post-Joint Halo reconstruction snapshot. Only target
 // point evidence from this JointAnalysisResult may enter the donor pool.
