@@ -28,6 +28,25 @@ CURRENT_PYTHON_VALIDATION_RUNNERS = {
     "joint_workflow_cli_smoke.py",
 }
 
+PRODUCTION_REGRESSION_OWNERS = (
+    "tests/core/joint_component/ActiveSetBoundedLM_test.cpp",
+    "tests/core/joint_component/WidthCalibration_test.cpp",
+    "tests/core/joint_component/Numerics_test.cpp",
+    "tests/core/joint_component/FixedNeighborBlockCoordinate_test.cpp",
+    "tests/core/joint_component/LocalConditioning_test.cpp",
+    "tests/core/joint_component/ParameterStability_test.cpp",
+    "tests/core/joint_component/PureHaloSupportExclusion_test.cpp",
+    "tests/core/joint_component/FixedHaloInitialization_test.cpp",
+    "tests/core/joint_component/Runtime_test.cpp",
+    "tests/core/joint_component/Progress_test.cpp",
+    "tests/core/joint_component/TargetEvidence_test.cpp",
+    "tests/data/DataObjectPersistence_test.cpp",
+    "tests/integration/CommandApiPipeline_test.cpp",
+    "tests/experiments/joint_production_bounded_synthetic.cpp",
+    "tests/experiments/joint_width_repro_no_instrumentation.cpp",
+    "tests/experiments/joint_fixed_neighbor.cpp",
+)
+
 RETIRED_REPOSITORY_FILES = (
     "tests/experiments/joint_sparse_benchmark.cpp",
     "tests/core/joint_component/FixedBBlockCoordinate_test.cpp",
@@ -241,6 +260,19 @@ def main():
         f"current Joint Python experiment drivers must match the whitelist: "
         f"unexpected={sorted(python_experiments-CURRENT_PYTHON_EXPERIMENTS)}, "
         f"missing={sorted(CURRENT_PYTHON_EXPERIMENTS-python_experiments)}")
+    missing_regression_owners = [
+        path for path in PRODUCTION_REGRESSION_OWNERS if not (ROOT / path).is_file()
+    ]
+    unregistered_regression_owners = [
+        path for path in PRODUCTION_REGRESSION_OWNERS
+        if Path(path).name not in cmake
+    ]
+    assert not missing_regression_owners, (
+        f"Production regression owners were removed: {missing_regression_owners}")
+    assert not unregistered_regression_owners, (
+        f"Production regression owners lost their CMake registration: {unregistered_regression_owners}")
+    assert "add_test(NAME joint_production_bounded_synthetic" in cmake, (
+        "bound-active Production synthetic must remain a normal CTest")
     missing_fixtures = [name for name in RETIRED_FIXTURES
                         if (ROOT / "tests" / "fixtures" / name).exists()]
     present_files = [name for name in RETIRED_REPOSITORY_FILES
