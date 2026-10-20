@@ -1015,6 +1015,50 @@ TEST(
     EXPECT_FALSE(view.GetLocalFittingPeelingRatio(0.0, 1.0).has_value());
 }
 
+TEST(DataObjectModelAnalysisTest, PeelingRatioAssessmentReportsUnavailableCauses)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().at(0).get() };
+    auto analysis{ model->EditAnalysis() };
+    analysis.SetAtomLocalRawSamplingEntries(*atom, {
+        LocalPotentialSample{ 4.0, SamplingPoint{ 1.5 } }
+    });
+    const auto view{ rg::AtomLocalPotentialView::For(*atom) };
+
+    auto assessment{ view.AssessLocalFittingPeelingRatio(1.0, 2.0) };
+    EXPECT_EQ(assessment.total_samples, 1u);
+    EXPECT_EQ(assessment.reason, "no-peeling-samples");
+    EXPECT_FALSE(assessment.ratio);
+
+    analysis.SetAtomLocalRawSamplingEntries(*atom, {
+        LocalPotentialSample{ 4.0, SamplingPoint{ 2.5 } }
+    });
+    assessment = view.AssessLocalFittingPeelingRatio(1.0, 2.0);
+    EXPECT_EQ(assessment.reason, "no-tail-samples");
+
+    analysis.SetAtomLocalRawSamplingEntries(*atom, {
+        LocalPotentialSample{ 1.0, SamplingPoint{ 1.5 } },
+        LocalPotentialSample{ -1.0, SamplingPoint{ 1.6 } }
+    });
+    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
+        LocalPotentialSample{ 0.5, SamplingPoint{ 1.5 } },
+        LocalPotentialSample{ -0.5, SamplingPoint{ 1.6 } }
+    });
+    assessment = view.AssessLocalFittingPeelingRatio(1.0, 2.0);
+    EXPECT_EQ(assessment.reason, "invalid-zero-denominator");
+
+    rg::LocalStageEstimate failed_joint;
+    failed_joint.source = { rg::EstimateMethod::JointComponents, "CA", "component", "failed-run", rg::FittingRole::Target };
+    failed_joint.reason = "joint-endpoint-not-qualified";
+    failed_joint.convergence = rg::JointCheckStatus::Failed;
+    analysis.SetAtomStageEstimate(rg::FittingStage::Second, *atom, failed_joint);
+    analysis.SetAtomLocalRawSamplingEntries(*atom, {
+        LocalPotentialSample{ 4.0, SamplingPoint{ 1.5 } }
+    });
+    assessment = view.AssessLocalFittingPeelingRatio(1.0, 2.0);
+    EXPECT_EQ(assessment.reason, "joint-qualification-failed");
+}
+
 TEST(
     DataObjectModelAnalysisTest,
     AtomLocalPotentialViewRejectsInvalidPeelingRatioDistanceRange)

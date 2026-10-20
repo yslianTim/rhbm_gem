@@ -64,6 +64,17 @@ struct PostFitPeelingResult
     std::vector<PeelingSampleEstimate> samples;
 };
 
+struct PeelingRatioAssessment
+{
+    std::optional<double> ratio;
+    std::size_t total_samples{};
+    std::size_t valid_samples{};
+    std::size_t peeling_samples{};
+    double raw_response_sum{};
+    double peeled_response_sum{};
+    std::string reason;
+};
+
 struct LocalFitDiagnostics
 {
     RHBMEstimationStatus status{ RHBMEstimationStatus::SUCCESS };

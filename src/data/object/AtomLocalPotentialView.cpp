@@ -180,7 +180,7 @@ bool AtomLocalPotentialView::HasEnoughSamplingEntriesInRange(
     return false;
 }
 
-std::optional<double> AtomLocalPotentialView::GetLocalFittingPeelingRatio(
+PeelingRatioAssessment AtomLocalPotentialView::AssessLocalFittingPeelingRatio(
     double distance_min,
     double distance_max) const
 {
@@ -189,47 +189,131 @@ std::optional<double> AtomLocalPotentialView::GetLocalFittingPeelingRatio(
         distance_max,
         "peeling ratio distance range");
 
+    PeelingRatioAssessment assessment;
+    const auto & raw = GetRawSamplingEntriesView();
     if (const auto & peeling = GetPostFitPeeling(); peeling)
     {
-        const auto raw = GetRawSamplingEntries(false);
-        if (raw.size() != peeling->samples.size()) return std::nullopt;
-        double raw_sum = 0, peeled_sum = 0;
-        std::size_t count = 0;
+        if (raw.size() != peeling->samples.size())
+        {
+            for (const auto & sample : raw)
+                if (!(sample.point.distance < distance_min || sample.point.distance > distance_max))
+                    ++assessment.total_samples;
+            assessment.reason = "raw-peeling-sample-count-mismatch";
+            return assessment;
+        }
+        std::string missing_reason;
         for (std::size_t i = 0; i < raw.size(); ++i)
         {
             if (raw[i].point.distance < distance_min || raw[i].point.distance > distance_max) continue;
-            if (!peeling->samples[i].response) return std::nullopt;
-            raw_sum += raw[i].response;
-            peeled_sum += *peeling->samples[i].response;
-            ++count;
+            ++assessment.total_samples;
+            if (std::isfinite(raw[i].response)) assessment.raw_response_sum += raw[i].response;
+            if (!peeling->samples[i].response)
+            {
+                if (missing_reason.empty()) missing_reason = peeling->samples[i].reason;
+                continue;
+            }
+            if (!std::isfinite(raw[i].response) || !std::isfinite(*peeling->samples[i].response))
+            {
+                if (missing_reason.empty()) missing_reason = "nonfinite-response";
+                continue;
+            }
+            assessment.peeled_response_sum += *peeling->samples[i].response;
+            ++assessment.valid_samples;
         }
-        if (!count || raw_sum == 0) return std::nullopt;
-        const double ratio = (raw_sum - peeled_sum) / raw_sum;
-        return std::isfinite(ratio) ? std::optional<double>{ratio} : std::nullopt;
+        assessment.peeling_samples = assessment.valid_samples;
+        if (!assessment.total_samples)
+        {
+            assessment.reason = "no-tail-samples";
+            return assessment;
+        }
+        if (assessment.valid_samples != assessment.total_samples)
+        {
+            assessment.reason = "tail-coverage-incomplete:" +
+                (missing_reason.empty() ? std::string("peeling-unavailable") : missing_reason);
+            return assessment;
+        }
+        if (assessment.raw_response_sum == 0.0)
+        {
+            assessment.reason = "invalid-zero-denominator";
+            return assessment;
+        }
+        const double ratio = (assessment.raw_response_sum - assessment.peeled_response_sum) /
+            assessment.raw_response_sum;
+        if (!std::isfinite(ratio))
+        {
+            assessment.reason = "nonfinite-ratio";
+            return assessment;
+        }
+        assessment.ratio = ratio;
+        return assessment;
     }
 
-    double raw_sum{ 0.0 };
-    std::size_t raw_sample_count{ 0 };
-    for (const auto & sample : GetRawSamplingEntries(false))
+    const auto & stage = GetStageEstimate(FittingStage::Second);
+    if (stage.source.method == EstimateMethod::JointComponents)
+    {
+        assessment.reason = !stage.point || stage.convergence != JointCheckStatus::Passed ?
+            "joint-qualification-failed" : "missing-peeling-result";
+        for (const auto & sample : raw)
+        {
+            if (!std::isfinite(sample.point.distance) || sample.point.distance < distance_min ||
+                sample.point.distance > distance_max) continue;
+            ++assessment.total_samples;
+            if (std::isfinite(sample.response)) assessment.raw_response_sum += sample.response;
+        }
+        return assessment;
+    }
+
+    std::size_t raw_sample_count{};
+    for (const auto & sample : raw)
     {
         if (!std::isfinite(sample.point.distance)) continue;
         if (sample.point.distance < distance_min || sample.point.distance > distance_max) continue;
-        raw_sum += sample.response;
+        assessment.raw_response_sum += sample.response;
         ++raw_sample_count;
     }
-    double peeling_sum{ 0.0 };
-    std::size_t peeling_sample_count{ 0 };
-    for (const auto & sample : GetPeelingSamplingEntries(false))
+    const auto peeling = GetPeelingSamplingEntries(false);
+    std::size_t peeling_sample_count{};
+    for (const auto & sample : peeling)
     {
         if (!std::isfinite(sample.point.distance)) continue;
         if (sample.point.distance < distance_min || sample.point.distance > distance_max) continue;
-        peeling_sum += sample.response;
+        assessment.peeled_response_sum += sample.response;
         ++peeling_sample_count;
     }
-    if (raw_sample_count == 0 || peeling_sample_count == 0 || raw_sum == 0.0) return std::nullopt;
+    assessment.total_samples = raw_sample_count;
+    assessment.peeling_samples = peeling_sample_count;
+    if (!raw_sample_count)
+    {
+        assessment.reason = "no-tail-samples";
+        return assessment;
+    }
+    if (!peeling_sample_count)
+    {
+        assessment.reason = "no-peeling-samples";
+        return assessment;
+    }
+    if (assessment.raw_response_sum == 0.0)
+    {
+        assessment.reason = "invalid-zero-denominator";
+        return assessment;
+    }
 
-    const auto ratio{ (raw_sum - peeling_sum) / raw_sum };
-    return std::isfinite(ratio) ? std::optional<double>{ ratio } : std::nullopt;
+    const auto ratio{ (assessment.raw_response_sum - assessment.peeled_response_sum) /
+        assessment.raw_response_sum };
+    if (!std::isfinite(ratio))
+    {
+        assessment.reason = "nonfinite-ratio";
+        return assessment;
+    }
+    assessment.ratio = ratio;
+    return assessment;
+}
+
+std::optional<double> AtomLocalPotentialView::GetLocalFittingPeelingRatio(
+    double distance_min,
+    double distance_max) const
+{
+    return AssessLocalFittingPeelingRatio(distance_min, distance_max).ratio;
 }
 
 int AtomLocalPotentialView::GetNeighborCountForPeeling() const

@@ -240,7 +240,9 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
         {
             if (kFeatureDefinitions[feature].include_in_umap && !std::isfinite(row.features[feature]))
             {
-                const std::string reason="unavailable: " + std::string(kFeatureDefinitions[feature].name);
+                std::string reason="unavailable: " + std::string(kFeatureDefinitions[feature].name);
+                if (feature == 3 && !row.tail_peeling_ratio_assessment.reason.empty())
+                    reason += " (" + row.tail_peeling_ratio_assessment.reason + ")";
                 ++exclusions[reason]; valid=false;
                 Logger::Log(LogLevel::Warning, FormatFeatureLocation(request.model_key_tag,row.serial_id,kFeatureDefinitions[feature].name) + ": excluded; required feature unavailable.");
             }

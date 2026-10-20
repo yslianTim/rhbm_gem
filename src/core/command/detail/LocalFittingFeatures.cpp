@@ -1,7 +1,9 @@
 #include "core/command/detail/LocalFittingFeatures.hpp"
 
+#include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/algorithm/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -42,6 +44,7 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
 {
     auto atom_list{ model_object.GetSelectedAtoms() };
     if (atom_list.empty()) return {};
+    const auto & joint_result = model_object.GetAnalysisView().GetJointResult();
 
     std::vector<AtomObject *> non_hydrogen_atoms;
     non_hydrogen_atoms.reserve(model_object.GetAtomList().size());
@@ -100,9 +103,16 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
         const auto signal_peeling_ratio{
             local_view.GetLocalFittingPeelingRatio(0.0, 1.0)
         };
-        const auto tail_peeling_ratio{
-            local_view.GetLocalFittingPeelingRatio(1.0, 2.0)
-        };
+        auto tail_assessment{ local_view.AssessLocalFittingPeelingRatio(1.0, 2.0) };
+        if (!tail_assessment.ratio && !local_view.GetPostFitPeeling() && joint_result)
+        {
+            if (!IsQualifiedJointAnalysisResult(*joint_result))
+                tail_assessment.reason = "joint-qualification-failed";
+            else if (joint_result->selection_domain &&
+                joint_result->selection_domain->target_indices.size() < joint_result->atom_ids.size() &&
+                !joint_result->halo_median_reconstruction)
+                tail_assessment.reason = "halo-median-reconstruction-unavailable";
+        }
 
         const auto neighbors{ KDTreeAlgorithm<AtomObject>::RangeSearch(
             non_hydrogen_kd_tree_root.get(), atom, 2.0)
@@ -138,7 +148,7 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
             neighbor_distance_sum,
             distance_to_closest_neighbor,
             OptionalFeatureValue(signal_peeling_ratio),
-            OptionalFeatureValue(tail_peeling_ratio),
+            OptionalFeatureValue(tail_assessment.ratio),
             second ? second->GetAmplitude() : missing,
             second ? second->GetWidth() : missing,
             second ? second->GetOffset() : missing,
@@ -146,6 +156,7 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
             second ? static_cast<double>(width_rank) : missing,
             second ? static_cast<double>(offset_rank) : missing,
         };
+        row.tail_peeling_ratio_assessment = std::move(tail_assessment);
         rows.emplace_back(std::move(row));
     }
     return rows;

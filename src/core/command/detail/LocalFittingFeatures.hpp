@@ -5,6 +5,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 
 namespace rhbm_gem {
 
@@ -56,6 +57,7 @@ struct LocalFittingFeatureRow
     std::string residue{};
     std::string spot{};
     std::array<double, kLocalFittingFeatureCount> features{};
+    PeelingRatioAssessment tail_peeling_ratio_assessment;
 };
 
 std::string BuildLocalFittingCsvHeader();

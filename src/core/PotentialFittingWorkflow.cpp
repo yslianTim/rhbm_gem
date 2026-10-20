@@ -332,6 +332,47 @@ void RunJointComponentWorkflow(
     for (auto & [id, peeling] : peelings)
         peeling_updates.emplace_back(id, std::move(peeling));
     model.EditAnalysis().ApplyPostFitPeelingsBatch(std::move(peeling_updates));
+    for (const auto * atom : model.GetSelectedAtoms())
+    {
+        const auto local = AtomLocalPotentialView::For(*atom);
+        const auto & stage = local.GetStageEstimate(FittingStage::Second);
+        if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target)
+            continue;
+        const auto assessment = local.AssessLocalFittingPeelingRatio(1.0, 2.0);
+        ++postprocessing_metrics.tail_target_count;
+        postprocessing_metrics.tail_raw_sample_count += assessment.total_samples;
+        postprocessing_metrics.tail_valid_sample_count += assessment.valid_samples;
+        postprocessing_metrics.tail_unavailable_sample_count +=
+            assessment.total_samples - assessment.valid_samples;
+        postprocessing_metrics.tail_raw_response_sum += assessment.raw_response_sum;
+        postprocessing_metrics.tail_peeling_response_sum += assessment.peeled_response_sum;
+        if (assessment.ratio) ++postprocessing_metrics.tail_ratio_available_targets;
+        if (!assessment.reason.empty()) ++postprocessing_metrics.tail_unavailable_reasons[assessment.reason];
+        if (!assessment.total_samples)
+        {
+            ++postprocessing_metrics.tail_no_sample_targets;
+            ++postprocessing_metrics.tail_coverage_distribution["no-tail-samples"];
+        }
+        else if (assessment.valid_samples == assessment.total_samples)
+        {
+            ++postprocessing_metrics.tail_full_coverage_targets;
+            ++postprocessing_metrics.tail_coverage_distribution["complete"];
+        }
+        else if (assessment.valid_samples == 0)
+        {
+            ++postprocessing_metrics.tail_zero_coverage_targets;
+            ++postprocessing_metrics.tail_coverage_distribution["zero"];
+        }
+        else
+        {
+            ++postprocessing_metrics.tail_partial_coverage_targets;
+            const double coverage = static_cast<double>(assessment.valid_samples) /
+                static_cast<double>(assessment.total_samples);
+            const auto bucket = coverage <= 0.25 ? "(0,0.25]" : coverage <= 0.5 ? "(0.25,0.5]" :
+                coverage <= 0.75 ? "(0.5,0.75]" : "(0.75,1)";
+            ++postprocessing_metrics.tail_coverage_distribution[bucket];
+        }
+    }
     postprocessing_metrics.peeling_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - phase_start).count();
     postprocessing_metrics.rss_after_peeling_bytes = joint_component::CurrentRssBytes();
@@ -371,6 +412,23 @@ void RunJointComponentWorkflow(
             << ", global_fallback_halos=" << postprocessing_metrics.halo_median_fallback_halos
             << ", fallback_support_rows=" << postprocessing_metrics.halo_median_fallback_support_rows;
         LogJointInfo(message.str());
+        std::ostringstream tail_message;
+        tail_message << "[Joint] Tail peeling coverage (1-2 A): targets="
+            << postprocessing_metrics.tail_target_count
+            << ", complete=" << postprocessing_metrics.tail_full_coverage_targets
+            << ", partial=" << postprocessing_metrics.tail_partial_coverage_targets
+            << ", zero=" << postprocessing_metrics.tail_zero_coverage_targets
+            << ", no_samples=" << postprocessing_metrics.tail_no_sample_targets
+            << ", valid/raw=" << postprocessing_metrics.tail_valid_sample_count << '/'
+            << postprocessing_metrics.tail_raw_sample_count
+            << ", ratio_available=" << postprocessing_metrics.tail_ratio_available_targets
+            << ", raw_sum=" << postprocessing_metrics.tail_raw_response_sum
+            << ", peeled_sum=" << postprocessing_metrics.tail_peeling_response_sum;
+        for (const auto & [bucket, count] : postprocessing_metrics.tail_coverage_distribution)
+            tail_message << ", coverage_" << bucket << '=' << count;
+        for (const auto & [reason, count] : postprocessing_metrics.tail_unavailable_reasons)
+            tail_message << ", " << reason << '=' << count;
+        LogJointInfo(tail_message.str());
     }
     postprocessing_metrics.total_postprocessing_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - postprocessing_start).count();

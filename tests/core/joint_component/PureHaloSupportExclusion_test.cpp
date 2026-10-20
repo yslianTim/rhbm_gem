@@ -725,7 +725,7 @@ TEST(PureHaloSupportExclusionTest, ClassifiesPeelingGeometrySupportAndMaskInters
     data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"peeling-domain-audit");
     const SamplingPointList points{
         {1.75,{1.75,0,0},true},
-        {2.25,{2.25,0,0},true},
+        {1.9,{1.9,0,0},true},
         {10.0,{10.0,0,0},true}};
     fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),
         core::detail::BuildLocalPotentialSampleList(fixture.map,points));
@@ -751,6 +751,14 @@ TEST(PureHaloSupportExclusionTest, ClassifiesPeelingGeometrySupportAndMaskInters
     EXPECT_GT(metrics.map_geometry_boundary_nodes,0u);
     EXPECT_GT(metrics.original_support_boundary_nodes,0u);
     EXPECT_GT(metrics.fitting_mask_only_intersection_nodes,0u);
+
+    fixture.model.EditAnalysis().SetAtomPostFitPeeling(*fixture.model.FindAtomPtr(1),peelings.at(1));
+    const auto assessment=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(1))
+        .AssessLocalFittingPeelingRatio(1.0,2.0);
+    EXPECT_FALSE(assessment.ratio);
+    EXPECT_EQ(assessment.total_samples,2u);
+    EXPECT_EQ(assessment.valid_samples,1u);
+    EXPECT_EQ(assessment.reason,"tail-coverage-incomplete:outside-joint-domain");
 }
 
 TEST(PureHaloSupportExclusionTest, PeelingRejectsFitReconstructionIdentityMismatch)

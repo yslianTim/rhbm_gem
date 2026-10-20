@@ -38,6 +38,8 @@ public:
         double distance_min,
         double distance_max,
         std::size_t minimum_sample_count) const;
+    PeelingRatioAssessment AssessLocalFittingPeelingRatio(
+        double distance_min, double distance_max) const;
     std::optional<double> GetLocalFittingPeelingRatio(
         double distance_min,
         double distance_max) const;

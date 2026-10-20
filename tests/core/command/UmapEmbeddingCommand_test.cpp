@@ -841,4 +841,6 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     EXPECT_EQ(metadata.at("included_rows").as_int64(),6);
     EXPECT_EQ(metadata.at("features").as_array().size(),3);
     EXPECT_FALSE(metadata.at("exclusions").as_object().empty());
+    EXPECT_EQ(metadata.at("exclusions").as_object().at(
+        "unavailable: tail peeling ratio (tail-coverage-incomplete:outside-joint-domain)").as_int64(),1);
 }
