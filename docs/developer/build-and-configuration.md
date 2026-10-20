@@ -108,29 +108,26 @@ Supported labels:
 - domain: `core`, `data`, `utils`, `integration`
 - intent: `contract`, `command`, `validation`, `io`, `schema`, `algorithm`, `bindings`
 
-## Correctness, Offline, Benchmark, and Research Builds
+## Correctness, Offline, and Benchmark Builds
 
 `BUILD_TESTING=ON` creates the permanent correctness tests by default. The
 installable `rhbm_gem` target stays free of test-support sources; `rhbm_gem_test`
 is a non-installed instrumented copy used by tests that need internal probes.
 The `tests_all` target builds core test dependencies and any correctness option
-explicitly enabled, but never depends on benchmark or research targets.
+explicitly enabled, but never depends on benchmark targets.
 
-| Configuration | Production | Core tests | Offline | Extended | Benchmarks | Research |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Production only (`BUILD_TESTING=OFF`) | Yes | No | No | No | No | No |
-| Default testing | Yes | Yes | No | No | No | No |
-| Offline audits | Yes | Yes | Yes | No | No | No |
-| Extended regressions | Yes | Yes | No | Yes | No | No |
-| Benchmark tools | Yes | Yes | No | No | Yes | No |
-| Research tools | Yes | Yes | No | No | No | Yes |
+| Configuration | Production | Core tests | Offline | Extended | Benchmarks |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Production only (`BUILD_TESTING=OFF`) | Yes | No | No | No | No |
+| Default testing | Yes | Yes | No | No | No |
+| Offline audits | Yes | Yes | Yes | No | No |
+| Extended regressions | Yes | Yes | No | Yes | No |
+| Benchmark tools | Yes | Yes | No | No | Yes |
 
 The corresponding options are `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS`,
 `RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS`,
-`RHBM_GEM_BUILD_BENCHMARKS`, and
-`RHBM_GEM_BUILD_RESEARCH_TOOLS`. Benchmark and research options require
-`BUILD_TESTING=ON`, because their sources and test-only support remain under
-`tests/`.
+and `RHBM_GEM_BUILD_BENCHMARKS`. Optional builds require `BUILD_TESTING=ON`,
+because their sources and test-only support remain under `tests/`.
 
 Build benchmark tools explicitly:
 
@@ -138,33 +135,34 @@ Build benchmark tools explicitly:
 cmake -S . -B build-bench \\
   -DBUILD_TESTING=ON \\
   -DRHBM_GEM_BUILD_BENCHMARKS=ON
-cmake --build build-bench --target benchmarks_all -j4
+cmake --build build-bench --target benchmarks_all --parallel 4
 ```
 
-Build research tools explicitly:
+Build optional numerical audits explicitly:
 
 ```bash
-cmake -S . -B build-research \\
+cmake -S . -B build-audits \\
   -DBUILD_TESTING=ON \\
-  -DRHBM_GEM_BUILD_RESEARCH_TOOLS=ON
-cmake --build build-research --target research_tools_all -j4
+  -DRHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON
+cmake --build build-audits --parallel 4
 ```
 
 Benchmark builds create the current measurement tools: `joint_fixed_neighbor_experiment`
 for search/solve, `joint_postprocessing_benchmark` for the complete Joint workflow, and
 `joint_partial_selection` for current selection and halo measurements. The
 single benchmark workflow is `tests/integration/joint_benchmark.py`. The
-research option creates only `joint_statistical_experiment`. The offline-audit
-option creates local precision, KKT, replay, trajectory, and FullABC width
-controls. It no longer creates global-rank or weak-direction certification
-tools. Complete-command measurements use the same benchmark workflow with
+offline-audit option creates local precision, KKT, replay, trajectory,
+Fixed-Halo validation, and FullABC width controls. The bound-active Production
+synthetic runs with ordinary `BUILD_TESTING`. Complete-command measurements use
+the same benchmark workflow with
 `--profile command`; they require the regular CLI build and explicit model/map
 inputs. No per-stage CMake switches are needed.
 
-CTest labels include `core`, `offline`, `extended`, `external`, `benchmark`, and
-`research`. The default configuration registers only core tests. Turning a
-category on adds its focused test entries; it does not run a full benchmark,
-research sweep, or external-data campaign as part of the default build.
+CTest labels include `core`, `offline`, `extended`, `external`, and
+`benchmark`. The default configuration registers ordinary regressions,
+including the bound-active synthetic. Turning on optional audits or benchmarks
+adds their focused test entries; it does not run a full benchmark sweep or
+external-data campaign as part of the default build.
 
 ## Repository Lint Checks
 
@@ -289,7 +287,6 @@ Beginner / common:
 | `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS` | `OFF` | Build independent joint numerical audit tools and tests. |
 | `RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS` | `OFF` | Register larger self-contained correctness regressions. |
 | `RHBM_GEM_BUILD_BENCHMARKS` | `OFF` | Build current Joint benchmark and measurement targets. Requires `BUILD_TESTING=ON`. |
-| `RHBM_GEM_BUILD_RESEARCH_TOOLS` | `OFF` | Build current Joint statistical research tools. Requires `BUILD_TESTING=ON`. |
 | `RHBM_GEM_PYTHON_INSTALL_LAYOUT` | `SITE_PREFIX` | Python module install layout: `SITE_PREFIX` or `LIBDIR`. |
 | `RHBM_GEM_PYTHON_INSTALL_DIR` | empty | Explicit install directory for the Python extension module. |
 

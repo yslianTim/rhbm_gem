@@ -11,11 +11,14 @@ evidence and does not invalidate a numerically converged Joint state.
 | Stage | Question | Owner | Build category | Output meaning |
 | --- | --- | --- | --- | --- |
 | A | Did the accepted Joint endpoint converge and replay consistently? | `JointComponentEstimator` and `joint_component_runtime.py` | CORE | Global stationarity, endpoint verification, component and assembly consistency |
-| B | How do fixed-seed noise and position mismatch affect estimates? | [`joint_statistical_experiment.py`](../../tests/integration/joint_statistical_experiment.py) and `joint_statistical_experiment` | RESEARCH | Fixed-seed outcomes, with execution, convergence, and estimate error reported separately |
+| B | Are the current numerical and production-workflow invariants covered? | Joint contract/workflow/numerical tests, bound-active synthetic, persistence, and CLI regressions | CORE | Current Active-set LM behavior and workflow contracts |
 | C | Did the full command path run and what resources did it use? | [`joint_benchmark.py`](../../tests/integration/joint_benchmark.py), `--profile command` | BENCHMARK | Analysis, save/reload, JSON/CSV export, and process/resource classification |
 
-There is no combined Stage A/B/C runner. Statistical research is not a
-correctness test, and process completion does not replace numerical or
+There is no combined Stage A/B/C runner. The fixed-seed noise/mismatch study
+and its 450 saved outcomes are historical evidence from an earlier solver
+path, not scientific validation of the current Active-set LM. Its campaign
+runner is retired; a deterministic generator contract preserves the noise
+stream and observation hash. Process completion does not replace numerical or
 persistence tests.
 
 ## Point-quality scope

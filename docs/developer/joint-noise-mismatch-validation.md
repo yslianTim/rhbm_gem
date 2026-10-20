@@ -1,9 +1,11 @@
 # Joint noise and position-mismatch research experiment
 
-The current entry point is `tests/integration/joint_statistical_experiment.py`.
-This is a research tool: its smoke run checks the fixed-seed input and output
-contract; only the full run evaluates the complete statistical matrix. Neither
-run is a production validation gate.
+> Archived study: the campaign runner and solver-comparison tests have been
+> retired. The 450 saved outcomes below came from an earlier Fixed-Halo/Profile
+> LM path and do not validate the current Pure Exclusion Active-set LM. The
+> saved inputs and result artifacts remain historical evidence. Only the
+> fixed-seed data-generator contract remains executable as
+> `fixed_seed_joint_noise_generator_test.py`.
 
 Status: **complete with applicability limitations**. The 326 generated inputs
 produced 450 fitted outcomes: all retained a state, 65 passed current runtime
@@ -97,32 +99,9 @@ domain. It is not an independently calibrated hypothesis test. This pilot tests
 one noise correlation length and one type of model mismatch, not a general
 cryo-EM noise distribution or real-data scientific validity.
 
-## Running the research tool
+## Retained reproducibility check
 
-Build the opt-in research target:
-
-```sh
-cmake -S . -B build/research -DBUILD_TESTING=ON \
-  -DRHBM_GEM_BUILD_RESEARCH_TOOLS=ON
-cmake --build build/research --target joint_statistical_experiment
-```
-
-Run the deterministic one-geometry smoke or the full fixed matrix in fresh
-directories. The smoke covers the noiseless control and the first seeded IID
-case; its output is marked `scope: smoke` and must not be pooled with the 326-case
-research result.
-
-```sh
-python3 tests/integration/joint_statistical_experiment.py \
-  --smoke --work-dir build/joint-statistical/smoke \
-  --executable build/research/bin/joint_statistical_experiment
-python3 tests/integration/joint_statistical_experiment.py \
-  --work-dir build/joint-statistical/full \
-  --executable build/research/bin/joint_statistical_experiment
-```
-
-The full run writes every attempted case to `receipt.json`, including cases that
-did not run or whose process did not complete. Compact per-fit records,
-denominator-aware summaries and a table are written below `report/`. The 20 seeds,
-PCG64 stream, draw order, conditions, geometry, metrics and qualification rules
-are fixed by the experiment.
+Run `python3 tests/integration/fixed_seed_joint_noise_generator_test.py` to
+verify the retained PCG64 IID/correlated noise streams and historical generated
+observation hash. This checks data generation only; it does not run an estimator
+or make a claim about current Production scientific accuracy.

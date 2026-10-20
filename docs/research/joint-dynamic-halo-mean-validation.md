@@ -7,7 +7,11 @@
 
 ## Scope and current status
 
-This research keeps the production estimator unchanged. Production continues to use qualified FirstStage fixed Halo parameters `(A, B, C) = (A_FirstStage, B_FirstStage, 0)`, 12-target FixedNeighbor cores, and the `practical-v1` convergence criteria. The dynamic implementation is research-only.
+This study evaluated an earlier Production baseline using qualified FirstStage
+fixed Halo parameters `(A, B, C) = (A_FirstStage, B_FirstStage, 0)`, 12-target
+FixedNeighbor cores, and the `practical-v1` convergence criteria. That baseline
+predates Pure Halo-Support Exclusion and Active-set LM; the dynamic
+implementation and its runners are retired.
 
 | Phase | Status | Evidence |
 |---|---|---|

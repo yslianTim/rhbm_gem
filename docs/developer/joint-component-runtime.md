@@ -23,9 +23,9 @@ mapping remain attached for later reconstruction and peeling. The production
 target-width initialization, and target-only fitting in sequence.
 
 `BuildJointProblem` and `BuildFixedHaloResearchProblem` retain the explicit
-historical Fixed-Halo parameterization. `EstimateJointComponentsFixedHalo`
-and `FitJointComponentsInitialized` can be used with that policy for research
-or compatibility. In that policy, `JointProblem::WithFixedHalos` accepts exactly
+Fixed-Halo compatibility parameterization. `EstimateJointComponentsFixedHalo`
+and `FitJointComponentsInitialized` can be used with that policy for
+compatibility. In that policy, `JointProblem::WithFixedHalos` accepts exactly
 the supported non-target contributors; each value must carry qualified
 FirstStage provenance and C=0, and the snapshot stays constant during
 optimization. The shared numerical endpoint is policy-dependent: Pure
@@ -51,7 +51,9 @@ Target-only median fallback remains a seed diagnostic for Joint initialization.
 It is not a qualified FirstStage estimate and cannot be used to create a fixed
 halo. The production Pure Exclusion path does not require FirstStage halo
 parameters at all; these fixed-halo validation rules apply when the explicit
-research/compatibility APIs are selected.
+compatibility API is selected. Fixed-Halo compatibility retains the Profile LM
+solver and is covered by initialization, qualification, persistence, and
+provenance tests.
 
 ## Objective and production search
 

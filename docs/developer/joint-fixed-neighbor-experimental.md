@@ -4,6 +4,13 @@ This guide records the current production route and the historical studies that
 selected its search policy. Retired global-rank certification code and its
 campaign tools are not part of the current estimator.
 
+Width-trust and global-bound comparison runners, Dynamic Halo implementations,
+and completed Halo strategy campaigns have also been retired. Their numerical
+decisions remain in `docs/research/`; current benchmarks use the Production
+FixedNeighbor path, while optional numerical audits retain independent A/C,
+Profile, width, and replay references. Fixed-Halo compatibility remains a
+supported Profile LM path with dedicated tests.
+
 ## Current production contract
 
 `FixedNeighbor` is the sole Joint estimator selected by

@@ -50,6 +50,46 @@ prior candidate runs are not presented as post-promotion results.
 | Real 6Z6U simulation/unsharpened rerun | Not run: source model/map files unavailable in this workspace |
 | `git diff --check` | Passed before commit |
 
+## Follow-up Release reproduction after research cleanup
+
+The 6Z6U simulation inputs became available for a later Release run. The
+no-instrumentation production reproducibility tool completed on chain A with
+1,418 targets and 180,478 observations. The model, map and simulation-truth
+SHA-256 values match the saved B4 record. This follow-up does not change the
+historical availability statement above or close the giant-component RSS gate.
+
+| Measure | Saved B4 | Follow-up Release run |
+| --- | ---: | ---: |
+| Qualified FirstStage donors | 1,415 / 1,418 | 1,415 / 1,418 |
+| Global P95 (Å) | 0.5689788338510722 | 0.5689788338510722 |
+| Bmax = 4×P95 (Å) | 2.2759153354042887 | 2.2759153354042887 |
+| Candidate objective | 1.2330854370810358e-13 | 1.2330854370810358e-13 |
+| Prediction RMSE | 9.206498889018314e-7 | 9.206498889018622e-7 |
+| A/C KKT | 9.434574186999167e-8 | 9.434574186999167e-8 |
+| Projected Width KKT | 8.776510069988752e-10 | 8.776509519137221e-10 |
+| Search sweeps / profile evaluations | 83 / 22,908 | 83 / 22,908 |
+| Final active-bound atoms | 0 | 0 |
+| Independent Replay / RuntimeConvergence | Passed / Passed | Passed / Passed |
+| Peak RSS | 586,285,056 B | 616,595,456 B |
+| Wall time | 297.87 s | 305.00 s |
+
+The reported B RMSE also matches within floating-point variation. The saved
+B4 A/C truth RMSE values (9.50818e-6 / 2.92104e-6) differ from this run's
+4.18660e-6 / 1.28618e-6 by the map normalization divisor: multiplying the
+saved values by 0.44031545732594374 reproduces the follow-up values within
+floating-point variation. The saved record labels its A/C truth scale as
+original-domain, but does not retain per-target final A/C estimates; aggregate
+RMSE parity is established after this scale conversion, while per-target
+endpoint equality is not claimed. The follow-up reports A/B/C RMSE of
+4.18660e-6 / 1.46475e-7 Å / 1.28618e-6, with truth coverage 1,418/1,418 and
+`truth_used_for_calibration=false`.
+
+The Release run used `joint_width_repro_no_instrumentation` with
+`instrumentation_enabled=false`. Its machine-readable summary and fingerprints
+were written to `/private/tmp/joint-post-promotion-cleanup-parity-20261020`;
+they are not committed. The 37,406-target / 5,938,087-observation complete-fit
+4 GB RSS gate remains open; this 1,418-target run is not that measurement.
+
 The post-promotion exact-shape preflight used 5,938,087 observations, 37,406
 targets/contributors, one connected component and 3,118 blocks. It reported:
 

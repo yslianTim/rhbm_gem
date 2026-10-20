@@ -9,7 +9,11 @@
 | --- | --- | --- | --- |
 | 2026-10-16 | develop | `5de15aa10e6f08a3d65aa55d110d53df59520577` | P0 exact support-incidence contract |
 
-本報告記錄 Halo-Support Row Exclusion 的受控驗證。Production 維持 Fixed-Neighbor Block-Coordinate Target-Only Joint Estimator；這個 mask 目前只供研究與測試使用。
+本報告記錄 Halo-Support Row Exclusion 的受控驗證。報告當時的
+Production baseline 是 Fixed-Neighbor Block-Coordinate Target-Only Joint
+Estimator；此 mask 在報告日期仍屬研究用途。後續 Pure Halo-Support
+Exclusion 升格 Production 的結論見正式升格報告，本文件的策略比較
+runner 已退役。
 
 ## P0 — Observation row 與 support 契約
 
