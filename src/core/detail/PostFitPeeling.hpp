@@ -1,6 +1,7 @@
 #pragma once
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
+#include <array>
 #include <cstddef>
 #include <map>
 #include <optional>
@@ -11,6 +12,24 @@
 namespace rhbm_gem::core::detail {
 struct HaloMedianBuildResult;
 
+struct JointPeelingContributor
+{
+    int atom_id{};
+    std::array<double,3> position{};
+    std::optional<std::size_t> contributor_index;
+    bool target{};
+    bool reconstruction_eligible{};
+};
+
+struct JointPeelingContributorUniverse
+{
+    std::string joint_run_id;
+    std::vector<JointPeelingContributor> contributors;
+};
+
+JointPeelingContributorUniverse BuildJointPeelingContributorUniverse(
+    const ModelObject &,const JointProblem &,const JointAnalysisResult *);
+
 struct JointPostprocessingMetrics
 {
     std::size_t snapshot_identity_validation_count{};
@@ -19,9 +38,8 @@ struct JointPostprocessingMetrics
     std::size_t contributor_mapping_builds{};
     std::size_t joint_stage_mapping_builds{};
     std::size_t halo_median_valid_target_count{};
-    std::size_t halo_median_same_group_halos{};
-    std::size_t halo_median_fallback_halos{};
-    std::size_t halo_median_fallback_support_rows{};
+    std::size_t halo_median_geometry_local_halos{};
+    std::size_t halo_median_unavailable_halos{};
     std::size_t reconstruction_lookup_atom_count{};
     std::size_t reconstruction_only_node_evaluation_count{};
     std::size_t reconstruction_node_cache_hit_count{};
@@ -107,6 +125,9 @@ public:
     JointPostprocessingContext(const MapObject &, const ModelObject &, const JointProblem &,
         const JointAnalysisResult *, JointPostprocessingMetrics * = nullptr,
         const HaloMedianBuildResult * = nullptr);
+    JointPostprocessingContext(const MapObject &, const ModelObject &, const JointProblem &,
+        const JointAnalysisResult *, JointPostprocessingMetrics *, const HaloMedianBuildResult *,
+        JointPeelingContributorUniverse);
 
     std::map<int, PostFitPeelingResult> BuildPostFitPeelingSamples(
         std::optional<std::span<const std::size_t>> outputs = std::nullopt) const;
@@ -120,6 +141,7 @@ private:
     const JointAnalysisResult * m_snapshot;
     JointPostprocessingMetrics * m_metrics;
     const HaloMedianBuildResult * m_halo_medians;
+    JointPeelingContributorUniverse m_contributors;
     std::unordered_map<std::size_t, std::size_t> m_row_index_by_grid;
     std::unordered_map<std::size_t, std::size_t> m_fitting_row_index_by_grid;
     std::unordered_map<int, std::size_t> m_contributor_index_by_id;

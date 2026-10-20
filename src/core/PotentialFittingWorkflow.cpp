@@ -297,15 +297,14 @@ void RunJointComponentWorkflow(
         halo_median_build=BuildHaloMedianReconstruction(model,problem,snapshot,joint_run_id);
         if (original_has_halos) snapshot.halo_median_reconstruction=halo_median_build->snapshot;
         postprocessing_metrics.halo_median_valid_target_count=halo_median_build->audit.valid_target_count;
-        postprocessing_metrics.halo_median_same_group_halos=halo_median_build->audit.same_group_halos;
-        postprocessing_metrics.halo_median_fallback_halos=halo_median_build->audit.fallback_halos;
-        postprocessing_metrics.halo_median_fallback_support_rows=halo_median_build->audit.fallback_support_rows;
+        postprocessing_metrics.halo_median_geometry_local_halos=halo_median_build->audit.geometry_local_halos;
     }
     catch (const std::invalid_argument & error)
     {
         if (std::string_view(error.what()) != "halo-median-no-valid-targets") throw;
         if (original_has_halos)
         {
+            postprocessing_metrics.halo_median_unavailable_halos=original.atom_ids.size()-target_count;
             snapshot.evidence.push_back({std::string(JointHaloMedianReconstructionEvidenceName),
                 JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{}, {},error.what()});
             halo_reconstruction_unavailable=true;
@@ -323,8 +322,10 @@ void RunJointComponentWorkflow(
     }
     const auto & joint_snapshot = *model.GetAnalysisView().GetJointResult();
     auto phase_start = std::chrono::steady_clock::now();
+    auto contributor_universe=BuildJointPeelingContributorUniverse(model,problem,&joint_snapshot);
     const JointPostprocessingContext postprocessing(map, model, problem, &joint_snapshot,
-        &postprocessing_metrics,halo_median_build ? &*halo_median_build : nullptr);
+        &postprocessing_metrics,halo_median_build ? &*halo_median_build : nullptr,
+        std::move(contributor_universe));
     postprocessing_metrics.context_construction_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - phase_start).count();
     postprocessing_metrics.rss_after_context_bytes = joint_component::CurrentRssBytes();
@@ -409,11 +410,10 @@ void RunJointComponentWorkflow(
     if (!options.quiet_mode)
     {
         std::ostringstream message;
-        message << "[Joint] Halo median audit: valid_targets="
+        message << "[Joint] Geometry Halo reconstruction: valid_targets="
             << postprocessing_metrics.halo_median_valid_target_count
-            << ", same_group_halos=" << postprocessing_metrics.halo_median_same_group_halos
-            << ", global_fallback_halos=" << postprocessing_metrics.halo_median_fallback_halos
-            << ", fallback_support_rows=" << postprocessing_metrics.halo_median_fallback_support_rows;
+            << ", geometry_local_halos=" << postprocessing_metrics.halo_median_geometry_local_halos
+            << ", unavailable_halos=" << postprocessing_metrics.halo_median_unavailable_halos;
         LogJointInfo(message.str());
         std::ostringstream tail_message;
         tail_message << "[Joint] Tail peeling coverage (1-2 A): targets="

@@ -54,6 +54,7 @@ const char * HaloMedianSourceText(HaloMedianSource source)
     {
     case HaloMedianSource::GroupKeyMedian: return "group-key-median";
     case HaloMedianSource::GlobalTargetMedian: return "global-target-median";
+    case HaloMedianSource::GeometryLocalTargetMedian: return "geometry-local-target-median";
     }
     throw std::invalid_argument("Invalid Halo median source.");
 }
@@ -62,6 +63,7 @@ HaloMedianSource HaloMedianSourceValue(const j::value & value)
     const auto source=j::value_to<std::string>(value);
     if(source=="group-key-median") return HaloMedianSource::GroupKeyMedian;
     if(source=="global-target-median") return HaloMedianSource::GlobalTargetMedian;
+    if(source=="geometry-local-target-median") return HaloMedianSource::GeometryLocalTargetMedian;
     throw std::invalid_argument("Invalid saved Halo median source: "+source);
 }
 j::value Number(std::optional<double> x)
@@ -689,13 +691,25 @@ j::value HaloMedianSnapshot(const std::optional<JointHaloMedianSnapshot> & value
     if(!value) return nullptr;
     const auto & snapshot=*value; j::array halos;
     for(const auto & halo:snapshot.halos)
-        halos.emplace_back(Object{{"halo_contributor_index",halo.halo_contributor_index},
-            {"atom_id",halo.atom_id},{"group_key",halo.group_key},{"amplitude",halo.amplitude},
+    {
+        Object encoded{{"halo_contributor_index",halo.halo_contributor_index},
+            {"atom_id",halo.atom_id},{"amplitude",halo.amplitude},
             {"width",halo.width},{"charge",halo.charge},{"source",HaloMedianSourceText(halo.source)},
-            {"donor_count",halo.donor_count},{"joint_run_id",halo.joint_run_id},{"contract",halo.contract}});
-    return Object{{"contract",snapshot.contract},{"joint_run_id",snapshot.joint_run_id},
+            {"donor_count",halo.donor_count},{"joint_run_id",halo.joint_run_id},{"contract",halo.contract}};
+        if(halo.legacy_group_key) encoded.emplace("group_key",*halo.legacy_group_key);
+        if(halo.contract==HaloMedianReconstructionContractVersion)
+            encoded.emplace("donor_atom_ids",j::value_from(halo.donor_atom_ids));
+        halos.emplace_back(std::move(encoded));
+    }
+    Object encoded{{"contract",snapshot.contract},{"joint_run_id",snapshot.joint_run_id},
         {"global_median",j::value_from(snapshot.global_median)},
         {"valid_target_count",snapshot.valid_target_count},{"halos",std::move(halos)}};
+    if(snapshot.contract==HaloMedianReconstructionContractVersion)
+    {
+        encoded.emplace("neighbor_count",snapshot.neighbor_count);
+        encoded.emplace("donor_policy",snapshot.donor_policy);
+    }
+    return encoded;
 }
 std::optional<JointHaloMedianSnapshot> ReadHaloMedianSnapshot(const j::value & value)
 {
@@ -705,13 +719,25 @@ std::optional<JointHaloMedianSnapshot> ReadHaloMedianSnapshot(const j::value & v
     snapshot.joint_run_id=Read<std::string>(object,"joint_run_id");
     snapshot.global_median=Read<std::array<double,3>>(object,"global_median");
     snapshot.valid_target_count=Read<std::size_t>(object,"valid_target_count");
+    if(object.contains("neighbor_count")) snapshot.neighbor_count=Read<std::size_t>(object,"neighbor_count");
+    if(object.contains("donor_policy")) snapshot.donor_policy=Read<std::string>(object,"donor_policy");
     for(const auto & value_tmp:object.at("halos").as_array())
     {
         const auto & halo=value_tmp.as_object();
-        snapshot.halos.push_back({Read<std::size_t>(halo,"halo_contributor_index"),Read<std::string>(halo,"atom_id"),
-            Read<GroupKey>(halo,"group_key"),Read<double>(halo,"amplitude"),Read<double>(halo,"width"),
-            Read<double>(halo,"charge"),HaloMedianSourceValue(halo.at("source")),Read<std::size_t>(halo,"donor_count"),
-            Read<std::string>(halo,"joint_run_id"),Read<std::string>(halo,"contract")});
+        JointHaloMedianReconstruction decoded;
+        decoded.halo_contributor_index=Read<std::size_t>(halo,"halo_contributor_index");
+        decoded.atom_id=Read<std::string>(halo,"atom_id");
+        if(halo.contains("group_key")) decoded.legacy_group_key=Read<GroupKey>(halo,"group_key");
+        decoded.amplitude=Read<double>(halo,"amplitude");
+        decoded.width=Read<double>(halo,"width");
+        decoded.charge=Read<double>(halo,"charge");
+        decoded.source=HaloMedianSourceValue(halo.at("source"));
+        decoded.donor_count=Read<std::size_t>(halo,"donor_count");
+        decoded.joint_run_id=Read<std::string>(halo,"joint_run_id");
+        decoded.contract=Read<std::string>(halo,"contract");
+        if(halo.contains("donor_atom_ids"))
+            decoded.donor_atom_ids=Read<std::vector<std::string>>(halo,"donor_atom_ids");
+        snapshot.halos.push_back(std::move(decoded));
     }
     return snapshot;
 }
@@ -1442,8 +1468,15 @@ void Validate(const JointAnalysisResult & x,int schema_version)
         if(has_halos && x.halo_median_reconstruction)
         {
             const auto & snapshot=*x.halo_median_reconstruction;
-            Require(snapshot.contract==HaloMedianReconstructionContractVersion &&
-                !snapshot.joint_run_id.empty() && snapshot.valid_target_count>0,
+            const bool legacy_policy=snapshot.contract==LegacyHaloMedianReconstructionContractVersion;
+            Require(legacy_policy || snapshot.contract==HaloMedianReconstructionContractVersion,
+                "Pure Exclusion Halo median policy contract");
+            if(!legacy_policy)
+                Require(schema_version>=18 &&
+                    snapshot.neighbor_count==GeometryLocalTargetMedianNeighborCount &&
+                    snapshot.donor_policy==GeometryLocalTargetMedianDonorPolicy,
+                    "geometry-local Halo median policy provenance");
+            Require(!snapshot.joint_run_id.empty() && snapshot.valid_target_count>0,
                 "Pure Exclusion Halo median snapshot contract");
             for(const double value:snapshot.global_median)
                 Require(std::isfinite(value),"Pure Exclusion global median finiteness");
@@ -1457,15 +1490,36 @@ void Validate(const JointAnalysisResult & x,int schema_version)
                     x.atom_ids[halo.halo_contributor_index]==halo.atom_id &&
                     !std::binary_search(targets.begin(),targets.end(),halo.halo_contributor_index),
                     "Pure Exclusion Halo median identity");
-                Require(halo.contract==HaloMedianReconstructionContractVersion &&
-                    halo.joint_run_id==snapshot.joint_run_id && halo.donor_count>0,
+                Require(halo.joint_run_id==snapshot.joint_run_id && halo.donor_count>0,
                     "Pure Exclusion Halo median provenance");
+                if(legacy_policy)
+                {
+                    Require(halo.contract==LegacyHaloMedianReconstructionContractVersion &&
+                        halo.legacy_group_key.has_value() &&
+                        (halo.source==HaloMedianSource::GroupKeyMedian ||
+                            halo.source==HaloMedianSource::GlobalTargetMedian),
+                        "legacy GroupKey Halo median provenance");
+                    if(halo.source==HaloMedianSource::GlobalTargetMedian)
+                        Require(halo.donor_count==snapshot.valid_target_count,
+                            "Pure Exclusion global median donor count");
+                }
+                else
+                {
+                    std::set<std::string> donor_ids;
+                    Require(halo.contract==HaloMedianReconstructionContractVersion &&
+                        !halo.legacy_group_key && halo.source==HaloMedianSource::GeometryLocalTargetMedian &&
+                        halo.donor_count<=snapshot.neighbor_count &&
+                        halo.donor_atom_ids.size()==halo.donor_count,
+                        "geometry-local Halo median provenance");
+                    for(const auto & donor_id:halo.donor_atom_ids)
+                        Require(!donor_id.empty() && donor_ids.insert(donor_id).second &&
+                            std::find_if(targets.begin(),targets.end(),[&](auto index) {
+                                return x.atom_ids[index]==donor_id;
+                            })!=targets.end(),"geometry-local Halo donor identity");
+                }
                 Require(std::isfinite(halo.amplitude) && halo.amplitude>=0 &&
                     std::isfinite(halo.width) && halo.width>0 && std::isfinite(halo.charge),
                     "Pure Exclusion Halo median parameters");
-                if(halo.source==HaloMedianSource::GlobalTargetMedian)
-                    Require(halo.donor_count==snapshot.valid_target_count,
-                        "Pure Exclusion global median donor count");
                 previous=halo.halo_contributor_index; first=false;
             }
         }
@@ -1544,7 +1598,7 @@ void Validate(const JointAnalysisResult & x,int schema_version)
 std::string Encode(const JointAnalysisResult & x)
 {
     const bool pure_exclusion=x.parameterization_contract==JointPureHaloSupportExclusionParameterizationContract;
-    Validate(x,pure_exclusion ? 17 : 16);
+    Validate(x,pure_exclusion ? 18 : 16);
     const auto & m=x.metadata; const auto & t=x.costs;
     j::array components;
     for(const auto & c:x.components)
@@ -1570,7 +1624,10 @@ std::string Encode(const JointAnalysisResult & x)
             component.emplace("legacy_candidate_evidence",LegacyCandidateEvidence(c.legacy_candidate_evidence));
         components.emplace_back(std::move(component));
     }
-    Object out{{"schema_version",pure_exclusion ? 17 : 16},{"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
+    const bool geometry_halo_reconstruction=pure_exclusion && x.halo_median_reconstruction &&
+        x.halo_median_reconstruction->contract==HaloMedianReconstructionContractVersion;
+    Object out{{"schema_version",geometry_halo_reconstruction ? 18 : (pure_exclusion ? 17 : 16)},
+        {"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
         { "support_contract","sphere-fma-v1"},{"parameterization_contract",x.parameterization_contract},{"layout",Layout(x.layout)},{"metadata",Metadata(m)},{"selection_domain",SelectionDomain(x.selection_domain)},
         {"fixed_halos",FixedHalos(x.fixed_halos)},
         {"atom_ids",j::value_from(x.atom_ids)},{"row_ids",j::value_from(x.row_ids)},{"initialization",Initialization(x.initialization)},
@@ -1596,8 +1653,8 @@ JointAnalysisResult Decode(std::string_view text)
     j::parse_options options; options.numbers=j::number_precision::precise;
     const auto parsed=j::parse(text,{},options); const auto & o=parsed.as_object();
     const int version=Read<int>(o,"schema_version");
-    Require(version==3 || version==4 || version==5 || version==6 || version==7 || version==8 || version==9 || version==10 || version==11 || version==12 || version==13 || version==14 || version==15 || version==16 || version==17,
-        "unsupported result schema version (expected 3 through 17)");
+    Require(version==3 || version==4 || version==5 || version==6 || version==7 || version==8 || version==9 || version==10 || version==11 || version==12 || version==13 || version==14 || version==15 || version==16 || version==17 || version==18,
+        "unsupported result schema version (expected 3 through 18)");
     if(version>=15)
         for(const auto & fixed:o.at("fixed_halos").as_array())
             Require(fixed.as_object().contains("first_stage_qualification"),

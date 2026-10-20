@@ -2,7 +2,8 @@
 
 #include <rhbm_gem/data/object/JointAnalysisResult.hpp>
 #include <cstddef>
-#include <map>
+#include <array>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -14,31 +15,51 @@ namespace core::detail {
 
 struct HaloMedianCoverageRecord
 {
-    GroupKey group_key{};
+    std::string halo_atom_id;
     std::size_t target_donor_count{};
-    std::size_t halo_count{};
     std::size_t affected_support_rows{};
     std::array<double,3> median{};
     std::array<double,3> dispersion{};
-    bool uses_global_fallback{};
 };
 
 struct HaloMedianCoverageAudit
 {
     std::size_t valid_target_count{};
-    std::size_t group_count{};
-    std::size_t same_group_halos{};
-    std::size_t fallback_halos{};
-    std::size_t fallback_support_rows{};
+    std::size_t geometry_local_halos{};
     std::array<double,3> global_median{};
-    std::vector<HaloMedianCoverageRecord> groups;
+    std::vector<HaloMedianCoverageRecord> halos;
+};
+
+struct HaloMedianTargetDonor
+{
+    std::size_t contributor_index{};
+    std::string atom_id;
+    std::array<double,3> position{};
+    std::array<double,3> point{};
 };
 
 struct HaloMedianBuildResult
 {
     JointHaloMedianSnapshot snapshot;
     HaloMedianCoverageAudit audit;
+    std::vector<HaloMedianTargetDonor> target_donors;
 };
+
+class GeometryLocalTargetDonorIndex
+{
+public:
+    explicit GeometryLocalTargetDonorIndex(const std::vector<HaloMedianTargetDonor> &);
+    ~GeometryLocalTargetDonorIndex();
+    GeometryLocalTargetDonorIndex(const GeometryLocalTargetDonorIndex &) = delete;
+    GeometryLocalTargetDonorIndex & operator=(const GeometryLocalTargetDonorIndex &) = delete;
+    std::vector<const HaloMedianTargetDonor *> Query(const std::array<double,3> &) const;
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> m_impl;
+};
+std::array<double,3> GeometryLocalTargetMedian(
+    const std::vector<const HaloMedianTargetDonor *> &);
 
 // Builds the immutable post-Joint Halo reconstruction snapshot. Only target
 // point evidence from this JointAnalysisResult may enter the donor pool.

@@ -3,7 +3,6 @@
 #include "JointPostprocessing.hpp"
 #include "MapInterpolation.hpp"
 #include "joint_component/Numerics.hpp"
-#include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/utils/algorithm/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -42,7 +41,7 @@ struct StencilAudit
 
 struct ReconstructionAtom
 {
-    const AtomObject * atom{};
+    int atom_id{};
     std::array<double, 3> position{};
     std::optional<std::size_t> contributor_index;
     std::optional<GaussianModel3D> point;
@@ -159,8 +158,17 @@ JointPostprocessingContext::JointPostprocessingContext(
     const MapObject & geometry, const ModelObject & model, const JointProblem & problem,
     const JointAnalysisResult * snapshot, JointPostprocessingMetrics * metrics,
     const HaloMedianBuildResult * halo_medians)
+    : JointPostprocessingContext(geometry,model,problem,snapshot,metrics,halo_medians,
+        BuildJointPeelingContributorUniverse(model,problem,snapshot))
+{
+}
+
+JointPostprocessingContext::JointPostprocessingContext(
+    const MapObject & geometry,const ModelObject & model,const JointProblem & problem,
+    const JointAnalysisResult * snapshot,JointPostprocessingMetrics * metrics,
+    const HaloMedianBuildResult * halo_medians,JointPeelingContributorUniverse contributors)
     : m_geometry(geometry), m_model(model), m_problem(problem), m_snapshot(snapshot), m_metrics(metrics),
-      m_halo_medians(halo_medians)
+      m_halo_medians(halo_medians),m_contributors(std::move(contributors))
 {
     const auto & input = problem.OriginalInput();
     const bool pure_exclusion=input.selection_domain &&
@@ -190,6 +198,25 @@ JointPostprocessingContext::JointPostprocessingContext(
                     throw std::invalid_argument("Joint peeling fitting/reconstruction identity mismatch.");
             }
         }
+    }
+    std::unordered_map<int,const JointPeelingContributor *> universe_by_id;
+    universe_by_id.reserve(m_contributors.contributors.size());
+    for (const auto & contributor:m_contributors.contributors)
+    {
+        if (contributor.atom_id<=0 || !universe_by_id.emplace(contributor.atom_id,&contributor).second ||
+            (contributor.reconstruction_eligible && !std::all_of(contributor.position.begin(),
+                contributor.position.end(),[](double value){return std::isfinite(value);})))
+            throw std::invalid_argument("Invalid Joint Peeling contributor universe.");
+    }
+    for (std::size_t index=0;index<input.atom_ids.size();++index)
+    {
+        const auto id=std::stoi(input.atom_ids[index]);
+        const auto found=universe_by_id.find(id);
+        const bool target=input.selection_domain && std::binary_search(
+            input.selection_domain->target_indices.begin(),input.selection_domain->target_indices.end(),index);
+        if (found==universe_by_id.end() || found->second->contributor_index!=index ||
+            found->second->target!=target || !found->second->reconstruction_eligible)
+            throw std::invalid_argument("Joint Peeling contributor universe identity mismatch.");
     }
     m_row_index_by_grid.reserve(input.row_ids.size());
     for (std::size_t row = 0; row < input.row_ids.size(); ++row)
@@ -221,7 +248,9 @@ JointPostprocessingContext::JointPostprocessingContext(
     if (m_metrics)
         m_metrics->estimated_context_lookup_bytes = EstimateHashStorageBytes(m_row_index_by_grid) +
             EstimateHashStorageBytes(m_fitting_row_index_by_grid) +
-            EstimateHashStorageBytes(m_contributor_index_by_id);
+            EstimateHashStorageBytes(m_contributor_index_by_id) +
+            m_contributors.contributors.size()*sizeof(JointPeelingContributor) +
+            input.atom_ids.size()*(sizeof(std::pair<const int,std::size_t>)+2*sizeof(void *));
 }
 
 std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeelingSamples(
@@ -270,7 +299,8 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
     {
         const auto & snapshot=*result->halo_median_reconstruction;
         if (snapshot.contract!=HaloMedianReconstructionContractVersion || snapshot.joint_run_id.empty() ||
-            snapshot.valid_target_count==0)
+            snapshot.valid_target_count==0 || snapshot.neighbor_count!=GeometryLocalTargetMedianNeighborCount ||
+            snapshot.donor_policy!=GeometryLocalTargetMedianDonorPolicy)
             throw std::invalid_argument("Invalid Pure Exclusion Halo median snapshot.");
         const auto valid_median=[](double amplitude,double width,double charge) {
             return std::isfinite(amplitude) && amplitude>=0 && std::isfinite(width) && width>0 &&
@@ -287,13 +317,14 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
                 std::binary_search(result->selection_domain->target_indices.begin(),
                     result->selection_domain->target_indices.end(),halo.halo_contributor_index) ||
                 halo.contract!=HaloMedianReconstructionContractVersion || halo.joint_run_id!=snapshot.joint_run_id ||
-                halo.donor_count==0 ||
-                (halo.source==HaloMedianSource::GlobalTargetMedian && halo.donor_count!=snapshot.valid_target_count) ||
+                halo.source!=HaloMedianSource::GeometryLocalTargetMedian || halo.donor_count==0 ||
+                halo.donor_count>snapshot.neighbor_count || halo.donor_atom_ids.size()!=halo.donor_count ||
                 !valid_median(halo.amplitude,halo.width,halo.charge))
                 throw std::invalid_argument("Invalid Pure Exclusion Halo median reconstruction.");
-            const auto * atom=m_model.FindAtomPtr(std::stoi(halo.atom_id));
-            if (!atom || data_internal::GetGroupKey(atom)!=halo.group_key)
-                throw std::invalid_argument("Invalid Pure Exclusion Halo GroupKey provenance.");
+            std::set<std::string> donor_ids;
+            for (const auto & donor_id:halo.donor_atom_ids)
+                if (donor_id.empty() || !donor_ids.insert(donor_id).second)
+                    throw std::invalid_argument("Invalid Pure Exclusion Halo donor identity.");
             previous=halo.halo_contributor_index;
             first=false;
             represented[halo.halo_contributor_index]=GaussianModel3D{halo.amplitude,halo.width,halo.charge};
@@ -317,6 +348,8 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
         if (result->halo_median_reconstruction &&
             result->halo_median_reconstruction->joint_run_id!=expected_joint_run_id)
             throw std::invalid_argument("Invalid Pure Exclusion Halo median run provenance.");
+        if (!m_contributors.joint_run_id.empty() && m_contributors.joint_run_id!=expected_joint_run_id)
+            throw std::invalid_argument("Invalid Joint Peeling contributor universe run provenance.");
     }
 
     std::optional<HaloMedianBuildResult> rebuilt_halo_medians;
@@ -342,18 +375,17 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
         const auto & rebuilt=halo_medians->snapshot;
         if (saved.contract!=HaloMedianReconstructionContractVersion || saved.joint_run_id.empty() ||
             saved.joint_run_id!=rebuilt.joint_run_id || saved.valid_target_count!=rebuilt.valid_target_count ||
-            saved.global_median!=rebuilt.global_median)
+            saved.global_median!=rebuilt.global_median || saved.neighbor_count!=rebuilt.neighbor_count ||
+            saved.donor_policy!=rebuilt.donor_policy || saved.halos!=rebuilt.halos)
             throw std::invalid_argument("Invalid Pure Exclusion Halo median run provenance.");
     }
     if (halo_medians && !expected_joint_run_id.empty() &&
         halo_medians->snapshot.joint_run_id!=expected_joint_run_id)
         throw std::invalid_argument("Invalid Pure Exclusion reconstruction median run provenance.");
 
-    std::map<GroupKey,GaussianModel3D> group_medians;
-    if (halo_medians)
-        for (const auto & group:halo_medians->audit.groups)
-            group_medians.emplace(group.group_key,GaussianModel3D{
-                group.median[0],group.median[1],group.median[2]});
+    const std::vector<HaloMedianTargetDonor> no_target_donors;
+    const auto & target_donors=halo_medians ? halo_medians->target_donors : no_target_donors;
+    const GeometryLocalTargetDonorIndex target_donor_index(target_donors);
 
     constexpr std::size_t reconstruction_node_cache_limit=4096;
     std::vector<ReconstructionAtom> reconstruction_atoms;
@@ -361,51 +393,50 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
     std::unique_ptr<KDNode<ReconstructionAtom>> reconstruction_tree;
     if (pure_exclusion)
     {
-        reconstruction_atoms.reserve(m_model.GetNumberOfAtom());
-        reconstruction_atom_by_id.reserve(m_model.GetNumberOfAtom());
-        for (const auto & object:m_model.GetAtomList())
+        reconstruction_atoms.reserve(m_contributors.contributors.size());
+        reconstruction_atom_by_id.reserve(m_contributors.contributors.size());
+        for (const auto & source:m_contributors.contributors)
         {
-            if (object->GetElement()==Element::HYDROGEN) continue;
+            if (!source.reconstruction_eligible) continue;
             ReconstructionAtom candidate;
-            candidate.atom=object.get();
-            candidate.position=object->GetPosition();
-            if (!std::all_of(candidate.position.begin(),candidate.position.end(),
-                    [](double coordinate){return std::isfinite(coordinate);}))
-                throw std::invalid_argument("Nonfinite Pure Exclusion reconstruction contributor position.");
-            if (const auto found=m_contributor_index_by_id.find(object->GetSerialID());
-                found!=m_contributor_index_by_id.end())
+            candidate.atom_id=source.atom_id;
+            candidate.position=source.position;
+            candidate.contributor_index=source.contributor_index;
+            if (source.contributor_index)
             {
-                candidate.contributor_index=found->second;
                 const bool target=std::binary_search(result->selection_domain->target_indices.begin(),
-                    result->selection_domain->target_indices.end(),found->second);
-                if (!target || QualifiedTargetPoint(*result,found->second))
-                    candidate.point=represented[found->second];
+                    result->selection_domain->target_indices.end(),*source.contributor_index);
+                if (!target || QualifiedTargetPoint(*result,*source.contributor_index))
+                    candidate.point=represented[*source.contributor_index];
             }
-            if (!candidate.point && !candidate.contributor_index)
+            if (!candidate.point && !candidate.contributor_index && !target_donors.empty())
             {
-                const auto found=group_medians.find(data_internal::GetGroupKey(object.get()));
-                if (found!=group_medians.end()) candidate.point=found->second;
-                else if (halo_medians)
-                    candidate.point=GaussianModel3D{
-                        halo_medians->snapshot.global_median[0],
-                        halo_medians->snapshot.global_median[1],
-                        halo_medians->snapshot.global_median[2]};
+                const auto selected=target_donor_index.Query(candidate.position);
+                if (!selected.empty())
+                {
+                    const auto median=GeometryLocalTargetMedian(selected);
+                    candidate.point=GaussianModel3D{median[0],median[1],median[2]};
+                }
             }
             if (candidate.point &&
                 (!std::isfinite(candidate.point->GetAmplitude()) || candidate.point->GetAmplitude()<0 ||
                     !std::isfinite(candidate.point->GetWidth()) || candidate.point->GetWidth()<=0 ||
                     !std::isfinite(candidate.point->GetOffset())))
                 throw std::invalid_argument("Invalid Pure Exclusion reconstruction contributor parameters.");
-            reconstruction_atom_by_id.emplace(object->GetSerialID(),reconstruction_atoms.size());
+            reconstruction_atom_by_id.emplace(candidate.atom_id,reconstruction_atoms.size());
             reconstruction_atoms.push_back(std::move(candidate));
         }
         reconstruction_tree=KDTreeAlgorithm<ReconstructionAtom>::BuildKDTree(reconstruction_atoms);
         if (m_metrics)
         {
             m_metrics->reconstruction_lookup_atom_count=reconstruction_atoms.size();
+            std::size_t donor_index_workspace_bytes{};
+            for (const auto & donor:target_donors)
+                donor_index_workspace_bytes+=sizeof(HaloMedianTargetDonor)+donor.atom_id.capacity()+
+                    sizeof(std::array<double,3>)+sizeof(HaloMedianTargetDonor *)+8*sizeof(void *);
             m_metrics->estimated_reconstruction_workspace_bytes=
                 reconstruction_atoms.size()*(sizeof(ReconstructionAtom)+sizeof(ReconstructionAtom *)+
-                    sizeof(KDNode<ReconstructionAtom>))+
+                    sizeof(KDNode<ReconstructionAtom>))+donor_index_workspace_bytes+
                 reconstruction_node_cache_limit*(sizeof(std::pair<const std::size_t,ReconstructionNode>)+
                     2*sizeof(void *))+
                 EstimateHashStorageBytes(reconstruction_atom_by_id)+
@@ -555,8 +586,8 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
                     query.position=grid_position;
                     for (const auto * neighbor:KDTreeAlgorithm<ReconstructionAtom>::RangeSearch(
                             reconstruction_tree.get(),&query,2.5))
-                        if (neighbor->atom->GetSerialID()!=id)
-                            neighbors.insert(neighbor->atom->GetSerialID());
+                        if (neighbor->atom_id!=id)
+                            neighbors.insert(neighbor->atom_id);
                     continue;
                 }
                 const auto row = found->second;
@@ -607,7 +638,7 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
         const auto own_charge_workspace = requested_support_entries *
             (sizeof(std::pair<const std::size_t, double>) + 2 * sizeof(void *));
         m_metrics->estimated_peak_postprocessing_payload_bytes = row_workspace +
-            contributor_workspace + support_workspace + own_charge_workspace +
+            m_metrics->estimated_context_lookup_bytes + contributor_workspace + support_workspace + own_charge_workspace +
             m_metrics->estimated_peeling_result_bytes + m_metrics->estimated_reconstruction_workspace_bytes;
     }
     return results;
@@ -709,6 +740,7 @@ PostJointLocalSamples JointPostprocessingContext::BuildPostJointLocalSamples(
         m_metrics->estimated_peak_postprocessing_payload_bytes = std::max(
             m_metrics->estimated_peak_postprocessing_payload_bytes,
             m_metrics->estimated_peeling_result_bytes + local_payload +
+                m_metrics->estimated_context_lookup_bytes +
                 m_metrics->estimated_reconstruction_workspace_bytes);
     }
     return output;

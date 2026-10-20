@@ -14,8 +14,13 @@ inline constexpr std::string_view FixedHaloContributorPolicy="first-stage-fixed-
 inline constexpr std::string_view PureHaloSupportExclusionContributorPolicy="pure-halo-support-exclusion-v1";
 inline constexpr std::string_view JointPureHaloSupportExclusionParameterizationContract=
     "target-only-pure-halo-support-exclusion-v1";
-inline constexpr std::string_view HaloMedianReconstructionContractVersion=
+inline constexpr std::string_view LegacyHaloMedianReconstructionContractVersion=
     "group-key-target-median-v1";
+inline constexpr std::string_view HaloMedianReconstructionContractVersion=
+    "geometry-local-target-median-v1";
+inline constexpr std::size_t GeometryLocalTargetMedianNeighborCount=4;
+inline constexpr std::string_view GeometryLocalTargetMedianDonorPolicy=
+    "qualified-joint-target-points-knn4-unbounded-euclidean-angstrom-distance-atom-id-tie-v1";
 struct ExcludedHaloRecord
 {
     std::string atom_id;
@@ -230,17 +235,18 @@ inline bool IsQualifiedFirstStageFixedHalo(const JointFixedHaloParameter & fixed
     return IsQualifiedFirstStageEstimate(fixed.first_stage_status,
         fixed.first_stage_fit_qualified, fixed.first_stage_qualification, fixed.first_stage_recovery);
 }
-enum class HaloMedianSource { GroupKeyMedian, GlobalTargetMedian };
+enum class HaloMedianSource { GroupKeyMedian, GlobalTargetMedian, GeometryLocalTargetMedian };
 struct JointHaloMedianReconstruction
 {
     std::size_t halo_contributor_index{};
     std::string atom_id;
-    GroupKey group_key{};
+    std::optional<GroupKey> legacy_group_key;
     double amplitude{},width{},charge{};
-    HaloMedianSource source{HaloMedianSource::GlobalTargetMedian};
+    HaloMedianSource source{HaloMedianSource::GeometryLocalTargetMedian};
     std::size_t donor_count{};
     std::string joint_run_id;
     std::string contract{HaloMedianReconstructionContractVersion};
+    std::vector<std::string> donor_atom_ids;
     bool operator==(const JointHaloMedianReconstruction &) const = default;
 };
 struct JointHaloMedianSnapshot
@@ -250,6 +256,8 @@ struct JointHaloMedianSnapshot
     std::array<double,3> global_median{};
     std::size_t valid_target_count{};
     std::vector<JointHaloMedianReconstruction> halos;
+    std::size_t neighbor_count{GeometryLocalTargetMedianNeighborCount};
+    std::string donor_policy{GeometryLocalTargetMedianDonorPolicy};
     bool operator==(const JointHaloMedianSnapshot &) const = default;
 };
 struct JointInitialization

@@ -90,14 +90,15 @@ TEST(HaloMedianReconstructionTest, ComputesSeparateComponentAndWidthAndChargeMed
     const auto built=BuildHaloMedianReconstruction(fixture.model,fixture.problem,fixture.result,"run-1");
     ASSERT_EQ(built.snapshot.halos.size(),2u);
     EXPECT_EQ(built.audit.valid_target_count,3u);
-    EXPECT_EQ(built.audit.same_group_halos,1u);
-    EXPECT_EQ(built.audit.fallback_halos,1u);
-    EXPECT_EQ(built.snapshot.halos[0].source,HaloMedianSource::GroupKeyMedian);
+    EXPECT_EQ(built.audit.geometry_local_halos,2u);
+    EXPECT_EQ(built.snapshot.neighbor_count,4u);
+    EXPECT_EQ(built.snapshot.donor_policy,GeometryLocalTargetMedianDonorPolicy);
+    EXPECT_EQ(built.snapshot.halos[0].source,HaloMedianSource::GeometryLocalTargetMedian);
     EXPECT_DOUBLE_EQ(built.snapshot.halos[0].amplitude,3.0);
     EXPECT_DOUBLE_EQ(built.snapshot.halos[0].width,2.0);
     EXPECT_DOUBLE_EQ(built.snapshot.halos[0].charge,5.0);
     EXPECT_EQ(built.snapshot.halos[0].donor_count,3u);
-    EXPECT_EQ(built.snapshot.halos[1].source,HaloMedianSource::GlobalTargetMedian);
+    EXPECT_EQ(built.snapshot.halos[1].source,HaloMedianSource::GeometryLocalTargetMedian);
     EXPECT_DOUBLE_EQ(built.snapshot.halos[1].amplitude,3.0);
     EXPECT_DOUBLE_EQ(built.snapshot.halos[1].width,2.0);
     EXPECT_DOUBLE_EQ(built.snapshot.halos[1].charge,5.0);
@@ -176,29 +177,22 @@ TEST(HaloMedianReconstructionTest, ResultIsIndependentOfModelAtomTraversalOrder)
     EXPECT_EQ(left.snapshot,right.snapshot);
 }
 
-TEST(HaloMedianReconstructionTest, CurrentGroupKeyPolicyChangesHaloEstimateWhenOnlyTargetLabelsChange)
+TEST(HaloMedianReconstructionTest, ChemicalLabelsDoNotChangeGeometryLocalHaloEstimates)
 {
     auto baseline=MakeFixture();
     auto relabeled=MakeFixture();
     relabeled.model.FindAtomPtr(3)->SetComponentKey(2);
+    relabeled.model.FindAtomPtr(3)->SetAtomKey(19);
+    relabeled.model.FindAtomPtr(3)->SetElement(Element::OXYGEN);
+    relabeled.model.FindAtomPtr(3)->SetResidue(Residue::GLY);
+    relabeled.model.FindAtomPtr(3)->SetSpot(Spot::O);
+    relabeled.model.FindAtomPtr(4)->SetComponentKey(7);
+    relabeled.model.FindAtomPtr(4)->SetAtomKey(28);
 
     const auto original=BuildHaloMedianReconstruction(
         baseline.model,baseline.problem,baseline.result,"label-baseline");
     const auto changed=BuildHaloMedianReconstruction(
         relabeled.model,relabeled.problem,relabeled.result,"label-baseline");
 
-    ASSERT_EQ(original.snapshot.halos.size(),2u);
-    ASSERT_EQ(changed.snapshot.halos.size(),2u);
-    EXPECT_EQ(original.snapshot.global_median,(std::array<double,3>{3.0,2.0,5.0}));
-    EXPECT_EQ(changed.snapshot.global_median,original.snapshot.global_median);
-    EXPECT_EQ(original.snapshot.halos[0].atom_id,"4");
-    EXPECT_EQ(changed.snapshot.halos[0].atom_id,"4");
-    EXPECT_EQ(original.snapshot.halos[0].source,HaloMedianSource::GroupKeyMedian);
-    EXPECT_EQ(changed.snapshot.halos[0].source,HaloMedianSource::GroupKeyMedian);
-    EXPECT_EQ((std::array<double,3>{original.snapshot.halos[0].amplitude,
-        original.snapshot.halos[0].width,original.snapshot.halos[0].charge}),
-        (std::array<double,3>{3.0,2.0,5.0}));
-    EXPECT_EQ((std::array<double,3>{changed.snapshot.halos[0].amplitude,
-        changed.snapshot.halos[0].width,changed.snapshot.halos[0].charge}),
-        (std::array<double,3>{2.0,1.5,3.5}));
+    EXPECT_EQ(original.snapshot,changed.snapshot);
 }

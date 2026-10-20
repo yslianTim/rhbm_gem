@@ -97,6 +97,7 @@ struct ScopedInternalUnboundedOracle
 
 JointAnalysisResult PurePeelingSnapshot(const JointProblem & problem,const ModelObject & model)
 {
+    (void)model;
     JointAnalysisResult result;
     result.parameterization_contract=std::string(JointPureHaloSupportExclusionParameterizationContract);
     result.atom_ids=problem.OriginalInput().atom_ids;
@@ -122,13 +123,20 @@ JointAnalysisResult PurePeelingSnapshot(const JointProblem & problem,const Model
     medians.joint_run_id="pure-peeling-run";
     medians.valid_target_count=1;
     medians.global_median={.5,.8,0.0};
-    const auto * halo=model.FindAtomPtr(2);
     if (problem.OriginalInput().atom_ids.size()>
         problem.OriginalInput().selection_domain->target_indices.size())
     {
-        medians.halos.push_back({1,"2",data_internal::GetGroupKey(halo),.5,.8,0.0,
-            HaloMedianSource::GlobalTargetMedian,1,"pure-peeling-run",
-            std::string(HaloMedianReconstructionContractVersion)});
+        JointHaloMedianReconstruction reconstruction;
+        reconstruction.halo_contributor_index=1;
+        reconstruction.atom_id="2";
+        reconstruction.amplitude=.5;
+        reconstruction.width=.8;
+        reconstruction.charge=0.0;
+        reconstruction.source=HaloMedianSource::GeometryLocalTargetMedian;
+        reconstruction.donor_count=1;
+        reconstruction.joint_run_id="pure-peeling-run";
+        reconstruction.donor_atom_ids={"1"};
+        medians.halos.push_back(std::move(reconstruction));
         result.halo_median_reconstruction=std::move(medians);
     }
     return result;
@@ -471,6 +479,7 @@ JointAnalysisResult IndexedChargeCorrectionSnapshot(
     const JointProblem & problem, const ModelObject & model, double first_charge,
     double second_charge, double halo_charge = .2)
 {
+    (void)model;
     const auto & original = problem.OriginalInput();
     JointAnalysisResult result;
     result.parameterization_contract = std::string(JointPureHaloSupportExclusionParameterizationContract);
@@ -505,10 +514,17 @@ JointAnalysisResult IndexedChargeCorrectionSnapshot(
     median.joint_run_id = "indexed-charge-run";
     median.valid_target_count = 2;
     median.global_median = {.5, .8, halo_charge};
-    const auto * halo = model.FindAtomPtr(1);
-    median.halos.push_back({0, "1", data_internal::GetGroupKey(halo), .5, .8, halo_charge,
-        HaloMedianSource::GlobalTargetMedian, 2, "indexed-charge-run",
-        std::string(HaloMedianReconstructionContractVersion)});
+    JointHaloMedianReconstruction reconstruction;
+    reconstruction.halo_contributor_index=0;
+    reconstruction.atom_id="1";
+    reconstruction.amplitude=.5;
+    reconstruction.width=.8;
+    reconstruction.charge=halo_charge;
+    reconstruction.source=HaloMedianSource::GeometryLocalTargetMedian;
+    reconstruction.donor_count=2;
+    reconstruction.joint_run_id="indexed-charge-run";
+    reconstruction.donor_atom_ids={"2","3"};
+    median.halos.push_back(std::move(reconstruction));
     result.halo_median_reconstruction = std::move(median);
     return result;
 }
@@ -885,6 +901,7 @@ TEST(PureHaloSupportExclusionTest, ReconstructsMissingNodesFromAllQualifiedHaloC
         {4.72,1.18,1.18},{4.72,-1.18,1.18}}};
     const GaussianModel3D point{2.0,.65,-.2};
     const GaussianModel3D other_target_point{10.0,1.1,.4};
+    const GaussianModel3D reconstructed_halo{6.0,.875,.1};
     const SamplingPointList points{
         {1.6,{1.6,0.0,0.0},true},
         {1.9,{1.9,0.0,0.0},true}};
@@ -911,7 +928,7 @@ TEST(PureHaloSupportExclusionTest, ReconstructsMissingNodesFromAllQualifiedHaloC
         };
         target_field[grid]=contribution(target_position,point);
         other_target_field[grid]=contribution(other_target_position,other_target_point);
-        for (const auto & halo:halo_positions) halo_field[grid]+=contribution(halo,point);
+        for (const auto & halo:halo_positions) halo_field[grid]+=contribution(halo,reconstructed_halo);
         const double target_square=core::simulation::SupportSquare(position,target_position);
         if (target_square<=6.25)
             charge_field[grid]=point.GetOffset()*core::joint_component::EvaluateKernel(
@@ -925,10 +942,6 @@ TEST(PureHaloSupportExclusionTest, ReconstructsMissingNodesFromAllQualifiedHaloC
                 fixture.map,other_target_field,points[sample].position);
         const double expected=raw[sample].response-neighbor_prediction;
         EXPECT_NEAR(*peeling.samples[sample].response,expected,1e-12);
-        const double direct_targets=ReferenceTricubicCharge(
-            fixture.map,target_field,points[sample].position)+ReferenceTricubicCharge(
-                fixture.map,other_target_field,points[sample].position);
-        EXPECT_NEAR(*peeling.samples[sample].response,direct_targets,1e-12);
     }
     EXPECT_NEAR(*peeling.samples[0].response,raw[0].response,1e-12);
     EXPECT_EQ(metrics.available_peeling_sample_count,2u);
@@ -949,19 +962,29 @@ TEST(PureHaloSupportExclusionTest, ReconstructsMissingNodesFromAllQualifiedHaloC
         *peeling.samples[1].response-expected_charge,1e-12);
 }
 
-TEST(PureHaloSupportExclusionTest, CurrentReconstructionOnlyPolicyChangesPredictionWhenExtraContributorGroupChanges)
+TEST(PureHaloSupportExclusionTest, PeelingIsInvariantToExtraContributorChemicalLabels)
 {
+    struct Output
+    {
+        std::vector<PeelingSampleEstimate> peeling;
+        std::vector<core::detail::PostJointLocalSample> local_samples;
+        std::optional<double> tail_ratio;
+    };
     const auto peel_sample=[](MapFixture & fixture) {
         const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
         auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
         data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"reconstruction-only-run");
-        const SamplingPointList points{{2.8,{2.8,0.0,0.0},true}};
+        const SamplingPointList points{{1.5,{1.5,0.0,0.0},true},{2.8,{2.8,0.0,0.0},true}};
         fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),
             core::detail::BuildLocalPotentialSampleList(fixture.map,points));
         const core::detail::JointPostprocessingContext context(
             fixture.map,fixture.model,problem,&snapshot);
-        return context.BuildPostFitPeelingSamples(std::vector<std::size_t>{0})
-            .at(1).samples.front().response;
+        auto peeling=context.BuildPostFitPeelingSamples(std::vector<std::size_t>{0}).at(1);
+        fixture.model.EditAnalysis().ApplyPostFitPeelingsBatch({{1,peeling}});
+        const auto tail=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(1))
+            .AssessLocalFittingPeelingRatio(1.0,2.0).ratio;
+        const auto local=context.BuildPostJointLocalSamples(1,peeling);
+        return Output{std::move(peeling.samples),local.samples,tail};
     };
     auto baseline=ReconstructionOnlyFixture();
     auto relabeled=ReconstructionOnlyFixture();
@@ -969,13 +992,36 @@ TEST(PureHaloSupportExclusionTest, CurrentReconstructionOnlyPolicyChangesPredict
     {
         relabeled.model.FindAtomPtr(id)->SetComponentKey(2);
         relabeled.model.FindAtomPtr(id)->SetAtomKey(9);
+        relabeled.model.FindAtomPtr(id)->SetElement(Element::OXYGEN);
+        relabeled.model.FindAtomPtr(id)->SetComponentID("GLY");
+        relabeled.model.FindAtomPtr(id)->SetResidue(Residue::GLY);
+        relabeled.model.FindAtomPtr(id)->SetSpot(Spot::O);
     }
 
-    const auto original_response=peel_sample(baseline);
-    const auto relabeled_response=peel_sample(relabeled);
-    ASSERT_TRUE(original_response);
-    ASSERT_TRUE(relabeled_response);
-    EXPECT_GT(std::abs(*original_response-*relabeled_response),1e-6);
+    const auto original=peel_sample(baseline);
+    const auto changed=peel_sample(relabeled);
+    ASSERT_EQ(original.peeling.size(),changed.peeling.size());
+    ASSERT_EQ(original.local_samples.size(),changed.local_samples.size());
+    for (std::size_t sample=0;sample<original.peeling.size();++sample)
+    {
+        ASSERT_EQ(original.peeling[sample].response.has_value(),changed.peeling[sample].response.has_value());
+        if (original.peeling[sample].response)
+            EXPECT_DOUBLE_EQ(*original.peeling[sample].response,*changed.peeling[sample].response);
+        EXPECT_EQ(original.peeling[sample].reason,changed.peeling[sample].reason);
+        const auto & left=original.local_samples[sample];
+        const auto & right=changed.local_samples[sample];
+        EXPECT_DOUBLE_EQ(left.raw_response,right.raw_response);
+        EXPECT_EQ(left.peeled_response.has_value(),right.peeled_response.has_value());
+        if (left.peeled_response) EXPECT_DOUBLE_EQ(*left.peeled_response,*right.peeled_response);
+        EXPECT_EQ(left.fixed_charge_response.has_value(),right.fixed_charge_response.has_value());
+        if (left.fixed_charge_response)
+            EXPECT_DOUBLE_EQ(*left.fixed_charge_response,*right.fixed_charge_response);
+        EXPECT_EQ(left.gaussian_response.has_value(),right.gaussian_response.has_value());
+        if (left.gaussian_response) EXPECT_DOUBLE_EQ(*left.gaussian_response,*right.gaussian_response);
+        EXPECT_EQ(left.reason,right.reason);
+    }
+    ASSERT_EQ(original.tail_ratio.has_value(),changed.tail_ratio.has_value());
+    if (original.tail_ratio) EXPECT_DOUBLE_EQ(*original.tail_ratio,*changed.tail_ratio);
 }
 
 TEST(PureHaloSupportExclusionTest, MissingHaloMedianKeepsOffDomainContributorUnavailable)
@@ -1050,6 +1096,8 @@ TEST(PureHaloSupportExclusionTest, BoundsReconstructionNodeCacheForLargeSampling
     EXPECT_GT(metrics.estimated_reconstruction_workspace_bytes,0u);
     EXPECT_GE(metrics.estimated_peak_postprocessing_payload_bytes,
         metrics.estimated_reconstruction_workspace_bytes);
+    EXPECT_GE(metrics.estimated_peak_postprocessing_payload_bytes,
+        metrics.estimated_context_lookup_bytes+metrics.estimated_reconstruction_workspace_bytes);
 }
 
 TEST(PureHaloSupportExclusionTest, PeelingRejectsFitReconstructionIdentityMismatch)
@@ -1068,12 +1116,52 @@ TEST(PureHaloSupportExclusionTest, PersistsVersionedDualDomainAndMedianProvenanc
     const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
     const auto snapshot=PurePeelingSnapshot(problem,fixture.model);
     const auto encoded=joint_result_io::Encode(snapshot);
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),17);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),18);
+    const auto encoded_root=boost::json::parse(encoded).as_object();
+    const auto & median_json=encoded_root.at("halo_median_reconstruction").as_object();
+    EXPECT_EQ(median_json.at("neighbor_count").as_int64(),4);
+    EXPECT_EQ(median_json.at("donor_policy").as_string(),GeometryLocalTargetMedianDonorPolicy);
+    const auto & halo_json=median_json.at("halos").as_array().front().as_object();
+    EXPECT_FALSE(halo_json.contains("group_key"));
+    EXPECT_TRUE(halo_json.contains("donor_atom_ids"));
     const auto decoded=joint_result_io::Decode(encoded);
     EXPECT_EQ(decoded.parameterization_contract,JointPureHaloSupportExclusionParameterizationContract);
     EXPECT_EQ(decoded.fitting_to_original_contributors,problem.FittingToOriginalContributors());
     ASSERT_TRUE(decoded.halo_median_reconstruction);
     EXPECT_EQ(decoded.halo_median_reconstruction->halos,snapshot.halo_median_reconstruction->halos);
+}
+
+TEST(PureHaloSupportExclusionTest, PreservesLegacyGroupKeyMedianSnapshotsAsSchema17)
+{
+    auto fixture=BoundaryFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    auto snapshot=PurePeelingSnapshot(problem,fixture.model);
+    ASSERT_TRUE(snapshot.halo_median_reconstruction);
+    auto & medians=*snapshot.halo_median_reconstruction;
+    medians.contract=std::string(LegacyHaloMedianReconstructionContractVersion);
+    for(auto & halo:medians.halos)
+    {
+        halo.contract=medians.contract;
+        halo.source=HaloMedianSource::GroupKeyMedian;
+        halo.legacy_group_key=data_internal::GetGroupKey(fixture.model.FindAtomPtr(1));
+        halo.donor_atom_ids.clear();
+    }
+
+    const auto encoded=joint_result_io::Encode(snapshot);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),17);
+    const auto decoded=joint_result_io::Decode(encoded);
+    ASSERT_TRUE(decoded.halo_median_reconstruction);
+    EXPECT_EQ(decoded.halo_median_reconstruction->contract,LegacyHaloMedianReconstructionContractVersion);
+    ASSERT_FALSE(decoded.halo_median_reconstruction->halos.empty());
+    const auto & decoded_halo=decoded.halo_median_reconstruction->halos.front();
+    EXPECT_EQ(decoded_halo.contract,LegacyHaloMedianReconstructionContractVersion);
+    EXPECT_EQ(decoded_halo.source,HaloMedianSource::GroupKeyMedian);
+    EXPECT_EQ(decoded_halo.legacy_group_key,data_internal::GetGroupKey(fixture.model.FindAtomPtr(1)));
+    EXPECT_TRUE(decoded_halo.donor_atom_ids.empty());
+    EXPECT_EQ(joint_result_io::Encode(decoded),encoded);
+    const core::detail::JointPostprocessingContext context(
+        fixture.map,fixture.model,problem,&decoded);
+    EXPECT_THROW(context.BuildPostFitPeelingSamples(std::vector<std::size_t>{0}),std::invalid_argument);
 }
 
 TEST(PureHaloSupportExclusionTest, PersistsUnqualifiedFailureDiagnosticsWithoutFormalEstimate)
@@ -1156,7 +1244,7 @@ TEST(PureHaloSupportExclusionTest, RejectsQualifiedHaloResultWithoutMedianOrUnav
     EXPECT_THROW(joint_result_io::Encode(result),std::invalid_argument);
 }
 
-TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGroupAndGlobalHaloSources)
+TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGeometryLocalHaloSources)
 {
     auto fixture=WorkflowFixture();
     FitOptions options;
@@ -1173,9 +1261,14 @@ TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGroupAndGlobalHaloSou
     ASSERT_TRUE(result->halo_median_reconstruction);
     EXPECT_EQ(result->halo_median_reconstruction->halos.size(),2u);
     EXPECT_EQ(metrics.halo_median_valid_target_count,1u);
-    EXPECT_EQ(metrics.halo_median_same_group_halos,1u);
-    EXPECT_EQ(metrics.halo_median_fallback_halos,1u);
-    EXPECT_GT(metrics.halo_median_fallback_support_rows,0u);
+    EXPECT_EQ(metrics.halo_median_geometry_local_halos,2u);
+    EXPECT_EQ(metrics.halo_median_unavailable_halos,0u);
+    for (const auto & halo_result:result->halo_median_reconstruction->halos)
+    {
+        EXPECT_EQ(halo_result.source,HaloMedianSource::GeometryLocalTargetMedian);
+        EXPECT_EQ(halo_result.donor_count,1u);
+        EXPECT_EQ(halo_result.donor_atom_ids,(std::vector<std::string>{"1"}));
+    }
     const auto target=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(1));
     EXPECT_TRUE(target.GetPostFitPeeling());
     EXPECT_TRUE(target.GetPostJointLocalResult());
@@ -1201,7 +1294,7 @@ TEST(PureHaloSupportExclusionTest, RunsPureWorkflowWithoutHalos)
     ASSERT_TRUE(result->selection_domain);
     EXPECT_EQ(result->selection_domain->target_indices.size(),result->atom_ids.size());
     EXPECT_FALSE(result->halo_median_reconstruction);
-    EXPECT_EQ(metrics.halo_median_fallback_halos,0u);
+    EXPECT_EQ(metrics.halo_median_geometry_local_halos,0u);
 }
 
 TEST(PureHaloSupportExclusionTest, SkipsDownstreamWhenJointQualificationFails)
@@ -1312,8 +1405,7 @@ TEST(PureHaloSupportExclusionTest, FullWorkflowRetainsMultipleMemberGroupContrac
         EXPECT_TRUE(std::isfinite(summary->inference->mdpde.GetWidth()));
     }
     EXPECT_TRUE(found_multi_member);
-    EXPECT_EQ(metrics.halo_median_same_group_halos,0u);
-    EXPECT_EQ(metrics.halo_median_fallback_halos,0u);
+    EXPECT_EQ(metrics.halo_median_geometry_local_halos,0u);
 }
 
 TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithMultipleTargetsAndHaloGroupSources)
@@ -1336,23 +1428,22 @@ TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithMultipleTargetsAndHal
     ASSERT_EQ(result->halo_median_reconstruction->halos.size(),2u);
     EXPECT_EQ(result->halo_median_reconstruction->valid_target_count,3u);
     EXPECT_EQ(metrics.halo_median_valid_target_count,3u);
-    EXPECT_EQ(metrics.halo_median_same_group_halos,1u);
-    EXPECT_EQ(metrics.halo_median_fallback_halos,1u);
+    EXPECT_EQ(metrics.halo_median_geometry_local_halos,2u);
 
-    const auto same_group_halo=std::find_if(result->halo_median_reconstruction->halos.begin(),
+    const auto near_halo=std::find_if(result->halo_median_reconstruction->halos.begin(),
         result->halo_median_reconstruction->halos.end(),
         [](const auto & halo){return halo.atom_id=="4";});
-    const auto fallback_halo=std::find_if(result->halo_median_reconstruction->halos.begin(),
+    const auto far_halo=std::find_if(result->halo_median_reconstruction->halos.begin(),
         result->halo_median_reconstruction->halos.end(),
         [](const auto & halo){return halo.atom_id=="5";});
-    ASSERT_NE(same_group_halo,result->halo_median_reconstruction->halos.end());
-    ASSERT_NE(fallback_halo,result->halo_median_reconstruction->halos.end());
-    EXPECT_EQ(same_group_halo->source,HaloMedianSource::GroupKeyMedian);
-    EXPECT_EQ(same_group_halo->donor_count,3u);
-    EXPECT_EQ(fallback_halo->source,HaloMedianSource::GlobalTargetMedian);
-    EXPECT_EQ(fallback_halo->donor_count,3u);
-    EXPECT_TRUE(std::isfinite(same_group_halo->amplitude));
-    EXPECT_TRUE(std::isfinite(fallback_halo->amplitude));
+    ASSERT_NE(near_halo,result->halo_median_reconstruction->halos.end());
+    ASSERT_NE(far_halo,result->halo_median_reconstruction->halos.end());
+    EXPECT_EQ(near_halo->source,HaloMedianSource::GeometryLocalTargetMedian);
+    EXPECT_EQ(near_halo->donor_count,3u);
+    EXPECT_EQ(far_halo->source,HaloMedianSource::GeometryLocalTargetMedian);
+    EXPECT_EQ(far_halo->donor_count,3u);
+    EXPECT_TRUE(std::isfinite(near_halo->amplitude));
+    EXPECT_TRUE(std::isfinite(far_halo->amplitude));
 
     double local_amplitude_sum{};
     double local_width_sum{};
@@ -1450,6 +1541,7 @@ struct Phase3Row
     std::string policy;
     std::vector<GaussianModel3D> halos;
     std::vector<std::size_t> donor_counts;
+    std::vector<std::vector<std::string>> donor_ids;
 };
 
 double ComponentMedian(std::vector<double> values)
@@ -1528,6 +1620,37 @@ std::vector<GaussianModel3D> Phase3KnnProfiles(
         profiles.push_back(MedianPoint(donors));
     }
     return profiles;
+}
+
+std::vector<std::vector<std::string>> Phase3KnnDonorIds(
+    const ModelObject & model,const std::vector<Phase3Target> & targets,
+    const std::vector<JointHaloMedianReconstruction> & halos,std::size_t k)
+{
+    std::vector<std::vector<std::string>> selected;
+    for (const auto & halo:halos)
+    {
+        const auto halo_position=model.FindAtomPtr(std::stoi(halo.atom_id))->GetPosition();
+        std::vector<std::pair<double,int>> ordered;
+        for (const auto & target:targets)
+        {
+            const auto target_position=model.FindAtomPtr(target.id)->GetPosition();
+            double square{};
+            for (std::size_t axis=0;axis<3;++axis)
+            {
+                const auto delta=target_position[axis]-halo_position[axis];
+                square+=delta*delta;
+            }
+            ordered.push_back({square,target.id});
+        }
+        std::sort(ordered.begin(),ordered.end(),[](const auto & left,const auto & right) {
+            return left.first==right.first ? left.second<right.second : left.first<right.first;
+        });
+        std::vector<std::string> donor_ids;
+        for (std::size_t index=0;index<std::min(k,ordered.size());++index)
+            donor_ids.push_back(std::to_string(ordered[index].second));
+        selected.push_back(std::move(donor_ids));
+    }
+    return selected;
 }
 
 std::optional<std::vector<GaussianModel3D>> Phase3ObservationAC(
@@ -1678,23 +1801,28 @@ TEST(PureHaloSupportExclusionTest, ComparesLabelFreePoliciesThroughPeelingAndLoc
     const auto global=GaussianModel3D{baseline.global_median[0],baseline.global_median[1],baseline.global_median[2]};
     const auto knn1=Phase3KnnProfiles(fixture.model,targets,baseline.halos,1);
     const auto knn2=Phase3KnnProfiles(fixture.model,targets,baseline.halos,2);
+    const auto knn4=Phase3KnnProfiles(fixture.model,targets,baseline.halos,4);
+    const auto knn1_ids=Phase3KnnDonorIds(fixture.model,targets,baseline.halos,1);
+    const auto knn2_ids=Phase3KnnDonorIds(fixture.model,targets,baseline.halos,2);
+    const auto knn4_ids=Phase3KnnDonorIds(fixture.model,targets,baseline.halos,4);
+    const auto all_target_ids=Phase3KnnDonorIds(fixture.model,targets,baseline.halos,targets.size());
     const auto observation_ac=Phase3ObservationAC(problem,targets,baseline.halos,knn2);
     const std::array<int,2> halo_ids{{4,5}};
     const std::array<GaussianModel3D,2> halo_truth{{{.5,.8,.3},{.3,1.0,-.25}}};
     const auto target_field=Phase3TargetTruthField(fixture.map);
     std::vector<Phase3Row> rows;
     const auto add_row=[&](std::string name,std::vector<GaussianModel3D> profiles,
-        std::vector<std::size_t> donor_counts) {
-        rows.push_back({std::move(name),std::move(profiles),std::move(donor_counts)});
+        std::vector<std::size_t> donor_counts,std::vector<std::vector<std::string>> donor_ids) {
+        rows.push_back({std::move(name),std::move(profiles),std::move(donor_counts),std::move(donor_ids)});
     };
-    std::vector<GaussianModel3D> baseline_profiles;
-    for (const auto & halo:baseline.halos)
-        baseline_profiles.emplace_back(halo.amplitude,halo.width,halo.charge);
-    add_row("group-key-global-fallback",baseline_profiles,{3,3});
-    add_row("global-target-median",{global,global},{3,3});
-    add_row("geometry-knn-1",knn1,{1,1});
-    add_row("geometry-knn-2",knn2,{2,2});
-    if (observation_ac) add_row("observation-ac-knn-2",*observation_ac,{2,2});
+    std::vector<GaussianModel3D> baseline_profiles(baseline.halos.size(),global);
+    const auto baseline_ids=all_target_ids;
+    add_row("group-key-global-fallback",baseline_profiles,{3,3},baseline_ids);
+    add_row("global-target-median",{global,global},{3,3},all_target_ids);
+    add_row("geometry-knn-1",knn1,{1,1},knn1_ids);
+    add_row("geometry-knn-2",knn2,{2,2},knn2_ids);
+    add_row("geometry-knn-4",knn4,{3,3},knn4_ids);
+    if (observation_ac) add_row("observation-ac-knn-2",*observation_ac,{2,2},knn2_ids);
 
     std::cout<<"PHASE3_CSV_BEGIN\n";
     std::cout<<"policy,donors_per_halo,halo_a_rmse,halo_b_rmse,halo_c_rmse,halo_signal_rmse,"
@@ -1752,8 +1880,8 @@ TEST(PureHaloSupportExclusionTest, ComparesLabelFreePoliciesThroughPeelingAndLoc
             saved.charge=rebuilt.charge=row.halos[h].GetOffset();
             const auto count=row.donor_counts[h];
             saved.donor_count=rebuilt.donor_count=count;
-            saved.source=rebuilt.source=count==baseline.valid_target_count ?
-                HaloMedianSource::GlobalTargetMedian : HaloMedianSource::GroupKeyMedian;
+            saved.donor_atom_ids=rebuilt.donor_atom_ids=row.donor_ids[h];
+            saved.source=rebuilt.source=HaloMedianSource::GeometryLocalTargetMedian;
         }
         core::detail::JointPostprocessingMetrics metrics;
         core::detail::JointPostprocessingContext context(fixture.map,fixture.model,problem,

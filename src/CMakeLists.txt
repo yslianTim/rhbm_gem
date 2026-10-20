@@ -46,6 +46,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/FittingWorkset.cpp
     core/detail/JointGroupFitting.cpp
     core/detail/HaloMedianReconstruction.cpp
+    core/detail/PeelingContributorUniverse.cpp
     core/detail/PostFitPeeling.cpp
     core/detail/gaussian_fit/GaussianModelOperations.cpp
     core/detail/gaussian_fit/PreparedLocalGaussianFit.cpp
