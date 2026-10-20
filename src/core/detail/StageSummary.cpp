@@ -66,33 +66,25 @@ std::string BuildSecondStageSpotSummary(const ModelObject & model_object)
         auto & samples = spots[spot];
         if (joint)
         {
-            const auto & local = view.GetPostJointLocalResult();
-            if (!local || local->status != EvidenceStatus::Available)
+            const auto convergence = view.GetStageEstimate(FittingStage::Second).convergence;
+            if (convergence != JointCheckStatus::Passed)
             {
-                if (local && (local->status == EvidenceStatus::Ineligible || local->reason == "local-mdpde-unqualified"))
-                    ++samples.not_converged;
+                if (convergence == JointCheckStatus::Failed) ++samples.not_converged;
                 else ++samples.unavailable;
                 continue;
             }
-            const auto & point = local->fit.mdpde.GetModel();
-            samples.amplitude_list.push_back(point.GetAmplitude());
-            samples.width_list.push_back(point.GetWidth());
-            samples.offset_list.push_back(local->fixed_charge.coefficient);
         }
-        else
-        {
-            if (!view.HasFinalModel(FittingStage::Second)) { ++samples.unavailable; continue; }
-            const auto & point = *view.GetStageEstimate(FittingStage::Second).point;
-            samples.amplitude_list.push_back(point.GetAmplitude());
-            samples.width_list.push_back(point.GetWidth());
-            samples.offset_list.push_back(point.GetOffset());
-        }
+        if (!view.HasFinalModel(FittingStage::Second)) { ++samples.unavailable; continue; }
+        const auto & point = *view.GetStageEstimate(FittingStage::Second).point;
+        samples.amplitude_list.push_back(point.GetAmplitude());
+        samples.width_list.push_back(point.GetWidth());
+        samples.offset_list.push_back(point.GetOffset());
     }
     std::ostringstream summary;
     const auto joint = CollectStageProvenance(population).estimator == "joint-components";
-    summary << (joint ? "Post-Joint local estimate summary by Spot:\nEstimator: " : "Second-stage estimate summary by Spot:\nEstimator: ")
+    summary << "Second-stage estimate summary by Spot:\nEstimator: "
         << CollectStageProvenance(population).estimator
-        << (joint ? "\nPopulation: selected targets; A/B: local MDPDE; C: fixed Joint charge profile; s.d.: between-atom dispersion" :
+        << (joint ? "\nPopulation: selected targets; A/B/C: Joint second-stage estimates; C(J): Joint charge coefficient; s.d.: between-atom dispersion" :
             "\nPopulation: selected targets; s.d.: between-atom dispersion")
         << "\n| " << std::left << std::setw(kSpotColumnWidth) << "Spot"
         << " | " << std::setw(kValidColumnWidth) << "valid"

@@ -948,8 +948,10 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     EXPECT_EQ(halo.GetStageEstimate(rhbm_gem::FittingStage::Second).source.role, rhbm_gem::FittingRole::Halo);
     auto summary = core::BuildSecondStageSpotSummary(*f.model);
     EXPECT_NE(summary.find("joint-components"), std::string::npos);
+    EXPECT_NE(summary.find("Second-stage estimate summary by Spot:"), std::string::npos);
+    EXPECT_NE(summary.find("A/B/C: Joint second-stage estimates"), std::string::npos);
     EXPECT_NE(summary.find("\n| Spot | valid | not-converged | unavailable | A mean / s.d. | B mean / s.d. | C(J) mean / s.d. |"), std::string::npos);
-    EXPECT_NE(summary.find("\n| CA   |"), std::string::npos);
+    EXPECT_NE(summary.find("\n| CA   |     1 |             0 |           0 |"), std::string::npos);
     EXPECT_EQ(summary.find("\n| CB   |"), std::string::npos);
     const auto expectSummaryRowWidths = [](const std::string & output, bool unavailable) {
         const auto row_start = output.find("\n| CA   |");
@@ -977,7 +979,7 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
                 EXPECT_EQ(row[pipe_positions[column] + 9], '/');
         }
     };
-    expectSummaryRowWidths(summary, true);
+    expectSummaryRowWidths(summary, false);
     f.model->EditAnalysis().SetJointResult(result);
     f.model->EditAnalysis().ClearJointResult();
     EXPECT_TRUE(target.HasFinalModel(rhbm_gem::FittingStage::Second));
@@ -988,6 +990,50 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     summary = core::BuildSecondStageSpotSummary(*f.model);
     EXPECT_NE(summary.find("\n| CA   |     0 |             0 |           1 |"), std::string::npos);
     expectSummaryRowWidths(summary, true);
+}
+
+TEST(JointComponentPartialSelectionTest, SummaryIncludesOnlyConvergedSecondStagePoints)
+{
+    using namespace rhbm_gem;
+    auto f = joint_partial_test::Make("all");
+    auto * first = f.model->FindAtomPtr(1);
+    auto * second = f.model->FindAtomPtr(2);
+    second->SetSpot(Spot::CA);
+    auto editor = f.model->EditAnalysis();
+    LocalStageEstimate stage;
+    stage.source = {EstimateMethod::JointComponents, {}, "component", "summary-test", FittingRole::Target};
+    stage.point = GaussianModel3D{2.0, 0.5, -1.0};
+    stage.convergence = JointCheckStatus::Passed;
+    editor.SetAtomStageEstimate(FittingStage::Second, *first, stage);
+
+    struct SummaryCase
+    {
+        JointCheckStatus convergence;
+        bool has_point;
+        const char * counts;
+        const char * values{ "   2.00 / 0.00 |   0.50 / 0.00 |  -1.00 / 0.00 |" };
+    };
+    const SummaryCase cases[]{
+        {JointCheckStatus::Passed, true, "     2 |             0 |           0 |",
+            "   4.00 / 2.83 |   1.00 / 0.71 |   0.00 / 1.41 |"},
+        {JointCheckStatus::Passed, false, "     1 |             0 |           1 |"},
+        {JointCheckStatus::Failed, true, "     1 |             1 |           0 |"},
+        {JointCheckStatus::Failed, false, "     1 |             1 |           0 |"},
+        {JointCheckStatus::Unavailable, true, "     1 |             0 |           1 |"},
+        {JointCheckStatus::Unavailable, false, "     1 |             0 |           1 |"},
+        {JointCheckStatus::NotRun, true, "     1 |             0 |           1 |"},
+        {JointCheckStatus::NotRun, false, "     1 |             0 |           1 |"}
+    };
+    for (const auto & test : cases)
+    {
+        SCOPED_TRACE(testing::Message() << "convergence=" << static_cast<int>(test.convergence)
+            << ", has_point=" << test.has_point);
+        stage.convergence = test.convergence;
+        stage.point = test.has_point ? std::optional{GaussianModel3D{6.0, 1.5, 1.0}} : std::nullopt;
+        editor.SetAtomStageEstimate(FittingStage::Second, *second, stage);
+        const auto summary = core::BuildSecondStageSpotSummary(*f.model);
+        EXPECT_NE(summary.find(std::string{"\n| CA   |"} + test.counts + test.values), std::string::npos) << summary;
+    }
 }
 
 TEST(JointComponentPartialSelectionTest, PostFitPeelingReconstructsGridNodesOutsideOriginalDomain)
@@ -1297,6 +1343,10 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
         stages[i] = std::move(stage);
     }
     editor.ApplySecondStageEstimates(stages);
+    const auto stage_summary = core::BuildSecondStageSpotSummary(model);
+    EXPECT_NE(stage_summary.find(
+        "\n| CA   |     5 |             0 |           0 |   2.60 / 0.32 |   0.55 / 0.03 |  -0.30 / 0.16 |"),
+        std::string::npos) << stage_summary;
 
     std::vector<std::pair<int, PostFitPeelingResult>> peelings;
     std::vector<std::pair<int, PostJointLocalResult>> local_results;
@@ -1352,6 +1402,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
     EXPECT_EQ(peeling_stats.membership_traversals, 1u);
     EXPECT_EQ(peeling_stats.groups_invalidated, 1u);
     editor.ApplyPostJointLocalResultsBatch(local_results);
+    EXPECT_EQ(core::BuildSecondStageSpotSummary(model), stage_summary);
 
     core::FitOptions options; options.estimator = core::PotentialEstimator::JOINT_COMPONENTS; options.quiet_mode = true;
     core::RunGroupPotentialFitting(model, options);
@@ -1430,6 +1481,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
         republished_peelings.emplace_back(id, *AtomLocalPotentialView::For(*model.FindAtomPtr(id)).GetPostFitPeeling());
     editor.ApplyPostFitPeelingsBatch(std::move(republished_peelings));
     EXPECT_FALSE(first.GetPostJointLocalResult());
+    EXPECT_EQ(core::BuildSecondStageSpotSummary(model), stage_summary);
     EXPECT_FALSE(first.GetGroupMemberResult());
     EXPECT_FALSE(model.GetAnalysisView().GetGroupParameterSummary(keys[0]));
     editor.ApplyPostJointLocalResultsBatch(local_results);
@@ -1535,6 +1587,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
     editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1), {{-12345, {0.3, {0,0,0}, true}}});
     EXPECT_FALSE(first.GetPostFitPeeling());
     EXPECT_FALSE(first.GetPostJointLocalResult());
+    EXPECT_EQ(core::BuildSecondStageSpotSummary(model), stage_summary);
     EXPECT_FALSE(first.GetGroupMemberResult());
     core::RunGroupPotentialFitting(model, options);
     EXPECT_EQ(model.GetAnalysisView().GetGroupParameterSummary(keys[0])->eligible_count, 3);
@@ -1552,7 +1605,22 @@ TEST(JointComponentPartialSelectionTest, SummaryReportsMixedSourcesWithoutSnapsh
     local.mdpde = {rhbm_gem::GaussianModel3D{2, .5, 0}, {}};
     editor.SetAtomLocalGaussianResult(rhbm_gem::FittingStage::Second, *f.model->FindAtomPtr(2), local);
     EXPECT_FALSE(f.model->GetAnalysisView().GetJointResult());
-    EXPECT_NE(core::BuildSecondStageSpotSummary(*f.model).find("Estimator: mixed"), std::string::npos);
+    auto summary = core::BuildSecondStageSpotSummary(*f.model);
+    EXPECT_NE(summary.find("Estimator: mixed"), std::string::npos);
+    EXPECT_NE(summary.find(
+        "\n| CB   |     1 |             0 |           0 |   2.00 / 0.00 |   0.50 / 0.00 |   0.00 / 0.00 |"),
+        std::string::npos);
+    local.mdpde = {rhbm_gem::GaussianModel3D{4, 1.5, -2}, {}};
+    editor.SetAtomLocalGaussianResult(rhbm_gem::FittingStage::Second, *f.model->FindAtomPtr(1), local);
+    auto stage = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1))
+        .GetStageEstimate(rhbm_gem::FittingStage::Second);
+    stage.convergence = rhbm_gem::JointCheckStatus::Failed;
+    editor.SetAtomStageEstimate(rhbm_gem::FittingStage::Second, *f.model->FindAtomPtr(1), stage);
+    summary = core::BuildSecondStageSpotSummary(*f.model);
+    EXPECT_NE(summary.find("Estimator: two-stage"), std::string::npos);
+    EXPECT_NE(summary.find(
+        "\n| CA   |     1 |             0 |           0 |   4.00 / 0.00 |   1.50 / 0.00 |  -2.00 / 0.00 |"),
+        std::string::npos);
 }
 
 TEST(JointComponentPartialSelectionTest, TargetOnlyPostprocessingRetainsFullContributorCoupling)
