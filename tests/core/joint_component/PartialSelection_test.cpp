@@ -990,7 +990,7 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     expectSummaryRowWidths(summary, true);
 }
 
-TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesGridOperatorAndRetainsMissingCoverage)
+TEST(JointComponentPartialSelectionTest, PostFitPeelingReconstructsGridNodesOutsideOriginalDomain)
 {
     auto f = joint_partial_test::Make("partial");
     SetExactMapForFixture(f);
@@ -1030,12 +1030,21 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesGridOperatorAndRetain
         return squared <= 6.25 ? neighbor.ResponseAtDistance(std::sqrt(squared)) : 0.0;
     });
     EXPECT_NEAR(*output.samples[0].response, raw[0].response - neighbor_prediction, 1e-12);
-    EXPECT_FALSE(output.samples[2].response);
-    EXPECT_EQ(output.samples[2].reason, "outside-joint-domain");
+    ASSERT_TRUE(output.samples[2].response);
+    const auto outer_stencil = core::detail::MakeTricubicStencil(*f.map, points[2].position);
+    const double outer_neighbor_prediction = core::detail::InterpolateTricubic(
+        outer_stencil, [&](const auto & node) {
+            const auto position = core::simulation::GridPosition(node, f.map->GetGridSpacing(), f.map->GetOrigin());
+            const double squared = core::simulation::SupportSquare(
+                position, f.model->FindAtomPtr(2)->GetPosition());
+            return squared <= 6.25 ? neighbor.ResponseAtDistance(std::sqrt(squared)) : 0.0;
+        });
+    EXPECT_NEAR(*output.samples[2].response,
+        raw[2].response - outer_neighbor_prediction, 1e-12);
     editor.SetAtomPostFitPeeling(*atom, output);
     ASSERT_TRUE(view.GetLocalFittingPeelingRatio(0, 1));
     EXPECT_GT(*view.GetLocalFittingPeelingRatio(0, 1), 0);
-    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(0, 3));
+    EXPECT_TRUE(view.GetLocalFittingPeelingRatio(0, 3));
     EXPECT_EQ(view.GetFinalModel(rhbm_gem::FittingStage::Second).ToVector(), before);
     const auto after = view.GetRawSamplingEntries(false);
     for (std::size_t i = 0; i < raw.size(); ++i)

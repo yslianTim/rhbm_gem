@@ -3,6 +3,7 @@
 
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/MapSampler.hpp"
+#include "core/detail/HaloMedianReconstruction.hpp"
 #include "core/detail/PostFitPeeling.hpp"
 #include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/joint_component/Problem.hpp"
@@ -116,10 +117,14 @@ JointAnalysisResult PurePeelingSnapshot(const JointProblem & problem,const Model
     medians.valid_target_count=1;
     medians.global_median={.5,.8,0.0};
     const auto * halo=model.FindAtomPtr(2);
-    medians.halos.push_back({1,"2",data_internal::GetGroupKey(halo),.5,.8,0.0,
-        HaloMedianSource::GlobalTargetMedian,1,"pure-peeling-run",
-        std::string(HaloMedianReconstructionContractVersion)});
-    result.halo_median_reconstruction=std::move(medians);
+    if (problem.OriginalInput().atom_ids.size()>
+        problem.OriginalInput().selection_domain->target_indices.size())
+    {
+        medians.halos.push_back({1,"2",data_internal::GetGroupKey(halo),.5,.8,0.0,
+            HaloMedianSource::GlobalTargetMedian,1,"pure-peeling-run",
+            std::string(HaloMedianReconstructionContractVersion)});
+        result.halo_median_reconstruction=std::move(medians);
+    }
     return result;
 }
 
@@ -292,6 +297,109 @@ MapFixture WideBoundaryFixture()
         values[i]=static_cast<double>(i);
     MapObject map(dimensions,{.5,.5,.5},{-5,-2,-2},std::move(values));
     return {std::move(fixture.model),std::move(map)};
+}
+
+MapFixture ReconstructionOnlyFixture()
+{
+    constexpr std::array<double,3> target_position{0.0,0.0,0.0};
+    constexpr std::array<double,3> other_target_position{-4.5,-4.5,-4.5};
+    constexpr std::array<std::array<double,3>,2> halo_positions{{
+        {4.72,1.18,1.18},{4.72,-1.18,1.18}}};
+    const GaussianModel3D point{2.0,.65,-.2};
+    const GaussianModel3D other_target_point{10.0,1.1,.4};
+    std::vector<std::unique_ptr<AtomObject>> atoms;
+    const auto add_atom=[&](int serial,const std::array<double,3> & position,
+        ComponentKey component,AtomKey atom_key) {
+        auto atom=std::make_unique<AtomObject>();
+        atom->SetSerialID(serial);
+        atom->SetElement(Element::CARBON);
+        atom->SetComponentKey(component);
+        atom->SetAtomKey(atom_key);
+        atom->SetChainID("A");
+        atom->SetComponentID("ALA");
+        atom->SetAtomID("CA");
+        atom->SetPosition(position);
+        atoms.push_back(std::move(atom));
+    };
+    add_atom(1,target_position,static_cast<ComponentKey>(1),static_cast<AtomKey>(7));
+    add_atom(2,halo_positions[0],static_cast<ComponentKey>(1),static_cast<AtomKey>(7));
+    add_atom(3,halo_positions[1],static_cast<ComponentKey>(1),static_cast<AtomKey>(7));
+    add_atom(4,other_target_position,static_cast<ComponentKey>(2),static_cast<AtomKey>(9));
+    ModelObject model(std::move(atoms));
+    model.SelectAtoms([](const auto & atom){return atom.GetSerialID()==1 || atom.GetSerialID()==4;});
+
+    constexpr std::array<int,3> dimensions{45,45,45};
+    constexpr std::array<double,3> spacing{.3,.3,.3};
+    constexpr std::array<double,3> origin{-6.6,-6.6,-6.6};
+    auto values=std::make_unique<double[]>(static_cast<std::size_t>(dimensions[0])*dimensions[1]*dimensions[2]);
+    for (int z=0;z<dimensions[2];++z) for (int y=0;y<dimensions[1];++y) for (int x=0;x<dimensions[0];++x)
+    {
+        const auto position=core::simulation::GridPosition({x,y,z},spacing,origin);
+        double value{};
+        const auto add_profile=[&](const auto & center,const GaussianModel3D & profile) {
+            const double square=core::simulation::SupportSquare(position,center);
+            if (square>6.25) return;
+            const auto basis=core::joint_component::EvaluateKernel(square,profile.GetWidth(),2.5);
+            value+=profile.GetAmplitude()*basis.gaussian+profile.GetOffset()*basis.charge;
+        };
+        add_profile(target_position,point);
+        for (const auto & halo:halo_positions) add_profile(halo,point);
+        add_profile(other_target_position,other_target_point);
+        const auto index=static_cast<std::size_t>(x)+static_cast<std::size_t>(dimensions[0]) *
+            (static_cast<std::size_t>(y)+static_cast<std::size_t>(dimensions[1])*static_cast<std::size_t>(z));
+        values[index]=value;
+    }
+    MapObject map(dimensions,spacing,origin,std::move(values));
+    return {std::move(model),std::move(map)};
+}
+
+JointAnalysisResult QualifiedReconstructionSnapshot(const JointProblem & problem,const ModelObject & model)
+{
+    auto result=PurePeelingSnapshot(problem,model);
+    result.halo_median_reconstruction.reset();
+    result.initialization=TargetInitialization();
+    result.search_completed=true;
+    const auto targets=problem.OriginalInput().selection_domain->target_indices;
+    result.components.front().atoms={targets.front()};
+    result.components.front().state->ac={2.0,-.2};
+    result.components.front().state->b={.65};
+    result.components.front().search_completed=true;
+    result.components.front().stop_reason="converged";
+    result.assembled_state=result.components.front().state;
+    result.objective=0.0;
+    if (targets.size()>1)
+    {
+        JointAnalysisComponent component;
+        component.id="second-target-component";
+        component.atoms={targets[1]};
+        component.rows=problem.FittingToOriginalRows();
+        component.runtime_convergence=JointCheckStatus::Passed;
+        component.target_runtime_convergence=JointCheckStatus::Passed;
+        component.search_completed=true;
+        component.stop_reason="converged";
+        component.state=JointState{{10.0,.4},{1.1},{0.0},{0.0},0.0,{}};
+        result.components.push_back(std::move(component));
+    }
+    result.target_evidence.emplace();
+    result.target_evidence->contract=std::string(JointTargetPointValidationContractVersion);
+    result.target_evidence->original_rows=problem.OriginalInput().row_ids.size();
+    for (const auto target:targets)
+    {
+        JointAtomPointValidation point;
+        point.atom=target;
+        point.component_convergence=JointCheckStatus::Passed;
+        point.parameter_validity=JointCheckStatus::Passed;
+        point.local_conditioning="Adequate";
+        point.parameter_stability="NotAssessed";
+        point.point_quality="NotAssessed";
+        point.reason="test-qualified-point";
+        result.target_evidence->point_atoms.push_back(std::move(point));
+    }
+    const auto medians=core::detail::BuildHaloMedianReconstruction(
+        model,problem,result,"reconstruction-only-run");
+    if (problem.OriginalInput().atom_ids.size()>targets.size())
+        result.halo_median_reconstruction=medians.snapshot;
+    return result;
 }
 
 struct IndexedChargeCorrectionFixture
@@ -736,15 +844,12 @@ TEST(PureHaloSupportExclusionTest, ClassifiesPeelingGeometrySupportAndMaskInters
     const auto & samples=peelings.at(1).samples;
     ASSERT_EQ(samples.size(),3u);
     EXPECT_TRUE(samples[0].response);
-    EXPECT_FALSE(samples[1].response);
-    EXPECT_FALSE(samples[2].response);
-    EXPECT_EQ(samples[1].reason,"outside-joint-domain");
-    EXPECT_EQ(samples[2].reason,"outside-joint-domain");
+    EXPECT_TRUE(samples[1].response);
+    EXPECT_TRUE(samples[2].response);
     EXPECT_EQ(metrics.raw_peeling_sample_count,3u);
-    EXPECT_EQ(metrics.available_peeling_sample_count,1u);
-    EXPECT_EQ(metrics.unavailable_peeling_sample_count,2u);
+    EXPECT_EQ(metrics.available_peeling_sample_count,3u);
+    EXPECT_EQ(metrics.unavailable_peeling_sample_count,0u);
     EXPECT_EQ(metrics.map_geometry_boundary_samples,1u);
-    EXPECT_EQ(metrics.original_support_boundary_samples,1u);
     EXPECT_EQ(metrics.mapping_mismatch_samples,0u);
     EXPECT_GE(metrics.fitting_mask_only_intersection_samples,1u);
     EXPECT_GT(metrics.nonzero_stencil_node_count,0u);
@@ -755,10 +860,161 @@ TEST(PureHaloSupportExclusionTest, ClassifiesPeelingGeometrySupportAndMaskInters
     fixture.model.EditAnalysis().SetAtomPostFitPeeling(*fixture.model.FindAtomPtr(1),peelings.at(1));
     const auto assessment=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(1))
         .AssessLocalFittingPeelingRatio(1.0,2.0);
-    EXPECT_FALSE(assessment.ratio);
+    EXPECT_TRUE(assessment.ratio);
     EXPECT_EQ(assessment.total_samples,2u);
-    EXPECT_EQ(assessment.valid_samples,1u);
-    EXPECT_EQ(assessment.reason,"tail-coverage-incomplete:outside-joint-domain");
+    EXPECT_EQ(assessment.valid_samples,2u);
+    EXPECT_TRUE(assessment.reason.empty());
+}
+
+TEST(PureHaloSupportExclusionTest, ReconstructsMissingNodesFromAllQualifiedHaloContributors)
+{
+    auto fixture=ReconstructionOnlyFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    ASSERT_EQ(problem.OriginalInput().atom_ids,(std::vector<std::string>{"1","4"}));
+    auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
+    data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"reconstruction-only-run");
+    const std::array<double,3> target_position{0.0,0.0,0.0};
+    const std::array<double,3> other_target_position{-4.5,-4.5,-4.5};
+    const std::array<std::array<double,3>,2> halo_positions{{
+        {4.72,1.18,1.18},{4.72,-1.18,1.18}}};
+    const GaussianModel3D point{2.0,.65,-.2};
+    const GaussianModel3D other_target_point{10.0,1.1,.4};
+    const SamplingPointList points{
+        {1.6,{1.6,0.0,0.0},true},
+        {1.9,{1.9,0.0,0.0},true}};
+    const auto raw=core::detail::BuildLocalPotentialSampleList(fixture.map,points);
+    fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),raw);
+
+    core::detail::JointPostprocessingMetrics metrics;
+    const core::detail::JointPostprocessingContext context(
+        fixture.map,fixture.model,problem,&snapshot,&metrics);
+    const auto peelings=context.BuildPostFitPeelingSamples(std::vector<std::size_t>{0});
+    const auto & peeling=peelings.at(1);
+    ASSERT_EQ(peeling.samples.size(),2u);
+
+    const auto map_size=fixture.map.GetMapValueArraySize();
+    std::vector<double> target_field(map_size),other_target_field(map_size),halo_field(map_size),charge_field(map_size);
+    for (std::size_t grid=0;grid<map_size;++grid)
+    {
+        const auto position=fixture.map.GetGridPosition(grid);
+        const auto contribution=[&](const auto & center,const GaussianModel3D & profile) {
+            const double square=core::simulation::SupportSquare(position,center);
+            if (square>6.25) return 0.0;
+            const auto basis=core::joint_component::EvaluateKernel(square,profile.GetWidth(),2.5);
+            return profile.GetAmplitude()*basis.gaussian+profile.GetOffset()*basis.charge;
+        };
+        target_field[grid]=contribution(target_position,point);
+        other_target_field[grid]=contribution(other_target_position,other_target_point);
+        for (const auto & halo:halo_positions) halo_field[grid]+=contribution(halo,point);
+        const double target_square=core::simulation::SupportSquare(position,target_position);
+        if (target_square<=6.25)
+            charge_field[grid]=point.GetOffset()*core::joint_component::EvaluateKernel(
+                target_square,point.GetWidth(),2.5).charge;
+    }
+    for (std::size_t sample=0;sample<points.size();++sample)
+    {
+        ASSERT_TRUE(peeling.samples[sample].response) << peeling.samples[sample].reason;
+        const double neighbor_prediction=ReferenceTricubicCharge(
+            fixture.map,halo_field,points[sample].position)+ReferenceTricubicCharge(
+                fixture.map,other_target_field,points[sample].position);
+        const double expected=raw[sample].response-neighbor_prediction;
+        EXPECT_NEAR(*peeling.samples[sample].response,expected,1e-12);
+        const double direct_targets=ReferenceTricubicCharge(
+            fixture.map,target_field,points[sample].position)+ReferenceTricubicCharge(
+                fixture.map,other_target_field,points[sample].position);
+        EXPECT_NEAR(*peeling.samples[sample].response,direct_targets,1e-12);
+    }
+    EXPECT_NEAR(*peeling.samples[0].response,raw[0].response,1e-12);
+    EXPECT_EQ(metrics.available_peeling_sample_count,2u);
+    EXPECT_GE(metrics.original_support_boundary_samples,1u);
+    EXPECT_EQ(metrics.reconstruction_lookup_atom_count,4u);
+    EXPECT_GT(metrics.reconstruction_only_node_evaluation_count,0u);
+    EXPECT_LE(metrics.reconstruction_node_cache_peak_entries,4096u);
+    EXPECT_GT(metrics.estimated_reconstruction_workspace_bytes,0u);
+
+    const auto local=context.BuildPostJointLocalSamples(1,peeling);
+    ASSERT_EQ(local.samples.size(),2u);
+    ASSERT_TRUE(local.samples[1].fixed_charge_response);
+    ASSERT_TRUE(local.samples[1].gaussian_response);
+    const double expected_charge=ReferenceTricubicCharge(
+        fixture.map,charge_field,points[1].position);
+    EXPECT_NEAR(*local.samples[1].fixed_charge_response,expected_charge,1e-12);
+    EXPECT_NEAR(*local.samples[1].gaussian_response,
+        *peeling.samples[1].response-expected_charge,1e-12);
+}
+
+TEST(PureHaloSupportExclusionTest, MissingHaloMedianKeepsOffDomainContributorUnavailable)
+{
+    auto fixture=ReconstructionOnlyFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    auto snapshot=PurePeelingSnapshot(problem,fixture.model);
+    data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"no-median-run");
+    const SamplingPointList points{{1.9,{1.9,0.0,0.0},true}};
+    fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),
+        core::detail::BuildLocalPotentialSampleList(fixture.map,points));
+    core::detail::JointPostprocessingMetrics metrics;
+    const core::detail::JointPostprocessingContext context(
+        fixture.map,fixture.model,problem,&snapshot,&metrics);
+    const auto peelings=context.BuildPostFitPeelingSamples(std::vector<std::size_t>{0});
+    ASSERT_EQ(peelings.at(1).samples.size(),1u);
+    EXPECT_FALSE(peelings.at(1).samples.front().response);
+    EXPECT_EQ(peelings.at(1).samples.front().reason,"missing-contributor-state");
+    EXPECT_EQ(metrics.missing_contributor_samples,1u);
+}
+
+TEST(PureHaloSupportExclusionTest, RejectsReconstructionMedianFromDifferentJointEndpoint)
+{
+    auto fixture=ReconstructionOnlyFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
+    snapshot.halo_median_reconstruction=core::detail::BuildHaloMedianReconstruction(
+        fixture.model,problem,snapshot,"reconstruction-only-run").snapshot;
+    snapshot.halo_median_reconstruction->global_median[0]+=1.0;
+    data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"reconstruction-only-run");
+    const core::detail::JointPostprocessingContext context(
+        fixture.map,fixture.model,problem,&snapshot);
+    EXPECT_THROW(context.BuildPostFitPeelingSamples(std::vector<std::size_t>{0}),std::invalid_argument);
+}
+
+TEST(PureHaloSupportExclusionTest, BoundsReconstructionNodeCacheForLargeSamplingSet)
+{
+    auto fixture=ReconstructionOnlyFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
+    data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"reconstruction-only-run");
+
+    SamplingPointList points;
+    constexpr std::size_t sample_axis_count=25;
+    points.reserve(sample_axis_count*sample_axis_count*sample_axis_count);
+    const auto dimensions=fixture.map.GetGridSize();
+    for (std::size_t z=0;z<sample_axis_count;++z)
+        for (std::size_t y=0;y<sample_axis_count;++y)
+            for (std::size_t x=0;x<sample_axis_count;++x)
+    {
+        const std::array<int,3> index{
+            static_cast<int>(x*static_cast<std::size_t>(dimensions[0]-1)/(sample_axis_count-1)),
+            static_cast<int>(y*static_cast<std::size_t>(dimensions[1]-1)/(sample_axis_count-1)),
+            static_cast<int>(z*static_cast<std::size_t>(dimensions[2]-1)/(sample_axis_count-1))};
+        const auto position=core::simulation::GridPosition(
+            index,fixture.map.GetGridSpacing(),fixture.map.GetOrigin());
+        points.push_back({std::sqrt(position[0]*position[0]+position[1]*position[1]+position[2]*position[2]),
+            position,true});
+    }
+    fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),
+        core::detail::BuildLocalPotentialSampleList(fixture.map,points));
+    core::detail::JointPostprocessingMetrics metrics;
+    const core::detail::JointPostprocessingContext context(
+        fixture.map,fixture.model,problem,&snapshot,&metrics);
+    std::map<int,PostFitPeelingResult> peelings;
+    ASSERT_NO_THROW(peelings=context.BuildPostFitPeelingSamples(std::vector<std::size_t>{0}));
+    ASSERT_TRUE(peelings.contains(1));
+    ASSERT_EQ(peelings.at(1).samples.size(),points.size());
+    EXPECT_EQ(metrics.raw_peeling_sample_count,points.size());
+    EXPECT_EQ(metrics.reconstruction_node_cache_peak_entries,4096u);
+    EXPECT_GT(metrics.reconstruction_only_node_evaluation_count,4096u);
+    EXPECT_GT(metrics.estimated_reconstruction_workspace_bytes,0u);
+    EXPECT_GE(metrics.estimated_peak_postprocessing_payload_bytes,
+        metrics.estimated_reconstruction_workspace_bytes);
 }
 
 TEST(PureHaloSupportExclusionTest, PeelingRejectsFitReconstructionIdentityMismatch)

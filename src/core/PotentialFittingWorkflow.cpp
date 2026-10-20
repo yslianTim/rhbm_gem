@@ -288,22 +288,24 @@ void RunJointComponentWorkflow(
         return;
     }
     bool halo_reconstruction_unavailable{};
+    std::optional<HaloMedianBuildResult> halo_median_build;
     const auto & original=problem.OriginalInput();
     const auto target_count=original.selection_domain ? original.selection_domain->target_indices.size() : 0;
-    if (original.atom_ids.size()>target_count)
+    const bool original_has_halos=original.atom_ids.size()>target_count;
+    try
     {
-        try
+        halo_median_build=BuildHaloMedianReconstruction(model,problem,snapshot,joint_run_id);
+        if (original_has_halos) snapshot.halo_median_reconstruction=halo_median_build->snapshot;
+        postprocessing_metrics.halo_median_valid_target_count=halo_median_build->audit.valid_target_count;
+        postprocessing_metrics.halo_median_same_group_halos=halo_median_build->audit.same_group_halos;
+        postprocessing_metrics.halo_median_fallback_halos=halo_median_build->audit.fallback_halos;
+        postprocessing_metrics.halo_median_fallback_support_rows=halo_median_build->audit.fallback_support_rows;
+    }
+    catch (const std::invalid_argument & error)
+    {
+        if (std::string_view(error.what()) != "halo-median-no-valid-targets") throw;
+        if (original_has_halos)
         {
-            const auto built=BuildHaloMedianReconstruction(model,problem,snapshot,joint_run_id);
-            snapshot.halo_median_reconstruction=built.snapshot;
-            postprocessing_metrics.halo_median_valid_target_count=built.audit.valid_target_count;
-            postprocessing_metrics.halo_median_same_group_halos=built.audit.same_group_halos;
-            postprocessing_metrics.halo_median_fallback_halos=built.audit.fallback_halos;
-            postprocessing_metrics.halo_median_fallback_support_rows=built.audit.fallback_support_rows;
-        }
-        catch (const std::invalid_argument & error)
-        {
-            if (std::string_view(error.what()) != "halo-median-no-valid-targets") throw;
             snapshot.evidence.push_back({std::string(JointHaloMedianReconstructionEvidenceName),
                 JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{}, {},error.what()});
             halo_reconstruction_unavailable=true;
@@ -321,7 +323,8 @@ void RunJointComponentWorkflow(
     }
     const auto & joint_snapshot = *model.GetAnalysisView().GetJointResult();
     auto phase_start = std::chrono::steady_clock::now();
-    const JointPostprocessingContext postprocessing(map, model, problem, &joint_snapshot, &postprocessing_metrics);
+    const JointPostprocessingContext postprocessing(map, model, problem, &joint_snapshot,
+        &postprocessing_metrics,halo_median_build ? &*halo_median_build : nullptr);
     postprocessing_metrics.context_construction_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - phase_start).count();
     postprocessing_metrics.rss_after_context_bytes = joint_component::CurrentRssBytes();
@@ -423,12 +426,25 @@ void RunJointComponentWorkflow(
             << postprocessing_metrics.tail_raw_sample_count
             << ", ratio_available=" << postprocessing_metrics.tail_ratio_available_targets
             << ", raw_sum=" << postprocessing_metrics.tail_raw_response_sum
-            << ", peeled_sum=" << postprocessing_metrics.tail_peeling_response_sum;
+            << ", peeled_sum=" << postprocessing_metrics.tail_peeling_response_sum
+            << ", map_boundary_samples=" << postprocessing_metrics.map_geometry_boundary_samples
+            << ", original_support_boundary_samples=" << postprocessing_metrics.original_support_boundary_samples
+            << ", fitting_mask_only_samples=" << postprocessing_metrics.fitting_mask_only_intersection_samples
+            << ", mapping_mismatch_samples=" << postprocessing_metrics.mapping_mismatch_samples
+            << ", missing_contributor_samples=" << postprocessing_metrics.missing_contributor_samples;
         for (const auto & [bucket, count] : postprocessing_metrics.tail_coverage_distribution)
             tail_message << ", coverage_" << bucket << '=' << count;
         for (const auto & [reason, count] : postprocessing_metrics.tail_unavailable_reasons)
             tail_message << ", " << reason << '=' << count;
         LogJointInfo(tail_message.str());
+        std::ostringstream reconstruction_message;
+        reconstruction_message << "[Joint] Reconstruction-only lookup: atoms="
+            << postprocessing_metrics.reconstruction_lookup_atom_count
+            << ", node_evaluations=" << postprocessing_metrics.reconstruction_only_node_evaluation_count
+            << ", cache_hits=" << postprocessing_metrics.reconstruction_node_cache_hit_count
+            << ", cache_peak_entries=" << postprocessing_metrics.reconstruction_node_cache_peak_entries
+            << ", estimated_workspace_bytes=" << postprocessing_metrics.estimated_reconstruction_workspace_bytes;
+        LogJointInfo(reconstruction_message.str());
     }
     postprocessing_metrics.total_postprocessing_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - postprocessing_start).count();
