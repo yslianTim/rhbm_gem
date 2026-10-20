@@ -19,20 +19,7 @@ bool LayoutMatchesScope(const JointProblem & problem,const JointParameterLayout 
     JointEvidenceScope scope,std::size_t rows)
 {
     const auto & data=JointProblemAccess::Get(problem);
-    JointParameterLayout optimization_layout=layout;
-    if(data.input->selection_domain &&
-        data.input->selection_domain->contributor_policy==FixedHaloContributorPolicy)
-    {
-        optimization_layout.full_atoms.clear();
-        optimization_layout.full_atoms.reserve(layout.full_atoms.size());
-        for(const auto contributor:layout.full_atoms)
-        {
-            if(contributor>=data.contributor_to_target.size()) return false;
-            const auto target=data.contributor_to_target[contributor];
-            if(target==std::numeric_limits<std::size_t>::max()) return false;
-            optimization_layout.full_atoms.push_back(target);
-        }
-    }
+    const auto & optimization_layout=layout;
     if(scope==JointEvidenceScope::AssembledGlobal)
         return rows==data.input->observations.size() && SameLayout(optimization_layout,data.layout);
     for(const auto & view:data.partition.components)
@@ -328,7 +315,6 @@ void AddTargetEvidence(JointFitResult & fit)
     if(!fit.problem || !fit.problem->Input().selection_domain) return;
     const auto started=std::chrono::steady_clock::now();
     const auto & problem=*fit.problem;
-    const auto & data=JointProblemAccess::Get(problem);
     for(auto & c:fit.components)
     {
         const JointParameterLayout layout=c.layout.value_or(JointParameterLayout{c.atoms,c.rows,{}});
@@ -338,8 +324,6 @@ void AddTargetEvidence(JointFitResult & fit)
             c.local_conditioning,stability,JointEvidenceScope::ComponentLocal,c.rows.size());
     }
     auto global_layout=problem.ParameterLayout();
-    if(data.input->selection_domain->contributor_policy==FixedHaloContributorPolicy)
-        global_layout.full_atoms=data.target_to_contributor;
     std::vector<JointBlockConditioning> conditioning;
     std::vector<JointBlockParameterStability> stability;
     for(const auto & component:fit.components)
@@ -372,12 +356,6 @@ JointCheckStatus JointFitResult::TargetRuntimeConvergence() const
     if(!assembled_state || !prediction || !objective || components.empty() ||
         !std::all_of(available_row_mask.begin(),available_row_mask.end(),[](bool b){return b;})) return JointCheckStatus::Unavailable;
     auto status=joint_component::TargetConvergence(target_evidence,true);
-    const bool fixed_halo_replay=std::any_of(evidence.begin(),evidence.end(),[](const auto & check) {
-        return check.name=="fixed-halo-replay" && check.scope==JointEvidenceScope::AssembledGlobal;
-    });
-    if(fixed_halo_replay)
-        status=joint_component::MergeConvergenceStatus(status,
-            joint_component::ConvergenceStatus(evidence,JointEvidenceScope::AssembledGlobal,true));
     for(const auto & c:components) status=joint_component::MergeConvergenceStatus(status,c.TargetRuntimeConvergence());
     for(const char * name:{"assembly-mapping","assembled-consistency"})
     {

@@ -398,9 +398,6 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
     const auto input_owner=view.domain.atoms.Snapshot();
     diagnostic_policy.halo_census=[input_owner,&component_layout,&view](
         std::size_t & halo_count,std::size_t & minimum_support) {
-        if(input_owner->selection_domain &&
-            input_owner->selection_domain->contributor_policy==FixedHaloContributorPolicy)
-        {halo_count=0; minimum_support=0; return;}
         const auto census=DiagnoseHaloSupport(*input_owner,component_layout,&view.atoms);
         halo_count=census.size(); minimum_support=census.empty() ? 0 : std::numeric_limits<std::size_t>::max();
         for(const auto & halo:census)

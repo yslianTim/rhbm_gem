@@ -2,7 +2,6 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include "joint_component/JointProgress.hpp"
-#include <optional>
 #include <string_view>
 #include <vector>
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -16,12 +15,7 @@ namespace rhbm_gem::core::detail {
 struct FittingWorkset;
 void TrainLocalAlphaForAtom(ModelAnalysisEditor &, const FitOptions &, FittingStage, AtomObject &);
 void ApplyJointSeedFallback(JointInitialization &);
-std::optional<JointFixedHaloParameter> MakeFixedHaloParameter(
-    const JointInitializationAtom &, std::size_t contributor_index,
-    std::string_view expected_atom_id, std::string & failure_reason);
-RHBMBetaEstimateResult RecoverFailedFirstStageEstimate(const RHBMMemberDataset &, double alpha,
-    const RHBMExecutionOptions &, const RHBMBetaEstimateResult & native);
-LocalGaussianResult FitFirstStageAtom(const AtomObject &, const FitOptions &, bool enable_fixed_halo_recovery = false);
+LocalGaussianResult FitFirstStageAtom(const AtomObject &, const FitOptions &);
 void RunBatchFirstStageFromPreparedSamples(
     ModelObject &, const std::vector<AtomObject *> &, const FitOptions &);
 JointInitialization RunJointFirstStageInitializationFromPreparedSamples(

@@ -22,8 +22,6 @@ struct JointProblemInput
     std::optional<JointSelectionDomain> selection_domain;
 };
 // Owns a validated immutable snapshot. Construction never reads historical fits.
-// BuildJointProblem is the historical low-level fixed-halo research builder;
-// initial target widths alone do not create its required FirstStage halo snapshot.
 class JointProblem
 {
 public:
@@ -32,11 +30,6 @@ public:
     const JointProblemInput & OriginalInput() const;
     const std::vector<std::size_t> & FittingToOriginalContributors() const;
     const std::vector<std::size_t> & FittingToOriginalRows() const;
-    const std::vector<JointFixedHaloParameter> & FixedHalos() const;
-    // Attaches exactly one qualified FirstStage (A,B,0) value for every
-    // supported non-target contributor. The returned problem keeps that
-    // snapshot immutable during target-only fitting.
-    JointProblem WithFixedHalos(std::vector<JointFixedHaloParameter>) const;
     JointProblem WithReconstructionDomain(JointProblemInput original,
         std::vector<std::size_t> fitting_to_original_contributors,
         std::vector<std::size_t> fitting_to_original_rows) const;
@@ -82,20 +75,12 @@ struct JointFitResult
 };
 // Captures results without retaining the problem snapshot or running numerical checks.
 JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult &, JointAnalysisMetadata = {});
-// Historical fixed-halo problem builder. New research call sites should use
-// the explicit BuildFixedHaloResearchProblem name.
-JointProblem BuildJointProblem(const MapObject &,const ModelObject &);
-JointProblem BuildFixedHaloResearchProblem(const MapObject &,const ModelObject &);
 // Production target-only problem. Halo support is used only to exclude fitting
 // rows; reconstruction keeps the original-domain input in OriginalInput().
 JointProblem BuildPureHaloSupportExclusionProblem(const MapObject &,const ModelObject &);
-// Fits only selected targets. For a fixed-halo problem, initial_b has one
-// width per selected target and the problem must already own its complete
-// qualified fixed-halo snapshot.
+// Fits the variables represented by the problem, starting from initial widths.
 JointFitResult FitJointComponents(const JointProblem &,const std::vector<double> & initial_b);
-// Validates FirstStage initialization and snapshots its qualified fixed halos
-// before fitting selected targets. A raw BuildJointProblem result without
-// qualified initialization cannot proceed to target optimization.
+// Validates target FirstStage initialization before fitting.
 JointFitResult FitJointComponentsInitialized(const JointProblem &,const JointInitialization &);
 // Builds the Production Pure Exclusion problem, performs FirstStage
 // initialization, and then fits targets only. Inspect initialization validity
@@ -104,7 +89,5 @@ JointFitResult FitJointComponentsInitialized(const JointProblem &,const JointIni
 // into the existing second-stage or group-fitting result fields. Replacing raw samples
 // invalidates sample-derived peeling, while fixed Second and group results are retained.
 JointFitResult EstimateJointComponents(MapObject &,ModelObject &);
-// Explicit historical Fixed Halo research/compatibility entry point.
-JointFitResult EstimateJointComponentsFixedHalo(MapObject &,ModelObject &);
 }
 }

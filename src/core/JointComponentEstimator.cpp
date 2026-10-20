@@ -135,231 +135,10 @@ void ConfigureOptimizationDomain(n::ProblemData & data)
 {
     const auto & input=*data.input;
     data.context=n::CreateContext(data.input);
-    if(!input.selection_domain || input.selection_domain->contributor_policy!=FixedHaloContributorPolicy)
-    {
-        data.target_to_contributor.resize(input.atom_ids.size());
-        std::iota(data.target_to_contributor.begin(),data.target_to_contributor.end(),0);
-        data.contributor_to_target.resize(input.atom_ids.size());
-        std::iota(data.contributor_to_target.begin(),data.contributor_to_target.end(),0);
-        data.layout=n::BuildParameterLayout(input);
-        data.partition=n::Partition(data.domain,input.atom_ids);
-        return;
-    }
-
-    const auto & targets=input.selection_domain->target_indices;
-    n::Indices selected; selected.reserve(targets.size());
-    data.target_to_contributor=targets;
-    data.contributor_to_target.assign(input.atom_ids.size(),std::numeric_limits<std::size_t>::max());
-    for(std::size_t local=0;local<targets.size();++local)
-    {
-        selected.push_back(static_cast<Eigen::Index>(targets[local]));
-        data.contributor_to_target[targets[local]]=local;
-    }
-    data.domain=data.domain.Select(selected,static_cast<Eigen::Index>(input.observations.size()),
-        n::CompactRowMapping::Identity(static_cast<Eigen::Index>(input.observations.size())));
-    data.context.atom_ids=data.context.atom_ids.Select(selected);
-    const auto rows=static_cast<Eigen::Index>(input.observations.size());
-    const auto atoms=static_cast<Eigen::Index>(targets.size());
-    data.context.rank={rows,2*atoms,atoms};
-    data.context.linear.rank_relative=data.context.rank.Relative(2*atoms);
-    data.layout.full_atoms.resize(targets.size());
-    std::iota(data.layout.full_atoms.begin(),data.layout.full_atoms.end(),0);
-    data.layout.informative_rows.resize(input.observations.size());
-    std::iota(data.layout.informative_rows.begin(),data.layout.informative_rows.end(),0);
+    data.layout=n::BuildParameterLayout(input);
     data.partition=n::Partition(data.domain,data.context.atom_ids);
 }
-struct FullReplay
-{
-    bool passed{},residual_passed{},halo_passed{},objective_passed{},mapping_passed{},
-        observation_identities_passed{},fixed_parameters_passed{},target_feasible{},
-        target_ac_passed{},target_width_passed{},width_bound_applied{},width_bound_feasible{true};
-    std::vector<double> prediction;
-    double residual_difference{},halo_difference{},objective_difference{},objective{},tolerance{},
-        objective_tolerance{},target_ac_kkt{},target_width_gradient{};
-    std::string reason;
-};
-FullReplay ReplayFixedHaloFullModel(const n::ProblemData & data,const n::AssemblyResult & assembly,
-    const n::JointConvergenceCriteria & convergence_criteria,std::optional<double> eta_upper_bound)
-{
-    FullReplay out;
-    out.fixed_parameters_passed=true;
-    const auto & input=*data.input;
-    if(!assembly.available || !assembly.raw.valid || assembly.prediction.size()!=data.y.size() ||
-        data.target_to_contributor.size()!=data.domain.atoms.size() ||
-        data.contributor_to_target.size()!=input.atom_ids.size())
-    {out.reason="missing-target-assembly"; return out;}
-    out.mapping_passed=true;
-    for(std::size_t target=0;target<data.target_to_contributor.size();++target)
-    {
-        const auto contributor=data.target_to_contributor[target];
-        if(contributor>=input.atom_ids.size() || data.contributor_to_target[contributor]!=target ||
-            data.context.atom_ids.size()!=data.target_to_contributor.size() ||
-            data.context.atom_ids[target]!=input.atom_ids[contributor])
-        {out.mapping_passed=false; break;}
-    }
-    out.observation_identities_passed=data.context.row_ids.size()==input.row_ids.size();
-    for(std::size_t row=0;out.observation_identities_passed && row<input.row_ids.size();++row)
-        out.observation_identities_passed=data.context.row_ids[row]==input.row_ids[row];
-    out.prediction.assign(input.observations.size(),0.0);
-    std::vector<double> target_prediction(input.observations.size()),halo_prediction(input.observations.size());
-    std::size_t fixed_cursor{};
-    const auto unassigned=std::numeric_limits<std::size_t>::max();
-    for(std::size_t contributor=0;contributor<input.atom_ids.size();++contributor)
-    {
-        const auto target=data.contributor_to_target[contributor];
-        double amplitude{},width{},charge{};
-        if(target!=unassigned)
-        {
-            if(target>=static_cast<std::size_t>(assembly.raw.eta.size()) ||
-                2*target+1>=static_cast<std::size_t>(assembly.raw.beta.size()))
-            {out.reason="target-state-mapping-mismatch"; return out;}
-            amplitude=assembly.raw.beta(static_cast<Eigen::Index>(2*target));
-            charge=assembly.raw.beta(static_cast<Eigen::Index>(2*target+1));
-            width=std::exp(assembly.raw.eta(static_cast<Eigen::Index>(target)));
-        }
-        else
-        {
-            if(fixed_cursor>=data.fixed_halos.size() ||
-                data.fixed_halos[fixed_cursor].contributor_index!=contributor)
-            {out.reason="fixed-halo-state-mapping-mismatch"; return out;}
-            const auto & fixed=data.fixed_halos[fixed_cursor++];
-            out.fixed_parameters_passed &= fixed.atom_id==input.atom_ids[contributor] &&
-                std::isfinite(fixed.amplitude) && fixed.amplitude>=0 &&
-                std::isfinite(fixed.width) && fixed.width>0 && fixed.charge==0.0 &&
-                IsQualifiedFirstStageFixedHalo(fixed) &&
-                fixed.source_contract==FixedHaloParameterSourceContractVersion;
-            amplitude=fixed.amplitude; width=fixed.width; charge=0;
-        }
-        if(!std::isfinite(amplitude) || amplitude<0 || !std::isfinite(width) || !(width>0) ||
-            !std::isfinite(charge))
-        {out.reason="invalid-full-model-parameters"; return out;}
-        for(const auto & support:input.support[contributor])
-        {
-            const auto basis=n::EvaluateKernel(support.squared_distance,width,2.5);
-            const double value=amplitude*basis.gaussian+charge*basis.charge;
-            const auto row=support.row;
-            const double updated=out.prediction[row]+value;
-            if(!std::isfinite(value) || !std::isfinite(updated))
-            {out.reason="nonfinite-full-model-prediction"; return out;}
-            out.prediction[row]=updated;
-            auto & part=target==unassigned ? halo_prediction[row] : target_prediction[row];
-            part+=target==unassigned ? amplitude*basis.gaussian : value;
-            if(!std::isfinite(part)) {out.reason="nonfinite-full-model-prediction"; return out;}
-        }
-    }
-    if(fixed_cursor!=data.fixed_halos.size()) {out.reason="unused-fixed-halo-state"; return out;}
-    if(!data.fixed_halos.empty() && !out.fixed_parameters_passed)
-    {out.reason="invalid-fixed-halo-provenance"; return out;}
-    if(!data.fixed_halos.empty()) out.fixed_parameters_passed=true;
-    double full_rss{},effective_rss{},full_compensation{},effective_compensation{};
-    double maximum_scale=1;
-    for(std::size_t row=0;row<input.observations.size();++row)
-    {
-        const double raw_residual=out.prediction[row]-input.observations[row];
-        const double effective_residual=target_prediction[row]-data.y(static_cast<Eigen::Index>(row));
-        const double expected_full=target_prediction[row]+halo_prediction[row];
-        out.residual_difference=std::max(out.residual_difference,std::abs(raw_residual-effective_residual));
-        out.halo_difference=std::max(out.halo_difference,
-            std::abs(halo_prediction[row]-data.fixed_prediction(static_cast<Eigen::Index>(row))));
-        out.halo_difference=std::max(out.halo_difference,
-            std::abs(expected_full-assembly.prediction(static_cast<Eigen::Index>(row))-
-                data.fixed_prediction(static_cast<Eigen::Index>(row))));
-        maximum_scale=std::max({maximum_scale,std::abs(raw_residual),std::abs(effective_residual),
-            std::abs(out.prediction[row]),std::abs(input.observations[row])});
-        const double full_term=raw_residual*raw_residual-full_compensation;
-        const double full_next=full_rss+full_term;
-        full_compensation=(full_next-full_rss)-full_term; full_rss=full_next;
-        const double effective_term=effective_residual*effective_residual-effective_compensation;
-        const double effective_next=effective_rss+effective_term;
-        effective_compensation=(effective_next-effective_rss)-effective_term; effective_rss=effective_next;
-    }
-    out.tolerance=2e-12*maximum_scale;
-    const double assembled_objective=.5*effective_rss;
-    const double replay_objective=.5*full_rss;
-    out.objective_tolerance=2e-12*std::max(1.0,assembled_objective);
-    out.objective_difference=std::max(std::abs(replay_objective-assembled_objective),
-        std::abs(assembled_objective-assembly.objective));
-    out.objective=replay_objective/(data.context.scale*data.context.scale);
-    out.residual_passed=out.residual_difference<=out.tolerance;
-    out.halo_passed=out.halo_difference<=out.tolerance;
-    out.objective_passed=std::isfinite(replay_objective) && out.objective_difference<=out.objective_tolerance;
 
-    const auto target_count=data.target_to_contributor.size();
-    std::vector<long double> ac_gradient(2*target_count),column_norm_squared(2*target_count),
-        gaussian_width_gradient(target_count),charge_width_gradient(target_count);
-    n::Vector target_eta(static_cast<Eigen::Index>(target_count)),target_width_gradient(
-        static_cast<Eigen::Index>(target_count));
-    out.target_feasible=true;
-    for(std::size_t target=0;target<target_count;++target)
-    {
-        const auto contributor=data.target_to_contributor[target];
-        const double amplitude=assembly.raw.beta(static_cast<Eigen::Index>(2*target));
-        const double charge=assembly.raw.beta(static_cast<Eigen::Index>(2*target+1));
-        const double width=std::exp(assembly.raw.eta(static_cast<Eigen::Index>(target)));
-        target_eta(static_cast<Eigen::Index>(target))=assembly.raw.eta(static_cast<Eigen::Index>(target));
-        out.target_feasible &= std::isfinite(amplitude) && amplitude>=0 && std::isfinite(charge) &&
-            std::isfinite(width) && width>0;
-        for(const auto & support:input.support[contributor])
-        {
-            const auto basis=n::EvaluateKernel(support.squared_distance,width,2.5);
-            const long double residual=out.prediction[support.row]-input.observations[support.row];
-            ac_gradient[2*target]+=static_cast<long double>(basis.gaussian)*residual;
-            ac_gradient[2*target+1]+=static_cast<long double>(basis.charge)*residual;
-            column_norm_squared[2*target]+=static_cast<long double>(basis.gaussian)*basis.gaussian;
-            column_norm_squared[2*target+1]+=static_cast<long double>(basis.charge)*basis.charge;
-            gaussian_width_gradient[target]+=static_cast<long double>(basis.gaussian_log_width)*residual;
-            charge_width_gradient[target]+=static_cast<long double>(basis.charge_log_width)*residual;
-        }
-    }
-    const long double scale=data.context.scale;
-    out.target_ac_kkt=0;
-    out.target_width_gradient=0;
-    for(std::size_t target=0;target<target_count;++target)
-    {
-        const double amplitude=assembly.raw.beta(static_cast<Eigen::Index>(2*target));
-        const double charge=assembly.raw.beta(static_cast<Eigen::Index>(2*target+1));
-        for(std::size_t coefficient=0;coefficient<2;++coefficient)
-        {
-            const auto index=2*target+coefficient;
-            const double norm=std::sqrt(static_cast<double>(column_norm_squared[index]));
-            if(!std::isfinite(norm) || !(norm>0))
-            {out.target_feasible=false; out.target_ac_kkt=std::numeric_limits<double>::infinity(); continue;}
-            const double beta=coefficient==0 ? amplitude : charge;
-            const double scaled_beta=norm*beta/static_cast<double>(scale);
-            const double scaled_gradient=static_cast<double>(ac_gradient[index]/norm/scale);
-            double projected=scaled_beta-scaled_gradient;
-            if(coefficient==0) projected=std::max(0.0,projected);
-            out.target_ac_kkt=std::max(out.target_ac_kkt,std::abs(scaled_beta-projected));
-        }
-        const double width_gradient=static_cast<double>((amplitude*gaussian_width_gradient[target]+
-            charge*charge_width_gradient[target])/(scale*scale));
-        target_width_gradient(static_cast<Eigen::Index>(target))=width_gradient;
-    }
-    if(eta_upper_bound)
-    {
-        const auto width_kkt=n::CalculateWidthBoundKkt(target_eta,target_width_gradient,*eta_upper_bound);
-        out.width_bound_applied=true;
-        out.width_bound_feasible=width_kkt.feasible;
-        out.target_width_gradient=width_kkt.projected;
-    }
-    else out.target_width_gradient=target_width_gradient.lpNorm<Eigen::Infinity>();
-    out.target_ac_passed=out.target_feasible && std::isfinite(out.target_ac_kkt) &&
-        out.target_ac_kkt<=convergence_criteria.global_ac_kkt;
-    out.target_width_passed=out.width_bound_feasible && std::isfinite(out.target_width_gradient) &&
-        out.target_width_gradient<=convergence_criteria.global_width_gradient;
-    out.passed=out.mapping_passed && out.observation_identities_passed && out.fixed_parameters_passed &&
-        out.residual_passed && out.halo_passed && out.objective_passed && out.target_ac_passed && out.target_width_passed;
-    if(!out.passed) out.reason=!out.mapping_passed ? "target-contributor-mapping-mismatch" :
-        !out.observation_identities_passed ? "original-observation-identity-mismatch" :
-        !out.fixed_parameters_passed ? "invalid-fixed-halo-provenance" :
-        !out.residual_passed ? "full-and-effective-residuals-disagree" :
-        !out.halo_passed ? "fixed-halo-replay-disagrees" :
-        !out.objective_passed ? "full-and-effective-objectives-disagree" :
-        !out.target_feasible ? "target-parameters-infeasible" :
-        !out.target_ac_passed ? "target-ac-kkt-failed" :
-        !out.width_bound_feasible ? "target-width-bound-infeasible" : "target-width-gradient-failed";
-    return out;
-}
 }
 namespace joint_component {
 std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceScope scope)
@@ -450,18 +229,10 @@ JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> & evidence,Join
     }
     if(assembled)
     {
-        std::vector<const char *> assembly_required=reference_free ?
+        const std::vector<const char *> assembly_required=reference_free ?
             std::vector<const char *>{"assembly-mapping","assembled-consistency"} :
             std::vector<const char *>{"assembled-profile"};
-        const bool fixed_halo_replay=std::any_of(evidence.begin(),evidence.end(),[&](const auto & check) {
-            return check.name=="fixed-halo-replay" && check.scope==scope;
-        });
-        if(fixed_halo_replay)
-            for(const char * name:{"full-observation-replay","fixed-halo-replay","full-objective-replay",
-                "target-ac-feasibility","target-ac-optimality","target-width-stationarity",
-                "target-width-bound-feasibility","target-contributor-mapping","original-observation-identities",
-                "fixed-halo-provenance"})
-                assembly_required.push_back(name);
+
         for(const char * name:assembly_required)
         {
             const auto found=std::find_if(evidence.begin(),evidence.end(),[&](const auto & check){return check.name==name && check.scope==scope;});
@@ -516,6 +287,9 @@ JointProblem::JointProblem(JointProblemInput input)
         throw std::invalid_argument("Invalid joint problem identities or dimensions.");
     if(input.selection_domain && !input.selection_domain->IsValid(input.atom_ids.size()))
         throw std::invalid_argument("Invalid joint selection domain.");
+    if(input.selection_domain &&
+        input.selection_domain->contributor_policy==FixedHaloContributorPolicy)
+        throw std::invalid_argument("Fixed Halo estimation is retired.");
     if(input.selection_domain && input.selection_domain->contributor_policy==FullABCHaloContributorPolicy)
     {
         const auto & provenance=*input.selection_domain->halo_eligibility;
@@ -531,31 +305,20 @@ JointProblem::JointProblem(JointProblemInput input)
                 throw std::invalid_argument("Ineligible halo in a FullABC-pruned joint problem.");
         }
     }
-    if(input.selection_domain && input.selection_domain->contributor_policy==FixedHaloContributorPolicy)
-    {
-        const auto & targets=input.selection_domain->target_indices;
-        for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
-            if(!std::binary_search(targets.begin(),targets.end(),atom) && input.support[atom].empty())
-                throw std::invalid_argument("Zero-support halo is present in a fixed-halo joint problem.");
-    }
     if(!std::all_of(input.observations.begin(),input.observations.end(),[](double value){return std::isfinite(value);}))
         throw std::invalid_argument("Nonfinite joint observations.");
     for(const auto & atom:input.support) for(const auto & s:atom)
         if(s.row>=input.observations.size() || !std::isfinite(s.squared_distance) || s.squared_distance<0 || s.squared_distance>6.25)
             throw std::invalid_argument("Invalid joint contributor row.");
-    const bool fixed_halo_policy=input.selection_domain &&
-        input.selection_domain->contributor_policy==FixedHaloContributorPolicy;
-    const std::size_t optimization_atoms=fixed_halo_policy ?
-        input.selection_domain->target_indices.size() : input.atom_ids.size();
     n::MemoryShape shape;
-    shape.component_atoms=optimization_atoms;
+    shape.component_atoms=input.atom_ids.size();
     shape.component_observations=input.observations.size();
     shape.problem_scope=true;
     const auto support_entries=n::CountSupportEntries(input);
     const auto resident=n::EstimateSnapshotBytes(input);
     const auto construction_scratch=n::EstimateConstructionScratchBytes(input);
     std::size_t free_columns{};
-    const bool dimensions_ok=n::CheckedMultiplyBytes(optimization_atoms,2,free_columns);
+    const bool dimensions_ok=n::CheckedMultiplyBytes(input.atom_ids.size(),2,free_columns);
     n::MemoryEstimate construction_memory;
     if(!support_entries || !resident || !construction_scratch || !dimensions_ok)
     {
@@ -568,36 +331,9 @@ JointProblem::JointProblem(JointProblemInput input)
     else
     {
         shape.component_support_entries=*support_entries; shape.resident_bytes=*resident;
-        if(fixed_halo_policy)
-        {
-            std::size_t future_fixed_bytes{},optimization_view_bytes{},target_support_entries{};
-            for(const auto target:input.selection_domain->target_indices)
-                if(!n::CheckedAddBytes(target_support_entries,input.support[target].size(),target_support_entries))
-                {future_fixed_bytes=std::numeric_limits<std::size_t>::max(); break;}
-            const auto halo_count=input.atom_ids.size()-optimization_atoms;
-            if(future_fixed_bytes!=std::numeric_limits<std::size_t>::max() &&
-                (!AddEstimatedBytes(future_fixed_bytes,halo_count,sizeof(JointFixedHaloParameter)) ||
-                    !AddEstimatedBytes(future_fixed_bytes,input.observations.size(),2*sizeof(double)) ||
-                    !AddEstimatedBytes(future_fixed_bytes,input.observations.size(),2*sizeof(Eigen::Index)) ||
-                    !AddEstimatedBytes(future_fixed_bytes,optimization_atoms,sizeof(std::vector<n::LocalSupportIndex>)) ||
-                    !AddEstimatedBytes(future_fixed_bytes,target_support_entries,sizeof(n::LocalSupportIndex)) ||
-                    !AddEstimatedBytes(future_fixed_bytes,optimization_atoms+input.atom_ids.size(),sizeof(std::size_t))))
-                future_fixed_bytes=std::numeric_limits<std::size_t>::max();
-            if(future_fixed_bytes==std::numeric_limits<std::size_t>::max() ||
-                !n::CheckedAddBytes(shape.resident_bytes,future_fixed_bytes,optimization_view_bytes))
-            {
-                construction_memory.shape=shape;
-                construction_memory.stage=n::MemoryStage::ProblemConstruction;
-                construction_memory.status=n::MemoryStatus::Overflow;
-                construction_memory.reason="size-overflow";
-                construction_memory.budget_bytes=n::JointMemoryPlanningBudgetBytes;
-            }
-            else shape.resident_bytes=optimization_view_bytes;
-        }
         shape.identity_validation_bytes=*construction_scratch;
         shape.component_free_columns=free_columns;
-        if(construction_memory.status!=n::MemoryStatus::Overflow)
-            construction_memory=n::PlanMemory(shape,n::MemoryStage::ProblemConstruction);
+        construction_memory=n::PlanMemory(shape,n::MemoryStage::ProblemConstruction);
     }
     if(construction_memory.status!=n::MemoryStatus::Pass ||
         construction_memory.estimated_peak_bytes>n::JointMemoryPlanningBudgetBytes/2)
@@ -618,61 +354,6 @@ const std::vector<std::size_t> & JointProblem::FittingToOriginalContributors() c
 const std::vector<std::size_t> & JointProblem::FittingToOriginalRows() const
 {return m_data->fitting_to_original_rows;}
 JointProblem::JointProblem(std::shared_ptr<const n::ProblemData> data):m_data(std::move(data)) {}
-const std::vector<JointFixedHaloParameter> & JointProblem::FixedHalos() const {return m_data->fixed_halos;}
-JointProblem JointProblem::WithFixedHalos(std::vector<JointFixedHaloParameter> fixed_halos) const
-{
-    const auto & input=*m_data->input;
-    if(!input.selection_domain || input.selection_domain->contributor_policy!=FixedHaloContributorPolicy)
-        throw std::invalid_argument("Fixed halos require the fixed-halo contributor policy.");
-    const auto & targets=input.selection_domain->target_indices;
-    if(fixed_halos.size()!=input.atom_ids.size()-targets.size())
-        throw std::invalid_argument("Fixed-halo initialization is incomplete.");
-    std::size_t previous{};
-    for(std::size_t k=0;k<fixed_halos.size();++k)
-    {
-        const auto & fixed=fixed_halos[k];
-        if(fixed.contributor_index>=input.atom_ids.size() ||
-            std::binary_search(targets.begin(),targets.end(),fixed.contributor_index) ||
-            input.atom_ids[fixed.contributor_index]!=fixed.atom_id || input.support[fixed.contributor_index].empty() ||
-            (k && fixed.contributor_index<=previous) || !std::isfinite(fixed.amplitude) || fixed.amplitude<0 ||
-            !std::isfinite(fixed.width) || !(fixed.width>0) || fixed.charge!=0.0 ||
-            !IsQualifiedFirstStageFixedHalo(fixed) ||
-            fixed.source_contract!=FixedHaloParameterSourceContractVersion)
-            throw std::invalid_argument("Invalid fixed-halo parameter snapshot.");
-        previous=fixed.contributor_index;
-    }
-    Eigen::VectorXd fixed_prediction=Eigen::VectorXd::Zero(static_cast<Eigen::Index>(input.observations.size()));
-    for(const auto & fixed:fixed_halos)
-        for(const auto & support:input.support[fixed.contributor_index])
-        {
-            const auto basis=n::EvaluateKernel(support.squared_distance,fixed.width,2.5);
-            const double contribution=fixed.amplitude*basis.gaussian;
-            const auto row=static_cast<Eigen::Index>(support.row);
-            const double updated=fixed_prediction(row)+contribution;
-            if(!std::isfinite(contribution) || !std::isfinite(updated))
-                throw std::invalid_argument("Nonfinite fixed-halo prediction.");
-            fixed_prediction(row)=updated;
-        }
-    auto effective=std::make_shared<std::vector<double>>(input.observations.size());
-    for(std::size_t row=0;row<effective->size();++row)
-    {
-        (*effective)[row]=input.observations[row]-fixed_prediction(static_cast<Eigen::Index>(row));
-        if(!std::isfinite((*effective)[row]))
-            throw std::invalid_argument("Nonfinite effective observation.");
-    }
-    std::shared_ptr<const std::vector<double>> effective_snapshot=effective;
-    auto data=std::make_shared<n::ProblemData>(m_data->input,std::move(fixed_halos),effective_snapshot);
-    data->target_to_contributor=m_data->target_to_contributor;
-    data->contributor_to_target=m_data->contributor_to_target;
-    data->domain=m_data->domain;
-    data->context=m_data->context;
-    data->context.observations=n::Observe(effective_snapshot);
-    data->layout=m_data->layout;
-    data->partition=m_data->partition;
-    data->construction_memory=m_data->construction_memory;
-    data->fixed_prediction=std::move(fixed_prediction);
-    return JointProblem(std::move(data));
-}
 JointProblem JointProblem::WithReconstructionDomain(
     JointProblemInput original, std::vector<std::size_t> fitting_to_original_contributors,
     std::vector<std::size_t> fitting_to_original_rows) const
@@ -899,22 +580,6 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
 }
 }
 
-JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
-{
-    auto closure=BuildSelectedObservationClosure(map,model);
-    auto & input=closure.original;
-    input.selection_domain.emplace();
-    input.selection_domain->contributor_policy=std::string(FixedHaloContributorPolicy);
-    input.selection_domain->target_indices=std::move(closure.target_indices);
-    input.selection_domain->fixed_halo_selection=JointFixedHaloSelectionProvenance{
-        1,closure.candidate_halos,closure.retained_halos,closure.zero_support_halos};
-    return JointProblem(std::move(input));
-}
-
-JointProblem BuildFixedHaloResearchProblem(const MapObject & map,const ModelObject & model)
-{
-    return BuildJointProblem(map,model);
-}
 JointProblem BuildPureHaloSupportExclusionProblem(const MapObject & map,const ModelObject & model)
 {
     auto closure=BuildSelectedObservationClosure(map,model);
@@ -974,18 +639,6 @@ JointProblem BuildPureHaloSupportExclusionProblem(const MapObject & map,const Mo
 }
 JointFitResult FitJointComponents(const JointProblem & problem,const std::vector<double> & initial_b)
 {
-    const auto & input=problem.Input();
-    if(input.selection_domain && input.selection_domain->contributor_policy==FixedHaloContributorPolicy &&
-        problem.FixedHalos().size()!=input.atom_ids.size()-input.selection_domain->target_indices.size())
-    {
-        JointFitResult out; out.problem=problem; out.initialization.b=initial_b;
-        out.initialization.valid=false; out.initialization.reason="fixed-halo-initialization-unavailable";
-        out.observation_scale=problem.ObservationScale();
-        out.available_row_mask.assign(input.observations.size(),false);
-        out.evidence.push_back({"fixed-halo-initialization",JointCheckStatus::Unavailable,
-            JointEvidenceScope::AssembledGlobal,{}, {},out.initialization.reason});
-        return out;
-    }
     return n::FitFixedNeighborComponents(problem,initial_b,{});
 }
 JointFitResult FitJointComponentsInitialized(const JointProblem & problem,const JointInitialization & initialization)
@@ -996,11 +649,8 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
     const JointProblem & problem,const JointInitialization & initialization,
     const joint_component::JointProgressObserver & observer)
 {
-    const auto & input=problem.Input();
-    const bool production_pure_exclusion=input.selection_domain &&
-        input.selection_domain->contributor_policy==PureHaloSupportExclusionContributorPolicy;
     return detail::FitJointComponentsInitializedWithProgress(
-        problem,initialization,observer,production_pure_exclusion);
+        problem,initialization,observer,true);
 }
 JointFitResult detail::FitJointComponentsInitializedBoundedWithProgress(
     const JointProblem & problem,const JointInitialization & initialization,
@@ -1018,29 +668,20 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
         out.initialization.valid=false; out.initialization.reason=std::move(reason);
         out.observation_scale=problem.ObservationScale();
         out.available_row_mask.assign(input.observations.size(),false);
-        out.evidence.push_back({"fixed-halo-initialization",JointCheckStatus::Unavailable,
+        out.evidence.push_back({"joint-initialization",JointCheckStatus::Unavailable,
             JointEvidenceScope::AssembledGlobal,{}, {},out.initialization.reason});
         return out;
     };
-    const auto policy=input.selection_domain ? input.selection_domain->contributor_policy : std::string{};
-    const bool fixed_halo_policy=policy==FixedHaloContributorPolicy;
-    const bool pure_exclusion_policy=policy==PureHaloSupportExclusionContributorPolicy;
-    if(!fixed_halo_policy && !pure_exclusion_policy)
-        return invalid("fixed-halo-initialization-unavailable:missing-joint-initialization-policy");
+    if(!input.selection_domain ||
+        input.selection_domain->contributor_policy!=PureHaloSupportExclusionContributorPolicy)
+        return invalid("joint-initialization-unavailable:missing-pure-exclusion-policy");
     if(initialization.atoms.size()!=input.atom_ids.size() || initialization.b.size()!=input.atom_ids.size())
-        return invalid("fixed-halo-initialization-unavailable:contributor-mapping-mismatch");
-    if(!initialization.valid)
-        return invalid(initialization.reason.starts_with("fixed-halo-initialization-unavailable:") ?
-            initialization.reason : "fixed-halo-initialization-unavailable:"+initialization.reason);
-
-    const auto & targets=input.selection_domain->target_indices;
+        return invalid("joint-initialization-unavailable:target-mapping-mismatch");
+    if(!initialization.valid) return invalid(initialization.reason);
     for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
-    {
-        const auto & record=initialization.atoms[atom];
-        const bool target=std::binary_search(targets.begin(),targets.end(),atom);
-        if(record.id!=input.atom_ids[atom] || record.target!=target)
-            return invalid("fixed-halo-initialization-unavailable:contributor-mapping-mismatch");
-    }
+        if(initialization.atoms[atom].id!=input.atom_ids[atom] || !initialization.atoms[atom].target)
+            return invalid("joint-initialization-unavailable:target-mapping-mismatch");
+
     joint_component::WidthBoundCalibration calibration;
     joint_component::BoundedInitialization bounded;
     if(use_bounded_candidate)
@@ -1062,58 +703,22 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
     else {bounded.available=true; bounded.widths=initialization.b;}
     joint_component::FixedNeighborSearchPolicy solver_policy;
     if(use_bounded_candidate) solver_policy.eta_upper_bound=calibration.eta_max4;
-    const auto record_calibration=[&](JointFitResult & fit) {
-        if(!use_bounded_candidate) return;
-        fit.evidence.push_back({"global-width-calibration",JointCheckStatus::Passed,
+    auto out=n::FitFixedNeighborComponents(problem,bounded.widths,solver_policy,observer);
+    out.initialization=initialization;
+    if(use_bounded_candidate)
+    {
+        out.evidence.push_back({"global-width-calibration",JointCheckStatus::Passed,
             JointEvidenceScope::AssembledGlobal,calibration.p95,bounded.bmax,
             "global-first-stage-p95-k4; qualified-donors="+
                 std::to_string(calibration.qualified_donor_count)+"/"+std::to_string(calibration.target_count)});
-        fit.evidence.push_back({"qualified-first-stage-donor-coverage",JointCheckStatus::Passed,
+        out.evidence.push_back({"qualified-first-stage-donor-coverage",JointCheckStatus::Passed,
             JointEvidenceScope::AssembledGlobal,calibration.qualified_donor_coverage,0.95,
             "target-only-qualified-first-stage-widths"});
-        fit.evidence.push_back({"bounded-initialization-projection",JointCheckStatus::Passed,
+        out.evidence.push_back({"bounded-initialization-projection",JointCheckStatus::Passed,
             JointEvidenceScope::AssembledGlobal,static_cast<double>(bounded.projection_count),{},
             "projected-target-widths="+std::to_string(bounded.projection_count)+
                 "; maximum-projection-angstroms="+std::to_string(bounded.maximum_projection_magnitude)});
-    };
-    if(pure_exclusion_policy)
-    {
-        for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
-        {
-            const auto & record=initialization.atoms[atom];
-            if(record.id!=input.atom_ids[atom] || !record.target)
-                return invalid("fixed-halo-initialization-unavailable:target-contributor-mapping-mismatch");
-        }
-        auto out=n::FitFixedNeighborComponents(problem,bounded.widths,solver_policy,observer);
-        out.initialization=initialization;
-        record_calibration(out);
-        return out;
     }
-    std::vector<JointFixedHaloParameter> fixed_halos;
-    fixed_halos.reserve(input.atom_ids.size()-targets.size());
-    for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
-    {
-        const auto & record=initialization.atoms[atom];
-        if(record.id!=input.atom_ids[atom])
-            return invalid("fixed-halo-initialization-unavailable:contributor-identity-mismatch");
-        const bool target=std::binary_search(targets.begin(),targets.end(),atom);
-        if(record.target!=target)
-            return invalid("fixed-halo-initialization-unavailable:contributor-role-mismatch");
-        if(target) continue;
-        std::string failure;
-        auto fixed=detail::MakeFixedHaloParameter(record,atom,input.atom_ids[atom],failure);
-        if(!fixed) return invalid("fixed-halo-initialization-unavailable:"+failure);
-        fixed_halos.push_back(std::move(*fixed));
-    }
-    JointProblem initialized_problem=problem;
-    try {initialized_problem=problem.WithFixedHalos(std::move(fixed_halos));}
-    catch(const std::exception & error)
-    {return invalid(std::string("fixed-halo-initialization-unavailable:")+error.what());}
-    std::vector<double> target_widths; target_widths.reserve(targets.size());
-    for(const auto contributor:targets) target_widths.push_back(bounded.widths[contributor]);
-    auto out=n::FitFixedNeighborComponents(initialized_problem,target_widths,solver_policy,observer);
-    out.initialization=initialization;
-    record_calibration(out);
     return out;
 }
 JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,const std::vector<double> & initial_b,
@@ -1145,29 +750,17 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         out.initialization.reason=out.initialization.valid ? "valid-widths" : "invalid-widths";
         out.available_row_mask.assign(data.input->observations.size(),false);
         out.evidence.push_back({"memory-preflight",JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,
-            data.construction_memory.estimated_peak_bytes ? std::optional<double>(static_cast<double>(data.construction_memory.estimated_peak_bytes)) : std::nullopt,
+            data.construction_memory.estimated_peak_bytes ?
+                std::optional<double>(static_cast<double>(data.construction_memory.estimated_peak_bytes)) : std::nullopt,
             static_cast<double>(data.construction_memory.budget_bytes),
             "resource-limit:problem-construction:"+data.construction_memory.reason});
-        return out;
-    }
-    const bool fixed_halo_policy=data.input->selection_domain &&
-        data.input->selection_domain->contributor_policy==FixedHaloContributorPolicy;
-    if(fixed_halo_policy && data.fixed_halos.size()!=
-        data.input->atom_ids.size()-data.input->selection_domain->target_indices.size())
-    {
-        JointFitResult out; out.problem=problem; out.solver_provenance=provenance();
-        out.observation_scale=data.context.scale; out.initialization.b=initial_b;
-        out.initialization.valid=false;
-        out.initialization.reason="fixed-halo-initialization-unavailable:missing-validated-first-stage-snapshot";
-        out.available_row_mask.assign(data.input->observations.size(),false);
-        out.evidence.push_back({"fixed-halo-initialization",JointCheckStatus::Unavailable,
-            JointEvidenceScope::AssembledGlobal,{},{},out.initialization.reason});
         return out;
     }
     JointFitResult out; out.problem=problem;
     out.solver_provenance=provenance();
     out.observation_scale=data.context.scale; out.initialization.b=initial_b;
-    out.initialization.valid=initial_b.size()==data.domain.atoms.size() && std::all_of(initial_b.begin(),initial_b.end(),[](double b){return std::isfinite(b) && b>0;});
+    out.initialization.valid=initial_b.size()==data.domain.atoms.size() &&
+        std::all_of(initial_b.begin(),initial_b.end(),[](double b){return std::isfinite(b) && b>0;});
     out.initialization.reason=out.initialization.valid ? "valid-widths" : "invalid-widths";
     if(initial_b.size()!=data.domain.atoms.size())
     {
@@ -1225,60 +818,10 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{},{},
         assembly.mapping_valid ? "exact-component-identity-mapping" :
             assembly.mapping_reason.empty() ? "missing-component-state" : assembly.mapping_reason});
-    std::optional<FullReplay> full_replay;
     if(assembly.available)
     {
         const auto & state=assembly.raw;
-        if(fixed_halo_policy)
-        {
-            full_replay=ReplayFixedHaloFullModel(data,assembly,bounded_policy.convergence_criteria,
-                bounded_policy.eta_upper_bound);
-            out.evidence.push_back({"full-observation-replay",full_replay->residual_passed ? JointCheckStatus::Passed :
-                JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
-                full_replay->residual_difference,full_replay->tolerance,full_replay->residual_passed ?
-                    "full-and-effective-residuals-agree" : full_replay->reason});
-            out.evidence.push_back({"fixed-halo-replay",full_replay->halo_passed ? JointCheckStatus::Passed :
-                JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
-                full_replay->halo_difference,full_replay->tolerance,full_replay->halo_passed ?
-                    "immutable-first-stage-snapshot" : full_replay->reason});
-            out.evidence.push_back({"full-objective-replay",full_replay->objective_passed ? JointCheckStatus::Passed :
-                JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
-                full_replay->objective_difference,full_replay->objective_tolerance,full_replay->objective_passed ?
-                    "full-and-effective-objectives-agree" : full_replay->reason});
-            out.evidence.push_back({"target-ac-feasibility",full_replay->target_feasible ? JointCheckStatus::Passed :
-                JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
-                full_replay->target_feasible ? 0.0 : 1.0,0.0,full_replay->target_feasible ?
-                    "target-parameters-feasible" : full_replay->reason});
-            out.evidence.push_back({"target-ac-optimality",full_replay->target_ac_passed ? JointCheckStatus::Passed :
-                JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
-                full_replay->target_ac_kkt,bounded_policy.convergence_criteria.global_ac_kkt,full_replay->target_ac_passed ?
-                    "target-only-projected-kkt" : full_replay->reason});
-            out.evidence.push_back({"target-width-stationarity",full_replay->target_width_passed ? JointCheckStatus::Passed :
-                JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
-                full_replay->target_width_gradient,bounded_policy.convergence_criteria.global_width_gradient,
-                full_replay->target_width_passed ?
-                    (full_replay->width_bound_applied ? "target-only-projected-width-kkt" :
-                        "target-only-log-width-gradient") : full_replay->reason});
-            out.evidence.push_back({"target-width-bound-feasibility",
-                full_replay->width_bound_feasible ? JointCheckStatus::Passed : JointCheckStatus::Failed,
-                JointEvidenceScope::AssembledGlobal,
-                full_replay->width_bound_feasible ? 0.0 : 1.0,0.0,
-                full_replay->width_bound_applied ? "independent-full-model-bound-check" : "no-global-width-bound"});
-            out.evidence.push_back({"target-contributor-mapping",full_replay->mapping_passed ? JointCheckStatus::Passed :
-                JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
-                full_replay->mapping_passed ? 0.0 : 1.0,0.0,full_replay->mapping_passed ?
-                    "target-contributor-identity" : full_replay->reason});
-            out.evidence.push_back({"original-observation-identities",full_replay->observation_identities_passed ?
-                JointCheckStatus::Passed : JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
-                full_replay->observation_identities_passed ? 0.0 : 1.0,0.0,full_replay->observation_identities_passed ?
-                    "original-row-identity" : full_replay->reason});
-            out.evidence.push_back({"fixed-halo-provenance",full_replay->fixed_parameters_passed ?
-                JointCheckStatus::Passed : JointCheckStatus::Failed,JointEvidenceScope::AssembledGlobal,
-                full_replay->fixed_parameters_passed ? 0.0 : 1.0,0.0,full_replay->fixed_parameters_passed ?
-                    "qualified-first-stage-fixed-parameters" : full_replay->reason});
-        }
-        const bool replay_passed=assembly.consistency_passed && (!full_replay || full_replay->passed);
-        const auto consistency_status=replay_passed ? JointCheckStatus::Passed :
+        const auto consistency_status=assembly.consistency_passed ? JointCheckStatus::Passed :
             !state.valid && assembly.verification_memory_estimate.status!=n::MemoryStatus::Pass ?
                 JointCheckStatus::Unavailable : JointCheckStatus::Failed;
         out.evidence.push_back({"assembled-consistency",consistency_status,
@@ -1292,29 +835,13 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
                 static_cast<double>(assembly.verification_memory_estimate.estimated_peak_bytes),
                 static_cast<double>(assembly.verification_memory_estimate.budget_bytes),
                 std::string("resource-limit:endpoint-verification:")+assembly.verification_memory_estimate.reason});
-        if(assembly.assessment.numerical_qualified && replay_passed)
+        if(assembly.assessment.numerical_qualified && assembly.consistency_passed)
         {
             out.assembled_state=State(state,data.context.scale);
-            out.prediction=full_replay ? std::move(full_replay->prediction) : Values(assembly.prediction);
-            out.objective=full_replay ? full_replay->objective :
-                assembly.objective/(data.context.scale*data.context.scale);
-            if(full_replay) out.assembled_state->objective=*out.objective;
+            out.prediction=Values(assembly.prediction);
+            out.objective=assembly.objective/(data.context.scale*data.context.scale);
         }
     }
-    if(data.input->selection_domain && data.input->selection_domain->contributor_policy==FixedHaloContributorPolicy)
-        for(auto & component:out.components)
-        {
-            const auto remap=[&](std::size_t & atom) {
-                if(atom>=data.target_to_contributor.size()) return false;
-                atom=data.target_to_contributor[atom]; return true;
-            };
-            for(auto & atom:component.atoms) remap(atom);
-            const auto remap_blocks=[&](auto & blocks) {
-                for(auto & block:blocks) for(auto & atom:block.core_atoms) remap(atom);
-            };
-            remap_blocks(component.local_conditioning);
-            if(component.parameter_stability) remap_blocks(component.parameter_stability->blocks);
-        }
     out.costs.assembly_seconds=Seconds(assembly_start);
     n::NotifyJointAssemblyProgress(observer,n::JointProgressPhase::AssemblyCompleted,component_count,
         out.costs.assembly_seconds,assembly.available && assembly.raw.valid);
@@ -1339,7 +866,6 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
     out.atom_ids=pure_exclusion_policy ? original_input.atom_ids : fitting_input.atom_ids;
     out.row_ids=pure_exclusion_policy ? original_input.row_ids : fitting_input.row_ids;
     out.selection_domain=pure_exclusion_policy ? original_input.selection_domain : fitting_input.selection_domain;
-    out.fixed_halos=fit.problem->FixedHalos();
     if(pure_exclusion_policy)
     {
         out.parameterization_contract=std::string(JointPureHaloSupportExclusionParameterizationContract);
@@ -1347,16 +873,7 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
         out.fitting_to_original_contributors=fit.problem->FittingToOriginalContributors();
         out.fitting_to_original_rows=fit.problem->FittingToOriginalRows();
     }
-    else if(out.selection_domain && out.selection_domain->contributor_policy==FixedHaloContributorPolicy)
-        out.parameterization_contract=std::string(JointTargetOnlyFixedHaloParameterizationContract);
     out.initialization=fit.initialization;
-    if(out.selection_domain && out.selection_domain->contributor_policy==FixedHaloContributorPolicy &&
-        out.initialization.b.size()==out.atom_ids.size())
-    {
-        std::vector<double> target_widths; target_widths.reserve(out.selection_domain->target_indices.size());
-        for(const auto target:out.selection_domain->target_indices) target_widths.push_back(out.initialization.b[target]);
-        out.initialization.b=std::move(target_widths);
-    }
     out.costs=fit.costs;
     for (const auto & component:fit.components)
     {
@@ -1411,20 +928,6 @@ JointInitialization joint_component::InitializeContributors(MapObject & map,Mode
     }
     return initialization;
 }
-JointFitResult EstimateJointComponentsFixedHalo(MapObject & map,ModelObject & model)
-{
-    const auto construction_start=Clock::now();
-    const auto problem=BuildJointProblem(map,model);
-    const double construction_seconds=Seconds(construction_start);
-    const auto initialization_start=Clock::now();
-    auto initialization=n::InitializeContributors(map,model,problem);
-    const double initialization_seconds=Seconds(initialization_start);
-    auto out=FitJointComponentsInitialized(problem,initialization); out.costs.initialization_seconds=initialization_seconds;
-    out.costs.construction_seconds=construction_seconds;
-    out.initialization=std::move(initialization);
-    return out;
-}
-
 JointFitResult EstimateJointComponents(MapObject & map,ModelObject & model)
 {
     const auto construction_start=Clock::now();
