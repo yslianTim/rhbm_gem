@@ -711,9 +711,18 @@ JointProblem JointProblem::WithReconstructionDomain(
 }
 double JointProblem::ObservationScale() const {return m_data->context.scale;}
 const JointParameterLayout & JointProblem::ParameterLayout() const {return m_data->layout;}
-JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
+namespace {
+struct SelectedObservationClosure
 {
-    const auto atoms=EligibleAtoms(model); JointProblemInput input;
+    JointProblemInput original;
+    std::vector<std::size_t> target_indices;
+    std::size_t candidate_halos{},retained_halos{},zero_support_halos{};
+};
+
+SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map,const ModelObject & model)
+{
+    const auto atoms=EligibleAtoms(model); SelectedObservationClosure closure;
+    auto & input=closure.original;
     std::set<const AtomObject *> selected;
     for(const auto * atom:model.GetSelectedAtoms()) if(atom->GetElement()!=Element::HYDROGEN) selected.insert(atom);
     if(selected.empty()) throw std::invalid_argument("Joint fitting requires at least one selected non-hydrogen atom.");
@@ -732,6 +741,7 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
     std::size_t builder_resident=selected_row_buffer,builder_tracking{};
     if(!AddEstimatedBytes(builder_tracking,atoms.capacity(),sizeof(const AtomObject *)) ||
         !AddEstimatedBytes(builder_tracking,selected.size(),4*sizeof(void *)+32) ||
+        !AddEstimatedBytes(builder_tracking,selected_support_entries,sizeof(std::size_t)) ||
         !n::CheckedAddBytes(builder_resident,builder_tracking,builder_resident))
         throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
     if(builder_resident>n::JointMemoryPlanningBudgetBytes)
@@ -770,7 +780,7 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
         RejectBuildPreflight(scan_shape,"halo-eligibility-scratch-exceeds-budget");
     }
 
-    std::size_t contributors=selected.size(),support_entries{},maximum_atom_support{};
+    std::size_t contributors=selected.size(),support_entries{},target_support_entries{},maximum_atom_support{};
     std::size_t candidate_halos{},retained_halos{},zero_support_halos{};
     std::vector<JointSupport> eligibility_support;
     eligibility_support.reserve(maximum_candidate_support);
@@ -786,6 +796,8 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
             });
             maximum_atom_support=std::max(maximum_atom_support,memberships);
             if(!n::CheckedAddBytes(support_entries,memberships,support_entries))
+                throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
+            if(!n::CheckedAddBytes(target_support_entries,memberships,target_support_entries))
                 throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
             continue;
         }
@@ -828,16 +840,19 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
         !n::CheckedAddBytes(contributors,selected.size(),identity_map_entries) ||
         !AddEstimatedBytes(planned_snapshot,identity_characters,2*sizeof(char)))
         RejectBuildPreflight(shape,"size-overflow");
+    std::size_t all_support_entries{},all_identity_entries{};
+    if(!n::CheckedAddBytes(support_entries,target_support_entries,all_support_entries) ||
+        !n::CheckedAddBytes(contributors,selected.size(),all_identity_entries))
+        RejectBuildPreflight(shape,"size-overflow");
     shape.identity_validation_bytes=identity_scratch;
     if(!AddEstimatedBytes(planned_snapshot,rows.size(),2*sizeof(double)) ||
-        !AddEstimatedBytes(planned_snapshot,contributors,2*sizeof(std::vector<JointSupport>)) ||
-        !AddEstimatedBytes(planned_snapshot,contributors,2*sizeof(std::string)) ||
+        !AddEstimatedBytes(planned_snapshot,all_identity_entries,sizeof(std::vector<JointSupport>)) ||
+        !AddEstimatedBytes(planned_snapshot,all_identity_entries,sizeof(std::string)) ||
         !AddEstimatedBytes(planned_snapshot,rows.size(),2*sizeof(std::string)) ||
-        !AddEstimatedBytes(planned_snapshot,support_entries,2*sizeof(JointSupport)) ||
-        !AddEstimatedBytes(planned_snapshot,selected.size(),2*sizeof(std::size_t)) ||
-        !AddEstimatedBytes(planned_snapshot,retained_halos,sizeof(JointFixedHaloParameter)) ||
-        !AddEstimatedBytes(planned_snapshot,rows.size(),2*sizeof(double)) ||
-        !AddEstimatedBytes(planned_snapshot,rows.size(),2*sizeof(Eigen::Index)) ||
+        !AddEstimatedBytes(planned_snapshot,all_support_entries,sizeof(JointSupport)) ||
+        !AddEstimatedBytes(planned_snapshot,selected.size(),sizeof(std::size_t)) ||
+        !AddEstimatedBytes(planned_snapshot,rows.size(),2*sizeof(std::size_t)) ||
+        !AddEstimatedBytes(planned_snapshot,rows.size(),sizeof(std::uint8_t)) ||
         !AddEstimatedBytes(planned_snapshot,selected.size(),sizeof(std::vector<n::LocalSupportIndex>)) ||
         !AddEstimatedBytes(planned_snapshot,selected_support_entries,sizeof(n::LocalSupportIndex)) ||
         !AddEstimatedBytes(planned_snapshot,identity_map_entries,sizeof(std::size_t)) ||
@@ -849,10 +864,6 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
         RejectBuildPreflight(shape,build_estimate.reason.c_str());
 
     for(auto index:rows) {input.row_ids.push_back(std::to_string(index)); input.observations.push_back(map.GetMapValue(index));}
-    input.selection_domain.emplace();
-    input.selection_domain->contributor_policy=std::string(FixedHaloContributorPolicy);
-    input.selection_domain->fixed_halo_selection=JointFixedHaloSelectionProvenance{
-        1,candidate_halos,retained_halos,zero_support_halos};
     for(const auto * atom:atoms)
     {
         bool selected_target=selected.contains(atom);
@@ -876,11 +887,27 @@ JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
         }
         if(selected_target || !support.empty())
         {
-            if(selected_target) input.selection_domain->target_indices.push_back(input.atom_ids.size());
+            if(selected_target) closure.target_indices.push_back(input.atom_ids.size());
             input.atom_ids.push_back(std::to_string(atom->GetSerialID()));
             input.support.push_back(std::move(support));
         }
     }
+    closure.candidate_halos=candidate_halos;
+    closure.retained_halos=retained_halos;
+    closure.zero_support_halos=zero_support_halos;
+    return closure;
+}
+}
+
+JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
+{
+    auto closure=BuildSelectedObservationClosure(map,model);
+    auto & input=closure.original;
+    input.selection_domain.emplace();
+    input.selection_domain->contributor_policy=std::string(FixedHaloContributorPolicy);
+    input.selection_domain->target_indices=std::move(closure.target_indices);
+    input.selection_domain->fixed_halo_selection=JointFixedHaloSelectionProvenance{
+        1,closure.candidate_halos,closure.retained_halos,closure.zero_support_halos};
     return JointProblem(std::move(input));
 }
 
@@ -890,12 +917,9 @@ JointProblem BuildFixedHaloResearchProblem(const MapObject & map,const ModelObje
 }
 JointProblem BuildPureHaloSupportExclusionProblem(const MapObject & map,const ModelObject & model)
 {
-    const auto fixed_problem=BuildJointProblem(map,model);
-    const auto & source=fixed_problem.Input();
-    if (!source.selection_domain || source.selection_domain->contributor_policy!=FixedHaloContributorPolicy ||
-        !source.selection_domain->fixed_halo_selection)
-        throw std::invalid_argument("Pure Halo exclusion requires the selected voxel closure.");
-    const auto & targets=source.selection_domain->target_indices;
+    auto closure=BuildSelectedObservationClosure(map,model);
+    const auto & source=closure.original;
+    const auto & targets=closure.target_indices;
     std::vector<bool> retained(source.observations.size(),true);
     for (std::size_t atom=0;atom<source.support.size();++atom)
     {
@@ -937,13 +961,13 @@ JointProblem BuildPureHaloSupportExclusionProblem(const MapObject & map,const Mo
         if (support.empty()) throw std::invalid_argument("Pure Halo exclusion removes all observations for a Target.");
         fitting.support.push_back(std::move(support));
     }
-    auto original=source;
+    auto original=std::move(closure.original);
+    original.selection_domain.emplace();
     original.selection_domain->contributor_policy=std::string(PureHaloSupportExclusionContributorPolicy);
-    original.selection_domain->fixed_halo_selection.reset();
-    const auto fixed=&*source.selection_domain->fixed_halo_selection;
+    original.selection_domain->target_indices=targets;
     original.selection_domain->pure_halo_support_exclusion=JointPureHaloSupportExclusionProvenance{
-        source.observations.size(),retained_count,source.observations.size()-retained_count,
-        fixed->candidate_halos,fixed->retained_halos,fixed->zero_support_halos};
+        original.observations.size(),retained_count,original.observations.size()-retained_count,
+        closure.candidate_halos,closure.retained_halos,closure.zero_support_halos};
     std::vector<std::size_t> fitting_to_original_contributors=targets;
     return JointProblem(std::move(fitting)).WithReconstructionDomain(
         std::move(original),std::move(fitting_to_original_contributors),std::move(fitting_rows));

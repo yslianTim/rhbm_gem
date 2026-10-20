@@ -161,6 +161,28 @@ MapFixture BoundaryFixture()
     return {std::move(model),std::move(map)};
 }
 
+MapFixture MultipleHaloBoundaryFixture()
+{
+    std::vector<std::unique_ptr<AtomObject>> atoms;
+    const auto add_atom=[&](int serial,double x) {
+        auto atom=std::make_unique<AtomObject>();
+        atom->SetSerialID(serial);
+        atom->SetElement(Element::CARBON);
+        atom->SetPosition(x,0,0);
+        atoms.push_back(std::move(atom));
+    };
+    add_atom(30,0.0);
+    add_atom(10,4.5);
+    add_atom(20,5.0);
+    add_atom(40,20.0);
+    ModelObject model(std::move(atoms));
+    model.SelectAtoms([](const auto & atom){return atom.GetSerialID()==30;});
+    auto values=std::make_unique<double[]>(11);
+    for(std::size_t row=0;row<11;++row) values[row]=static_cast<double>(row+1);
+    MapObject map({11,1,1},{.5,.5,.5},{-2.5,0,0},std::move(values));
+    return {std::move(model),std::move(map)};
+}
+
 MapFixture WorkflowFixture()
 {
     std::vector<std::unique_ptr<AtomObject>> atoms;
@@ -453,6 +475,62 @@ TEST(PureHaloSupportExclusionTest, ExcludesExactBoundarySupportAndPreservesOrigi
     EXPECT_DOUBLE_EQ(problem.ObservationScale(),std::max(1.0,std::sqrt(norm)));
     for (const auto & support:fitting.support)
         for (const auto & entry:support) EXPECT_LT(entry.row,fitting.row_ids.size());
+}
+
+TEST(PureHaloSupportExclusionTest, BuildsFromSharedGeometryWithOverlappingHaloRowsAndStableMappings)
+{
+    auto fixture=MultipleHaloBoundaryFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    const auto & original=problem.OriginalInput();
+    const auto & fitting=problem.Input();
+    ASSERT_TRUE(original.selection_domain);
+    EXPECT_EQ(original.selection_domain->contributor_policy,PureHaloSupportExclusionContributorPolicy);
+    EXPECT_FALSE(original.selection_domain->fixed_halo_selection);
+    EXPECT_EQ(original.atom_ids,(std::vector<std::string>{"10","20","30"}));
+    EXPECT_EQ(original.selection_domain->target_indices,(std::vector<std::size_t>{2}));
+    EXPECT_EQ(fitting.atom_ids,(std::vector<std::string>{"30"}));
+    EXPECT_EQ(fitting.row_ids,(std::vector<std::string>{"0","1","2","3","4","5","6","7","8"}));
+    EXPECT_EQ(problem.FittingToOriginalContributors(),(std::vector<std::size_t>{2}));
+    EXPECT_EQ(problem.FittingToOriginalRows(),(std::vector<std::size_t>{0,1,2,3,4,5,6,7,8}));
+    ASSERT_TRUE(original.selection_domain->pure_halo_support_exclusion);
+    const auto & provenance=*original.selection_domain->pure_halo_support_exclusion;
+    EXPECT_EQ(provenance.original_rows,11u);
+    EXPECT_EQ(provenance.fit_rows,9u);
+    EXPECT_EQ(provenance.excluded_rows,2u);
+    EXPECT_EQ(provenance.candidate_halos,3u);
+    EXPECT_EQ(provenance.retained_halos,2u);
+    EXPECT_EQ(provenance.zero_support_halos,1u);
+    EXPECT_EQ(original.support[0].size(),2u);
+    EXPECT_EQ(original.support[1].size(),1u);
+    EXPECT_EQ(original.support[0][1].row,10u);
+    EXPECT_EQ(original.support[1][0].row,10u);
+    EXPECT_EQ(fitting.support[0].size(),9u);
+    EXPECT_DOUBLE_EQ(problem.ObservationScale(),std::sqrt(506.0));
+}
+
+TEST(PureHaloSupportExclusionTest, NoHaloKeepsTheWholeSelectedObservationClosure)
+{
+    auto fixture=BoundaryFixture();
+    fixture.model.SelectAllAtoms();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    ASSERT_TRUE(problem.OriginalInput().selection_domain);
+    const auto & provenance=*problem.OriginalInput().selection_domain->pure_halo_support_exclusion;
+    EXPECT_EQ(provenance.candidate_halos,0u);
+    EXPECT_EQ(provenance.retained_halos,0u);
+    EXPECT_EQ(provenance.zero_support_halos,0u);
+    EXPECT_EQ(problem.Input().row_ids,problem.OriginalInput().row_ids);
+    EXPECT_EQ(problem.FittingToOriginalRows(),(std::vector<std::size_t>{0,1,2,3,4,5,6,7,8,9,10}));
+}
+
+TEST(PureHaloSupportExclusionTest, RejectsEmptyFitAndTargetWithoutRetainedSupport)
+{
+    auto empty=MultipleHaloBoundaryFixture();
+    empty.model.FindAtomPtr(10)->SetPosition(0,0,0);
+    EXPECT_THROW(BuildPureHaloSupportExclusionProblem(empty.map,empty.model),std::invalid_argument);
+
+    auto target_lost=MultiTargetHaloWorkflowFixture();
+    target_lost.model.FindAtomPtr(5)->SetPosition(0,0,0);
+    EXPECT_THROW(BuildPureHaloSupportExclusionProblem(target_lost.map,target_lost.model),std::invalid_argument);
 }
 
 TEST(PureHaloSupportExclusionTest, InternalUnboundedOracleFitsTargetOnlyWithoutFixedHaloSnapshot)

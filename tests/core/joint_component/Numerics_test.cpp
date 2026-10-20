@@ -863,6 +863,9 @@ TEST(JointComponentNumericsTest, MemoryPlannerRetainsNonRankStagesAndLocalBudget
     EXPECT_EQ(n::PlanMemory(overflow,n::MemoryStage::LocalConditioning).status,n::MemoryStatus::Overflow);
     auto tile_overflow=large; tile_overflow.maximum_tile_rows=std::numeric_limits<std::size_t>::max();
     EXPECT_EQ(n::PlanMemory(tile_overflow,n::MemoryStage::LocalConditioning).status,n::MemoryStatus::Overflow);
+    auto construction_overflow=large;
+    construction_overflow.component_observations=std::numeric_limits<std::size_t>::max();
+    EXPECT_EQ(n::PlanMemory(construction_overflow,n::MemoryStage::ProblemConstruction).status,n::MemoryStatus::Overflow);
 }
 
 TEST(JointComponentNumericsTest, StreamingStateMatchesSparseGlobalEvaluation)
