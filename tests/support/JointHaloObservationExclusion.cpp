@@ -161,7 +161,7 @@ NoiseSummary FillGaussianNoise(std::span<const double> source, std::span<double>
 }
 
 MaskedInput BuildMaskedInput(const rhbm_gem::core::JointProblemInput & source,
-    std::span<const std::uint8_t> retained_rows, bool retain_halos)
+    std::span<const std::uint8_t> retained_rows)
 {
     if (!source.selection_domain || !source.selection_domain->IsValid(source.atom_ids.size()) ||
         retained_rows.size() != source.observations.size() || source.row_ids.size() != source.observations.size() ||
@@ -196,7 +196,7 @@ MaskedInput BuildMaskedInput(const rhbm_gem::core::JointProblemInput & source,
         support.reserve(source.support[contributor].size());
         for (const auto & entry : source.support[contributor])
             if (retained_rows[entry.row]) support.push_back({row_map[entry.row], entry.squared_distance});
-        if (!is_target[contributor] && (!retain_halos || support.empty())) continue;
+        if (!is_target[contributor]) continue;
 
         source_to_masked[contributor] = input.atom_ids.size();
         result.source_contributors.push_back(contributor);
@@ -214,15 +214,6 @@ MaskedInput BuildMaskedInput(const rhbm_gem::core::JointProblemInput & source,
             throw std::invalid_argument("Masked fitting domain leaves target without observations: " +
                 source.atom_ids.at(target));
         input.selection_domain->target_indices.push_back(source_to_masked.at(target));
-    }
-    if (retain_halos)
-    {
-        const auto & prior = source.selection_domain->fixed_halo_selection;
-        if (!prior) throw std::invalid_argument("Original problem lacks fixed-halo selection provenance.");
-        const auto retained_halo_count = input.atom_ids.size() - targets.size();
-        input.selection_domain->contributor_policy = std::string(rhbm_gem::FixedHaloContributorPolicy);
-        input.selection_domain->fixed_halo_selection = rhbm_gem::JointFixedHaloSelectionProvenance{
-            1, prior->candidate_halos, retained_halo_count, prior->candidate_halos - retained_halo_count};
     }
     return result;
 }

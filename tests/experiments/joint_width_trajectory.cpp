@@ -91,94 +91,12 @@ struct ReplaySetup
     std::vector<double> initial_widths;
 };
 
-ReplaySetup BuildFullABCReplaySetup(
-    const rhbm_gem::ModelObject & model, const core::JointProblem & fixed_problem,
-    const rhbm_gem::JointInitialization & initialization)
+ReplaySetup BuildReplaySetup(rhbm_gem::MapObject & map,rhbm_gem::ModelObject & model)
 {
-    const auto & source=fixed_problem.Input();
-    if(!source.selection_domain ||
-        source.selection_domain->contributor_policy!=rhbm_gem::FixedHaloContributorPolicy ||
-        !source.selection_domain->fixed_halo_selection)
-        throw std::invalid_argument("FullABC replay requires the fixed-halo selection domain.");
-    if(initialization.b.size()!=source.atom_ids.size())
-        throw std::invalid_argument("FullABC replay initialization dimensions do not match contributors.");
-
-    std::unordered_map<std::string,double> initial_by_id;
-    std::unordered_set<std::string> source_ids;
-    for(std::size_t atom=0;atom<source.atom_ids.size();++atom)
-    {
-        initial_by_id.emplace(source.atom_ids[atom],initialization.b[atom]);
-        source_ids.insert(source.atom_ids[atom]);
-    }
-    const auto & source_domain=*source.selection_domain;
-    const auto & fixed=*source_domain.fixed_halo_selection;
-    core::JointProblemInput full;
-    full.row_ids=source.row_ids;
-    full.observations=source.observations;
-    full.selection_domain=source_domain;
-    full.selection_domain->contributor_policy=std::string(rhbm_gem::FullABCHaloContributorPolicy);
-    full.selection_domain->fixed_halo_selection.reset();
-    full.selection_domain->halo_eligibility.emplace();
-    auto & eligibility=*full.selection_domain->halo_eligibility;
-    eligibility.minimum_observations=joint::FullABCHaloMinimumObservations;
-    eligibility.minimum_distinct_radial_information=joint::FullABCHaloMinimumDistinctRadialInformation;
-    eligibility.candidate_halos=fixed.candidate_halos;
-
-    std::set<int> selected_serials;
-    for(const auto * atom:model.GetSelectedAtoms())
-        if(atom->GetElement()!=Element::HYDROGEN) selected_serials.insert(atom->GetSerialID());
-    std::vector<double> initial_widths;
-    for(std::size_t old=0;old<source.atom_ids.size();++old)
-    {
-        const bool target=std::binary_search(source_domain.target_indices.begin(),
-            source_domain.target_indices.end(),old);
-        if(!target)
-        {
-            auto support=source.support[old];
-            const auto halo=joint::EvaluateFullABCHaloEligibility(
-                support,joint::FullABCHaloMinimumObservations);
-            if(!halo.eligible)
-            {
-                eligibility.excluded_halos.push_back({source.atom_ids[old],halo.support_rows,
-                    halo.distinct_squared_distances,halo.reason});
-                continue;
-            }
-        }
-        const auto new_index=full.atom_ids.size();
-        if(target) full.selection_domain->target_indices.push_back(new_index);
-        full.atom_ids.push_back(source.atom_ids[old]);
-        full.support.push_back(source.support[old]);
-        initial_widths.push_back(initial_by_id.at(source.atom_ids[old]));
-    }
-    for(const auto & atom_ptr:model.GetAtomList())
-    {
-        const auto * atom=atom_ptr.get();
-        if(atom->GetElement()==Element::HYDROGEN || selected_serials.contains(atom->GetSerialID())) continue;
-        const auto id=std::to_string(atom->GetSerialID());
-        if(!source_ids.contains(id))
-            eligibility.excluded_halos.push_back({id,0,0,"insufficient-observations"});
-    }
-    std::sort(eligibility.excluded_halos.begin(),eligibility.excluded_halos.end(),
-        [](const auto & left,const auto & right){return left.atom_id<right.atom_id;});
-    eligibility.retained_halos=full.atom_ids.size()-full.selection_domain->target_indices.size();
-    if(eligibility.retained_halos+eligibility.excluded_halos.size()!=eligibility.candidate_halos)
-        throw std::invalid_argument("FullABC replay halo eligibility dimensions do not match candidates.");
-    return {core::JointProblem(std::move(full)),std::move(initial_widths)};
-}
-
-ReplaySetup BuildReplaySetup(rhbm_gem::MapObject & map,rhbm_gem::ModelObject & model,bool pure_exclusion)
-{
-    if(pure_exclusion)
-    {
-        auto problem=core::BuildPureHaloSupportExclusionProblem(map,model);
-        const auto initialization=joint::InitializeContributors(map,model,problem);
-        if(!initialization.valid) throw std::runtime_error("First-stage initialization failed: "+initialization.reason);
-        return {std::move(problem),initialization.b};
-    }
-    auto fixed_problem=core::BuildJointProblem(map,model);
-    const auto initialization=joint::InitializeContributors(map,model,fixed_problem);
+    auto problem=core::BuildPureHaloSupportExclusionProblem(map,model);
+    const auto initialization=joint::InitializeContributors(map,model,problem);
     if(!initialization.valid) throw std::runtime_error("First-stage initialization failed: "+initialization.reason);
-    return BuildFullABCReplaySetup(model,fixed_problem,initialization);
+    return {std::move(problem),initialization.b};
 }
 
 json::object ProfilePairMetrics(const joint::Evaluation & evaluation,Eigen::Index atom)
@@ -393,7 +311,7 @@ json::object AtomJson(const joint::FixedNeighborProfileTrial::AtomState & atom,b
 }
 void Run(const std::string & model_path,const std::string & map_path,const std::filesystem::path & output,
     const std::vector<std::string> & requested_atom_ids,std::size_t maximum_events,
-    bool accepted_updates_only,bool pure_exclusion)
+    bool accepted_updates_only)
 {
     if(requested_atom_ids.empty() || requested_atom_ids.size()>2048 || maximum_events>10000)
         throw std::invalid_argument("Track 1–2,048 atom IDs and at most 10,000 events.");
@@ -407,7 +325,7 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
     });
     model->EditAnalysis().InitializeFromSelection();
     const auto initialization_started=Clock::now();
-    auto replay=BuildReplaySetup(*map,*model,pure_exclusion);
+    auto replay=BuildReplaySetup(*map,*model);
     auto problem=std::move(replay.problem);
     const double initialization_seconds=std::chrono::duration<double>(Clock::now()-initialization_started).count();
     const auto & data=core::JointProblemAccess::Get(problem);
@@ -657,7 +575,7 @@ void Run(const std::string & model_path,const std::string & map_path,const std::
         capture.events_emitted<capture.maximum_events;
     const bool accepted_update_capture_complete=capture.events_emitted<capture.maximum_events;
     Write(output/"summary.json",json::object{{"source_model",model_path},{"source_map",map_path},
-        {"selected_chain","A"},{"replay_parameterization",pure_exclusion ? "PureExclusion" : "FullABC"},
+        {"selected_chain","A"},{"replay_parameterization","PureExclusion"},
         {"target_count",target_indices.size()},{"original_observation_count",original_observation_count},
         {"fitting_observation_count",fitting_observation_count},{"excluded_observation_count",excluded_observation_count},
         {"core_atoms",12},{"block_order","forward"},{"maximum_sweeps",200},
@@ -705,14 +623,22 @@ int main(int argc,char ** argv)
     try
     {
         if(argc<5 || argc>7)
-            throw std::invalid_argument("Usage: joint_width_trajectory MODEL MAP OUTPUT_DIR ATOM_ID[,ATOM_ID...]|all [MAX_EVENTS] [accepted-updates-only|pure|pure-accepted-updates-only]");
+            throw std::invalid_argument("Usage: joint_width_trajectory MODEL MAP OUTPUT_DIR ATOM_ID[,ATOM_ID...]|all [MAX_EVENTS] [accepted-updates-only]");
         const auto atom_ids=Split(argv[4]);
-        const auto maximum_events=argc>=6 ? static_cast<std::size_t>(std::stoull(argv[5])) : 1024;
-        const auto mode=argc==7 ? std::string(argv[6]) : std::string{};
-        const bool accepted_only=mode=="accepted-updates-only" || mode=="pure-accepted-updates-only";
-        const bool pure_exclusion=mode=="pure" || mode=="pure-accepted-updates-only";
-        if(argc==7 && !accepted_only && !pure_exclusion) throw std::invalid_argument("Unknown width trajectory mode.");
-        Run(argv[1],argv[2],argv[3],atom_ids,maximum_events,accepted_only,pure_exclusion); return 0;
+        std::size_t maximum_events=1024;
+        bool accepted_only=false;
+        if(argc>=6)
+        {
+            if(std::string(argv[5])=="accepted-updates-only") accepted_only=true;
+            else maximum_events=static_cast<std::size_t>(std::stoull(argv[5]));
+        }
+        if(argc==7)
+        {
+            if(std::string(argv[6])!="accepted-updates-only")
+                throw std::invalid_argument("Unknown width trajectory mode.");
+            accepted_only=true;
+        }
+        Run(argv[1],argv[2],argv[3],atom_ids,maximum_events,accepted_only); return 0;
     }
     catch(const std::exception & error) {std::cerr<<error.what()<<'\n'; return 1;}
 }

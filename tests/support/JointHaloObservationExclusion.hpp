@@ -78,7 +78,7 @@ RowMask HaloSupportExclusionRows(const rhbm_gem::core::JointProblemInput &);
 NoiseSummary FillGaussianNoise(std::span<const double> source, std::span<double> destination,
     double sigma, std::uint64_t seed);
 MaskedInput BuildMaskedInput(const rhbm_gem::core::JointProblemInput &,
-    std::span<const std::uint8_t> retained_rows, bool retain_halos);
+    std::span<const std::uint8_t> retained_rows);
 CoverageSummary AnalyzeCoverage(const rhbm_gem::core::JointProblemInput &,
     std::span<const std::uint8_t> retained_rows, std::span<const double> target_halo_distances,
     std::span<const double> observation_halo_distances);

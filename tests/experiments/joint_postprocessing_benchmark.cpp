@@ -131,14 +131,12 @@ int main(int argc, char ** argv)
 {
     try
     {
-        if (argc != 3 && argc != 4) throw std::invalid_argument(
-            "Usage: joint_postprocessing_benchmark full|halo|multi|noisy|outlier|dense|target-heavy|connected DATABASE [fixed|pure]");
+        if (argc != 3) throw std::invalid_argument(
+            "Usage: joint_postprocessing_benchmark full|halo|multi|noisy|outlier|dense|target-heavy|connected DATABASE");
         const std::string name = argv[1];
         if (name != "full" && name != "halo" && name != "multi" && name != "noisy" &&
             name != "outlier" && name != "dense" && name != "target-heavy" && name != "connected") return 2;
-        const std::string policy = argc == 4 ? argv[3] : "fixed";
-        if (policy != "fixed" && policy != "pure") return 2;
-        const bool pure_exclusion = policy == "pure";
+        const std::string policy = "pure";
 
         auto f = Make(name);
         c::FitOptions options;
@@ -153,7 +151,7 @@ int main(int argc, char ** argv)
         {
             const auto workflow_start = Clock::now();
             RssMonitor pipeline_rss;
-            c::detail::RunJointComponentWorkflow(*f.map, *f.model, options, &postprocessing_metrics, pure_exclusion);
+            c::detail::RunJointComponentWorkflow(*f.map, *f.model, options, &postprocessing_metrics);
             pipeline_seconds = Seconds(workflow_start);
             pipeline_peak_rss_bytes = pipeline_rss.Peak();
         }

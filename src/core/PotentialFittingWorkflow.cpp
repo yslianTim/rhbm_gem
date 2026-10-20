@@ -208,15 +208,14 @@ void RunTwoStageWorkflow(MapObject & map, ModelObject & model, const FitOptions 
 
 void RunJointComponentWorkflow(
     MapObject & map, ModelObject & model, const FitOptions & options,
-    JointPostprocessingMetrics * supplied_metrics, bool pure_exclusion)
+    JointPostprocessingMetrics * supplied_metrics)
 {
     JointPostprocessingMetrics local_metrics;
     auto & postprocessing_metrics = supplied_metrics ? *supplied_metrics : local_metrics;
     postprocessing_metrics = {};
     if (!options.quiet_mode) LogJointInfo("[Joint] Building joint problem...");
     const auto construction_start = std::chrono::steady_clock::now();
-    const auto problem = pure_exclusion ?
-        BuildPureHaloSupportExclusionProblem(map, model) : BuildJointProblem(map, model);
+    const auto problem = BuildPureHaloSupportExclusionProblem(map, model);
     const auto construction_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - construction_start).count();
     if (!options.quiet_mode)
@@ -289,30 +288,27 @@ void RunJointComponentWorkflow(
         return;
     }
     bool halo_reconstruction_unavailable{};
-    if (pure_exclusion)
+    const auto & original=problem.OriginalInput();
+    const auto target_count=original.selection_domain ? original.selection_domain->target_indices.size() : 0;
+    if (original.atom_ids.size()>target_count)
     {
-        const auto & original=problem.OriginalInput();
-        const auto target_count=original.selection_domain ? original.selection_domain->target_indices.size() : 0;
-        if (original.atom_ids.size()>target_count)
+        try
         {
-            try
-            {
-                const auto built=BuildHaloMedianReconstruction(model,problem,snapshot,joint_run_id);
-                snapshot.halo_median_reconstruction=built.snapshot;
-                postprocessing_metrics.halo_median_valid_target_count=built.audit.valid_target_count;
-                postprocessing_metrics.halo_median_same_group_halos=built.audit.same_group_halos;
-                postprocessing_metrics.halo_median_fallback_halos=built.audit.fallback_halos;
-                postprocessing_metrics.halo_median_fallback_support_rows=built.audit.fallback_support_rows;
-            }
-            catch (const std::invalid_argument & error)
-            {
-                if (std::string_view(error.what()) != "halo-median-no-valid-targets") throw;
-                snapshot.evidence.push_back({std::string(JointHaloMedianReconstructionEvidenceName),
-                    JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{}, {},error.what()});
-                halo_reconstruction_unavailable=true;
-                if (!options.quiet_mode)
-                    LogJointInfo("[Joint] Halo median reconstruction unavailable: " + std::string(error.what()));
-            }
+            const auto built=BuildHaloMedianReconstruction(model,problem,snapshot,joint_run_id);
+            snapshot.halo_median_reconstruction=built.snapshot;
+            postprocessing_metrics.halo_median_valid_target_count=built.audit.valid_target_count;
+            postprocessing_metrics.halo_median_same_group_halos=built.audit.same_group_halos;
+            postprocessing_metrics.halo_median_fallback_halos=built.audit.fallback_halos;
+            postprocessing_metrics.halo_median_fallback_support_rows=built.audit.fallback_support_rows;
+        }
+        catch (const std::invalid_argument & error)
+        {
+            if (std::string_view(error.what()) != "halo-median-no-valid-targets") throw;
+            snapshot.evidence.push_back({std::string(JointHaloMedianReconstructionEvidenceName),
+                JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{}, {},error.what()});
+            halo_reconstruction_unavailable=true;
+            if (!options.quiet_mode)
+                LogJointInfo("[Joint] Halo median reconstruction unavailable: " + std::string(error.what()));
         }
     }
     data_internal::ApplyJointStageEstimates(model, snapshot, joint_run_id);
@@ -330,8 +326,7 @@ void RunJointComponentWorkflow(
         std::chrono::steady_clock::now() - phase_start).count();
     postprocessing_metrics.rss_after_context_bytes = joint_component::CurrentRssBytes();
     phase_start = std::chrono::steady_clock::now();
-    const auto & postprocessing_input=pure_exclusion ? problem.OriginalInput() : problem.Input();
-    auto peelings = postprocessing.BuildPostFitPeelingSamples(postprocessing_input.selection_domain->target_indices);
+    auto peelings = postprocessing.BuildPostFitPeelingSamples(original.selection_domain->target_indices);
     std::vector<std::pair<int, PostFitPeelingResult>> peeling_updates;
     peeling_updates.reserve(peelings.size());
     for (auto & [id, peeling] : peelings)
@@ -367,7 +362,7 @@ void RunJointComponentWorkflow(
     if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model));
     RunJointGroupPotentialFitting(model, options, &postprocessing_metrics);
     postprocessing_metrics.rss_after_group_bytes = joint_component::CurrentRssBytes();
-    if (!options.quiet_mode && pure_exclusion)
+    if (!options.quiet_mode)
     {
         std::ostringstream message;
         message << "[Joint] Halo median audit: valid_targets="
@@ -394,7 +389,7 @@ void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const Fit
         detail::RunTwoStageWorkflow(map, model, options);
         return;
     case PotentialEstimator::JOINT_COMPONENTS:
-        detail::RunJointComponentWorkflow(map, model, options, nullptr, true);
+        detail::RunJointComponentWorkflow(map, model, options);
         return;
     }
     throw std::invalid_argument("Unsupported potential estimator.");

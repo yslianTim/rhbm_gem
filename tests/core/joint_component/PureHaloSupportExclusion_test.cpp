@@ -533,10 +533,20 @@ TEST(PureHaloSupportExclusionTest, RejectsEmptyFitAndTargetWithoutRetainedSuppor
     EXPECT_THROW(BuildPureHaloSupportExclusionProblem(target_lost.map,target_lost.model),std::invalid_argument);
 }
 
-TEST(PureHaloSupportExclusionTest, InternalUnboundedOracleFitsTargetOnlyWithoutFixedHaloSnapshot)
+TEST(PureHaloSupportExclusionTest, RetiredFixedHaloSelectionCannotCreateRuntimeProblem)
+{
+    auto input=PureInput();
+    input.atom_ids.push_back("2");
+    input.support.push_back({{0,.25}});
+    input.selection_domain->contributor_policy=std::string(FixedHaloContributorPolicy);
+    input.selection_domain->pure_halo_support_exclusion.reset();
+    input.selection_domain->fixed_halo_selection=JointFixedHaloSelectionProvenance{1,1,1,0};
+    EXPECT_THROW(JointProblem(std::move(input)),std::invalid_argument);
+}
+
+TEST(PureHaloSupportExclusionTest, InternalUnboundedOracleFitsTargetOnly)
 {
     const JointProblem problem(PureInput());
-    EXPECT_TRUE(problem.FixedHalos().empty());
     const auto fit=core::detail::FitJointComponentsInitializedWithProgress(
         problem,TargetInitialization(),{},false);
     ASSERT_TRUE(fit.assembled_state);
@@ -857,7 +867,7 @@ TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGroupAndGlobalHaloSou
     core::detail::JointPostprocessingMetrics metrics;
     ScopedInternalUnboundedOracle unbounded_test_solver;
     ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
-        fixture.map,fixture.model,options,&metrics,true));
+        fixture.map,fixture.model,options,&metrics));
     const auto result=fixture.model.GetAnalysisView().GetJointResult();
     ASSERT_TRUE(result);
     EXPECT_EQ(result->parameterization_contract,JointPureHaloSupportExclusionParameterizationContract);
@@ -886,7 +896,7 @@ TEST(PureHaloSupportExclusionTest, RunsPureWorkflowWithoutHalos)
     options.thread_size=1;
     core::detail::JointPostprocessingMetrics metrics;
     ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
-        fixture.map,fixture.model,options,&metrics,true));
+        fixture.map,fixture.model,options,&metrics));
     const auto result=fixture.model.GetAnalysisView().GetJointResult();
     ASSERT_TRUE(result);
     ASSERT_TRUE(result->selection_domain);
@@ -905,7 +915,7 @@ TEST(PureHaloSupportExclusionTest, SkipsDownstreamWhenJointQualificationFails)
     options.thread_size=1;
     core::detail::JointPostprocessingMetrics metrics;
     ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
-        fixture.map,fixture.model,options,&metrics,true));
+        fixture.map,fixture.model,options,&metrics));
     const auto result=fixture.model.GetAnalysisView().GetJointResult();
     ASSERT_TRUE(result);
     EXPECT_FALSE(result->initialization.valid);
@@ -925,7 +935,7 @@ TEST(PureHaloSupportExclusionTest, RejectsUnqualifiedJointSnapshotWithCurrentJoi
     options.thread_size=1;
     ScopedInternalUnboundedOracle unbounded_test_solver;
     ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
-        fixture.map,fixture.model,options,nullptr,true));
+        fixture.map,fixture.model,options,nullptr));
     ASSERT_TRUE(fixture.model.GetAnalysisView().GetJointResult());
 
     auto stale=*fixture.model.GetAnalysisView().GetJointResult();
@@ -953,7 +963,7 @@ TEST(PureHaloSupportExclusionTest, RejectsMixedCurrentJointRunIdentities)
     options.thread_size=1;
     ScopedInternalUnboundedOracle unbounded_test_solver;
     ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
-        fixture.map,fixture.model,options,nullptr,true));
+        fixture.map,fixture.model,options,nullptr));
     ASSERT_TRUE(fixture.model.GetAnalysisView().GetJointResult());
     auto snapshot=*fixture.model.GetAnalysisView().GetJointResult();
     snapshot.halo_median_reconstruction.reset();
@@ -979,7 +989,7 @@ TEST(PureHaloSupportExclusionTest, FullWorkflowRetainsMultipleMemberGroupContrac
     core::detail::JointPostprocessingMetrics metrics;
     ScopedInternalUnboundedOracle unbounded_test_solver;
     ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
-        fixture.map,fixture.model,options,&metrics,true));
+        fixture.map,fixture.model,options,&metrics));
     const auto result=fixture.model.GetAnalysisView().GetJointResult();
     ASSERT_TRUE(result);
     ASSERT_TRUE(result->selection_domain);
@@ -1017,7 +1027,7 @@ TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithMultipleTargetsAndHal
     core::detail::JointPostprocessingMetrics metrics;
     ScopedInternalUnboundedOracle unbounded_test_solver;
     ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
-        fixture.map,fixture.model,options,&metrics,true));
+        fixture.map,fixture.model,options,&metrics));
 
     const auto result=fixture.model.GetAnalysisView().GetJointResult();
     ASSERT_TRUE(result);
@@ -1107,7 +1117,7 @@ TEST(PureHaloSupportExclusionTest, ProductionWorkflowUsesBoundedPureExclusionAnd
     EXPECT_FALSE(target.GetPostJointLocalResult());
 }
 
-TEST(PureHaloSupportExclusionTest, PublicEstimatorEntrypointsDeclareTheirPolicies)
+TEST(PureHaloSupportExclusionTest, PublicEstimatorUsesPureExclusion)
 {
     auto production_fixture=WorkflowFixture();
     const auto production=EstimateJointComponents(production_fixture.map,production_fixture.model);
@@ -1120,13 +1130,4 @@ TEST(PureHaloSupportExclusionTest, PublicEstimatorEntrypointsDeclareTheirPolicie
         return check.name=="global-width-calibration";
     }));
 
-    auto legacy_fixture=WorkflowFixture();
-    const auto legacy=EstimateJointComponentsFixedHalo(legacy_fixture.map,legacy_fixture.model);
-    ASSERT_TRUE(legacy.problem);
-    ASSERT_TRUE(legacy.problem->Input().selection_domain);
-    EXPECT_EQ(legacy.problem->Input().selection_domain->contributor_policy,FixedHaloContributorPolicy);
-    EXPECT_EQ(legacy.problem->Input().atom_ids.size(),3u);
-    EXPECT_TRUE(std::none_of(legacy.evidence.begin(),legacy.evidence.end(),[](const auto & check) {
-        return check.name=="global-width-calibration";
-    }));
 }

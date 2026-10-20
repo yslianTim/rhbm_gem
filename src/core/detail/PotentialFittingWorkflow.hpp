@@ -25,7 +25,7 @@ void RunTwoStageFromPreparedSamples(
 
 void RunJointComponentWorkflow(
     MapObject & map, ModelObject & model, const FitOptions & options,
-    JointPostprocessingMetrics * metrics = nullptr, bool pure_exclusion = false);
+    JointPostprocessingMetrics * metrics = nullptr);
 
 // Research-only entry point for replaying local post-processing from a fixed
 // Joint snapshot. It does not build or alter a Joint objective.

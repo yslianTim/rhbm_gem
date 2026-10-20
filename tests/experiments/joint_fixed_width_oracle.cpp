@@ -215,7 +215,7 @@ void Run(const std::filesystem::path & model_path,const std::filesystem::path & 
     model->SelectAtoms([](const rhbm_gem::AtomObject & atom) {
         return atom.GetElement()!=Element::HYDROGEN && atom.GetChainID()=="A";
     });
-    const auto problem=core::BuildJointProblem(*map,*model);
+    const auto problem=core::BuildPureHaloSupportExclusionProblem(*map,*model);
     const auto initialization=joint::InitializeContributors(*map,*model,problem);
     if(!initialization.valid) throw std::runtime_error("First-stage initialization failed: "+initialization.reason);
     const auto & data=core::JointProblemAccess::Get(problem);

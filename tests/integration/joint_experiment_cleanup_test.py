@@ -7,7 +7,6 @@ ROOT = Path(__file__).resolve().parents[2]
 CURRENT_EXPERIMENT_SOURCES = {
     "joint_fullabc_width_study.cpp",
     "joint_fixed_width_oracle.cpp",
-    "joint_fixed_halo_validation.cpp",
     "joint_fixed_neighbor.cpp",
     "joint_local_ac_kkt.cpp",
     "joint_local_replay_analysis.cpp",
@@ -36,7 +35,6 @@ PRODUCTION_REGRESSION_OWNERS = (
     "tests/core/joint_component/LocalConditioning_test.cpp",
     "tests/core/joint_component/ParameterStability_test.cpp",
     "tests/core/joint_component/PureHaloSupportExclusion_test.cpp",
-    "tests/core/joint_component/FixedHaloInitialization_test.cpp",
     "tests/core/joint_component/Runtime_test.cpp",
     "tests/core/joint_component/Progress_test.cpp",
     "tests/core/joint_component/TargetEvidence_test.cpp",
@@ -104,6 +102,8 @@ RETIRED_REPOSITORY_FILES = (
     "tests/support/DynamicHaloMean.hpp",
     "tests/integration/joint_statistical_experiment.py",
     "tests/integration/joint_statistical_experiment_test.py",
+    "tests/experiments/joint_fixed_halo_validation.cpp",
+    "tests/core/joint_component/FixedHaloInitialization_test.cpp",
 )
 
 RETIRED_PYTHON_CAMPAIGNS = (
@@ -360,6 +360,15 @@ def main():
         assert token not in active_code, f"retired derivative control remains: {token}"
     for token in RETIRED_FIXED_B_SOLVER:
         assert token not in active_code, f"retired Fixed-B solver remains: {token}"
+    for token in (
+        "BuildJointProblem",
+        "BuildFixedHaloResearchProblem",
+        "EstimateJointComponentsFixedHalo",
+        "WithFixedHalos",
+        "ReplayFixedHaloFullModel",
+    ):
+        assert token not in active_code, (
+            f"retired FixedHalo estimation entry point returned: {token}")
     historical_raw_path = "docs/developer/figures/" + "joint-fixed-neighbor-scaling-r1/individual-results"
     assert historical_raw_path not in active_sources
     assert "/docs/developer/figures/**/individual-results/" in gitignore

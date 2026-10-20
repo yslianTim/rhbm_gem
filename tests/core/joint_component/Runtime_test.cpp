@@ -105,13 +105,13 @@ TEST(JointComponentRuntimeTest, GeometrySelectionAndNegativeObservations)
     rhbm_gem::ModelObject model(std::move(atoms)); model.SelectAllAtoms();
     auto values=std::make_unique<double[]>(11); for(std::size_t k=0;k<11;++k) values[k]=k%2 ? -1 : 0;
     rhbm_gem::MapObject map({11,1,1},{.5,.5,.5},{-2.5,0,0},std::move(values));
-    const auto problem=core::BuildJointProblem(map,model);
+    const auto problem=core::BuildPureHaloSupportExclusionProblem(map,model);
     ASSERT_EQ(problem.Input().observations.size(),11);
     EXPECT_EQ(problem.Input().support[0].front().squared_distance,6.25);
     EXPECT_EQ(problem.Input().support[0].back().squared_distance,6.25);
     EXPECT_EQ(problem.Input().observations[1],-1);
     model.SetAtomSelected(1,false);
-    EXPECT_THROW(core::BuildJointProblem(map,model),std::invalid_argument);
+    EXPECT_THROW(core::BuildPureHaloSupportExclusionProblem(map,model),std::invalid_argument);
 }
 
 TEST(JointComponentRuntimeTest, FreshInitializationPreservesSecondStageAndSelection)

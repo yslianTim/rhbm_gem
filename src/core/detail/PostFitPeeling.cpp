@@ -192,23 +192,20 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
     // Internal representatives reconstruct the observation prediction even when
     // a nonunique halo has no public atom-wise point estimate.
     std::vector<std::optional<GaussianModel3D>> represented(input.atom_ids.size());
-    const bool fixed_target_only=result &&
-        result->parameterization_contract==JointTargetOnlyFixedHaloParameterizationContract;
+    if (result && result->parameterization_contract==JointTargetOnlyFixedHaloParameterizationContract)
+        throw std::invalid_argument("Fixed Halo post-fit peeling is unsupported.");
     const bool pure_exclusion=result &&
         result->parameterization_contract==JointPureHaloSupportExclusionParameterizationContract;
     if (input.selection_domain && input.selection_domain->contributor_policy==PureHaloSupportExclusionContributorPolicy &&
         (!result || !pure_exclusion))
         throw std::invalid_argument("Pure Exclusion peeling requires a Pure Exclusion snapshot.");
-    if(fixed_target_only && (!result->selection_domain ||
-        result->selection_domain->contributor_policy!=FixedHaloContributorPolicy || result->layout))
-        throw std::invalid_argument("Invalid fixed-halo peeling contract.");
     const bool pure_has_halos=pure_exclusion && result->selection_domain &&
         result->atom_ids.size()>result->selection_domain->target_indices.size();
     if(pure_exclusion && (!result->selection_domain ||
         result->selection_domain->contributor_policy!=PureHaloSupportExclusionContributorPolicy ||
         result->layout || !result->fixed_halos.empty() || (pure_has_halos && !result->halo_median_reconstruction)))
         throw std::invalid_argument("Invalid Pure Exclusion peeling contract.");
-    if(fixed_target_only || pure_exclusion)
+    if(pure_exclusion)
         for(std::size_t atom=0;atom<requested.size();++atom)
             if(!std::binary_search(result->selection_domain->target_indices.begin(),
                 result->selection_domain->target_indices.end(),atom)) requested[atom]=false;
@@ -217,35 +214,10 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
         const auto & full = c.layout ? c.layout->full_atoms : c.atoms;
         for (std::size_t k = 0; k < full.size(); ++k)
         {
-            if(full[k]>=represented.size() || (fixed_target_only &&
-                !std::binary_search(result->selection_domain->target_indices.begin(),
-                    result->selection_domain->target_indices.end(),full[k])) || represented[full[k]])
+            if(full[k]>=represented.size() || represented[full[k]])
                 throw std::invalid_argument("Invalid target-only component mapping in peeling snapshot.");
             represented[full[k]] = GaussianModel3D{c.state->ac[2*k], c.state->b[k], c.state->ac[2*k+1]};
         }
-    }
-    if(fixed_target_only)
-    {
-        std::size_t previous{};
-        for(std::size_t k=0;k<result->fixed_halos.size();++k)
-        {
-            const auto & fixed=result->fixed_halos[k];
-            if(fixed.contributor_index>=represented.size() || (k && fixed.contributor_index<=previous) ||
-                result->atom_ids[fixed.contributor_index]!=fixed.atom_id || represented[fixed.contributor_index] ||
-                std::binary_search(result->selection_domain->target_indices.begin(),
-                    result->selection_domain->target_indices.end(),fixed.contributor_index) ||
-                !std::isfinite(fixed.amplitude) || fixed.amplitude<0 ||
-                !std::isfinite(fixed.width) || fixed.width<=0 || fixed.charge!=0.0 ||
-                !IsQualifiedFirstStageFixedHalo(fixed) ||
-                fixed.source_contract!=FixedHaloParameterSourceContractVersion)
-                throw std::invalid_argument("Invalid fixed FirstStage halo in peeling snapshot.");
-            previous=fixed.contributor_index;
-            represented[fixed.contributor_index]=GaussianModel3D{fixed.amplitude,fixed.width,0.0};
-        }
-        if(result->assembled_state)
-            for(std::size_t atom=0;atom<represented.size();++atom)
-                if(!represented[atom])
-                    throw std::invalid_argument("Fitted peeling snapshot has an unmapped target or fixed halo.");
     }
     if(pure_exclusion && pure_has_halos)
     {
@@ -333,7 +305,6 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
         if (!requested[atom]) continue;
         const auto id = std::stoi(input.atom_ids[atom]);
         const auto view = AtomLocalPotentialView::For(*m_model.FindAtomPtr(id));
-        if (fixed_target_only && view.GetStageEstimate(FittingStage::Second).source.component_id.empty()) continue;
         auto & output = results[id];
         output.source = view.GetStageEstimate(FittingStage::Second).source;
         std::set<std::size_t> neighbors;

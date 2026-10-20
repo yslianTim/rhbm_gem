@@ -393,8 +393,8 @@ TEST(CommandApiPipelineTest, JointOptInPersistsSmallSelectionCalibrationFailureA
     {
         return atom.GetElement() != Element::HYDROGEN && atom.GetChainID() == "A";
     });
-    const auto target_problem=rgc::BuildJointProblem(*map,*model);
-    EXPECT_EQ(saved.row_ids,target_problem.Input().row_ids);
+    const auto target_problem=rgc::BuildPureHaloSupportExclusionProblem(*map,*model);
+    EXPECT_EQ(saved.row_ids,target_problem.OriginalInput().row_ids);
     EXPECT_EQ(target_problem.Input().selection_domain->target_indices,
         (std::vector<std::size_t>{0,1}));
 

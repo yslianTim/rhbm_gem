@@ -31,7 +31,7 @@ std::pair<JointProblem,std::vector<double>> FixedNeighborRetryFixture()
     auto map=rhbm_gem::ReadMap(command_test::TestDataPath(root+"map.map"));
     model->ApplySimulationMetadata(.5); model->SelectAllAtoms();
     model->ApplyElementSelection(Element::HYDROGEN,true);
-    JointProblem problem=rhbm_gem::core::BuildJointProblem(*map,*model);
+    JointProblem problem=rhbm_gem::core::BuildPureHaloSupportExclusionProblem(*map,*model);
     std::ifstream file(command_test::TestDataPath(root+"initial_widths.txt"));
     std::vector<double> widths; double width{};
     while(file>>width) widths.push_back(width);
@@ -603,7 +603,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     constexpr Eigen::Index rows=5'938'087;
     constexpr std::size_t atoms=37'406;
     constexpr std::size_t target_atoms=27'406;
-    constexpr std::size_t halo_atoms=atoms-target_atoms;
+    constexpr std::size_t non_target_atoms=atoms-target_atoms;
     auto input=std::make_shared<rhbm_gem::core::JointProblemInput>();
     input->observations.assign(static_cast<std::size_t>(rows),0.0);
     input->row_ids.resize(static_cast<std::size_t>(rows));
@@ -614,17 +614,14 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
         input->support[atom].push_back({atom,0.0});
         input->support[atom].push_back({atom+1,0.0});
     }
-    for(std::size_t halo=0;halo<halo_atoms;++halo)
+    for(std::size_t halo=0;halo<non_target_atoms;++halo)
     {
         const auto atom=target_atoms+halo;
-        input->atom_ids.push_back("halo-"+std::to_string(halo));
+        input->atom_ids.push_back("non-target-"+std::to_string(halo));
         input->support[atom].push_back({0,0.0});
         input->support[atom].push_back({target_atoms,0.0});
     }
     input->selection_domain.emplace();
-    input->selection_domain->contributor_policy=std::string(rhbm_gem::FixedHaloContributorPolicy);
-    input->selection_domain->fixed_halo_selection=rhbm_gem::JointFixedHaloSelectionProvenance{
-        1,halo_atoms,halo_atoms,0};
     input->selection_domain->target_indices.resize(target_atoms);
     std::iota(input->selection_domain->target_indices.begin(),input->selection_domain->target_indices.end(),std::size_t{0});
     const std::shared_ptr<const rhbm_gem::core::JointProblemInput> snapshot=input;
@@ -647,7 +644,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     context.row_ids=n::Identities(std::shared_ptr<const std::vector<std::string>>(snapshot,&snapshot->row_ids));
     n::VectorMap y(effective->data(),rows);
     const n::Vector eta=n::Vector::Constant(static_cast<Eigen::Index>(target_atoms),std::log(.55));
-    const Eigen::VectorXd fixed_prediction=Eigen::VectorXd::Zero(rows);
     const auto target_partition=n::Partition(domain,context.atom_ids);
     ASSERT_EQ(target_partition.components.size(),1u);
     EXPECT_EQ(target_partition.components.front().atoms.size(),target_atoms);
@@ -687,17 +683,16 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionScaleSingleComponentPrepar
     const auto peak=n::ProcessPeakRssBytes();
     RecordProperty("synthetic_support_entries",std::to_string(*support_entries));
     RecordProperty("target_count",std::to_string(target_atoms));
-    RecordProperty("fixed_halo_count",std::to_string(halo_atoms));
+    RecordProperty("non_target_contributor_count",std::to_string(non_target_atoms));
     RecordProperty("target_only_blocks",std::to_string(preparation.memory_estimate.shape.component_blocks));
     RecordProperty("estimated_endpoint_verification_peak_bytes",
         std::to_string(certification.verification_memory_estimate.estimated_peak_bytes));
     std::cout<<"joint-large-synthetic observations="<<rows<<" contributors="<<atoms
-        <<" targets="<<target_atoms<<" fixed_halos="<<halo_atoms
+        <<" targets="<<target_atoms<<" non_target_contributors="<<non_target_atoms
         <<" target_components="<<target_partition.components.size()
         <<" target_only_blocks="<<preparation.memory_estimate.shape.component_blocks
         <<" ac_design_columns="<<2*target_atoms
         <<" target_parameters="<<3*target_atoms
-        <<" fixed_halo_prediction_bytes="<<static_cast<std::size_t>(fixed_prediction.size())*sizeof(double)
         <<" effective_observation_bytes="<<effective->size()*sizeof(double)
         <<" support_entries="<<*support_entries<<" target_support_entries="<<target_support_entries
         <<" preparation_peak_estimate_bytes="<<preparation.global_state_memory_estimate.estimated_peak_bytes
