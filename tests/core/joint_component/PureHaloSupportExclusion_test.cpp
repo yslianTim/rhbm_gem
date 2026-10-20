@@ -4,6 +4,7 @@
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/MapSampler.hpp"
 #include "core/detail/HaloMedianReconstruction.hpp"
+#include "core/detail/GroupPotentialFitting.hpp"
 #include "core/detail/PostFitPeeling.hpp"
 #include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/joint_component/Problem.hpp"
@@ -21,10 +22,15 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
+#include <Eigen/QR>
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <iomanip>
+#include <iostream>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -1423,4 +1429,460 @@ TEST(PureHaloSupportExclusionTest, PublicEstimatorUsesPureExclusion)
         return check.name=="global-width-calibration";
     }));
 
+}
+
+namespace {
+struct Phase3Target
+{
+    int id{};
+    GaussianModel3D point;
+};
+
+struct Phase3Halo
+{
+    std::size_t contributor{};
+    int id{};
+    GaussianModel3D truth;
+};
+
+struct Phase3Row
+{
+    std::string policy;
+    std::vector<GaussianModel3D> halos;
+    std::vector<std::size_t> donor_counts;
+};
+
+double ComponentMedian(std::vector<double> values)
+{
+    std::sort(values.begin(),values.end());
+    const auto middle=values.size()/2;
+    return values.size()%2 ? values[middle] : (values[middle-1]+values[middle])/2.0;
+}
+
+GaussianModel3D MedianPoint(const std::vector<Phase3Target> & donors)
+{
+    std::vector<double> amplitudes,widths,charges;
+    for (const auto & donor:donors)
+    {
+        amplitudes.push_back(donor.point.GetAmplitude());
+        widths.push_back(donor.point.GetWidth());
+        charges.push_back(donor.point.GetOffset());
+    }
+    return {ComponentMedian(std::move(amplitudes)),ComponentMedian(std::move(widths)),
+        ComponentMedian(std::move(charges))};
+}
+
+std::vector<Phase3Target> Phase3JointTargets(
+    const JointAnalysisResult & result)
+{
+    std::vector<Phase3Target> targets;
+    if (!result.selection_domain) return targets;
+    for (const auto index:result.selection_domain->target_indices)
+    {
+        std::optional<GaussianModel3D> point;
+        for (const auto & component:result.components)
+        {
+            if (!component.state) continue;
+            const auto & atoms=component.layout ? component.layout->full_atoms : component.atoms;
+            const auto found=std::find(atoms.begin(),atoms.end(),index);
+            if (found==atoms.end()) continue;
+            const auto offset=static_cast<std::size_t>(std::distance(atoms.begin(),found));
+            point.emplace(component.state->ac[2*offset],component.state->b[offset],
+                component.state->ac[2*offset+1]);
+            break;
+        }
+        if (!point) continue;
+        const auto id=std::stoi(result.atom_ids[index]);
+        targets.push_back({id,*point});
+    }
+    return targets;
+}
+
+std::vector<GaussianModel3D> Phase3KnnProfiles(
+    const ModelObject & model,const std::vector<Phase3Target> & targets,
+    const std::vector<JointHaloMedianReconstruction> & halos,std::size_t k)
+{
+    std::vector<GaussianModel3D> profiles;
+    for (const auto & halo:halos)
+    {
+        const auto halo_position=model.FindAtomPtr(std::stoi(halo.atom_id))->GetPosition();
+        std::vector<std::pair<double,Phase3Target>> ordered;
+        for (const auto & target:targets)
+        {
+            const auto target_position=model.FindAtomPtr(target.id)->GetPosition();
+            double square{};
+            for (std::size_t axis=0;axis<3;++axis)
+            {
+                const auto delta=target_position[axis]-halo_position[axis];
+                square+=delta*delta;
+            }
+            ordered.push_back({square,target});
+        }
+        std::sort(ordered.begin(),ordered.end(),[](const auto & left,const auto & right) {
+            if (left.first!=right.first) return left.first<right.first;
+            return left.second.id<right.second.id;
+        });
+        std::vector<Phase3Target> donors;
+        for (std::size_t index=0;index<std::min(k,ordered.size());++index)
+            donors.push_back(ordered[index].second);
+        profiles.push_back(MedianPoint(donors));
+    }
+    return profiles;
+}
+
+std::optional<std::vector<GaussianModel3D>> Phase3ObservationAC(
+    const JointProblem & problem,
+    const std::vector<Phase3Target> & targets,
+    const std::vector<JointHaloMedianReconstruction> & halos,
+    const std::vector<GaussianModel3D> & width_profiles)
+{
+    const auto & input=problem.OriginalInput();
+    std::map<int,GaussianModel3D> target_by_id;
+    for (const auto & target:targets) target_by_id.emplace(target.id,target.point);
+    std::vector<double> target_prediction(input.observations.size());
+    for (std::size_t atom=0;atom<input.atom_ids.size();++atom)
+    {
+        const auto found=target_by_id.find(std::stoi(input.atom_ids[atom]));
+        if (found==target_by_id.end()) continue;
+        for (const auto & support:input.support[atom])
+        {
+            const auto basis=core::joint_component::EvaluateKernel(support.squared_distance,
+                found->second.GetWidth(),2.5);
+            target_prediction[support.row]+=found->second.GetAmplitude()*basis.gaussian+
+                found->second.GetOffset()*basis.charge;
+        }
+    }
+    std::vector<std::size_t> halo_indices;
+    for (std::size_t atom=0;atom<input.atom_ids.size();++atom)
+        if (!target_by_id.contains(std::stoi(input.atom_ids[atom]))) halo_indices.push_back(atom);
+    if (halo_indices.size()!=halos.size() || halos.size()!=width_profiles.size() || halos.empty())
+        return std::nullopt;
+
+    Eigen::MatrixXd design=Eigen::MatrixXd::Zero(
+        static_cast<Eigen::Index>(input.observations.size()),static_cast<Eigen::Index>(2*halos.size()));
+    for (std::size_t h=0;h<halo_indices.size();++h)
+        for (const auto & support:input.support[halo_indices[h]])
+        {
+            const auto basis=core::joint_component::EvaluateKernel(support.squared_distance,
+                width_profiles[h].GetWidth(),2.5);
+            design(static_cast<Eigen::Index>(support.row),static_cast<Eigen::Index>(2*h))=basis.gaussian;
+            design(static_cast<Eigen::Index>(support.row),static_cast<Eigen::Index>(2*h+1))=basis.charge;
+        }
+    Eigen::VectorXd response(static_cast<Eigen::Index>(input.observations.size()));
+    for (std::size_t row=0;row<input.observations.size();++row)
+        response[static_cast<Eigen::Index>(row)]=input.observations[row]-target_prediction[row];
+
+    double best_error=std::numeric_limits<double>::infinity();
+    std::optional<Eigen::VectorXd> best;
+    const auto active_sets=std::size_t{1}<<halos.size();
+    for (std::size_t active=0;active<active_sets;++active)
+    {
+        std::vector<std::pair<std::size_t,bool>> columns;
+        for (std::size_t h=0;h<halos.size();++h)
+            if (active&(std::size_t{1}<<h)) columns.push_back({h,false});
+        for (std::size_t h=0;h<halos.size();++h) columns.push_back({h,true});
+        Eigen::MatrixXd reduced(design.rows(),static_cast<Eigen::Index>(columns.size()));
+        for (std::size_t column=0;column<columns.size();++column)
+            reduced.col(static_cast<Eigen::Index>(column))=design.col(static_cast<Eigen::Index>(
+                2*columns[column].first+(columns[column].second ? 1 : 0)));
+        Eigen::ColPivHouseholderQR<Eigen::MatrixXd> solver(reduced);
+        solver.setThreshold(1.0e-10);
+        if (solver.rank()!=reduced.cols()) continue;
+        const auto estimate=solver.solve(response);
+        bool feasible=true;
+        for (std::size_t column=0;column<columns.size();++column)
+            if (!columns[column].second && estimate[static_cast<Eigen::Index>(column)]<-1.0e-10)
+                feasible=false;
+        if (!feasible) continue;
+        const double error=(reduced*estimate-response).squaredNorm();
+        if (error<best_error)
+        {
+            best_error=error;
+            Eigen::VectorXd full=Eigen::VectorXd::Zero(static_cast<Eigen::Index>(2*halos.size()));
+            for (std::size_t column=0;column<columns.size();++column)
+                full[static_cast<Eigen::Index>(2*columns[column].first+(columns[column].second ? 1 : 0))]=
+                    estimate[static_cast<Eigen::Index>(column)];
+            best=std::move(full);
+        }
+    }
+    if (!best) return std::nullopt;
+    std::vector<GaussianModel3D> profiles;
+    for (std::size_t h=0;h<halos.size();++h)
+        profiles.emplace_back(std::max(0.0,(*best)[static_cast<Eigen::Index>(2*h)]),
+            width_profiles[h].GetWidth(),(*best)[static_cast<Eigen::Index>(2*h+1)]);
+    return profiles;
+}
+
+std::vector<double> Phase3TargetTruthField(const MapObject & map)
+{
+    const std::array<int,3> ids{{1,2,3}};
+    const std::array<GaussianModel3D,3> truth{{{2.0,.65,-.2},{1.6,.75,.15},{1.2,.85,-.1}}};
+    std::vector<double> field(map.GetMapValueArraySize());
+    for (std::size_t grid=0;grid<field.size();++grid)
+    {
+        const auto position=map.GetGridPosition(grid);
+        for (std::size_t atom=0;atom<ids.size();++atom)
+        {
+            const std::array<std::array<double,3>,3> centers{{{0,0,0},{3.5,0,0},{7,0,0}}};
+            double square{};
+            for (std::size_t axis=0;axis<3;++axis)
+            {
+                const auto delta=position[axis]-centers[atom][axis];
+                square+=delta*delta;
+            }
+            const auto basis=core::joint_component::EvaluateKernel(square,truth[atom].GetWidth(),2.5);
+            field[grid]+=truth[atom].GetAmplitude()*basis.gaussian+truth[atom].GetOffset()*basis.charge;
+        }
+    }
+    return field;
+}
+
+template<typename T>
+void Phase3CsvValue(const std::optional<T> & value)
+{
+    if (value) std::cout<<*value;
+    else std::cout<<"NA";
+}
+}
+
+TEST(PureHaloSupportExclusionTest, ComparesLabelFreePoliciesThroughPeelingAndLocalGroupFitting)
+{
+    auto geometry_fixture=MultiTargetHaloWorkflowFixture();
+    auto noisy_values=std::make_unique<double[]>(geometry_fixture.map.GetMapValueArraySize());
+    for (std::size_t grid=0;grid<geometry_fixture.map.GetMapValueArraySize();++grid)
+        noisy_values[grid]=geometry_fixture.map.GetMapValue(grid)+.01*std::sin(.127*static_cast<double>(grid+1))+
+            .005*std::cos(.071*static_cast<double>(grid+3));
+    MapObject noisy_map(geometry_fixture.map.GetGridSize(),geometry_fixture.map.GetGridSpacing(),
+        geometry_fixture.map.GetOrigin(),std::move(noisy_values));
+    MapFixture fixture{std::move(geometry_fixture.model),std::move(noisy_map)};
+
+    FitOptions options;
+    options.estimator=PotentialEstimator::JOINT_COMPONENTS;
+    options.quiet_mode=true;
+    options.thread_size=1;
+    ScopedInternalUnboundedOracle unbounded_test_solver;
+    ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(fixture.map,fixture.model,options));
+    auto result=fixture.model.GetAnalysisView().GetJointResult();
+    ASSERT_TRUE(result);
+    ASSERT_TRUE(result->selection_domain);
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    const auto targets=Phase3JointTargets(*result);
+    ASSERT_EQ(targets.size(),3u);
+    ASSERT_TRUE(result->halo_median_reconstruction);
+    const auto baseline=*result->halo_median_reconstruction;
+    ASSERT_EQ(baseline.halos.size(),2u);
+    const auto run_id=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(1))
+        .GetStageEstimate(FittingStage::Second).source.run_id;
+    const auto baseline_build=core::detail::BuildHaloMedianReconstruction(
+        fixture.model,problem,*result,run_id);
+    const auto global=GaussianModel3D{baseline.global_median[0],baseline.global_median[1],baseline.global_median[2]};
+    const auto knn1=Phase3KnnProfiles(fixture.model,targets,baseline.halos,1);
+    const auto knn2=Phase3KnnProfiles(fixture.model,targets,baseline.halos,2);
+    const auto observation_ac=Phase3ObservationAC(problem,targets,baseline.halos,knn2);
+    const std::array<int,2> halo_ids{{4,5}};
+    const std::array<GaussianModel3D,2> halo_truth{{{.5,.8,.3},{.3,1.0,-.25}}};
+    const auto target_field=Phase3TargetTruthField(fixture.map);
+    std::vector<Phase3Row> rows;
+    const auto add_row=[&](std::string name,std::vector<GaussianModel3D> profiles,
+        std::vector<std::size_t> donor_counts) {
+        rows.push_back({std::move(name),std::move(profiles),std::move(donor_counts)});
+    };
+    std::vector<GaussianModel3D> baseline_profiles;
+    for (const auto & halo:baseline.halos)
+        baseline_profiles.emplace_back(halo.amplitude,halo.width,halo.charge);
+    add_row("group-key-global-fallback",baseline_profiles,{3,3});
+    add_row("global-target-median",{global,global},{3,3});
+    add_row("geometry-knn-1",knn1,{1,1});
+    add_row("geometry-knn-2",knn2,{2,2});
+    if (observation_ac) add_row("observation-ac-knn-2",*observation_ac,{2,2});
+
+    std::cout<<"PHASE3_CSV_BEGIN\n";
+    std::cout<<"policy,donors_per_halo,halo_a_rmse,halo_b_rmse,halo_c_rmse,halo_signal_rmse,"
+        <<"halo_signal_abs_median,halo_signal_abs_max,peeling_rmse,peeling_coverage,tail_ratio_mae,"
+        <<"local_a_rmse,local_b_rmse,local_available,mean_effective_samples,mean_alpha_r,"
+        <<"group_alpha,group_mdpde_a,group_mdpde_b,group_truth_rmse,group_prior_sd_a,group_prior_sd_b,"
+        <<"group_outliers,reconstruction_only_nodes,cache_peak,estimated_workspace_bytes,"
+        <<"observation_design_rows,observation_design_columns,observation_dense_design_bytes\n";
+
+    for (const auto & row:rows)
+    {
+        double halo_a_sq{},halo_b_sq{},halo_c_sq{},halo_signal_sq{};
+        std::size_t halo_signal_count{};
+        std::vector<double> halo_abs_errors;
+        for (std::size_t h=0;h<row.halos.size();++h)
+        {
+            const auto & point=row.halos[h];
+            halo_a_sq+=std::pow(point.GetAmplitude()-halo_truth[h].GetAmplitude(),2);
+            halo_b_sq+=std::pow(point.GetWidth()-halo_truth[h].GetWidth(),2);
+            halo_c_sq+=std::pow(point.GetOffset()-halo_truth[h].GetOffset(),2);
+            const auto center=fixture.model.FindAtomPtr(halo_ids[h])->GetPosition();
+            for (std::size_t grid=0;grid<fixture.map.GetMapValueArraySize();++grid)
+            {
+                const auto position=fixture.map.GetGridPosition(grid);
+                double square{};
+                for (std::size_t axis=0;axis<3;++axis)
+                {
+                    const auto delta=position[axis]-center[axis];
+                    square+=delta*delta;
+                }
+                if (square>6.25) continue;
+                const auto estimated=core::joint_component::EvaluateKernel(square,point.GetWidth(),2.5);
+                const auto truth=core::joint_component::EvaluateKernel(square,halo_truth[h].GetWidth(),2.5);
+                const double error=point.GetAmplitude()*estimated.gaussian+point.GetOffset()*estimated.charge-
+                    halo_truth[h].GetAmplitude()*truth.gaussian-halo_truth[h].GetOffset()*truth.charge;
+                halo_signal_sq+=error*error;
+                ++halo_signal_count;
+                halo_abs_errors.push_back(std::abs(error));
+            }
+        }
+        std::sort(halo_abs_errors.begin(),halo_abs_errors.end());
+        const std::optional<double> halo_signal_median=halo_abs_errors.empty() ? std::nullopt :
+            std::optional<double>{halo_abs_errors[halo_abs_errors.size()/2]};
+        const std::optional<double> halo_signal_max=halo_abs_errors.empty() ? std::nullopt :
+            std::optional<double>{halo_abs_errors.back()};
+
+        auto candidate=*result;
+        auto build=baseline_build;
+        for (std::size_t h=0;h<row.halos.size();++h)
+        {
+            auto & saved=candidate.halo_median_reconstruction->halos[h];
+            auto & rebuilt=build.snapshot.halos[h];
+            saved.amplitude=rebuilt.amplitude=row.halos[h].GetAmplitude();
+            saved.width=rebuilt.width=row.halos[h].GetWidth();
+            saved.charge=rebuilt.charge=row.halos[h].GetOffset();
+            const auto count=row.donor_counts[h];
+            saved.donor_count=rebuilt.donor_count=count;
+            saved.source=rebuilt.source=count==baseline.valid_target_count ?
+                HaloMedianSource::GlobalTargetMedian : HaloMedianSource::GroupKeyMedian;
+        }
+        core::detail::JointPostprocessingMetrics metrics;
+        core::detail::JointPostprocessingContext context(fixture.map,fixture.model,problem,
+            &candidate,&metrics,&build);
+        auto peelings=context.BuildPostFitPeelingSamples(
+            std::span<const std::size_t>(candidate.selection_domain->target_indices));
+        double peeling_sq{};
+        std::size_t peeling_count{},peeling_total{};
+        for (const auto & target:targets)
+        {
+            const auto peeling=peelings.find(target.id);
+            ASSERT_NE(peeling,peelings.end());
+            const auto raw=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(target.id)).GetRawSamplingEntriesView();
+            for (std::size_t sample=0;sample<raw.size();++sample)
+            {
+                ++peeling_total;
+                if (!peeling->second.samples[sample].response) continue;
+                const auto truth=ReferenceTricubicCharge(fixture.map,target_field,raw[sample].point.position);
+                const auto error=*peeling->second.samples[sample].response-truth;
+                peeling_sq+=error*error;
+                ++peeling_count;
+            }
+        }
+        const std::optional<double> peeling_rmse=peeling_count ?
+            std::optional<double>{std::sqrt(peeling_sq/static_cast<double>(peeling_count))} : std::nullopt;
+        const double peeling_coverage=peeling_total ? static_cast<double>(peeling_count)/
+            static_cast<double>(peeling_total) : 0.0;
+        std::vector<std::pair<int,PostFitPeelingResult>> peeling_updates;
+        for (const auto & [id,peeling]:peelings) peeling_updates.emplace_back(id,peeling);
+        fixture.model.EditAnalysis().ApplyPostFitPeelingsBatch(std::move(peeling_updates));
+
+        double tail_ratio_abs_error{};
+        std::size_t tail_count{};
+        for (const auto & target:targets)
+        {
+            const auto view=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(target.id));
+            const auto assessment=view.AssessLocalFittingPeelingRatio(1.0,2.0);
+            if (!assessment.ratio) continue;
+            const auto raw=view.GetRawSamplingEntriesView();
+            double raw_sum{},true_target_sum{};
+            for (const auto & sample:raw)
+                if (sample.point.distance>=1.0 && sample.point.distance<=2.0)
+                {
+                    raw_sum+=sample.response;
+                    true_target_sum+=ReferenceTricubicCharge(fixture.map,target_field,sample.point.position);
+                }
+            if (raw_sum==0.0) continue;
+            const double truth_ratio=1.0-true_target_sum/raw_sum;
+            tail_ratio_abs_error+=std::abs(*assessment.ratio-truth_ratio);
+            ++tail_count;
+        }
+
+        std::vector<std::pair<int,PostJointLocalResult>> local_updates;
+        for (const auto & target:targets)
+        {
+            const auto found=std::find_if(peelings.begin(),peelings.end(),[&](const auto & item) {
+                return item.first==target.id;
+            });
+            if (found==peelings.end()) continue;
+            local_updates.emplace_back(target.id,core::detail::FitPostJointLocalTargetForResearch(
+                context,fixture.model,target.id,found->second,options,metrics));
+        }
+        fixture.model.EditAnalysis().ApplyPostJointLocalResultsBatch(std::move(local_updates));
+        core::detail::RunJointGroupPotentialFitting(fixture.model,options,&metrics);
+
+        double local_a_sq{},local_b_sq{},effective_samples{},alpha_r{};
+        std::size_t local_available{};
+        const std::array<double,3> truth_a{{2.0,1.6,1.2}},truth_b{{.65,.75,.85}};
+        for (std::size_t index=0;index<targets.size();++index)
+        {
+            const auto local=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(targets[index].id))
+                .GetPostJointLocalResult();
+            if (!local || local->status!=EvidenceStatus::Available) continue;
+            const auto & point=local->fit.mdpde.GetModel();
+            local_a_sq+=std::pow(point.GetAmplitude()-truth_a[index],2);
+            local_b_sq+=std::pow(point.GetWidth()-truth_b[index],2);
+            effective_samples+=static_cast<double>(local->effective_sample_count);
+            alpha_r+=local->fit.alpha_r;
+            ++local_available;
+        }
+        const auto key=data_internal::GetGroupKey(fixture.model.FindAtomPtr(1));
+        const auto summary=fixture.model.GetAnalysisView().GetGroupParameterSummary(key);
+        std::optional<double> group_alpha,group_a,group_b,group_truth_rmse,prior_sd_a,prior_sd_b;
+        std::size_t outliers{};
+        if (summary)
+        {
+            group_alpha=fixture.model.GetAnalysisView().GetAtomAlphaG(key);
+            if (summary->inference)
+            {
+                const auto & inference=*summary->inference;
+                group_a=inference.mdpde.GetAmplitude();
+                group_b=inference.mdpde.GetWidth();
+                group_truth_rmse=std::sqrt((std::pow(*group_a-1.6,2)+std::pow(*group_b-.75,2))/2.0);
+                prior_sd_a=inference.prior.GetStandardDeviationModel().GetAmplitude();
+                prior_sd_b=inference.prior.GetStandardDeviationModel().GetWidth();
+                outliers=static_cast<std::size_t>(std::count_if(inference.member_results.begin(),
+                    inference.member_results.end(),[](const auto & member){return member.is_outlier;}));
+            }
+        }
+
+        std::cout<<row.policy<<','<<row.donor_counts.front()<<','
+            <<std::sqrt(halo_a_sq/static_cast<double>(row.halos.size()))<<','
+            <<std::sqrt(halo_b_sq/static_cast<double>(row.halos.size()))<<','
+            <<std::sqrt(halo_c_sq/static_cast<double>(row.halos.size()))<<','
+            <<std::sqrt(halo_signal_sq/static_cast<double>(halo_signal_count))<<',';
+        Phase3CsvValue(halo_signal_median); std::cout<<','; Phase3CsvValue(halo_signal_max); std::cout<<',';
+        Phase3CsvValue(peeling_rmse); std::cout<<','<<peeling_coverage<<',';
+        const std::optional<double> tail_ratio_mae=tail_count ?
+            std::optional<double>{tail_ratio_abs_error/static_cast<double>(tail_count)} : std::nullopt;
+        Phase3CsvValue(tail_ratio_mae); std::cout<<',';
+        Phase3CsvValue(local_available ? std::optional<double>{std::sqrt(local_a_sq/
+            static_cast<double>(local_available))} : std::nullopt);
+        std::cout<<',';
+        Phase3CsvValue(local_available ? std::optional<double>{std::sqrt(local_b_sq/
+            static_cast<double>(local_available))} : std::nullopt);
+        std::cout<<','<<local_available<<',';
+        Phase3CsvValue(local_available ? std::optional<double>{effective_samples/
+            static_cast<double>(local_available)} : std::nullopt);
+        std::cout<<',';
+        Phase3CsvValue(local_available ? std::optional<double>{alpha_r/
+            static_cast<double>(local_available)} : std::nullopt);
+        std::cout<<','; Phase3CsvValue(group_alpha); std::cout<<','; Phase3CsvValue(group_a); std::cout<<',';
+        Phase3CsvValue(group_b); std::cout<<','; Phase3CsvValue(group_truth_rmse); std::cout<<',';
+        Phase3CsvValue(prior_sd_a); std::cout<<','; Phase3CsvValue(prior_sd_b); std::cout<<','<<outliers<<','
+            <<metrics.reconstruction_only_node_evaluation_count<<','
+            <<metrics.reconstruction_node_cache_peak_entries<<','
+            <<metrics.estimated_reconstruction_workspace_bytes<<','
+            <<problem.OriginalInput().observations.size()<<','<<2*baseline.halos.size()<<','
+            <<problem.OriginalInput().observations.size()*2*baseline.halos.size()*sizeof(double)<<'\n';
+    }
+    std::cout<<"PHASE3_OBSERVATION_AC_AVAILABLE,"<<(observation_ac ? "true" : "false")<<'\n';
 }
