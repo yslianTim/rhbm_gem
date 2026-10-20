@@ -76,8 +76,9 @@ same-group/fallback Halo counts, fallback support rows, reconstruction-only
 node evaluations, cache peak, contributor lookup count and estimated
 workspace bytes. Tail coverage and unavailable reasons are tracked per run.
 Halo contribution magnitude and per-target coverage are not currently
-persisted as a separate numerical audit; Phase 2 will add only the diagnostic
-needed by the reproducible policy comparison.
+persisted as a separate production audit. The Phase 2 research runner records
+synthetic per-Halo signal errors, donor coverage, availability, runtime and
+workspace estimates in its CSV output.
 
 No production algorithm changes in this phase. The tests intentionally capture
 the current dependence as a control; Phase 4 will change them to assert the

@@ -321,6 +321,11 @@ target_link_libraries(joint_production_bounded_synthetic PRIVATE joint_test_supp
 add_dependencies(tests_all joint_production_bounded_synthetic)
 add_test(NAME joint_production_bounded_synthetic COMMAND $<TARGET_FILE:joint_production_bounded_synthetic>)
 
+add_executable(joint_label_free_halo_policy experiments/joint_label_free_halo_policy.cpp)
+target_link_libraries(joint_label_free_halo_policy PRIVATE rhbm_gem CompilerFlags)
+target_include_directories(joint_label_free_halo_policy PRIVATE "${PROJECT_SOURCE_DIR}/src")
+add_test(NAME joint_label_free_halo_policy COMMAND $<TARGET_FILE:joint_label_free_halo_policy>)
+
 if(RHBM_GEM_BUILD_BENCHMARKS)
     add_custom_target(benchmarks_all)
     add_executable(joint_partial_selection experiments/joint_partial_selection.cpp)
