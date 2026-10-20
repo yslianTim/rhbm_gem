@@ -329,6 +329,10 @@ add_test(NAME joint_label_free_halo_policy COMMAND $<TARGET_FILE:joint_label_fre
 add_executable(joint_halo_geometry_census experiments/joint_halo_geometry_census.cpp)
 target_link_libraries(joint_halo_geometry_census PRIVATE rhbm_gem CompilerFlags)
 
+add_executable(joint_halo_fullabc_validation experiments/joint_halo_fullabc_validation.cpp)
+target_link_libraries(joint_halo_fullabc_validation PRIVATE rhbm_gem CompilerFlags)
+target_include_directories(joint_halo_fullabc_validation PRIVATE "${PROJECT_SOURCE_DIR}/src")
+
 if(RHBM_GEM_BUILD_BENCHMARKS)
     add_custom_target(benchmarks_all)
     add_executable(joint_partial_selection experiments/joint_partial_selection.cpp)

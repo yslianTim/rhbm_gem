@@ -1,0 +1,1112 @@
+#include "core/detail/FirstStageInitialization.hpp"
+#include "core/detail/FittingWorkset.hpp"
+#include "core/detail/GroupPotentialFitting.hpp"
+#include "core/detail/HaloMedianReconstruction.hpp"
+#include "core/detail/MapSampler.hpp"
+#include "core/detail/PostFitPeeling.hpp"
+#include "core/detail/PotentialFittingWorkflow.hpp"
+#include "core/detail/joint_component/Numerics.hpp"
+#include "core/detail/joint_component/Problem.hpp"
+#include "data/detail/JointStageAdapter.hpp"
+
+#include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include <rhbm_gem/core/MapSampler.hpp>
+#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
+#include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
+#include <boost/json.hpp>
+#include <Eigen/SparseCore>
+
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <cmath>
+#include <cstddef>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <numeric>
+#include <optional>
+#include <set>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <vector>
+#ifndef _WIN32
+#include <sys/resource.h>
+#endif
+
+namespace {
+namespace rg = rhbm_gem;
+namespace core = rg::core;
+namespace detail = core::detail;
+namespace joint = core::joint_component;
+namespace json = boost::json;
+using Position = std::array<double, 3>;
+using Profile = std::array<double, 3>; // A, B, C
+using Clock = std::chrono::steady_clock;
+
+struct Scenario
+{
+    std::string name;
+    double halo_distance{};
+    bool contrast{};
+    bool wide_charge_contrast{};
+    double noise{};
+    bool map_edge_halo{};
+    std::size_t extra_free_halo_observations{};
+};
+
+struct Halo
+{
+    int id{};
+    Position position{};
+    Profile truth{};
+    std::vector<std::size_t> rows;
+};
+
+struct MethodResult
+{
+    bool available{};
+    std::string reason;
+    std::vector<std::optional<Profile>> profiles;
+    std::optional<double> a_rmse, b_rmse, c_rmse;
+    std::optional<double> a_bias, b_bias, c_bias;
+    std::optional<double> a_median_abs, b_median_abs, c_median_abs;
+    std::optional<double> a_p95_abs, b_p95_abs, c_p95_abs;
+    std::optional<double> a_max_abs, b_max_abs, c_max_abs;
+    std::optional<double> halo_signal_rmse, shared_signal_rmse, domain_signal_rmse, max_signal_error;
+    std::optional<double> peeling_rmse, tail_ratio_mae, local_a_rmse, local_b_rmse;
+    std::optional<double> group_a_error, group_b_error;
+    std::optional<double> target_endpoint_drift_max;
+    std::optional<double> local_effective_sample_mean, local_information_trace_mean;
+    std::optional<std::size_t> local_effective_sample_min;
+    std::optional<double> group_alpha_g, group_mdpde_a, group_mdpde_b;
+    std::optional<double> group_posterior_a_rmse, group_posterior_b_rmse;
+    std::optional<double> group_prior_uncertainty_a, group_prior_uncertainty_b;
+    std::optional<double> group_member_uncertainty_a_mean, group_member_uncertainty_b_mean;
+    std::size_t peeling_available{}, peeling_total{}, local_available{}, local_qualified_count{};
+    std::size_t local_sample_count_total{}, local_effective_sample_count_total{}, local_information_count{};
+    std::size_t group_members{}, group_outlier_count{};
+    double seconds{};
+};
+
+double Distance(const Position & lhs, const Position & rhs)
+{
+    double square{};
+    for (std::size_t axis = 0; axis < 3; ++axis)
+    {
+        const double delta = lhs[axis] - rhs[axis];
+        square += delta * delta;
+    }
+    return std::sqrt(square);
+}
+
+double SupportSquare(const Position & lhs, const Position & rhs)
+{
+    double square{};
+    for (std::size_t axis = 0; axis < 3; ++axis)
+    {
+        const double delta = lhs[axis] - rhs[axis];
+        square += delta * delta;
+    }
+    return square;
+}
+
+std::size_t Grid(const std::array<int, 3> & size, int x, int y, int z)
+{
+    return static_cast<std::size_t>(x) + static_cast<std::size_t>(size[0]) *
+        (static_cast<std::size_t>(y) + static_cast<std::size_t>(size[1]) * static_cast<std::size_t>(z));
+}
+
+rg::AtomObject MakeAtom(int id, const Position & position, bool target)
+{
+    rg::AtomObject atom;
+    atom.SetSerialID(id);
+    atom.SetSequenceID(id);
+    atom.SetComponentID("ALA");
+    atom.SetAtomID(target ? "CA" : "CB");
+    atom.SetChainID("A");
+    atom.SetIndicator(".");
+    atom.SetComponentKey(target ? static_cast<ComponentKey>(1) : static_cast<ComponentKey>(id));
+    atom.SetAtomKey(static_cast<AtomKey>(target ? static_cast<int>(Spot::CA) : id));
+    atom.SetResidue(Residue::ALA);
+    atom.SetElement(Element::CARBON);
+    atom.SetSpot(target ? Spot::CA : Spot::CB);
+    atom.SetStructure(Structure::FREE);
+    atom.SetPosition(position);
+    return atom;
+}
+
+struct Synthetic
+{
+    rg::ModelObject model;
+    std::unique_ptr<rg::MapObject> map;
+    std::unique_ptr<rg::MapObject> target_only_map;
+    std::vector<Position> target_positions;
+    std::vector<Profile> target_truth;
+    std::vector<Halo> halos;
+    std::array<int, 3> grid_size{51, 63, 16};
+    std::array<double, 3> spacing{0.5, 0.5, 0.5};
+    std::array<double, 3> origin{-3.0, -3.0, -3.0};
+};
+
+Synthetic MakeSynthetic(const Scenario & scenario)
+{
+    Synthetic out;
+    out.target_positions.reserve(20);
+    out.target_truth.assign(20, Profile{1.0, 1.10, 0.10});
+    std::vector<std::unique_ptr<rg::AtomObject>> atoms;
+    atoms.reserve(27);
+    for (int y = 0; y < 5; ++y)
+        for (int x = 0; x < 4; ++x)
+        {
+            const Position position{6.2 * x, 6.2 * y, 0.0};
+            out.target_positions.push_back(position);
+            atoms.push_back(std::make_unique<rg::AtomObject>(MakeAtom(
+                static_cast<int>(out.target_positions.size()), position, true)));
+        }
+
+    const Position target0 = out.target_positions.front();
+    const Position halo0{target0[0], target0[1], 3.0};
+    Position halo1{};
+    if (scenario.halo_distance > 5.0)
+        halo1 = {out.target_positions[1][0], out.target_positions[1][1], 3.0};
+    else
+    {
+        const double angle = 2.0 * std::asin(scenario.halo_distance / 6.0);
+        halo1 = {target0[0] + 3.0 * std::sin(angle), target0[1], 3.0 * std::cos(angle)};
+    }
+    const Profile similar0{0.96, 1.08, 0.08}, similar1{1.04, 1.12, 0.12};
+    const Profile contrast0{1.55, scenario.wide_charge_contrast ? 1.20 : 1.12, 0.38};
+    const Profile contrast1{0.55, scenario.wide_charge_contrast ? 0.65 : 0.72, -0.28};
+    const auto add_halo = [&](int id, Position position, Profile truth) {
+        out.halos.push_back({id, position, truth, {}});
+        atoms.push_back(std::make_unique<rg::AtomObject>(MakeAtom(id, position, false)));
+    };
+    add_halo(101, halo0, scenario.contrast ? contrast0 : similar0);
+    add_halo(102, halo1, scenario.contrast ? contrast1 : similar1);
+    // One halo in each corner has exactly 3, 2, 1, and 0 distinct OriginalInput rows.
+    if (scenario.extra_free_halo_observations)
+        add_halo(103, {20.6, scenario.extra_free_halo_observations == 3 ? 27.9 : 27.8, -3.0},
+            {1.0, 1.10, 0.10});
+    add_halo(104, {-2.5, 28.10, -2.5}, {1.0, 1.10, 0.10});
+    add_halo(105, {-1.6, -3.40, -3.0}, {1.0, 1.10, 0.10});
+    add_halo(106, {21.1, -3.20, -2.5}, {1.0, 1.10, 0.10});
+    if (scenario.map_edge_halo)
+        add_halo(107, {22.0, 27.5, 4.2}, {0.70, 1.05, -0.15});
+
+    out.model = rg::ModelObject(std::move(atoms));
+    out.model.SelectAtoms([](const rg::AtomObject & atom) { return atom.GetSerialID() <= 20; });
+    out.model.EditAnalysis().InitializeFromSelection();
+
+    const std::size_t voxel_count = static_cast<std::size_t>(out.grid_size[0]) *
+        static_cast<std::size_t>(out.grid_size[1]) * static_cast<std::size_t>(out.grid_size[2]);
+    auto raw_values = std::make_unique<double[]>(voxel_count);
+    auto target_values = std::make_unique<double[]>(voxel_count);
+    for (int z = 0; z < out.grid_size[2]; ++z)
+        for (int y = 0; y < out.grid_size[1]; ++y)
+            for (int x = 0; x < out.grid_size[0]; ++x)
+            {
+                const Position position{out.origin[0] + out.spacing[0] * x,
+                    out.origin[1] + out.spacing[1] * y, out.origin[2] + out.spacing[2] * z};
+                double target_value{}, halo_value{};
+                for (std::size_t atom = 0; atom < out.target_positions.size(); ++atom)
+                {
+                    const double square = SupportSquare(position, out.target_positions[atom]);
+                    if (square <= 6.25)
+                    {
+                        const auto basis = joint::EvaluateKernel(square, out.target_truth[atom][1], 2.5);
+                        target_value += out.target_truth[atom][0] * basis.gaussian + out.target_truth[atom][2] * basis.charge;
+                    }
+                }
+                for (const auto & halo : out.halos)
+                {
+                    const double square = SupportSquare(position, halo.position);
+                    if (square <= 6.25)
+                    {
+                        const auto basis = joint::EvaluateKernel(square, halo.truth[1], 2.5);
+                        halo_value += halo.truth[0] * basis.gaussian + halo.truth[2] * basis.charge;
+                    }
+                }
+                const double deterministic_noise = scenario.noise *
+                    (std::sin(0.017 * static_cast<double>(Grid(out.grid_size, x, y, z))) +
+                     0.5 * std::sin(0.113 * static_cast<double>(Grid(out.grid_size, x, y, z))));
+                const auto row = Grid(out.grid_size, x, y, z);
+                target_values[row] = target_value;
+                raw_values[row] = target_value + halo_value + deterministic_noise;
+            }
+    out.map = std::make_unique<rg::MapObject>(out.grid_size, out.spacing, out.origin, std::move(raw_values));
+    out.target_only_map = std::make_unique<rg::MapObject>(out.grid_size, out.spacing, out.origin, std::move(target_values));
+    return out;
+}
+
+std::optional<Profile> TargetPoint(const rg::JointAnalysisResult & result, std::size_t target_index)
+{
+    for (const auto & component : result.components)
+    {
+        if (!component.state) continue;
+        for (std::size_t local = 0; local < component.atoms.size(); ++local)
+            if (component.atoms[local] == target_index &&
+                component.state->ac.size() >= 2 * local + 2 && component.state->b.size() > local)
+                return Profile{component.state->ac[2 * local], component.state->b[local],
+                    component.state->ac[2 * local + 1]};
+    }
+    return std::nullopt;
+}
+
+using ProfileMap = std::unordered_map<int, Profile>;
+
+ProfileMap GeometryProfiles(const detail::HaloMedianBuildResult & built, const rg::ModelObject & model)
+{
+    ProfileMap out;
+    for (const auto & halo : built.snapshot.halos)
+        out.emplace(std::stoi(halo.atom_id), Profile{halo.amplitude, halo.width, halo.charge});
+    detail::GeometryLocalTargetDonorIndex donor_index(built.target_donors);
+    std::set<int> targets;
+    for (const auto & donor : built.target_donors) targets.insert(std::stoi(donor.atom_id));
+    for (const auto & atom : model.GetAtomList())
+    {
+        if (atom->GetElement() == Element::HYDROGEN || targets.contains(atom->GetSerialID()) ||
+            out.contains(atom->GetSerialID()))
+            continue;
+        const auto donors = donor_index.Query(atom->GetPosition());
+        if (donors.empty()) continue;
+        out.emplace(atom->GetSerialID(), detail::GeometryLocalTargetMedian(donors));
+    }
+    return out;
+}
+
+ProfileMap FullABCProfiles(const detail::HaloFullABCReconstructionResult & result)
+{
+    ProfileMap out;
+    for (const auto & halo : result.halos)
+        if (halo.reconstructed_parameters)
+            out.emplace(std::stoi(halo.classification.atom_id), *halo.reconstructed_parameters);
+    return out;
+}
+
+double Median(std::vector<double> values)
+{
+    if (values.empty()) return std::numeric_limits<double>::quiet_NaN();
+    std::sort(values.begin(), values.end());
+    const auto middle = values.size() / 2;
+    return values.size() % 2 ? values[middle] : 0.5 * (values[middle - 1] + values[middle]);
+}
+
+double Quantile(std::vector<double> values, double probability)
+{
+    if (values.empty()) return std::numeric_limits<double>::quiet_NaN();
+    std::sort(values.begin(), values.end());
+    const double location = probability * static_cast<double>(values.size() - 1);
+    const auto lower = static_cast<std::size_t>(std::floor(location));
+    const auto upper = static_cast<std::size_t>(std::ceil(location));
+    return values[lower] + (location - static_cast<double>(lower)) * (values[upper] - values[lower]);
+}
+
+std::optional<double> Rmse(const std::vector<double> & errors)
+{
+    if (errors.empty()) return std::nullopt;
+    double sum{};
+    for (const double error : errors) sum += error * error;
+    return std::sqrt(sum / static_cast<double>(errors.size()));
+}
+
+void ScoreParameters(MethodResult & result, const std::vector<Halo> & halos)
+{
+    std::array<std::vector<double>, 3> errors, absolute;
+    for (std::size_t index = 0; index < halos.size(); ++index)
+    {
+        if (index >= result.profiles.size() || !result.profiles[index]) return;
+        for (std::size_t parameter = 0; parameter < 3; ++parameter)
+        {
+            const auto error = (*result.profiles[index])[parameter] - halos[index].truth[parameter];
+            errors[parameter].push_back(error);
+            absolute[parameter].push_back(std::abs(error));
+        }
+    }
+    result.a_rmse = Rmse(errors[0]); result.b_rmse = Rmse(errors[1]); result.c_rmse = Rmse(errors[2]);
+    std::array<std::optional<double> *, 3> biases{&result.a_bias, &result.b_bias, &result.c_bias};
+    std::array<std::optional<double> *, 3> medians{&result.a_median_abs, &result.b_median_abs, &result.c_median_abs};
+    std::array<std::optional<double> *, 3> p95s{&result.a_p95_abs, &result.b_p95_abs, &result.c_p95_abs};
+    std::array<std::optional<double> *, 3> maxima{&result.a_max_abs, &result.b_max_abs, &result.c_max_abs};
+    for (std::size_t parameter = 0; parameter < 3; ++parameter)
+    {
+        double sum{};
+        for (const double error : errors[parameter]) sum += error;
+        *biases[parameter] = sum / static_cast<double>(errors[parameter].size());
+        *medians[parameter] = Median(absolute[parameter]);
+        *p95s[parameter] = Quantile(absolute[parameter], 0.95);
+        *maxima[parameter] = *std::max_element(absolute[parameter].begin(), absolute[parameter].end());
+    }
+}
+
+std::optional<ProfileMap> ObservationACProfiles(const core::JointProblem & problem,
+    const rg::JointAnalysisResult & target_result, const detail::HaloMedianBuildResult & geometry_medians,
+    const detail::HaloFullABCPreclassification & preclassification,
+    const Synthetic & synthetic, std::string & reason)
+{
+    const auto & input = problem.OriginalInput();
+    const auto global = geometry_medians.snapshot.global_median;
+    const auto geometry_profiles = GeometryProfiles(geometry_medians, synthetic.model);
+    std::unordered_map<int, std::size_t> original_index;
+    for (std::size_t atom = 0; atom < input.atom_ids.size(); ++atom)
+        original_index.emplace(std::stoi(input.atom_ids[atom]), atom);
+    std::vector<const detail::HaloFullABCClassificationRecord *> free_halos;
+    std::vector<double> response = input.observations;
+    for (std::size_t atom = 0; atom < input.selection_domain->target_indices.size(); ++atom)
+    {
+        const auto contributor = input.selection_domain->target_indices[atom];
+        const auto point = TargetPoint(target_result, contributor);
+        if (!point) { reason = "target-endpoint-missing"; return std::nullopt; }
+        for (const auto & support : input.support[contributor])
+        {
+            const auto basis = joint::EvaluateKernel(support.squared_distance, (*point)[1], 2.5);
+            response[support.row] -= (*point)[0] * basis.gaussian + (*point)[2] * basis.charge;
+        }
+    }
+    for (const auto & halo : preclassification.halos)
+    {
+        if (halo.role == detail::HaloFullABCRole::FreeFullABC)
+        {
+            free_halos.push_back(&halo);
+            continue;
+        }
+        if (!halo.original_contributor_index) continue;
+        const auto & profile = global;
+        const auto contributor = *halo.original_contributor_index;
+        for (const auto row : halo.original_support_rows)
+        {
+            const auto support = std::find_if(input.support[contributor].begin(), input.support[contributor].end(),
+                [row](const auto & entry) { return entry.row == row; });
+            if (support == input.support[contributor].end()) continue;
+            const auto basis = joint::EvaluateKernel(support->squared_distance, profile[1], 2.5);
+            response[row] -= profile[0] * basis.gaussian + profile[2] * basis.charge;
+        }
+    }
+    if (free_halos.empty()) { reason = "no-free-halo-columns"; return ProfileMap{}; }
+    const auto columns = static_cast<Eigen::Index>(2 * free_halos.size());
+    const auto rows = static_cast<Eigen::Index>(input.observations.size());
+    std::vector<Eigen::Triplet<double>> triplets;
+    std::size_t support_count{};
+    for (const auto * halo : free_halos) support_count += halo->original_support_rows.size();
+    triplets.reserve(2 * support_count);
+    for (std::size_t local = 0; local < free_halos.size(); ++local)
+    {
+        const int id = std::stoi(free_halos[local]->atom_id);
+        const auto found = original_index.find(id);
+        if (found == original_index.end()) { reason = "free-halo-original-mapping-missing"; return std::nullopt; }
+        const auto profile = geometry_profiles.find(id);
+        if (profile == geometry_profiles.end()) { reason = "geometry-width-unavailable"; return std::nullopt; }
+        const auto contributor = found->second;
+        for (const auto row : free_halos[local]->original_support_rows)
+        {
+            const auto support = std::find_if(input.support[contributor].begin(), input.support[contributor].end(),
+                [row](const auto & entry) { return entry.row == row; });
+            if (support == input.support[contributor].end()) continue;
+            const auto basis = joint::EvaluateKernel(support->squared_distance, profile->second[1], 2.5);
+            triplets.emplace_back(static_cast<Eigen::Index>(row), static_cast<Eigen::Index>(2 * local), basis.gaussian);
+            triplets.emplace_back(static_cast<Eigen::Index>(row), static_cast<Eigen::Index>(2 * local + 1), basis.charge);
+        }
+    }
+    joint::Sparse design(rows, columns);
+    design.setFromTriplets(triplets.begin(), triplets.end());
+    Eigen::VectorXd y(rows), weights = Eigen::VectorXd::Ones(rows);
+    for (Eigen::Index row = 0; row < rows; ++row) y(row) = response[static_cast<std::size_t>(row)];
+    const auto solved = joint::SolveLinear(design, y, weights, false, true);
+    if (!solved.valid)
+    {
+        reason = "observation-ac-solver:" + solved.reason;
+        return std::nullopt;
+    }
+    ProfileMap result;
+    for (const auto & halo : preclassification.halos)
+    {
+        const int id = std::stoi(halo.atom_id);
+        if (halo.role == detail::HaloFullABCRole::FixedGlobalTargetMedian)
+            result.emplace(id, global);
+    }
+    for (std::size_t local = 0; local < free_halos.size(); ++local)
+    {
+        const int id = std::stoi(free_halos[local]->atom_id);
+        const auto width_source = geometry_profiles.find(id);
+        if (width_source == geometry_profiles.end()) continue;
+        result[id] = Profile{solved.beta(static_cast<Eigen::Index>(2 * local)), width_source->second[1],
+            solved.beta(static_cast<Eigen::Index>(2 * local + 1))};
+    }
+    (void)synthetic;
+    return result;
+}
+
+struct SignalScore
+{
+    std::optional<double> all, shared, domain, maximum;
+};
+
+SignalScore ScoreSignal(const core::JointProblem & problem, const Synthetic & synthetic,
+    const ProfileMap & profiles, const rg::JointAnalysisResult & target_result)
+{
+    const auto & input = problem.OriginalInput();
+    std::unordered_map<int, std::size_t> original_index;
+    for (std::size_t i = 0; i < input.atom_ids.size(); ++i) original_index.emplace(std::stoi(input.atom_ids[i]), i);
+    std::vector<double> true_signal(input.observations.size(), 0.0), estimate(input.observations.size(), 0.0);
+    std::vector<double> estimated_total(input.observations.size(), 0.0);
+    std::vector<std::size_t> shared_count(input.observations.size(), 0);
+    for (const auto & halo : synthetic.halos)
+    {
+        const auto found = original_index.find(halo.id);
+        if (found == original_index.end()) continue;
+        const auto & support = input.support[found->second];
+        std::set<std::size_t> visited;
+        for (const auto & entry : support)
+        {
+            if (!visited.insert(entry.row).second) continue;
+            const auto true_basis = joint::EvaluateKernel(entry.squared_distance, halo.truth[1], 2.5);
+            true_signal[entry.row] += halo.truth[0] * true_basis.gaussian + halo.truth[2] * true_basis.charge;
+            ++shared_count[entry.row];
+            const auto profile = profiles.find(halo.id);
+            if (profile == profiles.end()) continue;
+            const auto estimate_basis = joint::EvaluateKernel(entry.squared_distance, profile->second[1], 2.5);
+            estimate[entry.row] += profile->second[0] * estimate_basis.gaussian + profile->second[2] * estimate_basis.charge;
+        }
+    }
+    for (const auto target : input.selection_domain->target_indices)
+    {
+        const auto fitted = TargetPoint(target_result, target);
+        if (!fitted) continue;
+        for (const auto & entry : input.support[target])
+        {
+            const auto fitted_basis = joint::EvaluateKernel(entry.squared_distance, (*fitted)[1], 2.5);
+            estimated_total[entry.row] += (*fitted)[0] * fitted_basis.gaussian + (*fitted)[2] * fitted_basis.charge;
+        }
+    }
+    for (std::size_t row = 0; row < estimated_total.size(); ++row) estimated_total[row] += estimate[row];
+    std::vector<double> domain_errors;
+    std::vector<double> all_errors, shared_errors;
+    double maximum{};
+    for (std::size_t row = 0; row < input.observations.size(); ++row)
+    {
+        const double error = estimate[row] - true_signal[row];
+        all_errors.push_back(error);
+        if (shared_count[row] >= 2) shared_errors.push_back(error);
+        maximum = std::max(maximum, std::abs(error));
+        domain_errors.push_back(estimated_total[row] - input.observations[row]);
+    }
+    return {Rmse(all_errors), Rmse(shared_errors), Rmse(domain_errors), maximum};
+}
+
+std::size_t PeakRssBytes()
+{
+#ifdef _WIN32
+    return 0;
+#else
+    rusage usage{};
+    if (getrusage(RUSAGE_SELF, &usage) != 0) return 0;
+#ifdef __APPLE__
+    return static_cast<std::size_t>(usage.ru_maxrss);
+#else
+    return static_cast<std::size_t>(usage.ru_maxrss) * 1024;
+#endif
+#endif
+}
+
+json::value Number(const std::optional<double> & value)
+{
+    return value && std::isfinite(*value) ? json::value(*value) : json::value(nullptr);
+}
+
+json::object MethodJson(const MethodResult & result)
+{
+    return {
+        {"available", result.available}, {"reason", result.reason}, {"seconds", result.seconds},
+        {"halo_A_rmse", Number(result.a_rmse)}, {"halo_B_rmse", Number(result.b_rmse)},
+        {"halo_C_rmse", Number(result.c_rmse)}, {"halo_A_bias", Number(result.a_bias)},
+        {"halo_B_bias", Number(result.b_bias)}, {"halo_C_bias", Number(result.c_bias)},
+        {"halo_A_median_abs", Number(result.a_median_abs)}, {"halo_B_median_abs", Number(result.b_median_abs)},
+        {"halo_C_median_abs", Number(result.c_median_abs)}, {"halo_A_p95_abs", Number(result.a_p95_abs)},
+        {"halo_B_p95_abs", Number(result.b_p95_abs)}, {"halo_C_p95_abs", Number(result.c_p95_abs)},
+        {"halo_A_max_abs", Number(result.a_max_abs)}, {"halo_B_max_abs", Number(result.b_max_abs)},
+        {"halo_C_max_abs", Number(result.c_max_abs)}, {"halo_signal_rmse", Number(result.halo_signal_rmse)},
+        {"shared_support_rmse", Number(result.shared_signal_rmse)},
+        {"original_domain_prediction_rmse", Number(result.domain_signal_rmse)},
+        {"maximum_signal_error", Number(result.max_signal_error)},
+        {"peeling_rmse", Number(result.peeling_rmse)}, {"tail_ratio_mae", Number(result.tail_ratio_mae)},
+        {"local_A_rmse", Number(result.local_a_rmse)}, {"local_B_rmse", Number(result.local_b_rmse)},
+        {"local_qualified_count", result.local_qualified_count},
+        {"local_sample_count_total", result.local_sample_count_total},
+        {"local_effective_sample_count_total", result.local_effective_sample_count_total},
+        {"local_effective_sample_count_mean", Number(result.local_effective_sample_mean)},
+        {"local_effective_sample_count_min", result.local_effective_sample_min ?
+            json::value(*result.local_effective_sample_min) : json::value(nullptr)},
+        {"local_information_count", result.local_information_count},
+        {"local_information_trace_mean", Number(result.local_information_trace_mean)},
+        {"group_posterior_A_error", Number(result.group_a_error)},
+        {"group_posterior_B_error", Number(result.group_b_error)},
+        {"group_alpha_g", Number(result.group_alpha_g)},
+        {"group_mdpde_A", Number(result.group_mdpde_a)},
+        {"group_mdpde_B", Number(result.group_mdpde_b)},
+        {"group_posterior_A_rmse", Number(result.group_posterior_a_rmse)},
+        {"group_posterior_B_rmse", Number(result.group_posterior_b_rmse)},
+        {"group_prior_uncertainty_A", Number(result.group_prior_uncertainty_a)},
+        {"group_prior_uncertainty_B", Number(result.group_prior_uncertainty_b)},
+        {"group_member_uncertainty_A_mean", Number(result.group_member_uncertainty_a_mean)},
+        {"group_member_uncertainty_B_mean", Number(result.group_member_uncertainty_b_mean)},
+        {"group_outlier_count", result.group_outlier_count},
+        {"target_endpoint_drift_max_abs", Number(result.target_endpoint_drift_max)},
+        {"peeling_available", result.peeling_available}, {"peeling_total", result.peeling_total},
+        {"local_available", result.local_available}, {"group_members", result.group_members}
+    };
+}
+
+void RunPostprocessing(const Synthetic & synthetic, const core::JointProblem & problem,
+    const rg::JointAnalysisResult & snapshot, const detail::HaloMedianBuildResult * geometry,
+    const detail::HaloFullABCReconstructionResult * fullabc, const std::string & run_id,
+    MethodResult & result)
+{
+    rg::ModelObject model = synthetic.model;
+    rg::data_internal::ApplyJointStageEstimates(model, snapshot, run_id);
+    double target_drift{};
+    for (const auto target : problem.OriginalInput().selection_domain->target_indices)
+    {
+        const int id = std::stoi(problem.OriginalInput().atom_ids.at(target));
+        const auto expected = TargetPoint(snapshot, target);
+        const auto actual = rg::AtomLocalPotentialView::For(*model.FindAtomPtr(id)).GetStageEstimate(
+            rg::FittingStage::Second).point;
+        if (!expected || !actual) throw std::runtime_error("Frozen Target endpoint is unavailable during postprocessing.");
+        target_drift = std::max(target_drift, std::abs(actual->GetAmplitude() - (*expected)[0]));
+        target_drift = std::max(target_drift, std::abs(actual->GetWidth() - (*expected)[1]));
+        target_drift = std::max(target_drift, std::abs(actual->GetOffset() - (*expected)[2]));
+    }
+    result.target_endpoint_drift_max = target_drift;
+    if (target_drift != 0.0) throw std::runtime_error("A reconstruction method changed the frozen Target endpoint.");
+    detail::JointPostprocessingMetrics metrics;
+    detail::JointPostprocessingContext context(*synthetic.map, model, problem, &snapshot, &metrics,
+        geometry, fullabc);
+    auto peelings = context.BuildPostFitPeelingSamples();
+    std::vector<std::pair<int, rg::PostFitPeelingResult>> peeling_updates;
+    for (const auto & [id, peeling] : peelings) peeling_updates.emplace_back(id, peeling);
+    model.EditAnalysis().ApplyPostFitPeelingsBatch(std::move(peeling_updates));
+
+    std::vector<double> peeling_errors, tail_errors, local_a_errors, local_b_errors;
+    std::vector<double> local_information_traces, group_posterior_a_errors, group_posterior_b_errors;
+    std::vector<double> group_uncertainty_a, group_uncertainty_b;
+    std::vector<std::pair<int, rg::PostJointLocalResult>> local_updates;
+    core::FitOptions options;
+    options.thread_size = 1;
+    options.quiet_mode = true;
+    options.exclude_hydrogen = true;
+    for (const auto * atom : model.GetSelectedAtoms())
+    {
+        const int id = atom->GetSerialID();
+        const auto peeled = peelings.find(id);
+        if (peeled == peelings.end()) continue;
+        const auto raw = rg::AtomLocalPotentialView::For(*atom).GetRawSamplingEntriesView();
+        result.peeling_total += peeled->second.samples.size();
+        for (std::size_t sample = 0; sample < peeled->second.samples.size() && sample < raw.size(); ++sample)
+        {
+            if (!peeled->second.samples[sample].response) continue;
+            ++result.peeling_available;
+            const SamplingPointList point{raw[sample].point};
+            const auto target_truth = detail::BuildLocalPotentialSampleList(*synthetic.target_only_map, point);
+            if (!target_truth.empty())
+                peeling_errors.push_back(*peeled->second.samples[sample].response - target_truth.front().response);
+        }
+        const auto assessment = rg::AtomLocalPotentialView::For(*atom).AssessLocalFittingPeelingRatio(1.0, 2.0);
+        if (assessment.ratio)
+        {
+            double raw_target{}, raw_sum{};
+            std::size_t count{};
+            for (std::size_t sample = 0; sample < raw.size(); ++sample)
+            {
+                if (raw[sample].point.distance < 1.0 || raw[sample].point.distance > 2.0 ||
+                    !peeled->second.samples[sample].response) continue;
+                const SamplingPointList point{raw[sample].point};
+                const auto target_truth = detail::BuildLocalPotentialSampleList(*synthetic.target_only_map, point);
+                if (target_truth.empty()) continue;
+                raw_target += target_truth.front().response;
+                raw_sum += raw[sample].response;
+                ++count;
+            }
+            if (count && std::abs(raw_sum) > 1e-12)
+                tail_errors.push_back(*assessment.ratio - (1.0 - raw_target / raw_sum));
+        }
+        auto local = detail::FitPostJointLocalTargetForResearch(context, model, id,
+            peeled->second, options, metrics);
+        result.local_sample_count_total += local.sample_count;
+        if (local.status == rg::EvidenceStatus::Available)
+        {
+            ++result.local_qualified_count;
+            result.local_effective_sample_count_total += local.effective_sample_count;
+            result.local_effective_sample_min = result.local_effective_sample_min ?
+                std::min(*result.local_effective_sample_min, local.effective_sample_count) :
+                std::optional<std::size_t>{local.effective_sample_count};
+        }
+        if (local.information)
+        {
+            ++result.local_information_count;
+            local_information_traces.push_back(local.information->precision.trace());
+        }
+        if (local.status == rg::EvidenceStatus::Available)
+        {
+            const auto truth = synthetic.target_truth.at(static_cast<std::size_t>(id - 1));
+            local_a_errors.push_back(local.fit.mdpde.GetModel().GetAmplitude() - truth[0]);
+            local_b_errors.push_back(local.fit.mdpde.GetModel().GetWidth() - truth[1]);
+        }
+        local_updates.emplace_back(id, std::move(local));
+    }
+    model.EditAnalysis().ApplyPostJointLocalResultsBatch(std::move(local_updates));
+    detail::RunJointGroupPotentialFitting(model, options, &metrics);
+    result.peeling_rmse = Rmse(peeling_errors);
+    result.tail_ratio_mae = tail_errors.empty() ? std::nullopt :
+        std::optional<double>{std::accumulate(tail_errors.begin(), tail_errors.end(), 0.0,
+            [](double sum, double value) { return sum + std::abs(value); }) / static_cast<double>(tail_errors.size())};
+    result.local_a_rmse = Rmse(local_a_errors);
+    result.local_b_rmse = Rmse(local_b_errors);
+    result.local_available = local_a_errors.size();
+    if (result.local_qualified_count)
+        result.local_effective_sample_mean = static_cast<double>(result.local_effective_sample_count_total) /
+            static_cast<double>(result.local_qualified_count);
+    if (!local_information_traces.empty())
+        result.local_information_trace_mean = std::accumulate(local_information_traces.begin(),
+            local_information_traces.end(), 0.0) / static_cast<double>(local_information_traces.size());
+    if (const auto keys = model.GetAnalysisView().CollectAtomGroupKeys(); !keys.empty())
+    {
+        const auto summary = model.GetAnalysisView().GetGroupParameterSummary(keys.front());
+        if (summary && summary->inference)
+        {
+            result.group_members = summary->member_ids.size();
+            result.group_alpha_g = summary->inference->alpha_g;
+            result.group_mdpde_a = summary->inference->mdpde.GetAmplitude();
+            result.group_mdpde_b = summary->inference->mdpde.GetWidth();
+            result.group_a_error = summary->inference->prior.GetModel().GetAmplitude() - 1.0;
+            result.group_b_error = summary->inference->prior.GetModel().GetWidth() - 1.10;
+            result.group_prior_uncertainty_a =
+                summary->inference->prior.GetStandardDeviationModel().GetAmplitude();
+            result.group_prior_uncertainty_b =
+                summary->inference->prior.GetStandardDeviationModel().GetWidth();
+            for (std::size_t index = 0; index < summary->member_ids.size() &&
+                index < summary->inference->member_results.size(); ++index)
+            {
+                const int member_id = summary->member_ids[index];
+                const auto & member = summary->inference->member_results[index];
+                result.group_outlier_count += member.is_outlier;
+                if (member_id < 1 || member_id > static_cast<int>(synthetic.target_truth.size())) continue;
+                const auto truth = synthetic.target_truth[static_cast<std::size_t>(member_id - 1)];
+                group_posterior_a_errors.push_back(member.posterior.GetModel().GetAmplitude() - truth[0]);
+                group_posterior_b_errors.push_back(member.posterior.GetModel().GetWidth() - truth[1]);
+                group_uncertainty_a.push_back(member.posterior.GetStandardDeviationModel().GetAmplitude());
+                group_uncertainty_b.push_back(member.posterior.GetStandardDeviationModel().GetWidth());
+            }
+        }
+    }
+    result.group_posterior_a_rmse = Rmse(group_posterior_a_errors);
+    result.group_posterior_b_rmse = Rmse(group_posterior_b_errors);
+    if (!group_uncertainty_a.empty())
+        result.group_member_uncertainty_a_mean = std::accumulate(group_uncertainty_a.begin(), group_uncertainty_a.end(), 0.0) /
+            static_cast<double>(group_uncertainty_a.size());
+    if (!group_uncertainty_b.empty())
+        result.group_member_uncertainty_b_mean = std::accumulate(group_uncertainty_b.begin(), group_uncertainty_b.end(), 0.0) /
+            static_cast<double>(group_uncertainty_b.size());
+}
+
+json::object RunScenario(const Scenario & scenario, std::ofstream & summary_csv, std::ofstream & halo_csv)
+{
+    const auto started = Clock::now();
+    auto synthetic = MakeSynthetic(scenario);
+    const auto problem = core::BuildPureHaloSupportExclusionProblem(*synthetic.map, synthetic.model);
+    const auto workset = core::detail::MakeJointFittingWorkset(synthetic.model, problem);
+    core::RunPotentialSamplingWorkflow(*synthetic.map, synthetic.model, workset.contributors,
+        SphereSamplingMethod::FibonacciDeterministic, 1, "P3 FirstStage", true);
+    core::FitOptions options;
+    options.thread_size = 1;
+    options.quiet_mode = true;
+    options.exclude_hydrogen = true;
+    auto initialization = core::detail::RunJointFirstStageInitializationFromPreparedSamples(
+        synthetic.model, workset, options);
+    const auto fit_start = Clock::now();
+    const auto fit = core::FitJointComponentsInitialized(problem, initialization);
+    const double target_joint_seconds = std::chrono::duration<double>(Clock::now() - fit_start).count();
+    const auto snapshot = core::CaptureJointAnalysisResult(fit);
+    json::object case_json{
+        {"name", scenario.name}, {"halo_center_distance_requested", scenario.halo_distance},
+        {"contrast", scenario.contrast}, {"wide_charge_contrast", scenario.wide_charge_contrast},
+        {"noise_amplitude", scenario.noise}, {"map_edge_halo", scenario.map_edge_halo},
+        {"extra_free_halo_observations", scenario.extra_free_halo_observations},
+        {"target_joint_qualified", rg::IsQualifiedJointAnalysisResult(snapshot)},
+        {"target_joint_seconds", target_joint_seconds}, {"first_stage_qualified_width_donors", 0},
+        {"first_stage_donor_coverage", nullptr}, {"target_endpoint_drift_max_abs", nullptr},
+        {"geometry_kNN4", nullptr}, {"observation_AC_fixed_kNN_width", nullptr},
+        {"halo_fullabc", nullptr}, {"oracle_halo_truth", nullptr}, {"geometry_peeling", nullptr},
+        {"fullabc_peeling", nullptr}, {"solver_failure_reasons", json::array{}}
+    };
+    std::size_t qualified_width_donors{};
+    for (const auto & atom : initialization.atoms) qualified_width_donors +=
+        rg::IsQualifiedFirstStageEstimate(atom.native_status, atom.first_stage_fit_qualified,
+            atom.first_stage_qualification, atom.first_stage_recovery);
+    case_json["first_stage_qualified_width_donors"] = qualified_width_donors;
+    case_json["initialization_valid"] = initialization.valid;
+    case_json["initialization_reason"] = initialization.reason;
+    case_json["first_stage_donor_coverage"] = initialization.atoms.empty() ? json::value(nullptr) :
+        json::value(static_cast<double>(qualified_width_donors) / static_cast<double>(initialization.atoms.size()));
+    case_json["fit_search_completed"] = fit.search_completed;
+    case_json["fit_runtime_convergence"] = static_cast<int>(fit.RuntimeConvergence());
+    case_json["fit_target_runtime_convergence"] = static_cast<int>(fit.TargetRuntimeConvergence());
+    case_json["fitting_domain_rows"] = problem.Input().observations.size();
+    case_json["fit_components"] = json::array{};
+    for (const auto & component : fit.components)
+    {
+        json::object component_json{{"id", component.id}, {"stop_reason", component.stop_reason},
+            {"search_completed", component.search_completed}, {"search_sweeps", component.search_sweeps},
+            {"atom_count", component.atoms.size()}, {"row_count", component.rows.size()},
+            {"native_status", component.native_status}, {"has_state", component.state.has_value()}};
+        component_json["atom_ids"] = json::array{};
+        for (const auto atom : component.atoms)
+            if (atom < problem.Input().atom_ids.size())
+                component_json["atom_ids"].as_array().emplace_back(problem.Input().atom_ids[atom]);
+        component_json["evidence"] = json::array{};
+        for (const auto & evidence : component.evidence)
+            component_json["evidence"].as_array().emplace_back(json::object{
+                {"name", evidence.name}, {"status", static_cast<int>(evidence.status)},
+                {"scope", static_cast<int>(evidence.scope)}, {"reason", evidence.reason},
+                {"value", evidence.value ? json::value(*evidence.value) : json::value(nullptr)},
+                {"threshold", evidence.threshold ? json::value(*evidence.threshold) : json::value(nullptr)}});
+        case_json["fit_components"].as_array().emplace_back(std::move(component_json));
+    }
+    case_json["fit_evidence"] = json::array{};
+    for (const auto & evidence : fit.evidence)
+        case_json["fit_evidence"].as_array().emplace_back(json::object{
+            {"name", evidence.name}, {"status", static_cast<int>(evidence.status)},
+            {"scope", static_cast<int>(evidence.scope)}, {"reason", evidence.reason},
+            {"value", evidence.value ? json::value(*evidence.value) : json::value(nullptr)},
+            {"threshold", evidence.threshold ? json::value(*evidence.threshold) : json::value(nullptr)}});
+    if (!rg::IsQualifiedJointAnalysisResult(snapshot))
+    {
+        case_json["target_joint_failure"] = "runtime-or-target-qualification-not-passed";
+        return case_json;
+    }
+
+    const std::string run_id = "p3-" + scenario.name;
+    const auto targets = problem.OriginalInput().selection_domain->target_indices;
+    std::vector<Profile> target_endpoint;
+    for (const auto target : targets)
+    {
+        const auto point = TargetPoint(snapshot, target);
+        if (!point) throw std::runtime_error("Qualified Target Joint endpoint is missing a selected point.");
+        target_endpoint.push_back(*point);
+    }
+    const auto geometry_started = Clock::now();
+    const auto geometry = detail::BuildHaloMedianReconstruction(synthetic.model, problem, snapshot, run_id);
+    const double geometry_estimation_seconds = std::chrono::duration<double>(Clock::now() - geometry_started).count();
+    const auto fullabc_started = Clock::now();
+    const auto fullabc = detail::EstimateHaloFullABCJoint(synthetic.model, problem, snapshot, run_id);
+    const double fullabc_estimation_seconds = std::chrono::duration<double>(Clock::now() - fullabc_started).count();
+    const auto preclassification = detail::BuildHaloFullABCPreclassification(synthetic.model, problem, snapshot);
+    case_json["free_halo_count"] = fullabc.free_halo_count;
+    case_json["fixed_halo_count"] = fullabc.fixed_halo_count;
+    case_json["fullabc_solver_invoked"] = fullabc.diagnostics.solver_invoked;
+    case_json["fullabc_solver_qualified"] = fullabc.diagnostics.solver_qualified;
+    case_json["fullabc_solver_status"] = static_cast<int>(fullabc.diagnostics.solver_status);
+    case_json["fullabc_unavailable_reason"] = fullabc.unavailable_reason;
+    case_json["fullabc_seconds"] = fullabc_estimation_seconds;
+    case_json["fullabc_peak_workspace_estimate_bytes"] = fullabc.diagnostics.estimated_peak_memory_bytes ?
+        json::value(*fullabc.diagnostics.estimated_peak_memory_bytes) : json::value(nullptr);
+    case_json["fullabc_free_support_entries"] = fullabc.diagnostics.free_support_entries;
+    case_json["fullabc_zero_sensitivity_rows"] = fullabc.diagnostics.zero_sensitivity_rows;
+    case_json["fullabc_original_observation_rows"] = fullabc.diagnostics.original_observation_rows;
+    case_json["fullabc_observation_scale"] = Number(fullabc.diagnostics.observation_scale);
+    case_json["fullabc_objective"] = Number(fullabc.diagnostics.objective);
+    case_json["fullabc_qualified_first_stage_width_donors"] =
+        fullabc.diagnostics.qualified_first_stage_width_donors;
+    case_json["fullabc_first_stage_width_p95"] = Number(fullabc.diagnostics.first_stage_width_p95);
+    case_json["fullabc_width_upper_bound"] = Number(fullabc.diagnostics.width_upper_bound);
+    json::array solver_failures;
+    for (const auto & evidence : fullabc.diagnostics.evidence)
+        if (evidence.status == rg::JointCheckStatus::Failed || evidence.status == rg::JointCheckStatus::Unavailable)
+            solver_failures.emplace_back(json::object{{"name", evidence.name}, {"status", static_cast<int>(evidence.status)},
+                {"reason", evidence.reason},
+                {"value", evidence.value ? json::value(*evidence.value) : json::value(nullptr)},
+                {"threshold", evidence.threshold ? json::value(*evidence.threshold) : json::value(nullptr)}});
+    case_json["solver_failure_reasons"] = std::move(solver_failures);
+
+    std::unordered_map<int, std::size_t> original_index;
+    const auto & input = problem.OriginalInput();
+    for (std::size_t atom = 0; atom < input.atom_ids.size(); ++atom)
+        original_index.emplace(std::stoi(input.atom_ids[atom]), atom);
+    for (auto & halo : synthetic.halos)
+        if (const auto found = original_index.find(halo.id); found != original_index.end())
+            for (const auto & support : input.support[found->second]) halo.rows.push_back(support.row);
+    for (auto & halo : synthetic.halos)
+    {
+        std::sort(halo.rows.begin(), halo.rows.end());
+        halo.rows.erase(std::unique(halo.rows.begin(), halo.rows.end()), halo.rows.end());
+    }
+    double minimum_halo_distance = std::numeric_limits<double>::infinity();
+    std::size_t center_pairs_below_1_5{}, support_overlap_pairs{}, shared_voxel_pairs{};
+    std::map<std::string, std::size_t> distance_bins{
+        {"below_1_5", 0}, {"1_5_to_2", 0}, {"2_to_3", 0}, {"3_to_4", 0}, {"4_to_5", 0}, {"at_least_5", 0}};
+    for (std::size_t left = 0; left < synthetic.halos.size(); ++left)
+        for (std::size_t right = left + 1; right < synthetic.halos.size(); ++right)
+        {
+            const double distance = Distance(synthetic.halos[left].position, synthetic.halos[right].position);
+            minimum_halo_distance = std::min(minimum_halo_distance, distance);
+            std::string bin = distance < 1.5 ? "below_1_5" : distance < 2.0 ? "1_5_to_2" :
+                distance < 3.0 ? "2_to_3" : distance < 4.0 ? "3_to_4" : distance < 5.0 ? "4_to_5" : "at_least_5";
+            ++distance_bins[bin];
+            center_pairs_below_1_5 += distance < 1.5;
+            std::vector<std::size_t> intersection;
+            std::set_intersection(synthetic.halos[left].rows.begin(), synthetic.halos[left].rows.end(),
+                synthetic.halos[right].rows.begin(), synthetic.halos[right].rows.end(),
+                std::back_inserter(intersection));
+            if (!intersection.empty()) { ++support_overlap_pairs; shared_voxel_pairs += intersection.size(); }
+        }
+    json::array halo_target_distances;
+    for (const auto & halo : synthetic.halos)
+    {
+        double nearest = std::numeric_limits<double>::infinity();
+        for (const auto & target : synthetic.target_positions)
+            nearest = std::min(nearest, Distance(halo.position, target));
+        halo_target_distances.emplace_back(json::object{
+            {"atom_id", halo.id}, {"minimum_center_distance", nearest}});
+    }
+    if (!(minimum_halo_distance > 1.5) || center_pairs_below_1_5 != 0)
+        throw std::runtime_error("A normal synthetic scenario violated Halo-Halo center spacing > 1.5 A.");
+    case_json["halo_halo_minimum_center_distance"] = minimum_halo_distance;
+    case_json["halo_target_minimum_center_distances"] = std::move(halo_target_distances);
+    case_json["halo_halo_center_distance_bins"] = json::object{};
+    for (const auto & [bin, count] : distance_bins) case_json["halo_halo_center_distance_bins"].as_object()[bin] = count;
+    case_json["support_overlap_pairs"] = support_overlap_pairs;
+    case_json["pairwise_shared_voxel_count"] = shared_voxel_pairs;
+    case_json["n_h_distribution"] = json::object{};
+    for (const auto & halo : fullabc.halos)
+    {
+        const auto key = std::to_string(halo.classification.distinct_original_observations);
+        auto & value = case_json["n_h_distribution"].as_object()[key];
+        value = value.is_int64() ? json::value(value.as_int64() + 1) : json::value(1);
+    }
+    std::unordered_map<int, std::size_t> observed_by_id;
+    for (const auto & halo : fullabc.halos)
+        observed_by_id.emplace(std::stoi(halo.classification.atom_id),
+            halo.classification.distinct_original_observations);
+    const std::size_t expected_halo_103 = scenario.extra_free_halo_observations;
+    if ((expected_halo_103 && observed_by_id[103] != expected_halo_103) || observed_by_id[104] != 2 ||
+        observed_by_id[105] != 1 || observed_by_id[106] != 0)
+        throw std::runtime_error("Synthetic distinct OriginalInput observation counts differ from the scenario contract: " +
+            std::to_string(observed_by_id[103]) + "," + std::to_string(observed_by_id[104]) + "," +
+            std::to_string(observed_by_id[105]) + "," + std::to_string(observed_by_id[106]));
+    case_json["original_domain_rows"] = input.observations.size();
+    case_json["original_domain_scale"] = problem.ObservationScale();
+    case_json["target_endpoint_drift_max_abs"] = 0.0;
+
+    MethodResult geometry_result;
+    geometry_result.available = true;
+    geometry_result.profiles.resize(synthetic.halos.size());
+    const auto geometry_profiles = GeometryProfiles(geometry, synthetic.model);
+    for (std::size_t index = 0; index < synthetic.halos.size(); ++index)
+        if (const auto found = geometry_profiles.find(synthetic.halos[index].id); found != geometry_profiles.end())
+            geometry_result.profiles[index] = found->second;
+        else if (geometry_profiles.empty()) geometry_result.available = false;
+    ScoreParameters(geometry_result, synthetic.halos);
+    const auto geometry_signal = ScoreSignal(problem, synthetic, geometry_profiles, snapshot);
+    geometry_result.halo_signal_rmse = geometry_signal.all;
+    geometry_result.shared_signal_rmse = geometry_signal.shared;
+    geometry_result.domain_signal_rmse = geometry_signal.domain;
+    geometry_result.max_signal_error = geometry_signal.maximum;
+    geometry_result.seconds = geometry_estimation_seconds;
+    case_json["geometry_kNN4"] = MethodJson(geometry_result);
+
+    std::string ac_reason;
+    const auto ac_started = Clock::now();
+    const auto ac_profiles = ObservationACProfiles(problem, snapshot, geometry, preclassification, synthetic, ac_reason);
+    MethodResult ac_result;
+    ac_result.seconds = std::chrono::duration<double>(Clock::now() - ac_started).count();
+    ac_result.available = ac_profiles.has_value();
+    ac_result.reason = ac_reason;
+    ac_result.profiles.resize(synthetic.halos.size());
+    if (ac_profiles)
+    {
+        for (std::size_t index = 0; index < synthetic.halos.size(); ++index)
+            if (const auto found = ac_profiles->find(synthetic.halos[index].id); found != ac_profiles->end())
+                ac_result.profiles[index] = found->second;
+        ScoreParameters(ac_result, synthetic.halos);
+        const auto signal = ScoreSignal(problem, synthetic, *ac_profiles, snapshot);
+        ac_result.halo_signal_rmse = signal.all;
+        ac_result.shared_signal_rmse = signal.shared;
+        ac_result.domain_signal_rmse = signal.domain;
+        ac_result.max_signal_error = signal.maximum;
+    }
+    case_json["observation_AC_fixed_kNN_width"] = MethodJson(ac_result);
+
+    MethodResult full_result;
+    full_result.available = fullabc.available;
+    full_result.reason = fullabc.unavailable_reason;
+    full_result.profiles.resize(synthetic.halos.size());
+    const auto full_profiles = FullABCProfiles(fullabc);
+    if (fullabc.available)
+    {
+        for (std::size_t index = 0; index < synthetic.halos.size(); ++index)
+            if (const auto found = full_profiles.find(synthetic.halos[index].id); found != full_profiles.end())
+                full_result.profiles[index] = found->second;
+        ScoreParameters(full_result, synthetic.halos);
+        const auto signal = ScoreSignal(problem, synthetic, full_profiles, snapshot);
+        full_result.halo_signal_rmse = signal.all;
+        full_result.shared_signal_rmse = signal.shared;
+        full_result.domain_signal_rmse = signal.domain;
+        full_result.max_signal_error = signal.maximum;
+        const auto post_start = Clock::now();
+        RunPostprocessing(synthetic, problem, snapshot, nullptr, &fullabc, run_id, full_result);
+        full_result.seconds = fullabc_estimation_seconds +
+            std::chrono::duration<double>(Clock::now() - post_start).count();
+        case_json["fullabc_peeling"] = MethodJson(full_result);
+    }
+    case_json["halo_fullabc"] = MethodJson(full_result);
+
+    MethodResult post_geometry = geometry_result;
+    auto geometry_snapshot = snapshot;
+    geometry_snapshot.halo_median_reconstruction = geometry.snapshot;
+    const auto post_geometry_start = Clock::now();
+    RunPostprocessing(synthetic, problem, geometry_snapshot, &geometry, nullptr, run_id, post_geometry);
+    post_geometry.seconds = std::chrono::duration<double>(Clock::now() - post_geometry_start).count();
+    case_json["geometry_peeling"] = MethodJson(post_geometry);
+
+    MethodResult oracle;
+    oracle.available = true;
+    oracle.profiles.resize(synthetic.halos.size());
+    ProfileMap oracle_profiles;
+    for (std::size_t index = 0; index < synthetic.halos.size(); ++index)
+    {
+        oracle.profiles[index] = synthetic.halos[index].truth;
+        oracle_profiles.emplace(synthetic.halos[index].id, synthetic.halos[index].truth);
+    }
+    ScoreParameters(oracle, synthetic.halos);
+    const auto oracle_signal = ScoreSignal(problem, synthetic, oracle_profiles, snapshot);
+    oracle.halo_signal_rmse = 0.0;
+    oracle.shared_signal_rmse = 0.0;
+    oracle.domain_signal_rmse = oracle_signal.domain;
+    oracle.max_signal_error = 0.0;
+    case_json["oracle_halo_truth"] = MethodJson(oracle);
+
+    case_json["rss_process_peak_bytes"] = PeakRssBytes();
+    case_json["total_case_seconds"] = std::chrono::duration<double>(Clock::now() - started).count();
+    case_json["halos"] = json::array{};
+    for (std::size_t index = 0; index < synthetic.halos.size(); ++index)
+    {
+        const auto & halo = synthetic.halos[index];
+        json::object record{{"atom_id", halo.id}, {"observation_count", halo.rows.size()},
+            {"truth_A", halo.truth[0]}, {"truth_B", halo.truth[1]}, {"truth_C", halo.truth[2]},
+            {"position", json::array{halo.position[0], halo.position[1], halo.position[2]}},
+            {"geometry", json::array{}}, {"observation_AC", json::array{}},
+            {"fullabc", json::array{}}};
+        const auto geom = geometry_profiles.find(halo.id);
+        if (geom != geometry_profiles.end())
+            record["geometry"] = json::array{geom->second[0], geom->second[1], geom->second[2]};
+        if (ac_profiles && ac_profiles->contains(halo.id))
+        {
+            const auto & profile = ac_profiles->at(halo.id);
+            record["observation_AC"] = json::array{profile[0], profile[1], profile[2]};
+        }
+        if (full_profiles.contains(halo.id))
+        {
+            const auto & profile = full_profiles.at(halo.id);
+            record["fullabc"] = json::array{profile[0], profile[1], profile[2]};
+        }
+        case_json["halos"].as_array().emplace_back(record);
+        halo_csv << scenario.name << ',' << halo.id << ',' << halo.rows.size() << ',' << halo.truth[0] << ','
+            << halo.truth[1] << ',' << halo.truth[2] << ',' << Distance(halo.position, synthetic.target_positions.front()) << ','
+            << record.at("geometry").as_array().size() << ',' << record.at("observation_AC").as_array().size() << ','
+            << record.at("fullabc").as_array().size() << '\n';
+    }
+    const auto write_summary = [&](const char * method_name, const MethodResult & method) {
+        summary_csv << scenario.name << ',' << method_name << ',' << method.available << ',' << method.reason << ','
+            << synthetic.halos.size() << ',' << fullabc.fixed_halo_count << ',' << fullabc.free_halo_count << ','
+            << (method.a_rmse ? std::to_string(*method.a_rmse) : "") << ','
+            << (method.b_rmse ? std::to_string(*method.b_rmse) : "") << ','
+            << (method.c_rmse ? std::to_string(*method.c_rmse) : "") << ','
+            << (method.halo_signal_rmse ? std::to_string(*method.halo_signal_rmse) : "") << ','
+            << (method.peeling_rmse ? std::to_string(*method.peeling_rmse) : "") << ','
+            << (method.tail_ratio_mae ? std::to_string(*method.tail_ratio_mae) : "") << ','
+            << (method.local_a_rmse ? std::to_string(*method.local_a_rmse) : "") << ','
+            << (method.local_b_rmse ? std::to_string(*method.local_b_rmse) : "") << ','
+            << method.seconds << ',' << PeakRssBytes() << '\n';
+    };
+    write_summary("geometry-kNN4", post_geometry);
+    write_summary("observation-AC-fixed-kNN-width", ac_result);
+    write_summary("observation-driven-fullabc", full_result);
+    write_summary("oracle-truth", oracle);
+    return case_json;
+}
+
+}
+
+int main(int argc, char ** argv)
+try
+{
+    const std::filesystem::path output = argc > 1 ? argv[1] : "docs/research/results/halo_fullabc_p3";
+    std::filesystem::create_directories(output);
+    std::ofstream summary(output / "summary.csv");
+    std::ofstream halos(output / "halos.csv");
+    if (!summary || !halos) throw std::runtime_error("Cannot create P3 result files.");
+    summary << "scenario,method,available,reason,halo_count,fixed_count,free_count,A_RMSE,B_RMSE,C_RMSE,halo_signal_RMSE,peeling_RMSE,tail_ratio_MAE,local_A_RMSE,local_B_RMSE,seconds,process_peak_RSS_bytes\n";
+    halos << "scenario,atom_id,n_h,truth_A,truth_B,truth_C,target_distance,geometry_fields,observation_AC_fields,fullabc_fields\n";
+    std::vector<Scenario> scenarios{
+        {"separated_6p2_similar_low_noise", 6.2, false, false, 0.003, false},
+        {"separated_6p2_similar_high_noise", 6.2, false, false, 0.005, false},
+        {"overlap_4_similar_low_noise", 4.0, false, false, 0.003, false},
+        {"overlap_3_contrast_low_noise", 3.0, true, false, 0.003, false},
+        {"overlap_2_width_charge_low_noise", 2.0, true, true, 0.003, false},
+        {"overlap_1p6_contrast_low_noise", 1.6, true, false, 0.003, false},
+        {"overlap_4_width_charge_contrast", 4.0, true, true, 0.003, false},
+        {"boundary_halo_reconstruction_only", 3.0, false, false, 0.003, true},
+        {"three_observation_free_stress", 3.0, true, false, 0.003, false, 3},
+        {"four_observation_free_stress", 4.0, true, false, 0.003, false, 4}
+    };
+    if (argc > 2)
+    {
+        const std::string_view requested = argv[2];
+        if (requested == "--first") scenarios.resize(1);
+        else
+        {
+            const auto found = std::find_if(scenarios.begin(), scenarios.end(), [&](const auto & scenario) {
+                return scenario.name == requested;
+            });
+            if (found == scenarios.end()) throw std::runtime_error("Unknown P3 scenario: " + std::string(requested));
+            const Scenario selected = *found;
+            scenarios.assign(1, selected);
+        }
+    }
+    json::array cases;
+    for (const auto & scenario : scenarios)
+    {
+        std::cerr << "[P3] " << scenario.name << '\n';
+        cases.emplace_back(RunScenario(scenario, summary, halos));
+        summary.flush(); halos.flush();
+    }
+    json::object result{
+        {"contract", "fixed-target-observation-driven-halo-fullabc-p3-v1"},
+        {"map_grid", json::array{51, 63, 16}}, {"spacing_angstrom", 0.5},
+        {"target_count", 20}, {"synthetic_scenarios", std::move(cases)},
+        {"process_peak_rss_bytes", PeakRssBytes()},
+        {"method_notes", json::array{
+            "Every scenario uses the actual first-stage local initializer and qualified target-only Pure Exclusion Joint endpoint.",
+            "Observation A/C uses the same n_h<3 global-median fixed set and a sparse constrained A/C solve at geometry kNN-4 widths.",
+            "The oracle row is a signal and parameter diagnostic only; it does not enter estimation.",
+            "All reported cases assert every distinct Halo center distance is strictly greater than 1.5 Angstrom."
+        }}
+    };
+    std::ofstream json_file(output / "results.json");
+    if (!json_file) throw std::runtime_error("Cannot create P3 JSON output.");
+    json_file << json::serialize(result) << '\n';
+    std::cout << "P3 results written to " << output << '\n';
+    return 0;
+}
+catch (const std::exception & error)
+{
+    std::cerr << "joint_halo_fullabc_validation: " << error.what() << '\n';
+    return 1;
+}
