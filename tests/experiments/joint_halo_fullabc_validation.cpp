@@ -13,10 +13,12 @@
 #include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <boost/json.hpp>
 #include <Eigen/SparseCore>
 
@@ -25,6 +27,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -33,11 +36,13 @@
 #include <memory>
 #include <numeric>
 #include <optional>
+#include <random>
 #include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #ifndef _WIN32
 #include <sys/resource.h>
@@ -62,6 +67,10 @@ struct Scenario
     double noise{};
     bool map_edge_halo{};
     std::size_t extra_free_halo_observations{};
+    bool real_geometry{}, real_full_structure{};
+    bool require_short_bonded_halo_pair{};
+    int sequence_start{}, sequence_end{};
+    std::uint64_t noise_seed{};
 };
 
 struct Halo
@@ -152,11 +161,21 @@ struct Synthetic
     std::unique_ptr<rg::MapObject> target_only_map;
     std::vector<Position> target_positions;
     std::vector<Profile> target_truth;
+    std::unordered_map<int,Profile> target_truth_by_id;
     std::vector<Halo> halos;
+    std::set<std::pair<int,int>> covalent_pairs;
+    std::optional<double> map_normalization_divisor;
     std::array<int, 3> grid_size{51, 63, 16};
     std::array<double, 3> spacing{0.5, 0.5, 0.5};
     std::array<double, 3> origin{-3.0, -3.0, -3.0};
 };
+
+struct RealGeometrySource
+{
+    std::filesystem::path model, map, truth;
+};
+
+std::optional<RealGeometrySource> real_geometry_source;
 
 Synthetic MakeSynthetic(const Scenario & scenario)
 {
@@ -172,6 +191,8 @@ Synthetic MakeSynthetic(const Scenario & scenario)
             out.target_positions.push_back(position);
             atoms.push_back(std::make_unique<rg::AtomObject>(MakeAtom(
                 static_cast<int>(out.target_positions.size()), position, true)));
+            out.target_truth_by_id.emplace(static_cast<int>(out.target_positions.size()),
+                out.target_truth.back());
         }
 
     const Position target0 = out.target_positions.front();
@@ -248,6 +269,214 @@ Synthetic MakeSynthetic(const Scenario & scenario)
     return out;
 }
 
+std::unordered_map<int,Profile> ReadSimulationTruth(const std::filesystem::path & path)
+{
+    std::ifstream input(path);
+    if (!input) throw std::runtime_error("Cannot read 6Z6U simulation truth: " + path.string());
+    json::parse_options options;
+    options.numbers = json::number_precision::precise;
+    const auto metadata = json::parse(std::string(std::istreambuf_iterator<char>(input), {}), {}, options);
+    std::unordered_map<int,Profile> truth;
+    for (const auto & atom : metadata.at("atoms").as_array())
+    {
+        const int id = json::value_to<int>(atom.at("serial_id"));
+        const double gaussian_width = json::value_to<double>(atom.at("effective_gaussian_width"));
+        const double charge_width = json::value_to<double>(atom.at("effective_charge_width"));
+        if (gaussian_width != charge_width)
+            throw std::runtime_error("The real-geometry runner requires one common Gaussian/charge width per atom.");
+        truth.emplace(id, Profile{static_cast<double>(json::value_to<int>(atom.at("element"))),
+            gaussian_width, json::value_to<double>(atom.at("charge_used"))});
+    }
+    return truth;
+}
+
+void AddTruthAtomToGrid(const rg::AtomObject & atom, const Profile & profile,
+    const std::array<int,3> & dimensions, const std::array<double,3> & spacing,
+    const std::array<double,3> & origin, std::vector<double> & values)
+{
+    std::array<int,3> lower{}, upper{};
+    const auto position = atom.GetPosition();
+    for (std::size_t axis = 0; axis < 3; ++axis)
+    {
+        lower[axis] = std::max(0, static_cast<int>(std::ceil(
+            (position[axis] - 2.5 - origin[axis]) / spacing[axis])));
+        upper[axis] = std::min(dimensions[axis] - 1, static_cast<int>(std::floor(
+            (position[axis] + 2.5 - origin[axis]) / spacing[axis])));
+    }
+    for (int z = lower[2]; z <= upper[2]; ++z)
+        for (int y = lower[1]; y <= upper[1]; ++y)
+            for (int x = lower[0]; x <= upper[0]; ++x)
+            {
+                const Position grid_position{origin[0] + spacing[0] * x,
+                    origin[1] + spacing[1] * y, origin[2] + spacing[2] * z};
+                const double square = SupportSquare(grid_position, position);
+                if (square > 6.25) continue;
+                const auto basis = joint::EvaluateKernel(square, profile[1], 2.5);
+                const auto index = static_cast<std::size_t>(x) + static_cast<std::size_t>(dimensions[0]) *
+                    (static_cast<std::size_t>(y) + static_cast<std::size_t>(dimensions[1]) *
+                    static_cast<std::size_t>(z));
+                values.at(index) += profile[0] * basis.gaussian + profile[2] * basis.charge;
+            }
+}
+
+std::pair<int,int> OrderedPair(int left, int right)
+{ return left < right ? std::pair{left,right} : std::pair{right,left}; }
+
+Synthetic MakeRealGeometrySynthetic(const Scenario & scenario)
+{
+    if (!real_geometry_source) throw std::logic_error("Real-geometry inputs were not configured.");
+    auto source_model = rg::ReadModel(real_geometry_source->model.string());
+    if (!source_model) throw std::runtime_error("Could not load the real-geometry model.");
+    const auto truths = ReadSimulationTruth(real_geometry_source->truth);
+    Synthetic out;
+    std::unordered_set<int> target_ids;
+    std::array<double,3> minimum{std::numeric_limits<double>::infinity(),
+        std::numeric_limits<double>::infinity(),std::numeric_limits<double>::infinity()};
+    std::array<double,3> maximum{-std::numeric_limits<double>::infinity(),
+        -std::numeric_limits<double>::infinity(),-std::numeric_limits<double>::infinity()};
+
+    if (scenario.real_full_structure)
+    {
+        auto source_map = rg::ReadMap(real_geometry_source->map.string());
+        if (!source_map) throw std::runtime_error("Could not load the 6Z6U map.");
+        out.model = std::move(*source_model);
+        out.model.SelectAtoms([](const rg::AtomObject & atom) {
+            return atom.GetElement() != Element::HYDROGEN && atom.GetChainID() == "A";
+        });
+        if (out.model.GetSelectedAtomCount() != 1418)
+            throw std::runtime_error("The 6Z6U chain-A target count differs from the recorded 1,418 baseline.");
+        out.model.EditAnalysis().InitializeFromSelection();
+        out.map = std::move(source_map);
+        out.map_normalization_divisor = out.map->MapValueArrayNormalization();
+        const double truth_scale = out.map_normalization_divisor ? 1.0 / *out.map_normalization_divisor : 1.0;
+        out.grid_size = out.map->GetGridSize();
+        out.spacing = out.map->GetGridSpacing();
+        out.origin = out.map->GetOrigin();
+        for (const auto & bond : out.model.GetBondList())
+            out.covalent_pairs.insert(OrderedPair(bond->GetAtomSerialID1(), bond->GetAtomSerialID2()));
+        std::size_t maximum_id{};
+        for (const auto & owned : out.model.GetAtomList())
+            maximum_id = std::max(maximum_id, static_cast<std::size_t>(owned->GetSerialID()));
+        out.target_truth.assign(maximum_id, Profile{});
+        std::vector<double> target_values(out.map->GetMapValueArraySize(), 0.0);
+        for (const auto * atom : out.model.GetSelectedAtoms())
+        {
+            const auto found = truths.find(atom->GetSerialID());
+            if (found == truths.end()) throw std::runtime_error("Missing 6Z6U truth for a selected Target.");
+            target_ids.insert(atom->GetSerialID());
+            auto normalized_truth = found->second;
+            normalized_truth[0] *= truth_scale;
+            normalized_truth[2] *= truth_scale;
+            out.target_truth_by_id.emplace(atom->GetSerialID(), normalized_truth);
+            out.target_truth.at(static_cast<std::size_t>(atom->GetSerialID() - 1)) = normalized_truth;
+            out.target_positions.push_back(atom->GetPosition());
+            AddTruthAtomToGrid(*atom, normalized_truth, out.grid_size, out.spacing, out.origin, target_values);
+        }
+        for (const auto & owned : out.model.GetAtomList())
+        {
+            const int id = owned->GetSerialID();
+            if (owned->GetElement() == Element::HYDROGEN || target_ids.contains(id)) continue;
+            const auto found = truths.find(id);
+            if (found == truths.end()) throw std::runtime_error("Missing 6Z6U truth for a Halo candidate.");
+            auto normalized_truth = found->second;
+            normalized_truth[0] *= truth_scale;
+            normalized_truth[2] *= truth_scale;
+            out.halos.push_back({id, owned->GetPosition(), normalized_truth, {}});
+        }
+        auto target_array = std::make_unique<double[]>(target_values.size());
+        std::copy(target_values.begin(), target_values.end(), target_array.get());
+        out.target_only_map = std::make_unique<rg::MapObject>(out.grid_size, out.spacing, out.origin,
+            std::move(target_array));
+        return out;
+    }
+
+    std::vector<const rg::AtomObject *> seed_targets;
+    for (const auto & atom : source_model->GetAtomList())
+    {
+        if (atom->GetElement() == Element::HYDROGEN || atom->GetChainID() != "A" ||
+            atom->GetSequenceID() < scenario.sequence_start || atom->GetSequenceID() > scenario.sequence_end)
+            continue;
+        seed_targets.push_back(atom.get());
+        const auto position = atom->GetPosition();
+        for (std::size_t axis = 0; axis < 3; ++axis)
+        {
+            minimum[axis] = std::min(minimum[axis], position[axis]);
+            maximum[axis] = std::max(maximum[axis], position[axis]);
+        }
+    }
+    if (seed_targets.empty()) throw std::runtime_error("The requested real-geometry sequence window has no targets.");
+    for (const auto * atom : seed_targets) target_ids.insert(atom->GetSerialID());
+    const double padding = 5.0;
+    std::vector<std::unique_ptr<rg::AtomObject>> local_atoms;
+    std::size_t maximum_id{};
+    for (const auto & owned : source_model->GetAtomList())
+    {
+        if (owned->GetElement() == Element::HYDROGEN) continue;
+        if (owned->GetChainID() == "A" && !target_ids.contains(owned->GetSerialID())) continue;
+        const auto position = owned->GetPosition();
+        bool inside = true;
+        for (std::size_t axis = 0; axis < 3; ++axis)
+            inside &= position[axis] >= minimum[axis] - padding && position[axis] <= maximum[axis] + padding;
+        if (!inside) continue;
+        maximum_id = std::max(maximum_id, static_cast<std::size_t>(owned->GetSerialID()));
+        local_atoms.push_back(std::make_unique<rg::AtomObject>(*owned));
+    }
+    out.model = rg::ModelObject(std::move(local_atoms));
+    out.model.SelectAtoms([&target_ids](const rg::AtomObject & atom) {return target_ids.contains(atom.GetSerialID());});
+    out.model.EditAnalysis().InitializeFromSelection();
+    for (const auto & bond : source_model->GetBondList())
+        out.covalent_pairs.insert(OrderedPair(bond->GetAtomSerialID1(), bond->GetAtomSerialID2()));
+
+    constexpr double grid_spacing = 0.5;
+    const double grid_padding = scenario.map_edge_halo ? 2.5 : 3.0;
+    for (std::size_t axis = 0; axis < 3; ++axis)
+    {
+        out.origin[axis] = std::floor((minimum[axis] - grid_padding) / grid_spacing) * grid_spacing;
+        out.grid_size[axis] = static_cast<int>(std::ceil((maximum[axis] + grid_padding - out.origin[axis]) /
+            grid_spacing)) + 1;
+        out.spacing[axis] = grid_spacing;
+    }
+    const auto voxel_count = static_cast<std::size_t>(out.grid_size[0]) *
+        static_cast<std::size_t>(out.grid_size[1]) * static_cast<std::size_t>(out.grid_size[2]);
+    std::vector<double> raw_values(voxel_count, 0.0), target_values(voxel_count, 0.0);
+    for (const auto * atom : out.model.GetSelectedAtoms())
+    {
+        const auto profile = truths.find(atom->GetSerialID());
+        if (profile == truths.end()) throw std::runtime_error("Missing 6Z6U truth for a selected local Target.");
+        target_ids.insert(atom->GetSerialID());
+        out.target_truth_by_id.emplace(atom->GetSerialID(), profile->second);
+        out.target_positions.push_back(atom->GetPosition());
+        AddTruthAtomToGrid(*atom, profile->second, out.grid_size, out.spacing, out.origin, target_values);
+        AddTruthAtomToGrid(*atom, profile->second, out.grid_size, out.spacing, out.origin, raw_values);
+    }
+    for (const auto & owned : out.model.GetAtomList())
+    {
+        const int id = owned->GetSerialID();
+        if (owned->GetElement() == Element::HYDROGEN || target_ids.contains(id)) continue;
+        const auto profile = truths.find(id);
+        if (profile == truths.end()) throw std::runtime_error("Missing 6Z6U truth for a local Halo.");
+        out.halos.push_back({id, owned->GetPosition(), profile->second, {}});
+        AddTruthAtomToGrid(*owned, profile->second, out.grid_size, out.spacing, out.origin, raw_values);
+    }
+    if (scenario.noise > 0.0)
+    {
+        std::mt19937_64 generator(scenario.noise_seed);
+        std::normal_distribution<double> normal(0.0, scenario.noise);
+        for (double & value : raw_values) value += normal(generator);
+    }
+    auto raw_array = std::make_unique<double[]>(voxel_count);
+    auto target_array = std::make_unique<double[]>(voxel_count);
+    std::copy(raw_values.begin(), raw_values.end(), raw_array.get());
+    std::copy(target_values.begin(), target_values.end(), target_array.get());
+    out.map = std::make_unique<rg::MapObject>(out.grid_size, out.spacing, out.origin, std::move(raw_array));
+    out.target_only_map = std::make_unique<rg::MapObject>(out.grid_size, out.spacing, out.origin,
+        std::move(target_array));
+    out.target_truth.assign(maximum_id, Profile{});
+    for (const auto & [id, profile] : out.target_truth_by_id)
+        out.target_truth.at(static_cast<std::size_t>(id - 1)) = profile;
+    return out;
+}
+
 std::optional<Profile> TargetPoint(const rg::JointAnalysisResult & result, std::size_t target_index)
 {
     for (const auto & component : result.components)
@@ -263,6 +492,15 @@ std::optional<Profile> TargetPoint(const rg::JointAnalysisResult & result, std::
 }
 
 using ProfileMap = std::unordered_map<int, Profile>;
+
+std::optional<Profile> TargetTruth(const Synthetic & synthetic, int atom_id)
+{
+    if (const auto found = synthetic.target_truth_by_id.find(atom_id);
+        found != synthetic.target_truth_by_id.end()) return found->second;
+    if (atom_id > 0 && static_cast<std::size_t>(atom_id) <= synthetic.target_truth.size())
+        return synthetic.target_truth[static_cast<std::size_t>(atom_id - 1)];
+    return std::nullopt;
+}
 
 ProfileMap GeometryProfiles(const detail::HaloMedianBuildResult & built, const rg::ModelObject & model)
 {
@@ -884,9 +1122,12 @@ void RunPostprocessing(const Synthetic & synthetic, const core::JointProblem & p
         }
         if (local.status == rg::EvidenceStatus::Available)
         {
-            const auto truth = synthetic.target_truth.at(static_cast<std::size_t>(id - 1));
-            local_a_errors.push_back(local.fit.mdpde.GetModel().GetAmplitude() - truth[0]);
-            local_b_errors.push_back(local.fit.mdpde.GetModel().GetWidth() - truth[1]);
+            const auto truth = TargetTruth(synthetic,id);
+            if (truth)
+            {
+                local_a_errors.push_back(local.fit.mdpde.GetModel().GetAmplitude() - (*truth)[0]);
+                local_b_errors.push_back(local.fit.mdpde.GetModel().GetWidth() - (*truth)[1]);
+            }
         }
         local_updates.emplace_back(id, std::move(local));
     }
@@ -914,8 +1155,6 @@ void RunPostprocessing(const Synthetic & synthetic, const core::JointProblem & p
             result.group_alpha_g = summary->inference->alpha_g;
             result.group_mdpde_a = summary->inference->mdpde.GetAmplitude();
             result.group_mdpde_b = summary->inference->mdpde.GetWidth();
-            result.group_a_error = summary->inference->prior.GetModel().GetAmplitude() - 1.0;
-            result.group_b_error = summary->inference->prior.GetModel().GetWidth() - 1.10;
             result.group_prior_uncertainty_a =
                 summary->inference->prior.GetStandardDeviationModel().GetAmplitude();
             result.group_prior_uncertainty_b =
@@ -926,12 +1165,24 @@ void RunPostprocessing(const Synthetic & synthetic, const core::JointProblem & p
                 const int member_id = summary->member_ids[index];
                 const auto & member = summary->inference->member_results[index];
                 result.group_outlier_count += member.is_outlier;
-                if (member_id < 1 || member_id > static_cast<int>(synthetic.target_truth.size())) continue;
-                const auto truth = synthetic.target_truth[static_cast<std::size_t>(member_id - 1)];
-                group_posterior_a_errors.push_back(member.posterior.GetModel().GetAmplitude() - truth[0]);
-                group_posterior_b_errors.push_back(member.posterior.GetModel().GetWidth() - truth[1]);
+                const auto truth = TargetTruth(synthetic,member_id);
+                if (!truth) continue;
+                group_posterior_a_errors.push_back(member.posterior.GetModel().GetAmplitude() - (*truth)[0]);
+                group_posterior_b_errors.push_back(member.posterior.GetModel().GetWidth() - (*truth)[1]);
                 group_uncertainty_a.push_back(member.posterior.GetStandardDeviationModel().GetAmplitude());
                 group_uncertainty_b.push_back(member.posterior.GetStandardDeviationModel().GetWidth());
+            }
+            std::vector<double> group_truth_a,group_truth_b;
+            for (const int member_id : summary->member_ids)
+                if (const auto truth = TargetTruth(synthetic,member_id))
+                {
+                    group_truth_a.push_back((*truth)[0]);
+                    group_truth_b.push_back((*truth)[1]);
+                }
+            if (!group_truth_a.empty())
+            {
+                result.group_a_error = summary->inference->prior.GetModel().GetAmplitude() - Median(group_truth_a);
+                result.group_b_error = summary->inference->prior.GetModel().GetWidth() - Median(group_truth_b);
             }
         }
     }
@@ -948,8 +1199,16 @@ void RunPostprocessing(const Synthetic & synthetic, const core::JointProblem & p
 json::object RunScenario(const Scenario & scenario, std::ofstream & summary_csv, std::ofstream & halo_csv)
 {
     const auto started = Clock::now();
-    auto synthetic = MakeSynthetic(scenario);
+    auto synthetic = scenario.real_geometry ? MakeRealGeometrySynthetic(scenario) : MakeSynthetic(scenario);
     const auto problem = core::BuildPureHaloSupportExclusionProblem(*synthetic.map, synthetic.model);
+    if (scenario.real_full_structure)
+    {
+        const auto & input = problem.OriginalInput();
+        const auto target_count = input.selection_domain->target_indices.size();
+        const auto supported_halo_count = input.atom_ids.size() - target_count;
+        if (target_count != 1418 || supported_halo_count != 659 || input.observations.size() != 229783)
+            throw std::runtime_error("The 6Z6U Partial Selection no longer matches the recorded chain-A baseline.");
+    }
     const auto workset = core::detail::MakeJointFittingWorkset(synthetic.model, problem);
     core::RunPotentialSamplingWorkflow(*synthetic.map, synthetic.model, workset.contributors,
         SphereSamplingMethod::FibonacciDeterministic, 1, "P3 FirstStage", true);
@@ -964,9 +1223,16 @@ json::object RunScenario(const Scenario & scenario, std::ofstream & summary_csv,
     const double target_joint_seconds = std::chrono::duration<double>(Clock::now() - fit_start).count();
     const auto snapshot = core::CaptureJointAnalysisResult(fit);
     json::object case_json{
-        {"name", scenario.name}, {"halo_center_distance_requested", scenario.halo_distance},
+        {"name", scenario.name},
+        {"halo_center_distance_requested", scenario.real_geometry ? json::value(nullptr) : json::value(scenario.halo_distance)},
         {"contrast", scenario.contrast}, {"wide_charge_contrast", scenario.wide_charge_contrast},
         {"noise_amplitude", scenario.noise}, {"map_edge_halo", scenario.map_edge_halo},
+        {"noise_seed", scenario.real_geometry ? json::value(scenario.noise_seed) : json::value(nullptr)},
+        {"real_geometry", scenario.real_geometry},
+        {"requires_short_bonded_C_O_or_C_N_halo_pair",scenario.require_short_bonded_halo_pair},
+        {"map_normalization_divisor", synthetic.map_normalization_divisor ?
+            json::value(*synthetic.map_normalization_divisor) : json::value(nullptr)},
+        {"target_sequence_range", scenario.real_geometry ? json::value(json::array{scenario.sequence_start,scenario.sequence_end}) : json::value(nullptr)},
         {"extra_free_halo_observations", scenario.extra_free_halo_observations},
         {"target_joint_qualified", rg::IsQualifiedJointAnalysisResult(snapshot)},
         {"target_joint_seconds", target_joint_seconds}, {"first_stage_qualified_width_donors", 0},
@@ -1066,7 +1332,7 @@ json::object RunScenario(const Scenario & scenario, std::ofstream & summary_csv,
                 {"value", evidence.value ? json::value(*evidence.value) : json::value(nullptr)},
                 {"threshold", evidence.threshold ? json::value(*evidence.threshold) : json::value(nullptr)}});
     case_json["solver_failure_reasons"] = std::move(solver_failures);
-    if(capture_solver_diagnostics)
+    if(capture_solver_diagnostics || scenario.real_geometry)
     {
         case_json["halo_observation_geometry"]=HaloObservationGeometryJson(fullabc,problem,synthetic.model);
         case_json["fullabc_first_failing_block"]=FailureBlockJson(fullabc.diagnostics.first_failing_block);
@@ -1085,37 +1351,76 @@ json::object RunScenario(const Scenario & scenario, std::ofstream & summary_csv,
         std::sort(halo.rows.begin(), halo.rows.end());
         halo.rows.erase(std::unique(halo.rows.begin(), halo.rows.end()), halo.rows.end());
     }
+    std::vector<const Halo *> geometry_halos;
+    for (const auto & halo : synthetic.halos)
+        if (!halo.rows.empty() || !scenario.real_full_structure) geometry_halos.push_back(&halo);
     double minimum_halo_distance = std::numeric_limits<double>::infinity();
     std::size_t center_pairs_below_1_5{}, support_overlap_pairs{}, shared_voxel_pairs{};
+    std::size_t exact_center_pairs{}, nonbonded_pairs_below_1_0{}, close_bonded_pairs_below_1_5{},
+        short_bonded_co_cn_pairs{};
+    json::array shared_voxel_counts;
     std::map<std::string, std::size_t> distance_bins{
         {"below_1_5", 0}, {"1_5_to_2", 0}, {"2_to_3", 0}, {"3_to_4", 0}, {"4_to_5", 0}, {"at_least_5", 0}};
-    for (std::size_t left = 0; left < synthetic.halos.size(); ++left)
-        for (std::size_t right = left + 1; right < synthetic.halos.size(); ++right)
+    for (std::size_t left = 0; left < geometry_halos.size(); ++left)
+        for (std::size_t right = left + 1; right < geometry_halos.size(); ++right)
         {
-            const double distance = Distance(synthetic.halos[left].position, synthetic.halos[right].position);
+            const double distance = Distance(geometry_halos[left]->position, geometry_halos[right]->position);
             minimum_halo_distance = std::min(minimum_halo_distance, distance);
             std::string bin = distance < 1.5 ? "below_1_5" : distance < 2.0 ? "1_5_to_2" :
                 distance < 3.0 ? "2_to_3" : distance < 4.0 ? "3_to_4" : distance < 5.0 ? "4_to_5" : "at_least_5";
             ++distance_bins[bin];
             center_pairs_below_1_5 += distance < 1.5;
+            exact_center_pairs += distance <= 1e-9;
+            const bool covalent = synthetic.covalent_pairs.contains(
+                OrderedPair(geometry_halos[left]->id,geometry_halos[right]->id));
+            if (covalent && distance < 1.5)
+            {
+                ++close_bonded_pairs_below_1_5;
+                const auto * left_atom = synthetic.model.FindAtomPtr(geometry_halos[left]->id);
+                const auto * right_atom = synthetic.model.FindAtomPtr(geometry_halos[right]->id);
+                if (left_atom && right_atom)
+                {
+                    const auto left_element = left_atom->GetElement();
+                    const auto right_element = right_atom->GetElement();
+                    const bool c_o = (left_element == Element::CARBON && right_element == Element::OXYGEN) ||
+                        (right_element == Element::CARBON && left_element == Element::OXYGEN);
+                    const bool c_n = (left_element == Element::CARBON && right_element == Element::NITROGEN) ||
+                        (right_element == Element::CARBON && left_element == Element::NITROGEN);
+                    short_bonded_co_cn_pairs += c_o || c_n;
+                }
+            }
+            if (!covalent && distance < 1.0) ++nonbonded_pairs_below_1_0;
             std::vector<std::size_t> intersection;
-            std::set_intersection(synthetic.halos[left].rows.begin(), synthetic.halos[left].rows.end(),
-                synthetic.halos[right].rows.begin(), synthetic.halos[right].rows.end(),
+            std::set_intersection(geometry_halos[left]->rows.begin(), geometry_halos[left]->rows.end(),
+                geometry_halos[right]->rows.begin(), geometry_halos[right]->rows.end(),
                 std::back_inserter(intersection));
-            if (!intersection.empty()) { ++support_overlap_pairs; shared_voxel_pairs += intersection.size(); }
+            if (!intersection.empty())
+            {
+                ++support_overlap_pairs;
+                shared_voxel_pairs += intersection.size();
+                shared_voxel_counts.emplace_back(intersection.size());
+            }
         }
     json::array halo_target_distances;
-    for (const auto & halo : synthetic.halos)
+    for (const auto * halo : geometry_halos)
     {
         double nearest = std::numeric_limits<double>::infinity();
         for (const auto & target : synthetic.target_positions)
-            nearest = std::min(nearest, Distance(halo.position, target));
+            nearest = std::min(nearest, Distance(halo->position, target));
         halo_target_distances.emplace_back(json::object{
-            {"atom_id", halo.id}, {"minimum_center_distance", nearest}});
+            {"atom_id", halo->id}, {"minimum_center_distance", nearest}});
     }
-    if (!(minimum_halo_distance > 1.5) || center_pairs_below_1_5 != 0)
-        throw std::runtime_error("A normal synthetic scenario violated Halo-Halo center spacing > 1.5 A.");
     case_json["halo_halo_minimum_center_distance"] = minimum_halo_distance;
+    case_json["halo_halo_center_pairs_below_1_5_angstrom"] = center_pairs_below_1_5;
+    case_json["close_bonded_halo_pairs_below_1_5_angstrom"] = close_bonded_pairs_below_1_5;
+    case_json["short_bonded_C_O_or_C_N_pairs_below_1_5_angstrom"] = short_bonded_co_cn_pairs;
+    case_json["nonbonded_halo_pairs_below_1_0_angstrom"] = nonbonded_pairs_below_1_0;
+    case_json["exact_halo_center_pairs"] = exact_center_pairs;
+    case_json["shared_voxels_per_overlap_pair"] = std::move(shared_voxel_counts);
+    if (exact_center_pairs || nonbonded_pairs_below_1_0)
+        throw std::runtime_error("A scene contains coincident or unreasonably close nonbonded Halo centers.");
+    if (scenario.require_short_bonded_halo_pair && short_bonded_co_cn_pairs == 0)
+        throw std::runtime_error("The required physical short C-O/C-N Halo bond pair was not retained.");
     case_json["halo_target_minimum_center_distances"] = std::move(halo_target_distances);
     case_json["halo_halo_center_distance_bins"] = json::object{};
     for (const auto & [bin, count] : distance_bins) case_json["halo_halo_center_distance_bins"].as_object()[bin] = count;
@@ -1133,8 +1438,9 @@ json::object RunScenario(const Scenario & scenario, std::ofstream & summary_csv,
         observed_by_id.emplace(std::stoi(halo.classification.atom_id),
             halo.classification.distinct_original_observations);
     const std::size_t expected_halo_103 = scenario.extra_free_halo_observations;
-    if ((expected_halo_103 && observed_by_id[103] != expected_halo_103) || observed_by_id[104] != 2 ||
+    if (!scenario.real_geometry && ((expected_halo_103 && observed_by_id[103] != expected_halo_103) || observed_by_id[104] != 2 ||
         observed_by_id[105] != 1 || observed_by_id[106] != 0)
+       )
         throw std::runtime_error("Synthetic distinct OriginalInput observation counts differ from the scenario contract: " +
             std::to_string(observed_by_id[103]) + "," + std::to_string(observed_by_id[104]) + "," +
             std::to_string(observed_by_id[105]) + "," + std::to_string(observed_by_id[106]));
@@ -1160,8 +1466,11 @@ json::object RunScenario(const Scenario & scenario, std::ofstream & summary_csv,
     case_json["geometry_kNN4"] = MethodJson(geometry_result);
 
     std::string ac_reason;
+    std::optional<ProfileMap> ac_profiles;
     const auto ac_started = Clock::now();
-    const auto ac_profiles = ObservationACProfiles(problem, snapshot, geometry, preclassification, synthetic, ac_reason);
+    if (!scenario.real_full_structure)
+        ac_profiles = ObservationACProfiles(problem, snapshot, geometry, preclassification, synthetic, ac_reason);
+    else ac_reason = "not-run-for-full-chain-partial-selection";
     MethodResult ac_result;
     ac_result.seconds = std::chrono::duration<double>(Clock::now() - ac_started).count();
     ac_result.available = ac_profiles.has_value();
@@ -1205,7 +1514,7 @@ json::object RunScenario(const Scenario & scenario, std::ofstream & summary_csv,
     }
     case_json["halo_fullabc"] = MethodJson(full_result);
 
-    if (capture_solver_diagnostics)
+    if (capture_solver_diagnostics || scenario.real_geometry)
     {
         json::array recovery_results;
         const std::array recovery_methods{
@@ -1213,27 +1522,34 @@ json::object RunScenario(const Scenario & scenario, std::ofstream & summary_csv,
             detail::HaloFullABCRecoveryMethod::PostFailureGlobalMedian,
             detail::HaloFullABCRecoveryMethod::FixedWidthACPerComponent,
             detail::HaloFullABCRecoveryMethod::IsolateFailedComponent};
-        for (const auto method:recovery_methods)
+        std::vector<detail::HaloFullABCRecoveryMethod> methods;
+        if (scenario.real_full_structure) methods.push_back(detail::HaloFullABCRecoveryMethod::FixedWidthACPerComponent);
+        else if (scenario.real_geometry)
+            methods.assign(recovery_methods.begin(),recovery_methods.begin()+3);
+        else methods.assign(recovery_methods.begin(),recovery_methods.end());
+        for (const auto method:methods)
         {
             const auto recovered_started=Clock::now();
             const auto recovered=detail::EstimateHaloFullABCJointWithRecovery(
                 synthetic.model,problem,snapshot,run_id,method);
-            if (!recovered.available || !recovered.diagnostics.reconstruction_qualified ||
-                !recovered.diagnostics.assembly_replay_qualified || recovered.diagnostics.solver_qualified)
+            if (capture_solver_diagnostics && (!recovered.available || !recovered.diagnostics.reconstruction_qualified ||
+                !recovered.diagnostics.assembly_replay_qualified || recovered.diagnostics.solver_qualified))
                 throw std::runtime_error("P1 recovery qualification contract failed for " +
                     recovered.diagnostics.recovery_method + ": " + recovered.unavailable_reason);
-            if (!recovered.diagnostics.assembled_prediction_replay_error ||
+            if (capture_solver_diagnostics && (!recovered.diagnostics.assembled_prediction_replay_error ||
                 !recovered.diagnostics.assembled_objective_replay_error ||
                 !recovered.diagnostics.original_domain_objective ||
-                !recovered.diagnostics.original_domain_normalization_scale)
+                !recovered.diagnostics.original_domain_normalization_scale))
                 throw std::runtime_error("P1 mixed-source OriginalInput replay evidence is incomplete.");
             const auto recovered_free_halo=std::find_if(recovered.halos.begin(),recovered.halos.end(),
                 [](const auto & halo) {return halo.classification.atom_id=="103";});
-            if (recovered_free_halo==recovered.halos.end() || !recovered_free_halo->qualified ||
+            if (capture_solver_diagnostics && (recovered_free_halo==recovered.halos.end() || !recovered_free_halo->qualified ||
                 !recovered_free_halo->reconstructed_parameters)
+               )
                 throw std::runtime_error("P1 recovery omitted the failed Free Halo.");
-            if (method==detail::HaloFullABCRecoveryMethod::FixedWidthACPerHalo ||
+            if (capture_solver_diagnostics && (method==detail::HaloFullABCRecoveryMethod::FixedWidthACPerHalo ||
                 method==detail::HaloFullABCRecoveryMethod::FixedWidthACPerComponent)
+               )
             {
                 if (recovered_free_halo->parameter_source!=
                     detail::HaloFullABCParameterSource::ObservationACFixedWidthRecovery)
@@ -1246,11 +1562,12 @@ json::object RunScenario(const Scenario & scenario, std::ofstream & summary_csv,
                     !check->independent_replay_passed)
                     throw std::runtime_error("P1 fixed-width AC recovery failed rank or replay qualification.");
             }
-            else if (recovered_free_halo->parameter_source!=
+            else if (capture_solver_diagnostics && recovered_free_halo->parameter_source!=
                 detail::HaloFullABCParameterSource::PostFailureGlobalMedianRecovery)
                 throw std::runtime_error("P1 median recovery source was not recorded.");
-            if (method==detail::HaloFullABCRecoveryMethod::PostFailureGlobalMedian ||
+            if (capture_solver_diagnostics && (method==detail::HaloFullABCRecoveryMethod::PostFailureGlobalMedian ||
                 method==detail::HaloFullABCRecoveryMethod::IsolateFailedComponent)
+               )
                 for (const std::string_view atom_id:{"101","102"})
                 {
                     const auto retained=std::find_if(recovered.halos.begin(),recovered.halos.end(),[&](const auto & halo) {
@@ -1260,7 +1577,7 @@ json::object RunScenario(const Scenario & scenario, std::ofstream & summary_csv,
                         detail::HaloFullABCParameterSource::FullABC)
                         throw std::runtime_error("P1 local fallback discarded an independent FullABC component.");
                 }
-            if (method==detail::HaloFullABCRecoveryMethod::IsolateFailedComponent)
+            if (capture_solver_diagnostics && method==detail::HaloFullABCRecoveryMethod::IsolateFailedComponent)
                 for (const std::string_view atom_id:{"101","102"})
                 {
                     const auto retained=std::find_if(recovered.halos.begin(),recovered.halos.end(),[&](const auto & halo) {
@@ -1433,11 +1750,100 @@ json::object RunScenario(const Scenario & scenario, std::ofstream & summary_csv,
     return case_json;
 }
 
+void RunP2Suite(const std::filesystem::path & output, std::vector<Scenario> scenarios,
+    std::string contract)
+{
+    if (!real_geometry_source) throw std::logic_error("P2 source paths were not configured.");
+    const bool production_map_normalization = scenarios.size() == 1 && scenarios.front().real_full_structure;
+    std::filesystem::create_directories(output);
+    std::ofstream summary(output / "summary.csv");
+    std::ofstream halos(output / "halos.csv");
+    if (!summary || !halos) throw std::runtime_error("Cannot create P2 result files.");
+    summary << "scenario,method,available,reason,halo_count,fixed_count,free_count,A_RMSE,B_RMSE,C_RMSE,halo_signal_RMSE,peeling_RMSE,tail_ratio_MAE,local_A_RMSE,local_B_RMSE,seconds,process_peak_RSS_bytes\n";
+    halos << "scenario,atom_id,n_h,truth_A,truth_B,truth_C,nearest_target_distance_angstrom,geometry_fields,observation_AC_fields,fullabc_fields\n";
+    json::array cases;
+    for (const auto & scenario : scenarios)
+    {
+        std::cerr << "[P2] " << scenario.name << '\n';
+        cases.emplace_back(RunScenario(scenario, summary, halos));
+        summary.flush();
+        halos.flush();
+    }
+    std::ofstream output_json(output / "results.json");
+    if (!output_json) throw std::runtime_error("Cannot create P2 JSON output.");
+    output_json << json::serialize(json::object{
+        {"contract",std::move(contract)},
+        {"model",real_geometry_source->model.string()},
+        {"map",real_geometry_source->map.string()},
+        {"simulation_truth",real_geometry_source->truth.string()},
+        {"map_normalization_applied",production_map_normalization},
+        {"noise_seeds",json::array{4101,4102,4103}},
+        {"scenarios",std::move(cases)},
+        {"process_peak_rss_bytes",PeakRssBytes()},
+        {"method_notes",json::array{
+            "The chain-A structural coordinates come from 6Z6U and all map values are generated from the matching simulation truth sidecar.",
+            "Each noise seed re-estimates one Target endpoint, then all Halo methods use that same frozen endpoint and observation realization.",
+            "Short bonded Halo contacts are retained; exact coincidences and nonbonded center distances below 1.0 Angstrom are rejected as geometry errors.",
+            "Group Alpha is reported per case; alpha=0 is not counted as group-alpha training evidence."}}}) << '\n';
+}
+
 }
 
 int main(int argc, char ** argv)
 try
 {
+    if (argc > 1 && std::string_view(argv[1]) == "--real-geometry")
+    {
+        if (argc < 6) throw std::runtime_error("usage: --real-geometry model.cif map truth.json output [--first]");
+        real_geometry_source = RealGeometrySource{argv[2],argv[3],argv[4]};
+        std::vector<Scenario> scenarios;
+        for (const auto seed : {4101ULL,4102ULL,4103ULL})
+        {
+            Scenario scenario;
+            scenario.name = "6z6u_real_geometry_seq145_147_seed_" + std::to_string(seed);
+            scenario.noise = 0.003;
+            scenario.real_geometry = true;
+            scenario.sequence_start = 145;
+            scenario.sequence_end = 147;
+            scenario.noise_seed = seed;
+            scenario.require_short_bonded_halo_pair = true;
+            scenarios.push_back(scenario);
+        }
+        Scenario second_region;
+        second_region.name = "6z6u_real_geometry_seq80_82_seed_4101";
+        second_region.noise = 0.003;
+        second_region.real_geometry = true;
+        second_region.sequence_start = 80;
+        second_region.sequence_end = 82;
+        second_region.noise_seed = 4101;
+        scenarios.push_back(second_region);
+        Scenario boundary;
+        boundary.name = "6z6u_real_geometry_map_boundary_seq5_8_seed_4102";
+        boundary.noise = 0.003;
+        boundary.map_edge_halo = true;
+        boundary.real_geometry = true;
+        boundary.sequence_start = 5;
+        boundary.sequence_end = 8;
+        boundary.noise_seed = 4102;
+        scenarios.push_back(boundary);
+        if (argc > 6 && std::string_view(argv[6]) == "--first") scenarios.resize(1);
+        RunP2Suite(argv[5],std::move(scenarios),
+            "fixed-target-halo-fullabc-p2-real-geometry-multiseed-v1");
+        std::cout << "P2 real-geometry results written to " << argv[5] << '\n';
+        return 0;
+    }
+    if (argc > 1 && std::string_view(argv[1]) == "--6z6u-partial-selection")
+    {
+        if (argc != 6) throw std::runtime_error("usage: --6z6u-partial-selection model.cif map truth.json output");
+        real_geometry_source = RealGeometrySource{argv[2],argv[3],argv[4]};
+        Scenario scenario;
+        scenario.name = "6z6u_chain_a_partial_selection";
+        scenario.real_geometry = true;
+        scenario.real_full_structure = true;
+        RunP2Suite(argv[5],{scenario},"fixed-target-halo-fullabc-p2-6z6u-chain-a-paired-v1");
+        std::cout << "P2 6Z6U Partial Selection results written to " << argv[5] << '\n';
+        return 0;
+    }
     const std::filesystem::path output = argc > 1 ? argv[1] : "docs/research/results/halo_fullabc_p3";
     std::filesystem::create_directories(output);
     std::ofstream summary(output / "summary.csv");
@@ -1487,7 +1893,7 @@ try
             "Every scenario uses the actual first-stage local initializer and qualified target-only Pure Exclusion Joint endpoint.",
             "Observation A/C uses the same n_h<3 global-median fixed set and a sparse constrained A/C solve at geometry kNN-4 widths.",
             "The oracle row is a signal and parameter diagnostic only; it does not enter estimation.",
-            "All reported cases assert every distinct Halo center distance is strictly greater than 1.5 Angstrom."
+            "The original isolated synthetic scenarios remain separate from the real-geometry P2 suite; no 1.5-Angstrom center-distance gate is applied."
         }}
     };
     std::ofstream json_file(output / "results.json");
