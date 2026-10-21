@@ -310,7 +310,7 @@ TEST(JointProgressTest, ObservableComponentsUseTheSameLifecycle)
     ExpectLifecycle(problem, fit, events, {});
 }
 
-TEST(JointProgressTest, QuietWorkflowSuppressesProgressOutput)
+TEST(JointProgressTest, QuietWorkflowSuppressesProgressButKeepsFailureWarning)
 {
     auto atom = std::make_unique<rhbm_gem::AtomObject>();
     atom->SetSerialID(1);
@@ -349,6 +349,7 @@ TEST(JointProgressTest, QuietWorkflowSuppressesProgressOutput)
     Logger::SetLogLevel(previous_level);
 
     EXPECT_TRUE(stdout_text.empty());
-    EXPECT_TRUE(stderr_text.empty());
+    EXPECT_EQ(stderr_text,
+        "[Warning] [Joint] Qualification failed; preserving diagnostics and skipping downstream processing.\n");
     EXPECT_TRUE(model.GetAnalysisView().GetJointResult());
 }

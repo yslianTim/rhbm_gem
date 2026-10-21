@@ -297,7 +297,21 @@ std::string FormatMemoryEstimate(const MemoryEstimate & estimate)
     return out.str();
 }
 void LogMemoryEstimate(const MemoryEstimate & estimate)
-{Logger::Log(estimate.status==MemoryStatus::Pass ? LogLevel::Info : LogLevel::Warning,FormatMemoryEstimate(estimate));}
+{
+    Logger::FinishProgressLine();
+    if (estimate.status!=MemoryStatus::Pass)
+    {
+        Logger::Log(LogLevel::Warning,FormatMemoryEstimate(estimate));
+        return;
+    }
+    if (estimate.estimated_peak_bytes>=estimate.budget_bytes-estimate.budget_bytes/5)
+    {
+        Logger::Log(LogLevel::Info,"[Joint][Memory] " + std::string(MemoryStageName(estimate.stage))+
+            " | estimated_peak=" + Bytes(estimate.estimated_peak_bytes)+
+            " | budget=" + Bytes(estimate.budget_bytes));
+    }
+    Logger::Log(LogLevel::Debug,FormatMemoryEstimate(estimate));
+}
 
 NumericsWork & NumericsWorkForTesting() {static thread_local NumericsWork work; return work;}
 ResourceWork & ResourceWorkForTesting() {static thread_local ResourceWork work; return work;}

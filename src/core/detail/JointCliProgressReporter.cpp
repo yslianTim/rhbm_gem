@@ -35,16 +35,26 @@ std::string ComponentSummary(const JointProgressEvent & event)
 {
     std::ostringstream output;
     output << "[Joint] Component " << event.component_index << '/' << event.component_count
-        << " completed | atoms=" << event.atom_count << " rows=" << event.row_count
-        << " | eval=" << event.profile_evaluations
-        << " accepted=" << event.accepted_updates;
+        << " completed | state_trusted=" << (event.trusted_state ? "yes" : "no")
+        << " | stop=" << event.stop_reason;
     if (event.accepted_objective)
-        output << " | accepted-obj=" << Scientific(*event.accepted_objective);
+        output << " | obj=" << Scientific(*event.accepted_objective);
+    output << " | elapsed=" << Elapsed(event.elapsed_seconds);
+    return output.str();
+}
+
+std::string ComponentDetail(const JointProgressEvent & event)
+{
+    std::ostringstream output;
+    output << "[Joint] Component detail | " << event.component_index << '/' << event.component_count
+        << " | atoms=" << event.atom_count << " | rows=" << event.row_count
+        << " | evaluations=" << event.profile_evaluations << '/' << event.profile_budget
+        << " | accepted_updates=" << event.accepted_updates << '/' << event.update_budget;
+    if (event.accepted_objective) output << " | obj=" << Scientific(*event.accepted_objective);
     if (event.accepted_gradient_inf_norm)
-        output << " | accepted-grad-inf=" << Scientific(*event.accepted_gradient_inf_norm);
+        output << " | gradient_inf=" << Scientific(*event.accepted_gradient_inf_norm);
     output << " | stop=" << event.stop_reason
-        << " | trusted=" << (event.trusted_state ? "yes" : "no")
-        << " | elapsed=" << Elapsed(event.elapsed_seconds);
+        << " | state_trusted=" << (event.trusted_state ? "yes" : "no");
     return output.str();
 }
 }
@@ -56,40 +66,58 @@ joint_component::JointProgressObserver JointCliProgressReporter::Observer()
 
 void JointCliProgressReporter::ShowProgress(const JointProgressEvent & event, bool certifying)
 {
-    std::ostringstream output;
-    output << "Joint component " << event.component_index << '/' << event.component_count << " | "
-        << (certifying ? "certifying endpoint" : "searching")
-        << " | atoms=" << event.atom_count << " rows=" << event.row_count;
+    std::ostringstream output, detail;
+    output << "[Joint] Component " << event.component_index << '/' << event.component_count << " | ";
+    detail << "[Joint] Progress detail | component=" << event.component_index << '/' << event.component_count
+        << " | phase=" << (certifying ? "certification" : "search")
+        << " | atoms=" << event.atom_count << " | rows=" << event.row_count;
     if (event.fixed_neighbor)
     {
         const auto & progress=*event.fixed_neighbor;
-        output << " | sweep=" << progress.sweep << '/' << progress.maximum_sweeps
-            << " | blocks=" << progress.block_solves << " | accepted-blocks=" << progress.accepted_blocks
-            << " | unchanged-blocks=" << progress.unchanged_blocks
-            << " | failed-blocks=" << progress.failed_blocks
-            << " | local-accepted=" << progress.local_accepted_updates
-            << " | profile-evals=" << progress.profile_evaluations
-            << " | recovery=" << progress.recovery_attempts << '/' << progress.recovery_successes
-            << " | kkt=" << Scientific(progress.global_ac_kkt)
+        output << (certifying ? "certifying" : "searching")
+            << " | sweep=" << progress.sweep << '/' << progress.maximum_sweeps
+            << " | obj=" << Scientific(progress.objective)
+            << " | KKT=" << Scientific(progress.global_ac_kkt)
             << " | width-grad=" << Scientific(progress.width_gradient_inf_norm)
-            << " | max-log-width-step=" << Scientific(progress.maximum_accepted_log_width_step)
-            << " | max-B=" << Scientific(progress.maximum_target_width)
-            << " | eta-change=" << Scientific(progress.eta_change_inf)
-            << " | objective=" << Scientific(progress.objective);
+            << " | accepted=" << progress.accepted_blocks
+            << " | failed=" << progress.failed_blocks;
+        detail << " | sweep=" << progress.sweep << '/' << progress.maximum_sweeps
+            << " | blocks=" << progress.block_solves
+            << " | accepted_blocks=" << progress.accepted_blocks
+            << " | unchanged_blocks=" << progress.unchanged_blocks
+            << " | failed_blocks=" << progress.failed_blocks
+            << " | local_accepted_updates=" << progress.local_accepted_updates
+            << " | profile_evaluations=" << progress.profile_evaluations
+            << " | recovery=" << progress.recovery_attempts << '/' << progress.recovery_successes
+            << " | obj=" << Scientific(progress.objective)
+            << " | KKT=" << Scientific(progress.global_ac_kkt)
+            << " | width_grad=" << Scientific(progress.width_gradient_inf_norm)
+            << " | max_log_width_step=" << Scientific(progress.maximum_accepted_log_width_step)
+            << " | max_B=" << Scientific(progress.maximum_target_width)
+            << " | eta_change=" << Scientific(progress.eta_change_inf);
     }
-    else output << " | eval=" << event.profile_evaluations << '/' << event.profile_budget
-        << " | accepted=" << event.accepted_updates << '/' << event.update_budget;
-    if (event.accepted_objective)
-        output << " | " << (certifying ? "accepted-obj=" : "obj=") << Scientific(*event.accepted_objective);
-    if (event.accepted_gradient_inf_norm)
-        output << " | " << (certifying ? "accepted-grad-inf=" : "grad-inf=")
-            << Scientific(*event.accepted_gradient_inf_norm);
-    output << " | " << Elapsed(event.elapsed_seconds);
+    else
+    {
+        output << (certifying ? "certifying" : "searching")
+            << " | eval=" << event.profile_evaluations << '/' << event.profile_budget
+            << " | accepted=" << event.accepted_updates << '/' << event.update_budget;
+        if (event.accepted_objective) output << " | obj=" << Scientific(*event.accepted_objective);
+        if (event.accepted_gradient_inf_norm)
+            output << " | gradient-inf=" << Scientific(*event.accepted_gradient_inf_norm);
+        detail << " | eval=" << event.profile_evaluations << '/' << event.profile_budget
+            << " | accepted=" << event.accepted_updates << '/' << event.update_budget;
+        if (event.accepted_objective) detail << " | obj=" << Scientific(*event.accepted_objective);
+        if (event.accepted_gradient_inf_norm)
+            detail << " | gradient_inf=" << Scientific(*event.accepted_gradient_inf_norm);
+    }
+    output << " | elapsed=" << Elapsed(event.elapsed_seconds);
+    if (Logger::GetLogLevel() == LogLevel::Debug)
+    {
+        Logger::FinishProgressLine();
+        Logger::Log(LogLevel::Debug, detail.str());
+    }
     Logger::ProgressLine(output.str());
     m_component_index = event.component_index;
-    m_accepted_updates = event.accepted_updates;
-    m_has_accepted_objective = event.accepted_objective.has_value();
-    m_has_accepted_gradient = event.accepted_gradient_inf_norm.has_value();
     m_last_phase = event.phase;
     m_last_output = Clock::now();
     m_has_output = true;
@@ -104,12 +132,12 @@ void JointCliProgressReporter::OnProgress(const JointProgressEvent & event)
     {
         if (!event.solver_configuration) return;
         const auto & configuration = *event.solver_configuration;
-        std::ostringstream output;
-        output << "[Joint] Solver: FixedNeighbor | sparse=EIGEN"
-            << " | core=" << configuration.fixed_neighbor_core_atoms
+        LogJointInfo("[Joint] Solver | FixedNeighbor / Active-set LM");
+        std::ostringstream detail;
+        detail << "[Joint] Solver detail | sparse=EIGEN | core=" << configuration.fixed_neighbor_core_atoms
             << " | local-search=" << (configuration.bounded_width_profile ?
                 FixedNeighborBoundedLocalSearchName : FixedNeighborLocalSearchName);
-        LogJointInfo(output.str());
+        Logger::Log(LogLevel::Debug, detail.str());
         return;
     }
     case JointProgressPhase::ComponentStarted:
@@ -118,20 +146,14 @@ void JointCliProgressReporter::OnProgress(const JointProgressEvent & event)
             LogJointInfo("[Joint] Solving " + std::to_string(event.component_count) + " structural components");
             m_solver_started = true;
         }
-        m_has_accepted_objective = false;
-        m_has_accepted_gradient = false;
         ShowProgress(event, false);
         return;
     case JointProgressPhase::SearchProgress:
     {
         const auto now = Clock::now();
-        const bool accepted_changed = event.accepted_updates != m_accepted_updates;
-        const bool metrics_became_available = (!m_has_accepted_objective && event.accepted_objective.has_value())
-            || (!m_has_accepted_gradient && event.accepted_gradient_inf_norm.has_value());
         const bool phase_changed = !m_last_phase || *m_last_phase != event.phase;
         const bool elapsed = !m_has_output || now - m_last_output >= std::chrono::milliseconds(500);
-        if (event.component_index != m_component_index || accepted_changed || phase_changed
-            || metrics_became_available || elapsed)
+        if (event.component_index != m_component_index || phase_changed || elapsed)
             ShowProgress(event, false);
         return;
     }
@@ -140,7 +162,8 @@ void JointCliProgressReporter::OnProgress(const JointProgressEvent & event)
         return;
     case JointProgressPhase::ComponentCompleted:
         Logger::FinishProgressLine();
-        LogJointInfo(ComponentSummary(event));
+        Logger::Log(LogLevel::Debug, ComponentDetail(event));
+        Logger::Log(LogLevel::Info, ComponentSummary(event));
         m_has_output = false;
         m_last_phase = event.phase;
         return;
@@ -149,9 +172,15 @@ void JointCliProgressReporter::OnProgress(const JointProgressEvent & event)
         return;
     case JointProgressPhase::AssemblyCompleted:
     {
+        if (!event.trusted_state)
+        {
+            Logger::FinishProgressLine();
+            Logger::Log(LogLevel::Warning, "[Joint] Global assembly did not produce a trusted state | elapsed=" +
+                Elapsed(event.elapsed_seconds));
+            return;
+        }
         std::ostringstream output;
-        output << "[Joint] Global assembly completed | trusted=" << (event.trusted_state ? "yes" : "no")
-            << " | elapsed=" << Elapsed(event.elapsed_seconds);
+        output << "[Joint] Global assembly | trusted=yes | elapsed=" << Elapsed(event.elapsed_seconds);
         LogJointInfo(output.str());
         return;
     }

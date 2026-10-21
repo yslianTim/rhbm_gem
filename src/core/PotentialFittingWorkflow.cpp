@@ -29,12 +29,12 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <iomanip>
 #include <limits>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace rhbm_gem::core::detail {
@@ -161,6 +161,18 @@ void LogJointInfo(const std::string & message)
     Logger::Log(LogLevel::Info, message);
 }
 
+void LogJointDebug(const std::string & message)
+{
+    Logger::FinishProgressLine();
+    Logger::Log(LogLevel::Debug, message);
+}
+
+void LogJointWarning(const std::string & message)
+{
+    Logger::FinishProgressLine();
+    Logger::Log(LogLevel::Warning, message);
+}
+
 }
 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -213,7 +225,6 @@ void RunJointComponentWorkflow(
     JointPostprocessingMetrics local_metrics;
     auto & postprocessing_metrics = supplied_metrics ? *supplied_metrics : local_metrics;
     postprocessing_metrics = {};
-    if (!options.quiet_mode) LogJointInfo("[Joint] Building joint problem...");
     const auto construction_start = std::chrono::steady_clock::now();
     const auto problem = BuildPureHaloSupportExclusionProblem(map, model);
     const auto construction_seconds = std::chrono::duration<double>(
@@ -223,12 +234,14 @@ void RunJointComponentWorkflow(
         const auto & input = problem.Input();
         const auto targets = input.selection_domain ? input.selection_domain->target_indices.size() : 0;
         std::ostringstream message;
-        message << "[Joint] Problem ready: observations=" << input.observations.size()
-            << ", contributors=" << input.atom_ids.size()
-            << ", targets=" << targets
-            << ", halo=" << input.atom_ids.size() - targets
-            << ", elapsed=" << std::fixed << std::setprecision(2) << construction_seconds << 's';
+        message << "[Joint] Problem ready | observations=" << input.observations.size()
+            << " | targets=" << targets
+            << " | halo=" << input.atom_ids.size() - targets;
         LogJointInfo(message.str());
+        std::ostringstream detail;
+        detail << "[Joint] Problem build elapsed=" << construction_seconds << 's'
+            << " | contributors=" << input.atom_ids.size();
+        LogJointDebug(detail.str());
     }
     const auto initialization_start = std::chrono::steady_clock::now();
     const auto initialization = [&] {
@@ -264,8 +277,7 @@ void RunJointComponentWorkflow(
     };
     if (!IsQualifiedJointAnalysisResult(snapshot))
     {
-        if (!options.quiet_mode)
-            LogJointInfo("[Joint] Qualification failed; preserving diagnostics and skipping downstream processing.");
+        LogJointWarning("[Joint] Qualification failed; preserving diagnostics and skipping downstream processing.");
         model.EditAnalysis().SetJointResult(std::move(snapshot));
         finish_without_downstream();
         return;
@@ -292,12 +304,10 @@ void RunJointComponentWorkflow(
             snapshot.evidence.push_back({std::string(JointHaloMedianReconstructionEvidenceName),
                 JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{}, {},error.what()});
             halo_reconstruction_unavailable=true;
-            if (!options.quiet_mode)
-                LogJointInfo("[Joint] Halo median reconstruction unavailable: " + std::string(error.what()));
+            LogJointWarning("[Joint] Halo median reconstruction unavailable: " + std::string(error.what()));
         }
     }
     data_internal::ApplyJointStageEstimates(model, snapshot, joint_run_id);
-    if (!options.quiet_mode) LogJointInfo("[Joint] Computing post-fit outputs...");
     model.EditAnalysis().SetJointResult(std::move(snapshot));
     if (halo_reconstruction_unavailable)
     {
@@ -316,6 +326,14 @@ void RunJointComponentWorkflow(
     phase_start = std::chrono::steady_clock::now();
     auto peeling_updates = postprocessing.BuildPostFitPeelingBatch(original.selection_domain->target_indices);
     model.EditAnalysis().ApplyPostFitPeelingsBatch(std::move(peeling_updates));
+    if (postprocessing_metrics.mapping_mismatch_samples || postprocessing_metrics.missing_contributor_samples)
+    {
+        std::ostringstream warning;
+        warning << "[Joint] Peeling data integrity issue | mapping_mismatch="
+            << postprocessing_metrics.mapping_mismatch_samples
+            << " | missing_contributors=" << postprocessing_metrics.missing_contributor_samples;
+        LogJointWarning(warning.str());
+    }
     std::vector<const AtomObject *> joint_targets;
     for (const auto * atom : model.GetSelectedAtoms())
     {
@@ -386,47 +404,51 @@ void RunJointComponentWorkflow(
     }
     model.EditAnalysis().ApplyPostJointLocalResultsBatch(std::move(local_updates));
     postprocessing_metrics.rss_after_local_bytes = joint_component::CurrentRssBytes();
-    if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model));
+    if (!options.quiet_mode) LogJointDebug(BuildSecondStageSpotSummary(model));
     RunJointGroupPotentialFitting(model, options, &postprocessing_metrics);
     postprocessing_metrics.rss_after_group_bytes = joint_component::CurrentRssBytes();
     if (!options.quiet_mode)
     {
         std::ostringstream message;
-        message << "[Joint] Geometry Halo reconstruction: valid_targets="
+        message << "[Joint] Halo reconstruction | donors="
             << postprocessing_metrics.halo_median_valid_target_count
-            << ", geometry_local_halos=" << postprocessing_metrics.halo_median_geometry_local_halos
-            << ", unavailable_halos=" << postprocessing_metrics.halo_median_unavailable_halos;
+            << " | reconstructed=" << postprocessing_metrics.halo_median_geometry_local_halos
+            << " | unavailable=" << postprocessing_metrics.halo_median_unavailable_halos;
         LogJointInfo(message.str());
         std::ostringstream tail_message;
-        tail_message << "[Joint] Tail peeling coverage (1-2 A): targets="
+        tail_message << "[Joint] Peeling | targets="
             << postprocessing_metrics.tail_target_count
-            << ", complete=" << postprocessing_metrics.tail_full_coverage_targets
-            << ", partial=" << postprocessing_metrics.tail_partial_coverage_targets
-            << ", zero=" << postprocessing_metrics.tail_zero_coverage_targets
-            << ", no_samples=" << postprocessing_metrics.tail_no_sample_targets
-            << ", valid/raw=" << postprocessing_metrics.tail_valid_sample_count << '/'
+            << " | valid_samples=" << postprocessing_metrics.tail_valid_sample_count << '/'
             << postprocessing_metrics.tail_raw_sample_count
-            << ", ratio_available=" << postprocessing_metrics.tail_ratio_available_targets
-            << ", raw_sum=" << postprocessing_metrics.tail_raw_response_sum
-            << ", peeled_sum=" << postprocessing_metrics.tail_peeling_response_sum
-            << ", map_boundary_samples=" << postprocessing_metrics.map_geometry_boundary_samples
-            << ", original_support_boundary_samples=" << postprocessing_metrics.original_support_boundary_samples
-            << ", fitting_mask_only_samples=" << postprocessing_metrics.fitting_mask_only_intersection_samples
-            << ", mapping_mismatch_samples=" << postprocessing_metrics.mapping_mismatch_samples
-            << ", missing_contributor_samples=" << postprocessing_metrics.missing_contributor_samples;
-        for (const auto & [bucket, count] : postprocessing_metrics.tail_coverage_distribution)
-            tail_message << ", coverage_" << bucket << '=' << count;
-        for (const auto & [reason, count] : postprocessing_metrics.tail_unavailable_reasons)
-            tail_message << ", " << reason << '=' << count;
+            << " | unavailable=" << postprocessing_metrics.tail_unavailable_sample_count
+            << " | coverage=" << postprocessing_metrics.tail_full_coverage_targets << " complete/"
+            << postprocessing_metrics.tail_partial_coverage_targets << " partial/"
+            << postprocessing_metrics.tail_zero_coverage_targets << " zero/"
+            << postprocessing_metrics.tail_no_sample_targets << " no-samples";
         LogJointInfo(tail_message.str());
+        std::ostringstream tail_detail;
+        tail_detail << "[Joint] Peeling diagnostics | ratio_available="
+            << postprocessing_metrics.tail_ratio_available_targets
+            << " | raw_sum=" << postprocessing_metrics.tail_raw_response_sum
+            << " | peeled_sum=" << postprocessing_metrics.tail_peeling_response_sum
+            << " | map_boundary_samples=" << postprocessing_metrics.map_geometry_boundary_samples
+            << " | original_support_boundary_samples=" << postprocessing_metrics.original_support_boundary_samples
+            << " | fitting_mask_only_samples=" << postprocessing_metrics.fitting_mask_only_intersection_samples
+            << " | mapping_mismatch_samples=" << postprocessing_metrics.mapping_mismatch_samples
+            << " | missing_contributor_samples=" << postprocessing_metrics.missing_contributor_samples;
+        for (const auto & [bucket, count] : postprocessing_metrics.tail_coverage_distribution)
+            tail_detail << " | coverage_" << bucket << '=' << count;
+        for (const auto & [reason, count] : postprocessing_metrics.tail_unavailable_reasons)
+            tail_detail << " | " << reason << '=' << count;
+        LogJointDebug(tail_detail.str());
         std::ostringstream reconstruction_message;
         reconstruction_message << "[Joint] Reconstruction-only lookup: atoms="
             << postprocessing_metrics.reconstruction_lookup_atom_count
-            << ", node_evaluations=" << postprocessing_metrics.reconstruction_only_node_evaluation_count
-            << ", cache_hits=" << postprocessing_metrics.reconstruction_node_cache_hit_count
-            << ", cache_peak_entries=" << postprocessing_metrics.reconstruction_node_cache_peak_entries
-            << ", estimated_workspace_bytes=" << postprocessing_metrics.estimated_reconstruction_workspace_bytes;
-        LogJointInfo(reconstruction_message.str());
+            << " | node_evaluations=" << postprocessing_metrics.reconstruction_only_node_evaluation_count
+            << " | cache_hits=" << postprocessing_metrics.reconstruction_node_cache_hit_count
+            << " | cache_peak_entries=" << postprocessing_metrics.reconstruction_node_cache_peak_entries
+            << " | estimated_workspace_bytes=" << postprocessing_metrics.estimated_reconstruction_workspace_bytes;
+        LogJointDebug(reconstruction_message.str());
     }
     postprocessing_metrics.total_postprocessing_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - postprocessing_start).count();

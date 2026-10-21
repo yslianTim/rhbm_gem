@@ -704,7 +704,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
         cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
             "--model",model_path.string(),"--map",map_path.string(),
             "--database",database_path.string(),"--save-key",key,
-            "--select-chain","A","--verbose","3"});
+            "--select-chain","A","--verbose","4"});
         joint_log=testing::internal::GetCapturedStdout();
     }
     ASSERT_EQ(cli_status,0) << joint_log;
