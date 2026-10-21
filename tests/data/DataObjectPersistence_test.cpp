@@ -203,26 +203,6 @@ TEST(DataObjectPersistenceTest, DoublePrecisionDomainValuesRoundTripWithoutNarro
     EXPECT_FALSE(data_test::HasTable(database_path,"model_atom_local_potential"));
 }
 
-TEST(DataObjectPersistenceTest, InvalidLegacySamplingBlobLengthIsRejected)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_invalid_double_blob" };
-    const auto database_path{ temp_dir.path() / "invalid_double_blob.sqlite" };
-    data_test::CreateLegacyAnalysisDatabase(database_path);
-    data_test::ExecuteSql(
-        database_path,
-        "UPDATE model_atom_local_potential "
-        "SET raw_distance_and_map_value_list = X'000102' "
-        "WHERE key_tag = 'native' AND serial_id = 1;");
-
-    rg::DataRepository repository{ database_path };
-    EXPECT_THROW((void)repository.LoadModel("native"), std::runtime_error);
-    EXPECT_EQ(data_test::GetUserVersion(database_path), 18);
-    EXPECT_EQ(
-        data_test::CountRows(
-            database_path, "model_atom_local_potential", "native"),
-        1);
-}
-
 TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
 {
     const command_test::ScopedTempDir temp_dir{ "data_schema_gaussian_roundtrip" };
@@ -1130,46 +1110,6 @@ TEST(DataObjectPersistenceTest, VersionTwoJointEvidenceIsInvalidatedDuringNeutra
     }
 }
 
-TEST(DataObjectPersistenceTest, LegacyReadsAndMultiKeyMigrationAreAtomic)
-{
-    for(int version:{17,18})
-    {
-        const command_test::ScopedTempDir dir{"legacy_atomic"}; const auto path=dir.path()/"legacy.sqlite";
-        data_test::CreateLegacyAnalysisDatabase(path,version);
-        const auto bytes=[&]() {std::ifstream f(path,std::ios::binary); return std::string(std::istreambuf_iterator<char>(f),{});};
-        const auto before=bytes();
-        rg::DataRepository repository(path); auto native=repository.LoadModel("native"); auto joint=repository.LoadModel("joint");
-        EXPECT_EQ(bytes(),before); EXPECT_EQ(data_test::GetUserVersion(path),version);
-        EXPECT_EQ(rg::AtomLocalPotentialView::For(*native->FindAtomPtr(1)).HasSampleGeometry(),version==18);
-        auto bad=rg::ModelObject(*native);
-        auto & entry=rg::ModelAnalysisData::Of(bad).EnsureAtomLocalEntry(*bad.FindAtomPtr(1));
-        auto stage=entry.StageEstimate(rg::FittingStage::Second); stage.source.atom_id="wrong"; entry.SetStageEstimate(rg::FittingStage::Second,stage);
-        EXPECT_THROW(repository.SaveModel(bad,"new"),std::invalid_argument);
-        EXPECT_EQ(data_test::GetUserVersion(path),version);
-        EXPECT_TRUE(data_test::HasTable(path,"model_atom_local_potential"));
-        EXPECT_EQ(data_test::CountRows(path,"model_object"),2);
-        EXPECT_EQ(rg::stage_result_io::Encode(*repository.LoadModel("native")),rg::stage_result_io::Encode(*native));
-        EXPECT_EQ(rg::stage_result_io::Encode(*repository.LoadModel("joint")),rg::stage_result_io::Encode(*joint));
-        repository.SaveModel(*native,"new");
-        EXPECT_EQ(data_test::GetUserVersion(path),20); EXPECT_EQ(data_test::CountRows(path,"model_object"),3);
-        EXPECT_FALSE(data_test::HasTable(path,"model_atom_local_potential"));
-        EXPECT_EQ(rg::stage_result_io::Encode(*repository.LoadModel("native")),rg::stage_result_io::Encode(*native));
-        EXPECT_EQ(rg::stage_result_io::Encode(*repository.LoadModel("joint")),rg::stage_result_io::Encode(*joint));
-    }
-}
-
-TEST(DataObjectPersistenceTest, LegacyJointSnapshotMapsPointsWithoutInventingDerivedEvidence)
-{
-    const command_test::ScopedTempDir dir{"legacy_joint_adaptation"}; const auto path=dir.path()/"legacy.sqlite";
-    data_test::CreateLegacyAnalysisDatabase(path,17); const auto snapshot=SavedJointExample();
-    rg::DataRepository repository(path); const auto loaded=repository.LoadModel("joint");
-    const auto target=rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1));
-    EXPECT_DOUBLE_EQ(target.GetFinalModel(rg::FittingStage::Second).GetAmplitude(),snapshot.components[0].state->ac[0]);
-    EXPECT_EQ(target.GetStageEstimate(rg::FittingStage::Second).uncertainty.status,rg::EvidenceStatus::NotRun);
-    EXPECT_FALSE(target.GetPostFitPeeling()); EXPECT_FALSE(target.GetGroupMemberResult()); EXPECT_FALSE(target.HasSampleGeometry());
-    EXPECT_FALSE(target.GetLocalFittingPeelingRatio(1,2)); EXPECT_EQ(data_test::GetUserVersion(path),17);
-}
-
 TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundTripExactly)
 {
     const command_test::ScopedTempDir dir{"canonical_diagnostics"}; const auto path=dir.path()/"model.sqlite";
@@ -1204,66 +1144,4 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     EXPECT_EQ(actual.diagnostics->refinement->relative_coordinate_difference,fit.refinement->relative_coordinate_difference);
     const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),4);
     EXPECT_FALSE(loaded->GetAnalysisView().GetJointResult());
-}
-
-TEST(DataObjectPersistenceTest, ContradictoryLegacyRepresentationsAbortAllKeyMigration)
-{
-    for(const auto sql:{
-        "UPDATE model_atom_local_potential SET amplitude_estimate_mdpde_2nd=99 WHERE key_tag='native';",
-        "UPDATE model_atom_local_potential SET raw_distance_and_map_value_list=X'' WHERE key_tag='native';",
-        "UPDATE model_stage_result SET result_json=json_set(result_json,'$.atoms[0].peeled[0].y',99) WHERE key_tag='native';"})
-    {
-        const command_test::ScopedTempDir dir{"legacy_conflict"}; const auto path=dir.path()/"model.sqlite";
-        data_test::CreateLegacyAnalysisDatabase(path); data_test::ExecuteSql(path,sql);
-        rg::DataRepository repo(path); auto incoming=data_test::MakeModelWithBond();
-        EXPECT_THROW(repo.SaveModel(*incoming,"new"),std::invalid_argument);
-        EXPECT_EQ(data_test::GetUserVersion(path),18); EXPECT_EQ(data_test::CountRows(path,"model_object"),2);
-        EXPECT_TRUE(data_test::HasTable(path,"model_atom_local_potential"));
-        rg::SQLiteWrapper db(path); db.Prepare("SELECT json_extract(result_json,'$.version') FROM model_stage_result WHERE key_tag='joint';");
-        rg::SQLiteWrapper::StatementGuard guard(db); ASSERT_EQ(db.StepNext(),rg::SQLiteWrapper::StepRow());
-        EXPECT_EQ(db.GetColumn<int>(0),1); // Earlier key conversion must also roll back.
-    }
-}
-
-TEST(DataObjectPersistenceTest, DatabaseWriteFailureRollsBackSchemaAndAllLegacyKeys)
-{
-    for(int version:{17,18})
-    {
-        const command_test::ScopedTempDir dir{"legacy_write_failure"}; const auto path=dir.path()/"model.sqlite";
-        data_test::CreateLegacyAnalysisDatabase(path,version);
-        rg::DataRepository repo(path); auto incoming=repo.LoadModel("native");
-        data_test::ExecuteSql(path,"CREATE TRIGGER reject_new BEFORE INSERT ON model_object WHEN NEW.key_tag='new' BEGIN SELECT RAISE(ABORT,'write failure'); END;");
-        EXPECT_THROW(repo.SaveModel(*incoming,"new"),std::runtime_error);
-        data_test::ExecuteSql(path,"DROP TRIGGER reject_new;");
-        EXPECT_EQ(data_test::GetUserVersion(path),version); EXPECT_EQ(data_test::CountRows(path,"model_object"),2);
-        EXPECT_EQ(data_test::HasTable(path,"model_stage_result"),version==18);
-        EXPECT_TRUE(data_test::HasTable(path,"model_atom_posterior"));
-        EXPECT_EQ(rg::stage_result_io::Encode(*repo.LoadModel("native")),rg::stage_result_io::Encode(*incoming));
-    }
-}
-
-TEST(DataObjectPersistenceTest, LegacyPosteriorMirrorsMustAgreeBeforeMigration)
-{
-    const command_test::ScopedTempDir dir{"legacy_posterior_mirrors"}; const auto path=dir.path()/"model.sqlite";
-    data_test::CreateLegacyAnalysisDatabase(path);
-    const std::string member=R"({"posterior":{"point":[3,0.5,0.1],"sd":[0.1,0.2,null]},"outlier":false,"distance":2,"source":"","charge_inferred":true,"covariance":null})";
-    data_test::ExecuteSql(path,"INSERT INTO model_atom_posterior VALUES ('native',1,3,.5,.1,.1,.2,NULL,0,2);");
-    data_test::ExecuteSql(path,"UPDATE model_stage_result SET result_json=json_set(result_json,'$.atoms[0].posterior',json('"+member+"')) WHERE key_tag='native';");
-    const auto group=std::string(R"([{"key":0,"members":[1],"summary":{"status":1,"reason":"","source":"","correlation":"block-diagonal-by-atom","points":1,"eligible":1,"excluded":0,"mean":[3,0.5,0.1],"ids":[1],"inference":{"alpha":0.2,"mean":[3,0.5,0.1],"mdpde":[3,0.5,0.1],"prior":{"point":[3,0.5,0.1],"sd":[0.1,0.2,null]},"members":[)")+member+"]}}}]";
-    data_test::ExecuteSql(path,"UPDATE model_stage_result SET result_json=json_set(result_json,'$.groups',json('"+group+"')) WHERE key_tag='native';");
-    data_test::ExecuteSql(path,"INSERT INTO model_atom_group_potential VALUES ('native',0,3,.5,.1,3,.5,.1,3,.5,.1,.1,.2,NULL,.2);");
-    rg::DataRepository repo(path); auto native=repo.LoadModel("native");
-    EXPECT_TRUE(std::isnan(rg::AtomLocalPotentialView::For(*native->FindAtomPtr(1)).GetGroupMemberResult()->posterior.GetStandardDeviationModel().GetOffset()));
-    data_test::ExecuteSql(path,"UPDATE model_atom_group_potential SET amplitude_estimate_mean=99 WHERE key_tag='native';");
-    EXPECT_THROW(repo.SaveModel(*native,"new"),std::invalid_argument);
-    EXPECT_EQ(data_test::GetUserVersion(path),18);
-    data_test::ExecuteSql(path,"UPDATE model_atom_group_potential SET amplitude_estimate_mean=3 WHERE key_tag='native';");
-    data_test::ExecuteSql(path,"UPDATE model_atom_posterior SET amplitude_estimate_posterior=99 WHERE key_tag='native';");
-    EXPECT_THROW(repo.SaveModel(*native,"new"),std::invalid_argument);
-    EXPECT_EQ(data_test::GetUserVersion(path),18);
-    data_test::ExecuteSql(path,"UPDATE model_atom_posterior SET amplitude_estimate_posterior=3 WHERE key_tag='native';");
-    data_test::ExecuteSql(path,"UPDATE model_stage_result SET result_json=json_set(result_json,'$.groups[0].summary.inference.members[0].posterior.point[0]',99) WHERE key_tag='native';");
-    EXPECT_THROW(repo.SaveModel(*native,"new"),std::invalid_argument);
-    EXPECT_EQ(data_test::GetUserVersion(path),18);
-    EXPECT_EQ(data_test::CountRows(path,"model_object"),2);
 }
