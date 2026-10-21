@@ -310,6 +310,7 @@ struct JointBlockConditioning
         profile_sigma_min,profile_sigma_max,profile_condition,
         profile_rank_threshold,profile_rank_threshold_margin_relative;
     std::optional<bool> free_ac_threshold_sensitive,projected_width_threshold_sensitive,profile_threshold_sensitive;
+    std::vector<double> local_widths,projected_width_column_norms;
     std::string free_ac_status{"not-assessed"},free_ac_reason,
         projected_width_status{"not-assessed"},projected_width_reason,
         profile_status{"not-assessed"},profile_reason;

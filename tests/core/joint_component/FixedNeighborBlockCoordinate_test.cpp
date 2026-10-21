@@ -381,7 +381,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, WidthTrajectoryCaptureHonorsAtomEven
     policy.configure_search_for_testing=[&](n::FixedNeighborPolicy & local) {
         local.width_trajectory=&capture; local.diagnostic_sink=&sink;
     };
-    policy.search_result_observer=[&](const n::FixedNeighborSearchResult & result) {
+    policy.search_result_observer=[&](std::string_view,const n::FixedNeighborSearchResult & result) {
         retained_blocks=result.blocks.size(); retained_sweeps=result.sweeps.size();
     };
     const auto traced=n::FitFixedNeighborComponents(problem,std::vector<double>(8,.55),policy);

@@ -136,6 +136,8 @@ LocalConditioningAssessment AssessFixedNeighborLocalConditioning(
     {MarkUnavailable(evidence,"nonfinite-local-state"); out.seconds=Seconds(started); return out;}
     if(!(context.scale>0) || !std::isfinite(context.scale))
     {MarkUnavailable(evidence,"invalid-scale"); out.seconds=Seconds(started); return out;}
+    evidence.local_widths.resize(static_cast<std::size_t>(eta.size()));
+    for(Eigen::Index k=0;k<eta.size();++k) evidence.local_widths[static_cast<std::size_t>(k)]=std::exp(eta(k));
 
     std::vector<Eigen::Index> free_columns;
     free_columns.reserve(static_cast<std::size_t>(beta.size()));
@@ -206,6 +208,8 @@ LocalConditioningAssessment AssessFixedNeighborLocalConditioning(
         const auto projected=ReduceProjectedWidthDerivative(projected_prepared);
         if(projected.valid)
         {
+            evidence.projected_width_column_norms.assign(projected.projected_norms.data(),
+                projected.projected_norms.data()+projected.projected_norms.size());
             const auto spectrum=SpectrumOf(projected.projected,domain.rows,eta.size(),context.rank);
             SetSpectrum(evidence.projected_width_status,evidence.projected_width_reason,
                 evidence.projected_width_rank,evidence.projected_width_sigma_min,

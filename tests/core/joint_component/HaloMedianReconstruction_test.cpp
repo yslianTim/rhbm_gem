@@ -538,6 +538,23 @@ TEST(HaloMedianReconstructionTest, ClassifiesDistinctOriginalObservationsAtThree
         EXPECT_EQ(halo.parameter_profile,*classified.global_target_median);
 }
 
+TEST(HaloMedianReconstructionTest, ThreeEqualRadiusRowsRemainFreeForFullABC)
+{
+    auto fixture=MakeObservationCountFixture(false,true,false);
+    auto input=fixture.problem.OriginalInput();
+    for(auto & support:input.support[5]) support.squared_distance=.5;
+    fixture.problem=JointProblem(std::move(input));
+    const auto classified=BuildHaloFullABCPreclassification(
+        fixture.model,fixture.problem,fixture.result);
+    ASSERT_TRUE(classified.available);
+    const auto halo=std::find_if(classified.halos.begin(),classified.halos.end(),[](const auto & value) {
+        return value.atom_id=="6";
+    });
+    ASSERT_NE(halo,classified.halos.end());
+    EXPECT_EQ(halo->distinct_original_observations,3u);
+    EXPECT_EQ(halo->role,HaloFullABCRole::FreeFullABC);
+}
+
 TEST(HaloMedianReconstructionTest, DuplicateSupportEntriesDoNotIncreaseDistinctObservationCount)
 {
     EXPECT_EQ(DistinctOriginalSupportRows({{7,.25},{7,1.0},{9,2.0}}),

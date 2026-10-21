@@ -72,6 +72,45 @@ struct HaloFullABCReconstructionHalo
     HaloFullABCClassificationRecord classification;
     std::optional<std::array<double,3>> reconstructed_parameters;
 };
+struct HaloFullABCBlockFailureDiagnostic
+{
+    std::size_t component_index{},sweep_index{},block_index{},affected_rows{};
+    std::string component_id,status,reason,local_search_stop_reason,initial_profile_reason,
+        solver_reason,lm_subproblem_status,first_invalid_atom_id,first_invalid_parameter;
+    std::vector<std::string> core_atom_ids;
+    std::size_t local_design_rows{},local_design_columns{};
+    std::optional<std::size_t> local_design_rank,first_invalid_coefficient;
+    std::vector<std::size_t> active_amplitude_indices;
+    std::vector<double> local_column_norms,local_design_singular_values,initial_widths,
+        width_derivative_column_norms,projected_width_singular_values,projected_width_column_norms,proposed_eta_step;
+    std::optional<double> local_design_rank_threshold,condition_indicator,local_response_norm,
+        observation_scale,primal_feasibility,scaled_projected_kkt,width_upper_bound,width_step_inf,
+        width_gradient_inf,lm_actual_decrease,lm_predicted_decrease,lm_ratio,weak_width_step_fraction,
+        projected_width_rank_threshold,local_objective_before,local_objective_after,global_objective_before,
+        global_objective_after,global_replay_delta,local_global_delta_error,local_final_ac_kkt,
+        global_ac_kkt,global_width_gradient_inf_norm,replay_prediction_discrepancy,
+        replay_gradient_discrepancy,replay_kkt_discrepancy;
+    bool initial_profile_valid{},initial_profile_trusted{},solver_valid{},width_bound_active{};
+};
+struct HaloFullABCBlockSummary
+{
+    std::size_t sweep{},block{},affected_rows{};
+    std::string status,reason,local_search_stop_reason;
+    int profile_evaluations{},accepted_updates{};
+    std::optional<double> local_objective_before,local_objective_after,global_objective_before,
+        global_objective_after,global_replay_delta,local_global_delta_error,local_final_ac_kkt;
+};
+struct HaloFullABCComponentSearchDiagnostic
+{
+    std::string component_id,reason,endpoint_failure,trust_failure;
+    bool search_converged{};
+    std::size_t sweep_count{};
+    std::optional<double> objective,global_ac_kkt,global_width_gradient_inf_norm,eta_change_inf,
+        objective_replay_error,cache_replay_error;
+    bool endpoint_verified{},endpoint_qualified{};
+    std::vector<HaloFullABCBlockSummary> blocks;
+    std::vector<JointBlockConditioning> local_conditioning;
+};
 struct HaloFullABCJointDiagnostics
 {
     bool solver_invoked{},solver_qualified{};
@@ -81,6 +120,8 @@ struct HaloFullABCJointDiagnostics
         qualified_first_stage_width_donors{};
     std::optional<double> first_stage_width_p95,width_upper_bound,objective,observation_scale;
     std::optional<std::size_t> estimated_peak_memory_bytes;
+    std::optional<HaloFullABCBlockFailureDiagnostic> first_failing_block;
+    std::vector<HaloFullABCComponentSearchDiagnostic> component_searches;
     JointSolverProvenance solver_provenance;
     std::vector<JointCheck> evidence;
 };
@@ -115,7 +156,8 @@ std::vector<HaloMedianTargetDonor> QualifiedJointTargetDonors(
 HaloFullABCPreclassification BuildHaloFullABCPreclassification(
     const ModelObject &,const JointProblem &,const JointAnalysisResult &);
 HaloFullABCReconstructionResult EstimateHaloFullABCJoint(
-    const ModelObject &,const JointProblem &,const JointAnalysisResult &,std::string_view joint_run_id);
+    const ModelObject &,const JointProblem &,const JointAnalysisResult &,std::string_view joint_run_id,
+    bool collect_solver_diagnostics=false);
 
 // Builds the immutable post-Joint Halo reconstruction snapshot. Only target
 // point evidence from this JointAnalysisResult may enter the donor pool.

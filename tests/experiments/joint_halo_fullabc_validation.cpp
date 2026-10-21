@@ -565,6 +565,216 @@ json::object MethodJson(const MethodResult & result)
     };
 }
 
+json::value FailureBlockJson(const std::optional<detail::HaloFullABCBlockFailureDiagnostic> & failure)
+{
+    if(!failure) return nullptr;
+    json::array core_ids,active_amplitudes,column_norms,design_singulars,widths,width_derivative_norms,
+        projected_width_singulars,projected_width_norms,eta_steps;
+    for(const auto & id:failure->core_atom_ids) core_ids.emplace_back(id);
+    for(const auto index:failure->active_amplitude_indices) active_amplitudes.emplace_back(index);
+    for(const auto value:failure->local_column_norms) column_norms.emplace_back(value);
+    for(const auto value:failure->local_design_singular_values) design_singulars.emplace_back(value);
+    for(const auto value:failure->initial_widths) widths.emplace_back(value);
+    for(const auto value:failure->width_derivative_column_norms) width_derivative_norms.emplace_back(value);
+    for(const auto value:failure->projected_width_singular_values) projected_width_singulars.emplace_back(value);
+    for(const auto value:failure->projected_width_column_norms) projected_width_norms.emplace_back(value);
+    for(const auto value:failure->proposed_eta_step) eta_steps.emplace_back(value);
+    const auto optional_size=[](const std::optional<std::size_t> & value) {
+        return value ? json::value(*value) : json::value(nullptr);
+    };
+    return json::object{
+        {"component_index",failure->component_index},{"component_id",failure->component_id},
+        {"sweep",failure->sweep_index},{"block",failure->block_index},{"status",failure->status},
+        {"reason",failure->reason},{"core_atom_ids",std::move(core_ids)},
+        {"affected_rows",failure->affected_rows},{"local_design_rows",failure->local_design_rows},
+        {"local_design_columns",failure->local_design_columns},{"local_design_rank",optional_size(failure->local_design_rank)},
+        {"local_design_rank_threshold",Number(failure->local_design_rank_threshold)},
+        {"local_design_singular_values",std::move(design_singulars)},
+        {"condition_indicator",Number(failure->condition_indicator)},
+        {"local_column_norms",std::move(column_norms)},
+        {"initial_profile_valid",failure->initial_profile_valid},
+        {"initial_profile_trusted",failure->initial_profile_trusted},
+        {"initial_profile_reason",failure->initial_profile_reason},
+        {"local_search_stop_reason",failure->local_search_stop_reason},
+        {"active_amplitude_indices",std::move(active_amplitudes)},
+        {"first_invalid_coefficient",optional_size(failure->first_invalid_coefficient)},
+        {"first_invalid_atom_id",failure->first_invalid_atom_id},
+        {"first_invalid_parameter",failure->first_invalid_parameter},
+        {"solver_valid",failure->solver_valid},{"solver_reason",failure->solver_reason},
+        {"primal_feasibility",Number(failure->primal_feasibility)},
+        {"scaled_projected_kkt",Number(failure->scaled_projected_kkt)},
+        {"local_response_norm",Number(failure->local_response_norm)},
+        {"observation_scale",Number(failure->observation_scale)},
+        {"initial_widths",std::move(widths)},{"width_upper_bound",Number(failure->width_upper_bound)},
+        {"width_derivative_column_norms",std::move(width_derivative_norms)},
+        {"width_gradient_inf",Number(failure->width_gradient_inf)},
+        {"projected_width_column_norms",std::move(projected_width_norms)},
+        {"projected_width_singular_values",std::move(projected_width_singulars)},
+        {"projected_width_rank_threshold",Number(failure->projected_width_rank_threshold)},
+        {"width_step_inf",Number(failure->width_step_inf)},
+        {"proposed_eta_step",std::move(eta_steps)},
+        {"lm_subproblem_status",failure->lm_subproblem_status},
+        {"lm_actual_decrease",Number(failure->lm_actual_decrease)},
+        {"lm_predicted_decrease",Number(failure->lm_predicted_decrease)},
+        {"lm_ratio",Number(failure->lm_ratio)},
+        {"weak_width_step_fraction",Number(failure->weak_width_step_fraction)},
+        {"width_bound_active",failure->width_bound_active},
+        {"local_objective_before",Number(failure->local_objective_before)},
+        {"local_objective_after",Number(failure->local_objective_after)},
+        {"global_objective_before",Number(failure->global_objective_before)},
+        {"global_objective_after",Number(failure->global_objective_after)},
+        {"global_replay_delta",Number(failure->global_replay_delta)},
+        {"local_global_delta_error",Number(failure->local_global_delta_error)},
+        {"local_final_ac_kkt",Number(failure->local_final_ac_kkt)},
+        {"global_ac_kkt",Number(failure->global_ac_kkt)},
+        {"global_width_gradient_inf_norm",Number(failure->global_width_gradient_inf_norm)},
+        {"replay_prediction_discrepancy",Number(failure->replay_prediction_discrepancy)},
+        {"replay_gradient_discrepancy",Number(failure->replay_gradient_discrepancy)},
+        {"replay_kkt_discrepancy",Number(failure->replay_kkt_discrepancy)}
+    };
+}
+
+json::array ComponentSearchesJson(const std::vector<detail::HaloFullABCComponentSearchDiagnostic> & searches)
+{
+    json::array output;
+    for(const auto & search:searches)
+    {
+        json::array blocks;
+        json::array local_conditioning;
+        for(const auto & block:search.blocks)
+            blocks.emplace_back(json::object{{"sweep",block.sweep},{"block",block.block},
+                {"affected_rows",block.affected_rows},{"status",block.status},{"reason",block.reason},
+                {"local_search_stop_reason",block.local_search_stop_reason},
+                {"profile_evaluations",block.profile_evaluations},{"accepted_updates",block.accepted_updates},
+                {"local_objective_before",Number(block.local_objective_before)},
+                {"local_objective_after",Number(block.local_objective_after)},
+                {"global_objective_before",Number(block.global_objective_before)},
+                {"global_objective_after",Number(block.global_objective_after)},
+                {"global_replay_delta",Number(block.global_replay_delta)},
+                {"local_global_delta_error",Number(block.local_global_delta_error)},
+                {"local_final_ac_kkt",Number(block.local_final_ac_kkt)}});
+        for(const auto & condition:search.local_conditioning)
+            local_conditioning.emplace_back(json::object{{"block_id",condition.block_id},
+                {"status",condition.status},{"reason",condition.reason},
+                {"core_atom_count",condition.core_atom_count},{"affected_row_count",condition.affected_row_count},
+                {"active_amplitude_count",condition.active_amplitude_count},
+                {"free_ac_columns",condition.free_ac_columns},{"free_ac_rank",condition.free_ac_rank ?
+                    json::value(*condition.free_ac_rank) : json::value(nullptr)},
+                {"free_ac_rank_threshold",Number(condition.free_ac_rank_threshold)},
+                {"free_ac_sigma_min",Number(condition.free_ac_sigma_min)},
+                {"free_ac_sigma_max",Number(condition.free_ac_sigma_max)},
+                {"free_ac_condition",Number(condition.free_ac_condition)},
+                {"free_ac_conditioning",condition.free_ac_conditioning},
+                {"projected_width_rank",condition.projected_width_rank ?
+                    json::value(*condition.projected_width_rank) : json::value(nullptr)},
+                {"projected_width_rank_threshold",Number(condition.projected_width_rank_threshold)},
+                {"projected_width_sigma_min",Number(condition.projected_width_sigma_min)},
+                {"projected_width_sigma_max",Number(condition.projected_width_sigma_max)},
+                {"projected_width_condition",Number(condition.projected_width_condition)},
+                {"projected_width_conditioning",condition.projected_width_conditioning},
+                {"local_widths",condition.local_widths},{"projected_width_column_norms",condition.projected_width_column_norms},
+                {"local_ac_projected_kkt",Number(condition.local_ac_projected_kkt)},
+                {"local_projected_width_kkt",Number(condition.local_projected_width_kkt)}});
+        output.emplace_back(json::object{{"component_id",search.component_id},{"reason",search.reason},
+            {"search_converged",search.search_converged},{"sweep_count",search.sweep_count},
+            {"objective",Number(search.objective)},{"global_ac_kkt",Number(search.global_ac_kkt)},
+            {"global_width_gradient_inf_norm",Number(search.global_width_gradient_inf_norm)},
+            {"eta_change_inf",Number(search.eta_change_inf)},
+            {"objective_replay_error",Number(search.objective_replay_error)},
+            {"cache_replay_error",Number(search.cache_replay_error)},
+            {"endpoint_verified",search.endpoint_verified},{"endpoint_qualified",search.endpoint_qualified},
+            {"endpoint_failure",search.endpoint_failure},{"trust_failure",search.trust_failure},
+            {"local_conditioning",std::move(local_conditioning)},{"blocks",std::move(blocks)}});
+    }
+    return output;
+}
+
+json::array HaloObservationGeometryJson(const detail::HaloFullABCReconstructionResult & result,
+    const core::JointProblem & problem,const rg::ModelObject & model)
+{
+    const auto & input=problem.OriginalInput();
+    const auto count=result.halos.size();
+    std::vector<std::size_t> parent(count);
+    std::iota(parent.begin(),parent.end(),0);
+    const auto root=[&](std::size_t index) {
+        while(parent[index]!=index)
+        {
+            parent[index]=parent[parent[index]];
+            index=parent[index];
+        }
+        return index;
+    };
+    std::map<std::size_t,std::vector<std::size_t>> row_users;
+    for(std::size_t halo=0;halo<count;++halo)
+        if(result.halos[halo].classification.role==detail::HaloFullABCRole::FreeFullABC)
+            for(const auto row:result.halos[halo].classification.original_support_rows)
+                row_users[row].push_back(halo);
+    std::map<std::pair<std::size_t,std::size_t>,std::vector<std::size_t>> shared_by_pair;
+    for(const auto & [row,users]:row_users)
+        for(std::size_t left=0;left<users.size();++left)
+            for(std::size_t right=left+1;right<users.size();++right)
+            {
+                const auto a=std::min(users[left],users[right]);
+                const auto b=std::max(users[left],users[right]);
+                shared_by_pair[{a,b}].push_back(row);
+            }
+    for(const auto & [pair,rows]:shared_by_pair)
+    {
+        (void)rows;
+        const auto left=root(pair.first),right=root(pair.second);
+        if(left!=right) parent[std::max(left,right)]=std::min(left,right);
+    }
+    std::map<std::size_t,std::set<std::size_t>> component_rows;
+    std::map<std::size_t,std::vector<std::size_t>> component_halos;
+    for(std::size_t halo=0;halo<count;++halo)
+    {
+        if(result.halos[halo].classification.role!=detail::HaloFullABCRole::FreeFullABC) continue;
+        const auto component=root(halo);
+        component_halos[component].push_back(halo);
+        component_rows[component].insert(result.halos[halo].classification.original_support_rows.begin(),
+            result.halos[halo].classification.original_support_rows.end());
+    }
+
+    json::array output;
+    for(std::size_t halo=0;halo<count;++halo)
+    {
+        const auto & classification=result.halos[halo].classification;
+        const int id=std::stoi(classification.atom_id);
+        const auto * atom=model.FindAtomPtr(id);
+        const auto position=atom ? atom->GetPosition() : Position{};
+        json::array rows,shared_rows,component_ids;
+        if(classification.original_contributor_index)
+        {
+            std::map<std::size_t,double> radial_by_row;
+            for(const auto & support:input.support.at(*classification.original_contributor_index))
+                radial_by_row.emplace(support.row,support.squared_distance);
+            for(const auto & [row,square]:radial_by_row)
+                rows.emplace_back(json::object{{"row",row},{"row_id",input.row_ids.at(row)},
+                    {"squared_radial_distance",square}});
+        }
+        for(const auto & [row,users]:row_users)
+            if(users.size()>1 && std::find(users.begin(),users.end(),halo)!=users.end())
+                shared_rows.emplace_back(json::object{{"row",row},{"row_id",input.row_ids.at(row)}});
+        std::size_t local_effective_observations{};
+        if(classification.role==detail::HaloFullABCRole::FreeFullABC)
+        {
+            const auto component=root(halo);
+            local_effective_observations=component_rows.at(component).size();
+            for(const auto member:component_halos.at(component))
+                component_ids.emplace_back(result.halos[member].classification.atom_id);
+        }
+        output.emplace_back(json::object{{"halo_atom_id",classification.atom_id},
+            {"position",json::array{position[0],position[1],position[2]}},
+            {"distinct_support_rows",classification.distinct_original_observations},
+            {"role",classification.role==detail::HaloFullABCRole::FreeFullABC ? "FreeFullABC" :
+                "PreFixedGlobalMedian"},{"support",std::move(rows)},
+            {"free_component_atom_ids",std::move(component_ids)},
+            {"local_effective_observation_count",local_effective_observations},
+            {"shared_rows",std::move(shared_rows)}});
+    }
+    return output;
+}
+
 void RunPostprocessing(const Synthetic & synthetic, const core::JointProblem & problem,
     const rg::JointAnalysisResult & snapshot, const detail::HaloMedianBuildResult * geometry,
     const detail::HaloFullABCReconstructionResult * fullabc, const std::string & run_id,
@@ -805,7 +1015,10 @@ json::object RunScenario(const Scenario & scenario, std::ofstream & summary_csv,
     const auto geometry = detail::BuildHaloMedianReconstruction(synthetic.model, problem, snapshot, run_id);
     const double geometry_estimation_seconds = std::chrono::duration<double>(Clock::now() - geometry_started).count();
     const auto fullabc_started = Clock::now();
-    const auto fullabc = detail::EstimateHaloFullABCJoint(synthetic.model, problem, snapshot, run_id);
+    const bool capture_solver_diagnostics=scenario.name=="three_observation_free_stress" ||
+        scenario.name=="four_observation_free_stress";
+    const auto fullabc = detail::EstimateHaloFullABCJoint(
+        synthetic.model,problem,snapshot,run_id,capture_solver_diagnostics);
     const double fullabc_estimation_seconds = std::chrono::duration<double>(Clock::now() - fullabc_started).count();
     const auto preclassification = detail::BuildHaloFullABCPreclassification(synthetic.model, problem, snapshot);
     case_json["free_halo_count"] = fullabc.free_halo_count;
@@ -834,6 +1047,12 @@ json::object RunScenario(const Scenario & scenario, std::ofstream & summary_csv,
                 {"value", evidence.value ? json::value(*evidence.value) : json::value(nullptr)},
                 {"threshold", evidence.threshold ? json::value(*evidence.threshold) : json::value(nullptr)}});
     case_json["solver_failure_reasons"] = std::move(solver_failures);
+    if(capture_solver_diagnostics)
+    {
+        case_json["halo_observation_geometry"]=HaloObservationGeometryJson(fullabc,problem,synthetic.model);
+        case_json["fullabc_first_failing_block"]=FailureBlockJson(fullabc.diagnostics.first_failing_block);
+        case_json["fullabc_component_searches"]=ComponentSearchesJson(fullabc.diagnostics.component_searches);
+    }
 
     std::unordered_map<int, std::size_t> original_index;
     const auto & input = problem.OriginalInput();
@@ -1017,8 +1236,11 @@ json::object RunScenario(const Scenario & scenario, std::ofstream & summary_csv,
             record["fullabc"] = json::array{profile[0], profile[1], profile[2]};
         }
         case_json["halos"].as_array().emplace_back(record);
+        double nearest_target_distance=std::numeric_limits<double>::infinity();
+        for(const auto & target:synthetic.target_positions)
+            nearest_target_distance=std::min(nearest_target_distance,Distance(halo.position,target));
         halo_csv << scenario.name << ',' << halo.id << ',' << halo.rows.size() << ',' << halo.truth[0] << ','
-            << halo.truth[1] << ',' << halo.truth[2] << ',' << Distance(halo.position, synthetic.target_positions.front()) << ','
+            << halo.truth[1] << ',' << halo.truth[2] << ',' << nearest_target_distance << ','
             << record.at("geometry").as_array().size() << ',' << record.at("observation_AC").as_array().size() << ','
             << record.at("fullabc").as_array().size() << '\n';
     }
@@ -1053,7 +1275,7 @@ try
     std::ofstream halos(output / "halos.csv");
     if (!summary || !halos) throw std::runtime_error("Cannot create P3 result files.");
     summary << "scenario,method,available,reason,halo_count,fixed_count,free_count,A_RMSE,B_RMSE,C_RMSE,halo_signal_RMSE,peeling_RMSE,tail_ratio_MAE,local_A_RMSE,local_B_RMSE,seconds,process_peak_RSS_bytes\n";
-    halos << "scenario,atom_id,n_h,truth_A,truth_B,truth_C,target_distance,geometry_fields,observation_AC_fields,fullabc_fields\n";
+    halos << "scenario,atom_id,n_h,truth_A,truth_B,truth_C,nearest_target_distance_angstrom,geometry_fields,observation_AC_fields,fullabc_fields\n";
     std::vector<Scenario> scenarios{
         {"separated_6p2_similar_low_noise", 6.2, false, false, 0.003, false},
         {"separated_6p2_similar_high_noise", 6.2, false, false, 0.005, false},
@@ -1088,7 +1310,7 @@ try
         summary.flush(); halos.flush();
     }
     json::object result{
-        {"contract", "fixed-target-observation-driven-halo-fullabc-p3-v1"},
+        {"contract", "fixed-target-observation-driven-halo-fullabc-p3-v2-nearest-target-distance"},
         {"map_grid", json::array{51, 63, 16}}, {"spacing_angstrom", 0.5},
         {"target_count", 20}, {"synthetic_scenarios", std::move(cases)},
         {"process_peak_rss_bytes", PeakRssBytes()},

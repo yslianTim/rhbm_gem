@@ -1,0 +1,7 @@
+scenario,atom_id,n_h,truth_A,truth_B,truth_C,nearest_target_distance_angstrom,geometry_fields,observation_AC_fields,fullabc_fields
+four_observation_free_stress,101,109,1.55,1.12,0.38,3,3,3,0
+four_observation_free_stress,102,191,0.55,0.72,-0.28,3,3,3,0
+four_observation_free_stress,103,4,1,1.1,0.1,4.69042,3,3,0
+four_observation_free_stress,104,2,1,1.1,0.1,4.83632,3,3,3
+four_observation_free_stress,105,1,1,1.1,0.1,4.80833,3,3,3
+four_observation_free_stress,106,0,1,1.1,0.1,4.76865,3,3,3

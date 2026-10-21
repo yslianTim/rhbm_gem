@@ -8,6 +8,7 @@
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 #include "joint_component/Problem.hpp"
 #include "joint_component/WidthCalibration.hpp"
+#include "PostFitPeeling.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -238,29 +239,17 @@ HaloFullABCPreclassification BuildHaloFullABCPreclassification(
         }
     }
 
-    std::unordered_set<int> target_ids;
-    for(const auto target:input.selection_domain->target_indices)
-        target_ids.insert(std::stoi(input.atom_ids.at(target)));
-    std::unordered_map<int,std::size_t> contributor_indices;
-    contributor_indices.reserve(input.atom_ids.size());
-    for(std::size_t index=0;index<input.atom_ids.size();++index)
-        contributor_indices.emplace(std::stoi(input.atom_ids[index]),index);
-    std::vector<const AtomObject *> candidates;
-    for(const auto & atom:model.GetAtomList())
-        if(atom->GetElement()!=Element::HYDROGEN && !target_ids.contains(atom->GetSerialID()))
-            candidates.push_back(atom.get());
-    std::sort(candidates.begin(),candidates.end(),[](const auto * left,const auto * right) {
-        return left->GetSerialID()<right->GetSerialID();
-    });
-    out.halos.reserve(candidates.size());
-    for(const auto * atom:candidates)
+    const auto contributor_universe=BuildJointPeelingContributorUniverse(model,problem,&result);
+    out.halos.reserve(contributor_universe.contributors.size());
+    for(const auto & contributor:contributor_universe.contributors)
     {
+        if(!contributor.reconstruction_eligible || contributor.target) continue;
         HaloFullABCClassificationRecord record;
-        record.atom_id=std::to_string(atom->GetSerialID());
-        if(const auto found=contributor_indices.find(atom->GetSerialID());found!=contributor_indices.end())
+        record.atom_id=std::to_string(contributor.atom_id);
+        if(contributor.contributor_index)
         {
-            record.original_contributor_index=found->second;
-            record.original_support_rows=DistinctOriginalSupportRows(input.support.at(found->second));
+            record.original_contributor_index=contributor.contributor_index;
+            record.original_support_rows=DistinctOriginalSupportRows(input.support.at(*contributor.contributor_index));
             for(const auto row:record.original_support_rows)
             {
                 if(row>=input.row_ids.size())
@@ -286,7 +275,7 @@ HaloFullABCPreclassification BuildHaloFullABCPreclassification(
 
 HaloFullABCReconstructionResult EstimateHaloFullABCJoint(
     const ModelObject & model,const JointProblem & problem,const JointAnalysisResult & result,
-    std::string_view joint_run_id)
+    std::string_view joint_run_id,bool collect_solver_diagnostics)
 {
     HaloFullABCReconstructionResult out;
     out.joint_run_id=std::string(joint_run_id);
@@ -443,6 +432,114 @@ HaloFullABCReconstructionResult EstimateHaloFullABCJoint(
     halo_problem=JointProblemAccess::WithReferenceNormalization(halo_problem,problem);
     joint_component::FixedNeighborSearchPolicy policy;
     policy.eta_upper_bound=calibration.eta_max4;
+    policy.collect_diagnostics=collect_solver_diagnostics;
+    if(collect_solver_diagnostics)
+        policy.search_result_observer=[&out](std::string_view component_id,
+            const joint_component::FixedNeighborSearchResult & search) {
+            HaloFullABCComponentSearchDiagnostic component;
+            component.component_id=std::string(component_id);
+            component.reason=search.reason;
+            component.search_converged=search.search_converged;
+            component.sweep_count=search.sweep_count;
+            if(std::isfinite(search.state.objective)) component.objective=search.state.objective;
+            if(search.final_sweep)
+            {
+                component.global_ac_kkt=search.final_sweep->global_ac_kkt;
+                component.global_width_gradient_inf_norm=search.final_sweep->global_width_gradient_inf_norm;
+                component.eta_change_inf=search.final_sweep->eta_change_inf;
+                component.objective_replay_error=search.final_sweep->objective_replay_error;
+                component.cache_replay_error=search.final_sweep->cache_replay_error;
+            }
+            if(search.certification)
+            {
+                component.endpoint_verified=search.certification->verified();
+                component.endpoint_qualified=search.certification->qualified();
+                component.endpoint_failure=search.certification->assessment.failure;
+                component.trust_failure=search.certification->trust.reason;
+            }
+            else component.endpoint_failure=search.reason;
+            component.local_conditioning=search.local_conditioning;
+            for(const auto & block:search.blocks)
+            {
+                component.blocks.push_back({block.sweep,block.block,block.affected_rows,
+                    block.status,block.reason,block.local_search_stop_reason,block.profile_evaluations,
+                    block.accepted_updates,block.local_objective_before,block.local_objective_after,
+                    block.objective_before,block.objective_after,block.global_replay_delta,
+                    block.local_global_delta_error,block.local_final_ac_kkt});
+                if(out.diagnostics.first_failing_block ||
+                    (!block.failure_diagnostics && block.status!="failed" && block.status!="retry-pending")) continue;
+                HaloFullABCBlockFailureDiagnostic captured;
+                captured.component_index=block.failure_diagnostics ? block.failure_diagnostics->component_index : 0;
+                captured.sweep_index=block.failure_diagnostics ? block.failure_diagnostics->sweep_index : block.sweep;
+                captured.block_index=block.failure_diagnostics ? block.failure_diagnostics->block_index : block.block;
+                captured.affected_rows=block.affected_rows;
+                captured.component_id=block.failure_diagnostics && !block.failure_diagnostics->component_id.empty() ?
+                    block.failure_diagnostics->component_id : std::string(component_id);
+                captured.status=block.status; captured.reason=block.reason;
+                captured.local_objective_before=block.local_objective_before;
+                captured.local_objective_after=block.local_objective_after;
+                captured.global_objective_before=block.objective_before;
+                captured.global_objective_after=block.objective_after;
+                captured.global_replay_delta=block.global_replay_delta;
+                captured.local_global_delta_error=block.local_global_delta_error;
+                captured.local_final_ac_kkt=block.local_final_ac_kkt;
+                const auto sweep_index=captured.sweep_index ? captured.sweep_index-1 : 0;
+                if(sweep_index<search.sweeps.size())
+                {
+                    captured.global_ac_kkt=search.sweeps[sweep_index].global_ac_kkt;
+                    captured.global_width_gradient_inf_norm=search.sweeps[sweep_index].global_width_gradient_inf_norm;
+                }
+                if(const auto * failure=block.failure_diagnostics ? &*block.failure_diagnostics : nullptr)
+                {
+                    captured.core_atom_ids=failure->core_atom_ids;
+                    captured.local_design_rows=static_cast<std::size_t>(std::max<Eigen::Index>(0,failure->local_design_rows));
+                    captured.local_design_columns=static_cast<std::size_t>(std::max<Eigen::Index>(0,failure->local_design_columns));
+                    if(failure->local_design_rank && *failure->local_design_rank>=0)
+                        captured.local_design_rank=static_cast<std::size_t>(*failure->local_design_rank);
+                    if(failure->first_invalid_coefficient && *failure->first_invalid_coefficient>=0)
+                        captured.first_invalid_coefficient=static_cast<std::size_t>(*failure->first_invalid_coefficient);
+                    captured.active_amplitude_indices.assign(failure->active_amplitude_indices.begin(),
+                        failure->active_amplitude_indices.end());
+                    captured.local_column_norms=failure->local_column_norms;
+                    captured.local_design_singular_values=failure->local_design_singular_values;
+                    captured.initial_widths=failure->initial_widths;
+                    captured.width_derivative_column_norms=failure->width_derivative_column_norms;
+                    captured.projected_width_singular_values=failure->projected_width_singular_values;
+                    captured.projected_width_column_norms=failure->projected_width_column_norms;
+                    captured.proposed_eta_step=failure->proposed_eta_step;
+                    captured.local_design_rank_threshold=failure->local_design_rank_threshold;
+                    captured.condition_indicator=failure->condition_indicator;
+                    captured.local_response_norm=failure->local_response_norm;
+                    captured.observation_scale=failure->parent_observation_scale;
+                    captured.primal_feasibility=failure->primal_feasibility;
+                    captured.scaled_projected_kkt=failure->scaled_projected_kkt;
+                    captured.width_upper_bound=failure->width_upper_bound;
+                    captured.width_step_inf=failure->width_step_inf;
+                    captured.width_gradient_inf=failure->width_gradient_inf;
+                    captured.lm_actual_decrease=failure->lm_actual_decrease;
+                    captured.lm_predicted_decrease=failure->lm_predicted_decrease;
+                    captured.lm_ratio=failure->lm_ratio;
+                    captured.weak_width_step_fraction=failure->weak_width_step_fraction;
+                    captured.projected_width_rank_threshold=failure->projected_width_rank_threshold;
+                    captured.initial_profile_valid=failure->initial_profile_valid;
+                    captured.initial_profile_trusted=failure->initial_profile_trusted;
+                    captured.solver_valid=failure->solver_valid;
+                    captured.width_bound_active=failure->width_bound_active;
+                    captured.initial_profile_reason=failure->initial_profile_reason;
+                    captured.local_search_stop_reason=failure->local_search_stop_reason;
+                    captured.solver_reason=failure->solver_reason;
+                    captured.lm_subproblem_status=failure->lm_subproblem_status;
+                    captured.first_invalid_atom_id=failure->first_invalid_atom_id;
+                    captured.first_invalid_parameter=failure->first_invalid_parameter;
+                    captured.replay_prediction_discrepancy=failure->replay_prediction_discrepancy;
+                    captured.replay_gradient_discrepancy=failure->replay_gradient_discrepancy;
+                    captured.replay_kkt_discrepancy=failure->replay_kkt_discrepancy;
+                }
+                out.diagnostics.first_failing_block=std::move(captured);
+                break;
+            }
+            out.diagnostics.component_searches.push_back(std::move(component));
+        };
     auto fit=joint_component::FitFixedNeighborComponents(halo_problem,initial_widths,policy);
     out.diagnostics.solver_status=fit.RuntimeConvergence();
     out.diagnostics.solver_qualified=fit.search_completed &&

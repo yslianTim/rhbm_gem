@@ -378,6 +378,10 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
         original_indices.reserve(input.atom_ids.size());
         for (std::size_t index=0;index<input.atom_ids.size();++index)
             original_indices.emplace(std::stoi(input.atom_ids[index]),index);
+        std::unordered_map<int,const JointPeelingContributor *> frozen_eligibility;
+        frozen_eligibility.reserve(m_contributors.contributors.size());
+        for (const auto & contributor:m_contributors.contributors)
+            frozen_eligibility.emplace(contributor.atom_id,&contributor);
         if (!reconstruction.available || reconstruction.joint_run_id.empty() ||
             reconstruction.joint_run_id!=expected_joint_run_id ||
             (!m_contributors.joint_run_id.empty() && reconstruction.joint_run_id!=m_contributors.joint_run_id) ||
@@ -391,6 +395,7 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
         {
             const int id=std::stoi(halo.classification.atom_id);
             const auto * atom=m_model.FindAtomPtr(id);
+            const auto frozen=frozen_eligibility.find(id);
             const auto contributor=halo.classification.original_contributor_index;
             const auto original_index=original_indices.find(id);
             const std::optional<std::size_t> expected_index=original_index==original_indices.end() ?
@@ -398,7 +403,8 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
             const bool contributor_is_target=contributor && std::binary_search(
                 result->selection_domain->target_indices.begin(),result->selection_domain->target_indices.end(),
                 *contributor);
-            if (!atom || atom->GetElement()==Element::HYDROGEN || contributor_is_target ||
+            if (!atom || frozen==frozen_eligibility.end() || !frozen->second->reconstruction_eligible ||
+                frozen->second->target || contributor_is_target ||
                 contributor!=expected_index ||
                 (contributor && (*contributor>=result->atom_ids.size() || result->atom_ids[*contributor]!=
                     halo.classification.atom_id)) ||

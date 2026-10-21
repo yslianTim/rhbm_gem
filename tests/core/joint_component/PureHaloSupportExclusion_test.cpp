@@ -968,6 +968,8 @@ TEST(PureHaloSupportExclusionTest, ExplicitFullABCHaloProfilesReachReconstructio
     const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
     auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
     data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"reconstruction-only-run");
+    auto contributor_universe=core::detail::BuildJointPeelingContributorUniverse(
+        fixture.model,problem,&snapshot);
     auto preclassification=core::detail::BuildHaloFullABCPreclassification(
         fixture.model,problem,snapshot);
     ASSERT_TRUE(preclassification.available);
@@ -981,12 +983,14 @@ TEST(PureHaloSupportExclusionTest, ExplicitFullABCHaloProfilesReachReconstructio
     reconstruction.diagnostics.solver_status=JointCheckStatus::NotRun;
     for (const auto & classification:preclassification.halos)
         reconstruction.halos.push_back({classification,classification.parameter_profile});
+    fixture.model.FindAtomPtr(2)->SetElement(Element::HYDROGEN);
 
     const SamplingPointList points{{1.6,{1.6,0.0,0.0},true},{1.9,{1.9,0.0,0.0},true}};
     const auto raw=core::detail::BuildLocalPotentialSampleList(fixture.map,points);
     fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),raw);
     const core::detail::JointPostprocessingContext context(
-        fixture.map,fixture.model,problem,&snapshot,nullptr,nullptr,&reconstruction);
+        fixture.map,fixture.model,problem,&snapshot,nullptr,nullptr,
+        std::move(contributor_universe),&reconstruction);
     const auto peelings=context.BuildPostFitPeelingSamples(std::vector<std::size_t>{0});
     ASSERT_EQ(peelings.at(1).samples.size(),points.size());
 
@@ -1012,6 +1016,34 @@ TEST(PureHaloSupportExclusionTest, ExplicitFullABCHaloProfilesReachReconstructio
             fixture.map,fullabc_halo_field,points[sample].position);
         EXPECT_NEAR(*peelings.at(1).samples[sample].response,expected,1e-12);
     }
+}
+
+TEST(PureHaloSupportExclusionTest, PeelingRejectsContributorEligibilityMismatch)
+{
+    auto fixture=ReconstructionOnlyFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
+    data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"eligibility-mismatch-run");
+    auto contributor_universe=core::detail::BuildJointPeelingContributorUniverse(
+        fixture.model,problem,&snapshot);
+    const auto preclassification=core::detail::BuildHaloFullABCPreclassification(
+        fixture.model,problem,snapshot);
+    ASSERT_TRUE(preclassification.available);
+    core::detail::HaloFullABCReconstructionResult reconstruction;
+    reconstruction.available=true;
+    reconstruction.joint_run_id="eligibility-mismatch-run";
+    reconstruction.global_target_median=preclassification.global_target_median;
+    reconstruction.fixed_halo_count=preclassification.fixed_halo_count;
+    reconstruction.free_halo_count=preclassification.free_halo_count;
+    for (const auto & classification:preclassification.halos)
+        reconstruction.halos.push_back({classification,classification.parameter_profile});
+    const auto target=std::find_if(contributor_universe.contributors.begin(),contributor_universe.contributors.end(),
+        [](const auto & contributor){return contributor.atom_id==1;});
+    ASSERT_NE(target,contributor_universe.contributors.end());
+    target->reconstruction_eligible=false;
+
+    EXPECT_THROW(core::detail::JointPostprocessingContext(fixture.map,fixture.model,problem,&snapshot,nullptr,nullptr,
+        std::move(contributor_universe),&reconstruction),std::invalid_argument);
 }
 
 TEST(PureHaloSupportExclusionTest, PeelingIsInvariantToExtraContributorChemicalLabels)

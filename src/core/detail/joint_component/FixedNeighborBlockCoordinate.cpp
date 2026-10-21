@@ -611,7 +611,13 @@ FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolic
     out.active_set_iteration_factor=local_context.linear.active_set_iteration_factor;
     const auto design=Design(domain,eta);
     const auto spectrum=ComputeSpectrum(design,{domain.rows,design.cols(),eta.size()},design.cols(),true);
-    if(spectrum.available) out.local_design_rank=spectrum.rank;
+    if(spectrum.available)
+    {
+        out.local_design_rank=spectrum.rank;
+        out.local_design_rank_threshold=spectrum.threshold;
+        out.local_design_singular_values.assign(spectrum.singular_values.data(),
+            spectrum.singular_values.data()+spectrum.singular_values.size());
+    }
     out.local_design_nonzero_entries=static_cast<std::size_t>(design.nonZeros());
     if(spectrum.available) out.condition_indicator=spectrum.condition;
     out.local_column_norms.reserve(static_cast<std::size_t>(design.cols()));
@@ -624,6 +630,25 @@ FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolic
     out.active_set_releases=certificate.linear_releases;
     out.active_amplitude_indices.clear();
     for(const auto atom:certificate.active_atoms) out.active_amplitude_indices.push_back(2*atom);
+    out.initial_widths.reserve(static_cast<std::size_t>(eta.size()));
+    for(Eigen::Index atom=0;atom<eta.size();++atom) out.initial_widths.push_back(std::exp(eta(atom)));
+    if(context.eta_upper_bound)
+        out.width_upper_bound=std::exp(*context.eta_upper_bound);
+    if(profile.initial.beta.size()==design.cols())
+        for(Eigen::Index column=0;column<profile.initial.beta.size();++column)
+            if(!std::isfinite(profile.initial.beta(column)) ||
+                (column%2==0 && profile.initial.beta(column)<0))
+            {
+                out.first_invalid_coefficient=column;
+                out.first_invalid_coefficient_value=profile.initial.beta(column);
+                const auto atom=column/2;
+                if(atom>=0 && static_cast<std::size_t>(atom)<local_context.atom_ids.size())
+                {
+                    out.first_invalid_atom_id=local_context.atom_ids[static_cast<std::size_t>(atom)];
+                    out.first_invalid_parameter=column%2==0 ? "A" : "C";
+                }
+                break;
+            }
     out.primal_feasibility=0.0;
     for(Eigen::Index column=0;column<profile.initial.beta.size();column+=2)
         *out.primal_feasibility=std::max(*out.primal_feasibility,std::max(0.0,-profile.initial.beta(column)));
@@ -664,6 +689,55 @@ FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolic
                 std::max(*out.maximum_free_c_gradient_scaled,scaled) : scaled;
         }
     }
+    if(policy.collect_diagnostics && profile.initial.beta.size()==design.cols())
+    {
+        const auto initial_state=EvaluateState(domain,effective_response,eta,profile.initial.beta,context);
+        if(initial_state.valid && initial_state.derivative.cols()==eta.size())
+        {
+            out.width_derivative_column_norms.reserve(static_cast<std::size_t>(eta.size()));
+            for(Eigen::Index column=0;column<initial_state.derivative.cols();++column)
+                out.width_derivative_column_norms.push_back(initial_state.derivative.col(column).norm());
+            if(initial_state.gradient.size())
+                out.width_gradient_inf=initial_state.gradient.lpNorm<Eigen::Infinity>();
+            const auto projected_prepared=PrepareProjectedWidthDerivative(initial_state,context.scale,&context,
+                -1,derivative_tile_rows,true);
+            if(projected_prepared.valid)
+            {
+                const auto projected=ReduceProjectedWidthDerivative(projected_prepared);
+                if(projected.valid)
+                {
+                    out.projected_width_column_norms.assign(projected.projected_norms.data(),
+                        projected.projected_norms.data()+projected.projected_norms.size());
+                    const auto width_spectrum=ComputeSpectrum(projected.projected,context.rank,
+                        projected.projected.cols(),true);
+                    if(width_spectrum.available)
+                    {
+                        out.projected_width_rank_threshold=width_spectrum.threshold;
+                        out.projected_width_singular_values.assign(width_spectrum.singular_values.data(),
+                            width_spectrum.singular_values.data()+width_spectrum.singular_values.size());
+                    }
+                }
+            }
+        }
+    }
+    for(auto trial=profile.trials.rbegin();trial!=profile.trials.rend();++trial)
+        if(trial->lm)
+        {
+            out.lm_subproblem_status=trial->lm->subproblem_status;
+            out.lm_actual_decrease=trial->lm->actual_decrease;
+            out.lm_predicted_decrease=trial->lm->predicted_decrease;
+            out.lm_ratio=trial->lm->ratio;
+            out.width_step_inf=trial->lm->step.size() ?
+                trial->lm->step.lpNorm<Eigen::Infinity>() : 0.0;
+            out.proposed_eta_step.assign(trial->lm->step.data(),
+                trial->lm->step.data()+trial->lm->step.size());
+            out.weak_width_step_fraction=trial->weak_width_step_fraction;
+            out.width_bound_active=context.eta_upper_bound && trial->endpoint.eta.size()==eta.size() &&
+                (trial->endpoint.eta.array()>=*context.eta_upper_bound-
+                    64.0*std::numeric_limits<double>::epsilon()*
+                        std::max(1.0,std::abs(*context.eta_upper_bound))).any();
+            break;
+        }
     for(const auto atom:core_atoms)
         if(atom>=0 && static_cast<std::size_t>(atom)<context.atom_ids.size())
             out.core_atom_ids.push_back(context.atom_ids.at(static_cast<std::size_t>(atom)));
@@ -1592,8 +1666,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                         out.certification->assessment.failure;
         }
     }
-    if(policy.assess_local_conditioning && out.search_converged && out.certification &&
-        out.certification->qualified())
+    const bool assess_failed_diagnostic=policy.collect_diagnostics && out.certification.has_value();
+    if(policy.assess_local_conditioning && out.certification &&
+        ((out.search_converged && out.certification->qualified()) || assess_failed_diagnostic))
     {
         out.local_conditioning.reserve(prepared_blocks.size());
         for(const auto & prepared:prepared_blocks)
@@ -1890,6 +1965,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     policy.convergence_criteria=production_policy.convergence_criteria;
     policy.order=production_policy.order;
     policy.collect_telemetry=production_policy.collect_telemetry;
+    policy.collect_diagnostics=production_policy.collect_diagnostics;
     policy.component_index=production_policy.component_index;
     policy.component_id=production_policy.component_id;
     policy.halo_census=production_policy.halo_census;
