@@ -1,7 +1,6 @@
 #include "SimulationBuildInfo.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/joint_component/HaloEligibility.hpp"
 #include "core/detail/joint_component/TargetEvidence.hpp"
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
 #include "core/detail/joint_component/WidthCalibration.hpp"
@@ -291,20 +290,7 @@ JointProblem::JointProblem(JointProblemInput input)
         input.selection_domain->contributor_policy==FixedHaloContributorPolicy)
         throw std::invalid_argument("Fixed Halo estimation is retired.");
     if(input.selection_domain && input.selection_domain->contributor_policy==FullABCHaloContributorPolicy)
-    {
-        const auto & provenance=*input.selection_domain->halo_eligibility;
-        for(const auto & excluded:provenance.excluded_halos)
-            if(std::find(input.atom_ids.begin(),input.atom_ids.end(),excluded.atom_id)!=input.atom_ids.end())
-                throw std::invalid_argument("Excluded halo is present in the retained contributor list.");
-        const auto & targets=input.selection_domain->target_indices;
-        for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
-        {
-            if(std::binary_search(targets.begin(),targets.end(),atom)) continue;
-            auto support=input.support[atom];
-            if(!n::EvaluateFullABCHaloEligibility(support,provenance.minimum_observations).eligible)
-                throw std::invalid_argument("Ineligible halo in a FullABC-pruned joint problem.");
-        }
-    }
+        throw std::invalid_argument("FullABC Halo estimation is retired.");
     if(!std::all_of(input.observations.begin(),input.observations.end(),[](double value){return std::isfinite(value);}))
         throw std::invalid_argument("Nonfinite joint observations.");
     for(const auto & atom:input.support) for(const auto & s:atom)

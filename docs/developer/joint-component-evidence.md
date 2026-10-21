@@ -108,9 +108,10 @@ fits; it is deliberately unbalanced and is not a population success rate or a
 validation of current Pure Exclusion Active-set LM. Source: `develop` commit
 `c84eeb42c0abaac314fce20309114313ada5af40`.
 
-FullABC and Recovery remain opt-in research paths and were not promoted. Two
-different P4 reports used different samples and gates; their results must not
-be pooled:
+FullABC and Recovery were evaluated as opt-in research paths and were not
+promoted; their solver paths have since been removed from production source.
+Two different P4 reports used different samples and gates; their results must
+not be pooled:
 
 | Report | Stated sample and result | Decision and limitation |
 | --- | --- | --- |

@@ -11,7 +11,6 @@
 #include <vector>
 namespace rhbm_gem::core::detail {
 struct HaloMedianBuildResult;
-struct HaloFullABCReconstructionResult;
 
 struct JointPeelingContributor
 {
@@ -125,11 +124,10 @@ class JointPostprocessingContext
 public:
     JointPostprocessingContext(const MapObject &, const ModelObject &, const JointProblem &,
         const JointAnalysisResult *, JointPostprocessingMetrics * = nullptr,
-        const HaloMedianBuildResult * = nullptr,
-        const HaloFullABCReconstructionResult * = nullptr);
+        const HaloMedianBuildResult * = nullptr);
     JointPostprocessingContext(const MapObject &, const ModelObject &, const JointProblem &,
         const JointAnalysisResult *, JointPostprocessingMetrics *, const HaloMedianBuildResult *,
-        JointPeelingContributorUniverse,const HaloFullABCReconstructionResult * = nullptr);
+        JointPeelingContributorUniverse);
 
     std::map<int, PostFitPeelingResult> BuildPostFitPeelingSamples(
         std::optional<std::span<const std::size_t>> outputs = std::nullopt) const;
@@ -143,7 +141,6 @@ private:
     const JointAnalysisResult * m_snapshot;
     JointPostprocessingMetrics * m_metrics;
     const HaloMedianBuildResult * m_halo_medians;
-    const HaloFullABCReconstructionResult * m_halo_fullabc;
     JointPeelingContributorUniverse m_contributors;
     std::unordered_map<std::size_t, std::size_t> m_row_index_by_grid;
     std::unordered_map<std::size_t, std::size_t> m_fitting_row_index_by_grid;

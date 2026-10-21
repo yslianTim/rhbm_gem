@@ -172,7 +172,8 @@ enter the fitting domain.
 Historical Free-Halo FullABC result JSON remains readable under its saved
 schema and parameterization contract. Loading that data does not reinterpret
 the free halo estimates as a FirstStage fixed-halo snapshot or make the retired
-FixedHalo estimator available.
+FixedHalo estimator available, and does not invoke the retired FullABC or
+Recovery solvers.
 
 Each design and Jacobian is column-normalized before its spectrum is summarized,
 so the reported condition numbers are dimensionless within their own matrix.

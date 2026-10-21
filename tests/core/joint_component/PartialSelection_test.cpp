@@ -12,7 +12,6 @@
 #include "support/JointProfileSearchDiagnostic.hpp"
 #include "support/DataObjectTestSupport.hpp"
 #include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/joint_component/HaloEligibility.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/FittingWorkset.hpp"
 #include <map>
@@ -242,6 +241,21 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(missing_provenance)),std::invalid_argument);
     f.model->EditAnalysis().SetJointResult(saved);
 }
+TEST(JointComponentPartialSelectionTest, RetiredFullABCHaloPolicyCannotConstructNewProblem)
+{
+    core::JointProblemInput input;
+    input.observations={0.0};
+    input.support={{{0,0.0}}};
+    input.atom_ids={"1"};
+    input.row_ids={"0"};
+    input.selection_domain.emplace();
+    input.selection_domain->contributor_policy=std::string(rhbm_gem::FullABCHaloContributorPolicy);
+    input.selection_domain->target_indices={0};
+    input.selection_domain->halo_eligibility.emplace();
+
+    EXPECT_THROW(core::JointProblem(std::move(input)),std::invalid_argument);
+}
+
 TEST(JointComponentPartialSelectionTest, HistoricalFixedHaloResultPersistsThroughJsonAndSqlite)
 {
     rhbm_gem::JointAnalysisResult saved;
