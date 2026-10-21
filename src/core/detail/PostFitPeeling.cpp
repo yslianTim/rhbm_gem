@@ -253,7 +253,7 @@ JointPostprocessingContext::JointPostprocessingContext(
             input.atom_ids.size()*(sizeof(std::pair<const int,std::size_t>)+2*sizeof(void *));
 }
 
-std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeelingSamples(
+std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::BuildPostFitPeelingBatch(
     std::optional<std::span<const std::size_t>> outputs) const
 {
     const auto & input = m_problem.OriginalInput();
@@ -502,7 +502,8 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
             if (requested[atom]) own[atom].emplace(support.row, value);
         }
     }
-    std::map<int, PostFitPeelingResult> results;
+    std::vector<std::pair<int, PostFitPeelingResult>> results;
+    results.reserve(static_cast<std::size_t>(std::count(requested.begin(), requested.end(), true)));
     const auto record_sample = [&](const PeelingSampleEstimate & sample, const StencilAudit & audit) {
         if (!m_metrics) return;
         ++m_metrics->raw_peeling_sample_count;
@@ -524,7 +525,7 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
         if (!requested[atom]) continue;
         const auto id = std::stoi(input.atom_ids[atom]);
         const auto view = AtomLocalPotentialView::For(*m_model.FindAtomPtr(id));
-        auto & output = results[id];
+        auto & output = results.emplace_back(id, PostFitPeelingResult{}).second;
         output.source = view.GetStageEstimate(FittingStage::Second).source;
         std::set<int> neighbors;
         for (const auto & raw : view.GetRawSamplingEntriesView())
@@ -631,6 +632,18 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
             m_metrics->estimated_context_lookup_bytes + contributor_workspace + support_workspace + own_charge_workspace +
             m_metrics->estimated_peeling_result_bytes + m_metrics->estimated_reconstruction_workspace_bytes;
     }
+    std::sort(results.begin(), results.end(), [](const auto & left, const auto & right) {
+        return left.first < right.first;
+    });
+    return results;
+}
+
+std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeelingSamples(
+    std::optional<std::span<const std::size_t>> outputs) const
+{
+    std::map<int, PostFitPeelingResult> results;
+    for (auto & [id, peeling] : BuildPostFitPeelingBatch(outputs))
+        results.emplace(id, std::move(peeling));
     return results;
 }
 

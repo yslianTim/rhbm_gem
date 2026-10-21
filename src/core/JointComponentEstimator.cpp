@@ -857,7 +857,7 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
     out.evidence=fit.evidence;
     out.search_completed=fit.search_completed; out.observation_scale=fit.observation_scale;
     out.runtime_convergence=captured_runtime; out.regular_certificate=fit.regular_certificate;
-    out.target_evidence=fit.target_evidence; out.target_runtime_convergence=fit.TargetRuntimeConvergence();
+    out.target_evidence=fit.target_evidence;
     if(pure_exclusion_policy)
         RemapTargetEvidence(out.target_evidence,fit.problem->FittingToOriginalContributors(),original_input.row_ids.size());
     out.target_runtime_convergence=captured_target_runtime;

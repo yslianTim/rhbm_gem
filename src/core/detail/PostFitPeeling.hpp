@@ -129,6 +129,8 @@ public:
         const JointAnalysisResult *, JointPostprocessingMetrics *, const HaloMedianBuildResult *,
         JointPeelingContributorUniverse);
 
+    std::vector<std::pair<int, PostFitPeelingResult>> BuildPostFitPeelingBatch(
+        std::optional<std::span<const std::size_t>> outputs = std::nullopt) const;
     std::map<int, PostFitPeelingResult> BuildPostFitPeelingSamples(
         std::optional<std::span<const std::size_t>> outputs = std::nullopt) const;
     PostJointLocalSamples BuildPostJointLocalSamples(

@@ -313,18 +313,16 @@ void RunJointComponentWorkflow(
         std::chrono::steady_clock::now() - phase_start).count();
     postprocessing_metrics.rss_after_context_bytes = joint_component::CurrentRssBytes();
     phase_start = std::chrono::steady_clock::now();
-    auto peelings = postprocessing.BuildPostFitPeelingSamples(original.selection_domain->target_indices);
-    std::vector<std::pair<int, PostFitPeelingResult>> peeling_updates;
-    peeling_updates.reserve(peelings.size());
-    for (auto & [id, peeling] : peelings)
-        peeling_updates.emplace_back(id, std::move(peeling));
+    auto peeling_updates = postprocessing.BuildPostFitPeelingBatch(original.selection_domain->target_indices);
     model.EditAnalysis().ApplyPostFitPeelingsBatch(std::move(peeling_updates));
+    std::vector<const AtomObject *> joint_targets;
     for (const auto * atom : model.GetSelectedAtoms())
     {
         const auto local = AtomLocalPotentialView::For(*atom);
         const auto & stage = local.GetStageEstimate(FittingStage::Second);
         if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target)
             continue;
+        joint_targets.push_back(atom);
         const auto assessment = local.AssessLocalFittingPeelingRatio(1.0, 2.0);
         ++postprocessing_metrics.tail_target_count;
         postprocessing_metrics.tail_raw_sample_count += assessment.total_samples;
@@ -364,7 +362,7 @@ void RunJointComponentWorkflow(
         std::chrono::steady_clock::now() - phase_start).count();
     postprocessing_metrics.rss_after_peeling_bytes = joint_component::CurrentRssBytes();
     std::vector<std::pair<int, PostJointLocalResult>> local_updates;
-    for (const auto * atom : model.GetSelectedAtoms())
+    for (const auto * atom : joint_targets)
     {
         const auto local = AtomLocalPotentialView::For(*atom);
         const auto & stage = local.GetStageEstimate(FittingStage::Second);
