@@ -731,6 +731,24 @@ TEST(PureHaloSupportExclusionTest, RejectsReconstructionMedianFromDifferentJoint
     EXPECT_THROW(context.BuildPostFitPeelingSamples(std::vector<std::size_t>{0}),std::invalid_argument);
 }
 
+TEST(PureHaloSupportExclusionTest, HaloSnapshotTransferKeepsDonorWorkspaceAlive)
+{
+    auto fixture=ReconstructionOnlyFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    const auto source=QualifiedReconstructionSnapshot(problem,fixture.model);
+    auto build=core::detail::BuildHaloMedianReconstruction(
+        fixture.model,problem,source,"reconstruction-only-run");
+    ASSERT_TRUE(build.snapshot);
+    const auto expected=*build.snapshot;
+    const auto donor_count=build.target_donors.size();
+
+    const auto transferred=build.TakeSnapshot();
+
+    EXPECT_EQ(transferred,expected);
+    EXPECT_FALSE(build.snapshot);
+    EXPECT_EQ(build.target_donors.size(),donor_count);
+}
+
 TEST(PureHaloSupportExclusionTest, PersistsVersionedDualDomainAndMedianProvenance)
 {
     auto fixture=BoundaryFixture();
@@ -802,6 +820,29 @@ TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGeometryLocalHaloSour
     const auto halo=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(2));
     EXPECT_EQ(halo.GetStageEstimate(FittingStage::Second).source.role,FittingRole::Halo);
     EXPECT_FALSE(halo.GetStageEstimate(FittingStage::Second).point);
+
+    EXPECT_GT(metrics.estimated_context_lookup_bytes,0u);
+    EXPECT_GT(metrics.estimated_peeling_result_bytes,0u);
+    EXPECT_GE(metrics.estimated_peak_postprocessing_payload_bytes,metrics.estimated_peeling_result_bytes);
+    RecordProperty("estimated_context_lookup_bytes",
+        static_cast<long long>(metrics.estimated_context_lookup_bytes));
+    RecordProperty("estimated_reconstruction_workspace_bytes",
+        static_cast<long long>(metrics.estimated_reconstruction_workspace_bytes));
+    RecordProperty("estimated_peeling_result_bytes",
+        static_cast<long long>(metrics.estimated_peeling_result_bytes));
+    RecordProperty("estimated_peak_postprocessing_payload_bytes",
+        static_cast<long long>(metrics.estimated_peak_postprocessing_payload_bytes));
+    if (metrics.rss_before_postprocessing_bytes)
+        RecordProperty("rss_before_postprocessing_bytes",
+            static_cast<long long>(*metrics.rss_before_postprocessing_bytes));
+    if (metrics.rss_after_context_bytes)
+        RecordProperty("rss_after_context_bytes",static_cast<long long>(*metrics.rss_after_context_bytes));
+    if (metrics.rss_after_peeling_bytes)
+        RecordProperty("rss_after_peeling_bytes",static_cast<long long>(*metrics.rss_after_peeling_bytes));
+    if (metrics.rss_after_local_bytes)
+        RecordProperty("rss_after_local_bytes",static_cast<long long>(*metrics.rss_after_local_bytes));
+    if (metrics.rss_after_group_bytes)
+        RecordProperty("rss_after_group_bytes",static_cast<long long>(*metrics.rss_after_group_bytes));
 }
 
 TEST(PureHaloSupportExclusionTest, RunsPureWorkflowWithoutHalos)

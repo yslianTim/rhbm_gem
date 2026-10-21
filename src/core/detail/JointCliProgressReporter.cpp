@@ -50,9 +50,6 @@ std::string ComponentDetail(const JointProgressEvent & event)
         << " | atoms=" << event.atom_count << " | rows=" << event.row_count
         << " | evaluations=" << event.profile_evaluations << '/' << event.profile_budget
         << " | accepted_updates=" << event.accepted_updates << '/' << event.update_budget;
-    if (event.accepted_objective) output << " | obj=" << Scientific(*event.accepted_objective);
-    if (event.accepted_gradient_inf_norm)
-        output << " | gradient_inf=" << Scientific(*event.accepted_gradient_inf_norm);
     output << " | stop=" << event.stop_reason
         << " | state_trusted=" << (event.trusted_state ? "yes" : "no");
     return output.str();
@@ -89,9 +86,6 @@ void JointCliProgressReporter::ShowProgress(const JointProgressEvent & event, bo
             << " | local_accepted_updates=" << progress.local_accepted_updates
             << " | profile_evaluations=" << progress.profile_evaluations
             << " | recovery=" << progress.recovery_attempts << '/' << progress.recovery_successes
-            << " | obj=" << Scientific(progress.objective)
-            << " | KKT=" << Scientific(progress.global_ac_kkt)
-            << " | width_grad=" << Scientific(progress.width_gradient_inf_norm)
             << " | max_log_width_step=" << Scientific(progress.maximum_accepted_log_width_step)
             << " | max_B=" << Scientific(progress.maximum_target_width)
             << " | eta_change=" << Scientific(progress.eta_change_inf);

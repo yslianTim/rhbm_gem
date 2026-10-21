@@ -1,11 +1,14 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <thread>
 #include <tuple>
 #include <vector>
 
@@ -22,6 +25,7 @@
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "core/detail/JointCliProgressReporter.hpp"
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/ResourceWork.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 
 namespace {
@@ -232,6 +236,48 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
     EXPECT_FALSE(events[cursor + 1].accepted_gradient_inf_norm);
     EXPECT_GE(events[cursor + 1].elapsed_seconds, 0);
 }
+
+std::size_t CountOccurrences(std::string_view text, std::string_view value)
+{
+    std::size_t count{};
+    std::size_t position{};
+    while ((position = text.find(value, position)) != std::string_view::npos)
+    {
+        ++count;
+        position += value.size();
+    }
+    return count;
+}
+
+joint::JointProgressEvent MakeFixedNeighborEvent(joint::JointProgressPhase phase)
+{
+    joint::JointProgressEvent event;
+    event.phase = phase;
+    event.component_index = 1;
+    event.component_count = 1;
+    event.component_id = "component-A";
+    event.atom_count = 12;
+    event.row_count = 80;
+    event.elapsed_seconds = 12.5;
+    event.fixed_neighbor = joint::JointFixedNeighborProgress{
+        .sweep = 18,
+        .maximum_sweeps = 200,
+        .block_solves = 8,
+        .accepted_blocks = 3,
+        .local_accepted_updates = 5,
+        .profile_evaluations = 22,
+        .unchanged_blocks = 3,
+        .failed_blocks = 2,
+        .recovery_attempts = 1,
+        .recovery_successes = 0,
+        .objective = 1.25,
+        .global_ac_kkt = .003,
+        .width_gradient_inf_norm = .004,
+        .eta_change_inf = .005,
+        .maximum_accepted_log_width_step = .006,
+        .maximum_target_width = .7};
+    return event;
+}
 }
 
 TEST(JointProgressTest, PublicFitWithoutObserverIsSilent)
@@ -352,4 +398,210 @@ TEST(JointProgressTest, QuietWorkflowSuppressesProgressButKeepsFailureWarning)
     EXPECT_EQ(stderr_text,
         "[Warning] [Joint] Qualification failed; preserving diagnostics and skipping downstream processing.\n");
     EXPECT_TRUE(model.GetAnalysisView().GetJointResult());
+}
+
+TEST(JointProgressTest, InfoProgressIsCompactAndThrottlesAcceptedUpdateRefreshes)
+{
+    const auto previous_level = Logger::GetLogLevel();
+    Logger::SetLogLevel(LogLevel::Info);
+    Logger::FinishProgressLine();
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+
+    core::detail::JointCliProgressReporter reporter;
+    auto started = MakeFixedNeighborEvent(joint::JointProgressPhase::ComponentStarted);
+    reporter.OnProgress(started);
+
+    auto search = MakeFixedNeighborEvent(joint::JointProgressPhase::SearchProgress);
+    search.fixed_neighbor->accepted_blocks = 4;
+    reporter.OnProgress(search); // The search phase transition is immediate.
+    search.fixed_neighbor->accepted_blocks = 5;
+    reporter.OnProgress(search); // A changed accepted count alone is throttled.
+    std::this_thread::sleep_for(std::chrono::milliseconds(520));
+    search.fixed_neighbor->accepted_blocks = 6;
+    reporter.OnProgress(search); // Long-running search refreshes after the interval.
+
+    auto certifying = MakeFixedNeighborEvent(joint::JointProgressPhase::CertificationStarted);
+    reporter.OnProgress(certifying); // Phase transitions are immediate.
+
+    auto completed = MakeFixedNeighborEvent(joint::JointProgressPhase::ComponentCompleted);
+    completed.stop_reason = "converged";
+    completed.trusted_state = true;
+    completed.accepted_objective = 1.25;
+    reporter.OnProgress(completed);
+
+    auto failed_assembly = MakeFixedNeighborEvent(joint::JointProgressPhase::AssemblyCompleted);
+    failed_assembly.trusted_state = false;
+    reporter.OnProgress(failed_assembly);
+
+    const auto stdout_text = testing::internal::GetCapturedStdout();
+    const auto stderr_text = testing::internal::GetCapturedStderr();
+    Logger::SetLogLevel(previous_level);
+
+    EXPECT_EQ(CountOccurrences(stdout_text, "\r"), 4u);
+    EXPECT_EQ(CountOccurrences(stdout_text, "obj="), 5u); // Four progress rows and the summary.
+    EXPECT_EQ(CountOccurrences(stdout_text, "KKT="), 4u);
+    EXPECT_EQ(CountOccurrences(stdout_text, "width-grad="), 4u);
+    EXPECT_EQ(CountOccurrences(stdout_text, "accepted="), 4u);
+    EXPECT_EQ(CountOccurrences(stdout_text, "failed="), 4u);
+    EXPECT_NE(stdout_text.find("Component 1/1 completed | state_trusted=yes | stop=converged"),
+        std::string::npos);
+    EXPECT_EQ(stdout_text.back(), '\n');
+    EXPECT_NE(stderr_text.find(
+        "[Warning] [Joint] Global assembly did not produce a trusted state | elapsed=12.5s\n"),
+        std::string::npos);
+    EXPECT_EQ(stdout_text.find("unchanged_blocks"), std::string::npos);
+    EXPECT_EQ(stdout_text.find("local_accepted_updates"), std::string::npos);
+    EXPECT_EQ(stdout_text.find("recovery="), std::string::npos);
+}
+
+TEST(JointProgressTest, DebugProgressRetainsDetailedDiagnostics)
+{
+    const auto previous_level = Logger::GetLogLevel();
+    Logger::SetLogLevel(LogLevel::Debug);
+    Logger::FinishProgressLine();
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+
+    core::detail::JointCliProgressReporter reporter;
+    reporter.OnProgress(MakeFixedNeighborEvent(joint::JointProgressPhase::ComponentStarted));
+    reporter.OnProgress(MakeFixedNeighborEvent(joint::JointProgressPhase::SearchProgress));
+    auto completed = MakeFixedNeighborEvent(joint::JointProgressPhase::ComponentCompleted);
+    completed.stop_reason = "converged";
+    completed.trusted_state = true;
+    completed.accepted_objective = 1.25;
+    reporter.OnProgress(completed);
+
+    const auto stdout_text = testing::internal::GetCapturedStdout();
+    const auto stderr_text = testing::internal::GetCapturedStderr();
+    Logger::SetLogLevel(previous_level);
+
+    EXPECT_TRUE(stderr_text.empty());
+    EXPECT_NE(stdout_text.find("[Debug] [Joint] Progress detail"), std::string::npos);
+    EXPECT_NE(stdout_text.find("unchanged_blocks=3"), std::string::npos);
+    EXPECT_NE(stdout_text.find("local_accepted_updates=5"), std::string::npos);
+    EXPECT_NE(stdout_text.find("profile_evaluations=22"), std::string::npos);
+    EXPECT_NE(stdout_text.find("recovery=1/0"), std::string::npos);
+    EXPECT_NE(stdout_text.find("max_log_width_step=6.000e-03"), std::string::npos);
+    EXPECT_NE(stdout_text.find("max_B=7.000e-01"), std::string::npos);
+    EXPECT_NE(stdout_text.find("eta_change=5.000e-03"), std::string::npos);
+    EXPECT_NE(stdout_text.find("Component detail"), std::string::npos);
+    EXPECT_EQ(CountOccurrences(stdout_text, "obj="), 3u);
+    EXPECT_EQ(CountOccurrences(stdout_text, "KKT="), 2u);
+    EXPECT_EQ(CountOccurrences(stdout_text, "width-grad="), 2u);
+    EXPECT_EQ(stdout_text.find("width_grad="), std::string::npos);
+}
+
+TEST(JointProgressTest, MemoryPreflightLoggingPreservesWarningsAndDebugBreakdown)
+{
+    core::joint_component::MemoryEstimate estimate;
+    estimate.stage = core::joint_component::MemoryStage::ProblemConstruction;
+    estimate.status = core::joint_component::MemoryStatus::Pass;
+    estimate.budget_bytes = 1000;
+    estimate.estimated_peak_bytes = 900;
+    estimate.shape.component_atoms = 12;
+
+    const auto previous_level = Logger::GetLogLevel();
+    Logger::SetLogLevel(LogLevel::Info);
+    Logger::FinishProgressLine();
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    core::joint_component::LogMemoryEstimate(estimate);
+    const auto info_text = testing::internal::GetCapturedStdout();
+    const auto info_error = testing::internal::GetCapturedStderr();
+
+    Logger::SetLogLevel(LogLevel::Debug);
+    Logger::FinishProgressLine();
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    core::joint_component::LogMemoryEstimate(estimate);
+    const auto debug_text = testing::internal::GetCapturedStdout();
+    const auto debug_error = testing::internal::GetCapturedStderr();
+
+    estimate.status = core::joint_component::MemoryStatus::Reject;
+    estimate.reason = "resource-limit:test";
+    Logger::SetLogLevel(LogLevel::Info);
+    Logger::FinishProgressLine();
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    core::joint_component::LogMemoryEstimate(estimate);
+    const auto warning_text = testing::internal::GetCapturedStdout();
+    const auto warning_error = testing::internal::GetCapturedStderr();
+    Logger::SetLogLevel(previous_level);
+
+    EXPECT_TRUE(info_error.empty());
+    EXPECT_NE(info_text.find("[Joint][Memory] problem-construction"), std::string::npos);
+    EXPECT_EQ(info_text.find("component_atoms="), std::string::npos);
+    EXPECT_NE(debug_text.find("component_atoms=12"), std::string::npos);
+    EXPECT_NE(debug_text.find("estimated_peak="), std::string::npos);
+    EXPECT_TRUE(debug_error.empty());
+    EXPECT_TRUE(warning_text.empty());
+    EXPECT_NE(warning_error.find("[Warning] [Joint][Memory]"), std::string::npos);
+    EXPECT_NE(warning_error.find("resource-limit:test"), std::string::npos);
+    EXPECT_NE(warning_error.find("component_atoms=12"), std::string::npos);
+}
+
+TEST(JointProgressTest, ReportingDoesNotChangeNumericsOrObserverCadence)
+{
+    const core::JointProblem problem(MakeInput());
+    const std::vector<double> initial{.55, .55};
+    const auto previous_level = Logger::GetLogLevel();
+    const auto run = [&](LogLevel level, bool report) {
+        Logger::SetLogLevel(level);
+        Logger::FinishProgressLine();
+        testing::internal::CaptureStdout();
+        testing::internal::CaptureStderr();
+
+        core::detail::JointCliProgressReporter reporter;
+        std::vector<joint::JointProgressEvent> events;
+        const auto observer = [&](const auto & event) {
+            events.push_back(event);
+            if (report) reporter.OnProgress(event);
+        };
+        const auto fit = joint::FitFixedNeighborComponents(problem, initial, {}, observer);
+        const auto stdout_text = testing::internal::GetCapturedStdout();
+        const auto stderr_text = testing::internal::GetCapturedStderr();
+        return std::tuple{fit, std::move(events), stdout_text, stderr_text};
+    };
+
+    auto [baseline, baseline_events, baseline_stdout, baseline_stderr] = run(LogLevel::Info, false);
+    auto [info_fit, info_events, info_stdout, info_stderr] = run(LogLevel::Info, true);
+    auto [debug_fit, debug_events, debug_stdout, debug_stderr] = run(LogLevel::Debug, true);
+    Logger::SetLogLevel(previous_level);
+
+    EXPECT_TRUE(baseline_stdout.empty());
+    EXPECT_TRUE(baseline_stderr.empty());
+    ASSERT_TRUE(baseline.assembled_state);
+    ASSERT_TRUE(info_fit.assembled_state);
+    ASSERT_TRUE(debug_fit.assembled_state);
+    ExpectSameFitNumerics(baseline, info_fit);
+    ExpectSameFitNumerics(baseline, debug_fit);
+    EXPECT_TRUE(info_stderr.empty());
+    EXPECT_TRUE(debug_stderr.empty());
+
+    ASSERT_EQ(baseline_events.size(), info_events.size());
+    ASSERT_EQ(baseline_events.size(), debug_events.size());
+    for (std::size_t i = 0; i < baseline_events.size(); ++i)
+    {
+        const auto & baseline_event = baseline_events[i];
+        const auto & info_event = info_events[i];
+        const auto & debug_event = debug_events[i];
+        EXPECT_EQ(baseline_event.phase, info_event.phase);
+        EXPECT_EQ(baseline_event.phase, debug_event.phase);
+        EXPECT_EQ(baseline_event.component_index, info_event.component_index);
+        EXPECT_EQ(baseline_event.component_index, debug_event.component_index);
+        EXPECT_EQ(baseline_event.profile_evaluations, info_event.profile_evaluations);
+        EXPECT_EQ(baseline_event.profile_evaluations, debug_event.profile_evaluations);
+        EXPECT_EQ(baseline_event.accepted_updates, info_event.accepted_updates);
+        EXPECT_EQ(baseline_event.accepted_updates, debug_event.accepted_updates);
+        ASSERT_EQ(baseline_event.fixed_neighbor.has_value(), info_event.fixed_neighbor.has_value());
+        ASSERT_EQ(baseline_event.fixed_neighbor.has_value(), debug_event.fixed_neighbor.has_value());
+        if (baseline_event.fixed_neighbor)
+        {
+            EXPECT_EQ(baseline_event.fixed_neighbor->sweep, info_event.fixed_neighbor->sweep);
+            EXPECT_EQ(baseline_event.fixed_neighbor->sweep, debug_event.fixed_neighbor->sweep);
+            EXPECT_DOUBLE_EQ(baseline_event.fixed_neighbor->objective, info_event.fixed_neighbor->objective);
+            EXPECT_DOUBLE_EQ(baseline_event.fixed_neighbor->objective, debug_event.fixed_neighbor->objective);
+        }
+    }
 }

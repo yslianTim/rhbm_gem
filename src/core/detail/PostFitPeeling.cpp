@@ -254,8 +254,7 @@ JointPostprocessingContext::JointPostprocessingContext(
         m_metrics->estimated_context_lookup_bytes = EstimateHashStorageBytes(m_row_index_by_grid) +
             EstimateHashStorageBytes(m_fitting_row_index_by_grid) +
             EstimateHashStorageBytes(m_contributor_index_by_id) +
-            m_contributors.contributors.size()*sizeof(JointPeelingContributor) +
-            input.atom_ids.size()*(sizeof(std::pair<const int,std::size_t>)+2*sizeof(void *));
+            m_contributors.contributors.size()*sizeof(JointPeelingContributor);
 }
 
 std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::BuildPostFitPeelingBatch(

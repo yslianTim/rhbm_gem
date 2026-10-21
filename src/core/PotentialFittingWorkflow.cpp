@@ -403,6 +403,8 @@ void RunJointComponentWorkflow(
         local_updates.emplace_back(atom->GetSerialID(), std::move(result));
     }
     model.EditAnalysis().ApplyPostJointLocalResultsBatch(std::move(local_updates));
+    postprocessing_metrics.estimated_peak_postprocessing_payload_bytes +=
+        joint_targets.capacity() * sizeof(const AtomObject *);
     postprocessing_metrics.rss_after_local_bytes = joint_component::CurrentRssBytes();
     if (!options.quiet_mode) LogJointDebug(BuildSecondStageSpotSummary(model));
     RunJointGroupPotentialFitting(model, options, &postprocessing_metrics);

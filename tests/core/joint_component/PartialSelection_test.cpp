@@ -655,6 +655,23 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
     const auto peelings = context.BuildPostFitPeelingSamples(
         problem.Input().selection_domain->target_indices);
     ASSERT_EQ(peelings.size(), 2u);
+    const auto peeling_batch = context.BuildPostFitPeelingBatch(
+        problem.Input().selection_domain->target_indices);
+    ASSERT_EQ(peeling_batch.size(), peelings.size());
+    auto map_entry = peelings.begin();
+    for (const auto & [id, batch_peeling] : peeling_batch)
+    {
+        ASSERT_NE(map_entry, peelings.end());
+        EXPECT_EQ(id, map_entry->first);
+        ASSERT_EQ(batch_peeling.samples.size(), map_entry->second.samples.size());
+        for (std::size_t sample = 0; sample < batch_peeling.samples.size(); ++sample)
+        {
+            EXPECT_EQ(batch_peeling.samples[sample].response, map_entry->second.samples[sample].response);
+            EXPECT_EQ(batch_peeling.samples[sample].reason, map_entry->second.samples[sample].reason);
+        }
+        ++map_entry;
+    }
+    EXPECT_EQ(map_entry, peelings.end());
     EXPECT_EQ(metrics.snapshot_identity_validation_count, 1u);
     EXPECT_EQ(metrics.full_row_identity_scan_count, 1u);
     EXPECT_EQ(metrics.observation_row_mapping_builds, 1u);
