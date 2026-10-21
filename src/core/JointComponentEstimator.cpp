@@ -635,19 +635,6 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
     const JointProblem & problem,const JointInitialization & initialization,
     const joint_component::JointProgressObserver & observer)
 {
-    return detail::FitJointComponentsInitializedWithProgress(
-        problem,initialization,observer,true);
-}
-JointFitResult detail::FitJointComponentsInitializedBoundedWithProgress(
-    const JointProblem & problem,const JointInitialization & initialization,
-    const joint_component::JointProgressObserver & observer)
-{
-    return detail::FitJointComponentsInitializedWithProgress(problem,initialization,observer,true);
-}
-JointFitResult detail::FitJointComponentsInitializedWithProgress(
-    const JointProblem & problem,const JointInitialization & initialization,
-    const joint_component::JointProgressObserver & observer,bool use_bounded_candidate)
-{
     const auto & input=problem.Input();
     const auto invalid=[&](std::string reason) {
         JointFitResult out; out.problem=problem; out.initialization=initialization;
@@ -668,43 +655,34 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
         if(initialization.atoms[atom].id!=input.atom_ids[atom] || !initialization.atoms[atom].target)
             return invalid("joint-initialization-unavailable:target-mapping-mismatch");
 
-    joint_component::WidthBoundCalibration calibration;
-    joint_component::BoundedInitialization bounded;
-    if(use_bounded_candidate)
+    const auto calibration=joint_component::CalibrateGlobalWidth(initialization,"joint-target-widths");
+    const auto bounded=joint_component::MakeBoundedInitialization(initialization,calibration,
+        joint_component::GlobalWidthBoundMultiplier::FourP95);
+    if(!bounded.available)
     {
-        calibration=joint_component::CalibrateGlobalWidth(initialization,"joint-target-widths");
-        bounded=joint_component::MakeBoundedInitialization(initialization,calibration,
-            joint_component::GlobalWidthBoundMultiplier::FourP95);
-        if(!bounded.available)
-        {
-            JointFitResult out; out.problem=problem; out.initialization=initialization;
-            out.observation_scale=problem.ObservationScale();
-            out.available_row_mask.assign(input.observations.size(),false);
-            out.evidence.push_back({"global-width-calibration",JointCheckStatus::Unavailable,
-                JointEvidenceScope::AssembledGlobal,static_cast<double>(calibration.qualified_donor_count),
-                static_cast<double>(calibration.target_count),"calibration-unavailable:"+bounded.reason});
-            return out;
-        }
+        JointFitResult out; out.problem=problem; out.initialization=initialization;
+        out.observation_scale=problem.ObservationScale();
+        out.available_row_mask.assign(input.observations.size(),false);
+        out.evidence.push_back({"global-width-calibration",JointCheckStatus::Unavailable,
+            JointEvidenceScope::AssembledGlobal,static_cast<double>(calibration.qualified_donor_count),
+            static_cast<double>(calibration.target_count),"calibration-unavailable:"+bounded.reason});
+        return out;
     }
-    else {bounded.available=true; bounded.widths=initialization.b;}
     joint_component::FixedNeighborSearchPolicy solver_policy;
-    if(use_bounded_candidate) solver_policy.eta_upper_bound=calibration.eta_max4;
+    solver_policy.eta_upper_bound=calibration.eta_max4;
     auto out=n::FitFixedNeighborComponents(problem,bounded.widths,solver_policy,observer);
     out.initialization=initialization;
-    if(use_bounded_candidate)
-    {
-        out.evidence.push_back({"global-width-calibration",JointCheckStatus::Passed,
-            JointEvidenceScope::AssembledGlobal,calibration.p95,bounded.bmax,
-            "global-first-stage-p95-k4; qualified-donors="+
-                std::to_string(calibration.qualified_donor_count)+"/"+std::to_string(calibration.target_count)});
-        out.evidence.push_back({"qualified-first-stage-donor-coverage",JointCheckStatus::Passed,
-            JointEvidenceScope::AssembledGlobal,calibration.qualified_donor_coverage,0.95,
-            "target-only-qualified-first-stage-widths"});
-        out.evidence.push_back({"bounded-initialization-projection",JointCheckStatus::Passed,
-            JointEvidenceScope::AssembledGlobal,static_cast<double>(bounded.projection_count),{},
-            "projected-target-widths="+std::to_string(bounded.projection_count)+
-                "; maximum-projection-angstroms="+std::to_string(bounded.maximum_projection_magnitude)});
-    }
+    out.evidence.push_back({"global-width-calibration",JointCheckStatus::Passed,
+        JointEvidenceScope::AssembledGlobal,calibration.p95,bounded.bmax,
+        "global-first-stage-p95-k4; qualified-donors="+
+            std::to_string(calibration.qualified_donor_count)+"/"+std::to_string(calibration.target_count)});
+    out.evidence.push_back({"qualified-first-stage-donor-coverage",JointCheckStatus::Passed,
+        JointEvidenceScope::AssembledGlobal,calibration.qualified_donor_coverage,0.95,
+        "target-only-qualified-first-stage-widths"});
+    out.evidence.push_back({"bounded-initialization-projection",JointCheckStatus::Passed,
+        JointEvidenceScope::AssembledGlobal,static_cast<double>(bounded.projection_count),{},
+        "projected-target-widths="+std::to_string(bounded.projection_count)+
+            "; maximum-projection-angstroms="+std::to_string(bounded.maximum_projection_magnitude)});
     return out;
 }
 JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,const std::vector<double> & initial_b,

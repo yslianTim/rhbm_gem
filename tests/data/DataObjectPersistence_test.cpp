@@ -1424,20 +1424,22 @@ TEST(DataObjectPersistenceTest, JointSelectionMetadataValidationAndCsvRoles)
 #include "data/detail/ModelAnalysisData.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 namespace {
-void FitPersistenceFixtureWithInternalUnboundedOracle(rg::core::JointFitResult & fit)
+void FitPersistenceFixtureWithLowLevelUnboundedOracle(rg::core::JointFitResult & fit)
 {
     if (!fit.problem) throw std::runtime_error("Persistence test hook lacks a Joint problem snapshot.");
-    fit=rg::core::detail::FitJointComponentsInitializedWithProgress(
-        *fit.problem,fit.initialization,{},false);
+    const auto problem=*fit.problem;
+    auto initialization=fit.initialization;
+    fit=rg::core::FitJointComponents(problem,initialization.b);
+    fit.initialization=std::move(initialization);
 }
 
-struct ScopedPersistenceUnboundedOracle
+struct ScopedPersistenceLowLevelUnboundedOracle
 {
-    ScopedPersistenceUnboundedOracle()
+    ScopedPersistenceLowLevelUnboundedOracle()
     {
-        rg::core::detail::JointWorkflowFitHookForTesting()=&FitPersistenceFixtureWithInternalUnboundedOracle;
+        rg::core::detail::JointWorkflowFitHookForTesting()=&FitPersistenceFixtureWithLowLevelUnboundedOracle;
     }
-    ~ScopedPersistenceUnboundedOracle()
+    ~ScopedPersistenceLowLevelUnboundedOracle()
     {
         rg::core::detail::JointWorkflowFitHookForTesting()=nullptr;
     }
@@ -1449,7 +1451,7 @@ TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesSourcesGeometryAnd
     const command_test::ScopedTempDir dir{"joint_neutral_roundtrip"};
     auto f=joint_partial_test::Make("partial");
     rg::core::FitOptions options; options.estimator=rg::core::PotentialEstimator::JOINT_COMPONENTS; options.quiet_mode=true;
-    ScopedPersistenceUnboundedOracle unbounded_test_solver;
+    ScopedPersistenceLowLevelUnboundedOracle unbounded_test_solver;
     rg::core::RunPotentialFittingWorkflow(*f.map,*f.model,options);
     rg::DataRepository repository(dir.path()/"result.sqlite");
     repository.SaveModel(*f.model,"joint");

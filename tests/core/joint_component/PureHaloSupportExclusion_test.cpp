@@ -76,20 +76,22 @@ JointInitialization TargetInitialization()
     return initialization;
 }
 
-void FitWithInternalUnboundedOracle(JointFitResult & fit)
+void FitWithLowLevelUnboundedOracle(JointFitResult & fit)
 {
     if (!fit.problem) throw std::runtime_error("Joint test hook lacks a problem snapshot.");
-    fit=core::detail::FitJointComponentsInitializedWithProgress(
-        *fit.problem,fit.initialization,{},false);
+    const auto problem=*fit.problem;
+    auto initialization=fit.initialization;
+    fit=core::FitJointComponents(problem,initialization.b);
+    fit.initialization=std::move(initialization);
 }
 
-struct ScopedInternalUnboundedOracle
+struct ScopedLowLevelUnboundedOracle
 {
-    ScopedInternalUnboundedOracle()
+    ScopedLowLevelUnboundedOracle()
     {
-        core::detail::JointWorkflowFitHookForTesting()=&FitWithInternalUnboundedOracle;
+        core::detail::JointWorkflowFitHookForTesting()=&FitWithLowLevelUnboundedOracle;
     }
-    ~ScopedInternalUnboundedOracle()
+    ~ScopedLowLevelUnboundedOracle()
     {
         core::detail::JointWorkflowFitHookForTesting()=nullptr;
     }
@@ -792,7 +794,7 @@ TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGeometryLocalHaloSour
     options.quiet_mode=true;
     options.thread_size=1;
     core::detail::JointPostprocessingMetrics metrics;
-    ScopedInternalUnboundedOracle unbounded_test_solver;
+    ScopedLowLevelUnboundedOracle unbounded_test_solver;
     ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
         fixture.map,fixture.model,options,&metrics));
     const auto result=fixture.model.GetAnalysisView().GetJointResult();

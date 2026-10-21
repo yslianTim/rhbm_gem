@@ -78,9 +78,11 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult &, JointAnal
 // Production target-only problem. Halo support is used only to exclude fitting
 // rows; reconstruction keeps the original-domain input in OriginalInput().
 JointProblem BuildPureHaloSupportExclusionProblem(const MapObject &,const ModelObject &);
-// Fits the variables represented by the problem, starting from initial widths.
+// Low-level fit from caller-provided width seeds. This does not run FirstStage
+// width calibration or apply the production width bound.
 JointFitResult FitJointComponents(const JointProblem &,const std::vector<double> & initial_b);
-// Validates target FirstStage initialization before fitting.
+// Validates target FirstStage initialization, calibrates the global width bound,
+// and runs the bounded production fit.
 JointFitResult FitJointComponentsInitialized(const JointProblem &,const JointInitialization &);
 // Builds the Production Pure Exclusion problem, performs FirstStage
 // initialization, and then fits targets only. Inspect initialization validity
