@@ -239,7 +239,7 @@ parameters. This evidence makes no global identifiability claim.
 
 `ResourceWork` preserves preflights for problem construction, structural
 construction, FixedNeighbor preparation, global streaming evaluation, endpoint
-verification, reference solve, local conditioning, and parameter stability.
+verification, local conditioning, and parameter stability.
 The planner uses checked byte arithmetic, actual support and affected-row
 counts, the largest block, resident bytes, and a 3,200,000,000-byte estimated
 peak budget below the 4,000,000,000-byte hard limit. These are allocation

@@ -2,9 +2,9 @@
 
 `ResourceWork` preflights Joint problem construction, structural construction,
 FixedNeighbor preparation, global streaming evaluation, endpoint verification,
-reference solves, local conditioning, and parameter stability. It uses checked
-arithmetic and accounts for resident bytes, support entries, affected rows,
-block dimensions, and the largest local workspace.
+local conditioning, and parameter stability. It uses checked arithmetic and
+accounts for resident bytes, support entries, affected rows, block dimensions,
+and the largest local workspace.
 
 The estimated peak budget is 3.2 GB and the hard estimate limit is 4.0 GB.
 These are planner limits, not measured RSS guarantees. Construction and

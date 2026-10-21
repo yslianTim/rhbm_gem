@@ -709,7 +709,7 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
     EXPECT_EQ(old_current_decoded.metadata.solver->fixed_neighbor_local_search,"legacy-compact");
 }
 
-TEST(DataObjectPersistenceTest, ReferenceSolverProvenanceRemainsReadableAsHistoricalV3)
+TEST(DataObjectPersistenceTest, HistoricalV3SolverProvenanceRemainsReadable)
 {
     namespace io=rg::joint_result_io;
     auto fixed=SavedJointExample();
@@ -718,13 +718,42 @@ TEST(DataObjectPersistenceTest, ReferenceSolverProvenanceRemainsReadableAsHistor
     provenance.sparse_backend="EIGEN";
     provenance.fixed_neighbor_policy_version=rg::FixedNeighborReferencePolicyContractVersion;
     provenance.fixed_neighbor_maximum_sweeps=200;
-    provenance.fixed_neighbor_order="forward";
+    provenance.fixed_neighbor_order="reverse";
     provenance.fixed_neighbor_local_search="profile-lm";
     fixed.metadata.solver=provenance;
     const auto decoded=io::Decode(io::Encode(fixed));
     ASSERT_TRUE(decoded.metadata.solver);
     EXPECT_EQ(decoded.metadata.solver->contract_version,rg::JointSolverProvenanceReferenceContractVersion);
     EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_policy_version,rg::FixedNeighborReferencePolicyContractVersion);
+    EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_order,"reverse");
+}
+
+TEST(DataObjectPersistenceTest, HistoricalFullABCHaloPolicyRemainsReadable)
+{
+    namespace io=rg::joint_result_io;
+    auto record=SavedJointExample();
+    record.selection_domain->contributor_policy=std::string(rg::FullABCHaloContributorPolicy);
+    record.selection_domain->halo_eligibility=rg::JointHaloEligibilityProvenance{};
+    record.selection_domain->halo_eligibility->candidate_halos=1;
+    record.selection_domain->halo_eligibility->retained_halos=1;
+    auto historical=boost::json::parse(io::Encode(record)).as_object();
+    historical["schema_version"]=11;
+    historical["ranks"]=historical.at("legacy_global_rank_evidence");
+    historical.erase("legacy_global_rank_evidence");
+    for(auto & component:historical.at("components").as_array())
+    {
+        auto & saved=component.as_object();
+        saved["ranks"]=saved.at("legacy_global_rank_evidence");
+        saved.erase("legacy_global_rank_evidence");
+    }
+
+    const auto decoded=io::Decode(boost::json::serialize(historical));
+    ASSERT_TRUE(decoded.selection_domain);
+    EXPECT_EQ(decoded.selection_domain->contributor_policy,rg::FullABCHaloContributorPolicy);
+    ASSERT_TRUE(decoded.selection_domain->halo_eligibility);
+    EXPECT_EQ(decoded.selection_domain->halo_eligibility->candidate_halos,1u);
+    EXPECT_EQ(decoded.selection_domain->halo_eligibility->retained_halos,1u);
+    EXPECT_EQ(decoded.parameterization_contract,"full-abc-v1");
 }
 
 TEST(DataObjectPersistenceTest, HistoricalV2SolverProvenanceRemainsReadable)
