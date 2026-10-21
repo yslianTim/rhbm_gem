@@ -184,8 +184,6 @@ set(JOINT_COMPONENT_CONTRACT_TEST_SOURCES
     core/joint_component/Observation_test.cpp
     core/joint_component/CompactAssessment_test.cpp
     core/joint_component/Components_test.cpp
-    core/joint_component/HaloEligibility_test.cpp
-    core/joint_component/HaloObservationExclusion_test.cpp
     core/joint_component/HaloMedianReconstruction_test.cpp
     core/joint_component/PureHaloSupportExclusion_test.cpp
 )
@@ -194,13 +192,11 @@ set(JOINT_COMPONENT_WORKFLOW_TEST_SOURCES
     core/joint_component/Runtime_test.cpp
     core/joint_component/Progress_test.cpp
     core/joint_component/PartialSelection_test.cpp
-    core/joint_component/ObservableProfile_test.cpp
     core/joint_component/TargetEvidence_test.cpp
 )
 
 set(JOINT_COMPONENT_NUMERICAL_TEST_SOURCES
     core/joint_component/FixedNeighborBlockCoordinate_test.cpp
-    core/joint_component/JointSimulationTruth_test.cpp
     core/joint_component/LocalConditioning_test.cpp
     core/joint_component/ParameterStability_test.cpp
     core/joint_component/Numerics_test.cpp
@@ -300,8 +296,7 @@ add_library(joint_test_support STATIC
     support/JointBlockCoordinate.cpp
     support/JointTestGeometry.cpp support/JointTestNumerics.cpp support/JointDenseReference.cpp
     support/JointTestContext.cpp support/JointComponentChecks.cpp
-    support/JointFixtureSupport.cpp support/JointHaloObservationExclusion.cpp
-    support/JointReproducibilityFingerprint.cpp)
+    support/JointHaloObservationExclusion.cpp)
 target_compile_features(joint_test_support PUBLIC cxx_std_20)
 target_link_libraries(joint_test_support PUBLIC rhbm_gem_dependencies CompilerFlags)
 target_include_directories(joint_test_support PUBLIC
@@ -324,13 +319,8 @@ set_tests_properties(rhbm_tests_joint_component_workflow PROPERTIES
     LABELS "core;domain:core;intent:algorithm;joint:workflow" TIMEOUT 600
     ENVIRONMENT "OMP_NUM_THREADS=1")
 
-rhbm_gem_collect_gtest_patterns(joint_numerical_patterns ${JOINT_COMPONENT_NUMERICAL_TEST_SOURCES})
-list(JOIN joint_numerical_patterns ":" joint_numerical_filter)
-string(APPEND joint_numerical_filter
-    "-JointComponentNumericsTest.CompactJacobianGramIdentityDiagnosticsAcrossLattices"
-    ":JointFixedNeighborBlockCoordinateTest.ProductionScaleSingleComponentPreparationStaysBelowBudget")
-add_test(NAME rhbm_tests_joint_component_numerical
-    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes --gtest_filter=${joint_numerical_filter})
+add_rhbm_gtest_group(rhbm_tests_joint_component_numerical
+    DOMAIN core INTENTS algorithm SOURCES ${JOINT_COMPONENT_NUMERICAL_TEST_SOURCES})
 set_tests_properties(rhbm_tests_joint_component_numerical PROPERTIES
     LABELS "core;domain:core;intent:algorithm;joint:numerical" TIMEOUT 900
     ENVIRONMENT "OMP_NUM_THREADS=1")

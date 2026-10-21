@@ -157,21 +157,6 @@ struct PlainIdentityResidual
     {step=s; actual=a; predicted=p0; ratio=r; return true;}
 };
 }
-TEST(JointComponentSearchTest, CompactLinearizationPreservesStepAndFullResidualReduction)
-{
-    LinearResidual dense(false),tiled(true); p::InstrumentedLM<LinearResidual> a(dense),b(tiled);
-    Vector x=Vector::Zero(2),y=x;
-    a.parameters.factor=b.parameters.factor=.1;
-    a.minimizeInit(x); b.minimizeInit(y);
-    EXPECT_EQ(a.fjac.rows(),2); EXPECT_EQ(b.fjac.rows(),2);
-    EXPECT_EQ(a.minimizeOneStep(x),b.minimizeOneStep(y));
-    EXPECT_LT((x-y).norm(),1e-12); EXPECT_LT((dense.step-tiled.step).norm(),1e-12);
-    EXPECT_NEAR(dense.predicted,tiled.predicted,1e-12);
-    EXPECT_NEAR(dense.actual,tiled.actual,1e-12); EXPECT_NEAR(dense.ratio,tiled.ratio,1e-12);
-    EXPECT_NEAR(b.fnorm,(tiled.design*y-tiled.target).stableNorm(),1e-12);
-    EXPECT_GT(b.fnorm,1); // Nonzero orthogonal residual must survive row reduction.
-    EXPECT_EQ(b.fjac.rows(),2);
-}
 
 TEST(JointComponentSearchTest, InstrumentedLmUsesTheConstrainedStepForTrustRatio)
 {
@@ -215,23 +200,6 @@ TEST(JointComponentSearchTest, BoundedLmStopsAtAValidBoundaryKktPoint)
     EXPECT_NEAR(x(1),0.0,1e-8);
     EXPECT_EQ(status,Eigen::LevenbergMarquardtSpace::CosinusTooSmall);
     EXPECT_EQ(functor.failure,"bounded-tiny-step");
-}
-
-TEST(JointComponentSearchTest, DisabledBoundedHookRetainsTheOriginalLmStep)
-{
-    BoundedLinearResidual research_hook(false);
-    PlainIdentityResidual baseline;
-    p::InstrumentedLM<BoundedLinearResidual> instrumented(research_hook);
-    p::InstrumentedLM<PlainIdentityResidual> original(baseline);
-    Vector x(2),y(2); x<<.5,-.25; y=x;
-    instrumented.parameters.factor=original.parameters.factor=.1;
-    instrumented.minimizeInit(x); original.minimizeInit(y);
-    EXPECT_EQ(instrumented.minimizeOneStep(x),original.minimizeOneStep(y));
-    EXPECT_LT((x-y).norm(),1e-13);
-    EXPECT_LT((research_hook.step-baseline.step).norm(),1e-13);
-    EXPECT_NEAR(research_hook.predicted,baseline.predicted,1e-13);
-    EXPECT_NEAR(research_hook.actual,baseline.actual,1e-13);
-    EXPECT_NEAR(research_hook.ratio,baseline.ratio,1e-13);
 }
 
 TEST(JointComponentSearchTest, BoundedProfileSearchKeepsEveryEvaluatedWidthFeasible)

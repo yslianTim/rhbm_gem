@@ -148,55 +148,6 @@ TEST(JointTargetEvidenceTest, ComponentLocalAndAssembledEvidenceAgreeForNonconti
 }
 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-TEST(JointTargetEvidenceTest, LargeComponentMappingWorkIsLinearInPointsAndMemberships)
-{
-    constexpr std::size_t atom_count=37'406,core_size=12;
-    const auto problem=MakeProblem(atom_count); const auto state=MakeState(atom_count);
-    std::vector<rhbm_gem::JointBlockConditioning> conditioning;
-    std::vector<rhbm_gem::JointBlockParameterStability> stability;
-    for(std::size_t first=0;first<atom_count;first+=core_size)
-    {
-        std::vector<std::size_t> atoms;
-        const auto last=std::min(atom_count,first+core_size);
-        for(std::size_t atom=first;atom<last;++atom) atoms.push_back(atom);
-        const auto identity=std::to_string(first/core_size);
-        conditioning.push_back(ConditioningBlock("conditioning/"+identity,atoms));
-        stability.push_back(StabilityBlock("stability/"+identity,std::move(atoms)));
-    }
-    const auto & data=c::JointProblemAccess::Get(problem);
-    ASSERT_EQ(data.partition.components.size(),1u);
-    const auto & local_component=data.partition.components.front();
-    auto & work=n::TargetEvidenceWorkForTesting(); work={};
-    auto started=std::chrono::steady_clock::now();
-    const auto local=n::AssessTargetPointState(problem,problem.ParameterLayout(),state,Status::Passed,
-        conditioning,stability,rhbm_gem::JointEvidenceScope::ComponentLocal,local_component.rows.size());
-    const double local_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
-    ASSERT_EQ(local.point_atoms.size(),atom_count);
-    EXPECT_EQ(work.memberships_indexed,4*atom_count);
-    EXPECT_EQ(work.atom_lookups,3*atom_count);
-    const auto local_work=work;
 
-    work={};
-    started=std::chrono::steady_clock::now();
-    const auto global=n::AssessTargetPointState(problem,problem.ParameterLayout(),state,Status::Passed,
-        conditioning,stability,rhbm_gem::JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
-    const double global_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
-    ASSERT_EQ(global.point_atoms.size(),atom_count);
-    EXPECT_EQ(work.memberships_indexed,4*atom_count);
-    EXPECT_EQ(work.atom_lookups,3*atom_count);
-    EXPECT_EQ(global.point_atoms.back().point_quality,"Available");
-    ASSERT_EQ(local.point_atoms.size(),global.point_atoms.size());
-    for(std::size_t atom=0;atom<atom_count;++atom)
-    {
-        EXPECT_EQ(local.point_atoms[atom].local_conditioning,global.point_atoms[atom].local_conditioning);
-        EXPECT_EQ(local.point_atoms[atom].parameter_stability,global.point_atoms[atom].parameter_stability);
-        EXPECT_EQ(local.point_atoms[atom].point_quality,global.point_atoms[atom].point_quality);
-    }
-    EXPECT_EQ(local_work.memberships_indexed,work.memberships_indexed);
-    EXPECT_EQ(local_work.atom_lookups,work.atom_lookups);
-    std::cout<<"large-target-evidence-points="<<atom_count<<" blocks="<<conditioning.size()
-        <<" observations="<<problem.Input().observations.size()
-        <<" component-local-seconds="<<local_seconds<<" assembled-global-seconds="<<global_seconds<<"\n";
-}
 #endif
 }

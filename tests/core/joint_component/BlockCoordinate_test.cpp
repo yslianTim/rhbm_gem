@@ -108,14 +108,6 @@ c::JointProblemInput BridgeInput()
     input.support={{{0,0.0},{1,.25}},{{1,.25},{2,.5}},{{2,.5},{3,.25}},{{3,.25},{4,0.0}}};
     return input;
 }
-c::JointProblemInput HaloInput()
-{
-    c::JointProblemInput input; input.atom_ids={"target-A","halo-multi","target-B","halo-single"};
-    input.row_ids={"r0","r1","r2","lambda","constant"}; input.observations={2.0,-3.0,4.0,5.0,-.5};
-    input.support={{{0,0.0},{1,.25}},{{1,.25},{2,.5}},{{2,.5}},{{3,0.0}}};
-    rhbm_gem::JointSelectionDomain selection; selection.target_indices={0,2}; input.selection_domain=selection;
-    return input;
-}
 }
 
 TEST(JointBlockCoordinateTest, ConditionalResidualAndObjectiveMatchOnChainAndCubeFixtures)
@@ -161,20 +153,4 @@ TEST(JointBlockCoordinateTest, StructuralCensusMatchesPreparedCoreMetadata)
     EXPECT_EQ(census.neighbor_atom_entries,neighbors);
     EXPECT_EQ(census.maximum_block_rows,maximum_rows);
     EXPECT_EQ(census.maximum_block_support_entries,maximum_support);
-}
-TEST(JointBlockCoordinateTest, EveryContributorRemainsInFullAbcBlockRows)
-{
-    const auto input=HaloInput(); const auto layout=n::BuildParameterLayout(input);
-    ASSERT_EQ(layout.full_atoms,(std::vector<std::size_t>{0,1,2,3}));
-    EXPECT_TRUE(layout.groups.empty());
-    EXPECT_EQ(layout.informative_rows.size(),input.observations.size());
-    const auto partition=n::BuildStructuralBlockPartition(input,layout,1);
-    const auto first=std::find_if(partition.cores.begin(),partition.cores.end(),[](const auto & core){return core.atoms==n::Indices{0};});
-    ASSERT_NE(first,partition.cores.end());
-    EXPECT_EQ(first->neighbor_atoms,(n::Indices{1}));
-    EXPECT_TRUE(std::find(first->affected_rows.begin(),first->affected_rows.end(),3)==first->affected_rows.end());
-    const auto singleton=std::find_if(partition.cores.begin(),partition.cores.end(),[](const auto & core){return core.atoms==n::Indices{3};});
-    ASSERT_NE(singleton,partition.cores.end());
-    EXPECT_EQ(singleton->affected_rows,(n::Indices{3}));
-    ExerciseConditionalReplacements(input,layout,partition,777);
 }

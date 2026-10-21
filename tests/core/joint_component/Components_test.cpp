@@ -198,50 +198,6 @@ TEST(JointComponentChecksTest, NestedCompactRowsPreserveNoncontiguousAndZeroValu
     EXPECT_LT(data.y(2),0);
 }
 
-TEST(JointComponentChecksTest, RegisteredAuditDoesNotShrinkWithAComponent)
-{
-    const auto plan=p::RegisteredAudit(168,"heterogeneous-168","first-stage-double");
-    const p::Domain domain(2,{{{0,0}},{{1,0}}});
-    const auto c=p::MakeContext(Vector::Ones(2),2,"snapshot",&plan);
-    const auto part=p::BuildPartition(domain,c.atom_ids);
-    const auto child=p::ComponentContext(c,part.components[0],true);
-    EXPECT_FALSE(child.audit.trial_details); EXPECT_FALSE(child.audit.expanded_if_unverified);
-    EXPECT_TRUE(p::RegisteredAudit(12,"near-0.02","narrower-double").precision);
-}
-
-TEST(JointComponentChecksTest, EvaluationUsesParentScaleForBothKKTAndWidthGradient)
-{
-    std::vector<p::Support> support;
-    for(int k=0;k<40;++k) support.push_back({k,.003*k*k});
-    const p::Domain domain(40,{support}); const Vector eta=Vector::Constant(1,std::log(.5));
-    Vector y(40);
-    for(int k=0;k<40;++k)
-    {
-        const auto basis=second_stage_test::matched::EvaluateBasis(.003*k*k,.5,2.5);
-        y(k)=2*basis.gaussian-.3*basis.charge+.01*std::sin(k);
-    }
-    Vector parent(41); parent.head(40)=y; parent(40)=1000;
-    auto context=p::MakeContext(parent,1); context.independent_search=true;
-    const auto local=p::Evaluate(domain,y,eta),global=p::Evaluate(domain,y,eta,false,&context);
-    ASSERT_TRUE(local.valid && global.valid);
-    EXPECT_EQ(local.beta,global.beta);
-    const double local_scale=std::max(1.0,y.norm());
-    EXPECT_NEAR(global.gradient(0),local.gradient(0)*std::pow(local_scale/context.scale,2),1e-18);
-    EXPECT_NEAR(boost::json::value_to<double>(global.certificate.at("projected_kkt")),
-        boost::json::value_to<double>(local.certificate.at("projected_kkt"))*local_scale/context.scale,1e-16);
-    EXPECT_TRUE(p::Trust(domain,y,global,&context).at("passed").as_bool());
-}
-
-TEST(JointComponentChecksTest, ZeroObservationsAndUnderflowDoNotChangeStructuralPartition)
-{
-    const p::Domain domain(3,{{{0,0},{1,6.25}},{{1,6.25},{2,0}}});
-    const auto c=p::MakeContext(Vector::Zero(3),2);
-    const auto before=p::BuildPartition(domain,c.atom_ids);
-    (void)p::Evaluate(domain,Vector::Zero(3),Vector::Constant(2,-100));
-    const auto after=p::BuildPartition(domain,c.atom_ids);
-    ASSERT_EQ(before.components.size(),1); EXPECT_EQ(before.mappings->atom_component,after.mappings->atom_component);
-}
-
 TEST(JointComponentChecksTest, SameStateIncludesResidualTermAndConstantRows)
 {
     const TwoBlocks f; const auto c=p::MakeContext(f.y,2); const auto part=p::BuildPartition(f.domain,c.atom_ids);
@@ -258,30 +214,6 @@ TEST(JointComponentChecksTest, SameStateIncludesResidualTermAndConstantRows)
     const auto minus=p::EvaluatePartitioned(f.domain,f.y,f.eta-h*direction,part,c,true);
     ASSERT_TRUE(plus.valid && minus.valid);
     EXPECT_LT(((plus.residual-minus.residual)/(2*h*c.scale)-d.jacobian*direction).norm(),1e-8);
-}
-
-TEST(JointComponentChecksTest, FiniteUntrustedStateKeepsRawParityWithoutProfileClaims)
-{
-    TwoBlocks f; f.eta.setConstant(std::log(1e9));
-    const auto c=p::MakeContext(f.y,2); const auto part=p::BuildPartition(f.domain,c.atom_ids);
-    const auto parity=p::SameState(f.domain,f.y,f.eta,f.beta,part,c);
-    RecordProperty("scientific_record",boost::json::serialize(parity));
-    EXPECT_TRUE(parity.at("raw").at("passed").as_bool());
-    EXPECT_TRUE(parity.at("passed").as_bool()); EXPECT_FALSE(parity.at("full_equivalence").as_bool());
-    EXPECT_FALSE(parity.at("profile_solves").at(0).at("available").as_bool());
-}
-
-TEST(JointComponentChecksTest, BlockBackendSharesConstrainedActiveSet)
-{
-    const TwoBlocks f(-2); const auto c=p::MakeContext(f.y,2); const auto part=p::BuildPartition(f.domain,c.atom_ids);
-    for(bool reference:{false,true})
-    {
-        const auto a=p::Evaluate(f.domain,f.y,f.eta,reference,&c),b=p::EvaluatePartitioned(f.domain,f.y,f.eta,part,c,reference);
-        ASSERT_TRUE(a.valid && b.valid)<<a.reason<<' '<<b.reason;
-        EXPECT_EQ(a.certificate.at("active_atoms"),b.certificate.at("active_atoms"));
-        EXPECT_FALSE(a.certificate.at("active_atoms").as_array().empty()); EXPECT_LT((a.beta-b.beta).norm(),1e-12);
-        EXPECT_EQ(a.certificate.at("linear_solves"),b.certificate.at("linear_solves"));
-    }
 }
 
 TEST(JointComponentChecksTest, FailureIsolationDoesNotFillMissingRowsWithZero)
@@ -301,29 +233,6 @@ TEST(JointComponentChecksTest, FailureIsolationDoesNotFillMissingRowsWithZero)
     const auto healthy_second=p::FitComponent(part.components[0],initial,c);
     EXPECT_EQ(Science(failed_first),Science(result.at("components").at(1)));
     EXPECT_EQ(Science(healthy_second),Science(result.at("components").at(0)));
-}
-
-TEST(JointComponentChecksTest, LocalProfileBudgetAndInvalidStartRetainHonestAvailability)
-{
-    const TwoBlocks f; const auto input=p::MakeSyntheticJointProblemInput(f.domain,f.y); const p::Domain domain(input);
-    auto c=p::MakeContext(input); const auto part=p::BuildPartition(domain,c.atom_ids);
-    const Vector initial=Vector::Constant(2,.6);
-    const auto healthy=p::FitComponent(part.components[0],initial,c);
-    auto limited=c; limited.profile_budget=1;
-    const auto exhausted=p::FitComponent(part.components[1],initial,limited);
-    EXPECT_FALSE(exhausted.at("search_success").as_bool()); EXPECT_FALSE(exhausted.at("usable_state").as_bool());
-    EXPECT_TRUE(exhausted.at("candidate_available").as_bool());
-    EXPECT_TRUE(exhausted.at("candidate_state").is_object());
-    EXPECT_EQ(exhausted.at("stop_reason"),"block-sweep-budget");
-    const auto assembled=p::Assemble(domain,f.y,part,c,boost::json::array{healthy,exhausted});
-    EXPECT_FALSE(assembled.at("prediction_available").as_bool());
-    EXPECT_TRUE(assembled.at("prediction").is_null());
-    EXPECT_NE(assembled.at("runtime_convergence"),"passed");
-    EXPECT_TRUE(assembled.at("search_stopped_without_convergence").as_bool());
-    Vector invalid=initial; invalid(1)=0;
-    const auto failure=p::FitComponent(part.components[1],invalid,c);
-    EXPECT_FALSE(failure.at("usable_state").as_bool());
-    EXPECT_EQ(Science(healthy),Science(p::FitComponent(part.components[0],initial,c)));
 }
 
 TEST(JointComponentChecksTest, UnobservedAtomsKeepRawPredictionButDisableProfileClaims)

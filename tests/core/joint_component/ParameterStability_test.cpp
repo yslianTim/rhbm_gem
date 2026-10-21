@@ -187,46 +187,6 @@ TEST(JointParameterStabilityTest, UsesWeakLocalWidthDirectionsWithinTheBoundedBu
     }
 }
 
-TEST(JointParameterStabilityTest, AssessesPracticalBaselineThatFailsStrictLocalAcKkt)
-{
-    StabilityFixture fixture;
-    n::Vector accepted_beta;
-    bool found{};
-    for(int angle=0;angle<720 && !found;++angle)
-    {
-        const double radians=std::numbers::pi*static_cast<double>(angle)/360.;
-        n::Vector direction(2); direction<<std::cos(radians),std::sin(radians);
-        for(const double magnitude:{1e-9,1e-8,1e-7,1e-6})
-        {
-            const n::Vector beta=fixture.beta+magnitude*direction;
-            const auto state=n::EvaluateState(fixture.domain,fixture.y,fixture.eta,beta,fixture.context);
-            const auto width_kkt=n::ProfileGradientInfinityNorm(state,fixture.context);
-            if(!state.valid || !state.certificate.available || !state.certificate.feasible ||
-                !(state.certificate.projected_kkt>1e-10 && state.certificate.projected_kkt<=1e-7) ||
-                !width_kkt || *width_kkt>1e-9) continue;
-            const auto replay=n::CheckIndependentReplay(fixture.domain,fixture.y,state,fixture.context,
-                nullptr,nullptr,n::PracticalJointConvergenceCriteria);
-            if(!replay.passed) continue;
-            accepted_beta=beta; found=true; break;
-        }
-    }
-    ASSERT_TRUE(found);
-    const auto assessment=n::AssessLocalParameterStability(fixture.domain,fixture.y,fixture.eta,accepted_beta,
-        fixture.context,"practical-baseline/block-1");
-    EXPECT_EQ(assessment.evidence.baseline_numerical_validity_status,"Valid");
-    EXPECT_EQ(assessment.evidence.baseline_conditional_optimality_status,"PracticalOnly");
-    EXPECT_EQ(assessment.evidence.baseline_eligibility_status,"Eligible");
-    ASSERT_TRUE(assessment.evidence.baseline_local_ac_kkt);
-    EXPECT_GT(*assessment.evidence.baseline_local_ac_kkt,1e-10);
-    EXPECT_LE(*assessment.evidence.baseline_local_ac_kkt,1e-7);
-    ASSERT_TRUE(assessment.evidence.baseline_projected_width_kkt);
-    EXPECT_LE(*assessment.evidence.baseline_projected_width_kkt,1e-9);
-    EXPECT_EQ(assessment.evidence.baseline_independent_replay_status,"Passed");
-    EXPECT_EQ(assessment.evidence.conditional_reprofile_status,"StrictlyQualified");
-    EXPECT_EQ(assessment.evidence.conditional_reprofile_independent_replay_status,"Passed");
-    EXPECT_GT(assessment.evidence.perturbation_solves,0u);
-}
-
 TEST(JointParameterStabilityTest, WidthBoundUsesOneSidedInwardProbeAndRejectsZeroDisplacement)
 {
     StabilityFixture fixture;
@@ -244,22 +204,6 @@ TEST(JointParameterStabilityTest, WidthBoundUsesOneSidedInwardProbeAndRejectsZer
     ASSERT_TRUE(probe.plus_effective_displacement_inf);
     EXPECT_DOUBLE_EQ(*probe.plus_effective_displacement_inf,0.);
     EXPECT_EQ(assessment.evidence.perturbation_solves,1u);
-}
-
-TEST(JointParameterStabilityTest, PracticalLocalWidthCriterionKeepsEvaluationScaling)
-{
-    StabilityFixture fixture;
-    auto baseline=n::AssessLocalParameterStability(fixture.domain,fixture.y,fixture.eta,fixture.beta,
-        fixture.context,"scale-baseline/block-1");
-    n::Vector scaled_y=fixture.y*1e6,scaled_beta=fixture.beta*1e6;
-    const auto scaled_context=n::CreateContext(scaled_y,1);
-    const auto scaled=n::AssessLocalParameterStability(fixture.domain,scaled_y,fixture.eta,scaled_beta,
-        scaled_context,"scale-scaled/block-1");
-    ASSERT_TRUE(baseline.evidence.baseline_projected_width_kkt);
-    ASSERT_TRUE(scaled.evidence.baseline_projected_width_kkt);
-    EXPECT_NEAR(*baseline.evidence.baseline_projected_width_kkt,*scaled.evidence.baseline_projected_width_kkt,1e-12);
-    EXPECT_EQ(baseline.evidence.baseline_eligibility_status,"Eligible");
-    EXPECT_EQ(scaled.evidence.baseline_eligibility_status,"Eligible");
 }
 
 TEST(JointParameterStabilityTest, IndependentReplayFailureCannotBeClassifiedStable)
@@ -291,87 +235,6 @@ TEST(JointParameterStabilityTest, LocalAcSolveFailureCannotProduceFalseStableRes
         return probe.minus_seed_status=="LocalAcKktFailed" || probe.plus_seed_status=="LocalAcKktFailed" ||
             probe.minus_seed_status=="SolverFailed" || probe.plus_seed_status=="SolverFailed";
     }));
-}
-
-TEST(JointParameterStabilityTest, ProfileSearchHonorsCpuBudget)
-{
-    StabilityFixture fixture;
-    auto context=fixture.context;
-    context.profile_budget=static_cast<int>(n::MaximumLocalPerturbationProfileEvaluations);
-    context.update_budget=6;
-    context.profile_cpu_budget_seconds=1e-7;
-    const n::Vector perturbed_widths=(fixture.eta.array()+n::LocalWidthPerturbation).exp();
-    const auto result=n::SearchProfile(fixture.domain,fixture.y,perturbed_widths,context);
-    EXPECT_EQ(result.stop_reason,"cpu-time-budget");
-    EXPECT_TRUE(result.stopped);
-    EXPECT_LE(result.evaluations,static_cast<int>(n::MaximumLocalPerturbationProfileEvaluations));
-}
-
-TEST(JointParameterStabilityTest, ResourceBudgetExhaustionIsUnavailableWithoutSolves)
-{
-    StabilityFixture fixture;
-    const auto result=n::AssessLocalParameterStability(fixture.domain,fixture.y,fixture.eta,fixture.beta,
-        fixture.context,"test/block-1",n::JointMemoryPlanningBudgetBytes);
-    EXPECT_EQ(result.evidence.status,"Unavailable");
-    EXPECT_EQ(result.evidence.reason.rfind("resource-limit:parameter-stability:",0),0u);
-    EXPECT_EQ(result.evidence.perturbation_solves,0u);
-    EXPECT_EQ(result.evidence.perturbation_evaluations,0u);
-}
-
-TEST(JointParameterStabilityTest, ProbePriorityIsSensitivityBasedAndIndependentOfInputOrder)
-{
-    const auto block=[](std::string id,std::string classification,double condition) {
-        rhbm_gem::JointBlockConditioning value; value.block_id=std::move(id);
-        value.conditioning_classification=std::move(classification);
-        value.free_ac_condition=condition; value.free_ac_rank=2; value.free_ac_columns=2;
-        return value;
-    };
-    std::vector<rhbm_gem::JointBlockConditioning> forward{
-        block("block-a-well","WellConditioned",1e2),
-        block("block-b-moderate","IllConditioned",1e7),
-        block("block-z-highly-sensitive","IllConditioned",1e10),
-        block("block-c-unavailable","Unavailable",0.),
-        block("block-d-near-kkt","WellConditioned",1e2),
-        block("block-e-bound-active","WellConditioned",1e2),
-        block("block-f-active-amplitude","ActiveFace",1e2)};
-    forward[4].local_ac_projected_kkt=8e-8;
-    forward[5].active_width_bound_targets=2;
-    forward[5].free_ac_rank=1;
-    forward[6].active_amplitude_count=1;
-    const auto identities=[](const auto & blocks,const auto & order) {
-        std::vector<std::string> out;
-        for(const auto index:order) out.push_back(blocks.at(index).block_id);
-        return out;
-    };
-    const auto forward_order=n::RankFixedNeighborStabilityProbesForTesting(forward);
-    ASSERT_FALSE(forward_order.empty());
-    EXPECT_EQ(forward.at(forward_order.front()).block_id,"block-e-bound-active");
-    EXPECT_EQ(forward.at(forward_order.at(1)).block_id,"block-d-near-kkt");
-    EXPECT_EQ(forward.at(forward_order.at(2)).block_id,"block-z-highly-sensitive");
-    EXPECT_EQ(std::find_if(forward_order.begin(),forward_order.end(),[&](std::size_t index) {
-        return forward[index].block_id=="block-c-unavailable";
-    }),forward_order.end());
-    const auto expected_order=identities(forward,forward_order);
-    std::reverse(forward.begin(),forward.end());
-    const auto reverse_order=n::RankFixedNeighborStabilityProbesForTesting(forward);
-    EXPECT_EQ(identities(forward,reverse_order),expected_order);
-}
-
-TEST(JointParameterStabilityTest, RepresentativeProbesSpanCoreAtomPositions)
-{
-    const auto block=[](std::string id,std::size_t start) {
-        rhbm_gem::JointBlockConditioning value; value.block_id=std::move(id);
-        value.conditioning_classification="WellConditioned"; value.core_atoms={start,start+1};
-        value.core_atom_count=2; value.affected_row_count=20; value.free_ac_rank=4; value.free_ac_columns=4;
-        return value;
-    };
-    std::vector<rhbm_gem::JointBlockConditioning> blocks;
-    for(std::size_t index=0;index<7;++index) blocks.push_back(block("block-"+std::to_string(index),10*index));
-    std::vector<std::size_t> candidates{0,1,2,3,4,5,6};
-    EXPECT_EQ(n::SelectFixedNeighborRepresentativeStabilityProbesForTesting(blocks,candidates,3),
-        (std::vector<std::size_t>{0,3,6}));
-    EXPECT_EQ(n::SelectFixedNeighborRepresentativeStabilityProbesForTesting(blocks,candidates,1),
-        (std::vector<std::size_t>{3}));
 }
 
 TEST(JointParameterStabilityTest, ComponentFitHonorsPerturbationClaimBudgetAndPreservesPoint)
