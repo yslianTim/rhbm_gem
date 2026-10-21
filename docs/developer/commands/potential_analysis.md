@@ -270,8 +270,9 @@ and achieved KKT, width-gradient, and final-sweep log-width-change values.
 Local Conditioning and Parameter Stability remain diagnostics; they do not
 replace global qualification or relax solver and replay gates. The 37,406-target
 full fitting RSS has not yet been measured; the giant-component preflight peak
-is not a full-workflow memory qualification. See the [bounded resource
-validation](../../research/joint-bounded-giant-component-resource-validation-20261020.md).
+is not a full-workflow memory qualification. See the
+[production memory planning guide](../joint-component-memory-census.md) and
+[Joint evidence record](../joint-component-evidence.md).
 
 The standalone `EstimateJointComponents` convenience API remains available and
 keeps its model-copy and target writeback behavior.
@@ -408,9 +409,10 @@ the objective only and must not be used for this conversion. CSV retains fitted
 coefficients; its appended `SelectionRole` distinguishes target, halo and not-recorded; keep its companion JSON for units and
 provenance. No conversion is performed during export.
 
-Production joint JSON schemas 3 through 17 are accepted. Earlier joint JSON is rejected
+Production joint JSON schemas 3 through 18 are accepted. Earlier joint JSON is rejected
 with a request to regenerate the outcome, without migration or database writes.
-New Pure Exclusion Joint result JSON uses schema 17. Schemas 3 through 13 preserve their saved
+New Pure Exclusion Joint result JSON uses schema 17; schema 18 is used when the
+result includes geometry-local Halo reconstruction provenance. Schemas 3 through 13 preserve their saved
 evidence and convergence statuses. Schema 10 stores `target-estimability-v4`
 and rank-context identities without computed null-space leakage or full-Jacobian
 column scales. Schema 11 adds the retired FullABC halo pruning policy and
@@ -418,8 +420,10 @@ exclusion records. Schema 13 identifies the FirstStage fixed-halo contributor
 policy; schema 14 stores historical fixed `(A, B, 0)` halo snapshots separately
 from target component states using `target-only-fixed-halo-v1`. This payload is
 decode-only and does not restore a FixedHalo estimator. Schema 17 stores
-the Pure Halo-Support Exclusion policy, original/fitting row mappings, and the
-target-only `target-only-pure-halo-support-exclusion-v1` contract. Schema 16 stores
+the Pure Halo-Support Exclusion policy, original/fitting row mappings, the
+target-only `target-only-pure-halo-support-exclusion-v1` contract, and legacy
+GroupKey median snapshots. Schema 18 adds geometry-local Halo reconstruction
+provenance. Schema 16 stores
 the global convergence criteria provenance in candidate diagnostics; schema 15
 payloads remain readable with their historical strict criteria defaults. In particular,
 failed historical local or
@@ -465,7 +469,7 @@ independent valid components can run. Production initialization requires valid
 target widths only; target fallback diagnostics retain their existing
 provenance. Historical FixedHalo initialization evidence remains unchanged on
 load and is never used to initialize current estimation. See the
-[halo eligibility contract](../joint-observable-halo.md). `costs.construction_seconds` records builder time;
+[Joint runtime contract](../joint-component-runtime.md). `costs.construction_seconds` records builder time;
 initializer time includes model-copy setup. Neither storage nor export recomputes
 roles, initialization or numerical evidence. Original selection and halo legacy
 analysis are preserved; successful target first-stage data can be updated.

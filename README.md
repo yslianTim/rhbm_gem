@@ -52,7 +52,7 @@ available saved data; missing uncertainty or peeling coverage is never replaced
 with zero. Single-voxel halos use a shared observable contribution per row,
 without invented A/B/C estimates. JSON v4 and the companion `.contributions.csv`
 preserve these contributions; JSON v3 remains readable. See the
-[observable-halo contract](docs/developer/joint-observable-halo.md).
+[Joint workflow contract](docs/developer/commands/potential_analysis.md#joint-component-opt-in).
 
 ## License, Citation, and Third-Party Notices
 

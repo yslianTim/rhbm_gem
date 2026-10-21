@@ -13,8 +13,6 @@ This project uses a two-axis test organization model:
 | `tests/core/contract/` | `core` | Command catalog/metadata/surface contracts and docs sync checks |
 | `tests/core/second_stage/` | `core` | Second-stage fitting state, solvers, acceptance, recovery, finalization, and performance logging |
 | `tests/data/` | `data` | Data public-surface guards, file I/O/runtime behavior, and schema/persistence validation |
-| `tests/experiments/` | optional tools | Current Joint measurement, research, and offline diagnosis executables |
-| `tests/tools/` | test support | Current runtime and offline validation harness executables |
 | `tests/utils/math/` | `utils` | Numeric/statistical/geometry helper algorithms |
 | `tests/utils/domain/` | `utils` | Domain helpers (string/logging/file-path/chemistry-related helpers) |
 | `tests/utils/hrl/` | `utils` | HRL-specific algorithm and transform tests |
@@ -48,9 +46,8 @@ cmake --build build --target tests_all --parallel 4
 Build output note:
 
 - Default grouped C++ tests are compiled into a single executable: `build/bin/RHBM-GEM-TEST`
-- `ctest` exposes grouped entries such as `rhbm_tests_core_command`, `rhbm_tests_data_contract`, and `rhbm_tests_data_schema`
+- `ctest` exposes grouped entries such as `rhbm_tests_core_command` and `rhbm_tests_data_schema`
 - Those grouped CTest entries run filtered subsets from the same `RHBM-GEM-TEST` binary
-- Optional Joint offline C++ tests use a separate executable.
 
 Run all tests:
 
@@ -82,30 +79,22 @@ The Joint component sources under `tests/core/joint_component/` are split into
 `rhbm_tests_joint_component_contract`,
 `rhbm_tests_joint_component_workflow`, and
 `rhbm_tests_joint_component_numerical`. These run from the ordinary
-`RHBM-GEM-TEST` executable. `joint_component_regression` verifies eight frozen
-cases, and `joint_component_physical_smoke` checks double/float32 generation
-and CIF/MRC. All required inputs live in `tests/fixtures/joint_component/`; no
-historical archive or external model is loaded.
+`RHBM-GEM-TEST` executable. They retain deterministic checks for observation
+and support domains, component construction, width calibration, bounded A/C
+and Active-set LM solves, FixedNeighbor acceptance and convergence, local
+conditioning and stability, geometry-local Halo medians, Original-domain
+Peeling, persistence, and workflow behavior.
 
-`SharedPostprocessingContextValidatesIdentityAndBuildsMappingsOnce` and the
-Joint workflow regression assert one snapshot identity check and one complete
-row identity scan per context, one build of each shared mapping, and no increase
-in those counts while preparing multiple targets. They also check per-target
-prepared sample counts and exact peeling/charge-correction parity. Workflow
-benchmark JSON records the same identity-scan and mapping counts for each
-deterministic scaling case.
+Run the Joint groups:
 
-Run the bounded Joint gates with `joint:contract`, `joint:workflow`, and
-`joint:numerical` labels. Large Gram, production-shape single-component
-mapping-memory, and 256-atom diagnostics are separately listed under
-`joint:scalability`. `RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS=ON`
-adds the 168-atom float32 case and additional catalog cases to the offline
-qualification lane. `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON` builds the
-separate precision/certification targets and tests. Both options default to
-OFF; use `joint:offline` for that lane. High precision code must not be linked
-into `rhbm_tests` or `joint_test_support`. See the
-[runtime guide](../docs/developer/joint-component-runtime.md) for commands and
-acceptance policy.
+```bash
+ctest --test-dir build -L 'joint:(contract|workflow|numerical)' --parallel 4 --output-on-failure
+```
+
+Research conclusions and measurement limits are summarized in the
+[Joint evidence record](../docs/developer/joint-component-evidence.md); the
+[runtime guide](../docs/developer/joint-component-runtime.md) describes the
+current production contract.
 
 ## Adding New Tests
 
@@ -173,25 +162,8 @@ tests; solver failure replay remains in `SolverFailureCapture`.
 
 ## Joint validation workflow
 
-The production outcome codec accepts joint JSON schema 3 inside SQLite v17.
-Metadata tests cover actual normalization divisors, input/build fingerprints,
-coefficient units and rejection of old documents. CLI, C++ and Python workflow
-checks export after deleting their temporary model/map inputs. The installed
-consumer smoke target now executes the linked program and checks its exit status,
-including capture/export with unknown in-memory input provenance.
-
-Release validation runs all default CTests with Python bindings, then the existing
-`joint:extended|joint:offline` lane, plus a testing-disabled installation and
-consumer execution. A source copy without Git metadata must also build/install
-and run the consumer. Keep the frozen fixture packages and current parity
-thresholds unchanged.
-
-Current Joint experiments, build options, validation harnesses and permanent
-test owners are listed in the
-[Joint experiment inventory](../docs/developer/joint-experiments.md). The sole
-benchmark workflow is `tests/integration/joint_benchmark.py`; it includes the
-FixedNeighbor search/solve, the complete Joint/local/group workflow, and
-complete-command scopes.
-Partial-selection, weak-halo and noise/mismatch measurements remain current
-feature, diagnosis and research tools. Closed campaign drivers and their
-machine-readable results are not retained in the current tree.
+The default CTest suite includes current Joint result persistence, required
+legacy decoding, and CLI workflow smoke coverage. Python binding smoke tests
+also exercise the production workflow with a synthetic map generated from
+`tests/fixtures/test_model.cif`. There is no optional Joint research or
+benchmark CTest lane.

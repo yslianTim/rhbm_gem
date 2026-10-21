@@ -41,10 +41,7 @@ historical measurements, not current backend options or full-scale guarantees.
 Historical operator, preconditioner, and global rank results are summarized in
 [Joint component evidence](joint-component-evidence.md).
 
-Use the active benchmark wrapper for current FixedNeighbor measurements:
-
-```sh
-python3 tests/integration/joint_benchmark.py \
-  --profile solve --case chain-8 --build-dir build/qualification \
-  --output build/joint-solve.json
-```
+The production local solver and endpoint qualification checks are covered by
+the focused `rhbm_tests_joint_component_numerical` group. Historical backend
+comparison results and their limits are summarized in the
+[Joint evidence record](joint-component-evidence.md).

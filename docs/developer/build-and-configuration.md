@@ -50,7 +50,7 @@ cmake -S . -B build-cov -DCMAKE_BUILD_TYPE=Debug -DENABLE_COVERAGE=ON
 2. Build tests:
 
 ```bash
-cmake --build build-cov -j
+cmake --build build-cov --parallel 4
 ```
 
 3. Run the coverage target:
@@ -78,29 +78,28 @@ Notes:
 Build all C++ test targets:
 
 ```bash
-cmake --build build --target tests_all -j
+cmake --build build --target tests_all --parallel 4
 ```
 
 Default grouped C++ tests are linked into one executable at `build/bin/RHBM-GEM-TEST`. The `ctest`
-entries remain split by domain/intent grouping and invoke filtered subsets from that binary. Optional
-Joint offline C++ tests use a separate executable.
+entries remain split by domain/intent grouping and invoke filtered subsets from that binary.
 
 Run all tests:
 
 ```bash
-ctest --test-dir build --output-on-failure
+ctest --test-dir build --output-on-failure --parallel 4
 ```
 
 Run tests by domain label:
 
 ```bash
-ctest --test-dir build -L domain:data --output-on-failure
+ctest --test-dir build -L domain:data --output-on-failure --parallel 4
 ```
 
 Run tests by intent label:
 
 ```bash
-ctest --test-dir build -L intent:algorithm --output-on-failure
+ctest --test-dir build -L intent:algorithm --output-on-failure --parallel 4
 ```
 
 Supported labels:
@@ -108,83 +107,23 @@ Supported labels:
 - domain: `core`, `data`, `utils`, `integration`
 - intent: `contract`, `command`, `validation`, `io`, `schema`, `algorithm`, `bindings`
 
-## Correctness, Offline, and Benchmark Builds
+## Correctness builds
 
-`BUILD_TESTING=ON` creates the permanent correctness tests by default. The
-installable `rhbm_gem` target stays free of test-support sources; `rhbm_gem_test`
-is a non-installed instrumented copy used by tests that need internal probes.
-The `tests_all` target builds core test dependencies and any correctness option
-explicitly enabled, but never depends on benchmark targets.
-
-| Configuration | Production | Core tests | Offline | Extended | Benchmarks |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Production only (`BUILD_TESTING=OFF`) | Yes | No | No | No | No |
-| Default testing | Yes | Yes | No | No | No |
-| Offline audits | Yes | Yes | Yes | No | No |
-| Extended regressions | Yes | Yes | No | Yes | No |
-| Benchmark tools | Yes | Yes | No | No | Yes |
-
-The corresponding options are `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS`,
-`RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS`,
-and `RHBM_GEM_BUILD_BENCHMARKS`. Optional builds require `BUILD_TESTING=ON`,
-because their sources and test-only support remain under `tests/`.
-
-Build benchmark tools explicitly:
-
-```bash
-cmake -S . -B build-bench \\
-  -DBUILD_TESTING=ON \\
-  -DRHBM_GEM_BUILD_BENCHMARKS=ON
-cmake --build build-bench --target benchmarks_all --parallel 4
-```
-
-Build optional numerical audits explicitly:
-
-```bash
-cmake -S . -B build-audits \\
-  -DBUILD_TESTING=ON \\
-  -DRHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=ON
-cmake --build build-audits --parallel 4
-```
-
-Benchmark builds create the current measurement tools: `joint_fixed_neighbor_experiment`
-for search/solve, `joint_postprocessing_benchmark` for the complete Joint workflow, and
-`joint_partial_selection` for current selection and halo measurements. The
-single benchmark workflow is `tests/integration/joint_benchmark.py`. The
-offline-audit option creates local precision, KKT, replay, trajectory, and
-FullABC width controls. FixedHalo estimation validation has been retired. The bound-active Production
-synthetic runs with ordinary `BUILD_TESTING`. Complete-command measurements use
-the same benchmark workflow with
-`--profile command`; they require the regular CLI build and explicit model/map
-inputs. No per-stage CMake switches are needed.
-
-CTest labels include `core`, `offline`, `extended`, `external`, and
-`benchmark`. The default configuration registers ordinary regressions,
-including the bound-active synthetic. Turning on optional audits or benchmarks
-adds their focused test entries; it does not run a full benchmark sweep or
-external-data campaign as part of the default build.
+`BUILD_TESTING=ON` creates the maintained correctness tests. The installable
+`rhbm_gem` target stays free of test-support sources; internal test probes are
+compiled into the non-installed `rhbm_gem_test` and `rhbm_tests` targets.
+`BUILD_TESTING=OFF` builds production without test targets.
 
 ## Repository Lint Checks
 
 Repository guard checks (style/structure/hygiene/fixture tracking/absolute-path/install consumer smoke) are executed through `lint_repo`:
 
 ```bash
-cmake --build build --target lint_repo
+cmake --build build --target lint_repo --parallel 4
 ```
 
 `lint_repo` also exercises the command catalog indirectly through compile-time typed visitors and
 contract tests.
-
-## Joint component regression options
-
-`RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS` enables self-contained 168-atom float32
-and additional frozen cases. `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS` builds the
-separate derivative, multiprecision, boundary and local-certification tools.
-Both default to OFF and require `BUILD_TESTING=ON`. They do not change the
-installed estimator. The offline-audit build includes `joint_width_trajectory`,
-`joint_fullabc_width_study`, and `joint_fixed_width_oracle` for bounded local
-trajectory, profile, and fixed-width controls.
-See the [runtime validation commands](joint-component-runtime.md).
 
 ## Static Quality Checks (Targeted)
 
@@ -203,7 +142,7 @@ bash resources/tools/developer/run_clang_tidy_check.sh build --baseline resource
 CTest with failure classification output:
 
 ```bash
-bash resources/tools/developer/run_ctest_with_classification.sh build -j8
+bash resources/tools/developer/run_ctest_with_classification.sh build -j4
 ```
 
 This repository does not use GitHub-hosted CI. Run quality checks locally, or wire these commands into an external CI system if you need automation.
@@ -284,9 +223,6 @@ Beginner / common:
 | `RHBM_GEM_OPENMP_MODE` | `AUTO` | OpenMP mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_ROOT_MODE` | `AUTO` | ROOT mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` | `OFF` | Enable experimental features across the project. |
-| `RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS` | `OFF` | Build independent joint numerical audit tools and tests. |
-| `RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS` | `OFF` | Register larger self-contained correctness regressions. |
-| `RHBM_GEM_BUILD_BENCHMARKS` | `OFF` | Build current Joint benchmark and measurement targets. Requires `BUILD_TESTING=ON`. |
 | `RHBM_GEM_PYTHON_INSTALL_LAYOUT` | `SITE_PREFIX` | Python module install layout: `SITE_PREFIX` or `LIBDIR`. |
 | `RHBM_GEM_PYTHON_INSTALL_DIR` | empty | Explicit install directory for the Python extension module. |
 

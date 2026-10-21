@@ -34,12 +34,10 @@ with project internals.
   regression authority.
 - [Stage integration](joint-stage-integration.md) describes integration with
   the fitting workflow.
-- [Benchmark guide](joint-benchmark.md) documents current benchmark profiles
-  and measurement semantics.
 - [Capabilities and limitations](joint-capabilities-limitations.md) identifies
-  supported behavior and current research boundaries.
-- [Current experiment and validation inventory](joint-experiments.md) lists
-  active tools, build options, validation harnesses, and permanent test owners.
+  supported behavior and current evidence limits.
+- [Memory planning](joint-component-memory-census.md) documents production
+  preflight estimates and their limits.
 - [Historical evidence](joint-component-evidence.md) summarizes retired
   decisions and scientific limits. Closed implementations and machine-readable
   results are recoverable from Git history and are not retained in the tree.

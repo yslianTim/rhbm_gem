@@ -19,7 +19,7 @@ conditional free A/C, projected-width, and profile derivative evidence.
 
 Production does not request or retain global weak directions. Historical
 right-vector and global projected-width studies are archived in the
-[bounded global rank research](joint-bounded-rank-research.md); their memory
+[Joint evidence record](joint-component-evidence.md); their memory
 estimates do not describe current runtime. The local SVD controls remain owned
 by `Numerics_test.cpp`, `LocalConditioning_test.cpp`, and the Profile LM
 derivative tests.

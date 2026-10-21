@@ -279,9 +279,7 @@ results; new Peeling rejects them instead of treating them as geometry-local
 estimates. SQLite remains schema v20, so this JSON payload change requires no
 database migration.
 
-The runtime regression harness is `tests/integration/joint_component_runtime.py`.
 The ordinary Joint CTest groups cover component contracts, workflow,
 FixedNeighbor numerics, local conditioning, stability, persistence, and
-historical decoding. Optional offline tests cover high-precision local
-numerical controls; retired global-rank and weak-direction certification tools
-are not part of the production or test entry points.
+historical decoding. Run them with
+`ctest --test-dir build -L 'joint:(contract|workflow|numerical)' --parallel 4 --output-on-failure`.
