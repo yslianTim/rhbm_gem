@@ -290,22 +290,13 @@ target_include_directories(rhbm_tests PRIVATE
 )
 add_dependencies(tests_all rhbm_tests)
 
-# Test-only helpers contain no historical runner or multiprecision orchestration.
-add_library(joint_test_support STATIC
+# Shared test-only helpers compile into the test executable.
+target_sources(rhbm_tests PRIVATE
     support/JointSyntheticWorkload.cpp
     support/JointBlockCoordinate.cpp
     support/JointTestGeometry.cpp support/JointTestNumerics.cpp support/JointDenseReference.cpp
     support/JointTestContext.cpp support/JointComponentChecks.cpp
     support/JointHaloObservationExclusion.cpp)
-target_compile_features(joint_test_support PUBLIC cxx_std_20)
-target_link_libraries(joint_test_support PUBLIC rhbm_gem_dependencies CompilerFlags)
-target_include_directories(joint_test_support PUBLIC
-    "${PROJECT_SOURCE_DIR}/include"
-    "${PROJECT_SOURCE_DIR}/src"
-    "${PROJECT_SOURCE_DIR}/tests")
-target_include_directories(joint_test_support PRIVATE
-    "${PROJECT_BINARY_DIR}/generated/$<CONFIG>")
-target_link_libraries(rhbm_tests PRIVATE joint_test_support)
 
 add_rhbm_gtest_group(rhbm_tests_joint_component_contract
     DOMAIN core INTENTS algorithm contract SOURCES ${JOINT_COMPONENT_CONTRACT_TEST_SOURCES})
@@ -316,13 +307,13 @@ set_tests_properties(rhbm_tests_joint_component_contract PROPERTIES
 add_rhbm_gtest_group(rhbm_tests_joint_component_workflow
     DOMAIN core INTENTS algorithm SOURCES ${JOINT_COMPONENT_WORKFLOW_TEST_SOURCES})
 set_tests_properties(rhbm_tests_joint_component_workflow PROPERTIES
-    LABELS "core;domain:core;intent:algorithm;joint:workflow" TIMEOUT 600
+    LABELS "core;domain:core;intent:algorithm;joint:workflow" TIMEOUT 180
     ENVIRONMENT "OMP_NUM_THREADS=1")
 
 add_rhbm_gtest_group(rhbm_tests_joint_component_numerical
     DOMAIN core INTENTS algorithm SOURCES ${JOINT_COMPONENT_NUMERICAL_TEST_SOURCES})
 set_tests_properties(rhbm_tests_joint_component_numerical PROPERTIES
-    LABELS "core;domain:core;intent:algorithm;joint:numerical" TIMEOUT 900
+    LABELS "core;domain:core;intent:algorithm;joint:numerical" TIMEOUT 180
     ENVIRONMENT "OMP_NUM_THREADS=1")
 
 set(joint_persistence_test_patterns
