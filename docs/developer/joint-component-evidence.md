@@ -1,131 +1,164 @@
-# Joint component evidence and historical findings
+# Joint component evidence
 
-This document separates the current production contract from retained research
-conclusions. Current implementation and test owners are listed in [Joint
-experiments](joint-experiments.md) and [Joint component runtime](joint-component-runtime.md).
+This file is the compact historical record for research decisions. The
+production behavior is described in [Joint component runtime](joint-component-runtime.md).
+Values below apply only to the stated datasets and revisions; they are not
+general accuracy or performance guarantees.
 
-## Current estimator
+## Current production contract
 
-Production uses Pure Halo-Support Exclusion with FixedNeighbor core size 12,
-forward serial Gauss-Seidel, at most 200 sweeps, and at most one trusted
-accepted bounded Active-set LM update per block visit. The global width bound
-is `4 * Q95` of qualified FirstStage target widths, with at least 20 donors
-and 95% coverage. Selected targets are the only free FullABC parameters.
-Retained non-target support excludes fitting rows; it does not contribute
-FirstStage halo parameters to the Joint objective. The normalized objective
-uses the retained fitting observations for its scale. Target-only projected
-A/C KKT, projected Width KKT, complete-sweep confirmation, monotone
-global-objective acceptance, trust checks, and independent endpoint replay
-define numerical convergence. FixedHalo is retired; its historical result
-codec does not provide another solver or parameterization route.
+`EstimateJointComponents()` and the normal `joint-components` workflow use
+Target-only Joint fitting with Pure Halo-Support Exclusion at 2.5 Å. Halo
+support rows are excluded from fitting; Halo parameters do not enter the Joint
+objective. The solver uses disjoint FixedNeighbor cores of at most 12 Targets,
+forward serial Gauss–Seidel sweeps, at most 200 complete sweeps, and at most
+one trusted accepted update per block visit.
 
-A converged endpoint becomes the component state even when local conditioning
-is poor or parameter probes show sensitivity. Local conditioning describes
-target free A/C, projected-width, and full profile-derivative behavior within
-each FixedNeighbor block while outside targets are held fixed. Parameter
-stability perturbs targets only. Neither provides a global identifiability
-certificate.
+Target widths are constrained by one global bound,
+`Bmax = 4 × Q95(qualified FirstStage Target widths)`. Calibration requires at
+least 20 qualified donors and 95% Target coverage. The local A/C solve retains
+nonnegative A and signed C constraints. Bounded Active-set LM, monotone global
+objective acceptance, complete-sweep confirmation, projected A/C and Width
+KKT, endpoint verification, and Independent Replay determine whether a
+component is qualified. Unqualified estimates are not published downstream.
 
-Conditioning classes distinguish full-rank/ill-conditioned matrices from
-well-conditioned matrices using the provisional column-normalized
-`kappa * epsilon_double >= 1e-8` warning. The condition number describes local
-roundoff amplification; it is not an estimate of statistical parameter error.
-Stability selection sorts eligible blocks by conditioning class, available
-local condition score, and block identity. Selected blocks probe a weak
-projected-width direction, a related coordinate direction, and common mode,
-subject to the fixed block, seed, evaluation, and CPU budgets. Parameter and
-prediction changes are reported separately, and an incomplete probe is never
-reported as stable.
+After qualification, Halo A/B/C values are reconstructed from the nearest
+four qualified Target estimates for Original-domain Peeling. Conditioning and
+stability are read-only local diagnostics; they do not change the accepted
+Target estimates or independently deny a qualified endpoint. Persistence
+continues to decode historical result schemas without treating retired
+parameterizations as a current estimator.
 
-Target point validation uses atom-to-block indexes with work proportional to
-points, blocks, and core memberships rather than scanning all blocks for every
-point. Invalid diagnostic mappings are separately reported and do not change
-runtime convergence.
+## Search policy and block solver
 
-Target records use `target-point-validation-v1` to report component convergence,
-parameter validity, local conditioning, parameter stability, point quality, and
-reasons conditional on the qualified Pure Exclusion target state. Halo
-reconstruction availability is reported separately. Historical
-`target-estimability-v1` through `v4` and their rank records keep their original
-meanings in persistence and are not converted to new evidence. Post-fit
-peeling, local MDPDE covariance, and group fitting keep their own validation
-and qualification steps.
+The fixed-width conditional solver was numerically feasible but was not
+promoted; the nonlinear FixedNeighbor search was selected. Repeated
+correctness-checked chain and cube experiments selected core size 12 over the
+historical core-64 control. Median search time improved by 33.0%–64.3% in the
+four measured cases, with every compared run passing its search and replay
+checks:
 
-## Current memory controls
+| Case | Core 12 | Core 64 | Measured reduction |
+| --- | ---: | ---: | ---: |
+| Chain, 512 atoms | 61.18 s | 171.26 s | 64.3% |
+| Cube, 512 atoms | 151.02 s | 322.81 s | 53.2% |
+| Chain, 1,024 atoms | 167.73 s | 346.28 s | 51.6% |
+| Cube, 1,024 atoms | 490.85 s | 732.64 s | 33.0% |
 
-`ResourceWork` preflights problem construction, structural construction,
-FixedNeighbor preparation, global streaming evaluation, endpoint verification,
-reference solves, local conditioning, and parameter stability. It uses checked
-byte arithmetic and a 3,200,000,000-byte estimated peak budget below the
-4,000,000,000-byte hard limit. The estimate is not observed RSS.
+Forward order is the production serial Gauss–Seidel order. In one qualified
+6Z6U comparison, forward and reverse runs used 79 and 68 sweeps and produced
+objectives `0.006497513583164643` and `0.006497513583172617`; this is a
+single-dataset order check, not a general equivalence result. OneAccepted was
+selected over Full and TwoAccepted local update policies. Fixed-B, reverse
+order, core 64, and the alternative update policies are not production
+options. Source: [commit `de211df5`](https://github.com/yslianTim/rhbm_gem/commit/de211df5a57647fccc0c8abee2262f82ccdb0c53).
 
-The search and endpoint checks stream predictions, residuals, KKT reductions,
-and width gradients over support entries. Production does not allocate global
-free-design factors, projection coefficients, or projected-width factors.
-Local conditioning and perturbation stability use bounded block workspaces.
-Construction and FixedNeighbor preparation remain independent memory risks.
+## Linear solver and qualification choices
 
-A deterministic synthetic shape with 5,938,087 rows, 37,406 contributors,
-and 3,118 blocks previously measured 2,892,736 prepared-mapping bytes and an
-876,119,666-byte global-evaluation estimate. A no-sweep preparation test
-process recorded 474,546,176 bytes peak RSS. These results cover the synthetic
-fixture only; they do not measure a physical-data fitting run or its unknown
-support graph. See the [memory census](joint-component-memory-census.md) for
-which historical measurements have been retired.
+The production constrained A/C solve uses Eigen SparseQR with normalized free
+columns, a nonnegative-amplitude active set, bounded local QR refinement, and
+the existing strict local KKT limit of `1e-10`. The Block 21 study used a full
+rank `930 × 24` design with a free-face condition indicator near `6.62e10`.
+SparseQR, dense QR, SVD, active-face enumeration, and direct free-face QR all
+missed the strict gate; the best recorded scaled KKT was `4.65661e-10`. A
+50-digit reference was accurate in its own arithmetic, but rounding its
+coefficients did not give a double candidate that also passed the independent
+functional-kernel certificate. No multiprecision production fallback or
+parameter rotation was adopted. The strict solve failure remains an explicit
+qualification failure, not a relaxed threshold. Source: [commit `aebf67c6`](https://github.com/yslianTim/rhbm_gem/commit/aebf67c64a5d80071daef698aa887a36d04d7c87).
 
-## Historical FixedNeighbor decisions
+The former global-rank certification path was removed because its dense and
+projected-width workspaces were not suitable for the largest planned shape:
+the retired estimates included `67.2–78.4 GB` for the earlier BDC-SVD shape,
+`189.5 GB` for dense design spectrum, and `39.1 GB` for a combined
+projected-width stage. These were planner estimates for retired algorithms,
+not measured allocations or current production requirements. Production keeps
+the local rank and conditioning checks needed by each block and makes no
+global identifiability claim. Sources: [commit `d9fcbd9e`](https://github.com/yslianTim/rhbm_gem/commit/d9fcbd9ec219ddab04d383cf24ce72b0950a49a7) and [commit `de211df5`](https://github.com/yslianTim/rhbm_gem/commit/de211df5a57647fccc0c8abee2262f82ccdb0c53).
 
-- Fixed-B conditional updates were feasible but were not promoted; FixedNeighbor
-  superseded them.
-- Recorded chain/cube experiments selected core size 12. Against the historic
-  core-64 control, median search time improved by 33.0%–64.3% at 512 and 1024
-  atoms. These are selection measurements, not a current benchmark guarantee.
-- Forward was adopted as the serial Gauss-Seidel order. Reverse was an offline
-  comparison only.
-- OneAccepted was selected over Full and TwoAccepted local update policies and
-  remains intrinsic to each block visit.
-- Prepared mappings remain covered by deterministic tests. They do not reuse
-  numerical factors or accepted states across sweeps.
+The global width cap and bounded solver were promoted without relaxing the
+local A/C solve, endpoint replay, or practical global qualification limits. A
+post-promotion 6Z6U chain-A simulation run used 1,415 qualified donors among
+1,418 Targets, `Q95 = 0.5689788338510722 Å`, and `Bmax = 2.2759153354042887 Å`.
+It converged in 83 sweeps and 22,908 profile evaluations; Independent Replay
+and runtime qualification passed. Candidate objective was `1.2330854370810358e-13`,
+prediction RMSE was about `9.21e-7`, A/C KKT was `9.43e-8`, and projected Width
+KKT was `8.78e-10`. The two recorded Release runs took 298–305 s and measured
+586–617 MB peak RSS. They used 1,418 Targets and 180,478 observations; they do
+not close the separate 37,406-Target full-workflow resource gate. Sources:
+[commit `de211df5`](https://github.com/yslianTim/rhbm_gem/commit/de211df5a57647fccc0c8abee2262f82ccdb0c53) and [commit `975ed2c7`](https://github.com/yslianTim/rhbm_gem/commit/975ed2c72bfb35df695a387770f6ef6d796bba44).
 
-Further historical choices are in [Joint FixedNeighbor](joint-fixed-neighbor-experimental.md).
+## Halo policies and FullABC promotion decision
 
-## Retired global-rank research
+Pure Halo-Support Exclusion is the production policy: it removes each retained
+Halo's recorded support rows, including the exact 2.5 Å boundary, from the
+Target fitting domain. It does not require Halo FirstStage parameters and does
+not infer Halo estimates from the excluded rows. The original observation
+domain and mappings remain available for reconstruction and Peeling.
 
-The former global rank qualification pipeline and its memory planner have been
-removed. Earlier dense, bounded, projected-width, and weak-direction studies
-remain available as research records in [bounded global rank research](joint-bounded-rank-research.md)
-and [Joint component memory census](joint-component-memory-census.md). Their
-rank thresholds, allocation estimates, and unavailable outcomes describe the
-retired pipeline. They are not current runtime checks, memory estimates, or
-production prerequisites.
+An earlier Dynamic Halo-mean study did not justify adopting a changing Halo
+mean. On its recorded 6Z6U case, the dynamic E2 result had an observation
+objective 58.4% above the fixed E0 result, with Halo, Target, and full-field
+prediction RMSEs 5.73×, 5.04×, and 6.49× E0. Forward/reverse E2 runs both
+qualified with exact replay, but the Target parameter changes did not improve
+the field fit. This is one historical model and does not establish that the
+policies are interchangeable. Separately, a 450-fit noise/mismatch pilot from
+the retired Fixed-Halo/Profile-LM path had 65 qualified and 385 unqualified
+fits; it is deliberately unbalanced and is not a population success rate or a
+validation of current Pure Exclusion Active-set LM. Source: `develop` commit
+`c84eeb42c0abaac314fce20309114313ada5af40`.
 
-Historical profile-derivative and high-precision tests still cover local
-numerical primitives. Local SparseQR active-set checks, CompactSvd, KKT, and
-profile derivative utilities remain in the production solver where they are
-needed.
+FullABC and Recovery remain opt-in research paths and were not promoted. Two
+different P4 reports used different samples and gates; their results must not
+be pooled:
 
-## Scientific and workflow limits
+| Report | Stated sample and result | Decision and limitation |
+| --- | --- | --- |
+| P4 promotion gate, [`da63a718`](https://github.com/yslianTim/rhbm_gem/commit/da63a718459e7ca2191484679862f15126acbab6) | P2 had 5 local scenes with 0/5 FullABC-qualified results. A boundary Recovery endpoint replayed consistently but had `A ≈ 8.35e122`, `B ≈ 0.0934 Å`. In a separate three-short-bond seed comparison, component-local Recovery Halo-signal RMSE was `0.00652` versus `0.07363` for kNN-4; boundary Recovery Peeling RMSE was about `1.91e57`. | No promotion: replay and objective agreement did not exclude a pathological endpoint. Five local scenes had no Group members; the long Chain-A run was interrupted before a peak-RSS result, and full save/reload integration was not measured. |
+| P4 production feasibility, [`969f3371`](https://github.com/yslianTim/rhbm_gem/commit/969f3371e0a43af9ca136c119ee939a46635721b) | A distinct P3 synthetic physical set had 10/10 qualified Target endpoints and 8/10 qualified FullABC endpoints; the exact-3 and exact-4 observation free-Halo cases failed qualification. In the 8 qualified pairs, Halo-signal and Peeling RMSE improved, while Local/Group estimates improved in only 4/8. One high-noise A case had RMSE `1.413` and maximum absolute error `3.150`. | No promotion: small synthetic improvement did not establish downstream reliability. The complete 5,938,087-row Halo FullABC workflow, its actual Halo count, process RSS, persistence, and UMAP/Two Stage integration were not measured. |
 
-Local full rank does not rule out cross-block degeneracy. A bounded local
-perturbation study does not replace a global multi-start or block-order study.
-Joint point-estimate error can propagate through peeling. The Joint fit does
-not produce a global parameter covariance; local MDPDE covariance and group
-fitting retain their separate workflows.
+The production Halo reconstruction remains geometry-local kNN-4 Target Median.
+It uses only qualified Target estimates and has deterministic Atom-ID tie
+breaking. FullABC failures, Recovery outputs, and the reports' small-sample
+signal gains do not change this contract.
 
-Historical weak-halo observations showed that a numerically full-rank design
-can still have poor practical sensitivity. Small partial-selection controls
-showed that omitted halo contributors can shift target estimates. The retained
-noise and mismatch research is documented in
-[joint-noise-mismatch-validation.md](joint-noise-mismatch-validation.md), with
-its current receipts in `figures/joint-validation/`.
+## Local conditioning, stability, and large-component limits
 
-The 6Z6U Local Profile LM replay study and FullABC width study are bounded to
-their recorded inputs and host. They document a sweep 4 / block 21 local A/C
-KKT failure and an accepted large-width step followed by severe cancellation.
-Neither study established a full-data converged endpoint or target recovery.
-See [local replay validation](../research/joint-local-replay-validation.md)
-and the [FullABC width study](../research/joint-fullabc-width-degeneracy.md).
+Local Conditioning assesses the free A/C face, conditional projected-width
+directions, and the full profile derivative within each FixedNeighbor block.
+Parameter Stability probes at most eight representative blocks, with bounded
+local solves and `±1e-3` log-width seeds. A full-rank matrix can still be
+ill-conditioned; the current roundoff-amplification warning is
+`κ × ε_double >= 1e-8`. These diagnostics are conditional local evidence, not
+covariance, global identifiability, or endpoint qualification. They do not
+modify accepted estimates or turn an unrun probe into `Stable`. Sources:
+[commit `32cb6362`](https://github.com/yslianTim/rhbm_gem/commit/32cb6362a3d988d7fa77f715515351a9071d58dd), [commit `ddfabe47`](https://github.com/yslianTim/rhbm_gem/commit/ddfabe470f37886086c800c4e657b4b6395aea6a), and [commit `08151497`](https://github.com/yslianTim/rhbm_gem/commit/08151497f68f6c49b250c97f94f4dbe562dc092f).
 
-Closed campaign code and raw receipts are archived in Git history. Historical
-results apply to their saved source, host, and cases; they are not current
-performance claims.
+The deterministic large-shape checks use 5,938,087 rows, 37,406 contributors,
+74,811 support memberships, and 3,118 blocks. One preparation/zero-state
+verification run measured 622,460,928 bytes peak process RSS, with preparation
+and endpoint estimated peaks of 972,989,100 and 625,051,683 bytes. A separate
+preflight measured 1,721,008,128 bytes peak RSS. These runs did not execute a
+complete search, local conditioning and stability over all blocks, or
+downstream work. The planner's 3.2 GB estimate budget and 4.0 GB hard limit
+are not measured RSS guarantees. The full physical-data resource gate remains
+open. Sources: [commit `d9fcbd9e`](https://github.com/yslianTim/rhbm_gem/commit/d9fcbd9ec219ddab04d383cf24ce72b0950a49a7) and [commit `de211df5`](https://github.com/yslianTim/rhbm_gem/commit/de211df5a57647fccc0c8abee2262f82ccdb0c53).
+
+## Peeling and downstream workflow
+
+Post-Joint Local charge correction was fixed to use Original-domain support
+and row lookup. In the recorded 6Z6U B/C/D comparisons, Joint A/B/C, Halo
+fields, and Peeling were unchanged; Local and Group results improved, but
+case D still had Local A/B RMSE `0.709793 / 0.021414`. The evidence supports
+the domain-correctness fix, not complete scientific recovery or a change to
+the Local MDPDE/Group Fitting contracts. An independent small synthetic
+workflow also covers Pure Exclusion → kNN-4 Halo reconstruction → Original
+Peeling → own-charge correction → Local MDPDE → Group Fitting. Sources:
+[fix `a9684293`](https://github.com/yslianTim/rhbm_gem/commit/a968429320eebaf79e1e960b576eea83f7dc8f8d), [validation `7cc9a35e`](https://github.com/yslianTim/rhbm_gem/commit/7cc9a35e8ae2e4ad497cebf092c4cdaedd0f1852), and [workflow validation `975ed2c7`](https://github.com/yslianTim/rhbm_gem/commit/975ed2c72bfb35df695a387770f6ef6d796bba44).
+
+The persisted result retains the Original/Fitting domain identities, exclusion
+mappings, width calibration and global bound, accepted solver provenance,
+qualification evidence, and Halo donor provenance. Historical JSON/SQLite
+decoding remains part of the compatibility contract. The Joint objective does
+not estimate a global parameter covariance; downstream Local MDPDE and Group
+Fitting retain their own qualification rules.
