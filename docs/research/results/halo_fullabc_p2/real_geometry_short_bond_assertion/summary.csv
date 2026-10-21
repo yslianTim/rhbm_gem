@@ -1,5 +1,0 @@
-scenario,method,available,reason,halo_count,fixed_count,free_count,A_RMSE,B_RMSE,C_RMSE,halo_signal_RMSE,peeling_RMSE,tail_ratio_MAE,local_A_RMSE,local_B_RMSE,seconds,process_peak_RSS_bytes
-6z6u_real_geometry_seq145_147_seed_4101,geometry-kNN4,1,,104,72,32,1.220426,0.060988,0.466610,0.073641,0.629001,24.157517,0.278993,0.021703,2.02146,256360448
-6z6u_real_geometry_seq145_147_seed_4101,observation-AC-fixed-kNN-width,1,,104,72,32,212.374489,0.062856,0.382594,0.006803,,,,,0.419212,256360448
-6z6u_real_geometry_seq145_147_seed_4101,observation-driven-fullabc,0,halo-fullabc-solver-unqualified,104,72,32,,,,,,,,,0,256360448
-6z6u_real_geometry_seq145_147_seed_4101,oracle-truth,1,,104,72,32,0.000000,0.000000,0.000000,0.000000,,,,,0,256360448

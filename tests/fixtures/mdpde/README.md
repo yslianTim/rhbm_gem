@@ -15,13 +15,3 @@ Permanent `ProductionFittingTest` and `MDPDENumericsTest` cases replay these
 inputs without model, map, or simulation-manifest files. They record failures
 of the unchanged production solver; refined endpoints do not replace the
 captured native outputs.
-
-`6z6u-fixed-halo-first-stage.json` is a separate capture of the four failed
-FirstStage halos in the formal chain-A 6Z6U workflow. It stores the raw sample
-distances, responses and selection flags, the exact log-response dataset and
-design matrix, local alpha, OLS start, native options, normalization divisor,
-native and recovery results, and the fixed-point trace through convergence.
-The source map and model paths and their hashes are recorded in
-`docs/research/fixed-halo-target-only-6z6u-validation.md`. The captured observations and recovery trace remain as a historical research
-record. The Joint FixedHalo-specific recovery regression was retired with that
-estimation path; current tests cover generic endpoint refinement separately.

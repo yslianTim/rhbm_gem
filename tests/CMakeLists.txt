@@ -312,109 +312,6 @@ target_include_directories(joint_test_support PRIVATE
     "${PROJECT_BINARY_DIR}/generated/$<CONFIG>")
 target_link_libraries(rhbm_tests PRIVATE joint_test_support)
 
-add_executable(joint_component_runtime tools/joint_component_runtime.cpp support/JointComponentRuntime.cpp)
-target_link_libraries(joint_component_runtime PRIVATE joint_test_support rhbm_gem)
-add_dependencies(tests_all joint_component_runtime)
-
-add_executable(joint_production_bounded_synthetic experiments/joint_production_bounded_synthetic.cpp)
-target_link_libraries(joint_production_bounded_synthetic PRIVATE joint_test_support rhbm_gem CompilerFlags)
-add_dependencies(tests_all joint_production_bounded_synthetic)
-add_test(NAME joint_production_bounded_synthetic COMMAND $<TARGET_FILE:joint_production_bounded_synthetic>)
-
-add_executable(joint_label_free_halo_policy experiments/joint_label_free_halo_policy.cpp)
-target_link_libraries(joint_label_free_halo_policy PRIVATE rhbm_gem CompilerFlags)
-target_include_directories(joint_label_free_halo_policy PRIVATE "${PROJECT_SOURCE_DIR}/src")
-add_test(NAME joint_label_free_halo_policy COMMAND $<TARGET_FILE:joint_label_free_halo_policy>)
-
-add_executable(joint_halo_geometry_census experiments/joint_halo_geometry_census.cpp)
-target_link_libraries(joint_halo_geometry_census PRIVATE rhbm_gem CompilerFlags)
-
-add_executable(joint_halo_fullabc_validation experiments/joint_halo_fullabc_validation.cpp)
-target_link_libraries(joint_halo_fullabc_validation PRIVATE rhbm_gem CompilerFlags)
-target_include_directories(joint_halo_fullabc_validation PRIVATE "${PROJECT_SOURCE_DIR}/src")
-
-if(RHBM_GEM_BUILD_BENCHMARKS)
-    add_custom_target(benchmarks_all)
-    add_executable(joint_partial_selection experiments/joint_partial_selection.cpp)
-    target_link_libraries(joint_partial_selection PRIVATE joint_test_support rhbm_gem)
-    add_dependencies(benchmarks_all joint_partial_selection)
-
-    add_executable(joint_postprocessing_benchmark experiments/joint_postprocessing_benchmark.cpp)
-    target_link_libraries(joint_postprocessing_benchmark PRIVATE joint_test_support rhbm_gem)
-    add_dependencies(benchmarks_all joint_postprocessing_benchmark)
-
-
-    add_executable(joint_fixed_neighbor_experiment experiments/joint_fixed_neighbor.cpp)
-    target_link_libraries(joint_fixed_neighbor_experiment PRIVATE joint_test_support rhbm_gem_test CompilerFlags)
-    target_compile_definitions(joint_fixed_neighbor_experiment PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
-    add_dependencies(benchmarks_all joint_fixed_neighbor_experiment)
-endif()
-
-if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
-    add_library(joint_offline_support STATIC support/JointOfflineAudit.cpp
-        support/JointPrecisionAudit.cpp)
-    target_link_libraries(joint_offline_support PUBLIC joint_test_support)
-endif()
-
-if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
-    add_executable(joint_local_ac_kkt experiments/joint_local_ac_kkt.cpp)
-    target_link_libraries(joint_local_ac_kkt PRIVATE joint_test_support rhbm_gem)
-    add_executable(joint_local_replay_analysis experiments/joint_local_replay_analysis.cpp)
-    target_link_libraries(joint_local_replay_analysis PRIVATE joint_test_support rhbm_gem)
-    add_executable(joint_width_trajectory experiments/joint_width_trajectory.cpp)
-    target_link_libraries(joint_width_trajectory PRIVATE joint_test_support joint_offline_support rhbm_gem_test CompilerFlags)
-    target_compile_definitions(joint_width_trajectory PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
-    add_dependencies(tests_all joint_width_trajectory)
-    add_executable(joint_width_repro_no_instrumentation experiments/joint_width_repro_no_instrumentation.cpp)
-    target_link_libraries(joint_width_repro_no_instrumentation PRIVATE joint_test_support rhbm_gem CompilerFlags)
-    add_dependencies(tests_all joint_width_repro_no_instrumentation)
-    add_executable(joint_fullabc_width_study experiments/joint_fullabc_width_study.cpp)
-    target_link_libraries(joint_fullabc_width_study PRIVATE joint_test_support rhbm_gem_test CompilerFlags)
-    target_compile_definitions(joint_fullabc_width_study PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
-    add_dependencies(tests_all joint_fullabc_width_study)
-    add_executable(joint_fixed_width_oracle experiments/joint_fixed_width_oracle.cpp)
-    target_link_libraries(joint_fixed_width_oracle PRIVATE joint_test_support rhbm_gem_test CompilerFlags)
-    target_compile_definitions(joint_fixed_width_oracle PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
-    add_dependencies(tests_all joint_fixed_width_oracle)
-    add_test(NAME joint_local_ac_kkt_recovery
-        COMMAND $<TARGET_FILE:joint_local_ac_kkt> replay
-            "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_ac_kkt/block-82.json")
-    add_test(NAME joint_local_ac_kkt_accuracy
-        COMMAND $<TARGET_FILE:joint_local_ac_kkt> assess
-            "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_ac_kkt/block-82.json")
-    add_test(NAME joint_local_ac_kkt_sweep_recovery
-        COMMAND $<TARGET_FILE:joint_local_ac_kkt> replay
-            "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_ac_kkt/block-46-sweep-2.json")
-    add_test(NAME joint_local_ac_kkt_sweep4_block19_rejection
-        COMMAND $<TARGET_FILE:joint_local_ac_kkt> expect-kkt-rejection
-            "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_ac_kkt/block-19-sweep-4.json")
-    add_test(NAME joint_local_ac_kkt_sweep4_block21_rejection
-        COMMAND $<TARGET_FILE:joint_local_ac_kkt> expect-kkt-rejection
-            "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_ac_kkt/block-21-sweep-4.json")
-    add_test(NAME joint_local_replay_fixture
-        COMMAND $<TARGET_FILE:joint_local_ac_kkt> replay-trial
-            "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_replay/block-82-trial.json")
-    add_test(NAME joint_local_replay_numerical_analysis
-        COMMAND $<TARGET_FILE:joint_local_replay_analysis>
-            "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_replay/block-82-trial.json")
-    set_tests_properties(joint_local_ac_kkt_recovery joint_local_ac_kkt_accuracy joint_local_ac_kkt_sweep_recovery
-        joint_local_ac_kkt_sweep4_block19_rejection joint_local_ac_kkt_sweep4_block21_rejection
-        joint_local_replay_fixture PROPERTIES
-        LABELS "offline;domain:core;intent:algorithm;joint:numerics" TIMEOUT 120
-        ENVIRONMENT "OMP_NUM_THREADS=1")
-    set_tests_properties(joint_local_replay_numerical_analysis PROPERTIES
-        LABELS "offline;domain:core;intent:algorithm;joint:numerics" TIMEOUT 120
-        ENVIRONMENT "OMP_NUM_THREADS=1")
-    add_executable(joint_offline_tests core/joint_component/Precision_test.cpp
-    )
-    target_link_libraries(joint_offline_tests PRIVATE joint_offline_support rhbm_gem ${GTEST_MAIN_TARGET})
-    add_test(NAME joint_component_offline_tests COMMAND joint_offline_tests)
-    set_tests_properties(joint_component_offline_tests PROPERTIES
-        LABELS "offline;domain:core;intent:algorithm;joint:offline;long" TIMEOUT 3600
-        ENVIRONMENT "OMP_NUM_THREADS=1")
-    add_dependencies(tests_all joint_offline_tests)
-endif()
-
 add_rhbm_gtest_group(rhbm_tests_joint_component_contract
     DOMAIN core INTENTS algorithm contract SOURCES ${JOINT_COMPONENT_CONTRACT_TEST_SOURCES})
 set_tests_properties(rhbm_tests_joint_component_contract PROPERTIES
@@ -437,20 +334,6 @@ add_test(NAME rhbm_tests_joint_component_numerical
 set_tests_properties(rhbm_tests_joint_component_numerical PROPERTIES
     LABELS "core;domain:core;intent:algorithm;joint:numerical" TIMEOUT 900
     ENVIRONMENT "OMP_NUM_THREADS=1")
-
-add_test(NAME joint_component_gram_scalability
-    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
-        --gtest_filter=JointComponentNumericsTest.CompactJacobianGramIdentityDiagnosticsAcrossLattices)
-set_tests_properties(joint_component_gram_scalability
-    PROPERTIES LABELS "core;domain:core;intent:algorithm;joint:scalability;joint:offline;long" TIMEOUT 3600
-        ENVIRONMENT "OMP_NUM_THREADS=1")
-
-add_test(NAME joint_component_mapping_memory_scalability
-    COMMAND $<TARGET_FILE:rhbm_tests> --gtest_color=yes
-        --gtest_filter=JointFixedNeighborBlockCoordinateTest.ProductionScaleSingleComponentPreparationStaysBelowBudget)
-set_tests_properties(joint_component_mapping_memory_scalability
-    PROPERTIES LABELS "core;domain:core;intent:algorithm;joint:scalability;long" TIMEOUT 3600
-        ENVIRONMENT "OMP_NUM_THREADS=1")
 
 set(joint_persistence_test_patterns
     DataObjectPersistenceTest.JointResultsRoundTripCopyClearAndReplaceAtomically
@@ -555,66 +438,22 @@ if(NOT DEFINED Python_EXECUTABLE OR Python_EXECUTABLE STREQUAL "")
 endif()
 
 if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
-    add_test(NAME experiment_support_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/experiment_support_test.py")
-    add_test(NAME experiment_runner_dependency_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/runner_dependency_test.py")
-    add_test(NAME joint_benchmark_contract_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_benchmark_test.py")
-    add_test(NAME joint_experiment_cleanup_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_experiment_cleanup_test.py")
-    add_test(NAME fixed_seed_joint_noise_generator_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/fixed_seed_joint_noise_generator_test.py")
-    set_tests_properties(experiment_support_test experiment_runner_dependency_test
-        PROPERTIES LABELS "core;domain:integration;intent:algorithm")
-    set_tests_properties(fixed_seed_joint_noise_generator_test
-        PROPERTIES LABELS "core;domain:integration;intent:algorithm")
-    set_tests_properties(joint_benchmark_contract_test
-        PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:numerical" TIMEOUT 300
+    add_test(NAME joint_workflow_cli_smoke_test
+        COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/integration/joint_workflow_cli_smoke.py
+            $<TARGET_FILE:rhbm_gem_cli>)
+    set_tests_properties(joint_workflow_cli_smoke_test
+        PROPERTIES LABELS "core;domain:integration;intent:command;joint:workflow" TIMEOUT 300
         ENVIRONMENT "OMP_NUM_THREADS=1")
-    set_tests_properties(joint_experiment_cleanup_test
-        PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:contract" TIMEOUT 180
-        ENVIRONMENT "OMP_NUM_THREADS=1")
-    add_test(NAME joint_component_runtime_runner_test
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime_test.py")
-    add_test(NAME joint_component_regression
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime.py"
-            regression --executable $<TARGET_FILE:joint_component_runtime> --work-dir "${PROJECT_BINARY_DIR}/joint-regression")
-    add_test(NAME joint_component_physical_smoke
-        COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime.py"
-            physical-smoke --executable $<TARGET_FILE:joint_component_runtime>)
+    add_test(
+        NAME command_scaffold_smoke_test
+        COMMAND ${Python_EXECUTABLE}
+            ${PROJECT_SOURCE_DIR}/tests/integration/command_scaffold_smoke.py
+            ${PROJECT_SOURCE_DIR}
+    )
     set_tests_properties(
-        joint_component_runtime_runner_test
-        joint_component_regression joint_component_physical_smoke
-        PROPERTIES LABELS "core;domain:integration;intent:algorithm;joint:workflow" TIMEOUT 600
-        ENVIRONMENT "OMP_NUM_THREADS=1")
-
-    if(RHBM_GEM_BUILD_BENCHMARKS)
-        add_test(NAME joint_benchmark_smoke
-            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_benchmark_test.py"
-                --smoke "${PROJECT_BINARY_DIR}")
-        set_tests_properties(joint_benchmark_smoke PROPERTIES
-            LABELS "benchmark;domain:integration;intent:benchmark;joint:numerical" TIMEOUT 300
-            ENVIRONMENT "OMP_NUM_THREADS=1")
-    endif()
-
-    if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
-        add_test(NAME joint_fullabc_width_precision_regression
-            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_fullabc_width_precision_test.py"
-                --executable $<TARGET_FILE:joint_fullabc_width_study>
-                --fixture "${PROJECT_SOURCE_DIR}/tests/fixtures/joint_local_ac_kkt/block-21-sweep-4.json")
-        set_tests_properties(joint_fullabc_width_precision_regression PROPERTIES
-            LABELS "offline;domain:integration;intent:algorithm;joint:offline;long" TIMEOUT 3600 RUN_SERIAL TRUE
-            ENVIRONMENT "OMP_NUM_THREADS=1")
-    endif()
-    if(RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS)
-        add_test(NAME joint_component_extended_regression
-            COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/joint_component_runtime.py"
-                regression --extended --executable $<TARGET_FILE:joint_component_runtime> --work-dir "${PROJECT_BINARY_DIR}/joint-extended")
-        set_tests_properties(joint_component_extended_regression
-            PROPERTIES LABELS "extended;domain:integration;intent:algorithm;joint:offline;long" TIMEOUT 3600
-            ENVIRONMENT "OMP_NUM_THREADS=1")
-    endif()
+        command_scaffold_smoke_test
+        PROPERTIES LABELS "core;domain:integration;intent:contract"
+    )
 endif()
 
 if(UNIX)
@@ -635,22 +474,6 @@ endif()
 
 if(DEFINED Python_EXECUTABLE)
     add_dependencies(tests_all rhbm_gem_cli)
-    add_test(NAME joint_workflow_cli_smoke_test
-        COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/integration/joint_workflow_cli_smoke.py
-            $<TARGET_FILE:rhbm_gem_cli>)
-    set_tests_properties(joint_workflow_cli_smoke_test
-        PROPERTIES LABELS "core;domain:integration;intent:command;joint:workflow" TIMEOUT 300
-        ENVIRONMENT "OMP_NUM_THREADS=1")
-    add_test(
-        NAME command_scaffold_smoke_test
-        COMMAND ${Python_EXECUTABLE}
-            ${PROJECT_SOURCE_DIR}/tests/integration/command_scaffold_smoke.py
-            ${PROJECT_SOURCE_DIR}
-    )
-    set_tests_properties(
-        command_scaffold_smoke_test
-        PROPERTIES LABELS "core;domain:integration;intent:contract"
-    )
 endif()
 
 if(BUILD_PYTHON_BINDINGS AND TARGET rhbm_gem_module AND DEFINED Python_EXECUTABLE)
@@ -693,36 +516,4 @@ endforeach()
 get_target_property(_production_definitions rhbm_gem COMPILE_DEFINITIONS)
 if(_production_definitions MATCHES "RHBM_GEM_TEST_INSTRUMENTATION")
     message(FATAL_ERROR "Test instrumentation leaked into rhbm_gem")
-endif()
-
-get_target_property(_tests_all_dependencies tests_all MANUALLY_ADDED_DEPENDENCIES)
-foreach(_optional_target IN ITEMS
-    joint_partial_selection
-    joint_postprocessing_benchmark
-    joint_fixed_neighbor_experiment)
-    if(_optional_target IN_LIST _tests_all_dependencies)
-        message(FATAL_ERROR "Optional target ${_optional_target} must not be a tests_all dependency")
-    endif()
-endforeach()
-
-if(RHBM_GEM_BUILD_BENCHMARKS)
-    foreach(_target IN ITEMS joint_partial_selection joint_postprocessing_benchmark joint_fixed_neighbor_experiment)
-        if(NOT TARGET ${_target})
-            message(FATAL_ERROR "RHBM_GEM_BUILD_BENCHMARKS did not create ${_target}")
-        endif()
-    endforeach()
-else()
-    foreach(_target IN ITEMS joint_partial_selection joint_postprocessing_benchmark joint_fixed_neighbor_experiment)
-        if(TARGET ${_target})
-            message(FATAL_ERROR "${_target} exists while RHBM_GEM_BUILD_BENCHMARKS=OFF")
-        endif()
-    endforeach()
-endif()
-
-if(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS)
-    if(NOT TARGET joint_offline_tests)
-        message(FATAL_ERROR "RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS did not create its precision tests")
-    endif()
-elseif(TARGET joint_offline_tests)
-    message(FATAL_ERROR "Offline precision tests exist while RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS=OFF")
 endif()

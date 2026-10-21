@@ -21,12 +21,6 @@ option(RHBM_GEM_ENABLE_UMAP
     "Enable the umap_embedding command through umappp" ON)
 option(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
     "Enable experimental features across the project" OFF)
-option(RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS
-    "Enable frozen 168-atom and additional joint component regressions" OFF)
-option(RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS
-    "Build independent joint component derivative and certification tools" OFF)
-option(RHBM_GEM_BUILD_BENCHMARKS
-    "Build current Joint benchmark and measurement tools" OFF)
 foreach(retired_option IN ITEMS RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT)
     if(DEFINED ${retired_option})
         message(FATAL_ERROR "${retired_option} is retired. Remove this option from your command and cache.")
@@ -65,14 +59,6 @@ rhbm_gem_normalize_cache_enum(
 
 if(ENABLE_COVERAGE AND NOT BUILD_TESTING)
     message(FATAL_ERROR "ENABLE_COVERAGE requires BUILD_TESTING=ON")
-endif()
-
-if((RHBM_GEM_ENABLE_JOINT_EXTENDED_TESTS OR RHBM_GEM_ENABLE_JOINT_OFFLINE_AUDITS) AND NOT BUILD_TESTING)
-    message(FATAL_ERROR "Joint component test options require BUILD_TESTING=ON")
-endif()
-
-if(RHBM_GEM_BUILD_BENCHMARKS AND NOT BUILD_TESTING)
-    message(FATAL_ERROR "Benchmark builds require BUILD_TESTING=ON")
 endif()
 
 add_library(CompilerFlags INTERFACE)

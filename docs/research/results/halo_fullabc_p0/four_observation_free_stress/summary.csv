@@ -1,5 +1,0 @@
-scenario,method,available,reason,halo_count,fixed_count,free_count,A_RMSE,B_RMSE,C_RMSE,halo_signal_RMSE,peeling_RMSE,tail_ratio_MAE,local_A_RMSE,local_B_RMSE,seconds,process_peak_RSS_bytes
-four_observation_free_stress,geometry-kNN4,1,,6,3,3,0.317135,0.148922,0.192810,0.030561,0.020145,0.035912,0.261726,0.090310,2.90002,49954816
-four_observation_free_stress,observation-AC-fixed-kNN-width,1,,6,3,3,0.330472,0.147784,0.007177,0.000474,,,,,0.0121911,49954816
-four_observation_free_stress,observation-driven-fullabc,0,halo-fullabc-solver-unqualified,6,3,3,,,,,,,,,0,49954816
-four_observation_free_stress,oracle-truth,1,,6,3,3,0.000000,0.000000,0.000000,0.000000,,,,,0,49954816
