@@ -64,7 +64,6 @@ void RemapTargetEvidence(std::optional<JointTargetEvidence> & evidence,
     const std::vector<std::size_t> & atom_mapping,std::size_t original_rows)
 {
     if(!evidence) return;
-    for(auto & atom:evidence->atoms) RemapAtomIndex(atom.atom,atom_mapping);
     for(auto & point:evidence->point_atoms) RemapAtomIndex(point.atom,atom_mapping);
     evidence->original_rows=original_rows;
 }
@@ -77,11 +76,6 @@ void RemapComponentForOriginalDomain(JointAnalysisComponent & component,
     {
         for(auto & atom:component.layout->full_atoms) RemapAtomIndex(atom,atom_mapping);
         for(auto & row:component.layout->informative_rows) RemapRowIndex(row,row_mapping);
-        for(auto & group:component.layout->groups)
-        {
-            RemapRowIndex(group.row,row_mapping);
-            for(auto & atom:group.atoms) RemapAtomIndex(atom,atom_mapping);
-        }
     }
     for(auto & block:component.local_conditioning)
         for(auto & atom:block.core_atoms) RemapAtomIndex(atom,atom_mapping);
@@ -286,11 +280,6 @@ JointProblem::JointProblem(JointProblemInput input)
         throw std::invalid_argument("Invalid joint problem identities or dimensions.");
     if(input.selection_domain && !input.selection_domain->IsValid(input.atom_ids.size()))
         throw std::invalid_argument("Invalid joint selection domain.");
-    if(input.selection_domain &&
-        input.selection_domain->contributor_policy==FixedHaloContributorPolicy)
-        throw std::invalid_argument("Fixed Halo estimation is retired.");
-    if(input.selection_domain && input.selection_domain->contributor_policy==FullABCHaloContributorPolicy)
-        throw std::invalid_argument("FullABC Halo estimation is retired.");
     if(!std::all_of(input.observations.begin(),input.observations.end(),[](double value){return std::isfinite(value);}))
         throw std::invalid_argument("Nonfinite joint observations.");
     for(const auto & atom:input.support) for(const auto & s:atom)

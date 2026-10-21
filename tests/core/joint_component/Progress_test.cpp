@@ -87,7 +87,6 @@ void ExpectSameState(const rhbm_gem::JointState & left, const rhbm_gem::JointSta
     EXPECT_EQ(left.log_b, right.log_b);
     EXPECT_EQ(left.width_gradient, right.width_gradient);
     EXPECT_DOUBLE_EQ(left.objective, right.objective);
-    EXPECT_EQ(left.nuisance_amplitudes, right.nuisance_amplitudes);
 }
 
 void ExpectSameFitNumerics(const core::JointFitResult & left, const core::JointFitResult & right)
@@ -116,7 +115,6 @@ void ExpectSameFitNumerics(const core::JointFitResult & left, const core::JointF
         EXPECT_EQ(a.rows, b.rows);
         EXPECT_EQ(a.search_completed, b.search_completed);
         EXPECT_EQ(a.profile_evaluations, b.profile_evaluations);
-        EXPECT_EQ(a.reference_evaluations, b.reference_evaluations);
         EXPECT_EQ(a.accepted_updates, b.accepted_updates);
         EXPECT_EQ(a.native_status, b.native_status);
         ASSERT_EQ(a.state.has_value(), b.state.has_value());
@@ -285,7 +283,6 @@ TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
     ASSERT_EQ(fit.components.size(),2u);
     EXPECT_EQ(fit.solver_provenance.search_method,"fixed-neighbor");
     EXPECT_EQ(fit.solver_provenance.fixed_neighbor_core_atoms,12u);
-    EXPECT_FALSE(fit.solver_provenance.fixed_neighbor_local_work);
     EXPECT_EQ(fit.solver_provenance.fixed_neighbor_policy_version,
         rhbm_gem::FixedNeighborPolicyContractVersion);
     EXPECT_EQ(fit.solver_provenance.fixed_neighbor_maximum_sweeps,200u);
@@ -309,12 +306,8 @@ TEST(JointProgressTest, ObservableComponentsUseTheSameLifecycle)
     std::vector<joint::JointProgressEvent> events;
     const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
     const auto fit = joint::FitFixedNeighborComponents(problem, initial, {}, observer);
-    EXPECT_TRUE(problem.ParameterLayout().groups.empty());
     ASSERT_TRUE(fit.assembled_state);
     ExpectLifecycle(problem, fit, events, {});
-    EXPECT_TRUE(std::none_of(fit.components.begin(),fit.components.end(),[](const auto & component) {
-        return component.stop_reason=="analytic-nuisance-only";
-    }));
 }
 
 TEST(JointProgressTest, QuietWorkflowSuppressesProgressOutput)

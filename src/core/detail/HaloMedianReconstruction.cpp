@@ -102,12 +102,9 @@ bool SameSelectionDomain(const JointSelectionDomain & left,const JointSelectionD
 {
     const bool same_pure=left.pure_halo_support_exclusion.has_value()==right.pure_halo_support_exclusion.has_value() &&
         (!left.pure_halo_support_exclusion || *left.pure_halo_support_exclusion==*right.pure_halo_support_exclusion);
-    const bool same_fixed=left.fixed_halo_selection.has_value()==right.fixed_halo_selection.has_value() &&
-        (!left.fixed_halo_selection || *left.fixed_halo_selection==*right.fixed_halo_selection);
     return left.contract==right.contract && left.target_indices==right.target_indices &&
         left.observation_radius==right.observation_radius && left.support_radius==right.support_radius &&
-        left.contributor_policy==right.contributor_policy &&
-        left.halo_eligibility.has_value()==right.halo_eligibility.has_value() && same_fixed && same_pure;
+        left.contributor_policy==right.contributor_policy && same_pure;
 }
 
 bool ValidPoint(const GaussianModel3D & point)

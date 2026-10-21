@@ -230,7 +230,6 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
     EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),19);
     const auto decoded=rhbm_gem::joint_result_io::Decode(encoded);
     ASSERT_TRUE(decoded.selection_domain); EXPECT_EQ(decoded.selection_domain->target_indices,(std::vector<std::size_t>{0}));
-    EXPECT_TRUE(decoded.selection_domain->fixed_halo_selection==std::nullopt);
     ASSERT_TRUE(decoded.selection_domain->pure_halo_support_exclusion);
     EXPECT_EQ(decoded.selection_domain->pure_halo_support_exclusion,saved.selection_domain->pure_halo_support_exclusion);
     EXPECT_EQ(decoded.initialization.data_scope,"contributor-local-sampling-may-read-outside-target-domain");
@@ -240,7 +239,7 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(missing_provenance)),std::invalid_argument);
     f.model->EditAnalysis().SetJointResult(saved);
 }
-TEST(JointComponentPartialSelectionTest, RetiredFullABCHaloPolicyCannotConstructNewProblem)
+TEST(JointComponentPartialSelectionTest, UnknownContributorPolicyCannotConstructNewProblem)
 {
     core::JointProblemInput input;
     input.observations={0.0};
@@ -248,9 +247,8 @@ TEST(JointComponentPartialSelectionTest, RetiredFullABCHaloPolicyCannotConstruct
     input.atom_ids={"1"};
     input.row_ids={"0"};
     input.selection_domain.emplace();
-    input.selection_domain->contributor_policy=std::string(rhbm_gem::FullABCHaloContributorPolicy);
+    input.selection_domain->contributor_policy="unsupported-contributor-policy";
     input.selection_domain->target_indices={0};
-    input.selection_domain->halo_eligibility.emplace();
 
     EXPECT_THROW(core::JointProblem(std::move(input)),std::invalid_argument);
 }
@@ -402,25 +400,6 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsOnceWi
     }
 }
 
-TEST(JointComponentPartialSelectionTest, HistoricalFixedHaloPeelingIsRejected)
-{
-    auto f=joint_partial_test::Make("partial");
-    core::JointProblemInput input;
-    input.atom_ids={"1","2"}; input.row_ids={"0","1","2"}; input.observations={1.,2.,3.};
-    input.support={{{0,0.},{1,1.}},{{1,.25},{2,1.}}};
-    input.selection_domain.emplace(); input.selection_domain->target_indices={0};
-    const core::JointProblem problem(input);
-    rhbm_gem::JointAnalysisResult historical;
-    historical.parameterization_contract=std::string(rhbm_gem::JointTargetOnlyFixedHaloParameterizationContract);
-    historical.atom_ids=input.atom_ids; historical.row_ids=input.row_ids;
-    historical.selection_domain.emplace(); historical.selection_domain->target_indices={0};
-    historical.selection_domain->contributor_policy=std::string(rhbm_gem::FixedHaloContributorPolicy);
-    historical.selection_domain->fixed_halo_selection=rhbm_gem::JointFixedHaloSelectionProvenance{1,1,1,0};
-    historical.fixed_halos={{1,"2",1.,.5,0.,8,0,
-        std::string(rhbm_gem::FixedHaloParameterSourceContractVersion),true}};
-    const core::detail::JointPostprocessingContext postprocessing(*f.map,*f.model,problem,&historical);
-    EXPECT_THROW(postprocessing.BuildPostFitPeelingSamples(),std::invalid_argument);
-}
 TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissingStates)
 {
     auto f = joint_partial_test::Make("all");

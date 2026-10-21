@@ -127,7 +127,7 @@ using Clock=std::chrono::steady_clock;
 double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
 std::vector<double> Values(const Vector & v) {return {v.data(),v.data()+v.size()};}
 JointState ComponentState(const Endpoint & e,double scale)
-{return {Values(e.beta),Values(e.eta.array().exp()),Values(e.eta),Values(e.gradient),e.certificate.objective/(scale*scale),{}};}
+{return {Values(e.beta),Values(e.eta.array().exp()),Values(e.eta),Values(e.gradient),e.certificate.objective/(scale*scale)};}
 JointParameterLayout ComponentLayout(const JointParameterLayout & layout,const ComponentView & view)
 {
     JointParameterLayout out;

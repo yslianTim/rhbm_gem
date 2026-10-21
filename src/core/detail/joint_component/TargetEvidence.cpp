@@ -302,12 +302,6 @@ JointCheckStatus TargetConvergence(const std::optional<JointTargetEvidence> & ev
         const auto found=std::find_if(evidence->checks.begin(),evidence->checks.end(),[&](const auto & c){return c.name==name;});
         status=MergeConvergenceStatus(status,found==evidence->checks.end() ? Status::Unavailable : found->status);
     }
-    if(evidence->contract=="target-estimability-v1")
-        for(const char * name:{"local-correction","target-local-correction"})
-        {
-            const auto found=std::find_if(evidence->checks.begin(),evidence->checks.end(),[&](const auto & c){return c.name==name;});
-            status=MergeConvergenceStatus(status,found==evidence->checks.end() ? Status::Unavailable : found->status);
-        }
     return status;
 }
 void AddTargetEvidence(JointFitResult & fit)
@@ -317,7 +311,7 @@ void AddTargetEvidence(JointFitResult & fit)
     const auto & problem=*fit.problem;
     for(auto & c:fit.components)
     {
-        const JointParameterLayout layout=c.layout.value_or(JointParameterLayout{c.atoms,c.rows,{}});
+        const JointParameterLayout layout=c.layout.value_or(JointParameterLayout{c.atoms,c.rows});
         static const std::vector<JointBlockParameterStability> no_stability;
         const auto & stability=c.parameter_stability ? c.parameter_stability->blocks : no_stability;
         c.target_evidence=AssessTargetPointState(problem,layout,c.state,c.RuntimeConvergence(),

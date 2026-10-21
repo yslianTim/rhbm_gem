@@ -64,7 +64,7 @@ Fixture MakeFixture()
     component.rows={0,1,2,3,4};
     component.runtime_convergence=JointCheckStatus::Passed;
     component.target_runtime_convergence=JointCheckStatus::Passed;
-    component.state=JointState{{1.0,2.0,3.0,5.0,5.0,8.0},{1,2,3},{0,0,0},{0,0,0},0,{}};
+    component.state=JointState{{1.0,2.0,3.0,5.0,5.0,8.0},{1,2,3},{0,0,0},{0,0,0},0};
     result.assembled_state=component.state;
     result.target_evidence.emplace();
     result.target_evidence->contract=std::string(JointTargetPointValidationContractVersion);

@@ -55,7 +55,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
 struct FixedNeighborComponentBatch
 {
     std::vector<JointComponentResult> components;
-    // The single-component FullABC path can reuse its certified assessment
+    // A single-component fit can reuse its certified assessment
     // during assembly. Other search and certification state is released as
     // each component finishes.
     std::optional<Assessment> single_component_assessment;

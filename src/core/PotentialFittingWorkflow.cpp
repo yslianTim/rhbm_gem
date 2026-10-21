@@ -229,23 +229,6 @@ void RunJointComponentWorkflow(
             << ", halo=" << input.atom_ids.size() - targets
             << ", elapsed=" << std::fixed << std::setprecision(2) << construction_seconds << 's';
         LogJointInfo(message.str());
-        if(input.selection_domain && input.selection_domain->halo_eligibility)
-        {
-            const auto & eligibility=*input.selection_domain->halo_eligibility;
-            std::size_t insufficient_rows{},insufficient_radial{};
-            for(const auto & excluded:eligibility.excluded_halos)
-            {
-                insufficient_rows+=excluded.reason=="insufficient-observations";
-                insufficient_radial+=excluded.reason=="insufficient-radial-information";
-            }
-            std::ostringstream halo_message;
-            halo_message << "[Joint] Halo eligibility: candidates=" << eligibility.candidate_halos
-                << ", retained=" << eligibility.retained_halos
-                << ", excluded=" << eligibility.excluded_halos.size()
-                << ", excluded_insufficient_rows=" << insufficient_rows
-                << ", excluded_insufficient_radial_information=" << insufficient_radial;
-            LogJointInfo(halo_message.str());
-        }
     }
     const auto initialization_start = std::chrono::steady_clock::now();
     const auto initialization = [&] {

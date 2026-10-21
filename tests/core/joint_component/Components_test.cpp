@@ -87,7 +87,6 @@ TEST(JointComponentChecksTest, ImmutableComponentViewsMapDomainsWithoutCopyingPr
         rhbm_gem::JointParameterLayout out;
         for(const auto atom:parent.full_atoms) if(view.LocalAtom(static_cast<Eigen::Index>(atom))>=0) out.full_atoms.push_back(atom);
         for(const auto row:parent.informative_rows) if(view.LocalRow(static_cast<Eigen::Index>(row))>=0) out.informative_rows.push_back(row);
-        for(const auto & group:parent.groups) if(view.LocalRow(static_cast<Eigen::Index>(group.row))>=0) out.groups.push_back(group);
         return out;
     };
     const auto check=[&](JointProblem problem) {

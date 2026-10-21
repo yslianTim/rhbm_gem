@@ -25,7 +25,7 @@ Vector SelectBeta(VectorRef beta,const std::vector<std::size_t> & atoms)
 JointState State(const Endpoint & endpoint,double scale)
 {
     return {Values(endpoint.beta),Values(endpoint.eta.array().exp()),Values(endpoint.eta),
-        Values(endpoint.gradient),endpoint.certificate.objective/(scale*scale),{}};
+        Values(endpoint.gradient),endpoint.certificate.objective/(scale*scale)};
 }
 void AssembleResult(const JointProblem & problem,const ProblemData & data,const JointParameterLayout & layout,
     const Domain & domain,VectorRef y,const EvaluationContext & context,
@@ -123,7 +123,7 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
     const auto & data=JointProblemAccess::Get(problem); const auto & input=*data.input; const auto & layout=data.layout;
     if(initial_eta.size()!=static_cast<Eigen::Index>(input.atom_ids.size()) || !initial_eta.allFinite() ||
         !(data.context.scale>0) || !std::isfinite(data.context.scale) || policy.core_atoms==0 ||
-        layout.groups.size()!=0 || layout.full_atoms.size()!=input.atom_ids.size() ||
+        layout.full_atoms.size()!=input.atom_ids.size() ||
         layout.informative_rows.size()!=input.observations.size() || data.partition.components.size()!=1)
     {out.reason="block-invalid-partition"; return out;}
     for(Eigen::Index a=0;a<initial_eta.size();++a)

@@ -148,7 +148,7 @@ JointInitialization PrepareJointWidthInitialization(
         Logger::FinishProgressLine();
         Logger::Log(LogLevel::Info, "[Joint] Sampling " +
             std::to_string(workset.contributors.size()) +
-            " FullABC contributors");
+            " Joint contributors");
     }
     const auto atoms = CollectFirstStageAtoms(workset);
     RunPotentialSamplingWorkflow(map, model, atoms, SphereSamplingMethod::FibonacciDeterministic,

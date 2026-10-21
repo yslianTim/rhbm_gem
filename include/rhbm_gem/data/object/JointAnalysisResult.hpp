@@ -17,29 +17,13 @@ struct JointSolverProvenance
 {
     std::string search_method;
     std::optional<std::size_t> fixed_neighbor_core_atoms;
-    // Legacy provenance only. Current FixedNeighbor v4 has intrinsic OneAccepted behavior.
-    std::optional<std::string> fixed_neighbor_local_work;
     std::optional<std::string> contract_version;
     std::optional<std::string> sparse_backend;
-    // Historical multi-route provenance only. These are not current solver controls.
-    std::optional<std::string> preconditioner;
-    std::optional<std::string> operator_rank_mode,operator_rank_backend;
-    std::optional<int> operator_pcg_iterations,operator_damping_trials;
-    std::optional<double> operator_rank_budget_seconds;
-    std::optional<std::size_t> operator_rank_budget_entries,operator_rank_budget_workspace_bytes;
-    std::optional<std::size_t> schwarz_core_atoms,schwarz_overlap_hops,schwarz_max_block_atoms,
-        schwarz_storage_bytes,schwarz_scratch_bytes;
     std::optional<std::string> fixed_neighbor_policy_version,fixed_neighbor_order,fixed_neighbor_local_search;
     std::optional<std::size_t> fixed_neighbor_maximum_sweeps;
 };
 inline constexpr std::string_view JointSolverProvenanceContractVersion="joint-solver-provenance-v5";
-inline constexpr std::string_view JointSolverProvenancePreviousContractVersion="joint-solver-provenance-v4";
-inline constexpr std::string_view JointSolverProvenanceReferenceContractVersion="joint-solver-provenance-v3";
-inline constexpr std::string_view JointSolverProvenanceHistoricalContractVersion="joint-solver-provenance-v2";
-inline constexpr std::string_view FixedNeighborLegacyPolicyContractVersion="fixed-neighbor-production-v1";
 inline constexpr std::string_view FixedNeighborPolicyContractVersion="fixed-neighbor-production-v4";
-inline constexpr std::string_view FixedNeighborPreviousPolicyContractVersion="fixed-neighbor-production-v3";
-inline constexpr std::string_view FixedNeighborReferencePolicyContractVersion="fixed-neighbor-production-v2";
 inline constexpr std::string_view FixedNeighborLocalSearchName="profile-lm";
 inline constexpr std::string_view FixedNeighborBoundedLocalSearchName="active-set-lm";
 struct JointAnalysisMetadata
@@ -56,29 +40,20 @@ struct JointAnalysisMetadata
 };
 struct JointAnalysisComponent : JointComponentData
 {
-    std::vector<JointRankEvidence> legacy_global_rank_evidence;
-    struct LegacyCandidateEvidence
-    {
-        std::optional<JointCheckStatus> reference_status,rank_assessment_status;
-    };
-    std::optional<LegacyCandidateEvidence> legacy_candidate_evidence;
     JointCheckStatus runtime_convergence{JointCheckStatus::Unavailable};
     JointCheckStatus target_runtime_convergence{JointCheckStatus::NotRun};
 };
-inline constexpr std::string_view JointTargetOnlyFixedHaloParameterizationContract="target-only-fixed-halo-v1";
 // A saved outcome with optional parameter-only candidate diagnostics, not an
 // audit/restart bundle. Convergence is captured and never inferred by storage.
 struct JointAnalysisResult
 {
-    std::string parameterization_contract{"full-abc-v1"};
-    std::optional<JointParameterLayout> layout;
+    std::string parameterization_contract{JointPureHaloSupportExclusionParameterizationContract};
     JointAnalysisMetadata metadata;
     std::vector<std::string> atom_ids, row_ids;
     std::vector<std::string> fitting_row_ids;
     std::vector<std::size_t> fitting_to_original_contributors;
     std::vector<std::size_t> fitting_to_original_rows;
     std::optional<JointSelectionDomain> selection_domain;
-    std::vector<JointFixedHaloParameter> fixed_halos;
     JointInitialization initialization;
     JointFitCosts costs;
     std::vector<JointAnalysisComponent> components;
@@ -86,7 +61,6 @@ struct JointAnalysisResult
     std::optional<double> objective;
     std::vector<bool> available_row_mask;
     std::vector<JointCheck> evidence;
-    std::vector<JointRankEvidence> legacy_global_rank_evidence;
     bool search_completed{};
     double observation_scale{1};
     JointCheckStatus runtime_convergence{JointCheckStatus::Unavailable};

@@ -181,7 +181,7 @@ JointState ReadState(const j::value & v)
     const auto & o=v.as_object();
     return {Read<std::vector<double>>(o,"ac"),Read<std::vector<double>>(o,"b"),
         Read<std::vector<double>>(o,"log_b"),Read<std::vector<double>>(o,"width_gradient"),
-        Read<double>(o,"objective"),{}};
+        Read<double>(o,"objective")};
 }
 j::value OptionalState(const std::optional<JointState> & x) {return x ? j::value(State(*x)) : j::value(nullptr);}
 const char * CandidateStatusText(const JointCandidateDiagnostic & x)
@@ -703,12 +703,6 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
             p.fixed_neighbor_order==std::optional<std::string>{"forward"} &&
             p.fixed_neighbor_local_search==std::optional<std::string>{std::string(FixedNeighborBoundedLocalSearchName)},
             "invalid current FixedNeighbor provenance");
-        Require(!p.fixed_neighbor_local_work && !p.preconditioner && !p.operator_rank_mode &&
-            !p.operator_rank_backend && !p.operator_pcg_iterations && !p.operator_damping_trials &&
-            !p.operator_rank_budget_seconds && !p.operator_rank_budget_entries &&
-            !p.operator_rank_budget_workspace_bytes && !p.schwarz_core_atoms && !p.schwarz_overlap_hops &&
-            !p.schwarz_max_block_atoms && !p.schwarz_storage_bytes && !p.schwarz_scratch_bytes,
-            "current solver provenance contains retired controls");
     }
     if(m.map_normalization)
     {
@@ -725,7 +719,6 @@ void ValidateState(const JointState & x,std::size_t atoms)
     for(std::size_t atom=0;atom<atoms;++atom)
         Require(x.ac[2*atom]>=0 && x.b[atom]>0,"infeasible target parameters");
     Require(std::isfinite(x.objective),"nonfinite objective");
-    Require(x.nuisance_amplitudes.empty(),"current state contains retired nuisance parameters");
 }
 void ValidateCandidateDiagnostic(const JointCandidateDiagnostic & x,std::size_t atoms,bool trusted_state)
 {
@@ -933,8 +926,6 @@ void ValidateTarget(const std::optional<JointTargetEvidence> & value,const std::
 {
     if(!value) return;
     const auto & t=*value;
-    Require(t.ranks.empty() && t.atoms.empty() && t.column_scales.empty(),
-        "current target evidence contains retired rank data");
     Require(t.contract==JointTargetPointValidationContractVersion,"target point validation contract");
     Require(t.original_rows==rows,"target validation row context");
     std::set<std::size_t> expected(expected_atoms.begin(),expected_atoms.end()),seen;
@@ -958,15 +949,9 @@ void Validate(const JointAnalysisResult & x)
     const auto atoms=x.atom_ids.size(),rows=x.row_ids.size();
     Require(x.parameterization_contract==JointPureHaloSupportExclusionParameterizationContract,
         "current Joint result requires target-only Pure Exclusion");
-    Require(!x.layout && x.fixed_halos.empty() && x.legacy_global_rank_evidence.empty(),
-        "current Joint result contains retired parameterization or rank evidence");
     Require(x.selection_domain && x.selection_domain->IsValid(atoms) &&
         x.selection_domain->contributor_policy==PureHaloSupportExclusionContributorPolicy,
         "current Joint result requires Pure Exclusion selection domain");
-    for(const auto & component:x.components)
-        Require(!component.layout && component.legacy_global_rank_evidence.empty() &&
-            !component.legacy_candidate_evidence,"current Joint component contains retired result fields");
-    Require(x.costs.search_reference_seconds==0,"current Joint result contains retired reference timing");
     for(const double seconds:{x.costs.construction_seconds,x.costs.initialization_seconds,x.costs.search_seconds,
         x.costs.assessment_seconds,x.costs.assembly_seconds})
         Require(std::isfinite(seconds) && seconds>=0,"invalid Joint cost timing");
@@ -1076,7 +1061,7 @@ void Validate(const JointAnalysisResult & x)
                 halo.donor_count<=std::min(snapshot.neighbor_count,snapshot.valid_target_count) &&
                 halo.donor_count==halo.donor_atom_ids.size(),"Halo median donor provenance");
             Require(halo.contract==HaloMedianReconstructionContractVersion &&
-            halo.source==HaloMedianSource::GeometryLocalTargetMedian && !halo.legacy_group_key,
+            halo.source==HaloMedianSource::GeometryLocalTargetMedian,
             "Halo median source contract");
             std::set<std::string> donors;
             for(const auto & donor_id:halo.donor_atom_ids)

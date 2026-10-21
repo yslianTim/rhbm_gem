@@ -266,8 +266,8 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
     // Internal representatives reconstruct the observation prediction even when
     // a nonunique halo has no public atom-wise point estimate.
     std::vector<std::optional<GaussianModel3D>> represented(input.atom_ids.size());
-    if (result && result->parameterization_contract==JointTargetOnlyFixedHaloParameterizationContract)
-        throw std::invalid_argument("Fixed Halo post-fit peeling is unsupported.");
+    if (result && result->parameterization_contract!=JointPureHaloSupportExclusionParameterizationContract)
+        throw std::invalid_argument("Post-fit peeling requires a target-only Pure Exclusion snapshot.");
     const bool pure_exclusion=result &&
         result->parameterization_contract==JointPureHaloSupportExclusionParameterizationContract;
     if (input.selection_domain && input.selection_domain->contributor_policy==PureHaloSupportExclusionContributorPolicy &&
@@ -277,7 +277,6 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
         result->atom_ids.size()>result->selection_domain->target_indices.size();
     if(pure_exclusion && (!result->selection_domain ||
         result->selection_domain->contributor_policy!=PureHaloSupportExclusionContributorPolicy ||
-        result->layout || !result->fixed_halos.empty() ||
         (pure_has_halos && !result->halo_median_reconstruction)))
         throw std::invalid_argument("Invalid Pure Exclusion peeling contract.");
     if (pure_exclusion && !pure_has_halos && result->halo_median_reconstruction)
@@ -503,13 +502,6 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
             if (requested[atom]) own[atom].emplace(support.row, value);
         }
     }
-    if (result) for (const auto & component : result->components) if (component.state && component.layout)
-        for (std::size_t k = 0; k < component.layout->groups.size(); ++k)
-        {
-            const auto & group = component.layout->groups[k];
-            prediction.at(group.row) += component.state->nuisance_amplitudes.at(k);
-            missing.at(group.row) -= group.atoms.size();
-        }
     std::map<int, PostFitPeelingResult> results;
     const auto record_sample = [&](const PeelingSampleEstimate & sample, const StencilAudit & audit) {
         if (!m_metrics) return;
@@ -539,9 +531,6 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
         {
             PeelingSampleEstimate sample;
             StencilAudit audit;
-            if (result && result->layout && !std::binary_search(
-                    result->layout->full_atoms.begin(), result->layout->full_atoms.end(), atom))
-            { sample.reason = "observable-contribution-only"; record_sample(sample, audit); output.samples.push_back(sample); continue; }
             if (result)
             {
                 const auto & estimate = view.GetStageEstimate(FittingStage::Second);

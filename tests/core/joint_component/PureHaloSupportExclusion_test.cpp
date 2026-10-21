@@ -118,7 +118,7 @@ JointAnalysisResult PurePeelingSnapshot(const JointProblem & problem,const Model
     component.rows=problem.FittingToOriginalRows();
     component.runtime_convergence=JointCheckStatus::Passed;
     component.target_runtime_convergence=JointCheckStatus::Passed;
-    component.state=JointState{{1.0,0.0},{1.0},{0.0},{0.0},0.0,{}};
+    component.state=JointState{{1.0,0.0},{1.0},{0.0},{0.0},0.0};
     result.components.push_back(component);
     result.assembled_state=component.state;
     JointHaloMedianSnapshot medians;
@@ -371,7 +371,7 @@ JointAnalysisResult QualifiedReconstructionSnapshot(const JointProblem & problem
         component.target_runtime_convergence=JointCheckStatus::Passed;
         component.search_completed=true;
         component.stop_reason="converged";
-        component.state=JointState{{10.0,.4},{1.1},{0.0},{0.0},0.0,{}};
+        component.state=JointState{{10.0,.4},{1.1},{0.0},{0.0},0.0};
         result.components.push_back(std::move(component));
     }
     result.target_evidence.emplace();
@@ -485,7 +485,6 @@ TEST(PureHaloSupportExclusionTest, BuildsFromSharedGeometryWithOverlappingHaloRo
     const auto & fitting=problem.Input();
     ASSERT_TRUE(original.selection_domain);
     EXPECT_EQ(original.selection_domain->contributor_policy,PureHaloSupportExclusionContributorPolicy);
-    EXPECT_FALSE(original.selection_domain->fixed_halo_selection);
     EXPECT_EQ(original.atom_ids,(std::vector<std::string>{"10","20","30"}));
     EXPECT_EQ(original.selection_domain->target_indices,(std::vector<std::size_t>{2}));
     EXPECT_EQ(fitting.atom_ids,(std::vector<std::string>{"30"}));

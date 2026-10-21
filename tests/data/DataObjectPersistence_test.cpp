@@ -441,23 +441,6 @@ TEST(DataObjectPersistenceTest, GroupWriteFailureRollsBackAnalysisReplacement)
 }
 
 namespace {
-void UseHistoricalGlobalRankKeys(boost::json::object & json)
-{
-    if(json.contains("legacy_global_rank_evidence"))
-    {
-        json["ranks"]=json.at("legacy_global_rank_evidence");
-        json.erase("legacy_global_rank_evidence");
-    }
-    for(auto & item:json.at("components").as_array())
-    {
-        auto & component=item.as_object();
-        if(component.contains("legacy_global_rank_evidence"))
-        {
-            component["ranks"]=component.at("legacy_global_rank_evidence");
-            component.erase("legacy_global_rank_evidence");
-        }
-    }
-}
 rg::JointAnalysisResult CurrentJointExample(bool with_halo=true)
 {
     rg::JointAnalysisResult result;
@@ -812,7 +795,6 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
     const auto fixed_json=io::Encode(fixed);
     const auto fixed_object=boost::json::parse(fixed_json).as_object();
     auto downgraded_schema=fixed_object;
-    UseHistoricalGlobalRankKeys(downgraded_schema);
     downgraded_schema["schema_version"]=7;
     EXPECT_ANY_THROW(io::Decode(boost::json::serialize(downgraded_schema)));
     EXPECT_EQ(fixed_object.at("metadata").as_object().at("solver").as_object()
@@ -821,23 +803,9 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
     ASSERT_TRUE(fixed_decoded.metadata.solver);
     EXPECT_EQ(fixed_decoded.metadata.solver->contract_version,rg::JointSolverProvenanceContractVersion);
     EXPECT_EQ(fixed_decoded.metadata.solver->sparse_backend,"EIGEN");
-    EXPECT_FALSE(fixed_decoded.metadata.solver->fixed_neighbor_local_work);
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_maximum_sweeps,200u);
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_order,"forward");
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_local_search,"active-set-lm");
-    EXPECT_FALSE(fixed_decoded.metadata.solver->preconditioner);
-    EXPECT_FALSE(fixed_decoded.metadata.solver->operator_rank_mode);
-    EXPECT_FALSE(fixed_decoded.metadata.solver->operator_rank_backend);
-    EXPECT_FALSE(fixed_decoded.metadata.solver->operator_pcg_iterations);
-    EXPECT_FALSE(fixed_decoded.metadata.solver->operator_damping_trials);
-    EXPECT_FALSE(fixed_decoded.metadata.solver->operator_rank_budget_seconds);
-    EXPECT_FALSE(fixed_decoded.metadata.solver->operator_rank_budget_entries);
-    EXPECT_FALSE(fixed_decoded.metadata.solver->operator_rank_budget_workspace_bytes);
-    EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_core_atoms);
-    EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_overlap_hops);
-    EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_max_block_atoms);
-    EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_storage_bytes);
-    EXPECT_FALSE(fixed_decoded.metadata.solver->schwarz_scratch_bytes);
 
     auto bounded=fixed;
     bounded.metadata.solver->fixed_neighbor_local_search="active-set-lm";
@@ -924,7 +892,6 @@ TEST(DataObjectPersistenceTest, JointCodecRejectsMalformedMappingsAndPreservesMi
     auto invalid=record; invalid.components[0].atoms[0]=99;
     EXPECT_THROW(io::Encode(invalid),std::invalid_argument);
     auto json=boost::json::parse(io::Encode(record)).as_object();
-    UseHistoricalGlobalRankKeys(json);
     json["schema_version"]=99; EXPECT_THROW(io::Decode(boost::json::serialize(json)),std::invalid_argument);
     json["schema_version"]=3; json.erase("runtime_convergence");
     EXPECT_THROW(io::Decode(boost::json::serialize(json)),std::exception);
@@ -937,6 +904,7 @@ TEST(DataObjectPersistenceTest, JointCodecRejectsMalformedMappingsAndPreservesMi
     EXPECT_EQ(decoded.regular_certificate,rg::JointCheckStatus::NotRun);
     const command_test::ScopedTempDir dir{"joint_export"};
     rg::WriteJointAnalysisResult(decoded,dir.path()/"result.json",dir.path()/"atoms.csv");
+    EXPECT_FALSE(std::filesystem::exists(dir.path()/"atoms.contributions.csv"));
     std::ifstream csv(dir.path()/"atoms.csv"); std::string header,line;
     std::getline(csv,header); std::getline(csv,line);
     EXPECT_NE(line.find("\"1\",\"component-0\",,,,0,0,"),std::string::npos);
