@@ -389,10 +389,10 @@ JointAnalysisResult QualifiedReconstructionSnapshot(const JointProblem & problem
         point.reason="test-qualified-point";
         result.target_evidence->point_atoms.push_back(std::move(point));
     }
-    const auto medians=core::detail::BuildHaloMedianReconstruction(
+    auto medians=core::detail::BuildHaloMedianReconstruction(
         model,problem,result,"reconstruction-only-run");
     if (problem.OriginalInput().atom_ids.size()>targets.size())
-        result.halo_median_reconstruction=medians.snapshot;
+        result.halo_median_reconstruction=medians.TakeSnapshot();
     return result;
 }
 
@@ -723,7 +723,7 @@ TEST(PureHaloSupportExclusionTest, RejectsReconstructionMedianFromDifferentJoint
     const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
     auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
     snapshot.halo_median_reconstruction=core::detail::BuildHaloMedianReconstruction(
-        fixture.model,problem,snapshot,"reconstruction-only-run").snapshot;
+        fixture.model,problem,snapshot,"reconstruction-only-run").TakeSnapshot();
     snapshot.halo_median_reconstruction->global_median[0]+=1.0;
     data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"reconstruction-only-run");
     const core::detail::JointPostprocessingContext context(

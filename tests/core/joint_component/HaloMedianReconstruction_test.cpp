@@ -91,20 +91,22 @@ TEST(HaloMedianReconstructionTest, ComputesSeparateComponentAndWidthAndChargeMed
 {
     auto fixture=MakeFixture();
     const auto built=BuildHaloMedianReconstruction(fixture.model,fixture.problem,fixture.result,"run-1");
-    ASSERT_EQ(built.snapshot.halos.size(),2u);
+    ASSERT_TRUE(built.snapshot);
+    const auto & snapshot=*built.snapshot;
+    ASSERT_EQ(snapshot.halos.size(),2u);
     EXPECT_EQ(built.audit.valid_target_count,3u);
     EXPECT_EQ(built.audit.geometry_local_halos,2u);
-    EXPECT_EQ(built.snapshot.neighbor_count,4u);
-    EXPECT_EQ(built.snapshot.donor_policy,GeometryLocalTargetMedianDonorPolicy);
-    EXPECT_EQ(built.snapshot.halos[0].source,HaloMedianSource::GeometryLocalTargetMedian);
-    EXPECT_DOUBLE_EQ(built.snapshot.halos[0].amplitude,3.0);
-    EXPECT_DOUBLE_EQ(built.snapshot.halos[0].width,2.0);
-    EXPECT_DOUBLE_EQ(built.snapshot.halos[0].charge,5.0);
-    EXPECT_EQ(built.snapshot.halos[0].donor_count,3u);
-    EXPECT_EQ(built.snapshot.halos[1].source,HaloMedianSource::GeometryLocalTargetMedian);
-    EXPECT_DOUBLE_EQ(built.snapshot.halos[1].amplitude,3.0);
-    EXPECT_DOUBLE_EQ(built.snapshot.halos[1].width,2.0);
-    EXPECT_DOUBLE_EQ(built.snapshot.halos[1].charge,5.0);
+    EXPECT_EQ(snapshot.neighbor_count,4u);
+    EXPECT_EQ(snapshot.donor_policy,GeometryLocalTargetMedianDonorPolicy);
+    EXPECT_EQ(snapshot.halos[0].source,HaloMedianSource::GeometryLocalTargetMedian);
+    EXPECT_DOUBLE_EQ(snapshot.halos[0].amplitude,3.0);
+    EXPECT_DOUBLE_EQ(snapshot.halos[0].width,2.0);
+    EXPECT_DOUBLE_EQ(snapshot.halos[0].charge,5.0);
+    EXPECT_EQ(snapshot.halos[0].donor_count,3u);
+    EXPECT_EQ(snapshot.halos[1].source,HaloMedianSource::GeometryLocalTargetMedian);
+    EXPECT_DOUBLE_EQ(snapshot.halos[1].amplitude,3.0);
+    EXPECT_DOUBLE_EQ(snapshot.halos[1].width,2.0);
+    EXPECT_DOUBLE_EQ(snapshot.halos[1].charge,5.0);
 }
 
 TEST(HaloMedianReconstructionTest, AcceptsNotAssessedStabilityButRejectsUnqualifiedDonor)
@@ -112,10 +114,11 @@ TEST(HaloMedianReconstructionTest, AcceptsNotAssessedStabilityButRejectsUnqualif
     auto fixture=MakeFixture();
     fixture.result.target_evidence->point_atoms[0].parameter_validity=JointCheckStatus::Failed;
     const auto built=BuildHaloMedianReconstruction(fixture.model,fixture.problem,fixture.result,"run-2");
-    EXPECT_EQ(built.snapshot.valid_target_count,2u);
-    EXPECT_EQ(built.snapshot.global_median[0],4.0);
-    EXPECT_EQ(built.snapshot.global_median[1],2.5);
-    EXPECT_EQ(built.snapshot.global_median[2],6.5);
+    ASSERT_TRUE(built.snapshot);
+    EXPECT_EQ(built.snapshot->valid_target_count,2u);
+    EXPECT_EQ(built.snapshot->global_median[0],4.0);
+    EXPECT_EQ(built.snapshot->global_median[1],2.5);
+    EXPECT_EQ(built.snapshot->global_median[2],6.5);
 }
 
 TEST(HaloMedianReconstructionTest, ExcludesInvalidWidthAndNonfiniteDonors)
@@ -124,16 +127,18 @@ TEST(HaloMedianReconstructionTest, ExcludesInvalidWidthAndNonfiniteDonors)
     invalid_width.result.components.front().state->b[0]=0.0;
     const auto width_built=BuildHaloMedianReconstruction(
         invalid_width.model,invalid_width.problem,invalid_width.result,"invalid-width");
-    EXPECT_EQ(width_built.snapshot.valid_target_count,2u);
-    EXPECT_EQ(width_built.snapshot.global_median[0],4.0);
+    ASSERT_TRUE(width_built.snapshot);
+    EXPECT_EQ(width_built.snapshot->valid_target_count,2u);
+    EXPECT_EQ(width_built.snapshot->global_median[0],4.0);
 
     auto nonfinite=MakeFixture();
     nonfinite.result.components.front().state->ac[3]=std::numeric_limits<double>::quiet_NaN();
     const auto nonfinite_built=BuildHaloMedianReconstruction(
         nonfinite.model,nonfinite.problem,nonfinite.result,"nonfinite-charge");
-    EXPECT_EQ(nonfinite_built.snapshot.valid_target_count,2u);
-    EXPECT_EQ(nonfinite_built.snapshot.global_median[0],3.0);
-    EXPECT_EQ(nonfinite_built.snapshot.global_median[2],5.0);
+    ASSERT_TRUE(nonfinite_built.snapshot);
+    EXPECT_EQ(nonfinite_built.snapshot->valid_target_count,2u);
+    EXPECT_EQ(nonfinite_built.snapshot->global_median[0],3.0);
+    EXPECT_EQ(nonfinite_built.snapshot->global_median[2],5.0);
 }
 
 TEST(HaloMedianReconstructionTest, PreservesMixedSignChargeMedian)
@@ -141,8 +146,9 @@ TEST(HaloMedianReconstructionTest, PreservesMixedSignChargeMedian)
     auto fixture=MakeFixture();
     fixture.result.components.front().state->ac={1.0,-2.0,3.0,4.0,5.0,6.0};
     const auto built=BuildHaloMedianReconstruction(fixture.model,fixture.problem,fixture.result,"mixed-sign");
-    EXPECT_EQ(built.snapshot.global_median[2],4.0);
-    EXPECT_EQ(built.snapshot.halos.front().charge,4.0);
+    ASSERT_TRUE(built.snapshot);
+    EXPECT_EQ(built.snapshot->global_median[2],4.0);
+    EXPECT_EQ(built.snapshot->halos.front().charge,4.0);
 }
 
 TEST(HaloMedianReconstructionTest, EmptyQualifiedTargetPoolIsExplicitlyRejected)
@@ -177,7 +183,9 @@ TEST(HaloMedianReconstructionTest, ResultIsIndependentOfModelAtomTraversalOrder)
     ModelObject reversed(std::move(atoms));
     const auto left=BuildHaloMedianReconstruction(first.model,first.problem,first.result,"run-4");
     const auto right=BuildHaloMedianReconstruction(reversed,second.problem,second.result,"run-4");
-    EXPECT_EQ(left.snapshot,right.snapshot);
+    ASSERT_TRUE(left.snapshot);
+    ASSERT_TRUE(right.snapshot);
+    EXPECT_EQ(*left.snapshot,*right.snapshot);
 }
 
 TEST(HaloMedianReconstructionTest, ChemicalLabelsDoNotChangeGeometryLocalHaloEstimates)
@@ -197,5 +205,7 @@ TEST(HaloMedianReconstructionTest, ChemicalLabelsDoNotChangeGeometryLocalHaloEst
     const auto changed=BuildHaloMedianReconstruction(
         relabeled.model,relabeled.problem,relabeled.result,"label-baseline");
 
-    EXPECT_EQ(original.snapshot,changed.snapshot);
+    ASSERT_TRUE(original.snapshot);
+    ASSERT_TRUE(changed.snapshot);
+    EXPECT_EQ(*original.snapshot,*changed.snapshot);
 }

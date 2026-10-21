@@ -518,7 +518,7 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingReconstructsGridNodesOuts
         << (fit.components.empty() ? std::string{} : ", stop="+fit.components.front().stop_reason);
     auto snapshot=core::CaptureJointAnalysisResult(fit);
     snapshot.halo_median_reconstruction=core::detail::BuildHaloMedianReconstruction(
-        *f.model,problem,snapshot,"peeling-test").snapshot;
+        *f.model,problem,snapshot,"peeling-test").TakeSnapshot();
     ASSERT_TRUE(snapshot.components.front().state);
     rhbm_gem::data_internal::ApplyJointStageEstimates(*f.model, snapshot, "peeling-test");
     auto * atom = f.model->FindAtomPtr(1);
@@ -585,7 +585,7 @@ TEST(JointComponentPartialSelectionTest, ExcludedFitRowsRemainInOriginalPeelingD
     ASSERT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     auto snapshot=core::CaptureJointAnalysisResult(fit);
     snapshot.halo_median_reconstruction=core::detail::BuildHaloMedianReconstruction(
-        *f.model,problem,snapshot,"original-peeling-domain").snapshot;
+        *f.model,problem,snapshot,"original-peeling-domain").TakeSnapshot();
     f.model->EditAnalysis().ApplyJointResult(snapshot,"original-peeling-domain");
     const SamplingPointList points{{1.5,{1.5,0.0,0.0},true}};
     f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*f.model->FindAtomPtr(1),
@@ -610,7 +610,7 @@ TEST(JointComponentPartialSelectionTest, PeelingIncludesDistantHaloThroughInterp
     ASSERT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     auto snapshot=core::CaptureJointAnalysisResult(fit);
     snapshot.halo_median_reconstruction=core::detail::BuildHaloMedianReconstruction(
-        *f.model,problem,snapshot,"distant-halo-peeling").snapshot;
+        *f.model,problem,snapshot,"distant-halo-peeling").TakeSnapshot();
     rhbm_gem::data_internal::ApplyJointStageEstimates(*f.model,snapshot,"distant-halo-peeling");
     auto editor = f.model->EditAnalysis();
     auto * target = f.model->FindAtomPtr(1);
@@ -1018,7 +1018,7 @@ TEST(JointComponentPartialSelectionTest, TargetOnlyPostprocessingRetainsFullCont
         << (fit.components.empty() ? std::string{} : ", stop="+fit.components.front().stop_reason);
     auto snapshot = core::CaptureJointAnalysisResult(fit);
     snapshot.halo_median_reconstruction=core::detail::BuildHaloMedianReconstruction(
-        *f.model,problem,snapshot,"output-scope").snapshot;
+        *f.model,problem,snapshot,"output-scope").TakeSnapshot();
     rhbm_gem::data_internal::ApplyJointStageEstimates(*f.model, snapshot, "output-scope");
     const auto target_stage=rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1))
         .GetStageEstimate(rhbm_gem::FittingStage::Second);

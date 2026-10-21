@@ -15,21 +15,10 @@ class ModelObject;
 namespace core { class JointProblem; }
 namespace core::detail {
 
-struct HaloMedianCoverageRecord
-{
-    std::string halo_atom_id;
-    std::size_t target_donor_count{};
-    std::size_t affected_support_rows{};
-    std::array<double,3> median{};
-    std::array<double,3> dispersion{};
-};
-
 struct HaloMedianCoverageAudit
 {
     std::size_t valid_target_count{};
     std::size_t geometry_local_halos{};
-    std::array<double,3> global_median{};
-    std::vector<HaloMedianCoverageRecord> halos;
 };
 
 struct HaloMedianTargetDonor
@@ -42,9 +31,13 @@ struct HaloMedianTargetDonor
 
 struct HaloMedianBuildResult
 {
-    JointHaloMedianSnapshot snapshot;
+    // TakeSnapshot() transfers this value to the persisted Joint result; the
+    // donor workspace remains alive for postprocessing.
+    std::optional<JointHaloMedianSnapshot> snapshot;
     HaloMedianCoverageAudit audit;
     std::vector<HaloMedianTargetDonor> target_donors;
+
+    JointHaloMedianSnapshot TakeSnapshot();
 };
 
 class GeometryLocalTargetDonorIndex

@@ -24,6 +24,7 @@ struct JointPeelingContributor
 struct JointPeelingContributorUniverse
 {
     std::string joint_run_id;
+    // BuildJointPeelingContributorUniverse returns contributors sorted by atom_id.
     std::vector<JointPeelingContributor> contributors;
 };
 
@@ -117,8 +118,8 @@ struct PostJointLocalSamples
 };
 
 // Borrows one immutable Joint run and owns compact lookups shared by its targets.
-// The geometry, model endpoints, problem input, and snapshot must outlive this
-// context and remain unchanged until postprocessing completes.
+// The geometry, model endpoints, problem input, snapshot, and optional Halo donor
+// workspace must outlive this context and remain unchanged until postprocessing completes.
 class JointPostprocessingContext
 {
 public:

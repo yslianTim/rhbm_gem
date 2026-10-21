@@ -278,7 +278,8 @@ void RunJointComponentWorkflow(
     try
     {
         halo_median_build=BuildHaloMedianReconstruction(model,problem,snapshot,joint_run_id);
-        if (original_has_halos) snapshot.halo_median_reconstruction=halo_median_build->snapshot;
+        if (original_has_halos)
+            snapshot.halo_median_reconstruction=halo_median_build->TakeSnapshot();
         postprocessing_metrics.halo_median_valid_target_count=halo_median_build->audit.valid_target_count;
         postprocessing_metrics.halo_median_geometry_local_halos=halo_median_build->audit.geometry_local_halos;
     }

@@ -199,25 +199,33 @@ JointPostprocessingContext::JointPostprocessingContext(
             }
         }
     }
-    std::unordered_map<int,const JointPeelingContributor *> universe_by_id;
-    universe_by_id.reserve(m_contributors.contributors.size());
+    m_contributor_index_by_id.reserve(input.atom_ids.size());
+    int previous_contributor_id{};
+    bool first_contributor=true;
     for (const auto & contributor:m_contributors.contributors)
     {
-        if (contributor.atom_id<=0 || !universe_by_id.emplace(contributor.atom_id,&contributor).second ||
+        if (contributor.atom_id<=0 || (!first_contributor && contributor.atom_id<=previous_contributor_id) ||
             (contributor.reconstruction_eligible && !std::all_of(contributor.position.begin(),
                 contributor.position.end(),[](double value){return std::isfinite(value);})))
             throw std::invalid_argument("Invalid Joint Peeling contributor universe.");
-    }
-    for (std::size_t index=0;index<input.atom_ids.size();++index)
-    {
-        const auto id=std::stoi(input.atom_ids[index]);
-        const auto found=universe_by_id.find(id);
-        const bool target=input.selection_domain && std::binary_search(
-            input.selection_domain->target_indices.begin(),input.selection_domain->target_indices.end(),index);
-        if (found==universe_by_id.end() || found->second->contributor_index!=index ||
-            found->second->target!=target || !found->second->reconstruction_eligible)
+        first_contributor=false;
+        previous_contributor_id=contributor.atom_id;
+        if (contributor.contributor_index)
+        {
+            const auto index=*contributor.contributor_index;
+            if (index>=input.atom_ids.size() || std::stoi(input.atom_ids[index])!=contributor.atom_id)
+                throw std::invalid_argument("Joint Peeling contributor universe identity mismatch.");
+            const bool target=input.selection_domain && std::binary_search(
+                input.selection_domain->target_indices.begin(),input.selection_domain->target_indices.end(),index);
+            if (contributor.target!=target || !contributor.reconstruction_eligible ||
+                !m_contributor_index_by_id.emplace(contributor.atom_id,index).second)
+                throw std::invalid_argument("Joint Peeling contributor universe identity mismatch.");
+        }
+        else if (contributor.target)
             throw std::invalid_argument("Joint Peeling contributor universe identity mismatch.");
     }
+    if (m_contributor_index_by_id.size()!=input.atom_ids.size())
+        throw std::invalid_argument("Joint Peeling contributor universe identity mismatch.");
     m_row_index_by_grid.reserve(input.row_ids.size());
     for (std::size_t row = 0; row < input.row_ids.size(); ++row)
     {
@@ -241,9 +249,6 @@ JointPostprocessingContext::JointPostprocessingContext(
             throw std::invalid_argument("Joint fitting-domain row mapping mismatch.");
     }
 
-    m_contributor_index_by_id.reserve(input.atom_ids.size());
-    for (std::size_t atom = 0; atom < input.atom_ids.size(); ++atom)
-        m_contributor_index_by_id.emplace(std::stoi(input.atom_ids[atom]), atom);
     if (m_metrics) ++m_metrics->contributor_mapping_builds;
     if (m_metrics)
         m_metrics->estimated_context_lookup_bytes = EstimateHashStorageBytes(m_row_index_by_grid) +
@@ -369,18 +374,20 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
                 throw std::invalid_argument("Saved Pure Exclusion Halo medians have no qualified donors.");
         }
     }
-    if (pure_exclusion && result->halo_median_reconstruction && halo_medians)
+    if (pure_exclusion && result->halo_median_reconstruction && halo_medians && halo_medians->snapshot)
     {
         const auto & saved=*result->halo_median_reconstruction;
-        const auto & rebuilt=halo_medians->snapshot;
+        const auto & rebuilt=*halo_medians->snapshot;
         if (saved.contract!=HaloMedianReconstructionContractVersion || saved.joint_run_id.empty() ||
             saved.joint_run_id!=rebuilt.joint_run_id || saved.valid_target_count!=rebuilt.valid_target_count ||
             saved.global_median!=rebuilt.global_median || saved.neighbor_count!=rebuilt.neighbor_count ||
             saved.donor_policy!=rebuilt.donor_policy || saved.halos!=rebuilt.halos)
             throw std::invalid_argument("Invalid Pure Exclusion Halo median run provenance.");
     }
-    if (halo_medians && !expected_joint_run_id.empty() &&
-        halo_medians->snapshot.joint_run_id!=expected_joint_run_id)
+    const std::string * halo_run_id=halo_medians && halo_medians->snapshot ?
+        &halo_medians->snapshot->joint_run_id : result && result->halo_median_reconstruction ?
+        &result->halo_median_reconstruction->joint_run_id : nullptr;
+    if (halo_run_id && !expected_joint_run_id.empty() && *halo_run_id!=expected_joint_run_id)
         throw std::invalid_argument("Invalid Pure Exclusion reconstruction median run provenance.");
 
     const std::vector<HaloMedianTargetDonor> no_target_donors;

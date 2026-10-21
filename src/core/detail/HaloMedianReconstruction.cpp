@@ -10,7 +10,6 @@
 #include <array>
 #include <cmath>
 #include <map>
-#include <set>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -55,16 +54,6 @@ std::array<double,3> Median(const std::vector<const HaloMedianTargetDonor *> & d
         }
         result[parameter]=array_helper::ComputeMedian(values);
     }
-    return result;
-}
-
-std::array<double,3> Dispersion(
-    const std::vector<const HaloMedianTargetDonor *> & donors,const std::array<double,3> & median)
-{
-    std::array<double,3> result{};
-    for (std::size_t parameter=0;parameter<3;++parameter)
-        for (const auto * donor:donors)
-            result[parameter]=std::max(result[parameter],std::abs(donor->point[parameter]-median[parameter]));
     return result;
 }
 
@@ -167,6 +156,14 @@ std::array<double,3> GeometryLocalTargetMedian(
     return Median(donors);
 }
 
+JointHaloMedianSnapshot HaloMedianBuildResult::TakeSnapshot()
+{
+    if (!snapshot) throw std::logic_error("Halo median snapshot was already transferred.");
+    auto result = std::move(*snapshot);
+    snapshot.reset();
+    return result;
+}
+
 std::vector<HaloMedianTargetDonor> QualifiedJointTargetDonors(
     const ModelObject & model,const JointProblem & problem,const JointAnalysisResult & result)
 {
@@ -207,16 +204,17 @@ HaloMedianBuildResult BuildHaloMedianReconstruction(
     HaloMedianBuildResult out;
     out.target_donors=QualifiedJointTargetDonors(model,problem,result);
     if(out.target_donors.empty()) throw std::invalid_argument("halo-median-no-valid-targets");
-    out.snapshot.joint_run_id=std::string(joint_run_id);
-    out.snapshot.neighbor_count=GeometryLocalTargetMedianNeighborCount;
-    out.snapshot.donor_policy=std::string(GeometryLocalTargetMedianDonorPolicy);
+    out.snapshot.emplace();
+    auto & snapshot=*out.snapshot;
+    snapshot.joint_run_id=std::string(joint_run_id);
+    snapshot.neighbor_count=GeometryLocalTargetMedianNeighborCount;
+    snapshot.donor_policy=std::string(GeometryLocalTargetMedianDonorPolicy);
     std::vector<const HaloMedianTargetDonor *> all_donors;
     all_donors.reserve(out.target_donors.size());
     for(const auto & donor:out.target_donors) all_donors.push_back(&donor);
-    out.snapshot.valid_target_count=all_donors.size();
-    out.snapshot.global_median=Median(all_donors);
+    snapshot.valid_target_count=all_donors.size();
+    snapshot.global_median=Median(all_donors);
     out.audit.valid_target_count=all_donors.size();
-    out.audit.global_median=out.snapshot.global_median;
     const GeometryLocalTargetDonorIndex donor_index(out.target_donors);
 
     const auto & targets=input.selection_domain->target_indices;
@@ -239,14 +237,10 @@ HaloMedianBuildResult BuildHaloMedianReconstruction(
         halo.joint_run_id=std::string(joint_run_id);
         halo.contract=std::string(HaloMedianReconstructionContractVersion);
         for (const auto * donor:donors) halo.donor_atom_ids.push_back(donor->atom_id);
-        out.snapshot.halos.push_back(std::move(halo));
+        snapshot.halos.push_back(std::move(halo));
 
-        std::set<std::size_t> rows;
-        for (const auto & support:input.support[atom]) rows.insert(support.row);
-        out.audit.halos.push_back({input.atom_ids[atom],donors.size(),rows.size(),median,
-            Dispersion(donors,median)});
     }
-    out.audit.geometry_local_halos=out.snapshot.halos.size();
+    out.audit.geometry_local_halos=snapshot.halos.size();
     return out;
 }
 }
