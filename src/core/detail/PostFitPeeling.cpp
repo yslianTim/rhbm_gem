@@ -370,6 +370,32 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
                         check.status==JointCheckStatus::Passed;
                 });
         };
+        const auto has_fullabc_component=[&](const HaloFullABCReconstructionHalo & halo) {
+            if (reconstruction.diagnostics.solver_qualified) return true;
+            const bool original_component=std::any_of(reconstruction.diagnostics.component_searches.begin(),
+                reconstruction.diagnostics.component_searches.end(),[&](const auto & search) {
+                    return search.endpoint_qualified && std::any_of(search.candidate_profiles.begin(),
+                        search.candidate_profiles.end(),[&](const auto & candidate) {
+                            return candidate.atom_id==halo.classification.atom_id &&
+                                candidate.parameters==*halo.reconstructed_parameters;
+                        });
+                });
+            const bool isolated_refit=std::any_of(reconstruction.diagnostics.recovery.begin(),
+                reconstruction.diagnostics.recovery.end(),[&](const auto & recovery) {
+                    return recovery.fullabc_refit_qualified &&
+                        std::find(recovery.atom_ids.begin(),recovery.atom_ids.end(),halo.classification.atom_id)!=
+                            recovery.atom_ids.end();
+                });
+            return original_component || isolated_refit;
+        };
+        const auto has_recovery=[&](const HaloFullABCReconstructionHalo & halo,std::string_view prefix) {
+            return std::any_of(reconstruction.diagnostics.recovery.begin(),reconstruction.diagnostics.recovery.end(),
+                [&](const auto & recovery) {
+                    return recovery.qualified && recovery.method.starts_with(prefix) &&
+                        std::find(recovery.atom_ids.begin(),recovery.atom_ids.end(),halo.classification.atom_id)!=
+                            recovery.atom_ids.end();
+                });
+        };
         const auto expected_halo_count=static_cast<std::size_t>(std::count_if(
             m_contributors.contributors.begin(),m_contributors.contributors.end(),[](const auto & contributor) {
                 return contributor.reconstruction_eligible && !contributor.target;
@@ -410,7 +436,7 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
                     halo.classification.atom_id)) ||
                 (contributor ? DistinctOriginalSupportRows(input.support[*contributor]).size() : 0)!=
                     halo.classification.distinct_original_observations || !halo.reconstructed_parameters ||
-                !valid_point(*halo.reconstructed_parameters) ||
+                !valid_point(*halo.reconstructed_parameters) || !halo.qualified ||
                 !fullabc_points.emplace(id,GaussianModel3D{(*halo.reconstructed_parameters)[0],
                     (*halo.reconstructed_parameters)[1],(*halo.reconstructed_parameters)[2]}).second)
                 throw std::invalid_argument("Invalid Halo FullABC reconstruction parameters.");
@@ -418,6 +444,7 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
             {
                 ++fixed_count;
                 if (halo.classification.distinct_original_observations>=3 ||
+                    halo.parameter_source!=HaloFullABCParameterSource::PreFixedGlobalMedian ||
                     !reconstruction.global_target_median ||
                     *halo.reconstructed_parameters!=*reconstruction.global_target_median)
                     throw std::invalid_argument("Invalid fixed Halo FullABC classification.");
@@ -434,16 +461,38 @@ std::map<int, PostFitPeelingResult> JointPostprocessingContext::BuildPostFitPeel
                     (*halo.reconstructed_parameters)[1]>*width_bound+64.0*
                         std::numeric_limits<double>::epsilon()*std::max(1.0,*width_bound))
                     throw std::invalid_argument("Invalid free Halo FullABC classification.");
+                if ((halo.parameter_source==HaloFullABCParameterSource::FullABC &&
+                        !has_fullabc_component(halo)) ||
+                    (halo.parameter_source==HaloFullABCParameterSource::ObservationACFixedWidthRecovery &&
+                        !has_recovery(halo,"fixed-width-ac-")) ||
+                    (halo.parameter_source==HaloFullABCParameterSource::PostFailureGlobalMedianRecovery &&
+                        (!reconstruction.global_target_median ||
+                            *halo.reconstructed_parameters!=*reconstruction.global_target_median ||
+                            !has_recovery(halo,reconstruction.diagnostics.recovery_method))) ||
+                    halo.parameter_source==HaloFullABCParameterSource::PreFixedGlobalMedian ||
+                    halo.parameter_source==HaloFullABCParameterSource::Unavailable)
+                    throw std::invalid_argument("Invalid Halo FullABC parameter source qualification.");
             }
         }
+        const bool global_fullabc_qualified=free_count && reconstruction.diagnostics.solver_qualified &&
+            reconstruction.diagnostics.solver_status==JointCheckStatus::Passed &&
+            std::all_of(reconstruction.halos.begin(),reconstruction.halos.end(),[](const auto & halo) {
+                return halo.classification.role!=HaloFullABCRole::FreeFullABC ||
+                    halo.parameter_source==HaloFullABCParameterSource::FullABC;
+            });
+        const bool recovery_qualified=free_count && !reconstruction.diagnostics.solver_qualified &&
+            reconstruction.diagnostics.reconstruction_qualified &&
+            reconstruction.diagnostics.assembly_replay_qualified &&
+            !reconstruction.diagnostics.recovery_method.empty() &&
+            !reconstruction.diagnostics.recovery.empty();
         if (fixed_count!=reconstruction.fixed_halo_count || free_count!=reconstruction.free_halo_count ||
             (free_count && (!reconstruction.global_target_median ||
-                !reconstruction.diagnostics.solver_invoked || !reconstruction.diagnostics.solver_qualified ||
-                reconstruction.diagnostics.solver_status!=JointCheckStatus::Passed ||
-                !has_global_pass("independent-replay") || !has_global_pass("width-stationarity") ||
-                !has_global_pass("width-bound-feasibility") ||
-                !has_global_pass("endpoint-verification") || !has_global_pass("numerical-qualification") ||
-                !has_global_pass("assembly-mapping") || !has_global_pass("assembled-consistency"))) ||
+                !reconstruction.diagnostics.solver_invoked ||
+                (!(global_fullabc_qualified && has_global_pass("independent-replay") &&
+                    has_global_pass("width-stationarity") && has_global_pass("width-bound-feasibility") &&
+                    has_global_pass("endpoint-verification") && has_global_pass("numerical-qualification") &&
+                    has_global_pass("assembly-mapping") && has_global_pass("assembled-consistency")) &&
+                    !recovery_qualified))) ||
             (!free_count && reconstruction.diagnostics.solver_invoked))
             throw std::invalid_argument("Invalid Halo FullABC solver qualification.");
         for (const auto & contributor:m_contributors.contributors)

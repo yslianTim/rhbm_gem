@@ -302,12 +302,24 @@ HaloFullABCReconstructionResult EstimateHaloFullABCJoint(
     out.global_target_median=preclassification.global_target_median;
     out.halos.reserve(preclassification.halos.size());
     for (const auto & halo:preclassification.halos)
-        out.halos.push_back({halo,halo.role==HaloFullABCRole::FixedGlobalTargetMedian ?
-            halo.parameter_profile : std::nullopt});
+    {
+        HaloFullABCReconstructionHalo reconstruction;
+        reconstruction.classification=halo;
+        if(halo.role==HaloFullABCRole::FixedGlobalTargetMedian)
+        {
+            reconstruction.reconstructed_parameters=halo.parameter_profile;
+            reconstruction.parameter_source=HaloFullABCParameterSource::PreFixedGlobalMedian;
+            reconstruction.qualified=halo.parameter_profile.has_value();
+            reconstruction.qualification_reason=reconstruction.qualified ? "preclassified-before-solve" :
+                "global-target-median-unavailable";
+        }
+        out.halos.push_back(std::move(reconstruction));
+    }
 
     if (out.halos.empty())
     {
         out.available=true;
+        out.diagnostics.reconstruction_qualified=true;
         out.global_target_median.reset();
         out.diagnostics.solver_status=JointCheckStatus::NotRun;
         return out;
@@ -322,6 +334,7 @@ HaloFullABCReconstructionResult EstimateHaloFullABCJoint(
     if (out.free_halo_count==0)
     {
         out.available=true;
+        out.diagnostics.reconstruction_qualified=true;
         out.diagnostics.solver_status=JointCheckStatus::NotRun;
         return out;
     }
@@ -430,11 +443,15 @@ HaloFullABCReconstructionResult EstimateHaloFullABCJoint(
     const auto free_atom_ids=halo_input.atom_ids;
     JointProblem halo_problem(std::move(halo_input));
     halo_problem=JointProblemAccess::WithReferenceNormalization(halo_problem,problem);
+    std::map<std::string,std::vector<std::size_t>> component_atom_indices;
+    for(const auto & component:JointProblemAccess::Get(halo_problem).partition.components)
+        component_atom_indices.emplace(component.id,
+            std::vector<std::size_t>(component.atoms.begin(),component.atoms.end()));
     joint_component::FixedNeighborSearchPolicy policy;
     policy.eta_upper_bound=calibration.eta_max4;
     policy.collect_diagnostics=collect_solver_diagnostics;
     if(collect_solver_diagnostics)
-        policy.search_result_observer=[&out](std::string_view component_id,
+        policy.search_result_observer=[&out,&free_atom_ids,&component_atom_indices](std::string_view component_id,
             const joint_component::FixedNeighborSearchResult & search) {
             HaloFullABCComponentSearchDiagnostic component;
             component.component_id=std::string(component_id);
@@ -459,6 +476,18 @@ HaloFullABCReconstructionResult EstimateHaloFullABCJoint(
             }
             else component.endpoint_failure=search.reason;
             component.local_conditioning=search.local_conditioning;
+            if(const auto atoms=component_atom_indices.find(std::string(component_id));
+                atoms!=component_atom_indices.end() && atoms->second.size()==static_cast<std::size_t>(search.state.eta.size()) &&
+                    search.state.beta.size()==2*search.state.eta.size())
+                for(std::size_t k=0;k<atoms->second.size();++k)
+                {
+                    const auto parent=atoms->second[k];
+                    if(parent>=free_atom_ids.size()) continue;
+                    component.candidate_profiles.push_back({free_atom_ids[parent],{
+                        search.state.beta(2*static_cast<Eigen::Index>(k)),
+                        std::exp(search.state.eta(static_cast<Eigen::Index>(k))),
+                        search.state.beta(2*static_cast<Eigen::Index>(k)+1)}});
+                }
             for(const auto & block:search.blocks)
             {
                 component.blocks.push_back({block.sweep,block.block,block.affected_rows,
@@ -580,8 +609,28 @@ HaloFullABCReconstructionResult EstimateHaloFullABCJoint(
                 break;
             }
             found->reconstructed_parameters=parameters;
+            found->parameter_source=HaloFullABCParameterSource::FullABC;
+            found->qualified=true;
+            found->qualification_reason="fullabc-endpoint-qualified";
         }
     }
+    if (!out.diagnostics.solver_qualified && collect_solver_diagnostics)
+        for (const auto & component:out.diagnostics.component_searches)
+        {
+            if (!component.endpoint_qualified) continue;
+            for (const auto & candidate:component.candidate_profiles)
+            {
+                const auto found=std::find_if(out.halos.begin(),out.halos.end(),[&](const auto & halo) {
+                    return halo.classification.atom_id==candidate.atom_id;
+                });
+                if (found==out.halos.end() || found->classification.role!=HaloFullABCRole::FreeFullABC)
+                    continue;
+                found->reconstructed_parameters=candidate.parameters;
+                found->parameter_source=HaloFullABCParameterSource::FullABC;
+                found->qualified=true;
+                found->qualification_reason="independently-qualified-fullabc-component";
+            }
+        }
     if (out.diagnostics.solver_qualified && std::any_of(out.halos.begin(),out.halos.end(),[](const auto & halo) {
             return halo.classification.role==HaloFullABCRole::FreeFullABC && !halo.reconstructed_parameters;
         }))
@@ -593,11 +642,601 @@ HaloFullABCReconstructionResult EstimateHaloFullABCJoint(
     if (out.diagnostics.solver_qualified)
     {
         out.available=true;
+        out.diagnostics.reconstruction_qualified=true;
+        out.diagnostics.assembly_replay_qualified=true;
         return out;
     }
     out.unavailable_reason=out.diagnostics.unavailable_reason.empty() ?
         "halo-fullabc-solver-unqualified" : out.diagnostics.unavailable_reason;
     out.diagnostics.unavailable_reason=out.unavailable_reason;
+    return out;
+}
+
+HaloFullABCReconstructionResult EstimateHaloFullABCJointWithRecovery(
+    const ModelObject & model,const JointProblem & problem,const JointAnalysisResult & result,
+    std::string_view joint_run_id,HaloFullABCRecoveryMethod method)
+{
+    const auto recovery_method_name=[](HaloFullABCRecoveryMethod value) -> std::string {
+        switch(value)
+        {
+        case HaloFullABCRecoveryMethod::FixedWidthACPerHalo: return "fixed-width-ac-per-halo";
+        case HaloFullABCRecoveryMethod::FixedWidthACPerComponent: return "fixed-width-ac-per-component";
+        case HaloFullABCRecoveryMethod::PostFailureGlobalMedian: return "post-failure-global-median";
+        case HaloFullABCRecoveryMethod::IsolateFailedComponent: return "isolate-failed-component";
+        case HaloFullABCRecoveryMethod::None: return "none";
+        }
+        return "unknown";
+    };
+    auto out=EstimateHaloFullABCJoint(model,problem,result,joint_run_id,true);
+    out.diagnostics.recovery_method=recovery_method_name(method);
+    if (out.available || method==HaloFullABCRecoveryMethod::None)
+        return out;
+    if (!out.diagnostics.solver_invoked)
+    {
+        out.unavailable_reason="recovery-fullabc-solver-not-invoked";
+        out.diagnostics.unavailable_reason=out.unavailable_reason;
+        return out;
+    }
+    if (!out.global_target_median)
+    {
+        out.unavailable_reason="recovery-global-target-median-unavailable";
+        out.diagnostics.unavailable_reason=out.unavailable_reason;
+        return out;
+    }
+    if (!out.diagnostics.width_upper_bound)
+    {
+        out.unavailable_reason="recovery-width-bound-unavailable";
+        out.diagnostics.unavailable_reason=out.unavailable_reason;
+        return out;
+    }
+
+    const auto & original=problem.OriginalInput();
+    const auto preclassification=BuildHaloFullABCPreclassification(model,problem,result);
+    if (!preclassification.available || !preclassification.global_target_median)
+    {
+        out.unavailable_reason="recovery-preclassification-unavailable:"+preclassification.unavailable_reason;
+        out.diagnostics.unavailable_reason=out.unavailable_reason;
+        return out;
+    }
+    const auto target_points=TargetPoints(result);
+    JointProblemInput halo_input;
+    halo_input.row_ids=original.row_ids;
+    halo_input.observations=original.observations;
+    const auto unique_support=[&](std::size_t contributor) {
+        std::map<std::size_t,double> by_row;
+        for (const auto & entry:original.support.at(contributor))
+        {
+            const auto [found,inserted]=by_row.emplace(entry.row,entry.squared_distance);
+            if (!inserted && found->second!=entry.squared_distance)
+                throw std::invalid_argument("Conflicting duplicate Halo support row.");
+        }
+        std::vector<JointSupport> support;
+        support.reserve(by_row.size());
+        for (const auto [row,square]:by_row) support.push_back({row,square});
+        return support;
+    };
+    const auto subtract_profile=[&](std::size_t contributor,const std::array<double,3> & parameters) {
+        for (const auto & entry:unique_support(contributor))
+        {
+            const auto basis=joint_component::EvaluateKernel(entry.squared_distance,parameters[1],2.5);
+            halo_input.observations.at(entry.row)-=parameters[0]*basis.gaussian+parameters[2]*basis.charge;
+        }
+    };
+    for (const auto target:original.selection_domain->target_indices)
+    {
+        const auto & point=target_points.at(target);
+        for (const auto & entry:unique_support(target))
+        {
+            const auto basis=joint_component::EvaluateKernel(entry.squared_distance,point.GetWidth(),2.5);
+            halo_input.observations.at(entry.row)-=
+                point.GetAmplitude()*basis.gaussian+point.GetOffset()*basis.charge;
+        }
+    }
+    std::vector<std::size_t> free_contributors;
+    for (const auto & halo:out.halos)
+        if (halo.classification.role==HaloFullABCRole::FixedGlobalTargetMedian)
+        {
+            if (halo.classification.original_contributor_index)
+                subtract_profile(*halo.classification.original_contributor_index,*out.global_target_median);
+        }
+        else
+        {
+            if (!halo.classification.original_contributor_index) return out;
+            halo_input.atom_ids.push_back(halo.classification.atom_id);
+            halo_input.support.push_back(unique_support(*halo.classification.original_contributor_index));
+            free_contributors.push_back(*halo.classification.original_contributor_index);
+        }
+    if (!std::all_of(halo_input.observations.begin(),halo_input.observations.end(),
+            [](double value){return std::isfinite(value);})) return out;
+
+    const auto qualified_fullabc=[&](std::string_view atom_id) {
+        const auto found=std::find_if(out.halos.begin(),out.halos.end(),[&](const auto & halo) {
+            return halo.classification.atom_id==atom_id &&
+                halo.parameter_source==HaloFullABCParameterSource::FullABC && halo.qualified;
+        });
+        return found!=out.halos.end();
+    };
+
+    JointProblem halo_problem(std::move(halo_input));
+    halo_problem=JointProblemAccess::WithReferenceNormalization(halo_problem,problem);
+    const auto & parent_data=JointProblemAccess::Get(halo_problem);
+    const double recovery_width=std::min((*out.global_target_median)[1],*out.diagnostics.width_upper_bound);
+    const auto run_fixed_width_ac=[&](const std::vector<std::size_t> & parent_atoms,
+        const std::vector<double> & parent_response) {
+        HaloFullABCRecoveryDiagnostic diagnostic;
+        diagnostic.attempted_halos=parent_atoms.size();
+        diagnostic.fixed_width=recovery_width;
+        JointProblemInput local_input;
+        std::set<std::size_t> parent_rows;
+        for (const auto atom:parent_atoms)
+        {
+            diagnostic.atom_ids.push_back(parent_data.input->atom_ids.at(atom));
+            for (const auto & support:parent_data.input->support.at(atom)) parent_rows.insert(support.row);
+        }
+        if (parent_rows.empty())
+        {
+            diagnostic.status="unavailable";
+            diagnostic.reason="component-has-no-support-rows";
+            return std::pair{std::move(diagnostic),std::vector<std::array<double,3>>{}};
+        }
+        std::map<std::size_t,std::size_t> row_to_local;
+        for (const auto row:parent_rows)
+        {
+            row_to_local.emplace(row,local_input.row_ids.size());
+            local_input.row_ids.push_back(parent_data.input->row_ids.at(row));
+            local_input.observations.push_back(parent_response.at(row));
+        }
+        for (const auto atom:parent_atoms)
+        {
+            local_input.atom_ids.push_back(parent_data.input->atom_ids.at(atom));
+            std::vector<JointSupport> support;
+            for (const auto & entry:parent_data.input->support.at(atom))
+                support.push_back({row_to_local.at(entry.row),entry.squared_distance});
+            local_input.support.push_back(std::move(support));
+        }
+        JointProblem local_problem(std::move(local_input));
+        local_problem=JointProblemAccess::WithReferenceNormalization(local_problem,halo_problem);
+        const auto & local_data=JointProblemAccess::Get(local_problem);
+        const auto atoms=static_cast<Eigen::Index>(parent_atoms.size());
+        const Eigen::VectorXd eta=Eigen::VectorXd::Constant(atoms,std::log(recovery_width));
+        const auto profile=joint_component::EvaluateProfile(local_data.domain,local_data.y,eta,false,&local_data.context);
+        if (profile.valid && profile.certificate.available)
+        {
+            const auto spectrum=joint_component::ComputeSpectrum(profile.x,local_data.context.rank,
+                profile.x.cols(),true);
+            diagnostic.ac_rank=static_cast<std::size_t>(std::max<Eigen::Index>(0,spectrum.rank));
+            diagnostic.ac_columns=static_cast<std::size_t>(profile.x.cols());
+            if (std::isfinite(spectrum.condition)) diagnostic.ac_condition=spectrum.condition;
+            diagnostic.full_ac_rank=spectrum.available && !spectrum.threshold_sensitive &&
+                spectrum.rank==profile.x.cols();
+            const auto replay=joint_component::CheckIndependentReplay(local_data.domain,local_data.y,
+                profile,local_data.context);
+            diagnostic.independent_replay_passed=replay.passed;
+            if (std::isfinite(replay.primary_ac_kkt)) diagnostic.primary_ac_kkt=replay.primary_ac_kkt;
+            if (std::isfinite(replay.independent_ac_kkt)) diagnostic.independent_ac_kkt=replay.independent_ac_kkt;
+            if (std::isfinite(replay.objective_difference)) diagnostic.objective_replay_error=replay.objective_difference;
+            diagnostic.qualified=diagnostic.full_ac_rank && profile.certificate.kkt_passed && replay.passed;
+            if (diagnostic.qualified)
+            {
+                diagnostic.qualified_halos=parent_atoms.size();
+                diagnostic.status="qualified";
+                diagnostic.reason="full-ac-rank-independent-replay-passed";
+                std::vector<std::array<double,3>> parameters;
+                parameters.reserve(parent_atoms.size());
+                for (Eigen::Index atom=0;atom<atoms;++atom)
+                    parameters.push_back({profile.beta(2*atom),recovery_width,profile.beta(2*atom+1)});
+                return std::pair{std::move(diagnostic),std::move(parameters)};
+            }
+            diagnostic.reason=!diagnostic.full_ac_rank ? "ac-design-not-full-rank" :
+                !profile.certificate.kkt_passed ? "primary-ac-kkt-failed" : replay.reason;
+        }
+        else diagnostic.reason=profile.reason.empty() ? "fixed-width-ac-profile-unavailable" : profile.reason;
+        diagnostic.status="failed";
+        return std::pair{std::move(diagnostic),std::vector<std::array<double,3>>{}};
+    };
+
+    out.diagnostics.recovery_method=recovery_method_name(method);
+    const auto & components=parent_data.partition.components;
+    for (const auto & component:components)
+    {
+        bool has_failed_halo{};
+        for (const auto atom:component.atoms)
+            has_failed_halo |= !qualified_fullabc(parent_data.input->atom_ids.at(static_cast<std::size_t>(atom)));
+        if (!has_failed_halo) continue;
+        HaloFullABCRecoveryDiagnostic diagnostic;
+        diagnostic.component_id=component.id;
+        for (const auto atom:component.atoms) diagnostic.atom_ids.push_back(
+            parent_data.input->atom_ids.at(static_cast<std::size_t>(atom)));
+        diagnostic.attempted_halos=component.atoms.size();
+        diagnostic.method=out.diagnostics.recovery_method;
+        if (method==HaloFullABCRecoveryMethod::FixedWidthACPerComponent)
+        {
+            std::vector<std::size_t> atoms;
+            for (const auto atom:component.atoms) atoms.push_back(static_cast<std::size_t>(atom));
+            auto solved=run_fixed_width_ac(atoms,halo_problem.OriginalInput().observations);
+            diagnostic=std::move(solved.first);
+            diagnostic.component_id=component.id;
+            diagnostic.method=out.diagnostics.recovery_method;
+            if (diagnostic.qualified)
+                for (std::size_t k=0;k<atoms.size();++k)
+                {
+                    auto found=std::find_if(out.halos.begin(),out.halos.end(),[&](const auto & halo) {
+                        return halo.classification.atom_id==diagnostic.atom_ids[k];
+                    });
+                    found->reconstructed_parameters=solved.second[k];
+                    found->parameter_source=HaloFullABCParameterSource::ObservationACFixedWidthRecovery;
+                    found->qualified=true;
+                    found->qualification_reason="fixed-width-component-ac-independent-replay";
+                }
+            else
+            {
+                HaloFullABCRecoveryDiagnostic fallback;
+                fallback.component_id=component.id;
+                fallback.method=out.diagnostics.recovery_method+"-median-fallback";
+                fallback.status="qualified";
+                fallback.reason="component-ac-recovery-failed-then-fixed-at-global-median";
+                fallback.attempted_halos=component.atoms.size();
+                fallback.qualified_halos=component.atoms.size();
+                fallback.qualified=true;
+                for (const auto atom:component.atoms)
+                {
+                    const auto atom_id=parent_data.input->atom_ids.at(static_cast<std::size_t>(atom));
+                    fallback.atom_ids.push_back(atom_id);
+                    const auto found=std::find_if(out.halos.begin(),out.halos.end(),[&](const auto & halo) {
+                        return halo.classification.atom_id==atom_id;
+                    });
+                    found->reconstructed_parameters=*out.global_target_median;
+                    found->parameter_source=HaloFullABCParameterSource::PostFailureGlobalMedianRecovery;
+                    found->qualified=true;
+                    found->qualification_reason="component-ac-failed-global-median-fallback";
+                }
+                out.diagnostics.recovery.push_back(std::move(fallback));
+            }
+        }
+        else if (method==HaloFullABCRecoveryMethod::FixedWidthACPerHalo)
+        {
+            diagnostic.status="qualified";
+            diagnostic.reason="all-per-halo-fixed-width-ac-profiles-qualified";
+            diagnostic.qualified=true;
+            diagnostic.full_ac_rank=true;
+            diagnostic.independent_replay_passed=true;
+            for (const auto atom:component.atoms)
+            {
+                const auto atom_index=static_cast<std::size_t>(atom);
+                auto response=halo_problem.OriginalInput().observations;
+                for (const auto other:component.atoms)
+                {
+                    if (other==atom) continue;
+                    const auto global=std::find_if(out.halos.begin(),out.halos.end(),[&](const auto & halo) {
+                        return halo.classification.atom_id==parent_data.input->atom_ids.at(
+                            static_cast<std::size_t>(other));
+                    });
+                    if (global==out.halos.end()) continue;
+                    const auto contributor=global->classification.original_contributor_index;
+                    if (!contributor) continue;
+                    const auto & parameters=global->parameter_source==HaloFullABCParameterSource::FullABC &&
+                        global->reconstructed_parameters ? *global->reconstructed_parameters :
+                            *out.global_target_median;
+                    for (const auto & entry:unique_support(*contributor))
+                    {
+                        const auto basis=joint_component::EvaluateKernel(entry.squared_distance,
+                            parameters[1],2.5);
+                        response.at(entry.row)-=parameters[0]*basis.gaussian+parameters[2]*basis.charge;
+                    }
+                }
+                auto solved=run_fixed_width_ac({atom_index},response);
+                diagnostic.qualified &= solved.first.qualified;
+                diagnostic.qualified_halos+=solved.first.qualified_halos;
+                if (!solved.first.qualified && diagnostic.status=="qualified")
+                {diagnostic.status="partial"; diagnostic.reason=solved.first.reason;}
+                if (solved.first.ac_rank)
+                    diagnostic.ac_rank=diagnostic.ac_rank ?
+                        std::min(*diagnostic.ac_rank,*solved.first.ac_rank) : solved.first.ac_rank;
+                if (solved.first.ac_columns)
+                    diagnostic.ac_columns=diagnostic.ac_columns ?
+                        *diagnostic.ac_columns+*solved.first.ac_columns : solved.first.ac_columns;
+                if (solved.first.ac_condition)
+                    diagnostic.ac_condition=diagnostic.ac_condition ?
+                        std::max(*diagnostic.ac_condition,*solved.first.ac_condition) : solved.first.ac_condition;
+                if (solved.first.fixed_width) diagnostic.fixed_width=solved.first.fixed_width;
+                if (solved.first.primary_ac_kkt)
+                    diagnostic.primary_ac_kkt=diagnostic.primary_ac_kkt ?
+                        std::max(*diagnostic.primary_ac_kkt,*solved.first.primary_ac_kkt) :
+                        solved.first.primary_ac_kkt;
+                if (solved.first.independent_ac_kkt)
+                    diagnostic.independent_ac_kkt=diagnostic.independent_ac_kkt ?
+                        std::max(*diagnostic.independent_ac_kkt,*solved.first.independent_ac_kkt) :
+                        solved.first.independent_ac_kkt;
+                if (solved.first.objective_replay_error)
+                    diagnostic.objective_replay_error=diagnostic.objective_replay_error ?
+                        std::max(*diagnostic.objective_replay_error,*solved.first.objective_replay_error) :
+                        solved.first.objective_replay_error;
+                diagnostic.full_ac_rank &= solved.first.full_ac_rank;
+                diagnostic.independent_replay_passed &= solved.first.independent_replay_passed;
+                if (solved.first.qualified)
+                {
+                    const auto found=std::find_if(out.halos.begin(),out.halos.end(),[&](const auto & halo) {
+                        return halo.classification.atom_id==parent_data.input->atom_ids.at(atom_index);
+                    });
+                    found->reconstructed_parameters=solved.second.front();
+                    found->parameter_source=HaloFullABCParameterSource::ObservationACFixedWidthRecovery;
+                    found->qualified=true;
+                    found->qualification_reason="fixed-width-per-halo-ac-independent-replay";
+                }
+            }
+            if (diagnostic.qualified_halos==diagnostic.attempted_halos) diagnostic.status="qualified";
+        }
+        else if (method==HaloFullABCRecoveryMethod::PostFailureGlobalMedian)
+        {
+            diagnostic.status="qualified";
+            diagnostic.qualified=true;
+            diagnostic.reason="failed-component-fixed-at-global-median";
+            for (const auto atom:component.atoms)
+            {
+                const auto atom_id=parent_data.input->atom_ids.at(static_cast<std::size_t>(atom));
+                auto found=std::find_if(out.halos.begin(),out.halos.end(),[&](const auto & halo) {
+                    return halo.classification.atom_id==atom_id;
+                });
+                if (!qualified_fullabc(atom_id))
+                {
+                    found->reconstructed_parameters=*out.global_target_median;
+                    found->parameter_source=HaloFullABCParameterSource::PostFailureGlobalMedianRecovery;
+                    found->qualified=true;
+                    found->qualification_reason="failed-component-global-median";
+                    ++diagnostic.qualified_halos;
+                }
+                else ++diagnostic.qualified_halos;
+            }
+        }
+        else if (method==HaloFullABCRecoveryMethod::IsolateFailedComponent)
+        {
+            std::optional<std::size_t> isolated_atom;
+            const auto set_isolated_from_id=[&](const std::string & atom_id) {
+                for (const auto atom:component.atoms)
+                    if (parent_data.input->atom_ids.at(static_cast<std::size_t>(atom))==atom_id)
+                    {isolated_atom=static_cast<std::size_t>(atom); return;}
+            };
+            if (out.diagnostics.first_failing_block &&
+                out.diagnostics.first_failing_block->component_id==component.id)
+            {
+                if (!out.diagnostics.first_failing_block->first_invalid_atom_id.empty())
+                    set_isolated_from_id(out.diagnostics.first_failing_block->first_invalid_atom_id);
+                if (!isolated_atom && out.diagnostics.first_failing_block->core_atom_ids.size()==1)
+                    set_isolated_from_id(out.diagnostics.first_failing_block->core_atom_ids.front());
+            }
+            if (!isolated_atom && component.atoms.size()==1)
+                isolated_atom=static_cast<std::size_t>(component.atoms.front());
+            std::vector<std::size_t> remaining_atoms;
+            for (const auto atom:component.atoms)
+                if (!isolated_atom || static_cast<std::size_t>(atom)!=*isolated_atom)
+                    remaining_atoms.push_back(static_cast<std::size_t>(atom));
+            if (!isolated_atom)
+            {
+                diagnostic.reason="failed-halo-not-localized; failed-component-fixed-at-global-median";
+                for (const auto atom:component.atoms)
+                {
+                    const auto atom_id=parent_data.input->atom_ids.at(static_cast<std::size_t>(atom));
+                    const auto found=std::find_if(out.halos.begin(),out.halos.end(),[&](const auto & halo) {
+                        return halo.classification.atom_id==atom_id;
+                    });
+                    found->reconstructed_parameters=*out.global_target_median;
+                    found->parameter_source=HaloFullABCParameterSource::PostFailureGlobalMedianRecovery;
+                    found->qualified=true;
+                    found->qualification_reason="failed-component-global-median-not-localized";
+                    ++diagnostic.qualified_halos;
+                }
+            }
+            else
+            {
+                const auto atom_id=parent_data.input->atom_ids.at(*isolated_atom);
+                const auto isolated=std::find_if(out.halos.begin(),out.halos.end(),[&](const auto & halo) {
+                    return halo.classification.atom_id==atom_id;
+                });
+                isolated->reconstructed_parameters=*out.global_target_median;
+                isolated->parameter_source=HaloFullABCParameterSource::PostFailureGlobalMedianRecovery;
+                isolated->qualified=true;
+                isolated->qualification_reason="failed-halo-isolated-at-global-median";
+                ++diagnostic.qualified_halos;
+                diagnostic.reason=remaining_atoms.empty() ? "failed-halo-isolated; no-other-halo-in-component" :
+                    "failed-halo-isolated; remaining-component-refit";
+                if (!remaining_atoms.empty())
+                {
+                    diagnostic.fullabc_refit_attempted=true;
+                    JointProblemInput refit_input;
+                    std::map<std::size_t,std::size_t> row_to_local;
+                    for (const auto row:component.rows)
+                    {
+                        row_to_local.emplace(static_cast<std::size_t>(row),refit_input.row_ids.size());
+                        refit_input.row_ids.push_back(parent_data.input->row_ids.at(static_cast<std::size_t>(row)));
+                        refit_input.observations.push_back(parent_data.input->observations.at(
+                            static_cast<std::size_t>(row)));
+                    }
+                    const auto isolated_contributor=isolated->classification.original_contributor_index;
+                    if (isolated_contributor)
+                        for (const auto & support:unique_support(*isolated_contributor))
+                        {
+                            const auto basis=joint_component::EvaluateKernel(support.squared_distance,
+                                (*out.global_target_median)[1],2.5);
+                            const auto local_row=row_to_local.find(support.row);
+                            if (local_row!=row_to_local.end())
+                                refit_input.observations.at(local_row->second)-=
+                                    (*out.global_target_median)[0]*basis.gaussian+
+                                    (*out.global_target_median)[2]*basis.charge;
+                        }
+                    std::vector<double> initial_widths;
+                    for (const auto atom:remaining_atoms)
+                    {
+                        refit_input.atom_ids.push_back(parent_data.input->atom_ids.at(atom));
+                        std::vector<JointSupport> support;
+                        for (const auto & entry:parent_data.input->support.at(atom))
+                            support.push_back({row_to_local.at(entry.row),entry.squared_distance});
+                        refit_input.support.push_back(std::move(support));
+                        initial_widths.push_back(recovery_width);
+                    }
+                    JointProblem refit_problem(std::move(refit_input));
+                    refit_problem=JointProblemAccess::WithReferenceNormalization(refit_problem,halo_problem);
+                    joint_component::FixedNeighborSearchPolicy refit_policy;
+                    refit_policy.eta_upper_bound=std::log(*out.diagnostics.width_upper_bound);
+                    const auto refit=joint_component::FitFixedNeighborComponents(
+                        refit_problem,initial_widths,refit_policy);
+                    const auto has_pass=[&](std::string_view name) {
+                        return std::any_of(refit.evidence.begin(),refit.evidence.end(),[&](const auto & check) {
+                            return check.name==name && check.scope==JointEvidenceScope::AssembledGlobal &&
+                                check.status==JointCheckStatus::Passed;
+                        });
+                    };
+                    diagnostic.fullabc_refit_qualified=refit.search_completed &&
+                        refit.RuntimeConvergence()==JointCheckStatus::Passed && refit.assembled_state &&
+                        refit.assembled_state->ac.size()==2*remaining_atoms.size() &&
+                        refit.assembled_state->b.size()==remaining_atoms.size() &&
+                        has_pass("independent-replay") && has_pass("width-stationarity") &&
+                        has_pass("width-bound-feasibility") && has_pass("endpoint-verification") &&
+                        has_pass("numerical-qualification") && has_pass("assembly-mapping") &&
+                        has_pass("assembled-consistency");
+                    for (std::size_t k=0;k<remaining_atoms.size();++k)
+                    {
+                        const auto remaining_id=parent_data.input->atom_ids.at(remaining_atoms[k]);
+                        const auto found=std::find_if(out.halos.begin(),out.halos.end(),[&](const auto & halo) {
+                            return halo.classification.atom_id==remaining_id;
+                        });
+                        if (diagnostic.fullabc_refit_qualified)
+                        {
+                            const auto & state=*refit.assembled_state;
+                            const std::array<double,3> parameters{state.ac[2*k],state.b[k],state.ac[2*k+1]};
+                            found->reconstructed_parameters=parameters;
+                            found->parameter_source=HaloFullABCParameterSource::FullABC;
+                            found->qualified=true;
+                            found->qualification_reason="fullabc-refit-after-failed-halo-isolation";
+                        }
+                        else
+                        {
+                            found->reconstructed_parameters=*out.global_target_median;
+                            found->parameter_source=HaloFullABCParameterSource::PostFailureGlobalMedianRecovery;
+                            found->qualified=true;
+                            found->qualification_reason="isolated-refit-failed-global-median-fallback";
+                        }
+                        ++diagnostic.qualified_halos;
+                    }
+                }
+            }
+            diagnostic.status="qualified";
+            diagnostic.qualified=diagnostic.qualified_halos==diagnostic.attempted_halos;
+        }
+        out.diagnostics.recovery.push_back(std::move(diagnostic));
+    }
+    const auto & assembled_response=halo_problem.OriginalInput().observations;
+    std::vector<double> primary_prediction(assembled_response.size(),0.0),
+        independent_prediction(assembled_response.size(),0.0),prediction_compensation(assembled_response.size(),0.0);
+    bool complete_profiles=true;
+    const double sqrt_two=std::sqrt(2.0);
+    for (const auto & halo:out.halos)
+        if (halo.classification.role==HaloFullABCRole::FreeFullABC)
+        {
+            if (!halo.reconstructed_parameters)
+            {
+                complete_profiles=false;
+                continue;
+            }
+            const auto & parameters=*halo.reconstructed_parameters;
+            const auto contributor=halo.classification.original_contributor_index;
+            if (!contributor)
+            {
+                complete_profiles=false;
+                continue;
+            }
+            for (const auto & support:unique_support(*contributor))
+            {
+                const auto primary_basis=joint_component::EvaluateKernel(support.squared_distance,
+                    parameters[1],2.5);
+                primary_prediction.at(support.row)+=parameters[0]*primary_basis.gaussian+
+                    parameters[2]*primary_basis.charge;
+                const double radius=std::sqrt(support.squared_distance);
+                const double gaussian=std::pow(2.0*std::acos(-1.0)*parameters[1]*parameters[1],-1.5)*
+                    std::exp(-support.squared_distance/(2.0*parameters[1]*parameters[1]));
+                const double charge=radius<1e-5 ? std::sqrt(2.0/std::acos(-1.0))/parameters[1] :
+                    std::erf(radius/parameters[1]/sqrt_two)/radius;
+                const auto row=support.row;
+                const double value=parameters[0]*gaussian+parameters[2]*charge;
+                const double sum=independent_prediction[row],next=sum+value;
+                prediction_compensation[row]+=std::abs(sum)>=std::abs(value) ?
+                    (sum-next)+value : (value-next)+sum;
+                independent_prediction[row]=next;
+            }
+        }
+    for (std::size_t row=0;row<independent_prediction.size();++row)
+        independent_prediction[row]+=prediction_compensation[row];
+    double maximum_prediction_error{};
+    bool prediction_replay_passed=true;
+    double primary_rss{},primary_rss_compensation{},independent_rss{},independent_rss_compensation{};
+    const auto add_square=[](double residual,double & sum,double & compensation) {
+        const double square=residual*residual;
+        const double adjusted=square-compensation,next=sum+adjusted;
+        compensation=(next-sum)-adjusted;
+        sum=next;
+    };
+    for (std::size_t row=0;row<assembled_response.size();++row)
+    {
+        const double difference=std::abs(primary_prediction[row]-independent_prediction[row]);
+        maximum_prediction_error=std::max(maximum_prediction_error,difference);
+        prediction_replay_passed &= difference<=2e-12+2e-13*std::abs(primary_prediction[row]);
+        add_square(primary_prediction[row]-assembled_response[row],primary_rss,primary_rss_compensation);
+        add_square(independent_prediction[row]-assembled_response[row],independent_rss,independent_rss_compensation);
+    }
+    const double scale=parent_data.context.scale;
+    const double primary_objective=.5*primary_rss/(scale*scale);
+    const double independent_objective=.5*independent_rss/(scale*scale);
+    const double objective_error=std::abs(primary_objective-independent_objective);
+    out.diagnostics.assembled_prediction_replay_error=maximum_prediction_error;
+    out.diagnostics.assembled_objective_replay_error=objective_error;
+    out.diagnostics.original_domain_objective=independent_objective;
+    out.diagnostics.original_domain_normalization_scale=scale;
+    out.diagnostics.assembly_replay_qualified=complete_profiles && prediction_replay_passed &&
+        objective_error<=1e-12+2e-12*std::abs(independent_objective);
+    for (const auto & halo:out.halos)
+        if (halo.classification.role==HaloFullABCRole::FreeFullABC)
+        {
+            if (!halo.reconstructed_parameters || !halo.qualified) out.diagnostics.assembly_replay_qualified=false;
+            if (halo.parameter_source==HaloFullABCParameterSource::FullABC)
+            {
+                const auto component=std::find_if(out.diagnostics.component_searches.begin(),
+                    out.diagnostics.component_searches.end(),[&](const auto & search) {
+                        return search.endpoint_qualified && std::any_of(search.candidate_profiles.begin(),
+                            search.candidate_profiles.end(),[&](const auto & candidate) {
+                                return candidate.atom_id==halo.classification.atom_id;
+                            });
+                    });
+                const bool original_component=component!=out.diagnostics.component_searches.end();
+                const bool isolated_refit=std::any_of(out.diagnostics.recovery.begin(),
+                    out.diagnostics.recovery.end(),[&](const auto & recovery) {
+                        return recovery.fullabc_refit_qualified &&
+                            std::find(recovery.atom_ids.begin(),recovery.atom_ids.end(),
+                                halo.classification.atom_id)!=recovery.atom_ids.end();
+                    });
+                out.diagnostics.assembly_replay_qualified &= original_component || isolated_refit;
+            }
+            else if (halo.parameter_source==HaloFullABCParameterSource::ObservationACFixedWidthRecovery)
+            {
+                const auto recovery=std::find_if(out.diagnostics.recovery.begin(),out.diagnostics.recovery.end(),
+                    [&](const auto & item) {
+                        return std::find(item.atom_ids.begin(),item.atom_ids.end(),halo.classification.atom_id)!=
+                            item.atom_ids.end() && item.method.starts_with("fixed-width-ac-");
+                    });
+                out.diagnostics.assembly_replay_qualified &= recovery!=out.diagnostics.recovery.end() &&
+                    recovery->status=="qualified";
+            }
+            else if (halo.parameter_source!=HaloFullABCParameterSource::PostFailureGlobalMedianRecovery)
+                out.diagnostics.assembly_replay_qualified=false;
+        }
+    out.diagnostics.reconstruction_qualified=out.diagnostics.assembly_replay_qualified;
+    if (!out.diagnostics.reconstruction_qualified)
+    {
+        out.unavailable_reason="no-qualified-recovery-endpoint";
+        out.diagnostics.unavailable_reason=out.unavailable_reason;
+        return out;
+    }
+    out.available=true;
+    out.unavailable_reason.clear();
+    out.diagnostics.unavailable_reason.clear();
     return out;
 }
 

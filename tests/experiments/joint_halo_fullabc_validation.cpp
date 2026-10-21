@@ -293,6 +293,21 @@ ProfileMap FullABCProfiles(const detail::HaloFullABCReconstructionResult & resul
     return out;
 }
 
+std::string HaloParameterSourceName(detail::HaloFullABCParameterSource source)
+{
+    switch(source)
+    {
+    case detail::HaloFullABCParameterSource::Unavailable: return "Unavailable";
+    case detail::HaloFullABCParameterSource::PreFixedGlobalMedian: return "PreFixedGlobalMedian";
+    case detail::HaloFullABCParameterSource::FullABC: return "FullABC";
+    case detail::HaloFullABCParameterSource::ObservationACFixedWidthRecovery:
+        return "ObservationACFixedWidthRecovery";
+    case detail::HaloFullABCParameterSource::PostFailureGlobalMedianRecovery:
+        return "PostFailureGlobalMedianRecovery";
+    }
+    return "Unknown";
+}
+
 double Median(std::vector<double> values)
 {
     if (values.empty()) return std::numeric_limits<double>::quiet_NaN();
@@ -639,8 +654,11 @@ json::array ComponentSearchesJson(const std::vector<detail::HaloFullABCComponent
     json::array output;
     for(const auto & search:searches)
     {
-        json::array blocks;
+        json::array blocks,candidates;
         json::array local_conditioning;
+        for(const auto & candidate:search.candidate_profiles)
+            candidates.emplace_back(json::object{{"atom_id",candidate.atom_id},
+                {"parameters",json::array{candidate.parameters[0],candidate.parameters[1],candidate.parameters[2]}}});
         for(const auto & block:search.blocks)
             blocks.emplace_back(json::object{{"sweep",block.sweep},{"block",block.block},
                 {"affected_rows",block.affected_rows},{"status",block.status},{"reason",block.reason},
@@ -684,7 +702,8 @@ json::array ComponentSearchesJson(const std::vector<detail::HaloFullABCComponent
             {"cache_replay_error",Number(search.cache_replay_error)},
             {"endpoint_verified",search.endpoint_verified},{"endpoint_qualified",search.endpoint_qualified},
             {"endpoint_failure",search.endpoint_failure},{"trust_failure",search.trust_failure},
-            {"local_conditioning",std::move(local_conditioning)},{"blocks",std::move(blocks)}});
+            {"local_conditioning",std::move(local_conditioning)},
+            {"candidate_profiles",std::move(candidates)},{"blocks",std::move(blocks)}});
     }
     return output;
 }
@@ -1185,6 +1204,156 @@ json::object RunScenario(const Scenario & scenario, std::ofstream & summary_csv,
         case_json["fullabc_peeling"] = MethodJson(full_result);
     }
     case_json["halo_fullabc"] = MethodJson(full_result);
+
+    if (capture_solver_diagnostics)
+    {
+        json::array recovery_results;
+        const std::array recovery_methods{
+            detail::HaloFullABCRecoveryMethod::FixedWidthACPerHalo,
+            detail::HaloFullABCRecoveryMethod::PostFailureGlobalMedian,
+            detail::HaloFullABCRecoveryMethod::FixedWidthACPerComponent,
+            detail::HaloFullABCRecoveryMethod::IsolateFailedComponent};
+        for (const auto method:recovery_methods)
+        {
+            const auto recovered_started=Clock::now();
+            const auto recovered=detail::EstimateHaloFullABCJointWithRecovery(
+                synthetic.model,problem,snapshot,run_id,method);
+            if (!recovered.available || !recovered.diagnostics.reconstruction_qualified ||
+                !recovered.diagnostics.assembly_replay_qualified || recovered.diagnostics.solver_qualified)
+                throw std::runtime_error("P1 recovery qualification contract failed for " +
+                    recovered.diagnostics.recovery_method + ": " + recovered.unavailable_reason);
+            if (!recovered.diagnostics.assembled_prediction_replay_error ||
+                !recovered.diagnostics.assembled_objective_replay_error ||
+                !recovered.diagnostics.original_domain_objective ||
+                !recovered.diagnostics.original_domain_normalization_scale)
+                throw std::runtime_error("P1 mixed-source OriginalInput replay evidence is incomplete.");
+            const auto recovered_free_halo=std::find_if(recovered.halos.begin(),recovered.halos.end(),
+                [](const auto & halo) {return halo.classification.atom_id=="103";});
+            if (recovered_free_halo==recovered.halos.end() || !recovered_free_halo->qualified ||
+                !recovered_free_halo->reconstructed_parameters)
+                throw std::runtime_error("P1 recovery omitted the failed Free Halo.");
+            if (method==detail::HaloFullABCRecoveryMethod::FixedWidthACPerHalo ||
+                method==detail::HaloFullABCRecoveryMethod::FixedWidthACPerComponent)
+            {
+                if (recovered_free_halo->parameter_source!=
+                    detail::HaloFullABCParameterSource::ObservationACFixedWidthRecovery)
+                    throw std::runtime_error("P1 fixed-width AC recovery source was not recorded.");
+                const auto check=std::find_if(recovered.diagnostics.recovery.begin(),
+                    recovered.diagnostics.recovery.end(),[](const auto & value) {
+                        return std::find(value.atom_ids.begin(),value.atom_ids.end(),"103")!=value.atom_ids.end();
+                    });
+                if (check==recovered.diagnostics.recovery.end() || !check->qualified || !check->full_ac_rank ||
+                    !check->independent_replay_passed)
+                    throw std::runtime_error("P1 fixed-width AC recovery failed rank or replay qualification.");
+            }
+            else if (recovered_free_halo->parameter_source!=
+                detail::HaloFullABCParameterSource::PostFailureGlobalMedianRecovery)
+                throw std::runtime_error("P1 median recovery source was not recorded.");
+            if (method==detail::HaloFullABCRecoveryMethod::PostFailureGlobalMedian ||
+                method==detail::HaloFullABCRecoveryMethod::IsolateFailedComponent)
+                for (const std::string_view atom_id:{"101","102"})
+                {
+                    const auto retained=std::find_if(recovered.halos.begin(),recovered.halos.end(),[&](const auto & halo) {
+                        return halo.classification.atom_id==atom_id;
+                    });
+                    if (retained==recovered.halos.end() || retained->parameter_source!=
+                        detail::HaloFullABCParameterSource::FullABC)
+                        throw std::runtime_error("P1 local fallback discarded an independent FullABC component.");
+                }
+            if (method==detail::HaloFullABCRecoveryMethod::IsolateFailedComponent)
+                for (const std::string_view atom_id:{"101","102"})
+                {
+                    const auto retained=std::find_if(recovered.halos.begin(),recovered.halos.end(),[&](const auto & halo) {
+                        return halo.classification.atom_id==atom_id;
+                    });
+                    if (retained==recovered.halos.end() || retained->parameter_source!=
+                        detail::HaloFullABCParameterSource::FullABC)
+                        throw std::runtime_error("P1 failed-component isolation changed a qualified component.");
+                }
+            MethodResult metrics;
+            metrics.available=recovered.available;
+            metrics.reason=recovered.unavailable_reason;
+            metrics.profiles.resize(synthetic.halos.size());
+            const auto recovered_profiles=FullABCProfiles(recovered);
+            for (std::size_t index=0;index<synthetic.halos.size();++index)
+                if (const auto found=recovered_profiles.find(synthetic.halos[index].id);
+                    found!=recovered_profiles.end()) metrics.profiles[index]=found->second;
+            if (recovered.available)
+            {
+                ScoreParameters(metrics,synthetic.halos);
+                const auto signal=ScoreSignal(problem,synthetic,recovered_profiles,snapshot);
+                metrics.halo_signal_rmse=signal.all;
+                metrics.shared_signal_rmse=signal.shared;
+                metrics.domain_signal_rmse=signal.domain;
+                metrics.max_signal_error=signal.maximum;
+                const auto post_started=Clock::now();
+                RunPostprocessing(synthetic,problem,snapshot,nullptr,&recovered,run_id,metrics);
+                metrics.seconds=std::chrono::duration<double>(Clock::now()-post_started).count();
+            }
+            json::array sources;
+            std::size_t fullabc_source_count{},ac_recovery_count{},median_recovery_count{},
+                pre_fixed_count{},unavailable_count{};
+            for (const auto & halo:recovered.halos)
+            {
+                switch(halo.parameter_source)
+                {
+                case detail::HaloFullABCParameterSource::FullABC: ++fullabc_source_count; break;
+                case detail::HaloFullABCParameterSource::ObservationACFixedWidthRecovery: ++ac_recovery_count; break;
+                case detail::HaloFullABCParameterSource::PostFailureGlobalMedianRecovery:
+                    ++median_recovery_count; break;
+                case detail::HaloFullABCParameterSource::PreFixedGlobalMedian: ++pre_fixed_count; break;
+                case detail::HaloFullABCParameterSource::Unavailable: ++unavailable_count; break;
+                }
+                sources.emplace_back(json::object{{"atom_id",halo.classification.atom_id},
+                    {"source",HaloParameterSourceName(halo.parameter_source)},
+                    {"qualified",halo.qualified},{"reason",halo.qualification_reason},
+                    {"parameters",halo.reconstructed_parameters ? json::value(json::array{
+                        (*halo.reconstructed_parameters)[0],(*halo.reconstructed_parameters)[1],
+                        (*halo.reconstructed_parameters)[2]}) : json::value(nullptr)}});
+            }
+            json::array recovery_checks;
+            for (const auto & check:recovered.diagnostics.recovery)
+            {
+                json::array atom_ids;
+                for (const auto & atom_id:check.atom_ids) atom_ids.emplace_back(atom_id);
+                recovery_checks.emplace_back(json::object{{"component_id",check.component_id},
+                    {"method",check.method},{"status",check.status},{"reason",check.reason},
+                    {"atom_ids",std::move(atom_ids)},
+                    {"attempted_halos",check.attempted_halos},{"qualified_halos",check.qualified_halos},
+                    {"ac_rank",check.ac_rank ? json::value(*check.ac_rank) : json::value(nullptr)},
+                    {"ac_columns",check.ac_columns ? json::value(*check.ac_columns) : json::value(nullptr)},
+                    {"ac_condition",Number(check.ac_condition)},
+                    {"fixed_width",Number(check.fixed_width)},
+                    {"primary_ac_kkt",Number(check.primary_ac_kkt)},
+                    {"independent_ac_kkt",Number(check.independent_ac_kkt)},
+                    {"objective_replay_error",Number(check.objective_replay_error)},
+                    {"full_ac_rank",check.full_ac_rank},
+                    {"independent_replay_passed",check.independent_replay_passed},
+                    {"fullabc_refit_attempted",check.fullabc_refit_attempted},
+                    {"fullabc_refit_qualified",check.fullabc_refit_qualified},
+                    {"qualified",check.qualified}});
+            }
+            recovery_results.emplace_back(json::object{{"method",recovered.diagnostics.recovery_method},
+                {"available",recovered.available},{"reason",recovered.unavailable_reason},
+                {"solver_qualified",recovered.diagnostics.solver_qualified},
+                {"reconstruction_qualified",recovered.diagnostics.reconstruction_qualified},
+                {"assembly_replay_qualified",recovered.diagnostics.assembly_replay_qualified},
+                {"assembled_prediction_replay_error",Number(
+                    recovered.diagnostics.assembled_prediction_replay_error)},
+                {"assembled_objective_replay_error",Number(
+                    recovered.diagnostics.assembled_objective_replay_error)},
+                {"original_domain_objective",Number(recovered.diagnostics.original_domain_objective)},
+                {"original_domain_normalization_scale",Number(
+                    recovered.diagnostics.original_domain_normalization_scale)},
+                {"source_counts",json::object{{"fullabc",fullabc_source_count},
+                    {"observation_ac_recovery",ac_recovery_count},{"median_recovery",median_recovery_count},
+                    {"pre_fixed_median",pre_fixed_count},{"unavailable",unavailable_count}}},
+                {"seconds",std::chrono::duration<double>(Clock::now()-recovered_started).count()},
+                {"sources",std::move(sources)},{"recovery_checks",std::move(recovery_checks)},
+                {"metrics",MethodJson(metrics)}});
+        }
+        case_json["p1_recovery_methods"]=std::move(recovery_results);
+    }
 
     MethodResult post_geometry = geometry_result;
     auto geometry_snapshot = snapshot;

@@ -48,6 +48,14 @@ struct HaloMedianBuildResult
 };
 
 enum class HaloFullABCRole {FixedGlobalTargetMedian,FreeFullABC};
+enum class HaloFullABCParameterSource
+{
+    Unavailable,PreFixedGlobalMedian,FullABC,ObservationACFixedWidthRecovery,PostFailureGlobalMedianRecovery
+};
+enum class HaloFullABCRecoveryMethod
+{
+    None,FixedWidthACPerHalo,FixedWidthACPerComponent,PostFailureGlobalMedian,IsolateFailedComponent
+};
 struct HaloFullABCClassificationRecord
 {
     std::string atom_id;
@@ -71,6 +79,9 @@ struct HaloFullABCReconstructionHalo
 {
     HaloFullABCClassificationRecord classification;
     std::optional<std::array<double,3>> reconstructed_parameters;
+    HaloFullABCParameterSource parameter_source{HaloFullABCParameterSource::Unavailable};
+    bool qualified{};
+    std::string qualification_reason;
 };
 struct HaloFullABCBlockFailureDiagnostic
 {
@@ -100,6 +111,11 @@ struct HaloFullABCBlockSummary
     std::optional<double> local_objective_before,local_objective_after,global_objective_before,
         global_objective_after,global_replay_delta,local_global_delta_error,local_final_ac_kkt;
 };
+struct HaloFullABCCandidateProfile
+{
+    std::string atom_id;
+    std::array<double,3> parameters{};
+};
 struct HaloFullABCComponentSearchDiagnostic
 {
     std::string component_id,reason,endpoint_failure,trust_failure;
@@ -110,18 +126,33 @@ struct HaloFullABCComponentSearchDiagnostic
     bool endpoint_verified{},endpoint_qualified{};
     std::vector<HaloFullABCBlockSummary> blocks;
     std::vector<JointBlockConditioning> local_conditioning;
+    std::vector<HaloFullABCCandidateProfile> candidate_profiles;
+};
+struct HaloFullABCRecoveryDiagnostic
+{
+    std::string component_id,method,status,reason;
+    std::size_t attempted_halos{},qualified_halos{};
+    std::optional<double> primary_ac_kkt,independent_ac_kkt,objective_replay_error,ac_condition,fixed_width;
+    std::optional<std::size_t> ac_rank,ac_columns;
+    bool full_ac_rank{},independent_replay_passed{},fullabc_refit_attempted{},
+        fullabc_refit_qualified{},qualified{};
+    std::vector<std::string> atom_ids;
 };
 struct HaloFullABCJointDiagnostics
 {
-    bool solver_invoked{},solver_qualified{};
+    bool solver_invoked{},solver_qualified{},reconstruction_qualified{},assembly_replay_qualified{};
     JointCheckStatus solver_status{JointCheckStatus::NotRun};
     std::string unavailable_reason;
     std::size_t original_observation_rows{},free_support_entries{},zero_sensitivity_rows{},
         qualified_first_stage_width_donors{};
     std::optional<double> first_stage_width_p95,width_upper_bound,objective,observation_scale;
+    std::optional<double> assembled_prediction_replay_error,assembled_objective_replay_error,
+        original_domain_objective,original_domain_normalization_scale;
     std::optional<std::size_t> estimated_peak_memory_bytes;
     std::optional<HaloFullABCBlockFailureDiagnostic> first_failing_block;
     std::vector<HaloFullABCComponentSearchDiagnostic> component_searches;
+    std::string recovery_method;
+    std::vector<HaloFullABCRecoveryDiagnostic> recovery;
     JointSolverProvenance solver_provenance;
     std::vector<JointCheck> evidence;
 };
@@ -158,6 +189,9 @@ HaloFullABCPreclassification BuildHaloFullABCPreclassification(
 HaloFullABCReconstructionResult EstimateHaloFullABCJoint(
     const ModelObject &,const JointProblem &,const JointAnalysisResult &,std::string_view joint_run_id,
     bool collect_solver_diagnostics=false);
+HaloFullABCReconstructionResult EstimateHaloFullABCJointWithRecovery(
+    const ModelObject &,const JointProblem &,const JointAnalysisResult &,std::string_view joint_run_id,
+    HaloFullABCRecoveryMethod);
 
 // Builds the immutable post-Joint Halo reconstruction snapshot. Only target
 // point evidence from this JointAnalysisResult may enter the donor pool.

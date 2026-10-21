@@ -982,7 +982,15 @@ TEST(PureHaloSupportExclusionTest, ExplicitFullABCHaloProfilesReachReconstructio
     reconstruction.free_halo_count=preclassification.free_halo_count;
     reconstruction.diagnostics.solver_status=JointCheckStatus::NotRun;
     for (const auto & classification:preclassification.halos)
-        reconstruction.halos.push_back({classification,classification.parameter_profile});
+    {
+        core::detail::HaloFullABCReconstructionHalo halo;
+        halo.classification=classification;
+        halo.reconstructed_parameters=classification.parameter_profile;
+        halo.parameter_source=core::detail::HaloFullABCParameterSource::PreFixedGlobalMedian;
+        halo.qualified=classification.parameter_profile.has_value();
+        halo.qualification_reason="preclassified-before-solve";
+        reconstruction.halos.push_back(std::move(halo));
+    }
     fixture.model.FindAtomPtr(2)->SetElement(Element::HYDROGEN);
 
     const SamplingPointList points{{1.6,{1.6,0.0,0.0},true},{1.9,{1.9,0.0,0.0},true}};
@@ -1036,7 +1044,15 @@ TEST(PureHaloSupportExclusionTest, PeelingRejectsContributorEligibilityMismatch)
     reconstruction.fixed_halo_count=preclassification.fixed_halo_count;
     reconstruction.free_halo_count=preclassification.free_halo_count;
     for (const auto & classification:preclassification.halos)
-        reconstruction.halos.push_back({classification,classification.parameter_profile});
+    {
+        core::detail::HaloFullABCReconstructionHalo halo;
+        halo.classification=classification;
+        halo.reconstructed_parameters=classification.parameter_profile;
+        halo.parameter_source=core::detail::HaloFullABCParameterSource::PreFixedGlobalMedian;
+        halo.qualified=classification.parameter_profile.has_value();
+        halo.qualification_reason="preclassified-before-solve";
+        reconstruction.halos.push_back(std::move(halo));
+    }
     const auto target=std::find_if(contributor_universe.contributors.begin(),contributor_universe.contributors.end(),
         [](const auto & contributor){return contributor.atom_id==1;});
     ASSERT_NE(target,contributor_universe.contributors.end());
