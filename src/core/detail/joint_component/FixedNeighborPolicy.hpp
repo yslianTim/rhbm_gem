@@ -9,7 +9,6 @@
 
 namespace rhbm_gem::core::joint_component {
 
-enum class FixedNeighborBlockOrder {Forward,Reverse};
 struct FixedNeighborPolicy;
 struct BlockCoordinateState;
 struct FixedNeighborBlockSweep;
@@ -24,7 +23,6 @@ struct FixedNeighborSearchPolicy
     JointConvergenceCriteria convergence_criteria{PracticalJointConvergenceCriteria};
     bool collect_telemetry{};
     bool collect_diagnostics{};
-    FixedNeighborBlockOrder order{FixedNeighborBlockOrder::Forward};
     std::size_t component_index{};
     std::string component_id;
     std::function<void(std::size_t &,std::size_t &)> halo_census;

@@ -120,7 +120,6 @@ const char * MemoryStageName(MemoryStage stage)
     case MemoryStage::FixedNeighborPreparation: return "fixed-neighbor-preparation";
     case MemoryStage::GlobalStateEvaluation: return "global-state-evaluation";
     case MemoryStage::EndpointVerification: return "endpoint-verification";
-    case MemoryStage::ReferenceSolve: return "reference-solve";
     case MemoryStage::LocalConditioning: return "local-conditioning";
     case MemoryStage::ParameterStability: return "parameter-stability";
     }
@@ -141,7 +140,7 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
     MemoryEstimate out; out.shape=shape; out.stage=stage; out.resident_bytes=shape.resident_bytes; out.budget_bytes=budget;
     std::size_t temporary{};
     const auto rows=shape.component_observations,atoms=shape.component_atoms,entries=shape.component_support_entries;
-    const auto blocks=shape.component_blocks,affected=shape.affected_row_entries,free=shape.component_free_columns;
+    const auto blocks=shape.component_blocks,affected=shape.affected_row_entries;
     bool ok=true; std::size_t rows_plus_atoms{},rows_plus_one{};
     switch(stage)
     {
@@ -192,18 +191,6 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
         ok=AddProduct(temporary,rows,4*sizeof(double)) &&
             AddProduct(temporary,atoms,24*sizeof(double)+3*sizeof(Eigen::Index));
         break;
-    case MemoryStage::ReferenceSolve:
-    {
-        // ReferenceQR retains a dense R and forms a dense tiled Householder workspace.
-        // Include the sparse design/value copies while the factorization runs.
-        std::size_t sparse_bytes{},factor_bytes{},workspace{};
-        ok=AddProduct(sparse_bytes,entries,9*(sizeof(double)+sizeof(Eigen::Index))) &&
-            CheckedMultiplyBytes(free,free,factor_bytes) && CheckedMultiplyBytes(factor_bytes,sizeof(double),factor_bytes) &&
-            CheckedMultiplyBytes(factor_bytes,3,workspace) &&
-            AddProduct(workspace,free,2*8192*sizeof(double)) &&
-            CheckedAddBytes(sparse_bytes,factor_bytes,temporary) && CheckedAddBytes(temporary,workspace,temporary);
-        break;
-    }
     case MemoryStage::LocalConditioning:
     {
         const auto local_rows=shape.maximum_block_rows ? shape.maximum_block_rows : rows;

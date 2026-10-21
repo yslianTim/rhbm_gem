@@ -25,8 +25,8 @@ Domain::Domain(const unique_grid::Grid & grid,const std::vector<Atom> & geometry
 }
 
 Evaluation::Evaluation(runtime::Evaluation e):runtime::Evaluation(std::move(e)),certificate(runtime_json::Certificate(runtime::Evaluation::certificate)) {}
-Evaluation Evaluate(const Domain & d,const Vector & y,const Vector & eta,bool reference,const EvaluationContext * c,const std::vector<runtime::LinearBlock> * blocks)
-{return Evaluation(runtime::EvaluateProfile(d,y,eta,reference,c,blocks));}
+Evaluation Evaluate(const Domain & d,const Vector & y,const Vector & eta,const EvaluationContext * c,const std::vector<runtime::LinearBlock> * blocks)
+{return Evaluation(runtime::EvaluateProfile(d,y,eta,c,blocks));}
 Evaluation AtState(const Domain & d,const Vector & y,const Vector & eta,const Vector & beta,const EvaluationContext & c)
 {return Evaluation(runtime::EvaluateState(d,y,eta,beta,c));}
 j::object MatrixSpectrum(const Sparse & x,const RankPolicy & p,Eigen::Index columns,bool normalize)

@@ -48,12 +48,10 @@ inline j::object MatrixSpectrum(const r::Spectrum & s)
 }
 inline j::object Trust(const r::TrustEvidence & t)
 {
-    j::object out{{"reference",t.reference ? j::value(Endpoint(*t.reference)) : j::value(nullptr)},
-        {"passed",t.passed},{"reason",t.reason}};
+    j::object out{{"passed",t.passed},{"reason",t.reason}};
     if(t.independent)
     {
         const auto & replay=*t.independent;
-        out["reference_solve_calls"]=0;
         out["independent_replay"]=j::object{{"available",replay.available},{"valid",replay.valid},
             {"passed",replay.passed},{"feasible",replay.feasible},
             {"prediction_difference",Number(replay.prediction_difference)},
@@ -67,7 +65,6 @@ inline j::object Trust(const r::TrustEvidence & t)
             {"gradient_difference",Number(replay.gradient_difference)},
             {"cancellation_ratio",Number(replay.cancellation_ratio)},{"reason",replay.reason}};
     }
-    out["scaled_coefficient_difference"]=Number(t.coefficient_difference);
     if(!t.primary_valid) return out;
     out["prediction_passed"]=t.prediction_passed;
     out["gradient_passed"]=t.gradient_passed; out["kkt_replay_difference"]=Number(t.kkt_difference);
@@ -145,10 +142,9 @@ inline j::object Search(const r::SearchResult & s,const r::EvaluationContext & c
         {"initial",Endpoint(s.initial)},{"lm_status",s.lm_status},{"stop_reason",s.stop_reason},{"profile_evaluations",s.evaluations},
         {"jacobian_evaluations",s.derivatives},{"accepted_updates",s.accepted},{"trials",trials},{"row_count",rows},
         {"settings",j::object{{"factor",.1},{"ftol",1e-14},{"xtol",1e-12},{"gtol",1e-12},{"profile_budget",c.profile_budget},{"accepted_update_budget",c.update_budget}}},
-        {"linear_solver","sparse-qr-householder-1024"},{"reference_solver","independent-tsqr-8192-svd"},
+        {"linear_solver","sparse-qr-householder-1024"},
         {"residual_scale",c.scale},{"variance_semantics","descriptive RSS/N; zero permitted"}};
-    out["variant"]="guarded"; out["search_reference_evaluations"]=s.references;
-    out["initial_accepted"]=s.initial_accepted; out["search_reference_seconds"]=s.reference_seconds;
+    out["variant"]="guarded"; out["initial_accepted"]=s.initial_accepted;
     out["search_stopped_without_convergence"]=s.stopped;
     return out;
 }

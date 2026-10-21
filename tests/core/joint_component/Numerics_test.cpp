@@ -96,7 +96,7 @@ TEST(JointTestNumericsTest, FullJacobianAndEnvelopeGradientAtNonzeroResidual)
     for (Eigen::Index k=0;k<2;++k)
     {
         Vector plus=eta,minus=eta; plus(k)+=1e-5; minus(k)-=1e-5;
-        const auto ep=p::Evaluate(domain,sample.y,plus,true),em=p::Evaluate(domain,sample.y,minus,true);
+        const auto ep=p::Evaluate(domain,sample.y,plus),em=p::Evaluate(domain,sample.y,minus);
         ASSERT_TRUE(ep.valid && em.valid);
         const Vector finite=(ep.residual-em.residual)/(2e-5*scale);
         EXPECT_LT((finite-d.jacobian.col(k)).norm()/finite.norm(),1e-7);
@@ -114,7 +114,7 @@ TEST(JointTestNumericsTest, BoundaryAndChangingActiveFaceRebuildDerivative)
         const Vector eta=Vector::Constant(1,std::log(width)); const auto e=p::Evaluate(domain,sample.y,eta);
         ASSERT_TRUE(e.valid); active |= e.beta(0)==0; interior |= e.beta(0)>0;
         const double scale=std::max(1.0,sample.y.norm()); const auto d=p::Differentiate(e,scale); ASSERT_TRUE(d.valid);
-        const auto plus=p::Evaluate(domain,sample.y,eta.array()+1e-5,true),minus=p::Evaluate(domain,sample.y,eta.array()-1e-5,true);
+        const auto plus=p::Evaluate(domain,sample.y,eta.array()+1e-5),minus=p::Evaluate(domain,sample.y,eta.array()-1e-5);
         ASSERT_EQ(plus.certificate.at("active_atoms"),minus.certificate.at("active_atoms"));
         EXPECT_LT(((plus.residual-minus.residual)/(2e-5*scale)-d.jacobian.col(0)).norm(),1e-8);
     }
@@ -152,7 +152,7 @@ TEST(JointTestNumericsTest, TiledDerivativeMatchesDenseAcrossTileBoundaries)
                 if(first+s.row<rows) support[a].push_back({first+s.row,s.square});
         for(Eigen::Index r=0;r<rows;++r) y(r)=sample.y(r%base.rows)+.03*std::sin(static_cast<double>(r));
         const p::Domain domain(rows,std::move(support)); const auto context=p::MakeContext(y,2);
-        const auto e=p::Evaluate(domain,y,Eigen::Vector2d(.55,.51).array().log(),false,&context);
+        const auto e=p::Evaluate(domain,y,Eigen::Vector2d(.55,.51).array().log(),&context);
         ASSERT_TRUE(e.valid); const auto dense=p::DenseDifferentiate(e,context.scale,&context);
         ASSERT_TRUE(dense.valid); ASSERT_GT((dense.projected-dense.jacobian).norm(),1e-3);
         const auto correction=p::DenseLocalCorrection(e,dense,context);
@@ -252,7 +252,7 @@ TEST(JointComponentNumericsTest, CompactSvdPreservesRankBoundaryAndAbsoluteOverr
         const bool near=std::abs(factor-1)*threshold<=64*std::numeric_limits<double>::epsilon()*16;
         EXPECT_EQ(actual.jacobi_retry,near);
         EXPECT_EQ(n::NumericsWorkForTesting().jacobi_retries,near ? 1 : 0);
-        EXPECT_EQ(n::NumericsWorkForTesting().reference_solves,1);
+        EXPECT_EQ(n::NumericsWorkForTesting().rhs_solutions,1);
         if(near) EXPECT_GT(n::NumericsWorkForTesting().jacobi_retry_seconds,0);
     }
 }
@@ -303,7 +303,6 @@ TEST(JointComponentNumericsTest, MemoryPlannerRetainsNonRankStagesAndLocalBudget
     const auto preparation=n::PlanMemory(large,n::MemoryStage::FixedNeighborPreparation);
     const auto state=n::PlanMemory(large,n::MemoryStage::GlobalStateEvaluation);
     const auto endpoint=n::PlanMemory(large,n::MemoryStage::EndpointVerification);
-    const auto reference=n::PlanMemory(large,n::MemoryStage::ReferenceSolve);
     auto local=large; local.component_free_columns=24;
     const auto conditioning=n::PlanMemory(local,n::MemoryStage::LocalConditioning);
     local.component_stability_evaluations=2;
@@ -313,7 +312,6 @@ TEST(JointComponentNumericsTest, MemoryPlannerRetainsNonRankStagesAndLocalBudget
     EXPECT_EQ(preparation.status,n::MemoryStatus::Pass);
     EXPECT_EQ(state.status,n::MemoryStatus::Pass);
     EXPECT_EQ(endpoint.status,n::MemoryStatus::Pass);
-    EXPECT_EQ(reference.status,n::MemoryStatus::Reject);
     EXPECT_EQ(conditioning.status,n::MemoryStatus::Pass);
     EXPECT_EQ(stability.status,n::MemoryStatus::Pass);
     EXPECT_GT(stability.estimated_peak_bytes,conditioning.estimated_peak_bytes);
@@ -373,7 +371,7 @@ TEST(JointComponentNumericsTest, IndependentStreamingReplayMatchesLegacyMatrixRe
         JointProblem problem(second_stage_test::SyntheticJointWorkload(topology,8));
         const auto & data=JointProblemAccess::Get(problem);
         const Vector eta=Vector::Constant(8,std::log(.55));
-        const auto primary=n::EvaluateProfile(data.domain,data.y,eta,false,&data.context);
+        const auto primary=n::EvaluateProfile(data.domain,data.y,eta,&data.context);
         ASSERT_TRUE(primary.valid);
         const auto streaming=n::EvaluateStateStreaming(data.domain,data.y,primary.eta,primary.beta,data.context);
         ASSERT_TRUE(streaming.valid);
@@ -525,7 +523,7 @@ TEST(JointComponentNumericsTest, BoundedReplayUsesProjectedWidthKktAndChecksFeas
         }
         auto context=n::CreateContext(y,1);
         context.eta_upper_bound=std::log(.55);
-        const auto primary=n::EvaluateProfile(domain,y,eta,false,&context);
+        const auto primary=n::EvaluateProfile(domain,y,eta,&context);
         EXPECT_TRUE(primary.valid)<<primary.reason;
         const auto replay=n::CheckIndependentReplay(domain,y,primary,context,nullptr,nullptr,
             n::StrictJointConvergenceCriteria);
@@ -576,7 +574,7 @@ TEST(JointComponentNumericsTest, BoundedReplayUsesProjectedWidthKktAndChecksFeas
     EXPECT_FALSE(rejected.numerical_qualified);
 
     const Vector infeasible_eta=Vector::Constant(1,std::log(.55)+1e-8);
-    const auto infeasible=n::EvaluateProfile(domain,outward_y,infeasible_eta,false,&outward_context);
+    const auto infeasible=n::EvaluateProfile(domain,outward_y,infeasible_eta,&outward_context);
     ASSERT_TRUE(infeasible.valid);
     const auto infeasible_replay=n::CheckIndependentReplay(domain,outward_y,infeasible,outward_context);
     ASSERT_TRUE(infeasible_replay.available && infeasible_replay.valid);

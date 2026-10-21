@@ -699,7 +699,7 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         out.fixed_neighbor_core_atoms=production_policy.core_atoms;
         out.fixed_neighbor_policy_version=std::string(FixedNeighborPolicyContractVersion);
         out.fixed_neighbor_maximum_sweeps=production_policy.maximum_sweeps;
-        out.fixed_neighbor_order=std::string(n::FixedNeighborBlockOrderName(production_policy.order));
+        out.fixed_neighbor_order="forward";
         out.fixed_neighbor_local_search=std::string(production_policy.eta_upper_bound ?
             FixedNeighborBoundedLocalSearchName : FixedNeighborLocalSearchName);
         return out;

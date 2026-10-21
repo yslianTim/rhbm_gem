@@ -10,7 +10,6 @@
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "core/command/detail/MapSimulation.hpp"
 #include "support/JointComponentChecks.hpp"
-#include "support/JointProfileSearchDiagnostic.hpp"
 #include "support/JointRuntimeJson.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include <cmath>
@@ -74,7 +73,6 @@ TEST(JointComponentRuntimeTest, AssemblyPreservesSuppliedCoefficientsWithoutGlob
     ASSERT_TRUE(assembled.available);
     EXPECT_DOUBLE_EQ(assembled.beta(0),actual);
     EXPECT_FALSE(assembled.consistency_passed);
-    EXPECT_EQ(n::AssessmentWorkForTesting().reference_evaluations,0);
     const auto replay=n::EvaluateState(data.domain,data.y,assembled.eta,assembled.beta,data.context);
     EXPECT_LT((assembled.prediction-replay.x*assembled.beta).lpNorm<Eigen::Infinity>(),
         2e-12+2e-13*assembled.prediction.lpNorm<Eigen::Infinity>());
@@ -106,12 +104,12 @@ TEST(JointComponentRuntimeTest, AssemblyRejectsMappingMismatchAndMissingNumerica
     EXPECT_EQ(rejected.mapping_reason,"component-not-converged");
 }
 
-TEST(JointComponentRuntimeTest, ReplayAndReferenceRejectIndependentDisagreements)
+TEST(JointComponentRuntimeTest, ReplayTrustRejectsIndependentDisagreements)
 {
     const core::JointProblem problem(Snapshot()); const auto & data=core::JointProblemAccess::Get(problem);
     const auto & view=data.partition.components[0]; const auto y=n::SelectValues(data.y,view.rows);
     const auto context=n::ChildContext(data.context,view,true);
-    const auto e=n::EvaluateProfile(view.domain,y,n::Vector::Constant(1,std::log(.55)),false,&context);
+    const auto e=n::EvaluateProfile(view.domain,y,n::Vector::Constant(1,std::log(.55)),&context);
     ASSERT_TRUE(e.valid); EXPECT_TRUE(n::CheckReplay(view.domain,y,e,context).passed);
     auto bad=e; bad.valid=false;
     EXPECT_FALSE(n::CheckReplay(view.domain,y,bad,context).passed);
@@ -129,16 +127,14 @@ TEST(JointComponentRuntimeTest, ReplayAndReferenceRejectIndependentDisagreements
     EXPECT_FALSE(n::CheckReplay(view.domain,y,bad,context).passed);
     bad=e; bad.certificate.projected_kkt+=1e-11;
     EXPECT_FALSE(n::CheckReplay(view.domain,y,bad,context).passed);
-    const auto reference=n::EvaluateProfile(view.domain,y,e.eta,true,&context);
-    EXPECT_TRUE(n::CheckTrust(view.domain,y,e,context,reference).passed);
-    bad=reference; bad.valid=false;
-    EXPECT_FALSE(n::CheckTrust(view.domain,y,e,context,bad).passed);
-    bad=reference; bad.beta(0)+=.01;
-    EXPECT_FALSE(n::CheckTrust(view.domain,y,e,context,bad).passed);
-    bad=reference; bad.gradient(0)+=.01;
-    EXPECT_FALSE(n::CheckTrust(view.domain,y,e,context,bad).passed);
-    bad=reference; bad.certificate.kkt_passed=false;
-    EXPECT_FALSE(n::CheckTrust(view.domain,y,e,context,bad).passed);
+    const auto independent=n::CheckIndependentReplay(view.domain,y,e,context);
+    ASSERT_TRUE(independent.passed);
+    EXPECT_TRUE(n::CheckTrust(view.domain,y,e,context,independent).passed);
+    auto bad_independent=independent;
+    bad_independent.passed=false;
+    bad_independent.prediction_passed=false;
+    bad_independent.reason="independent-replay-disagreement";
+    EXPECT_FALSE(n::CheckTrust(view.domain,y,e,context,bad_independent).passed);
 }
 
 TEST(JointComponentRuntimeTest, RuntimeConvergenceIsDerivedFromActualEvidenceNotTermination)

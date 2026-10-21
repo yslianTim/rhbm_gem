@@ -54,8 +54,7 @@ struct EvaluationContext
     double profile_cpu_budget_seconds{};
     std::optional<double> eta_upper_bound;
 };
-enum class ProfileEvaluationRole {Unspecified,InitialProfile,TrialProfile,AcceptedEndpoint,Reference};
-const char * ProfileEvaluationRoleName(ProfileEvaluationRole);
+enum class ProfileEvaluationRole {Unspecified,InitialProfile,TrialProfile,AcceptedEndpoint};
 struct BoundedLmWork
 {
     std::size_t subproblem_solves{},failed_subproblems{},active_set_iterations{},releases{},active_bound_occurrences{};
@@ -93,7 +92,7 @@ struct ProfileRoleWork
 };
 struct ProfileSearchWork
 {
-    ProfileRoleWork total,initial_profile,trial_profile,accepted_endpoint,reference_evaluation;
+    ProfileRoleWork total,initial_profile,trial_profile,accepted_endpoint;
     BoundedLmWork bounded_lm;
     std::size_t accepted_profile_trials{},rejected_profile_trials{},local_replay_kkt_rejections{},
         local_replay_disagreements{},invalid_gradient_stops{},width_safeguard_rejections{};
@@ -121,11 +120,8 @@ struct LinearResult
         refinement_before_objective{unavailable},refinement_after_objective{unavailable};
 };
 struct LinearBlock {std::vector<Eigen::Index> rows,columns;};
-LinearResult SolveLinear(const Sparse &,VectorRef,const Vector &,bool=false,bool=true,
-    const Sparse * = nullptr,const LinearPolicy * = nullptr,const std::vector<LinearBlock> * = nullptr,double=0);
-LinearResult SolveLinear(const Matrix &,VectorRef,const Vector &,bool=false,bool=false,const Sparse * = nullptr,
-    const LinearPolicy * = nullptr,double=0);
-std::pair<Matrix,Vector> ReferenceQR(const Sparse &,const Vector &,const Vector &,VectorRef);
+LinearResult SolveLinear(const Sparse &,VectorRef,const Vector &,const LinearPolicy * = nullptr,
+    const std::vector<LinearBlock> * = nullptr,double=0);
 struct Certificate
 {
     bool evaluated{},available{},feasible{},kkt_passed{};
@@ -172,7 +168,7 @@ struct WidthBoundKkt
 WidthBoundKkt CalculateWidthBoundKkt(const Vector &,const Vector &,double);
 Spectrum ComputeSpectrum(const Sparse &,const RankPolicy &,Eigen::Index,bool);
 Spectrum ComputeSpectrum(const Matrix &,const RankPolicy &,Eigen::Index,bool);
-Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,bool,const EvaluationContext *,
+Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext *,
     const std::vector<LinearBlock> * = nullptr,
     ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);
 Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &,
@@ -180,7 +176,6 @@ Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,
 // Scalar/vector reductions for accepted global sweep states. Leaves x and derivative empty.
 Evaluation EvaluateStateStreaming(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &,
     ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);
-MemoryEstimate ReferenceSolveMemoryEstimate(const Domain &,VectorRef,const EvaluationContext &,std::size_t resident_override=0);
 MemoryEstimate EndpointVerificationMemoryEstimate(const Domain &,VectorRef,const EvaluationContext &,std::size_t resident_override=0);
 struct IndependentReplayEvidence
 {
@@ -214,11 +209,10 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain &,VectorRef,const 
     const JointConvergenceCriteria & = StrictJointConvergenceCriteria);
 struct TrustEvidence
 {
-    std::optional<Endpoint> reference;
     std::optional<IndependentReplayEvidence> independent;
     bool primary_valid{},passed{},prediction_passed{},gradient_passed{};
     std::string reason;
-    double coefficient_difference{unavailable},kkt_difference{unavailable},prediction_difference{unavailable},
+    double kkt_difference{unavailable},prediction_difference{unavailable},
         gradient_difference{unavailable},cancellation_ratio{unavailable};
     bool width_bound_feasible{true};
 };
@@ -231,7 +225,6 @@ TrustEvidence CheckReplay(const Domain &,VectorRef,const Evaluation &,const Eval
     ReplayDetailsForDiagnostics * = nullptr);
 TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &);
 TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &,const IndependentReplayEvidence &);
-TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &,const Evaluation & reference);
 struct LmTrial
 {
     Vector accepted_eta,step,diagonal;
@@ -271,10 +264,10 @@ struct SearchResult
     std::vector<Trial> trials;
     std::optional<double> accepted_objective;
     std::optional<double> accepted_gradient_inf_norm;
-    int lm_status{},evaluations{},derivatives{},accepted{},references{};
+    int lm_status{},evaluations{},derivatives{},accepted{};
     bool stopped{},initial_accepted{};
     std::string stop_reason;
-    double seconds{},reference_seconds{};
+    double seconds{};
     ProfileSearchWork profile_work;
 };
 SearchResult SearchProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,
@@ -295,8 +288,6 @@ JointCheckStatus MergeConvergenceStatus(JointCheckStatus,JointCheckStatus);
 JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> &,JointEvidenceScope,bool assembled=false);
 Assessment AssessProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,const Vector * = nullptr,
     const Vector * assembled_prediction=nullptr,const std::vector<std::size_t> * assembled_rows=nullptr);
-Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const Evaluation &,
-    const EvaluationContext &,bool supplied=false);
 // Evaluations belong to this exact domain, observations and numerical policy.
 Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const IndependentReplayEvidence &,
     const EvaluationContext &,bool supplied=false,std::size_t resident_override=0);
@@ -332,7 +323,7 @@ struct AssessmentStageWork
 };
 struct AssessmentWork
 {
-    int assessments{},reference_evaluations{};
+    int assessments{};
     std::string active_stage,last_stage;
     std::vector<std::string> stage_stack;
     std::vector<AssessmentStageWork> stages;

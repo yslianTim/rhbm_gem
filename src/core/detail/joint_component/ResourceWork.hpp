@@ -36,7 +36,7 @@ struct SearchStageWork
 inline constexpr std::size_t JointMemoryHardLimitBytes=4'000'000'000;
 inline constexpr std::size_t JointMemoryPlanningBudgetBytes=3'200'000'000;
 enum class MemoryStage {ProblemConstruction,StructuralConstruction,FixedNeighborPreparation,GlobalStateEvaluation,
-    EndpointVerification,ReferenceSolve,LocalConditioning,ParameterStability};
+    EndpointVerification,LocalConditioning,ParameterStability};
 enum class MemoryStatus {Pass,Reject,Overflow};
 struct MemoryShape
 {
@@ -85,8 +85,8 @@ struct ResourceWork
 
 struct NumericsWork
 {
-    std::size_t reference{},cancellation_reductions{},derivative_preparations{};
-    std::size_t free_design_svds{},reference_svds{},reference_solves{},bdc_svds{},jacobi_retries{};
+    std::size_t cancellation_reductions{},derivative_preparations{};
+    std::size_t free_design_svds{},rhs_svds{},rhs_solutions{},bdc_svds{},jacobi_retries{};
     double derivative_seconds{},jacobi_retry_seconds{};
 };
 NumericsWork & NumericsWorkForTesting();

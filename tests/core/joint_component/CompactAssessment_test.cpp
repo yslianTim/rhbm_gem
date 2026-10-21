@@ -125,7 +125,7 @@ TEST(JointCompactAssessmentTest, ProjectedWidthRouteMatchesFullProfileDerivative
         const c::JointProblem problem(second_stage_test::SyntheticJointWorkload(topology,atoms));
         const auto & data=c::JointProblemAccess::Get(problem);
         const auto eta=n::Vector::Constant(atoms,std::log(.55));
-        const auto endpoint=n::EvaluateProfile(data.domain,data.y,eta,false,&data.context);
+        const auto endpoint=n::EvaluateProfile(data.domain,data.y,eta,&data.context);
         ASSERT_TRUE(endpoint.valid);
         const auto full=n::PrepareDerivative(endpoint,data.context.scale,&data.context);
         const auto projected=n::PrepareProjectedWidthDerivative(endpoint,data.context.scale,&data.context);

@@ -174,7 +174,7 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
         evidence.baseline_independent_replay_reason=replay.reason;
         baseline_replay_passed=replay.passed;
 
-        const auto reprofiled_profile=EvaluateProfile(domain,y,eta,false,&context,nullptr,
+        const auto reprofiled_profile=EvaluateProfile(domain,y,eta,&context,nullptr,
             ProfileEvaluationRole::AcceptedEndpoint);
         if(reprofiled_profile.certificate.available && reprofiled_profile.certificate.feasible &&
             reprofiled_profile.beta.size()==beta.size())
@@ -359,7 +359,7 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
                 direction_failed=true; failure_reason="perturbation-search-invalid";
                 seed_status="SolverFailed"; seed_reason=failure_reason; break;
             }
-            const auto candidate=EvaluateProfile(domain,y,search.eta,false,&bounded_context,nullptr,
+            const auto candidate=EvaluateProfile(domain,y,search.eta,&bounded_context,nullptr,
                 ProfileEvaluationRole::AcceptedEndpoint);
             ++evidence.perturbation_evaluations; ++probe.evaluations;
             if(CpuSeconds(cpu_started)>=MaximumLocalPerturbationCpuSeconds)

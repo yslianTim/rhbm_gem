@@ -210,8 +210,8 @@ TEST(JointComponentChecksTest, SameStateIncludesResidualTermAndConstantRows)
     const auto d=p::DifferentiatePartitioned(e,part,c);
     ASSERT_TRUE(e.valid && d.valid); EXPECT_GT((d.projected-d.jacobian).norm(),1e-5);
     Vector direction(2); direction<<.3,-.7; constexpr double h=1e-5;
-    const auto plus=p::EvaluatePartitioned(f.domain,f.y,f.eta+h*direction,part,c,true);
-    const auto minus=p::EvaluatePartitioned(f.domain,f.y,f.eta-h*direction,part,c,true);
+    const auto plus=p::EvaluatePartitioned(f.domain,f.y,f.eta+h*direction,part,c);
+    const auto minus=p::EvaluatePartitioned(f.domain,f.y,f.eta-h*direction,part,c);
     ASSERT_TRUE(plus.valid && minus.valid);
     EXPECT_LT(((plus.residual-minus.residual)/(2*h*c.scale)-d.jacobian*direction).norm(),1e-8);
 }

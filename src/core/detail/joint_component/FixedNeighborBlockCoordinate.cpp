@@ -14,7 +14,6 @@
 #include <fstream>
 #include <iomanip>
 #include <limits>
-#include <numeric>
 #include <sstream>
 
 namespace rhbm_gem::core::joint_component {
@@ -22,31 +21,6 @@ double BlockObjectiveReplayEnclosure(double reference)
 {return 1e-12+2e-12*std::abs(reference);}
 bool WithinBlockObjectiveReplay(double error,double reference)
 {return error<=BlockObjectiveReplayEnclosure(reference);}
-IncrementalCandidateReplay EvaluateCandidateDelta(VectorRef current_residual,
-    const Indices & affected_rows,VectorRef old_core,VectorRef new_core,
-    double current_objective,double scale)
-{
-    if(affected_rows.size()!=static_cast<std::size_t>(old_core.size()) || old_core.size()!=new_core.size() ||
-        !(scale>0) || !std::isfinite(scale)) throw std::invalid_argument("Invalid incremental candidate dimensions.");
-    IncrementalCandidateReplay out; out.residual_delta.resize(new_core.size());
-    long double delta{},correction{},absolute_delta{};
-    const long double normalization=2.0L*static_cast<long double>(scale)*static_cast<long double>(scale);
-    for(Eigen::Index k=0;k<new_core.size();++k)
-    {
-        const auto row=affected_rows[static_cast<std::size_t>(k)];
-        const double change=new_core(k)-old_core(k); out.residual_delta(k)=change;
-        const long double residual=current_residual(row),difference=change;
-        const long double term=(2.0L*residual*difference+difference*difference)/normalization;
-        const long double adjusted=term-correction,next=delta+adjusted;
-        correction=(next-delta)-adjusted; delta=next; absolute_delta+=std::abs(term);
-    }
-    out.objective_delta=static_cast<double>(delta);
-    out.objective=current_objective+out.objective_delta;
-    out.delta_condition=absolute_delta==0 ? 0.0 : delta==0 ? std::numeric_limits<double>::infinity() :
-        static_cast<double>(absolute_delta/std::abs(delta));
-    return out;
-}
-
 namespace {
 using Clock=std::chrono::steady_clock;
 constexpr std::size_t EndpointCertificationRetryInterval=10;
@@ -1170,8 +1144,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     out.block_preparations=prepared_blocks.size();
     out.domain_preparations=prepared_blocks.size();
     out.mapping_preparations=prepared_blocks.size();
-    std::vector<std::size_t> order(partition.cores.size()); std::iota(order.begin(),order.end(),0);
-    if(policy.order==FixedNeighborBlockOrder::Reverse) std::reverse(order.begin(),order.end());
     if(mapping_timer.target)
     {
         out.work.structural_preparation_seconds+=Seconds(mapping_timer.started);
@@ -1206,7 +1178,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             if(policy.diagnostic_sink && policy.diagnostic_sink->block) policy.diagnostic_sink->block(record);
             if(retain_diagnostics) out.blocks.push_back(std::move(record));
         };
-        for(auto block_index:order)
+        for(std::size_t block_index=0;block_index<partition.cores.size();++block_index)
         {
             const auto & prepared=prepared_blocks.at(block_index);
             const auto & core_atoms=prepared.core_atoms; const auto & affected_rows=prepared.affected_rows;
@@ -1408,16 +1380,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 }
                 (void)candidate_copy_timer;
             }
-            std::optional<IncrementalCandidateReplay> incremental;
-            if(policy.compare_incremental_replay)
-            {
-                const auto incremental_started=Clock::now();
-                const Vector new_core=(local_state.x*local_state.beta).eval();
-                incremental=EvaluateCandidateDelta(out.state.residual,affected_rows,old_core,new_core,
-                    out.state.objective,context.scale);
-                out.work.incremental_candidate_replay_seconds+=Seconds(incremental_started);
-                ++out.work.incremental_candidate_replays;
-            }
             ReplayState replay;
             {
                 const auto candidate_replay_timer=Measure(policy.collect_telemetry,out.work.candidate_replay_seconds);
@@ -1433,49 +1395,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             const bool delta_enclosed=WithinBlockObjectiveReplay(record.local_global_delta_error,replay_reference);
             const bool candidate_unchanged=(out.state.eta.array()==candidate_eta.array()).all() &&
                 (out.state.beta.array()==candidate_beta.array()).all();
-            if(incremental)
-            {
-                const double objective_difference=std::abs(incremental->objective-replay.objective);
-                const double relative_scale=std::max({std::abs(incremental->objective),std::abs(replay.objective),
-                    std::numeric_limits<double>::min()});
-                std::size_t affected_index{};
-                double residual_difference{};
-                for(auto row:layout.informative_rows)
-                {
-                    double change{};
-                    if(affected_index<affected_rows.size() &&
-                        affected_rows[affected_index]==static_cast<Eigen::Index>(row))
-                    {
-                        change=incremental->residual_delta(static_cast<Eigen::Index>(affected_index));
-                        ++affected_index;
-                    }
-                    residual_difference=std::max(residual_difference,
-                        std::abs(out.state.residual(static_cast<Eigen::Index>(row))+change-
-                            replay.residual(static_cast<Eigen::Index>(row))));
-                }
-                const double incremental_reference=std::max(std::abs(incremental->objective),std::abs(out.state.objective));
-                const double incremental_error=std::abs(incremental->objective_delta+
-                    record.local_objective_before-record.local_objective_after);
-                const double incremental_enclosure=BlockObjectiveReplayEnclosure(incremental_reference);
-                const bool incremental_enclosed=WithinBlockObjectiveReplay(incremental_error,incremental_reference);
-                const bool full_accept=delta_enclosed && !candidate_unchanged &&
-                    !(record.global_replay_delta>0 && !(record.local_objective_after<=record.local_objective_before &&
-                        record.global_replay_delta<=record.objective_replay_enclosure));
-                const bool incremental_accept=incremental_enclosed && !candidate_unchanged &&
-                    !(incremental->objective_delta>0 && !(record.local_objective_after<=record.local_objective_before &&
-                        incremental->objective_delta<=incremental_enclosure));
-                if(full_accept!=incremental_accept) ++out.work.incremental_acceptance_mismatches;
-                out.work.maximum_incremental_objective_difference=std::max(
-                    out.work.maximum_incremental_objective_difference,objective_difference);
-                out.work.maximum_incremental_relative_objective_difference=std::max(
-                    out.work.maximum_incremental_relative_objective_difference,objective_difference/relative_scale);
-                out.work.maximum_incremental_residual_difference=std::max(
-                    out.work.maximum_incremental_residual_difference,residual_difference);
-                out.work.maximum_incremental_delta_condition=std::max(
-                    out.work.maximum_incremental_delta_condition,incremental->delta_condition);
-                out.work.last_incremental_candidate_objective=incremental->objective;
-                out.work.last_full_candidate_objective=replay.objective;
-            }
             if(!delta_enclosed)
             {
                 record.status="failed"; record.reason="block-objective-replay-failed"; out.reason=record.reason;
@@ -1963,7 +1882,6 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     policy.core_atoms=production_policy.core_atoms;
     policy.maximum_sweeps=production_policy.maximum_sweeps;
     policy.convergence_criteria=production_policy.convergence_criteria;
-    policy.order=production_policy.order;
     policy.collect_telemetry=production_policy.collect_telemetry;
     policy.collect_diagnostics=production_policy.collect_diagnostics;
     policy.component_index=production_policy.component_index;

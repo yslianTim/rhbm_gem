@@ -143,18 +143,6 @@ namespace {
 bool MeetsJointThreshold(double value,double threshold)
 {return std::isfinite(value) && value>=0.0 && value<=threshold;}
 }
-const char * ProfileEvaluationRoleName(ProfileEvaluationRole role)
-{
-    switch(role)
-    {
-    case ProfileEvaluationRole::Unspecified: return "unspecified";
-    case ProfileEvaluationRole::InitialProfile: return "initial-profile";
-    case ProfileEvaluationRole::TrialProfile: return "trial-profile";
-    case ProfileEvaluationRole::AcceptedEndpoint: return "accepted-endpoint";
-    case ProfileEvaluationRole::Reference: return "reference";
-    }
-    return "unspecified";
-}
 ProfileRoleWork & ProfileSearchWork::Role(ProfileEvaluationRole role)
 {
     switch(role)
@@ -162,7 +150,6 @@ ProfileRoleWork & ProfileSearchWork::Role(ProfileEvaluationRole role)
     case ProfileEvaluationRole::InitialProfile: return initial_profile;
     case ProfileEvaluationRole::TrialProfile: return trial_profile;
     case ProfileEvaluationRole::AcceptedEndpoint: return accepted_endpoint;
-    case ProfileEvaluationRole::Reference: return reference_evaluation;
     case ProfileEvaluationRole::Unspecified: return total;
     }
     return total;
@@ -187,7 +174,6 @@ void ProfileSearchWork::Merge(const ProfileSearchWork & other)
 {
     AddRoleWork(total,other.total); AddRoleWork(initial_profile,other.initial_profile);
     AddRoleWork(trial_profile,other.trial_profile); AddRoleWork(accepted_endpoint,other.accepted_endpoint);
-    AddRoleWork(reference_evaluation,other.reference_evaluation);
     bounded_lm.Merge(other.bounded_lm);
     accepted_profile_trials+=other.accepted_profile_trials;
     rejected_profile_trials+=other.rejected_profile_trials;
@@ -209,7 +195,6 @@ double ProfileSearchWork::AttributedSeconds() const
         total.derivative_prepare_seconds+total.derivative_reduce_seconds+total.replay_trust_seconds;
 }
 namespace {
-double Difference(const Vector & a,const Vector & b) {return ((a-b).array().abs()/(1+a.array().abs().max(b.array().abs()))).maxCoeff();}
 Vector StablePrediction(const Sparse & x,const Vector & beta)
 {
     Vector prediction=Vector::Zero(x.rows()),compensation=prediction;
@@ -263,15 +248,6 @@ std::pair<Matrix,Matrix> Reduce(const Design & x,const Matrix & rhs)
 }
 JointSolverConfiguration ResolveJointSolverConfiguration(const FixedNeighborSearchPolicy & policy)
 {return {policy.core_atoms,policy.eta_upper_bound.has_value()};}
-std::string_view FixedNeighborBlockOrderName(FixedNeighborBlockOrder order)
-{
-    switch(order)
-    {
-    case FixedNeighborBlockOrder::Forward: return "forward";
-    case FixedNeighborBlockOrder::Reverse: return "reverse";
-    }
-    return {};
-}
 double RankPolicy::Relative(Eigen::Index columns) const
 {return std::numeric_limits<double>::epsilon()*static_cast<double>(std::max(rows,columns));}
 double RankPolicy::Absolute(Eigen::Index columns,double maximum) const
@@ -416,32 +392,6 @@ Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
     out.valid=true; return out;
 }
 }
-MemoryEstimate ReferenceSolveMemoryEstimate(const Domain & domain,VectorRef,const EvaluationContext &,
-    std::size_t resident_override)
-{
-    MemoryShape shape; shape.component_atoms=domain.atoms.size(); shape.component_observations=static_cast<std::size_t>(domain.rows);
-    const auto overflow=[&] {
-        auto estimate=PlanMemory(shape,MemoryStage::ReferenceSolve);
-        estimate.status=MemoryStatus::Overflow; estimate.reason="size-overflow"; return estimate;
-    };
-    const auto add_product=[](std::size_t & total,std::size_t count,std::size_t width) {
-        std::size_t bytes{}; return CheckedMultiplyBytes(count,width,bytes) && CheckedAddBytes(total,bytes,total);
-    };
-    if(!CheckedMultiplyBytes(shape.component_atoms,2,shape.component_free_columns)) return overflow();
-    for(std::size_t atom=0;atom<domain.atoms.size();++atom)
-        if(!CheckedAddBytes(shape.component_support_entries,domain.atoms[atom].size(),shape.component_support_entries))
-            return overflow();
-    const auto * input=domain.atoms.Storage();
-    const auto snapshot=input ? EstimateSnapshotBytes(*input) : std::nullopt;
-    std::size_t view_bytes{};
-    if(!snapshot || !CheckedAddBytes(*snapshot,domain.atoms.LocalSupportIndexBytes(),view_bytes) ||
-        !add_product(view_bytes,shape.component_observations,2*sizeof(double)) ||
-        !add_product(view_bytes,shape.component_observations,2*sizeof(Eigen::Index)) ||
-        !add_product(view_bytes,shape.component_atoms,2*sizeof(Eigen::Index)+4*sizeof(double)) ||
-        !add_product(view_bytes,shape.component_support_entries,4*(sizeof(double)+sizeof(Eigen::Index)))) return overflow();
-    shape.resident_bytes=std::max(view_bytes,resident_override);
-    return PlanMemory(shape,MemoryStage::ReferenceSolve);
-}
 MemoryEstimate EndpointVerificationMemoryEstimate(const Domain & domain,VectorRef y,const EvaluationContext &,
     std::size_t resident_override)
 {
@@ -468,26 +418,13 @@ MemoryEstimate EndpointVerificationMemoryEstimate(const Domain & domain,VectorRe
     shape.resident_bytes=std::max(resident,resident_override);
     return PlanMemory(shape,MemoryStage::EndpointVerification);
 }
-Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,bool reference,const EvaluationContext * context,
+Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,const EvaluationContext * context,
     const std::vector<LinearBlock> * blocks,
     ProfileEvaluationRole role,ProfileSearchWork * profile_work)
 {
-    ResourcePhase phase(reference ? "reference" : "ac-profile");
+    ResourcePhase phase("ac-profile");
     ProfileEvaluationRoleScopeForTesting role_scope(role);
     EvaluationTelemetry telemetry(profile_work,role);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(reference) ++AssessmentWorkForTesting().reference_evaluations;
-#endif
-    if(reference)
-    {
-        const EvaluationContext fallback_context;
-        const auto estimate=ReferenceSolveMemoryEstimate(domain,y,context ? *context : fallback_context);
-        if(estimate.status!=MemoryStatus::Pass || estimate.estimated_peak_bytes>estimate.budget_bytes/2)
-            LogMemoryEstimate(estimate);
-        if(estimate.status!=MemoryStatus::Pass)
-        {Evaluation unavailable_evaluation; unavailable_evaluation.eta=eta;
-            unavailable_evaluation.reason="resource-limit:reference-solve"; return unavailable_evaluation;}
-    }
     const auto basis_started=std::chrono::steady_clock::now();
     auto out=Basis(domain,y,eta);
     if(profile_work) telemetry.work.basis_seconds+=
@@ -496,7 +433,7 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     const Eigen::Index m=eta.size();
     ResourcePhase linear_solve("linear-solve",true,out.x.rows(),out.x.cols(),static_cast<std::size_t>(out.x.nonZeros()));
     const auto solve_started=std::chrono::steady_clock::now();
-    const auto solved=SolveLinear(out.x,y,Vector::Ones(y.size()),reference,true,nullptr,
+    const auto solved=SolveLinear(out.x,y,Vector::Ones(y.size()),
         context ? &context->linear : nullptr,blocks,context ? context->scale : 0);
     if(profile_work)
     {
@@ -683,24 +620,6 @@ TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation & e,const Eva
     out.passed=replay.passed;
     out.reason=replay.reason;
     out.width_bound_feasible=replay.width_bound_feasible;
-    return out;
-}
-TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy,const Evaluation & reference)
-{
-    if(!reference.valid && reference.reason.starts_with("resource-limit:reference-solve"))
-    {TrustEvidence unavailable_trust; unavailable_trust.primary_valid=e.valid;
-        unavailable_trust.reason=reference.reason; return unavailable_trust;}
-    auto out=CheckReplay(domain,y,e,policy); out.reference=reference;
-    if(!out.primary_valid) return out;
-    out.coefficient_difference=reference.beta.size()==e.beta.size() ? Difference(e.beta,reference.beta) :
-        std::numeric_limits<double>::infinity();
-    const bool reference_gradient_ok=reference.valid && reference.gradient.size()==e.gradient.size() &&
-        ((reference.gradient-e.gradient).array().abs()<=1e-13+2e-9*e.gradient.array().abs()).all();
-    out.gradient_passed &= reference_gradient_ok;
-    out.passed=out.passed && reference.valid && reference.certificate.kkt_passed &&
-        out.coefficient_difference<=1e-10 && reference_gradient_ok;
-    if(!reference.valid) out.reason="invalid-reference";
-    else if(out.reason=="trusted" && !out.passed) out.reason="reference-disagreement";
     return out;
 }
 TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy,
@@ -1071,7 +990,7 @@ Assessment AssessProfileImpl(const Domain & domain,VectorRef y,const Vector & et
 #endif
     const auto primary_started=std::chrono::steady_clock::now();
     const auto endpoint=supplied_beta ? EvaluateStateStreaming(domain,y,eta,*supplied_beta,policy) :
-        EvaluateProfile(domain,y,eta,false,&policy);
+        EvaluateProfile(domain,y,eta,&policy);
     const double primary_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-primary_started).count();
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     primary_stage.Finish();
@@ -1228,27 +1147,6 @@ Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluatio
         !replay_consistent ? (replay.reason.empty() ? "endpoint-verification-failed" : replay.reason) :
         !out.gradient ? "global-width-gradient-failed" :
         replay.reason.empty() ? "endpoint-verification-failed" : replay.reason;
-    return out;
-}
-Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation & endpoint,const Evaluation & reference,
-    const EvaluationContext &,bool)
-{
-    Assessment out; out.primary=endpoint;
-    if(!endpoint.valid || !reference.valid)
-    {
-        out.failure=!endpoint.valid ? endpoint.reason : reference.reason;
-        return out;
-    }
-    const bool coefficients_agree=endpoint.beta.size()==reference.beta.size() &&
-        (endpoint.beta-reference.beta).lpNorm<Eigen::Infinity>()<=1e-10;
-    out.inner=endpoint.certificate.feasible && endpoint.certificate.kkt_passed &&
-        reference.certificate.feasible && reference.certificate.kkt_passed && coefficients_agree;
-    out.gradient=endpoint.gradient.size()==endpoint.eta.size() && endpoint.gradient.allFinite() &&
-        endpoint.gradient.lpNorm<Eigen::Infinity>()<=1e-12 && reference.gradient.size()==reference.eta.size() &&
-        reference.gradient.allFinite() && reference.gradient.lpNorm<Eigen::Infinity>()<=1e-12;
-    out.endpoint_verified=out.inner;
-    out.numerical_qualified=out.inner && out.gradient;
-    out.failure=out.numerical_qualified ? "none" : !out.inner ? "inner-solve" : "global-width-gradient-failed";
     return out;
 }
 Assessment AssessEvaluated(const Domain & domain,VectorRef y,const Evaluation & endpoint,

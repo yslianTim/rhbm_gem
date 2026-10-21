@@ -9,7 +9,6 @@
 #include <iterator>
 #include "support/JointPartialSelection.hpp"
 #include "support/JointHaloObservationExclusion.hpp"
-#include "support/JointProfileSearchDiagnostic.hpp"
 #include "support/DataObjectTestSupport.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/FirstStageInitialization.hpp"

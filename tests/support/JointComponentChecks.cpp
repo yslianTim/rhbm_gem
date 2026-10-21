@@ -94,27 +94,25 @@ j::object FaceEvidence(const Domain & domain,const Vector & y,const Evaluation &
         j::array direction; for(double v:directions.col(k)) direction.push_back(v); saved.push_back(direction);
         for(double h:{1e-4,5e-5}) for(int sign:{-1,1})
         {
-            const auto p=Evaluate(domain,y,e.eta+sign*h*directions.col(k),false,&context);
-            const auto r=Evaluate(domain,y,e.eta+sign*h*directions.col(k),true,&context);
-            const bool same=p.valid && r.valid && p.certificate.at("active_atoms")==e.certificate.at("active_atoms") &&
-                r.certificate.at("active_atoms")==e.certificate.at("active_atoms");
+            const auto p=Evaluate(domain,y,e.eta+sign*h*directions.col(k),&context);
+            const bool same=p.valid && p.certificate.at("active_atoms")==e.certificate.at("active_atoms");
             stable &= same;
             probes.push_back(j::object{{"direction",k},{"step",sign*h},{"same_face",same},
-                {"primary",State(p)},{"reference",State(r)}});
+                {"primary",State(p)}});
         }
     }
     return {{"stable",stable},{"directions",saved},{"probes",probes},
-        {"rule","Both declared legacy step sizes must preserve the canonical active face in primary and reference solves."}};
+        {"rule","Both declared step sizes must preserve the canonical active face in production solves."}};
 }
 }
 
 Evaluation EvaluatePartitioned(const Domain & domain,const Vector & y,const Vector & eta,
-    const ComponentPartition & partition,const EvaluationContext & context,bool reference)
+    const ComponentPartition & partition,const EvaluationContext & context)
 {
-    if(IdentityPartition(partition)) return Evaluate(domain,y,eta,reference,&context);
+    if(IdentityPartition(partition)) return Evaluate(domain,y,eta,&context);
     std::vector<runtime::LinearBlock> blocks;
     for(const auto & view:partition.components) blocks.push_back({view.rows,Coefficients(view)});
-    return Evaluate(domain,y,eta,reference,&context,&blocks);
+    return Evaluate(domain,y,eta,&context,&blocks);
 }
 Evaluation ComponentEvaluation(const Evaluation & e,const ComponentView & view)
 {
@@ -179,10 +177,9 @@ j::object SameState(const Domain & domain,const Vector & y,const Vector & eta,co
         {"rss",raw.residual.squaredNorm()},{"partitioned_rss",2*loss},{"constant_objective",constant},
         {"normalized_objective_difference",objective_error}}; passed &= raw_pass;
     j::array solves;
-    for(bool reference:{false,true})
     {
-        const auto a=Evaluate(domain,y,eta,reference,&context),b=identity ? a : EvaluatePartitioned(domain,y,eta,partition,context,reference);
-        j::object pair{{"reference",reference},{"monolithic",State(a)},{"partitioned",State(b)},
+        const auto a=Evaluate(domain,y,eta,&context),b=identity ? a : EvaluatePartitioned(domain,y,eta,partition,context);
+        j::object pair{{"solver","production"},{"monolithic",State(a)},{"partitioned",State(b)},
             {"available",a.valid && b.valid},{"validity_agrees",a.valid==b.valid}};
         passed &= a.valid==b.valid;
         if(a.valid && b.valid)
@@ -195,7 +192,7 @@ j::object SameState(const Domain & domain,const Vector & y,const Vector & eta,co
             pair["fixed_face_available"]=face;
             if(!face) pair["limitation"]="cross-active-face; fixed-face equivalence unavailable";
             pair["passed"]=coefficients<=1e-10 && objective<=1e-12 && gradient; passed &= pair.at("passed").as_bool();
-            if(!reference && face)
+            if(face)
             {
                 // Isolate differentiation at exactly the same profiled A/C/B.
                 // Independently solved coefficients are compared above, never
@@ -239,11 +236,11 @@ runtime::FixedNeighborComponentResult SolveFixedNeighborComponentForTesting(cons
     const auto prepared=runtime::MakeComponentProblemView(layout,view);
     return runtime::SolveFixedNeighborComponent(prepared,initial_b,parent,{});
 }
-runtime::ProfileSearchDiagnosticResult SolveFixedNeighborComponentForDiagnostics(const ComponentView & view,
+FixedNeighborFitDiagnostic SolveFixedNeighborComponentForDiagnostics(const ComponentView & view,
     const Vector & initial_b,const EvaluationContext & parent)
 {
     const auto fixed=SolveFixedNeighborComponentForTesting(view,initial_b,parent);
-    runtime::ProfileSearchDiagnosticResult out;
+    FixedNeighborFitDiagnostic out;
     const auto & result=fixed.search;
     const bool endpoint_qualified=result.certification && result.certification->qualified();
     out.search.initial.eta.resize(static_cast<Eigen::Index>(view.atoms.size()));
@@ -325,20 +322,19 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
     const EvaluationContext & context,const j::array & fits)
 {
     const auto start=std::chrono::steady_clock::now();
-    std::vector<rhbm_gem::core::JointComponentResult> children; int evaluations{},references{},updates{}; j::array failed;
+    std::vector<rhbm_gem::core::JointComponentResult> children; int evaluations{},updates{}; j::array failed;
     for(const auto & view:partition.components)
     {
         const auto found=std::find_if(fits.begin(),fits.end(),[&](const auto & f){return f.at("component_id").as_string()==view.id;});
         if(found==fits.end()) throw std::invalid_argument("Missing component scientific record.");
         const auto & fit=*found; evaluations+=j::value_to<int>(fit.at("profile_evaluations"));
-        references+=j::value_to<int>(fit.at("search_reference_evaluations")); updates+=j::value_to<int>(fit.at("accepted_updates"));
+        updates+=j::value_to<int>(fit.at("accepted_updates"));
         rhbm_gem::core::JointComponentResult child; child.id=view.id;
         for(const auto atom:view.atoms) child.atoms.push_back(static_cast<std::size_t>(atom));
         for(const auto row:view.rows) child.rows.push_back(static_cast<std::size_t>(row));
         child.search_completed=fit.at("search_success").as_bool();
         child.stop_reason=j::value_to<std::string>(fit.at("stop_reason"));
         child.profile_evaluations=j::value_to<int>(fit.at("profile_evaluations"));
-        child.reference_evaluations=j::value_to<int>(fit.at("search_reference_evaluations"));
         child.accepted_updates=j::value_to<int>(fit.at("accepted_updates"));
         if(!child.search_completed) failed.push_back(j::object{{"id",view.id},{"reason",fit.at("stop_reason")}});
         if(fit.at("usable_state").as_bool())
@@ -368,7 +364,7 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
     j::object out{{"schema_version",2},{"experiment","exact-component-equivalence"},{"variant","guarded-components"},
         {"execution_complete",true},{"search_stopped_without_convergence",!assembly.completed},{"prediction_available",assembly.available},
         {"objective_available",assembly.available},{"available_row_mask",mask},{"failed_components",failed},
-        {"profile_evaluations",evaluations},{"search_reference_evaluations",references},{"accepted_updates",updates},
+        {"profile_evaluations",evaluations},{"accepted_updates",updates},
         {"runtime_convergence","unavailable"},{"context",ContextEvidence(context)},{"row_count",domain.rows},{"residual_scale",context.scale}};
     if(!assembly.available)
     {out["runtime_failure"]="missing-trusted-component-state"; out["prediction"]=nullptr; out["objective"]=nullptr; return out;}
@@ -382,7 +378,7 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
     out["assembled_consistency_passed"]=assembly.consistency_passed;
     out["independent_prediction_difference"]=runtime_json::Number(assembly.replay.prediction_difference);
     out["independent_objective_difference"]=runtime_json::Number(assembly.replay.objective_difference);
-    const auto offline_profile=runtime::EvaluateProfile(domain,y,assembly.eta,false,&context);
+    const auto offline_profile=runtime::EvaluateProfile(domain,y,assembly.eta,&context);
     const bool profile_agrees=offline_profile.valid &&
         ((assembly.beta-offline_profile.beta).array().abs()<=1e-10*(1+assembly.beta.array().abs().max(offline_profile.beta.array().abs()))).all();
     out["offline_profile_control"]=j::object{{"valid",offline_profile.valid},{"reason",offline_profile.reason},

@@ -36,7 +36,7 @@ CompactSvdResult Decompose(const Matrix & matrix,double relative,double absolute
     }
     if(rhs)
     {
-        ++work.reference_solves;
+        ++work.rhs_solutions;
         out.solution=svd.solve(*rhs);
         if(!out.solution.allFinite()) return out;
     }
@@ -52,7 +52,7 @@ CompactSvdResult CompactSvd(const Matrix & matrix,double relative,double absolut
     if(vectors==CompactSvdVectors::Right) RecordDenseShape("svd-right-vectors",matrix.cols(),std::min(matrix.rows(),matrix.cols()));
     const bool right=vectors==CompactSvdVectors::Right;
     auto & work=NumericsWorkForTesting();
-    ++(rhs ? work.reference_svds : work.free_design_svds);
+    ++(rhs ? work.rhs_svds : work.free_design_svds);
     if(matrix.rows()==0 || matrix.cols()==0 || !matrix.allFinite() ||
         (rhs && (rhs->size()!=matrix.rows() || !rhs->allFinite()))) return {};
     bool automatic=true,legacy=false;

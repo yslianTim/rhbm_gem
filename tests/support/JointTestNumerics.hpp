@@ -20,7 +20,7 @@ struct Evaluation : runtime::Evaluation
 };
 using Differential=DenseDifferential;
 Evaluation Evaluate(const Domain &, const Eigen::VectorXd & y,
-    const Eigen::VectorXd & eta, bool reference=false, const EvaluationContext * = nullptr,
+    const Eigen::VectorXd & eta, const EvaluationContext * = nullptr,
     const std::vector<runtime::LinearBlock> * = nullptr);
 Evaluation AtState(const Domain &, const Eigen::VectorXd &, const Eigen::VectorXd & eta,
     const Eigen::VectorXd & beta, const EvaluationContext &);
