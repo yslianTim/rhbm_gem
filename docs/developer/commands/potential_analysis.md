@@ -132,8 +132,7 @@ For Joint Components, selected chains define targets and their voxel
 observations. Other non-hydrogen atoms remain eligible as halo contributors
 when their support overlaps those observations. Chain selection does not crop
 the contributor model or change the target/halo distinction.
-Joint fitting uses bounded Active-set LM, with Profile LM as its bounded local
-profile operation; FixedHalo estimation is retired.
+Production Joint fitting uses bounded Active-set LM.
 
 Simulation maps skip normalization. Every non-simulation map is normalized by
 its standard deviation when that operation succeeds; no mean is subtracted. A
@@ -189,12 +188,10 @@ reference is never used as a fallback.
 `RHBMBetaEstimateResult.status` and `diagnostics` retain native solver history.
 Use `Qualification()` to distinguish `NativeSuccess`, `RefinedSuccess` and
 `Unqualified`. The optional `refinement` diagnostics record acceptance, rejection
-reason, residuals, branch differences and candidate/reference work. Historical
-FixedHalo result schemas retain their saved qualification and recovery
-provenance for decoding and supported round-trip only; they cannot start a new
-fit. Audit shape records retain effective `status` for existing consumers and
-additionally expose `native_status`, `qualification` and optional
-refinement/recovery evidence.
+reason, residuals, branch differences and candidate/reference work. Audit shape
+records retain effective `status` for existing consumers and additionally
+expose `native_status`, `qualification` and optional refinement/recovery
+evidence.
 
 Recovery continues to require qualified inner endpoints. Refinement does not
 relax outer convergence, offset IRLS or the best-objective bound, and does not
@@ -223,253 +220,76 @@ Neither PotentialAnalysis nor RHBMTest accepts `--fit-min` or `--fit-max`.
 - [`tests/integration/CommandApiPipeline_test.cpp`](/tests/integration/CommandApiPipeline_test.cpp)
 - [`tests/integration/python_bindings_runtime_smoke.py`](/tests/integration/python_bindings_runtime_smoke.py)
 
-## Joint component opt-in
+## Joint component production
 
-The map-aware `RunPotentialFittingWorkflow(map, model, options)` is the canonical
-complete workflow. It dispatches by estimator, builds the corresponding fitting
-workset, and passes an explicit atom list to the shared sampling engine.
+The map-aware `RunPotentialFittingWorkflow(map, model, options)` dispatches
+`JOINT_COMPONENTS` to the production target-only Pure Halo-Support Exclusion
+workflow. Selected non-hydrogen atoms are Targets. Halo support is used only to
+exclude fitting rows within 2.5 Å; Halos are not free Joint parameters.
 
-For TWO_STAGE, the workset contains the selected atoms. Their samples feed batch
-First-stage fitting, second-stage iterations, and group fitting. The configured
-worker count continues to apply to sampling and the existing parallel fitting
-operations.
+Qualified FirstStage Target widths initialize the fit and determine the global
+width bound `Bmax = 4 × P95`. Calibration needs at least 20 qualified Target
+donors and 95% Target coverage. If calibration is unavailable, the saved
+result retains that status and does not retry with an unbounded search.
 
-For JOINT_COMPONENTS, the problem fixes the observation voxel domain and the
-workset contains its target and contributor atoms. Only FullABC contributors are
-sampled and fitted locally; contribution-only halo atoms retain initialization
-provenance without local sampling or fitting. Joint initialization consumes
-those prepared samples in isolation and supplies FirstStage qualification,
-width-donor evidence and a feasible start to the Joint fit. Joint estimates
-then flow through the second-stage mapping, target summary, post-fit peeling,
-fixed Joint charge-profile correction, and fresh local alpha/MDPDE fitting for
-each selected target.
-Group alpha and group WEB consume the qualified local estimates and their
-compact MDPDE-derived information. Local fitting does not update Joint
-estimates or construct a cross-atom covariance.
+Production uses FixedNeighbor core size 12, forward serial Gauss-Seidel, at
+most 200 sweeps, and no more than one trusted accepted update per block visit.
+Bounded Active-set LM updates widths. Constrained A/C subproblems use Eigen
+SparseQR; A is nonnegative and C is signed. Global convergence, complete-sweep
+stationarity, endpoint verification, Independent Replay, Local Conditioning,
+and Parameter Stability remain explicit evidence. See the
+[Joint runtime guide](../joint-component-runtime.md).
 
-`FixedNeighbor` is the qualified bounded-memory production route with the fixed
-core-12, forward, one-accepted-local-update policy documented in the
-[joint runtime contract](../joint-component-runtime.md). The production Pure
-Halo-Support Exclusion workflow uses bounded Active-set LM and the global bound
-`Bmax = 4 * Q95(qualified FirstStage target widths)`. Calibration requires at
-least 20 qualified donors and at least 95% coverage. The initial widths are
-projected to the feasible range; boundary stationarity uses projected Width
-KKT, and endpoint certification plus Independent Replay remain required.
-Calibration failure is persisted as Unavailable and skips downstream fitting;
-the workflow does not retry with unbounded LM. FixedHalo estimation has been
-retired.
-Use `--estimator joint-components`; no solver or bound CLI option is exposed.
+Qualified target A/B/C points provide geometry-local kNN-4 Halo Median
+Reconstruction. Original-domain PostFitPeeling uses available Target and
+reconstructed Halo points, followed by Post-Joint Local MDPDE and Group
+Fitting for qualified Targets. These downstream results retain their own
+availability and qualification states.
 
-Production uses practical-v1 global stopping limits: projected A/C KKT
-`1e-7`, width-gradient infinity norm `1e-9`, and complete-sweep log-width
-change `1e-6`. Endpoint certification and independent replay remain required;
-local SparseQR/active-set and replay-consistency tolerances are unchanged. Each
-component candidate diagnostic records the criteria identifier, thresholds,
-and achieved KKT, width-gradient, and final-sweep log-width-change values.
-
-Local Conditioning and Parameter Stability remain diagnostics; they do not
-replace global qualification or relax solver and replay gates. The 37,406-target
-full fitting RSS has not yet been measured; the giant-component preflight peak
-is not a full-workflow memory qualification. See the
-[production memory planning guide](../joint-component-memory-census.md) and
-[Joint evidence record](../joint-component-evidence.md).
-
-The standalone `EstimateJointComponents` convenience API remains available and
-keeps its model-copy and target writeback behavior.
-
-The solver contracts remain `guarded-joint-ls-v1`,
-`parent-normalized-half-rss-v1`, and `sphere-fma-v1`.
-
-Both estimators use the selected non-hydrogen atoms as targets. Sampling is
-always Fibonacci deterministic, and PotentialAnalysis always enables
-failed-only second-stage refinement. Joint Components uses one worker; `-j`
-values greater than one produce a notice. Selected targets fix the observation
-rows. Unselected non-hydrogen halo candidates enter Joint fitting only with at
-least three support rows and three exact distinct squared distances. Pruning
-keeps selected observation rows fixed and can change fitted target values
-because excluded signal remains in the observations.
+Initialization failure, unavailable width calibration, search failure,
+unqualified endpoint, missing component state, absent Halos, unavailable Halo
+reconstruction, and incomplete downstream results are valid saved outcomes.
+`CommandResult.succeeded` means command execution and persistence completed; it
+does not mean the Joint estimate qualified. Invalid input or a persistence
+failure remains a command failure.
 
 ```cpp
 rhbm_gem::core::PotentialAnalysisRequest request;
 request.estimator = rhbm_gem::core::PotentialEstimator::JOINT_COMPONENTS;
 request.model_file_path = "model.cif";
 request.map_file_path = "map.mrc";
-request.selected_chain_ids = {"A"}; // omit this or use {} for every non-hydrogen chain
-request.database_path = "joint.sqlite"; // new v19 database
+request.selected_chain_ids = {"A"};
+request.database_path = "joint.sqlite"; // SQLite schema v20
 request.saved_key_tag = "example";
 auto completed = rhbm_gem::core::RunCommand(request);
 ```
 
-```python
-import rhbm_gem_module as gem
-request = gem.PotentialAnalysisRequest()
-request.estimator = gem.PotentialEstimator.JOINT_COMPONENTS
-request.model_file_path = "model.cif"
-request.map_file_path = "map.mrc"
-request.selected_chain_ids = ["A"]  # [] selects all non-hydrogen atoms
-request.database_path = "joint.sqlite"
-request.saved_key_tag = "example"
-assert gem.RunCommand(request).succeeded  # execution/persistence, not convergence
-export = gem.ResultDumpRequest()
-export.database_path = request.database_path
-export.model_key_tag_list = ["example"]
-export.printer_choice = gem.PrinterType.JOINT_ESTIMATES
-export.output_dir = "results"
-assert gem.RunCommand(export).succeeded
-```
+`result_dump --printer joint` writes one Joint JSON and one atom CSV. The CSV
+columns are `AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate,SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality`.
+`ContributionGroupID` remains an empty compatibility column in the current
+CSV layout. No singleton contribution file is written. Available unqualified
+Target states remain distinguishable from unavailable point estimates through
+convergence and point-quality columns.
 
-A returned initialization failure or missing/unconverged component is a saved
-outcome, not an execution error. `CommandResult.succeeded` is true after successful
-persistence. The log and saved record separately expose search completion, stop
-reasons, available components, runtime convergence and regular certificate.
-Invalid input/problem construction and persistence errors fail the command.
-`NotRun` offline evidence never implies passing certification.
+## Joint persistence formats
 
-`result_dump --printer joint` writes `joint_result_<sanitized-key>.json` and
-`joint_atoms_<sanitized-key>.csv`. It writes the sibling
-`joint_atoms_<sanitized-key>.contributions.csv` only for a historical result
-with nuisance groups. Current Pure Exclusion Joint JSON schema 17 includes
-metadata, identities, contributor-selection policy and provenance, target-only
-parameterization, original/fitting row mappings, seed provenance, row
-availability mask, initial values, target-only trusted states, optional
-parameter-only
-candidate diagnostics, objectives, cost counters, checks, legacy global-rank
-evidence, local block-conditioning and parameter-stability diagnostics, and captured
-convergence. Target-estimability rank evidence remains under target evidence.
-CSV has one row per fitted contributor (including unavailable targets):
-`AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate,SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,ParameterIdentifiability`.
-A/C follow the joint kernel convention, with signed C; B is the width, not log-B.
-Available but unconverged trusted states are retained. Uncertified candidate
-diagnostics appear only in JSON and never fill scientific state or CSV values.
-Missing estimates have empty CSV fields and null JSON states. Initialization diagnostics with nonfinite numbers
-use null; they are not converted to zero. Numeric serialization preserves finite
-double values on reload.
+| Data | Accepted format |
+| --- | --- |
+| SQLite database | Schema v20 only |
+| Stage Result JSON | Version 4 only |
+| Joint Result JSON | Schema v19 only |
 
-Export needs only the saved model. It fails on missing joint records, colliding
-sanitized keys or write errors. Gaussian/outlier export, display, comparison and UMAP consume the common stage
-contract and enable only available data. Joint values are not written to OLS or
-local MDPDE columns. UMAP excludes rows missing required features and needs at
-least three valid targets.
+An empty database is initialized as v20. An existing database must have the
+exact v20 schema. Stage JSON accepts only version 4; Joint JSON always writes
+schema 19 and reads only schema 19. No migrations, upgrades, historical
+fallbacks, or automatic repairs are performed. Unsupported inputs are rejected
+without modifying the database. See the
+[data I/O architecture](../architecture/dataobject-io-architecture.md).
 
-SQLite v20 is created for new databases. Reading v17/v18/v19 does not modify them; the first
-Save upgrades and writes in one transaction, rolling back on failure. Older
-versions, including v16, remain unchanged on rejection. A saved key holds one joint outcome;
-saving a model without a joint result over that key removes the previous outcome.
+## Tests to update when behavior changes
 
-### Provenance and map units (joint JSON schemas 3 through 14)
-
-`metadata.model_sha256` and `map_sha256` fingerprint the original file bytes,
-checked before and after loading. Paths remain descriptive, not content identity.
-`metadata.software` records the library version and source, configuration and
-build SHA-256 fingerprints from the existing build-time generator. Loading or
-exporting a saved outcome preserves these values; it does not stamp the reader's
-version or access either input file.
-
-`metadata.solver` records the current `fixed-neighbor` estimator. FixedNeighbor records
-`fixed_neighbor_core_atoms: 12` and the intrinsic at-most-one trusted accepted
-local update per block visit. Current writers use
-`fixed-neighbor-production-v4`; `fixed_neighbor_local_work` is absent or null,
-because it is legacy provenance rather than a current policy input. They also
-persist the `joint-solver-provenance-v5` contract, fixed EIGEN sparse
-backend, and FixedNeighbor's maximum sweeps and forward order. The bounded
-Pure Exclusion production route records
-`fixed_neighbor_local_search: active-set-lm`. Historical solver metadata,
-including old `profile-lm` values, is preserved by the compatibility decoder
-and is not an active solver choice. Readers accept `legacy-compact` as the
-previous v3 value for that local-search field.
-Operator, rank, preconditioner and Schwarz
-controls are historical provenance only and are not emitted by current
-writers. Historical `joint-solver-provenance-v2` records, including
-top-level `search_method` values `legacy-compact` and `operator-pcg`, remain
-readable through the compatibility decoder.
-
-Older `fixed-neighbor-production-v1` records remain readable and preserve their
-explicit `full`, `one-accepted`, or `two-accepted` local-work provenance. A v2
-record may omit that field or carry transitional `one-accepted`, but explicit
-v2 `full` and `two-accepted` claims are rejected; the decoder never silently
-converts historical provenance into the current contract.
-
-`metadata.map_normalization` is `{requested, applied, divisor}`. The operation is
-`fit_map = input_map / divisor`, with no mean subtraction. An applied operation
-records the actual pre-normalization standard deviation, including SD=1.
-`requested` records the fixed command policy: false for simulation requests and
-true otherwise. `applied` records whether normalization succeeded; a zero-SD
-non-simulation map therefore records `requested=true, applied=false, divisor=1`.
-Simulation requests record `requested=false, applied=false, divisor=1`.
-Pure in-memory API callers may leave the normalization record and input hashes
-null; unknown provenance does not imply an identity transform.
-
-The fixed `metadata.units` contract is `joint-kernel-map-units-v1`. For fitted map
-unit U, the volume-normalized Gaussian has units Angstrom^-3 and the charge basis
-`erf(r/(sqrt(2)*B))/r` has units Angstrom^-1. Thus A has units U*Angstrom^3, C has
-units U*Angstrom, and B and geometry use Angstrom. U denotes the supplied fitting
-scale, not an assumed physical calibration. To return to input-map scale,
-multiply both A and C by `divisor`; B is unchanged. `observation_scale` normalizes
-the objective only and must not be used for this conversion. CSV retains fitted
-coefficients; its appended `SelectionRole` distinguishes target, halo and not-recorded; keep its companion JSON for units and
-provenance. No conversion is performed during export.
-
-Production joint JSON schemas 3 through 18 are accepted. Earlier joint JSON is rejected
-with a request to regenerate the outcome, without migration or database writes.
-New Pure Exclusion Joint result JSON uses schema 17; schema 18 is used when the
-result includes geometry-local Halo reconstruction provenance. Schemas 3 through 13 preserve their saved
-evidence and convergence statuses. Schema 10 stores `target-estimability-v4`
-and rank-context identities without computed null-space leakage or full-Jacobian
-column scales. Schema 11 adds the retired FullABC halo pruning policy and
-exclusion records. Schema 13 identifies the FirstStage fixed-halo contributor
-policy; schema 14 stores historical fixed `(A, B, 0)` halo snapshots separately
-from target component states using `target-only-fixed-halo-v1`. This payload is
-decode-only and does not restore a FixedHalo estimator. Schema 17 stores
-the Pure Halo-Support Exclusion policy, original/fitting row mappings, the
-target-only `target-only-pure-halo-support-exclusion-v1` contract, and legacy
-GroupKey median snapshots. Schema 18 adds geometry-local Halo reconstruction
-provenance. Schema 16 stores
-the global convergence criteria provenance in candidate diagnostics; schema 15
-payloads remain readable with their historical strict criteria defaults. In particular,
-failed historical local or
-target-local correction checks remain failed on load; the reader does not
-rerun those solves. Schemas 8 through 11 record the correction-free numerical
-contract and store endpoint-verification and numerical-qualification
-diagnostics separately. Legacy reference agreement is not mapped to conditional KKT, and
-no reference status is mapped to independent replay.
-See the [target contract](../joint-target-estimability.md)
-for target convergence and retained halo availability. SQLite v20 stores
-estimator-neutral stage format 4, including `PostJointLocalResult`, paired
-peeling, compact local information, posterior evidence and sample geometry in
-`model_stage_result`. Legacy sample BLOBs have unavailable geometry; migrated
-Joint results whose group evidence used the previous measurement source are
-marked unavailable until the new local workflow runs. Neutral stage format 3
-is read and converted to format 4 using each available local result's fixed
-Joint charge profile.
-Consumers must rebuild against the updated public C++ value types.
-
-### Selected-domain and initialization metadata
-
-Production `selection_domain` records `contract: fixed-selected-voxel-closure-v1`,
-ordered unique `target_indices` into `atom_ids`, `observation_radius: 2.5`,
-`support_radius: 2.5`, and `contributor_policy:
-pure-halo-support-exclusion-v1`. Every retained non-hydrogen halo with support
-on the selected-target observation domain is represented for exact row
-exclusion; it is not a Joint parameter and does not have a FirstStage snapshot
-in the production result. Schema 17 stores the original row IDs, fitting row
-IDs, and fit-to-original mappings needed for reconstruction and peeling.
-Historical FixedHalo results retain the separate `first-stage-fixed-halo-v1`
-selection and `fixed_halos` contract through the legacy decoder.
-Older payloads carrying `fullabc-eligible-halo-pruning-v1` and exclusion
-records retain their original free-halo meaning. A hand-built input with the legacy `all-non-hydrogen` selection
-contract remains readable; an input without selection metadata retains null and
-no roles are inferred. CSV `SelectionRole` is `target`, `halo`, or
-`not-recorded`; halos in historical FixedHalo results preserve their saved
-FirstStage source and are not Joint-optimized estimates.
-
-`initialization.data_scope` is `caller-provided-widths` or
-`contributor-local-sampling-may-read-outside-target-domain`. Each initialization
-atom retains its reason; a failed component retains an unavailable state while
-independent valid components can run. Production initialization requires valid
-target widths only; target fallback diagnostics retain their existing
-provenance. Historical FixedHalo initialization evidence remains unchanged on
-load and is never used to initialize current estimation. See the
-[Joint runtime contract](../joint-component-runtime.md). `costs.construction_seconds` records builder time;
-initializer time includes model-copy setup. Neither storage nor export recomputes
-roles, initialization or numerical evidence. Original selection and halo legacy
-analysis are preserved; successful target first-stage data can be updated.
+- [`tests/data/DataObjectPersistence_test.cpp`](/tests/data/DataObjectPersistence_test.cpp)
+- [`tests/data/DataObjectSchemaLifecycle_test.cpp`](/tests/data/DataObjectSchemaLifecycle_test.cpp)
+- [`tests/data/DataObjectSchemaValidation_test.cpp`](/tests/data/DataObjectSchemaValidation_test.cpp)
+- [`tests/core/joint_component`](/tests/core/joint_component)
+- [`tests/integration/joint_workflow_cli_smoke.py`](/tests/integration/joint_workflow_cli_smoke.py)

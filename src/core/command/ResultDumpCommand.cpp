@@ -378,8 +378,7 @@ bool ExecutePreparedRequest(const ResultDumpRequest & request)
             if (!model->GetAnalysisView().GetJointResult())
                 throw std::invalid_argument("No joint result saved for key '"+model->GetKeyTag()+"'.");
             const auto tag=path_helper::EnsureSanitizedTag(model->GetKeyTag());
-            for(const auto & filename:{"joint_result_"+tag+".json","joint_atoms_"+tag+".csv",
-                "joint_atoms_"+tag+".contributions.csv"})
+            for(const auto & filename:{"joint_result_"+tag+".json","joint_atoms_"+tag+".csv"})
                 if (!filenames.insert(filename).second)
                     throw std::invalid_argument("Joint export filenames collide after key sanitization.");
         }

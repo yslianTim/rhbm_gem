@@ -511,9 +511,7 @@ TEST(CommandApiPipelineTest, JointOptInPersistsSmallSelectionCalibrationFailureA
 #endif
     loaded=repository.LoadModel(request.saved_key_tag);
     {
-        rgc::JointProblemInput missing_input; missing_input.atom_ids={"1","2"}; missing_input.support.resize(2);
-        missing_input.selection_domain=rg::JointSelectionDomain{}; missing_input.selection_domain->target_indices={0};
-        auto missing_snapshot=rgc::CaptureJointAnalysisResult(rgc::FitJointComponents(rgc::JointProblem(missing_input),{0.5,0.5}));
+        const auto missing_snapshot=*loaded->GetAnalysisView().GetJointResult();
         rg::ModelObject missing_model(*loaded); missing_model.EditAnalysis().Clear(); missing_model.EditAnalysis().ApplyJointResult(missing_snapshot,"imported-joint");
         repository.SaveModel(missing_model,"missing");
         display.model_key_tag_list={"missing"}; display.painter_choice=rgc::PainterType::ATOM; display.reference_model_groups.clear();
@@ -528,8 +526,8 @@ TEST(CommandApiPipelineTest, JointOptInPersistsSmallSelectionCalibrationFailureA
     dump.printer_choice=rgc::PrinterType::JOINT_ESTIMATES;
     dump.model_key_tag_list={request.saved_key_tag,"joint_model"};
     EXPECT_FALSE(rgc::RunCommand(dump).succeeded);
-    loaded->EditAnalysis().ClearJointResult(); repository.SaveModel(*loaded,"legacy");
-    dump.model_key_tag_list={"legacy"}; EXPECT_FALSE(rgc::RunCommand(dump).succeeded);
+    loaded->EditAnalysis().ClearJointResult(); repository.SaveModel(*loaded,"no-joint-result");
+    dump.model_key_tag_list={"no-joint-result"}; EXPECT_FALSE(rgc::RunCommand(dump).succeeded);
 }
 
 TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApiCliAndReload)

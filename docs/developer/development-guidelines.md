@@ -98,8 +98,8 @@ Change-integration principles:
 - `[Required]` Only add a new `*_test.cpp` when the change introduces a genuinely new testing responsibility.
 - `[Required]` Every test target declared through `add_rhbm_gtest_target(...)` must carry both `domain:*` and `intent:*` CTest labels.
 - `[Required]` Every file referenced by `TestDataPath(...)` must exist under `/tests/fixtures/` and be tracked by git.
-- `[Required]` Schema/persistence changes require regression coverage for bootstrap or migration behavior, rollback behavior on failure, and round-trip correctness.
-- `[Recommended]` Prefer searchable suite names that encode intent (for example `DataObjectSchemaMigrationTest`) over generic suite names.
+- `[Required]` Schema/persistence changes require regression coverage for current-schema bootstrap, unsupported-format rejection without mutation, rollback behavior on failure, and round-trip correctness.
+- `[Recommended]` Prefer searchable suite names that encode intent (for example `DataObjectSchemaLifecycleTest`) over generic suite names.
 - `[Recommended]` Use minimal fixtures and temporary directories/files for generated outputs.
 
 ## 9. Public API, CLI, and Python Surface Governance

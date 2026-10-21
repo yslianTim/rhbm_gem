@@ -101,3 +101,10 @@ Fixture version 1 is whitespace-delimited with round-trip double precision:
   status.
 
 The MDPDE fixtures remain checked in because permanent tests use them.
+
+## Joint result persistence
+
+Joint component estimation uses the separate production contract in the
+[Joint runtime guide](joint-component-runtime.md). Its saved data supports
+SQLite schema v20, Stage Result JSON version 4, and Joint Result JSON schema
+v19 only. These formats do not migrate or decode older formats.

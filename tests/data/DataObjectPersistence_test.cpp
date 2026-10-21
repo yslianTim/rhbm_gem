@@ -1115,7 +1115,7 @@ TEST(DataObjectPersistenceTest, StageResultJsonV4OnlyAcceptsCurrentRoundTrip)
     EXPECT_NO_THROW(rg::stage_result_io::Decode(*restored,encoded));
     EXPECT_EQ(rg::stage_result_io::Encode(*restored),encoded);
 
-    for(const int version:{1,2,3})
+    for(const int version:{1,2,3,5})
     {
         auto old=boost::json::parse(encoded).as_object();
         old["version"]=version;

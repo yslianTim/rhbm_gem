@@ -1,11 +1,11 @@
 # DataObject I/O Architecture
 
-This document describes the current typed file I/O and Model-only SQLite v20
-boundary.
+This document describes file I/O and the current Model-only SQLite
+persistence boundary.
 
-## 1. Public Surface
+## Public surface
 
-File I/O remains available for both object roots:
+File I/O supports both model and map objects:
 
 ```cpp
 std::unique_ptr<ModelObject> ReadModel(const std::filesystem::path & path);
@@ -15,216 +15,99 @@ std::unique_ptr<MapObject> ReadMap(const std::filesystem::path & path);
 void WriteMap(const std::filesystem::path & path, const MapObject & map);
 ```
 
-SQLite persistence is deliberately narrower:
+SQLite persistence is narrower:
 
 ```cpp
-DataRepository repository{ database_path };
+DataRepository repository{database_path};
 repository.SaveModel(model, key_tag);
 auto model = repository.LoadModel(key_tag);
 ```
 
-`DataRepository` does not expose `SaveMap(...)` or `LoadMap(...)`. Maps remain supported through MRC and CCP4 files.
+`DataRepository` does not store maps. Maps use MRC/CCP4 files; models use
+PDB/mmCIF files or the SQLite repository.
 
-## 2. Supported File Formats
+## File codecs
 
-| Root | Read | Write |
-|---|---|---|
+| Object | Read | Write |
+| --- | --- | --- |
 | `ModelObject` | `.pdb`, `.cif`, `.mmcif`, `.mcif` | `.pdb`, `.cif` |
 | `MapObject` | `.mrc`, `.map`, `.ccp4` | `.mrc`, `.map`, `.ccp4` |
 
-Extension dispatch is case-insensitive. Public file functions add filename context and report failures as `std::runtime_error`.
+Extension dispatch is case-insensitive. MRC uses its stored floating-point
+origin; CCP4 derives origin from integer start indices and grid spacing. Both
+codecs decode float32 mode-2 voxels into the runtime's contiguous double map.
 
-## 3. Model Import
+## Current persistence contract
 
-PDB and CIF parsers build a `ModelImportState`. The state owns atoms, bonds, chemical components, chain metadata, and key systems until parsing finishes. `TakeModelObject()` moves those values directly into `ModelObjectParts`, and `AssembleModelObject(...)` establishes owners, indexes, selection, and derived-state invariants.
+| Layer | Supported format |
+| --- | --- |
+| SQLite | Schema v20 only |
+| Stage Result JSON | Version 4 only |
+| Joint Result JSON | Schema v19 only |
 
-Parser-only fields that were never consumed by the runtime are not collected. Import does not retain molecule-size counts, standalone entity-ID lists, or sheet-strand counts.
+No layer migrates historical data. A genuinely empty SQLite database is
+initialized as v20. An existing database opens only when its `user_version`
+is 20 and its exact current schema validates. Unsupported versions or
+structures are rejected before schema or row mutation; the repository does
+not repair, upgrade, delete, or replace them.
 
-CIF/MMCIF numeric domain fields are parsed directly as `double`. PDB parsing likewise uses double-precision temporary fields. Coordinates, occupancy, temperature, and molecular weight therefore enter the runtime without an intermediate float representation.
+Stage JSON readers require `{"version":4}`. Joint JSON writers always emit
+schema 19, and Joint readers require schema 19 with the
+`target-only-pure-halo-support-exclusion-v1` parameterization. Version
+selection does not depend on convergence, Halo count, or reconstruction
+availability. Current documents may represent failed initialization,
+unavailable calibration, search failure, an unqualified endpoint, missing
+component state, no Halo, unavailable reconstruction, incomplete downstream
+results, and nullable diagnostics.
 
-## 4. Map Codecs
+## SQLite schema and lifecycle
 
-MRC and CCP4 keep separate headers and origin rules:
+Schema v20 contains these tables:
 
-- MRC uses the explicit floating-point origin stored in its header.
-- CCP4 derives origin from integer start indices multiplied by grid spacing.
+- `model_object`
+- `model_chain_map`
+- `model_component`
+- `model_component_atom`
+- `model_component_bond`
+- `model_atom`
+- `model_bond`
+- `model_joint_result`
+- `model_stage_result`
 
-They intentionally do not share a base class or format traits. `MapHelper` contains only mechanics common to both:
+Opening an existing database checks the exact table set, ordered columns,
+primary keys, required nullability, foreign keys, selection flags, and
+referential integrity. Extra schema objects and malformed current schemas are
+rejected.
 
-- positive voxel-dimension validation and voxel counting;
-- validation that the file mode is float32 mode 2;
-- float32 voxel seek/read and temporary float32 write buffers;
-- file-axis to canonical XYZ voxel reordering;
-- corresponding three-axis header-field reordering.
+Each repository operation is serialized by its mutex and runs in a SQLite
+transaction. Model save replaces the selected key atomically, validates the
+Joint/Stage JSON payloads, and relies on foreign-key cascades for child rows.
+Joint and Stage rows are loaded as their current JSON values; Stage results are
+not reconstructed from other tables.
 
-Any non-float32 mode is rejected before voxel allocation or decoding. A read widens the mode-2 payload immediately and performs axis normalization on a contiguous `double` array. A write narrows the `MapObject` double buffer only while encoding the mode-2 payload. Header geometry remains float32 because it is part of the MRC/CCP4 external format.
+## Load and save flow
 
-## 5. Repository Runtime
+Save writes the current model structure and any Joint and Stage results in one
+transaction. A failed write rolls back all rows for that save. A key saved
+without a Joint result has no Joint result row.
 
-`DataRepository` owns:
+Load validates the database, loads the current model structure, decodes a
+Joint result only as schema 19, and decodes a Stage result only as version 4.
+Any malformed JSON or unsupported payload fails the load; it is not rewritten
+in place.
 
-- the resolved database path;
-- one `SQLiteWrapper` connection;
-- the per-repository mutex;
-- transaction boundaries;
-- schema creation and validation;
-- the public Model save/load methods.
+## Key files
 
-There is no intermediate persistence forwarding class. `ModelObjectStorage` remains separate because it maps the model graph and analysis payload to SQL rows.
+- `src/data/io/DataRepository.cpp`: schema-version and exact-schema checks.
+- `src/data/io/sqlite/ModelObjectStorage.cpp`: current model and result SQL.
+- `src/data/io/detail/PersistenceSchema.hpp`: SQLite, Stage, and Joint
+  version constants.
+- `src/data/io/detail/StageResultJson.cpp`: Stage JSON version 4.
+- `src/data/io/detail/JointResultJson.cpp`: Joint JSON schema 19.
+- `tests/data/DataObjectSchemaLifecycle_test.cpp` and
+  `DataObjectSchemaValidation_test.cpp`: database bootstrap and rejection.
+- `tests/data/DataObjectPersistence_test.cpp`: current JSON and model
+  round-trips.
 
-Each save and load is serialized by the repository mutex and runs inside a transaction. An empty path still resolves to `database.sqlite`; parent directories are created before opening the database.
-
-## 6. SQLite schema lifecycle
-
-The accepted database states are intentionally strict:
-
-1. An empty database with `PRAGMA user_version = 0` is initialized as v20.
-2. Versions 17, 18, 19, and 20 are accepted only after structural validation.
-3. Other versions or unexpected structures are rejected without migration.
-
-Opening a v17 or v18 database is read-only. Its legacy analysis tables are
-adapted while loading. The first `SaveModel` migrates every stored model to the
-canonical analysis representation and writes the requested model in the same
-transaction. A failed conversion or save rolls back the schema and rows.
-Conflicting legacy and neutral stage values are rejected. Versions 16 and
-earlier are rejected without changing their versions, tables, or rows.
-
-Schema validation checks the expected table set and ordered columns, primary
-keys, selected-flag constraints, and direct cascading `key_tag` foreign keys
-from child tables to `model_object(key_tag)`.
-
-## 7. Current table topology
-
-`model_object` is the direct root. Current v20 also has one canonical neutral
-analysis document per model and a separate Joint result payload. The three
-method-specific analysis tables remain only in accepted legacy v17/v18
-databases; they are dropped during first-write migration.
-
-```mermaid
-flowchart TD
-    M[model_object]
-    M --> C[model_chain_map]
-    M --> CC[model_component]
-    M --> CA[model_component_atom]
-    M --> CB[model_component_bond]
-    M --> A[model_atom]
-    M --> B[model_bond]
-    M --> J[model_joint_result]
-    M --> S[model_stage_result]
-    subgraph legacy [v17/v18 only]
-        AL[model_atom_local_potential]
-        AP[model_atom_posterior]
-        AG[model_atom_group_potential]
-    end
-```
-
-Current v20 contains these nine tables:
-
-- `model_object`;
-- `model_chain_map`;
-- `model_component`;
-- `model_component_atom`;
-- `model_component_bond`;
-- `model_atom`;
-- `model_bond`;
-- `model_joint_result`;
-- `model_stage_result`.
-
-## 8. Canonical analysis data
-
-The root stores model metadata but not `atom_size`; row counts are derived from
-child tables. Atom and bond selection is restored from their structure rows.
-Analysis values do not imply selection.
-
-`model_stage_result(key_tag, result_json)` owns the canonical neutral analysis
-document (format version 4). It stores per-atom First/Second stage estimates,
-method and run provenance, availability reasons, uncertainty, raw samples and
-geometry, paired peeling, post-Joint local fits and compact information, group
-membership and posterior summaries. Joint points remain separate from local
-OLS/MDPDE diagnostics. Group members store Gaussian posterior A/B separately
-from their fixed per-member Joint charge profile; group charge medians are
-descriptive summaries. Format 3 is accepted and migrated on read by rebuilding
-member charge profiles from available local evidence and removing charge
-offsets from Gaussian-only group values. Group membership is restored by its saved atom
-identities; legacy group tables are adapted using the restored selection.
-
-`model_joint_result(key_tag, result_json)` stores the Joint estimator snapshot
-and its versioned JSON metadata, contributor selection, evidence, states and optional
-candidate diagnostics. It is
-distinct from the neutral stage view used by downstream analysis. Legacy v17/v18
-analysis rows are read only for adaptation or migration; they are not canonical
-in v20. A v19 database is upgraded by changing the schema version; its old
-format-2 Joint group evidence is invalidated on load because it was based on a
-different measurement source.
-
-## 9. Save and load flow
-
-### Save
-
-1. Lock the repository and begin a transaction.
-2. If the database is v17/v18, load and convert every model to neutral
-   document version 4, create `model_stage_result`, drop the three legacy
-   analysis tables, and set schema version 20. If it is v19, upgrade the schema
-   version; prior neutral stage formats are migrated when each model is loaded
-   and saved.
-3. Replace the requested model's child rows and root row.
-4. Write its structure, optional Joint result, and canonical stage document.
-5. Commit the migration and requested model save together.
-
-### Load
-
-1. Lock the repository and begin a read transaction.
-2. Read and assemble model structure, metadata, and saved atom/bond selection.
-3. Adapt legacy v17/v18 analysis or decode the canonical v19/v20 stage document.
-4. Decode the optional Joint snapshot and rebuild group membership.
-5. Return the model and commit the read transaction.
-
-A missing `key_tag` or conflicting legacy/canonical representation raises an
-error; it does not produce an empty model.
-
-## 10. Key Files
-
-- `include/rhbm_gem/data/io/DataRepository.hpp`
-- `src/data/io/DataRepository.cpp`
-- `src/data/io/ModelMapFileIO.cpp`
-- `src/data/io/file/ModelImportState.*`
-- `src/data/io/file/MapHelper.*`
-- `src/data/io/file/MrcFormat.*`
-- `src/data/io/file/CCP4Format.*`
-- `src/data/io/sqlite/ModelObjectStorage.*`
-- `src/data/io/sqlite/SQLiteWrapper.hpp`
-
-## Joint result payload
-
-`model_joint_result(key_tag TEXT PRIMARY KEY, result_json TEXT NOT NULL)` has the
-same direct cascading model-root foreign key as other child tables. Its JSON
-codec is shared by SQLite and the public Joint file exporter; readers accept
-schemas 3 through 18. Legacy global-rank evidence remains distinguishable from
-target evidence, while schema 12 added local conditioning and parameter-stability
-diagnostics. Schema 12 may also include additive per-direction stability probes
-and work counters; older schema-12 payloads without those optional fields
-remain readable. Schema 14 stores historical FirstStage fixed-halo parameters
-separately from target-only component states. This data remains available for
-decoding, validation, display, and supported round-trip only; it cannot start
-new estimation. Schema 17 stores the production Pure Halo-Support
-Exclusion policy, original/fitting row mappings, and target-only parameterization.
-Schema 18 stores the geometry-local Halo reconstruction contract, its unbounded
-kNN-4 donor policy, donor Atom IDs, per-Halo source and donor count, A/B/C, and
-Joint run identity. Schema 17 GroupKey median snapshots remain readable and
-round-trip under their legacy contract; they are not reinterpreted as
-geometry-local snapshots. SQLite remains at schema v20 and requires no
-migration for the Joint JSON version change.
-New contributor-selection provenance is stored with the fixed selected observation
-domain. Candidate diagnostics contain parameter vectors and separate
-endpoint-verification and qualification statuses; they do not change trusted
-scientific-state availability. Legacy schemas retain their saved evidence
-semantics. Finite doubles use precise parsing for round-trip
-preservation. Nonfinite initialization diagnostics use null. Captured convergence
-and scoped evidence are read as stored; decoding does not reassess numerically.
-Missing fields, invalid enums or schema values, and inconsistent state/mapping
-dimensions are rejected.
-
-Joint result save/load shares the model transaction. Saving over a key replaces
-its Joint payload; saving a model without a Joint outcome removes that key's
-previous payload. Stored atom identities must match the model's non-hydrogen
-atoms. Observations, support memberships, and prediction vectors are not stored.
+See the [Joint runtime guide](../joint-component-runtime.md) for the
+target-only parameterization and production solver contract.

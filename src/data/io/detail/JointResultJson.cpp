@@ -983,8 +983,9 @@ void Validate(const JointAnalysisResult & x)
     {
         Require(std::find(x.atom_ids.begin(),x.atom_ids.end(),atom.id)!=x.atom_ids.end() &&
             initialized.insert(atom.id).second,"initialization atom identity");
-        for(const auto * width:{&atom.original_b,&atom.used_b})
-            Require(!*width || (std::isfinite(**width) && **width>0),"invalid initialization width provenance");
+        Require(!atom.original_b || std::isfinite(*atom.original_b),"nonfinite original initialization width provenance");
+        Require(!atom.used_b || (std::isfinite(*atom.used_b) && *atom.used_b>0),
+            "invalid used initialization width provenance");
     }
     if(x.initialization.valid)
     {
@@ -1033,8 +1034,8 @@ void Validate(const JointAnalysisResult & x)
     }
     ValidateTarget(x.target_evidence,targets,rows);
     Require(!(x.runtime_convergence==JointCheckStatus::Passed) ||
-        (x.initialization.valid && x.search_completed && x.assembled_state && x.objective),
-        "qualified Joint result is missing assembled state");
+        (x.initialization.valid && x.assembled_state && x.objective),
+        "passed convergence evidence is missing its assembled state");
     const bool has_halos=atoms>targets.size();
     if(x.halo_median_reconstruction)
     {

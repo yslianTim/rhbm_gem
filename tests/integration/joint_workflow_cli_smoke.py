@@ -121,6 +121,7 @@ def main() -> int:
             assert saved["halo_median_reconstruction"]["halos"] == []
         assert saved["initialization"]["data_scope"] == "contributor-local-sampling-may-read-outside-target-domain"
         csv_lines = (root / "joint_atoms_example.csv").read_text().splitlines()
+        assert not (root / "joint_atoms_example.contributions.csv").exists()
         assert csv_lines[0].endswith(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality")
         csv_rows = {row["SelectionRole"]: row for row in csv.DictReader(csv_lines)}
         assert csv_rows["target"]["Parameterization"] == "JointEstimated"

@@ -25,9 +25,9 @@ component is qualified. Unqualified estimates are not published downstream.
 After qualification, Halo A/B/C values are reconstructed from the nearest
 four qualified Target estimates for Original-domain Peeling. Conditioning and
 stability are read-only local diagnostics; they do not change the accepted
-Target estimates or independently deny a qualified endpoint. Persistence
-continues to decode historical result schemas without treating retired
-parameterizations as a current estimator.
+Target estimates or independently deny a qualified endpoint. Current Joint
+results use JSON schema v19, target-only Pure Exclusion, geometry-local kNN-4
+Halo reconstruction, and no legacy decoding.
 
 ## Search policy and block solver
 

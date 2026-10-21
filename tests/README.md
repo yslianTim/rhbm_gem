@@ -162,8 +162,8 @@ tests; solver failure replay remains in `SolverFailureCapture`.
 
 ## Joint validation workflow
 
-The default CTest suite includes current Joint result persistence, required
-legacy decoding, and CLI workflow smoke coverage. Python binding smoke tests
+The default CTest suite includes current Joint result persistence, unsupported
+format rejection, and CLI workflow smoke coverage. Python binding smoke tests
 also exercise the production workflow with a synthetic map generated from
 `tests/fixtures/test_model.cif`. There is no optional Joint research or
 benchmark CTest lane.

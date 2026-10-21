@@ -797,24 +797,91 @@ TEST(UmapEmbeddingCommandTest, ExcludesMissingRequiredFeaturesAndAllowsMissingAn
 #include "core/detail/joint_component/Numerics.hpp"
 TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNoInputFiles)
 {
-    command_test::ScopedTempDir dir{"joint_umap_saved"}; auto model=BuildFeatureModel();
-    JointProblemInput input; input.selection_domain=rg::JointSelectionDomain{};
-    std::vector<double> widths;
+    command_test::ScopedTempDir dir{"joint_umap_saved"};
+    FeatureModelOptions model_options; model_options.atom_count=22;
+    auto model=BuildFeatureModel(model_options);
+    JointProblemInput original;
+    original.selection_domain.emplace();
     for(std::size_t a=0;a<model->GetAtomList().size();++a)
     {
-        input.atom_ids.push_back(std::to_string(model->GetAtomList()[a]->GetSerialID()));
-        input.support.emplace_back(); widths.push_back(0.5);
-        if(a!=0) input.selection_domain->target_indices.push_back(a);
+        original.atom_ids.push_back(std::to_string(model->GetAtomList()[a]->GetSerialID()));
+        original.support.emplace_back();
+        if(a!=0) original.selection_domain->target_indices.push_back(a);
         for(int k=0;k<12;++k)
         {
             const double square=0.02+0.1*k;
             const auto kernel=rhbm_gem::core::joint_component::EvaluateKernel(square,0.5,2.5);
-            input.support.back().push_back({input.observations.size(),square});
-            input.row_ids.push_back(std::to_string(input.observations.size()));
-            input.observations.push_back(2*kernel.gaussian-0.1*kernel.charge);
+            original.support.back().push_back({original.observations.size(),square});
+            original.row_ids.push_back(std::to_string(original.observations.size()));
+            original.observations.push_back(2*kernel.gaussian-0.1*kernel.charge);
         }
     }
-    auto snapshot=CaptureJointAnalysisResult(FitJointComponents(JointProblem(input),widths));
+    const auto original_rows=original.row_ids.size();
+    const auto fit_rows=original_rows-original.support.front().size();
+    const auto excluded_rows=original_rows-fit_rows;
+    original.selection_domain->contributor_policy=std::string(rg::PureHaloSupportExclusionContributorPolicy);
+    original.selection_domain->pure_halo_support_exclusion=
+        rg::JointPureHaloSupportExclusionProvenance{original_rows,fit_rows,excluded_rows,1,1,0};
+
+    JointProblemInput fitting;
+    fitting.selection_domain.emplace();
+    fitting.selection_domain->contributor_policy=std::string(rg::PureHaloSupportExclusionContributorPolicy);
+    fitting.selection_domain->pure_halo_support_exclusion=
+        rg::JointPureHaloSupportExclusionProvenance{original_rows,fit_rows,excluded_rows,0,0,0};
+    std::vector<std::size_t> original_to_fitting_row(original_rows,fit_rows);
+    std::vector<std::size_t> fitting_to_original_rows;
+    for(std::size_t atom=1;atom<original.atom_ids.size();++atom)
+    {
+        fitting.selection_domain->target_indices.push_back(fitting.atom_ids.size());
+        fitting.atom_ids.push_back(original.atom_ids[atom]);
+        fitting.support.emplace_back();
+        for(const auto & support:original.support[atom])
+        {
+            if(original_to_fitting_row[support.row]==fit_rows)
+            {
+                original_to_fitting_row[support.row]=fitting.row_ids.size();
+                fitting_to_original_rows.push_back(support.row);
+                fitting.row_ids.push_back(original.row_ids[support.row]);
+                fitting.observations.push_back(original.observations[support.row]);
+            }
+            fitting.support.back().push_back({original_to_fitting_row[support.row],support.squared_distance});
+        }
+    }
+
+    std::vector<double> widths(fitting.atom_ids.size(),0.5);
+    JointInitialization initialization;
+    initialization.valid=true;
+    initialization.reason="valid-widths";
+    initialization.b=widths;
+    for(std::size_t atom_index=0;atom_index<fitting.atom_ids.size();++atom_index)
+    {
+        JointInitializationAtom atom;
+        atom.id=fitting.atom_ids[atom_index];
+        atom.target=true;
+        atom.mdpde[1]=0.5;
+        atom.ols[1]=0.5;
+        atom.alpha=0.5;
+        atom.sample_count=12;
+        atom.reason=atom_index<20 ? "valid-width" : "median-fallback";
+        atom.original_b=atom_index<20 ? std::optional<double>{0.5} : std::nullopt;
+        atom.used_b=0.5;
+        atom.seed_source=atom_index<20 ? "fitted" : "median-fallback";
+        atom.donor_count=atom_index<20 ? 0 : 20;
+        atom.first_stage_fit_qualified=atom_index<20;
+        atom.first_stage_qualification=atom_index<20 ? rg::RHBMSolveQualification::NativeSuccess :
+            rg::RHBMSolveQualification::Unqualified;
+        atom.native_status=atom_index<20 ? static_cast<int>(rg::RHBMEstimationStatus::SUCCESS) :
+            static_cast<int>(rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED);
+        initialization.atoms.push_back(std::move(atom));
+    }
+
+    const auto fitting_to_original_contributors=original.selection_domain->target_indices;
+    const auto problem=JointProblem(std::move(fitting)).WithReconstructionDomain(
+        std::move(original),fitting_to_original_contributors,std::move(fitting_to_original_rows));
+    auto snapshot=CaptureJointAnalysisResult(FitJointComponentsInitialized(problem,initialization));
+    snapshot.evidence.push_back({std::string(rg::JointHaloMedianReconstructionEvidenceName),
+        rg::JointCheckStatus::Unavailable,rg::JointEvidenceScope::AssembledGlobal,{}, {},
+        "test fixture has no geometry-local donor reconstruction"});
     snapshot.metadata.map_normalization=rg::JointMapNormalization{false,false,1};
     std::map<int, LocalPotentialSampleList> original_peeling;
     for (const auto & atom : model->GetAtomList())
@@ -837,14 +904,14 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     const auto request=MakeRequest(path,dir.path()/"output");
     ASSERT_TRUE(RunCommand(request).succeeded);
     const auto csv=ReadLines(request.output_dir/"umap_embedding_model.csv");
-    ASSERT_EQ(csv.size(),7); // six valid targets + header; one halo and one coverage exclusion.
+    ASSERT_EQ(csv.size(),21); // twenty valid targets + header; one Halo and one coverage exclusion.
     const auto metadata_lines=ReadLines(request.output_dir/"umap_embedding_model.csv.metadata.json");
     const auto metadata=boost::json::parse(metadata_lines.at(0));
     EXPECT_EQ(metadata.at("estimator").as_string(),"joint-components");
     EXPECT_EQ(metadata.at("peeling_mode").as_string(),"grid-consistent");
     EXPECT_NE(metadata.at("column_semantics").at("offset 2nd").as_string().find("charge-kernel coefficient C"),
         std::string::npos);
-    EXPECT_EQ(metadata.at("included_rows").as_int64(),6);
+    EXPECT_EQ(metadata.at("included_rows").as_int64(),20);
     EXPECT_EQ(metadata.at("features").as_array().size(),3);
     EXPECT_FALSE(metadata.at("exclusions").as_object().empty());
     EXPECT_EQ(metadata.at("exclusions").as_object().at(
