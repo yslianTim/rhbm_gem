@@ -2,6 +2,7 @@
 
 #include "SQLiteWrapper.hpp"
 #include "data/io/detail/JointResultJson.hpp"
+#include "data/io/detail/PersistenceSchema.hpp"
 #include "data/io/detail/StageResultJson.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
@@ -1094,7 +1095,7 @@ void CreateTables(SQLiteWrapper & database)
         database.Execute(std::string(create_sql));
     }
     CreateStageTable(database);
-    database.Execute("PRAGMA user_version=20;");
+    database.Execute("PRAGMA user_version=" + std::to_string(persistence_schema::SQLite) + ";");
 }
 
 void Save(

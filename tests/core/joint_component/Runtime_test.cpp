@@ -192,7 +192,7 @@ TEST(JointComponentRuntimeTest, MissingOrWrongScopeEvidenceCannotVacuouslyConver
     EXPECT_EQ(core::JointFitResult{}.RuntimeConvergence(),Status::Unavailable);
 }
 
-TEST(JointComponentRuntimeTest, SavedOutcomesPreserveActualResultsWithoutProblemOrPrediction)
+TEST(JointComponentRuntimeTest, GenericNumericalOutcomesAreNotPersistedAsFormalResults)
 {
     namespace io=rhbm_gem::joint_result_io;
     for(int variant=0;variant<4;++variant)
@@ -209,24 +209,19 @@ TEST(JointComponentRuntimeTest, SavedOutcomesPreserveActualResultsWithoutProblem
         EXPECT_FALSE(saved.metadata.model_sha256); EXPECT_FALSE(saved.metadata.map_sha256);
         EXPECT_FALSE(saved.metadata.map_normalization);
         EXPECT_EQ(saved.metadata.software->source_sha256.size(),64);
-        const auto encoded=io::Encode(saved);
-        const auto decoded=io::Decode(encoded);
-        EXPECT_EQ(io::Encode(decoded),encoded);
-        EXPECT_EQ(decoded.runtime_convergence,fit.RuntimeConvergence());
-        EXPECT_EQ(decoded.available_row_mask,fit.available_row_mask);
-        EXPECT_EQ(decoded.objective,fit.objective);
-        EXPECT_EQ(decoded.observation_scale,fit.observation_scale);
-        ASSERT_EQ(decoded.components.size(),fit.components.size());
+        EXPECT_EQ(saved.runtime_convergence,fit.RuntimeConvergence());
+        EXPECT_EQ(saved.available_row_mask,fit.available_row_mask);
+        EXPECT_EQ(saved.objective,fit.objective);
+        EXPECT_EQ(saved.observation_scale,fit.observation_scale);
+        ASSERT_EQ(saved.components.size(),fit.components.size());
         for(std::size_t k=0;k<fit.components.size();++k)
         {
-            EXPECT_EQ(decoded.components[k].runtime_convergence,fit.components[k].RuntimeConvergence());
-            EXPECT_EQ(decoded.components[k].regular_certificate,core::JointCheckStatus::NotRun);
-            EXPECT_EQ(decoded.components[k].state.has_value(),fit.components[k].state.has_value());
-            if(fit.components[k].state) EXPECT_EQ(decoded.components[k].state->ac,fit.components[k].state->ac);
+            EXPECT_EQ(saved.components[k].runtime_convergence,fit.components[k].RuntimeConvergence());
+            EXPECT_EQ(saved.components[k].state.has_value(),fit.components[k].state.has_value());
+            if(fit.components[k].state) EXPECT_EQ(saved.components[k].state->ac,fit.components[k].state->ac);
         }
-        EXPECT_EQ(encoded.find("\"prediction\""),std::string::npos);
-        EXPECT_EQ(encoded.find("\"observations\""),std::string::npos);
-        if(variant==3) EXPECT_TRUE(std::isnan(decoded.initialization.b[0]));
+        EXPECT_THROW(io::Encode(saved),std::invalid_argument);
+        if(variant==3) EXPECT_TRUE(std::isnan(saved.initialization.b[0]));
     }
 }
 

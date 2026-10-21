@@ -2,6 +2,7 @@
 
 #include "sqlite/ModelObjectStorage.hpp"
 #include "sqlite/SQLiteWrapper.hpp"
+#include "detail/PersistenceSchema.hpp"
 
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
@@ -19,7 +20,7 @@ namespace {
 
 using namespace std::literals;
 
-constexpr int kCurrentSchemaVersion = 20;
+constexpr int kCurrentSchemaVersion = rhbm_gem::persistence_schema::SQLite;
 constexpr std::string_view kUserSchemaObjectCountSql =
     "SELECT COUNT(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%';";
 constexpr std::string_view kTableNamesSql =

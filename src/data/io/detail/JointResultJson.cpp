@@ -1,4 +1,5 @@
 #include "JointResultJson.hpp"
+#include "PersistenceSchema.hpp"
 #include "core/detail/joint_component/ConvergenceCriteria.hpp"
 #include <boost/json.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
@@ -180,8 +181,7 @@ std::vector<double> DiagnosticValues(const j::value & v)
 Object State(const JointState & x)
 {
     return {{"ac",j::value_from(x.ac)},{"b",j::value_from(x.b)},{"log_b",j::value_from(x.log_b)},
-        {"width_gradient",j::value_from(x.width_gradient)},{"objective",x.objective},
-        {"nuisance_amplitudes",j::value_from(x.nuisance_amplitudes)}};
+        {"width_gradient",j::value_from(x.width_gradient)},{"objective",x.objective}};
 }
 JointState ReadState(const j::value & v)
 {
@@ -272,14 +272,6 @@ std::optional<JointAnalysisComponent::LegacyCandidateEvidence> ReadLegacyCandida
     if(source->contains("rank_assessment_status")) out.rank_assessment_status=Status(source->at("rank_assessment_status"));
     else if(source->contains("legacy_rank_assessment_status")) out.rank_assessment_status=Status(source->at("legacy_rank_assessment_status"));
     if(!out.reference_status && !out.rank_assessment_status) return {};
-    return out;
-}
-Object LegacyCandidateEvidence(const std::optional<JointAnalysisComponent::LegacyCandidateEvidence> & x)
-{
-    Object out;
-    if(!x) return out;
-    if(x->reference_status) out.emplace("reference_status",StatusText(*x->reference_status));
-    if(x->rank_assessment_status) out.emplace("rank_assessment_status",StatusText(*x->rank_assessment_status));
     return out;
 }
 j::array Checks(const std::vector<JointCheck> & values)
@@ -649,25 +641,8 @@ std::optional<JointParameterStability> ReadParameterStability(const j::value & v
     x.workspace_peak_memory_estimate_bytes=ReadOptionalSize(o.at("workspace_peak_memory_estimate_bytes"));
     return x;
 }
-j::value OptionalInt(std::optional<int> value)
-{return value ? j::value(*value) : j::value(nullptr);}
 std::optional<int> ReadOptionalInt(const j::value & value)
 {return value.is_null() ? std::nullopt : std::optional<int>(j::value_to<int>(value));}
-j::array FixedHalos(const std::vector<JointFixedHaloParameter> & values)
-{
-    j::array out;
-    for(const auto & value:values)
-        out.emplace_back(Object{{"contributor_index",value.contributor_index},{"atom_id",value.atom_id},
-            {"amplitude",value.amplitude},{"width",value.width},{"charge",value.charge},
-            {"first_stage_sample_count",value.first_stage_sample_count},
-            {"first_stage_status",OptionalInt(value.first_stage_status)},
-            {"source_contract",value.source_contract},{"first_stage_fit_qualified",value.first_stage_fit_qualified},
-            {"first_stage_qualification",QualificationText(FirstStageQualification(value.first_stage_status,
-                value.first_stage_fit_qualified,value.first_stage_qualification,value.first_stage_recovery))},
-            {"first_stage_recovery",value.first_stage_recovery ?
-                FailedOnlyRecovery(*value.first_stage_recovery) : j::value(nullptr)}});
-    return out;
-}
 std::vector<JointFixedHaloParameter> ReadFixedHalos(const j::value & value)
 {
     std::vector<JointFixedHaloParameter> out;
@@ -695,20 +670,14 @@ j::value HaloMedianSnapshot(const std::optional<JointHaloMedianSnapshot> & value
         Object encoded{{"halo_contributor_index",halo.halo_contributor_index},
             {"atom_id",halo.atom_id},{"amplitude",halo.amplitude},
             {"width",halo.width},{"charge",halo.charge},{"source",HaloMedianSourceText(halo.source)},
-            {"donor_count",halo.donor_count},{"joint_run_id",halo.joint_run_id},{"contract",halo.contract}};
-        if(halo.legacy_group_key) encoded.emplace("group_key",*halo.legacy_group_key);
-        if(halo.contract==HaloMedianReconstructionContractVersion)
-            encoded.emplace("donor_atom_ids",j::value_from(halo.donor_atom_ids));
+            {"donor_count",halo.donor_count},{"joint_run_id",halo.joint_run_id},
+            {"contract",halo.contract},{"donor_atom_ids",j::value_from(halo.donor_atom_ids)}};
         halos.emplace_back(std::move(encoded));
     }
     Object encoded{{"contract",snapshot.contract},{"joint_run_id",snapshot.joint_run_id},
         {"global_median",j::value_from(snapshot.global_median)},
-        {"valid_target_count",snapshot.valid_target_count},{"halos",std::move(halos)}};
-    if(snapshot.contract==HaloMedianReconstructionContractVersion)
-    {
-        encoded.emplace("neighbor_count",snapshot.neighbor_count);
-        encoded.emplace("donor_policy",snapshot.donor_policy);
-    }
+        {"valid_target_count",snapshot.valid_target_count},{"halos",std::move(halos)},
+        {"neighbor_count",snapshot.neighbor_count},{"donor_policy",snapshot.donor_policy}};
     return encoded;
 }
 std::optional<JointHaloMedianSnapshot> ReadHaloMedianSnapshot(const j::value & value)
@@ -767,21 +736,7 @@ Object Metadata(const JointAnalysisMetadata & m)
         solver=Object{{"search_method",p.search_method},
             {"contract_version",OptionalText(p.contract_version)},
             {"sparse_backend",OptionalText(p.sparse_backend)},
-            {"preconditioner",OptionalText(p.preconditioner)},
-            {"operator_rank_mode",OptionalText(p.operator_rank_mode)},
-            {"operator_rank_backend",OptionalText(p.operator_rank_backend)},
-            {"operator_pcg_iterations",OptionalInt(p.operator_pcg_iterations)},
-            {"operator_damping_trials",OptionalInt(p.operator_damping_trials)},
-            {"operator_rank_budget_seconds",Number(p.operator_rank_budget_seconds)},
-            {"operator_rank_budget_entries",OptionalSize(p.operator_rank_budget_entries)},
-            {"operator_rank_budget_workspace_bytes",OptionalSize(p.operator_rank_budget_workspace_bytes)},
-            {"schwarz_core_atoms",OptionalSize(p.schwarz_core_atoms)},
-            {"schwarz_overlap_hops",OptionalSize(p.schwarz_overlap_hops)},
-            {"schwarz_max_block_atoms",OptionalSize(p.schwarz_max_block_atoms)},
-            {"schwarz_storage_bytes",OptionalSize(p.schwarz_storage_bytes)},
-            {"schwarz_scratch_bytes",OptionalSize(p.schwarz_scratch_bytes)},
             {"fixed_neighbor_core_atoms",OptionalSize(p.fixed_neighbor_core_atoms)},
-            {"fixed_neighbor_local_work",OptionalText(p.fixed_neighbor_local_work)},
             {"fixed_neighbor_policy_version",OptionalText(p.fixed_neighbor_policy_version)},
             {"fixed_neighbor_maximum_sweeps",OptionalSize(p.fixed_neighbor_maximum_sweeps)},
             {"fixed_neighbor_order",OptionalText(p.fixed_neighbor_order)},
@@ -1100,39 +1055,15 @@ void ValidateParameterStability(const JointParameterStability & x)
 j::value SelectionDomain(const std::optional<JointSelectionDomain> & domain)
 {
     if(!domain) return nullptr;
-    j::value halo_eligibility=nullptr,fixed_halo_selection=nullptr,pure_halo_support_exclusion=nullptr;
-    if(domain->halo_eligibility)
-    {
-        const auto & provenance=*domain->halo_eligibility; j::array excluded;
-        for(const auto & record:provenance.excluded_halos)
-            excluded.emplace_back(Object{{"atom_id",record.atom_id},{"support_rows",record.support_rows},
-                {"distinct_radial_distances",record.distinct_radial_distances},{"reason",record.reason}});
-        halo_eligibility=Object{{"minimum_observations",provenance.minimum_observations},
-            {"minimum_distinct_radial_information",provenance.minimum_distinct_radial_information},
-            {"candidate_halos",provenance.candidate_halos},{"retained_halos",provenance.retained_halos},
-            {"excluded_halos",std::move(excluded)}};
-    }
-    if(domain->fixed_halo_selection)
-    {
-        const auto & provenance=*domain->fixed_halo_selection;
-        fixed_halo_selection=Object{{"minimum_observations",provenance.minimum_observations},
-            {"candidate_halos",provenance.candidate_halos},{"retained_halos",provenance.retained_halos},
-            {"zero_support_halos",provenance.zero_support_halos}};
-    }
-    if(domain->pure_halo_support_exclusion)
-    {
-        const auto & provenance=*domain->pure_halo_support_exclusion;
-        pure_halo_support_exclusion=Object{{"original_rows",provenance.original_rows},
-            {"fit_rows",provenance.fit_rows},{"excluded_rows",provenance.excluded_rows},
-            {"candidate_halos",provenance.candidate_halos},{"retained_halos",provenance.retained_halos},
-            {"zero_support_halos",provenance.zero_support_halos}};
-    }
+    const auto & provenance=*domain->pure_halo_support_exclusion;
+    const auto pure_halo_support_exclusion=Object{{"original_rows",provenance.original_rows},
+        {"fit_rows",provenance.fit_rows},{"excluded_rows",provenance.excluded_rows},
+        {"candidate_halos",provenance.candidate_halos},{"retained_halos",provenance.retained_halos},
+        {"zero_support_halos",provenance.zero_support_halos}};
     Object out{{"contract",domain->contract},{"target_indices",j::value_from(domain->target_indices)},
         {"observation_radius",domain->observation_radius},{"support_radius",domain->support_radius},
-        {"contributor_policy",domain->contributor_policy},{"halo_eligibility",std::move(halo_eligibility)},
-        {"fixed_halo_selection",std::move(fixed_halo_selection)}};
-    if(domain->pure_halo_support_exclusion)
-        out.emplace("pure_halo_support_exclusion",std::move(pure_halo_support_exclusion));
+        {"contributor_policy",domain->contributor_policy},
+        {"pure_halo_support_exclusion",pure_halo_support_exclusion}};
     return out;
 }
 std::optional<JointSelectionDomain> ReadSelectionDomain(const j::value & value)
@@ -1177,13 +1108,6 @@ std::optional<JointSelectionDomain> ReadSelectionDomain(const j::value & value)
             Read<std::size_t>(item,"retained_halos"),Read<std::size_t>(item,"zero_support_halos")};
     }
     return out;
-}
-j::value Layout(const std::optional<JointParameterLayout> & layout)
-{
-    if(!layout) return nullptr;
-    j::array groups;
-    for(const auto & group:layout->groups) groups.emplace_back(Object{{"row",group.row},{"atoms",j::value_from(group.atoms)}});
-    return Object{{"full_atoms",j::value_from(layout->full_atoms)},{"informative_rows",j::value_from(layout->informative_rows)},{"groups",std::move(groups)}};
 }
 std::optional<JointParameterLayout> ReadLayout(const Object & object)
 {
@@ -1368,9 +1292,10 @@ void Validate(const JointAnalysisResult & x,int schema_version)
                 return old_target_contract(component.target_evidence);
             }),"target-estimability-v2 requires schema 8");
     }
-    const bool reference_free_contract=x.metadata.solver && x.metadata.solver->contract_version &&
+    const bool reference_free_contract=schema_version==persistence_schema::JointResultJson ||
+        (x.metadata.solver && x.metadata.solver->contract_version &&
         (*x.metadata.solver->contract_version==JointSolverProvenanceContractVersion ||
-         *x.metadata.solver->contract_version==JointSolverProvenancePreviousContractVersion);
+         *x.metadata.solver->contract_version==JointSolverProvenancePreviousContractVersion));
     const auto atoms=x.atom_ids.size(), rows=x.row_ids.size();
     Require(!x.selection_domain || x.selection_domain->IsValid(atoms),"selection domain");
     const bool pruned_policy=x.selection_domain &&
@@ -1382,6 +1307,46 @@ void Validate(const JointAnalysisResult & x,int schema_version)
     const bool target_only_fixed_halo=x.parameterization_contract==JointTargetOnlyFixedHaloParameterizationContract;
     const bool target_only_pure_exclusion=x.parameterization_contract==
         JointPureHaloSupportExclusionParameterizationContract;
+    if(schema_version==persistence_schema::JointResultJson)
+    {
+        Require(target_only_pure_exclusion && pure_exclusion_policy && !x.layout && x.fixed_halos.empty(),
+            "current Joint result requires target-only Pure Exclusion");
+        Require(x.legacy_global_rank_evidence.empty(),"current Joint result contains retired rank evidence");
+        for(const auto & component:x.components)
+        {
+            Require(!component.layout && component.legacy_global_rank_evidence.empty() &&
+                !component.legacy_candidate_evidence,
+                "current Joint component contains retired result fields");
+            if(component.state)
+                Require(component.state->nuisance_amplitudes.empty(),
+                    "current Joint state contains retired nuisance parameters");
+        }
+        if(x.assembled_state)
+            Require(x.assembled_state->nuisance_amplitudes.empty(),
+                "current assembled state contains retired nuisance parameters");
+        if(x.metadata.solver)
+        {
+            const auto & solver=*x.metadata.solver;
+            Require(solver.search_method=="fixed-neighbor" && solver.contract_version &&
+                *solver.contract_version==JointSolverProvenanceContractVersion &&
+                solver.sparse_backend && *solver.sparse_backend=="EIGEN" &&
+                solver.fixed_neighbor_core_atoms==std::optional<std::size_t>{12} &&
+                solver.fixed_neighbor_policy_version &&
+                *solver.fixed_neighbor_policy_version==FixedNeighborPolicyContractVersion &&
+                solver.fixed_neighbor_maximum_sweeps==std::optional<std::size_t>{200} &&
+                solver.fixed_neighbor_order && *solver.fixed_neighbor_order=="forward" &&
+                solver.fixed_neighbor_local_search &&
+                *solver.fixed_neighbor_local_search==FixedNeighborBoundedLocalSearchName &&
+                !solver.fixed_neighbor_local_work && !solver.preconditioner &&
+                !solver.operator_rank_mode && !solver.operator_rank_backend &&
+                !solver.operator_pcg_iterations && !solver.operator_damping_trials &&
+                !solver.operator_rank_budget_seconds && !solver.operator_rank_budget_entries &&
+                !solver.operator_rank_budget_workspace_bytes && !solver.schwarz_core_atoms &&
+                !solver.schwarz_overlap_hops && !solver.schwarz_max_block_atoms &&
+                !solver.schwarz_storage_bytes && !solver.schwarz_scratch_bytes,
+                "invalid current FixedNeighbor solver provenance");
+        }
+    }
     Require(schema_version>=11 || !pruned_policy,"halo pruning policy requires schema 11");
     Require(schema_version>=13 || !fixed_halo_policy,"fixed-halo policy requires schema 13");
     Require(schema_version>=17 || !pure_exclusion_policy,"Pure Exclusion policy requires schema 17");
@@ -1597,8 +1562,7 @@ void Validate(const JointAnalysisResult & x,int schema_version)
 }
 std::string Encode(const JointAnalysisResult & x)
 {
-    const bool pure_exclusion=x.parameterization_contract==JointPureHaloSupportExclusionParameterizationContract;
-    Validate(x,pure_exclusion ? 18 : 16);
+    Validate(x,persistence_schema::JointResultJson);
     const auto & m=x.metadata; const auto & t=x.costs;
     j::array components;
     for(const auto & c:x.components)
@@ -1609,50 +1573,155 @@ std::string Encode(const JointAnalysisResult & x)
         {"first_order_stationarity_sweep",c.first_order_stationarity_sweep},
         {"confirmed_stationarity_sweep",c.confirmed_stationarity_sweep},
         {"endpoint_certification_sweep",c.endpoint_certification_sweep},
-        {"profile_evaluations",c.profile_evaluations},{"reference_evaluations",c.reference_evaluations},
+        {"profile_evaluations",c.profile_evaluations},
         {"accepted_updates",c.accepted_updates},{"native_status",c.native_status},{"state",OptionalState(c.state)},
         {"candidate_diagnostic",c.candidate_diagnostic ? j::value(CandidateDiagnostic(*c.candidate_diagnostic)) : j::value(nullptr)},
-        {"evidence",Checks(c.evidence)},{"legacy_global_rank_evidence",Ranks(c.legacy_global_rank_evidence)},
+        {"evidence",Checks(c.evidence)},
         {"local_conditioning",BlockConditioning(c.local_conditioning)},
         {"local_conditioning_seconds",Number(c.local_conditioning_seconds)},
         {"local_conditioning_peak_memory_estimate_bytes",OptionalSize(c.local_conditioning_peak_memory_estimate_bytes)},
         {"parameter_stability",ParameterStability(c.parameter_stability)},
         {"regular_certificate",StatusText(c.regular_certificate)},
-        { "runtime_convergence",StatusText(c.runtime_convergence)},{"layout",Layout(c.layout)},
-        {"target_evidence",Target(c.target_evidence)},{"target_runtime_convergence",StatusText(c.target_runtime_convergence)}};
-        if(c.legacy_candidate_evidence)
-            component.emplace("legacy_candidate_evidence",LegacyCandidateEvidence(c.legacy_candidate_evidence));
+        {"runtime_convergence",StatusText(c.runtime_convergence)},
+        {"target_evidence",Target(c.target_evidence)},
+        {"target_runtime_convergence",StatusText(c.target_runtime_convergence)}};
         components.emplace_back(std::move(component));
     }
-    const bool geometry_halo_reconstruction=pure_exclusion && x.halo_median_reconstruction &&
-        x.halo_median_reconstruction->contract==HaloMedianReconstructionContractVersion;
-    Object out{{"schema_version",geometry_halo_reconstruction ? 18 : (pure_exclusion ? 17 : 16)},
-        {"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},{"objective_contract","parent-normalized-half-rss-v1"},
-        { "support_contract","sphere-fma-v1"},{"parameterization_contract",x.parameterization_contract},{"layout",Layout(x.layout)},{"metadata",Metadata(m)},{"selection_domain",SelectionDomain(x.selection_domain)},
-        {"fixed_halos",FixedHalos(x.fixed_halos)},
-        {"atom_ids",j::value_from(x.atom_ids)},{"row_ids",j::value_from(x.row_ids)},{"initialization",Initialization(x.initialization)},
-        {"costs",Object{{"construction_seconds",t.construction_seconds},{"initialization_seconds",t.initialization_seconds},{"search_seconds",t.search_seconds},
-            {"search_reference_seconds",t.search_reference_seconds},{"assessment_seconds",t.assessment_seconds},{"assembly_seconds",t.assembly_seconds}}},
-        {"components",std::move(components)},{"assembled_state",OptionalState(x.assembled_state)},{"objective",Number(x.objective)},
-        {"available_row_mask",j::value_from(x.available_row_mask)},{"evidence",Checks(x.evidence)},
-        {"legacy_global_rank_evidence",Ranks(x.legacy_global_rank_evidence)},
-        {"search_completed",x.search_completed},{"observation_scale",x.observation_scale},
-        {"regular_certificate",StatusText(x.regular_certificate)},{"runtime_convergence",StatusText(x.runtime_convergence)},
-        {"target_evidence",Target(x.target_evidence)},{"target_runtime_convergence",StatusText(x.target_runtime_convergence)}};
-    if(pure_exclusion)
-    {
-        out.emplace("fitting_row_ids",j::value_from(x.fitting_row_ids));
-        out.emplace("fitting_to_original_contributors",j::value_from(x.fitting_to_original_contributors));
-        out.emplace("fitting_to_original_rows",j::value_from(x.fitting_to_original_rows));
-        out.emplace("halo_median_reconstruction",HaloMedianSnapshot(x.halo_median_reconstruction));
-    }
+    Object out{{"schema_version",persistence_schema::JointResultJson},
+        {"estimator","joint-components"},{"estimator_contract","guarded-joint-ls-v1"},
+        {"objective_contract","parent-normalized-half-rss-v1"},{"support_contract","sphere-fma-v1"},
+        {"parameterization_contract",x.parameterization_contract},{"metadata",Metadata(m)},
+        {"selection_domain",SelectionDomain(x.selection_domain)},
+        {"atom_ids",j::value_from(x.atom_ids)},{"row_ids",j::value_from(x.row_ids)},
+        {"initialization",Initialization(x.initialization)},
+        {"costs",Object{{"construction_seconds",t.construction_seconds},
+            {"initialization_seconds",t.initialization_seconds},{"search_seconds",t.search_seconds},
+            {"assessment_seconds",t.assessment_seconds},{"assembly_seconds",t.assembly_seconds}}},
+        {"components",std::move(components)},{"assembled_state",OptionalState(x.assembled_state)},
+        {"objective",Number(x.objective)},{"available_row_mask",j::value_from(x.available_row_mask)},
+        {"evidence",Checks(x.evidence)},{"search_completed",x.search_completed},
+        {"observation_scale",x.observation_scale},{"regular_certificate",StatusText(x.regular_certificate)},
+        {"runtime_convergence",StatusText(x.runtime_convergence)},
+        {"target_evidence",Target(x.target_evidence)},
+        {"target_runtime_convergence",StatusText(x.target_runtime_convergence)},
+        {"fitting_row_ids",j::value_from(x.fitting_row_ids)},
+        {"fitting_to_original_contributors",j::value_from(x.fitting_to_original_contributors)},
+        {"fitting_to_original_rows",j::value_from(x.fitting_to_original_rows)},
+        {"halo_median_reconstruction",HaloMedianSnapshot(x.halo_median_reconstruction)}};
     return j::serialize(out);
+}
+void RequireNoKeys(const Object & object,std::initializer_list<const char *> keys,const char * message)
+{
+    for(const auto key:keys)
+        Require(!object.contains(key),message);
+}
+JointAnalysisResult DecodeCurrent(const Object & o)
+{
+    RequireNoKeys(o,{"layout","fixed_halos","legacy_global_rank_evidence","ranks"},
+        "current Joint result contains retired fields");
+    const auto & metadata=o.at("metadata").as_object();
+    if(!metadata.at("solver").is_null())
+        RequireNoKeys(metadata.at("solver").as_object(),
+            {"preconditioner","operator_rank_mode","operator_rank_backend","operator_pcg_iterations",
+             "operator_damping_trials","operator_rank_budget_seconds","operator_rank_budget_entries",
+             "operator_rank_budget_workspace_bytes","schwarz_core_atoms","schwarz_overlap_hops",
+             "schwarz_max_block_atoms","schwarz_storage_bytes","schwarz_scratch_bytes",
+             "fixed_neighbor_local_work"},"current solver provenance contains retired fields");
+    RequireNoKeys(o.at("selection_domain").as_object(),{"halo_eligibility","fixed_halo_selection"},
+        "current selection domain contains retired fields");
+    RequireNoKeys(o.at("costs").as_object(),{"search_reference_seconds"},
+        "current Joint costs contain retired fields");
+    JointAnalysisResult x;
+    Require(Read<int>(o,"schema_version")==persistence_schema::JointResultJson,
+        "unsupported current Joint result schema");
+    Require(Read<std::string>(o,"estimator")=="joint-components" &&
+        Read<std::string>(o,"estimator_contract")=="guarded-joint-ls-v1" &&
+        Read<std::string>(o,"objective_contract")=="parent-normalized-half-rss-v1" &&
+        Read<std::string>(o,"support_contract")=="sphere-fma-v1","unsupported estimator contract");
+    x.parameterization_contract=Read<std::string>(o,"parameterization_contract");
+    x.metadata=ReadMetadata(metadata);
+    x.selection_domain=ReadSelectionDomain(o.at("selection_domain"));
+    x.atom_ids=Read<std::vector<std::string>>(o,"atom_ids");
+    x.row_ids=Read<std::vector<std::string>>(o,"row_ids");
+    x.fitting_row_ids=Read<std::vector<std::string>>(o,"fitting_row_ids");
+    x.fitting_to_original_contributors=Read<std::vector<std::size_t>>(o,"fitting_to_original_contributors");
+    x.fitting_to_original_rows=Read<std::vector<std::size_t>>(o,"fitting_to_original_rows");
+    x.initialization=ReadInitialization(o.at("initialization"));
+    const auto & costs=o.at("costs").as_object();
+    x.costs.construction_seconds=Read<double>(costs,"construction_seconds");
+    x.costs.initialization_seconds=Read<double>(costs,"initialization_seconds");
+    x.costs.search_seconds=Read<double>(costs,"search_seconds");
+    x.costs.assessment_seconds=Read<double>(costs,"assessment_seconds");
+    x.costs.assembly_seconds=Read<double>(costs,"assembly_seconds");
+    for(const auto & item:o.at("components").as_array())
+    {
+        const auto & c=item.as_object();
+        RequireNoKeys(c,{"layout","reference_evaluations","legacy_global_rank_evidence","ranks",
+            "legacy_candidate_evidence"},"current Joint component contains retired fields");
+        JointAnalysisComponent component;
+        component.id=Read<std::string>(c,"id");
+        component.stop_reason=Read<std::string>(c,"stop_reason");
+        component.atoms=Read<std::vector<std::size_t>>(c,"atoms");
+        component.rows=Read<std::vector<std::size_t>>(c,"rows");
+        component.search_completed=Read<bool>(c,"search_completed");
+        component.search_sweeps=Read<std::size_t>(c,"search_sweeps");
+        component.first_order_stationarity_sweep=Read<std::size_t>(c,"first_order_stationarity_sweep");
+        component.confirmed_stationarity_sweep=Read<std::size_t>(c,"confirmed_stationarity_sweep");
+        component.endpoint_certification_sweep=Read<std::size_t>(c,"endpoint_certification_sweep");
+        component.profile_evaluations=Read<int>(c,"profile_evaluations");
+        component.accepted_updates=Read<int>(c,"accepted_updates");
+        component.native_status=Read<int>(c,"native_status");
+        if(!c.at("state").is_null())
+        {
+            RequireNoKeys(c.at("state").as_object(),{"nuisance_amplitudes"},
+                "current Joint state contains retired fields");
+            component.state=ReadState(c.at("state"));
+        }
+        if(!c.at("candidate_diagnostic").is_null())
+            component.candidate_diagnostic=ReadCandidateDiagnostic(c.at("candidate_diagnostic"),true,true);
+        component.evidence=ReadChecks(c.at("evidence"));
+        component.local_conditioning=ReadBlockConditioning(c.at("local_conditioning"));
+        component.local_conditioning_seconds=Read<double>(c,"local_conditioning_seconds");
+        component.local_conditioning_peak_memory_estimate_bytes=
+            ReadOptionalSize(c.at("local_conditioning_peak_memory_estimate_bytes"));
+        component.parameter_stability=ReadParameterStability(c.at("parameter_stability"));
+        component.regular_certificate=Status(c.at("regular_certificate"));
+        component.runtime_convergence=Status(c.at("runtime_convergence"));
+        component.target_evidence=ReadTarget(c.at("target_evidence"),persistence_schema::JointResultJson);
+        component.target_runtime_convergence=Status(c.at("target_runtime_convergence"));
+        x.components.push_back(std::move(component));
+    }
+    if(!o.at("assembled_state").is_null())
+    {
+        RequireNoKeys(o.at("assembled_state").as_object(),{"nuisance_amplitudes"},
+            "current assembled state contains retired fields");
+        x.assembled_state=ReadState(o.at("assembled_state"));
+    }
+    x.objective=OptionalNumber(o.at("objective"));
+    x.available_row_mask=Read<std::vector<bool>>(o,"available_row_mask");
+    x.evidence=ReadChecks(o.at("evidence"));
+    x.search_completed=Read<bool>(o,"search_completed");
+    x.observation_scale=Read<double>(o,"observation_scale");
+    x.regular_certificate=Status(o.at("regular_certificate"));
+    x.runtime_convergence=Status(o.at("runtime_convergence"));
+    x.target_evidence=ReadTarget(o.at("target_evidence"),persistence_schema::JointResultJson);
+    x.target_runtime_convergence=Status(o.at("target_runtime_convergence"));
+    x.halo_median_reconstruction=ReadHaloMedianSnapshot(o.at("halo_median_reconstruction"));
+    if(x.halo_median_reconstruction)
+    {
+        const auto & snapshot=o.at("halo_median_reconstruction").as_object();
+        for(const auto & halo:snapshot.at("halos").as_array())
+            RequireNoKeys(halo.as_object(),{"group_key"},"current Halo median contains retired fields");
+    }
+    Validate(x,persistence_schema::JointResultJson);
+    return x;
 }
 JointAnalysisResult Decode(std::string_view text)
 {
     j::parse_options options; options.numbers=j::number_precision::precise;
     const auto parsed=j::parse(text,{},options); const auto & o=parsed.as_object();
     const int version=Read<int>(o,"schema_version");
+    if(version==persistence_schema::JointResultJson) return DecodeCurrent(o);
     Require(version==3 || version==4 || version==5 || version==6 || version==7 || version==8 || version==9 || version==10 || version==11 || version==12 || version==13 || version==14 || version==15 || version==16 || version==17 || version==18,
         "unsupported result schema version (expected 3 through 18)");
     if(version>=15)

@@ -1,4 +1,5 @@
 #include "StageResultJson.hpp"
+#include "PersistenceSchema.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/JointStageAdapter.hpp"
@@ -317,7 +318,7 @@ std::string Encode(const ModelObject & model)
     }
     const auto & g=data.AtomGroupEntry();
     for(const auto key:g.CollectGroupKeys()) { A ids; for(const auto * a:g.GetMembers(key)) ids.push_back(a->GetSerialID()); groups.push_back(O{{"key",static_cast<std::uint64_t>(key)},{"members",ids},{"alpha",g.GetParameterSummary(key) && !g.GetParameterSummary(key)->inference ? V(g.GetAlphaG(key)):V{}},{"native",g.GetParameterSummary(key) ? V{}:V(O{{"alpha",g.GetAlphaG(key)},{"mean",Pack(g.GetMean(key))},{"mdpde",Pack(g.GetMDPDE(key))},{"prior",Pack(g.GetPriorWithUncertainty(key))}})},{"summary",g.GetParameterSummary(key) ? Pack(*g.GetParameterSummary(key)):V{}}}); }
-    return j::serialize(O{{"version",4},{"atoms",atoms},{"groups",groups}});
+    return j::serialize(O{{"version",persistence_schema::StageResultJson},{"atoms",atoms},{"groups",groups}});
 }
 void Decode(ModelObject & model, const std::string & text, int expected_version, const std::vector<GroupKey> & legacy_groups)
 {

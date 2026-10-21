@@ -84,18 +84,17 @@ def main() -> int:
                     assert atom["post_joint_local"] is None
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
-        assert saved["schema_version"] == 17
+        assert saved["schema_version"] == 19
         assert saved["parameterization_contract"] == "target-only-pure-halo-support-exclusion-v1"
         assert saved["metadata"]["solver"]["search_method"] == "fixed-neighbor"
         default_solver = saved["metadata"]["solver"]
         assert {key: default_solver[key] for key in (
-            "search_method", "fixed_neighbor_core_atoms", "fixed_neighbor_local_work",
+            "search_method", "fixed_neighbor_core_atoms",
             "fixed_neighbor_policy_version", "fixed_neighbor_maximum_sweeps",
             "fixed_neighbor_order", "fixed_neighbor_local_search",
         )} == {
             "search_method": "fixed-neighbor",
             "fixed_neighbor_core_atoms": 12,
-            "fixed_neighbor_local_work": None,
             "fixed_neighbor_policy_version": "fixed-neighbor-production-v4",
             "fixed_neighbor_maximum_sweeps": 200,
             "fixed_neighbor_order": "forward",
@@ -103,13 +102,12 @@ def main() -> int:
         }
         fixed_solver = fixed["metadata"]["solver"]
         assert {key: fixed_solver[key] for key in (
-            "search_method", "fixed_neighbor_core_atoms", "fixed_neighbor_local_work",
+            "search_method", "fixed_neighbor_core_atoms",
             "fixed_neighbor_policy_version",
             "fixed_neighbor_maximum_sweeps", "fixed_neighbor_order", "fixed_neighbor_local_search",
         )} == {
             "search_method": "fixed-neighbor",
             "fixed_neighbor_core_atoms": 12,
-            "fixed_neighbor_local_work": None,
             "fixed_neighbor_policy_version": "fixed-neighbor-production-v4",
             "fixed_neighbor_maximum_sweeps": 200,
             "fixed_neighbor_order": "forward",
@@ -118,7 +116,7 @@ def main() -> int:
         assert saved["selection_domain"]["target_indices"] == list(range(25))
         assert saved["selection_domain"]["contributor_policy"] == "pure-halo-support-exclusion-v1"
         assert saved["atom_ids"] == [str(index) for index in range(1, 26)]
-        assert not saved["fixed_halos"]
+        assert "fixed_halos" not in saved
         if saved["halo_median_reconstruction"] is not None:
             assert saved["halo_median_reconstruction"]["halos"] == []
         assert saved["initialization"]["data_scope"] == "contributor-local-sampling-may-read-outside-target-domain"

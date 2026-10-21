@@ -479,28 +479,179 @@ void UseHistoricalGlobalRankKeys(boost::json::object & json)
         }
     }
 }
-rg::JointAnalysisResult SavedJointExample()
+rg::JointAnalysisResult CurrentJointExample(bool with_halo=true)
 {
     rg::JointAnalysisResult result;
-    result.metadata.model_sha256=std::string(64,'a'); result.metadata.map_sha256=std::string(64,'b');
-    result.metadata.software=rg::JointSoftwareProvenance{"saved-version",std::string(64,'c'),std::string(64,'d'),std::string(64,'e')};
+    result.parameterization_contract=std::string(rg::JointPureHaloSupportExclusionParameterizationContract);
+    result.metadata.model_sha256=std::string(64,'a');
+    result.metadata.map_sha256=std::string(64,'b');
+    result.metadata.software=rg::JointSoftwareProvenance{"saved-version",std::string(64,'c'),
+        std::string(64,'d'),std::string(64,'e')};
     result.metadata.map_normalization=rg::JointMapNormalization{true,true,2.5};
-    result.atom_ids={"1","2"}; result.row_ids={"voxel-1","constant"}; result.available_row_mask={true,true};
-    result.initialization={true,"",{.5,.6},{}};
-    result.selection_domain=rg::JointSelectionDomain{}; result.selection_domain->target_indices={0};
-    rg::JointAnalysisComponent component;
-    component.id="component-0"; component.atoms={0,1}; component.rows={0};
-    component.stop_reason="budget"; component.search_completed=false;
-    component.search_sweeps=120; component.first_order_stationarity_sweep=107;
-    component.confirmed_stationarity_sweep=108; component.endpoint_certification_sweep=108;
-    component.state=rg::JointState{{2.123456789012345,-.3,4,.2},{.5,.6},{-.7,-.5},{1e-14,-2e-14},.012345678901234567};
-    component.runtime_convergence=rg::JointCheckStatus::Failed;
-    component.evidence.push_back({"local-correction",rg::JointCheckStatus::Failed,rg::JointEvidenceScope::ComponentLocal,.1,1e-10,"too-large"});
-    result.components.push_back(component); result.assembled_state=component.state;
-    result.objective=.11234567890123456; result.observation_scale=9;
+    result.metadata.solver=rg::JointSolverProvenance{};
+    auto & solver=*result.metadata.solver;
+    solver.search_method="fixed-neighbor";
+    solver.fixed_neighbor_core_atoms=12;
+    solver.contract_version=std::string(rg::JointSolverProvenanceContractVersion);
+    solver.sparse_backend="EIGEN";
+    solver.fixed_neighbor_policy_version=std::string(rg::FixedNeighborPolicyContractVersion);
+    solver.fixed_neighbor_maximum_sweeps=200;
+    solver.fixed_neighbor_order="forward";
+    solver.fixed_neighbor_local_search=std::string(rg::FixedNeighborBoundedLocalSearchName);
+    result.atom_ids=with_halo ? std::vector<std::string>{"1","2"} : std::vector<std::string>{"1"};
+    result.row_ids={"voxel-1","constant"};
+    result.fitting_row_ids={"voxel-1"};
+    result.fitting_to_original_contributors={0};
+    result.fitting_to_original_rows={0};
+    result.available_row_mask={true,false};
+    result.selection_domain=rg::JointSelectionDomain{};
+    result.selection_domain->target_indices={0};
+    result.selection_domain->contributor_policy=std::string(rg::PureHaloSupportExclusionContributorPolicy);
+    result.selection_domain->pure_halo_support_exclusion=rg::JointPureHaloSupportExclusionProvenance{
+        2,1,1,with_halo ? 1u:0u,with_halo ? 1u:0u,0};
+    result.initialization.valid=true;
+    result.initialization.reason="valid-widths";
+    result.initialization.b={0.5};
+    result.objective=0.012345678901234567;
+    result.observation_scale=9;
     result.runtime_convergence=rg::JointCheckStatus::Failed;
+    result.target_runtime_convergence=rg::JointCheckStatus::Failed;
+    rg::JointAnalysisComponent component;
+    component.id="component-0";
+    component.atoms={0};
+    component.rows={0};
+    component.stop_reason="budget";
+    component.search_sweeps=120;
+    component.first_order_stationarity_sweep=107;
+    component.confirmed_stationarity_sweep=108;
+    component.endpoint_certification_sweep=108;
+    component.state=rg::JointState{{2.123456789012345,-0.3},{0.5},{-0.7},{1e-14},0.012345678901234567};
+    component.runtime_convergence=rg::JointCheckStatus::Failed;
+    component.target_runtime_convergence=rg::JointCheckStatus::Failed;
+    component.evidence.push_back({"active-set-lm-subproblems",rg::JointCheckStatus::Passed,
+        rg::JointEvidenceScope::ComponentLocal,1.0,{},"solves=1"});
+    result.components.push_back(component);
+    result.assembled_state=component.state;
+    result.evidence.push_back({"global-width-calibration",rg::JointCheckStatus::Passed,
+        rg::JointEvidenceScope::AssembledGlobal,0.6,2.4,"qualified-first-stage-widths"});
     return result;
 }
+rg::JointAnalysisResult SavedJointExample() { return CurrentJointExample(); }
+}
+
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV19RoundTripsUnqualifiedResult)
+{
+    namespace io=rg::joint_result_io;
+    const auto result=CurrentJointExample();
+    const auto encoded=io::Encode(result);
+    const auto object=boost::json::parse(encoded).as_object();
+    EXPECT_EQ(boost::json::value_to<int>(object.at("schema_version")),19);
+    for(const auto key:{"fixed_halos","layout","legacy_global_rank_evidence","ranks"})
+        EXPECT_FALSE(object.contains(key));
+    EXPECT_FALSE(object.at("costs").as_object().contains("search_reference_seconds"));
+    const auto & component=object.at("components").as_array().front().as_object();
+    for(const auto key:{"reference_evaluations","legacy_global_rank_evidence","legacy_candidate_evidence","layout"})
+        EXPECT_FALSE(component.contains(key));
+    EXPECT_FALSE(component.at("state").as_object().contains("nuisance_amplitudes"));
+    const auto decoded=io::Decode(encoded);
+    EXPECT_EQ(decoded.parameterization_contract,rg::JointPureHaloSupportExclusionParameterizationContract);
+    EXPECT_EQ(decoded.runtime_convergence,rg::JointCheckStatus::Failed);
+    ASSERT_TRUE(decoded.components.front().state);
+    EXPECT_DOUBLE_EQ(decoded.components.front().state->ac.front(),2.123456789012345);
+    ASSERT_TRUE(decoded.metadata.solver);
+    EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_local_search,rg::FixedNeighborBoundedLocalSearchName);
+}
+
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV19RoundTripsQualifiedTargetWithoutHalo)
+{
+    namespace io=rg::joint_result_io;
+    auto result=CurrentJointExample(false);
+    result.search_completed=true;
+    result.runtime_convergence=rg::JointCheckStatus::Passed;
+    result.target_runtime_convergence=rg::JointCheckStatus::Passed;
+    result.components.front().search_completed=true;
+    result.components.front().runtime_convergence=rg::JointCheckStatus::Passed;
+    result.components.front().target_runtime_convergence=rg::JointCheckStatus::Passed;
+    ASSERT_TRUE(rg::IsQualifiedJointAnalysisResult(result));
+    const auto decoded=io::Decode(io::Encode(result));
+    EXPECT_TRUE(rg::IsQualifiedJointAnalysisResult(decoded));
+    EXPECT_FALSE(decoded.halo_median_reconstruction);
+}
+
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV19RoundTripsGeometryLocalHaloMedian)
+{
+    namespace io=rg::joint_result_io;
+    auto result=CurrentJointExample();
+    result.search_completed=true;
+    result.runtime_convergence=rg::JointCheckStatus::Passed;
+    result.target_runtime_convergence=rg::JointCheckStatus::Passed;
+    result.components.front().search_completed=true;
+    result.components.front().runtime_convergence=rg::JointCheckStatus::Passed;
+    result.components.front().target_runtime_convergence=rg::JointCheckStatus::Passed;
+    rg::JointHaloMedianSnapshot snapshot;
+    snapshot.joint_run_id="deterministic-run";
+    snapshot.global_median={2.123456789012345,0.5,-0.3};
+    snapshot.valid_target_count=1;
+    rg::JointHaloMedianReconstruction halo;
+    halo.halo_contributor_index=1;
+    halo.atom_id="2";
+    halo.amplitude=2.123456789012345;
+    halo.width=0.5;
+    halo.charge=-0.3;
+    halo.source=rg::HaloMedianSource::GeometryLocalTargetMedian;
+    halo.donor_count=1;
+    halo.joint_run_id=snapshot.joint_run_id;
+    halo.donor_atom_ids={"1"};
+    snapshot.halos.push_back(halo);
+    result.halo_median_reconstruction=snapshot;
+    const auto decoded=io::Decode(io::Encode(result));
+    ASSERT_TRUE(decoded.halo_median_reconstruction);
+    ASSERT_EQ(decoded.halo_median_reconstruction->halos.size(),1u);
+    EXPECT_EQ(decoded.halo_median_reconstruction->halos.front().source,
+        rg::HaloMedianSource::GeometryLocalTargetMedian);
+    EXPECT_EQ(decoded.halo_median_reconstruction->halos.front().donor_atom_ids,
+        std::vector<std::string>{"1"});
+}
+
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV19PreservesUnavailableAndNullableDiagnostics)
+{
+    namespace io=rg::joint_result_io;
+    auto unavailable=CurrentJointExample();
+    unavailable.components.clear();
+    unavailable.initialization.valid=false;
+    unavailable.initialization.b.clear();
+    unavailable.initialization.reason="width-calibration-unavailable";
+    unavailable.assembled_state.reset();
+    unavailable.objective.reset();
+    unavailable.runtime_convergence=rg::JointCheckStatus::Unavailable;
+    unavailable.target_runtime_convergence=rg::JointCheckStatus::NotRun;
+    unavailable.evidence.push_back({"global-width-calibration",rg::JointCheckStatus::Unavailable,
+        rg::JointEvidenceScope::AssembledGlobal,{}, {},"calibration-unavailable:no-qualified-donors"});
+    const auto decoded=io::Decode(io::Encode(unavailable));
+    EXPECT_FALSE(decoded.initialization.valid);
+    EXPECT_EQ(decoded.runtime_convergence,rg::JointCheckStatus::Unavailable);
+    EXPECT_FALSE(decoded.objective);
+
+    auto halo_unavailable=CurrentJointExample();
+    halo_unavailable.evidence.push_back({std::string(rg::JointHaloMedianReconstructionEvidenceName),
+        rg::JointCheckStatus::Unavailable,rg::JointEvidenceScope::AssembledGlobal,{}, {},
+        "halo-median-no-valid-targets"});
+    const auto halo_round_trip=io::Decode(io::Encode(halo_unavailable));
+    EXPECT_TRUE(rg::HasUnavailableJointHaloMedianReconstruction(halo_round_trip));
+
+    auto nullable=CurrentJointExample();
+    nullable.components.front().state.reset();
+    nullable.components.front().candidate_diagnostic=rg::JointCandidateDiagnostic{};
+    nullable.assembled_state.reset();
+    nullable.objective.reset();
+    const auto encoded=io::Encode(nullable);
+    const auto object=boost::json::parse(encoded).as_object();
+    EXPECT_TRUE(object.at("objective").is_null());
+    EXPECT_TRUE(object.at("components").as_array().front().as_object().at("candidate_diagnostic")
+        .as_object().at("candidate_objective").is_null());
+    const auto round_trip=io::Decode(encoded);
+    EXPECT_TRUE(round_trip.components.front().candidate_diagnostic);
+    EXPECT_FALSE(round_trip.components.front().candidate_diagnostic->candidate_objective);
 }
 
 TEST(DataObjectPersistenceTest, LocalStabilityBoundedProbeDiagnosticsRoundTrip)
@@ -565,18 +716,16 @@ TEST(DataObjectPersistenceTest, JointResultsRoundTripCopyClearAndReplaceAtomical
 TEST(DataObjectPersistenceTest, JointSolverProvenanceRoundTripsAndMissingFieldRemainsReadable)
 {
     namespace io=rg::joint_result_io;
-    auto fixed=SavedJointExample();
-    fixed.metadata.solver=rg::JointSolverProvenance{"fixed-neighbor",12u,"one-accepted"};
+    const auto fixed=SavedJointExample();
     const auto decoded=io::Decode(io::Encode(fixed));
     ASSERT_TRUE(decoded.metadata.solver);
     EXPECT_EQ(decoded.metadata.solver->search_method,"fixed-neighbor");
     EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_core_atoms,12u);
-    EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_local_work,"one-accepted");
+    EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_local_search,"active-set-lm");
 
     auto old=boost::json::parse(io::Encode(fixed)).as_object();
     old.at("metadata").as_object().erase("solver");
-    const auto legacy=io::Decode(boost::json::serialize(old));
-    EXPECT_FALSE(legacy.metadata.solver);
+    EXPECT_ANY_THROW(io::Decode(boost::json::serialize(old)));
 }
 
 TEST(DataObjectPersistenceTest, FixedNeighborFailureEvidenceAndSweepCountsRoundTrip)
@@ -595,59 +744,11 @@ TEST(DataObjectPersistenceTest, FixedNeighborFailureEvidenceAndSweepCountsRoundT
     ASSERT_FALSE(component.evidence.empty());
     EXPECT_EQ(component.evidence.back().reason,"reference-disagreement");
 
-    auto legacy=boost::json::parse(io::Encode(result)).as_object();
-    auto & saved_component=legacy.at("components").as_array().front().as_object();
+    auto missing_sweeps=boost::json::parse(io::Encode(result)).as_object();
+    auto & saved_component=missing_sweeps.at("components").as_array().front().as_object();
     for(const auto key:{"search_sweeps","first_order_stationarity_sweep",
         "confirmed_stationarity_sweep","endpoint_certification_sweep"}) saved_component.erase(key);
-    const auto legacy_decoded=io::Decode(boost::json::serialize(legacy));
-    ASSERT_EQ(legacy_decoded.components.size(),1u);
-    EXPECT_EQ(legacy_decoded.components.front().search_sweeps,0u);
-    EXPECT_EQ(legacy_decoded.components.front().first_order_stationarity_sweep,0u);
-    EXPECT_EQ(legacy_decoded.components.front().confirmed_stationarity_sweep,0u);
-    EXPECT_EQ(legacy_decoded.components.front().endpoint_certification_sweep,0u);
-}
-
-TEST(DataObjectPersistenceTest, FixedNeighborPolicyVersionsPreserveLegacyAndRejectRetiredV2Claims)
-{
-    namespace io=rg::joint_result_io;
-    for(const std::string local_work: {"full","two-accepted"})
-    {
-        auto legacy=SavedJointExample();
-        rg::JointSolverProvenance provenance{"fixed-neighbor",12u,local_work};
-        provenance.contract_version=rg::JointSolverProvenanceHistoricalContractVersion;
-        provenance.fixed_neighbor_policy_version=rg::FixedNeighborLegacyPolicyContractVersion;
-        provenance.fixed_neighbor_maximum_sweeps=30;
-        provenance.fixed_neighbor_order="forward";
-        provenance.fixed_neighbor_local_search="legacy-compact";
-        legacy.metadata.solver=provenance;
-
-        const auto decoded=io::Decode(io::Encode(legacy));
-        ASSERT_TRUE(decoded.metadata.solver);
-        EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_local_work,local_work);
-        const auto round_tripped=io::Decode(io::Encode(decoded));
-        ASSERT_TRUE(round_tripped.metadata.solver);
-        EXPECT_EQ(round_tripped.metadata.solver->fixed_neighbor_local_work,local_work);
-    }
-
-    auto current=SavedJointExample();
-    rg::JointSolverProvenance current_provenance{"fixed-neighbor",12u,std::nullopt};
-    current_provenance.contract_version=rg::JointSolverProvenanceContractVersion;
-    current_provenance.sparse_backend="EIGEN";
-    current_provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
-    current_provenance.fixed_neighbor_maximum_sweeps=200;
-    current_provenance.fixed_neighbor_order="forward";
-    current_provenance.fixed_neighbor_local_search="profile-lm";
-    current.metadata.solver=current_provenance;
-    const auto current_decoded=io::Decode(io::Encode(current));
-    ASSERT_TRUE(current_decoded.metadata.solver);
-    EXPECT_FALSE(current_decoded.metadata.solver->fixed_neighbor_local_work);
-
-    for(const std::string local_work: {"full","two-accepted"})
-    {
-        auto malformed=boost::json::parse(io::Encode(current)).as_object();
-        malformed.at("metadata").as_object().at("solver").as_object()["fixed_neighbor_local_work"]=local_work;
-        EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::invalid_argument);
-    }
+    EXPECT_ANY_THROW(io::Decode(boost::json::serialize(missing_sweeps)));
 }
 
 TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
@@ -660,16 +761,16 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
     fixed_provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
     fixed_provenance.fixed_neighbor_maximum_sweeps=200;
     fixed_provenance.fixed_neighbor_order="forward";
-    fixed_provenance.fixed_neighbor_local_search="profile-lm";
+    fixed_provenance.fixed_neighbor_local_search="active-set-lm";
     fixed.metadata.solver=fixed_provenance;
     const auto fixed_json=io::Encode(fixed);
     const auto fixed_object=boost::json::parse(fixed_json).as_object();
     auto downgraded_schema=fixed_object;
     UseHistoricalGlobalRankKeys(downgraded_schema);
     downgraded_schema["schema_version"]=7;
-    EXPECT_THROW(io::Decode(boost::json::serialize(downgraded_schema)),std::invalid_argument);
+    EXPECT_ANY_THROW(io::Decode(boost::json::serialize(downgraded_schema)));
     EXPECT_EQ(fixed_object.at("metadata").as_object().at("solver").as_object()
-        .at("fixed_neighbor_local_search").as_string(),"profile-lm");
+        .at("fixed_neighbor_local_search").as_string(),"active-set-lm");
     const auto fixed_decoded=io::Decode(fixed_json);
     ASSERT_TRUE(fixed_decoded.metadata.solver);
     EXPECT_EQ(fixed_decoded.metadata.solver->contract_version,rg::JointSolverProvenanceContractVersion);
@@ -677,7 +778,7 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
     EXPECT_FALSE(fixed_decoded.metadata.solver->fixed_neighbor_local_work);
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_maximum_sweeps,200u);
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_order,"forward");
-    EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_local_search,"profile-lm");
+    EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_local_search,"active-set-lm");
     EXPECT_FALSE(fixed_decoded.metadata.solver->preconditioner);
     EXPECT_FALSE(fixed_decoded.metadata.solver->operator_rank_mode);
     EXPECT_FALSE(fixed_decoded.metadata.solver->operator_rank_backend);
@@ -698,120 +799,10 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
     ASSERT_TRUE(bounded_decoded.metadata.solver);
     EXPECT_EQ(bounded_decoded.metadata.solver->fixed_neighbor_local_search,"active-set-lm");
 
-    auto saved_current=boost::json::parse(fixed_json).as_object();
-    saved_current.at("metadata").as_object().at("solver").as_object()["fixed_neighbor_local_search"]=
+    auto retired_search=boost::json::parse(fixed_json).as_object();
+    retired_search.at("metadata").as_object().at("solver").as_object()["fixed_neighbor_local_search"]=
         "legacy-compact";
-    const auto old_current_decoded=io::Decode(boost::json::serialize(saved_current));
-    ASSERT_TRUE(old_current_decoded.metadata.solver);
-    EXPECT_EQ(old_current_decoded.metadata.solver->contract_version,
-        rg::JointSolverProvenanceContractVersion);
-    EXPECT_EQ(old_current_decoded.metadata.solver->search_method,"fixed-neighbor");
-    EXPECT_EQ(old_current_decoded.metadata.solver->fixed_neighbor_local_search,"legacy-compact");
-}
-
-TEST(DataObjectPersistenceTest, HistoricalV3SolverProvenanceRemainsReadable)
-{
-    namespace io=rg::joint_result_io;
-    auto fixed=SavedJointExample();
-    rg::JointSolverProvenance provenance{"fixed-neighbor",12u,std::nullopt};
-    provenance.contract_version=rg::JointSolverProvenanceReferenceContractVersion;
-    provenance.sparse_backend="EIGEN";
-    provenance.fixed_neighbor_policy_version=rg::FixedNeighborReferencePolicyContractVersion;
-    provenance.fixed_neighbor_maximum_sweeps=200;
-    provenance.fixed_neighbor_order="reverse";
-    provenance.fixed_neighbor_local_search="profile-lm";
-    fixed.metadata.solver=provenance;
-    const auto decoded=io::Decode(io::Encode(fixed));
-    ASSERT_TRUE(decoded.metadata.solver);
-    EXPECT_EQ(decoded.metadata.solver->contract_version,rg::JointSolverProvenanceReferenceContractVersion);
-    EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_policy_version,rg::FixedNeighborReferencePolicyContractVersion);
-    EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_order,"reverse");
-}
-
-TEST(DataObjectPersistenceTest, HistoricalFullABCHaloPolicyRemainsReadable)
-{
-    namespace io=rg::joint_result_io;
-    auto record=SavedJointExample();
-    record.selection_domain->contributor_policy=std::string(rg::FullABCHaloContributorPolicy);
-    record.selection_domain->halo_eligibility=rg::JointHaloEligibilityProvenance{};
-    record.selection_domain->halo_eligibility->candidate_halos=1;
-    record.selection_domain->halo_eligibility->retained_halos=1;
-    auto historical=boost::json::parse(io::Encode(record)).as_object();
-    historical["schema_version"]=11;
-    historical["ranks"]=historical.at("legacy_global_rank_evidence");
-    historical.erase("legacy_global_rank_evidence");
-    for(auto & component:historical.at("components").as_array())
-    {
-        auto & saved=component.as_object();
-        saved["ranks"]=saved.at("legacy_global_rank_evidence");
-        saved.erase("legacy_global_rank_evidence");
-    }
-
-    const auto decoded=io::Decode(boost::json::serialize(historical));
-    ASSERT_TRUE(decoded.selection_domain);
-    EXPECT_EQ(decoded.selection_domain->contributor_policy,rg::FullABCHaloContributorPolicy);
-    ASSERT_TRUE(decoded.selection_domain->halo_eligibility);
-    EXPECT_EQ(decoded.selection_domain->halo_eligibility->candidate_halos,1u);
-    EXPECT_EQ(decoded.selection_domain->halo_eligibility->retained_halos,1u);
-    EXPECT_EQ(decoded.parameterization_contract,"full-abc-v1");
-}
-
-TEST(DataObjectPersistenceTest, HistoricalV2SolverProvenanceRemainsReadable)
-{
-    namespace io=rg::joint_result_io;
-    auto operator_result=SavedJointExample();
-    rg::JointSolverProvenance operator_provenance;
-    operator_provenance.search_method="operator-pcg";
-    operator_provenance.contract_version=rg::JointSolverProvenanceHistoricalContractVersion;
-    operator_provenance.sparse_backend="SPQR";
-    operator_provenance.preconditioner="Schwarz";
-    operator_provenance.operator_rank_mode="Auto";
-    operator_provenance.operator_rank_backend="SpqrBounds";
-    operator_provenance.operator_pcg_iterations=-1;
-    operator_provenance.operator_damping_trials=20;
-    operator_provenance.schwarz_core_atoms=128;
-    operator_provenance.schwarz_overlap_hops=0;
-    operator_provenance.schwarz_max_block_atoms=512;
-    operator_provenance.schwarz_storage_bytes=512ULL*1024*1024;
-    operator_provenance.schwarz_scratch_bytes=256ULL*1024*1024;
-    operator_result.metadata.solver=operator_provenance;
-    const auto operator_decoded=io::Decode(io::Encode(operator_result));
-    ASSERT_TRUE(operator_decoded.metadata.solver);
-    EXPECT_EQ(operator_decoded.metadata.solver->preconditioner,"Schwarz");
-    EXPECT_EQ(operator_decoded.metadata.solver->operator_rank_backend,"SpqrBounds");
-    EXPECT_EQ(operator_decoded.metadata.solver->schwarz_overlap_hops,0u);
-    EXPECT_EQ(operator_decoded.metadata.solver->schwarz_max_block_atoms,512u);
-    const auto operator_round_tripped=io::Decode(io::Encode(operator_decoded));
-    ASSERT_TRUE(operator_round_tripped.metadata.solver);
-    EXPECT_EQ(operator_round_tripped.metadata.solver->search_method,"operator-pcg");
-    EXPECT_EQ(operator_round_tripped.metadata.solver->preconditioner,"Schwarz");
-    EXPECT_EQ(operator_round_tripped.metadata.solver->operator_rank_mode,"Auto");
-    EXPECT_EQ(operator_round_tripped.metadata.solver->schwarz_scratch_bytes,256ULL*1024*1024);
-
-    auto legacy_result=SavedJointExample();
-    rg::JointSolverProvenance legacy_provenance;
-    legacy_provenance.search_method="legacy-compact";
-    legacy_provenance.contract_version=rg::JointSolverProvenanceHistoricalContractVersion;
-    legacy_provenance.sparse_backend="EIGEN";
-    legacy_result.metadata.solver=legacy_provenance;
-    const auto legacy_decoded=io::Decode(io::Encode(legacy_result));
-    ASSERT_TRUE(legacy_decoded.metadata.solver);
-    EXPECT_EQ(legacy_decoded.metadata.solver->search_method,"legacy-compact");
-    EXPECT_EQ(legacy_decoded.metadata.solver->contract_version,
-        rg::JointSolverProvenanceHistoricalContractVersion);
-
-    auto partial=boost::json::parse(io::Encode(operator_result)).as_object();
-    auto & partial_solver=partial.at("metadata").as_object().at("solver").as_object();
-    for(const auto key:{"contract_version","sparse_backend","preconditioner","operator_rank_mode",
-        "operator_rank_backend","operator_pcg_iterations","operator_damping_trials","operator_rank_budget_seconds",
-        "operator_rank_budget_entries","operator_rank_budget_workspace_bytes","schwarz_core_atoms",
-        "schwarz_overlap_hops","schwarz_max_block_atoms","schwarz_storage_bytes","schwarz_scratch_bytes"})
-        partial_solver.erase(key);
-    const auto partial_decoded=io::Decode(boost::json::serialize(partial));
-    ASSERT_TRUE(partial_decoded.metadata.solver);
-    EXPECT_EQ(partial_decoded.metadata.solver->search_method,"operator-pcg");
-    EXPECT_FALSE(partial_decoded.metadata.solver->operator_rank_mode);
-    EXPECT_FALSE(partial_decoded.metadata.solver->schwarz_core_atoms);
+    EXPECT_THROW(io::Decode(boost::json::serialize(retired_search)),std::invalid_argument);
 }
 
 TEST(DataObjectPersistenceTest, MalformedCurrentSolverProvenanceIsRejected)
@@ -824,7 +815,7 @@ TEST(DataObjectPersistenceTest, MalformedCurrentSolverProvenanceIsRejected)
     provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
     provenance.fixed_neighbor_maximum_sweeps=200;
     provenance.fixed_neighbor_order="forward";
-    provenance.fixed_neighbor_local_search="profile-lm";
+    provenance.fixed_neighbor_local_search="active-set-lm";
     fixed.metadata.solver=provenance;
 
     auto malformed=boost::json::parse(io::Encode(fixed)).as_object();
@@ -906,295 +897,6 @@ TEST(DataObjectPersistenceTest, JointCodecRejectsMalformedMappingsAndPreservesMi
     EXPECT_THROW(rg::WriteJointAnalysisResult(decoded,dir.path()/"missing"/"result.json",dir.path()/"atoms.csv"),std::runtime_error);
 }
 
-TEST(DataObjectPersistenceTest, SchemaSevenKeepsFailedCorrectionEvidenceAndStatus)
-{
-    namespace io=rg::joint_result_io;
-    auto record=SavedJointExample();
-    rg::JointSolverProvenance previous;
-    previous.search_method="fixed-neighbor";
-    previous.fixed_neighbor_core_atoms=12u;
-    previous.contract_version=rg::JointSolverProvenancePreviousContractVersion;
-    previous.sparse_backend="EIGEN";
-    previous.fixed_neighbor_policy_version=rg::FixedNeighborPreviousPolicyContractVersion;
-    previous.fixed_neighbor_maximum_sweeps=200;
-    previous.fixed_neighbor_order="forward";
-    previous.fixed_neighbor_local_search="profile-lm";
-    record.metadata.solver=previous;
-    auto & component=record.components.front();
-    component.target_runtime_convergence=rg::JointCheckStatus::Failed;
-    rg::JointTargetEvidence target;
-    target.contract="target-estimability-v1";
-    target.original_rows=component.rows.size();
-    target.atoms={{0,rg::JointCheckStatus::Passed,0.0,{}},{1,rg::JointCheckStatus::Passed,0.0,{}}};
-    target.checks={
-        {"conditional-ac-optimality",rg::JointCheckStatus::Passed,rg::JointEvidenceScope::ComponentLocal,{},{},{}},
-        {"independent-replay",rg::JointCheckStatus::Passed,rg::JointEvidenceScope::ComponentLocal,{},{},{}},
-        {"width-stationarity",rg::JointCheckStatus::Passed,rg::JointEvidenceScope::ComponentLocal,{},{},{}},
-        {"design-identifiability",rg::JointCheckStatus::Passed,rg::JointEvidenceScope::ComponentLocal,{},{},{}},
-        {"local-correction",rg::JointCheckStatus::Failed,rg::JointEvidenceScope::ComponentLocal,{},{},{}},
-        {"numerical-identifiability",rg::JointCheckStatus::Passed,rg::JointEvidenceScope::ComponentLocal,{},{},{}},
-        {"target-identifiability",rg::JointCheckStatus::Passed,rg::JointEvidenceScope::ComponentLocal,{},{},{}},
-        {"target-local-correction",rg::JointCheckStatus::Failed,rg::JointEvidenceScope::ComponentLocal,{},{},{}}};
-    component.target_evidence=target;
-    record.target_runtime_convergence=rg::JointCheckStatus::Failed;
-
-    auto saved=boost::json::parse(io::Encode(record)).as_object();
-    UseHistoricalGlobalRankKeys(saved);
-    saved["schema_version"]=7;
-    const auto decoded=io::Decode(boost::json::serialize(saved));
-    EXPECT_EQ(decoded.components.front().runtime_convergence,rg::JointCheckStatus::Failed);
-    ASSERT_TRUE(decoded.components.front().evidence.size());
-    EXPECT_EQ(decoded.components.front().evidence.front().name,"local-correction");
-    EXPECT_EQ(decoded.components.front().evidence.front().status,rg::JointCheckStatus::Failed);
-    EXPECT_EQ(decoded.target_runtime_convergence,rg::JointCheckStatus::Failed);
-    EXPECT_EQ(decoded.components.front().target_runtime_convergence,rg::JointCheckStatus::Failed);
-    ASSERT_TRUE(decoded.components.front().target_evidence);
-    EXPECT_EQ(decoded.components.front().target_evidence->contract,"target-estimability-v1");
-    const auto target_correction=std::find_if(decoded.components.front().target_evidence->checks.begin(),
-        decoded.components.front().target_evidence->checks.end(),[](const auto & check) {
-            return check.name=="target-local-correction";
-        });
-    ASSERT_NE(target_correction,decoded.components.front().target_evidence->checks.end());
-    EXPECT_EQ(target_correction->status,rg::JointCheckStatus::Failed);
-
-    const auto round_trip=io::Decode(io::Encode(decoded));
-    EXPECT_EQ(round_trip.components.front().runtime_convergence,rg::JointCheckStatus::Failed);
-    EXPECT_EQ(round_trip.target_runtime_convergence,rg::JointCheckStatus::Failed);
-    EXPECT_EQ(round_trip.components.front().target_evidence->contract,"target-estimability-v1");
-}
-
-TEST(DataObjectPersistenceTest, SchemaTwelveKeepsLegacyRanksDistinctAndReadsSchemaEleven)
-{
-    namespace io=rg::joint_result_io;
-    auto record=SavedJointExample();
-    const std::string context="fnv1a64:0123456789abcdef";
-    record.legacy_global_rank_evidence={{"old-top-global",rg::JointEvidenceScope::AssembledGlobal,1,1e-12,{1},context}};
-    record.components.front().legacy_global_rank_evidence={
-        {"old-component-global",rg::JointEvidenceScope::ComponentLocal,1,1e-12,{1},context}};
-    rg::JointBlockConditioning conditioning;
-    conditioning.block_id="block-0"; conditioning.status="assessed"; conditioning.reason="";
-    conditioning.conditioning_classification="IllConditioned";
-    conditioning.core_atoms={0}; conditioning.core_atom_count=1; conditioning.affected_row_count=2;
-    conditioning.free_ac_columns=2; conditioning.free_ac_rank=2; conditioning.projected_width_rank=1;
-    conditioning.profile_rank=1; conditioning.active_width_bound_targets=1;
-    conditioning.local_ac_projected_kkt=5e-8; conditioning.local_projected_width_kkt=7e-10;
-    conditioning.workspace_peak_memory_estimate_bytes=1234;
-    conditioning.free_ac_sigma_min=.2; conditioning.free_ac_sigma_max=1.5; conditioning.free_ac_condition=7.5;
-    conditioning.free_ac_rank_threshold=1e-14; conditioning.free_ac_rank_threshold_margin_relative=.1;
-    conditioning.free_ac_threshold_sensitive=false; conditioning.free_ac_conditioning="WellConditioned";
-    conditioning.projected_width_sigma_min=.02; conditioning.projected_width_sigma_max=1.2;
-    conditioning.projected_width_rank_threshold=1e-14;
-    conditioning.projected_width_rank_threshold_margin_relative=.01;
-    conditioning.projected_width_threshold_sensitive=true;
-    conditioning.projected_width_conditioning="IllConditioned";
-    conditioning.profile_sigma_min=.1; conditioning.profile_sigma_max=.9;
-    conditioning.profile_rank_threshold=1e-14; conditioning.profile_rank_threshold_margin_relative=.05;
-    conditioning.profile_threshold_sensitive=false; conditioning.profile_conditioning="ActiveFace";
-    conditioning.projected_width_condition=4.; conditioning.profile_condition=5.;
-    conditioning.free_ac_status="full-rank"; conditioning.projected_width_status="rank-deficient";
-    conditioning.profile_status="active-set-boundary";
-    record.components.front().local_conditioning={conditioning};
-    record.components.front().local_conditioning_seconds=.125;
-    record.components.front().local_conditioning_peak_memory_estimate_bytes=2048;
-    rg::JointParameterStability stability;
-    stability.recent_sweep_count=3; stability.maximum_eta_change=.01; stability.maximum_scaled_ac_change=.02;
-    stability.trajectory_stability_status="stable-trajectory"; stability.perturbation_status="assessed";
-    stability.seconds=.25; stability.cpu_seconds=.2; stability.perturbation_solves=2;
-    stability.perturbation_directions=1; stability.perturbation_seeds=2;
-    stability.perturbation_evaluations=8; stability.workspace_peak_memory_estimate_bytes=4096;
-    rg::JointBlockParameterStability stability_block;
-    stability_block.block_id="block-0"; stability_block.status="Sensitive"; stability_block.reason="bounded-local-perturbation-assessed";
-    stability_block.core_atoms={0}; stability_block.prediction_status="Stable";
-    stability_block.objective_consistency_status="Passed";
-    stability_block.log_width_parameter_change_inf=.03; stability_block.scaled_ac_parameter_change_inf=.04;
-    stability_block.local_prediction_change_relative=1e-10; stability_block.objective_difference=1e-12;
-    stability_block.baseline_local_ac_kkt=4e-11; stability_block.baseline_projected_width_kkt=2e-12;
-    stability_block.baseline_width_bound_slack=.25; stability_block.baseline_local_objective=1e-8;
-    stability_block.baseline_local_residual_rmse_normalized=3e-5; stability_block.baseline_active_ac_constraints=1;
-    stability_block.baseline_active_width_bound_targets=2;
-    stability_block.baseline_independent_replay_status="Passed";
-    stability_block.baseline_numerical_validity_status="Valid";
-    stability_block.baseline_conditional_optimality_status="PracticalOnly";
-    stability_block.baseline_eligibility_status="Eligible";
-    stability_block.conditional_reprofile_status="StrictlyQualified";
-    stability_block.conditional_reprofile_local_ac_kkt=2e-12;
-    stability_block.conditional_reprofile_projected_width_kkt=4e-12;
-    stability_block.conditional_reprofile_objective_difference=1e-14;
-    stability_block.conditional_reprofile_scaled_ac_parameter_difference=2e-7;
-    stability_block.conditional_reprofile_prediction_change_relative=3e-8;
-    stability_block.conditional_reprofile_independent_replay_status="Passed";
-    stability_block.cpu_seconds=.1; stability_block.perturbation_directions=1; stability_block.perturbation_seeds=2;
-    stability_block.perturbation_solves=2; stability_block.perturbation_evaluations=8;
-    rhbm_gem::JointStabilityProbe probe; probe.direction="common-mode";
-    probe.source="normalized-all-width-direction"; probe.status="OneSidedAssessed";
-    probe.unit_direction={1.}; probe.evaluations=4; probe.parameter_change=.03;
-    probe.prediction_change=1e-10; probe.objective_change=1e-12;
-    probe.minus_seed_status="Assessed"; probe.minus_requested_displacement_inf=.001;
-    probe.minus_effective_displacement_inf=.001; probe.plus_seed_status="ZeroDisplacement";
-    probe.plus_seed_reason="upper-bound-projection-produced-zero-displacement";
-    probe.plus_requested_displacement_inf=.001; probe.plus_effective_displacement_inf=0.;
-    stability_block.probes={probe};
-    stability.blocks={stability_block};
-    record.components.front().parameter_stability=stability;
-    rg::JointCandidateDiagnostic candidate;
-    candidate.candidate_available=true; candidate.candidate_eta=record.components.front().state->log_b;
-    candidate.candidate_ac=record.components.front().state->ac; candidate.candidate_objective=record.components.front().state->objective;
-    candidate.candidate_ac_kkt=0.; candidate.candidate_width_gradient_inf_norm=0.; candidate.candidate_feasible=true;
-    candidate.certification_status=rg::JointCheckStatus::Passed;
-    candidate.endpoint_verification_status=rg::JointCheckStatus::Passed;
-    candidate.numerical_qualification_status=rg::JointCheckStatus::Passed;
-    candidate.verification_reason="verified";
-    record.components.front().candidate_diagnostic=candidate;
-    record.components.front().legacy_candidate_evidence=rg::JointAnalysisComponent::LegacyCandidateEvidence{
-        rg::JointCheckStatus::Failed,rg::JointCheckStatus::Unavailable};
-    rg::JointTargetEvidence derived;
-    derived.contract="target-estimability-v4"; derived.original_rows=record.row_ids.size();
-    derived.atoms={{0,rg::JointCheckStatus::Passed,{},"derived-from-component-identifiability"},
-        {1,rg::JointCheckStatus::Passed,{},"derived-from-component-identifiability"}};
-    derived.checks={{"target-identifiability",rg::JointCheckStatus::Passed,
-        rg::JointEvidenceScope::AssembledGlobal,{},{},"derived-from-component-identifiability"}};
-    derived.ranks={{"design",rg::JointEvidenceScope::AssembledGlobal,4,1e-12,{4,3,2,1},context},
-        {"projected-width",rg::JointEvidenceScope::AssembledGlobal,2,1e-12,{2,1},context}};
-    record.target_evidence=derived;
-    record.target_runtime_convergence=rg::JointCheckStatus::Unavailable;
-
-    const auto encoded=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(encoded.at("schema_version").as_int64(),16);
-    EXPECT_FALSE(encoded.as_object().contains("ranks"));
-    EXPECT_EQ(encoded.at("legacy_global_rank_evidence").as_array().size(),1u);
-    const auto & saved_component=encoded.at("components").as_array()[0];
-    EXPECT_FALSE(saved_component.as_object().contains("ranks"));
-    EXPECT_EQ(saved_component.at("legacy_global_rank_evidence").as_array().size(),1u);
-    EXPECT_EQ(saved_component.at("local_conditioning").as_array().size(),1u);
-    EXPECT_EQ(saved_component.at("parameter_stability").at("blocks").as_array().size(),1u);
-    EXPECT_EQ(saved_component.at("legacy_candidate_evidence").at("reference_status").as_string(),"failed");
-    const auto & saved_target=encoded.at("target_evidence");
-    EXPECT_EQ(saved_target.at("contract").as_string(),"target-estimability-v4");
-    EXPECT_TRUE(saved_target.at("column_scales").as_array().empty());
-    EXPECT_TRUE(saved_target.at("atoms").as_array()[0].at("null_space_leakage").is_null());
-    EXPECT_EQ(saved_target.at("ranks").as_array()[0].at("context_identity").as_string(),context);
-    auto downgraded=encoded.as_object(); UseHistoricalGlobalRankKeys(downgraded); downgraded["schema_version"]=8;
-    EXPECT_THROW(io::Decode(boost::json::serialize(downgraded)),std::invalid_argument);
-    downgraded["schema_version"]=9;
-    EXPECT_THROW(io::Decode(boost::json::serialize(downgraded)),std::invalid_argument);
-    downgraded["target_evidence"].as_object()["contract"]="target-estimability-v3";
-    downgraded["components"].as_array()[0].as_object().erase("local_conditioning");
-    downgraded["components"].as_array()[0].as_object().erase("local_conditioning_seconds");
-    downgraded["components"].as_array()[0].as_object().erase("local_conditioning_peak_memory_estimate_bytes");
-    downgraded["components"].as_array()[0].as_object().erase("parameter_stability");
-    const auto schema_nine=io::Decode(boost::json::serialize(downgraded));
-    ASSERT_TRUE(schema_nine.target_evidence);
-    EXPECT_EQ(schema_nine.target_evidence->contract,"target-estimability-v3");
-
-    const auto decoded=io::Decode(boost::json::serialize(encoded));
-    ASSERT_TRUE(decoded.target_evidence);
-    EXPECT_EQ(decoded.target_evidence->contract,"target-estimability-v4");
-    EXPECT_TRUE(decoded.target_evidence->column_scales.empty());
-    EXPECT_FALSE(decoded.target_evidence->atoms.front().null_space_leakage);
-    ASSERT_EQ(decoded.target_evidence->ranks.size(),2u);
-    EXPECT_EQ(decoded.target_evidence->ranks.front().context_identity,context);
-    EXPECT_EQ(decoded.target_runtime_convergence,rg::JointCheckStatus::Unavailable);
-    ASSERT_EQ(decoded.legacy_global_rank_evidence.size(),1u);
-    EXPECT_EQ(decoded.legacy_global_rank_evidence.front().name,"old-top-global");
-    ASSERT_EQ(decoded.components.front().legacy_global_rank_evidence.size(),1u);
-    EXPECT_EQ(decoded.components.front().legacy_global_rank_evidence.front().name,"old-component-global");
-    ASSERT_EQ(decoded.components.front().local_conditioning.size(),1u);
-    EXPECT_EQ(decoded.components.front().local_conditioning.front().block_id,"block-0");
-    EXPECT_EQ(decoded.components.front().local_conditioning.front().free_ac_rank,2u);
-    EXPECT_EQ(decoded.components.front().local_conditioning.front().free_ac_status,"full-rank");
-    EXPECT_EQ(decoded.components.front().local_conditioning.front().conditioning_classification,"IllConditioned");
-    EXPECT_EQ(decoded.components.front().local_conditioning.front().active_width_bound_targets,1u);
-    EXPECT_DOUBLE_EQ(*decoded.components.front().local_conditioning.front().local_ac_projected_kkt,5e-8);
-    EXPECT_DOUBLE_EQ(*decoded.components.front().local_conditioning.front().local_projected_width_kkt,7e-10);
-    EXPECT_EQ(decoded.components.front().local_conditioning.front().projected_width_sigma_min,.02);
-    EXPECT_EQ(decoded.components.front().local_conditioning.front().projected_width_threshold_sensitive,true);
-    EXPECT_DOUBLE_EQ(decoded.components.front().local_conditioning_seconds,.125);
-    EXPECT_EQ(decoded.components.front().local_conditioning_peak_memory_estimate_bytes,2048u);
-    ASSERT_TRUE(decoded.components.front().parameter_stability);
-    EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().status,"Sensitive");
-    EXPECT_EQ(decoded.components.front().parameter_stability->perturbation_directions,1u);
-    EXPECT_EQ(decoded.components.front().parameter_stability->perturbation_seeds,2u);
-    ASSERT_EQ(decoded.components.front().parameter_stability->blocks.front().probes.size(),1u);
-    EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().probes.front().direction,"common-mode");
-    EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().probes.front().unit_direction,
-        (std::vector<double>{1.}));
-    EXPECT_DOUBLE_EQ(*decoded.components.front().parameter_stability->blocks.front().baseline_local_ac_kkt,4e-11);
-    EXPECT_DOUBLE_EQ(*decoded.components.front().parameter_stability->blocks.front().conditional_reprofile_local_ac_kkt,2e-12);
-    EXPECT_EQ(*decoded.components.front().parameter_stability->blocks.front().baseline_active_width_bound_targets,2u);
-    EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().baseline_independent_replay_status,"Passed");
-    EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().baseline_eligibility_status,"Eligible");
-    EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().conditional_reprofile_status,
-        "StrictlyQualified");
-    EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().probes.front().status,
-        "OneSidedAssessed");
-    EXPECT_EQ(decoded.components.front().parameter_stability->blocks.front().probes.front().plus_seed_status,
-        "ZeroDisplacement");
-    EXPECT_DOUBLE_EQ(*decoded.components.front().parameter_stability->blocks.front().probes.front().plus_effective_displacement_inf,0.);
-    ASSERT_TRUE(decoded.components.front().legacy_candidate_evidence);
-    EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->reference_status,rg::JointCheckStatus::Failed);
-    EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->rank_assessment_status,rg::JointCheckStatus::Unavailable);
-
-    auto old_schema_twelve=encoded.as_object();
-    auto & old_conditioning=old_schema_twelve["components"].as_array()[0].as_object()
-        ["local_conditioning"].as_array()[0].as_object();
-    for(const char * key:{"conditioning_classification","free_ac_rank_threshold",
-        "free_ac_rank_threshold_margin_relative","free_ac_threshold_sensitive","projected_width_sigma_min",
-        "projected_width_sigma_max","projected_width_rank_threshold","projected_width_rank_threshold_margin_relative",
-        "projected_width_threshold_sensitive","profile_sigma_min","profile_sigma_max","profile_rank_threshold",
-        "profile_rank_threshold_margin_relative","profile_threshold_sensitive","free_ac_conditioning",
-        "projected_width_conditioning","profile_conditioning"}) old_conditioning.erase(key);
-    const auto decoded_old_twelve=io::Decode(boost::json::serialize(old_schema_twelve));
-    EXPECT_EQ(decoded_old_twelve.components.front().local_conditioning.front().conditioning_classification,"NotAssessed");
-    EXPECT_EQ(decoded_old_twelve.components.front().local_conditioning.front().free_ac_condition,7.5);
-    auto & old_stability=old_schema_twelve["components"].as_array()[0].as_object()
-        ["parameter_stability"].as_object();
-    old_stability.erase("perturbation_directions"); old_stability.erase("perturbation_seeds");
-    auto & old_stability_block=old_stability["blocks"].as_array()[0].as_object();
-    old_stability_block.erase("probes"); old_stability_block.erase("perturbation_directions");
-    old_stability_block.erase("perturbation_seeds");
-    const auto decoded_old_stability=io::Decode(boost::json::serialize(old_schema_twelve));
-    ASSERT_TRUE(decoded_old_stability.components.front().parameter_stability);
-    EXPECT_TRUE(decoded_old_stability.components.front().parameter_stability->blocks.front().probes.empty());
-    EXPECT_EQ(decoded_old_stability.components.front().parameter_stability->perturbation_directions,0u);
-
-    auto schema_eleven=encoded.as_object(); UseHistoricalGlobalRankKeys(schema_eleven);
-    schema_eleven["schema_version"]=11;
-    auto & old_component=schema_eleven["components"].as_array()[0].as_object();
-    old_component.erase("local_conditioning"); old_component.erase("local_conditioning_seconds");
-    old_component.erase("local_conditioning_peak_memory_estimate_bytes"); old_component.erase("parameter_stability");
-    old_component.erase("legacy_candidate_evidence");
-    old_component["candidate_diagnostic"].as_object()["reference_status"]="failed";
-    old_component["candidate_diagnostic"].as_object()["rank_assessment_status"]="unavailable";
-    const auto decoded_eleven=io::Decode(boost::json::serialize(schema_eleven));
-    ASSERT_EQ(decoded_eleven.legacy_global_rank_evidence.size(),1u);
-    EXPECT_EQ(decoded_eleven.legacy_global_rank_evidence.front().name,"old-top-global");
-    ASSERT_EQ(decoded_eleven.components.front().legacy_global_rank_evidence.size(),1u);
-    EXPECT_EQ(decoded_eleven.components.front().legacy_global_rank_evidence.front().name,"old-component-global");
-    EXPECT_TRUE(decoded_eleven.components.front().local_conditioning.empty());
-    EXPECT_FALSE(decoded_eleven.components.front().parameter_stability);
-    ASSERT_TRUE(decoded_eleven.components.front().legacy_candidate_evidence);
-    EXPECT_EQ(decoded_eleven.components.front().legacy_candidate_evidence->reference_status,rg::JointCheckStatus::Failed);
-    EXPECT_EQ(decoded_eleven.components.front().legacy_candidate_evidence->rank_assessment_status,
-        rg::JointCheckStatus::Unavailable);
-
-    auto historical=record;
-    historical.target_evidence->contract="target-estimability-v2";
-    historical.target_evidence->column_scales={1,1,1,1,1,1};
-    historical.target_evidence->ranks={{"column-scaled-observation-jacobian",
-        rg::JointEvidenceScope::AssembledGlobal,3,1e-12,{3,2,1},""}};
-    historical.target_evidence->atoms={{0,rg::JointCheckStatus::Failed,.25,"target-confounded-with-nuisance"},
-        {1,rg::JointCheckStatus::Passed,0.0,{}}};
-    auto schema_eight=boost::json::parse(io::Encode(historical)).as_object();
-    UseHistoricalGlobalRankKeys(schema_eight);
-    schema_eight["schema_version"]=8;
-    const auto decoded_historical=io::Decode(boost::json::serialize(schema_eight));
-    ASSERT_TRUE(decoded_historical.target_evidence);
-    EXPECT_EQ(decoded_historical.target_evidence->contract,"target-estimability-v2");
-    ASSERT_TRUE(decoded_historical.target_evidence->atoms.front().null_space_leakage);
-    EXPECT_DOUBLE_EQ(*decoded_historical.target_evidence->atoms.front().null_space_leakage,.25);
-    EXPECT_EQ(decoded_historical.target_runtime_convergence,rg::JointCheckStatus::Unavailable);
-}
-
 TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutEnteringScientificExports)
 {
     namespace io=rg::joint_result_io;
@@ -1204,10 +906,10 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     component.state.reset(); record.assembled_state.reset(); record.objective.reset();
     component.runtime_convergence=rg::JointCheckStatus::Unavailable;
     record.runtime_convergence=rg::JointCheckStatus::Unavailable;
-    component.legacy_global_rank_evidence.clear(); component.target_evidence.reset(); record.target_evidence.reset();
+    component.target_evidence.reset(); record.target_evidence.reset();
     rg::JointCandidateDiagnostic candidate;
     candidate.candidate_available=true;
-    candidate.candidate_eta={-.7,-.5}; candidate.candidate_ac={999.125,-.3,4,.2};
+    candidate.candidate_eta={-.7}; candidate.candidate_ac={999.125,-.3};
     candidate.candidate_objective=.0123; candidate.candidate_ac_kkt=.1;
     candidate.candidate_width_gradient_inf_norm=.2; candidate.candidate_feasible=true;
     candidate.convergence_criteria_id="practical-v1";
@@ -1216,22 +918,12 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     candidate.certification_status=rg::JointCheckStatus::Unavailable;
     candidate.endpoint_verification_status=rg::JointCheckStatus::Passed;
     candidate.numerical_qualification_status=rg::JointCheckStatus::Unavailable;
-    candidate.verification_reason="rank-assessment-unavailable";
-    candidate.resource_limit_reason="resource-limit:rank-assessment:budget-exceeded";
+    candidate.verification_reason="endpoint-verified-but-unqualified";
+    candidate.resource_limit_reason="resource-limit:qualification:budget-exceeded";
     component.candidate_diagnostic=candidate;
-    component.legacy_candidate_evidence=rg::JointAnalysisComponent::LegacyCandidateEvidence{
-        rg::JointCheckStatus::Unavailable,rg::JointCheckStatus::Unavailable};
-    rg::JointSolverProvenance provenance{"fixed-neighbor",12u,std::nullopt};
-    provenance.contract_version=rg::JointSolverProvenanceContractVersion;
-    provenance.sparse_backend="EIGEN";
-    provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
-    provenance.fixed_neighbor_maximum_sweeps=200;
-    provenance.fixed_neighbor_order="forward";
-    provenance.fixed_neighbor_local_search="profile-lm";
-    record.metadata.solver=provenance;
 
     const auto json=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(json.at("schema_version").as_int64(),16);
+    EXPECT_EQ(json.at("schema_version").as_int64(),19);
     const auto & saved_candidate=json.at("components").as_array()[0].at("candidate_diagnostic");
     EXPECT_EQ(saved_candidate.at("candidate_status").as_string(),"uncertified");
     EXPECT_EQ(saved_candidate.at("convergence_criteria_id").as_string(),"practical-v1");
@@ -1250,42 +942,18 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     ASSERT_TRUE(decoded.metadata.software);
     EXPECT_EQ(decoded.metadata.software->configuration_sha256,record.metadata.software->configuration_sha256);
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->candidate_ac,candidate.candidate_ac);
-    ASSERT_TRUE(decoded.components.front().legacy_candidate_evidence);
-    EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->reference_status,rg::JointCheckStatus::Unavailable);
-    EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->rank_assessment_status,rg::JointCheckStatus::Unavailable);
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->certification_status,rg::JointCheckStatus::Unavailable);
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->endpoint_verification_status,rg::JointCheckStatus::Passed);
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->numerical_qualification_status,rg::JointCheckStatus::Unavailable);
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->convergence_criteria_id,"practical-v1");
     ASSERT_TRUE(decoded.components.front().candidate_diagnostic->global_ac_kkt_threshold);
     EXPECT_DOUBLE_EQ(*decoded.components.front().candidate_diagnostic->global_ac_kkt_threshold,1e-7);
-    ASSERT_TRUE(decoded.components.front().candidate_diagnostic->global_width_gradient_threshold);
-    EXPECT_DOUBLE_EQ(*decoded.components.front().candidate_diagnostic->global_width_gradient_threshold,1e-9);
-    ASSERT_TRUE(decoded.components.front().candidate_diagnostic->confirmed_log_width_change_threshold);
-    EXPECT_DOUBLE_EQ(*decoded.components.front().candidate_diagnostic->confirmed_log_width_change_threshold,1e-6);
     ASSERT_TRUE(decoded.components.front().candidate_diagnostic->candidate_log_width_change_inf_norm);
     EXPECT_DOUBLE_EQ(*decoded.components.front().candidate_diagnostic->candidate_log_width_change_inf_norm,5e-7);
-    EXPECT_EQ(decoded.components.front().candidate_diagnostic->verification_reason,"rank-assessment-unavailable");
-    EXPECT_TRUE(decoded.components.front().legacy_global_rank_evidence.empty());
+    EXPECT_EQ(decoded.components.front().candidate_diagnostic->verification_reason,
+        "endpoint-verified-but-unqualified");
     EXPECT_FALSE(decoded.components.front().target_evidence);
 
-    auto historical=json.as_object(); historical["schema_version"]=15;
-    auto & historical_candidate=historical.at("components").as_array()[0].as_object()
-        .at("candidate_diagnostic").as_object();
-    historical_candidate.erase("convergence_criteria_id");
-    historical_candidate.erase("global_ac_kkt_threshold");
-    historical_candidate.erase("global_width_gradient_threshold");
-    historical_candidate.erase("confirmed_log_width_change_threshold");
-    historical_candidate.erase("candidate_log_width_change_inf_norm");
-    const auto legacy=io::Decode(boost::json::serialize(historical));
-    ASSERT_TRUE(legacy.components.front().candidate_diagnostic);
-    EXPECT_EQ(legacy.components.front().candidate_diagnostic->convergence_criteria_id,"strict-v1");
-    ASSERT_TRUE(legacy.components.front().candidate_diagnostic->global_ac_kkt_threshold);
-    EXPECT_DOUBLE_EQ(*legacy.components.front().candidate_diagnostic->global_ac_kkt_threshold,1e-10);
-    ASSERT_TRUE(legacy.components.front().candidate_diagnostic->global_width_gradient_threshold);
-    EXPECT_DOUBLE_EQ(*legacy.components.front().candidate_diagnostic->global_width_gradient_threshold,1e-12);
-    ASSERT_TRUE(legacy.components.front().candidate_diagnostic->confirmed_log_width_change_threshold);
-    EXPECT_DOUBLE_EQ(*legacy.components.front().candidate_diagnostic->confirmed_log_width_change_threshold,1e-10);
     auto missing_current_criteria=json.as_object();
     missing_current_criteria.at("components").as_array()[0].as_object()
         .at("candidate_diagnostic").as_object().erase("convergence_criteria_id");
@@ -1294,44 +962,6 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     rg::WriteJointAnalysisResult(decoded,dir.path()/"result.json",dir.path()/"atoms.csv");
     std::ifstream csv(dir.path()/"atoms.csv"); std::string line;
     while(std::getline(csv,line)) EXPECT_EQ(line.find("999.125"),std::string::npos);
-}
-
-TEST(DataObjectPersistenceTest, SchemaSixEvidenceRetainsLegacyReferenceMeaning)
-{
-    namespace io=rg::joint_result_io;
-    auto record=SavedJointExample();
-    auto & component=record.components.front();
-    component.candidate_diagnostic=rg::JointCandidateDiagnostic{};
-    component.candidate_diagnostic->candidate_available=true;
-    component.candidate_diagnostic->candidate_eta={-.7,-.5};
-    component.candidate_diagnostic->candidate_ac={2,-.3,4,.2};
-    component.candidate_diagnostic->candidate_objective=.02;
-    component.legacy_candidate_evidence=rg::JointAnalysisComponent::LegacyCandidateEvidence{
-        rg::JointCheckStatus::Passed,{}};
-    component.candidate_diagnostic->certification_status=rg::JointCheckStatus::Passed;
-    component.evidence.push_back({"inner",rg::JointCheckStatus::Passed,
-        rg::JointEvidenceScope::ComponentLocal,2e-12,1e-10,"legacy-reference-coefficient-agreement"});
-    auto legacy=boost::json::parse(io::Encode(record)).as_object();
-    UseHistoricalGlobalRankKeys(legacy);
-    legacy["schema_version"]=6;
-    auto & diagnostic=legacy.at("components").as_array()[0].as_object().at("candidate_diagnostic").as_object();
-    diagnostic["reference_status"]="passed";
-    diagnostic.erase("endpoint_verification_status");
-    diagnostic.erase("numerical_qualification_status");
-    diagnostic.erase("verification_reason");
-    legacy.at("components").as_array()[0].as_object().erase("legacy_candidate_evidence");
-    const auto decoded=io::Decode(boost::json::serialize(legacy));
-    const auto & saved=*decoded.components.front().candidate_diagnostic;
-    EXPECT_EQ(saved.certification_status,rg::JointCheckStatus::Passed);
-    ASSERT_TRUE(decoded.components.front().legacy_candidate_evidence);
-    EXPECT_EQ(decoded.components.front().legacy_candidate_evidence->reference_status,rg::JointCheckStatus::Passed);
-    EXPECT_EQ(saved.endpoint_verification_status,rg::JointCheckStatus::NotRun);
-    EXPECT_EQ(saved.numerical_qualification_status,rg::JointCheckStatus::NotRun);
-    const auto old_inner=std::find_if(decoded.components.front().evidence.begin(),decoded.components.front().evidence.end(),
-        [](const auto & check){return check.name=="inner";});
-    ASSERT_NE(old_inner,decoded.components.front().evidence.end());
-    EXPECT_EQ(old_inner->status,rg::JointCheckStatus::Passed);
-    EXPECT_EQ(old_inner->reason,"legacy-reference-coefficient-agreement");
 }
 
 TEST(DataObjectPersistenceTest, CandidateDiagnosticsRejectInvalidOrUntrustedCheckpointParameters)
@@ -1356,23 +986,6 @@ TEST(DataObjectPersistenceTest, CandidateDiagnosticsRejectInvalidOrUntrustedChec
     component.candidate_diagnostic->candidate_ac.clear();
     component.candidate_diagnostic->candidate_objective.reset();
     EXPECT_NO_THROW(io::Encode(record));
-}
-
-TEST(DataObjectPersistenceTest, SchemaFiveRecordsDoNotInferCandidateDiagnostics)
-{
-    namespace io=rg::joint_result_io;
-    auto record=SavedJointExample();
-    rg::JointCandidateDiagnostic candidate;
-    candidate.candidate_available=true; candidate.candidate_eta={-.7,-.5};
-    candidate.candidate_ac={2,-.3,4,.2}; candidate.candidate_objective=.2;
-    candidate.certification_status=rg::JointCheckStatus::Passed;
-    record.components.front().candidate_diagnostic=candidate;
-    auto json=boost::json::parse(io::Encode(record)).as_object();
-    UseHistoricalGlobalRankKeys(json);
-    json["schema_version"]=5;
-    for(auto & component:json.at("components").as_array()) component.as_object().erase("candidate_diagnostic");
-    const auto decoded=io::Decode(boost::json::serialize(json));
-    EXPECT_FALSE(decoded.components.front().candidate_diagnostic);
 }
 
 TEST(DataObjectPersistenceTest, JointMetadataRejectsInvalidValuesAndOldDocumentsWithoutWrites)
@@ -1440,115 +1053,38 @@ TEST(DataObjectPersistenceTest, JointSelectionMetadataValidationAndCsvRoles)
     rg::WriteJointAnalysisResult(saved,dir.path()/"out.json",dir.path()/"out.csv");
     std::ifstream csv(dir.path()/"out.csv"); std::string line;
     std::getline(csv,line); EXPECT_TRUE(line.ends_with(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality"));
-    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",target,FullABC,\"\",not-run,not-run"));
-    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",halo,FullABC,\"\",not-run,not-run"));
+    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",target,JointEstimated,\"\",failed,not-run"));
+    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",halo,HaloReconstructionUnavailable,\"\",not-run,NotApplicable"));
     auto raw=saved; raw.selection_domain.reset();
-    rg::WriteJointAnalysisResult(raw,dir.path()/"raw.json",dir.path()/"raw.csv");
-    std::ifstream raw_csv(dir.path()/"raw.csv"); std::getline(raw_csv,line); std::getline(raw_csv,line);
-    EXPECT_TRUE(line.ends_with(",not-recorded,FullABC,\"\",not-run,not-run"));
+    EXPECT_THROW(rg::WriteJointAnalysisResult(raw,dir.path()/"raw.json",dir.path()/"raw.csv"),std::invalid_argument);
 }
 
 #include "support/JointPartialSelection.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
-#include <rhbm_gem/core/GaussianEstimator.hpp>
-namespace {
-void FitPersistenceFixtureWithLowLevelUnboundedOracle(rg::core::JointFitResult & fit)
-{
-    if (!fit.problem) throw std::runtime_error("Persistence test hook lacks a Joint problem snapshot.");
-    const auto problem=*fit.problem;
-    auto initialization=fit.initialization;
-    fit=rg::core::FitJointComponents(problem,initialization.b);
-    fit.initialization=std::move(initialization);
-}
-
-struct ScopedPersistenceLowLevelUnboundedOracle
-{
-    ScopedPersistenceLowLevelUnboundedOracle()
-    {
-        rg::core::detail::JointWorkflowFitHookForTesting()=&FitPersistenceFixtureWithLowLevelUnboundedOracle;
-    }
-    ~ScopedPersistenceLowLevelUnboundedOracle()
-    {
-        rg::core::detail::JointWorkflowFitHookForTesting()=nullptr;
-    }
-};
-}
-
-TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesSourcesGeometryAndUnavailableStates)
+TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesCurrentJointAndStageResults)
 {
     const command_test::ScopedTempDir dir{"joint_neutral_roundtrip"};
-    auto f=joint_partial_test::Make("partial");
-    rg::core::FitOptions options; options.estimator=rg::core::PotentialEstimator::JOINT_COMPONENTS; options.quiet_mode=true;
-    ScopedPersistenceLowLevelUnboundedOracle unbounded_test_solver;
-    rg::core::RunPotentialFittingWorkflow(*f.map,*f.model,options);
+    auto fixture=joint_partial_test::Make("partial");
+    rg::core::FitOptions options;
+    options.estimator=rg::core::PotentialEstimator::JOINT_COMPONENTS;
+    options.quiet_mode=true;
+    rg::core::RunPotentialFittingWorkflow(*fixture.map,*fixture.model,options);
     rg::DataRepository repository(dir.path()/"result.sqlite");
-    repository.SaveModel(*f.model,"joint");
+    repository.SaveModel(*fixture.model,"joint");
     auto loaded=repository.LoadModel("joint");
-    EXPECT_EQ(rg::stage_result_io::Encode(*loaded),rg::stage_result_io::Encode(*f.model));
-    for(int id:{1,2})
-    {
-        const auto before=rg::AtomLocalPotentialView::For(*f.model->FindAtomPtr(id));
-        const auto after=rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(id));
-        const auto & a=before.GetStageEstimate(rg::FittingStage::Second);
-        const auto & b=after.GetStageEstimate(rg::FittingStage::Second);
-        EXPECT_EQ(a.point.has_value(),b.point.has_value());
-        if(a.point) EXPECT_EQ(a.point->ToVector(),b.point->ToVector());
-        EXPECT_EQ(a.source.run_id,b.source.run_id); EXPECT_EQ(a.source.role,b.source.role);
-        EXPECT_EQ(a.source.fixed_from_first_stage,b.source.fixed_from_first_stage);
-        EXPECT_EQ(a.uncertainty.status,b.uncertainty.status); EXPECT_EQ(a.uncertainty.reason,b.uncertainty.reason);
-        EXPECT_EQ(a.uncertainty.covariance.has_value(),b.uncertainty.covariance.has_value());
-        if(a.uncertainty.covariance) EXPECT_EQ(*a.uncertainty.covariance,*b.uncertainty.covariance);
-        EXPECT_EQ(before.GetPostFitPeeling().has_value(), after.GetPostFitPeeling().has_value());
-        EXPECT_EQ(after.GetPostFitPeeling().has_value(), b.source.role == rg::FittingRole::Target);
-        if (after.GetPostFitPeeling()) EXPECT_EQ(before.GetPostFitPeeling()->mode,after.GetPostFitPeeling()->mode);
-        EXPECT_EQ(before.GetPostJointLocalResult().has_value(),after.GetPostJointLocalResult().has_value());
-        if(before.GetPostJointLocalResult())
-        {
-            const auto & local_before=*before.GetPostJointLocalResult();
-            const auto & local_after=*after.GetPostJointLocalResult();
-            EXPECT_EQ(local_before.source.run_id,local_after.source.run_id);
-            EXPECT_EQ(local_before.status,local_after.status);
-            EXPECT_EQ(local_before.reason,local_after.reason);
-            EXPECT_EQ(local_before.fixed_charge.coefficient,local_after.fixed_charge.coefficient);
-            EXPECT_EQ(local_before.fixed_charge.width,local_after.fixed_charge.width);
-            EXPECT_EQ(local_before.sample_count,local_after.sample_count);
-            EXPECT_EQ(local_before.effective_sample_count,local_after.effective_sample_count);
-            EXPECT_EQ(local_before.sample_failures.size(),local_after.sample_failures.size());
-            if(local_before.information)
-            {
-                ASSERT_TRUE(local_after.information);
-                EXPECT_EQ(local_before.information->precision,local_after.information->precision);
-                EXPECT_EQ(local_before.information->moment,local_after.information->moment);
-            }
-            EXPECT_EQ(local_before.fit.alpha_r,local_after.fit.alpha_r);
-            EXPECT_EQ(local_before.fit.mdpde.GetModel().ToVector(),local_after.fit.mdpde.GetModel().ToVector());
-            EXPECT_EQ(local_before.fit.diagnostics.has_value(),local_after.fit.diagnostics.has_value());
-        }
-        const auto raw=before.GetRawSamplingEntries(false), saved=after.GetRawSamplingEntries(false);
-        ASSERT_EQ(raw.size(),saved.size()); EXPECT_TRUE(after.HasSampleGeometry());
-        for(std::size_t i=0;i<raw.size();++i) {EXPECT_EQ(raw[i].point.position,saved[i].point.position); EXPECT_EQ(raw[i].response,saved[i].response); if(after.GetPostFitPeeling()) {EXPECT_EQ(before.GetPostFitPeeling()->samples[i].response,after.GetPostFitPeeling()->samples[i].response); EXPECT_EQ(before.GetPostFitPeeling()->samples[i].reason,after.GetPostFitPeeling()->samples[i].reason);}}
-        EXPECT_THROW(after.GetEstimateMDPDE(rg::FittingStage::Second),std::runtime_error);
-    }
+    ASSERT_TRUE(fixture.model->GetAnalysisView().GetJointResult());
+    ASSERT_TRUE(loaded->GetAnalysisView().GetJointResult());
+    EXPECT_EQ(rg::joint_result_io::Encode(*loaded->GetAnalysisView().GetJointResult()),
+        rg::joint_result_io::Encode(*fixture.model->GetAnalysisView().GetJointResult()));
+    EXPECT_EQ(rg::stage_result_io::Encode(*loaded),rg::stage_result_io::Encode(*fixture.model));
+
     loaded->EditAnalysis().ClearJointResult();
     repository.SaveModel(*loaded,"no-snapshot");
-    EXPECT_EQ(rg::stage_result_io::Encode(*repository.LoadModel("no-snapshot")),rg::stage_result_io::Encode(*loaded));
+    const auto restored=repository.LoadModel("no-snapshot");
+    EXPECT_EQ(rg::stage_result_io::Encode(*restored),rg::stage_result_io::Encode(*loaded));
+    EXPECT_FALSE(restored->GetAnalysisView().GetJointResult());
     EXPECT_FALSE(data_test::HasTable(dir.path()/"result.sqlite","model_atom_local_potential"));
-    auto * target=f.model->FindAtomPtr(1);
-    auto changed=rg::AtomLocalPotentialView::For(*target).GetStageEstimate(rg::FittingStage::Second);
-    const auto snapshot = *f.model->GetAnalysisView().GetJointResult();
-    if(changed.point)
-    {
-        const auto original=*changed.point;
-        changed.point=original.WithAmplitude(original.GetAmplitude()+1);
-        f.model->EditAnalysis().SetAtomStageEstimate(rg::FittingStage::Second,*target,changed);
-        EXPECT_FALSE(f.model->GetAnalysisView().GetJointResult());
-        f.model->EditAnalysis().SetJointResult(snapshot); // An explicitly reattached stale snapshot must still fail validation.
-        EXPECT_THROW(repository.SaveModel(*f.model,"joint"),std::invalid_argument);
-        const auto preserved=repository.LoadModel("joint");
-        EXPECT_EQ(rg::AtomLocalPotentialView::For(*preserved->FindAtomPtr(1))
-            .GetFinalModel(rg::FittingStage::Second).ToVector(),original.ToVector());
-    }
 }
 
 TEST(DataObjectPersistenceTest, VersionTwoJointEvidenceIsInvalidatedDuringNeutralMigration)

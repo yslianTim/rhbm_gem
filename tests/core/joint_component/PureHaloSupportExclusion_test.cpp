@@ -738,7 +738,7 @@ TEST(PureHaloSupportExclusionTest, PersistsVersionedDualDomainAndMedianProvenanc
     const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
     const auto snapshot=PurePeelingSnapshot(problem,fixture.model);
     const auto encoded=joint_result_io::Encode(snapshot);
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),18);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),19);
     const auto encoded_root=boost::json::parse(encoded).as_object();
     const auto & median_json=encoded_root.at("halo_median_reconstruction").as_object();
     EXPECT_EQ(median_json.at("neighbor_count").as_int64(),4);
@@ -751,39 +751,6 @@ TEST(PureHaloSupportExclusionTest, PersistsVersionedDualDomainAndMedianProvenanc
     EXPECT_EQ(decoded.fitting_to_original_contributors,problem.FittingToOriginalContributors());
     ASSERT_TRUE(decoded.halo_median_reconstruction);
     EXPECT_EQ(decoded.halo_median_reconstruction->halos,snapshot.halo_median_reconstruction->halos);
-}
-
-TEST(PureHaloSupportExclusionTest, PreservesLegacyGroupKeyMedianSnapshotsAsSchema17)
-{
-    auto fixture=BoundaryFixture();
-    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
-    auto snapshot=PurePeelingSnapshot(problem,fixture.model);
-    ASSERT_TRUE(snapshot.halo_median_reconstruction);
-    auto & medians=*snapshot.halo_median_reconstruction;
-    medians.contract=std::string(LegacyHaloMedianReconstructionContractVersion);
-    for(auto & halo:medians.halos)
-    {
-        halo.contract=medians.contract;
-        halo.source=HaloMedianSource::GroupKeyMedian;
-        halo.legacy_group_key=data_internal::GetGroupKey(fixture.model.FindAtomPtr(1));
-        halo.donor_atom_ids.clear();
-    }
-
-    const auto encoded=joint_result_io::Encode(snapshot);
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),17);
-    const auto decoded=joint_result_io::Decode(encoded);
-    ASSERT_TRUE(decoded.halo_median_reconstruction);
-    EXPECT_EQ(decoded.halo_median_reconstruction->contract,LegacyHaloMedianReconstructionContractVersion);
-    ASSERT_FALSE(decoded.halo_median_reconstruction->halos.empty());
-    const auto & decoded_halo=decoded.halo_median_reconstruction->halos.front();
-    EXPECT_EQ(decoded_halo.contract,LegacyHaloMedianReconstructionContractVersion);
-    EXPECT_EQ(decoded_halo.source,HaloMedianSource::GroupKeyMedian);
-    EXPECT_EQ(decoded_halo.legacy_group_key,data_internal::GetGroupKey(fixture.model.FindAtomPtr(1)));
-    EXPECT_TRUE(decoded_halo.donor_atom_ids.empty());
-    EXPECT_EQ(joint_result_io::Encode(decoded),encoded);
-    const core::detail::JointPostprocessingContext context(
-        fixture.map,fixture.model,problem,&decoded);
-    EXPECT_THROW(context.BuildPostFitPeelingSamples(std::vector<std::size_t>{0}),std::invalid_argument);
 }
 
 TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGeometryLocalHaloSources)
