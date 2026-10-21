@@ -1004,65 +1004,6 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
             core::EvaluateGroupMemberResponseAtDistance(*first.GetGroupMemberResult(), 1.2));
     }
 
-    auto version_three = boost::json::parse(rhbm_gem::stage_result_io::Encode(model)).as_object();
-    version_three["version"] = 3;
-    for (auto & value : version_three["atoms"].as_array())
-    {
-        auto & atom_record = value.as_object();
-        if (atom_record.at("posterior").is_null()) continue;
-        auto & posterior_record = atom_record.at("posterior").as_object();
-        const auto & charge = atom_record.at("post_joint_local").as_object().at("fixed_charge").as_array();
-        posterior_record.at("posterior").as_object().at("point").as_array()[2] = charge[0];
-        posterior_record.erase("fixed_charge");
-    }
-    for (auto & value : version_three["groups"].as_array())
-    {
-        auto & group_record = value.as_object();
-        if (group_record.at("summary").is_null()) continue;
-        auto & summary_record = group_record.at("summary").as_object();
-        if (!summary_record.at("charge_median").is_null())
-        {
-            const auto median = summary_record.at("charge_median");
-            summary_record.at("mean").as_array()[2] = median;
-            auto & inference = summary_record.at("inference").as_object();
-            inference.at("mean").as_array()[2] = median;
-            inference.at("mdpde").as_array()[2] = median;
-            inference.at("prior").as_object().at("point").as_array()[2] = median;
-        }
-        summary_record.erase("charge_median");
-    }
-    ModelObject migrated_v3{model};
-    rhbm_gem::stage_result_io::Decode(
-        migrated_v3, boost::json::serialize(version_three), 4, {});
-    const auto migrated_summary = migrated_v3.GetAnalysisView().GetGroupParameterSummary(keys[0]);
-    ASSERT_TRUE(migrated_summary);
-    ASSERT_TRUE(migrated_summary->inference);
-    EXPECT_EQ(migrated_summary->member_ids, summary.member_ids);
-    EXPECT_DOUBLE_EQ(migrated_summary->descriptive_charge_median.value(),
-        summary.descriptive_charge_median.value());
-    EXPECT_DOUBLE_EQ(migrated_summary->inference->mean.GetOffset(), 0.0);
-    EXPECT_DOUBLE_EQ(migrated_summary->inference->mdpde.GetOffset(), 0.0);
-    for (const int id : summary.member_ids)
-    {
-        const auto original_member = AtomLocalPotentialView::For(*model.FindAtomPtr(id)).GetGroupMemberResult();
-        const auto migrated_member = AtomLocalPotentialView::For(*migrated_v3.FindAtomPtr(id)).GetGroupMemberResult();
-        ASSERT_TRUE(original_member);
-        ASSERT_TRUE(migrated_member);
-        ASSERT_TRUE(original_member->fixed_charge);
-        ASSERT_TRUE(migrated_member->fixed_charge);
-        EXPECT_DOUBLE_EQ(migrated_member->fixed_charge->coefficient,
-            original_member->fixed_charge->coefficient);
-        EXPECT_DOUBLE_EQ(migrated_member->fixed_charge->width,
-            original_member->fixed_charge->width);
-        EXPECT_DOUBLE_EQ(migrated_member->posterior.GetModel().GetAmplitude(),
-            original_member->posterior.GetModel().GetAmplitude());
-        EXPECT_DOUBLE_EQ(migrated_member->posterior.GetModel().GetWidth(),
-            original_member->posterior.GetModel().GetWidth());
-        for (const double distance : {0.0, 1.2, 2.5, 2.6})
-            EXPECT_DOUBLE_EQ(core::EvaluateGroupMemberResponseAtDistance(*migrated_member, distance),
-                core::EvaluateGroupMemberResponseAtDistance(*original_member, distance));
-    }
-
     auto invalid_v4 = boost::json::parse(rhbm_gem::stage_result_io::Encode(model)).as_object();
     for (auto & value : invalid_v4.at("atoms").as_array())
     {
@@ -1074,7 +1015,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
     }
     ModelObject invalid_persistence{model};
     EXPECT_THROW(rhbm_gem::stage_result_io::Decode(
-        invalid_persistence, boost::json::serialize(invalid_v4), 4, {}), std::invalid_argument);
+        invalid_persistence, boost::json::serialize(invalid_v4)), std::invalid_argument);
 
     editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1), {{-12345, {0.3, {0,0,0}, true}}});
     EXPECT_FALSE(first.GetPostFitPeeling());

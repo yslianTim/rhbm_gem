@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <numeric>
 #include <set>
 #include <stdexcept>
 
@@ -25,6 +24,7 @@ std::string_view StatusText(JointCheckStatus status)
 }
 namespace {
 using Object = j::object;
+void RequireOnlyKeys(const Object &,std::initializer_list<const char *>,const char *);
 template<class T> T Read(const Object & o, const char * key) {return j::value_to<T>(o.at(key));}
 JointCheckStatus Status(const j::value & v)
 {
@@ -51,21 +51,14 @@ JointEvidenceScope Scope(const Object & o)
 }
 const char * HaloMedianSourceText(HaloMedianSource source)
 {
-    switch(source)
-    {
-    case HaloMedianSource::GroupKeyMedian: return "group-key-median";
-    case HaloMedianSource::GlobalTargetMedian: return "global-target-median";
-    case HaloMedianSource::GeometryLocalTargetMedian: return "geometry-local-target-median";
-    }
-    throw std::invalid_argument("Invalid Halo median source.");
+    if(source==HaloMedianSource::GeometryLocalTargetMedian) return "geometry-local-target-median";
+    throw std::invalid_argument("Invalid current Halo median source.");
 }
 HaloMedianSource HaloMedianSourceValue(const j::value & value)
 {
-    const auto source=j::value_to<std::string>(value);
-    if(source=="group-key-median") return HaloMedianSource::GroupKeyMedian;
-    if(source=="global-target-median") return HaloMedianSource::GlobalTargetMedian;
-    if(source=="geometry-local-target-median") return HaloMedianSource::GeometryLocalTargetMedian;
-    throw std::invalid_argument("Invalid saved Halo median source: "+source);
+    if(j::value_to<std::string>(value)=="geometry-local-target-median")
+        return HaloMedianSource::GeometryLocalTargetMedian;
+    throw std::invalid_argument("Invalid current Halo median source.");
 }
 j::value Number(std::optional<double> x)
 {
@@ -186,9 +179,9 @@ Object State(const JointState & x)
 JointState ReadState(const j::value & v)
 {
     const auto & o=v.as_object();
-    return {Read<std::vector<double>>(o,"ac"),Read<std::vector<double>>(o,"b"),Read<std::vector<double>>(o,"log_b"),
-        Read<std::vector<double>>(o,"width_gradient"),Read<double>(o,"objective"),
-        o.contains("nuisance_amplitudes") ? Read<std::vector<double>>(o,"nuisance_amplitudes") : std::vector<double>{}};
+    return {Read<std::vector<double>>(o,"ac"),Read<std::vector<double>>(o,"b"),
+        Read<std::vector<double>>(o,"log_b"),Read<std::vector<double>>(o,"width_gradient"),
+        Read<double>(o,"objective"),{}};
 }
 j::value OptionalState(const std::optional<JointState> & x) {return x ? j::value(State(*x)) : j::value(nullptr);}
 const char * CandidateStatusText(const JointCandidateDiagnostic & x)
@@ -216,8 +209,7 @@ Object CandidateDiagnostic(const JointCandidateDiagnostic & x)
         {"verification_reason",x.verification_reason},
         {"resource_limit_reason",x.resource_limit_reason}};
 }
-std::optional<JointCandidateDiagnostic> ReadCandidateDiagnostic(const j::value & value,bool reference_free_schema,
-    bool convergence_criteria_schema)
+std::optional<JointCandidateDiagnostic> ReadCandidateDiagnostic(const j::value & value)
 {
     if(value.is_null()) return {};
     const auto & o=value.as_object(); JointCandidateDiagnostic x;
@@ -227,53 +219,24 @@ std::optional<JointCandidateDiagnostic> ReadCandidateDiagnostic(const j::value &
     x.candidate_objective=OptionalNumber(o.at("candidate_objective"));
     x.candidate_ac_kkt=OptionalNumber(o.at("candidate_ac_kkt"));
     x.candidate_width_gradient_inf_norm=OptionalNumber(o.at("candidate_width_gradient_inf_norm"));
-    if(convergence_criteria_schema)
-    {
-        x.convergence_criteria_id=Read<std::string>(o,"convergence_criteria_id");
-        x.global_ac_kkt_threshold=Read<double>(o,"global_ac_kkt_threshold");
-        x.global_width_gradient_threshold=Read<double>(o,"global_width_gradient_threshold");
-        x.confirmed_log_width_change_threshold=Read<double>(o,"confirmed_log_width_change_threshold");
-        x.candidate_log_width_change_inf_norm=OptionalNumber(o.at("candidate_log_width_change_inf_norm"));
-    }
-    else
-    {
-        const auto & strict=core::joint_component::StrictJointConvergenceCriteria;
-        x.convergence_criteria_id="strict-v1";
-        x.global_ac_kkt_threshold=strict.global_ac_kkt;
-        x.global_width_gradient_threshold=strict.global_width_gradient;
-        x.confirmed_log_width_change_threshold=strict.confirmed_log_width_change;
-    }
+    x.convergence_criteria_id=Read<std::string>(o,"convergence_criteria_id");
+    x.global_ac_kkt_threshold=Read<double>(o,"global_ac_kkt_threshold");
+    x.global_width_gradient_threshold=Read<double>(o,"global_width_gradient_threshold");
+    x.confirmed_log_width_change_threshold=Read<double>(o,"confirmed_log_width_change_threshold");
+    x.candidate_log_width_change_inf_norm=OptionalNumber(o.at("candidate_log_width_change_inf_norm"));
     x.candidate_feasible=o.at("candidate_feasible").is_null() ? std::nullopt :
         std::optional<bool>(Read<bool>(o,"candidate_feasible"));
     x.certification_status=Status(o.at("certification_status"));
-    if(reference_free_schema)
-    {
-        x.endpoint_verification_status=Status(o.at("endpoint_verification_status"));
-        x.numerical_qualification_status=Status(o.at("numerical_qualification_status"));
-        x.verification_reason=Read<std::string>(o,"verification_reason");
-    }
+    x.endpoint_verification_status=Status(o.at("endpoint_verification_status"));
+    x.numerical_qualification_status=Status(o.at("numerical_qualification_status"));
+    x.verification_reason=Read<std::string>(o,"verification_reason");
     x.resource_limit_reason=Read<std::string>(o,"resource_limit_reason");
     const auto candidate_status=Read<std::string>(o,"candidate_status");
     if(candidate_status!=CandidateStatusText(x))
         throw std::invalid_argument("Invalid saved joint candidate status: "+candidate_status);
     return x;
 }
-std::optional<JointAnalysisComponent::LegacyCandidateEvidence> ReadLegacyCandidateEvidence(const j::object & component)
-{
-    const j::object * source{};
-    if(component.contains("legacy_candidate_evidence") && !component.at("legacy_candidate_evidence").is_null())
-        source=&component.at("legacy_candidate_evidence").as_object();
-    else if(component.contains("candidate_diagnostic") && !component.at("candidate_diagnostic").is_null())
-        source=&component.at("candidate_diagnostic").as_object();
-    if(!source) return {};
-    JointAnalysisComponent::LegacyCandidateEvidence out;
-    if(source->contains("reference_status")) out.reference_status=Status(source->at("reference_status"));
-    else if(source->contains("legacy_reference_status")) out.reference_status=Status(source->at("legacy_reference_status"));
-    if(source->contains("rank_assessment_status")) out.rank_assessment_status=Status(source->at("rank_assessment_status"));
-    else if(source->contains("legacy_rank_assessment_status")) out.rank_assessment_status=Status(source->at("legacy_rank_assessment_status"));
-    if(!out.reference_status && !out.rank_assessment_status) return {};
-    return out;
-}
+
 j::array Checks(const std::vector<JointCheck> & values)
 {
     j::array out;
@@ -287,37 +250,15 @@ std::vector<JointCheck> ReadChecks(const j::value & v)
     for(const auto & item:v.as_array())
     {
         const auto & o=item.as_object();
+        RequireOnlyKeys(o,{"name","scope","status","value","threshold","reason"},
+            "unknown current Joint evidence field");
         out.push_back({Read<std::string>(o,"name"),Status(o.at("status")),Scope(o),OptionalNumber(o.at("value")),
             OptionalNumber(o.at("threshold")),Read<std::string>(o,"reason")});
     }
     return out;
 }
-j::array Ranks(const std::vector<JointRankEvidence> & values)
-{
-    j::array out;
-    for(const auto & x:values)
-    {
-        for(double value:x.singular_values)
-            if(!std::isfinite(value)) throw std::invalid_argument("Nonfinite joint rank evidence.");
-        Object rank{{"name",x.name},{"scope",ScopeText(x.scope)},
-            {"rank",x.rank},{"threshold",Number(x.threshold)},{"singular_values",j::value_from(x.singular_values)}};
-        if(!x.context_identity.empty()) rank.emplace("context_identity",x.context_identity);
-        out.emplace_back(std::move(rank));
-    }
-    return out;
-}
-std::vector<JointRankEvidence> ReadRanks(const j::value & v,bool has_context_identity)
-{
-    std::vector<JointRankEvidence> out;
-    for(const auto & item:v.as_array())
-    {
-        const auto & o=item.as_object();
-        out.push_back({Read<std::string>(o,"name"),Scope(o),Read<std::size_t>(o,"rank"),Read<double>(o,"threshold"),
-            Read<std::vector<double>>(o,"singular_values"),has_context_identity && o.contains("context_identity") ?
-                Read<std::string>(o,"context_identity") : std::string{}});
-    }
-    return out;
-}
+
+
 Object Initialization(const JointInitialization & x)
 {
     j::array atoms;
@@ -335,27 +276,28 @@ Object Initialization(const JointInitialization & x)
 JointInitialization ReadInitialization(const j::value & v)
 {
     const auto & o=v.as_object(); JointInitialization x;
+    RequireOnlyKeys(o,{"valid","reason","b","atoms","data_scope"},"unknown current Joint initialization field");
     x.valid=Read<bool>(o,"valid"); x.reason=Read<std::string>(o,"reason"); x.b=DiagnosticValues(o.at("b"));
     x.data_scope=Read<std::string>(o,"data_scope");
     for(const auto & item:o.at("atoms").as_array())
     {
         const auto & a=item.as_object(); JointInitializationAtom atom;
+        RequireOnlyKeys(a,{"id","ols","mdpde","alpha","sample_count","native_status","reason","original_b",
+            "used_b","seed_source","donor_count","first_stage_fit_qualified","first_stage_qualification",
+            "first_stage_recovery"},"unknown current FirstStage initialization field");
         atom.id=Read<std::string>(a,"id"); atom.reason=Read<std::string>(a,"reason");
         const auto ols=DiagnosticValues(a.at("ols")),mdpde=DiagnosticValues(a.at("mdpde"));
         if(ols.size()!=3 || mdpde.size()!=3) throw std::invalid_argument("Invalid joint initialization dimensions.");
         std::copy(ols.begin(),ols.end(),atom.ols.begin()); std::copy(mdpde.begin(),mdpde.end(),atom.mdpde.begin());
         atom.alpha=OptionalNumber(a.at("alpha")).value_or(std::numeric_limits<double>::quiet_NaN());
         atom.sample_count=Read<std::size_t>(a,"sample_count");
-        if(a.contains("first_stage_fit_qualified")) atom.first_stage_fit_qualified=Read<bool>(a,"first_stage_fit_qualified");
-        if(a.contains("first_stage_qualification") && !a.at("first_stage_qualification").is_null())
+        atom.first_stage_fit_qualified=Read<bool>(a,"first_stage_fit_qualified");
+        if(!a.at("first_stage_qualification").is_null())
             atom.first_stage_qualification=Qualification(a.at("first_stage_qualification"));
-        if(a.contains("first_stage_recovery") && !a.at("first_stage_recovery").is_null())
+        if(!a.at("first_stage_recovery").is_null())
             atom.first_stage_recovery=ReadFailedOnlyRecovery(a.at("first_stage_recovery"));
-        if(a.contains("seed_source"))
-        {
-            atom.original_b=OptionalNumber(a.at("original_b")); atom.used_b=OptionalNumber(a.at("used_b"));
-            atom.seed_source=Read<std::string>(a,"seed_source"); atom.donor_count=Read<std::size_t>(a,"donor_count");
-        }
+        atom.original_b=OptionalNumber(a.at("original_b")); atom.used_b=OptionalNumber(a.at("used_b"));
+        atom.seed_source=Read<std::string>(a,"seed_source"); atom.donor_count=Read<std::size_t>(a,"donor_count");
         if(!a.at("native_status").is_null()) atom.native_status=Read<int>(a,"native_status");
         x.atoms.push_back(std::move(atom));
     }
@@ -363,6 +305,12 @@ JointInitialization ReadInitialization(const j::value & v)
 }
 void Require(bool condition, const char * message)
 {if(!condition) throw std::invalid_argument(std::string("Invalid joint result: ")+message);}
+void RequireOnlyKeys(const Object & object,std::initializer_list<const char *> keys,const char * message)
+{
+    for(const auto key:keys) Require(object.contains(key),message);
+    for(auto it=object.begin();it!=object.end();++it)
+        Require(std::find(keys.begin(),keys.end(),it->key())!=keys.end(),message);
+}
 bool IsSha256(const std::string & value)
 {
     return value.size()==64 && std::all_of(value.begin(),value.end(),[](char c) {
@@ -419,9 +367,8 @@ std::vector<JointBlockConditioning> ReadBlockConditioning(const j::value & value
     {
         const auto & o=item.as_object(); JointBlockConditioning x;
         x.block_id=Read<std::string>(o,"block_id"); x.status=Read<std::string>(o,"status");
-        x.reason=Read<std::string>(o,"reason"); x.core_atoms=Read<std::vector<std::size_t>>(o,"core_atoms");
-        if(o.contains("conditioning_classification"))
-            x.conditioning_classification=Read<std::string>(o,"conditioning_classification");
+        x.reason=Read<std::string>(o,"reason"); x.conditioning_classification=Read<std::string>(o,"conditioning_classification");
+        x.core_atoms=Read<std::vector<std::size_t>>(o,"core_atoms");
         x.core_atom_count=Read<std::size_t>(o,"core_atom_count");
         x.affected_row_count=Read<std::size_t>(o,"affected_row_count");
         x.free_ac_columns=Read<std::size_t>(o,"free_ac_columns");
@@ -429,45 +376,34 @@ std::vector<JointBlockConditioning> ReadBlockConditioning(const j::value & value
         x.free_ac_rank=ReadOptionalSize(o.at("free_ac_rank"));
         x.projected_width_rank=ReadOptionalSize(o.at("projected_width_rank"));
         x.profile_rank=ReadOptionalSize(o.at("profile_rank"));
-        if(o.contains("active_width_bound_targets"))
-            x.active_width_bound_targets=ReadOptionalSize(o.at("active_width_bound_targets"));
+        x.active_width_bound_targets=ReadOptionalSize(o.at("active_width_bound_targets"));
         x.workspace_peak_memory_estimate_bytes=ReadOptionalSize(o.at("workspace_peak_memory_estimate_bytes"));
         x.free_ac_sigma_min=OptionalNumber(o.at("free_ac_sigma_min"));
         x.free_ac_sigma_max=OptionalNumber(o.at("free_ac_sigma_max"));
         x.free_ac_condition=OptionalNumber(o.at("free_ac_condition"));
-        if(o.contains("free_ac_rank_threshold")) x.free_ac_rank_threshold=OptionalNumber(o.at("free_ac_rank_threshold"));
-        if(o.contains("free_ac_rank_threshold_margin_relative"))
-            x.free_ac_rank_threshold_margin_relative=OptionalNumber(o.at("free_ac_rank_threshold_margin_relative"));
-        if(o.contains("local_ac_projected_kkt"))
-            x.local_ac_projected_kkt=OptionalNumber(o.at("local_ac_projected_kkt"));
-        if(o.contains("local_projected_width_kkt"))
-            x.local_projected_width_kkt=OptionalNumber(o.at("local_projected_width_kkt"));
-        if(o.contains("free_ac_threshold_sensitive"))
-            x.free_ac_threshold_sensitive=ReadOptionalBoolean(o.at("free_ac_threshold_sensitive"));
+        x.free_ac_rank_threshold=OptionalNumber(o.at("free_ac_rank_threshold"));
+        x.free_ac_rank_threshold_margin_relative=OptionalNumber(o.at("free_ac_rank_threshold_margin_relative"));
+        x.local_ac_projected_kkt=OptionalNumber(o.at("local_ac_projected_kkt"));
+        x.local_projected_width_kkt=OptionalNumber(o.at("local_projected_width_kkt"));
+        x.free_ac_threshold_sensitive=ReadOptionalBoolean(o.at("free_ac_threshold_sensitive"));
         x.projected_width_condition=OptionalNumber(o.at("projected_width_condition"));
-        if(o.contains("projected_width_sigma_min")) x.projected_width_sigma_min=OptionalNumber(o.at("projected_width_sigma_min"));
-        if(o.contains("projected_width_sigma_max")) x.projected_width_sigma_max=OptionalNumber(o.at("projected_width_sigma_max"));
-        if(o.contains("projected_width_rank_threshold"))
-            x.projected_width_rank_threshold=OptionalNumber(o.at("projected_width_rank_threshold"));
-        if(o.contains("projected_width_rank_threshold_margin_relative"))
-            x.projected_width_rank_threshold_margin_relative=OptionalNumber(o.at("projected_width_rank_threshold_margin_relative"));
-        if(o.contains("projected_width_threshold_sensitive"))
-            x.projected_width_threshold_sensitive=ReadOptionalBoolean(o.at("projected_width_threshold_sensitive"));
+        x.projected_width_sigma_min=OptionalNumber(o.at("projected_width_sigma_min"));
+        x.projected_width_sigma_max=OptionalNumber(o.at("projected_width_sigma_max"));
+        x.projected_width_rank_threshold=OptionalNumber(o.at("projected_width_rank_threshold"));
+        x.projected_width_rank_threshold_margin_relative=OptionalNumber(o.at("projected_width_rank_threshold_margin_relative"));
+        x.projected_width_threshold_sensitive=ReadOptionalBoolean(o.at("projected_width_threshold_sensitive"));
         x.profile_condition=OptionalNumber(o.at("profile_condition"));
-        if(o.contains("profile_sigma_min")) x.profile_sigma_min=OptionalNumber(o.at("profile_sigma_min"));
-        if(o.contains("profile_sigma_max")) x.profile_sigma_max=OptionalNumber(o.at("profile_sigma_max"));
-        if(o.contains("profile_rank_threshold")) x.profile_rank_threshold=OptionalNumber(o.at("profile_rank_threshold"));
-        if(o.contains("profile_rank_threshold_margin_relative"))
-            x.profile_rank_threshold_margin_relative=OptionalNumber(o.at("profile_rank_threshold_margin_relative"));
-        if(o.contains("profile_threshold_sensitive"))
-            x.profile_threshold_sensitive=ReadOptionalBoolean(o.at("profile_threshold_sensitive"));
+        x.profile_sigma_min=OptionalNumber(o.at("profile_sigma_min"));
+        x.profile_sigma_max=OptionalNumber(o.at("profile_sigma_max"));
+        x.profile_rank_threshold=OptionalNumber(o.at("profile_rank_threshold"));
+        x.profile_rank_threshold_margin_relative=OptionalNumber(o.at("profile_rank_threshold_margin_relative"));
+        x.profile_threshold_sensitive=ReadOptionalBoolean(o.at("profile_threshold_sensitive"));
         x.free_ac_status=Read<std::string>(o,"free_ac_status"); x.free_ac_reason=Read<std::string>(o,"free_ac_reason");
         x.projected_width_status=Read<std::string>(o,"projected_width_status");
         x.projected_width_reason=Read<std::string>(o,"projected_width_reason");
-        if(o.contains("free_ac_conditioning")) x.free_ac_conditioning=Read<std::string>(o,"free_ac_conditioning");
-        if(o.contains("projected_width_conditioning"))
-            x.projected_width_conditioning=Read<std::string>(o,"projected_width_conditioning");
-        if(o.contains("profile_conditioning")) x.profile_conditioning=Read<std::string>(o,"profile_conditioning");
+        x.free_ac_conditioning=Read<std::string>(o,"free_ac_conditioning");
+        x.projected_width_conditioning=Read<std::string>(o,"projected_width_conditioning");
+        x.profile_conditioning=Read<std::string>(o,"profile_conditioning");
         x.profile_status=Read<std::string>(o,"profile_status"); x.profile_reason=Read<std::string>(o,"profile_reason");
         out.push_back(std::move(x));
     }
@@ -526,86 +462,56 @@ JointBlockParameterStability ReadStabilityBlock(const j::value & value)
     const auto & o=value.as_object(); JointBlockParameterStability x;
     x.block_id=Read<std::string>(o,"block_id"); x.status=Read<std::string>(o,"status");
     x.reason=Read<std::string>(o,"reason"); x.core_atoms=Read<std::vector<std::size_t>>(o,"core_atoms");
-    if(o.contains("probe_selected")) x.probe_selected=Read<bool>(o,"probe_selected");
+    x.probe_selected=Read<bool>(o,"probe_selected");
     x.prediction_status=Read<std::string>(o,"prediction_status");
     x.objective_consistency_status=Read<std::string>(o,"objective_consistency_status");
     x.log_width_parameter_change_inf=OptionalNumber(o.at("log_width_parameter_change_inf"));
     x.scaled_ac_parameter_change_inf=OptionalNumber(o.at("scaled_ac_parameter_change_inf"));
     x.local_prediction_change_relative=OptionalNumber(o.at("local_prediction_change_relative"));
-    x.objective_difference=OptionalNumber(o.at("objective_difference"));
-    x.cpu_seconds=Read<double>(o,"cpu_seconds");
-    if(o.contains("baseline_local_ac_kkt")) x.baseline_local_ac_kkt=OptionalNumber(o.at("baseline_local_ac_kkt"));
-    if(o.contains("baseline_projected_width_kkt"))
-        x.baseline_projected_width_kkt=OptionalNumber(o.at("baseline_projected_width_kkt"));
-    if(o.contains("baseline_width_bound_slack"))
-        x.baseline_width_bound_slack=OptionalNumber(o.at("baseline_width_bound_slack"));
-    if(o.contains("baseline_local_objective"))
-        x.baseline_local_objective=OptionalNumber(o.at("baseline_local_objective"));
-    if(o.contains("baseline_local_residual_rmse_normalized"))
-        x.baseline_local_residual_rmse_normalized=OptionalNumber(o.at("baseline_local_residual_rmse_normalized"));
-    if(o.contains("baseline_active_ac_constraints"))
-        x.baseline_active_ac_constraints=ReadOptionalSize(o.at("baseline_active_ac_constraints"));
-    if(o.contains("baseline_active_width_bound_targets"))
-        x.baseline_active_width_bound_targets=ReadOptionalSize(o.at("baseline_active_width_bound_targets"));
-    if(o.contains("baseline_numerical_validity_status"))
-        x.baseline_numerical_validity_status=Read<std::string>(o,"baseline_numerical_validity_status");
-    if(o.contains("baseline_conditional_optimality_status"))
-        x.baseline_conditional_optimality_status=Read<std::string>(o,"baseline_conditional_optimality_status");
-    if(o.contains("baseline_eligibility_status"))
-        x.baseline_eligibility_status=Read<std::string>(o,"baseline_eligibility_status");
-    if(o.contains("baseline_eligibility_reason"))
-        x.baseline_eligibility_reason=Read<std::string>(o,"baseline_eligibility_reason");
-    if(o.contains("baseline_independent_replay_status"))
-        x.baseline_independent_replay_status=Read<std::string>(o,"baseline_independent_replay_status");
-    if(o.contains("baseline_independent_replay_reason"))
-        x.baseline_independent_replay_reason=Read<std::string>(o,"baseline_independent_replay_reason");
-    if(o.contains("conditional_reprofile_status"))
-        x.conditional_reprofile_status=Read<std::string>(o,"conditional_reprofile_status");
-    if(o.contains("conditional_reprofile_local_ac_kkt"))
-        x.conditional_reprofile_local_ac_kkt=OptionalNumber(o.at("conditional_reprofile_local_ac_kkt"));
-    if(o.contains("conditional_reprofile_projected_width_kkt"))
-        x.conditional_reprofile_projected_width_kkt=OptionalNumber(o.at("conditional_reprofile_projected_width_kkt"));
-    if(o.contains("conditional_reprofile_objective_difference"))
-        x.conditional_reprofile_objective_difference=OptionalNumber(o.at("conditional_reprofile_objective_difference"));
-    if(o.contains("conditional_reprofile_scaled_ac_parameter_difference"))
-        x.conditional_reprofile_scaled_ac_parameter_difference=
-            OptionalNumber(o.at("conditional_reprofile_scaled_ac_parameter_difference"));
-    if(o.contains("conditional_reprofile_prediction_change_relative"))
-        x.conditional_reprofile_prediction_change_relative=
-            OptionalNumber(o.at("conditional_reprofile_prediction_change_relative"));
-    if(o.contains("conditional_reprofile_independent_replay_status"))
-        x.conditional_reprofile_independent_replay_status=
-            Read<std::string>(o,"conditional_reprofile_independent_replay_status");
-    if(o.contains("conditional_reprofile_independent_replay_reason"))
-        x.conditional_reprofile_independent_replay_reason=
-            Read<std::string>(o,"conditional_reprofile_independent_replay_reason");
-    if(o.contains("probes"))
-        for(const auto & probe_value:o.at("probes").as_array())
-        {
-            const auto & p=probe_value.as_object(); JointStabilityProbe probe;
-            probe.direction=Read<std::string>(p,"direction"); probe.source=Read<std::string>(p,"source");
-            probe.status=Read<std::string>(p,"status");
-            if(p.contains("minus_seed_status")) probe.minus_seed_status=Read<std::string>(p,"minus_seed_status");
-            if(p.contains("plus_seed_status")) probe.plus_seed_status=Read<std::string>(p,"plus_seed_status");
-            if(p.contains("minus_seed_reason")) probe.minus_seed_reason=Read<std::string>(p,"minus_seed_reason");
-            if(p.contains("plus_seed_reason")) probe.plus_seed_reason=Read<std::string>(p,"plus_seed_reason");
-            probe.unit_direction=Read<std::vector<double>>(p,"unit_direction");
-            probe.evaluations=Read<std::size_t>(p,"evaluations");
-            probe.parameter_change=OptionalNumber(p.at("parameter_change"));
-            probe.prediction_change=OptionalNumber(p.at("prediction_change"));
-            probe.objective_change=OptionalNumber(p.at("objective_change"));
-            if(p.contains("minus_requested_displacement_inf"))
-                probe.minus_requested_displacement_inf=OptionalNumber(p.at("minus_requested_displacement_inf"));
-            if(p.contains("minus_effective_displacement_inf"))
-                probe.minus_effective_displacement_inf=OptionalNumber(p.at("minus_effective_displacement_inf"));
-            if(p.contains("plus_requested_displacement_inf"))
-                probe.plus_requested_displacement_inf=OptionalNumber(p.at("plus_requested_displacement_inf"));
-            if(p.contains("plus_effective_displacement_inf"))
-                probe.plus_effective_displacement_inf=OptionalNumber(p.at("plus_effective_displacement_inf"));
-            x.probes.push_back(std::move(probe));
-        }
-    if(o.contains("perturbation_directions")) x.perturbation_directions=Read<std::size_t>(o,"perturbation_directions");
-    if(o.contains("perturbation_seeds")) x.perturbation_seeds=Read<std::size_t>(o,"perturbation_seeds");
+    x.objective_difference=OptionalNumber(o.at("objective_difference")); x.cpu_seconds=Read<double>(o,"cpu_seconds");
+    x.baseline_local_ac_kkt=OptionalNumber(o.at("baseline_local_ac_kkt"));
+    x.baseline_projected_width_kkt=OptionalNumber(o.at("baseline_projected_width_kkt"));
+    x.baseline_width_bound_slack=OptionalNumber(o.at("baseline_width_bound_slack"));
+    x.baseline_local_objective=OptionalNumber(o.at("baseline_local_objective"));
+    x.baseline_local_residual_rmse_normalized=OptionalNumber(o.at("baseline_local_residual_rmse_normalized"));
+    x.baseline_active_ac_constraints=ReadOptionalSize(o.at("baseline_active_ac_constraints"));
+    x.baseline_active_width_bound_targets=ReadOptionalSize(o.at("baseline_active_width_bound_targets"));
+    x.baseline_numerical_validity_status=Read<std::string>(o,"baseline_numerical_validity_status");
+    x.baseline_conditional_optimality_status=Read<std::string>(o,"baseline_conditional_optimality_status");
+    x.baseline_eligibility_status=Read<std::string>(o,"baseline_eligibility_status");
+    x.baseline_eligibility_reason=Read<std::string>(o,"baseline_eligibility_reason");
+    x.baseline_independent_replay_status=Read<std::string>(o,"baseline_independent_replay_status");
+    x.baseline_independent_replay_reason=Read<std::string>(o,"baseline_independent_replay_reason");
+    x.conditional_reprofile_status=Read<std::string>(o,"conditional_reprofile_status");
+    x.conditional_reprofile_local_ac_kkt=OptionalNumber(o.at("conditional_reprofile_local_ac_kkt"));
+    x.conditional_reprofile_projected_width_kkt=OptionalNumber(o.at("conditional_reprofile_projected_width_kkt"));
+    x.conditional_reprofile_objective_difference=OptionalNumber(o.at("conditional_reprofile_objective_difference"));
+    x.conditional_reprofile_scaled_ac_parameter_difference=OptionalNumber(o.at("conditional_reprofile_scaled_ac_parameter_difference"));
+    x.conditional_reprofile_prediction_change_relative=OptionalNumber(o.at("conditional_reprofile_prediction_change_relative"));
+    x.conditional_reprofile_independent_replay_status=Read<std::string>(o,"conditional_reprofile_independent_replay_status");
+    x.conditional_reprofile_independent_replay_reason=Read<std::string>(o,"conditional_reprofile_independent_replay_reason");
+    for(const auto & probe_value:o.at("probes").as_array())
+    {
+        const auto & p=probe_value.as_object(); JointStabilityProbe probe;
+        probe.direction=Read<std::string>(p,"direction"); probe.source=Read<std::string>(p,"source");
+        probe.status=Read<std::string>(p,"status");
+        probe.minus_seed_status=Read<std::string>(p,"minus_seed_status");
+        probe.plus_seed_status=Read<std::string>(p,"plus_seed_status");
+        probe.minus_seed_reason=Read<std::string>(p,"minus_seed_reason");
+        probe.plus_seed_reason=Read<std::string>(p,"plus_seed_reason");
+        probe.unit_direction=Read<std::vector<double>>(p,"unit_direction");
+        probe.evaluations=Read<std::size_t>(p,"evaluations");
+        probe.parameter_change=OptionalNumber(p.at("parameter_change"));
+        probe.prediction_change=OptionalNumber(p.at("prediction_change"));
+        probe.objective_change=OptionalNumber(p.at("objective_change"));
+        probe.minus_requested_displacement_inf=OptionalNumber(p.at("minus_requested_displacement_inf"));
+        probe.minus_effective_displacement_inf=OptionalNumber(p.at("minus_effective_displacement_inf"));
+        probe.plus_requested_displacement_inf=OptionalNumber(p.at("plus_requested_displacement_inf"));
+        probe.plus_effective_displacement_inf=OptionalNumber(p.at("plus_effective_displacement_inf"));
+        x.probes.push_back(std::move(probe));
+    }
+    x.perturbation_directions=Read<std::size_t>(o,"perturbation_directions");
+    x.perturbation_seeds=Read<std::size_t>(o,"perturbation_seeds");
     x.perturbation_solves=Read<std::size_t>(o,"perturbation_solves");
     x.perturbation_evaluations=Read<std::size_t>(o,"perturbation_evaluations");
     return x;
@@ -634,33 +540,15 @@ std::optional<JointParameterStability> ReadParameterStability(const j::value & v
     x.perturbation_status=Read<std::string>(o,"perturbation_status");
     for(const auto & block:o.at("blocks").as_array()) x.blocks.push_back(ReadStabilityBlock(block));
     x.seconds=Read<double>(o,"seconds"); x.cpu_seconds=Read<double>(o,"cpu_seconds");
-    if(o.contains("perturbation_directions")) x.perturbation_directions=Read<std::size_t>(o,"perturbation_directions");
-    if(o.contains("perturbation_seeds")) x.perturbation_seeds=Read<std::size_t>(o,"perturbation_seeds");
+    x.perturbation_directions=Read<std::size_t>(o,"perturbation_directions");
+    x.perturbation_seeds=Read<std::size_t>(o,"perturbation_seeds");
     x.perturbation_solves=Read<std::size_t>(o,"perturbation_solves");
     x.perturbation_evaluations=Read<std::size_t>(o,"perturbation_evaluations");
     x.workspace_peak_memory_estimate_bytes=ReadOptionalSize(o.at("workspace_peak_memory_estimate_bytes"));
     return x;
 }
-std::optional<int> ReadOptionalInt(const j::value & value)
-{return value.is_null() ? std::nullopt : std::optional<int>(j::value_to<int>(value));}
-std::vector<JointFixedHaloParameter> ReadFixedHalos(const j::value & value)
-{
-    std::vector<JointFixedHaloParameter> out;
-    for(const auto & item:value.as_array())
-    {
-        const auto & object=item.as_object();
-        JointFixedHaloParameter fixed{Read<std::size_t>(object,"contributor_index"),Read<std::string>(object,"atom_id"),
-            Read<double>(object,"amplitude"),Read<double>(object,"width"),Read<double>(object,"charge"),
-            Read<std::size_t>(object,"first_stage_sample_count"),ReadOptionalInt(object.at("first_stage_status")),
-            Read<std::string>(object,"source_contract"),Read<bool>(object,"first_stage_fit_qualified")};
-        if(object.contains("first_stage_qualification") && !object.at("first_stage_qualification").is_null())
-            fixed.first_stage_qualification=Qualification(object.at("first_stage_qualification"));
-        if(object.contains("first_stage_recovery") && !object.at("first_stage_recovery").is_null())
-            fixed.first_stage_recovery=ReadFailedOnlyRecovery(object.at("first_stage_recovery"));
-        out.push_back(std::move(fixed));
-    }
-    return out;
-}
+
+
 j::value HaloMedianSnapshot(const std::optional<JointHaloMedianSnapshot> & value)
 {
     if(!value) return nullptr;
@@ -684,19 +572,22 @@ std::optional<JointHaloMedianSnapshot> ReadHaloMedianSnapshot(const j::value & v
 {
     if(value.is_null()) return std::nullopt;
     const auto & object=value.as_object(); JointHaloMedianSnapshot snapshot;
+    RequireOnlyKeys(object,{"contract","joint_run_id","global_median","valid_target_count","halos",
+        "neighbor_count","donor_policy"},"unknown current Halo median field");
     snapshot.contract=Read<std::string>(object,"contract");
     snapshot.joint_run_id=Read<std::string>(object,"joint_run_id");
     snapshot.global_median=Read<std::array<double,3>>(object,"global_median");
     snapshot.valid_target_count=Read<std::size_t>(object,"valid_target_count");
-    if(object.contains("neighbor_count")) snapshot.neighbor_count=Read<std::size_t>(object,"neighbor_count");
-    if(object.contains("donor_policy")) snapshot.donor_policy=Read<std::string>(object,"donor_policy");
-    for(const auto & value_tmp:object.at("halos").as_array())
+    snapshot.neighbor_count=Read<std::size_t>(object,"neighbor_count");
+    snapshot.donor_policy=Read<std::string>(object,"donor_policy");
+    for(const auto & item:object.at("halos").as_array())
     {
-        const auto & halo=value_tmp.as_object();
+        const auto & halo=item.as_object();
+        RequireOnlyKeys(halo,{"halo_contributor_index","atom_id","amplitude","width","charge","source",
+            "donor_count","joint_run_id","contract","donor_atom_ids"},"unknown current Halo median point field");
         JointHaloMedianReconstruction decoded;
         decoded.halo_contributor_index=Read<std::size_t>(halo,"halo_contributor_index");
         decoded.atom_id=Read<std::string>(halo,"atom_id");
-        if(halo.contains("group_key")) decoded.legacy_group_key=Read<GroupKey>(halo,"group_key");
         decoded.amplitude=Read<double>(halo,"amplitude");
         decoded.width=Read<double>(halo,"width");
         decoded.charge=Read<double>(halo,"charge");
@@ -704,8 +595,7 @@ std::optional<JointHaloMedianSnapshot> ReadHaloMedianSnapshot(const j::value & v
         decoded.donor_count=Read<std::size_t>(halo,"donor_count");
         decoded.joint_run_id=Read<std::string>(halo,"joint_run_id");
         decoded.contract=Read<std::string>(halo,"contract");
-        if(halo.contains("donor_atom_ids"))
-            decoded.donor_atom_ids=Read<std::vector<std::string>>(halo,"donor_atom_ids");
+        decoded.donor_atom_ids=Read<std::vector<std::string>>(halo,"donor_atom_ids");
         snapshot.halos.push_back(std::move(decoded));
     }
     return snapshot;
@@ -761,42 +651,32 @@ JointAnalysisMetadata ReadMetadata(const Object & m)
     if(!m.at("map_normalization").is_null())
     {
         const auto & n=m.at("map_normalization").as_object();
+        RequireOnlyKeys(n,{"requested","applied","divisor"},"unknown current map normalization field");
         out.map_normalization=JointMapNormalization{Read<bool>(n,"requested"),Read<bool>(n,"applied"),Read<double>(n,"divisor")};
     }
     if(!m.at("software").is_null())
     {
         const auto & p=m.at("software").as_object();
+        RequireOnlyKeys(p,{"version","source_sha256","configuration_sha256","build_sha256"},
+            "unknown current software provenance field");
         out.software=JointSoftwareProvenance{Read<std::string>(p,"version"),Read<std::string>(p,"source_sha256"),
             Read<std::string>(p,"configuration_sha256"),Read<std::string>(p,"build_sha256")};
     }
-    if(m.contains("solver") && !m.at("solver").is_null())
+    if(!m.at("solver").is_null())
     {
         const auto & p=m.at("solver").as_object();
+        RequireOnlyKeys(p,{"search_method","contract_version","sparse_backend","fixed_neighbor_core_atoms",
+            "fixed_neighbor_policy_version","fixed_neighbor_maximum_sweeps","fixed_neighbor_order",
+            "fixed_neighbor_local_search"},"unknown current solver provenance field");
         JointSolverProvenance solver;
         solver.search_method=Read<std::string>(p,"search_method");
-        solver.fixed_neighbor_core_atoms=p.contains("fixed_neighbor_core_atoms") ?
-            ReadOptionalSize(p.at("fixed_neighbor_core_atoms")) : std::nullopt;
-        solver.fixed_neighbor_local_work=p.contains("fixed_neighbor_local_work") ?
-            ReadOptionalText(p.at("fixed_neighbor_local_work")) : std::nullopt;
-        solver.contract_version=p.contains("contract_version") ? ReadOptionalText(p.at("contract_version")) : std::nullopt;
-        solver.sparse_backend=p.contains("sparse_backend") ? ReadOptionalText(p.at("sparse_backend")) : std::nullopt;
-        solver.preconditioner=p.contains("preconditioner") ? ReadOptionalText(p.at("preconditioner")) : std::nullopt;
-        solver.operator_rank_mode=p.contains("operator_rank_mode") ? ReadOptionalText(p.at("operator_rank_mode")) : std::nullopt;
-        solver.operator_rank_backend=p.contains("operator_rank_backend") ? ReadOptionalText(p.at("operator_rank_backend")) : std::nullopt;
-        solver.operator_pcg_iterations=p.contains("operator_pcg_iterations") ? ReadOptionalInt(p.at("operator_pcg_iterations")) : std::nullopt;
-        solver.operator_damping_trials=p.contains("operator_damping_trials") ? ReadOptionalInt(p.at("operator_damping_trials")) : std::nullopt;
-        solver.operator_rank_budget_seconds=p.contains("operator_rank_budget_seconds") ? OptionalNumber(p.at("operator_rank_budget_seconds")) : std::nullopt;
-        solver.operator_rank_budget_entries=p.contains("operator_rank_budget_entries") ? ReadOptionalSize(p.at("operator_rank_budget_entries")) : std::nullopt;
-        solver.operator_rank_budget_workspace_bytes=p.contains("operator_rank_budget_workspace_bytes") ? ReadOptionalSize(p.at("operator_rank_budget_workspace_bytes")) : std::nullopt;
-        solver.schwarz_core_atoms=p.contains("schwarz_core_atoms") ? ReadOptionalSize(p.at("schwarz_core_atoms")) : std::nullopt;
-        solver.schwarz_overlap_hops=p.contains("schwarz_overlap_hops") ? ReadOptionalSize(p.at("schwarz_overlap_hops")) : std::nullopt;
-        solver.schwarz_max_block_atoms=p.contains("schwarz_max_block_atoms") ? ReadOptionalSize(p.at("schwarz_max_block_atoms")) : std::nullopt;
-        solver.schwarz_storage_bytes=p.contains("schwarz_storage_bytes") ? ReadOptionalSize(p.at("schwarz_storage_bytes")) : std::nullopt;
-        solver.schwarz_scratch_bytes=p.contains("schwarz_scratch_bytes") ? ReadOptionalSize(p.at("schwarz_scratch_bytes")) : std::nullopt;
-        solver.fixed_neighbor_policy_version=p.contains("fixed_neighbor_policy_version") ? ReadOptionalText(p.at("fixed_neighbor_policy_version")) : std::nullopt;
-        solver.fixed_neighbor_maximum_sweeps=p.contains("fixed_neighbor_maximum_sweeps") ? ReadOptionalSize(p.at("fixed_neighbor_maximum_sweeps")) : std::nullopt;
-        solver.fixed_neighbor_order=p.contains("fixed_neighbor_order") ? ReadOptionalText(p.at("fixed_neighbor_order")) : std::nullopt;
-        solver.fixed_neighbor_local_search=p.contains("fixed_neighbor_local_search") ? ReadOptionalText(p.at("fixed_neighbor_local_search")) : std::nullopt;
+        solver.contract_version=ReadOptionalText(p.at("contract_version"));
+        solver.sparse_backend=ReadOptionalText(p.at("sparse_backend"));
+        solver.fixed_neighbor_core_atoms=ReadOptionalSize(p.at("fixed_neighbor_core_atoms"));
+        solver.fixed_neighbor_policy_version=ReadOptionalText(p.at("fixed_neighbor_policy_version"));
+        solver.fixed_neighbor_maximum_sweeps=ReadOptionalSize(p.at("fixed_neighbor_maximum_sweeps"));
+        solver.fixed_neighbor_order=ReadOptionalText(p.at("fixed_neighbor_order"));
+        solver.fixed_neighbor_local_search=ReadOptionalText(p.at("fixed_neighbor_local_search"));
         out.solver=std::move(solver);
     }
     return out;
@@ -814,99 +694,21 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
     if(m.solver)
     {
         const auto & p=*m.solver;
-        Require(p.search_method=="legacy-compact" || p.search_method=="operator-pcg" ||
-            p.search_method=="fixed-neighbor","invalid solver search method");
-        const bool current_contract=p.contract_version &&
-            *p.contract_version==JointSolverProvenanceContractVersion;
-        const bool previous_contract=p.contract_version &&
-            *p.contract_version==JointSolverProvenancePreviousContractVersion;
-        const bool reference_contract=p.contract_version &&
-            *p.contract_version==JointSolverProvenanceReferenceContractVersion;
-        const bool historical_contract=!p.contract_version || reference_contract ||
-            *p.contract_version==JointSolverProvenanceHistoricalContractVersion;
-        Require(current_contract || previous_contract || historical_contract,"unsupported solver provenance contract");
-        if(current_contract || previous_contract || reference_contract)
-        {
-            Require(p.search_method=="fixed-neighbor",
-                "current solver provenance must use FixedNeighbor");
-            Require(p.sparse_backend && *p.sparse_backend=="EIGEN",
-                "current solver provenance must use EIGEN");
-            Require(!p.preconditioner && !p.operator_rank_mode && !p.operator_rank_backend &&
-                !p.operator_pcg_iterations && !p.operator_damping_trials &&
-                !p.operator_rank_budget_seconds && !p.operator_rank_budget_entries &&
-                !p.operator_rank_budget_workspace_bytes && !p.schwarz_core_atoms &&
-                !p.schwarz_overlap_hops && !p.schwarz_max_block_atoms &&
-                !p.schwarz_storage_bytes && !p.schwarz_scratch_bytes,
-                "current solver provenance contains retired operator controls");
-            const auto policy=current_contract ? FixedNeighborPolicyContractVersion :
-                previous_contract ? FixedNeighborPreviousPolicyContractVersion : FixedNeighborReferencePolicyContractVersion;
-            Require(p.fixed_neighbor_policy_version &&
-                *p.fixed_neighbor_policy_version==policy && !p.fixed_neighbor_local_work,
-                "incomplete FixedNeighbor provenance");
-        }
-        else if(p.sparse_backend)
-            Require(*p.sparse_backend=="EIGEN" || *p.sparse_backend=="SPQR","invalid historical solver sparse backend");
-        if(p.preconditioner)
-            Require(*p.preconditioner=="Identity" || *p.preconditioner=="Diagonal" || *p.preconditioner=="Schwarz",
-                "invalid solver preconditioner");
-        if(p.operator_rank_mode)
-            Require(*p.operator_rank_mode=="Auto" || *p.operator_rank_mode=="Dense" ||
-                *p.operator_rank_mode=="SpqrBounds","invalid operator rank mode");
-        if(p.operator_rank_backend)
-            Require(*p.operator_rank_backend=="Dense" || *p.operator_rank_backend=="SpqrBounds",
-                "invalid operator rank backend");
-        if(p.operator_pcg_iterations) Require(*p.operator_pcg_iterations>=-1,"invalid operator PCG iteration budget");
-        if(p.operator_damping_trials) Require(*p.operator_damping_trials>=0,"invalid operator damping trial budget");
-        if(p.operator_rank_budget_seconds)
-            Require(std::isfinite(*p.operator_rank_budget_seconds) && *p.operator_rank_budget_seconds>0,
-                "invalid operator rank time budget");
-        const auto require_positive=[](const auto & value) {
-            if(value) Require(*value>0,"invalid solver resource budget");
-        };
-        require_positive(p.operator_rank_budget_entries); require_positive(p.operator_rank_budget_workspace_bytes);
-        require_positive(p.schwarz_core_atoms);
-        // overlap_hops is size_t, so its type already enforces >= 0; zero is valid.
-        require_positive(p.schwarz_max_block_atoms); require_positive(p.schwarz_storage_bytes);
-        require_positive(p.schwarz_scratch_bytes);
-        if(p.schwarz_core_atoms && p.schwarz_max_block_atoms)
-            Require(*p.schwarz_max_block_atoms>=*p.schwarz_core_atoms,"invalid Schwarz block limits");
-        if(p.search_method=="fixed-neighbor")
-        {
-            Require(p.fixed_neighbor_core_atoms && *p.fixed_neighbor_core_atoms>0,
-                "incomplete fixed-neighbor provenance");
-            const bool current_policy=current_contract && p.fixed_neighbor_policy_version &&
-                *p.fixed_neighbor_policy_version==FixedNeighborPolicyContractVersion;
-            const bool previous_policy=previous_contract && p.fixed_neighbor_policy_version &&
-                *p.fixed_neighbor_policy_version==FixedNeighborPreviousPolicyContractVersion;
-            const bool reference_policy=reference_contract && p.fixed_neighbor_policy_version &&
-                *p.fixed_neighbor_policy_version==FixedNeighborReferencePolicyContractVersion;
-            const bool legacy_policy=!p.fixed_neighbor_policy_version ||
-                *p.fixed_neighbor_policy_version==FixedNeighborLegacyPolicyContractVersion;
-            Require(current_policy || previous_policy || reference_policy || legacy_policy,"unsupported fixed-neighbor policy contract");
-            if(current_policy || previous_policy || reference_policy)
-            {
-                if(p.fixed_neighbor_local_work)
-                    Require(*p.fixed_neighbor_local_work=="one-accepted",
-                        "current FixedNeighbor cannot claim retired local work");
-            }
-            else
-            {
-                Require(p.fixed_neighbor_local_work && !p.fixed_neighbor_local_work->empty(),
-                    "incomplete legacy fixed-neighbor provenance");
-                Require(*p.fixed_neighbor_local_work=="full" || *p.fixed_neighbor_local_work=="one-accepted" ||
-                    *p.fixed_neighbor_local_work=="two-accepted","invalid legacy fixed-neighbor local work");
-            }
-            if(p.fixed_neighbor_maximum_sweeps) Require(*p.fixed_neighbor_maximum_sweeps>0,
-                "invalid fixed-neighbor sweep budget");
-            if(p.fixed_neighbor_order)
-                Require(*p.fixed_neighbor_order=="forward" || *p.fixed_neighbor_order=="reverse",
-                    "invalid fixed-neighbor block order");
-            if(p.fixed_neighbor_local_search)
-                Require(*p.fixed_neighbor_local_search==FixedNeighborLocalSearchName ||
-                    *p.fixed_neighbor_local_search==FixedNeighborBoundedLocalSearchName ||
-                    *p.fixed_neighbor_local_search=="legacy-compact",
-                    "invalid fixed-neighbor local search");
-        }
+        Require(p.search_method=="fixed-neighbor" &&
+            p.contract_version==std::optional<std::string>{std::string(JointSolverProvenanceContractVersion)} &&
+            p.sparse_backend==std::optional<std::string>{"EIGEN"} &&
+            p.fixed_neighbor_core_atoms==std::optional<std::size_t>{12} &&
+            p.fixed_neighbor_policy_version==std::optional<std::string>{std::string(FixedNeighborPolicyContractVersion)} &&
+            p.fixed_neighbor_maximum_sweeps==std::optional<std::size_t>{200} &&
+            p.fixed_neighbor_order==std::optional<std::string>{"forward"} &&
+            p.fixed_neighbor_local_search==std::optional<std::string>{std::string(FixedNeighborBoundedLocalSearchName)},
+            "invalid current FixedNeighbor provenance");
+        Require(!p.fixed_neighbor_local_work && !p.preconditioner && !p.operator_rank_mode &&
+            !p.operator_rank_backend && !p.operator_pcg_iterations && !p.operator_damping_trials &&
+            !p.operator_rank_budget_seconds && !p.operator_rank_budget_entries &&
+            !p.operator_rank_budget_workspace_bytes && !p.schwarz_core_atoms && !p.schwarz_overlap_hops &&
+            !p.schwarz_max_block_atoms && !p.schwarz_storage_bytes && !p.schwarz_scratch_bytes,
+            "current solver provenance contains retired controls");
     }
     if(m.map_normalization)
     {
@@ -915,45 +717,43 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
         Require(n.applied ? n.requested && !m.simulation : n.divisor==1,"inconsistent normalization");
     }
 }
-void ValidateState(const JointState & x,std::size_t atoms,std::size_t groups=0)
+void ValidateState(const JointState & x,std::size_t atoms)
 {
     Require(x.ac.size()==2*atoms && x.b.size()==atoms && x.log_b.size()==atoms && x.width_gradient.size()==atoms,"state dimensions");
     for(const auto * values:{&x.ac,&x.b,&x.log_b,&x.width_gradient})
         for(double value:*values) Require(std::isfinite(value),"nonfinite state");
-    for(double b:x.b) Require(b>0,"nonpositive width");
+    for(std::size_t atom=0;atom<atoms;++atom)
+        Require(x.ac[2*atom]>=0 && x.b[atom]>0,"infeasible target parameters");
     Require(std::isfinite(x.objective),"nonfinite objective");
-    Require(x.nuisance_amplitudes.size()==groups,"nuisance amplitude dimensions");
-    for(double value:x.nuisance_amplitudes) Require(std::isfinite(value),"nonfinite nuisance amplitude");
+    Require(x.nuisance_amplitudes.empty(),"current state contains retired nuisance parameters");
 }
-void ValidateCandidateDiagnostic(const JointCandidateDiagnostic & x,std::size_t atoms,bool trusted_state,
-    bool reference_free_contract)
+void ValidateCandidateDiagnostic(const JointCandidateDiagnostic & x,std::size_t atoms,bool trusted_state)
 {
-    const bool no_criteria=x.convergence_criteria_id.empty() && !x.global_ac_kkt_threshold &&
+    const auto & strict=core::joint_component::StrictJointConvergenceCriteria;
+    const auto & practical=core::joint_component::PracticalJointConvergenceCriteria;
+    const bool default_criteria=x.convergence_criteria_id.empty() && !x.global_ac_kkt_threshold &&
         !x.global_width_gradient_threshold && !x.confirmed_log_width_change_threshold;
-    const bool has_criteria=!x.convergence_criteria_id.empty() && x.global_ac_kkt_threshold &&
+    const bool complete_criteria=!x.convergence_criteria_id.empty() && x.global_ac_kkt_threshold &&
         x.global_width_gradient_threshold && x.confirmed_log_width_change_threshold;
-    Require(no_criteria || has_criteria,"incomplete convergence criteria provenance");
-    if(has_criteria)
-    {
-        const auto & strict=core::joint_component::StrictJointConvergenceCriteria;
-        const auto & practical=core::joint_component::PracticalJointConvergenceCriteria;
-        Require(x.convergence_criteria_id=="strict-v1" || x.convergence_criteria_id=="practical-v1" ||
-            x.convergence_criteria_id=="custom-v1","invalid convergence criteria identifier");
-        Require(std::isfinite(*x.global_ac_kkt_threshold) && *x.global_ac_kkt_threshold>0 &&
-            std::isfinite(*x.global_width_gradient_threshold) && *x.global_width_gradient_threshold>0 &&
-            std::isfinite(*x.confirmed_log_width_change_threshold) && *x.confirmed_log_width_change_threshold>0,
-            "invalid convergence criteria threshold");
-        if(x.convergence_criteria_id=="strict-v1")
-            Require(*x.global_ac_kkt_threshold==strict.global_ac_kkt &&
-                *x.global_width_gradient_threshold==strict.global_width_gradient &&
-                *x.confirmed_log_width_change_threshold==strict.confirmed_log_width_change,
-                "strict convergence criteria do not match their identifier");
-        if(x.convergence_criteria_id=="practical-v1")
-            Require(*x.global_ac_kkt_threshold==practical.global_ac_kkt &&
-                *x.global_width_gradient_threshold==practical.global_width_gradient &&
-                *x.confirmed_log_width_change_threshold==practical.confirmed_log_width_change,
-                "practical convergence criteria do not match their identifier");
-    }
+    Require(default_criteria || complete_criteria,"incomplete convergence criteria provenance");
+    const auto & criteria_id=default_criteria ? std::string_view{"strict-v1"} :
+        std::string_view{x.convergence_criteria_id};
+    const auto ac_threshold=default_criteria ? strict.global_ac_kkt : *x.global_ac_kkt_threshold;
+    const auto width_threshold=default_criteria ? strict.global_width_gradient : *x.global_width_gradient_threshold;
+    const auto change_threshold=default_criteria ? strict.confirmed_log_width_change : *x.confirmed_log_width_change_threshold;
+    Require(criteria_id=="strict-v1" || criteria_id=="practical-v1" || criteria_id=="custom-v1",
+        "invalid convergence criteria identifier");
+    Require(std::isfinite(ac_threshold) && ac_threshold>0 && std::isfinite(width_threshold) &&
+        width_threshold>0 && std::isfinite(change_threshold) && change_threshold>0,
+        "invalid convergence criteria thresholds");
+    if(criteria_id=="strict-v1")
+        Require(ac_threshold==strict.global_ac_kkt && width_threshold==strict.global_width_gradient &&
+            change_threshold==strict.confirmed_log_width_change,
+            "strict convergence criteria do not match their identifier");
+    if(criteria_id=="practical-v1")
+        Require(ac_threshold==practical.global_ac_kkt && width_threshold==practical.global_width_gradient &&
+            change_threshold==practical.confirmed_log_width_change,
+            "practical convergence criteria do not match their identifier");
     Require(!x.candidate_log_width_change_inf_norm ||
         (std::isfinite(*x.candidate_log_width_change_inf_norm) && *x.candidate_log_width_change_inf_norm>=0),
         "invalid candidate log-width change");
@@ -964,7 +764,9 @@ void ValidateCandidateDiagnostic(const JointCandidateDiagnostic & x,std::size_t 
             "candidate dimensions");
         for(double eta:x.candidate_eta)
             Require(std::isfinite(eta) && std::isfinite(std::exp(eta)) && std::exp(eta)>0,"invalid candidate width");
-        for(double value:x.candidate_ac) Require(std::isfinite(value),"nonfinite candidate A/C");
+        for(std::size_t atom=0;atom<atoms;++atom)
+            Require(std::isfinite(x.candidate_ac[2*atom]) && x.candidate_ac[2*atom]>=0 &&
+                std::isfinite(x.candidate_ac[2*atom+1]),"infeasible candidate A/C");
         Require(std::isfinite(*x.candidate_objective),"nonfinite candidate objective");
     }
     else Require(x.candidate_eta.empty() && x.candidate_ac.empty() && !x.candidate_objective,
@@ -973,17 +775,14 @@ void ValidateCandidateDiagnostic(const JointCandidateDiagnostic & x,std::size_t 
         Require(!*value || (std::isfinite(**value) && **value>=0),"invalid candidate diagnostic value");
     Require((x.certification_status==JointCheckStatus::Passed)==trusted_state,
         "candidate certification disagrees with trusted state");
+    Require((x.numerical_qualification_status==JointCheckStatus::Passed)==trusted_state,
+        "candidate numerical qualification disagrees with trusted state");
     Require(x.certification_status!=JointCheckStatus::Passed || x.candidate_available,
         "certified candidate is unavailable");
-    if(reference_free_contract)
-    {
-        Require((x.numerical_qualification_status==JointCheckStatus::Passed)==trusted_state,
-            "candidate numerical qualification disagrees with trusted state");
-        Require(x.numerical_qualification_status!=JointCheckStatus::Passed || x.candidate_available,
-            "qualified candidate is unavailable");
-        Require(x.endpoint_verification_status!=JointCheckStatus::Passed || x.candidate_available,
-            "verified candidate is unavailable");
-    }
+    Require(x.numerical_qualification_status!=JointCheckStatus::Passed || x.candidate_available,
+        "qualified candidate is unavailable");
+    Require(x.endpoint_verification_status!=JointCheckStatus::Passed || x.candidate_available,
+        "verified candidate is unavailable");
 }
 void ValidateBlockConditioning(const JointBlockConditioning & x)
 {
@@ -1070,107 +869,53 @@ std::optional<JointSelectionDomain> ReadSelectionDomain(const j::value & value)
 {
     if(value.is_null()) return std::nullopt;
     const auto & o=value.as_object();
+    RequireOnlyKeys(o,{"contract","target_indices","observation_radius","support_radius","contributor_policy",
+        "pure_halo_support_exclusion"},"unknown current selection domain field");
     JointSelectionDomain out;
     out.contract=Read<std::string>(o,"contract");
     out.target_indices=Read<std::vector<std::size_t>>(o,"target_indices");
     out.observation_radius=Read<double>(o,"observation_radius");
     out.support_radius=Read<double>(o,"support_radius");
     out.contributor_policy=Read<std::string>(o,"contributor_policy");
-    if(o.contains("halo_eligibility") && !o.at("halo_eligibility").is_null())
-    {
-        const auto & item=o.at("halo_eligibility").as_object(); JointHaloEligibilityProvenance provenance;
-        provenance.minimum_observations=Read<std::size_t>(item,"minimum_observations");
-        provenance.minimum_distinct_radial_information=Read<std::size_t>(item,"minimum_distinct_radial_information");
-        provenance.candidate_halos=Read<std::size_t>(item,"candidate_halos");
-        provenance.retained_halos=Read<std::size_t>(item,"retained_halos");
-        for(const auto & excluded_value:item.at("excluded_halos").as_array())
-        {
-            const auto & excluded=excluded_value.as_object();
-            provenance.excluded_halos.push_back({Read<std::string>(excluded,"atom_id"),
-                Read<std::size_t>(excluded,"support_rows"),Read<std::size_t>(excluded,"distinct_radial_distances"),
-                Read<std::string>(excluded,"reason")});
-        }
-        out.halo_eligibility=std::move(provenance);
-    }
-    if(o.contains("fixed_halo_selection") && !o.at("fixed_halo_selection").is_null())
-    {
-        const auto & item=o.at("fixed_halo_selection").as_object();
-        out.fixed_halo_selection=JointFixedHaloSelectionProvenance{
-            Read<std::size_t>(item,"minimum_observations"),Read<std::size_t>(item,"candidate_halos"),
-            Read<std::size_t>(item,"retained_halos"),Read<std::size_t>(item,"zero_support_halos")};
-    }
-    if(o.contains("pure_halo_support_exclusion") && !o.at("pure_halo_support_exclusion").is_null())
-    {
-        const auto & item=o.at("pure_halo_support_exclusion").as_object();
-        out.pure_halo_support_exclusion=JointPureHaloSupportExclusionProvenance{
-            Read<std::size_t>(item,"original_rows"),Read<std::size_t>(item,"fit_rows"),
-            Read<std::size_t>(item,"excluded_rows"),Read<std::size_t>(item,"candidate_halos"),
-            Read<std::size_t>(item,"retained_halos"),Read<std::size_t>(item,"zero_support_halos")};
-    }
+    Require(!o.at("pure_halo_support_exclusion").is_null(),"missing Pure Exclusion provenance");
+    const auto & item=o.at("pure_halo_support_exclusion").as_object();
+    RequireOnlyKeys(item,{"original_rows","fit_rows","excluded_rows","candidate_halos","retained_halos",
+        "zero_support_halos"},"unknown current Pure Exclusion provenance field");
+    out.pure_halo_support_exclusion=JointPureHaloSupportExclusionProvenance{
+        Read<std::size_t>(item,"original_rows"),Read<std::size_t>(item,"fit_rows"),
+        Read<std::size_t>(item,"excluded_rows"),Read<std::size_t>(item,"candidate_halos"),
+        Read<std::size_t>(item,"retained_halos"),Read<std::size_t>(item,"zero_support_halos")};
     return out;
 }
-std::optional<JointParameterLayout> ReadLayout(const Object & object)
-{
-    if(!object.contains("layout") || object.at("layout").is_null()) return std::nullopt;
-    const auto & o=object.at("layout").as_object();
-    JointParameterLayout out{Read<std::vector<std::size_t>>(o,"full_atoms"),Read<std::vector<std::size_t>>(o,"informative_rows"),{}};
-    for(const auto & item:o.at("groups").as_array())
-    {const auto & group=item.as_object(); out.groups.push_back({Read<std::size_t>(group,"row"),Read<std::vector<std::size_t>>(group,"atoms")});}
-    return out;
-}
-void ValidateLayout(const JointParameterLayout & layout,const std::vector<std::size_t> & atoms,
-    const std::vector<std::size_t> & rows,const JointSelectionDomain * selection)
-{
-    std::set<std::size_t> remaining_atoms(atoms.begin(),atoms.end()),remaining_rows(rows.begin(),rows.end());
-    Require(std::is_sorted(layout.full_atoms.begin(),layout.full_atoms.end()),"unsorted full atom layout");
-    Require(std::is_sorted(layout.informative_rows.begin(),layout.informative_rows.end()),"unsorted informative rows");
-    for(auto a:layout.full_atoms) Require(remaining_atoms.erase(a)==1,"full atom mapping");
-    for(auto r:layout.informative_rows) Require(remaining_rows.erase(r)==1,"informative row mapping");
-    std::optional<std::size_t> previous;
-    for(const auto & group:layout.groups)
-    {
-        Require(!previous || *previous<group.row,"unsorted or duplicate nuisance row"); previous=group.row;
-        Require(!group.atoms.empty() && remaining_rows.erase(group.row)==1,"nuisance row mapping");
-        Require(std::is_sorted(group.atoms.begin(),group.atoms.end()),"unsorted nuisance atoms");
-        for(auto a:group.atoms)
-        {
-            Require(remaining_atoms.erase(a)==1,"nuisance atom mapping");
-            Require(selection && !std::binary_search(selection->target_indices.begin(),selection->target_indices.end(),a),"nuisance atom must be a recorded halo");
-        }
-    }
-    Require(remaining_atoms.empty() && remaining_rows.empty(),"incomplete parameter layout");
-}
+
+
 j::value Target(const std::optional<JointTargetEvidence> & value)
 {
     if(!value) return nullptr;
-    const auto & t=*value; j::array atoms,point_atoms;
-    for(const auto & a:t.atoms) atoms.emplace_back(Object{{"atom",a.atom},{"status",StatusText(a.status)},
-        {"null_space_leakage",Number(a.null_space_leakage)},{"reason",a.reason}});
+    const auto & t=*value; j::array point_atoms;
     for(const auto & a:t.point_atoms)
         point_atoms.emplace_back(Object{{"atom",a.atom},{"component_convergence",StatusText(a.component_convergence)},
             {"parameter_validity",StatusText(a.parameter_validity)},{"local_conditioning",a.local_conditioning},
             {"parameter_stability",a.parameter_stability},{"point_quality",a.point_quality},
             {"local_conditioning_blocks",j::value_from(a.local_conditioning_blocks)},
             {"parameter_stability_blocks",j::value_from(a.parameter_stability_blocks)},{"reason",a.reason}});
-    return Object{{"contract",t.contract},{"checks",Checks(t.checks)},{"ranks",Ranks(t.ranks)},
-        {"atoms",atoms},{"point_atoms",point_atoms},{"column_scales",j::value_from(t.column_scales)},
-        {"original_rows",t.original_rows}};
+    return Object{{"contract",t.contract},{"checks",Checks(t.checks)},
+        {"point_atoms",std::move(point_atoms)},{"original_rows",t.original_rows}};
 }
-std::optional<JointTargetEvidence> ReadTarget(const j::value & value,int schema_version)
+std::optional<JointTargetEvidence> ReadTarget(const j::value & value)
 {
     if(value.is_null()) return {};
-    const auto & o=value.as_object(); JointTargetEvidence t;
+    const auto & o=value.as_object();
+    RequireOnlyKeys(o,{"contract","checks","point_atoms","original_rows"},"unknown current target evidence field");
+    JointTargetEvidence t;
     t.contract=Read<std::string>(o,"contract"); t.checks=ReadChecks(o.at("checks"));
-    t.ranks=ReadRanks(o.at("ranks"),schema_version>=9);
-    t.column_scales=Read<std::vector<double>>(o,"column_scales"); t.original_rows=Read<std::size_t>(o,"original_rows");
-    for(const auto & value_tmp:o.at("atoms").as_array())
+    t.original_rows=Read<std::size_t>(o,"original_rows");
+    for(const auto & item:o.at("point_atoms").as_array())
     {
-        const auto & a=value_tmp.as_object();
-        t.atoms.push_back({Read<std::size_t>(a,"atom"),Status(a.at("status")),OptionalNumber(a.at("null_space_leakage")),Read<std::string>(a,"reason")});
-    }
-    if(o.contains("point_atoms")) for(const auto & value_tmp:o.at("point_atoms").as_array())
-    {
-        const auto & a=value_tmp.as_object(); JointAtomPointValidation point;
+        const auto & a=item.as_object(); JointAtomPointValidation point;
+        RequireOnlyKeys(a,{"atom","component_convergence","parameter_validity","local_conditioning",
+            "parameter_stability","point_quality","local_conditioning_blocks","parameter_stability_blocks","reason"},
+            "unknown current target point field");
         point.atom=Read<std::size_t>(a,"atom");
         point.component_convergence=Status(a.at("component_convergence"));
         point.parameter_validity=Status(a.at("parameter_validity"));
@@ -1183,386 +928,209 @@ std::optional<JointTargetEvidence> ReadTarget(const j::value & value,int schema_
     }
     return t;
 }
-void ValidateTarget(const std::optional<JointTargetEvidence> & value,const std::vector<std::size_t> & atoms,
-    const std::vector<std::size_t> & full_atoms,const std::optional<JointSelectionDomain> & selection,
-    std::size_t full,std::size_t rows)
+void ValidateTarget(const std::optional<JointTargetEvidence> & value,const std::vector<std::size_t> & expected_atoms,
+    std::size_t rows)
 {
     if(!value) return;
     const auto & t=*value;
-    const bool derived=t.contract=="target-estimability-v3" || t.contract=="target-estimability-v4";
-    const bool point_contract=t.contract==JointTargetPointValidationContractVersion;
-    Require(selection.has_value() && (t.contract=="target-estimability-v1" || t.contract=="target-estimability-v2" || derived || point_contract),
-        "target evidence contract");
-    Require(t.original_rows==rows,"target rank row context");
-    if(point_contract)
+    Require(t.ranks.empty() && t.atoms.empty() && t.column_scales.empty(),
+        "current target evidence contains retired rank data");
+    Require(t.contract==JointTargetPointValidationContractVersion,"target point validation contract");
+    Require(t.original_rows==rows,"target validation row context");
+    std::set<std::size_t> expected(expected_atoms.begin(),expected_atoms.end()),seen;
+    for(const auto & point:t.point_atoms)
     {
-        Require(t.ranks.empty() && t.atoms.empty() && t.column_scales.empty(),"point evidence cannot contain rank evidence");
-        std::set<std::size_t> expected(full_atoms.begin(),full_atoms.end()),seen;
-        for(const auto & point:t.point_atoms)
-        {
-            Require(expected.contains(point.atom) && seen.insert(point.atom).second,"point atom mapping");
-            Require(point.local_conditioning=="Adequate" || point.local_conditioning=="Warning" ||
-                point.local_conditioning=="Unavailable" || point.local_conditioning=="NotAssessed","point local conditioning status");
-            Require(point.parameter_stability=="Stable" || point.parameter_stability=="Sensitive" ||
-                point.parameter_stability=="Unstable" || point.parameter_stability=="Unavailable" ||
-                point.parameter_stability=="NotAssessed","point parameter stability status");
-            Require(point.point_quality=="Available" || point.point_quality=="Warning" ||
-                point.point_quality=="Unavailable" || point.point_quality=="NotAssessed","point quality status");
-            Require(!point.reason.empty(),"point quality reason");
-        }
-        Require(seen==expected,"incomplete point atom evidence");
+        Require(expected.contains(point.atom) && seen.insert(point.atom).second,"point atom mapping");
+        Require(point.local_conditioning=="Adequate" || point.local_conditioning=="Warning" ||
+            point.local_conditioning=="Unavailable" || point.local_conditioning=="NotAssessed","point local conditioning status");
+        Require(point.parameter_stability=="Stable" || point.parameter_stability=="Sensitive" ||
+            point.parameter_stability=="Unstable" || point.parameter_stability=="Unavailable" ||
+            point.parameter_stability=="NotAssessed","point parameter stability status");
+        Require(point.point_quality=="Available" || point.point_quality=="Warning" ||
+            point.point_quality=="Unavailable" || point.point_quality=="NotAssessed","point quality status");
+        Require(!point.reason.empty(),"point quality reason");
     }
-    if(derived)
-    {
-        Require(t.column_scales.empty(),"derived target evidence cannot contain column scales");
-        Require(std::none_of(t.atoms.begin(),t.atoms.end(),[](const auto & a){return a.null_space_leakage.has_value();}),
-            "derived target evidence cannot contain null-space leakage");
-        const bool derived_pass=std::any_of(t.atoms.begin(),t.atoms.end(),[](const auto & atom) {
-            return atom.status==JointCheckStatus::Passed &&
-                atom.reason=="derived-from-component-identifiability";
-        });
-        if(derived_pass)
-            Require(t.ranks.size()==2,"derived target rank evidence dimensions");
-        if(!t.ranks.empty())
-        {
-            Require(t.ranks.size()==2,"derived target rank evidence dimensions");
-            const auto design=std::find_if(t.ranks.begin(),t.ranks.end(),[](const auto & rank){return rank.name=="design";});
-            const auto widths=std::find_if(t.ranks.begin(),t.ranks.end(),[](const auto & rank){return rank.name=="projected-width";});
-            Require(design!=t.ranks.end() && widths!=t.ranks.end(),"derived target rank evidence sources");
-            if(derived_pass)
-            {
-                Require(design->scope==widths->scope && !design->context_identity.empty() &&
-                    design->context_identity==widths->context_identity,
-                    "derived target rank context");
-                Require(full<=std::numeric_limits<std::size_t>::max()/2 && design->rank==2*full &&
-                    widths->rank==full && design->singular_values.size()==2*full &&
-                    widths->singular_values.size()==full && std::isfinite(design->threshold) &&
-                    design->threshold>0 && std::isfinite(widths->threshold) && widths->threshold>0,
-                    "derived target rank dimensions");
-            }
-        }
-    }
-    Require(t.column_scales.empty() || t.column_scales.size()==3*full,"target scale dimensions");
-    for(double s:t.column_scales) Require(std::isfinite(s) && s>0,"target column scale");
-    if(!point_contract)
-    {
-        std::set<std::size_t> expected(atoms.begin(),atoms.end()),seen;
-        for(const auto & a:t.atoms)
-        {
-            Require(expected.contains(a.atom) && seen.insert(a.atom).second,"target atom mapping");
-            if(a.null_space_leakage) Require(std::isfinite(*a.null_space_leakage) && *a.null_space_leakage>=0,"target null space leakage");
-        }
-        Require(seen==expected,"incomplete target atom evidence");
-    }
+    Require(seen==expected,"incomplete point atom evidence");
 }
-void Validate(const JointAnalysisResult & x,int schema_version)
+void Validate(const JointAnalysisResult & x)
 {
     ValidateMetadata(x.metadata);
-    if(schema_version<9)
+    const auto atoms=x.atom_ids.size(),rows=x.row_ids.size();
+    Require(x.parameterization_contract==JointPureHaloSupportExclusionParameterizationContract,
+        "current Joint result requires target-only Pure Exclusion");
+    Require(!x.layout && x.fixed_halos.empty() && x.legacy_global_rank_evidence.empty(),
+        "current Joint result contains retired parameterization or rank evidence");
+    Require(x.selection_domain && x.selection_domain->IsValid(atoms) &&
+        x.selection_domain->contributor_policy==PureHaloSupportExclusionContributorPolicy,
+        "current Joint result requires Pure Exclusion selection domain");
+    for(const auto & component:x.components)
+        Require(!component.layout && component.legacy_global_rank_evidence.empty() &&
+            !component.legacy_candidate_evidence,"current Joint component contains retired result fields");
+    Require(x.costs.search_reference_seconds==0,"current Joint result contains retired reference timing");
+    for(const double seconds:{x.costs.construction_seconds,x.costs.initialization_seconds,x.costs.search_seconds,
+        x.costs.assessment_seconds,x.costs.assembly_seconds})
+        Require(std::isfinite(seconds) && seconds>=0,"invalid Joint cost timing");
+    const auto & selection=*x.selection_domain;
+    const auto & provenance=*selection.pure_halo_support_exclusion;
+    Require(atoms>0 && std::set<std::string>(x.atom_ids.begin(),x.atom_ids.end()).size()==atoms,
+        "atom identities");
+    Require(std::set<std::string>(x.row_ids.begin(),x.row_ids.end()).size()==rows,"row identities");
+    Require(provenance.original_rows==rows,"Pure Exclusion original row provenance");
+    Require(x.fitting_row_ids.size()==x.fitting_to_original_rows.size() &&
+        x.fitting_row_ids.size()==provenance.fit_rows && !x.fitting_row_ids.empty(),
+        "Pure Exclusion fitting identity dimensions");
+    std::set<std::size_t> fitting_rows;
+    for(std::size_t k=0;k<x.fitting_row_ids.size();++k)
     {
-        const auto old_target_contract=[](const auto & evidence) {
-            return !evidence || (evidence->contract!="target-estimability-v3" &&
-                evidence->contract!="target-estimability-v4");
-        };
-        Require(old_target_contract(x.target_evidence) &&
-            std::all_of(x.components.begin(),x.components.end(),[&](const auto & component) {
-                return old_target_contract(component.target_evidence);
-            }),"derived target evidence requires schema 9");
+        const auto row=x.fitting_to_original_rows[k];
+        Require(row<rows && fitting_rows.insert(row).second && x.fitting_row_ids[k]==x.row_ids[row],
+            "Pure Exclusion fitting row identity");
     }
-    if(schema_version<10)
-    {
-        const auto new_target_contract=[](const auto & evidence) {
-            return !evidence || evidence->contract!="target-estimability-v4";
-        };
-        Require(new_target_contract(x.target_evidence) &&
-            std::all_of(x.components.begin(),x.components.end(),[&](const auto & component) {
-                return new_target_contract(component.target_evidence);
-            }),"target-estimability-v4 requires schema 10");
-    }
-    if(schema_version<8)
-    {
-        Require(!x.metadata.solver || !x.metadata.solver->contract_version ||
-            *x.metadata.solver->contract_version!=JointSolverProvenanceContractVersion,
-            "correction-free solver contract requires schema 8");
-        const auto old_target_contract=[](const auto & evidence) {
-            return !evidence || evidence->contract=="target-estimability-v1";
-        };
-        Require(old_target_contract(x.target_evidence) &&
-            std::all_of(x.components.begin(),x.components.end(),[&](const auto & component) {
-                return old_target_contract(component.target_evidence);
-            }),"target-estimability-v2 requires schema 8");
-    }
-    const bool reference_free_contract=schema_version==persistence_schema::JointResultJson ||
-        (x.metadata.solver && x.metadata.solver->contract_version &&
-        (*x.metadata.solver->contract_version==JointSolverProvenanceContractVersion ||
-         *x.metadata.solver->contract_version==JointSolverProvenancePreviousContractVersion));
-    const auto atoms=x.atom_ids.size(), rows=x.row_ids.size();
-    Require(!x.selection_domain || x.selection_domain->IsValid(atoms),"selection domain");
-    const bool pruned_policy=x.selection_domain &&
-        x.selection_domain->contributor_policy==FullABCHaloContributorPolicy;
-    const bool fixed_halo_policy=x.selection_domain &&
-        x.selection_domain->contributor_policy==FixedHaloContributorPolicy;
-    const bool pure_exclusion_policy=x.selection_domain &&
-        x.selection_domain->contributor_policy==PureHaloSupportExclusionContributorPolicy;
-    const bool target_only_fixed_halo=x.parameterization_contract==JointTargetOnlyFixedHaloParameterizationContract;
-    const bool target_only_pure_exclusion=x.parameterization_contract==
-        JointPureHaloSupportExclusionParameterizationContract;
-    if(schema_version==persistence_schema::JointResultJson)
-    {
-        Require(target_only_pure_exclusion && pure_exclusion_policy && !x.layout && x.fixed_halos.empty(),
-            "current Joint result requires target-only Pure Exclusion");
-        Require(x.legacy_global_rank_evidence.empty(),"current Joint result contains retired rank evidence");
-        for(const auto & component:x.components)
-        {
-            Require(!component.layout && component.legacy_global_rank_evidence.empty() &&
-                !component.legacy_candidate_evidence,
-                "current Joint component contains retired result fields");
-            if(component.state)
-                Require(component.state->nuisance_amplitudes.empty(),
-                    "current Joint state contains retired nuisance parameters");
-        }
-        if(x.assembled_state)
-            Require(x.assembled_state->nuisance_amplitudes.empty(),
-                "current assembled state contains retired nuisance parameters");
-        if(x.metadata.solver)
-        {
-            const auto & solver=*x.metadata.solver;
-            Require(solver.search_method=="fixed-neighbor" && solver.contract_version &&
-                *solver.contract_version==JointSolverProvenanceContractVersion &&
-                solver.sparse_backend && *solver.sparse_backend=="EIGEN" &&
-                solver.fixed_neighbor_core_atoms==std::optional<std::size_t>{12} &&
-                solver.fixed_neighbor_policy_version &&
-                *solver.fixed_neighbor_policy_version==FixedNeighborPolicyContractVersion &&
-                solver.fixed_neighbor_maximum_sweeps==std::optional<std::size_t>{200} &&
-                solver.fixed_neighbor_order && *solver.fixed_neighbor_order=="forward" &&
-                solver.fixed_neighbor_local_search &&
-                *solver.fixed_neighbor_local_search==FixedNeighborBoundedLocalSearchName &&
-                !solver.fixed_neighbor_local_work && !solver.preconditioner &&
-                !solver.operator_rank_mode && !solver.operator_rank_backend &&
-                !solver.operator_pcg_iterations && !solver.operator_damping_trials &&
-                !solver.operator_rank_budget_seconds && !solver.operator_rank_budget_entries &&
-                !solver.operator_rank_budget_workspace_bytes && !solver.schwarz_core_atoms &&
-                !solver.schwarz_overlap_hops && !solver.schwarz_max_block_atoms &&
-                !solver.schwarz_storage_bytes && !solver.schwarz_scratch_bytes,
-                "invalid current FixedNeighbor solver provenance");
-        }
-    }
-    Require(schema_version>=11 || !pruned_policy,"halo pruning policy requires schema 11");
-    Require(schema_version>=13 || !fixed_halo_policy,"fixed-halo policy requires schema 13");
-    Require(schema_version>=17 || !pure_exclusion_policy,"Pure Exclusion policy requires schema 17");
-    Require(schema_version>=17 || !target_only_pure_exclusion,"Pure Exclusion parameterization requires schema 17");
-    Require(schema_version>=14 || (!target_only_fixed_halo && x.fixed_halos.empty()),
-        "target-only fixed-halo state requires schema 14");
-    if(pruned_policy)
-    {
-        Require(x.selection_domain->halo_eligibility.has_value(),"halo pruning requires eligibility provenance");
-        Require(!x.layout && x.parameterization_contract=="full-abc-v1",
-            "halo pruning results require FullABC parameterization");
-    }
+    const auto & targets=selection.target_indices;
+    Require(x.fitting_to_original_contributors==targets,"Pure Exclusion fitting contributor mapping");
+    Require(x.available_row_mask.size()==rows,"row mask dimensions");
+    Require(std::isfinite(x.observation_scale) && x.observation_scale>=1,"observation scale");
+    Require(!x.objective || std::isfinite(*x.objective),"nonfinite objective");
     Require(x.initialization.data_scope=="caller-provided-widths" ||
         x.initialization.data_scope=="contributor-local-sampling-may-read-outside-target-domain","initialization data scope");
     std::set<std::string> initialized;
     for(const auto & atom:x.initialization.atoms)
-        Require(std::find(x.atom_ids.begin(),x.atom_ids.end(),atom.id)!=x.atom_ids.end() && initialized.insert(atom.id).second,
-            "initialization atom identity");
-    const std::set<std::string> atom_id_set(x.atom_ids.begin(),x.atom_ids.end());
-    Require(atoms>0 && atom_id_set.size()==atoms,"atom identities");
-    if(pruned_policy) for(const auto & excluded:x.selection_domain->halo_eligibility->excluded_halos)
-        Require(!atom_id_set.contains(excluded.atom_id),"excluded halo is a retained contributor");
-    Require(std::set<std::string>(x.row_ids.begin(),x.row_ids.end()).size()==rows,"row identities");
-    Require(x.available_row_mask.size()==rows,"row mask dimensions");
-    Require(std::isfinite(x.observation_scale) && x.observation_scale>=1,"observation scale");
-    Require(!x.objective || std::isfinite(*x.objective),"nonfinite objective");
-    if(target_only_fixed_halo)
-        Require(fixed_halo_policy && !x.layout,"target-only fixed-halo parameterization contract");
-    else if(target_only_pure_exclusion)
-        Require(pure_exclusion_policy && !x.layout && x.fixed_halos.empty(),
-            "target-only Pure Exclusion parameterization contract");
-    else
     {
-        Require(x.parameterization_contract==(x.layout ? "singleton-halo-profile-v1" : "full-abc-v1"),"parameterization contract");
-        Require(x.fixed_halos.empty(),"fixed-halo parameters require target-only parameterization");
+        Require(std::find(x.atom_ids.begin(),x.atom_ids.end(),atom.id)!=x.atom_ids.end() &&
+            initialized.insert(atom.id).second,"initialization atom identity");
+        for(const auto * width:{&atom.original_b,&atom.used_b})
+            Require(!*width || (std::isfinite(**width) && **width>0),"invalid initialization width provenance");
     }
-    if(target_only_fixed_halo)
-    {
-        const auto & targets=x.selection_domain->target_indices;
-        std::vector<std::size_t> expected_halos;
-        for(std::size_t atom=0;atom<atoms;++atom)
-            if(!std::binary_search(targets.begin(),targets.end(),atom)) expected_halos.push_back(atom);
-        Require(x.fixed_halos.empty() || x.fixed_halos.size()==expected_halos.size(),"incomplete fixed-halo state");
-        if(!x.fixed_halos.empty())
-            for(std::size_t k=0;k<x.fixed_halos.size();++k)
-            {
-                const auto & fixed=x.fixed_halos[k];
-                Require(fixed.contributor_index==expected_halos[k] && fixed.atom_id==x.atom_ids[expected_halos[k]],
-                    "fixed-halo identity mapping");
-                Require(std::isfinite(fixed.amplitude) && fixed.amplitude>=0 &&
-                    std::isfinite(fixed.width) && fixed.width>0 && fixed.charge==0.0,
-                    "invalid fixed-halo parameters");
-                Require(IsQualifiedFirstStageFixedHalo(fixed) &&
-                    fixed.source_contract==FixedHaloParameterSourceContractVersion,
-                    "invalid fixed-halo FirstStage provenance");
-            }
-        Require(x.fixed_halos.size()==expected_halos.size() ||
-            (!x.assembled_state && !x.objective && x.components.empty() &&
-                x.runtime_convergence!=JointCheckStatus::Passed),
-            "fitted target-only result requires every fixed halo");
-    }
-    if(target_only_pure_exclusion)
-    {
-        const auto & targets=x.selection_domain->target_indices;
-        const auto & provenance=*x.selection_domain->pure_halo_support_exclusion;
-        Require(provenance.original_rows==rows,"Pure Exclusion original row provenance");
-        Require(x.fitting_row_ids.size()==x.fitting_to_original_rows.size() &&
-            x.fitting_row_ids.size()==provenance.fit_rows && !x.fitting_row_ids.empty(),
-            "Pure Exclusion fitting identity dimensions");
-        std::set<std::size_t> fitting_rows;
-        for(std::size_t k=0;k<x.fitting_row_ids.size();++k)
-        {
-            const auto row=x.fitting_to_original_rows[k];
-            Require(row<rows && fitting_rows.insert(row).second && x.fitting_row_ids[k]==x.row_ids[row],
-                "Pure Exclusion fitting row identity");
-        }
-        Require(x.fitting_to_original_contributors.size()==targets.size(),
-            "Pure Exclusion fitting contributor dimensions");
-        for(std::size_t k=0;k<targets.size();++k)
-            Require(x.fitting_to_original_contributors[k]<atoms &&
-                x.fitting_to_original_contributors[k]==targets[k],
-                "Pure Exclusion fitting contributor mapping");
-        const bool has_halos=atoms>targets.size();
-        if(has_halos && x.halo_median_reconstruction)
-        {
-            const auto & snapshot=*x.halo_median_reconstruction;
-            const bool legacy_policy=snapshot.contract==LegacyHaloMedianReconstructionContractVersion;
-            Require(legacy_policy || snapshot.contract==HaloMedianReconstructionContractVersion,
-                "Pure Exclusion Halo median policy contract");
-            if(!legacy_policy)
-                Require(schema_version>=18 &&
-                    snapshot.neighbor_count==GeometryLocalTargetMedianNeighborCount &&
-                    snapshot.donor_policy==GeometryLocalTargetMedianDonorPolicy,
-                    "geometry-local Halo median policy provenance");
-            Require(!snapshot.joint_run_id.empty() && snapshot.valid_target_count>0,
-                "Pure Exclusion Halo median snapshot contract");
-            for(const double value:snapshot.global_median)
-                Require(std::isfinite(value),"Pure Exclusion global median finiteness");
-            Require(snapshot.global_median[0]>=0 && snapshot.global_median[1]>0,
-                "Pure Exclusion global median validity");
-            Require(snapshot.halos.size()==atoms-targets.size(),"Pure Exclusion Halo median coverage");
-            std::size_t previous{}; bool first=true;
-            for(const auto & halo:snapshot.halos)
-            {
-                Require(halo.halo_contributor_index<atoms && (first || previous<halo.halo_contributor_index) &&
-                    x.atom_ids[halo.halo_contributor_index]==halo.atom_id &&
-                    !std::binary_search(targets.begin(),targets.end(),halo.halo_contributor_index),
-                    "Pure Exclusion Halo median identity");
-                Require(halo.joint_run_id==snapshot.joint_run_id && halo.donor_count>0,
-                    "Pure Exclusion Halo median provenance");
-                if(legacy_policy)
-                {
-                    Require(halo.contract==LegacyHaloMedianReconstructionContractVersion &&
-                        halo.legacy_group_key.has_value() &&
-                        (halo.source==HaloMedianSource::GroupKeyMedian ||
-                            halo.source==HaloMedianSource::GlobalTargetMedian),
-                        "legacy GroupKey Halo median provenance");
-                    if(halo.source==HaloMedianSource::GlobalTargetMedian)
-                        Require(halo.donor_count==snapshot.valid_target_count,
-                            "Pure Exclusion global median donor count");
-                }
-                else
-                {
-                    std::set<std::string> donor_ids;
-                    Require(halo.contract==HaloMedianReconstructionContractVersion &&
-                        !halo.legacy_group_key && halo.source==HaloMedianSource::GeometryLocalTargetMedian &&
-                        halo.donor_count<=snapshot.neighbor_count &&
-                        halo.donor_atom_ids.size()==halo.donor_count,
-                        "geometry-local Halo median provenance");
-                    for(const auto & donor_id:halo.donor_atom_ids)
-                        Require(!donor_id.empty() && donor_ids.insert(donor_id).second &&
-                            std::find_if(targets.begin(),targets.end(),[&](auto index) {
-                                return x.atom_ids[index]==donor_id;
-                            })!=targets.end(),"geometry-local Halo donor identity");
-                }
-                Require(std::isfinite(halo.amplitude) && halo.amplitude>=0 &&
-                    std::isfinite(halo.width) && halo.width>0 && std::isfinite(halo.charge),
-                    "Pure Exclusion Halo median parameters");
-                previous=halo.halo_contributor_index; first=false;
-            }
-        }
-        else if(has_halos)
-        {
-            Require(!IsQualifiedJointAnalysisResult(x) ||
-                HasUnavailableJointHaloMedianReconstruction(x),
-                "Pure Exclusion unavailable Halo median reconstruction");
-        }
-        else Require(!x.halo_median_reconstruction,"Pure Exclusion no-Halo median snapshot");
-    }
-    else Require(!x.halo_median_reconstruction,"unexpected Halo median snapshot");
-    if(x.layout)
-    {
-        std::vector<std::size_t> all_atoms(atoms),all_rows(rows);
-        std::iota(all_atoms.begin(),all_atoms.end(),0); std::iota(all_rows.begin(),all_rows.end(),0);
-        Require(!x.layout->groups.empty(),"empty observable reduction");
-        ValidateLayout(*x.layout,all_atoms,all_rows,x.selection_domain ? &*x.selection_domain : nullptr);
-    }
-    std::vector<std::size_t> all(atoms); std::iota(all.begin(),all.end(),0);
-    const bool target_only_parameters=target_only_fixed_halo || target_only_pure_exclusion;
-    const auto & full_atoms=target_only_parameters ? x.selection_domain->target_indices :
-        x.layout ? x.layout->full_atoms : all;
-    ValidateTarget(x.target_evidence,target_only_parameters ? full_atoms : all,full_atoms,x.selection_domain,
-        target_only_parameters ? full_atoms.size() : x.layout ? x.layout->full_atoms.size() : atoms,rows);
-    if(x.assembled_state) ValidateState(*x.assembled_state,
-        target_only_parameters ? full_atoms.size() : x.layout ? x.layout->full_atoms.size() : atoms,
-        x.layout ? x.layout->groups.size() : 0);
     if(x.initialization.valid)
     {
-        Require(x.initialization.b.size()==(target_only_parameters ? full_atoms.size() : atoms),"initial width dimensions");
-        if(target_only_parameters)
-            for(const double width:x.initialization.b)
-                Require(std::isfinite(width) && width>0,"invalid initial width");
-        else for(std::size_t atom=0;atom<atoms;++atom)
-            if(!x.layout || std::binary_search(x.layout->full_atoms.begin(),x.layout->full_atoms.end(),atom))
-                Require(std::isfinite(x.initialization.b[atom]) && x.initialization.b[atom]>0,"invalid initial width");
+        Require(x.initialization.b.size()==targets.size(),"initial width dimensions");
+        for(const double width:x.initialization.b)
+            Require(std::isfinite(width) && width>0,"invalid initial width");
     }
-    Require(x.initialization.atoms.size()<=atoms,"initialization dimensions");
+    for(const auto & check:x.evidence)
+    {
+        Require(!check.name.empty(),"empty Joint evidence name");
+        Require(!check.value || std::isfinite(*check.value),"nonfinite Joint evidence value");
+        Require(!check.threshold || std::isfinite(*check.threshold),"nonfinite Joint evidence threshold");
+    }
+    const auto evidence=[&](const std::vector<JointCheck> & checks,const std::string & name) -> const JointCheck * {
+        const auto found=std::find_if(checks.begin(),checks.end(),[&](const auto & check){return check.name==name;});
+        return found==checks.end() ? nullptr : &*found;
+    };
+    std::optional<double> width_bound;
+    if(x.metadata.solver)
+    {
+        const auto * calibration=evidence(x.evidence,"global-width-calibration");
+        const auto * coverage=evidence(x.evidence,"qualified-first-stage-donor-coverage");
+        Require(calibration && calibration->status==JointCheckStatus::Passed && calibration->value &&
+            calibration->threshold && *calibration->value>0 &&
+            *calibration->threshold==4.0*(*calibration->value) &&
+            calibration->reason.find("global-first-stage-p95-k4")!=std::string::npos,
+            "missing global width bound provenance");
+        Require(coverage && coverage->status==JointCheckStatus::Passed && coverage->value &&
+            coverage->threshold && *coverage->threshold==0.95 &&
+            std::isfinite(*coverage->value) && *coverage->value>=0.95 && *coverage->value<=1.0,
+            "missing qualified FirstStage donor coverage");
+        width_bound=calibration->threshold;
+    }
+    else
+        Require(!x.search_completed && x.components.empty() && !x.assembled_state && !x.objective,
+            "solver result is missing current provenance");
+    const auto validate_bound=[&](const JointState & state) {
+        if(width_bound)
+            for(double width:state.b)
+                Require(std::log(width)<=std::log(*width_bound),"state exceeds global width bound");
+    };
+    if(x.assembled_state)
+    {
+        ValidateState(*x.assembled_state,targets.size());
+        validate_bound(*x.assembled_state);
+    }
+    ValidateTarget(x.target_evidence,targets,rows);
+    Require(!(x.runtime_convergence==JointCheckStatus::Passed) ||
+        (x.initialization.valid && x.search_completed && x.assembled_state && x.objective),
+        "qualified Joint result is missing assembled state");
+    const bool has_halos=atoms>targets.size();
+    if(x.halo_median_reconstruction)
+    {
+        const auto & snapshot=*x.halo_median_reconstruction;
+        Require(snapshot.valid_target_count<=targets.size(),"Halo median valid target count");
+        Require(has_halos && snapshot.contract==HaloMedianReconstructionContractVersion &&
+            snapshot.neighbor_count==GeometryLocalTargetMedianNeighborCount &&
+            snapshot.donor_policy==GeometryLocalTargetMedianDonorPolicy,
+            "invalid geometry-local Halo median contract");
+        Require(!snapshot.joint_run_id.empty() && snapshot.valid_target_count>0,
+            "invalid Halo median snapshot identity");
+        for(double value:snapshot.global_median) Require(std::isfinite(value),"nonfinite Halo median global value");
+        Require(snapshot.global_median[0]>=0 && snapshot.global_median[1]>0,
+            "invalid Halo median global value");
+        Require(snapshot.halos.size()==atoms-targets.size(),"Halo median coverage");
+        std::size_t previous{}; bool first=true;
+        for(const auto & halo:snapshot.halos)
+        {
+            Require(halo.halo_contributor_index<atoms && (first || previous<halo.halo_contributor_index) &&
+                x.atom_ids[halo.halo_contributor_index]==halo.atom_id &&
+                !std::binary_search(targets.begin(),targets.end(),halo.halo_contributor_index),
+                "Halo median atom mapping");
+            Require(halo.joint_run_id==snapshot.joint_run_id && halo.donor_count>0 &&
+                halo.donor_count<=std::min(snapshot.neighbor_count,snapshot.valid_target_count) &&
+                halo.donor_count==halo.donor_atom_ids.size(),"Halo median donor provenance");
+            Require(halo.contract==HaloMedianReconstructionContractVersion &&
+            halo.source==HaloMedianSource::GeometryLocalTargetMedian && !halo.legacy_group_key,
+            "Halo median source contract");
+            std::set<std::string> donors;
+            for(const auto & donor_id:halo.donor_atom_ids)
+                Require(!donor_id.empty() && donors.insert(donor_id).second &&
+                    std::any_of(targets.begin(),targets.end(),[&](const auto index) {
+                        return x.atom_ids[index]==donor_id;
+                    }),"Halo median donor identity");
+            Require(std::isfinite(halo.amplitude) && halo.amplitude>=0 &&
+                std::isfinite(halo.width) && halo.width>0 && std::isfinite(halo.charge),
+                "invalid Halo median parameters");
+            previous=halo.halo_contributor_index; first=false;
+        }
+    }
+    else if(has_halos)
+        Require(!IsQualifiedJointAnalysisResult(x) || HasUnavailableJointHaloMedianReconstruction(x),
+            "qualified Halo result lacks reconstruction or unavailable evidence");
     std::set<std::size_t> used_atoms,used_rows;
     std::set<std::string> components;
     for(const auto & c:x.components)
     {
-        Require(components.insert(c.id).second,"duplicate component");
-        for(auto a:c.atoms) Require(a<atoms && used_atoms.insert(a).second,"component atom mapping");
-        for(auto r:c.rows) Require(r<rows && used_rows.insert(r).second,"component row mapping");
-        Require(c.layout.has_value()==x.layout.has_value(),"component layout contract");
-        if(target_only_parameters)
-            for(const auto atom:c.atoms)
-                Require(std::binary_search(x.selection_domain->target_indices.begin(),
-                    x.selection_domain->target_indices.end(),atom),"fixed halo cannot enter target component");
-        if(c.layout)
-        {
-            ValidateLayout(*c.layout,c.atoms,c.rows,x.selection_domain ? &*x.selection_domain : nullptr);
-            for(auto a:c.layout->full_atoms) Require(std::binary_search(x.layout->full_atoms.begin(),x.layout->full_atoms.end(),a),"component full atom disagreement");
-            for(auto r:c.layout->informative_rows) Require(std::binary_search(x.layout->informative_rows.begin(),x.layout->informative_rows.end(),r),"component informative row disagreement");
-            for(const auto & group:c.layout->groups)
-            {
-                const auto found=std::find_if(x.layout->groups.begin(),x.layout->groups.end(),[&](const auto & g){return g.row==group.row;});
-                Require(found!=x.layout->groups.end() && found->atoms==group.atoms,"component nuisance group disagreement");
-            }
-        }
-        const auto & component_full_atoms=c.layout ? c.layout->full_atoms : c.atoms;
-        ValidateTarget(c.target_evidence,c.atoms,component_full_atoms,x.selection_domain,
-            c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.rows.size());
+        Require(!c.id.empty() && components.insert(c.id).second,"component identity");
+        for(const auto atom:c.atoms)
+            Require(atom<atoms && std::binary_search(targets.begin(),targets.end(),atom) && used_atoms.insert(atom).second,
+                "component target mapping");
+        for(const auto row:c.rows) Require(row<rows && used_rows.insert(row).second,"component row mapping");
         Require(std::isfinite(c.local_conditioning_seconds) && c.local_conditioning_seconds>=0,
             "local conditioning time");
-        for(const auto & block:c.local_conditioning) ValidateBlockConditioning(block);
+        for(const auto & block:c.local_conditioning)
+        {
+            ValidateBlockConditioning(block);
+            for(const auto atom:block.core_atoms)
+                Require(std::binary_search(c.atoms.begin(),c.atoms.end(),atom),"local conditioning atom mapping");
+        }
         if(c.parameter_stability) ValidateParameterStability(*c.parameter_stability);
-        if(c.state) ValidateState(*c.state,c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.layout ? c.layout->groups.size() : 0);
-        if(c.candidate_diagnostic) ValidateCandidateDiagnostic(*c.candidate_diagnostic,
-            c.layout ? c.layout->full_atoms.size() : c.atoms.size(),c.state.has_value(),reference_free_contract);
+        ValidateTarget(c.target_evidence,c.atoms,c.rows.size());
+        if(c.state)
+        {
+            ValidateState(*c.state,c.atoms.size());
+            validate_bound(*c.state);
+        }
+        if(c.candidate_diagnostic)
+        {
+            ValidateCandidateDiagnostic(*c.candidate_diagnostic,c.atoms.size(),c.state.has_value());
+            if(width_bound && c.candidate_diagnostic->candidate_available &&
+                c.candidate_diagnostic->candidate_feasible.value_or(false))
+                for(const double eta:c.candidate_diagnostic->candidate_eta)
+                    Require(eta<=std::log(*width_bound),"candidate exceeds global width bound");
+        }
     }
 }
 }
 std::string Encode(const JointAnalysisResult & x)
 {
-    Validate(x,persistence_schema::JointResultJson);
+    Validate(x);
     const auto & m=x.metadata; const auto & t=x.costs;
     j::array components;
     for(const auto & c:x.components)
@@ -1610,27 +1178,28 @@ std::string Encode(const JointAnalysisResult & x)
         {"halo_median_reconstruction",HaloMedianSnapshot(x.halo_median_reconstruction)}};
     return j::serialize(out);
 }
-void RequireNoKeys(const Object & object,std::initializer_list<const char *> keys,const char * message)
-{
-    for(const auto key:keys)
-        Require(!object.contains(key),message);
-}
 JointAnalysisResult DecodeCurrent(const Object & o)
 {
-    RequireNoKeys(o,{"layout","fixed_halos","legacy_global_rank_evidence","ranks"},
-        "current Joint result contains retired fields");
+    RequireOnlyKeys(o,{"schema_version","estimator","estimator_contract","objective_contract","support_contract",
+        "parameterization_contract","metadata","selection_domain","atom_ids","row_ids","fitting_row_ids",
+        "fitting_to_original_contributors","fitting_to_original_rows","initialization","costs","components",
+        "assembled_state","objective","available_row_mask","evidence","search_completed","observation_scale",
+        "regular_certificate","runtime_convergence","target_evidence","target_runtime_convergence",
+        "halo_median_reconstruction"},"unknown current Joint result field");
     const auto & metadata=o.at("metadata").as_object();
     if(!metadata.at("solver").is_null())
-        RequireNoKeys(metadata.at("solver").as_object(),
-            {"preconditioner","operator_rank_mode","operator_rank_backend","operator_pcg_iterations",
-             "operator_damping_trials","operator_rank_budget_seconds","operator_rank_budget_entries",
-             "operator_rank_budget_workspace_bytes","schwarz_core_atoms","schwarz_overlap_hops",
-             "schwarz_max_block_atoms","schwarz_storage_bytes","schwarz_scratch_bytes",
-             "fixed_neighbor_local_work"},"current solver provenance contains retired fields");
-    RequireNoKeys(o.at("selection_domain").as_object(),{"halo_eligibility","fixed_halo_selection"},
-        "current selection domain contains retired fields");
-    RequireNoKeys(o.at("costs").as_object(),{"search_reference_seconds"},
-        "current Joint costs contain retired fields");
+    {
+        RequireOnlyKeys(metadata.at("solver").as_object(),{"search_method","contract_version","sparse_backend",
+            "fixed_neighbor_core_atoms","fixed_neighbor_policy_version","fixed_neighbor_maximum_sweeps",
+            "fixed_neighbor_order","fixed_neighbor_local_search"},"unknown current solver provenance field");
+    }
+    RequireOnlyKeys(metadata,{"model_path","map_path","grid_size","grid_spacing","origin","simulation",
+        "map_normalization","model_sha256","map_sha256","software","solver","units"},
+        "unknown current Joint metadata field");
+    RequireOnlyKeys(o.at("selection_domain").as_object(),{"contract","target_indices","observation_radius",
+        "support_radius","contributor_policy","pure_halo_support_exclusion"},"unknown current selection field");
+    RequireOnlyKeys(o.at("costs").as_object(),{"construction_seconds","initialization_seconds","search_seconds",
+        "assessment_seconds","assembly_seconds"},"unknown current Joint cost field");
     JointAnalysisResult x;
     Require(Read<int>(o,"schema_version")==persistence_schema::JointResultJson,
         "unsupported current Joint result schema");
@@ -1656,8 +1225,12 @@ JointAnalysisResult DecodeCurrent(const Object & o)
     for(const auto & item:o.at("components").as_array())
     {
         const auto & c=item.as_object();
-        RequireNoKeys(c,{"layout","reference_evaluations","legacy_global_rank_evidence","ranks",
-            "legacy_candidate_evidence"},"current Joint component contains retired fields");
+        RequireOnlyKeys(c,{"id","stop_reason","atoms","rows","search_completed","search_sweeps",
+            "first_order_stationarity_sweep","confirmed_stationarity_sweep","endpoint_certification_sweep",
+            "profile_evaluations","accepted_updates","native_status","state","candidate_diagnostic","evidence",
+            "local_conditioning","local_conditioning_seconds","local_conditioning_peak_memory_estimate_bytes",
+            "parameter_stability","regular_certificate","runtime_convergence","target_evidence",
+            "target_runtime_convergence"},"unknown current Joint component field");
         JointAnalysisComponent component;
         component.id=Read<std::string>(c,"id");
         component.stop_reason=Read<std::string>(c,"stop_reason");
@@ -1673,12 +1246,21 @@ JointAnalysisResult DecodeCurrent(const Object & o)
         component.native_status=Read<int>(c,"native_status");
         if(!c.at("state").is_null())
         {
-            RequireNoKeys(c.at("state").as_object(),{"nuisance_amplitudes"},
-                "current Joint state contains retired fields");
-            component.state=ReadState(c.at("state"));
+            RequireOnlyKeys(c.at("state").as_object(),{"ac","b","log_b","width_gradient","objective"},
+                "unknown current Joint state field");
+                component.state=ReadState(c.at("state"));
         }
         if(!c.at("candidate_diagnostic").is_null())
-            component.candidate_diagnostic=ReadCandidateDiagnostic(c.at("candidate_diagnostic"),true,true);
+        {
+            RequireOnlyKeys(c.at("candidate_diagnostic").as_object(),{"candidate_status","candidate_available",
+                "candidate_eta","candidate_ac","candidate_objective","candidate_ac_kkt",
+                "candidate_width_gradient_inf_norm","convergence_criteria_id","global_ac_kkt_threshold",
+                "global_width_gradient_threshold","confirmed_log_width_change_threshold",
+                "candidate_log_width_change_inf_norm","candidate_feasible","certification_status",
+                "endpoint_verification_status","numerical_qualification_status","verification_reason",
+                "resource_limit_reason"},"unknown current candidate diagnostic field");
+            component.candidate_diagnostic=ReadCandidateDiagnostic(c.at("candidate_diagnostic"));
+        }
         component.evidence=ReadChecks(c.at("evidence"));
         component.local_conditioning=ReadBlockConditioning(c.at("local_conditioning"));
         component.local_conditioning_seconds=Read<double>(c,"local_conditioning_seconds");
@@ -1687,14 +1269,14 @@ JointAnalysisResult DecodeCurrent(const Object & o)
         component.parameter_stability=ReadParameterStability(c.at("parameter_stability"));
         component.regular_certificate=Status(c.at("regular_certificate"));
         component.runtime_convergence=Status(c.at("runtime_convergence"));
-        component.target_evidence=ReadTarget(c.at("target_evidence"),persistence_schema::JointResultJson);
+        component.target_evidence=ReadTarget(c.at("target_evidence"));
         component.target_runtime_convergence=Status(c.at("target_runtime_convergence"));
         x.components.push_back(std::move(component));
     }
     if(!o.at("assembled_state").is_null())
     {
-        RequireNoKeys(o.at("assembled_state").as_object(),{"nuisance_amplitudes"},
-            "current assembled state contains retired fields");
+        RequireOnlyKeys(o.at("assembled_state").as_object(),{"ac","b","log_b","width_gradient","objective"},
+            "unknown current assembled state field");
         x.assembled_state=ReadState(o.at("assembled_state"));
     }
     x.objective=OptionalNumber(o.at("objective"));
@@ -1704,16 +1286,10 @@ JointAnalysisResult DecodeCurrent(const Object & o)
     x.observation_scale=Read<double>(o,"observation_scale");
     x.regular_certificate=Status(o.at("regular_certificate"));
     x.runtime_convergence=Status(o.at("runtime_convergence"));
-    x.target_evidence=ReadTarget(o.at("target_evidence"),persistence_schema::JointResultJson);
+    x.target_evidence=ReadTarget(o.at("target_evidence"));
     x.target_runtime_convergence=Status(o.at("target_runtime_convergence"));
     x.halo_median_reconstruction=ReadHaloMedianSnapshot(o.at("halo_median_reconstruction"));
-    if(x.halo_median_reconstruction)
-    {
-        const auto & snapshot=o.at("halo_median_reconstruction").as_object();
-        for(const auto & halo:snapshot.at("halos").as_array())
-            RequireNoKeys(halo.as_object(),{"group_key"},"current Halo median contains retired fields");
-    }
-    Validate(x,persistence_schema::JointResultJson);
+    Validate(x);
     return x;
 }
 JointAnalysisResult Decode(std::string_view text)
@@ -1721,79 +1297,7 @@ JointAnalysisResult Decode(std::string_view text)
     j::parse_options options; options.numbers=j::number_precision::precise;
     const auto parsed=j::parse(text,{},options); const auto & o=parsed.as_object();
     const int version=Read<int>(o,"schema_version");
-    if(version==persistence_schema::JointResultJson) return DecodeCurrent(o);
-    Require(version==3 || version==4 || version==5 || version==6 || version==7 || version==8 || version==9 || version==10 || version==11 || version==12 || version==13 || version==14 || version==15 || version==16 || version==17 || version==18,
-        "unsupported result schema version (expected 3 through 18)");
-    if(version>=15)
-        for(const auto & fixed:o.at("fixed_halos").as_array())
-            Require(fixed.as_object().contains("first_stage_qualification"),
-                "schema 15 fixed halo requires qualification provenance");
-    Require(Read<std::string>(o,"estimator")=="joint-components" &&
-        Read<std::string>(o,"estimator_contract")=="guarded-joint-ls-v1" &&
-        Read<std::string>(o,"objective_contract")=="parent-normalized-half-rss-v1" &&
-        Read<std::string>(o,"support_contract")=="sphere-fma-v1","unsupported estimator contract");
-    JointAnalysisResult x;
-    if(version>=4) {x.layout=ReadLayout(o); x.parameterization_contract=Read<std::string>(o,"parameterization_contract");}
-    x.metadata=ReadMetadata(o.at("metadata").as_object());
-    x.selection_domain=ReadSelectionDomain(o.at("selection_domain"));
-    if(version>=14) x.fixed_halos=ReadFixedHalos(o.at("fixed_halos"));
-    x.atom_ids=Read<std::vector<std::string>>(o,"atom_ids"); x.row_ids=Read<std::vector<std::string>>(o,"row_ids");
-    if(version>=17)
-    {
-        x.fitting_row_ids=Read<std::vector<std::string>>(o,"fitting_row_ids");
-        x.fitting_to_original_contributors=Read<std::vector<std::size_t>>(o,"fitting_to_original_contributors");
-        x.fitting_to_original_rows=Read<std::vector<std::size_t>>(o,"fitting_to_original_rows");
-        x.halo_median_reconstruction=ReadHaloMedianSnapshot(o.at("halo_median_reconstruction"));
-    }
-    x.initialization=ReadInitialization(o.at("initialization"));
-    const auto & t=o.at("costs").as_object();
-    x.costs={Read<double>(t,"initialization_seconds"),Read<double>(t,"search_seconds"),Read<double>(t,"search_reference_seconds"),
-        Read<double>(t,"assessment_seconds"),Read<double>(t,"assembly_seconds")};
-    x.costs.construction_seconds=Read<double>(t,"construction_seconds");
-    for(const auto & item:o.at("components").as_array())
-    {
-        const auto & c=item.as_object(); JointAnalysisComponent component;
-        if(version>=4) component.layout=ReadLayout(c);
-        component.id=Read<std::string>(c,"id"); component.stop_reason=Read<std::string>(c,"stop_reason");
-        component.atoms=Read<std::vector<std::size_t>>(c,"atoms"); component.rows=Read<std::vector<std::size_t>>(c,"rows");
-        component.search_completed=Read<bool>(c,"search_completed");
-        component.search_sweeps=c.contains("search_sweeps") ? Read<std::size_t>(c,"search_sweeps") : 0;
-        component.first_order_stationarity_sweep=c.contains("first_order_stationarity_sweep") ?
-            Read<std::size_t>(c,"first_order_stationarity_sweep") : 0;
-        component.confirmed_stationarity_sweep=c.contains("confirmed_stationarity_sweep") ?
-            Read<std::size_t>(c,"confirmed_stationarity_sweep") : 0;
-        component.endpoint_certification_sweep=c.contains("endpoint_certification_sweep") ?
-            Read<std::size_t>(c,"endpoint_certification_sweep") : 0;
-        component.profile_evaluations=Read<int>(c,"profile_evaluations");
-        component.reference_evaluations=Read<int>(c,"reference_evaluations"); component.accepted_updates=Read<int>(c,"accepted_updates");
-        component.native_status=Read<int>(c,"native_status");
-        if(!c.at("state").is_null()) component.state=ReadState(c.at("state"));
-        if(version>=6)
-        {
-            component.candidate_diagnostic=ReadCandidateDiagnostic(c.at("candidate_diagnostic"),version>=7,version>=16);
-            component.legacy_candidate_evidence=ReadLegacyCandidateEvidence(c);
-        }
-        component.evidence=ReadChecks(c.at("evidence"));
-        component.legacy_global_rank_evidence=ReadRanks(c.at(version>=12 ? "legacy_global_rank_evidence" : "ranks"),version>=9);
-        if(version>=12)
-        {
-            component.local_conditioning=ReadBlockConditioning(c.at("local_conditioning"));
-            component.local_conditioning_seconds=Read<double>(c,"local_conditioning_seconds");
-            component.local_conditioning_peak_memory_estimate_bytes=
-                ReadOptionalSize(c.at("local_conditioning_peak_memory_estimate_bytes"));
-            component.parameter_stability=ReadParameterStability(c.at("parameter_stability"));
-        }
-        component.regular_certificate=Status(c.at("regular_certificate")); component.runtime_convergence=Status(c.at("runtime_convergence"));
-        if(version>=5) {component.target_evidence=ReadTarget(c.at("target_evidence"),version); component.target_runtime_convergence=Status(c.at("target_runtime_convergence"));}
-        x.components.push_back(std::move(component));
-    }
-    if(!o.at("assembled_state").is_null()) x.assembled_state=ReadState(o.at("assembled_state"));
-    x.objective=OptionalNumber(o.at("objective")); x.available_row_mask=Read<std::vector<bool>>(o,"available_row_mask");
-    x.evidence=ReadChecks(o.at("evidence"));
-    x.legacy_global_rank_evidence=ReadRanks(o.at(version>=12 ? "legacy_global_rank_evidence" : "ranks"),version>=9);
-    x.search_completed=Read<bool>(o,"search_completed"); x.observation_scale=Read<double>(o,"observation_scale");
-    x.regular_certificate=Status(o.at("regular_certificate")); x.runtime_convergence=Status(o.at("runtime_convergence"));
-    if(version>=5) {x.target_evidence=ReadTarget(o.at("target_evidence"),version); x.target_runtime_convergence=Status(o.at("target_runtime_convergence"));}
-    Validate(x,version); return x;
+    Require(version==persistence_schema::JointResultJson,"unsupported Joint result schema version");
+    return DecodeCurrent(o);
 }
 }

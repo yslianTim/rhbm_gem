@@ -158,7 +158,7 @@ def main() -> int:
             assert diagnostic["candidate_log_width_change_inf_norm"] <= 1e-6
             point = component["target_evidence"]
             assert point["contract"] == "target-point-validation-v1"
-            assert not point["ranks"] and not point["atoms"]
+            assert all(key not in point for key in ("ranks", "atoms", "column_scales"))
             assert point["point_atoms"]
         assert "prediction" not in saved and "observations" not in saved
         assert (root / "joint_atoms_example.csv").read_text().startswith("AtomID,ComponentID,A,B,C,")

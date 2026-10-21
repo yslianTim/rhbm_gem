@@ -4,7 +4,6 @@
 #include <string>
 #include <fstream>
 #include <limits>
-#include <map>
 #include <boost/json.hpp>
 #include <rhbm_gem/data/io/JointAnalysisFileIO.hpp>
 #include "data/io/detail/JointResultJson.hpp"
@@ -510,10 +509,28 @@ rg::JointAnalysisResult CurrentJointExample(bool with_halo=true)
     component.target_runtime_convergence=rg::JointCheckStatus::Failed;
     component.evidence.push_back({"active-set-lm-subproblems",rg::JointCheckStatus::Passed,
         rg::JointEvidenceScope::ComponentLocal,1.0,{},"solves=1"});
+    rg::JointTargetEvidence target_evidence;
+    target_evidence.original_rows=1;
+    target_evidence.checks.push_back({"target-point-validation",rg::JointCheckStatus::Failed,
+        rg::JointEvidenceScope::AssembledGlobal,{}, {},"selected-target-point-unavailable"});
+    rg::JointAtomPointValidation target_point;
+    target_point.atom=0;
+    target_point.component_convergence=rg::JointCheckStatus::Failed;
+    target_point.parameter_validity=rg::JointCheckStatus::Passed;
+    target_point.point_quality="Unavailable";
+    target_point.reason="component-not-converged";
+    target_evidence.point_atoms.push_back(target_point);
+    component.target_evidence=target_evidence;
     result.components.push_back(component);
+    result.target_evidence=target_evidence;
+    result.target_evidence->original_rows=2;
+    result.target_evidence->checks.front().scope=rg::JointEvidenceScope::AssembledGlobal;
     result.assembled_state=component.state;
     result.evidence.push_back({"global-width-calibration",rg::JointCheckStatus::Passed,
-        rg::JointEvidenceScope::AssembledGlobal,0.6,2.4,"qualified-first-stage-widths"});
+        rg::JointEvidenceScope::AssembledGlobal,0.6,2.4,
+        "global-first-stage-p95-k4; qualified-donors=1/1"});
+    result.evidence.push_back({"qualified-first-stage-donor-coverage",rg::JointCheckStatus::Passed,
+        rg::JointEvidenceScope::AssembledGlobal,1.0,0.95,"target-only-qualified-first-stage-widths"});
     return result;
 }
 rg::JointAnalysisResult SavedJointExample() { return CurrentJointExample(); }
@@ -538,8 +555,35 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV19RoundTripsUnqualifiedResult
     EXPECT_EQ(decoded.runtime_convergence,rg::JointCheckStatus::Failed);
     ASSERT_TRUE(decoded.components.front().state);
     EXPECT_DOUBLE_EQ(decoded.components.front().state->ac.front(),2.123456789012345);
+    ASSERT_TRUE(decoded.components.front().target_evidence);
+    ASSERT_EQ(decoded.components.front().target_evidence->point_atoms.size(),1u);
+    EXPECT_EQ(decoded.components.front().target_evidence->point_atoms.front().reason,"component-not-converged");
+    const auto & target=component.at("target_evidence").as_object();
+    for(const auto key:{"ranks","atoms","column_scales"}) EXPECT_FALSE(target.contains(key));
     ASSERT_TRUE(decoded.metadata.solver);
     EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_local_search,rg::FixedNeighborBoundedLocalSearchName);
+}
+
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV19RejectsOtherVersionsAndRetiredFields)
+{
+    namespace io=rg::joint_result_io;
+    const auto encoded=io::Encode(CurrentJointExample());
+    const auto current=boost::json::parse(encoded).as_object();
+    for(const int version:{3,18,20,99})
+    {
+        auto unsupported=current;
+        unsupported["schema_version"]=version;
+        EXPECT_THROW(io::Decode(boost::json::serialize(unsupported)),std::invalid_argument);
+    }
+    auto retired=current;
+    retired["layout"]=nullptr;
+    EXPECT_THROW(io::Decode(boost::json::serialize(retired)),std::invalid_argument);
+    retired=current;
+    retired.at("components").as_array().front().as_object()["legacy_candidate_evidence"]=nullptr;
+    EXPECT_THROW(io::Decode(boost::json::serialize(retired)),std::invalid_argument);
+    retired=current;
+    retired.at("target_evidence").as_object()["ranks"]=boost::json::array{};
+    EXPECT_THROW(io::Decode(boost::json::serialize(retired)),std::invalid_argument);
 }
 
 TEST(DataObjectPersistenceTest, JointCurrentSchemaV19RoundTripsQualifiedTargetWithoutHalo)
@@ -552,6 +596,17 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV19RoundTripsQualifiedTargetWi
     result.components.front().search_completed=true;
     result.components.front().runtime_convergence=rg::JointCheckStatus::Passed;
     result.components.front().target_runtime_convergence=rg::JointCheckStatus::Passed;
+    result.components.front().target_evidence->checks.front().status=rg::JointCheckStatus::Passed;
+    result.components.front().target_evidence->checks.front().reason="selected-target-points-valid";
+    auto & component_point=result.components.front().target_evidence->point_atoms.front();
+    component_point.component_convergence=rg::JointCheckStatus::Passed;
+    component_point.local_conditioning="Adequate";
+    component_point.parameter_stability="Stable";
+    component_point.point_quality="Available";
+    component_point.reason="numerically-converged-point";
+    result.target_evidence=result.components.front().target_evidence;
+    result.target_evidence->original_rows=2;
+    result.target_evidence->checks.front().scope=rg::JointEvidenceScope::AssembledGlobal;
     ASSERT_TRUE(rg::IsQualifiedJointAnalysisResult(result));
     const auto decoded=io::Decode(io::Encode(result));
     EXPECT_TRUE(rg::IsQualifiedJointAnalysisResult(decoded));
@@ -568,6 +623,17 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV19RoundTripsGeometryLocalHalo
     result.components.front().search_completed=true;
     result.components.front().runtime_convergence=rg::JointCheckStatus::Passed;
     result.components.front().target_runtime_convergence=rg::JointCheckStatus::Passed;
+    result.components.front().target_evidence->checks.front().status=rg::JointCheckStatus::Passed;
+    result.components.front().target_evidence->checks.front().reason="selected-target-points-valid";
+    auto & component_point=result.components.front().target_evidence->point_atoms.front();
+    component_point.component_convergence=rg::JointCheckStatus::Passed;
+    component_point.local_conditioning="Adequate";
+    component_point.parameter_stability="Stable";
+    component_point.point_quality="Available";
+    component_point.reason="numerically-converged-point";
+    result.target_evidence=result.components.front().target_evidence;
+    result.target_evidence->original_rows=2;
+    result.target_evidence->checks.front().scope=rg::JointEvidenceScope::AssembledGlobal;
     rg::JointHaloMedianSnapshot snapshot;
     snapshot.joint_run_id="deterministic-run";
     snapshot.global_median={2.123456789012345,0.5,-0.3};
@@ -1033,7 +1099,7 @@ TEST(DataObjectPersistenceTest, JointSelectionMetadataValidationAndCsvRoles)
     rg::WriteJointAnalysisResult(saved,dir.path()/"out.json",dir.path()/"out.csv");
     std::ifstream csv(dir.path()/"out.csv"); std::string line;
     std::getline(csv,line); EXPECT_TRUE(line.ends_with(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality"));
-    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",target,JointEstimated,\"\",failed,not-run"));
+    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",target,JointEstimated,\"\",failed,Unavailable"));
     std::getline(csv,line); EXPECT_TRUE(line.ends_with(",halo,HaloReconstructionUnavailable,\"\",not-run,NotApplicable"));
     auto raw=saved; raw.selection_domain.reset();
     EXPECT_THROW(rg::WriteJointAnalysisResult(raw,dir.path()/"raw.json",dir.path()/"raw.csv"),std::invalid_argument);
@@ -1067,46 +1133,29 @@ TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesCurrentJointAndSta
     EXPECT_FALSE(data_test::HasTable(dir.path()/"result.sqlite","model_atom_local_potential"));
 }
 
-TEST(DataObjectPersistenceTest, VersionTwoJointEvidenceIsInvalidatedDuringNeutralMigration)
+TEST(DataObjectPersistenceTest, StageResultJsonV4OnlyAcceptsCurrentRoundTrip)
 {
-    auto model = data_test::MakeModelWithBond();
+    auto model=data_test::MakeModelWithBond();
     model->SelectAllAtoms();
-    auto editor = model->EditAnalysis();
-    editor.InitializeFromSelection();
-    std::map<int, rg::LocalStageEstimate> stages;
-    for (const auto & atom : model->GetAtomList())
-    {
-        rg::LocalStageEstimate stage;
-        stage.source = {rg::EstimateMethod::JointComponents, std::to_string(atom->GetSerialID()),
-            "legacy-component", "legacy-v2-run", rg::FittingRole::Target};
-        stage.point = rg::GaussianModel3D(2.0, 0.5, 0.1);
-        stage.convergence = rg::JointCheckStatus::Passed;
-        stages.emplace(atom->GetSerialID(), std::move(stage));
-    }
-    editor.ApplySecondStageEstimates(std::move(stages));
-    auto old_document = boost::json::parse(rg::stage_result_io::Encode(*model)).as_object();
-    old_document["version"] = 2;
-    for (auto & atom : old_document["atoms"].as_array())
-        atom.as_object()["evidence"] = boost::json::object{
-            {"atom", "legacy"}, {"component", "legacy-component"}, {"source", "legacy-v2-run"},
-            {"status", 1}, {"reason", ""}, {"method", "local-conditional-iid-ls"},
-            {"correlation", "block-diagonal-by-atom"}, {"estimate", boost::json::array{1.0, 0.5}},
-            {"covariance", boost::json::array{1.0, 0.0, 0.0, 1.0}}};
+    model->EditAnalysis().InitializeFromSelection();
+    const auto encoded=rg::stage_result_io::Encode(*model);
+    EXPECT_EQ(boost::json::parse(encoded).at("version").as_int64(),4);
 
-    rg::stage_result_io::Decode(*model, boost::json::serialize(old_document), 3, {});
-    for (const auto & atom : model->GetAtomList())
+    auto restored=data_test::MakeModelWithBond();
+    restored->SelectAllAtoms();
+    restored->EditAnalysis().InitializeFromSelection();
+    EXPECT_NO_THROW(rg::stage_result_io::Decode(*restored,encoded));
+    EXPECT_EQ(rg::stage_result_io::Encode(*restored),encoded);
+
+    for(const int version:{1,2,3})
     {
-        const auto view = rg::AtomLocalPotentialView::For(*atom);
-        EXPECT_FALSE(view.GetPostJointLocalResult());
-        EXPECT_FALSE(view.GetGroupMemberResult());
-    }
-    for (const auto key : model->GetAnalysisView().CollectAtomGroupKeys())
-    {
-        const auto summary = model->GetAnalysisView().GetGroupParameterSummary(key);
-        if (!summary) continue;
-        EXPECT_EQ(summary->status, rg::EvidenceStatus::Unavailable);
-        EXPECT_EQ(summary->reason, "post-joint-local-results-required");
-        EXPECT_FALSE(summary->inference);
+        auto old=boost::json::parse(encoded).as_object();
+        old["version"]=version;
+        auto rejected=data_test::MakeModelWithBond();
+        rejected->SelectAllAtoms();
+        rejected->EditAnalysis().InitializeFromSelection();
+        EXPECT_THROW(rg::stage_result_io::Decode(*rejected,boost::json::serialize(old)),
+            std::invalid_argument);
     }
 }
 

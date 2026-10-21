@@ -918,7 +918,7 @@ std::unique_ptr<ModelObject> Load(
         throw std::invalid_argument("Missing current stage result document.");
     if(rc!=SQLiteWrapper::StepRow())
         throw std::runtime_error("Failed to read current stage result: "+database.ErrorMessage());
-    stage_result_io::Decode(*model_object,database.GetColumn<std::string>(0),persistence_schema::StageResultJson,{});
+    stage_result_io::Decode(*model_object,database.GetColumn<std::string>(0));
     return model_object;
 }
 
