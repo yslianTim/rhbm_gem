@@ -188,7 +188,8 @@ struct FixedNeighborSearchResult
     std::optional<FixedNeighborEndpointCertification> certification;
     std::vector<JointBlockConditioning> local_conditioning;
     std::optional<JointParameterStability> parameter_stability;
-    std::vector<std::pair<double,double>> recent_sweep_changes;
+    std::size_t recent_sweep_count{};
+    double maximum_eta_change{},maximum_scaled_ac_change{};
     std::vector<FixedNeighborBlockRecord> blocks;
     std::vector<FixedNeighborBlockSweep> sweeps;
     bool search_converged{};

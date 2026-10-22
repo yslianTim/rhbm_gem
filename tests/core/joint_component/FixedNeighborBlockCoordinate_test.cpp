@@ -234,6 +234,34 @@ TEST(JointFixedNeighborBlockCoordinateTest, CheapStationarityNeedsCompleteSweepC
     EXPECT_EQ(confirmed.confirmed_stationarity_sweep,confirmed.sweeps.size());
 }
 
+TEST(JointFixedNeighborBlockCoordinateTest, StabilityHistoryKeepsOnlyTheLastThreeCompletedSweeps)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector eta=n::Vector::Constant(8,std::log(.55));
+    for(std::size_t sweep_budget=0;sweep_budget<=5;++sweep_budget)
+    {
+        n::FixedNeighborPolicy policy;
+        policy.maximum_sweeps=sweep_budget;
+        policy.stop_after_stationarity=false;
+        policy.collect_diagnostics=true;
+        policy.assess_parameter_stability=true;
+        const auto result=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,data.context,policy);
+        ASSERT_EQ(result.sweep_count,sweep_budget);
+        ASSERT_EQ(result.sweeps.size(),sweep_budget);
+        const auto recent_count=std::min<std::size_t>(sweep_budget,3);
+        EXPECT_EQ(result.recent_sweep_count,recent_count);
+        double maximum_eta_change{},maximum_scaled_ac_change{};
+        for(std::size_t k=sweep_budget-recent_count;k<sweep_budget;++k)
+        {
+            maximum_eta_change=std::max(maximum_eta_change,result.sweeps[k].eta_change_inf);
+            maximum_scaled_ac_change=std::max(maximum_scaled_ac_change,result.sweeps[k].beta_scaled_change);
+        }
+        EXPECT_DOUBLE_EQ(result.maximum_eta_change,maximum_eta_change);
+        EXPECT_DOUBLE_EQ(result.maximum_scaled_ac_change,maximum_scaled_ac_change);
+    }
+}
+
 TEST(JointFixedNeighborBlockCoordinateTest, FailedBlockRetriesAfterLaterBlocksUpdateTheNeighborState)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
