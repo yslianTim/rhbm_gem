@@ -38,7 +38,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/joint_component/JointComponentEstimator.cpp
     core/GaussianEstimator.cpp
     core/detail/joint_component/JointCliProgressReporter.cpp
-    core/PotentialFittingWorkflow.cpp
+    core/detail/PotentialFittingWorkflow.cpp
     core/detail/StageSummary.cpp
     core/detail/FirstStageInitialization.cpp
     core/detail/FittingWorkset.cpp
