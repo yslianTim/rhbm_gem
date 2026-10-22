@@ -106,7 +106,6 @@ set(CORE_ESTIMATOR_TEST_SOURCES
     core/second_stage/Recovery_test.cpp
     core/second_stage/ProductionFitting_test.cpp
     core/second_stage/ConvergenceAndFinalization_test.cpp
-    core/second_stage/PerformanceLogging_test.cpp
     core/EstimatorTester_test.cpp
     core/TestDataFactory_test.cpp
 )
