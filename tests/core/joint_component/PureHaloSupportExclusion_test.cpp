@@ -76,27 +76,6 @@ JointInitialization TargetInitialization()
     return initialization;
 }
 
-void FitWithLowLevelUnboundedOracle(JointFitResult & fit)
-{
-    if (!fit.problem) throw std::runtime_error("Joint test hook lacks a problem snapshot.");
-    const auto problem=*fit.problem;
-    auto initialization=fit.initialization;
-    fit=core::FitJointComponents(problem,initialization.b);
-    fit.initialization=std::move(initialization);
-}
-
-struct ScopedLowLevelUnboundedOracle
-{
-    ScopedLowLevelUnboundedOracle()
-    {
-        core::detail::JointWorkflowFitHookForTesting()=&FitWithLowLevelUnboundedOracle;
-    }
-    ~ScopedLowLevelUnboundedOracle()
-    {
-        core::detail::JointWorkflowFitHookForTesting()=nullptr;
-    }
-};
-
 JointAnalysisResult PurePeelingSnapshot(const JointProblem & problem,const ModelObject & model)
 {
     (void)model;
@@ -193,10 +172,11 @@ MapFixture MultipleHaloBoundaryFixture()
     return {std::move(model),std::move(map)};
 }
 
-MapFixture WorkflowFixture()
+MapFixture WorkflowFixture(bool qualified_donors=false)
 {
     std::vector<std::unique_ptr<AtomObject>> atoms;
-    const auto add_atom=[&](int serial,double x,int component,int atom_key) {
+    const auto add_atom=[&](int serial,const std::array<double,3> & position,int component,int atom_key,
+        const char * atom_id) {
         auto atom=std::make_unique<AtomObject>();
         atom->SetSerialID(serial);
         atom->SetElement(Element::CARBON);
@@ -204,34 +184,58 @@ MapFixture WorkflowFixture()
         atom->SetAtomKey(static_cast<AtomKey>(atom_key));
         atom->SetChainID("A");
         atom->SetComponentID("ALA");
-        atom->SetAtomID(serial==1 ? "CA" : serial==2 ? "CB" : "CG");
-        atom->SetPosition(x,0,0);
+        atom->SetAtomID(atom_id);
+        atom->SetPosition(position);
         atoms.push_back(std::move(atom));
     };
-    add_atom(1,0.0,1,7);
-    add_atom(2,4.5,1,7);
-    add_atom(3,4.8,3,8);
+    struct Profile
+    {
+        std::array<double,3> position;
+        double amplitude,width,charge;
+    };
+    std::vector<Profile> profiles{
+        {{0,0,0},2.0,.65,-.2},{{4.5,0,0},.4,.8,.1},{{4.8,0,0},.3,.9,-.1}};
+    add_atom(1,profiles[0].position,1,7,"CA");
+    add_atom(2,profiles[1].position,1,7,"CB");
+    add_atom(3,profiles[2].position,3,8,"CG");
+    if(qualified_donors)
+    {
+        std::vector<std::array<double,3>> candidates;
+        for(double x:{-6.,0.,6.}) for(double y:{-6.,0.,6.}) for(double z:{-6.,0.,6.})
+        {
+            const std::array<double,3> position{x,y,z};
+            if(position==std::array<double,3>{0,0,0} || position==std::array<double,3>{6,0,0}) continue;
+            candidates.push_back(position);
+        }
+        for(std::size_t donor=0;donor<19;++donor)
+        {
+            profiles.push_back({candidates[donor],2.0,.65,-.2});
+            add_atom(static_cast<int>(4+donor),candidates[donor],10+static_cast<int>(donor),
+                100+static_cast<int>(donor),"CA");
+        }
+    }
     ModelObject model(std::move(atoms));
-    model.SelectAtoms([](const auto & atom){return atom.GetSerialID()==1;});
+    model.SelectAtoms([qualified_donors](const auto & atom) {
+        return atom.GetSerialID()==1 || (qualified_donors && atom.GetSerialID()>=4);
+    });
 
-    constexpr std::array<int,3> dimensions{45,45,45};
+    const std::array<int,3> dimensions=qualified_donors ? std::array<int,3>{61,61,61} :
+        std::array<int,3>{45,45,45};
     constexpr std::array<double,3> spacing{.3,.3,.3};
-    constexpr std::array<double,3> origin{-6.6,-6.6,-6.6};
-    const std::array<std::array<double,3>,3> positions{{{0,0,0},{4.5,0,0},{4.8,0,0}}};
-    const std::array<double,3> amplitudes{{2.0,.4,.3}};
-    const std::array<double,3> widths{{.65,.8,.9}};
-    const std::array<double,3> charges{{-.2,.1,-.1}};
-    auto values=std::make_unique<double[]>(static_cast<std::size_t>(dimensions[0])*dimensions[1]*dimensions[2]);
+    const std::array<double,3> origin=qualified_donors ? std::array<double,3>{-9.,-9.,-9.} :
+        std::array<double,3>{-6.6,-6.6,-6.6};
+    auto values=std::make_unique<double[]>(static_cast<std::size_t>(dimensions[0])*
+        static_cast<std::size_t>(dimensions[1])*static_cast<std::size_t>(dimensions[2]));
     for (int z=0;z<dimensions[2];++z) for (int y=0;y<dimensions[1];++y) for (int x=0;x<dimensions[0];++x)
     {
         const auto position=core::simulation::GridPosition({x,y,z},spacing,origin);
         double value{};
-        for (std::size_t atom=0;atom<positions.size();++atom)
+        for (const auto & profile:profiles)
         {
-            const auto square=core::simulation::SupportSquare(position,positions[atom]);
+            const auto square=core::simulation::SupportSquare(position,profile.position);
             if (square>6.25) continue;
-            const auto basis=core::joint_component::EvaluateKernel(square,widths[atom],2.5);
-            value+=amplitudes[atom]*basis.gaussian+charges[atom]*basis.charge;
+            const auto basis=core::joint_component::EvaluateKernel(square,profile.width,2.5);
+            value+=profile.amplitude*basis.gaussian+profile.charge*basis.charge;
         }
         const auto index=static_cast<std::size_t>(x)+static_cast<std::size_t>(dimensions[0]) *
             (static_cast<std::size_t>(y)+static_cast<std::size_t>(dimensions[1])*static_cast<std::size_t>(z));
@@ -790,18 +794,32 @@ TEST(PureHaloSupportExclusionTest, PersistsVersionedDualDomainAndMedianProvenanc
 
 TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGeometryLocalHaloSources)
 {
-    auto fixture=WorkflowFixture();
+    auto fixture=WorkflowFixture(true);
     FitOptions options;
     options.estimator=PotentialEstimator::JOINT_COMPONENTS;
     options.quiet_mode=true;
     options.thread_size=1;
     core::detail::JointPostprocessingMetrics metrics;
-    ScopedLowLevelUnboundedOracle unbounded_test_solver;
     ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
         fixture.map,fixture.model,options,&metrics));
     const auto result=fixture.model.GetAnalysisView().GetJointResult();
     ASSERT_TRUE(result);
     EXPECT_EQ(result->parameterization_contract,JointPureHaloSupportExclusionParameterizationContract);
+    ASSERT_TRUE(result->selection_domain);
+    EXPECT_EQ(result->selection_domain->target_indices.size(),20u);
+    EXPECT_TRUE(IsQualifiedJointAnalysisResult(*result));
+    const auto calibration=std::find_if(result->evidence.begin(),result->evidence.end(),[](const auto & item) {
+        return item.name=="global-width-calibration";
+    });
+    ASSERT_NE(calibration,result->evidence.end());
+    EXPECT_EQ(calibration->status,JointCheckStatus::Passed);
+    EXPECT_NE(calibration->reason.find("qualified-donors=20/20"),std::string::npos);
+    const auto donor_coverage=std::find_if(result->evidence.begin(),result->evidence.end(),[](const auto & item) {
+        return item.name=="qualified-first-stage-donor-coverage";
+    });
+    ASSERT_NE(donor_coverage,result->evidence.end());
+    ASSERT_TRUE(donor_coverage->value && donor_coverage->threshold);
+    EXPECT_GE(*donor_coverage->value,*donor_coverage->threshold);
     ASSERT_TRUE(result->halo_median_reconstruction);
     EXPECT_EQ(result->halo_median_reconstruction->halos.size(),2u);
     EXPECT_EQ(metrics.halo_median_valid_target_count,1u);

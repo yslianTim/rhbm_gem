@@ -29,7 +29,9 @@ struct FixedNeighborSearchPolicy
     std::function<void(std::size_t,std::size_t,const BlockCoordinateState &,
         const FixedNeighborBlockSweep &)> state_observer;
     std::function<void(std::string_view,const FixedNeighborSearchResult &)> search_result_observer;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     std::function<void(FixedNeighborPolicy &)> configure_search_for_testing;
+#endif
     std::optional<double> eta_upper_bound;
 };
 
