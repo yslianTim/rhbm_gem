@@ -1,6 +1,5 @@
 #pragma once
 #include "Numerics.hpp"
-#include "Problem.hpp"
 
 namespace rhbm_gem::core::joint_component {
 inline constexpr std::size_t MaximumLocalPerturbationDirectionsPerBlock=3;

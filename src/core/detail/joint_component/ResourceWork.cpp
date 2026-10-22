@@ -3,7 +3,6 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <algorithm>
 #include <cstring>
-#include <fstream>
 #include <iomanip>
 #include <limits>
 #include <sstream>

@@ -1,8 +1,6 @@
 #include "SimulationBuildInfo.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/joint_component/TargetEvidence.hpp"
-#include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
 #include "core/detail/joint_component/WidthCalibration.hpp"
 #include "core/detail/joint_component/ParameterStability.hpp"
 #include "core/detail/FirstStageInitialization.hpp"

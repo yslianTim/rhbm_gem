@@ -2,8 +2,6 @@
 #include "SnapshotViews.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <limits>
-#include <memory>
-#include <stdexcept>
 #include <string>
 #include <vector>
 

@@ -1,6 +1,5 @@
 #pragma once
 #include "Numerics.hpp"
-#include "Problem.hpp"
 
 namespace rhbm_gem::core::joint_component {
 // Provisional roundoff-amplification warning; this is diagnostic evidence only.

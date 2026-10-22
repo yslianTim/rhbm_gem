@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <numeric>
 
 namespace rhbm_gem::core::joint_component {
 namespace {

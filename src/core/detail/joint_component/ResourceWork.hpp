@@ -3,10 +3,8 @@
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <chrono>
 #include <cstddef>
-#include <cstdint>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace rhbm_gem::core::joint_component {

@@ -1,6 +1,5 @@
 #pragma once
 #include <rhbm_gem/data/object/JointAnalysisResult.hpp>
-#include <array>
 #include <cstddef>
 #include <memory>
 #include <optional>

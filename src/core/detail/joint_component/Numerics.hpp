@@ -1,7 +1,6 @@
 #pragma once
 #include <Eigen/Dense>
 #include "JointProgress.hpp"
-#include "SolverConfiguration.hpp"
 #include "SnapshotViews.hpp"
 #include "ResourceWork.hpp"
 #include "ConvergenceCriteria.hpp"

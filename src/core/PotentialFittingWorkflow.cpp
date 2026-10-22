@@ -5,7 +5,6 @@
 #include "detail/FirstStageInitialization.hpp"
 #include "detail/FittingWorkset.hpp"
 #include "detail/PotentialFittingWorkflow.hpp"
-#include "detail/joint_component/Problem.hpp"
 #include "detail/HaloMedianReconstruction.hpp"
 #include "detail/StageSummary.hpp"
 #include "detail/PostFitPeeling.hpp"
@@ -26,7 +25,6 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <Eigen/Cholesky>
 #include <Eigen/QR>
-#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <limits>

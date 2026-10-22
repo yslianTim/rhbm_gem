@@ -1,6 +1,5 @@
 #include "Problem.hpp"
 #include <algorithm>
-#include <cmath>
 #include <numeric>
 
 namespace rhbm_gem::core::joint_component {
