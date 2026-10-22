@@ -332,7 +332,6 @@ TEST(CommandApiPipelineTest, PotentialAnalysisFixedPoliciesMatchDirectTwoStageWo
     rgc::FitOptions direct_options;
     direct_options.thread_size = 1;
     direct_options.estimator = rgc::PotentialEstimator::TWO_STAGE;
-    direct_options.sampling_method = SphereSamplingMethod::FibonacciDeterministic;
     direct_options.exclude_hydrogen = true;
     direct_options.enable_second_stage_failed_only_refinement = true;
     direct_options.quiet_mode = true;

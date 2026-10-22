@@ -151,8 +151,7 @@ JointInitialization PrepareJointWidthInitialization(
             " Joint contributors");
     }
     const auto atoms = CollectFirstStageAtoms(workset);
-    RunPotentialSamplingWorkflow(map, model, atoms, SphereSamplingMethod::FibonacciDeterministic,
-        1, " Joint sampling", options.quiet_mode);
+    RunPotentialSamplingWorkflow(map, model, atoms, 1, " Joint sampling", options.quiet_mode);
     if (!options.quiet_mode)
     {
         Logger::FinishProgressLine();

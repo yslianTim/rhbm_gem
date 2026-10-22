@@ -50,26 +50,14 @@ LocalPotentialSampleList BuildLocalPotentialSampleList(
 } // namespace rhbm_gem::core::detail
 
 namespace rhbm_gem::core {
+namespace {
 
-LocalPotentialSampleList SampleMapValues(
-    const MapObject & map_object,
-    const GridSampler & sampler,
-    const std::array<double, 3> & position,
-    const std::array<double, 3> & direction)
-{
-    const auto sample_point_list{ sampler.GenerateSamplingPoints(position, direction) };
-    return detail::BuildLocalPotentialSampleList(map_object, sample_point_list);
-}
-
-LocalPotentialSampleList SampleAtomMapValues(
+LocalPotentialSampleList SampleAtomMapValuesFromPoints(
     const MapObject & map_object,
     const AtomObject & atom,
-    SphereSamplingMethod sampling_method)
+    SamplingPointList sample_point_list)
 {
     const auto local_position{ atom.GetPosition() };
-    auto sample_point_list{
-        sphere_sampler::GenerateSamplingPointList(local_position, sampling_method)
-    };
     const auto neighbor_atom_list{ atom.FindNeighborAtoms() };
     std::vector<std::array<double, 3>> reject_position_list;
     reject_position_list.reserve(neighbor_atom_list.size());
@@ -81,21 +69,11 @@ LocalPotentialSampleList SampleAtomMapValues(
     return detail::BuildLocalPotentialSampleList(map_object, sample_point_list);
 }
 
-void RunPotentialSamplingWorkflow(
+void RunPotentialSamplingWorkflowImpl(
     MapObject & map_object,
     ModelObject & model_object,
     const std::vector<AtomObject *> & atom_list,
-    SphereSamplingMethod sampling_method,
-    int thread_count)
-{
-    RunPotentialSamplingWorkflow(map_object, model_object, atom_list, sampling_method, thread_count, {}, false);
-}
-
-void RunPotentialSamplingWorkflow(
-    MapObject & map_object,
-    ModelObject & model_object,
-    const std::vector<AtomObject *> & atom_list,
-    SphereSamplingMethod sampling_method,
+    const SphereSamplingMethod * sampling_method,
     int thread_count,
     std::string_view progress_label,
     bool quiet_mode)
@@ -110,8 +88,9 @@ void RunPotentialSamplingWorkflow(
 #endif
     for (size_t i = 0; i < atom_list.size(); i++)
     {
-        raw_sampling_entries_list[i] =
-            SampleAtomMapValues(map_object, *atom_list[i], sampling_method);
+        raw_sampling_entries_list[i] = sampling_method ?
+            SampleAtomMapValues(map_object, *atom_list[i], *sampling_method) :
+            SampleAtomMapValues(map_object, *atom_list[i]);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if (detail::PotentialSamplingObserverForTesting())
             detail::PotentialSamplingObserverForTesting()(atom_list[i]->GetSerialID());
@@ -134,6 +113,85 @@ void RunPotentialSamplingWorkflow(
     }
 }
 
+} // namespace
+
+LocalPotentialSampleList SampleMapValues(
+    const MapObject & map_object,
+    const GridSampler & sampler,
+    const std::array<double, 3> & position,
+    const std::array<double, 3> & direction)
+{
+    const auto sample_point_list{ sampler.GenerateSamplingPoints(position, direction) };
+    return detail::BuildLocalPotentialSampleList(map_object, sample_point_list);
+}
+
+LocalPotentialSampleList SampleAtomMapValues(
+    const MapObject & map_object,
+    const AtomObject & atom)
+{
+    return SampleAtomMapValuesFromPoints(
+        map_object,
+        atom,
+        sphere_sampler::GenerateSamplingPointList(atom.GetPosition()));
+}
+
+LocalPotentialSampleList SampleAtomMapValues(
+    const MapObject & map_object,
+    const AtomObject & atom,
+    SphereSamplingMethod sampling_method)
+{
+    return SampleAtomMapValuesFromPoints(
+        map_object,
+        atom,
+        sphere_sampler::GenerateSamplingPointList(atom.GetPosition(), sampling_method));
+}
+
+void RunPotentialSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
+    const std::vector<AtomObject *> & atom_list,
+    SphereSamplingMethod sampling_method,
+    int thread_count)
+{
+    RunPotentialSamplingWorkflowImpl(
+        map_object, model_object, atom_list, &sampling_method, thread_count, {}, false);
+}
+
+void RunPotentialSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
+    const std::vector<AtomObject *> & atom_list,
+    SphereSamplingMethod sampling_method,
+    int thread_count,
+    std::string_view progress_label,
+    bool quiet_mode)
+{
+    RunPotentialSamplingWorkflowImpl(
+        map_object, model_object, atom_list, &sampling_method, thread_count, progress_label, quiet_mode);
+}
+
+void RunPotentialSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
+    const std::vector<AtomObject *> & atom_list,
+    int thread_count)
+{
+    RunPotentialSamplingWorkflowImpl(
+        map_object, model_object, atom_list, nullptr, thread_count, {}, false);
+}
+
+void RunPotentialSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
+    const std::vector<AtomObject *> & atom_list,
+    int thread_count,
+    std::string_view progress_label,
+    bool quiet_mode)
+{
+    RunPotentialSamplingWorkflowImpl(
+        map_object, model_object, atom_list, nullptr, thread_count, progress_label, quiet_mode);
+}
+
 void RunPotentialSamplingWorkflow(
     MapObject & map_object,
     ModelObject & model_object,
@@ -145,6 +203,18 @@ void RunPotentialSamplingWorkflow(
         model_object,
         model_object.GetSelectedAtoms(),
         sampling_method,
+        thread_count);
+}
+
+void RunPotentialSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
+    int thread_count)
+{
+    RunPotentialSamplingWorkflow(
+        map_object,
+        model_object,
+        model_object.GetSelectedAtoms(),
         thread_count);
 }
 

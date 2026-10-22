@@ -5,7 +5,6 @@
 #include <vector>
 
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
-#include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 namespace rhbm_gem {
@@ -18,7 +17,6 @@ namespace core {
 struct FitOptions
 {
     PotentialEstimator estimator{ PotentialEstimator::JOINT_COMPONENTS };
-    SphereSamplingMethod sampling_method{ SphereSamplingMethod::FibonacciDeterministic };
     int thread_size{ 1 };
     bool quiet_mode{ false };
     bool exclude_hydrogen{ false };

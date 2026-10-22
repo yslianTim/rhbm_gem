@@ -109,8 +109,12 @@ TEST(SphereSamplerTest, DispatchUsesRequestedMethod)
             center,
             SphereSamplingMethod::FibonacciDeterministic)
     };
+    const auto default_samples{
+        rhbm_gem::sphere_sampler::GenerateSamplingPointList(center)
+    };
 
     ASSERT_EQ(200u, samples.size());
+    ExpectSamplesEqual(samples, default_samples);
     EXPECT_EQ(10u, CountSamplesAtRadius(samples, 0.05));
     ExpectAnalysisSampleDistances(samples, center);
 }

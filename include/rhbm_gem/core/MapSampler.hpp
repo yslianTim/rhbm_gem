@@ -24,8 +24,26 @@ LocalPotentialSampleList SampleMapValues(
 
 LocalPotentialSampleList SampleAtomMapValues(
     const MapObject & map_object,
+    const AtomObject & atom);
+
+LocalPotentialSampleList SampleAtomMapValues(
+    const MapObject & map_object,
     const AtomObject & atom,
     SphereSamplingMethod sampling_method);
+
+void RunPotentialSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
+    const std::vector<AtomObject *> & atoms,
+    int thread_count);
+
+void RunPotentialSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
+    const std::vector<AtomObject *> & atoms,
+    int thread_count,
+    std::string_view progress_label,
+    bool quiet_mode = false);
 
 void RunPotentialSamplingWorkflow(
     MapObject & map_object,
@@ -47,6 +65,11 @@ void RunPotentialSamplingWorkflow(
     MapObject & map_object,
     ModelObject & model_object,
     SphereSamplingMethod sampling_method,
+    int thread_count);
+
+void RunPotentialSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
     int thread_count);
 
 } // namespace core

@@ -191,7 +191,6 @@ bool ExecutePreparedRequest(
     FitOptions options;
     options.thread_size = joint ? 1 : request.job_count;
     options.estimator = request.estimator;
-    options.sampling_method = SphereSamplingMethod::FibonacciDeterministic;
     options.exclude_hydrogen = true;
     options.enable_second_stage_failed_only_refinement = true;
     try

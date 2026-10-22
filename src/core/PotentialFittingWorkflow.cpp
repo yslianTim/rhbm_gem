@@ -211,8 +211,8 @@ void RunTwoStageWorkflow(MapObject & map, ModelObject & model, const FitOptions 
     model.EditAnalysis().InitializeFromSelection();
     const auto workset = MakeTwoStageFittingWorkset(model);
     const auto first_stage_atoms = CollectFirstStageAtoms(workset);
-    RunPotentialSamplingWorkflow(map, model, first_stage_atoms, options.sampling_method,
-        options.thread_size, " Sampling", options.quiet_mode);
+    RunPotentialSamplingWorkflow(map, model, first_stage_atoms, options.thread_size,
+        " Sampling", options.quiet_mode);
     RunTwoStageFromPreparedSamples(model, workset.contributors, options);
 }
 
