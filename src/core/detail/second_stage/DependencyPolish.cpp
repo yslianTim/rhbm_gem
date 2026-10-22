@@ -3,9 +3,7 @@
 
 #include "core/detail/second_stage/CandidateState.hpp"
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
-#include "core/detail/second_stage/observation/PerformanceCounters.hpp"
 
-#include <chrono>
 #include <exception>
 #include <utility>
 
@@ -24,22 +22,17 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
     const ObjectiveDomain & objective_domain,
     const SuspiciousBlockActivity & block_activity,
     const FitState & base_state,
-    BoundaryJointCorrectionWorkspaceMap & workspace_by_key,
-    PerformanceCounters & performance_counters)
+    BoundaryJointCorrectionWorkspaceMap & workspace_by_key)
 {
     FinalDependencyPolishResult result{ .state = base_state };
-    auto & report{ result.diagnostic };
-    report = FinalDependencyPolishDiagnostic{};
     if (!options.enable_second_stage_dependency_polish) return result;
 
-    const auto polish_start{ std::chrono::steady_clock::now() };
     const auto component_list{
         BuildUncutDependencyPolishComponents(
             topology,
             partition,
             objective_domain.owner_key_by_atom_index)
     };
-    report.component_count = component_list.size();
     const auto base_baseline{ BuildResidualBaseline(context, base_state) };
     const auto base_objective{
         EvaluateAuditObjective(objective_domain, base_baseline)
@@ -47,8 +40,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
     if (base_objective.has_value())
     {
         result.objective = base_objective;
-        report.objective_before = base_objective->GetTotalObjective();
-        report.objective_after = base_objective->GetTotalObjective();
     }
 
     std::vector<std::optional<FitStatePatch>> accepted_patch_by_component(
@@ -74,19 +65,12 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                 offset_active_index_list.emplace_back(atom_index);
             }
         }
-        const auto parameter_count{
-            2 * shape_active_index_list.size() + offset_active_index_list.size()
-        };
-        report.atom_count += component.atom_index_list.size();
-        report.parameter_count += parameter_count;
         if (!base_objective.has_value()) continue;
 
         if (shape_active_index_list.empty() && offset_active_index_list.empty())
         {
             continue;
         }
-
-        report.attempted_component_count++;
 
         try
         {
@@ -100,8 +84,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
             };
             if (maximum_round_count != 0)
             {
-                report.round_count++;
-
                 std::vector<BoundaryJointTrustRegion> trust_region_list;
                 trust_region_list.reserve(component.key_list.size());
                 for (const auto & key : component.key_list)
@@ -123,10 +105,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                     round < maximum_round_count;
                     round++)
                 {
-                    if (round != 0)
-                    {
-                        report.round_count++;
-                    }
                     const FitStateView endpoint_state_view{
                         base_state,
                         endpoint_patch
@@ -162,7 +140,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                         FinalPolishCandidateReference{component, partition, objective_domain,
                             endpoint_state_view, *base_objective, endpoint_objective}) };
 
-                    report.suspicious_candidate_atom_count += evaluation.suspicious_atom_count;
                     if (!evaluation.objective) break;
                     const auto & candidate_objective{ evaluation.objective };
 
@@ -261,16 +238,7 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
         result.state = std::move(assembled_state);
         result.objective = assembled_objective;
         result.accepted = true;
-        report.objective_after =
-            assembled_objective->GetTotalObjective();
     }
-    report.accepted_component_count =
-        result.accepted ? accepted_component_count : 0;
-    report.elapsed_milliseconds =
-        std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - polish_start).count();
-    performance_counters.RecordDependencyPolish(
-        report.elapsed_milliseconds);
     return result;
 }
 } // namespace rhbm_gem::core::detail

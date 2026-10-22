@@ -21,14 +21,6 @@ struct ClusterCandidateDecision
     CandidateDecisionEvidence evidence{};
 };
 
-struct PolishProgress
-{
-    std::size_t eligible_count{ 0 };
-    std::size_t accepted_count{ 0 };
-    std::size_t rejected_count{ 0 };
-    std::size_t skipped_count{ 0 };
-};
-
 struct BoundaryComponentDecision
 {
     std::optional<double> accepted_factor{};
@@ -48,7 +40,6 @@ struct CandidateSelection
     std::vector<ClusterCandidateDecision> accepted_cluster_evidence_list{};
     std::vector<ClusterCandidateDecision> rejected_cluster_evidence_list{};
     std::optional<ObjectiveBreakdown> final_audit_objective{};
-    PolishProgress polish_progress{};
 };
 
 } // namespace rhbm_gem::core::detail

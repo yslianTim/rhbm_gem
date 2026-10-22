@@ -27,13 +27,8 @@ struct IterationResult
     TrustRegionRadiusUpdate trust_region_update{};
     std::size_t attempt_number{ 0 };
     std::size_t accepted_iteration_count{ 0 };
-    std::size_t active_atom_count{ 0 };
-    std::size_t quarantine_atom_count{ 0 };
-    PolishProgress polish_progress{};
-    std::size_t suspicious_atom_count{ 0 };
     SecondStageStopReason stop_reason{ SecondStageStopReason::None };
     bool objective_domain_changed{ false };
-    TransformedChange transformed_change_percentile{};
 };
 
 } // namespace rhbm_gem::core::detail

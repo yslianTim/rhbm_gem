@@ -1,12 +1,10 @@
 #include "core/detail/second_stage/IterationResult.hpp"
 #include "core/detail/second_stage/FixedPointRecovery.hpp"
 #include "core/detail/second_stage/ConvergenceCertificate.hpp"
-#include "core/detail/second_stage/SecondStageDiagnostics.hpp"
 #include "core/detail/second_stage/IterationProcess.hpp"
 
 #include "core/detail/gaussian_fit/FittingRanges.hpp"
 #include "core/detail/second_stage/observation/SecondStageLogging.hpp"
-#include "core/detail/second_stage/observation/PerformanceCounters.hpp"
 #include "core/detail/second_stage/IterationProposal.hpp"
 #include "core/detail/second_stage/Quarantine.hpp"
 #include "core/detail/second_stage/DependencyPolish.hpp"
@@ -15,7 +13,6 @@
 #include "core/detail/second_stage/CandidateTransaction.hpp"
 
 #include <algorithm>
-#include <chrono>
 #include <numeric>
 #include <ranges>
 #include <set>
@@ -82,7 +79,6 @@ struct SecondStageInitializationResult
     SecondStageContext context{};
     FitState state{};
     std::vector<int> neighbor_count_list{};
-    SecondStageSeedSummary seeds{};
 };
 
 struct PendingTopology
@@ -106,9 +102,6 @@ struct IterationState
     BestAuditState best_audit_state{};
     MemberBestState member_best{};
     bool recovery_mode{ false };
-    bool final_polish_applied{ false };
-    IterationDiagnostics diagnostics{};
-    std::size_t attempts{ 0 }, recovery_operator_evaluations{ 0 }, certificate_operator_evaluations{ 0 };
     std::optional<ConvergenceAssessment> final_certificate{};
     QuarantineState quarantine_state{};
     TrustRegionStateSet trust_region_state{};
@@ -170,8 +163,6 @@ static std::optional<SecondStageInitializationResult> BuildSecondStageInitializa
         if (!selection.has_value()) return std::nullopt;
 
         result.mdpde = selection->model;
-        if (selection->source == SecondStageSeedSource::LocalMdpde) ++build_result.seeds.local_mdpde;
-        else ++build_result.seeds.global_median;
     }
 
     build_result.neighbor_count_list.reserve(context.atom_list.size());
@@ -296,8 +287,7 @@ static bool TryRebuildAdaptiveTopology(
     const FitOptions & options,
     const FitState & accepted_state,
     GraphTopology & graph_topology,
-    IterationState & iteration_state,
-    PerformanceCounters & performance_counters)
+    IterationState & iteration_state)
 {
     const auto maximum_transformed_drift{
         CalculateAdaptiveTopologyDrift(
@@ -307,8 +297,6 @@ static bool TryRebuildAdaptiveTopology(
     };
     if (!(maximum_transformed_drift >= kAdaptiveTopologyRebuildDriftThreshold)) return false;
 
-    FinishProgressLine(options.quiet_mode);
-    const auto rebuild_start{ std::chrono::steady_clock::now() };
     auto rebuilt_topology{
         BuildSecondStageGraphTopology(
             context,
@@ -322,19 +310,6 @@ static bool TryRebuildAdaptiveTopology(
             iteration_state.selected_atom_index_list)
     };
     const auto partition_changed{ iteration_state.graph_partition != rebuilt_partition };
-    const auto elapsed_milliseconds{
-        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - rebuild_start).count()
-    };
-    performance_counters.RecordTopologyRebuild(elapsed_milliseconds);
-
-    LogAdaptiveTopologyRebuild(
-        options.quiet_mode,
-        iteration_state.accepted_iteration_count,
-        maximum_transformed_drift,
-        iteration_state.graph_partition,
-        rebuilt_partition,
-        partition_changed);
-
     iteration_state.topology_reference_state = BuildSecondStageModelSnapshot(context, accepted_state).node;
     if (partition_changed)
     {
@@ -395,7 +370,6 @@ static IterationState BuildIterationState(
 static bool BeginFrozenBackgroundIteration(
     SecondStageContext & context,
     GraphTopology & graph_topology,
-    const FitOptions & options,
     IterationState & iteration_state)
 {
     const bool partition_changed{ iteration_state.pending_topology.has_value() };
@@ -412,7 +386,6 @@ static bool BeginFrozenBackgroundIteration(
             iteration_state);
         iteration_state.frozen_recovery_revision++;
         graph_topology = std::move(pending.topology);
-        LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode, true);
         return true;
     }
     if (previous_background && previous_background->response_by_atom == background->response_by_atom) return false;
@@ -426,19 +399,16 @@ static bool BeginFrozenBackgroundIteration(
 
 static IterationResult RunRecoveryIteration(
     SecondStageContext & context, GraphTopology & topology, const FitOptions & options,
-    std::size_t attempt, IterationState & state, PerformanceCounters & counters)
+    std::size_t attempt, IterationState & state)
 {
     IterationResult result;
     result.attempt_number = attempt;
     result.accepted_iteration_count = state.accepted_iteration_count;
-    result.quarantine_atom_count = state.quarantine_state.AtomCount();
-    result.active_atom_count = context.atom_list.size() - result.quarantine_atom_count;
     const auto keys{ BuildGraphClusterKeyList(state.graph_partition) };
     const auto activity{ state.quarantine_state.BuildFinalActivity() };
     const auto ridge{ BuildSuspiciousJointOffsetRidgeMultiplierList(state.rollback_atom_mask, activity, {}) };
     auto recovery{ RunFixedPointRecovery(context, keys, state.accepted_state, options, ridge,
         state.objective_domain, state.best_audit_state, state.trust_region_state, activity) };
-    state.recovery_operator_evaluations += recovery.diagnostics.operator_evaluations;
     if (!recovery.state)
     {
         result.stop_reason = SecondStageStopReason::RecoveryFailed;
@@ -454,9 +424,8 @@ static IterationResult RunRecoveryIteration(
     state.audit_patience_count = 0;
     result.accepted_iteration_count = state.accepted_iteration_count;
     result.accepted_key_list = keys;
-    result.transformed_change_percentile = assessment.certificate.accepted_active_p99;
     result.objective_domain_changed = TryRebuildAdaptiveTopology(context, options,
-        state.accepted_state, topology, state, counters);
+        state.accepted_state, topology, state);
     assessment.certificate.objective_domain_changed = result.objective_domain_changed;
     const auto objective{ EvaluateAuditObjective(state.objective_domain, context,
         BuildSecondStageModelSnapshot(context, state.accepted_state)) };
@@ -472,17 +441,14 @@ static IterationResult RunIteration(
     GraphTopology & graph_topology,
     const FitOptions & options,
     std::size_t attempt_number,
-    IterationState & iteration_state,
-    PerformanceCounters & performance_counters)
+    IterationState & iteration_state)
 {
-    iteration_state.attempts = attempt_number;
-    iteration_state.diagnostics = IterationDiagnostics{};
     // Prepare this attempt's frozen background, objectives, and active blocks.
     const bool background_partition_changed{ attempt_number > 1 && BeginFrozenBackgroundIteration(
-        context, graph_topology, options, iteration_state) };
+        context, graph_topology, iteration_state) };
     if (iteration_state.recovery_mode)
         return RunRecoveryIteration(context, graph_topology, options, attempt_number,
-            iteration_state, performance_counters);
+            iteration_state);
     auto previous_state{ std::move(iteration_state.accepted_state) };
     const auto & selected_atom_index_list{ iteration_state.selected_atom_index_list };
     const auto & graph_partition{ iteration_state.graph_partition };
@@ -527,7 +493,6 @@ static IterationResult RunIteration(
             retry_atom_index_set)
     };
     // Build a constrained proposal while retaining unrestricted operator evidence.
-    const auto iteration_phase_start{ std::chrono::steady_clock::now() };
     auto proposal_result{
         BuildIterationProposal(
             context,
@@ -538,12 +503,7 @@ static IterationResult RunIteration(
             quarantine_activity,
             iteration_state.solver_workspace_by_key)
     };
-    performance_counters.FinishIterationPhase(iteration_phase_start);
-
     const auto & proposal_state{ proposal_result.proposal_state };
-    const auto proposal_change_summary{
-        SummarizeTransformedChanges(proposal_state, previous_state, selected_atom_index_list)
-    };
     // Select cluster candidates, then reconcile their shared boundary samples.
     const CandidateSelectionInputs candidate_inputs{
         .context = context,
@@ -562,7 +522,6 @@ static IterationResult RunIteration(
         .trust_region_state = iteration_state.trust_region_state,
         .solver_workspace_by_key = iteration_state.solver_workspace_by_key,
         .boundary_joint_correction_workspace_by_key = iteration_state.boundary_joint_correction_workspace_by_key,
-        .performance_counters = performance_counters,
         .member_best = &iteration_state.member_best
     };
     CandidateTransactionBuilder builder;
@@ -587,11 +546,6 @@ static IterationResult RunIteration(
     iteration_state.rollback_atom_mask = selection.block_activity.BuildCombinedFixedAtomMask();
     result.attempt_number = attempt_number;
     result.accepted_iteration_count = iteration_state.accepted_iteration_count;
-    result.quarantine_atom_count = iteration_state.quarantine_state.AtomCount();
-    result.active_atom_count = context.atom_list.size() - result.quarantine_atom_count;
-    result.polish_progress = selection.polish_progress;
-    result.suspicious_atom_count = iteration_suspicious_atom_count;
-    iteration_state.diagnostics.proposal_maximum_transformed_change = std::ranges::max(proposal_change_summary.maximum_list);
 
     if (!selection.accepted)
     {
@@ -606,12 +560,6 @@ static IterationResult RunIteration(
         BuildActiveCoordinatePopulation(
             selected_atom_index_list,
             selection.block_activity)
-    };
-    const auto transformed_change_summary{
-        SummarizeTransformedChanges(
-            assembled_state,
-            previous_state,
-            iteration_state.selected_atom_index_list)
     };
     const auto operator_summary{
         SummarizeFixedPointOperator(
@@ -643,8 +591,7 @@ static IterationResult RunIteration(
         options,
         assembled_state,
         graph_topology,
-        iteration_state,
-        performance_counters) || background_partition_changed;
+        iteration_state) || background_partition_changed;
     bool improved_best_audit{ false };
     {
         auto candidate_audit_objective{ selection.final_audit_objective };
@@ -693,8 +640,6 @@ static IterationResult RunIteration(
         cluster_key_list, iteration_state.member_best);
 
     result.accepted_iteration_count = iteration_state.accepted_iteration_count;
-    iteration_state.diagnostics.accepted_maximum_transformed_change = std::ranges::max(transformed_change_summary.maximum_list);
-    result.transformed_change_percentile = certificate.accepted_active_p99;
     certificate.objective_domain_changed = result.objective_domain_changed;
     certificate.quarantine_transition = has_quarantine_transition;
     certificate.suspicious_block_fallback = has_suspicious_block_fallback;
@@ -752,7 +697,6 @@ static std::optional<ConvergenceAssessment> EvaluateFinalPolishCertificate(
                 final_block_activity,
                 {})
         };
-        ++iteration_state.certificate_operator_evaluations;
         const auto evidence{ EvaluateNominalOperator(context, cluster_key_list, candidate_state,
             options, joint_offset_ridge_multiplier_list) };
         return AssessNominalOperator(evidence, candidate_state);
@@ -771,13 +715,10 @@ static void CertifyFinalState(const SecondStageContext & context, const FitOptio
         const auto keys{ BuildGraphClusterKeyList(state.graph_partition) };
         const auto activity{ state.quarantine_state.BuildFinalActivity() };
         const auto ridge{ BuildSuspiciousJointOffsetRidgeMultiplierList(state.rollback_atom_mask, activity, {}) };
-        ++state.certificate_operator_evaluations;
         const auto evidence{ EvaluateNominalOperator(context, keys, final_state, options, ridge) };
         state.final_certificate = AssessNominalOperator(evidence, final_state);
     }
     catch (const std::exception &) { state.final_certificate.reset(); }
-    LogFinalStateCertificate(options.quiet_mode, state.final_certificate, state.final_polish_applied,
-        state.attempts, state.recovery_operator_evaluations, state.certificate_operator_evaluations);
 }
 
 static const FitState & FinalizeSecondStageState(
@@ -787,8 +728,7 @@ static const FitState & FinalizeSecondStageState(
     const GraphTopology & graph_topology,
     IterationState & iteration_state,
     bool use_best_audit_state,
-    SecondStageStopReason stop_reason,
-    PerformanceCounters & performance_counters)
+    SecondStageStopReason stop_reason)
 {
     const auto final_uses_best_audit{
         use_best_audit_state && iteration_state.best_audit_state.has_value()
@@ -817,8 +757,7 @@ static const FitState & FinalizeSecondStageState(
             iteration_state.objective_domain,
             final_block_activity,
             final_state,
-            iteration_state.boundary_joint_correction_workspace_by_key,
-            performance_counters)
+            iteration_state.boundary_joint_correction_workspace_by_key)
     };
     auto safety_status{ FinalPolishResidualSafetyStatus::NotEvaluated };
     std::optional<ConvergenceAssessment> candidate_certificate;
@@ -836,9 +775,6 @@ static const FitState & FinalizeSecondStageState(
         polish_result.accepted && polish_result.objective.has_value() &&
         safety_status == FinalPolishResidualSafetyStatus::AbsolutePassed
     };
-    LogFinalDependencyPolish(
-        options.quiet_mode, polish_result, polish_result.diagnostic, safety_status, polish_applied);
-    iteration_state.final_polish_applied = polish_applied;
     if (polish_applied)
     {
         if (iteration_state.previous_polish_provenance.size() != context.atom_list.size())
@@ -894,30 +830,22 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
         }
         StoreSecondStageNeighborCounts(model_object, initialization->context,
             initialization->neighbor_count_list);
-        LogSecondStageSeedSelections(
-            initialization->seeds,
-            options.quiet_mode);
         context = std::move(initialization->context);
         initial_state = std::move(initialization->state);
     }
     auto graph_topology{
         BuildSecondStageGraphTopology(context, initial_state, options.quiet_mode)
     };
-    LogGraphTopology(graph_topology, options.quiet_mode);
+    LogGraphFallbackWarning(options.quiet_mode, graph_topology.summary.uses_weighted_graph);
     auto iteration_state{
         BuildIterationState(context, graph_topology, std::move(initial_state))
     };
-    PerformanceCounters performance_counters{
-        options.quiet_mode
-    };
-    LogObjectiveDomain(iteration_state.objective_domain, options.quiet_mode);
     const auto progress_column_widths{ BuildProgressColumnWidths(context.atom_list.size(), kMaximumIterations) };
     LogProgressHeader(options.quiet_mode, progress_column_widths);
 
     IterationResult terminal_result;
     if (context.atom_list.size() == 0)
     {
-        terminal_result.attempt_number = 1;
         terminal_result.accepted_iteration_count = iteration_state.accepted_iteration_count;
         terminal_result.stop_reason = SecondStageStopReason::Quarantine;
     }
@@ -930,12 +858,11 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
                 graph_topology,
                 options,
                 iter + 1,
-                iteration_state,
-                performance_counters);
+                iteration_state);
             LogIterationProgress(
                 options.quiet_mode,
                 progress_column_widths,
-                terminal_result, iteration_state.diagnostics);
+                terminal_result);
 
             if (terminal_result.stop_reason != SecondStageStopReason::None)
             {
@@ -964,8 +891,7 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
             graph_topology,
             iteration_state,
             use_best_audit_state,
-            terminal_result.stop_reason,
-            performance_counters);
+            terminal_result.stop_reason);
 
     if (converged && (!iteration_state.final_certificate ||
         !iteration_state.final_certificate->certificate.StrictOperatorPassed()))
@@ -994,7 +920,7 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
         {
             LogConverged(
                 options.quiet_mode,
-                terminal_result);
+                iteration_state.accepted_iteration_count);
         }
     }
     else if (terminal_result.stop_reason == SecondStageStopReason::MaximumIterations)

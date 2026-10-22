@@ -12,8 +12,6 @@ struct FitOptions;
 
 namespace rhbm_gem::core::detail {
 
-class PerformanceCounters;
-
 class TrustRegionStateSet
 {
     std::map<ClusterKey, unsigned int> m_shrink_level_by_key{};
@@ -98,7 +96,6 @@ struct CandidateSelectionInputs
     const TrustRegionStateSet & trust_region_state;
     ClusterSolverWorkspaceMap & solver_workspace_by_key;
     BoundaryJointCorrectionWorkspaceMap & boundary_joint_correction_workspace_by_key;
-    PerformanceCounters & performance_counters;
     const MemberBestState * member_best{ nullptr };
 };
 
@@ -111,7 +108,6 @@ struct CandidateCommitResult
     TrustRegionRadiusUpdate trust_region_update{};
     SuspiciousBlockActivity block_activity{};
     std::optional<ObjectiveBreakdown> final_audit_objective{};
-    PolishProgress polish_progress{};
     std::size_t suspicious_atom_count{ 0 };
     bool accepted{ false };
     bool rejected_cluster{ false };

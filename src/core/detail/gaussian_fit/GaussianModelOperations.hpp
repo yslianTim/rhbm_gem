@@ -56,9 +56,6 @@ struct TransformedChangeSummary
 {
     TransformedChange percentile_list{};
     TransformedChange maximum_list{};
-    std::array<
-        std::size_t,
-        GaussianModel3D::TransformedCoordinateSize()> population_size_list{};
 };
 
 TransformedChange CalculateTransformedChange(

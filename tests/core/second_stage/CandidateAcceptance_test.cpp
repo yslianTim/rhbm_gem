@@ -8,7 +8,6 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
-#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -25,9 +24,7 @@
 #include "core/detail/second_stage/ObjectiveEvaluation.hpp"
 #include "core/detail/second_stage/Quarantine.hpp"
 #include "core/detail/second_stage/SecondStageState.hpp"
-#include "core/detail/second_stage/observation/PerformanceCounters.hpp"
 #include <rhbm_gem/utils/algorithm/RobustLoss.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 
 namespace {
@@ -151,11 +148,10 @@ TEST(EstimatorSecondStageDefenseTest, LocalSearchChecksTrustAndGuardBeforeStarti
         detail::ClusterSolverWorkspaceMap workspaces;
         workspaces.try_emplace(key);
         detail::BoundaryJointCorrectionWorkspaceMap corrections;
-        detail::PerformanceCounters counters{ true };
         const auto options{ MakeSecondStageOptions() };
         const detail::CandidateSelectionInputs inputs{
             fixture.context, options, baseline, partition, health, fixture.state, provenance,
-            proposal, activity, ridge, domain, previous, audit, trust, workspaces, corrections, counters };
+            proposal, activity, ridge, domain, previous, audit, trust, workspaces, corrections };
         detail::CandidateTransactionBuilder builder;
         builder.Select(inputs);
         const auto & selection{ builder.View() };
@@ -229,13 +225,10 @@ TEST(EstimatorSecondStageDefenseTest, CandidateCommitPublishesAcceptedRejectedAn
         const detail::BestAuditState audit;
         detail::ClusterSolverWorkspaceMap workspaces;
         detail::BoundaryJointCorrectionWorkspaceMap corrections;
-        detail::PerformanceCounters counters{ true };
         const auto options{ MakeSecondStageOptions() };
-        const auto saved_level{ Logger::GetLogLevel() };
-        Logger::SetLogLevel(LogLevel::Debug);
         const detail::CandidateSelectionInputs inputs{
             fixture.context, options, baseline, partition, health, fixture.state, provenance,
-            candidate, activity, ridge, domain, previous_objectives, audit, trust, workspaces, corrections, counters };
+            candidate, activity, ridge, domain, previous_objectives, audit, trust, workspaces, corrections };
         detail::CandidateSelection selection;
         selection.block_activity = activity;
         selection.assembled_state = candidate;
@@ -245,7 +238,6 @@ TEST(EstimatorSecondStageDefenseTest, CandidateCommitPublishesAcceptedRejectedAn
         selection.shrink_trust_region_key_list = accepted_keys;
         if (accepted_count == 0) selection.exhausted_key_list = { keys.at(1) };
         selection.final_audit_objective = detail::ObjectiveBreakdown{ 1.0, 2.0, 3.0 };
-        selection.polish_progress = { 2, accepted_count, 2 - accepted_count, 0 };
         for (std::size_t atom = keys.size(); atom-- > 0;)
         {
             detail::ClusterCandidateDecision decision{ keys.at(atom), {} };
@@ -260,10 +252,7 @@ TEST(EstimatorSecondStageDefenseTest, CandidateCommitPublishesAcceptedRejectedAn
         ASSERT_EQ(builder.View().accepted_key_list, accepted_keys);
         ASSERT_EQ(builder.View().rejected_key_list, rejected_keys);
         detail::FitState published{ MakeGaussianResult({ 99.0, 0.9, 0.9 }) };
-        testing::internal::CaptureStdout();
         auto transaction{ std::move(builder).Finish(inputs, quarantine, assessments, health, {}, 0) };
-        const auto finish_output{ testing::internal::GetCapturedStdout() };
-        EXPECT_EQ(finish_output.find("Cluster best publication:"), std::string::npos);
         EXPECT_EQ(quarantine.TargetCount(), 0U);
         EXPECT_EQ(quarantine.state_by_target.at(target).stable_iteration_count, detail::kPersistentQuarantineFailureIterationLimit - 1);
         EXPECT_DOUBLE_EQ(trust.GetRadius(keys.at(0)), 1.0);
@@ -272,7 +261,6 @@ TEST(EstimatorSecondStageDefenseTest, CandidateCommitPublishesAcceptedRejectedAn
         EXPECT_DOUBLE_EQ(published.front().mdpde.GetModel().GetAmplitude(), 99.0);
         EXPECT_EQ(fixture.state.size(), original.size());
         const auto committed{ std::move(transaction).Commit(fixture.state, published, provenance, quarantine, trust) };
-        Logger::SetLogLevel(saved_level);
         EXPECT_EQ(committed.accepted_key_list, accepted_keys);
         EXPECT_EQ(committed.rejected_key_list, rejected_keys);
         EXPECT_EQ(committed.trust_region_update.changed_key_list, (std::vector<detail::ClusterKey>{ keys.at(0) }));
@@ -292,10 +280,6 @@ TEST(EstimatorSecondStageDefenseTest, CandidateCommitPublishesAcceptedRejectedAn
         EXPECT_EQ(committed.block_activity.hard_failure_atom_mask, activity.hard_failure_atom_mask);
         ASSERT_TRUE(committed.final_audit_objective);
         EXPECT_DOUBLE_EQ(committed.final_audit_objective->GetTotalObjective(), 4.5);
-        EXPECT_EQ(committed.polish_progress.eligible_count, 2U);
-        EXPECT_EQ(committed.polish_progress.accepted_count, accepted_count);
-        EXPECT_EQ(committed.polish_progress.rejected_count, 2 - accepted_count);
-        EXPECT_EQ(committed.polish_progress.skipped_count, 0U);
         EXPECT_EQ(provenance, accepted_count ? candidate_provenance : original_provenance);
         const auto & expected{ accepted_count ? candidate : original };
         ASSERT_EQ(published.size(), expected.size());

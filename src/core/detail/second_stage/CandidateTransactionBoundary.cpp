@@ -2,10 +2,7 @@
 #include "core/detail/second_stage/CandidateTransaction.hpp"
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
 
-#include "core/detail/second_stage/observation/PerformanceCounters.hpp"
-
 #include <algorithm>
-#include <chrono>
 #include <iterator>
 #include <limits>
 #include <ranges>
@@ -136,12 +133,6 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
     auto & solver{
         inputs.boundary_joint_correction_workspace_by_key.try_emplace(workspace_key).first->second
     };
-    const auto start_time{ std::chrono::steady_clock::now() };
-    const auto record_performance = [&]
-    {
-        inputs.performance_counters.RecordBoundaryJointCorrection(std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - start_time).count());
-    };
     auto correction_result{
         BuildBoundaryJointCorrection(
             inputs.context,
@@ -156,7 +147,6 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
     if (correction_result.status != BoundaryJointCorrectionStatus::CandidateReady ||
         !correction_result.patch.has_value())
     {
-        record_performance();
         return std::nullopt;
     }
 
@@ -165,7 +155,6 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
             corrected_component_patch,
             *correction_result.patch))
     {
-        record_performance();
         return std::nullopt;
     }
     const CandidateEvaluationOverlay corrected_overlay{
@@ -185,7 +174,6 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
         improvement_reference_objective) };
     if (!correction_accepted)
     {
-        record_performance();
         return std::nullopt;
     }
 
@@ -204,7 +192,6 @@ CandidateTransactionBuilder::TryBoundaryJointCorrection(
         }
     }
     decision.accepted_source = BoundaryComponentAcceptedSource::JointCorrection;
-    record_performance();
     return candidate;
 }
 
@@ -567,7 +554,6 @@ void CandidateTransactionBuilder::ReconcileSelectedBoundaries(
     };
     if (!boundary_component_list.empty())
     {
-        const auto boundary_reconciliation_start{ std::chrono::steady_clock::now() };
         for (const auto & component : boundary_component_list)
         {
             ReconcileBoundaryComponent(
@@ -590,8 +576,6 @@ void CandidateTransactionBuilder::ReconcileSelectedBoundaries(
                 inputs,
                 *previous_audit_objective);
         }
-        inputs.performance_counters.RecordBoundaryReconciliation(std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - boundary_reconciliation_start).count());
     }
     if (previous_audit_objective.has_value() &&
         ReconcileCooperativeComponents(inputs, *previous_audit_objective))

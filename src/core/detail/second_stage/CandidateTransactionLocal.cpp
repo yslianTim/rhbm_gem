@@ -2,12 +2,10 @@
 #include "core/detail/second_stage/CandidateState.hpp"
 #include "core/detail/second_stage/CandidateTransaction.hpp"
 #include "core/detail/second_stage/CandidateEvaluation.hpp"
-#include "core/detail/second_stage/observation/PerformanceCounters.hpp"
 #include "core/detail/gaussian_fit/GaussianModelOperations.hpp"
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cmath>
 #include <exception>
 #include <limits>
@@ -32,7 +30,6 @@ struct ClusterCandidateResult
     std::optional<FitStatePatch> rescue_patch{};
     PolishProvenance polish_provenance{};
     CandidateDecisionEvidence evidence{};
-    PolishProgress polish_progress{};
     bool shrink_trust_region{ false };
 };
 } // namespace
@@ -344,7 +341,6 @@ static ClusterCandidateResult SelectClusterCandidate(
     for (;;)
     {
         result.evidence = CandidateDecisionEvidence{};
-        result.polish_progress = PolishProgress{};
         is_polish_eligible =
             inputs.health_by_key.at(key).IsSolverQualified() &&
             std::ranges::all_of(
@@ -354,7 +350,6 @@ static ClusterCandidateResult SelectClusterCandidate(
                     return search_block_activity.HasActiveShape(atom_index) &&
                         search_block_activity.HasActiveOffset(atom_index);
                 });
-        if (is_polish_eligible) result.polish_progress.eligible_count = 1;
         const auto has_active_parameter{
             std::ranges::any_of(
                 key,
@@ -370,7 +365,6 @@ static ClusterCandidateResult SelectClusterCandidate(
             result.evidence.previous_objective = previous_objective_entry;
             result.evidence.candidate_objective = previous_objective_entry;
             result.evidence.accepted_factor = 0.0;
-            if (is_polish_eligible) result.polish_progress.skipped_count = 1;
             break;
         }
 
@@ -524,7 +518,6 @@ static ClusterCandidateResult SelectClusterCandidate(
         }
         result.evidence.terminal_evidence_list =
             std::move(terminal_evidence_list);
-        if (is_polish_eligible) result.polish_progress.skipped_count = 1;
         return result;
     }
     result.evidence.terminal_evidence_list =
@@ -557,11 +550,7 @@ static ClusterCandidateResult SelectClusterCandidate(
                 solver_workspace.joint_polish,
                 trust_region_radius)
         };
-        if (!polished_candidate.has_value())
-        {
-            result.polish_progress.skipped_count = 1;
-        }
-        else
+        if (polished_candidate.has_value())
         {
             CandidateDecisionEvidence polish_evidence;
             polish_evidence.accepted_factor = polished_candidate->effective_damping;
@@ -577,13 +566,8 @@ static ClusterCandidateResult SelectClusterCandidate(
                     objective_domain, polish_evidence}) };
             polish_evidence = evaluation.evidence;
             const auto polish_committed{ evaluation.accepted };
-            if (!polish_committed)
+            if (polish_committed)
             {
-                result.polish_progress.rejected_count = 1;
-            }
-            else
-            {
-                result.polish_progress.accepted_count = 1;
                 for (std::size_t position = 0; position < key.size(); position++)
                 {
                     const auto base_coordinates{
@@ -607,7 +591,6 @@ static ClusterCandidateResult SelectClusterCandidate(
 
 void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs)
 {
-    const auto candidate_phase_start{ std::chrono::steady_clock::now() };
     const auto & partition{ inputs.partition };
     auto & solver_workspace_by_key{ inputs.solver_workspace_by_key };
     const auto cluster_key_list{ BuildGraphClusterKeyList(partition) };
@@ -668,8 +651,6 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
     auto & selection{ m_selection };
     m_candidate_by_key.clear();
     m_next_rejection_order = 0;
-    std::vector<ClusterKey> locally_polished_key_list;
-    locally_polished_key_list.reserve(result_list.size());
     for (std::size_t position = 0; position < result_list.size(); position++)
     {
         auto & result{ result_list.at(position) };
@@ -695,19 +676,6 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
                 selection.block_activity.shape_fixed_atom_mask.at(atom_index) = 1;
             }
         }
-        selection.polish_progress.eligible_count +=
-            result.polish_progress.eligible_count;
-        selection.polish_progress.accepted_count +=
-            result.polish_progress.accepted_count;
-        selection.polish_progress.rejected_count +=
-            result.polish_progress.rejected_count;
-        selection.polish_progress.skipped_count +=
-            result.polish_progress.skipped_count;
-        if (result.polish_progress.accepted_count != 0)
-        {
-            locally_polished_key_list.emplace_back(key);
-        }
-
         const auto is_accepted{ result.accepted_patch.has_value() };
         auto & pending{ m_candidate_by_key[key] };
         pending.selected = is_accepted;
@@ -735,15 +703,6 @@ void CandidateTransactionBuilder::Select(const CandidateSelectionInputs & inputs
                 result.polish_provenance.at(key_position);
         }
     }
-    inputs.performance_counters.FinishCandidatePhase(candidate_phase_start);
-
     ReconcileSelectedBoundaries(inputs);
-    for (const auto & key : locally_polished_key_list)
-    {
-        if (std::ranges::find(selection.accepted_key_list, key) !=
-            selection.accepted_key_list.end()) continue;
-        selection.polish_progress.accepted_count--;
-        selection.polish_progress.rejected_count++;
-    }
 }
 } // namespace rhbm_gem::core::detail

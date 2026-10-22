@@ -4,30 +4,14 @@
 #include "core/detail/second_stage/IterationProposal.hpp"
 #include "core/detail/second_stage/CandidateTransaction.hpp"
 
+#include <vector>
+
 namespace rhbm_gem::core::detail {
-
-struct RecoveryTrial
-{
-    double factor{ 0.0 };
-    std::string_view reason{ "not-evaluated" };
-    std::optional<double> residual{}, objective{};
-};
-
-struct RecoveryDiagnostics
-{
-    bool attempted{ false }, accepted{ false };
-    std::size_t operator_evaluations{ 0 };
-    std::string_view reason{ "not-attempted" };
-    std::optional<double> current_residual{}, best_objective{};
-    std::vector<RecoveryTrial> trials{};
-};
 
 struct FixedPointRecoveryResult
 {
-    RecoveryDiagnostics diagnostics{};
     std::optional<FitState> state{};
     std::optional<ConvergenceAssessment> assessment{};
-    FixedPointOperatorEvidence current_operator{}, accepted_operator{};
 };
 
 bool IsRecoveryProgressAcceptable(double current_residual, double trial_residual,

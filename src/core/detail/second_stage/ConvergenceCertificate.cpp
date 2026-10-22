@@ -107,7 +107,6 @@ TransformedChangeSummary SummarizeActiveDofChanges(
     for (std::size_t parameter_index = 0; parameter_index < parameter_change_lists.size(); parameter_index++)
     {
         const auto & values{ parameter_change_lists.at(parameter_index) };
-        result.population_size_list.at(parameter_index) = values.size();
         result.percentile_list.at(parameter_index) = array_helper::ComputePercentile(values, kConvergencePercentile);
         result.maximum_list.at(parameter_index) = values.empty() ? 0.0 : *std::ranges::max_element(values);
     }

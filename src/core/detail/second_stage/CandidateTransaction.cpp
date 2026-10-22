@@ -100,7 +100,6 @@ CandidateCommitResult CandidateTransaction::Commit(FitState & previous_state, Fi
     else accepted_state = std::move(previous_state);
     result.block_activity = std::move(m_selection.block_activity);
     result.final_audit_objective = m_selection.final_audit_objective;
-    result.polish_progress = m_selection.polish_progress;
     result.suspicious_atom_count = m_suspicious_atom_count;
     result.accepted = accepted;
     result.rejected_cluster = !m_selection.rejected_key_list.empty();

@@ -24,7 +24,6 @@
 #include "core/detail/second_stage/ObjectiveEvaluation.hpp"
 #include "core/detail/second_stage/SecondStageState.hpp"
 #include "core/detail/second_stage/SuspiciousUpdate.hpp"
-#include "core/detail/second_stage/observation/PerformanceCounters.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
@@ -158,8 +157,11 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
             base_snapshot,
             detail::BuildGraphClusterKeyList(partition))
     };
+    const auto base_objective{
+        detail::EvaluateAuditObjective(objective_domain, fixture.context, base_snapshot)
+    };
+    ASSERT_TRUE(base_objective.has_value());
     detail::BoundaryJointCorrectionWorkspaceMap correction_workspace_by_key;
-    detail::PerformanceCounters performance_counters{ true };
     auto options{ MakeSecondStageOptions() };
     const detail::SuspiciousBlockActivity all_active{
         std::vector<char>(fixture.context.atom_list.size(), 0),
@@ -175,22 +177,13 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
             objective_domain,
             all_active,
             fixture.state,
-            correction_workspace_by_key,
-            performance_counters)
+            correction_workspace_by_key)
     };
     ASSERT_TRUE(polish_result.accepted);
     ASSERT_TRUE(polish_result.objective.has_value());
-    ASSERT_TRUE(polish_result.diagnostic.objective_before.has_value());
-    ASSERT_TRUE(polish_result.diagnostic.objective_after.has_value());
     EXPECT_LT(
-        *polish_result.diagnostic.objective_after,
-        *polish_result.diagnostic.objective_before);
-    ASSERT_EQ(polish_result.diagnostic.component_count, 1U);
-    EXPECT_GE(polish_result.diagnostic.round_count, 1U);
-    EXPECT_LE(
-        polish_result.diagnostic.round_count,
-        options.second_stage_dependency_polish_max_iterations);
-    EXPECT_EQ(polish_result.diagnostic.parameter_count, 6U);
+        polish_result.objective->GetTotalObjective(),
+        base_objective->GetTotalObjective());
     EXPECT_NE(
         polish_result.state.at(0).mdpde.GetModel().GetOffset(),
         polish_result.state.at(1).mdpde.GetModel().GetOffset());
@@ -235,22 +228,10 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateSeparatesAcceptedAnd
     certificate.operator_nominal_p99 = diagnostics.operator_nominal_residual.percentile_list;
     certificate.solver_qualified = true;
 
-    EXPECT_EQ(
-        diagnostics.accepted_active_movement.population_size_list.at(
-            rg::GaussianModel3D::LogPeakHeightCoordinateIndex()),
-        1U);
-    EXPECT_EQ(
-        diagnostics.accepted_active_movement.population_size_list.at(
-            rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex()),
-        1U);
-    EXPECT_EQ(
-        diagnostics.operator_nominal_residual.population_size_list.at(
-            rg::GaussianModel3D::LogPeakHeightCoordinateIndex()),
-        3U);
-    EXPECT_EQ(
-        diagnostics.operator_nominal_residual.population_size_list.at(
-            rg::GaussianModel3D::OffsetToPeakRatioCoordinateIndex()),
-        3U);
+    EXPECT_EQ(accepted_population.active_shape_atom_index_list.size(), 1U);
+    EXPECT_EQ(accepted_population.active_offset_atom_index_list.size(), 1U);
+    EXPECT_EQ(nominal_population.active_shape_atom_index_list.size(), 3U);
+    EXPECT_EQ(nominal_population.active_offset_atom_index_list.size(), 3U);
     EXPECT_TRUE(detail::IsTransformedPercentileConverged(
         diagnostics.accepted_active_movement));
     EXPECT_FALSE(detail::IsTransformedPercentileConverged(
@@ -268,20 +249,19 @@ TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateSeparatesAcceptedAnd
 
 TEST(EstimatorSecondStageDefenseTest, ConvergenceCertificateAllFixedStillRequiresCompleteOperator)
 {
-    const auto make_summary = [](double value, std::size_t population)
+    const auto make_summary = [](double value)
     {
         detail::TransformedChangeSummary summary;
         summary.percentile_list.fill(value);
         summary.maximum_list.fill(value);
-        summary.population_size_list.fill(population);
         return summary;
     };
 
     detail::ConvergenceCertificate certificate;
     certificate.accepted_active_p99 =
-        make_summary(0.0, 0).percentile_list;
+        make_summary(0.0).percentile_list;
     certificate.operator_nominal_p99 =
-        make_summary(5.0e-5, 4).percentile_list;
+        make_summary(5.0e-5).percentile_list;
     certificate.solver_qualified = true;
 
     EXPECT_TRUE(detail::IsTransformedPercentileConverged(

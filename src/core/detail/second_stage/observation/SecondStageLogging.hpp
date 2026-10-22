@@ -4,74 +4,29 @@
 
 #include <array>
 #include <cstddef>
-#include <span>
-#include <optional>
 #include <string_view>
-#include <vector>
 
 namespace rhbm_gem::core::detail {
-class PerformanceCounters;
-struct IterationDiagnostics;
-struct FinalDependencyPolishDiagnostic;
-struct SuspiciousGaussianAssessment;
-struct SuspiciousBlockActivity;
 
-void LogSecondStagePerformance(const PerformanceCounters &, double);
 bool IsDebugLogLevelEnabled();
 
 struct IterationResult;
-struct FixedPointOperatorEvidence;
-struct ConvergenceCertificate;
-struct ConvergenceAssessment;
-void LogFinalStateCertificate(bool quiet, const std::optional<ConvergenceAssessment> &, bool polish_applied,
-    std::size_t attempts, std::size_t recovery_operators, std::size_t certificate_operators);
-struct ConvergenceDiagnostics;
-struct SecondStageSeedSummary;
-struct FinalDependencyPolishResult;
 enum class SecondStageStopReason;
 std::string_view SecondStageStopReasonText(SecondStageStopReason);
-enum class FinalPolishResidualSafetyStatus;
+void LogGraphFallbackWarning(bool quiet_mode, bool uses_weighted_graph);
 
-void LogObjectiveDomain(
-    const ObjectiveDomain & domain,
-    bool quiet_mode,
-    bool is_terminal_reset = false);
-
-void LogGraphTopology(const GraphTopology & topology, bool quiet_mode);
-
-using ProgressColumnWidths = std::array<std::size_t, 6>;
+using ProgressColumnWidths = std::array<std::size_t, 2>;
 void FinishProgressLine(bool quiet_mode);
 void LogSecondStageStart(bool quiet_mode);
 void LogSecondStageInitializationFailure(bool quiet_mode);
 void LogNoSelectedAtoms(bool quiet_mode);
-
-void LogSecondStageSeedSelections(
-    const SecondStageSeedSummary & selection_record_list,
-    bool quiet_mode);
-
 
 ProgressColumnWidths BuildProgressColumnWidths(std::size_t atom_count, std::size_t maximum_iterations);
 void LogProgressHeader(bool quiet_mode, const ProgressColumnWidths & column_widths);
 void LogIterationProgress(
     bool quiet_mode,
     const ProgressColumnWidths & column_widths,
-    const IterationResult & iteration_result, const IterationDiagnostics & diagnostics);
-
-
-void LogAdaptiveTopologyRebuild(
-    bool quiet_mode,
-    std::size_t accepted_iteration_count,
-    double maximum_transformed_drift,
-    const CouplingGraphPartition & previous_partition,
-    const CouplingGraphPartition & rebuilt_partition,
-    bool partition_changed);
-
-void LogFinalDependencyPolish(
-    bool quiet_mode,
-    const FinalDependencyPolishResult & polish_result,
-    const FinalDependencyPolishDiagnostic & diagnostic,
-    FinalPolishResidualSafetyStatus safety_status,
-    bool applied);
+    const IterationResult & iteration_result);
 
 void LogQuarantineFallback(
     bool quiet_mode,
@@ -82,7 +37,7 @@ void LogQuarantineFallback(
     std::size_t unresolved_target_count);
 void LogConverged(
     bool quiet_mode,
-    const IterationResult & iteration_result);
+    std::size_t accepted_iteration_count);
 void LogMaximumIterations(
     bool quiet_mode,
     std::size_t entered_target_count,

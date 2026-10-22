@@ -249,7 +249,6 @@ bool IsTransformedChangeMaterial(const TransformedChange & change, double minimu
 TransformedChangeSummary SummarizeTransformedChanges(const std::vector<TransformedChange> & change_list)
 {
     TransformedChangeSummary summary;
-    summary.population_size_list.fill(change_list.size());
     for (std::size_t parameter_index = 0;
         parameter_index < summary.percentile_list.size(); parameter_index++)
     {
