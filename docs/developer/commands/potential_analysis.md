@@ -33,7 +33,8 @@ Shared fields:
 
 Command-specific fields:
 
-- `estimator` (default `PotentialEstimator::TWO_STAGE`)
+- `estimator` (default `PotentialEstimator::JOINT_COMPONENTS`; `TWO_STAGE`
+  remains explicitly selectable)
 - `database_path`
 - `model_file_path`
 - `map_file_path`
@@ -42,12 +43,25 @@ Command-specific fields:
 - `simulated_map_resolution`
 - `saved_key_tag`
 
-The request catalog generates both CLI options and Python bindings. Potential
-analysis fixes map normalization, hydrogen exclusion, sampling and failed-only
-refinement as command policies; those policies are not request fields. The
-shared `SphereSamplingMethod` enum remains available to generic fitting APIs.
-Alpha training is enabled, with initial local/group alpha values set internally
-to `0.0`.
+The request catalog generates both CLI options and Python bindings. C++ and
+Python requests share the same estimator default. Potential analysis always
+excludes hydrogen from its target, sampling mask and contributor domains. The
+sampler owns the deterministic Fibonacci sampling default; generic sampling
+APIs retain explicit `SphereSamplingMethod` selection. Second Stage refinement
+and dependency-polish settings are fixed production policies, not request
+fields. Alpha training is enabled, with initial local/group alpha values set
+internally to `0.0`.
+
+`FitOptions` contains only the estimator and execution settings:
+
+```cpp
+struct FitOptions
+{
+    PotentialEstimator estimator{ PotentialEstimator::JOINT_COMPONENTS };
+    int thread_size{ 1 };
+    bool quiet_mode{ false };
+};
+```
 
 ## Execution Contract
 
@@ -102,9 +116,11 @@ The anonymous-namespace `NormalizeAndValidateRequest(...)` phase handles field v
   other requests
 - computes Q-scores and fits the target selection without removing atoms from
   the model
-- delegates atom sampling to `MapSampler`, then performs alpha training and fitting
-- uses Fibonacci deterministic sampling, permanently excludes hydrogen, and
-  enables failed-only second-stage refinement
+- delegates sampling to `MapSampler`, whose default uses deterministic
+  Fibonacci points
+- excludes hydrogen from all potential-fitting targets, neighbor masks and
+  contributor sets
+- applies the fixed Second Stage refinement and final-polish policies
 - persists the prepared model through `DataRepository::SaveModel(...)`
 - writes to the repository using `request.saved_key_tag` as the persisted key
 - clears sampled local-potential distance/value buffers after persistence to keep runtime state lean
@@ -124,6 +140,12 @@ falls back to `auth_asym_id`. Unknown IDs, empty CSV tokens and selections with
 no non-hydrogen targets fail before Q-score preprocessing and fitting. Repeated
 IDs are deduplicated; token whitespace is trimmed.
 
+Direct C++ calls to `RunPotentialFittingWorkflow` remove hydrogen only from the
+currently selected targets, preserving the caller's non-hydrogen subset. They
+do not select previously unselected atoms, and fail clearly if no non-hydrogen
+target remains. Hydrogen neighbors do not affect sample masks, Second Stage
+neighbor counts, frozen background or peeling.
+
 C++ callers can assign `request.selected_chain_ids = {"A", "B", "C"}`;
 Python callers can assign `request.selected_chain_ids = ["A", "B", "C"]`.
 An empty vector or list selects every non-hydrogen atom in the model.
@@ -137,11 +159,12 @@ Production Joint fitting uses bounded Active-set LM.
 Simulation maps skip normalization. Every non-simulation map is normalized by
 its standard deviation when that operation succeeds; no mean is subtracted. A
 zero-SD map records `requested: true`, `applied: false`, and `divisor: 1`.
+Map Simulation is a separate workflow; `MapSimulationRequest::exclude_hydrogen`
+continues to control whether hydrogen contributes to a simulated map.
 
 ```sh
-# Default: all non-hydrogen atoms in all chains
+# Default: Joint Components for all non-hydrogen atoms in all chains
 rhbm_gem potential_analysis \
-    --estimator joint-components \
     --model model.cif \
     --map map.mrc
 
@@ -158,18 +181,22 @@ rhbm_gem potential_analysis \
     --model model.cif \
     --map map.mrc \
     --select-chain A,B,C
+
+# Explicitly select the Two-Stage estimator
+rhbm_gem potential_analysis \
+    --estimator two-stage \
+    --model model.cif \
+    --map map.mrc
 ```
 
 ## Failed-only endpoint refinement
 
-Potential analysis always enables failed-only refinement for second-stage shape
-fitting. The PotentialAnalysis request and CLI do not expose a switch. Direct
-fitting callers retain the generic
-`FitOptions::enable_second_stage_failed_only_refinement` control. Current Joint
-initialization fits selected targets only; it has no halo FirstStage fitting or
-recovery path. Target FirstStage fits, alpha training, group estimation and
-generic `EstimateLocalGaussian` / `EstimateBetaMDPDE` entrypoints keep their
-native behavior.
+Second Stage always enables failed-only refinement for its shape refits. Native
+successes remain unchanged; only eligible failed endpoints can be refined.
+First Stage, Joint initialization, alpha training, group estimation and generic
+`EstimateLocalGaussian` / `EstimateBetaMDPDE` entrypoints retain their existing
+native behavior. Final dependency polish is enabled with the production
+10-round limit and runs only after the existing eligible convergence stop.
 
 A native successful solve is used unchanged, without a fresh-equation evaluation.
 A failed solve may be refined from its own endpoint. Acceptance requires fresh

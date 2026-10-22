@@ -76,8 +76,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
             };
             auto endpoint_objective{ *base_objective };
             std::optional<ObjectiveBreakdown> improved_objective;
-            constexpr auto maximum_round_count{ kFinalDependencyPolishMaximumRounds };
-            if (maximum_round_count != 0)
             {
                 std::vector<BoundaryJointTrustRegion> trust_region_list;
                 trust_region_list.reserve(component.key_list.size());
@@ -97,7 +95,7 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
                     workspace_by_key.try_emplace(workspace_key).first->second
                 };
                 for (std::size_t round = 0;
-                    round < maximum_round_count;
+                    round < kFinalDependencyPolishMaximumRounds;
                     round++)
                 {
                     const FitStateView endpoint_state_view{

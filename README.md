@@ -27,10 +27,11 @@ For the full documentation map, start at [`docs/README.md`](/docs/README.md).
 
 Browse runnable examples and helper assets in [`resources/README.md`](/resources/README.md).
 
-## Joint component workflow (opt-in)
+## Joint component workflow (default)
 
-The default estimator remains the two-stage workflow. New results use **SQLite v19**. Valid v17/v18 databases are read without modification
-and upgraded transactionally on their first write; v16 and earlier are rejected.
+The default estimator is `joint-components`; use `--estimator two-stage` to
+select the two-stage workflow. New results use **SQLite v20**. Existing
+databases must use the current schema; older schemas are rejected.
 
 ```sh
 RHBM-GEM potential_analysis --estimator joint-components -a model.cif -m map.mrc -d joint.sqlite -k example

@@ -4,6 +4,12 @@ This guide describes data ownership from the production Joint fit through
 Original-domain peeling, Post-Joint Local MDPDE, and Group Fitting. Solver
 details are in the [Joint runtime guide](joint-component-runtime.md).
 
+Joint Components is the default potential estimator; `two-stage` remains an
+explicit choice. Potential fitting excludes hydrogen from targets and eligible
+contributors, including direct C++ workflow entrypoints. Sampling uses the
+Sampler's deterministic Fibonacci default. These input policies do not change
+Joint problem construction or its Pure Halo-Support Exclusion model.
+
 ## Result ownership
 
 The Joint result stores the target-only Pure Exclusion state, component

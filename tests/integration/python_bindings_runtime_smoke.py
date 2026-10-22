@@ -116,6 +116,8 @@ def assert_request_objects_are_usable() -> None:
 
     analysis = m.PotentialAnalysisRequest()
     assert analysis.estimator == m.PotentialEstimator.JOINT_COMPONENTS
+    assert int(m.PotentialEstimator.TWO_STAGE) == 0
+    assert int(m.PotentialEstimator.JOINT_COMPONENTS) == 1
     assert analysis.selected_chain_ids == []
     analysis.selected_chain_ids = ["A", "B", "C"]
     assert analysis.selected_chain_ids == ["A", "B", "C"]
@@ -255,7 +257,7 @@ def assert_joint_workflow() -> None:
         export.output_dir = root
         assert m.RunCommand(export).succeeded
         saved = json.loads((root / "joint_result_model.json").read_text())
-        assert saved["schema_version"] == 17
+        assert saved["schema_version"] == 19
         assert saved["selection_domain"]["target_indices"] == list(range(25))
         assert saved["atom_ids"] == [str(index) for index in range(1, 26)]
         assert saved["metadata"]["model_sha256"] == model_hash
@@ -268,7 +270,7 @@ def assert_joint_workflow() -> None:
         assert saved["regular_certificate"] == "not-run"
         assert saved["parameterization_contract"] == "target-only-pure-halo-support-exclusion-v1"
         assert saved["assembled_state"] is not None
-        assert not saved["fixed_halos"]
+        assert "fixed_halos" not in saved
         if saved["halo_median_reconstruction"] is not None:
             assert saved["halo_median_reconstruction"]["halos"] == []
         assert saved["components"]

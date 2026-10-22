@@ -36,13 +36,14 @@ The stage keeps candidate states in memory and writes one validated final
 state to `ModelObject`. Individual outer iterations do not partially update the
 stored atom estimates.
 
-`FitOptions::second_stage_boundary_halo_depth` controls boundary-correction
-parameter halo expansion and defaults to one physical-dependency hop. A value of zero
-keeps the direct-interface behavior. Final uncut-component polish is enabled by
-`FitOptions::enable_second_stage_dependency_polish`; its nonlinear round limit
-is `FitOptions::second_stage_dependency_polish_max_iterations`, which defaults
-to ten. An enabled polish with a zero round limit is rejected before any model
-write. These settings intentionally have no command-line flags.
+Second Stage owns its fixed production policies internally. Boundary-correction
+parameter halo expansion is one physical-dependency hop. Final uncut-component
+dependency polish is enabled and runs only after the existing eligible
+convergence stop, with at most ten nonlinear rounds. Failed-only shape
+refinement is always enabled in Second Stage; native successes remain unchanged
+and only qualified failed endpoints may be refined. Generic local fitting and
+First Stage retain their existing refinement behavior. `FitOptions` contains
+only `estimator`, `thread_size` and `quiet_mode`.
 
 ## Implementation responsibilities and state ownership
 
@@ -255,8 +256,9 @@ Neither selected nor unselected chemical `GroupKey`/`group_id` is queried or sto
 Neighbor candidates are searched within `kNeighborAtomSearchRange`. A neighbor
 contributes to a sample only when its distance from that sample does not exceed
 `kNeighborContributionDistanceMax`. Each physical atom contributes at most
-once to a sample. When `FitOptions::exclude_hydrogen` is true, hydrogen atoms
-are removed from this contributor set; other selection exclusions do not remove
+once to a sample. Hydrogen atoms are always excluded from selected-neighbor,
+frozen-background, candidate-residual, neighbor-count and final-peeling
+contributions. Other selection exclusions do not remove non-hydrogen
 background contributors. One unselected atom can affect targets in different
 clusters without connecting those clusters, and uses each target's own frozen
 cluster model.

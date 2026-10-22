@@ -33,13 +33,14 @@ Second-stage shape solves run the native OLS/MDPDE fixed-point solve first.
 `Native SUCCESS` results are returned unchanged. Only a non-success result
 from a prepared second-stage shape fit enters the refinement eligibility
 checks. Invalid, underdetermined, or rank-deficient data remain unqualified and
-cannot be promoted. First-stage fitting, alpha training, group solvers, and
-generic local/MDPDE calls remain native.
+cannot be promoted. This failed-only refinement is fixed on for Second Stage.
+First-stage fitting, Joint initialization, alpha training, group solvers, and
+generic local/MDPDE calls retain their existing native behavior.
 
-PotentialAnalysis always enables failed-only refinement. Direct fitting callers
-can select native-only behavior with
-`FitOptions::enable_second_stage_failed_only_refinement = false`. Refinement
-uses the same Powell hybrid method in
+Potential-fitting workflows exclude hydrogen from targets, sample-neighbor
+masks and contributors. `FitOptions` exposes only `estimator`, `thread_size`
+and `quiet_mode`; sampling and Second Stage fixed policies are owned by their
+implementations. Refinement uses the same Powell hybrid method in
 `(beta0, log(beta1), log(variance))`, a central-difference Jacobian,
 `xtol=1e-12`, and a 128-equation budget.
 
