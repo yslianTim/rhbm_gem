@@ -40,7 +40,7 @@ def main() -> int:
         map_path = next(root.glob("*.map"))
         generator = json.loads(Path(str(map_path) + ".simulation.json").read_text())["generator"]
         database = root / "joint.sqlite"
-        run("potential_analysis", "--estimator", "joint-components", "--select-chain", "A", "-a", model,
+        run("potential_analysis", "--select-chain", "A", "-a", model,
             "-m", map_path, "-d", database, "-k", "example", "-v", "0", expected_exit=0)
         run("potential_analysis", "--estimator", "joint-components",
             "--select-chain", "A", "-a", model, "-m", map_path, "-d", database, "-k", "fixed", "-v", "0",

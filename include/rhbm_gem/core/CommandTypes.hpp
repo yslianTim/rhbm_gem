@@ -87,7 +87,7 @@ struct CommandRequestBase
 
 struct PotentialAnalysisRequest : public CommandRequestBase
 {
-    PotentialEstimator estimator{ PotentialEstimator::TWO_STAGE };
+    PotentialEstimator estimator{ PotentialEstimator::JOINT_COMPONENTS };
     std::filesystem::path database_path{ GetDefaultDatabasePath() };
     std::filesystem::path model_file_path{};
     std::filesystem::path map_file_path{};

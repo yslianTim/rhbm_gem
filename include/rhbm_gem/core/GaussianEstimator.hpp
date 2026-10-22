@@ -17,7 +17,7 @@ namespace core {
 
 struct FitOptions
 {
-    PotentialEstimator estimator{ PotentialEstimator::TWO_STAGE };
+    PotentialEstimator estimator{ PotentialEstimator::JOINT_COMPONENTS };
     SphereSamplingMethod sampling_method{ SphereSamplingMethod::FibonacciDeterministic };
     int thread_size{ 1 };
     bool quiet_mode{ false };

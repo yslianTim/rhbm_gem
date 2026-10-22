@@ -133,6 +133,13 @@ void ExpectSelectedAtomsHaveFiniteNonNegativeAlphaR(const rg::ModelObject & mode
 
 } // namespace
 
+TEST(CommandApiPipelineTest, PotentialFittingDefaultsToJointComponents)
+{
+    EXPECT_EQ(rgc::FitOptions{}.estimator, rgc::PotentialEstimator::JOINT_COMPONENTS);
+    EXPECT_EQ(rgc::PotentialAnalysisRequest{}.estimator,
+        rgc::PotentialEstimator::JOINT_COMPONENTS);
+}
+
 TEST(CommandApiPipelineTest, FittingIgnoresSimulationTruthAndResolutionMetadata)
 {
     command_test::ScopedTempDir directory{"production_truth_isolation"};
@@ -153,6 +160,7 @@ TEST(CommandApiPipelineTest, FittingIgnoresSimulationTruthAndResolutionMetadata)
         if (variant == 2) { std::ofstream out(manifest); out << "{broken"; }
         if (variant == 3) { std::ofstream out(manifest); out << R"({"charge_used":99999,"blurring_width":123.456})"; }
         rgc::PotentialAnalysisRequest request;
+        request.estimator = rgc::PotentialEstimator::TWO_STAGE;
         request.database_path = directory.path() / (std::to_string(variant)+".sqlite");
         request.model_file_path = simulation.model_file_path;
         request.map_file_path = map;
@@ -214,6 +222,7 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     ASSERT_TRUE(std::filesystem::exists(generated_map_file));
 
     rgc::PotentialAnalysisRequest analysis_request;
+    analysis_request.estimator = rgc::PotentialEstimator::TWO_STAGE;
     analysis_request.database_path = database_path;
     analysis_request.output_dir = analysis_output_dir;
     analysis_request.model_file_path = command_test::TestDataPath("test_model.cif");
@@ -294,6 +303,7 @@ TEST(CommandApiPipelineTest, PotentialAnalysisFixedPoliciesMatchDirectTwoStageWo
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
     const auto map_path{ command_test::GenerateMapFile(directory.path() / "maps", model_path) };
     rgc::PotentialAnalysisRequest request;
+    request.estimator = rgc::PotentialEstimator::TWO_STAGE;
     request.database_path = directory.path() / "analysis.sqlite";
     request.model_file_path = model_path;
     request.map_file_path = map_path;

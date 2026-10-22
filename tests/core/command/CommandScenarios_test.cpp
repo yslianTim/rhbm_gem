@@ -164,6 +164,7 @@ PotentialAnalysisRequest MakeNormalizationScenarioRequest(
     const std::filesystem::path & map_path)
 {
     PotentialAnalysisRequest request{};
+    request.estimator = PotentialEstimator::TWO_STAGE;
     request.database_path = temp_dir / "analysis.sqlite";
     request.model_file_path = command_test::TestDataPath("test_model.cif");
     request.map_file_path = map_path;
@@ -203,6 +204,7 @@ TEST(CommandScenariosTest, PotentialAnalysisDefaultsToAllChains)
     PotentialAnalysisRequest request{};
 
     EXPECT_TRUE(request.selected_chain_ids.empty());
+    EXPECT_EQ(request.estimator, PotentialEstimator::JOINT_COMPONENTS);
 }
 
 TEST(CommandScenariosTest, MapSimulationDefaultsToIncludingHydrogen)
@@ -253,6 +255,7 @@ TEST(CommandScenariosTest, PotentialAnalysisSelectsAllChainsAndExcludesHydrogen)
 
     PotentialAnalysisRequest include_request{};
     include_request.output_dir = temp_dir.path() / "analysis_output";
+    include_request.estimator = PotentialEstimator::TWO_STAGE;
     include_request.database_path = database_path;
     include_request.model_file_path = model_path;
     include_request.map_file_path = map_path;
@@ -285,6 +288,7 @@ TEST(CommandScenariosTest, PotentialAnalysisSelectsBackboneAndSideChainAtoms)
 
     PotentialAnalysisRequest all_atom_request{};
     all_atom_request.output_dir = temp_dir.path() / "analysis_output";
+    all_atom_request.estimator = PotentialEstimator::TWO_STAGE;
     all_atom_request.database_path = database_path;
     all_atom_request.model_file_path = model_path;
     all_atom_request.map_file_path = map_path;
@@ -338,6 +342,7 @@ TEST(CommandScenariosTest, PotentialAnalysisCliSelectsCommaSeparatedTargetChains
     const auto database_path{ temp_dir.path() / "analysis.sqlite" };
     const auto result{ RunCli({
         "RHBM-GEM", "potential_analysis",
+        "--estimator", "two-stage",
         "--model", model_path.string(), "--map", map_path.string(),
         "--database", database_path.string(), "--folder", (temp_dir.path() / "out").string(),
         "--save-key", "cli", "--select-chain", "C, A", "--verbose", "0" }) };
@@ -359,6 +364,7 @@ TEST(CommandScenariosTest, PotentialAnalysisChainSelectionNormalizesAndKeepsMode
     };
     const auto database_path{ temp_dir.path() / "analysis.sqlite" };
     PotentialAnalysisRequest request{};
+    request.estimator = PotentialEstimator::TWO_STAGE;
     request.database_path = database_path;
     request.model_file_path = model_path;
     request.map_file_path = map_path;
@@ -453,6 +459,7 @@ TEST(CommandScenariosTest, PotentialAnalysisNoLongerAcceptsRemovedOptions)
         + testing::internal::GetCapturedStderr() };
     ASSERT_EQ(help_result, 0);
     EXPECT_NE(help_output.find("--select-chain"), std::string::npos);
+    EXPECT_NE(help_output.find("joint-components (default)"), std::string::npos);
     for (const auto * option : {
         "--map-normalization", "--exclude-hydrogen", "--only-backbone", "--asymmetry",
         "--sampling-method", "--second-stage-failed-only-refinement" })

@@ -115,7 +115,7 @@ def assert_request_objects_are_usable() -> None:
     assert simulation.only_backbone is True
 
     analysis = m.PotentialAnalysisRequest()
-    assert analysis.estimator == m.PotentialEstimator.TWO_STAGE
+    assert analysis.estimator == m.PotentialEstimator.JOINT_COMPONENTS
     assert analysis.selected_chain_ids == []
     analysis.selected_chain_ids = ["A", "B", "C"]
     assert analysis.selected_chain_ids == ["A", "B", "C"]
