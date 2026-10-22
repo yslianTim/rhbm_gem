@@ -21,6 +21,8 @@
 #include <set>
 #include <string_view>
 #include <stdexcept>
+#include <type_traits>
+#include <utility>
 
 namespace rhbm_gem::core {
 namespace {
@@ -805,7 +807,15 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         out.costs.assembly_seconds,assembly.available && assembly.raw.valid);
     return out;
 }
-JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, JointAnalysisMetadata metadata)
+namespace {
+template<class Fit,class Value>
+decltype(auto) CaptureTransfer(Value & value)
+{
+    if constexpr(std::is_rvalue_reference_v<Fit &&>) return std::move(value);
+    else return (value);
+}
+template<class Fit>
+JointAnalysisResult CaptureJointAnalysisResultImpl(Fit && fit,JointAnalysisMetadata metadata)
 {
     if (!fit.problem) throw std::invalid_argument("Cannot capture joint result without problem identities.");
     const auto & fitting_input=fit.problem->Input();
@@ -814,13 +824,14 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
         fitting_input.selection_domain->contributor_policy==PureHaloSupportExclusionContributorPolicy;
     const auto captured_runtime=fit.RuntimeConvergence();
     const auto captured_target_runtime=fit.TargetRuntimeConvergence();
+    if constexpr(std::is_rvalue_reference_v<Fit &&>) fit.prediction.reset();
     JointAnalysisResult out;
     metadata.software=JointSoftwareProvenance{RHBM_GEM_SIMULATION_VERSION,
         RHBM_GEM_SIMULATION_SOURCE_SHA256,RHBM_GEM_SIMULATION_CONFIG_SHA256,
         RHBM_GEM_SIMULATION_BUILD_SHA256};
     out.metadata=std::move(metadata);
-    out.metadata.solver=fit.solver_provenance.search_method.empty() ? std::nullopt :
-        std::optional<JointSolverProvenance>{fit.solver_provenance};
+    if(!fit.solver_provenance.search_method.empty())
+        out.metadata.solver=CaptureTransfer<Fit>(fit.solver_provenance);
     out.atom_ids=pure_exclusion_policy ? original_input.atom_ids : fitting_input.atom_ids;
     out.row_ids=pure_exclusion_policy ? original_input.row_ids : fitting_input.row_ids;
     out.selection_domain=pure_exclusion_policy ? original_input.selection_domain : fitting_input.selection_domain;
@@ -831,20 +842,22 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
         out.fitting_to_original_contributors=fit.problem->FittingToOriginalContributors();
         out.fitting_to_original_rows=fit.problem->FittingToOriginalRows();
     }
-    out.initialization=fit.initialization;
-    out.costs=fit.costs;
-    for (const auto & component:fit.components)
+    out.initialization=CaptureTransfer<Fit>(fit.initialization);
+    out.costs=CaptureTransfer<Fit>(fit.costs);
+    for(auto & component:fit.components)
     {
+        const auto runtime=component.RuntimeConvergence();
+        const auto target_runtime=component.TargetRuntimeConvergence();
         JointAnalysisComponent saved;
-        static_cast<JointComponentData &>(saved)=component;
+        static_cast<JointComponentData &>(saved)=CaptureTransfer<Fit>(component);
         if(pure_exclusion_policy)
             RemapComponentForOriginalDomain(saved,fit.problem->FittingToOriginalContributors(),
                 fit.problem->FittingToOriginalRows());
-        saved.runtime_convergence=component.RuntimeConvergence();
-        saved.target_runtime_convergence=component.TargetRuntimeConvergence();
+        saved.runtime_convergence=runtime;
+        saved.target_runtime_convergence=target_runtime;
         out.components.push_back(std::move(saved));
     }
-    out.assembled_state=fit.assembled_state; out.objective=fit.objective;
+    out.assembled_state=CaptureTransfer<Fit>(fit.assembled_state); out.objective=fit.objective;
     if(pure_exclusion_policy)
     {
         out.available_row_mask.assign(original_input.row_ids.size(),false);
@@ -858,16 +871,21 @@ JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit, Joint
             out.available_row_mask[original_row]=fit.available_row_mask[row];
         }
     }
-    else out.available_row_mask=fit.available_row_mask;
-    out.evidence=fit.evidence;
+    else out.available_row_mask=CaptureTransfer<Fit>(fit.available_row_mask);
+    out.evidence=CaptureTransfer<Fit>(fit.evidence);
     out.search_completed=fit.search_completed; out.observation_scale=fit.observation_scale;
     out.runtime_convergence=captured_runtime; out.regular_certificate=fit.regular_certificate;
-    out.target_evidence=fit.target_evidence;
+    out.target_evidence=CaptureTransfer<Fit>(fit.target_evidence);
     if(pure_exclusion_policy)
         RemapTargetEvidence(out.target_evidence,fit.problem->FittingToOriginalContributors(),original_input.row_ids.size());
     out.target_runtime_convergence=captured_target_runtime;
     return out;
 }
+}
+JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult & fit,JointAnalysisMetadata metadata)
+{return CaptureJointAnalysisResultImpl(fit,std::move(metadata));}
+JointAnalysisResult CaptureJointAnalysisResult(JointFitResult && fit,JointAnalysisMetadata metadata)
+{return CaptureJointAnalysisResultImpl(std::move(fit),std::move(metadata));}
 JointInitialization joint_component::InitializeContributors(MapObject & map,ModelObject & model,const JointProblem & problem)
 {
     ModelObject initializer(model);

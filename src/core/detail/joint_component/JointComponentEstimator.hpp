@@ -74,6 +74,7 @@ struct JointFitResult
 };
 // Captures results without retaining the problem snapshot or running numerical checks.
 JointAnalysisResult CaptureJointAnalysisResult(const JointFitResult &, JointAnalysisMetadata = {});
+JointAnalysisResult CaptureJointAnalysisResult(JointFitResult &&, JointAnalysisMetadata = {});
 // Production target-only problem. Halo support is used only to exclude fitting
 // rows; reconstruction keeps the original-domain input in OriginalInput().
 JointProblem BuildPureHaloSupportExclusionProblem(const MapObject &,const ModelObject &);

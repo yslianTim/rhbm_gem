@@ -250,7 +250,9 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             component.accepted_updates=static_cast<int>(fit.search.total_accepted_local_updates);
             component.candidate_diagnostic=CandidateDiagnostic(fit.search,layout.full_atoms.size(),
                 production_policy.convergence_criteria);
-            component.local_conditioning=fit.search.local_conditioning;
+            fit.search.state=joint_component::BlockCoordinateState{};
+            fit.search.blocks={}; fit.search.sweeps={}; fit.search.final_sweep.reset();
+            component.local_conditioning=std::move(fit.search.local_conditioning);
             const auto remap_core_atoms=[&](auto & blocks) {
                 for(auto & block:blocks)
                     for(auto & atom:block.core_atoms)
@@ -269,7 +271,7 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             if(fit.search.work.local_conditioning_peak_memory_estimate_bytes)
                 component.local_conditioning_peak_memory_estimate_bytes=
                     fit.search.work.local_conditioning_peak_memory_estimate_bytes;
-            component.parameter_stability=fit.search.parameter_stability;
+            component.parameter_stability=std::move(fit.search.parameter_stability);
             if(component.parameter_stability) remap_core_atoms(component.parameter_stability->blocks);
             if(fit.search.certification)
             {
@@ -321,6 +323,7 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
                 static_cast<double>(fit.search.memory_estimate.budget_bytes),
                 std::string("resource-limit:")+MemoryStageName(fit.search.memory_estimate.stage)+":"+
                     fit.search.memory_estimate.reason});
+        fit.search.certification.reset();
         const double elapsed=Seconds(component_start);
         out.costs.search_seconds+=fit.search.search_seconds;
         out.costs.assessment_seconds+=elapsed-fit.search.search_seconds;

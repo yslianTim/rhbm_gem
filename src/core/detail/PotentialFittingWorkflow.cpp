@@ -263,7 +263,7 @@ void RunJointComponentWorkflow(
 #endif
         fit.costs.construction_seconds = construction_seconds;
         fit.costs.initialization_seconds = initialization_seconds;
-        return CaptureJointAnalysisResult(fit);
+        return CaptureJointAnalysisResult(std::move(fit));
     }();
     const auto postprocessing_start = std::chrono::steady_clock::now();
     postprocessing_metrics.rss_before_postprocessing_bytes = joint_component::CurrentRssBytes();
