@@ -160,7 +160,6 @@ struct FixedNeighborPolicy
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     bool capture_local_trajectory{};
 #endif
-    bool retain_diagnostic_records{true};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     bool certify_endpoint{true}; // Diagnostic facade only; production components always certify.
 #endif

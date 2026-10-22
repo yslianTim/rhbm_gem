@@ -134,7 +134,7 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
     const EvaluationContext context=data.context;
     const Vector y=Select(data.y,IndicesOf(layout.informative_rows));
     auto run_policy=policy;
-    run_policy.collect_diagnostics=policy.collect_diagnostics || policy.retain_diagnostic_records;
+    run_policy.collect_diagnostics=true;
     auto search=SearchFixedNeighborComponent(domain,layout,y,initial_eta,context,
         run_policy,std::move(initial_beta));
     out.state=std::move(search.state); out.blocks=std::move(search.blocks); out.sweeps=std::move(search.sweeps);
