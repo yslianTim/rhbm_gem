@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include "support/JointTestGeometry.hpp"
-#include "core/detail/MapSampler.hpp"
+#include "core/detail/MapInterpolation.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/math/ElectricPotential.hpp>
 #include <cmath>

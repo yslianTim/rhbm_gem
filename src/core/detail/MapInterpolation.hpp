@@ -1,7 +1,9 @@
 #pragma once
 #include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <map>
 
 namespace rhbm_gem::core::detail {
@@ -83,5 +85,24 @@ inline std::map<std::size_t, double> TricubicWeights(const TricubicStencil & ste
     for (int i = -1; i < 3; ++i) for (int j = -1; j < 3; ++j) for (int k = -1; k < 3; ++k)
         result[stencil.Index(stencil.Node(i, j, k))] += weights[0][static_cast<std::size_t>(i + 1)] * weights[1][static_cast<std::size_t>(j + 1)] * weights[2][static_cast<std::size_t>(k + 1)];
     return result;
+}
+
+inline LocalPotentialSampleList BuildLocalPotentialSampleList(
+    const MapObject & map_object,
+    const SamplingPointList & sample_point_list)
+{
+    LocalPotentialSampleList sampling_data_list;
+    sampling_data_list.reserve(sample_point_list.size());
+    for (const auto & sampling_point : sample_point_list)
+    {
+        const auto stencil{MakeTricubicStencil(map_object, sampling_point.position)};
+        const auto map_value{InterpolateTricubic(stencil,
+            [&](const auto & node) { return map_object.GetMapValue(node[0], node[1], node[2]); })};
+        sampling_data_list.emplace_back(LocalPotentialSample{
+            map_value,
+            sampling_point
+        });
+    }
+    return sampling_data_list;
 }
 } // namespace rhbm_gem::core::detail

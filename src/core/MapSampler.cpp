@@ -1,6 +1,8 @@
 #include <rhbm_gem/core/MapSampler.hpp>
-#include "core/detail/MapSampler.hpp"
 #include "core/detail/MapInterpolation.hpp"
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include "support/MapSamplerTestSupport.hpp"
+#endif
 
 #include <array>
 #include <cstddef>
@@ -28,24 +30,6 @@ PotentialSamplingObserver & PotentialSamplingObserverForTesting()
 }
 #endif
 
-LocalPotentialSampleList BuildLocalPotentialSampleList(
-    const MapObject & map_object,
-    const SamplingPointList & sample_point_list)
-{
-    LocalPotentialSampleList sampling_data_list;
-    sampling_data_list.reserve(sample_point_list.size());
-    for (const auto & sampling_point : sample_point_list)
-    {
-        const auto stencil{MakeTricubicStencil(map_object, sampling_point.position)};
-        const auto map_value{InterpolateTricubic(stencil,
-            [&](const auto & node) { return map_object.GetMapValue(node[0], node[1], node[2]); })};
-        sampling_data_list.emplace_back(LocalPotentialSample{
-            map_value,
-            sampling_point
-        });
-    }
-    return sampling_data_list;
-}
 } // namespace rhbm_gem::core::detail
 
 namespace rhbm_gem::core {

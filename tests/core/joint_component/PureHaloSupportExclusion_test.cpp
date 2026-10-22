@@ -2,7 +2,7 @@
 #include <boost/json.hpp>
 
 #include "core/detail/FirstStageInitialization.hpp"
-#include "core/detail/MapSampler.hpp"
+#include "core/detail/MapInterpolation.hpp"
 #include "core/detail/joint_component/HaloMedianReconstruction.hpp"
 #include "core/detail/GroupPotentialFitting.hpp"
 #include "core/detail/joint_component/PostFitPeeling.hpp"

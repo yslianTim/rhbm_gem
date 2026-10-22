@@ -27,7 +27,7 @@
 #include "core/detail/joint_component/PostFitPeeling.hpp"
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include "core/detail/MapInterpolation.hpp"
-#include "core/detail/MapSampler.hpp"
+#include "support/MapSamplerTestSupport.hpp"
 #include "data/io/detail/JointResultJson.hpp"
 #include "data/io/detail/StageResultJson.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
