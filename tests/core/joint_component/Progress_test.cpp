@@ -136,9 +136,10 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
     ASSERT_FALSE(events.empty());
     EXPECT_EQ(events.front().phase, joint::JointProgressPhase::SolverConfigured);
     ASSERT_TRUE(events.front().solver_configuration);
-    const auto expected_configuration = joint::ResolveJointSolverConfiguration(policy);
     EXPECT_EQ(events.front().solver_configuration->fixed_neighbor_core_atoms,
-        expected_configuration.fixed_neighbor_core_atoms);
+        policy.core_atoms);
+    EXPECT_EQ(events.front().solver_configuration->bounded_width_profile,
+        policy.eta_upper_bound.has_value());
     EXPECT_EQ(std::count_if(events.begin(), events.end(), [](const auto & event) {
         return event.phase == joint::JointProgressPhase::SolverConfigured;
     }), 1);

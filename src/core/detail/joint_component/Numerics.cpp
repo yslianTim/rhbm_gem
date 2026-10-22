@@ -246,8 +246,6 @@ std::pair<Matrix,Matrix> Reduce(const Design & x,const Matrix & rhs)
     return {std::move(reduced.r),std::move(reduced.target)};
 }
 }
-JointSolverConfiguration ResolveJointSolverConfiguration(const FixedNeighborSearchPolicy & policy)
-{return {policy.core_atoms,policy.eta_upper_bound.has_value()};}
 double RankPolicy::Relative(Eigen::Index columns) const
 {return std::numeric_limits<double>::epsilon()*static_cast<double>(std::max(rows,columns));}
 double RankPolicy::Absolute(Eigen::Index columns,double maximum) const

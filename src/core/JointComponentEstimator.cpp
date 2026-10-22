@@ -132,6 +132,16 @@ void ConfigureOptimizationDomain(n::ProblemData & data)
 
 }
 namespace joint_component {
+JointParameterLayout BuildParameterLayout(const JointProblemInput & input)
+{
+    JointParameterLayout out;
+    out.full_atoms.resize(input.atom_ids.size());
+    std::iota(out.full_atoms.begin(),out.full_atoms.end(),0);
+    out.informative_rows.resize(input.observations.size());
+    std::iota(out.informative_rows.begin(),out.informative_rows.end(),0);
+    return out;
+}
+
 std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceScope scope)
 {
     using Status=JointCheckStatus;
@@ -676,8 +686,14 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
     const n::FixedNeighborSearchPolicy & production_policy,const n::JointProgressObserver & observer)
 {
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
-    const auto configuration=n::ResolveJointSolverConfiguration(production_policy);
-    n::NotifyJointSolverConfigured(observer,configuration);
+    if(observer)
+    {
+        n::JointProgressEvent event;
+        event.phase=n::JointProgressPhase::SolverConfigured;
+        event.solver_configuration=n::JointSolverConfiguration{
+            production_policy.core_atoms,production_policy.eta_upper_bound.has_value()};
+        observer(event);
+    }
     auto provenance=[&] {
         JointSolverProvenance out;
         out.search_method="fixed-neighbor";

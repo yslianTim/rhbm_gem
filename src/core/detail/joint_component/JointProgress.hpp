@@ -1,7 +1,5 @@
 #pragma once
 
-#include "SolverConfiguration.hpp"
-
 #include <cstddef>
 #include <functional>
 #include <limits>
@@ -19,6 +17,12 @@ enum class JointProgressPhase
     ComponentCompleted,
     AssemblyStarted,
     AssemblyCompleted
+};
+
+struct JointSolverConfiguration
+{
+    std::size_t fixed_neighbor_core_atoms{};
+    bool bounded_width_profile{};
 };
 
 struct JointFixedNeighborProgress
@@ -55,16 +59,6 @@ struct JointProgressEvent
 };
 
 using JointProgressObserver = std::function<void(const JointProgressEvent &)>;
-
-inline void NotifyJointSolverConfigured(
-    const JointProgressObserver & observer, const JointSolverConfiguration & configuration)
-{
-    if (!observer) return;
-    JointProgressEvent event;
-    event.phase = JointProgressPhase::SolverConfigured;
-    event.solver_configuration = configuration;
-    observer(event);
-}
 
 struct JointProgressComponent
 {

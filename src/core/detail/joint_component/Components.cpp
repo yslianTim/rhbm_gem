@@ -395,14 +395,6 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
     auto diagnostic_policy=production_policy;
     diagnostic_policy.component_index=static_cast<std::size_t>(view.component_index);
     diagnostic_policy.component_id=view.id;
-    const auto input_owner=view.domain.atoms.Snapshot();
-    diagnostic_policy.halo_census=[input_owner,&component_layout,&view](
-        std::size_t & halo_count,std::size_t & minimum_support) {
-        const auto census=DiagnoseHaloSupport(*input_owner,component_layout,&view.atoms);
-        halo_count=census.size(); minimum_support=census.empty() ? 0 : std::numeric_limits<std::size_t>::max();
-        for(const auto & halo:census)
-            minimum_support=std::min(minimum_support,halo.original_observation_support_count);
-    };
     out=SolveFixedNeighborComponent(prepared,initial_b,parent_context,
         diagnostic_policy,observer,progress_component);
     return out;

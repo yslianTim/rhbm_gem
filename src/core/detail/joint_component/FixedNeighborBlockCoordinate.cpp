@@ -715,7 +715,6 @@ FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolic
     for(const auto atom:core_atoms)
         if(atom>=0 && static_cast<std::size_t>(atom)<context.atom_ids.size())
             out.core_atom_ids.push_back(context.atom_ids.at(static_cast<std::size_t>(atom)));
-    if(policy.halo_census) policy.halo_census(out.halo_count,out.minimum_halo_support_rows);
     for(auto trial=profile.trials.rbegin();trial!=profile.trials.rend();++trial)
         if(trial->trust && !trial->trust->passed)
         {
@@ -738,7 +737,6 @@ std::string FormatFailureDiagnostics(const FixedNeighborBlockFailureDiagnostics 
        <<" core_atom_ids=[";
     for(std::size_t i=0;i<d.core_atom_ids.size();++i) out<<(i ? "," : "")<<d.core_atom_ids[i];
     out<<"] core_atom_count="<<d.core_atom_count<<" affected_row_count="<<d.affected_row_count
-       <<" halo_count="<<d.halo_count<<" minimum_halo_support_rows="<<d.minimum_halo_support_rows
        <<" initial_profile_valid="<<(d.initial_profile_valid ? "true" : "false")
        <<" initial_profile_reason="<<d.initial_profile_reason
        <<" initial_profile_trusted="<<(d.initial_profile_trusted ? "true" : "false")
@@ -1886,7 +1884,6 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     policy.collect_diagnostics=production_policy.collect_diagnostics;
     policy.component_index=production_policy.component_index;
     policy.component_id=production_policy.component_id;
-    policy.halo_census=production_policy.halo_census;
     policy.eta_upper_bound=production_policy.eta_upper_bound;
     policy.assess_local_conditioning=true;
     policy.assess_parameter_stability=true;

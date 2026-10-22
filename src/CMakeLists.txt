@@ -35,7 +35,6 @@ target_sources(rhbm_gem PRIVATE
     core/detail/joint_component/Search.cpp
     core/detail/joint_component/Components.cpp
     core/detail/joint_component/TargetEvidence.cpp
-    core/detail/joint_component/ObservableProfile.cpp
     core/JointComponentEstimator.cpp
     core/GaussianEstimator.cpp
     core/detail/joint_component/JointCliProgressReporter.cpp
@@ -45,7 +44,6 @@ target_sources(rhbm_gem PRIVATE
     core/detail/FittingWorkset.cpp
     core/detail/joint_component/JointGroupFitting.cpp
     core/detail/joint_component/HaloMedianReconstruction.cpp
-    core/detail/joint_component/PeelingContributorUniverse.cpp
     core/detail/joint_component/PostFitPeeling.cpp
     core/detail/gaussian_fit/GaussianModelOperations.cpp
     core/detail/gaussian_fit/PreparedLocalGaussianFit.cpp

@@ -59,8 +59,8 @@ struct FixedNeighborProfileTrial
 };
 struct FixedNeighborBlockFailureDiagnostics
 {
-    std::size_t component_index{},sweep_index{},block_index{},core_atom_count{},affected_row_count{},halo_count{},
-        minimum_halo_support_rows{},local_design_nonzero_entries{};
+    std::size_t component_index{},sweep_index{},block_index{},core_atom_count{},affected_row_count{},
+        local_design_nonzero_entries{};
     std::vector<std::string> core_atom_ids;
     std::vector<double> local_column_norms,local_design_singular_values,initial_widths,
         width_derivative_column_norms,projected_width_singular_values,projected_width_column_norms,proposed_eta_step;
@@ -195,7 +195,6 @@ struct FixedNeighborPolicy
     bool assess_parameter_stability{};
     std::size_t component_index{};
     std::string component_id;
-    std::function<void(std::size_t &,std::size_t &)> halo_census;
     std::function<void()> preparation_observer;
     std::function<bool(int)> claim_parameter_stability_block;
     FixedNeighborDiagnosticSink * diagnostic_sink{};

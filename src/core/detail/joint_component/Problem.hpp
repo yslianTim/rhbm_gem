@@ -28,17 +28,7 @@ struct ProblemData
         std::iota(fitting_to_original_rows.begin(),fitting_to_original_rows.end(),0);
     }
 };
-struct HaloSupportDiagnostic
-{
-    std::size_t atom_index{};
-    std::string atom_id,selection_role{"halo"};
-    std::size_t original_observation_support_count{},profiled_observation_support_count{},
-        distinct_squared_distance_count{};
-    bool singleton{},exact_common_response{},insufficient_full_abc_dimension{};
-};
 JointParameterLayout BuildParameterLayout(const JointProblemInput &);
-std::vector<HaloSupportDiagnostic> DiagnoseHaloSupport(const JointProblemInput &,
-    const JointParameterLayout &,const std::vector<Eigen::Index> * component_atoms=nullptr);
 struct ComponentProblemView
 {
     JointParameterLayout local_layout;
