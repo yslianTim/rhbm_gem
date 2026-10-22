@@ -329,9 +329,6 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
                 component.profile_evaluations,data.context.profile_budget,component.accepted_updates,
                 data.context.update_budget,elapsed,component.stop_reason,component.state.has_value(),
                 accepted_objective,accepted_gradient_inf_norm);
-        if(component_count==1 && data.partition.constant_rows.empty() &&
-            fit.search.certification && fit.search.certification->qualified())
-            out.single_component_assessment=std::move(fit.search.certification->assessment);
         out.components.push_back(std::move(component));
     }
     return out;
@@ -400,7 +397,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
     return out;
 }
 AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const ComponentPartition & partition,
-    const EvaluationContext & context,const std::vector<JointComponentResult> & components,const AssessmentReuse * reuse,
+    const EvaluationContext & context,const std::vector<JointComponentResult> & components,
     const JointConvergenceCriteria & convergence_criteria)
 {
     ResourcePhase phase("assembly");
@@ -532,23 +529,7 @@ AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const Compon
     out.replay=CheckIndependentReplay(domain,y,raw,context,nullptr,nullptr,convergence_criteria);
     const double replay_seconds=Seconds(replay_started);
     out.consistency_passed=out.replay.passed;
-    bool same=reuse && SameAssessmentPolicy(reuse->context,context) && reuse->domain.rows==domain.rows &&
-        reuse->domain.atoms.size()==domain.atoms.size() && reuse->observations.size()==y.size() &&
-        (reuse->observations.array()==y.array()).all() && reuse->assessment.primary.eta.size()==out.eta.size() &&
-        reuse->assessment.primary.beta.size()==out.beta.size() &&
-        (reuse->assessment.primary.eta.array()==out.eta.array()).all() && (reuse->assessment.primary.beta.array()==out.beta.array()).all();
-    if(same) for(std::size_t a=0;a<domain.atoms.size();++a)
-    {
-        const auto & left=reuse->domain.atoms[a], & right=domain.atoms[a];
-        same &= left.size()==right.size();
-        if(same) for(std::size_t k=0;k<left.size();++k) same &= left[k].row==right[k].row && left[k].square==right[k].square;
-    }
-    if(same)
-    {
-        out.assessment=VerifyJointEndpoint(domain,y,raw,out.replay,context,convergence_criteria);
-    }
-    else
-        out.assessment=VerifyJointEndpoint(domain,y,raw,out.replay,context,convergence_criteria);
+    out.assessment=VerifyJointEndpoint(domain,y,raw,out.replay,context,convergence_criteria);
     out.assessment.verification_memory_estimate=out.verification_memory_estimate;
     out.assessment.primary_endpoint_seconds=primary_seconds;
     out.assessment.independent_replay_seconds=replay_seconds;

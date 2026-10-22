@@ -1086,14 +1086,6 @@ void AssessmentStageTimerForTesting::Finish()
     FinishAssessmentStageForTesting(name_,seconds,true); finished_=true;
 }
 #endif
-bool SameAssessmentPolicy(const EvaluationContext & a,const EvaluationContext & b)
-{
-    const bool same=a.scale==b.scale && a.rank.rows==b.rank.rows && a.rank.design_columns==b.rank.design_columns &&
-        a.rank.width_columns==b.rank.width_columns && a.linear.rank_relative==b.linear.rank_relative &&
-        a.linear.active_set_iteration_factor==b.linear.active_set_iteration_factor && a.linear.release_factor==b.linear.release_factor &&
-        a.linear.release_response_norm==b.linear.release_response_norm && a.atom_ids==b.atom_ids && a.row_ids==b.row_ids;
-    return same && a.eta_upper_bound==b.eta_upper_bound;
-}
 Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluation & endpoint,
     const IndependentReplayEvidence & replay,const EvaluationContext & context,
     const JointConvergenceCriteria & criteria)

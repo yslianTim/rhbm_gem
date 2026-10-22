@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "support/JointFixedNeighborDiagnostic.hpp"
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/ResourceWork.hpp"
 #include "core/detail/joint_component/StructuralPartition.hpp"
 #include "core/detail/joint_component/TargetEvidence.hpp"
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
@@ -305,6 +306,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, SearchResultAndIndependentCertificat
     const auto quiet_state=quiet.state;
     const auto quiet_certification=n::CertifyFixedNeighborEndpoint(domain,data.y,quiet.state,context);
     const auto diagnostic_certification=n::CertifyFixedNeighborEndpoint(domain,data.y,diagnostic.state,context);
+    const auto resource_limited=n::CertifyFixedNeighborEndpoint(domain,data.y,quiet.state,context,nullptr,
+        n::JointMemoryPlanningBudgetBytes+1);
 
     EXPECT_TRUE(quiet.blocks.empty());
     EXPECT_TRUE(quiet.sweeps.empty());
@@ -329,6 +332,10 @@ TEST(JointFixedNeighborBlockCoordinateTest, SearchResultAndIndependentCertificat
     EXPECT_DOUBLE_EQ(quiet.final_sweep->global_ac_kkt,diagnostic.sweeps.back().global_ac_kkt);
     EXPECT_DOUBLE_EQ(quiet.final_sweep->global_width_gradient_inf_norm,
         diagnostic.sweeps.back().global_width_gradient_inf_norm);
+    EXPECT_TRUE(resource_limited.resource_limited());
+    EXPECT_EQ(resource_limited.verification_memory_estimate.status,n::MemoryStatus::Reject);
+    EXPECT_EQ(resource_limited.resource_limit_reason(),
+        "resource-limit:endpoint-verification:estimated-peak-exceeds-budget");
     EXPECT_TRUE((quiet_certification.assessment.primary.eta.array()==
         diagnostic_certification.assessment.primary.eta.array()).all());
     EXPECT_TRUE((quiet_certification.assessment.primary.eta.array()==quiet.state.eta.array()).all());

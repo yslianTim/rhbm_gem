@@ -295,15 +295,6 @@ Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const Ind
 Assessment VerifyJointEndpoint(const Domain &,VectorRef,const Evaluation &,
     const IndependentReplayEvidence &,const EvaluationContext &,
     const JointConvergenceCriteria & = StrictJointConvergenceCriteria);
-bool SameAssessmentPolicy(const EvaluationContext &,const EvaluationContext &);
-// Borrowed only while the originating immutable problem and report remain alive.
-struct AssessmentReuse
-{
-    const Domain & domain;
-    VectorRef observations;
-    const EvaluationContext & context;
-    const Assessment & assessment;
-};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 struct AssessmentStageWork
 {
@@ -380,6 +371,6 @@ struct AssemblyResult
     MemoryEstimate verification_memory_estimate;
 };
 AssemblyResult AssembleComponents(const Domain &,VectorRef,const ComponentPartition &,const EvaluationContext &,
-    const std::vector<JointComponentResult> &,const AssessmentReuse * = nullptr,
+    const std::vector<JointComponentResult> &,
     const JointConvergenceCriteria & = StrictJointConvergenceCriteria);
 }

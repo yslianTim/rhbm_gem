@@ -768,17 +768,8 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
     out.costs.assessment_seconds+=component_batch.costs.assessment_seconds;
     const auto assembly_start=Clock::now();
     n::NotifyJointAssemblyProgress(observer,n::JointProgressPhase::AssemblyStarted,component_count);
-    std::optional<n::EvaluationContext> reuse_context;
-    std::optional<n::AssessmentReuse> reuse;
-    if(component_batch.single_component_assessment)
-    {
-        const auto & view=data.partition.components[0];
-        // A single full component has identity row/atom mappings in this immutable snapshot.
-        reuse_context=n::ChildContext(assembly_context,view,true);
-        reuse.emplace(n::AssessmentReuse{view.domain,data.y,*reuse_context,*component_batch.single_component_assessment});
-    }
     const auto assembly=n::AssembleComponents(data.domain,data.y,data.partition,assembly_context,out.components,
-        reuse ? &*reuse : nullptr,bounded_policy.convergence_criteria);
+        bounded_policy.convergence_criteria);
     out.search_completed=assembly.completed; out.available_row_mask=assembly.row_mask;
     out.evidence=n::AssessmentEvidence(assembly.assessment,JointEvidenceScope::AssembledGlobal);
     out.evidence.push_back({"assembly-mapping",assembly.mapping_valid ? JointCheckStatus::Passed :

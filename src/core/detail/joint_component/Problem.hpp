@@ -45,10 +45,6 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
 struct FixedNeighborComponentBatch
 {
     std::vector<JointComponentResult> components;
-    // A single-component fit can reuse its certified assessment
-    // during assembly. Other search and certification state is released as
-    // each component finishes.
-    std::optional<Assessment> single_component_assessment;
     JointFitCosts costs;
 };
 FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
