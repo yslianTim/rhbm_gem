@@ -206,7 +206,6 @@ TEST(MapSamplerTest, PotentialSamplingWorkflowWritesSamplesToSelectedAtoms)
     RunPotentialSamplingWorkflow(
         map,
         *model,
-        SphereSamplingMethod::FibonacciDeterministic,
         2);
 
     ASSERT_EQ(2u, model->GetSelectedAtomCount());
@@ -231,7 +230,6 @@ TEST(MapSamplerTest, PotentialSamplingWorkflowUsesExplicitAtomDomain)
         map,
         *model,
         atoms,
-        SphereSamplingMethod::FibonacciDeterministic,
         1);
     detail::PotentialSamplingObserverForTesting() = {};
 
@@ -289,7 +287,7 @@ TEST(MapSamplerTest, PotentialSamplingProgressLabelAndQuietMode)
     Logger::FinishProgressLine();
     testing::internal::CaptureStdout();
     RunPotentialSamplingWorkflow(map, *model, atoms,
-        SphereSamplingMethod::FibonacciDeterministic, 1, " Joint sampling");
+        1, " Joint sampling");
     const auto labelled{ testing::internal::GetCapturedStdout() };
     EXPECT_NE(labelled.find("100% Joint sampling"), std::string::npos);
 
@@ -297,7 +295,7 @@ TEST(MapSamplerTest, PotentialSamplingProgressLabelAndQuietMode)
     Logger::FinishProgressLine();
     testing::internal::CaptureStdout();
     RunPotentialSamplingWorkflow(map, *model, atoms,
-        SphereSamplingMethod::FibonacciDeterministic, 1, " Joint sampling", true);
+        1, " Joint sampling", true);
     const auto quiet{ testing::internal::GetCapturedStdout() };
     Logger::SetLogLevel(previous_level);
     EXPECT_TRUE(quiet.empty());

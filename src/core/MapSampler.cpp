@@ -74,7 +74,6 @@ void RunPotentialSamplingWorkflowImpl(
     MapObject & map_object,
     ModelObject & model_object,
     const std::vector<AtomObject *> & atom_list,
-    const SphereSamplingMethod * sampling_method,
     int thread_count,
     std::string_view progress_label,
     bool quiet_mode)
@@ -89,9 +88,7 @@ void RunPotentialSamplingWorkflowImpl(
 #endif
     for (size_t i = 0; i < atom_list.size(); i++)
     {
-        raw_sampling_entries_list[i] = sampling_method ?
-            SampleAtomMapValues(map_object, *atom_list[i], *sampling_method) :
-            SampleAtomMapValues(map_object, *atom_list[i]);
+        raw_sampling_entries_list[i] = SampleAtomMapValues(map_object, *atom_list[i]);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if (detail::PotentialSamplingObserverForTesting())
             detail::PotentialSamplingObserverForTesting()(atom_list[i]->GetSerialID());
@@ -151,60 +148,12 @@ void RunPotentialSamplingWorkflow(
     MapObject & map_object,
     ModelObject & model_object,
     const std::vector<AtomObject *> & atom_list,
-    SphereSamplingMethod sampling_method,
-    int thread_count)
-{
-    RunPotentialSamplingWorkflowImpl(
-        map_object, model_object, atom_list, &sampling_method, thread_count, {}, false);
-}
-
-void RunPotentialSamplingWorkflow(
-    MapObject & map_object,
-    ModelObject & model_object,
-    const std::vector<AtomObject *> & atom_list,
-    SphereSamplingMethod sampling_method,
     int thread_count,
     std::string_view progress_label,
     bool quiet_mode)
 {
     RunPotentialSamplingWorkflowImpl(
-        map_object, model_object, atom_list, &sampling_method, thread_count, progress_label, quiet_mode);
-}
-
-void RunPotentialSamplingWorkflow(
-    MapObject & map_object,
-    ModelObject & model_object,
-    const std::vector<AtomObject *> & atom_list,
-    int thread_count)
-{
-    RunPotentialSamplingWorkflowImpl(
-        map_object, model_object, atom_list, nullptr, thread_count, {}, false);
-}
-
-void RunPotentialSamplingWorkflow(
-    MapObject & map_object,
-    ModelObject & model_object,
-    const std::vector<AtomObject *> & atom_list,
-    int thread_count,
-    std::string_view progress_label,
-    bool quiet_mode)
-{
-    RunPotentialSamplingWorkflowImpl(
-        map_object, model_object, atom_list, nullptr, thread_count, progress_label, quiet_mode);
-}
-
-void RunPotentialSamplingWorkflow(
-    MapObject & map_object,
-    ModelObject & model_object,
-    SphereSamplingMethod sampling_method,
-    int thread_count)
-{
-    RunPotentialSamplingWorkflow(
-        map_object,
-        model_object,
-        model_object.GetSelectedAtoms(),
-        sampling_method,
-        thread_count);
+        map_object, model_object, atom_list, thread_count, progress_label, quiet_mode);
 }
 
 void RunPotentialSamplingWorkflow(

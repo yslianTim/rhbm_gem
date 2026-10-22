@@ -35,37 +35,9 @@ void RunPotentialSamplingWorkflow(
     MapObject & map_object,
     ModelObject & model_object,
     const std::vector<AtomObject *> & atoms,
-    int thread_count);
-
-void RunPotentialSamplingWorkflow(
-    MapObject & map_object,
-    ModelObject & model_object,
-    const std::vector<AtomObject *> & atoms,
     int thread_count,
-    std::string_view progress_label,
+    std::string_view progress_label = {},
     bool quiet_mode = false);
-
-void RunPotentialSamplingWorkflow(
-    MapObject & map_object,
-    ModelObject & model_object,
-    const std::vector<AtomObject *> & atoms,
-    SphereSamplingMethod sampling_method,
-    int thread_count);
-
-void RunPotentialSamplingWorkflow(
-    MapObject & map_object,
-    ModelObject & model_object,
-    const std::vector<AtomObject *> & atoms,
-    SphereSamplingMethod sampling_method,
-    int thread_count,
-    std::string_view progress_label,
-    bool quiet_mode = false);
-
-void RunPotentialSamplingWorkflow(
-    MapObject & map_object,
-    ModelObject & model_object,
-    SphereSamplingMethod sampling_method,
-    int thread_count);
 
 void RunPotentialSamplingWorkflow(
     MapObject & map_object,
