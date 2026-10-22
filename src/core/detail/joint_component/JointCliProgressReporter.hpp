@@ -1,6 +1,6 @@
 #pragma once
 
-#include "joint_component/JointProgress.hpp"
+#include "JointProgress.hpp"
 
 #include <chrono>
 #include <optional>

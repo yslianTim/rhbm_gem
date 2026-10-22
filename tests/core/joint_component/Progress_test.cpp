@@ -23,7 +23,7 @@
 
 #include "core/command/detail/MapSimulation.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
-#include "core/detail/JointCliProgressReporter.hpp"
+#include "core/detail/joint_component/JointCliProgressReporter.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/ResourceWork.hpp"
 #include "support/JointSyntheticWorkload.hpp"

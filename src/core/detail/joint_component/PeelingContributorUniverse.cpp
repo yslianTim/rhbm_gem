@@ -4,7 +4,7 @@
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "joint_component/Problem.hpp"
+#include "Problem.hpp"
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>

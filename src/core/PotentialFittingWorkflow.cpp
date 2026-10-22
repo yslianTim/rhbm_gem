@@ -1,13 +1,13 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <rhbm_gem/core/MapSampler.hpp>
-#include "detail/JointCliProgressReporter.hpp"
+#include "detail/joint_component/JointCliProgressReporter.hpp"
 #include "detail/FirstStageInitialization.hpp"
 #include "detail/FittingWorkset.hpp"
 #include "detail/PotentialFittingWorkflow.hpp"
-#include "detail/HaloMedianReconstruction.hpp"
+#include "detail/joint_component/HaloMedianReconstruction.hpp"
 #include "detail/StageSummary.hpp"
-#include "detail/PostFitPeeling.hpp"
+#include "detail/joint_component/PostFitPeeling.hpp"
 #include "detail/GroupPotentialFitting.hpp"
 #include "detail/joint_component/ResourceWork.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"

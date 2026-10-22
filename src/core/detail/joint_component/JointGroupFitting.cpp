@@ -1,4 +1,4 @@
-#include "GroupPotentialFitting.hpp"
+#include "../GroupPotentialFitting.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>

@@ -3,9 +3,9 @@
 
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/MapSampler.hpp"
-#include "core/detail/HaloMedianReconstruction.hpp"
+#include "core/detail/joint_component/HaloMedianReconstruction.hpp"
 #include "core/detail/GroupPotentialFitting.hpp"
-#include "core/detail/PostFitPeeling.hpp"
+#include "core/detail/joint_component/PostFitPeeling.hpp"
 #include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"

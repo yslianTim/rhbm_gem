@@ -1,8 +1,8 @@
 #include "PostFitPeeling.hpp"
 #include "HaloMedianReconstruction.hpp"
-#include "JointPostprocessing.hpp"
-#include "MapInterpolation.hpp"
-#include "joint_component/Numerics.hpp"
+#include "../JointPostprocessing.hpp"
+#include "../MapInterpolation.hpp"
+#include "Numerics.hpp"
 #include <rhbm_gem/utils/algorithm/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>

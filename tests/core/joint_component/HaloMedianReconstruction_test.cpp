@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "core/detail/HaloMedianReconstruction.hpp"
+#include "core/detail/joint_component/HaloMedianReconstruction.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>

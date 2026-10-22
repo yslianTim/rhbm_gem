@@ -38,15 +38,15 @@ target_sources(rhbm_gem PRIVATE
     core/detail/joint_component/ObservableProfile.cpp
     core/JointComponentEstimator.cpp
     core/GaussianEstimator.cpp
-    core/detail/JointCliProgressReporter.cpp
+    core/detail/joint_component/JointCliProgressReporter.cpp
     core/PotentialFittingWorkflow.cpp
     core/detail/StageSummary.cpp
     core/detail/FirstStageInitialization.cpp
     core/detail/FittingWorkset.cpp
-    core/detail/JointGroupFitting.cpp
-    core/detail/HaloMedianReconstruction.cpp
-    core/detail/PeelingContributorUniverse.cpp
-    core/detail/PostFitPeeling.cpp
+    core/detail/joint_component/JointGroupFitting.cpp
+    core/detail/joint_component/HaloMedianReconstruction.cpp
+    core/detail/joint_component/PeelingContributorUniverse.cpp
+    core/detail/joint_component/PostFitPeeling.cpp
     core/detail/gaussian_fit/GaussianModelOperations.cpp
     core/detail/gaussian_fit/PreparedLocalGaussianFit.cpp
     core/detail/second_stage/SecondStageState.cpp

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
-#include "PostFitPeeling.hpp"
+#include "joint_component/PostFitPeeling.hpp"
 
 #include <vector>
 

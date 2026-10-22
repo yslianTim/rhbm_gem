@@ -1,5 +1,5 @@
 #pragma once
-#include "PostFitPeeling.hpp"
+#include "joint_component/PostFitPeeling.hpp"
 namespace rhbm_gem {
 class ModelObject;
 namespace core {
