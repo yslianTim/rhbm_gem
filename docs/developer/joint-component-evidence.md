@@ -7,7 +7,8 @@ general accuracy or performance guarantees.
 
 ## Current production contract
 
-`EstimateJointComponents()` and the normal `joint-components` workflow use
+The internal `EstimateJointComponents()` entrypoint and the normal
+`joint-components` workflow use
 Target-only Joint fitting with Pure Halo-Support Exclusion at 2.5 Å. Halo
 support rows are excluded from fitting; Halo parameters do not enter the Joint
 objective. The solver uses disjoint FixedNeighbor cores of at most 12 Targets,
