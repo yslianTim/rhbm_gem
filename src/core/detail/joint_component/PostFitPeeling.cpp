@@ -254,7 +254,7 @@ JointPostprocessingContext::JointPostprocessingContext(
             }
         }
     }
-    m_contributor_index_by_id.reserve(input.atom_ids.size());
+    std::size_t indexed_contributors{};
     int previous_contributor_id{};
     bool first_contributor=true;
     for (const auto & contributor:m_contributors.contributors)
@@ -272,14 +272,14 @@ JointPostprocessingContext::JointPostprocessingContext(
                 throw std::invalid_argument("Joint Peeling contributor universe identity mismatch.");
             const bool target=input.selection_domain && std::binary_search(
                 input.selection_domain->target_indices.begin(),input.selection_domain->target_indices.end(),index);
-            if (contributor.target!=target || !contributor.reconstruction_eligible ||
-                !m_contributor_index_by_id.emplace(contributor.atom_id,index).second)
+            if (contributor.target!=target || !contributor.reconstruction_eligible)
                 throw std::invalid_argument("Joint Peeling contributor universe identity mismatch.");
+            ++indexed_contributors;
         }
         else if (contributor.target)
             throw std::invalid_argument("Joint Peeling contributor universe identity mismatch.");
     }
-    if (m_contributor_index_by_id.size()!=input.atom_ids.size())
+    if (indexed_contributors!=input.atom_ids.size())
         throw std::invalid_argument("Joint Peeling contributor universe identity mismatch.");
     m_row_index_by_grid.reserve(input.row_ids.size());
     for (std::size_t row = 0; row < input.row_ids.size(); ++row)
@@ -308,7 +308,6 @@ JointPostprocessingContext::JointPostprocessingContext(
     if (m_metrics)
         m_metrics->estimated_context_lookup_bytes = EstimateHashStorageBytes(m_row_index_by_grid) +
             EstimateHashStorageBytes(m_fitting_row_index_by_grid) +
-            EstimateHashStorageBytes(m_contributor_index_by_id) +
             m_contributors.contributors.size()*sizeof(JointPeelingContributor);
 }
 
@@ -713,10 +712,12 @@ PostJointLocalSamples JointPostprocessingContext::BuildPostJointLocalSamples(
 {
     if (!m_snapshot) throw std::invalid_argument("Post-Joint samples require a trusted Joint snapshot.");
     const auto & input = m_problem.OriginalInput();
-    const auto atom_found = m_contributor_index_by_id.find(atom_id);
-    if (atom_found == m_contributor_index_by_id.end())
+    const auto atom_found=std::lower_bound(m_contributors.contributors.begin(),m_contributors.contributors.end(),atom_id,
+        [](const JointPeelingContributor & contributor,int id){return contributor.atom_id<id;});
+    if (atom_found==m_contributors.contributors.end() || atom_found->atom_id!=atom_id ||
+        !atom_found->contributor_index)
         throw std::invalid_argument("Post-Joint sample target is outside the Joint problem.");
-    const auto atom_index = atom_found->second;
+    const auto atom_index=*atom_found->contributor_index;
     if (!input.selection_domain || !std::binary_search(
             input.selection_domain->target_indices.begin(), input.selection_domain->target_indices.end(), atom_index))
         throw std::invalid_argument("Post-Joint samples require a selected Joint target.");

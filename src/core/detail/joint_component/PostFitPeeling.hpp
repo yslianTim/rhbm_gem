@@ -147,7 +147,6 @@ private:
     JointPeelingContributorUniverse m_contributors;
     std::unordered_map<std::size_t, std::size_t> m_row_index_by_grid;
     std::unordered_map<std::size_t, std::size_t> m_fitting_row_index_by_grid;
-    std::unordered_map<int, std::size_t> m_contributor_index_by_id;
 };
 
 // Reads geometry, immutable support, raw samples and fixed Second states only.
