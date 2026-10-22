@@ -245,6 +245,31 @@ endfunction()
 function(rhbm_guard_check_structure)
     rhbm_guard_find_git(GIT_EXECUTABLE)
 
+    foreach(REQUIRED_PATH IN ITEMS
+        "src/core/detail/joint_component/JointComponentEstimator.cpp"
+        "src/core/detail/joint_component/JointComponentEstimator.hpp"
+        "src/core/detail/PotentialFittingWorkflow.cpp"
+        "src/core/detail/PotentialFittingWorkflow.hpp"
+        "src/core/detail/MapInterpolation.hpp"
+        "tests/support/MapSamplerTestSupport.hpp"
+    )
+        if(NOT EXISTS "${PROJECT_SOURCE_DIR}/${REQUIRED_PATH}")
+            message(FATAL_ERROR
+                "Core implementation layout guard failed: missing ${REQUIRED_PATH}")
+        endif()
+    endforeach()
+
+    foreach(RETIRED_PATH IN ITEMS
+        "src/core/JointComponentEstimator.cpp"
+        "src/core/PotentialFittingWorkflow.cpp"
+        "src/core/detail/MapSampler.hpp"
+    )
+        if(EXISTS "${PROJECT_SOURCE_DIR}/${RETIRED_PATH}")
+            message(FATAL_ERROR
+                "Core implementation layout guard failed: retired ${RETIRED_PATH} is present")
+        endif()
+    endforeach()
+
     set(REQUIRED_DOCUMENTATION_PATHS
         "docs/README.md"
         "docs/user/README.md"
