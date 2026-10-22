@@ -14,7 +14,7 @@
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/CommandTypes.hpp>
-#include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include "core/detail/joint_component/JointComponentEstimator.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>

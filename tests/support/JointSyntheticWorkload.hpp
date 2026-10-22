@@ -1,5 +1,5 @@
 #pragma once
-#include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include "core/detail/joint_component/JointComponentEstimator.hpp"
 #include <string>
 namespace second_stage_test {
 // Frozen support, no finite map box. Versioned benchmark data, not production.

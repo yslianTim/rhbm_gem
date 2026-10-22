@@ -1,6 +1,6 @@
 #pragma once
 #include <Eigen/Core>
-#include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include "core/detail/joint_component/JointComponentEstimator.hpp"
 #include <chrono>
 #include <cstddef>
 #include <optional>

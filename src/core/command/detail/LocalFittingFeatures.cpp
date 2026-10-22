@@ -1,8 +1,8 @@
 #include "core/command/detail/LocalFittingFeatures.hpp"
 
-#include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/JointAnalysisResult.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/algorithm/KDTreeAlgorithm.hpp>

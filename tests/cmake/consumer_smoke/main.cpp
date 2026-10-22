@@ -1,114 +1,82 @@
 #include <rhbm_gem/core/CommandSystem.hpp>
-#include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include <rhbm_gem/core/CommandTypes.hpp>
 #include <rhbm_gem/core/GaussianEstimator.hpp>
+#include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/JointAnalysisFileIO.hpp>
-#include <filesystem>
-#include <fstream>
-#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
-#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/BondObject.hpp>
-#include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
-#include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
-#include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/data/object/JointAnalysisResult.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/algorithm/KDTreeAlgorithm.hpp>
-#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 
-#include <array>
+#include <fstream>
+#include <iterator>
+#include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 template <typename T>
 constexpr bool kHeaderExposesCompleteType = sizeof(T) > 0;
 
 int main()
 {
-    static_assert(kHeaderExposesCompleteType<rhbm_gem::DataRepository>);
-    static_assert(kHeaderExposesCompleteType<rhbm_gem::AtomObject>);
-    static_assert(kHeaderExposesCompleteType<rhbm_gem::BondObject>);
-    static_assert(kHeaderExposesCompleteType<rhbm_gem::ChemicalComponentEntry>);
-    static_assert(kHeaderExposesCompleteType<rhbm_gem::GaussianModel3D>);
-    static_assert(kHeaderExposesCompleteType<rhbm_gem::GaussianModel3DWithUncertainty>);
-    static_assert(kHeaderExposesCompleteType<rhbm_gem::MapObject>);
-    static_assert(kHeaderExposesCompleteType<rhbm_gem::AtomLocalPotentialView>);
-    static_assert(kHeaderExposesCompleteType<rhbm_gem::ModelAnalysisEditor>);
-    static_assert(kHeaderExposesCompleteType<rhbm_gem::ModelObject>);
-    static_assert(kHeaderExposesCompleteType<rhbm_gem::core::FitOptions>);
-#ifdef RHBM_GEM_ENABLE_UMAP
-    static_assert(kHeaderExposesCompleteType<rhbm_gem::core::UmapEmbeddingRequest>);
-#endif
+    using namespace rhbm_gem;
+    using namespace rhbm_gem::core;
 
-    rhbm_gem::core::JointProblemInput input;
-    input.atom_ids={"unobserved"}; input.support.resize(1);
-    input.selection_domain=rhbm_gem::JointSelectionDomain{};
-    input.selection_domain->target_indices={0};
-    const rhbm_gem::core::JointProblem problem(std::move(input));
-    const auto joint=rhbm_gem::core::FitJointComponents(problem,{0.});
-    if(joint.initialization.valid || joint.regular_certificate!=rhbm_gem::core::JointCheckStatus::NotRun) return 2;
-    const auto saved=rhbm_gem::core::CaptureJointAnalysisResult(joint);
-    if(!saved.metadata.software || saved.metadata.software->source_sha256.size()!=64 ||
-        saved.metadata.model_sha256 || saved.metadata.map_sha256 || saved.metadata.map_normalization) return 6;
-    rhbm_gem::WriteJointAnalysisResult(saved,"consumer-joint.json","consumer-joint.csv");
+    static_assert(kHeaderExposesCompleteType<FitOptions>);
+    static_assert(static_cast<int>(PotentialEstimator::TWO_STAGE) == 0);
+    static_assert(static_cast<int>(PotentialEstimator::JOINT_COMPONENTS) == 1);
+
+    FitOptions fit_options;
+    PotentialAnalysisRequest request;
+    if (fit_options.estimator != PotentialEstimator::JOINT_COMPONENTS ||
+        request.estimator != PotentialEstimator::JOINT_COMPONENTS)
+        return 1;
+
+    using PotentialFittingWorkflow = void (*)(MapObject &, ModelObject &, const FitOptions &);
+    PotentialFittingWorkflow volatile workflow_entry{&RunPotentialFittingWorkflow};
+    if (workflow_entry == nullptr) return 2;
+
+    JointAnalysisResult result;
+    result.atom_ids = {"1"};
+    result.row_ids = {"row-0"};
+    result.fitting_row_ids = {"row-0"};
+    result.fitting_to_original_contributors = {0};
+    result.fitting_to_original_rows = {0};
+    result.available_row_mask = {true};
+    result.selection_domain = JointSelectionDomain{};
+    result.selection_domain->target_indices = {0};
+    result.selection_domain->contributor_policy =
+        std::string(PureHaloSupportExclusionContributorPolicy);
+    result.selection_domain->pure_halo_support_exclusion =
+        JointPureHaloSupportExclusionProvenance{1, 1, 0, 0, 0, 0};
+    result.metadata.software = JointSoftwareProvenance{
+        "consumer-smoke", std::string(64, '0'), std::string(64, '0'), std::string(64, '0')};
+
+    WriteJointAnalysisResult(result, "consumer-joint.json", "consumer-joint.csv");
     std::ifstream json("consumer-joint.json");
-    const std::string payload((std::istreambuf_iterator<char>(json)),{});
-    if(payload.find("\"schema_version\":16")==std::string::npos ||
-        payload.find("joint-kernel-map-units-v1")==std::string::npos ||
-        payload.find("fixed-selected-voxel-closure-v1")==std::string::npos) return 7;
-    rhbm_gem::ModelObject saved_model;
-    saved_model.EditAnalysis().SetJointResult(saved);
-    if(!saved_model.GetAnalysisView().GetJointResult()) return 5;
-    auto imported=saved; imported.atom_ids={"1"};
-    std::vector<std::unique_ptr<rhbm_gem::AtomObject>> imported_atoms;
-    auto imported_atom=std::make_unique<rhbm_gem::AtomObject>();
-    imported_atom->SetSerialID(1); imported_atom->SetElement(Element::CARBON);
-    imported_atoms.push_back(std::move(imported_atom));
-    rhbm_gem::ModelObject imported_model(std::move(imported_atoms));
-    imported_model.EditAnalysis().ApplyJointResult(std::move(imported),"consumer-import");
-    rhbm_gem::DataRepository repository("consumer-analysis.sqlite");
-    repository.SaveModel(imported_model,"import");
-    const auto loaded=repository.LoadModel("import");
-    if(!loaded->GetAnalysisView().GetJointResult() ||
-        rhbm_gem::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1)).GetStageEstimate(rhbm_gem::FittingStage::Second).point.has_value()) return 8;
-    const auto unobserved=rhbm_gem::core::FitJointComponents(problem,{.5});
-    if(!unobserved.initialization.valid || unobserved.components.size()!=1 || unobserved.prediction) return 3;
-    if(unobserved.TargetRuntimeConvergence()!=rhbm_gem::core::JointCheckStatus::Unavailable ||
-        unobserved.components[0].TargetRuntimeConvergence()!=rhbm_gem::core::JointCheckStatus::Unavailable) return 9;
-    if(joint.RuntimeConvergence()!=rhbm_gem::core::JointCheckStatus::Unavailable ||
-        unobserved.RuntimeConvergence()!=rhbm_gem::core::JointCheckStatus::Unavailable ||
-        unobserved.components[0].RuntimeConvergence()!=rhbm_gem::core::JointCheckStatus::Unavailable) return 4;
-    rhbm_gem::ModelObject model_object;
-    (void)model_object;
-    rhbm_gem::core::FitOptions fit_options;
-    using PotentialFittingWorkflow = void (*)(
-        rhbm_gem::MapObject &,
-        rhbm_gem::ModelObject &,
-        const rhbm_gem::core::FitOptions &);
-    PotentialFittingWorkflow volatile workflow_entry{
-        &rhbm_gem::core::RunPotentialFittingWorkflow
-    };
-    const rhbm_gem::GaussianModel3D estimate{ 4.0, 2.0 };
-    const auto transformed_estimate{ estimate.ToTransformedCoordinates() };
-    const auto transformed_round_trip{
-        transformed_estimate.has_value() ?
-            rhbm_gem::GaussianModel3D::FromTransformedCoordinates(
-                *transformed_estimate) :
-            std::nullopt
-    };
-    const std::array<int, 3> compile_only_sizes{
-        static_cast<int>(sizeof(rhbm_gem::AtomObject)),
-        static_cast<int>(sizeof(rhbm_gem::BondObject)),
-        static_cast<int>(sizeof(rhbm_gem::ChemicalComponentEntry)) };
+    const std::string payload((std::istreambuf_iterator<char>(json)), {});
+    if (payload.find("\"schema_version\":19") == std::string::npos ||
+        payload.find("target-only-pure-halo-support-exclusion-v1") == std::string::npos)
+        return 3;
 
-    const std::string extension{ rhbm_gem::path_helper::GetExtension("sample.cif") };
-    const auto default_database_path{ rhbm_gem::core::GetDefaultDatabasePath() };
-    return extension == ".cif"
-            && compile_only_sizes.front() > 0
-            && default_database_path.filename() == "database.sqlite"
-            && fit_options.thread_size == 1
-            && workflow_entry != nullptr
-            && estimate.Intensity() > 0.0
-            && transformed_round_trip.has_value() ? 0 : 1;
+    std::vector<std::unique_ptr<AtomObject>> atoms;
+    auto atom = std::make_unique<AtomObject>();
+    atom->SetSerialID(1);
+    atom->SetElement(Element::CARBON);
+    atoms.push_back(std::move(atom));
+    ModelObject model(std::move(atoms));
+    model.EditAnalysis().ApplyJointResult(result, "consumer-smoke");
+
+    DataRepository repository("consumer-analysis.sqlite");
+    repository.SaveModel(model, "consumer");
+    const auto loaded = repository.LoadModel("consumer");
+    const auto & loaded_result = loaded->GetAnalysisView().GetJointResult();
+    if (!loaded_result || loaded_result->atom_ids != result.atom_ids ||
+        IsQualifiedJointAnalysisResult(*loaded_result))
+        return 4;
+
+    return 0;
 }

@@ -791,7 +791,7 @@ TEST(UmapEmbeddingCommandTest, ExcludesMissingRequiredFeaturesAndAllowsMissingAn
     }
 }
 
-#include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include "core/detail/joint_component/JointComponentEstimator.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include "data/detail/JointStageAdapter.hpp"
 #include "core/detail/joint_component/Numerics.hpp"

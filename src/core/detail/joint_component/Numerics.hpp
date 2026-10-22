@@ -4,7 +4,7 @@
 #include "SnapshotViews.hpp"
 #include "ResourceWork.hpp"
 #include "ConvergenceCriteria.hpp"
-#include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include "core/detail/joint_component/JointComponentEstimator.hpp"
 #include <Eigen/SparseCore>
 #include <array>
 #include <memory>

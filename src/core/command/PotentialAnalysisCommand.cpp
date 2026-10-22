@@ -2,7 +2,6 @@
 #include "utils/domain/FileFingerprint.hpp"
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
-#include <rhbm_gem/core/JointComponentEstimator.hpp>
 #include "data/io/detail/JointResultJson.hpp"
 #include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/core/QScoreHelper.hpp>
@@ -10,6 +9,7 @@
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/data/object/JointAnalysisResult.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>

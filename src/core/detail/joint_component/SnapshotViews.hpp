@@ -1,5 +1,5 @@
 #pragma once
-#include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include "core/detail/joint_component/JointComponentEstimator.hpp"
 #include <Eigen/Core>
 #include <algorithm>
 #include <limits>

@@ -4,7 +4,7 @@
 #include "core/detail/joint_component/ResourceWork.hpp"
 #include "core/detail/joint_component/StructuralPartition.hpp"
 #include "core/detail/joint_component/TargetEvidence.hpp"
-#include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include "core/detail/joint_component/JointComponentEstimator.hpp"
 #include <algorithm>
 #include "support/JointSyntheticWorkload.hpp"
 #include <cmath>

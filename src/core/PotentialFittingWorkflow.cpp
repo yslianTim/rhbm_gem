@@ -1,5 +1,5 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
-#include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include "core/detail/joint_component/JointComponentEstimator.hpp"
 #include <rhbm_gem/core/MapSampler.hpp>
 #include "detail/joint_component/JointCliProgressReporter.hpp"
 #include "detail/FirstStageInitialization.hpp"

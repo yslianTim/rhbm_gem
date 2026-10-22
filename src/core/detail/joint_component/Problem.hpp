@@ -3,7 +3,7 @@
 #include "JointProgress.hpp"
 #include "FixedNeighborBlockCoordinate.hpp"
 #include "ResourceWork.hpp"
-#include <rhbm_gem/core/JointComponentEstimator.hpp>
+#include "core/detail/joint_component/JointComponentEstimator.hpp"
 namespace rhbm_gem::core::joint_component {
 JointInitialization InitializeContributors(MapObject &,ModelObject &,const JointProblem &);
 struct ProblemData
