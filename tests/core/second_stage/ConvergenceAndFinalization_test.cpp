@@ -162,7 +162,6 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
     };
     ASSERT_TRUE(base_objective.has_value());
     detail::BoundaryJointCorrectionWorkspaceMap correction_workspace_by_key;
-    auto options{ MakeSecondStageOptions() };
     const detail::SuspiciousBlockActivity all_active{
         std::vector<char>(fixture.context.atom_list.size(), 0),
         std::vector<char>(fixture.context.atom_list.size(), 0),
@@ -171,7 +170,6 @@ TEST(EstimatorSecondStageDefenseTest, FinalDependencyPolishImprovesUncutComponen
     const auto polish_result{
         detail::RunFinalDependencyPolish(
             fixture.context,
-            options,
             topology,
             partition,
             objective_domain,

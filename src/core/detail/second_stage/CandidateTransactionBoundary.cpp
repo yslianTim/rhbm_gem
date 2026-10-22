@@ -12,6 +12,10 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 
 namespace rhbm_gem::core::detail {
+namespace {
+constexpr std::size_t kBoundaryHaloDepth{ 1 };
+}
+
 static ClusterKey FlattenClusterKeyList(const std::vector<ClusterKey> & key_list)
 {
     ClusterKey atom_index_list;
@@ -377,7 +381,7 @@ BuildExpandedBoundaryReconciliationComponents(
         component = ExpandBoundaryReconciliationHalo(
             inputs.context,
             std::move(component),
-            inputs.options.second_stage_boundary_halo_depth);
+            kBoundaryHaloDepth);
     }
     return component_list;
 }

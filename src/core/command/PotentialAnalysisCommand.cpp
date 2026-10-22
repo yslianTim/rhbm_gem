@@ -191,7 +191,6 @@ bool ExecutePreparedRequest(
     FitOptions options;
     options.thread_size = joint ? 1 : request.job_count;
     options.estimator = request.estimator;
-    options.enable_second_stage_failed_only_refinement = true;
     try
     {
         RunPotentialFittingWorkflow(*map_object, *model_object, options);

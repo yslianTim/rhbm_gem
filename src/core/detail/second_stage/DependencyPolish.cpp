@@ -7,16 +7,14 @@
 #include <exception>
 #include <utility>
 
-#include <rhbm_gem/core/GaussianEstimator.hpp>
-
 namespace rhbm_gem::core::detail {
 namespace {
 constexpr double kFinalDependencyPolishTrustRadius{ 1.0 };
+constexpr std::size_t kFinalDependencyPolishMaximumRounds{ 10 };
 }
 
 FinalDependencyPolishResult RunFinalDependencyPolish(
     const SecondStageContext & context,
-    const FitOptions & options,
     const GraphTopology & topology,
     const CouplingGraphPartition & partition,
     const ObjectiveDomain & objective_domain,
@@ -25,7 +23,6 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
     BoundaryJointCorrectionWorkspaceMap & workspace_by_key)
 {
     FinalDependencyPolishResult result{ .state = base_state };
-    if (!options.enable_second_stage_dependency_polish) return result;
 
     const auto component_list{
         BuildUncutDependencyPolishComponents(
@@ -79,9 +76,7 @@ FinalDependencyPolishResult RunFinalDependencyPolish(
             };
             auto endpoint_objective{ *base_objective };
             std::optional<ObjectiveBreakdown> improved_objective;
-            const auto maximum_round_count{
-                options.second_stage_dependency_polish_max_iterations
-            };
+            constexpr auto maximum_round_count{ kFinalDependencyPolishMaximumRounds };
             if (maximum_round_count != 0)
             {
                 std::vector<BoundaryJointTrustRegion> trust_region_list;

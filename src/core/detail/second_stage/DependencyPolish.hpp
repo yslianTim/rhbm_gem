@@ -4,10 +4,6 @@
 #include "core/detail/second_stage/SuspiciousUpdate.hpp"
 #include "core/detail/second_stage/JointFitting.hpp"
 
-namespace rhbm_gem::core {
-struct FitOptions;
-}
-
 namespace rhbm_gem::core::detail {
 
 struct FinalDependencyPolishResult
@@ -19,7 +15,6 @@ struct FinalDependencyPolishResult
 
 FinalDependencyPolishResult RunFinalDependencyPolish(
     const SecondStageContext & context,
-    const FitOptions & options,
     const GraphTopology & topology,
     const CouplingGraphPartition & partition,
     const ObjectiveDomain & objective_domain,

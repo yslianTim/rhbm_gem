@@ -145,7 +145,7 @@ RunUnrestrictedShapeRefits(
                     context.atom_list.at(atom_index).alpha_r,
                     refit_thread_size,
                     GetFitModel(operator_model_bundle.node, atom_index),
-                    options.enable_second_stage_failed_only_refinement)
+                    true)
             };
             result.at(atom_index) = std::move(candidate);
         }
@@ -347,7 +347,7 @@ IterationProposalResult BuildIterationProposal(
                     refit_response_cache.at(atom_index),
                     refit_thread_size,
                     attempted_shape_solves.at(atom_index),
-                    options.enable_second_stage_failed_only_refinement);
+                    true);
         }
         catch (...)
         {

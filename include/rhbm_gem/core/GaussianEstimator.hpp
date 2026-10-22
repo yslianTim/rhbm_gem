@@ -19,10 +19,6 @@ struct FitOptions
     PotentialEstimator estimator{ PotentialEstimator::JOINT_COMPONENTS };
     int thread_size{ 1 };
     bool quiet_mode{ false };
-    std::size_t second_stage_boundary_halo_depth{ 1 };
-    bool enable_second_stage_dependency_polish{ true };
-    std::size_t second_stage_dependency_polish_max_iterations{ 10 };
-    bool enable_second_stage_failed_only_refinement{ true };
 };
 
 double TrainAlphaR(

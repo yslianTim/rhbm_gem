@@ -737,8 +737,7 @@ static const FitState & FinalizeSecondStageState(
             iteration_state.best_audit_state->state :
             iteration_state.accepted_state
     };
-    if (stop_reason != SecondStageStopReason::Converged ||
-        !options.enable_second_stage_dependency_polish)
+    if (stop_reason != SecondStageStopReason::Converged)
     {
         CertifyFinalState(context, options, iteration_state, final_state);
         ApplyFitState(model_object, context, final_state);
@@ -750,7 +749,6 @@ static const FitState & FinalizeSecondStageState(
     auto polish_result{
         RunFinalDependencyPolish(
             context,
-            options,
             graph_topology,
             iteration_state.graph_partition,
             iteration_state.objective_domain,
@@ -807,13 +805,6 @@ static const FitState & FinalizeSecondStageState(
 
 void RunSecondStageIterations(ModelObject & model_object, const FitOptions & options)
 {
-    if (options.enable_second_stage_dependency_polish &&
-        options.second_stage_dependency_polish_max_iterations == 0)
-    {
-        throw std::invalid_argument(
-            "Second-stage dependency polish maximum iterations must be positive when enabled.");
-    }
-
     model_object.EditAnalysis().CopyLocalFittingStageResult(FittingStage::First, FittingStage::Second);
     // Prepare seeds and sampling context before establishing the initial objective.
     SecondStageContext context;
