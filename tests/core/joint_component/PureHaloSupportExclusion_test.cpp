@@ -822,14 +822,14 @@ TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGeometryLocalHaloSour
     EXPECT_GE(*donor_coverage->value,*donor_coverage->threshold);
     ASSERT_TRUE(result->halo_median_reconstruction);
     EXPECT_EQ(result->halo_median_reconstruction->halos.size(),2u);
-    EXPECT_EQ(metrics.halo_median_valid_target_count,1u);
+    EXPECT_EQ(metrics.halo_median_valid_target_count,20u);
     EXPECT_EQ(metrics.halo_median_geometry_local_halos,2u);
     EXPECT_EQ(metrics.halo_median_unavailable_halos,0u);
     for (const auto & halo_result:result->halo_median_reconstruction->halos)
     {
         EXPECT_EQ(halo_result.source,HaloMedianSource::GeometryLocalTargetMedian);
-        EXPECT_EQ(halo_result.donor_count,1u);
-        EXPECT_EQ(halo_result.donor_atom_ids,(std::vector<std::string>{"1"}));
+        EXPECT_EQ(halo_result.donor_count,4u);
+        EXPECT_EQ(halo_result.donor_atom_ids,(std::vector<std::string>{"1","22","14","16"}));
     }
     const auto target=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(1));
     EXPECT_TRUE(target.GetPostFitPeeling());
