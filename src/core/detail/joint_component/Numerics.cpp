@@ -71,23 +71,6 @@ void AddRoleWork(ProfileRoleWork & destination,const ProfileRoleWork & source)
     destination.linear_certificate_seconds+=source.linear_certificate_seconds;
     destination.derivative_prepare_seconds+=source.derivative_prepare_seconds;
     destination.derivative_reduce_seconds+=source.derivative_reduce_seconds;
-    destination.derivative_raw_assembly_seconds+=source.derivative_raw_assembly_seconds;
-    destination.derivative_free_design_assembly_seconds+=source.derivative_free_design_assembly_seconds;
-    destination.derivative_factor_match_seconds+=source.derivative_factor_match_seconds;
-    destination.derivative_factor_build_seconds+=source.derivative_factor_build_seconds;
-    destination.derivative_factor_compact_seconds+=source.derivative_factor_compact_seconds;
-    destination.derivative_rank_seconds+=source.derivative_rank_seconds;
-    destination.derivative_least_squares_seconds+=source.derivative_least_squares_seconds;
-    destination.derivative_normal_solve_seconds+=source.derivative_normal_solve_seconds;
-    destination.derivative_cancellation_check_seconds+=source.derivative_cancellation_check_seconds;
-    destination.derivative_cancellation_fallback_seconds+=source.derivative_cancellation_fallback_seconds;
-    destination.derivative_rows_seconds+=source.derivative_rows_seconds;
-    destination.derivative_jacobian_qr_seconds+=source.derivative_jacobian_qr_seconds;
-    destination.derivative_norms_seconds+=source.derivative_norms_seconds;
-    destination.derivative_outer_overhead_seconds+=source.derivative_outer_overhead_seconds;
-    destination.tiled_qr_assembly_copy_seconds+=source.tiled_qr_assembly_copy_seconds;
-    destination.tiled_qr_householder_seconds+=source.tiled_qr_householder_seconds;
-    destination.tiled_qr_rhs_transform_seconds+=source.tiled_qr_rhs_transform_seconds;
     destination.replay_trust_seconds+=source.replay_trust_seconds;
 }
 }
@@ -363,7 +346,6 @@ struct EvaluationTelemetry
 };
 Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
 {
-    ResourcePhase phase("profile-basis-build",true,domain.rows,2*eta.size());
     Evaluation out; out.eta=eta;
     if (domain.rows!=y.size() || domain.rows==0 || eta.size()!=static_cast<Eigen::Index>(domain.atoms.size()) ||
         eta.size()==0 || !eta.allFinite() || !y.allFinite()) {out.reason="invalid-input"; return out;}
@@ -386,7 +368,6 @@ Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
         }
     }
     out.x.setFromTriplets(x.begin(),x.end()); out.derivative.setFromTriplets(dx.begin(),dx.end());
-    RecordSparseShape("profile-design",out.x.rows(),out.x.cols(),static_cast<std::size_t>(out.x.nonZeros()));
     out.valid=true; return out;
 }
 }
@@ -420,8 +401,6 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     const std::vector<LinearBlock> * blocks,
     ProfileEvaluationRole role,ProfileSearchWork * profile_work)
 {
-    ResourcePhase phase("ac-profile");
-    ProfileEvaluationRoleScopeForTesting role_scope(role);
     EvaluationTelemetry telemetry(profile_work,role);
     const auto basis_started=std::chrono::steady_clock::now();
     auto out=Basis(domain,y,eta);
@@ -429,7 +408,6 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
         std::chrono::duration<double>(std::chrono::steady_clock::now()-basis_started).count();
     if(!out.valid) return out; out.valid=false;
     const Eigen::Index m=eta.size();
-    ResourcePhase linear_solve("linear-solve",true,out.x.rows(),out.x.cols(),static_cast<std::size_t>(out.x.nonZeros()));
     const auto solve_started=std::chrono::steady_clock::now();
     const auto solved=SolveLinear(out.x,y,Vector::Ones(y.size()),
         context ? &context->linear : nullptr,blocks,context ? context->scale : 0);
@@ -507,7 +485,6 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
 Evaluation EvaluateState(const Domain & domain,VectorRef y,const Vector & eta,const Vector & beta,const EvaluationContext & context,
     ProfileEvaluationRole role,ProfileSearchWork * profile_work)
 {
-    ProfileEvaluationRoleScopeForTesting role_scope(role);
     EvaluationTelemetry telemetry(profile_work,role);
     const auto basis_started=std::chrono::steady_clock::now();
     auto out=Basis(domain,y,eta);
@@ -529,8 +506,6 @@ Evaluation EvaluateState(const Domain & domain,VectorRef y,const Vector & eta,co
 Evaluation EvaluateStateStreaming(const Domain & domain,VectorRef y,const Vector & eta,const Vector & beta,
     const EvaluationContext & context,ProfileEvaluationRole role,ProfileSearchWork * profile_work)
 {
-    ResourcePhase phase("global-state-evaluation",true,domain.rows,2*eta.size());
-    ProfileEvaluationRoleScopeForTesting role_scope(role);
     EvaluationTelemetry telemetry(profile_work,role);
     Evaluation out; out.eta=eta;
     if(domain.rows!=y.size() || domain.rows==0 || eta.size()!=static_cast<Eigen::Index>(domain.atoms.size()) ||
@@ -969,9 +944,6 @@ namespace {
 Assessment AssessProfileImpl(const Domain & domain,VectorRef y,const Vector & eta,const EvaluationContext & policy,
     const Vector * supplied_beta,const Vector * assembled_prediction,const std::vector<std::size_t> * assembled_rows)
 {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    AssessmentStageTimerForTesting total_stage("total-assessment",y.size(),eta.size());
-#endif
     const auto verification_memory=EndpointVerificationMemoryEstimate(domain,y,policy);
     if(verification_memory.status!=MemoryStatus::Pass)
     {
@@ -983,23 +955,13 @@ Assessment AssessProfileImpl(const Domain & domain,VectorRef y,const Vector & et
     }
     if(verification_memory.estimated_peak_bytes>verification_memory.budget_bytes/2)
         LogMemoryEstimate(verification_memory);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    AssessmentStageTimerForTesting primary_stage("endpoint-primary-evaluation",y.size(),eta.size(),&verification_memory);
-#endif
     const auto primary_started=std::chrono::steady_clock::now();
     const auto endpoint=supplied_beta ? EvaluateStateStreaming(domain,y,eta,*supplied_beta,policy) :
         EvaluateProfile(domain,y,eta,&policy);
     const double primary_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-primary_started).count();
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    primary_stage.Finish();
-    AssessmentStageTimerForTesting replay_stage("independent-streaming-replay",y.size(),eta.size(),&verification_memory);
-#endif
     const auto replay_started=std::chrono::steady_clock::now();
     const auto replay=CheckIndependentReplay(domain,y,endpoint,policy,assembled_prediction,assembled_rows);
     const double replay_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-replay_started).count();
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    replay_stage.Finish();
-#endif
     auto assessment=VerifyJointEndpoint(domain,y,endpoint,replay,policy);
     assessment.verification_memory_estimate=verification_memory;
     assessment.primary_endpoint_seconds=primary_seconds;
@@ -1012,80 +974,6 @@ Assessment AssessProfile(const Domain & domain,VectorRef y,const Vector & eta,co
 {
     return AssessProfileImpl(domain,y,eta,policy,supplied_beta,assembled_prediction,assembled_rows);
 }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-AssessmentWork & AssessmentWorkForTesting() {static thread_local AssessmentWork work; return work;}
-namespace {
-AssessmentStageObserverForTesting & AssessmentStageObserver()
-{static thread_local AssessmentStageObserverForTesting observer{}; return observer;}
-void * & AssessmentStageObserverContext()
-{static thread_local void * context{}; return context;}
-AssessmentStageWork & AssessmentStage(const std::string & name)
-{
-    auto & stages=AssessmentWorkForTesting().stages;
-    const auto found=std::find_if(stages.begin(),stages.end(),[&](const auto & stage){return stage.name==name;});
-    if(found!=stages.end()) return *found;
-    AssessmentStageWork stage; stage.name=name; stages.push_back(std::move(stage)); return stages.back();
-}
-void NotifyAssessmentStageObserver()
-{
-    if(const auto observer=AssessmentStageObserver()) observer(AssessmentWorkForTesting(),AssessmentStageObserverContext());
-}
-}
-void SetAssessmentStageObserverForTesting(AssessmentStageObserverForTesting observer,void * context)
-{AssessmentStageObserver()=observer; AssessmentStageObserverContext()=context;}
-void BeginAssessmentStageForTesting(const std::string & name,Eigen::Index rows,Eigen::Index columns,
-    const MemoryEstimate * estimate)
-{
-    auto & work=AssessmentWorkForTesting(); auto & stage=AssessmentStage(name);
-    ++stage.calls; stage.rows=rows; stage.columns=columns;
-    if(estimate)
-    {
-        stage.memory_estimate_available=true; stage.memory_stage=estimate->stage; stage.memory_status=estimate->status;
-        stage.estimated_resident_bytes=estimate->resident_bytes; stage.estimated_temporary_bytes=estimate->temporary_bytes;
-        stage.estimated_peak_bytes=estimate->estimated_peak_bytes; stage.budget_bytes=estimate->budget_bytes;
-        stage.memory_preflight_reason=estimate->reason;
-        stage.sparse_design_bytes=estimate->sparse_design_bytes; stage.dense_factor_bytes=estimate->dense_factor_bytes;
-        stage.factor_workspace_bytes=estimate->factor_workspace_bytes;
-        stage.factor_rows=estimate->factor_rows; stage.factor_columns=estimate->factor_columns;
-        stage.maximum_tile_rows=estimate->shape.maximum_tile_rows;
-    }
-    stage.current_rss_before_bytes=CurrentRssBytes();
-    stage.process_peak_rss_bytes=ProcessPeakRssBytes();
-    work.stage_stack.push_back(name); work.active_stage=name; work.last_stage=name;
-    NotifyAssessmentStageObserver();
-}
-void FinishAssessmentStageForTesting(const std::string & name,double seconds,bool completed)
-{
-    auto & work=AssessmentWorkForTesting(); auto & stage=AssessmentStage(name);
-    stage.seconds+=seconds; if(completed) ++stage.completed_calls;
-    stage.current_rss_after_bytes=CurrentRssBytes();
-    const auto peak=ProcessPeakRssBytes();
-    if(peak && (!stage.process_peak_rss_bytes || *peak>*stage.process_peak_rss_bytes)) stage.process_peak_rss_bytes=peak;
-    if(!work.stage_stack.empty()) work.stage_stack.pop_back();
-    work.active_stage=work.stage_stack.empty() ? std::string{} : work.stage_stack.back();
-    work.last_stage=name;
-    NotifyAssessmentStageObserver();
-}
-AssessmentStageTimerForTesting::AssessmentStageTimerForTesting(std::string name,Eigen::Index rows,Eigen::Index columns,
-    const MemoryEstimate * estimate)
-    :name_(std::move(name)),uncaught_exceptions_(std::uncaught_exceptions())
-{
-    BeginAssessmentStageForTesting(name_,rows,columns,estimate);
-    started_=std::chrono::steady_clock::now();
-}
-AssessmentStageTimerForTesting::~AssessmentStageTimerForTesting()
-{
-    if(finished_) return;
-    const double seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started_).count();
-    FinishAssessmentStageForTesting(name_,seconds,std::uncaught_exceptions()==uncaught_exceptions_);
-}
-void AssessmentStageTimerForTesting::Finish()
-{
-    if(finished_) return;
-    const double seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started_).count();
-    FinishAssessmentStageForTesting(name_,seconds,true); finished_=true;
-}
-#endif
 Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluation & endpoint,
     const IndependentReplayEvidence & replay,const EvaluationContext & context,
     const JointConvergenceCriteria & criteria)

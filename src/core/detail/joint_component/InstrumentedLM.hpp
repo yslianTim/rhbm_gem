@@ -12,7 +12,6 @@
 
 #pragma once
 #include <unsupported/Eigen/NonLinearOptimization>
-#include "ResourceWork.hpp"
 #include "ActiveSetBoundedLM.hpp"
 #include <cmath>
 
@@ -128,7 +127,6 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeIni
   wa4.resize(m);
   fvec.resize(m);
   fjac.resize(n, n);
-  RecordDenseShape("lm-fjac",n,n);
   if (!useExternalScaling) diag.resize(n);
   eigen_assert((!useExternalScaling || diag.size() == n) &&
                "When useExternalScaling is set, the caller must provide a valid 'diag'");

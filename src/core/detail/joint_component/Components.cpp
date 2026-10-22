@@ -400,7 +400,6 @@ AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const Compon
     const EvaluationContext & context,const std::vector<JointComponentResult> & components,
     const JointConvergenceCriteria & convergence_criteria)
 {
-    ResourcePhase phase("assembly");
     AssemblyResult out; out.assessment.convergence_criteria=convergence_criteria;
     if(components.size()!=partition.components.size())
     {out.mapping_reason="missing-component-result"; return out;}

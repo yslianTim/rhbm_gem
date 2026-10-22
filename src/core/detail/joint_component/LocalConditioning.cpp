@@ -169,7 +169,7 @@ LocalConditioningAssessment AssessFixedNeighborLocalConditioning(
         norms(k)=state.x.col(free_columns[static_cast<std::size_t>(k)]).norm();
         zero_column|=!(norms(k)>0);
     }
-    TiledQR ac_factor(p,0,"local-conditioning-ac");
+    TiledQR ac_factor(p,0);
     for(Eigen::Index first=0;first<domain.rows;first+=derivative_tile_rows)
     {
         const auto count=std::min(derivative_tile_rows,domain.rows-first);

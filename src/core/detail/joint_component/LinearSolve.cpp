@@ -1,5 +1,4 @@
 #include "Numerics.hpp"
-#include "ResourceWork.hpp"
 #include <Eigen/SparseQR>
 #include <Eigen/QR>
 #include <algorithm>
@@ -43,7 +42,6 @@ std::pair<Eigen::SparseMatrix<double>,Eigen::VectorXd> ReduceSparseRows(
         {local_column[static_cast<std::size_t>(k)]=static_cast<int>(columns.size()); columns.push_back(static_cast<int>(k));}
         if(columns.empty()) continue;
         Eigen::MatrixXd local{Eigen::MatrixXd::Zero(count,static_cast<Eigen::Index>(columns.size()))};
-        RecordDenseShape("ac-row-reduction",local.rows(),local.cols());
         for(Eigen::Index row=first;row<first+count;++row)
             for(Eigen::SparseMatrix<double,Eigen::RowMajor>::InnerIterator e(rows,row);e;++e)
                 local(row-first,local_column[static_cast<std::size_t>(e.col())])=e.value();
@@ -240,7 +238,6 @@ LinearResult WeightedSolveImpl(const Sparse & x, VectorRef y,const Eigen::Vector
                         face(entry.row(),static_cast<Eigen::Index>(k))=entry.value()/scales(column);
                     theta(static_cast<Eigen::Index>(k))=b(column);
                 }
-                RecordDenseShape("ac-bounded-kkt-refinement",face.rows(),face.cols());
                 Eigen::ColPivHouseholderQR<Eigen::MatrixXd> refinement_qr(face);
                 refinement_qr.setThreshold(rank_threshold);
                 ++out.refinement_factorizations;

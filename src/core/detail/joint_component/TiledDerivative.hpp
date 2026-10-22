@@ -29,17 +29,7 @@ ReducedDifferential ReduceProjectedWidthDerivative(const TiledDifferential &,Eig
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 struct DerivativeWork
 {
-    struct Preparation
-    {
-        double raw_assembly_seconds{},free_design_assembly_seconds{},factor_match_seconds{},factor_build_seconds{},
-            factor_compact_seconds{},rank_seconds{},least_squares_seconds{},normal_solve_seconds{},
-            cancellation_check_seconds{},cancellation_fallback_seconds{};
-    } preparation;
-    double rows_seconds{},jacobian_qr_seconds{},norms_seconds{},outer_overhead_seconds{};
-    std::size_t free_design_qr_factorizations{},free_design_rank_assessments{};
     Eigen::Index maximum_generated_rows{},maximum_reduction_rows{};
-    std::size_t tile_count{};
-    TiledQrTelemetry projected_qr,jacobian_qr;
 };
 DerivativeWork & DerivativeWorkForTesting();
 #endif

@@ -244,16 +244,14 @@ TEST(JointComponentNumericsTest, CompactSvdPreservesRankBoundaryAndAbsoluteOverr
         const Vector rhs=x*Vector::LinSpaced(16,.5,2.);
         n::CompactSvdResult expected;
         {SvdMode mode(n::CompactSvdMode::Legacy); expected=n::CompactSvd(x,relative,absolute,&rhs);}
-        n::NumericsWorkForTesting()={};
         const auto actual=n::CompactSvd(x,relative,absolute,&rhs);
         ASSERT_TRUE(actual.valid); EXPECT_EQ(actual.rank,expected.rank);
         EXPECT_EQ(actual.threshold,expected.threshold);
         EXPECT_LT((actual.solution-expected.solution).norm(),1e-10);
+        EXPECT_TRUE(actual.used_bdc);
+        ASSERT_EQ(actual.solution.size(),rhs.size()); EXPECT_TRUE(actual.solution.allFinite());
         const bool near=std::abs(factor-1)*threshold<=64*std::numeric_limits<double>::epsilon()*16;
         EXPECT_EQ(actual.jacobi_retry,near);
-        EXPECT_EQ(n::NumericsWorkForTesting().jacobi_retries,near ? 1 : 0);
-        EXPECT_EQ(n::NumericsWorkForTesting().rhs_solutions,1);
-        if(near) EXPECT_GT(n::NumericsWorkForTesting().jacobi_retry_seconds,0);
     }
 }
 

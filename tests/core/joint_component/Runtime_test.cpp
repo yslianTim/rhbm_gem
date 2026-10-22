@@ -68,7 +68,6 @@ TEST(JointComponentRuntimeTest, AssemblyPreservesSuppliedCoefficientsWithoutGlob
     ASSERT_TRUE(components[0].state && components[1].state);
     components[0].state->ac[0]+=.1;
     const double actual=components[0].state->ac[0];
-    n::AssessmentWorkForTesting()={};
     const auto assembled=n::AssembleComponents(data.domain,data.y,data.partition,data.context,components);
     ASSERT_TRUE(assembled.available);
     EXPECT_DOUBLE_EQ(assembled.beta(0),actual);

@@ -12,9 +12,6 @@
 #include <string>
 #include <vector>
 #include <limits>
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include <chrono>
-#endif
 
 namespace rhbm_gem::core::joint_component {
 using Matrix=Eigen::MatrixXd;
@@ -81,13 +78,7 @@ struct ProfileRoleWork
     LinearSolveWork linear_solve;
     double evaluation_seconds{},basis_seconds{},linear_matrix_preparation_seconds{},linear_rhs_solve_seconds{},
         linear_certificate_seconds{},derivative_prepare_seconds{},
-        derivative_reduce_seconds{},derivative_raw_assembly_seconds{},derivative_free_design_assembly_seconds{},
-        derivative_factor_match_seconds{},derivative_factor_build_seconds{},derivative_factor_compact_seconds{},
-        derivative_rank_seconds{},derivative_least_squares_seconds{},derivative_normal_solve_seconds{},
-        derivative_cancellation_check_seconds{},derivative_cancellation_fallback_seconds{},derivative_rows_seconds{},
-        derivative_jacobian_qr_seconds{},derivative_norms_seconds{},derivative_outer_overhead_seconds{},
-        tiled_qr_assembly_copy_seconds{},tiled_qr_householder_seconds{},tiled_qr_rhs_transform_seconds{},
-        replay_trust_seconds{};
+        derivative_reduce_seconds{},replay_trust_seconds{};
 };
 struct ProfileSearchWork
 {
@@ -294,49 +285,6 @@ Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const Ind
 Assessment VerifyJointEndpoint(const Domain &,VectorRef,const Evaluation &,
     const IndependentReplayEvidence &,const EvaluationContext &,
     const JointConvergenceCriteria & = StrictJointConvergenceCriteria);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-struct AssessmentStageWork
-{
-    std::string name;
-    int calls{},completed_calls{};
-    Eigen::Index rows{},columns{};
-    double seconds{};
-    bool memory_estimate_available{};
-    MemoryStage memory_stage{MemoryStage::ProblemConstruction};
-    MemoryStatus memory_status{MemoryStatus::Pass};
-    std::size_t estimated_resident_bytes{},estimated_temporary_bytes{},estimated_peak_bytes{},budget_bytes{};
-    std::string memory_preflight_reason;
-    std::size_t sparse_design_bytes{},dense_factor_bytes{},factor_workspace_bytes{};
-    std::size_t factor_rows{},factor_columns{},maximum_tile_rows{};
-    std::optional<std::size_t> current_rss_before_bytes,current_rss_after_bytes,process_peak_rss_bytes;
-};
-struct AssessmentWork
-{
-    int assessments{};
-    std::string active_stage,last_stage;
-    std::vector<std::string> stage_stack;
-    std::vector<AssessmentStageWork> stages;
-};
-AssessmentWork & AssessmentWorkForTesting();
-using AssessmentStageObserverForTesting=void (*)(const AssessmentWork &,void *);
-void SetAssessmentStageObserverForTesting(AssessmentStageObserverForTesting,void *);
-void BeginAssessmentStageForTesting(const std::string &,Eigen::Index,Eigen::Index,const MemoryEstimate * = nullptr);
-void FinishAssessmentStageForTesting(const std::string &,double,bool);
-class AssessmentStageTimerForTesting
-{
-public:
-    AssessmentStageTimerForTesting(std::string,Eigen::Index,Eigen::Index,const MemoryEstimate * = nullptr);
-    ~AssessmentStageTimerForTesting();
-    AssessmentStageTimerForTesting(const AssessmentStageTimerForTesting &)=delete;
-    AssessmentStageTimerForTesting & operator=(const AssessmentStageTimerForTesting &)=delete;
-    void Finish();
-private:
-    std::string name_;
-    std::chrono::steady_clock::time_point started_;
-    int uncaught_exceptions_{};
-    bool finished_{};
-};
-#endif
 struct ComponentView
 {
     std::string id;
