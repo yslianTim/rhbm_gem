@@ -109,6 +109,35 @@ Sparse Design(const Domain & domain,VectorRef eta)
     }
     out.setFromTriplets(entries.begin(),entries.end()); return out;
 }
+struct LocalEndpointWorkspace
+{
+    Vector eta,beta,effective_response;
+    EvaluationContext context;
+};
+LocalEndpointWorkspace PrepareLocalEndpointWorkspace(const PreparedFixedNeighborBlock & prepared,
+    const BlockCoordinateState & state,const std::optional<double> & eta_upper_bound)
+{
+    LocalEndpointWorkspace out;
+    out.eta.resize(prepared.local_atoms); out.beta.resize(2*prepared.local_atoms);
+    for(std::size_t k=0;k<prepared.core_atoms.size();++k)
+    {
+        const auto atom=static_cast<Eigen::Index>(prepared.core_atoms[k]);
+        out.eta(static_cast<Eigen::Index>(k))=state.eta(atom);
+        out.beta.segment<2>(2*static_cast<Eigen::Index>(k))=state.beta.segment<2>(2*atom);
+    }
+    const Sparse design=Design(prepared.domain,out.eta);
+    const Vector local_core=(design*out.beta).eval();
+    out.effective_response.resize(static_cast<Eigen::Index>(prepared.affected_rows.size()));
+    for(std::size_t k=0;k<prepared.affected_rows.size();++k)
+    {
+        const auto row=static_cast<Eigen::Index>(prepared.affected_rows[k]);
+        out.effective_response(static_cast<Eigen::Index>(k))=local_core(static_cast<Eigen::Index>(k))-
+            state.residual(row);
+    }
+    out.context=prepared.context;
+    if(eta_upper_bound) out.context.eta_upper_bound=eta_upper_bound;
+    return out;
+}
 double PredictionDifference(VectorRef a,VectorRef b)
 {return (a-b).lpNorm<Eigen::Infinity>();}
 void WriteJsonString(std::ostream & out,const std::string & value)
@@ -1334,30 +1363,12 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         out.local_conditioning.reserve(prepared_blocks.size());
         for(const auto & prepared:prepared_blocks)
         {
-            const auto local_atoms=prepared.local_atoms;
-            Vector eta(local_atoms),beta(2*local_atoms);
-            for(std::size_t k=0;k<prepared.core_atoms.size();++k)
-            {
-                const auto atom=static_cast<Eigen::Index>(prepared.core_atoms[k]);
-                eta(static_cast<Eigen::Index>(k))=out.state.eta(atom);
-                beta.segment<2>(2*static_cast<Eigen::Index>(k))=out.state.beta.segment<2>(2*atom);
-            }
-            Vector local_y(static_cast<Eigen::Index>(prepared.affected_rows.size()));
-            {
-                const Sparse design=Design(prepared.domain,eta);
-                const Vector local_core=(design*beta).eval();
-                for(std::size_t k=0;k<prepared.affected_rows.size();++k)
-                {
-                    const auto row=static_cast<Eigen::Index>(prepared.affected_rows[k]);
-                    local_y(static_cast<Eigen::Index>(k))=local_core(static_cast<Eigen::Index>(k))-out.state.residual(row);
-                }
-            }
+            auto workspace=PrepareLocalEndpointWorkspace(prepared,out.state,policy.eta_upper_bound);
             const auto block_id=(policy.component_id.empty() ? std::string("component") : policy.component_id)+
                 "/block-"+std::to_string(prepared.block+1);
-            auto local_context=prepared.context;
-            if(policy.eta_upper_bound) local_context.eta_upper_bound=policy.eta_upper_bound;
-            auto conditioning=AssessFixedNeighborLocalConditioning(prepared.domain,local_y,eta,beta,
-                local_context,block_id,out.global_state_memory_estimate.shape.resident_bytes);
+            auto conditioning=AssessFixedNeighborLocalConditioning(prepared.domain,workspace.effective_response,
+                workspace.eta,workspace.beta,workspace.context,block_id,
+                out.global_state_memory_estimate.shape.resident_bytes);
             conditioning.evidence.core_atoms.assign(prepared.core_atoms.begin(),prepared.core_atoms.end());
             out.work.local_conditioning_seconds+=conditioning.seconds;
             if(conditioning.evidence.workspace_peak_memory_estimate_bytes)
@@ -1451,28 +1462,10 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             }
             const auto & prepared=prepared_blocks[index];
             const auto block_id=evidence.block_id;
-            const auto local_atoms=prepared.local_atoms;
-            Vector eta(local_atoms),beta(2*local_atoms);
-            for(std::size_t k=0;k<prepared.core_atoms.size();++k)
-            {
-                const auto atom=static_cast<Eigen::Index>(prepared.core_atoms[k]);
-                eta(static_cast<Eigen::Index>(k))=out.state.eta(atom);
-                beta.segment<2>(2*static_cast<Eigen::Index>(k))=out.state.beta.segment<2>(2*atom);
-            }
-            Vector local_y(static_cast<Eigen::Index>(prepared.affected_rows.size()));
-            {
-                const Sparse design=Design(prepared.domain,eta);
-                const Vector local_core=(design*beta).eval();
-                for(std::size_t k=0;k<prepared.affected_rows.size();++k)
-                {
-                    const auto row=static_cast<Eigen::Index>(prepared.affected_rows[k]);
-                    local_y(static_cast<Eigen::Index>(k))=local_core(static_cast<Eigen::Index>(k))-out.state.residual(row);
-                }
-            }
-            auto local_context=prepared.context;
-            if(policy.eta_upper_bound) local_context.eta_upper_bound=policy.eta_upper_bound;
-            auto assessment=AssessLocalParameterStability(prepared.domain,local_y,eta,beta,local_context,
-                block_id,out.global_state_memory_estimate.shape.resident_bytes);
+            auto workspace=PrepareLocalEndpointWorkspace(prepared,out.state,policy.eta_upper_bound);
+            auto assessment=AssessLocalParameterStability(prepared.domain,workspace.effective_response,
+                workspace.eta,workspace.beta,workspace.context,block_id,
+                out.global_state_memory_estimate.shape.resident_bytes);
             evidence=std::move(assessment.evidence);
             evidence.probe_selected=true;
             evidence.core_atoms.assign(prepared.core_atoms.begin(),prepared.core_atoms.end());
