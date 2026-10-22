@@ -112,8 +112,7 @@ struct IterationState
 };
 
 static std::optional<SecondStageInitializationResult> BuildSecondStageInitialization(
-    const ModelObject & model_object,
-    const FitOptions & options)
+    const ModelObject & model_object)
 {
     SecondStageInitializationResult build_result;
     auto & context{ build_result.context };
@@ -192,7 +191,7 @@ static std::optional<SecondStageInitializationResult> BuildSecondStageInitializa
             std::unordered_set<const AtomObject *> sample_neighbor_set;
             for (auto * neighbor_atom : neighbor_atom_list)
             {
-                if (options.exclude_hydrogen && neighbor_atom->GetElement() == Element::HYDROGEN)
+                if (neighbor_atom->GetElement() == Element::HYDROGEN)
                 {
                     continue;
                 }
@@ -820,7 +819,7 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
     SecondStageContext context;
     FitState initial_state;
     {
-        auto initialization{ BuildSecondStageInitialization(model_object, options) };
+        auto initialization{ BuildSecondStageInitialization(model_object) };
         LogSecondStageStart(options.quiet_mode);
 
         if (!initialization.has_value())

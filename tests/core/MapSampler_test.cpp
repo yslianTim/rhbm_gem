@@ -59,10 +59,12 @@ std::unique_ptr<ModelObject> MakeLinearNeighborModel()
 
     auto center_atom{ std::make_unique<AtomObject>() };
     center_atom->SetSerialID(1);
+    center_atom->SetElement(Element::CARBON);
     center_atom->SetPosition(0.0, 0.0, 0.0);
 
     auto neighbor_atom{ std::make_unique<AtomObject>() };
     neighbor_atom->SetSerialID(2);
+    neighbor_atom->SetElement(Element::CARBON);
     neighbor_atom->SetPosition(1.0, 0.0, 0.0);
 
     atom_list.emplace_back(std::move(center_atom));
@@ -142,6 +144,38 @@ TEST(MapSamplerTest, AtomSamplerDefaultMatchesExplicitFibonacci)
         EXPECT_EQ(default_samples[i].point.position, explicit_samples[i].point.position);
         EXPECT_EQ(default_samples[i].point.is_selected, explicit_samples[i].point.is_selected);
     }
+}
+
+TEST(MapSamplerTest, HydrogenNeighborDoesNotChangeSamplingMask)
+{
+    auto map{ MakeMapObject() };
+    std::vector<std::unique_ptr<AtomObject>> baseline_atoms;
+    auto baseline_center{ std::make_unique<AtomObject>() };
+    baseline_center->SetSerialID(1);
+    baseline_center->SetElement(Element::CARBON);
+    baseline_center->SetPosition(0.0, 0.0, 0.0);
+    baseline_atoms.emplace_back(std::move(baseline_center));
+    ModelObject baseline_model{ std::move(baseline_atoms) };
+
+    std::vector<std::unique_ptr<AtomObject>> hydrogen_atoms;
+    auto hydrogen_center{ std::make_unique<AtomObject>() };
+    hydrogen_center->SetSerialID(1);
+    hydrogen_center->SetElement(Element::CARBON);
+    hydrogen_center->SetPosition(0.0, 0.0, 0.0);
+    hydrogen_atoms.emplace_back(std::move(hydrogen_center));
+    auto hydrogen_neighbor{ std::make_unique<AtomObject>() };
+    hydrogen_neighbor->SetSerialID(2);
+    hydrogen_neighbor->SetElement(Element::HYDROGEN);
+    hydrogen_neighbor->SetPosition(1.0, 0.0, 0.0);
+    hydrogen_atoms.emplace_back(std::move(hydrogen_neighbor));
+    ModelObject hydrogen_model{ std::move(hydrogen_atoms) };
+
+    const auto baseline{ SampleAtomMapValues(map, *baseline_model.FindAtomPtr(1)) };
+    const auto with_hydrogen{ SampleAtomMapValues(map, *hydrogen_model.FindAtomPtr(1)) };
+
+    ASSERT_EQ(baseline.size(), with_hydrogen.size());
+    for (std::size_t i = 0; i < baseline.size(); ++i)
+        EXPECT_EQ(baseline[i].point.is_selected, with_hydrogen[i].point.is_selected);
 }
 
 TEST(MapSamplerTest, AtomSamplerKeepsRejectedSamplesAsUnselected)

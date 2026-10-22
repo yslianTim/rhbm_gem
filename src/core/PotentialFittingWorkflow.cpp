@@ -461,6 +461,10 @@ namespace rhbm_gem::core {
 
 void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const FitOptions & options)
 {
+    model.ApplyElementSelection(Element::HYDROGEN, true);
+    if (model.GetSelectedAtoms().empty())
+        throw std::invalid_argument("Potential fitting requires at least one selected non-hydrogen target.");
+
     switch (options.estimator)
     {
     case PotentialEstimator::TWO_STAGE:

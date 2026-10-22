@@ -19,7 +19,6 @@ struct FitOptions
     PotentialEstimator estimator{ PotentialEstimator::JOINT_COMPONENTS };
     int thread_size{ 1 };
     bool quiet_mode{ false };
-    bool exclude_hydrogen{ false };
     std::size_t second_stage_boundary_halo_depth{ 1 };
     bool enable_second_stage_dependency_polish{ true };
     std::size_t second_stage_dependency_polish_max_iterations{ 10 };

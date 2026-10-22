@@ -530,6 +530,7 @@ TEST(EstimatorTesterTest, GroupFittingUsesSecondLocalInputsWithoutChangingLocalS
     constexpr double alpha_g{ 0.2 };
     analysis.InitializeGroupAlpha(alpha_g);
     auto options{ MakeSecondStageOptions() };
+    options.estimator = rt::PotentialEstimator::TWO_STAGE;
     options.quiet_mode = true;
     const auto expected{ rt::EstimateGroupGaussian(expected_inputs, alpha_g, options) };
     rt::RunGroupPotentialFitting(model, options);
@@ -602,6 +603,7 @@ TEST(
     ASSERT_TRUE(initial_view.GetPeelingSamplingEntries(false).empty());
 
     auto options{ MakeSecondStageOptions() };
+    options.estimator = rt::PotentialEstimator::TWO_STAGE;
     options.quiet_mode = true;
     auto analysis{ model->EditAnalysis() };
     analysis.InitializeLocalFittingSeedModels();

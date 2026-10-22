@@ -39,6 +39,30 @@ using second_stage_test::MakeAtom;
 using second_stage_test::MakeGaussianResult;
 using second_stage_test::MakeSecondStageOptions;
 
+TEST(EstimatorSecondStageDefenseTest, HydrogenNeverCountsAsSecondStageNeighbor)
+{
+    auto model{ second_stage_test::BuildDefenseModel(
+        {
+            std::array<double, 3>{ 0.0, 0.0, 0.0 },
+            std::array<double, 3>{ 0.8, 0.0, 0.0 },
+            std::array<double, 3>{ 1.2, 0.0, 0.0 }
+        },
+        { Spot::CA, Spot::H, Spot::CB },
+        { Element::CARBON, Element::HYDROGEN, Element::CARBON },
+        {
+            rg::GaussianModel3D{ 6.0, 0.48, 0.05 },
+            rg::GaussianModel3D{ 2.0, 0.42, 0.01 },
+            rg::GaussianModel3D{ 4.8, 0.62, -0.08 }
+        },
+        rg::GaussianModel3D{ 5.3, 0.57, 0.02 }) };
+    model->SelectAtoms([](const rg::AtomObject & atom) { return atom.GetSerialID() == 1; });
+    model->EditAnalysis().CopyLocalFittingStageResult(FittingStage::Second, FittingStage::First);
+
+    detail::RunSecondStageIterations(*model, MakeSecondStageOptions());
+
+    EXPECT_EQ(rg::AtomLocalPotentialView::For(*model->FindAtomPtr(1)).GetNeighborCountForPeeling(), 1);
+}
+
 void AddCouplingGraphSample(
     detail::CouplingGraphBuilder & builder,
     detail::SampleRef sample_id,

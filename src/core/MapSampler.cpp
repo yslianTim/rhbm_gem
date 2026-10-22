@@ -63,6 +63,7 @@ LocalPotentialSampleList SampleAtomMapValuesFromPoints(
     reject_position_list.reserve(neighbor_atom_list.size());
     for (const auto * neighbor_atom : neighbor_atom_list)
     {
+        if (neighbor_atom->GetElement() == Element::HYDROGEN) continue;
         reject_position_list.emplace_back(neighbor_atom->GetPosition());
     }
     sample_filter::FilterSamplingPointList(sample_point_list, local_position, reject_position_list);

@@ -332,7 +332,6 @@ TEST(CommandApiPipelineTest, PotentialAnalysisFixedPoliciesMatchDirectTwoStageWo
     rgc::FitOptions direct_options;
     direct_options.thread_size = 1;
     direct_options.estimator = rgc::PotentialEstimator::TWO_STAGE;
-    direct_options.exclude_hydrogen = true;
     direct_options.enable_second_stage_failed_only_refinement = true;
     direct_options.quiet_mode = true;
     rgc::RunPotentialFittingWorkflow(*direct_map, *direct_model, direct_options);
@@ -350,6 +349,45 @@ TEST(CommandApiPipelineTest, PotentialAnalysisFixedPoliciesMatchDirectTwoStageWo
             rg::AtomLocalPotentialView::For(command_atom).GetAlphaR(stage),
             rg::AtomLocalPotentialView::For(direct_atom).GetAlphaR(stage));
     }
+}
+
+TEST(CommandApiPipelineTest, DirectPotentialFittingExcludesHydrogenAndKeepsSelectedSubset)
+{
+    command_test::ScopedTempDir directory{ "direct_hydrogen_free_fitting" };
+    const auto model_path{ command_test::TestDataPath("potential_analysis_multichain.cif") };
+    const auto map_path{ command_test::GenerateMapFile(directory.path() / "maps", model_path) };
+    auto map{ rg::ReadMap(map_path) };
+    auto model{ rg::ReadModel(model_path) };
+    ASSERT_NE(map, nullptr);
+    ASSERT_NE(model, nullptr);
+    ASSERT_TRUE(map->MapValueArrayNormalization());
+    model->SelectAtoms([](const rg::AtomObject & atom)
+    {
+        return atom.GetSerialID() == 1 || atom.GetSerialID() == 7;
+    });
+
+    rgc::FitOptions options;
+    options.estimator = rgc::PotentialEstimator::TWO_STAGE;
+    options.thread_size = 1;
+    options.quiet_mode = true;
+    rgc::RunPotentialFittingWorkflow(*map, *model, options);
+
+    ASSERT_EQ(model->GetSelectedAtomCount(), 1u);
+    EXPECT_EQ(model->GetSelectedAtoms().front()->GetSerialID(), 1);
+    EXPECT_EQ(model->GetSelectedAtoms().front()->GetElement(), Element::CARBON);
+    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*model->FindAtomPtr(2)).IsAvailable());
+    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*model->FindAtomPtr(7)).IsAvailable());
+    EXPECT_EQ(rg::AtomLocalPotentialView::For(*model->FindAtomPtr(1)).GetNeighborCountForPeeling(), 5);
+
+    auto hydrogen_only_model{ rg::ReadModel(model_path) };
+    ASSERT_NE(hydrogen_only_model, nullptr);
+    hydrogen_only_model->SelectAtoms([](const rg::AtomObject & atom)
+    {
+        return atom.GetSerialID() == 7;
+    });
+    EXPECT_THROW(rgc::RunPotentialFittingWorkflow(*map, *hydrogen_only_model, options),
+        std::invalid_argument);
+    EXPECT_EQ(hydrogen_only_model->GetSelectedAtomCount(), 0u);
 }
 
 TEST(CommandApiPipelineTest, JointOptInPersistsSmallSelectionCalibrationFailureAndExportsWithoutSourceInputs)

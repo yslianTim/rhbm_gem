@@ -872,7 +872,7 @@ JointInitialization joint_component::InitializeContributors(MapObject & map,Mode
 {
     ModelObject initializer(model);
     const auto workset = detail::MakeJointFittingWorkset(initializer, problem);
-    FitOptions options; options.thread_size = 1; options.quiet_mode = true; options.exclude_hydrogen = true;
+    FitOptions options; options.thread_size = 1; options.quiet_mode = true;
     const auto initialization = detail::PrepareJointWidthInitialization(map, initializer, workset, options);
     for (std::size_t i = 0; i < workset.contributors.size(); ++i)
     {
