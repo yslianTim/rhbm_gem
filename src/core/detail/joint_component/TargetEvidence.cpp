@@ -6,9 +6,6 @@
 #include <utility>
 
 namespace rhbm_gem::core::joint_component {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-TargetEvidenceWork & TargetEvidenceWorkForTesting() {static thread_local TargetEvidenceWork work; return work;}
-#endif
 namespace {
 using Status=JointCheckStatus;
 bool SameLayout(const JointParameterLayout & a,const JointParameterLayout & b)
@@ -76,9 +73,6 @@ DiagnosticAtomIndex<Blocks> BuildDiagnosticAtomIndex(std::size_t atom_count,cons
         }
         for(const auto atom:block.core_atoms)
         {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            ++TargetEvidenceWorkForTesting().memberships_indexed;
-#endif
             if(atom>=atom_count)
             {
                 MappingError(index.invalid,index.reason,"diagnostic-core-atom-out-of-range");
@@ -94,9 +88,6 @@ DiagnosticAtomIndex<Blocks> BuildDiagnosticAtomIndex(std::size_t atom_count,cons
     for(std::size_t block_index=0;block_index<blocks.size();++block_index)
         for(const auto atom:blocks[block_index].core_atoms)
         {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            ++TargetEvidenceWorkForTesting().memberships_indexed;
-#endif
             if(atom<atom_count) index.block_indices[next[atom]++]=block_index;
         }
     for(std::size_t atom=0;atom<atom_count;++atom)
@@ -149,9 +140,6 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
     };
     const auto local_status=[&](std::size_t atom,std::vector<std::string> & block_ids,bool & mapping_invalid) {
         bool matched=false,unavailable=false,adequate=true;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        ++TargetEvidenceWorkForTesting().atom_lookups;
-#endif
         const auto [first,last]=conditioning_index.Range(atom);
         mapping_invalid=conditioning_index.Invalid(atom) || (!conditioning.empty() && first==last);
         for(std::size_t position=first;position<last;++position)
@@ -173,9 +161,6 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
         bool matched=false,not_assessed=false;
         int worst{};
         std::string status="NotAssessed";
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        ++TargetEvidenceWorkForTesting().atom_lookups;
-#endif
         const auto [first,last]=stability_index.Range(atom);
         mapping_invalid=stability_index.Invalid(atom) || (!stability.empty() && first==last);
         for(std::size_t position=first;position<last;++position)
@@ -232,9 +217,6 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
         if(!std::is_sorted(targets->begin(),targets->end())) selection_targets_valid=false;
         for(const auto atom:*targets)
         {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            ++TargetEvidenceWorkForTesting().atom_lookups;
-#endif
             while(point_cursor<out.point_atoms.size() && out.point_atoms[point_cursor].atom<atom) ++point_cursor;
             while(layout_cursor<layout.full_atoms.size() && layout.full_atoms[layout_cursor]<atom) ++layout_cursor;
             const bool target_in_scope=layout_cursor<layout.full_atoms.size() && layout.full_atoms[layout_cursor]==atom;

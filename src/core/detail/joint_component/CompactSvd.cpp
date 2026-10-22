@@ -6,7 +6,6 @@
 namespace rhbm_gem::core::joint_component {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 CompactSvdMode & CompactSvdModeForTesting() {static thread_local auto mode=CompactSvdMode::Automatic; return mode;}
-CompactSvdCapture & CompactSvdCaptureForTesting() {static thread_local CompactSvdCapture capture; return capture;}
 #endif
 namespace {
 template<class Svd>
@@ -82,9 +81,6 @@ CompactSvdResult CompactSvd(const Matrix & matrix,double relative,double absolut
     }
     else out=jacobi();
     out.used_bdc=bdc;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(CompactSvdCaptureForTesting()) CompactSvdCaptureForTesting()(matrix,relative,absolute,rhs,out);
-#endif
     return out;
 }
 CompactSvdResult EvaluateRank(const Matrix & compact,const RankRequest & request,const Vector * rhs,CompactSvdVectors vectors)

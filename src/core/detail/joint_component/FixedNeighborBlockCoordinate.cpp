@@ -109,205 +109,6 @@ Sparse Design(const Domain & domain,VectorRef eta)
     }
     out.setFromTriplets(entries.begin(),entries.end()); return out;
 }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-double SparseColumnDot(const Sparse & x,Eigen::Index left,Eigen::Index right)
-{
-    double out{};
-    Sparse::InnerIterator a(x,left),b(x,right);
-    while(a && b)
-    {
-        if(a.row()==b.row()) {out+=a.value()*b.value(); ++a; ++b;}
-        else if(a.row()<b.row()) ++a;
-        else ++b;
-    }
-    return out;
-}
-void CaptureWidthTrajectory(FixedNeighborBlockRecord & record,const SearchResult & search,
-    const Domain & domain,VectorRef response,VectorRef block_entry_eta,const EvaluationContext & context,
-    FixedNeighborWidthTrajectoryCapture & capture)
-{
-    if(capture.atom_initial_widths.empty()) return;
-    const auto eligible=[&](std::size_t trial_index) {
-        const auto & trial=search.trials[trial_index];
-        if(capture.accepted_updates_only && (!trial.accepted || trial.accepted_update.value_or(0)==0)) return false;
-        return true;
-    };
-    std::vector<std::pair<Eigen::Index,double>> tracked;
-    const auto count=std::min(capture.maximum_atoms,capture.atom_initial_widths.size());
-    bool requested_atom_excluded_by_limit=false;
-    for(std::size_t atom_index=0;atom_index<context.atom_ids.size();++atom_index)
-    {
-        const auto atom=static_cast<Eigen::Index>(atom_index);
-        const auto & id=context.atom_ids[atom_index];
-        const auto initial=std::find_if(capture.atom_initial_widths.begin(),capture.atom_initial_widths.end(),
-            [&](const auto & value){return value.first==id;});
-        if(initial==capture.atom_initial_widths.end()) continue;
-        if(static_cast<std::size_t>(std::distance(capture.atom_initial_widths.begin(),initial))<count)
-            tracked.emplace_back(atom,initial->second);
-        else requested_atom_excluded_by_limit=true;
-    }
-    if(requested_atom_excluded_by_limit)
-    {
-        for(std::size_t trial_index=0;trial_index<search.trials.size();++trial_index) if(eligible(trial_index))
-            ++capture.events_skipped_due_to_atom_limit;
-        return;
-    }
-    if(tracked.empty())
-        return;
-    if(capture.maximum_events==0)
-    {
-        for(std::size_t trial_index=0;trial_index<search.trials.size();++trial_index) if(eligible(trial_index))
-            ++capture.events_skipped_due_to_event_limit;
-        return;
-    }
-    double previous_accepted_objective=record.local_objective_before;
-    for(std::size_t trial_index=0;trial_index<search.trials.size();++trial_index)
-    {
-        if(capture.events_emitted>=capture.maximum_events)
-        {
-            for(std::size_t skipped=trial_index;skipped<search.trials.size();++skipped) if(eligible(skipped))
-                ++capture.events_skipped_due_to_event_limit;
-            break;
-        }
-        const auto & trial=search.trials[trial_index];
-        if(!eligible(trial_index)) continue;
-        FixedNeighborProfileTrial * destination=nullptr;
-        const auto existing=std::find_if(record.profile_trials.begin(),record.profile_trials.end(),
-            [&](const auto & value){return value.profile_evaluation==trial.evaluation;});
-        if(existing!=record.profile_trials.end()) destination=&*existing;
-        else
-        {
-            record.profile_trials.emplace_back(); destination=&record.profile_trials.back();
-            destination->trial_index=trial_index; destination->profile_evaluation=trial.evaluation;
-            destination->accepted=trial.accepted; destination->accepted_update=trial.accepted_update;
-            destination->profile_seconds=trial.seconds; destination->factor_seconds=trial.factor_seconds;
-            destination->local_objective_before=previous_accepted_objective;
-            destination->local_objective_after=trial.endpoint.certificate.available ?
-                trial.endpoint.certificate.objective/(context.scale*context.scale) : unavailable;
-            destination->objective_reduction=std::isfinite(destination->local_objective_before) &&
-                std::isfinite(destination->local_objective_after) ?
-                destination->local_objective_before-destination->local_objective_after : unavailable;
-            destination->eta_change_inf=trial.endpoint.eta.size()==block_entry_eta.size() ?
-                (trial.endpoint.eta-block_entry_eta).lpNorm<Eigen::Infinity>() : unavailable;
-            destination->gradient_inf_norm=trial.endpoint.gradient.size() ?
-                trial.endpoint.gradient.lpNorm<Eigen::Infinity>() : unavailable;
-        }
-        destination->tracked_atoms.clear();
-        const auto objective=trial.endpoint.certificate.available ?
-            trial.endpoint.certificate.objective/(context.scale*context.scale) : unavailable;
-        if(trial.lm)
-        {
-            destination->lm_actual_decrease=trial.lm->actual_decrease;
-            destination->lm_predicted_decrease=trial.lm->predicted_decrease;
-            destination->lm_ratio=trial.lm->ratio;
-            destination->lm_proposed_acceptance=trial.lm->proposed_acceptance;
-            destination->bounded_subproblem=trial.lm->bounded_subproblem;
-            destination->bounded_subproblem_status=trial.lm->subproblem_status;
-            destination->lm_subproblem_kkt_inf_norm=trial.lm->subproblem_kkt_inf_norm;
-            destination->active_set_iterations=trial.lm->active_set_iterations;
-            destination->active_set_releases=trial.lm->active_set_releases;
-            destination->active_bound_indices=trial.lm->active_bound_indices;
-            destination->active_bound_multipliers=trial.lm->active_bound_multipliers;
-        }
-        destination->weak_width_step_fraction=trial.weak_width_step_fraction;
-        destination->weak_width_guard_rejected=trial.rejection_reason=="weak-width-identifiability-limited";
-        destination->acceptance_reason=!trial.endpoint.valid ? trial.endpoint.reason :
-            !trial.rejection_reason.empty() ? trial.rejection_reason :
-            trial.trust && !trial.trust->passed ? "untrusted:"+trial.trust->reason :
-            trial.lm && !trial.lm->proposed_acceptance ? "lm-rejected" :
-            trial.accepted && trial.accepted_update.value_or(0)==0 ? "initial-profile" :
-            trial.accepted ? "accepted" : "not-selected";
-        if(trial.accepted)
-        {
-            destination->accepted_local_objective_improvement=trial.accepted_update.value_or(0)>0 &&
-                std::isfinite(previous_accepted_objective) && std::isfinite(objective) ?
-                previous_accepted_objective-objective : unavailable;
-            if(std::isfinite(objective)) previous_accepted_objective=objective;
-        }
-
-        Evaluation state;
-        Spectrum spectrum;
-        const bool within_row_limit=static_cast<std::size_t>(domain.rows)<=capture.maximum_rows;
-        if(!within_row_limit) ++capture.events_unavailable_due_to_row_limit;
-        if(within_row_limit && trial.endpoint.eta.size()==block_entry_eta.size() &&
-            trial.endpoint.beta.size()==2*block_entry_eta.size())
-        {
-            state=EvaluateState(domain,response,trial.endpoint.eta,trial.endpoint.beta,context);
-            if(state.valid) spectrum=ComputeSpectrum(state.x,context.rank,state.x.cols(),true);
-            if(state.valid)
-            {
-                const auto projected_prepared=PrepareProjectedWidthDerivative(state,context.scale,&context,-1,
-                    derivative_tile_rows,true);
-                if(projected_prepared.valid)
-                {
-                    const auto projected=ReduceProjectedWidthDerivative(projected_prepared);
-                    if(projected.valid)
-                    {
-                        const auto width_spectrum=ComputeSpectrum(projected.projected,context.rank,
-                            projected.projected.cols(),true);
-                        if(width_spectrum.available)
-                            destination->projected_width_singular_values.assign(width_spectrum.singular_values.data(),
-                                width_spectrum.singular_values.data()+width_spectrum.singular_values.size());
-                    }
-                }
-            }
-        }
-        for(const auto & [atom,initial_width]:tracked)
-        {
-            if(destination->tracked_atoms.size()>=capture.maximum_atoms) break;
-            FixedNeighborProfileTrial::AtomState value;
-            value.atom_id=context.atom_ids[static_cast<std::size_t>(atom)];
-            value.first_stage_width=initial_width;
-            value.block_entry_width=std::exp(block_entry_eta(atom));
-            const double before=trial.lm && trial.lm->accepted_eta.size()==block_entry_eta.size() ?
-                trial.lm->accepted_eta(atom) : block_entry_eta(atom);
-            const double proposed=trial.endpoint.eta.size()==block_entry_eta.size() ? trial.endpoint.eta(atom) : unavailable;
-            const double after=trial.accepted ? proposed : before;
-            value.eta_before=before; value.eta_after=after;
-            value.width_before=std::exp(before); value.width_after=std::exp(after);
-            value.lm_proposed_width=std::isfinite(proposed) ? std::exp(proposed) : unavailable;
-            value.accepted_width=std::isfinite(after) ? std::exp(after) : unavailable;
-            value.eta_step_inf=trial.lm ? trial.lm->step.lpNorm<Eigen::Infinity>() : 0.0;
-            if(trial.lm && trial.lm->step.size()==block_entry_eta.size())
-            {
-                value.proposed_eta_step=trial.lm->step(atom);
-                value.accepted_eta_step=trial.accepted ? value.proposed_eta_step : 0.0;
-            }
-            if(trial.endpoint.beta.size()==2*block_entry_eta.size())
-            {
-                value.amplitude_a=trial.endpoint.beta(2*atom);
-                value.amplitude_c=trial.endpoint.beta(2*atom+1);
-            }
-            if(state.valid)
-            {
-                value.amplitude_active=std::find(state.certificate.active_atoms.begin(),
-                    state.certificate.active_atoms.end(),atom)!=state.certificate.active_atoms.end();
-                const double gnorm=state.x.col(2*atom).norm(),knorm=state.x.col(2*atom+1).norm();
-                value.gaussian_column_norm=gnorm; value.charge_column_norm=knorm;
-                value.normalized_a=value.amplitude_a*gnorm; value.normalized_c=value.amplitude_c*knorm;
-                value.gaussian_contribution_norm=std::abs(value.normalized_a);
-                value.charge_contribution_norm=std::abs(value.normalized_c);
-                const Vector atom_contribution=(state.x.col(2*atom)*value.amplitude_a+
-                    state.x.col(2*atom+1)*value.amplitude_c).eval();
-                const double contribution_norm=atom_contribution.stableNorm();
-                const double contribution_sum=value.gaussian_contribution_norm+value.charge_contribution_norm;
-                if(contribution_norm>0) value.ac_cancellation_ratio=contribution_sum/contribution_norm;
-                else if(contribution_sum==0) value.ac_cancellation_ratio=1.0;
-                const double denominator=gnorm*knorm;
-                if(denominator>0) value.basis_correlation=SparseColumnDot(state.x,2*atom,2*atom+1)/denominator;
-                value.local_kkt=state.certificate.projected_kkt;
-                if(state.gradient.size()>atom) value.width_gradient=std::abs(state.gradient(atom));
-                value.local_design_rank=spectrum.available ? spectrum.rank : -1;
-                value.local_design_condition=spectrum.available ? spectrum.condition : unavailable;
-                value.numerical_status=state.certificate.available ? "evaluated" : "certificate-unavailable";
-            }
-            else value.numerical_status=within_row_limit ? "state-evaluation-unavailable" : "row-limit";
-            destination->tracked_atoms.push_back(std::move(value));
-        }
-        if(!destination->tracked_atoms.empty()) ++capture.events_emitted;
-    }
-}
-#endif
 double PredictionDifference(VectorRef a,VectorRef b)
 {return (a-b).lpNorm<Eigen::Infinity>();}
 void WriteJsonString(std::ostream & out,const std::string & value)
@@ -869,15 +670,6 @@ double ScaledCoefficientDifference(VectorRef lhs,VectorRef rhs)
     return ((lhs-rhs).array().abs()/(1.0+lhs.array().abs().max(rhs.array().abs()))).maxCoeff();
 }
 }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-std::vector<std::size_t> RankFixedNeighborStabilityProbesForTesting(
-    const std::vector<JointBlockConditioning> & conditioning)
-{return StabilityProbeOrder(conditioning);}
-std::vector<std::size_t> SelectFixedNeighborRepresentativeStabilityProbesForTesting(
-    const std::vector<JointBlockConditioning> & conditioning,const std::vector<std::size_t> & candidates,
-    std::size_t limit)
-{return RepresentativeStabilityProbeSelection(conditioning,candidates,limit);}
-#endif
 bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_complete_sweep,
     const JointConvergenceCriteria & criteria)
 {
@@ -1065,10 +857,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             }
             return certification;
         };
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(policy.certification_for_testing)
-            return record_assessment_work(policy.certification_for_testing(domain,y,out.state,context,profile_work));
-#endif
         auto certification_resident=out.global_state_memory_estimate.shape.resident_bytes;
         if(!AddMemoryBytes(certification_resident,memory_shape.component_observations,3*sizeof(double)) ||
             !AddMemoryBytes(certification_resident,memory_shape.component_atoms,8*sizeof(double)))
@@ -1126,15 +914,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         prepared.local_atoms=static_cast<Eigen::Index>(prepared.profile_atoms.size());
         prepared.context.rank={prepared.domain.rows,2*prepared.local_atoms,prepared.local_atoms};
         prepared.context.linear.rank_relative=prepared.context.rank.Relative(2*prepared.local_atoms);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(!policy.fixed_width_atom_ids.empty())
-        {
-            prepared.fixed_width_mask.resize(prepared.profile_atoms.size());
-            for(std::size_t k=0;k<prepared.profile_atoms.size();++k)
-                prepared.fixed_width_mask[k]=std::find(policy.fixed_width_atom_ids.begin(),
-                    policy.fixed_width_atom_ids.end(),prepared.context.atom_ids[k])!=policy.fixed_width_atom_ids.end();
-        }
-#endif
         // FixedNeighbor performs at most one trusted accepted local update per block visit.
         prepared.context.update_budget=1;
         prepared_blocks.push_back(std::move(prepared));
@@ -1239,12 +1018,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 }
             }
             const auto old_widths=old_eta.array().exp().eval();
-            const std::vector<bool> * fixed_width_mask=nullptr;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(!prepared.fixed_width_mask.empty()) fixed_width_mask=&prepared.fixed_width_mask;
-#endif
-            const auto profile_search=SearchProfile(local_domain,local_y,old_widths,local_context,{},nullptr,profile_work,
-                fixed_width_mask);
+            const auto profile_search=SearchProfile(local_domain,local_y,old_widths,local_context,{},nullptr,profile_work);
             if(policy.collect_telemetry || local_context.eta_upper_bound)
                 out.work.local_profile_work.Merge(profile_search.profile_work);
             record.search_seconds=Seconds(search_started); record.profile_evaluations=profile_search.evaluations;
@@ -1299,11 +1073,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 }
                 record.profile_factor_seconds=cumulative_factor_seconds;
             }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(policy.width_trajectory)
-                CaptureWidthTrajectory(record,profile_search,local_domain,local_y,old_eta,local_context,
-                    *policy.width_trajectory);
-#endif
             ++sweep.block_solves; ++out.total_block_solves;
             if(policy.collect_telemetry) ++out.work.block_solves;
             sweep.profile_evaluations+=static_cast<std::size_t>(profile_search.evaluations);
@@ -1423,11 +1192,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             if(policy.collect_telemetry) out.work.cache_update_seconds+=Seconds(cache_started);
             record.accepted=!unchanged; record.status=unchanged ? "unchanged" : "accepted";
             record.reason=unchanged ? "block-unchanged" : "";
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(policy.width_trajectory && !unchanged)
-                for(auto & trial:record.profile_trials) if(trial.profile_evaluation==accepted->evaluation)
-                    trial.accepted_global_objective_improvement=record.objective_before-record.objective_after;
-#endif
             if(record.recovery_retry)
             {
                 ++out.recovery_successes;
@@ -1473,29 +1237,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         sweep.coordinate_confirmation_available=sweep_index>0;
         double stationarity_width_gradient=sweep.projected_width_gradient_inf_norm;
         double stationarity_eta_change=sweep.eta_change_inf;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(!policy.fixed_width_atom_ids.empty())
-        {
-            stationarity_width_gradient=0.0; stationarity_eta_change=0.0;
-            const auto count=std::min({static_cast<std::size_t>(global.gradient.size()),
-                static_cast<std::size_t>(out.state.eta.size()),context.atom_ids.size()});
-            for(std::size_t atom=0;atom<count;++atom)
-            {
-                const auto & id=context.atom_ids[atom];
-                if(std::find(policy.fixed_width_atom_ids.begin(),policy.fixed_width_atom_ids.end(),id)!=
-                    policy.fixed_width_atom_ids.end()) continue;
-                double gradient=global.gradient(static_cast<Eigen::Index>(atom));
-                if(context.eta_upper_bound)
-                    gradient=out.state.eta(static_cast<Eigen::Index>(atom))-
-                        std::min(out.state.eta(static_cast<Eigen::Index>(atom))-gradient,
-                            *context.eta_upper_bound);
-                stationarity_width_gradient=std::max(stationarity_width_gradient,std::abs(gradient));
-                stationarity_eta_change=std::max(stationarity_eta_change,
-                    std::abs(out.state.eta(static_cast<Eigen::Index>(atom))-
-                        eta_before(static_cast<Eigen::Index>(atom))));
-            }
-        }
-#endif
         if(sweep.width_bound_applied && !global.certificate.width_bound_feasible)
             stationarity_width_gradient=std::numeric_limits<double>::infinity();
         sweep.stationarity_width_gradient_inf_norm=stationarity_width_gradient;
@@ -1510,10 +1251,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             policy.sweep_observer(observed);
         }
         if(policy.state_observer) policy.state_observer(sweep_index+1,out.state,out.sweeps.back(),out.blocks);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(policy.width_trajectory && policy.width_trajectory->state_observer)
-            policy.width_trajectory->state_observer(sweep_index+1,out.state,sweep);
-#endif
         if(sweep.cache_replay_error>2e-12+2e-13*std::max(1.0,replay.prediction.cwiseAbs().maxCoeff()) ||
             !WithinBlockObjectiveReplay(sweep.objective_replay_error,replay.objective))
         {out.reason="block-cache-replay-failed"; stop=true; break;}

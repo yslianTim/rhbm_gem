@@ -147,7 +147,4 @@ TEST(JointTargetEvidenceTest, ComponentLocalAndAssembledEvidenceAgreeForNonconti
     EXPECT_EQ(n::TargetConvergence(global,true),Status::Passed);
 }
 
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-
-#endif
 }

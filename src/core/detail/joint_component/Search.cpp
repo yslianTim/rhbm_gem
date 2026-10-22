@@ -60,7 +60,6 @@ struct Profile
     int accepted_updates{};
     std::optional<double> accepted_objective;
     std::optional<double> accepted_gradient_inf_norm;
-    const std::vector<bool> * fixed_width_mask{};
     std::optional<ActiveSetStep> last_bounded_subproblem;
     BoundedLmWork bounded_lm_work;
     bool has_bounded_step() const {return context.eta_upper_bound.has_value();}
@@ -71,8 +70,7 @@ struct Profile
         bounded_lm_work.active_set_iterations+=step.iterations;
         bounded_lm_work.releases+=step.releases;
         for(std::size_t i=0;i<step.active.size();++i)
-            if(step.active[i] && (!fixed_width_mask || fixed_width_mask->size()!=step.active.size() ||
-                !(*fixed_width_mask)[i])) ++bounded_lm_work.active_bound_occurrences;
+            if(step.active[i]) ++bounded_lm_work.active_bound_occurrences;
         if(std::isfinite(step.kkt_inf_norm))
             bounded_lm_work.maximum_subproblem_kkt=std::isfinite(bounded_lm_work.maximum_subproblem_kkt) ?
                 std::max(bounded_lm_work.maximum_subproblem_kkt,step.kkt_inf_norm) : step.kkt_inf_norm;
@@ -89,8 +87,7 @@ struct Profile
             {failed_step.status="infeasible-current-width"; last_bounded_subproblem=failed_step;
                 RecordBoundedSubproblem(failed_step); return failed_step;}
         const Vector upper=Vector::Constant(eta.size(),*context.eta_upper_bound)-eta;
-        auto result=SolveBoundedTrustRegionStep(jacobian,response,diagonal,upper,radius,damping,
-            fixed_width_mask ? *fixed_width_mask : std::vector<bool>{});
+        auto result=SolveBoundedTrustRegionStep(jacobian,response,diagonal,upper,radius,damping);
         last_bounded_subproblem=result;
         RecordBoundedSubproblem(result);
         return result;
@@ -124,9 +121,7 @@ struct Profile
             lm.active_set_releases=last_bounded_subproblem->releases;
             for(std::size_t i=0;i<last_bounded_subproblem->active.size();++i)
             {
-                if(!last_bounded_subproblem->active[i] ||
-                    (fixed_width_mask && fixed_width_mask->size()==last_bounded_subproblem->active.size() &&
-                        (*fixed_width_mask)[i])) continue;
+                if(!last_bounded_subproblem->active[i]) continue;
                 lm.active_bound_indices.push_back(i);
                 lm.active_bound_multipliers.push_back(last_bounded_subproblem->multipliers(
                     static_cast<Eigen::Index>(i)));
@@ -158,11 +153,7 @@ struct Profile
             const auto differential=ReduceDerivative(prepared,cached.residual,false);
             if(differential.valid)
             {
-                Matrix jacobian=differential.jacobian;
-                if(fixed_width_mask && fixed_width_mask->size()==static_cast<std::size_t>(jacobian.cols()))
-                    for(Eigen::Index column=0;column<jacobian.cols();++column)
-                        if((*fixed_width_mask)[static_cast<std::size_t>(column)]) jacobian.col(column).setZero();
-                const auto assessment=AssessWeakWidthStep(jacobian,step,context.rank);
+                const auto assessment=AssessWeakWidthStep(differential.jacobian,step,context.rank);
                 if(assessment.available)
                 {
                     row.weak_width_step_fraction=assessment.weak_step_fraction;
@@ -273,13 +264,6 @@ struct Profile
         }
         if(!differential.valid)
         {if(telemetry) ++telemetry->invalid_gradient_stops; failure=differential.reason; return -1;}
-        if(fixed_width_mask && fixed_width_mask->size()==static_cast<std::size_t>(differential.jacobian.cols()))
-            for(Eigen::Index column=0;column<differential.jacobian.cols();++column)
-                if((*fixed_width_mask)[static_cast<std::size_t>(column)])
-                {
-                    differential.jacobian.col(column).setZero();
-                    differential.jacobian_norms(column)=0.0;
-                }
         factor=std::move(differential.jacobian); response=std::move(differential.response);
         norms=std::move(differential.jacobian_norms); return 0;
     }
@@ -299,8 +283,7 @@ struct Profile
 namespace {
 SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & initial_b,
     const EvaluationContext & context,const JointProgressObserver & observer,
-    const JointProgressComponent * progress_component,ProfileSearchWork * telemetry,
-    const std::vector<bool> * fixed_width_mask)
+    const JointProgressComponent * progress_component,ProfileSearchWork * telemetry)
 {
     ResourcePhase phase("search",true,domain.rows,initial_b.size());
     const auto start=std::chrono::steady_clock::now();
@@ -308,9 +291,8 @@ SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & 
     EvaluationContext search_context=context;
     const auto active_eta_max=search_context.eta_upper_bound;
     Profile profile{domain,y,search_context.scale,search_context,{}, {},0,0,{},telemetry ? &local_work : nullptr,
-        ProfileEvaluationRole::Unspecified,observer,progress_component,start,std::clock(),0,{}, {},nullptr,{},{}
+        ProfileEvaluationRole::Unspecified,observer,progress_component,start,std::clock(),0,{}, {},{},{}
     };
-    profile.fixed_width_mask=fixed_width_mask;
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
         lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;
@@ -376,10 +358,9 @@ SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & 
 
 SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
     const EvaluationContext & context,const JointProgressObserver & observer,
-    const JointProgressComponent * progress_component,ProfileSearchWork * telemetry,
-    const std::vector<bool> * fixed_width_mask)
+    const JointProgressComponent * progress_component,ProfileSearchWork * telemetry)
 {
     return SearchProfileImpl(domain,y,initial_b,context,observer,
-        progress_component,telemetry,fixed_width_mask);
+        progress_component,telemetry);
 }
 }

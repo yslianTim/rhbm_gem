@@ -33,28 +33,11 @@ struct FixedNeighborProfileTrial
     std::size_t active_set_iterations{},active_set_releases{};
     std::vector<std::size_t> active_bound_indices;
     std::vector<double> active_bound_multipliers;
-    double accepted_local_objective_improvement{unavailable},accepted_global_objective_improvement{unavailable};
+    double accepted_local_objective_improvement{unavailable};
     double weak_width_step_fraction{unavailable};
     bool lm_proposed_acceptance{};
     bool weak_width_guard_rejected{};
-    std::vector<double> projected_width_singular_values;
     std::string acceptance_reason;
-    struct AtomState
-    {
-        std::string atom_id,numerical_status;
-        bool amplitude_active{};
-        double first_stage_width{unavailable},block_entry_width{unavailable},lm_proposed_width{unavailable},
-            accepted_width{unavailable},width_before{unavailable},width_after{unavailable},
-            eta_before{unavailable},eta_after{unavailable},proposed_eta_step{unavailable},
-            accepted_eta_step{unavailable},eta_step_inf{unavailable},
-            amplitude_a{unavailable},amplitude_c{unavailable},gaussian_column_norm{unavailable},
-            charge_column_norm{unavailable},normalized_a{unavailable},normalized_c{unavailable},
-            gaussian_contribution_norm{unavailable},charge_contribution_norm{unavailable},
-            ac_cancellation_ratio{unavailable},basis_correlation{unavailable},local_kkt{unavailable},width_gradient{unavailable},
-            local_design_condition{unavailable};
-        Eigen::Index local_design_rank{-1};
-    };
-    std::vector<AtomState> tracked_atoms;
 #endif
 };
 struct FixedNeighborBlockFailureDiagnostics
@@ -158,17 +141,6 @@ struct FixedNeighborDiagnosticSink
     std::function<void(const FixedNeighborBlockRecord &)> block;
     std::function<void(const FixedNeighborBlockSweep &)> sweep;
 };
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-struct FixedNeighborWidthTrajectoryCapture
-{
-    std::vector<std::pair<std::string,double>> atom_initial_widths;
-    std::size_t maximum_events{1024},maximum_atoms{32},maximum_rows{4096},events_emitted{},
-        events_skipped_due_to_event_limit{},events_skipped_due_to_atom_limit{},
-        events_unavailable_due_to_row_limit{};
-    bool accepted_updates_only{};
-    std::function<void(std::size_t,const BlockCoordinateState &,const FixedNeighborBlockSweep &)> state_observer;
-};
-#endif
 struct PreparedFixedNeighborBlock
 {
     std::size_t block{};
@@ -177,9 +149,6 @@ struct PreparedFixedNeighborBlock
     Domain domain{0,{}};
     EvaluationContext context;
     Eigen::Index local_atoms{};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    std::vector<bool> fixed_width_mask;
-#endif
 };
 struct FixedNeighborPolicy
 {
@@ -202,12 +171,7 @@ struct FixedNeighborPolicy
     std::function<void(const FixedNeighborBlockSweep &)> sweep_observer;
     std::optional<double> eta_upper_bound;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    FixedNeighborWidthTrajectoryCapture * width_trajectory{};
-    std::vector<std::string> fixed_width_atom_ids;
     std::function<bool(std::size_t,std::size_t)> force_no_trusted_profile_for_testing;
-    // Test-only fault injection; compiled out of production targets.
-    std::function<FixedNeighborEndpointCertification(const Domain &,VectorRef,const BlockCoordinateState &,
-        const EvaluationContext &,ProfileSearchWork *)> certification_for_testing;
 #endif
     std::function<void(std::size_t,const BlockCoordinateState &,const FixedNeighborBlockSweep &,
         const std::vector<FixedNeighborBlockRecord> &)> state_observer;
@@ -262,10 +226,4 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
 std::optional<double> LastFixedNeighborObjective(const FixedNeighborSearchResult &);
 std::optional<double> LastFixedNeighborGradient(const FixedNeighborSearchResult &);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-std::vector<std::size_t> RankFixedNeighborStabilityProbesForTesting(
-    const std::vector<JointBlockConditioning> &);
-std::vector<std::size_t> SelectFixedNeighborRepresentativeStabilityProbesForTesting(
-    const std::vector<JointBlockConditioning> &,const std::vector<std::size_t> &,std::size_t);
-#endif
 }

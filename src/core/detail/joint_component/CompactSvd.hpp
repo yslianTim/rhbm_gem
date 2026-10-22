@@ -1,8 +1,5 @@
 #pragma once
 #include "Numerics.hpp"
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include <functional>
-#endif
 
 namespace rhbm_gem::core::joint_component {
 struct CompactSvdResult
@@ -35,7 +32,5 @@ bool CompactRankDecisionSafe(const CompactSvdResult &);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 enum class CompactSvdMode {Automatic,Legacy,ValuesOnly};
 CompactSvdMode & CompactSvdModeForTesting();
-using CompactSvdCapture=std::function<void(const Matrix &,double,double,const Vector *,const CompactSvdResult &)>;
-CompactSvdCapture & CompactSvdCaptureForTesting();
 #endif
 }
