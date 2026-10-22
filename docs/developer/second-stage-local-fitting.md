@@ -25,8 +25,8 @@ but no unselected model is persisted.
 
 This page specifies the current production algorithm, including outer
 iteration, candidate lifecycle, recovery, convergence, and finalization. For
-per-atom MDPDE fitting, failed-only refinement, covariance, and solver replay,
-see the [production fitting contract](production-fitting.md).
+per-atom MDPDE fitting, failed-only refinement, and covariance, see the
+[production fitting contract](production-fitting.md).
 
 Implementation ownership and candidate acceptance references are specified below.
 Candidate selection uses a private builder and one transaction publication;
@@ -48,7 +48,7 @@ write. These settings intentionally have no command-line flags.
 
 Shared fitting support lives in `src/core/detail/gaussian_fit/`; second-stage
 implementation lives in `src/core/detail/second_stage/`, with runtime logging
-and timing under its `observation/` subdirectory. All retain the existing
+under its `observation/` subdirectory. All retain the existing
 `rhbm_gem::core::detail` namespace.
 
 The internal implementation follows the iteration sequence rather than exposing
@@ -60,7 +60,7 @@ all second-stage services through candidate selection:
 | `IterationResult.hpp` | Outer attempt summary and stop reasons |
 | `ConvergenceCertificate` | Active-coordinate summaries, shared fixed-point operator evidence summaries, solver qualification, and convergence certificate |
 | `CandidateEvidence.hpp` | Candidate decision evidence, pre-objective failure reasons, and boundary accepted sources |
-| `CandidateState.hpp` | Selection data, boundary decisions, polish progress, and trust-radius update records |
+| `CandidateState.hpp` | Selection data, boundary decisions, and trust-radius update records |
 | `IterationProposal` | Joint offsets, local shape refits, fallback, and unrestricted fixed-point operator evidence |
 | `CandidateTransactionLocal.cpp` | Builder-owned per-cluster candidate search, local joint polish, and trust-radius control |
 | `CandidateEvaluation` | Typed references with scopes only where policy differs; separate local/boundary results and complete global candidate acceptance with original gate ordering; no history inputs or results |
@@ -71,9 +71,7 @@ all second-stage services through candidate selection:
 | `ObjectiveEvaluation` | Objective domains, full and incremental evaluation, tolerances, previous objectives and the production global best |
 | `SuspiciousUpdate` | Profile baselines, suspicious assessments, coordinate activity, failure masks, and candidate/polish guards |
 | `Quarantine` | Active/Frozen failure tracking, domain retry, and next-iteration activity |
-| `SecondStageDiagnostics` | Scalar iteration and final-polish diagnostics used by production progress and summaries |
-| `observation/SecondStageLogging` | Progress and certificate output, graph/objective diagnostics, and performance formatting |
-| `observation/PerformanceCounters` | Phase timings for normal runtime summaries |
+| `observation/SecondStageLogging` | Compact iteration progress, warnings, and termination summaries |
 
 `GaussianModelOperations` and `PreparedLocalGaussianFit` provide shared model
 operations and prepared designs in `gaussian_fit/`, alongside `FittingRanges.hpp`.
@@ -82,7 +80,6 @@ state/residual representation and seed selection, graph construction and topolog
 drift, and solvers. `IterationProcess.hpp` declares only `RunSecondStageIterations`;
 convergence types and the outer attempt result have their own headers. Operator
 evidence summarization serves production convergence and final certification.
-Seed summaries and scalar iteration diagnostics feed normal runtime logging.
 `CandidateEvidence.hpp` supplies diagnostics and candidate evaluation without
 including the complete selection. `CandidateState.hpp` owns selection data.
 `CandidateTransaction.hpp`
@@ -93,11 +90,11 @@ the transaction implementation is distributed across
 internal fitting-range constants; `FitOptions` does not expose radial bounds.
 
 `CandidateSelectionInputs` contains read-only algorithm inputs and runtime
-workspace/timing resources. The private
+workspace resources. The private
 `CandidateTransactionBuilder` owns working activity, state and provenance;
 boundary operations are its private methods. Evaluators return numerical decisions
-without accepting or returning per-cluster history. Solver workspaces and timing
-counters remain mutable working resources.
+without accepting or returning per-cluster history. Solver workspaces remain
+mutable working resources.
 Boundary candidate and correction references borrow only the per-key samples,
 objective domain, previous member objectives, optional best objective, component,
 reference objectives and, for correction, its endpoint and strict-improvement
@@ -125,7 +122,7 @@ accepted factor with the first objective-evaluated factor directly.
 Candidate references may point to production-owned member-best patches.
 `CandidateSelection` retains keys, state/provenance, decision evidence,
 and lightweight boundary decisions. `IterationResult` retains accepted/rejected
-keys, radius updates, progress state and stop information; audit-patience reset
+keys, radius updates, attempt counts and stop information; audit-patience reset
 uses rejected keys directly.
 
 Quarantine is staged on a copy and changes only next-iteration activity,
@@ -151,10 +148,10 @@ snapshots, while accepted and best-audit states retain complete local results.
 Patch/view and residual-overlay representations continue to avoid full-state
 materialization during candidate evaluation.
 
-`IterationDiagnostics::proposal_maximum_transformed_change` measures the constrained
-proposal's maximum movement. It is distinct from the nominal operator residual
-in `ConvergenceCertificate`. Maximum/population measurements reside in
-`ConvergenceDiagnostics`; the existing progress label is unchanged.
+`ConvergenceCertificate` uses accepted-active and nominal-operator p99 changes,
+solver qualification, operator completeness, and the existing production stop
+guards. `ConvergenceDiagnostics` retains aggregate movement and residual
+summaries; these summaries do not replace or loosen the certificate checks.
 
 ### Candidate acceptance references
 
@@ -1058,7 +1055,7 @@ one group result and one optional posterior/outlier result per atom, stored
 independently of local fitting stages. Group fitting and group-result access
 do not accept a fitting-stage parameter.
 
-## Performance architecture
+## Execution and memory model
 
 The fitting context stores selected atom indexes, flattened selected
 sample-neighbor edges, unselected per-sample distance lists, prepared selected
@@ -1096,59 +1093,27 @@ candidate search, polish, and local objective evaluation run per cluster in
 parallel while Eigen uses one thread. Results are committed in the partition's
 fixed cluster order; the serial path calls the same worker and merge code.
 
-Non-quiet runs also emit non-blocking performance counters for complete-state
-materializations, Gaussian cache hits/misses, recomputed/reused objective
-samples, symbolic solver analyses, adaptive topology rebuilds and partition
-changes, boundary reconciliation attempts/backtracks/rejections, and
-boundary joint-correction attempts/acceptances/fallbacks, symbolic analyses,
-boundary rescue attempts/acceptances/fallbacks/rejections, rescue exclusion
-reasons, final dependency-polish component/atom/parameter/round counts,
-acceptances/fallbacks, and elapsed time. The existing
-iteration/candidate/topology/total elapsed-time field remains unchanged.
-These counters are diagnostic evidence rather than acceptance thresholds.
-
 ## Logging
 
-After valid seeds are available, non-quiet runs print a compact header and
-update one progress row per outer attempt with `Logger::ProgressLine`. An outer
-attempt may be accepted or terminally rejected, so `Try` can advance without
-`Acc`. The header and progress rows use the same
-fixed column widths, including enough space for both scientific-notation
-values in `dMax A/F`.
+Non-quiet runs log the start, initialization failures, binary graph fallback,
+and a compact progress row for each outer attempt. An outer attempt may be
+accepted or terminally rejected, so `Try` can advance without `Acc`.
 
 | Column | Meaning after the current outer attempt |
 |---|---|
 | `Try/Acc` | One-based outer attempt / cumulative accepted iterations |
-| `Atom A/Q` | Selected atoms without quarantine targets / selected atoms covered by current quarantine targets |
 | `Cluster A/R` | Accepted / rejected candidate clusters |
-| `Polish E/A/R/S` | Eligible / accepted / rejected / skipped polish clusters after component reconciliation and the final global guard; `E = A + R + S` |
-| `Suspicious` | Atoms with at least one shape, offset, or hard-failure block fixed in this attempt |
-| `dMax A/F` | Maximum transformed change in the accepted/fixed-point operator state; accepted is `-` on an all-rejected attempt |
 
-Objective-domain startup reports weights and scalar sample/cluster counts.
-Warnings report cumulative quarantine entries, releases, failed retries and
-unresolved targets. Progress, warnings, the final summary and basic timings use
-normal runtime logging.
-
-Non-quiet runs also emit a final-state certificate record with the persisted-state
-assessment, last frozen-background reference, attempt count, and recovery and
-certification operator counts. This record does not recompute the objective.
-
-The one-time atom-cutoff text remains `Local-fitting atom cutoff: atoms=N,
-limit=100, clusters=C, max-atoms=M, cutoff-edges=E.` and counts selected atoms only.
-Formal graph thresholds, hysteresis, binary fallback and cutoff are unchanged.
-
-Non-quiet runs end with this summary format:
+Warnings describe quarantine fallback or maximum-iteration state selection.
+Convergence and finalization retain their production checks regardless of
+logging mode. Non-quiet runs end with a concise summary:
 
 ```text
-Second-stage local fitting summary: accepted_iterations=<N>, best_iteration=<initial|N|unavailable>, stop_reason=<reason>, best_audit_objective=<value|unavailable>, final_uses_polish=<yes|no|unavailable>, final_state_source=<best-audit|latest-validated|unavailable>.
+Second-stage fitting summary: accepted_iterations=<N>, stop_reason=<reason>, final_state=<best-audit|latest-validated>, final_uses_polish=<yes|no>.
 ```
 
-`final_uses_polish` describes the state actually written to `ModelObject`. It is
-`yes` when at least one atom's most recent transformed-parameter update in that
-state came from an accepted polish, `no` when none did, and `unavailable` when
-the stage exits before a valid state can be formed. `best_iteration` describes
-the selected best iteration and `final_state_source` identifies the state actually
-written.
+`final_state` identifies the selected best-audit state or latest validated
+state written to `ModelObject`. `final_uses_polish` indicates whether that
+state has accepted polish provenance.
 
 `quiet_mode` suppresses the second-stage informational logging.

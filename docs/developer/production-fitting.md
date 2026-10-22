@@ -10,8 +10,8 @@ continues to skip normalization; `-r supplies model metadata` only.
 
 The shape solve uses the production MDPDE fixed-point equations, and selected
 offsets use joint-offset IRLS. Parameter accuracy alone does not establish
-convergence. Inner solver failures retain their native status and remain
-reproducible.
+convergence. Inner solver failures retain their native status and are handled
+by production qualification and recovery rules.
 
 The [Second-stage local fitting specification](second-stage-local-fitting.md)
 owns outer iteration, candidate acceptance, recovery, convergence, and
@@ -57,50 +57,14 @@ diagnostics, and status. Budget exhaustion, invalid numerical state, rank
 deficiency, reference failure, and wrong-root or branch mismatch remain
 explicitly unqualified.
 
-Permanent owners are `MDPDERegression_test.cpp` and
-`ProductionFitting_test.cpp`. They cover native-success bypass and unchanged
-values, failed-only invocation, ineligible rank-deficient endpoints, wrong-root
-branch rejection, fresh weights, covariance, budget exhaustion, invalid
-variance/state, rank deficiency, and preservation of native status.
-`MDPDETestSupport.*`, `EndpointRefinementTestSupport.*`, and
-`SolverFailureCapture.*` provide numerical references, endpoint probes, and
-captured solver-failure replay.
-
-## Solver failure replay
-
-Match the compiler, feature flags, worker count, verbosity, and quiet setting
-when comparing runs. Debug verbosity affects scheduling, so a `-v 4`
-diagnosis is not the same benchmark run as `-v 3`. Compare work, commits,
-terminal state, parameters, and peeling. A reproducible failure case
-demonstrates repeatability; it does not establish convergence.
-
-Testing builds can save the first failure of each solver/status pair:
-
-    RHBM_TEST_SOLVER_CAPTURE_DIR=build/production-fitting/failures \
-      build/production-fitting/on/bin/RHBM-GEM potential_analysis [normal arguments]
-    RHBM_TEST_REPLAY_DIR=build/production-fitting/failures \
-      build/production-fitting/on/bin/RHBM-GEM-TEST \
-      --gtest_filter=ProductionFittingTest.ReplaysCapturedSolverFailureWithoutSimulationInputs
-
-These environment variables exist only in `BUILD_TESTING` binaries. Capture is
-independent of the observer and never changes a result. The validation harness
-must verify that requested artifacts were produced. No map or manifest is
-needed to replay a captured subproblem. Retain executable/library hashes and
-build/source provenance beside the fixtures; replay uses the same compiled
-solver constants.
-
-Fixture version 1 is whitespace-delimited with round-trip double precision:
-
-- `shape 1`: alpha, threads, iteration limit, tolerance, and data-weight floor;
-  dense X and y; expected status/variance; expected OLS and MDPDE beta vectors.
-- `offset 1`: sparse X dimensions/nonzero count and row/column/value entries
-  (including explicit zeros); y, anchor, and ridge vectors; expected status and
-  offset vector. The compiled IRLS constants remain unchanged.
-- Dense matrices and vectors contain row and column counts followed by
-  row-major values. Replay requires exact parameters and matching terminal
-  status.
-
-The MDPDE fixtures remain checked in because permanent tests use them.
+`MDPDERegression_test.cpp` retains deterministic checks for MDPDE equations
+and numerical boundaries. Its failed-only cases use generated inputs to verify
+that native success stays unchanged, rank-deficient endpoints remain ineligible,
+and an eligible generated failure can be refined. `ProductionFitting_test.cpp`
+checks that every nominal endpoint is qualified and that nominal evaluation is
+read-only and uses the unrestricted solve status. The failed-only cases generate
+their input data in the test itself; MDPDE equation helpers are declared in
+`MDPDETestSupport.hpp`.
 
 ## Joint result persistence
 

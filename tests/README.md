@@ -11,7 +11,7 @@ This project uses a two-axis test organization model:
 | --- | --- | --- |
 | `tests/core/command/` | `core` | Command workflows, option handling, command-level validation |
 | `tests/core/contract/` | `core` | Command catalog/metadata/surface contracts and docs sync checks |
-| `tests/core/second_stage/` | `core` | Second-stage fitting state, solvers, acceptance, recovery, finalization, and performance logging |
+| `tests/core/second_stage/` | `core` | Second-stage fitting state, solvers, acceptance, recovery, convergence, and finalization |
 | `tests/data/` | `data` | Data public-surface guards, file I/O/runtime behavior, and schema/persistence validation |
 | `tests/utils/math/` | `utils` | Numeric/statistical/geometry helper algorithms |
 | `tests/utils/domain/` | `utils` | Domain helpers (string/logging/file-path/chemistry-related helpers) |
@@ -107,23 +107,17 @@ Keep second-stage defense tests in the following behavior-based files under
 | --- | --- |
 | `GraphAndBackground_test.cpp` | Graphs, partitions, topology drift, physical halos, uncut component construction, frozen backgrounds, and residual overlays |
 | `SeedAndState_test.cpp` | Seed selection and fallback, Gaussian medians, transformed coordinates, damping, and extrapolation |
-| `SolverAndProposal_test.cpp` | Conditioning, solver health, joint offsets, Jacobians, refits, and joint polish/correction proposals |
-| `CandidateAcceptance_test.cpp` | Objectives and best references, trust radii, backtracking, transaction publication, boundary acceptance, and serial/parallel selection |
-| `Recovery_test.cpp` | Suspicious guards, failure masks, quarantine, fallback, ridge guards, and healthy remote clusters |
-| `ConvergenceAndFinalization_test.cpp` | Active-coordinate certificates, final dependency polish, persistence, and whole-run intensity scaling |
-| `PerformanceLogging_test.cpp` | Normal performance summary output and quiet-mode behavior |
+| `SolverAndProposal_test.cpp` | Conditioning, solver health, joint offsets, frozen-background RHS, and joint polish proposals |
+| `CandidateAcceptance_test.cpp` | Objective guards, trust regions, backtracking, transaction publication, and boundary acceptance |
+| `Recovery_test.cpp` | Non-finite solver fallback, failure isolation, and quarantine retries |
+| `ConvergenceAndFinalization_test.cpp` | Active-coordinate convergence certificates, final dependency polish, and persistence |
+| `ProductionFitting_test.cpp` | Nominal endpoint qualification and read-only evaluation |
 
-Preserve the existing `EstimatorSecondStageDefenseTest` suite and case names.
-All second-stage files belong to `CORE_ESTIMATOR_TEST_SOURCES` and run through the single
+The 24 `EstimatorSecondStageDefenseTest` cases and two
+`ProductionFittingTest` cases run through the single
 `rhbm_tests_core_estimator` CTest group. Do not add per-file CTest groups using
-this shared suite filter: each would repeat the entire suite. Mixed cases that
-verify production acceptance or rollback remain with the production behavior
-they exercise.
-
-Boundary reference tests cover ordinary/rescue gates, unavailable evidence,
-suspicious-correction early exits, strict rejection, and single correction-delta
-evaluation. Runtime log checks and debug-level scheduling behavior remain with
-the production fitting tests.
+these suite filters: each would repeat the same tests. Acceptance and rollback
+checks stay with the production behavior they exercise.
 
 Use `tests/support/SecondStageTestSupport.hpp/.cpp` and its `second_stage_test`
 namespace for fixture builders and assertions shared across these files. Keep
@@ -132,9 +126,10 @@ private to the support implementation. Build fresh model/solver state per case;
 do not share mutable fixtures. Use `detail` for `rhbm_gem::core::detail` throughout
 these tests. `EstimatorTester_test.cpp` retains its workflow tests and fixtures.
 
-Compile test support directly into `rhbm_tests`, outside the suite-discovery source
-lists. Work-count and frozen-background capture helpers serve permanent numerical
-tests; solver failure replay remains in `SolverFailureCapture`.
+Compile shared test support directly into `rhbm_tests`, outside the suite source
+lists. `SecondStageTestSupport` provides generated inputs for the retained
+production behavior tests. Failed-only refinement cases live with the MDPDE
+regression tests and use generated endpoints.
 
 ### General placement
 

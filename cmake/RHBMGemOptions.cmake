@@ -21,7 +21,7 @@ option(RHBM_GEM_ENABLE_UMAP
     "Enable the umap_embedding command through umappp" ON)
 option(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
     "Enable experimental features across the project" OFF)
-foreach(retired_option IN ITEMS RHBM_GEM_ENABLE_SECOND_STAGE_AUDIT_TRACE RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT)
+foreach(retired_option IN ITEMS RHBM_GEM_ENABLE_TRUST_MODEL_EXPERIMENT)
     if(DEFINED ${retired_option})
         message(FATAL_ERROR "${retired_option} is retired. Remove this option from your command and cache.")
     endif()
