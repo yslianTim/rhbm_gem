@@ -1,8 +1,7 @@
 #pragma once
 #include <rhbm_gem/core/GaussianEstimator.hpp>
-#include "core/detail/joint_component/JointComponentEstimator.hpp"
+#include "joint_component/JointComponentEstimator.hpp"
 #include "joint_component/JointProgress.hpp"
-#include <string_view>
 #include <vector>
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 #include <functional>

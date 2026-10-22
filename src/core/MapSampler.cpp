@@ -2,7 +2,6 @@
 #include "core/detail/MapSampler.hpp"
 #include "core/detail/MapInterpolation.hpp"
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <optional>
