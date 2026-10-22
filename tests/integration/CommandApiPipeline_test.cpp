@@ -135,6 +135,8 @@ void ExpectSelectedAtomsHaveFiniteNonNegativeAlphaR(const rg::ModelObject & mode
 
 TEST(CommandApiPipelineTest, PotentialFittingDefaultsToJointComponents)
 {
+    EXPECT_EQ(static_cast<int>(rgc::PotentialEstimator::TWO_STAGE), 0);
+    EXPECT_EQ(static_cast<int>(rgc::PotentialEstimator::JOINT_COMPONENTS), 1);
     EXPECT_EQ(rgc::FitOptions{}.estimator, rgc::PotentialEstimator::JOINT_COMPONENTS);
     EXPECT_EQ(rgc::PotentialAnalysisRequest{}.estimator,
         rgc::PotentialEstimator::JOINT_COMPONENTS);

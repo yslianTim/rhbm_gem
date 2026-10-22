@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstddef>
-#include <rhbm_gem/core/PotentialEstimator.hpp>
+#include <rhbm_gem/core/CommandTypes.hpp>
 #include <vector>
 
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
