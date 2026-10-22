@@ -16,6 +16,7 @@ struct BlockCoordinateState
 double BlockObjectiveReplayEnclosure(double reference);
 bool WithinBlockObjectiveReplay(double error,double reference);
 
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
 struct FixedNeighborProfileTrial
 {
     std::size_t trial_index{};
@@ -25,7 +26,6 @@ struct FixedNeighborProfileTrial
     double local_objective_before{},local_objective_after{},objective_reduction{};
     double eta_change_inf{},gradient_inf_norm{};
     double profile_seconds{},factor_seconds{},cumulative_factor_seconds{};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     double lm_actual_decrease{unavailable},lm_predicted_decrease{unavailable},lm_ratio{unavailable};
     double lm_subproblem_kkt_inf_norm{unavailable};
     bool bounded_subproblem{};
@@ -38,8 +38,8 @@ struct FixedNeighborProfileTrial
     bool lm_proposed_acceptance{};
     bool weak_width_guard_rejected{};
     std::string acceptance_reason;
-#endif
 };
+#endif
 struct FixedNeighborBlockFailureDiagnostics
 {
     std::size_t component_index{},sweep_index{},block_index{},core_atom_count{},affected_row_count{},
@@ -75,7 +75,9 @@ struct FixedNeighborBlockRecord
     double local_final_gradient_inf_norm{},local_final_ac_kkt{};
     double search_seconds{},block_seconds{},profile_factor_seconds{};
     int profile_evaluations{},accepted_updates{};
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     std::vector<FixedNeighborProfileTrial> profile_trials;
+#endif
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     std::size_t component_index{};
     std::string component_id;
@@ -155,9 +157,13 @@ struct FixedNeighborPolicy
     std::size_t core_atoms{12},maximum_sweeps{30};
     JointConvergenceCriteria convergence_criteria{StrictJointConvergenceCriteria};
     bool stop_after_stationarity{true};
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     bool capture_local_trajectory{};
+#endif
     bool retain_diagnostic_records{true};
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     bool certify_endpoint{true}; // Diagnostic facade only; production components always certify.
+#endif
     bool collect_telemetry{};
     bool collect_diagnostics{};
     bool assess_local_conditioning{};

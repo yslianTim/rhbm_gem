@@ -702,6 +702,13 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     const FixedNeighborPolicy & policy,Vector initial_beta)
 {
     FixedNeighborSearchResult out;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    const bool endpoint_certification_enabled=policy.certify_endpoint;
+    const bool capture_local_trajectory=policy.capture_local_trajectory;
+#else
+    constexpr bool endpoint_certification_enabled=true;
+    constexpr bool capture_local_trajectory=false;
+#endif
     EvaluationContext context=parent_context;
     if(policy.eta_upper_bound)
     {
@@ -927,7 +934,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         mapping_timer.target=nullptr;
     }
     if(policy.preparation_observer) policy.preparation_observer();
-    const bool retain_diagnostics=policy.collect_diagnostics || policy.capture_local_trajectory ||
+    const bool retain_diagnostics=policy.collect_diagnostics || capture_local_trajectory ||
         static_cast<bool>(policy.state_observer);
     bool stop=false;
     std::size_t next_certification_retry_sweep{};
@@ -1024,7 +1031,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             record.search_seconds=Seconds(search_started); record.profile_evaluations=profile_search.evaluations;
             if(policy.collect_telemetry) out.work.local_search_seconds+=record.search_seconds;
             record.accepted_updates=profile_search.accepted; record.local_search_stop_reason=profile_search.stop_reason;
-            if(policy.capture_local_trajectory)
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            if(capture_local_trajectory)
             {
                 record.profile_trials.reserve(profile_search.trials.size());
                 double accepted_objective=record.local_objective_before;
@@ -1048,7 +1056,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                     telemetry.profile_seconds=trial.seconds; telemetry.factor_seconds=trial.factor_seconds;
                     cumulative_factor_seconds+=trial.factor_seconds;
                     telemetry.cumulative_factor_seconds=cumulative_factor_seconds;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
                     if(trial.lm)
                     {
                         telemetry.lm_actual_decrease=trial.lm->actual_decrease;
@@ -1063,7 +1070,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                         telemetry.active_bound_indices=trial.lm->active_bound_indices;
                         telemetry.active_bound_multipliers=trial.lm->active_bound_multipliers;
                     }
-#endif
                     record.profile_trials.push_back(std::move(telemetry));
                     if(trial.accepted && std::isfinite(objective))
                     {
@@ -1073,6 +1079,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 }
                 record.profile_factor_seconds=cumulative_factor_seconds;
             }
+#endif
             ++sweep.block_solves; ++out.total_block_solves;
             if(policy.collect_telemetry) ++out.work.block_solves;
             sweep.profile_evaluations+=static_cast<std::size_t>(profile_search.evaluations);
@@ -1266,7 +1273,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         if(stationarity==FixedNeighborStationarityState::ConfirmedStationary)
         {
             if(out.confirmed_stationarity_sweep==0) out.confirmed_stationarity_sweep=sweep_index+1;
-            if(!policy.stop_after_stationarity || !policy.certify_endpoint)
+            if(!policy.stop_after_stationarity || !endpoint_certification_enabled)
             {
                 out.search_converged=true; out.reason="block-stationary";
                 if(policy.stop_after_stationarity) break;
@@ -1300,7 +1307,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         const bool recovery_pending=std::any_of(block_failure_visits.begin(),block_failure_visits.end(),
             [](std::size_t visits){return visits>0;});
         out.reason=recovery_pending ? "block-recovery-sweep-budget" : "block-sweep-budget";
-        if(!recovery_pending && policy.stop_after_stationarity && policy.certify_endpoint && out.sweep_count &&
+        if(!recovery_pending && policy.stop_after_stationarity && endpoint_certification_enabled && out.sweep_count &&
             out.certification_sweep!=out.sweep_count)
         {
             out.certification=certify_endpoint();
