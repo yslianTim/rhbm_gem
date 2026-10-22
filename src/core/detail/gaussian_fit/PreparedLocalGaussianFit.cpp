@@ -1,14 +1,3 @@
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include "support/EndpointRefinementTestSupport.hpp"
-#include <sstream>
-#include <iomanip>
-#endif
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include "support/SolverFailureCapture.hpp"
-#include "support/SecondStageWorkCapture.hpp"
-#else
-#define RHBM_TEST_COUNT_WORK(kind) ((void)0)
-#endif
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include "utils/hrl/MDPDEEndpointRefinement.hpp"
 
@@ -138,46 +127,20 @@ LocalGaussianResult PreparedLocalGaussianDesign::Estimate(
     const GaussianModel3D & offset_model,
     bool enable_failed_only_refinement) const
 {
-    RHBM_TEST_COUNT_WORK(Solver);
     numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
     auto dataset{ BuildDataset(sample_response_list, offset_model) };
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    second_stage_test::CaptureShapeResponse(sample_response_list, offset_model);
-#endif
     auto result{
         rhbm_helper::EstimateBetaMDPDE(
             alpha_r,
             dataset,
             RHBMExecutionOptions{ .thread_size = thread_size })
     };
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    second_stage_test::CaptureShapeFailure(dataset, alpha_r, RHBMExecutionOptions{ .thread_size = thread_size }, result);
-    if (second_stage_test::IsEndpointTestActive())
-    {
-        result = second_stage_test::ApplyEndpointTestPolicy({dataset,alpha_r,
-            RHBMExecutionOptions{.thread_size=thread_size},result});
-    }
-    else
-#endif
     if (enable_failed_only_refinement)
     {
         result = mdpde_detail::ApplyFailedOnlyRefinement(dataset, alpha_r,
             RHBMExecutionOptions{.thread_size = thread_size}, result);
     }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    second_stage_test::CaptureShapeSolve(result);
-#endif
     return DecodeLocalGaussianResult(alpha_r, result, offset_model.GetOffset());
 }
-
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-std::string PreparedLocalGaussianDesign::ExperimentSnapshot() const
-{
-    std::ostringstream out; out << std::setprecision(17) << m_source_sample_count << ':';
-    for (const auto & row : m_row_list) out << row.source_sample_index << ',' << row.distance << ';';
-    out << m_design_matrix;
-    return out.str();
-}
-#endif
 
 } // namespace rhbm_gem::core::detail

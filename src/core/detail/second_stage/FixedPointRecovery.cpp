@@ -1,9 +1,5 @@
 #include "core/detail/second_stage/FixedPointRecovery.hpp"
 #include <cmath>
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include "support/SolverFailureCapture.hpp"
-#include "support/EndpointRefinementTestSupport.hpp"
-#endif
 
 namespace rhbm_gem::core::detail {
 
@@ -23,17 +19,11 @@ FixedPointRecoveryResult RunFixedPointRecovery(
     const TrustRegionStateSet & radii, const SuspiciousBlockActivity & activity)
 {
     FixedPointRecoveryResult result;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    second_stage_test::ScopedSolverCapturePhase capture_phase("recovery-current");
-#endif
     auto & diagnostic{ result.diagnostics };
     diagnostic.attempted = true;
     diagnostic.reason = "current-operator-unqualified";
     ++diagnostic.operator_evaluations;
     result.current_operator = EvaluateNominalOperator(context, keys, current, options, ridge);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    second_stage_test::CompareEndpointOperators("recovery-current",context,keys,current,options,ridge,result.current_operator);
-#endif
     diagnostic.current_residual = QualifiedNominalResidualMeanSquare(result.current_operator, current);
     if (!diagnostic.current_residual) return result;
     diagnostic.reason = "best-objective-unavailable";
@@ -64,9 +54,6 @@ FixedPointRecoveryResult RunFixedPointRecovery(
     diagnostic.reason = "search-exhausted";
     for (std::size_t trial = 0; trial < 8; ++trial)
     {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        second_stage_test::ScopedSolverCapturePhase trial_phase("recovery-trial");
-#endif
         const double factor{ std::ldexp(1.0, -static_cast<int>(trial)) };
         auto & detail{ diagnostic.trials.emplace_back(RecoveryTrial{ factor, "invalid-candidate" }) };
         const auto models{ BuildDampedModelList(previous, result.current_operator.state, factor) };

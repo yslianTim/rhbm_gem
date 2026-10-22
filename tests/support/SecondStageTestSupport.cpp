@@ -230,52 +230,6 @@ std::unique_ptr<rg::ModelObject> BuildDefenseModel(
     return model;
 }
 
-std::unique_ptr<rg::ModelObject> BuildNearCollinearDefenseModel(
-    double intensity_scale)
-{
-    return BuildDefenseModel(
-        {
-            std::array<double, 3>{ 0.0, 0.0, 0.0 },
-            std::array<double, 3>{ 1.0e-4, 0.0, 0.0 }
-        },
-        { Spot::C, Spot::O },
-        { Element::CARBON, Element::OXYGEN },
-        {
-            rg::GaussianModel3D{ 6.0 * intensity_scale, 0.55, 0.20 * intensity_scale },
-            rg::GaussianModel3D{ 5.5 * intensity_scale, 0.55, -0.15 * intensity_scale }
-        },
-        rg::GaussianModel3D{ 5.75 * intensity_scale, 0.55, 0.0 });
-}
-
-std::unique_ptr<rg::ModelObject> BuildJointPolishDefenseModel()
-{
-    auto model{ BuildDefenseModel(
-        {
-            std::array<double, 3>{ 0.0, 0.0, 0.0 },
-            std::array<double, 3>{ 0.8, 0.0, 0.0 }
-        },
-        { Spot::C, Spot::O },
-        { Element::CARBON, Element::OXYGEN },
-        {
-            rg::GaussianModel3D{ 6.0, 0.45, 0.20 },
-            rg::GaussianModel3D{ 4.5, 0.70, -0.12 }
-        },
-        rg::GaussianModel3D{ 5.25, 0.60, 0.02 }) };
-    auto analysis{ model->EditAnalysis() };
-    const auto & atom_list{ model->GetSelectedAtoms() };
-    // Keep the raw joint-offset update inside the trust region now that a
-    // noise-scale rebound no longer supplies an incidental rollback.
-    analysis.SetAtomLocalGaussianResult(
-        FittingStage::Second,
-        *atom_list.at(0),
-        MakeGaussianResult(rg::GaussianModel3D{ 5.8, 0.47, 0.15 }));
-    analysis.SetAtomLocalGaussianResult(
-        FittingStage::Second,
-        *atom_list.at(1),
-        MakeGaussianResult(rg::GaussianModel3D{ 4.7, 0.68, -0.08 }));
-    return model;
-}
-
 std::unique_ptr<rg::ModelObject> BuildIndependentOffsetDefenseModel(
     double intensity_scale,
     bool alternate_keys)

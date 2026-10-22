@@ -50,11 +50,6 @@ std::unique_ptr<rhbm_gem::ModelObject> BuildDefenseModel(
     const std::vector<rhbm_gem::GaussianModel3D> & truth_model_list,
     const rhbm_gem::GaussianModel3D & initial_model);
 
-std::unique_ptr<rhbm_gem::ModelObject> BuildNearCollinearDefenseModel(
-    double intensity_scale = 1.0);
-
-std::unique_ptr<rhbm_gem::ModelObject> BuildJointPolishDefenseModel();
-
 std::unique_ptr<rhbm_gem::ModelObject> BuildIndependentOffsetDefenseModel(
     double intensity_scale = 1.0,
     bool alternate_keys = false);

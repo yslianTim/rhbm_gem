@@ -21,7 +21,6 @@ namespace detail = rhbm_gem::core::detail;
 namespace rg = rhbm_gem;
 using rhbm_gem::FittingStage;
 
-using second_stage_test::BuildNearCollinearDefenseModel;
 using second_stage_test::ExpectGaussianModelsNear;
 using second_stage_test::GetEstimateModel;
 using second_stage_test::MakeSecondStageOptions;

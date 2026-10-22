@@ -24,7 +24,6 @@ namespace rg = rhbm_gem;
 using rhbm_gem::FittingStage;
 
 using second_stage_test::BuildDefenseModel;
-using second_stage_test::BuildNearCollinearDefenseModel;
 using second_stage_test::BuildSeparatedRollbackDefenseModel;
 using second_stage_test::CalculateSelectedAtomResponseMeanSquaredError;
 using second_stage_test::ExpectGaussianModelsNear;

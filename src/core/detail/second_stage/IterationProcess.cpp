@@ -1,7 +1,3 @@
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include "support/SolverFailureCapture.hpp"
-#include "support/EndpointRefinementTestSupport.hpp"
-#endif
 #include "core/detail/second_stage/IterationResult.hpp"
 #include "core/detail/second_stage/FixedPointRecovery.hpp"
 #include "core/detail/second_stage/ConvergenceCertificate.hpp"
@@ -480,9 +476,6 @@ static IterationResult RunIteration(
     PerformanceCounters & performance_counters)
 {
     iteration_state.attempts = attempt_number;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    second_stage_test::ScopedSolverCapturePhase capture_phase("proposal", attempt_number);
-#endif
     iteration_state.diagnostics = IterationDiagnostics{};
     // Prepare this attempt's frozen background, objectives, and active blocks.
     const bool background_partition_changed{ attempt_number > 1 && BeginFrozenBackgroundIteration(
@@ -773,9 +766,6 @@ static std::optional<ConvergenceAssessment> EvaluateFinalPolishCertificate(
 static void CertifyFinalState(const SecondStageContext & context, const FitOptions & options,
     IterationState & state, const FitState & final_state)
 {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    second_stage_test::ScopedSolverCapturePhase capture_phase("final", state.attempts);
-#endif
     try
     {
         const auto keys{ BuildGraphClusterKeyList(state.graph_partition) };
@@ -783,9 +773,6 @@ static void CertifyFinalState(const SecondStageContext & context, const FitOptio
         const auto ridge{ BuildSuspiciousJointOffsetRidgeMultiplierList(state.rollback_atom_mask, activity, {}) };
         ++state.certificate_operator_evaluations;
         const auto evidence{ EvaluateNominalOperator(context, keys, final_state, options, ridge) };
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        second_stage_test::CompareEndpointOperators("final",context,keys,final_state,options,ridge,evidence);
-#endif
         state.final_certificate = AssessNominalOperator(evidence, final_state);
     }
     catch (const std::exception &) { state.final_certificate.reset(); }
@@ -885,9 +872,6 @@ static const FitState & FinalizeSecondStageState(
 
 void RunSecondStageIterations(ModelObject & model_object, const FitOptions & options)
 {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    second_stage_test::ScopedSecondStageEndpointTest endpoint_test;
-#endif
     if (options.enable_second_stage_dependency_polish &&
         options.second_stage_dependency_polish_max_iterations == 0)
     {
@@ -916,9 +900,6 @@ void RunSecondStageIterations(ModelObject & model_object, const FitOptions & opt
         context = std::move(initialization->context);
         initial_state = std::move(initialization->state);
     }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    second_stage_test::CaptureEndpointInitialState(context,initial_state,options);
-#endif
     auto graph_topology{
         BuildSecondStageGraphTopology(context, initial_state, options.quiet_mode)
     };

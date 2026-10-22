@@ -1,8 +1,3 @@
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include "support/SecondStageWorkCapture.hpp"
-#else
-#define RHBM_TEST_COUNT_WORK(kind) ((void)0)
-#endif
 #include "core/detail/second_stage/ObjectiveEvaluation.hpp"
 
 #include "core/detail/gaussian_fit/FittingRanges.hpp"
@@ -151,7 +146,6 @@ std::optional<ObjectiveBreakdown> EvaluateObjectiveContributionImpl(
     const std::vector<SampleRef> & sample_ref_list,
     const ObjectiveDomain & domain)
 {
-    RHBM_TEST_COUNT_WORK(Objective);
     const auto residual_contribution{
         EvaluateResidualObjectiveContribution(sample_ref_list, domain, evaluator)
     };
@@ -172,7 +166,6 @@ std::optional<ObjectiveBreakdown> EvaluateAuditObjectiveImpl(
     const State & state,
     const Evaluator & evaluator)
 {
-    RHBM_TEST_COUNT_WORK(Objective);
     double fit_range_residual_objective{ 0.0 };
     double tail_validation_loss{ 0.0 };
     double offset_plausibility_penalty{ 0.0 };
@@ -513,7 +506,6 @@ std::optional<ObjectiveBreakdown> EvaluateObjectiveDelta(
     const ObjectiveDomain & domain,
     const ObjectiveBreakdown & baseline)
 {
-    RHBM_TEST_COUNT_WORK(Objective);
     const auto & changed_key{
         candidate_overlay.GetState().GetOverrideAtomIndexList()
     };

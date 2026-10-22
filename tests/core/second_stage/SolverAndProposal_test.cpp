@@ -27,7 +27,6 @@ namespace alg = rhbm_gem::algorithm;
 using rhbm_gem::FittingStage;
 
 using second_stage_test::BuildIndependentOffsetDefenseModel;
-using second_stage_test::BuildJointPolishDefenseModel;
 using second_stage_test::BuildJointPolishFixture;
 using second_stage_test::CalculateSelectedAtomResponseMeanSquaredError;
 using second_stage_test::ExpectGaussianModelsNear;

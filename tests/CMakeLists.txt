@@ -241,11 +241,6 @@ endforeach()
 
 add_library(rhbm_gem_test STATIC
     ${_rhbm_gem_test_sources}
-    support/SecondStageWorkCapture.cpp
-    support/SecondStageBackgroundCapture.cpp
-    support/SolverFailureCapture.cpp
-    support/MDPDETestSupport.cpp
-    support/EndpointRefinementTestSupport.cpp
     support/JointFixedNeighborDiagnostic.cpp
 )
 foreach(_property IN ITEMS
