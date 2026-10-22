@@ -3,9 +3,6 @@
 #include <cmath>
 
 namespace rhbm_gem::core::joint_component {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-CompactSvdMode & CompactSvdModeForTesting() {static thread_local auto mode=CompactSvdMode::Automatic; return mode;}
-#endif
 namespace {
 template<class Svd>
 CompactSvdResult Decompose(const Matrix & matrix,double relative,double absolute,const Vector * rhs,bool guard,bool right)
@@ -47,19 +44,13 @@ CompactSvdResult CompactSvd(const Matrix & matrix,double relative,double absolut
     const bool right=vectors==CompactSvdVectors::Right;
     if(matrix.rows()==0 || matrix.cols()==0 || !matrix.allFinite() ||
         (rhs && (rhs->size()!=matrix.rows() || !rhs->allFinite()))) return {};
-    bool automatic=true,legacy=false;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    automatic=CompactSvdModeForTesting()==CompactSvdMode::Automatic;
-    legacy=CompactSvdModeForTesting()==CompactSvdMode::Legacy;
-#endif
     const auto jacobi=[&]() {
         if(rhs) return Jacobi<Eigen::ComputeFullU|Eigen::ComputeFullV>(matrix,relative,absolute,rhs,right);
-        if(legacy) return Jacobi<Eigen::ComputeThinU|Eigen::ComputeThinV>(matrix,relative,absolute,rhs,right);
         if(right) return Jacobi<Eigen::ComputeThinV>(matrix,relative,absolute,rhs,right);
         return Jacobi<0>(matrix,relative,absolute,rhs,right);
     };
     CompactSvdResult out;
-    const bool bdc=automatic && std::min(matrix.rows(),matrix.cols())>=16;
+    const bool bdc=std::min(matrix.rows(),matrix.cols())>=16;
     if(bdc)
     {
         if(rhs) out=Decompose<Eigen::BDCSVD<Matrix,Eigen::ComputeThinU|Eigen::ComputeThinV>>(matrix,relative,absolute,rhs,true,right);

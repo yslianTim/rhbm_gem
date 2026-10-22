@@ -19,12 +19,6 @@ namespace p=m::joint_abc;
 namespace n=p::runtime;
 using Vector=Eigen::VectorXd;
 using Matrix=Eigen::MatrixXd;
-struct SvdMode
-{
-    p::runtime::CompactSvdMode saved{p::runtime::CompactSvdModeForTesting()};
-    explicit SvdMode(p::runtime::CompactSvdMode mode) {p::runtime::CompactSvdModeForTesting()=mode;}
-    ~SvdMode() {p::runtime::CompactSvdModeForTesting()=saved;}
-};
 struct Sample
 {
     m::unique_grid::Grid grid;
@@ -233,7 +227,7 @@ TEST(JointComponentNumericsTest, LocalLinearCertificateKeepsItsStrictKktLimit)
     EXPECT_FALSE(certificate.kkt_passed);
 }
 
-TEST(JointComponentNumericsTest, CompactSvdPreservesRankBoundaryAndAbsoluteOverride)
+TEST(JointComponentNumericsTest, CompactSvdMatchesJacobiReferenceAtRankBoundaryAndAbsoluteOverride)
 {
     namespace n=p::runtime;
     constexpr double relative=1e-9;
@@ -242,12 +236,16 @@ TEST(JointComponentNumericsTest, CompactSvdPreservesRankBoundaryAndAbsoluteOverr
         const double threshold=absolute<0 ? relative : absolute;
         Matrix x=Matrix::Identity(16,16); x(15,15)=threshold*factor;
         const Vector rhs=x*Vector::LinSpaced(16,.5,2.);
-        n::CompactSvdResult expected;
-        {SvdMode mode(n::CompactSvdMode::Legacy); expected=n::CompactSvd(x,relative,absolute,&rhs);}
+        Eigen::JacobiSVD<Matrix,Eigen::ComputeFullU|Eigen::ComputeFullV> reference(x);
+        const double maximum=reference.singularValues()(0);
+        reference.setThreshold(absolute>=0 && maximum>0 ? absolute/maximum : relative);
+        const double expected_threshold=reference.threshold()*maximum;
+        const Eigen::Index expected_rank=reference.rank();
+        const Vector expected_solution=reference.solve(rhs);
         const auto actual=n::CompactSvd(x,relative,absolute,&rhs);
-        ASSERT_TRUE(actual.valid); EXPECT_EQ(actual.rank,expected.rank);
-        EXPECT_EQ(actual.threshold,expected.threshold);
-        EXPECT_LT((actual.solution-expected.solution).norm(),1e-10);
+        ASSERT_TRUE(actual.valid); EXPECT_EQ(actual.rank,expected_rank);
+        EXPECT_EQ(actual.threshold,expected_threshold);
+        EXPECT_LT((actual.solution-expected_solution).norm(),1e-10);
         EXPECT_TRUE(actual.used_bdc);
         ASSERT_EQ(actual.solution.size(),rhs.size()); EXPECT_TRUE(actual.solution.allFinite());
         const bool near=std::abs(factor-1)*threshold<=64*std::numeric_limits<double>::epsilon()*16;
