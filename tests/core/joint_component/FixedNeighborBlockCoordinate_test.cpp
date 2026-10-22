@@ -369,6 +369,24 @@ TEST(JointFixedNeighborBlockCoordinateTest, SearchResultAndIndependentCertificat
     EXPECT_TRUE((quiet_certification.assessment.primary.eta.array()==quiet.state.eta.array()).all());
     EXPECT_TRUE((quiet_certification.assessment.primary.beta.array()==quiet.state.beta.array()).all());
 }
+
+TEST(JointFixedNeighborBlockCoordinateTest, BlockSinkReceivesRecordsWithoutRetainingThemInSearchResult)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector eta=n::Vector::Constant(2,std::log(.55));
+    n::FixedNeighborDiagnosticSink sink;
+    std::vector<n::FixedNeighborBlockRecord> records;
+    sink.block=[&](const auto & record){records.push_back(record);};
+    n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=1;
+    policy.diagnostic_sink=&sink;
+    const auto result=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,data.context,policy);
+    EXPECT_TRUE(result.blocks.empty());
+    ASSERT_EQ(records.size(),2u);
+    EXPECT_EQ(records[0].core_atoms.size(),1u);
+    EXPECT_EQ(records[1].core_atoms.size(),1u);
+}
+
 TEST(JointFixedNeighborBlockCoordinateTest, FixedNeighborAcceptsAtMostOneTrustedLocalUpdatePerBlockVisit)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",32));

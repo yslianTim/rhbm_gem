@@ -108,8 +108,7 @@ struct FixedNeighborWork
         effective_response_seconds{},local_search_seconds{},local_state_seconds{},
         candidate_copy_seconds{},candidate_replay_seconds{},cache_update_seconds{},sweep_replay_seconds{},
         sweep_global_state_seconds{},maximum_block_seconds{},maximum_cache_replay_error{};
-    std::size_t block_visits{},block_solves{},full_candidate_replays{},candidate_state_full_copies{},
-        affected_row_updates{},old_core_basis_builds{};
+    std::size_t full_candidate_replays{},affected_row_updates{};
     std::size_t local_problem_count{},minimum_local_atoms{},maximum_local_atoms{};
     std::size_t local_conditioning_peak_memory_estimate_bytes{};
     std::size_t parameter_stability_peak_memory_estimate_bytes{},perturbation_solves{},perturbation_evaluations{};
