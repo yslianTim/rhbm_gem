@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include "support/JointPartialSelection.hpp"
 #include "support/JointHaloObservationExclusion.hpp"
 #include "support/DataObjectTestSupport.hpp"
@@ -387,6 +388,22 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsOnceWi
         if (!target) EXPECT_FALSE(view.GetGroupMemberResult());
     }
     EXPECT_GT(local_regression_count, 0u);
+
+    const auto contributors=core::detail::BuildJointPeelingContributorUniverse(*f.model,problem,&result);
+    const auto halo=std::lower_bound(contributors.contributors.begin(),contributors.contributors.end(),21,
+        [](const auto & contributor,int id){return contributor.atom_id<id;});
+    ASSERT_NE(halo,contributors.contributors.end());
+    ASSERT_EQ(halo->atom_id,21);
+    ASSERT_TRUE(halo->contributor_index);
+    EXPECT_FALSE(halo->target);
+    const auto first_target_id=std::stoi(result.atom_ids[result.selection_domain->target_indices.front()]);
+    const auto * first_target=f.model->FindAtomPtr(first_target_id);
+    ASSERT_NE(first_target,nullptr);
+    const auto first_target_view=rhbm_gem::AtomLocalPotentialView::For(*first_target);
+    ASSERT_TRUE(first_target_view.GetPostFitPeeling());
+    EXPECT_THROW(core::detail::BuildPostJointLocalSamples(
+        *f.map,*f.model,problem,21,*first_target_view.GetPostFitPeeling(),result),std::invalid_argument);
+
     const auto direct = core::FitJointComponents(problem, result.initialization.b);
     EXPECT_EQ(result.objective, direct.objective);
     ASSERT_EQ(result.components.size(), direct.components.size());
@@ -637,13 +654,41 @@ TEST(JointComponentPartialSelectionTest, PeelingIncludesDistantHaloThroughInterp
 
 TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIdentityAndBuildsMappingsOnce)
 {
-    auto f = joint_partial_test::Make("all");
+    auto f = joint_partial_test::Make("bridge");
+    const std::array<int,3> atom_ids{10,20,30};
+    f.map=std::make_unique<rhbm_gem::MapObject>(std::array<int,3>{49,25,25},
+        std::array<double,3>{.5,.5,.5},std::array<double,3>{-12,-6,-6},
+        std::make_unique<double[]>(49*25*25));
+    const std::array<double,3> positions{-6.0,0.0,6.0};
+    std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
+    for(std::size_t i=0;i<atom_ids.size();++i)
+    {
+        auto atom=std::make_unique<rhbm_gem::AtomObject>();
+        atom->SetSerialID(atom_ids[i]);
+        atom->SetElement(Element::CARBON);
+        atom->SetPosition(positions[i],0.0,0.0);
+        atom->SetChainID("A");
+        atom->SetComponentID("ALA");
+        atom->SetAtomID("CA"+std::to_string(i));
+        atoms.push_back(std::move(atom));
+    }
+    f.model=std::make_unique<rhbm_gem::ModelObject>(std::move(atoms));
+    f.model->SelectAllAtoms();
+    SetExactMapForFixture(f);
     const auto problem = core::BuildPureHaloSupportExclusionProblem(*f.map, *f.model);
     const auto snapshot = core::CaptureJointAnalysisResult(core::FitJointComponents(problem, f.b));
     f.model->EditAnalysis().ApplyJointResult(snapshot, "shared-context-test");
-    for (const auto * atom : f.model->GetSelectedAtoms())
-        f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*atom,
-            core::SampleAtomMapValues(*f.map, *atom, SphereSamplingMethod::FibonacciDeterministic));
+    for (std::size_t i=0;i<atom_ids.size();++i)
+    {
+        const auto * atom=f.model->FindAtomPtr(atom_ids[i]);
+        ASSERT_NE(atom,nullptr);
+        LocalPotentialSampleList raw(1);
+        raw.front().point.distance=0.0;
+        raw.front().point.position=atom->GetPosition();
+        raw.front().point.is_selected=true;
+        raw.front().response=10.0+static_cast<double>(i);
+        f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*atom,raw);
+    }
 
     core::detail::JointPostprocessingMetrics metrics;
     const core::detail::JointPostprocessingContext context(
@@ -654,7 +699,7 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
     EXPECT_EQ(metrics.contributor_mapping_builds, 1u);
     const auto peelings = context.BuildPostFitPeelingSamples(
         problem.Input().selection_domain->target_indices);
-    ASSERT_EQ(peelings.size(), 2u);
+    ASSERT_EQ(peelings.size(), atom_ids.size());
     const auto peeling_batch = context.BuildPostFitPeelingBatch(
         problem.Input().selection_domain->target_indices);
     ASSERT_EQ(peeling_batch.size(), peelings.size());
@@ -681,9 +726,12 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
     const auto standalone_peelings = core::detail::BuildPostFitPeelingSamples(
         *f.map, *f.model, problem, problem.Input().selection_domain->target_indices, &snapshot);
     std::size_t expected_prepared_samples{};
+    std::size_t target_position{};
     for (const auto * atom : f.model->GetSelectedAtoms())
     {
         const int id = atom->GetSerialID();
+        ASSERT_LT(target_position,atom_ids.size());
+        EXPECT_EQ(id,atom_ids[target_position]);
         const auto & shared_peeling = peelings.at(id);
         const auto & standalone_peeling = standalone_peelings.at(id);
         const auto local = rhbm_gem::AtomLocalPotentialView::For(*atom);
@@ -698,30 +746,163 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
         const auto shared = context.BuildPostJointLocalSamples(id, shared_peeling);
         const auto standalone = core::detail::BuildPostJointLocalSamples(
             *f.map, *f.model, problem, id, standalone_peeling, snapshot);
+        EXPECT_EQ(shared.source.atom_id,std::to_string(id));
+        EXPECT_EQ(shared.source.atom_id,standalone.source.atom_id);
+        EXPECT_EQ(shared.source.method,standalone.source.method);
+        EXPECT_EQ(shared.source.component_id,standalone.source.component_id);
+        EXPECT_EQ(shared.source.run_id,standalone.source.run_id);
+        EXPECT_EQ(shared.source.role,standalone.source.role);
+        EXPECT_EQ(shared.source.fixed_from_first_stage,standalone.source.fixed_from_first_stage);
         EXPECT_EQ(shared.samples.size(), raw_samples.size());
         ASSERT_EQ(shared.samples.size(), standalone.samples.size());
         EXPECT_DOUBLE_EQ(shared.fixed_charge.coefficient, standalone.fixed_charge.coefficient);
         EXPECT_DOUBLE_EQ(shared.fixed_charge.width, standalone.fixed_charge.width);
+        const auto stage=local.GetStageEstimate(rhbm_gem::FittingStage::Second);
+        ASSERT_TRUE(stage.point);
+        EXPECT_DOUBLE_EQ(shared.fixed_charge.coefficient,stage.point->GetOffset());
+        EXPECT_DOUBLE_EQ(shared.fixed_charge.width,stage.point->GetWidth());
         for (std::size_t i = 0; i < shared.samples.size(); ++i)
         {
+            EXPECT_EQ(shared.samples[i].raw_sample_index,i);
+            EXPECT_EQ(shared.samples[i].raw_sample_index,standalone.samples[i].raw_sample_index);
+            EXPECT_DOUBLE_EQ(shared.samples[i].distance,raw_samples[i].point.distance);
+            EXPECT_DOUBLE_EQ(shared.samples[i].raw_response,raw_samples[i].response);
+            EXPECT_DOUBLE_EQ(shared.samples[i].distance,standalone.samples[i].distance);
+            EXPECT_DOUBLE_EQ(shared.samples[i].raw_response,standalone.samples[i].raw_response);
+            EXPECT_EQ(shared.samples[i].peeled_response,standalone.samples[i].peeled_response);
             EXPECT_EQ(shared.samples[i].fixed_charge_response, standalone.samples[i].fixed_charge_response);
             EXPECT_EQ(shared.samples[i].gaussian_response, standalone.samples[i].gaussian_response);
             EXPECT_EQ(shared.samples[i].reason, standalone.samples[i].reason);
         }
+        ASSERT_EQ(shared.samples.size(),1u);
+        ASSERT_TRUE(shared.samples.front().fixed_charge_response);
+        const auto basis=core::joint_component::EvaluateKernel(0.0,stage.point->GetWidth(),2.5);
+        EXPECT_DOUBLE_EQ(*shared.samples.front().fixed_charge_response,
+            stage.point->GetOffset()*basis.charge);
         expected_prepared_samples += shared.samples.size();
         EXPECT_EQ(metrics.snapshot_identity_validation_count, 1u);
         EXPECT_EQ(metrics.full_row_identity_scan_count, 1u);
         EXPECT_EQ(metrics.observation_row_mapping_builds, 1u);
         EXPECT_EQ(metrics.contributor_mapping_builds, 1u);
+        ++target_position;
     }
+    EXPECT_EQ(target_position,atom_ids.size());
     EXPECT_EQ(metrics.snapshot_identity_validation_count, 1u);
     EXPECT_EQ(metrics.full_row_identity_scan_count, 1u);
     EXPECT_EQ(metrics.observation_row_mapping_builds, 1u);
     EXPECT_EQ(metrics.contributor_mapping_builds, 1u);
-    EXPECT_EQ(metrics.target_preparation_count, 2u);
+    EXPECT_EQ(metrics.target_preparation_count, atom_ids.size());
     EXPECT_EQ(metrics.total_prepared_sample_count, expected_prepared_samples);
     EXPECT_EQ(metrics.total_prepared_sample_count,
         metrics.valid_local_sample_count + metrics.invalid_local_sample_count);
+
+    const auto & target_peeling=peelings.at(atom_ids.front());
+    const auto expect_lookup_rejected=[&](const auto & lookup_context,int id,const char * expected_message) {
+        try
+        {
+            (void)lookup_context.BuildPostJointLocalSamples(id,target_peeling);
+            ADD_FAILURE() << "Expected contributor lookup to reject atom " << id;
+        }
+        catch(const std::invalid_argument & error)
+        {
+            EXPECT_STREQ(error.what(),expected_message);
+        }
+    };
+    for(const int missing_id:{5,15,35})
+        expect_lookup_rejected(context,missing_id,"Post-Joint sample target is outside the Joint problem.");
+
+    const auto universe=core::detail::BuildJointPeelingContributorUniverse(
+        *f.model,problem,&snapshot);
+    const auto expect_universe_rejected=[&](auto malformed,const char * expected_message) {
+        try
+        {
+            const core::detail::JointPostprocessingContext rejected(
+                *f.map,*f.model,problem,&snapshot,nullptr,nullptr,std::move(malformed));
+            ADD_FAILURE() << "Expected malformed contributor universe to be rejected";
+        }
+        catch(const std::invalid_argument & error)
+        {
+            EXPECT_STREQ(error.what(),expected_message);
+        }
+    };
+
+    auto duplicate=universe;
+    duplicate.contributors.push_back(duplicate.contributors.back());
+    expect_universe_rejected(std::move(duplicate),"Invalid Joint Peeling contributor universe.");
+
+    auto unsorted=universe;
+    std::swap(unsorted.contributors[0],unsorted.contributors[1]);
+    expect_universe_rejected(std::move(unsorted),"Invalid Joint Peeling contributor universe.");
+
+    const auto target_contributor=[&](auto & contributors) {
+        return std::find_if(contributors.begin(),contributors.end(),[&](const auto & contributor) {
+            return contributor.atom_id==atom_ids.front();
+        });
+    };
+    auto out_of_range=universe;
+    auto found=target_contributor(out_of_range.contributors);
+    ASSERT_NE(found,out_of_range.contributors.end());
+    ASSERT_TRUE(found->contributor_index);
+    found->contributor_index=problem.OriginalInput().atom_ids.size();
+    expect_universe_rejected(std::move(out_of_range),
+        "Joint Peeling contributor universe identity mismatch.");
+
+    auto wrong_id=universe;
+    found=target_contributor(wrong_id.contributors);
+    ASSERT_NE(found,wrong_id.contributors.end());
+    const auto second_target_index=static_cast<std::size_t>(std::distance(
+        problem.OriginalInput().atom_ids.begin(),
+        std::find(problem.OriginalInput().atom_ids.begin(),problem.OriginalInput().atom_ids.end(),
+            std::to_string(atom_ids[1]))));
+    ASSERT_LT(second_target_index,problem.OriginalInput().atom_ids.size());
+    found->contributor_index=second_target_index;
+    expect_universe_rejected(std::move(wrong_id),
+        "Joint Peeling contributor universe identity mismatch.");
+
+    auto missing_target_index=universe;
+    found=target_contributor(missing_target_index.contributors);
+    ASSERT_NE(found,missing_target_index.contributors.end());
+    found->contributor_index.reset();
+    expect_universe_rejected(std::move(missing_target_index),
+        "Joint Peeling contributor universe identity mismatch.");
+
+    auto wrong_target_flag=universe;
+    found=target_contributor(wrong_target_flag.contributors);
+    ASSERT_NE(found,wrong_target_flag.contributors.end());
+    found->target=false;
+    expect_universe_rejected(std::move(wrong_target_flag),
+        "Joint Peeling contributor universe identity mismatch.");
+
+    const auto insert_contributor=[](auto & contributors,core::detail::JointPeelingContributor contributor) {
+        const auto found=std::lower_bound(contributors.begin(),contributors.end(),contributor.atom_id,
+            [](const auto & current,int id){return current.atom_id<id;});
+        contributors.insert(found,std::move(contributor));
+    };
+    auto reconstruction_only=universe;
+    insert_contributor(reconstruction_only.contributors,
+        {25,{0.0,0.0,0.0},std::nullopt,false,true});
+    const core::detail::JointPostprocessingContext reconstruction_context(
+        *f.map,*f.model,problem,&snapshot,nullptr,nullptr,std::move(reconstruction_only));
+    expect_lookup_rejected(reconstruction_context,25,"Post-Joint sample target is outside the Joint problem.");
+
+    for(const double invalid_coordinate:{std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::infinity(),-std::numeric_limits<double>::infinity()})
+    {
+        SCOPED_TRACE(invalid_coordinate);
+        auto invalid_geometry=universe;
+        insert_contributor(invalid_geometry.contributors,
+            {35,{invalid_coordinate,0.0,0.0},std::nullopt,false,true});
+        expect_universe_rejected(std::move(invalid_geometry),
+            "Invalid Joint Peeling contributor universe.");
+    }
+
+    auto ineligible_geometry=universe;
+    insert_contributor(ineligible_geometry.contributors,
+        {35,{std::numeric_limits<double>::quiet_NaN(),std::numeric_limits<double>::infinity(),
+            -std::numeric_limits<double>::infinity()},std::nullopt,false,false});
+    const core::detail::JointPostprocessingContext ineligible_context(
+        *f.map,*f.model,problem,&snapshot,nullptr,nullptr,std::move(ineligible_geometry));
+    expect_lookup_rejected(ineligible_context,35,"Post-Joint sample target is outside the Joint problem.");
 }
 
 TEST(JointComponentPartialSelectionTest, PostJointEvidenceAssessmentEnforcesAvailableContract)
