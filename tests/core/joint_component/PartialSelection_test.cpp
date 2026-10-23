@@ -226,8 +226,17 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
     EXPECT_EQ(halo.GetEstimateMDPDE(rhbm_gem::FittingStage::First).GetWidth(),.91);
     for(const auto & atom:f.model->GetAtomList())
         EXPECT_EQ(rhbm_gem::AtomLocalPotentialView::For(*atom).GetEstimateMDPDE(rhbm_gem::FittingStage::Second).GetWidth(),.91);
+    const auto prediction_before=fit.prediction;
     const auto saved=core::CaptureJointAnalysisResult(fit);
+    auto movable_fit=fit;
+    const auto moved_saved=core::CaptureJointAnalysisResult(std::move(movable_fit));
     const auto encoded=rhbm_gem::joint_result_io::Encode(saved);
+    EXPECT_EQ(rhbm_gem::joint_result_io::Encode(moved_saved),encoded);
+    EXPECT_EQ(fit.prediction.has_value(),prediction_before.has_value());
+    if(prediction_before)
+        EXPECT_EQ(*fit.prediction,*prediction_before);
+    EXPECT_EQ(saved.fitting_to_original_contributors,fit.problem->FittingToOriginalContributors());
+    EXPECT_EQ(saved.fitting_to_original_rows,fit.problem->FittingToOriginalRows());
     EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),19);
     const auto decoded=rhbm_gem::joint_result_io::Decode(encoded);
     ASSERT_TRUE(decoded.selection_domain); EXPECT_EQ(decoded.selection_domain->target_indices,(std::vector<std::size_t>{0}));

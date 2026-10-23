@@ -533,4 +533,20 @@ TEST(JointFixedNeighborBlockCoordinateTest, BudgetExhaustionPreservesCandidateWi
     });
     ASSERT_NE(trust,component.evidence.end());
     EXPECT_EQ(trust->status,rhbm_gem::JointCheckStatus::Passed);
+
+    const auto copy_result=rhbm_gem::core::CaptureJointAnalysisResult(fit);
+    auto movable_fit=fit;
+    const auto move_result=rhbm_gem::core::CaptureJointAnalysisResult(std::move(movable_fit));
+    EXPECT_EQ(move_result.search_completed,copy_result.search_completed);
+    EXPECT_FALSE(copy_result.search_completed);
+    ASSERT_EQ(copy_result.components.size(),1u);
+    ASSERT_EQ(move_result.components.size(),copy_result.components.size());
+    EXPECT_EQ(move_result.components.front().stop_reason,copy_result.components.front().stop_reason);
+    ASSERT_TRUE(copy_result.components.front().candidate_diagnostic);
+    ASSERT_TRUE(move_result.components.front().candidate_diagnostic);
+    EXPECT_EQ(move_result.components.front().candidate_diagnostic->candidate_available,
+        copy_result.components.front().candidate_diagnostic->candidate_available);
+    EXPECT_EQ(move_result.components.front().candidate_diagnostic->numerical_qualification_status,
+        copy_result.components.front().candidate_diagnostic->numerical_qualification_status);
+    if(!qualified) EXPECT_FALSE(copy_result.components.front().state);
 }
