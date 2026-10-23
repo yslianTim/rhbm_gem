@@ -9,6 +9,7 @@
 #include <iterator>
 #include <limits>
 #include "support/JointPartialSelection.hpp"
+#include "support/JointSyntheticWorkload.hpp"
 #include "support/JointHaloObservationExclusion.hpp"
 #include "support/DataObjectTestSupport.hpp"
 #include "core/detail/joint_component/Problem.hpp"
@@ -249,6 +250,122 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(missing_provenance)),std::invalid_argument);
     f.model->EditAnalysis().SetJointResult(saved);
 }
+
+TEST(JointComponentPartialSelectionTest, CopyAndMoveCapturePreserveComponentPersistence)
+{
+    auto fitting=second_stage_test::SyntheticJointWorkload("chain",20);
+    auto original=fitting;
+    rhbm_gem::JointSelectionDomain fitting_selection;
+    fitting_selection.contributor_policy=std::string(rhbm_gem::PureHaloSupportExclusionContributorPolicy);
+    fitting_selection.target_indices.resize(fitting.atom_ids.size());
+    std::iota(fitting_selection.target_indices.begin(),fitting_selection.target_indices.end(),0);
+    fitting_selection.pure_halo_support_exclusion=rhbm_gem::JointPureHaloSupportExclusionProvenance{
+        fitting.row_ids.size(),fitting.row_ids.size(),0,0,0,0};
+    fitting.selection_domain=fitting_selection;
+
+    original.atom_ids.insert(original.atom_ids.begin(),"halo");
+    original.support.insert(original.support.begin(),{{original.observations.size(),0.0}});
+    original.observations.push_back(0.0);
+    original.row_ids.push_back("halo-only-row");
+    auto original_selection=fitting_selection;
+    for(auto & target:original_selection.target_indices) ++target;
+    original_selection.pure_halo_support_exclusion=rhbm_gem::JointPureHaloSupportExclusionProvenance{
+        original.row_ids.size(),fitting.row_ids.size(),1,1,1,0};
+    original.selection_domain=std::move(original_selection);
+    core::JointProblem fitting_problem(std::move(fitting));
+    std::vector<std::size_t> contributors(original.atom_ids.size()-1),rows(original.row_ids.size()-1);
+    std::iota(contributors.begin(),contributors.end(),1);
+    std::iota(rows.begin(),rows.end(),0);
+    const auto problem=fitting_problem.WithReconstructionDomain(
+        std::move(original),std::move(contributors),std::move(rows));
+
+    rhbm_gem::JointInitialization initialization;
+    initialization.valid=true;
+    initialization.reason="valid-widths";
+    for(const auto & id:problem.Input().atom_ids)
+    {
+        rhbm_gem::JointInitializationAtom atom;
+        atom.id=id;
+        atom.mdpde[1]=.5;
+        atom.native_status=static_cast<int>(rhbm_gem::RHBMEstimationStatus::SUCCESS);
+        atom.target=true;
+        atom.first_stage_fit_qualified=true;
+        atom.reason="valid-width";
+        atom.used_b=.5;
+        initialization.atoms.push_back(std::move(atom));
+        initialization.b.push_back(.5);
+    }
+
+    const auto fit=core::FitJointComponentsInitialized(problem,initialization);
+    ASSERT_TRUE(fit.assembled_state);
+    ASSERT_FALSE(fit.components.empty());
+    ASSERT_TRUE(fit.components.front().state);
+    ASSERT_TRUE(fit.components.front().candidate_diagnostic);
+    const auto compare_copy_move=[](const core::JointFitResult & source) {
+        const auto source_prediction=source.prediction;
+        auto copied_fit=source;
+        auto moved_fit=source;
+        for(auto * value:{&copied_fit,&moved_fit})
+            value->evidence.push_back({std::string(rhbm_gem::JointHaloMedianReconstructionEvidenceName),
+                rhbm_gem::JointCheckStatus::Unavailable,rhbm_gem::JointEvidenceScope::AssembledGlobal,
+                {},{},"halo-median-reconstruction-unavailable"});
+        const auto copied=core::CaptureJointAnalysisResult(copied_fit);
+        auto movable=std::move(moved_fit);
+        const auto moved=core::CaptureJointAnalysisResult(std::move(movable));
+        EXPECT_EQ(rhbm_gem::joint_result_io::Encode(copied),rhbm_gem::joint_result_io::Encode(moved));
+        EXPECT_EQ(source.prediction,source_prediction);
+        return copied;
+    };
+    const auto qualified=compare_copy_move(fit);
+    EXPECT_TRUE(qualified.components.front().state);
+    EXPECT_EQ(qualified.fitting_to_original_contributors,
+        fit.problem->FittingToOriginalContributors());
+    EXPECT_EQ(qualified.fitting_to_original_rows,fit.problem->FittingToOriginalRows());
+    EXPECT_EQ(qualified.components.front().atoms.front(),1u);
+
+    auto nullable_fit=fit;
+    for(auto & component:nullable_fit.components)
+    {component.local_conditioning.clear(); component.parameter_stability.reset();}
+    const auto nullable=compare_copy_move(nullable_fit);
+    EXPECT_TRUE(nullable.components.front().local_conditioning.empty());
+    EXPECT_FALSE(nullable.components.front().parameter_stability);
+
+    auto unqualified_fit=fit;
+    unqualified_fit.assembled_state.reset();
+    unqualified_fit.prediction.reset();
+    unqualified_fit.objective.reset();
+    auto & unqualified_component=unqualified_fit.components.front();
+    unqualified_component.state.reset();
+    unqualified_component.target_evidence.reset();
+    unqualified_fit.target_evidence.reset();
+    ASSERT_TRUE(unqualified_component.candidate_diagnostic);
+    unqualified_component.candidate_diagnostic->certification_status=rhbm_gem::JointCheckStatus::Unavailable;
+    unqualified_component.candidate_diagnostic->numerical_qualification_status=rhbm_gem::JointCheckStatus::Unavailable;
+    unqualified_component.candidate_diagnostic->verification_reason="endpoint-verified-but-unqualified";
+    const auto unqualified=compare_copy_move(unqualified_fit);
+    EXPECT_FALSE(unqualified.components.front().state);
+    EXPECT_NE(unqualified.components.front().candidate_diagnostic->numerical_qualification_status,
+        rhbm_gem::JointCheckStatus::Passed);
+
+    auto resource_limited_fit=unqualified_fit;
+    auto & candidate=*resource_limited_fit.components.front().candidate_diagnostic;
+    candidate.candidate_available=false;
+    candidate.candidate_eta.clear();
+    candidate.candidate_ac.clear();
+    candidate.candidate_objective.reset();
+    candidate.candidate_feasible.reset();
+    candidate.certification_status=rhbm_gem::JointCheckStatus::Unavailable;
+    candidate.endpoint_verification_status=rhbm_gem::JointCheckStatus::Unavailable;
+    candidate.numerical_qualification_status=rhbm_gem::JointCheckStatus::Unavailable;
+    candidate.verification_reason="resource-limit:qualification:budget-exceeded";
+    candidate.resource_limit_reason=candidate.verification_reason;
+    const auto resource_limited=compare_copy_move(resource_limited_fit);
+    EXPECT_FALSE(resource_limited.components.front().state);
+    EXPECT_FALSE(resource_limited.components.front().candidate_diagnostic->candidate_available);
+    EXPECT_EQ(resource_limited.components.front().candidate_diagnostic->resource_limit_reason,
+        "resource-limit:qualification:budget-exceeded");
+}
+
 TEST(JointComponentPartialSelectionTest, UnknownContributorPolicyCannotConstructNewProblem)
 {
     core::JointProblemInput input;
