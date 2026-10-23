@@ -296,11 +296,34 @@ TEST(JointComponentPartialSelectionTest, CopyAndMoveCapturePreserveComponentPers
         initialization.b.push_back(.5);
     }
 
-    const auto fit=core::FitJointComponentsInitialized(problem,initialization);
+    auto fit=core::FitJointComponentsInitialized(problem,initialization);
     ASSERT_TRUE(fit.assembled_state);
     ASSERT_FALSE(fit.components.empty());
     ASSERT_TRUE(fit.components.front().state);
     ASSERT_TRUE(fit.components.front().candidate_diagnostic);
+    for(auto & component:fit.components)
+    {
+        rhbm_gem::JointTargetEvidence evidence;
+        evidence.original_rows=component.rows.size();
+        for(const auto atom:component.atoms)
+        {
+            rhbm_gem::JointAtomPointValidation point;
+            point.atom=atom;
+            point.reason="not-assessed-capture-fixture";
+            evidence.point_atoms.push_back(std::move(point));
+        }
+        component.target_evidence=std::move(evidence);
+    }
+    rhbm_gem::JointTargetEvidence target_evidence;
+    target_evidence.original_rows=problem.Input().row_ids.size();
+    for(const auto atom:problem.Input().selection_domain->target_indices)
+    {
+        rhbm_gem::JointAtomPointValidation point;
+        point.atom=atom;
+        point.reason="not-assessed-capture-fixture";
+        target_evidence.point_atoms.push_back(std::move(point));
+    }
+    fit.target_evidence=std::move(target_evidence);
     const auto compare_copy_move=[](const core::JointFitResult & source) {
         const auto source_prediction=source.prediction;
         auto copied_fit=source;
@@ -318,6 +341,12 @@ TEST(JointComponentPartialSelectionTest, CopyAndMoveCapturePreserveComponentPers
     };
     const auto qualified=compare_copy_move(fit);
     EXPECT_TRUE(qualified.components.front().state);
+    ASSERT_TRUE(qualified.components.front().candidate_diagnostic);
+    EXPECT_EQ(qualified.components.front().candidate_diagnostic->endpoint_verification_status,
+        rhbm_gem::JointCheckStatus::Passed);
+    ASSERT_TRUE(qualified.target_evidence);
+    EXPECT_EQ(qualified.target_evidence->point_atoms.front().atom,1u);
+    ASSERT_TRUE(qualified.components.front().target_evidence);
     EXPECT_EQ(qualified.fitting_to_original_contributors,
         fit.problem->FittingToOriginalContributors());
     EXPECT_EQ(qualified.fitting_to_original_rows,fit.problem->FittingToOriginalRows());
@@ -336,8 +365,6 @@ TEST(JointComponentPartialSelectionTest, CopyAndMoveCapturePreserveComponentPers
     unqualified_fit.objective.reset();
     auto & unqualified_component=unqualified_fit.components.front();
     unqualified_component.state.reset();
-    unqualified_component.target_evidence.reset();
-    unqualified_fit.target_evidence.reset();
     ASSERT_TRUE(unqualified_component.candidate_diagnostic);
     unqualified_component.candidate_diagnostic->certification_status=rhbm_gem::JointCheckStatus::Unavailable;
     unqualified_component.candidate_diagnostic->numerical_qualification_status=rhbm_gem::JointCheckStatus::Unavailable;
