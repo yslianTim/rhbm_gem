@@ -360,10 +360,15 @@ TEST(JointComponentPartialSelectionTest, CopyAndMoveCapturePreserveComponentPers
     EXPECT_FALSE(nullable.components.front().parameter_stability);
 
     auto unqualified_fit=fit;
+    unqualified_fit.search_completed=false;
     unqualified_fit.assembled_state.reset();
     unqualified_fit.prediction.reset();
     unqualified_fit.objective.reset();
     auto & unqualified_component=unqualified_fit.components.front();
+    unqualified_component.search_completed=false;
+    unqualified_component.stop_reason="block-sweep-budget";
+    unqualified_component.search_sweeps=200;
+    unqualified_component.endpoint_certification_sweep=200;
     unqualified_component.state.reset();
     ASSERT_TRUE(unqualified_component.candidate_diagnostic);
     unqualified_component.candidate_diagnostic->certification_status=rhbm_gem::JointCheckStatus::Unavailable;
@@ -371,6 +376,7 @@ TEST(JointComponentPartialSelectionTest, CopyAndMoveCapturePreserveComponentPers
     unqualified_component.candidate_diagnostic->verification_reason="endpoint-verified-but-unqualified";
     const auto unqualified=compare_copy_move(unqualified_fit);
     EXPECT_FALSE(unqualified.components.front().state);
+    EXPECT_EQ(unqualified.components.front().stop_reason,"block-sweep-budget");
     EXPECT_NE(unqualified.components.front().candidate_diagnostic->numerical_qualification_status,
         rhbm_gem::JointCheckStatus::Passed);
 
