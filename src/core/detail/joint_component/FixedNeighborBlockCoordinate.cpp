@@ -72,16 +72,23 @@ Vector SelectBeta(VectorRef beta,const std::vector<std::size_t> & atoms)
     return out;
 }
 struct ReplayState {Vector prediction,residual; double objective{};};
+struct ReplayStructure
+{
+    std::vector<std::uint8_t> informative_rows;
+    ReplayStructure(Eigen::Index row_count,const JointParameterLayout & layout)
+        :informative_rows(static_cast<std::size_t>(row_count))
+    {
+        for(const auto row:layout.informative_rows) informative_rows.at(row)=1;
+    }
+};
 ReplayState Replay(const Domain & domain,const JointParameterLayout & layout,VectorRef observations,
-    VectorRef eta,VectorRef beta,double scale)
+    VectorRef eta,VectorRef beta,double scale,const ReplayStructure & structure)
 {
     ReplayState out; out.prediction=Vector::Zero(observations.size()); out.residual=Vector::Zero(observations.size());
-    std::vector<std::uint8_t> informative(static_cast<std::size_t>(domain.rows));
-    for(auto row:layout.informative_rows) informative.at(row)=1;
     for(auto atom:layout.full_atoms)
     {
         const auto a=static_cast<Eigen::Index>(atom); const double width=std::exp(eta(a));
-        for(const auto & support:domain.atoms[atom]) if(informative.at(static_cast<std::size_t>(support.row)))
+        for(const auto & support:domain.atoms[atom]) if(structure.informative_rows.at(static_cast<std::size_t>(support.row)))
         {
             const auto basis=EvaluateKernel(support.square,width,2.5);
             out.prediction(support.row)+=beta(2*a)*basis.gaussian+beta(2*a+1)*basis.charge;
@@ -785,6 +792,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             !AddMemoryBytes(root_mappings,root_entries,4*sizeof(Eigen::Index)) ||
             !CheckedAddBytes(base_resident,root_mappings,base_resident))) ||
         !AddMemoryBytes(base_resident,local_support_bytes,1) ||
+        !AddMemoryBytes(base_resident,memory_shape.component_observations,sizeof(std::uint8_t)) ||
         !CheckedMultiplyBytes(memory_shape.component_observations,2,twice_rows) ||
         !CheckedAddBytes(memory_shape.component_atoms,twice_rows,selector_entries) ||
         !AddMemoryBytes(base_resident,selector_entries,sizeof(Eigen::Index)))
@@ -886,6 +894,10 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     }
     auto * const profile_work=policy.collect_telemetry || context.eta_upper_bound ?
         &out.work.local_profile_work : nullptr;
+    const auto replay_structure_started=Clock::now();
+    const ReplayStructure replay_structure(domain.rows,layout);
+    if(policy.collect_telemetry)
+        out.work.structural_preparation_seconds+=Seconds(replay_structure_started);
     const auto certify_endpoint=[&] {
         const auto assessment_timer=Measure(policy.collect_telemetry,out.work.endpoint_verification_seconds);
         const auto record_assessment_work=[&](FixedNeighborEndpointCertification certification) {
@@ -907,7 +919,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     out.state.eta=initial_eta;
     out.state.beta=has_initial_beta ? std::move(initial_beta) :
         Vector::Zero(2*static_cast<Eigen::Index>(domain.atoms.size()));
-    auto initial=Replay(domain,layout,y,out.state.eta,out.state.beta,context.scale);
+    auto initial=Replay(domain,layout,y,out.state.eta,out.state.beta,context.scale,replay_structure);
     out.state.prediction=std::move(initial.prediction); out.state.residual=std::move(initial.residual);
     out.state.objective=initial.objective;
     auto mapping_timer=Measure(policy.collect_telemetry,out.work.structural_preparation_seconds);
@@ -1205,7 +1217,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             {
                 const auto candidate_replay_timer=Measure(policy.collect_telemetry,out.work.candidate_replay_seconds);
                 if(policy.collect_telemetry) ++out.work.full_candidate_replays;
-                replay=Replay(domain,layout,y,candidate_eta,candidate_beta,context.scale);
+                replay=Replay(domain,layout,y,candidate_eta,candidate_beta,context.scale,replay_structure);
                 (void)candidate_replay_timer;
             }
             record.objective_after=replay.objective; record.global_replay_delta=replay.objective-out.state.objective;
@@ -1260,7 +1272,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         ReplayState replay;
         {
             const auto timer=Measure(policy.collect_telemetry,out.work.sweep_replay_seconds);
-            replay=Replay(domain,layout,y,out.state.eta,out.state.beta,context.scale);
+            replay=Replay(domain,layout,y,out.state.eta,out.state.beta,context.scale,replay_structure);
             (void)timer;
         }
         sweep.cache_replay_error=PredictionDifference(out.state.prediction,replay.prediction);

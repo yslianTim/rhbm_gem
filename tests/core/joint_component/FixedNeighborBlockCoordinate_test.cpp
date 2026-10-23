@@ -370,6 +370,62 @@ TEST(JointFixedNeighborBlockCoordinateTest, SearchResultAndIndependentCertificat
     EXPECT_TRUE((quiet_certification.assessment.primary.beta.array()==quiet.state.beta.array()).all());
 }
 
+TEST(JointFixedNeighborBlockCoordinateTest, ReplayStructureFollowsComponentLocalRows)
+{
+    rhbm_gem::core::JointProblemInput input;
+    input.atom_ids={"a","b"};
+    input.row_ids={"r0","r1","r2","r3","r4","r5","r6","r7","r8","r9","constant"};
+    input.observations.resize(11);
+    input.support.resize(2);
+    const std::vector<double> squares{0.0,.25,1.0,2.25,4.0};
+    for(std::size_t k=0;k<squares.size();++k)
+        for(std::size_t atom=0;atom<2;++atom)
+        {
+            const auto row=2*k+atom;
+            input.support[atom].push_back({row,squares[k]});
+            const auto basis=n::EvaluateKernel(squares[k],.6,2.5);
+            input.observations[row]=(atom==0 ? 1.3 : 2.1)*basis.gaussian+
+                (atom==0 ? .1 : -.2)*basis.charge;
+        }
+    input.observations.back()=.4;
+
+    const JointProblem problem(std::move(input));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    ASSERT_EQ(data.partition.components.size(),2u);
+    EXPECT_EQ(data.partition.components[0].rows,(n::Indices{0,2,4,6,8}));
+    EXPECT_EQ(data.partition.components[1].rows,(n::Indices{1,3,5,7,9}));
+    EXPECT_EQ(data.partition.constant_rows,(n::Indices{10}));
+
+    const auto fit=rhbm_gem::core::FitJointComponents(problem,{.55,.55});
+    ASSERT_EQ(fit.components.size(),2u);
+    for(const auto & component:fit.components)
+    {
+        ASSERT_TRUE(component.candidate_diagnostic) << component.stop_reason;
+        EXPECT_EQ(component.candidate_diagnostic->endpoint_verification_status,
+            rhbm_gem::JointCheckStatus::Passed);
+        ASSERT_TRUE(component.state) << component.stop_reason;
+    }
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, EmptyOrInvalidReplayRowMappingCannotAcceptState)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector eta=n::Vector::Constant(2,std::log(.55));
+    auto check_invalid=[&](const rhbm_gem::JointParameterLayout & layout) {
+        const auto result=n::SearchFixedNeighborComponent(data.domain,layout,data.y,eta,data.context);
+        EXPECT_EQ(result.reason,"block-invalid-partition");
+        EXPECT_EQ(result.state.eta.size(),0);
+        EXPECT_FALSE(result.search_converged);
+    };
+    auto empty_layout=data.layout;
+    empty_layout.informative_rows.clear();
+    check_invalid(empty_layout);
+    auto invalid_layout=data.layout;
+    invalid_layout.informative_rows.front()=static_cast<std::size_t>(data.domain.rows);
+    check_invalid(invalid_layout);
+}
+
 TEST(JointFixedNeighborBlockCoordinateTest, BlockSinkReceivesRecordsWithoutRetainingThemInSearchResult)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
