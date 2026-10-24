@@ -27,13 +27,16 @@ struct Sample
 };
 struct RejectOnce
 {
-    int calls{},rejected{}; bool always{},reject_all{},tiny_step{}; std::string failure;
-    bool retry() const {return calls<40;}
+    int calls{},rejected{},retry_limit{40}; bool always{},reject_all{},tiny_step{}; std::string failure;
+    bool retry() const {return calls<retry_limit;}
     int values() const {return 2;}
     int operator()(const Vector & x,Vector & r) {++calls; r=Vector::Constant(2,tiny_step ? -1 : x(0)-1); return 0;}
     int df(const Vector &,Eigen::MatrixXd & d) {d=Eigen::MatrixXd::Constant(2,1,tiny_step ? 1e100 : 1.); return 0;}
     int linearize(const Vector & x,const Vector & residual,Eigen::MatrixXd & d,Vector & response,Vector & norms)
     {df(x,d); response=residual; norms=d.colwise().blueNorm(); return 0;}
+    joint::ActiveSetStep solve_bounded_step(const Eigen::MatrixXd & j,const Vector & response,
+        const Vector & x,const Vector & diagonal,double radius,double damping)
+    {return joint::SolveBoundedTrustRegionStep(j,response,diagonal,Vector::Constant(x.size(),2.0)-x,radius,damping);}
     bool Trial(const Vector &,const Vector &,const Vector &,double,double,double,double,double,bool proposed)
     {if(reject_all || (proposed && (always || rejected==0))) {++rejected; return false;} return true;}
 };
@@ -54,9 +57,10 @@ TEST(JointComponentSearchTest, InvalidTrialShrinksWithoutChangingAcceptedState)
     lm.parameters.factor=.1; auto status=lm.minimizeInit(x);
     while(status==Eigen::LevenbergMarquardtSpace::NotStarted || status==Eigen::LevenbergMarquardtSpace::Running) status=lm.minimizeOneStep(x);
     EXPECT_EQ(functor.rejected,1); EXPECT_NEAR(x(0),1,1e-10);
-    RejectOnce fail; fail.always=true; p::InstrumentedLM<RejectOnce> rejecting(fail); x.setZero();
+    RejectOnce fail; fail.always=true; fail.retry_limit=2;
+    p::InstrumentedLM<RejectOnce> rejecting(fail); x.setZero();
     rejecting.minimizeInit(x); status=rejecting.minimizeOneStep(x);
-    EXPECT_EQ(status,Eigen::LevenbergMarquardtSpace::UserAsked); EXPECT_EQ(x(0),0); EXPECT_LE(fail.calls,40);
+    EXPECT_EQ(status,Eigen::LevenbergMarquardtSpace::UserAsked); EXPECT_EQ(x(0),0); EXPECT_EQ(fail.calls,2);
 }
 
 TEST(JointComponentSearchTest, ExplicitSupportArithmeticKeepsStrictBoundary)
@@ -80,16 +84,16 @@ TEST(JointComponentSearchTest, EffectiveWidthsFollowAllModelSemantics)
     potential.SetModelChoice(2); EXPECT_FALSE(potential.GetEffectiveWidths(Element::OXYGEN).gaussian);
 }
 
-TEST(JointComponentSearchTest, BudgetAndUnrepresentableStepsReturnWithoutAnUpdate)
+TEST(JointComponentSearchTest, BudgetAndTinyBoundedStepsReturnWithoutAnUpdate)
 {
-    RejectOnce budget; budget.reject_all=true; p::InstrumentedLM<RejectOnce> lm(budget);
+    RejectOnce budget; budget.reject_all=true; budget.retry_limit=2; p::InstrumentedLM<RejectOnce> lm(budget);
     Vector x=Vector::Zero(1); lm.minimizeInit(x);
     EXPECT_EQ(lm.minimizeOneStep(x),Eigen::LevenbergMarquardtSpace::UserAsked);
-    EXPECT_EQ(budget.calls,40); EXPECT_EQ(x(0),0); EXPECT_EQ(lm.iter,1);
+    EXPECT_EQ(budget.calls,2); EXPECT_EQ(x(0),0); EXPECT_EQ(lm.iter,1);
     RejectOnce tiny; tiny.tiny_step=true; p::InstrumentedLM<RejectOnce> small(tiny);
     small.useExternalScaling=true; small.diag=Vector::Ones(1); x.setOnes(); small.minimizeInit(x);
-    EXPECT_EQ(small.minimizeOneStep(x),Eigen::LevenbergMarquardtSpace::UserAsked);
-    EXPECT_EQ(tiny.failure,"unrepresentable-step"); EXPECT_EQ(x(0),1); EXPECT_EQ(tiny.calls,1);
+    EXPECT_EQ(small.minimizeOneStep(x),Eigen::LevenbergMarquardtSpace::CosinusTooSmall);
+    EXPECT_EQ(tiny.failure,"bounded-tiny-step"); EXPECT_EQ(x(0),1); EXPECT_EQ(tiny.calls,1);
 }
 
 namespace {
@@ -124,16 +128,14 @@ struct BoundedLinearResidual
     Vector target,upper_eta;
     Vector step;
     double radius{},damping{},actual{},predicted{},ratio{};
-    bool enabled{};
     std::string failure;
-    explicit BoundedLinearResidual(bool use_bound):design(2,2),target(2),upper_eta(2),enabled(use_bound)
-    {design.setIdentity(); target<<20.0,0.0; upper_eta<<10.2,100.0;}
+    BoundedLinearResidual():design(2,2),target(2),upper_eta(2)
+    {design.setIdentity(); target<<20.0,0.0; upper_eta<<10.2,12.0;}
     int values() const {return 2;}
     bool retry() const {return false;}
     int operator()(const Vector & x,Vector & residual) {residual=design*x-target; return 0;}
     int linearize(const Vector &,const Vector & residual,Eigen::MatrixXd & factor,Vector & response,Vector & norms)
     {factor=design; response=residual; norms=design.colwise().blueNorm(); return 0;}
-    bool has_bounded_step() const {return enabled;}
     joint::ActiveSetStep solve_bounded_step(const Eigen::MatrixXd & j,const Vector & response,
         const Vector & x,const Vector & diagonal,double trust_radius,double lambda)
     {return joint::SolveBoundedTrustRegionStep(j,response,diagonal,upper_eta-x,trust_radius,lambda);}
@@ -143,24 +145,11 @@ struct BoundedLinearResidual
         predicted=used_predicted; ratio=used_ratio; return true;}
 };
 
-struct PlainIdentityResidual
-{
-    Vector target{Eigen::Vector2d(20.0,0.0)},step;
-    double actual{},predicted{},ratio{};
-    std::string failure;
-    int values() const {return 2;}
-    bool retry() const {return false;}
-    int operator()(const Vector & x,Vector & residual) {residual=x-target; return 0;}
-    int linearize(const Vector &,const Vector & residual,Eigen::MatrixXd & factor,Vector & response,Vector & norms)
-    {factor=Eigen::Matrix2d::Identity(); response=residual; norms=Vector::Ones(2); return 0;}
-    bool Trial(const Vector &,const Vector & s,const Vector &,double,double,double a,double p0,double r,bool)
-    {step=s; actual=a; predicted=p0; ratio=r; return true;}
-};
 }
 
 TEST(JointComponentSearchTest, InstrumentedLmUsesTheConstrainedStepForTrustRatio)
 {
-    BoundedLinearResidual functor(true);
+    BoundedLinearResidual functor;
     p::InstrumentedLM<BoundedLinearResidual> lm(functor);
     Vector x(2); x<<10.0,10.0;
     lm.parameters.factor=.1;
@@ -186,7 +175,7 @@ TEST(JointComponentSearchTest, InstrumentedLmUsesTheConstrainedStepForTrustRatio
 
 TEST(JointComponentSearchTest, BoundedLmStopsAtAValidBoundaryKktPoint)
 {
-    BoundedLinearResidual functor(true);
+    BoundedLinearResidual functor;
     p::InstrumentedLM<BoundedLinearResidual> lm(functor);
     Vector x(2); x<<10.0,10.0;
     lm.parameters.factor=.1; lm.parameters.maxfev=200;
@@ -195,7 +184,6 @@ TEST(JointComponentSearchTest, BoundedLmStopsAtAValidBoundaryKktPoint)
     for(int iteration=0;iteration<100 && status==Eigen::LevenbergMarquardtSpace::Running;++iteration)
         status=lm.minimizeOneStep(x);
     EXPECT_NE(status,Eigen::LevenbergMarquardtSpace::UserAsked)<<functor.failure;
-    EXPECT_NE(functor.failure,"unrepresentable-step");
     EXPECT_NEAR(x(0),10.2,1e-12);
     EXPECT_NEAR(x(1),0.0,1e-8);
     EXPECT_EQ(status,Eigen::LevenbergMarquardtSpace::CosinusTooSmall);
@@ -225,4 +213,15 @@ TEST(JointComponentSearchTest, BoundedProfileSearchKeepsEveryEvaluatedWidthFeasi
         }
     }
     EXPECT_TRUE(reached_bound)<<search.stop_reason;
+}
+
+TEST(JointComponentSearchTest, ProfileSearchRequiresFiniteWidthUpperBound)
+{
+    Sample sample;
+    const p::Domain domain(sample.grid,sample.atoms);
+    const auto context=joint::CreateContext(sample.y,static_cast<Eigen::Index>(sample.atoms.size()));
+    const auto search=joint::SearchProfile(domain,sample.y,Vector::Constant(2,.5),context);
+    EXPECT_TRUE(search.stopped);
+    EXPECT_TRUE(search.trials.empty());
+    EXPECT_EQ(search.stop_reason,"invalid-width-upper-bound");
 }

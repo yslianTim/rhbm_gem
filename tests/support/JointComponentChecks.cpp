@@ -247,7 +247,18 @@ runtime::FixedNeighborComponentResult SolveFixedNeighborComponentForTesting(cons
     layout.full_atoms.assign(view.atoms.begin(),view.atoms.end());
     layout.informative_rows.assign(view.rows.begin(),view.rows.end());
     const auto prepared=runtime::MakeComponentProblemView(layout,view);
-    return runtime::SolveFixedNeighborComponent(prepared,initial_b,parent,{});
+    auto bounded_parent=parent;
+    if(!bounded_parent.eta_upper_bound)
+    {
+        double maximum_initial_width{};
+        for(const double width:initial_b)
+            if(std::isfinite(width) && width>maximum_initial_width) maximum_initial_width=width;
+        if(!(maximum_initial_width>0.0)) maximum_initial_width=1.0;
+        bounded_parent.eta_upper_bound=std::log(4.0*maximum_initial_width);
+    }
+    runtime::FixedNeighborSearchPolicy policy;
+    policy.eta_upper_bound=bounded_parent.eta_upper_bound;
+    return runtime::SolveFixedNeighborComponent(prepared,initial_b,bounded_parent,policy);
 }
 FixedNeighborFitDiagnostic SolveFixedNeighborComponentForDiagnostics(const ComponentView & view,
     const Vector & initial_b,const EvaluationContext & parent)

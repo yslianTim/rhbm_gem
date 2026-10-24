@@ -1,5 +1,7 @@
 #include "support/JointTestNumerics.hpp"
 #include "support/JointRuntimeJson.hpp"
+#include <algorithm>
+#include <cmath>
 #include <chrono>
 
 namespace second_stage_test::matched::joint_abc {
@@ -44,8 +46,15 @@ j::object Trust(const Domain & d,const Vector & y,const Evaluation & e,const Eva
 }
 j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,const EvaluationContext * provided)
 {
-    const auto fallback=provided ? EvaluationContext{} : MakeContext(y,static_cast<Eigen::Index>(domain.atoms.size()));
-    const auto & context=provided ? *provided : fallback;
+    auto context=provided ? *provided : MakeContext(y,static_cast<Eigen::Index>(domain.atoms.size()));
+    if(!context.eta_upper_bound)
+    {
+        double maximum_initial_width{};
+        for(const double width:initial_b)
+            if(std::isfinite(width) && width>maximum_initial_width) maximum_initial_width=width;
+        if(!(maximum_initial_width>0.0)) maximum_initial_width=1.0;
+        context.eta_upper_bound=std::log(4.0*maximum_initial_width);
+    }
     const auto start=std::chrono::steady_clock::now();
     const auto search=runtime::SearchProfile(domain,y,initial_b,context);
     auto out=runtime_json::Search(search,context,y.size());

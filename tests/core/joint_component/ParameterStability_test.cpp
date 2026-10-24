@@ -39,6 +39,7 @@ struct StabilityFixture
             y(row)=beta(0)*gaussian+beta(1)*charge;
         }
         context=n::CreateContext(y,1);
+        context.eta_upper_bound=std::log(2.0);
     }
 };
 

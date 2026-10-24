@@ -139,8 +139,6 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
     ASSERT_TRUE(events.front().solver_configuration);
     EXPECT_EQ(events.front().solver_configuration->fixed_neighbor_core_atoms,
         policy.core_atoms);
-    EXPECT_EQ(events.front().solver_configuration->bounded_width_profile,
-        policy.eta_upper_bound.has_value());
     EXPECT_EQ(std::count_if(events.begin(), events.end(), [](const auto & event) {
         return event.phase == joint::JointProgressPhase::SolverConfigured;
     }), 1);
@@ -348,7 +346,6 @@ TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
     EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(events.front().solver_configuration);
     EXPECT_EQ(events.front().solver_configuration->fixed_neighbor_core_atoms,12u);
-    EXPECT_TRUE(events.front().solver_configuration->bounded_width_profile);
     ASSERT_TRUE(std::any_of(events.begin(),events.end(),[](const auto & event) {
         return event.fixed_neighbor && event.fixed_neighbor->sweep>0;
     }));

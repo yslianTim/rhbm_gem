@@ -129,9 +129,12 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
     for(Eigen::Index a=0;a<initial_eta.size();++a)
         if(!(std::exp(initial_eta(a))>0) || !std::isfinite(std::exp(initial_eta(a))))
         {out.reason="block-invalid-partition"; return out;}
+    if(!policy.eta_upper_bound || !std::isfinite(*policy.eta_upper_bound))
+    {out.reason="invalid-width-upper-bound"; return out;}
 
     const Domain domain=data.domain;
-    const EvaluationContext context=data.context;
+    auto context=data.context;
+    context.eta_upper_bound=policy.eta_upper_bound;
     const Vector y=Select(data.y,IndicesOf(layout.informative_rows));
     auto run_policy=policy;
     run_policy.collect_diagnostics=true;

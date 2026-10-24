@@ -25,6 +25,7 @@ void CheckSingleBlock(const std::string & topology,int atoms)
     const n::Vector eta=n::Vector::Constant(atoms,std::log(.55));
     n::FixedNeighborPolicy policy; policy.maximum_sweeps=30;
     policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
+    policy.eta_upper_bound=std::log(2.2);
     std::vector<n::FixedNeighborBlockSweep> observed;
     n::BlockCoordinateState observed_state; std::size_t state_callbacks{};
     policy.sweep_observer=[&](const auto & sweep){observed.push_back(sweep);};
@@ -198,6 +199,7 @@ void CheckMultiBlockBudgetFailure(const std::string & topology)
     ASSERT_EQ(partition.cores.size(),2u);
     const n::Vector eta=n::Vector::Constant(32,std::log(.55));
     n::FixedNeighborPolicy policy; policy.core_atoms=16; policy.maximum_sweeps=0;
+    policy.eta_upper_bound=std::log(2.2);
     const auto result=n::RunFixedNeighborDiagnostic(problem,eta,policy);
     EXPECT_FALSE(result.search_converged);
     EXPECT_EQ(result.reason,"block-sweep-budget");
@@ -221,6 +223,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, CheapStationarityNeedsCompleteSweepC
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
     const n::Vector eta=n::Vector::Constant(8,std::log(.55));
     n::FixedNeighborPolicy policy; policy.maximum_sweeps=1;
+    policy.eta_upper_bound=std::log(2.2);
     const auto candidate=n::RunFixedNeighborDiagnostic(problem,eta,policy);
     EXPECT_FALSE(candidate.search_converged);
     EXPECT_EQ(candidate.reason,"block-sweep-budget");
@@ -245,6 +248,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, StabilityHistoryKeepsOnlyTheLastThre
     {
         n::FixedNeighborPolicy policy;
         policy.maximum_sweeps=sweep_budget;
+        policy.eta_upper_bound=std::log(2.2);
         policy.stop_after_stationarity=false;
         policy.collect_diagnostics=true;
         policy.assess_parameter_stability=true;
@@ -270,6 +274,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, FailedBlockRetriesAfterLaterBlocksUp
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
     n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=6;
+    policy.eta_upper_bound=std::log(2.2);
     policy.force_no_trusted_profile_for_testing=[](std::size_t block,std::size_t sweep) {
         return block==0 && sweep==0;
     };
@@ -303,6 +308,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ExhaustedBlockRecoveryLeavesTheLastA
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
     n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=6;
+    policy.eta_upper_bound=std::log(2.2);
     policy.force_no_trusted_profile_for_testing=[](std::size_t block,std::size_t) {return block==0;};
     std::optional<n::BlockCoordinateState> last_complete_sweep_state;
     policy.state_observer=[&](std::size_t sweep,const auto & state,const auto &,const auto &) {
@@ -330,6 +336,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, SearchResultAndIndependentCertificat
     const n::Domain domain=data.domain;
     const auto context=data.context;
     n::FixedNeighborPolicy quiet_policy; quiet_policy.core_atoms=16; quiet_policy.maximum_sweeps=3;
+    quiet_policy.eta_upper_bound=std::log(2.2);
     const auto quiet=n::SearchFixedNeighborComponent(domain,data.layout,data.y,initial_eta,context,quiet_policy);
     auto diagnostic_policy=quiet_policy; diagnostic_policy.collect_diagnostics=true;
     const auto diagnostic=n::SearchFixedNeighborComponent(domain,data.layout,data.y,initial_eta,context,diagnostic_policy);
@@ -350,7 +357,9 @@ TEST(JointFixedNeighborBlockCoordinateTest, SearchResultAndIndependentCertificat
     EXPECT_EQ(quiet.domain_preparations,quiet.block_preparations);
     EXPECT_EQ(quiet.mapping_preparations,quiet.block_preparations);
     EXPECT_EQ(diagnostic.block_preparations,quiet.block_preparations);
-    EXPECT_EQ(quiet.work.local_profile_work.total.evaluations,0u);
+    EXPECT_GT(quiet.work.local_profile_work.total.evaluations,0u);
+    EXPECT_EQ(quiet.work.local_profile_work.total.evaluations,
+        diagnostic.work.local_profile_work.total.evaluations);
     EXPECT_EQ(quiet.reason,diagnostic.reason);
     EXPECT_EQ(quiet.search_converged,diagnostic.search_converged);
     EXPECT_EQ(quiet_certification.verified(),diagnostic_certification.verified());
@@ -416,7 +425,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, EmptyOrInvalidReplayRowMappingCannot
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(2,std::log(.55));
     auto check_invalid=[&](const rhbm_gem::JointParameterLayout & layout) {
-        const auto result=n::SearchFixedNeighborComponent(data.domain,layout,data.y,eta,data.context);
+        n::FixedNeighborPolicy policy; policy.eta_upper_bound=std::log(2.2);
+        const auto result=n::SearchFixedNeighborComponent(data.domain,layout,data.y,eta,data.context,policy);
         EXPECT_EQ(result.reason,"block-invalid-partition");
         EXPECT_EQ(result.state.eta.size(),0);
         EXPECT_FALSE(result.search_converged);
@@ -438,6 +448,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, BlockSinkReceivesRecordsWithoutRetai
     std::vector<n::FixedNeighborBlockRecord> records;
     sink.block=[&](const auto & record){records.push_back(record);};
     n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=1;
+    policy.eta_upper_bound=std::log(2.2);
     policy.diagnostic_sink=&sink;
     const auto result=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,data.context,policy);
     EXPECT_TRUE(result.blocks.empty());
@@ -451,6 +462,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, FixedNeighborAcceptsAtMostOneTrusted
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",32));
     const n::Vector eta=n::Vector::Constant(32,std::log(.55));
     n::FixedNeighborPolicy policy; policy.core_atoms=16; policy.maximum_sweeps=2;
+    policy.eta_upper_bound=std::log(2.2);
     policy.certify_endpoint=false; policy.capture_local_trajectory=true;
     const auto result=n::RunFixedNeighborDiagnostic(problem,eta,policy);
     ASSERT_FALSE(result.blocks.empty());
@@ -546,6 +558,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, PracticalCriteriaDoNotQualifySweepsW
     const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
     n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=6;
     policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
+    policy.eta_upper_bound=std::log(2.2);
     policy.force_no_trusted_profile_for_testing=[](std::size_t block,std::size_t) {return block==0;};
     const auto result=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,
         initial_eta,data.context,policy);

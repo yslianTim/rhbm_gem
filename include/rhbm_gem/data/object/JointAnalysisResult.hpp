@@ -24,7 +24,6 @@ struct JointSolverProvenance
 };
 inline constexpr std::string_view JointSolverProvenanceContractVersion="joint-solver-provenance-v5";
 inline constexpr std::string_view FixedNeighborPolicyContractVersion="fixed-neighbor-production-v4";
-inline constexpr std::string_view FixedNeighborLocalSearchName="profile-lm";
 inline constexpr std::string_view FixedNeighborBoundedLocalSearchName="active-set-lm";
 struct JointAnalysisMetadata
 {

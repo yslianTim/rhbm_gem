@@ -61,7 +61,6 @@ struct Profile
     std::optional<double> accepted_gradient_inf_norm;
     std::optional<ActiveSetStep> last_bounded_subproblem;
     BoundedLmWork bounded_lm_work;
-    bool has_bounded_step() const {return context.eta_upper_bound.has_value();}
     void RecordBoundedSubproblem(const ActiveSetStep & step)
     {
         ++bounded_lm_work.subproblem_solves;
@@ -193,8 +192,9 @@ struct Profile
     }
     int operator()(const Vector & eta,Vector & residual)
     {
-        if(context.eta_upper_bound && (!std::isfinite(*context.eta_upper_bound) ||
-            (eta.array()>*context.eta_upper_bound).any()))
+        if(!context.eta_upper_bound || !std::isfinite(*context.eta_upper_bound))
+        {failure="invalid-width-upper-bound"; return -1;}
+        if((eta.array()>*context.eta_upper_bound).any())
         {failure="bounded-step-infeasible"; return -1;}
         if(!Get(eta)) return -1;
         residual=cached.residual/scale; return 0;
@@ -268,10 +268,14 @@ SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & 
         return status;
     };
     Eigen::LevenbergMarquardtSpace::Status status;
-    if(active_eta_max && (!std::isfinite(*active_eta_max) || (eta.array()>*active_eta_max).any()))
+    if(!active_eta_max || !std::isfinite(*active_eta_max))
     {
-        profile.failure=std::isfinite(*active_eta_max) ?
-            "bounded-initial-width-infeasible" : "invalid-width-upper-bound";
+        profile.failure="invalid-width-upper-bound";
+        status=Eigen::LevenbergMarquardtSpace::UserAsked;
+    }
+    else if((eta.array()>*active_eta_max).any())
+    {
+        profile.failure="bounded-initial-width-infeasible";
         status=Eigen::LevenbergMarquardtSpace::UserAsked;
     }
     else

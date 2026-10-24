@@ -769,8 +769,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     for(Eigen::Index a=0;a<initial_eta.size();++a)
         if(!(std::exp(initial_eta(a))>0) || !std::isfinite(std::exp(initial_eta(a))))
         {out.reason="block-invalid-partition"; return out;}
-    if(context.eta_upper_bound &&
-        (initial_eta.array()>*context.eta_upper_bound).any())
+    if(!context.eta_upper_bound || !std::isfinite(*context.eta_upper_bound))
+    {out.reason="invalid-width-upper-bound"; return out;}
+    if((initial_eta.array()>*context.eta_upper_bound).any())
     {out.reason="bounded-initial-width-infeasible"; return out;}
 
     auto structural_timer=Measure(policy.collect_telemetry,out.work.structural_preparation_seconds);
@@ -892,8 +893,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         out.memory_estimate=out.global_state_memory_estimate;
         out.reason="resource-limit:global-state-evaluation:"+out.memory_estimate.reason; return out;
     }
-    auto * const profile_work=policy.collect_telemetry || context.eta_upper_bound ?
-        &out.work.local_profile_work : nullptr;
+    auto * const profile_work=&out.work.local_profile_work;
     const auto replay_structure_started=Clock::now();
     const ReplayStructure replay_structure(domain.rows,layout);
     if(policy.collect_telemetry)
@@ -1081,8 +1081,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             }
             const auto old_widths=old_eta.array().exp().eval();
             const auto profile_search=SearchProfile(local_domain,local_y,old_widths,local_context,{},nullptr,profile_work);
-            if(policy.collect_telemetry || local_context.eta_upper_bound)
-                out.work.local_profile_work.Merge(profile_search.profile_work);
+            out.work.local_profile_work.Merge(profile_search.profile_work);
             const double search_seconds=capture_block_records || policy.collect_telemetry ?
                 Seconds(search_started) : 0.0;
             if(capture_block_records)

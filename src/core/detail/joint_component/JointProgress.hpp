@@ -22,7 +22,6 @@ enum class JointProgressPhase
 struct JointSolverConfiguration
 {
     std::size_t fixed_neighbor_core_atoms{};
-    bool bounded_width_profile{};
 };
 
 struct JointFixedNeighborProgress

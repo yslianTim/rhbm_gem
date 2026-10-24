@@ -129,8 +129,7 @@ void JointCliProgressReporter::OnProgress(const JointProgressEvent & event)
         LogJointInfo("[Joint] Solver | FixedNeighbor / Active-set LM");
         std::ostringstream detail;
         detail << "[Joint] Solver detail | sparse=EIGEN | core=" << configuration.fixed_neighbor_core_atoms
-            << " | local-search=" << (configuration.bounded_width_profile ?
-                FixedNeighborBoundedLocalSearchName : FixedNeighborLocalSearchName);
+            << " | local-search=" << FixedNeighborBoundedLocalSearchName;
         Logger::Log(LogLevel::Debug, detail.str());
         return;
     }

@@ -622,10 +622,6 @@ JointProblem BuildPureHaloSupportExclusionProblem(const MapObject & map,const Mo
     return JointProblem(std::move(fitting)).WithReconstructionDomain(
         std::move(original),std::move(fitting_to_original_contributors),std::move(fitting_rows));
 }
-JointFitResult FitJointComponents(const JointProblem & problem,const std::vector<double> & initial_b)
-{
-    return n::FitFixedNeighborComponents(problem,initial_b,{});
-}
 JointFitResult FitJointComponentsInitialized(const JointProblem & problem,const JointInitialization & initialization)
 {
     return detail::FitJointComponentsInitializedWithProgress(problem,initialization,{});
@@ -692,7 +688,7 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         n::JointProgressEvent event;
         event.phase=n::JointProgressPhase::SolverConfigured;
         event.solver_configuration=n::JointSolverConfiguration{
-            production_policy.core_atoms,production_policy.eta_upper_bound.has_value()};
+            production_policy.core_atoms};
         observer(event);
     }
     auto provenance=[&] {
@@ -704,8 +700,7 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         out.fixed_neighbor_policy_version=std::string(FixedNeighborPolicyContractVersion);
         out.fixed_neighbor_maximum_sweeps=production_policy.maximum_sweeps;
         out.fixed_neighbor_order="forward";
-        out.fixed_neighbor_local_search=std::string(production_policy.eta_upper_bound ?
-            FixedNeighborBoundedLocalSearchName : FixedNeighborLocalSearchName);
+        out.fixed_neighbor_local_search=std::string(FixedNeighborBoundedLocalSearchName);
         return out;
     };
     const auto & data=JointProblemAccess::Get(problem);
@@ -736,11 +731,18 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         for(auto row:data.partition.constant_rows) out.available_row_mask[static_cast<std::size_t>(row)]=true;
         return out;
     }
+    if(!production_policy.eta_upper_bound || !std::isfinite(*production_policy.eta_upper_bound))
+    {
+        out.available_row_mask.assign(data.input->observations.size(),false);
+        for(auto row:data.partition.constant_rows) out.available_row_mask[static_cast<std::size_t>(row)]=true;
+        out.evidence.push_back({"global-width-bound",JointCheckStatus::Unavailable,
+            JointEvidenceScope::AssembledGlobal,{}, {},"finite-width-upper-bound-required"});
+        return out;
+    }
     const auto component_count=data.partition.components.size();
     auto bounded_policy=production_policy;
     auto assembly_context=data.context;
-    if(bounded_policy.eta_upper_bound)
-        assembly_context.eta_upper_bound=bounded_policy.eta_upper_bound;
+    assembly_context.eta_upper_bound=bounded_policy.eta_upper_bound;
     std::size_t remaining_perturbation_blocks=n::MaximumPerturbedBlocksPerFit;
     std::size_t remaining_general_perturbation_blocks=
         n::MaximumPerturbedBlocksPerFit>1 ? n::MaximumPerturbedBlocksPerFit-1 : 0;

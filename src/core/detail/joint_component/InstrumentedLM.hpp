@@ -175,16 +175,8 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
   else
     njev++;
 
-  bool bounded_step_enabled=false;
-  JacobianType bounded_jacobian;
-  FVectorType bounded_response;
-  if constexpr (requires(FunctorType &f) { f.has_bounded_step(); }) {
-    bounded_step_enabled=functor.has_bounded_step();
-    if(bounded_step_enabled) {
-      bounded_jacobian=fjac;
-      bounded_response=reduced_response;
-    }
-  }
+  JacobianType bounded_jacobian=fjac;
+  FVectorType bounded_response=reduced_response;
 
   /* compute the qr factorization of the jacobian. */
   ColPivHouseholderQR<JacobianType> qrfac(fjac);
@@ -225,43 +217,32 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
 
   bool rejected_invalid = false;
   do {
-    /* determine the LM step using either the original or bounded subproblem. */
-    if constexpr (requires(FunctorType &f,const JacobianType &j,const FVectorType &r,
-        const FVectorType &v) { f.solve_bounded_step(j,r,v,v,Scalar{},Scalar{}); }) {
-      if(bounded_step_enabled) {
-        if(!std::isfinite(par) || par<Scalar(0.) || !std::isfinite(delta) || !(delta>Scalar(0.))) {
-          functor.failure="invalid-bounded-lm-trust-state";
-          return LevenbergMarquardtSpace::UserAsked;
-        }
-        const auto bounded=functor.solve_bounded_step(bounded_jacobian,bounded_response,x,diag,delta,par);
-        if(!bounded.valid) {
-          functor.failure="bounded-subproblem:"+bounded.status;
-          return LevenbergMarquardtSpace::UserAsked;
-        }
-        wa1=bounded.step;
-        par=static_cast<Scalar>(bounded.damping);
-        if(!wa1.allFinite() || !std::isfinite(par) || par<Scalar(0.) ||
-            !std::isfinite(bounded.scaled_step_norm)) {
-          functor.failure="non-finite-bounded-step";
-          return LevenbergMarquardtSpace::UserAsked;
-        }
-        if(bounded.scaled_step_norm<=Scalar(64)*NumTraits<Scalar>::epsilon()*(std::max)(Scalar(1),delta)) {
-          functor.failure="bounded-tiny-step";
-          return LevenbergMarquardtSpace::CosinusTooSmall;
-        }
-      } else {
-        internal::lmpar2<Scalar>(qrfac, diag, qtf, delta, par, wa1);
-        wa1=-wa1;
-      }
-    } else {
-      internal::lmpar2<Scalar>(qrfac, diag, qtf, delta, par, wa1);
-      wa1=-wa1;
+    /* determine the LM step from the bounded subproblem. */
+    if(!std::isfinite(par) || par<Scalar(0.) || !std::isfinite(delta) || !(delta>Scalar(0.))) {
+      functor.failure="invalid-bounded-lm-trust-state";
+      return LevenbergMarquardtSpace::UserAsked;
+    }
+    const auto bounded=functor.solve_bounded_step(bounded_jacobian,bounded_response,x,diag,delta,par);
+    if(!bounded.valid) {
+      functor.failure="bounded-subproblem:"+bounded.status;
+      return LevenbergMarquardtSpace::UserAsked;
+    }
+    wa1=bounded.step;
+    par=static_cast<Scalar>(bounded.damping);
+    if(!wa1.allFinite() || !std::isfinite(par) || par<Scalar(0.) ||
+        !std::isfinite(bounded.scaled_step_norm)) {
+      functor.failure="non-finite-bounded-step";
+      return LevenbergMarquardtSpace::UserAsked;
+    }
+    if(bounded.scaled_step_norm<=Scalar(64)*NumTraits<Scalar>::epsilon()*(std::max)(Scalar(1),delta)) {
+      functor.failure="bounded-tiny-step";
+      return LevenbergMarquardtSpace::CosinusTooSmall;
     }
 
     /* store the direction p and x + p. calculate the norm of the scaled step. */
     wa2 = x + wa1;
     pnorm = diag.cwiseProduct(wa1).stableNorm();
-    if(!wa2.allFinite() || !std::isfinite(pnorm) || (bounded_step_enabled && !std::isfinite(par))) {
+    if(!wa2.allFinite() || !std::isfinite(pnorm) || !std::isfinite(par)) {
       functor.failure="non-finite-lm-step";
       return LevenbergMarquardtSpace::UserAsked;
     }
@@ -298,9 +279,8 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
     temp2 = numext::abs2(sqrt(par) * pnorm / fnorm);
     prered = temp1 + temp2 / Scalar(.5);
     dirder = -(temp1 + temp2);
-    if(!std::isfinite(prered) || prered<Scalar(0.) || !std::isfinite(dirder) ||
-        (bounded_step_enabled && !(prered>Scalar(0.)))) {
-      functor.failure=bounded_step_enabled ? "invalid-bounded-predicted-reduction" : "invalid-predicted-reduction";
+    if(!std::isfinite(prered) || !(prered>Scalar(0.)) || !std::isfinite(dirder)) {
+      functor.failure="invalid-bounded-predicted-reduction";
       return LevenbergMarquardtSpace::UserAsked;
     }
 
