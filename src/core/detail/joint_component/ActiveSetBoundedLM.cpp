@@ -166,13 +166,6 @@ ActiveSetStep WithDamping(ActiveSetStep result,double damping)
 }
 }
 
-ActiveSetStep SolveBoundedDampedLeastSquares(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,
-    const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double damping,
-    const std::vector<bool> & fixed)
-{
-    return WithDamping(SolveAtDamping(j,r,d,upper,damping,fixed),damping);
-}
-
 ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,
     const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double trust_radius,double damping_seed,
     const std::vector<bool> & fixed)

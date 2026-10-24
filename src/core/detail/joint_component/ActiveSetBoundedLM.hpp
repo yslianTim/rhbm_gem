@@ -16,13 +16,6 @@ struct ActiveSetStep
     std::size_t iterations{},releases{};
 };
 
-// Solves the damped profile least-squares subproblem with upper step bounds:
-// min 0.5 ||J p + r||^2 + 0.5 lambda ||D p||^2, p <= upper_step.
-// Active variables are released whenever their upper-bound multiplier has the
-// wrong sign. A supplied fixed mask represents equality constraints p_i=0.
-ActiveSetStep SolveBoundedDampedLeastSquares(const Eigen::MatrixXd &,const Eigen::VectorXd &,
-    const Eigen::VectorXd &,const Eigen::VectorXd &,double,const std::vector<bool> & = {});
-
 // Selects the LM damping so the same constrained subproblem also satisfies
 // ||D p|| <= trust_radius. The returned step is the step used by the model.
 ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd &,const Eigen::VectorXd &,
