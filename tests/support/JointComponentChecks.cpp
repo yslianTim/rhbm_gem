@@ -304,8 +304,6 @@ FixedNeighborFitDiagnostic SolveFixedNeighborComponentForDiagnostics(const Compo
     out.search.evaluations=static_cast<int>(result.total_profile_evaluations);
     out.search.seconds=result.search_seconds;
     out.search.accepted=static_cast<int>(result.total_accepted_local_updates);
-    out.search.accepted_objective=runtime::LastFixedNeighborObjective(result);
-    out.search.accepted_gradient_inf_norm=runtime::LastFixedNeighborGradient(result);
     if(result.certification) out.assessment=result.certification->assessment;
     if(endpoint_qualified)
     {

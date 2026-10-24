@@ -1096,7 +1096,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 }
             }
             const auto old_widths=old_eta.array().exp().eval();
-            const auto profile_search=SearchProfile(local_domain,local_y,old_widths,local_context,{},nullptr,profile_work);
+            const auto profile_search=SearchProfile(local_domain,local_y,old_widths,local_context,profile_work);
             out.work.local_profile_work.Merge(profile_search.profile_work);
             const double search_seconds=capture_block_records || collect_telemetry ?
                 Seconds(search_started) : 0.0;

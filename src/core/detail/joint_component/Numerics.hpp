@@ -1,6 +1,5 @@
 #pragma once
 #include <Eigen/Dense>
-#include "JointProgress.hpp"
 #include "SnapshotViews.hpp"
 #include "ResourceWork.hpp"
 #include "ConvergenceCriteria.hpp"
@@ -239,8 +238,6 @@ struct SearchResult
     Endpoint initial;
     Vector eta;
     std::vector<Trial> trials;
-    std::optional<double> accepted_objective;
-    std::optional<double> accepted_gradient_inf_norm;
     int lm_status{},evaluations{},derivatives{},accepted{};
     bool stopped{},initial_accepted{};
     std::string stop_reason;
@@ -248,7 +245,7 @@ struct SearchResult
     ProfileSearchWork profile_work;
 };
 SearchResult SearchProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,
-    const JointProgressObserver & = {},const JointProgressComponent * = nullptr,ProfileSearchWork * = nullptr);
+    ProfileSearchWork * = nullptr);
 struct Assessment
 {
     Endpoint primary;

@@ -1,6 +1,7 @@
 #pragma once
 #include "Numerics.hpp"
 #include "FixedNeighborPolicy.hpp"
+#include "JointProgress.hpp"
 #include "ResourceWork.hpp"
 #include <functional>
 #include <utility>

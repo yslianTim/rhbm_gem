@@ -52,13 +52,8 @@ struct Profile
     std::string failure;
     ProfileSearchWork * telemetry{};
     ProfileEvaluationRole last_role{ProfileEvaluationRole::Unspecified};
-    const JointProgressObserver & observer;
-    const JointProgressComponent * progress_component{};
-    std::chrono::steady_clock::time_point search_start;
     std::clock_t cpu_start{};
-    int accepted_updates{};
     std::optional<double> accepted_objective;
-    std::optional<double> accepted_gradient_inf_norm;
     std::optional<ActiveSetStep> last_bounded_subproblem;
     BoundedLmWork bounded_lm_work;
     void RecordBoundedSubproblem(const ActiveSetStep & step)
@@ -89,13 +84,6 @@ struct Profile
         last_bounded_subproblem=result;
         RecordBoundedSubproblem(result);
         return result;
-    }
-    void Report() const
-    {
-        if(!progress_component) return;
-        NotifyJointProgress(observer,JointProgressPhase::SearchProgress,*progress_component,
-            evaluations,context.profile_budget,accepted_updates,context.update_budget,Seconds(search_start),{},false,
-            accepted_objective,accepted_gradient_inf_norm);
     }
     bool retry() const {return evaluations<context.profile_budget && failure!="unrepresentable-step";}
     bool Trial(const Vector & accepted,const Vector & step,const Vector & diagonal,
@@ -186,7 +174,6 @@ struct Profile
         cached=EvaluateProfile(domain,y,eta,&context,last_role,telemetry); ++evaluations;
         joint_component::Trial row; row.endpoint=cached; row.evaluation=evaluations; row.seconds=Seconds(start);
         trace.push_back(std::move(row));
-        Report();
         if(!cached.valid) failure="inner-"+cached.reason;
         return cached.valid;
     }
@@ -225,28 +212,23 @@ struct Profile
     }
     void Accept(const Vector & eta,int update)
     {
-        const bool changed=update>accepted_updates;
-        accepted_updates=update;
         UpdateAcceptedProfileObjective(accepted_objective,cached,context.scale,true);
-        accepted_gradient_inf_norm=ProfileGradientInfinityNorm(cached,context);
         for(auto it=trace.rbegin();it!=trace.rend();++it)
             if((it->endpoint.eta.array()==eta.array()).all())
             {it->accepted=true; it->accepted_update=update; break;}
-        if(changed || update==0) Report();
     }
 };
 }
 namespace {
 SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & initial_b,
-    const EvaluationContext & context,const JointProgressObserver & observer,
-    const JointProgressComponent * progress_component,ProfileSearchWork * telemetry)
+    const EvaluationContext & context,ProfileSearchWork * telemetry)
 {
     const auto start=std::chrono::steady_clock::now();
     ProfileSearchWork local_work;
     EvaluationContext search_context=context;
     const auto active_eta_max=search_context.eta_upper_bound;
     Profile profile{domain,y,search_context.scale,search_context,{}, {},0,0,{},telemetry ? &local_work : nullptr,
-        ProfileEvaluationRole::Unspecified,observer,progress_component,start,std::clock(),0,{}, {},{},{}
+        ProfileEvaluationRole::Unspecified,std::clock(),{}, {},{}
     };
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
@@ -286,8 +268,6 @@ SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & 
     SearchResult out; out.initial=profile.trace.empty() ? static_cast<Endpoint>(profile.cached) : profile.trace.front().endpoint;
     out.initial_accepted=!profile.trace.empty() && profile.trace.front().accepted;
     out.trials=std::move(profile.trace); out.eta=eta; out.lm_status=static_cast<int>(status);
-    out.accepted_objective=profile.accepted_objective;
-    out.accepted_gradient_inf_norm=profile.accepted_gradient_inf_norm;
     out.stop_reason=profile.failure.empty() ? "native-lm-stop" : profile.failure;
     out.evaluations=profile.evaluations; out.derivatives=profile.derivatives; out.accepted=accepted;
     out.stopped=status==Eigen::LevenbergMarquardtSpace::UserAsked || status==Eigen::LevenbergMarquardtSpace::TooManyFunctionEvaluation || !profile.failure.empty();
@@ -316,10 +296,8 @@ SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & 
 }
 
 SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
-    const EvaluationContext & context,const JointProgressObserver & observer,
-    const JointProgressComponent * progress_component,ProfileSearchWork * telemetry)
+    const EvaluationContext & context,ProfileSearchWork * telemetry)
 {
-    return SearchProfileImpl(domain,y,initial_b,context,observer,
-        progress_component,telemetry);
+    return SearchProfileImpl(domain,y,initial_b,context,telemetry);
 }
 }
