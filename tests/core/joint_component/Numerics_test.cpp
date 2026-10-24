@@ -173,9 +173,8 @@ TEST(JointTestNumericsTest, TiledDerivativeMatchesDenseAcrossTileBoundaries)
                 EXPECT_LE((left.singular_values-right.singular_values).lpNorm<Eigen::Infinity>()/left.singular_values(0),1e-10);
                 EXPECT_NEAR(left.threshold,right.threshold,1e-10*left.threshold);
             }
-            Eigen::JacobiSVD<Eigen::MatrixXd> svd(reduced.jacobian,Eigen::ComputeThinU|Eigen::ComputeThinV);
-            svd.setThreshold(context.rank.Relative(2));
-            const Vector compact=svd.solve(-reduced.response);
+            const Vector compact=p::JacobiLeastSquaresReference(
+                reduced.jacobian,-reduced.response,context.rank);
             EXPECT_LE(((correction-compact).array().abs()/(1+correction.array().abs().max(compact.array().abs()))).maxCoeff(),1e-10);
             EXPECT_LT((reduced_width.projected_norms-dense.projected.colwise().norm().transpose()).norm()/dense.projected.norm(),1e-10);
             EXPECT_LT((reduced.jacobian_norms-dense.jacobian.colwise().blueNorm().transpose()).norm()/dense.jacobian.norm(),1e-10);
@@ -238,20 +237,23 @@ TEST(JointComponentNumericsTest, CompactSvdMatchesJacobiReferenceAtRankBoundaryA
     for(double absolute:{-1.,1e-7}) for(double factor:{0.,.5,.999999,1.,1.000001,2.})
     {
         const double threshold=absolute<0 ? relative : absolute;
-        Matrix x=Matrix::Identity(16,16); x(15,15)=threshold*factor;
-        const Vector rhs=x*Vector::LinSpaced(16,.5,2.);
-        Eigen::JacobiSVD<Matrix,Eigen::ComputeFullU|Eigen::ComputeFullV> reference(x);
+        Matrix x=Matrix::Identity(16,16);
+        for(Eigen::Index diagonal=0;diagonal<15;++diagonal)
+            x(diagonal,diagonal)=1.-.01*static_cast<double>(diagonal);
+        x(15,15)=threshold*factor;
+        Eigen::JacobiSVD<Matrix,Eigen::ComputeThinV> reference(x);
         const double maximum=reference.singularValues()(0);
         reference.setThreshold(absolute>=0 && maximum>0 ? absolute/maximum : relative);
         const double expected_threshold=reference.threshold()*maximum;
         const Eigen::Index expected_rank=reference.rank();
-        const Vector expected_solution=reference.solve(rhs);
-        const auto actual=n::CompactSvd(x,relative,absolute,&rhs);
+        const auto actual=n::CompactSvd(x,relative,absolute,n::CompactSvdVectors::Right);
         ASSERT_TRUE(actual.valid); EXPECT_EQ(actual.rank,expected_rank);
         EXPECT_EQ(actual.threshold,expected_threshold);
-        EXPECT_LT((actual.solution-expected_solution).norm(),1e-10);
+        EXPECT_LT((actual.singular_values-reference.singularValues()).norm(),1e-10);
+        ASSERT_EQ(actual.right_vectors.cols(),reference.matrixV().cols());
+        for(Eigen::Index column=0;column<actual.right_vectors.cols();++column)
+            EXPECT_NEAR(std::abs(actual.right_vectors.col(column).dot(reference.matrixV().col(column))),1.0,1e-10);
         EXPECT_TRUE(actual.used_bdc);
-        ASSERT_EQ(actual.solution.size(),rhs.size()); EXPECT_TRUE(actual.solution.allFinite());
         const bool near=std::abs(factor-1)*threshold<=64*std::numeric_limits<double>::epsilon()*16;
         EXPECT_EQ(actual.jacobi_retry,near);
     }

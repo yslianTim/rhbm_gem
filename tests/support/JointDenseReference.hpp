@@ -6,4 +6,5 @@ struct DenseDifferential {runtime::Matrix projected,jacobian; bool valid{}; std:
 DenseDifferential DenseDifferentiate(const runtime::Evaluation &,double,const runtime::EvaluationContext *,double=-1);
 DenseDifferential MaterializeDerivative(const runtime::Evaluation &,double,const runtime::EvaluationContext *,double=-1,Eigen::Index=8192);
 runtime::Vector DenseLocalCorrection(const runtime::Evaluation &,const DenseDifferential &,const runtime::EvaluationContext &,double=-1);
+runtime::Vector JacobiLeastSquaresReference(const runtime::Matrix &,runtime::VectorRef,const runtime::RankPolicy &);
 }

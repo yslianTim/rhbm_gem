@@ -4,7 +4,7 @@
 namespace rhbm_gem::core::joint_component {
 struct CompactSvdResult
 {
-    Vector singular_values,solution;
+    Vector singular_values;
     Matrix right_vectors;
     Eigen::Index rank{};
     double threshold{};
@@ -22,11 +22,10 @@ struct RankRequest
 };
 enum class CompactSvdVectors {None,Right};
 // Thresholds belong to the original problem, not the compact matrix dimensions.
-// A non-null RHS requests a least-squares solution. Right vectors are retained
-// only when explicitly requested; the default needs singular values alone.
-CompactSvdResult CompactSvd(const Matrix &,double relative,double absolute=-1,const Vector * rhs=nullptr,
+// Right vectors are retained only when explicitly requested.
+CompactSvdResult CompactSvd(const Matrix &,double relative,double absolute=-1,
     CompactSvdVectors=CompactSvdVectors::None);
-CompactSvdResult EvaluateRank(const Matrix &,const RankRequest &,const Vector * rhs=nullptr,
+CompactSvdResult EvaluateRank(const Matrix &,const RankRequest &,
     CompactSvdVectors=CompactSvdVectors::None);
 bool CompactRankDecisionSafe(const CompactSvdResult &);
 }

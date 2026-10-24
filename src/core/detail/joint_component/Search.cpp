@@ -15,7 +15,7 @@ WeakWidthStepAssessment AssessWeakWidthStep(const Matrix & jacobian,VectorRef st
     if(jacobian.rows()!=jacobian.cols() || jacobian.cols()!=step.size() ||
         jacobian.rows()==0 || !jacobian.allFinite() || !step.allFinite()) return out;
     const auto svd=EvaluateRank(jacobian,{policy,jacobian.cols(),-1,RankBoundary::StrictGreater},
-        nullptr,CompactSvdVectors::Right);
+        CompactSvdVectors::Right);
     if(!svd.valid || svd.right_vectors.cols()!=step.size() || svd.singular_values.size()!=step.size()) return out;
     const auto weak=step.size()-svd.rank;
     const double norm=step.norm();

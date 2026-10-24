@@ -115,7 +115,7 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
         }
         const auto boundary=projected_only ? RankBoundary::StrictGreater : RankBoundary::SvdNative;
         const auto svd=EvaluateRank(qr.r,{{context ? context->rank.rows : n,2*m,m},p,absolute,boundary},
-            nullptr,projected_only && allow_rank_deficient ? CompactSvdVectors::Right : CompactSvdVectors::None);
+            projected_only && allow_rank_deficient ? CompactSvdVectors::Right : CompactSvdVectors::None);
         if(projected_only) out.free_design_rank=FreeDesignSpectrum(svd,
             context ? context->rank.rows : n,p,2*m,free_column_norms);
         if(!svd.valid) {out.reason="nonfinite-derivative"; return false;}

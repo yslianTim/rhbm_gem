@@ -41,6 +41,14 @@ Vector DenseLocalCorrection(const Evaluation & e,const DenseDifferential & d,con
     return svd.solve(reduced.second.col(0));
 }
 
+Vector JacobiLeastSquaresReference(const Matrix & matrix,VectorRef rhs,const RankPolicy & policy)
+{
+    Eigen::JacobiSVD<Matrix,Eigen::ComputeThinU|Eigen::ComputeThinV> svd(matrix);
+    svd.setThreshold(policy.Relative(matrix.cols()));
+    if(svd.rank()!=matrix.cols()) return {};
+    return svd.solve(rhs);
+}
+
 DenseDifferential DenseDifferentiate(const Evaluation & e,double scale,const EvaluationContext * context,double free_design_threshold)
 {
     DenseDifferential out;
