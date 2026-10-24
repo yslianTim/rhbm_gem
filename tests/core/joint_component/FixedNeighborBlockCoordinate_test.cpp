@@ -194,7 +194,8 @@ void CheckMultiBlockBudgetFailure(const std::string & topology)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload(topology,32));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
-    const auto partition=n::BuildStructuralBlockPartition(*data.input,data.layout,16);
+    n::StructuralTopology structural_topology(data.domain,data.context.atom_ids,data.layout);
+    const auto partition=structural_topology.BuildCores(16);
     ASSERT_EQ(partition.cores.size(),2u);
     const n::Vector eta=n::Vector::Constant(32,std::log(.55));
     n::FixedNeighborPolicy policy; policy.core_atoms=16; policy.maximum_sweeps=0;

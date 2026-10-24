@@ -1,7 +1,6 @@
 #pragma once
 #include "SnapshotViews.hpp"
 #include "core/detail/joint_component/JointComponentEstimator.hpp"
-#include <limits>
 #include <string>
 #include <vector>
 
@@ -9,7 +8,7 @@ namespace rhbm_gem::core::joint_component {
 struct StructuralCore
 {
     std::string id;
-    Indices atoms,affected_rows,neighbor_atoms,context_atoms; // Indices in the supplied problem view.
+    Indices atoms,affected_rows,neighbor_atoms; // Indices in the supplied problem view.
 };
 struct StructuralBlockPartition
 {
@@ -38,15 +37,5 @@ public:
     StructuralBlockCensus Census(const StructuralBlockPartition &) const;
     std::size_t StorageBytes() const;
     void PopulateMetadata(StructuralBlockPartition &);
-    Indices ContextAtoms(const Indices & core_atoms,std::size_t context_hops,std::size_t max_block_atoms);
 };
-
-// Builds deterministic cores from informative-row incidence. Context atoms
-// are the requested graph-hop expansion and remain structural data only.
-StructuralBlockPartition BuildStructuralBlockPartition(const JointProblemInput &,const JointParameterLayout &,
-    std::size_t core_atoms,std::size_t context_hops=0,
-    std::size_t max_block_atoms=std::numeric_limits<std::size_t>::max());
-StructuralBlockPartition BuildStructuralBlockPartition(const Domain &,const Identities &,const JointParameterLayout &,
-    std::size_t core_atoms,std::size_t context_hops=0,
-    std::size_t max_block_atoms=std::numeric_limits<std::size_t>::max());
 }

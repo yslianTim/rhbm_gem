@@ -108,6 +108,15 @@ c::JointProblemInput BridgeInput()
     input.support={{{0,0.0},{1,.25}},{{1,.25},{2,.5}},{{2,.5},{3,.25}},{{3,.25},{4,0.0}}};
     return input;
 }
+n::StructuralBlockPartition BuildCores(const c::JointProblemInput & input,
+    const rhbm_gem::JointParameterLayout & layout,std::size_t core_atoms)
+{
+    const auto owner=std::make_shared<const c::JointProblemInput>(input);
+    const n::Domain domain(owner);
+    const n::Identities identities(std::shared_ptr<const std::vector<std::string>>(owner,&owner->atom_ids));
+    n::StructuralTopology topology(domain,identities,layout);
+    return topology.BuildCores(core_atoms);
+}
 }
 
 TEST(JointBlockCoordinateTest, ConditionalResidualAndObjectiveMatchOnChainAndCubeFixtures)
@@ -116,19 +125,28 @@ TEST(JointBlockCoordinateTest, ConditionalResidualAndObjectiveMatchOnChainAndCub
         {"chain",32,32},{"cube",8,108},{"cube",32,132}})
     {
         auto input=second_stage_test::SyntheticJointWorkload(topology,atoms); const auto layout=n::BuildParameterLayout(input);
-        const auto partition=n::BuildStructuralBlockPartition(input,layout,4);
+        const auto partition=BuildCores(input,layout,4);
         ExerciseConditionalReplacements(input,layout,partition,seed);
     }
 }
 TEST(JointBlockCoordinateTest, BridgeAtomRetainsEveryBoundaryCoupling)
 {
     const auto input=BridgeInput(); const auto layout=n::BuildParameterLayout(input);
-    const auto partition=n::BuildStructuralBlockPartition(input,layout,1);
+    const auto partition=BuildCores(input,layout,1);
     const auto bridge=std::find_if(partition.cores.begin(),partition.cores.end(),[](const auto & core){return core.atoms==n::Indices{1};});
     ASSERT_NE(bridge,partition.cores.end());
     EXPECT_EQ(bridge->affected_rows,(n::Indices{1,2}));
     EXPECT_EQ(bridge->neighbor_atoms,(n::Indices{0,2}));
     ExerciseConditionalReplacements(input,layout,partition,501);
+}
+TEST(JointBlockCoordinateTest, StructuralCoreOrderingFollowsAtomIdentity)
+{
+    auto input=BridgeInput(); input.atom_ids={"D","B-bridge","C","A"};
+    const auto layout=n::BuildParameterLayout(input);
+    const auto partition=BuildCores(input,layout,1);
+    std::vector<std::string> core_ids;
+    for(const auto & core:partition.cores) core_ids.push_back(core.id);
+    EXPECT_EQ(core_ids,(std::vector<std::string>{"A","B-bridge","C","D"}));
 }
 TEST(JointBlockCoordinateTest, StructuralCensusMatchesPreparedCoreMetadata)
 {

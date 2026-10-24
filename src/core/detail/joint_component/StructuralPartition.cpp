@@ -1,6 +1,7 @@
 #include "StructuralPartition.hpp"
 #include <algorithm>
 #include <deque>
+#include <limits>
 #include <numeric>
 
 namespace rhbm_gem::core::joint_component {
@@ -169,41 +170,5 @@ void StructuralTopology::PopulateMetadata(StructuralBlockPartition & partition)
         std::sort(core.neighbor_atoms.begin(),core.neighbor_atoms.end(),[&](auto a,auto b){return LessAtom(a,b);});
         core.neighbor_atoms.erase(std::unique(core.neighbor_atoms.begin(),core.neighbor_atoms.end()),core.neighbor_atoms.end());
     }
-}
-Indices StructuralTopology::ContextAtoms(const Indices & core_atoms,std::size_t context_hops,std::size_t max_block_atoms)
-{
-    const auto count=domain_.atoms.size(); std::vector<bool> included(count,false);
-    for(auto atom:core_atoms) included.at(static_cast<std::size_t>(atom))=true;
-    Indices context,frontier=core_atoms;
-    for(std::size_t hop=0;hop<context_hops && !frontier.empty();++hop)
-    {
-        Indices next;
-        for(auto atom:frontier) for(auto other:Neighbors(static_cast<std::size_t>(atom)))
-        {
-            const auto index=static_cast<std::size_t>(other);
-            if(included[index]) continue;
-            included[index]=true; context.push_back(other); next.push_back(other);
-            if(core_atoms.size()+context.size()>max_block_atoms) throw std::runtime_error("structural-context-limit");
-        }
-        frontier=std::move(next);
-    }
-    std::sort(context.begin(),context.end(),[&](auto a,auto b){return LessAtom(a,b);});
-    return context;
-}
-StructuralBlockPartition BuildStructuralBlockPartition(const JointProblemInput & input,const JointParameterLayout & layout,
-    std::size_t core_atoms,std::size_t context_hops,std::size_t max_block_atoms)
-{
-    const auto owner=std::shared_ptr<const JointProblemInput>(&input,[](const JointProblemInput *){});
-    const Domain domain(owner);
-    const Identities identities(std::shared_ptr<const std::vector<std::string>>(owner,&input.atom_ids));
-    return BuildStructuralBlockPartition(domain,identities,layout,core_atoms,context_hops,max_block_atoms);
-}
-StructuralBlockPartition BuildStructuralBlockPartition(const Domain & domain,const Identities & identities,
-    const JointParameterLayout & layout,std::size_t core_atoms,std::size_t context_hops,std::size_t max_block_atoms)
-{
-    if(core_atoms>max_block_atoms) throw std::invalid_argument("Invalid structural partition policy");
-    StructuralTopology topology(domain,identities,layout); auto partition=topology.BuildCores(core_atoms);
-    for(auto & core:partition.cores) core.context_atoms=topology.ContextAtoms(core.atoms,context_hops,max_block_atoms);
-    return partition;
 }
 }

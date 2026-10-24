@@ -59,8 +59,7 @@ bool PartitionStorageBytes(const StructuralBlockPartition & partition,bool inclu
             !CheckedAddBytes(bytes,id_bytes,bytes) || !AddMemoryBytes(bytes,core.atoms.capacity(),sizeof(Eigen::Index)) ||
             !AddMemoryBytes(bytes,1,4*32)) return false;
         if(include_metadata && (!AddMemoryBytes(bytes,core.affected_rows.capacity(),sizeof(Eigen::Index)) ||
-            !AddMemoryBytes(bytes,core.neighbor_atoms.capacity(),sizeof(Eigen::Index)) ||
-            !AddMemoryBytes(bytes,core.context_atoms.capacity(),sizeof(Eigen::Index)))) return false;
+            !AddMemoryBytes(bytes,core.neighbor_atoms.capacity(),sizeof(Eigen::Index)))) return false;
     }
     return true;
 }
