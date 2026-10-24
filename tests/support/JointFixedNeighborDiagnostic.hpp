@@ -24,5 +24,5 @@ struct FixedNeighborDiagnosticResult
 };
 
 FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem &,VectorRef initial_eta,
-    const FixedNeighborPolicy & = {},Vector initial_beta = {});
+    const FixedNeighborPolicy & = {});
 }

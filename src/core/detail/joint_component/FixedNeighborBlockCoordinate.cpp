@@ -737,7 +737,7 @@ bool ShouldAttemptFixedNeighborCertification(FixedNeighborStationarityState stat
 }
 FixedNeighborSearchResult SearchFixedNeighborComponent(
     const Domain & domain,const JointParameterLayout & layout,VectorRef y,VectorRef initial_eta,const EvaluationContext & parent_context,
-    const FixedNeighborPolicy & policy,Vector initial_beta)
+    const FixedNeighborPolicy & policy)
 {
     FixedNeighborSearchResult out;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -771,11 +771,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         {out.reason="invalid-global-width-bound"; return out;}
         context.eta_upper_bound=policy.eta_upper_bound;
     }
-    const bool has_initial_beta=initial_beta.size()!=0;
     if(initial_eta.size()!=static_cast<Eigen::Index>(domain.atoms.size()) || !initial_eta.allFinite() ||
         y.size()!=domain.rows || !y.allFinite() || !(context.scale>0) || !std::isfinite(context.scale) ||
-        (has_initial_beta && (initial_beta.size()!=2*static_cast<Eigen::Index>(domain.atoms.size()) ||
-            !initial_beta.allFinite())) ||
         policy.core_atoms==0 || layout.full_atoms.size()!=domain.atoms.size() ||
         layout.informative_rows.size()!=static_cast<std::size_t>(domain.rows) ||
         context.atom_ids.size()!=domain.atoms.size() || context.row_ids.size()!=static_cast<std::size_t>(domain.rows))
@@ -931,8 +928,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     };
 
     out.state.eta=initial_eta;
-    out.state.beta=has_initial_beta ? std::move(initial_beta) :
-        Vector::Zero(2*static_cast<Eigen::Index>(domain.atoms.size()));
+    out.state.beta=Vector::Zero(2*static_cast<Eigen::Index>(domain.atoms.size()));
     auto initial=Replay(domain,layout,y,out.state.eta,out.state.beta,context.scale,replay_structure);
     out.state.prediction=std::move(initial.prediction); out.state.residual=std::move(initial.residual);
     out.state.objective=initial.objective;

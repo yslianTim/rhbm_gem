@@ -117,7 +117,7 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
 }
 
 FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & problem,VectorRef initial_eta,
-    const FixedNeighborPolicy & policy,Vector initial_beta)
+    const FixedNeighborPolicy & policy)
 {
     FixedNeighborDiagnosticResult out;
     const auto & data=JointProblemAccess::Get(problem); const auto & input=*data.input; const auto & layout=data.layout;
@@ -138,8 +138,7 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
     const Vector y=Select(data.y,IndicesOf(layout.informative_rows));
     auto run_policy=policy;
     run_policy.collect_diagnostics=true;
-    auto search=SearchFixedNeighborComponent(domain,layout,y,initial_eta,context,
-        run_policy,std::move(initial_beta));
+    auto search=SearchFixedNeighborComponent(domain,layout,y,initial_eta,context,run_policy);
     out.state=std::move(search.state); out.blocks=std::move(search.blocks); out.sweeps=std::move(search.sweeps);
     out.search_converged=search.search_converged; out.reason=search.reason;
     out.first_order_stationarity_sweep=search.first_order_stationarity_sweep;

@@ -225,8 +225,7 @@ bool ShouldAttemptFixedNeighborCertification(FixedNeighborStationarityState,std:
     std::size_t & next_retry_sweep);
 FixedNeighborSearchResult SearchFixedNeighborComponent(
     const Domain &,const JointParameterLayout &,VectorRef y,VectorRef initial_eta,const EvaluationContext &,
-    const FixedNeighborPolicy & = {},
-    Vector initial_beta = {});
+    const FixedNeighborPolicy & = {});
 FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
     const Domain &,VectorRef y,const BlockCoordinateState &,const EvaluationContext &,
     ProfileSearchWork * = nullptr,std::size_t resident_override=0,
