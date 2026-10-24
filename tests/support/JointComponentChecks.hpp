@@ -2,8 +2,13 @@
 #include "support/JointTestNumerics.hpp"
 #include <cstddef>
 #include <optional>
+#include <vector>
+
+namespace rhbm_gem::core {class JointProblem; struct JointFitResult;}
 
 namespace second_stage_test::matched::joint_abc {
+rhbm_gem::core::JointFitResult FitBoundedJointComponentsForTesting(
+    const rhbm_gem::core::JointProblem &,const std::vector<double> & initial_widths,double maximum_width);
 struct FixedNeighborFitDiagnostic
 {
     runtime::SearchResult search;

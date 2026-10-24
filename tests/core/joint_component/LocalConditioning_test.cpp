@@ -171,7 +171,7 @@ TEST(JointLocalConditioningTest, MultiBlockDiagnosticsLeaveTheAcceptedFitUnchang
 {
     const c::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
     const auto run=[&](bool diagnostics) {
-        n::FixedNeighborSearchPolicy policy; policy.core_atoms=1;
+        n::FixedNeighborSearchPolicy policy; policy.core_atoms=1; policy.eta_upper_bound=std::log(2.2);
         policy.configure_search_for_testing=[diagnostics](n::FixedNeighborPolicy & search) {
             search.assess_local_conditioning=diagnostics;
             search.assess_parameter_stability=false;

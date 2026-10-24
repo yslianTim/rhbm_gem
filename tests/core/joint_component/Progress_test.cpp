@@ -27,6 +27,7 @@
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/ResourceWork.hpp"
 #include "support/JointSyntheticWorkload.hpp"
+#include "support/JointComponentChecks.hpp"
 
 namespace {
 namespace core = rhbm_gem::core;
@@ -281,14 +282,15 @@ joint::JointProgressEvent MakeFixedNeighborEvent(joint::JointProgressPhase phase
 }
 }
 
-TEST(JointProgressTest, PublicFitWithoutObserverIsSilent)
+TEST(JointProgressTest, BoundedSyntheticFitWithoutObserverIsSilent)
 {
     const auto previous_level = Logger::GetLogLevel();
     Logger::SetLogLevel(LogLevel::Info);
     Logger::FinishProgressLine();
     testing::internal::CaptureStdout();
     testing::internal::CaptureStderr();
-    const auto fit = core::FitJointComponents(core::JointProblem(MakeInput()), {.55, .55});
+    const auto fit=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(
+        core::JointProblem(MakeInput()),{.55,.55},2.2);
     const auto stdout_text = testing::internal::GetCapturedStdout();
     const auto stderr_text = testing::internal::GetCapturedStderr();
     Logger::SetLogLevel(previous_level);
@@ -297,12 +299,18 @@ TEST(JointProgressTest, PublicFitWithoutObserverIsSilent)
     EXPECT_TRUE(stderr_text.empty());
 }
 
-TEST(JointProgressTest, PublicFitUsesFixedNeighborProductionContract)
+TEST(JointProgressTest, BoundedSyntheticFitUsesFixedNeighborContract)
 {
     const core::JointProblem problem(MakeInput());
     const std::vector<double> initial{.55, .55};
-    const auto expected = joint::FitFixedNeighborComponents(problem, initial, {});
-    const auto actual = core::FitJointComponents(problem, initial);
+    const auto actual=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(
+        problem,initial,2.2);
+    auto policy=joint::FixedNeighborSearchPolicy{};
+    policy.core_atoms=12;
+    policy.maximum_sweeps=200;
+    policy.convergence_criteria=joint::PracticalJointConvergenceCriteria;
+    policy.eta_upper_bound=std::log(2.2);
+    const auto expected=joint::FitFixedNeighborComponents(problem,initial,policy);
 
     EXPECT_EQ(actual.solver_provenance.search_method, "fixed-neighbor");
     EXPECT_EQ(actual.solver_provenance.fixed_neighbor_core_atoms, 12u);
@@ -310,7 +318,7 @@ TEST(JointProgressTest, PublicFitUsesFixedNeighborProductionContract)
         rhbm_gem::FixedNeighborPolicyContractVersion);
     EXPECT_EQ(actual.solver_provenance.fixed_neighbor_maximum_sweeps, 200u);
     EXPECT_EQ(actual.solver_provenance.fixed_neighbor_order, "forward");
-    EXPECT_EQ(actual.solver_provenance.fixed_neighbor_local_search, "profile-lm");
+    EXPECT_EQ(actual.solver_provenance.fixed_neighbor_local_search, "active-set-lm");
     EXPECT_EQ(actual.RuntimeConvergence(), expected.RuntimeConvergence());
     ASSERT_TRUE(actual.assembled_state);
     ASSERT_TRUE(expected.assembled_state);
@@ -321,7 +329,8 @@ TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
 {
     const core::JointProblem problem(MakeInput());
     const std::vector<double> initial{.55, .55};
-    const joint::FixedNeighborSearchPolicy policy{};
+    auto policy=joint::FixedNeighborSearchPolicy{};
+    policy.eta_upper_bound=std::log(2.2);
     EXPECT_EQ(policy.core_atoms,12u);
     std::vector<joint::JointProgressEvent> events;
     const auto fit=joint::FitFixedNeighborComponents(problem,initial,policy,
@@ -334,12 +343,12 @@ TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
         rhbm_gem::FixedNeighborPolicyContractVersion);
     EXPECT_EQ(fit.solver_provenance.fixed_neighbor_maximum_sweeps,200u);
     EXPECT_EQ(fit.solver_provenance.fixed_neighbor_order,"forward");
-    EXPECT_EQ(fit.solver_provenance.fixed_neighbor_local_search,"profile-lm");
+    EXPECT_EQ(fit.solver_provenance.fixed_neighbor_local_search,"active-set-lm");
     ASSERT_TRUE(fit.assembled_state);
     EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(events.front().solver_configuration);
     EXPECT_EQ(events.front().solver_configuration->fixed_neighbor_core_atoms,12u);
-    EXPECT_FALSE(events.front().solver_configuration->bounded_width_profile);
+    EXPECT_TRUE(events.front().solver_configuration->bounded_width_profile);
     ASSERT_TRUE(std::any_of(events.begin(),events.end(),[](const auto & event) {
         return event.fixed_neighbor && event.fixed_neighbor->sweep>0;
     }));
@@ -352,9 +361,14 @@ TEST(JointProgressTest, ObservableComponentsUseTheSameLifecycle)
     const std::vector<double> initial{.55};
     std::vector<joint::JointProgressEvent> events;
     const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
-    const auto fit = joint::FitFixedNeighborComponents(problem, initial, {}, observer);
+    auto policy=joint::FixedNeighborSearchPolicy{};
+    policy.core_atoms=12;
+    policy.maximum_sweeps=200;
+    policy.convergence_criteria=joint::PracticalJointConvergenceCriteria;
+    policy.eta_upper_bound=std::log(2.2);
+    const auto fit=joint::FitFixedNeighborComponents(problem,initial,policy,observer);
     ASSERT_TRUE(fit.assembled_state);
-    ExpectLifecycle(problem, fit, events, {});
+    ExpectLifecycle(problem,fit,events,policy);
 }
 
 TEST(JointProgressTest, QuietWorkflowSuppressesProgressButKeepsFailureWarning)
@@ -547,6 +561,11 @@ TEST(JointProgressTest, ReportingDoesNotChangeNumericsOrObserverCadence)
     const core::JointProblem problem(MakeInput());
     const std::vector<double> initial{.55, .55};
     const auto previous_level = Logger::GetLogLevel();
+    auto policy=joint::FixedNeighborSearchPolicy{};
+    policy.core_atoms=12;
+    policy.maximum_sweeps=200;
+    policy.convergence_criteria=joint::PracticalJointConvergenceCriteria;
+    policy.eta_upper_bound=std::log(2.2);
     const auto run = [&](LogLevel level, bool report) {
         Logger::SetLogLevel(level);
         Logger::FinishProgressLine();
@@ -559,7 +578,7 @@ TEST(JointProgressTest, ReportingDoesNotChangeNumericsOrObserverCadence)
             events.push_back(event);
             if (report) reporter.OnProgress(event);
         };
-        const auto fit = joint::FitFixedNeighborComponents(problem, initial, {}, observer);
+        const auto fit=joint::FitFixedNeighborComponents(problem,initial,policy,observer);
         const auto stdout_text = testing::internal::GetCapturedStdout();
         const auto stderr_text = testing::internal::GetCapturedStderr();
         return std::tuple{fit, std::move(events), stdout_text, stderr_text};

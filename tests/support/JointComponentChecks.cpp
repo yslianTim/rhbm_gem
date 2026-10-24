@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <cmath>
 #include <chrono>
+#include <stdexcept>
 
 namespace second_stage_test::matched::joint_abc {
 namespace {
@@ -17,6 +18,18 @@ namespace j=boost::json;
 std::size_t Index(Eigen::Index i) {return static_cast<std::size_t>(i);}
 j::array Indices(const std::vector<Eigen::Index> & v)
 {j::array out; for(auto i:v) out.push_back(i); return out;}
+}
+rhbm_gem::core::JointFitResult FitBoundedJointComponentsForTesting(
+    const rhbm_gem::core::JointProblem & problem,const std::vector<double> & initial_widths,double maximum_width)
+{
+    if(!(std::isfinite(maximum_width) && maximum_width>0.0))
+        throw std::invalid_argument("Bounded Joint test fit requires a finite positive Width upper bound.");
+    runtime::FixedNeighborSearchPolicy policy;
+    policy.core_atoms=12;
+    policy.maximum_sweeps=200;
+    policy.convergence_criteria=runtime::PracticalJointConvergenceCriteria;
+    policy.eta_upper_bound=std::log(maximum_width);
+    return runtime::FitFixedNeighborComponents(problem,initial_widths,policy);
 }
 ComponentPartition BuildPartition(const Domain & d,const std::vector<std::string> & ids) {return runtime::Partition(d,ids);}
 Eigen::VectorXd Select(const Eigen::VectorXd & v,const std::vector<Eigen::Index> & indices) {return runtime::SelectValues(v,indices);}

@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "support/JointFixedNeighborDiagnostic.hpp"
+#include "support/JointComponentChecks.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/ResourceWork.hpp"
 #include "core/detail/joint_component/StructuralPartition.hpp"
@@ -56,21 +57,22 @@ void CheckSingleBlock(const std::string & topology,int atoms)
     EXPECT_TRUE(result.assessment.independent_replay.passed);
     EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     EXPECT_TRUE(result.fit.search_completed);
-    const auto production=rhbm_gem::core::FitJointComponents(problem,std::vector<double>(static_cast<std::size_t>(atoms),.55));
-    ASSERT_EQ(production.components.size(),1u);
-    ASSERT_TRUE(production.components.front().candidate_diagnostic);
-    EXPECT_EQ(production.components.front().candidate_diagnostic->convergence_criteria_id,"practical-v1");
-    ASSERT_TRUE(production.components.front().state);
+    const auto bounded=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(
+        problem,std::vector<double>(static_cast<std::size_t>(atoms),.55),2.2);
+    ASSERT_EQ(bounded.components.size(),1u);
+    ASSERT_TRUE(bounded.components.front().candidate_diagnostic);
+    EXPECT_EQ(bounded.components.front().candidate_diagnostic->convergence_criteria_id,"practical-v1");
+    ASSERT_TRUE(bounded.components.front().state);
     ASSERT_TRUE(result.fit.components.front().state);
-    ASSERT_TRUE(production.objective && result.fit.objective);
-    EXPECT_EQ(production.components.front().search_sweeps,result.fit.components.front().search_sweeps);
-    EXPECT_EQ(production.components.front().stop_reason,"block-stationary");
-    EXPECT_LE(std::abs(production.objective.value()-result.fit.objective.value()),1e-12);
-    for(std::size_t k=0;k<production.components.front().state->ac.size();++k)
-        EXPECT_LE(std::abs(production.components.front().state->ac[k]-result.fit.components.front().state->ac[k]),
+    ASSERT_TRUE(bounded.objective && result.fit.objective);
+    EXPECT_EQ(bounded.components.front().search_sweeps,result.fit.components.front().search_sweeps);
+    EXPECT_EQ(bounded.components.front().stop_reason,"block-stationary");
+    EXPECT_LE(std::abs(bounded.objective.value()-result.fit.objective.value()),1e-12);
+    for(std::size_t k=0;k<bounded.components.front().state->ac.size();++k)
+        EXPECT_LE(std::abs(bounded.components.front().state->ac[k]-result.fit.components.front().state->ac[k]),
             1e-10*(1+std::abs(result.fit.components.front().state->ac[k])));
-    for(std::size_t k=0;k<production.components.front().state->log_b.size();++k)
-        EXPECT_LE(std::abs(production.components.front().state->log_b[k]-result.fit.components.front().state->log_b[k]),1e-10);
+    for(std::size_t k=0;k<bounded.components.front().state->log_b.size();++k)
+        EXPECT_LE(std::abs(bounded.components.front().state->log_b[k]-result.fit.components.front().state->log_b[k]),1e-10);
     EXPECT_EQ(result.search_converged,unobserved.search_converged);
     EXPECT_EQ(result.endpoint_certified,unobserved.endpoint_certified);
     EXPECT_EQ(result.reason,unobserved.reason);
@@ -396,7 +398,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReplayStructureFollowsComponentLocal
     EXPECT_EQ(data.partition.components[1].rows,(n::Indices{1,3,5,7,9}));
     EXPECT_EQ(data.partition.constant_rows,(n::Indices{10}));
 
-    const auto fit=rhbm_gem::core::FitJointComponents(problem,{.55,.55});
+    const auto fit=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(
+        problem,{.55,.55},2.2);
     ASSERT_EQ(fit.components.size(),2u);
     for(const auto & component:fit.components)
     {
@@ -568,7 +571,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchDefaultsToValidatedP
 TEST(JointFixedNeighborBlockCoordinateTest, BudgetExhaustionPreservesCandidateWithoutInventingTrustedState)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
-    n::FixedNeighborSearchPolicy policy; policy.maximum_sweeps=1;
+    n::FixedNeighborSearchPolicy policy; policy.maximum_sweeps=1; policy.eta_upper_bound=std::log(2.2);
     const auto fit=n::FitFixedNeighborComponents(problem,std::vector<double>(8,.55),policy);
     ASSERT_EQ(fit.components.size(),1u);
     const auto & component=fit.components.front();
@@ -588,7 +591,13 @@ TEST(JointFixedNeighborBlockCoordinateTest, BudgetExhaustionPreservesCandidateWi
         return check.name=="independent-replay";
     });
     ASSERT_NE(trust,component.evidence.end());
-    EXPECT_EQ(trust->status,rhbm_gem::JointCheckStatus::Passed);
+    if(qualified)
+        EXPECT_EQ(trust->status,rhbm_gem::JointCheckStatus::Passed)<<trust->reason;
+    else
+    {
+        EXPECT_NE(trust->status,rhbm_gem::JointCheckStatus::Passed)<<trust->reason;
+        EXPECT_EQ(trust->reason,"primary-bounded-width-kkt-failed");
+    }
 
     const auto copy_result=rhbm_gem::core::CaptureJointAnalysisResult(fit);
     auto movable_fit=fit;

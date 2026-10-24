@@ -41,7 +41,7 @@ TEST(JointComponentRuntimeTest, PublicObjectivesUseParentScaleAndIncludeConstant
     input.row_ids.push_back("constant"); input.observations.push_back(7);
     const core::JointProblem problem(input); const double scale=problem.ObservationScale();
     ASSERT_GT(scale,1);
-    const auto fit=core::FitJointComponents(problem,{.55,.55});
+    const auto fit=p::FitBoundedJointComponentsForTesting(problem,{.55,.55},2.2);
     ASSERT_TRUE(fit.prediction && fit.objective && fit.assembled_state);
     double total{},components{};
     for(std::size_t r=0;r<input.observations.size();++r)
@@ -63,7 +63,7 @@ TEST(JointComponentRuntimeTest, AssemblyPreservesSuppliedCoefficientsWithoutGlob
 {
     const core::JointProblem problem(Snapshot());
     const auto & data=core::JointProblemAccess::Get(problem);
-    auto fit=core::FitJointComponents(problem,{.55,.55});
+    auto fit=p::FitBoundedJointComponentsForTesting(problem,{.55,.55},2.2);
     auto components=fit.components;
     ASSERT_TRUE(components[0].state && components[1].state);
     components[0].state->ac[0]+=.1;
@@ -80,7 +80,7 @@ TEST(JointComponentRuntimeTest, AssemblyPreservesSuppliedCoefficientsWithoutGlob
 TEST(JointComponentRuntimeTest, AssemblyRejectsMappingMismatchAndMissingNumericalState)
 {
     const core::JointProblem problem(Snapshot()); const auto & data=core::JointProblemAccess::Get(problem);
-    const auto fit=core::FitJointComponents(problem,{.55,.55});
+    const auto fit=p::FitBoundedJointComponentsForTesting(problem,{.55,.55},2.2);
     ASSERT_EQ(fit.components.size(),2u);
     auto mapping_mismatch=fit.components;
     mapping_mismatch.front().atoms.front()=mapping_mismatch.back().atoms.front();
@@ -139,7 +139,7 @@ TEST(JointComponentRuntimeTest, ReplayTrustRejectsIndependentDisagreements)
 TEST(JointComponentRuntimeTest, RuntimeConvergenceIsDerivedFromActualEvidenceNotTermination)
 {
     using Status=core::JointCheckStatus;
-    auto fit=core::FitJointComponents(core::JointProblem(Snapshot()),{.55,.55});
+    auto fit=p::FitBoundedJointComponentsForTesting(core::JointProblem(Snapshot()),{.55,.55},2.2);
     ASSERT_EQ(fit.RuntimeConvergence(),Status::Passed);
     for(auto & component:fit.components)
     {
@@ -176,7 +176,7 @@ TEST(JointComponentRuntimeTest, RuntimeConvergenceIsDerivedFromActualEvidenceNot
 TEST(JointComponentRuntimeTest, MissingOrWrongScopeEvidenceCannotVacuouslyConverge)
 {
     using Status=core::JointCheckStatus;
-    const auto fit=core::FitJointComponents(core::JointProblem(Snapshot()),{.55,.55});
+    const auto fit=p::FitBoundedJointComponentsForTesting(core::JointProblem(Snapshot()),{.55,.55},2.2);
     auto component=fit.components[0];
     component.evidence.clear(); EXPECT_EQ(component.RuntimeConvergence(),Status::Unavailable);
     component.evidence=fit.evidence; EXPECT_EQ(component.RuntimeConvergence(),Status::Unavailable);
@@ -202,7 +202,7 @@ TEST(JointComponentRuntimeTest, GenericNumericalOutcomesAreNotPersistedAsFormalR
         if(variant==2) for(auto & y:input.observations) y=0;
         std::vector<double> initial(input.atom_ids.size(),.55);
         if(variant==3) initial[0]=std::numeric_limits<double>::quiet_NaN();
-        const auto fit=core::FitJointComponents(core::JointProblem(input),initial);
+        const auto fit=p::FitBoundedJointComponentsForTesting(core::JointProblem(input),initial,2.2);
         const auto saved=core::CaptureJointAnalysisResult(fit);
         ASSERT_TRUE(saved.metadata.software);
         EXPECT_FALSE(saved.metadata.model_sha256); EXPECT_FALSE(saved.metadata.map_sha256);
@@ -227,10 +227,10 @@ TEST(JointComponentRuntimeTest, GenericNumericalOutcomesAreNotPersistedAsFormalR
 TEST(JointComponentRuntimeTest, PositiveMapScalingPreservesKernelCoefficientUnits)
 {
     auto input=Snapshot();
-    const auto original=core::FitJointComponents(core::JointProblem(input),{.55,.55});
+    const auto original=p::FitBoundedJointComponentsForTesting(core::JointProblem(input),{.55,.55},2.2);
     constexpr double divisor=3.25;
     for(auto & y:input.observations) y/=divisor;
-    const auto normalized=core::FitJointComponents(core::JointProblem(input),{.55,.55});
+    const auto normalized=p::FitBoundedJointComponentsForTesting(core::JointProblem(input),{.55,.55},2.2);
     ASSERT_EQ(original.RuntimeConvergence(),core::JointCheckStatus::Passed);
     ASSERT_EQ(normalized.RuntimeConvergence(),core::JointCheckStatus::Passed);
     ASSERT_TRUE(original.assembled_state); ASSERT_TRUE(normalized.assembled_state);

@@ -243,11 +243,13 @@ TEST(JointParameterStabilityTest, ComponentFitHonorsPerturbationClaimBudgetAndPr
     n::FixedNeighborSearchPolicy policy; policy.core_atoms=1;
     std::size_t claims{};
     policy.claim_parameter_stability_block=[&](int) {return ++claims<=1;};
+    policy.eta_upper_bound=std::log(2.2);
     policy.configure_search_for_testing=[](n::FixedNeighborPolicy & search) {
         search.assess_parameter_stability=true;
     };
     const auto fit=n::FitFixedNeighborComponents(problem,{.55,.55},policy);
     n::FixedNeighborSearchPolicy baseline_policy; baseline_policy.core_atoms=1;
+    baseline_policy.eta_upper_bound=std::log(2.2);
     baseline_policy.configure_search_for_testing=[](n::FixedNeighborPolicy & search) {
         search.assess_parameter_stability=false;
     };
