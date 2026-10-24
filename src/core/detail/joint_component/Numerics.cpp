@@ -399,7 +399,7 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     if(!out.valid) return out; out.valid=false;
     const Eigen::Index m=eta.size();
     const auto solve_started=std::chrono::steady_clock::now();
-    const auto solved=SolveLinear(out.x,y,Vector::Ones(y.size()),
+    const auto solved=SolveLinear(out.x,y,
         context ? &context->linear : nullptr,context ? context->scale : 0);
     if(profile_work)
     {

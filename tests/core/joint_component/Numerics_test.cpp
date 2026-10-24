@@ -10,6 +10,7 @@
 #include <cmath>
 #include <iomanip>
 #include <limits>
+#include <numbers>
 #include <sstream>
 #include <tuple>
 
@@ -214,10 +215,10 @@ TEST(JointComponentNumericsTest, SparseConstrainedSolvePreservesInteriorBoundary
     namespace n=p::runtime;
     Matrix x=Matrix::Zero(7,4);
     x(0,0)=1; x(1,1)=1; x(2,2)=1; x(3,3)=1;
-    const n::Sparse sparse=x.sparseView(); const Vector weights=Vector::Ones(x.rows());
+    const n::Sparse sparse=x.sparseView();
     for(const Eigen::Vector4d truth:{Eigen::Vector4d(2,-.3,1.5,.4),Eigen::Vector4d(-.5,-.3,1.5,.4)})
     {
-        const Vector y=x*truth; const auto solved=n::SolveLinear(sparse,y,weights);
+        const Vector y=x*truth; const auto solved=n::SolveLinear(sparse,y);
         ASSERT_TRUE(solved.valid);
         const auto certificate=n::CertifyLinear(sparse,y,solved.beta,std::max(1.0,y.norm()));
         ASSERT_TRUE(certificate.available); EXPECT_TRUE(certificate.feasible); EXPECT_TRUE(certificate.kkt_passed);
@@ -231,7 +232,7 @@ TEST(JointComponentNumericsTest, SparseConstrainedSolvePreservesInteriorBoundary
         0,0,2,2, 0,2,-1,0, -1,1,2,-1;
     const Vector release_y=(Vector(7)<<0,1,2,1,1,2,0).finished();
     const auto release_sparse=n::Sparse(release_design.sparseView());
-    const auto released=n::SolveLinear(release_sparse,release_y,Vector::Ones(release_y.size()));
+    const auto released=n::SolveLinear(release_sparse,release_y);
     ASSERT_TRUE(released.valid); EXPECT_EQ(released.releases,1); EXPECT_GT(released.beta(0),0);
     EXPECT_EQ(released.beta(2),0);
     const auto released_certificate=n::CertifyLinear(release_sparse,release_y,released.beta,
@@ -241,8 +242,125 @@ TEST(JointComponentNumericsTest, SparseConstrainedSolvePreservesInteriorBoundary
 
     Matrix deficient=Matrix::Zero(7,4);
     deficient(0,0)=1; deficient(1,1)=1; deficient(0,2)=1; deficient(2,3)=1;
-    const auto rejected=n::SolveLinear(n::Sparse(deficient.sparseView()),Vector::Ones(7),Vector::Ones(7));
+    const auto rejected=n::SolveLinear(n::Sparse(deficient.sparseView()),Vector::Ones(7));
     EXPECT_FALSE(rejected.valid); EXPECT_EQ(rejected.reason,"rank-deficient"); EXPECT_EQ(rejected.rank,3);
+}
+
+TEST(JointComponentNumericsTest, UnweightedLinearSolvePreservesRecordedNumericalBaseline)
+{
+    namespace n=p::runtime;
+    const auto solve=[](const Matrix & x,const Vector & y) {
+        const n::Sparse sparse=x.sparseView();
+        auto result=n::SolveLinear(sparse,y);
+        auto certificate=result.valid ? n::CertifyLinear(sparse,y,result.beta) : n::Certificate{};
+        return std::pair{std::move(result),std::move(certificate)};
+    };
+    const auto relative_match=[](double actual,double expected,double tolerance) {
+        return std::abs(actual-expected)<=tolerance*std::abs(expected);
+    };
+
+    Matrix identity=Matrix::Zero(7,4);
+    identity(0,0)=1; identity(1,1)=1; identity(2,2)=1; identity(3,3)=1;
+    Vector positive_truth(4); positive_truth<<2,-.3,1.5,.4;
+    const auto [full_rank,full_rank_certificate]=solve(identity,identity*positive_truth);
+    ASSERT_TRUE(full_rank.valid); EXPECT_EQ(full_rank.reason,"solved"); EXPECT_EQ(full_rank.rank,4);
+    EXPECT_EQ(full_rank.active_set_iterations,1u); EXPECT_EQ(full_rank.releases,0);
+    EXPECT_LE((full_rank.beta-positive_truth).norm(),1e-14);
+    EXPECT_DOUBLE_EQ(full_rank_certificate.objective,0.0);
+    EXPECT_EQ(full_rank.refinement_eligibility_count,1u); EXPECT_EQ(full_rank.refinement_trigger_count,0u);
+
+    Vector boundary_truth(4); boundary_truth<<-.5,-.3,1.5,.4;
+    const auto [boundary,boundary_certificate]=solve(identity,identity*boundary_truth);
+    ASSERT_TRUE(boundary.valid); EXPECT_EQ(boundary.reason,"solved"); EXPECT_EQ(boundary.rank,3);
+    EXPECT_EQ(boundary.active_set_iterations,2u); EXPECT_EQ(boundary.releases,0);
+    EXPECT_DOUBLE_EQ(boundary.beta(0),0.0); EXPECT_NEAR(boundary.beta(1),-.3,1e-14);
+    EXPECT_NEAR(boundary.beta(2),1.5,1e-14); EXPECT_NEAR(boundary.beta(3),.4,1e-14);
+    EXPECT_NEAR(boundary_certificate.objective,.125,1e-14);
+    EXPECT_NEAR(boundary_certificate.projected_kkt,2.7755575615628914e-17,1e-15);
+
+    Matrix release_design(7,4);
+    release_design<<0,0,-1,2, 0,1,-1,-1, -2,0,-2,-2, 2,-2,-1,0,
+        0,0,2,2, 0,2,-1,0, -1,1,2,-1;
+    const auto [released,release_certificate]=solve(release_design,(Vector(7)<<0,1,2,1,1,2,0).finished());
+    ASSERT_TRUE(released.valid); EXPECT_EQ(released.reason,"solved"); EXPECT_EQ(released.rank,3);
+    EXPECT_EQ(released.active_set_iterations,4u); EXPECT_EQ(released.releases,1);
+    const Vector expected_release=(Vector(4)<<.038674033149171297,.28176795580110497,0.,-.18784530386740331).finished();
+    EXPECT_LE((released.beta-expected_release).norm(),1e-14);
+    EXPECT_NEAR(release_certificate.objective,4.834254143646409,1e-13);
+    EXPECT_NEAR(release_certificate.projected_kkt,5.5511151231257827e-17,1e-15);
+
+    Matrix deficient=Matrix::Zero(7,4);
+    deficient(0,0)=1; deficient(1,1)=1; deficient(0,2)=1; deficient(2,3)=1;
+    const auto [rejected,unavailable]=solve(deficient,Vector::Ones(7));
+    EXPECT_FALSE(rejected.valid); EXPECT_EQ(rejected.reason,"rank-deficient"); EXPECT_EQ(rejected.rank,3);
+    EXPECT_EQ(rejected.active_set_iterations,1u); EXPECT_EQ(rejected.solves,1);
+    EXPECT_FALSE(unavailable.available);
+
+    Matrix scaled=Matrix::Zero(7,4);
+    scaled(0,0)=1e-6; scaled(1,1)=1e3; scaled(2,2)=1e-2; scaled(3,3)=1e4;
+    Vector scaled_truth(4); scaled_truth<<2,-.3,1.5,.4;
+    const auto [nonuniform,nonuniform_certificate]=solve(scaled,scaled*scaled_truth);
+    ASSERT_TRUE(nonuniform.valid); EXPECT_EQ(nonuniform.rank,4); EXPECT_EQ(nonuniform.active_set_iterations,1u);
+    EXPECT_LE((nonuniform.beta-scaled_truth).norm(),1e-14);
+    EXPECT_DOUBLE_EQ(nonuniform_certificate.objective,0.0);
+
+    Matrix large=Matrix::Zero(512,48); Vector large_truth(48);
+    for(Eigen::Index column=0;column<large.cols();++column)
+    {
+        const Eigen::Index frequency=column/2+1;
+        large_truth(column)=column%2 ? .15*std::sin(static_cast<double>(column)) : .2+.002*static_cast<double>(column);
+        for(Eigen::Index row=0;row<large.rows();++row)
+        {
+            const double phase=2*std::numbers::pi*static_cast<double>(frequency*row)/static_cast<double>(large.rows());
+            large(row,column)=column%2 ? std::cos(phase) : std::sin(phase);
+        }
+    }
+    const auto [large_result,large_certificate]=solve(large,large*large_truth);
+    ASSERT_TRUE(large_result.valid); EXPECT_EQ(large_result.rank,48);
+    EXPECT_EQ(large_result.active_set_iterations,1u); EXPECT_EQ(large_result.releases,0);
+    EXPECT_LE((large_result.beta-large_truth).norm(),1e-12);
+    EXPECT_LT(large_certificate.objective,1e-27);
+    EXPECT_LT(large_certificate.projected_kkt,2e-16);
+
+    struct RefinementBaseline {double delta,a,c,b,d,objective,kkt; std::size_t successes,failures; int solves;};
+    const std::array<RefinementBaseline,4> refinement_baselines{{
+        {1e-8,1000000.001636615,-1000000.001636615,.39999999996198982,-.19999999997244269,
+            2.9245477447186279e-20,7.0582428790544327e-11,1,0,5},
+        {1e-10,999999.86949451349,-999999.86949451349,.40000000000915337,-.20000000001303836,
+            1.2527628537315677e-20,1.9641177573248569e-11,1,0,2},
+        {1e-12,999966.90945700917,-999966.90945700917,.40000000001083835,-.20000000004484161,
+            2.4204223979307309e-20,8.9422913518433234e-11,1,0,2},
+        {1e-14,1015378.31601107,-1015378.3160110699,.39999999977109302,-.19999999958936632,
+            5.232877687860051e-19,9.3132257461547852e-10,0,1,1}}};
+    for(const auto & baseline:refinement_baselines)
+    {
+        constexpr Eigen::Index rows=32;
+        Matrix x(rows,4);
+        for(Eigen::Index row=0;row<rows;++row)
+        {
+            const double k=static_cast<double>(row);
+            const double a=std::sin(.23*k)+.2*std::cos(.09*k);
+            const double b=std::cos(.17*k)+.3*std::sin(.31*k);
+            const double c=std::sin(.37*k)+.1*std::cos(.41*k);
+            const double d=std::cos(.29*k)-.2*std::sin(.13*k);
+            x(row,0)=a; x(row,1)=a+baseline.delta*b; x(row,2)=c; x(row,3)=d;
+        }
+        Vector truth(4); truth<<1e6,-1e6,.4,-.2;
+        const auto [solved,certificate]=solve(x,x*truth);
+        ASSERT_TRUE(solved.valid); EXPECT_EQ(solved.reason,"solved"); EXPECT_EQ(solved.rank,4);
+        EXPECT_EQ(solved.active_set_iterations,1u); EXPECT_EQ(solved.releases,0);
+        EXPECT_EQ(solved.refinement_eligibility_count,1u); EXPECT_EQ(solved.refinement_trigger_count,1u);
+        EXPECT_EQ(solved.refinement_success_count,baseline.successes);
+        EXPECT_EQ(solved.refinement_failure_count,baseline.failures);
+        EXPECT_EQ(solved.refinement_factorizations,1u); EXPECT_EQ(solved.solves,baseline.solves);
+        EXPECT_TRUE(relative_match(solved.beta(0),baseline.a,1e-12));
+        EXPECT_TRUE(relative_match(solved.beta(1),baseline.c,1e-12));
+        EXPECT_TRUE(relative_match(solved.beta(2),baseline.b,1e-12));
+        EXPECT_TRUE(relative_match(solved.beta(3),baseline.d,1e-12));
+        EXPECT_TRUE(relative_match(certificate.objective,baseline.objective,1e-11));
+        EXPECT_TRUE(relative_match(certificate.projected_kkt,baseline.kkt,1e-11));
+        EXPECT_EQ(certificate.kkt_passed,baseline.failures==0);
+    }
 }
 
 TEST(JointComponentNumericsTest, LocalLinearCertificateKeepsItsStrictKktLimit)

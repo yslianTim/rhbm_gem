@@ -97,8 +97,7 @@ struct LinearResult
     double initial_projected_kkt{unavailable},final_projected_kkt{unavailable},refinement_seconds{},
         refinement_before_objective{unavailable},refinement_after_objective{unavailable};
 };
-LinearResult SolveLinear(const Sparse &,VectorRef,const Vector &,const LinearPolicy * = nullptr,
-    double=0);
+LinearResult SolveLinear(const Sparse &,VectorRef,const LinearPolicy * = nullptr,double=0);
 struct Certificate
 {
     bool evaluated{},available{},feasible{},kkt_passed{};

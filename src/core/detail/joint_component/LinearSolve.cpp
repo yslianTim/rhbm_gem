@@ -27,7 +27,7 @@ std::pair<Eigen::SparseMatrix<double>,Eigen::VectorXd> ReduceSparseRows(
     const Eigen::SparseMatrix<double> & a,const Eigen::VectorXd & rhs)
 {
     // Orthogonal elimination within contiguous row tiles. Only structurally
-    // present columns need local QR; all original rows and weights participate.
+    // present columns need local QR; all original rows and RHS entries participate.
     const Eigen::SparseMatrix<double,Eigen::RowMajor> rows(a);
     std::vector<Eigen::Triplet<double>> entries; std::vector<double> response;
     constexpr Eigen::Index tile_size{1024};
@@ -61,19 +61,19 @@ std::pair<Eigen::SparseMatrix<double>,Eigen::VectorXd> ReduceSparseRows(
     for(std::size_t row=0;row<response.size();++row) transformed(static_cast<Eigen::Index>(row))=response[row];
     return {std::move(reduced),std::move(transformed)};
 }
-LinearResult WeightedSolveImpl(const Sparse & x, VectorRef y,const Eigen::VectorXd & weights,
+LinearResult UnweightedSolveImpl(const Sparse & x,VectorRef y,
     const LinearPolicy * policy,double observation_scale_override)
 {
     LinearResult out; out.reason="invalid-input"; out.beta=Eigen::VectorXd::Zero(x.cols());
-    if (x.cols()==0 || x.cols()%2!=0 || x.rows()<=x.cols() || y.size()!=x.rows() || weights.size()!=y.size() ||
-        !Finite(x) || !y.allFinite() || !weights.allFinite() || (weights.array()<0).any()) return out;
+    if (x.cols()==0 || x.cols()%2!=0 || x.rows()<=x.cols() || y.size()!=x.rows() ||
+        !Finite(x) || !y.allFinite()) return out;
     const Eigen::VectorXd scales{ColumnNorms(x)};
     if ((scales.array()==0).any()) {out.reason="rank-deficient"; return out;}
     Sparse sparse_z=x;
     for (int k=0;k<sparse_z.outerSize();++k)
         for (Sparse::InnerIterator entry(sparse_z,k);entry;++entry)
-            entry.valueRef()=(entry.value()*std::sqrt(weights(entry.row())))/scales(k);
-    Eigen::VectorXd rhs{weights.cwiseSqrt().array()*y.array()};
+            entry.valueRef()/=scales(k);
+    Eigen::VectorXd rhs{y};
     const double original_rhs_norm=policy && policy->release_response_norm>=0 ? policy->release_response_norm : rhs.norm();
     const double znorm{sparse_z.norm()};
     const double rank_threshold{policy ? policy->rank_relative : eps*static_cast<double>(std::max(x.rows(),x.cols()))};
@@ -102,7 +102,7 @@ LinearResult WeightedSolveImpl(const Sparse & x, VectorRef y,const Eigen::Vector
         if (maximum_norm==0) {out.reason="rank-deficient"; return out;}
         Eigen::SparseQR<Eigen::SparseMatrix<double>,Eigen::COLAMDOrdering<int>> qr;
         // SparseQR uses an absolute pivot threshold. The scale is the
-        // largest norm of the weighted, column-normalized design.
+        // largest norm of the column-normalized design.
         const auto reduced{ReduceSparseRows(selected,rhs)};
         qr.setPivotThreshold(rank_threshold*maximum_norm); qr.compute(reduced.first);
         if(qr.info()!=Eigen::Success) {out.reason="nonfinite"; return out;}
@@ -132,12 +132,11 @@ LinearResult WeightedSolveImpl(const Sparse & x, VectorRef y,const Eigen::Vector
         out.beta=b.cwiseQuotient(scales);
         {
             constexpr Eigen::Index maximum_dense_elements=1'000'000; // Cap the dense face matrix at 8 MB.
-            const bool unit_weights=(weights.array()==1.0).all();
             const bool bounded=!columns.empty() && x.rows()<=maximum_dense_elements/
                 static_cast<Eigen::Index>(columns.size());
             const double observation_scale=observation_scale_override>0 ? observation_scale_override :
                 std::max(1.0,original_rhs_norm);
-            const Certificate initial=unit_weights && bounded ?
+            const Certificate initial=bounded ?
                 CertifyLinear(x,y,out.beta,observation_scale) : Certificate{};
             if(initial.available)
             {
@@ -218,7 +217,6 @@ LinearResult WeightedSolveImpl(const Sparse & x, VectorRef y,const Eigen::Vector
 
 
 } // namespace
-LinearResult SolveLinear(const Sparse & x,VectorRef y,const Vector & w,
-    const LinearPolicy * policy,double observation_scale)
-{return WeightedSolveImpl(x,y,w,policy,observation_scale);}
+LinearResult SolveLinear(const Sparse & x,VectorRef y,const LinearPolicy * policy,double observation_scale)
+{return UnweightedSolveImpl(x,y,policy,observation_scale);}
 }
