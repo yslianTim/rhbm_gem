@@ -520,7 +520,8 @@ FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolic
                 {
                     out.projected_width_column_norms.assign(projected.projected_norms.data(),
                         projected.projected_norms.data()+projected.projected_norms.size());
-                    const auto width_spectrum=ComputeSpectrum(projected.projected,context.rank,
+                    const Sparse projected_sparse=projected.projected.sparseView();
+                    const auto width_spectrum=ComputeSpectrum(projected_sparse,context.rank,
                         projected.projected.cols(),true);
                     if(width_spectrum.available)
                     {

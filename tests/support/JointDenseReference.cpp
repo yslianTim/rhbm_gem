@@ -49,6 +49,12 @@ Vector JacobiLeastSquaresReference(const Matrix & matrix,VectorRef rhs,const Ran
     return svd.solve(rhs);
 }
 
+Spectrum DenseSpectrum(const Matrix & matrix,const RankPolicy & policy,Eigen::Index columns,bool normalize)
+{
+    const Sparse sparse=matrix.sparseView();
+    return ComputeSpectrum(sparse,policy,columns,normalize);
+}
+
 DenseDifferential DenseDifferentiate(const Evaluation & e,double scale,const EvaluationContext * context,double free_design_threshold)
 {
     DenseDifferential out;

@@ -927,8 +927,6 @@ template<class Design> Spectrum SpectrumRecord(const Design & input,const RankPo
 }
 Spectrum ComputeSpectrum(const Sparse & x,const RankPolicy & p,Eigen::Index columns,bool normalize)
 {return SpectrumRecord(x,p,columns,normalize);}
-Spectrum ComputeSpectrum(const Matrix & x,const RankPolicy & p,Eigen::Index columns,bool normalize)
-{return SpectrumRecord(x,p,columns,normalize);}
 Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluation & endpoint,
     const IndependentReplayEvidence & replay,const EvaluationContext & context,
     const JointConvergenceCriteria & criteria)

@@ -58,7 +58,7 @@ Evaluation AtState(const Domain & d,const Vector & y,const Vector & eta,const Ve
 j::object MatrixSpectrum(const Sparse & x,const RankPolicy & p,Eigen::Index columns,bool normalize)
 {return runtime_json::MatrixSpectrum(runtime::ComputeSpectrum(x,p,columns,normalize));}
 j::object MatrixSpectrum(const Matrix & x,const RankPolicy & p,Eigen::Index columns,bool normalize)
-{return runtime_json::MatrixSpectrum(runtime::ComputeSpectrum(x,p,columns,normalize));}
+{return runtime_json::MatrixSpectrum(DenseSpectrum(x,p,columns,normalize));}
 Vector LocalCorrection(const Evaluation & e,const Differential & d,const EvaluationContext & c,double threshold)
 {return DenseLocalCorrection(e,d,c,threshold);}
 Differential Differentiate(const Evaluation & e,double scale,const EvaluationContext * c,double threshold)

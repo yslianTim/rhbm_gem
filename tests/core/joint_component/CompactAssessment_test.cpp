@@ -139,10 +139,10 @@ TEST(JointCompactAssessmentTest, ProjectedWidthRouteMatchesFullProfileDerivative
         const auto a=n::ReduceDerivative(full,endpoint.residual);
         const auto b=n::ReduceProjectedWidthDerivative(projected);
         ASSERT_TRUE(a.valid); ASSERT_TRUE(b.valid);
-        const auto dense_profile=n::ComputeSpectrum(dense.jacobian,data.context.rank,atoms,false);
-        const auto reduced_profile=n::ComputeSpectrum(a.jacobian,data.context.rank,atoms,false);
-        const auto dense_width=n::ComputeSpectrum(dense.projected,data.context.rank,atoms,false);
-        const auto reduced_width=n::ComputeSpectrum(b.projected,data.context.rank,atoms,false);
+        const auto dense_profile=tc::DenseSpectrum(dense.jacobian,data.context.rank,atoms,false);
+        const auto reduced_profile=tc::DenseSpectrum(a.jacobian,data.context.rank,atoms,false);
+        const auto dense_width=tc::DenseSpectrum(dense.projected,data.context.rank,atoms,false);
+        const auto reduced_width=tc::DenseSpectrum(b.projected,data.context.rank,atoms,false);
         ASSERT_TRUE(dense_profile.available && reduced_profile.available);
         ASSERT_TRUE(dense_width.available && reduced_width.available);
         EXPECT_EQ(dense_profile.rank,reduced_profile.rank);

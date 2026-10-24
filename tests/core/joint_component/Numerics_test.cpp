@@ -167,8 +167,8 @@ TEST(JointTestNumericsTest, TiledDerivativeMatchesDenseAcrossTileBoundaries)
             for(const auto & matrices:{std::pair{dense.projected,reduced_width.projected},
                 std::pair{dense.jacobian,reduced.jacobian}})
             {
-                const auto left=n::ComputeSpectrum(matrices.first,context.rank,2,false);
-                const auto right=n::ComputeSpectrum(matrices.second,context.rank,2,false);
+                const auto left=p::DenseSpectrum(matrices.first,context.rank,2,false);
+                const auto right=p::DenseSpectrum(matrices.second,context.rank,2,false);
                 EXPECT_EQ(left.rank,right.rank);
                 EXPECT_LE((left.singular_values-right.singular_values).lpNorm<Eigen::Infinity>()/left.singular_values(0),1e-10);
                 EXPECT_NEAR(left.threshold,right.threshold,1e-10*left.threshold);
