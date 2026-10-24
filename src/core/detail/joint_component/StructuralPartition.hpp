@@ -33,7 +33,7 @@ class StructuralTopology
     Indices Neighbors(std::size_t);
 public:
     StructuralTopology(const Domain &,const Identities &,const JointParameterLayout &);
-    StructuralBlockPartition BuildCores(std::size_t core_atoms,bool include_metadata=true);
+    StructuralBlockPartition BuildCores(std::size_t core_atoms);
     StructuralBlockCensus Census(const StructuralBlockPartition &) const;
     std::size_t StorageBytes() const;
     void PopulateMetadata(StructuralBlockPartition &);

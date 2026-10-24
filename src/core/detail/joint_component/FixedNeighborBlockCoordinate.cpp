@@ -823,7 +823,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     try
     {
         StructuralTopology topology(domain,context.atom_ids,layout);
-        partition=topology.BuildCores(policy.core_atoms,false);
+        partition=topology.BuildCores(policy.core_atoms);
         if(partition.cores.empty()) {out.reason="block-invalid-partition"; return out;}
         census=topology.Census(partition);
         memory_shape.component_blocks=partition.cores.size();

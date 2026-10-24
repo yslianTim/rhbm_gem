@@ -115,7 +115,9 @@ n::StructuralBlockPartition BuildCores(const c::JointProblemInput & input,
     const n::Domain domain(owner);
     const n::Identities identities(std::shared_ptr<const std::vector<std::string>>(owner,&owner->atom_ids));
     n::StructuralTopology topology(domain,identities,layout);
-    return topology.BuildCores(core_atoms);
+    auto partition=topology.BuildCores(core_atoms);
+    topology.PopulateMetadata(partition);
+    return partition;
 }
 }
 
@@ -155,7 +157,7 @@ TEST(JointBlockCoordinateTest, StructuralCensusMatchesPreparedCoreMetadata)
     const n::Identities identities(std::shared_ptr<const std::vector<std::string>>(owner,&owner->atom_ids));
     const auto layout=n::BuildParameterLayout(*owner);
     n::StructuralTopology topology(domain,identities,layout);
-    auto cores=topology.BuildCores(1,false);
+    auto cores=topology.BuildCores(1);
     const auto census=topology.Census(cores);
     topology.PopulateMetadata(cores);
     std::size_t affected{},neighbors{},maximum_rows{},maximum_support{};

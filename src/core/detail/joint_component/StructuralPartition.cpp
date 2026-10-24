@@ -51,7 +51,7 @@ Indices StructuralTopology::Neighbors(std::size_t atom)
     std::sort(out.begin(),out.end(),[&](auto a,auto b){return LessAtom(a,b);});
     return out;
 }
-StructuralBlockPartition StructuralTopology::BuildCores(std::size_t core_atoms,bool include_metadata)
+StructuralBlockPartition StructuralTopology::BuildCores(std::size_t core_atoms)
 {
     if(core_atoms==0) throw std::invalid_argument("Invalid structural partition policy");
     const auto count=domain_.atoms.size(); std::vector<bool> assigned(count,false);
@@ -76,7 +76,6 @@ StructuralBlockPartition StructuralTopology::BuildCores(std::size_t core_atoms,b
         std::sort(core.atoms.begin(),core.atoms.end(),[&](auto a,auto b){return LessAtom(a,b);});
         result.cores.push_back(std::move(core));
     }
-    if(include_metadata) PopulateMetadata(result);
     return result;
 }
 StructuralBlockCensus StructuralTopology::Census(const StructuralBlockPartition & partition) const
