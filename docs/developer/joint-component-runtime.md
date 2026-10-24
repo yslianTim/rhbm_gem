@@ -7,32 +7,43 @@ estimator. The persisted parameterization is
 ## Production flow
 
 `RunJointComponentWorkflow` builds the Pure Exclusion problem and obtains
-qualified target widths from FirstStage fitting. A width calibration is
-available only with at least 20 qualified target donors and 95% target
-coverage. The global width bound is
-`Bmax = 4 × P95(qualified FirstStage target widths)`.
-Calibration failure remains an unavailable diagnostic and the search does not
-start with an unbounded substitute.
+qualified FirstStage target widths. A width calibration is available only with
+at least 20 qualified target donors and 95% target coverage. The sole global
+width bound is `Bmax = 4 × Q0.95(qualified FirstStage target widths)`.
+Nonfinite or nonpositive donor widths, median-fallback donors, initialization
+failures, and overflowed bounds do not produce a usable calibration. Initial
+widths are projected into this finite bound; unavailable calibration prevents
+Joint search from starting.
 
 Targets are the only free Joint components. Non-target Halo support is used
 only for the Pure Halo-Support Exclusion row selection, with the production
-support radius of 2.5 Å. The target model estimates Gaussian amplitude A,
-width B, and signed Coulomb charge C.
+support radius of 2.5 Å. The model is
+`f_i(r) = A_i G(r; B_i) + C_i K(r; B_i)`, with `A_i ≥ 0`,
+`0 < B_i ≤ Bmax`, and signed `C_i`. C multiplies the charge kernel; it is not
+a constant background offset.
 
 Production uses FixedNeighbor blocks with core size 12, forward serial
 Gauss-Seidel order, and at most 200 sweeps. A block visit may accept at most
-one trusted update. Width updates use bounded Active-set Levenberg–Marquardt;
-constrained A/C subproblems use SparseQR with the Eigen backend. Amplitudes
-satisfy A ≥ 0 and charge C may have either sign.
+one trusted update. At fixed widths, the local A/C problem uses column
+normalization, Eigen SparseQR, a nonnegative-amplitude active set, strict
+`1e-10` local KKT certification, and the existing local QR iterative
+refinement when needed. C remains signed. Width updates use bounded log-width
+Active-set LM with a bounded trust-region subproblem, damping adjustment, and
+the weak-width safeguard. The full profile derivative includes its
+nonzero-residual correction and cancellation protection. Compact SVD supports
+rank and weak-direction checks; it is not an alternate A/C solver.
 
 ## Qualification
 
-The global search preserves objective monotonicity, practical global KKT
-convergence, complete-sweep stationarity, and endpoint verification. A
-qualified endpoint must also pass Independent Replay. Failed initialization,
-unavailable width calibration, incomplete search, unqualified endpoint,
-missing component state, and nullable diagnostics remain representable saved
-outcomes.
+The global search preserves objective monotonicity and practical-v1
+convergence: projected A/C KKT ≤ `1e-7`, bound-aware projected Width KKT ≤
+`1e-9`, and maximum log-width change ≤ `1e-6` after a complete sweep. Endpoint
+certification and Independent Replay verify the accepted state. Component
+assembly consistency, Local Conditioning, Parameter Stability, target point
+quality, and resource preflight remain explicit evidence; local LM termination
+alone does not qualify a component. Failed initialization, unavailable width
+calibration, incomplete search, unqualified endpoint, missing component state,
+and nullable diagnostics remain representable saved outcomes.
 
 Local Conditioning and Parameter Stability describe the accepted solution's
 block behavior. Target point validation records component convergence,

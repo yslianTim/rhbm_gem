@@ -40,7 +40,8 @@ meaning when decoded; research comparisons are summarized in the
 
 The maintained tests use small deterministic inputs. `ActiveSetBoundedLM_test`
 covers interior and upper-bound solutions, multiplier signs, release,
-rank-deficient and invalid problems. `Numerics_test` checks derivatives,
+trust-region damping recovery from rank deficiency, and invalid problems.
+`Numerics_test` checks derivatives,
 active-face rebuilding, feasible width replay, and projected KKT behavior.
 `FixedNeighborBlockCoordinate_test` covers retries, accepted-state safety,
 complete-sweep confirmation, endpoint qualification, and budget exhaustion.
