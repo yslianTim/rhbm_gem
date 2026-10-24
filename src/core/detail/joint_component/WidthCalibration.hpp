@@ -8,8 +8,6 @@
 
 namespace rhbm_gem::core::joint_component {
 
-enum class GlobalWidthBoundMultiplier { TwoP95, FourP95 };
-
 struct WidthBoundCalibration
 {
     std::string dataset_identity;
@@ -21,8 +19,8 @@ struct WidthBoundCalibration
     std::size_t invalid_width_count{}, fallback_count{}, initialization_failure_count{};
     std::map<std::string,std::size_t> excluded_donor_reasons;
     std::optional<double> minimum_width, median_width, p90, p95, p99, maximum_width;
-    std::optional<double> bmax2, bmax4, eta_max2, eta_max4;
-    std::size_t initial_violations2{}, initial_violations4{};
+    std::optional<double> bmax4, eta_max4;
+    std::size_t initial_violations4{};
 };
 
 struct InitialWidthProjection
@@ -52,6 +50,6 @@ WidthBoundCalibration CalibrateGlobalWidth(const JointInitialization &, std::str
 // Builds a feasible working vector without changing the captured FirstStage
 // estimates or the caller's JointInitialization.
 BoundedInitialization MakeBoundedInitialization(
-    const JointInitialization &, const WidthBoundCalibration &, GlobalWidthBoundMultiplier);
+    const JointInitialization &, const WidthBoundCalibration &);
 
 } // namespace rhbm_gem::core::joint_component

@@ -655,8 +655,7 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
             return invalid("joint-initialization-unavailable:target-mapping-mismatch");
 
     const auto calibration=joint_component::CalibrateGlobalWidth(initialization,"joint-target-widths");
-    const auto bounded=joint_component::MakeBoundedInitialization(initialization,calibration,
-        joint_component::GlobalWidthBoundMultiplier::FourP95);
+    const auto bounded=joint_component::MakeBoundedInitialization(initialization,calibration);
     if(!bounded.available)
     {
         JointFitResult out; out.problem=problem; out.initialization=initialization;

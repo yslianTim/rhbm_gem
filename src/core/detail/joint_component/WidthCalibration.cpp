@@ -110,9 +110,8 @@ WidthBoundCalibration CalibrateGlobalWidth(
     result.p90=QuantileType7(donors,0.90);
     result.p95=QuantileType7(donors,0.95);
     result.p99=QuantileType7(donors,0.99);
-    result.bmax2=BoundFrom(*result.p95,2.0);
     result.bmax4=BoundFrom(*result.p95,4.0);
-    if(!result.bmax2 || !result.bmax4)
+    if(!result.bmax4)
     {
         result.unavailable_reason="global-width-bound-overflow-or-invalid-log-bound";
         result.p95.reset();
@@ -123,13 +122,11 @@ WidthBoundCalibration CalibrateGlobalWidth(
         result.maximum_width.reset();
         return result;
     }
-    result.eta_max2=std::log(*result.bmax2);
     result.eta_max4=std::log(*result.bmax4);
     for(std::size_t i=0;i<initialization.atoms.size();++i)
     {
         const auto & atom=initialization.atoms[i];
         if(!atom.target || !std::isfinite(initialization.b[i]) || !(initialization.b[i]>0.0)) continue;
-        if(initialization.b[i]>*result.bmax2) ++result.initial_violations2;
         if(initialization.b[i]>*result.bmax4) ++result.initial_violations4;
     }
     result.status="Available";
@@ -137,8 +134,7 @@ WidthBoundCalibration CalibrateGlobalWidth(
 }
 
 BoundedInitialization MakeBoundedInitialization(
-    const JointInitialization & initialization, const WidthBoundCalibration & calibration,
-    GlobalWidthBoundMultiplier multiplier)
+    const JointInitialization & initialization, const WidthBoundCalibration & calibration)
 {
     BoundedInitialization result;
     if(initialization.atoms.size()!=initialization.b.size())
@@ -146,13 +142,12 @@ BoundedInitialization MakeBoundedInitialization(
         result.reason="initialization-record-size-mismatch";
         return result;
     }
-    const auto selected_bound=multiplier==GlobalWidthBoundMultiplier::TwoP95 ? calibration.bmax2 : calibration.bmax4;
-    if(calibration.status!="Available" || !selected_bound)
+    if(calibration.status!="Available" || !calibration.bmax4)
     {
         result.reason=calibration.unavailable_reason.empty() ? "calibration-unavailable" : calibration.unavailable_reason;
         return result;
     }
-    result.bmax=*selected_bound;
+    result.bmax=*calibration.bmax4;
     result.widths=initialization.b;
     result.projections.reserve(calibration.target_count);
     for(std::size_t i=0;i<initialization.atoms.size();++i)

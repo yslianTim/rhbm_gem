@@ -129,17 +129,15 @@ TEST(WidthCalibrationTest, ProducesOneGlobalBoundAndProjectsWithoutChangingStore
     const auto original=input;
     const auto calibration=joint::CalibrateGlobalWidth(input,"global");
     ASSERT_EQ(calibration.status,"Available");
-    EXPECT_DOUBLE_EQ(*calibration.bmax2,2.0*(*calibration.p95));
     EXPECT_DOUBLE_EQ(*calibration.bmax4,4.0*(*calibration.p95));
-    EXPECT_EQ(calibration.initial_violations2,1u);
     EXPECT_EQ(calibration.initial_violations4,1u);
 
-    const auto projected=joint::MakeBoundedInitialization(
-        input,calibration,joint::GlobalWidthBoundMultiplier::TwoP95);
+    const auto projected=joint::MakeBoundedInitialization(input,calibration);
     ASSERT_TRUE(projected.available);
+    EXPECT_DOUBLE_EQ(projected.bmax,4.0*(*calibration.p95));
     EXPECT_EQ(projected.projection_count,1u);
-    EXPECT_DOUBLE_EQ(projected.maximum_projection_magnitude,1000.0-*calibration.bmax2);
-    EXPECT_DOUBLE_EQ(projected.widths[5],*calibration.bmax2);
+    EXPECT_DOUBLE_EQ(projected.maximum_projection_magnitude,1000.0-*calibration.bmax4);
+    EXPECT_DOUBLE_EQ(projected.widths[5],*calibration.bmax4);
     EXPECT_DOUBLE_EQ(input.b[5],original.b[5]);
     EXPECT_DOUBLE_EQ(input.atoms[5].mdpde[1],original.atoms[5].mdpde[1]);
     EXPECT_DOUBLE_EQ(projected.widths[6],input.b[6]);
@@ -155,8 +153,7 @@ TEST(WidthCalibrationTest, RejectsMalformedInitializationAndUnavailableCalibrati
         "initialization-record-size-mismatch");
     auto valid=ExampleInitialization();
     auto unavailable=joint::CalibrateGlobalWidth(JointInitialization{},"none");
-    const auto projected=joint::MakeBoundedInitialization(
-        valid,unavailable,joint::GlobalWidthBoundMultiplier::FourP95);
+    const auto projected=joint::MakeBoundedInitialization(valid,unavailable);
     EXPECT_FALSE(projected.available);
     EXPECT_EQ(projected.reason,"no-qualified-first-stage-target-widths");
 }
