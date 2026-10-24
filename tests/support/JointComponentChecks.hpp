@@ -27,7 +27,7 @@ using ComponentView=runtime::ComponentView;
 using ComponentPartition=runtime::ComponentPartition;
 ComponentPartition BuildPartition(const Domain &, const std::vector<std::string> & atom_ids);
 Eigen::VectorXd Select(const Eigen::VectorXd &, const std::vector<Eigen::Index> &);
-EvaluationContext ComponentContext(const EvaluationContext &, const ComponentView &, bool independent_search);
+EvaluationContext ComponentContext(const EvaluationContext &, const ComponentView &, bool independent);
 boost::json::object Census(const Domain &, const ComponentPartition &, const EvaluationContext &);
 Evaluation EvaluatePartitioned(const Domain &, const Eigen::VectorXd &, const Eigen::VectorXd & eta,
     const ComponentPartition &, const EvaluationContext &);

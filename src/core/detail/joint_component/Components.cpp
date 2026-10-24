@@ -106,15 +106,6 @@ Eigen::VectorXd SelectValues(VectorRef v,const std::vector<Eigen::Index> & indic
 EvaluationContext ChildContext(const EvaluationContext & parent,const ComponentView & view,bool independent)
 {
     auto c=parent; c.atom_ids=parent.atom_ids.Select(view.atoms); c.row_ids=parent.row_ids.Select(view.rows);
-    if(parent.audit.directions.size())
-    {
-        c.audit.directions.resize(static_cast<Eigen::Index>(view.atoms.size()),parent.audit.directions.cols());
-        for(std::size_t a=0;a<view.atoms.size();++a) c.audit.directions.row(static_cast<Eigen::Index>(a))=parent.audit.directions.row(view.atoms[a]);
-    }
-    c.audit.boundary_atoms.clear();
-    for(auto a:parent.audit.boundary_atoms) if(view.LocalAtom(a)>=0) c.audit.boundary_atoms.push_back(view.LocalAtom(a));
-    c.audit.boundary=!c.audit.boundary_atoms.empty();
-    c.independent_search=independent;
     if(independent)
     {
         const auto n=static_cast<Eigen::Index>(view.atoms.size()); c.rank={view.domain.rows,2*n,n};

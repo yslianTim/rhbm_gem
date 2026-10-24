@@ -55,15 +55,13 @@ TEST(JointComponentChecksTest, StructuralGraphPreservesBridgeChainConstantAndUno
     EXPECT_EQ(p::Census(domain,part,c).at("constant_objective"),1.0);
 }
 
-TEST(JointComponentChecksTest, SharedParentScaleAndDirectionsAreNotRenormalized)
+TEST(JointComponentChecksTest, SharedParentScaleAndComponentRankPolicy)
 {
     const p::Domain domain(4,{{{0,0},{1,1}},{{2,0},{3,1}}});
     auto c=p::MakeContext((Vector(4)<<100,200,.01,.02).finished(),2);
-    c.audit.directions=Eigen::MatrixXd::Constant(2,1,1/std::sqrt(2.0));
     const auto part=p::BuildPartition(domain,c.atom_ids);
     const auto child=p::ComponentContext(c,part.components[1],true);
     EXPECT_EQ(child.scale,c.scale); EXPECT_EQ(child.observations,c.observations);
-    EXPECT_EQ(child.audit.directions(0,0),c.audit.directions(1,0)); EXPECT_LT(child.audit.directions.col(0).norm(),1);
     EXPECT_EQ(child.rank.rows,2); EXPECT_EQ(child.rank.design_columns,2);
     const auto shared=p::ComponentContext(c,part.components[1],false); EXPECT_EQ(shared.rank.rows,4);
 }

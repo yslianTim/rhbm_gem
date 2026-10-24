@@ -233,21 +233,21 @@ double RankPolicy::Relative(Eigen::Index columns) const
 {return std::numeric_limits<double>::epsilon()*static_cast<double>(std::max(rows,columns));}
 double RankPolicy::Absolute(Eigen::Index columns,double maximum) const
 {return Relative(columns)*maximum;}
-EvaluationContext CreateContext(std::shared_ptr<const JointProblemInput> input,const std::string & hash,const AuditPlan & plan)
+EvaluationContext CreateContext(std::shared_ptr<const JointProblemInput> input,const std::string & hash)
 {
     EvaluationContext c; c.snapshot_hash=hash; c.observations=Observe(input);
     const auto & y=*c.observations; const auto atoms=static_cast<Eigen::Index>(input->atom_ids.size());
     c.scale=std::max(1.0,y.norm()); c.rank={y.size(),2*atoms,atoms};
-    c.linear.rank_relative=c.rank.Relative(2*atoms); c.linear.release_response_norm=y.norm(); c.audit=plan;
+    c.linear.rank_relative=c.rank.Relative(2*atoms); c.linear.release_response_norm=y.norm();
     c.atom_ids=Identities(std::shared_ptr<const std::vector<std::string>>(input,&input->atom_ids));
     c.row_ids=Identities(std::shared_ptr<const std::vector<std::string>>(input,&input->row_ids)); return c;
 }
-EvaluationContext CreateContext(VectorRef y,Eigen::Index atoms,const std::string & hash,const AuditPlan & plan)
+EvaluationContext CreateContext(VectorRef y,Eigen::Index atoms,const std::string & hash)
 {
     auto input=std::make_shared<JointProblemInput>(); input->observations.assign(y.data(),y.data()+y.size());
     for(Eigen::Index a=0;a<atoms;++a) input->atom_ids.push_back(std::to_string(a));
     for(Eigen::Index r=0;r<y.size();++r) input->row_ids.push_back(std::to_string(r));
-    return CreateContext(std::move(input),hash,plan);
+    return CreateContext(std::move(input),hash);
 }
 BasisValues EvaluateKernel(double square, double width, double cutoff)
 {

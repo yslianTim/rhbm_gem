@@ -23,13 +23,6 @@ struct RankPolicy
     double Relative(Eigen::Index columns) const;
     double Absolute(Eigen::Index columns,double maximum) const;
 };
-struct AuditPlan
-{
-    bool trial_details{}, expanded_if_unverified{}, precision{}, boundary{};
-    bool block_precision{}, cache_precision{};
-    std::vector<Eigen::Index> boundary_atoms;
-    Matrix directions;
-};
 struct LinearPolicy
 {
     double rank_relative{};
@@ -44,8 +37,6 @@ struct EvaluationContext
     double scale{1};
     RankPolicy rank;
     LinearPolicy linear;
-    AuditPlan audit;
-    bool independent_search{};
     int profile_budget{200},update_budget{100};
     double profile_cpu_budget_seconds{};
     std::optional<double> eta_upper_bound;
@@ -94,8 +85,8 @@ struct ProfileSearchWork
     void Merge(const ProfileSearchWork &);
     double AttributedSeconds() const;
 };
-EvaluationContext CreateContext(VectorRef,Eigen::Index,const std::string & = "",const AuditPlan & = {});
-EvaluationContext CreateContext(std::shared_ptr<const JointProblemInput>,const std::string & = "",const AuditPlan & = {});
+EvaluationContext CreateContext(VectorRef,Eigen::Index,const std::string & = "");
+EvaluationContext CreateContext(std::shared_ptr<const JointProblemInput>,const std::string & = "");
 struct BasisValues {double gaussian{},charge{},gaussian_log_width{},charge_log_width{};};
 BasisValues EvaluateKernel(double,double,double);
 struct LinearResult

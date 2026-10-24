@@ -961,7 +961,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         prepared.context=context;
         prepared.context.atom_ids=context.atom_ids.Select(prepared.profile_atoms);
         prepared.context.row_ids=context.row_ids.Select(prepared.profile_rows);
-        prepared.context.independent_search=true;
         prepared.local_atoms=static_cast<Eigen::Index>(prepared.profile_atoms.size());
         prepared.context.rank={prepared.domain.rows,2*prepared.local_atoms,prepared.local_atoms};
         prepared.context.linear.rank_relative=prepared.context.rank.Relative(2*prepared.local_atoms);
@@ -1625,7 +1624,6 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     auto context=parent_context;
     context.atom_ids=prepared.atom_ids; context.row_ids=prepared.row_ids;
     context.eta_upper_bound=production_policy.eta_upper_bound;
-    context.independent_search=true;
     const auto atom_count=static_cast<Eigen::Index>(local_layout.full_atoms.size());
     context.rank={prepared.parent_row_count,2*atom_count,atom_count};
     context.linear.rank_relative=context.rank.Relative(2*atom_count);

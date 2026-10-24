@@ -129,7 +129,7 @@ struct Profile
         last_bounded_subproblem.reset();
         row.lm=std::move(lm);
         bool trusted=cached.valid;
-        if(proposed || context.audit.trial_details)
+        if(proposed)
         {
             const auto replay_started=std::chrono::steady_clock::now();
             auto evidence=CheckReplay(domain,y,cached,context);

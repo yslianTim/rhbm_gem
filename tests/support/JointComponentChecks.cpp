@@ -94,13 +94,9 @@ Vector Parse(const j::value & v)
 {Vector out(static_cast<Eigen::Index>(v.as_array().size())); for(Eigen::Index k=0;k<out.size();++k) out(k)=j::value_to<double>(v.at(Index(k))); return out;}
 j::object FaceEvidence(const Domain & domain,const Vector & y,const Evaluation & e,const EvaluationContext & context)
 {
-    Matrix directions=context.audit.directions;
-    if(!directions.size())
-    {
-        directions.resize(e.eta.size(),2); directions.col(0)=Vector::Ones(e.eta.size()).normalized();
-        for(Eigen::Index k=0;k<e.eta.size();++k) directions(k,1)=k%2 ? -1 : 1;
-        directions.col(1).normalize();
-    }
+    Matrix directions(e.eta.size(),2); directions.col(0)=Vector::Ones(e.eta.size()).normalized();
+    for(Eigen::Index k=0;k<e.eta.size();++k) directions(k,1)=k%2 ? -1 : 1;
+    directions.col(1).normalize();
     bool stable=true; j::array probes,saved;
     for(Eigen::Index k=0;k<directions.cols();++k)
     {
@@ -221,7 +217,7 @@ j::object SameState(const Domain & domain,const Vector & y,const Vector & eta,co
                 const auto da=Differentiate(a,context.scale,&context),db=identity ? da : DifferentiatePartitioned(a,partition,context);
                 j::object derivative{{"available",da.valid && db.valid},{"monolithic_reason",da.reason},{"partitioned_reason",db.reason}};
                 bool stable=true;
-                if(context.audit.expanded_if_unverified)
+                if(domain.atoms.size()<=12)
                 {
                     const auto evidence=FaceEvidence(domain,y,a,context); stable=evidence.at("stable").as_bool();
                     derivative["face_evidence"]=evidence;

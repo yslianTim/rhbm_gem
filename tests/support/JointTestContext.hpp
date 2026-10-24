@@ -10,17 +10,13 @@ namespace second_stage_test::matched::joint_abc {
 namespace runtime=rhbm_gem::core::joint_component;
 using runtime::RankPolicy;
 using runtime::LinearPolicy;
-using runtime::AuditPlan;
 using runtime::EvaluationContext;
-// This is the fixture audit registry. Numerical kernels never inspect case names.
-AuditPlan RegisteredAudit(Eigen::Index atoms, const std::string & dataset = "",
-    const std::string & case_name = "");
 EvaluationContext MakeContext(const Eigen::VectorXd &, Eigen::Index atoms,
-    const std::string & snapshot_hash = "", const AuditPlan * = nullptr);
+    const std::string & snapshot_hash = "");
 std::shared_ptr<rhbm_gem::core::JointProblemInput> MakeSyntheticJointProblemInput(
     const runtime::Domain &, const Eigen::VectorXd & observations,
     std::vector<std::string> atom_ids = {}, std::vector<std::string> row_ids = {});
 EvaluationContext MakeContext(std::shared_ptr<const rhbm_gem::core::JointProblemInput>,
-    const std::string & snapshot_hash = "", const AuditPlan * = nullptr);
+    const std::string & snapshot_hash = "");
 boost::json::object ContextEvidence(const EvaluationContext &);
 } // namespace second_stage_test::matched::joint_abc
