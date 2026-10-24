@@ -137,11 +137,13 @@ struct FixedNeighborEndpointCertification
     }
 };
 enum class FixedNeighborStationarityState {NotStationary,CandidateStationary,ConfirmedStationary};
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
 struct FixedNeighborDiagnosticSink
 {
     std::function<void(const FixedNeighborBlockRecord &)> block;
     std::function<void(const FixedNeighborBlockSweep &)> sweep;
 };
+#endif
 struct PreparedFixedNeighborBlock
 {
     std::size_t block{};
@@ -155,30 +157,33 @@ struct FixedNeighborPolicy
 {
     std::size_t core_atoms{12},maximum_sweeps{30};
     JointConvergenceCriteria convergence_criteria{StrictJointConvergenceCriteria};
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     bool stop_after_stationarity{true};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     bool capture_local_trajectory{};
-#endif
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     bool certify_endpoint{true}; // Diagnostic facade only; production components always certify.
-#endif
-    bool collect_telemetry{};
-    bool collect_diagnostics{};
     bool assess_local_conditioning{};
     bool assess_parameter_stability{};
+    bool collect_telemetry{};
+    bool collect_diagnostics{};
+#endif
     std::size_t component_index{};
     std::string component_id;
-    std::function<void()> preparation_observer;
     std::function<bool(int)> claim_parameter_stability_block;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     FixedNeighborDiagnosticSink * diagnostic_sink{};
+#endif
     std::function<void(const FixedNeighborBlockSweep &)> production_progress;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     std::function<void(const FixedNeighborBlockSweep &)> sweep_observer;
+#endif
     std::optional<double> eta_upper_bound;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     std::function<bool(std::size_t,std::size_t)> force_no_trusted_profile_for_testing;
 #endif
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     std::function<void(std::size_t,const BlockCoordinateState &,const FixedNeighborBlockSweep &,
         const std::vector<FixedNeighborBlockRecord> &)> state_observer;
+#endif
 };
 // Search output contains only the candidate state and search diagnostics.
 struct FixedNeighborSearchResult

@@ -228,8 +228,6 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
         {
             fit=SolveFixedNeighborComponentView(view,layout,widths,data.context,production_policy,observer,
                 progress_component ? &*progress_component : nullptr);
-            if(production_policy.search_result_observer)
-                production_policy.search_result_observer(view.id,fit.search);
             accepted_objective=LastFixedNeighborObjective(fit.search);
             accepted_gradient_inf_norm=LastFixedNeighborGradient(fit.search);
             component.search_completed=fit.succeeded; component.stop_reason=fit.stop_reason;
@@ -240,7 +238,7 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             component.profile_evaluations=static_cast<int>(fit.search.total_profile_evaluations);
             component.accepted_updates=static_cast<int>(fit.search.total_accepted_local_updates);
             component.candidate_diagnostic=CandidateDiagnostic(fit.search,layout.full_atoms.size(),
-                production_policy.convergence_criteria);
+                PracticalJointConvergenceCriteria);
             fit.search.state=joint_component::BlockCoordinateState{};
             fit.search.blocks={}; fit.search.sweeps={}; fit.search.final_sweep.reset();
             component.local_conditioning=std::move(fit.search.local_conditioning);
@@ -330,8 +328,6 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
     const JointProgressObserver & observer,const JointProgressComponent * progress_component)
 {
     FixedNeighborComponentResult out;
-    if(production_policy.core_atoms==0)
-    {out.stop_reason="block-invalid-partition"; out.search.reason=out.stop_reason; return out;}
     MemoryShape shape; shape.component_atoms=component_layout.full_atoms.size();
     shape.component_observations=component_layout.informative_rows.size();
     shape.component_blocks=shape.component_atoms;

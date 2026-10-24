@@ -157,7 +157,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, AssembledBoundedWidthStationarityUse
     auto problem=PureExclusionChain(3);
     const double eta_max=std::log(.4);
     n::FixedNeighborSearchPolicy policy;
-    policy.maximum_sweeps=200;
     policy.eta_upper_bound=eta_max;
     const auto fit=n::FitFixedNeighborComponentsImpl(problem,std::vector<double>(3,.4),policy);
     const auto stationarity=std::find_if(fit.evidence.begin(),fit.evidence.end(),[](const auto & check) {
@@ -185,9 +184,9 @@ TEST(JointFixedNeighborBlockCoordinateTest, AssembledBoundedWidthStationarityUse
         active_bound|=eta>=eta_max-1e-12;
     }
     EXPECT_TRUE(active_bound);
-    EXPECT_GT(raw_inf,policy.convergence_criteria.global_width_gradient);
+    EXPECT_GT(raw_inf,n::PracticalJointConvergenceCriteria.global_width_gradient);
     EXPECT_NEAR(*stationarity->value,projected_inf,1e-12);
-    EXPECT_LE(*stationarity->value,policy.convergence_criteria.global_width_gradient);
+    EXPECT_LE(*stationarity->value,n::PracticalJointConvergenceCriteria.global_width_gradient);
     EXPECT_EQ(stationarity->status,rhbm_gem::JointCheckStatus::Passed);
 }
 
@@ -570,7 +569,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, PracticalCriteriaDoNotQualifySweepsW
 }
 TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchDefaultsToValidatedPracticalCriteria)
 {
-    const auto production=n::FixedNeighborSearchPolicy{}.convergence_criteria;
+    const auto production=n::PracticalJointConvergenceCriteria;
     EXPECT_DOUBLE_EQ(production.global_ac_kkt,n::PracticalJointConvergenceCriteria.global_ac_kkt);
     EXPECT_DOUBLE_EQ(production.global_width_gradient,n::PracticalJointConvergenceCriteria.global_width_gradient);
     EXPECT_DOUBLE_EQ(production.confirmed_log_width_change,
@@ -584,7 +583,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchDefaultsToValidatedP
 TEST(JointFixedNeighborBlockCoordinateTest, BudgetExhaustionPreservesCandidateWithoutInventingTrustedState)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
-    n::FixedNeighborSearchPolicy policy; policy.maximum_sweeps=1; policy.eta_upper_bound=std::log(2.2);
+    n::FixedNeighborSearchPolicy policy; policy.eta_upper_bound=std::log(2.2);
+    policy.configure_search_for_testing=[](n::FixedNeighborPolicy & search) {search.maximum_sweeps=1;};
     const auto fit=n::FitFixedNeighborComponents(problem,std::vector<double>(8,.55),policy);
     ASSERT_EQ(fit.components.size(),1u);
     const auto & component=fit.components.front();

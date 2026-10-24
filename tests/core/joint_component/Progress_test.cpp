@@ -129,8 +129,7 @@ void ExpectSameFitNumerics(const core::JointFitResult & left, const core::JointF
 }
 
 void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitResult & fit,
-    const std::vector<joint::JointProgressEvent> & events,
-    const joint::FixedNeighborSearchPolicy & policy)
+    const std::vector<joint::JointProgressEvent> & events)
 {
     const auto & data = core::JointProblemAccess::Get(problem);
     ASSERT_EQ(fit.components.size(), data.partition.components.size());
@@ -138,7 +137,7 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
     EXPECT_EQ(events.front().phase, joint::JointProgressPhase::SolverConfigured);
     ASSERT_TRUE(events.front().solver_configuration);
     EXPECT_EQ(events.front().solver_configuration->fixed_neighbor_core_atoms,
-        policy.core_atoms);
+        joint::ProductionFixedNeighborCoreAtoms);
     EXPECT_EQ(std::count_if(events.begin(), events.end(), [](const auto & event) {
         return event.phase == joint::JointProgressPhase::SolverConfigured;
     }), 1);
@@ -304,10 +303,12 @@ TEST(JointProgressTest, BoundedSyntheticFitUsesFixedNeighborContract)
     const auto actual=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(
         problem,initial,2.2);
     auto policy=joint::FixedNeighborSearchPolicy{};
-    policy.core_atoms=12;
-    policy.maximum_sweeps=200;
-    policy.convergence_criteria=joint::PracticalJointConvergenceCriteria;
     policy.eta_upper_bound=std::log(2.2);
+    policy.configure_search_for_testing=[](joint::FixedNeighborPolicy & search) {
+        search.core_atoms=joint::ProductionFixedNeighborCoreAtoms;
+        search.maximum_sweeps=joint::ProductionFixedNeighborMaximumSweeps;
+        search.convergence_criteria=joint::PracticalJointConvergenceCriteria;
+    };
     const auto expected=joint::FitFixedNeighborComponents(problem,initial,policy);
 
     EXPECT_EQ(actual.solver_provenance.search_method, "fixed-neighbor");
@@ -329,7 +330,6 @@ TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
     const std::vector<double> initial{.55, .55};
     auto policy=joint::FixedNeighborSearchPolicy{};
     policy.eta_upper_bound=std::log(2.2);
-    EXPECT_EQ(policy.core_atoms,12u);
     std::vector<joint::JointProgressEvent> events;
     const auto fit=joint::FitFixedNeighborComponents(problem,initial,policy,
         [&](const auto & event) { events.push_back(event); });
@@ -349,7 +349,7 @@ TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
     ASSERT_TRUE(std::any_of(events.begin(),events.end(),[](const auto & event) {
         return event.fixed_neighbor && event.fixed_neighbor->sweep>0;
     }));
-    ExpectLifecycle(problem,fit,events,policy);
+    ExpectLifecycle(problem,fit,events);
 }
 
 TEST(JointProgressTest, ObservableComponentsUseTheSameLifecycle)
@@ -359,13 +359,10 @@ TEST(JointProgressTest, ObservableComponentsUseTheSameLifecycle)
     std::vector<joint::JointProgressEvent> events;
     const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
     auto policy=joint::FixedNeighborSearchPolicy{};
-    policy.core_atoms=12;
-    policy.maximum_sweeps=200;
-    policy.convergence_criteria=joint::PracticalJointConvergenceCriteria;
     policy.eta_upper_bound=std::log(2.2);
     const auto fit=joint::FitFixedNeighborComponents(problem,initial,policy,observer);
     ASSERT_TRUE(fit.assembled_state);
-    ExpectLifecycle(problem,fit,events,policy);
+    ExpectLifecycle(problem,fit,events);
 }
 
 TEST(JointProgressTest, QuietWorkflowSuppressesProgressButKeepsFailureWarning)
@@ -559,9 +556,6 @@ TEST(JointProgressTest, ReportingDoesNotChangeNumericsOrObserverCadence)
     const std::vector<double> initial{.55, .55};
     const auto previous_level = Logger::GetLogLevel();
     auto policy=joint::FixedNeighborSearchPolicy{};
-    policy.core_atoms=12;
-    policy.maximum_sweeps=200;
-    policy.convergence_criteria=joint::PracticalJointConvergenceCriteria;
     policy.eta_upper_bound=std::log(2.2);
     const auto run = [&](LogLevel level, bool report) {
         Logger::SetLogLevel(level);

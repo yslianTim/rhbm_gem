@@ -4,31 +4,24 @@
 #include <functional>
 #include <optional>
 #include <string>
-#include <string_view>
 #include "ConvergenceCriteria.hpp"
 
 namespace rhbm_gem::core::joint_component {
 
-struct FixedNeighborPolicy;
-struct BlockCoordinateState;
-struct FixedNeighborBlockSweep;
-struct FixedNeighborSearchResult;
+inline constexpr std::size_t ProductionFixedNeighborCoreAtoms=12;
+inline constexpr std::size_t ProductionFixedNeighborMaximumSweeps=200;
 
-// The search controls are the qualified production policy. Component identity
-// is supplied internally for failure-only logs.
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+struct FixedNeighborPolicy;
+#endif
+
+// The production search accepts its calibrated bound and stability-work budget.
+// Component identity is supplied internally for failure-only logs.
 struct FixedNeighborSearchPolicy
 {
-    std::size_t core_atoms{12};
-    std::size_t maximum_sweeps{200};
-    JointConvergenceCriteria convergence_criteria{PracticalJointConvergenceCriteria};
-    bool collect_telemetry{};
-    bool collect_diagnostics{};
     std::size_t component_index{};
     std::string component_id;
     std::function<bool(int)> claim_parameter_stability_block;
-    std::function<void(std::size_t,std::size_t,const BlockCoordinateState &,
-        const FixedNeighborBlockSweep &)> state_observer;
-    std::function<void(std::string_view,const FixedNeighborSearchResult &)> search_result_observer;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     std::function<void(FixedNeighborPolicy &)> configure_search_for_testing;
 #endif

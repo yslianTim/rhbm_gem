@@ -501,6 +501,7 @@ FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolic
                 std::max(*out.maximum_free_c_gradient_scaled,scaled) : scaled;
         }
     }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(policy.collect_diagnostics && profile.initial.beta.size()==design.cols())
     {
         const auto initial_state=EvaluateState(domain,effective_response,eta,profile.initial.beta,context);
@@ -532,6 +533,7 @@ FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolic
             }
         }
     }
+#endif
     for(auto trial=profile.trials.rbegin();trial!=profile.trials.rend();++trial)
         if(trial->lm)
         {
@@ -739,6 +741,19 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     const FixedNeighborPolicy & policy,Vector initial_beta)
 {
     FixedNeighborSearchResult out;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    const bool stop_after_stationarity=policy.stop_after_stationarity;
+    const bool assess_local_conditioning=policy.assess_local_conditioning;
+    const bool assess_parameter_stability=policy.assess_parameter_stability;
+    const bool collect_telemetry=policy.collect_telemetry;
+    const bool collect_diagnostics=policy.collect_diagnostics;
+#else
+    constexpr bool stop_after_stationarity=true;
+    constexpr bool assess_local_conditioning=true;
+    constexpr bool assess_parameter_stability=true;
+    constexpr bool collect_telemetry=false;
+    constexpr bool collect_diagnostics=false;
+#endif
     std::array<std::pair<double,double>,3> recent_sweep_changes{};
     std::size_t next_recent_sweep_change{};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -774,7 +789,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     if((initial_eta.array()>*context.eta_upper_bound).any())
     {out.reason="bounded-initial-width-infeasible"; return out;}
 
-    auto structural_timer=Measure(policy.collect_telemetry,out.work.structural_preparation_seconds);
+    auto structural_timer=Measure(collect_telemetry,out.work.structural_preparation_seconds);
     MemoryShape memory_shape; memory_shape.component_atoms=domain.atoms.size();
     memory_shape.component_observations=static_cast<std::size_t>(domain.rows);
     if(!CheckedMultiplyBytes(memory_shape.component_atoms,2,memory_shape.component_free_columns))
@@ -896,12 +911,12 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     auto * const profile_work=&out.work.local_profile_work;
     const auto replay_structure_started=Clock::now();
     const ReplayStructure replay_structure(domain.rows,layout);
-    if(policy.collect_telemetry)
+    if(collect_telemetry)
         out.work.structural_preparation_seconds+=Seconds(replay_structure_started);
     const auto certify_endpoint=[&] {
-        const auto assessment_timer=Measure(policy.collect_telemetry,out.work.endpoint_verification_seconds);
+        const auto assessment_timer=Measure(collect_telemetry,out.work.endpoint_verification_seconds);
         const auto record_assessment_work=[&](FixedNeighborEndpointCertification certification) {
-            if(policy.collect_telemetry)
+            if(collect_telemetry)
             {
                 out.work.primary_endpoint_seconds+=certification.assessment.primary_endpoint_seconds;
                 out.work.independent_replay_seconds+=certification.assessment.independent_replay_seconds;
@@ -922,7 +937,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     auto initial=Replay(domain,layout,y,out.state.eta,out.state.beta,context.scale,replay_structure);
     out.state.prediction=std::move(initial.prediction); out.state.residual=std::move(initial.residual);
     out.state.objective=initial.objective;
-    auto mapping_timer=Measure(policy.collect_telemetry,out.work.structural_preparation_seconds);
+    auto mapping_timer=Measure(collect_telemetry,out.work.structural_preparation_seconds);
     Indices atom_position(domain.atoms.size(),-1),row_position(static_cast<std::size_t>(domain.rows),-1);
     for(std::size_t k=0;k<layout.full_atoms.size();++k) atom_position.at(layout.full_atoms[k])=static_cast<Eigen::Index>(k);
     for(std::size_t k=0;k<layout.informative_rows.size();++k) row_position.at(layout.informative_rows[k])=static_cast<Eigen::Index>(k);
@@ -976,11 +991,16 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         out.work.structural_preparation_seconds+=Seconds(mapping_timer.started);
         mapping_timer.target=nullptr;
     }
-    if(policy.preparation_observer) policy.preparation_observer();
-    const bool retain_diagnostics=policy.collect_diagnostics || capture_local_trajectory ||
-        static_cast<bool>(policy.state_observer);
-    const bool capture_block_records=retain_diagnostics ||
-        (policy.diagnostic_sink && static_cast<bool>(policy.diagnostic_sink->block));
+    const bool retain_diagnostics=collect_diagnostics || capture_local_trajectory
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        || static_cast<bool>(policy.state_observer)
+#endif
+        ;
+    const bool capture_block_records=retain_diagnostics
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        || (policy.diagnostic_sink && static_cast<bool>(policy.diagnostic_sink->block))
+#endif
+        ;
     bool stop=false;
     std::size_t next_certification_retry_sweep{};
     std::vector<std::size_t> block_failure_visits(partition.cores.size());
@@ -993,13 +1013,13 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         auto finish_record=[&](FixedNeighborBlockRecord record,const Indices & core_atoms,
             Clock::time_point block_started) {
             double block_seconds{};
-            if(capture_block_records || policy.collect_telemetry) block_seconds=Seconds(block_started);
+            if(capture_block_records || collect_telemetry) block_seconds=Seconds(block_started);
             if(capture_block_records)
             {
                 record.core_atoms=core_atoms;
                 record.block_seconds=block_seconds;
             }
-            if(policy.collect_telemetry)
+            if(collect_telemetry)
             {
                 out.work.maximum_block_seconds=std::max(out.work.maximum_block_seconds,block_seconds);
             }
@@ -1010,7 +1030,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 out.total_accepted_local_updates+=static_cast<std::size_t>(record.accepted_updates);
             }
             else if(record.status=="unchanged") ++sweep.unchanged_blocks;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
             if(policy.diagnostic_sink && policy.diagnostic_sink->block) policy.diagnostic_sink->block(record);
+#endif
             if(retain_diagnostics) out.blocks.push_back(std::move(record));
         };
         for(std::size_t block_index=0;block_index<partition.cores.size();++block_index)
@@ -1019,7 +1041,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             const auto & core_atoms=prepared.core_atoms; const auto & affected_rows=prepared.affected_rows;
             const auto & local_domain=prepared.domain; const auto & local_context=prepared.context;
             const auto local_atoms=prepared.local_atoms;
-            const auto block_started=capture_block_records || policy.collect_telemetry ? Clock::now() : Clock::time_point{};
+            const auto block_started=capture_block_records || collect_telemetry ? Clock::now() : Clock::time_point{};
             FixedNeighborBlockRecord record;
             record.sweep=sweep_index+1; record.block=block_index+1;
             record.affected_rows=affected_rows.size(); record.objective_before=out.state.objective;
@@ -1037,7 +1059,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 
             Vector old_eta(local_atoms),old_beta(2*local_atoms),old_core;
             {
-                const auto old_core_timer=Measure(policy.collect_telemetry,out.work.old_core_seconds);
+                const auto old_core_timer=Measure(collect_telemetry,out.work.old_core_seconds);
                 for(std::size_t k=0;k<core_atoms.size();++k)
                 {
                     const auto atom=static_cast<Eigen::Index>(core_atoms[k]);
@@ -1051,7 +1073,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 
             Vector local_y(static_cast<Eigen::Index>(affected_rows.size()));
             {
-                const auto response_timer=Measure(policy.collect_telemetry,out.work.effective_response_seconds);
+                const auto response_timer=Measure(collect_telemetry,out.work.effective_response_seconds);
                 double local_before_squared{};
                 for(std::size_t k=0;k<affected_rows.size();++k)
                 {
@@ -1063,9 +1085,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 (void)response_timer;
             }
 
-            const auto search_started=capture_block_records || policy.collect_telemetry ? Clock::now() :
+            const auto search_started=capture_block_records || collect_telemetry ? Clock::now() :
                 Clock::time_point{};
-            if(policy.collect_telemetry)
+            if(collect_telemetry)
             {
                 const auto atoms=static_cast<std::size_t>(local_atoms);
                 ++out.work.local_problem_count;
@@ -1081,14 +1103,14 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             const auto old_widths=old_eta.array().exp().eval();
             const auto profile_search=SearchProfile(local_domain,local_y,old_widths,local_context,{},nullptr,profile_work);
             out.work.local_profile_work.Merge(profile_search.profile_work);
-            const double search_seconds=capture_block_records || policy.collect_telemetry ?
+            const double search_seconds=capture_block_records || collect_telemetry ?
                 Seconds(search_started) : 0.0;
             if(capture_block_records)
             {
                 record.search_seconds=search_seconds; record.profile_evaluations=profile_search.evaluations;
                 record.local_search_stop_reason=profile_search.stop_reason;
             }
-            if(policy.collect_telemetry) out.work.local_search_seconds+=search_seconds;
+            if(collect_telemetry) out.work.local_search_seconds+=search_seconds;
             record.accepted_updates=profile_search.accepted;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             if(capture_local_trajectory)
@@ -1179,7 +1201,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             const auto local_state_started=Clock::now();
             const auto local_state=EvaluateState(local_domain,local_y,accepted->endpoint.eta,accepted->endpoint.beta,local_context,
                 ProfileEvaluationRole::AcceptedEndpoint,profile_work);
-            if(policy.collect_telemetry) out.work.local_state_seconds+=Seconds(local_state_started);
+            if(collect_telemetry) out.work.local_state_seconds+=Seconds(local_state_started);
             if(!local_state.valid || !local_state.certificate.available || !local_state.certificate.feasible ||
                 !local_state.certificate.kkt_passed)
             {
@@ -1201,7 +1223,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             }
             Vector candidate_eta,candidate_beta;
             {
-                const auto candidate_copy_timer=Measure(policy.collect_telemetry,out.work.candidate_copy_seconds);
+                const auto candidate_copy_timer=Measure(collect_telemetry,out.work.candidate_copy_seconds);
                 candidate_eta=out.state.eta; candidate_beta=out.state.beta;
                 for(std::size_t k=0;k<core_atoms.size();++k)
                 {
@@ -1213,8 +1235,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             }
             ReplayState replay;
             {
-                const auto candidate_replay_timer=Measure(policy.collect_telemetry,out.work.candidate_replay_seconds);
-                if(policy.collect_telemetry) ++out.work.full_candidate_replays;
+                const auto candidate_replay_timer=Measure(collect_telemetry,out.work.candidate_replay_seconds);
+                if(collect_telemetry) ++out.work.full_candidate_replays;
                 replay=Replay(domain,layout,y,candidate_eta,candidate_beta,context.scale,replay_structure);
                 (void)candidate_replay_timer;
             }
@@ -1251,9 +1273,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             out.state.prediction=std::move(replay.prediction);
             out.state.residual=std::move(replay.residual);
             out.state.objective=replay.objective;
-            if(policy.collect_telemetry) out.work.affected_row_updates+=affected_rows.size();
+            if(collect_telemetry) out.work.affected_row_updates+=affected_rows.size();
             out.state.eta=std::move(candidate_eta); out.state.beta=std::move(candidate_beta);
-            if(policy.collect_telemetry) out.work.cache_update_seconds+=Seconds(cache_started);
+            if(collect_telemetry) out.work.cache_update_seconds+=Seconds(cache_started);
             record.accepted=!unchanged; record.status=unchanged ? "unchanged" : "accepted";
             record.reason=unchanged ? "block-unchanged" : "";
             if(record.recovery_retry)
@@ -1269,19 +1291,19 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         sweep.objective_after=out.state.objective;
         ReplayState replay;
         {
-            const auto timer=Measure(policy.collect_telemetry,out.work.sweep_replay_seconds);
+            const auto timer=Measure(collect_telemetry,out.work.sweep_replay_seconds);
             replay=Replay(domain,layout,y,out.state.eta,out.state.beta,context.scale,replay_structure);
             (void)timer;
         }
         sweep.cache_replay_error=PredictionDifference(out.state.prediction,replay.prediction);
         sweep.objective_replay_error=std::abs(out.state.objective-replay.objective);
-        if(policy.collect_telemetry)
+        if(collect_telemetry)
             out.work.maximum_cache_replay_error=std::max(out.work.maximum_cache_replay_error,sweep.cache_replay_error);
         const Vector eta=Select(out.state.eta,IndicesOf(layout.full_atoms));
         const Vector beta=SelectBeta(out.state.beta,layout.full_atoms);
         const auto global_started=Clock::now();
         const auto global=EvaluateStateStreaming(domain,y,eta,beta,context,ProfileEvaluationRole::AcceptedEndpoint,profile_work);
-        if(policy.collect_telemetry) out.work.sweep_global_state_seconds+=Seconds(global_started);
+        if(collect_telemetry) out.work.sweep_global_state_seconds+=Seconds(global_started);
         if(!global.valid || !global.certificate.available)
         {out.reason="block-inner-invalid"; stop=true; break;}
         sweep.global_a_feasibility=global.certificate.feasible ? 0.0 : 1.0;
@@ -1306,19 +1328,25 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         sweep.stationarity_width_gradient_inf_norm=stationarity_width_gradient;
         sweep.wall_seconds=Seconds(sweep_started); out.search_seconds+=sweep.wall_seconds;
         ++out.sweep_count; out.final_sweep=sweep;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(policy.diagnostic_sink && policy.diagnostic_sink->sweep) policy.diagnostic_sink->sweep(sweep);
+#endif
         if(policy.production_progress) policy.production_progress(sweep);
         if(retain_diagnostics) out.sweeps.push_back(sweep);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(policy.sweep_observer)
         {
             const auto & observed=retain_diagnostics ? out.sweeps.back() : sweep;
             policy.sweep_observer(observed);
         }
+#endif
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(policy.state_observer) policy.state_observer(sweep_index+1,out.state,out.sweeps.back(),out.blocks);
+#endif
         if(sweep.cache_replay_error>2e-12+2e-13*std::max(1.0,replay.prediction.cwiseAbs().maxCoeff()) ||
             !WithinBlockObjectiveReplay(sweep.objective_replay_error,replay.objective))
         {out.reason="block-cache-replay-failed"; stop=true; break;}
-        if(policy.assess_parameter_stability)
+        if(assess_parameter_stability)
         {
             recent_sweep_changes[next_recent_sweep_change]={sweep.eta_change_inf,sweep.beta_scaled_change};
             next_recent_sweep_change=(next_recent_sweep_change+1)%recent_sweep_changes.size();
@@ -1340,10 +1368,10 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         if(stationarity==FixedNeighborStationarityState::ConfirmedStationary)
         {
             if(out.confirmed_stationarity_sweep==0) out.confirmed_stationarity_sweep=sweep_index+1;
-            if(!policy.stop_after_stationarity || !endpoint_certification_enabled)
+            if(!stop_after_stationarity || !endpoint_certification_enabled)
             {
                 out.search_converged=true; out.reason="block-stationary";
-                if(policy.stop_after_stationarity) break;
+                if(stop_after_stationarity) break;
                 continue;
             }
             const bool retry_due=!out.certification || certification_retry_due;
@@ -1374,7 +1402,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         const bool recovery_pending=std::any_of(block_failure_visits.begin(),block_failure_visits.end(),
             [](std::size_t visits){return visits>0;});
         out.reason=recovery_pending ? "block-recovery-sweep-budget" : "block-sweep-budget";
-        if(!recovery_pending && policy.stop_after_stationarity && endpoint_certification_enabled && out.sweep_count &&
+        if(!recovery_pending && stop_after_stationarity && endpoint_certification_enabled && out.sweep_count &&
             out.certification_sweep!=out.sweep_count)
         {
             out.certification=certify_endpoint();
@@ -1394,8 +1422,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                         out.certification->assessment.failure;
         }
     }
-    const bool assess_failed_diagnostic=policy.collect_diagnostics && out.certification.has_value();
-    if(policy.assess_local_conditioning && out.certification &&
+    const bool assess_failed_diagnostic=collect_diagnostics && out.certification.has_value();
+    if(assess_local_conditioning && out.certification &&
         ((out.search_converged && out.certification->qualified()) || assess_failed_diagnostic))
     {
         out.local_conditioning.reserve(prepared_blocks.size());
@@ -1416,7 +1444,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             out.local_conditioning.push_back(std::move(conditioning.evidence));
         }
     }
-    if(policy.assess_parameter_stability && out.search_converged && out.certification &&
+    if(assess_parameter_stability && out.search_converged && out.certification &&
         out.certification->qualified())
     {
         const auto started=Clock::now(); JointParameterStability stability;
@@ -1633,28 +1661,24 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
         initial_eta(static_cast<Eigen::Index>(k))=std::log(initial_b(prepared.local_to_parent_atoms[k]));
 
     FixedNeighborPolicy policy;
-    policy.core_atoms=production_policy.core_atoms;
-    policy.maximum_sweeps=production_policy.maximum_sweeps;
-    policy.convergence_criteria=production_policy.convergence_criteria;
-    policy.collect_telemetry=production_policy.collect_telemetry;
-    policy.collect_diagnostics=production_policy.collect_diagnostics;
+    policy.core_atoms=ProductionFixedNeighborCoreAtoms;
+    policy.maximum_sweeps=ProductionFixedNeighborMaximumSweeps;
+    policy.convergence_criteria=PracticalJointConvergenceCriteria;
     policy.component_index=production_policy.component_index;
     policy.component_id=production_policy.component_id;
     policy.eta_upper_bound=production_policy.eta_upper_bound;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     policy.assess_local_conditioning=true;
     policy.assess_parameter_stability=true;
+#endif
     policy.claim_parameter_stability_block=production_policy.claim_parameter_stability_block;
-    if(production_policy.state_observer)
-        policy.state_observer=[&production_policy](std::size_t sweep,const BlockCoordinateState & state,
-            const FixedNeighborBlockSweep & record,const std::vector<FixedNeighborBlockRecord> &) {
-            production_policy.state_observer(production_policy.component_index,sweep,state,record);
-        };
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(production_policy.configure_search_for_testing) production_policy.configure_search_for_testing(policy);
 #endif
     if(progress_component && observer)
     {
-        policy.production_progress=[&observer,progress_component,&production_policy,context](
+        const auto maximum_sweeps=policy.maximum_sweeps;
+        policy.production_progress=[&observer,progress_component,maximum_sweeps,context](
             const FixedNeighborBlockSweep & sweep) {
             auto event=MakeJointProgressEvent(JointProgressPhase::SearchProgress,*progress_component);
             event.profile_evaluations=static_cast<int>(sweep.profile_evaluations);
@@ -1666,7 +1690,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
             event.accepted_gradient_inf_norm=sweep.global_width_gradient_inf_norm;
             JointFixedNeighborProgress progress;
             progress.sweep=sweep.sweep;
-            progress.maximum_sweeps=production_policy.maximum_sweeps;
+            progress.maximum_sweeps=maximum_sweeps;
             progress.block_solves=sweep.block_solves;
             progress.accepted_blocks=sweep.accepted_blocks;
             progress.local_accepted_updates=sweep.accepted_local_updates;

@@ -683,12 +683,15 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
     const n::FixedNeighborSearchPolicy & production_policy,const n::JointProgressObserver & observer)
 {
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
+    constexpr auto fixed_neighbor_core_atoms=n::ProductionFixedNeighborCoreAtoms;
+    constexpr auto fixed_neighbor_maximum_sweeps=n::ProductionFixedNeighborMaximumSweeps;
+    constexpr auto convergence_criteria=n::PracticalJointConvergenceCriteria;
     if(observer)
     {
         n::JointProgressEvent event;
         event.phase=n::JointProgressPhase::SolverConfigured;
         event.solver_configuration=n::JointSolverConfiguration{
-            production_policy.core_atoms};
+            fixed_neighbor_core_atoms};
         observer(event);
     }
     auto provenance=[&] {
@@ -696,9 +699,9 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         out.search_method="fixed-neighbor";
         out.contract_version=std::string(JointSolverProvenanceContractVersion);
         out.sparse_backend="EIGEN";
-        out.fixed_neighbor_core_atoms=production_policy.core_atoms;
+        out.fixed_neighbor_core_atoms=fixed_neighbor_core_atoms;
         out.fixed_neighbor_policy_version=std::string(FixedNeighborPolicyContractVersion);
-        out.fixed_neighbor_maximum_sweeps=production_policy.maximum_sweeps;
+        out.fixed_neighbor_maximum_sweeps=fixed_neighbor_maximum_sweeps;
         out.fixed_neighbor_order="forward";
         out.fixed_neighbor_local_search=std::string(FixedNeighborBoundedLocalSearchName);
         return out;
@@ -772,7 +775,7 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
     const auto assembly_start=Clock::now();
     n::NotifyJointAssemblyProgress(observer,n::JointProgressPhase::AssemblyStarted,component_count);
     const auto assembly=n::AssembleComponents(data.domain,data.y,data.partition,assembly_context,out.components,
-        bounded_policy.convergence_criteria);
+        convergence_criteria);
     out.search_completed=assembly.completed; out.available_row_mask=assembly.row_mask;
     out.evidence=n::AssessmentEvidence(assembly.assessment,JointEvidenceScope::AssembledGlobal);
     out.evidence.push_back({"assembly-mapping",assembly.mapping_valid ? JointCheckStatus::Passed :
