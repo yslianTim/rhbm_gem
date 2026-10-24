@@ -9,6 +9,7 @@
 #include <iterator>
 #include <limits>
 #include "support/JointPartialSelection.hpp"
+#include "support/JointPostprocessingTestHelpers.hpp"
 #include "support/JointComponentChecks.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include "support/JointHaloObservationExclusion.hpp"
@@ -40,6 +41,7 @@
 
 namespace {
 namespace core=rhbm_gem::core;
+namespace postprocessing_test=second_stage_test::postprocessing;
 namespace n=core::joint_component;
 namespace sim=core::simulation;
 // Exhaust the whole map/catalogue independently of the builder's bounding boxes.
@@ -527,7 +529,7 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsOnceWi
             }
             if (local.status == rhbm_gem::EvidenceStatus::Available)
             {
-                const auto prepared = core::detail::BuildPostJointLocalSamples(
+                const auto prepared = postprocessing_test::BuildPostJointLocalSamples(
                     *f.map, *f.model, problem, id, *view.GetPostFitPeeling(), result);
                 const auto gaussian_only = prepared.BuildGaussianSamples(view.GetRawSamplingEntriesView());
                 const double alpha = core::TrainAlphaR(gaussian_only, options);
@@ -549,7 +551,7 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsOnceWi
     }
     EXPECT_GT(local_regression_count, 0u);
 
-    const auto contributors=core::detail::BuildJointPeelingContributorUniverse(*f.model,problem,&result);
+    const auto contributors=core::detail::BuildJointPeelingContributorUniverse(*f.model,problem,result);
     const auto halo=std::lower_bound(contributors.contributors.begin(),contributors.contributors.end(),21,
         [](const auto & contributor,int id){return contributor.atom_id<id;});
     ASSERT_NE(halo,contributors.contributors.end());
@@ -561,7 +563,7 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsOnceWi
     ASSERT_NE(first_target,nullptr);
     const auto first_target_view=rhbm_gem::AtomLocalPotentialView::For(*first_target);
     ASSERT_TRUE(first_target_view.GetPostFitPeeling());
-    EXPECT_THROW(core::detail::BuildPostJointLocalSamples(
+    EXPECT_THROW(postprocessing_test::BuildPostJointLocalSamples(
         *f.map,*f.model,problem,21,*first_target_view.GetPostFitPeeling(),result),std::invalid_argument);
 
     const auto direct = core::FitJointComponentsInitialized(problem, result.initialization);
@@ -710,7 +712,7 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingReconstructsGridNodesOuts
     editor.SetAtomLocalRawSamplingEntries(*atom, raw);
     const auto view = rhbm_gem::AtomLocalPotentialView::For(*atom);
     const auto before = view.GetFinalModel(rhbm_gem::FittingStage::Second).ToVector();
-    const auto outputs = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot);
+    const auto outputs = postprocessing_test::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot);
     const auto & output = outputs.at(1);
     ASSERT_EQ(output.samples.size(), raw.size());
     ASSERT_TRUE(output.samples[0].response);
@@ -749,7 +751,7 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingReconstructsGridNodesOuts
         EXPECT_EQ(after[i].point.position, raw[i].point.position);
         EXPECT_EQ(after[i].point.is_selected, raw[i].point.is_selected);
     }
-    EXPECT_THROW(core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem),std::invalid_argument);
+    EXPECT_THROW(postprocessing_test::BuildPostFitPeelingSamples(*f.map, *f.model, problem),std::invalid_argument);
 }
 
 TEST(JointComponentPartialSelectionTest, ExcludedFitRowsRemainInOriginalPeelingDomain)
@@ -769,8 +771,8 @@ TEST(JointComponentPartialSelectionTest, ExcludedFitRowsRemainInOriginalPeelingD
     const SamplingPointList points{{1.5,{1.5,0.0,0.0},true}};
     f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*f.model->FindAtomPtr(1),
         core::detail::BuildLocalPotentialSampleList(*f.map,points));
-    const core::detail::JointPostprocessingContext context(*f.map,*f.model,problem,&snapshot);
-    const auto peelings=context.BuildPostFitPeelingSamples();
+    const core::detail::JointPostprocessingContext context(*f.map,*f.model,problem,snapshot);
+    const auto peelings=postprocessing_test::BuildPostFitPeelingSamples(context);
     ASSERT_TRUE(peelings.contains(1));
     ASSERT_EQ(peelings.at(1).samples.size(),1u);
     EXPECT_TRUE(peelings.at(1).samples.front().response) << peelings.at(1).samples.front().reason;
@@ -796,7 +798,7 @@ TEST(JointComponentPartialSelectionTest, PeelingIncludesDistantHaloThroughInterp
     const SamplingPointList points{{2.11, {2.11, 0, 0}, true}};
     auto raw = core::detail::BuildLocalPotentialSampleList(*f.map, points);
     editor.SetAtomLocalRawSamplingEntries(*target, raw);
-    auto result = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot).at(1);
+    auto result = postprocessing_test::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot).at(1);
     ASSERT_TRUE(result.samples[0].response) << result.samples[0].reason;
     // Halo center 4.8 A away, with zero analytic support at the sample position.
     // Its contribution at the 2.5 A stencil node must still be subtracted.
@@ -804,12 +806,12 @@ TEST(JointComponentPartialSelectionTest, PeelingIncludesDistantHaloThroughInterp
     EXPECT_EQ(result.neighbor_count, 1);
     raw[0].response = 0;
     editor.SetAtomLocalRawSamplingEntries(*target, raw);
-    result = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot).at(1);
+    result = postprocessing_test::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot).at(1);
     editor.SetAtomPostFitPeeling(*target, result);
     EXPECT_FALSE(rhbm_gem::AtomLocalPotentialView::For(*target).GetLocalFittingPeelingRatio(0, 3));
     raw[0].response = -100;
     editor.SetAtomLocalRawSamplingEntries(*target, raw);
-    result = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot).at(1);
+    result = postprocessing_test::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot).at(1);
     ASSERT_TRUE(result.samples[0].response);
     EXPECT_LT(*result.samples[0].response, 0);
 }
@@ -855,12 +857,12 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
 
     core::detail::JointPostprocessingMetrics metrics;
     const core::detail::JointPostprocessingContext context(
-        *f.map, *f.model, problem, &snapshot, &metrics);
+        *f.map, *f.model, problem, snapshot, &metrics);
     EXPECT_EQ(metrics.snapshot_identity_validation_count, 1u);
     EXPECT_EQ(metrics.full_row_identity_scan_count, 1u);
     EXPECT_EQ(metrics.observation_row_mapping_builds, 1u);
     EXPECT_EQ(metrics.contributor_mapping_builds, 1u);
-    const auto peelings = context.BuildPostFitPeelingSamples(
+    const auto peelings = postprocessing_test::BuildPostFitPeelingSamples(context,
         problem.Input().selection_domain->target_indices);
     ASSERT_EQ(peelings.size(), atom_ids.size());
     const auto peeling_batch = context.BuildPostFitPeelingBatch(
@@ -886,7 +888,7 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
     EXPECT_EQ(metrics.contributor_mapping_builds, 1u);
     EXPECT_EQ(metrics.target_preparation_count, 0u);
 
-    const auto standalone_peelings = core::detail::BuildPostFitPeelingSamples(
+    const auto standalone_peelings = postprocessing_test::BuildPostFitPeelingSamples(
         *f.map, *f.model, problem, problem.Input().selection_domain->target_indices, &snapshot);
     std::size_t expected_prepared_samples{};
     std::size_t target_position{};
@@ -907,7 +909,7 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
         }
 
         const auto shared = context.BuildPostJointLocalSamples(id, shared_peeling);
-        const auto standalone = core::detail::BuildPostJointLocalSamples(
+        const auto standalone = postprocessing_test::BuildPostJointLocalSamples(
             *f.map, *f.model, problem, id, standalone_peeling, snapshot);
         EXPECT_EQ(shared.source.atom_id,std::to_string(id));
         EXPECT_EQ(shared.source.atom_id,standalone.source.atom_id);
@@ -975,12 +977,12 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
         expect_lookup_rejected(context,missing_id,"Post-Joint sample target is outside the Joint problem.");
 
     const auto universe=core::detail::BuildJointPeelingContributorUniverse(
-        *f.model,problem,&snapshot);
+        *f.model,problem,snapshot);
     const auto expect_universe_rejected=[&](auto malformed,const char * expected_message) {
         try
         {
             const core::detail::JointPostprocessingContext rejected(
-                *f.map,*f.model,problem,&snapshot,nullptr,nullptr,std::move(malformed));
+                *f.map,*f.model,problem,snapshot,nullptr,nullptr,std::move(malformed));
             ADD_FAILURE() << "Expected malformed contributor universe to be rejected";
         }
         catch(const std::invalid_argument & error)
@@ -1045,7 +1047,7 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
     insert_contributor(reconstruction_only.contributors,
         {25,{0.0,0.0,0.0},std::nullopt,false,true});
     const core::detail::JointPostprocessingContext reconstruction_context(
-        *f.map,*f.model,problem,&snapshot,nullptr,nullptr,std::move(reconstruction_only));
+        *f.map,*f.model,problem,snapshot,nullptr,nullptr,std::move(reconstruction_only));
     expect_lookup_rejected(reconstruction_context,25,"Post-Joint sample target is outside the Joint problem.");
 
     for(const double invalid_coordinate:{std::numeric_limits<double>::quiet_NaN(),
@@ -1064,7 +1066,7 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
         {35,{std::numeric_limits<double>::quiet_NaN(),std::numeric_limits<double>::infinity(),
             -std::numeric_limits<double>::infinity()},std::nullopt,false,false});
     const core::detail::JointPostprocessingContext ineligible_context(
-        *f.map,*f.model,problem,&snapshot,nullptr,nullptr,std::move(ineligible_geometry));
+        *f.map,*f.model,problem,snapshot,nullptr,nullptr,std::move(ineligible_geometry));
     expect_lookup_rejected(ineligible_context,35,"Post-Joint sample target is outside the Joint problem.");
 }
 
@@ -1388,8 +1390,8 @@ TEST(JointComponentPartialSelectionTest, TargetOnlyPostprocessingRetainsFullCont
         f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*atom,
             core::SampleAtomMapValues(*f.map, *atom, SphereSamplingMethod::FibonacciDeterministic));
     const std::vector<std::size_t> all{0, 1};
-    const auto target = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot);
-    const auto complete = core::detail::BuildPostFitPeelingSamples(*f.map, *f.model, problem,all,&snapshot);
+    const auto target = postprocessing_test::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot);
+    const auto complete = postprocessing_test::BuildPostFitPeelingSamples(*f.map, *f.model, problem,all,&snapshot);
     ASSERT_EQ(target.size(), 1); ASSERT_EQ(complete.size(), 1);
     EXPECT_EQ(target.at(1).neighbor_count, complete.at(1).neighbor_count);
     for (std::size_t i=0; i<target.at(1).samples.size(); ++i)

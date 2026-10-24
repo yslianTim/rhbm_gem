@@ -29,7 +29,7 @@ struct JointPeelingContributorUniverse
 };
 
 JointPeelingContributorUniverse BuildJointPeelingContributorUniverse(
-    const ModelObject &,const JointProblem &,const JointAnalysisResult *);
+    const ModelObject &,const JointProblem &,const JointAnalysisResult &);
 
 struct JointPostprocessingMetrics
 {
@@ -124,15 +124,13 @@ class JointPostprocessingContext
 {
 public:
     JointPostprocessingContext(const MapObject &, const ModelObject &, const JointProblem &,
-        const JointAnalysisResult *, JointPostprocessingMetrics * = nullptr,
+        const JointAnalysisResult &, JointPostprocessingMetrics * = nullptr,
         const HaloMedianBuildResult * = nullptr);
     JointPostprocessingContext(const MapObject &, const ModelObject &, const JointProblem &,
-        const JointAnalysisResult *, JointPostprocessingMetrics *, const HaloMedianBuildResult *,
+        const JointAnalysisResult &, JointPostprocessingMetrics *, const HaloMedianBuildResult *,
         JointPeelingContributorUniverse);
 
     std::vector<std::pair<int, PostFitPeelingResult>> BuildPostFitPeelingBatch(
-        std::optional<std::span<const std::size_t>> outputs = std::nullopt) const;
-    std::map<int, PostFitPeelingResult> BuildPostFitPeelingSamples(
         std::optional<std::span<const std::size_t>> outputs = std::nullopt) const;
     PostJointLocalSamples BuildPostJointLocalSamples(
         int atom_id, const PostFitPeelingResult &) const;
@@ -141,7 +139,7 @@ private:
     const MapObject & m_geometry;
     const ModelObject & m_model;
     const JointProblem & m_problem;
-    const JointAnalysisResult * m_snapshot;
+    const JointAnalysisResult & m_snapshot;
     JointPostprocessingMetrics * m_metrics;
     const HaloMedianBuildResult * m_halo_medians;
     JointPeelingContributorUniverse m_contributors;
@@ -149,13 +147,4 @@ private:
     std::unordered_map<std::size_t, std::size_t> m_fitting_row_index_by_grid;
 };
 
-// Reads geometry, immutable support, raw samples and fixed Second states only.
-std::map<int, PostFitPeelingResult> BuildPostFitPeelingSamples(
-    const MapObject &, const ModelObject &, const JointProblem &,
-    std::optional<std::span<const std::size_t>> outputs = std::nullopt,
-    const JointAnalysisResult * result = nullptr);
-
-PostJointLocalSamples BuildPostJointLocalSamples(
-    const MapObject &, const ModelObject &, const JointProblem &, int atom_id,
-    const PostFitPeelingResult &, const JointAnalysisResult &);
 }

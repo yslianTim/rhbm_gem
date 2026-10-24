@@ -314,8 +314,8 @@ void RunJointComponentWorkflow(
     }
     const auto & joint_snapshot = *model.GetAnalysisView().GetJointResult();
     auto phase_start = std::chrono::steady_clock::now();
-    auto contributor_universe=BuildJointPeelingContributorUniverse(model,problem,&joint_snapshot);
-    const JointPostprocessingContext postprocessing(map, model, problem, &joint_snapshot,
+    auto contributor_universe=BuildJointPeelingContributorUniverse(model,problem,joint_snapshot);
+    const JointPostprocessingContext postprocessing(map, model, problem, joint_snapshot,
         &postprocessing_metrics,halo_median_build ? &*halo_median_build : nullptr,
         std::move(contributor_universe));
     postprocessing_metrics.context_construction_seconds = std::chrono::duration<double>(
