@@ -3,7 +3,6 @@
 #include <Eigen/Core>
 #include <algorithm>
 #include <limits>
-#include <numeric>
 #include <span>
 #include <stdexcept>
 
@@ -19,16 +18,6 @@ inline bool SafeMultiply(std::size_t a,std::size_t b,std::size_t & out)
 struct CompactRowMapping
 {
     Indices parent_rows,local_rows;
-    static std::shared_ptr<const CompactRowMapping> Identity(Eigen::Index rows)
-    {
-        auto mapping=std::make_shared<CompactRowMapping>();
-        if(rows<0) throw std::invalid_argument("Negative row mapping size.");
-        mapping->parent_rows.resize(static_cast<std::size_t>(rows));
-        mapping->local_rows.resize(static_cast<std::size_t>(rows));
-        std::iota(mapping->parent_rows.begin(),mapping->parent_rows.end(),0);
-        std::iota(mapping->local_rows.begin(),mapping->local_rows.end(),0);
-        return mapping;
-    }
     static std::shared_ptr<const CompactRowMapping> FromParentRows(const Indices & rows)
     {
         auto mapping=std::make_shared<CompactRowMapping>();

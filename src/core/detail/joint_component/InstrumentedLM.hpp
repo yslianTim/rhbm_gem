@@ -73,8 +73,6 @@ class InstrumentedLM {
   Scalar fnorm, gnorm;
   bool useExternalScaling;
 
-  Scalar lm_param() { return par; }
-
  private:
   FunctorType &functor;
   Index n;

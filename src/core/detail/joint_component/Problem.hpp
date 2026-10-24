@@ -59,12 +59,5 @@ namespace rhbm_gem::core {
 struct JointProblemAccess
 {
     static const joint_component::ProblemData & Get(const JointProblem & p) {return *p.m_data;}
-    static JointProblem WithReferenceNormalization(const JointProblem & problem,const JointProblem & reference)
-    {
-        auto data=std::make_shared<joint_component::ProblemData>(*problem.m_data);
-        data->context.scale=reference.m_data->context.scale;
-        data->context.linear.release_response_norm=reference.m_data->context.linear.release_response_norm;
-        return JointProblem(std::move(data));
-    }
 };
 }

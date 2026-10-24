@@ -231,8 +231,6 @@ std::pair<Matrix,Matrix> Reduce(const Design & x,const Matrix & rhs)
 }
 double RankPolicy::Relative(Eigen::Index columns) const
 {return std::numeric_limits<double>::epsilon()*static_cast<double>(std::max(rows,columns));}
-double RankPolicy::Absolute(Eigen::Index columns,double maximum) const
-{return Relative(columns)*maximum;}
 EvaluationContext CreateContext(std::shared_ptr<const JointProblemInput> input,const std::string & hash)
 {
     EvaluationContext c; c.snapshot_hash=hash; c.observations=Observe(input);
@@ -1025,8 +1023,4 @@ Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluatio
         replay.reason.empty() ? "endpoint-verification-failed" : replay.reason;
     return out;
 }
-Assessment AssessEvaluated(const Domain & domain,VectorRef y,const Evaluation & endpoint,
-    const IndependentReplayEvidence & replay,const EvaluationContext & policy,bool,std::size_t)
-{return VerifyJointEndpoint(domain,y,endpoint,replay,policy);}
-
 }

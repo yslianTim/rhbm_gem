@@ -21,7 +21,6 @@ struct RankPolicy
 {
     Eigen::Index rows{}, design_columns{}, width_columns{};
     double Relative(Eigen::Index columns) const;
-    double Absolute(Eigen::Index columns,double maximum) const;
 };
 struct LinearPolicy
 {
@@ -266,9 +265,6 @@ JointCheckStatus MergeConvergenceStatus(JointCheckStatus,JointCheckStatus);
 JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> &,JointEvidenceScope,bool assembled=false);
 Assessment AssessProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,const Vector * = nullptr,
     const Vector * assembled_prediction=nullptr,const std::vector<std::size_t> * assembled_rows=nullptr);
-// Evaluations belong to this exact domain, observations and numerical policy.
-Assessment AssessEvaluated(const Domain &,VectorRef,const Evaluation &,const IndependentReplayEvidence &,
-    const EvaluationContext &,bool supplied=false,std::size_t resident_override=0);
 // Verifies an accepted endpoint using only the streaming objective, KKT,
 // width-gradient, and independent replay evidence. It never assesses global rank.
 Assessment VerifyJointEndpoint(const Domain &,VectorRef,const Evaluation &,

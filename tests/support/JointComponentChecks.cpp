@@ -153,7 +153,7 @@ Differential DifferentiatePartitioned(const Evaluation & e,const ComponentPartit
         if(spectrum.available && spectrum.singular_values.size())
             maximum=std::max(maximum,spectrum.singular_values(0));
     }
-    const double threshold=context.rank.Absolute(columns,maximum);
+    const double threshold=context.rank.Relative(columns)*maximum;
     out.projected=Matrix::Zero(e.x.rows(),e.eta.size()); out.jacobian=out.projected;
     for(std::size_t c=0;c<local.size();++c)
     {
