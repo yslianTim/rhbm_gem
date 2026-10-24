@@ -771,8 +771,9 @@ TEST(JointComponentPartialSelectionTest, ExcludedFitRowsRemainInOriginalPeelingD
     const SamplingPointList points{{1.5,{1.5,0.0,0.0},true}};
     f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*f.model->FindAtomPtr(1),
         core::detail::BuildLocalPotentialSampleList(*f.map,points));
-    const core::detail::JointPostprocessingContext context(*f.map,*f.model,problem,snapshot);
-    const auto peelings=postprocessing_test::BuildPostFitPeelingSamples(context);
+    const auto context=postprocessing_test::MakeJointPostprocessingContext(*f.map,*f.model,problem,snapshot);
+    const auto peelings=postprocessing_test::BuildPostFitPeelingSamples(
+        context,problem.OriginalInput().selection_domain->target_indices);
     ASSERT_TRUE(peelings.contains(1));
     ASSERT_EQ(peelings.at(1).samples.size(),1u);
     EXPECT_TRUE(peelings.at(1).samples.front().response) << peelings.at(1).samples.front().reason;
@@ -856,17 +857,17 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
     }
 
     core::detail::JointPostprocessingMetrics metrics;
-    const core::detail::JointPostprocessingContext context(
+    const auto context=postprocessing_test::MakeJointPostprocessingContext(
         *f.map, *f.model, problem, snapshot, &metrics);
     EXPECT_EQ(metrics.snapshot_identity_validation_count, 1u);
     EXPECT_EQ(metrics.full_row_identity_scan_count, 1u);
     EXPECT_EQ(metrics.observation_row_mapping_builds, 1u);
     EXPECT_EQ(metrics.contributor_mapping_builds, 1u);
     const auto peelings = postprocessing_test::BuildPostFitPeelingSamples(context,
-        problem.Input().selection_domain->target_indices);
+        problem.OriginalInput().selection_domain->target_indices);
     ASSERT_EQ(peelings.size(), atom_ids.size());
     const auto peeling_batch = context.BuildPostFitPeelingBatch(
-        problem.Input().selection_domain->target_indices);
+        std::span<const std::size_t>(problem.OriginalInput().selection_domain->target_indices));
     ASSERT_EQ(peeling_batch.size(), peelings.size());
     auto map_entry = peelings.begin();
     for (const auto & [id, batch_peeling] : peeling_batch)

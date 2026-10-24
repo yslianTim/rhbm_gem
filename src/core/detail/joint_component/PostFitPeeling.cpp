@@ -14,11 +14,10 @@
 namespace rhbm_gem::core::detail {
 namespace {
 std::vector<bool> JointOutputMask(const JointProblemInput & input,
-    std::optional<std::span<const std::size_t>> requested)
+    std::span<const std::size_t> requested)
 {
-    if (!requested && input.selection_domain) requested=input.selection_domain->target_indices;
-    std::vector<bool> mask(input.atom_ids.size(),!requested);
-    if (requested) for (auto atom:*requested) mask.at(atom)=true;
+    std::vector<bool> mask(input.atom_ids.size(),false);
+    for (auto atom:requested) mask.at(atom)=true;
     return mask;
 }
 
@@ -210,15 +209,6 @@ LocalPotentialSampleList PostJointLocalSamples::BuildGaussianSamples(
 }
 
 JointPostprocessingContext::JointPostprocessingContext(
-    const MapObject & geometry, const ModelObject & model, const JointProblem & problem,
-    const JointAnalysisResult & snapshot, JointPostprocessingMetrics * metrics,
-    const HaloMedianBuildResult * halo_medians)
-    : JointPostprocessingContext(geometry,model,problem,snapshot,metrics,halo_medians,
-        BuildJointPeelingContributorUniverse(model,problem,snapshot))
-{
-}
-
-JointPostprocessingContext::JointPostprocessingContext(
     const MapObject & geometry,const ModelObject & model,const JointProblem & problem,
     const JointAnalysisResult & snapshot,JointPostprocessingMetrics * metrics,
     const HaloMedianBuildResult * halo_medians,JointPeelingContributorUniverse contributors)
@@ -308,7 +298,7 @@ JointPostprocessingContext::JointPostprocessingContext(
 }
 
 std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::BuildPostFitPeelingBatch(
-    std::optional<std::span<const std::size_t>> outputs) const
+    std::span<const std::size_t> outputs) const
 {
     const auto & input = m_problem.OriginalInput();
     const auto & result = m_snapshot;

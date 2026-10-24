@@ -574,7 +574,7 @@ TEST(PureHaloSupportExclusionTest, PeelingUsesOriginalRowsAndReconstructedHalo)
     const SamplingPointList points{{2.5,{2.5,0,0},true}};
     fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),
         core::detail::BuildLocalPotentialSampleList(fixture.map,points));
-    const core::detail::JointPostprocessingContext context(
+    const auto context=postprocessing_test::MakeJointPostprocessingContext(
         fixture.map,fixture.model,problem,snapshot);
     const auto peelings=postprocessing_test::BuildPostFitPeelingSamples(context, std::vector<std::size_t>{0});
     ASSERT_TRUE(peelings.contains(1));
@@ -608,7 +608,7 @@ TEST(PureHaloSupportExclusionTest, ReconstructsMissingNodesFromAllQualifiedHaloC
     fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),raw);
 
     core::detail::JointPostprocessingMetrics metrics;
-    const core::detail::JointPostprocessingContext context(
+    const auto context=postprocessing_test::MakeJointPostprocessingContext(
         fixture.map,fixture.model,problem,snapshot,&metrics);
     const auto peelings=postprocessing_test::BuildPostFitPeelingSamples(context, std::vector<std::size_t>{0});
     const auto & peeling=peelings.at(1);
@@ -676,7 +676,7 @@ TEST(PureHaloSupportExclusionTest, PeelingIsInvariantToExtraContributorChemicalL
         const SamplingPointList points{{1.5,{1.5,0.0,0.0},true},{2.8,{2.8,0.0,0.0},true}};
         fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),
             core::detail::BuildLocalPotentialSampleList(fixture.map,points));
-        const core::detail::JointPostprocessingContext context(
+        const auto context=postprocessing_test::MakeJointPostprocessingContext(
             fixture.map,fixture.model,problem,snapshot);
         auto peeling=postprocessing_test::BuildPostFitPeelingSamples(context, std::vector<std::size_t>{0}).at(1);
         fixture.model.EditAnalysis().ApplyPostFitPeelingsBatch({{1,peeling}});
@@ -732,7 +732,7 @@ TEST(PureHaloSupportExclusionTest, RejectsReconstructionMedianFromDifferentJoint
         fixture.model,problem,snapshot,"reconstruction-only-run").TakeSnapshot();
     snapshot.halo_median_reconstruction->global_median[0]+=1.0;
     data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"reconstruction-only-run");
-    const core::detail::JointPostprocessingContext context(
+    const auto context=postprocessing_test::MakeJointPostprocessingContext(
         fixture.map,fixture.model,problem,snapshot);
     EXPECT_THROW(postprocessing_test::BuildPostFitPeelingSamples(context, std::vector<std::size_t>{0}),std::invalid_argument);
 }

@@ -124,14 +124,11 @@ class JointPostprocessingContext
 {
 public:
     JointPostprocessingContext(const MapObject &, const ModelObject &, const JointProblem &,
-        const JointAnalysisResult &, JointPostprocessingMetrics * = nullptr,
-        const HaloMedianBuildResult * = nullptr);
-    JointPostprocessingContext(const MapObject &, const ModelObject &, const JointProblem &,
         const JointAnalysisResult &, JointPostprocessingMetrics *, const HaloMedianBuildResult *,
         JointPeelingContributorUniverse);
 
     std::vector<std::pair<int, PostFitPeelingResult>> BuildPostFitPeelingBatch(
-        std::optional<std::span<const std::size_t>> outputs = std::nullopt) const;
+        std::span<const std::size_t> outputs) const;
     PostJointLocalSamples BuildPostJointLocalSamples(
         int atom_id, const PostFitPeelingResult &) const;
 

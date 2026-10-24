@@ -322,7 +322,8 @@ void RunJointComponentWorkflow(
         std::chrono::steady_clock::now() - phase_start).count();
     postprocessing_metrics.rss_after_context_bytes = joint_component::CurrentRssBytes();
     phase_start = std::chrono::steady_clock::now();
-    auto peeling_updates = postprocessing.BuildPostFitPeelingBatch(original.selection_domain->target_indices);
+    auto peeling_updates = postprocessing.BuildPostFitPeelingBatch(
+        std::span<const std::size_t>(original.selection_domain->target_indices));
     model.EditAnalysis().ApplyPostFitPeelingsBatch(std::move(peeling_updates));
     if (postprocessing_metrics.mapping_mismatch_samples || postprocessing_metrics.missing_contributor_samples)
     {
