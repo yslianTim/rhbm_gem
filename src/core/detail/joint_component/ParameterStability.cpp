@@ -66,8 +66,7 @@ DirectionSet BuildDirections(const Evaluation & baseline,const Vector & eta,cons
 
     Vector weak;
     Vector column_norms;
-    const auto prepared=PrepareProjectedWidthDerivative(baseline,context.scale,&context,-1,
-        derivative_tile_rows,true);
+    const auto prepared=PrepareProjectedWidthDerivative(baseline,context.scale,&context);
     if(prepared.valid)
     {
         const auto reduced=ReduceProjectedWidthDerivative(prepared);

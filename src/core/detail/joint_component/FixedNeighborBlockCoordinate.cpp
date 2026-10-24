@@ -511,8 +511,8 @@ FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolic
                 out.width_derivative_column_norms.push_back(initial_state.derivative.col(column).norm());
             if(initial_state.gradient.size())
                 out.width_gradient_inf=initial_state.gradient.lpNorm<Eigen::Infinity>();
-            const auto projected_prepared=PrepareProjectedWidthDerivative(initial_state,context.scale,&context,
-                -1,derivative_tile_rows,true);
+            const auto projected_prepared=PrepareProjectedWidthDerivative(
+                initial_state,context.scale,&context);
             if(projected_prepared.valid)
             {
                 const auto projected=ReduceProjectedWidthDerivative(projected_prepared);

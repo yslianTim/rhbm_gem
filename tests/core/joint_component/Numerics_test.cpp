@@ -182,6 +182,33 @@ TEST(JointTestNumericsTest, TiledDerivativeMatchesDenseAcrossTileBoundaries)
     }
 }
 
+TEST(JointComponentNumericsTest, ProjectedWidthKeepsRankDeficiencyAsEvidenceWhileProfileDerivativeRejectsIt)
+{
+    namespace n=p::runtime;
+    const std::vector<std::vector<n::Support>> supports{
+        {{0,0.0},{1,.5},{2,1.0},{3,1.5},{4,2.0}},
+        {{0,0.0},{1,.5},{2,1.0},{3,1.5},{4,2.0}}};
+    const n::Domain domain(5,supports);
+    const Vector y=Vector::Zero(5),eta=Vector::Constant(2,std::log(.7)),beta=Vector::Zero(4);
+    const auto context=p::MakeContext(y,2);
+    const auto state=n::EvaluateState(domain,y,eta,beta,context);
+    ASSERT_TRUE(state.valid)<<state.reason;
+
+    const auto projected=n::PrepareProjectedWidthDerivative(state,context.scale,&context);
+    ASSERT_TRUE(projected.valid)<<projected.reason;
+    ASSERT_TRUE(projected.free_design_rank);
+    ASSERT_TRUE(projected.free_design_rank->available);
+    const Matrix dense_design=Matrix(projected.free_design);
+    Eigen::JacobiSVD<Matrix> reference(dense_design);
+    reference.setThreshold(context.rank.Relative(4));
+    EXPECT_EQ(projected.free_design_rank->rank,reference.rank());
+    EXPECT_LT(reference.rank(),dense_design.cols());
+
+    const auto full=n::PrepareDerivative(state,context.scale,&context);
+    EXPECT_FALSE(full.valid);
+    EXPECT_EQ(full.reason,"rank-deficient-free-design");
+}
+
 TEST(JointComponentNumericsTest, SparseConstrainedSolvePreservesInteriorBoundaryAndReleaseFaces)
 {
     namespace n=p::runtime;

@@ -30,7 +30,7 @@ struct ReducedProjectedWidthDifferential
 TiledDifferential PrepareDerivative(const Evaluation &,double,const EvaluationContext *,double=-1,
     Eigen::Index=derivative_tile_rows);
 TiledDifferential PrepareProjectedWidthDerivative(const Evaluation &,double,const EvaluationContext *,double=-1,
-    Eigen::Index=derivative_tile_rows,bool=false);
+    Eigen::Index=derivative_tile_rows);
 ReducedDifferential ReduceDerivative(const TiledDifferential &,VectorRef,Eigen::Index=derivative_tile_rows);
 ReducedProjectedWidthDifferential ReduceProjectedWidthDerivative(const TiledDifferential &,
     Eigen::Index=derivative_tile_rows);

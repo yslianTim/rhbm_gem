@@ -201,8 +201,7 @@ LocalConditioningAssessment AssessFixedNeighborLocalConditioning(
     }
     evidence.free_ac_conditioning=ConditioningClass(ac_spectrum,zero_column);
 
-    const auto projected_prepared=PrepareProjectedWidthDerivative(state,context.scale,&context,-1,
-        derivative_tile_rows,true);
+    const auto projected_prepared=PrepareProjectedWidthDerivative(state,context.scale,&context);
     if(projected_prepared.valid)
     {
         const auto projected=ReduceProjectedWidthDerivative(projected_prepared);
