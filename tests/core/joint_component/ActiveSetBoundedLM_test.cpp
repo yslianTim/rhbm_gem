@@ -36,7 +36,7 @@ TEST(ActiveSetBoundedLMTest, UpperBoundarySolutionHasCorrectMultiplierSign)
     EXPECT_NEAR(result.multipliers(0),1.5,1e-14);
 }
 
-TEST(ActiveSetBoundedLMTest, ReleasesAStartingBoundaryWhenTheObjectivePointsInward)
+TEST(ActiveSetBoundedLMTest, ReleasesAnUpperActiveSetCoordinateWhenKktRequiresAnInwardStep)
 {
     Eigen::MatrixXd j(1,1); j<<1.0;
     Eigen::VectorXd r(1); r<<1.0;
@@ -109,16 +109,6 @@ TEST(ActiveSetBoundedLMTest, TrustRegionDampingRecoversRankDeficiencyAndRejectsI
         Eigen::Vector2d::Zero(),Eigen::Vector2d::Ones(),upper,1.0,1.0);
     EXPECT_FALSE(infeasible.valid);
     EXPECT_EQ(infeasible.status,"invalid-subproblem-input");
-}
-
-TEST(ActiveSetBoundedLMTest, FixedCoordinatesRemainFixed)
-{
-    Eigen::Matrix2d j=Eigen::Matrix2d::Identity();
-    Eigen::Vector2d r(-1.0,-2.0),d=Eigen::Vector2d::Ones(),upper=Eigen::Vector2d::Constant(5.0);
-    const auto result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,10.0,0.0,{true,false});
-    ASSERT_TRUE(result.valid)<<result.status;
-    EXPECT_DOUBLE_EQ(result.step(0),0.0);
-    EXPECT_DOUBLE_EQ(result.step(1),2.0);
 }
 
 TEST(ActiveSetBoundedLMTest, RejectsNonfiniteSubproblemCoefficients)

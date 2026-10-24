@@ -19,6 +19,6 @@ struct ActiveSetStep
 // Selects the LM damping so the same constrained subproblem also satisfies
 // ||D p|| <= trust_radius. The returned step is the step used by the model.
 ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd &,const Eigen::VectorXd &,
-    const Eigen::VectorXd &,const Eigen::VectorXd &,double,double,const std::vector<bool> & = {});
+    const Eigen::VectorXd &,const Eigen::VectorXd &,double,double);
 
 } // namespace rhbm_gem::core::joint_component

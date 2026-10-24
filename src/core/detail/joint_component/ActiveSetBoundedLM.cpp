@@ -20,12 +20,10 @@ ActiveSetStep Failure(std::string status)
 }
 
 ActiveSetStep SolveAtDamping(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,
-    const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double lambda,
-    const std::vector<bool> & fixed)
+    const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double lambda)
 {
     const Eigen::Index n=j.cols();
     if(j.rows()!=r.size() || n==0 || d.size()!=n || upper.size()!=n ||
-        (!fixed.empty() && fixed.size()!=static_cast<std::size_t>(n)) ||
         !j.allFinite() || !r.allFinite() || !d.allFinite() || !upper.allFinite() ||
         !(d.array()>0.0).all() || (upper.array()<0.0).any() ||
         !std::isfinite(lambda) || lambda<0.0)
@@ -37,9 +35,8 @@ ActiveSetStep SolveAtDamping(const Eigen::MatrixXd & j,const Eigen::VectorXd & r
     Eigen::VectorXd step=Eigen::VectorXd::Zero(n);
     for(Eigen::Index i=0;i<n;++i)
     {
-        const bool equality=!fixed.empty() && fixed[static_cast<std::size_t>(i)];
-        active[static_cast<std::size_t>(i)]=equality || upper(i)<=bound_tolerance;
-        if(active[static_cast<std::size_t>(i)] && !equality) step(i)=upper(i);
+        active[static_cast<std::size_t>(i)]=upper(i)<=bound_tolerance;
+        if(active[static_cast<std::size_t>(i)]) step(i)=upper(i);
     }
 
     const std::size_t maximum_iterations=std::max<std::size_t>(40,20*static_cast<std::size_t>(n));
@@ -119,8 +116,7 @@ ActiveSetStep SolveAtDamping(const Eigen::MatrixXd & j,const Eigen::VectorXd & r
         double largest_wrong_multiplier=kkt_tolerance;
         for(Eigen::Index i=0;i<n;++i)
         {
-            if(!active[static_cast<std::size_t>(i)] ||
-                (!fixed.empty() && fixed[static_cast<std::size_t>(i)])) continue;
+            if(!active[static_cast<std::size_t>(i)]) continue;
             if(gradient(i)>largest_wrong_multiplier)
             {
                 largest_wrong_multiplier=gradient(i);
@@ -138,13 +134,11 @@ ActiveSetStep SolveAtDamping(const Eigen::MatrixXd & j,const Eigen::VectorXd & r
         Eigen::VectorXd multipliers=Eigen::VectorXd::Zero(n);
         for(Eigen::Index i=0;i<n;++i)
         {
-            if(active[static_cast<std::size_t>(i)] &&
-                (fixed.empty() || !fixed[static_cast<std::size_t>(i)]))
+            if(active[static_cast<std::size_t>(i)])
                 multipliers(i)=std::max(0.0,-gradient(i));
-            else if(!active[static_cast<std::size_t>(i)])
+            else
                 kkt_inf=std::max(kkt_inf,std::abs(gradient(i)));
-            if(active[static_cast<std::size_t>(i)] &&
-                (fixed.empty() || !fixed[static_cast<std::size_t>(i)]))
+            if(active[static_cast<std::size_t>(i)])
                 kkt_inf=std::max(kkt_inf,std::max(0.0,gradient(i)));
         }
         if(kkt_inf>kkt_tolerance) return Failure("subproblem-kkt-failed");
@@ -167,12 +161,11 @@ ActiveSetStep WithDamping(ActiveSetStep result,double damping)
 }
 
 ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,
-    const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double trust_radius,double damping_seed,
-    const std::vector<bool> & fixed)
+    const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double trust_radius,double damping_seed)
 {
     if(!std::isfinite(trust_radius) || !(trust_radius>0.0) || !std::isfinite(damping_seed) || damping_seed<0.0)
         return Failure("invalid-trust-region-input");
-    auto unconstrained=SolveAtDamping(j,r,d,upper,0.0,fixed);
+    auto unconstrained=SolveAtDamping(j,r,d,upper,0.0);
     const double trust_tolerance=64.0*std::numeric_limits<double>::epsilon()*std::max(1.0,trust_radius);
     if(unconstrained.valid && unconstrained.scaled_step_norm<=trust_radius+trust_tolerance)
         return WithDamping(std::move(unconstrained),0.0);
@@ -182,7 +175,7 @@ ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd & j,const Eigen:
     ActiveSetStep feasible;
     for(int bracket=0;bracket<80;++bracket)
     {
-        auto candidate=SolveAtDamping(j,r,d,upper,high,fixed);
+        auto candidate=SolveAtDamping(j,r,d,upper,high);
         if(candidate.valid && candidate.scaled_step_norm<=trust_radius)
         {feasible=std::move(candidate); break;}
         if(!candidate.valid && candidate.status!="rank-deficient-free-subproblem") return candidate;
@@ -196,7 +189,7 @@ ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd & j,const Eigen:
     {
         const double middle=low+(high-low)*0.5;
         if(!(middle>low) || !(middle<high)) break;
-        auto candidate=SolveAtDamping(j,r,d,upper,middle,fixed);
+        auto candidate=SolveAtDamping(j,r,d,upper,middle);
         if(candidate.valid && candidate.scaled_step_norm<=trust_radius)
         {high=middle; feasible=std::move(candidate);}
         else if(candidate.valid || candidate.status=="rank-deficient-free-subproblem") low=middle;
