@@ -148,7 +148,7 @@ struct Profile
         if(proposed && trusted && step.lpNorm<Eigen::Infinity>()>2.302585092994046)
         {
             const auto prepared=PrepareDerivative(cached,scale,&context);
-            const auto differential=ReduceDerivative(prepared,cached.residual,false);
+            const auto differential=ReduceDerivative(prepared,cached.residual);
             if(differential.valid)
             {
                 const auto assessment=AssessWeakWidthStep(differential.jacobian,step,context.rank);
@@ -209,7 +209,7 @@ struct Profile
         const auto prepared=PrepareDerivative(cached,scale,&context);
         const auto prepare_seconds=Seconds(prepare_started);
         const auto reduce_started=std::chrono::steady_clock::now();
-        auto differential=ReduceDerivative(prepared,cached.residual,false); ++derivatives;
+        auto differential=ReduceDerivative(prepared,cached.residual); ++derivatives;
         const auto reduce_seconds=Seconds(reduce_started);
         if(telemetry)
         {

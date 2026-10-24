@@ -15,8 +15,15 @@ struct TiledDifferential
 };
 struct ReducedDifferential
 {
-    Matrix projected,jacobian; // Compact R factors, never observation-sized.
-    Vector response,projected_norms,jacobian_norms;
+    Matrix jacobian; // Compact R factor, never observation-sized.
+    Vector response,jacobian_norms;
+    bool valid{};
+    std::string reason;
+};
+struct ReducedProjectedWidthDifferential
+{
+    Matrix projected; // Compact R factor, never observation-sized.
+    Vector projected_norms;
     bool valid{};
     std::string reason;
 };
@@ -24,8 +31,9 @@ TiledDifferential PrepareDerivative(const Evaluation &,double,const EvaluationCo
     Eigen::Index=derivative_tile_rows);
 TiledDifferential PrepareProjectedWidthDerivative(const Evaluation &,double,const EvaluationContext *,double=-1,
     Eigen::Index=derivative_tile_rows,bool=false);
-ReducedDifferential ReduceDerivative(const TiledDifferential &,VectorRef,bool=true,Eigen::Index=derivative_tile_rows);
-ReducedDifferential ReduceProjectedWidthDerivative(const TiledDifferential &,Eigen::Index=derivative_tile_rows);
+ReducedDifferential ReduceDerivative(const TiledDifferential &,VectorRef,Eigen::Index=derivative_tile_rows);
+ReducedProjectedWidthDifferential ReduceProjectedWidthDerivative(const TiledDifferential &,
+    Eigen::Index=derivative_tile_rows);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 struct DerivativeWork
 {

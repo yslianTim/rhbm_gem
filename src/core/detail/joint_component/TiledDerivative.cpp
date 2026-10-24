@@ -184,42 +184,37 @@ void TiledDifferential::Rows(Eigen::Index first,Eigen::Index count,Matrix & proj
     jacobian=projected-free_design.middleRows(first,count)*correction/scale;
 }
 namespace {
-ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef residual,bool widths,Eigen::Index tile)
+ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef residual,Eigen::Index tile)
 {
     ReducedDifferential out; out.reason=d.reason; if(!d.valid) return out;
     if(tile<=0) throw std::invalid_argument("Invalid derivative tile size.");
     const auto n=d.raw.rows(),m=d.raw.cols();
-    TiledQR projected(m,0),jacobian(m,1);
-    out.projected_norms=Vector::Zero(m); out.jacobian_norms=Vector::Zero(m);
-    Matrix p,j;
+    TiledQR jacobian(m,1);
+    out.jacobian_norms=Vector::Zero(m);
+    Matrix projected,j;
     for(Eigen::Index first=0;first<n;first+=tile)
     {
         const auto count=std::min(tile,n-first);
-        d.Rows(first,count,p,j);
+        d.Rows(first,count,projected,j);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         auto & work=DerivativeWorkForTesting();
         work.maximum_generated_rows=std::max(work.maximum_generated_rows,count);
         work.maximum_reduction_rows=std::max(work.maximum_reduction_rows,count+jacobian.r.rows());
 #endif
-        if(!p.allFinite() || !j.allFinite()) {out.reason="nonfinite-derivative"; return out;}
-        if(widths) projected.Append(p,Matrix(count,0));
+        if(!projected.allFinite() || !j.allFinite()) {out.reason="nonfinite-derivative"; return out;}
         jacobian.Append(j,Matrix(residual.segment(first,count)/d.scale));
         for(Eigen::Index k=0;k<m;++k)
-        {
-            if(widths) out.projected_norms(k)=std::hypot(out.projected_norms(k),p.col(k).norm());
             out.jacobian_norms(k)=std::hypot(out.jacobian_norms(k),j.col(k).blueNorm());
-        }
     }
-    out.projected=std::move(projected.r);
     out.jacobian=std::move(jacobian.r); out.response=jacobian.target.col(0);
     out.valid=true; return out;
 }
 }
-ReducedDifferential ReduceDerivative(const TiledDifferential & d,VectorRef residual,bool widths,Eigen::Index tile)
-{return ReduceDerivativeImpl(d,residual,widths,tile);}
-ReducedDifferential ReduceProjectedWidthDerivative(const TiledDifferential & d,Eigen::Index tile)
+ReducedDifferential ReduceDerivative(const TiledDifferential & d,VectorRef residual,Eigen::Index tile)
+{return ReduceDerivativeImpl(d,residual,tile);}
+ReducedProjectedWidthDifferential ReduceProjectedWidthDerivative(const TiledDifferential & d,Eigen::Index tile)
 {
-    ReducedDifferential out; out.reason=d.reason; if(!d.valid || !d.projected_only) return out;
+    ReducedProjectedWidthDifferential out; out.reason=d.reason; if(!d.valid || !d.projected_only) return out;
     if(tile<=0) throw std::invalid_argument("Invalid derivative tile size.");
     const auto n=d.raw.rows(),m=d.raw.cols();
     TiledQR projected(m,0);

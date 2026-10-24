@@ -252,7 +252,7 @@ LocalConditioningAssessment AssessFixedNeighborLocalConditioning(
         }
         else
         {
-            const auto reduced=ReduceDerivative(prepared,state.residual,false);
+            const auto reduced=ReduceDerivative(prepared,state.residual);
             if(!reduced.valid)
             {
                 evidence.profile_status="unavailable";

@@ -154,14 +154,18 @@ TEST(JointTestNumericsTest, TiledDerivativeMatchesDenseAcrossTileBoundaries)
         {
             n::DerivativeWorkForTesting()={};
             const auto d=n::PrepareDerivative(e,context.scale,&context,-1,tile);
-            const auto reduced=n::ReduceDerivative(d,e.residual,true,tile);
+            const auto reduced=n::ReduceDerivative(d,e.residual,tile);
+            const auto width_derivative=n::PrepareProjectedWidthDerivative(e,context.scale,&context,-1,tile);
+            const auto reduced_width=n::ReduceProjectedWidthDerivative(width_derivative,tile);
             ASSERT_TRUE(reduced.valid);
+            ASSERT_TRUE(reduced_width.valid);
             EXPECT_LE(n::DerivativeWorkForTesting().maximum_generated_rows,tile);
             EXPECT_LE(n::DerivativeWorkForTesting().maximum_reduction_rows,tile+e.x.cols());
             const auto actual=p::MaterializeDerivative(e,context.scale,&context,-1,tile);
             EXPECT_LT((actual.projected-dense.projected).norm()/dense.projected.norm(),1e-8);
             EXPECT_LT((actual.jacobian-dense.jacobian).norm()/dense.jacobian.norm(),1e-8);
-            for(const auto & matrices:{std::pair{dense.projected,reduced.projected},std::pair{dense.jacobian,reduced.jacobian}})
+            for(const auto & matrices:{std::pair{dense.projected,reduced_width.projected},
+                std::pair{dense.jacobian,reduced.jacobian}})
             {
                 const auto left=n::ComputeSpectrum(matrices.first,context.rank,2,false);
                 const auto right=n::ComputeSpectrum(matrices.second,context.rank,2,false);
@@ -173,7 +177,7 @@ TEST(JointTestNumericsTest, TiledDerivativeMatchesDenseAcrossTileBoundaries)
             svd.setThreshold(context.rank.Relative(2));
             const Vector compact=svd.solve(-reduced.response);
             EXPECT_LE(((correction-compact).array().abs()/(1+correction.array().abs().max(compact.array().abs()))).maxCoeff(),1e-10);
-            EXPECT_LT((reduced.projected_norms-dense.projected.colwise().norm().transpose()).norm()/dense.projected.norm(),1e-10);
+            EXPECT_LT((reduced_width.projected_norms-dense.projected.colwise().norm().transpose()).norm()/dense.projected.norm(),1e-10);
             EXPECT_LT((reduced.jacobian_norms-dense.jacobian.colwise().blueNorm().transpose()).norm()/dense.jacobian.norm(),1e-10);
         }
     }

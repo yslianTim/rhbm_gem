@@ -3,6 +3,7 @@
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "support/JointSyntheticWorkload.hpp"
+#include "support/JointDenseReference.hpp"
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <algorithm>
 
@@ -130,12 +131,26 @@ TEST(JointCompactAssessmentTest, ProjectedWidthRouteMatchesFullProfileDerivative
         const auto full=n::PrepareDerivative(endpoint,data.context.scale,&data.context);
         const auto projected=n::PrepareProjectedWidthDerivative(endpoint,data.context.scale,&data.context);
         ASSERT_TRUE(full.valid); ASSERT_TRUE(projected.valid);
+        const auto dense=second_stage_test::matched::joint_abc::DenseDifferentiate(
+            endpoint,data.context.scale,&data.context);
+        ASSERT_TRUE(dense.valid);
         const auto a=n::ReduceDerivative(full,endpoint.residual);
         const auto b=n::ReduceProjectedWidthDerivative(projected);
         ASSERT_TRUE(a.valid); ASSERT_TRUE(b.valid);
-        EXPECT_EQ(b.jacobian.size(),0);
-        EXPECT_LE((a.projected-b.projected).norm(),1e-10*(1.+a.projected.norm()));
-        EXPECT_LE((a.projected_norms-b.projected_norms).norm(),1e-10*(1.+a.projected_norms.norm()));
+        const auto dense_profile=n::ComputeSpectrum(dense.jacobian,data.context.rank,atoms,false);
+        const auto reduced_profile=n::ComputeSpectrum(a.jacobian,data.context.rank,atoms,false);
+        const auto dense_width=n::ComputeSpectrum(dense.projected,data.context.rank,atoms,false);
+        const auto reduced_width=n::ComputeSpectrum(b.projected,data.context.rank,atoms,false);
+        ASSERT_TRUE(dense_profile.available && reduced_profile.available);
+        ASSERT_TRUE(dense_width.available && reduced_width.available);
+        EXPECT_EQ(dense_profile.rank,reduced_profile.rank);
+        EXPECT_LE((dense_profile.singular_values-reduced_profile.singular_values).lpNorm<Eigen::Infinity>()/
+            dense_profile.singular_values(0),1e-10);
+        EXPECT_EQ(dense_width.rank,reduced_width.rank);
+        EXPECT_LE((dense_width.singular_values-reduced_width.singular_values).lpNorm<Eigen::Infinity>()/
+            dense_width.singular_values(0),1e-10);
+        EXPECT_LE((dense.projected.colwise().norm().transpose()-b.projected_norms).norm(),
+            1e-10*(1.+b.projected_norms.norm()));
     }
 }
 }
