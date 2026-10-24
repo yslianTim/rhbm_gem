@@ -262,8 +262,8 @@ SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & 
         while(status==Eigen::LevenbergMarquardtSpace::NotStarted || status==Eigen::LevenbergMarquardtSpace::Running)
         {
             if(accepted>=search_context.update_budget) {profile.failure="accepted-update-budget"; break;}
-            const auto before=lm.iter; status=lm.minimizeOneStep(eta);
-            if(lm.iter>before) {++accepted; profile.Accept(eta,accepted);}
+            const auto before=lm.iterations(); status=lm.minimizeOneStep(eta);
+            if(lm.iterations()>before) {++accepted; profile.Accept(eta,accepted);}
         }
         return status;
     };

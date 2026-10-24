@@ -29,9 +29,8 @@ class InstrumentedLM {
 
  public:
   InstrumentedLM(FunctorType &_functor) : functor(_functor) {
-    nfev = njev = iter = 0;
+    nfev = iter = 0;
     fnorm = gnorm = 0.;
-    useExternalScaling = false;
   }
 
   typedef DenseIndex Index;
@@ -42,38 +41,28 @@ class InstrumentedLM {
           maxfev(400),
           ftol(sqrt_epsilon()),
           xtol(sqrt_epsilon()),
-          gtol(Scalar(0.)),
-          epsfcn(Scalar(0.)) {}
+          gtol(Scalar(0.)) {}
     Scalar factor;
     Index maxfev;  // maximum number of function evaluation
     Scalar ftol;
     Scalar xtol;
     Scalar gtol;
-    Scalar epsfcn;
   };
 
   typedef Eigen::Matrix<Scalar, Dynamic, 1> FVectorType;
   typedef Eigen::Matrix<Scalar, Dynamic, Dynamic> JacobianType;
 
-  LevenbergMarquardtSpace::Status lmder1(FVectorType &x, const Scalar tol = sqrt_epsilon());
-
-  LevenbergMarquardtSpace::Status minimize(FVectorType &x);
   LevenbergMarquardtSpace::Status minimizeInit(FVectorType &x);
   LevenbergMarquardtSpace::Status minimizeOneStep(FVectorType &x);
-
-  void resetParameters() { parameters = Parameters(); }
-
   Parameters parameters;
+  Index iterations() const { return iter; }
+
+ private:
   FVectorType fvec, qtf, diag;
   JacobianType fjac;
   Eigen::PermutationMatrix<Dynamic, Dynamic> permutation;
-  Index nfev;
-  Index njev;
-  Index iter;
+  Index nfev, iter;
   Scalar fnorm, gnorm;
-  bool useExternalScaling;
-
- private:
   FunctorType &functor;
   Index n;
   Index m;
@@ -89,32 +78,6 @@ class InstrumentedLM {
 };
 
 template <typename FunctorType, typename Scalar>
-LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::lmder1(FVectorType &x, const Scalar tol) {
-  n = x.size();
-  m = functor.values();
-
-  /* check the input parameters for errors. */
-  if (n <= 0 || m < n || tol < 0.) return LevenbergMarquardtSpace::ImproperInputParameters;
-
-  resetParameters();
-  parameters.ftol = tol;
-  parameters.xtol = tol;
-  parameters.maxfev = 100 * (n + 1);
-
-  return minimize(x);
-}
-
-template <typename FunctorType, typename Scalar>
-LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimize(FVectorType &x) {
-  LevenbergMarquardtSpace::Status status = minimizeInit(x);
-  if (status == LevenbergMarquardtSpace::ImproperInputParameters) return status;
-  do {
-    status = minimizeOneStep(x);
-  } while (status == LevenbergMarquardtSpace::Running);
-  return status;
-}
-
-template <typename FunctorType, typename Scalar>
 LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeInit(FVectorType &x) {
   n = x.size();
   m = functor.values();
@@ -125,23 +88,16 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeIni
   wa4.resize(m);
   fvec.resize(m);
   fjac.resize(n, n);
-  if (!useExternalScaling) diag.resize(n);
-  eigen_assert((!useExternalScaling || diag.size() == n) &&
-               "When useExternalScaling is set, the caller must provide a valid 'diag'");
+  diag.resize(n);
   qtf.resize(n);
 
   /* Function Body */
   nfev = 0;
-  njev = 0;
 
   /*     check the input parameters for errors. */
   if (n <= 0 || m < n || parameters.ftol < 0. || parameters.xtol < 0. || parameters.gtol < 0. ||
       parameters.maxfev <= 0 || parameters.factor <= 0.)
     return LevenbergMarquardtSpace::ImproperInputParameters;
-
-  if (useExternalScaling)
-    for (Index j = 0; j < n; ++j)
-      if (diag[j] <= 0.) return LevenbergMarquardtSpace::ImproperInputParameters;
 
   /*     evaluate the function at the starting point */
   /*     and calculate its norm. */
@@ -170,8 +126,6 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
   if (df_ret > 0)
     // numerical diff, we evaluated the function df_ret times
     nfev += df_ret;
-  else
-    njev++;
 
   JacobianType bounded_jacobian=fjac;
   FVectorType bounded_response=reduced_response;
@@ -181,11 +135,10 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
   fjac = qrfac.matrixQR();
   permutation = qrfac.colsPermutation();
 
-  /* on the first iteration and if external scaling is not used, scale according */
+  /* on the first iteration, scale according */
   /* to the norms of the columns of the initial jacobian. */
   if (iter == 1) {
-    if (!useExternalScaling)
-      for (Index j = 0; j < n; ++j) diag[j] = (wa2[j] == 0.) ? 1. : wa2[j];
+    for (Index j = 0; j < n; ++j) diag[j] = (wa2[j] == 0.) ? 1. : wa2[j];
 
     /* on the first iteration, calculate the norm of the scaled x */
     /* and initialize the step bound delta. */
@@ -211,7 +164,7 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
   if (gnorm <= parameters.gtol) return LevenbergMarquardtSpace::CosinusTooSmall;
 
   /* rescale if necessary. */
-  if (!useExternalScaling) diag = diag.cwiseMax(wa2);
+  diag = diag.cwiseMax(wa2);
 
   bool rejected_invalid = false;
   do {

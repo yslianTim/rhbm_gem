@@ -30,7 +30,7 @@ struct RejectOnce
     int calls{},rejected{},retry_limit{40}; bool always{},reject_all{},tiny_step{}; std::string failure;
     bool retry() const {return calls<retry_limit;}
     int values() const {return 2;}
-    int operator()(const Vector & x,Vector & r) {++calls; r=Vector::Constant(2,tiny_step ? -1 : x(0)-1); return 0;}
+    int operator()(const Vector & x,Vector & r) {++calls; r=Vector::Constant(2,tiny_step ? -1e-100 : x(0)-1); return 0;}
     int df(const Vector &,Eigen::MatrixXd & d) {d=Eigen::MatrixXd::Constant(2,1,tiny_step ? 1e100 : 1.); return 0;}
     int linearize(const Vector & x,const Vector & residual,Eigen::MatrixXd & d,Vector & response,Vector & norms)
     {df(x,d); response=residual; norms=d.colwise().blueNorm(); return 0;}
@@ -89,9 +89,9 @@ TEST(JointComponentSearchTest, BudgetAndTinyBoundedStepsReturnWithoutAnUpdate)
     RejectOnce budget; budget.reject_all=true; budget.retry_limit=2; p::InstrumentedLM<RejectOnce> lm(budget);
     Vector x=Vector::Zero(1); lm.minimizeInit(x);
     EXPECT_EQ(lm.minimizeOneStep(x),Eigen::LevenbergMarquardtSpace::UserAsked);
-    EXPECT_EQ(budget.calls,2); EXPECT_EQ(x(0),0); EXPECT_EQ(lm.iter,1);
+    EXPECT_EQ(budget.calls,2); EXPECT_EQ(x(0),0); EXPECT_EQ(lm.iterations(),1);
     RejectOnce tiny; tiny.tiny_step=true; p::InstrumentedLM<RejectOnce> small(tiny);
-    small.useExternalScaling=true; small.diag=Vector::Ones(1); x.setOnes(); small.minimizeInit(x);
+    x.setOnes(); small.minimizeInit(x);
     EXPECT_EQ(small.minimizeOneStep(x),Eigen::LevenbergMarquardtSpace::CosinusTooSmall);
     EXPECT_EQ(tiny.failure,"bounded-tiny-step"); EXPECT_EQ(x(0),1); EXPECT_EQ(tiny.calls,1);
 }
