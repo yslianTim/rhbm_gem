@@ -6,12 +6,14 @@
 #include "core/detail/joint_component/TargetEvidence.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "support/JointSyntheticWorkload.hpp"
+#include "support/JointTestContext.hpp"
 #include <cmath>
 #include <limits>
 
 namespace {
 namespace c=rhbm_gem::core;
 namespace n=c::joint_component;
+namespace tc=second_stage_test::matched::joint_abc;
 
 n::LocalConditioningAssessment Assess(const n::Domain & domain,n::VectorRef y,const n::Vector & eta,
     const n::Vector & beta,const n::EvaluationContext & context)
@@ -23,7 +25,7 @@ TEST(JointLocalConditioningTest, FullRankBlockUsesCompleteProfileDerivative)
 {
     n::Domain domain(6,{{{0,0.0},{1,.25},{2,1.0},{3,2.25},{4,4.0},{5,6.25}}});
     n::Vector y(6); y<<.8,-.2,.5,1.1,-.6,.3;
-    auto context=n::CreateContext(y,1);
+    auto context=tc::MakeContext(y,1);
     n::Vector eta(1),beta(2); eta<<std::log(.8); beta<<1.2,.3;
     const auto result=Assess(domain,y,eta,beta,context);
     ASSERT_EQ(result.evidence.status,"assessed");
@@ -70,7 +72,7 @@ TEST(JointLocalConditioningTest, ExactSingularityIsReportedWithoutInventingACond
     n::Domain domain(5,supports);
     n::Vector y=n::Vector::Zero(5),eta=n::Vector::Constant(2,std::log(.7)),beta(4);
     beta<<1.0,.2,1.4,-.1;
-    auto context=n::CreateContext(y,2);
+    auto context=tc::MakeContext(y,2);
     const auto result=Assess(domain,y,eta,beta,context);
     ASSERT_EQ(result.evidence.status,"partial");
     ASSERT_TRUE(result.evidence.free_ac_rank);
@@ -91,7 +93,7 @@ TEST(JointLocalConditioningTest, FullRankButIllConditionedBlockIsClassifiedSepar
         {{0,.1+offset},{1,.5-offset},{2,1.0+offset},{3,1.5-offset},{4,2.0+offset}}});
     n::Vector y=n::Vector::Zero(5),eta=n::Vector::Constant(2,std::log(.7)),beta(4);
     beta<<1.0,.2,1.4,-.1;
-    auto context=n::CreateContext(y,2);
+    auto context=tc::MakeContext(y,2);
     const auto result=Assess(domain,y,eta,beta,context);
     ASSERT_TRUE(result.evidence.free_ac_rank);
     ASSERT_TRUE(result.evidence.free_ac_condition);
@@ -130,7 +132,7 @@ TEST(JointLocalConditioningTest, ActiveAmplitudeBoundaryIsKeptAsConditionalEvide
 {
     n::Domain domain(5,{{{0,0.0},{1,.5},{2,1.0},{3,1.5},{4,2.0}}});
     n::Vector y=n::Vector::Zero(5),eta(1),beta(2); eta<<std::log(.7); beta<<0.,.2;
-    auto context=n::CreateContext(y,1);
+    auto context=tc::MakeContext(y,1);
     const auto result=Assess(domain,y,eta,beta,context);
     ASSERT_EQ(result.evidence.status,"assessed");
     EXPECT_EQ(result.evidence.active_amplitude_count,1u);
@@ -144,7 +146,7 @@ TEST(JointLocalConditioningTest, ActiveAmplitudeBoundaryIsKeptAsConditionalEvide
 
 TEST(JointLocalConditioningTest, ZeroSupportAndNonfiniteInputAreUnavailable)
 {
-    n::Vector empty_y(0); auto empty_context=n::CreateContext(empty_y,1);
+    n::Vector empty_y(0); auto empty_context=tc::MakeContext(empty_y,1);
     n::Domain empty_domain(0,{{}});
     n::Vector eta(1),beta(2); eta<<0.; beta<<1.,.2;
     const auto empty=Assess(empty_domain,empty_y,eta,beta,empty_context);
@@ -152,7 +154,7 @@ TEST(JointLocalConditioningTest, ZeroSupportAndNonfiniteInputAreUnavailable)
     EXPECT_EQ(empty.evidence.reason,"zero-support");
 
     n::Domain domain(5,{{{0,0.0},{1,.5},{2,1.0},{3,1.5},{4,2.0}}});
-    n::Vector y=n::Vector::Zero(5); auto context=n::CreateContext(y,1);
+    n::Vector y=n::Vector::Zero(5); auto context=tc::MakeContext(y,1);
     eta(0)=std::numeric_limits<double>::quiet_NaN();
     const auto nonfinite=Assess(domain,y,eta,beta,context);
     EXPECT_EQ(nonfinite.evidence.status,"unavailable");

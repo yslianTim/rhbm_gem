@@ -3,6 +3,7 @@
 #include "core/detail/joint_component/ParameterStability.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "support/JointSyntheticWorkload.hpp"
+#include "support/JointTestContext.hpp"
 #include <algorithm>
 #include <cmath>
 #include <numbers>
@@ -11,6 +12,7 @@
 
 namespace {
 namespace n=rhbm_gem::core::joint_component;
+namespace tc=second_stage_test::matched::joint_abc;
 
 std::vector<n::Support> MakeSupport()
 {
@@ -38,7 +40,7 @@ struct StabilityFixture
                 std::erf(radius/(std::sqrt(2.0)*width))/radius;
             y(row)=beta(0)*gaussian+beta(1)*charge;
         }
-        context=n::CreateContext(y,1);
+        context=tc::MakeContext(y,1);
         context.eta_upper_bound=std::log(2.0);
     }
 };
@@ -131,7 +133,7 @@ TEST(JointParameterStabilityTest, UsesWeakLocalWidthDirectionsWithinTheBoundedBu
         }
         y(row)=value;
     }
-    auto context=n::CreateContext(y,1);
+    auto context=tc::MakeContext(y,1);
     context.eta_upper_bound=eta(1);
     const auto first=n::AssessLocalParameterStability(domain,y,eta,beta,context,"two-atom-block");
     ASSERT_FALSE(first.evidence.probes.empty());

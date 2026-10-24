@@ -410,7 +410,7 @@ TEST(JointComponentNumericsTest, PracticalStationarityCannotHidePerCoordinateRep
         y(row)=beta(0)*basis.gaussian+beta(1)*basis.charge;
     }
     const n::Domain domain(rows,std::move(support));
-    auto context=n::CreateContext(y,1);
+    auto context=p::MakeContext(y,1);
     context.atom_ids=n::Identities({"target-42"});
     context.row_ids=n::Identities({"row-1","row-2","row-3","row-4"});
     auto primary=n::EvaluateStateStreaming(domain,y,eta,beta,context);
@@ -477,7 +477,7 @@ TEST(JointComponentNumericsTest, IndependentStreamingReplayPreservesActiveBounda
     }
     n::Domain domain(rows,std::move(support));
     y=-gaussian; beta<<0,charge.dot(y)/charge.squaredNorm();
-    const auto context=n::CreateContext(y,1);
+    const auto context=p::MakeContext(y,1);
     const auto active=n::EvaluateStateStreaming(domain,y,eta,beta,context);
     ASSERT_TRUE(active.valid)<<active.reason;
     ASSERT_TRUE(active.certificate.kkt_passed);
@@ -496,7 +496,7 @@ TEST(JointComponentNumericsTest, IndependentStreamingReplayPreservesActiveBounda
     n::Domain duplicate_domain(rows,std::move(duplicate_support));
     const Vector zero=Vector::Zero(rows),duplicate_eta=Vector::Constant(2,std::log(.55));
     Vector cancelling_beta(4); cancelling_beta<<0,1e12,0,-1e12;
-    const auto duplicate_context=n::CreateContext(zero,2);
+    const auto duplicate_context=p::MakeContext(zero,2);
     const auto cancelling=n::EvaluateStateStreaming(duplicate_domain,zero,duplicate_eta,cancelling_beta,duplicate_context);
     ASSERT_TRUE(cancelling.valid)<<cancelling.reason;
     const auto cancellation_replay=n::CheckIndependentReplay(duplicate_domain,zero,cancelling,duplicate_context);
@@ -521,7 +521,7 @@ TEST(JointComponentNumericsTest, BoundedReplayUsesProjectedWidthKktAndChecksFeas
             const auto basis=n::EvaluateKernel(square,truth_width,2.5);
             y(row)=2.0*basis.gaussian+.5*basis.charge;
         }
-        auto context=n::CreateContext(y,1);
+        auto context=p::MakeContext(y,1);
         context.eta_upper_bound=std::log(.55);
         const auto primary=n::EvaluateProfile(domain,y,eta,&context);
         EXPECT_TRUE(primary.valid)<<primary.reason;

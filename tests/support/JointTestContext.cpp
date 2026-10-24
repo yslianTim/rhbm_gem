@@ -6,7 +6,13 @@
 
 namespace second_stage_test::matched::joint_abc {
 EvaluationContext MakeContext(const Eigen::VectorXd & y,Eigen::Index atoms,const std::string & hash)
-{return runtime::CreateContext(y,atoms,hash);}
+{
+    auto input=std::make_shared<rhbm_gem::core::JointProblemInput>();
+    input->observations.assign(y.data(),y.data()+y.size());
+    for(Eigen::Index atom=0;atom<atoms;++atom) input->atom_ids.push_back(std::to_string(atom));
+    for(Eigen::Index row=0;row<y.size();++row) input->row_ids.push_back(std::to_string(row));
+    return runtime::CreateContext(std::move(input),hash);
+}
 std::shared_ptr<rhbm_gem::core::JointProblemInput> MakeSyntheticJointProblemInput(
     const runtime::Domain & domain,const Eigen::VectorXd & observations,
     std::vector<std::string> atom_ids,std::vector<std::string> row_ids)

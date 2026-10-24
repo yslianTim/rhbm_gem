@@ -194,7 +194,7 @@ TEST(JointComponentSearchTest, BoundedProfileSearchKeepsEveryEvaluatedWidthFeasi
 {
     Sample sample;
     const p::Domain domain(sample.grid,sample.atoms);
-    auto context=joint::CreateContext(sample.y,static_cast<Eigen::Index>(sample.atoms.size()));
+    auto context=p::MakeContext(sample.y,static_cast<Eigen::Index>(sample.atoms.size()));
     const Vector initial=Eigen::Vector2d(.48,.59);
     const double eta_max=std::log(.6);
     context.eta_upper_bound=eta_max;
@@ -219,7 +219,7 @@ TEST(JointComponentSearchTest, ProfileSearchRequiresFiniteWidthUpperBound)
 {
     Sample sample;
     const p::Domain domain(sample.grid,sample.atoms);
-    const auto context=joint::CreateContext(sample.y,static_cast<Eigen::Index>(sample.atoms.size()));
+    const auto context=p::MakeContext(sample.y,static_cast<Eigen::Index>(sample.atoms.size()));
     const auto search=joint::SearchProfile(domain,sample.y,Vector::Constant(2,.5),context);
     EXPECT_TRUE(search.stopped);
     EXPECT_TRUE(search.trials.empty());

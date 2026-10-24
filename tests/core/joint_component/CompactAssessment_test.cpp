@@ -3,6 +3,7 @@
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "support/JointSyntheticWorkload.hpp"
+#include "support/JointTestContext.hpp"
 #include "support/JointDenseReference.hpp"
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <algorithm>
@@ -10,6 +11,7 @@
 namespace {
 namespace c=rhbm_gem::core;
 namespace n=c::joint_component;
+namespace tc=second_stage_test::matched::joint_abc;
 
 n::IndependentReplayEvidence PassingReplay()
 {
@@ -27,7 +29,7 @@ TEST(JointCompactAssessmentTest, RankDeficientDesignDoesNotGateNumericalEndpoint
 {
     const n::Vector y=n::Vector::Zero(2);
     const n::Domain domain(2,{{{0,0.},{1,1.}},{{0,0.},{1,1.}}});
-    auto context=n::CreateContext(y,2);
+    auto context=tc::MakeContext(y,2);
     n::Evaluation endpoint; endpoint.valid=true;
     endpoint.eta=n::Vector::Zero(2); endpoint.beta=n::Vector::Ones(4);
     endpoint.gradient=n::Vector::Zero(2);
@@ -45,7 +47,7 @@ TEST(JointCompactAssessmentTest, KktReplayAndParameterFailuresStillRejectEndpoin
 {
     const n::Vector y=n::Vector::Zero(1);
     const n::Domain domain(1,{{{0,0.}}});
-    const auto context=n::CreateContext(y,1);
+    const auto context=tc::MakeContext(y,1);
     n::Evaluation endpoint; endpoint.valid=true;
     endpoint.eta=n::Vector::Zero(1); endpoint.beta=n::Vector::Ones(2);
     endpoint.gradient=n::Vector::Zero(1); endpoint.residual=n::Vector::Zero(1);
@@ -70,7 +72,7 @@ TEST(JointCompactAssessmentTest, PracticalCriteriaRelaxOnlyGlobalEndpointStation
 {
     const n::Vector y=n::Vector::Zero(1);
     const n::Domain domain(1,{{{0,0.}}});
-    const auto context=n::CreateContext(y,1);
+    const auto context=tc::MakeContext(y,1);
     n::Evaluation endpoint; endpoint.valid=true;
     endpoint.eta=n::Vector::Zero(1); endpoint.beta=n::Vector::Ones(2);
     endpoint.gradient=n::Vector::Constant(1,5e-10); endpoint.residual=n::Vector::Zero(1);

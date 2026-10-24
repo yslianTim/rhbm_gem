@@ -240,13 +240,6 @@ EvaluationContext CreateContext(std::shared_ptr<const JointProblemInput> input,c
     c.atom_ids=Identities(std::shared_ptr<const std::vector<std::string>>(input,&input->atom_ids));
     c.row_ids=Identities(std::shared_ptr<const std::vector<std::string>>(input,&input->row_ids)); return c;
 }
-EvaluationContext CreateContext(VectorRef y,Eigen::Index atoms,const std::string & hash)
-{
-    auto input=std::make_shared<JointProblemInput>(); input->observations.assign(y.data(),y.data()+y.size());
-    for(Eigen::Index a=0;a<atoms;++a) input->atom_ids.push_back(std::to_string(a));
-    for(Eigen::Index r=0;r<y.size();++r) input->row_ids.push_back(std::to_string(r));
-    return CreateContext(std::move(input),hash);
-}
 BasisValues EvaluateKernel(double square, double width, double cutoff)
 {
     if (!(width>0.0) || !std::isfinite(width)) throw std::invalid_argument("Invalid matched width.");

@@ -84,7 +84,6 @@ struct ProfileSearchWork
     void Merge(const ProfileSearchWork &);
     double AttributedSeconds() const;
 };
-EvaluationContext CreateContext(VectorRef,Eigen::Index,const std::string & = "");
 EvaluationContext CreateContext(std::shared_ptr<const JointProblemInput>,const std::string & = "");
 struct BasisValues {double gaussian{},charge{},gaussian_log_width{},charge_log_width{};};
 BasisValues EvaluateKernel(double,double,double);
