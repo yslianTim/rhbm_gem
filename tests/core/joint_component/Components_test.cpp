@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "support/JointComponentChecks.hpp"
+#include "support/JointDomainHelpers.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include <algorithm>
@@ -7,6 +8,7 @@
 
 namespace {
 namespace p=second_stage_test::matched::joint_abc;
+namespace jd=second_stage_test::joint_domain;
 using Vector=Eigen::VectorXd;
 }
 namespace {
@@ -17,7 +19,7 @@ struct TwoBlocks
     TwoBlocks(double amplitude=2,double noise=.001)
     {
         beta<<2,.2,amplitude,-.15;
-        auto support=domain.CopySupport();
+        auto support=jd::CopySupport(domain);
         for(int block=0;block<2;++block) for(int k=0;k<40;++k)
         {
             const auto row=block*40+k; const double square=.003*k*k;
@@ -110,7 +112,6 @@ TEST(JointComponentChecksTest, ImmutableComponentViewsMapDomainsWithoutCopyingPr
                 {
                     const auto support=supports[k];
                     const auto parent_row=prepared.local_to_parent_rows.at(static_cast<std::size_t>(support.row));
-                    EXPECT_EQ(supports.ParentRow(k),parent_row);
                     const auto & source=data.input->support.at(static_cast<std::size_t>(parent));
                     EXPECT_TRUE(std::any_of(source.begin(),source.end(),[&](const auto & item) {
                         return item.row==static_cast<std::size_t>(parent_row) && item.squared_distance==support.square;
@@ -183,7 +184,6 @@ TEST(JointComponentChecksTest, NestedCompactRowsPreserveNoncontiguousAndZeroValu
         for(std::size_t k=0;k<rows.size();++k)
         {
             const auto row=rows[k];
-            EXPECT_EQ(rows.ParentRow(k),static_cast<Eigen::Index>(root_support[k].row));
             EXPECT_EQ(prepared.local_to_parent_rows[static_cast<std::size_t>(row.row)],
                 static_cast<Eigen::Index>(root_support[k].row));
             EXPECT_DOUBLE_EQ(row.square,root_support[k].squared_distance);
@@ -215,7 +215,7 @@ TEST(JointComponentChecksTest, SameStateIncludesResidualTermAndConstantRows)
 
 TEST(JointComponentChecksTest, FailureIsolationDoesNotFillMissingRowsWithZero)
 {
-    TwoBlocks f(2,0); auto support=f.domain.CopySupport(); support.push_back(support[1]); f.domain=p::Domain(f.domain.rows,std::move(support));
+    TwoBlocks f(2,0); auto support=jd::CopySupport(f.domain); support.push_back(support[1]); f.domain=p::Domain(f.domain.rows,std::move(support));
     const auto input=p::MakeSyntheticJointProblemInput(f.domain,f.y); f.domain=p::Domain(input);
     auto c=p::MakeContext(input); const auto part=p::BuildPartition(f.domain,c.atom_ids);
     const Vector initial=Vector::Constant(3,.55);
@@ -234,7 +234,7 @@ TEST(JointComponentChecksTest, FailureIsolationDoesNotFillMissingRowsWithZero)
 
 TEST(JointComponentChecksTest, UnobservedAtomsKeepRawPredictionButDisableProfileClaims)
 {
-    TwoBlocks f(2,0); auto support=f.domain.CopySupport(); support[1].clear(); f.domain=p::Domain(f.domain.rows,std::move(support));
+    TwoBlocks f(2,0); auto support=jd::CopySupport(f.domain); support[1].clear(); f.domain=p::Domain(f.domain.rows,std::move(support));
     const auto input=p::MakeSyntheticJointProblemInput(f.domain,f.y); f.domain=p::Domain(input); const auto c=p::MakeContext(input);
     const auto part=p::BuildPartition(f.domain,c.atom_ids);
     const auto state=p::SameState(f.domain,f.y,f.eta,f.beta,part,c);

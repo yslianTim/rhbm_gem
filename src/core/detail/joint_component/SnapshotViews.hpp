@@ -53,11 +53,6 @@ inline std::shared_ptr<const VectorMap> Observe(std::shared_ptr<const JointProbl
     auto * map=new VectorMap(input->observations.data(),static_cast<Eigen::Index>(input->observations.size()));
     return {map,[input=std::move(input)](const VectorMap * p){delete p;}};
 }
-inline std::shared_ptr<const VectorMap> Observe(std::shared_ptr<const std::vector<double>> values)
-{
-    auto * map=new VectorMap(values->data(),static_cast<Eigen::Index>(values->size()));
-    return {map,[values=std::move(values)](const VectorMap * p){delete p;}};
-}
 class Identities
 {
     std::shared_ptr<const std::vector<std::string>> values;
@@ -131,8 +126,6 @@ public:
         std::size_t size() const {return local ? local->size() : entries.size();} bool empty() const {return size()==0;}
         Support operator[](std::size_t i) const
         {const auto & s=entries[local ? local->at(i).support : i]; return {local ? local->at(i).row : owner->LocalRow(static_cast<Eigen::Index>(s.row)),s.squared_distance};}
-        Eigen::Index ParentRow(std::size_t i) const
-        {return static_cast<Eigen::Index>(entries[local ? local->at(i).support : i].row);}
         struct Iterator
         {
             const Rows * rows; std::size_t index;
@@ -188,12 +181,6 @@ struct Domain
     }()) {rows=count;}
     Domain Select(const Indices & selected,Eigen::Index count,std::shared_ptr<const CompactRowMapping> mapping) const
     {auto out=*this; out.rows=count; out.atoms=atoms.Select(selected,std::move(mapping)); return out;}
-    std::vector<std::vector<Support>> CopySupport() const
-    {
-        std::vector<std::vector<Support>> out(atoms.size());
-        for(std::size_t a=0;a<atoms.size();++a) for(const auto & s:atoms[a]) out[a].push_back(s);
-        return out;
-    }
 };
 struct PartitionMappings {Indices atom_component,row_component,atom_to_local,row_to_local;};
 }
