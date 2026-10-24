@@ -103,15 +103,14 @@ struct LinearResult
     Vector beta;
     bool valid{};
     std::string reason;
-    int rank{},solves{},releases{},block_factorizations{};
+    int rank{},solves{},releases{};
     std::size_t active_set_iterations{},refinement_eligibility_count{},refinement_trigger_count{},
         refinement_iterations{},refinement_success_count{},refinement_failure_count{},refinement_factorizations{};
     double initial_projected_kkt{unavailable},final_projected_kkt{unavailable},refinement_seconds{},
         refinement_before_objective{unavailable},refinement_after_objective{unavailable};
 };
-struct LinearBlock {std::vector<Eigen::Index> rows,columns;};
 LinearResult SolveLinear(const Sparse &,VectorRef,const Vector &,const LinearPolicy * = nullptr,
-    const std::vector<LinearBlock> * = nullptr,double=0);
+    double=0);
 struct Certificate
 {
     bool evaluated{},available{},feasible{},kkt_passed{};
@@ -120,7 +119,7 @@ struct Certificate
     double projected_kkt{unavailable},rss{unavailable},objective{unavailable},residual_scale{unavailable},
         residual_rmse{unavailable},residual_max{unavailable},relative_residual{unavailable};
     std::vector<Eigen::Index> active_atoms;
-    std::optional<int> linear_solves,linear_releases,free_rank,block_factorizations;
+    std::optional<int> linear_solves,linear_releases,free_rank;
     bool width_bound_applied{},width_bound_feasible{true};
     double width_bound_projected_kkt{unavailable},maximum_width_bound_violation{},
         boundary_gradient_max{},boundary_multiplier_max{},width_bound_complementarity{unavailable};
@@ -159,7 +158,6 @@ WidthBoundKkt CalculateWidthBoundKkt(const Vector &,const Vector &,double);
 Spectrum ComputeSpectrum(const Sparse &,const RankPolicy &,Eigen::Index,bool);
 Spectrum ComputeSpectrum(const Matrix &,const RankPolicy &,Eigen::Index,bool);
 Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext *,
-    const std::vector<LinearBlock> * = nullptr,
     ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);
 Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &,
     ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);

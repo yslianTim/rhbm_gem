@@ -21,7 +21,6 @@ inline j::object Certificate(const r::Certificate & c)
     }
     if(c.linear_solves) out["linear_solves"]=*c.linear_solves;
     if(c.free_rank) out["free_rank"]=*c.free_rank;
-    if(c.block_factorizations) out["block_factorizations"]=*c.block_factorizations;
     return out;
 }
 inline j::object Endpoint(const r::Endpoint & e)

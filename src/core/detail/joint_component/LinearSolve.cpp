@@ -61,74 +61,8 @@ std::pair<Eigen::SparseMatrix<double>,Eigen::VectorXd> ReduceSparseRows(
     for(std::size_t row=0;row<response.size();++row) transformed(static_cast<Eigen::Index>(row))=response[row];
     return {std::move(reduced),std::move(transformed)};
 }
-struct BlockFace
-{
-    Eigen::VectorXd solution;
-    int rank{}, factorizations{};
-    bool valid{true};
-};
-// Only the free-face factorization changes. The caller owns the single global
-// active-set trajectory, release tolerance and coefficient vector.
-BlockFace SolveBlocks(const Sparse & x,VectorRef y,const Eigen::VectorXd & weights,
-    const Eigen::VectorXd & scales,const std::vector<Eigen::Index> & free,
-    const std::vector<LinearBlock> & blocks,double relative)
-{
-    struct Factor
-    {
-        Sparse reduced;
-        Eigen::VectorXd rhs;
-        std::vector<Eigen::Index> positions;
-    };
-    BlockFace out; out.solution=Eigen::VectorXd::Zero(static_cast<Eigen::Index>(free.size()));
-    std::vector<Factor> factors; double maximum{};
-    for(const auto & block:blocks)
-    {
-        Factor f; std::vector<Eigen::Index> columns,row_map(static_cast<std::size_t>(x.rows()),-1);
-        for(std::size_t k=0;k<block.rows.size();++k) row_map[static_cast<std::size_t>(block.rows[k])]=static_cast<Eigen::Index>(k);
-        for(std::size_t k=0;k<free.size();++k) if(std::find(block.columns.begin(),block.columns.end(),free[k])!=block.columns.end())
-        {columns.push_back(free[k]); f.positions.push_back(static_cast<Eigen::Index>(k));}
-        const auto n=static_cast<Eigen::Index>(block.rows.size()),p=static_cast<Eigen::Index>(columns.size());
-        if(!p) continue;
-        if(n<p) {out.valid=false; return out;}
-        Sparse selected(n,p); std::vector<Eigen::Triplet<double>> entries;
-        Eigen::VectorXd response(n),w(n),norms(p);
-        for(Eigen::Index r=0;r<n;++r) {const auto parent=block.rows[static_cast<std::size_t>(r)]; response(r)=y(parent); w(r)=weights(parent);}
-        for(Eigen::Index k=0;k<p;++k)
-        {
-            const auto col=columns[static_cast<std::size_t>(k)]; norms(k)=scales(col);
-            for(Sparse::InnerIterator entry(x,col);entry;++entry)
-            {
-                const auto row=row_map[static_cast<std::size_t>(entry.row())];
-                if(row<0) throw std::invalid_argument("A linear block omits a contributor row.");
-                entries.emplace_back(row,k,entry.value());
-            }
-        }
-        selected.setFromTriplets(entries.begin(),entries.end());
-        for(Eigen::Index k=0;k<p;++k)
-        {
-            double squared{};
-            for(Sparse::InnerIterator entry(selected,k);entry;++entry)
-            {entry.valueRef()*=std::sqrt(w(entry.row()))/norms(k); squared+=entry.value()*entry.value();}
-            maximum=std::max(maximum,std::sqrt(squared));
-        }
-        const Eigen::VectorXd rhs=w.cwiseSqrt().array()*response.array();
-        auto reduced=ReduceSparseRows(selected,rhs); f.reduced=std::move(reduced.first); f.rhs=std::move(reduced.second);
-        factors.push_back(std::move(f));
-    }
-    const double absolute=relative*maximum;
-    for(auto & f:factors)
-    {
-        Eigen::SparseQR<Sparse,Eigen::COLAMDOrdering<int>> qr;
-        qr.setPivotThreshold(absolute); qr.compute(f.reduced);
-        if(qr.info()!=Eigen::Success) {out.valid=false; return out;}
-        out.rank+=static_cast<int>(qr.rank()); const Eigen::VectorXd solution=qr.solve(f.rhs);
-        ++out.factorizations;
-        for(std::size_t k=0;k<f.positions.size();++k) out.solution(f.positions[k])=solution(static_cast<Eigen::Index>(k));
-    }
-    return out;
-}
 LinearResult WeightedSolveImpl(const Sparse & x, VectorRef y,const Eigen::VectorXd & weights,
-    const LinearPolicy * policy,const std::vector<LinearBlock> * blocks,double observation_scale_override)
+    const LinearPolicy * policy,double observation_scale_override)
 {
     LinearResult out; out.reason="invalid-input"; out.beta=Eigen::VectorXd::Zero(x.cols());
     if (x.cols()==0 || x.cols()%2!=0 || x.rows()<=x.cols() || y.size()!=x.rows() || weights.size()!=y.size() ||
@@ -152,37 +86,27 @@ LinearResult WeightedSolveImpl(const Sparse & x, VectorRef y,const Eigen::Vector
         ++out.active_set_iterations;
         std::vector<Eigen::Index> columns;
         for (Eigen::Index k=0;k<x.cols();++k) if (free[static_cast<std::size_t>(k)]) columns.push_back(k);
-        Eigen::VectorXd solution;
-        if (blocks)
+        Eigen::SparseMatrix<double> selected(x.rows(),static_cast<Eigen::Index>(columns.size()));
+        selected.reserve(sparse_z.nonZeros()); double maximum_norm{};
+        for (std::size_t k=0;k<columns.size();++k)
         {
-            const auto face=SolveBlocks(x,y,weights,scales,columns,*blocks,rank_threshold);
-            out.rank=face.rank; out.block_factorizations+=face.factorizations; solution=face.solution;
-            if(!face.valid) {out.reason="rank-deficient-block"; return out;}
-        }
-        else
-        {
-            Eigen::SparseMatrix<double> selected(x.rows(),static_cast<Eigen::Index>(columns.size()));
-            selected.reserve(sparse_z.nonZeros()); double maximum_norm{};
-            for (std::size_t k=0;k<columns.size();++k)
+            selected.startVec(static_cast<Eigen::Index>(k)); double squared{};
+            for (Eigen::SparseMatrix<double>::InnerIterator entry(sparse_z,columns[k]);entry;++entry)
             {
-                selected.startVec(static_cast<Eigen::Index>(k)); double squared{};
-                for (Eigen::SparseMatrix<double>::InnerIterator entry(sparse_z,columns[k]);entry;++entry)
-                {
-                    selected.insertBack(entry.row(),static_cast<Eigen::Index>(k))=entry.value();
-                    squared+=entry.value()*entry.value();
-                }
-                maximum_norm=std::max(maximum_norm,std::sqrt(squared));
+                selected.insertBack(entry.row(),static_cast<Eigen::Index>(k))=entry.value();
+                squared+=entry.value()*entry.value();
             }
-            selected.finalize();
-            if (maximum_norm==0) {out.reason="rank-deficient"; return out;}
-            Eigen::SparseQR<Eigen::SparseMatrix<double>,Eigen::COLAMDOrdering<int>> qr;
-            // SparseQR uses an absolute pivot threshold. The scale is the
-            // largest norm of the weighted, column-normalized design.
-            const auto reduced{ReduceSparseRows(selected,rhs)};
-            qr.setPivotThreshold(rank_threshold*maximum_norm); qr.compute(reduced.first);
-            if(qr.info()!=Eigen::Success) {out.reason="nonfinite"; return out;}
-            out.rank=static_cast<int>(qr.rank()); solution=qr.solve(reduced.second);
+            maximum_norm=std::max(maximum_norm,std::sqrt(squared));
         }
+        selected.finalize();
+        if (maximum_norm==0) {out.reason="rank-deficient"; return out;}
+        Eigen::SparseQR<Eigen::SparseMatrix<double>,Eigen::COLAMDOrdering<int>> qr;
+        // SparseQR uses an absolute pivot threshold. The scale is the
+        // largest norm of the weighted, column-normalized design.
+        const auto reduced{ReduceSparseRows(selected,rhs)};
+        qr.setPivotThreshold(rank_threshold*maximum_norm); qr.compute(reduced.first);
+        if(qr.info()!=Eigen::Success) {out.reason="nonfinite"; return out;}
+        out.rank=static_cast<int>(qr.rank()); const Eigen::VectorXd solution=qr.solve(reduced.second);
         ++out.solves;
         if (out.rank!=static_cast<int>(columns.size())) {out.reason="rank-deficient"; return out;}
         Eigen::VectorXd candidate{Eigen::VectorXd::Zero(x.cols())};
@@ -295,6 +219,6 @@ LinearResult WeightedSolveImpl(const Sparse & x, VectorRef y,const Eigen::Vector
 
 } // namespace
 LinearResult SolveLinear(const Sparse & x,VectorRef y,const Vector & w,
-    const LinearPolicy * policy,const std::vector<LinearBlock> * blocks,double observation_scale)
-{return WeightedSolveImpl(x,y,w,policy,blocks,observation_scale);}
+    const LinearPolicy * policy,double observation_scale)
+{return WeightedSolveImpl(x,y,w,policy,observation_scale);}
 }

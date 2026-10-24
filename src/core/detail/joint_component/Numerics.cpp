@@ -398,7 +398,6 @@ MemoryEstimate EndpointVerificationMemoryEstimate(const Domain & domain,VectorRe
     return PlanMemory(shape,MemoryStage::EndpointVerification);
 }
 Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,const EvaluationContext * context,
-    const std::vector<LinearBlock> * blocks,
     ProfileEvaluationRole role,ProfileSearchWork * profile_work)
 {
     EvaluationTelemetry telemetry(profile_work,role);
@@ -410,7 +409,7 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     const Eigen::Index m=eta.size();
     const auto solve_started=std::chrono::steady_clock::now();
     const auto solved=SolveLinear(out.x,y,Vector::Ones(y.size()),
-        context ? &context->linear : nullptr,blocks,context ? context->scale : 0);
+        context ? &context->linear : nullptr,context ? context->scale : 0);
     if(profile_work)
     {
         auto & stats=telemetry.work.linear_solve;
@@ -458,7 +457,6 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     out.certificate.linear_solver_valid=solved.valid; out.certificate.linear_solver_reason=solved.reason;
     out.certificate.linear_solves=solved.solves; out.certificate.linear_releases=solved.releases;
     out.certificate.free_rank=solved.rank;
-    if(blocks) out.certificate.block_factorizations=solved.block_factorizations;
     if(profile_work && out.certificate.available)
     {
         auto & stats=telemetry.work.linear_solve;

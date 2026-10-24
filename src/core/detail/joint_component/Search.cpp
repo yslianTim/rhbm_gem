@@ -183,7 +183,7 @@ struct Profile
         failure.clear();
         const auto start=std::chrono::steady_clock::now();
         last_role=evaluations==0 ? ProfileEvaluationRole::InitialProfile : ProfileEvaluationRole::TrialProfile;
-        cached=EvaluateProfile(domain,y,eta,&context,nullptr,last_role,telemetry); ++evaluations;
+        cached=EvaluateProfile(domain,y,eta,&context,last_role,telemetry); ++evaluations;
         joint_component::Trial row; row.endpoint=cached; row.evaluation=evaluations; row.seconds=Seconds(start);
         trace.push_back(std::move(row));
         Report();

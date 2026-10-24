@@ -123,9 +123,17 @@ Evaluation EvaluatePartitioned(const Domain & domain,const Vector & y,const Vect
     const ComponentPartition & partition,const EvaluationContext & context)
 {
     if(IdentityPartition(partition)) return Evaluate(domain,y,eta,&context);
-    std::vector<runtime::LinearBlock> blocks;
-    for(const auto & view:partition.components) blocks.push_back({view.rows,Coefficients(view)});
-    return Evaluate(domain,y,eta,&context,&blocks);
+    Vector beta=Vector::Zero(2*eta.size());
+    for(const auto & view:partition.components)
+    {
+        const auto local_y=Select(y,view.rows),local_eta=Select(eta,view.atoms);
+        const auto child=ComponentContext(context,view,false);
+        const auto local=runtime::EvaluateProfile(view.domain,local_y,local_eta,&child);
+        if(!local.valid) return Evaluation(local);
+        for(std::size_t atom=0;atom<view.atoms.size();++atom)
+            beta.segment(2*view.atoms[atom],2)=local.beta.segment(2*static_cast<Eigen::Index>(atom),2);
+    }
+    return Evaluation(runtime::EvaluateState(domain,y,eta,beta,context));
 }
 Evaluation ComponentEvaluation(const Evaluation & e,const ComponentView & view)
 {

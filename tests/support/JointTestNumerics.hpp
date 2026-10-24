@@ -20,8 +20,7 @@ struct Evaluation : runtime::Evaluation
 };
 using Differential=DenseDifferential;
 Evaluation Evaluate(const Domain &, const Eigen::VectorXd & y,
-    const Eigen::VectorXd & eta, const EvaluationContext * = nullptr,
-    const std::vector<runtime::LinearBlock> * = nullptr);
+    const Eigen::VectorXd & eta, const EvaluationContext * = nullptr);
 Evaluation AtState(const Domain &, const Eigen::VectorXd &, const Eigen::VectorXd & eta,
     const Eigen::VectorXd & beta, const EvaluationContext &);
 boost::json::object MatrixSpectrum(const Sparse &, const RankPolicy &, Eigen::Index columns, bool normalize);
