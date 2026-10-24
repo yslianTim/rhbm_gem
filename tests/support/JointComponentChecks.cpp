@@ -34,8 +34,22 @@ rhbm_gem::core::JointFitResult FitBoundedJointComponentsForTesting(
     return runtime::FitFixedNeighborComponents(problem,initial_widths,policy);
 }
 ComponentPartition BuildPartition(const Domain & d,const std::vector<std::string> & ids) {return runtime::Partition(d,ids);}
-Eigen::VectorXd Select(const Eigen::VectorXd & v,const std::vector<Eigen::Index> & indices) {return runtime::SelectValues(v,indices);}
-EvaluationContext ComponentContext(const EvaluationContext & p,const ComponentView & v,bool independent) {return runtime::ChildContext(p,v,independent);}
+Eigen::VectorXd Select(const Eigen::VectorXd & v,const std::vector<Eigen::Index> & indices)
+{
+    Eigen::VectorXd out(static_cast<Eigen::Index>(indices.size()));
+    for(std::size_t k=0;k<indices.size();++k) out(static_cast<Eigen::Index>(k))=v(indices[k]);
+    return out;
+}
+EvaluationContext ComponentContext(const EvaluationContext & parent,const ComponentView & view,bool independent)
+{
+    auto context=parent; context.atom_ids=parent.atom_ids.Select(view.atoms); context.row_ids=parent.row_ids.Select(view.rows);
+    if(independent)
+    {
+        const auto atoms=static_cast<Eigen::Index>(view.atoms.size()); context.rank={view.domain.rows,2*atoms,atoms};
+        context.linear.rank_relative=context.rank.Relative(2*atoms);
+    }
+    return context;
+}
 j::object Census(const Domain & domain,const ComponentPartition & partition,const EvaluationContext & context)
 {
     j::array components; std::size_t memberships{},largest_atoms{},largest_rows{};

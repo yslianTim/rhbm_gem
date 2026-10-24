@@ -11,6 +11,30 @@ using Matrix=Eigen::MatrixXd;
 using Vector=Eigen::VectorXd;
 double Seconds(std::chrono::steady_clock::time_point start)
 {return std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();}
+runtime::Assessment AssessProfile(const Domain & domain,runtime::VectorRef y,const Vector & eta,
+    const EvaluationContext & context)
+{
+    const auto memory=runtime::EndpointVerificationMemoryEstimate(domain,y,context);
+    if(memory.status!=runtime::MemoryStatus::Pass)
+    {
+        runtime::Assessment assessment; assessment.primary.eta=eta;
+        assessment.primary.reason="resource-limit:endpoint-verification:"+memory.reason;
+        assessment.failure=assessment.primary.reason; assessment.verification_memory_estimate=memory;
+        return assessment;
+    }
+    if(memory.estimated_peak_bytes>memory.budget_bytes/2) runtime::LogMemoryEstimate(memory);
+    const auto primary_started=std::chrono::steady_clock::now();
+    const auto endpoint=runtime::EvaluateProfile(domain,y,eta,&context);
+    const double primary_seconds=Seconds(primary_started);
+    const auto replay_started=std::chrono::steady_clock::now();
+    const auto replay=runtime::CheckIndependentReplay(domain,y,endpoint,context);
+    const double replay_seconds=Seconds(replay_started);
+    auto assessment=runtime::VerifyJointEndpoint(domain,y,endpoint,replay,context);
+    assessment.verification_memory_estimate=memory;
+    assessment.primary_endpoint_seconds=primary_seconds;
+    assessment.independent_replay_seconds=replay_seconds;
+    return assessment;
+}
 
 }
 
@@ -58,7 +82,7 @@ j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,co
     const auto start=std::chrono::steady_clock::now();
     const auto search=runtime::SearchProfile(domain,y,initial_b,context);
     auto out=runtime_json::Search(search,context,y.size());
-    auto assessment=runtime_json::Assessment(runtime::AssessProfile(domain,y,search.eta,context));
+    auto assessment=runtime_json::Assessment(AssessProfile(domain,y,search.eta,context));
     for(auto & field:assessment) out[field.key()]=std::move(field.value());
     out["seconds"]=Seconds(start); return out;
 }

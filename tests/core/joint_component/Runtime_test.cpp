@@ -106,8 +106,8 @@ TEST(JointComponentRuntimeTest, AssemblyRejectsMappingMismatchAndMissingNumerica
 TEST(JointComponentRuntimeTest, ReplayTrustRejectsIndependentDisagreements)
 {
     const core::JointProblem problem(Snapshot()); const auto & data=core::JointProblemAccess::Get(problem);
-    const auto & view=data.partition.components[0]; const auto y=n::SelectValues(data.y,view.rows);
-    const auto context=n::ChildContext(data.context,view,true);
+    const auto & view=data.partition.components[0]; const auto y=p::Select(data.y,view.rows);
+    const auto context=p::ComponentContext(data.context,view,true);
     const auto e=n::EvaluateProfile(view.domain,y,n::Vector::Constant(1,std::log(.55)),&context);
     ASSERT_TRUE(e.valid); EXPECT_TRUE(n::CheckReplay(view.domain,y,e,context).passed);
     auto bad=e; bad.valid=false;

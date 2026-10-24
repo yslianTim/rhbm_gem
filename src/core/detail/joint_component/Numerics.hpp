@@ -263,8 +263,6 @@ struct Assessment
 std::vector<JointCheck> AssessmentEvidence(const Assessment &,JointEvidenceScope);
 JointCheckStatus MergeConvergenceStatus(JointCheckStatus,JointCheckStatus);
 JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> &,JointEvidenceScope,bool assembled=false);
-Assessment AssessProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,const Vector * = nullptr,
-    const Vector * assembled_prediction=nullptr,const std::vector<std::size_t> * assembled_rows=nullptr);
 // Verifies an accepted endpoint using only the streaming objective, KKT,
 // width-gradient, and independent replay evidence. It never assesses global rank.
 Assessment VerifyJointEndpoint(const Domain &,VectorRef,const Evaluation &,
@@ -287,8 +285,6 @@ struct ComponentPartition
     std::vector<Eigen::Index> constant_rows,unobserved_atoms;
 };
 ComponentPartition Partition(const Domain &,const Identities &);
-Vector SelectValues(VectorRef,const std::vector<Eigen::Index> &);
-EvaluationContext ChildContext(const EvaluationContext &,const ComponentView &,bool);
 struct FixedNeighborComponentResult;
 struct AssemblyResult
 {

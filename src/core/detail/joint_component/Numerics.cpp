@@ -936,40 +936,6 @@ Spectrum ComputeSpectrum(const Sparse & x,const RankPolicy & p,Eigen::Index colu
 {return SpectrumRecord(x,p,columns,normalize);}
 Spectrum ComputeSpectrum(const Matrix & x,const RankPolicy & p,Eigen::Index columns,bool normalize)
 {return SpectrumRecord(x,p,columns,normalize);}
-namespace {
-Assessment AssessProfileImpl(const Domain & domain,VectorRef y,const Vector & eta,const EvaluationContext & policy,
-    const Vector * supplied_beta,const Vector * assembled_prediction,const std::vector<std::size_t> * assembled_rows)
-{
-    const auto verification_memory=EndpointVerificationMemoryEstimate(domain,y,policy);
-    if(verification_memory.status!=MemoryStatus::Pass)
-    {
-        Assessment assessment; assessment.primary.eta=eta;
-        assessment.primary.reason="resource-limit:endpoint-verification:"+verification_memory.reason;
-        assessment.failure=assessment.primary.reason;
-        assessment.verification_memory_estimate=verification_memory;
-        return assessment;
-    }
-    if(verification_memory.estimated_peak_bytes>verification_memory.budget_bytes/2)
-        LogMemoryEstimate(verification_memory);
-    const auto primary_started=std::chrono::steady_clock::now();
-    const auto endpoint=supplied_beta ? EvaluateStateStreaming(domain,y,eta,*supplied_beta,policy) :
-        EvaluateProfile(domain,y,eta,&policy);
-    const double primary_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-primary_started).count();
-    const auto replay_started=std::chrono::steady_clock::now();
-    const auto replay=CheckIndependentReplay(domain,y,endpoint,policy,assembled_prediction,assembled_rows);
-    const double replay_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-replay_started).count();
-    auto assessment=VerifyJointEndpoint(domain,y,endpoint,replay,policy);
-    assessment.verification_memory_estimate=verification_memory;
-    assessment.primary_endpoint_seconds=primary_seconds;
-    assessment.independent_replay_seconds=replay_seconds;
-    return assessment;
-}
-}
-Assessment AssessProfile(const Domain & domain,VectorRef y,const Vector & eta,const EvaluationContext & policy,
-    const Vector * supplied_beta,const Vector * assembled_prediction,const std::vector<std::size_t> * assembled_rows)
-{
-    return AssessProfileImpl(domain,y,eta,policy,supplied_beta,assembled_prediction,assembled_rows);
-}
 Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluation & endpoint,
     const IndependentReplayEvidence & replay,const EvaluationContext & context,
     const JointConvergenceCriteria & criteria)

@@ -101,18 +101,6 @@ ComponentProblemView MakeComponentProblemView(const JointParameterLayout & paren
     out.row_ids=parent_rows.Select(out.local_to_parent_rows);
     return out;
 }
-Eigen::VectorXd SelectValues(VectorRef v,const std::vector<Eigen::Index> & indices)
-{Eigen::VectorXd out(static_cast<Eigen::Index>(indices.size())); for(std::size_t k=0;k<indices.size();++k) out(static_cast<Eigen::Index>(k))=v(indices[k]); return out;}
-EvaluationContext ChildContext(const EvaluationContext & parent,const ComponentView & view,bool independent)
-{
-    auto c=parent; c.atom_ids=parent.atom_ids.Select(view.atoms); c.row_ids=parent.row_ids.Select(view.rows);
-    if(independent)
-    {
-        const auto n=static_cast<Eigen::Index>(view.atoms.size()); c.rank={view.domain.rows,2*n,n};
-        c.linear.rank_relative=c.rank.Relative(2*n);
-    }
-    return c;
-}
 namespace {
 using Clock=std::chrono::steady_clock;
 double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
