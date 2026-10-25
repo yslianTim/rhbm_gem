@@ -363,6 +363,35 @@ TEST(JointComponentNumericsTest, UnweightedLinearSolvePreservesRecordedNumerical
     }
 }
 
+TEST(JointComponentNumericsTest, UnweightedLinearSolveRejectsInvalidDimensionsAndNonfiniteInputs)
+{
+    namespace n=p::runtime;
+    const auto expect_invalid=[](const n::Sparse & design,const Vector & observations) {
+        const auto result=n::SolveLinear(design,observations);
+        EXPECT_FALSE(result.valid);
+        EXPECT_EQ(result.reason,"invalid-input");
+    };
+
+    const n::Sparse empty_columns(6,0);
+    expect_invalid(empty_columns,Vector::Ones(6));
+    const Matrix odd_columns=Matrix::Zero(6,3);
+    expect_invalid(n::Sparse(odd_columns.sparseView()),Vector::Ones(6));
+    const Matrix too_few_rows=Matrix::Identity(4,4);
+    expect_invalid(n::Sparse(too_few_rows.sparseView()),Vector::Ones(4));
+
+    Matrix valid_design=Matrix::Zero(6,4);
+    for(Eigen::Index k=0;k<4;++k) valid_design(k,k)=1;
+    const n::Sparse valid_sparse(valid_design.sparseView());
+    expect_invalid(valid_sparse,Vector::Ones(5));
+
+    Matrix nonfinite_design=valid_design;
+    nonfinite_design(0,0)=std::numeric_limits<double>::infinity();
+    expect_invalid(n::Sparse(nonfinite_design.sparseView()),Vector::Ones(6));
+    Vector nonfinite_observations=Vector::Ones(6);
+    nonfinite_observations(0)=std::numeric_limits<double>::quiet_NaN();
+    expect_invalid(valid_sparse,nonfinite_observations);
+}
+
 TEST(JointComponentNumericsTest, LocalLinearCertificateKeepsItsStrictKktLimit)
 {
     n::Sparse design(2,2);
