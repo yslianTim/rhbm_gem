@@ -1,5 +1,6 @@
 #include "JointDenseReference.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
+#include <Eigen/SVD>
 
 namespace second_stage_test::matched::joint_abc {
 using namespace runtime;
@@ -51,8 +52,27 @@ Vector JacobiLeastSquaresReference(const Matrix & matrix,VectorRef rhs,const Ran
 
 Spectrum DenseSpectrum(const Matrix & matrix,const RankPolicy & policy,Eigen::Index columns,bool normalize)
 {
-    const Sparse sparse=matrix.sparseView();
-    return ComputeSpectrum(sparse,policy,columns,normalize);
+    Spectrum out; out.rows=policy.rows; out.columns=columns; out.full_design_columns=columns;
+    if(matrix.cols()==0) {out.available=false; out.reason="empty-matrix"; return out;}
+    if(matrix.rows()==0) {out.reason="unobserved-columns"; return out;}
+    if(policy.rows<0 || columns<=0 || !matrix.allFinite())
+    {out.available=false; out.reason="spectrum-factorization-failed"; return out;}
+
+    Matrix normalized=matrix; out.column_norms.resize(matrix.cols());
+    for(Eigen::Index column=0;column<matrix.cols();++column)
+    {
+        out.column_norms(column)=matrix.col(column).norm();
+        if(normalize && out.column_norms(column)>0) normalized.col(column)/=out.column_norms(column);
+    }
+    Eigen::JacobiSVD<Matrix> svd(normalized);
+    if(svd.info()!=Eigen::Success || !svd.singularValues().allFinite())
+    {out.available=false; out.reason="spectrum-factorization-failed"; return out;}
+    svd.setThreshold(policy.Relative(columns));
+    out.singular_values=svd.singularValues(); out.threshold=svd.threshold()*out.singular_values(0);
+    out.rank=(out.singular_values.array()>out.threshold).count();
+    out.minimum=out.singular_values(out.singular_values.size()-1);
+    out.condition=out.singular_values(0)/out.minimum;
+    return out;
 }
 
 DenseDifferential DenseDifferentiate(const Evaluation & e,double scale,const EvaluationContext * context,double free_design_threshold)

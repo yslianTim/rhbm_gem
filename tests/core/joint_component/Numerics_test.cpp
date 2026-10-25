@@ -454,6 +454,63 @@ TEST(JointComponentNumericsTest, SharedRankContractPreservesBothBoundaryRules)
     EXPECT_FALSE(n::EvaluateRank(Matrix::Constant(4,4,n::unavailable),{{1000,8,4},4}).valid);
 }
 
+TEST(JointComponentNumericsTest, DenseSpectrumReferenceUsesGlobalRowsDecisionDimensionsAndStrictBoundary)
+{
+    namespace n=p::runtime;
+    const n::RankPolicy global_rows{1000,4,2};
+    constexpr Eigen::Index decisions=4;
+    const double threshold=global_rows.Relative(decisions);
+    Matrix boundary=Matrix::Zero(6,4);
+    boundary(0,0)=1;
+    boundary(1,1)=2*threshold;
+    boundary(2,2)=threshold;
+    boundary(3,3)=.5*threshold;
+
+    const auto dense=p::DenseSpectrum(boundary,global_rows,decisions,false);
+    ASSERT_TRUE(dense.available)<<dense.reason;
+    EXPECT_EQ(dense.rows,global_rows.rows);
+    EXPECT_EQ(dense.columns,decisions);
+    EXPECT_EQ(dense.full_design_columns,decisions);
+    EXPECT_DOUBLE_EQ(dense.threshold,threshold);
+    EXPECT_EQ(dense.rank,2);
+    EXPECT_EQ(dense.singular_values.size(),4);
+    EXPECT_DOUBLE_EQ(dense.singular_values(0),1);
+    EXPECT_DOUBLE_EQ(dense.singular_values(1),2*threshold);
+    EXPECT_DOUBLE_EQ(dense.singular_values(2),threshold);
+    EXPECT_DOUBLE_EQ(dense.singular_values(3),.5*threshold);
+
+    const auto native=n::EvaluateRank(boundary,{global_rows,decisions,-1,n::RankBoundary::SvdNative});
+    const auto strict=n::EvaluateRank(boundary,{global_rows,decisions,-1,n::RankBoundary::StrictGreater});
+    ASSERT_TRUE(native.valid && strict.valid);
+    EXPECT_EQ(native.rank,3);
+    EXPECT_EQ(strict.rank,2);
+    EXPECT_EQ(dense.rank,strict.rank);
+
+    const auto normalized=p::DenseSpectrum(boundary,global_rows,decisions,true);
+    ASSERT_TRUE(normalized.available)<<normalized.reason;
+    EXPECT_EQ(normalized.rank,4);
+    EXPECT_LE((normalized.singular_values-Vector::Ones(4)).norm(),1e-14);
+    EXPECT_NEAR(normalized.column_norms(1),2*threshold,1e-27);
+
+    Matrix rank_deficient=Matrix::Zero(6,4);
+    rank_deficient.diagonal()<<1,.5,.25,0;
+    const auto deficient=p::DenseSpectrum(rank_deficient,global_rows,decisions,false);
+    ASSERT_TRUE(deficient.available);
+    EXPECT_EQ(deficient.rank,3);
+    rank_deficient(3,3)=2*threshold;
+    const auto near_deficient=p::DenseSpectrum(rank_deficient,global_rows,decisions,false);
+    ASSERT_TRUE(near_deficient.available);
+    EXPECT_EQ(near_deficient.rank,4);
+
+    const n::RankPolicy decision_columns{4,1000,4};
+    Matrix decision_limited=Matrix::Zero(6,4);
+    decision_limited.diagonal()<<1,.5,.25,100*std::numeric_limits<double>::epsilon();
+    const auto decision_reference=p::DenseSpectrum(decision_limited,decision_columns,1000,false);
+    ASSERT_TRUE(decision_reference.available);
+    EXPECT_DOUBLE_EQ(decision_reference.threshold,1000*std::numeric_limits<double>::epsilon());
+    EXPECT_EQ(decision_reference.rank,3);
+}
+
 TEST(JointComponentNumericsTest, MemoryPlannerRetainsNonRankStagesAndLocalBudgets)
 {
     using rhbm_gem::core::JointProblemInput;
