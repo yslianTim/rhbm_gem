@@ -1023,3 +1023,62 @@ passed 19/19.
 | E4 | Partial | Standard, active-bound, multi-initial, and known-truth qualifications passed; hard weak-signal/rank/rejection coverage remains. | `92acb92c` |
 | E5 | Partial | Five-run certified performance covered 3/30/300/1,000 synthetic targets; real large data and end-to-end runtime unavailable. | `92acb92c` |
 | E6 | Complete | Retain D1 Production; repository report updated; no Notion edits or push. | This report commit |
+
+## E1 promotion follow-up
+
+### P0 — Historical Full Replay baseline
+
+Commit ancestry confirms that `6787a777da83dd820e72899a9bf4f53b91e6ad93`
+(`test(joint): benchmark large replay workloads`) is the direct parent of
+`6f41026cde46153d537a8f41d7ab749fcd14f4c0` (`perf(joint): use preflighted
+affected-row replay`). The latter is the D1 production introduction. The F0
+commit's production candidate path calls `ReplayInto` for a full prediction,
+residual, and objective replay; its test-only candidate observer does not
+replace that path. Thus F0 is the last committed Production Full Replay
+baseline before D1, rather than the current-code F1 reference.
+
+F0 was exported with `git archive` into `/private/tmp`, then built without
+switching `develop` or creating a branch/worktree. The only archive-local
+change added a diagnostic test; no historical solver or acceptance code was
+modified. Release settings used C++20, CMake 4.4.3, Ninja 1.13.2, AppleClang
+21.0.0, Boost 1.92.0, GTest 1.18.0, system Eigen, and OpenMP 5.1, with
+`BUILD_TESTING=ON`, `RHBM_GEM_ENABLE_UMAP=OFF`, and a four-worker build. The
+targeted archived F0 test ran successfully.
+
+The signed-cancellation input is the existing `chain` 3-target synthetic
+workload after the exact observation mutation in
+`IncrementalObjectiveHandlesSignedChargeCancellationAndLowAmplitude`. It has
+1,425 rows and 1,545 support entries. Its canonical SHA-256 is
+`0b5c3798029192eb18c137134db3214e9647fa87868433366bd744210cce34eb`. The
+generator source is byte-identical between F0 and current HEAD; the current
+test suite now pins this digest so future runs can detect fixture drift.
+
+All runs used atom order 1/2/3, initial width 0.55, upper bound 2.2, core size
+2, objective scale `5.678970475776449`, `PracticalJointConvergenceCriteria`,
+and the listed sweep budget. No KKT or stopping threshold was changed.
+
+| F0 sweep budget | Outcome | Final objective | Global A/C KKT | Projected Width KKT | Endpoint certification | Last 100 sweeps |
+| ---: | --- | ---: | ---: | ---: | --- | --- |
+| 200 | Unqualified, `block-sweep-budget` | `4.0589644398391108e-10` | `2.2204460492503131e-16` | `1.2280135797126945e-9` | Not reached | Objective and parameters stationary; 0 width movement |
+| 500 | Unqualified, `block-sweep-budget` | `4.0589644398391108e-10` | `2.2204460492503131e-16` | `1.2280135797126945e-9` | Not reached | Objective and parameters stationary; 0 width movement |
+| 1,000 | Unqualified, `block-sweep-budget` | `4.0589644398391108e-10` | `2.2204460492503131e-16` | `1.2280135797126945e-9` | Not reached | Objective and parameters stationary; 0 width movement |
+
+The practical projected Width KKT limit is `1e-9`; F0 remains above it by
+`2.280135797126945e-10`. Prediction and objective replay differences were
+zero on each sweep. Each budget produced the same final parameters:
+
+```text
+eta   = [-0.69313238734324734, -0.69315371810798543, -0.69314737995827003]
+width = [0.50000739666305904, 0.49999673123666483, 0.49999990030084757]
+beta  = [1.8623863311018945e-09, -0.20000155320669047,
+         1.9999352041743306, 0.20001477549941502,
+         1.9999905326991614, -0.19999470127506408]
+```
+
+The first 24 sweeps accepted 42 changed block updates; all later block attempts
+were unchanged. There were no candidate rejections, recovery retries, active
+width bounds, nonfinite values, or cache drift. The last 100 sweeps in every
+run had exactly the same objective, A/C KKT, Width KKT, and parameters. This is
+direct evidence that the signed-cancellation/near-zero Width failure existed
+in historical Production Full Replay before D1; its CTest success must not be
+read as a qualified endpoint.

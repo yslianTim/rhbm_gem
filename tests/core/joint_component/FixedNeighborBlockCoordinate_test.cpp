@@ -1291,6 +1291,26 @@ TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveHandlesSignedCha
     (void)data;
 }
 
+TEST(JointFixedNeighborBlockCoordinateTest, SignedCancellationFixtureMatchesHistoricalInputDigest)
+{
+    auto input=second_stage_test::SyntheticJointWorkload("chain",3);
+    for(std::size_t atom=0;atom<3;++atom)
+        for(const auto & support:input.support[atom])
+        {
+            const auto basis=n::EvaluateKernel(support.squared_distance,.5,2.5);
+            if(atom==0) input.observations[support.row]-=2.0*basis.gaussian;
+            if(atom!=1) input.observations[support.row]-=.4*basis.charge;
+        }
+    std::size_t support_entries{};
+    for(const auto & support:input.support) support_entries+=support.size();
+    EXPECT_EQ(input.atom_ids,(std::vector<std::string>{"1","2","3"}));
+    EXPECT_EQ(input.row_ids.size(),1425u);
+    EXPECT_EQ(input.observations.size(),1425u);
+    EXPECT_EQ(support_entries,1545u);
+    EXPECT_EQ(second_stage_test::SyntheticJointWorkloadHash(input),
+        "0b5c3798029192eb18c137134db3214e9647fa87868433366bd744210cce34eb");
+}
+
 TEST(JointFixedNeighborBlockCoordinateTest, AffectedReplayFallsBackBeforeScratchExceedsMemoryBudget)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
