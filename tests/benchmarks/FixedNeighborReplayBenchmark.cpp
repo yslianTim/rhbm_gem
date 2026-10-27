@@ -29,6 +29,17 @@ struct ReplayCandidate
     joint::Indices core_atoms,neighbor_atoms,affected_rows;
     Vector eta,beta;
 };
+struct GlobalReplayCsr
+{
+    std::vector<std::size_t> offsets;
+    std::vector<Eigen::Index> atoms;
+    std::vector<double> squares;
+    std::size_t StorageBytes() const
+    {
+        return offsets.capacity()*sizeof(std::size_t)+atoms.capacity()*sizeof(Eigen::Index)+
+            squares.capacity()*sizeof(double);
+    }
+};
 struct ErrorSummary
 {
     std::size_t bitwise_mismatches{},normal_pairs{},nonfinite_pairs{};
@@ -53,19 +64,21 @@ struct Method
     const char * name;
     second_stage_test::ReplayPredictionStrategy prediction;
     second_stage_test::ReplayObjectiveStrategy objective;
-    bool exact;
+    bool exact,global_csr;
 };
-constexpr std::array<Method,5> Methods{{
+constexpr std::array<Method,6> Methods{{
     {"B1",second_stage_test::ReplayPredictionStrategy::DeltaAddDifference,
-        second_stage_test::ReplayObjectiveStrategy::FullScan,false},
+        second_stage_test::ReplayObjectiveStrategy::FullScan,false,false},
     {"B2",second_stage_test::ReplayPredictionStrategy::DeltaSubtractThenAdd,
-        second_stage_test::ReplayObjectiveStrategy::FullScan,false},
+        second_stage_test::ReplayObjectiveStrategy::FullScan,false,false},
     {"C",second_stage_test::ReplayPredictionStrategy::DeltaAddDifference,
-        second_stage_test::ReplayObjectiveStrategy::Incremental,false},
+        second_stage_test::ReplayObjectiveStrategy::Incremental,false,false},
+    {"D2",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+        second_stage_test::ReplayObjectiveStrategy::FullScan,false,true},
     {"D1",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
-        second_stage_test::ReplayObjectiveStrategy::FullScan,true},
+        second_stage_test::ReplayObjectiveStrategy::FullScan,true,false},
     {"E",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
-        second_stage_test::ReplayObjectiveStrategy::Incremental,true}
+        second_stage_test::ReplayObjectiveStrategy::Incremental,true,false}
 }};
 double Seconds(Clock::time_point started)
 {return std::chrono::duration<double>(Clock::now()-started).count();}
@@ -100,6 +113,70 @@ Eigen::Index AffectedPosition(const joint::Indices & rows,Eigen::Index row)
 {
     const auto found=std::lower_bound(rows.begin(),rows.end(),row);
     return found==rows.end() || *found!=row ? -1 : static_cast<Eigen::Index>(found-rows.begin());
+}
+GlobalReplayCsr BuildGlobalReplayCsr(const joint::Domain & domain,
+    const rhbm_gem::JointParameterLayout & layout)
+{
+    const auto row_count=static_cast<std::size_t>(domain.rows);
+    std::vector<std::uint8_t> informative(row_count);
+    std::vector<std::size_t> counts(row_count);
+    for(const auto row:layout.informative_rows) informative.at(row)=1;
+    for(const auto atom_value:layout.full_atoms)
+        for(const auto & support:domain.atoms[static_cast<std::size_t>(atom_value)])
+            if(informative.at(static_cast<std::size_t>(support.row)))
+                ++counts[static_cast<std::size_t>(support.row)];
+    GlobalReplayCsr out; out.offsets.resize(row_count+1);
+    for(std::size_t row=0;row<row_count;++row) out.offsets[row+1]=out.offsets[row]+counts[row];
+    out.atoms.resize(out.offsets.back()); out.squares.resize(out.offsets.back());
+    std::vector<std::size_t> cursor(out.offsets.begin(),out.offsets.end()-1);
+    for(const auto atom_value:layout.full_atoms)
+    {
+        const auto atom=static_cast<Eigen::Index>(atom_value);
+        for(const auto & support:domain.atoms[static_cast<std::size_t>(atom)])
+        {
+            const auto row=static_cast<std::size_t>(support.row);
+            if(!informative.at(row)) continue;
+            const auto position=cursor[row]++;
+            out.atoms[position]=atom; out.squares[position]=support.square;
+        }
+    }
+    return out;
+}
+second_stage_test::ReplayCandidateResult EvaluateGlobalCsrCandidate(
+    const rhbm_gem::JointParameterLayout & layout,
+    joint::VectorRef observations,const joint::BlockCoordinateState & accepted,
+    joint::VectorRef candidate_eta,joint::VectorRef candidate_beta,double scale,
+    const joint::Indices & affected_rows,const GlobalReplayCsr & incidence)
+{
+    second_stage_test::ReplayCandidateResult out;
+    out.prediction.resize(static_cast<Eigen::Index>(affected_rows.size()));
+    out.residual.resize(static_cast<Eigen::Index>(affected_rows.size()));
+    Vector widths(candidate_eta.size());
+    for(Eigen::Index atom=0;atom<candidate_eta.size();++atom) widths(atom)=std::exp(candidate_eta(atom));
+    for(std::size_t local=0;local<affected_rows.size();++local)
+    {
+        const auto row=static_cast<std::size_t>(affected_rows[local]);
+        double prediction{};
+        for(std::size_t entry=incidence.offsets[row];entry<incidence.offsets[row+1];++entry)
+        {
+            const auto atom=incidence.atoms[entry];
+            const auto basis=joint::EvaluateKernel(incidence.squares[entry],widths(atom),2.5);
+            prediction+=candidate_beta(2*atom)*basis.gaussian+candidate_beta(2*atom+1)*basis.charge;
+        }
+        out.prediction(static_cast<Eigen::Index>(local))=prediction;
+        out.residual(static_cast<Eigen::Index>(local))=prediction-observations(affected_rows[local]);
+    }
+    double squared{};
+    for(const auto row_value:layout.informative_rows)
+    {
+        const auto row=static_cast<Eigen::Index>(row_value);
+        const auto local=AffectedPosition(affected_rows,row);
+        const double residual=local>=0 ? out.residual(local) : accepted.residual(row);
+        squared+=residual*residual;
+    }
+    out.objective=.5*squared/(scale*scale);
+    out.scratch_bytes=static_cast<std::size_t>(2*out.prediction.size()+widths.size())*sizeof(double);
+    return out;
 }
 void CompareMethod(const rhbm_gem::JointParameterLayout & layout,
     const joint::BlockCoordinateState & accepted,const ReplayCandidate & candidate,
@@ -208,6 +285,11 @@ void Run(int target_count)
     {++support_entries; ++row_contributors[static_cast<std::size_t>(support.row)];}
     const auto contributor_total=std::accumulate(row_contributors.begin(),row_contributors.end(),std::size_t{});
     const auto sequence_bytes=CandidateSequenceBytes(candidates);
+    const auto csr_started=Clock::now();
+    const auto global_incidence=BuildGlobalReplayCsr(data.domain,data.layout);
+    const double csr_build_seconds=Seconds(csr_started);
+    const auto csr_build_temporary_bytes=static_cast<std::size_t>(data.domain.rows)*
+        (sizeof(std::uint8_t)+2*sizeof(std::size_t));
     std::cout<<std::setprecision(17)
         <<"fixture_targets="<<target_count<<" observations="<<data.domain.rows
         <<" informative_rows="<<data.layout.informative_rows.size()<<" support_entries="<<support_entries
@@ -215,7 +297,10 @@ void Run(int target_count)
         <<" blocks="<<candidates.size()<<" affected_rows_min_median_max="
         <<affected_counts.front()<<":"<<affected_counts[affected_counts.size()/2]<<":"<<affected_counts.back()
         <<" candidate_sequence_bytes="<<sequence_bytes<<" fixture_and_sequence_seconds="<<fixture_seconds
-        <<" accepted_state_bytes="<<2*static_cast<std::size_t>(data.domain.rows)*sizeof(double)<<'\n';
+        <<" accepted_state_bytes="<<2*static_cast<std::size_t>(data.domain.rows)*sizeof(double)
+        <<" d2_index_build_seconds="<<csr_build_seconds
+        <<" d2_index_bytes="<<global_incidence.StorageBytes()
+        <<" d2_index_build_peak_bytes_estimate="<<global_incidence.StorageBytes()+csr_build_temporary_bytes<<'\n';
 
     std::array<MethodAccuracy,Methods.size()> accuracies{};
     const auto verification_started=Clock::now();
@@ -228,10 +313,13 @@ void Run(int target_count)
         for(std::size_t method_index=0;method_index<Methods.size();++method_index)
         {
             const auto & method=Methods[method_index];
-            const auto result=second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
-                accepted,candidate.eta,candidate.beta,data.context.scale,candidate.core_atoms,
-                candidate.affected_rows,method.prediction,method.objective,
-                method.exact ? &incidence : nullptr);
+            const auto result=method.global_csr
+                ? EvaluateGlobalCsrCandidate(data.layout,data.y,accepted,
+                    candidate.eta,candidate.beta,data.context.scale,candidate.affected_rows,global_incidence)
+                : second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
+                    accepted,candidate.eta,candidate.beta,data.context.scale,candidate.core_atoms,
+                    candidate.affected_rows,method.prediction,method.objective,
+                    method.exact ? &incidence : nullptr);
             CompareMethod(data.layout,accepted,candidate,reference,result,accuracies[method_index]);
         }
     }
@@ -272,10 +360,14 @@ void Run(int target_count)
                     preparation+=Seconds(prep_started);
                 }
                 const auto started=Clock::now();
-                const auto result=second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
-                    accepted,replay_candidate.eta,replay_candidate.beta,data.context.scale,
-                    replay_candidate.core_atoms,replay_candidate.affected_rows,method.prediction,method.objective,
-                    method.exact ? &incidence : nullptr);
+                const auto result=method.global_csr
+                    ? EvaluateGlobalCsrCandidate(data.layout,data.y,accepted,
+                        replay_candidate.eta,replay_candidate.beta,data.context.scale,
+                        replay_candidate.affected_rows,global_incidence)
+                    : second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
+                        accepted,replay_candidate.eta,replay_candidate.beta,data.context.scale,
+                        replay_candidate.core_atoms,replay_candidate.affected_rows,method.prediction,method.objective,
+                        method.exact ? &incidence : nullptr);
                 candidate_time+=Seconds(started); checksum+=result.objective;
                 max_temporary=std::max(max_temporary,result.scratch_bytes);
             }
@@ -292,6 +384,25 @@ void Run(int target_count)
     }
     ReportTimes("A",timings[0],candidates.size());
     for(std::size_t i=0;i<Methods.size();++i) ReportTimes(Methods[i].name,timings[i+1],candidates.size());
+    const auto median_seconds=[](std::vector<double> values) {
+        std::sort(values.begin(),values.end()); return values[values.size()/2];
+    };
+    const double d1_per_candidate=median_seconds(timings[5].total)/
+        static_cast<double>(candidates.size());
+    const double d2_per_candidate=median_seconds(timings[4].total)/
+        static_cast<double>(candidates.size());
+    const double d2_amortized=d2_per_candidate+csr_build_seconds/static_cast<double>(candidates.size());
+    std::cout<<"d2_amortized_ms_per_candidate="<<d2_amortized*1000.0
+        <<" build_amortized_ms_per_candidate="<<csr_build_seconds*1000.0/static_cast<double>(candidates.size())
+        <<" d2_vs_d1_savings_ms_per_candidate="<<(d1_per_candidate-d2_amortized)*1000.0;
+    if(d1_per_candidate>d2_per_candidate)
+        std::cout<<" break_even_candidates_vs_d1="<<std::ceil(csr_build_seconds/
+            (d1_per_candidate-d2_per_candidate))
+            <<" break_even_sweeps_vs_d1="<<csr_build_seconds/
+                ((d1_per_candidate-d2_per_candidate)*static_cast<double>(candidates.size()));
+    else
+        std::cout<<" break_even_candidates_vs_d1=never break_even_sweeps_vs_d1=never";
+    std::cout<<'\n';
     rusage usage{};
     if(getrusage(RUSAGE_SELF,&usage)==0)
     {

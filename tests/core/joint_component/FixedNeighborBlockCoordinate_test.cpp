@@ -686,14 +686,9 @@ TEST(JointFixedNeighborBlockCoordinateTest, AffectedRowExactReplayMatchesClosedL
             second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
             second_stage_test::ReplayObjectiveStrategy::FullScan,&incidence);
         n::FixedNeighborReplayResult replay;
-        replay.prediction=accepted.prediction; replay.residual=accepted.residual;
-        for(std::size_t k=0;k<affected_rows.size();++k)
-        {
-            const auto row=affected_rows[k];
-            replay.prediction(row)=exact.prediction(static_cast<Eigen::Index>(k));
-            replay.residual(row)=exact.residual(static_cast<Eigen::Index>(k));
-        }
+        replay.prediction=exact.prediction; replay.residual=exact.residual;
         replay.objective=exact.objective;
+        replay.affected_rows_only=true;
         return replay;
     };
     d1_policy.candidate_observer=trace_candidate(d1_trace);

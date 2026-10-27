@@ -29,6 +29,7 @@ struct FixedNeighborReplayResult
 {
     Vector prediction,residual;
     double objective{};
+    bool affected_rows_only{};
 };
 using FixedNeighborCandidateReplayForTesting=std::function<FixedNeighborReplayResult(
     const BlockCoordinateState &,const Indices &,const Indices &,VectorRef,VectorRef)>;

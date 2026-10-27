@@ -224,6 +224,72 @@ Independent Replay passed for both. This is a single-component, two-block
 fixture; the full regression suite remains part of final acceptance. The test
 is for correctness only and makes no speed claim.
 
+## N5: larger synthetic performance and memory study
+
+No cryo-EM `.mrc`/`.star` or large observation data files are present in the
+project workspace, so N5 uses the reproducible synthetic `chain` workload. The
+largest closed-loop case has 1,000 targets and 455,060 observations; the
+5,938,087-observation workload was not available. Each closed-loop size had one
+warm-up and five measured repeats. Timings are medians; ranges are the five
+measured runs. The diagnostic runs five search sweeps and disables endpoint
+certification, so these are FixedNeighbor search measurements, not complete
+algorithm runtimes.
+
+| Targets / rows / blocks | Block prep A → D1 | A search median (range) | D1 search median (range) | A→D1 search change | A→D1 candidate replay | D1 added scratch estimate | Process peak RSS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 3 / 1,425 / 1 | 0.125 → 0.117 ms | 4.953 ms (4.744–5.094) | 5.606 ms (5.320–9.124) | 13.2% slower | 0.267 → 0.852 ms | 81,768 B | 23,904,256 B |
+| 30 / 13,710 / 3 | 1.220 → 1.242 ms | 100.144 ms (99.400–101.688) | 104.198 ms (102.393–154.713) | 4.0% slower | 7.948 → 11.824 ms | 321,824 B | 40,419,328 B |
+| 300 / 136,560 / 26 | 11.749 → 11.939 ms | 1.690 s (1.636–1.704) | 1.364 s (1.333–1.427) | 19.3% faster (1.24×) | 694.612 → 373.164 ms | 321,824 B | 97,730,560 B |
+| 1,000 / 455,060 / 84 | 39.721 → 39.540 ms | 10.863 s (10.502–10.961) | 6.704 s (6.606–7.080) | 38.3% faster (1.62×) | 7.514 → 3.393 s | 321,824 B | 244,400,128 B |
+
+The 1,000-target run accepted 420 candidates in both methods. All five
+Full-Replay and D1 runs had bitwise-identical block/sweep traces and final
+state. A's candidate replay occupied 69.1% of search time; replacing it with
+D1 left local search and sweep/global work essentially unchanged. The estimated
+baseline peak was 121,371,048 B; D1 raised it to 121,692,872 B. The process
+RSS is for the benchmark process, including both methods and repeated runs.
+At 3 and 30 targets D1 was slower; at 3 targets the absolute median increase
+was 0.65 ms. There were no rejected candidates in these closed-loop searches,
+so N5 did not produce a standalone rollback timing. N3 separately verified
+bitwise rollback for 29 scripted rejected updates. The search diagnostic does
+measure sweep-end replay; at 1,000 targets its median was 88.9 ms for A and
+88.2 ms for D1. It does not run endpoint certification or Independent Replay;
+N4's converged fixture passed those checks.
+
+The 1,000-target replay-only study measured all replay candidates five times
+with a fixed accepted state and 84 fixed block candidates. Full objective scan
+is included except for C/E, whose incremental objectives are experimental.
+D1's incidence preparation is included in its total candidate time.
+
+| Method | Preparation | Candidate time | Temporary / index memory | Prediction, residual, objective |
+| --- | ---: | ---: | ---: | --- |
+| A | 0 | 17.525 ms | 7,280,960 B | Reference |
+| B1 | 0 | 7.992 ms | 88,512 B | 12,960 prediction and residual mismatches; full-scan objective exact |
+| B2 | 0 | 7.962 ms | 88,512 B | 14,776 prediction and residual mismatches; full-scan objective exact |
+| C | 0 | 0.587 ms | 88,512 B | Same prediction/residual differences as B1; incremental objective differs on all 84 candidates |
+| D1 | 0.391 ms/candidate incidence build | 8.009 ms total (7.553 ms replay) | 321,824 B | Bitwise exact across 38,225,040 row comparisons and 84 objectives |
+| D2 | 4.264 ms global index build once | 7.655 ms (7.706 ms/candidate amortized over 84) | 96,320 B scratch + 11,880,488 B retained CSR | Bitwise exact across 38,225,040 row comparisons and 84 objectives |
+| E | 0.386 ms/candidate incidence build | 0.658 ms total (0.213 ms update) | 321,824 B | Prediction/residual exact; incremental objective differs on all 84 candidates |
+
+B1/B2 prediction maximum absolute errors were `2.78e-17`/`5.55e-17`; residual
+errors reached 256 ULP near zero. C/E's incremental objective maximum absolute
+error was `3.64e-17` (42 ULP). They are not production candidates. The replay
+benchmark process peak RSS was 197,754,880 B across verification and all
+methods; it is not a per-method RSS measurement. D2's index-build peak estimate
+was 19,616,508 B, including its temporary row counts/cursors. Across 84
+candidates, D2 repaid its 4.264 ms build after 13 candidates (0.144 of a
+84-candidate sweep) relative to D1, but saved only 0.303 ms per candidate after
+amortization and retained 11.88 MB. That incremental speed is not worth the
+global index memory and lifetime; D2 is rejected.
+
+D1 meets the approximate 2× candidate-replay and 15% FixedNeighbor search
+thresholds at 1,000 targets, and meets the total-search threshold at 300
+targets. At 3 and 30 targets its regression is material in relative terms,
+though the 3-target cost is under 1 ms. This supports the bounded, on-demand
+D1 implementation with a Full-Replay memory fallback; it does not establish
+performance on the unavailable 5.9-million-observation data. N6 adds and
+preflights that production path, then reruns the suite and closed-loop checks.
+
 ## Roadmap status
 
 | Stage | Status | Result |
@@ -233,5 +299,5 @@ is for correctness only and makes no speed claim.
 | N2 | Complete | Five-method shadow; Full Replay retained every decision; D1 remained bitwise exact, while B/C/E accumulated drift. |
 | N3 | Complete | 503-attempt refresh/drift stress at 1/10/50/100/sweep; B methods drifted more with longer intervals, C/E retained objective error, D1 stayed exact; all scripted rejections rolled back bitwise. |
 | N4 | Complete | D1 controlled candidate results in closed loop and reached Level A on the converged two-block fixture; Independent Replay passed. |
-| N5 | Pending | |
+| N5 | Complete | Five-run closed-loop comparison through 1,000 synthetic targets; D1 reached 1.62× search speedup with bitwise-identical traces; D2 was exact but rejected for a small gain and 11.88 MB retained index. |
 | N6 | Pending | |

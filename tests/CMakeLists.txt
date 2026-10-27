@@ -318,6 +318,19 @@ target_include_directories(rhbm_fixed_neighbor_replay_drift_benchmark PRIVATE
     "${PROJECT_SOURCE_DIR}/tests"
 )
 target_link_libraries(rhbm_fixed_neighbor_replay_drift_benchmark PRIVATE rhbm_gem_test CompilerFlags)
+add_executable(rhbm_fixed_neighbor_closed_loop_benchmark
+    benchmarks/FixedNeighborClosedLoopBenchmark.cpp
+    support/JointFixedNeighborDiagnostic.cpp
+    support/JointReplayExperiment.cpp
+    support/JointSyntheticWorkload.cpp
+)
+target_compile_definitions(rhbm_fixed_neighbor_closed_loop_benchmark PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
+target_include_directories(rhbm_fixed_neighbor_closed_loop_benchmark PRIVATE
+    "${PROJECT_SOURCE_DIR}/src"
+    "${PROJECT_SOURCE_DIR}/src/core"
+    "${PROJECT_SOURCE_DIR}/tests"
+)
+target_link_libraries(rhbm_fixed_neighbor_closed_loop_benchmark PRIVATE rhbm_gem_test CompilerFlags)
 add_dependencies(tests_all rhbm_tests)
 
 # Shared test-only helpers compile into the test executable.

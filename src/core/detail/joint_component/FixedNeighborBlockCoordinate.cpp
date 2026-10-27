@@ -1259,6 +1259,10 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             // The candidate path only overwrites core parameters in copies of the current state.
             // Once the accepted endpoint is qualified, bitwise-equal core values leave the full
             // parameter state unchanged and the current full-replay cache remains valid.
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            bool candidate_result_affected_rows_only{};
+            Vector candidate_affected_prediction,candidate_affected_residual;
+#endif
             const bool candidate_fast_unchanged=state_cache_valid && std::isfinite(out.state.objective) &&
                 IsBitwiseIdenticalCoreCandidate(out.state,core_atoms,accepted->endpoint);
             Vector candidate_eta,candidate_beta;
@@ -1286,8 +1290,17 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 {
                     auto candidate=policy.candidate_replay_for_testing(out.state,core_atoms,affected_rows,
                         candidate_eta,candidate_beta);
-                    replay_workspace.prediction=std::move(candidate.prediction);
-                    replay_workspace.residual=std::move(candidate.residual);
+                    candidate_result_affected_rows_only=candidate.affected_rows_only;
+                    if(candidate_result_affected_rows_only)
+                    {
+                        candidate_affected_prediction=std::move(candidate.prediction);
+                        candidate_affected_residual=std::move(candidate.residual);
+                    }
+                    else
+                    {
+                        replay_workspace.prediction=std::move(candidate.prediction);
+                        replay_workspace.residual=std::move(candidate.residual);
+                    }
                     replay_workspace.objective=candidate.objective;
                 }
                 else
@@ -1318,10 +1331,28 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 if(!policy.candidate_observer) return;
                 const auto & observed_eta=candidate_fast_unchanged ? out.state.eta : candidate_eta;
                 const auto & observed_beta=candidate_fast_unchanged ? out.state.beta : candidate_beta;
-                const auto & observed_prediction=candidate_fast_unchanged ? out.state.prediction : replay_workspace.prediction;
-                const auto & observed_residual=candidate_fast_unchanged ? out.state.residual : replay_workspace.residual;
+                Vector observed_candidate_prediction,observed_candidate_residual;
+                const Vector * observed_prediction=&replay_workspace.prediction;
+                const Vector * observed_residual=&replay_workspace.residual;
+                if(candidate_fast_unchanged)
+                {
+                    observed_prediction=&out.state.prediction; observed_residual=&out.state.residual;
+                }
+                else if(candidate_result_affected_rows_only)
+                {
+                    observed_candidate_prediction=out.state.prediction;
+                    observed_candidate_residual=out.state.residual;
+                    for(std::size_t k=0;k<affected_rows.size();++k)
+                    {
+                        const auto row=affected_rows[k];
+                        observed_candidate_prediction(row)=candidate_affected_prediction(static_cast<Eigen::Index>(k));
+                        observed_candidate_residual(row)=candidate_affected_residual(static_cast<Eigen::Index>(k));
+                    }
+                    observed_prediction=&observed_candidate_prediction;
+                    observed_residual=&observed_candidate_residual;
+                }
                 policy.candidate_observer({sweep_index+1,block_index+1,out.state,core_atoms,affected_rows,
-                    observed_eta,observed_beta,observed_prediction,observed_residual,candidate_objective,
+                    observed_eta,observed_beta,*observed_prediction,*observed_residual,candidate_objective,
                     record.local_objective_before,record.local_objective_after,record.global_replay_delta,
                     record.local_global_delta_error,record.objective_replay_enclosure,accepted_candidate,
                     unchanged_candidate,!candidate_fast_unchanged});
@@ -1360,9 +1391,24 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             if(!candidate_fast_unchanged)
             {
                 const auto cache_started=Clock::now();
-                out.state.prediction.swap(replay_workspace.prediction);
-                out.state.residual.swap(replay_workspace.residual);
-                out.state.objective=replay_workspace.objective;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                if(candidate_result_affected_rows_only)
+                {
+                    for(std::size_t k=0;k<affected_rows.size();++k)
+                    {
+                        const auto row=affected_rows[k];
+                        out.state.prediction(row)=candidate_affected_prediction(static_cast<Eigen::Index>(k));
+                        out.state.residual(row)=candidate_affected_residual(static_cast<Eigen::Index>(k));
+                    }
+                    out.state.objective=replay_workspace.objective;
+                }
+                else
+#endif
+                {
+                    out.state.prediction.swap(replay_workspace.prediction);
+                    out.state.residual.swap(replay_workspace.residual);
+                    out.state.objective=replay_workspace.objective;
+                }
                 if(collect_telemetry) out.work.affected_row_updates+=affected_rows.size();
                 out.state.eta=std::move(candidate_eta); out.state.beta=std::move(candidate_beta);
                 state_cache_valid=out.state.prediction.size()==y.size() && out.state.residual.size()==y.size() &&
