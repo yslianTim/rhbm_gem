@@ -354,6 +354,110 @@ complete end-to-end runtime were unavailable; these are the remaining limits
 on the performance claim. No FirstStage, Local MDPDE, Group Fitting, KKT,
 solver acceptance, bound, convergence, or Independent Replay rules changed.
 
+## Incremental Objective study
+
+### R0: numerical contract and current Production baseline
+
+The study started on `develop` at `6f41026cde46153d537a8f41d7ab749fcd14f4c0`.
+The working tree was clean, `develop` and the locally recorded
+`origin/develop` ref were equal, and there were no local commits ahead or
+behind. No fetch was performed in this run, so this records the local tracking
+ref rather than a fresh server-side query. Production contained D1 and its
+preflighted Full Replay fallback; incremental objective was available only in
+test experiments (`ReplayObjectiveStrategy::Incremental`). There was no
+Production objective cache, error bound, conditional scan, or global CSR path.
+
+The numerical levels for this study are:
+
+- **Level A — Bitwise identity:** prediction, residual, objective, and the
+  compared search decisions are identical to Full Replay.
+- **Level B — Decision-safe numerical equivalence:** a conservative bound
+  proves the existing decision for every value in the bound; otherwise Full
+  Scan is used. Sweep verification, endpoint certification, and Independent
+  Replay still pass.
+- **Level C — Empirical agreement:** measured results are close without a
+  decision-safety proof. This is research evidence only and is not eligible
+  for Production.
+
+#### Acceptance and replay contract
+
+For each visited block, `local_objective_before` is half the sum of squared
+accepted residuals on its affected rows, divided by `scale²`. The local solver
+returns only a valid, available, feasible, KKT-qualified, trusted endpoint.
+`local_objective_after` is its qualified local certificate objective divided
+by `scale²`. If the local objective increases, the candidate is left unchanged;
+on a recovery visit the same condition exhausts that block recovery. This
+local comparison has no additive roundoff allowance in the outer block code.
+
+After local qualification, D1 computes the candidate predictions for all
+affected rows and scans every informative row in the production order to form
+the candidate objective. It then computes
+`global_delta = candidate_objective - accepted_objective` and
+`consistency_error = abs(global_delta + local_before - local_after)`. The
+consistency limit is `1e-12 + 2e-12 * max(abs(candidate_objective),
+abs(accepted_objective))`; the tolerance therefore depends on the absolute
+objective values. A consistency failure stops the search with
+`block-objective-replay-failed`. If `global_delta > 0`, the block is accepted
+only when the local objective did not increase and the global increase is at
+most that same enclosure; otherwise it remains unchanged, or terminates a
+recovery retry. A candidate whose core parameters are exactly unchanged skips
+replay. Accepted prediction, residual, objective, and parameter state are
+updated only after these checks, so the candidate replay itself cannot mutate
+the accepted cache before acceptance.
+
+At each completed sweep, a Full Replay reconstructs predictions, residuals,
+and objective. Prediction cache error must be no greater than
+`2e-12 + 2e-13 * max(1, max(abs(full_prediction)))`; objective error must be no
+greater than the objective enclosure above, referenced to the replay
+objective. A failure stops with `block-cache-replay-failed`. This check
+compares the cache but does not overwrite it. Global A/C and projected Width
+KKT are evaluated from a separately streamed state evaluation. Stationarity
+then invokes endpoint certification; a successful production endpoint still
+requires the existing primary and independent replay trust checks. The strict
+and practical KKT, LM, width-bound, convergence, and Independent Replay
+criteria are unchanged by this study.
+
+The existing `BlockObjectiveReplayEnclosure` is an engineering comparison
+tolerance, not a derived floating-point error bound. It cannot certify an
+incremental objective by itself. The Full Scan fallback is required whenever
+a candidate decision cannot be proved inside an eventual conservative error
+interval. Nonfinite or overflowed intermediate values cannot be treated as a
+fast acceptance.
+
+#### Baseline measurements
+
+The Release build in `build/replay-study` used system dependencies and
+`BUILD_TESTING=ON`; the build had no work to do. Serial CTest passed all
+19/19 groups in 22.24 s. No thresholds or Production code changed.
+
+The 1,000-target replay benchmark used 455,060 informative rows, 515,000
+support entries, 84 candidates, and 38,225,040 prediction/residual comparisons
+per method. It reported 8.898 s for independent Full Replay verification.
+D1 matched all 84 objectives and all prediction/residual values bitwise. The
+incremental E objective differed on all 84 candidates: maximum absolute error
+`3.64292e-17`, relative error `7.18793e-15`, and 42 ULP. Its candidate median
+was 0.648 ms including incidence preparation (0.209 ms for replay/update);
+D1 was 7.878 ms including incidence preparation (7.439 ms replay). The
+process RSS was 197,787,648 B for the benchmark containing every method and
+reference verification, not per-method RSS.
+
+The 1,000-target closed-loop timing used five measured runs after warm-up,
+five sweeps per run, and no endpoint certification. Full Replay took a median
+10.393 s of search and D1 6.401 s (1.624x); candidate replay was 7.248 s and
+3.283 s, respectively. Both accepted 420/420 candidates and the benchmark
+verified identical traces. D1 scratch was 233,512 B and the preflight peak
+estimate was 121,648,896 B. Process peak RSS was 242,663,424 B across both
+methods and all repetitions. This is a FixedNeighbor synthetic benchmark,
+not an end-to-end algorithm result or a 5.9-million-row measurement.
+
+For a converged two-block fixture, the existing N4 study recorded ten accepted
+candidates, twenty local profile trials, bitwise-identical Full Replay and D1
+traces, endpoint certification and Independent Replay passing, objective
+`2.0199079729737389e-10`, global A/C KKT `4.33411e-9`, projected Width KKT
+`1.62354e-10`, and a narrowest observed D1 objective acceptance margin of
+`1.09552e-16` (about `1.09552e-4` of the replay enclosure). This is one small
+fixture and supplies no general acceptance-bound proof.
+
 ## Roadmap status
 
 | Stage | Status | Result |
