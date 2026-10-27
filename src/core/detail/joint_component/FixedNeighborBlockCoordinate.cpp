@@ -80,10 +80,12 @@ struct ReplayStructure
         for(const auto row:layout.informative_rows) informative_rows.at(row)=1;
     }
 };
-ReplayState Replay(const Domain & domain,const JointParameterLayout & layout,VectorRef observations,
-    VectorRef eta,VectorRef beta,double scale,const ReplayStructure & structure)
+void ReplayInto(const Domain & domain,const JointParameterLayout & layout,VectorRef observations,
+    VectorRef eta,VectorRef beta,double scale,const ReplayStructure & structure,ReplayState & out)
 {
-    ReplayState out; out.prediction=Vector::Zero(observations.size()); out.residual=Vector::Zero(observations.size());
+    if(out.prediction.size()!=observations.size()) out.prediction.resize(observations.size());
+    if(out.residual.size()!=observations.size()) out.residual.resize(observations.size());
+    out.prediction.setZero(); out.residual.setZero();
     for(auto atom:layout.full_atoms)
     {
         const auto a=static_cast<Eigen::Index>(atom); const double width=std::exp(eta(a));
@@ -99,7 +101,7 @@ ReplayState Replay(const Domain & domain,const JointParameterLayout & layout,Vec
         const auto r=static_cast<Eigen::Index>(row); out.residual(r)=out.prediction(r)-observations(r);
         squared+=out.residual(r)*out.residual(r);
     }
-    out.objective=.5*squared/(scale*scale); return out;
+    out.objective=.5*squared/(scale*scale);
 }
 Sparse Design(const Domain & domain,VectorRef eta)
 {
@@ -886,7 +888,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             sizeof(std::vector<LocalSupportIndex>)) ||
         !AddMemoryBytes(global_resident,memory_shape.component_blocks,
             sizeof(PreparedFixedNeighborBlock)+sizeof(CompactRowMapping)+sizeof(std::size_t)) ||
-        !AddMemoryBytes(global_resident,memory_shape.component_observations,3*sizeof(double)+sizeof(Eigen::Index)))
+        // The reusable replay vectors remain allocated between block visits.
+        !AddMemoryBytes(global_resident,memory_shape.component_observations,5*sizeof(double)+sizeof(Eigen::Index)))
     {
         out.global_state_memory_estimate.shape=memory_shape;
         out.global_state_memory_estimate.stage=MemoryStage::GlobalStateEvaluation;
@@ -908,6 +911,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     auto * const profile_work=&out.work.local_profile_work;
     const auto replay_structure_started=Clock::now();
     const ReplayStructure replay_structure(domain.rows,layout);
+    ReplayState replay_workspace;
     if(collect_telemetry)
         out.work.structural_preparation_seconds+=Seconds(replay_structure_started);
     const auto certify_endpoint=[&] {
@@ -930,7 +934,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 
     out.state.eta=initial_eta;
     out.state.beta=Vector::Zero(2*static_cast<Eigen::Index>(domain.atoms.size()));
-    auto initial=Replay(domain,layout,y,out.state.eta,out.state.beta,context.scale,replay_structure);
+    ReplayState initial;
+    ReplayInto(domain,layout,y,out.state.eta,out.state.beta,context.scale,replay_structure,initial);
     out.state.prediction=std::move(initial.prediction); out.state.residual=std::move(initial.residual);
     out.state.objective=initial.objective;
     auto mapping_timer=Measure(collect_telemetry,out.work.structural_preparation_seconds);
@@ -1226,13 +1231,14 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 }
                 (void)candidate_copy_timer;
             }
-            ReplayState replay;
             {
                 const auto candidate_replay_timer=Measure(collect_telemetry,out.work.candidate_replay_seconds);
                 if(collect_telemetry) ++out.work.full_candidate_replays;
-                replay=Replay(domain,layout,y,candidate_eta,candidate_beta,context.scale,replay_structure);
+                ReplayInto(domain,layout,y,candidate_eta,candidate_beta,context.scale,replay_structure,
+                    replay_workspace);
                 (void)candidate_replay_timer;
             }
+            const auto & replay=replay_workspace;
             record.objective_after=replay.objective; record.global_replay_delta=replay.objective-out.state.objective;
             const auto replay_reference=std::max(std::abs(replay.objective),std::abs(out.state.objective));
             record.objective_replay_enclosure=BlockObjectiveReplayEnclosure(replay_reference);
@@ -1263,9 +1269,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                         std::abs(candidate_eta(static_cast<Eigen::Index>(atom))-
                             out.state.eta(static_cast<Eigen::Index>(atom))));
             const auto cache_started=Clock::now();
-            out.state.prediction=std::move(replay.prediction);
-            out.state.residual=std::move(replay.residual);
-            out.state.objective=replay.objective;
+            out.state.prediction.swap(replay_workspace.prediction);
+            out.state.residual.swap(replay_workspace.residual);
+            out.state.objective=replay_workspace.objective;
             if(collect_telemetry) out.work.affected_row_updates+=affected_rows.size();
             out.state.eta=std::move(candidate_eta); out.state.beta=std::move(candidate_beta);
             if(collect_telemetry) out.work.cache_update_seconds+=Seconds(cache_started);
@@ -1282,12 +1288,12 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         }
         if(stop) break;
         sweep.objective_after=out.state.objective;
-        ReplayState replay;
         {
             const auto timer=Measure(collect_telemetry,out.work.sweep_replay_seconds);
-            replay=Replay(domain,layout,y,out.state.eta,out.state.beta,context.scale,replay_structure);
+            ReplayInto(domain,layout,y,out.state.eta,out.state.beta,context.scale,replay_structure,replay_workspace);
             (void)timer;
         }
+        const auto & replay=replay_workspace;
         sweep.cache_replay_error=PredictionDifference(out.state.prediction,replay.prediction);
         sweep.objective_replay_error=std::abs(out.state.objective-replay.objective);
         if(collect_telemetry)

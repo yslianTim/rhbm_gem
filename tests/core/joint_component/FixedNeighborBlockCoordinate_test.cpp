@@ -138,6 +138,58 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProfileEndpointMatchesFixedStateEval
         state.certificate.width_bound_projected_kkt));
 }
 
+TEST(JointFixedNeighborBlockCoordinateTest, ReplayWorkspacePreservesExactSearchResultsAcrossRuns)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const n::Vector eta=n::Vector::Constant(3,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=4;
+    policy.stop_after_stationarity=false; policy.certify_endpoint=false;
+    policy.capture_local_trajectory=true; policy.eta_upper_bound=std::log(2.2);
+    const auto first=n::RunFixedNeighborDiagnostic(problem,eta,policy);
+    const auto second=n::RunFixedNeighborDiagnostic(problem,eta,policy);
+
+    EXPECT_EQ(first.reason,second.reason);
+    EXPECT_EQ(first.total_block_solves,second.total_block_solves);
+    EXPECT_EQ(first.total_profile_evaluations,second.total_profile_evaluations);
+    ASSERT_EQ(first.blocks.size(),second.blocks.size());
+    ASSERT_EQ(first.sweeps.size(),second.sweeps.size());
+    EXPECT_TRUE(BitwiseEqual(first.state.eta,second.state.eta));
+    EXPECT_TRUE(BitwiseEqual(first.state.beta,second.state.beta));
+    EXPECT_TRUE(BitwiseEqual(first.state.prediction,second.state.prediction));
+    EXPECT_TRUE(BitwiseEqual(first.state.residual,second.state.residual));
+    EXPECT_TRUE(BitwiseEqual(first.state.objective,second.state.objective));
+
+    for(std::size_t i=0;i<first.blocks.size();++i)
+    {
+        const auto & left=first.blocks[i]; const auto & right=second.blocks[i];
+        EXPECT_EQ(left.sweep,right.sweep); EXPECT_EQ(left.block,right.block);
+        EXPECT_EQ(left.status,right.status); EXPECT_EQ(left.reason,right.reason);
+        EXPECT_EQ(left.accepted,right.accepted); EXPECT_EQ(left.recovery_retry,right.recovery_retry);
+        EXPECT_EQ(left.recovery_success,right.recovery_success);
+        EXPECT_TRUE(BitwiseEqual(left.local_objective_before,right.local_objective_before));
+        EXPECT_TRUE(BitwiseEqual(left.local_objective_after,right.local_objective_after));
+        EXPECT_TRUE(BitwiseEqual(left.global_replay_delta,right.global_replay_delta));
+        ASSERT_EQ(left.profile_trials.size(),right.profile_trials.size());
+        for(std::size_t j=0;j<left.profile_trials.size();++j)
+        {
+            EXPECT_EQ(left.profile_trials[j].profile_evaluation,right.profile_trials[j].profile_evaluation);
+            EXPECT_EQ(left.profile_trials[j].accepted,right.profile_trials[j].accepted);
+            EXPECT_EQ(left.profile_trials[j].accepted_update,right.profile_trials[j].accepted_update);
+            EXPECT_EQ(left.profile_trials[j].acceptance_reason,right.profile_trials[j].acceptance_reason);
+            EXPECT_TRUE(BitwiseEqual(left.profile_trials[j].local_objective_after,
+                right.profile_trials[j].local_objective_after));
+        }
+    }
+    for(std::size_t i=0;i<first.sweeps.size();++i)
+    {
+        EXPECT_EQ(first.sweeps[i].accepted_blocks,second.sweeps[i].accepted_blocks);
+        EXPECT_EQ(first.sweeps[i].unchanged_blocks,second.sweeps[i].unchanged_blocks);
+        EXPECT_EQ(first.sweeps[i].block_solves,second.sweeps[i].block_solves);
+        EXPECT_TRUE(BitwiseEqual(first.sweeps[i].objective_after,second.sweeps[i].objective_after));
+        EXPECT_TRUE(BitwiseEqual(first.sweeps[i].cache_replay_error,second.sweeps[i].cache_replay_error));
+    }
+}
+
 TEST(JointFixedNeighborBlockCoordinateTest, ProductionBoundedSearchReleasesTheStartingUpperFace)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
