@@ -355,3 +355,37 @@ bytes, while the new raw tile adds at most one bounded tile buffer (1,966,080
 bytes at 8,192 rows and 30 columns for this fixture). The three joint
 contract, workflow, and numerical CTest groups passed (3/3, 5.87 s), and the
 additional buffer identity check passed in the numerical group (1/1, 2.52 s).
+
+## N4: Outer/Bounded QR reuse study — not adopted
+
+The Outer LM and Bounded solver receive the same square reduced Jacobian when
+the Bounded solve has zero damping and all variables remain free: the Outer
+QR factors the dense reduced `R`; `SolveAtDamping()` copies those same values
+into its `n × n` augmented matrix. Both use column-major `MatrixXd` and
+`ColPivHouseholderQR`. Their rank thresholds differ by a factor of 64
+(`epsilon × n` by default in the Outer QR and `64 × epsilon × n` in the
+Bounded solve), but the threshold is applied after factorization and does not
+change its pivots. The experiment applied the Bounded threshold to the Outer
+factorization when checking rank.
+
+A test-only candidate reused that existing factorization for the eligible
+step, while a baseline path kept the second QR. On the profile-search fixture,
+the candidate and baseline matched QR rank, permutation, and step bits for
+every eligible case. Their profile traces also matched bitwise for endpoint
+parameters, gradients, objective and KKT, LM steps, damping, actual and
+predicted reductions, trust ratios, acceptance decisions, active bounds,
+release counts, evaluation counts, and termination status. The experiment
+code was removed after this comparison; no QR-reuse solver path is retained.
+
+In the three-Target synthetic Joint run, the Outer QR ran 3 times and the
+Bounded solver performed 76 QR factorizations per run. Only 2 Bounded solves
+met the zero-damping, square, full-free criteria (2.6% of Bounded QR calls).
+Rank, permutation, and step matched in both cases. Those two Bounded QR
+factorizations accounted for 0.000500 ms per run; the full Joint search median
+was 3.362 ms. The theoretical maximum reduction is therefore 0.015% of this
+search. The test audit, including rank, permutation, and bitwise-step checks,
+took 0.000358 ms per run. The existing Outer QR still has to run for the LM
+gradient and predicted-reduction calculations, so only the tiny second
+factorization could be removed. Passing and certifying the QR object across
+the Profile and Bounded solver interfaces adds complexity for a negligible
+end-to-end gain; the production path continues to run both factorizations.
