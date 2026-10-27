@@ -181,7 +181,11 @@ AffectedReplayIncidence PrepareAffectedReplayIncidence(const Domain & domain,con
 AffectedReplayResult ReplayAffectedRows(const Domain & domain,const JointParameterLayout & layout,
     VectorRef observations,const BlockCoordinateState & accepted,VectorRef candidate_eta,
     VectorRef candidate_beta,double scale,const Indices & core_atoms,const Indices & neighbor_atoms,
-    const Indices & affected_rows,const Indices & atom_position,bool incremental_objective=false)
+    const Indices & affected_rows,const Indices & atom_position
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    ,bool incremental_objective=false
+#endif
+    )
 {
     const auto incidence=PrepareAffectedReplayIncidence(domain,core_atoms,neighbor_atoms,affected_rows,atom_position);
     Vector widths(static_cast<Eigen::Index>(incidence.atoms.size()));
@@ -203,6 +207,7 @@ AffectedReplayResult ReplayAffectedRows(const Domain & domain,const JointParamet
         out.prediction(static_cast<Eigen::Index>(row))=prediction;
         out.residual(static_cast<Eigen::Index>(row))=prediction-observations(affected_rows[row]);
     }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(incremental_objective)
     {
         double delta_squared{};
@@ -215,6 +220,7 @@ AffectedReplayResult ReplayAffectedRows(const Domain & domain,const JointParamet
         out.objective=accepted.objective+.5*delta_squared/(scale*scale);
     }
     else
+#endif
     {
         double squared{};
         for(const auto row_value:layout.informative_rows)
@@ -1490,12 +1496,13 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
                     const bool incremental_objective=policy.objective_strategy_for_testing!=
                         FixedNeighborObjectiveStrategyForTesting::FullScan;
-#else
-                    constexpr bool incremental_objective=false;
 #endif
                     auto candidate=ReplayAffectedRows(domain,layout,y,out.state,candidate_eta,candidate_beta,
-                        context.scale,core_atoms,partition.cores[block_index].neighbor_atoms,affected_rows,atom_position,
-                        incremental_objective);
+                        context.scale,core_atoms,partition.cores[block_index].neighbor_atoms,affected_rows,atom_position
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                        ,incremental_objective
+#endif
+                        );
                     candidate_result_affected_rows_only=true;
                     candidate_affected_prediction=std::move(candidate.prediction);
                     candidate_affected_residual=std::move(candidate.residual);
