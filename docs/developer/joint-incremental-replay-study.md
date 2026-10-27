@@ -754,3 +754,54 @@ in 20.66 s. Git changes for this stage are documentation only.
 | R3 | Complete, candidate unqualified | No conservative decision bound; safe disposition is D1 Full Scan on every candidate. | `2624c585` |
 | R4 | Complete, diagnostic only | E1/E2/C shadowed D1 traces; errors observed and no safe gate or candidate-controlled convergence established. | `46a4c288` |
 | R5 | Complete | Outcome D; retain D1, report replay-only gains and leave incremental methods test-only. | This final study commit |
+
+## Closed-loop Incremental Objective reconsideration
+
+### E0: refreshed D1 qualification baseline
+
+This follow-up starts from `develop` HEAD `0ae5f00a1bacbd910d8338da6609ee8724f14d83`,
+with a clean tree and `origin/develop` at the same locally recorded commit. The
+Release Ninja build in `build/replay-study` uses `/usr/bin/c++`, system
+dependencies, OpenMP enabled, and `BUILD_TESTING=ON`. The baseline build
+completed with `--parallel 4`; serial CTest passed all 19/19 groups in 22.47 s.
+OpenMP and common BLAS thread limits were set to four. No repository source
+changes were part of this baseline.
+
+The D1 qualification run used the deterministic synthetic `chain` workload,
+initial log-width `log(0.55)` for every atom, zero initial A/C coefficients,
+width upper bound 2.2, 12-atom cores, the existing `PracticalJointConvergenceCriteria`,
+and a 30-sweep maximum. Every component stopped at `block-stationary` before
+the budget. Endpoint Certification, Independent Replay, runtime convergence,
+and parameter-stability assessment passed. These are one-run qualification
+records; they are not repeated performance measurements. The known synthetic
+truth is A=2, C=0.2, Width=0.5 for each target.
+
+| Targets | Observations / support entries | Blocks | Sweeps | Candidate accept / reject | Full Objective | Global A/C KKT | Projected Width KKT | Endpoint / Independent Replay | Preflight peak |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: |
+| 3 | 1,425 / 1,545 | 1 | 4 | 4 / 0 | `2.0199078132865162e-10` | `3.33e-16` | `3.89e-15` | pass / pass | 447,445 B |
+| 30 | 13,710 / 15,450 | 3 | 5 | 15 / 0 | `1.517076030684615e-10` | `1.60e-9` | `1.88e-11` | pass / pass | 3,930,461 B |
+| 300 | 136,560 / 154,500 | 26 | 5 | 130 / 0 | `1.4790433590012254e-10` | `5.07e-10` | `1.88e-12` | pass / pass | 36,716,466 B |
+| 1,000 | 455,060 / 515,000 | 84 | 5 | 420 / 0 | `1.4790435904528611e-10` | `2.78e-10` | `5.63e-13` | pass / pass | 121,648,896 B |
+
+All widths were feasible, the existing global convergence and parameter-
+stability criteria passed, and local-conditioning assessment covered every
+block. The 1,000-target A/C/Width medians were 2.0000005 / 0.19999991 /
+0.50000003; P95 absolute errors against the known truth were `6.15e-5`,
+`1.48e-5`, and `3.01e-6`. Its A/C/Width RMSEs were `4.36e-5`, `1.05e-5`, and
+`2.13e-6`. The 300-target RMSEs were `4.36e-5`, `1.05e-5`, and `2.14e-6`; the
+30-target values were `4.45e-5`, `1.05e-5`, and `2.21e-6`; the 3-target values
+were `4.06e-5`, `9.16e-6`, and `2.14e-6`. This is a deterministic uniform
+truth fixture, not real cryo-EM evidence or a low-signal precision study.
+
+The qualification process peak RSS was 23.6 MB, 35.7 MB, 101.3 MB, and 275.7
+MB at the four sizes, respectively. These values cover a diagnostic process
+that ran all three methods and retained per-candidate reference diagnostics;
+they are not per-method Production RSS values. The 5,938,087-observation real
+input remains unavailable.
+
+The prior N4 fixture remains the explicit Full Replay versus D1 converged
+comparison: 3 targets, two blocks, five sweeps, ten accepted candidates,
+bitwise-identical final state, Endpoint Certification, and Independent Replay
+passed. The broader baseline above supplies a qualified D1 endpoint at each
+requested synthetic size. The old N5 timing runs remain search-only and are
+not reused as qualification evidence.
