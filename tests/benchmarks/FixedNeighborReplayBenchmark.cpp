@@ -40,6 +40,26 @@ struct GlobalReplayCsr
             squares.capacity()*sizeof(double);
     }
 };
+struct GlobalReplayCsrEntry
+{
+    std::uint32_t atom_position{},support_position{};
+};
+static_assert(sizeof(GlobalReplayCsrEntry)==2*sizeof(std::uint32_t));
+struct GlobalReplayCsrReference
+{
+    std::vector<std::size_t> offsets;
+    std::vector<GlobalReplayCsrEntry> entries;
+    std::size_t build_temporary_bytes{};
+    std::size_t StorageBytes() const
+    {
+        std::size_t offsets_bytes{},entries_bytes{},total{};
+        if(!joint::CheckedMultiplyBytes(offsets.capacity(),sizeof(std::size_t),offsets_bytes) ||
+            !joint::CheckedMultiplyBytes(entries.capacity(),sizeof(GlobalReplayCsrEntry),entries_bytes) ||
+            !joint::CheckedAddBytes(offsets_bytes,entries_bytes,total))
+            throw std::overflow_error("E2 CSR storage estimate overflow.");
+        return total;
+    }
+};
 struct ErrorSummary
 {
     std::size_t bitwise_mismatches{},normal_pairs{},nonfinite_pairs{};
@@ -64,9 +84,9 @@ struct Method
     const char * name;
     second_stage_test::ReplayPredictionStrategy prediction;
     second_stage_test::ReplayObjectiveStrategy objective;
-    bool exact,global_csr;
+    bool exact,global_csr,global_csr_reference{};
 };
-constexpr std::array<Method,6> Methods{{
+constexpr std::array<Method,7> Methods{{
     {"B1",second_stage_test::ReplayPredictionStrategy::DeltaAddDifference,
         second_stage_test::ReplayObjectiveStrategy::FullScan,false,false},
     {"B2",second_stage_test::ReplayPredictionStrategy::DeltaSubtractThenAdd,
@@ -78,7 +98,9 @@ constexpr std::array<Method,6> Methods{{
     {"D1",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
         second_stage_test::ReplayObjectiveStrategy::FullScan,true,false},
     {"E",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
-        second_stage_test::ReplayObjectiveStrategy::Incremental,true,false}
+        second_stage_test::ReplayObjectiveStrategy::Incremental,true,false},
+    {"E2",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+        second_stage_test::ReplayObjectiveStrategy::Incremental,false,false,true}
 }};
 double Seconds(Clock::time_point started)
 {return std::chrono::duration<double>(Clock::now()-started).count();}
@@ -142,6 +164,65 @@ GlobalReplayCsr BuildGlobalReplayCsr(const joint::Domain & domain,
     }
     return out;
 }
+GlobalReplayCsrReference BuildGlobalReplayCsrReference(const joint::Domain & domain,
+    const rhbm_gem::JointParameterLayout & layout)
+{
+    const auto row_count=static_cast<std::size_t>(domain.rows);
+    if(row_count==std::numeric_limits<std::size_t>::max())
+        throw std::overflow_error("Global CSR row count overflow.");
+    if(layout.full_atoms.size()>std::numeric_limits<std::uint32_t>::max())
+        throw std::overflow_error("Global CSR atom index does not fit its entry.");
+    std::vector<std::uint8_t> informative(row_count);
+    for(const auto row:layout.informative_rows) informative.at(row)=1;
+    std::vector<std::size_t> counts(row_count);
+    for(const auto atom_value:layout.full_atoms)
+    {
+        const auto & supports=domain.atoms[atom_value];
+        if(supports.size()>std::numeric_limits<std::uint32_t>::max())
+            throw std::overflow_error("Global CSR support index does not fit its entry.");
+        for(const auto & support:supports)
+        {
+            const auto row=static_cast<std::size_t>(support.row);
+            if(informative.at(row))
+            {
+                if(counts[row]==std::numeric_limits<std::size_t>::max())
+                    throw std::overflow_error("Global CSR contributor count overflow.");
+                ++counts[row];
+            }
+        }
+    }
+    GlobalReplayCsrReference out;
+    out.offsets.resize(row_count+1);
+    for(std::size_t row=0;row<row_count;++row)
+    {
+        if(counts[row]>std::numeric_limits<std::size_t>::max()-out.offsets[row])
+            throw std::overflow_error("Global CSR row offsets overflow.");
+        out.offsets[row+1]=out.offsets[row]+counts[row];
+    }
+    out.entries.resize(out.offsets.back());
+    std::vector<std::size_t> cursor(out.offsets.begin(),out.offsets.end()-1);
+    for(std::size_t atom_position=0;atom_position<layout.full_atoms.size();++atom_position)
+    {
+        const auto atom=layout.full_atoms[atom_position];
+        const auto & supports=domain.atoms[atom];
+        for(std::size_t support_position=0;support_position<supports.size();++support_position)
+        {
+            const auto row=static_cast<std::size_t>(supports[support_position].row);
+            if(!informative.at(row)) continue;
+            const auto entry_position=cursor[row]++;
+            out.entries[entry_position]={static_cast<std::uint32_t>(atom_position),
+                static_cast<std::uint32_t>(support_position)};
+        }
+    }
+    std::size_t counts_bytes{},cursor_bytes{},informative_bytes{};
+    if(!joint::CheckedMultiplyBytes(counts.capacity(),sizeof(std::size_t),counts_bytes) ||
+        !joint::CheckedMultiplyBytes(cursor.capacity(),sizeof(std::size_t),cursor_bytes) ||
+        !joint::CheckedMultiplyBytes(informative.capacity(),sizeof(std::uint8_t),informative_bytes) ||
+        !joint::CheckedAddBytes(counts_bytes,cursor_bytes,counts_bytes) ||
+        !joint::CheckedAddBytes(counts_bytes,informative_bytes,out.build_temporary_bytes))
+        throw std::overflow_error("Global CSR build memory estimate overflow.");
+    return out;
+}
 second_stage_test::ReplayCandidateResult EvaluateGlobalCsrCandidate(
     const rhbm_gem::JointParameterLayout & layout,
     joint::VectorRef observations,const joint::BlockCoordinateState & accepted,
@@ -176,6 +257,68 @@ second_stage_test::ReplayCandidateResult EvaluateGlobalCsrCandidate(
     }
     out.objective=.5*squared/(scale*scale);
     out.scratch_bytes=static_cast<std::size_t>(2*out.prediction.size()+widths.size())*sizeof(double);
+    return out;
+}
+second_stage_test::ReplayCandidateResult EvaluateGlobalCsrReferenceCandidate(
+    const joint::Domain & domain,const rhbm_gem::JointParameterLayout & layout,
+    joint::VectorRef observations,const joint::BlockCoordinateState & accepted,
+    joint::VectorRef candidate_eta,joint::VectorRef candidate_beta,double scale,
+    const joint::Indices & core_atoms,const joint::Indices & neighbor_atoms,
+    const joint::Indices & affected_rows,const GlobalReplayCsrReference & incidence)
+{
+    std::vector<std::uint8_t> active(layout.full_atoms.size());
+    for(const auto atom:core_atoms)
+    {
+        const auto found=std::find(layout.full_atoms.begin(),layout.full_atoms.end(),static_cast<std::size_t>(atom));
+        if(found==layout.full_atoms.end()) throw std::invalid_argument("E2 core atom is absent from component layout.");
+        active[static_cast<std::size_t>(found-layout.full_atoms.begin())]=1;
+    }
+    for(const auto atom:neighbor_atoms)
+    {
+        const auto found=std::find(layout.full_atoms.begin(),layout.full_atoms.end(),static_cast<std::size_t>(atom));
+        if(found==layout.full_atoms.end()) throw std::invalid_argument("E2 neighbor atom is absent from component layout.");
+        active[static_cast<std::size_t>(found-layout.full_atoms.begin())]=1;
+    }
+    Vector widths(static_cast<Eigen::Index>(layout.full_atoms.size()));
+    for(std::size_t position=0;position<layout.full_atoms.size();++position)
+        if(active[position]) widths(static_cast<Eigen::Index>(position))=
+            std::exp(candidate_eta(static_cast<Eigen::Index>(layout.full_atoms[position])));
+    second_stage_test::ReplayCandidateResult out;
+    out.prediction.resize(static_cast<Eigen::Index>(affected_rows.size()));
+    out.residual.resize(static_cast<Eigen::Index>(affected_rows.size()));
+    for(std::size_t local=0;local<affected_rows.size();++local)
+    {
+        const auto row=static_cast<std::size_t>(affected_rows[local]);
+        double prediction{};
+        for(std::size_t entry=incidence.offsets[row];entry<incidence.offsets[row+1];++entry)
+        {
+            const auto & contributor=incidence.entries[entry];
+            const auto atom_position=static_cast<std::size_t>(contributor.atom_position);
+            if(!active[atom_position]) continue;
+            const auto atom=static_cast<std::size_t>(layout.full_atoms[atom_position]);
+            const auto & support=domain.atoms[atom][static_cast<std::size_t>(contributor.support_position)];
+            const auto basis=joint::EvaluateKernel(support.square,widths(static_cast<Eigen::Index>(atom_position)),2.5);
+            prediction+=candidate_beta(2*static_cast<Eigen::Index>(atom))*basis.gaussian+
+                candidate_beta(2*static_cast<Eigen::Index>(atom)+1)*basis.charge;
+        }
+        out.prediction(static_cast<Eigen::Index>(local))=prediction;
+        out.residual(static_cast<Eigen::Index>(local))=prediction-observations(affected_rows[local]);
+    }
+    double delta_squared{};
+    for(std::size_t local=0;local<affected_rows.size();++local)
+    {
+        const double old_residual=accepted.residual(affected_rows[local]);
+        const double new_residual=out.residual(static_cast<Eigen::Index>(local));
+        delta_squared+=new_residual*new_residual-old_residual*old_residual;
+    }
+    out.objective=accepted.objective+.5*delta_squared/(scale*scale);
+    std::size_t scratch{};
+    if(!joint::CheckedMultiplyBytes(active.capacity(),sizeof(std::uint8_t),scratch))
+        throw std::overflow_error("E2 candidate scratch estimate overflow.");
+    std::size_t values{};
+    if(!joint::CheckedMultiplyBytes(static_cast<std::size_t>(widths.size()+out.prediction.size()+out.residual.size()),
+        sizeof(double),values) || !joint::CheckedAddBytes(scratch,values,out.scratch_bytes))
+        throw std::overflow_error("E2 candidate scratch estimate overflow.");
     return out;
 }
 void CompareMethod(const rhbm_gem::JointParameterLayout & layout,
@@ -250,6 +393,9 @@ void Run(int target_count)
     const auto fixture_started=Clock::now();
     rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",target_count));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    std::size_t accepted_state_bytes{};
+    if(!joint::CheckedMultiplyBytes(static_cast<std::size_t>(data.domain.rows),2*sizeof(double),
+        accepted_state_bytes)) throw std::overflow_error("Replay accepted-state memory estimate overflow.");
     Vector eta=Vector::Constant(static_cast<Eigen::Index>(data.layout.full_atoms.size()),std::log(.55));
     Vector beta(2*eta.size());
     for(Eigen::Index atom=0;atom<eta.size();++atom)
@@ -290,6 +436,18 @@ void Run(int target_count)
     const double csr_build_seconds=Seconds(csr_started);
     const auto csr_build_temporary_bytes=static_cast<std::size_t>(data.domain.rows)*
         (sizeof(std::uint8_t)+2*sizeof(std::size_t));
+    const auto csr_reference_started=Clock::now();
+    const auto csr_reference=BuildGlobalReplayCsrReference(data.domain,data.layout);
+    const double csr_reference_build_seconds=Seconds(csr_reference_started);
+    std::size_t e2_offset_bytes{},e2_entry_bytes{};
+    if(!joint::CheckedMultiplyBytes(csr_reference.offsets.capacity(),sizeof(std::size_t),e2_offset_bytes) ||
+        !joint::CheckedMultiplyBytes(csr_reference.entries.capacity(),sizeof(GlobalReplayCsrEntry),e2_entry_bytes))
+        throw std::overflow_error("E2 CSR component memory estimate overflow.");
+    std::size_t e2_csr_storage_bytes{},e2_csr_build_peak_bytes{};
+    if(!joint::CheckedAddBytes(e2_offset_bytes,e2_entry_bytes,e2_csr_storage_bytes) ||
+        !joint::CheckedAddBytes(e2_csr_storage_bytes,csr_reference.build_temporary_bytes,e2_csr_build_peak_bytes) ||
+        !joint::CheckedAddBytes(e2_csr_build_peak_bytes,accepted_state_bytes,e2_csr_build_peak_bytes))
+        throw std::overflow_error("E2 CSR build peak estimate overflow.");
     std::cout<<std::setprecision(17)
         <<"fixture_targets="<<target_count<<" observations="<<data.domain.rows
         <<" informative_rows="<<data.layout.informative_rows.size()<<" support_entries="<<support_entries
@@ -297,10 +455,16 @@ void Run(int target_count)
         <<" blocks="<<candidates.size()<<" affected_rows_min_median_max="
         <<affected_counts.front()<<":"<<affected_counts[affected_counts.size()/2]<<":"<<affected_counts.back()
         <<" candidate_sequence_bytes="<<sequence_bytes<<" fixture_and_sequence_seconds="<<fixture_seconds
-        <<" accepted_state_bytes="<<2*static_cast<std::size_t>(data.domain.rows)*sizeof(double)
+        <<" accepted_state_bytes="<<accepted_state_bytes
         <<" d2_index_build_seconds="<<csr_build_seconds
         <<" d2_index_bytes="<<global_incidence.StorageBytes()
-        <<" d2_index_build_peak_bytes_estimate="<<global_incidence.StorageBytes()+csr_build_temporary_bytes<<'\n';
+        <<" d2_index_build_peak_bytes_estimate="<<global_incidence.StorageBytes()+csr_build_temporary_bytes
+        <<" e2_csr_build_seconds="<<csr_reference_build_seconds
+        <<" e2_csr_offsets_bytes="<<e2_offset_bytes
+        <<" e2_csr_entries_bytes="<<e2_entry_bytes
+        <<" e2_csr_storage_bytes="<<e2_csr_storage_bytes
+        <<" e2_csr_build_temporary_bytes="<<csr_reference.build_temporary_bytes
+        <<" e2_csr_build_peak_bytes_estimate="<<e2_csr_build_peak_bytes<<'\n';
 
     std::array<MethodAccuracy,Methods.size()> accuracies{};
     const auto verification_started=Clock::now();
@@ -316,16 +480,22 @@ void Run(int target_count)
             const auto result=method.global_csr
                 ? EvaluateGlobalCsrCandidate(data.layout,data.y,accepted,
                     candidate.eta,candidate.beta,data.context.scale,candidate.affected_rows,global_incidence)
-                : second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
-                    accepted,candidate.eta,candidate.beta,data.context.scale,candidate.core_atoms,
-                    candidate.affected_rows,method.prediction,method.objective,
-                    method.exact ? &incidence : nullptr);
+                : method.global_csr_reference
+                    ? EvaluateGlobalCsrReferenceCandidate(data.domain,data.layout,data.y,accepted,
+                        candidate.eta,candidate.beta,data.context.scale,candidate.core_atoms,
+                        candidate.neighbor_atoms,candidate.affected_rows,csr_reference)
+                    : second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
+                        accepted,candidate.eta,candidate.beta,data.context.scale,candidate.core_atoms,
+                        candidate.affected_rows,method.prediction,method.objective,
+                        method.exact ? &incidence : nullptr);
             CompareMethod(data.layout,accepted,candidate,reference,result,accuracies[method_index]);
         }
     }
     const double verification_seconds=Seconds(verification_started);
     std::cout<<"full_reference_verification_seconds="<<verification_seconds<<'\n';
     for(std::size_t i=0;i<Methods.size();++i) ReportAccuracy(Methods[i].name,accuracies[i]);
+    if(accuracies[6].prediction.bitwise_mismatches || accuracies[6].residual.bitwise_mismatches)
+        throw std::runtime_error("E2 global CSR changed exact affected-row prediction or residual values.");
 
     constexpr std::size_t samples=5;
     std::array<MethodTiming,Methods.size()+1> timings{};
@@ -346,8 +516,7 @@ void Run(int target_count)
                     auto replay=joint::FullReplayForTesting(data.domain,data.layout,data.y,
                         replay_candidate.eta,replay_candidate.beta,data.context.scale);
                     candidate_time+=Seconds(started); checksum+=replay.objective;
-                    max_temporary=std::max(max_temporary,
-                        2*static_cast<std::size_t>(data.domain.rows)*sizeof(double));
+                    max_temporary=std::max(max_temporary,accepted_state_bytes);
                     continue;
                 }
                 const auto & method=Methods[method_index-1];
@@ -364,10 +533,15 @@ void Run(int target_count)
                     ? EvaluateGlobalCsrCandidate(data.layout,data.y,accepted,
                         replay_candidate.eta,replay_candidate.beta,data.context.scale,
                         replay_candidate.affected_rows,global_incidence)
-                    : second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
-                        accepted,replay_candidate.eta,replay_candidate.beta,data.context.scale,
-                        replay_candidate.core_atoms,replay_candidate.affected_rows,method.prediction,method.objective,
-                        method.exact ? &incidence : nullptr);
+                    : method.global_csr_reference
+                        ? EvaluateGlobalCsrReferenceCandidate(data.domain,data.layout,data.y,accepted,
+                            replay_candidate.eta,replay_candidate.beta,data.context.scale,
+                            replay_candidate.core_atoms,replay_candidate.neighbor_atoms,
+                            replay_candidate.affected_rows,csr_reference)
+                        : second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
+                            accepted,replay_candidate.eta,replay_candidate.beta,data.context.scale,
+                            replay_candidate.core_atoms,replay_candidate.affected_rows,method.prediction,method.objective,
+                            method.exact ? &incidence : nullptr);
                 candidate_time+=Seconds(started); checksum+=result.objective;
                 max_temporary=std::max(max_temporary,result.scratch_bytes);
             }
@@ -402,6 +576,15 @@ void Run(int target_count)
                 ((d1_per_candidate-d2_per_candidate)*static_cast<double>(candidates.size()));
     else
         std::cout<<" break_even_candidates_vs_d1=never break_even_sweeps_vs_d1=never";
+    const auto e1_candidate=median_seconds(timings[6].total)/static_cast<double>(candidates.size());
+    const auto e2_candidate=median_seconds(timings[7].total)/static_cast<double>(candidates.size());
+    std::cout<<"\ne2_break_even_candidates_vs_e1=";
+    if(e1_candidate>e2_candidate)
+        std::cout<<std::ceil(csr_reference_build_seconds/(e1_candidate-e2_candidate))
+            <<" break_even_sweeps="<<csr_reference_build_seconds/
+                ((e1_candidate-e2_candidate)*static_cast<double>(candidates.size()));
+    else std::cout<<"never break_even_sweeps=never";
+    std::cout<<" e2_candidate_savings_ms="<<(e1_candidate-e2_candidate)*1000.0<<'\n';
     std::cout<<'\n';
     rusage usage{};
     if(getrusage(RUSAGE_SELF,&usage)==0)

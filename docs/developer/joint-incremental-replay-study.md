@@ -522,6 +522,60 @@ that covers both the candidate and accepted objectives is implemented and
 validated. R1 changed no Production path or numeric threshold. The full
 serial CTest suite passed 19/19 in 22.02 s after this test-only change.
 
+### R2: E1 on-demand incidence versus E2 global CSR
+
+R2 reuses the direct incremental objective from R1 and keeps exact
+affected-row prediction. E1 builds the existing local incidence for every
+candidate. E2 builds one global row-to-contributor CSR, then filters each
+affected row to the block's core and neighbor atoms. The E2 CSR stores a
+32-bit position in `layout.full_atoms` and a 32-bit position in that atom's
+existing support list. It reads the squared distance from `domain.atoms` and
+does not copy squared-distance values. Construction checks the row-count,
+contributor-count, offset, support-index, atom-index, and byte arithmetic for
+overflow. Contributor fill order follows `layout.full_atoms` and original
+support order. E2 remains test-only; this study did not add a Production
+selector or change the `StructuralPartition` path.
+
+The benchmark used five timed repeats over 84 candidates at 1,000 targets and
+26 candidates at 300 targets. E2 prediction and residual matched Full Replay
+bitwise on all 38,225,040 row comparisons at 1,000 targets and 3,550,560 at
+300 targets. E1 and E2 share the same incremental objective calculation, so
+both differed from Full Scan on every candidate: maximum absolute error was
+`3.64292e-17` (42 ULP) at 1,000 targets and `4.33681e-17` (50 ULP) at 300.
+
+| Targets | Actual support entries | E1 incidence prep / candidate | E1 replay / candidate | E1 total / candidate | E2 CSR build once | E2 replay / candidate | E2 amortized / candidate | Break-even candidates | E2 CSR resident | E2 build scratch | E2 candidate scratch |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 300 | 154,500 | 0.365 ms | 0.201 ms | 0.623 ms | 0.724 ms | 0.214 ms | 0.242 ms | 2 | 2,328,488 B | 2,321,520 B | 91,020 B |
+| 1,000 | 515,000 | 0.380 ms | 0.209 ms | 0.647 ms | 2.916 ms | 0.225 ms | 0.260 ms | 7 | 7,760,488 B | 7,736,020 B | 97,320 B |
+
+The amortized E2 time includes its CSR build divided across the measured block
+candidates. It was 2.58x faster than E1 at 300 targets and 2.49x at 1,000.
+E2's candidate replay itself was about 6–8% slower than E1's replay because it
+filters global row entries, but avoids E1's 0.365–0.380 ms per-candidate local
+incidence build. The CSR break-even was below one 26- or 84-candidate sweep.
+The incremental objective cache adds no per-row resident data; the accepted
+scalar objective is already part of the state.
+
+At 1,000 targets the E2 index had 3,640,488 B of row offsets and 4,120,000 B
+of contributor entries. At 300 targets those were 1,092,488 B and 1,236,000 B.
+The reported E2 build scratch consists of row counts, a fill cursor, and the
+informative-row bitmap. E2's build peak estimate, including the accepted
+prediction/residual state, was 6,834,968 B at 300 targets and 22,777,468 B at
+1,000 targets. The full benchmark process peak RSS was 78,086,144 B and
+205,602,816 B, respectively; those process peaks include the synthetic input,
+both CSR variants, reference checks, and all methods, not a per-method peak.
+E1's candidate scratch was 321,824 B; E2's was 91,020–97,320 B. Accepted state
+is not changed during candidate evaluation, so rollback retains no extra full
+copy in either path.
+
+The 5,938,087-observation real workload and its measured support-entry count
+were unavailable. No fixed average contributor count was used to extrapolate
+its CSR memory. E2 advances to R3 as an experimental candidate because its
+replay-time savings were repeatable at both measured synthetic sizes and its
+scratch remains bounded by actual index sizes. Promotion still depends on the
+R3 decision-safety gate; these replay-only timings do not establish a
+FixedNeighbor or end-to-end speedup.
+
 ## Roadmap status
 
 | Stage | Status | Result |
