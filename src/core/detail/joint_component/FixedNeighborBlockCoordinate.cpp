@@ -1287,14 +1287,32 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             const bool candidate_unchanged=candidate_fast_unchanged ||
                 ((out.state.eta.array()==candidate_eta.array()).all() &&
                     (out.state.beta.array()==candidate_beta.array()).all());
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            const auto observe_candidate=[&](bool accepted_candidate,bool unchanged_candidate) {
+                if(!policy.candidate_observer) return;
+                const auto & observed_eta=candidate_fast_unchanged ? out.state.eta : candidate_eta;
+                const auto & observed_beta=candidate_fast_unchanged ? out.state.beta : candidate_beta;
+                const auto & observed_prediction=candidate_fast_unchanged ? out.state.prediction : replay_workspace.prediction;
+                const auto & observed_residual=candidate_fast_unchanged ? out.state.residual : replay_workspace.residual;
+                policy.candidate_observer({sweep_index+1,block_index+1,out.state,core_atoms,affected_rows,
+                    observed_eta,observed_beta,observed_prediction,observed_residual,candidate_objective,
+                    accepted_candidate,unchanged_candidate,!candidate_fast_unchanged});
+            };
+#endif
             if(!delta_enclosed)
             {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                observe_candidate(false,candidate_unchanged);
+#endif
                 record.status="failed"; record.reason="block-objective-replay-failed"; out.reason=record.reason;
                 finish_record(std::move(record),core_atoms,block_started); stop=true; break;
             }
             if(record.global_replay_delta>0 && !(record.local_objective_after<=record.local_objective_before &&
                 record.global_replay_delta<=record.objective_replay_enclosure))
             {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                observe_candidate(false,candidate_unchanged);
+#endif
                 record.status=record.recovery_retry ? "failed" : "unchanged";
                 record.reason=record.recovery_retry ? "block-recovery-exhausted" : "block-objective-increase";
                 if(record.recovery_retry) {out.reason=record.reason; stop=true;}
@@ -1303,6 +1321,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 continue;
             }
             const bool unchanged=candidate_unchanged;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            observe_candidate(!unchanged,unchanged);
+#endif
             if(!unchanged)
                 for(const auto atom:core_atoms)
                     sweep.maximum_accepted_log_width_step=std::max(sweep.maximum_accepted_log_width_step,

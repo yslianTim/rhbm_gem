@@ -14,6 +14,18 @@ struct BlockCoordinateState
     double objective{};
 };
 
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+struct FixedNeighborCandidateEvent
+{
+    std::size_t sweep{},block{};
+    const BlockCoordinateState & accepted_before;
+    const Indices & core_atoms,& affected_rows;
+    const Vector & candidate_eta,& candidate_beta,& full_prediction,& full_residual;
+    double full_objective{};
+    bool accepted{},unchanged{},full_replay_ran{};
+};
+#endif
+
 double BlockObjectiveReplayEnclosure(double reference);
 bool WithinBlockObjectiveReplay(double error,double reference);
 
@@ -166,6 +178,7 @@ struct FixedNeighborPolicy
     bool assess_parameter_stability{};
     bool collect_telemetry{};
     bool collect_diagnostics{};
+    std::function<void(const FixedNeighborCandidateEvent &)> candidate_observer;
 #endif
     std::size_t component_index{};
     std::string component_id;
