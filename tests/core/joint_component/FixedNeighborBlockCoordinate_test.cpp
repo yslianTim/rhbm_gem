@@ -1197,6 +1197,13 @@ TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveRefreshIntervals
     ASSERT_TRUE(every_sweep.endpoint_certified)<<every_sweep.endpoint_trust.reason;
     EXPECT_TRUE(every_sweep.assessment.independent_replay.passed);
     EXPECT_EQ(every_sweep.work.objective_cache_refreshes,every_sweep.sweep_count);
+    EXPECT_GT(every_sweep.work.sweep_replay_seconds,0.0);
+    EXPECT_GT(every_sweep.work.sweep_replay_audit_seconds,0.0);
+    EXPECT_GT(every_sweep.work.sweep_global_state_seconds,0.0);
+    EXPECT_GT(every_sweep.work.objective_cache_refresh_seconds,0.0);
+    EXPECT_LE(every_sweep.work.sweep_replay_seconds+every_sweep.work.sweep_replay_audit_seconds+
+        every_sweep.work.sweep_global_state_seconds+every_sweep.work.objective_cache_refresh_seconds,
+        every_sweep.search_seconds);
 }
 
 TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveRemainsQualifiedAcrossInitialWidths)

@@ -420,7 +420,7 @@ void RunControlled(int target_count,bool qualify,int selected_method=-1,bool per
             };
     struct Metrics
     {
-        std::vector<double> wall,search,candidate,local,sweep,global,endpoint,independent,reconciliation;
+        std::vector<double> wall,search,candidate,local,sweep,audit,global,endpoint,independent,reconciliation;
         std::size_t candidates{},accepted{},unchanged{},incremental{},fallbacks{},refreshes{},
             peak_estimate{},candidate_scratch{};
         double maximum_cache_replay_error{},maximum_objective_replay_error{};
@@ -439,6 +439,7 @@ void RunControlled(int target_count,bool qualify,int selected_method=-1,bool per
             out.wall.push_back(timing.wall); out.search.push_back(timing.search);
             out.candidate.push_back(timing.candidate_replay); out.local.push_back(timing.local_search);
             out.sweep.push_back(timing.sweep_replay); out.global.push_back(timing.global_state);
+            out.audit.push_back(result.work.sweep_replay_audit_seconds);
             out.endpoint.push_back(result.work.endpoint_verification_seconds);
             out.independent.push_back(result.work.independent_replay_seconds);
             out.reconciliation.push_back(result.work.objective_cache_refresh_seconds);
@@ -508,6 +509,7 @@ void RunControlled(int target_count,bool qualify,int selected_method=-1,bool per
             <<" candidate_evaluation_median_seconds="<<Median(m.candidate)
             <<" local_search_median_seconds="<<Median(m.local)
             <<" sweep_replay_median_seconds="<<Median(m.sweep)
+            <<" replay_audit_median_seconds="<<Median(m.audit)
             <<" global_state_median_seconds="<<Median(m.global)
             <<" endpoint_verification_median_seconds="<<Median(m.endpoint)
             <<" independent_replay_median_seconds="<<Median(m.independent)

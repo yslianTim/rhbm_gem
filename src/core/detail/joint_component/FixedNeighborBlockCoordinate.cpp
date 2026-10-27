@@ -1743,14 +1743,17 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             (void)timer;
         }
         const auto & replay=replay_workspace;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        const auto objective_reconciliation_started=policy.refresh_objective_after_sweep_for_testing && collect_telemetry ?
-            Clock::now() : Clock::time_point{};
-#endif
+        const auto replay_audit_started=collect_telemetry ? Clock::now() : Clock::time_point{};
         sweep.cache_replay_error=PredictionDifference(out.state.prediction,replay.prediction);
         sweep.objective_replay_error=std::abs(out.state.objective-replay.objective);
+        const bool sweep_replay_valid=
+            sweep.cache_replay_error<=2e-12+2e-13*std::max(1.0,replay.prediction.cwiseAbs().maxCoeff()) &&
+            WithinBlockObjectiveReplay(sweep.objective_replay_error,replay.objective);
         if(collect_telemetry)
+        {
             out.work.maximum_cache_replay_error=std::max(out.work.maximum_cache_replay_error,sweep.cache_replay_error);
+            out.work.sweep_replay_audit_seconds+=Seconds(replay_audit_started);
+        }
         const Vector eta=Select(out.state.eta,IndicesOf(layout.full_atoms));
         const Vector beta=SelectBeta(out.state.beta,layout.full_atoms);
         const auto global_started=Clock::now();
@@ -1795,9 +1798,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(policy.state_observer) policy.state_observer(sweep_index+1,out.state,out.sweeps.back(),out.blocks);
 #endif
-        const bool sweep_replay_valid=
-            sweep.cache_replay_error<=2e-12+2e-13*std::max(1.0,replay.prediction.cwiseAbs().maxCoeff()) &&
-            WithinBlockObjectiveReplay(sweep.objective_replay_error,replay.objective);
         if(!sweep_replay_valid)
         {out.reason="block-cache-replay-failed"; stop=true; break;}
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -1807,6 +1807,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         if(policy.refresh_objective_after_sweep_for_testing)
         {
             // The replay audit above must pass before objective-only refresh is allowed.
+            const auto objective_reconciliation_started=collect_telemetry ? Clock::now() : Clock::time_point{};
             ++sweep.objective_cache_refreshes;
             sweep.maximum_objective_refresh_error=sweep.objective_replay_error;
             if(collect_telemetry)
@@ -1817,13 +1818,14 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 out.work.maximum_accepted_updates_between_objective_refreshes=std::max(
                     out.work.maximum_accepted_updates_between_objective_refreshes,
                     accepted_updates_since_objective_refresh);
-                out.work.objective_cache_refresh_seconds+=Seconds(objective_reconciliation_started);
             }
             accepted_updates_since_objective_refresh=0;
             out.state.objective=replay.objective;
             sweep.objective_after=replay.objective;
             sweep.objective_cache_refreshed=true;
             objective_cache_trusted=true;
+            if(collect_telemetry)
+                out.work.objective_cache_refresh_seconds+=Seconds(objective_reconciliation_started);
         }
         out.final_sweep=sweep;
         if(retain_diagnostics) out.sweeps.back()=sweep;

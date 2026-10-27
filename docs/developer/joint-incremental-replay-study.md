@@ -1307,3 +1307,45 @@ production library was built without test-only instrumentation; the audited E1
 measurements use the test benchmark policy and do not change the production
 default. No third-party dependency, optimization threshold, or convergence
 criterion changed. The repository is not pushed.
+
+### M0 — Promotion baseline at `94ac5f3`
+
+The current `develop` source was measured with the Release, test-instrumented
+closed-loop benchmark before changing the production path. Each D1/E1 mode ran
+one warm-up and five timed runs, serially. Both modes completed endpoint
+certification and independent replay on all four standard chain fixtures;
+each stopped with `block-stationary`. D1 used a full objective scan for each
+candidate. E1 used exact affected-row prediction, incremental objective
+updates, and a full replay audit and objective refresh after every sweep.
+
+| Targets | D1 / E1 independent objective | Mean A / C / width (D1 and E1) | Global A/C KKT | Projected width KKT | Sweeps | D1 / E1 search median (s) | D1 / E1 wall median (s) | Preflight peak (bytes) | D1 / E1 process peak RSS (bytes) |
+| ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 3 | `2.0199078132865188e-10` / same | 1.9999831 / 0.20000604 / 0.49999942 | `3.330669074e-16` | `3.885780586e-15` | 4 | 0.004412251 / 0.004281458 | 0.005630500 / 0.005387041 | 447,445 | 23,724,032 / 23,756,800 |
+| 30 | `1.5170760306846197e-10` / same | 1.9999989 / 0.20000029 / 0.49999995 | `1.602388888e-9` | `1.880662293e-11` | 5 | 0.097959709 / 0.095761459 | 0.119049083 / 0.117569250 | 3,930,461 | 35,749,888 / 35,651,584 |
+| 300 | `1.4790433590012404e-10` / same | 1.9999998 / 0.20000006 / 0.49999999 | `5.067264247e-10` | `1.878275313e-12` | 5 | 1.290707000 / 1.009375957 | 1.515713083 / 1.235971167 | 36,716,466 | 100,040,704 / 94,289,920 |
+| 1,000 | `1.4790435904529177e-10` / same | 2.0000000 / 0.20000002 / 0.50000000 | `2.775278306e-10` | `5.634381850e-13` | 5 | 6.433934333 / 3.376282041 | 7.186736791 / 4.130182332 | 121,648,896 | 256,966,656 / 256,966,656 |
+
+The final A/C/width distributions matched between D1 and E1 for these fixtures;
+the table records their means. The previous E1 `objective_reconciliation`
+values (0.000408, 0.005168, 0.050663, and 0.169116 seconds) included the
+overlapping global-state evaluation (0.000405, 0.005039, 0.050317, and
+0.168025 seconds). They are not objective-refresh costs. M0 now times the
+full-replay consistency audit separately and starts the reconciliation timer
+only after the audit passes and after global-state evaluation has completed.
+
+The acceptance inequalities also constrain the positive-delta branch: if the
+local objective is nonincreasing and the local/global discrepancy is enclosed
+by `epsilon`, then `global_delta <= local_after - local_before + epsilon <=
+epsilon`. Thus its separate rejection condition is unreachable for finite
+values satisfying those checks; it remains in place to preserve the explicit
+acceptance contract and protect floating-point boundary behavior. The
+consistency failure retains its existing terminal `block-objective-replay-failed`
+semantics. The audit also found that `WithinBlockObjectiveReplay(Inf, Inf)` is
+true under IEEE comparisons, so a nonfinite candidate objective cannot rely
+on the enclosure check alone. M1 will explicitly qualify candidate parameters,
+prediction, residual, and objective for finiteness before commit.
+
+A post-fix 1,000-target timing check separated the E1 median sweep replay
+(0.085563 s), replay audit (0.000881 s), global-state evaluation (0.168027 s),
+and objective-only reconciliation (0.000000125 s). This is a timer-boundary
+check, not a replacement for the final Production Release benchmark.

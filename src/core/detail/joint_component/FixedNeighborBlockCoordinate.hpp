@@ -137,7 +137,7 @@ struct FixedNeighborWork
         independent_replay_seconds{},old_core_seconds{},
         effective_response_seconds{},local_search_seconds{},local_state_seconds{},
         candidate_copy_seconds{},candidate_replay_seconds{},cache_update_seconds{},sweep_replay_seconds{},
-        sweep_global_state_seconds{},maximum_block_seconds{},maximum_cache_replay_error{};
+        sweep_replay_audit_seconds{},sweep_global_state_seconds{},maximum_block_seconds{},maximum_cache_replay_error{};
     std::size_t full_candidate_replays{},affected_candidate_replays{},candidate_replay_skipped_unchanged{},
         sweep_replays{},affected_row_updates{},affected_replay_peak_scratch_bytes{};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
