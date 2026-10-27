@@ -20,6 +20,79 @@ struct BoundedSubproblemContext
     bool kkt_norms_ready{};
 };
 
+struct BoundedLmWorkspace
+{
+    Eigen::MatrixXd augmented;
+    Eigen::VectorXd rhs,adjusted,candidate,step,residual,gradient,multipliers,solution;
+    std::vector<Eigen::Index> free_indices,hit_indices;
+    std::vector<bool> active;
+};
+
+void RecordWorkspaceResize(bool allocation)
+{
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    auto & work=BoundedLmWorkForTesting();
+    ++work.workspace_resize_events;
+    if(allocation) ++work.workspace_allocation_sites;
+#else
+    (void)allocation;
+#endif
+}
+
+void ResizeWorkspaceVector(Eigen::VectorXd & value,Eigen::Index size)
+{
+    if(value.size()!=size)
+    {
+        RecordWorkspaceResize(value.size()==0 && size>0);
+        value.resize(size);
+    }
+}
+
+void ResizeWorkspaceMatrix(Eigen::MatrixXd & value,Eigen::Index rows,Eigen::Index columns)
+{
+    if(value.rows()!=rows || value.cols()!=columns)
+    {
+        RecordWorkspaceResize(value.size()==0 && rows>0 && columns>0);
+        value.resize(rows,columns);
+    }
+}
+
+void PrepareWorkspace(BoundedLmWorkspace & workspace,Eigen::Index rows,Eigen::Index columns)
+{
+    if(workspace.active.size()!=static_cast<std::size_t>(columns))
+    {
+        RecordWorkspaceResize(workspace.active.empty() && columns>0);
+        workspace.active.resize(static_cast<std::size_t>(columns));
+    }
+    for(auto * value:{&workspace.candidate,&workspace.step,&workspace.gradient,&workspace.multipliers})
+        ResizeWorkspaceVector(*value,columns);
+    ResizeWorkspaceVector(workspace.adjusted,rows);
+    ResizeWorkspaceVector(workspace.residual,rows);
+    if(workspace.free_indices.capacity()<static_cast<std::size_t>(columns))
+    {
+        RecordWorkspaceResize(workspace.free_indices.capacity()==0 && columns>0);
+        workspace.free_indices.reserve(static_cast<std::size_t>(columns));
+    }
+    if(workspace.hit_indices.capacity()<static_cast<std::size_t>(columns))
+    {
+        RecordWorkspaceResize(workspace.hit_indices.capacity()==0 && columns>0);
+        workspace.hit_indices.reserve(static_cast<std::size_t>(columns));
+    }
+}
+
+void CopyActiveSetStep(ActiveSetStep & destination,const ActiveSetStep & source)
+{
+    if(destination.step.size()!=source.step.size())
+        RecordWorkspaceResize(destination.step.size()==0 && source.step.size()>0);
+    if(destination.gradient.size()!=source.gradient.size())
+        RecordWorkspaceResize(destination.gradient.size()==0 && source.gradient.size()>0);
+    if(destination.multipliers.size()!=source.multipliers.size())
+        RecordWorkspaceResize(destination.multipliers.size()==0 && source.multipliers.size()>0);
+    if(destination.active.capacity()<source.active.size())
+        RecordWorkspaceResize(destination.active.capacity()==0 && !source.active.empty());
+    destination=source;
+}
+
 bool ValidSubproblemInput(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,
     const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double lambda)
 {
@@ -80,31 +153,33 @@ struct BoundedLmTimer
 };
 #endif
 
-ActiveSetStep SolveAtDamping(BoundedSubproblemContext & context,const Eigen::MatrixXd & j,
-    const Eigen::VectorXd & r,const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double lambda
+void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & workspace,
+    const Eigen::MatrixXd & j,const Eigen::VectorXd & r,const Eigen::VectorXd & d,
+    const Eigen::VectorXd & upper,double lambda,ActiveSetStep & result
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     ,BoundedLmDampingTrace * trace
 #endif
 )
 {
     const Eigen::Index n=j.cols();
-    if(!std::isfinite(lambda) || lambda<0.0)
-        return Failure("invalid-subproblem-input");
-
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     auto & work=BoundedLmWorkForTesting();
-    ++work.workspace_allocation_sites; // active mask
 #endif
+    result.valid=false; result.status.clear(); result.damping=lambda;
+    result.scaled_step_norm=0.0; result.kkt_inf_norm=0.0;
+    result.iterations=0; result.releases=0;
+    const auto fail=[&](const char * status) {result.status=status;};
+    if(!std::isfinite(lambda) || lambda<0.0)
+    {fail("invalid-subproblem-input"); return;}
+
+    PrepareWorkspace(workspace,j.rows(),n);
     const double bound_tolerance=context.bound_tolerance;
-    std::vector<bool> active(static_cast<std::size_t>(n),false);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    ++work.workspace_allocation_sites; // step
-#endif
-    Eigen::VectorXd step=Eigen::VectorXd::Zero(n);
+    std::fill(workspace.active.begin(),workspace.active.end(),false);
+    workspace.step.setZero();
     for(Eigen::Index i=0;i<n;++i)
     {
-        active[static_cast<std::size_t>(i)]=upper(i)<=bound_tolerance;
-        if(active[static_cast<std::size_t>(i)]) step(i)=upper(i);
+        workspace.active[static_cast<std::size_t>(i)]=upper(i)<=bound_tolerance;
+        if(workspace.active[static_cast<std::size_t>(i)]) workspace.step(i)=upper(i);
     }
 
     std::size_t releases{};
@@ -113,142 +188,117 @@ ActiveSetStep SolveAtDamping(BoundedSubproblemContext & context,const Eigen::Mat
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(trace)
         {
-            trace->active_set_sequence.push_back(active);
-            trace->step_sequence.push_back(step);
+            trace->active_set_sequence.push_back(workspace.active);
+            trace->step_sequence.push_back(workspace.step);
             trace->iterations=iteration+1;
         }
 #endif
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         ++work.active_set_iterations;
 #endif
-        std::vector<Eigen::Index> free_indices;
+        workspace.free_indices.clear();
         for(Eigen::Index i=0;i<n;++i)
-            if(!active[static_cast<std::size_t>(i)])
-            {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                if(free_indices.size()==free_indices.capacity()) ++work.workspace_allocation_sites;
-#endif
-                free_indices.push_back(i);
-            }
+            if(!workspace.active[static_cast<std::size_t>(i)])
+                workspace.free_indices.push_back(i);
 
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        ++work.workspace_allocation_sites; // candidate
-#endif
-        Eigen::VectorXd candidate=step;
-        if(!free_indices.empty())
+        workspace.candidate=workspace.step;
+        if(!workspace.free_indices.empty())
         {
-            const Eigen::Index free_count=static_cast<Eigen::Index>(free_indices.size());
-            Eigen::MatrixXd augmented(j.rows()+(lambda>0.0 ? free_count : 0),free_count);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(augmented.size()) ++work.workspace_allocation_sites;
-#endif
-            Eigen::VectorXd rhs(augmented.rows());
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(rhs.size()) ++work.workspace_allocation_sites;
-#endif
-            augmented.setZero();
-            rhs.setZero();
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(r.size()) ++work.workspace_allocation_sites;
-#endif
-            Eigen::VectorXd adjusted=r;
+            const Eigen::Index free_count=static_cast<Eigen::Index>(workspace.free_indices.size());
+            const Eigen::Index augmented_rows=j.rows()+(lambda>0.0 ? free_count : 0);
+            ResizeWorkspaceMatrix(workspace.augmented,augmented_rows,free_count);
+            ResizeWorkspaceVector(workspace.rhs,augmented_rows);
+            ResizeWorkspaceVector(workspace.solution,free_count);
+            workspace.augmented.setZero();
+            workspace.rhs.setZero();
+            workspace.adjusted=r;
             for(Eigen::Index i=0;i<n;++i)
-                if(active[static_cast<std::size_t>(i)]) adjusted.noalias()+=j.col(i)*step(i);
-            rhs.head(j.rows())=-adjusted;
+                if(workspace.active[static_cast<std::size_t>(i)])
+                    workspace.adjusted.noalias()+=j.col(i)*workspace.step(i);
+            workspace.rhs.head(j.rows())=-workspace.adjusted;
             for(Eigen::Index k=0;k<free_count;++k)
-                augmented.col(k).head(j.rows())=j.col(free_indices[static_cast<std::size_t>(k)]);
+                workspace.augmented.col(k).head(j.rows())=
+                    j.col(workspace.free_indices[static_cast<std::size_t>(k)]);
             if(lambda>0.0)
             {
                 const double root=std::sqrt(lambda);
                 for(Eigen::Index k=0;k<free_count;++k)
                 {
-                    const auto index=free_indices[static_cast<std::size_t>(k)];
-                    augmented(j.rows()+k,k)=root*d(index);
+                    const auto index=workspace.free_indices[static_cast<std::size_t>(k)];
+                    workspace.augmented(j.rows()+k,k)=root*d(index);
                 }
             }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            const auto bytes=static_cast<std::size_t>(n)*(2*sizeof(double))+
-                ((static_cast<std::size_t>(n)+8*sizeof(std::size_t)-1)/(8*sizeof(std::size_t)))*sizeof(std::size_t)+
-                static_cast<std::size_t>(n)*2*sizeof(Eigen::Index)+
-                static_cast<std::size_t>(augmented.size()+rhs.size()+adjusted.size()+free_count)*sizeof(double);
+            const auto packed_bool_bytes=((static_cast<std::size_t>(n)+8*sizeof(std::size_t)-1)/
+                (8*sizeof(std::size_t)))*sizeof(std::size_t);
+            const auto double_count=static_cast<std::size_t>(workspace.augmented.size()+workspace.rhs.size()+
+                workspace.adjusted.size()+workspace.residual.size()+workspace.candidate.size()+
+                workspace.step.size()+workspace.gradient.size()+workspace.multipliers.size()+
+                workspace.solution.size())+6*static_cast<std::size_t>(n);
+            const auto bytes=double_count*sizeof(double)+3*packed_bool_bytes+
+                2*static_cast<std::size_t>(n)*sizeof(Eigen::Index);
             work.workspace_peak_bytes=std::max(work.workspace_peak_bytes,bytes);
 #endif
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             const auto qr_started=std::chrono::steady_clock::now();
 #endif
-            Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr(augmented);
+            Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr(workspace.augmented);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             ++work.dense_qr_factorizations;
             work.dense_qr_factorization_seconds+=std::chrono::duration<double>(
                 std::chrono::steady_clock::now()-qr_started).count();
 #endif
             qr.setThreshold(64.0*std::numeric_limits<double>::epsilon()*
-                static_cast<double>(std::max(augmented.rows(),augmented.cols())));
+                static_cast<double>(std::max(workspace.augmented.rows(),workspace.augmented.cols())));
             const auto rank=qr.rank();
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             if(trace) trace->free_ranks.push_back(rank);
 #endif
-            if(rank!=free_count) return Failure("rank-deficient-free-subproblem");
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            ++work.workspace_allocation_sites; // QR solution
-#endif
-            const Eigen::VectorXd solution=qr.solve(rhs);
-            if(!solution.allFinite()) return Failure("non-finite-free-solution");
+            if(rank!=free_count) {fail("rank-deficient-free-subproblem"); return;}
+            workspace.solution=qr.solve(workspace.rhs);
+            if(!workspace.solution.allFinite()) {fail("non-finite-free-solution"); return;}
             for(Eigen::Index k=0;k<free_count;++k)
-                candidate(free_indices[static_cast<std::size_t>(k)])=solution(k);
+                workspace.candidate(workspace.free_indices[static_cast<std::size_t>(k)])=
+                    workspace.solution(k);
         }
 
-        if(!candidate.allFinite()) return Failure("non-finite-candidate-step");
+        if(!workspace.candidate.allFinite()) {fail("non-finite-candidate-step"); return;}
         double first_hit=1.0;
-        std::vector<Eigen::Index> hit_indices;
-        for(const auto index:free_indices)
+        workspace.hit_indices.clear();
+        for(const auto index:workspace.free_indices)
         {
-            if(candidate(index)<=upper(index)) continue;
-            const double direction=candidate(index)-step(index);
-            if(!(direction>0.0)) return Failure("inconsistent-active-set-direction");
-            const double alpha=std::clamp((upper(index)-step(index))/direction,0.0,1.0);
+            if(workspace.candidate(index)<=upper(index)) continue;
+            const double direction=workspace.candidate(index)-workspace.step(index);
+            if(!(direction>0.0)) {fail("inconsistent-active-set-direction"); return;}
+            const double alpha=std::clamp((upper(index)-workspace.step(index))/direction,0.0,1.0);
             if(alpha<first_hit-bound_tolerance)
             {
                 first_hit=alpha;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                if(hit_indices.empty() && !hit_indices.capacity()) ++work.workspace_allocation_sites;
-#endif
-                hit_indices.assign(1,index);
+                workspace.hit_indices.assign(1,index);
             }
             else if(std::abs(alpha-first_hit)<=bound_tolerance)
-            {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                if(hit_indices.size()==hit_indices.capacity()) ++work.workspace_allocation_sites;
-#endif
-                hit_indices.push_back(index);
-            }
+                workspace.hit_indices.push_back(index);
         }
-        if(!hit_indices.empty())
+        if(!workspace.hit_indices.empty())
         {
-            step.noalias()+=first_hit*(candidate-step);
-            for(const auto index:hit_indices)
+            workspace.step.noalias()+=first_hit*(workspace.candidate-workspace.step);
+            for(const auto index:workspace.hit_indices)
             {
-                step(index)=upper(index);
-                active[static_cast<std::size_t>(index)]=true;
+                workspace.step(index)=upper(index);
+                workspace.active[static_cast<std::size_t>(index)]=true;
             }
             continue;
         }
-        step=std::move(candidate);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        ++work.workspace_allocation_sites; // residual
-#endif
-        const Eigen::VectorXd residual=j*step+r;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        ++work.workspace_allocation_sites; // gradient
-#endif
-        Eigen::VectorXd gradient=j.transpose()*residual+
-            lambda*d.cwiseProduct(d).cwiseProduct(step);
-        if(!gradient.allFinite()) return Failure("non-finite-subproblem-gradient");
-        const double kkt_tolerance=2e-11*KktScale(j,r,d,step,lambda,context);
+        workspace.step.swap(workspace.candidate);
+        workspace.residual=j*workspace.step+r;
+        workspace.gradient=j.transpose()*workspace.residual+
+            lambda*d.cwiseProduct(d).cwiseProduct(workspace.step);
+        if(!workspace.gradient.allFinite()) {fail("non-finite-subproblem-gradient"); return;}
+        const double kkt_tolerance=2e-11*KktScale(j,r,d,workspace.step,lambda,context);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(trace)
         {
-            trace->gradient_sequence.push_back(gradient);
+            trace->gradient_sequence.push_back(workspace.gradient);
             trace->kkt_tolerance_sequence.push_back(kkt_tolerance);
         }
 #endif
@@ -256,16 +306,16 @@ ActiveSetStep SolveAtDamping(BoundedSubproblemContext & context,const Eigen::Mat
         double largest_wrong_multiplier=kkt_tolerance;
         for(Eigen::Index i=0;i<n;++i)
         {
-            if(!active[static_cast<std::size_t>(i)]) continue;
-            if(gradient(i)>largest_wrong_multiplier)
+            if(!workspace.active[static_cast<std::size_t>(i)]) continue;
+            if(workspace.gradient(i)>largest_wrong_multiplier)
             {
-                largest_wrong_multiplier=gradient(i);
+                largest_wrong_multiplier=workspace.gradient(i);
                 release=i;
             }
         }
         if(release>=0)
         {
-            active[static_cast<std::size_t>(release)]=false;
+            workspace.active[static_cast<std::size_t>(release)]=false;
             ++releases;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             ++work.releases;
@@ -275,29 +325,30 @@ ActiveSetStep SolveAtDamping(BoundedSubproblemContext & context,const Eigen::Mat
         }
 
         double kkt_inf{};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        ++work.workspace_allocation_sites; // multipliers
-#endif
-        Eigen::VectorXd multipliers=Eigen::VectorXd::Zero(n);
+        workspace.multipliers.setZero();
         for(Eigen::Index i=0;i<n;++i)
         {
-            if(active[static_cast<std::size_t>(i)])
-                multipliers(i)=std::max(0.0,-gradient(i));
+            if(workspace.active[static_cast<std::size_t>(i)])
+                workspace.multipliers(i)=std::max(0.0,-workspace.gradient(i));
             else
-                kkt_inf=std::max(kkt_inf,std::abs(gradient(i)));
-            if(active[static_cast<std::size_t>(i)])
-                kkt_inf=std::max(kkt_inf,std::max(0.0,gradient(i)));
+                kkt_inf=std::max(kkt_inf,std::abs(workspace.gradient(i)));
+            if(workspace.active[static_cast<std::size_t>(i)])
+                kkt_inf=std::max(kkt_inf,std::max(0.0,workspace.gradient(i)));
         }
-        if(kkt_inf>kkt_tolerance) return Failure("subproblem-kkt-failed");
-        ActiveSetStep result;
-        result.valid=true; result.status="solved"; result.step=std::move(step);
-        result.gradient=std::move(gradient); result.multipliers=std::move(multipliers);
-        result.active=std::move(active); result.damping=lambda;
+        if(kkt_inf>kkt_tolerance) {fail("subproblem-kkt-failed"); return;}
+        if(result.step.size()!=n) RecordWorkspaceResize(result.step.size()==0);
+        if(result.gradient.size()!=n) RecordWorkspaceResize(result.gradient.size()==0);
+        if(result.multipliers.size()!=n) RecordWorkspaceResize(result.multipliers.size()==0);
+        if(result.active.capacity()<static_cast<std::size_t>(n))
+            RecordWorkspaceResize(result.active.capacity()==0);
+        result.valid=true; result.status="solved"; result.step=workspace.step;
+        result.gradient=workspace.gradient; result.multipliers=workspace.multipliers;
+        result.active=workspace.active; result.damping=lambda;
         result.scaled_step_norm=d.cwiseProduct(result.step).norm();
         result.kkt_inf_norm=kkt_inf; result.iterations=iteration+1; result.releases=releases;
-        return result;
+        return;
     }
-    return Failure("active-set-iteration-budget");
+    fail("active-set-iteration-budget");
 }
 
 ActiveSetStep WithDamping(ActiveSetStep result,double damping)
@@ -307,24 +358,31 @@ ActiveSetStep WithDamping(ActiveSetStep result,double damping)
 }
 }
 
-ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,
-    const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double trust_radius,double damping_seed)
+namespace {
+ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,
+    const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double trust_radius,double damping_seed,
+    BoundedLmWorkspace & workspace)
 {
     BoundedSubproblemContext context;
+    ActiveSetStep candidate;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     auto & work=BoundedLmWorkForTesting();
     BoundedLmTimer timer{work};
-    const auto solve_candidate=[&](double lambda,int phase) {
+    const auto solve_candidate=[&](double lambda,int phase,ActiveSetStep & result) -> void {
         ++work.damping_solves;
         if(phase==1) ++work.bracket_solves;
         else if(phase==2) ++work.bisection_solves;
         BoundedLmDampingTrace trace;
-        auto result=SolveAtDamping(context,j,r,d,upper,lambda,work.capture_trace ? &trace : nullptr);
+        SolveAtDamping(context,workspace,j,r,d,upper,lambda,result,
+            work.capture_trace ? &trace : nullptr);
         if(work.capture_trace)
         {
             trace.damping=lambda; trace.phase=phase; trace.status=result.status;
-            trace.step=result.step; trace.gradient=result.gradient; trace.multipliers=result.multipliers;
-            trace.active=result.active;
+            if(result.valid)
+            {
+                trace.step=result.step; trace.gradient=result.gradient; trace.multipliers=result.multipliers;
+                trace.active=result.active;
+            }
             if(result.iterations) trace.iterations=result.iterations;
             if(result.valid) trace.releases=result.releases;
             trace.scaled_step_norm=result.scaled_step_norm; trace.kkt_inf_norm=result.kkt_inf_norm;
@@ -332,7 +390,6 @@ ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd & j,const Eigen:
             trace.within_trust_region=result.valid && result.scaled_step_norm<=trust_radius;
             work.damping_trace.push_back(std::move(trace));
         }
-        return result;
     };
     const auto mark_search_accepted=[&]() {
         if(work.capture_trace && !work.damping_trace.empty())
@@ -347,17 +404,17 @@ ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd & j,const Eigen:
     if(!ValidSubproblemInput(j,r,d,upper,0.0)) return Failure("invalid-subproblem-input");
     context=MakeBoundedSubproblemContext(j,upper);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    auto unconstrained=solve_candidate(0.0,0);
+    solve_candidate(0.0,0,candidate);
 #else
-    auto unconstrained=SolveAtDamping(context,j,r,d,upper,0.0);
+    SolveAtDamping(context,workspace,j,r,d,upper,0.0,candidate);
 #endif
     const double trust_tolerance=64.0*std::numeric_limits<double>::epsilon()*std::max(1.0,trust_radius);
-    if(unconstrained.valid && unconstrained.scaled_step_norm<=trust_radius+trust_tolerance)
+    if(candidate.valid && candidate.scaled_step_norm<=trust_radius+trust_tolerance)
     {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         mark_search_accepted();
 #endif
-        return WithDamping(std::move(unconstrained),0.0);
+        return WithDamping(std::move(candidate),0.0);
     }
 
     double low=0.0;
@@ -366,18 +423,19 @@ ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd & j,const Eigen:
     for(int bracket=0;bracket<80;++bracket)
     {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        auto candidate=solve_candidate(high,1);
+        solve_candidate(high,1,candidate);
 #else
-        auto candidate=SolveAtDamping(context,j,r,d,upper,high);
+        SolveAtDamping(context,workspace,j,r,d,upper,high,candidate);
 #endif
         if(candidate.valid && candidate.scaled_step_norm<=trust_radius)
         {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             mark_search_accepted();
 #endif
-            feasible=std::move(candidate); break;
+            CopyActiveSetStep(feasible,candidate); break;
         }
-        if(!candidate.valid && candidate.status!="rank-deficient-free-subproblem") return candidate;
+        if(!candidate.valid && candidate.status!="rank-deficient-free-subproblem")
+            return Failure(candidate.status);
         low=high;
         high*=4.0;
         if(!std::isfinite(high)) return Failure("trust-region-damping-overflow");
@@ -389,24 +447,32 @@ ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd & j,const Eigen:
         const double middle=low+(high-low)*0.5;
         if(!(middle>low) || !(middle<high)) break;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        auto candidate=solve_candidate(middle,2);
+        solve_candidate(middle,2,candidate);
 #else
-        auto candidate=SolveAtDamping(context,j,r,d,upper,middle);
+        SolveAtDamping(context,workspace,j,r,d,upper,middle,candidate);
 #endif
         if(candidate.valid && candidate.scaled_step_norm<=trust_radius)
         {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             mark_search_accepted();
 #endif
-            high=middle; feasible=std::move(candidate);
+            high=middle; CopyActiveSetStep(feasible,candidate);
         }
         else if(candidate.valid || candidate.status=="rank-deficient-free-subproblem") low=middle;
-        else return candidate;
+        else return Failure(candidate.status);
     }
     feasible.damping=high;
     if(feasible.scaled_step_norm>trust_radius+trust_tolerance)
         return Failure("trust-region-feasibility-failed");
     return feasible;
+}
+}
+
+ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,
+    const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double trust_radius,double damping_seed)
+{
+    BoundedLmWorkspace workspace;
+    return SolveBoundedTrustRegionStepImpl(j,r,d,upper,trust_radius,damping_seed,workspace);
 }
 
 } // namespace rhbm_gem::core::joint_component

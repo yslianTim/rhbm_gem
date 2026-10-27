@@ -197,6 +197,43 @@ TEST(ActiveSetBoundedLMTest, RecordedInteriorDampedStepIsBitwiseStable)
     EXPECT_EQ(joint::BoundedLmWorkForTesting().bisection_solves,54u);
 }
 
+TEST(ActiveSetBoundedLMTest, CallWorkspaceResetsAcrossFullBoundaryFailureAndRecovery)
+{
+    joint::BoundedLmWorkForTesting()={};
+    const Eigen::Matrix2d j=Eigen::Matrix2d::Identity();
+    const Eigen::Vector2d d=Eigen::Vector2d::Ones();
+    const Eigen::Vector2d full_upper=Eigen::Vector2d::Constant(10.0);
+    const Eigen::Vector2d full_residual(-1.0,2.0);
+    const auto full=joint::SolveBoundedTrustRegionStep(j,full_residual,d,full_upper,10.0,0.0);
+    ASSERT_TRUE(full.valid)<<full.status;
+
+    const Eigen::Vector2d boundary_residual(-2.0,-3.0),boundary_upper(.25,.5);
+    const auto boundary=joint::SolveBoundedTrustRegionStep(j,boundary_residual,d,
+        boundary_upper,10.0,0.0);
+    ASSERT_TRUE(boundary.valid)<<boundary.status;
+    EXPECT_TRUE(boundary.active[0]);
+    EXPECT_TRUE(boundary.active[1]);
+    EXPECT_EQ(Bits(boundary.step(0)),Bits(.25));
+    EXPECT_EQ(Bits(boundary.step(1)),Bits(.5));
+
+    auto invalid_residual=Eigen::VectorXd::Zero(1);
+    const auto invalid=joint::SolveBoundedTrustRegionStep(j,invalid_residual,d,
+        full_upper,10.0,0.0);
+    EXPECT_FALSE(invalid.valid);
+    EXPECT_EQ(invalid.status,"invalid-subproblem-input");
+
+    const auto recovered=joint::SolveBoundedTrustRegionStep(j,full_residual,d,full_upper,10.0,0.0);
+    ASSERT_TRUE(recovered.valid)<<recovered.status;
+    EXPECT_EQ(Bits(recovered.damping),Bits(full.damping));
+    EXPECT_EQ(Bits(recovered.step(0)),Bits(full.step(0)));
+    EXPECT_EQ(Bits(recovered.step(1)),Bits(full.step(1)));
+    EXPECT_EQ(Bits(recovered.gradient(0)),Bits(full.gradient(0)));
+    EXPECT_EQ(Bits(recovered.gradient(1)),Bits(full.gradient(1)));
+    EXPECT_EQ(Bits(recovered.multipliers(0)),Bits(full.multipliers(0)));
+    EXPECT_EQ(Bits(recovered.multipliers(1)),Bits(full.multipliers(1)));
+    EXPECT_EQ(recovered.active,full.active);
+}
+
 TEST(ActiveSetBoundedLMTest, InvalidDimensionsKeepTheSubproblemFailureReason)
 {
     joint::BoundedLmWorkForTesting()={};

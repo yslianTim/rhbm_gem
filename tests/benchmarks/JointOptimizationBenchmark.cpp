@@ -167,6 +167,7 @@ int Run()
             aggregate.bound_tolerance_evaluations+=work.bound_tolerance_evaluations;
             aggregate.dense_qr_factorizations+=work.dense_qr_factorizations;
             aggregate.workspace_allocation_sites+=work.workspace_allocation_sites;
+            aggregate.workspace_resize_events+=work.workspace_resize_events;
             aggregate.workspace_peak_bytes=std::max(aggregate.workspace_peak_bytes,work.workspace_peak_bytes);
             aggregate.dense_qr_factorization_seconds+=work.dense_qr_factorization_seconds;
             aggregate.damping_search_seconds+=work.damping_search_seconds;
@@ -192,6 +193,7 @@ int Run()
         <<" dense_qr_count_per_call="<<bounded_work.dense_qr_factorizations/repeats
         <<" dense_qr_ms_per_call="<<bounded_work.dense_qr_factorization_seconds*1000.0/repeats
         <<" workspace_allocation_sites_per_call="<<bounded_work.workspace_allocation_sites/repeats
+        <<" workspace_resize_events_per_call="<<bounded_work.workspace_resize_events/repeats
         <<" workspace_peak_bytes_estimate="<<bounded_work.workspace_peak_bytes
         <<" bitwise_trace_sha256="<<bounded_digest<<'\n';
 
@@ -274,16 +276,28 @@ int Run()
     policy.core_atoms=3; policy.maximum_sweeps=3; policy.stop_after_stationarity=false;
     policy.certify_endpoint=false; policy.collect_telemetry=true; policy.eta_upper_bound=std::log(2.2);
     std::vector<double> joint_times;
+    std::size_t joint_subproblem_calls{},joint_workspace_allocations{},joint_workspace_resizes{};
     for(int sample=0;sample<samples+1;++sample)
     {
+        auto & work=joint::BoundedLmWorkForTesting(); work={};
         problem=rhbm_gem::core::JointProblem(second_stage_test::SyntheticJointWorkload("chain",3));
         const auto started=Clock::now();
         const auto result=joint::RunFixedNeighborDiagnostic(problem,joint_eta,policy);
         const double elapsed=Seconds(started);
-        if(sample) joint_times.push_back(elapsed);
+        if(sample)
+        {
+            joint_times.push_back(elapsed);
+            joint_subproblem_calls+=work.subproblem_validation_calls;
+            joint_workspace_allocations+=work.workspace_allocation_sites;
+            joint_workspace_resizes+=work.workspace_resize_events;
+        }
         if(result.reason.empty()) throw std::runtime_error("synthetic Joint diagnostic returned no status");
     }
     ReportSamples("synthetic_joint_search",std::move(joint_times));
+    std::cout<<"synthetic_joint_subproblems_per_run="<<joint_subproblem_calls/samples
+        <<" workspace_allocations_per_run="<<joint_workspace_allocations/samples
+        <<" workspace_resizes_per_run="<<joint_workspace_resizes/samples<<'\n';
+    joint::BoundedLmWorkForTesting()={};
     rusage usage{};
     if(getrusage(RUSAGE_SELF,&usage)==0)
     {

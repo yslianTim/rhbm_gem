@@ -242,3 +242,37 @@ The joint contract, workflow, and numerical CTest groups passed (3/3,
 5.70 s). The bounded workspace estimate stayed at 328,584 bytes; observed
 process peak RSS was 45,514,752 bytes in the N0 run and 44,859,392 bytes in
 the N1 run, which is within the benchmark's run-to-run measurement noise.
+
+## N2: call-scoped dense workspace
+
+`SolveBoundedTrustRegionStep()` now creates one `BoundedLmWorkspace` per trust
+region call and reuses its vectors, index lists, active mask, RHS, adjusted
+residual, and augmented dense matrix across all damping candidates and active
+set iterations. The QR object and its factorization are still rebuilt for
+every free face. The returned `ActiveSetStep` owns its vectors, and sequential
+full/boundary/invalid/full plus rank-recovery cases pass bitwise checks.
+
+The five-sample Bounded LM median moved from 15.877 ms/call in N1 to
+15.496 ms/call in N2 (ranges 15.818–15.978 and 15.481–15.537), a 1.025×
+speedup (2.40% lower elapsed time). Relative to N0, the cumulative median is
+9.14% lower. The result and damping trace SHA-256 remains exactly
+`290e1a65097e34b1a1198064bc49c2c357a83271c709ce6b156ccbb1eec798ab`; active
+set iterations stayed at 139 and dense QR count stayed at 136 per call.
+
+The workspace counter now reports 20 first buffer materializations and 418
+dimension changes per Bounded LM call. N0's 1,581 count was explicit temporary
+construction sites in the inner loop, so these figures are source-level
+workspace events rather than allocator-hook counts. The estimated peak of
+known workspace buffers is 361,880 bytes, up 33,296 bytes from the N0 estimate
+because scratch buffers coexist for reuse. The benchmark process peak RSS was
+44,777,472 bytes, within run-to-run measurement noise of N1's 44,859,392 bytes.
+
+The N2-B experiment compared call-scoped and LM-search-scoped reuse on the
+three-Target synthetic diagnostic. Each run performed three bounded
+subproblems; both modes recorded 52 buffer materializations and 54 dimension
+changes. Median elapsed times were 3.220 ms (3.212–3.226) and 3.209 ms
+(3.207–3.229), with overlapping ranges and no allocation reduction. The
+search-scoped prototype was removed; the production workspace remains
+trust-region-call scoped.
+
+The joint contract, workflow, and numerical CTest groups passed (3/3, 5.62 s).

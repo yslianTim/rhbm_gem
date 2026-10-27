@@ -44,7 +44,7 @@ struct BoundedLmTestWork
     std::size_t damping_solves{},bracket_solves{},bisection_solves{},active_set_iterations{},releases{};
     std::size_t subproblem_validation_calls{},kkt_scale_evaluations{},jacobian_norm_evaluations{},
         diagonal_squared_norm_evaluations{},bound_tolerance_evaluations{};
-    std::size_t dense_qr_factorizations{},workspace_allocation_sites{},workspace_peak_bytes{};
+    std::size_t dense_qr_factorizations{},workspace_allocation_sites{},workspace_resize_events{},workspace_peak_bytes{};
     double dense_qr_factorization_seconds{},damping_search_seconds{};
 };
 BoundedLmTestWork & BoundedLmWorkForTesting();
