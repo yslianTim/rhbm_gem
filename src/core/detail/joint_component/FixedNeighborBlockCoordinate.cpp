@@ -8,9 +8,11 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -102,6 +104,29 @@ void ReplayInto(const Domain & domain,const JointParameterLayout & layout,Vector
         squared+=out.residual(r)*out.residual(r);
     }
     out.objective=.5*squared/(scale*scale);
+}
+bool BitwiseEqual(double left,double right)
+{return std::bit_cast<std::uint64_t>(left)==std::bit_cast<std::uint64_t>(right);}
+bool IsBitwiseIdenticalCoreCandidate(const BlockCoordinateState & state,
+    const Indices & core_atoms,const Endpoint & endpoint)
+{
+    const auto core_count=static_cast<Eigen::Index>(core_atoms.size());
+    if(state.beta.size()!=2*state.eta.size() || endpoint.eta.size()!=core_count || endpoint.beta.size()!=2*core_count)
+        return false;
+    for(std::size_t k=0;k<core_atoms.size();++k)
+    {
+        const auto atom=core_atoms[k];
+        const auto local=static_cast<Eigen::Index>(k);
+        const double current_eta=state.eta(atom),candidate_eta=endpoint.eta(local);
+        const double current_a=state.beta(2*atom),candidate_a=endpoint.beta(2*local);
+        const double current_c=state.beta(2*atom+1),candidate_c=endpoint.beta(2*local+1);
+        if(!std::isfinite(current_eta) || !std::isfinite(candidate_eta) ||
+            !std::isfinite(current_a) || !std::isfinite(candidate_a) ||
+            !std::isfinite(current_c) || !std::isfinite(candidate_c) ||
+            !BitwiseEqual(current_eta,candidate_eta) || !BitwiseEqual(current_a,candidate_a) ||
+            !BitwiseEqual(current_c,candidate_c)) return false;
+    }
+    return true;
 }
 Sparse Design(const Domain & domain,VectorRef eta)
 {
@@ -938,6 +963,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     ReplayInto(domain,layout,y,out.state.eta,out.state.beta,context.scale,replay_structure,initial);
     out.state.prediction=std::move(initial.prediction); out.state.residual=std::move(initial.residual);
     out.state.objective=initial.objective;
+    bool state_cache_valid=out.state.prediction.size()==y.size() && out.state.residual.size()==y.size() &&
+        std::isfinite(out.state.objective);
     auto mapping_timer=Measure(collect_telemetry,out.work.structural_preparation_seconds);
     Indices atom_position(domain.atoms.size(),-1),row_position(static_cast<std::size_t>(domain.rows),-1);
     for(std::size_t k=0;k<layout.full_atoms.size();++k) atom_position.at(layout.full_atoms[k])=static_cast<Eigen::Index>(k);
@@ -1219,34 +1246,47 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 if(stop) break;
                 continue;
             }
+            // The candidate path only overwrites core parameters in copies of the current state.
+            // Once the accepted endpoint is qualified, bitwise-equal core values leave the full
+            // parameter state unchanged and the current full-replay cache remains valid.
+            const bool candidate_fast_unchanged=state_cache_valid && std::isfinite(out.state.objective) &&
+                IsBitwiseIdenticalCoreCandidate(out.state,core_atoms,accepted->endpoint);
             Vector candidate_eta,candidate_beta;
+            if(candidate_fast_unchanged)
             {
-                const auto candidate_copy_timer=Measure(collect_telemetry,out.work.candidate_copy_seconds);
-                candidate_eta=out.state.eta; candidate_beta=out.state.beta;
-                for(std::size_t k=0;k<core_atoms.size();++k)
-                {
-                    const auto atom=static_cast<Eigen::Index>(core_atoms[k]);
-                    candidate_eta(atom)=accepted->endpoint.eta(static_cast<Eigen::Index>(k));
-                    candidate_beta.segment<2>(2*atom)=accepted->endpoint.beta.segment<2>(2*static_cast<Eigen::Index>(k));
-                }
-                (void)candidate_copy_timer;
+                if(collect_telemetry) ++out.work.candidate_replay_skipped_unchanged;
             }
+            else
             {
+                {
+                    const auto candidate_copy_timer=Measure(collect_telemetry,out.work.candidate_copy_seconds);
+                    candidate_eta=out.state.eta; candidate_beta=out.state.beta;
+                    for(std::size_t k=0;k<core_atoms.size();++k)
+                    {
+                        const auto atom=static_cast<Eigen::Index>(core_atoms[k]);
+                        candidate_eta(atom)=accepted->endpoint.eta(static_cast<Eigen::Index>(k));
+                        candidate_beta.segment<2>(2*atom)=accepted->endpoint.beta.segment<2>(2*static_cast<Eigen::Index>(k));
+                    }
+                    (void)candidate_copy_timer;
+                }
                 const auto candidate_replay_timer=Measure(collect_telemetry,out.work.candidate_replay_seconds);
                 if(collect_telemetry) ++out.work.full_candidate_replays;
                 ReplayInto(domain,layout,y,candidate_eta,candidate_beta,context.scale,replay_structure,
                     replay_workspace);
                 (void)candidate_replay_timer;
             }
-            const auto & replay=replay_workspace;
-            record.objective_after=replay.objective; record.global_replay_delta=replay.objective-out.state.objective;
-            const auto replay_reference=std::max(std::abs(replay.objective),std::abs(out.state.objective));
+            const double candidate_objective=candidate_fast_unchanged ? out.state.objective :
+                replay_workspace.objective;
+            record.objective_after=candidate_objective;
+            record.global_replay_delta=candidate_fast_unchanged ? 0.0 : candidate_objective-out.state.objective;
+            const auto replay_reference=std::max(std::abs(candidate_objective),std::abs(out.state.objective));
             record.objective_replay_enclosure=BlockObjectiveReplayEnclosure(replay_reference);
             record.local_global_delta_error=std::abs(record.global_replay_delta+
                 record.local_objective_before-record.local_objective_after);
             const bool delta_enclosed=WithinBlockObjectiveReplay(record.local_global_delta_error,replay_reference);
-            const bool candidate_unchanged=(out.state.eta.array()==candidate_eta.array()).all() &&
-                (out.state.beta.array()==candidate_beta.array()).all();
+            const bool candidate_unchanged=candidate_fast_unchanged ||
+                ((out.state.eta.array()==candidate_eta.array()).all() &&
+                    (out.state.beta.array()==candidate_beta.array()).all());
             if(!delta_enclosed)
             {
                 record.status="failed"; record.reason="block-objective-replay-failed"; out.reason=record.reason;
@@ -1268,13 +1308,18 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                     sweep.maximum_accepted_log_width_step=std::max(sweep.maximum_accepted_log_width_step,
                         std::abs(candidate_eta(static_cast<Eigen::Index>(atom))-
                             out.state.eta(static_cast<Eigen::Index>(atom))));
-            const auto cache_started=Clock::now();
-            out.state.prediction.swap(replay_workspace.prediction);
-            out.state.residual.swap(replay_workspace.residual);
-            out.state.objective=replay_workspace.objective;
-            if(collect_telemetry) out.work.affected_row_updates+=affected_rows.size();
-            out.state.eta=std::move(candidate_eta); out.state.beta=std::move(candidate_beta);
-            if(collect_telemetry) out.work.cache_update_seconds+=Seconds(cache_started);
+            if(!candidate_fast_unchanged)
+            {
+                const auto cache_started=Clock::now();
+                out.state.prediction.swap(replay_workspace.prediction);
+                out.state.residual.swap(replay_workspace.residual);
+                out.state.objective=replay_workspace.objective;
+                if(collect_telemetry) out.work.affected_row_updates+=affected_rows.size();
+                out.state.eta=std::move(candidate_eta); out.state.beta=std::move(candidate_beta);
+                state_cache_valid=out.state.prediction.size()==y.size() && out.state.residual.size()==y.size() &&
+                    std::isfinite(out.state.objective);
+                if(collect_telemetry) out.work.cache_update_seconds+=Seconds(cache_started);
+            }
             record.accepted=!unchanged; record.status=unchanged ? "unchanged" : "accepted";
             record.reason=unchanged ? "block-unchanged" : "";
             if(record.recovery_retry)
@@ -1290,6 +1335,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         sweep.objective_after=out.state.objective;
         {
             const auto timer=Measure(collect_telemetry,out.work.sweep_replay_seconds);
+            if(collect_telemetry) ++out.work.sweep_replays;
             ReplayInto(domain,layout,y,out.state.eta,out.state.beta,context.scale,replay_structure,replay_workspace);
             (void)timer;
         }

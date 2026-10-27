@@ -190,6 +190,32 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReplayWorkspacePreservesExactSearchR
     }
 }
 
+TEST(JointFixedNeighborBlockCoordinateTest, UnchangedCandidateSkipsOnlyCandidateReplay)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const n::Vector eta=n::Vector::Constant(3,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=30;
+    policy.stop_after_stationarity=false; policy.certify_endpoint=false;
+    policy.collect_telemetry=true; policy.eta_upper_bound=std::log(2.2);
+    const auto result=n::RunFixedNeighborDiagnostic(problem,eta,policy);
+
+    EXPECT_GT(result.work.candidate_replay_skipped_unchanged,0u);
+    EXPECT_LT(result.work.full_candidate_replays,result.total_block_solves);
+    EXPECT_LE(result.work.full_candidate_replays+result.work.candidate_replay_skipped_unchanged,
+        result.total_block_solves);
+    EXPECT_EQ(result.work.sweep_replays,result.sweeps.size());
+    std::size_t unchanged_records{};
+    for(const auto & block:result.blocks)
+        if(block.reason=="block-unchanged")
+        {
+            ++unchanged_records;
+            EXPECT_TRUE(BitwiseEqual(block.global_replay_delta,0.0));
+            EXPECT_LE(block.local_global_delta_error,block.objective_replay_enclosure);
+        }
+    EXPECT_EQ(unchanged_records,result.work.candidate_replay_skipped_unchanged);
+}
+
+
 TEST(JointFixedNeighborBlockCoordinateTest, ProductionBoundedSearchReleasesTheStartingUpperFace)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
