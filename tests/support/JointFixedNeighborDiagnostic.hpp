@@ -17,6 +17,8 @@ struct FixedNeighborDiagnosticResult
     FixedNeighborWork work;
     double search_seconds{};
     std::optional<FixedNeighborBlockSweep> final_sweep;
+    std::vector<JointBlockConditioning> local_conditioning;
+    std::optional<JointParameterStability> parameter_stability;
     bool certification_attempted{};
     Assessment assessment;
     TrustEvidence endpoint_trust;

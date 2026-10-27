@@ -128,6 +128,68 @@ std::uint64_t UlpDistance(double left,double right)
     const auto a=ordered(left),b=ordered(right);
     return a>b ? a-b : b-a;
 }
+bool ObjectiveDecision(double before,double after,double local_before,double local_after,bool unchanged)
+{
+    const double delta=after-before;
+    const double enclosure=n::BlockObjectiveReplayEnclosure(std::max(std::abs(before),std::abs(after)));
+    const double consistency=std::abs(delta+local_before-local_after);
+    return n::WithinBlockObjectiveReplay(consistency,std::max(std::abs(before),std::abs(after))) &&
+        (delta<=0 || (local_after<=local_before && delta<=enclosure)) && !unchanged;
+}
+struct IncrementalObjectiveAudit
+{
+    std::size_t candidates{},accepted{},rejected{},fallbacks{},estimated_reference_disagreements{},
+        actual_reference_disagreements{},reference_positive_accepts{};
+    double maximum_absolute{},maximum_relative{},maximum_cache_drift{},minimum_decision_margin{
+        std::numeric_limits<double>::infinity()};
+    std::uint64_t maximum_ulp{};
+};
+void AuditIncrementalCandidate(const rhbm_gem::JointParameterLayout & layout,double scale,
+    const n::FixedNeighborCandidateEvent & event,IncrementalObjectiveAudit & audit)
+{
+    if(!event.candidate_replay_ran || !std::isfinite(event.incremental_objective)) return;
+    ++audit.candidates; audit.accepted+=event.accepted; audit.rejected+=!event.accepted;
+    audit.fallbacks+=event.objective_full_scan_fallback;
+    double old_reference_squared{},candidate_reference_squared{};
+    for(const auto row_value:layout.informative_rows)
+    {
+        const auto row=static_cast<Eigen::Index>(row_value);
+        const double old_residual=event.accepted_before.residual(row);
+        const double candidate_residual=event.full_residual(row);
+        old_reference_squared+=old_residual*old_residual;
+        candidate_reference_squared+=candidate_residual*candidate_residual;
+    }
+    const double old_reference=.5*old_reference_squared/(scale*scale);
+    const double candidate_reference=.5*candidate_reference_squared/(scale*scale);
+    const double error=std::abs(event.incremental_objective-candidate_reference);
+    audit.maximum_absolute=std::max(audit.maximum_absolute,error);
+    audit.maximum_relative=std::max(audit.maximum_relative,
+        error/std::max(std::abs(candidate_reference),std::numeric_limits<double>::min()));
+    audit.maximum_cache_drift=std::max(audit.maximum_cache_drift,
+        std::abs(event.accepted_before.objective-old_reference));
+    if(std::isnormal(event.incremental_objective) && std::isnormal(candidate_reference))
+        audit.maximum_ulp=std::max(audit.maximum_ulp,UlpDistance(event.incremental_objective,candidate_reference));
+    const bool estimated_decision=ObjectiveDecision(event.accepted_before.objective,event.incremental_objective,
+        event.local_objective_before,event.local_objective_after,event.unchanged);
+    const bool reference_decision=ObjectiveDecision(old_reference,candidate_reference,
+        event.local_objective_before,event.local_objective_after,event.unchanged);
+    audit.estimated_reference_disagreements+=estimated_decision!=reference_decision;
+    audit.actual_reference_disagreements+=event.accepted!=reference_decision;
+    audit.reference_positive_accepts+=reference_decision && candidate_reference>old_reference;
+    const double delta=candidate_reference-old_reference;
+    const double enclosure=n::BlockObjectiveReplayEnclosure(std::max(std::abs(old_reference),
+        std::abs(candidate_reference)));
+    const double consistency=std::abs(delta+event.local_objective_before-event.local_objective_after);
+    audit.minimum_decision_margin=std::min({audit.minimum_decision_margin,std::abs(delta),
+        std::abs(delta-enclosure),std::abs(event.local_objective_after-event.local_objective_before),
+        std::abs(consistency-enclosure)});
+}
+std::string VectorProperty(n::VectorRef values)
+{
+    std::ostringstream out; out<<std::setprecision(17)<<'[';
+    for(Eigen::Index k=0;k<values.size();++k) {if(k) out<<','; out<<values(k);}
+    out<<']'; return out.str();
+}
 std::string ReplayDigest(const n::Vector & values)
 {
     boost::hash2::sha2_256 hash;
@@ -875,6 +937,360 @@ TEST(JointFixedNeighborBlockCoordinateTest, AffectedRowExactReplayMatchesClosedL
     RecordProperty("N4_final_objective",Precise(full.state.objective));
 }
 
+TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveControlsClosedLoopAndGuardedFallback)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector initial_eta=n::Vector::Constant(3,std::log(.55));
+    n::FixedNeighborPolicy base; base.core_atoms=2; base.maximum_sweeps=40;
+    base.convergence_criteria=n::PracticalJointConvergenceCriteria;
+    base.eta_upper_bound=std::log(2.2); base.collect_telemetry=true;
+
+    auto full_replay_policy=base;
+    full_replay_policy.candidate_replay_for_testing=[&](const n::BlockCoordinateState &,const n::Indices &,
+        const n::Indices &,n::VectorRef candidate_eta,n::VectorRef candidate_beta) {
+        return n::FullReplayForTesting(data.domain,data.layout,data.y,candidate_eta,candidate_beta,data.context.scale);
+    };
+    const auto full_replay=n::RunFixedNeighborDiagnostic(problem,initial_eta,full_replay_policy);
+    auto d1_policy=base;
+    const auto d1=n::RunFixedNeighborDiagnostic(problem,initial_eta,d1_policy);
+    ASSERT_TRUE(full_replay.search_converged)<<full_replay.reason;
+    ASSERT_TRUE(d1.search_converged)<<d1.reason;
+    ASSERT_TRUE(full_replay.endpoint_certified)<<full_replay.endpoint_trust.reason;
+    ASSERT_TRUE(d1.endpoint_certified)<<d1.endpoint_trust.reason;
+
+    const auto run_incremental=[&](n::FixedNeighborObjectiveStrategyForTesting strategy,double guard_fraction,
+        bool refresh,const std::string & prefix) {
+        auto policy=base; policy.objective_strategy_for_testing=strategy;
+        policy.objective_guard_band_fraction_for_testing=guard_fraction;
+        policy.refresh_objective_after_sweep_for_testing=refresh;
+        IncrementalObjectiveAudit audit;
+        policy.candidate_observer=[&](const n::FixedNeighborCandidateEvent & event) {
+            AuditIncrementalCandidate(data.layout,data.context.scale,event,audit);
+        };
+        const auto result=n::RunFixedNeighborDiagnostic(problem,initial_eta,policy);
+        RecordProperty(prefix+"_candidates",std::to_string(audit.candidates));
+        RecordProperty(prefix+"_accepted",std::to_string(audit.accepted));
+        RecordProperty(prefix+"_rejected",std::to_string(audit.rejected));
+        RecordProperty(prefix+"_fallbacks",std::to_string(audit.fallbacks));
+        RecordProperty(prefix+"_estimated_reference_disagreements",std::to_string(audit.estimated_reference_disagreements));
+        RecordProperty(prefix+"_actual_reference_disagreements",std::to_string(audit.actual_reference_disagreements));
+        RecordProperty(prefix+"_max_objective_abs_error",Precise(audit.maximum_absolute));
+        RecordProperty(prefix+"_max_objective_relative_error",Precise(audit.maximum_relative));
+        RecordProperty(prefix+"_max_accepted_cache_drift",Precise(audit.maximum_cache_drift));
+        RecordProperty(prefix+"_max_objective_ulp",std::to_string(audit.maximum_ulp));
+        RecordProperty(prefix+"_minimum_reference_decision_margin",Precise(audit.minimum_decision_margin));
+        RecordProperty(prefix+"_search_converged",std::to_string(result.search_converged));
+        RecordProperty(prefix+"_stop_reason",result.reason);
+        RecordProperty(prefix+"_sweeps",std::to_string(result.sweep_count));
+        RecordProperty(prefix+"_objective_full_scan_fallbacks",std::to_string(result.work.objective_full_scan_fallbacks));
+        RecordProperty(prefix+"_objective_cache_refreshes",std::to_string(std::count_if(result.sweeps.begin(),
+            result.sweeps.end(),[](const auto & sweep){return sweep.objective_cache_refreshed;})));
+        if(result.final_sweep)
+        {
+            RecordProperty(prefix+"_global_ac_kkt",Precise(result.final_sweep->global_ac_kkt));
+            RecordProperty(prefix+"_projected_width_kkt",Precise(result.final_sweep->projected_width_gradient_inf_norm));
+            RecordProperty(prefix+"_objective_replay_error",Precise(result.final_sweep->objective_replay_error));
+        }
+        if(result.endpoint_certified)
+        {
+            EXPECT_TRUE(result.assessment.primary.valid);
+            EXPECT_TRUE(result.assessment.independent_replay.passed);
+            EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+        }
+        EXPECT_EQ(audit.candidates,result.work.incremental_objective_evaluations);
+        EXPECT_EQ(audit.fallbacks,result.work.objective_full_scan_fallbacks);
+        EXPECT_GT(audit.candidates,0u);
+        RecordProperty(prefix+"_final_objective",Precise(result.state.objective));
+        RecordProperty(prefix+"_final_eta",VectorProperty(result.state.eta));
+        RecordProperty(prefix+"_final_width",VectorProperty(result.state.eta.array().exp()));
+        RecordProperty(prefix+"_final_beta",VectorProperty(result.state.beta));
+        double amplitude_squared{},charge_squared{},width_squared{};
+        for(Eigen::Index atom=0;atom<result.state.eta.size();++atom)
+        {
+            amplitude_squared+=std::pow(result.state.beta(2*atom)-2.0,2);
+            charge_squared+=std::pow(result.state.beta(2*atom+1)-0.2,2);
+            width_squared+=std::pow(std::exp(result.state.eta(atom))-0.5,2);
+        }
+        const double atom_count=static_cast<double>(result.state.eta.size());
+        RecordProperty(prefix+"_truth_rmse_A",Precise(std::sqrt(amplitude_squared/atom_count)));
+        RecordProperty(prefix+"_truth_rmse_C",Precise(std::sqrt(charge_squared/atom_count)));
+        RecordProperty(prefix+"_truth_rmse_width",Precise(std::sqrt(width_squared/atom_count)));
+        if(result.fit.objective) RecordProperty(prefix+"_independent_final_objective",Precise(*result.fit.objective));
+        return result;
+    };
+
+    const auto direct=run_incremental(n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect,
+        0.0,false,"E1_direct");
+    const auto narrow_guard=run_incremental(n::FixedNeighborObjectiveStrategyForTesting::IncrementalGuarded,
+        0.01,true,"E1_guarded_001");
+    const auto guarded=run_incremental(n::FixedNeighborObjectiveStrategyForTesting::IncrementalGuarded,
+        0.1,true,"E1_guarded");
+    const auto wide_guard=run_incremental(n::FixedNeighborObjectiveStrategyForTesting::IncrementalGuarded,
+        1.0,true,"E1_guarded_1");
+    EXPECT_TRUE(direct.search_converged)<<direct.reason;
+    EXPECT_TRUE(guarded.search_converged)<<guarded.reason;
+    EXPECT_TRUE(direct.endpoint_certified)<<direct.endpoint_trust.reason;
+    EXPECT_TRUE(guarded.endpoint_certified)<<guarded.endpoint_trust.reason;
+    EXPECT_TRUE(direct.assessment.independent_replay.passed);
+    EXPECT_TRUE(guarded.assessment.independent_replay.passed);
+    EXPECT_TRUE(narrow_guard.search_converged)<<narrow_guard.reason;
+    EXPECT_TRUE(wide_guard.search_converged)<<wide_guard.reason;
+    EXPECT_TRUE(narrow_guard.endpoint_certified)<<narrow_guard.endpoint_trust.reason;
+    EXPECT_TRUE(wide_guard.endpoint_certified)<<wide_guard.endpoint_trust.reason;
+    const auto parameter_differences=[&](const n::BlockCoordinateState & candidate,const std::string & prefix) {
+        double max_amplitude{},max_charge{},max_width{};
+        for(Eigen::Index atom=0;atom<d1.state.eta.size();++atom)
+        {
+            max_amplitude=std::max(max_amplitude,std::abs(candidate.beta(2*atom)-d1.state.beta(2*atom)));
+            max_charge=std::max(max_charge,std::abs(candidate.beta(2*atom+1)-d1.state.beta(2*atom+1)));
+            max_width=std::max(max_width,std::abs(std::exp(candidate.eta(atom))-std::exp(d1.state.eta(atom))));
+        }
+        RecordProperty(prefix+"_max_abs_A_difference",Precise(max_amplitude));
+        RecordProperty(prefix+"_max_abs_C_difference",Precise(max_charge));
+        RecordProperty(prefix+"_max_abs_width_difference",Precise(max_width));
+    };
+    parameter_differences(direct.state,"E1_direct");
+    parameter_differences(guarded.state,"E1_guarded");
+    parameter_differences(narrow_guard.state,"E1_guarded_001");
+    parameter_differences(wide_guard.state,"E1_guarded_1");
+    EXPECT_LE(std::abs(direct.state.objective-direct.fit.objective.value()),
+        n::BlockObjectiveReplayEnclosure(direct.fit.objective.value()));
+    EXPECT_LE(std::abs(guarded.state.objective-guarded.fit.objective.value()),
+        n::BlockObjectiveReplayEnclosure(guarded.fit.objective.value()));
+    EXPECT_LE(std::abs(narrow_guard.state.objective-narrow_guard.fit.objective.value()),
+        n::BlockObjectiveReplayEnclosure(narrow_guard.fit.objective.value()));
+    EXPECT_LE(std::abs(wide_guard.state.objective-wide_guard.fit.objective.value()),
+        n::BlockObjectiveReplayEnclosure(wide_guard.fit.objective.value()));
+    RecordProperty("E0_D1_sweeps",std::to_string(d1.sweep_count));
+    RecordProperty("E0_D1_candidates",std::to_string(d1.blocks.size()));
+    RecordProperty("E0_D1_final_objective",Precise(d1.state.objective));
+    RecordProperty("E0_D1_global_ac_kkt",Precise(d1.final_sweep->global_ac_kkt));
+    RecordProperty("E0_D1_projected_width_kkt",Precise(d1.final_sweep->projected_width_gradient_inf_norm));
+    EXPECT_TRUE(BitwiseEqual(full_replay.state.eta,d1.state.eta));
+    EXPECT_TRUE(BitwiseEqual(full_replay.state.beta,d1.state.beta));
+    EXPECT_TRUE(BitwiseEqual(full_replay.state.prediction,d1.state.prediction));
+    EXPECT_TRUE(BitwiseEqual(full_replay.state.residual,d1.state.residual));
+    EXPECT_TRUE(BitwiseEqual(full_replay.state.objective,d1.state.objective));
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveQualifiesAtActiveWidthUpperBound)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const n::Vector initial_eta=n::Vector::Constant(3,std::log(.5));
+    n::FixedNeighborPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=40;
+    policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
+    policy.eta_upper_bound=std::log(.5); policy.collect_telemetry=true;
+    policy.objective_strategy_for_testing=n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect;
+    policy.refresh_objective_after_sweep_for_testing=true;
+    const auto result=n::RunFixedNeighborDiagnostic(problem,initial_eta,policy);
+    ASSERT_TRUE(result.search_converged)<<result.reason;
+    ASSERT_TRUE(result.endpoint_certified)<<result.endpoint_trust.reason;
+    ASSERT_TRUE(result.assessment.independent_replay.passed);
+    ASSERT_TRUE(result.final_sweep);
+    EXPECT_TRUE(result.final_sweep->width_bound_applied);
+    EXPECT_GT(result.final_sweep->active_width_bound_count,0u);
+    EXPECT_LE(result.final_sweep->maximum_width_bound_violation,0.0);
+    EXPECT_LE(result.final_sweep->projected_width_gradient_inf_norm,
+        n::PracticalJointConvergenceCriteria.global_width_gradient);
+    EXPECT_EQ(result.work.objective_full_scan_fallbacks,0u);
+    EXPECT_GT(result.work.incremental_objective_evaluations,0u);
+    EXPECT_EQ(std::count_if(result.sweeps.begin(),result.sweeps.end(),
+        [](const auto & sweep){return sweep.objective_cache_refreshed;}),
+        static_cast<std::ptrdiff_t>(result.sweeps.size()));
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveRefreshIntervalsReconcileCache)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",300));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector initial_eta=n::Vector::Constant(300,std::log(.55));
+    n::FixedNeighborPolicy base; base.core_atoms=12; base.maximum_sweeps=30;
+    base.convergence_criteria=n::PracticalJointConvergenceCriteria;
+    base.stop_after_stationarity=true; base.certify_endpoint=true;
+    base.assess_local_conditioning=true; base.assess_parameter_stability=true;
+    base.eta_upper_bound=std::log(2.2); base.collect_telemetry=true;
+    const auto run_interval=[&](std::size_t interval,const std::string & prefix) {
+        auto policy=base;
+        policy.objective_strategy_for_testing=n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect;
+        policy.objective_refresh_interval_for_testing=interval;
+        IncrementalObjectiveAudit audit;
+        policy.candidate_observer=[&](const n::FixedNeighborCandidateEvent & event) {
+            AuditIncrementalCandidate(data.layout,data.context.scale,event,audit);
+        };
+        const auto result=n::RunFixedNeighborDiagnostic(problem,initial_eta,policy);
+        RecordProperty(prefix+"_candidates",std::to_string(audit.candidates));
+        RecordProperty(prefix+"_accepted",std::to_string(audit.accepted));
+        RecordProperty(prefix+"_rejected",std::to_string(audit.rejected));
+        RecordProperty(prefix+"_decision_disagreements",std::to_string(audit.actual_reference_disagreements));
+        RecordProperty(prefix+"_maximum_absolute_objective_error",Precise(audit.maximum_absolute));
+        RecordProperty(prefix+"_maximum_relative_objective_error",Precise(audit.maximum_relative));
+        RecordProperty(prefix+"_maximum_cache_drift",Precise(audit.maximum_cache_drift));
+        RecordProperty(prefix+"_maximum_objective_ulp",std::to_string(audit.maximum_ulp));
+        RecordProperty(prefix+"_refreshes",std::to_string(result.work.objective_cache_refreshes));
+        RecordProperty(prefix+"_refresh_max_error",Precise(result.work.maximum_objective_refresh_error));
+        RecordProperty(prefix+"_refresh_max_accepted_updates",std::to_string(
+            result.work.maximum_accepted_updates_between_objective_refreshes));
+        RecordProperty(prefix+"_refresh_positive_deltas",std::to_string(result.work.objective_refresh_positive_deltas));
+        RecordProperty(prefix+"_refresh_failures",std::to_string(result.work.objective_refresh_failures));
+        RecordProperty(prefix+"_refresh_seconds",Precise(result.work.objective_cache_refresh_seconds));
+        RecordProperty(prefix+"_sweeps",std::to_string(result.sweep_count));
+        RecordProperty(prefix+"_stop_reason",result.reason);
+        ASSERT_TRUE(result.search_converged)<<result.reason;
+        ASSERT_TRUE(result.endpoint_certified)<<result.endpoint_trust.reason;
+        EXPECT_TRUE(result.assessment.independent_replay.passed);
+        EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+        EXPECT_EQ(audit.candidates,result.work.incremental_objective_evaluations);
+        EXPECT_EQ(audit.actual_reference_disagreements,0u);
+        EXPECT_EQ(result.work.objective_refresh_failures,0u);
+        EXPECT_EQ(result.work.objective_cache_refreshes,130u/interval);
+        EXPECT_EQ(result.work.maximum_accepted_updates_between_objective_refreshes,interval);
+        EXPECT_TRUE(result.final_sweep.has_value());
+        EXPECT_LE(std::abs(result.state.objective-result.fit.objective.value()),
+            n::BlockObjectiveReplayEnclosure(result.fit.objective.value()));
+    };
+    run_interval(10,"E2_refresh_10");
+    run_interval(50,"E2_refresh_50");
+    run_interval(100,"E2_refresh_100");
+
+    auto sweep_policy=base;
+    sweep_policy.objective_strategy_for_testing=n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect;
+    sweep_policy.refresh_objective_after_sweep_for_testing=true;
+    const auto every_sweep=n::RunFixedNeighborDiagnostic(problem,initial_eta,sweep_policy);
+    RecordProperty("E2_refresh_every_sweep_count",std::to_string(every_sweep.work.objective_cache_refreshes));
+    RecordProperty("E2_refresh_every_sweep_max_error",Precise(every_sweep.work.maximum_objective_refresh_error));
+    RecordProperty("E2_refresh_every_sweep_max_updates",std::to_string(
+        every_sweep.work.maximum_accepted_updates_between_objective_refreshes));
+    ASSERT_TRUE(every_sweep.search_converged)<<every_sweep.reason;
+    ASSERT_TRUE(every_sweep.endpoint_certified)<<every_sweep.endpoint_trust.reason;
+    EXPECT_TRUE(every_sweep.assessment.independent_replay.passed);
+    EXPECT_EQ(every_sweep.work.objective_cache_refreshes,every_sweep.sweep_count);
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveRemainsQualifiedAcrossInitialWidths)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    for(const double width:std::array<double,3>{.35,.55,.9})
+    {
+        const n::Vector initial_eta=n::Vector::Constant(3,std::log(width));
+        n::FixedNeighborPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=40;
+        policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
+        policy.eta_upper_bound=std::log(2.2); policy.collect_telemetry=true;
+        policy.assess_local_conditioning=true; policy.assess_parameter_stability=true;
+        const auto d1=n::RunFixedNeighborDiagnostic(problem,initial_eta,policy);
+        policy.objective_strategy_for_testing=n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect;
+        const auto e1=n::RunFixedNeighborDiagnostic(problem,initial_eta,policy);
+        const auto prefix="initial_width_"+std::to_string(width);
+        RecordProperty(prefix+"_D1_objective",Precise(d1.fit.objective.value()));
+        RecordProperty(prefix+"_E1_objective",Precise(e1.fit.objective.value()));
+        RecordProperty(prefix+"_D1_sweeps",std::to_string(d1.sweep_count));
+        RecordProperty(prefix+"_E1_sweeps",std::to_string(e1.sweep_count));
+        ASSERT_TRUE(d1.search_converged)<<d1.reason;
+        ASSERT_TRUE(e1.search_converged)<<e1.reason;
+        ASSERT_TRUE(d1.endpoint_certified)<<d1.endpoint_trust.reason;
+        ASSERT_TRUE(e1.endpoint_certified)<<e1.endpoint_trust.reason;
+        EXPECT_TRUE(d1.assessment.independent_replay.passed);
+        EXPECT_TRUE(e1.assessment.independent_replay.passed);
+        EXPECT_EQ(e1.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+        EXPECT_GT(e1.work.incremental_objective_evaluations,0u);
+        EXPECT_EQ(e1.final_sweep->global_ac_kkt,d1.final_sweep->global_ac_kkt);
+        EXPECT_EQ(e1.final_sweep->projected_width_gradient_inf_norm,
+            d1.final_sweep->projected_width_gradient_inf_norm);
+        EXPECT_TRUE((e1.state.eta.array()==d1.state.eta.array()).all());
+        EXPECT_TRUE((e1.state.beta.array()==d1.state.beta.array()).all());
+        (void)data;
+    }
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveHandlesSignedChargeCancellationAndLowAmplitude)
+{
+    auto input=second_stage_test::SyntheticJointWorkload("chain",3);
+    for(std::size_t atom=0;atom<3;++atom)
+        for(const auto & support:input.support[atom])
+        {
+            const auto basis=n::EvaluateKernel(support.squared_distance,.5,2.5);
+            if(atom==0) input.observations[support.row]-=2.0*basis.gaussian;
+            if(atom!=1) input.observations[support.row]-=.4*basis.charge;
+        }
+    JointProblem problem(std::move(input));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector initial_eta=n::Vector::Constant(3,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=500;
+    policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
+    policy.eta_upper_bound=std::log(2.2); policy.collect_telemetry=true;
+    policy.assess_local_conditioning=true; policy.assess_parameter_stability=true;
+    const auto d1=n::RunFixedNeighborDiagnostic(problem,initial_eta,policy);
+    policy.objective_strategy_for_testing=n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect;
+    IncrementalObjectiveAudit signed_audit;
+    policy.candidate_observer=[&](const n::FixedNeighborCandidateEvent & event) {
+        AuditIncrementalCandidate(data.layout,data.context.scale,event,signed_audit);
+    };
+    const auto e1=n::RunFixedNeighborDiagnostic(problem,initial_eta,policy);
+    RecordProperty("signed_low_amplitude_D1_converged",std::to_string(d1.search_converged));
+    RecordProperty("signed_low_amplitude_E1_converged",std::to_string(e1.search_converged));
+    RecordProperty("signed_low_amplitude_D1_stop_reason",d1.reason);
+    RecordProperty("signed_low_amplitude_E1_stop_reason",e1.reason);
+    RecordProperty("signed_low_amplitude_D1_sweeps",std::to_string(d1.sweep_count));
+    RecordProperty("signed_low_amplitude_E1_sweeps",std::to_string(e1.sweep_count));
+    RecordProperty("signed_low_amplitude_E1_incremental_candidates",
+        std::to_string(e1.work.incremental_objective_evaluations));
+    RecordProperty("signed_low_amplitude_D1_accepted_updates",std::to_string(d1.total_accepted_local_updates));
+    RecordProperty("signed_low_amplitude_E1_accepted_updates",std::to_string(e1.total_accepted_local_updates));
+    RecordProperty("signed_low_amplitude_E1_candidates",std::to_string(signed_audit.candidates));
+    RecordProperty("signed_low_amplitude_E1_candidate_accepted",std::to_string(signed_audit.accepted));
+    RecordProperty("signed_low_amplitude_E1_candidate_rejected",std::to_string(signed_audit.rejected));
+    RecordProperty("signed_low_amplitude_E1_reference_decision_disagreements",
+        std::to_string(signed_audit.actual_reference_disagreements));
+    RecordProperty("signed_low_amplitude_E1_maximum_objective_absolute_error",Precise(signed_audit.maximum_absolute));
+    RecordProperty("signed_low_amplitude_E1_maximum_cache_drift",Precise(signed_audit.maximum_cache_drift));
+    RecordProperty("signed_low_amplitude_E1_maximum_objective_ulp",std::to_string(signed_audit.maximum_ulp));
+    RecordProperty("signed_low_amplitude_E1_recovery_retries",std::to_string(std::count_if(
+        e1.blocks.begin(),e1.blocks.end(),[](const auto & block){return block.recovery_retry;})));
+    RecordProperty("signed_low_amplitude_E1_recovery_successes",std::to_string(std::count_if(
+        e1.blocks.begin(),e1.blocks.end(),[](const auto & block){return block.recovery_success;})));
+    RecordProperty("signed_low_amplitude_E1_final_objective_cache",Precise(e1.state.objective));
+    RecordProperty("signed_low_amplitude_E1_final_eta",VectorProperty(e1.state.eta));
+    RecordProperty("signed_low_amplitude_E1_final_width",VectorProperty(e1.state.eta.array().exp()));
+    RecordProperty("signed_low_amplitude_E1_final_beta",VectorProperty(e1.state.beta));
+    if(d1.final_sweep)
+    {
+        RecordProperty("signed_low_amplitude_D1_global_ac_kkt",Precise(d1.final_sweep->global_ac_kkt));
+        RecordProperty("signed_low_amplitude_D1_projected_width_kkt",
+            Precise(d1.final_sweep->projected_width_gradient_inf_norm));
+    }
+    if(e1.final_sweep)
+    {
+        RecordProperty("signed_low_amplitude_E1_global_ac_kkt",Precise(e1.final_sweep->global_ac_kkt));
+        RecordProperty("signed_low_amplitude_E1_projected_width_kkt",
+            Precise(e1.final_sweep->projected_width_gradient_inf_norm));
+        RecordProperty("signed_low_amplitude_E1_objective_replay_error",
+            Precise(e1.final_sweep->objective_replay_error));
+        RecordProperty("signed_low_amplitude_E1_prediction_replay_error",
+            Precise(e1.final_sweep->cache_replay_error));
+    }
+    if(!d1.search_converged || !e1.search_converged)
+    {
+        EXPECT_EQ(d1.reason,"block-sweep-budget");
+        EXPECT_EQ(e1.reason,"block-sweep-budget");
+        return;
+    }
+    ASSERT_TRUE(d1.endpoint_certified)<<d1.endpoint_trust.reason;
+    ASSERT_TRUE(e1.endpoint_certified)<<e1.endpoint_trust.reason;
+    EXPECT_TRUE(d1.assessment.independent_replay.passed);
+    EXPECT_TRUE(e1.assessment.independent_replay.passed);
+    EXPECT_EQ(e1.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    EXPECT_GT(e1.work.incremental_objective_evaluations,0u);
+    EXPECT_LE(std::abs(e1.state.beta(0)),1e-5);
+    EXPECT_LT(std::abs(e1.state.beta(2*2+1)),.01);
+    RecordProperty("signed_low_amplitude_D1_objective",Precise(*d1.fit.objective));
+    RecordProperty("signed_low_amplitude_E1_objective",Precise(*e1.fit.objective));
+    RecordProperty("signed_low_amplitude_E1_direct_cache_error",
+        Precise(std::abs(e1.state.objective-*e1.fit.objective)));
+    RecordProperty("signed_low_amplitude_local_conditioning_blocks",std::to_string(e1.local_conditioning.size()));
+    (void)data;
+}
+
 TEST(JointFixedNeighborBlockCoordinateTest, AffectedReplayFallsBackBeforeScratchExceedsMemoryBudget)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
@@ -1110,6 +1526,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, FailedBlockRetriesAfterLaterBlocksUp
     const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
     n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=6;
     policy.eta_upper_bound=std::log(2.2);
+    policy.objective_strategy_for_testing=n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect;
+    policy.collect_telemetry=true;
     policy.force_no_trusted_profile_for_testing=[](std::size_t block,std::size_t sweep) {
         return block==0 && sweep==0;
     };
@@ -1123,6 +1541,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, FailedBlockRetriesAfterLaterBlocksUp
     EXPECT_GT(first_sweep_state->beta.norm(),0.0);
     EXPECT_EQ(result.recovery_attempts,1u);
     EXPECT_EQ(result.recovery_successes,1u);
+    EXPECT_GT(result.work.incremental_objective_evaluations,0u);
     const auto first_failure=std::find_if(result.blocks.begin(),result.blocks.end(),[](const auto & block) {
         return block.block==1 && block.sweep==1;
     });

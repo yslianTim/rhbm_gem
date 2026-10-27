@@ -12,6 +12,8 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <numeric>
+#include <sstream>
 #include <stdexcept>
 #include <sys/resource.h>
 #include <utility>
@@ -52,6 +54,18 @@ double Median(std::vector<double> values)
 std::pair<double,double> Range(std::vector<double> values)
 {
     std::sort(values.begin(),values.end()); return {values.front(),values.back()};
+}
+std::string Distribution(const std::vector<double> & values)
+{
+    if(values.empty()) return "empty";
+    auto ordered=values; std::sort(ordered.begin(),ordered.end());
+    const double mean=std::accumulate(values.begin(),values.end(),0.0)/static_cast<double>(values.size());
+    const auto percentile=[&](double p) {
+        return ordered[static_cast<std::size_t>(std::ceil(p*static_cast<double>(ordered.size()-1)))];
+    };
+    std::ostringstream out; out<<std::setprecision(8)<<"min:"<<ordered.front()<<",median:"<<percentile(.5)
+        <<",p95:"<<percentile(.95)<<",p99:"<<percentile(.99)<<",max:"<<ordered.back()<<",mean:"<<mean;
+    return out.str();
 }
 void VerifyEquivalent(const joint::FixedNeighborDiagnosticResult & full,
     const joint::FixedNeighborDiagnosticResult & exact)
@@ -111,6 +125,14 @@ struct ShadowMetrics
     std::size_t candidates{},baseline_accepted{},e1_acceptance_disagreements{},
         c_acceptance_proxy_disagreements{};
     ScalarError e1_objective,c_prediction,c_residual,c_objective;
+};
+struct ControlledCandidateAudit
+{
+    std::size_t candidates{},accepted{},rejected{},fallbacks{},estimated_reference_disagreements{},
+        actual_reference_disagreements{},reference_positive_accepts{};
+    ScalarError objective;
+    double maximum_cache_drift{};
+    std::vector<double> decision_margins;
 };
 std::uint64_t OrderedBits(double value)
 {
@@ -204,6 +226,44 @@ void RecordIncrementalObjectiveShadow(const joint::Domain & domain,
         joint::BlockObjectiveReplayEnclosure(std::max(std::abs(c_objective),
             std::abs(event.accepted_before.objective)))) && !event.unchanged;
     metrics.c_acceptance_proxy_disagreements+=c_accept!=event.accepted;
+}
+void AuditControlledCandidate(const rhbm_gem::JointParameterLayout & layout,
+    double scale,const joint::FixedNeighborCandidateEvent & event,ControlledCandidateAudit & audit)
+{
+    if(!event.candidate_replay_ran || !std::isfinite(event.incremental_objective)) return;
+    ++audit.candidates; audit.accepted+=event.accepted; audit.rejected+=!event.accepted;
+    audit.fallbacks+=event.objective_full_scan_fallback;
+    double old_squared{},candidate_squared{};
+    for(const auto row_value:layout.informative_rows)
+    {
+        const auto row=static_cast<Eigen::Index>(row_value);
+        const double old_residual=event.accepted_before.residual(row);
+        const double candidate_residual=event.full_residual(row);
+        old_squared+=old_residual*old_residual;
+        candidate_squared+=candidate_residual*candidate_residual;
+    }
+    const double old_reference=.5*old_squared/(scale*scale);
+    const double candidate_reference=.5*candidate_squared/(scale*scale);
+    RecordError(audit.objective,candidate_reference,event.incremental_objective);
+    audit.maximum_cache_drift=std::max(audit.maximum_cache_drift,
+        std::abs(event.accepted_before.objective-old_reference));
+    const double estimated_enclosure=joint::BlockObjectiveReplayEnclosure(std::max(
+        std::abs(event.accepted_before.objective),std::abs(event.incremental_objective)));
+    const bool estimated_decision=ObjectiveProxyAccept(event.accepted_before.objective,
+        event.incremental_objective,event.local_objective_before,event.local_objective_after,estimated_enclosure) &&
+        !event.unchanged;
+    const double reference_enclosure=joint::BlockObjectiveReplayEnclosure(std::max(
+        std::abs(old_reference),std::abs(candidate_reference)));
+    const bool reference_decision=ObjectiveProxyAccept(old_reference,candidate_reference,
+        event.local_objective_before,event.local_objective_after,reference_enclosure) && !event.unchanged;
+    audit.estimated_reference_disagreements+=estimated_decision!=reference_decision;
+    audit.actual_reference_disagreements+=event.accepted!=reference_decision;
+    audit.reference_positive_accepts+=reference_decision && candidate_reference>old_reference;
+    const double delta=candidate_reference-old_reference;
+    const double consistency=std::abs(delta+event.local_objective_before-event.local_objective_after);
+    audit.decision_margins.push_back(std::min({std::abs(delta),std::abs(delta-reference_enclosure),
+        std::abs(event.local_objective_after-event.local_objective_before),
+        std::abs(consistency-reference_enclosure)}));
 }
 void Run(int target_count)
 {
@@ -331,14 +391,211 @@ void Run(int target_count)
         std::cout<<"process_peak_rss_bytes="<<peak<<'\n';
     }
 }
+
+void RunControlled(int target_count,bool qualify,int selected_method=-1,bool performance_qualified=false)
+{
+    constexpr std::size_t measured_samples=5;
+    const std::size_t sample_count=qualify ? 1 : measured_samples;
+    auto problem=rhbm_gem::core::JointProblem(second_stage_test::SyntheticJointWorkload("chain",target_count));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const Vector initial_eta=Vector::Constant(static_cast<Eigen::Index>(data.layout.full_atoms.size()),std::log(.55));
+    joint::FixedNeighborPolicy base; base.core_atoms=12; base.maximum_sweeps=qualify || performance_qualified ? 30 : 5;
+    base.convergence_criteria=joint::PracticalJointConvergenceCriteria;
+    base.stop_after_stationarity=qualify || performance_qualified; base.certify_endpoint=qualify || performance_qualified;
+    base.assess_local_conditioning=qualify || performance_qualified; base.assess_parameter_stability=qualify || performance_qualified;
+    base.capture_local_trajectory=qualify;
+    base.collect_telemetry=true; base.eta_upper_bound=std::log(2.2);
+    std::array<joint::FixedNeighborPolicy,3> policies{base,base,base};
+    policies[1].objective_strategy_for_testing=joint::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect;
+    policies[2].objective_strategy_for_testing=joint::FixedNeighborObjectiveStrategyForTesting::IncrementalGuarded;
+    policies[2].objective_guard_band_fraction_for_testing=.1;
+    policies[2].refresh_objective_after_sweep_for_testing=true;
+    constexpr std::array<const char *,3> names{"D1_full_objective_scan","E1_direct","E1_guarded"};
+    std::array<ControlledCandidateAudit,3> audits{};
+    if(qualify)
+        for(std::size_t method=1;method<policies.size();++method)
+            policies[method].candidate_observer=[&,method](const joint::FixedNeighborCandidateEvent & event) {
+                AuditControlledCandidate(data.layout,data.context.scale,event,audits[method]);
+            };
+    struct Metrics
+    {
+        std::vector<double> wall,search,candidate,local,sweep,global,endpoint,independent;
+        std::size_t candidates{},accepted{},unchanged{},incremental{},fallbacks{},refreshes{},
+            peak_estimate{},candidate_scratch{};
+        double maximum_cache_replay_error{},maximum_objective_replay_error{};
+    };
+    std::array<Metrics,3> metrics{};
+    std::array<joint::FixedNeighborDiagnosticResult,3> final_results{};
+    const std::size_t total_runs=qualify ? 1 : measured_samples+1;
+    for(std::size_t sample=0;sample<total_runs;++sample)
+        for(std::size_t method=0;method<policies.size();++method)
+        {
+            if(selected_method>=0 && method!=static_cast<std::size_t>(selected_method)) continue;
+            joint::FixedNeighborDiagnosticResult result;
+            const auto timing=RunSearch(problem,initial_eta,policies[method],result);
+            if(sample==0 && !qualify) continue;
+            auto & out=metrics[method];
+            out.wall.push_back(timing.wall); out.search.push_back(timing.search);
+            out.candidate.push_back(timing.candidate_replay); out.local.push_back(timing.local_search);
+            out.sweep.push_back(timing.sweep_replay); out.global.push_back(timing.global_state);
+            out.endpoint.push_back(result.work.endpoint_verification_seconds);
+            out.independent.push_back(result.work.independent_replay_seconds);
+            out.candidates+=timing.candidate_count; out.accepted+=timing.accepted_count;
+            out.unchanged+=timing.unchanged_count;
+            out.incremental+=result.work.incremental_objective_evaluations;
+            out.fallbacks+=result.work.objective_full_scan_fallbacks;
+            out.refreshes+=static_cast<std::size_t>(std::count_if(result.sweeps.begin(),result.sweeps.end(),
+                [](const auto & sweep){return sweep.objective_cache_refreshed;}));
+            out.peak_estimate=std::max(out.peak_estimate,result.global_state_memory_estimate.estimated_peak_bytes);
+            out.candidate_scratch=std::max(out.candidate_scratch,result.work.affected_replay_peak_scratch_bytes);
+            out.maximum_cache_replay_error=std::max(out.maximum_cache_replay_error,result.work.maximum_cache_replay_error);
+            if(result.final_sweep) out.maximum_objective_replay_error=std::max(out.maximum_objective_replay_error,
+                result.final_sweep->objective_replay_error);
+            final_results[method]=std::move(result);
+        }
+    std::size_t support_entries{};
+    for(const auto atom:data.layout.full_atoms) support_entries+=data.domain.atoms[static_cast<std::size_t>(atom)].size();
+    std::cout<<std::setprecision(17)<<"controlled_fixture_targets="<<target_count
+        <<" observations="<<data.domain.rows<<" informative_rows="<<data.layout.informative_rows.size()
+        <<" support_entries="<<support_entries<<" samples="<<sample_count
+        <<" qualification_mode="<<qualify<<" performance_qualified_mode="<<performance_qualified
+        <<" sweeps_requested="<<(qualify || performance_qualified ? 30 : 5)
+        <<" selected_method="<<(selected_method<0 ? "all" : names[static_cast<std::size_t>(selected_method)])
+        <<" initial_eta="<<std::log(.55)<<" initial_beta=0 width_upper_bound=2.2\n";
+    for(std::size_t method=0;method<metrics.size();++method)
+    {
+        if(selected_method>=0 && method!=static_cast<std::size_t>(selected_method)) continue;
+        const auto & m=metrics[method]; const auto & result=final_results[method];
+        const std::size_t replay_candidates=result.work.full_candidate_replays+
+            result.work.affected_candidate_replays;
+        const auto accepted=static_cast<std::size_t>(std::count_if(result.blocks.begin(),result.blocks.end(),
+            [](const auto & block){return block.accepted;}));
+        const auto unchanged=static_cast<std::size_t>(std::count_if(result.blocks.begin(),result.blocks.end(),
+            [](const auto & block){return block.status=="unchanged";}));
+        std::size_t profile_trial_count{},profile_trial_accepted{};
+        for(const auto & block:result.blocks) for(const auto & trial:block.profile_trials)
+        {
+            ++profile_trial_count;
+            profile_trial_accepted+=trial.accepted;
+        }
+        const std::size_t rejected=replay_candidates>accepted ? replay_candidates-accepted : 0;
+        double amplitude_squared{},charge_squared{},width_squared{};
+        std::vector<double> amplitudes,charges,widths,amplitude_errors,charge_errors,width_errors;
+        amplitudes.reserve(static_cast<std::size_t>(result.state.eta.size()));
+        charges.reserve(amplitudes.capacity()); widths.reserve(amplitudes.capacity());
+        amplitude_errors.reserve(amplitudes.capacity()); charge_errors.reserve(amplitudes.capacity());
+        width_errors.reserve(amplitudes.capacity());
+        for(Eigen::Index atom=0;atom<result.state.eta.size();++atom)
+        {
+            const double amplitude=result.state.beta(2*atom),charge=result.state.beta(2*atom+1),
+                width=std::exp(result.state.eta(atom));
+            amplitudes.push_back(amplitude); charges.push_back(charge); widths.push_back(width);
+            const double error_a=std::abs(amplitude-2.0),error_c=std::abs(charge-.2),error_width=std::abs(width-.5);
+            amplitude_errors.push_back(error_a); charge_errors.push_back(error_c); width_errors.push_back(error_width);
+            amplitude_squared+=error_a*error_a; charge_squared+=error_c*error_c; width_squared+=error_width*error_width;
+        }
+        const double atom_count=static_cast<double>(result.state.eta.size());
+        const double truth_rmse_a=std::sqrt(amplitude_squared/atom_count);
+        const double truth_rmse_c=std::sqrt(charge_squared/atom_count);
+        const double truth_rmse_width=std::sqrt(width_squared/atom_count);
+        const auto refreshes=static_cast<std::size_t>(std::count_if(result.sweeps.begin(),result.sweeps.end(),
+            [](const auto & sweep){return sweep.objective_cache_refreshed;}));
+        std::cout<<"method="<<names[method]
+            <<" search_median_seconds="<<Median(m.search)<<" search_range_seconds="<<Range(m.search).first<<".."<<Range(m.search).second
+            <<" wall_median_seconds="<<Median(m.wall)
+            <<" candidate_evaluation_median_seconds="<<Median(m.candidate)
+            <<" local_search_median_seconds="<<Median(m.local)
+            <<" sweep_replay_median_seconds="<<Median(m.sweep)
+            <<" global_state_median_seconds="<<Median(m.global)
+            <<" endpoint_verification_median_seconds="<<Median(m.endpoint)
+            <<" independent_replay_median_seconds="<<Median(m.independent)
+            <<" candidate_replays="<<replay_candidates<<" candidate_accepted="<<accepted
+            <<" candidate_rejected="<<rejected<<" unchanged_blocks="<<unchanged
+            <<" profile_trials="<<profile_trial_count<<" profile_trials_accepted="<<profile_trial_accepted
+            <<" profile_trials_rejected="<<(profile_trial_count-profile_trial_accepted)
+            <<" incremental_objective_evaluations="<<result.work.incremental_objective_evaluations
+            <<" full_scan_fallbacks="<<result.work.objective_full_scan_fallbacks
+            <<" full_scan_fallback_seconds="<<result.work.objective_full_scan_fallback_seconds
+            <<" sweep_objective_refreshes="<<refreshes
+            <<" sweeps="<<result.sweep_count<<" stop_reason="<<result.reason
+            <<" search_converged="<<result.search_converged
+            <<" global_ac_kkt="<<(result.final_sweep ? result.final_sweep->global_ac_kkt : 0.0)
+            <<" projected_width_kkt="<<(result.final_sweep ? result.final_sweep->projected_width_gradient_inf_norm : 0.0)
+            <<" cache_replay_error_max="<<m.maximum_cache_replay_error
+            <<" objective_replay_error_max="<<m.maximum_objective_replay_error
+            <<" endpoint_certified="<<result.endpoint_certified
+            <<" independent_replay_passed="<<(result.assessment.independent_replay.available && result.assessment.independent_replay.passed)
+            <<" runtime_convergence="<<static_cast<int>(result.fit.RuntimeConvergence())
+            <<" final_objective_cache="<<result.state.objective
+            <<" final_objective_independent="<<(result.fit.objective ? *result.fit.objective : std::numeric_limits<double>::quiet_NaN())
+            <<" final_A_distribution={"<<Distribution(amplitudes)<<'}'
+            <<" final_C_distribution={"<<Distribution(charges)<<'}'
+            <<" final_width_distribution={"<<Distribution(widths)<<'}'
+            <<" truth_abs_A_error={"<<Distribution(amplitude_errors)<<'}'
+            <<" truth_abs_C_error={"<<Distribution(charge_errors)<<'}'
+            <<" truth_abs_width_error={"<<Distribution(width_errors)<<'}'
+            <<" truth_rmse_A="<<truth_rmse_a<<" truth_rmse_C="<<truth_rmse_c<<" truth_rmse_width="<<truth_rmse_width
+            <<" memory_preflight_peak_bytes="<<m.peak_estimate
+            <<" affected_replay_scratch_bytes="<<m.candidate_scratch
+            <<" parameter_stability="<<(result.parameter_stability ? result.parameter_stability->trajectory_stability_status : "unavailable")
+            <<" local_conditioning_blocks="<<result.local_conditioning.size()<<'\n';
+        if(qualify && method>0)
+        {
+            const auto & audit=audits[method];
+            std::cout<<"diagnostic_reference="<<names[method]<<" candidates="<<audit.candidates
+                <<" accepted="<<audit.accepted<<" rejected="<<audit.rejected
+                <<" full_scan_fallbacks="<<audit.fallbacks
+                <<" estimated_reference_acceptance_disagreements="<<audit.estimated_reference_disagreements
+                <<" actual_reference_acceptance_disagreements="<<audit.actual_reference_disagreements
+                <<" reference_positive_accepts="<<audit.reference_positive_accepts
+                <<" maximum_objective_absolute_error="<<audit.objective.maximum_absolute
+                <<" maximum_objective_relative_error="<<audit.objective.maximum_relative
+                <<" maximum_objective_ulp="<<audit.objective.maximum_ulp
+                <<" maximum_accepted_cache_drift="<<audit.maximum_cache_drift
+                <<" decision_margin_distribution={"<<Distribution(audit.decision_margins)<<"}\n";
+        }
+        if(method>0 && result.state.eta.size()==final_results[0].state.eta.size())
+        {
+            std::vector<double> difference_a,difference_c,difference_width;
+            for(Eigen::Index atom=0;atom<result.state.eta.size();++atom)
+            {
+                difference_a.push_back(std::abs(result.state.beta(2*atom)-final_results[0].state.beta(2*atom)));
+                difference_c.push_back(std::abs(result.state.beta(2*atom+1)-final_results[0].state.beta(2*atom+1)));
+                difference_width.push_back(std::abs(std::exp(result.state.eta(atom))-
+                    std::exp(final_results[0].state.eta(atom))));
+            }
+            std::cout<<"method="<<names[method]<<" abs_A_difference_from_D1={"<<Distribution(difference_a)
+                <<"} abs_C_difference_from_D1={"<<Distribution(difference_c)
+                <<"} abs_width_difference_from_D1={"<<Distribution(difference_width)<<"}\n";
+        }
+    }
+    rusage usage{};
+    if(getrusage(RUSAGE_SELF,&usage)==0)
+    {
+#if defined(__APPLE__)
+        const auto peak=static_cast<std::uint64_t>(usage.ru_maxrss);
+#else
+        const auto peak=static_cast<std::uint64_t>(usage.ru_maxrss)*1024;
+#endif
+        std::cout<<"controlled_benchmark_process_peak_rss_bytes="<<peak<<'\n';
+    }
+}
 }
 
 int main(int argc,char ** argv)
 {
     try
     {
-        if(argc!=2) throw std::invalid_argument("usage: rhbm_fixed_neighbor_closed_loop_benchmark <target-count>");
-        Run(std::stoi(argv[1]));
+        if(argc==2) Run(std::stoi(argv[1]));
+        else if(argc==3 && std::string(argv[2])=="--controlled") RunControlled(std::stoi(argv[1]),false);
+        else if(argc==3 && std::string(argv[2])=="--qualify") RunControlled(std::stoi(argv[1]),true);
+        else if(argc==3 && std::string(argv[2])=="--controlled-d1") RunControlled(std::stoi(argv[1]),false,0);
+        else if(argc==3 && std::string(argv[2])=="--controlled-direct") RunControlled(std::stoi(argv[1]),false,1);
+        else if(argc==3 && std::string(argv[2])=="--controlled-guarded") RunControlled(std::stoi(argv[1]),false,2);
+        else if(argc==3 && std::string(argv[2])=="--performance-qualified-d1") RunControlled(std::stoi(argv[1]),false,0,true);
+        else if(argc==3 && std::string(argv[2])=="--performance-qualified-direct") RunControlled(std::stoi(argv[1]),false,1,true);
+        else if(argc==3 && std::string(argv[2])=="--performance-qualified-guarded") RunControlled(std::stoi(argv[1]),false,2,true);
+        else throw std::invalid_argument("usage: rhbm_fixed_neighbor_closed_loop_benchmark <target-count> [--controlled|--qualify|--controlled-d1|--controlled-direct|--controlled-guarded|--performance-qualified-d1|--performance-qualified-direct|--performance-qualified-guarded]");
     }
     catch(const std::exception & error)
     {std::cerr<<"fixed-neighbor closed-loop benchmark failed: "<<error.what()<<'\n'; return 1;}
