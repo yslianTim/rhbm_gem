@@ -265,6 +265,9 @@ TEST(JointComponentNumericsTest, UnweightedLinearSolvePreservesRecordedNumerical
     const auto [full_rank,full_rank_certificate]=solve(identity,identity*positive_truth);
     ASSERT_TRUE(full_rank.valid); EXPECT_EQ(full_rank.reason,"solved"); EXPECT_EQ(full_rank.rank,4);
     EXPECT_EQ(full_rank.active_set_iterations,1u); EXPECT_EQ(full_rank.releases,0);
+    EXPECT_EQ(full_rank.sparse_structure_build_count,1u); EXPECT_EQ(full_rank.tile_mapping_build_count,1u);
+    EXPECT_EQ(full_rank.free_face_changes,0u); EXPECT_EQ(full_rank.free_face_unchanged,0u);
+    EXPECT_GT(full_rank.solver_total_seconds,0.0); EXPECT_GT(full_rank.sparse_qr_seconds,0.0);
     EXPECT_LE((full_rank.beta-positive_truth).norm(),1e-14);
     EXPECT_DOUBLE_EQ(full_rank_certificate.objective,0.0);
     EXPECT_EQ(full_rank.refinement_eligibility_count,1u); EXPECT_EQ(full_rank.refinement_trigger_count,0u);
@@ -273,6 +276,8 @@ TEST(JointComponentNumericsTest, UnweightedLinearSolvePreservesRecordedNumerical
     const auto [boundary,boundary_certificate]=solve(identity,identity*boundary_truth);
     ASSERT_TRUE(boundary.valid); EXPECT_EQ(boundary.reason,"solved"); EXPECT_EQ(boundary.rank,3);
     EXPECT_EQ(boundary.active_set_iterations,2u); EXPECT_EQ(boundary.releases,0);
+    EXPECT_EQ(boundary.sparse_structure_build_count,2u); EXPECT_EQ(boundary.tile_mapping_build_count,2u);
+    EXPECT_EQ(boundary.free_face_changes,1u); EXPECT_EQ(boundary.free_face_unchanged,0u);
     EXPECT_DOUBLE_EQ(boundary.beta(0),0.0); EXPECT_NEAR(boundary.beta(1),-.3,1e-14);
     EXPECT_NEAR(boundary.beta(2),1.5,1e-14); EXPECT_NEAR(boundary.beta(3),.4,1e-14);
     EXPECT_NEAR(boundary_certificate.objective,.125,1e-14);
@@ -284,6 +289,8 @@ TEST(JointComponentNumericsTest, UnweightedLinearSolvePreservesRecordedNumerical
     const auto [released,release_certificate]=solve(release_design,(Vector(7)<<0,1,2,1,1,2,0).finished());
     ASSERT_TRUE(released.valid); EXPECT_EQ(released.reason,"solved"); EXPECT_EQ(released.rank,3);
     EXPECT_EQ(released.active_set_iterations,4u); EXPECT_EQ(released.releases,1);
+    EXPECT_EQ(released.sparse_structure_build_count,4u); EXPECT_EQ(released.tile_mapping_build_count,4u);
+    EXPECT_EQ(released.free_face_changes,3u); EXPECT_EQ(released.free_face_unchanged,0u);
     const Vector expected_release=(Vector(4)<<.038674033149171297,.28176795580110497,0.,-.18784530386740331).finished();
     EXPECT_LE((released.beta-expected_release).norm(),1e-14);
     EXPECT_NEAR(release_certificate.objective,4.834254143646409,1e-13);
@@ -318,6 +325,7 @@ TEST(JointComponentNumericsTest, UnweightedLinearSolvePreservesRecordedNumerical
     const auto [large_result,large_certificate]=solve(large,large*large_truth);
     ASSERT_TRUE(large_result.valid); EXPECT_EQ(large_result.rank,48);
     EXPECT_EQ(large_result.active_set_iterations,1u); EXPECT_EQ(large_result.releases,0);
+    EXPECT_EQ(large_result.sparse_structure_build_count,1u); EXPECT_EQ(large_result.tile_mapping_build_count,1u);
     EXPECT_LE((large_result.beta-large_truth).norm(),1e-12);
     EXPECT_LT(large_certificate.objective,1e-27);
     EXPECT_LT(large_certificate.projected_kkt,2e-16);

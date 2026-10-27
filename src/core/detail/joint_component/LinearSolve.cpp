@@ -8,6 +8,13 @@
 namespace rhbm_gem::core::joint_component {
 namespace {
 constexpr double eps=std::numeric_limits<double>::epsilon();
+struct ScopeSeconds
+{
+    double & result;
+    std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
+    ~ScopeSeconds()
+    {result+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();}
+};
 bool Finite(const Sparse & x)
 {
     for (int k=0;k<x.outerSize();++k) for (Sparse::InnerIterator e(x,k);e;++e)
@@ -24,29 +31,40 @@ Eigen::VectorXd ColumnNorms(const Sparse & x)
 }
 namespace {
 std::pair<Eigen::SparseMatrix<double>,Eigen::VectorXd> ReduceSparseRows(
-    const Eigen::SparseMatrix<double> & a,const Eigen::VectorXd & rhs)
+    const Eigen::SparseMatrix<double> & a,const Eigen::VectorXd & rhs,LinearResult & work)
 {
     // Orthogonal elimination within contiguous row tiles. Only structurally
     // present columns need local QR; all original rows and RHS entries participate.
+    const auto conversion_started=std::chrono::steady_clock::now();
     const Eigen::SparseMatrix<double,Eigen::RowMajor> rows(a);
+    work.row_major_conversion_seconds+=std::chrono::duration<double>(
+        std::chrono::steady_clock::now()-conversion_started).count();
     std::vector<Eigen::Triplet<double>> entries; std::vector<double> response;
     constexpr Eigen::Index tile_size{1024};
     for(Eigen::Index first=0;first<a.rows();first+=tile_size)
     {
         const Eigen::Index count{std::min(tile_size,a.rows()-first)};
+        const auto mapping_started=std::chrono::steady_clock::now();
         std::vector<int> local_column(static_cast<std::size_t>(a.cols()),-1),columns;
         for(Eigen::Index row=first;row<first+count;++row)
             for(Eigen::SparseMatrix<double,Eigen::RowMajor>::InnerIterator e(rows,row);e;++e)
                 local_column[static_cast<std::size_t>(e.col())]=0;
         for(Eigen::Index k=0;k<a.cols();++k) if(local_column[static_cast<std::size_t>(k)]==0)
         {local_column[static_cast<std::size_t>(k)]=static_cast<int>(columns.size()); columns.push_back(static_cast<int>(k));}
+        ++work.tile_mapping_build_count;
+        work.tile_mapping_build_seconds+=std::chrono::duration<double>(
+            std::chrono::steady_clock::now()-mapping_started).count();
         if(columns.empty()) continue;
         Eigen::MatrixXd local{Eigen::MatrixXd::Zero(count,static_cast<Eigen::Index>(columns.size()))};
         for(Eigen::Index row=first;row<first+count;++row)
             for(Eigen::SparseMatrix<double,Eigen::RowMajor>::InnerIterator e(rows,row);e;++e)
                 local(row-first,local_column[static_cast<std::size_t>(e.col())])=e.value();
+        const auto qr_started=std::chrono::steady_clock::now();
         const Eigen::HouseholderQR<Eigen::MatrixXd> qr(local);
         const Eigen::VectorXd transformed{qr.householderQ().adjoint()*rhs.segment(first,count)};
+        work.tiled_qr_seconds+=std::chrono::duration<double>(
+            std::chrono::steady_clock::now()-qr_started).count();
+        const auto assembly_started=std::chrono::steady_clock::now();
         const Eigen::Index retained{std::min(count,local.cols())},offset{static_cast<Eigen::Index>(response.size())};
         for(Eigen::Index row=0;row<retained;++row)
         {
@@ -54,17 +72,24 @@ std::pair<Eigen::SparseMatrix<double>,Eigen::VectorXd> ReduceSparseRows(
             for(Eigen::Index col=row;col<local.cols();++col)
                 if(qr.matrixQR()(row,col)!=0) entries.emplace_back(offset+row,columns[static_cast<std::size_t>(col)],qr.matrixQR()(row,col));
         }
+        work.reduced_sparse_assembly_seconds+=std::chrono::duration<double>(
+            std::chrono::steady_clock::now()-assembly_started).count();
     }
+    const auto assembly_started=std::chrono::steady_clock::now();
     Eigen::SparseMatrix<double> reduced(static_cast<Eigen::Index>(response.size()),a.cols());
     reduced.setFromTriplets(entries.begin(),entries.end());
+    work.reduced_nonzeros+=static_cast<std::size_t>(reduced.nonZeros());
     Eigen::VectorXd transformed(static_cast<Eigen::Index>(response.size()));
     for(std::size_t row=0;row<response.size();++row) transformed(static_cast<Eigen::Index>(row))=response[row];
+    work.reduced_sparse_assembly_seconds+=std::chrono::duration<double>(
+        std::chrono::steady_clock::now()-assembly_started).count();
     return {std::move(reduced),std::move(transformed)};
 }
 LinearResult UnweightedSolveImpl(const Sparse & x,VectorRef y,
     const LinearPolicy * policy,double observation_scale_override)
 {
     LinearResult out; out.reason="invalid-input"; out.beta=Eigen::VectorXd::Zero(x.cols());
+    ScopeSeconds total_timer{out.solver_total_seconds};
     if (x.cols()==0 || x.cols()%2!=0 || x.rows()<=x.cols() || y.size()!=x.rows() ||
         !Finite(x) || !y.allFinite()) return out;
     const Eigen::VectorXd scales{ColumnNorms(x)};
@@ -79,6 +104,8 @@ LinearResult UnweightedSolveImpl(const Sparse & x,VectorRef y,
     const double rank_threshold{policy ? policy->rank_relative : eps*static_cast<double>(std::max(x.rows(),x.cols()))};
     Eigen::VectorXd b{Eigen::VectorXd::Zero(x.cols())};
     std::vector<bool> free(static_cast<std::size_t>(x.cols()),true);
+    std::vector<Eigen::Index> previous_columns; previous_columns.reserve(static_cast<std::size_t>(x.cols()));
+    bool has_previous_face{};
     // Begin with the unconstrained problem. Block infeasible A coefficients and
     // release blocked ones when the dual gradient requires it (mixed NNLS).
     for (Eigen::Index iteration=0; iteration<(policy ? policy->active_set_iteration_factor : 20)*x.cols()*x.cols(); ++iteration)
@@ -86,6 +113,13 @@ LinearResult UnweightedSolveImpl(const Sparse & x,VectorRef y,
         ++out.active_set_iterations;
         std::vector<Eigen::Index> columns;
         for (Eigen::Index k=0;k<x.cols();++k) if (free[static_cast<std::size_t>(k)]) columns.push_back(k);
+        if(has_previous_face)
+        {
+            if(columns==previous_columns) ++out.free_face_unchanged;
+            else ++out.free_face_changes;
+        }
+        previous_columns=columns; has_previous_face=true;
+        const auto structure_started=std::chrono::steady_clock::now();
         Eigen::SparseMatrix<double> selected(x.rows(),static_cast<Eigen::Index>(columns.size()));
         selected.reserve(sparse_z.nonZeros()); double maximum_norm{};
         for (std::size_t k=0;k<columns.size();++k)
@@ -99,15 +133,28 @@ LinearResult UnweightedSolveImpl(const Sparse & x,VectorRef y,
             maximum_norm=std::max(maximum_norm,std::sqrt(squared));
         }
         selected.finalize();
+        ++out.sparse_structure_build_count;
+        out.selected_nonzeros+=static_cast<std::size_t>(selected.nonZeros());
+        out.sparse_structure_build_seconds+=std::chrono::duration<double>(
+            std::chrono::steady_clock::now()-structure_started).count();
         if (maximum_norm==0) {out.reason="rank-deficient"; return out;}
         Eigen::SparseQR<Eigen::SparseMatrix<double>,Eigen::COLAMDOrdering<int>> qr;
         // SparseQR uses an absolute pivot threshold. The scale is the
         // largest norm of the column-normalized design.
-        const auto reduced{ReduceSparseRows(selected,rhs)};
+        const auto reduced{ReduceSparseRows(selected,rhs,out)};
+        const auto sparse_qr_started=std::chrono::steady_clock::now();
         qr.setPivotThreshold(rank_threshold*maximum_norm); qr.compute(reduced.first);
-        if(qr.info()!=Eigen::Success) {out.reason="nonfinite"; return out;}
-        out.rank=static_cast<int>(qr.rank()); const Eigen::VectorXd solution=qr.solve(reduced.second);
+        if(qr.info()!=Eigen::Success)
+        {
+            out.sparse_qr_seconds+=std::chrono::duration<double>(
+                std::chrono::steady_clock::now()-sparse_qr_started).count();
+            out.reason="nonfinite"; return out;
+        }
+        out.rank=static_cast<int>(qr.rank());
+        const Eigen::VectorXd solution=qr.solve(reduced.second);
         ++out.solves;
+        out.sparse_qr_seconds+=std::chrono::duration<double>(
+            std::chrono::steady_clock::now()-sparse_qr_started).count();
         if (out.rank!=static_cast<int>(columns.size())) {out.reason="rank-deficient"; return out;}
         Eigen::VectorXd candidate{Eigen::VectorXd::Zero(x.cols())};
         for (std::size_t k=0;k<columns.size();++k) candidate(columns[k])=solution(static_cast<Eigen::Index>(k));

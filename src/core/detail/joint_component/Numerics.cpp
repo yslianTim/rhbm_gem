@@ -29,7 +29,9 @@ void AddLinearSolveWork(LinearSolveWork & destination,const LinearSolveWork & so
     ADD_COUNT(solve_calls); ADD_COUNT(valid_solves); ADD_COUNT(invalid_solves); ADD_COUNT(invalid_input_solves);
     ADD_COUNT(rank_deficient_solves); ADD_COUNT(nonfinite_solves); ADD_COUNT(active_set_budget_exhausted_solves);
     ADD_COUNT(other_invalid_solves); ADD_COUNT(factorization_solves); ADD_COUNT(active_set_iterations);
-    ADD_COUNT(active_set_releases); ADD_COUNT(initial_kkt_count); ADD_COUNT(initial_kkt_le_1e10);
+    ADD_COUNT(active_set_releases); ADD_COUNT(free_face_changes); ADD_COUNT(free_face_unchanged);
+    ADD_COUNT(sparse_structure_build_count); ADD_COUNT(tile_mapping_build_count);
+    ADD_COUNT(selected_nonzeros); ADD_COUNT(reduced_nonzeros); ADD_COUNT(initial_kkt_count); ADD_COUNT(initial_kkt_le_1e10);
     ADD_COUNT(initial_kkt_le_1e8); ADD_COUNT(initial_kkt_le_1e7); ADD_COUNT(final_kkt_count);
     ADD_COUNT(final_kkt_le_1e10); ADD_COUNT(final_kkt_le_1e8); ADD_COUNT(final_kkt_le_1e7);
     ADD_COUNT(refinement_eligibility_count); ADD_COUNT(refinement_trigger_count); ADD_COUNT(refinement_iterations);
@@ -40,6 +42,13 @@ void AddLinearSolveWork(LinearSolveWork & destination,const LinearSolveWork & so
     destination.final_kkt_sum+=source.final_kkt_sum;
     destination.final_kkt_max=std::max(destination.final_kkt_max,source.final_kkt_max);
     destination.refinement_seconds+=source.refinement_seconds;
+    destination.sparse_structure_build_seconds+=source.sparse_structure_build_seconds;
+    destination.row_major_conversion_seconds+=source.row_major_conversion_seconds;
+    destination.tile_mapping_build_seconds+=source.tile_mapping_build_seconds;
+    destination.tiled_qr_seconds+=source.tiled_qr_seconds;
+    destination.reduced_sparse_assembly_seconds+=source.reduced_sparse_assembly_seconds;
+    destination.sparse_qr_seconds+=source.sparse_qr_seconds;
+    destination.solver_total_seconds+=source.solver_total_seconds;
     destination.refinement_before_kkt_sum+=source.refinement_before_kkt_sum;
     destination.refinement_before_kkt_max=std::max(destination.refinement_before_kkt_max,source.refinement_before_kkt_max);
     destination.refinement_after_kkt_sum+=source.refinement_after_kkt_sum;
@@ -415,6 +424,19 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
         stats.refinement_failure_count+=solved.refinement_failure_count;
         stats.refinement_factorizations+=solved.refinement_factorizations;
         stats.refinement_seconds+=solved.refinement_seconds;
+        stats.free_face_changes+=solved.free_face_changes;
+        stats.free_face_unchanged+=solved.free_face_unchanged;
+        stats.sparse_structure_build_count+=solved.sparse_structure_build_count;
+        stats.tile_mapping_build_count+=solved.tile_mapping_build_count;
+        stats.selected_nonzeros+=solved.selected_nonzeros;
+        stats.reduced_nonzeros+=solved.reduced_nonzeros;
+        stats.sparse_structure_build_seconds+=solved.sparse_structure_build_seconds;
+        stats.row_major_conversion_seconds+=solved.row_major_conversion_seconds;
+        stats.tile_mapping_build_seconds+=solved.tile_mapping_build_seconds;
+        stats.tiled_qr_seconds+=solved.tiled_qr_seconds;
+        stats.reduced_sparse_assembly_seconds+=solved.reduced_sparse_assembly_seconds;
+        stats.sparse_qr_seconds+=solved.sparse_qr_seconds;
+        stats.solver_total_seconds+=solved.solver_total_seconds;
         AddKktSample(solved.initial_projected_kkt,stats.initial_kkt_count,stats.initial_kkt_le_1e10,
             stats.initial_kkt_le_1e8,stats.initial_kkt_le_1e7,stats.initial_kkt_sum,stats.initial_kkt_max);
         if(solved.refinement_trigger_count)
