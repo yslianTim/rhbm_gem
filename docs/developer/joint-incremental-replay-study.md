@@ -134,6 +134,73 @@ that B/C/E are safe around the decision boundary. N3 must check whether refresh
 can contain their accumulated drift before deciding whether they proceed; D1
 proceeds to closed-loop testing.
 
+## N3: long-run drift, refresh, and rollback
+
+The repeatable synthetic stress used 30 targets, 13,710 rows, 15,450 support
+entries, and the first overlapping 12-atom block (5,520 affected rows). It made
+503 attempts on that same block, with 474 scripted accepted updates and every
+17th attempt rejected (29 rollbacks). The sequence includes alternating signed
+charge coefficients, repeated small updates, width swings, updates within
+`1e-12` of the upper width bound, and near-converged coefficient perturbations.
+The 11-update refresh interval represents one synthetic sweep. This is a
+deterministic arithmetic stress, not a FixedNeighbor LM trajectory: the update
+and reject schedule is scripted, and the reported acceptance check is the
+objective-only nonincrease/replay-enclosure proxy. All 29 rejects preserved the
+accepted shadow state bitwise for each strategy. Every full refresh restored
+prediction, residual, and objective exactly (zero post-refresh mismatches).
+
+The timings below cover candidate calculation, accepted-state updates, and
+scheduled Full Replay refresh; independent reference replay and error scanning
+are outside the timed interval. This was one run per case, so the times are
+diagnostic rather than a stable performance claim. An 11-update sweep refresh
+is shown last.
+
+| Strategy | Refresh interval | ms/attempt | Max prediction error | Max residual error | Max objective error | Max prediction/residual ULP | Max objective ULP |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| A | Full Replay each candidate | 0.533 | 0 | 0 | 0 | 0 / 0 | 0 |
+| B1 | 1 | 1.393 | `1.39e-16` | `2.22e-16` | `5.55e-17` | 32 / 4 | 1 |
+| B1 | 10 | 0.858 | `1.67e-16` | `2.22e-16` | `5.55e-17` | 32 / 10 | 1 |
+| B1 | 50 | 0.814 | `5.00e-16` | `5.00e-16` | `1.11e-16` | 32 / 32 | 2 |
+| B1 | 100 | 0.808 | `8.33e-16` | `8.33e-16` | `1.11e-16` | 54 / 60 | 2 |
+| B1 | 11 (sweep) | 0.850 | `1.39e-16` | `2.22e-16` | `5.55e-17` | 32 / 10 | 1 |
+| B2 | 1 | 1.321 | `5.55e-17` | `5.55e-17` | `5.55e-17` | 2 / 2 | 1 |
+| B2 | 10 | 0.842 | `1.11e-16` | `1.11e-16` | `5.55e-17` | 4 / 6 | 1 |
+| B2 | 50 | 0.819 | `2.22e-16` | `2.22e-16` | `5.55e-17` | 9 / 16 | 1 |
+| B2 | 100 | 0.794 | `2.78e-16` | `2.78e-16` | `5.55e-17` | 25 / 20 | 1 |
+| B2 | 11 (sweep) | 0.838 | `1.11e-16` | `1.11e-16` | `5.55e-17` | 4 / 6 | 1 |
+| C | 1 | 1.083 | `1.39e-16` | `2.22e-16` | `3.11e-15` | 32 / 4 | 56 |
+| C | 10 | 0.615 | `1.67e-16` | `2.22e-16` | `3.22e-15` | 32 / 10 | 58 |
+| C | 50 | 0.578 | `5.00e-16` | `5.00e-16` | `2.61e-15` | 32 / 32 | 47 |
+| C | 100 | 0.594 | `8.33e-16` | `8.33e-16` | `2.78e-15` | 54 / 60 | 50 |
+| C | 11 (sweep) | 0.616 | `1.39e-16` | `2.22e-16` | `2.89e-15` | 32 / 10 | 52 |
+| D1 | 1 / 10 / 50 / 100 / 11 | 1.411 / 0.936 / 0.880 / 0.883 / 0.922 | 0 | 0 | 0 | 0 / 0 | 0 |
+| E | 1 | 1.187 | 0 | 0 | `3.11e-15` | 0 / 0 | 56 |
+| E | 10 | 0.716 | 0 | 0 | `3.22e-15` | 0 / 0 | 58 |
+| E | 50 | 0.665 | 0 | 0 | `2.61e-15` | 0 / 0 | 47 |
+| E | 100 | 0.670 | 0 | 0 | `2.83e-15` | 0 / 0 | 51 |
+| E | 11 (sweep) | 0.701 | 0 | 0 | `2.89e-15` | 0 / 0 | 52 |
+
+B1 and B2 prediction/residual drift increased as refresh intervals grew. For
+example, B1's maximum prediction error rose from `1.39e-16` with refresh every
+update to `8.33e-16` at 100 updates; B2 rose from `5.55e-17` to `2.78e-16`.
+The incremental objective in C/E differed on 489–494 of 503 attempts even with
+refresh every update: refresh clears carried state error, but the next
+incremental objective still has its own rounding difference. C's maximum was
+`3.22e-15` (58 ULP); E had bitwise-exact predictions/residuals but the same
+objective issue. No objective-only acceptance disagreements occurred in this
+scripted sequence; that does not establish trajectory safety near real LM
+acceptance boundaries. The measured average was 0.533 ms/attempt for A; even
+the fastest refresh setting per strategy remained slower (B1 0.808, B2 0.794,
+C 0.578, D1 0.880, E 0.665 ms/attempt). Refresh did not make these methods a
+net win at this component size.
+
+Estimated peak bytes were 438,720 for A/B1/B2/C and 540,208 for D1/E. Candidate
+scratch alone was 88,512 bytes for B1/B2/C, 320,848 for D1/E, and 219,360 for
+A. Process peak RSS for the entire stress executable was 26,656,768 bytes.
+Existing tests cover unchanged candidates, recovery retry/exhaustion, and
+resource-limited endpoint certification. The stress runner does not inject a
+thrown exception or exercise a real solver trajectory.
+
 ## Roadmap status
 
 | Stage | Status | Result |
@@ -141,7 +208,7 @@ proceeds to closed-loop testing.
 | N0 | Complete | Baseline telemetry and deterministic state/candidate digests recorded. |
 | N1 | Complete | A/B1/B2/C/D1/E measured at 3, 30, and 300 synthetic targets; D1 passed bitwise candidate replay checks. |
 | N2 | Complete | Five-method shadow; Full Replay retained every decision; D1 remained bitwise exact, while B/C/E accumulated drift. |
-| N3 | Pending | |
+| N3 | Complete | 503-attempt refresh/drift stress at 1/10/50/100/sweep; B methods drifted more with longer intervals, C/E retained objective error, D1 stayed exact; all scripted rejections rolled back bitwise. |
 | N4 | Pending | |
 | N5 | Pending | |
 | N6 | Pending | |
