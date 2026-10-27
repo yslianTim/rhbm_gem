@@ -1435,6 +1435,13 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             record.local_final_gradient_inf_norm=local_state.gradient.lpNorm<Eigen::Infinity>();
             record.local_final_ac_kkt=local_state.certificate.projected_kkt;
             record.local_objective_after=local_state.certificate.objective/(context.scale*context.scale);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            const auto candidate_fault=policy.candidate_fault_for_testing ?
+                policy.candidate_fault_for_testing(sweep_index+1,block_index+1,out.state) :
+                    FixedNeighborCandidateFaultForTesting::None;
+            if(candidate_fault==FixedNeighborCandidateFaultForTesting::LocalObjectiveIncrease)
+                record.local_objective_after+=std::max(1.0,std::abs(record.local_objective_before));
+#endif
             if(record.local_objective_after>record.local_objective_before)
             {
                 record.status=record.recovery_retry ? "failed" : "unchanged";
@@ -1455,7 +1462,11 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             bool candidate_objective_full_scan_fallback{};
 #endif
             const bool candidate_fast_unchanged=state_cache_valid && std::isfinite(out.state.objective) &&
-                IsBitwiseIdenticalCoreCandidate(out.state,core_atoms,accepted->endpoint);
+                IsBitwiseIdenticalCoreCandidate(out.state,core_atoms,accepted->endpoint)
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                && candidate_fault==FixedNeighborCandidateFaultForTesting::None
+#endif
+                ;
             Vector candidate_eta,candidate_beta;
             if(candidate_fast_unchanged)
             {
@@ -1532,6 +1543,38 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             }
             double candidate_objective=candidate_fast_unchanged ? out.state.objective : replay_workspace.objective;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            switch(candidate_fault)
+            {
+            case FixedNeighborCandidateFaultForTesting::ObjectiveConsistencyFailure:
+                candidate_objective+=std::max(1.0,std::abs(candidate_objective));
+                replay_workspace.objective=candidate_objective;
+                break;
+            case FixedNeighborCandidateFaultForTesting::NaNObjective:
+                candidate_objective=std::numeric_limits<double>::quiet_NaN();
+                replay_workspace.objective=candidate_objective;
+                break;
+            case FixedNeighborCandidateFaultForTesting::InfiniteObjective:
+                candidate_objective=std::numeric_limits<double>::infinity();
+                replay_workspace.objective=candidate_objective;
+                break;
+            case FixedNeighborCandidateFaultForTesting::NaNParameter:
+                candidate_eta(core_atoms.front())=std::numeric_limits<double>::quiet_NaN();
+                break;
+            case FixedNeighborCandidateFaultForTesting::InfiniteParameter:
+                candidate_eta(core_atoms.front())=std::numeric_limits<double>::infinity();
+                break;
+            case FixedNeighborCandidateFaultForTesting::InfinitePrediction:
+                if(candidate_result_affected_rows_only)
+                    candidate_affected_prediction(0)=std::numeric_limits<double>::infinity();
+                else replay_workspace.prediction(affected_rows.front())=std::numeric_limits<double>::infinity();
+                break;
+            case FixedNeighborCandidateFaultForTesting::InfiniteResidual:
+                if(candidate_result_affected_rows_only)
+                    candidate_affected_residual(0)=std::numeric_limits<double>::infinity();
+                else replay_workspace.residual(affected_rows.front())=std::numeric_limits<double>::infinity();
+                break;
+            default: break;
+            }
             if(!candidate_fast_unchanged && candidate_result_affected_rows_only &&
                 policy.objective_strategy_for_testing==FixedNeighborObjectiveStrategyForTesting::IncrementalGuarded)
             {

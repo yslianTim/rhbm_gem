@@ -119,6 +119,12 @@ bool BitwiseEqual(const n::Vector & left,const n::Vector & right)
         if(!BitwiseEqual(left(i),right(i))) return false;
     return true;
 }
+bool BitwiseEqual(const n::BlockCoordinateState & left,const n::BlockCoordinateState & right)
+{
+    return BitwiseEqual(left.eta,right.eta) && BitwiseEqual(left.beta,right.beta) &&
+        BitwiseEqual(left.prediction,right.prediction) && BitwiseEqual(left.residual,right.residual) &&
+        BitwiseEqual(left.objective,right.objective);
+}
 std::string Precise(double value)
 {std::ostringstream out; out<<std::setprecision(17)<<value; return out.str();}
 std::uint64_t UlpDistance(double left,double right)
@@ -1919,6 +1925,115 @@ TEST(JointFixedNeighborBlockCoordinateTest, E1NonfiniteObjectiveDoesNotAcceptOrP
     EXPECT_TRUE(BitwiseEqual(e1.result.state.eta,eta));
     EXPECT_TRUE(BitwiseEqual(d1.result.state.beta,n::Vector::Zero(6)));
     EXPECT_TRUE(BitwiseEqual(e1.result.state.beta,n::Vector::Zero(6)));
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, CandidateLocalObjectiveIncreasePreservesAcceptedBeforeState)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector eta=n::Vector::Constant(3,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=1;
+    policy.eta_upper_bound=std::log(2.2);
+    std::optional<n::BlockCoordinateState> rejected_before;
+    std::optional<n::BlockCoordinateState> state_before_reconciliation;
+    policy.candidate_fault_for_testing=[&](std::size_t sweep,std::size_t block,const auto & state) {
+        if(sweep==1 && block==2)
+        {
+            rejected_before=state;
+            return n::FixedNeighborCandidateFaultForTesting::LocalObjectiveIncrease;
+        }
+        return n::FixedNeighborCandidateFaultForTesting::None;
+    };
+    policy.state_observer=[&](std::size_t,const auto & state,const auto &,const auto &) {
+        state_before_reconciliation=state;
+    };
+    const auto result=n::RunFixedNeighborDiagnostic(problem,eta,policy);
+
+    ASSERT_TRUE(rejected_before.has_value());
+    ASSERT_EQ(result.blocks.size(),2u);
+    EXPECT_TRUE(result.blocks[0].accepted);
+    EXPECT_EQ(result.blocks[1].status,"unchanged");
+    EXPECT_EQ(result.blocks[1].reason,"block-objective-increase");
+    ASSERT_TRUE(state_before_reconciliation.has_value());
+    EXPECT_TRUE(BitwiseEqual(*state_before_reconciliation,*rejected_before));
+    const auto replay=n::FullReplayForTesting(data.domain,data.layout,data.y,
+        result.state.eta,result.state.beta,data.context.scale);
+    EXPECT_LE(std::abs(result.state.objective-replay.objective),
+        n::BlockObjectiveReplayEnclosure(replay.objective));
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, CandidateConsistencyAndNonfiniteFaultsPreserveAcceptedBeforeState)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector eta=n::Vector::Constant(3,std::log(.55));
+    constexpr std::array faults{
+        n::FixedNeighborCandidateFaultForTesting::ObjectiveConsistencyFailure,
+        n::FixedNeighborCandidateFaultForTesting::NaNObjective,
+        n::FixedNeighborCandidateFaultForTesting::InfiniteObjective,
+        n::FixedNeighborCandidateFaultForTesting::NaNParameter,
+        n::FixedNeighborCandidateFaultForTesting::InfiniteParameter,
+        n::FixedNeighborCandidateFaultForTesting::InfinitePrediction,
+        n::FixedNeighborCandidateFaultForTesting::InfiniteResidual};
+    constexpr std::array strategies{
+        n::FixedNeighborObjectiveStrategyForTesting::FullScan,
+        n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect};
+    for(const auto strategy:strategies) for(const auto fault:faults)
+    {
+        SCOPED_TRACE(static_cast<int>(strategy));
+        SCOPED_TRACE(static_cast<int>(fault));
+        n::FixedNeighborPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=1;
+        policy.eta_upper_bound=std::log(2.2);
+        policy.objective_strategy_for_testing=strategy;
+        std::optional<n::BlockCoordinateState> failed_candidate_before;
+        bool failure_event_seen{};
+        policy.candidate_fault_for_testing=[&](std::size_t sweep,std::size_t block,const auto & state) {
+            if(sweep==1 && block==2)
+            {
+                failed_candidate_before=state;
+                return fault;
+            }
+            return n::FixedNeighborCandidateFaultForTesting::None;
+        };
+        policy.candidate_observer=[&](const n::FixedNeighborCandidateEvent & event) {
+            if(event.block!=2) return;
+            failure_event_seen=true;
+            ASSERT_TRUE(failed_candidate_before.has_value());
+            EXPECT_FALSE(event.accepted);
+            EXPECT_TRUE(BitwiseEqual(event.accepted_before,*failed_candidate_before));
+        };
+        const auto result=n::RunFixedNeighborDiagnostic(problem,eta,policy);
+
+        ASSERT_TRUE(failed_candidate_before.has_value());
+        ASSERT_EQ(result.blocks.size(),2u);
+        EXPECT_TRUE(result.blocks[0].accepted);
+        EXPECT_EQ(result.blocks[1].status,"failed");
+        EXPECT_EQ(result.blocks[1].reason,"block-objective-replay-failed");
+        EXPECT_EQ(result.reason,"block-objective-replay-failed");
+        EXPECT_TRUE(failure_event_seen);
+        EXPECT_TRUE(BitwiseEqual(result.state,*failed_candidate_before));
+        const auto replay=n::FullReplayForTesting(data.domain,data.layout,data.y,
+            result.state.eta,result.state.beta,data.context.scale);
+        EXPECT_TRUE(BitwiseEqual(result.state.prediction,replay.prediction));
+        EXPECT_TRUE(BitwiseEqual(result.state.residual,replay.residual));
+        EXPECT_LE(std::abs(result.state.objective-replay.objective),
+            n::BlockObjectiveReplayEnclosure(replay.objective));
+    }
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, PositiveObjectiveDeltaConsistencyConditionBoundsTheAcceptanceCase)
+{
+    const double boundary_delta=n::BlockObjectiveReplayEnclosure(0.0);
+    const double boundary_reference=boundary_delta;
+    const double boundary_error=std::abs(boundary_delta+0.0-0.0);
+    ASSERT_TRUE(n::WithinBlockObjectiveReplay(boundary_error,boundary_reference));
+    EXPECT_LE(boundary_delta,n::BlockObjectiveReplayEnclosure(boundary_reference));
+
+    const double outside_delta=1e-12+4e-24;
+    const double outside_reference=outside_delta;
+    const double outside_error=std::abs(outside_delta+0.0-0.0);
+    EXPECT_FALSE(n::WithinBlockObjectiveReplay(outside_error,outside_reference));
+    EXPECT_GT(outside_delta,n::BlockObjectiveReplayEnclosure(outside_reference));
 }
 
 TEST(JointFixedNeighborBlockCoordinateTest, UnchangedCandidateSkipsOnlyCandidateReplay)

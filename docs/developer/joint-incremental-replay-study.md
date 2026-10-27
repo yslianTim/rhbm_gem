@@ -1383,3 +1383,34 @@ hard fixtures, width bounds, recovery, unchanged candidates, nonfinite initial
 state, and memory fallback. The signed-cancellation case retains its shared
 F0/D1 legacy width-KKT limitation; E1 introduces no new failure there. No
 numerical acceptance, KKT, width, or convergence threshold changed.
+
+### M2 — Candidate transaction and failure-path tests
+
+A test-only candidate fault callback now injects faults after local candidate
+calculation and before acceptance. It is compiled only with
+`RHBM_GEM_TEST_INSTRUMENTATION`; it does not select a Production strategy or
+alter local solvers or acceptance limits. The added cases cover a local
+objective increase, objective-consistency failure, NaN and infinite objective,
+nonfinite candidate parameters, and nonfinite affected prediction/residual.
+For failures after a prior accepted update, the tests snapshot the exact
+accepted-before state for the failing candidate and verify parameters,
+prediction, residual, and objective remain bitwise unchanged. The local
+objective-increase test captures state before the sweep's separately required
+Objective Reconciliation, since that later audit is allowed to refresh the
+objective scalar.
+
+The consistency and nonfinite faults run against both D1 Full Scan and E1
+Incremental Direct. They terminate with the existing
+`block-objective-replay-failed` reason and do not masquerade as an ordinary
+candidate rejection. The positive-delta test checks the enclosure boundary
+and a value immediately outside it; it supports the acceptance-control-flow
+analysis, not a claim about every possible floating-point input. These
+fault-injection tests are Transaction Safety and branch-coverage evidence,
+not Numerical Non-regression evidence and not proof that natural inputs can
+never produce different decisions.
+
+After these additions, all 42 `JointFixedNeighborBlockCoordinateTest` cases
+passed. The fault-injection cases passed with their expected state-preservation
+and failure semantics. The earlier P3 “missing evidence” classification for
+natural candidate rejections is superseded for branch-coverage purposes; no
+natural-rejection fixture is claimed or required.

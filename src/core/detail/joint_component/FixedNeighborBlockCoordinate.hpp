@@ -34,6 +34,11 @@ struct FixedNeighborReplayResult
 using FixedNeighborCandidateReplayForTesting=std::function<FixedNeighborReplayResult(
     const BlockCoordinateState &,const Indices &,const Indices &,VectorRef,VectorRef)>;
 enum class FixedNeighborObjectiveStrategyForTesting {FullScan,IncrementalDirect,IncrementalGuarded};
+enum class FixedNeighborCandidateFaultForTesting
+{
+    None,LocalObjectiveIncrease,ObjectiveConsistencyFailure,NaNObjective,InfiniteObjective,
+    NaNParameter,InfiniteParameter,InfinitePrediction,InfiniteResidual
+};
 FixedNeighborReplayResult FullReplayForTesting(const Domain &,const JointParameterLayout &,
     VectorRef observations,VectorRef eta,VectorRef beta,double scale);
 #endif
@@ -206,6 +211,8 @@ struct FixedNeighborPolicy
     std::optional<std::size_t> global_state_memory_budget_for_testing;
     FixedNeighborCandidateReplayForTesting candidate_replay_for_testing;
     std::function<void(const FixedNeighborCandidateEvent &)> candidate_observer;
+    std::function<FixedNeighborCandidateFaultForTesting(std::size_t,std::size_t,
+        const BlockCoordinateState &)> candidate_fault_for_testing;
     FixedNeighborObjectiveStrategyForTesting objective_strategy_for_testing{FixedNeighborObjectiveStrategyForTesting::IncrementalDirect};
     double objective_guard_band_fraction_for_testing{0.1};
     bool refresh_objective_after_sweep_for_testing{};
