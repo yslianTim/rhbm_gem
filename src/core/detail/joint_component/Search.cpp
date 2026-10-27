@@ -1,4 +1,5 @@
 #include "Numerics.hpp"
+#include "LinearSolve.hpp"
 #include "CompactSvd.hpp"
 #include "InstrumentedLM.hpp"
 #include "TiledDerivative.hpp"
@@ -56,6 +57,7 @@ struct Profile
     std::optional<double> accepted_objective;
     std::optional<ActiveSetStep> last_bounded_subproblem;
     BoundedLmWork bounded_lm_work;
+    LinearSolveWorkspace linear_workspace;
     void RecordBoundedSubproblem(const ActiveSetStep & step)
     {
         ++bounded_lm_work.subproblem_solves;
@@ -171,7 +173,7 @@ struct Profile
         failure.clear();
         const auto start=std::chrono::steady_clock::now();
         last_role=evaluations==0 ? ProfileEvaluationRole::InitialProfile : ProfileEvaluationRole::TrialProfile;
-        cached=EvaluateProfile(domain,y,eta,&context,last_role,telemetry); ++evaluations;
+        cached=EvaluateProfile(domain,y,eta,&context,last_role,telemetry,&linear_workspace); ++evaluations;
         joint_component::Trial row; row.endpoint=cached; row.evaluation=evaluations; row.seconds=Seconds(start);
         trace.push_back(std::move(row));
         if(!cached.valid) failure="inner-"+cached.reason;
@@ -228,7 +230,7 @@ SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & 
     EvaluationContext search_context=context;
     const auto active_eta_max=search_context.eta_upper_bound;
     Profile profile{domain,y,search_context.scale,search_context,{}, {},0,0,{},telemetry ? &local_work : nullptr,
-        ProfileEvaluationRole::Unspecified,std::clock(),{}, {},{}
+        ProfileEvaluationRole::Unspecified,std::clock(),{}, {},{},{}
     };
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {

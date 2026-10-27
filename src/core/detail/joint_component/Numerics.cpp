@@ -2,6 +2,7 @@
 #include "ResourceWork.hpp"
 #include "TiledDerivative.hpp"
 #include "CompactSvd.hpp"
+#include "LinearSolve.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -398,7 +399,7 @@ MemoryEstimate EndpointVerificationMemoryEstimate(const Domain & domain,VectorRe
     return PlanMemory(shape,MemoryStage::EndpointVerification);
 }
 Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,const EvaluationContext * context,
-    ProfileEvaluationRole role,ProfileSearchWork * profile_work)
+    ProfileEvaluationRole role,ProfileSearchWork * profile_work,LinearSolveWorkspace * workspace)
 {
     EvaluationTelemetry telemetry(profile_work,role);
     const auto basis_started=std::chrono::steady_clock::now();
@@ -409,7 +410,7 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     const Eigen::Index m=eta.size();
     const auto solve_started=std::chrono::steady_clock::now();
     const auto solved=SolveLinear(out.x,y,
-        context ? &context->linear : nullptr,context ? context->scale : 0);
+        context ? &context->linear : nullptr,context ? context->scale : 0,workspace);
     if(profile_work)
     {
         auto & stats=telemetry.work.linear_solve;

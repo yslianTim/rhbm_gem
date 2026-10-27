@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "core/detail/joint_component/ResourceWork.hpp"
+#include "core/detail/joint_component/LinearSolve.hpp"
 #include "core/detail/joint_component/CompactSvd.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "support/JointSyntheticWorkload.hpp"
@@ -8,6 +9,7 @@
 #include <unsupported/Eigen/NonLinearOptimization>
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <iomanip>
 #include <limits>
 #include <numbers>
@@ -369,6 +371,66 @@ TEST(JointComponentNumericsTest, UnweightedLinearSolvePreservesRecordedNumerical
         EXPECT_TRUE(relative_match(certificate.projected_kkt,baseline.kkt,1e-11));
         EXPECT_EQ(certificate.kkt_passed,baseline.failures==0);
     }
+}
+
+TEST(JointComponentNumericsTest, ActiveSetWorkspaceResetsAcrossFacesShapesAndFailures)
+{
+    namespace n=p::runtime;
+    n::LinearSolveWorkspace workspace;
+    Matrix small=Matrix::Zero(7,4);
+    small(0,0)=1; small(1,1)=1; small(2,2)=1; small(3,3)=1;
+    Vector truth(4); truth<<2,-.3,1.5,.4;
+    const auto small_sparse=n::Sparse(small.sparseView());
+    const Vector small_y=small*truth;
+    const auto compare_bitwise=[](const Vector & left,const Vector & right) {
+        if(left.size()!=right.size()) {ADD_FAILURE()<<"Vector sizes differ."; return;}
+        EXPECT_EQ(std::memcmp(left.data(),right.data(),static_cast<std::size_t>(left.size())*sizeof(double)),0);
+    };
+
+    const auto fresh=n::SolveLinear(small_sparse,small_y);
+    const auto reused=n::SolveLinear(small_sparse,small_y,nullptr,0,&workspace);
+    ASSERT_TRUE(fresh.valid && reused.valid);
+    compare_bitwise(fresh.beta,reused.beta);
+
+    Vector boundary_truth(4); boundary_truth<<-.5,-.3,1.5,.4;
+    const Vector boundary_y=small*boundary_truth;
+    const auto fresh_boundary=n::SolveLinear(small_sparse,boundary_y);
+    const auto reused_boundary=n::SolveLinear(small_sparse,boundary_y,nullptr,0,&workspace);
+    ASSERT_TRUE(fresh_boundary.valid && reused_boundary.valid);
+    compare_bitwise(fresh_boundary.beta,reused_boundary.beta);
+    EXPECT_EQ(reused_boundary.beta(0),0.0);
+
+    Matrix deficient=Matrix::Zero(7,4);
+    deficient(0,0)=1; deficient(1,1)=1; deficient(0,2)=1; deficient(2,3)=1;
+    const auto failed=n::SolveLinear(n::Sparse(deficient.sparseView()),Vector::Ones(7),nullptr,0,&workspace);
+    EXPECT_FALSE(failed.valid); EXPECT_EQ(failed.reason,"rank-deficient");
+
+    Matrix wider=Matrix::Zero(64,8); Vector wider_truth(8);
+    for(Eigen::Index column=0;column<wider.cols();++column)
+    {
+        wider(column,column)=1;
+        wider_truth(column)=column%2 ? -.1*static_cast<double>(column) : .2+.1*static_cast<double>(column);
+    }
+    const auto wider_sparse=n::Sparse(wider.sparseView()); const Vector wider_y=wider*wider_truth;
+    const auto fresh_wider=n::SolveLinear(wider_sparse,wider_y);
+    const auto reused_wider=n::SolveLinear(wider_sparse,wider_y,nullptr,0,&workspace);
+    ASSERT_TRUE(fresh_wider.valid && reused_wider.valid);
+    compare_bitwise(fresh_wider.beta,reused_wider.beta);
+
+    const auto retry=n::SolveLinear(small_sparse,small_y,nullptr,0,&workspace);
+    ASSERT_TRUE(retry.valid);
+    compare_bitwise(fresh.beta,retry.beta);
+    const auto columns_capacity=workspace.columns.capacity(),entries_capacity=workspace.entries.capacity(),
+        response_capacity=workspace.response.capacity(),local_column_capacity=workspace.local_column.capacity(),
+        tile_columns_capacity=workspace.tile_columns.capacity();
+    const auto repeated=n::SolveLinear(small_sparse,small_y,nullptr,0,&workspace);
+    ASSERT_TRUE(repeated.valid);
+    EXPECT_EQ(workspace.columns.capacity(),columns_capacity);
+    EXPECT_EQ(workspace.entries.capacity(),entries_capacity);
+    EXPECT_EQ(workspace.response.capacity(),response_capacity);
+    EXPECT_EQ(workspace.local_column.capacity(),local_column_capacity);
+    EXPECT_EQ(workspace.tile_columns.capacity(),tile_columns_capacity);
+    compare_bitwise(fresh.beta,repeated.beta);
 }
 
 TEST(JointComponentNumericsTest, UnweightedLinearSolveRejectsInvalidDimensionsAndNonfiniteInputs)

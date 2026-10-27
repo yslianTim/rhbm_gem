@@ -105,7 +105,9 @@ struct LinearResult
         tiled_qr_seconds{},reduced_sparse_assembly_seconds{},sparse_qr_seconds{},solver_total_seconds{},
         refinement_before_objective{unavailable},refinement_after_objective{unavailable};
 };
-LinearResult SolveLinear(const Sparse &,VectorRef,const LinearPolicy * = nullptr,double=0);
+struct LinearSolveWorkspace;
+LinearResult SolveLinear(const Sparse &,VectorRef,const LinearPolicy * = nullptr,double=0,
+    LinearSolveWorkspace * = nullptr);
 struct Certificate
 {
     bool evaluated{},available{},feasible{},kkt_passed{};
@@ -152,7 +154,8 @@ struct WidthBoundKkt
 WidthBoundKkt CalculateWidthBoundKkt(const Vector &,const Vector &,double);
 Spectrum ComputeSpectrum(const Sparse &,const RankPolicy &,Eigen::Index,bool);
 Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext *,
-    ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);
+    ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr,
+    LinearSolveWorkspace * = nullptr);
 Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &,
     ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);
 // Scalar/vector reductions for accepted global sweep states. Leaves x and derivative empty.
