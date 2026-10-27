@@ -29,7 +29,6 @@ struct FixedNeighborReplayResult
 {
     Vector prediction,residual;
     double objective{};
-    bool affected_rows_only{};
 };
 using FixedNeighborCandidateReplayForTesting=std::function<FixedNeighborReplayResult(
     const BlockCoordinateState &,const Indices &,const Indices &,VectorRef,VectorRef)>;
@@ -132,7 +131,9 @@ struct FixedNeighborWork
         effective_response_seconds{},local_search_seconds{},local_state_seconds{},
         candidate_copy_seconds{},candidate_replay_seconds{},cache_update_seconds{},sweep_replay_seconds{},
         sweep_global_state_seconds{},maximum_block_seconds{},maximum_cache_replay_error{};
-    std::size_t full_candidate_replays{},candidate_replay_skipped_unchanged{},sweep_replays{},affected_row_updates{};
+    std::size_t full_candidate_replays{},affected_candidate_replays{},candidate_replay_skipped_unchanged{},
+        sweep_replays{},affected_row_updates{},affected_replay_peak_scratch_bytes{};
+    bool full_replay_memory_fallback{};
     std::size_t local_problem_count{},minimum_local_atoms{},maximum_local_atoms{};
     std::size_t local_conditioning_peak_memory_estimate_bytes{};
     std::size_t parameter_stability_peak_memory_estimate_bytes{},perturbation_solves{},perturbation_evaluations{};
@@ -189,6 +190,7 @@ struct FixedNeighborPolicy
     bool assess_parameter_stability{};
     bool collect_telemetry{};
     bool collect_diagnostics{};
+    std::optional<std::size_t> global_state_memory_budget_for_testing;
     FixedNeighborCandidateReplayForTesting candidate_replay_for_testing;
     std::function<void(const FixedNeighborCandidateEvent &)> candidate_observer;
 #endif

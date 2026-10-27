@@ -105,6 +105,124 @@ void ReplayInto(const Domain & domain,const JointParameterLayout & layout,Vector
     }
     out.objective=.5*squared/(scale*scale);
 }
+struct AffectedReplayContributor
+{
+    Eigen::Index atom_position{};
+    double square{};
+};
+static_assert(sizeof(AffectedReplayContributor)==sizeof(Eigen::Index)+sizeof(double));
+struct AffectedReplayIncidence
+{
+    Indices atoms;
+    std::vector<std::size_t> offsets;
+    std::vector<AffectedReplayContributor> contributors;
+    std::size_t build_scratch_bytes{};
+};
+struct AffectedReplayResult
+{
+    Vector prediction,residual;
+    double objective{};
+    std::size_t scratch_bytes{};
+};
+Eigen::Index AffectedReplayPosition(const Indices & affected_rows,Eigen::Index row)
+{
+    const auto found=std::lower_bound(affected_rows.begin(),affected_rows.end(),row);
+    return found==affected_rows.end() || *found!=row ? -1 : static_cast<Eigen::Index>(found-affected_rows.begin());
+}
+AffectedReplayIncidence PrepareAffectedReplayIncidence(const Domain & domain,const Indices & core_atoms,
+    const Indices & neighbor_atoms,const Indices & affected_rows,const Indices & atom_positions)
+{
+    if(neighbor_atoms.size()>std::numeric_limits<std::size_t>::max()-core_atoms.size())
+        throw std::overflow_error("Affected-row replay atom count overflow.");
+    AffectedReplayIncidence out;
+    out.atoms.reserve(core_atoms.size()+neighbor_atoms.size());
+    out.atoms.insert(out.atoms.end(),core_atoms.begin(),core_atoms.end());
+    out.atoms.insert(out.atoms.end(),neighbor_atoms.begin(),neighbor_atoms.end());
+    std::sort(out.atoms.begin(),out.atoms.end(),[&](Eigen::Index left,Eigen::Index right) {
+        return atom_positions.at(static_cast<std::size_t>(left))<atom_positions.at(static_cast<std::size_t>(right));
+    });
+    out.atoms.erase(std::unique(out.atoms.begin(),out.atoms.end()),out.atoms.end());
+    if(affected_rows.size()==std::numeric_limits<std::size_t>::max())
+        throw std::overflow_error("Affected-row replay row count overflow.");
+    out.offsets.assign(affected_rows.size()+1,0);
+    for(const auto atom_value:out.atoms)
+        for(const auto & support:domain.atoms[static_cast<std::size_t>(atom_value)])
+        {
+            const auto local=AffectedReplayPosition(affected_rows,support.row);
+            if(local>=0 && !CheckedAddBytes(out.offsets[static_cast<std::size_t>(local)+1],1,
+                out.offsets[static_cast<std::size_t>(local)+1]))
+                throw std::overflow_error("Affected-row replay contributor count overflow.");
+        }
+    for(std::size_t row=1;row<out.offsets.size();++row)
+        if(!CheckedAddBytes(out.offsets[row-1],out.offsets[row],out.offsets[row]))
+            throw std::overflow_error("Affected-row replay contributor prefix overflow.");
+    std::vector<std::size_t> cursor(out.offsets.begin(),out.offsets.end()-1);
+    out.contributors.resize(out.offsets.back());
+    for(std::size_t atom_position=0;atom_position<out.atoms.size();++atom_position)
+    {
+        const auto atom=static_cast<std::size_t>(out.atoms[atom_position]);
+        for(const auto & support:domain.atoms[atom])
+        {
+            const auto local=AffectedReplayPosition(affected_rows,support.row);
+            if(local<0) continue;
+            const auto row=static_cast<std::size_t>(local);
+            out.contributors[cursor[row]++]={static_cast<Eigen::Index>(atom_position),support.square};
+        }
+    }
+    std::size_t bytes{};
+    if(!AddMemoryBytes(bytes,out.atoms.capacity(),sizeof(Eigen::Index)) ||
+        !AddMemoryBytes(bytes,out.offsets.capacity(),sizeof(std::size_t)) ||
+        !AddMemoryBytes(bytes,cursor.capacity(),sizeof(std::size_t)) ||
+        !AddMemoryBytes(bytes,out.contributors.capacity(),sizeof(AffectedReplayContributor)))
+        throw std::overflow_error("Affected-row replay memory estimate overflow.");
+    out.build_scratch_bytes=bytes;
+    return out;
+}
+AffectedReplayResult ReplayAffectedRows(const Domain & domain,const JointParameterLayout & layout,
+    VectorRef observations,const BlockCoordinateState & accepted,VectorRef candidate_eta,
+    VectorRef candidate_beta,double scale,const Indices & core_atoms,const Indices & neighbor_atoms,
+    const Indices & affected_rows,const Indices & atom_position)
+{
+    const auto incidence=PrepareAffectedReplayIncidence(domain,core_atoms,neighbor_atoms,affected_rows,atom_position);
+    Vector widths(static_cast<Eigen::Index>(incidence.atoms.size()));
+    for(std::size_t k=0;k<incidence.atoms.size();++k)
+        widths(static_cast<Eigen::Index>(k))=std::exp(candidate_eta(incidence.atoms[k]));
+    AffectedReplayResult out;
+    out.prediction.resize(static_cast<Eigen::Index>(affected_rows.size()));
+    out.residual.resize(static_cast<Eigen::Index>(affected_rows.size()));
+    for(std::size_t row=0;row<affected_rows.size();++row)
+    {
+        double prediction{};
+        for(auto entry=incidence.offsets[row];entry<incidence.offsets[row+1];++entry)
+        {
+            const auto & contributor=incidence.contributors[entry];
+            const auto atom=incidence.atoms[static_cast<std::size_t>(contributor.atom_position)];
+            const auto basis=EvaluateKernel(contributor.square,widths(contributor.atom_position),2.5);
+            prediction+=candidate_beta(2*atom)*basis.gaussian+candidate_beta(2*atom+1)*basis.charge;
+        }
+        out.prediction(static_cast<Eigen::Index>(row))=prediction;
+        out.residual(static_cast<Eigen::Index>(row))=prediction-observations(affected_rows[row]);
+    }
+    double squared{};
+    for(const auto row_value:layout.informative_rows)
+    {
+        const auto row=static_cast<Eigen::Index>(row_value);
+        const auto local=AffectedReplayPosition(affected_rows,row);
+        const double residual=local>=0 ? out.residual(local) : accepted.residual(row);
+        squared+=residual*residual;
+    }
+    out.objective=.5*squared/(scale*scale);
+    std::size_t evaluation_bytes{};
+    if(!AddMemoryBytes(evaluation_bytes,incidence.atoms.capacity(),sizeof(Eigen::Index)) ||
+        !AddMemoryBytes(evaluation_bytes,incidence.offsets.capacity(),sizeof(std::size_t)) ||
+        !AddMemoryBytes(evaluation_bytes,incidence.contributors.capacity(),sizeof(AffectedReplayContributor)) ||
+        !AddMemoryBytes(evaluation_bytes,static_cast<std::size_t>(widths.size()),sizeof(double)) ||
+        !AddMemoryBytes(evaluation_bytes,static_cast<std::size_t>(out.prediction.size()),sizeof(double)) ||
+        !AddMemoryBytes(evaluation_bytes,static_cast<std::size_t>(out.residual.size()),sizeof(double)))
+        throw std::overflow_error("Affected-row replay memory estimate overflow.");
+    out.scratch_bytes=std::max(incidence.build_scratch_bytes,evaluation_bytes);
+    return out;
+}
 bool BitwiseEqual(double left,double right)
 {return std::bit_cast<std::uint64_t>(left)==std::bit_cast<std::uint64_t>(right);}
 bool IsBitwiseIdenticalCoreCandidate(const BlockCoordinateState & state,
@@ -871,6 +989,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         memory_shape.maximum_block_support_entries=census.maximum_block_support_entries;
         memory_shape.total_block_support_entries=census.total_block_support_entries;
         memory_shape.maximum_neighbor_atoms=census.maximum_neighbor_atoms;
+        memory_shape.maximum_block_replay_entries=census.maximum_block_replay_entries;
+        memory_shape.maximum_block_atoms=census.maximum_block_atoms;
         std::size_t topology_bytes{},core_bytes{},planned_metadata{},planned_entries{};
         if(!CheckedAddBytes(census.affected_row_entries,census.neighbor_atom_entries,planned_entries) ||
             !CheckedMultiplyBytes(planned_entries,2*sizeof(Eigen::Index),planned_metadata) ||
@@ -916,6 +1036,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         structural_timer.target=nullptr;
     }
     auto global_shape=memory_shape;
+    global_shape.affected_replay_scratch=true;
     auto global_resident=resident;
     if(!AddMemoryBytes(global_resident,memory_shape.component_support_entries,sizeof(LocalSupportIndex)) ||
         !AddMemoryBytes(global_resident,memory_shape.affected_row_entries,5*sizeof(Eigen::Index)) ||
@@ -934,7 +1055,31 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         out.reason="resource-limit:global-state-evaluation:size-overflow"; return out;
     }
     global_shape.resident_bytes=global_resident;
-    out.global_state_memory_estimate=PlanMemory(global_shape,MemoryStage::GlobalStateEvaluation);
+    std::size_t global_memory_budget=JointMemoryPlanningBudgetBytes;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(policy.global_state_memory_budget_for_testing)
+        global_memory_budget=*policy.global_state_memory_budget_for_testing;
+#endif
+    out.global_state_memory_estimate=PlanMemory(global_shape,MemoryStage::GlobalStateEvaluation,global_memory_budget);
+    bool use_affected_row_replay=true;
+    if(out.global_state_memory_estimate.status!=MemoryStatus::Pass)
+    {
+        auto full_replay_shape=global_shape;
+        full_replay_shape.affected_replay_scratch=false;
+        const auto full_replay_estimate=PlanMemory(full_replay_shape,MemoryStage::GlobalStateEvaluation,
+            global_memory_budget);
+        if(full_replay_estimate.status==MemoryStatus::Pass)
+        {
+            use_affected_row_replay=false;
+            global_shape=full_replay_shape;
+            out.global_state_memory_estimate=full_replay_estimate;
+            out.work.full_replay_memory_fallback=true;
+        }
+        else
+        {
+            out.global_state_memory_estimate=full_replay_estimate;
+        }
+    }
     if(out.global_state_memory_estimate.status!=MemoryStatus::Pass ||
         out.global_state_memory_estimate.estimated_peak_bytes>out.global_state_memory_estimate.budget_bytes/2)
         LogMemoryEstimate(out.global_state_memory_estimate);
@@ -1259,10 +1404,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             // The candidate path only overwrites core parameters in copies of the current state.
             // Once the accepted endpoint is qualified, bitwise-equal core values leave the full
             // parameter state unchanged and the current full-replay cache remains valid.
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
             bool candidate_result_affected_rows_only{};
             Vector candidate_affected_prediction,candidate_affected_residual;
-#endif
             const bool candidate_fast_unchanged=state_cache_valid && std::isfinite(out.state.objective) &&
                 IsBitwiseIdenticalCoreCandidate(out.state,core_atoms,accepted->endpoint);
             Vector candidate_eta,candidate_beta;
@@ -1285,32 +1428,37 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 }
                 const auto candidate_replay_timer=Measure(collect_telemetry,out.work.candidate_replay_seconds);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                if(collect_telemetry && !policy.candidate_replay_for_testing) ++out.work.full_candidate_replays;
                 if(policy.candidate_replay_for_testing)
                 {
                     auto candidate=policy.candidate_replay_for_testing(out.state,core_atoms,affected_rows,
                         candidate_eta,candidate_beta);
-                    candidate_result_affected_rows_only=candidate.affected_rows_only;
-                    if(candidate_result_affected_rows_only)
-                    {
-                        candidate_affected_prediction=std::move(candidate.prediction);
-                        candidate_affected_residual=std::move(candidate.residual);
-                    }
-                    else
-                    {
-                        replay_workspace.prediction=std::move(candidate.prediction);
-                        replay_workspace.residual=std::move(candidate.residual);
-                    }
+                    replay_workspace.prediction=std::move(candidate.prediction);
+                    replay_workspace.residual=std::move(candidate.residual);
                     replay_workspace.objective=candidate.objective;
+                    if(collect_telemetry) ++out.work.full_candidate_replays;
                 }
                 else
 #endif
+                if(use_affected_row_replay)
                 {
-#ifndef RHBM_GEM_TEST_INSTRUMENTATION
+                    auto candidate=ReplayAffectedRows(domain,layout,y,out.state,candidate_eta,candidate_beta,
+                        context.scale,core_atoms,partition.cores[block_index].neighbor_atoms,affected_rows,atom_position);
+                    candidate_result_affected_rows_only=true;
+                    candidate_affected_prediction=std::move(candidate.prediction);
+                    candidate_affected_residual=std::move(candidate.residual);
+                    replay_workspace.objective=candidate.objective;
+                    if(collect_telemetry)
+                    {
+                        ++out.work.affected_candidate_replays;
+                        out.work.affected_replay_peak_scratch_bytes=std::max(
+                            out.work.affected_replay_peak_scratch_bytes,candidate.scratch_bytes);
+                    }
+                }
+                else
+                {
                     if(collect_telemetry) ++out.work.full_candidate_replays;
-#endif
-                ReplayInto(domain,layout,y,candidate_eta,candidate_beta,context.scale,replay_structure,
-                    replay_workspace);
+                    ReplayInto(domain,layout,y,candidate_eta,candidate_beta,context.scale,replay_structure,
+                        replay_workspace);
                 }
                 (void)candidate_replay_timer;
             }
@@ -1391,7 +1539,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             if(!candidate_fast_unchanged)
             {
                 const auto cache_started=Clock::now();
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
                 if(candidate_result_affected_rows_only)
                 {
                     for(std::size_t k=0;k<affected_rows.size();++k)
@@ -1403,7 +1550,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                     out.state.objective=replay_workspace.objective;
                 }
                 else
-#endif
                 {
                     out.state.prediction.swap(replay_workspace.prediction);
                     out.state.residual.swap(replay_workspace.residual);

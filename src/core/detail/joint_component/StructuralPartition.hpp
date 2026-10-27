@@ -17,7 +17,7 @@ struct StructuralBlockPartition
 struct StructuralBlockCensus
 {
     std::size_t affected_row_entries{},neighbor_atom_entries{},total_block_support_entries{},maximum_block_rows{},
-        maximum_block_support_entries{},maximum_neighbor_atoms{};
+        maximum_block_support_entries{},maximum_neighbor_atoms{},maximum_block_replay_entries{},maximum_block_atoms{};
 };
 
 class StructuralTopology

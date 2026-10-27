@@ -1,7 +1,9 @@
 # Joint Incremental Prediction Replay Study
 
-This record compares candidate replay methods with the production Full Replay.
-The production implementation remains unchanged and uses Full Replay.
+This record compares candidate replay methods against the production Full Replay.
+At the N0 baseline, production used Full Replay. N6 adopts on-demand D1 for
+candidate replay when its scratch preflight passes, with Full Replay as the
+memory fallback and with sweep-end and independent verification retained.
 
 ## N0: baseline and workload census
 
@@ -285,10 +287,72 @@ global index memory and lifetime; D2 is rejected.
 D1 meets the approximate 2× candidate-replay and 15% FixedNeighbor search
 thresholds at 1,000 targets, and meets the total-search threshold at 300
 targets. At 3 and 30 targets its regression is material in relative terms,
-though the 3-target cost is under 1 ms. This supports the bounded, on-demand
-D1 implementation with a Full-Replay memory fallback; it does not establish
-performance on the unavailable 5.9-million-observation data. N6 adds and
-preflights that production path, then reruns the suite and closed-loop checks.
+though the 3-target cost is under 1 ms. N6 implements and preflights the
+bounded, on-demand D1 production path, then reruns full search and correctness
+checks. Neither stage establishes performance on the unavailable
+5.9-million-observation data.
+
+## N6: production decision and final acceptance
+
+Production now builds a per-candidate compressed incidence for the current
+block's affected rows from core plus neighboring atoms. Contributors are
+ordered by `layout.full_atoms`, then by their existing per-atom support order.
+The replay uses the same kernel, multiply/add expression, and informative-row
+objective sum order as `ReplayInto()`. It retains only affected prediction and
+residual values; accepted candidates update those rows, while rejected
+candidates leave accepted state untouched. Full Replay remains available when
+the D1 scratch estimate exceeds the memory budget, and continues to verify
+each sweep and endpoint.
+
+The resource preflight now counts the maximum contributor entries and local
+atoms for any block and includes incidence, offsets, widths, and affected-row
+vectors in the Global State Evaluation stage. The production path uses the
+existing 3.2 GB planning budget. A test forces the D1 plan over budget while
+leaving Full Replay within budget; search falls back before creating the D1
+incidence and returns a bitwise-identical result. On the 1,000-target fixture,
+the observed D1 scratch was 233,512 B and the preflight increase over the
+previous Full Replay estimate was 277,848 B.
+
+The production-path closed-loop run repeated each size five times after a
+warm-up. The A side uses the test-only Full Replay callback; D1 uses the
+production path. Every run compares all block and sweep decisions and final
+state bitwise. Endpoint certification is disabled for timing, so this remains
+a FixedNeighbor search benchmark rather than total algorithm runtime.
+
+| Targets | A search median (range) | D1 search median (range) | Search change | A → D1 candidate replay | D1 scratch / preflight peak | Process peak RSS |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 3 | 4.740 ms (4.736–4.838) | 5.140 ms (5.134–5.478) | 8.4% slower | 0.260 → 0.660 ms | 58,976 / 447,445 B | 23,461,888 B |
+| 30 | 95.447 ms (95.061–97.998) | 98.697 ms (98.372–99.877) | 3.4% slower | 7.803 → 10.492 ms | 233,512 / 3,930,461 B | 35,143,680 B |
+| 300 | 1.632 s (1.616–1.638) | 1.314 s (1.300–1.328) | 19.5% faster (1.24×) | 679.116 → 357.100 ms | 233,512 / 36,716,466 B | 94,076,928 B |
+| 1,000 | 10.669 s (10.525–14.231) | 6.506 s (6.495–6.561) | 39.0% faster (1.64×) | 7.420 → 3.309 s | 233,512 / 121,648,896 B | 248,119,296 B |
+
+The largest run accepted 420 of 420 candidates for both methods and retained
+bitwise-identical search traces. The single A timing outlier at 1,000 targets
+is reflected in its range; the median comparison remains 1.64×. At small
+sizes, the candidate replay itself is slower, but the total search penalty is
+0.40 ms at 3 targets and 3.25 ms at 30 targets. At 300 and 1,000 targets the
+search wins exceed the 15% engineering threshold. The 1,000-target candidate
+replay exceeds 2× speedup. This is enough to adopt D1 without a size-based
+heuristic: the memory preflight controls whether it runs, and Full Replay is
+used when D1's scratch would exceed budget.
+
+The converged two-block comparison in N4 ran production D1 against a Full
+Replay reference for ten accepted candidates and twenty local profile trials.
+It remained Level A: parameters, predictions, residuals, objectives, candidate
+and sweep traces, KKT values, stop reason, endpoint certification, and
+Independent Replay qualification matched. Final objective was
+`2.0199079729737389e-10`, global A/C KKT `4.3341136235497402e-9`, and projected
+Width KKT `1.6235413013987454e-10`. The full 19-group CTest suite passed
+serially in 21.96 s after a four-worker build. The new memory-fallback case and
+all existing component, endpoint, persistence, workflow, and CLI tests passed.
+
+The final choice is D1 with memory-bounded Full Replay fallback. D2, B1/B2, C,
+and E remain benchmark-only; D2's index was exact but its 3.8% amortized replay
+gain did not justify 11.88 MB at 1,000 targets, while B/C/E failed bitwise
+prediction or objective equality. The real 5.9-million-observation case and
+complete end-to-end runtime were unavailable; these are the remaining limits
+on the performance claim. No FirstStage, Local MDPDE, Group Fitting, KKT,
+solver acceptance, bound, convergence, or Independent Replay rules changed.
 
 ## Roadmap status
 
@@ -300,4 +364,4 @@ preflights that production path, then reruns the suite and closed-loop checks.
 | N3 | Complete | 503-attempt refresh/drift stress at 1/10/50/100/sweep; B methods drifted more with longer intervals, C/E retained objective error, D1 stayed exact; all scripted rejections rolled back bitwise. |
 | N4 | Complete | D1 controlled candidate results in closed loop and reached Level A on the converged two-block fixture; Independent Replay passed. |
 | N5 | Complete | Five-run closed-loop comparison through 1,000 synthetic targets; D1 reached 1.62× search speedup with bitwise-identical traces; D2 was exact but rejected for a small gain and 11.88 MB retained index. |
-| N6 | Pending | |
+| N6 | Complete | Adopted preflighted production D1 after Level A closed-loop/Independent Replay checks; 19/19 CTest groups passed; Full Replay remains the memory fallback and final reference. |

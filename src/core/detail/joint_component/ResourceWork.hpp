@@ -14,11 +14,12 @@ struct MemoryShape
 {
     std::size_t component_atoms{},component_observations{},component_support_entries{},component_blocks{},
         affected_row_entries{},component_neighbor_entries{},maximum_block_rows{},maximum_block_support_entries{},
-        total_block_support_entries{},maximum_neighbor_atoms{},component_free_columns{},component_width_columns{},
+        total_block_support_entries{},maximum_neighbor_atoms{},maximum_block_replay_entries{},maximum_block_atoms{},
+        component_free_columns{},component_width_columns{},
         identity_validation_bytes{},resident_bytes{},
         maximum_tile_rows{8192},
         component_stability_evaluations{};
-    bool problem_scope{};
+    bool problem_scope{},affected_replay_scratch{};
 };
 struct MemoryEstimate
 {

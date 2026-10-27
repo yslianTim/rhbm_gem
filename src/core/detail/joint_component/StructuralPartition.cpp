@@ -89,7 +89,7 @@ StructuralBlockCensus StructuralTopology::Census(const StructuralBlockPartition 
     {
         if(generation==std::numeric_limits<std::size_t>::max()) throw std::overflow_error("Structural census generation overflow.");
         ++generation;
-        std::size_t block_rows{},block_support{},block_neighbors{};
+        std::size_t block_rows{},block_support{},block_neighbors{},block_replay_entries{};
         for(auto atom:core.atoms)
         {
             const auto index=static_cast<std::size_t>(atom);
@@ -103,6 +103,8 @@ StructuralBlockCensus StructuralTopology::Census(const StructuralBlockPartition 
                 {
                     row_marks[row]=generation;
                     if(!SafeAdd(block_rows,1,block_rows)) throw std::overflow_error("Structural row census overflow.");
+                    if(!SafeAdd(block_replay_entries,row_offsets_[row+1]-row_offsets_[row],block_replay_entries))
+                        throw std::overflow_error("Structural replay incidence census overflow.");
                 }
             }
         }
@@ -131,9 +133,14 @@ StructuralBlockCensus StructuralTopology::Census(const StructuralBlockPartition 
         if(!SafeAdd(census.neighbor_atom_entries,block_neighbors,census.neighbor_atom_entries) ||
             !SafeAdd(census.total_block_support_entries,block_support,census.total_block_support_entries))
             throw std::overflow_error("Structural resource census overflow.");
+        std::size_t block_atoms{};
+        if(!SafeAdd(core.atoms.size(),block_neighbors,block_atoms))
+            throw std::overflow_error("Structural block atom census overflow.");
         census.maximum_block_rows=std::max(census.maximum_block_rows,block_rows);
         census.maximum_block_support_entries=std::max(census.maximum_block_support_entries,block_support);
         census.maximum_neighbor_atoms=std::max(census.maximum_neighbor_atoms,block_neighbors);
+        census.maximum_block_replay_entries=std::max(census.maximum_block_replay_entries,block_replay_entries);
+        census.maximum_block_atoms=std::max(census.maximum_block_atoms,block_atoms);
     }
     return census;
 }

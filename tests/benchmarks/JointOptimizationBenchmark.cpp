@@ -316,7 +316,7 @@ int Run()
             policy.candidate_observer=[&](const joint::FixedNeighborCandidateEvent & event) {
                 candidate_trace.Add(event.sweep); candidate_trace.Add(event.block);
                 candidate_trace.Add(event.accepted); candidate_trace.Add(event.unchanged);
-                candidate_trace.Add(event.full_replay_ran); candidate_trace.Add(event.core_atoms.size());
+                candidate_trace.Add(event.candidate_replay_ran); candidate_trace.Add(event.core_atoms.size());
                 for(const auto atom:event.core_atoms) candidate_trace.Add(atom);
                 candidate_trace.Add(event.affected_rows.size());
                 for(const auto row:event.affected_rows) candidate_trace.Add(row);
@@ -386,6 +386,9 @@ int Run()
         <<(block_rows.empty()?0:block_rows.back())
         <<" candidates="<<last_joint_result.total_block_solves
         <<" full_candidate_replays="<<last_joint_result.work.full_candidate_replays
+        <<" affected_candidate_replays="<<last_joint_result.work.affected_candidate_replays
+        <<" affected_replay_peak_scratch_bytes="<<last_joint_result.work.affected_replay_peak_scratch_bytes
+        <<" full_replay_memory_fallback="<<last_joint_result.work.full_replay_memory_fallback
         <<" unchanged_replay_skips="<<last_joint_result.work.candidate_replay_skipped_unchanged
         <<" accepted_blocks="<<accepted_candidates<<" rejected_blocks="<<rejected_candidates
         <<" unchanged_blocks="<<unchanged_candidates

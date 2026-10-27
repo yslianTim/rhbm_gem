@@ -2,7 +2,6 @@
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/StructuralPartition.hpp"
 #include "support/JointFixedNeighborDiagnostic.hpp"
-#include "support/JointReplayExperiment.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include <algorithm>
 #include <array>
@@ -25,11 +24,13 @@ struct Sample
 {
     double wall{},search{},structural_preparation{},candidate_replay{},local_search{},sweep_replay{},global_state{};
     std::size_t candidate_count{},accepted_count{},unchanged_count{},peak_estimate{};
+    bool full_replay_memory_fallback{};
 };
 struct Summary
 {
     std::vector<double> wall,search,structural_preparation,candidate_replay,local_search,sweep_replay,global_state;
     std::size_t candidate_count{},accepted_count{},unchanged_count{},peak_estimate{},candidate_scratch{};
+    bool full_replay_memory_fallback{};
 };
 
 double Seconds(Clock::time_point started)
@@ -80,7 +81,7 @@ void VerifyEquivalent(const joint::FixedNeighborDiagnosticResult & full,
     }
 }
 Sample RunSearch(const rhbm_gem::core::JointProblem & problem,joint::VectorRef eta,
-    const joint::FixedNeighborPolicy & policy,std::size_t candidate_count,
+    const joint::FixedNeighborPolicy & policy,
     joint::FixedNeighborDiagnosticResult & result)
 {
     const auto started=Clock::now();
@@ -92,8 +93,10 @@ Sample RunSearch(const rhbm_gem::core::JointProblem & problem,joint::VectorRef e
     {accepted+=block.accepted; unchanged+=block.status=="unchanged";}
     return {wall,result.search_seconds,result.work.structural_preparation_seconds,
         result.work.candidate_replay_seconds,result.work.local_search_seconds,
-        result.work.sweep_replay_seconds,result.work.sweep_global_state_seconds,candidate_count,
-        accepted,unchanged,result.global_state_memory_estimate.estimated_peak_bytes};
+        result.work.sweep_replay_seconds,result.work.sweep_global_state_seconds,
+        result.work.full_candidate_replays+result.work.affected_candidate_replays,
+        accepted,unchanged,result.global_state_memory_estimate.estimated_peak_bytes,
+        result.work.full_replay_memory_fallback};
 }
 void Run(int target_count)
 {
@@ -106,37 +109,22 @@ void Run(int target_count)
     policy.collect_telemetry=true; policy.eta_upper_bound=std::log(2.2);
     joint::StructuralTopology topology(data.domain,data.context.atom_ids,data.layout);
     auto partition=topology.BuildCores(policy.core_atoms); topology.PopulateMetadata(partition);
-    std::vector<std::pair<joint::Indices,const joint::StructuralCore *>> cores;
-    cores.reserve(partition.cores.size());
-    for(const auto & core:partition.cores) cores.emplace_back(core.atoms,&core);
-    std::size_t replay_calls{},maximum_candidate_scratch{};
-    auto exact_policy=policy;
-    exact_policy.candidate_replay_for_testing=[&](const joint::BlockCoordinateState & accepted,
-        const joint::Indices & core_atoms,const joint::Indices & affected_rows,joint::VectorRef candidate_eta,
+    auto full_policy=policy;
+    full_policy.candidate_replay_for_testing=[&](const joint::BlockCoordinateState &,
+        const joint::Indices &,const joint::Indices &,joint::VectorRef candidate_eta,
         joint::VectorRef candidate_beta) {
-        const auto found=std::find_if(cores.begin(),cores.end(),[&](const auto & entry) {
-            return entry.first==core_atoms;
-        });
-        if(found==cores.end()) throw std::logic_error("D1 benchmark could not find structural core.");
-        const auto incidence=second_stage_test::PrepareReplayIncidence(data.domain,data.layout,
-            core_atoms,found->second->neighbor_atoms,affected_rows);
-        auto candidate=second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
-            accepted,candidate_eta,candidate_beta,data.context.scale,core_atoms,affected_rows,
-            second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
-            second_stage_test::ReplayObjectiveStrategy::FullScan,&incidence);
-        ++replay_calls;
-        maximum_candidate_scratch=std::max(maximum_candidate_scratch,candidate.scratch_bytes);
-        return joint::FixedNeighborReplayResult{std::move(candidate.prediction),std::move(candidate.residual),
-            candidate.objective,true};
+        return joint::FullReplayForTesting(data.domain,data.layout,data.y,
+            candidate_eta,candidate_beta,data.context.scale);
     };
 
     std::array<Summary,2> summaries{};
     for(std::size_t sample=0;sample<=measured_samples;++sample)
     {
-        replay_calls=0; maximum_candidate_scratch=0;
         joint::FixedNeighborDiagnosticResult full_result,exact_result;
-        const auto full_sample=RunSearch(problem,eta,policy,0,full_result);
-        const auto exact_sample=RunSearch(problem,eta,exact_policy,replay_calls,exact_result);
+        const auto full_sample=RunSearch(problem,eta,full_policy,full_result);
+        const auto exact_sample=RunSearch(problem,eta,policy,exact_result);
+        if(exact_result.work.full_replay_memory_fallback)
+            throw std::runtime_error("D1 benchmark unexpectedly fell back to Full Replay.");
         VerifyEquivalent(full_result,exact_result);
         if(sample==0) continue;
         auto & exact=summaries[1];
@@ -151,9 +139,10 @@ void Run(int target_count)
             summary.global_state.push_back(current.global_state); summary.candidate_count=current.candidate_count;
             summary.accepted_count=current.accepted_count; summary.unchanged_count=current.unchanged_count;
             summary.peak_estimate=current.peak_estimate;
+            summary.full_replay_memory_fallback=current.full_replay_memory_fallback;
         }
-        exact.candidate_scratch=std::max(exact.candidate_scratch,maximum_candidate_scratch);
-        exact.candidate_count=replay_calls;
+        exact.candidate_scratch=std::max(exact.candidate_scratch,
+            exact_result.work.affected_replay_peak_scratch_bytes);
     }
     std::size_t support_entries{};
     for(const auto atom:data.layout.full_atoms) support_entries+=data.domain.atoms[static_cast<std::size_t>(atom)].size();
@@ -181,9 +170,9 @@ void Run(int target_count)
             <<" global_state_median_seconds="<<Median(s.global_state)
             <<" candidate_replay_fraction="<<candidate_share<<" amdahl_candidate_only_upper_bound="<<amdahl
             <<" candidates="<<s.candidate_count<<" accepted="<<s.accepted_count
-            <<" unchanged="<<s.unchanged_count<<" base_peak_estimate_bytes="<<s.peak_estimate
-            <<" candidate_scratch_estimate_bytes="<<s.candidate_scratch
-            <<" estimated_peak_with_candidate_scratch_bytes="<<s.peak_estimate+s.candidate_scratch<<'\n';
+            <<" unchanged="<<s.unchanged_count<<" memory_preflight_peak_estimate_bytes="<<s.peak_estimate
+            <<" affected_replay_peak_scratch_bytes="<<s.candidate_scratch
+            <<" full_replay_memory_fallback="<<s.full_replay_memory_fallback<<'\n';
     }
     rusage usage{};
     if(getrusage(RUSAGE_SELF,&usage)==0)

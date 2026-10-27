@@ -684,6 +684,21 @@ TEST(JointComponentNumericsTest, MemoryPlannerRetainsNonRankStagesAndLocalBudget
     EXPECT_EQ(conditioning.factor_columns,24);
     EXPECT_EQ(conditioning.budget_bytes,n::JointMemoryPlanningBudgetBytes);
 
+    auto bounded_affected_replay=large;
+    bounded_affected_replay.affected_replay_scratch=true;
+    bounded_affected_replay.maximum_block_replay_entries=200'000;
+    bounded_affected_replay.maximum_block_atoms=24;
+    const auto full_replay=n::PlanMemory(large,n::MemoryStage::GlobalStateEvaluation);
+    const auto d1_at_full_budget=n::PlanMemory(bounded_affected_replay,n::MemoryStage::GlobalStateEvaluation,
+        full_replay.estimated_peak_bytes);
+    auto fallback_shape=bounded_affected_replay; fallback_shape.affected_replay_scratch=false;
+    const auto fallback_at_full_budget=n::PlanMemory(fallback_shape,n::MemoryStage::GlobalStateEvaluation,
+        full_replay.estimated_peak_bytes);
+    EXPECT_EQ(full_replay.status,n::MemoryStatus::Pass);
+    EXPECT_EQ(d1_at_full_budget.status,n::MemoryStatus::Reject);
+    EXPECT_EQ(fallback_at_full_budget.status,n::MemoryStatus::Pass);
+    EXPECT_GT(d1_at_full_budget.estimated_peak_bytes,fallback_at_full_budget.estimated_peak_bytes);
+
     auto overflow=large; overflow.component_free_columns=std::numeric_limits<std::size_t>::max();
     EXPECT_EQ(n::PlanMemory(overflow,n::MemoryStage::LocalConditioning).status,n::MemoryStatus::Overflow);
     auto tile_overflow=large; tile_overflow.maximum_tile_rows=std::numeric_limits<std::size_t>::max();

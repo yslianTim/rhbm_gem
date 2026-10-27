@@ -165,9 +165,20 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
             AddProduct(temporary,shape.maximum_block_support_entries,4*(sizeof(double)+sizeof(Eigen::Index)));
         break;
     case MemoryStage::GlobalStateEvaluation:
+    {
         ok=AddProduct(temporary,rows,3*sizeof(double)+sizeof(std::uint8_t)) &&
             AddProduct(temporary,atoms,24*sizeof(double)+sizeof(Eigen::Index));
+        if(ok && shape.affected_replay_scratch)
+        {
+            std::size_t block_rows_plus_one{};
+            ok=CheckedAddBytes(shape.maximum_block_rows,1,block_rows_plus_one) &&
+                AddProduct(temporary,shape.maximum_block_rows,2*sizeof(double)+sizeof(std::size_t)) &&
+                AddProduct(temporary,block_rows_plus_one,sizeof(std::size_t)) &&
+                AddProduct(temporary,shape.maximum_block_replay_entries,sizeof(Eigen::Index)+sizeof(double)) &&
+                AddProduct(temporary,shape.maximum_block_atoms,sizeof(Eigen::Index)+sizeof(double));
+        }
         break;
+    }
     case MemoryStage::EndpointVerification:
         // The primary residual remains live while the independent replay holds
         // compensated prediction accumulators and O(P) gradient/norm vectors.
@@ -263,6 +274,9 @@ std::string FormatMemoryEstimate(const MemoryEstimate & estimate)
        <<"  max_block_support_entries="<<s.maximum_block_support_entries<<'\n'
        <<"  total_block_support_entries="<<s.total_block_support_entries<<'\n'
        <<"  maximum_neighbor_atoms="<<s.maximum_neighbor_atoms<<'\n'
+       <<"  maximum_block_replay_entries="<<s.maximum_block_replay_entries<<'\n'
+       <<"  maximum_block_atoms="<<s.maximum_block_atoms<<'\n'
+       <<"  affected_replay_scratch="<<(s.affected_replay_scratch ? "true" : "false")<<'\n'
        <<"  free_columns="<<s.component_free_columns<<'\n'
        <<"  width_columns="<<s.component_width_columns<<'\n'
        <<"  identity_validation_scratch="<<Bytes(s.identity_validation_bytes)<<'\n'

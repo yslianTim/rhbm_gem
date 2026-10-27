@@ -219,10 +219,15 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReplayWorkspacePreservesExactSearchR
 TEST(JointFixedNeighborBlockCoordinateTest, CandidateObserverDoesNotChangeFullReplaySearch)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=4;
     policy.stop_after_stationarity=false; policy.certify_endpoint=false;
     policy.eta_upper_bound=std::log(2.2);
+    policy.candidate_replay_for_testing=[&](const n::BlockCoordinateState &,const n::Indices &,
+        const n::Indices &,n::VectorRef candidate_eta,n::VectorRef candidate_beta) {
+        return n::FullReplayForTesting(data.domain,data.layout,data.y,candidate_eta,candidate_beta,data.context.scale);
+    };
     const auto baseline=n::RunFixedNeighborDiagnostic(problem,eta,policy);
     std::size_t candidate_count{},full_replay_count{},accepted_count{};
     policy.candidate_observer=[&](const n::FixedNeighborCandidateEvent & event) {
@@ -362,6 +367,10 @@ TEST(JointFixedNeighborBlockCoordinateTest, ExactReplayShadowMatchesProductionCa
     n::FixedNeighborPolicy policy; policy.core_atoms=12; policy.maximum_sweeps=5;
     policy.stop_after_stationarity=false; policy.certify_endpoint=false;
     policy.eta_upper_bound=std::log(2.2);
+    policy.candidate_replay_for_testing=[&](const n::BlockCoordinateState &,const n::Indices &,
+        const n::Indices &,n::VectorRef candidate_eta,n::VectorRef candidate_beta) {
+        return n::FullReplayForTesting(data.domain,data.layout,data.y,candidate_eta,candidate_beta,data.context.scale);
+    };
     const auto baseline=n::RunFixedNeighborDiagnostic(problem,eta,policy);
     n::StructuralTopology topology(data.domain,data.context.atom_ids,data.layout);
     auto partition=topology.BuildCores(policy.core_atoms); topology.PopulateMetadata(partition);
@@ -637,6 +646,10 @@ TEST(JointFixedNeighborBlockCoordinateTest, AffectedRowExactReplayMatchesClosedL
     n::FixedNeighborPolicy full_policy; full_policy.core_atoms=2; full_policy.maximum_sweeps=40;
     full_policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
     full_policy.eta_upper_bound=std::log(2.2); full_policy.capture_local_trajectory=true;
+    full_policy.candidate_replay_for_testing=[&](const n::BlockCoordinateState &,const n::Indices &,
+        const n::Indices &,n::VectorRef candidate_eta,n::VectorRef candidate_beta) {
+        return n::FullReplayForTesting(data.domain,data.layout,data.y,candidate_eta,candidate_beta,data.context.scale);
+    };
     struct CandidateTrace
     {
         std::size_t sweep{},block{};
@@ -668,34 +681,14 @@ TEST(JointFixedNeighborBlockCoordinateTest, AffectedRowExactReplayMatchesClosedL
     const auto full=n::RunFixedNeighborDiagnostic(problem,eta,full_policy);
 
     auto d1_policy=full_policy;
-    n::StructuralTopology topology(data.domain,data.context.atom_ids,data.layout);
-    auto partition=topology.BuildCores(d1_policy.core_atoms); topology.PopulateMetadata(partition);
-    std::size_t d1_candidate_replays{};
-    d1_policy.candidate_replay_for_testing=[&](const n::BlockCoordinateState & accepted,
-        const n::Indices & core_atoms,const n::Indices & affected_rows,n::VectorRef candidate_eta,
-        n::VectorRef candidate_beta) {
-        ++d1_candidate_replays;
-        const auto block=std::find_if(partition.cores.begin(),partition.cores.end(),[&](const auto & item) {
-            return item.atoms==core_atoms;
-        });
-        if(block==partition.cores.end()) throw std::logic_error("Closed-loop replay could not match the prepared core.");
-        const auto incidence=second_stage_test::PrepareReplayIncidence(data.domain,data.layout,
-            core_atoms,block->neighbor_atoms,affected_rows);
-        const auto exact=second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
-            accepted,candidate_eta,candidate_beta,data.context.scale,core_atoms,affected_rows,
-            second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
-            second_stage_test::ReplayObjectiveStrategy::FullScan,&incidence);
-        n::FixedNeighborReplayResult replay;
-        replay.prediction=exact.prediction; replay.residual=exact.residual;
-        replay.objective=exact.objective;
-        replay.affected_rows_only=true;
-        return replay;
-    };
+    d1_policy.candidate_replay_for_testing={};
     d1_policy.candidate_observer=trace_candidate(d1_trace);
     d1_policy.state_observer=[&](std::size_t,const n::BlockCoordinateState & state,const auto &,const auto &) {
         d1_sweep_states.push_back(state);
     };
     const auto d1=n::RunFixedNeighborDiagnostic(problem,eta,d1_policy);
+    const auto d1_candidate_replays=static_cast<std::size_t>(std::count_if(d1_trace.begin(),d1_trace.end(),
+        [](const auto & candidate){return candidate.replay_ran;}));
 
     ASSERT_EQ(full.reason,d1.reason);
     EXPECT_EQ(full.search_converged,d1.search_converged);
@@ -820,6 +813,40 @@ TEST(JointFixedNeighborBlockCoordinateTest, AffectedRowExactReplayMatchesClosedL
     RecordProperty("N4_final_objective",Precise(full.state.objective));
 }
 
+TEST(JointFixedNeighborBlockCoordinateTest, AffectedReplayFallsBackBeforeScratchExceedsMemoryBudget)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const n::Vector eta=n::Vector::Constant(3,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=5;
+    policy.stop_after_stationarity=false; policy.certify_endpoint=false;
+    policy.collect_telemetry=true; policy.eta_upper_bound=std::log(2.2);
+    const auto affected=n::RunFixedNeighborDiagnostic(problem,eta,policy);
+    ASSERT_FALSE(affected.work.full_replay_memory_fallback);
+    ASSERT_EQ(affected.global_state_memory_estimate.status,n::MemoryStatus::Pass);
+
+    auto full_replay_shape=affected.global_state_memory_estimate.shape;
+    full_replay_shape.affected_replay_scratch=false;
+    const auto full_replay_plan=n::PlanMemory(full_replay_shape,n::MemoryStage::GlobalStateEvaluation);
+    ASSERT_EQ(full_replay_plan.status,n::MemoryStatus::Pass);
+    const auto affected_at_full_budget=n::PlanMemory(affected.global_state_memory_estimate.shape,
+        n::MemoryStage::GlobalStateEvaluation,full_replay_plan.estimated_peak_bytes);
+    EXPECT_EQ(affected_at_full_budget.status,n::MemoryStatus::Reject);
+
+    auto fallback_policy=policy;
+    fallback_policy.global_state_memory_budget_for_testing=full_replay_plan.estimated_peak_bytes;
+    const auto fallback=n::RunFixedNeighborDiagnostic(problem,eta,fallback_policy);
+    ASSERT_TRUE(fallback.work.full_replay_memory_fallback);
+    EXPECT_GT(fallback.work.full_candidate_replays,0u);
+    EXPECT_EQ(fallback.work.affected_candidate_replays,0u);
+    EXPECT_EQ(affected.reason,fallback.reason);
+    EXPECT_EQ(affected.sweep_count,fallback.sweep_count);
+    EXPECT_TRUE(BitwiseEqual(affected.state.eta,fallback.state.eta));
+    EXPECT_TRUE(BitwiseEqual(affected.state.beta,fallback.state.beta));
+    EXPECT_TRUE(BitwiseEqual(affected.state.prediction,fallback.state.prediction));
+    EXPECT_TRUE(BitwiseEqual(affected.state.residual,fallback.state.residual));
+    EXPECT_TRUE(BitwiseEqual(affected.state.objective,fallback.state.objective));
+}
+
 TEST(JointFixedNeighborBlockCoordinateTest, UnchangedCandidateSkipsOnlyCandidateReplay)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
@@ -830,8 +857,9 @@ TEST(JointFixedNeighborBlockCoordinateTest, UnchangedCandidateSkipsOnlyCandidate
     const auto result=n::RunFixedNeighborDiagnostic(problem,eta,policy);
 
     EXPECT_GT(result.work.candidate_replay_skipped_unchanged,0u);
-    EXPECT_LT(result.work.full_candidate_replays,result.total_block_solves);
-    EXPECT_LE(result.work.full_candidate_replays+result.work.candidate_replay_skipped_unchanged,
+    EXPECT_LT(result.work.full_candidate_replays+result.work.affected_candidate_replays,result.total_block_solves);
+    EXPECT_LE(result.work.full_candidate_replays+result.work.affected_candidate_replays+
+        result.work.candidate_replay_skipped_unchanged,
         result.total_block_solves);
     EXPECT_EQ(result.work.sweep_replays,result.sweeps.size());
     std::size_t unchanged_records{};
