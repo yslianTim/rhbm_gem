@@ -1458,3 +1458,93 @@ coverage remains. The focused FixedNeighbor group now has 36 tests and all
 36 passed after cleanup. This is numerical non-regression and branch-safety
 evidence for the covered fixtures; it does not claim a universal floating
 point error bound.
+
+### M4 — Production Release qualification and measured performance
+
+The `build/release` tree is an explicit Release build with
+`BUILD_TESTING=OFF` and `RHBM_GEM_TEST_INSTRUMENTATION` absent from the
+`FixedNeighborBlockCoordinate.cpp` compile command. The benchmark executable
+uses the same ordinary `rhbm_gem` Production library without test
+instrumentation. Its source calls `SearchFixedNeighborComponent` directly,
+requires a converged and qualified endpoint plus passing Independent Replay,
+and reports one warm-up followed by five measured runs. Objective values are
+reported on the normalized scale (`independent replay objective / scale²`).
+
+For a fair D1 reference, a Release copy of revision `b6a69d85` was built
+outside the repository with only the candidate Objective calculation changed
+back to the Full Objective Scan. It used the same current benchmark driver,
+full sweep audit, reconciliation, endpoint certification, and Independent
+Replay. Both executables were uninstrumented, used the same synthetic
+workloads, and had the same thread limits. This comparison measures the
+candidate Objective calculation difference; it is not the historical
+test-only strategy selector.
+
+| Targets | D1 search median [range] | E1 search median [range] | Search change | D1 wall median [range] | E1 wall median [range] | Wall change | D1 / E1 peak RSS | Memory preflight |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 3 | 4.365 [4.358, 4.394] ms | 4.283 [4.277, 4.305] ms | 1.9% faster | 5.259 [5.252, 5.338] ms | 5.176 [5.167, 5.244] ms | 1.6% faster | 24.23 / 24.20 MB | 447,445 B, pass |
+| 30 | 97.526 [97.505, 97.606] ms | 94.213 [94.201, 94.471] ms | 3.4% faster | 116.382 [116.335, 116.480] ms | 113.071 [113.047, 113.374] ms | 2.8% faster | 35.42 / 35.52 MB | 3,930,461 B, pass |
+| 300 | 1.287 [1.287, 1.295] s | 1.007 [1.007, 1.010] s | 21.8% faster | 1.490 [1.489, 1.498] s | 1.210 [1.209, 1.214] s | 18.8% faster | 88.31 / 88.56 MB | 36,716,466 B, pass |
+| 1,000 | 6.418 [6.416, 6.419] s | 3.369 [3.365, 3.373] s | 47.5% faster | 7.099 [7.096, 7.105] s | 4.050 [4.047, 4.058] s | 42.9% faster | 233.83 / 233.65 MB | 121,648,896 B, pass |
+
+The following are E1 median component times in seconds. Sweep Full Replay,
+replay audit, global-state evaluation, and Objective Reconciliation have
+separate non-overlapping timers. Endpoint certification excludes its separately
+reported Independent Replay.
+
+| Targets | Candidate evaluation | Sweep Full Replay | Replay audit | Global state | Objective reconciliation | Endpoint certification | Independent Replay |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 3 | 0.000454 | 0.000206 | 0.000002 | 0.000405 | 0.000000083 | 0.000103 | 0.000108 |
+| 30 | 0.007026 | 0.002561 | 0.000025 | 0.005037 | 0.000000042 | 0.001021 | 0.001071 |
+| 300 | 0.072423 | 0.025655 | 0.000253 | 0.050424 | 0.000000042 | 0.010188 | 0.010716 |
+| 1,000 | 0.241705 | 0.085553 | 0.000885 | 0.168241 | 0.000000124 | 0.033997 | 0.035934 |
+
+Every measured D1 and E1 endpoint was qualified, passed Independent Replay,
+and stopped with `block-stationary`. The 3/30/300/1,000-target normalized
+objectives were respectively `2.01990781e-10`, `1.51707603e-10`,
+`1.47904336e-10`, and `1.47904359e-10`; the final means and KKT values matched
+between D1 and E1 to the reported precision. E1 used 4/5/5/5 sweeps and
+4/15/130/420 affected candidate evaluations. No benchmark candidate used the
+memory fallback; the fallback and over-budget preflight are covered by the
+FixedNeighbor tests. D1/E1 preflight estimates were identical. RSS varies by
+process allocation and remains comparable at all four sizes.
+
+The wider numerical suite retains the original D1/E1 comparisons: standard,
+active-width, high-overlap, weak-width, and multiple initial-width fixtures
+remain qualified without a meaningful estimate or objective regression.
+Rank-deficient and near-singular fixtures retain the same recovery-exhausted
+baseline result; the low-signal fixture retains the same sweep-budget stop.
+Signed cancellation retains the known F0/D1 width-KKT limitation, with no new
+E1 failure. The fault-injection cases are transaction and branch-coverage
+evidence, not a claim that all possible natural floating-point inputs have
+identical decisions.
+
+A test-only sweep replay perturbation now exercises the cache audit failure
+before reconciliation. The injected mismatch produces
+`block-cache-replay-failed`, leaves the reconciliation count at zero, leaves
+`objective_cache_refreshed` false, and preserves eta, beta, prediction,
+residual, and objective bitwise at the sweep boundary. This specifically tests
+the check-before-refresh ordering; it does not simulate a natural E1 numerical
+drift.
+
+The repository contains no 37,406-target / 5,938,087-observation production
+input, so runtime and peak RSS at that actual size remain unmeasured. The
+1,000-target result is synthetic and is not extrapolated to that workload.
+Release build, all 19 serial CTest groups, the focused 37-case FixedNeighbor
+suite, transaction fault tests, endpoint certification, Independent Replay,
+and memory-preflight coverage passed. M4 did not change numerical thresholds,
+add dependencies, update Notion, or push commits.
+
+### Final Production decision
+
+E1-Direct is the Production candidate Objective path. Normal candidates use
+the accepted Objective cache plus exact affected-row residual-square deltas;
+the D1 Full Objective Scan exists only as an instrumented test reference.
+Scratch-memory preflight still selects the full trusted replay fallback before
+affected-row allocations. Each successful sweep Full Replays prediction,
+residual, and objective; the cache audit must pass before the objective scalar
+is reconciled. Endpoint Certification and Independent Replay remain mandatory.
+The measured Release build has a small 3-target improvement, a modest
+30-target improvement, and stable 21.8% / 47.5% search-time reductions at 300
+and 1,000 targets. There is no E1-specific numerical or transaction-safety
+blocker in the covered fixtures. No universal floating-point error bound is
+claimed.
