@@ -6,6 +6,7 @@
 #include "core/detail/joint_component/StructuralPartition.hpp"
 #include "core/detail/joint_component/TargetEvidence.hpp"
 #include "core/detail/joint_component/JointComponentEstimator.hpp"
+#include "support/JointReplayExperiment.hpp"
 #include <algorithm>
 #include "support/JointSyntheticWorkload.hpp"
 #include <bit>
@@ -222,6 +223,110 @@ TEST(JointFixedNeighborBlockCoordinateTest, CandidateObserverDoesNotChangeFullRe
     EXPECT_TRUE(BitwiseEqual(baseline.state.prediction,observed.state.prediction));
     EXPECT_TRUE(BitwiseEqual(baseline.state.residual,observed.state.residual));
     EXPECT_TRUE(BitwiseEqual(baseline.state.objective,observed.state.objective));
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, AffectedRowReplayPreservesFullContributorAndObjectiveOrder)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    n::Vector eta=n::Vector::Constant(3,std::log(.55));
+    n::Vector beta(6);
+    const auto cancel_basis=n::EvaluateKernel(0.0,.55,2.5);
+    beta<<1.0,-cancel_basis.gaussian/cancel_basis.charge*(1.0+1e-15),0.0,-.2,1.4,.2;
+    n::BlockCoordinateState accepted; accepted.eta=eta; accepted.beta=beta;
+    auto initial=n::FullReplayForTesting(data.domain,data.layout,data.y,eta,beta,data.context.scale);
+    accepted.prediction=std::move(initial.prediction); accepted.residual=std::move(initial.residual);
+    accepted.objective=initial.objective;
+    n::StructuralTopology topology(data.domain,data.context.atom_ids,data.layout);
+    auto partition=topology.BuildCores(2); topology.PopulateMetadata(partition);
+    ASSERT_FALSE(partition.cores.empty());
+    ASSERT_EQ(partition.cores.front().atoms.size(),2u);
+    std::size_t delta_method_prediction_mismatches{};
+    for(std::size_t mode=0;mode<4;++mode)
+    {
+        const auto & core=partition.cores[mode%partition.cores.size()];
+        n::Vector candidate_eta=accepted.eta,candidate_beta=accepted.beta;
+        for(const auto atom:core.atoms)
+        {
+            if(mode==0 || mode==3) candidate_beta(2*atom)+=.01;
+            if(mode==1 || mode==3) candidate_beta(2*atom+1)-=.007;
+            if(mode==2 || mode==3) candidate_eta(atom)+=.002;
+        }
+        const auto incidence=second_stage_test::PrepareReplayIncidence(data.domain,data.layout,
+            core.atoms,core.neighbor_atoms,core.affected_rows);
+        ASSERT_TRUE(second_stage_test::VerifyReplayIncidenceCoverage(data.domain,data.layout,
+            core.affected_rows,incidence));
+        const auto full=n::FullReplayForTesting(data.domain,data.layout,data.y,
+            candidate_eta,candidate_beta,data.context.scale);
+        const auto exact=second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
+            accepted,candidate_eta,candidate_beta,data.context.scale,core.atoms,core.affected_rows,
+            second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+            second_stage_test::ReplayObjectiveStrategy::FullScan,&incidence);
+        const auto b1=second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
+            accepted,candidate_eta,candidate_beta,data.context.scale,core.atoms,core.affected_rows,
+            second_stage_test::ReplayPredictionStrategy::DeltaAddDifference,
+            second_stage_test::ReplayObjectiveStrategy::FullScan);
+        const auto b2=second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
+            accepted,candidate_eta,candidate_beta,data.context.scale,core.atoms,core.affected_rows,
+            second_stage_test::ReplayPredictionStrategy::DeltaSubtractThenAdd,
+            second_stage_test::ReplayObjectiveStrategy::FullScan);
+        const auto incremental_exact=second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
+            accepted,candidate_eta,candidate_beta,data.context.scale,core.atoms,core.affected_rows,
+            second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+            second_stage_test::ReplayObjectiveStrategy::Incremental,&incidence);
+        std::size_t local{};
+        for(const auto row_value:data.layout.informative_rows)
+        {
+            const auto row=static_cast<Eigen::Index>(row_value);
+            const auto found=std::lower_bound(core.affected_rows.begin(),core.affected_rows.end(),row);
+            const bool affected=found!=core.affected_rows.end() && *found==row;
+            const auto index=static_cast<Eigen::Index>(found-core.affected_rows.begin());
+            const double expected_prediction=affected ? exact.prediction(index) : accepted.prediction(row);
+            const double expected_residual=affected ? exact.residual(index) : accepted.residual(row);
+            EXPECT_TRUE(BitwiseEqual(full.prediction(row),expected_prediction));
+            EXPECT_TRUE(BitwiseEqual(full.residual(row),expected_residual));
+            if(affected) ++local;
+        }
+        EXPECT_EQ(local,core.affected_rows.size());
+        EXPECT_TRUE(BitwiseEqual(full.objective,exact.objective));
+        EXPECT_TRUE(std::isfinite(b1.objective)); EXPECT_TRUE(std::isfinite(b2.objective));
+        EXPECT_TRUE(std::isfinite(incremental_exact.objective));
+        for(Eigen::Index k=0;k<exact.prediction.size();++k)
+            delta_method_prediction_mismatches+=!BitwiseEqual(b1.prediction(k),b2.prediction(k));
+    }
+    RecordProperty("B1_B2_prediction_bitwise_mismatch_count",std::to_string(delta_method_prediction_mismatches));
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, LocalIncidencePreservesDuplicateSupportEntries)
+{
+    n::Domain domain(2,{{{0,0.0},{0,0.0},{1,.25}},{{0,0.0},{1,.25}}});
+    rhbm_gem::JointParameterLayout layout;
+    layout.full_atoms={0,1}; layout.informative_rows={0,1};
+    n::Vector observations(2); observations<<0.1,-0.2;
+    n::BlockCoordinateState accepted;
+    accepted.eta.resize(2); accepted.eta<<std::log(.7),std::log(.9);
+    accepted.beta.resize(4); accepted.beta<<1.0,-.2,1.1,-0.0;
+    auto replay=n::FullReplayForTesting(domain,layout,observations,accepted.eta,accepted.beta,1.0);
+    accepted.prediction=std::move(replay.prediction); accepted.residual=std::move(replay.residual);
+    accepted.objective=replay.objective;
+    const n::Indices core{0},neighbors{1},affected{0,1};
+    const auto incidence=second_stage_test::PrepareReplayIncidence(domain,layout,core,neighbors,affected);
+    ASSERT_TRUE(second_stage_test::VerifyReplayIncidenceCoverage(domain,layout,affected,incidence));
+    ASSERT_EQ(incidence.rows[0].size(),3u);
+    n::Vector candidate_eta=accepted.eta,candidate_beta=accepted.beta;
+    candidate_eta(0)+=.01; candidate_beta(0)+=.05;
+    const auto reference=n::FullReplayForTesting(domain,layout,observations,
+        candidate_eta,candidate_beta,1.0);
+    const auto exact=second_stage_test::EvaluateReplayCandidate(domain,layout,observations,accepted,
+        candidate_eta,candidate_beta,1.0,core,affected,
+        second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+        second_stage_test::ReplayObjectiveStrategy::FullScan,&incidence);
+    for(Eigen::Index row=0;row<2;++row)
+    {
+        EXPECT_TRUE(BitwiseEqual(reference.prediction(row),exact.prediction(row)));
+        EXPECT_TRUE(BitwiseEqual(reference.residual(row),exact.residual(row)));
+    }
+    EXPECT_TRUE(BitwiseEqual(reference.objective,exact.objective));
 }
 
 TEST(JointFixedNeighborBlockCoordinateTest, UnchangedCandidateSkipsOnlyCandidateReplay)

@@ -24,6 +24,13 @@ struct FixedNeighborCandidateEvent
     double full_objective{};
     bool accepted{},unchanged{},full_replay_ran{};
 };
+struct FixedNeighborReplayResult
+{
+    Vector prediction,residual;
+    double objective{};
+};
+FixedNeighborReplayResult FullReplayForTesting(const Domain &,const JointParameterLayout &,
+    VectorRef observations,VectorRef eta,VectorRef beta,double scale);
 #endif
 
 double BlockObjectiveReplayEnclosure(double reference);

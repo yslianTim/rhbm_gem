@@ -736,6 +736,16 @@ double ScaledCoefficientDifference(VectorRef lhs,VectorRef rhs)
     return ((lhs-rhs).array().abs()/(1.0+lhs.array().abs().max(rhs.array().abs()))).maxCoeff();
 }
 }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+FixedNeighborReplayResult FullReplayForTesting(const Domain & domain,const JointParameterLayout & layout,
+    VectorRef observations,VectorRef eta,VectorRef beta,double scale)
+{
+    const ReplayStructure structure(domain.rows,layout);
+    ReplayState replay;
+    ReplayInto(domain,layout,observations,eta,beta,scale,structure,replay);
+    return {std::move(replay.prediction),std::move(replay.residual),replay.objective};
+}
+#endif
 bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_complete_sweep,
     const JointConvergenceCriteria & criteria)
 {

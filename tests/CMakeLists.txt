@@ -284,6 +284,7 @@ target_include_directories(rhbm_tests PRIVATE
 
 add_executable(rhbm_joint_optimization_benchmark
     benchmarks/JointOptimizationBenchmark.cpp
+    support/JointReplayExperiment.cpp
     support/JointSyntheticWorkload.cpp
 )
 target_compile_definitions(rhbm_joint_optimization_benchmark PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
@@ -293,11 +294,24 @@ target_include_directories(rhbm_joint_optimization_benchmark PRIVATE
     "${PROJECT_SOURCE_DIR}/tests"
 )
 target_link_libraries(rhbm_joint_optimization_benchmark PRIVATE rhbm_gem_test CompilerFlags)
+add_executable(rhbm_fixed_neighbor_replay_benchmark
+    benchmarks/FixedNeighborReplayBenchmark.cpp
+    support/JointReplayExperiment.cpp
+    support/JointSyntheticWorkload.cpp
+)
+target_compile_definitions(rhbm_fixed_neighbor_replay_benchmark PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
+target_include_directories(rhbm_fixed_neighbor_replay_benchmark PRIVATE
+    "${PROJECT_SOURCE_DIR}/src"
+    "${PROJECT_SOURCE_DIR}/src/core"
+    "${PROJECT_SOURCE_DIR}/tests"
+)
+target_link_libraries(rhbm_fixed_neighbor_replay_benchmark PRIVATE rhbm_gem_test CompilerFlags)
 add_dependencies(tests_all rhbm_tests)
 
 # Shared test-only helpers compile into the test executable.
 target_sources(rhbm_tests PRIVATE
     support/JointSyntheticWorkload.cpp
+    support/JointReplayExperiment.cpp
     support/JointBlockCoordinate.cpp
     support/JointTestGeometry.cpp support/JointTestNumerics.cpp support/JointDenseReference.cpp
     support/JointTestContext.cpp support/JointComponentChecks.cpp

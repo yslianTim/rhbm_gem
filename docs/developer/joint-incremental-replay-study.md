@@ -52,12 +52,62 @@ This fixture makes Full Replay a small fraction of search time. It only
 establishes the instrumentation baseline; larger replay-only fixtures are
 needed to evaluate the affected-row methods.
 
+## N1: deterministic replay comparison
+
+The test-only microbenchmark uses the same accepted-before parameter and
+prediction state for every candidate method. It applies one fixed candidate
+per structural block and does not let any candidate result change a later
+candidate. Timings include candidate evaluation; D1/E also include rebuilding
+the block-local contributor incidence for every candidate. Fixture/sequence
+construction and full-reference verification are reported separately, rather
+than folded into one method's timing. The candidate sequence is synthetic and
+is not a solver trajectory.
+
+| Targets | Rows | Blocks | A Full Replay | B1 | B2 | C | D1 | E | D1 incidence prep |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 3 | 1,425 | 1 | 0.0520 ms | 0.1488 ms | 0.1482 ms | 0.1306 ms | 0.1619 ms | 0.1438 ms | 0.0784 ms |
+| 30 | 13,710 | 3 | 0.5397 ms | 0.6913 ms | 0.6941 ms | 0.4694 ms | 0.7581 ms | 0.5330 ms | 0.3127 ms |
+| 300 | 136,560 | 26 | 5.2585 ms | 2.7318 ms | 2.7099 ms | 0.5531 ms | 2.7880 ms | 0.6242 ms | 0.3680 ms |
+
+Times are five-sample medians per candidate. D1 replay-only evaluation at 300
+targets was 2.3637 ms per candidate; together with incidence preparation it
+was 1.89× faster than Full Replay. D1 was slower at 3 and 30 targets. The
+largest fixture therefore approaches but does not reach the suggested 2×
+candidate replay threshold. C was 9.51× faster and E 8.42× faster at 300
+targets, but their incremental objectives differed from Full Scan for all 26
+candidates (maximum absolute difference `4.33681e-17`, maximum 50 ULP).
+
+At 300 targets, B1 and B2 both had Full Scan objectives bitwise equal to A,
+but their prediction and residual arrays were not bitwise equal. B1 differed
+on 3,928 of 3,550,560 row comparisons, with maximum prediction error
+`2.77556e-17`; B2 differed on 4,492, with maximum error `5.55112e-17`.
+Residual maximum error was `5.55978e-14` relative and 256 ULP on near-zero
+residuals. B2 produced more prediction mismatches and twice B1's maximum
+absolute prediction error, confirming the two update expressions are not
+interchangeable.
+
+D1 reproduced prediction, residual, and Full Scan objective bitwise on all
+3,550,560 informative-row comparisons and 26 candidate objectives at 300
+targets. The test also verifies that each affected row's incidence contains
+every contributor in `layout.full_atoms` order, including original support
+traversal order. Estimated temporary bytes were 321,824 for D1, 88,512 for
+B1/B2/C, and 2,184,960 for A. The 300-target process peak RSS was 72,056,832
+bytes, including the synthetic input, reference verification, and every
+strategy. Fixture plus candidate-sequence construction took 0.0804 s, and
+full-reference verification took 0.7491 s.
+
+N1 establishes D1 as the only candidate with bitwise-identical prediction,
+residual, and Full Scan objective. It is a candidate for shadow and closed-loop
+validation, not yet a production optimization: total FixedNeighbor search
+speedup, acceptance agreement, long-run behavior, and larger-component
+performance remain unmeasured.
+
 ## Roadmap status
 
 | Stage | Status | Result |
 | --- | --- | --- |
 | N0 | Complete | Baseline telemetry and deterministic state/candidate digests recorded. |
-| N1 | Pending | |
+| N1 | Complete | A/B1/B2/C/D1/E measured at 3, 30, and 300 synthetic targets; D1 passed bitwise candidate replay checks. |
 | N2 | Pending | |
 | N3 | Pending | |
 | N4 | Pending | |
