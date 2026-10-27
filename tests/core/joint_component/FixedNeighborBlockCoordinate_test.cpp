@@ -1771,6 +1771,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, SignedCancellationHistoricalFailureI
 TEST(JointFixedNeighborBlockCoordinateTest, AffectedReplayFallsBackBeforeScratchExceedsMemoryBudget)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     n::FixedNeighborPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=5;
     policy.stop_after_stationarity=false; policy.certify_endpoint=false;
@@ -1789,10 +1790,26 @@ TEST(JointFixedNeighborBlockCoordinateTest, AffectedReplayFallsBackBeforeScratch
 
     auto fallback_policy=policy;
     fallback_policy.global_state_memory_budget_for_testing=full_replay_plan.estimated_peak_bytes;
+    fallback_policy.objective_strategy_for_testing=n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect;
+    std::size_t fallback_candidate_count{};
+    fallback_policy.candidate_observer=[&](const n::FixedNeighborCandidateEvent & event) {
+        if(!event.candidate_replay_ran) return;
+        ++fallback_candidate_count;
+        const auto before=n::FullReplayForTesting(data.domain,data.layout,data.y,
+            event.accepted_before.eta,event.accepted_before.beta,data.context.scale);
+        const auto candidate=n::FullReplayForTesting(data.domain,data.layout,data.y,
+            event.candidate_eta,event.candidate_beta,data.context.scale);
+        EXPECT_LE(std::abs(event.accepted_before.objective-before.objective),
+            n::BlockObjectiveReplayEnclosure(before.objective));
+        EXPECT_DOUBLE_EQ(event.full_objective,candidate.objective);
+        EXPECT_FALSE(std::isfinite(event.incremental_objective));
+    };
     const auto fallback=n::RunFixedNeighborDiagnostic(problem,eta,fallback_policy);
     ASSERT_TRUE(fallback.work.full_replay_memory_fallback);
     EXPECT_GT(fallback.work.full_candidate_replays,0u);
     EXPECT_EQ(fallback.work.affected_candidate_replays,0u);
+    EXPECT_EQ(fallback.work.incremental_objective_evaluations,0u);
+    EXPECT_GT(fallback_candidate_count,0u);
     EXPECT_EQ(affected.reason,fallback.reason);
     EXPECT_EQ(affected.sweep_count,fallback.sweep_count);
     EXPECT_TRUE(BitwiseEqual(affected.state.eta,fallback.state.eta));
@@ -1800,6 +1817,48 @@ TEST(JointFixedNeighborBlockCoordinateTest, AffectedReplayFallsBackBeforeScratch
     EXPECT_TRUE(BitwiseEqual(affected.state.prediction,fallback.state.prediction));
     EXPECT_TRUE(BitwiseEqual(affected.state.residual,fallback.state.residual));
     EXPECT_TRUE(BitwiseEqual(affected.state.objective,fallback.state.objective));
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, E1MemoryPreflightRejectsBeforeCreatingAcceptedState)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector eta=n::Vector::Constant(3,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=2;
+    policy.eta_upper_bound=std::log(2.2);
+    policy.objective_strategy_for_testing=n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect;
+    policy.global_state_memory_budget_for_testing=1;
+    std::size_t candidates{};
+    policy.candidate_observer=[&](const auto &) {++candidates;};
+    const auto result=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,
+        eta,data.context,policy);
+
+    EXPECT_NE(result.reason.find("resource-limit"),std::string::npos);
+    EXPECT_EQ(result.memory_estimate.status,n::MemoryStatus::Reject);
+    EXPECT_EQ(result.state.eta.size(),0);
+    EXPECT_EQ(result.state.beta.size(),0);
+    EXPECT_EQ(candidates,0u);
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, E1NonfiniteObservationsFailBeforeAcceptedStateCreation)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    n::Vector observations=data.y;
+    observations(0)=std::numeric_limits<double>::quiet_NaN();
+    const n::Vector eta=n::Vector::Constant(3,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=2;
+    policy.eta_upper_bound=std::log(2.2);
+    policy.objective_strategy_for_testing=n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect;
+    std::size_t candidates{};
+    policy.candidate_observer=[&](const auto &) {++candidates;};
+    const auto result=n::SearchFixedNeighborComponent(data.domain,data.layout,observations,
+        eta,data.context,policy);
+
+    EXPECT_EQ(result.reason,"block-invalid-partition");
+    EXPECT_EQ(result.state.eta.size(),0);
+    EXPECT_EQ(result.state.beta.size(),0);
+    EXPECT_EQ(candidates,0u);
 }
 
 TEST(JointFixedNeighborBlockCoordinateTest, UnchangedCandidateSkipsOnlyCandidateReplay)
@@ -2001,36 +2060,77 @@ TEST(JointFixedNeighborBlockCoordinateTest, FailedBlockRetriesAfterLaterBlocksUp
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
-    n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=6;
-    policy.eta_upper_bound=std::log(2.2);
-    policy.objective_strategy_for_testing=n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect;
-    policy.collect_telemetry=true;
-    policy.force_no_trusted_profile_for_testing=[](std::size_t block,std::size_t sweep) {
-        return block==0 && sweep==0;
+    struct RecoveryRun
+    {
+        n::FixedNeighborSearchResult result;
+        std::optional<n::BlockCoordinateState> first_sweep_state,retry_candidate_before;
+        double retry_candidate_objective{},retry_candidate_reference{};
+        bool retry_candidate_seen{};
     };
-    std::optional<n::BlockCoordinateState> first_sweep_state;
-    policy.state_observer=[&](std::size_t sweep,const auto & state,const auto &,const auto &) {
-        if(sweep==1) first_sweep_state=state;
+    const auto run=[&](n::FixedNeighborObjectiveStrategyForTesting strategy) {
+        RecoveryRun output;
+        n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=6;
+        policy.eta_upper_bound=std::log(2.2); policy.collect_telemetry=true;
+        policy.objective_strategy_for_testing=strategy;
+        policy.refresh_objective_after_sweep_for_testing=
+            strategy==n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect;
+        policy.force_no_trusted_profile_for_testing=[](std::size_t block,std::size_t sweep) {
+            return block==0 && sweep==0;
+        };
+        policy.state_observer=[&](std::size_t sweep,const auto & state,const auto &,const auto &) {
+            if(sweep==1) output.first_sweep_state=state;
+        };
+        policy.candidate_observer=[&](const n::FixedNeighborCandidateEvent & event) {
+            if(event.sweep==2 && event.block==1)
+            {
+                output.retry_candidate_seen=true;
+                output.retry_candidate_before=event.accepted_before;
+                output.retry_candidate_objective=event.full_objective;
+                const auto replay=n::FullReplayForTesting(data.domain,data.layout,data.y,
+                    event.candidate_eta,event.candidate_beta,data.context.scale);
+                output.retry_candidate_reference=replay.objective;
+            }
+        };
+        output.result=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,
+            initial_eta,data.context,policy);
+        return output;
     };
-    const auto result=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,
-        initial_eta,data.context,policy);
-    ASSERT_TRUE(first_sweep_state.has_value());
-    EXPECT_GT(first_sweep_state->beta.norm(),0.0);
-    EXPECT_EQ(result.recovery_attempts,1u);
-    EXPECT_EQ(result.recovery_successes,1u);
-    EXPECT_GT(result.work.incremental_objective_evaluations,0u);
-    const auto first_failure=std::find_if(result.blocks.begin(),result.blocks.end(),[](const auto & block) {
-        return block.block==1 && block.sweep==1;
-    });
-    ASSERT_NE(first_failure,result.blocks.end());
-    EXPECT_EQ(first_failure->status,"retry-pending");
-    const auto retried=std::find_if(result.blocks.begin(),result.blocks.end(),[](const auto & block) {
-        return block.block==1 && block.sweep==2;
-    });
-    ASSERT_NE(retried,result.blocks.end());
-    EXPECT_TRUE(retried->recovery_retry);
-    EXPECT_EQ(retried->recovery_attempt,1u);
-    EXPECT_DOUBLE_EQ(retried->objective_before,first_sweep_state->objective);
+    const auto d1=run(n::FixedNeighborObjectiveStrategyForTesting::FullScan);
+    const auto e1=run(n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect);
+    for(const auto * current:{&d1,&e1})
+    {
+        ASSERT_TRUE(current->first_sweep_state.has_value());
+        ASSERT_TRUE(current->retry_candidate_seen);
+        ASSERT_TRUE(current->retry_candidate_before.has_value());
+        EXPECT_GT(current->first_sweep_state->beta.norm(),0.0);
+        EXPECT_EQ(current->result.recovery_attempts,1u);
+        EXPECT_EQ(current->result.recovery_successes,1u);
+        const auto first_failure=std::find_if(current->result.blocks.begin(),current->result.blocks.end(),[](const auto & block) {
+            return block.block==1 && block.sweep==1;
+        });
+        ASSERT_NE(first_failure,current->result.blocks.end());
+        EXPECT_EQ(first_failure->status,"retry-pending");
+        const auto retried=std::find_if(current->result.blocks.begin(),current->result.blocks.end(),[](const auto & block) {
+            return block.block==1 && block.sweep==2;
+        });
+        ASSERT_NE(retried,current->result.blocks.end());
+        EXPECT_TRUE(retried->recovery_retry);
+        EXPECT_EQ(retried->recovery_attempt,1u);
+        EXPECT_LE(std::abs(retried->objective_before-current->first_sweep_state->objective),
+            n::BlockObjectiveReplayEnclosure(current->first_sweep_state->objective));
+        const auto trusted=n::FullReplayForTesting(data.domain,data.layout,data.y,
+            current->first_sweep_state->eta,current->first_sweep_state->beta,data.context.scale);
+        EXPECT_LE(std::abs(current->first_sweep_state->objective-trusted.objective),
+            n::BlockObjectiveReplayEnclosure(trusted.objective));
+        EXPECT_LE(std::abs(current->retry_candidate_before->objective-trusted.objective),
+            n::BlockObjectiveReplayEnclosure(trusted.objective));
+        EXPECT_LE(std::abs(current->retry_candidate_objective-current->retry_candidate_reference),
+            n::BlockObjectiveReplayEnclosure(current->retry_candidate_reference));
+    }
+    EXPECT_GT(e1.result.work.incremental_objective_evaluations,0u);
+    EXPECT_TRUE(BitwiseEqual(d1.result.state.eta,e1.result.state.eta));
+    EXPECT_TRUE(BitwiseEqual(d1.result.state.beta,e1.result.state.beta));
+    EXPECT_TRUE(BitwiseEqual(d1.result.state.objective,e1.result.state.objective));
 }
 
 TEST(JointFixedNeighborBlockCoordinateTest, ExhaustedBlockRecoveryLeavesTheLastAcceptedComponentStateUntouched)
@@ -2038,25 +2138,42 @@ TEST(JointFixedNeighborBlockCoordinateTest, ExhaustedBlockRecoveryLeavesTheLastA
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
-    n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=6;
-    policy.eta_upper_bound=std::log(2.2);
-    policy.force_no_trusted_profile_for_testing=[](std::size_t block,std::size_t) {return block==0;};
-    std::optional<n::BlockCoordinateState> last_complete_sweep_state;
-    policy.state_observer=[&](std::size_t sweep,const auto & state,const auto &,const auto &) {
-        if(sweep==1) last_complete_sweep_state=state;
-    };
-    const auto result=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,
-        initial_eta,data.context,policy);
-    ASSERT_TRUE(last_complete_sweep_state.has_value());
-    EXPECT_FALSE(result.search_converged);
-    EXPECT_EQ(result.reason,"block-recovery-exhausted");
-    EXPECT_EQ(result.recovery_attempts,1u);
-    EXPECT_EQ(result.recovery_successes,0u);
-    EXPECT_EQ(result.sweep_count,1u);
-    EXPECT_EQ(result.first_order_stationarity_sweep,0u);
-    EXPECT_TRUE((result.state.eta.array()==last_complete_sweep_state->eta.array()).all());
-    EXPECT_TRUE((result.state.beta.array()==last_complete_sweep_state->beta.array()).all());
-    EXPECT_FALSE(result.certification.has_value());
+    std::array<n::BlockCoordinateState,2> accepted_states;
+    std::array<n::FixedNeighborSearchResult,2> results;
+    for(std::size_t i=0;i<results.size();++i)
+    {
+        n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=6;
+        policy.eta_upper_bound=std::log(2.2);
+        policy.objective_strategy_for_testing=i==0 ? n::FixedNeighborObjectiveStrategyForTesting::FullScan :
+            n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect;
+        policy.refresh_objective_after_sweep_for_testing=i==1;
+        policy.force_no_trusted_profile_for_testing=[](std::size_t block,std::size_t) {return block==0;};
+        policy.state_observer=[&,i](std::size_t sweep,const auto & state,const auto &,const auto &) {
+            if(sweep==1) accepted_states[i]=state;
+        };
+        results[i]=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,
+            initial_eta,data.context,policy);
+    }
+    for(std::size_t i=0;i<results.size();++i)
+    {
+        const auto & result=results[i];
+        EXPECT_FALSE(result.search_converged);
+        EXPECT_EQ(result.reason,"block-recovery-exhausted");
+        EXPECT_EQ(result.recovery_attempts,1u);
+        EXPECT_EQ(result.recovery_successes,0u);
+        EXPECT_EQ(result.sweep_count,1u);
+        EXPECT_EQ(result.first_order_stationarity_sweep,0u);
+        EXPECT_TRUE((result.state.eta.array()==accepted_states[i].eta.array()).all());
+        EXPECT_TRUE((result.state.beta.array()==accepted_states[i].beta.array()).all());
+        const auto replay=n::FullReplayForTesting(data.domain,data.layout,data.y,
+            result.state.eta,result.state.beta,data.context.scale);
+        EXPECT_LE(std::abs(result.state.objective-replay.objective),
+            n::BlockObjectiveReplayEnclosure(replay.objective));
+        EXPECT_FALSE(result.certification.has_value());
+    }
+    EXPECT_TRUE(BitwiseEqual(results[0].state.eta,results[1].state.eta));
+    EXPECT_TRUE(BitwiseEqual(results[0].state.beta,results[1].state.beta));
+    EXPECT_TRUE(BitwiseEqual(results[0].state.objective,results[1].state.objective));
 }
 
 TEST(JointFixedNeighborBlockCoordinateTest, SearchResultAndIndependentCertificationStaySeparate)

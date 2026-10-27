@@ -1202,3 +1202,42 @@ ill-conditioning. The outer-transaction rejection and recovery cases remain
 for P3 because none of these qualification fixtures naturally rejects a
 global candidate. These results support numerical non-regression; they do not
 by themselves qualify Candidate Rejection/Recovery state safety.
+
+### P3 — Candidate state, recovery, and memory safety
+
+The accepted-state update remains after both the local/global objective
+consistency check and the existing objective acceptance check. The candidate
+prediction, residual, and objective are prepared separately; a rejection
+returns or continues before the accepted cache and parameters are updated. A
+successful sweep still performs a full replay audit before any test-configured
+objective refresh. The P4 production-path reconciliation has not been applied.
+
+The D1/E1 retry test now records the accepted state after the first sweep,
+checks the retry's `objective_before` and candidate's `accepted_before` against
+independent Full Replay, and compares the recovered final parameters and
+objective. Both modes recovered after one retry with equal final parameters.
+The exhausted-recovery test verifies that both modes retain the last complete
+accepted parameters and a Full Replay-consistent objective. The existing
+unchanged-candidate test still exercises the no-replay fast path.
+
+The E1 memory tests exercise the incremental strategy under a budget that
+requires the memory-bounded Full Replay candidate fallback. The fallback
+records only Full Replay candidates, and each accepted-before and candidate
+objective matches an independent Full Replay. A one-byte preflight budget
+returns `resource-limit` before an accepted state or candidate is created.
+Nonfinite observations are rejected before accepted-state creation. Endpoint
+certification's resource-limited assessment behavior remains covered by the
+existing certification test.
+
+No natural outer candidate rejection was found in 512 deterministic
+observation/scale/initial-width perturbations and 196 signed-cancellation
+factor/width perturbations. The pinned standard and hard fixtures also
+produced zero candidate decision disagreements and zero rejected changed
+candidates. No test injects a false rejection. This is missing evidence for
+the requested objective-increase and local/global-consistency rejection
+transactions; the recovery retry above is a local profile recovery and is not
+counted as an outer candidate rejection. The near-boundary candidate evidence
+currently consists of the qualified E1 candidate audits and their full
+objective comparison, not a rejected boundary case. Consequently P3 is
+partially qualified and is not a Promotion pass. No KKT, width, or convergence
+threshold was changed.
