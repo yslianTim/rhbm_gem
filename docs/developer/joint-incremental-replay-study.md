@@ -576,6 +576,46 @@ scratch remains bounded by actual index sizes. Promotion still depends on the
 R3 decision-safety gate; these replay-only timings do not establish a
 FixedNeighbor or end-to-end speedup.
 
+### R3: acceptance safety gate outcome
+
+R3 did not qualify an incremental objective for Production. No conservative
+bound was implemented that covers all of: the prior accepted objective's
+accumulated error, changed residual squaring and subtraction, signed delta
+accumulation, scaling, the candidate objective, the accepted and candidate
+Full Scan values, the global delta, local/global consistency, and the
+objective-magnitude-dependent replay enclosure. The `gamma_k` model can bound
+a positive sequential sum under finite-arithmetic assumptions, but using a
+generic `gamma_k` term as an acceptance tolerance would not bound the
+incremental update or the difference between both Full Scan decisions. The
+cache would also need to carry and refresh its error interval without
+overwriting evidence of an already accepted bad update.
+
+The measured error is small in absolute terms but not uniformly small
+relative to observed decisions: direct E differed from Full Scan on 489–494
+of 503 attempts in the 30-target stress, reached `3.22e-15` at a longer refresh
+interval, and E/E2 differed on every candidate at 300 and 1,000 targets. The
+earlier D1 closed-loop fixture recorded a minimum acceptance margin of
+`1.09552e-16`. Therefore the zero-disagreement scripted checks cannot establish
+that a candidate whose estimate differs by `1e-15` remains on the same side of
+every production acceptance condition.
+
+The R3 gate's safe disposition is consequently Full Scan for every objective
+decision: Fast Accept `0`, Fast Reject `0`, Full Scan fallback `100%`. These
+are the required disposition counts, not measurements from a partially
+implemented conditional gate. No error-bound violations are reported because
+no candidate error interval was emitted; the count is not zero. An unknown or
+nonfinite interval also remains on the Full Scan path. This has no speed
+benefit over D1 and does not justify adding an objective cache to Production.
+
+Production remains D1 with its existing preflighted Full Replay memory
+fallback, sweep-end Full Replay check, endpoint certification, Independent
+Replay, local/global consistency, and convergence rules. No threshold,
+acceptance branch, recovery behavior, or accepted-state cache was changed.
+R4 is diagnostic only: it may measure E1/E2 on a real D1 trajectory, but it
+cannot let an unqualified incremental estimate control later search state.
+R5's Production outcome is D unless a future study supplies a conservative
+decision interval and validates it over the actual solver path.
+
 ## Roadmap status
 
 | Stage | Status | Result |
