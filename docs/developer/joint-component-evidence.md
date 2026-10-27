@@ -326,3 +326,32 @@ search-scoped prototype was removed; the production workspace remains
 trust-region-call scoped.
 
 The joint contract, workflow, and numerical CTest groups passed (3/3, 5.62 s).
+
+## N3-C: derivative reduction tile buffers
+
+`TiledDifferential::Rows()` now fills a caller-owned dense raw tile directly
+from the sparse row block and reuses it with the projected and Jacobian tile
+matrices. `ReduceDerivativeImpl()` similarly reuses the scaled residual tile.
+The expressions for projection, correction, residual scaling, column norms,
+and `std::hypot` accumulation retain their previous order. The reference-order
+branch keeps its independent sparse design and QR handling. These buffers
+remain tile-sized; the 8,192-row limit and no-observation-sized-dense-Jacobian
+rule are unchanged.
+
+For the two-tile benchmark, the reduction previously materialized a raw dense
+tile and a scaled residual temporary for each tile, in addition to the
+projected and Jacobian buffers. It now materializes four owned tile buffers
+once (raw, projected, Jacobian, and residual) and records eight shape changes
+as the two tile sizes are processed. Repeated same-shape `Rows()` calls kept
+the raw, projected, and Jacobian data pointers stable. Full and projected-only
+fallback tests pass with their scratch reuse counters, and the profile
+preparation/reduction digest remains exactly
+`8c2f90707e1f5b97058dc6708c58b136737878f3795d5c731f2150555255c9d7`.
+
+Before/after reduction medians were 5.996 ms/call (5.913–6.073) and 6.019
+ms/call (5.964–6.062); the ranges overlap, so the fixture shows no stable
+runtime change. The estimated maximum QR tile workspace remains 5,898,240
+bytes, while the new raw tile adds at most one bounded tile buffer (1,966,080
+bytes at 8,192 rows and 30 columns for this fixture). The three joint
+contract, workflow, and numerical CTest groups passed (3/3, 5.87 s), and the
+additional buffer identity check passed in the numerical group (1/1, 2.52 s).

@@ -12,6 +12,7 @@ struct TiledDifferential
     bool valid{},reference_order{},projected_only{};
     std::string reason;
     void Rows(Eigen::Index first,Eigen::Index count,Matrix & projected,Matrix & jacobian) const;
+    void Rows(Eigen::Index first,Eigen::Index count,Matrix & raw_tile,Matrix & projected,Matrix & jacobian) const;
 };
 struct ReducedDifferential
 {
@@ -41,6 +42,7 @@ struct DerivativeWork
     std::size_t prepare_calls{},reduction_calls{},tiled_qr_invocations{},tile_count{},
         triplet_capacity_growths{},triplet_reserved_entries{},triplet_reserved_bytes{},
         tiled_qr_scratch_materializations{},tiled_qr_scratch_resize_events{},
+        reduction_tile_scratch_materializations{},reduction_tile_scratch_resize_events{},
         cancellation_fallbacks{},reference_order_recomputations{};
     std::size_t maximum_tile_workspace_bytes{};
     double prepare_seconds{},reduction_seconds{},tiled_qr_seconds{};

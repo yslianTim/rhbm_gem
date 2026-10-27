@@ -96,6 +96,20 @@ TEST(JointComponentNumericsTest, TiledDerivativeRecordsCancellationReferenceFall
     EXPECT_EQ(n::DerivativeWorkForTesting().triplet_capacity_growths,0u);
     EXPECT_EQ(n::DerivativeWorkForTesting().tiled_qr_scratch_materializations,4u);
     EXPECT_EQ(n::DerivativeWorkForTesting().tiled_qr_scratch_resize_events,4u);
+    Matrix raw_tile,projected_tile,jacobian_tile;
+    full.Rows(0,2,raw_tile,projected_tile,jacobian_tile);
+    const auto * raw_storage=raw_tile.data();
+    const auto * projected_storage=projected_tile.data();
+    const auto * jacobian_storage=jacobian_tile.data();
+    full.Rows(1,2,raw_tile,projected_tile,jacobian_tile);
+    EXPECT_EQ(raw_tile.data(),raw_storage);
+    EXPECT_EQ(projected_tile.data(),projected_storage);
+    EXPECT_EQ(jacobian_tile.data(),jacobian_storage);
+    n::DerivativeWorkForTesting()={};
+    const auto reduced=n::ReduceDerivative(full,evaluation.residual,3);
+    ASSERT_TRUE(reduced.valid)<<reduced.reason;
+    EXPECT_EQ(n::DerivativeWorkForTesting().reduction_tile_scratch_materializations,4u);
+    EXPECT_EQ(n::DerivativeWorkForTesting().reduction_tile_scratch_resize_events,4u);
 
     n::DerivativeWorkForTesting()={};
     const auto projected=n::PrepareProjectedWidthDerivative(evaluation,context.scale,&context,-1,3);
@@ -107,6 +121,11 @@ TEST(JointComponentNumericsTest, TiledDerivativeRecordsCancellationReferenceFall
     EXPECT_EQ(n::DerivativeWorkForTesting().triplet_capacity_growths,0u);
     EXPECT_EQ(n::DerivativeWorkForTesting().tiled_qr_scratch_materializations,4u);
     EXPECT_EQ(n::DerivativeWorkForTesting().tiled_qr_scratch_resize_events,4u);
+    n::DerivativeWorkForTesting()={};
+    const auto projected_reduced=n::ReduceProjectedWidthDerivative(projected,3);
+    ASSERT_TRUE(projected_reduced.valid)<<projected_reduced.reason;
+    EXPECT_EQ(n::DerivativeWorkForTesting().reduction_tile_scratch_materializations,2u);
+    EXPECT_EQ(n::DerivativeWorkForTesting().reduction_tile_scratch_resize_events,3u);
 }
 
 ;

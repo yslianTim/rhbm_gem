@@ -211,7 +211,7 @@ int Run()
     joint::TiledDifferential prepared;
     joint::ReducedDifferential reduced;
     std::string derivative_digest;
-    joint::DerivativeWork derivative_work;
+    joint::DerivativeWork derivative_work,reduction_work;
     for(int sample=0;sample<samples+1;++sample)
     {
         joint::DerivativeWork aggregate;
@@ -248,19 +248,39 @@ int Run()
         derivative_work=std::move(aggregate);
 
         joint::TiledDifferential one=prepared;
+        joint::DerivativeWork reduction_aggregate;
         const auto reduce_started=Clock::now();
         for(int repeat=0;repeat<repeats;++repeat)
         {
             work={};
             reduced=joint::ReduceDerivative(one,evaluation.residual);
             if(!reduced.valid) throw std::runtime_error("derivative reduction: "+reduced.reason);
+            if(repeat==0) reduction_aggregate=work;
+            else
+            {
+                reduction_aggregate.reduction_tile_scratch_materializations+=work.reduction_tile_scratch_materializations;
+                reduction_aggregate.reduction_tile_scratch_resize_events+=work.reduction_tile_scratch_resize_events;
+                reduction_aggregate.tiled_qr_scratch_materializations+=work.tiled_qr_scratch_materializations;
+                reduction_aggregate.tiled_qr_scratch_resize_events+=work.tiled_qr_scratch_resize_events;
+                reduction_aggregate.maximum_tile_workspace_bytes=std::max(
+                    reduction_aggregate.maximum_tile_workspace_bytes,work.maximum_tile_workspace_bytes);
+                reduction_aggregate.tiled_qr_seconds+=work.tiled_qr_seconds;
+            }
         }
         const double reduce_elapsed=Seconds(reduce_started)/repeats;
         if(sample) reduce_times.push_back(reduce_elapsed);
+        reduction_work=std::move(reduction_aggregate);
         if(!sample) derivative_digest=DerivativeDigest(prepared,reduced);
     }
     ReportSamples("derivative_prepare",std::move(prepare_times));
     ReportSamples("derivative_reduce",std::move(reduce_times));
+    std::cout<<"derivative_reduce_tile_scratch_materializations_per_call="
+        <<reduction_work.reduction_tile_scratch_materializations/repeats
+        <<" derivative_reduce_tile_scratch_resize_events_per_call="
+        <<reduction_work.reduction_tile_scratch_resize_events/repeats
+        <<" derivative_reduce_tiled_qr_scratch_materializations_per_call="
+        <<reduction_work.tiled_qr_scratch_materializations/repeats
+        <<" derivative_reduce_tiled_qr_ms_per_call="<<reduction_work.tiled_qr_seconds*1000.0/repeats<<'\n';
     std::cout<<"derivative_rows="<<evaluation.residual.size()
         <<" derivative_columns="<<evaluation.x.cols()
         <<" derivative_prepare_qr_invocations="<<derivative_work.tiled_qr_invocations/repeats

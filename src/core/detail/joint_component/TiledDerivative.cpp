@@ -227,19 +227,39 @@ TiledDifferential PrepareDerivative(const Evaluation & e,double scale,const Eval
 TiledDifferential PrepareProjectedWidthDerivative(const Evaluation & e,double scale,const EvaluationContext * context,
     double absolute,Eigen::Index tile)
 {return PrepareDerivativeImpl(e,scale,context,absolute,tile,true);}
-void TiledDifferential::Rows(Eigen::Index first,Eigen::Index count,Matrix & projected,Matrix & jacobian) const
+void TiledDifferential::Rows(Eigen::Index first,Eigen::Index count,Matrix & raw_tile,
+    Matrix & projected,Matrix & jacobian) const
 {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    auto & work=DerivativeWorkForTesting();
+    const auto record_resize=[&](const Matrix & value,Eigen::Index rows,Eigen::Index columns) {
+        if(value.rows()!=rows || value.cols()!=columns)
+        {
+            if(value.size()==0 && rows>0 && columns>0) ++work.reduction_tile_scratch_materializations;
+            ++work.reduction_tile_scratch_resize_events;
+        }
+    };
+    record_resize(raw_tile,count,raw.cols());
+    record_resize(projected,count,raw.cols());
+    record_resize(jacobian,count,projected_only ? 0 : raw.cols());
+#endif
+    raw_tile=raw.middleRows(first,count);
     if(reference_order)
     {
         const Sparse design=free_design.middleRows(first,count);
-        projected=(Matrix(raw.middleRows(first,count))-design*coefficients)/scale;
+        projected=(raw_tile-design*coefficients)/scale;
         if(projected_only) {jacobian.resize(count,0); return;}
         jacobian=projected-design*correction/scale;
         return;
     }
-    projected=(Matrix(raw.middleRows(first,count))-free_design.middleRows(first,count)*coefficients)/scale;
+    projected=(raw_tile-free_design.middleRows(first,count)*coefficients)/scale;
     if(projected_only) {jacobian.resize(count,0); return;}
     jacobian=projected-free_design.middleRows(first,count)*correction/scale;
+}
+void TiledDifferential::Rows(Eigen::Index first,Eigen::Index count,Matrix & projected,Matrix & jacobian) const
+{
+    Matrix raw_tile;
+    Rows(first,count,raw_tile,projected,jacobian);
 }
 namespace {
 ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef residual,Eigen::Index tile)
@@ -254,11 +274,20 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
     const auto n=d.raw.rows(),m=d.raw.cols();
     TiledQR jacobian(m,1);
     out.jacobian_norms=Vector::Zero(m);
-    Matrix projected,j;
+    Matrix raw_tile,projected,j,residual_tile;
     for(Eigen::Index first=0;first<n;first+=tile)
     {
         const auto count=std::min(tile,n-first);
-        d.Rows(first,count,projected,j);
+        d.Rows(first,count,raw_tile,projected,j);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(residual_tile.rows()!=count || residual_tile.cols()!=1)
+        {
+            if(residual_tile.size()==0 && count>0) ++work.reduction_tile_scratch_materializations;
+            ++work.reduction_tile_scratch_resize_events;
+        }
+#endif
+        if(residual_tile.rows()!=count || residual_tile.cols()!=1) residual_tile.resize(count,1);
+        residual_tile=residual.segment(first,count)/d.scale;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         work.maximum_generated_rows=std::max(work.maximum_generated_rows,count);
         work.maximum_reduction_rows=std::max(work.maximum_reduction_rows,count+jacobian.r.rows());
@@ -270,7 +299,7 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         const auto qr_started=std::chrono::steady_clock::now();
 #endif
-        jacobian.Append(j,Matrix(residual.segment(first,count)/d.scale));
+        jacobian.Append(j,residual_tile);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         work.tiled_qr_seconds+=std::chrono::duration<double>(
             std::chrono::steady_clock::now()-qr_started).count();
@@ -299,11 +328,11 @@ ReducedProjectedWidthDifferential ReduceProjectedWidthDerivative(const TiledDiff
     if(tile<=0) throw std::invalid_argument("Invalid derivative tile size.");
     const auto n=d.raw.rows(),m=d.raw.cols();
     TiledQR projected(m,0);
-    out.projected_norms=Vector::Zero(m); Matrix p,j;
+    out.projected_norms=Vector::Zero(m); Matrix raw_tile,p,j;
     for(Eigen::Index first=0;first<n;first+=tile)
     {
         const auto count=std::min(tile,n-first);
-        d.Rows(first,count,p,j);
+        d.Rows(first,count,raw_tile,p,j);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         work.maximum_generated_rows=std::max(work.maximum_generated_rows,count);
         work.maximum_reduction_rows=std::max(work.maximum_reduction_rows,count+projected.r.rows());
