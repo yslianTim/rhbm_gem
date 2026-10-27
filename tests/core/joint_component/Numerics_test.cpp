@@ -93,6 +93,7 @@ TEST(JointComponentNumericsTest, TiledDerivativeRecordsCancellationReferenceFall
     EXPECT_EQ(n::DerivativeWorkForTesting().reference_order_recomputations,1u);
     EXPECT_EQ(n::DerivativeWorkForTesting().tiled_qr_invocations,2u);
     EXPECT_EQ(n::DerivativeWorkForTesting().tile_count,2u);
+    EXPECT_EQ(n::DerivativeWorkForTesting().triplet_capacity_growths,0u);
 
     n::DerivativeWorkForTesting()={};
     const auto projected=n::PrepareProjectedWidthDerivative(evaluation,context.scale,&context,-1,3);
@@ -101,6 +102,7 @@ TEST(JointComponentNumericsTest, TiledDerivativeRecordsCancellationReferenceFall
     EXPECT_EQ(n::DerivativeWorkForTesting().cancellation_fallbacks,1u);
     EXPECT_EQ(n::DerivativeWorkForTesting().reference_order_recomputations,1u);
     EXPECT_TRUE(projected.projected_only);
+    EXPECT_EQ(n::DerivativeWorkForTesting().triplet_capacity_growths,0u);
 }
 
 ;

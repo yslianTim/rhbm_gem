@@ -259,6 +259,29 @@ speedup (2.40% lower elapsed time). Relative to N0, the cumulative median is
 `290e1a65097e34b1a1198064bc49c2c357a83271c709ce6b156ccbb1eec798ab`; active
 set iterations stayed at 139 and dense QR count stayed at 136 per call.
 
+## N3-A: derivative Triplet capacity reservation
+
+`PrepareDerivativeImpl()` now counts stored nonzeros in the selected free
+columns of the existing sparse design and reserves that exact Triplet capacity
+for `free_design`; `raw` reserves the stored nonzero count of the existing
+sparse derivative. The insertion loops, order, duplicate handling,
+normalization, and `setFromTriplets()` calls are unchanged. The same `raw`
+capacity is retained when cancellation fallback clears and rebuilds its
+reference-order values.
+
+On the 30-Target, 13,710-row fixture, Triplet capacity growth fell from 32 to
+zero per preparation. The two reservations total 61,800 Triplets (988,800
+bytes) per call. The profile preparation/reduction digest remained exactly
+`8c2f90707e1f5b97058dc6708c58b136737878f3795d5c731f2150555255c9d7`, and
+the full and projected-only cancellation fallback tests both recorded zero
+Triplet growth. Preparation measured 19.469 ms/call (19.204–19.749), versus
+19.593 ms/call (19.580–19.619) before this change; the ranges overlap, so the
+timing does not establish a stable speedup. Peak RSS was 44,630,016 bytes in
+this run versus 44,777,472 bytes before it, within run-to-run noise. This stage
+is retained for the verified reduction in vector growth, not a claimed runtime
+or RSS gain. The three joint contract, workflow, and numerical CTest groups
+passed (3/3, 5.63 s).
+
 The workspace counter now reports 20 first buffer materializations and 418
 dimension changes per Bounded LM call. N0's 1,581 count was explicit temporary
 construction sites in the inner loop, so these figures are source-level

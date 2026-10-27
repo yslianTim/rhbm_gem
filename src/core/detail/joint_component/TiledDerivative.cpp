@@ -47,11 +47,25 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
     if(!e.valid || !(scale>0) || !std::isfinite(scale)) {out.reason="invalid-inner"; return out;}
     if(tile<=0) throw std::invalid_argument("Invalid derivative tile size.");
     std::vector<Eigen::Index> free;
-    for(Eigen::Index k=0;k<e.beta.size();++k) if(k%2 || e.beta(k)>0) free.push_back(k);
+    std::size_t free_design_nonzeros{};
+    const auto * x_outer=e.x.outerIndexPtr();
+    const auto * x_inner_nonzeros=e.x.innerNonZeroPtr();
+    for(Eigen::Index k=0;k<e.beta.size();++k) if(k%2 || e.beta(k)>0)
+    {
+        free.push_back(k);
+        const auto count=x_inner_nonzeros ? x_inner_nonzeros[k] : x_outer[k+1]-x_outer[k];
+        free_design_nonzeros+=static_cast<std::size_t>(count);
+    }
     const Eigen::Index n=e.x.rows(),m=e.beta.size()/2,p=static_cast<Eigen::Index>(free.size());
     out.scale=scale; out.free_design.resize(n,p); out.raw.resize(n,m);
     Vector free_column_norms(projected_only ? p : 0);
     std::vector<Eigen::Triplet<double>> entries,raw;
+    entries.reserve(free_design_nonzeros);
+    raw.reserve(static_cast<std::size_t>(e.derivative.nonZeros()));
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    work.triplet_reserved_entries+=entries.capacity()+raw.capacity();
+    work.triplet_reserved_bytes+=(entries.capacity()+raw.capacity())*sizeof(Eigen::Triplet<double>);
+#endif
     Matrix t;
     if(!projected_only)
     {

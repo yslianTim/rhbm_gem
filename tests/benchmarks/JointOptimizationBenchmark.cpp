@@ -229,6 +229,8 @@ int Run()
                 aggregate.tiled_qr_invocations+=work.tiled_qr_invocations;
                 aggregate.tile_count+=work.tile_count;
                 aggregate.triplet_capacity_growths+=work.triplet_capacity_growths;
+                aggregate.triplet_reserved_entries+=work.triplet_reserved_entries;
+                aggregate.triplet_reserved_bytes+=work.triplet_reserved_bytes;
                 aggregate.cancellation_fallbacks+=work.cancellation_fallbacks;
                 aggregate.reference_order_recomputations+=work.reference_order_recomputations;
                 aggregate.maximum_generated_rows=std::max(aggregate.maximum_generated_rows,work.maximum_generated_rows);
@@ -262,6 +264,8 @@ int Run()
         <<" derivative_prepare_qr_invocations="<<derivative_work.tiled_qr_invocations/repeats
         <<" derivative_prepare_tiles="<<derivative_work.tile_count/repeats
         <<" triplet_capacity_growths_per_call="<<derivative_work.triplet_capacity_growths/repeats
+        <<" triplet_reserved_entries_per_call="<<derivative_work.triplet_reserved_entries/repeats
+        <<" triplet_reserved_bytes_per_call="<<derivative_work.triplet_reserved_bytes/repeats
         <<" max_generated_rows="<<derivative_work.maximum_generated_rows
         <<" max_reduction_rows="<<derivative_work.maximum_reduction_rows
         <<" maximum_tile_workspace_bytes_estimate="<<derivative_work.maximum_tile_workspace_bytes
