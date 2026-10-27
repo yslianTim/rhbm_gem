@@ -1743,6 +1743,10 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             (void)timer;
         }
         const auto & replay=replay_workspace;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        const auto objective_reconciliation_started=policy.refresh_objective_after_sweep_for_testing && collect_telemetry ?
+            Clock::now() : Clock::time_point{};
+#endif
         sweep.cache_replay_error=PredictionDifference(out.state.prediction,replay.prediction);
         sweep.objective_replay_error=std::abs(out.state.objective-replay.objective);
         if(collect_telemetry)
@@ -1813,6 +1817,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 out.work.maximum_accepted_updates_between_objective_refreshes=std::max(
                     out.work.maximum_accepted_updates_between_objective_refreshes,
                     accepted_updates_since_objective_refresh);
+                out.work.objective_cache_refresh_seconds+=Seconds(objective_reconciliation_started);
             }
             accepted_updates_since_objective_refresh=0;
             out.state.objective=replay.objective;

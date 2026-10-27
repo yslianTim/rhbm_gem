@@ -1241,3 +1241,49 @@ currently consists of the qualified E1 candidate audits and their full
 objective comparison, not a rejected boundary case. Consequently P3 is
 partially qualified and is not a Promotion pass. No KKT, width, or convergence
 threshold was changed.
+
+### P4 — Promotion decision and audited performance
+
+P3 did not complete its required natural outer-rejection evidence. Production
+therefore remains D1 (exact affected-row prediction with a full objective
+scan); no E1 production candidate update or runtime selector was promoted.
+This is a Partial Qualification decision, not a numerical regression finding.
+
+For a full-cost E1 measurement, the closed-loop benchmark now enables the
+incremental objective together with the existing full Replay at every sweep
+and objective-cache reconciliation after the replay audit passes. The
+reconciliation timer includes cache prediction/objective comparison and the
+objective refresh. Each mode ran one warm-up plus five measured Release runs
+serially, using practical criteria and the original bounds. All benchmark runs
+converged, passed Endpoint Certification and Independent Replay, and had zero
+candidate rejection or incremental-vs-Full-Replay decision disagreement.
+
+| Targets | D1 search median (s) | E1 audited search median (s) | Search change | D1 complete wall (s) | E1 complete wall (s) | Wall change | D1/E1 process peak RSS (MiB) |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 3 | 0.004358 | 0.004443 | 2.0% slower | 0.005467 | 0.005596 | 2.4% slower | 22.57 / 22.57 |
+| 30 | 0.097897 | 0.094575 | 3.4% faster | 0.118995 | 0.115968 | 2.5% faster | 34.05 / 34.16 |
+| 300 | 1.293647 | 1.008356 | 22.1% faster | 1.519822 | 1.232017 | 18.9% faster | 90.01 / 89.99 |
+| 1,000 | 6.434934 | 3.381034 | 47.5% faster | 7.187297 | 4.133619 | 42.5% faster | 244.86 / 245.05 |
+
+The 300- and 1,000-target search speedups exceed the requested 15% guide. The
+small fixture's wall time regressed by 0.13 ms; the 30-target wall time
+improved by 3.0 ms. E1's per-run median objective reconciliation costs were
+0.000422, 0.005066, 0.050565, and 0.169161 seconds for 3, 30, 300, and 1,000
+targets. Endpoint Certification medians were 0.000219, 0.002256, 0.020984,
+and 0.070278 seconds; Independent Replay medians were 0.000113, 0.001236,
+0.010803, and 0.036284 seconds. E1 objective-cache replay errors were at most
+`7.96e-24` and all memory preflights passed. The measured RSS is process-wide
+maximum resident set size across the warm-up and five repetitions.
+
+For each size, the D1/E1 independent objectives and final A/C/Width estimates
+were equal at the precision recorded in P2. Their known-truth RMSEs were also
+identical to the P2 values. These synthetic workloads do not represent the
+5,938,087-observation production dataset; that full workload remains
+unmeasured. The E1 timings include closed-loop search, every-sweep Full Replay
+audit and reconciliation, Endpoint Certification, and Independent Replay.
+
+The Release build completed and the full serial CTest suite passed 19/19. The
+production library was built without test-only instrumentation; the audited E1
+measurements use the test benchmark policy and do not change the production
+default. No third-party dependency, optimization threshold, or convergence
+criterion changed. The repository is not pushed.

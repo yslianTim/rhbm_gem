@@ -407,6 +407,7 @@ void RunControlled(int target_count,bool qualify,int selected_method=-1,bool per
     base.collect_telemetry=true; base.eta_upper_bound=std::log(2.2);
     std::array<joint::FixedNeighborPolicy,3> policies{base,base,base};
     policies[1].objective_strategy_for_testing=joint::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect;
+    policies[1].refresh_objective_after_sweep_for_testing=qualify || performance_qualified;
     policies[2].objective_strategy_for_testing=joint::FixedNeighborObjectiveStrategyForTesting::IncrementalGuarded;
     policies[2].objective_guard_band_fraction_for_testing=.1;
     policies[2].refresh_objective_after_sweep_for_testing=true;
@@ -419,7 +420,7 @@ void RunControlled(int target_count,bool qualify,int selected_method=-1,bool per
             };
     struct Metrics
     {
-        std::vector<double> wall,search,candidate,local,sweep,global,endpoint,independent;
+        std::vector<double> wall,search,candidate,local,sweep,global,endpoint,independent,reconciliation;
         std::size_t candidates{},accepted{},unchanged{},incremental{},fallbacks{},refreshes{},
             peak_estimate{},candidate_scratch{};
         double maximum_cache_replay_error{},maximum_objective_replay_error{};
@@ -440,6 +441,7 @@ void RunControlled(int target_count,bool qualify,int selected_method=-1,bool per
             out.sweep.push_back(timing.sweep_replay); out.global.push_back(timing.global_state);
             out.endpoint.push_back(result.work.endpoint_verification_seconds);
             out.independent.push_back(result.work.independent_replay_seconds);
+            out.reconciliation.push_back(result.work.objective_cache_refresh_seconds);
             out.candidates+=timing.candidate_count; out.accepted+=timing.accepted_count;
             out.unchanged+=timing.unchanged_count;
             out.incremental+=result.work.incremental_objective_evaluations;
@@ -509,6 +511,7 @@ void RunControlled(int target_count,bool qualify,int selected_method=-1,bool per
             <<" global_state_median_seconds="<<Median(m.global)
             <<" endpoint_verification_median_seconds="<<Median(m.endpoint)
             <<" independent_replay_median_seconds="<<Median(m.independent)
+            <<" objective_reconciliation_median_seconds="<<Median(m.reconciliation)
             <<" candidate_replays="<<replay_candidates<<" candidate_accepted="<<accepted
             <<" candidate_rejected="<<rejected<<" unchanged_blocks="<<unchanged
             <<" profile_trials="<<profile_trial_count<<" profile_trials_accepted="<<profile_trial_accepted
