@@ -304,6 +304,18 @@ TEST(JointFixedNeighborBlockCoordinateTest, AffectedRowReplayPreservesFullContri
             accepted,candidate_eta,candidate_beta,data.context.scale,core.atoms,core.affected_rows,
             second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
             second_stage_test::ReplayObjectiveStrategy::Incremental,&incidence);
+        for(const auto objective_strategy:std::array{
+            second_stage_test::ReplayObjectiveStrategy::IncrementalScaled,
+            second_stage_test::ReplayObjectiveStrategy::IncrementalKahan,
+            second_stage_test::ReplayObjectiveStrategy::IncrementalNeumaier,
+            second_stage_test::ReplayObjectiveStrategy::IncrementalKahanScaled,
+            second_stage_test::ReplayObjectiveStrategy::IncrementalNeumaierScaled})
+        {
+            const auto compensated=second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
+                accepted,candidate_eta,candidate_beta,data.context.scale,core.atoms,core.affected_rows,
+                second_stage_test::ReplayPredictionStrategy::AffectedRowExact,objective_strategy,&incidence);
+            EXPECT_TRUE(std::isfinite(compensated.objective));
+        }
         std::size_t local{};
         for(const auto row_value:data.layout.informative_rows)
         {
@@ -325,6 +337,56 @@ TEST(JointFixedNeighborBlockCoordinateTest, AffectedRowReplayPreservesFullContri
             delta_method_prediction_mismatches+=!BitwiseEqual(b1.prediction(k),b2.prediction(k));
     }
     RecordProperty("B1_B2_prediction_bitwise_mismatch_count",std::to_string(delta_method_prediction_mismatches));
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, TiledObjectiveCacheUpdatesAffectedTilesAndRollsBackByOmission)
+{
+    const std::vector<std::size_t> informative{0,1,2,3,4,5,6};
+    n::Vector accepted(7); accepted<<1.0,-.5,1e-14,2.0,-1.25,.75,1e-8;
+    n::Indices affected{1,2,6};
+    n::Vector candidate_residuals(3); candidate_residuals<<-.5000001,-2e-14,3e-8;
+    constexpr double scale=1.7;
+    const auto full_objective=[&](const n::Vector & residuals) {
+        double squared{};
+        for(const auto row:informative)
+        {
+            const auto index=static_cast<Eigen::Index>(row);
+            squared+=residuals(index)*residuals(index);
+        }
+        return .5*squared/(scale*scale);
+    };
+    second_stage_test::TiledObjectiveCache tiled(informative,accepted,2,false);
+    second_stage_test::TiledObjectiveCache tree(informative,accepted,2,true);
+    const auto tiled_rejected=tiled.Evaluate(accepted,affected,candidate_residuals,scale);
+    const auto tree_rejected=tree.Evaluate(accepted,affected,candidate_residuals,scale);
+    EXPECT_EQ(tiled_rejected.tiles_recomputed,3u);
+    EXPECT_EQ(tree_rejected.tiles_recomputed,3u);
+    EXPECT_GT(tree.StorageBytes(),tiled.StorageBytes());
+    EXPECT_NEAR(tiled_rejected.objective,tree_rejected.objective,1e-14);
+    EXPECT_NEAR(tiled_rejected.objective,[&] {
+        n::Vector candidate=accepted;
+        for(std::size_t k=0;k<affected.size();++k)
+            candidate(affected[k])=candidate_residuals(static_cast<Eigen::Index>(k));
+        return full_objective(candidate);
+    }(),1e-14);
+
+    const auto repeated_tiled=tiled.Evaluate(accepted,affected,candidate_residuals,scale);
+    const auto repeated_tree=tree.Evaluate(accepted,affected,candidate_residuals,scale);
+    EXPECT_TRUE(BitwiseEqual(tiled_rejected.objective,repeated_tiled.objective));
+    EXPECT_TRUE(BitwiseEqual(tree_rejected.objective,repeated_tree.objective));
+    tiled.Commit(tiled_rejected); tree.Commit(tree_rejected);
+    for(std::size_t k=0;k<affected.size();++k)
+        accepted(affected[k])=candidate_residuals(static_cast<Eigen::Index>(k));
+
+    const n::Indices second_affected{0,4};
+    n::Vector second_residuals(2); second_residuals<<.9,-1.1;
+    const auto next_tiled=tiled.Evaluate(accepted,second_affected,second_residuals,scale);
+    const auto next_tree=tree.Evaluate(accepted,second_affected,second_residuals,scale);
+    n::Vector second_candidate=accepted;
+    for(std::size_t k=0;k<second_affected.size();++k)
+        second_candidate(second_affected[k])=second_residuals(static_cast<Eigen::Index>(k));
+    EXPECT_NEAR(next_tiled.objective,full_objective(second_candidate),1e-14);
+    EXPECT_NEAR(next_tree.objective,full_objective(second_candidate),1e-14);
 }
 
 TEST(JointFixedNeighborBlockCoordinateTest, LocalIncidencePreservesDuplicateSupportEntries)

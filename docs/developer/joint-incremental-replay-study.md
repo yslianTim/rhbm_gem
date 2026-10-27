@@ -458,6 +458,70 @@ traces, endpoint certification and Independent Replay passing, objective
 `1.09552e-16` (about `1.09552e-4` of the replay enclosure). This is one small
 fixture and supplies no general acceptance-bound proof.
 
+### R1: incremental objective strategy comparison
+
+R1 extends only test support and benchmark code. The 30-target `chain`
+workload used 13,710 observations, 15,450 support entries, a 12-atom core,
+5,520 affected rows, and 503 scripted attempts (474 accepted and 29 rejected).
+Prediction used exact affected-row replay. Every candidate was checked against
+Full Replay outside the timed interval. The stress includes signed charge
+coefficients, alternating small updates, width swings and upper-bound
+proximity. It is deterministic arithmetic stress, not an LM trajectory.
+
+The objective alternatives were: current direct sum of squared differences;
+scale each difference before summing; Kahan or Neumaier accumulation of the
+unscaled or scaled differences; recompute changed fixed-size tiles of 256,
+512, 1,024, or 2,048 rows and sum tile values; and update a fixed binary tree
+above the same tiles. The tiled caches only commit after a scripted accepted
+candidate. Rejected candidates discard their sparse cache updates. A focused
+test confirms that discarded changes leave subsequent cache evaluations
+unchanged and that accepted updates continue to match a fresh Full Scan within
+the observed reduction-order difference.
+
+At an 11-attempt refresh interval, direct incremental objective took
+`0.675 ms/attempt`; scale-per-term took `0.675 ms`; Kahan ranged
+`0.691 ms`; Neumaier ranged `0.677 ms`. They differed from Full Scan on
+489–490 of 503 attempts, with maximum absolute error `2.89e-15` for direct and
+`2.94e-15` for the compensated variants (52 and 53 ULP respectively). Refresh
+every accepted attempt also left 494/503 objective mismatches, with maximum
+`3.11e-15` and 56 ULP. More frequent refresh removes carried cache error but
+does not remove the next candidate's incremental arithmetic difference.
+Compensation did not reliably reduce the objective error and added a small
+measured cost.
+
+Across tile sizes, cache evaluation took about `0.075 s` for 503 attempts
+(`0.150 ms/attempt`), compared with `0.675 ms/attempt` for the entire direct
+incremental candidate path. Total tile-method time was `0.820–0.822 ms/attempt`
+at the 11-attempt interval; the hierarchical tree was `0.820–0.825 ms/attempt`.
+The direct tile cache used 56–432 B at 2,048–256 rows; tree cache used 128–1,024
+B. Sparse update scratch was 112–864 B for tiles and 224–3,456 B for trees.
+The strategies differed on 481–491 of 503 objectives, with maximum absolute
+error `2.39e-15–2.55e-15` (43–46 ULP). The tree did not pay for itself on this
+fixture: tile recomputation plus propagation was slower than direct
+incremental accumulation, and regrouping the reductions still differed from
+the production Full Scan.
+
+No scripted objective-only acceptance disagreement occurred for these
+strategies, and all 29 scripted rejects preserved the accepted state. This is
+empirical evidence only; it does not prove decision safety near an LM
+acceptance boundary. The observed signed-delta cancellation ratio was 2.81 on
+this fixture, but it does not bound other workloads. Underflow/overflow and
+nonfinite behavior were not covered by this stress. For normal finite
+arithmetic, a first-order analysis can bound each residual square and a
+positive sequential sum with a `gamma_n` term, but the incremental difference
+also subtracts nearly equal squares and carries prior objective rounding.
+Kahan and Neumaier only address part of the signed-term summation. The current
+scalar cache does not carry the residual-scale data or accumulated error state
+needed to certify those terms for every candidate. No empirical tolerance is
+promoted to a certified bound.
+
+Direct incremental objective is the fastest simple strategy and is carried
+into the incidence comparison as an experimental candidate. None of the R1
+strategies is eligible for Production before an acceptance error interval
+that covers both the candidate and accepted objectives is implemented and
+validated. R1 changed no Production path or numeric threshold. The full
+serial CTest suite passed 19/19 in 22.02 s after this test-only change.
+
 ## Roadmap status
 
 | Stage | Status | Result |

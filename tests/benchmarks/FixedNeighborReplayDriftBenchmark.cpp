@@ -12,6 +12,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <sys/resource.h>
@@ -27,9 +28,11 @@ struct Method
     const char * name;
     second_stage_test::ReplayPredictionStrategy prediction;
     second_stage_test::ReplayObjectiveStrategy objective;
-    bool full_replay{},exact{};
+    bool full_replay{},exact{},tiled{};
+    std::size_t tile_size{};
+    bool hierarchical{};
 };
-constexpr std::array<Method,6> Methods{{
+const std::vector<Method> Methods{
     {"A",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
         second_stage_test::ReplayObjectiveStrategy::FullScan,true,true},
     {"B1",second_stage_test::ReplayPredictionStrategy::DeltaAddDifference,
@@ -41,8 +44,34 @@ constexpr std::array<Method,6> Methods{{
     {"D1",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
         second_stage_test::ReplayObjectiveStrategy::FullScan,false,true},
     {"E",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
-        second_stage_test::ReplayObjectiveStrategy::Incremental,false,true}
-}};
+        second_stage_test::ReplayObjectiveStrategy::Incremental,false,true},
+    {"E_scaled",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+        second_stage_test::ReplayObjectiveStrategy::IncrementalScaled,false,true},
+    {"E_kahan",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+        second_stage_test::ReplayObjectiveStrategy::IncrementalKahan,false,true},
+    {"E_neumaier",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+        second_stage_test::ReplayObjectiveStrategy::IncrementalNeumaier,false,true},
+    {"E_kahan_scaled",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+        second_stage_test::ReplayObjectiveStrategy::IncrementalKahanScaled,false,true},
+    {"E_neumaier_scaled",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+        second_stage_test::ReplayObjectiveStrategy::IncrementalNeumaierScaled,false,true},
+    {"tile_256",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+        second_stage_test::ReplayObjectiveStrategy::CachedExternally,false,true,true,256,false},
+    {"tile_512",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+        second_stage_test::ReplayObjectiveStrategy::CachedExternally,false,true,true,512,false},
+    {"tile_1024",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+        second_stage_test::ReplayObjectiveStrategy::CachedExternally,false,true,true,1024,false},
+    {"tile_2048",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+        second_stage_test::ReplayObjectiveStrategy::CachedExternally,false,true,true,2048,false},
+    {"tree_256",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+        second_stage_test::ReplayObjectiveStrategy::CachedExternally,false,true,true,256,true},
+    {"tree_512",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+        second_stage_test::ReplayObjectiveStrategy::CachedExternally,false,true,true,512,true},
+    {"tree_1024",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+        second_stage_test::ReplayObjectiveStrategy::CachedExternally,false,true,true,1024,true},
+    {"tree_2048",second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+        second_stage_test::ReplayObjectiveStrategy::CachedExternally,false,true,true,2048,true}
+};
 struct Candidate {Vector eta,beta; bool accept{};};
 struct Metrics
 {
@@ -55,6 +84,11 @@ struct Metrics
         maximum_refresh_pre_prediction{},maximum_refresh_pre_residual{},maximum_refresh_pre_objective{};
     double first_half_max_prediction{},second_half_max_prediction{},first_half_max_objective{},second_half_max_objective{};
     std::size_t temporary_bytes{};
+    std::size_t objective_cache_bytes{};
+    std::size_t objective_cache_update_bytes{};
+    std::size_t objective_cache_tiles_recomputed{};
+    double objective_cache_evaluate_seconds{},objective_cache_commit_seconds{};
+    double maximum_delta_cancellation{};
 };
 
 double Seconds(Clock::time_point started)
@@ -153,6 +187,18 @@ void CompareCandidate(const rhbm_gem::JointParameterLayout & layout,const joint:
             metrics.maximum_residual_ulp=std::max(metrics.maximum_residual_ulp,
                 UlpDistance(residual,reference.residual(row)));
     }
+    double delta_sum{},delta_absolute_sum{};
+    for(std::size_t k=0;k<affected_rows.size();++k)
+    {
+        const double old_residual=accepted.residual(affected_rows[k]);
+        const double new_residual=full_replay ? reference.residual(affected_rows[k]) :
+            result.residual(static_cast<Eigen::Index>(k));
+        const double delta=new_residual*new_residual-old_residual*old_residual;
+        delta_sum+=delta; delta_absolute_sum+=std::abs(delta);
+    }
+    if(delta_absolute_sum>0)
+        metrics.maximum_delta_cancellation=std::max(metrics.maximum_delta_cancellation,
+            delta_sum==0 ? std::numeric_limits<double>::infinity() : delta_absolute_sum/std::abs(delta_sum));
     const double objective_error=std::abs(result.objective-reference.objective);
     metrics.maximum_objective_absolute=std::max(metrics.maximum_objective_absolute,objective_error);
     metrics.maximum_objective_relative=std::max(metrics.maximum_objective_relative,
@@ -210,6 +256,10 @@ void Run(int target_count)
             joint::BlockCoordinateState state{eta,beta,initial.prediction,initial.residual,initial.objective};
             double accepted_reference_objective=initial.objective;
             std::size_t accepted_since_refresh{};
+            std::optional<second_stage_test::TiledObjectiveCache> objective_cache;
+            if(method.tiled)
+                objective_cache.emplace(data.layout.informative_rows,state.residual,
+                    method.tile_size,method.hierarchical);
             Metrics metrics;
             double measured_seconds{};
             for(std::size_t attempt=0;attempt<sequence.size();++attempt)
@@ -221,6 +271,7 @@ void Run(int target_count)
                 const bool full_objective_acceptance=reference_delta<=0;
                 const auto before_rejection=state;
                 second_stage_test::ReplayCandidateResult result;
+                second_stage_test::ObjectiveCacheCandidate objective_cache_candidate;
                 const auto candidate_started=Clock::now();
                 if(method.full_replay)
                 {
@@ -239,7 +290,20 @@ void Run(int target_count)
                     }
                     result=second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
                         state,candidate.eta,candidate.beta,data.context.scale,block.atoms,block.affected_rows,
-                        method.prediction,method.objective,method.exact ? &incidence : nullptr);
+                        method.prediction,method.tiled ? second_stage_test::ReplayObjectiveStrategy::CachedExternally :
+                            method.objective,method.exact ? &incidence : nullptr);
+                    if(method.tiled)
+                    {
+                        const auto cache_started=Clock::now();
+                        objective_cache_candidate=objective_cache->Evaluate(state.residual,block.affected_rows,
+                            result.residual,data.context.scale);
+                        metrics.objective_cache_evaluate_seconds+=Seconds(cache_started);
+                        metrics.objective_cache_tiles_recomputed+=objective_cache_candidate.tiles_recomputed;
+                        result.objective=objective_cache_candidate.objective;
+                        metrics.objective_cache_update_bytes=std::max(metrics.objective_cache_update_bytes,
+                            objective_cache_candidate.updates.capacity()*sizeof(
+                                std::pair<std::size_t,double>));
+                    }
                 }
                 const double method_delta=result.objective-state.objective;
                 const double method_scale=std::max(std::abs(result.objective),std::abs(state.objective));
@@ -271,6 +335,12 @@ void Run(int target_count)
                         }
                         state.objective=result.objective;
                     }
+                    if(method.tiled)
+                    {
+                        const auto cache_started=Clock::now();
+                        objective_cache->Commit(objective_cache_candidate);
+                        metrics.objective_cache_commit_seconds+=Seconds(cache_started);
+                    }
                     accepted_reference_objective=reference.objective;
                     ++accepted_since_refresh;
                     if(!method.full_replay && accepted_since_refresh==interval)
@@ -288,6 +358,9 @@ void Run(int target_count)
                             refresh_objective_error);
                         state.prediction=refreshed.prediction; state.residual=refreshed.residual;
                         state.objective=refreshed.objective; accepted_since_refresh=0; ++metrics.refresh_count;
+                        if(method.tiled)
+                            objective_cache.emplace(data.layout.informative_rows,state.residual,
+                                method.tile_size,method.hierarchical);
                         metrics.refresh_mismatches+=!BitwiseEqual(state.prediction,refreshed.prediction) ||
                             !BitwiseEqual(state.residual,refreshed.residual) ||
                             !BitwiseEqual(state.objective,refreshed.objective);
@@ -306,12 +379,18 @@ void Run(int target_count)
             }
             const auto resident_state_bytes=2*static_cast<std::size_t>(data.domain.rows)*sizeof(double);
             const auto full_replay_scratch_bytes=resident_state_bytes;
-            const auto estimated_peak_bytes=resident_state_bytes+
-                std::max(metrics.temporary_bytes,full_replay_scratch_bytes);
+            if(objective_cache) metrics.objective_cache_bytes=objective_cache->StorageBytes();
+            const auto estimated_peak_bytes=resident_state_bytes+metrics.objective_cache_bytes+
+                std::max(metrics.temporary_bytes+metrics.objective_cache_update_bytes,full_replay_scratch_bytes);
             std::cout<<"method="<<method.name<<" refresh_interval="<<interval
                 <<" refresh_count="<<metrics.refresh_count<<" elapsed_seconds="<<measured_seconds
                 <<" milliseconds_per_attempt="<<measured_seconds*1000.0/static_cast<double>(attempts)
                 <<" candidate_temporary_bytes_estimate="<<metrics.temporary_bytes
+                <<" objective_cache_bytes="<<metrics.objective_cache_bytes
+                <<" objective_cache_update_bytes="<<metrics.objective_cache_update_bytes
+                <<" objective_cache_tiles_recomputed="<<metrics.objective_cache_tiles_recomputed
+                <<" objective_cache_evaluate_seconds="<<metrics.objective_cache_evaluate_seconds
+                <<" objective_cache_commit_seconds="<<metrics.objective_cache_commit_seconds
                 <<" estimated_peak_bytes="<<estimated_peak_bytes
                 <<" prediction_mismatches="<<metrics.prediction_mismatches
                 <<" residual_mismatches="<<metrics.residual_mismatches
@@ -325,6 +404,7 @@ void Run(int target_count)
                 <<" max_objective_abs="<<metrics.maximum_objective_absolute
                 <<" max_objective_rel="<<metrics.maximum_objective_relative
                 <<" max_objective_ulp="<<metrics.maximum_objective_ulp
+                <<" max_delta_cancellation_ratio="<<metrics.maximum_delta_cancellation
                 <<" first_half_max_prediction="<<metrics.first_half_max_prediction
                 <<" second_half_max_prediction="<<metrics.second_half_max_prediction
                 <<" first_half_max_objective="<<metrics.first_half_max_objective

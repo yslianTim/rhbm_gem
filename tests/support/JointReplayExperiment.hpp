@@ -5,7 +5,11 @@ namespace second_stage_test {
 namespace joint=rhbm_gem::core::joint_component;
 
 enum class ReplayPredictionStrategy {DeltaAddDifference,DeltaSubtractThenAdd,AffectedRowExact};
-enum class ReplayObjectiveStrategy {FullScan,Incremental};
+enum class ReplayObjectiveStrategy
+{
+    FullScan,Incremental,IncrementalScaled,IncrementalKahan,IncrementalNeumaier,
+    IncrementalKahanScaled,IncrementalNeumaierScaled,CachedExternally
+};
 
 struct ReplayContributor
 {
@@ -23,6 +27,31 @@ struct ReplayCandidateResult
     joint::Vector prediction,residual;
     double objective{};
     std::size_t scratch_bytes{};
+};
+
+struct ObjectiveCacheCandidate
+{
+    double objective{};
+    std::size_t tiles_recomputed{};
+    std::vector<std::pair<std::size_t,double>> updates;
+};
+
+class TiledObjectiveCache
+{
+public:
+    TiledObjectiveCache(const std::vector<std::size_t> & informative_rows,joint::VectorRef residuals,
+        std::size_t tile_size,bool hierarchical);
+    ObjectiveCacheCandidate Evaluate(joint::VectorRef accepted_residuals,
+        const joint::Indices & affected_rows,joint::VectorRef candidate_residuals,double scale) const;
+    void Commit(const ObjectiveCacheCandidate &);
+    std::size_t StorageBytes() const;
+    std::size_t TileCount() const {return tile_count_;}
+
+private:
+    const std::vector<std::size_t> * informative_rows_{};
+    std::size_t tile_size_{},tile_count_{},leaf_capacity_{};
+    bool hierarchical_{};
+    std::vector<double> values_;
 };
 
 ReplayIncidence PrepareReplayIncidence(const joint::Domain &,const rhbm_gem::JointParameterLayout &,

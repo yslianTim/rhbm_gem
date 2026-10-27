@@ -1,7 +1,9 @@
 #include "support/JointReplayExperiment.hpp"
 #include <algorithm>
 #include <bit>
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 
 namespace second_stage_test {
@@ -43,18 +45,50 @@ void EvaluateObjective(const rhbm_gem::JointParameterLayout & layout,VectorRef o
     const BlockCoordinateState & accepted,const Indices & affected_rows,double scale,
     ReplayObjectiveStrategy strategy,ReplayCandidateResult & out)
 {
-    if(strategy==ReplayObjectiveStrategy::Incremental)
+    if(strategy==ReplayObjectiveStrategy::Incremental ||
+        strategy==ReplayObjectiveStrategy::IncrementalScaled ||
+        strategy==ReplayObjectiveStrategy::IncrementalKahan ||
+        strategy==ReplayObjectiveStrategy::IncrementalNeumaier ||
+        strategy==ReplayObjectiveStrategy::IncrementalKahanScaled ||
+        strategy==ReplayObjectiveStrategy::IncrementalNeumaierScaled)
     {
-        double delta_squared{};
+        double sum{},correction{};
+        const bool scaled=strategy==ReplayObjectiveStrategy::IncrementalScaled ||
+            strategy==ReplayObjectiveStrategy::IncrementalKahanScaled ||
+            strategy==ReplayObjectiveStrategy::IncrementalNeumaierScaled;
+        const bool kahan=strategy==ReplayObjectiveStrategy::IncrementalKahan ||
+            strategy==ReplayObjectiveStrategy::IncrementalKahanScaled;
+        const bool neumaier=strategy==ReplayObjectiveStrategy::IncrementalNeumaier ||
+            strategy==ReplayObjectiveStrategy::IncrementalNeumaierScaled;
+        const double scale_squared=scale*scale;
         for(std::size_t k=0;k<affected_rows.size();++k)
         {
             const auto row=affected_rows[k];
             const double old_residual=accepted.residual(row),new_residual=out.residual(static_cast<Eigen::Index>(k));
-            delta_squared+=new_residual*new_residual-old_residual*old_residual;
+            double term=new_residual*new_residual-old_residual*old_residual;
+            if(scaled) term/=scale_squared;
+            if(kahan)
+            {
+                const double adjusted=term-correction;
+                const double next=sum+adjusted;
+                correction=(next-sum)-adjusted;
+                sum=next;
+            }
+            else if(neumaier)
+            {
+                const double next=sum+term;
+                correction+=std::abs(sum)>=std::abs(term) ? (sum-next)+term : (term-next)+sum;
+                sum=next;
+            }
+            else sum+=term;
         }
-        out.objective=accepted.objective+.5*delta_squared/(scale*scale);
+        sum+=neumaier ? correction : 0.0;
+        out.objective=scaled ? accepted.objective+.5*sum :
+            accepted.objective+.5*sum/scale_squared;
         return;
     }
+    if(strategy==ReplayObjectiveStrategy::CachedExternally)
+    {out.objective=accepted.objective; return;}
     double squared{};
     for(const auto row:layout.informative_rows)
     {
@@ -64,6 +98,14 @@ void EvaluateObjective(const rhbm_gem::JointParameterLayout & layout,VectorRef o
     }
     out.objective=.5*squared/(scale*scale);
     (void)observations;
+}
+
+double SparseValue(const std::vector<std::pair<std::size_t,double>> & values,
+    std::size_t index,double fallback)
+{
+    const auto found=std::lower_bound(values.begin(),values.end(),index,
+        [](const auto & value,std::size_t target){return value.first<target;});
+    return found!=values.end() && found->first==index ? found->second : fallback;
 }
 }
 
@@ -190,4 +232,155 @@ ReplayCandidateResult EvaluateReplayCandidate(const joint::Domain & domain,
     EvaluateObjective(layout,observations,accepted,affected_rows,scale,objective_strategy,out);
     return out;
 }
+
+TiledObjectiveCache::TiledObjectiveCache(const std::vector<std::size_t> & informative_rows,
+    joint::VectorRef residuals,std::size_t tile_size,bool hierarchical)
+    :informative_rows_(&informative_rows),tile_size_(tile_size),hierarchical_(hierarchical)
+{
+    if(tile_size_==0) throw std::invalid_argument("Objective tile size must be positive.");
+    tile_count_=informative_rows.size()/tile_size_+
+        (informative_rows.size()%tile_size_!=0 ? 1U : 0U);
+    if(hierarchical_)
+    {
+        leaf_capacity_=1;
+        while(leaf_capacity_<tile_count_)
+        {
+            if(leaf_capacity_>std::numeric_limits<std::size_t>::max()/2)
+                throw std::overflow_error("Objective reduction tree size overflow.");
+            leaf_capacity_*=2;
+        }
+        if(leaf_capacity_>std::numeric_limits<std::size_t>::max()/2)
+            throw std::overflow_error("Objective reduction tree size overflow.");
+        values_.assign(2*leaf_capacity_,0.0);
+        for(std::size_t tile=0;tile<tile_count_;++tile)
+        {
+            const auto begin=tile*tile_size_;
+            const auto end=begin+std::min(tile_size_,informative_rows.size()-begin);
+            double squared{};
+            for(std::size_t position=begin;position<end;++position)
+            {
+                const double residual=residuals(static_cast<Eigen::Index>(informative_rows[position]));
+                squared+=residual*residual;
+            }
+            values_[leaf_capacity_+tile]=squared;
+        }
+        for(std::size_t node=leaf_capacity_;node-->1;)
+            values_[node]=values_[2*node]+values_[2*node+1];
+    }
+    else
+    {
+        values_.assign(tile_count_,0.0);
+        for(std::size_t tile=0;tile<tile_count_;++tile)
+        {
+            const auto begin=tile*tile_size_;
+            const auto end=begin+std::min(tile_size_,informative_rows.size()-begin);
+            for(std::size_t position=begin;position<end;++position)
+            {
+                const double residual=residuals(static_cast<Eigen::Index>(informative_rows[position]));
+                values_[tile]+=residual*residual;
+            }
+        }
+    }
+}
+
+ObjectiveCacheCandidate TiledObjectiveCache::Evaluate(joint::VectorRef accepted_residuals,
+    const joint::Indices & affected_rows,joint::VectorRef candidate_residuals,double scale) const
+{
+    if(affected_rows.size()!=static_cast<std::size_t>(candidate_residuals.size()))
+        throw std::invalid_argument("Objective candidate residual count mismatch.");
+    const auto & informative_rows=*informative_rows_;
+    std::vector<std::pair<std::size_t,double>> changed;
+    changed.reserve(affected_rows.size());
+    for(std::size_t k=0;k<affected_rows.size();++k)
+    {
+        const auto row=affected_rows[k];
+        const auto found=std::lower_bound(informative_rows.begin(),informative_rows.end(),
+            static_cast<std::size_t>(row));
+        if(found!=informative_rows.end() && *found==static_cast<std::size_t>(row))
+            changed.emplace_back(static_cast<std::size_t>(found-informative_rows.begin()),
+                candidate_residuals(static_cast<Eigen::Index>(k)));
+    }
+    std::sort(changed.begin(),changed.end(),[](const auto & left,const auto & right) {
+        return left.first<right.first;
+    });
+    std::vector<std::size_t> tiles;
+    tiles.reserve(changed.size());
+    for(const auto & [position,value]:changed)
+    {
+        (void)value;
+        const auto tile=position/tile_size_;
+        if(tiles.empty() || tiles.back()!=tile) tiles.push_back(tile);
+    }
+    std::vector<std::pair<std::size_t,double>> leaf_updates;
+    leaf_updates.reserve(tiles.size());
+    for(const auto tile:tiles)
+    {
+        const auto begin=tile*tile_size_;
+        const auto end=begin+std::min(tile_size_,informative_rows.size()-begin);
+        auto changed_it=std::lower_bound(changed.begin(),changed.end(),begin,
+            [](const auto & value,std::size_t target){return value.first<target;});
+        double squared{};
+        for(std::size_t position=begin;position<end;++position)
+        {
+            double residual{};
+            if(changed_it!=changed.end() && changed_it->first==position)
+            {residual=changed_it->second; ++changed_it;}
+            else residual=accepted_residuals(static_cast<Eigen::Index>(informative_rows[position]));
+            squared+=residual*residual;
+        }
+        leaf_updates.emplace_back(tile,squared);
+    }
+
+    ObjectiveCacheCandidate out;
+    out.tiles_recomputed=leaf_updates.size();
+    if(!hierarchical_)
+    {
+        out.updates=leaf_updates;
+        std::size_t update{};
+        double total{};
+        for(std::size_t tile=0;tile<tile_count_;++tile)
+        {
+            if(update<leaf_updates.size() && leaf_updates[update].first==tile)
+                total+=leaf_updates[update++].second;
+            else total+=values_[tile];
+        }
+        out.objective=.5*total/(scale*scale);
+        return out;
+    }
+
+    std::vector<std::pair<std::size_t,double>> level;
+    level.reserve(leaf_updates.size());
+    for(const auto & [tile,value]:leaf_updates) level.emplace_back(leaf_capacity_+tile,value);
+    out.updates=level;
+    while(!level.empty() && level.front().first>1)
+    {
+        std::vector<std::pair<std::size_t,double>> parents;
+        parents.reserve(level.size());
+        for(const auto & [node,value]:level)
+        {
+            (void)value;
+            const auto parent=node/2;
+            if(parents.empty() || parents.back().first!=parent)
+            {
+                const auto left=2*parent,right=left+1;
+                const double left_value=SparseValue(level,left,values_[left]);
+                const double right_value=SparseValue(level,right,values_[right]);
+                parents.emplace_back(parent,left_value+right_value);
+            }
+        }
+        out.updates.insert(out.updates.end(),parents.begin(),parents.end());
+        level=std::move(parents);
+    }
+    const double total=level.empty() ? values_[1] : level.front().second;
+    out.objective=.5*total/(scale*scale);
+    return out;
+}
+
+void TiledObjectiveCache::Commit(const ObjectiveCacheCandidate & candidate)
+{
+    for(const auto & [index,value]:candidate.updates) values_.at(index)=value;
+}
+
+std::size_t TiledObjectiveCache::StorageBytes() const
+{return values_.capacity()*sizeof(double);}
 }
