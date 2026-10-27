@@ -94,6 +94,8 @@ TEST(JointComponentNumericsTest, TiledDerivativeRecordsCancellationReferenceFall
     EXPECT_EQ(n::DerivativeWorkForTesting().tiled_qr_invocations,2u);
     EXPECT_EQ(n::DerivativeWorkForTesting().tile_count,2u);
     EXPECT_EQ(n::DerivativeWorkForTesting().triplet_capacity_growths,0u);
+    EXPECT_EQ(n::DerivativeWorkForTesting().tiled_qr_scratch_materializations,4u);
+    EXPECT_EQ(n::DerivativeWorkForTesting().tiled_qr_scratch_resize_events,4u);
 
     n::DerivativeWorkForTesting()={};
     const auto projected=n::PrepareProjectedWidthDerivative(evaluation,context.scale,&context,-1,3);
@@ -103,6 +105,8 @@ TEST(JointComponentNumericsTest, TiledDerivativeRecordsCancellationReferenceFall
     EXPECT_EQ(n::DerivativeWorkForTesting().reference_order_recomputations,1u);
     EXPECT_TRUE(projected.projected_only);
     EXPECT_EQ(n::DerivativeWorkForTesting().triplet_capacity_growths,0u);
+    EXPECT_EQ(n::DerivativeWorkForTesting().tiled_qr_scratch_materializations,4u);
+    EXPECT_EQ(n::DerivativeWorkForTesting().tiled_qr_scratch_resize_events,4u);
 }
 
 ;

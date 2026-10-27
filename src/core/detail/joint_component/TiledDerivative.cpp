@@ -164,6 +164,10 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
 #endif
             }
         }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        work.tiled_qr_scratch_materializations+=qr.scratch_matrix_materializations;
+        work.tiled_qr_scratch_resize_events+=qr.scratch_resize_events;
+#endif
         const auto boundary=projected_only ? RankBoundary::StrictGreater : RankBoundary::SvdNative;
         const auto svd=EvaluateRank(qr.r,{{context ? context->rank.rows : n,2*m,m},p,absolute,boundary},
             projected_only ? CompactSvdVectors::Right : CompactSvdVectors::None);
@@ -274,6 +278,10 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
         for(Eigen::Index k=0;k<m;++k)
             out.jacobian_norms(k)=std::hypot(out.jacobian_norms(k),j.col(k).blueNorm());
     }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    work.tiled_qr_scratch_materializations+=jacobian.scratch_matrix_materializations;
+    work.tiled_qr_scratch_resize_events+=jacobian.scratch_resize_events;
+#endif
     out.jacobian=std::move(jacobian.r); out.response=jacobian.target.col(0);
     out.valid=true; return out;
 }
@@ -315,6 +323,10 @@ ReducedProjectedWidthDifferential ReduceProjectedWidthDerivative(const TiledDiff
         for(Eigen::Index k=0;k<m;++k)
             out.projected_norms(k)=std::hypot(out.projected_norms(k),p.col(k).norm());
     }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    work.tiled_qr_scratch_materializations+=projected.scratch_matrix_materializations;
+    work.tiled_qr_scratch_resize_events+=projected.scratch_resize_events;
+#endif
     out.projected=std::move(projected.r); out.valid=true; return out;
 }
 }

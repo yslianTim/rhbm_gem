@@ -40,6 +40,7 @@ struct DerivativeWork
     Eigen::Index maximum_generated_rows{},maximum_reduction_rows{};
     std::size_t prepare_calls{},reduction_calls{},tiled_qr_invocations{},tile_count{},
         triplet_capacity_growths{},triplet_reserved_entries{},triplet_reserved_bytes{},
+        tiled_qr_scratch_materializations{},tiled_qr_scratch_resize_events{},
         cancellation_fallbacks{},reference_order_recomputations{};
     std::size_t maximum_tile_workspace_bytes{};
     double prepare_seconds{},reduction_seconds{},tiled_qr_seconds{};

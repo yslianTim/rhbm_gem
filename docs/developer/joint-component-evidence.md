@@ -282,6 +282,33 @@ is retained for the verified reduction in vector growth, not a claimed runtime
 or RSS gain. The three joint contract, workflow, and numerical CTest groups
 passed (3/3, 5.63 s).
 
+## N3-B: TiledQR scratch matrices
+
+`TiledQR` now owns its two assembled-tile matrices and resizes them to the
+exact shape used by each append. The in-place general Householder path and the
+separate reference-order QR and RHS transformation are unchanged. The
+8,192-row cap and estimated maximum tile workspace remain 5,898,240 bytes.
+
+On the two-tile derivative fixture, the frozen N3-A implementation constructs
+two assembled matrices for each append (four materializations total); the
+scratch version materializes two matrices once and reuses them on the second
+append. Instrumentation reports two materializations and four shape-change
+events. Both versions produced the same derivative/reduction SHA-256,
+`8c2f90707e1f5b97058dc6708c58b136737878f3795d5c731f2150555255c9d7`. The
+normal, 8,191/8,192/8,193-row boundary, and cancellation reference-order tests
+passed; the full and projected-only cancellation tests each confirmed that
+both QR passes reused their two scratch buffers.
+
+For one paired Release run, frozen N3-A preparation measured 20.590 ms/call
+(20.151–20.674) and TiledQR 17.387 ms; the scratch candidate measured
+20.148 ms/call (19.737–20.342) and TiledQR 17.227 ms. Preparation ranges
+overlap, and the QR-time change is small, so this does not establish a stable
+speedup. Peak RSS was 45,252,608 bytes for the frozen run and 46,678,016 bytes
+for the candidate run; this single-run difference is not enough to claim a
+memory change. The stage is retained for reducing per-tile matrix
+materializations; runtime and RSS benefits remain unproven. The numerical
+joint CTest group passed (1/1, 2.59 s).
+
 The workspace counter now reports 20 first buffer materializations and 418
 dimension changes per Bounded LM call. N0's 1,581 count was explicit temporary
 construction sites in the inner loop, so these figures are source-level
