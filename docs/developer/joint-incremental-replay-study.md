@@ -1134,3 +1134,71 @@ fails the unchanged projected Width KKT limit in historical F0, current F1,
 D1, and E1, with identical final objective, KKT, and parameters. E1 shows no
 additional failure in this case. The fixture is unqualified; the passing test
 records and asserts that status and does not certify it as a successful solve.
+
+### P2 — Numerical non-regression qualification
+
+The archived F0 qualification harness and current benchmark used the same
+versioned synthetic input stream. A new regression test pins the four standard
+fixture SHA-256 values, and the hard-case comparison test pins the additional
+fixture hashes below. F0 was the archived 6787a777 solver; F1 was a current-code
+Full Replay candidate reference; D1 was the current exact affected-row
+prediction plus full-objective scan; E1 was current exact affected-row
+prediction plus incremental objective. All runs used the unchanged practical
+convergence criteria, bounds, initial states, core sizes, and sweep budgets.
+
+| Targets | SHA-256 | F0 outcome / sweeps | D1 and E1 outcome / sweeps | F0 objective; D1/E1 independent objective | Global A/C KKT; Width KKT | Truth RMSE A / C / Width |
+| ---: | --- | --- | --- | --- | --- | --- |
+| 3 | `4b338146…e2ab176` | Qualified / 4 | Qualified / 4 | `2.0199078132865162e-10`; `2.0199078132865188e-10` | `3.33e-16`; `3.89e-15` | `4.0637447e-5 / 9.1600727e-6 / 2.1408647e-6` |
+| 30 | `13cb46a3…a8580c57` | Qualified / 5 | Qualified / 5 | `1.517076030684615e-10`; `1.5170760306846197e-10` | `1.6023889e-9`; `1.8806623e-11` | `4.4464113e-5 / 1.0451471e-5 / 2.2118189e-6` |
+| 300 | `bfb80c5d…0268d8544` | Qualified / 5 | Qualified / 5 | `1.4790433590012254e-10`; `1.4790433590012404e-10` | `5.0672642e-10`; `1.8782753e-12` | `4.3627912e-5 / 1.0462239e-5 / 2.1372762e-6` |
+| 1,000 | `3d81218f…299ee33a3` | Qualified / 5 | Qualified / 5 | `1.4790435904528611e-10`; `1.4790435904529177e-10` | `2.7752783e-10`; `5.6343818e-13` | `4.3588368e-5 / 1.0456485e-5 / 2.1346573e-6` |
+
+Every run reached Endpoint Certification and Independent Replay. The
+independent objectives differ from F0 by at most `5.66e-24`; D1 and E1 final
+A/C/Width parameter differences were all exactly zero in these runs. E1's
+maximum candidate objective error against a full-residual calculation was
+`7.59e-16`, `3.33e-15`, `1.29e-14`, and `2.01e-14`, respectively. There were
+zero candidate acceptance disagreements. All tested candidates were accepted
+(4/15/130/420); no candidate rejection was exercised by these standard inputs.
+E1's pre-promotion objective cache was not reconciled on every sweep in this
+benchmark; its largest final sweep replay difference was `1.08e-14` at 1,000
+targets. P4 changes the production path to reconcile after every successful
+full replay audit.
+
+The separately hashed active upper-width-bound input (`4b338146…e2ab176`)
+also qualified on F0, F1, D1, and E1. Each had one active upper bound, objective
+`2.02540027678003e-10`, global A/C KKT `1.1910380459667635e-9`, projected Width
+KKT `4.4614645311469303e-11`, Endpoint Certification, and Independent Replay.
+The bound was feasible and the KKT used the existing projected-bound
+criterion. The three initial-width runs `.35`, `.55`, and `.9` qualified on
+F0, F1, D1, and E1 in 7, 5, and 23 sweeps. Their F0 objectives were
+`2.0199080158137056e-10`, `2.0199079729737389e-10`, and
+`2.0199079727070732e-10`; current F1/D1/E1 objectives matched to rounding,
+with zero E1-to-D1 parameter differences.
+
+| Hard fixture | SHA-256 prefix | F0 | F1 / D1 / E1 | Objective, KKT and E1 audit | Assessment |
+| --- | --- | --- | --- | --- | --- |
+| High-overlap cube, 8 targets | `2a1894dc…f3f717b2` | Qualified | Qualified / Qualified / Qualified | Objective `1.1487848300043995e-10`; A/C KKT `6.9202588e-10`; Width KKT `1.4783064e-11`; 10 E1 candidates, zero disagreements, maximum error `2.30e-15` | Pass |
+| Rank-deficient constant-support | `fd39aa13…acaa7151` | `block-recovery-exhausted` | Same / Same / Same | Objective `0.49999999999999944`; A/C KKT `0.4828122672`; Width KKT `0`; no parameter movement; local rank failure preceded E1 candidate evaluation | Legacy unqualified; E1 added no failure |
+| Near-singular overlapping support | `fc9e6c0e…467454ef` | `block-recovery-exhausted` | Same / Same / Same | Objective `0.24948812932689915`; A/C KKT `0.6897680220`; Width KKT `0`; no parameter movement; local KKT failure preceded E1 candidate evaluation | Legacy unqualified; E1 added no failure |
+| Noise-only low signal | `0d2ecf60…7ad99d2f` | `block-sweep-budget` | Same / Same / Same | Objective `3.5558894899614887e-8`; A/C KKT `4.4687101e-13`; Width KKT `1.5473044e-12`; 2 active width bounds; final changes A/C `2.33e-13`, log Width `1.7644e-6`; 184 E1 accepts, zero disagreements, maximum candidate error `1.39e-22` | Legacy unqualified; E1 added no failure |
+| Weak-width direction | `aa1d50f8…f9ef9c` | Qualified | Qualified / Qualified / Qualified | Objective `1.1716558769804921e-32`; A/C KKT `1.1102230e-16`; Width KKT `5.5511151e-17`; 2 E1 candidates, zero disagreements, maximum error `6.14e-32` | Pass |
+
+The rank-deficient and near-singular fixtures are common solver limitations,
+not incremental-objective decision failures: all four modes retain the same
+finite accepted state and full-replay objective, and both failures occur
+before any outer candidate replay. The noise-only fixture has a passing
+endpoint assessment and Independent Replay but does not meet search
+convergence by its 100-sweep budget; those passing checks do not change its
+unqualified classification. F0, F1, D1, and E1 return exactly the same
+objective, KKT, parameters, and active-bound count for it. No convergence
+limit was relaxed.
+
+The P2 targeted tests passed for the digest-pinned standard cases, active
+upper bound, three initial widths, high overlap, rank deficiency, near
+singularity, weak Width, low signal, and the P1 signed-cancellation baseline.
+Local conditioning tests independently classify exact singularity and
+ill-conditioning. The outer-transaction rejection and recovery cases remain
+for P3 because none of these qualification fixtures naturally rejects a
+global candidate. These results support numerical non-regression; they do not
+by themselves qualify Candidate Rejection/Recovery state safety.
