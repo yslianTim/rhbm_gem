@@ -8,7 +8,9 @@
 #include "core/detail/joint_component/JointComponentEstimator.hpp"
 #include <algorithm>
 #include "support/JointSyntheticWorkload.hpp"
+#include <bit>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <numeric>
 #include <string>
@@ -99,6 +101,41 @@ JointProblem PureExclusionChain(std::size_t atoms)
     input.selection_domain->pure_halo_support_exclusion=rhbm_gem::JointPureHaloSupportExclusionProvenance{
         input.observations.size(),input.observations.size(),0,0,0,0};
     return JointProblem(std::move(input));
+}
+
+bool BitwiseEqual(double left,double right)
+{return std::bit_cast<std::uint64_t>(left)==std::bit_cast<std::uint64_t>(right);}
+bool BitwiseEqual(const n::Vector & left,const n::Vector & right)
+{
+    if(left.size()!=right.size()) return false;
+    for(Eigen::Index i=0;i<left.size();++i)
+        if(!BitwiseEqual(left(i),right(i))) return false;
+    return true;
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, ProfileEndpointMatchesFixedStateEvaluation)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector eta=n::Vector::Constant(3,std::log(.55));
+    const auto profile=n::EvaluateProfile(data.domain,data.y,eta,&data.context);
+    ASSERT_TRUE(profile.valid)<<profile.reason;
+    const auto state=n::EvaluateState(data.domain,data.y,profile.eta,profile.beta,data.context);
+    ASSERT_TRUE(state.valid)<<state.reason;
+
+    EXPECT_TRUE(BitwiseEqual(profile.eta,state.eta));
+    EXPECT_TRUE(BitwiseEqual(profile.beta,state.beta));
+    EXPECT_TRUE(BitwiseEqual(profile.gradient,state.gradient));
+    EXPECT_TRUE(BitwiseEqual(profile.certificate.objective,state.certificate.objective));
+    EXPECT_TRUE(BitwiseEqual(profile.certificate.projected_kkt,state.certificate.projected_kkt));
+    EXPECT_EQ(profile.certificate.evaluated,state.certificate.evaluated);
+    EXPECT_EQ(profile.certificate.available,state.certificate.available);
+    EXPECT_EQ(profile.certificate.feasible,state.certificate.feasible);
+    EXPECT_EQ(profile.certificate.kkt_passed,state.certificate.kkt_passed);
+    EXPECT_EQ(profile.certificate.width_bound_applied,state.certificate.width_bound_applied);
+    EXPECT_EQ(profile.certificate.width_bound_feasible,state.certificate.width_bound_feasible);
+    EXPECT_TRUE(BitwiseEqual(profile.certificate.width_bound_projected_kkt,
+        state.certificate.width_bound_projected_kkt));
 }
 
 TEST(JointFixedNeighborBlockCoordinateTest, ProductionBoundedSearchReleasesTheStartingUpperFace)

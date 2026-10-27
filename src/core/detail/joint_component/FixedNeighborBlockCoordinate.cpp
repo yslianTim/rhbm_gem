@@ -1194,10 +1194,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 if(stop) break;
                 continue;
             }
-            const auto local_state_started=Clock::now();
-            const auto local_state=EvaluateState(local_domain,local_y,accepted->endpoint.eta,accepted->endpoint.beta,local_context,
-                ProfileEvaluationRole::AcceptedEndpoint,profile_work);
-            if(collect_telemetry) out.work.local_state_seconds+=Seconds(local_state_started);
+            const Endpoint & local_state=accepted->endpoint;
             if(!local_state.valid || !local_state.certificate.available || !local_state.certificate.feasible ||
                 !local_state.certificate.kkt_passed)
             {
