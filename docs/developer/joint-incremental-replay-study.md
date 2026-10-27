@@ -783,6 +783,20 @@ truth is A=2, C=0.2, Width=0.5 for each target.
 | 300 | 136,560 / 154,500 | 26 | 5 | 130 / 0 | `1.4790433590012254e-10` | `5.07e-10` | `1.88e-12` | pass / pass | 36,716,466 B |
 | 1,000 | 455,060 / 515,000 | 84 | 5 | 420 / 0 | `1.4790435904528611e-10` | `2.78e-10` | `5.63e-13` | pass / pass | 121,648,896 B |
 
+The final D1 parameter medians and the single-run qualification timing were:
+
+| Targets | A median | C median | Width median | Search / wall time | Qualification-process peak RSS |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 3 | 1.9999904 | 0.20000529 | 0.49999991 | 6.88 / 8.13 ms | 23.6 MB |
+| 30 | 2.0000014 | 0.20000169 | 0.50000007 | 111.69 / 133.11 ms | 35.7 MB |
+| 300 | 2.0000001 | 0.20000037 | 0.50000001 | 1.294 / 1.519 s | 101.3 MB |
+| 1,000 | 2.0000005 | 0.19999991 | 0.50000003 | 6.434 / 7.187 s | 275.7 MB |
+
+The RSS column belongs to the one-run qualification process, which ran all
+three methods and retained candidate diagnostic references; it is not a
+per-method Production RSS measurement. These times are qualification-run
+records, not repeated performance results.
+
 All widths were feasible, the existing global convergence and parameter-
 stability criteria passed, and local-conditioning assessment covered every
 block. The 1,000-target A/C/Width medians were 2.0000005 / 0.19999991 /
@@ -805,3 +819,207 @@ bitwise-identical final state, Endpoint Certification, and Independent Replay
 passed. The broader baseline above supplies a qualified D1 endpoint at each
 requested synthetic size. The old N5 timing runs remain search-only and are
 not reused as qualification evidence.
+
+### E1: controlled closed-loop search
+
+The test-instrumented build now has three actual search controls: D1 Full Scan,
+E1-Direct, and E1-Guarded. E1 computes the exact affected-row prediction and
+residual patch, then adds the affected squared-residual difference to its own
+currently accepted objective cache. That value controls candidate objective,
+global delta, local/global consistency, acceptance, and the next block's state.
+Parameters and prediction/residual rows are committed only after those checks
+pass. A rejected or failed block leaves the last accepted state available to
+the existing retry path. The candidate observer is a separate diagnostic mode;
+it copies full vectors and runs a full objective reference, and its cost is not
+included in Performance Mode. E1-Direct, E1-Guarded, refresh intervals, and
+their counters compile only with `RHBM_GEM_TEST_INSTRUMENTATION`; the ordinary
+Production build still selects D1 and has no E1 runtime selector.
+
+Each qualified method below stopped at `block-stationary`, before its sweep
+budget, with unchanged convergence criteria. Both E1 methods passed Endpoint
+Certification, Independent Replay, parameter-stability assessment, and runtime
+convergence. E1-Direct's cached final objective is shown separately from the
+independently recomputed objective.
+
+| Targets | Candidate accept / reject (D1, Direct, Guarded) | Sweeps | Final cached objective D1 / Direct / Guarded | Independently recomputed objective | Global A/C KKT | Projected Width KKT | Endpoint / Independent Replay | Max |ΔA| / |ΔC| / |ΔWidth| vs D1 |
+| ---: | --- | ---: | --- | ---: | ---: | ---: | --- | --- |
+| 3 | 4/0, 4/0, 4/0 | 4 | `2.0199078133e-10` / `2.0199153986e-10` / `2.0199078133e-10` | `2.0199078132865188e-10` | `3.33e-16` | `3.89e-15` | pass / pass | 0 / 0 / 0 |
+| 30 | 15/0, 15/0, 15/0 | 5 | `1.5170760307e-10` / `1.5170575065e-10` / `1.5170760307e-10` | `1.5170760306846197e-10` | `1.60e-9` | `1.88e-11` | pass / pass | 0 / 0 / 0 |
+| 300 | 130/0, 130/0, 130/0 | 5 | `1.4790433590e-10` / `1.4791233916e-10` / `1.4790433590e-10` | `1.4790433590012404e-10` | `5.07e-10` | `1.88e-12` | pass / pass | 0 / 0 / 0 |
+| 1,000 | 420/0, 420/0, 420/0 | 5 | `1.4790435905e-10` / `1.4789356718e-10` / `1.4790435905e-10` | `1.4790435904529177e-10` | `2.78e-10` | `5.63e-13` | pass / pass | 0 / 0 / 0 |
+
+The ordinary-chain E1 search therefore did not change candidate decisions,
+sweep count, independently recomputed final objective, or final A/C/Width on these four fixtures. The
+independent references compared each E1 candidate with the full objective at
+that same candidate and its actual accepted-before state; they did not compare
+different D1 and E1 trajectories. All 1,000-target blocks received local
+conditioning assessment. The separate width-upper-bound test and initial
+widths 0.35, 0.55, and 0.9 also passed for D1 and E1, with the same final
+parameters.
+
+The final parameter medians (and therefore D1/E1 parameter deltas) were:
+
+| Targets | A median | C median | Width median | D1/E1 max difference distribution, for each parameter |
+| ---: | ---: | ---: | ---: | --- |
+| 3 | 1.9999904 | 0.20000529 | 0.49999991 | mean / median / P95 / P99 / max = 0 |
+| 30 | 2.0000014 | 0.20000169 | 0.50000007 | mean / median / P95 / P99 / max = 0 |
+| 300 | 2.0000001 | 0.20000037 | 0.50000001 | mean / median / P95 / P99 / max = 0 |
+| 1,000 | 2.0000005 | 0.19999991 | 0.50000003 | mean / median / P95 / P99 / max = 0 |
+
+The per-candidate audit found rounding drift but no reference acceptance
+disagreement. ULP counts are large because the objective and some decision
+deltas are close to zero; the absolute differences give the useful scale.
+
+| Targets | Direct max absolute / relative error | Direct max ULP | Guarded Full Scan fallbacks | Guarded max relative raw-estimate error after refreshes | Min decision margin | Reference decision disagreements, Direct / Guarded |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 3 | `7.59e-16` / `3.76e-6` | 29,344,345,814 | 1/4 (25.0%) | `5.60e-11` | `4.12e-18` | 0 / 0 |
+| 30 | `3.33e-15` / `1.22e-5` | 71,661,907,826 | 3/15 (20.0%) | `6.12e-12` | `1.10e-16` | 0 / 0 |
+| 300 | `1.29e-14` / `5.41e-5` | 309,611,272,926 | 28/130 (21.5%) | `2.43e-11` | `1.00e-17` | 0 / 0 |
+| 1,000 | `2.01e-14` / `7.30e-5` | 417,490,110,813 | 86/420 (20.5%) | `3.27e-11` | `6.40e-18` | 0 / 0 |
+
+Guarded's raw incremental estimate still has rounding error on fast candidates;
+fallback candidates use a full objective scan. The guard band is empirical and
+does not certify an error bound. A smaller 3-target band of 0.01 fell back on
+1/10 candidates, the 0.1 band on 2/10, and the 1.0 band on 10/10. All three
+settings converged and had zero reference decision disagreements on that
+fixture. The 0.1 policy is the measured Guarded configuration above.
+
+No outer candidate was rejected in these converged chain runs; the 300-target
+qualification captured 260/260 accepted local profile trials as well. The
+forced-recovery E1 test still passed after an injected untrusted profile
+failure. A numeric candidate-rejection fixture was not established, so rejection
+decision coverage remains incomplete. The signed-cancellation/near-zero
+amplitude fixture produced 42/42 accepted replay candidates and no reference
+decision disagreement, but both D1 and E1 reached the 500-sweep budget without
+qualification: global A/C KKT was `2.22e-16`, while projected Width KKT was
+`1.22801358e-9`, just above the unchanged `1e-9` requirement. Neither method
+received Endpoint Certification there. Its E1 max candidate/cache error was
+`7.87e-16`; this was a shared convergence limit, not an E1-only state drift.
+
+### E2: cache reconciliation and refresh intervals
+
+For each periodic refresh, the experiment retained the exact affected-row
+state, recomputed the full replay, compared prediction/residual and objective,
+and refreshed only the objective after those checks passed. The full replay
+audit at every sweep end remains in place and precedes its optional objective
+refresh. The 300-target direct run had 130 accepted updates and qualified under
+all intervals:
+
+| Accepted updates between refreshes | Refresh count | Max cache error at refresh | Max candidate objective error, absolute / relative / ULP | Refresh time | Decision disagreements / refresh failures / positive true deltas |
+| ---: | ---: | ---: | ---: | ---: | --- |
+| 10 | 13 | `1.02e-14` | `1.02e-14` / `2.06e-12` / 14,484 | 72.2 ms | 0 / 0 / 0 |
+| 50 | 2 | `8.00e-15` | `1.29e-14` / `1.23e-9` / 7,398,953 | 11.1 ms | 0 / 0 / 0 |
+| 100 | 1 | `8.00e-15` | `1.29e-14` / `5.14e-5` / 309,611,272,926 | 5.56 ms | 0 / 0 / 0 |
+| Every sweep | 5 | `8.01e-15` | candidate-reference scan not attached | Included in mandatory sweep replay | 0 / 0 / 0 |
+
+The periodic intervals each ended with Endpoint Certification and Independent
+Replay. Every-sweep reconciliation saw at most 26 accepted updates since the
+preceding refresh. The every-candidate reference is D1 Full Scan. No true
+objective increase outside the existing acceptance enclosure was observed;
+therefore no cache refresh masked such an event. No rollback was triggered, and
+the two checkpoint representations (full accepted state versus parameters with
+state reconstructed by replay) were not compared. The refresh interval study
+is complete; E2 checkpoint/rollback qualification is partial. No extra
+checkpoint buffer was allocated, and the measured cache/scratch paths stayed
+within the existing preflight budget.
+
+### E3/E4: guard policy and estimate qualification
+
+The E1 errors did not change an acceptance decision in the audited cases,
+including minimum reference margins from `4.1e-18` to `1.0e-16`. This is
+evidence for these synthetic fixtures, not a general safety guarantee. Guarded
+reduced observed raw-objective error after its fallbacks and sweep refreshes,
+but its 20–25% fallback rate consumed some of Direct's gain.
+
+For the 3, 30, 300, and 1,000-target qualified chain fixtures, maximum absolute
+parameter differences between D1 and either E1 method were zero for A, C, and
+Width. Their mean / median / P95 / P99 / maximum absolute errors against known
+truth are below, followed by A/C/Width RMSE and maximum relative errors.
+
+| Targets | A error distribution | C error distribution | Width error distribution | A / C / Width RMSE | Max relative error A / C / Width |
+| ---: | --- | --- | --- | --- | --- |
+| 3 | `3.31e-5 / 2.43e-5 / 6.54e-5 / 6.54e-5 / 6.54e-5` | `7.37e-6 / 5.29e-6 / 1.48e-5 / 1.48e-5 / 1.48e-5` | `1.69e-6 / 1.67e-6 / 3.31e-6 / 3.31e-6 / 3.31e-6` | `4.06e-5 / 9.16e-6 / 2.14e-6` | `3.27e-5 / 7.41e-5 / 6.62e-6` |
+| 30 | `4.01e-5 / 4.53e-5 / 6.30e-5 / 6.71e-5 / 6.71e-5` | `9.38e-6 / 1.09e-5 / 1.47e-5 / 1.48e-5 / 1.48e-5` | `2.00e-6 / 2.21e-6 / 3.14e-6 / 3.68e-6 / 3.68e-6` | `4.45e-5 / 1.05e-5 / 2.21e-6` | `3.35e-5 / 7.40e-5 / 7.37e-6` |
+| 300 | `3.93e-5 / 4.35e-5 / 6.15e-5 / 6.16e-5 / 6.30e-5` | `9.42e-6 / 1.04e-5 / 1.47e-5 / 1.48e-5 / 1.48e-5` | `1.93e-6 / 2.13e-6 / 3.01e-6 / 3.02e-6 / 3.14e-6` | `4.36e-5 / 1.05e-5 / 2.14e-6` | `3.15e-5 / 7.40e-5 / 6.29e-6` |
+| 1,000 | `3.92e-5 / 4.37e-5 / 6.15e-5 / 6.16e-5 / 6.45e-5` | `9.41e-6 / 1.05e-5 / 1.48e-5 / 1.48e-5 / 1.50e-5` | `1.92e-6 / 2.14e-6 / 3.01e-6 / 3.02e-6 / 3.21e-6` | `4.36e-5 / 1.05e-5 / 2.13e-6` | `3.22e-5 / 7.51e-5 / 6.43e-6` |
+
+At 1,000 targets, A/C/Width maximum absolute truth errors were `6.45e-5`,
+`1.50e-5`, and `3.21e-6`, all below 0.01 in their stored parameter units.
+This verifies the two-decimal scale on the uniform synthetic truth fixture;
+it does not establish it for low-signal or weakly identifiable real data. The
+FixedNeighbor state has two fitted coefficients per target (A and C) plus
+Width; it has no separate B coordinate, so a ΔB statistic is not applicable
+to this implementation.
+
+The active-width-upper-bound test passed with the existing projected KKT
+threshold. The near-zero amplitude/signed-charge fixture remained unqualified
+for both methods as described above. E1 qualification for rank-deficient or
+near-singular local blocks, weakly identifiable widths, multiple outer
+rejections, and a broad set of noisy/overlapping initializations remains
+incomplete. Consequently E4 is partial even though the standard synthetic
+fixtures pass.
+
+### E5: five-run performance and memory
+
+Performance Mode used five measured runs per method and one warm-up, with the
+same synthetic input, initial parameters, and 4-thread cap. It attached no
+per-candidate diagnostic Full Scan. It ran through Endpoint Certification,
+Independent Replay, local-conditioning assessment, and parameter-stability
+assessment. Search medians exclude the final checks; wall medians include
+them. The range is the five search measurements.
+
+| Targets | Candidates | D1 search median (range) | E1-Direct search median (range) | E1-Guarded search median (range) | Search improvement Direct / Guarded | Wall median D1 / Direct / Guarded | Guard fallbacks | Peak RSS D1 / Direct / Guarded |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 3 | 4 | 4.383 ms (4.363–4.498) | 4.283 ms (4.264–4.301) | 4.288 ms (4.284–4.313) | 2.3% / 2.2% | 5.502 / 5.392 / 5.392 ms | 1/4 | 23.64 / 23.66 / 23.66 MB |
+| 30 | 15 | 97.616 ms (97.450–98.103) | 94.117 ms (93.679–96.205) | 94.726 ms (94.502–96.997) | 3.6% / 3.0% | 118.712 / 115.119 / 115.888 ms | 3/15 | 35.75 / 35.80 / 35.75 MB |
+| 300 | 130 | 1.291 s (1.285–1.293) | 1.013 s (1.004–1.017) | 1.066 s (1.064–1.206) | 21.5% / 17.5% | 1.514 / 1.236 / 1.289 s | 28/130 | 93.47 / 94.58 / 94.40 MB |
+| 1,000 | 420 | 6.413 s (6.408–6.431) | 3.372 s (3.372–3.381) | 3.990 s (3.986–4.193) | 47.4% / 37.8% | 7.165 / 4.125 / 4.743 s | 86/420 | 247.61 / 246.27 / 248.09 MB |
+
+Endpoint Certification and Independent Replay medians at 1,000 targets were
+71 ms and 37 ms, respectively; at 300 targets they were 21 ms and 11 ms.
+Candidate evaluation fell from 3.284 s on D1 to 0.243 s on either E1 method at
+1,000 targets. Guard fallback consumed 0.621 s there and 0.060 s at 300
+targets. Sweep-end full replay was already part of every method's search; the
+objective scalar refresh added no second replay. At 1,000 targets D1 candidate
+evaluation accounts for 51.2% of search time, so the Amdahl limit is 2.05x;
+Direct measured 1.90x and Guarded 1.61x on search time.
+
+All three methods used the same memory preflight: 447,445 B at 3 targets,
+3,930,461 B at 30, 36,716,466 B at 300, and 121,648,896 B at 1,000. Affected
+row scratch was 58,976 B at 3 targets and 233,512 B for the larger sizes. E1
+kept on-demand incidence and one objective scalar; it added no CSR, full-state
+checkpoint, or rollback buffer. The 3.2 GB budget was not approached on these
+synthetic sizes. The approximately 37,406-target / 5,938,087-observation input
+was unavailable, and no end-to-end full algorithm timing is claimed.
+
+### E6: Production decision
+
+The controlled search establishes that E1 can run to qualified endpoints on
+the standard 3–1,000-target synthetic fixtures and can deliver greater than
+15% search improvement at 300 and 1,000 targets. It does not complete the
+requested hard-case qualification: the low-signal width boundary fixture is
+unqualified for both methods, outer rejected-candidate reference coverage is
+absent, rank-deficient/weak-width E1 coverage is incomplete, and objective
+checkpoint rollback was not exercised. The Guarded band remains empirical.
+The real cryo-EM component was also unavailable.
+
+Production remains D1 affected-row exact recompute plus Full Objective Scan.
+No Production acceptance, KKT, width-bound, convergence, endpoint, independent
+replay, or memory threshold changed. Sweep-end replay, Endpoint Certification,
+Independent Replay, and the 3.2 GB preflight remain in the formal path. No E1
+runtime selector or third-party dependency was added. The test-only E1,
+Guarded, refresh, and qualification benchmarks remain as research evidence.
+The final CMake build without test instrumentation passed, and serial CTest
+passed 19/19.
+
+### E1 follow-up roadmap
+
+| Stage | Status | Result | Commit |
+| --- | --- | --- | --- |
+| E0 | Complete | Refreshed D1 baseline qualified on 3, 30, 300, and 1,000 synthetic targets. | `2ffe6b48` |
+| E1 | Complete for tested fixtures | Incremental objective controlled closed-loop decisions; all audited candidate decisions matched their reference; full CTest passed. | `92acb92c` |
+| E2 | Partial | 10/50/100-update and every-sweep reconciliation measured; checkpoint representation and rollback were not exercised. | `92acb92c` |
+| E3 | Complete for tested fixtures | Guard bands 0.01/0.1/1.0 compared; use remains test-only and empirical. | `92acb92c` |
+| E4 | Partial | Standard, active-bound, multi-initial, and known-truth qualifications passed; hard weak-signal/rank/rejection coverage remains. | `92acb92c` |
+| E5 | Partial | Five-run certified performance covered 3/30/300/1,000 synthetic targets; real large data and end-to-end runtime unavailable. | `92acb92c` |
+| E6 | Complete | Retain D1 Production; repository report updated; no Notion edits or push. | This report commit |
