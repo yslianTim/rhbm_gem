@@ -134,6 +134,11 @@ TEST(ActiveSetBoundedLMTest, TrustRegionDampingRecoversRankDeficiencyAndRejectsI
     EXPECT_EQ(work.dense_qr_factorizations,work.damping_solves);
     EXPECT_GT(work.workspace_allocation_sites,0u);
     EXPECT_GT(work.workspace_peak_bytes,0u);
+    EXPECT_EQ(work.subproblem_validation_calls,1u);
+    EXPECT_GT(work.kkt_scale_evaluations,1u);
+    EXPECT_EQ(work.jacobian_norm_evaluations,1u);
+    EXPECT_EQ(work.diagonal_squared_norm_evaluations,1u);
+    EXPECT_EQ(work.bound_tolerance_evaluations,1u);
     ASSERT_FALSE(work.damping_trace.empty());
     EXPECT_EQ(work.damping_trace[0].status,"rank-deficient-free-subproblem");
     EXPECT_FALSE(work.damping_trace[0].valid);
@@ -194,17 +199,25 @@ TEST(ActiveSetBoundedLMTest, RecordedInteriorDampedStepIsBitwiseStable)
 
 TEST(ActiveSetBoundedLMTest, InvalidDimensionsKeepTheSubproblemFailureReason)
 {
+    joint::BoundedLmWorkForTesting()={};
     Eigen::MatrixXd j=Eigen::MatrixXd::Identity(2,2);
     Eigen::VectorXd r=Eigen::VectorXd::Zero(1),d=Eigen::VectorXd::Ones(2),
         upper=Eigen::VectorXd::Ones(2);
-    auto result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,1.0,0.0);
+    auto result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,0.0,0.0);
+    EXPECT_FALSE(result.valid);
+    EXPECT_EQ(result.status,"invalid-trust-region-input");
+    EXPECT_EQ(joint::BoundedLmWorkForTesting().subproblem_validation_calls,0u);
+
+    result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,1.0,0.0);
     EXPECT_FALSE(result.valid);
     EXPECT_EQ(result.status,"invalid-subproblem-input");
+    EXPECT_EQ(joint::BoundedLmWorkForTesting().subproblem_validation_calls,1u);
 
     j.resize(2,0); r=Eigen::VectorXd::Zero(2); d.resize(0); upper.resize(0);
     result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,1.0,0.0);
     EXPECT_FALSE(result.valid);
     EXPECT_EQ(result.status,"invalid-subproblem-input");
+    EXPECT_EQ(joint::BoundedLmWorkForTesting().subproblem_validation_calls,2u);
 }
 
 TEST(ActiveSetBoundedLMTest, RejectsNonfiniteSubproblemCoefficients)

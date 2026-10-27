@@ -160,6 +160,11 @@ int Run()
             aggregate.bisection_solves+=work.bisection_solves;
             aggregate.active_set_iterations+=work.active_set_iterations;
             aggregate.releases+=work.releases;
+            aggregate.subproblem_validation_calls+=work.subproblem_validation_calls;
+            aggregate.kkt_scale_evaluations+=work.kkt_scale_evaluations;
+            aggregate.jacobian_norm_evaluations+=work.jacobian_norm_evaluations;
+            aggregate.diagonal_squared_norm_evaluations+=work.diagonal_squared_norm_evaluations;
+            aggregate.bound_tolerance_evaluations+=work.bound_tolerance_evaluations;
             aggregate.dense_qr_factorizations+=work.dense_qr_factorizations;
             aggregate.workspace_allocation_sites+=work.workspace_allocation_sites;
             aggregate.workspace_peak_bytes=std::max(aggregate.workspace_peak_bytes,work.workspace_peak_bytes);
@@ -178,6 +183,12 @@ int Run()
     std::cout<<"bounded_lm_damping_solves_per_call="<<bounded_work.damping_solves/repeats
         <<" bracket_solves_per_call="<<bounded_work.bracket_solves/repeats
         <<" bisection_solves_per_call="<<bounded_work.bisection_solves/repeats
+        <<" active_set_iterations_per_call="<<bounded_work.active_set_iterations/repeats
+        <<" subproblem_validations_per_call="<<bounded_work.subproblem_validation_calls/repeats
+        <<" kkt_scale_evaluations_per_call="<<bounded_work.kkt_scale_evaluations/repeats
+        <<" jacobian_norm_evaluations_per_call="<<bounded_work.jacobian_norm_evaluations/repeats
+        <<" diagonal_squared_norm_evaluations_per_call="<<bounded_work.diagonal_squared_norm_evaluations/repeats
+        <<" bound_tolerance_evaluations_per_call="<<bounded_work.bound_tolerance_evaluations/repeats
         <<" dense_qr_count_per_call="<<bounded_work.dense_qr_factorizations/repeats
         <<" dense_qr_ms_per_call="<<bounded_work.dense_qr_factorization_seconds*1000.0/repeats
         <<" workspace_allocation_sites_per_call="<<bounded_work.workspace_allocation_sites/repeats

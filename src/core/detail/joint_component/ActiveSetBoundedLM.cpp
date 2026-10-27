@@ -12,12 +12,58 @@ namespace rhbm_gem::core::joint_component {
 BoundedLmTestWork & BoundedLmWorkForTesting() {static thread_local BoundedLmTestWork work; return work;}
 #endif
 namespace {
-double KktScale(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,const Eigen::VectorXd & d,
-    const Eigen::VectorXd & p,double lambda)
+struct BoundedSubproblemContext
 {
+    double bound_tolerance{};
+    std::size_t maximum_active_iterations{};
+    double jacobian_norm{},diagonal_squared_norm{};
+    bool kkt_norms_ready{};
+};
+
+bool ValidSubproblemInput(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,
+    const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double lambda)
+{
+    const Eigen::Index n=j.cols();
+    return j.rows()==r.size() && n>0 && d.size()==n && upper.size()==n &&
+        j.allFinite() && r.allFinite() && d.allFinite() && upper.allFinite() &&
+        (d.array()>0.0).all() && !(upper.array()<0.0).any() &&
+        std::isfinite(lambda) && lambda>=0.0;
+}
+
+BoundedSubproblemContext MakeBoundedSubproblemContext(const Eigen::MatrixXd & j,
+    const Eigen::VectorXd & upper)
+{
+    BoundedSubproblemContext context;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    ++BoundedLmWorkForTesting().bound_tolerance_evaluations;
+#endif
+    context.bound_tolerance=64.0*std::numeric_limits<double>::epsilon()*
+        std::max(1.0,upper.cwiseAbs().maxCoeff());
+    context.maximum_active_iterations=std::max<std::size_t>(40,
+        20*static_cast<std::size_t>(j.cols()));
+    return context;
+}
+
+double KktScale(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,const Eigen::VectorXd & d,
+    const Eigen::VectorXd & p,double lambda,BoundedSubproblemContext & context)
+{
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    auto & work=BoundedLmWorkForTesting();
+    ++work.kkt_scale_evaluations;
+#endif
     const double residual=(j*p+r).norm();
-    return std::max(1.0,j.norm()*(residual+j.norm()*p.norm())+
-        lambda*d.squaredNorm()*std::max(1.0,p.norm()));
+    if(!context.kkt_norms_ready)
+    {
+        context.jacobian_norm=j.norm();
+        context.diagonal_squared_norm=d.squaredNorm();
+        context.kkt_norms_ready=true;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        ++work.jacobian_norm_evaluations;
+        ++work.diagonal_squared_norm_evaluations;
+#endif
+    }
+    return std::max(1.0,context.jacobian_norm*(residual+context.jacobian_norm*p.norm())+
+        lambda*context.diagonal_squared_norm*std::max(1.0,p.norm()));
 }
 
 ActiveSetStep Failure(std::string status)
@@ -34,26 +80,22 @@ struct BoundedLmTimer
 };
 #endif
 
-ActiveSetStep SolveAtDamping(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,
-    const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double lambda
+ActiveSetStep SolveAtDamping(BoundedSubproblemContext & context,const Eigen::MatrixXd & j,
+    const Eigen::VectorXd & r,const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double lambda
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     ,BoundedLmDampingTrace * trace
 #endif
 )
 {
     const Eigen::Index n=j.cols();
-    if(j.rows()!=r.size() || n==0 || d.size()!=n || upper.size()!=n ||
-        !j.allFinite() || !r.allFinite() || !d.allFinite() || !upper.allFinite() ||
-        !(d.array()>0.0).all() || (upper.array()<0.0).any() ||
-        !std::isfinite(lambda) || lambda<0.0)
+    if(!std::isfinite(lambda) || lambda<0.0)
         return Failure("invalid-subproblem-input");
 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     auto & work=BoundedLmWorkForTesting();
     ++work.workspace_allocation_sites; // active mask
 #endif
-    const double bound_tolerance=64.0*std::numeric_limits<double>::epsilon()*
-        std::max(1.0,upper.cwiseAbs().maxCoeff());
+    const double bound_tolerance=context.bound_tolerance;
     std::vector<bool> active(static_cast<std::size_t>(n),false);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     ++work.workspace_allocation_sites; // step
@@ -65,9 +107,8 @@ ActiveSetStep SolveAtDamping(const Eigen::MatrixXd & j,const Eigen::VectorXd & r
         if(active[static_cast<std::size_t>(i)]) step(i)=upper(i);
     }
 
-    const std::size_t maximum_iterations=std::max<std::size_t>(40,20*static_cast<std::size_t>(n));
     std::size_t releases{};
-    for(std::size_t iteration=0;iteration<maximum_iterations;++iteration)
+    for(std::size_t iteration=0;iteration<context.maximum_active_iterations;++iteration)
     {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(trace)
@@ -203,7 +244,7 @@ ActiveSetStep SolveAtDamping(const Eigen::MatrixXd & j,const Eigen::VectorXd & r
         Eigen::VectorXd gradient=j.transpose()*residual+
             lambda*d.cwiseProduct(d).cwiseProduct(step);
         if(!gradient.allFinite()) return Failure("non-finite-subproblem-gradient");
-        const double kkt_tolerance=2e-11*KktScale(j,r,d,step,lambda);
+        const double kkt_tolerance=2e-11*KktScale(j,r,d,step,lambda,context);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(trace)
         {
@@ -269,6 +310,7 @@ ActiveSetStep WithDamping(ActiveSetStep result,double damping)
 ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,
     const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double trust_radius,double damping_seed)
 {
+    BoundedSubproblemContext context;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     auto & work=BoundedLmWorkForTesting();
     BoundedLmTimer timer{work};
@@ -277,7 +319,7 @@ ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd & j,const Eigen:
         if(phase==1) ++work.bracket_solves;
         else if(phase==2) ++work.bisection_solves;
         BoundedLmDampingTrace trace;
-        auto result=SolveAtDamping(j,r,d,upper,lambda,work.capture_trace ? &trace : nullptr);
+        auto result=SolveAtDamping(context,j,r,d,upper,lambda,work.capture_trace ? &trace : nullptr);
         if(work.capture_trace)
         {
             trace.damping=lambda; trace.phase=phase; trace.status=result.status;
@@ -300,9 +342,14 @@ ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd & j,const Eigen:
     if(!std::isfinite(trust_radius) || !(trust_radius>0.0) || !std::isfinite(damping_seed) || damping_seed<0.0)
         return Failure("invalid-trust-region-input");
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    ++work.subproblem_validation_calls;
+#endif
+    if(!ValidSubproblemInput(j,r,d,upper,0.0)) return Failure("invalid-subproblem-input");
+    context=MakeBoundedSubproblemContext(j,upper);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     auto unconstrained=solve_candidate(0.0,0);
 #else
-    auto unconstrained=SolveAtDamping(j,r,d,upper,0.0);
+    auto unconstrained=SolveAtDamping(context,j,r,d,upper,0.0);
 #endif
     const double trust_tolerance=64.0*std::numeric_limits<double>::epsilon()*std::max(1.0,trust_radius);
     if(unconstrained.valid && unconstrained.scaled_step_norm<=trust_radius+trust_tolerance)
@@ -321,7 +368,7 @@ ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd & j,const Eigen:
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         auto candidate=solve_candidate(high,1);
 #else
-        auto candidate=SolveAtDamping(j,r,d,upper,high);
+        auto candidate=SolveAtDamping(context,j,r,d,upper,high);
 #endif
         if(candidate.valid && candidate.scaled_step_norm<=trust_radius)
         {
@@ -344,7 +391,7 @@ ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd & j,const Eigen:
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         auto candidate=solve_candidate(middle,2);
 #else
-        auto candidate=SolveAtDamping(j,r,d,upper,middle);
+        auto candidate=SolveAtDamping(context,j,r,d,upper,middle);
 #endif
         if(candidate.valid && candidate.scaled_step_norm<=trust_radius)
         {

@@ -213,3 +213,32 @@ tolerances, free-face ranks, and trust-region feasibility decisions; a release
 fixture verifies the active-face transition bitwise. A three-row fixture
 confirms cancellation detection and reference-order recomputation in both full
 and projected-only derivative preparation.
+
+## N1: bounded-subproblem invariant reuse
+
+Within a trust-region call, subproblem input validation now runs once after the
+existing trust-region parameter check, preserving its failure precedence.
+Bound tolerance and the active-set iteration limit are computed once for the
+shared context. `j.norm()` and `d.squaredNorm()` are cached lazily at the first
+KKT scale evaluation; the KKT expression keeps its original multiplication
+and addition order. No trust-region or active-set decision rule changed.
+
+On the same Release diagnostic workload, the N0 implementation measured
+17.055 ms/call (17.053–18.102) and N1 measured 15.877 ms/call
+(15.818–15.978), a 1.074× median speedup (6.91% lower elapsed time). The
+bounded-step SHA-256 stayed exactly
+`290e1a65097e34b1a1198064bc49c2c357a83271c709ce6b156ccbb1eec798ab`.
+Dense QR remained 136 factorizations per call; `KktScale` remained 59 calls.
+Repeated scalar work fell as follows:
+
+| Per bounded-step call | N0 | N1 |
+| --- | ---: | ---: |
+| Subproblem input validations | 59 | 1 |
+| Jacobian norm evaluations | 118 | 1 |
+| Damping diagonal squared-norm evaluations | 59 | 1 |
+| Bound-tolerance evaluations | 59 | 1 |
+
+The joint contract, workflow, and numerical CTest groups passed (3/3,
+5.70 s). The bounded workspace estimate stayed at 328,584 bytes; observed
+process peak RSS was 45,514,752 bytes in the N0 run and 44,859,392 bytes in
+the N1 run, which is within the benchmark's run-to-run measurement noise.
