@@ -1,0 +1,295 @@
+#include "core/detail/joint_component/ActiveSetBoundedLM.hpp"
+#include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
+#include "core/detail/joint_component/Numerics.hpp"
+#include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/TiledDerivative.hpp"
+#include "support/JointFixedNeighborDiagnostic.hpp"
+#include "support/JointSyntheticWorkload.hpp"
+
+#include <boost/hash2/sha2.hpp>
+#include <algorithm>
+#include <array>
+#include <bit>
+#include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <numbers>
+#include <sys/resource.h>
+#include <stdexcept>
+#include <string>
+#include <type_traits>
+#include <vector>
+
+namespace {
+namespace joint=rhbm_gem::core::joint_component;
+using Clock=std::chrono::steady_clock;
+using Matrix=Eigen::MatrixXd;
+using Vector=Eigen::VectorXd;
+
+struct Digest
+{
+    boost::hash2::sha2_256 hash;
+    template<class Integer> requires std::is_integral_v<Integer>
+    void Add(Integer value)
+    {
+        std::array<unsigned char,8> bytes{};
+        const auto bits=static_cast<std::uint64_t>(value);
+        for(unsigned k=0;k<8;++k) bytes[k]=static_cast<unsigned char>((bits>>(8*k))&255);
+        hash.update(bytes.data(),bytes.size());
+    }
+    void Add(double value) {Add(std::bit_cast<std::uint64_t>(value));}
+    void Add(const std::string & value)
+    {Add(value.size()); hash.update(value.data(),value.size());}
+    template<class Derived>
+    void Add(const Eigen::MatrixBase<Derived> & value)
+    {
+        Add(static_cast<std::uint64_t>(value.rows())); Add(static_cast<std::uint64_t>(value.cols()));
+        for(Eigen::Index k=0;k<value.size();++k) Add(value.derived().coeff(k));
+    }
+    template<class SparseType>
+    void AddSparse(const SparseType & value)
+    {
+        Add(static_cast<std::uint64_t>(value.rows())); Add(static_cast<std::uint64_t>(value.cols()));
+        Add(static_cast<std::uint64_t>(value.nonZeros()));
+        for(Eigen::Index outer=0;outer<value.outerSize();++outer)
+            for(typename SparseType::InnerIterator entry(value,outer);entry;++entry)
+            {Add(static_cast<std::uint64_t>(entry.row())); Add(static_cast<std::uint64_t>(entry.col())); Add(entry.value());}
+    }
+    std::string Finish() {return boost::hash2::to_string(hash.result());}
+};
+
+std::string BoundedDigest(const joint::ActiveSetStep & result,const joint::BoundedLmTestWork & work)
+{
+    Digest digest;
+    digest.Add(result.valid); digest.Add(result.status); digest.Add(result.damping);
+    digest.Add(result.step); digest.Add(result.gradient); digest.Add(result.multipliers);
+    digest.Add(result.scaled_step_norm); digest.Add(result.kkt_inf_norm);
+    digest.Add(result.iterations); digest.Add(result.releases);
+    for(bool active:result.active) digest.Add(active);
+    for(const auto & candidate:work.damping_trace)
+    {
+        digest.Add(candidate.damping); digest.Add(candidate.phase); digest.Add(candidate.status);
+        digest.Add(candidate.valid); digest.Add(candidate.step); digest.Add(candidate.gradient);
+        digest.Add(candidate.multipliers); digest.Add(candidate.scaled_step_norm);
+        digest.Add(candidate.kkt_inf_norm); digest.Add(candidate.iterations); digest.Add(candidate.releases);
+        for(bool active:candidate.active) digest.Add(active);
+        digest.Add(candidate.within_trust_region);
+        digest.Add(candidate.search_accepted);
+        digest.Add(candidate.active_set_sequence.size());
+        for(const auto & active:candidate.active_set_sequence)
+        {
+            digest.Add(active.size());
+            for(bool value:active) digest.Add(value);
+        }
+        digest.Add(candidate.step_sequence.size());
+        for(const auto & step:candidate.step_sequence) digest.Add(step);
+        digest.Add(candidate.gradient_sequence.size());
+        for(const auto & gradient:candidate.gradient_sequence) digest.Add(gradient);
+        digest.Add(candidate.kkt_tolerance_sequence.size());
+        for(double tolerance:candidate.kkt_tolerance_sequence) digest.Add(tolerance);
+        digest.Add(candidate.free_ranks.size());
+        for(Eigen::Index rank:candidate.free_ranks) digest.Add(rank);
+    }
+    return digest.Finish();
+}
+
+std::string DerivativeDigest(const joint::TiledDifferential & prepared,
+    const joint::ReducedDifferential & reduced)
+{
+    Digest digest;
+    digest.Add(prepared.valid); digest.Add(prepared.reference_order); digest.Add(prepared.projected_only);
+    digest.Add(prepared.reason); digest.Add(prepared.scale);
+    digest.AddSparse(prepared.free_design); digest.AddSparse(prepared.raw);
+    digest.Add(prepared.coefficients); digest.Add(prepared.correction);
+    if(prepared.free_design_rank)
+    {
+        digest.Add(true); digest.Add(prepared.free_design_rank->rank);
+        digest.Add(prepared.free_design_rank->threshold); digest.Add(prepared.free_design_rank->singular_values);
+    }
+    else digest.Add(false);
+    digest.Add(reduced.valid); digest.Add(reduced.reason); digest.Add(reduced.jacobian);
+    digest.Add(reduced.response); digest.Add(reduced.jacobian_norms);
+    return digest.Finish();
+}
+
+double Seconds(Clock::time_point started)
+{return std::chrono::duration<double>(Clock::now()-started).count();}
+
+void ReportSamples(const std::string & name,std::vector<double> samples)
+{
+    auto sorted=samples; std::sort(sorted.begin(),sorted.end());
+    const double median=sorted[sorted.size()/2];
+    std::cout<<name<<"_ms_per_call_median="<<median*1000.0
+        <<" range_ms="<<sorted.front()*1000.0<<".."<<sorted.back()*1000.0<<" samples_ms=";
+    for(std::size_t k=0;k<samples.size();++k)
+        std::cout<<(k ? "," : "")<<samples[k]*1000.0;
+    std::cout<<'\n';
+}
+
+int Run()
+{
+    constexpr int samples=5,repeats=5;
+    Matrix j(4096,8);
+    for(Eigen::Index row=0;row<j.rows();++row)
+        for(Eigen::Index col=0;col<j.cols();++col)
+        {
+            const double phase=static_cast<double>(row+1)*static_cast<double>(col+1);
+            j(row,col)=(std::sin(.00019*phase)+.4*std::cos(.00031*(phase+7.0)))/std::sqrt(4096.0);
+        }
+    Vector truth=Vector::Constant(j.cols(),.6),r=-(j*truth),d=Vector::Ones(j.cols());
+    Vector upper=Vector::Constant(j.cols(),.15); upper(0)=.02;
+    std::vector<double> bounded_times;
+    joint::ActiveSetStep bounded;
+    joint::BoundedLmTestWork bounded_work;
+    std::string bounded_digest;
+    for(int sample=0;sample<samples+1;++sample)
+    {
+        joint::BoundedLmTestWork aggregate;
+        const auto started=Clock::now();
+        for(int repeat=0;repeat<repeats;++repeat)
+        {
+            joint::BoundedLmWorkForTesting()={};
+            bounded=joint::SolveBoundedTrustRegionStep(j,r,d,upper,.3,.5);
+            if(!bounded.valid) throw std::runtime_error("bounded LM: "+bounded.status);
+            const auto & work=joint::BoundedLmWorkForTesting();
+            aggregate.damping_solves+=work.damping_solves;
+            aggregate.bracket_solves+=work.bracket_solves;
+            aggregate.bisection_solves+=work.bisection_solves;
+            aggregate.active_set_iterations+=work.active_set_iterations;
+            aggregate.releases+=work.releases;
+            aggregate.dense_qr_factorizations+=work.dense_qr_factorizations;
+            aggregate.workspace_allocation_sites+=work.workspace_allocation_sites;
+            aggregate.workspace_peak_bytes=std::max(aggregate.workspace_peak_bytes,work.workspace_peak_bytes);
+            aggregate.dense_qr_factorization_seconds+=work.dense_qr_factorization_seconds;
+            aggregate.damping_search_seconds+=work.damping_search_seconds;
+        }
+        const double elapsed=Seconds(started)/repeats;
+        if(sample) bounded_times.push_back(elapsed);
+        bounded_work=std::move(aggregate);
+    }
+    joint::BoundedLmWorkForTesting()={};
+    joint::BoundedLmWorkForTesting().capture_trace=true;
+    bounded=joint::SolveBoundedTrustRegionStep(j,r,d,upper,.3,.5);
+    bounded_digest=BoundedDigest(bounded,joint::BoundedLmWorkForTesting());
+    ReportSamples("bounded_lm",std::move(bounded_times));
+    std::cout<<"bounded_lm_damping_solves_per_call="<<bounded_work.damping_solves/repeats
+        <<" bracket_solves_per_call="<<bounded_work.bracket_solves/repeats
+        <<" bisection_solves_per_call="<<bounded_work.bisection_solves/repeats
+        <<" dense_qr_count_per_call="<<bounded_work.dense_qr_factorizations/repeats
+        <<" dense_qr_ms_per_call="<<bounded_work.dense_qr_factorization_seconds*1000.0/repeats
+        <<" workspace_allocation_sites_per_call="<<bounded_work.workspace_allocation_sites/repeats
+        <<" workspace_peak_bytes_estimate="<<bounded_work.workspace_peak_bytes
+        <<" bitwise_trace_sha256="<<bounded_digest<<'\n';
+
+    auto input=std::make_shared<rhbm_gem::core::JointProblemInput>(
+        second_stage_test::SyntheticJointWorkload("chain",30));
+    joint::Domain domain(input);
+    const auto context=joint::CreateContext(input);
+    Vector y=Eigen::Map<const Vector>(input->observations.data(),
+        static_cast<Eigen::Index>(input->observations.size()));
+    Vector eta=Vector::Constant(static_cast<Eigen::Index>(input->atom_ids.size()),std::log(.55));
+    const auto evaluation=joint::EvaluateProfile(domain,y,eta,&context);
+    if(!evaluation.valid) throw std::runtime_error("profile preparation: "+evaluation.reason);
+
+    std::vector<double> prepare_times,reduce_times;
+    joint::TiledDifferential prepared;
+    joint::ReducedDifferential reduced;
+    std::string derivative_digest;
+    joint::DerivativeWork derivative_work;
+    for(int sample=0;sample<samples+1;++sample)
+    {
+        joint::DerivativeWork aggregate;
+        auto & work=joint::DerivativeWorkForTesting();
+        const auto started=Clock::now();
+        for(int repeat=0;repeat<repeats;++repeat)
+        {
+            work={};
+            prepared=joint::PrepareDerivative(evaluation,context.scale,&context);
+            if(!prepared.valid) throw std::runtime_error("derivative preparation: "+prepared.reason);
+            if(repeat==0) aggregate=work;
+            else
+            {
+                aggregate.prepare_calls+=work.prepare_calls;
+                aggregate.tiled_qr_invocations+=work.tiled_qr_invocations;
+                aggregate.tile_count+=work.tile_count;
+                aggregate.triplet_capacity_growths+=work.triplet_capacity_growths;
+                aggregate.cancellation_fallbacks+=work.cancellation_fallbacks;
+                aggregate.reference_order_recomputations+=work.reference_order_recomputations;
+                aggregate.maximum_generated_rows=std::max(aggregate.maximum_generated_rows,work.maximum_generated_rows);
+                aggregate.maximum_reduction_rows=std::max(aggregate.maximum_reduction_rows,work.maximum_reduction_rows);
+                aggregate.maximum_tile_workspace_bytes=std::max(aggregate.maximum_tile_workspace_bytes,work.maximum_tile_workspace_bytes);
+                aggregate.prepare_seconds+=work.prepare_seconds;
+                aggregate.tiled_qr_seconds+=work.tiled_qr_seconds;
+            }
+        }
+        const double elapsed=Seconds(started)/repeats;
+        if(sample) prepare_times.push_back(elapsed);
+        else derivative_digest=DerivativeDigest(prepared,reduced);
+        derivative_work=std::move(aggregate);
+
+        joint::TiledDifferential one=prepared;
+        const auto reduce_started=Clock::now();
+        for(int repeat=0;repeat<repeats;++repeat)
+        {
+            work={};
+            reduced=joint::ReduceDerivative(one,evaluation.residual);
+            if(!reduced.valid) throw std::runtime_error("derivative reduction: "+reduced.reason);
+        }
+        const double reduce_elapsed=Seconds(reduce_started)/repeats;
+        if(sample) reduce_times.push_back(reduce_elapsed);
+        if(!sample) derivative_digest=DerivativeDigest(prepared,reduced);
+    }
+    ReportSamples("derivative_prepare",std::move(prepare_times));
+    ReportSamples("derivative_reduce",std::move(reduce_times));
+    std::cout<<"derivative_rows="<<evaluation.residual.size()
+        <<" derivative_columns="<<evaluation.x.cols()
+        <<" derivative_prepare_qr_invocations="<<derivative_work.tiled_qr_invocations/repeats
+        <<" derivative_prepare_tiles="<<derivative_work.tile_count/repeats
+        <<" triplet_capacity_growths_per_call="<<derivative_work.triplet_capacity_growths/repeats
+        <<" max_generated_rows="<<derivative_work.maximum_generated_rows
+        <<" max_reduction_rows="<<derivative_work.maximum_reduction_rows
+        <<" maximum_tile_workspace_bytes_estimate="<<derivative_work.maximum_tile_workspace_bytes
+        <<" cancellation_fallbacks_per_call="<<derivative_work.cancellation_fallbacks/repeats
+        <<" reference_order_recomputations_per_call="<<derivative_work.reference_order_recomputations/repeats
+        <<" tiled_qr_ms_per_call="<<derivative_work.tiled_qr_seconds*1000.0/repeats
+        <<" bitwise_trace_sha256="<<derivative_digest<<'\n';
+
+    rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    Vector joint_eta=Vector::Constant(3,std::log(.55));
+    joint::FixedNeighborPolicy policy;
+    policy.core_atoms=3; policy.maximum_sweeps=3; policy.stop_after_stationarity=false;
+    policy.certify_endpoint=false; policy.collect_telemetry=true; policy.eta_upper_bound=std::log(2.2);
+    std::vector<double> joint_times;
+    for(int sample=0;sample<samples+1;++sample)
+    {
+        problem=rhbm_gem::core::JointProblem(second_stage_test::SyntheticJointWorkload("chain",3));
+        const auto started=Clock::now();
+        const auto result=joint::RunFixedNeighborDiagnostic(problem,joint_eta,policy);
+        const double elapsed=Seconds(started);
+        if(sample) joint_times.push_back(elapsed);
+        if(result.reason.empty()) throw std::runtime_error("synthetic Joint diagnostic returned no status");
+    }
+    ReportSamples("synthetic_joint_search",std::move(joint_times));
+    rusage usage{};
+    if(getrusage(RUSAGE_SELF,&usage)==0)
+    {
+#if defined(__APPLE__)
+        const auto peak_rss_bytes=static_cast<std::uint64_t>(usage.ru_maxrss);
+#else
+        const auto peak_rss_bytes=static_cast<std::uint64_t>(usage.ru_maxrss)*1024;
+#endif
+        std::cout<<"benchmark_peak_rss_bytes="<<peak_rss_bytes<<'\n';
+    }
+    return 0;
+}
+}
+
+int main()
+{
+    try {return Run();}
+    catch(const std::exception & error)
+    {std::cerr<<"joint optimization benchmark failed: "<<error.what()<<'\n'; return 1;}
+}

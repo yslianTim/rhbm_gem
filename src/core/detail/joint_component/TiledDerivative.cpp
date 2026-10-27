@@ -3,10 +3,22 @@
 #include <cmath>
 #include <optional>
 #include <utility>
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+#include <chrono>
+#endif
 
 namespace rhbm_gem::core::joint_component {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 DerivativeWork & DerivativeWorkForTesting() {static thread_local DerivativeWork work; return work;}
+namespace {
+struct DerivativeTimer
+{
+    double & seconds;
+    std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
+    ~DerivativeTimer()
+    {seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();}
+};
+}
 #endif
 namespace {
 Spectrum FreeDesignSpectrum(const CompactSvdResult & svd,Eigen::Index rows,Eigen::Index columns,
@@ -25,6 +37,11 @@ Spectrum FreeDesignSpectrum(const CompactSvdResult & svd,Eigen::Index rows,Eigen
 TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const EvaluationContext * context,
     double absolute,Eigen::Index tile,bool projected_only)
 {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    auto & work=DerivativeWorkForTesting();
+    ++work.prepare_calls;
+    DerivativeTimer timer{work.prepare_seconds};
+#endif
     TiledDifferential out;
     out.projected_only=projected_only;
     if(!e.valid || !(scale>0) || !std::isfinite(scale)) {out.reason="invalid-inner"; return out;}
@@ -41,7 +58,12 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
         t=Matrix::Zero(p,m);
     }
     for(Eigen::Index k=0;k<2*m;++k) for(Sparse::InnerIterator entry(e.derivative,k);entry;++entry)
+    {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(raw.size()==raw.capacity()) ++work.triplet_capacity_growths;
+#endif
         raw.emplace_back(entry.row(),k/2,entry.value()*e.beta(k));
+    }
     for(Eigen::Index col=0;col<p;++col)
     {
         const auto k=free[static_cast<std::size_t>(col)]; const double norm=e.x.col(k).norm();
@@ -54,7 +76,12 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
         }
         if(projected_only) free_column_norms(col)=norm;
         if(norm>0) for(Sparse::InnerIterator entry(e.x,k);entry;++entry)
+        {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            if(entries.size()==entries.capacity()) ++work.triplet_capacity_growths;
+#endif
             entries.emplace_back(entry.row(),col,entry.value()/norm);
+        }
         if(!projected_only) t(col,k/2)=e.derivative.col(k).dot(e.residual)/norm;
     }
     out.free_design.setFromTriplets(entries.begin(),entries.end());
@@ -70,6 +97,9 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
     };
     const auto reference_raw=[&]() {
         out.reference_order=true;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        ++work.reference_order_recomputations;
+#endif
         // Match the independent reference's multiply-add accumulation before
         // normalization amplifies a nearly cancelled projected column.
         raw.clear();
@@ -82,6 +112,9 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
                 double value=0;
                 if(ga && ga.row()==row) {value=std::fma(ga.value(),e.beta(2*a),value); ++ga;}
                 if(ch && ch.row()==row) {value=std::fma(ch.value(),e.beta(2*a+1),value); ++ch;}
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                if(raw.size()==raw.capacity()) ++work.triplet_capacity_growths;
+#endif
                 raw.emplace_back(row,a,value);
             }
         }
@@ -91,18 +124,30 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
     // bounded by tiled Householder reductions rather than materializing a
     // sparse Q action.
     const auto tiled_solve=[&]() {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        ++work.tiled_qr_invocations;
+#endif
         TiledQR qr(p,m);
         {
             for(Eigen::Index first=0;first<n;first+=tile)
             {
                 const auto count=std::min(tile,n-first);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                auto & tiles=DerivativeWorkForTesting();
-                tiles.maximum_generated_rows=std::max(tiles.maximum_generated_rows,count);
-                tiles.maximum_reduction_rows=std::max(tiles.maximum_reduction_rows,count+qr.r.rows());
+                work.maximum_generated_rows=std::max(work.maximum_generated_rows,count);
+                work.maximum_reduction_rows=std::max(work.maximum_reduction_rows,count+qr.r.rows());
+                work.maximum_tile_workspace_bytes=std::max(work.maximum_tile_workspace_bytes,
+                    static_cast<std::size_t>((count+qr.r.rows())*(p+m))*sizeof(double));
+                ++work.tile_count;
 #endif
                 const Matrix design(out.free_design.middleRows(first,count));
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                const auto qr_started=std::chrono::steady_clock::now();
+#endif
                 qr.Append(design,Matrix(out.raw.middleRows(first,count)),out.reference_order);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                work.tiled_qr_seconds+=std::chrono::duration<double>(
+                    std::chrono::steady_clock::now()-qr_started).count();
+#endif
             }
         }
         const auto boundary=projected_only ? RankBoundary::StrictGreater : RankBoundary::SvdNative;
@@ -146,6 +191,9 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
     const bool cancellation_detected=cancelled();
     if(!out.reference_order && cancellation_detected)
     {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        ++work.cancellation_fallbacks;
+#endif
         reference_raw();
         if(!tiled_solve()) return out;
     }
@@ -178,6 +226,11 @@ void TiledDifferential::Rows(Eigen::Index first,Eigen::Index count,Matrix & proj
 namespace {
 ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef residual,Eigen::Index tile)
 {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    auto & work=DerivativeWorkForTesting();
+    ++work.reduction_calls;
+    DerivativeTimer timer{work.reduction_seconds};
+#endif
     ReducedDifferential out; out.reason=d.reason; if(!d.valid) return out;
     if(tile<=0) throw std::invalid_argument("Invalid derivative tile size.");
     const auto n=d.raw.rows(),m=d.raw.cols();
@@ -189,12 +242,21 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
         const auto count=std::min(tile,n-first);
         d.Rows(first,count,projected,j);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        auto & work=DerivativeWorkForTesting();
         work.maximum_generated_rows=std::max(work.maximum_generated_rows,count);
         work.maximum_reduction_rows=std::max(work.maximum_reduction_rows,count+jacobian.r.rows());
+        work.maximum_tile_workspace_bytes=std::max(work.maximum_tile_workspace_bytes,
+            static_cast<std::size_t>((count+jacobian.r.rows())*(m+1))*sizeof(double));
+        ++work.tile_count; ++work.tiled_qr_invocations;
 #endif
         if(!projected.allFinite() || !j.allFinite()) {out.reason="nonfinite-derivative"; return out;}
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        const auto qr_started=std::chrono::steady_clock::now();
+#endif
         jacobian.Append(j,Matrix(residual.segment(first,count)/d.scale));
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        work.tiled_qr_seconds+=std::chrono::duration<double>(
+            std::chrono::steady_clock::now()-qr_started).count();
+#endif
         for(Eigen::Index k=0;k<m;++k)
             out.jacobian_norms(k)=std::hypot(out.jacobian_norms(k),j.col(k).blueNorm());
     }
@@ -206,6 +268,11 @@ ReducedDifferential ReduceDerivative(const TiledDifferential & d,VectorRef resid
 {return ReduceDerivativeImpl(d,residual,tile);}
 ReducedProjectedWidthDifferential ReduceProjectedWidthDerivative(const TiledDifferential & d,Eigen::Index tile)
 {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    auto & work=DerivativeWorkForTesting();
+    ++work.reduction_calls;
+    DerivativeTimer timer{work.reduction_seconds};
+#endif
     ReducedProjectedWidthDifferential out; out.reason=d.reason; if(!d.valid || !d.projected_only) return out;
     if(tile<=0) throw std::invalid_argument("Invalid derivative tile size.");
     const auto n=d.raw.rows(),m=d.raw.cols();
@@ -216,12 +283,21 @@ ReducedProjectedWidthDifferential ReduceProjectedWidthDerivative(const TiledDiff
         const auto count=std::min(tile,n-first);
         d.Rows(first,count,p,j);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        auto & work=DerivativeWorkForTesting();
         work.maximum_generated_rows=std::max(work.maximum_generated_rows,count);
         work.maximum_reduction_rows=std::max(work.maximum_reduction_rows,count+projected.r.rows());
+        work.maximum_tile_workspace_bytes=std::max(work.maximum_tile_workspace_bytes,
+            static_cast<std::size_t>((count+projected.r.rows())*m)*sizeof(double));
+        ++work.tile_count; ++work.tiled_qr_invocations;
 #endif
         if(!p.allFinite()) {out.reason="nonfinite-projected-width-derivative"; return out;}
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        const auto qr_started=std::chrono::steady_clock::now();
+#endif
         projected.Append(p,Matrix(count,0));
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        work.tiled_qr_seconds+=std::chrono::duration<double>(
+            std::chrono::steady_clock::now()-qr_started).count();
+#endif
         for(Eigen::Index k=0;k<m;++k)
             out.projected_norms(k)=std::hypot(out.projected_norms(k),p.col(k).norm());
     }

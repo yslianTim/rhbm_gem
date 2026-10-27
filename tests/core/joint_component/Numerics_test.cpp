@@ -66,6 +66,43 @@ struct Direct
     }
 };
 
+TEST(JointComponentNumericsTest, TiledDerivativeRecordsCancellationReferenceFallback)
+{
+    std::vector<std::vector<n::Support>> support(1);
+    support[0]={{0,0.0},{1,0.25},{2,0.25}};
+    Vector y(3);
+    for(Eigen::Index row=0;row<3;++row)
+    {
+        const double square=row==0 ? 0.0 : 0.25;
+        const auto basis=n::EvaluateKernel(square,.55,2.5);
+        y(row)=3.0*basis.gaussian+.25*basis.charge+(row==1 ? 1e-4 : row==2 ? -1e-4 : 0.0);
+    }
+    const n::Domain domain(3,std::move(support));
+    const auto context=p::MakeContext(y,1);
+    const Vector eta=Vector::Constant(1,std::log(.55));
+    const auto evaluation=n::EvaluateProfile(domain,y,eta,&context);
+    ASSERT_TRUE(evaluation.valid)<<evaluation.reason;
+    ASSERT_GT(evaluation.beta(0),0.0);
+    EXPECT_GT(evaluation.residual.norm(),0.0);
+
+    n::DerivativeWorkForTesting()={};
+    const auto full=n::PrepareDerivative(evaluation,context.scale,&context,-1,3);
+    ASSERT_TRUE(full.valid)<<full.reason;
+    EXPECT_TRUE(full.reference_order);
+    EXPECT_EQ(n::DerivativeWorkForTesting().cancellation_fallbacks,1u);
+    EXPECT_EQ(n::DerivativeWorkForTesting().reference_order_recomputations,1u);
+    EXPECT_EQ(n::DerivativeWorkForTesting().tiled_qr_invocations,2u);
+    EXPECT_EQ(n::DerivativeWorkForTesting().tile_count,2u);
+
+    n::DerivativeWorkForTesting()={};
+    const auto projected=n::PrepareProjectedWidthDerivative(evaluation,context.scale,&context,-1,3);
+    ASSERT_TRUE(projected.valid)<<projected.reason;
+    EXPECT_TRUE(projected.reference_order);
+    EXPECT_EQ(n::DerivativeWorkForTesting().cancellation_fallbacks,1u);
+    EXPECT_EQ(n::DerivativeWorkForTesting().reference_order_recomputations,1u);
+    EXPECT_TRUE(projected.projected_only);
+}
+
 ;
 ;
 }

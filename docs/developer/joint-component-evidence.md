@@ -164,3 +164,52 @@ qualification evidence, and Halo donor provenance. Historical JSON/SQLite
 decoding remains part of the compatibility contract. The Joint objective does
 not estimate a global parameter covariance; downstream Local MDPDE and Group
 Fitting retain their own qualification rules.
+
+## Bounded Active-set LM and Profile Derivative optimization baseline
+
+Frozen baseline: `8275deea7ea21c4891ef2a882239273005313511` on `develop`.
+The local Release build used AppleClang 21.0.0.21000334, C++20, Eigen 5.0.1,
+Ninja, macOS Darwin 25.6.0 arm64 (Apple M1), OpenMP 5.1, Boost 1.92.0, and
+SQLite 3.54.0. CMake used `BUILD_TESTING=ON`,
+`RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE=ON`, `RHBM_GEM_ENABLE_UMAP=OFF`,
+`RHBM_GEM_DEP_PROVIDER=SYSTEM`, and `CMAKE_BUILD_TYPE=Release`. Build and
+runtime thread limits were four; CTest ran serially. The benchmark was built
+with test-only instrumentation and run with five warmup calls followed by five
+samples of five calls each. Its full numeric traces are hashed from the raw
+IEEE-754 bit patterns; timing is diagnostic-build data and should only be
+compared with the same configuration.
+
+The Bounded LM fixture is a deterministic `4096 × 8` dense subproblem with a
+nonzero damping bracket and bisection. The Profile Derivative fixture is a
+30-Target chain with 13,710 rows and 60 derivative columns, reduced in two
+tiles at the existing 8,192-row limit. The separate synthetic Joint timing is
+a 3-Target, 3-sweep diagnostic run; it is a local regression fixture, not a
+large-workload performance claim.
+
+| Baseline measure | Result |
+| --- | ---: |
+| Bounded LM total, median (5 samples) | 17.059 ms/call (16.851–17.173) |
+| Damping solves / bracket / bisection | 59 / 4 / 54 per call |
+| Dense QR factorizations | 136 per call |
+| Dense QR factorization time | 11.620 ms/call |
+| Explicit temporary allocation sites | 1,581 per call |
+| Estimated temporary workspace peak | 328,584 bytes, excluding QR internals |
+| Derivative preparation, median (5 samples) | 20.233 ms/call (19.807–20.507) |
+| Derivative reduction, median (5 samples) | 5.977 ms/call (5.860–6.007) |
+| Tiled QR time during preparation | 16.986 ms/call |
+| Triplet vector capacity growths | 32 per preparation |
+| Estimated maximum tiled workspace | 5,898,240 bytes |
+| Synthetic Joint search, median (5 samples) | 3.317 ms/call (3.263–3.386) |
+| Benchmark process peak RSS | 44,728,320 bytes |
+
+Baseline Bounded LM trace SHA-256:
+`290e1a65097e34b1a1198064bc49c2c357a83271c709ce6b156ccbb1eec798ab`.
+Profile preparation/reduction bit-pattern SHA-256:
+`8c2f90707e1f5b97058dc6708c58b136737878f3795d5c731f2150555255c9d7`.
+The joint contract, workflow, and numerical CTest groups all passed (3/3,
+5.69 s). Deterministic Bounded LM tests pin result bits and record the damping
+candidate sequence, per-iteration active masks, steps, gradients, KKT
+tolerances, free-face ranks, and trust-region feasibility decisions; a release
+fixture verifies the active-face transition bitwise. A three-row fixture
+confirms cancellation detection and reference-order recomputation in both full
+and projected-only derivative preparation.
