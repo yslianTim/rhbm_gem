@@ -658,6 +658,82 @@ and convergence differences are not measurable here. No E1/E2/C convergence
 or Independent Replay pass is claimed. R4 passes as a diagnostic study, but
 no incremental objective qualifies for R5 Production promotion.
 
+### R5: performance decision and Production outcome
+
+All closed-loop sizes used five timed repetitions and five sweeps. For the
+1,000-target Full-Replay-versus-D1 comparison, the search medians were
+10.412323 s and 6.433959 s, respectively: D1 was 38.2% faster. Candidate
+replay accounted for 7.249199 s of Full Replay search and 3.290498 s of D1
+search. D1's candidate replay was 51.1% of its total search time, giving a
+2.05x Amdahl upper bound only if that whole candidate-replay cost vanished.
+This is a bound on D1 search, not a measured incremental-objective speedup.
+The benchmark reported a 121,648,896 B memory preflight peak and 233,512 B
+affected-row candidate scratch for D1. Process peak RSS was 242,302,976 B for
+the benchmark containing both methods and all five repetitions.
+
+The replay-only 1,000-target comparison used five timed repeats and 84
+candidates. These per-candidate values are not a FixedNeighbor total-search
+comparison:
+
+| Method | Candidate replay median | Preparation / amortized index cost | Incremental memory observed | Numerical result | Production |
+| --- | ---: | ---: | ---: | --- | --- |
+| D1 | 7.877 ms (including 0.380 ms incidence preparation) | On-demand incidence per candidate | 321,824 B candidate scratch; no global index | Prediction, residual, and objective bitwise match Full Replay | Yes; only production candidate path |
+| E1 | 0.647 ms (0.209 ms replay plus 0.380 ms incidence preparation) | On-demand incidence per candidate | Same 321,824 B candidate scratch; no retained objective cache | Prediction/residual exact; objective differed on 84/84 candidates, max `3.64e-17` | No; no decision-safety bound |
+| E2 | 0.260 ms amortized, including CSR build divided over 84 candidates (0.225 ms replay) | 2.916 ms one-time CSR build | 7,760,488 B resident CSR; 7,736,020 B build temporary; 22,777,468 B estimated build peak including accepted state | Prediction/residual exact; objective differed on 84/84, max `3.64e-17` | No; no decision-safety bound |
+| C | 0.562 ms in the replay-only comparison | No global index | 88,512 B experiment candidate scratch | Prediction drift; objective differed on 84/84, max `3.64e-17` | No; prediction drift also needs control |
+
+E2 was 2.49x faster than E1 in amortized replay-only candidate time and broke
+even after seven candidates in this 84-candidate synthetic fixture. That
+supports its replay-only index hypothesis, but not a Production memory
+decision: neither E1 nor E2 passed R3, and the 5,938,087-observation input and
+its actual support count were unavailable. Process RSS in the E1/E2 replay
+benchmark was 205,602,816 B across the fixture, reference checks, methods, and
+repetitions; it is not a per-method resident-memory measurement.
+
+The conditional Full Scan fallback rate is 100% by the safe R3 policy because
+no validated error interval exists. Fast Accept and Fast Reject counts are
+both zero by policy; no conditional-gate execution counts or error-bound
+violations exist to report. There is no accepted incremental objective cache
+in Production and thus no Production objective drift. Experimental direct
+incremental objective showed measured differences up to `3.22e-15` in the
+503-attempt study and up to `1.07e-14` on the 1,000-target D1 shadow. No
+conservative bound was emitted, so bound violations are N/A rather than zero.
+
+The qualified D1 two-block fixture passed convergence, endpoint certification,
+and Independent Replay; global A/C KKT was `4.33411e-9`, projected Width KKT
+was `1.62354e-10`, and objective was `2.0199079729737389e-10`. Its complete
+Full Replay and D1 state traces, including final eta/beta/prediction/residual
+and objective, matched bitwise. The N5 1,000-target five-sweep comparison also
+had bitwise-identical block/sweep traces and final state. The R4 shadow runs
+did not let E1/E2/C change parameters; final A/B/C/Width deltas for those
+methods are therefore not applicable, not zero. Their KKT, convergence
+qualification, endpoint certification, and Independent Replay remain
+unmeasured. At 1,000 targets the non-qualifying five-sweep D1 diagnostic ended
+with global A/C KKT `2.77528e-10` and projected Width KKT `5.63438e-13`, but
+stopped at its sweep budget without endpoint certification or Independent
+Replay. No claim that the incremental methods preserve final estimates to two
+decimal places is supported by these shadow comparisons.
+
+R5 selects Outcome D. Production remains D1 with its existing Full Replay
+memory fallback, sweep-end replay, endpoint certification, Independent
+Replay, and unchanged acceptance and convergence criteria. No incremental
+objective Production branch was added, so there was no unqualified branch to
+remove. The direct, compensated, tiled, tree, E1/E2, and C mechanisms remain
+test-only research comparisons. They do not meet the 15% Production promotion
+criterion because no safe conditional gate was implemented and no valid
+incremental-objective FixedNeighbor total was measured. No real large-data
+benchmark or complete end-to-end algorithm timing was available.
+
+Direct incremental accumulation was the fastest simple R1 objective update;
+Kahan and Neumaier did not consistently reduce error, and tile/tree cache
+recompute was slower on the measured fixture. E2 was fastest in replay-only
+incidence comparison, while E1 had lower retained memory. Conditional Full
+Scan is the only proven-safe objective decision policy from this study, but
+at 100% fallback it delivers no speedup over D1.
+
+R5 ran after the final code change from R4. Serial CTest remained 19/19 green
+in 20.66 s. Git changes for this stage are documentation only.
+
 ## Roadmap status
 
 | Stage | Status | Result |
@@ -676,5 +752,5 @@ no incremental objective qualifies for R5 Production promotion.
 | R1 | Complete | Compared direct, scaled, compensated, tiled, and tree objectives; no reliable error bound. | `7584c5f8` |
 | R2 | Complete | E2 beat E1 in replay-only tests but added 7.76 MB CSR at 1,000 targets; no Production integration. | `2deba209` |
 | R3 | Complete, candidate unqualified | No conservative decision bound; safe disposition is D1 Full Scan on every candidate. | `2624c585` |
-| R4 | Complete, diagnostic only | E1/E2/C shadowed D1 traces; errors observed and no safe gate or candidate-controlled convergence established. | Pending |
-| R5 | Pending | Production decision and final benchmark record. | Pending |
+| R4 | Complete, diagnostic only | E1/E2/C shadowed D1 traces; errors observed and no safe gate or candidate-controlled convergence established. | `46a4c288` |
+| R5 | Complete | Outcome D; retain D1, report replay-only gains and leave incremental methods test-only. | This final study commit |
