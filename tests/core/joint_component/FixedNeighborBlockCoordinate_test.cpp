@@ -13,7 +13,9 @@
 #include "support/JointSyntheticWorkload.hpp"
 #include <bit>
 #include <cmath>
+#include <cstdlib>
 #include <cstdint>
+#include <fstream>
 #include <iomanip>
 #include <limits>
 #include <numeric>
@@ -1269,12 +1271,34 @@ TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveHandlesSignedCha
         RecordProperty("signed_low_amplitude_E1_prediction_replay_error",
             Precise(e1.final_sweep->cache_replay_error));
     }
-    if(!d1.search_converged || !e1.search_converged)
+    if(!d1.search_converged && !e1.search_converged)
     {
         EXPECT_EQ(d1.reason,"block-sweep-budget");
         EXPECT_EQ(e1.reason,"block-sweep-budget");
+        ASSERT_TRUE(d1.final_sweep); ASSERT_TRUE(e1.final_sweep);
+        EXPECT_GT(d1.final_sweep->projected_width_gradient_inf_norm,
+            policy.convergence_criteria.global_width_gradient);
+        EXPECT_GT(e1.final_sweep->projected_width_gradient_inf_norm,
+            policy.convergence_criteria.global_width_gradient);
+        EXPECT_FALSE(d1.endpoint_certified); EXPECT_FALSE(e1.endpoint_certified);
+        EXPECT_NE(d1.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+        EXPECT_NE(e1.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+        EXPECT_NEAR(d1.final_sweep->projected_width_gradient_inf_norm,
+            e1.final_sweep->projected_width_gradient_inf_norm,1e-12);
+        EXPECT_EQ(signed_audit.actual_reference_disagreements,0u);
+        RecordProperty("signed_low_amplitude_classification","legacy-unqualified-non-regression");
         return;
     }
+    if(!d1.search_converged)
+    {
+        ASSERT_TRUE(e1.search_converged)<<e1.reason;
+        ASSERT_TRUE(e1.endpoint_certified)<<e1.endpoint_trust.reason;
+        EXPECT_TRUE(e1.assessment.independent_replay.passed);
+        EXPECT_EQ(e1.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+        RecordProperty("signed_low_amplitude_classification","E1-improvement");
+        return;
+    }
+    ASSERT_TRUE(e1.search_converged)<<"E1 regression: "<<e1.reason;
     ASSERT_TRUE(d1.endpoint_certified)<<d1.endpoint_trust.reason;
     ASSERT_TRUE(e1.endpoint_certified)<<e1.endpoint_trust.reason;
     EXPECT_TRUE(d1.assessment.independent_replay.passed);
@@ -1309,6 +1333,188 @@ TEST(JointFixedNeighborBlockCoordinateTest, SignedCancellationFixtureMatchesHist
     EXPECT_EQ(support_entries,1545u);
     EXPECT_EQ(second_stage_test::SyntheticJointWorkloadHash(input),
         "0b5c3798029192eb18c137134db3214e9647fa87868433366bd744210cce34eb");
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, SignedCancellationHistoricalFailureIsNonRegressionAcrossReplayModes)
+{
+    auto input=second_stage_test::SyntheticJointWorkload("chain",3);
+    for(std::size_t atom=0;atom<3;++atom)
+        for(const auto & support:input.support[atom])
+        {
+            const auto basis=n::EvaluateKernel(support.squared_distance,.5,2.5);
+            if(atom==0) input.observations[support.row]-=2.0*basis.gaussian;
+            if(atom!=1) input.observations[support.row]-=.4*basis.charge;
+        }
+    const auto input_hash=second_stage_test::SyntheticJointWorkloadHash(input);
+    ASSERT_EQ(input_hash,"0b5c3798029192eb18c137134db3214e9647fa87868433366bd744210cce34eb");
+    JointProblem problem(std::move(input));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector initial_eta=n::Vector::Constant(3,std::log(.55));
+    const std::vector<double> truth_beta{0,-.2,2,.2,2,-.2};
+    const char * trace_path=std::getenv("RHBM_SIGNED_TRACE_PATH");
+    std::ofstream trace;
+    if(trace_path) trace.open(trace_path);
+    if(trace_path) ASSERT_TRUE(trace.good());
+    trace << std::setprecision(17);
+    trace << "record|method|budget|sweep|block|full_objective|cache_objective|global_ac_kkt|width_kkt|"
+             "eta_change|ac_change|max_log_width_change|accepted|rejected|unchanged|recovery_attempts|"
+             "recovery_successes|objective_replay_error|prediction_replay_error|active_width_bounds|"
+             "local_stop|block_reason|candidate_before|candidate_objective|incremental_objective|"
+             "global_delta|local_global_error|candidate_accepted|candidate_unchanged|profile_evaluation|"
+             "profile_accepted|lm_ratio|acceptance_reason|stop_reason|details\n";
+    const auto run=[&](const std::string & method,std::size_t budget,
+        n::FixedNeighborObjectiveStrategyForTesting strategy,bool full_replay_reference,
+        IncrementalObjectiveAudit * audit_out) {
+        n::FixedNeighborPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=budget;
+        policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
+        policy.eta_upper_bound=std::log(2.2); policy.collect_telemetry=true;
+        policy.assess_local_conditioning=true; policy.assess_parameter_stability=true;
+        policy.capture_local_trajectory=true;
+        policy.objective_strategy_for_testing=strategy;
+        IncrementalObjectiveAudit audit;
+        std::vector<std::size_t> candidate_accepts(budget+1),candidate_rejects(budget+1),candidate_unchanged(budget+1);
+        policy.candidate_observer=[&](const n::FixedNeighborCandidateEvent & event) {
+            AuditIncrementalCandidate(data.layout,data.context.scale,event,audit);
+            if(event.unchanged) ++candidate_unchanged.at(event.sweep);
+            else if(event.accepted) ++candidate_accepts.at(event.sweep);
+            else ++candidate_rejects.at(event.sweep);
+            trace << "candidate|" << method << '|' << budget << '|' << event.sweep << '|' << event.block
+                << "|||||||||||||||||" << event.accepted_before.objective << '|' << event.full_objective
+                << '|' << event.incremental_objective << '|' << event.global_replay_delta << '|'
+                << event.local_global_delta_error << '|' << event.accepted << '|' << event.unchanged
+                << "||||||" << (event.objective_full_scan_fallback ? "full-scan-fallback" : "direct") << '\n';
+        };
+        policy.state_observer=[&](std::size_t sweep_index,const n::BlockCoordinateState & state,
+            const n::FixedNeighborBlockSweep & sweep,const std::vector<n::FixedNeighborBlockRecord> & blocks) {
+            const auto replay=n::FullReplayForTesting(data.domain,data.layout,data.y,
+                state.eta,state.beta,data.context.scale);
+            std::size_t block_accepted{},block_unchanged{},block_failed{};
+            for(const auto & block:blocks) if(block.sweep==sweep_index)
+            {
+                block_accepted+=block.accepted;
+                block_unchanged+=block.status=="unchanged";
+                block_failed+=block.status=="failed";
+                trace << "block|" << method << '|' << budget << '|' << block.sweep << '|' << block.block
+                    << "||||||||" << block.accepted << '|' << (block.status=="failed") << '|'
+                    << (block.status=="unchanged") << '|' << block.recovery_attempt << '|'
+                    << block.recovery_success << "||||||||||||" << block.local_search_stop_reason << '|'
+                    << block.reason << "||||||||" << block.profile_trials.size() << '\n';
+                for(const auto & trial:block.profile_trials)
+                    trace << "trial|" << method << '|' << budget << '|' << block.sweep << '|' << block.block
+                        << "|||||||||||||||||||||||||" << trial.profile_evaluation << '|' << trial.accepted
+                        << '|' << trial.lm_ratio << '|' << trial.acceptance_reason << "||\n";
+            }
+            trace << "sweep|" << method << '|' << budget << '|' << sweep_index << "|"
+                << "|" << replay.objective << '|' << state.objective << '|' << sweep.global_ac_kkt << '|'
+                << sweep.projected_width_gradient_inf_norm << '|' << sweep.eta_change_inf << '|'
+                << sweep.beta_scaled_change << '|' << sweep.maximum_accepted_log_width_step << '|'
+                << candidate_accepts.at(sweep_index) << '|' << candidate_rejects.at(sweep_index) << '|'
+                << candidate_unchanged.at(sweep_index) << '|' << sweep.recovery_attempts << '|'
+                << sweep.recovery_successes << '|' << sweep.objective_replay_error << '|'
+                << sweep.cache_replay_error << '|' << sweep.active_width_bound_count
+                << "|||||||||||||full-replay-audit,block_accepts=" << block_accepted
+                << ",block_unchanged=" << block_unchanged << ",block_failures=" << block_failed << '\n';
+        };
+        if(full_replay_reference)
+            policy.candidate_replay_for_testing=[&](const n::BlockCoordinateState &,const n::Indices &,
+                const n::Indices &,n::VectorRef eta,n::VectorRef beta) {
+                return n::FullReplayForTesting(data.domain,data.layout,data.y,eta,beta,data.context.scale);
+            };
+        const auto result=n::RunFixedNeighborDiagnostic(problem,initial_eta,policy);
+        const auto full=n::FullReplayForTesting(data.domain,data.layout,data.y,
+            result.state.eta,result.state.beta,data.context.scale);
+        const double beta_error=(result.state.beta-n::Vector::Map(truth_beta.data(),6)).norm()/std::sqrt(6.0);
+        const double width_error=(result.state.eta.array().exp()-.5).matrix().norm()/std::sqrt(3.0);
+        if(!result.final_sweep) {ADD_FAILURE() << "Missing final sweep for " << method; return result;}
+        trace << "summary|" << method << '|' << budget << '|' << result.sweep_count << "||"
+            << full.objective << '|' << result.state.objective << '|' << result.final_sweep->global_ac_kkt << '|'
+            << result.final_sweep->projected_width_gradient_inf_norm << '|' << result.final_sweep->eta_change_inf << '|'
+            << result.final_sweep->beta_scaled_change << '|' << result.final_sweep->maximum_accepted_log_width_step
+            << "||||" << result.final_sweep->recovery_attempts << '|' << result.final_sweep->recovery_successes << "||||"
+            << result.final_sweep->active_width_bound_count << "||||||||||||" << result.reason << '|'
+            << "converged=" << result.search_converged << ",endpoint=" << result.endpoint_certified
+            << ",independent_replay=" << result.assessment.independent_replay.passed
+            << ",objective_error=" << std::abs(result.state.objective-full.objective)
+            << ",beta_truth_rmse=" << beta_error << ",width_truth_rmse=" << width_error
+            << ",candidate_count=" << audit.candidates << ",candidate_accepts=" << audit.accepted
+            << ",candidate_rejects=" << audit.rejected
+            << ",actual_decision_disagreements=" << audit.actual_reference_disagreements
+            << ",max_candidate_objective_error=" << audit.maximum_absolute
+            << ",max_candidate_cache_drift=" << audit.maximum_cache_drift
+            << ",max_candidate_objective_ulp=" << audit.maximum_ulp
+            << ",input_sha256=" << input_hash << ",scale=" << data.context.scale
+            << ",memory_status=" << static_cast<int>(result.global_state_memory_estimate.status)
+            << ",memory_peak=" << result.global_state_memory_estimate.estimated_peak_bytes << '\n';
+        EXPECT_TRUE(result.state.eta.allFinite()); EXPECT_TRUE(result.state.beta.allFinite());
+        EXPECT_TRUE(std::isfinite(result.state.objective)); EXPECT_TRUE(std::isfinite(full.objective));
+        EXPECT_EQ(result.global_state_memory_estimate.status,n::MemoryStatus::Pass);
+        EXPECT_FALSE(result.work.full_replay_memory_fallback);
+        if(result.search_converged)
+        {
+            EXPECT_TRUE(result.endpoint_certified);
+            EXPECT_TRUE(result.assessment.independent_replay.passed);
+        }
+        else
+        {
+            EXPECT_EQ(result.reason,"block-sweep-budget");
+            EXPECT_GT(result.final_sweep->projected_width_gradient_inf_norm,
+                policy.convergence_criteria.global_width_gradient);
+        }
+        if(audit_out) *audit_out=audit;
+        return result;
+    };
+    for(const std::size_t budget:{200u,500u,1000u})
+    {
+        const auto f1=run("F1",budget,n::FixedNeighborObjectiveStrategyForTesting::FullScan,true,nullptr);
+        const auto d1=run("D1",budget,n::FixedNeighborObjectiveStrategyForTesting::FullScan,false,nullptr);
+        IncrementalObjectiveAudit e1_audit;
+        const auto e1=run("E1-Direct",budget,n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect,
+            false,&e1_audit);
+        const auto f1_full=n::FullReplayForTesting(data.domain,data.layout,data.y,f1.state.eta,f1.state.beta,data.context.scale);
+        const auto d1_full=n::FullReplayForTesting(data.domain,data.layout,data.y,d1.state.eta,d1.state.beta,data.context.scale);
+        const auto e1_full=n::FullReplayForTesting(data.domain,data.layout,data.y,e1.state.eta,e1.state.beta,data.context.scale);
+        ASSERT_EQ(f1.search_converged,d1.search_converged);
+        ASSERT_EQ(f1.reason,d1.reason);
+        EXPECT_LE(std::abs(d1_full.objective-f1_full.objective),n::BlockObjectiveReplayEnclosure(f1_full.objective));
+        EXPECT_LE(std::abs(e1_full.objective-d1_full.objective),n::BlockObjectiveReplayEnclosure(d1_full.objective));
+        EXPECT_LE(std::abs(e1.state.objective-e1_full.objective),n::BlockObjectiveReplayEnclosure(e1_full.objective));
+        EXPECT_EQ(e1_audit.candidates,e1.work.incremental_objective_evaluations);
+        EXPECT_EQ(e1_audit.actual_reference_disagreements,0u);
+        if(!e1.search_converged)
+        {
+            EXPECT_EQ(e1.reason,d1.reason);
+            EXPECT_NEAR(e1.final_sweep->global_ac_kkt,d1.final_sweep->global_ac_kkt,1e-12);
+            EXPECT_NEAR(e1.final_sweep->projected_width_gradient_inf_norm,
+                d1.final_sweep->projected_width_gradient_inf_norm,1e-12);
+        }
+        const double maximum_beta_difference=(e1.state.beta-d1.state.beta).cwiseAbs().maxCoeff();
+        const double maximum_width_difference=(e1.state.eta.array().exp()-d1.state.eta.array().exp()).abs().maxCoeff();
+        const double f1_d1_beta_difference=(f1.state.beta-d1.state.beta).cwiseAbs().maxCoeff();
+        const double f1_d1_width_difference=(f1.state.eta.array().exp()-d1.state.eta.array().exp()).abs().maxCoeff();
+        RecordProperty(("signed_"+std::to_string(budget)+"_f1_outcome").c_str(),f1.reason);
+        RecordProperty(("signed_"+std::to_string(budget)+"_d1_outcome").c_str(),d1.reason);
+        RecordProperty(("signed_"+std::to_string(budget)+"_e1_outcome").c_str(),e1.reason);
+        RecordProperty(("signed_"+std::to_string(budget)+"_F1_full_objective").c_str(),Precise(f1_full.objective));
+        RecordProperty(("signed_"+std::to_string(budget)+"_D1_full_objective").c_str(),Precise(d1_full.objective));
+        RecordProperty(("signed_"+std::to_string(budget)+"_E1_full_objective").c_str(),Precise(e1_full.objective));
+        RecordProperty(("signed_"+std::to_string(budget)+"_E1_cache_error").c_str(),
+            Precise(std::abs(e1.state.objective-e1_full.objective)));
+        RecordProperty(("signed_"+std::to_string(budget)+"_E1_max_beta_difference").c_str(),Precise(maximum_beta_difference));
+        RecordProperty(("signed_"+std::to_string(budget)+"_E1_max_width_difference").c_str(),Precise(maximum_width_difference));
+        RecordProperty(("signed_"+std::to_string(budget)+"_F1_D1_max_beta_difference").c_str(),Precise(f1_d1_beta_difference));
+        RecordProperty(("signed_"+std::to_string(budget)+"_F1_D1_max_width_difference").c_str(),Precise(f1_d1_width_difference));
+        RecordProperty(("signed_"+std::to_string(budget)+"_E1_candidate_objective_error").c_str(),
+            Precise(e1_audit.maximum_absolute));
+        RecordProperty(("signed_"+std::to_string(budget)+"_E1_candidate_decision_disagreements").c_str(),
+            std::to_string(e1_audit.actual_reference_disagreements));
+        EXPECT_LE(f1_d1_beta_difference,1e-12);
+        EXPECT_LE(f1_d1_width_difference,1e-12);
+        EXPECT_LE(maximum_beta_difference,1e-12);
+        EXPECT_LE(maximum_width_difference,1e-12);
+        EXPECT_LE(e1_audit.maximum_absolute,n::BlockObjectiveReplayEnclosure(d1_full.objective));
+    }
+    trace.close();
+    if(trace_path) ASSERT_TRUE(trace.good());
 }
 
 TEST(JointFixedNeighborBlockCoordinateTest, AffectedReplayFallsBackBeforeScratchExceedsMemoryBudget)

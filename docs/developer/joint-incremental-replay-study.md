@@ -1082,3 +1082,55 @@ run had exactly the same objective, A/C KKT, Width KKT, and parameters. This is
 direct evidence that the signed-cancellation/near-zero Width failure existed
 in historical Production Full Replay before D1; its CTest success must not be
 read as a qualified endpoint.
+
+### P1 — Signed-cancellation failure attribution
+
+The same frozen input digest and scale were run against four implementations:
+archived F0, current F1 using `FullReplayForTesting` for candidate replay, D1
+using exact affected-row prediction plus full objective scan, and E1-Direct
+using exact affected-row prediction plus the incremental objective. F1 is a
+current-code reference measurement and is not substituted for the archived F0
+run. Each implementation ran with sweep budgets 200, 500, and 1,000.
+
+| Budget | F0 outcome | F1 outcome | D1 outcome | E1 outcome | Full Replay objective in all modes | E1 cached objective at stop | Global A/C KKT | Projected Width KKT |
+| ---: | --- | --- | --- | --- | ---: | ---: | ---: | ---: |
+| 200 | Unqualified | Unqualified | Unqualified | Unqualified | `4.0589644398391108e-10` | `4.0589565781233565e-10` | `2.2204460492503131e-16` | `1.2280135797126945e-9` |
+| 500 | Unqualified | Unqualified | Unqualified | Unqualified | `4.0589644398391108e-10` | `4.0589565781233565e-10` | `2.2204460492503131e-16` | `1.2280135797126945e-9` |
+| 1,000 | Unqualified | Unqualified | Unqualified | Unqualified | `4.0589644398391108e-10` | `4.0589565781233565e-10` | `2.2204460492503131e-16` | `1.2280135797126945e-9` |
+
+Every run stopped at `block-sweep-budget`; convergence and Endpoint
+Certification were not reached, and Independent Replay was not attempted.
+For each budget, F1, D1, and E1 had the same final parameters as F0. The maximum
+per-parameter E1-to-D1 and F1-to-D1 differences in A/C and Width were zero in
+this build. Their final truth RMSEs were also identical: A `3.7807092865e-5`,
+C `9.1068530959e-6`, and Width `4.6692389841e-6`. Full objective and KKT were
+constant throughout the final 100 sweeps. All methods had zero parameter
+movement and zero active Width bounds during those sweeps.
+
+E1's final cached objective differed from Full Replay by
+`7.8617157543253364e-16`, while the largest candidate incremental-objective
+difference was `7.8691393678997912e-16`. Both are within the existing
+`BlockObjectiveReplayEnclosure` (approximately `1e-12` here). Prediction
+replay error was zero. E1 made zero candidate-decision disagreements against
+the Full Replay objective reference; it had 42 accepted changed candidates,
+zero candidate rejections, and zero recovery retries at each budget. The other
+block attempts ended unchanged with `block-objective-increase` before a global
+candidate replay: 358, 958, and 1,958 block records at budgets 200, 500, and
+1,000 respectively. These are local no-update outcomes, not rejected global
+candidate transactions. LM local stop reasons, candidate decisions, and each
+sweep's full objective, KKT values, parameter changes, replay errors, and
+active-bound count were written to:
+
+- F0: `/private/tmp/rhbm-gem-f0-signed-trace.csv`
+- F1/D1/E1: `/private/tmp/rhbm-p1-signed-cancellation.csv`
+
+The current diagnostic trace contains all 5,100 sweeps, 10,200 block records,
+30,843 profile-trial records, and 378 candidate events. All three modes passed
+the 436,948-byte memory preflight with no Full Replay memory fallback. No
+nonfinite state or resource failure occurred.
+
+This is a **Legacy Baseline Limitation — Non-blocking for E1 Promotion**. It
+fails the unchanged projected Width KKT limit in historical F0, current F1,
+D1, and E1, with identical final objective, KKT, and parameters. E1 shows no
+additional failure in this case. The fixture is unqualified; the passing test
+records and asserts that status and does not certify it as a successful solve.
