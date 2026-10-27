@@ -1162,8 +1162,9 @@ zero candidate acceptance disagreements. All tested candidates were accepted
 (4/15/130/420); no candidate rejection was exercised by these standard inputs.
 E1's pre-promotion objective cache was not reconciled on every sweep in this
 benchmark; its largest final sweep replay difference was `1.08e-14` at 1,000
-targets. P4 changes the production path to reconcile after every successful
-full replay audit.
+targets. The audited P4 benchmark below includes the proposed per-sweep
+reconciliation after each successful Full Replay audit. It remains test-only
+because P3 did not pass its rejection-state-safety gate.
 
 The separately hashed active upper-width-bound input (`4b338146…e2ab176`)
 also qualified on F0, F1, D1, and E1. Each had one active upper bound, objective
