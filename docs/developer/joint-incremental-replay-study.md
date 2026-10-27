@@ -1037,6 +1037,19 @@ residual, and objective replay; its test-only candidate observer does not
 replace that path. Thus F0 is the last committed Production Full Replay
 baseline before D1, rather than the current-code F1 reference.
 
+The source diff from F0 to the D1-introduction commit adds exact affected-row
+candidate prediction, memory census/planning, and a memory-bounded fallback to
+the existing full replay. It does not change the local A/C solver, bounded
+Width LM, candidate consistency/acceptance conditions, Global KKT tests,
+convergence criteria, Endpoint Certification, or Independent Replay. For an
+affected row, contributors are evaluated in the existing global atom order;
+the objective still scans all informative rows. Unaffected rows reuse the
+accepted residual, and the existing sweep-end Full Replay checks that cache.
+The memory fallback calls the original full replay directly. This is a replay
+implementation and resource-planning change, with possible last-bit floating
+order effects covered by replay consistency checks; no other intended
+optimization or convergence semantic change was introduced by D1.
+
 F0 was exported with `git archive` into `/private/tmp`, then built without
 switching `develop` or creating a branch/worktree. The only archive-local
 change added a diagnostic test; no historical solver or acceptance code was
@@ -1148,10 +1161,10 @@ convergence criteria, bounds, initial states, core sizes, and sweep budgets.
 
 | Targets | SHA-256 | F0 outcome / sweeps | D1 and E1 outcome / sweeps | F0 objective; D1/E1 independent objective | Global A/C KKT; Width KKT | Truth RMSE A / C / Width |
 | ---: | --- | --- | --- | --- | --- | --- |
-| 3 | `4b338146…e2ab176` | Qualified / 4 | Qualified / 4 | `2.0199078132865162e-10`; `2.0199078132865188e-10` | `3.33e-16`; `3.89e-15` | `4.0637447e-5 / 9.1600727e-6 / 2.1408647e-6` |
-| 30 | `13cb46a3…a8580c57` | Qualified / 5 | Qualified / 5 | `1.517076030684615e-10`; `1.5170760306846197e-10` | `1.6023889e-9`; `1.8806623e-11` | `4.4464113e-5 / 1.0451471e-5 / 2.2118189e-6` |
-| 300 | `bfb80c5d…0268d8544` | Qualified / 5 | Qualified / 5 | `1.4790433590012254e-10`; `1.4790433590012404e-10` | `5.0672642e-10`; `1.8782753e-12` | `4.3627912e-5 / 1.0462239e-5 / 2.1372762e-6` |
-| 1,000 | `3d81218f…299ee33a3` | Qualified / 5 | Qualified / 5 | `1.4790435904528611e-10`; `1.4790435904529177e-10` | `2.7752783e-10`; `5.6343818e-13` | `4.3588368e-5 / 1.0456485e-5 / 2.1346573e-6` |
+| 3 | `4b3381463b3e7d97099342a9de86df01bf435cf2d64b8ea96af9ac0ee2eab176` | Qualified / 4 | Qualified / 4 | `2.0199078132865162e-10`; `2.0199078132865188e-10` | `3.33e-16`; `3.89e-15` | `4.0637447e-5 / 9.1600727e-6 / 2.1408647e-6` |
+| 30 | `13cb46a3575b92368d8393f168cf45cc7db9615e0e2cce06b7f97326a8580c57` | Qualified / 5 | Qualified / 5 | `1.517076030684615e-10`; `1.5170760306846197e-10` | `1.6023889e-9`; `1.8806623e-11` | `4.4464113e-5 / 1.0451471e-5 / 2.2118189e-6` |
+| 300 | `bfb80c5d252cee06f7e7f57906c39123adc007d37bccbe34fe546390268d8544` | Qualified / 5 | Qualified / 5 | `1.4790433590012254e-10`; `1.4790433590012404e-10` | `5.0672642e-10`; `1.8782753e-12` | `4.3627912e-5 / 1.0462239e-5 / 2.1372762e-6` |
+| 1,000 | `3d81218fbf38f8c661551631fbe4038694c67254b26283f51d10d49299ee33a3` | Qualified / 5 | Qualified / 5 | `1.4790435904528611e-10`; `1.4790435904529177e-10` | `2.7752783e-10`; `5.6343818e-13` | `4.3588368e-5 / 1.0456485e-5 / 2.1346573e-6` |
 
 Every run reached Endpoint Certification and Independent Replay. The
 independent objectives differ from F0 by at most `5.66e-24`; D1 and E1 final
@@ -1166,7 +1179,8 @@ targets. The audited P4 benchmark below includes the proposed per-sweep
 reconciliation after each successful Full Replay audit. It remains test-only
 because P3 did not pass its rejection-state-safety gate.
 
-The separately hashed active upper-width-bound input (`4b338146…e2ab176`)
+The separately hashed active upper-width-bound input
+(`4b3381463b3e7d97099342a9de86df01bf435cf2d64b8ea96af9ac0ee2eab176`)
 also qualified on F0, F1, D1, and E1. Each had one active upper bound, objective
 `2.02540027678003e-10`, global A/C KKT `1.1910380459667635e-9`, projected Width
 KKT `4.4614645311469303e-11`, Endpoint Certification, and Independent Replay.
@@ -1179,11 +1193,11 @@ with zero E1-to-D1 parameter differences.
 
 | Hard fixture | SHA-256 prefix | F0 | F1 / D1 / E1 | Objective, KKT and E1 audit | Assessment |
 | --- | --- | --- | --- | --- | --- |
-| High-overlap cube, 8 targets | `2a1894dc…f3f717b2` | Qualified | Qualified / Qualified / Qualified | Objective `1.1487848300043995e-10`; A/C KKT `6.9202588e-10`; Width KKT `1.4783064e-11`; 10 E1 candidates, zero disagreements, maximum error `2.30e-15` | Pass |
-| Rank-deficient constant-support | `fd39aa13…acaa7151` | `block-recovery-exhausted` | Same / Same / Same | Objective `0.49999999999999944`; A/C KKT `0.4828122672`; Width KKT `0`; no parameter movement; local rank failure preceded E1 candidate evaluation | Legacy unqualified; E1 added no failure |
-| Near-singular overlapping support | `fc9e6c0e…467454ef` | `block-recovery-exhausted` | Same / Same / Same | Objective `0.24948812932689915`; A/C KKT `0.6897680220`; Width KKT `0`; no parameter movement; local KKT failure preceded E1 candidate evaluation | Legacy unqualified; E1 added no failure |
-| Noise-only low signal | `0d2ecf60…7ad99d2f` | `block-sweep-budget` | Same / Same / Same | Objective `3.5558894899614887e-8`; A/C KKT `4.4687101e-13`; Width KKT `1.5473044e-12`; 2 active width bounds; final changes A/C `2.33e-13`, log Width `1.7644e-6`; 184 E1 accepts, zero disagreements, maximum candidate error `1.39e-22` | Legacy unqualified; E1 added no failure |
-| Weak-width direction | `aa1d50f8…f9ef9c` | Qualified | Qualified / Qualified / Qualified | Objective `1.1716558769804921e-32`; A/C KKT `1.1102230e-16`; Width KKT `5.5511151e-17`; 2 E1 candidates, zero disagreements, maximum error `6.14e-32` | Pass |
+| High-overlap cube, 8 targets | `2a1894dc5dc5f7789fbc802477e77e08f520a6c25f0c7eac6b42a4caf3f717b2` | Qualified | Qualified / Qualified / Qualified | Objective `1.1487848300043995e-10`; A/C KKT `6.9202588e-10`; Width KKT `1.4783064e-11`; 10 E1 candidates, zero disagreements, maximum error `2.30e-15` | Pass |
+| Rank-deficient constant-support | `fd39aa13434e60a2193641f97ff9bdd05669fb6bc1b57a4d52f454bdacaa7151` | `block-recovery-exhausted` | Same / Same / Same | Objective `0.49999999999999944`; A/C KKT `0.4828122672`; Width KKT `0`; no parameter movement; local rank failure preceded E1 candidate evaluation | Legacy unqualified; E1 added no failure |
+| Near-singular overlapping support | `fc9e6c0ec7f746d9de6221d1b680334bd870d7797012a666c32cdcdb467454ef` | `block-recovery-exhausted` | Same / Same / Same | Objective `0.24948812932689915`; A/C KKT `0.6897680220`; Width KKT `0`; no parameter movement; local KKT failure preceded E1 candidate evaluation | Legacy unqualified; E1 added no failure |
+| Noise-only low signal | `0d2ecf601cb21d6ce3d4e23f1aa7f37b78f17fe7ec58a19c49b397374ad99d2f` | `block-sweep-budget` | Same / Same / Same | Objective `3.5558894899614887e-8`; A/C KKT `4.4687101e-13`; Width KKT `1.5473044e-12`; 2 active width bounds; final changes A/C `2.33e-13`, log Width `1.7644e-6`; 184 E1 accepts, zero disagreements, maximum candidate error `1.39e-22` | Legacy unqualified; E1 added no failure |
+| Weak-width direction | `aa1d50f8e6dbcdaa22e401be857e849573ca0c6457d714583029003f23f9ef9c` | Qualified | Qualified / Qualified / Qualified | Objective `1.1716558769804921e-32`; A/C KKT `1.1102230e-16`; Width KKT `5.5511151e-17`; 2 E1 candidates, zero disagreements, maximum error `6.14e-32` | Pass |
 
 The rank-deficient and near-singular fixtures are common solver limitations,
 not incremental-objective decision failures: all four modes retain the same
