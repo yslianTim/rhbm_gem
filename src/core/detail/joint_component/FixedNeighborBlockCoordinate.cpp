@@ -1687,6 +1687,10 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             ReplayInto(domain,layout,y,out.state.eta,out.state.beta,context.scale,replay_structure,replay_workspace);
             (void)timer;
         }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(policy.perturb_sweep_replay_objective_for_testing)
+            replay_workspace.objective+=1.0;
+#endif
         const auto & replay=replay_workspace;
         const auto replay_audit_started=collect_telemetry ? Clock::now() : Clock::time_point{};
         sweep.cache_replay_error=PredictionDifference(out.state.prediction,replay.prediction);

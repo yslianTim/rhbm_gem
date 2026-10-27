@@ -17,6 +17,7 @@ using Clock=std::chrono::steady_clock;
 
 struct Sample
 {
+    std::string stop_reason;
     double search_seconds{},wall_seconds{},candidate_seconds{},sweep_replay_seconds{},
         replay_audit_seconds{},reconciliation_seconds{},global_state_seconds{},
         endpoint_certification_seconds{},independent_replay_seconds{};
@@ -80,6 +81,7 @@ Sample Run(std::size_t targets)
         throw std::runtime_error("Production E1 qualification failed: "+result.reason);
 
     Sample sample;
+    sample.stop_reason=result.reason;
     sample.search_seconds=result.search_seconds;
     sample.wall_seconds=wall_seconds;
     sample.candidate_seconds=result.work.candidate_replay_seconds;
@@ -153,6 +155,7 @@ void PrintSummary(std::size_t targets,const std::vector<Sample> & samples)
         <<" mean_amplitude="<<representative.mean_amplitude
         <<" mean_charge="<<representative.mean_charge
         <<" mean_width="<<representative.mean_width
+        <<" stop_reason="<<representative.stop_reason
         <<" endpoint_qualified="<<representative.qualified
         <<" independent_replay_pass="<<representative.independent_replay_passed<<'\n';
 }

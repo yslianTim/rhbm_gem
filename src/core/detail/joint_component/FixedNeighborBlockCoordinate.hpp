@@ -202,6 +202,7 @@ struct FixedNeighborPolicy
     FixedNeighborCandidateReplayForTesting candidate_replay_for_testing;
     std::function<void(const FixedNeighborCandidateEvent &)> candidate_observer;
     bool full_objective_reference_for_testing{};
+    bool perturb_sweep_replay_objective_for_testing{};
     std::function<FixedNeighborCandidateFaultForTesting(std::size_t,std::size_t,
         const BlockCoordinateState &)> candidate_fault_for_testing;
 #endif

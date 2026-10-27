@@ -409,6 +409,37 @@ TEST(JointFixedNeighborBlockCoordinateTest, EverySweepReconcilesObjectiveAfterRe
         n::BlockObjectiveReplayEnclosure(replay.objective));
 }
 
+TEST(JointFixedNeighborBlockCoordinateTest, SweepReplayMismatchFailsBeforeObjectiveReconciliation)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector eta=n::Vector::Constant(3,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=1;
+    policy.eta_upper_bound=std::log(2.2); policy.collect_telemetry=true;
+    policy.perturb_sweep_replay_objective_for_testing=true;
+    std::optional<n::BlockCoordinateState> state_before_reconciliation;
+    policy.state_observer=[&](std::size_t,const auto & state,const auto &,const auto &) {
+        state_before_reconciliation=state;
+    };
+    const auto result=n::RunFixedNeighborDiagnostic(problem,eta,policy);
+
+    ASSERT_TRUE(state_before_reconciliation.has_value());
+    ASSERT_TRUE(result.final_sweep.has_value());
+    ASSERT_EQ(result.sweeps.size(),1u);
+    EXPECT_EQ(result.reason,"block-cache-replay-failed");
+    EXPECT_FALSE(result.sweeps.front().objective_cache_refreshed);
+    EXPECT_EQ(result.work.objective_reconciliations,0u);
+    EXPECT_GT(result.sweeps.front().objective_replay_error,
+        n::BlockObjectiveReplayEnclosure(result.sweeps.front().objective_after));
+    EXPECT_TRUE(BitwiseEqual(result.state,*state_before_reconciliation));
+    EXPECT_EQ(result.state.objective,state_before_reconciliation->objective);
+    EXPECT_TRUE(BitwiseEqual(result.state.prediction,state_before_reconciliation->prediction));
+    EXPECT_TRUE(BitwiseEqual(result.state.residual,state_before_reconciliation->residual));
+    const auto replay=n::FullReplayForTesting(data.domain,data.layout,data.y,
+        result.state.eta,result.state.beta,data.context.scale);
+    EXPECT_NE(result.state.objective,replay.objective);
+}
+
 TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveRemainsQualifiedAcrossInitialWidths)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
