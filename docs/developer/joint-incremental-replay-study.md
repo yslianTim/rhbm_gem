@@ -1242,7 +1242,12 @@ objective matches an independent Full Replay. A one-byte preflight budget
 returns `resource-limit` before an accepted state or candidate is created.
 Nonfinite observations are rejected before accepted-state creation. Endpoint
 certification's resource-limited assessment behavior remains covered by the
-existing certification test.
+existing certification test. A separate internal-boundary test pairs finite
+`1e200` observations with the ordinary fixture scale, producing an infinite
+initial objective; D1 and E1 both stop at `block-cache-replay-failed`, perform
+no candidate replay or acceptance, and retain the initial parameters. This is
+an adversarial inconsistent-context check, not a valid constructed
+`JointProblem` workload.
 
 No natural outer candidate rejection was found in 512 deterministic
 observation/scale/initial-width perturbations and 196 signed-cancellation

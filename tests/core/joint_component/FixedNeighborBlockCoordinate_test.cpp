@@ -1861,6 +1861,52 @@ TEST(JointFixedNeighborBlockCoordinateTest, E1NonfiniteObservationsFailBeforeAcc
     EXPECT_EQ(candidates,0u);
 }
 
+TEST(JointFixedNeighborBlockCoordinateTest, E1NonfiniteObjectiveDoesNotAcceptOrPartiallyCommitCandidate)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector observations=n::Vector::Constant(data.y.size(),1e200);
+    const n::Vector eta=n::Vector::Constant(3,std::log(.55));
+    struct Run
+    {
+        n::FixedNeighborSearchResult result;
+        std::size_t candidates{},accepted{};
+    };
+    const auto run=[&](n::FixedNeighborObjectiveStrategyForTesting strategy) {
+        Run output;
+        n::FixedNeighborPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=2;
+        policy.eta_upper_bound=std::log(2.2);
+        policy.objective_strategy_for_testing=strategy;
+        policy.candidate_observer=[&](const n::FixedNeighborCandidateEvent & event) {
+            if(event.candidate_replay_ran) ++output.candidates;
+            output.accepted+=event.accepted;
+        };
+        output.result=n::SearchFixedNeighborComponent(data.domain,data.layout,observations,
+            eta,data.context,policy);
+        return output;
+    };
+    const auto d1=run(n::FixedNeighborObjectiveStrategyForTesting::FullScan);
+    const auto e1=run(n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect);
+    const auto initial_replay=n::FullReplayForTesting(data.domain,data.layout,observations,
+        eta,n::Vector::Zero(6),data.context.scale);
+
+    ASSERT_TRUE(std::isinf(initial_replay.objective));
+    EXPECT_FALSE(d1.result.search_converged);
+    EXPECT_FALSE(e1.result.search_converged);
+    EXPECT_EQ(d1.result.reason,"block-cache-replay-failed");
+    EXPECT_EQ(d1.result.reason,e1.result.reason);
+    EXPECT_TRUE(std::isinf(d1.result.state.objective));
+    EXPECT_TRUE(std::isinf(e1.result.state.objective));
+    EXPECT_EQ(d1.candidates,0u);
+    EXPECT_EQ(e1.candidates,0u);
+    EXPECT_EQ(d1.accepted,0u);
+    EXPECT_EQ(e1.accepted,0u);
+    EXPECT_TRUE(BitwiseEqual(d1.result.state.eta,eta));
+    EXPECT_TRUE(BitwiseEqual(e1.result.state.eta,eta));
+    EXPECT_TRUE(BitwiseEqual(d1.result.state.beta,n::Vector::Zero(6)));
+    EXPECT_TRUE(BitwiseEqual(e1.result.state.beta,n::Vector::Zero(6)));
+}
+
 TEST(JointFixedNeighborBlockCoordinateTest, UnchangedCandidateSkipsOnlyCandidateReplay)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
