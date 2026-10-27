@@ -389,3 +389,40 @@ gradient and predicted-reduction calculations, so only the tiny second
 factorization could be removed. Passing and certifying the QR object across
 the Profile and Bounded solver interfaces adds complexity for a negligible
 end-to-end gain; the production path continues to run both factorizations.
+
+## N5: final integration validation
+
+The final Release `tests_all` target built successfully. All 19 CTest groups
+passed serially in 23.11 seconds, including Joint contract/workflow/numerical,
+joint persistence, core/data/utils regression, integration, and CLI smoke
+groups. `lint_repo` passed all repository guards. The final Bounded LM and
+profile derivative digests still match the N0 bitwise snapshots:
+`290e1a65097e34b1a1198064bc49c2c357a83271c709ce6b156ccbb1eec798ab` and
+`8c2f90707e1f5b97058dc6708c58b136737878f3795d5c731f2150555255c9d7`.
+
+| Measure | N0 baseline | Final Release | Observed change |
+| --- | ---: | ---: | ---: |
+| Bounded LM median | 17.059 ms (16.851–17.173) | 15.475 ms (15.366–15.652) | 9.3% lower; ranges do not overlap |
+| Derivative preparation median | 20.233 ms (19.807–20.507) | 19.593 ms (19.297–19.701) | 3.2% lower on this fixture |
+| Derivative reduction median | 5.977 ms (5.860–6.007) | 5.837 ms (5.824–5.923) | 2.4% lower; ranges overlap |
+| Synthetic Joint diagnostic median | 3.317 ms | 3.249 ms | Not comparable: N0 retained BLM trace capture during this run |
+| Process peak RSS | 44,728,320 bytes | 48,087,040 bytes | +3,358,720 bytes (+7.5%) |
+
+The Bounded LM run retained 59 damping solves (4 bracket, 54 bisection), 139
+active-set iterations, and 136 dense QR factorizations. Its known-workspace
+estimate is 361,880 bytes, 33,296 bytes above N0 because scratch buffers
+coexist. The RSS increase is modest in absolute terms but visible against the
+N0 run; the derivative stages also keep bounded tile buffers alive for reuse.
+The derivative workspace stays tile-bounded at the existing 8,192-row limit.
+
+N3-A reduced Triplet capacity growth from 32 to zero, with 988,800 bytes
+reserved on the measured fixture. N3-B reduced assembled-matrix
+materializations from four to two for two tiles. N3-C reused the raw and
+scaled-residual tile buffers. Stepwise N3 timings did not show a reproducible
+incremental speedup over the preceding Release runs, so these stages are
+reported as verified allocation reductions rather than attributed runtime
+gains. N4 QR reuse remains unadopted; the measured eligible QR time was too
+small to justify carrying the extra solver interface complexity.
+
+The work was committed directly to the existing `develop` branch. No Notion
+content was changed.
