@@ -7,9 +7,11 @@
 #include <array>
 #include <bit>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <sys/resource.h>
 #include <utility>
@@ -98,6 +100,111 @@ Sample RunSearch(const rhbm_gem::core::JointProblem & problem,joint::VectorRef e
         accepted,unchanged,result.global_state_memory_estimate.estimated_peak_bytes,
         result.work.full_replay_memory_fallback};
 }
+struct ScalarError
+{
+    std::size_t mismatches{};
+    std::uint64_t maximum_ulp{};
+    double maximum_absolute{},maximum_relative{};
+};
+struct ShadowMetrics
+{
+    std::size_t candidates{},baseline_accepted{},e1_acceptance_disagreements{},
+        c_acceptance_proxy_disagreements{};
+    ScalarError e1_objective,c_prediction,c_residual,c_objective;
+};
+std::uint64_t OrderedBits(double value)
+{
+    const auto bits=std::bit_cast<std::uint64_t>(value);
+    return bits&(std::uint64_t{1}<<63) ? ~bits : bits|(std::uint64_t{1}<<63);
+}
+void RecordError(ScalarError & error,double reference,double candidate)
+{
+    if(!std::isfinite(reference) || !std::isfinite(candidate)) return;
+    const double absolute=std::abs(reference-candidate);
+    if(absolute!=0) ++error.mismatches;
+    error.maximum_absolute=std::max(error.maximum_absolute,absolute);
+    error.maximum_relative=std::max(error.maximum_relative,
+        absolute/std::max(std::abs(reference),std::numeric_limits<double>::min()));
+    if(std::isnormal(reference) && std::isnormal(candidate))
+    {
+        const auto a=OrderedBits(reference),b=OrderedBits(candidate);
+        error.maximum_ulp=std::max(error.maximum_ulp,a>b ? a-b : b-a);
+    }
+}
+bool ObjectiveProxyAccept(double objective_before,double objective_after,
+    double local_before,double local_after,double objective_enclosure)
+{
+    const double replay_reference=std::max(std::abs(objective_before),std::abs(objective_after));
+    const double delta=objective_after-objective_before;
+    const double consistency_error=std::abs(delta+local_before-local_after);
+    return joint::WithinBlockObjectiveReplay(consistency_error,replay_reference) &&
+        (delta<=0 || (local_after<=local_before && delta<=objective_enclosure));
+}
+void RecordIncrementalObjectiveShadow(const joint::Domain & domain,
+    const rhbm_gem::JointParameterLayout & layout,joint::VectorRef observations,
+    double scale,const joint::FixedNeighborCandidateEvent & event,ShadowMetrics & metrics)
+{
+    if(!event.candidate_replay_ran) return;
+    ++metrics.candidates;
+    metrics.baseline_accepted+=event.accepted;
+    double e1_delta_squared{};
+    for(const auto row:event.affected_rows)
+    {
+        const double old_residual=event.accepted_before.residual(row);
+        const double new_residual=event.full_residual(row);
+        e1_delta_squared+=new_residual*new_residual-old_residual*old_residual;
+    }
+    const double e1_objective=event.accepted_before.objective+
+        .5*e1_delta_squared/(scale*scale);
+    RecordError(metrics.e1_objective,event.full_objective,e1_objective);
+    const double replay_reference=std::max(std::abs(event.full_objective),
+        std::abs(event.accepted_before.objective));
+    const double enclosure=joint::BlockObjectiveReplayEnclosure(replay_reference);
+    const bool e1_accept=ObjectiveProxyAccept(event.accepted_before.objective,e1_objective,
+        event.local_objective_before,event.local_objective_after,enclosure) && !event.unchanged;
+    metrics.e1_acceptance_disagreements+=e1_accept!=event.accepted;
+
+    Vector c_prediction(static_cast<Eigen::Index>(event.affected_rows.size()));
+    for(std::size_t k=0;k<event.affected_rows.size();++k)
+        c_prediction(static_cast<Eigen::Index>(k))=event.accepted_before.prediction(event.affected_rows[k]);
+    for(const auto atom_value:layout.full_atoms)
+    {
+        const auto atom=static_cast<Eigen::Index>(atom_value);
+        if(std::find(event.core_atoms.begin(),event.core_atoms.end(),atom)==event.core_atoms.end()) continue;
+        const double old_width=std::exp(event.accepted_before.eta(atom));
+        const double new_width=std::exp(event.candidate_eta(atom));
+        for(const auto & support:domain.atoms[atom_value])
+        {
+            const auto found=std::lower_bound(event.affected_rows.begin(),event.affected_rows.end(),support.row);
+            if(found==event.affected_rows.end() || *found!=support.row) continue;
+            const auto local=static_cast<Eigen::Index>(found-event.affected_rows.begin());
+            const auto old_basis=joint::EvaluateKernel(support.square,old_width,2.5);
+            const auto new_basis=joint::EvaluateKernel(support.square,new_width,2.5);
+            const double old_contribution=event.accepted_before.beta(2*atom)*old_basis.gaussian+
+                event.accepted_before.beta(2*atom+1)*old_basis.charge;
+            const double new_contribution=event.candidate_beta(2*atom)*new_basis.gaussian+
+                event.candidate_beta(2*atom+1)*new_basis.charge;
+            c_prediction(local)+=new_contribution-old_contribution;
+        }
+    }
+    double c_delta_squared{};
+    for(std::size_t k=0;k<event.affected_rows.size();++k)
+    {
+        const auto row=event.affected_rows[k];
+        const double residual=c_prediction(static_cast<Eigen::Index>(k))-observations(row);
+        RecordError(metrics.c_prediction,event.full_prediction(row),c_prediction(static_cast<Eigen::Index>(k)));
+        RecordError(metrics.c_residual,event.full_residual(row),residual);
+        const double old_residual=event.accepted_before.residual(row);
+        c_delta_squared+=residual*residual-old_residual*old_residual;
+    }
+    const double c_objective=event.accepted_before.objective+.5*c_delta_squared/(scale*scale);
+    RecordError(metrics.c_objective,event.full_objective,c_objective);
+    const bool c_accept=ObjectiveProxyAccept(event.accepted_before.objective,c_objective,
+        event.local_objective_before,event.local_objective_after,
+        joint::BlockObjectiveReplayEnclosure(std::max(std::abs(c_objective),
+            std::abs(event.accepted_before.objective)))) && !event.unchanged;
+    metrics.c_acceptance_proxy_disagreements+=c_accept!=event.accepted;
+}
 void Run(int target_count)
 {
     constexpr std::size_t measured_samples=5;
@@ -174,6 +281,45 @@ void Run(int target_count)
             <<" affected_replay_peak_scratch_bytes="<<s.candidate_scratch
             <<" full_replay_memory_fallback="<<s.full_replay_memory_fallback<<'\n';
     }
+    ShadowMetrics shadow;
+    auto shadow_policy=policy;
+    shadow_policy.candidate_observer=[&](const joint::FixedNeighborCandidateEvent & event) {
+        RecordIncrementalObjectiveShadow(data.domain,data.layout,data.y,data.context.scale,event,shadow);
+    };
+    const auto shadow_result=joint::RunFixedNeighborDiagnostic(problem,eta,shadow_policy);
+    if(shadow_result.reason.empty()) throw std::runtime_error("D1 shadow search returned no stop reason.");
+    std::cout<<"shadow_candidates="<<shadow.candidates<<" baseline_accepted="<<shadow.baseline_accepted
+        <<" E1_objective_mismatches="<<shadow.e1_objective.mismatches
+        <<" E1_objective_max_abs="<<shadow.e1_objective.maximum_absolute
+        <<" E1_objective_max_rel="<<shadow.e1_objective.maximum_relative
+        <<" E1_objective_max_ulp="<<shadow.e1_objective.maximum_ulp
+        <<" E1_acceptance_disagreements="<<shadow.e1_acceptance_disagreements
+        <<" E2_same_as_E1=true"
+        <<" C_prediction_mismatches="<<shadow.c_prediction.mismatches
+        <<" C_prediction_max_abs="<<shadow.c_prediction.maximum_absolute
+        <<" C_prediction_max_rel="<<shadow.c_prediction.maximum_relative
+        <<" C_prediction_max_ulp="<<shadow.c_prediction.maximum_ulp
+        <<" C_residual_mismatches="<<shadow.c_residual.mismatches
+        <<" C_residual_max_abs="<<shadow.c_residual.maximum_absolute
+        <<" C_residual_max_rel="<<shadow.c_residual.maximum_relative
+        <<" C_residual_max_ulp="<<shadow.c_residual.maximum_ulp
+        <<" C_objective_mismatches="<<shadow.c_objective.mismatches
+        <<" C_objective_max_abs="<<shadow.c_objective.maximum_absolute
+        <<" C_objective_max_rel="<<shadow.c_objective.maximum_relative
+        <<" C_objective_max_ulp="<<shadow.c_objective.maximum_ulp
+        <<" C_acceptance_proxy_disagreements="<<shadow.c_acceptance_proxy_disagreements
+        <<" conditional_full_scan_fallback_rate=1.0"
+        <<" search_only=true endpoint_certification=false independent_replay=false"
+        <<" search_converged="<<shadow_result.search_converged
+        <<" final_reason="<<shadow_result.reason
+        <<" final_objective="<<shadow_result.state.objective
+        <<" global_ac_kkt="<<(shadow_result.final_sweep ? shadow_result.final_sweep->global_ac_kkt : 0.0)
+        <<" projected_width_kkt="<<(shadow_result.final_sweep ?
+            shadow_result.final_sweep->projected_width_gradient_inf_norm : 0.0)
+        <<" final_eta_min="<<shadow_result.state.eta.minCoeff()
+        <<" final_eta_max="<<shadow_result.state.eta.maxCoeff()
+        <<" final_beta_min="<<shadow_result.state.beta.minCoeff()
+        <<" final_beta_max="<<shadow_result.state.beta.maxCoeff()<<'\n';
     rusage usage{};
     if(getrusage(RUSAGE_SELF,&usage)==0)
     {
