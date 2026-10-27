@@ -808,6 +808,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, AffectedRowExactReplayMatchesClosedL
 
     auto d1_policy=full_policy;
     d1_policy.candidate_replay_for_testing={};
+    d1_policy.objective_strategy_for_testing=n::FixedNeighborObjectiveStrategyForTesting::FullScan;
     d1_policy.candidate_observer=trace_candidate(d1_trace);
     d1_policy.state_observer=[&](std::size_t,const n::BlockCoordinateState & state,const auto &,const auto &) {
         d1_sweep_states.push_back(state);
@@ -955,6 +956,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveControlsClosedLo
     };
     const auto full_replay=n::RunFixedNeighborDiagnostic(problem,initial_eta,full_replay_policy);
     auto d1_policy=base;
+    d1_policy.objective_strategy_for_testing=n::FixedNeighborObjectiveStrategyForTesting::FullScan;
     const auto d1=n::RunFixedNeighborDiagnostic(problem,initial_eta,d1_policy);
     ASSERT_TRUE(full_replay.search_converged)<<full_replay.reason;
     ASSERT_TRUE(d1.search_converged)<<d1.reason;
@@ -1175,8 +1177,9 @@ TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveRefreshIntervals
         EXPECT_EQ(audit.candidates,result.work.incremental_objective_evaluations);
         EXPECT_EQ(audit.actual_reference_disagreements,0u);
         EXPECT_EQ(result.work.objective_refresh_failures,0u);
-        EXPECT_EQ(result.work.objective_cache_refreshes,130u/interval);
-        EXPECT_EQ(result.work.maximum_accepted_updates_between_objective_refreshes,interval);
+        EXPECT_GE(result.work.objective_cache_refreshes,result.sweep_count);
+        EXPECT_EQ(result.work.objective_reconciliations,result.sweep_count);
+        EXPECT_LE(result.work.maximum_accepted_updates_between_objective_refreshes,interval);
         EXPECT_TRUE(result.final_sweep.has_value());
         EXPECT_LE(std::abs(result.state.objective-result.fit.objective.value()),
             n::BlockObjectiveReplayEnclosure(result.fit.objective.value()));
@@ -1197,6 +1200,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveRefreshIntervals
     ASSERT_TRUE(every_sweep.endpoint_certified)<<every_sweep.endpoint_trust.reason;
     EXPECT_TRUE(every_sweep.assessment.independent_replay.passed);
     EXPECT_EQ(every_sweep.work.objective_cache_refreshes,every_sweep.sweep_count);
+    EXPECT_EQ(every_sweep.work.objective_reconciliations,every_sweep.sweep_count);
     EXPECT_GT(every_sweep.work.sweep_replay_seconds,0.0);
     EXPECT_GT(every_sweep.work.sweep_replay_audit_seconds,0.0);
     EXPECT_GT(every_sweep.work.sweep_global_state_seconds,0.0);
@@ -1218,27 +1222,29 @@ TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveRemainsQualified
         policy.eta_upper_bound=std::log(2.2); policy.collect_telemetry=true;
         policy.assess_local_conditioning=true; policy.assess_parameter_stability=true;
         auto f1_policy=policy;
+        auto d1_policy=policy;
+        d1_policy.objective_strategy_for_testing=n::FixedNeighborObjectiveStrategyForTesting::FullScan;
         f1_policy.candidate_replay_for_testing=[&](const n::BlockCoordinateState &,const n::Indices &,
             const n::Indices &,n::VectorRef candidate_eta,n::VectorRef candidate_beta) {
             return n::FullReplayForTesting(data.domain,data.layout,data.y,
                 candidate_eta,candidate_beta,data.context.scale);
         };
         const auto f1=n::RunFixedNeighborDiagnostic(problem,initial_eta,f1_policy);
-        const auto d1=n::RunFixedNeighborDiagnostic(problem,initial_eta,policy);
+        const auto d1=n::RunFixedNeighborDiagnostic(problem,initial_eta,d1_policy);
         policy.objective_strategy_for_testing=n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect;
         const auto e1=n::RunFixedNeighborDiagnostic(problem,initial_eta,policy);
-        const auto prefix="initial_width_"+std::to_string(width);
-        RecordProperty(prefix+"_F1_objective",Precise(f1.fit.objective.value()));
-        RecordProperty(prefix+"_D1_objective",Precise(d1.fit.objective.value()));
-        RecordProperty(prefix+"_E1_objective",Precise(e1.fit.objective.value()));
-        RecordProperty(prefix+"_D1_sweeps",std::to_string(d1.sweep_count));
-        RecordProperty(prefix+"_E1_sweeps",std::to_string(e1.sweep_count));
         ASSERT_TRUE(f1.search_converged)<<f1.reason;
         ASSERT_TRUE(d1.search_converged)<<d1.reason;
         ASSERT_TRUE(e1.search_converged)<<e1.reason;
         ASSERT_TRUE(f1.endpoint_certified)<<f1.endpoint_trust.reason;
         ASSERT_TRUE(d1.endpoint_certified)<<d1.endpoint_trust.reason;
         ASSERT_TRUE(e1.endpoint_certified)<<e1.endpoint_trust.reason;
+        const auto prefix="initial_width_"+std::to_string(width);
+        RecordProperty(prefix+"_F1_objective",Precise(f1.fit.objective.value()));
+        RecordProperty(prefix+"_D1_objective",Precise(d1.fit.objective.value()));
+        RecordProperty(prefix+"_E1_objective",Precise(e1.fit.objective.value()));
+        RecordProperty(prefix+"_D1_sweeps",std::to_string(d1.sweep_count));
+        RecordProperty(prefix+"_E1_sweeps",std::to_string(e1.sweep_count));
         EXPECT_TRUE(f1.assessment.independent_replay.passed);
         EXPECT_TRUE(d1.assessment.independent_replay.passed);
         EXPECT_TRUE(e1.assessment.independent_replay.passed);
@@ -1272,6 +1278,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveHandlesSignedCha
     policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
     policy.eta_upper_bound=std::log(2.2); policy.collect_telemetry=true;
     policy.assess_local_conditioning=true; policy.assess_parameter_stability=true;
+    policy.objective_strategy_for_testing=n::FixedNeighborObjectiveStrategyForTesting::FullScan;
     const auto d1=n::RunFixedNeighborDiagnostic(problem,initial_eta,policy);
     policy.objective_strategy_for_testing=n::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect;
     IncrementalObjectiveAudit signed_audit;

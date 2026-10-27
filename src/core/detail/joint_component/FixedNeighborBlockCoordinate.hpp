@@ -117,11 +117,9 @@ struct FixedNeighborBlockSweep
     double objective_before{},objective_after{},global_a_feasibility{},global_ac_kkt{};
     double global_width_gradient_inf_norm{},cache_replay_error{},objective_replay_error{},wall_seconds{};
     double eta_change_inf{},beta_scaled_change{},maximum_accepted_log_width_step{},maximum_target_width{};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
     std::size_t objective_cache_refreshes{};
     double maximum_objective_refresh_error{};
     bool objective_cache_refreshed{};
-#endif
     bool width_bound_applied{};
     double projected_width_gradient_inf_norm{unavailable},maximum_width_bound_violation{},
         boundary_gradient_max{},boundary_multiplier_max{},width_bound_complementarity{unavailable},
@@ -138,11 +136,13 @@ struct FixedNeighborWork
         effective_response_seconds{},local_search_seconds{},local_state_seconds{},
         candidate_copy_seconds{},candidate_replay_seconds{},cache_update_seconds{},sweep_replay_seconds{},
         sweep_replay_audit_seconds{},sweep_global_state_seconds{},maximum_block_seconds{},maximum_cache_replay_error{};
+    double objective_reconciliation_seconds{},maximum_objective_reconciliation_error{};
     std::size_t full_candidate_replays{},affected_candidate_replays{},candidate_replay_skipped_unchanged{},
-        sweep_replays{},affected_row_updates{},affected_replay_peak_scratch_bytes{};
+        sweep_replays{},affected_row_updates{},affected_replay_peak_scratch_bytes{},objective_reconciliations{},
+        incremental_objective_evaluations{};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     double objective_full_scan_fallback_seconds{},objective_cache_refresh_seconds{},maximum_objective_refresh_error{};
-    std::size_t incremental_objective_evaluations{},objective_full_scan_fallbacks{},objective_cache_refreshes{},
+    std::size_t objective_full_scan_fallbacks{},objective_cache_refreshes{},
         objective_refresh_failures{},objective_refresh_positive_deltas{},
         maximum_accepted_updates_between_objective_refreshes{};
 #endif
@@ -206,7 +206,7 @@ struct FixedNeighborPolicy
     std::optional<std::size_t> global_state_memory_budget_for_testing;
     FixedNeighborCandidateReplayForTesting candidate_replay_for_testing;
     std::function<void(const FixedNeighborCandidateEvent &)> candidate_observer;
-    FixedNeighborObjectiveStrategyForTesting objective_strategy_for_testing{FixedNeighborObjectiveStrategyForTesting::FullScan};
+    FixedNeighborObjectiveStrategyForTesting objective_strategy_for_testing{FixedNeighborObjectiveStrategyForTesting::IncrementalDirect};
     double objective_guard_band_fraction_for_testing{0.1};
     bool refresh_objective_after_sweep_for_testing{};
     std::size_t objective_refresh_interval_for_testing{};

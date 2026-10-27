@@ -406,6 +406,7 @@ void RunControlled(int target_count,bool qualify,int selected_method=-1,bool per
     base.capture_local_trajectory=qualify;
     base.collect_telemetry=true; base.eta_upper_bound=std::log(2.2);
     std::array<joint::FixedNeighborPolicy,3> policies{base,base,base};
+    policies[0].objective_strategy_for_testing=joint::FixedNeighborObjectiveStrategyForTesting::FullScan;
     policies[1].objective_strategy_for_testing=joint::FixedNeighborObjectiveStrategyForTesting::IncrementalDirect;
     policies[1].refresh_objective_after_sweep_for_testing=qualify || performance_qualified;
     policies[2].objective_strategy_for_testing=joint::FixedNeighborObjectiveStrategyForTesting::IncrementalGuarded;
@@ -442,13 +443,12 @@ void RunControlled(int target_count,bool qualify,int selected_method=-1,bool per
             out.audit.push_back(result.work.sweep_replay_audit_seconds);
             out.endpoint.push_back(result.work.endpoint_verification_seconds);
             out.independent.push_back(result.work.independent_replay_seconds);
-            out.reconciliation.push_back(result.work.objective_cache_refresh_seconds);
+            out.reconciliation.push_back(result.work.objective_reconciliation_seconds);
             out.candidates+=timing.candidate_count; out.accepted+=timing.accepted_count;
             out.unchanged+=timing.unchanged_count;
             out.incremental+=result.work.incremental_objective_evaluations;
             out.fallbacks+=result.work.objective_full_scan_fallbacks;
-            out.refreshes+=static_cast<std::size_t>(std::count_if(result.sweeps.begin(),result.sweeps.end(),
-                [](const auto & sweep){return sweep.objective_cache_refreshed;}));
+            out.refreshes+=result.work.objective_reconciliations;
             out.peak_estimate=std::max(out.peak_estimate,result.global_state_memory_estimate.estimated_peak_bytes);
             out.candidate_scratch=std::max(out.candidate_scratch,result.work.affected_replay_peak_scratch_bytes);
             out.maximum_cache_replay_error=std::max(out.maximum_cache_replay_error,result.work.maximum_cache_replay_error);
@@ -514,6 +514,7 @@ void RunControlled(int target_count,bool qualify,int selected_method=-1,bool per
             <<" endpoint_verification_median_seconds="<<Median(m.endpoint)
             <<" independent_replay_median_seconds="<<Median(m.independent)
             <<" objective_reconciliation_median_seconds="<<Median(m.reconciliation)
+            <<" objective_reconciliation_count="<<result.work.objective_reconciliations
             <<" candidate_replays="<<replay_candidates<<" candidate_accepted="<<accepted
             <<" candidate_rejected="<<rejected<<" unchanged_blocks="<<unchanged
             <<" profile_trials="<<profile_trial_count<<" profile_trials_accepted="<<profile_trial_accepted

@@ -23,7 +23,7 @@ namespace rhbm_gem::core::joint_component {
 double BlockObjectiveReplayEnclosure(double reference)
 {return 1e-12+2e-12*std::abs(reference);}
 bool WithinBlockObjectiveReplay(double error,double reference)
-{return error<=BlockObjectiveReplayEnclosure(reference);}
+{return std::isfinite(error) && std::isfinite(reference) && error<=BlockObjectiveReplayEnclosure(reference);}
 namespace {
 using Clock=std::chrono::steady_clock;
 constexpr std::size_t EndpointCertificationRetryInterval=10;
@@ -178,12 +178,15 @@ AffectedReplayIncidence PrepareAffectedReplayIncidence(const Domain & domain,con
     out.build_scratch_bytes=bytes;
     return out;
 }
-AffectedReplayResult ReplayAffectedRows(const Domain & domain,const JointParameterLayout & layout,
-    VectorRef observations,const BlockCoordinateState & accepted,VectorRef candidate_eta,
+AffectedReplayResult ReplayAffectedRows(const Domain & domain
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    ,const JointParameterLayout & layout
+#endif
+    ,VectorRef observations,const BlockCoordinateState & accepted,VectorRef candidate_eta,
     VectorRef candidate_beta,double scale,const Indices & core_atoms,const Indices & neighbor_atoms,
     const Indices & affected_rows,const Indices & atom_position
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    ,bool incremental_objective=false
+    ,bool incremental_objective=true
 #endif
     )
 {
@@ -208,19 +211,7 @@ AffectedReplayResult ReplayAffectedRows(const Domain & domain,const JointParamet
         out.residual(static_cast<Eigen::Index>(row))=prediction-observations(affected_rows[row]);
     }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(incremental_objective)
-    {
-        double delta_squared{};
-        for(std::size_t k=0;k<affected_rows.size();++k)
-        {
-            const double old_residual=accepted.residual(affected_rows[k]);
-            const double new_residual=out.residual(static_cast<Eigen::Index>(k));
-            delta_squared+=new_residual*new_residual-old_residual*old_residual;
-        }
-        out.objective=accepted.objective+.5*delta_squared/(scale*scale);
-    }
-    else
-#endif
+    if(!incremental_objective)
     {
         double squared{};
         for(const auto row_value:layout.informative_rows)
@@ -231,6 +222,18 @@ AffectedReplayResult ReplayAffectedRows(const Domain & domain,const JointParamet
             squared+=residual*residual;
         }
         out.objective=.5*squared/(scale*scale);
+    }
+    else
+#endif
+    {
+        double delta_squared{};
+        for(std::size_t k=0;k<affected_rows.size();++k)
+        {
+            const double old_residual=accepted.residual(affected_rows[k]);
+            const double new_residual=out.residual(static_cast<Eigen::Index>(k));
+            delta_squared+=new_residual*new_residual-old_residual*old_residual;
+        }
+        out.objective=accepted.objective+.5*delta_squared/(scale*scale);
     }
     std::size_t evaluation_bytes{};
     if(!AddMemoryBytes(evaluation_bytes,incidence.atoms.capacity(),sizeof(Eigen::Index)) ||
@@ -941,7 +944,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     constexpr bool stop_after_stationarity=true;
     constexpr bool assess_local_conditioning=true;
     constexpr bool assess_parameter_stability=true;
-    constexpr bool collect_telemetry=false;
+    constexpr bool collect_telemetry=true;
     constexpr bool collect_diagnostics=false;
 #endif
     std::array<std::pair<double,double>,3> recent_sweep_changes{};
@@ -962,14 +965,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         {out.reason="invalid-global-width-bound"; return out;}
         context.eta_upper_bound=policy.eta_upper_bound;
     }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(!std::isfinite(policy.objective_guard_band_fraction_for_testing) ||
-        policy.objective_guard_band_fraction_for_testing<0.0)
-    {out.reason="invalid-objective-guard-policy"; return out;}
-    if(policy.objective_strategy_for_testing!=FixedNeighborObjectiveStrategyForTesting::FullScan &&
-        policy.candidate_replay_for_testing)
-    {out.reason="invalid-objective-test-strategy"; return out;}
-#endif
     if(initial_eta.size()!=static_cast<Eigen::Index>(domain.atoms.size()) || !initial_eta.allFinite() ||
         y.size()!=domain.rows || !y.allFinite() || !(context.scale>0) || !std::isfinite(context.scale) ||
         policy.core_atoms==0 || layout.full_atoms.size()!=domain.atoms.size() ||
@@ -1162,7 +1157,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     out.state.prediction=std::move(initial.prediction); out.state.residual=std::move(initial.residual);
     out.state.objective=initial.objective;
     bool state_cache_valid=out.state.prediction.size()==y.size() && out.state.residual.size()==y.size() &&
-        std::isfinite(out.state.objective);
+        out.state.eta.allFinite() && out.state.beta.allFinite() && out.state.prediction.allFinite() &&
+        out.state.residual.allFinite() && std::isfinite(out.state.objective);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     bool objective_cache_trusted=true;
     double last_objective_cache_error{};
@@ -1497,7 +1493,11 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                     const bool incremental_objective=policy.objective_strategy_for_testing!=
                         FixedNeighborObjectiveStrategyForTesting::FullScan;
 #endif
-                    auto candidate=ReplayAffectedRows(domain,layout,y,out.state,candidate_eta,candidate_beta,
+                    auto candidate=ReplayAffectedRows(domain
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                        ,layout
+#endif
+                        ,y,out.state,candidate_eta,candidate_beta,
                         context.scale,core_atoms,partition.cores[block_index].neighbor_atoms,affected_rows,atom_position
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
                         ,incremental_objective
@@ -1514,6 +1514,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                             out.work.affected_replay_peak_scratch_bytes,candidate.scratch_bytes);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
                         if(incremental_objective) ++out.work.incremental_objective_evaluations;
+#else
+                        ++out.work.incremental_objective_evaluations;
 #endif
                     }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -1571,6 +1573,13 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             const bool candidate_unchanged=candidate_fast_unchanged ||
                 ((out.state.eta.array()==candidate_eta.array()).all() &&
                     (out.state.beta.array()==candidate_beta.array()).all());
+            const bool candidate_values_finite=candidate_fast_unchanged ?
+                out.state.eta.allFinite() && out.state.beta.allFinite() && out.state.prediction.allFinite() &&
+                    out.state.residual.allFinite() && std::isfinite(candidate_objective) :
+                candidate_eta.allFinite() && candidate_beta.allFinite() && std::isfinite(candidate_objective) &&
+                    (candidate_result_affected_rows_only ?
+                        candidate_affected_prediction.allFinite() && candidate_affected_residual.allFinite() :
+                        replay_workspace.prediction.allFinite() && replay_workspace.residual.allFinite());
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             const auto observe_candidate=[&](bool accepted_candidate,bool unchanged_candidate) {
                 if(!policy.candidate_observer) return;
@@ -1604,6 +1613,15 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                     unchanged_candidate,!candidate_fast_unchanged});
             };
 #endif
+            if(!candidate_values_finite)
+            {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                observe_candidate(false,candidate_unchanged);
+#endif
+                record.status="failed"; record.reason="block-objective-replay-failed";
+                out.reason=record.reason;
+                finish_record(std::move(record),core_atoms,block_started); stop=true; break;
+            }
             if(!delta_enclosed)
             {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -1669,7 +1687,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                     out.state.objective=replay_workspace.objective;
                 }
                 if(collect_telemetry) out.work.affected_row_updates+=affected_rows.size();
-                out.state.eta=std::move(candidate_eta); out.state.beta=std::move(candidate_beta);
+                out.state.eta.swap(candidate_eta); out.state.beta.swap(candidate_beta);
                 state_cache_valid=out.state.prediction.size()==y.size() && out.state.residual.size()==y.size() &&
                     std::isfinite(out.state.objective);
                 if(collect_telemetry) out.work.cache_update_seconds+=Seconds(cache_started);
@@ -1804,32 +1822,33 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         last_objective_cache_error=sweep.objective_replay_error;
         objective_cache_trusted=sweep.objective_replay_error<=
             policy.objective_guard_band_fraction_for_testing*BlockObjectiveReplayEnclosure(replay.objective);
-        if(policy.refresh_objective_after_sweep_for_testing)
-        {
-            // The replay audit above must pass before objective-only refresh is allowed.
-            const auto objective_reconciliation_started=collect_telemetry ? Clock::now() : Clock::time_point{};
-            ++sweep.objective_cache_refreshes;
-            sweep.maximum_objective_refresh_error=sweep.objective_replay_error;
-            if(collect_telemetry)
-            {
-                ++out.work.objective_cache_refreshes;
-                out.work.maximum_objective_refresh_error=std::max(
-                    out.work.maximum_objective_refresh_error,sweep.objective_replay_error);
-                out.work.maximum_accepted_updates_between_objective_refreshes=std::max(
-                    out.work.maximum_accepted_updates_between_objective_refreshes,
-                    accepted_updates_since_objective_refresh);
-            }
-            accepted_updates_since_objective_refresh=0;
-            out.state.objective=replay.objective;
-            sweep.objective_after=replay.objective;
-            sweep.objective_cache_refreshed=true;
-            objective_cache_trusted=true;
-            if(collect_telemetry)
-                out.work.objective_cache_refresh_seconds+=Seconds(objective_reconciliation_started);
-        }
+#endif
+        // Reconciliation follows the successful audit and global-state evaluation.
+        const auto objective_reconciliation_started=collect_telemetry ? Clock::now() : Clock::time_point{};
+        ++sweep.objective_cache_refreshes;
+        sweep.maximum_objective_refresh_error=sweep.objective_replay_error;
+        ++out.work.objective_reconciliations;
+        out.work.maximum_objective_reconciliation_error=std::max(
+            out.work.maximum_objective_reconciliation_error,sweep.objective_replay_error);
+        out.state.objective=replay.objective;
+        sweep.objective_after=replay.objective;
+        sweep.objective_cache_refreshed=true;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        ++out.work.objective_cache_refreshes;
+        out.work.maximum_objective_refresh_error=std::max(
+            out.work.maximum_objective_refresh_error,sweep.objective_replay_error);
+        out.work.maximum_accepted_updates_between_objective_refreshes=std::max(
+            out.work.maximum_accepted_updates_between_objective_refreshes,
+            accepted_updates_since_objective_refresh);
+        accepted_updates_since_objective_refresh=0;
+        objective_cache_trusted=true;
+        if(collect_telemetry)
+            out.work.objective_cache_refresh_seconds+=Seconds(objective_reconciliation_started);
+#endif
+        if(collect_telemetry)
+            out.work.objective_reconciliation_seconds+=Seconds(objective_reconciliation_started);
         out.final_sweep=sweep;
         if(retain_diagnostics) out.sweeps.back()=sweep;
-#endif
         if(assess_parameter_stability)
         {
             recent_sweep_changes[next_recent_sweep_change]={sweep.eta_change_inf,sweep.beta_scaled_change};

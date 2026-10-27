@@ -1349,3 +1349,37 @@ A post-fix 1,000-target timing check separated the E1 median sweep replay
 (0.085563 s), replay audit (0.000881 s), global-state evaluation (0.168027 s),
 and objective-only reconciliation (0.000000125 s). This is a timer-boundary
 check, not a replacement for the final Production Release benchmark.
+
+### M1 — E1-Direct Production promotion
+
+`develop` now uses E1-Direct in the ordinary Production candidate path. The
+exact affected-row replay still recomputes prediction and residual from all
+contributors; the candidate objective uses the accepted cache plus the
+affected residual-square delta. D1's affected-row full objective remains only
+in the instrumented test reference. If the existing scratch preflight rejects
+the affected-row workspace, the candidate uses Full Replay and its complete
+objective instead.
+
+Candidate parameters and replay values are prepared and checked before any
+accepted-state write. Accepted prediction and residual values update only on
+affected rows; parameters swap into place after all acceptance checks. A
+nonfinite candidate parameter, prediction, residual, or objective now follows
+the terminal `block-objective-replay-failed` path without updating the
+accepted state. The replay enclosure helper also rejects nonfinite values,
+including the previously problematic `Inf <= Inf` comparison.
+
+Every successful sweep performs a Full Replay prediction, residual, and
+objective audit. Only a passing audit reaches objective-scalar reconciliation;
+the scalar is set from the already computed replay objective. Production work
+telemetry reports candidate replay counts, sweep replay and audit times,
+global-state evaluation time, reconciliation count/time, and maximum replay
+errors. Endpoint Certification and Independent Replay remain in the existing
+completion path.
+
+Validation at this stage: the Production Release CLI and instrumented test
+targets both compiled; all 39 `JointFixedNeighborBlockCoordinateTest` cases
+passed. The group includes D1/E1 reference comparisons, qualified standard and
+hard fixtures, width bounds, recovery, unchanged candidates, nonfinite initial
+state, and memory fallback. The signed-cancellation case retains its shared
+F0/D1 legacy width-KKT limitation; E1 introduces no new failure there. No
+numerical acceptance, KKT, width, or convergence threshold changed.
