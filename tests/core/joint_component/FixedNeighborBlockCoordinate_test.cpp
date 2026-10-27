@@ -8,12 +8,15 @@
 #include "core/detail/joint_component/JointComponentEstimator.hpp"
 #include "support/JointReplayExperiment.hpp"
 #include <algorithm>
+#include <array>
 #include "support/JointSyntheticWorkload.hpp"
 #include <bit>
 #include <cmath>
 #include <cstdint>
+#include <iomanip>
 #include <limits>
 #include <numeric>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -112,6 +115,17 @@ bool BitwiseEqual(const n::Vector & left,const n::Vector & right)
     for(Eigen::Index i=0;i<left.size();++i)
         if(!BitwiseEqual(left(i),right(i))) return false;
     return true;
+}
+std::string Precise(double value)
+{std::ostringstream out; out<<std::setprecision(17)<<value; return out.str();}
+std::uint64_t UlpDistance(double left,double right)
+{
+    const auto ordered=[](double value) {
+        const auto bits=std::bit_cast<std::uint64_t>(value);
+        return bits&(std::uint64_t{1}<<63) ? ~bits : bits|(std::uint64_t{1}<<63);
+    };
+    const auto a=ordered(left),b=ordered(right);
+    return a>b ? a-b : b-a;
 }
 
 TEST(JointFixedNeighborBlockCoordinateTest, ProfileEndpointMatchesFixedStateEvaluation)
@@ -327,6 +341,281 @@ TEST(JointFixedNeighborBlockCoordinateTest, LocalIncidencePreservesDuplicateSupp
         EXPECT_TRUE(BitwiseEqual(reference.residual(row),exact.residual(row)));
     }
     EXPECT_TRUE(BitwiseEqual(reference.objective,exact.objective));
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, ExactReplayShadowMatchesProductionCandidateSearch)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",30));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector eta=n::Vector::Constant(30,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.core_atoms=12; policy.maximum_sweeps=5;
+    policy.stop_after_stationarity=false; policy.certify_endpoint=false;
+    policy.eta_upper_bound=std::log(2.2);
+    const auto baseline=n::RunFixedNeighborDiagnostic(problem,eta,policy);
+    n::StructuralTopology topology(data.domain,data.context.atom_ids,data.layout);
+    auto partition=topology.BuildCores(policy.core_atoms); topology.PopulateMetadata(partition);
+    n::BlockCoordinateState shadow; shadow.eta=eta; shadow.beta=n::Vector::Zero(2*eta.size());
+    auto initial=n::FullReplayForTesting(data.domain,data.layout,data.y,shadow.eta,shadow.beta,data.context.scale);
+    shadow.prediction=std::move(initial.prediction); shadow.residual=std::move(initial.residual);
+    shadow.objective=initial.objective;
+    constexpr std::array prediction_strategies{
+        second_stage_test::ReplayPredictionStrategy::DeltaAddDifference,
+        second_stage_test::ReplayPredictionStrategy::DeltaSubtractThenAdd,
+        second_stage_test::ReplayPredictionStrategy::DeltaAddDifference,
+        second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+        second_stage_test::ReplayPredictionStrategy::AffectedRowExact};
+    constexpr std::array objective_strategies{
+        second_stage_test::ReplayObjectiveStrategy::FullScan,
+        second_stage_test::ReplayObjectiveStrategy::FullScan,
+        second_stage_test::ReplayObjectiveStrategy::Incremental,
+        second_stage_test::ReplayObjectiveStrategy::FullScan,
+        second_stage_test::ReplayObjectiveStrategy::Incremental};
+    constexpr std::array<const char *,5> method_names{"B1","B2","C","D1","E"};
+    struct ShadowMetrics
+    {
+        std::size_t prediction_mismatches{},residual_mismatches{},objective_mismatches{},acceptance_disagreements{};
+        Eigen::Index first_prediction_mismatch=-1,first_residual_mismatch=-1,first_objective_mismatch=-1;
+        std::uint64_t maximum_prediction_ulp{},maximum_residual_ulp{},maximum_objective_ulp{};
+        double maximum_prediction_absolute{},maximum_prediction_relative{},maximum_residual_absolute{},
+            maximum_residual_relative{},maximum_objective_absolute{},maximum_objective_relative{};
+    };
+    std::array<n::BlockCoordinateState,5> experiment_states;
+    for(auto & state:experiment_states) state=shadow;
+    std::array<ShadowMetrics,5> experiment_metrics{};
+    std::size_t candidates{},full_replays{},accepted_updates{},acceptance_disagreements{},
+        prediction_mismatches{},residual_mismatches{},objective_mismatches{},accepted_since_refresh{},
+        maximum_accepted_since_refresh{};
+    Eigen::Index first_prediction_mismatch=-1,first_residual_mismatch=-1;
+    std::uint64_t maximum_prediction_ulp{},maximum_residual_ulp{},maximum_objective_ulp{};
+    double maximum_prediction_absolute{},maximum_prediction_relative{},maximum_residual_absolute{},
+        maximum_residual_relative{},maximum_objective_absolute{};
+    double minimum_acceptance_margin=std::numeric_limits<double>::infinity();
+    double minimum_acceptance_margin_ratio=std::numeric_limits<double>::infinity();
+    policy.candidate_observer=[&](const n::FixedNeighborCandidateEvent & event) {
+        ++candidates; full_replays+=event.full_replay_ran;
+        EXPECT_TRUE(BitwiseEqual(shadow.eta,event.accepted_before.eta));
+        EXPECT_TRUE(BitwiseEqual(shadow.beta,event.accepted_before.beta));
+        EXPECT_TRUE(BitwiseEqual(shadow.prediction,event.accepted_before.prediction));
+        EXPECT_TRUE(BitwiseEqual(shadow.residual,event.accepted_before.residual));
+        EXPECT_TRUE(BitwiseEqual(shadow.objective,event.accepted_before.objective));
+        ASSERT_LT(event.block,partition.cores.size()+1);
+        const auto & structural=partition.cores[event.block-1];
+        EXPECT_EQ(event.core_atoms,structural.atoms);
+        const auto incidence=second_stage_test::PrepareReplayIncidence(data.domain,data.layout,
+            event.core_atoms,structural.neighbor_atoms,event.affected_rows);
+        const auto exact=second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
+            shadow,event.candidate_eta,event.candidate_beta,data.context.scale,event.core_atoms,
+            event.affected_rows,second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+            second_stage_test::ReplayObjectiveStrategy::FullScan,&incidence);
+        for(const auto row_value:data.layout.informative_rows)
+        {
+            const auto row=static_cast<Eigen::Index>(row_value);
+            const auto found=std::lower_bound(event.affected_rows.begin(),event.affected_rows.end(),row);
+            const bool affected=found!=event.affected_rows.end() && *found==row;
+            const auto local=static_cast<Eigen::Index>(found-event.affected_rows.begin());
+            const double prediction=affected ? exact.prediction(local) : shadow.prediction(row);
+            const double residual=affected ? exact.residual(local) : shadow.residual(row);
+            const double prediction_error=std::abs(prediction-event.full_prediction(row));
+            const double residual_error=std::abs(residual-event.full_residual(row));
+            maximum_prediction_absolute=std::max(maximum_prediction_absolute,prediction_error);
+            maximum_residual_absolute=std::max(maximum_residual_absolute,residual_error);
+            maximum_prediction_relative=std::max(maximum_prediction_relative,
+                prediction_error/std::max(std::abs(event.full_prediction(row)),std::numeric_limits<double>::min()));
+            maximum_residual_relative=std::max(maximum_residual_relative,
+                residual_error/std::max(std::abs(event.full_residual(row)),std::numeric_limits<double>::min()));
+            if(std::isnormal(prediction) && std::isnormal(event.full_prediction(row)))
+                maximum_prediction_ulp=std::max(maximum_prediction_ulp,UlpDistance(prediction,event.full_prediction(row)));
+            if(std::isnormal(residual) && std::isnormal(event.full_residual(row)))
+                maximum_residual_ulp=std::max(maximum_residual_ulp,UlpDistance(residual,event.full_residual(row)));
+            if(!BitwiseEqual(prediction,event.full_prediction(row)))
+            {++prediction_mismatches; if(first_prediction_mismatch<0) first_prediction_mismatch=row;}
+            if(!BitwiseEqual(residual,event.full_residual(row)))
+            {++residual_mismatches; if(first_residual_mismatch<0) first_residual_mismatch=row;}
+        }
+        for(std::size_t method=0;method<experiment_states.size();++method)
+        {
+            auto & method_state=experiment_states[method];
+            EXPECT_TRUE(BitwiseEqual(method_state.eta,event.accepted_before.eta));
+            EXPECT_TRUE(BitwiseEqual(method_state.beta,event.accepted_before.beta));
+            const auto result=second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
+                method_state,event.candidate_eta,event.candidate_beta,data.context.scale,event.core_atoms,
+                event.affected_rows,prediction_strategies[method],objective_strategies[method],
+                method>=3 ? &incidence : nullptr);
+            auto & metrics=experiment_metrics[method];
+            for(const auto row_value:data.layout.informative_rows)
+            {
+                const auto row=static_cast<Eigen::Index>(row_value);
+                const auto found=std::lower_bound(event.affected_rows.begin(),event.affected_rows.end(),row);
+                const bool affected=found!=event.affected_rows.end() && *found==row;
+                const auto local=static_cast<Eigen::Index>(found-event.affected_rows.begin());
+                const double prediction=affected ? result.prediction(local) : method_state.prediction(row);
+                const double residual=affected ? result.residual(local) : method_state.residual(row);
+                const double prediction_error=std::abs(prediction-event.full_prediction(row));
+                const double residual_error=std::abs(residual-event.full_residual(row));
+                EXPECT_TRUE(std::isfinite(prediction)); EXPECT_TRUE(std::isfinite(residual));
+                metrics.maximum_prediction_absolute=std::max(metrics.maximum_prediction_absolute,prediction_error);
+                metrics.maximum_prediction_relative=std::max(metrics.maximum_prediction_relative,
+                    prediction_error/std::max(std::abs(event.full_prediction(row)),std::numeric_limits<double>::min()));
+                metrics.maximum_residual_absolute=std::max(metrics.maximum_residual_absolute,residual_error);
+                metrics.maximum_residual_relative=std::max(metrics.maximum_residual_relative,
+                    residual_error/std::max(std::abs(event.full_residual(row)),std::numeric_limits<double>::min()));
+                if(std::isnormal(prediction) && std::isnormal(event.full_prediction(row)))
+                    metrics.maximum_prediction_ulp=std::max(metrics.maximum_prediction_ulp,
+                        UlpDistance(prediction,event.full_prediction(row)));
+                if(std::isnormal(residual) && std::isnormal(event.full_residual(row)))
+                    metrics.maximum_residual_ulp=std::max(metrics.maximum_residual_ulp,
+                        UlpDistance(residual,event.full_residual(row)));
+                if(!BitwiseEqual(prediction,event.full_prediction(row)))
+                {
+                    ++metrics.prediction_mismatches;
+                    if(metrics.first_prediction_mismatch<0) metrics.first_prediction_mismatch=row;
+                }
+                if(!BitwiseEqual(residual,event.full_residual(row)))
+                {
+                    ++metrics.residual_mismatches;
+                    if(metrics.first_residual_mismatch<0) metrics.first_residual_mismatch=row;
+                }
+            }
+            const double objective_error=std::abs(result.objective-event.full_objective);
+            EXPECT_TRUE(std::isfinite(result.objective));
+            metrics.maximum_objective_absolute=std::max(metrics.maximum_objective_absolute,objective_error);
+            metrics.maximum_objective_relative=std::max(metrics.maximum_objective_relative,
+                objective_error/std::max(std::abs(event.full_objective),std::numeric_limits<double>::min()));
+            if(std::isnormal(result.objective) && std::isnormal(event.full_objective))
+                metrics.maximum_objective_ulp=std::max(metrics.maximum_objective_ulp,
+                    UlpDistance(result.objective,event.full_objective));
+            if(!BitwiseEqual(result.objective,event.full_objective))
+            {
+                ++metrics.objective_mismatches;
+                if(metrics.first_objective_mismatch<0) metrics.first_objective_mismatch=static_cast<Eigen::Index>(candidates-1);
+            }
+            const double reference=std::max(std::abs(result.objective),std::abs(method_state.objective));
+            const double enclosure=n::BlockObjectiveReplayEnclosure(reference);
+            const double delta=result.objective-method_state.objective;
+            const double consistency_error=std::abs(delta+event.local_objective_before-event.local_objective_after);
+            const bool method_acceptance=!event.unchanged && n::WithinBlockObjectiveReplay(consistency_error,reference) &&
+                (delta<=0 || (event.local_objective_after<=event.local_objective_before && delta<=enclosure));
+            metrics.acceptance_disagreements+=method_acceptance!=event.accepted;
+            if(event.accepted)
+            {
+                method_state.eta=event.candidate_eta; method_state.beta=event.candidate_beta;
+                for(std::size_t k=0;k<event.affected_rows.size();++k)
+                {
+                    const auto row=event.affected_rows[k];
+                    method_state.prediction(row)=result.prediction(static_cast<Eigen::Index>(k));
+                    method_state.residual(row)=result.residual(static_cast<Eigen::Index>(k));
+                }
+                method_state.objective=result.objective;
+            }
+        }
+        const double objective_error=std::abs(exact.objective-event.full_objective);
+        maximum_objective_absolute=std::max(maximum_objective_absolute,objective_error);
+        if(std::isnormal(exact.objective) && std::isnormal(event.full_objective))
+            maximum_objective_ulp=std::max(maximum_objective_ulp,UlpDistance(exact.objective,event.full_objective));
+        objective_mismatches+=!BitwiseEqual(exact.objective,event.full_objective);
+        const double reference=std::max(std::abs(exact.objective),std::abs(shadow.objective));
+        const double enclosure=n::BlockObjectiveReplayEnclosure(reference);
+        const double delta=exact.objective-shadow.objective;
+        const double consistency_error=std::abs(delta+event.local_objective_before-event.local_objective_after);
+        const bool objective_rule=delta<=0 || (event.local_objective_after<=event.local_objective_before &&
+            delta<=enclosure);
+        const bool exact_acceptance=!event.unchanged && n::WithinBlockObjectiveReplay(consistency_error,reference) &&
+            objective_rule;
+        acceptance_disagreements+=exact_acceptance!=event.accepted;
+        const double margin=std::min({enclosure-delta,
+            event.local_objective_before-event.local_objective_after,enclosure-consistency_error});
+        minimum_acceptance_margin=std::min(minimum_acceptance_margin,margin);
+        minimum_acceptance_margin_ratio=std::min(minimum_acceptance_margin_ratio,margin/enclosure);
+        if(event.accepted)
+        {
+            ++accepted_updates; ++accepted_since_refresh;
+            shadow.eta=event.candidate_eta; shadow.beta=event.candidate_beta;
+            for(std::size_t k=0;k<event.affected_rows.size();++k)
+            {
+                const auto row=event.affected_rows[k];
+                shadow.prediction(row)=exact.prediction(static_cast<Eigen::Index>(k));
+                shadow.residual(row)=exact.residual(static_cast<Eigen::Index>(k));
+            }
+            shadow.objective=exact.objective;
+            maximum_accepted_since_refresh=std::max(maximum_accepted_since_refresh,accepted_since_refresh);
+        }
+    };
+    policy.state_observer=[&](std::size_t,const n::BlockCoordinateState & state,const auto &,const auto &) {
+        EXPECT_TRUE(BitwiseEqual(shadow.eta,state.eta));
+        EXPECT_TRUE(BitwiseEqual(shadow.beta,state.beta));
+        EXPECT_TRUE(BitwiseEqual(shadow.prediction,state.prediction));
+        EXPECT_TRUE(BitwiseEqual(shadow.residual,state.residual));
+        EXPECT_TRUE(BitwiseEqual(shadow.objective,state.objective));
+        for(std::size_t method=0;method<experiment_states.size();++method)
+        {
+            EXPECT_TRUE(BitwiseEqual(experiment_states[method].eta,state.eta));
+            EXPECT_TRUE(BitwiseEqual(experiment_states[method].beta,state.beta));
+            if(method==3)
+            {
+                EXPECT_TRUE(BitwiseEqual(experiment_states[method].prediction,state.prediction));
+                EXPECT_TRUE(BitwiseEqual(experiment_states[method].residual,state.residual));
+                EXPECT_TRUE(BitwiseEqual(experiment_states[method].objective,state.objective));
+            }
+        }
+    };
+    const auto shadow_result=n::RunFixedNeighborDiagnostic(problem,eta,policy);
+
+    EXPECT_GT(candidates,0u); EXPECT_GT(full_replays,0u); EXPECT_GT(accepted_updates,0u);
+    EXPECT_EQ(acceptance_disagreements,0u);
+    EXPECT_EQ(prediction_mismatches,0u); EXPECT_EQ(residual_mismatches,0u);
+    EXPECT_EQ(objective_mismatches,0u);
+    EXPECT_EQ(baseline.reason,shadow_result.reason);
+    ASSERT_EQ(baseline.sweeps.size(),shadow_result.sweeps.size());
+    for(std::size_t k=0;k<baseline.sweeps.size();++k)
+    {
+        EXPECT_EQ(baseline.sweeps[k].accepted_blocks,shadow_result.sweeps[k].accepted_blocks);
+        EXPECT_EQ(baseline.sweeps[k].unchanged_blocks,shadow_result.sweeps[k].unchanged_blocks);
+        EXPECT_TRUE(BitwiseEqual(baseline.sweeps[k].objective_after,shadow_result.sweeps[k].objective_after));
+        EXPECT_TRUE(BitwiseEqual(baseline.sweeps[k].cache_replay_error,shadow_result.sweeps[k].cache_replay_error));
+    }
+    EXPECT_TRUE(BitwiseEqual(baseline.state.eta,shadow_result.state.eta));
+    EXPECT_TRUE(BitwiseEqual(baseline.state.beta,shadow_result.state.beta));
+    EXPECT_TRUE(BitwiseEqual(baseline.state.prediction,shadow_result.state.prediction));
+    EXPECT_TRUE(BitwiseEqual(baseline.state.residual,shadow_result.state.residual));
+    EXPECT_TRUE(BitwiseEqual(baseline.state.objective,shadow_result.state.objective));
+    RecordProperty("D1_shadow_candidates",std::to_string(candidates));
+    RecordProperty("D1_shadow_full_replays",std::to_string(full_replays));
+    RecordProperty("D1_shadow_accepted_updates",std::to_string(accepted_updates));
+    RecordProperty("D1_shadow_mismatches",std::to_string(prediction_mismatches+residual_mismatches+objective_mismatches));
+    RecordProperty("D1_shadow_max_prediction_absolute",Precise(maximum_prediction_absolute));
+    RecordProperty("D1_shadow_max_prediction_relative",Precise(maximum_prediction_relative));
+    RecordProperty("D1_shadow_max_residual_absolute",Precise(maximum_residual_absolute));
+    RecordProperty("D1_shadow_max_residual_relative",Precise(maximum_residual_relative));
+    RecordProperty("D1_shadow_max_prediction_ulp",std::to_string(maximum_prediction_ulp));
+    RecordProperty("D1_shadow_max_residual_ulp",std::to_string(maximum_residual_ulp));
+    RecordProperty("D1_shadow_max_objective_absolute",Precise(maximum_objective_absolute));
+    RecordProperty("D1_shadow_max_objective_ulp",std::to_string(maximum_objective_ulp));
+    RecordProperty("D1_shadow_min_acceptance_margin",Precise(minimum_acceptance_margin));
+    RecordProperty("D1_shadow_min_acceptance_margin_ratio",Precise(minimum_acceptance_margin_ratio));
+    RecordProperty("D1_shadow_max_accepted_updates_without_refresh",std::to_string(maximum_accepted_since_refresh));
+    RecordProperty("D1_shadow_first_prediction_mismatch",std::to_string(first_prediction_mismatch));
+    RecordProperty("D1_shadow_first_residual_mismatch",std::to_string(first_residual_mismatch));
+    for(std::size_t method=0;method<experiment_metrics.size();++method)
+    {
+        const auto prefix=std::string(method_names[method])+"_shadow_";
+        const auto & metrics=experiment_metrics[method];
+        RecordProperty(prefix+"prediction_mismatches",std::to_string(metrics.prediction_mismatches));
+        RecordProperty(prefix+"residual_mismatches",std::to_string(metrics.residual_mismatches));
+        RecordProperty(prefix+"objective_mismatches",std::to_string(metrics.objective_mismatches));
+        RecordProperty(prefix+"acceptance_disagreements",std::to_string(metrics.acceptance_disagreements));
+        RecordProperty(prefix+"max_prediction_abs",Precise(metrics.maximum_prediction_absolute));
+        RecordProperty(prefix+"max_prediction_rel",Precise(metrics.maximum_prediction_relative));
+        RecordProperty(prefix+"max_residual_abs",Precise(metrics.maximum_residual_absolute));
+        RecordProperty(prefix+"max_residual_rel",Precise(metrics.maximum_residual_relative));
+        RecordProperty(prefix+"max_objective_abs",Precise(metrics.maximum_objective_absolute));
+        RecordProperty(prefix+"max_objective_rel",Precise(metrics.maximum_objective_relative));
+        RecordProperty(prefix+"max_prediction_ulp",std::to_string(metrics.maximum_prediction_ulp));
+        RecordProperty(prefix+"max_residual_ulp",std::to_string(metrics.maximum_residual_ulp));
+        RecordProperty(prefix+"max_objective_ulp",std::to_string(metrics.maximum_objective_ulp));
+        RecordProperty(prefix+"first_prediction_mismatch",std::to_string(metrics.first_prediction_mismatch));
+        RecordProperty(prefix+"first_residual_mismatch",std::to_string(metrics.first_residual_mismatch));
+        RecordProperty(prefix+"first_objective_mismatch_candidate",std::to_string(metrics.first_objective_mismatch));
+    }
 }
 
 TEST(JointFixedNeighborBlockCoordinateTest, UnchangedCandidateSkipsOnlyCandidateReplay)

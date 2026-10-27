@@ -1306,7 +1306,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 const auto & observed_residual=candidate_fast_unchanged ? out.state.residual : replay_workspace.residual;
                 policy.candidate_observer({sweep_index+1,block_index+1,out.state,core_atoms,affected_rows,
                     observed_eta,observed_beta,observed_prediction,observed_residual,candidate_objective,
-                    accepted_candidate,unchanged_candidate,!candidate_fast_unchanged});
+                    record.local_objective_before,record.local_objective_after,record.global_replay_delta,
+                    record.local_global_delta_error,record.objective_replay_enclosure,accepted_candidate,
+                    unchanged_candidate,!candidate_fast_unchanged});
             };
 #endif
             if(!delta_enclosed)

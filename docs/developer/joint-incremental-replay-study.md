@@ -102,13 +102,45 @@ validation, not yet a production optimization: total FixedNeighbor search
 speedup, acceptance agreement, long-run behavior, and larger-component
 performance remain unmeasured.
 
+## N2: Full-Replay-controlled shadow search
+
+The test-only shadow ran on the deterministic 30-target chain with five
+sweeps. Production Full Replay made all 15 candidate decisions; all 15 were
+accepted. The shadow candidates never changed the production state or later
+local searches. The final state, sweep objectives, sweep replay errors, and stop
+reason matched the observer-off baseline bitwise. Existing tests separately
+cover unchanged candidates and block recovery/retry behavior.
+
+| Shadow method | Prediction mismatches | Residual mismatches | Objective mismatches | Acceptance disagreements | Maximum absolute prediction / residual / objective error |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| B1 | 9,163 | 9,163 | 10 | 0 | `1.11022e-16` / `1.11022e-16` / `1.85288e-22` |
+| B2 | 9,238 | 9,238 | 10 | 0 | `1.11022e-16` / `1.11022e-16` / `7.94093e-23` |
+| C | 9,163 | 9,163 | 15 | 0 | `1.11022e-16` / `1.11022e-16` / `3.33067e-15` |
+| D1 | 0 | 0 | 0 | 0 | 0 / 0 / 0 |
+| E | 0 | 0 | 15 | 0 | 0 / 0 / `3.33067e-15` |
+
+B1 and B2 maximum prediction differences were 3 and 4 ULP, respectively. Their
+maximum residual difference was 536,870,912 ULP because some residuals are
+near zero; maximum relative residual error was `9.35544e-8`. Their first
+prediction and residual mismatch was informative row 1,507; the first Full Scan
+objective mismatch occurred at candidate 5. C and E's largest objective
+difference was 71,661,654,325 ULP near a zero objective, with maximum relative
+objective error `1.22105e-5`; C first differed at candidate 0, E at candidate 0.
+These are 15 accepted updates without a shadow refresh. D1's minimum objective acceptance margin was
+`1.0955168297673593e-16`, or `0.00010955168294349627` of its replay enclosure.
+There was no acceptance disagreement in this fixture, but it had no rejected
+candidate and its narrowest margin means this small run alone cannot establish
+that B/C/E are safe around the decision boundary. N3 must check whether refresh
+can contain their accumulated drift before deciding whether they proceed; D1
+proceeds to closed-loop testing.
+
 ## Roadmap status
 
 | Stage | Status | Result |
 | --- | --- | --- |
 | N0 | Complete | Baseline telemetry and deterministic state/candidate digests recorded. |
 | N1 | Complete | A/B1/B2/C/D1/E measured at 3, 30, and 300 synthetic targets; D1 passed bitwise candidate replay checks. |
-| N2 | Pending | |
+| N2 | Complete | Five-method shadow; Full Replay retained every decision; D1 remained bitwise exact, while B/C/E accumulated drift. |
 | N3 | Pending | |
 | N4 | Pending | |
 | N5 | Pending | |

@@ -21,7 +21,8 @@ struct FixedNeighborCandidateEvent
     const BlockCoordinateState & accepted_before;
     const Indices & core_atoms,& affected_rows;
     const Vector & candidate_eta,& candidate_beta,& full_prediction,& full_residual;
-    double full_objective{};
+    double full_objective{},local_objective_before{},local_objective_after{},global_replay_delta{},
+        local_global_delta_error{},objective_replay_enclosure{};
     bool accepted{},unchanged{},full_replay_ran{};
 };
 struct FixedNeighborReplayResult
