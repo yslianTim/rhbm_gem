@@ -1,9 +1,13 @@
 # Joint Incremental Prediction Replay Study
 
-This record compares candidate replay methods against the production Full Replay.
-At the N0 baseline, production used Full Replay. N6 adopts on-demand D1 for
-candidate replay when its scratch preflight passes, with Full Replay as the
-memory fallback and with sweep-end and independent verification retained.
+This record preserves the historical candidate replay study and records the
+later E1 Production promotion. At the N0 baseline, Production used Full
+Replay; the historical N6 checkpoint adopted D1 with a Full Replay memory
+fallback. The current Production decision is recorded in M0–M4 below.
+
+> Historical note: the N0–P4 sections below record earlier study checkpoints.
+> Their statement that Production remained D1 describes that earlier state and
+> is superseded by the M0–M4 promotion record at the end of this document.
 
 ## N0: baseline and workload census
 
@@ -1414,3 +1418,43 @@ passed. The fault-injection cases passed with their expected state-preservation
 and failure semantics. The earlier P3 “missing evidence” classification for
 natural candidate rejections is superseded for branch-coverage purposes; no
 natural-rejection fixture is claimed or required.
+
+### M3 — Retired replay experiment cleanup
+
+Production FixedNeighbor now has one candidate objective path: exact
+affected-row prediction and residual recomputation followed by the direct
+objective cache delta. The only D1 full-objective candidate calculation is a
+test-only reference flag. It is absent from the Production build. Scratch
+preflight still selects Full Replay when affected-row replay cannot fit; a
+fallback candidate uses the full prediction, residual, and objective result.
+
+Removed the IncrementalGuarded path, empirical guard-band and refresh-interval
+controls, cache-trust state, candidate full-scan fallback counters, and
+periodic duplicate Full Replay checks. Sweep replay audit and Objective
+Reconciliation remain mandatory: the already computed Full Replay is checked
+before the cached scalar is refreshed. The 3.2 GB planning budget and all
+acceptance, KKT, width, and convergence thresholds are unchanged.
+
+Removed `JointReplayExperiment.{hpp,cpp}`, which implemented Delta Prediction
+B1/B2/C, external CSR/incidence replay variants, compensated or scaled
+incremental sums, and tiled/tree objective caches. Removed the replay-only and
+drift benchmark executables and sources. Replaced the strategy-comparison
+benchmark with a Release benchmark linked to the uninstrumented `rhbm_gem`
+Production library; it performs one warm-up and five measured closed-loop
+runs and reports candidate, sweep replay, audit, reconciliation, global
+evaluation, endpoint, Independent Replay, memory preflight, and process RSS.
+The separate Joint Optimization benchmark remains because it measures other
+solver work and did not depend on the retired replay framework.
+
+The broad experiment shadow tests and guard/refresh-interval matrices were
+replaced by a focused Production E1 vs D1 Full Objective Reference test. It
+checks every E1 affected-row prediction/residual against independent Full
+Replay, checks the incremental objective and acceptance decision, verifies
+the final D1/E1 state on the standard fixture, and confirms every successful
+sweep reconciles after audit. Active-width, multiple initial-width,
+high-overlap, weak-width, rank-deficient, near-singular, low-signal,
+signed-cancellation, recovery, unchanged, fault-injection, and memory-fallback
+coverage remains. The focused FixedNeighbor group now has 36 tests and all
+36 passed after cleanup. This is numerical non-regression and branch-safety
+evidence for the covered fixtures; it does not claim a universal floating
+point error bound.

@@ -186,7 +186,7 @@ AffectedReplayResult ReplayAffectedRows(const Domain & domain
     VectorRef candidate_beta,double scale,const Indices & core_atoms,const Indices & neighbor_atoms,
     const Indices & affected_rows,const Indices & atom_position
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    ,bool incremental_objective=true
+    ,bool full_objective_reference=false
 #endif
     )
 {
@@ -211,7 +211,7 @@ AffectedReplayResult ReplayAffectedRows(const Domain & domain
         out.residual(static_cast<Eigen::Index>(row))=prediction-observations(affected_rows[row]);
     }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(!incremental_objective)
+    if(full_objective_reference)
     {
         double squared{};
         for(const auto row_value:layout.informative_rows)
@@ -246,21 +246,6 @@ AffectedReplayResult ReplayAffectedRows(const Domain & domain
     out.scratch_bytes=std::max(incidence.build_scratch_bytes,evaluation_bytes);
     return out;
 }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-double FullObjectiveFromAffectedRows(const JointParameterLayout & layout,VectorRef accepted_residual,
-    const Indices & affected_rows,VectorRef candidate_residual,double scale)
-{
-    double squared{};
-    for(const auto row_value:layout.informative_rows)
-    {
-        const auto row=static_cast<Eigen::Index>(row_value);
-        const auto local=AffectedReplayPosition(affected_rows,row);
-        const double residual=local>=0 ? candidate_residual(local) : accepted_residual(row);
-        squared+=residual*residual;
-    }
-    return .5*squared/(scale*scale);
-}
-#endif
 bool BitwiseEqual(double left,double right)
 {return std::bit_cast<std::uint64_t>(left)==std::bit_cast<std::uint64_t>(right);}
 bool IsBitwiseIdenticalCoreCandidate(const BlockCoordinateState & state,
@@ -1159,11 +1144,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     bool state_cache_valid=out.state.prediction.size()==y.size() && out.state.residual.size()==y.size() &&
         out.state.eta.allFinite() && out.state.beta.allFinite() && out.state.prediction.allFinite() &&
         out.state.residual.allFinite() && std::isfinite(out.state.objective);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    bool objective_cache_trusted=true;
-    double last_objective_cache_error{};
-    std::size_t accepted_updates_since_objective_refresh{};
-#endif
     auto mapping_timer=Measure(collect_telemetry,out.work.structural_preparation_seconds);
     Indices atom_position(domain.atoms.size(),-1),row_position(static_cast<std::size_t>(domain.rows),-1);
     for(std::size_t k=0;k<layout.full_atoms.size();++k) atom_position.at(layout.full_atoms[k])=static_cast<Eigen::Index>(k);
@@ -1459,7 +1439,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             Vector candidate_affected_prediction,candidate_affected_residual;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             double incremental_candidate_objective=std::numeric_limits<double>::quiet_NaN();
-            bool candidate_objective_full_scan_fallback{};
 #endif
             const bool candidate_fast_unchanged=state_cache_valid && std::isfinite(out.state.objective) &&
                 IsBitwiseIdenticalCoreCandidate(out.state,core_atoms,accepted->endpoint)
@@ -1501,8 +1480,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 if(use_affected_row_replay)
                 {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                    const bool incremental_objective=policy.objective_strategy_for_testing!=
-                        FixedNeighborObjectiveStrategyForTesting::FullScan;
+                    const bool full_objective_reference=policy.full_objective_reference_for_testing;
 #endif
                     auto candidate=ReplayAffectedRows(domain
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -1511,7 +1489,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                         ,y,out.state,candidate_eta,candidate_beta,
                         context.scale,core_atoms,partition.cores[block_index].neighbor_atoms,affected_rows,atom_position
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                        ,incremental_objective
+                        ,full_objective_reference
 #endif
                         );
                     candidate_result_affected_rows_only=true;
@@ -1524,13 +1502,13 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                         out.work.affected_replay_peak_scratch_bytes=std::max(
                             out.work.affected_replay_peak_scratch_bytes,candidate.scratch_bytes);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                        if(incremental_objective) ++out.work.incremental_objective_evaluations;
+                        if(!full_objective_reference) ++out.work.incremental_objective_evaluations;
 #else
                         ++out.work.incremental_objective_evaluations;
 #endif
                     }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                    if(incremental_objective) incremental_candidate_objective=candidate.objective;
+                    if(!full_objective_reference) incremental_candidate_objective=candidate.objective;
 #endif
                 }
                 else
@@ -1574,36 +1552,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 else replay_workspace.residual(affected_rows.front())=std::numeric_limits<double>::infinity();
                 break;
             default: break;
-            }
-            if(!candidate_fast_unchanged && candidate_result_affected_rows_only &&
-                policy.objective_strategy_for_testing==FixedNeighborObjectiveStrategyForTesting::IncrementalGuarded)
-            {
-                const double estimated_delta=candidate_objective-out.state.objective;
-                const double reference=std::max(std::abs(candidate_objective),std::abs(out.state.objective));
-                const double enclosure=BlockObjectiveReplayEnclosure(reference);
-                const double consistency=std::abs(estimated_delta+record.local_objective_before-
-                    record.local_objective_after);
-                const double boundary_distance=std::min({std::abs(estimated_delta),
-                    std::abs(estimated_delta-enclosure),
-                    std::abs(record.local_objective_after-record.local_objective_before),
-                    std::abs(consistency-enclosure)});
-                const double guard=policy.objective_guard_band_fraction_for_testing*enclosure;
-                const bool cache_drifted=last_objective_cache_error>
-                    policy.objective_guard_band_fraction_for_testing*BlockObjectiveReplayEnclosure(out.state.objective);
-                candidate_objective_full_scan_fallback=!objective_cache_trusted || cache_drifted ||
-                    boundary_distance<=guard;
-                if(candidate_objective_full_scan_fallback)
-                {
-                    const auto fallback_started=collect_telemetry ? Clock::now() : Clock::time_point{};
-                    candidate_objective=FullObjectiveFromAffectedRows(layout,out.state.residual,affected_rows,
-                        candidate_affected_residual,context.scale);
-                    replay_workspace.objective=candidate_objective;
-                    if(collect_telemetry)
-                    {
-                        ++out.work.objective_full_scan_fallbacks;
-                        out.work.objective_full_scan_fallback_seconds+=Seconds(fallback_started);
-                    }
-                }
             }
 #endif
             record.objective_after=candidate_objective;
@@ -1652,7 +1600,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                     observed_eta,observed_beta,*observed_prediction,*observed_residual,candidate_objective,
                     record.local_objective_before,record.local_objective_after,record.global_replay_delta,
                     record.local_global_delta_error,record.objective_replay_enclosure,incremental_candidate_objective,
-                    candidate_objective_full_scan_fallback,accepted_candidate,
+                    accepted_candidate,
                     unchanged_candidate,!candidate_fast_unchanged});
             };
 #endif
@@ -1688,21 +1636,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             }
             const bool unchanged=candidate_unchanged;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            const bool periodic_objective_refresh_due=!candidate_fast_unchanged && !unchanged &&
-                policy.objective_refresh_interval_for_testing>0 &&
-                accepted_updates_since_objective_refresh+1>=policy.objective_refresh_interval_for_testing;
-            const auto objective_refresh_started=periodic_objective_refresh_due && collect_telemetry ?
-                Clock::now() : Clock::time_point{};
-            double old_objective_reference{};
-            if(periodic_objective_refresh_due)
-            {
-                const Indices no_affected_rows;
-                const Vector no_candidate_residual;
-                old_objective_reference=FullObjectiveFromAffectedRows(layout,out.state.residual,
-                    no_affected_rows,no_candidate_residual,context.scale);
-            }
-#endif
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
             observe_candidate(!unchanged,unchanged);
 #endif
             if(!unchanged)
@@ -1735,55 +1668,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                     std::isfinite(out.state.objective);
                 if(collect_telemetry) out.work.cache_update_seconds+=Seconds(cache_started);
             }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(!candidate_fast_unchanged && !unchanged)
-            {
-                ++accepted_updates_since_objective_refresh;
-                if(periodic_objective_refresh_due)
-                {
-                    ReplayInto(domain,layout,y,out.state.eta,out.state.beta,context.scale,replay_structure,replay_workspace);
-                    const double prediction_error=PredictionDifference(out.state.prediction,replay_workspace.prediction);
-                    const double residual_error=PredictionDifference(out.state.residual,replay_workspace.residual);
-                    const double objective_error=std::abs(out.state.objective-replay_workspace.objective);
-                    const double reference=std::max(std::abs(old_objective_reference),std::abs(replay_workspace.objective));
-                    const double true_delta=replay_workspace.objective-old_objective_reference;
-                    const double prediction_limit=2e-12+2e-13*replay_workspace.prediction.cwiseAbs().maxCoeff();
-                    const double residual_limit=2e-12+2e-13*replay_workspace.residual.cwiseAbs().maxCoeff();
-                    const bool state_valid=prediction_error<=prediction_limit && residual_error<=residual_limit &&
-                        WithinBlockObjectiveReplay(objective_error,replay_workspace.objective);
-                    const bool true_increase_allowed=true_delta<=0 ||
-                        (record.local_objective_after<=record.local_objective_before &&
-                            true_delta<=BlockObjectiveReplayEnclosure(reference));
-                    if(collect_telemetry)
-                    {
-                        ++out.work.objective_cache_refreshes;
-                        out.work.maximum_accepted_updates_between_objective_refreshes=std::max(
-                            out.work.maximum_accepted_updates_between_objective_refreshes,
-                            accepted_updates_since_objective_refresh);
-                        out.work.objective_cache_refresh_seconds+=Seconds(objective_refresh_started);
-                        out.work.maximum_objective_refresh_error=std::max(
-                            out.work.maximum_objective_refresh_error,objective_error);
-                    }
-                    ++sweep.objective_cache_refreshes;
-                    sweep.maximum_objective_refresh_error=std::max(sweep.maximum_objective_refresh_error,objective_error);
-                    if(!state_valid || !true_increase_allowed)
-                    {
-                        if(collect_telemetry) ++out.work.objective_refresh_failures;
-                        out.reason=!state_valid ? "block-cache-replay-failed" : "block-objective-increase";
-                        stop=true;
-                    }
-                    else
-                    {
-                        if(true_delta>0 && collect_telemetry) ++out.work.objective_refresh_positive_deltas;
-                        out.state.objective=replay_workspace.objective;
-                        sweep.objective_cache_refreshed=true;
-                        objective_cache_trusted=true;
-                        last_objective_cache_error=0;
-                        accepted_updates_since_objective_refresh=0;
-                    }
-                }
-            }
-#endif
             record.accepted=!unchanged; record.status=unchanged ? "unchanged" : "accepted";
             record.reason=unchanged ? "block-unchanged" : "";
             if(record.recovery_retry)
@@ -1861,33 +1745,14 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 #endif
         if(!sweep_replay_valid)
         {out.reason="block-cache-replay-failed"; stop=true; break;}
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        last_objective_cache_error=sweep.objective_replay_error;
-        objective_cache_trusted=sweep.objective_replay_error<=
-            policy.objective_guard_band_fraction_for_testing*BlockObjectiveReplayEnclosure(replay.objective);
-#endif
         // Reconciliation follows the successful audit and global-state evaluation.
         const auto objective_reconciliation_started=collect_telemetry ? Clock::now() : Clock::time_point{};
-        ++sweep.objective_cache_refreshes;
-        sweep.maximum_objective_refresh_error=sweep.objective_replay_error;
         ++out.work.objective_reconciliations;
         out.work.maximum_objective_reconciliation_error=std::max(
             out.work.maximum_objective_reconciliation_error,sweep.objective_replay_error);
         out.state.objective=replay.objective;
         sweep.objective_after=replay.objective;
         sweep.objective_cache_refreshed=true;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        ++out.work.objective_cache_refreshes;
-        out.work.maximum_objective_refresh_error=std::max(
-            out.work.maximum_objective_refresh_error,sweep.objective_replay_error);
-        out.work.maximum_accepted_updates_between_objective_refreshes=std::max(
-            out.work.maximum_accepted_updates_between_objective_refreshes,
-            accepted_updates_since_objective_refresh);
-        accepted_updates_since_objective_refresh=0;
-        objective_cache_trusted=true;
-        if(collect_telemetry)
-            out.work.objective_cache_refresh_seconds+=Seconds(objective_reconciliation_started);
-#endif
         if(collect_telemetry)
             out.work.objective_reconciliation_seconds+=Seconds(objective_reconciliation_started);
         out.final_sweep=sweep;
