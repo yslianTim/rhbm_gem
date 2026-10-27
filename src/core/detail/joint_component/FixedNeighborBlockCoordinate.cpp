@@ -1731,7 +1731,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(policy.diagnostic_sink && policy.diagnostic_sink->sweep) policy.diagnostic_sink->sweep(sweep);
 #endif
-        if(policy.production_progress) policy.production_progress(sweep);
         if(retain_diagnostics) out.sweeps.push_back(sweep);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(policy.sweep_observer)
@@ -1757,6 +1756,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             out.work.objective_reconciliation_seconds+=Seconds(objective_reconciliation_started);
         out.final_sweep=sweep;
         if(retain_diagnostics) out.sweeps.back()=sweep;
+        if(policy.production_progress) policy.production_progress(sweep);
         if(assess_parameter_stability)
         {
             recent_sweep_changes[next_recent_sweep_change]={sweep.eta_change_inf,sweep.beta_scaled_change};
