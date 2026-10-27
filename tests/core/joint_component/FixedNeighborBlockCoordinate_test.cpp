@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <boost/hash2/sha2.hpp>
 #include "support/JointFixedNeighborDiagnostic.hpp"
 #include "support/JointComponentChecks.hpp"
 #include "core/detail/joint_component/Problem.hpp"
@@ -127,6 +128,16 @@ std::uint64_t UlpDistance(double left,double right)
     const auto a=ordered(left),b=ordered(right);
     return a>b ? a-b : b-a;
 }
+std::string ReplayDigest(const n::Vector & values)
+{
+    boost::hash2::sha2_256 hash;
+    for(Eigen::Index i=0;i<values.size();++i)
+    {
+        const auto bits=std::bit_cast<std::uint64_t>(values(i));
+        hash.update(&bits,sizeof(bits));
+    }
+    return boost::hash2::to_string(hash.result());
+}
 
 TEST(JointFixedNeighborBlockCoordinateTest, ProfileEndpointMatchesFixedStateEvaluation)
 {
@@ -215,7 +226,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, CandidateObserverDoesNotChangeFullRe
     const auto baseline=n::RunFixedNeighborDiagnostic(problem,eta,policy);
     std::size_t candidate_count{},full_replay_count{},accepted_count{};
     policy.candidate_observer=[&](const n::FixedNeighborCandidateEvent & event) {
-        ++candidate_count; full_replay_count+=event.full_replay_ran; accepted_count+=event.accepted;
+        ++candidate_count; full_replay_count+=event.candidate_replay_ran; accepted_count+=event.accepted;
         EXPECT_EQ(event.candidate_eta.size(),event.accepted_before.eta.size());
         EXPECT_EQ(event.candidate_beta.size(),event.accepted_before.beta.size());
         EXPECT_EQ(event.full_prediction.size(),event.accepted_before.prediction.size());
@@ -392,7 +403,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ExactReplayShadowMatchesProductionCa
     double minimum_acceptance_margin=std::numeric_limits<double>::infinity();
     double minimum_acceptance_margin_ratio=std::numeric_limits<double>::infinity();
     policy.candidate_observer=[&](const n::FixedNeighborCandidateEvent & event) {
-        ++candidates; full_replays+=event.full_replay_ran;
+        ++candidates; full_replays+=event.candidate_replay_ran;
         EXPECT_TRUE(BitwiseEqual(shadow.eta,event.accepted_before.eta));
         EXPECT_TRUE(BitwiseEqual(shadow.beta,event.accepted_before.beta));
         EXPECT_TRUE(BitwiseEqual(shadow.prediction,event.accepted_before.prediction));
@@ -616,6 +627,202 @@ TEST(JointFixedNeighborBlockCoordinateTest, ExactReplayShadowMatchesProductionCa
         RecordProperty(prefix+"first_residual_mismatch",std::to_string(metrics.first_residual_mismatch));
         RecordProperty(prefix+"first_objective_mismatch_candidate",std::to_string(metrics.first_objective_mismatch));
     }
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, AffectedRowExactReplayMatchesClosedLoopFullReplay)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector eta=n::Vector::Constant(3,std::log(.55));
+    n::FixedNeighborPolicy full_policy; full_policy.core_atoms=2; full_policy.maximum_sweeps=40;
+    full_policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
+    full_policy.eta_upper_bound=std::log(2.2); full_policy.capture_local_trajectory=true;
+    struct CandidateTrace
+    {
+        std::size_t sweep{},block{};
+        n::Indices core_atoms;
+        n::Vector eta_before,beta_before,candidate_eta,candidate_beta;
+        std::string before_prediction_digest,before_residual_digest,prediction_digest,residual_digest;
+        double objective_before{},objective_after{},local_objective_before{},local_objective_after{},
+            global_delta{},consistency_error{},replay_enclosure{};
+        bool accepted{},unchanged{},replay_ran{};
+    };
+    std::vector<CandidateTrace> full_trace,d1_trace;
+    std::vector<n::BlockCoordinateState> full_sweep_states,d1_sweep_states;
+    const auto trace_candidate=[&](std::vector<CandidateTrace> & trace) {
+        auto * const trace_ptr=&trace;
+        return [trace_ptr](const n::FixedNeighborCandidateEvent & event) {
+            trace_ptr->push_back({event.sweep,event.block,event.core_atoms,event.accepted_before.eta,
+                event.accepted_before.beta,event.candidate_eta,event.candidate_beta,
+                ReplayDigest(event.accepted_before.prediction),ReplayDigest(event.accepted_before.residual),
+                ReplayDigest(event.full_prediction),ReplayDigest(event.full_residual),
+                event.accepted_before.objective,event.full_objective,event.local_objective_before,
+                event.local_objective_after,event.global_replay_delta,event.local_global_delta_error,
+                event.objective_replay_enclosure,event.accepted,event.unchanged,event.candidate_replay_ran});
+        };
+    };
+    full_policy.candidate_observer=trace_candidate(full_trace);
+    full_policy.state_observer=[&](std::size_t,const n::BlockCoordinateState & state,const auto &,const auto &) {
+        full_sweep_states.push_back(state);
+    };
+    const auto full=n::RunFixedNeighborDiagnostic(problem,eta,full_policy);
+
+    auto d1_policy=full_policy;
+    n::StructuralTopology topology(data.domain,data.context.atom_ids,data.layout);
+    auto partition=topology.BuildCores(d1_policy.core_atoms); topology.PopulateMetadata(partition);
+    std::size_t d1_candidate_replays{};
+    d1_policy.candidate_replay_for_testing=[&](const n::BlockCoordinateState & accepted,
+        const n::Indices & core_atoms,const n::Indices & affected_rows,n::VectorRef candidate_eta,
+        n::VectorRef candidate_beta) {
+        ++d1_candidate_replays;
+        const auto block=std::find_if(partition.cores.begin(),partition.cores.end(),[&](const auto & item) {
+            return item.atoms==core_atoms;
+        });
+        if(block==partition.cores.end()) throw std::logic_error("Closed-loop replay could not match the prepared core.");
+        const auto incidence=second_stage_test::PrepareReplayIncidence(data.domain,data.layout,
+            core_atoms,block->neighbor_atoms,affected_rows);
+        const auto exact=second_stage_test::EvaluateReplayCandidate(data.domain,data.layout,data.y,
+            accepted,candidate_eta,candidate_beta,data.context.scale,core_atoms,affected_rows,
+            second_stage_test::ReplayPredictionStrategy::AffectedRowExact,
+            second_stage_test::ReplayObjectiveStrategy::FullScan,&incidence);
+        n::FixedNeighborReplayResult replay;
+        replay.prediction=accepted.prediction; replay.residual=accepted.residual;
+        for(std::size_t k=0;k<affected_rows.size();++k)
+        {
+            const auto row=affected_rows[k];
+            replay.prediction(row)=exact.prediction(static_cast<Eigen::Index>(k));
+            replay.residual(row)=exact.residual(static_cast<Eigen::Index>(k));
+        }
+        replay.objective=exact.objective;
+        return replay;
+    };
+    d1_policy.candidate_observer=trace_candidate(d1_trace);
+    d1_policy.state_observer=[&](std::size_t,const n::BlockCoordinateState & state,const auto &,const auto &) {
+        d1_sweep_states.push_back(state);
+    };
+    const auto d1=n::RunFixedNeighborDiagnostic(problem,eta,d1_policy);
+
+    ASSERT_EQ(full.reason,d1.reason);
+    EXPECT_EQ(full.search_converged,d1.search_converged);
+    EXPECT_EQ(full.endpoint_certified,d1.endpoint_certified);
+    EXPECT_EQ(full.sweep_count,d1.sweep_count);
+    ASSERT_EQ(full.blocks.size(),d1.blocks.size());
+    ASSERT_EQ(full.sweeps.size(),d1.sweeps.size());
+    ASSERT_EQ(full_trace.size(),d1_trace.size());
+    ASSERT_EQ(full_sweep_states.size(),d1_sweep_states.size());
+    for(std::size_t k=0;k<full_trace.size();++k)
+    {
+        const auto & a=full_trace[k]; const auto & b=d1_trace[k];
+        EXPECT_EQ(a.sweep,b.sweep); EXPECT_EQ(a.block,b.block); EXPECT_EQ(a.core_atoms,b.core_atoms);
+        EXPECT_TRUE(BitwiseEqual(a.eta_before,b.eta_before)); EXPECT_TRUE(BitwiseEqual(a.beta_before,b.beta_before));
+        EXPECT_TRUE(BitwiseEqual(a.candidate_eta,b.candidate_eta)); EXPECT_TRUE(BitwiseEqual(a.candidate_beta,b.candidate_beta));
+        EXPECT_EQ(a.before_prediction_digest,b.before_prediction_digest);
+        EXPECT_EQ(a.before_residual_digest,b.before_residual_digest);
+        EXPECT_EQ(a.prediction_digest,b.prediction_digest); EXPECT_EQ(a.residual_digest,b.residual_digest);
+        EXPECT_TRUE(BitwiseEqual(a.objective_before,b.objective_before));
+        EXPECT_TRUE(BitwiseEqual(a.objective_after,b.objective_after));
+        EXPECT_TRUE(BitwiseEqual(a.local_objective_before,b.local_objective_before));
+        EXPECT_TRUE(BitwiseEqual(a.local_objective_after,b.local_objective_after));
+        EXPECT_TRUE(BitwiseEqual(a.global_delta,b.global_delta));
+        EXPECT_TRUE(BitwiseEqual(a.consistency_error,b.consistency_error));
+        EXPECT_TRUE(BitwiseEqual(a.replay_enclosure,b.replay_enclosure));
+        EXPECT_EQ(a.accepted,b.accepted); EXPECT_EQ(a.unchanged,b.unchanged); EXPECT_EQ(a.replay_ran,b.replay_ran);
+    }
+    for(std::size_t k=0;k<full.blocks.size();++k)
+    {
+        const auto & a=full.blocks[k]; const auto & b=d1.blocks[k];
+        EXPECT_EQ(a.sweep,b.sweep); EXPECT_EQ(a.block,b.block); EXPECT_EQ(a.core_atoms,b.core_atoms);
+        EXPECT_EQ(a.status,b.status); EXPECT_EQ(a.reason,b.reason); EXPECT_EQ(a.accepted,b.accepted);
+        EXPECT_EQ(a.recovery_retry,b.recovery_retry); EXPECT_EQ(a.recovery_success,b.recovery_success);
+        EXPECT_EQ(a.profile_evaluations,b.profile_evaluations); EXPECT_EQ(a.accepted_updates,b.accepted_updates);
+        EXPECT_TRUE(BitwiseEqual(a.local_objective_before,b.local_objective_before));
+        EXPECT_TRUE(BitwiseEqual(a.local_objective_after,b.local_objective_after));
+        EXPECT_TRUE(BitwiseEqual(a.global_replay_delta,b.global_replay_delta));
+        EXPECT_TRUE(BitwiseEqual(a.local_global_delta_error,b.local_global_delta_error));
+        EXPECT_TRUE(BitwiseEqual(a.objective_after,b.objective_after));
+        EXPECT_TRUE(BitwiseEqual(a.local_final_gradient_inf_norm,b.local_final_gradient_inf_norm));
+        EXPECT_TRUE(BitwiseEqual(a.local_final_ac_kkt,b.local_final_ac_kkt));
+        ASSERT_EQ(a.profile_trials.size(),b.profile_trials.size());
+        for(std::size_t trial=0;trial<a.profile_trials.size();++trial)
+        {
+            const auto & x=a.profile_trials[trial]; const auto & y=b.profile_trials[trial];
+            EXPECT_EQ(x.trial_index,y.trial_index); EXPECT_EQ(x.profile_evaluation,y.profile_evaluation);
+            EXPECT_EQ(x.accepted,y.accepted); EXPECT_EQ(x.accepted_update,y.accepted_update);
+            EXPECT_TRUE(BitwiseEqual(x.local_objective_before,y.local_objective_before));
+            EXPECT_TRUE(BitwiseEqual(x.local_objective_after,y.local_objective_after));
+            EXPECT_TRUE(BitwiseEqual(x.eta_change_inf,y.eta_change_inf));
+            EXPECT_TRUE(BitwiseEqual(x.gradient_inf_norm,y.gradient_inf_norm));
+            EXPECT_TRUE(BitwiseEqual(x.lm_actual_decrease,y.lm_actual_decrease));
+            EXPECT_TRUE(BitwiseEqual(x.lm_predicted_decrease,y.lm_predicted_decrease));
+            EXPECT_TRUE(BitwiseEqual(x.lm_ratio,y.lm_ratio));
+        }
+    }
+    for(std::size_t k=0;k<full.sweeps.size();++k)
+    {
+        const auto & a=full.sweeps[k]; const auto & b=d1.sweeps[k];
+        EXPECT_EQ(a.sweep,b.sweep); EXPECT_EQ(a.accepted_blocks,b.accepted_blocks);
+        EXPECT_EQ(a.unchanged_blocks,b.unchanged_blocks); EXPECT_EQ(a.block_solves,b.block_solves);
+        EXPECT_TRUE(BitwiseEqual(a.objective_before,b.objective_before));
+        EXPECT_TRUE(BitwiseEqual(a.objective_after,b.objective_after));
+        EXPECT_TRUE(BitwiseEqual(a.global_ac_kkt,b.global_ac_kkt));
+        EXPECT_TRUE(BitwiseEqual(a.projected_width_gradient_inf_norm,b.projected_width_gradient_inf_norm));
+        EXPECT_TRUE(BitwiseEqual(a.cache_replay_error,b.cache_replay_error));
+        EXPECT_TRUE(BitwiseEqual(a.objective_replay_error,b.objective_replay_error));
+        EXPECT_TRUE(BitwiseEqual(full_sweep_states[k].eta,d1_sweep_states[k].eta));
+        EXPECT_TRUE(BitwiseEqual(full_sweep_states[k].beta,d1_sweep_states[k].beta));
+        EXPECT_TRUE(BitwiseEqual(full_sweep_states[k].prediction,d1_sweep_states[k].prediction));
+        EXPECT_TRUE(BitwiseEqual(full_sweep_states[k].residual,d1_sweep_states[k].residual));
+        EXPECT_TRUE(BitwiseEqual(full_sweep_states[k].objective,d1_sweep_states[k].objective));
+    }
+    EXPECT_TRUE(BitwiseEqual(full.state.eta,d1.state.eta));
+    EXPECT_TRUE(BitwiseEqual(full.state.beta,d1.state.beta));
+    EXPECT_TRUE(BitwiseEqual(full.state.prediction,d1.state.prediction));
+    EXPECT_TRUE(BitwiseEqual(full.state.residual,d1.state.residual));
+    EXPECT_TRUE(BitwiseEqual(full.state.objective,d1.state.objective));
+    auto context=data.context; context.eta_upper_bound=full_policy.eta_upper_bound;
+    const auto full_primary=n::EvaluateStateStreaming(data.domain,data.y,full.state.eta,full.state.beta,context,
+        n::ProfileEvaluationRole::AcceptedEndpoint);
+    const auto d1_primary=n::EvaluateStateStreaming(data.domain,data.y,d1.state.eta,d1.state.beta,context,
+        n::ProfileEvaluationRole::AcceptedEndpoint);
+    ASSERT_TRUE(full_primary.valid)<<full_primary.reason; ASSERT_TRUE(d1_primary.valid)<<d1_primary.reason;
+    const auto full_independent=n::CheckIndependentReplay(data.domain,data.y,full_primary,context,
+        nullptr,nullptr,full_policy.convergence_criteria);
+    const auto d1_independent=n::CheckIndependentReplay(data.domain,data.y,d1_primary,context,
+        nullptr,nullptr,d1_policy.convergence_criteria);
+    ASSERT_TRUE(full_independent.available && full_independent.valid)<<full_independent.reason;
+    ASSERT_TRUE(d1_independent.available && d1_independent.valid)<<d1_independent.reason;
+    EXPECT_EQ(full_independent.passed,d1_independent.passed);
+    EXPECT_TRUE(BitwiseEqual(full_independent.primary_objective,d1_independent.primary_objective));
+    EXPECT_TRUE(BitwiseEqual(full_independent.independent_objective,d1_independent.independent_objective));
+    EXPECT_TRUE(BitwiseEqual(full_independent.primary_ac_kkt,d1_independent.primary_ac_kkt));
+    EXPECT_TRUE(BitwiseEqual(full_independent.independent_ac_kkt,d1_independent.independent_ac_kkt));
+    EXPECT_EQ(full.fit.RuntimeConvergence(),d1.fit.RuntimeConvergence());
+    ASSERT_TRUE(full.endpoint_certified)<<full.endpoint_trust.reason;
+    ASSERT_TRUE(d1.endpoint_certified)<<d1.endpoint_trust.reason;
+    ASSERT_TRUE(full.endpoint_trust.independent.has_value());
+    ASSERT_TRUE(d1.endpoint_trust.independent.has_value());
+    EXPECT_EQ(full_independent.passed,full.endpoint_trust.independent->passed);
+    EXPECT_EQ(d1_independent.passed,d1.endpoint_trust.independent->passed);
+    const auto full_accepted=static_cast<std::size_t>(std::count_if(full_trace.begin(),full_trace.end(),
+        [](const auto & candidate){return candidate.accepted;}));
+    const auto profile_trials=std::accumulate(full.blocks.begin(),full.blocks.end(),std::size_t{},
+        [](std::size_t count,const auto & block){return count+block.profile_trials.size();});
+    EXPECT_GT(d1_candidate_replays,0u);
+    EXPECT_EQ(d1_candidate_replays,static_cast<std::size_t>(std::count_if(d1_trace.begin(),d1_trace.end(),
+        [](const auto & candidate){return candidate.replay_ran;})));
+    RecordProperty("N4_candidates",std::to_string(full_trace.size()));
+    RecordProperty("N4_accepted_candidates",std::to_string(full_accepted));
+    RecordProperty("N4_replay_calls",std::to_string(d1_candidate_replays));
+    RecordProperty("N4_sweeps",std::to_string(full.sweeps.size()));
+    RecordProperty("N4_blocks",std::to_string(full.blocks.size()));
+    RecordProperty("N4_profile_trials",std::to_string(profile_trials));
+    RecordProperty("N4_converged",std::to_string(full.search_converged));
+    RecordProperty("N4_stop_reason",full.reason);
+    RecordProperty("N4_endpoint_certified",std::to_string(full.endpoint_certified));
+    RecordProperty("N4_independent_replay_passed",std::to_string(full_independent.passed));
+    RecordProperty("N4_global_ac_kkt",Precise(full.sweeps.back().global_ac_kkt));
+    RecordProperty("N4_projected_width_kkt",Precise(full.sweeps.back().projected_width_gradient_inf_norm));
+    RecordProperty("N4_final_objective",Precise(full.state.objective));
 }
 
 TEST(JointFixedNeighborBlockCoordinateTest, UnchangedCandidateSkipsOnlyCandidateReplay)

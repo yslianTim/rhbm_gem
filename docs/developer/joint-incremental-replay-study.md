@@ -201,6 +201,29 @@ Existing tests cover unchanged candidates, recovery retry/exhaustion, and
 resource-limited endpoint certification. The stress runner does not inject a
 thrown exception or exercise a real solver trajectory.
 
+## N4: closed-loop D1 search
+
+A test-only candidate replay callback let D1 control candidate objective,
+consistency, acceptance, accepted prediction/residual, and later block response.
+The production build has no callback field or strategy branch. On the
+three-target chain with two-atom cores and practical convergence criteria, the
+Full Replay and D1 searches both completed five sweeps, ten block solves, ten
+accepted candidates, and 20 local profile trials. Both stopped with
+`block-stationary`, converged, and passed endpoint certification and
+Independent Replay.
+
+Level A passed. Every candidate's parameter snapshot, accepted-before state
+digest, candidate prediction/residual digest, objective values, local profile
+trial counts, acceptance flags, local objectives, width/gradient updates, LM
+ratios, and block record matched bitwise. Sweep objectives, cache-replay
+errors, global A/C KKT, projected Width KKT, sweep states, and final
+eta/beta/prediction/residual/objective also matched bitwise.
+Final objective was `2.0199079729737389e-10`; global A/C KKT was
+`4.3341136235497402e-9`, and projected Width KKT was `1.6235413013987454e-10`.
+Independent Replay passed for both. This is a single-component, two-block
+fixture; the full regression suite remains part of final acceptance. The test
+is for correctness only and makes no speed claim.
+
 ## Roadmap status
 
 | Stage | Status | Result |
@@ -209,6 +232,6 @@ thrown exception or exercise a real solver trajectory.
 | N1 | Complete | A/B1/B2/C/D1/E measured at 3, 30, and 300 synthetic targets; D1 passed bitwise candidate replay checks. |
 | N2 | Complete | Five-method shadow; Full Replay retained every decision; D1 remained bitwise exact, while B/C/E accumulated drift. |
 | N3 | Complete | 503-attempt refresh/drift stress at 1/10/50/100/sweep; B methods drifted more with longer intervals, C/E retained objective error, D1 stayed exact; all scripted rejections rolled back bitwise. |
-| N4 | Pending | |
+| N4 | Complete | D1 controlled candidate results in closed loop and reached Level A on the converged two-block fixture; Independent Replay passed. |
 | N5 | Pending | |
 | N6 | Pending | |

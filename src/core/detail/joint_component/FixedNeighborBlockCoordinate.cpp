@@ -1280,9 +1280,25 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                     (void)candidate_copy_timer;
                 }
                 const auto candidate_replay_timer=Measure(collect_telemetry,out.work.candidate_replay_seconds);
-                if(collect_telemetry) ++out.work.full_candidate_replays;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                if(collect_telemetry && !policy.candidate_replay_for_testing) ++out.work.full_candidate_replays;
+                if(policy.candidate_replay_for_testing)
+                {
+                    auto candidate=policy.candidate_replay_for_testing(out.state,core_atoms,affected_rows,
+                        candidate_eta,candidate_beta);
+                    replay_workspace.prediction=std::move(candidate.prediction);
+                    replay_workspace.residual=std::move(candidate.residual);
+                    replay_workspace.objective=candidate.objective;
+                }
+                else
+#endif
+                {
+#ifndef RHBM_GEM_TEST_INSTRUMENTATION
+                    if(collect_telemetry) ++out.work.full_candidate_replays;
+#endif
                 ReplayInto(domain,layout,y,candidate_eta,candidate_beta,context.scale,replay_structure,
                     replay_workspace);
+                }
                 (void)candidate_replay_timer;
             }
             const double candidate_objective=candidate_fast_unchanged ? out.state.objective :
