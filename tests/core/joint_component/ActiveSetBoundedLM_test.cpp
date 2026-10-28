@@ -149,7 +149,7 @@ TEST(ActiveSetBoundedLMTest, TrustRegionDampingRecoversRankDeficiencyAndRejectsI
     EXPECT_EQ(infeasible.status,"invalid-subproblem-input");
 }
 
-TEST(ActiveSetBoundedLMTest, RecordedInteriorDampedStepIsBitwiseStable)
+TEST(ActiveSetBoundedLMTest, BoundaryEarlyStopPreservesTheDampedStepAndKkt)
 {
     Eigen::Matrix2d j=Eigen::Matrix2d::Identity();
     Eigen::Vector2d r(-1.0,2.0),d(1.0,2.0),upper(10.0,10.0);
@@ -159,16 +159,15 @@ TEST(ActiveSetBoundedLMTest, RecordedInteriorDampedStepIsBitwiseStable)
     const auto result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,radius,0.5);
 
     ASSERT_TRUE(result.valid)<<result.status;
-    EXPECT_EQ(Bits(result.damping),4602678819172646914ULL);
-    EXPECT_EQ(Bits(result.step(0)),4604180019048437080ULL);
-    EXPECT_EQ(Bits(result.step(1)),13827552055903212883ULL);
-    EXPECT_EQ(Bits(result.gradient(0)),4379187687664386048ULL);
-    EXPECT_EQ(Bits(result.gradient(1)),Bits(0.0));
-    ASSERT_EQ(joint::BoundedLmWorkForTesting().damping_trace.size(),57u);
+    EXPECT_NEAR(result.damping,.5,1e-12);
+    EXPECT_NEAR(result.step(0),2.0/3.0,1e-13);
+    EXPECT_NEAR(result.step(1),-2.0/3.0,1e-13);
+    EXPECT_LE(result.kkt_inf_norm,1e-10);
+    EXPECT_NEAR(result.scaled_step_norm,radius,1e-13*radius);
     const auto & trace=joint::BoundedLmWorkForTesting().damping_trace;
-    EXPECT_EQ(result.damping_solves,trace.size());
+    ASSERT_EQ(result.damping_solves,trace.size());
     EXPECT_EQ(result.bracket_solves,2u);
-    EXPECT_EQ(result.bisection_solves,54u);
+    EXPECT_LT(result.bisection_solves,54u);
     std::size_t active_iterations{},qr_factorizations{},releases{};
     for(const auto & attempt:trace)
     {
@@ -205,7 +204,8 @@ TEST(ActiveSetBoundedLMTest, RecordedInteriorDampedStepIsBitwiseStable)
     EXPECT_EQ(Bits(result.multipliers(1)),Bits(0.0));
     EXPECT_EQ(Bits(trace[0].kkt_inf_norm),Bits(0.0));
     EXPECT_EQ(std::count_if(trace.begin(),trace.end(),[](const auto & candidate) {return candidate.phase==1;}),2);
-    EXPECT_EQ(std::count_if(trace.begin(),trace.end(),[](const auto & candidate) {return candidate.phase==2;}),54);
+    EXPECT_EQ(std::count_if(trace.begin(),trace.end(),[](const auto & candidate) {return candidate.phase==2;}),
+        result.bisection_solves);
 }
 
 TEST(ActiveSetBoundedLMTest, CallWorkspaceResetsAcrossFullBoundaryFailureAndRecovery)

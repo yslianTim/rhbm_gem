@@ -332,6 +332,7 @@ ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Ei
     context=MakeBoundedSubproblemContext(j,upper);
     solve_candidate(0.0,0,candidate);
     const double trust_tolerance=64.0*std::numeric_limits<double>::epsilon()*std::max(1.0,trust_radius);
+    constexpr double boundary_relative_tolerance=1e-13;
     if(candidate.valid && candidate.scaled_step_norm<=trust_radius+trust_tolerance)
     {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -372,6 +373,8 @@ ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Ei
             mark_search_accepted();
 #endif
             high=middle; CopyActiveSetStep(feasible,candidate);
+            if(trust_radius-candidate.scaled_step_norm<=boundary_relative_tolerance*trust_radius)
+                break;
         }
         else if(candidate.valid || candidate.status=="rank-deficient-free-subproblem") low=middle;
         else return finish(Failure(candidate.status));
