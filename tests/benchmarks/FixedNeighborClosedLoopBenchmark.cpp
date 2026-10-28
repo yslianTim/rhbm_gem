@@ -2,8 +2,11 @@
 #include "support/JointSyntheticWorkload.hpp"
 #include <algorithm>
 #include <array>
+#include <bit>
+#include <boost/hash2/sha2.hpp>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
@@ -22,9 +25,11 @@ struct Sample
         replay_audit_seconds{},reconciliation_seconds{},global_state_seconds{},
         endpoint_certification_seconds{},independent_replay_seconds{};
     std::size_t affected_candidates{},full_replay_fallbacks{},sweep_replays{},
-        objective_reconciliations{},sweeps{},preflight_bytes{},peak_rss_bytes{};
+        objective_reconciliations{},sweeps{},accepted_blocks{},unchanged_blocks{},failed_blocks{},
+        preflight_bytes{},peak_rss_bytes{};
     double objective{},global_ac_kkt{},projected_width_kkt{},maximum_cache_replay_error{},
         mean_amplitude{},mean_charge{},mean_width{};
+    std::string eta_sha256,beta_sha256;
     bool qualified{},independent_replay_passed{},memory_preflight_passed{},full_replay_memory_fallback{};
 };
 
@@ -44,6 +49,19 @@ double Median(std::vector<double> values)
     std::sort(values.begin(),values.end());
     const auto middle=values.size()/2;
     return values.size()%2 ? values[middle] : .5*(values[middle-1]+values[middle]);
+}
+
+std::string DigestVector(const Eigen::VectorXd & values)
+{
+    boost::hash2::sha2_256 hash;
+    const auto add=[&hash](std::uint64_t value) {
+        std::array<unsigned char,8> bytes{};
+        for(unsigned k=0;k<8;++k) bytes[k]=static_cast<unsigned char>((value>>(8*k))&255);
+        hash.update(bytes.data(),bytes.size());
+    };
+    add(static_cast<std::uint64_t>(values.size()));
+    for(Eigen::Index i=0;i<values.size();++i) add(std::bit_cast<std::uint64_t>(values(i)));
+    return boost::hash2::to_string(hash.result());
 }
 
 template<class Getter>
@@ -68,6 +86,12 @@ Sample Run(std::size_t targets)
     policy.core_atoms=12;
     policy.convergence_criteria=joint::PracticalJointConvergenceCriteria;
     policy.eta_upper_bound=std::log(2.2);
+    std::size_t accepted_blocks{},unchanged_blocks{},failed_blocks{};
+    policy.production_progress=[&](const joint::FixedNeighborBlockSweep & sweep) {
+        accepted_blocks+=sweep.accepted_blocks;
+        unchanged_blocks+=sweep.unchanged_blocks;
+        failed_blocks+=sweep.block_solves-sweep.accepted_blocks-sweep.unchanged_blocks;
+    };
 
     const auto started=Clock::now();
     const auto result=joint::SearchFixedNeighborComponent(data.domain,data.layout,data.y,
@@ -98,6 +122,9 @@ Sample Run(std::size_t targets)
     sample.objective_reconciliations=result.work.objective_reconciliations;
     sample.preflight_bytes=result.global_state_memory_estimate.estimated_peak_bytes;
     sample.peak_rss_bytes=PeakRssBytes();
+    sample.accepted_blocks=accepted_blocks;
+    sample.unchanged_blocks=unchanged_blocks;
+    sample.failed_blocks=failed_blocks;
     sample.objective=independent.independent_objective/(data.context.scale*data.context.scale);
     sample.global_ac_kkt=result.final_sweep->global_ac_kkt;
     sample.projected_width_kkt=result.final_sweep->projected_width_gradient_inf_norm;
@@ -118,6 +145,8 @@ Sample Run(std::size_t targets)
     sample.independent_replay_passed=independent.passed;
     sample.memory_preflight_passed=result.global_state_memory_estimate.status==joint::MemoryStatus::Pass;
     sample.full_replay_memory_fallback=result.work.full_replay_memory_fallback;
+    sample.eta_sha256=DigestVector(result.state.eta);
+    sample.beta_sha256=DigestVector(result.state.beta);
     return sample;
 }
 
@@ -144,6 +173,9 @@ void PrintSummary(std::size_t targets,const std::vector<Sample> & samples)
         <<" sweep_replays="<<representative.sweep_replays
         <<" objective_reconciliations="<<representative.objective_reconciliations
         <<" sweeps="<<representative.sweeps
+        <<" accepted_blocks="<<representative.accepted_blocks
+        <<" unchanged_blocks="<<representative.unchanged_blocks
+        <<" failed_blocks="<<representative.failed_blocks
         <<" memory_full_replay_fallback="<<representative.full_replay_memory_fallback
         <<" memory_preflight_peak_bytes="<<representative.preflight_bytes
         <<" memory_preflight_pass="<<representative.memory_preflight_passed
@@ -152,9 +184,12 @@ void PrintSummary(std::size_t targets,const std::vector<Sample> & samples)
         <<" global_ac_kkt="<<representative.global_ac_kkt
         <<" projected_width_kkt="<<representative.projected_width_kkt
         <<" maximum_cache_replay_error="<<representative.maximum_cache_replay_error
+        <<" initial_width=0.55"
         <<" mean_amplitude="<<representative.mean_amplitude
         <<" mean_charge="<<representative.mean_charge
         <<" mean_width="<<representative.mean_width
+        <<" eta_sha256="<<representative.eta_sha256
+        <<" beta_sha256="<<representative.beta_sha256
         <<" stop_reason="<<representative.stop_reason
         <<" endpoint_qualified="<<representative.qualified
         <<" independent_replay_pass="<<representative.independent_replay_passed<<'\n';
