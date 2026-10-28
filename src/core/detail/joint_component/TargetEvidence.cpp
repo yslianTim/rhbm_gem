@@ -255,33 +255,13 @@ JointCheckStatus TargetConvergence(const std::optional<JointTargetEvidence> & ev
 {
     if(!evidence) return Status::NotRun;
     if(!state) return Status::Unavailable;
-    if(evidence->contract==JointTargetPointValidationContractVersion)
-    {
-        auto status=Status::Passed;
-        for(const char * name:{"component-convergence","parameter-validity","target-point-validation"})
-        {
-            const auto found=std::find_if(evidence->checks.begin(),evidence->checks.end(),[&](const auto & check) {
-                return check.name==name;
-            });
-            status=MergeConvergenceStatus(status,found==evidence->checks.end() ? Status::Unavailable : found->status);
-        }
-        return status;
-    }
-    if(evidence->contract!="target-estimability-v1" && evidence->contract!="target-estimability-v2" &&
-        evidence->contract!="target-estimability-v3" && evidence->contract!="target-estimability-v4")
-        return Status::Unavailable;
+    if(evidence->contract!=JointTargetPointValidationContractVersion) return Status::Unavailable;
     auto status=Status::Passed;
-    const bool reference_free=std::any_of(evidence->checks.begin(),evidence->checks.end(),[](const auto & check) {
-        return check.name=="conditional-ac-optimality";
-    });
-    const std::vector<const char *> required=reference_free ?
-        std::vector<const char *>{"conditional-ac-optimality","independent-replay","width-stationarity",
-            "design-identifiability","numerical-identifiability",
-            "target-identifiability"} :
-        std::vector<const char *>{"inner","kkt","width-stationarity","target-identifiability"};
-    for(const char * name:required)
+    for(const char * name:{"component-convergence","parameter-validity","target-point-validation"})
     {
-        const auto found=std::find_if(evidence->checks.begin(),evidence->checks.end(),[&](const auto & c){return c.name==name;});
+        const auto found=std::find_if(evidence->checks.begin(),evidence->checks.end(),[&](const auto & check) {
+            return check.name==name;
+        });
         status=MergeConvergenceStatus(status,found==evidence->checks.end() ? Status::Unavailable : found->status);
     }
     return status;

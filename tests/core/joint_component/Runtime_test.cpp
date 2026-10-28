@@ -177,6 +177,12 @@ TEST(JointComponentRuntimeTest, RuntimeConvergenceIsDerivedFromActualEvidenceNot
     set_status("conditional-ac-optimality",Status::Unavailable);
     EXPECT_EQ(fit.RuntimeConvergence(),Status::Unavailable);
     set_status("conditional-ac-optimality",Status::Passed);
+    set_status("width-stationarity",Status::Failed);
+    EXPECT_EQ(fit.RuntimeConvergence(),Status::Failed);
+    set_status("width-stationarity",Status::Passed);
+    set_status("active-set-lm-subproblems",Status::Failed);
+    EXPECT_EQ(fit.RuntimeConvergence(),Status::Failed);
+    set_status("active-set-lm-subproblems",Status::Passed);
     evidence.push_back({"local-correction",Status::Failed,rhbm_gem::JointEvidenceScope::ComponentLocal,.1,1e-10,
         "historical-correction-evidence"});
     set_status("local-correction",Status::Failed);
@@ -196,6 +202,13 @@ TEST(JointComponentRuntimeTest, MissingOrWrongScopeEvidenceCannotVacuouslyConver
     auto global=fit;
     for(auto & check:global.evidence) if(check.name=="assembled-consistency") check.status=Status::Failed;
     EXPECT_EQ(global.RuntimeConvergence(),Status::Failed);
+    global=fit;
+    const auto mapping=std::find_if(global.evidence.begin(),global.evidence.end(),[](const auto & check) {
+        return check.name=="assembly-mapping";
+    });
+    ASSERT_NE(mapping,global.evidence.end());
+    mapping->status=Status::Unavailable;
+    EXPECT_EQ(global.RuntimeConvergence(),Status::Unavailable);
     global=fit; global.evidence=fit.components[0].evidence;
     EXPECT_EQ(global.RuntimeConvergence(),Status::Unavailable);
     global=fit; global.prediction.reset(); EXPECT_EQ(global.RuntimeConvergence(),Status::Unavailable);

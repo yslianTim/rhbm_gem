@@ -266,14 +266,10 @@ JointCheckStatus MergeConvergenceStatus(JointCheckStatus a,JointCheckStatus b)
 JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> & evidence,JointEvidenceScope scope,bool assembled)
 {
     auto status=JointCheckStatus::Passed;
-    const bool reference_free=std::any_of(evidence.begin(),evidence.end(),[&](const auto & check) {
-        return check.name=="endpoint-verification" && check.scope==scope;
-    });
-    const std::vector<const char *> required=reference_free ?
-        std::vector<const char *>{"ac-feasibility","conditional-ac-optimality","independent-ac-optimality",
-            "independent-kkt-consistency","independent-replay","width-gradient-consistency",
-            "width-stationarity","endpoint-verification","numerical-qualification"} :
-        std::vector<const char *>{"inner","kkt","width-stationarity","numerical-qualification"};
+    const std::vector<const char *> required{"ac-feasibility","conditional-ac-optimality",
+        "independent-ac-optimality","independent-kkt-consistency","independent-replay",
+        "width-gradient-consistency","width-stationarity","endpoint-verification",
+        "numerical-qualification"};
     for(const char * name:required)
     {
         const auto found=std::find_if(evidence.begin(),evidence.end(),[&](const auto & check){return check.name==name && check.scope==scope;});
@@ -281,9 +277,7 @@ JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> & evidence,Join
     }
     if(assembled)
     {
-        const std::vector<const char *> assembly_required=reference_free ?
-            std::vector<const char *>{"assembly-mapping","assembled-consistency"} :
-            std::vector<const char *>{"assembled-profile"};
+        const std::vector<const char *> assembly_required{"assembly-mapping","assembled-consistency"};
 
         for(const char * name:assembly_required)
         {

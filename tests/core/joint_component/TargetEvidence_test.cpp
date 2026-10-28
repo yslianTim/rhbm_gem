@@ -147,4 +147,30 @@ TEST(JointTargetEvidenceTest, ComponentLocalAndAssembledEvidenceAgreeForNonconti
     EXPECT_EQ(n::TargetConvergence(global,true),Status::Passed);
 }
 
+TEST(JointTargetEvidenceTest, OnlyCurrentValidationContractCanQualify)
+{
+    const auto problem=MakeProblem(1); const auto state=MakeState(1);
+    const std::vector<rhbm_gem::JointBlockConditioning> conditioning{ConditioningBlock("block-a",{0})};
+    const std::vector<rhbm_gem::JointBlockParameterStability> stability{StabilityBlock("block-a",{0})};
+    auto evidence=n::AssessTargetPointState(problem,problem.ParameterLayout(),state,Status::Passed,
+        conditioning,stability,rhbm_gem::JointEvidenceScope::AssembledGlobal,1);
+    EXPECT_EQ(evidence.contract,rhbm_gem::JointTargetPointValidationContractVersion);
+    EXPECT_EQ(n::TargetConvergence(evidence,true),Status::Passed);
+
+    auto unavailable=evidence;
+    const auto target_check=std::find_if(unavailable.checks.begin(),unavailable.checks.end(),[](const auto & check) {
+        return check.name=="target-point-validation";
+    });
+    ASSERT_NE(target_check,unavailable.checks.end());
+    target_check->status=Status::Unavailable;
+    EXPECT_EQ(n::TargetConvergence(unavailable,true),Status::Unavailable);
+
+    auto missing=evidence;
+    std::erase_if(missing.checks,[](const auto & check){return check.name=="parameter-validity";});
+    EXPECT_EQ(n::TargetConvergence(missing,true),Status::Unavailable);
+
+    evidence.contract="target-estimability-v4";
+    EXPECT_EQ(n::TargetConvergence(evidence,true),Status::Unavailable);
+}
+
 }
