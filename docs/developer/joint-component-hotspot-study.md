@@ -89,6 +89,14 @@ The real 6Z6U/EMD-11103 run with chains A and YA used one warmup and five fresh-
 
 R2 incidence caching was skipped after R3: direct mapping reduced all incidence preparation to 5.010 ms at 300 targets (0.45% of full FixedNeighbor wall), leaving less than a 0.5% workflow ceiling while a reusable cache would retain per-block structures. R4 candidate copying was also skipped: its measured ~0.04 ms was below 0.005% of complete wall. The lower-bound A/B selector and all test-only selector fields were removed; direct mapping is the sole production path.
 
-P2 and P3 remain gated by the attribution above. SparseQR reduced-pattern repetition is only 5/130 transitions and values change on all five; refinement triggered 0/260 times. Bounded LM uses 0.37% of 300-target wall. The P0 derivative and row-reduction results are recorded above; no persistent workspace or solver path has been promoted from microbenchmark evidence alone.
+### P2 Constrained A/C SparseQR and refinement
+
+Q1/Q2 completed from the P0 stage breakdown. The 300-target case had 260 valid A/C solves and 260 sparse structure builds. Column normalization was 4.848 ms; selected sparse assembly 6.741 ms; row reduction 233.292 ms; SparseQR analysis/factorization/solve 2.915/6.113/0.699 ms. `ReduceSparseRows` dominated because tiled Householder work took 220.748 ms, while SparseQR itself was only 0.84% of complete FixedNeighbor wall. The free face and selected matrix pattern repeated across all 130 profile transitions, but the reduced pattern repeated only 5/130 times and changed 125/130 times. Numeric values changed on all five repeated-pattern transitions.
+
+Q3 symbolic reuse was skipped: the actual factorization input rarely repeats, and a same-pattern fingerprint does not imply reusable numeric factors. The measured analysis time was only 2.915 ms total, so caching would add invalidation risk for a small maximum saving. Q5 refinement optimization was skipped because it was eligible on 260 solves but triggered 0 times; all initial KKT checks passed at `6.94e-17`. Refinement remains intact and strict KKT is unchanged.
+
+Q4 tested reusing one `Eigen::HouseholderQR<MatrixXd>` object across `ReduceSparseRows` tiles, replacing per-tile construction while preserving the same `compute` arithmetic. On the 300-target instrumented benchmark, representative tiled-QR time changed from 222.881 ms to 215.794 ms (−3.2%); five-run complete search-wall medians changed from 1.125087 s to 1.120985 s (−0.36%). Numerical output and qualification passed, but the localized gain was below the 10% preference and the end-to-end change did not approach the 5% gate. The experiment was reverted. No P2 production optimization was promoted.
+
+P3 derivative and bounded-LM experiments are recorded in the next phase commit.
 
 Production remains on FixedNeighbor Block-coordinate, constrained A/C SparseQR with nonnegative active-set, and bounded active-set LM with width bounds and augmented QR.
