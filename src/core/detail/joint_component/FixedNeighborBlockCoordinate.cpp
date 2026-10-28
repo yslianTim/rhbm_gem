@@ -121,15 +121,17 @@ struct AffectedReplayResult
     double objective{};
     std::size_t scratch_bytes{};
 };
-Eigen::Index AffectedReplayPosition(const Indices & affected_rows,Eigen::Index row)
+Eigen::Index AffectedReplayPosition(const Indices & row_positions,Eigen::Index row)
 {
-    const auto found=std::lower_bound(affected_rows.begin(),affected_rows.end(),row);
-    return found==affected_rows.end() || *found!=row ? -1 : static_cast<Eigen::Index>(found-affected_rows.begin());
+    if(row<0 || static_cast<std::size_t>(row)>=row_positions.size()) return -1;
+    return row_positions[static_cast<std::size_t>(row)];
 }
 AffectedReplayIncidence PrepareAffectedReplayIncidence(const Domain & domain,const Indices & core_atoms,
     const Indices & neighbor_atoms,const Indices & affected_rows,const Indices & atom_positions
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    ,FixedNeighborWork::CandidateReplayBreakdown * breakdown
+    ,const Indices & row_positions,FixedNeighborWork::CandidateReplayBreakdown * breakdown
+#else
+    ,const Indices & row_positions
 #endif
 )
 {
@@ -159,7 +161,7 @@ AffectedReplayIncidence PrepareAffectedReplayIncidence(const Domain & domain,con
     for(const auto atom_value:out.atoms)
         for(const auto & support:domain.atoms[static_cast<std::size_t>(atom_value)])
         {
-            const auto local=AffectedReplayPosition(affected_rows,support.row);
+            const auto local=AffectedReplayPosition(row_positions,support.row);
             if(local>=0 && !CheckedAddBytes(out.offsets[static_cast<std::size_t>(local)+1],1,
                 out.offsets[static_cast<std::size_t>(local)+1]))
                 throw std::overflow_error("Affected-row replay contributor count overflow.");
@@ -178,7 +180,7 @@ AffectedReplayIncidence PrepareAffectedReplayIncidence(const Domain & domain,con
         const auto atom=static_cast<std::size_t>(out.atoms[atom_position]);
         for(const auto & support:domain.atoms[atom])
         {
-            const auto local=AffectedReplayPosition(affected_rows,support.row);
+            const auto local=AffectedReplayPosition(row_positions,support.row);
             if(local<0) continue;
             const auto row=static_cast<std::size_t>(local);
             out.contributors[cursor[row]++]={static_cast<Eigen::Index>(atom_position),support.square};
@@ -205,16 +207,19 @@ AffectedReplayResult ReplayAffectedRows(const Domain & domain,VectorRef observat
     VectorRef candidate_beta,double scale,const Indices & core_atoms,const Indices & neighbor_atoms,
     const Indices & affected_rows,const Indices & atom_position
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    ,FixedNeighborWork::CandidateReplayBreakdown * breakdown
+    ,const Indices & row_positions,FixedNeighborWork::CandidateReplayBreakdown * breakdown
+#else
+    ,const Indices & row_positions
 #endif
 )
 {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     const auto incidence=PrepareAffectedReplayIncidence(domain,core_atoms,neighbor_atoms,affected_rows,
-        atom_position,breakdown);
+        atom_position,row_positions,breakdown);
     const auto prediction_started=breakdown ? Clock::now() : Clock::time_point{};
 #else
-    const auto incidence=PrepareAffectedReplayIncidence(domain,core_atoms,neighbor_atoms,affected_rows,atom_position);
+    const auto incidence=PrepareAffectedReplayIncidence(domain,core_atoms,neighbor_atoms,affected_rows,
+        atom_position,row_positions);
 #endif
     Vector widths(static_cast<Eigen::Index>(incidence.atoms.size()));
     for(std::size_t k=0;k<incidence.atoms.size();++k)
@@ -862,6 +867,16 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         out.work.structural_preparation_seconds+=Seconds(mapping_timer.started);
         mapping_timer.target=nullptr;
     }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    const auto row_mapping_clear_started=collect_telemetry ? Clock::now() : Clock::time_point{};
+#endif
+    for(const auto row:layout.informative_rows)
+        row_position.at(static_cast<std::size_t>(row))=-1;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(collect_telemetry)
+        out.work.candidate_replay_breakdown.row_mapping_preparation_seconds+=Seconds(row_mapping_clear_started);
+#endif
+    std::size_t mapped_replay_block=std::numeric_limits<std::size_t>::max();
     const bool retain_diagnostics=collect_diagnostics;
     bool stop=false;
     std::size_t next_certification_retry_sweep{};
@@ -1048,15 +1063,27 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 if(use_affected_row_replay)
                 {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                    const auto mapping_started=collect_telemetry ? Clock::now() : Clock::time_point{};
+#endif
+                    if(mapped_replay_block!=std::numeric_limits<std::size_t>::max())
+                        for(const auto row:prepared_blocks[mapped_replay_block].affected_rows)
+                            row_position.at(static_cast<std::size_t>(row))=-1;
+                    for(std::size_t k=0;k<affected_rows.size();++k)
+                        row_position.at(static_cast<std::size_t>(affected_rows[k]))=static_cast<Eigen::Index>(k);
+                    mapped_replay_block=block_index;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                    if(collect_telemetry)
+                        out.work.candidate_replay_breakdown.row_mapping_preparation_seconds+=Seconds(mapping_started);
                     auto * replay_breakdown=collect_telemetry ? &out.work.candidate_replay_breakdown : nullptr;
                     auto candidate=ReplayAffectedRows(domain
                         ,y,out.state,candidate_eta,candidate_beta,
                         context.scale,core_atoms,partition.cores[block_index].neighbor_atoms,affected_rows,
-                        atom_position,replay_breakdown);
+                        atom_position,row_position,replay_breakdown);
 #else
                     auto candidate=ReplayAffectedRows(domain
                         ,y,out.state,candidate_eta,candidate_beta,
-                        context.scale,core_atoms,partition.cores[block_index].neighbor_atoms,affected_rows,atom_position);
+                        context.scale,core_atoms,partition.cores[block_index].neighbor_atoms,affected_rows,
+                        atom_position,row_position);
 #endif
                     candidate_result_affected_rows_only=true;
                     candidate_affected_prediction=std::move(candidate.prediction);

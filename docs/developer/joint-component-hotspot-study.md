@@ -68,4 +68,27 @@ The current priority is: (1) derivative preparation/reduction and its Tiled QR w
 
 ## P1–P3 decisions and results
 
-Pending gated experiments. Production remains on FixedNeighbor Block-coordinate, constrained A/C SparseQR with nonnegative active-set, and bounded active-set LM with width bounds and augmented QR.
+### P1 FixedNeighbor Candidate Replay
+
+R1 confirmed that each affected replay rebuilt its sorted contributor incidence and performed two support traversals. At 300 targets this initially cost 46.033 ms of 72.248 ms candidate replay (63.7%); row lookup/count and contributor construction were each about 23 ms. Candidate replay was 6.25% of complete FixedNeighbor wall, so eliminating it entirely could save at most that amount.
+
+R3 replaced the two per-support `lower_bound` lookups with direct indices in the existing `row_position` vector. After all block mappings are prepared, its informative-row entries are cleared and the vector is populated only for the last replayed block; the preceding block's entries are cleared before reuse. Atom ordering, contributor ordering, prediction/residual arithmetic, objective calculation, acceptance, cache commit, and independent replay remain unchanged. The vector already existed for block preparation and is accounted for in the global-state preflight estimate (`component_observations * sizeof(Eigen::Index)`); no allocation or preflight estimate was added. The largest candidate replay scratch remained 233,512 bytes.
+
+In five independent 300-target benchmark processes, lower-bound versus direct-map medians were 1.165115 s versus 1.125677 s complete FixedNeighbor wall (−3.38%), 72.699 ms versus 32.780 ms candidate replay (−54.9%), and 87,851,008 B versus 87,801,856 B peak RSS. All five candidate-decision digests matched. The P1 production benchmark then compared one warmup plus five measured runs at each synthetic size:
+
+| Targets | Candidate replay baseline → final | FixedNeighbor wall baseline → final | Wall change | Search baseline → final | Search change |
+|---:|---:|---:|---:|---:|---:|
+| 12 | 2.130 → 0.975 ms (−54.3%) | 39.202 → 37.812 ms | −3.55% | 31.133 → 29.759 ms | −4.41% |
+| 48 | 11.330 → 5.001 ms (−55.9%) | 186.981 → 181.182 ms | −3.10% | 154.739 → 148.864 ms | −3.80% |
+| 240 | 57.658 → 25.438 ms (−55.9%) | 923.514 → 893.422 ms | −3.26% | 765.112 → 735.608 ms | −3.86% |
+| 300 | 72.239 → 32.056 ms (−55.6%) | 1.15554 → 1.12232 s | −2.87% | 957.371 → 921.170 ms | −3.78% |
+
+All four sizes retained identical candidate decision digests, eta/beta hashes, objective, KKT, sweep counts, qualification, and Independent Replay. Preflight estimates and candidate scratch did not increase. Independent-process RSS on 300 targets was unchanged within noise. The smaller-than-5% synthetic workflow gains were stable across four sizes and came with a greater-than-50% reduction in the targeted stage, so this minimal reuse was promoted.
+
+The real 6Z6U/EMD-11103 run with chains A and YA used one warmup and five fresh-database measured runs. It retained 1,557 targets, 118 sweeps, 35,828 profile evaluations, 14,680 accepted updates, objective `0.02195348206329014`, independent A/C KKT `4.39461e-9`, projected-width KKT `6.14044e-11`, endpoint qualification, and Independent Replay. CLI wall median was 114.499 s (114.422–118.010) versus 134.471 s (134.224–134.711) at P0, a 14.85% reduction; Joint search was 89.174 s (89.131–92.517) versus 108.909 s (108.869–109.357), an 18.12% reduction. Peak RSS was variable: final median 1,563,672,576 B (1,484,242,944–1,793,097,728) versus baseline median 1,484,701,696 B (1,484,177,408–2,034,909,184); the minima are essentially identical, the baseline had the larger maximum, and the preflight estimate stayed exactly 52,661,461 B. Since the change reuses an already-preflighted vector without adding storage, the RSS spread is treated as process-level measurement variation rather than an allocation increase.
+
+R2 incidence caching was skipped after R3: direct mapping reduced all incidence preparation to 5.010 ms at 300 targets (0.45% of full FixedNeighbor wall), leaving less than a 0.5% workflow ceiling while a reusable cache would retain per-block structures. R4 candidate copying was also skipped: its measured ~0.04 ms was below 0.005% of complete wall. The lower-bound A/B selector and all test-only selector fields were removed; direct mapping is the sole production path.
+
+P2 and P3 remain gated by the attribution above. SparseQR reduced-pattern repetition is only 5/130 transitions and values change on all five; refinement triggered 0/260 times. Bounded LM uses 0.37% of 300-target wall. The P0 derivative and row-reduction results are recorded above; no persistent workspace or solver path has been promoted from microbenchmark evidence alone.
+
+Production remains on FixedNeighbor Block-coordinate, constrained A/C SparseQR with nonnegative active-set, and bounded active-set LM with width bounds and augmented QR.

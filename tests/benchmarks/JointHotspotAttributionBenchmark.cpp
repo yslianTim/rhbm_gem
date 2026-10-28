@@ -10,6 +10,7 @@
 #include <boost/hash2/sha2.hpp>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -28,9 +29,10 @@ struct Sample
     joint::ProfileSearchWork profile;
     double wall_seconds{},candidate_copy_seconds{},candidate_replay_seconds{},cache_update_seconds{},
         sweep_replay_seconds{},replay_audit_seconds{};
-    std::size_t peak_rss_bytes{},unchanged_fast_paths{},full_replay_fallbacks{};
+    std::size_t peak_rss_bytes{},unchanged_fast_paths{},full_replay_fallbacks{},sweeps{},accepted_updates{},
+        active_width_bounds{},candidate_events{};
     double objective{},ac_kkt{},width_kkt{};
-    std::string eta_digest,beta_digest,stop_reason;
+    std::string eta_digest,beta_digest,candidate_decision_digest,stop_reason;
     bool qualified{},independent_replay_passed{};
 };
 
@@ -58,6 +60,19 @@ std::string Digest(const Eigen::VectorXd & values)
     };
     add(static_cast<std::uint64_t>(values.size()));
     for(Eigen::Index i=0;i<values.size();++i) add(std::bit_cast<std::uint64_t>(values(i)));
+    return boost::hash2::to_string(hash.result());
+}
+
+std::string Digest(const std::vector<std::uint64_t> & values)
+{
+    boost::hash2::sha2_256 hash;
+    const auto add=[&hash](std::uint64_t value) {
+        std::array<unsigned char,8> bytes{};
+        for(unsigned k=0;k<8;++k) bytes[k]=static_cast<unsigned char>((value>>(8*k))&255);
+        hash.update(bytes.data(),bytes.size());
+    };
+    add(static_cast<std::uint64_t>(values.size()));
+    for(const auto value:values) add(value);
     return boost::hash2::to_string(hash.result());
 }
 
@@ -92,6 +107,14 @@ Sample Run(std::size_t targets,bool telemetry)
     policy.collect_telemetry=telemetry;
     policy.assess_local_conditioning=true;
     policy.assess_parameter_stability=true;
+    std::vector<std::uint64_t> candidate_decisions;
+    policy.candidate_observer=[&](const joint::FixedNeighborCandidateEvent & event) {
+        candidate_decisions.push_back(static_cast<std::uint64_t>(event.sweep));
+        candidate_decisions.push_back(static_cast<std::uint64_t>(event.block));
+        candidate_decisions.push_back(event.accepted);
+        candidate_decisions.push_back(event.unchanged);
+        candidate_decisions.push_back(event.candidate_replay_ran);
+    };
 
     const auto started=Clock::now();
     const auto result=joint::SearchFixedNeighborComponent(data.domain,data.layout,data.y,
@@ -105,6 +128,11 @@ Sample Run(std::size_t targets,bool telemetry)
     if(!result.search_converged || !certification.qualified() || !independent.passed)
         throw std::runtime_error("qualification failed: "+result.reason);
     sample.replay=result.work.candidate_replay_breakdown;
+    sample.sweeps=result.sweep_count;
+    sample.accepted_updates=result.total_accepted_local_updates;
+    sample.active_width_bounds=result.final_sweep->active_width_bound_count;
+    sample.candidate_events=candidate_decisions.size()/5;
+    sample.candidate_decision_digest=Digest(candidate_decisions);
     sample.profile=result.work.local_profile_work;
     sample.candidate_copy_seconds=result.work.candidate_copy_seconds;
     sample.candidate_replay_seconds=result.work.candidate_replay_seconds;
@@ -161,6 +189,7 @@ void PrintSummary(std::size_t targets,bool telemetry,const std::vector<Sample> &
         <<" candidate_incidence_ordering_s="<<replay.incidence_ordering_seconds
         <<" candidate_lookup_count_s="<<replay.incidence_lookup_count_seconds
         <<" candidate_incidence_construction_s="<<replay.incidence_construction_seconds
+        <<" candidate_row_mapping_preparation_s="<<replay.row_mapping_preparation_seconds
         <<" candidate_prediction_residual_s="<<replay.prediction_residual_seconds
         <<" candidate_incremental_objective_s="<<replay.incremental_objective_seconds
         <<" candidate_scratch_peak_bytes="<<replay.peak_scratch_bytes
@@ -264,6 +293,10 @@ void PrintSummary(std::size_t targets,bool telemetry,const std::vector<Sample> &
     std::cout<<" peak_rss_bytes="<<peak_rss
         <<" objective="<<representative.objective<<" ac_kkt="<<representative.ac_kkt
         <<" width_kkt="<<representative.width_kkt<<" stop_reason="<<representative.stop_reason
+        <<" sweeps="<<representative.sweeps<<" accepted_local_updates="<<representative.accepted_updates
+        <<" active_width_bounds="<<representative.active_width_bounds
+        <<" candidate_events="<<representative.candidate_events
+        <<" candidate_decisions_sha256="<<representative.candidate_decision_digest
         <<" eta_sha256="<<representative.eta_digest<<" beta_sha256="<<representative.beta_digest
         <<" qualified="<<representative.qualified
         <<" independent_replay="<<representative.independent_replay_passed<<'\n';

@@ -103,7 +103,8 @@ struct FixedNeighborWork
         std::array<std::size_t,16> affected_row_count_bins{},contributor_entry_count_bins{};
         std::size_t peak_scratch_bytes{};
         double incidence_preparation_seconds{},incidence_ordering_seconds{},incidence_lookup_count_seconds{},
-            incidence_construction_seconds{},prediction_residual_seconds{},incremental_objective_seconds{};
+            incidence_construction_seconds{},prediction_residual_seconds{},incremental_objective_seconds{},
+            row_mapping_preparation_seconds{};
     } candidate_replay_breakdown;
 #endif
 };
