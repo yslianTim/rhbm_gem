@@ -58,7 +58,6 @@ struct Profile
     std::optional<ActiveSetStep> last_bounded_subproblem;
     BoundedLmWork bounded_lm_work;
     LinearSolveWorkspace linear_workspace;
-    DerivativeWorkspace derivative_workspace;
     void RecordBoundedSubproblem(const ActiveSetStep & step)
     {
         ++bounded_lm_work.subproblem_solves;
@@ -144,10 +143,8 @@ struct Profile
         }
         if(proposed && trusted && step.lpNorm<Eigen::Infinity>()>2.302585092994046)
         {
-            const auto prepared=PrepareDerivative(cached,scale,&context,-1,derivative_tile_rows,
-                &derivative_workspace);
-            const auto differential=ReduceDerivative(prepared,cached.residual,derivative_tile_rows,
-                &derivative_workspace);
+            const auto prepared=PrepareDerivative(cached,scale,&context);
+            const auto differential=ReduceDerivative(prepared,cached.residual);
             if(differential.valid)
             {
                 const auto assessment=AssessWeakWidthStep(differential.jacobian,step,context.rank);
@@ -204,12 +201,10 @@ struct Profile
         {failure="cpu-time-budget"; return -1;}
         if(!Get(eta)) return -1;
         const auto prepare_started=std::chrono::steady_clock::now();
-        const auto prepared=PrepareDerivative(cached,scale,&context,-1,derivative_tile_rows,
-            &derivative_workspace);
+        const auto prepared=PrepareDerivative(cached,scale,&context);
         const auto prepare_seconds=Seconds(prepare_started);
         const auto reduce_started=std::chrono::steady_clock::now();
-        auto differential=ReduceDerivative(prepared,cached.residual,derivative_tile_rows,&derivative_workspace);
-        ++derivatives;
+        auto differential=ReduceDerivative(prepared,cached.residual); ++derivatives;
         const auto reduce_seconds=Seconds(reduce_started);
         if(telemetry)
         {
@@ -241,7 +236,7 @@ SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & 
     EvaluationContext search_context=context;
     const auto active_eta_max=search_context.eta_upper_bound;
     Profile profile{domain,y,search_context.scale,search_context,{}, {},0,0,{},telemetry ? &local_work : nullptr,
-        ProfileEvaluationRole::Unspecified,std::clock(),{}, {},{},{},{}
+        ProfileEvaluationRole::Unspecified,std::clock(),{}, {},{},{}
     };
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
