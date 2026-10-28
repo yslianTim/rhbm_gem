@@ -11,10 +11,7 @@
 #include <bit>
 #include <chrono>
 #include <cmath>
-#include <cstdlib>
 #include <cstdint>
-#include <filesystem>
-#include <fstream>
 #include <iomanip>
 #include <limits>
 #include <sstream>
@@ -293,393 +290,50 @@ LocalEndpointWorkspace PrepareLocalEndpointWorkspace(const PreparedFixedNeighbor
 }
 double PredictionDifference(VectorRef a,VectorRef b)
 {return (a-b).lpNorm<Eigen::Infinity>();}
-void WriteJsonString(std::ostream & out,const std::string & value)
-{
-    out<<'"';
-    for(const char byte:value)
-    {
-        const auto character=static_cast<unsigned char>(byte);
-        if(character=='"' || character=='\\') out<<'\\'<<character;
-        else if(character=='\n') out<<"\\n";
-        else if(character=='\r') out<<"\\r";
-        else if(character=='\t') out<<"\\t";
-        else if(character<0x20) out<<"\\u00"<<std::hex<<std::setw(2)<<std::setfill('0')<<static_cast<int>(character)<<std::dec<<std::setfill(' ');
-        else out<<character;
-    }
-    out<<'"';
-}
-void WriteJsonNumber(std::ostream & out,double value)
-{if(std::isfinite(value)) out<<value; else out<<"null";}
-void WriteJsonVector(std::ostream & out,VectorRef values)
-{
-    out<<'['; for(Eigen::Index k=0;k<values.size();++k) {if(k) out<<','; WriteJsonNumber(out,values(k));} out<<']';
-}
-void WriteJsonStrings(std::ostream & out,const std::vector<std::string> & values)
-{
-    out<<'['; for(std::size_t k=0;k<values.size();++k) {if(k) out<<','; WriteJsonString(out,values[k]);} out<<']';
-}
-void WriteJsonIndices(std::ostream & out,const std::vector<Eigen::Index> & values)
-{
-    out<<'['; for(std::size_t k=0;k<values.size();++k) {if(k) out<<','; out<<values[k];} out<<']';
-}
-void WriteOptionalJson(std::ostream & out,const std::optional<double> & value)
-{if(value) WriteJsonNumber(out,*value); else out<<"null";}
-void WriteOptionalJson(std::ostream & out,const std::optional<int> & value)
-{if(value) out<<*value; else out<<"null";}
-void WriteOptionalJson(std::ostream & out,const std::optional<Eigen::Index> & value)
-{if(value) out<<*value; else out<<"null";}
-std::string CaptureLocalFailureFixture(const FixedNeighborBlockFailureDiagnostics & d,const Domain & domain,
-    VectorRef effective_response,VectorRef eta,const EvaluationContext & parent_context,
-    const EvaluationContext & local_context,const Endpoint & initial)
-{
-    const char * const destination=std::getenv("RHBM_JOINT_LOCAL_FAILURE_CAPTURE");
-    if(!destination || !*destination) return "not-requested";
-    try
-    {
-        const std::filesystem::path path(destination);
-        if(std::filesystem::exists(path)) return "destination-exists";
-        std::ofstream out(path,std::ios::binary);
-        if(!out) return "open-failed";
-        out<<std::setprecision(std::numeric_limits<double>::max_digits10);
-        out<<"{\n  \"format\":\"rhbm-joint-local-ac-kkt-v1\",\n  \"identity\":{\"component_id\":";
-        WriteJsonString(out,d.component_id);
-        out<<",\"component_index\":"<<d.component_index<<",\"sweep_index\":"<<d.sweep_index
-           <<",\"block_index\":"<<d.block_index<<",\"core_atom_count\":"<<d.core_atom_count
-           <<",\"core_atom_ids\":"; WriteJsonStrings(out,d.core_atom_ids);
-        out<<",\"affected_row_count\":"<<d.affected_row_count<<",\"local_design_rows\":"<<d.local_design_rows
-           <<",\"local_design_columns\":"<<d.local_design_columns<<",\"local_design_nonzero_entries\":"
-           <<d.local_design_nonzero_entries<<",\"local_design_rank\":";
-        WriteOptionalJson(out,d.local_design_rank);
-        out<<"},\n  \"atom_ids\":"; std::vector<std::string> atom_ids;
-        for(const auto & id:local_context.atom_ids) atom_ids.push_back(id);
-        WriteJsonStrings(out,atom_ids);
-        out<<",\n  \"row_ids\":"; std::vector<std::string> row_ids;
-        for(const auto & id:local_context.row_ids) row_ids.push_back(id);
-        WriteJsonStrings(out,row_ids);
-        out<<",\n  \"effective_response\":"; WriteJsonVector(out,effective_response);
-        out<<",\n  \"old_eta\":"; WriteJsonVector(out,eta);
-        out<<",\n  \"old_widths\":"; const Vector widths=eta.array().exp(); WriteJsonVector(out,widths);
-        out<<",\n  \"support\":[";
-        for(std::size_t atom=0;atom<domain.atoms.size();++atom)
-        {
-            if(atom) out<<','; out<<'['; std::size_t support_index{};
-            for(const auto support:domain.atoms[atom])
-            {
-                if(support_index++) out<<',';
-                out<<"{\"row\":"<<support.row<<",\"squared_distance\":";
-                WriteJsonNumber(out,support.square); out<<'}';
-            }
-            out<<']';
-        }
-        out<<"],\n  \"numerical_context\":{\"parent_observation_scale\":";
-        WriteJsonNumber(out,parent_context.scale);
-        out<<",\"parent_response_norm\":"; WriteJsonNumber(out,parent_context.linear.release_response_norm);
-        out<<",\"local_effective_response_norm\":"; WriteJsonNumber(out,effective_response.norm());
-        out<<",\"local_response_min\":"; WriteJsonNumber(out,effective_response.minCoeff());
-        out<<",\"local_response_max\":"; WriteJsonNumber(out,effective_response.maxCoeff());
-        out<<",\"parent_rank_relative\":"; WriteJsonNumber(out,parent_context.linear.rank_relative);
-        out<<",\"rank_relative\":"; WriteJsonNumber(out,local_context.linear.rank_relative);
-        out<<",\"release_factor\":"; WriteJsonNumber(out,local_context.linear.release_factor);
-        out<<",\"release_response_norm\":"; WriteJsonNumber(out,local_context.linear.release_response_norm);
-        out<<",\"active_set_iteration_factor\":"<<local_context.linear.active_set_iteration_factor<<"},\n  \"production_solver\":{\"valid\":"
-           <<(initial.certificate.linear_solver_valid ? "true" : "false")<<",\"reason\":";
-        WriteJsonString(out,initial.reason);
-        out<<",\"solver_reason\":"; WriteJsonString(out,initial.certificate.linear_solver_reason);
-        out<<",\"beta\":"; WriteJsonVector(out,initial.beta);
-        out<<",\"linear_rank\":"; WriteOptionalJson(out,initial.certificate.free_rank);
-        out<<",\"linear_solve_count\":"; WriteOptionalJson(out,initial.certificate.linear_solves);
-        out<<",\"active_set_releases\":"; WriteOptionalJson(out,initial.certificate.linear_releases);
-        std::vector<Eigen::Index> active_a_atoms;
-        for(const auto amplitude:d.active_amplitude_indices) active_a_atoms.push_back(amplitude/2);
-        out<<",\"active_a_atom_indices\":"; WriteJsonIndices(out,active_a_atoms);
-        out<<",\"active_amplitude_indices\":"; WriteJsonIndices(out,d.active_amplitude_indices);
-        out<<",\"primal_feasibility\":"; WriteOptionalJson(out,d.primal_feasibility);
-        out<<",\"scaled_projected_kkt\":"; WriteOptionalJson(out,d.scaled_projected_kkt);
-        out<<",\"column_norms\":"; const Sparse design=Design(domain,eta);
-        out<<'['; for(Eigen::Index k=0;k<design.cols();++k) {if(k) out<<','; WriteJsonNumber(out,design.col(k).norm());} out<<']';
-        out<<",\"raw_gradient\":";
-        const Vector residual=design*initial.beta-effective_response;
-        const Vector raw_gradient=design.transpose()*residual;
-        WriteJsonVector(out,raw_gradient);
-        out<<",\"scaled_gradient\":";
-        const Vector column_norms=[&] {Vector value(design.cols()); for(Eigen::Index k=0;k<design.cols();++k) value(k)=design.col(k).norm(); return value;}();
-        const Vector scaled_gradient=raw_gradient.array()/column_norms.array()/parent_context.scale;
-        WriteJsonVector(out,scaled_gradient);
-        out<<",\"objective\":"; WriteJsonNumber(out,initial.certificate.objective);
-        out<<"}\n}\n";
-        out.close();
-        return out ? "written" : "write-failed";
-    }
-    catch(const std::exception &)
-    {return "write-failed";}
-}
-std::string CaptureRejectedTrialFixture(const FixedNeighborBlockFailureDiagnostics & d,const Domain & domain,
-    VectorRef effective_response,const EvaluationContext & parent_context,const EvaluationContext & local_context,
-    const SearchResult & profile)
-{
-    const char * const destination=std::getenv("RHBM_JOINT_LOCAL_TRIAL_CAPTURE");
-    if(!destination || !*destination) return "not-requested";
-    const auto failed=std::find_if(profile.trials.rbegin(),profile.trials.rend(),[](const Trial & trial) {
-        return trial.trust && !trial.trust->passed;
-    });
-    if(failed==profile.trials.rend()) return "no-rejected-trial";
-    std::size_t support_count{};
-    for(const auto & atom:domain.atoms) support_count+=atom.size();
-    if(domain.rows<=0 || domain.rows>4096 || domain.atoms.size()==0 || domain.atoms.size()>256 ||
-        support_count>65536 || effective_response.size()!=domain.rows)
-        return "fixture-size-limit";
-    try
-    {
-        const auto & endpoint=failed->endpoint;
-        const auto primary=EvaluateState(domain,effective_response,endpoint.eta,endpoint.beta,local_context);
-        if(!primary.valid) return "primary-reconstruction-failed";
-        ReplayDetailsForDiagnostics replay;
-        const auto trust=CheckReplay(domain,effective_response,primary,local_context,&replay);
-        const Vector primary_prediction=(primary.x*primary.beta).eval();
-        const Vector widths=endpoint.eta.array().exp();
-        std::vector<std::string> atom_ids,row_ids;
-        for(const auto & id:local_context.atom_ids) atom_ids.push_back(id);
-        for(const auto & id:local_context.row_ids) row_ids.push_back(id);
-        std::ostringstream payload;
-        payload<<std::setprecision(std::numeric_limits<double>::max_digits10);
-        payload<<"{\n  \"format\":\"rhbm-joint-local-replay-trial-v1\",\n  \"identity\":{\"component_id\":";
-        WriteJsonString(payload,d.component_id);
-        payload<<",\"component_index\":"<<d.component_index<<",\"sweep_index\":"<<d.sweep_index
-            <<",\"block_index\":"<<d.block_index<<",\"trial_index\":"
-            <<(profile.trials.size()-1-static_cast<std::size_t>(std::distance(profile.trials.rbegin(),failed)))
-            <<",\"profile_evaluation\":"<<failed->evaluation<<",\"local_observation_count\":"<<domain.rows
-            <<",\"local_atom_count\":"<<domain.atoms.size()<<"},\n  \"atom_ids\":";
-        WriteJsonStrings(payload,atom_ids);
-        payload<<",\n  \"row_ids\":"; WriteJsonStrings(payload,row_ids);
-        payload<<",\n  \"local_support\":[";
-        for(std::size_t atom=0;atom<domain.atoms.size();++atom)
-        {
-            if(atom) payload<<','; payload<<'[';
-            std::size_t item{};
-            for(const auto & support:domain.atoms[atom])
-            {
-                if(item++) payload<<',';
-                payload<<"{\"row\":"<<support.row<<",\"squared_distance\":";
-                WriteJsonNumber(payload,support.square); payload<<'}';
-            }
-            payload<<']';
-        }
-        payload<<"],\n  \"effective_response\":"; WriteJsonVector(payload,effective_response);
-        payload<<",\n  \"local_numerical_context\":{\"parent_observation_scale\":";
-        WriteJsonNumber(payload,parent_context.scale);
-        payload<<",\"local_observation_scale\":"; WriteJsonNumber(payload,local_context.scale);
-        payload<<",\"parent_rank_relative\":"; WriteJsonNumber(payload,parent_context.linear.rank_relative);
-        payload<<",\"rank_relative\":"; WriteJsonNumber(payload,local_context.linear.rank_relative);
-        payload<<",\"release_factor\":"; WriteJsonNumber(payload,local_context.linear.release_factor);
-        payload<<",\"release_response_norm\":"; WriteJsonNumber(payload,local_context.linear.release_response_norm);
-        payload<<",\"active_set_iteration_factor\":"<<local_context.linear.active_set_iteration_factor<<"},\n";
-        payload<<"  \"trial_eta\":"; WriteJsonVector(payload,endpoint.eta);
-        payload<<",\n  \"trial_widths\":"; WriteJsonVector(payload,widths);
-        payload<<",\n  \"trial_beta\":"; WriteJsonVector(payload,endpoint.beta);
-        payload<<",\n  \"primary_prediction\":"; WriteJsonVector(payload,primary_prediction);
-        payload<<",\n  \"primary_residual\":"; WriteJsonVector(payload,primary.residual);
-        payload<<",\n  \"primary_width_gradient\":"; WriteJsonVector(payload,primary.gradient);
-        payload<<",\n  \"primary_objective\":"; WriteJsonNumber(payload,endpoint.certificate.objective);
-        payload<<",\n  \"primary_scaled_kkt\":"; WriteJsonNumber(payload,endpoint.certificate.projected_kkt);
-        payload<<",\n  \"primary_valid\":"<<(endpoint.valid?"true":"false")
-            <<",\n  \"primary_certificate\":{\"available\":"<<(endpoint.certificate.available?"true":"false")
-            <<",\"feasible\":"<<(endpoint.certificate.feasible?"true":"false")
-            <<",\"kkt_passed\":"<<(endpoint.certificate.kkt_passed?"true":"false")
-            <<",\"linear_solver_valid\":"<<(endpoint.certificate.linear_solver_valid?"true":"false")
-            <<",\"reason\":";
-        WriteJsonString(payload,endpoint.reason);
-        payload<<",\"solver_reason\":"; WriteJsonString(payload,endpoint.certificate.linear_solver_reason);
-        payload<<",\"free_rank\":"; WriteOptionalJson(payload,endpoint.certificate.free_rank);
-        payload<<",\"linear_solves\":"; WriteOptionalJson(payload,endpoint.certificate.linear_solves);
-        payload<<",\"linear_releases\":"; WriteOptionalJson(payload,endpoint.certificate.linear_releases);
-        payload<<"},\n  \"replay_prediction\":"; WriteJsonVector(payload,replay.prediction);
-        payload<<",\n  \"replay_residual\":"; WriteJsonVector(payload,replay.residual);
-        payload<<",\n  \"replay_width_gradient\":"; WriteJsonVector(payload,replay.width_gradient);
-        payload<<",\n  \"replay_objective\":"; WriteJsonNumber(payload,replay.objective);
-        payload<<",\n  \"replay_scaled_kkt\":"; WriteJsonNumber(payload,replay.scaled_kkt);
-        payload<<",\n  \"prediction_difference\":"; WriteJsonNumber(payload,trust.prediction_difference);
-        payload<<",\n  \"gradient_difference\":"; WriteJsonNumber(payload,trust.gradient_difference);
-        payload<<",\n  \"kkt_difference\":"; WriteJsonNumber(payload,trust.kkt_difference);
-        payload<<",\n  \"trust\":{\"prediction_passed\":"<<(trust.prediction_passed?"true":"false")
-            <<",\"gradient_passed\":"<<(trust.gradient_passed?"true":"false")
-            <<",\"kkt_agrees\":"<<(trust.kkt_difference<=1e-13?"true":"false")
-            <<",\"trust_passed\":"<<(trust.passed?"true":"false")<<",\"trust_reason\":";
-        WriteJsonString(payload,trust.reason);
-        payload<<"},\n  \"build_metadata\":{\"compiler\":";
-#if defined(__clang__)
-        WriteJsonString(payload,std::string("clang ")+__clang_version__);
-#elif defined(__GNUC__)
-        WriteJsonString(payload,std::string("gcc ")+__VERSION__);
-#else
-        WriteJsonString(payload,"unknown");
-#endif
-#if defined(__aarch64__) || defined(__arm64__)
-        payload<<",\"architecture\":\"arm64\"";
-#elif defined(__x86_64__) || defined(_M_X64)
-        payload<<",\"architecture\":\"x86_64\"";
-#else
-        payload<<",\"architecture\":\"unknown\"";
-#endif
-        payload<<",\"double_digits\":"<<std::numeric_limits<double>::digits
-            <<",\"double_iec559\":"<<(std::numeric_limits<double>::is_iec559?"true":"false");
-#ifdef __FAST_MATH__
-        payload<<",\"fast_math_macro\":true";
-#else
-        payload<<",\"fast_math_macro\":false";
-#endif
-        payload<<"}\n}\n";
-        const auto contents=payload.str();
-        if(contents.size()>16*1024*1024) return "fixture-size-limit";
-        const std::filesystem::path path(destination),temporary(path.string()+".tmp");
-        if(std::filesystem::exists(path)) return "destination-exists";
-        if(std::filesystem::exists(temporary)) return "temporary-exists";
-        {std::ofstream out(temporary,std::ios::binary); out.exceptions(std::ios::failbit|std::ios::badbit); out<<contents;}
-        std::filesystem::create_hard_link(temporary,path);
-        std::filesystem::remove(temporary);
-        return "written";
-    }
-    catch(const std::exception &)
-    {return "write-failed";}
-}
 FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolicy & policy,
     const FixedNeighborBlockRecord & block,std::size_t sweep_index,const Indices & core_atoms,
-    const EvaluationContext & context,const EvaluationContext & local_context,const Domain & domain,VectorRef effective_response,
-    const Vector & eta,const SearchResult & profile)
+    const EvaluationContext & context,const SearchResult & profile)
 {
     FixedNeighborBlockFailureDiagnostics out;
     out.component_index=policy.component_index; out.component_id=policy.component_id;
     out.sweep_index=sweep_index+1; out.block_index=block.block;
     out.core_atom_count=core_atoms.size(); out.affected_row_count=block.affected_rows;
-    out.local_design_rows=domain.rows; out.local_design_columns=2*eta.size();
     out.local_search_stop_reason=profile.stop_reason;
     out.initial_profile_valid=profile.initial.valid;
     out.initial_profile_reason=profile.initial.reason;
     out.initial_profile_trusted=profile.initial_accepted;
-    out.local_response_norm=effective_response.norm();
-    if(effective_response.size())
-    {
-        out.local_response_min=effective_response.minCoeff(); out.local_response_max=effective_response.maxCoeff();
-    }
-    out.parent_observation_scale=context.scale;
-    out.parent_response_norm=context.linear.release_response_norm;
-    out.parent_rank_relative=context.linear.rank_relative;
-    out.release_factor=local_context.linear.release_factor;
-    out.rank_relative=local_context.linear.rank_relative;
-    out.active_set_iteration_factor=local_context.linear.active_set_iteration_factor;
-    const auto design=Design(domain,eta);
-    const auto spectrum=ComputeSpectrum(design,{domain.rows,design.cols(),eta.size()},design.cols(),true);
-    if(spectrum.available)
-    {
-        out.local_design_rank=spectrum.rank;
-        out.local_design_rank_threshold=spectrum.threshold;
-        out.local_design_singular_values.assign(spectrum.singular_values.data(),
-            spectrum.singular_values.data()+spectrum.singular_values.size());
-    }
-    out.local_design_nonzero_entries=static_cast<std::size_t>(design.nonZeros());
-    if(spectrum.available) out.condition_indicator=spectrum.condition;
-    out.local_column_norms.reserve(static_cast<std::size_t>(design.cols()));
-    for(Eigen::Index column=0;column<design.cols();++column)
-        out.local_column_norms.push_back(design.col(column).norm());
+    out.width_upper_bound=context.eta_upper_bound ? std::optional<double>(std::exp(*context.eta_upper_bound)) : std::nullopt;
     const auto & certificate=profile.initial.certificate;
     out.solver_valid=certificate.linear_solver_valid;
     out.solver_reason=certificate.linear_solver_reason;
-    out.linear_rank=certificate.free_rank; out.linear_solve_count=certificate.linear_solves;
+    out.linear_rank=certificate.free_rank;
+    out.linear_solve_count=certificate.linear_solves;
     out.active_set_releases=certificate.linear_releases;
-    out.active_amplitude_indices.clear();
-    for(const auto atom:certificate.active_atoms) out.active_amplitude_indices.push_back(2*atom);
-    out.initial_widths.reserve(static_cast<std::size_t>(eta.size()));
-    for(Eigen::Index atom=0;atom<eta.size();++atom) out.initial_widths.push_back(std::exp(eta(atom)));
-    if(context.eta_upper_bound)
-        out.width_upper_bound=std::exp(*context.eta_upper_bound);
-    if(profile.initial.beta.size()==design.cols())
-        for(Eigen::Index column=0;column<profile.initial.beta.size();++column)
-            if(!std::isfinite(profile.initial.beta(column)) ||
-                (column%2==0 && profile.initial.beta(column)<0))
-            {
-                out.first_invalid_coefficient=column;
-                out.first_invalid_coefficient_value=profile.initial.beta(column);
-                const auto atom=column/2;
-                if(atom>=0 && static_cast<std::size_t>(atom)<local_context.atom_ids.size())
-                {
-                    out.first_invalid_atom_id=local_context.atom_ids[static_cast<std::size_t>(atom)];
-                    out.first_invalid_parameter=column%2==0 ? "A" : "C";
-                }
-                break;
-            }
-    out.primal_feasibility=0.0;
-    for(Eigen::Index column=0;column<profile.initial.beta.size();column+=2)
-        *out.primal_feasibility=std::max(*out.primal_feasibility,std::max(0.0,-profile.initial.beta(column)));
+    if(profile.initial.beta.size())
+    {
+        out.primal_feasibility=0.0;
+        for(Eigen::Index column=0;column<profile.initial.beta.size();column+=2)
+            *out.primal_feasibility=std::max(*out.primal_feasibility,
+                std::max(0.0,-profile.initial.beta(column)));
+    }
     if(certificate.available) out.scaled_projected_kkt=certificate.projected_kkt;
-    if(profile.initial.beta.size()==design.cols() && effective_response.size()==design.rows() &&
-        !out.local_column_norms.empty())
-    {
-        const Vector residual=design*profile.initial.beta-effective_response;
-        const Vector raw_gradient=design.transpose()*residual;
-        for(Eigen::Index atom=0;atom<eta.size();++atom)
+    for(Eigen::Index column=0;column<profile.initial.beta.size();++column)
+        if(!std::isfinite(profile.initial.beta(column)) ||
+            (column%2==0 && profile.initial.beta(column)<0))
         {
-            const Eigen::Index amplitude=2*atom;
-            const double scaled_a=raw_gradient(amplitude)/out.local_column_norms[static_cast<std::size_t>(amplitude)]/context.scale;
-            if(profile.initial.beta(amplitude)>0)
+            out.first_invalid_coefficient=column;
+            out.first_invalid_coefficient_value=profile.initial.beta(column);
+            const auto atom=column/2;
+            if(atom>=0 && static_cast<std::size_t>(atom)<context.atom_ids.size())
             {
-                const double raw=std::abs(raw_gradient(amplitude));
-                const double scaled=std::abs(scaled_a);
-                out.maximum_free_a_gradient_raw=out.maximum_free_a_gradient_raw ?
-                    std::max(*out.maximum_free_a_gradient_raw,raw) : raw;
-                out.maximum_free_a_gradient_scaled=out.maximum_free_a_gradient_scaled ?
-                    std::max(*out.maximum_free_a_gradient_scaled,scaled) : scaled;
+                out.first_invalid_atom_id=context.atom_ids[static_cast<std::size_t>(atom)];
+                out.first_invalid_parameter=column%2==0 ? "A" : "C";
             }
-            else
-            {
-                const double raw=std::max(0.0,-raw_gradient(amplitude));
-                const double scaled=std::max(0.0,-scaled_a);
-                out.maximum_active_a_complementarity_violation_raw=out.maximum_active_a_complementarity_violation_raw ?
-                    std::max(*out.maximum_active_a_complementarity_violation_raw,raw) : raw;
-                out.maximum_active_a_complementarity_violation_scaled=out.maximum_active_a_complementarity_violation_scaled ?
-                    std::max(*out.maximum_active_a_complementarity_violation_scaled,scaled) : scaled;
-            }
-            const Eigen::Index charge=amplitude+1;
-            const double raw=std::abs(raw_gradient(charge));
-            const double scaled=raw/out.local_column_norms[static_cast<std::size_t>(charge)]/context.scale;
-            out.maximum_free_c_gradient_raw=out.maximum_free_c_gradient_raw ?
-                std::max(*out.maximum_free_c_gradient_raw,raw) : raw;
-            out.maximum_free_c_gradient_scaled=out.maximum_free_c_gradient_scaled ?
-                std::max(*out.maximum_free_c_gradient_scaled,scaled) : scaled;
+            break;
         }
-    }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(policy.collect_diagnostics && profile.initial.beta.size()==design.cols())
-    {
-        const auto initial_state=EvaluateState(domain,effective_response,eta,profile.initial.beta,context);
-        if(initial_state.valid && initial_state.derivative.cols()==eta.size())
-        {
-            out.width_derivative_column_norms.reserve(static_cast<std::size_t>(eta.size()));
-            for(Eigen::Index column=0;column<initial_state.derivative.cols();++column)
-                out.width_derivative_column_norms.push_back(initial_state.derivative.col(column).norm());
-            if(initial_state.gradient.size())
-                out.width_gradient_inf=initial_state.gradient.lpNorm<Eigen::Infinity>();
-            const auto projected_prepared=PrepareProjectedWidthDerivative(
-                initial_state,context.scale,&context);
-            if(projected_prepared.valid)
-            {
-                const auto projected=ReduceProjectedWidthDerivative(projected_prepared);
-                if(projected.valid)
-                {
-                    out.projected_width_column_norms.assign(projected.projected_norms.data(),
-                        projected.projected_norms.data()+projected.projected_norms.size());
-                    const Sparse projected_sparse=projected.projected.sparseView();
-                    const auto width_spectrum=ComputeSpectrum(projected_sparse,context.rank,
-                        projected.projected.cols(),true);
-                    if(width_spectrum.available)
-                    {
-                        out.projected_width_rank_threshold=width_spectrum.threshold;
-                        out.projected_width_singular_values.assign(width_spectrum.singular_values.data(),
-                            width_spectrum.singular_values.data()+width_spectrum.singular_values.size());
-                    }
-                }
-            }
-        }
-    }
-#endif
+    for(const auto atom:core_atoms)
+        if(atom>=0 && static_cast<std::size_t>(atom)<context.atom_ids.size())
+            out.core_atom_ids.push_back(context.atom_ids.at(static_cast<std::size_t>(atom)));
     for(auto trial=profile.trials.rbegin();trial!=profile.trials.rend();++trial)
         if(trial->lm)
         {
@@ -689,18 +343,13 @@ FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolic
             out.lm_ratio=trial->lm->ratio;
             out.width_step_inf=trial->lm->step.size() ?
                 trial->lm->step.lpNorm<Eigen::Infinity>() : 0.0;
-            out.proposed_eta_step.assign(trial->lm->step.data(),
-                trial->lm->step.data()+trial->lm->step.size());
             out.weak_width_step_fraction=trial->weak_width_step_fraction;
-            out.width_bound_active=context.eta_upper_bound && trial->endpoint.eta.size()==eta.size() &&
+            out.width_bound_active=context.eta_upper_bound && trial->endpoint.eta.size()>0 &&
                 (trial->endpoint.eta.array()>=*context.eta_upper_bound-
                     64.0*std::numeric_limits<double>::epsilon()*
                         std::max(1.0,std::abs(*context.eta_upper_bound))).any();
             break;
         }
-    for(const auto atom:core_atoms)
-        if(atom>=0 && static_cast<std::size_t>(atom)<context.atom_ids.size())
-            out.core_atom_ids.push_back(context.atom_ids.at(static_cast<std::size_t>(atom)));
     for(auto trial=profile.trials.rbegin();trial!=profile.trials.rend();++trial)
         if(trial->trust && !trial->trust->passed)
         {
@@ -709,8 +358,6 @@ FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolic
             out.replay_kkt_discrepancy=trial->trust->kkt_difference;
             break;
         }
-    out.failure_capture_status=CaptureLocalFailureFixture(out,domain,effective_response,eta,context,local_context,profile.initial);
-    out.replay_trial_capture_status=CaptureRejectedTrialFixture(out,domain,effective_response,context,local_context,profile);
     return out;
 }
 std::string FormatFailureDiagnostics(const FixedNeighborBlockFailureDiagnostics & d)
@@ -726,36 +373,26 @@ std::string FormatFailureDiagnostics(const FixedNeighborBlockFailureDiagnostics 
        <<" initial_profile_valid="<<(d.initial_profile_valid ? "true" : "false")
        <<" initial_profile_reason="<<d.initial_profile_reason
        <<" initial_profile_trusted="<<(d.initial_profile_trusted ? "true" : "false")
-       <<" local_design_rows="<<d.local_design_rows<<" local_design_columns="<<d.local_design_columns
-       <<" local_design_nonzero_entries="<<d.local_design_nonzero_entries
-       <<" local_design_rank=";
-    if(d.local_design_rank) out<<*d.local_design_rank; else out<<"unavailable";
-    out<<" condition_indicator="; if(d.condition_indicator) out<<*d.condition_indicator; else out<<"unavailable";
-    out<<" local_response_norm="; if(d.local_response_norm) out<<*d.local_response_norm; else out<<"unavailable";
-    out<<" local_response_min="; if(d.local_response_min) out<<*d.local_response_min; else out<<"unavailable";
-    out<<" local_response_max="; if(d.local_response_max) out<<*d.local_response_max; else out<<"unavailable";
-    out<<" parent_observation_scale="; if(d.parent_observation_scale) out<<*d.parent_observation_scale; else out<<"unavailable";
-    out<<" parent_response_norm="; if(d.parent_response_norm) out<<*d.parent_response_norm; else out<<"unavailable";
-    out<<" rank_relative="; if(d.rank_relative) out<<*d.rank_relative; else out<<"unavailable";
-    out<<" parent_rank_relative="; if(d.parent_rank_relative) out<<*d.parent_rank_relative; else out<<"unavailable";
-    out<<" release_factor="; if(d.release_factor) out<<*d.release_factor; else out<<"unavailable";
-    out<<" solver_valid="<<(d.solver_valid ? "true" : "false")<<" solver_reason="<<d.solver_reason;
+       <<" solver_valid="<<(d.solver_valid ? "true" : "false")<<" solver_reason="<<d.solver_reason;
     out<<" linear_rank="; if(d.linear_rank) out<<*d.linear_rank; else out<<"unavailable";
     out<<" linear_solve_count="; if(d.linear_solve_count) out<<*d.linear_solve_count; else out<<"unavailable";
     out<<" active_set_releases="; if(d.active_set_releases) out<<*d.active_set_releases; else out<<"unavailable";
     out<<" primal_feasibility="; if(d.primal_feasibility) out<<*d.primal_feasibility; else out<<"unavailable";
     out<<" scaled_projected_kkt="; if(d.scaled_projected_kkt) out<<*d.scaled_projected_kkt; else out<<"unavailable";
-    out<<" maximum_free_a_gradient_raw="; if(d.maximum_free_a_gradient_raw) out<<*d.maximum_free_a_gradient_raw; else out<<"unavailable";
-    out<<" maximum_free_a_gradient_scaled="; if(d.maximum_free_a_gradient_scaled) out<<*d.maximum_free_a_gradient_scaled; else out<<"unavailable";
-    out<<" maximum_free_c_gradient_raw="; if(d.maximum_free_c_gradient_raw) out<<*d.maximum_free_c_gradient_raw; else out<<"unavailable";
-    out<<" maximum_free_c_gradient_scaled="; if(d.maximum_free_c_gradient_scaled) out<<*d.maximum_free_c_gradient_scaled; else out<<"unavailable";
-    out<<" maximum_active_a_complementarity_violation_raw=";
-    if(d.maximum_active_a_complementarity_violation_raw) out<<*d.maximum_active_a_complementarity_violation_raw; else out<<"unavailable";
-    out<<" maximum_active_a_complementarity_violation_scaled=";
-    if(d.maximum_active_a_complementarity_violation_scaled) out<<*d.maximum_active_a_complementarity_violation_scaled; else out<<"unavailable";
-    out<<" failure_capture_status="<<d.failure_capture_status
-       <<" replay_trial_capture_status="<<d.replay_trial_capture_status
-       <<" local_search_stop_reason="<<d.local_search_stop_reason;
+    out<<" width_upper_bound="; if(d.width_upper_bound) out<<*d.width_upper_bound; else out<<"unavailable";
+    out<<" width_bound_active="<<(d.width_bound_active ? "true" : "false")
+       <<" width_step_inf="; if(d.width_step_inf) out<<*d.width_step_inf; else out<<"unavailable";
+    out<<" lm_subproblem_status="<<(d.lm_subproblem_status.empty() ? "unavailable" : d.lm_subproblem_status)
+       <<" lm_actual_decrease="; if(d.lm_actual_decrease) out<<*d.lm_actual_decrease; else out<<"unavailable";
+    out<<" lm_predicted_decrease="; if(d.lm_predicted_decrease) out<<*d.lm_predicted_decrease; else out<<"unavailable";
+    out<<" lm_ratio="; if(d.lm_ratio) out<<*d.lm_ratio; else out<<"unavailable";
+    out<<" weak_width_step_fraction="; if(d.weak_width_step_fraction) out<<*d.weak_width_step_fraction; else out<<"unavailable";
+    out<<" local_search_stop_reason="<<d.local_search_stop_reason;
+    if(d.first_invalid_coefficient)
+        out<<" first_invalid_coefficient="<<*d.first_invalid_coefficient
+           <<" first_invalid_coefficient_value="<<*d.first_invalid_coefficient_value
+           <<" first_invalid_atom_id="<<d.first_invalid_atom_id
+           <<" first_invalid_parameter="<<d.first_invalid_parameter;
     if(d.replay_prediction_discrepancy)
         out<<" replay_prediction_discrepancy="<<*d.replay_prediction_discrepancy
            <<" replay_gradient_discrepancy="<<*d.replay_gradient_discrepancy
@@ -1357,7 +994,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             if(!accepted)
             {
                 record.failure_diagnostics=FailureDiagnostics(policy,record,sweep_index,core_atoms,
-                    context,local_context,local_domain,local_y,old_eta,profile_search);
+                    context,profile_search);
                 Logger::Log(LogLevel::Warning,FormatFailureDiagnostics(*record.failure_diagnostics));
                 ++block_failure_visits[block_index]; sweep_had_block_failure=true;
                 if(block_failure_visits[block_index]>=MaximumBlockFailureVisits)

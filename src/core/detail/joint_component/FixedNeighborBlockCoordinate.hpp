@@ -62,28 +62,17 @@ struct FixedNeighborProfileTrial
 #endif
 struct FixedNeighborBlockFailureDiagnostics
 {
-    std::size_t component_index{},sweep_index{},block_index{},core_atom_count{},affected_row_count{},
-        local_design_nonzero_entries{};
+    std::size_t component_index{},sweep_index{},block_index{},core_atom_count{},affected_row_count{};
     std::vector<std::string> core_atom_ids;
-    std::vector<double> local_column_norms,local_design_singular_values,initial_widths,
-        width_derivative_column_norms,projected_width_singular_values,projected_width_column_norms,proposed_eta_step;
-    bool initial_profile_valid{},initial_profile_trusted{},solver_valid{};
-    bool width_bound_active{};
+    bool initial_profile_valid{},initial_profile_trusted{},solver_valid{},width_bound_active{};
     std::string component_id,initial_profile_reason,local_search_stop_reason,solver_reason,lm_subproblem_status,
         first_invalid_atom_id,first_invalid_parameter;
-    Eigen::Index local_design_rows{},local_design_columns{};
-    std::optional<Eigen::Index> local_design_rank,first_invalid_coefficient;
+    std::optional<Eigen::Index> first_invalid_coefficient;
     std::optional<int> linear_rank,linear_solve_count,active_set_releases;
-    std::vector<Eigen::Index> active_amplitude_indices;
-    std::optional<double> local_response_norm,local_response_min,local_response_max,parent_observation_scale,
-        parent_response_norm,parent_rank_relative,release_factor,rank_relative,active_set_iteration_factor,condition_indicator,
-        local_design_rank_threshold,first_invalid_coefficient_value,width_upper_bound,width_step_inf,width_gradient_inf,
-        lm_actual_decrease,lm_predicted_decrease,lm_ratio,weak_width_step_fraction,projected_width_rank_threshold,
-        primal_feasibility,scaled_projected_kkt,maximum_free_a_gradient_raw,maximum_free_a_gradient_scaled,
-        maximum_free_c_gradient_raw,maximum_free_c_gradient_scaled,
-        maximum_active_a_complementarity_violation_raw,maximum_active_a_complementarity_violation_scaled,
-        replay_prediction_discrepancy,replay_gradient_discrepancy,replay_kkt_discrepancy;
-    std::string failure_capture_status,replay_trial_capture_status;
+    std::optional<double> first_invalid_coefficient_value,width_upper_bound,width_step_inf,
+        lm_actual_decrease,lm_predicted_decrease,lm_ratio,weak_width_step_fraction,
+        primal_feasibility,scaled_projected_kkt,replay_prediction_discrepancy,
+        replay_gradient_discrepancy,replay_kkt_discrepancy;
 };
 struct FixedNeighborBlockRecord
 {
