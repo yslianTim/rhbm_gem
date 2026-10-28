@@ -176,6 +176,23 @@ TEST(JointComponentPartialSelectionTest, HaloBoundsPreserveExactBoundaryAndRejec
     EXPECT_EQ(provenance.zero_support_halos,1u);
 }
 
+TEST(JointComponentPartialSelectionTest, ProblemBuilderMemoryPreflightRejectsBeforeSupportAllocation)
+{
+    auto fixture = joint_partial_test::Make("all");
+    core::SetJointProblemMemoryBudgetForTesting(0);
+    std::string reason;
+    try
+    {
+        (void)core::BuildPureHaloSupportExclusionProblem(*fixture.map, *fixture.model);
+    }
+    catch (const std::runtime_error & error)
+    {
+        reason = error.what();
+    }
+    core::SetJointProblemMemoryBudgetForTesting(std::nullopt);
+    EXPECT_EQ(reason, "resource-limit:build-joint-problem:raw-target-row-buffer-exceeds-budget");
+}
+
 TEST(JointComponentPartialSelectionTest, SelectedTargetWithOneObservationIsAlwaysRetained)
 {
     auto atom=std::make_unique<rhbm_gem::AtomObject>(); atom->SetSerialID(1);

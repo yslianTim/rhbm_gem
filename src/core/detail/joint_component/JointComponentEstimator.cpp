@@ -28,6 +28,16 @@ namespace rhbm_gem::core {
 namespace {
 namespace n=joint_component;
 using Clock=std::chrono::steady_clock;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+thread_local std::optional<std::size_t> problem_memory_budget_for_testing;
+#endif
+std::size_t JointProblemMemoryBudget()
+{
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(problem_memory_budget_for_testing) return *problem_memory_budget_for_testing;
+#endif
+    return n::JointMemoryPlanningBudgetBytes;
+}
 double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
 std::vector<double> Values(const n::Vector & v) {return {v.data(),v.data()+v.size()};}
 bool ValidJointState(const JointState & state,std::size_t atoms)
@@ -151,7 +161,7 @@ bool AddEstimatedBytes(std::size_t & total,std::size_t count,std::size_t width)
 }
 [[noreturn]] void RejectBuildPreflight(const n::MemoryShape & shape,const char * reason)
 {
-    auto estimate=n::PlanMemory(shape,n::MemoryStage::ProblemConstruction);
+    auto estimate=n::PlanMemory(shape,n::MemoryStage::ProblemConstruction,JointProblemMemoryBudget());
     estimate.status=estimate.status==n::MemoryStatus::Overflow || std::string_view(reason)=="size-overflow" ?
         n::MemoryStatus::Overflow : n::MemoryStatus::Reject;
     estimate.reason=reason; n::LogMemoryEstimate(estimate);
@@ -168,6 +178,12 @@ void ConfigureOptimizationDomain(n::ProblemData & data)
 }
 
 }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+void SetJointProblemMemoryBudgetForTesting(std::optional<std::size_t> budget)
+{
+    problem_memory_budget_for_testing=budget;
+}
+#endif
 namespace joint_component {
 JointParameterLayout BuildParameterLayout(const JointProblemInput & input)
 {
@@ -446,7 +462,7 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
         !AddEstimatedBytes(builder_tracking,atoms.size(),sizeof(std::size_t)) ||
         !n::CheckedAddBytes(builder_resident,builder_tracking,builder_resident))
         throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
-    if(builder_resident>n::JointMemoryPlanningBudgetBytes)
+    if(builder_resident>JointProblemMemoryBudget())
     {
         n::MemoryShape shape; shape.component_atoms=atoms.size(); shape.component_observations=selected_support_entries;
         shape.component_support_entries=selected_support_entries; shape.resident_bytes=builder_resident;
@@ -534,7 +550,8 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
         !n::CheckedAddBytes(planned_snapshot,builder_resident,planned_snapshot))
         RejectBuildPreflight(shape,"size-overflow");
     shape.resident_bytes=planned_snapshot;
-    const auto build_estimate=n::PlanMemory(shape,n::MemoryStage::ProblemConstruction);
+    const auto build_estimate=n::PlanMemory(shape,n::MemoryStage::ProblemConstruction,
+        JointProblemMemoryBudget());
     if(build_estimate.status!=n::MemoryStatus::Pass)
         RejectBuildPreflight(shape,build_estimate.reason.c_str());
 
