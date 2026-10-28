@@ -13,8 +13,79 @@
 namespace rhbm_gem::core::joint_component {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 namespace {thread_local bool hotspot_attribution_enabled{};}
+namespace {thread_local std::vector<TiledQrTileCensus> projected_width_tile_census;}
 void SetHotspotAttributionEnabled(bool enabled) {hotspot_attribution_enabled=enabled;}
 bool HotspotAttributionEnabled() {return hotspot_attribution_enabled;}
+void ResetProjectedWidthTileCensus() {projected_width_tile_census.clear();}
+void RecordProjectedWidthTileCensus(const TiledQrTileCensus & tile)
+{AddTiledQrTileCensus(projected_width_tile_census,tile);}
+const std::vector<TiledQrTileCensus> & ProjectedWidthTileCensus() {return projected_width_tile_census;}
+void AddTiledQrTileCensus(std::vector<TiledQrTileCensus> & destination,const TiledQrTileCensus & source)
+{
+    auto incoming=source;
+    if(!incoming.histograms_recorded)
+    {
+        const auto bin=[](std::size_t numerator,std::size_t denominator) {
+            if(!denominator || !numerator) return std::size_t{};
+            const double ratio=static_cast<double>(numerator)/static_cast<double>(denominator);
+            return ratio<=.25 ? std::size_t{1} : ratio<=.5 ? std::size_t{2} : ratio<=.75 ? std::size_t{3} : std::size_t{4};
+        };
+        const auto rows=std::max<std::size_t>(1,incoming.input_rows);
+        std::size_t occupancy_numerator{},occupancy_denominator{};
+        switch(incoming.stage)
+        {
+        case TiledQrStage::SparseRows:
+            occupancy_numerator=incoming.exact_nonzeros;
+            occupancy_denominator=incoming.input_rows*incoming.columns;
+            break;
+        case TiledQrStage::DerivativePrepare:
+            occupancy_numerator=incoming.design_exact_nonzeros+incoming.derivative_exact_nonzeros;
+            occupancy_denominator=incoming.input_rows*(incoming.columns+incoming.rhs_columns);
+            break;
+        case TiledQrStage::DerivativeReduce:
+            occupancy_numerator=incoming.corrected_jacobian_nonzeros;
+            occupancy_denominator=incoming.input_rows*incoming.columns;
+            break;
+        case TiledQrStage::ProjectedWidth:
+            occupancy_numerator=incoming.projection_nonzeros;
+            occupancy_denominator=incoming.input_rows*incoming.columns;
+            break;
+        }
+        ++incoming.structural_row_ratio_bins[bin(incoming.structural_rows,rows)];
+        ++incoming.exact_row_ratio_bins[bin(incoming.nonzero_design_rows,rows)];
+        ++incoming.dense_occupancy_bins[bin(occupancy_numerator,occupancy_denominator)];
+        incoming.histograms_recorded=true;
+    }
+    for(auto & tile:destination) if(tile.stage==incoming.stage && tile.factor_rows==incoming.factor_rows &&
+        tile.columns==incoming.columns && tile.rhs_columns==incoming.rhs_columns)
+    {
+#define ADD_TILE(name) tile.name+=source.name
+        ADD_TILE(tile_count); ADD_TILE(input_rows); ADD_TILE(retained_rows); ADD_TILE(structural_columns);
+        ADD_TILE(exact_nonzero_columns); ADD_TILE(structural_nonzeros); ADD_TILE(exact_nonzeros);
+        ADD_TILE(structural_rows); ADD_TILE(nonzero_design_rows); ADD_TILE(exact_zero_rows);
+        ADD_TILE(zero_design_nonzero_rhs_rows); ADD_TILE(design_structural_nonzeros);
+        ADD_TILE(design_exact_nonzeros); ADD_TILE(derivative_structural_nonzeros);
+        ADD_TILE(derivative_exact_nonzeros); ADD_TILE(design_nonzero_rows); ADD_TILE(derivative_nonzero_rows);
+        ADD_TILE(both_zero_rows); ADD_TILE(corrected_jacobian_nonzeros);
+        ADD_TILE(corrected_jacobian_nonzero_rows); ADD_TILE(projection_nonzeros);
+        ADD_TILE(projection_nonzero_rows); ADD_TILE(rhs_nonzero_rows);
+        ADD_TILE(row_census_seconds); ADD_TILE(dense_tile_materialization_seconds); ADD_TILE(dense_assembly_seconds);
+        ADD_TILE(householder_factorization_seconds); ADD_TILE(qtrhs_transform_seconds);
+        ADD_TILE(r_extraction_seconds); ADD_TILE(corrected_jacobian_seconds);
+#undef ADD_TILE
+        for(std::size_t i=0;i<tile.structural_row_ratio_bins.size();++i)
+        {
+            tile.structural_row_ratio_bins[i]+=incoming.structural_row_ratio_bins[i];
+            tile.exact_row_ratio_bins[i]+=incoming.exact_row_ratio_bins[i];
+            tile.dense_occupancy_bins[i]+=incoming.dense_occupancy_bins[i];
+        }
+        tile.histograms_recorded=true;
+        tile.estimated_peak_temporary_bytes=std::max(tile.estimated_peak_temporary_bytes,
+            incoming.estimated_peak_temporary_bytes);
+        return;
+    }
+    destination.push_back(std::move(incoming));
+}
 #endif
 namespace {
 void AddCompensated(double term,double & sum,double & compensation)
@@ -44,6 +115,7 @@ void AddLinearSolveBreakdown(LinearSolveBreakdown & destination,const LinearSolv
     destination.reduced_pattern_changes+=source.reduced_pattern_changes;
     destination.reduced_numeric_repeats_on_same_pattern+=source.reduced_numeric_repeats_on_same_pattern;
     destination.reduced_numeric_changes_on_same_pattern+=source.reduced_numeric_changes_on_same_pattern;
+    for(const auto & tile:source.tiled_qr_tiles) AddTiledQrTileCensus(destination.tiled_qr_tiles,tile);
     if(has_source_samples)
     {
         if(!has_destination_samples)
@@ -154,6 +226,9 @@ void AddRoleWork(ProfileRoleWork & destination,const ProfileRoleWork & source)
     destination.derivative_breakdown.triangular_solve_seconds+=source.derivative_breakdown.triangular_solve_seconds;
     destination.derivative_breakdown.correction_matrix_seconds+=source.derivative_breakdown.correction_matrix_seconds;
     destination.derivative_breakdown.cancellation_fallback_seconds+=source.derivative_breakdown.cancellation_fallback_seconds;
+    destination.derivative_breakdown.corrected_jacobian_seconds+=source.derivative_breakdown.corrected_jacobian_seconds;
+    for(const auto & tile:source.derivative_breakdown.tiled_qr_tiles)
+        AddTiledQrTileCensus(destination.derivative_breakdown.tiled_qr_tiles,tile);
 #endif
 }
 }

@@ -1,5 +1,6 @@
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/LinearSolve.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include "support/JointTestNumerics.hpp"
@@ -14,6 +15,9 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <map>
+#include <numeric>
+#include <numbers>
 #include <stdexcept>
 #include <string>
 #include <sys/resource.h>
@@ -27,6 +31,7 @@ struct Sample
 {
     joint::FixedNeighborWork::CandidateReplayBreakdown replay;
     joint::ProfileSearchWork profile;
+    std::vector<joint::TiledQrTileCensus> projected_width_census;
     double wall_seconds{},candidate_copy_seconds{},candidate_replay_seconds{},cache_update_seconds{},
         sweep_replay_seconds{},replay_audit_seconds{};
     std::size_t peak_rss_bytes{},unchanged_fast_paths{},full_replay_fallbacks{},sweeps{},accepted_updates{},
@@ -92,9 +97,107 @@ void PrintTime(const char * name,const std::vector<Sample> & samples,Getter gett
     std::cout<<' '<<name<<"_median_s="<<Median(values)<<' '<<name<<"_range_s=["<<*minimum<<','<<*maximum<<']';
 }
 
+double TileTime(const std::vector<joint::TiledQrTileCensus> & tiles,joint::TiledQrStage stage,
+    double joint::TiledQrTileCensus::* member)
+{
+    double total{};
+    for(const auto & tile:tiles) if(tile.stage==stage) total+=tile.*member;
+    return total;
+}
+
+void PrintTileCensus(const char * label,const std::vector<joint::TiledQrTileCensus> & tiles,
+    joint::TiledQrStage stage)
+{
+    std::map<std::pair<std::size_t,std::size_t>,std::size_t> shapes;
+    std::size_t count{},rows{},active_rows{},structural{},numeric{},zero_rhs{},temporary_peak{},dense_cells{},
+        design_cells{},derivative_cells{},active_columns{};
+    std::size_t design_structural{},design_numeric{},derivative_structural{},derivative_numeric{},
+        design_active{},derivative_active{},both_zero{},corrected_numeric{},corrected_active{},projection_active{};
+    std::array<std::size_t,5> structural_bins{},exact_bins{},occupancy_bins{};
+    for(const auto & tile:tiles) if(tile.stage==stage)
+    {
+        count+=tile.tile_count;
+        rows+=tile.input_rows;
+        active_rows+=tile.nonzero_design_rows;
+        structural+=tile.structural_nonzeros;
+        numeric+=tile.exact_nonzeros;
+        zero_rhs+=tile.zero_design_nonzero_rhs_rows;
+        active_columns+=tile.exact_nonzero_columns;
+        for(std::size_t i=0;i<structural_bins.size();++i)
+        {
+            structural_bins[i]+=tile.structural_row_ratio_bins[i];
+            exact_bins[i]+=tile.exact_row_ratio_bins[i];
+            occupancy_bins[i]+=tile.dense_occupancy_bins[i];
+        }
+        dense_cells+=tile.input_rows*tile.columns;
+        design_cells+=tile.input_rows*tile.columns;
+        derivative_cells+=tile.input_rows*tile.rhs_columns;
+        design_structural+=tile.design_structural_nonzeros;
+        design_numeric+=tile.design_exact_nonzeros;
+        derivative_structural+=tile.derivative_structural_nonzeros;
+        derivative_numeric+=tile.derivative_exact_nonzeros;
+        design_active+=tile.design_nonzero_rows;
+        derivative_active+=tile.derivative_nonzero_rows;
+        both_zero+=tile.both_zero_rows;
+        corrected_numeric+=tile.corrected_jacobian_nonzeros;
+        corrected_active+=tile.corrected_jacobian_nonzero_rows;
+        projection_active+=tile.projection_nonzero_rows;
+        temporary_peak=std::max(temporary_peak,tile.estimated_peak_temporary_bytes);
+        shapes[{tile.factor_rows,tile.columns}]+=tile.tile_count;
+    }
+    if(!count) return;
+    const auto ratio=[](std::size_t numerator,std::size_t denominator) {
+        return denominator ? static_cast<double>(numerator)/static_cast<double>(denominator) : 0.0;
+    };
+    double occupancy=ratio(numeric,dense_cells);
+    if(stage==joint::TiledQrStage::DerivativePrepare)
+        occupancy=ratio(design_numeric+derivative_numeric,design_cells+derivative_cells);
+    if(stage==joint::TiledQrStage::DerivativeReduce) occupancy=ratio(corrected_numeric,dense_cells);
+    if(stage==joint::TiledQrStage::ProjectedWidth)
+    {
+        corrected_numeric=std::accumulate(tiles.begin(),tiles.end(),std::size_t{},[&](std::size_t total,const auto & tile) {
+            return total+(tile.stage==stage ? tile.projection_nonzeros : 0);
+        });
+        occupancy=ratio(corrected_numeric,dense_cells);
+    }
+    std::cout<<' '<<label<<"_tile_count="<<count<<"_input_rows="<<rows
+        <<"_active_rows="<<active_rows<<"_active_row_ratio="<<ratio(active_rows,rows)
+        <<"_zero_rows_nonzero_rhs="<<zero_rhs<<"_structural_nnz="<<structural<<"_exact_nnz="<<numeric
+        <<"_numeric_active_columns="<<active_columns
+        <<"_dense_occupancy="<<occupancy
+        <<"_peak_tile_temporary_bytes="<<temporary_peak<<"_factor_shapes=";
+    bool first=true;
+    for(const auto & [shape,frequency]:shapes)
+    {
+        std::cout<<(first?"":",")<<shape.first<<'x'<<shape.second<<':'<<frequency;
+        first=false;
+    }
+    std::cout<<"_structural_row_ratio_bins=";
+    for(std::size_t i=0;i<structural_bins.size();++i) std::cout<<(i?",":"")<<structural_bins[i];
+    std::cout<<"_exact_row_ratio_bins=";
+    for(std::size_t i=0;i<exact_bins.size();++i) std::cout<<(i?",":"")<<exact_bins[i];
+    std::cout<<"_dense_occupancy_bins=";
+    for(std::size_t i=0;i<occupancy_bins.size();++i) std::cout<<(i?",":"")<<occupancy_bins[i];
+    if(stage==joint::TiledQrStage::DerivativePrepare)
+        std::cout<<"_free_design_structural_nnz="<<design_structural
+            <<"_free_design_exact_nnz="<<design_numeric<<"_raw_derivative_structural_nnz="<<derivative_structural
+            <<"_raw_derivative_exact_nnz="<<derivative_numeric<<"_free_design_nonzero_rows="<<design_active
+            <<"_free_design_dense_occupancy="<<ratio(design_numeric,design_cells)
+            <<"_raw_derivative_nonzero_rows="<<derivative_active
+            <<"_raw_derivative_dense_occupancy="<<ratio(derivative_numeric,derivative_cells)
+            <<"_both_zero_rows="<<both_zero;
+    if(stage==joint::TiledQrStage::DerivativeReduce)
+        std::cout<<"_corrected_jacobian_exact_nnz="<<corrected_numeric
+            <<"_corrected_jacobian_nonzero_rows="<<corrected_active;
+    if(stage==joint::TiledQrStage::ProjectedWidth)
+        std::cout<<"_projection_only_effective_rows="<<projection_active;
+    std::cout<<'\n';
+}
+
 Sample Run(std::size_t targets,bool telemetry)
 {
     joint::SetHotspotAttributionEnabled(telemetry);
+    joint::ResetProjectedWidthTileCensus();
     rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload(
         "chain",static_cast<int>(targets)));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -150,6 +253,7 @@ Sample Run(std::size_t targets,bool telemetry)
     sample.stop_reason=result.reason;
     sample.qualified=certification.qualified();
     sample.independent_replay_passed=independent.passed;
+    sample.projected_width_census=joint::ProjectedWidthTileCensus();
     return sample;
 }
 
@@ -181,6 +285,41 @@ void PrintSummary(std::size_t targets,bool telemetry,const std::vector<Sample> &
     PrintTime("cache_update",samples,[](const auto & x){return x.cache_update_seconds;});
     PrintTime("sweep_full_replay",samples,[](const auto & x){return x.sweep_replay_seconds;});
     PrintTime("replay_audit",samples,[](const auto & x){return x.replay_audit_seconds;});
+    PrintTime("ac_row_reduction",samples,[](const auto & x){return x.profile.total.linear_solve.breakdown.row_reduction_seconds;});
+    PrintTime("ac_tile_dense_assembly",samples,[](const auto & x){return TileTime(
+        x.profile.total.linear_solve.breakdown.tiled_qr_tiles,joint::TiledQrStage::SparseRows,
+        &joint::TiledQrTileCensus::dense_tile_materialization_seconds);});
+    PrintTime("ac_householder_factorization",samples,[](const auto & x){return TileTime(
+        x.profile.total.linear_solve.breakdown.tiled_qr_tiles,joint::TiledQrStage::SparseRows,
+        &joint::TiledQrTileCensus::householder_factorization_seconds);});
+    PrintTime("ac_qtrhs_transform",samples,[](const auto & x){return TileTime(
+        x.profile.total.linear_solve.breakdown.tiled_qr_tiles,joint::TiledQrStage::SparseRows,
+        &joint::TiledQrTileCensus::qtrhs_transform_seconds);});
+    PrintTime("ac_r_extraction",samples,[](const auto & x){return TileTime(
+        x.profile.total.linear_solve.breakdown.tiled_qr_tiles,joint::TiledQrStage::SparseRows,
+        &joint::TiledQrTileCensus::r_extraction_seconds);});
+    PrintTime("ac_sparse_qr_analysis",samples,[](const auto & x){return x.profile.total.linear_solve.breakdown.sparse_qr_analysis_seconds;});
+    PrintTime("ac_sparse_qr_factorization",samples,[](const auto & x){return x.profile.total.linear_solve.breakdown.sparse_qr_factorization_seconds;});
+    PrintTime("ac_sparse_qr_solve",samples,[](const auto & x){return x.profile.total.linear_solve.breakdown.sparse_qr_solve_seconds;});
+    PrintTime("derivative_prepare",samples,[](const auto & x){return x.profile.total.derivative_prepare_seconds;});
+    PrintTime("derivative_prepare_qr",samples,[](const auto & x){return x.profile.total.derivative_breakdown.tiled_qr_seconds;});
+    PrintTime("derivative_prepare_materialization",samples,[](const auto & x){return TileTime(
+        x.profile.total.derivative_breakdown.tiled_qr_tiles,joint::TiledQrStage::DerivativePrepare,
+        &joint::TiledQrTileCensus::dense_tile_materialization_seconds);});
+    PrintTime("derivative_prepare_householder",samples,[](const auto & x){return TileTime(
+        x.profile.total.derivative_breakdown.tiled_qr_tiles,joint::TiledQrStage::DerivativePrepare,
+        &joint::TiledQrTileCensus::householder_factorization_seconds);});
+    PrintTime("derivative_prepare_qtrhs",samples,[](const auto & x){return TileTime(
+        x.profile.total.derivative_breakdown.tiled_qr_tiles,joint::TiledQrStage::DerivativePrepare,
+        &joint::TiledQrTileCensus::qtrhs_transform_seconds);});
+    PrintTime("derivative_reduce",samples,[](const auto & x){return x.profile.total.derivative_reduce_seconds;});
+    PrintTime("derivative_corrected_jacobian",samples,[](const auto & x){return x.profile.total.derivative_breakdown.corrected_jacobian_seconds;});
+    PrintTime("derivative_reduce_householder",samples,[](const auto & x){return TileTime(
+        x.profile.total.derivative_breakdown.tiled_qr_tiles,joint::TiledQrStage::DerivativeReduce,
+        &joint::TiledQrTileCensus::householder_factorization_seconds);});
+    PrintTime("derivative_reduce_qtrhs",samples,[](const auto & x){return TileTime(
+        x.profile.total.derivative_breakdown.tiled_qr_tiles,joint::TiledQrStage::DerivativeReduce,
+        &joint::TiledQrTileCensus::qtrhs_transform_seconds);});
     std::cout<<" candidate_attempts="<<replay.attempts
         <<" affected_candidates="<<replay.affected_row_candidates
         <<" unchanged_fast_paths="<<representative.unchanged_fast_paths
@@ -241,6 +380,14 @@ void PrintSummary(std::size_t targets,bool telemetry,const std::vector<Sample> &
         <<" row_major_conversion_s="<<linear.row_major_conversion_seconds
         <<" tile_mapping_build_s="<<linear.tile_mapping_build_seconds
         <<" tiled_sparse_row_qr_s="<<linear.tiled_qr_seconds
+        <<" ac_dense_tile_materialization_s="<<TileTime(linear_detail.tiled_qr_tiles,
+            joint::TiledQrStage::SparseRows,&joint::TiledQrTileCensus::dense_tile_materialization_seconds)
+        <<" ac_householder_factorization_s="<<TileTime(linear_detail.tiled_qr_tiles,
+            joint::TiledQrStage::SparseRows,&joint::TiledQrTileCensus::householder_factorization_seconds)
+        <<" ac_qtrhs_transform_s="<<TileTime(linear_detail.tiled_qr_tiles,
+            joint::TiledQrStage::SparseRows,&joint::TiledQrTileCensus::qtrhs_transform_seconds)
+        <<" ac_r_extraction_s="<<TileTime(linear_detail.tiled_qr_tiles,
+            joint::TiledQrStage::SparseRows,&joint::TiledQrTileCensus::r_extraction_seconds)
         <<" reduced_sparse_assembly_s="<<linear.reduced_sparse_assembly_seconds
         <<" sparse_qr_analysis_s="<<linear_detail.sparse_qr_analysis_seconds
         <<" sparse_qr_factorization_s="<<linear_detail.sparse_qr_factorization_seconds
@@ -263,6 +410,25 @@ void PrintSummary(std::size_t targets,bool telemetry,const std::vector<Sample> &
         <<" derivative_raw_construction_s="<<derivative.raw_construction_seconds
         <<" derivative_tiled_qr_s="<<derivative.tiled_qr_seconds
         <<" derivative_tiled_qr_calls="<<derivative.tiled_qr_calls
+        <<" derivative_corrected_jacobian_s="<<derivative.corrected_jacobian_seconds
+        <<" derivative_prepare_dense_tile_materialization_s="<<TileTime(derivative.tiled_qr_tiles,
+            joint::TiledQrStage::DerivativePrepare,&joint::TiledQrTileCensus::dense_tile_materialization_seconds)
+        <<" derivative_prepare_qr_assembly_s="<<TileTime(derivative.tiled_qr_tiles,
+            joint::TiledQrStage::DerivativePrepare,&joint::TiledQrTileCensus::dense_assembly_seconds)
+        <<" derivative_prepare_householder_s="<<TileTime(derivative.tiled_qr_tiles,
+            joint::TiledQrStage::DerivativePrepare,&joint::TiledQrTileCensus::householder_factorization_seconds)
+        <<" derivative_prepare_qtrhs_s="<<TileTime(derivative.tiled_qr_tiles,
+            joint::TiledQrStage::DerivativePrepare,&joint::TiledQrTileCensus::qtrhs_transform_seconds)
+        <<" derivative_prepare_r_extraction_s="<<TileTime(derivative.tiled_qr_tiles,
+            joint::TiledQrStage::DerivativePrepare,&joint::TiledQrTileCensus::r_extraction_seconds)
+        <<" derivative_reduce_qr_assembly_s="<<TileTime(derivative.tiled_qr_tiles,
+            joint::TiledQrStage::DerivativeReduce,&joint::TiledQrTileCensus::dense_assembly_seconds)
+        <<" derivative_reduce_householder_s="<<TileTime(derivative.tiled_qr_tiles,
+            joint::TiledQrStage::DerivativeReduce,&joint::TiledQrTileCensus::householder_factorization_seconds)
+        <<" derivative_reduce_qtrhs_s="<<TileTime(derivative.tiled_qr_tiles,
+            joint::TiledQrStage::DerivativeReduce,&joint::TiledQrTileCensus::qtrhs_transform_seconds)
+        <<" derivative_reduce_r_extraction_s="<<TileTime(derivative.tiled_qr_tiles,
+            joint::TiledQrStage::DerivativeReduce,&joint::TiledQrTileCensus::r_extraction_seconds)
         <<" derivative_rank_svd_s="<<derivative.rank_svd_seconds
         <<" derivative_rank_svd_calls="<<derivative.rank_svd_calls
         <<" derivative_triangular_solves_s="<<derivative.triangular_solve_seconds
@@ -300,6 +466,10 @@ void PrintSummary(std::size_t targets,bool telemetry,const std::vector<Sample> &
         <<" eta_sha256="<<representative.eta_digest<<" beta_sha256="<<representative.beta_digest
         <<" qualified="<<representative.qualified
         <<" independent_replay="<<representative.independent_replay_passed<<'\n';
+    PrintTileCensus("ac_sparse_rows",linear_detail.tiled_qr_tiles,joint::TiledQrStage::SparseRows);
+    PrintTileCensus("derivative_prepare",derivative.tiled_qr_tiles,joint::TiledQrStage::DerivativePrepare);
+    PrintTileCensus("derivative_reduce",derivative.tiled_qr_tiles,joint::TiledQrStage::DerivativeReduce);
+    PrintTileCensus("projected_width",representative.projected_width_census,joint::TiledQrStage::ProjectedWidth);
 }
 
 void PrintCancellationSummary()
@@ -339,6 +509,107 @@ void PrintCancellationSummary()
         <<" total_median_s="<<Median(total_seconds)<<" fallback_extra_median_s="<<Median(fallback_seconds)
         <<" fallback_extra_range_s=["<<*minimum<<','<<*maximum<<"] reference_order=1\n";
 }
+
+void PrintControlledLinearCensus()
+{
+    struct ControlledCase
+    {
+        const char * name;
+        Eigen::Index columns;
+        double active_row_ratio,support_ratio;
+        bool active_a{},rank_deficient{},near_rank_deficient{};
+    };
+    std::vector<ControlledCase> cases;
+    for(const auto columns:{Eigen::Index{4},Eigen::Index{24}})
+        for(const double active_ratio:{.25,.5,.75,1.0})
+            for(const double support_ratio:{.25,1.0})
+                cases.push_back({columns==4 ? "narrow" : "wide",columns,active_ratio,support_ratio});
+    cases.push_back({"active-a-signed-c",24,1.0,.25,true});
+    cases.push_back({"rank-deficient",24,1.0,1.0,false,true});
+    cases.push_back({"near-rank-deficient",24,1.0,1.0,false,false,true});
+
+    constexpr Eigen::Index rows=2053;
+    constexpr double pi=std::numbers::pi;
+    for(const auto & test:cases)
+    {
+        const Eigen::Index active_rows=static_cast<Eigen::Index>(std::llround(
+            test.active_row_ratio*static_cast<double>(rows)));
+        joint::Matrix dense=joint::Matrix::Zero(rows,test.columns);
+        for(Eigen::Index row=0;row<active_rows;++row)
+        {
+            const Eigen::Index supported=std::max<Eigen::Index>(1,
+                static_cast<Eigen::Index>(std::llround(test.support_ratio*static_cast<double>(test.columns))));
+            for(Eigen::Index col=0;col<test.columns;++col)
+            {
+                const bool present=test.support_ratio==1.0 ||
+                    ((col-row%test.columns+test.columns)%test.columns)<supported;
+                if(!present) continue;
+                const double phase=2*pi*static_cast<double>((col+1)*(row+1))/static_cast<double>(active_rows);
+                dense(row,col)=std::sin(phase)+.37*std::cos(phase)+.001*static_cast<double>(row+col);
+            }
+        }
+        if(test.rank_deficient) dense.col(test.columns-1)=dense.col(test.columns-3);
+        if(test.near_rank_deficient) dense.col(test.columns-1)=dense.col(test.columns-3)+
+            2e-12*dense.col(test.columns-2);
+        joint::Vector truth(test.columns);
+        for(Eigen::Index col=0;col<test.columns;++col)
+            truth(col)=col%2 ? -.12-.003*static_cast<double>(col) : .4+.02*static_cast<double>(col);
+        if(test.active_a) truth(0)=-.8;
+        joint::Vector rhs=dense*truth;
+        for(Eigen::Index row=0;row<rows;++row)
+            rhs(row)+=row<active_rows ? .001*std::sin(.13*static_cast<double>(row)) :
+                .05*(row%2 ? 1.0 : -1.0);
+        const joint::Sparse sparse=dense.sparseView(0.0,0.0);
+        joint::SetHotspotAttributionEnabled(true);
+        const auto solve=[&]() {
+            joint::LinearSolveWorkspace workspace;
+            const auto started=Clock::now();
+            auto result=joint::SolveLinear(sparse,rhs,nullptr,0,&workspace);
+            return std::pair{std::move(result),Seconds(started)};
+        };
+        (void)solve();
+        std::vector<double> times;
+        joint::LinearResult representative;
+        for(std::size_t i=0;i<5;++i)
+        {
+            auto [result,elapsed]=solve();
+            times.push_back(elapsed);
+            if(i==2) representative=std::move(result);
+        }
+        if((test.rank_deficient && (representative.valid || representative.reason!="rank-deficient")) ||
+            (!test.rank_deficient && !test.near_rank_deficient && !representative.valid))
+            throw std::runtime_error(std::string("controlled QR case failed: ")+test.name);
+        double reference_error=std::numeric_limits<double>::quiet_NaN();
+        joint::Certificate certificate;
+        if(representative.valid)
+        {
+            certificate=joint::CertifyLinear(sparse,rhs,representative.beta);
+            if(!test.active_a && !test.near_rank_deficient)
+            {
+                const Eigen::ColPivHouseholderQR<joint::Matrix> reference(dense);
+                const joint::Vector dense_beta=reference.solve(rhs);
+                reference_error=(representative.beta-dense_beta).norm()/(1+dense_beta.norm());
+                if(reference_error>2e-8) throw std::runtime_error("controlled dense QR reference mismatch");
+            }
+            if(!certificate.available || !certificate.kkt_passed)
+                throw std::runtime_error("controlled QR KKT certification failed");
+        }
+        const auto [minimum,maximum]=std::minmax_element(times.begin(),times.end());
+        std::cout<<std::setprecision(9)<<"controlled_case="<<test.name<<" columns="<<test.columns
+            <<" rows="<<rows<<" nonzero_design_row_ratio="<<static_cast<double>(active_rows)/rows
+            <<" requested_support_ratio="<<test.support_ratio<<" warmups=1 measured_runs=5"
+            <<" solve_median_s="<<Median(times)<<" solve_range_s=["<<*minimum<<','<<*maximum<<']'
+            <<" valid="<<representative.valid<<" reason="<<representative.reason<<" rank="<<representative.rank
+            <<" active_set_iterations="<<representative.active_set_iterations
+            <<" active_set_releases="<<representative.releases
+            <<" objective="<<certificate.objective<<" projected_kkt="<<certificate.projected_kkt
+            <<" dense_qr_relative_error="<<reference_error
+            <<" zero_design_nonzero_rhs_rows="<<(rows-active_rows)
+            <<" peak_rss_bytes="<<PeakRssBytes()<<'\n';
+        PrintTileCensus("controlled_sparse_rows",representative.breakdown.tiled_qr_tiles,
+            joint::TiledQrStage::SparseRows);
+    }
+}
 }
 
 int main(int argc,char ** argv)
@@ -358,9 +629,14 @@ int main(int argc,char ** argv)
         (void)Run(targets,telemetry);
         std::vector<Sample> samples;
         samples.reserve(5);
-        for(std::size_t repetition=0;repetition<5;++repetition) samples.push_back(Run(targets,telemetry));
+        for(std::size_t repetition=0;repetition<5;++repetition)
+            samples.push_back(Run(targets,telemetry));
         PrintSummary(targets,telemetry,samples);
-        if(telemetry) PrintCancellationSummary();
+        if(telemetry)
+        {
+            PrintCancellationSummary();
+            if(targets==300) PrintControlledLinearCensus();
+        }
         return 0;
     }
     catch(const std::exception & error)

@@ -31,6 +31,9 @@ struct ReducedProjectedWidthDifferential
 {
     Matrix projected; // Compact R factor, never observation-sized.
     Vector projected_norms;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    DerivativeBreakdown breakdown;
+#endif
     bool valid{};
     std::string reason;
 };
