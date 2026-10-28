@@ -209,4 +209,63 @@ The retained FixedNeighbor fault injectors are still in the production solver so
 6. Production `rhbm_gem` has no test instrumentation or test-support source. Endpoint certification, sweep replay audit, objective reconciliation, memory fallback, and independent replay remain in the production path.
 7. Numerical results are bitwise identical on all standard and hard fixtures measured. Median benchmark changes were below 1%; at 1,000 targets the C0 search median is only 0.15% below the minimum of the five C5 runs, so the measurements do not show a clear regression.
 
-Commit: recorded in the Git history for this stage.
+Commit: `0cc4eb51`.
+
+## Final delivery summary
+
+### Git and scope
+
+| Item | Result |
+|---|---|
+| Initial HEAD | `661ce0c6ad0f51e824595dd528189e8e85b97a67` |
+| Branch | `develop` throughout; no branch or worktree created |
+| Final HEAD | The final documentation commit for this report; exact SHA is in the delivery summary |
+| Remote tracking | `develop` is 7 commits ahead of `origin/develop` after the final report commit |
+| Working tree | Clean after the final report commit |
+| Push | No |
+| New third-party dependencies | None |
+| Numerical thresholds or definitions changed | No |
+| Notion documents updated | No |
+
+### Commit roadmap
+
+| Stage | Status | Changes | Commit |
+|---|---|---|---|
+| C0 | Complete | Captured Release E1 baseline, fixtures, build boundary, and instrumentation responsibilities | `ae9122f1` |
+| C1 | Complete | Removed `ReplaceBlock()` Delta-add state update; kept independent replay and structural/conditional tests | `4e87e273` |
+| C2 | Complete | Removed D1 objective selection and candidate replay replacement; isolated necessary FixedNeighbor test hooks | `d7182237` |
+| C3 | Complete | Removed retired LM, derivative, and QR counters/timers; preserved numerical traces and scratch reuse | `efc25fbc` |
+| C4 | Complete | Simplified kernel microbenchmark and test compile-definition ownership | `a87efb70` |
+| C5 | Complete | Verified Release build, 19/19 CTest, numerical equivalence, four-size E1 benchmark, and final source audit | `0cc4eb51` |
+
+### Removed experimental code and retained references
+
+| Path or symbol | Action | Replacement or remaining use |
+|---|---|---|
+| `JointBlockCoordinate::ReplaceBlock()` | Removed | Full contributor replay and conditional response remain in test support. |
+| `full_objective_reference_for_testing`, D1 full-scan selector | Removed | Production uses only E1 incremental objective; tests compare with independent full replay. |
+| Candidate replay replacement callback and `FullReplayForTesting()` | Removed | `JointBlockCoordinate::Replay()` provides the independent candidate reference. |
+| `configure_search_for_testing` | Removed | Search-specific tests set the public/internal search policy directly. |
+| `DerivativeWorkForTesting` and derivative counters/timers | Removed | Cancellation and tile-boundary outputs compare to independent dense calculations. |
+| LM workspace, QR, KKT, tolerance, and timing counters | Removed | Damping/active-set numerical trace remains for numerical tests. |
+| Tiled QR scratch counters | Removed | Scratch buffers and repeated-shape reuse remain. |
+| Joint benchmark candidate replay/Amdahl/RSS diagnostics and trace digests | Removed | The target now measures bounded LM and derivative preparation/reduction against `rhbm_gem`. |
+
+No complete support source file, benchmark target, CMake source entry, or CTest group was removed. `JointBlockCoordinate`, `JointFixedNeighborDiagnostic`, `JointComponentChecks`, `JointSyntheticWorkload`, `JointDenseReference`, and `JointTestNumerics` all retain active test call sites. The independent full replay and dense numerical references remain separate from production E1.
+
+### Regression coverage
+
+| Numerical contract | After-cleanup evidence | Result |
+|---|---|---|
+| Exact affected-row prediction | Candidate affected prediction/residual compared to independent full replay; unaffected rows checked | Pass |
+| Incremental objective | E1 candidate objective and acceptance decision compared to full replay | Pass |
+| Candidate transaction | Accepted-state integrity for local objective increase, nonfinite candidate, replay fault, and recovery | Pass |
+| Sweep replay audit | Injected mismatch stops before objective reconciliation | Pass |
+| Objective reconciliation | Every completed sweep is replayed and cache reconciliation is checked | Pass |
+| Memory preflight and fallback | Budget failure triggers and validates trusted full-replay fallback | Pass |
+| Width active set | Upper-face release, projected-width KKT, and active-width endpoint fixtures | Pass |
+| Global KKT and conditioning | Standard-size, high-overlap, weak-width, rank-deficient, and near-singular cases | Pass; original failure/budget limitations preserved |
+| Endpoint certification | Production benchmark and small/hard fixture regressions | Pass where previously qualified |
+| Independent replay | Production benchmark and fixture comparisons | Pass where previously qualified |
+
+The detailed C0 and C5 fixture metrics, full benchmark timings, residual source branches, and their test responsibilities are recorded in the sections above. C5 confirms zero retired experimental references and zero unexpected source-audit residuals.
