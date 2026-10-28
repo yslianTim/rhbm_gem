@@ -23,10 +23,14 @@ struct Sample
     std::string stop_reason;
     double search_seconds{},wall_seconds{},candidate_seconds{},sweep_replay_seconds{},
         replay_audit_seconds{},reconciliation_seconds{},global_state_seconds{},
-        endpoint_certification_seconds{},independent_replay_seconds{};
+        endpoint_certification_seconds{},independent_replay_seconds{},local_profile_seconds{},
+        profile_basis_seconds{},profile_linear_solve_seconds{},profile_derivative_prepare_seconds{},
+        profile_derivative_reduce_seconds{};
     std::size_t affected_candidates{},full_replay_fallbacks{},sweep_replays{},
         objective_reconciliations{},sweeps{},accepted_blocks{},unchanged_blocks{},failed_blocks{},
-        preflight_bytes{},peak_rss_bytes{};
+        preflight_bytes{},peak_rss_bytes{},profile_evaluations{},profile_derivatives{},
+        bounded_subproblems{},damping_solves{},damping_bracket_solves{},damping_bisection_solves{},
+        damping_qr_factorizations{},damping_active_set_iterations{},damping_releases{};
     double objective{},global_ac_kkt{},projected_width_kkt{},maximum_cache_replay_error{},
         mean_amplitude{},mean_charge{},mean_width{};
     std::string eta_sha256,beta_sha256;
@@ -108,6 +112,21 @@ Sample Run(std::size_t targets)
     sample.stop_reason=result.reason;
     sample.search_seconds=result.search_seconds;
     sample.wall_seconds=wall_seconds;
+    const auto & profile_work=result.work.local_profile_work;
+    sample.local_profile_seconds=profile_work.total_seconds;
+    sample.profile_basis_seconds=profile_work.total.basis_seconds;
+    sample.profile_linear_solve_seconds=profile_work.total.linear_rhs_solve_seconds;
+    sample.profile_derivative_prepare_seconds=profile_work.total.derivative_prepare_seconds;
+    sample.profile_derivative_reduce_seconds=profile_work.total.derivative_reduce_seconds;
+    sample.profile_evaluations=profile_work.total.evaluations;
+    sample.profile_derivatives=profile_work.total.derivative_preparations;
+    sample.bounded_subproblems=profile_work.bounded_lm.subproblem_solves;
+    sample.damping_solves=profile_work.bounded_lm.damping_solves;
+    sample.damping_bracket_solves=profile_work.bounded_lm.bracket_solves;
+    sample.damping_bisection_solves=profile_work.bounded_lm.bisection_solves;
+    sample.damping_qr_factorizations=profile_work.bounded_lm.damping_qr_factorizations;
+    sample.damping_active_set_iterations=profile_work.bounded_lm.damping_active_set_iterations;
+    sample.damping_releases=profile_work.bounded_lm.damping_releases;
     sample.candidate_seconds=result.work.candidate_replay_seconds;
     sample.sweep_replay_seconds=result.work.sweep_replay_seconds;
     sample.replay_audit_seconds=result.work.sweep_replay_audit_seconds;
@@ -156,6 +175,11 @@ void PrintSummary(std::size_t targets,const std::vector<Sample> & samples)
         <<" warmups=1 measured_runs="<<samples.size();
     PrintTime("search",samples,[](const auto & x){return x.search_seconds;});
     PrintTime("wall",samples,[](const auto & x){return x.wall_seconds;});
+    PrintTime("local_profile_total",samples,[](const auto & x){return x.local_profile_seconds;});
+    PrintTime("local_profile_basis",samples,[](const auto & x){return x.profile_basis_seconds;});
+    PrintTime("local_profile_linear_solve",samples,[](const auto & x){return x.profile_linear_solve_seconds;});
+    PrintTime("local_profile_derivative_prepare",samples,[](const auto & x){return x.profile_derivative_prepare_seconds;});
+    PrintTime("local_profile_derivative_reduce",samples,[](const auto & x){return x.profile_derivative_reduce_seconds;});
     PrintTime("candidate_evaluation",samples,[](const auto & x){return x.candidate_seconds;});
     PrintTime("sweep_replay",samples,[](const auto & x){return x.sweep_replay_seconds;});
     PrintTime("replay_audit",samples,[](const auto & x){return x.replay_audit_seconds;});
@@ -169,6 +193,15 @@ void PrintSummary(std::size_t targets,const std::vector<Sample> & samples)
         return left.peak_rss_bytes<right.peak_rss_bytes;
     })->peak_rss_bytes;
     std::cout<<" affected_candidate_evaluations="<<representative.affected_candidates
+        <<" profile_evaluations="<<representative.profile_evaluations
+        <<" profile_derivatives="<<representative.profile_derivatives
+        <<" bounded_subproblems="<<representative.bounded_subproblems
+        <<" damping_solves="<<representative.damping_solves
+        <<" damping_bracket_solves="<<representative.damping_bracket_solves
+        <<" damping_bisection_solves="<<representative.damping_bisection_solves
+        <<" damping_qr_factorizations="<<representative.damping_qr_factorizations
+        <<" damping_active_set_iterations="<<representative.damping_active_set_iterations
+        <<" damping_releases="<<representative.damping_releases
         <<" full_replay_fallbacks="<<representative.full_replay_fallbacks
         <<" sweep_replays="<<representative.sweep_replays
         <<" objective_reconciliations="<<representative.objective_reconciliations
