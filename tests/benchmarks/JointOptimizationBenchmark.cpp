@@ -59,6 +59,11 @@ int Run()
         if(sample) bounded_times.push_back(Seconds(started)/repeats);
     }
     ReportSamples("bounded_lm",std::move(bounded_times));
+    std::cout<<"bounded_damping_solves="<<bounded.damping_solves
+        <<" bounded_damping_qr_factorizations="<<bounded.damping_qr_factorizations
+        <<" bounded_damping_active_set_iterations="<<bounded.damping_active_set_iterations
+        <<" bounded_damping_releases="<<bounded.damping_releases
+        <<" bounded_active_coordinates="<<std::count(bounded.active.begin(),bounded.active.end(),true)<<'\n';
 
     auto input=std::make_shared<rhbm_gem::core::JointProblemInput>(
         second_stage_test::SyntheticJointWorkload("chain",30));
