@@ -20,25 +20,17 @@ struct FixedNeighborCandidateEvent
     std::size_t sweep{},block{};
     const BlockCoordinateState & accepted_before;
     const Indices & core_atoms,& affected_rows;
-    const Vector & candidate_eta,& candidate_beta,& full_prediction,& full_residual;
-    double full_objective{},local_objective_before{},local_objective_after{},global_replay_delta{},
+    const Vector & candidate_eta,& candidate_beta;
+    const Vector & affected_prediction,& affected_residual;
+    double candidate_objective{},local_objective_before{},local_objective_after{},global_replay_delta{},
         local_global_delta_error{},objective_replay_enclosure{},incremental_objective{};
     bool accepted{},unchanged{},candidate_replay_ran{};
 };
-struct FixedNeighborReplayResult
-{
-    Vector prediction,residual;
-    double objective{};
-};
-using FixedNeighborCandidateReplayForTesting=std::function<FixedNeighborReplayResult(
-    const BlockCoordinateState &,const Indices &,const Indices &,VectorRef,VectorRef)>;
 enum class FixedNeighborCandidateFaultForTesting
 {
     None,LocalObjectiveIncrease,ObjectiveConsistencyFailure,NaNObjective,InfiniteObjective,
     NaNParameter,InfiniteParameter,InfinitePrediction,InfiniteResidual
 };
-FixedNeighborReplayResult FullReplayForTesting(const Domain &,const JointParameterLayout &,
-    VectorRef observations,VectorRef eta,VectorRef beta,double scale);
 #endif
 
 double BlockObjectiveReplayEnclosure(double reference);
@@ -199,9 +191,7 @@ struct FixedNeighborPolicy
     bool collect_telemetry{};
     bool collect_diagnostics{};
     std::optional<std::size_t> global_state_memory_budget_for_testing;
-    FixedNeighborCandidateReplayForTesting candidate_replay_for_testing;
     std::function<void(const FixedNeighborCandidateEvent &)> candidate_observer;
-    bool full_objective_reference_for_testing{};
     bool perturb_sweep_replay_objective_for_testing{};
     std::function<FixedNeighborCandidateFaultForTesting(std::size_t,std::size_t,
         const BlockCoordinateState &)> candidate_fault_for_testing;

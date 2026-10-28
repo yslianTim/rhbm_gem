@@ -26,11 +26,6 @@ rhbm_gem::core::JointFitResult FitBoundedJointComponentsForTesting(
         throw std::invalid_argument("Bounded Joint test fit requires a finite positive Width upper bound.");
     runtime::FixedNeighborSearchPolicy policy;
     policy.eta_upper_bound=std::log(maximum_width);
-    policy.configure_search_for_testing=[](runtime::FixedNeighborPolicy & search) {
-        search.core_atoms=runtime::ProductionFixedNeighborCoreAtoms;
-        search.maximum_sweeps=runtime::ProductionFixedNeighborMaximumSweeps;
-        search.convergence_criteria=runtime::PracticalJointConvergenceCriteria;
-    };
     return runtime::FitFixedNeighborComponents(problem,initial_widths,policy);
 }
 ComponentPartition BuildPartition(const Domain & d,const std::vector<std::string> & ids) {return runtime::Partition(d,ids);}

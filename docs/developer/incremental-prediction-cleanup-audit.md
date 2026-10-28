@@ -95,4 +95,16 @@ JointBlockCoordinate.cpp/.hpp remain because they still provide the independent 
 
 The C1 source search found no ReplaceBlock, DeltaPrediction, IncrementalPrediction, prediction += change, or residual += change matches in src or tests. rhbm_tests_joint_component_contract passed (1.55 s); the CTest group count remains 19 and the FixedNeighbor block-coordinate case count remains 37. The production numerical source was not changed in C1, so C0 Release E1 results remain the comparison baseline.
 
+Commit: `4e87e273`.
+
+### C2 — Isolate FixedNeighbor test controls from production candidate replay
+
+Removed the test-only D1 full-objective scan, `full_objective_reference_for_testing`, the replaceable candidate replay callback, and the production-side `FullReplayForTesting()` helper. `ReplayAffectedRows()` now has only the E1 incremental-objective calculation and no test-only layout parameter. The component-level `configure_search_for_testing` callback was removed; its former callers now rely on the unchanged fixed production defaults or directly configure `SearchFixedNeighborComponent()` in search-specific numerical tests.
+
+The independent candidate reference now lives in `tests/support/JointBlockCoordinate::Replay()`. When the affected-row path runs, the candidate event references its already-created prediction/residual scratch vectors; it no longer assembles or copies full candidate prediction/residual vectors for observers. Incremental-candidate tests compare affected-row values, unaffected-row preservation, objective, and acceptance decision against the support replay. Full-replay memory fallback remains covered through its integration test. The retired candidate trace and its SHA output were removed from `JointOptimizationBenchmark.cpp`.
+
+The candidate fault injector, sweep-audit perturbation, retry profile override, state/sweep observers, and memory-budget override remain behind `RHBM_GEM_TEST_INSTRUMENTATION` because the numerical suite uses them to verify accepted-state integrity, audit-before-refresh failure, recovery retry, and memory preflight/fallback end to end. Their component policy entry point has no test configuration callback. The Release compile command for the production `FixedNeighborBlockCoordinate.cpp` has no instrumentation definition; the instrumented copy is built only into `rhbm_gem_test`, and the production library exports none of the removed or test-only event symbols. This is source-level isolation for the removed strategy/callback; remaining test hooks are compile-isolated.
+
+Instrumentation occurrence counts changed from 35 to 25 in `FixedNeighborBlockCoordinate.cpp` and from 2 to 0 in `FixedNeighborPolicy.hpp`; `FixedNeighborBlockCoordinate.hpp` remains at 10. Active-set LM, derivative, QR, and Search counts are unchanged in C2. The CTest inventory remains 19 groups and the FixedNeighbor block-coordinate suite remains 37 cases. Release targets `rhbm_tests`, `rhbm_fixed_neighbor_closed_loop_benchmark`, and `rhbm_joint_optimization_benchmark` built successfully. The joint component contract, workflow, and numerical CTest groups passed (3/3; numerical group includes 89 GoogleTest cases across its configured suites).
+
 Commit: recorded in the Git history for this stage.

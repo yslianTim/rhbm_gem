@@ -304,11 +304,6 @@ TEST(JointProgressTest, BoundedSyntheticFitUsesFixedNeighborContract)
         problem,initial,2.2);
     auto policy=joint::FixedNeighborSearchPolicy{};
     policy.eta_upper_bound=std::log(2.2);
-    policy.configure_search_for_testing=[](joint::FixedNeighborPolicy & search) {
-        search.core_atoms=joint::ProductionFixedNeighborCoreAtoms;
-        search.maximum_sweeps=joint::ProductionFixedNeighborMaximumSweeps;
-        search.convergence_criteria=joint::PracticalJointConvergenceCriteria;
-    };
     const auto expected=joint::FitFixedNeighborComponents(problem,initial,policy);
 
     EXPECT_EQ(actual.solver_provenance.search_method, "fixed-neighbor");

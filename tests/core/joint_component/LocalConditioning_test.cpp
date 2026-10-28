@@ -172,27 +172,22 @@ TEST(JointLocalConditioningTest, ZeroSupportAndNonfiniteInputAreUnavailable)
 TEST(JointLocalConditioningTest, MultiBlockDiagnosticsLeaveTheAcceptedFitUnchanged)
 {
     const c::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    const auto & data=c::JointProblemAccess::Get(problem);
     const auto run=[&](bool diagnostics) {
-        n::FixedNeighborSearchPolicy policy; policy.eta_upper_bound=std::log(2.2);
-        policy.configure_search_for_testing=[diagnostics](n::FixedNeighborPolicy & search) {
-            search.core_atoms=1;
-            search.assess_local_conditioning=diagnostics;
-            search.assess_parameter_stability=false;
-        };
-        return n::FitFixedNeighborComponents(problem,{.55,.55},policy);
+        n::FixedNeighborPolicy policy; policy.core_atoms=1;
+        policy.assess_local_conditioning=diagnostics;
+        policy.assess_parameter_stability=false;
+        policy.eta_upper_bound=std::log(2.2);
+        const n::Vector eta=n::Vector::Constant(2,std::log(.55));
+        return n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,data.context,policy);
     };
     const auto with_diagnostics=run(true),without_diagnostics=run(false);
-    ASSERT_EQ(with_diagnostics.components.size(),1u);
-    ASSERT_EQ(without_diagnostics.components.size(),1u);
-    const auto & measured=with_diagnostics.components.front();
-    const auto & baseline=without_diagnostics.components.front();
-    ASSERT_TRUE(measured.state); ASSERT_TRUE(baseline.state);
-    ASSERT_EQ(measured.local_conditioning.size(),2u);
-    EXPECT_TRUE(baseline.local_conditioning.empty());
-    EXPECT_EQ(measured.state->ac,baseline.state->ac);
-    EXPECT_EQ(measured.state->b,baseline.state->b);
-    EXPECT_EQ(measured.state->log_b,baseline.state->log_b);
-    EXPECT_DOUBLE_EQ(measured.state->objective,baseline.state->objective);
-    EXPECT_EQ(measured.RuntimeConvergence(),baseline.RuntimeConvergence());
+    ASSERT_EQ(with_diagnostics.local_conditioning.size(),2u);
+    EXPECT_TRUE(without_diagnostics.local_conditioning.empty());
+    EXPECT_EQ(with_diagnostics.state.eta,without_diagnostics.state.eta);
+    EXPECT_EQ(with_diagnostics.state.beta,without_diagnostics.state.beta);
+    EXPECT_DOUBLE_EQ(with_diagnostics.state.objective,without_diagnostics.state.objective);
+    EXPECT_EQ(with_diagnostics.search_converged,without_diagnostics.search_converged);
+    EXPECT_EQ(with_diagnostics.reason,without_diagnostics.reason);
 }
 }

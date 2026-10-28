@@ -306,27 +306,10 @@ int Run()
     std::vector<double> joint_times;
     std::size_t joint_subproblem_calls{},joint_workspace_allocations{},joint_workspace_resizes{};
     joint::FixedNeighborDiagnosticResult last_joint_result;
-    std::string candidate_trace_digest;
     for(int sample=0;sample<samples+1;++sample)
     {
         auto & work=joint::BoundedLmWorkForTesting(); work={};
         problem=rhbm_gem::core::JointProblem(second_stage_test::SyntheticJointWorkload("chain",3));
-        Digest candidate_trace;
-        if(sample==0)
-            policy.candidate_observer=[&](const joint::FixedNeighborCandidateEvent & event) {
-                candidate_trace.Add(event.sweep); candidate_trace.Add(event.block);
-                candidate_trace.Add(event.accepted); candidate_trace.Add(event.unchanged);
-                candidate_trace.Add(event.candidate_replay_ran); candidate_trace.Add(event.core_atoms.size());
-                for(const auto atom:event.core_atoms) candidate_trace.Add(atom);
-                candidate_trace.Add(event.affected_rows.size());
-                for(const auto row:event.affected_rows) candidate_trace.Add(row);
-                candidate_trace.Add(event.accepted_before.eta); candidate_trace.Add(event.accepted_before.beta);
-                candidate_trace.Add(event.accepted_before.prediction); candidate_trace.Add(event.accepted_before.residual);
-                candidate_trace.Add(event.accepted_before.objective); candidate_trace.Add(event.candidate_eta);
-                candidate_trace.Add(event.candidate_beta); candidate_trace.Add(event.full_prediction);
-                candidate_trace.Add(event.full_residual); candidate_trace.Add(event.full_objective);
-            };
-        else policy.candidate_observer={};
         const auto started=Clock::now();
         auto result=joint::RunFixedNeighborDiagnostic(problem,joint_eta,policy);
         const double elapsed=Seconds(started);
@@ -337,7 +320,6 @@ int Run()
             joint_workspace_allocations+=work.workspace_allocation_sites;
             joint_workspace_resizes+=work.workspace_resize_events;
         }
-        if(sample==0) candidate_trace_digest=candidate_trace.Finish();
         if(result.reason.empty()) throw std::runtime_error("synthetic Joint diagnostic returned no status");
         if(sample==samples) last_joint_result=std::move(result);
     }
@@ -402,7 +384,6 @@ int Run()
         <<" amdahl_speedup_upper_bound="<<(replay_fraction<1.0 ? 1.0/(1.0-replay_fraction) : 0.0)
         <<" estimated_peak_bytes="<<last_joint_result.global_state_memory_estimate.estimated_peak_bytes
         <<" baseline_state_sha256="<<final_state_digest.Finish()
-        <<" candidate_trace_sha256="<<candidate_trace_digest
         <<" final_objective="<<last_joint_result.state.objective
         <<" sweep_count="<<last_joint_result.sweep_count
         <<" global_ac_kkt="<<(last_joint_result.final_sweep ? last_joint_result.final_sweep->global_ac_kkt : 0.0)

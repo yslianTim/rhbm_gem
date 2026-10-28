@@ -243,35 +243,29 @@ TEST(JointParameterStabilityTest, LocalAcSolveFailureCannotProduceFalseStableRes
 TEST(JointParameterStabilityTest, ComponentFitHonorsPerturbationClaimBudgetAndPreservesPoint)
 {
     const rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
-    n::FixedNeighborSearchPolicy policy;
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     std::size_t claims{};
-    policy.claim_parameter_stability_block=[&](int) {return ++claims<=1;};
-    policy.eta_upper_bound=std::log(2.2);
-    policy.configure_search_for_testing=[](n::FixedNeighborPolicy & search) {
-        search.core_atoms=1;
-        search.assess_parameter_stability=true;
+    const auto run=[&](bool assess_parameter_stability) {
+        n::FixedNeighborPolicy policy; policy.core_atoms=1;
+        policy.maximum_sweeps=n::ProductionFixedNeighborMaximumSweeps;
+        policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
+        policy.eta_upper_bound=std::log(2.2);
+        policy.assess_parameter_stability=assess_parameter_stability;
+        if(assess_parameter_stability)
+            policy.claim_parameter_stability_block=[&](int) {return ++claims<=1;};
+        const n::Vector eta=n::Vector::Constant(2,std::log(.55));
+        return n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,data.context,policy);
     };
-    const auto fit=n::FitFixedNeighborComponents(problem,{.55,.55},policy);
-    n::FixedNeighborSearchPolicy baseline_policy;
-    baseline_policy.eta_upper_bound=std::log(2.2);
-    baseline_policy.configure_search_for_testing=[](n::FixedNeighborPolicy & search) {
-        search.core_atoms=1;
-        search.assess_parameter_stability=false;
-    };
-    const auto baseline=n::FitFixedNeighborComponents(problem,{.55,.55},baseline_policy);
-    ASSERT_EQ(fit.components.size(),1u);
-    ASSERT_EQ(baseline.components.size(),1u);
-    const auto & component=fit.components.front();
-    const auto & baseline_component=baseline.components.front();
-    ASSERT_TRUE(component.state) << component.stop_reason;
-    ASSERT_TRUE(baseline_component.state) << baseline_component.stop_reason;
-    ASSERT_TRUE(component.parameter_stability);
-    EXPECT_EQ(component.state->ac,baseline_component.state->ac);
-    EXPECT_EQ(component.state->b,baseline_component.state->b);
-    EXPECT_EQ(component.state->log_b,baseline_component.state->log_b);
-    EXPECT_DOUBLE_EQ(component.state->objective,baseline_component.state->objective);
-    EXPECT_EQ(component.RuntimeConvergence(),baseline_component.RuntimeConvergence());
-    const auto & stability=*component.parameter_stability;
+    const auto measured=run(true),baseline=run(false);
+    ASSERT_TRUE(measured.state.eta.allFinite())<<measured.reason;
+    ASSERT_TRUE(baseline.state.eta.allFinite())<<baseline.reason;
+    ASSERT_TRUE(measured.parameter_stability);
+    EXPECT_EQ(measured.state.eta,baseline.state.eta);
+    EXPECT_EQ(measured.state.beta,baseline.state.beta);
+    EXPECT_DOUBLE_EQ(measured.state.objective,baseline.state.objective);
+    EXPECT_EQ(measured.search_converged,baseline.search_converged);
+    EXPECT_EQ(measured.reason,baseline.reason);
+    const auto & stability=*measured.parameter_stability;
     EXPECT_EQ(stability.blocks.size(),2u);
     EXPECT_LE(stability.perturbation_solves,2u);
     EXPECT_LE(claims,2u);

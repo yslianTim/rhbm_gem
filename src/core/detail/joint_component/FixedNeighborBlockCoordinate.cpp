@@ -178,17 +178,10 @@ AffectedReplayIncidence PrepareAffectedReplayIncidence(const Domain & domain,con
     out.build_scratch_bytes=bytes;
     return out;
 }
-AffectedReplayResult ReplayAffectedRows(const Domain & domain
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    ,const JointParameterLayout & layout
-#endif
-    ,VectorRef observations,const BlockCoordinateState & accepted,VectorRef candidate_eta,
+AffectedReplayResult ReplayAffectedRows(const Domain & domain,VectorRef observations,
+    const BlockCoordinateState & accepted,VectorRef candidate_eta,
     VectorRef candidate_beta,double scale,const Indices & core_atoms,const Indices & neighbor_atoms,
-    const Indices & affected_rows,const Indices & atom_position
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    ,bool full_objective_reference=false
-#endif
-    )
+    const Indices & affected_rows,const Indices & atom_position)
 {
     const auto incidence=PrepareAffectedReplayIncidence(domain,core_atoms,neighbor_atoms,affected_rows,atom_position);
     Vector widths(static_cast<Eigen::Index>(incidence.atoms.size()));
@@ -210,21 +203,6 @@ AffectedReplayResult ReplayAffectedRows(const Domain & domain
         out.prediction(static_cast<Eigen::Index>(row))=prediction;
         out.residual(static_cast<Eigen::Index>(row))=prediction-observations(affected_rows[row]);
     }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(full_objective_reference)
-    {
-        double squared{};
-        for(const auto row_value:layout.informative_rows)
-        {
-            const auto row=static_cast<Eigen::Index>(row_value);
-            const auto local=AffectedReplayPosition(affected_rows,row);
-            const double residual=local>=0 ? out.residual(local) : accepted.residual(row);
-            squared+=residual*residual;
-        }
-        out.objective=.5*squared/(scale*scale);
-    }
-    else
-#endif
     {
         double delta_squared{};
         for(std::size_t k=0;k<affected_rows.size();++k)
@@ -877,16 +855,6 @@ double ScaledCoefficientDifference(VectorRef lhs,VectorRef rhs)
     return ((lhs-rhs).array().abs()/(1.0+lhs.array().abs().max(rhs.array().abs()))).maxCoeff();
 }
 }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-FixedNeighborReplayResult FullReplayForTesting(const Domain & domain,const JointParameterLayout & layout,
-    VectorRef observations,VectorRef eta,VectorRef beta,double scale)
-{
-    const ReplayStructure structure(domain.rows,layout);
-    ReplayState replay;
-    ReplayInto(domain,layout,observations,eta,beta,scale,structure,replay);
-    return {std::move(replay.prediction),std::move(replay.residual),replay.objective};
-}
-#endif
 bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_complete_sweep,
     const JointConvergenceCriteria & criteria)
 {
@@ -1465,33 +1433,11 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                     (void)candidate_copy_timer;
                 }
                 const auto candidate_replay_timer=Measure(collect_telemetry,out.work.candidate_replay_seconds);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                if(policy.candidate_replay_for_testing)
-                {
-                    auto candidate=policy.candidate_replay_for_testing(out.state,core_atoms,affected_rows,
-                        candidate_eta,candidate_beta);
-                    replay_workspace.prediction=std::move(candidate.prediction);
-                    replay_workspace.residual=std::move(candidate.residual);
-                    replay_workspace.objective=candidate.objective;
-                    if(collect_telemetry) ++out.work.full_candidate_replays;
-                }
-                else
-#endif
                 if(use_affected_row_replay)
                 {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                    const bool full_objective_reference=policy.full_objective_reference_for_testing;
-#endif
                     auto candidate=ReplayAffectedRows(domain
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                        ,layout
-#endif
                         ,y,out.state,candidate_eta,candidate_beta,
-                        context.scale,core_atoms,partition.cores[block_index].neighbor_atoms,affected_rows,atom_position
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                        ,full_objective_reference
-#endif
-                        );
+                        context.scale,core_atoms,partition.cores[block_index].neighbor_atoms,affected_rows,atom_position);
                     candidate_result_affected_rows_only=true;
                     candidate_affected_prediction=std::move(candidate.prediction);
                     candidate_affected_residual=std::move(candidate.residual);
@@ -1499,16 +1445,12 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                     if(collect_telemetry)
                     {
                         ++out.work.affected_candidate_replays;
+                        ++out.work.incremental_objective_evaluations;
                         out.work.affected_replay_peak_scratch_bytes=std::max(
                             out.work.affected_replay_peak_scratch_bytes,candidate.scratch_bytes);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                        if(!full_objective_reference) ++out.work.incremental_objective_evaluations;
-#else
-                        ++out.work.incremental_objective_evaluations;
-#endif
                     }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                    if(!full_objective_reference) incremental_candidate_objective=candidate.objective;
+                    incremental_candidate_objective=candidate.objective;
 #endif
                 }
                 else
@@ -1576,28 +1518,14 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 if(!policy.candidate_observer) return;
                 const auto & observed_eta=candidate_fast_unchanged ? out.state.eta : candidate_eta;
                 const auto & observed_beta=candidate_fast_unchanged ? out.state.beta : candidate_beta;
-                Vector observed_candidate_prediction,observed_candidate_residual;
-                const Vector * observed_prediction=&replay_workspace.prediction;
-                const Vector * observed_residual=&replay_workspace.residual;
-                if(candidate_fast_unchanged)
-                {
-                    observed_prediction=&out.state.prediction; observed_residual=&out.state.residual;
-                }
-                else if(candidate_result_affected_rows_only)
-                {
-                    observed_candidate_prediction=out.state.prediction;
-                    observed_candidate_residual=out.state.residual;
-                    for(std::size_t k=0;k<affected_rows.size();++k)
-                    {
-                        const auto row=affected_rows[k];
-                        observed_candidate_prediction(row)=candidate_affected_prediction(static_cast<Eigen::Index>(k));
-                        observed_candidate_residual(row)=candidate_affected_residual(static_cast<Eigen::Index>(k));
-                    }
-                    observed_prediction=&observed_candidate_prediction;
-                    observed_residual=&observed_candidate_residual;
-                }
+                static const Vector empty_vector;
+                const auto & observed_affected_prediction=candidate_result_affected_rows_only ?
+                    candidate_affected_prediction : empty_vector;
+                const auto & observed_affected_residual=candidate_result_affected_rows_only ?
+                    candidate_affected_residual : empty_vector;
                 policy.candidate_observer({sweep_index+1,block_index+1,out.state,core_atoms,affected_rows,
-                    observed_eta,observed_beta,*observed_prediction,*observed_residual,candidate_objective,
+                    observed_eta,observed_beta,observed_affected_prediction,observed_affected_residual,
+                    candidate_objective,
                     record.local_objective_before,record.local_objective_after,record.global_replay_delta,
                     record.local_global_delta_error,record.objective_replay_enclosure,incremental_candidate_objective,
                     accepted_candidate,
@@ -2087,9 +2015,6 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     policy.assess_parameter_stability=true;
 #endif
     policy.claim_parameter_stability_block=production_policy.claim_parameter_stability_block;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(production_policy.configure_search_for_testing) production_policy.configure_search_for_testing(policy);
-#endif
     if(progress_component && observer)
     {
         const auto maximum_sweeps=policy.maximum_sweeps;
