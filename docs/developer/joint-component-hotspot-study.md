@@ -109,4 +109,38 @@ P3-L1/L2 completed: the 130 bounded-LM subproblems used 1,754 damping solves and
 
 P3-L3 was skipped because the implementation already reuses bounded-LM augmented matrix, index vectors, and workspace. Assembly and active/free selection together were below 0.02% of workflow, with no measured repeated allocation cost. P3-L4 QR caching was skipped because no exact same free face, numeric matrix, damping, and threshold subproblem was identified; matching dimensions or active faces alone are insufficient. No P3 change passed the production gate, and Normal Equations remain absent.
 
+## P4 Final validation and production audit
+
+The 300-target comparison below uses the P0 instrumented Release baseline and the final production FixedNeighbor benchmark. Stage timings are nested and do not sum; SparseQR and refinement/derivative/LM substage times are from the instrumented representative sample. The full wall/search/candidate times are five-run medians. `stage_speedup` is baseline time divided by final time.
+
+| Metric | Baseline | Final | Change / speedup |
+|---|---:|---:|---:|
+| FixedNeighbor complete wall | 1.15554 s | 1.118539 s | −3.20%; 1.033× |
+| FixedNeighbor search | 957.371 ms | 920.006 ms | −3.90%; 1.041× |
+| Candidate Replay | 72.239 ms | 31.995 ms | −55.7%; 2.258× |
+| A/C SparseQR inclusive | 9.753 ms | 9.778 ms | +0.3%; 0.997× (unchanged solver) |
+| Conditional refinement | 0 / 260 triggers | 0 / 260 triggers | Not triggered |
+| Derivative prepare + reduce | 324.277 ms | 323.988 ms | −0.1%; 1.001× |
+| Bounded-LM damping search | 4.316 ms | 4.328 ms | +0.3%; 0.997× |
+| Profile evaluations | 266 | 266 | unchanged |
+| SparseQR factorizations | 260 | 260 | unchanged |
+| Damping QR factorizations | 1,754 | 1,754 | unchanged |
+| Candidate scratch peak | 233,512 B | 233,512 B | unchanged |
+| Global-state preflight peak | 36,716,466 B | 36,716,466 B | unchanged |
+| Sweeps / accepted blocks | 5 / 130 | 5 / 130 | unchanged |
+| Objective | `1.47904336e-10` | `1.47904336e-10` | unchanged |
+| Global A/C KKT | `5.06726418e-10` | `5.06726418e-10` | unchanged |
+| Projected width KKT | `1.87827531e-12` | `1.87827531e-12` | unchanged |
+| Endpoint / Independent Replay | pass / pass | pass / pass | unchanged |
+
+For synthetic 300 targets, five independent lower-bound versus direct-map benchmark processes measured Peak RSS medians of 87,851,008 B versus 87,801,856 B. The final 300-target closed-loop benchmark measured Peak RSS 88,227,840 B and the same preflight estimate. No persistent memory was added.
+
+For the real A/YA workload, baseline versus final medians were CLI wall 134.471 s versus 114.499 s (−14.85%, workflow speedup 1.174×), and Joint search 108.909 s versus 89.174 s (−18.12%, stage speedup 1.221×). Baseline/final Peak RSS medians were 1,484,701,696 B and 1,563,672,576 B; run-to-run ranges overlap, with final minimum 1,484,242,944 B and final maximum below the baseline maximum. Endpoint-verification preflight estimate remained 52,661,461 B. All five final runs had the same 118 sweeps, 35,828 profile evaluations, 14,680 accepted updates, objective, independent A/C KKT, projected-width KKT, qualification, and Independent Replay result.
+
+The final Release build completed with `cmake --build build/release -j4`. The serial CTest run passed 21/21 tests with numerical libraries capped at four threads. Coverage includes cancellation-sensitive derivative fallback; dense/reference derivative comparisons; SparseQR rank deficiency, active-set faces and conditional refinement; bounded trust-region damping, bracket and bisection; width-bound activation/release and projected KKT; incremental objective/acceptance and sweep replay; independent replay; component assembly; memory-budget fallback/rejection; non-finite inputs; and large-component memory planning. The 300-target production benchmark also passed endpoint qualification and Independent Replay.
+
+Production audit: the only promoted implementation change is reuse of the existing row-position vector for affected-row direct lookup. FixedNeighbor Block-coordinate, constrained A/C SparseQR, nonnegative active-set, conditional strict-KKT refinement, and bounded active-set LM with width bounds and augmented QR remain the production algorithms. There is no second solver path, runtime experiment selector, or new persistent cache. Detailed attribution and cancellation hooks compile only in the test instrumentation target; their fields are consumed by the hotspot benchmark and regression tests. No third-party dependency or Notion content changed.
+
+The lower-bound comparison switch, temporary per-tile QR reuse experiment, real-run databases/logs, and temporary runner scripts were removed after results were recorded. No unconsumed benchmark hook or experiment-only production branch remains.
+
 Production remains on FixedNeighbor Block-coordinate, constrained A/C SparseQR with nonnegative active-set, and bounded active-set LM with width bounds and augmented QR.
