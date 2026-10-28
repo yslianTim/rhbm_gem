@@ -443,6 +443,7 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
     if(!AddEstimatedBytes(builder_tracking,atoms.capacity(),sizeof(const AtomObject *)) ||
         !AddEstimatedBytes(builder_tracking,selected.size(),4*sizeof(void *)+32) ||
         !AddEstimatedBytes(builder_tracking,selected_support_entries,sizeof(std::size_t)) ||
+        !AddEstimatedBytes(builder_tracking,atoms.size(),sizeof(std::size_t)) ||
         !n::CheckedAddBytes(builder_resident,builder_tracking,builder_resident))
         throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
     if(builder_resident>n::JointMemoryPlanningBudgetBytes)
@@ -458,80 +459,46 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
     std::sort(rows.begin(),rows.end()); rows.erase(std::unique(rows.begin(),rows.end()),rows.end());
     const auto target_bounds=BoundsForRows(map,rows);
 
-    std::size_t maximum_candidate_support{};
-    for(const auto * atom:atoms)
-    {
-        if(!selected.contains(atom) && !MayOverlapTargetRows(*atom,target_bounds)) continue;
-        std::size_t memberships{};
-        VisitSupport(map,*atom,[&](auto index,double) {
-            if(std::binary_search(rows.begin(),rows.end(),index) &&
-                !n::CheckedAddBytes(memberships,1,memberships))
-                throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
-        });
-        maximum_candidate_support=std::max(maximum_candidate_support,memberships);
-    }
-
-    std::size_t eligibility_scratch_bytes{},eligibility_builder_resident{};
-    if(!n::CheckedMultiplyBytes(maximum_candidate_support,sizeof(JointSupport),eligibility_scratch_bytes) ||
-        !n::CheckedAddBytes(builder_resident,eligibility_scratch_bytes,eligibility_builder_resident))
-        throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
-    if(eligibility_builder_resident>n::JointMemoryPlanningBudgetBytes)
-    {
-        n::MemoryShape scan_shape; scan_shape.component_atoms=atoms.size();
-        scan_shape.component_observations=rows.size(); scan_shape.component_support_entries=maximum_candidate_support;
-        scan_shape.resident_bytes=eligibility_builder_resident; scan_shape.problem_scope=true;
-        RejectBuildPreflight(scan_shape,"halo-eligibility-scratch-exceeds-budget");
-    }
-
     std::size_t contributors=selected.size(),support_entries{},target_support_entries{},maximum_atom_support{};
     std::size_t candidate_halos{},retained_halos{},zero_support_halos{};
-    std::vector<JointSupport> eligibility_support;
-    eligibility_support.reserve(maximum_candidate_support);
+    std::vector<std::size_t> atom_support_counts;
+    atom_support_counts.reserve(atoms.size());
     for(const auto * atom:atoms)
     {
-        if(selected.contains(atom))
+        const bool selected_target=selected.contains(atom);
+        if(!selected_target && !n::CheckedAddBytes(candidate_halos,1,candidate_halos))
+            throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
+        std::size_t memberships{};
+        if(!selected_target && !MayOverlapTargetRows(*atom,target_bounds))
         {
-            std::size_t memberships{};
+            if(!n::CheckedAddBytes(zero_support_halos,1,zero_support_halos))
+                throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
+        }
+        else
+        {
             VisitSupport(map,*atom,[&](auto index,double) {
                 if(std::binary_search(rows.begin(),rows.end(),index) &&
                     !n::CheckedAddBytes(memberships,1,memberships))
                     throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
             });
-            maximum_atom_support=std::max(maximum_atom_support,memberships);
-            if(!n::CheckedAddBytes(support_entries,memberships,support_entries))
+            if(!selected_target && memberships==0 &&
+                !n::CheckedAddBytes(zero_support_halos,1,zero_support_halos))
                 throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
-            if(!n::CheckedAddBytes(target_support_entries,memberships,target_support_entries))
-                throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
-            continue;
         }
-        if(!n::CheckedAddBytes(candidate_halos,1,candidate_halos))
-            throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
-        if(!MayOverlapTargetRows(*atom,target_bounds))
-        {
-            if(!n::CheckedAddBytes(zero_support_halos,1,zero_support_halos))
-                throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
-            continue;
-        }
-        eligibility_support.clear();
-        VisitSupport(map,*atom,[&](auto index,double square) {
-            const auto row=std::lower_bound(rows.begin(),rows.end(),index);
-            if(row!=rows.end() && *row==index)
-                eligibility_support.push_back({static_cast<std::size_t>(row-rows.begin()),square});
-        });
-        const auto memberships=eligibility_support.size();
-        if(memberships==0)
-        {
-            if(!n::CheckedAddBytes(zero_support_halos,1,zero_support_halos))
-                throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
-            continue;
-        }
+        atom_support_counts.push_back(memberships);
         maximum_atom_support=std::max(maximum_atom_support,memberships);
-        if(!n::CheckedAddBytes(retained_halos,1,retained_halos) ||
+        if(selected_target)
+        {
+            if(!n::CheckedAddBytes(support_entries,memberships,support_entries) ||
+                !n::CheckedAddBytes(target_support_entries,memberships,target_support_entries))
+                throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
+            continue;
+        }
+        if(memberships>0 && (!n::CheckedAddBytes(retained_halos,1,retained_halos) ||
             !n::CheckedAddBytes(contributors,1,contributors) ||
-            !n::CheckedAddBytes(support_entries,memberships,support_entries))
+            !n::CheckedAddBytes(support_entries,memberships,support_entries)))
             throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
     }
-    eligibility_support.clear();
     n::MemoryShape shape; shape.problem_scope=true; shape.component_atoms=selected.size();
     shape.component_observations=rows.size(); shape.component_support_entries=support_entries;
     std::size_t free_columns{};
@@ -545,7 +512,6 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
         !AddEstimatedBytes(identity_scratch,rows.size(),identity_node+32) ||
         !AddEstimatedBytes(identity_scratch,contributors,2*sizeof(std::string)+identity_node+64) ||
         !AddEstimatedBytes(identity_scratch,maximum_atom_support,sizeof(std::size_t)+4*sizeof(void *)+32) ||
-        !n::CheckedAddBytes(identity_scratch,eligibility_scratch_bytes,identity_scratch) ||
         !n::CheckedAddBytes(contributors,selected.size(),identity_map_entries) ||
         !AddEstimatedBytes(planned_snapshot,identity_characters,2*sizeof(char)))
         RejectBuildPreflight(shape,"size-overflow");
@@ -573,28 +539,19 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
         RejectBuildPreflight(shape,build_estimate.reason.c_str());
 
     for(auto index:rows) {input.row_ids.push_back(std::to_string(index)); input.observations.push_back(map.GetMapValue(index));}
-    for(const auto * atom:atoms)
+    for(std::size_t atom_index=0;atom_index<atoms.size();++atom_index)
     {
+        const auto * atom=atoms[atom_index];
         bool selected_target=selected.contains(atom);
+        const auto memberships=atom_support_counts[atom_index];
+        if(!selected_target && memberships==0) continue;
         std::vector<JointSupport> support;
-        if(selected_target)
-        {
-            VisitSupport(map,*atom,[&](auto index,double square) {
-                const auto row=std::lower_bound(rows.begin(),rows.end(),index);
-                if(row!=rows.end() && *row==index) support.push_back({static_cast<std::size_t>(row-rows.begin()),square});
-            });
-        }
-        else
-        {
-            if(!MayOverlapTargetRows(*atom,target_bounds)) continue;
-            eligibility_support.clear();
-            VisitSupport(map,*atom,[&](auto index,double square) {
-                const auto row=std::lower_bound(rows.begin(),rows.end(),index);
-                if(row!=rows.end() && *row==index)
-                    eligibility_support.push_back({static_cast<std::size_t>(row-rows.begin()),square});
-            });
-            support=eligibility_support;
-        }
+        support.reserve(memberships);
+        VisitSupport(map,*atom,[&](auto index,double square) {
+            const auto row=std::lower_bound(rows.begin(),rows.end(),index);
+            if(row!=rows.end() && *row==index)
+                support.push_back({static_cast<std::size_t>(row-rows.begin()),square});
+        });
         if(selected_target || !support.empty())
         {
             if(selected_target) closure.target_indices.push_back(input.atom_ids.size());
