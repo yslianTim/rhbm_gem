@@ -142,7 +142,9 @@ TEST(JointComponentNumericsTest, BasisAssemblyMatchesTripletsForOrderedAndDuplic
     const std::vector<std::vector<n::Support>> ordered{{{0,0.0},{1,.0004},{2,.04},{3,6.25},{4,9.0}}};
     const std::vector<std::vector<n::Support>> unsorted_duplicates{{{2,.04},{0,0.0},{2,.01},
         {1,.0004},{3,6.25},{4,9.0}}};
-    for(const auto & support:{ordered,unsorted_duplicates})
+    const std::vector<std::vector<n::Support>> noncontiguous{{{0,0.0},{2,.04},{4,9.0}}};
+    const std::vector<std::vector<n::Support>> empty_support(1);
+    for(const auto & support:{ordered,unsorted_duplicates,noncontiguous,empty_support})
     {
         const n::Domain domain(5,support);
         const auto context=p::MakeContext(y,1);
@@ -155,6 +157,19 @@ TEST(JointComponentNumericsTest, BasisAssemblyMatchesTripletsForOrderedAndDuplic
         EXPECT_EQ(evaluation.x.coeff(4,1),0.0);
         EXPECT_EQ(evaluation.derivative.coeff(4,1),0.0);
     }
+
+    const n::Domain parent(5,{{{0,0.0},{2,.04},{3,.25}}});
+    const auto local=parent.Select(n::Indices{0},3,
+        n::CompactRowMapping::FromParentRows(n::Indices{3,0,2}));
+    ASSERT_EQ(local.atoms[0][0].row,1);
+    ASSERT_EQ(local.atoms[0][1].row,2);
+    ASSERT_EQ(local.atoms[0][2].row,0);
+    const Vector local_y=Vector::Ones(3);
+    const auto context=p::MakeContext(local_y,1);
+    const auto evaluation=n::EvaluateProfile(local,local_y,eta,&context);
+    const auto [expected_x,expected_derivative]=expected(local,eta);
+    EXPECT_EQ((evaluation.x-expected_x).norm(),0.0);
+    EXPECT_EQ((evaluation.derivative-expected_derivative).norm(),0.0);
 }
 
 TEST(JointComponentNumericsTest, TiledQRReusesScratchForRepeatedAssembledShape)
