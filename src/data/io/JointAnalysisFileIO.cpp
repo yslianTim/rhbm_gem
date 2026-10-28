@@ -26,7 +26,7 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
         csv_file.exceptions(std::ios::failbit|std::ios::badbit);
         json_file.open(json_path); csv_file.open(csv_path);
         json_file << json << '\n';
-        csv_file << "AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate,SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality\n"
+        csv_file << "AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality\n"
             << std::setprecision(std::numeric_limits<double>::max_digits10);
 
         std::vector<std::pair<const JointAnalysisComponent *,std::size_t>> mapping(result.atom_ids.size());
@@ -71,8 +71,6 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
                 "halo-reconstruction-unavailable" : component ? component->stop_reason : result.initialization.reason;
             const auto runtime_convergence=median_halo ? JointCheckStatus::NotRun :
                 component && export_point ? component->runtime_convergence : JointCheckStatus::Unavailable;
-            const auto regular_certificate=median_halo ? JointCheckStatus::NotRun :
-                component ? component->regular_certificate : result.regular_certificate;
             const auto target_convergence=median_halo ? JointCheckStatus::NotRun :
                 component && target ? component->target_runtime_convergence : JointCheckStatus::NotRun;
 
@@ -88,7 +86,6 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
             csv_file << ',' << state_available << ',' << (component && component->search_completed)
                 << ',' << CsvText(stop_reason)
                 << ',' << joint_result_io::StatusText(runtime_convergence)
-                << ',' << joint_result_io::StatusText(regular_certificate)
                 << ',' << (target ? "target" : "halo") << ',' << parameterization
                 << ',' << CsvText("") << ',' << joint_result_io::StatusText(target_convergence)
                 << ',' << (target ? point_quality : "NotApplicable") << '\n';

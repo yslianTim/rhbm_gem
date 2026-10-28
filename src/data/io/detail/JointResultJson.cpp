@@ -1135,7 +1135,6 @@ std::string Encode(const JointAnalysisResult & x)
         {"local_conditioning_seconds",Number(c.local_conditioning_seconds)},
         {"local_conditioning_peak_memory_estimate_bytes",OptionalSize(c.local_conditioning_peak_memory_estimate_bytes)},
         {"parameter_stability",ParameterStability(c.parameter_stability)},
-        {"regular_certificate",StatusText(c.regular_certificate)},
         {"runtime_convergence",StatusText(c.runtime_convergence)},
         {"target_evidence",Target(c.target_evidence)},
         {"target_runtime_convergence",StatusText(c.target_runtime_convergence)}};
@@ -1154,7 +1153,7 @@ std::string Encode(const JointAnalysisResult & x)
         {"components",std::move(components)},{"assembled_state",OptionalState(x.assembled_state)},
         {"objective",Number(x.objective)},{"available_row_mask",j::value_from(x.available_row_mask)},
         {"evidence",Checks(x.evidence)},{"search_completed",x.search_completed},
-        {"observation_scale",x.observation_scale},{"regular_certificate",StatusText(x.regular_certificate)},
+        {"observation_scale",x.observation_scale},
         {"runtime_convergence",StatusText(x.runtime_convergence)},
         {"target_evidence",Target(x.target_evidence)},
         {"target_runtime_convergence",StatusText(x.target_runtime_convergence)},
@@ -1170,7 +1169,7 @@ JointAnalysisResult DecodeCurrent(const Object & o)
         "parameterization_contract","metadata","selection_domain","atom_ids","row_ids","fitting_row_ids",
         "fitting_to_original_contributors","fitting_to_original_rows","initialization","costs","components",
         "assembled_state","objective","available_row_mask","evidence","search_completed","observation_scale",
-        "regular_certificate","runtime_convergence","target_evidence","target_runtime_convergence",
+        "runtime_convergence","target_evidence","target_runtime_convergence",
         "halo_median_reconstruction"},"unknown current Joint result field");
     const auto & metadata=o.at("metadata").as_object();
     if(!metadata.at("solver").is_null())
@@ -1215,7 +1214,7 @@ JointAnalysisResult DecodeCurrent(const Object & o)
             "first_order_stationarity_sweep","confirmed_stationarity_sweep","endpoint_certification_sweep",
             "profile_evaluations","accepted_updates","native_status","state","candidate_diagnostic","evidence",
             "local_conditioning","local_conditioning_seconds","local_conditioning_peak_memory_estimate_bytes",
-            "parameter_stability","regular_certificate","runtime_convergence","target_evidence",
+            "parameter_stability","runtime_convergence","target_evidence",
             "target_runtime_convergence"},"unknown current Joint component field");
         JointAnalysisComponent component;
         component.id=Read<std::string>(c,"id");
@@ -1253,7 +1252,6 @@ JointAnalysisResult DecodeCurrent(const Object & o)
         component.local_conditioning_peak_memory_estimate_bytes=
             ReadOptionalSize(c.at("local_conditioning_peak_memory_estimate_bytes"));
         component.parameter_stability=ReadParameterStability(c.at("parameter_stability"));
-        component.regular_certificate=Status(c.at("regular_certificate"));
         component.runtime_convergence=Status(c.at("runtime_convergence"));
         component.target_evidence=ReadTarget(c.at("target_evidence"));
         component.target_runtime_convergence=Status(c.at("target_runtime_convergence"));
@@ -1270,7 +1268,6 @@ JointAnalysisResult DecodeCurrent(const Object & o)
     x.evidence=ReadChecks(o.at("evidence"));
     x.search_completed=Read<bool>(o,"search_completed");
     x.observation_scale=Read<double>(o,"observation_scale");
-    x.regular_certificate=Status(o.at("regular_certificate"));
     x.runtime_convergence=Status(o.at("runtime_convergence"));
     x.target_evidence=ReadTarget(o.at("target_evidence"));
     x.target_runtime_convergence=Status(o.at("target_runtime_convergence"));

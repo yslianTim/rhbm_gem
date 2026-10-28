@@ -84,7 +84,7 @@ def main() -> int:
                     assert atom["post_joint_local"] is None
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
-        assert saved["schema_version"] == 19
+        assert saved["schema_version"] == 20
         assert saved["parameterization_contract"] == "target-only-pure-halo-support-exclusion-v1"
         assert saved["metadata"]["solver"]["search_method"] == "fixed-neighbor"
         default_solver = saved["metadata"]["solver"]
@@ -144,7 +144,8 @@ def main() -> int:
         for key in ("source_sha256", "configuration_sha256", "build_sha256"):
             assert len(metadata["software"][key]) == 64
         assert metadata["software"] == generator
-        assert saved["regular_certificate"] == "not-run"
+        assert "regular_certificate" not in saved
+        assert all("regular_certificate" not in component for component in saved["components"])
         assert saved["components"] and saved["assembled_state"] is not None
         for component in saved["components"]:
             assert component["search_completed"]

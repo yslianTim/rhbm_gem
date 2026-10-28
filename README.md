@@ -38,8 +38,7 @@ RHBM-GEM potential_analysis --estimator joint-components -a model.cif -m map.mrc
 RHBM-GEM result_dump --printer joint -d joint.sqlite -k example -o results
 ```
 
-Joint output contains A/B/C, component availability, runtime convergence and
-separate offline-certificate status. The C++/Python `CommandResult.succeeded`
+Joint output contains A/B/C, component availability and runtime convergence. The C++/Python `CommandResult.succeeded`
 field reports whether execution completed and the result was saved; its
 `outcome` distinguishes Joint initialization failure, an unqualified fit, and a
 qualified fit. CLI exit codes are `1` for execution or saving failure, `2` when

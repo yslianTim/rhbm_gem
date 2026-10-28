@@ -259,7 +259,6 @@ struct JointComponentData
     double local_conditioning_seconds{};
     std::optional<std::size_t> local_conditioning_peak_memory_estimate_bytes;
     std::optional<JointParameterStability> parameter_stability;
-    JointCheckStatus regular_certificate{JointCheckStatus::NotRun};
     // Absent means component atom indices map directly to the state.
     std::optional<JointParameterLayout> layout;
     std::optional<JointTargetEvidence> target_evidence;

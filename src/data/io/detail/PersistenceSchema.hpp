@@ -4,6 +4,6 @@ namespace rhbm_gem::persistence_schema {
 
 inline constexpr int SQLite = 20;
 inline constexpr int StageResultJson = 4;
-inline constexpr int JointResultJson = 19;
+inline constexpr int JointResultJson = 20;
 
 } // namespace rhbm_gem::persistence_schema

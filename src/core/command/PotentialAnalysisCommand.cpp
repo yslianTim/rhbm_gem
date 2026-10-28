@@ -241,8 +241,7 @@ bool ExecutePreparedRequest(
         Logger::Log(LogLevel::Info,"Joint result saved: search_completed="+std::to_string(fit.search_completed)+
             ", available_components="+std::to_string(available)+"/"+std::to_string(fit.components.size())+
             ", runtime_convergence="+std::string(joint_result_io::StatusText(fit.runtime_convergence))+
-            ", target_runtime_convergence="+std::string(joint_result_io::StatusText(fit.target_runtime_convergence))+
-            ", regular_certificate="+std::string(joint_result_io::StatusText(fit.regular_certificate)));
+            ", target_runtime_convergence="+std::string(joint_result_io::StatusText(fit.target_runtime_convergence)));
         if (!fit.initialization.valid) Logger::Log(LogLevel::Warning,"Joint initialization unavailable: "+fit.initialization.reason);
         if (!fit.initialization.valid)
         {

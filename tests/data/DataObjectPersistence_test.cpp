@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <stdexcept>
 #include <string>
 #include <fstream>
@@ -519,17 +520,19 @@ rg::JointAnalysisResult CurrentJointExample(bool with_halo=true)
 rg::JointAnalysisResult SavedJointExample() { return CurrentJointExample(); }
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV19RoundTripsUnqualifiedResult)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV20RoundTripsUnqualifiedResult)
 {
     namespace io=rg::joint_result_io;
     const auto result=CurrentJointExample();
     const auto encoded=io::Encode(result);
     const auto object=boost::json::parse(encoded).as_object();
-    EXPECT_EQ(boost::json::value_to<int>(object.at("schema_version")),19);
+    EXPECT_EQ(boost::json::value_to<int>(object.at("schema_version")),20);
     for(const auto key:{"fixed_halos","layout","legacy_global_rank_evidence","ranks"})
         EXPECT_FALSE(object.contains(key));
     EXPECT_FALSE(object.at("costs").as_object().contains("search_reference_seconds"));
+    EXPECT_FALSE(object.contains("regular_certificate"));
     const auto & component=object.at("components").as_array().front().as_object();
+    EXPECT_FALSE(component.contains("regular_certificate"));
     for(const auto key:{"reference_evaluations","legacy_global_rank_evidence","legacy_candidate_evidence","layout"})
         EXPECT_FALSE(component.contains(key));
     EXPECT_FALSE(component.at("state").as_object().contains("nuisance_amplitudes"));
@@ -547,18 +550,24 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV19RoundTripsUnqualifiedResult
     EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_local_search,rg::FixedNeighborBoundedLocalSearchName);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV19RejectsOtherVersionsAndRetiredFields)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV20RejectsOtherVersionsAndRetiredFields)
 {
     namespace io=rg::joint_result_io;
     const auto encoded=io::Encode(CurrentJointExample());
     const auto current=boost::json::parse(encoded).as_object();
-    for(const int version:{3,18,20,99})
+    for(const int version:{3,18,19,21,99})
     {
         auto unsupported=current;
         unsupported["schema_version"]=version;
         EXPECT_THROW(io::Decode(boost::json::serialize(unsupported)),std::invalid_argument);
     }
     auto retired=current;
+    retired["regular_certificate"]="not-run";
+    EXPECT_THROW(io::Decode(boost::json::serialize(retired)),std::invalid_argument);
+    retired=current;
+    retired.at("components").as_array().front().as_object()["regular_certificate"]="not-run";
+    EXPECT_THROW(io::Decode(boost::json::serialize(retired)),std::invalid_argument);
+    retired=current;
     retired["layout"]=nullptr;
     EXPECT_THROW(io::Decode(boost::json::serialize(retired)),std::invalid_argument);
     retired=current;
@@ -569,7 +578,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV19RejectsOtherVersionsAndReti
     EXPECT_THROW(io::Decode(boost::json::serialize(retired)),std::invalid_argument);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV19RoundTripsQualifiedTargetWithoutHalo)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV20RoundTripsQualifiedTargetWithoutHalo)
 {
     namespace io=rg::joint_result_io;
     auto result=CurrentJointExample(false);
@@ -596,7 +605,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV19RoundTripsQualifiedTargetWi
     EXPECT_FALSE(decoded.halo_median_reconstruction);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV19RoundTripsGeometryLocalHaloMedian)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV20RoundTripsGeometryLocalHaloMedian)
 {
     namespace io=rg::joint_result_io;
     auto result=CurrentJointExample();
@@ -642,7 +651,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV19RoundTripsGeometryLocalHalo
         std::vector<std::string>{"1"});
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV19PreservesUnavailableAndNullableDiagnostics)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV20PreservesUnavailableAndNullableDiagnostics)
 {
     namespace io=rg::joint_result_io;
     auto unavailable=CurrentJointExample();
@@ -901,7 +910,6 @@ TEST(DataObjectPersistenceTest, JointCodecRejectsMalformedMappingsAndPreservesMi
     const auto decoded=io::Decode(io::Encode(record));
     EXPECT_FALSE(decoded.objective); EXPECT_FALSE(decoded.components[0].state);
     EXPECT_EQ(decoded.available_row_mask,record.available_row_mask);
-    EXPECT_EQ(decoded.regular_certificate,rg::JointCheckStatus::NotRun);
     const command_test::ScopedTempDir dir{"joint_export"};
     rg::WriteJointAnalysisResult(decoded,dir.path()/"result.json",dir.path()/"atoms.csv");
     EXPECT_FALSE(std::filesystem::exists(dir.path()/"atoms.contributions.csv"));
@@ -937,7 +945,7 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     component.candidate_diagnostic=candidate;
 
     const auto json=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(json.at("schema_version").as_int64(),19);
+    EXPECT_EQ(json.at("schema_version").as_int64(),20);
     const auto & saved_candidate=json.at("components").as_array()[0].at("candidate_diagnostic");
     EXPECT_EQ(saved_candidate.at("candidate_status").as_string(),"uncertified");
     EXPECT_EQ(saved_candidate.at("convergence_criteria_id").as_string(),"practical-v1");
@@ -1066,9 +1074,16 @@ TEST(DataObjectPersistenceTest, JointSelectionMetadataValidationAndCsvRoles)
     }
     rg::WriteJointAnalysisResult(saved,dir.path()/"out.json",dir.path()/"out.csv");
     std::ifstream csv(dir.path()/"out.csv"); std::string line;
-    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality"));
-    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",target,JointEstimated,\"\",failed,Unavailable"));
-    std::getline(csv,line); EXPECT_TRUE(line.ends_with(",halo,HaloReconstructionUnavailable,\"\",not-run,NotApplicable"));
+    std::getline(csv,line);
+    EXPECT_EQ(line.find("RegularCertificate"),std::string::npos);
+    const auto column_count=std::count(line.begin(),line.end(),',');
+    EXPECT_TRUE(line.ends_with(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality"));
+    std::getline(csv,line);
+    EXPECT_EQ(std::count(line.begin(),line.end(),','),column_count);
+    EXPECT_TRUE(line.ends_with(",target,JointEstimated,\"\",failed,Unavailable"));
+    std::getline(csv,line);
+    EXPECT_EQ(std::count(line.begin(),line.end(),','),column_count);
+    EXPECT_TRUE(line.ends_with(",halo,HaloReconstructionUnavailable,\"\",not-run,NotApplicable"));
     auto raw=saved; raw.selection_domain.reset();
     EXPECT_THROW(rg::WriteJointAnalysisResult(raw,dir.path()/"raw.json",dir.path()/"raw.csv"),std::invalid_argument);
 }

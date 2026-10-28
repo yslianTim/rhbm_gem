@@ -894,7 +894,7 @@ JointAnalysisResult CaptureJointAnalysisResultImpl(Fit && fit,JointAnalysisMetad
     else out.available_row_mask=CaptureTransfer<Fit>(fit.available_row_mask);
     out.evidence=CaptureTransfer<Fit>(fit.evidence);
     out.search_completed=fit.search_completed; out.observation_scale=fit.observation_scale;
-    out.runtime_convergence=captured_runtime; out.regular_certificate=fit.regular_certificate;
+    out.runtime_convergence=captured_runtime;
     out.target_evidence=CaptureTransfer<Fit>(fit.target_evidence);
     if(pure_exclusion_policy)
         RemapTargetEvidence(out.target_evidence,fit.problem->FittingToOriginalContributors(),original_input.row_ids.size());

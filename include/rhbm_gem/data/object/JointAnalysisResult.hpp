@@ -63,7 +63,6 @@ struct JointAnalysisResult
     bool search_completed{};
     double observation_scale{1};
     JointCheckStatus runtime_convergence{JointCheckStatus::Unavailable};
-    JointCheckStatus regular_certificate{JointCheckStatus::NotRun};
     std::optional<JointTargetEvidence> target_evidence;
     JointCheckStatus target_runtime_convergence{JointCheckStatus::NotRun};
     std::optional<JointHaloMedianSnapshot> halo_median_reconstruction;

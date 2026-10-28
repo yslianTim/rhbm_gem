@@ -292,7 +292,7 @@ auto completed = rhbm_gem::core::RunCommand(request);
 ```
 
 `result_dump --printer joint` writes one Joint JSON and one atom CSV. The CSV
-columns are `AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,RegularCertificate,SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality`.
+columns are `AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality`.
 `ContributionGroupID` remains an empty compatibility column in the current
 CSV layout. No singleton contribution file is written. Available unqualified
 Target states remain distinguishable from unavailable point estimates through

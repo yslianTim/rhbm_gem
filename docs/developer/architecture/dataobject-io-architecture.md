@@ -103,7 +103,7 @@ in place.
 - `src/data/io/detail/PersistenceSchema.hpp`: SQLite, Stage, and Joint
   version constants.
 - `src/data/io/detail/StageResultJson.cpp`: Stage JSON version 4.
-- `src/data/io/detail/JointResultJson.cpp`: Joint JSON schema 19.
+- `src/data/io/detail/JointResultJson.cpp`: Joint JSON schema 20.
 - `tests/data/DataObjectSchemaLifecycle_test.cpp` and
   `DataObjectSchemaValidation_test.cpp`: database bootstrap and rejection.
 - `tests/data/DataObjectPersistence_test.cpp`: current JSON and model
