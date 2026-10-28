@@ -166,6 +166,19 @@ TEST(ActiveSetBoundedLMTest, RecordedInteriorDampedStepIsBitwiseStable)
     EXPECT_EQ(Bits(result.gradient(1)),Bits(0.0));
     ASSERT_EQ(joint::BoundedLmWorkForTesting().damping_trace.size(),57u);
     const auto & trace=joint::BoundedLmWorkForTesting().damping_trace;
+    EXPECT_EQ(result.damping_solves,trace.size());
+    EXPECT_EQ(result.bracket_solves,2u);
+    EXPECT_EQ(result.bisection_solves,54u);
+    std::size_t active_iterations{},qr_factorizations{},releases{};
+    for(const auto & attempt:trace)
+    {
+        active_iterations+=attempt.active_set_sequence.size();
+        qr_factorizations+=attempt.free_ranks.size();
+        releases+=attempt.releases;
+    }
+    EXPECT_EQ(result.damping_active_set_iterations,active_iterations);
+    EXPECT_EQ(result.damping_qr_factorizations,qr_factorizations);
+    EXPECT_EQ(result.damping_releases,releases);
     EXPECT_EQ(Bits(trace[0].damping),Bits(0.0));
     EXPECT_EQ(Bits(trace[0].step(0)),Bits(1.0));
     EXPECT_EQ(Bits(trace[0].step(1)),Bits(-2.0));

@@ -14,6 +14,8 @@ struct ActiveSetStep
     std::vector<bool> active;
     double damping{},scaled_step_norm{},kkt_inf_norm{};
     std::size_t iterations{},releases{};
+    std::size_t damping_solves{},bracket_solves{},bisection_solves{},damping_qr_factorizations{},
+        damping_active_set_iterations{},damping_releases{};
 };
 
 // Selects the LM damping so the same constrained subproblem also satisfies

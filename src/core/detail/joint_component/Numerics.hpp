@@ -43,6 +43,8 @@ enum class ProfileEvaluationRole {Unspecified,InitialProfile,TrialProfile,Accept
 struct BoundedLmWork
 {
     std::size_t subproblem_solves{},failed_subproblems{},active_set_iterations{},releases{},active_bound_occurrences{};
+    std::size_t damping_solves{},bracket_solves{},bisection_solves{},damping_qr_factorizations{},
+        damping_active_set_iterations{},damping_releases{};
     double maximum_subproblem_kkt{unavailable};
     void Merge(const BoundedLmWork &);
 };

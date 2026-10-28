@@ -61,6 +61,12 @@ struct Profile
     void RecordBoundedSubproblem(const ActiveSetStep & step)
     {
         ++bounded_lm_work.subproblem_solves;
+        bounded_lm_work.damping_solves+=step.damping_solves;
+        bounded_lm_work.bracket_solves+=step.bracket_solves;
+        bounded_lm_work.bisection_solves+=step.bisection_solves;
+        bounded_lm_work.damping_qr_factorizations+=step.damping_qr_factorizations;
+        bounded_lm_work.damping_active_set_iterations+=step.damping_active_set_iterations;
+        bounded_lm_work.damping_releases+=step.damping_releases;
         if(!step.valid) {++bounded_lm_work.failed_subproblems; return;}
         bounded_lm_work.active_set_iterations+=step.iterations;
         bounded_lm_work.releases+=step.releases;

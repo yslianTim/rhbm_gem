@@ -159,6 +159,12 @@ void BoundedLmWork::Merge(const BoundedLmWork & other)
     active_set_iterations+=other.active_set_iterations;
     releases+=other.releases;
     active_bound_occurrences+=other.active_bound_occurrences;
+    damping_solves+=other.damping_solves;
+    bracket_solves+=other.bracket_solves;
+    bisection_solves+=other.bisection_solves;
+    damping_qr_factorizations+=other.damping_qr_factorizations;
+    damping_active_set_iterations+=other.damping_active_set_iterations;
+    damping_releases+=other.damping_releases;
     if(std::isfinite(other.maximum_subproblem_kkt))
         maximum_subproblem_kkt=std::isfinite(maximum_subproblem_kkt) ?
             std::max(maximum_subproblem_kkt,other.maximum_subproblem_kkt) : other.maximum_subproblem_kkt;
