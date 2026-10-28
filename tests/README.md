@@ -91,7 +91,7 @@ Run the Joint groups:
 ctest --test-dir build -L 'joint:(contract|workflow|numerical)' --parallel 4 --output-on-failure
 ```
 
-Run the deterministic optimization microbenchmark in a Release test build:
+Run the bounded LM and tiled derivative microbenchmarks in a Release build:
 
 ```bash
 cmake --build build --target rhbm_joint_optimization_benchmark --parallel 4
@@ -99,9 +99,9 @@ env OMP_NUM_THREADS=4 OMP_THREAD_LIMIT=4 CMAKE_BUILD_PARALLEL_LEVEL=4 \
     build/bin/rhbm_joint_optimization_benchmark
 ```
 
-It prints five timing samples, damping/QR and tiled-derivative counters,
-bit-pattern fingerprints, and benchmark-process peak RSS. The benchmark uses
-test-only instrumentation and is not registered as a CTest test.
+It prints five timing samples for bounded LM, derivative preparation, and
+derivative reduction, plus the derivative input dimensions. It links the
+uninstrumented production library and is not registered as a CTest test.
 
 Research conclusions and measurement limits are summarized in the
 [Joint evidence record](../docs/developer/joint-component-evidence.md); the

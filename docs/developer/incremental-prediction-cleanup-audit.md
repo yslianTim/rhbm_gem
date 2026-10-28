@@ -129,3 +129,17 @@ Removed `DerivativeWorkForTesting` and its preparation, tile, reduction, triplet
 The Release targets `rhbm_tests`, `rhbm_fixed_neighbor_closed_loop_benchmark`, and `rhbm_joint_optimization_benchmark` built successfully. The joint component contract, workflow, and numerical CTest groups passed (3/3; the numerical group includes the new scratch-reuse regression). The CTest inventory remains 19 groups and the FixedNeighbor block-coordinate suite remains 37 cases.
 
 Commit: recorded in the Git history for this stage.
+
+### C4 — Trim benchmark, support, and CMake residue
+
+Reduced `JointOptimizationBenchmark.cpp` to the bounded-LM solve and tiled-derivative preparation/reduction microbenchmarks. It links the uninstrumented production `rhbm_gem` library. Removed the duplicate synthetic FixedNeighbor diagnostic run, its candidate replay timing split and Amdahl estimate, peak-RSS reporting, and the LM/derivative trace digests. The production `FixedNeighborClosedLoopBenchmark.cpp` remains the end-to-end E1 performance benchmark.
+
+The closed-loop benchmark directly calls `SearchFixedNeighborComponent`, requires a completed sweep and endpoint certification, and checks the independent replay. Its output includes affected-candidate and full-replay-fallback counts; it does not calculate a second full objective for every candidate.
+
+Support call-site review found continuing coverage for each retained helper: `JointBlockCoordinate` supplies a full contributor replay and conditional-response reference to block-coordinate and candidate tests; `JointFixedNeighborDiagnostic` exposes sweep/state evidence to the FixedNeighbor integration tests; `JointComponentChecks`, `JointSyntheticWorkload`, `JointDenseReference`, and `JointTestNumerics` are used by the component, workflow, or numerical suites. The independent dense/reference implementations remain separate from production E1. No remaining support source or function in this audit was unused, and the CTest suite list and regression cases were not reduced.
+
+In CMake, the test instrumentation definition now propagates from `rhbm_gem_test` to `rhbm_tests` through the test library's public interface; it is no longer specified twice. Only `rhbm_tests` uses that instrumented clone. Both benchmarks link the production `rhbm_gem`. The existing configure-time guards still reject test-support sources or `RHBM_GEM_TEST_INSTRUMENTATION` on `rhbm_gem`, and there are no stale source references.
+
+The CTest inventory remains 19 groups and the FixedNeighbor block-coordinate suite remains 37 cases. Contract, workflow, and numerical CTest groups pass after the C4 edits (1.21 s, 2.08 s, and 18.27 s). The Release microbenchmark built and ran against `rhbm_gem`; this run reported medians of 15.6153 ms for bounded LM, 19.3243 ms for derivative preparation, and 5.85488 ms for derivative reduction (13,710 rows by 60 derivative columns). Compile commands confirm the production LM source and both benchmark executables have no test-instrumentation definition, while the instrumented test clone and test sources do.
+
+Commit: recorded in the Git history for this stage.

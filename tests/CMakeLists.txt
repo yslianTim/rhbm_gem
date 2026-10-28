@@ -261,11 +261,10 @@ if(RHBM_GEM_ENABLE_UMAP)
     target_compile_definitions(rhbm_gem_test PUBLIC RHBM_GEM_ENABLE_UMAP)
 endif()
 target_include_directories(rhbm_gem_test PRIVATE "${PROJECT_SOURCE_DIR}/tests")
-target_compile_definitions(rhbm_gem_test PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
+target_compile_definitions(rhbm_gem_test PUBLIC RHBM_GEM_TEST_INSTRUMENTATION)
 
 add_executable(rhbm_tests ${RHBM_GEM_ALL_GTEST_SOURCES})
 target_sources(rhbm_tests PRIVATE support/SecondStageTestSupport.cpp)
-target_compile_definitions(rhbm_tests PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
 set_target_properties(rhbm_tests PROPERTIES
     OUTPUT_NAME "${PROJECT_DISPLAY_NAME}-TEST"
 )
@@ -286,13 +285,12 @@ add_executable(rhbm_joint_optimization_benchmark
     benchmarks/JointOptimizationBenchmark.cpp
     support/JointSyntheticWorkload.cpp
 )
-target_compile_definitions(rhbm_joint_optimization_benchmark PRIVATE RHBM_GEM_TEST_INSTRUMENTATION)
 target_include_directories(rhbm_joint_optimization_benchmark PRIVATE
     "${PROJECT_SOURCE_DIR}/src"
     "${PROJECT_SOURCE_DIR}/src/core"
     "${PROJECT_SOURCE_DIR}/tests"
 )
-target_link_libraries(rhbm_joint_optimization_benchmark PRIVATE rhbm_gem_test CompilerFlags)
+target_link_libraries(rhbm_joint_optimization_benchmark PRIVATE rhbm_gem CompilerFlags)
 add_executable(rhbm_fixed_neighbor_closed_loop_benchmark
     benchmarks/FixedNeighborClosedLoopBenchmark.cpp
     support/JointSyntheticWorkload.cpp
