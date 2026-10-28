@@ -145,24 +145,37 @@ TEST(JointComponentRuntimeTest, RuntimeConvergenceIsDerivedFromActualEvidenceNot
     {
         component.search_completed=false; component.stop_reason="profile-budget";
         EXPECT_EQ(component.RuntimeConvergence(),Status::Passed);
-        for(const auto & check:component.evidence)
-            if(check.name=="two-step-derivative" || check.name=="richardson" || check.name=="precision-50-100" ||
-                check.name=="boundary-audit" || check.name=="regular-certificate")
-                EXPECT_EQ(check.status,Status::NotRun);
+        for(const char * name:{"two-step-derivative","richardson","precision-50-100","boundary-audit","regular-certificate"})
+        {
+            EXPECT_EQ(std::find_if(component.evidence.begin(),component.evidence.end(),[&](const auto & check) {
+                return check.name==name;
+            }),component.evidence.end());
+            EXPECT_EQ(std::find_if(fit.evidence.begin(),fit.evidence.end(),[&](const auto & check) {
+                return check.name==name;
+            }),fit.evidence.end());
+        }
+        for(const char * name:{"ac-feasibility","conditional-ac-optimality","independent-ac-optimality",
+            "independent-kkt-consistency","independent-replay","width-gradient-consistency",
+            "width-stationarity","endpoint-verification","numerical-qualification"})
+            EXPECT_NE(std::find_if(component.evidence.begin(),component.evidence.end(),[&](const auto & check) {
+                return check.name==name;
+            }),component.evidence.end());
     }
     fit.search_completed=false;
     EXPECT_EQ(fit.RuntimeConvergence(),Status::Passed);
-    EXPECT_EQ(fit.regular_certificate,Status::NotRun);
     auto & evidence=fit.components[0].evidence;
     const auto set_status=[&](const std::string & name,Status status) {
         const auto found=std::find_if(evidence.begin(),evidence.end(),[&](const auto & check){return check.name==name;});
         ASSERT_NE(found,evidence.end()); found->status=status;
     };
-    set_status("independent-replay",Status::NotRun);
-    EXPECT_EQ(fit.RuntimeConvergence(),Status::NotRun);
+    for(const auto status:{Status::Passed,Status::Failed,Status::Unavailable,Status::NotRun})
+    {
+        set_status("independent-replay",status);
+        EXPECT_EQ(fit.RuntimeConvergence(),status);
+    }
+    set_status("independent-replay",Status::Passed);
     set_status("conditional-ac-optimality",Status::Unavailable);
     EXPECT_EQ(fit.RuntimeConvergence(),Status::Unavailable);
-    set_status("independent-replay",Status::Passed);
     set_status("conditional-ac-optimality",Status::Passed);
     evidence.push_back({"local-correction",Status::Failed,rhbm_gem::JointEvidenceScope::ComponentLocal,.1,1e-10,
         "historical-correction-evidence"});

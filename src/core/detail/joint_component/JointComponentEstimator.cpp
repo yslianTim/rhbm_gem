@@ -253,8 +253,6 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
             static_cast<double>(a.verification_memory_estimate.budget_bytes),
             a.verification_memory_estimate.reason.empty() ? "" :
                 std::string("resource-limit:endpoint-verification:")+a.verification_memory_estimate.reason});
-    for(const char * name:{"two-step-derivative","richardson","precision-50-100","boundary-audit","regular-certificate"})
-        out.push_back({name,Status::NotRun,scope,{},{},"offline-audit-not-run"});
     for(auto & evidence:out) if(evidence.status==Status::Unavailable && evidence.reason.empty())
         evidence.reason=a.failure.empty() ? "missing-trusted-state" : a.failure;
     return out;
