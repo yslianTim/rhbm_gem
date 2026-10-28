@@ -128,7 +128,7 @@ Removed `DerivativeWorkForTesting` and its preparation, tile, reduction, triplet
 
 The Release targets `rhbm_tests`, `rhbm_fixed_neighbor_closed_loop_benchmark`, and `rhbm_joint_optimization_benchmark` built successfully. The joint component contract, workflow, and numerical CTest groups passed (3/3; the numerical group includes the new scratch-reuse regression). The CTest inventory remains 19 groups and the FixedNeighbor block-coordinate suite remains 37 cases.
 
-Commit: recorded in the Git history for this stage.
+Commit: `efc25fbc`.
 
 ### C4 — Trim benchmark, support, and CMake residue
 
@@ -141,5 +141,72 @@ Support call-site review found continuing coverage for each retained helper: `Jo
 In CMake, the test instrumentation definition now propagates from `rhbm_gem_test` to `rhbm_tests` through the test library's public interface; it is no longer specified twice. Only `rhbm_tests` uses that instrumented clone. Both benchmarks link the production `rhbm_gem`. The existing configure-time guards still reject test-support sources or `RHBM_GEM_TEST_INSTRUMENTATION` on `rhbm_gem`, and there are no stale source references.
 
 The CTest inventory remains 19 groups and the FixedNeighbor block-coordinate suite remains 37 cases. Contract, workflow, and numerical CTest groups pass after the C4 edits (1.21 s, 2.08 s, and 18.27 s). The Release microbenchmark built and ran against `rhbm_gem`; this run reported medians of 15.6153 ms for bounded LM, 19.3243 ms for derivative preparation, and 5.85488 ms for derivative reduction (13,710 rows by 60 derivative columns). Compile commands confirm the production LM source and both benchmark executables have no test-instrumentation definition, while the instrumented test clone and test sources do.
+
+Commit: `a87efb70`.
+
+### C5 — Final production regression and cleanup audit
+
+The full Release build completed with AppleClang 21.0.0, arm64 macOS, and Ninja. The production library and both benchmarks compiled without `RHBM_GEM_TEST_INSTRUMENTATION`; compile commands show the definition only on `rhbm_gem_test` and its test sources. The production library contains no test-only `ForTesting`, replay, or counter symbols checked in the source audit. Full CTest passed 19/19 in 39.49 s; the test inventory and the 37 FixedNeighbor block-coordinate cases are unchanged.
+
+The Release E1 benchmark runs below each used one warm-up and five measured runs. Every size passed memory preflight, completed endpoint certification, passed independent replay, reported zero full-candidate fallbacks, and produced the C0 eta/beta SHA-256 digests exactly.
+
+| Targets | Candidate evaluation (s) | Sweep replay (s) | Replay audit (s) | Objective reconciliation (s) | Global state (s) | Endpoint certification excluding independent replay (s) | Independent replay (s) | Peak RSS / preflight bytes |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 3 | 0.000462416 | 0.000211417 | 1.917e-6 | 4.2e-8 | 0.000410459 | 0.000104708 | 0.000108833 | 24,133,632 / 447,445 |
+| 30 | 0.007064835 | 0.002570751 | 2.6582e-5 | 1.25e-7 | 0.005059292 | 0.001022750 | 0.001071750 | 35,373,056 / 3,930,461 |
+| 300 | 0.072989171 | 0.025759001 | 0.000256874 | 4.1e-8 | 0.050417125 | 0.010219125 | 0.010782167 | 88,276,992 / 36,716,466 |
+| 1,000 | 0.246198629 | 0.086668084 | 0.000917459 | 8.4e-8 | 0.170182333 | 0.034814501 | 0.037242250 | 240,435,200 / 121,648,896 |
+
+| Targets | C0 search median (s) | C5 search median (s) | Change | C0 wall median (s) | C5 wall median (s) | Change | C0 → C5 peak RSS (bytes) |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 3 | 0.004314583 | 0.004357875 | +1.003% | 0.005237208 | 0.005265958 | +0.549% | 23,986,176 → 24,133,632 |
+| 30 | 0.094831833 | 0.094801667 | −0.032% | 0.113906250 | 0.113753375 | −0.134% | 35,454,976 → 35,373,056 |
+| 300 | 1.016224370 | 1.014450750 | −0.175% | 1.222492710 | 1.217986000 | −0.369% | 90,161,152 → 88,276,992 |
+| 1,000 | 3.394646710 | 3.427572750 | +0.970% | 4.083542460 | 4.121985620 | +0.942% | 236,879,872 → 240,435,200 |
+
+The largest median change is under 1% for search and wall time. The 1,000-target search median is 3.4276 s versus a 3.3996–3.5564 s range across the five current runs; the C0 median is 3.3946 s. This is not a clear or reproducible regression. State digests, objective, KKT, sweep and acceptance results match the baseline.
+
+Hard-fixture post-cleanup values were collected from the same production FixedNeighbor search through the test-only diagnostic adapter; the adapter did not install observers or alter candidate decisions. Final eta/beta vectors printed at 17-digit round-trip precision match the C0 vectors exactly. Values below also match the C0 objective, KKT, and acceptance rows above.
+
+| Fixture | Final / independent objective | Global A/C KKT | Projected width KKT | Sweeps; accepted / unchanged / failed | C5 stop and qualification |
+|---|---:|---:|---:|---|---|
+| Initial width 0.35 | 2.0199080158137056e-10 / 2.0199080158135505e-10 | 4.8809691843842984e-09 | 1.8283163871757324e-10 | 7; 14 / 0 / 0 | stationary; endpoint and replay passed |
+| Initial width 0.55 | 2.0199079729737389e-10 / 2.0199079729739116e-10 | 4.3341136235497402e-09 | 1.6235413013987454e-10 | 5; 10 / 0 / 0 | stationary; endpoint and replay passed |
+| Initial width 0.90 | 2.0199079727070732e-10 / 2.0199079727069230e-10 | 4.3304900776419686e-09 | 1.6221834986396289e-10 | 23; 46 / 0 / 0 | stationary; endpoint and replay passed |
+| Active width upper bound | 2.0254002767800283e-10 / 2.0254002767799073e-10 | 1.1910380459667635e-09 | 4.4614645311469303e-11 | 5; 10 / 0 / 0 | stationary; endpoint and replay passed |
+| High-overlap cube-8 | 1.1487848300043995e-10 / 1.1487848300043186e-10 | 6.9202588104388951e-10 | 1.4783063662093809e-11 | 5; 10 / 0 / 0 | stationary; endpoint and replay passed |
+| Signed cancellation | 4.0589644398391108e-10 / 4.0589644398388808e-10 | 2.2204460492503131e-16 | 1.2280135797126945e-09 | 500; 42 / 958 / 0 | sweep budget; endpoint not certified; independent replay did not qualify |
+| Rank-deficient constant support | 0.49999999999999944 / unavailable | 0.48281226720638365 | 0 | 1; 0 / 0 / 1 | recovery exhausted after 3 local attempts; endpoint/replay unavailable |
+| Near-singular overlapping support | 0.24948812932689915 / unavailable | 0.68976802196285614 | 0 | 1; 0 / 0 / 1 | recovery exhausted after 2 local attempts; endpoint/replay unavailable |
+| Low-signal noise-only | 3.5558894899614887e-08 / 3.5558894899614893e-08 | 4.4687101427961151e-13 | 1.5473043853131419e-12 | 100; 184 / 16 / 0 | sweep budget; endpoint and independent replay passed |
+| Weak-width direction | 1.1716558769804921e-32 / 1.0952435371774165e-32 | 1.1102230246251565e-16 | 5.5511151231257827e-17 | 2; 2 / 0 / 0 | stationary; endpoint and replay passed |
+
+The rank-deficient and near-singular cases retain their original recovery failures. Signed cancellation and low-signal retain their budget-stop limitations. Active-width and weak-width qualification still pass. No KKT, width, convergence, objective, or certification thresholds changed.
+
+The transaction and qualification regressions remain end-to-end tests: exact affected-row values and incremental objective versus full replay; accepted-state integrity for objective increase and nonfinite candidates; replay-audit failure before cache reconciliation; unchanged-candidate replay skip; recovery retry; memory preflight and full-replay fallback; sweep objective reconciliation; endpoint certification; and independent replay. The full numerical, contract, and workflow groups all passed as part of the 19-group CTest run.
+
+Final source search for `DeltaPrediction`, `IncrementalPrediction`, `ReplaceBlock`, `full_objective_reference_for_testing`, and `candidate_replay_for_testing` returned no hits in `src/core/detail/joint_component` or `tests`. `candidate_fault_for_testing` and `RHBM_GEM_TEST_INSTRUMENTATION` remain only as required, compile-isolated test support; their responsibilities are summarized in the final audit table below. There are zero retired experimental references and zero unexpected residuals.
+
+| Source | C0 occurrences | After C4 | Production binary | Remaining responsibility |
+|---|---:|---:|---|---|
+| `FixedNeighborBlockCoordinate.cpp` | 35 | 25 | No test branches | Test fault injection, candidate/sweep/state observation, memory override, retry and audit perturbation. |
+| `FixedNeighborBlockCoordinate.hpp` | 10 | 10 | No test fields | Declarations for the test-only candidate event, diagnostic controls, and observers. |
+| `FixedNeighborPolicy.hpp` | 2 | 0 | No test fields | Component policy test configurator removed. |
+| `ActiveSetBoundedLM.cpp` | 25 | 13 | No trace branch | Capture active-set, damping, rank, step, and KKT trace for numerical tests. |
+| `TiledDerivative.cpp` | 26 | 0 | No test instrumentation | Cancellation correctness checked through `reference_order` and dense numerical comparison. |
+| `TiledQR.hpp` | 3 | 0 | No test instrumentation | QR scratch buffers remain; only their counters were removed. |
+| `Search.cpp` | 1 | 1 | No test metadata branch | Test-only capture of bounded subproblem details; production `InstrumentedLM<Profile>` remains. |
+
+The retained FixedNeighbor fault injectors are still in the production solver source under `RHBM_GEM_TEST_INSTRUMENTATION`; they are absent from the production build and binary. Candidate and sweep observers are used by integration tests to compare E1 candidate rows/objectives to the independent replay and to verify audit-before-reconciliation and accepted-state transactions. Memory-budget/retry overrides and fault injection cover fallback and recovery end to end. Active-set tracing supports numerical damping, rank, release, and KKT tests. These hooks remain necessary test-only source coupling; they are not described as source-decoupled.
+
+### Final decision
+
+1. Retired Delta-add prediction and `ReplaceBlock()` are removed; `JointBlockCoordinate` remains for independent full replay and conditional-response reference tests.
+2. Production has one E1 candidate objective; the D1 selector and candidate replay replacement callback are removed.
+3. Fault injection and observers remain behind the test-only compile definition for transaction, replay, fallback, and recovery regression coverage.
+4. The obsolete LM/derivative/QR counters and timers are removed; numerical LM traces and actual QR scratch reuse remain covered.
+5. `JointOptimizationBenchmark` is reduced to bounded-LM and derivative/QR timings on the production library. `FixedNeighborClosedLoopBenchmark` remains the production E1 performance benchmark.
+6. Production `rhbm_gem` has no test instrumentation or test-support source. Endpoint certification, sweep replay audit, objective reconciliation, memory fallback, and independent replay remain in the production path.
+7. Numerical results are bitwise identical on all standard and hard fixtures measured. Median benchmark changes were below 1%; at 1,000 targets the C0 search median is only 0.15% below the minimum of the five C5 runs, so the measurements do not show a clear regression.
 
 Commit: recorded in the Git history for this stage.
