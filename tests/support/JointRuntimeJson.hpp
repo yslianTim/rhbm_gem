@@ -70,20 +70,6 @@ inline j::object Trust(const r::TrustEvidence & t)
     out["maximum_prediction_difference"]=Number(t.prediction_difference);
     out["maximum_gradient_difference"]=Number(t.gradient_difference); out["maximum_cancellation_ratio"]=Number(t.cancellation_ratio); return out;
 }
-inline j::object Trial(const r::Trial & t)
-{
-    auto out=Endpoint(t.endpoint); out["evaluation"]=t.evaluation; out["accepted"]=t.accepted; out["seconds"]=t.seconds;
-    if(t.accepted_update) out["accepted_update"]=*t.accepted_update;
-    if(t.trust) out["trust"]=Trust(*t.trust);
-    if(t.lm)
-    {
-        const auto & v=*t.lm;
-        out["lm"]=j::object{{"accepted_eta",Values(v.accepted_eta)},{"step",Values(v.step)},{"diagonal",Values(v.diagonal)},
-            {"radius",Number(v.radius)},{"damping",Number(v.damping)},{"actual_decrease",Number(v.actual_decrease)},
-            {"predicted_decrease",Number(v.predicted_decrease)},{"ratio",Number(v.ratio)},{"proposed_acceptance",v.proposed_acceptance}};
-    }
-    return out;
-}
 inline const char * Status(rhbm_gem::core::JointCheckStatus status)
 {
     switch(status)
@@ -136,10 +122,9 @@ inline j::object Assessment(const r::Assessment & a)
 }
 inline j::object Search(const r::SearchResult & s,const r::EvaluationContext & c,Eigen::Index rows)
 {
-    j::array trials; for(const auto & t:s.trials) trials.push_back(Trial(t));
     j::object out{{"schema_version",2},{"experiment","joint-abc-profile"},{"alpha",0},{"execution_complete",true},{"runtime_convergence","unavailable"},
         {"initial",Endpoint(s.initial)},{"lm_status",s.lm_status},{"stop_reason",s.stop_reason},{"profile_evaluations",s.evaluations},
-        {"jacobian_evaluations",s.derivatives},{"accepted_updates",s.accepted},{"trials",trials},{"row_count",rows},
+        {"jacobian_evaluations",s.derivatives},{"accepted_updates",s.accepted},{"row_count",rows},
         {"settings",j::object{{"factor",.1},{"ftol",1e-14},{"xtol",1e-12},{"gtol",1e-12},{"profile_budget",c.profile_budget},{"accepted_update_budget",c.update_budget}}},
         {"linear_solver","sparse-qr-householder-1024"},
         {"residual_scale",c.scale},{"variance_semantics","descriptive RSS/N; zero permitted"}};

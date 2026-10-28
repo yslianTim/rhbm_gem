@@ -18,7 +18,6 @@ struct FixedNeighborFitDiagnostic
     runtime::Assessment assessment;
     std::optional<runtime::Assessment> trusted_assessment;
     std::optional<runtime::Endpoint> trusted_state;
-    std::optional<std::size_t> trusted_trial;
     double assessment_seconds{};
     std::optional<runtime::TrustEvidence> endpoint_trust;
     bool search_success{};

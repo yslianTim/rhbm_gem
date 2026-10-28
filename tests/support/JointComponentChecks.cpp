@@ -348,8 +348,7 @@ j::object FitComponent(const ComponentView & view,const Vector & initial_b,const
         fit["candidate_state"]=std::move(candidate);
     }
     else fit["candidate_state"]=nullptr;
-    if(result.trusted_trial) fit["last_trusted_state"]=runtime_json::Trial(result.search.trials[*result.trusted_trial]);
-    else if(result.trusted_state) fit["last_trusted_state"]=runtime_json::Endpoint(*result.trusted_state);
+    if(result.trusted_state) fit["last_trusted_state"]=runtime_json::Endpoint(*result.trusted_state);
     if(result.endpoint_trust) fit["endpoint_trust"]=runtime_json::Trust(*result.endpoint_trust);
     fit["search_endpoint_eta"]=Values(result.search.eta);
     if(!result.trusted_state) {fit["runtime_convergence"]="unavailable"; fit["runtime_failure"]="missing-trusted-state";}
@@ -415,15 +414,6 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
     out["assembled_consistency_passed"]=assembly.consistency_passed;
     out["independent_prediction_difference"]=runtime_json::Number(assembly.replay.prediction_difference);
     out["independent_objective_difference"]=runtime_json::Number(assembly.replay.objective_difference);
-    const auto offline_profile=runtime::EvaluateProfile(domain,y,assembly.eta,&context);
-    const bool profile_agrees=offline_profile.valid &&
-        ((assembly.beta-offline_profile.beta).array().abs()<=1e-10*(1+assembly.beta.array().abs().max(offline_profile.beta.array().abs()))).all();
-    out["offline_profile_control"]=j::object{{"valid",offline_profile.valid},{"reason",offline_profile.reason},
-        {"certificate",runtime_json::Certificate(offline_profile.certificate)}};
-    out["offline_profile_control_evaluations"]=1;
-    out["assembled_profile_difference"]=offline_profile.valid ?
-        j::value(((assembly.beta-offline_profile.beta).array().abs()/(1+assembly.beta.array().abs().max(offline_profile.beta.array().abs()))).maxCoeff()) : j::value(nullptr);
-    out["assembled_profile_agrees"]=profile_agrees;
     auto evidence=runtime::AssessmentEvidence(assembly.assessment,rhbm_gem::core::JointEvidenceScope::AssembledGlobal);
     evidence.push_back({"assembled-consistency",assembly.consistency_passed ? rhbm_gem::core::JointCheckStatus::Passed : rhbm_gem::core::JointCheckStatus::Failed,
         rhbm_gem::core::JointEvidenceScope::AssembledGlobal,{},{},{}});

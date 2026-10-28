@@ -36,30 +36,6 @@ enum class FixedNeighborCandidateFaultForTesting
 double BlockObjectiveReplayEnclosure(double reference);
 bool WithinBlockObjectiveReplay(double error,double reference);
 
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-struct FixedNeighborProfileTrial
-{
-    std::size_t trial_index{};
-    int profile_evaluation{};
-    bool accepted{};
-    std::optional<int> accepted_update;
-    double local_objective_before{},local_objective_after{},objective_reduction{};
-    double eta_change_inf{},gradient_inf_norm{};
-    double profile_seconds{},factor_seconds{},cumulative_factor_seconds{};
-    double lm_actual_decrease{unavailable},lm_predicted_decrease{unavailable},lm_ratio{unavailable};
-    double lm_subproblem_kkt_inf_norm{unavailable};
-    bool bounded_subproblem{};
-    std::string bounded_subproblem_status;
-    std::size_t active_set_iterations{},active_set_releases{};
-    std::vector<std::size_t> active_bound_indices;
-    std::vector<double> active_bound_multipliers;
-    double accepted_local_objective_improvement{unavailable};
-    double weak_width_step_fraction{unavailable};
-    bool lm_proposed_acceptance{};
-    bool weak_width_guard_rejected{};
-    std::string acceptance_reason;
-};
-#endif
 struct FixedNeighborBlockFailureDiagnostics
 {
     std::size_t component_index{},sweep_index{},block_index{},core_atom_count{},affected_row_count{};
@@ -78,22 +54,12 @@ struct FixedNeighborBlockRecord
 {
     std::size_t sweep{},block{},affected_rows{};
     std::size_t recovery_attempt{};
-    Indices core_atoms;
     double objective_before{},objective_after{},local_objective_before{},local_objective_after{};
     double global_replay_delta{},local_global_delta_error{},objective_replay_enclosure{};
-    double local_final_gradient_inf_norm{},local_final_ac_kkt{};
-    double search_seconds{},block_seconds{},profile_factor_seconds{};
-    int profile_evaluations{},accepted_updates{};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    std::vector<FixedNeighborProfileTrial> profile_trials;
-#endif
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    std::size_t component_index{};
-    std::string component_id;
-#endif
+    int accepted_updates{};
     std::optional<FixedNeighborBlockFailureDiagnostics> failure_diagnostics;
     bool accepted{},recovery_retry{},recovery_success{};
-    std::string status,reason,local_search_stop_reason;
+    std::string status,reason;
 };
 struct FixedNeighborBlockSweep
 {
@@ -151,13 +117,6 @@ struct FixedNeighborEndpointCertification
     }
 };
 enum class FixedNeighborStationarityState {NotStationary,CandidateStationary,ConfirmedStationary};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-struct FixedNeighborDiagnosticSink
-{
-    std::function<void(const FixedNeighborBlockRecord &)> block;
-    std::function<void(const FixedNeighborBlockSweep &)> sweep;
-};
-#endif
 struct PreparedFixedNeighborBlock
 {
     std::size_t block{};
@@ -173,7 +132,6 @@ struct FixedNeighborPolicy
     JointConvergenceCriteria convergence_criteria{StrictJointConvergenceCriteria};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     bool stop_after_stationarity{true};
-    bool capture_local_trajectory{};
     bool certify_endpoint{true}; // Diagnostic facade only; production components always certify.
     bool assess_local_conditioning{};
     bool assess_parameter_stability{};
@@ -188,20 +146,10 @@ struct FixedNeighborPolicy
     std::size_t component_index{};
     std::string component_id;
     std::function<bool(int)> claim_parameter_stability_block;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    FixedNeighborDiagnosticSink * diagnostic_sink{};
-#endif
     std::function<void(const FixedNeighborBlockSweep &)> production_progress;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    std::function<void(const FixedNeighborBlockSweep &)> sweep_observer;
-#endif
     std::optional<double> eta_upper_bound;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     std::function<bool(std::size_t,std::size_t)> force_no_trusted_profile_for_testing;
-#endif
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    std::function<void(std::size_t,const BlockCoordinateState &,const FixedNeighborBlockSweep &,
-        const std::vector<FixedNeighborBlockRecord> &)> state_observer;
 #endif
 };
 // Search output contains only the candidate state and search diagnostics.

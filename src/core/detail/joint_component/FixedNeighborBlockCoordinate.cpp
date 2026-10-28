@@ -541,10 +541,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     std::size_t next_recent_sweep_change{};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     const bool endpoint_certification_enabled=policy.certify_endpoint;
-    const bool capture_local_trajectory=policy.capture_local_trajectory;
 #else
     constexpr bool endpoint_certification_enabled=true;
-    constexpr bool capture_local_trajectory=false;
 #endif
     EvaluationContext context=parent_context;
     if(policy.eta_upper_bound)
@@ -803,16 +801,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         out.work.structural_preparation_seconds+=Seconds(mapping_timer.started);
         mapping_timer.target=nullptr;
     }
-    const bool retain_diagnostics=collect_diagnostics || capture_local_trajectory
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        || static_cast<bool>(policy.state_observer)
-#endif
-        ;
-    const bool capture_block_records=retain_diagnostics
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        || (policy.diagnostic_sink && static_cast<bool>(policy.diagnostic_sink->block))
-#endif
-        ;
+    const bool retain_diagnostics=collect_diagnostics;
     bool stop=false;
     std::size_t next_certification_retry_sweep{};
     std::vector<std::size_t> block_failure_visits(partition.cores.size());
@@ -822,19 +811,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         const Vector eta_before=out.state.eta,beta_before=out.state.beta;
         sweep.objective_before=out.state.objective;
         bool sweep_had_block_failure=false;
-        auto finish_record=[&](FixedNeighborBlockRecord record,const Indices & core_atoms,
-            Clock::time_point block_started) {
-            double block_seconds{};
-            if(capture_block_records || collect_telemetry) block_seconds=Seconds(block_started);
-            if(capture_block_records)
-            {
-                record.core_atoms=core_atoms;
-                record.block_seconds=block_seconds;
-            }
-            if(collect_telemetry)
-            {
-                out.work.maximum_block_seconds=std::max(out.work.maximum_block_seconds,block_seconds);
-            }
+        auto finish_record=[&](FixedNeighborBlockRecord record,Clock::time_point block_started) {
+            if(collect_telemetry) out.work.maximum_block_seconds=std::max(
+                out.work.maximum_block_seconds,Seconds(block_started));
             if(record.accepted)
             {
                 ++sweep.accepted_blocks;
@@ -842,9 +821,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 out.total_accepted_local_updates+=static_cast<std::size_t>(record.accepted_updates);
             }
             else if(record.status=="unchanged") ++sweep.unchanged_blocks;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(policy.diagnostic_sink && policy.diagnostic_sink->block) policy.diagnostic_sink->block(record);
-#endif
             if(retain_diagnostics) out.blocks.push_back(std::move(record));
         };
         for(std::size_t block_index=0;block_index<partition.cores.size();++block_index)
@@ -853,7 +829,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             const auto & core_atoms=prepared.core_atoms; const auto & affected_rows=prepared.affected_rows;
             const auto & local_domain=prepared.domain; const auto & local_context=prepared.context;
             const auto local_atoms=prepared.local_atoms;
-            const auto block_started=capture_block_records || collect_telemetry ? Clock::now() : Clock::time_point{};
+            const auto block_started=collect_telemetry ? Clock::now() : Clock::time_point{};
             FixedNeighborBlockRecord record;
             record.sweep=sweep_index+1; record.block=block_index+1;
             record.affected_rows=affected_rows.size(); record.objective_before=out.state.objective;
@@ -864,11 +840,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 ++out.recovery_attempts;
                 ++sweep.recovery_attempts;
             }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(capture_block_records)
-            {record.component_index=policy.component_index; record.component_id=policy.component_id;}
-#endif
-
             Vector old_eta(local_atoms),old_beta(2*local_atoms),old_core;
             {
                 const auto old_core_timer=Measure(collect_telemetry,out.work.old_core_seconds);
@@ -897,7 +868,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 (void)response_timer;
             }
 
-            const auto search_started=capture_block_records || collect_telemetry ? Clock::now() :
+            const auto search_started=collect_telemetry ? Clock::now() :
                 Clock::time_point{};
             if(collect_telemetry)
             {
@@ -915,64 +886,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             const auto old_widths=old_eta.array().exp().eval();
             const auto profile_search=SearchProfile(local_domain,local_y,old_widths,local_context,profile_work);
             out.work.local_profile_work.Merge(profile_search.profile_work);
-            const double search_seconds=capture_block_records || collect_telemetry ?
-                Seconds(search_started) : 0.0;
-            if(capture_block_records)
-            {
-                record.search_seconds=search_seconds; record.profile_evaluations=profile_search.evaluations;
-                record.local_search_stop_reason=profile_search.stop_reason;
-            }
-            if(collect_telemetry) out.work.local_search_seconds+=search_seconds;
+            if(collect_telemetry) out.work.local_search_seconds+=Seconds(search_started);
             record.accepted_updates=profile_search.accepted;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(capture_local_trajectory)
-            {
-                record.profile_trials.reserve(profile_search.trials.size());
-                double accepted_objective=record.local_objective_before;
-                Vector accepted_eta=old_eta; double cumulative_factor_seconds{};
-                for(std::size_t trial_index=0;trial_index<profile_search.trials.size();++trial_index)
-                {
-                    const auto & trial=profile_search.trials[trial_index];
-                    const double objective=trial.endpoint.certificate.evaluated && trial.endpoint.certificate.available ?
-                        trial.endpoint.certificate.objective/(context.scale*context.scale) : unavailable;
-                    FixedNeighborProfileTrial telemetry;
-                    telemetry.trial_index=trial_index; telemetry.profile_evaluation=trial.evaluation;
-                    telemetry.accepted=trial.accepted; telemetry.accepted_update=trial.accepted_update;
-                    telemetry.local_objective_before=accepted_objective;
-                    telemetry.local_objective_after=objective;
-                    telemetry.objective_reduction=std::isfinite(accepted_objective) && std::isfinite(objective) ?
-                        accepted_objective-objective : unavailable;
-                    telemetry.eta_change_inf=trial.endpoint.eta.size()==accepted_eta.size() ?
-                        (trial.endpoint.eta-accepted_eta).cwiseAbs().maxCoeff() : unavailable;
-                    telemetry.gradient_inf_norm=trial.endpoint.gradient.size() ?
-                        trial.endpoint.gradient.cwiseAbs().maxCoeff() : unavailable;
-                    telemetry.profile_seconds=trial.seconds; telemetry.factor_seconds=trial.factor_seconds;
-                    cumulative_factor_seconds+=trial.factor_seconds;
-                    telemetry.cumulative_factor_seconds=cumulative_factor_seconds;
-                    if(trial.lm)
-                    {
-                        telemetry.lm_actual_decrease=trial.lm->actual_decrease;
-                        telemetry.lm_predicted_decrease=trial.lm->predicted_decrease;
-                        telemetry.lm_ratio=trial.lm->ratio;
-                        telemetry.lm_proposed_acceptance=trial.lm->proposed_acceptance;
-                        telemetry.bounded_subproblem=trial.lm->bounded_subproblem;
-                        telemetry.bounded_subproblem_status=trial.lm->subproblem_status;
-                        telemetry.lm_subproblem_kkt_inf_norm=trial.lm->subproblem_kkt_inf_norm;
-                        telemetry.active_set_iterations=trial.lm->active_set_iterations;
-                        telemetry.active_set_releases=trial.lm->active_set_releases;
-                        telemetry.active_bound_indices=trial.lm->active_bound_indices;
-                        telemetry.active_bound_multipliers=trial.lm->active_bound_multipliers;
-                    }
-                    record.profile_trials.push_back(std::move(telemetry));
-                    if(trial.accepted && std::isfinite(objective))
-                    {
-                        accepted_objective=objective;
-                        if(trial.endpoint.eta.size()==accepted_eta.size()) accepted_eta=trial.endpoint.eta;
-                    }
-                }
-                record.profile_factor_seconds=cumulative_factor_seconds;
-            }
-#endif
             ++sweep.block_solves; ++out.total_block_solves;
             sweep.profile_evaluations+=static_cast<std::size_t>(profile_search.evaluations);
             out.total_profile_evaluations+=static_cast<std::size_t>(profile_search.evaluations);
@@ -1006,7 +921,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 {
                     record.status="retry-pending"; record.reason="block-retry-pending";
                 }
-                finish_record(std::move(record),core_atoms,block_started);
+                finish_record(std::move(record),block_started);
                 if(stop) break;
                 continue;
             }
@@ -1015,10 +930,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 !local_state.certificate.kkt_passed)
             {
                 record.status="failed"; record.reason="block-inner-invalid"; out.reason=record.reason;
-                finish_record(std::move(record),core_atoms,block_started); stop=true; break;
+                finish_record(std::move(record),block_started); stop=true; break;
             }
-            record.local_final_gradient_inf_norm=local_state.gradient.lpNorm<Eigen::Infinity>();
-            record.local_final_ac_kkt=local_state.certificate.projected_kkt;
             record.local_objective_after=local_state.certificate.objective/(context.scale*context.scale);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             const auto candidate_fault=policy.candidate_fault_for_testing ?
@@ -1033,7 +946,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 record.reason=record.recovery_retry ? "block-recovery-exhausted" : "block-objective-increase";
                 record.objective_after=record.objective_before;
                 if(record.recovery_retry) {out.reason=record.reason; stop=true;}
-                finish_record(std::move(record),core_atoms,block_started);
+                finish_record(std::move(record),block_started);
                 if(stop) break;
                 continue;
             }
@@ -1176,7 +1089,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 #endif
                 record.status="failed"; record.reason="block-objective-replay-failed";
                 out.reason=record.reason;
-                finish_record(std::move(record),core_atoms,block_started); stop=true; break;
+                finish_record(std::move(record),block_started); stop=true; break;
             }
             if(!delta_enclosed)
             {
@@ -1184,7 +1097,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 observe_candidate(false,candidate_unchanged);
 #endif
                 record.status="failed"; record.reason="block-objective-replay-failed"; out.reason=record.reason;
-                finish_record(std::move(record),core_atoms,block_started); stop=true; break;
+                finish_record(std::move(record),block_started); stop=true; break;
             }
             if(record.global_replay_delta>0 && !(record.local_objective_after<=record.local_objective_before &&
                 record.global_replay_delta<=record.objective_replay_enclosure))
@@ -1195,7 +1108,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 record.status=record.recovery_retry ? "failed" : "unchanged";
                 record.reason=record.recovery_retry ? "block-recovery-exhausted" : "block-objective-increase";
                 if(record.recovery_retry) {out.reason=record.reason; stop=true;}
-                finish_record(std::move(record),core_atoms,block_started);
+                finish_record(std::move(record),block_started);
                 if(stop) break;
                 continue;
             }
@@ -1242,7 +1155,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 block_failure_visits[block_index]=0;
                 record.recovery_success=true;
             }
-            finish_record(std::move(record),core_atoms,block_started);
+            finish_record(std::move(record),block_started);
         }
         if(stop) break;
         sweep.objective_after=out.state.objective;
@@ -1297,20 +1210,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         sweep.stationarity_width_gradient_inf_norm=stationarity_width_gradient;
         sweep.wall_seconds=Seconds(sweep_started); out.search_seconds+=sweep.wall_seconds;
         ++out.sweep_count; out.final_sweep=sweep;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(policy.diagnostic_sink && policy.diagnostic_sink->sweep) policy.diagnostic_sink->sweep(sweep);
-#endif
         if(retain_diagnostics) out.sweeps.push_back(sweep);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(policy.sweep_observer)
-        {
-            const auto & observed=retain_diagnostics ? out.sweeps.back() : sweep;
-            policy.sweep_observer(observed);
-        }
-#endif
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(policy.state_observer) policy.state_observer(sweep_index+1,out.state,out.sweeps.back(),out.blocks);
-#endif
         if(!sweep_replay_valid)
         {out.reason="block-cache-replay-failed"; stop=true; break;}
         // Reconciliation follows the successful audit and global-state evaluation.

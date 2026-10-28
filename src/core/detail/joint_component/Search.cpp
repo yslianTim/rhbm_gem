@@ -177,10 +177,9 @@ struct Profile
         if(cached.valid && cached.eta.size()==eta.size() && (cached.eta.array()==eta.array()).all()) return true;
         if(evaluations>=context.profile_budget) {failure="profile-budget"; return false;}
         failure.clear();
-        const auto start=std::chrono::steady_clock::now();
         last_role=evaluations==0 ? ProfileEvaluationRole::InitialProfile : ProfileEvaluationRole::TrialProfile;
         cached=EvaluateProfile(domain,y,eta,&context,last_role,telemetry,&linear_workspace); ++evaluations;
-        joint_component::Trial row; row.endpoint=cached; row.evaluation=evaluations; row.seconds=Seconds(start);
+        joint_component::Trial row; row.endpoint=cached; row.evaluation=evaluations;
         trace.push_back(std::move(row));
         if(!cached.valid) failure="inner-"+cached.reason;
         return cached.valid;

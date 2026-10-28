@@ -230,7 +230,6 @@ struct Trial
     int evaluation{};
     bool accepted{};
     std::optional<int> accepted_update;
-    double seconds{},factor_seconds{};
     std::optional<LmTrial> lm;
     std::optional<TrustEvidence> trust;
     double weak_width_step_fraction{unavailable};
