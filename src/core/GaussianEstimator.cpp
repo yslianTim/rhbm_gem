@@ -336,11 +336,10 @@ void RunLocalAlphaTraining(
     RunLocalAlphaTraining(model_object, options, stage, model_object.GetSelectedAtoms());
 }
 
-void detail::TrainLocalAlphaForAtom(
-    ModelAnalysisEditor & analysis,
+double detail::EstimateLocalAlphaForAtom(
+    const AtomObject & atom,
     const FitOptions & options,
-    FittingStage stage,
-    AtomObject & atom)
+    FittingStage stage)
 {
     const auto local_view{ AtomLocalPotentialView::For(atom) };
     auto alpha_r{ MakeTrainingOptions(options).alpha_min };
@@ -352,7 +351,17 @@ void detail::TrainLocalAlphaForAtom(
     {
         alpha_r = TrainAlphaR(local_view.GetSamplingEntries(stage), options);
     }
-    analysis.SetAtomLocalAlphaR(stage, atom, alpha_r);
+    return alpha_r;
+}
+
+void detail::TrainLocalAlphaForAtom(
+    ModelAnalysisEditor & analysis,
+    const FitOptions & options,
+    FittingStage stage,
+    AtomObject & atom)
+{
+    analysis.SetAtomLocalAlphaR(stage, atom,
+        detail::EstimateLocalAlphaForAtom(atom, options, stage));
 }
 
 void RunLocalAlphaTraining(

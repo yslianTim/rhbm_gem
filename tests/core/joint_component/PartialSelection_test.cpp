@@ -1504,3 +1504,73 @@ TEST(JointComponentPartialSelectionTest, ExistingSampleFirstExecutorUsesOnlyTheE
     EXPECT_EQ((calls[{2, "first"}]), 1);
     EXPECT_EQ((calls[{1, "first"}]), 0);
 }
+
+TEST(JointComponentPartialSelectionTest, JointFirstStageParallelWorkersPreserveSerialResults)
+{
+    const auto run = [](int thread_count) {
+        auto fixture = joint_partial_test::Make("all");
+        const auto problem = core::BuildPureHaloSupportExclusionProblem(*fixture.map, *fixture.model);
+        const auto workset = core::detail::MakeJointFittingWorkset(*fixture.model, problem);
+        fixture.model->EditAnalysis().InitializeFromSelection();
+        core::RunPotentialSamplingWorkflow(*fixture.map, *fixture.model,
+            core::detail::CollectFirstStageAtoms(workset), 1, {}, true);
+        core::FitOptions options;
+        options.quiet_mode = true;
+        options.thread_size = 1;
+        options.joint_initialization_thread_size = thread_count;
+        auto initialization = core::detail::RunJointFirstStageInitializationFromPreparedSamples(
+            *fixture.model, workset, options);
+        return std::pair{std::move(initialization), std::move(fixture)};
+    };
+
+    auto [serial, serial_fixture] = run(1);
+    for (const int thread_count : {2, 4})
+    {
+        auto [parallel, parallel_fixture] = run(thread_count);
+        ASSERT_EQ(parallel.valid, serial.valid);
+        EXPECT_EQ(parallel.reason, serial.reason);
+        EXPECT_EQ(parallel.data_scope, serial.data_scope);
+        ASSERT_EQ(parallel.b, serial.b);
+        ASSERT_EQ(parallel.atoms.size(), serial.atoms.size());
+        for (std::size_t i = 0; i < parallel.atoms.size(); ++i)
+        {
+            const auto & actual = parallel.atoms[i];
+            const auto & expected = serial.atoms[i];
+            EXPECT_EQ(actual.id, expected.id);
+            EXPECT_EQ(actual.ols, expected.ols);
+            EXPECT_EQ(actual.mdpde, expected.mdpde);
+            EXPECT_DOUBLE_EQ(actual.alpha, expected.alpha);
+            EXPECT_EQ(actual.sample_count, expected.sample_count);
+            EXPECT_EQ(actual.native_status, expected.native_status);
+            EXPECT_EQ(actual.target, expected.target);
+            EXPECT_EQ(actual.first_stage_fit_qualified, expected.first_stage_fit_qualified);
+            EXPECT_EQ(actual.reason, expected.reason);
+            EXPECT_EQ(actual.original_b, expected.original_b);
+            EXPECT_EQ(actual.used_b, expected.used_b);
+            EXPECT_EQ(actual.seed_source, expected.seed_source);
+            EXPECT_EQ(actual.donor_count, expected.donor_count);
+            EXPECT_EQ(actual.first_stage_qualification, expected.first_stage_qualification);
+            EXPECT_EQ(actual.first_stage_recovery, expected.first_stage_recovery);
+        }
+        for (const auto atom_id : {1, 2})
+        {
+            const auto serial_view = rhbm_gem::AtomLocalPotentialView::For(
+                *serial_fixture.model->FindAtomPtr(atom_id));
+            const auto parallel_view = rhbm_gem::AtomLocalPotentialView::For(
+                *parallel_fixture.model->FindAtomPtr(atom_id));
+            EXPECT_DOUBLE_EQ(serial_view.GetAlphaR(rhbm_gem::FittingStage::First),
+                parallel_view.GetAlphaR(rhbm_gem::FittingStage::First));
+            EXPECT_EQ(serial_view.GetStageEstimate(rhbm_gem::FittingStage::First).source.role,
+                parallel_view.GetStageEstimate(rhbm_gem::FittingStage::First).source.role);
+            const auto serial_ols = serial_view.GetGaussianResult(rhbm_gem::FittingStage::First).ols.GetModel().ToVector();
+            const auto parallel_ols = parallel_view.GetGaussianResult(rhbm_gem::FittingStage::First).ols.GetModel().ToVector();
+            const auto serial_mdpde = serial_view.GetGaussianResult(rhbm_gem::FittingStage::First).mdpde.GetModel().ToVector();
+            const auto parallel_mdpde = parallel_view.GetGaussianResult(rhbm_gem::FittingStage::First).mdpde.GetModel().ToVector();
+            for (Eigen::Index k = 0; k < 3; ++k)
+            {
+                EXPECT_DOUBLE_EQ(serial_ols(k), parallel_ols(k));
+                EXPECT_DOUBLE_EQ(serial_mdpde(k), parallel_mdpde(k));
+            }
+        }
+    }
+}

@@ -246,31 +246,40 @@ TEST(MapSamplerTest, DefaultSamplingWorkflowPreservesAtomOutputOrderAcrossWorker
     auto map{ MakeWorkflowMapObject() };
     auto serial_model{ MakeLinearNeighborModel() };
     auto parallel_model{ MakeLinearNeighborModel() };
+    auto four_thread_model{ MakeLinearNeighborModel() };
     serial_model->SelectAllAtoms();
     parallel_model->SelectAllAtoms();
+    four_thread_model->SelectAllAtoms();
     const std::vector<AtomObject *> serial_atoms{
         serial_model->FindAtomPtr(2), serial_model->FindAtomPtr(1)
     };
     const std::vector<AtomObject *> parallel_atoms{
         parallel_model->FindAtomPtr(2), parallel_model->FindAtomPtr(1)
     };
+    const std::vector<AtomObject *> four_thread_atoms{
+        four_thread_model->FindAtomPtr(2), four_thread_model->FindAtomPtr(1)
+    };
 
     RunPotentialSamplingWorkflow(map, *serial_model, serial_atoms, 1);
     RunPotentialSamplingWorkflow(map, *parallel_model, parallel_atoms, 2);
+    RunPotentialSamplingWorkflow(map, *four_thread_model, four_thread_atoms, 4);
 
     for (const auto serial_id : { 1, 2 })
     {
         const auto serial_samples = AtomLocalPotentialView::For(
             *serial_model->FindAtomPtr(serial_id)).GetRawSamplingEntries(false);
-        const auto parallel_samples = AtomLocalPotentialView::For(
-            *parallel_model->FindAtomPtr(serial_id)).GetRawSamplingEntries(false);
-        ASSERT_EQ(serial_samples.size(), parallel_samples.size());
-        for (std::size_t i = 0; i < serial_samples.size(); ++i)
+        for (const auto * model : { parallel_model.get(), four_thread_model.get() })
         {
-            EXPECT_DOUBLE_EQ(serial_samples[i].response, parallel_samples[i].response);
-            EXPECT_EQ(serial_samples[i].point.position, parallel_samples[i].point.position);
-            EXPECT_DOUBLE_EQ(serial_samples[i].point.distance, parallel_samples[i].point.distance);
-            EXPECT_EQ(serial_samples[i].point.is_selected, parallel_samples[i].point.is_selected);
+            const auto parallel_samples = AtomLocalPotentialView::For(
+                *model->FindAtomPtr(serial_id)).GetRawSamplingEntries(false);
+            ASSERT_EQ(serial_samples.size(), parallel_samples.size());
+            for (std::size_t i = 0; i < serial_samples.size(); ++i)
+            {
+                EXPECT_DOUBLE_EQ(serial_samples[i].response, parallel_samples[i].response);
+                EXPECT_EQ(serial_samples[i].point.position, parallel_samples[i].point.position);
+                EXPECT_DOUBLE_EQ(serial_samples[i].point.distance, parallel_samples[i].point.distance);
+                EXPECT_EQ(serial_samples[i].point.is_selected, parallel_samples[i].point.is_selected);
+            }
         }
     }
 }

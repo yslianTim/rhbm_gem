@@ -115,7 +115,12 @@ void NormalizeAndValidateRequest(
     }
     if (request.estimator==PotentialEstimator::JOINT_COMPONENTS)
     {
-        if (request.job_count>1) runner.AddFieldNormalizationWarning(&PotentialAnalysisRequest::job_count,"Joint initialization and fitting use one worker.");
+        if (request.job_count>4)
+        {
+            request.job_count=4;
+            runner.AddFieldNormalizationWarning(&PotentialAnalysisRequest::job_count,
+                "Joint initialization is limited to four workers.");
+        }
     }
 }
 
@@ -190,6 +195,7 @@ bool ExecutePreparedRequest(
 
     FitOptions options;
     options.thread_size = joint ? 1 : request.job_count;
+    options.joint_initialization_thread_size = joint ? request.job_count : 1;
     options.estimator = request.estimator;
     try
     {

@@ -12,6 +12,7 @@ namespace rhbm_gem { class MapObject; class ModelAnalysisEditor; }
 
 namespace rhbm_gem::core::detail {
 struct FittingWorkset;
+double EstimateLocalAlphaForAtom(const AtomObject &, const FitOptions &, FittingStage);
 void TrainLocalAlphaForAtom(ModelAnalysisEditor &, const FitOptions &, FittingStage, AtomObject &);
 void ApplyJointSeedFallback(JointInitialization &);
 LocalGaussianResult FitFirstStageAtom(const AtomObject &, const FitOptions &);
