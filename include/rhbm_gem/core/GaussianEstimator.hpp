@@ -18,8 +18,8 @@ struct FitOptions
 {
     PotentialEstimator estimator{ PotentialEstimator::JOINT_COMPONENTS };
     int thread_size{ 1 };
-    int joint_initialization_thread_size{ 1 };
     bool quiet_mode{ false };
+    int joint_initialization_thread_size{ 1 };
 };
 
 double TrainAlphaR(
