@@ -2015,10 +2015,11 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     policy.assess_parameter_stability=true;
 #endif
     policy.claim_parameter_stability_block=production_policy.claim_parameter_stability_block;
+    std::optional<JointFixedNeighborProgress> last_fixed_neighbor_progress;
     if(progress_component && observer)
     {
         const auto maximum_sweeps=policy.maximum_sweeps;
-        policy.production_progress=[&observer,progress_component,maximum_sweeps,context](
+        policy.production_progress=[&observer,&last_fixed_neighbor_progress,progress_component,maximum_sweeps,context](
             const FixedNeighborBlockSweep & sweep) {
             auto event=MakeJointProgressEvent(JointProgressPhase::SearchProgress,*progress_component);
             event.profile_evaluations=static_cast<int>(sweep.profile_evaluations);
@@ -2045,6 +2046,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
             progress.eta_change_inf=sweep.eta_change_inf;
             progress.maximum_accepted_log_width_step=sweep.maximum_accepted_log_width_step;
             progress.maximum_target_width=sweep.maximum_target_width;
+            last_fixed_neighbor_progress=progress;
             event.fixed_neighbor=std::move(progress);
             observer(event);
         };
@@ -2058,7 +2060,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
             static_cast<int>(out.search.total_profile_evaluations),parent_context.profile_budget,
             static_cast<int>(out.search.total_accepted_local_updates),parent_context.update_budget,
             out.search.search_seconds,out.stop_reason,qualified,
-            LastFixedNeighborObjective(out.search),LastFixedNeighborGradient(out.search));
+            LastFixedNeighborObjective(out.search),LastFixedNeighborGradient(out.search),last_fixed_neighbor_progress);
     return out;
 }
 

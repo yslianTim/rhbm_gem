@@ -159,7 +159,8 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
         int last_accepted = 0;
         std::optional<double> last_search_objective;
         std::optional<double> last_search_gradient;
-        bool fixed_neighbor_progress{};
+        std::optional<joint::JointFixedNeighborProgress> last_fixed_neighbor;
+        std::size_t total_evaluations{}, total_local_accepted_updates{};
         while (cursor < events.size() && events[cursor].phase == joint::JointProgressPhase::SearchProgress)
         {
             const auto & progress = events[cursor++];
@@ -170,7 +171,9 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
             EXPECT_EQ(progress.profile_budget, data.context.profile_budget);
             if (progress.fixed_neighbor)
             {
-                fixed_neighbor_progress = true;
+                last_fixed_neighbor = progress.fixed_neighbor;
+                total_evaluations += progress.fixed_neighbor->profile_evaluations;
+                total_local_accepted_updates += progress.fixed_neighbor->local_accepted_updates;
                 EXPECT_EQ(progress.update_budget, static_cast<int>(progress.fixed_neighbor->block_solves));
                 EXPECT_EQ(progress.profile_evaluations,
                     static_cast<int>(progress.fixed_neighbor->profile_evaluations));
@@ -181,9 +184,12 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
                 EXPECT_GE(progress.fixed_neighbor->maximum_accepted_log_width_step, 0.0);
                 EXPECT_GT(progress.fixed_neighbor->maximum_target_width, 0.0);
             }
-            else EXPECT_EQ(progress.update_budget, data.context.update_budget);
-            EXPECT_GE(progress.profile_evaluations, last_evaluation);
-            EXPECT_GE(progress.accepted_updates, last_accepted);
+            else
+            {
+                EXPECT_EQ(progress.update_budget, data.context.update_budget);
+                EXPECT_GE(progress.profile_evaluations, last_evaluation);
+                EXPECT_GE(progress.accepted_updates, last_accepted);
+            }
             EXPECT_GE(progress.elapsed_seconds, 0);
             last_evaluation = progress.profile_evaluations;
             last_accepted = progress.accepted_updates;
@@ -191,7 +197,12 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
             if (progress.accepted_gradient_inf_norm) last_search_gradient = progress.accepted_gradient_inf_norm;
         }
         EXPECT_GT(last_evaluation, 0);
-        if (!fixed_neighbor_progress)
+        if (last_fixed_neighbor)
+        {
+            EXPECT_EQ(total_evaluations, component.profile_evaluations);
+            EXPECT_EQ(total_local_accepted_updates, component.accepted_updates);
+        }
+        else
         {
             EXPECT_EQ(last_evaluation, component.profile_evaluations);
             EXPECT_EQ(last_accepted, component.accepted_updates);
@@ -207,6 +218,17 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
         EXPECT_EQ(certifying.update_budget, data.context.update_budget);
         EXPECT_EQ(certifying.accepted_objective, last_search_objective);
         EXPECT_EQ(certifying.accepted_gradient_inf_norm, last_search_gradient);
+        if (last_fixed_neighbor)
+        {
+            ASSERT_TRUE(certifying.fixed_neighbor);
+            EXPECT_EQ(certifying.fixed_neighbor->sweep, last_fixed_neighbor->sweep);
+            EXPECT_EQ(certifying.fixed_neighbor->maximum_sweeps, last_fixed_neighbor->maximum_sweeps);
+            EXPECT_EQ(certifying.fixed_neighbor->profile_evaluations, last_fixed_neighbor->profile_evaluations);
+            EXPECT_EQ(certifying.fixed_neighbor->accepted_blocks, last_fixed_neighbor->accepted_blocks);
+            EXPECT_EQ(certifying.fixed_neighbor->local_accepted_updates, last_fixed_neighbor->local_accepted_updates);
+            EXPECT_EQ(certifying.fixed_neighbor->failed_blocks, last_fixed_neighbor->failed_blocks);
+            EXPECT_DOUBLE_EQ(certifying.fixed_neighbor->objective, last_fixed_neighbor->objective);
+        }
 
         ASSERT_LT(cursor, events.size());
         const auto & completed = events[cursor++];
@@ -474,6 +496,10 @@ TEST(JointProgressTest, DebugProgressRetainsDetailedDiagnostics)
     completed.stop_reason = "converged";
     completed.trusted_state = true;
     completed.accepted_objective = 1.25;
+    completed.profile_evaluations = 220;
+    completed.profile_budget = 80;
+    completed.accepted_updates = 50;
+    completed.update_budget = 40;
     reporter.OnProgress(completed);
 
     const auto stdout_text = testing::internal::GetCapturedStdout();
@@ -490,6 +516,7 @@ TEST(JointProgressTest, DebugProgressRetainsDetailedDiagnostics)
     EXPECT_NE(stdout_text.find("max_B=7.000e-01"), std::string::npos);
     EXPECT_NE(stdout_text.find("eta_change=5.000e-03"), std::string::npos);
     EXPECT_NE(stdout_text.find("Component detail"), std::string::npos);
+    EXPECT_NE(stdout_text.find("evaluations=220 | accepted_updates=50 | stop=converged"), std::string::npos);
     EXPECT_EQ(CountOccurrences(stdout_text, "obj="), 3u);
     EXPECT_EQ(CountOccurrences(stdout_text, "KKT="), 2u);
     EXPECT_EQ(CountOccurrences(stdout_text, "width-grad="), 2u);
@@ -584,6 +611,10 @@ TEST(JointProgressTest, ReportingDoesNotChangeNumericsOrObserverCadence)
     ExpectSameFitNumerics(baseline, debug_fit);
     EXPECT_TRUE(info_stderr.empty());
     EXPECT_TRUE(debug_stderr.empty());
+    EXPECT_EQ(CountOccurrences(info_stdout, " | certifying | sweep="), info_fit.components.size());
+    EXPECT_EQ(CountOccurrences(debug_stdout, " | certifying | sweep="), debug_fit.components.size());
+    EXPECT_EQ(info_stdout.find(" | certifying | eval="), std::string::npos);
+    EXPECT_EQ(debug_stdout.find(" | certifying | eval="), std::string::npos);
 
     ASSERT_EQ(baseline_events.size(), info_events.size());
     ASSERT_EQ(baseline_events.size(), debug_events.size());

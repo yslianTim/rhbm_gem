@@ -45,11 +45,12 @@ std::string ComponentSummary(const JointProgressEvent & event)
 
 std::string ComponentDetail(const JointProgressEvent & event)
 {
+    // Component totals span blocks and sweeps; local budgets are not component limits.
     std::ostringstream output;
     output << "[Joint] Component detail | " << event.component_index << '/' << event.component_count
         << " | atoms=" << event.atom_count << " | rows=" << event.row_count
-        << " | evaluations=" << event.profile_evaluations << '/' << event.profile_budget
-        << " | accepted_updates=" << event.accepted_updates << '/' << event.update_budget;
+        << " | evaluations=" << event.profile_evaluations
+        << " | accepted_updates=" << event.accepted_updates;
     output << " | stop=" << event.stop_reason
         << " | state_trusted=" << (event.trusted_state ? "yes" : "no");
     return output.str();

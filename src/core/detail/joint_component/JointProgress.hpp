@@ -99,7 +99,8 @@ inline void NotifyJointProgress(
     const std::string & stop_reason = {},
     bool trusted_state = false,
     std::optional<double> accepted_objective = std::nullopt,
-    std::optional<double> accepted_gradient_inf_norm = std::nullopt)
+    std::optional<double> accepted_gradient_inf_norm = std::nullopt,
+    std::optional<JointFixedNeighborProgress> fixed_neighbor = std::nullopt)
 {
     if (!observer) return;
     auto event = MakeJointProgressEvent(phase, component);
@@ -112,6 +113,7 @@ inline void NotifyJointProgress(
     event.trusted_state = trusted_state;
     event.accepted_objective = accepted_objective;
     event.accepted_gradient_inf_norm = accepted_gradient_inf_norm;
+    event.fixed_neighbor = fixed_neighbor;
     observer(event);
 }
 
