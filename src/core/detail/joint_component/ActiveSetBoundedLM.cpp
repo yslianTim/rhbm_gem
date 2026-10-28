@@ -1,6 +1,8 @@
 #include "ActiveSetBoundedLM.hpp"
+#include "Numerics.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
 namespace rhbm_gem::core::joint_component {
@@ -8,6 +10,10 @@ namespace rhbm_gem::core::joint_component {
 BoundedLmTestWork & BoundedLmWorkForTesting() {static thread_local BoundedLmTestWork work; return work;}
 #endif
 namespace {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+double Seconds(std::chrono::steady_clock::time_point start)
+{return std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();}
+#endif
 struct BoundedSubproblemContext
 {
     double bound_tolerance{};
@@ -106,6 +112,12 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
     result.iterations=0; result.releases=0;
     result.damping_solves=0; result.bracket_solves=0; result.bisection_solves=0;
     result.damping_qr_factorizations=0; result.damping_active_set_iterations=0; result.damping_releases=0;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    const bool collect_breakdown=HotspotAttributionEnabled();
+    result.active_free_selection_seconds=0.0; result.augmented_matrix_assembly_seconds=0.0;
+    result.dense_qr_factorization_seconds=0.0; result.qr_solve_seconds=0.0;
+    result.kkt_validation_seconds=0.0; result.damping_search_seconds=0.0;
+#endif
     const auto fail=[&](const char * status) {result.status=status;};
     if(!std::isfinite(lambda) || lambda<0.0)
     {fail("invalid-subproblem-input"); return;}
@@ -132,14 +144,25 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
             trace->iterations=iteration+1;
         }
 #endif
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        const auto free_selection_started=collect_breakdown ? std::chrono::steady_clock::now() :
+            std::chrono::steady_clock::time_point{};
+#endif
         workspace.free_indices.clear();
         for(Eigen::Index i=0;i<n;++i)
             if(!workspace.active[static_cast<std::size_t>(i)])
                 workspace.free_indices.push_back(i);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(collect_breakdown) result.active_free_selection_seconds+=Seconds(free_selection_started);
+#endif
 
         workspace.candidate=workspace.step;
         if(!workspace.free_indices.empty())
         {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            const auto assembly_started=collect_breakdown ? std::chrono::steady_clock::now() :
+                std::chrono::steady_clock::time_point{};
+#endif
             const Eigen::Index free_count=static_cast<Eigen::Index>(workspace.free_indices.size());
             const Eigen::Index augmented_rows=j.rows()+(lambda>0.0 ? free_count : 0);
             ResizeWorkspaceMatrix(workspace.augmented,augmented_rows,free_count);
@@ -164,16 +187,31 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
                     workspace.augmented(j.rows()+k,k)=root*d(index);
                 }
             }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            if(collect_breakdown) result.augmented_matrix_assembly_seconds+=Seconds(assembly_started);
+            const auto qr_factorization_started=collect_breakdown ? std::chrono::steady_clock::now() :
+                std::chrono::steady_clock::time_point{};
+#endif
             ++result.damping_qr_factorizations;
             Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr(workspace.augmented);
             qr.setThreshold(64.0*std::numeric_limits<double>::epsilon()*
                 static_cast<double>(std::max(workspace.augmented.rows(),workspace.augmented.cols())));
             const auto rank=qr.rank();
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            if(collect_breakdown) result.dense_qr_factorization_seconds+=Seconds(qr_factorization_started);
+#endif
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
             if(trace) trace->free_ranks.push_back(rank);
 #endif
             if(rank!=free_count) {fail("rank-deficient-free-subproblem"); return;}
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            const auto solve_started=collect_breakdown ? std::chrono::steady_clock::now() :
+                std::chrono::steady_clock::time_point{};
+#endif
             workspace.solution=qr.solve(workspace.rhs);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            if(collect_breakdown) result.qr_solve_seconds+=Seconds(solve_started);
+#endif
             if(!workspace.solution.allFinite()) {fail("non-finite-free-solution"); return;}
             for(Eigen::Index k=0;k<free_count;++k)
                 workspace.candidate(workspace.free_indices[static_cast<std::size_t>(k)])=
@@ -208,6 +246,10 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
             continue;
         }
         workspace.step.swap(workspace.candidate);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        const auto kkt_validation_started=collect_breakdown ? std::chrono::steady_clock::now() :
+            std::chrono::steady_clock::time_point{};
+#endif
         workspace.residual=j*workspace.step+r;
         workspace.gradient=j.transpose()*workspace.residual+
             lambda*d.cwiseProduct(d).cwiseProduct(workspace.step);
@@ -253,6 +295,9 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
             if(workspace.active[static_cast<std::size_t>(i)])
                 kkt_inf=std::max(kkt_inf,std::max(0.0,workspace.gradient(i)));
         }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(collect_breakdown) result.kkt_validation_seconds+=Seconds(kkt_validation_started);
+#endif
         if(kkt_inf>kkt_tolerance) {fail("subproblem-kkt-failed"); return;}
         result.valid=true; result.status="solved"; result.step=workspace.step;
         result.gradient=workspace.gradient; result.multipliers=workspace.multipliers;
@@ -278,8 +323,18 @@ ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Ei
 {
     BoundedSubproblemContext context;
     ActiveSetStep candidate;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    const bool collect_breakdown=HotspotAttributionEnabled();
+    const auto damping_search_started=collect_breakdown ? std::chrono::steady_clock::now() :
+        std::chrono::steady_clock::time_point{};
+#endif
     std::size_t damping_solves{},bracket_solves{},bisection_solves{},damping_qr_factorizations{},
         damping_active_set_iterations{},damping_releases{};
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    double active_free_selection_seconds{},augmented_matrix_assembly_seconds{},
+        dense_qr_factorization_seconds{},qr_solve_seconds{},kkt_validation_seconds{};
+    std::size_t zero_damping_solves{};
+#endif
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     auto & work=BoundedLmWorkForTesting();
     const auto mark_search_accepted=[&]() {
@@ -289,17 +344,34 @@ ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Ei
 #endif
     const auto finish=[&](ActiveSetStep result) {
         result.damping_solves=damping_solves;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        result.zero_damping_solves=zero_damping_solves;
+#endif
         result.bracket_solves=bracket_solves;
         result.bisection_solves=bisection_solves;
         result.damping_qr_factorizations=damping_qr_factorizations;
         result.damping_active_set_iterations=damping_active_set_iterations;
         result.damping_releases=damping_releases;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(collect_breakdown)
+        {
+            result.active_free_selection_seconds=active_free_selection_seconds;
+            result.augmented_matrix_assembly_seconds=augmented_matrix_assembly_seconds;
+            result.dense_qr_factorization_seconds=dense_qr_factorization_seconds;
+            result.qr_solve_seconds=qr_solve_seconds;
+            result.kkt_validation_seconds=kkt_validation_seconds;
+            result.damping_search_seconds=Seconds(damping_search_started);
+        }
+#endif
         return result;
     };
     const auto solve_candidate=[&](double lambda,int phase,ActiveSetStep & result) -> void {
         ++damping_solves;
         if(phase==1) ++bracket_solves;
         else if(phase==2) ++bisection_solves;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        else if(phase==0) ++zero_damping_solves;
+#endif
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         BoundedLmDampingTrace trace;
         SolveAtDamping(context,workspace,j,r,d,upper,lambda,result,
@@ -325,6 +397,16 @@ ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Ei
         damping_qr_factorizations+=result.damping_qr_factorizations;
         damping_active_set_iterations+=result.damping_active_set_iterations;
         damping_releases+=result.damping_releases;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(collect_breakdown)
+        {
+            active_free_selection_seconds+=result.active_free_selection_seconds;
+            augmented_matrix_assembly_seconds+=result.augmented_matrix_assembly_seconds;
+            dense_qr_factorization_seconds+=result.dense_qr_factorization_seconds;
+            qr_solve_seconds+=result.qr_solve_seconds;
+            kkt_validation_seconds+=result.kkt_validation_seconds;
+        }
+#endif
     };
     if(!std::isfinite(trust_radius) || !(trust_radius>0.0) || !std::isfinite(damping_seed) || damping_seed<0.0)
         return Failure("invalid-trust-region-input");

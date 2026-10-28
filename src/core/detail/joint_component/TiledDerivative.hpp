@@ -8,6 +8,9 @@ struct TiledDifferential
     Eigen::SparseMatrix<double,Eigen::RowMajor> free_design,raw;
     Matrix coefficients,correction;
     std::optional<Spectrum> free_design_rank;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    DerivativeBreakdown breakdown;
+#endif
     double scale{};
     bool valid{},reference_order{},projected_only{};
     std::string reason;
@@ -18,6 +21,9 @@ struct ReducedDifferential
 {
     Matrix jacobian; // Compact R factor, never observation-sized.
     Vector response,jacobian_norms;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    DerivativeBreakdown breakdown;
+#endif
     bool valid{};
     std::string reason;
 };

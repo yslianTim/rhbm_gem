@@ -85,9 +85,13 @@ TEST(JointComponentNumericsTest, TiledDerivativePreservesCancellationReferenceFa
     ASSERT_GT(evaluation.beta(0),0.0);
     EXPECT_GT(evaluation.residual.norm(),0.0);
 
+    const bool attribution_was_enabled=n::HotspotAttributionEnabled();
+    n::SetHotspotAttributionEnabled(true);
     const auto full=n::PrepareDerivative(evaluation,context.scale,&context,-1,3);
+    n::SetHotspotAttributionEnabled(attribution_was_enabled);
     ASSERT_TRUE(full.valid)<<full.reason;
     EXPECT_TRUE(full.reference_order);
+    EXPECT_EQ(full.breakdown.cancellation_fallbacks,1u);
     const auto dense=p::DenseDifferentiate(evaluation,context.scale,&context);
     ASSERT_TRUE(dense.valid)<<dense.reason;
     Matrix raw_tile,projected_tile,jacobian_tile;

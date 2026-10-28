@@ -291,6 +291,17 @@ target_include_directories(rhbm_joint_optimization_benchmark PRIVATE
     "${PROJECT_SOURCE_DIR}/tests"
 )
 target_link_libraries(rhbm_joint_optimization_benchmark PRIVATE rhbm_gem CompilerFlags)
+add_executable(rhbm_joint_hotspot_attribution_benchmark
+    benchmarks/JointHotspotAttributionBenchmark.cpp
+    support/JointTestContext.cpp
+    support/JointSyntheticWorkload.cpp
+)
+target_include_directories(rhbm_joint_hotspot_attribution_benchmark PRIVATE
+    "${PROJECT_SOURCE_DIR}/src"
+    "${PROJECT_SOURCE_DIR}/src/core"
+    "${PROJECT_SOURCE_DIR}/tests"
+)
+target_link_libraries(rhbm_joint_hotspot_attribution_benchmark PRIVATE rhbm_gem_test CompilerFlags)
 add_executable(rhbm_fixed_neighbor_closed_loop_benchmark
     benchmarks/FixedNeighborClosedLoopBenchmark.cpp
     support/JointSyntheticWorkload.cpp

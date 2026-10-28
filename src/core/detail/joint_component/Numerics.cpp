@@ -11,6 +11,11 @@
 #include <utility>
 
 namespace rhbm_gem::core::joint_component {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+namespace {thread_local bool hotspot_attribution_enabled{};}
+void SetHotspotAttributionEnabled(bool enabled) {hotspot_attribution_enabled=enabled;}
+bool HotspotAttributionEnabled() {return hotspot_attribution_enabled;}
+#endif
 namespace {
 void AddCompensated(double term,double & sum,double & compensation)
 {
@@ -24,6 +29,58 @@ void AddCompensatedProduct(double left,double right,double & sum,double & compen
     AddCompensated(product,sum,compensation);
     AddCompensated(std::fma(left,right,-product),sum,compensation);
 }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+void AddLinearSolveBreakdown(LinearSolveBreakdown & destination,const LinearSolveBreakdown & source)
+{
+    const bool has_destination_samples=destination.selected_matrix_builds!=0;
+    const bool has_source_samples=source.selected_matrix_builds!=0;
+    destination.sparse_qr_factorizations+=source.sparse_qr_factorizations;
+    destination.selected_matrix_builds+=source.selected_matrix_builds;
+    destination.free_face_repeats_across_builds+=source.free_face_repeats_across_builds;
+    destination.free_face_changes_across_builds+=source.free_face_changes_across_builds;
+    destination.selected_pattern_repeats+=source.selected_pattern_repeats;
+    destination.selected_pattern_changes+=source.selected_pattern_changes;
+    destination.reduced_pattern_repeats+=source.reduced_pattern_repeats;
+    destination.reduced_pattern_changes+=source.reduced_pattern_changes;
+    destination.reduced_numeric_repeats_on_same_pattern+=source.reduced_numeric_repeats_on_same_pattern;
+    destination.reduced_numeric_changes_on_same_pattern+=source.reduced_numeric_changes_on_same_pattern;
+    if(has_source_samples)
+    {
+        if(!has_destination_samples)
+        {
+            destination.selected_rows_min=source.selected_rows_min;
+            destination.selected_columns_min=source.selected_columns_min;
+            destination.selected_nonzeros_min=source.selected_nonzeros_min;
+            destination.reduced_rows_min=source.reduced_rows_min;
+            destination.reduced_nonzeros_min=source.reduced_nonzeros_min;
+        }
+        else
+        {
+            destination.selected_rows_min=std::min(destination.selected_rows_min,source.selected_rows_min);
+            destination.selected_columns_min=std::min(destination.selected_columns_min,source.selected_columns_min);
+            destination.selected_nonzeros_min=std::min(destination.selected_nonzeros_min,source.selected_nonzeros_min);
+            destination.reduced_rows_min=std::min(destination.reduced_rows_min,source.reduced_rows_min);
+            destination.reduced_nonzeros_min=std::min(destination.reduced_nonzeros_min,source.reduced_nonzeros_min);
+        }
+        destination.selected_rows_max=std::max(destination.selected_rows_max,source.selected_rows_max);
+        destination.selected_columns_max=std::max(destination.selected_columns_max,source.selected_columns_max);
+        destination.selected_nonzeros_max=std::max(destination.selected_nonzeros_max,source.selected_nonzeros_max);
+        destination.reduced_rows_max=std::max(destination.reduced_rows_max,source.reduced_rows_max);
+        destination.reduced_nonzeros_max=std::max(destination.reduced_nonzeros_max,source.reduced_nonzeros_max);
+    }
+    destination.column_normalization_seconds+=source.column_normalization_seconds;
+    destination.row_reduction_seconds+=source.row_reduction_seconds;
+    destination.sparse_qr_analysis_seconds+=source.sparse_qr_analysis_seconds;
+    destination.sparse_qr_factorization_seconds+=source.sparse_qr_factorization_seconds;
+    destination.sparse_qr_solve_seconds+=source.sparse_qr_solve_seconds;
+    destination.refinement_matrix_seconds+=source.refinement_matrix_seconds;
+    destination.refinement_qr_factorization_seconds+=source.refinement_qr_factorization_seconds;
+    destination.refinement_correction_solve_seconds+=source.refinement_correction_solve_seconds;
+    destination.refinement_certification_seconds+=source.refinement_certification_seconds;
+    destination.pattern_fingerprint_seconds+=source.pattern_fingerprint_seconds;
+    destination.reduced_pattern_fingerprint_seconds+=source.reduced_pattern_fingerprint_seconds;
+}
+#endif
 void AddLinearSolveWork(LinearSolveWork & destination,const LinearSolveWork & source)
 {
 #define ADD_COUNT(name) destination.name+=source.name
@@ -56,6 +113,9 @@ void AddLinearSolveWork(LinearSolveWork & destination,const LinearSolveWork & so
     destination.refinement_after_kkt_max=std::max(destination.refinement_after_kkt_max,source.refinement_after_kkt_max);
     destination.refinement_before_objective_sum+=source.refinement_before_objective_sum;
     destination.refinement_after_objective_sum+=source.refinement_after_objective_sum;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    AddLinearSolveBreakdown(destination.breakdown,source.breakdown);
+#endif
 }
 void AddKktSample(double value,std::size_t & count,std::size_t & le_1e10,std::size_t & le_1e8,
     std::size_t & le_1e7,double & sum,double & maximum)
@@ -82,6 +142,19 @@ void AddRoleWork(ProfileRoleWork & destination,const ProfileRoleWork & source)
     destination.derivative_prepare_seconds+=source.derivative_prepare_seconds;
     destination.derivative_reduce_seconds+=source.derivative_reduce_seconds;
     destination.replay_trust_seconds+=source.replay_trust_seconds;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    destination.derivative_breakdown.tiled_qr_calls+=source.derivative_breakdown.tiled_qr_calls;
+    destination.derivative_breakdown.rank_svd_calls+=source.derivative_breakdown.rank_svd_calls;
+    destination.derivative_breakdown.triangular_solve_calls+=source.derivative_breakdown.triangular_solve_calls;
+    destination.derivative_breakdown.cancellation_fallbacks+=source.derivative_breakdown.cancellation_fallbacks;
+    destination.derivative_breakdown.workspace_resize_events+=source.derivative_breakdown.workspace_resize_events;
+    destination.derivative_breakdown.raw_construction_seconds+=source.derivative_breakdown.raw_construction_seconds;
+    destination.derivative_breakdown.tiled_qr_seconds+=source.derivative_breakdown.tiled_qr_seconds;
+    destination.derivative_breakdown.rank_svd_seconds+=source.derivative_breakdown.rank_svd_seconds;
+    destination.derivative_breakdown.triangular_solve_seconds+=source.derivative_breakdown.triangular_solve_seconds;
+    destination.derivative_breakdown.correction_matrix_seconds+=source.derivative_breakdown.correction_matrix_seconds;
+    destination.derivative_breakdown.cancellation_fallback_seconds+=source.derivative_breakdown.cancellation_fallback_seconds;
+#endif
 }
 }
 WidthBoundKkt CalculateWidthBoundKkt(const Vector & eta,const Vector & gradient,double upper)
@@ -165,6 +238,20 @@ void BoundedLmWork::Merge(const BoundedLmWork & other)
     damping_qr_factorizations+=other.damping_qr_factorizations;
     damping_active_set_iterations+=other.damping_active_set_iterations;
     damping_releases+=other.damping_releases;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    zero_damping_solves+=other.zero_damping_solves;
+    for(std::size_t i=0;i<damping_solves_per_update_bins.size();++i)
+    {
+        damping_solves_per_update_bins[i]+=other.damping_solves_per_update_bins[i];
+        qr_factorizations_per_update_bins[i]+=other.qr_factorizations_per_update_bins[i];
+    }
+    breakdown.active_free_selection_seconds+=other.breakdown.active_free_selection_seconds;
+    breakdown.augmented_matrix_assembly_seconds+=other.breakdown.augmented_matrix_assembly_seconds;
+    breakdown.dense_qr_factorization_seconds+=other.breakdown.dense_qr_factorization_seconds;
+    breakdown.qr_solve_seconds+=other.breakdown.qr_solve_seconds;
+    breakdown.kkt_validation_seconds+=other.breakdown.kkt_validation_seconds;
+    breakdown.damping_search_seconds+=other.breakdown.damping_search_seconds;
+#endif
     if(std::isfinite(other.maximum_subproblem_kkt))
         maximum_subproblem_kkt=std::isfinite(maximum_subproblem_kkt) ?
             std::max(maximum_subproblem_kkt,other.maximum_subproblem_kkt) : other.maximum_subproblem_kkt;
@@ -490,6 +577,9 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
         stats.reduced_sparse_assembly_seconds+=solved.reduced_sparse_assembly_seconds;
         stats.sparse_qr_seconds+=solved.sparse_qr_seconds;
         stats.solver_total_seconds+=solved.solver_total_seconds;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        AddLinearSolveBreakdown(stats.breakdown,solved.breakdown);
+#endif
         AddKktSample(solved.initial_projected_kkt,stats.initial_kkt_count,stats.initial_kkt_le_1e10,
             stats.initial_kkt_le_1e8,stats.initial_kkt_le_1e7,stats.initial_kkt_sum,stats.initial_kkt_max);
         if(solved.refinement_trigger_count)

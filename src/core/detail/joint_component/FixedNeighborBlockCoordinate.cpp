@@ -127,10 +127,18 @@ Eigen::Index AffectedReplayPosition(const Indices & affected_rows,Eigen::Index r
     return found==affected_rows.end() || *found!=row ? -1 : static_cast<Eigen::Index>(found-affected_rows.begin());
 }
 AffectedReplayIncidence PrepareAffectedReplayIncidence(const Domain & domain,const Indices & core_atoms,
-    const Indices & neighbor_atoms,const Indices & affected_rows,const Indices & atom_positions)
+    const Indices & neighbor_atoms,const Indices & affected_rows,const Indices & atom_positions
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    ,FixedNeighborWork::CandidateReplayBreakdown * breakdown
+#endif
+)
 {
     if(neighbor_atoms.size()>std::numeric_limits<std::size_t>::max()-core_atoms.size())
         throw std::overflow_error("Affected-row replay atom count overflow.");
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    const auto preparation_started=breakdown ? Clock::now() : Clock::time_point{};
+    const auto ordering_started=breakdown ? Clock::now() : Clock::time_point{};
+#endif
     AffectedReplayIncidence out;
     out.atoms.reserve(core_atoms.size()+neighbor_atoms.size());
     out.atoms.insert(out.atoms.end(),core_atoms.begin(),core_atoms.end());
@@ -139,9 +147,15 @@ AffectedReplayIncidence PrepareAffectedReplayIncidence(const Domain & domain,con
         return atom_positions.at(static_cast<std::size_t>(left))<atom_positions.at(static_cast<std::size_t>(right));
     });
     out.atoms.erase(std::unique(out.atoms.begin(),out.atoms.end()),out.atoms.end());
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(breakdown) breakdown->incidence_ordering_seconds+=Seconds(ordering_started);
+#endif
     if(affected_rows.size()==std::numeric_limits<std::size_t>::max())
         throw std::overflow_error("Affected-row replay row count overflow.");
     out.offsets.assign(affected_rows.size()+1,0);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    const auto lookup_started=breakdown ? Clock::now() : Clock::time_point{};
+#endif
     for(const auto atom_value:out.atoms)
         for(const auto & support:domain.atoms[static_cast<std::size_t>(atom_value)])
         {
@@ -150,6 +164,10 @@ AffectedReplayIncidence PrepareAffectedReplayIncidence(const Domain & domain,con
                 out.offsets[static_cast<std::size_t>(local)+1]))
                 throw std::overflow_error("Affected-row replay contributor count overflow.");
         }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(breakdown) breakdown->incidence_lookup_count_seconds+=Seconds(lookup_started);
+    const auto construction_started=breakdown ? Clock::now() : Clock::time_point{};
+#endif
     for(std::size_t row=1;row<out.offsets.size();++row)
         if(!CheckedAddBytes(out.offsets[row-1],out.offsets[row],out.offsets[row]))
             throw std::overflow_error("Affected-row replay contributor prefix overflow.");
@@ -173,14 +191,31 @@ AffectedReplayIncidence PrepareAffectedReplayIncidence(const Domain & domain,con
         !AddMemoryBytes(bytes,out.contributors.capacity(),sizeof(AffectedReplayContributor)))
         throw std::overflow_error("Affected-row replay memory estimate overflow.");
     out.build_scratch_bytes=bytes;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(breakdown)
+    {
+        breakdown->incidence_construction_seconds+=Seconds(construction_started);
+        breakdown->incidence_preparation_seconds+=Seconds(preparation_started);
+    }
+#endif
     return out;
 }
 AffectedReplayResult ReplayAffectedRows(const Domain & domain,VectorRef observations,
     const BlockCoordinateState & accepted,VectorRef candidate_eta,
     VectorRef candidate_beta,double scale,const Indices & core_atoms,const Indices & neighbor_atoms,
-    const Indices & affected_rows,const Indices & atom_position)
+    const Indices & affected_rows,const Indices & atom_position
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    ,FixedNeighborWork::CandidateReplayBreakdown * breakdown
+#endif
+)
 {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    const auto incidence=PrepareAffectedReplayIncidence(domain,core_atoms,neighbor_atoms,affected_rows,
+        atom_position,breakdown);
+    const auto prediction_started=breakdown ? Clock::now() : Clock::time_point{};
+#else
     const auto incidence=PrepareAffectedReplayIncidence(domain,core_atoms,neighbor_atoms,affected_rows,atom_position);
+#endif
     Vector widths(static_cast<Eigen::Index>(incidence.atoms.size()));
     for(std::size_t k=0;k<incidence.atoms.size();++k)
         widths(static_cast<Eigen::Index>(k))=std::exp(candidate_eta(incidence.atoms[k]));
@@ -200,6 +235,10 @@ AffectedReplayResult ReplayAffectedRows(const Domain & domain,VectorRef observat
         out.prediction(static_cast<Eigen::Index>(row))=prediction;
         out.residual(static_cast<Eigen::Index>(row))=prediction-observations(affected_rows[row]);
     }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(breakdown) breakdown->prediction_residual_seconds+=Seconds(prediction_started);
+    const auto objective_started=breakdown ? Clock::now() : Clock::time_point{};
+#endif
     {
         double delta_squared{};
         for(std::size_t k=0;k<affected_rows.size();++k)
@@ -210,6 +249,25 @@ AffectedReplayResult ReplayAffectedRows(const Domain & domain,VectorRef observat
         }
         out.objective=accepted.objective+.5*delta_squared/(scale*scale);
     }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(breakdown)
+    {
+        breakdown->incremental_objective_seconds+=Seconds(objective_started);
+        ++breakdown->affected_row_candidates;
+        breakdown->affected_rows_total+=affected_rows.size();
+        breakdown->affected_rows_min=std::min(breakdown->affected_rows_min,affected_rows.size());
+        breakdown->affected_rows_max=std::max(breakdown->affected_rows_max,affected_rows.size());
+        breakdown->contributor_entries_total+=incidence.contributors.size();
+        breakdown->contributor_entries_min=std::min(breakdown->contributor_entries_min,incidence.contributors.size());
+        breakdown->contributor_entries_max=std::max(breakdown->contributor_entries_max,incidence.contributors.size());
+        const auto row_bin=std::min<std::size_t>(15,
+            static_cast<std::size_t>(std::bit_width(affected_rows.size())-1));
+        const auto contributor_bin=std::min<std::size_t>(15,
+            static_cast<std::size_t>(std::bit_width(incidence.contributors.size())-1));
+        ++breakdown->affected_row_count_bins[row_bin];
+        ++breakdown->contributor_entry_count_bins[contributor_bin];
+    }
+#endif
     std::size_t evaluation_bytes{};
     if(!AddMemoryBytes(evaluation_bytes,incidence.atoms.capacity(),sizeof(Eigen::Index)) ||
         !AddMemoryBytes(evaluation_bytes,incidence.offsets.capacity(),sizeof(std::size_t)) ||
@@ -219,6 +277,9 @@ AffectedReplayResult ReplayAffectedRows(const Domain & domain,VectorRef observat
         !AddMemoryBytes(evaluation_bytes,static_cast<std::size_t>(out.residual.size()),sizeof(double)))
         throw std::overflow_error("Affected-row replay memory estimate overflow.");
     out.scratch_bytes=std::max(incidence.build_scratch_bytes,evaluation_bytes);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(breakdown) breakdown->peak_scratch_bytes=std::max(breakdown->peak_scratch_bytes,out.scratch_bytes);
+#endif
     return out;
 }
 bool BitwiseEqual(double left,double right)
@@ -957,6 +1018,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             Vector candidate_affected_prediction,candidate_affected_residual;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             double incremental_candidate_objective=std::numeric_limits<double>::quiet_NaN();
+            if(collect_telemetry) ++out.work.candidate_replay_breakdown.attempts;
 #endif
             const bool candidate_fast_unchanged=state_cache_valid && std::isfinite(out.state.objective) &&
                 IsBitwiseIdenticalCoreCandidate(out.state,core_atoms,accepted->endpoint)
@@ -985,9 +1047,17 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                 const auto candidate_replay_timer=Measure(collect_telemetry,out.work.candidate_replay_seconds);
                 if(use_affected_row_replay)
                 {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                    auto * replay_breakdown=collect_telemetry ? &out.work.candidate_replay_breakdown : nullptr;
+                    auto candidate=ReplayAffectedRows(domain
+                        ,y,out.state,candidate_eta,candidate_beta,
+                        context.scale,core_atoms,partition.cores[block_index].neighbor_atoms,affected_rows,
+                        atom_position,replay_breakdown);
+#else
                     auto candidate=ReplayAffectedRows(domain
                         ,y,out.state,candidate_eta,candidate_beta,
                         context.scale,core_atoms,partition.cores[block_index].neighbor_atoms,affected_rows,atom_position);
+#endif
                     candidate_result_affected_rows_only=true;
                     candidate_affected_prediction=std::move(candidate.prediction);
                     candidate_affected_residual=std::move(candidate.residual);
