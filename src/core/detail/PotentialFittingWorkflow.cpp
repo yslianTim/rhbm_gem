@@ -405,7 +405,7 @@ void RunJointComponentWorkflow(
     postprocessing_metrics.estimated_peak_postprocessing_payload_bytes +=
         joint_targets.capacity() * sizeof(const AtomObject *);
     postprocessing_metrics.rss_after_local_bytes = joint_component::CurrentRssBytes();
-    if (!options.quiet_mode) LogJointDebug(BuildSecondStageSpotSummary(model));
+    if (!options.quiet_mode) LogJointInfo(BuildSecondStageSpotSummary(model));
     RunJointGroupPotentialFitting(model, options, &postprocessing_metrics);
     postprocessing_metrics.rss_after_group_bytes = joint_component::CurrentRssBytes();
     if (!options.quiet_mode)
