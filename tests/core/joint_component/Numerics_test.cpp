@@ -66,7 +66,7 @@ struct Direct
     }
 };
 
-TEST(JointComponentNumericsTest, TiledDerivativeRecordsCancellationReferenceFallback)
+TEST(JointComponentNumericsTest, TiledDerivativePreservesCancellationReferenceFallback)
 {
     std::vector<std::vector<n::Support>> support(1);
     support[0]={{0,0.0},{1,0.25},{2,0.25}};
@@ -85,18 +85,15 @@ TEST(JointComponentNumericsTest, TiledDerivativeRecordsCancellationReferenceFall
     ASSERT_GT(evaluation.beta(0),0.0);
     EXPECT_GT(evaluation.residual.norm(),0.0);
 
-    n::DerivativeWorkForTesting()={};
     const auto full=n::PrepareDerivative(evaluation,context.scale,&context,-1,3);
     ASSERT_TRUE(full.valid)<<full.reason;
     EXPECT_TRUE(full.reference_order);
-    EXPECT_EQ(n::DerivativeWorkForTesting().cancellation_fallbacks,1u);
-    EXPECT_EQ(n::DerivativeWorkForTesting().reference_order_recomputations,1u);
-    EXPECT_EQ(n::DerivativeWorkForTesting().tiled_qr_invocations,2u);
-    EXPECT_EQ(n::DerivativeWorkForTesting().tile_count,2u);
-    EXPECT_EQ(n::DerivativeWorkForTesting().triplet_capacity_growths,0u);
-    EXPECT_EQ(n::DerivativeWorkForTesting().tiled_qr_scratch_materializations,4u);
-    EXPECT_EQ(n::DerivativeWorkForTesting().tiled_qr_scratch_resize_events,4u);
+    const auto dense=p::DenseDifferentiate(evaluation,context.scale,&context);
+    ASSERT_TRUE(dense.valid)<<dense.reason;
     Matrix raw_tile,projected_tile,jacobian_tile;
+    full.Rows(0,3,raw_tile,projected_tile,jacobian_tile);
+    EXPECT_LT((projected_tile-dense.projected).norm()/dense.projected.norm(),1e-8);
+    EXPECT_LT((jacobian_tile-dense.jacobian).norm()/dense.jacobian.norm(),1e-8);
     full.Rows(0,2,raw_tile,projected_tile,jacobian_tile);
     const auto * raw_storage=raw_tile.data();
     const auto * projected_storage=projected_tile.data();
@@ -105,27 +102,32 @@ TEST(JointComponentNumericsTest, TiledDerivativeRecordsCancellationReferenceFall
     EXPECT_EQ(raw_tile.data(),raw_storage);
     EXPECT_EQ(projected_tile.data(),projected_storage);
     EXPECT_EQ(jacobian_tile.data(),jacobian_storage);
-    n::DerivativeWorkForTesting()={};
     const auto reduced=n::ReduceDerivative(full,evaluation.residual,3);
     ASSERT_TRUE(reduced.valid)<<reduced.reason;
-    EXPECT_EQ(n::DerivativeWorkForTesting().reduction_tile_scratch_materializations,4u);
-    EXPECT_EQ(n::DerivativeWorkForTesting().reduction_tile_scratch_resize_events,4u);
 
-    n::DerivativeWorkForTesting()={};
     const auto projected=n::PrepareProjectedWidthDerivative(evaluation,context.scale,&context,-1,3);
     ASSERT_TRUE(projected.valid)<<projected.reason;
     EXPECT_TRUE(projected.reference_order);
-    EXPECT_EQ(n::DerivativeWorkForTesting().cancellation_fallbacks,1u);
-    EXPECT_EQ(n::DerivativeWorkForTesting().reference_order_recomputations,1u);
     EXPECT_TRUE(projected.projected_only);
-    EXPECT_EQ(n::DerivativeWorkForTesting().triplet_capacity_growths,0u);
-    EXPECT_EQ(n::DerivativeWorkForTesting().tiled_qr_scratch_materializations,4u);
-    EXPECT_EQ(n::DerivativeWorkForTesting().tiled_qr_scratch_resize_events,4u);
-    n::DerivativeWorkForTesting()={};
+    Matrix raw,projected_only_tile,jacobian;
+    projected.Rows(0,3,raw,projected_only_tile,jacobian);
+    EXPECT_LT((projected_only_tile-dense.projected).norm()/dense.projected.norm(),1e-8);
     const auto projected_reduced=n::ReduceProjectedWidthDerivative(projected,3);
     ASSERT_TRUE(projected_reduced.valid)<<projected_reduced.reason;
-    EXPECT_EQ(n::DerivativeWorkForTesting().reduction_tile_scratch_materializations,2u);
-    EXPECT_EQ(n::DerivativeWorkForTesting().reduction_tile_scratch_resize_events,3u);
+}
+
+TEST(JointComponentNumericsTest, TiledQRReusesScratchForRepeatedAssembledShape)
+{
+    n::TiledQR qr(2,1);
+    Matrix rows(2,2); rows<<1.0,2.0,3.0,5.0;
+    Matrix rhs(2,1); rhs<<.25,-.5;
+    qr.Append(rows,rhs);
+    qr.Append(rows,rhs);
+    const auto * row_storage=qr.scratch_rows.data();
+    const auto * rhs_storage=qr.scratch_rhs.data();
+    qr.Append(rows,rhs);
+    EXPECT_EQ(qr.scratch_rows.data(),row_storage);
+    EXPECT_EQ(qr.scratch_rhs.data(),rhs_storage);
 }
 
 ;
@@ -217,15 +219,12 @@ TEST(JointTestNumericsTest, TiledDerivativeMatchesDenseAcrossTileBoundaries)
         const auto correction=p::DenseLocalCorrection(e,dense,context);
         for(Eigen::Index tile:{17,8192})
         {
-            n::DerivativeWorkForTesting()={};
             const auto d=n::PrepareDerivative(e,context.scale,&context,-1,tile);
             const auto reduced=n::ReduceDerivative(d,e.residual,tile);
             const auto width_derivative=n::PrepareProjectedWidthDerivative(e,context.scale,&context,-1,tile);
             const auto reduced_width=n::ReduceProjectedWidthDerivative(width_derivative,tile);
             ASSERT_TRUE(reduced.valid);
             ASSERT_TRUE(reduced_width.valid);
-            EXPECT_LE(n::DerivativeWorkForTesting().maximum_generated_rows,tile);
-            EXPECT_LE(n::DerivativeWorkForTesting().maximum_reduction_rows,tile+e.x.cols());
             const auto actual=p::MaterializeDerivative(e,context.scale,&context,-1,tile);
             EXPECT_LT((actual.projected-dense.projected).norm()/dense.projected.norm(),1e-8);
             EXPECT_LT((actual.jacobian-dense.jacobian).norm()/dense.jacobian.norm(),1e-8);

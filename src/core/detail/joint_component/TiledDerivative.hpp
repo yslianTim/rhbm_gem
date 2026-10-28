@@ -35,18 +35,4 @@ TiledDifferential PrepareProjectedWidthDerivative(const Evaluation &,double,cons
 ReducedDifferential ReduceDerivative(const TiledDifferential &,VectorRef,Eigen::Index=derivative_tile_rows);
 ReducedProjectedWidthDifferential ReduceProjectedWidthDerivative(const TiledDifferential &,
     Eigen::Index=derivative_tile_rows);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-struct DerivativeWork
-{
-    Eigen::Index maximum_generated_rows{},maximum_reduction_rows{};
-    std::size_t prepare_calls{},reduction_calls{},tiled_qr_invocations{},tile_count{},
-        triplet_capacity_growths{},triplet_reserved_entries{},triplet_reserved_bytes{},
-        tiled_qr_scratch_materializations{},tiled_qr_scratch_resize_events{},
-        reduction_tile_scratch_materializations{},reduction_tile_scratch_resize_events{},
-        cancellation_fallbacks{},reference_order_recomputations{};
-    std::size_t maximum_tile_workspace_bytes{};
-    double prepare_seconds{},reduction_seconds{},tiled_qr_seconds{};
-};
-DerivativeWork & DerivativeWorkForTesting();
-#endif
 }

@@ -3,10 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include <chrono>
-#endif
-
 namespace rhbm_gem::core::joint_component {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 BoundedLmTestWork & BoundedLmWorkForTesting() {static thread_local BoundedLmTestWork work; return work;}
@@ -28,68 +24,32 @@ struct BoundedLmWorkspace
     std::vector<bool> active;
 };
 
-void RecordWorkspaceResize(bool allocation)
-{
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    auto & work=BoundedLmWorkForTesting();
-    ++work.workspace_resize_events;
-    if(allocation) ++work.workspace_allocation_sites;
-#else
-    (void)allocation;
-#endif
-}
-
 void ResizeWorkspaceVector(Eigen::VectorXd & value,Eigen::Index size)
 {
-    if(value.size()!=size)
-    {
-        RecordWorkspaceResize(value.size()==0 && size>0);
-        value.resize(size);
-    }
+    if(value.size()!=size) value.resize(size);
 }
 
 void ResizeWorkspaceMatrix(Eigen::MatrixXd & value,Eigen::Index rows,Eigen::Index columns)
 {
-    if(value.rows()!=rows || value.cols()!=columns)
-    {
-        RecordWorkspaceResize(value.size()==0 && rows>0 && columns>0);
-        value.resize(rows,columns);
-    }
+    if(value.rows()!=rows || value.cols()!=columns) value.resize(rows,columns);
 }
 
 void PrepareWorkspace(BoundedLmWorkspace & workspace,Eigen::Index rows,Eigen::Index columns)
 {
     if(workspace.active.size()!=static_cast<std::size_t>(columns))
-    {
-        RecordWorkspaceResize(workspace.active.empty() && columns>0);
         workspace.active.resize(static_cast<std::size_t>(columns));
-    }
     for(auto * value:{&workspace.candidate,&workspace.step,&workspace.gradient,&workspace.multipliers})
         ResizeWorkspaceVector(*value,columns);
     ResizeWorkspaceVector(workspace.adjusted,rows);
     ResizeWorkspaceVector(workspace.residual,rows);
     if(workspace.free_indices.capacity()<static_cast<std::size_t>(columns))
-    {
-        RecordWorkspaceResize(workspace.free_indices.capacity()==0 && columns>0);
         workspace.free_indices.reserve(static_cast<std::size_t>(columns));
-    }
     if(workspace.hit_indices.capacity()<static_cast<std::size_t>(columns))
-    {
-        RecordWorkspaceResize(workspace.hit_indices.capacity()==0 && columns>0);
         workspace.hit_indices.reserve(static_cast<std::size_t>(columns));
-    }
 }
 
 void CopyActiveSetStep(ActiveSetStep & destination,const ActiveSetStep & source)
 {
-    if(destination.step.size()!=source.step.size())
-        RecordWorkspaceResize(destination.step.size()==0 && source.step.size()>0);
-    if(destination.gradient.size()!=source.gradient.size())
-        RecordWorkspaceResize(destination.gradient.size()==0 && source.gradient.size()>0);
-    if(destination.multipliers.size()!=source.multipliers.size())
-        RecordWorkspaceResize(destination.multipliers.size()==0 && source.multipliers.size()>0);
-    if(destination.active.capacity()<source.active.size())
-        RecordWorkspaceResize(destination.active.capacity()==0 && !source.active.empty());
     destination=source;
 }
 
@@ -107,9 +67,6 @@ BoundedSubproblemContext MakeBoundedSubproblemContext(const Eigen::MatrixXd & j,
     const Eigen::VectorXd & upper)
 {
     BoundedSubproblemContext context;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    ++BoundedLmWorkForTesting().bound_tolerance_evaluations;
-#endif
     context.bound_tolerance=64.0*std::numeric_limits<double>::epsilon()*
         std::max(1.0,upper.cwiseAbs().maxCoeff());
     context.maximum_active_iterations=std::max<std::size_t>(40,
@@ -120,20 +77,12 @@ BoundedSubproblemContext MakeBoundedSubproblemContext(const Eigen::MatrixXd & j,
 double KktScale(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,const Eigen::VectorXd & d,
     const Eigen::VectorXd & p,double lambda,BoundedSubproblemContext & context)
 {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    auto & work=BoundedLmWorkForTesting();
-    ++work.kkt_scale_evaluations;
-#endif
     const double residual=(j*p+r).norm();
     if(!context.kkt_norms_ready)
     {
         context.jacobian_norm=j.norm();
         context.diagonal_squared_norm=d.squaredNorm();
         context.kkt_norms_ready=true;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        ++work.jacobian_norm_evaluations;
-        ++work.diagonal_squared_norm_evaluations;
-#endif
     }
     return std::max(1.0,context.jacobian_norm*(residual+context.jacobian_norm*p.norm())+
         lambda*context.diagonal_squared_norm*std::max(1.0,p.norm()));
@@ -143,16 +92,6 @@ ActiveSetStep Failure(std::string status)
 {
     ActiveSetStep result; result.status=std::move(status); return result;
 }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-struct BoundedLmTimer
-{
-    BoundedLmTestWork & work;
-    std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
-    ~BoundedLmTimer()
-    {work.damping_search_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();}
-};
-#endif
-
 void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & workspace,
     const Eigen::MatrixXd & j,const Eigen::VectorXd & r,const Eigen::VectorXd & d,
     const Eigen::VectorXd & upper,double lambda,ActiveSetStep & result
@@ -162,9 +101,6 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
 )
 {
     const Eigen::Index n=j.cols();
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    auto & work=BoundedLmWorkForTesting();
-#endif
     result.valid=false; result.status.clear(); result.damping=lambda;
     result.scaled_step_norm=0.0; result.kkt_inf_norm=0.0;
     result.iterations=0; result.releases=0;
@@ -192,9 +128,6 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
             trace->step_sequence.push_back(workspace.step);
             trace->iterations=iteration+1;
         }
-#endif
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        ++work.active_set_iterations;
 #endif
         workspace.free_indices.clear();
         for(Eigen::Index i=0;i<n;++i)
@@ -228,26 +161,7 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
                     workspace.augmented(j.rows()+k,k)=root*d(index);
                 }
             }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            const auto packed_bool_bytes=((static_cast<std::size_t>(n)+8*sizeof(std::size_t)-1)/
-                (8*sizeof(std::size_t)))*sizeof(std::size_t);
-            const auto double_count=static_cast<std::size_t>(workspace.augmented.size()+workspace.rhs.size()+
-                workspace.adjusted.size()+workspace.residual.size()+workspace.candidate.size()+
-                workspace.step.size()+workspace.gradient.size()+workspace.multipliers.size()+
-                workspace.solution.size())+6*static_cast<std::size_t>(n);
-            const auto bytes=double_count*sizeof(double)+3*packed_bool_bytes+
-                2*static_cast<std::size_t>(n)*sizeof(Eigen::Index);
-            work.workspace_peak_bytes=std::max(work.workspace_peak_bytes,bytes);
-#endif
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            const auto qr_started=std::chrono::steady_clock::now();
-#endif
             Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr(workspace.augmented);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            ++work.dense_qr_factorizations;
-            work.dense_qr_factorization_seconds+=std::chrono::duration<double>(
-                std::chrono::steady_clock::now()-qr_started).count();
-#endif
             qr.setThreshold(64.0*std::numeric_limits<double>::epsilon()*
                 static_cast<double>(std::max(workspace.augmented.rows(),workspace.augmented.cols())));
             const auto rank=qr.rank();
@@ -318,7 +232,6 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
             workspace.active[static_cast<std::size_t>(release)]=false;
             ++releases;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            ++work.releases;
             if(trace) ++trace->releases;
 #endif
             continue;
@@ -336,11 +249,6 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
                 kkt_inf=std::max(kkt_inf,std::max(0.0,workspace.gradient(i)));
         }
         if(kkt_inf>kkt_tolerance) {fail("subproblem-kkt-failed"); return;}
-        if(result.step.size()!=n) RecordWorkspaceResize(result.step.size()==0);
-        if(result.gradient.size()!=n) RecordWorkspaceResize(result.gradient.size()==0);
-        if(result.multipliers.size()!=n) RecordWorkspaceResize(result.multipliers.size()==0);
-        if(result.active.capacity()<static_cast<std::size_t>(n))
-            RecordWorkspaceResize(result.active.capacity()==0);
         result.valid=true; result.status="solved"; result.step=workspace.step;
         result.gradient=workspace.gradient; result.multipliers=workspace.multipliers;
         result.active=workspace.active; result.damping=lambda;
@@ -367,11 +275,7 @@ ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Ei
     ActiveSetStep candidate;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     auto & work=BoundedLmWorkForTesting();
-    BoundedLmTimer timer{work};
     const auto solve_candidate=[&](double lambda,int phase,ActiveSetStep & result) -> void {
-        ++work.damping_solves;
-        if(phase==1) ++work.bracket_solves;
-        else if(phase==2) ++work.bisection_solves;
         BoundedLmDampingTrace trace;
         SolveAtDamping(context,workspace,j,r,d,upper,lambda,result,
             work.capture_trace ? &trace : nullptr);
@@ -398,9 +302,6 @@ ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Ei
 #endif
     if(!std::isfinite(trust_radius) || !(trust_radius>0.0) || !std::isfinite(damping_seed) || damping_seed<0.0)
         return Failure("invalid-trust-region-input");
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    ++work.subproblem_validation_calls;
-#endif
     if(!ValidSubproblemInput(j,r,d,upper,0.0)) return Failure("invalid-subproblem-input");
     context=MakeBoundedSubproblemContext(j,upper);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION

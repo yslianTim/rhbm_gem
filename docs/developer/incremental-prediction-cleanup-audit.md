@@ -107,4 +107,25 @@ The candidate fault injector, sweep-audit perturbation, retry profile override, 
 
 Instrumentation occurrence counts changed from 35 to 25 in `FixedNeighborBlockCoordinate.cpp` and from 2 to 0 in `FixedNeighborPolicy.hpp`; `FixedNeighborBlockCoordinate.hpp` remains at 10. Active-set LM, derivative, QR, and Search counts are unchanged in C2. The CTest inventory remains 19 groups and the FixedNeighbor block-coordinate suite remains 37 cases. Release targets `rhbm_tests`, `rhbm_fixed_neighbor_closed_loop_benchmark`, and `rhbm_joint_optimization_benchmark` built successfully. The joint component contract, workflow, and numerical CTest groups passed (3/3; numerical group includes 89 GoogleTest cases across its configured suites).
 
+Commit: `d7182237`.
+
+### C3 — Remove retired numerical-kernel profiling counters
+
+`BoundedLmWorkForTesting` now retains only the damping trace and its capture switch. Removed workspace resize/allocation and peak-byte estimates, dense QR counts/timing, KKT and tolerance evaluation counts, and damping-search timing. Numerical tests still inspect the recorded active-set sequence, damping phase and decision, rank/status, step, and KKT values; bracket and bisection expectations are derived from the trace. The solver calculations and workspace reuse were not changed.
+
+Removed `DerivativeWorkForTesting` and its preparation, tile, reduction, triplet, scratch, cancellation, and timing counters. Cancellation coverage now checks the actual `reference_order` result and compares full and projected derivatives with the independent dense reference. The tile-boundary tests continue to compare derivative and reduction outputs. A new `TiledQRReusesScratchForRepeatedAssembledShape` regression verifies that the existing scratch buffers retain their storage when the assembled shape repeats; the buffers remain in place.
+
+`JointOptimizationBenchmark` no longer reports the removed internal LM, derivative, or QR counters and timings. It retains end-to-end microbenchmark timings and trace/output digests. `Search.cpp` and production `InstrumentedLM<Profile>` are unchanged.
+
+| Source | C0 count | After C3 | Remaining test-only responsibility |
+|---|---:|---:|---|
+| `ActiveSetBoundedLM.cpp` | 25 | 13 | Record numerical damping/active-set trace when enabled for tests. |
+| `ActiveSetBoundedLM.hpp` | — | 1 | Define trace capture storage for tests. |
+| `TiledDerivative.cpp` | 26 | 0 | No test-only instrumentation remains; numerical cancellation behavior is checked through output. |
+| `TiledDerivative.hpp` | — | 0 | `DerivativeWork` interface removed. |
+| `TiledQR.hpp` | 3 | 0 | Scratch buffers remain; only their counters were removed. |
+| `Search.cpp` | 1 | 1 | Required production `InstrumentedLM<Profile>` integration. |
+
+The Release targets `rhbm_tests`, `rhbm_fixed_neighbor_closed_loop_benchmark`, and `rhbm_joint_optimization_benchmark` built successfully. The joint component contract, workflow, and numerical CTest groups passed (3/3; the numerical group includes the new scratch-reuse regression). The CTest inventory remains 19 groups and the FixedNeighbor block-coordinate suite remains 37 cases.
+
 Commit: recorded in the Git history for this stage.

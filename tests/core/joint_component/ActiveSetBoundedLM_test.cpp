@@ -2,6 +2,7 @@
 
 #include "core/detail/joint_component/ActiveSetBoundedLM.hpp"
 
+#include <algorithm>
 #include <bit>
 #include <cmath>
 #include <cstdint>
@@ -127,22 +128,19 @@ TEST(ActiveSetBoundedLMTest, TrustRegionDampingRecoversRankDeficiencyAndRejectsI
     ASSERT_TRUE(rank.valid)<<rank.status;
     EXPECT_GT(rank.damping,0.0);
     EXPECT_LE(rank.scaled_step_norm,0.5+1e-13);
-    const auto & work=joint::BoundedLmWorkForTesting();
-    EXPECT_GT(work.bracket_solves,0u);
-    EXPECT_GT(work.bisection_solves,0u);
-    EXPECT_EQ(work.damping_solves,work.damping_trace.size());
-    EXPECT_EQ(work.dense_qr_factorizations,work.damping_solves);
-    EXPECT_GT(work.workspace_allocation_sites,0u);
-    EXPECT_GT(work.workspace_peak_bytes,0u);
-    EXPECT_EQ(work.subproblem_validation_calls,1u);
-    EXPECT_GT(work.kkt_scale_evaluations,1u);
-    EXPECT_EQ(work.jacobian_norm_evaluations,1u);
-    EXPECT_EQ(work.diagonal_squared_norm_evaluations,1u);
-    EXPECT_EQ(work.bound_tolerance_evaluations,1u);
-    ASSERT_FALSE(work.damping_trace.empty());
-    EXPECT_EQ(work.damping_trace[0].status,"rank-deficient-free-subproblem");
-    EXPECT_FALSE(work.damping_trace[0].valid);
-    EXPECT_FALSE(work.damping_trace[0].search_accepted);
+    const auto & trace=joint::BoundedLmWorkForTesting().damping_trace;
+    const auto bracket_solves=std::count_if(trace.begin(),trace.end(),[](const auto & attempt) {
+        return attempt.phase==1;
+    });
+    const auto bisection_solves=std::count_if(trace.begin(),trace.end(),[](const auto & attempt) {
+        return attempt.phase==2;
+    });
+    EXPECT_GT(bracket_solves,0);
+    EXPECT_GT(bisection_solves,0);
+    ASSERT_FALSE(trace.empty());
+    EXPECT_EQ(trace[0].status,"rank-deficient-free-subproblem");
+    EXPECT_FALSE(trace[0].valid);
+    EXPECT_FALSE(trace[0].search_accepted);
 
     upper(0)=-1.0;
     const auto infeasible=joint::SolveBoundedTrustRegionStep(Eigen::Matrix2d::Identity(),
@@ -193,8 +191,8 @@ TEST(ActiveSetBoundedLMTest, RecordedInteriorDampedStepIsBitwiseStable)
     EXPECT_EQ(Bits(result.multipliers(0)),Bits(0.0));
     EXPECT_EQ(Bits(result.multipliers(1)),Bits(0.0));
     EXPECT_EQ(Bits(trace[0].kkt_inf_norm),Bits(0.0));
-    EXPECT_EQ(joint::BoundedLmWorkForTesting().bracket_solves,2u);
-    EXPECT_EQ(joint::BoundedLmWorkForTesting().bisection_solves,54u);
+    EXPECT_EQ(std::count_if(trace.begin(),trace.end(),[](const auto & candidate) {return candidate.phase==1;}),2);
+    EXPECT_EQ(std::count_if(trace.begin(),trace.end(),[](const auto & candidate) {return candidate.phase==2;}),54);
 }
 
 TEST(ActiveSetBoundedLMTest, CallWorkspaceResetsAcrossFullBoundaryFailureAndRecovery)
@@ -236,25 +234,20 @@ TEST(ActiveSetBoundedLMTest, CallWorkspaceResetsAcrossFullBoundaryFailureAndReco
 
 TEST(ActiveSetBoundedLMTest, InvalidDimensionsKeepTheSubproblemFailureReason)
 {
-    joint::BoundedLmWorkForTesting()={};
     Eigen::MatrixXd j=Eigen::MatrixXd::Identity(2,2);
     Eigen::VectorXd r=Eigen::VectorXd::Zero(1),d=Eigen::VectorXd::Ones(2),
         upper=Eigen::VectorXd::Ones(2);
     auto result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,0.0,0.0);
     EXPECT_FALSE(result.valid);
     EXPECT_EQ(result.status,"invalid-trust-region-input");
-    EXPECT_EQ(joint::BoundedLmWorkForTesting().subproblem_validation_calls,0u);
-
     result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,1.0,0.0);
     EXPECT_FALSE(result.valid);
     EXPECT_EQ(result.status,"invalid-subproblem-input");
-    EXPECT_EQ(joint::BoundedLmWorkForTesting().subproblem_validation_calls,1u);
 
     j.resize(2,0); r=Eigen::VectorXd::Zero(2); d.resize(0); upper.resize(0);
     result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,1.0,0.0);
     EXPECT_FALSE(result.valid);
     EXPECT_EQ(result.status,"invalid-subproblem-input");
-    EXPECT_EQ(joint::BoundedLmWorkForTesting().subproblem_validation_calls,2u);
 }
 
 TEST(ActiveSetBoundedLMTest, RejectsNonfiniteSubproblemCoefficients)

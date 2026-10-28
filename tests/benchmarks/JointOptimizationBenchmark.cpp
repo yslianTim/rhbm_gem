@@ -143,59 +143,25 @@ int Run()
     Vector upper=Vector::Constant(j.cols(),.15); upper(0)=.02;
     std::vector<double> bounded_times;
     joint::ActiveSetStep bounded;
-    joint::BoundedLmTestWork bounded_work;
     std::string bounded_digest;
+    joint::BoundedLmWorkForTesting()={};
     for(int sample=0;sample<samples+1;++sample)
     {
-        joint::BoundedLmTestWork aggregate;
         const auto started=Clock::now();
         for(int repeat=0;repeat<repeats;++repeat)
         {
-            joint::BoundedLmWorkForTesting()={};
             bounded=joint::SolveBoundedTrustRegionStep(j,r,d,upper,.3,.5);
             if(!bounded.valid) throw std::runtime_error("bounded LM: "+bounded.status);
-            const auto & work=joint::BoundedLmWorkForTesting();
-            aggregate.damping_solves+=work.damping_solves;
-            aggregate.bracket_solves+=work.bracket_solves;
-            aggregate.bisection_solves+=work.bisection_solves;
-            aggregate.active_set_iterations+=work.active_set_iterations;
-            aggregate.releases+=work.releases;
-            aggregate.subproblem_validation_calls+=work.subproblem_validation_calls;
-            aggregate.kkt_scale_evaluations+=work.kkt_scale_evaluations;
-            aggregate.jacobian_norm_evaluations+=work.jacobian_norm_evaluations;
-            aggregate.diagonal_squared_norm_evaluations+=work.diagonal_squared_norm_evaluations;
-            aggregate.bound_tolerance_evaluations+=work.bound_tolerance_evaluations;
-            aggregate.dense_qr_factorizations+=work.dense_qr_factorizations;
-            aggregate.workspace_allocation_sites+=work.workspace_allocation_sites;
-            aggregate.workspace_resize_events+=work.workspace_resize_events;
-            aggregate.workspace_peak_bytes=std::max(aggregate.workspace_peak_bytes,work.workspace_peak_bytes);
-            aggregate.dense_qr_factorization_seconds+=work.dense_qr_factorization_seconds;
-            aggregate.damping_search_seconds+=work.damping_search_seconds;
         }
         const double elapsed=Seconds(started)/repeats;
         if(sample) bounded_times.push_back(elapsed);
-        bounded_work=std::move(aggregate);
     }
     joint::BoundedLmWorkForTesting()={};
     joint::BoundedLmWorkForTesting().capture_trace=true;
     bounded=joint::SolveBoundedTrustRegionStep(j,r,d,upper,.3,.5);
     bounded_digest=BoundedDigest(bounded,joint::BoundedLmWorkForTesting());
     ReportSamples("bounded_lm",std::move(bounded_times));
-    std::cout<<"bounded_lm_damping_solves_per_call="<<bounded_work.damping_solves/repeats
-        <<" bracket_solves_per_call="<<bounded_work.bracket_solves/repeats
-        <<" bisection_solves_per_call="<<bounded_work.bisection_solves/repeats
-        <<" active_set_iterations_per_call="<<bounded_work.active_set_iterations/repeats
-        <<" subproblem_validations_per_call="<<bounded_work.subproblem_validation_calls/repeats
-        <<" kkt_scale_evaluations_per_call="<<bounded_work.kkt_scale_evaluations/repeats
-        <<" jacobian_norm_evaluations_per_call="<<bounded_work.jacobian_norm_evaluations/repeats
-        <<" diagonal_squared_norm_evaluations_per_call="<<bounded_work.diagonal_squared_norm_evaluations/repeats
-        <<" bound_tolerance_evaluations_per_call="<<bounded_work.bound_tolerance_evaluations/repeats
-        <<" dense_qr_count_per_call="<<bounded_work.dense_qr_factorizations/repeats
-        <<" dense_qr_ms_per_call="<<bounded_work.dense_qr_factorization_seconds*1000.0/repeats
-        <<" workspace_allocation_sites_per_call="<<bounded_work.workspace_allocation_sites/repeats
-        <<" workspace_resize_events_per_call="<<bounded_work.workspace_resize_events/repeats
-        <<" workspace_peak_bytes_estimate="<<bounded_work.workspace_peak_bytes
-        <<" bitwise_trace_sha256="<<bounded_digest<<'\n';
+    std::cout<<"bounded_lm_bitwise_trace_sha256="<<bounded_digest<<'\n';
 
     auto input=std::make_shared<rhbm_gem::core::JointProblemInput>(
         second_stage_test::SyntheticJointWorkload("chain",30));
@@ -211,91 +177,32 @@ int Run()
     joint::TiledDifferential prepared;
     joint::ReducedDifferential reduced;
     std::string derivative_digest;
-    joint::DerivativeWork derivative_work,reduction_work;
     for(int sample=0;sample<samples+1;++sample)
     {
-        joint::DerivativeWork aggregate;
-        auto & work=joint::DerivativeWorkForTesting();
         const auto started=Clock::now();
         for(int repeat=0;repeat<repeats;++repeat)
         {
-            work={};
             prepared=joint::PrepareDerivative(evaluation,context.scale,&context);
             if(!prepared.valid) throw std::runtime_error("derivative preparation: "+prepared.reason);
-            if(repeat==0) aggregate=work;
-            else
-            {
-                aggregate.prepare_calls+=work.prepare_calls;
-                aggregate.tiled_qr_invocations+=work.tiled_qr_invocations;
-                aggregate.tile_count+=work.tile_count;
-                aggregate.triplet_capacity_growths+=work.triplet_capacity_growths;
-                aggregate.triplet_reserved_entries+=work.triplet_reserved_entries;
-                aggregate.triplet_reserved_bytes+=work.triplet_reserved_bytes;
-                aggregate.tiled_qr_scratch_materializations+=work.tiled_qr_scratch_materializations;
-                aggregate.tiled_qr_scratch_resize_events+=work.tiled_qr_scratch_resize_events;
-                aggregate.cancellation_fallbacks+=work.cancellation_fallbacks;
-                aggregate.reference_order_recomputations+=work.reference_order_recomputations;
-                aggregate.maximum_generated_rows=std::max(aggregate.maximum_generated_rows,work.maximum_generated_rows);
-                aggregate.maximum_reduction_rows=std::max(aggregate.maximum_reduction_rows,work.maximum_reduction_rows);
-                aggregate.maximum_tile_workspace_bytes=std::max(aggregate.maximum_tile_workspace_bytes,work.maximum_tile_workspace_bytes);
-                aggregate.prepare_seconds+=work.prepare_seconds;
-                aggregate.tiled_qr_seconds+=work.tiled_qr_seconds;
-            }
         }
         const double elapsed=Seconds(started)/repeats;
         if(sample) prepare_times.push_back(elapsed);
-        else derivative_digest=DerivativeDigest(prepared,reduced);
-        derivative_work=std::move(aggregate);
 
         joint::TiledDifferential one=prepared;
-        joint::DerivativeWork reduction_aggregate;
         const auto reduce_started=Clock::now();
         for(int repeat=0;repeat<repeats;++repeat)
         {
-            work={};
             reduced=joint::ReduceDerivative(one,evaluation.residual);
             if(!reduced.valid) throw std::runtime_error("derivative reduction: "+reduced.reason);
-            if(repeat==0) reduction_aggregate=work;
-            else
-            {
-                reduction_aggregate.reduction_tile_scratch_materializations+=work.reduction_tile_scratch_materializations;
-                reduction_aggregate.reduction_tile_scratch_resize_events+=work.reduction_tile_scratch_resize_events;
-                reduction_aggregate.tiled_qr_scratch_materializations+=work.tiled_qr_scratch_materializations;
-                reduction_aggregate.tiled_qr_scratch_resize_events+=work.tiled_qr_scratch_resize_events;
-                reduction_aggregate.maximum_tile_workspace_bytes=std::max(
-                    reduction_aggregate.maximum_tile_workspace_bytes,work.maximum_tile_workspace_bytes);
-                reduction_aggregate.tiled_qr_seconds+=work.tiled_qr_seconds;
-            }
         }
         const double reduce_elapsed=Seconds(reduce_started)/repeats;
         if(sample) reduce_times.push_back(reduce_elapsed);
-        reduction_work=std::move(reduction_aggregate);
         if(!sample) derivative_digest=DerivativeDigest(prepared,reduced);
     }
     ReportSamples("derivative_prepare",std::move(prepare_times));
     ReportSamples("derivative_reduce",std::move(reduce_times));
-    std::cout<<"derivative_reduce_tile_scratch_materializations_per_call="
-        <<reduction_work.reduction_tile_scratch_materializations/repeats
-        <<" derivative_reduce_tile_scratch_resize_events_per_call="
-        <<reduction_work.reduction_tile_scratch_resize_events/repeats
-        <<" derivative_reduce_tiled_qr_scratch_materializations_per_call="
-        <<reduction_work.tiled_qr_scratch_materializations/repeats
-        <<" derivative_reduce_tiled_qr_ms_per_call="<<reduction_work.tiled_qr_seconds*1000.0/repeats<<'\n';
     std::cout<<"derivative_rows="<<evaluation.residual.size()
         <<" derivative_columns="<<evaluation.x.cols()
-        <<" derivative_prepare_qr_invocations="<<derivative_work.tiled_qr_invocations/repeats
-        <<" derivative_prepare_tiles="<<derivative_work.tile_count/repeats
-        <<" triplet_capacity_growths_per_call="<<derivative_work.triplet_capacity_growths/repeats
-        <<" triplet_reserved_entries_per_call="<<derivative_work.triplet_reserved_entries/repeats
-        <<" triplet_reserved_bytes_per_call="<<derivative_work.triplet_reserved_bytes/repeats
-        <<" tiled_qr_scratch_materializations_per_call="<<derivative_work.tiled_qr_scratch_materializations/repeats
-        <<" tiled_qr_scratch_resize_events_per_call="<<derivative_work.tiled_qr_scratch_resize_events/repeats
-        <<" max_generated_rows="<<derivative_work.maximum_generated_rows
-        <<" max_reduction_rows="<<derivative_work.maximum_reduction_rows
-        <<" maximum_tile_workspace_bytes_estimate="<<derivative_work.maximum_tile_workspace_bytes
-        <<" cancellation_fallbacks_per_call="<<derivative_work.cancellation_fallbacks/repeats
-        <<" reference_order_recomputations_per_call="<<derivative_work.reference_order_recomputations/repeats
-        <<" tiled_qr_ms_per_call="<<derivative_work.tiled_qr_seconds*1000.0/repeats
         <<" bitwise_trace_sha256="<<derivative_digest<<'\n';
 
     rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
@@ -304,7 +211,6 @@ int Run()
     policy.core_atoms=3; policy.maximum_sweeps=3; policy.stop_after_stationarity=false;
     policy.certify_endpoint=false; policy.collect_telemetry=true; policy.eta_upper_bound=std::log(2.2);
     std::vector<double> joint_times;
-    std::size_t joint_subproblem_calls{},joint_workspace_allocations{},joint_workspace_resizes{};
     joint::FixedNeighborDiagnosticResult last_joint_result;
     for(int sample=0;sample<samples+1;++sample)
     {
@@ -314,19 +220,11 @@ int Run()
         auto result=joint::RunFixedNeighborDiagnostic(problem,joint_eta,policy);
         const double elapsed=Seconds(started);
         if(sample)
-        {
             joint_times.push_back(elapsed);
-            joint_subproblem_calls+=work.subproblem_validation_calls;
-            joint_workspace_allocations+=work.workspace_allocation_sites;
-            joint_workspace_resizes+=work.workspace_resize_events;
-        }
         if(result.reason.empty()) throw std::runtime_error("synthetic Joint diagnostic returned no status");
         if(sample==samples) last_joint_result=std::move(result);
     }
     ReportSamples("synthetic_joint_search",std::move(joint_times));
-    std::cout<<"synthetic_joint_subproblems_per_run="<<joint_subproblem_calls/samples
-        <<" workspace_allocations_per_run="<<joint_workspace_allocations/samples
-        <<" workspace_resizes_per_run="<<joint_workspace_resizes/samples<<'\n';
     const auto & joint_data=rhbm_gem::core::JointProblemAccess::Get(problem);
     std::vector<std::uint8_t> informative(static_cast<std::size_t>(joint_data.domain.rows));
     for(const auto row:joint_data.layout.informative_rows) informative.at(row)=1;
