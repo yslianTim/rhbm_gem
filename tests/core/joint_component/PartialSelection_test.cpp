@@ -148,6 +148,34 @@ TEST(JointComponentPartialSelectionTest, BoundariesClippingAndNonrecursiveHalo)
     EXPECT_EQ(p.Input().atom_ids,(std::vector<std::string>{"1"}));
 }
 
+TEST(JointComponentPartialSelectionTest, HaloBoundsPreserveExactBoundaryAndRejectDiagonalDisjointSupport)
+{
+    std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
+    const auto add_atom=[&](int id,double x,double y) {
+        auto atom=std::make_unique<rhbm_gem::AtomObject>();
+        atom->SetSerialID(id);
+        atom->SetElement(Element::CARBON);
+        atom->SetPosition(x,y,0.0);
+        atoms.push_back(std::move(atom));
+    };
+    add_atom(1,0.0,0.0);
+    add_atom(2,5.0,0.0);
+    add_atom(3,4.5,4.5);
+    rhbm_gem::ModelObject model(std::move(atoms));
+    model.SelectAtoms([](const auto & atom){return atom.GetSerialID()==1;});
+    auto values=std::make_unique<double[]>(21*21*21);
+    rhbm_gem::MapObject map({21,21,21},{.5,.5,.5},{-5,-5,-5},std::move(values));
+
+    CheckReference(map,model);
+    const auto problem=core::BuildPureHaloSupportExclusionProblem(map,model);
+    EXPECT_EQ(problem.OriginalInput().atom_ids,(std::vector<std::string>{"1","2"}));
+    ASSERT_TRUE(problem.OriginalInput().selection_domain->pure_halo_support_exclusion);
+    const auto & provenance=*problem.OriginalInput().selection_domain->pure_halo_support_exclusion;
+    EXPECT_EQ(provenance.candidate_halos,2u);
+    EXPECT_EQ(provenance.retained_halos,1u);
+    EXPECT_EQ(provenance.zero_support_halos,1u);
+}
+
 TEST(JointComponentPartialSelectionTest, SelectedTargetWithOneObservationIsAlwaysRetained)
 {
     auto atom=std::make_unique<rhbm_gem::AtomObject>(); atom->SetSerialID(1);

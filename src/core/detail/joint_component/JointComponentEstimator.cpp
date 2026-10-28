@@ -110,6 +110,41 @@ template<class Visit> void VisitSupport(const MapObject & map,const AtomObject &
         if(square<=6.25) visit(index,square);
     }
 }
+struct TargetSpatialBounds
+{
+    std::array<double,3> minimum{},maximum{};
+    bool available{};
+};
+TargetSpatialBounds BoundsForRows(const MapObject & map,const std::vector<std::size_t> & rows)
+{
+    TargetSpatialBounds bounds;
+    if(rows.empty()) return bounds;
+    bounds.minimum.fill(std::numeric_limits<double>::infinity());
+    bounds.maximum.fill(-std::numeric_limits<double>::infinity());
+    const auto spacing=map.GetGridSpacing(),origin=map.GetOrigin();
+    for(const auto row:rows)
+    {
+        const auto point=simulation::GridPosition(map.GetGridIndex(row),spacing,origin);
+        for(std::size_t axis=0;axis<3;++axis)
+        {
+            if(!std::isfinite(point[axis])) return {};
+            bounds.minimum[axis]=std::min(bounds.minimum[axis],point[axis]);
+            bounds.maximum[axis]=std::max(bounds.maximum[axis],point[axis]);
+        }
+    }
+    bounds.available=true;
+    return bounds;
+}
+bool MayOverlapTargetRows(const AtomObject & atom,const TargetSpatialBounds & bounds)
+{
+    if(!bounds.available) return true;
+    const auto position=atom.GetPosition();
+    for(const double coordinate:position) if(!std::isfinite(coordinate)) return true;
+    std::array<double,3> nearest{};
+    for(std::size_t axis=0;axis<3;++axis)
+        nearest[axis]=std::clamp(position[axis],bounds.minimum[axis],bounds.maximum[axis]);
+    return simulation::SupportSquare(nearest,position)<=6.25;
+}
 bool AddEstimatedBytes(std::size_t & total,std::size_t count,std::size_t width)
 {
     std::size_t bytes{}; return n::CheckedMultiplyBytes(count,width,bytes) && n::CheckedAddBytes(total,bytes,total);
@@ -421,10 +456,12 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
     for(const auto * atom:atoms) if(selected.contains(atom))
         VisitSupport(map,*atom,[&](auto index,double) {rows.push_back(index);});
     std::sort(rows.begin(),rows.end()); rows.erase(std::unique(rows.begin(),rows.end()),rows.end());
+    const auto target_bounds=BoundsForRows(map,rows);
 
     std::size_t maximum_candidate_support{};
     for(const auto * atom:atoms)
     {
+        if(!selected.contains(atom) && !MayOverlapTargetRows(*atom,target_bounds)) continue;
         std::size_t memberships{};
         VisitSupport(map,*atom,[&](auto index,double) {
             if(std::binary_search(rows.begin(),rows.end(),index) &&
@@ -469,6 +506,12 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
         }
         if(!n::CheckedAddBytes(candidate_halos,1,candidate_halos))
             throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
+        if(!MayOverlapTargetRows(*atom,target_bounds))
+        {
+            if(!n::CheckedAddBytes(zero_support_halos,1,zero_support_halos))
+                throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
+            continue;
+        }
         eligibility_support.clear();
         VisitSupport(map,*atom,[&](auto index,double square) {
             const auto row=std::lower_bound(rows.begin(),rows.end(),index);
@@ -543,6 +586,7 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
         }
         else
         {
+            if(!MayOverlapTargetRows(*atom,target_bounds)) continue;
             eligibility_support.clear();
             VisitSupport(map,*atom,[&](auto index,double square) {
                 const auto row=std::lower_bound(rows.begin(),rows.end(),index);
