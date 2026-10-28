@@ -87,4 +87,12 @@ Classification: **A** `JointBlockCoordinate::ReplaceBlock()` is the only identif
 
 ## Cleanup stages
 
-Later sections record each completed stage, validation result, and commit SHA.
+### C1 — Remove the retired Delta-add helper
+
+Removed ReplaceBlock() and renamed its mutable support state to ConditionalReplayState. The conditional-response test now applies candidate parameters to a copied full parameter vector and obtains the next state through the test support's complete replay. It still checks the conditional effective-response identity, local/full objective-delta equality, unchanged parameters outside the core, unchanged predictions outside affected rows, structural core ordering, bridge boundary coupling, affected rows, neighbor atoms, and structural census.
+
+JointBlockCoordinate.cpp/.hpp remain because they still provide the independent full replay and conditional-response calculations used by those assertions. They no longer implement an incremental state update. Their CMake source entry remains necessary.
+
+The C1 source search found no ReplaceBlock, DeltaPrediction, IncrementalPrediction, prediction += change, or residual += change matches in src or tests. rhbm_tests_joint_component_contract passed (1.55 s); the CTest group count remains 19 and the FixedNeighbor block-coordinate case count remains 37. The production numerical source was not changed in C1, so C0 Release E1 results remain the comparison baseline.
+
+Commit: recorded in the Git history for this stage.

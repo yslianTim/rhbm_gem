@@ -35,7 +35,7 @@ void AssertPartition(const n::StructuralBlockPartition & partition,const rhbm_ge
     for(std::size_t atom=0;atom<atoms;++atom)
         EXPECT_EQ(membership[atom],std::find(layout.full_atoms.begin(),layout.full_atoms.end(),atom)!=layout.full_atoms.end()?1U:0U);
 }
-void CoreParameters(const b::BlockCoordinateState & state,const n::StructuralCore & core,n::Vector & eta,n::Vector & beta)
+void CoreParameters(const b::ConditionalReplayState & state,const n::StructuralCore & core,n::Vector & eta,n::Vector & beta)
 {
     eta.resize(static_cast<Eigen::Index>(core.atoms.size())); beta.resize(2*eta.size());
     for(std::size_t k=0;k<core.atoms.size();++k)
@@ -44,7 +44,7 @@ void CoreParameters(const b::BlockCoordinateState & state,const n::StructuralCor
         beta.segment<2>(2*static_cast<Eigen::Index>(k))=state.beta.segment<2>(2*atom);
     }
 }
-void ExerciseConditionalReplacements(const c::JointProblemInput & input,const rhbm_gem::JointParameterLayout & layout,
+void ExerciseConditionalResponses(const c::JointProblemInput & input,const rhbm_gem::JointParameterLayout & layout,
     const n::StructuralBlockPartition & partition,unsigned seed)
 {
     AssertPartition(partition,layout,input.atom_ids.size());
@@ -79,7 +79,14 @@ void ExerciseConditionalReplacements(const c::JointProblemInput & input,const rh
         const double local_after=b::ConditionalObjective(input,core,conditional,next_eta,next_beta);
         const double objective_before=state.objective;
         const auto prior=state;
-        b::ReplaceBlock(input,core,next_eta,next_beta,state);
+        n::Vector next_global_eta=state.eta,next_global_beta=state.beta;
+        for(std::size_t k=0;k<core.atoms.size();++k)
+        {
+            const auto atom=static_cast<Eigen::Index>(core.atoms[k]);
+            next_global_eta(atom)=next_eta(static_cast<Eigen::Index>(k));
+            next_global_beta.segment<2>(2*atom)=next_beta.segment<2>(2*static_cast<Eigen::Index>(k));
+        }
+        state=b::Replay(input,layout,observations,next_global_eta,next_global_beta,parent_scale);
         EXPECT_NEAR((state.objective-objective_before)-(local_after-local_before),
             0.0,4e-12*(1+std::abs(objective_before)));
         for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
@@ -128,7 +135,7 @@ TEST(JointBlockCoordinateTest, ConditionalResidualAndObjectiveMatchOnChainAndCub
     {
         auto input=second_stage_test::SyntheticJointWorkload(topology,atoms); const auto layout=n::BuildParameterLayout(input);
         const auto partition=BuildCores(input,layout,4);
-        ExerciseConditionalReplacements(input,layout,partition,seed);
+        ExerciseConditionalResponses(input,layout,partition,seed);
     }
 }
 TEST(JointBlockCoordinateTest, BridgeAtomRetainsEveryBoundaryCoupling)
@@ -139,7 +146,7 @@ TEST(JointBlockCoordinateTest, BridgeAtomRetainsEveryBoundaryCoupling)
     ASSERT_NE(bridge,partition.cores.end());
     EXPECT_EQ(bridge->affected_rows,(n::Indices{1,2}));
     EXPECT_EQ(bridge->neighbor_atoms,(n::Indices{0,2}));
-    ExerciseConditionalReplacements(input,layout,partition,501);
+    ExerciseConditionalResponses(input,layout,partition,501);
 }
 TEST(JointBlockCoordinateTest, StructuralCoreOrderingFollowsAtomIdentity)
 {

@@ -4,7 +4,7 @@
 
 namespace second_stage_test::joint_block {
 namespace n=rhbm_gem::core::joint_component;
-struct BlockCoordinateState
+struct ConditionalReplayState
 {
     n::Vector observations,eta,beta,prediction,residual;
     double scale{},objective{};
@@ -17,14 +17,12 @@ struct ConditionalBlockProblem
 };
 
 double ParentScale(n::VectorRef observations);
-BlockCoordinateState Initialize(const rhbm_gem::core::JointProblemInput &,const rhbm_gem::JointParameterLayout &,
+ConditionalReplayState Initialize(const rhbm_gem::core::JointProblemInput &,const rhbm_gem::JointParameterLayout &,
     n::VectorRef observations,n::Vector eta,n::Vector beta,double parent_scale);
 ConditionalBlockProblem BuildConditionalProblem(const rhbm_gem::core::JointProblemInput &,
-    const n::StructuralCore &,const BlockCoordinateState &);
+    const n::StructuralCore &,const ConditionalReplayState &);
 double ConditionalObjective(const rhbm_gem::core::JointProblemInput &,const n::StructuralCore &,
     const ConditionalBlockProblem &,n::VectorRef eta,n::VectorRef beta);
-void ReplaceBlock(const rhbm_gem::core::JointProblemInput &,const n::StructuralCore &,
-    n::VectorRef eta,n::VectorRef beta,BlockCoordinateState &);
-BlockCoordinateState Replay(const rhbm_gem::core::JointProblemInput &,const rhbm_gem::JointParameterLayout &,
+ConditionalReplayState Replay(const rhbm_gem::core::JointProblemInput &,const rhbm_gem::JointParameterLayout &,
     n::VectorRef observations,n::VectorRef eta,n::VectorRef beta,double parent_scale);
 }
