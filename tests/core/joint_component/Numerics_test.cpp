@@ -171,6 +171,52 @@ TEST(JointComponentNumericsTest, TiledQRReusesScratchForRepeatedAssembledShape)
     EXPECT_EQ(qr.scratch_rhs.data(),rhs_storage);
 }
 
+TEST(JointComponentNumericsTest, DerivativeWorkspaceReusesScratchAcrossActiveFaces)
+{
+    Sample sample; sample.atoms.resize(1); sample.atoms[0].amplitude=.05; sample.atoms[0].charge=-1;
+    for(Eigen::Index k=0;k<sample.y.size();++k)
+        sample.y(k)=m::unique_grid::Direct(sample.grid.voxels[static_cast<std::size_t>(k)].position,
+            sample.atoms,2.5);
+    const p::Domain domain(sample.grid,sample.atoms);
+    const auto context=p::MakeContext(sample.y,1);
+    n::DerivativeWorkspace workspace;
+    bool active=false,interior=false;
+    for(double width:{.25,.42,.8})
+    {
+        const Vector eta=Vector::Constant(1,std::log(width));
+        const auto evaluation=n::EvaluateProfile(domain,sample.y,eta,&context);
+        ASSERT_TRUE(evaluation.valid)<<evaluation.reason;
+        active|=evaluation.beta(0)==0; interior|=evaluation.beta(0)>0;
+        const auto reference_prepared=n::PrepareDerivative(evaluation,context.scale,&context);
+        const auto reference=n::ReduceDerivative(reference_prepared,evaluation.residual);
+        const auto prepared=n::PrepareDerivative(evaluation,context.scale,&context,-1,
+            n::derivative_tile_rows,&workspace);
+        const auto reduced=n::ReduceDerivative(prepared,evaluation.residual,n::derivative_tile_rows,&workspace);
+        ASSERT_TRUE(reference.valid)<<reference.reason;
+        ASSERT_TRUE(reduced.valid)<<reduced.reason;
+        EXPECT_EQ((prepared.free_design-reference_prepared.free_design).norm(),0.0);
+        EXPECT_EQ((prepared.raw-reference_prepared.raw).norm(),0.0);
+        EXPECT_EQ((prepared.coefficients-reference_prepared.coefficients).norm(),0.0);
+        EXPECT_EQ((prepared.correction-reference_prepared.correction).norm(),0.0);
+        EXPECT_EQ((reduced.jacobian-reference.jacobian).norm(),0.0);
+        EXPECT_EQ((reduced.response-reference.response).norm(),0.0);
+        EXPECT_EQ((reduced.jacobian_norms-reference.jacobian_norms).norm(),0.0);
+    }
+    EXPECT_TRUE(active && interior);
+    const auto * row_storage=workspace.qr.scratch_rows.data();
+    const auto * free_entry_storage=workspace.free_design_entries.data();
+    const auto * raw_entry_storage=workspace.raw_entries.data();
+    const Vector eta=Vector::Constant(1,std::log(.8));
+    const auto evaluation=n::EvaluateProfile(domain,sample.y,eta,&context);
+    const auto prepared=n::PrepareDerivative(evaluation,context.scale,&context,-1,
+        n::derivative_tile_rows,&workspace);
+    const auto reduced=n::ReduceDerivative(prepared,evaluation.residual,n::derivative_tile_rows,&workspace);
+    ASSERT_TRUE(reduced.valid)<<reduced.reason;
+    EXPECT_EQ(workspace.qr.scratch_rows.data(),row_storage);
+    EXPECT_EQ(workspace.free_design_entries.data(),free_entry_storage);
+    EXPECT_EQ(workspace.raw_entries.data(),raw_entry_storage);
+}
+
 ;
 ;
 }
@@ -246,6 +292,7 @@ TEST(JointTestNumericsTest, TiledDerivativeMatchesDenseAcrossTileBoundaries)
 {
     namespace n=p::runtime;
     Sample sample; const p::Domain base(sample.grid,sample.atoms);
+    n::DerivativeWorkspace workspace;
     for(Eigen::Index rows:{8191,8192,8193})
     {
         std::vector<std::vector<p::Support>> support(base.atoms.size()); Vector y(rows);
@@ -260,8 +307,8 @@ TEST(JointTestNumericsTest, TiledDerivativeMatchesDenseAcrossTileBoundaries)
         const auto correction=p::DenseLocalCorrection(e,dense,context);
         for(Eigen::Index tile:{17,8192})
         {
-            const auto d=n::PrepareDerivative(e,context.scale,&context,-1,tile);
-            const auto reduced=n::ReduceDerivative(d,e.residual,tile);
+            const auto d=n::PrepareDerivative(e,context.scale,&context,-1,tile,&workspace);
+            const auto reduced=n::ReduceDerivative(d,e.residual,tile,&workspace);
             const auto width_derivative=n::PrepareProjectedWidthDerivative(e,context.scale,&context,-1,tile);
             const auto reduced_width=n::ReduceProjectedWidthDerivative(width_derivative,tile);
             ASSERT_TRUE(reduced.valid);

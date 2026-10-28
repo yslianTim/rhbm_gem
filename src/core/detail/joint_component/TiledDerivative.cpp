@@ -20,13 +20,15 @@ Spectrum FreeDesignSpectrum(const CompactSvdResult & svd,Eigen::Index rows,Eigen
     return out;
 }
 TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const EvaluationContext * context,
-    double absolute,Eigen::Index tile,bool projected_only)
+    double absolute,Eigen::Index tile,bool projected_only,DerivativeWorkspace * workspace)
 {
     TiledDifferential out;
+    DerivativeWorkspace local_workspace;
+    auto & scratch=workspace ? *workspace : local_workspace;
     out.projected_only=projected_only;
     if(!e.valid || !(scale>0) || !std::isfinite(scale)) {out.reason="invalid-inner"; return out;}
     if(tile<=0) throw std::invalid_argument("Invalid derivative tile size.");
-    std::vector<Eigen::Index> free;
+    auto & free=scratch.free_indices; free.clear();
     std::size_t free_design_nonzeros{};
     const auto * x_outer=e.x.outerIndexPtr();
     const auto * x_inner_nonzeros=e.x.innerNonZeroPtr();
@@ -38,14 +40,14 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
     }
     const Eigen::Index n=e.x.rows(),m=e.beta.size()/2,p=static_cast<Eigen::Index>(free.size());
     out.scale=scale; out.free_design.resize(n,p); out.raw.resize(n,m);
-    Vector free_column_norms(projected_only ? p : 0);
-    std::vector<Eigen::Triplet<double>> entries,raw;
-    entries.reserve(free_design_nonzeros);
-    raw.reserve(static_cast<std::size_t>(e.derivative.nonZeros()));
-    Matrix t;
+    auto & free_column_norms=scratch.free_column_norms;
+    if(projected_only) free_column_norms.resize(p); else free_column_norms.resize(0);
+    auto & entries=scratch.free_design_entries; entries.clear(); entries.reserve(free_design_nonzeros);
+    auto & raw=scratch.raw_entries; raw.clear(); raw.reserve(static_cast<std::size_t>(e.derivative.nonZeros()));
+    auto & t=scratch.t;
     if(!projected_only)
     {
-        t=Matrix::Zero(p,m);
+        t.resize(p,m); t.setZero();
     }
     for(Eigen::Index k=0;k<2*m;++k) for(Sparse::InnerIterator entry(e.derivative,k);entry;++entry)
     {
@@ -102,7 +104,7 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
     // bounded by tiled Householder reductions rather than materializing a
     // sparse Q action.
     const auto tiled_solve=[&]() {
-        TiledQR qr(p,m);
+        auto & qr=scratch.qr; qr.Reset(p,m);
         {
             for(Eigen::Index first=0;first<n;first+=tile)
             {
@@ -162,11 +164,11 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
 }
 }
 TiledDifferential PrepareDerivative(const Evaluation & e,double scale,const EvaluationContext * context,
-    double absolute,Eigen::Index tile)
-{return PrepareDerivativeImpl(e,scale,context,absolute,tile,false);}
+    double absolute,Eigen::Index tile,DerivativeWorkspace * workspace)
+{return PrepareDerivativeImpl(e,scale,context,absolute,tile,false,workspace);}
 TiledDifferential PrepareProjectedWidthDerivative(const Evaluation & e,double scale,const EvaluationContext * context,
     double absolute,Eigen::Index tile)
-{return PrepareDerivativeImpl(e,scale,context,absolute,tile,true);}
+{return PrepareDerivativeImpl(e,scale,context,absolute,tile,true,nullptr);}
 void TiledDifferential::Rows(Eigen::Index first,Eigen::Index count,Matrix & raw_tile,
     Matrix & projected,Matrix & jacobian) const
 {
@@ -189,14 +191,20 @@ void TiledDifferential::Rows(Eigen::Index first,Eigen::Index count,Matrix & proj
     Rows(first,count,raw_tile,projected,jacobian);
 }
 namespace {
-ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef residual,Eigen::Index tile)
+ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef residual,Eigen::Index tile,
+    DerivativeWorkspace * workspace)
 {
     ReducedDifferential out; out.reason=d.reason; if(!d.valid) return out;
     if(tile<=0) throw std::invalid_argument("Invalid derivative tile size.");
+    DerivativeWorkspace local_workspace;
+    auto & scratch=workspace ? *workspace : local_workspace;
     const auto n=d.raw.rows(),m=d.raw.cols();
-    TiledQR jacobian(m,1);
+    auto & jacobian=scratch.qr; jacobian.Reset(m,1);
     out.jacobian_norms=Vector::Zero(m);
-    Matrix raw_tile,projected,j,residual_tile;
+    auto & raw_tile=scratch.raw_tile;
+    auto & projected=scratch.projected_tile;
+    auto & j=scratch.jacobian_tile;
+    auto & residual_tile=scratch.residual_tile;
     for(Eigen::Index first=0;first<n;first+=tile)
     {
         const auto count=std::min(tile,n-first);
@@ -208,12 +216,13 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
         for(Eigen::Index k=0;k<m;++k)
             out.jacobian_norms(k)=std::hypot(out.jacobian_norms(k),j.col(k).blueNorm());
     }
-    out.jacobian=std::move(jacobian.r); out.response=jacobian.target.col(0);
+    out.jacobian=jacobian.r; out.response=jacobian.target.col(0);
     out.valid=true; return out;
 }
 }
-ReducedDifferential ReduceDerivative(const TiledDifferential & d,VectorRef residual,Eigen::Index tile)
-{return ReduceDerivativeImpl(d,residual,tile);}
+ReducedDifferential ReduceDerivative(const TiledDifferential & d,VectorRef residual,Eigen::Index tile,
+    DerivativeWorkspace * workspace)
+{return ReduceDerivativeImpl(d,residual,tile,workspace);}
 ReducedProjectedWidthDifferential ReduceProjectedWidthDerivative(const TiledDifferential & d,Eigen::Index tile)
 {
     ReducedProjectedWidthDifferential out; out.reason=d.reason; if(!d.valid || !d.projected_only) return out;

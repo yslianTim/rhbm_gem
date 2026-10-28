@@ -28,11 +28,20 @@ struct ReducedProjectedWidthDifferential
     bool valid{};
     std::string reason;
 };
+struct DerivativeWorkspace
+{
+    std::vector<Eigen::Index> free_indices;
+    std::vector<Eigen::Triplet<double>> free_design_entries,raw_entries;
+    Matrix t,raw_tile,projected_tile,jacobian_tile,residual_tile;
+    Vector free_column_norms;
+    TiledQR qr;
+};
 TiledDifferential PrepareDerivative(const Evaluation &,double,const EvaluationContext *,double=-1,
-    Eigen::Index=derivative_tile_rows);
+    Eigen::Index=derivative_tile_rows,DerivativeWorkspace * =nullptr);
 TiledDifferential PrepareProjectedWidthDerivative(const Evaluation &,double,const EvaluationContext *,double=-1,
     Eigen::Index=derivative_tile_rows);
-ReducedDifferential ReduceDerivative(const TiledDifferential &,VectorRef,Eigen::Index=derivative_tile_rows);
+ReducedDifferential ReduceDerivative(const TiledDifferential &,VectorRef,Eigen::Index=derivative_tile_rows,
+    DerivativeWorkspace * =nullptr);
 ReducedProjectedWidthDifferential ReduceProjectedWidthDerivative(const TiledDifferential &,
     Eigen::Index=derivative_tile_rows);
 }

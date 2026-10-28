@@ -10,7 +10,9 @@ struct TiledQR
 {
     Eigen::MatrixXd r,target;
     Eigen::MatrixXd scratch_rows,scratch_rhs;
-    TiledQR(Eigen::Index columns,Eigen::Index responses):r(0,columns),target(0,responses) {}
+    TiledQR(Eigen::Index columns=0,Eigen::Index responses=0):r(0,columns),target(0,responses) {}
+    void Reset(Eigen::Index columns,Eigen::Index responses)
+    {r.resize(0,columns); target.resize(0,responses);}
     void Append(const Eigen::MatrixXd & rows,const Eigen::MatrixXd & rhs,bool reference_order=false)
     {
         const auto prior=r.rows();
