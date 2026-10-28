@@ -56,6 +56,7 @@ std::string BuildSecondStageSpotSummary(const ModelObject & model_object)
     std::vector<const AtomObject *> population;
     for (const auto * atom : model_object.GetSelectedAtoms())
     {
+        if (atom->GetSpecialAtomFlag()) continue;
         const auto spot = atom->GetSpot();
         if (std::find(kLocalMDPDESummarySpotList.begin(), kLocalMDPDESummarySpotList.end(), spot) ==
             kLocalMDPDESummarySpotList.end()) continue;
@@ -84,8 +85,8 @@ std::string BuildSecondStageSpotSummary(const ModelObject & model_object)
     const auto joint = CollectStageProvenance(population).estimator == "joint-components";
     summary << "Second-stage estimate summary by Spot:\nEstimator: "
         << CollectStageProvenance(population).estimator
-        << (joint ? "\nPopulation: selected targets; A/B/C: Joint second-stage estimates; C(J): Joint charge coefficient; s.d.: between-atom dispersion" :
-            "\nPopulation: selected targets; s.d.: between-atom dispersion")
+        << (joint ? "\nPopulation: selected targets excluding special atoms; A/B/C: Joint second-stage estimates; C(J): Joint charge coefficient; s.d.: between-atom dispersion" :
+            "\nPopulation: selected targets excluding special atoms; s.d.: between-atom dispersion")
         << "\n| " << std::left << std::setw(kSpotColumnWidth) << "Spot"
         << " | " << std::setw(kValidColumnWidth) << "valid"
         << " | " << std::setw(kNotConvergedColumnWidth) << "not-converged"
