@@ -178,3 +178,86 @@ Across the three A/C and derivative stages, measured median time was about 569 m
 The real files `/Users/yslian/data/6z6u.cif` and `/Users/yslian/data/emd_11103_unsharpened.map` existed and were run for chains A and YA with the current 1,024-row A/C tile. Five fresh-database measured CLI runs produced wall median 114.975 s (114.555–115.099), Peak RSS median 1,704,280,064 B (1,633,452,032–1,916,256,256), 118 sweeps, 35,828 profile evaluations, and 14,680 accepted updates. Every run completed endpoint certification, passed all component evidence, and passed Independent Replay. Objective was 0.02195348206329014, independent A/C KKT 4.39461e-9, independent width stationarity 6.14044e-11, and the memory preflight estimate was 133,985,764 B. Fine-grained census for this real CLI is unavailable: the CLI does not expose the test-only `ProfileSearchWork` breakdown. Therefore the QR stage timings and row-shape distribution above are attributed to the instrumented synthetic workflow; the real workflow is used for full end-to-end A/B and qualification, not for fine-grained stage attribution.
 
 P0 answers: Householder factorization dominates A/C reduction; derivative preparation is the largest single complete derivative stage. The measured 300-target workflow has no exact-zero design rows, so A/C zero-row compaction has no production rows to remove. Preparation and corrected-Jacobian row compaction likewise have no exact-zero rows in this workload. Smaller local blocks have some cache/workspace opportunity, but tile candidates must be decided by full workflow and real-data results. Direct SparseQR is worth a controlled comparison because A/C Householder factor time is material and the selected matrix is sparse; it is evaluated in P3 below.
+
+### P1 tile-size tuning
+
+All sizes below use the 300-target workload, one warmup, five measured runs, one thread, and the same Release binary. Each candidate changed one tile-size parameter only. The persistent defaults remained A/C 1,024 and derivative preparation/reduction 8,192.
+
+| A/C tile rows | Full FixedNeighbor median | `ReduceSparseRows` | Householder factor | SparseQR analysis/factor/solve | Estimated largest tile temporary |
+|---:|---:|---:|---:|---:|---:|
+| 128 | 1.17674 s | 206.97 ms | 163.45 ms | 8.08 / 56.68 / 4.51 ms | 50,368 B |
+| 256 | 1.12548 s | 195.33 ms | 158.07 ms | 5.59 / 25.61 / 2.20 ms | 100,544 B |
+| 512 | 1.10050 s | 186.68 ms | 156.30 ms | 3.86 / 12.63 / 1.16 ms | 200,896 B |
+| 1,024 (baseline) | 1.14486 s | 237.32 ms | 209.22 ms | 2.97 / 6.14 / 0.65 ms | 401,600 B |
+| 2,048 | 1.14209 s | 242.42 ms | 215.82 ms | 2.01 / 2.83 / 0.36 ms | 803,200 B |
+
+Tile 512 increased A/C tile count from 1,500 to 2,760. It cut Householder time 25.3% and row-reduction time 21.3%; SparseQR time increased because the tiled reduction retained more rows. Full synthetic search improved 3.88%. At 12, 48, and 240 targets the same 512-row choice improved full FixedNeighbor wall by 3.38%, 3.73%, and 3.50%, respectively. Objectives, rank, KKT, sweeps, qualification, and Independent Replay passed; floating-point hashes changed as expected when row grouping changed. This synthetic-only benefit did not hold on the real workflow: five fresh-database 6Z6U/EMD-11103 A/YA runs at 512 rows took 115.544 s median (115.142–119.833), versus the 1,024-row median of 114.975 s (114.555–115.099), about 0.5% slower. The candidate used 122 sweeps and 14,772 accepted updates versus 118 and 14,680 at baseline. Its objective was `0.021953482063290126` versus `0.02195348206329014`; independent A/C KKT was `2.87957e-9` versus `4.39461e-9`, width stationarity `3.33512e-11` versus `6.14044e-11`; all evidence and Independent Replay passed. The preflight estimate remained 133,985,764 B. RSS ranges varied substantially between runs and do not support attributing their lower candidate median to a sub-megabyte tile-workspace change. Since the real full workflow did not accelerate, tile 512 was rejected and the 1,024-row production default restored.
+
+| Derivative tile rows | Preparation median | Full FixedNeighbor median | Corrected-Jacobian reduction median | Estimated largest prepare / reduce tile temporary |
+|---:|---:|---:|---:|---:|
+| 256 | 236.91 ms | 1.13722 s | 98.77 ms | 154,560 / 54,592 B |
+| 512 | 225.65 ms | 1.12058 s | 94.78 ms | 302,016 / 107,840 B |
+| 1,024 | 241.69 ms | 1.14453 s | 94.81 ms | 596,928 / 214,336 B |
+| 2,048 | 282.33 ms | 1.20132 s | 99.76 ms | 1,186,752 / 427,328 B |
+| 4,096 | 260.55 ms | 1.16932 s | 98.41 ms | 2,359,488 / 852,064 B |
+| 8,192 (baseline) | 241.59 ms | 1.14486 s | 93.67 ms | 3,179,712 / 1,148,256 B |
+
+Preparation tile 512 reduced that stage by 6.6% and full synthetic wall by 2.1% in this one target size, below the preferred stage gate and without real-data evidence. Smaller reduction tiles added 5.4–6.5% reduction time; 512/1,024 had no meaningful end-to-end change, while 2,048 and 4,096 were slower. Candidate measured RSS ranged up to 94,355,456 B for the reduction-512 experiment versus 88,047,616 B in its baseline sample; because this exceeded the 5% preference and lacked end-to-end benefit, no derivative tile change was promoted. All tile-size runs passed qualification and Independent Replay; no tolerance was changed. No CLI or persistent benchmark tile-size selector remains.
+
+### P2 zero-row compaction
+
+Skipped without a Production prototype. In the measured production-like 300-target A/C workload, all 1,380,600 rows were exact-nonzero design rows, so compacting exact-zero rows would remove no QR work. Free-design, raw-derivative, corrected-Jacobian, and projection-only derivative rows were also all exact-nonzero in the P0 census. The 19 controlled A/C fixtures demonstrate the separate case where zero-design rows carry nonzero RHS: at 25/50/75/100% active-row ratios, the full RHS is retained and full-rank solutions agree with an independent dense QR reference to at most about 1.8e-15. The identity `||Ax-y||² = ||A_I x-y_I||² + ||y_Z||²` permits omitting those rows from the solve, but their constant residual contribution must remain in the full objective/certificate. Since the real CLI does not expose row census and no measured production opportunity was established, no row-index cache or compaction path was retained.
+
+### P3 direct Eigen SparseQR comparison
+
+A temporary test-only direct path passed the same normalized selected sparse matrix, free columns, and RHS directly to the existing Eigen SparseQR rank/solve code. It was removed after the A/B. The input memory estimate was bounded by the observed 5,520×24 matrix with at most 12,360 stored values (about 0.15 MB for values and indices, plus outer pointers and object overhead); this experiment did not factor any larger component. Peak RSS for the 300-target run was 88,424,448 B, below 1% above the same-build baseline.
+
+| Targets | Tiled A/C wall | Direct SparseQR wall | Change | Qualification / replay |
+|---:|---:|---:|---:|---|
+| 12 | 38.471 ms | 38.398 ms | −0.19% | pass / pass |
+| 48 | 184.044 ms | 184.513 ms | +0.25% | pass / pass |
+| 240 | 909.982 ms | 911.207 ms | +0.13% | pass / pass |
+| 300 | 1.14064 s | 1.14113 s | +0.04% | pass / pass |
+
+For 300 targets, direct mode reduced row-reduction from 234.92 ms to about 1.01 ms, but SparseQR grew from 2.90/6.10/0.70 ms analysis/factor/solve to 21.97/192.49/19.38 ms. The direct factorization's reported R had at most 214 stored entries; the input had up to 12,360. Eigen does not expose the full internal Q reflector storage as a comparable public fill metric, so factor/solve time and process RSS were used alongside R and input nnz. Thus the tiled Householder stage disappeared but numeric SparseQR became much more expensive; the complete-workflow difference stayed within measurement noise and varied direction across target sizes. The direct path also passed the 19 controlled cases: full-rank dense-reference error stayed below 1.8e-15, active A/signed C remained feasible, and rank-deficient and near-rank-deficient inputs were still rejected at rank 23/24. This is not a Production replacement: there is no stable end-to-end gain, and the maintained compressed-QR path keeps a smaller SparseQR factorization. The temporary direct selector and implementation were fully removed.
+
+### P4 derivative row compaction and P5 architecture study
+
+P4 compaction was skipped because the P0 derivative census found zero rows where free design and raw derivative were both exact zero, zero exact-zero corrected-Jacobian rows, and zero exact-zero projection-only rows. No “small value” threshold was introduced. Residual and cancellation fallback contracts remain intact.
+
+P5 received the required mathematical review; no prototype was justified. The first QR works on free design and raw derivative RHS to assess free-design rank and compute projection coefficients. The nonzero-residual correction then changes the profile Jacobian. The second QR factors that corrected Jacobian into the reduced LM system and transforms its residual RHS. Those factors serve different matrices and the second factorization cannot be removed by reusing only the first R or QᵀRHS result. A one-pass alternative would need to preserve a larger orthogonal representation and still apply the correction while retaining rank and width-derivative semantics; no simpler exact streamed representation was established. The two derivative stages total 333.90 ms (29.3% of the 300-target instrumented FixedNeighbor wall), but the current workflow uses one tile per preparation/reduction, so a persistent workspace or broader QR API had no demonstrated benefit. The existing cancellation detection, reference-order accumulation, and QR fallback remain unchanged.
+
+### P6 final validation and audit
+
+No production optimization passed the real full-workflow gate. Consequently, baseline and final Production metrics are identical by source: A/C rows remain 1,024; derivative preparation/reduction remain 8,192; the current single constrained A/C SparseQR and bounded active-set LM path remain. The P0 five-run baseline set is also the final five-run set because rejected experiments were removed and no Production code changed after it. A post-cleanup real CLI run independently completed in 114.755 s with the same 118 sweeps, 35,828 profile evaluations, 14,680 updates, objective, KKT and preflight; every evidence item passed, including Independent Replay.
+
+| Metric | Baseline | Final Production | Evidence |
+|---|---:|---:|---|
+| Synthetic 300-target FixedNeighbor wall | 1.11853 s median (1.11737–1.11968) | same | Closed-loop benchmark, five measured runs |
+| Synthetic Profile Search | 790.713 ms median (instrumented) | same | Hotspot benchmark, five measured runs |
+| A/C row reduction / Householder / QᵀRHS | 234.92 / 206.73 / 13.47 ms | same | Instrumented five-run benchmark |
+| A/C SparseQR analysis / factor / solve | 2.90 / 6.10 / 0.70 ms | same | Instrumented representative breakdown |
+| Derivative preparation / QR / factor / QᵀRHS | 239.82 / 201.61 / 87.01 / 76.00 ms | same | Instrumented representative breakdown |
+| Derivative reduction / factor / QᵀRHS | 94.08 / 24.78 / 4.63 ms | same | Instrumented representative breakdown |
+| QR work counts | 1,500 A/C tiles; 260 SparseQR; 130 prepare; 130 reduce; 26 projected-width tiles | same | Instrumented representative breakdown |
+| Synthetic process Peak RSS / memory preflight | 88,276,992 B / 36,716,466 B | same | Closed-loop five-run maximum / estimate, preflight passed |
+| Sweeps / accepted updates | 5 / 130 | same | closed-loop benchmark |
+| Objective / A/C KKT / width KKT | `1.47904336e-10` / `5.06726418e-10` / `1.87827531e-12` | same | qualification and Independent Replay passed |
+| Real A/YA CLI wall | 114.975 s median (114.555–115.099) | same five-run baseline; final sanity 114.755 s | five baseline runs plus one post-cleanup run |
+| Real Peak RSS / memory preflight | 1,704,280,064 B median / 133,985,764 B | same preflight; final sanity 1,850,720,256 B RSS | process RSS varied; all five baseline and final sanity passed |
+
+`cmake --build build/release -j4` succeeded. `ctest --test-dir build/release -j4 --output-on-failure` passed 21/21 tests. The build emitted three existing missing-field-initializer warnings in `tests/data/DataObjectPersistence_test.cpp`; that file was not changed. The final `rhbm_joint_optimization_benchmark` reported 12.4676 ms bounded-LM median, 200.034 ms profile-search median, and 19.1829/5.8166 ms derivative prepare/reduce medians, all with replay passed. The 300-target fixed-neighbor closed-loop benchmark passed endpoint qualification, Independent Replay, and memory preflight.
+
+Audit: there is no QR optimization in Production from this follow-up, no new runtime solver selector, no direct SparseQR shadow path, no tile-size selector, and no new persistent cache. The maintained test-only census is consumed by `rhbm_joint_hotspot_attribution_benchmark`; the direct SparseQR study code is absent. The existing Production solver remains a single understandable pipeline. The real CLI does not expose fine-grained QR stage timing or row census, which limits real-data attribution; it does expose full workflow result evidence and preflight. No Notion document was read or changed, no third-party dependency was added, and no branch or worktree was created.
+
+| Stage | Status | Decision |
+|---|---|---|
+| P0 Workload Census | completed | Baseline and exact row/shape/time census committed |
+| P1 Tile Size Tuning | completed, no promotion | 512-row A/C helped synthetic but slowed real; retain 1,024/8,192 |
+| P2 Sparse Row Compaction | skipped | No exact-zero production-like rows to remove |
+| P3 Direct SparseQR | completed, no promotion | Numeric factor/solve cost erased row-reduction savings |
+| P4 Derivative Row Compaction | skipped | No exact-zero derivative rows in observed workload |
+| P5 Derivative Architecture | research-only | Two QR stages have distinct mathematical roles; no simple exact merge |
+| P6 Validation/Cleanup | completed | Release, 21 tests, main benchmarks, and real acceptance passed |
+
+The best next direction for A/C remains reducing dense Householder factorization work without raising SparseQR cost; current exact-zero compaction and tile-size candidates do not meet the real workflow gate. For Profile Derivative, the preparation QR's Householder and QᵀRHS are both substantial, while derivative reduction also spends more time constructing corrected Jacobians than factoring them. Tile-size changes affect cache/workspace footprint and QR count materially but did not produce real-data acceleration. Direct SparseQR is not worthwhile for the measured workload. A new QR kernel is not justified yet; this round should close with the current numerical path and the retained test-only census.
