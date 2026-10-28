@@ -74,11 +74,11 @@ parameter stability, Halo reconstruction, and peeling.
 | --- | --- |
 | SQLite database | Schema v20 |
 | Stage Result JSON | Version 4 |
-| Joint Result JSON | Schema v19 |
+| Joint Result JSON | Schema v20 |
 
 SQLite opens a new empty database by initializing schema v20 and opens an
 existing database only when its exact schema is v20. Stage JSON accepts only
-version 4. Joint JSON accepts only schema 19 and stores target-only Pure
+version 4. Joint JSON accepts only schema 20 and stores target-only Pure
 Exclusion results. No format performs migrations or compatibility decoding.
 Unsupported inputs are rejected without repair or overwrite.
 

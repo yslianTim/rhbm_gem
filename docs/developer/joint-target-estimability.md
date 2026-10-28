@@ -15,13 +15,13 @@ criteria. Global convergence, endpoint verification, and Independent Replay
 remain separate evidence. A Halo has no free Joint point; geometry-local
 kNN-4 Halo Median Reconstruction is a separate downstream result.
 
-The Joint Result writer emits schema v19 and the reader accepts only schema
-v19. The payload retains target point evidence, convergence, component and
+The Joint Result writer emits schema v20 and the reader accepts only schema
+v20. The payload retains target point evidence, convergence, component and
 row mappings, candidate diagnostics, Local Conditioning, Parameter Stability,
 and optional reconstruction evidence. It permits unqualified results,
 missing states, nullable diagnostics, and unavailable reconstruction.
 
-SQLite schema v20 stores Joint schema v19 and Stage Result JSON version 4.
+SQLite schema v20 stores Joint schema v20 and Stage Result JSON version 4.
 Persistence performs no migrations or historical decoding. See the
 [Joint runtime guide](joint-component-runtime.md) and
 [data I/O architecture](architecture/dataobject-io-architecture.md).

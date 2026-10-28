@@ -74,7 +74,7 @@ data as zero.
 ## Persistence
 
 SQLite schema v20 stores the current model structure, Joint Result JSON schema
-19, and Stage Result JSON version 4. Joint JSON is target-only Pure Exclusion.
+20, and Stage Result JSON version 4. Joint JSON is target-only Pure Exclusion.
 Stage JSON retains current FirstStage and SecondStage estimates, raw and
 peeling samples, Post-Joint Local results, group posterior, fixed-charge
 profiles, summaries, and source provenance.

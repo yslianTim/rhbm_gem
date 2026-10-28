@@ -27,7 +27,7 @@ After qualification, Halo A/B/C values are reconstructed from the nearest
 four qualified Target estimates for Original-domain Peeling. Conditioning and
 stability are read-only local diagnostics; they do not change the accepted
 Target estimates or independently deny a qualified endpoint. Current Joint
-results use JSON schema v19, target-only Pure Exclusion, geometry-local kNN-4
+results use JSON schema v20, target-only Pure Exclusion, geometry-local kNN-4
 Halo reconstruction, and no legacy decoding.
 
 ## Search policy and block solver
