@@ -359,22 +359,68 @@ Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
     const Vector widths=eta.array().exp();
     if (!widths.allFinite() || (widths.array()<=0).any()) {out.reason="invalid-b"; return out;}
     const Eigen::Index m=eta.size(); out.x.resize(y.size(),2*m); out.derivative.resize(y.size(),2*m);
-    std::vector<Eigen::Triplet<double>> x,dx;
-    std::size_t memberships{}; for (const auto & atom:domain.atoms) memberships+=atom.size();
-    x.reserve(2*memberships); dx.reserve(2*memberships);
-    for (Eigen::Index a=0;a<m;++a) for (const auto & p:domain.atoms[static_cast<std::size_t>(a)])
+    std::size_t memberships{},maximum_support{};
+    bool ordered_unique=true;
+    for(const auto & atom:domain.atoms)
     {
-        const auto b=EvaluateKernel(p.square,widths(a),2.5);
-        const std::array<double,4> v{b.gaussian,b.charge,b.gaussian_log_width,b.charge_log_width};
-        if (!std::all_of(v.begin(),v.end(),[](double n){return std::isfinite(n);}))
-        {out.reason="nonfinite-basis"; return out;}
-        for (Eigen::Index k=0;k<2;++k)
+        memberships+=atom.size(); maximum_support=std::max(maximum_support,atom.size());
+        Eigen::Index previous=-1;
+        for(const auto & p:atom)
         {
-            if (v[static_cast<std::size_t>(k)]!=0) x.emplace_back(p.row,2*a+k,v[static_cast<std::size_t>(k)]);
-            if (v[static_cast<std::size_t>(k+2)]!=0) dx.emplace_back(p.row,2*a+k,v[static_cast<std::size_t>(k+2)]);
+            if(p.row<=previous) ordered_unique=false;
+            previous=p.row;
         }
     }
-    out.x.setFromTriplets(x.begin(),x.end()); out.derivative.setFromTriplets(dx.begin(),dx.end());
+    if(ordered_unique)
+    {
+        struct Entry {Eigen::Index row; std::array<double,4> values;};
+        std::vector<Entry> entries; entries.reserve(maximum_support);
+        out.x.reserve(static_cast<Eigen::Index>(2*memberships));
+        out.derivative.reserve(static_cast<Eigen::Index>(2*memberships));
+        for(Eigen::Index a=0;a<m;++a)
+        {
+            entries.clear();
+            for(const auto & p:domain.atoms[static_cast<std::size_t>(a)])
+            {
+                const auto b=EvaluateKernel(p.square,widths(a),2.5);
+                const std::array<double,4> v{b.gaussian,b.charge,b.gaussian_log_width,b.charge_log_width};
+                if(!std::all_of(v.begin(),v.end(),[](double n){return std::isfinite(n);}))
+                {out.reason="nonfinite-basis"; return out;}
+                entries.push_back({p.row,v});
+            }
+            for(Eigen::Index k=0;k<2;++k)
+            {
+                const Eigen::Index col=2*a+k;
+                out.x.startVec(col); out.derivative.startVec(col);
+                for(const auto & entry:entries)
+                {
+                    const double value=entry.values[static_cast<std::size_t>(k)];
+                    const double derivative=entry.values[static_cast<std::size_t>(k+2)];
+                    if(value!=0.0) out.x.insertBack(entry.row,col)=value;
+                    if(derivative!=0.0) out.derivative.insertBack(entry.row,col)=derivative;
+                }
+            }
+        }
+        out.x.finalize(); out.derivative.finalize();
+    }
+    else
+    {
+        std::vector<Eigen::Triplet<double>> x,dx;
+        x.reserve(2*memberships); dx.reserve(2*memberships);
+        for(Eigen::Index a=0;a<m;++a) for(const auto & p:domain.atoms[static_cast<std::size_t>(a)])
+        {
+            const auto b=EvaluateKernel(p.square,widths(a),2.5);
+            const std::array<double,4> v{b.gaussian,b.charge,b.gaussian_log_width,b.charge_log_width};
+            if(!std::all_of(v.begin(),v.end(),[](double n){return std::isfinite(n);}))
+            {out.reason="nonfinite-basis"; return out;}
+            for(Eigen::Index k=0;k<2;++k)
+            {
+                if(v[static_cast<std::size_t>(k)]!=0.0) x.emplace_back(p.row,2*a+k,v[static_cast<std::size_t>(k)]);
+                if(v[static_cast<std::size_t>(k+2)]!=0.0) dx.emplace_back(p.row,2*a+k,v[static_cast<std::size_t>(k+2)]);
+            }
+        }
+        out.x.setFromTriplets(x.begin(),x.end()); out.derivative.setFromTriplets(dx.begin(),dx.end());
+    }
     out.valid=true; return out;
 }
 }

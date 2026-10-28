@@ -116,6 +116,47 @@ TEST(JointComponentNumericsTest, TiledDerivativePreservesCancellationReferenceFa
     ASSERT_TRUE(projected_reduced.valid)<<projected_reduced.reason;
 }
 
+TEST(JointComponentNumericsTest, BasisAssemblyMatchesTripletsForOrderedAndDuplicateSupports)
+{
+    auto expected=[](const n::Domain & domain,const Vector & eta) {
+        n::Sparse x(domain.rows,2*eta.size()),derivative(domain.rows,2*eta.size());
+        std::vector<Eigen::Triplet<double>> x_entries,derivative_entries;
+        for(Eigen::Index a=0;a<eta.size();++a) for(const auto & support:domain.atoms[static_cast<std::size_t>(a)])
+        {
+            const auto basis=n::EvaluateKernel(support.square,std::exp(eta(a)),2.5);
+            const std::array<double,4> values{basis.gaussian,basis.charge,
+                basis.gaussian_log_width,basis.charge_log_width};
+            for(Eigen::Index k=0;k<2;++k)
+            {
+                if(values[static_cast<std::size_t>(k)]!=0.0)
+                    x_entries.emplace_back(support.row,2*a+k,values[static_cast<std::size_t>(k)]);
+                if(values[static_cast<std::size_t>(k+2)]!=0.0)
+                    derivative_entries.emplace_back(support.row,2*a+k,values[static_cast<std::size_t>(k+2)]);
+            }
+        }
+        x.setFromTriplets(x_entries.begin(),x_entries.end());
+        derivative.setFromTriplets(derivative_entries.begin(),derivative_entries.end());
+        return std::pair{std::move(x),std::move(derivative)};
+    };
+    const Vector y=Vector::Ones(5),eta=Vector::Constant(1,std::log(.05));
+    const std::vector<std::vector<n::Support>> ordered{{{0,0.0},{1,.0004},{2,.04},{3,6.25},{4,9.0}}};
+    const std::vector<std::vector<n::Support>> unsorted_duplicates{{{2,.04},{0,0.0},{2,.01},
+        {1,.0004},{3,6.25},{4,9.0}}};
+    for(const auto & support:{ordered,unsorted_duplicates})
+    {
+        const n::Domain domain(5,support);
+        const auto context=p::MakeContext(y,1);
+        const auto evaluation=n::EvaluateProfile(domain,y,eta,&context);
+        const auto [expected_x,expected_derivative]=expected(domain,eta);
+        EXPECT_EQ((evaluation.x-expected_x).norm(),0.0);
+        EXPECT_EQ((evaluation.derivative-expected_derivative).norm(),0.0);
+        EXPECT_EQ(evaluation.x.coeff(3,0),0.0);
+        EXPECT_EQ(evaluation.derivative.coeff(3,0),0.0);
+        EXPECT_EQ(evaluation.x.coeff(4,1),0.0);
+        EXPECT_EQ(evaluation.derivative.coeff(4,1),0.0);
+    }
+}
+
 TEST(JointComponentNumericsTest, TiledQRReusesScratchForRepeatedAssembledShape)
 {
     n::TiledQR qr(2,1);
