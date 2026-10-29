@@ -11,7 +11,7 @@
 | P0 原始證據 | 完成 | 25 個 selected block 快照、138 個完成的擾動 seed，含逐端點 KKT 與 Replay 欄位 |
 | P1 Null／Reference | 完成（有明示限制） | N0、N1、baseline-η-seeded N2 與 30/300/1,000 target reference；SearchProfile 會重新 profile β，沒有宣稱直接 full-state β seed |
 | P2 Solver Precision | 部分完成 | 實際改變 Local profile LM `gtol`；A/C constrained linear solve 沒有可安全注入的 KKT stopping tolerance |
-| P3 Qualification | 待完成 |  |
+| P3 Qualification | 完成 | 對 25 個 baseline、25 個 conditional reprofile 與 138 個成功 perturbation endpoint 以同一端點重算 Q0–Q3 |
 | P4 困難案例 | 待完成 |  |
 | P5 Promotion／Cleanup | 待完成 |  |
 
@@ -82,3 +82,17 @@ S0–S2 的 endpoint 逐值相同；S3 提早一個 accepted update 停止，但
 這是實際的 Width profile solver stopping precision 對照，但不是 A/C linear solver tolerance 對照。程式審計發現 `CertifyLinear()` 的 A/C KKT certificate 固定以 `1e-10` 設定 `kkt_passed`；`SolveLinear()` 的 rank policy、active-set 與 refinement controls 不提供獨立的 local KKT target。把這個 certificate 門檻改小／改大會改變共同使用的 evaluation 與 candidate qualification，不會單純改變局部線性求解精度。故本輪不把 A/C KKT threshold 冒充 A/C solver precision，也沒有放寬 Certificate、`CheckReplay()`、`CheckTrust()` 或 Candidate Acceptance。
 
 Precision 個別 run 沒有配置獨立 RSS recorder；T4 30-target process peak RSS 為 `41.2 MB`，local-stability workspace estimate 為 `23.7 MB`。這兩個是整個診斷執行的資源資料，不是每一 gtol 設定的增量記憶體。P2 因此只對 Width LM precision 完成受控矩陣，A/C solver precision 與 per-setting memory 仍未定量。
+
+## P3 — 同端點 Q0–Q3 Qualification Matrix
+
+下表以同一份 raw endpoint 的 Primary／Independent A/C KKT、Primary／Independent Width KKT、bound feasibility 與 replay consistency 計算。Q 放寬不重跑 solver。Qualification 必須同時通過 optimality 與 replay consistency；prediction、residual、objective、gradient 一致性不會隨 Q 門檻放寬。
+
+| Endpoint 類型 | 端點數 | Q0 qualified | Q1 qualified | Q2 qualified | Q3 qualified | Q3 仍失敗原因 |
+|---|---:|---:|---:|---:|---:|---|
+| Baseline | 25 | 6 | 14 | 16 | 21 | 4 個 T4 block 1/2 baseline 的 Width KKT 略高於 `1e-9` |
+| Conditional reprofile | 25 | 6 | 21 | 21 | 21 | 同 4 個 T4 block 1/2 reprofile Width KKT 在 `4.66e-9–5.01e-9` |
+| 完成的 perturbation seed | 138 | 138 | 138 | 138 | 138 | 無 |
+
+`Q0={1e-10,1e-12}`、`Q1={1e-10,1e-9}`、`Q2={1e-8,1e-9}`、`Q3={1e-7,1e-9}`，數值依序為 A/C、Width。25 個 baseline/reprofile 的 replay numerical consistency 欄位全部通過；baseline run-criteria replay 中僅 T4 solver-only block 1/2 因 Width KKT fail。完成的 138 個 seeds 全部 linear solver valid、feasible、width feasible、Independent Replay 通過，並在最嚴格 Q0 通過。132 個 seed 沒有 active A/C 或 width bound；另 6 個 noise-only seed 有 2 個 active A/C constraints 與 2 個 active width bounds，也通過各自 replay consistency 和 Q0 optimality。Raw endpoint 中沒有 rank invalid、nonfinite、budget-exhausted 或 replay-disagreement 的 perturbation seed。
+
+Q3 相對 Q0 多讓 15/25 個 baseline 和 15/25 個 conditional-reprofile 快照通過；它沒有讓任何新的 perturbation endpoint 合格，因為已完成 endpoints 原先都已通過 Q0。T4 full-policy 雖用 Local eligibility width `1e-5` 完成 block 1/2 的診斷，但 Q3 仍拒絕它們：兩個 baseline Width KKT 是 `1.1122e-9`／`1.0308e-9`，兩個 N1 Width KKT 是 `5.0148e-9`／`4.6642e-9`。因此放寬 A/C qualification 或 T4 Local eligibility 都沒有理由改動 Global `1e-9` Width criterion。
