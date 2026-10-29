@@ -30,7 +30,7 @@ JointState State(const Endpoint & endpoint,double scale)
 void AssembleResult(const JointProblem & problem,const ProblemData & data,const JointParameterLayout & layout,
     const Domain & domain,VectorRef y,const EvaluationContext & context,
     const FixedNeighborEndpointCertification & certification,const JointConvergenceCriteria & convergence_criteria,
-    FixedNeighborDiagnosticResult & out)
+    FixedNeighborDiagnosticResult & out,bool accepted_state_integrity)
 {
     out.assessment=certification.assessment;
     out.endpoint_trust=certification.trust;
@@ -52,9 +52,11 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
     component.first_order_stationarity_sweep=out.first_order_stationarity_sweep;
     component.confirmed_stationarity_sweep=out.confirmed_stationarity_sweep;
     component.endpoint_certification_sweep=out.sweeps.size();
-    const bool qualified=certification.qualified();
+    const bool qualified=certification.qualified() && accepted_state_integrity;
     if(qualified) component.state=State(out.assessment.primary,context.scale);
     component.evidence=AssessmentEvidence(out.assessment,JointEvidenceScope::ComponentLocal);
+    component.evidence.push_back({"accepted-state-integrity",accepted_state_integrity ? JointCheckStatus::Passed :
+        JointCheckStatus::Failed,JointEvidenceScope::ComponentLocal,{},{},{}});
     if(out.confirmed_stationarity_sweep)
         component.evidence.push_back({"complete-sweep-stationarity",JointCheckStatus::Passed,
             JointEvidenceScope::ComponentLocal,static_cast<double>(out.confirmed_stationarity_sweep),{},"confirmed"});
@@ -166,7 +168,7 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
         {
             out.work=search.work;
             AssembleResult(problem,data,layout,domain,y,context,*search.certification,
-                policy.convergence_criteria,out);
+                policy.convergence_criteria,out,search.accepted_state_integrity);
         }
         else if(!policy.stop_after_stationarity && search.search_converged &&
             search.state.eta.size()==static_cast<Eigen::Index>(domain.atoms.size()))
@@ -176,7 +178,7 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
                 policy.convergence_criteria);
             out.work=search.work;
             AssembleResult(problem,data,layout,domain,y,context,certification,
-                policy.convergence_criteria,out);
+                policy.convergence_criteria,out,search.accepted_state_integrity);
         }
     }
     return out;

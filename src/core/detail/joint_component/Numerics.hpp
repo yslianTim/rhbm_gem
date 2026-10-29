@@ -39,6 +39,9 @@ struct EvaluationContext
     int profile_budget{200},update_budget{100};
     double profile_cpu_budget_seconds{};
     std::optional<double> eta_upper_bound;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    bool force_width_subproblem_failure_for_testing{};
+#endif
 };
 enum class ProfileEvaluationRole {Unspecified,InitialProfile,TrialProfile,AcceptedEndpoint};
 struct BoundedLmWork
@@ -250,7 +253,7 @@ struct SearchResult
     Vector eta;
     std::vector<Trial> trials;
     int lm_status{},evaluations{},derivatives{},accepted{};
-    bool stopped{},initial_accepted{};
+    bool stopped{},initial_accepted{},width_failed{};
     std::string stop_reason;
     double seconds{};
     ProfileSearchWork profile_work;

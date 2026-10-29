@@ -181,7 +181,7 @@ TEST(JointComponentRuntimeTest, RuntimeConvergenceIsDerivedFromActualEvidenceNot
     EXPECT_EQ(fit.RuntimeConvergence(),Status::Failed);
     set_status("width-stationarity",Status::Passed);
     set_status("active-set-lm-subproblems",Status::Failed);
-    EXPECT_EQ(fit.RuntimeConvergence(),Status::Failed);
+    EXPECT_EQ(fit.RuntimeConvergence(),Status::Passed);
     set_status("active-set-lm-subproblems",Status::Passed);
     evidence.push_back({"local-correction",Status::Failed,rhbm_gem::JointEvidenceScope::ComponentLocal,.1,1e-10,
         "historical-correction-evidence"});
@@ -271,7 +271,7 @@ TEST(JointComponentRuntimeTest, PositiveMapScalingPreservesKernelCoefficientUnit
             1e-10*(1+std::abs((*original.prediction)[i])));
 }
 
-TEST(JointComponentRuntimeTest, HistoricalLmFailureVetoesAnOtherwiseVerifiedEndpoint)
+TEST(JointComponentRuntimeTest, HistoricalLmFailureDoesNotVetoAVerifiedRecoveredEndpoint)
 {
     using Status=core::JointCheckStatus;
     const auto fit=p::FitBoundedJointComponentsForTesting(core::JointProblem(Snapshot()),{.55,.55},2.2);
@@ -282,14 +282,23 @@ TEST(JointComponentRuntimeTest, HistoricalLmFailureVetoesAnOtherwiseVerifiedEndp
     });
     ASSERT_NE(lm,component.evidence.end());
     lm->status=Status::Failed; lm->reason="solves=3; failed=1; safely-rolled-back";
-    EXPECT_EQ(component.RuntimeConvergence(),Status::Failed);
+    EXPECT_EQ(component.RuntimeConvergence(),Status::Passed);
+    const core::JointProblem problem(Snapshot());
+    const auto & data=core::JointProblemAccess::Get(problem);
+    auto components=fit.components; components.front()=component;
+    EXPECT_TRUE(n::AssembleComponents(data.domain,data.y,data.partition,data.context,components).available);
     // Endpoint failures and incomplete recovery must continue to reject output.
-    for(const char * name:{"width-stationarity","endpoint-verification","independent-replay","complete-sweep-stationarity"})
+    for(const char * name:{"width-stationarity","endpoint-verification","independent-replay","complete-sweep-stationarity","accepted-state-integrity"})
     {
         auto bad=component;
         for(auto & check:bad.evidence) if(check.name==name) check.status=Status::Failed;
         EXPECT_NE(bad.RuntimeConvergence(),Status::Passed)<<name;
+        components.front()=bad;
+        EXPECT_FALSE(n::AssembleComponents(data.domain,data.y,data.partition,data.context,components).available)<<name;
     }
+    auto missing=component;
+    std::erase_if(missing.evidence,[](const auto & check){return check.name=="accepted-state-integrity";});
+    EXPECT_EQ(missing.RuntimeConvergence(),Status::Unavailable);
     component.state->b[0]=std::numeric_limits<double>::quiet_NaN();
     EXPECT_NE(component.RuntimeConvergence(),Status::Passed);
 }

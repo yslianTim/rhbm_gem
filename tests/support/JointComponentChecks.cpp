@@ -387,7 +387,7 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
             const auto status=runtime_json::ParseStatus(fit.at("runtime_convergence"));
             for(const char * name:{"ac-feasibility","conditional-ac-optimality","independent-ac-optimality",
                 "independent-kkt-consistency","independent-replay","width-gradient-consistency",
-                "width-stationarity","endpoint-verification","numerical-qualification"})
+                "width-stationarity","endpoint-verification","numerical-qualification","accepted-state-integrity"})
                 child.evidence.push_back({name,status,rhbm_gem::core::JointEvidenceScope::ComponentLocal,{},{},{}});
             child.evidence.push_back({"complete-sweep-stationarity",child.search_completed ?
                 rhbm_gem::core::JointCheckStatus::Passed : rhbm_gem::core::JointCheckStatus::Unavailable,

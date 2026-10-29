@@ -307,10 +307,13 @@ JointCheckStatus JointComponentResult::RuntimeConvergence() const
     });
     status=joint_component::MergeConvergenceStatus(status,stationary==evidence.end() ?
         JointCheckStatus::Unavailable : stationary->status);
-    const auto active_set=std::find_if(evidence.begin(),evidence.end(),[](const auto & check) {
-        return check.name=="active-set-lm-subproblems" && check.scope==JointEvidenceScope::ComponentLocal;
+    // Historical subproblem failures remain diagnostic. Only a verified terminal
+    // state with completed recovery can qualify, alongside all endpoint checks.
+    const auto integrity=std::find_if(evidence.begin(),evidence.end(),[](const auto & check) {
+        return check.name=="accepted-state-integrity" && check.scope==JointEvidenceScope::ComponentLocal;
     });
-    if(active_set!=evidence.end()) status=joint_component::MergeConvergenceStatus(status,active_set->status);
+    status=joint_component::MergeConvergenceStatus(status,integrity==evidence.end() ?
+        JointCheckStatus::Unavailable : integrity->status);
     return status;
 }
 JointCheckStatus JointFitResult::RuntimeConvergence() const

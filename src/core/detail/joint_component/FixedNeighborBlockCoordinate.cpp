@@ -891,7 +891,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 #else
             const bool force_no_trusted_profile=false;
 #endif
-            if(!force_no_trusted_profile)
+            if(!force_no_trusted_profile && !profile_search.width_failed)
                 for(auto it=profile_search.trials.rbegin();it!=profile_search.trials.rend();++it)
                 {
                     if(!it->accepted || !it->endpoint.valid || !it->trust || !it->trust->passed) continue;
@@ -1415,6 +1415,11 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         out.work.parameter_stability_seconds+=stability.seconds;
         out.parameter_stability=std::move(stability);
     }
+    out.unresolved_failures=static_cast<std::size_t>(std::count_if(
+        block_failure_visits.begin(),block_failure_visits.end(),[](auto visits){return visits>0;}));
+    // All accepted-state mutations and the final sweep replay must be intact.
+    // A safely rejected candidate does not poison this terminal evidence.
+    out.accepted_state_integrity=!stop && out.sweep_count>0 && out.unresolved_failures==0;
     return out;
 }
 
@@ -1561,7 +1566,8 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
         };
     }
     out.search=SearchFixedNeighborComponent(prepared.domain,local_layout,local_y,initial_eta,context,policy);
-    const bool qualified=out.search.certification && out.search.certification->qualified();
+    const bool qualified=out.search.accepted_state_integrity && out.search.certification &&
+        out.search.certification->qualified();
     out.succeeded=out.search.search_converged && qualified;
     out.stop_reason=out.search.reason;
     if(progress_component)

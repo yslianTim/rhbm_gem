@@ -161,7 +161,8 @@ struct FixedNeighborSearchResult
     std::optional<JointParameterStability> parameter_stability;
     std::vector<FixedNeighborBlockRecord> blocks;
     std::vector<FixedNeighborBlockSweep> sweeps;
-    bool search_converged{};
+    bool search_converged{},accepted_state_integrity{};
+    std::size_t unresolved_failures{};
     std::string reason;
     std::size_t first_order_stationarity_sweep{},confirmed_stationarity_sweep{},certification_sweep{};
     std::size_t sweep_count{},total_block_solves{},total_profile_evaluations{},total_accepted_local_updates{},

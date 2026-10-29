@@ -1031,6 +1031,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, FailedBlockRetriesAfterLaterBlocksUp
     EXPECT_GT(current.retry_candidate_before->beta.norm(),0.0);
     EXPECT_EQ(current.result.recovery_attempts,1u);
     EXPECT_EQ(current.result.recovery_successes,1u);
+    EXPECT_TRUE(current.result.accepted_state_integrity);
+    EXPECT_EQ(current.result.unresolved_failures,0u);
     const auto first_failure=std::find_if(current.result.blocks.begin(),current.result.blocks.end(),[](const auto & block) {
         return block.block==1 && block.sweep==1;
     });
@@ -1077,6 +1079,8 @@ TEST(JointFixedNeighborBlockCoordinateTest, ExhaustedBlockRecoveryLeavesTheLastA
     EXPECT_EQ(result.reason,"block-recovery-exhausted");
     EXPECT_EQ(result.recovery_attempts,1u);
     EXPECT_EQ(result.recovery_successes,0u);
+    EXPECT_FALSE(result.accepted_state_integrity);
+    EXPECT_GT(result.unresolved_failures,0u);
     EXPECT_EQ(result.sweep_count,1u);
     EXPECT_EQ(result.first_order_stationarity_sweep,0u);
     ASSERT_EQ(accepted_eta.size(),result.state.eta.size());
@@ -1350,4 +1354,25 @@ TEST(JointFixedNeighborBlockCoordinateTest, BudgetExhaustionPreservesCandidateWi
         result.state.eta,result.state.beta,data.context.scale);
     EXPECT_LE(std::abs(result.state.objective-replay.objective),
         n::BlockObjectiveReplayEnclosure(replay.objective));
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, TrustedInitialProfileCannotCompleteFailedWidthRecovery)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    auto context=data.context; context.force_width_subproblem_failure_for_testing=true;
+    n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=6;
+    policy.eta_upper_bound=std::log(2.2); policy.collect_diagnostics=true;
+    const auto result=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,
+        n::Vector::Constant(2,std::log(.55)),context,policy);
+    EXPECT_EQ(result.reason,"block-recovery-exhausted");
+    EXPECT_FALSE(result.accepted_state_integrity);
+    EXPECT_GT(result.unresolved_failures,0u);
+    EXPECT_GT(result.recovery_attempts,0u);
+    EXPECT_EQ(result.recovery_successes,0u);
+    EXPECT_GT(result.work.local_profile_work.bounded_lm.failed_subproblems,0u);
+    ASSERT_FALSE(result.blocks.empty());
+    ASSERT_TRUE(result.blocks.front().failure_diagnostics);
+    EXPECT_TRUE(result.blocks.front().failure_diagnostics->initial_profile_trusted);
+    EXPECT_EQ(result.blocks.front().accepted_updates,0);
 }

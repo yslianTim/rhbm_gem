@@ -80,6 +80,11 @@ struct Profile
         VectorRef diagonal,double radius,double damping)
     {
         ActiveSetStep failed_step;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        if(context.force_width_subproblem_failure_for_testing)
+        {failed_step.status="injected-width-subproblem-failure"; last_bounded_subproblem=failed_step;
+            RecordBoundedSubproblem(failed_step); return failed_step;}
+#endif
         if(!context.eta_upper_bound || !std::isfinite(*context.eta_upper_bound))
         {failed_step.status="invalid-width-upper-bound"; last_bounded_subproblem=failed_step;
             RecordBoundedSubproblem(failed_step); return failed_step;}
@@ -283,6 +288,9 @@ SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & 
     out.initial_accepted=!profile.trace.empty() && profile.trace.front().accepted;
     out.trials=std::move(profile.trace); out.eta=eta; out.lm_status=static_cast<int>(status);
     out.stop_reason=profile.failure.empty() ? "native-lm-stop" : profile.failure;
+    out.width_failed=profile.bounded_lm_work.failed_subproblems>0 ||
+        out.stop_reason=="bounded-tiny-step-nonstationary" ||
+        (out.stop_reason=="unrepresentable-step" && !profile.WidthStationary());
     out.evaluations=profile.evaluations; out.derivatives=profile.derivatives; out.accepted=accepted;
     out.stopped=status==Eigen::LevenbergMarquardtSpace::UserAsked || status==Eigen::LevenbergMarquardtSpace::TooManyFunctionEvaluation || !profile.failure.empty();
     out.seconds=Seconds(start);

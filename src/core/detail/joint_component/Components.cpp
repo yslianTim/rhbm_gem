@@ -254,7 +254,7 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
                         static_cast<double>(certification.verification_memory_estimate.estimated_peak_bytes),
                         static_cast<double>(certification.verification_memory_estimate.budget_bytes),
                         std::string("resource-limit:endpoint-verification:")+certification.verification_memory_estimate.reason});
-                if(certification.qualified())
+                if(certification.qualified() && fit.search.accepted_state_integrity)
                     component.state=ComponentState(certification.assessment.primary,data.context.scale);
             }
         }
@@ -265,6 +265,12 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             Assessment missing; missing.failure=component.stop_reason;
             component.evidence=AssessmentEvidence(missing,JointEvidenceScope::ComponentLocal);
         }
+        component.evidence.push_back({"accepted-state-integrity",fit.search.accepted_state_integrity ?
+            JointCheckStatus::Passed : JointCheckStatus::Failed,JointEvidenceScope::ComponentLocal,
+            static_cast<double>(fit.search.unresolved_failures),0.0,
+            "recovery-attempts="+std::to_string(fit.search.recovery_attempts)+
+                "; recovery-successes="+std::to_string(fit.search.recovery_successes)+
+                "; unresolved="+std::to_string(fit.search.unresolved_failures)});
         const auto & work=fit.search.work.local_profile_work.bounded_lm;
         const bool certified_without_steps=work.subproblem_solves==0 && fit.search.certification &&
             fit.search.certification->qualified();
@@ -277,6 +283,9 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
                 std::optional<double>(work.maximum_subproblem_kkt) : std::nullopt,{},
             "solves="+std::to_string(work.subproblem_solves)+
                 "; failed="+std::to_string(work.failed_subproblems)+
+                "; damping-solves="+std::to_string(work.damping_solves)+
+                "; bracket-solves="+std::to_string(work.bracket_solves)+
+                "; qr-factorizations="+std::to_string(work.damping_qr_factorizations)+
                 "; active-set-iterations="+std::to_string(work.active_set_iterations)+
                 "; releases="+std::to_string(work.releases)+
                 "; active-bound-occurrences="+std::to_string(work.active_bound_occurrences)+

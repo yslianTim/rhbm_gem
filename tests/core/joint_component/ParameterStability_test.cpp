@@ -535,27 +535,15 @@ TEST(JointParameterStabilityTest, LocalAcSolveFailureCannotProduceFalseStableRes
 
 TEST(JointParameterStabilityTest, ConditionalReprofileStatusDoesNotOverrideWidthReplayFailure)
 {
-    const rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",30));
-    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
-    n::FixedNeighborPolicy policy;
-    policy.core_atoms=12;
-    policy.maximum_sweeps=n::ProductionFixedNeighborMaximumSweeps;
-    policy.convergence_criteria={1e-7,1e-5};
-    policy.eta_upper_bound=std::log(2.2);
-    policy.assess_local_conditioning=true;
-    policy.assess_parameter_stability=true;
-    policy.claim_parameter_stability_block=[](int) {return true;};
-    const n::Vector eta=n::Vector::Constant(30,std::log(.55));
-
-    const auto result=n::SearchFixedNeighborComponent(
-        data.domain,data.layout,data.y,eta,data.context,policy);
-    ASSERT_TRUE(result.search_converged)<<result.reason;
-    ASSERT_TRUE(result.parameter_stability);
-    const auto found=std::find_if(result.parameter_stability->blocks.begin(),
-        result.parameter_stability->blocks.end(),[](const auto & block) {
-            return block.block_id=="component/block-1";
-        });
-    ASSERT_NE(found,result.parameter_stability->blocks.end());
+    StabilityFixture fixture;
+    // Prescribe a nonstationary Width; do not depend on a search trajectory
+    // terminating at a particular block under deliberately loose criteria.
+    fixture.eta(0)+=.001;
+    const auto profile=n::EvaluateProfile(fixture.domain,fixture.y,fixture.eta,&fixture.context);
+    ASSERT_TRUE(profile.valid);
+    const auto assessment=n::AssessLocalParameterStability(fixture.domain,fixture.y,fixture.eta,
+        profile.beta,fixture.context,"nonstationary-width/block-1");
+    const auto * found=&assessment.evidence;
     EXPECT_EQ(found->baseline_eligibility_status,"Unavailable");
     EXPECT_EQ(found->baseline_eligibility_reason,"baseline-width-practical-stationarity-failed");
     EXPECT_EQ(found->conditional_reprofile_status,"StrictlyQualified");

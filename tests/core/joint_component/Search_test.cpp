@@ -281,3 +281,17 @@ TEST(JointComponentSearchTest, NearUnitWidthHasOriginIndependentRadiusAndEvaluat
             EXPECT_LE(eta>=upper-1e-14 ? std::max(0.0,gradient) : std::abs(gradient),1e-9);
         }
 }
+
+TEST(JointComponentSearchTest, InitialAcAcceptanceDoesNotHideAWidthSubproblemFailure)
+{
+    Sample sample; const p::Domain domain(sample.grid,sample.atoms);
+    auto context=p::MakeContext(sample.y,2); context.eta_upper_bound=std::log(2.2);
+    context.force_width_subproblem_failure_for_testing=true;
+    const auto search=joint::SearchProfile(domain,sample.y,Eigen::Vector2d(.48,.59),context);
+    EXPECT_TRUE(search.initial_accepted);
+    EXPECT_TRUE(search.width_failed);
+    EXPECT_EQ(search.accepted,0);
+    EXPECT_EQ(search.profile_work.bounded_lm.failed_subproblems,1u);
+    EXPECT_EQ(search.stop_reason,"bounded-subproblem:injected-width-subproblem-failure");
+    EXPECT_TRUE(search.eta.allFinite());
+}
