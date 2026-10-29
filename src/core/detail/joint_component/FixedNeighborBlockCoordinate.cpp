@@ -723,6 +723,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     if(collect_telemetry)
         out.work.structural_preparation_seconds+=Seconds(replay_structure_started);
     const auto certify_endpoint=[&] {
+        ++out.certification_attempts;
         const auto assessment_timer=Measure(collect_telemetry,out.work.endpoint_verification_seconds);
         const auto record_assessment_work=[&](FixedNeighborEndpointCertification certification) {
             if(collect_telemetry)

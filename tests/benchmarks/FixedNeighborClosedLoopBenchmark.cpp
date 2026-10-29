@@ -28,11 +28,13 @@ struct Sample
         profile_derivative_reduce_seconds{};
     std::size_t affected_candidates{},full_replay_fallbacks{},sweep_replays{},
         objective_reconciliations{},sweeps{},accepted_blocks{},unchanged_blocks{},failed_blocks{},
+        first_kkt_sweep{},first_kkt_eligible_sweep{},first_confirmed_sweep{},eta_blocked_sweeps{},
+        certification_attempts{},block_solves{},
         preflight_bytes{},peak_rss_bytes{},profile_evaluations{},profile_derivatives{},
         bounded_subproblems{},damping_solves{},damping_bracket_solves{},damping_bisection_solves{},
         damping_qr_factorizations{},damping_active_set_iterations{},damping_releases{};
     double objective{},global_ac_kkt{},projected_width_kkt{},maximum_cache_replay_error{},
-        mean_amplitude{},mean_charge{},mean_width{};
+        first_kkt_eta_change{},mean_amplitude{},mean_charge{},mean_width{};
     std::string eta_sha256,beta_sha256;
     bool qualified{},independent_replay_passed{},memory_preflight_passed{},full_replay_memory_fallback{};
 };
@@ -91,10 +93,30 @@ Sample Run(std::size_t targets)
     policy.convergence_criteria=joint::PracticalJointConvergenceCriteria;
     policy.eta_upper_bound=std::log(2.2);
     std::size_t accepted_blocks{},unchanged_blocks{},failed_blocks{};
+    std::size_t first_kkt_sweep{},first_kkt_eligible_sweep{},eta_blocked_sweeps{};
+    double first_kkt_eta_change=std::numeric_limits<double>::quiet_NaN();
+    const auto & criteria=policy.convergence_criteria;
     policy.production_progress=[&](const joint::FixedNeighborBlockSweep & sweep) {
         accepted_blocks+=sweep.accepted_blocks;
         unchanged_blocks+=sweep.unchanged_blocks;
         failed_blocks+=sweep.block_solves-sweep.accepted_blocks-sweep.unchanged_blocks;
+        const double width_kkt=sweep.width_bound_applied ? sweep.projected_width_gradient_inf_norm :
+            sweep.global_width_gradient_inf_norm;
+        const bool kkt_passed=std::isfinite(sweep.global_ac_kkt) &&
+            sweep.global_ac_kkt<=criteria.global_ac_kkt && std::isfinite(width_kkt) &&
+            width_kkt<=criteria.global_width_gradient;
+        if(kkt_passed)
+        {
+            if(first_kkt_sweep==0)
+            {
+                first_kkt_sweep=sweep.sweep;
+                first_kkt_eta_change=sweep.eta_change_inf;
+            }
+            if(sweep.eta_change_inf>criteria.confirmed_log_width_change) ++eta_blocked_sweeps;
+            const auto failed_in_sweep=sweep.block_solves-sweep.accepted_blocks-sweep.unchanged_blocks;
+            if(first_kkt_eligible_sweep==0 && sweep.coordinate_confirmation_available && failed_in_sweep==0)
+                first_kkt_eligible_sweep=sweep.sweep;
+        }
     };
 
     const auto started=Clock::now();
@@ -149,6 +171,13 @@ Sample Run(std::size_t targets)
     sample.projected_width_kkt=result.final_sweep->projected_width_gradient_inf_norm;
     sample.maximum_cache_replay_error=result.work.maximum_cache_replay_error;
     sample.sweeps=result.sweep_count;
+    sample.first_kkt_sweep=first_kkt_sweep;
+    sample.first_kkt_eligible_sweep=first_kkt_eligible_sweep;
+    sample.first_confirmed_sweep=result.confirmed_stationarity_sweep;
+    sample.eta_blocked_sweeps=eta_blocked_sweeps;
+    sample.first_kkt_eta_change=first_kkt_eta_change;
+    sample.certification_attempts=result.certification_attempts;
+    sample.block_solves=result.total_block_solves;
     const auto atom_count=result.state.eta.size();
     for(Eigen::Index atom=0;atom<atom_count;++atom)
     {
@@ -223,6 +252,13 @@ void PrintSummary(std::size_t targets,const std::vector<Sample> & samples)
         <<" mean_width="<<representative.mean_width
         <<" eta_sha256="<<representative.eta_sha256
         <<" beta_sha256="<<representative.beta_sha256
+        <<" first_kkt_sweep="<<representative.first_kkt_sweep
+        <<" first_kkt_eligible_sweep="<<representative.first_kkt_eligible_sweep
+        <<" first_confirmed_sweep="<<representative.first_confirmed_sweep
+        <<" eta_blocked_sweeps="<<representative.eta_blocked_sweeps
+        <<" first_kkt_eta_change="<<representative.first_kkt_eta_change
+        <<" certification_attempts="<<representative.certification_attempts
+        <<" block_solves="<<representative.block_solves
         <<" stop_reason="<<representative.stop_reason
         <<" endpoint_qualified="<<representative.qualified
         <<" independent_replay_pass="<<representative.independent_replay_passed<<'\n';

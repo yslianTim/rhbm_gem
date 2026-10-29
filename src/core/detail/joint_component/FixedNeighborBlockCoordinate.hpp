@@ -167,7 +167,7 @@ struct FixedNeighborSearchResult
     std::string reason;
     std::size_t first_order_stationarity_sweep{},confirmed_stationarity_sweep{},certification_sweep{};
     std::size_t sweep_count{},total_block_solves{},total_profile_evaluations{},total_accepted_local_updates{},
-        recovery_attempts{},recovery_successes{},
+        certification_attempts{},recovery_attempts{},recovery_successes{},
         block_preparations{},domain_preparations{},mapping_preparations{};
     std::size_t prepared_mapping_entries{},prepared_mapping_bytes{};
     MemoryEstimate memory_estimate,global_state_memory_estimate;
