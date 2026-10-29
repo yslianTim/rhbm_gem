@@ -36,6 +36,9 @@ with project internals.
   the fitting workflow.
 - [Capabilities and limitations](joint-capabilities-limitations.md) identifies
   supported behavior and current evidence limits.
+- [Local parameter stability calibration study](joint-local-parameter-stability-calibration-study.md)
+  records the warning-threshold evidence and its remaining limits; it does not
+  replace the production runtime contract.
 - [Memory planning](joint-component-memory-census.md) documents production
   preflight estimates and their limits.
 - [Historical evidence](joint-component-evidence.md) summarizes retired
