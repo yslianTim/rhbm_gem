@@ -53,6 +53,30 @@ parameter validity, conditioning, stability, point quality, and reasons.
 These diagnostics retain `Unavailable` and `NotAssessed` states where work
 could not be assessed; they do not replace global convergence evidence.
 
+### practical-v2 evaluation
+
+This evaluation supports practical-v2 as the production default. The
+measurements below cover numerical qualification, parameter accuracy, and
+resource use.
+
+The practical-v2 policy was compared with a frozen practical-v1 Release build
+using one thread and five measured runs after one warmup. On the 3, 30, 300,
+and 1,000 target synthetic chains, both versions qualified the endpoint and
+passed Independent Replay. KKT-only saved one sweep on 3, 300, and 1,000
+targets; median wall time changed by -21.5%, +1.2%, -16.2%, and -16.2%,
+respectively. Peak RSS changed by less than 1.2% in either direction. At 300
+and 1,000 targets, maximum paired per-target differences were `3.81e-6` for A,
+`3.16e-7` for C, and `2.62e-7` for B; the 30-target result was bitwise
+identical. The largest objective increase was `1.89e-14`.
+
+Signed cancellation now certifies after 19 sweeps where practical-v1 exhausted
+its 500-sweep budget, with log-width change `2.13e-6`. The noise-only fixture
+reaches a certified KKT endpoint after two sweeps while parameter-stability
+evidence remains `insufficient-history` and `NotAssessed`. This is numerical
+stationarity evidence, not evidence that parameters are identifiable or
+stable. Rank-deficient and near-singular fixtures still exhaust recovery
+without endpoint qualification. No real cryo-EM map workload was available.
+
 ## Halo reconstruction and downstream work
 
 Qualified Joint Target points are the donors for geometry-local Halo Median
