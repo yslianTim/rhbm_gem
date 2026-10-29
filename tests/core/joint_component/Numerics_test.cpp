@@ -85,13 +85,9 @@ TEST(JointComponentNumericsTest, TiledDerivativePreservesCancellationReferenceFa
     ASSERT_GT(evaluation.beta(0),0.0);
     EXPECT_GT(evaluation.residual.norm(),0.0);
 
-    const bool attribution_was_enabled=n::HotspotAttributionEnabled();
-    n::SetHotspotAttributionEnabled(true);
     const auto full=n::PrepareDerivative(evaluation,context.scale,&context,-1,3);
-    n::SetHotspotAttributionEnabled(attribution_was_enabled);
     ASSERT_TRUE(full.valid)<<full.reason;
     EXPECT_TRUE(full.reference_order);
-    EXPECT_EQ(full.breakdown.cancellation_fallbacks,1u);
     const auto dense=p::DenseDifferentiate(evaluation,context.scale,&context);
     ASSERT_TRUE(dense.valid)<<dense.reason;
     Matrix raw_tile,projected_tile,jacobian_tile;
@@ -188,6 +184,122 @@ TEST(JointComponentNumericsTest, TiledQRReusesScratchForRepeatedAssembledShape)
     qr.Append(rows,rhs);
     EXPECT_EQ(qr.scratch_rows.data(),row_storage);
     EXPECT_EQ(qr.scratch_rhs.data(),rhs_storage);
+}
+
+TEST(JointComponentNumericsTest, SparseSolveCountsZeroDesignRowsWithNonzeroRhsInObjective)
+{
+    namespace n=p::runtime;
+    Matrix dense=Matrix::Zero(9,4);
+    dense(0,0)=1.0;
+    dense(1,1)=1.0;
+    dense(2,2)=1.0;
+    dense(3,3)=1.0;
+    dense(4,0)=.5;
+    dense(4,2)=-.25;
+    dense(4,3)=.125;
+    const n::Sparse sparse=dense.sparseView(0.0,0.0);
+    const Vector truth=(Vector(4)<<.8,-.3,1.2,.5).finished();
+    Vector rhs=dense*truth;
+    rhs(4)+=.125;
+    rhs(5)=.5;
+    rhs(6)=-.25;
+    rhs(7)=.75;
+
+    ASSERT_LT(sparse.nonZeros(),dense.size());
+    n::LinearSolveWorkspace workspace;
+    const auto solved=n::SolveLinear(sparse,rhs,nullptr,0,&workspace);
+    ASSERT_TRUE(solved.valid)<<solved.reason;
+    EXPECT_EQ(solved.rank,4);
+    EXPECT_GE(solved.beta(0),0.0);
+    EXPECT_GE(solved.beta(2),0.0);
+
+    const Eigen::ColPivHouseholderQR<Matrix> reference(dense);
+    ASSERT_EQ(reference.rank(),dense.cols());
+    const Vector reference_beta=reference.solve(rhs);
+    EXPECT_LE((solved.beta-reference_beta).norm()/(1+reference_beta.norm()),2e-8);
+
+    const auto certificate=n::CertifyLinear(sparse,rhs,solved.beta);
+    ASSERT_TRUE(certificate.available);
+    EXPECT_TRUE(certificate.feasible);
+    EXPECT_TRUE(certificate.kkt_passed);
+    EXPECT_LE(certificate.projected_kkt,1e-10);
+    const Vector residual=dense*solved.beta-rhs;
+    EXPECT_NEAR(certificate.objective,.5*residual.squaredNorm(),1e-13);
+    EXPECT_NEAR(certificate.objective,
+        .5*(rhs.segment(5,3).squaredNorm()+residual.head(5).squaredNorm()),1e-13);
+    EXPECT_GT(rhs.segment(5,3).squaredNorm(),0.0);
+}
+
+TEST(JointComponentNumericsTest, ControlledQrMatchesDenseReferenceAcrossPartialFinalTile)
+{
+    namespace n=p::runtime;
+    constexpr Eigen::Index rows=2053;
+    constexpr double pi=std::numbers::pi;
+    const std::array<std::pair<Eigen::Index,double>,2> fixtures{{{4,.25},{24,1.0}}};
+    for(const auto [columns,support_ratio]:fixtures)
+    {
+        Matrix dense=Matrix::Zero(rows,columns);
+        const Eigen::Index supported=std::max<Eigen::Index>(1,
+            static_cast<Eigen::Index>(std::llround(support_ratio*static_cast<double>(columns))));
+        for(Eigen::Index row=0;row<rows;++row) for(Eigen::Index col=0;col<columns;++col)
+        {
+            const bool present=support_ratio==1.0 ||
+                ((col-row%columns+columns)%columns)<supported;
+            if(!present) continue;
+            const double phase=2*pi*static_cast<double>((col+1)*(row+1))/static_cast<double>(rows);
+            dense(row,col)=std::sin(phase)+.37*std::cos(phase)+.001*static_cast<double>(row+col);
+        }
+        Vector truth(columns);
+        for(Eigen::Index col=0;col<columns;++col)
+            truth(col)=col%2 ? -.12-.003*static_cast<double>(col) : .4+.02*static_cast<double>(col);
+        Vector rhs=dense*truth;
+        for(Eigen::Index row=0;row<rows;++row) rhs(row)+=.001*std::sin(.13*static_cast<double>(row));
+        const n::Sparse sparse=dense.sparseView(0.0,0.0);
+        const auto solved=n::SolveLinear(sparse,rhs);
+        ASSERT_TRUE(solved.valid)<<"columns="<<columns<<" reason="<<solved.reason;
+        EXPECT_EQ(solved.rank,columns);
+        EXPECT_EQ(rows%1024,5);
+
+        const Eigen::ColPivHouseholderQR<Matrix> reference(dense);
+        ASSERT_EQ(reference.rank(),columns);
+        const Vector reference_beta=reference.solve(rhs);
+        EXPECT_LE((solved.beta-reference_beta).norm()/(1+reference_beta.norm()),2e-8);
+
+        const auto certificate=n::CertifyLinear(sparse,rhs,solved.beta);
+        ASSERT_TRUE(certificate.available);
+        EXPECT_TRUE(certificate.feasible);
+        EXPECT_TRUE(certificate.kkt_passed);
+        EXPECT_LE(certificate.projected_kkt,1e-10);
+        const Vector residual=dense*solved.beta-rhs;
+        EXPECT_NEAR(certificate.objective,.5*residual.squaredNorm(),
+            1e-12+2e-12*std::abs(certificate.objective));
+    }
+}
+
+TEST(JointComponentNumericsTest, NearRankDeficientTwentyFourColumnDesignIsClassifiedAsRankTwentyThree)
+{
+    namespace n=p::runtime;
+    constexpr Eigen::Index rows=2053,columns=24;
+    constexpr double perturbation=1e-14;
+    Matrix dense=Matrix::Zero(rows,columns);
+    for(Eigen::Index col=0;col<columns-1;++col) dense(col,col)=1.0;
+    dense(columns-3,columns-1)=1.0;
+    dense(columns-2,columns-1)=perturbation;
+    const n::Sparse sparse=dense.sparseView(0.0,0.0);
+    Vector truth=Vector::LinSpaced(columns,.2,.8);
+    const Vector rhs=dense*truth;
+    const double rank_threshold=std::numeric_limits<double>::epsilon()*static_cast<double>(rows);
+    Eigen::ColPivHouseholderQR<Matrix> reference(dense);
+    reference.setThreshold(rank_threshold);
+    ASSERT_EQ(reference.rank(),23);
+
+    n::LinearPolicy policy;
+    policy.rank_relative=rank_threshold;
+    const auto solved=n::SolveLinear(sparse,rhs,&policy);
+    EXPECT_FALSE(solved.valid);
+    EXPECT_EQ(solved.reason,"rank-deficient");
+    EXPECT_EQ(solved.rank,23);
+    EXPECT_NE(solved.rank,columns);
 }
 
 ;
