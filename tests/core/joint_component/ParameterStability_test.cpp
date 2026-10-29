@@ -716,4 +716,79 @@ TEST(JointParameterStabilityTest, SplitCandidatesPreserveTheCompleteAcceptedFitA
         EXPECT_EQ(b1.diagnostics.seed_scaled_ac_endpoint,b2.diagnostics.seed_scaled_ac_endpoint);
     }
 }
+
+TEST(JointParameterStabilityTest, SplitMetricValuesMatchAcrossMinimalAndWorkspaceReuseOnThirtyTargets)
+{
+    const rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",30));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const auto run=[&](n::SplitDiagnosticsMode mode) {
+        n::FixedNeighborPolicy policy;
+        policy.core_atoms=12;
+        policy.maximum_sweeps=n::ProductionFixedNeighborMaximumSweeps;
+        policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
+        policy.eta_upper_bound=std::log(2.2);
+        policy.assess_local_conditioning=true;
+        policy.assess_parameter_stability=true;
+        policy.claim_parameter_stability_block=[](int) {return true;};
+        policy.split_diagnostics_mode=mode;
+        const auto eta=n::Vector::Constant(30,std::log(.55));
+        return n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,data.context,policy);
+    };
+    const auto minimal=run(n::SplitDiagnosticsMode::Minimal);
+    const auto reused=run(n::SplitDiagnosticsMode::ReuseWorkspace);
+    ASSERT_TRUE(minimal.certification && reused.certification);
+    EXPECT_EQ(minimal.state.eta,reused.state.eta);
+    EXPECT_EQ(minimal.state.beta,reused.state.beta);
+    EXPECT_EQ(minimal.state.prediction,reused.state.prediction);
+    EXPECT_EQ(minimal.state.residual,reused.state.residual);
+    EXPECT_DOUBLE_EQ(minimal.state.objective,reused.state.objective);
+    ASSERT_TRUE(minimal.parameter_stability && reused.parameter_stability);
+    ASSERT_EQ(minimal.parameter_stability->blocks.size(),reused.parameter_stability->blocks.size());
+    ASSERT_EQ(minimal.split_diagnostics.size(),reused.split_diagnostics.size());
+    const auto expect_same=[](const std::optional<double> & left,const std::optional<double> & right) {
+        ASSERT_EQ(left.has_value(),right.has_value());
+        if(left) EXPECT_DOUBLE_EQ(*left,*right);
+    };
+    for(std::size_t index=0;index<minimal.parameter_stability->blocks.size();++index)
+    {
+        EXPECT_EQ(minimal.parameter_stability->blocks[index].status,reused.parameter_stability->blocks[index].status);
+        EXPECT_EQ(minimal.parameter_stability->blocks[index].prediction_status,
+            reused.parameter_stability->blocks[index].prediction_status);
+    }
+    for(std::size_t index=0;index<minimal.split_diagnostics.size();++index)
+    {
+        const auto & left=minimal.split_diagnostics[index].diagnostics;
+        const auto & right=reused.split_diagnostics[index].diagnostics;
+        EXPECT_EQ(minimal.split_diagnostics[index].block_id,reused.split_diagnostics[index].block_id);
+        EXPECT_EQ(left.status,right.status);
+        EXPECT_EQ(left.reason,right.reason);
+        EXPECT_EQ(left.null_reference_status,right.null_reference_status);
+        EXPECT_EQ(left.null_reference_failure_reason,right.null_reference_failure_reason);
+        EXPECT_EQ(left.high_budget_reference_status,right.high_budget_reference_status);
+        EXPECT_EQ(left.qualified_seed_count,right.qualified_seed_count);
+        EXPECT_EQ(left.assessed_direction_count,right.assessed_direction_count);
+        EXPECT_EQ(left.incomplete_direction_count,right.incomplete_direction_count);
+        EXPECT_EQ(left.null_profile_evaluations,right.null_profile_evaluations);
+        EXPECT_EQ(left.null_accepted_updates,right.null_accepted_updates);
+        expect_same(left.reoptimization_prediction_drift,right.reoptimization_prediction_drift);
+        expect_same(left.reoptimization_log_width_difference_inf,right.reoptimization_log_width_difference_inf);
+        expect_same(left.reoptimization_scaled_ac_difference,right.reoptimization_scaled_ac_difference);
+        expect_same(left.seed_prediction_robustness,right.seed_prediction_robustness);
+        expect_same(left.seed_log_width_difference_inf,right.seed_log_width_difference_inf);
+        expect_same(left.seed_scaled_ac_difference,right.seed_scaled_ac_difference);
+        expect_same(left.high_budget_width_difference_inf,right.high_budget_width_difference_inf);
+        expect_same(left.high_budget_scaled_ac_difference,right.high_budget_scaled_ac_difference);
+        expect_same(left.high_budget_prediction_difference_relative,right.high_budget_prediction_difference_relative);
+        ASSERT_EQ(left.directions.size(),right.directions.size());
+        for(std::size_t direction=0;direction<left.directions.size();++direction)
+        {
+            EXPECT_EQ(left.directions[direction].direction,right.directions[direction].direction);
+            EXPECT_EQ(left.directions[direction].status,right.directions[direction].status);
+            EXPECT_EQ(left.directions[direction].reason,right.directions[direction].reason);
+            EXPECT_EQ(left.directions[direction].prediction_endpoint,right.directions[direction].prediction_endpoint);
+            EXPECT_EQ(left.directions[direction].log_width_endpoint,right.directions[direction].log_width_endpoint);
+            EXPECT_EQ(left.directions[direction].scaled_ac_endpoint,right.directions[direction].scaled_ac_endpoint);
+        }
+    }
+}
 }

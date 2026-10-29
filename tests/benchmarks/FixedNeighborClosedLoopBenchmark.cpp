@@ -9,6 +9,8 @@
 #include <ctime>
 #include <iomanip>
 #include <iostream>
+#include <limits>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <sys/resource.h>
@@ -20,6 +22,10 @@ using Clock=std::chrono::steady_clock;
 struct Sample
 {
     std::string stop_reason,mode,split_status,split_reason,null_reference_status;
+    std::optional<double> max_reoptimization_prediction_drift,max_reoptimization_log_width_difference,
+        max_reoptimization_scaled_ac_difference,max_seed_prediction_robustness,
+        max_seed_log_width_difference,max_seed_scaled_ac_difference,max_high_budget_width_difference,
+        max_high_budget_scaled_ac_difference,max_high_budget_prediction_difference;
     double search_seconds{},wall_seconds{},cpu_seconds{},parameter_stability_seconds{},
         parameter_stability_cpu_seconds{},null_search_seconds{},null_search_cpu_seconds{},
         candidate_seconds{},sweep_replay_seconds{},
@@ -81,6 +87,11 @@ double Median(std::vector<double> values)
     std::sort(values.begin(),values.end());
     const auto middle=values.size()/2;
     return values.size()%2 ? values[middle] : .5*(values[middle-1]+values[middle]);
+}
+
+void KeepMaximum(std::optional<double> & maximum,const std::optional<double> & value)
+{
+    if(value && (!maximum || *value>*maximum)) maximum=value;
 }
 
 template<class Getter>
@@ -187,6 +198,15 @@ Sample Run(std::size_t targets,joint::SplitDiagnosticsMode split_mode)
         sample.null_replay_checks+=split.null_replay_checks;
         sample.split_workspace_peak_bytes=std::max(sample.split_workspace_peak_bytes,
             split.workspace_estimate_bytes);
+        KeepMaximum(sample.max_reoptimization_prediction_drift,split.reoptimization_prediction_drift);
+        KeepMaximum(sample.max_reoptimization_log_width_difference,split.reoptimization_log_width_difference_inf);
+        KeepMaximum(sample.max_reoptimization_scaled_ac_difference,split.reoptimization_scaled_ac_difference);
+        KeepMaximum(sample.max_seed_prediction_robustness,split.seed_prediction_robustness);
+        KeepMaximum(sample.max_seed_log_width_difference,split.seed_log_width_difference_inf);
+        KeepMaximum(sample.max_seed_scaled_ac_difference,split.seed_scaled_ac_difference);
+        KeepMaximum(sample.max_high_budget_width_difference,split.high_budget_width_difference_inf);
+        KeepMaximum(sample.max_high_budget_scaled_ac_difference,split.high_budget_scaled_ac_difference);
+        KeepMaximum(sample.max_high_budget_prediction_difference,split.high_budget_prediction_difference_relative);
         sample.split_qualified_blocks+=split.status=="Qualified" ? 1u : 0u;
         sample.split_incomplete_blocks+=split.status=="Incomplete" || split.status=="Unavailable" ? 1u : 0u;
         if(sample.split_status.empty())
@@ -299,6 +319,24 @@ void PrintSummary(std::size_t targets,const std::string & mode,const std::vector
         <<" split_status="<<representative.split_status
         <<" split_reason="<<representative.split_reason
         <<" null_reference_status="<<representative.null_reference_status
+        <<" max_reoptimization_prediction_drift="<<representative.max_reoptimization_prediction_drift.value_or(
+            std::numeric_limits<double>::quiet_NaN())
+        <<" max_reoptimization_log_width_difference="<<representative.max_reoptimization_log_width_difference.value_or(
+            std::numeric_limits<double>::quiet_NaN())
+        <<" max_reoptimization_scaled_ac_difference="<<representative.max_reoptimization_scaled_ac_difference.value_or(
+            std::numeric_limits<double>::quiet_NaN())
+        <<" max_seed_prediction_robustness="<<representative.max_seed_prediction_robustness.value_or(
+            std::numeric_limits<double>::quiet_NaN())
+        <<" max_seed_log_width_difference="<<representative.max_seed_log_width_difference.value_or(
+            std::numeric_limits<double>::quiet_NaN())
+        <<" max_seed_scaled_ac_difference="<<representative.max_seed_scaled_ac_difference.value_or(
+            std::numeric_limits<double>::quiet_NaN())
+        <<" max_high_budget_width_difference="<<representative.max_high_budget_width_difference.value_or(
+            std::numeric_limits<double>::quiet_NaN())
+        <<" max_high_budget_scaled_ac_difference="<<representative.max_high_budget_scaled_ac_difference.value_or(
+            std::numeric_limits<double>::quiet_NaN())
+        <<" max_high_budget_prediction_difference="<<representative.max_high_budget_prediction_difference.value_or(
+            std::numeric_limits<double>::quiet_NaN())
         <<" accepted_state_fnv1a64="<<std::hex<<std::setw(16)<<std::setfill('0')
         <<representative.accepted_state_fingerprint<<std::dec<<std::setfill(' ')
         <<" accepted_state_fingerprint_equal="<<state_fingerprint_equal

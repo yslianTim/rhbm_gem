@@ -38,3 +38,18 @@ The first controlled 3-target benchmark (Release; single numeric thread; 1 warmu
 | B2 | 16.381 ms | 12.617 ms | 2.113 ms | 23.82 MB | 1/1 Qualified |
 
 All three runs had accepted-state fingerprint `a7980d92f9da5a52`; the B1 fit used 6 N2 profile evaluations, 2 accepted updates, and 2 strict replay checks. In the 2-target array regression, B0/B1/B2 were directly equal. Full workload matrix and B2 retention decision are deferred to S2/S3.
+
+## S2 — B2 workspace reuse experiment
+
+**Status: Complete; B2 not retained for promotion.** B2 reuses one endpoint prediction buffer plus five difference/decomposition buffers while calculating endpoint metrics. It uses the same N2 searches, endpoint qualification, directions, replay policy, and calculations as B1.
+
+Across 3/30/300/1,000 targets, B2 matched B1 split status, N2 qualification, counts, high-budget endpoint, all aggregate Drift/Seed metrics, endpoint fingerprints, and Accepted State fingerprints. A direct 30-target C++ regression also requires equality of each selected block's qualification, reason, all split scalar metrics, endpoint identities, and full accepted arrays.
+
+| Targets | B1 wall | B2 wall | B2 vs B1 | B1 stability CPU | B2 stability CPU | B1 peak RSS | B2 peak RSS |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 3 | 16.222 ms | 16.288 ms | +0.41% | 12.492 ms | 12.549 ms | 23.675 MB | 23.839 MB |
+| 30 | 390.063 ms | 388.846 ms | -0.31% | 284.130 ms | 284.288 ms | 35.095 MB | 35.422 MB |
+| 300 | 1.1900 s | 1.1884 s | -0.14% | 256.729 ms | 256.856 ms | 87.704 MB | 87.753 MB |
+| 1,000 | 3.4889 s | 3.4913 s | +0.07% | 372.284 ms | 373.104 ms | 232.899 MB | 236.077 MB |
+
+The wall differences change sign and remain below 0.5%; B2 does not reduce stability CPU, and its preallocated scratch can raise peak RSS. The implementation adds mode branches, six reusable vectors, and separate buffer lifetime management without measurable production value. Decision: retain B1 semantics only if C1 is later promoted; remove the B2 runtime branch/workspace during final cleanup.
