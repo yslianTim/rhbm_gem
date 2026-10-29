@@ -98,8 +98,8 @@ TEST(JointComponentSearchTest, BudgetAndTinyBoundedStepsReturnWithoutAnUpdate)
     EXPECT_EQ(budget.calls,2); EXPECT_EQ(x(0),0); EXPECT_EQ(lm.iterations(),1);
     RejectOnce tiny; tiny.tiny_step=true; p::InstrumentedLM<RejectOnce> small(tiny);
     x.setOnes(); small.minimizeInit(x);
-    EXPECT_EQ(small.minimizeOneStep(x),Eigen::LevenbergMarquardtSpace::CosinusTooSmall);
-    EXPECT_EQ(tiny.failure,"bounded-tiny-step"); EXPECT_EQ(x(0),1); EXPECT_EQ(tiny.calls,1);
+    EXPECT_EQ(small.minimizeOneStep(x),Eigen::LevenbergMarquardtSpace::UserAsked);
+    EXPECT_EQ(tiny.failure,"bounded-tiny-step-nonstationary"); EXPECT_EQ(x(0),1); EXPECT_EQ(tiny.calls,1);
 }
 
 namespace {
@@ -158,7 +158,7 @@ TEST(JointComponentSearchTest, InstrumentedLmUsesTheConstrainedStepForTrustRatio
     BoundedLinearResidual functor;
     p::InstrumentedLM<BoundedLinearResidual> lm(functor);
     Vector x(2); x<<10.0,10.0;
-    lm.parameters.factor=.1;
+    lm.parameters.factor=.5; // Reach the active bound with an origin-independent radius.
     ASSERT_EQ(lm.minimizeInit(x),Eigen::LevenbergMarquardtSpace::NotStarted);
     const auto status=lm.minimizeOneStep(x);
     EXPECT_TRUE(status==Eigen::LevenbergMarquardtSpace::Running ||
@@ -193,7 +193,7 @@ TEST(JointComponentSearchTest, BoundedLmStopsAtAValidBoundaryKktPoint)
     EXPECT_NEAR(x(0),10.2,1e-12);
     EXPECT_NEAR(x(1),0.0,1e-8);
     EXPECT_EQ(status,Eigen::LevenbergMarquardtSpace::CosinusTooSmall);
-    EXPECT_EQ(functor.failure,"bounded-tiny-step");
+    EXPECT_EQ(functor.failure,"bounded-stationary");
 }
 
 TEST(JointComponentSearchTest, BoundedProfileSearchKeepsEveryEvaluatedWidthFeasible)
@@ -236,7 +236,7 @@ namespace {
 // The same physical log-width t=x+reference is expressed about different origins.
 struct ShiftedWidthResidual
 {
-    double reference{},target{.01},sensitivity{2.199712482e-4};
+    double reference{},target{2.1},sensitivity{2.199712482e-4};
     int evaluations{};
     double initial_radius{};
     std::string failure;
@@ -253,19 +253,31 @@ struct ShiftedWidthResidual
     bool Trial(const Vector &,const Vector &,const Vector &,double,double,double,double,double,bool) {return true;}
 };
 }
-TEST(JointComponentSearchTest, NearUnitWidthReproducesOriginDependentTinyStep)
+TEST(JointComponentSearchTest, NearUnitWidthHasOriginIndependentRadiusAndEvaluatesCandidates)
 {
-    for(const double physical_eta:{0.0,std::log(1.000000000626)})
-    {
-        ShiftedWidthResidual f; p::InstrumentedLM<ShiftedWidthResidual> lm(f);
-        Vector x=Vector::Constant(1,physical_eta); lm.parameters.factor=.1;
-        lm.minimizeInit(x); lm.minimizeOneStep(x);
-        if(physical_eta==0.0) {EXPECT_GT(f.evaluations,1); EXPECT_GT(x(0),physical_eta);}
-        else {EXPECT_EQ(f.evaluations,1); EXPECT_EQ(f.failure,"bounded-tiny-step"); EXPECT_LT(f.initial_radius,2e-14);}
-    }
-    ShiftedWidthResidual shifted; shifted.reference=1.0;
-    p::InstrumentedLM<ShiftedWidthResidual> lm(shifted);
-    Vector x=Vector::Constant(1,std::log(1.000000000626)-shifted.reference);
-    lm.parameters.factor=.1; lm.minimizeInit(x); lm.minimizeOneStep(x);
-    EXPECT_GT(shifted.evaluations,1);
+    double first_radius=0.0,first_eta=0.0;
+    for(const double reference:{0.0,1.0,-4.0})
+        for(const double physical_eta:{0.0,std::log(1.000000000626)})
+        {
+            ShiftedWidthResidual f; f.reference=reference;
+            p::InstrumentedLM<ShiftedWidthResidual> lm(f);
+            Vector x=Vector::Constant(1,physical_eta-reference); lm.parameters.factor=.1;
+            lm.parameters.gtol=1e-12;
+            lm.minimizeInit(x); auto status=lm.minimizeOneStep(x);
+            EXPECT_GT(f.evaluations,1)<<f.failure;
+            EXPECT_TRUE(x.allFinite());
+            EXPECT_GT(x(0)+reference,physical_eta);
+            EXPECT_NEAR(f.initial_radius,.1*f.sensitivity,1e-18);
+            if(first_radius==0.0) {first_radius=f.initial_radius; first_eta=x(0)+reference;}
+            EXPECT_NEAR(f.initial_radius,first_radius,1e-18);
+            EXPECT_NEAR(x(0)+reference,first_eta,1e-8);
+            EXPECT_LT(std::abs(x(0)+reference-f.target),std::abs(physical_eta-f.target));
+            for(int i=0;i<30 && status==Eigen::LevenbergMarquardtSpace::Running;++i)
+                status=lm.minimizeOneStep(x);
+            const double eta=x(0)+reference;
+            const double upper=std::log(3.0660309206);
+            const double gradient=f.sensitivity*f.sensitivity*(eta-f.target);
+            EXPECT_LE(eta,upper+1e-14);
+            EXPECT_LE(eta>=upper-1e-14 ? std::max(0.0,gradient) : std::abs(gradient),1e-9);
+        }
 }

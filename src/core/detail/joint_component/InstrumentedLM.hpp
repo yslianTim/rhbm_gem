@@ -140,11 +140,11 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
   if (iter == 1) {
     for (Index j = 0; j < n; ++j) diag[j] = (wa2[j] == 0.) ? 1. : wa2[j];
 
-    /* on the first iteration, calculate the norm of the scaled x */
-    /* and initialize the step bound delta. */
+    // A unit log-width increment has scaled norm ||D||. With factor=.1,
+    // the initial radius represents a 10% log-width update, independent of
+    // the coordinate origin. Bounds and objective acceptance still govern p.
     xnorm = diag.cwiseProduct(x).stableNorm();
-    delta = parameters.factor * xnorm;
-    if (delta == 0.) delta = parameters.factor;
+    delta = parameters.factor * diag.stableNorm();
   }
 
   /* form (q transpose)*fvec and store the first n components in */
@@ -161,7 +161,11 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
                            abs(fjac.col(j).head(j + 1).dot(qtf.head(j + 1) / fnorm) / wa2[permutation.indices()[j]]));
 
   /* test for convergence of the gradient norm. */
-  if (gnorm <= parameters.gtol) return LevenbergMarquardtSpace::CosinusTooSmall;
+  if (gnorm <= parameters.gtol) {
+    if constexpr(requires { functor.WidthStationary(); }) {
+      if(functor.WidthStationary()) return LevenbergMarquardtSpace::CosinusTooSmall;
+    } else return LevenbergMarquardtSpace::CosinusTooSmall;
+  }
 
   /* rescale if necessary. */
   diag = diag.cwiseMax(wa2);
@@ -185,9 +189,19 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
       functor.failure="non-finite-bounded-step";
       return LevenbergMarquardtSpace::UserAsked;
     }
-    if(bounded.scaled_step_norm<=Scalar(64)*NumTraits<Scalar>::epsilon()*(std::max)(Scalar(1),delta)) {
-      functor.failure="bounded-tiny-step";
-      return LevenbergMarquardtSpace::CosinusTooSmall;
+    // A small D must not hide a meaningful physical log-width increment.
+    if(wa1.template lpNorm<Infinity>()<=Scalar(64)*NumTraits<Scalar>::epsilon()) {
+      bool stationary;
+      if constexpr(requires { functor.WidthStationary(); }) stationary=functor.WidthStationary();
+      else {
+        FVectorType gradient=bounded_jacobian.transpose()*bounded_response;
+        for(Index i=0;i<n;++i)
+          if(bounded.active[static_cast<std::size_t>(i)] && wa1(i)>=Scalar(0))
+            gradient(i)=(std::max)(Scalar(0),gradient(i));
+        stationary=gradient.template lpNorm<Infinity>()<=parameters.gtol;
+      }
+      functor.failure=stationary ? "bounded-stationary" : "bounded-tiny-step-nonstationary";
+      return stationary ? LevenbergMarquardtSpace::CosinusTooSmall : LevenbergMarquardtSpace::UserAsked;
     }
 
     /* store the direction p and x + p. calculate the norm of the scaled step. */

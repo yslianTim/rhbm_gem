@@ -52,3 +52,20 @@ than 81 failed QRs. Genuine rank deficiency still uses the existing bounded
 positive-damping QR search. No SVD or additional production solver is needed.
 S1 validation: Release build; 69 tests across ActiveSetBoundedLM, Search, Runtime,
 and FixedNeighbor (including rollback/recovery) passed.
+
+## S2: origin-independent trust radius
+
+The initial radius is `factor * ||D||_2`, the weighted norm of a representative
+unit log-width increment (production factor 0.1). It is independent of eta's
+origin and limits the initial aggregate model displacement; bounds, replay,
+weak-direction safeguards and actual objective reduction still control updates.
+The trust-ratio regression explicitly selects a radius that reaches its active
+bound rather than depending on the absolute starting coordinates.
+
+Tiny steps use the original log-width increment infinity norm, not `||D p||`.
+Production tiny-step success requires the original projected Width KKT plus valid,
+feasible A/C. Nonstationary tiny steps return a numerical stop for block recovery.
+A cosine-based early stop also cannot bypass production projected KKT.
+The radius regression covers B=1, B=1.000000000626 and shifted reference origins,
+finite evaluated candidates, objective improvement and final bound-aware KKT.
+S2 validation: Release build and all 75 focused tests passed.
