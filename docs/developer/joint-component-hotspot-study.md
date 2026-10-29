@@ -261,3 +261,5 @@ Audit: there is no QR optimization in Production from this follow-up, no new run
 | P6 Validation/Cleanup | completed | Release, 21 tests, main benchmarks, and real acceptance passed |
 
 The best next direction for A/C remains reducing dense Householder factorization work without raising SparseQR cost; current exact-zero compaction and tile-size candidates do not meet the real workflow gate. For Profile Derivative, the preparation QR's Householder and QᵀRHS are both substantial, while derivative reduction also spends more time constructing corrected Jacobians than factoring them. Tile-size changes affect cache/workspace footprint and QR count materially but did not produce real-data acceleration. Direct SparseQR is not worthwhile for the measured workload. A new QR kernel is not justified yet; this round should close with the current numerical path and the retained test-only census.
+
+Hotspot attribution instrumentation and its dedicated benchmark were removed after study completion. The numerical regression coverage is maintained by the Joint Component GoogleTest suite. Historical performance data remain preserved in this report.
