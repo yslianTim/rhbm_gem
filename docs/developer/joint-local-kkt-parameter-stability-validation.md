@@ -10,7 +10,7 @@
 |---|---|---|
 | P0 原始證據 | 完成 | 25 個 selected block 快照、138 個完成的擾動 seed，含逐端點 KKT 與 Replay 欄位 |
 | P1 Null／Reference | 完成（有明示限制） | N0、N1、baseline-η-seeded N2 與 30/300/1,000 target reference；SearchProfile 會重新 profile β，沒有宣稱直接 full-state β seed |
-| P2 Solver Precision | 待完成 |  |
+| P2 Solver Precision | 部分完成 | 實際改變 Local profile LM `gtol`；A/C constrained linear solve 沒有可安全注入的 KKT stopping tolerance |
 | P3 Qualification | 待完成 |  |
 | P4 困難案例 | 待完成 |  |
 | P5 Promotion／Cleanup | 待完成 |  |
@@ -64,3 +64,21 @@ T4 full-policy block 1 的 N0 identity prediction/objective difference 是 0；N
 N0 identity 的 prediction/objective change 在所有 selected baseline 均為精確 0；它不會掩蓋 baseline 的資格問題。例：T0 30 block 1 的 Primary A/C／Width KKT 為 `1.6024e-9 / 1.8807e-11`，Strict Replay 因 A/C KKT 未達 `1e-10` 而 fail；T4 30 block 1 為 `9.4630e-8 / 1.1122e-9`，Strict Replay 也 fail，但 prediction、residual、objective 與 gradient 一致性通過。N2 Strict Reference 對這兩個 block 的 A/C／Width KKT 分別降至約 `1.25e-16 / 5.55e-16`、`1.39e-16 / 0`，Replay 通過；N2 各使用 1–2 accepted updates、2–3 profile evaluations，未耗盡 budget。
 
 T0/T4 30-target block 1 的 Strict Reference 終點也很接近：兩端 η 的最大差 `8.83e-9`、β 最大絕對差 `6.44e-8`；同一 local design 上兩組預測的 normalized L2 差為 `3.28e-9`，RMS row 差 `7.15e-10`。兩組 effective response 本身仍相差 `9.21e-9`（normalized L2），所以這是相近資料下的端點比較，不是完全相同 response 的同一最佳化問題。
+
+## P2 — Local Solver Precision 對照
+
+Q 與 S 分開執行。Q0–Q3 只對已保存端點重算資格，不變動 solver。S 矩陣則在同一 T4 block 1 baseline-η-seeded N2 null、同一 local domain/response/scale/bounds、profile budget 11、update budget 6 上，只注入 `SearchProfile` 的 LM `gtol`；`ftol=1e-14`、`xtol=1e-12` 固定。Strict Reference 使用 production 預設值，profile/update budget 200/100。下表數字比較各 S 端點與 Strict Reference；objective 是 normalized profile objective。
+
+| 設定 | 實際 LM gtol | A/C KKT | Width KKT | `D_B` vs ref | `D_AC` vs ref | `D_pred` vs ref | `ΔF` vs ref | Updates / evaluations | CPU / reference wall |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Strict Reference | `1e-12` | `1.39e-16` | `0` | `0` | `0` | `0` | `0` | 2 / 3 | CPU 未獨立記錄（wall `14.22 ms`） |
+| S0 | `1e-12` | `1.39e-16` | `0` | `0` | `0` | `0` | `0` | 2 / 3 | `16.19 ms` |
+| S1 | `1e-9` | `1.39e-16` | `0` | `0` | `0` | `0` | `0` | 2 / 3 | `16.45 ms` |
+| S2 | `1e-8` | `1.39e-16` | `0` | `0` | `0` | `0` | `0` | 2 / 3 | `16.29 ms` |
+| S3 | `1e-7` | `8.33e-17` | `3.00e-14` | `3.12e-12` | `6.54e-13` | `4.88e-13` | 約 `5.8e-24` | 1 / 2 | `11.69 ms` |
+
+S0–S2 的 endpoint 逐值相同；S3 提早一個 accepted update 停止，但其 prediction solver error 約為 warning `1e-8` 的 `4.9e-5` 倍。S3 相對 Strict Reference 的 max row prediction difference `4.07e-12`、RMS `1.06e-13`、P95 `1.82e-13`、P99 `5.79e-13`；Independent Replay 仍通過。四種設定 active A/C constraints 與 active width-bound targets 均為 0。已測案例中，LM stopping precision 沒有解釋 T4 的 `~1.9e-7` common-mode 位移，也沒有接近 `1e-8` warning。
+
+這是實際的 Width profile solver stopping precision 對照，但不是 A/C linear solver tolerance 對照。程式審計發現 `CertifyLinear()` 的 A/C KKT certificate 固定以 `1e-10` 設定 `kkt_passed`；`SolveLinear()` 的 rank policy、active-set 與 refinement controls 不提供獨立的 local KKT target。把這個 certificate 門檻改小／改大會改變共同使用的 evaluation 與 candidate qualification，不會單純改變局部線性求解精度。故本輪不把 A/C KKT threshold 冒充 A/C solver precision，也沒有放寬 Certificate、`CheckReplay()`、`CheckTrust()` 或 Candidate Acceptance。
+
+Precision 個別 run 沒有配置獨立 RSS recorder；T4 30-target process peak RSS 為 `41.2 MB`，local-stability workspace estimate 為 `23.7 MB`。這兩個是整個診斷執行的資源資料，不是每一 gtol 設定的增量記憶體。P2 因此只對 Width LM precision 完成受控矩陣，A/C solver precision 與 per-setting memory 仍未定量。
