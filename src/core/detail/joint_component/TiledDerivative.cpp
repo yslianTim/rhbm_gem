@@ -1,16 +1,11 @@
 #include "TiledDerivative.hpp"
 #include "CompactSvd.hpp"
-#include <chrono>
 #include <cmath>
 #include <optional>
 #include <utility>
 
 namespace rhbm_gem::core::joint_component {
 namespace {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-double Seconds(std::chrono::steady_clock::time_point start)
-{return std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();}
-#endif
 Spectrum FreeDesignSpectrum(const CompactSvdResult & svd,Eigen::Index rows,Eigen::Index columns,
     Eigen::Index full_columns,Vector norms)
 {
@@ -31,11 +26,6 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
     out.projected_only=projected_only;
     if(!e.valid || !(scale>0) || !std::isfinite(scale)) {out.reason="invalid-inner"; return out;}
     if(tile<=0) throw std::invalid_argument("Invalid derivative tile size.");
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    const bool collect_breakdown=HotspotAttributionEnabled();
-    const auto raw_construction_started=collect_breakdown ? std::chrono::steady_clock::now() :
-        std::chrono::steady_clock::time_point{};
-#endif
     std::vector<Eigen::Index> free;
     std::size_t free_design_nonzeros{};
     const auto * x_outer=e.x.outerIndexPtr();
@@ -48,9 +38,6 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
     }
     const Eigen::Index n=e.x.rows(),m=e.beta.size()/2,p=static_cast<Eigen::Index>(free.size());
     out.scale=scale; out.free_design.resize(n,p); out.raw.resize(n,m);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(collect_breakdown) out.breakdown.workspace_resize_events+=2;
-#endif
     Vector free_column_norms(projected_only ? p : 0);
     std::vector<Eigen::Triplet<double>> entries,raw;
     entries.reserve(free_design_nonzeros);
@@ -83,13 +70,6 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
     }
     out.free_design.setFromTriplets(entries.begin(),entries.end());
     out.raw.setFromTriplets(raw.begin(),raw.end());
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(collect_breakdown)
-    {
-        out.breakdown.workspace_resize_events+=2;
-        out.breakdown.raw_construction_seconds+=Seconds(raw_construction_started);
-    }
-#endif
     const auto cancelled=[&]() {
         constexpr double relative_roundoff=64*std::numeric_limits<double>::epsilon()/1e-10;
         for(Eigen::Index k=0;k<m;++k)
@@ -122,11 +102,6 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
     // bounded by tiled Householder reductions rather than materializing a
     // sparse Q action.
     const auto tiled_solve=[&]() {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        const auto tiled_qr_started=collect_breakdown ? std::chrono::steady_clock::now() :
-            std::chrono::steady_clock::time_point{};
-        if(collect_breakdown) ++out.breakdown.tiled_qr_calls;
-#endif
         TiledQR qr(p,m);
         {
             for(Eigen::Index first=0;first<n;first+=tile)
@@ -137,18 +112,9 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
                 qr.Append(design,raw_tile,out.reference_order);
             }
         }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(collect_breakdown) out.breakdown.tiled_qr_seconds+=Seconds(tiled_qr_started);
-        const auto svd_started=collect_breakdown ? std::chrono::steady_clock::now() :
-            std::chrono::steady_clock::time_point{};
-        if(collect_breakdown) ++out.breakdown.rank_svd_calls;
-#endif
         const auto boundary=projected_only ? RankBoundary::StrictGreater : RankBoundary::SvdNative;
         const auto svd=EvaluateRank(qr.r,{{context ? context->rank.rows : n,2*m,m},p,absolute,boundary},
             projected_only ? CompactSvdVectors::Right : CompactSvdVectors::None);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(collect_breakdown) out.breakdown.rank_svd_seconds+=Seconds(svd_started);
-#endif
         if(projected_only) out.free_design_rank=FreeDesignSpectrum(svd,
             context ? context->rank.rows : n,p,2*m,free_column_norms);
         if(!svd.valid) {out.reason="nonfinite-derivative"; return false;}
@@ -158,15 +124,7 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
         {
             if(svd.rank==p)
             {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                const auto solve_started=collect_breakdown ? std::chrono::steady_clock::now() :
-                    std::chrono::steady_clock::time_point{};
-                if(collect_breakdown) ++out.breakdown.triangular_solve_calls;
-#endif
                 qr.r.triangularView<Eigen::Upper>().solveInPlace(qr.target);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                if(collect_breakdown) out.breakdown.triangular_solve_seconds+=Seconds(solve_started);
-#endif
                 out.coefficients=std::move(qr.target);
             }
             else
@@ -185,33 +143,9 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
         }
         else
         {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            const auto coefficient_started=collect_breakdown ? std::chrono::steady_clock::now() :
-                std::chrono::steady_clock::time_point{};
-            if(collect_breakdown) ++out.breakdown.triangular_solve_calls;
-#endif
             out.coefficients=qr.r.triangularView<Eigen::Upper>().solve(qr.target.leftCols(m));
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(collect_breakdown) out.breakdown.triangular_solve_seconds+=Seconds(coefficient_started);
-            const auto correction_started=collect_breakdown ? std::chrono::steady_clock::now() :
-                std::chrono::steady_clock::time_point{};
-            if(collect_breakdown) ++out.breakdown.triangular_solve_calls;
-#endif
             const Matrix adjoint=qr.r.transpose().triangularView<Eigen::Lower>().solve(t);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(collect_breakdown) out.breakdown.triangular_solve_seconds+=Seconds(correction_started);
-            const auto correction_solve_started=collect_breakdown ? std::chrono::steady_clock::now() :
-                std::chrono::steady_clock::time_point{};
-            if(collect_breakdown) ++out.breakdown.triangular_solve_calls;
-#endif
             out.correction=qr.r.triangularView<Eigen::Upper>().solve(adjoint);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(collect_breakdown)
-            {
-                out.breakdown.triangular_solve_seconds+=Seconds(correction_solve_started);
-                out.breakdown.correction_matrix_seconds+=Seconds(correction_started);
-            }
-#endif
         }
         return true;
     };
@@ -219,16 +153,8 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
     const bool cancellation_detected=cancelled();
     if(!out.reference_order && cancellation_detected)
     {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        const auto fallback_started=collect_breakdown ? std::chrono::steady_clock::now() :
-            std::chrono::steady_clock::time_point{};
-        if(collect_breakdown) ++out.breakdown.cancellation_fallbacks;
-#endif
         reference_raw();
         const bool fallback_valid=tiled_solve();
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(collect_breakdown) out.breakdown.cancellation_fallback_seconds+=Seconds(fallback_started);
-#endif
         if(!fallback_valid) return out;
     }
     out.valid=out.coefficients.allFinite() && (projected_only || out.correction.allFinite());
@@ -269,9 +195,6 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
 {
     ReducedDifferential out; out.reason=d.reason; if(!d.valid) return out;
     if(tile<=0) throw std::invalid_argument("Invalid derivative tile size.");
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    const bool collect_breakdown=HotspotAttributionEnabled();
-#endif
     const auto n=d.raw.rows(),m=d.raw.cols();
     TiledQR jacobian(m,1);
     out.jacobian_norms=Vector::Zero(m);
@@ -283,20 +206,10 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
         if(residual_tile.rows()!=count || residual_tile.cols()!=1)
         {
             residual_tile.resize(count,1);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(collect_breakdown) ++out.breakdown.workspace_resize_events;
-#endif
         }
         residual_tile=residual.segment(first,count)/d.scale;
         if(!projected.allFinite() || !j.allFinite()) {out.reason="nonfinite-derivative"; return out;}
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        const auto append_started=collect_breakdown ? std::chrono::steady_clock::now() :
-            std::chrono::steady_clock::time_point{};
-#endif
         jacobian.Append(j,residual_tile);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(collect_breakdown) out.breakdown.tiled_qr_seconds+=Seconds(append_started);
-#endif
         for(Eigen::Index k=0;k<m;++k)
             out.jacobian_norms(k)=std::hypot(out.jacobian_norms(k),j.col(k).blueNorm());
     }

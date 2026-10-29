@@ -14,10 +14,6 @@
 #include <limits>
 
 namespace rhbm_gem::core::joint_component {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-void SetHotspotAttributionEnabled(bool);
-bool HotspotAttributionEnabled();
-#endif
 using Matrix=Eigen::MatrixXd;
 using Sparse=Eigen::SparseMatrix<double>;
 inline constexpr double unavailable=std::numeric_limits<double>::quiet_NaN();
@@ -32,38 +28,6 @@ struct LinearPolicy
     int active_set_iteration_factor{20};
     double release_factor{128}, release_response_norm{-1};
 };
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-struct LinearSolveBreakdown
-{
-    std::size_t sparse_qr_factorizations{},selected_matrix_builds{},
-        selected_rows_min{std::numeric_limits<std::size_t>::max()},selected_rows_max{},
-        selected_columns_min{std::numeric_limits<std::size_t>::max()},selected_columns_max{},
-        selected_nonzeros_min{std::numeric_limits<std::size_t>::max()},selected_nonzeros_max{},
-        reduced_rows_min{std::numeric_limits<std::size_t>::max()},reduced_rows_max{},
-        reduced_nonzeros_min{std::numeric_limits<std::size_t>::max()},reduced_nonzeros_max{},
-        free_face_repeats_across_builds{},free_face_changes_across_builds{},
-        selected_pattern_repeats{},selected_pattern_changes{},reduced_pattern_repeats{},
-        reduced_pattern_changes{},reduced_numeric_repeats_on_same_pattern{},
-        reduced_numeric_changes_on_same_pattern{};
-    double column_normalization_seconds{},row_reduction_seconds{},sparse_qr_analysis_seconds{},
-        sparse_qr_factorization_seconds{},sparse_qr_solve_seconds{},refinement_matrix_seconds{},
-        refinement_qr_factorization_seconds{},refinement_correction_solve_seconds{},
-        refinement_certification_seconds{},pattern_fingerprint_seconds{},reduced_pattern_fingerprint_seconds{};
-};
-struct DerivativeBreakdown
-{
-    std::size_t tiled_qr_calls{},rank_svd_calls{},triangular_solve_calls{},
-        cancellation_fallbacks{},workspace_resize_events{};
-    double raw_construction_seconds{},tiled_qr_seconds{},rank_svd_seconds{},triangular_solve_seconds{},
-        correction_matrix_seconds{},cancellation_fallback_seconds{};
-};
-struct BoundedLmBreakdown
-{
-    double active_free_selection_seconds{},augmented_matrix_assembly_seconds{},
-        dense_qr_factorization_seconds{},qr_solve_seconds{},kkt_validation_seconds{},
-        damping_search_seconds{};
-};
-#endif
 struct EvaluationContext
 {
     std::string snapshot_hash;
@@ -83,11 +47,6 @@ struct BoundedLmWork
     std::size_t damping_solves{},bracket_solves{},bisection_solves{},damping_qr_factorizations{},
         damping_active_set_iterations{},damping_releases{};
     double maximum_subproblem_kkt{unavailable};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    std::size_t zero_damping_solves{};
-    BoundedLmBreakdown breakdown;
-    std::array<std::size_t,16> damping_solves_per_update_bins{},qr_factorizations_per_update_bins{};
-#endif
     void Merge(const BoundedLmWork &);
 };
 struct LinearSolveWork
@@ -107,9 +66,6 @@ struct LinearSolveWork
         refinement_after_objective_sum{},sparse_structure_build_seconds{},row_major_conversion_seconds{},
         tile_mapping_build_seconds{},tiled_qr_seconds{},reduced_sparse_assembly_seconds{},sparse_qr_seconds{},
         solver_total_seconds{};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    LinearSolveBreakdown breakdown;
-#endif
 };
 struct ProfileRoleWork
 {
@@ -119,9 +75,6 @@ struct ProfileRoleWork
     double evaluation_seconds{},basis_seconds{},linear_matrix_preparation_seconds{},linear_rhs_solve_seconds{},
         linear_certificate_seconds{},derivative_prepare_seconds{},
         derivative_reduce_seconds{},replay_trust_seconds{};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    DerivativeBreakdown derivative_breakdown;
-#endif
 };
 struct ProfileSearchWork
 {
@@ -154,9 +107,6 @@ struct LinearResult
         sparse_structure_build_seconds{},row_major_conversion_seconds{},tile_mapping_build_seconds{},
         tiled_qr_seconds{},reduced_sparse_assembly_seconds{},sparse_qr_seconds{},solver_total_seconds{},
         refinement_before_objective{unavailable},refinement_after_objective{unavailable};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    LinearSolveBreakdown breakdown;
-#endif
 };
 struct LinearSolveWorkspace;
 LinearResult SolveLinear(const Sparse &,VectorRef,const LinearPolicy * = nullptr,double=0,

@@ -94,19 +94,6 @@ struct FixedNeighborWork
     std::size_t parameter_stability_peak_memory_estimate_bytes{},perturbation_solves{},perturbation_evaluations{};
     double total_local_atoms{};
     ProfileSearchWork local_profile_work;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    struct CandidateReplayBreakdown
-    {
-        std::size_t attempts{},affected_row_candidates{},affected_rows_total{},affected_rows_min{
-            std::numeric_limits<std::size_t>::max()},affected_rows_max{},contributor_entries_total{},
-            contributor_entries_min{std::numeric_limits<std::size_t>::max()},contributor_entries_max{};
-        std::array<std::size_t,16> affected_row_count_bins{},contributor_entry_count_bins{};
-        std::size_t peak_scratch_bytes{};
-        double incidence_preparation_seconds{},incidence_ordering_seconds{},incidence_lookup_count_seconds{},
-            incidence_construction_seconds{},prediction_residual_seconds{},incremental_objective_seconds{},
-            row_mapping_preparation_seconds{};
-    } candidate_replay_breakdown;
-#endif
 };
 struct FixedNeighborEndpointCertification
 {

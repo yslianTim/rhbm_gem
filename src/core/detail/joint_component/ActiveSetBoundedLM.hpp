@@ -16,12 +16,6 @@ struct ActiveSetStep
     std::size_t iterations{},releases{};
     std::size_t damping_solves{},bracket_solves{},bisection_solves{},damping_qr_factorizations{},
         damping_active_set_iterations{},damping_releases{};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    std::size_t zero_damping_solves{};
-    double active_free_selection_seconds{},augmented_matrix_assembly_seconds{},
-        dense_qr_factorization_seconds{},qr_solve_seconds{},kkt_validation_seconds{},
-        damping_search_seconds{};
-#endif
 };
 
 // Selects the LM damping so the same constrained subproblem also satisfies

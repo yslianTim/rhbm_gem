@@ -5,7 +5,6 @@
 #include "TiledDerivative.hpp"
 #include "ActiveSetBoundedLM.hpp"
 #include <algorithm>
-#include <bit>
 #include <chrono>
 #include <cmath>
 #include <ctime>
@@ -62,28 +61,12 @@ struct Profile
     void RecordBoundedSubproblem(const ActiveSetStep & step)
     {
         ++bounded_lm_work.subproblem_solves;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        bounded_lm_work.zero_damping_solves+=step.zero_damping_solves;
-#endif
         bounded_lm_work.damping_solves+=step.damping_solves;
         bounded_lm_work.bracket_solves+=step.bracket_solves;
         bounded_lm_work.bisection_solves+=step.bisection_solves;
         bounded_lm_work.damping_qr_factorizations+=step.damping_qr_factorizations;
         bounded_lm_work.damping_active_set_iterations+=step.damping_active_set_iterations;
         bounded_lm_work.damping_releases+=step.damping_releases;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        const auto histogram_bin=[](std::size_t count) {
-            return count ? std::min<std::size_t>(15,static_cast<std::size_t>(std::bit_width(count)-1)) : 0;
-        };
-        ++bounded_lm_work.damping_solves_per_update_bins[histogram_bin(step.damping_solves)];
-        ++bounded_lm_work.qr_factorizations_per_update_bins[histogram_bin(step.damping_qr_factorizations)];
-        bounded_lm_work.breakdown.active_free_selection_seconds+=step.active_free_selection_seconds;
-        bounded_lm_work.breakdown.augmented_matrix_assembly_seconds+=step.augmented_matrix_assembly_seconds;
-        bounded_lm_work.breakdown.dense_qr_factorization_seconds+=step.dense_qr_factorization_seconds;
-        bounded_lm_work.breakdown.qr_solve_seconds+=step.qr_solve_seconds;
-        bounded_lm_work.breakdown.kkt_validation_seconds+=step.kkt_validation_seconds;
-        bounded_lm_work.breakdown.damping_search_seconds+=step.damping_search_seconds;
-#endif
         if(!step.valid) {++bounded_lm_work.failed_subproblems; return;}
         bounded_lm_work.active_set_iterations+=step.iterations;
         bounded_lm_work.releases+=step.releases;
@@ -225,14 +208,8 @@ struct Profile
         if(telemetry)
         {
             ProfileRoleWork work; work.derivative_preparations=1; work.derivative_prepare_seconds=prepare_seconds;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            work.derivative_breakdown=prepared.breakdown;
-#endif
             telemetry->Add(last_role,work);
             work={}; work.derivative_reductions=1; work.derivative_reduce_seconds=reduce_seconds;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            work.derivative_breakdown=differential.breakdown;
-#endif
             telemetry->Add(last_role,work);
         }
         if(!differential.valid)
