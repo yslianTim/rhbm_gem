@@ -26,16 +26,17 @@ trust checks do not substitute for global component qualification.
 The default global criteria are practical-v2: projected A/C KKT at most
 `1e-7` and bound-aware projected log-width KKT at most `1e-9`. Stationarity
 confirmation requires at least two completed sweeps and a current sweep with no
-block failure. Log-width change remains a diagnostic and does not gate
-certification. Endpoint verification and Independent Replay check feasibility
-and consistency at the accepted state. Sweep-budget exhaustion is not
+block failure. Global feasibility, the full sweep replay audit, recovery, and
+candidate rollback remain part of search. Endpoint Certification and
+Independent Replay check the accepted state. Sweep-budget exhaustion is not
 convergence; an unqualified candidate is not published as a Target estimate.
 
 Local conditioning and parameter stability are read-only point-quality
 assessments. They do not alter accepted parameters or revoke a qualified global
-endpoint. Historical strict criteria and reference statuses retain their saved
-meaning when decoded; research comparisons are summarized in the
-[Joint evidence record](joint-component-evidence.md).
+endpoint. Perturbation-based Parameter Stability applies deliberate local
+parameter perturbations and records the resulting parameter, prediction, and
+objective sensitivity. Current Joint Result JSON uses schema v21 and accepts
+only `strict-v2` and `practical-v2` convergence identifiers.
 
 ## Focused regression coverage
 

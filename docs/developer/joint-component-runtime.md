@@ -38,44 +38,23 @@ rank and weak-direction checks; it is not an alternate A/C solver.
 The global search preserves objective monotonicity and practical-v2
 convergence: projected A/C KKT ≤ `1e-7` and bound-aware projected Width KKT ≤
 `1e-9`. Confirmation requires at least two completed sweeps and no block
-failure on the current sweep. Maximum log-width change remains a diagnostic and
-does not gate certification. Endpoint certification and Independent Replay
-verify the accepted state. Component assembly consistency, Local Conditioning,
-Parameter Stability, target point quality, and resource preflight remain
-explicit evidence; local LM termination alone does not qualify a component.
-Failed initialization, unavailable width calibration, incomplete search,
-unqualified endpoint, missing component state, and nullable diagnostics remain
-representable saved outcomes.
+failure on the confirming sweep. Global feasibility, the full sweep replay
+audit, recovery, and candidate rollback remain part of search. Endpoint
+Certification and Independent Replay verify the accepted state. Component
+assembly consistency, Local Conditioning, Parameter Stability, target point
+quality, and resource preflight remain explicit evidence; local LM termination
+alone does not qualify a component. Failed initialization, unavailable width
+calibration, incomplete search, unqualified endpoint, missing component state,
+and nullable diagnostics remain representable saved outcomes.
 
-Local Conditioning and Parameter Stability describe the accepted solution's
-block behavior. Target point validation records component convergence,
-parameter validity, conditioning, stability, point quality, and reasons.
-These diagnostics retain `Unavailable` and `NotAssessed` states where work
-could not be assessed; they do not replace global convergence evidence.
-
-### practical-v2 evaluation
-
-This evaluation supports practical-v2 as the production default. The
-measurements below cover numerical qualification, parameter accuracy, and
-resource use.
-
-The practical-v2 policy was compared with a frozen practical-v1 Release build
-using one thread and five measured runs after one warmup. On the 3, 30, 300,
-and 1,000 target synthetic chains, both versions qualified the endpoint and
-passed Independent Replay. KKT-only saved one sweep on 3, 300, and 1,000
-targets; median wall time changed by -21.5%, +1.2%, -16.2%, and -16.2%,
-respectively. Peak RSS changed by less than 1.2% in either direction. At 300
-and 1,000 targets, maximum paired per-target differences were `3.81e-6` for A,
-`3.16e-7` for C, and `2.62e-7` for B; the 30-target result was bitwise
-identical. The largest objective increase was `1.89e-14`.
-
-Signed cancellation now certifies after 19 sweeps where practical-v1 exhausted
-its 500-sweep budget, with log-width change `2.13e-6`. The noise-only fixture
-reaches a certified KKT endpoint after two sweeps while parameter-stability
-evidence remains `insufficient-history` and `NotAssessed`. This is numerical
-stationarity evidence, not evidence that parameters are identifiable or
-stable. Rank-deficient and near-singular fixtures still exhaust recovery
-without endpoint qualification. No real cryo-EM map workload was available.
+Local Conditioning assesses each block's numerical conditioning. Perturbation-
+based Parameter Stability deliberately perturbs local parameters, re-estimates
+the block, and records parameter, prediction, and objective sensitivity.
+These point-quality assessments do not use sweep-to-sweep parameter movement
+and do not replace global convergence evidence. Target point validation
+records component convergence, parameter validity, conditioning, stability,
+point quality, and reasons. `Unavailable` and `NotAssessed` remain valid states
+when an assessment cannot be completed.
 
 ## Halo reconstruction and downstream work
 
@@ -100,13 +79,14 @@ parameter stability, Halo reconstruction, and peeling.
 | --- | --- |
 | SQLite database | Schema v20 |
 | Stage Result JSON | Version 4 |
-| Joint Result JSON | Schema v20 |
+| Joint Result JSON | Schema v21 |
 
 SQLite opens a new empty database by initializing schema v20 and opens an
 existing database only when its exact schema is v20. Stage JSON accepts only
-version 4. Joint JSON accepts only schema 20 and stores target-only Pure
-Exclusion results. No format performs migrations or compatibility decoding.
-Unsupported inputs are rejected without repair or overwrite.
+version 4. Joint JSON accepts only schema 21 and the `strict-v2` or
+`practical-v2` convergence identifiers. It stores target-only Pure Exclusion
+results. No format performs migrations or compatibility decoding. Unsupported
+inputs are rejected without repair or overwrite.
 
 Current documents can store qualified and unqualified results, nullable
 diagnostics, missing component states, unavailable width calibration, and

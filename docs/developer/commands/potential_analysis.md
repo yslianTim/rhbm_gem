@@ -304,11 +304,11 @@ convergence and point-quality columns.
 | --- | --- |
 | SQLite database | Schema v20 only |
 | Stage Result JSON | Version 4 only |
-| Joint Result JSON | Schema v20 only |
+| Joint Result JSON | Schema v21 only |
 
 An empty database is initialized as v20. An existing database must have the
 exact v20 schema. Stage JSON accepts only version 4; Joint JSON always writes
-schema 20 and reads only schema 20. No migrations, upgrades, historical
+schema 21 and reads only schema 21. No migrations, upgrades, historical
 fallbacks, or automatic repairs are performed. Unsupported inputs are rejected
 without modifying the database. See the
 [data I/O architecture](../architecture/dataobject-io-architecture.md).
