@@ -24,7 +24,8 @@ std::string_view StatusText(JointCheckStatus status)
 }
 namespace {
 using Object = j::object;
-void RequireOnlyKeys(const Object &,std::initializer_list<const char *>,const char *);
+void RequireOnlyKeys(const Object &,std::initializer_list<const char *>,const char *,
+    std::initializer_list<const char *> optional_keys={});
 template<class T> T Read(const Object & o, const char * key) {return j::value_to<T>(o.at(key));}
 JointCheckStatus Status(const j::value & v)
 {
@@ -189,18 +190,16 @@ const char * CandidateStatusText(const JointCandidateDiagnostic & x)
 Object CandidateDiagnostic(const JointCandidateDiagnostic & x)
 {
     const auto & strict=core::joint_component::StrictJointConvergenceCriteria;
-    return {{"candidate_status",CandidateStatusText(x)},
+    Object out{{"candidate_status",CandidateStatusText(x)},
         {"candidate_available",x.candidate_available},
         {"candidate_eta",j::value_from(x.candidate_eta)},
         {"candidate_ac",j::value_from(x.candidate_ac)},
         {"candidate_objective",Number(x.candidate_objective)},
         {"candidate_ac_kkt",Number(x.candidate_ac_kkt)},
         {"candidate_width_gradient_inf_norm",Number(x.candidate_width_gradient_inf_norm)},
-        {"convergence_criteria_id",x.convergence_criteria_id.empty() ? "strict-v1" : x.convergence_criteria_id},
+        {"convergence_criteria_id",x.convergence_criteria_id.empty() ? "strict-v2" : x.convergence_criteria_id},
         {"global_ac_kkt_threshold",x.global_ac_kkt_threshold.value_or(strict.global_ac_kkt)},
         {"global_width_gradient_threshold",x.global_width_gradient_threshold.value_or(strict.global_width_gradient)},
-        {"confirmed_log_width_change_threshold",x.confirmed_log_width_change_threshold.value_or(
-            strict.confirmed_log_width_change)},
         {"candidate_log_width_change_inf_norm",Number(x.candidate_log_width_change_inf_norm)},
         {"candidate_feasible",x.candidate_feasible ? j::value(*x.candidate_feasible) : j::value(nullptr)},
         {"certification_status",StatusText(x.certification_status)},
@@ -208,6 +207,9 @@ Object CandidateDiagnostic(const JointCandidateDiagnostic & x)
         {"numerical_qualification_status",StatusText(x.numerical_qualification_status)},
         {"verification_reason",x.verification_reason},
         {"resource_limit_reason",x.resource_limit_reason}};
+    if(x.legacy_log_width_change_threshold)
+        out["confirmed_log_width_change_threshold"]=*x.legacy_log_width_change_threshold;
+    return out;
 }
 std::optional<JointCandidateDiagnostic> ReadCandidateDiagnostic(const j::value & value)
 {
@@ -222,7 +224,8 @@ std::optional<JointCandidateDiagnostic> ReadCandidateDiagnostic(const j::value &
     x.convergence_criteria_id=Read<std::string>(o,"convergence_criteria_id");
     x.global_ac_kkt_threshold=Read<double>(o,"global_ac_kkt_threshold");
     x.global_width_gradient_threshold=Read<double>(o,"global_width_gradient_threshold");
-    x.confirmed_log_width_change_threshold=Read<double>(o,"confirmed_log_width_change_threshold");
+    if(o.contains("confirmed_log_width_change_threshold"))
+        x.legacy_log_width_change_threshold=Read<double>(o,"confirmed_log_width_change_threshold");
     x.candidate_log_width_change_inf_norm=OptionalNumber(o.at("candidate_log_width_change_inf_norm"));
     x.candidate_feasible=o.at("candidate_feasible").is_null() ? std::nullopt :
         std::optional<bool>(Read<bool>(o,"candidate_feasible"));
@@ -305,11 +308,13 @@ JointInitialization ReadInitialization(const j::value & v)
 }
 void Require(bool condition, const char * message)
 {if(!condition) throw std::invalid_argument(std::string("Invalid joint result: ")+message);}
-void RequireOnlyKeys(const Object & object,std::initializer_list<const char *> keys,const char * message)
+void RequireOnlyKeys(const Object & object,std::initializer_list<const char *> keys,const char * message,
+    std::initializer_list<const char *> optional_keys)
 {
     for(const auto key:keys) Require(object.contains(key),message);
     for(auto it=object.begin();it!=object.end();++it)
-        Require(std::find(keys.begin(),keys.end(),it->key())!=keys.end(),message);
+        Require(std::find(keys.begin(),keys.end(),it->key())!=keys.end() ||
+            std::find(optional_keys.begin(),optional_keys.end(),it->key())!=optional_keys.end(),message);
 }
 bool IsSha256(const std::string & value)
 {
@@ -725,27 +730,38 @@ void ValidateCandidateDiagnostic(const JointCandidateDiagnostic & x,std::size_t 
     const auto & strict=core::joint_component::StrictJointConvergenceCriteria;
     const auto & practical=core::joint_component::PracticalJointConvergenceCriteria;
     const bool default_criteria=x.convergence_criteria_id.empty() && !x.global_ac_kkt_threshold &&
-        !x.global_width_gradient_threshold && !x.confirmed_log_width_change_threshold;
+        !x.global_width_gradient_threshold && !x.legacy_log_width_change_threshold;
     const bool complete_criteria=!x.convergence_criteria_id.empty() && x.global_ac_kkt_threshold &&
-        x.global_width_gradient_threshold && x.confirmed_log_width_change_threshold;
+        x.global_width_gradient_threshold;
     Require(default_criteria || complete_criteria,"incomplete convergence criteria provenance");
-    const auto & criteria_id=default_criteria ? std::string_view{"strict-v1"} :
+    const auto & criteria_id=default_criteria ? std::string_view{"strict-v2"} :
         std::string_view{x.convergence_criteria_id};
     const auto ac_threshold=default_criteria ? strict.global_ac_kkt : *x.global_ac_kkt_threshold;
     const auto width_threshold=default_criteria ? strict.global_width_gradient : *x.global_width_gradient_threshold;
-    const auto change_threshold=default_criteria ? strict.confirmed_log_width_change : *x.confirmed_log_width_change_threshold;
-    Require(criteria_id=="strict-v1" || criteria_id=="practical-v1" || criteria_id=="custom-v1",
+    const bool legacy_criteria=criteria_id=="strict-v1" || criteria_id=="practical-v1" || criteria_id=="custom-v1";
+    const bool current_criteria=criteria_id=="strict-v2" || criteria_id=="practical-v2";
+    Require(legacy_criteria || current_criteria,
         "invalid convergence criteria identifier");
-    Require(std::isfinite(ac_threshold) && ac_threshold>0 && std::isfinite(width_threshold) &&
-        width_threshold>0 && std::isfinite(change_threshold) && change_threshold>0,
+    Require(std::isfinite(ac_threshold) && ac_threshold>0 && std::isfinite(width_threshold) && width_threshold>0,
         "invalid convergence criteria thresholds");
+    Require(legacy_criteria==x.legacy_log_width_change_threshold.has_value(),
+        "legacy convergence criteria width-change provenance mismatch");
+    if(legacy_criteria)
+        Require(std::isfinite(*x.legacy_log_width_change_threshold) && *x.legacy_log_width_change_threshold>0,
+            "invalid legacy convergence criteria threshold");
     if(criteria_id=="strict-v1")
         Require(ac_threshold==strict.global_ac_kkt && width_threshold==strict.global_width_gradient &&
-            change_threshold==strict.confirmed_log_width_change,
+            *x.legacy_log_width_change_threshold==1e-10,
             "strict convergence criteria do not match their identifier");
     if(criteria_id=="practical-v1")
         Require(ac_threshold==practical.global_ac_kkt && width_threshold==practical.global_width_gradient &&
-            change_threshold==practical.confirmed_log_width_change,
+            *x.legacy_log_width_change_threshold==1e-6,
+            "practical convergence criteria do not match their identifier");
+    if(criteria_id=="strict-v2")
+        Require(ac_threshold==strict.global_ac_kkt && width_threshold==strict.global_width_gradient,
+            "strict convergence criteria do not match their identifier");
+    if(criteria_id=="practical-v2")
+        Require(ac_threshold==practical.global_ac_kkt && width_threshold==practical.global_width_gradient,
             "practical convergence criteria do not match their identifier");
     Require(!x.candidate_log_width_change_inf_norm ||
         (std::isfinite(*x.candidate_log_width_change_inf_norm) && *x.candidate_log_width_change_inf_norm>=0),
@@ -1240,10 +1256,11 @@ JointAnalysisResult DecodeCurrent(const Object & o)
             RequireOnlyKeys(c.at("candidate_diagnostic").as_object(),{"candidate_status","candidate_available",
                 "candidate_eta","candidate_ac","candidate_objective","candidate_ac_kkt",
                 "candidate_width_gradient_inf_norm","convergence_criteria_id","global_ac_kkt_threshold",
-                "global_width_gradient_threshold","confirmed_log_width_change_threshold",
-                "candidate_log_width_change_inf_norm","candidate_feasible","certification_status",
+                "global_width_gradient_threshold","candidate_log_width_change_inf_norm",
+                "candidate_feasible","certification_status",
                 "endpoint_verification_status","numerical_qualification_status","verification_reason",
-                "resource_limit_reason"},"unknown current candidate diagnostic field");
+                "resource_limit_reason"},"unknown current candidate diagnostic field",
+                {"confirmed_log_width_change_threshold"});
             component.candidate_diagnostic=ReadCandidateDiagnostic(c.at("candidate_diagnostic"));
         }
         component.evidence=ReadChecks(c.at("evidence"));

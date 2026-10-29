@@ -934,9 +934,9 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     candidate.candidate_eta={-.7}; candidate.candidate_ac={999.125,-.3};
     candidate.candidate_objective=.0123; candidate.candidate_ac_kkt=.1;
     candidate.candidate_width_gradient_inf_norm=.2; candidate.candidate_feasible=true;
-    candidate.convergence_criteria_id="practical-v1";
+    candidate.convergence_criteria_id="practical-v2";
     candidate.global_ac_kkt_threshold=1e-7; candidate.global_width_gradient_threshold=1e-9;
-    candidate.confirmed_log_width_change_threshold=1e-6; candidate.candidate_log_width_change_inf_norm=5e-7;
+    candidate.candidate_log_width_change_inf_norm=5e-7;
     candidate.certification_status=rg::JointCheckStatus::Unavailable;
     candidate.endpoint_verification_status=rg::JointCheckStatus::Passed;
     candidate.numerical_qualification_status=rg::JointCheckStatus::Unavailable;
@@ -948,10 +948,10 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     EXPECT_EQ(json.at("schema_version").as_int64(),20);
     const auto & saved_candidate=json.at("components").as_array()[0].at("candidate_diagnostic");
     EXPECT_EQ(saved_candidate.at("candidate_status").as_string(),"uncertified");
-    EXPECT_EQ(saved_candidate.at("convergence_criteria_id").as_string(),"practical-v1");
+    EXPECT_EQ(saved_candidate.at("convergence_criteria_id").as_string(),"practical-v2");
     EXPECT_DOUBLE_EQ(saved_candidate.at("global_ac_kkt_threshold").as_double(),1e-7);
     EXPECT_DOUBLE_EQ(saved_candidate.at("global_width_gradient_threshold").as_double(),1e-9);
-    EXPECT_DOUBLE_EQ(saved_candidate.at("confirmed_log_width_change_threshold").as_double(),1e-6);
+    EXPECT_FALSE(saved_candidate.as_object().contains("confirmed_log_width_change_threshold"));
     EXPECT_DOUBLE_EQ(saved_candidate.at("candidate_log_width_change_inf_norm").as_double(),5e-7);
     const auto decoded=io::Decode(boost::json::serialize(json));
     ASSERT_TRUE(decoded.components.front().candidate_diagnostic);
@@ -967,7 +967,7 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->certification_status,rg::JointCheckStatus::Unavailable);
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->endpoint_verification_status,rg::JointCheckStatus::Passed);
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->numerical_qualification_status,rg::JointCheckStatus::Unavailable);
-    EXPECT_EQ(decoded.components.front().candidate_diagnostic->convergence_criteria_id,"practical-v1");
+    EXPECT_EQ(decoded.components.front().candidate_diagnostic->convergence_criteria_id,"practical-v2");
     ASSERT_TRUE(decoded.components.front().candidate_diagnostic->global_ac_kkt_threshold);
     EXPECT_DOUBLE_EQ(*decoded.components.front().candidate_diagnostic->global_ac_kkt_threshold,1e-7);
     ASSERT_TRUE(decoded.components.front().candidate_diagnostic->candidate_log_width_change_inf_norm);
@@ -975,6 +975,20 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     EXPECT_EQ(decoded.components.front().candidate_diagnostic->verification_reason,
         "endpoint-verified-but-unqualified");
     EXPECT_FALSE(decoded.components.front().target_evidence);
+
+    auto legacy_json=json.as_object();
+    auto & legacy_candidate=legacy_json.at("components").as_array()[0]
+        .as_object().at("candidate_diagnostic").as_object();
+    legacy_candidate["convergence_criteria_id"]="practical-v1";
+    legacy_candidate["confirmed_log_width_change_threshold"]=1e-6;
+    const auto legacy_decoded=io::Decode(boost::json::serialize(legacy_json));
+    ASSERT_TRUE(legacy_decoded.components.front().candidate_diagnostic);
+    EXPECT_EQ(legacy_decoded.components.front().candidate_diagnostic->convergence_criteria_id,"practical-v1");
+    ASSERT_TRUE(legacy_decoded.components.front().candidate_diagnostic->legacy_log_width_change_threshold);
+    EXPECT_DOUBLE_EQ(*legacy_decoded.components.front().candidate_diagnostic->legacy_log_width_change_threshold,1e-6);
+    const auto legacy_resaved=boost::json::parse(io::Encode(legacy_decoded));
+    EXPECT_DOUBLE_EQ(legacy_resaved.at("components").as_array()[0].at("candidate_diagnostic")
+        .at("confirmed_log_width_change_threshold").as_double(),1e-6);
 
     auto missing_current_criteria=json.as_object();
     missing_current_criteria.at("components").as_array()[0].as_object()

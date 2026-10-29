@@ -129,8 +129,7 @@ void CaptureWidthBoundKkt(Certificate & certificate,const Vector & eta,const Vec
 bool IsValidJointConvergenceCriteria(const JointConvergenceCriteria & criteria)
 {
     return std::isfinite(criteria.global_ac_kkt) && criteria.global_ac_kkt>=0.0 &&
-        std::isfinite(criteria.global_width_gradient) && criteria.global_width_gradient>=0.0 &&
-        std::isfinite(criteria.confirmed_log_width_change) && criteria.confirmed_log_width_change>=0.0;
+        std::isfinite(criteria.global_width_gradient) && criteria.global_width_gradient>=0.0;
 }
 namespace {
 bool MeetsJointThreshold(double value,double threshold)

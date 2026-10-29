@@ -494,23 +494,16 @@ double ScaledCoefficientDifference(VectorRef lhs,VectorRef rhs)
     return ((lhs-rhs).array().abs()/(1.0+lhs.array().abs().max(rhs.array().abs()))).maxCoeff();
 }
 }
-bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_complete_sweep,
-    const JointConvergenceCriteria & criteria)
-{
-    return IsValidJointConvergenceCriteria(criteria) && has_previous_complete_sweep &&
-        std::isfinite(eta_change_inf) && eta_change_inf>=0.0 &&
-        eta_change_inf<=criteria.confirmed_log_width_change;
-}
 FixedNeighborStationarityState ClassifyFixedNeighborStationarity(
-    double ac_kkt,double width_gradient_inf,double eta_change_inf,bool has_previous_complete_sweep,
+    double ac_kkt,double width_gradient_inf,bool has_previous_complete_sweep,
     const JointConvergenceCriteria & criteria)
 {
     if(!IsValidJointConvergenceCriteria(criteria) || !std::isfinite(ac_kkt) || ac_kkt<0.0 ||
         ac_kkt>criteria.global_ac_kkt || !std::isfinite(width_gradient_inf) || width_gradient_inf<0.0 ||
         width_gradient_inf>criteria.global_width_gradient)
         return FixedNeighborStationarityState::NotStationary;
-    return IsFixedNeighborEtaChangeConfirmed(eta_change_inf,has_previous_complete_sweep,criteria) ?
-        FixedNeighborStationarityState::ConfirmedStationary : FixedNeighborStationarityState::CandidateStationary;
+    return has_previous_complete_sweep ? FixedNeighborStationarityState::ConfirmedStationary :
+        FixedNeighborStationarityState::CandidateStationary;
 }
 bool ShouldAttemptFixedNeighborCertification(FixedNeighborStationarityState stationarity,std::size_t sweep,
     std::size_t & next_retry_sweep)
@@ -1217,7 +1210,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         sweep.maximum_target_width=out.state.eta.size() ? std::exp(out.state.eta.maxCoeff()) : 0.0;
         sweep.coordinate_confirmation_available=sweep_index>0;
         double stationarity_width_gradient=sweep.projected_width_gradient_inf_norm;
-        double stationarity_eta_change=sweep.eta_change_inf;
         if(sweep.width_bound_applied && !global.certificate.width_bound_feasible)
             stationarity_width_gradient=std::numeric_limits<double>::infinity();
         sweep.stationarity_width_gradient_inf_norm=stationarity_width_gradient;
@@ -1253,7 +1245,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         }
         const auto stationarity=sweep_had_block_failure ? FixedNeighborStationarityState::NotStationary :
             ClassifyFixedNeighborStationarity(sweep.global_ac_kkt,stationarity_width_gradient,
-                stationarity_eta_change,sweep.coordinate_confirmation_available,policy.convergence_criteria);
+                sweep.coordinate_confirmation_available,policy.convergence_criteria);
         if(stationarity!=FixedNeighborStationarityState::NotStationary && out.first_order_stationarity_sweep==0)
             out.first_order_stationarity_sweep=sweep_index+1;
         const bool certification_retry_due=ShouldAttemptFixedNeighborCertification(
@@ -1302,7 +1294,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             out.certification_sweep=out.sweep_count;
             if(out.certification->qualified() && out.final_sweep &&
                 ClassifyFixedNeighborStationarity(out.final_sweep->global_ac_kkt,
-                    out.final_sweep->stationarity_width_gradient_inf_norm,out.final_sweep->eta_change_inf,
+                    out.final_sweep->stationarity_width_gradient_inf_norm,
                     out.final_sweep->coordinate_confirmation_available,policy.convergence_criteria)==
                         FixedNeighborStationarityState::ConfirmedStationary)
             {

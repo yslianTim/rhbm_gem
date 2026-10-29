@@ -277,7 +277,7 @@ def assert_joint_workflow() -> None:
         assert saved["components"]
         assert saved["components"][0]["state"] is not None
         assert saved["components"][0]["stop_reason"] == "block-stationary"
-        assert saved["components"][0]["candidate_diagnostic"]["convergence_criteria_id"] == "practical-v1"
+        assert saved["components"][0]["candidate_diagnostic"]["convergence_criteria_id"] == "practical-v2"
         assert saved["runtime_convergence"] == "passed"
         assert saved["metadata"]["solver"]["fixed_neighbor_local_search"] == "active-set-lm"
         calibration = next(item for item in saved["evidence"] if item["name"] == "global-width-calibration")

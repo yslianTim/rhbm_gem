@@ -54,7 +54,7 @@ void CheckSingleBlock(const std::string & topology,int atoms)
         problem,std::vector<double>(static_cast<std::size_t>(atoms),.55),2.2);
     ASSERT_EQ(bounded.components.size(),1u);
     ASSERT_TRUE(bounded.components.front().candidate_diagnostic);
-    EXPECT_EQ(bounded.components.front().candidate_diagnostic->convergence_criteria_id,"practical-v1");
+    EXPECT_EQ(bounded.components.front().candidate_diagnostic->convergence_criteria_id,"practical-v2");
     ASSERT_TRUE(bounded.components.front().state);
     ASSERT_TRUE(result.fit.components.front().state);
     ASSERT_TRUE(bounded.objective && result.fit.objective);
@@ -393,7 +393,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveRemainsQualified
     }
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, SignedCancellationRetainsSharedBaselineLimitation)
+TEST(JointFixedNeighborBlockCoordinateTest, SignedCancellationQualifiesWhenOnlyKktGateIsSatisfied)
 {
     auto input=second_stage_test::SyntheticJointWorkload("chain",3);
     for(std::size_t atom=0;atom<3;++atom)
@@ -419,12 +419,19 @@ TEST(JointFixedNeighborBlockCoordinateTest, SignedCancellationRetainsSharedBasel
     EXPECT_GT(audit.candidates,0u);
     EXPECT_EQ(audit.decision_disagreements,0u);
     EXPECT_EQ(result.work.incremental_objective_evaluations,audit.candidates);
-    EXPECT_EQ(result.reason,"block-sweep-budget");
-    EXPECT_FALSE(result.search_converged);
-    EXPECT_FALSE(result.endpoint_certified);
-    EXPECT_NE(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    EXPECT_EQ(result.reason,"block-stationary")<<" sweeps="<<result.sweep_count
+        <<" first_kkt="<<result.first_order_stationarity_sweep
+        <<" confirmed="<<result.confirmed_stationarity_sweep
+        <<" eta_change="<<(result.final_sweep ? result.final_sweep->eta_change_inf : -1.0)
+        <<" stability="<<(result.parameter_stability ? result.parameter_stability->trajectory_stability_status : "missing")
+        <<" perturbation="<<(result.parameter_stability ? result.parameter_stability->perturbation_status : "missing");
+    EXPECT_TRUE(result.search_converged);
+    EXPECT_TRUE(result.endpoint_certified);
+    EXPECT_TRUE(result.assessment.independent_replay.passed);
+    EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(result.final_sweep);
-    EXPECT_EQ(result.sweep_count,500u);
+    EXPECT_GT(result.final_sweep->eta_change_inf,1e-6);
+    EXPECT_EQ(result.confirmed_stationarity_sweep,result.sweep_count);
 }
 
 TEST(JointFixedNeighborBlockCoordinateTest, SignedCancellationFixtureMatchesHistoricalInputDigest)
@@ -565,10 +572,22 @@ TEST(JointFixedNeighborBlockCoordinateTest, HardCaseIncrementalObjectiveAndRepla
         }
         else if(fixture.name=="low-signal-noise-only")
         {
-            EXPECT_EQ(result.reason,"block-sweep-budget")<<fixture.name;
-            EXPECT_FALSE(result.search_converged)<<fixture.name;
+            EXPECT_EQ(result.reason,"block-stationary")<<fixture.name
+                <<" sweeps="<<result.sweep_count
+                <<" first_kkt="<<result.first_order_stationarity_sweep
+                <<" confirmed="<<result.confirmed_stationarity_sweep
+                <<" eta_change="<<(result.final_sweep ? result.final_sweep->eta_change_inf : -1.0)
+                <<" objective="<<result.state.objective
+                <<" stability="<<(result.parameter_stability ? result.parameter_stability->trajectory_stability_status : "missing")
+                <<" perturbation="<<(result.parameter_stability ? result.parameter_stability->perturbation_status : "missing");
+            EXPECT_TRUE(result.search_converged)<<fixture.name;
             EXPECT_TRUE(result.endpoint_certified)<<fixture.name<<':'<<result.endpoint_trust.reason;
             EXPECT_TRUE(result.assessment.independent_replay.passed)<<fixture.name;
+            ASSERT_TRUE(result.final_sweep)<<fixture.name;
+            EXPECT_GT(result.final_sweep->eta_change_inf,1e-6)<<fixture.name;
+            ASSERT_TRUE(result.parameter_stability)<<fixture.name;
+            EXPECT_EQ(result.parameter_stability->trajectory_stability_status,"insufficient-history")<<fixture.name;
+            EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed)<<fixture.name;
         }
         else
         {
@@ -957,8 +976,23 @@ TEST(JointFixedNeighborBlockCoordinateTest, CheapStationarityNeedsCompleteSweepC
     const auto confirmed=n::RunFixedNeighborDiagnostic(problem,eta,policy);
     ASSERT_TRUE(confirmed.search_converged)<<confirmed.reason;
     EXPECT_GT(confirmed.first_order_stationarity_sweep,0u);
-    EXPECT_GT(confirmed.confirmed_stationarity_sweep,confirmed.first_order_stationarity_sweep);
+    EXPECT_GE(confirmed.confirmed_stationarity_sweep,confirmed.first_order_stationarity_sweep);
     EXPECT_EQ(confirmed.confirmed_stationarity_sweep,confirmed.sweeps.size());
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, EndpointCertificationRetryScheduleIsPreserved)
+{
+    std::size_t next_retry_sweep{};
+    EXPECT_FALSE(n::ShouldAttemptFixedNeighborCertification(
+        n::FixedNeighborStationarityState::CandidateStationary,2,next_retry_sweep));
+    EXPECT_TRUE(n::ShouldAttemptFixedNeighborCertification(
+        n::FixedNeighborStationarityState::ConfirmedStationary,2,next_retry_sweep));
+    EXPECT_EQ(next_retry_sweep,12u);
+    EXPECT_FALSE(n::ShouldAttemptFixedNeighborCertification(
+        n::FixedNeighborStationarityState::ConfirmedStationary,11,next_retry_sweep));
+    EXPECT_TRUE(n::ShouldAttemptFixedNeighborCertification(
+        n::FixedNeighborStationarityState::ConfirmedStationary,12,next_retry_sweep));
+    EXPECT_EQ(next_retry_sweep,22u);
 }
 
 TEST(JointFixedNeighborBlockCoordinateTest, StabilityHistoryKeepsOnlyTheLastThreeCompletedSweeps)
@@ -1211,74 +1245,56 @@ TEST(JointFixedNeighborBlockCoordinateTest, FixedNeighborAcceptsAtMostOneTrusted
     }
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, StrictAndPracticalStationarityCriteriaHaveInclusiveFiniteBoundaries)
+TEST(JointFixedNeighborBlockCoordinateTest, KktStationarityCriteriaHaveInclusiveFiniteBoundaries)
 {
     const auto & strict=n::StrictJointConvergenceCriteria;
     const auto & practical=n::PracticalJointConvergenceCriteria;
     EXPECT_TRUE(n::IsValidJointConvergenceCriteria(strict));
     EXPECT_TRUE(n::IsValidJointConvergenceCriteria(practical));
 
-    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(5e-8,0,0,true,strict),
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(5e-8,0,true,strict),
         n::FixedNeighborStationarityState::NotStationary);
-    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(5e-8,0,0,true,practical),
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(5e-8,0,true,practical),
         n::FixedNeighborStationarityState::ConfirmedStationary);
-    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,5e-10,0,true,strict),
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,5e-10,true,strict),
         n::FixedNeighborStationarityState::NotStationary);
-    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,5e-10,0,true,practical),
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,5e-10,true,practical),
         n::FixedNeighborStationarityState::ConfirmedStationary);
-    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,0,5e-7,true,strict),
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(practical.global_ac_kkt,0,false,practical),
         n::FixedNeighborStationarityState::CandidateStationary);
-    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,0,5e-7,true,practical),
-        n::FixedNeighborStationarityState::ConfirmedStationary);
-
-    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(practical.global_ac_kkt,0,0,true,practical),
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(practical.global_ac_kkt,0,true,practical),
         n::FixedNeighborStationarityState::ConfirmedStationary);
     EXPECT_EQ(n::ClassifyFixedNeighborStationarity(
-        std::nextafter(practical.global_ac_kkt,0.0),0,0,true,practical),
+        std::nextafter(practical.global_ac_kkt,0.0),0,true,practical),
         n::FixedNeighborStationarityState::ConfirmedStationary);
     EXPECT_EQ(n::ClassifyFixedNeighborStationarity(
-        std::nextafter(practical.global_ac_kkt,std::numeric_limits<double>::infinity()),0,0,true,practical),
+        std::nextafter(practical.global_ac_kkt,std::numeric_limits<double>::infinity()),0,true,practical),
         n::FixedNeighborStationarityState::NotStationary);
-    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,practical.global_width_gradient,0,true,practical),
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,practical.global_width_gradient,true,practical),
         n::FixedNeighborStationarityState::ConfirmedStationary);
     EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,
-        std::nextafter(practical.global_width_gradient,0.0),0,true,practical),
+        std::nextafter(practical.global_width_gradient,0.0),true,practical),
         n::FixedNeighborStationarityState::ConfirmedStationary);
     EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,
-        std::nextafter(practical.global_width_gradient,std::numeric_limits<double>::infinity()),0,true,practical),
+        std::nextafter(practical.global_width_gradient,std::numeric_limits<double>::infinity()),true,practical),
         n::FixedNeighborStationarityState::NotStationary);
-    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,0,practical.confirmed_log_width_change,true,practical),
-        n::FixedNeighborStationarityState::ConfirmedStationary);
-    EXPECT_TRUE(n::IsFixedNeighborEtaChangeConfirmed(
-        std::nextafter(practical.confirmed_log_width_change,0.0),true,practical));
-    EXPECT_FALSE(n::IsFixedNeighborEtaChangeConfirmed(
-        std::nextafter(practical.confirmed_log_width_change,std::numeric_limits<double>::infinity()),true,practical));
 
     const double nan=std::numeric_limits<double>::quiet_NaN();
     const double infinity=std::numeric_limits<double>::infinity();
-    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(nan,0,0,true,practical),
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(nan,0,true,practical),
         n::FixedNeighborStationarityState::NotStationary);
-    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,infinity,0,true,practical),
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,infinity,true,practical),
         n::FixedNeighborStationarityState::NotStationary);
-    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(-1,0,0,true,practical),
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(-1,0,true,practical),
         n::FixedNeighborStationarityState::NotStationary);
-    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,-1,0,true,practical),
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,-1,true,practical),
         n::FixedNeighborStationarityState::NotStationary);
-    EXPECT_FALSE(n::IsFixedNeighborEtaChangeConfirmed(-1,true,practical));
-    EXPECT_FALSE(n::IsFixedNeighborEtaChangeConfirmed(infinity,true,practical));
-    EXPECT_FALSE(n::IsFixedNeighborEtaChangeConfirmed(nan,true,practical));
-    EXPECT_NE(n::ClassifyFixedNeighborStationarity(0,0,-1,true,practical),
-        n::FixedNeighborStationarityState::ConfirmedStationary);
-    EXPECT_NE(n::ClassifyFixedNeighborStationarity(0,0,nan,true,practical),
-        n::FixedNeighborStationarityState::ConfirmedStationary);
 
     auto invalid=practical; invalid.global_ac_kkt=nan;
     EXPECT_FALSE(n::IsValidJointConvergenceCriteria(invalid));
-    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,0,0,true,invalid),
+    EXPECT_EQ(n::ClassifyFixedNeighborStationarity(0,0,true,invalid),
         n::FixedNeighborStationarityState::NotStationary);
     invalid=practical; invalid.global_width_gradient=infinity;
-    EXPECT_FALSE(n::IsValidJointConvergenceCriteria(invalid));
-    invalid=practical; invalid.confirmed_log_width_change=-1;
     EXPECT_FALSE(n::IsValidJointConvergenceCriteria(invalid));
 }
 TEST(JointFixedNeighborBlockCoordinateTest, PracticalCriteriaDoNotQualifySweepsWithFailedBlocks)
@@ -1303,12 +1319,33 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchDefaultsToValidatedP
     const auto production=n::PracticalJointConvergenceCriteria;
     EXPECT_DOUBLE_EQ(production.global_ac_kkt,n::PracticalJointConvergenceCriteria.global_ac_kkt);
     EXPECT_DOUBLE_EQ(production.global_width_gradient,n::PracticalJointConvergenceCriteria.global_width_gradient);
-    EXPECT_DOUBLE_EQ(production.confirmed_log_width_change,
-        n::PracticalJointConvergenceCriteria.confirmed_log_width_change);
     const auto local=n::FixedNeighborPolicy{}.convergence_criteria;
     EXPECT_DOUBLE_EQ(local.global_ac_kkt,n::StrictJointConvergenceCriteria.global_ac_kkt);
     EXPECT_DOUBLE_EQ(local.global_width_gradient,n::StrictJointConvergenceCriteria.global_width_gradient);
-    EXPECT_DOUBLE_EQ(local.confirmed_log_width_change,n::StrictJointConvergenceCriteria.confirmed_log_width_change);
+}
+
+TEST(JointFixedNeighborBlockCoordinateTest, KktOnlyCanCertifyWithLargeLogWidthChange)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector eta=n::Vector::Constant(3,std::log(.55));
+    n::FixedNeighborPolicy policy;
+    policy.core_atoms=12;
+    policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
+    policy.eta_upper_bound=std::log(2.2);
+
+    const auto result=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,data.context,policy);
+    ASSERT_TRUE(result.search_converged)<<result.reason;
+    ASSERT_TRUE(result.final_sweep);
+    EXPECT_EQ(result.first_order_stationarity_sweep,3u);
+    EXPECT_EQ(result.confirmed_stationarity_sweep,3u);
+    EXPECT_EQ(result.certification_sweep,3u);
+    EXPECT_EQ(result.sweep_count,3u);
+    EXPECT_GT(result.final_sweep->eta_change_inf,1e-6);
+    ASSERT_TRUE(result.certification);
+    EXPECT_TRUE(result.certification->qualified());
+    EXPECT_TRUE(result.certification->assessment.independent_replay.passed);
+    EXPECT_EQ(result.certification_attempts,1u);
 }
 
 TEST(JointFixedNeighborBlockCoordinateTest, BudgetExhaustionPreservesCandidateWithoutInventingTrustedState)

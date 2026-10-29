@@ -117,10 +117,9 @@ JointParameterLayout ComponentLayout(const JointParameterLayout & layout,const C
 JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & search, std::size_t atoms)
 {
     JointCandidateDiagnostic out;
-    out.convergence_criteria_id="practical-v1";
+    out.convergence_criteria_id="practical-v2";
     out.global_ac_kkt_threshold=PracticalJointConvergenceCriteria.global_ac_kkt;
     out.global_width_gradient_threshold=PracticalJointConvergenceCriteria.global_width_gradient;
-    out.confirmed_log_width_change_threshold=PracticalJointConvergenceCriteria.confirmed_log_width_change;
     const auto & state=search.state;
     bool finite_widths=state.eta.size()==static_cast<Eigen::Index>(atoms) && state.eta.allFinite();
     if(finite_widths) for(Eigen::Index atom=0;atom<state.eta.size();++atom)

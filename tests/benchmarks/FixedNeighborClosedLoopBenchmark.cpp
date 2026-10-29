@@ -17,6 +17,7 @@
 namespace {
 namespace joint=rhbm_gem::core::joint_component;
 using Clock=std::chrono::steady_clock;
+constexpr double PracticalV1LogWidthChangeThreshold=1e-6;
 
 struct Sample
 {
@@ -112,7 +113,7 @@ Sample Run(std::size_t targets)
                 first_kkt_sweep=sweep.sweep;
                 first_kkt_eta_change=sweep.eta_change_inf;
             }
-            if(sweep.eta_change_inf>criteria.confirmed_log_width_change) ++eta_blocked_sweeps;
+            if(sweep.eta_change_inf>PracticalV1LogWidthChangeThreshold) ++eta_blocked_sweeps;
             const auto failed_in_sweep=sweep.block_solves-sweep.accepted_blocks-sweep.unchanged_blocks;
             if(first_kkt_eligible_sweep==0 && sweep.coordinate_confirmation_available && failed_in_sweep==0)
                 first_kkt_eligible_sweep=sweep.sweep;

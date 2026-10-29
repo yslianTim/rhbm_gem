@@ -153,11 +153,11 @@ def main() -> int:
             assert component["stop_reason"] == "block-stationary"
             assert 0 < component["search_sweeps"] <= 200
             diagnostic = component["candidate_diagnostic"]
-            assert diagnostic["convergence_criteria_id"] == "practical-v1"
+            assert diagnostic["convergence_criteria_id"] == "practical-v2"
             assert diagnostic["global_ac_kkt_threshold"] == 1e-7
             assert diagnostic["global_width_gradient_threshold"] == 1e-9
-            assert diagnostic["confirmed_log_width_change_threshold"] == 1e-6
-            assert diagnostic["candidate_log_width_change_inf_norm"] <= 1e-6
+            assert "confirmed_log_width_change_threshold" not in diagnostic
+            assert diagnostic["candidate_log_width_change_inf_norm"] >= 0
             point = component["target_evidence"]
             assert point["contract"] == "target-point-validation-v1"
             assert all(key not in point for key in ("ranks", "atoms", "column_scales"))

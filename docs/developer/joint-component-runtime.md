@@ -35,15 +35,17 @@ rank and weak-direction checks; it is not an alternate A/C solver.
 
 ## Qualification
 
-The global search preserves objective monotonicity and practical-v1
-convergence: projected A/C KKT ≤ `1e-7`, bound-aware projected Width KKT ≤
-`1e-9`, and maximum log-width change ≤ `1e-6` after a complete sweep. Endpoint
-certification and Independent Replay verify the accepted state. Component
-assembly consistency, Local Conditioning, Parameter Stability, target point
-quality, and resource preflight remain explicit evidence; local LM termination
-alone does not qualify a component. Failed initialization, unavailable width
-calibration, incomplete search, unqualified endpoint, missing component state,
-and nullable diagnostics remain representable saved outcomes.
+The global search preserves objective monotonicity and practical-v2
+convergence: projected A/C KKT ≤ `1e-7` and bound-aware projected Width KKT ≤
+`1e-9`. Confirmation requires at least two completed sweeps and no block
+failure on the current sweep. Maximum log-width change remains a diagnostic and
+does not gate certification. Endpoint certification and Independent Replay
+verify the accepted state. Component assembly consistency, Local Conditioning,
+Parameter Stability, target point quality, and resource preflight remain
+explicit evidence; local LM termination alone does not qualify a component.
+Failed initialization, unavailable width calibration, incomplete search,
+unqualified endpoint, missing component state, and nullable diagnostics remain
+representable saved outcomes.
 
 Local Conditioning and Parameter Stability describe the accepted solution's
 block behavior. Target point validation records component convergence,

@@ -183,10 +183,8 @@ struct FixedNeighborComponentResult
     std::string stop_reason;
 };
 
-bool IsFixedNeighborEtaChangeConfirmed(double eta_change_inf,bool has_previous_complete_sweep,
-    const JointConvergenceCriteria & = StrictJointConvergenceCriteria);
 FixedNeighborStationarityState ClassifyFixedNeighborStationarity(
-    double ac_kkt,double width_gradient_inf,double eta_change_inf,bool has_previous_complete_sweep,
+    double ac_kkt,double width_gradient_inf,bool has_previous_complete_sweep,
     const JointConvergenceCriteria & = StrictJointConvergenceCriteria);
 bool ShouldAttemptFixedNeighborCertification(FixedNeighborStationarityState,std::size_t sweep,
     std::size_t & next_retry_sweep);

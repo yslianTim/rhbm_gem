@@ -23,12 +23,13 @@ trust checks do not substitute for global component qualification.
 
 ## Component qualification
 
-The default global criteria are practical-v1: projected A/C KKT at most
-`1e-7`, projected log-width gradient at most `1e-9`, and confirmed log-width
-change at most `1e-6`. Confirmation requires a complete sweep. Endpoint
-verification and Independent Replay then check feasibility and consistency at
-the accepted state. Sweep-budget exhaustion is not convergence; an unqualified
-candidate is not published as a Target estimate.
+The default global criteria are practical-v2: projected A/C KKT at most
+`1e-7` and bound-aware projected log-width KKT at most `1e-9`. Stationarity
+confirmation requires at least two completed sweeps and a current sweep with no
+block failure. Log-width change remains a diagnostic and does not gate
+certification. Endpoint verification and Independent Replay check feasibility
+and consistency at the accepted state. Sweep-budget exhaustion is not
+convergence; an unqualified candidate is not published as a Target estimate.
 
 Local conditioning and parameter stability are read-only point-quality
 assessments. They do not alter accepted parameters or revoke a qualified global
