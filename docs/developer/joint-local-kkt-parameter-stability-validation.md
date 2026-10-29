@@ -12,7 +12,7 @@
 | P1 Null／Reference | 完成（有明示限制） | N0、N1、baseline-η-seeded N2 與 30/300/1,000 target reference；SearchProfile 會重新 profile β，沒有宣稱直接 full-state β seed |
 | P2 Solver Precision | 部分完成 | 實際改變 Local profile LM `gtol`；A/C constrained linear solve 沒有可安全注入的 KKT stopping tolerance |
 | P3 Qualification | 完成 | 對 25 個 baseline、25 個 conditional reprofile 與 138 個成功 perturbation endpoint 以同一端點重算 Q0–Q3 |
-| P4 困難案例 | 待完成 |  |
+| P4 困難案例 | 部分完成 | 合成 exact/noise/scale/amplitude/width、cube 與 3–1,000 target；尚無 real map、rank-deficient/near-singular workload |
 | P5 Promotion／Cleanup | 待完成 |  |
 
 ## P0 — Per-seed 原始數值證據
@@ -96,3 +96,42 @@ Precision 個別 run 沒有配置獨立 RSS recorder；T4 30-target process peak
 `Q0={1e-10,1e-12}`、`Q1={1e-10,1e-9}`、`Q2={1e-8,1e-9}`、`Q3={1e-7,1e-9}`，數值依序為 A/C、Width。25 個 baseline/reprofile 的 replay numerical consistency 欄位全部通過；baseline run-criteria replay 中僅 T4 solver-only block 1/2 因 Width KKT fail。完成的 138 個 seeds 全部 linear solver valid、feasible、width feasible、Independent Replay 通過，並在最嚴格 Q0 通過。132 個 seed 沒有 active A/C 或 width bound；另 6 個 noise-only seed 有 2 個 active A/C constraints 與 2 個 active width bounds，也通過各自 replay consistency 和 Q0 optimality。Raw endpoint 中沒有 rank invalid、nonfinite、budget-exhausted 或 replay-disagreement 的 perturbation seed。
 
 Q3 相對 Q0 多讓 15/25 個 baseline 和 15/25 個 conditional-reprofile 快照通過；它沒有讓任何新的 perturbation endpoint 合格，因為已完成 endpoints 原先都已通過 Q0。T4 full-policy 雖用 Local eligibility width `1e-5` 完成 block 1/2 的診斷，但 Q3 仍拒絕它們：兩個 baseline Width KKT 是 `1.1122e-9`／`1.0308e-9`，兩個 N1 Width KKT 是 `5.0148e-9`／`4.6642e-9`。因此放寬 A/C qualification 或 T4 Local eligibility 都沒有理由改動 Global `1e-9` Width criterion。
+
+## P4 — 科學品質、尺度與資源覆蓋
+
+本輪 15 個 synthetic run variant 包含 3/30/300/1,000 targets、T0/T4 solver-only/full-policy、8-target cube topology、無噪聲資料、兩個 noise amplitude、noise-only、兩種 signal scale、不同 A/C amplitude 與 true width `0.8`。每個 variant 的 accepted state 在「有／無 stability assessment」對照中，η、β、prediction、residual、objective 與 sweep count 都逐值相同（15/15）。
+
+| Fixture | Truth／擾動 | 最大 width error | 最大 A error | 最大 C error | Prediction RMSE | 局部結果／觀察 |
+|---|---|---:|---:|---:|---:|---|
+| exact 3 targets | 無噪聲，B=.5, A=2, C=.2 | `5.45e-9` | `2.42e-8` | `7.00e-10` | `5.65e-10` | Well-conditioned，Stable |
+| low noise | noise amplitude `1e-6` | `3.77e-7` | `1.93e-6` | `9.09e-8` | `3.22e-8` | Well-conditioned，Stable |
+| higher noise | noise amplitude `1e-5` | `3.72e-6` | `1.91e-5` | `9.03e-7` | `3.20e-7` | Well-conditioned，Stable |
+| noise-only | true A=C=0，noise `1e-5` | `0.720`（不可解讀為真實 width 誤差） | `5.58e-6` | `5.23e-7` | `1.67e-7` | ActiveFace；6 seeds 均有兩個 width bound 與兩個 A/C active；Unstable、parameter change `.763` |
+| small scale | signal scale `.001` | `5.45e-9` | `2.42e-11` | `7.00e-13` | `5.65e-13` | Width recovery 與大尺度相同，絕對 A/C 誤差按尺度縮放 |
+| large scale | signal scale `1000` | `5.45e-9` | `2.42e-5` | `7.00e-7` | `5.65e-7` | 絕對誤差按尺度放大，condition estimate 幾乎不變 |
+| wider true width | B=`.8` | `2.64e-12` | `1.82e-11` | `3.75e-13` | `8.16e-14` | 11 sweeps，Well-conditioned、Stable |
+| lower amplitudes | A=`.2`, C=`.02` | `5.45e-9` | `2.42e-9` | `7.00e-11` | `5.65e-11` | Well-conditioned、Stable |
+| cube 8 targets | 中等空間重疊 | `8.92e-6` | `6.96e-5` | `1.36e-5` | `6.15e-6` | full rank；projected width condition 約 `1.073`，不足以代表病態 overlap |
+
+Noise-only 的 Width 不具真值識別性，upper-bound active 且出現 Unstable，說明 Parameter Stability warning 不能單獨解讀成可識別參數的物理敏感度；應搭配 target point-quality、active face 與 rank/conditioning。low/high noise 與尺度測試皆有合理的誤差縮放，但不構成多 map 統計驗證。
+
+### 擾動大小與不同初始值
+
+T4 full-policy block 1 在 coordinate direction 的 `D_common` 對 δ=`1e-4 / 1e-3 / 1e-2` 分別是 `1.9376222241e-7 / 1.9376222238e-7 / 1.9376222240e-7`；`D_odd` 分別是 `6.94e-16 / 6.01e-14 / 9.80e-17`。block 2 同樣呈現 `D_common≈1.80112867e-7`，`D_odd<4.2e-15`。在所測範圍內 common response 幾乎不依賴 δ，符合 baseline reoptimization offset；沒有觀察到一階成長的方向性 odd response。upper-bound projection 與非線性仍限制此結論。
+
+另外對 T4 3 個 selected blocks 分別從 baseline η 的 ±`.25` log-width offsets 啟動 multi-start；六個 endpoint 都有 Strict Replay。相對 strict reference，`D_B` 約 `2.2e-16–3.3e-16`、`D_AC` 約 `7.5e-17–1.8e-16`、`D_pred` 約 `2.5e-16–4.7e-16`。在這六個起點未見不同局部極小值，但不能據此排除其他 component 或更遠初值的多模態。
+
+### 覆蓋率與 production benchmark
+
+跨 15 個 synthetic variants 的 25 個 selected-block assessment 為 15 Stable、8 Unstable、2 Unavailable；沒有 Sensitive/NotAssessed。兩個 Unavailable 是 T4 solver-only block 1/2。這些是跨 scenario 的 selected-block 結果，不是獨立科學樣本。300 targets 選 3/26 個 local blocks（11.5%），1,000 targets 選 3/84（3.6%），不能當成整個 component 的 stability 證明。
+
+Local perturbation diagnostic 的 measured CPU 約為 T0 30 targets `0.266 s`、300 targets `0.219 s`、1,000 targets `0.311 s`；對應 workspace estimates 為 `23.7 MB`、`53.4 MB`、`130.2 MB`。Workspace 是估算值；research runner 的 process RSS 高水位包含 stability-on/off 兩次 fit，不能解讀成診斷增量。另以 Release、單執行緒、warmup 1 + measured 5 runs 執行 production closed-loop benchmark，完整結果在 [joint-local-production-benchmark-2026-10-29.txt](data/joint-local-production-benchmark-2026-10-29.txt)：
+
+| Targets | Median search | Median wall | Peak RSS | Memory preflight estimate | Sweeps | Endpoint / Replay |
+|---:|---:|---:|---:|---:|---:|---|
+| 3 | `2.84 ms` | `3.72 ms` | `24.1 MB` | `0.45 MB` | 3 | 通過 / 通過 |
+| 30 | `87.2 ms` | `105.9 ms` | `35.4 MB` | `3.93 MB` | 5 | 通過 / 通過 |
+| 300 | `0.750 s` | `0.948 s` | `88.1 MB` | `36.7 MB` | 4 | 通過 / 通過 |
+| 1,000 | `2.509 s` | `3.182 s` | `237.6 MB` | `121.6 MB` | 4 | 通過 / 通過 |
+
+Production Release benchmark 的 accepted objective/KKT、sweep count、candidate counts 均符合 T0 synthetic baseline，cache replay error 為 0。Production `.git` artifact 中沒有 cryo-EM `.mrc/.map/.ccp4` fixture；real-map validation 未執行。獨立 Rank-deficient、near-singular 與 high-overlap hard workload 也未完成；cube fixture condition 約 1.07，不能充當這些案例。
