@@ -1,6 +1,5 @@
 #pragma once
 #include "Numerics.hpp"
-#include "SplitDiagnostics.hpp"
 
 namespace rhbm_gem::core::joint_component {
 inline constexpr std::size_t MaximumLocalPerturbationDirectionsPerBlock=3;
@@ -24,11 +23,9 @@ struct LocalParameterStabilityAssessment
 {
     JointBlockParameterStability evidence;
     MemoryEstimate memory_estimate;
-    std::optional<LocalSplitDiagnostics> split_diagnostics;
-    std::size_t perturbation_replay_checks{};
     double seconds{},cpu_seconds{};
 };
 LocalParameterStabilityAssessment AssessLocalParameterStability(
     const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &,
-    std::string,std::size_t=0,SplitDiagnosticsMode=SplitDiagnosticsMode::Disabled);
+    std::string,std::size_t=0);
 }

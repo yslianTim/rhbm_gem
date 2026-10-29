@@ -9,8 +9,6 @@
 #include <ctime>
 #include <iomanip>
 #include <iostream>
-#include <limits>
-#include <optional>
 #include <stdexcept>
 #include <string>
 #include <sys/resource.h>
@@ -21,14 +19,9 @@ namespace joint=rhbm_gem::core::joint_component;
 using Clock=std::chrono::steady_clock;
 struct Sample
 {
-    std::string stop_reason,mode,split_status,split_reason,null_reference_status;
-    std::optional<double> max_reoptimization_prediction_drift,max_reoptimization_log_width_difference,
-        max_reoptimization_scaled_ac_difference,max_seed_prediction_robustness,
-        max_seed_log_width_difference,max_seed_scaled_ac_difference,max_high_budget_width_difference,
-        max_high_budget_scaled_ac_difference,max_high_budget_prediction_difference;
+    std::string stop_reason;
     double search_seconds{},wall_seconds{},cpu_seconds{},parameter_stability_seconds{},
-        parameter_stability_cpu_seconds{},null_search_seconds{},null_search_cpu_seconds{},
-        candidate_seconds{},sweep_replay_seconds{},
+        parameter_stability_cpu_seconds{},candidate_seconds{},sweep_replay_seconds{},
         replay_audit_seconds{},reconciliation_seconds{},global_state_seconds{},
         endpoint_certification_seconds{},independent_replay_seconds{},local_profile_seconds{},
         profile_basis_seconds{},profile_linear_solve_seconds{},profile_derivative_prepare_seconds{},
@@ -40,9 +33,6 @@ struct Sample
         preflight_bytes{},peak_rss_bytes{},profile_evaluations{},profile_derivatives{},
         parameter_stability_solves{},parameter_stability_evaluations{},
         parameter_stability_blocks_selected{},parameter_stability_peak_bytes{},
-        null_profile_evaluations{},null_accepted_updates{},null_replay_checks{},
-        perturbation_replay_checks{},
-        split_qualified_blocks{},split_incomplete_blocks{},split_workspace_peak_bytes{},
         bounded_subproblems{},damping_solves{},damping_bracket_solves{},damping_bisection_solves{},
         damping_qr_factorizations{},damping_active_set_iterations{},damping_releases{};
     std::uint64_t accepted_state_fingerprint{};
@@ -90,11 +80,6 @@ double Median(std::vector<double> values)
     return values.size()%2 ? values[middle] : .5*(values[middle-1]+values[middle]);
 }
 
-void KeepMaximum(std::optional<double> & maximum,const std::optional<double> & value)
-{
-    if(value && (!maximum || *value>*maximum)) maximum=value;
-}
-
 template<class Getter>
 void PrintTime(const char * name,const std::vector<Sample> & samples,Getter getter)
 {
@@ -106,10 +91,10 @@ void PrintTime(const char * name,const std::vector<Sample> & samples,Getter gett
         <<' '<<name<<"_range_s=["<<*minimum<<','<<*maximum<<']';
 }
 
-Sample Run(std::size_t targets,joint::SplitDiagnosticsMode split_mode,const std::string & topology)
+Sample Run(std::size_t targets)
 {
     rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload(
-        topology,static_cast<int>(targets)));
+        "chain",static_cast<int>(targets)));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const joint::Vector initial_eta=joint::Vector::Constant(
         static_cast<Eigen::Index>(targets),std::log(.55));
@@ -134,9 +119,6 @@ Sample Run(std::size_t targets,joint::SplitDiagnosticsMode split_mode,const std:
         --remaining_perturbation_blocks;
         return true;
     };
-    policy.assess_local_conditioning=true;
-    policy.assess_parameter_stability=true;
-    policy.split_diagnostics_mode=split_mode;
     std::size_t accepted_blocks{},unchanged_blocks{},failed_blocks{};
     std::size_t first_kkt_sweep{},first_kkt_eligible_sweep{};
     const auto & criteria=policy.convergence_criteria;
@@ -172,8 +154,6 @@ Sample Run(std::size_t targets,joint::SplitDiagnosticsMode split_mode,const std:
         throw std::runtime_error("Production search qualification failed: "+result.reason);
 
     Sample sample;
-    sample.mode=split_mode==joint::SplitDiagnosticsMode::Disabled ? "B0" :
-        split_mode==joint::SplitDiagnosticsMode::Minimal ? "B1" : "B2";
     sample.stop_reason=result.reason;
     sample.search_seconds=result.search_seconds;
     sample.wall_seconds=wall_seconds;
@@ -182,41 +162,12 @@ Sample Run(std::size_t targets,joint::SplitDiagnosticsMode split_mode,const std:
     sample.parameter_stability_seconds=result.work.parameter_stability_seconds;
     sample.parameter_stability_solves=result.work.perturbation_solves;
     sample.parameter_stability_evaluations=result.work.perturbation_evaluations;
-    sample.perturbation_replay_checks=result.work.perturbation_replay_checks;
     sample.parameter_stability_peak_bytes=result.work.parameter_stability_peak_memory_estimate_bytes;
     if(result.parameter_stability)
     {
         sample.parameter_stability_cpu_seconds=result.parameter_stability->cpu_seconds;
         for(const auto & block:result.parameter_stability->blocks)
             sample.parameter_stability_blocks_selected+=block.probe_selected ? 1u : 0u;
-    }
-    for(const auto & block:result.split_diagnostics)
-    {
-        const auto & split=block.diagnostics;
-        sample.null_search_seconds+=split.null_search_seconds;
-        sample.null_search_cpu_seconds+=split.null_search_cpu_seconds;
-        sample.null_profile_evaluations+=split.null_profile_evaluations;
-        sample.null_accepted_updates+=split.null_accepted_updates;
-        sample.null_replay_checks+=split.null_replay_checks;
-        sample.split_workspace_peak_bytes=std::max(sample.split_workspace_peak_bytes,
-            split.workspace_estimate_bytes);
-        KeepMaximum(sample.max_reoptimization_prediction_drift,split.reoptimization_prediction_drift);
-        KeepMaximum(sample.max_reoptimization_log_width_difference,split.reoptimization_log_width_difference_inf);
-        KeepMaximum(sample.max_reoptimization_scaled_ac_difference,split.reoptimization_scaled_ac_difference);
-        KeepMaximum(sample.max_seed_prediction_robustness,split.seed_prediction_robustness);
-        KeepMaximum(sample.max_seed_log_width_difference,split.seed_log_width_difference_inf);
-        KeepMaximum(sample.max_seed_scaled_ac_difference,split.seed_scaled_ac_difference);
-        KeepMaximum(sample.max_high_budget_width_difference,split.high_budget_width_difference_inf);
-        KeepMaximum(sample.max_high_budget_scaled_ac_difference,split.high_budget_scaled_ac_difference);
-        KeepMaximum(sample.max_high_budget_prediction_difference,split.high_budget_prediction_difference_relative);
-        sample.split_qualified_blocks+=split.status=="Qualified" ? 1u : 0u;
-        sample.split_incomplete_blocks+=split.status=="Incomplete" || split.status=="Unavailable" ? 1u : 0u;
-        if(sample.split_status.empty())
-        {
-            sample.split_status=split.status;
-            sample.split_reason=split.reason;
-            sample.null_reference_status=split.null_reference_status;
-        }
     }
     const auto & profile_work=result.work.local_profile_work;
     sample.local_profile_seconds=profile_work.total_seconds;
@@ -267,18 +218,15 @@ Sample Run(std::size_t targets,joint::SplitDiagnosticsMode split_mode,const std:
     return sample;
 }
 
-void PrintSummary(std::size_t targets,const std::string & topology,const std::string & mode,
-    const std::vector<Sample> & samples)
+void PrintSummary(std::size_t targets,const std::vector<Sample> & samples)
 {
-    std::cout<<std::setprecision(9)<<"targets="<<targets<<" topology="<<topology<<" mode="<<mode
+    std::cout<<std::setprecision(9)<<"targets="<<targets<<" mode=production"
         <<" warmups=1 measured_runs="<<samples.size();
     PrintTime("search",samples,[](const auto & x){return x.search_seconds;});
     PrintTime("wall",samples,[](const auto & x){return x.wall_seconds;});
     PrintTime("cpu",samples,[](const auto & x){return x.cpu_seconds;});
     PrintTime("parameter_stability_wall",samples,[](const auto & x){return x.parameter_stability_seconds;});
     PrintTime("parameter_stability_cpu",samples,[](const auto & x){return x.parameter_stability_cpu_seconds;});
-    PrintTime("null_search_wall",samples,[](const auto & x){return x.null_search_seconds;});
-    PrintTime("null_search_cpu",samples,[](const auto & x){return x.null_search_cpu_seconds;});
     PrintTime("local_profile_total",samples,[](const auto & x){return x.local_profile_seconds;});
     PrintTime("local_profile_basis",samples,[](const auto & x){return x.profile_basis_seconds;});
     PrintTime("local_profile_linear_solve",samples,[](const auto & x){return x.profile_linear_solve_seconds;});
@@ -311,36 +259,8 @@ void PrintSummary(std::size_t targets,const std::string & topology,const std::st
         <<" damping_releases="<<representative.damping_releases
         <<" parameter_stability_solves="<<representative.parameter_stability_solves
         <<" parameter_stability_evaluations="<<representative.parameter_stability_evaluations
-        <<" perturbation_replay_checks="<<representative.perturbation_replay_checks
         <<" parameter_stability_blocks_selected="<<representative.parameter_stability_blocks_selected
         <<" parameter_stability_peak_bytes="<<representative.parameter_stability_peak_bytes
-        <<" null_profile_evaluations="<<representative.null_profile_evaluations
-        <<" null_accepted_updates="<<representative.null_accepted_updates
-        <<" null_replay_checks="<<representative.null_replay_checks
-        <<" split_qualified_blocks="<<representative.split_qualified_blocks
-        <<" split_incomplete_blocks="<<representative.split_incomplete_blocks
-        <<" split_workspace_peak_bytes="<<representative.split_workspace_peak_bytes
-        <<" split_status="<<representative.split_status
-        <<" split_reason="<<representative.split_reason
-        <<" null_reference_status="<<representative.null_reference_status
-        <<" max_reoptimization_prediction_drift="<<representative.max_reoptimization_prediction_drift.value_or(
-            std::numeric_limits<double>::quiet_NaN())
-        <<" max_reoptimization_log_width_difference="<<representative.max_reoptimization_log_width_difference.value_or(
-            std::numeric_limits<double>::quiet_NaN())
-        <<" max_reoptimization_scaled_ac_difference="<<representative.max_reoptimization_scaled_ac_difference.value_or(
-            std::numeric_limits<double>::quiet_NaN())
-        <<" max_seed_prediction_robustness="<<representative.max_seed_prediction_robustness.value_or(
-            std::numeric_limits<double>::quiet_NaN())
-        <<" max_seed_log_width_difference="<<representative.max_seed_log_width_difference.value_or(
-            std::numeric_limits<double>::quiet_NaN())
-        <<" max_seed_scaled_ac_difference="<<representative.max_seed_scaled_ac_difference.value_or(
-            std::numeric_limits<double>::quiet_NaN())
-        <<" max_high_budget_width_difference="<<representative.max_high_budget_width_difference.value_or(
-            std::numeric_limits<double>::quiet_NaN())
-        <<" max_high_budget_scaled_ac_difference="<<representative.max_high_budget_scaled_ac_difference.value_or(
-            std::numeric_limits<double>::quiet_NaN())
-        <<" max_high_budget_prediction_difference="<<representative.max_high_budget_prediction_difference.value_or(
-            std::numeric_limits<double>::quiet_NaN())
         <<" accepted_state_fnv1a64="<<std::hex<<std::setw(16)<<std::setfill('0')
         <<representative.accepted_state_fingerprint<<std::dec<<std::setfill(' ')
         <<" accepted_state_fingerprint_equal="<<state_fingerprint_equal
@@ -373,26 +293,20 @@ void PrintSummary(std::size_t targets,const std::string & topology,const std::st
 
 int main(int argc,char ** argv)
 {
-    if(argc!=3 && argc!=4)
+    if(argc!=2)
     {
-        std::cerr<<"usage: rhbm_fixed_neighbor_closed_loop_benchmark <target-count> <B0|B1|B2> [chain|noise-only]\n";
+        std::cerr<<"usage: rhbm_fixed_neighbor_closed_loop_benchmark <target-count>\n";
         return 2;
     }
     try
     {
         const auto targets=static_cast<std::size_t>(std::stoul(argv[1]));
         if(targets==0 || targets>1000000) throw std::invalid_argument("target count is out of range");
-        const std::string mode=argv[2];
-        const std::string topology=argc==4 ? argv[3] : "chain";
-        const auto split_mode=mode=="B0" ? joint::SplitDiagnosticsMode::Disabled :
-            mode=="B1" ? joint::SplitDiagnosticsMode::Minimal :
-            mode=="B2" ? joint::SplitDiagnosticsMode::ReuseWorkspace :
-            throw std::invalid_argument("mode must be B0, B1, or B2");
-        (void)Run(targets,split_mode,topology);
+        (void)Run(targets);
         std::vector<Sample> samples;
         samples.reserve(5);
-        for(std::size_t repetition=0;repetition<5;++repetition) samples.push_back(Run(targets,split_mode,topology));
-        PrintSummary(targets,topology,mode,samples);
+        for(std::size_t repetition=0;repetition<5;++repetition) samples.push_back(Run(targets));
+        PrintSummary(targets,samples);
         return 0;
     }
     catch(const std::exception & error)

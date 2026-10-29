@@ -1,6 +1,5 @@
 #pragma once
 #include "Numerics.hpp"
-#include "SplitDiagnostics.hpp"
 #include "FixedNeighborPolicy.hpp"
 #include "JointProgress.hpp"
 #include "ResourceWork.hpp"
@@ -93,7 +92,6 @@ struct FixedNeighborWork
     std::size_t local_problem_count{},minimum_local_atoms{},maximum_local_atoms{};
     std::size_t local_conditioning_peak_memory_estimate_bytes{};
     std::size_t parameter_stability_peak_memory_estimate_bytes{},perturbation_solves{},perturbation_evaluations{};
-    std::size_t perturbation_replay_checks{};
     double total_local_atoms{};
     ProfileSearchWork local_profile_work;
 };
@@ -137,7 +135,6 @@ struct FixedNeighborPolicy
     bool certify_endpoint{true}; // Diagnostic facade only; production components always certify.
     bool assess_local_conditioning{};
     bool assess_parameter_stability{};
-    SplitDiagnosticsMode split_diagnostics_mode{SplitDiagnosticsMode::Disabled};
     bool collect_telemetry{};
     bool collect_diagnostics{};
     std::optional<std::size_t> global_state_memory_budget_for_testing;
@@ -162,9 +159,6 @@ struct FixedNeighborSearchResult
     std::optional<FixedNeighborEndpointCertification> certification;
     std::vector<JointBlockConditioning> local_conditioning;
     std::optional<JointParameterStability> parameter_stability;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    std::vector<SplitDiagnosticBlock> split_diagnostics;
-#endif
     std::vector<FixedNeighborBlockRecord> blocks;
     std::vector<FixedNeighborBlockSweep> sweeps;
     bool search_converged{};

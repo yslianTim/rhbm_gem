@@ -13,7 +13,7 @@ Date: 2026-10-29. This report records the staged C1 split-only diagnostics quali
 
 ## S0 — Split diagnostic regression contract
 
-**Status: Complete.** Added an internal split metric accumulator and C++ regression coverage without changing the persisted result type, JSON schema, legacy classifier, thresholds, point-quality, or accepted fitting state.
+**Status: Complete.** Added a split metric accumulator and C++ regression coverage without changing the persisted result type, JSON schema, legacy classifier, thresholds, point-quality, or accepted fitting state. S5 moved the metric helper to test-only support after C1 was not promoted.
 
 The regression contract defines prediction normalization as `max(1, ||prediction_0||_2)`, A/C parameter scaling using the N2 reference design column norms and observation scale, and log-width infinity norm. It records the endpoint identity that maximizes each drift and seed metric for every direction. Qualified seed vectors are checked against the vector decomposition; no scalar norm additivity is assumed. An unqualified null reference yields `Unavailable` with no split metrics. An incomplete direction yields `Incomplete` and cannot claim full seed robustness.
 
@@ -76,7 +76,7 @@ At each scale the B1 and B2 maxima were identical: reoptimization prediction dri
 
 B1 is within the exploratory wall gate at 30 targets and above the 15% reference by 0.23 percentage points at 3 targets in this final counter-instrumented run; the earlier 3-target run measured +14.3%. Peak RSS changes remained under 1% in the final matrix. The added workspace estimate was 8.4 KB at 3 targets and 33.6 KB at 30+ targets. Existing memory preflight, global KKT, width KKT, sweep counts, endpoint certification, and independent replay were unchanged. At 3 and 30 targets, Null Search is a visible fixed share of the short end-to-end fit; at 300 and 1,000 targets, global search dominates total wall time.
 
-This matrix covers the four required scale workloads. High-overlap, weak-width, active-bound, and noise-only workload measurements are part of S4 and must not be inferred from the chain fixture.
+This table covers the four required scale workloads. Noise-only has its own paired matrix below. High-overlap, weak-width, and active-bound received numerical candidate tests but not the same paired B0/B1/B2 performance matrix.
 
 The additional 3-target noise-only paired benchmark used the same 1 warmup + 5 measured runs. B0/B1/B2 accepted-state fingerprint was `60c62facd75f39d2` in all modes; direct B0/B1/B2 arrays, objective, legacy statuses, and Target point-quality were also equal in the regression test.
 
@@ -108,8 +108,40 @@ The 3-target chain run was +15.23% in the final counter-instrumented repeat (an 
 | Multi-start | On the exact one-target fixture, starts at widths `.4` and `1.1` both passed Strict Independent Replay and converged to width endpoints within `1e-8` in log width and prediction difference within `1e-12`. This is one smooth fixture, not proof of a unique physical solution. Prior raw evidence had 50 replay-qualified starts, maximum prediction difference `3.92e-12`, scaled A/C difference `5.70e-12`, and log-width difference `4.47e-8`. |
 | Real cryo-EM map | Not run. No `.mrc`, `.map`, `.ccp4`, or equivalent real-map fixture exists in this checkout. |
 
-The S4 focused Release run passed 31 Split-metric and Local Parameter Stability tests. An exploratory multi-start attempt on the near-singular fixture failed inner KKT from both starts; those endpoints were excluded. It does not overturn the qualified exact-fixture result or the prior replay-qualified raw starts.
+The pre-cleanup S4 focused Release run passed 31 Split-metric and Local Parameter Stability tests. An exploratory multi-start attempt on the near-singular fixture failed inner KKT from both starts; those endpoints were excluded. It does not overturn the qualified exact-fixture result or the prior replay-qualified raw starts.
 
 ## Preliminary promotion decision
 
-**Do not promote C1. Keep C0 Production.** The synthetic numerical guards support the distinction between common baseline reoptimization drift and seed-to-seed variation, and failed references correctly suppress Seed metrics. Promotion gates remain open because the added Null Search exceeds the small-workload wall target, the full difficult-case performance matrix and real-map evidence are absent, and formal persistence/consumer round-trip work is intentionally not performed before a promotion decision. No warning threshold, point-quality, Local/Global KKT, solver, acceptance, endpoint certification, or Independent Replay policy changed.
+**Do not promote C1. Keep C0 Production.** The synthetic numerical guards support the distinction between common baseline reoptimization drift and seed-to-seed variation, and failed references correctly suppress Seed metrics. Promotion gates remain open because the added Null Search exceeds the small-workload wall target, the full difficult-case performance matrix and real-map evidence are absent. As C1 was not promoted, no persistence schema or consumer path was added. No warning threshold, point-quality, Local/Global KKT, solver, acceptance, endpoint certification, or Independent Replay policy changed.
+
+## S5 — Promotion decision and cleanup
+
+**Result: Partial Qualification; C1 not promoted; C0 retained.** The B1 candidate and B2 workspace experiment were actually executed, compared, and measured in S1–S4. The Release path now contains no Split Diagnostics candidate branch, runtime mode, result field, or persistence field. B2 was rejected for no measurable CPU/wall benefit and its workspace reuse code was removed. The B0 benchmark remains; its B0-only runner no longer has B1/B2 switches.
+
+| Gate | Result | Reason |
+|---|---|---|
+| Numerical validity | Partial | Qualified synthetic references and endpoint metrics passed KKT/Replay and decomposition regressions. Noise-only N2 budget exhaustion and rank-deficient numerical validity correctly returned Unavailable without Seed metrics. |
+| Diagnostic reliability | Partial | Drift/Seed separation held in tested exact, noisy, active-bound, and condition-`5.47e9` cases; conditioning/point-quality warnings remained. Real-map and broader weak-width/multi-start basin coverage are absent. |
+| Engineering | Failed for promotion | B1 wall increased 15.23% on the 3-target chain and 30.5% on 3-target noise-only; B2 did not improve B1. RSS stayed within the exploratory gate. |
+| Persistence / Target Evidence | Not promoted | No JSON/schema changes. Existing persistence contract and Target Evidence tests pass; candidate diagnostics are not exposed to consumers. |
+
+Cleanup removed the C1 orchestration and B2 reuse branches from `ParameterStability.cpp`, the Split fields/mode and replay counters from the search result/work structures, the B0/B1/B2 benchmark switch, and the temporary noise-only benchmark topology. The pure metric helper moved from `src/` into `tests/support/` and is compiled only into `rhbm_gem_test`; all 11 split formula/qualification regression cases remain. No experimental Production branch, JSON compatibility case, debug output, temporary precision control, extra CMake target, or unused source remains.
+
+Final post-cleanup verification:
+
+| Check | Result |
+|---|---|
+| Release full build, `--parallel 4` | Passed; clean incremental rebuild reported no work. |
+| Full CTest, `--parallel 4` | 19/19 passed. The first attempt set `OMP_NUM_THREADS=1`; an unrelated Eigen thread restoration test then failed because it explicitly sets Eigen to 2. The isolated test passed with that variable unset, and the full suite passed on rerun. |
+| Focused Split/Parameter Stability/Conditioning/Target Evidence | 32/32 passed: 11 split metric, 10 parameter stability, 7 conditioning, 4 target evidence. |
+| Persistence / JSON contract | `joint_persistence_contract_test` passed; no schema changes. |
+| Post-cleanup B0 Release benchmark | 1 warmup + 5 measured, single numeric thread; accepted-state fingerprints matched the B0 fingerprints from S3. |
+
+| Targets | B0 wall median | Stability CPU | Process peak RSS | Accepted-state fingerprint | Endpoint / Independent Replay |
+|---:|---:|---:|---:|---|---|
+| 3 | 14.165 ms | 10.436 ms | 24.216 MB | `a7980d92f9da5a52` | Qualified / Passed |
+| 30 | 340.585 ms | 235.427 ms | 35.619 MB | `b18509add52fabf9` | Qualified / Passed |
+| 300 | 1.14346 s | 206.250 ms | 88.179 MB | `3535e5d2710ef2ba` | Qualified / Passed |
+| 1,000 | 3.42900 s | 289.526 ms | 236.405 MB | `7483b6f0d4edefa8` | Qualified / Passed |
+
+The B0/B1/B2 measurements in S3 and the noise-only matrix above were completed before cleanup. B1/B2 were then removed, so the final post-cleanup run is B0-only; no post-cleanup B1/B2 runner remains.

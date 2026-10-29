@@ -31,8 +31,8 @@ std::string SyntheticJointWorkloadHash(const rhbm_gem::core::JointProblemInput &
 }
 rhbm_gem::core::JointProblemInput SyntheticJointWorkload(const std::string & topology,int count)
 {
-    if((topology!="chain" && topology!="cube" && topology!="noise-only") || count<=0 || count>10000)
-        throw std::invalid_argument("Expected chain/cube/noise-only and 1..10000 atoms");
+    if((topology!="chain" && topology!="cube") || count<=0 || count>10000)
+        throw std::invalid_argument("Expected chain/cube and 1..10000 atoms");
     using Voxel=std::array<int,3>; // z,y,x; lexicographic ordering.
     std::vector<Voxel> offsets,centers,rows;
     for(int z=-5;z<=5;++z) for(int y=-5;y<=5;++y) for(int x=-5;x<=5;++x)
@@ -41,8 +41,7 @@ rhbm_gem::core::JointProblemInput SyntheticJointWorkload(const std::string & top
     rows.reserve(static_cast<std::size_t>(count)*offsets.size());
     for(int a=0;a<count;++a)
     {
-        const Voxel center=topology=="cube" ? Voxel{7*(a/(side*side)),7*((a/side)%side),7*(a%side)} :
-            Voxel{0,0,7*a};
+        const Voxel center=topology=="chain" ? Voxel{0,0,7*a} : Voxel{7*(a/(side*side)),7*((a/side)%side),7*(a%side)};
         centers.push_back(center);
         for(const auto & d:offsets) rows.push_back({center[0]+d[0],center[1]+d[1],center[2]+d[2]});
     }
@@ -65,11 +64,8 @@ rhbm_gem::core::JointProblemInput SyntheticJointWorkload(const std::string & top
             const auto row=static_cast<std::size_t>(std::lower_bound(rows.begin(),rows.end(),v)-rows.begin());
             const double square=.25*(d[0]*d[0]+d[1]*d[1]+d[2]*d[2]);
             support.push_back({row,square});
-            if(topology!="noise-only")
-            {
-                const auto b=rhbm_gem::core::joint_component::EvaluateKernel(square,.5,2.5);
-                input.observations[row]+=2*b.gaussian+.2*b.charge;
-            }
+            const auto b=rhbm_gem::core::joint_component::EvaluateKernel(square,.5,2.5);
+            input.observations[row]+=2*b.gaussian+.2*b.charge;
         }
     }
     return input;

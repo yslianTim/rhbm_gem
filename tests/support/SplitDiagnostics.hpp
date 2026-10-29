@@ -1,5 +1,5 @@
 #pragma once
-#include "Numerics.hpp"
+#include "core/detail/joint_component/Numerics.hpp"
 
 namespace rhbm_gem::core::joint_component {
 

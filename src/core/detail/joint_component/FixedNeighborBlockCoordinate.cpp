@@ -1377,18 +1377,9 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             const auto & prepared=prepared_blocks[index];
             const auto block_id=evidence.block_id;
             auto workspace=PrepareLocalEndpointWorkspace(prepared,out.state,policy.eta_upper_bound);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            const auto split_mode=policy.split_diagnostics_mode;
-#else
-            constexpr auto split_mode=SplitDiagnosticsMode::Disabled;
-#endif
             auto assessment=AssessLocalParameterStability(prepared.domain,workspace.effective_response,
                 workspace.eta,workspace.beta,workspace.context,block_id,
-                out.global_state_memory_estimate.shape.resident_bytes,split_mode);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(assessment.split_diagnostics)
-                out.split_diagnostics.push_back({block_id,*assessment.split_diagnostics});
-#endif
+                out.global_state_memory_estimate.shape.resident_bytes);
             evidence=std::move(assessment.evidence);
             evidence.probe_selected=true;
             evidence.core_atoms.assign(prepared.core_atoms.begin(),prepared.core_atoms.end());
@@ -1403,7 +1394,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                     assessment.memory_estimate.estimated_peak_bytes);
             out.work.perturbation_solves+=evidence.perturbation_solves;
             out.work.perturbation_evaluations+=evidence.perturbation_evaluations;
-            out.work.perturbation_replay_checks+=assessment.perturbation_replay_checks;
             if(assessment.memory_estimate.status!=MemoryStatus::Overflow)
                 out.work.parameter_stability_peak_memory_estimate_bytes=std::max(
                     out.work.parameter_stability_peak_memory_estimate_bytes,

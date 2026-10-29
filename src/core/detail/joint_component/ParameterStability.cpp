@@ -17,12 +17,6 @@ double CpuSeconds(std::clock_t start)
 {return static_cast<double>(std::clock()-start)/static_cast<double>(CLOCKS_PER_SEC);}
 constexpr double MinimumEffectiveLocalWidthPerturbation=1e-12;
 
-bool ProfileSearchBudgetStopped(const SearchResult & search)
-{
-    return search.stop_reason=="cpu-time-budget" || search.stop_reason=="profile-budget" ||
-        search.stop_reason=="accepted-update-budget";
-}
-
 void Unavailable(JointBlockParameterStability & evidence,const std::string & reason)
 {
     evidence.status="Unavailable"; evidence.reason=reason;
@@ -138,39 +132,12 @@ LocalParameterStabilityClassification ClassifyLocalParameterStability(
 
 LocalParameterStabilityAssessment AssessLocalParameterStability(
     const Domain & domain,VectorRef y,const Vector & eta,const Vector & beta,const EvaluationContext & context,
-    std::string block_id,std::size_t resident_bytes,SplitDiagnosticsMode split_mode)
+    std::string block_id,std::size_t resident_bytes)
 {
     const auto started=Clock::now(); const auto cpu_started=std::clock();
     LocalParameterStabilityAssessment out;
-    const bool assess_split=split_mode!=SplitDiagnosticsMode::Disabled;
-    std::optional<SplitDiagnosticsAccumulator> split_accumulator;
-    if(assess_split)
-    {
-        out.split_diagnostics.emplace();
-        out.split_diagnostics->reason="baseline-not-qualified";
-    }
     auto & evidence=out.evidence; evidence.block_id=std::move(block_id);
     const auto finish=[&]() {
-        if(split_accumulator)
-        {
-            const auto metadata=*out.split_diagnostics;
-            auto result=split_accumulator->Finish();
-            result.null_reference_status=metadata.null_reference_status;
-            result.null_reference_failure_reason=metadata.null_reference_failure_reason;
-            result.high_budget_reference_status=metadata.high_budget_reference_status;
-            result.independent_replay_status=metadata.independent_replay_status;
-            result.width_stationarity_status=metadata.width_stationarity_status;
-            result.high_budget_width_difference_inf=metadata.high_budget_width_difference_inf;
-            result.high_budget_scaled_ac_difference=metadata.high_budget_scaled_ac_difference;
-            result.high_budget_prediction_difference_relative=metadata.high_budget_prediction_difference_relative;
-            result.null_search_seconds=metadata.null_search_seconds;
-            result.null_search_cpu_seconds=metadata.null_search_cpu_seconds;
-            result.null_profile_evaluations=metadata.null_profile_evaluations;
-            result.null_accepted_updates=metadata.null_accepted_updates;
-            result.null_replay_checks=metadata.null_replay_checks;
-            result.workspace_estimate_bytes=metadata.workspace_estimate_bytes;
-            out.split_diagnostics=std::move(result);
-        }
         out.seconds=Seconds(started); out.cpu_seconds=CpuSeconds(cpu_started);
         evidence.cpu_seconds=out.cpu_seconds; return out;
     };
@@ -191,37 +158,14 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
     out.memory_estimate=PlanMemory(shape,MemoryStage::ParameterStability);
     if(out.memory_estimate.status!=MemoryStatus::Pass)
     {
-        if(assess_split)
-        {
-            out.split_diagnostics->null_reference_status="Unavailable";
-            out.split_diagnostics->null_reference_failure_reason=
-                std::string("resource-limit:parameter-stability:")+out.memory_estimate.reason;
-            out.split_diagnostics->reason=out.split_diagnostics->null_reference_failure_reason;
-        }
         Unavailable(evidence,std::string("resource-limit:parameter-stability:")+out.memory_estimate.reason);
         return finish();
     }
     if(domain.rows<=0 || y.size()!=domain.rows || eta.size()!=static_cast<Eigen::Index>(domain.atoms.size()) ||
         beta.size()!=2*eta.size())
-    {
-        if(assess_split)
-        {
-            out.split_diagnostics->null_reference_status="Unavailable";
-            out.split_diagnostics->null_reference_failure_reason="invalid-local-dimensions";
-            out.split_diagnostics->reason=out.split_diagnostics->null_reference_failure_reason;
-        }
-        Unavailable(evidence,"invalid-local-dimensions"); return finish();
-    }
+    {Unavailable(evidence,"invalid-local-dimensions"); return finish();}
     if(!eta.allFinite() || !beta.allFinite() || !y.allFinite() || !(context.scale>0) || !std::isfinite(context.scale))
-    {
-        if(assess_split)
-        {
-            out.split_diagnostics->null_reference_status="Unavailable";
-            out.split_diagnostics->null_reference_failure_reason="nonfinite-local-input";
-            out.split_diagnostics->reason=out.split_diagnostics->null_reference_failure_reason;
-        }
-        Unavailable(evidence,"nonfinite-local-input"); return finish();
-    }
+    {Unavailable(evidence,"nonfinite-local-input"); return finish();}
 
     const auto baseline=EvaluateState(domain,y,eta,beta,context,ProfileEvaluationRole::AcceptedEndpoint);
     std::optional<double> baseline_width_gradient;
@@ -323,198 +267,26 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
     if(evidence.baseline_eligibility_status!="Eligible")
     {
         evidence.baseline_eligibility_status="Unavailable";
-        if(assess_split)
-        {
-            out.split_diagnostics->null_reference_status="Unavailable";
-            out.split_diagnostics->null_reference_failure_reason=evidence.baseline_eligibility_reason;
-            out.split_diagnostics->reason=evidence.baseline_eligibility_reason;
-        }
         Unavailable(evidence,evidence.baseline_eligibility_reason);
         return finish();
     }
+    if(CpuSeconds(cpu_started)>=MaximumLocalPerturbationCpuSeconds)
+    {Unavailable(evidence,"cpu-time-budget-exhausted"); return finish();}
     const Vector baseline_prediction=(baseline.x*baseline.beta).eval();
     const double baseline_objective=baseline.certificate.objective/(context.scale*context.scale);
     Vector column_norms(baseline.x.cols());
     for(Eigen::Index k=0;k<column_norms.size();++k) column_norms(k)=baseline.x.col(k).norm();
 
     const auto directions=BuildDirections(baseline,eta,context);
-    const std::size_t expected_split_directions=directions.available.size()+
-        (!directions.weak_direction_available && eta.size()>1 ? 1u : 0u);
-    Evaluation null_reference;
-    Vector null_prediction,null_column_norms;
-    bool null_reference_qualified{};
-    double split_cpu_elapsed{};
-    if(assess_split)
-    {
-        auto & split=*out.split_diagnostics;
-        MemoryShape split_shape=shape;
-        constexpr auto null_profile_budget=MaximumLocalPerturbationProfileEvaluations-1;
-        const auto search_evaluations=static_cast<std::size_t>(null_profile_budget);
-        const auto additional_evaluations=search_evaluations>
-            (std::numeric_limits<std::size_t>::max()-2)/(2+1) ?
-            std::numeric_limits<std::size_t>::max() : 3*search_evaluations+2;
-        if(additional_evaluations==std::numeric_limits<std::size_t>::max() ||
-            split_shape.component_stability_evaluations>
-                std::numeric_limits<std::size_t>::max()-additional_evaluations)
-            split.null_reference_failure_reason="resource-limit:split-null-search:size-overflow";
-        else
-        {
-            split_shape.component_stability_evaluations+=additional_evaluations;
-            const auto split_memory=PlanMemory(split_shape,MemoryStage::ParameterStability);
-            split.workspace_estimate_bytes=split_memory.estimated_peak_bytes;
-            if(split_memory.status!=MemoryStatus::Pass)
-                split.null_reference_failure_reason="resource-limit:split-null-search:"+split_memory.reason;
-        }
-        if(split.null_reference_failure_reason.empty())
-        {
-            const auto null_started=Clock::now();
-            const auto null_cpu_started=std::clock();
-            auto null_context=context;
-            null_context.profile_budget=static_cast<int>(null_profile_budget);
-            null_context.update_budget=6;
-            null_context.profile_cpu_budget_seconds=MaximumLocalPerturbationCpuSeconds;
-            ProfileSearchWork null_work,high_work;
-            const Vector initial_widths=eta.array().exp();
-            const auto null_search=SearchProfile(domain,y,initial_widths,null_context,&null_work);
-            split.null_profile_evaluations+=static_cast<std::size_t>(std::max(null_search.evaluations,0));
-            split.null_accepted_updates+=static_cast<std::size_t>(std::max(null_search.accepted,0));
-            if(null_search.eta.size()==eta.size() && null_search.eta.allFinite())
-            {
-                null_reference=EvaluateProfile(domain,y,null_search.eta,&null_context,
-                    ProfileEvaluationRole::AcceptedEndpoint);
-                ++split.null_profile_evaluations;
-            }
-            else split.null_reference_failure_reason="null-reference-search-invalid";
-
-            auto high_context=null_context;
-            const auto double_budget=[](int value) {
-                const auto doubled=2ll*static_cast<long long>(std::max(value,0));
-                return static_cast<int>(std::min<long long>(std::max(1ll,doubled),
-                    static_cast<long long>(std::numeric_limits<int>::max())));
-            };
-            high_context.profile_budget=double_budget(null_context.profile_budget);
-            high_context.update_budget=double_budget(null_context.update_budget);
-            const auto high_search=SearchProfile(domain,y,initial_widths,high_context,&high_work);
-            split.null_profile_evaluations+=static_cast<std::size_t>(std::max(high_search.evaluations,0));
-            split.null_accepted_updates+=static_cast<std::size_t>(std::max(high_search.accepted,0));
-            Evaluation high_reference;
-            if(high_search.eta.size()==eta.size() && high_search.eta.allFinite())
-            {
-                high_reference=EvaluateProfile(domain,y,high_search.eta,&high_context,
-                    ProfileEvaluationRole::AcceptedEndpoint);
-                ++split.null_profile_evaluations;
-            }
-            else if(split.null_reference_failure_reason.empty())
-                split.null_reference_failure_reason="null-reference-high-budget-search-invalid";
-
-            const auto strict_qualification=[&](const Evaluation & candidate,const EvaluationContext & candidate_context,
-                std::string & failure,std::string & replay_status,std::string & width_status) {
-                if(!candidate.valid || !candidate.certificate.available || !candidate.certificate.feasible ||
-                    (candidate.certificate.width_bound_applied && !candidate.certificate.width_bound_feasible))
-                {failure="null-reference-numerical-validity-failed"; return false;}
-                if(candidate.certificate.projected_kkt>StrictJointConvergenceCriteria.global_ac_kkt)
-                {failure="null-reference-ac-kkt-failed"; return false;}
-                const auto width_gradient=ProfileGradientInfinityNorm(candidate,candidate_context);
-                if(!width_gradient)
-                {failure="null-reference-width-kkt-unavailable"; width_status="Unavailable"; return false;}
-                if(*width_gradient>StrictJointConvergenceCriteria.global_width_gradient)
-                {failure="null-reference-width-kkt-failed"; width_status="Failed"; return false;}
-                width_status="Passed";
-                const auto replay=CheckIndependentReplay(domain,y,candidate,candidate_context,nullptr,nullptr,
-                    StrictJointConvergenceCriteria);
-                ++split.null_replay_checks;
-                replay_status=replay.passed ? "Passed" : "Failed";
-                if(!replay.passed || !replay.objective_passed || !replay.independent_width_kkt_passed)
-                {failure="null-reference-independent-replay-failed:"+replay.reason; return false;}
-                return true;
-            };
-            std::string standard_failure,high_failure;
-            bool standard_qualified=split.null_reference_failure_reason.empty() &&
-                strict_qualification(null_reference,null_context,standard_failure,split.independent_replay_status,
-                    split.width_stationarity_status);
-            std::string high_replay_status,high_width_status;
-            bool high_qualified=strict_qualification(high_reference,high_context,high_failure,
-                high_replay_status,high_width_status);
-            if(ProfileSearchBudgetStopped(null_search))
-            {standard_qualified=false; standard_failure="null-reference-budget-exhausted:"+null_search.stop_reason;}
-            if(ProfileSearchBudgetStopped(high_search))
-            {high_qualified=false; high_failure="null-reference-high-budget-exhausted:"+high_search.stop_reason;}
-            split.null_search_seconds=Seconds(null_started);
-            split.null_search_cpu_seconds=CpuSeconds(null_cpu_started);
-            split_cpu_elapsed+=split.null_search_cpu_seconds;
-            if(split.null_reference_failure_reason.empty())
-            {
-                if(!standard_qualified) split.null_reference_failure_reason=standard_failure;
-                else if(!high_qualified) split.null_reference_failure_reason=high_failure;
-                else
-                {
-                    null_column_norms.resize(null_reference.x.cols());
-                    for(Eigen::Index column=0;column<null_column_norms.size();++column)
-                        null_column_norms(column)=null_reference.x.col(column).norm();
-                    split.high_budget_width_difference_inf=
-                        (high_reference.eta-null_reference.eta).lpNorm<Eigen::Infinity>();
-                    split.high_budget_scaled_ac_difference=
-                        (((high_reference.beta-null_reference.beta).array()*null_column_norms.array()).abs()/
-                            context.scale).maxCoeff();
-                    const Vector high_prediction=(high_reference.x*high_reference.beta).eval();
-                    split.high_budget_prediction_difference_relative=
-                        (high_prediction-(null_reference.x*null_reference.beta).eval()).norm()/
-                        std::max(1.0,baseline_prediction.norm());
-                    if(*split.high_budget_width_difference_inf>StrictJointConvergenceCriteria.global_width_gradient ||
-                        *split.high_budget_scaled_ac_difference>StrictJointConvergenceCriteria.global_ac_kkt ||
-                        *split.high_budget_prediction_difference_relative>1e-10)
-                        split.null_reference_failure_reason="null-reference-high-budget-disagreement";
-                    else
-                    {
-                        null_reference_qualified=true;
-                        split.null_reference_status="Qualified";
-                        split.high_budget_reference_status="Qualified";
-                        null_prediction=(null_reference.x*null_reference.beta).eval();
-                        split.null_reference_failure_reason.clear();
-                    }
-                }
-            }
-            if(!null_reference_qualified)
-            {
-                split.null_reference_status="Unavailable";
-                split.high_budget_reference_status=high_qualified ? "Qualified" : "Unavailable";
-                if(split.null_reference_failure_reason.empty())
-                    split.null_reference_failure_reason="null-reference-not-qualified";
-                split.reason=split.null_reference_failure_reason;
-            }
-            split_accumulator.emplace(eta,beta,baseline_prediction,
-                null_reference_qualified ? null_reference.eta : eta,
-                null_reference_qualified ? null_reference.beta : beta,
-                null_reference_qualified ? null_prediction : baseline_prediction,
-                null_reference_qualified ? null_column_norms : column_norms,context.scale,
-                null_reference_qualified,split.null_reference_failure_reason,expected_split_directions,
-                split_mode==SplitDiagnosticsMode::ReuseWorkspace);
-        }
-        else
-        {
-            split.null_reference_status="Unavailable";
-            split.reason=split.null_reference_failure_reason;
-            split_accumulator.emplace(eta,beta,baseline_prediction,eta,beta,baseline_prediction,column_norms,
-                context.scale,false,split.null_reference_failure_reason,expected_split_directions,
-                split_mode==SplitDiagnosticsMode::ReuseWorkspace);
-        }
-    }
-    if(CpuSeconds(cpu_started)-split_cpu_elapsed>=MaximumLocalPerturbationCpuSeconds)
-    {Unavailable(evidence,"cpu-time-budget-exhausted"); return finish();}
     if(!directions.weak_direction_available && eta.size()>1)
     {
         JointStabilityProbe unavailable_probe; unavailable_probe.direction="weak-singular";
         unavailable_probe.source=directions.weak_direction_reason; unavailable_probe.status="Unavailable";
         evidence.probes.push_back(std::move(unavailable_probe));
-        if(split_accumulator)
-            split_accumulator->FinishDirection("weak-singular",false,directions.weak_direction_reason);
     }
     double maximum_width_change{},maximum_ac_change{},maximum_prediction_change{},maximum_objective_difference{};
     bool all_directions_assessed=directions.weak_direction_available || eta.size()==1;
     bool any_search_failure{},any_qualified_perturbation{};
-    Vector candidate_prediction_workspace;
-    if(split_mode==SplitDiagnosticsMode::ReuseWorkspace)
-        candidate_prediction_workspace.resize(domain.rows);
     for(const auto & direction:directions.available)
     {
         JointStabilityProbe probe;
@@ -619,7 +391,6 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
             }
             // Keep the strict independent solver/replay gate for every perturbation endpoint.
             const auto trust=CheckTrust(domain,y,candidate,bounded_context);
-            ++out.perturbation_replay_checks;
             if(!trust.passed || !trust.independent || !trust.independent->objective_passed)
             {
                 direction_failed=true; failure_reason="perturbation-independent-replay-failed";
@@ -641,23 +412,8 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
             }
             const double width_change=(candidate.eta-eta).lpNorm<Eigen::Infinity>();
             const double ac_change=(((candidate.beta-beta).array()*column_norms.array()).abs()/context.scale).maxCoeff();
-            Vector candidate_prediction;
-            const Vector * candidate_prediction_pointer{};
-            if(split_mode==SplitDiagnosticsMode::ReuseWorkspace)
-            {
-                candidate_prediction_workspace.noalias()=candidate.x*candidate.beta;
-                candidate_prediction_pointer=&candidate_prediction_workspace;
-            }
-            else
-            {
-                candidate_prediction=(candidate.x*candidate.beta).eval();
-                candidate_prediction_pointer=&candidate_prediction;
-            }
-            const auto & candidate_prediction_ref=*candidate_prediction_pointer;
-            if(split_accumulator)
-                split_accumulator->AddEndpoint(direction.direction,direction.direction+(negative ? ":-" : ":+"),
-                    candidate.eta,candidate.beta,candidate_prediction_ref,true);
-            const double prediction_change=(candidate_prediction_ref-baseline_prediction).norm()/
+            const Vector candidate_prediction=(candidate.x*candidate.beta).eval();
+            const double prediction_change=(candidate_prediction-baseline_prediction).norm()/
                 std::max(1.0,baseline_prediction.norm());
             const double objective=candidate.certificate.objective/(context.scale*context.scale);
             direction_parameter_change=std::max(direction_parameter_change,std::max(width_change,ac_change));
@@ -687,8 +443,6 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
             if(!failure_reason.empty()) probe.source+="; "+failure_reason;
             if(evidence.reason.empty()) evidence.reason=failure_reason;
         }
-        if(split_accumulator)
-            split_accumulator->FinishDirection(direction.direction,direction_assessed,failure_reason);
         evidence.probes.push_back(std::move(probe));
     }
     evidence.perturbation_directions=static_cast<std::size_t>(std::count_if(evidence.probes.begin(),
