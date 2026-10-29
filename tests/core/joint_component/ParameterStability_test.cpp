@@ -5,6 +5,7 @@
 #include "support/JointSyntheticWorkload.hpp"
 #include "support/JointTestContext.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <numbers>
@@ -133,6 +134,33 @@ TEST(JointParameterStabilityTest, PureClassifierRespectsIndependentThresholdBoun
     const auto nonfinite=n::ClassifyLocalParameterStability(
         std::numeric_limits<double>::quiet_NaN(),0.,0.,true,true,1e-6,1e-6);
     EXPECT_EQ(nonfinite.status,"Unavailable");
+}
+
+TEST(JointParameterStabilityTest, ReclassifiesSameQualifiedMetricsAcrossThresholdGrid)
+{
+    constexpr double width_change=5.2135492445426479e-7;
+    constexpr double ac_change=1.7762220265378486e-7;
+    constexpr double prediction_change=1.9376222241792277e-7;
+    const std::array<double,3> thresholds{1e-8,1e-7,1e-6};
+    const std::array<std::array<std::string,3>,3> expected{{
+        {{"Unstable","Unstable","Sensitive"}},
+        {{"Unstable","Unstable","Sensitive"}},
+        {{"Unstable","Unstable","Stable"}}
+    }};
+    for(std::size_t p=0;p<thresholds.size();++p)
+        for(std::size_t y=0;y<thresholds.size();++y)
+        {
+            const auto result=n::ClassifyLocalParameterStability(width_change,ac_change,prediction_change,
+                true,true,thresholds[p],thresholds[y]);
+            EXPECT_EQ(result.status,expected[p][y]);
+        }
+    for(const auto parameter_threshold:thresholds)
+        for(const auto prediction_threshold:thresholds)
+        {
+            const auto result=n::ClassifyLocalParameterStability(width_change,ac_change,prediction_change,
+                false,false,parameter_threshold,prediction_threshold);
+            EXPECT_EQ(result.status,"Unavailable");
+        }
 }
 
 TEST(JointParameterStabilityTest, UsesWeakLocalWidthDirectionsWithinTheBoundedBudget)

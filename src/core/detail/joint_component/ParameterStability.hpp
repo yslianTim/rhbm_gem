@@ -15,6 +15,7 @@ struct LocalParameterStabilityClassification
 {
     std::string status,prediction_status;
 };
+// Pure classification of completed perturbation measurements; does not perform solver or replay work.
 LocalParameterStabilityClassification ClassifyLocalParameterStability(
     double,double,double,bool,bool,double=LocalParameterChangeWarning,
     double=LocalPredictionChangeWarning);
