@@ -488,11 +488,6 @@ std::vector<std::size_t> StabilityProbeOrder(const std::vector<JointBlockConditi
     for(const auto & candidate:candidates) order.push_back(candidate.index);
     return order;
 }
-double ScaledCoefficientDifference(VectorRef lhs,VectorRef rhs)
-{
-    if(lhs.size()!=rhs.size() || lhs.size()==0) return std::numeric_limits<double>::infinity();
-    return ((lhs-rhs).array().abs()/(1.0+lhs.array().abs().max(rhs.array().abs()))).maxCoeff();
-}
 }
 FixedNeighborStationarityState ClassifyFixedNeighborStationarity(
     double ac_kkt,double width_gradient_inf,bool has_previous_complete_sweep,
@@ -532,8 +527,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     constexpr bool collect_telemetry=true;
     constexpr bool collect_diagnostics=false;
 #endif
-    std::array<std::pair<double,double>,3> recent_sweep_changes{};
-    std::size_t next_recent_sweep_change{};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     const bool endpoint_certification_enabled=policy.certify_endpoint;
 #else
@@ -807,7 +800,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     for(std::size_t sweep_index=0;sweep_index<policy.maximum_sweeps && !stop;++sweep_index)
     {
         const auto sweep_started=Clock::now(); FixedNeighborBlockSweep sweep; sweep.sweep=sweep_index+1;
-        const Vector eta_before=out.state.eta,beta_before=out.state.beta;
         sweep.objective_before=out.state.objective;
         bool sweep_had_block_failure=false;
         auto finish_record=[&](FixedNeighborBlockRecord record,Clock::time_point block_started) {
@@ -1122,11 +1114,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             observe_candidate(!unchanged,unchanged);
 #endif
-            if(!unchanged)
-                for(const auto atom:core_atoms)
-                    sweep.maximum_accepted_log_width_step=std::max(sweep.maximum_accepted_log_width_step,
-                        std::abs(candidate_eta(static_cast<Eigen::Index>(atom))-
-                            out.state.eta(static_cast<Eigen::Index>(atom))));
             if(!candidate_fast_unchanged)
             {
                 const auto cache_started=Clock::now();
@@ -1205,8 +1192,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         sweep.boundary_multiplier_max=global.certificate.boundary_multiplier_max;
         sweep.width_bound_complementarity=global.certificate.width_bound_complementarity;
         sweep.active_width_bound_count=global.certificate.active_width_bound_count;
-        sweep.eta_change_inf=(out.state.eta-eta_before).lpNorm<Eigen::Infinity>();
-        sweep.beta_scaled_change=ScaledCoefficientDifference(out.state.beta,beta_before);
         sweep.maximum_target_width=out.state.eta.size() ? std::exp(out.state.eta.maxCoeff()) : 0.0;
         sweep.coordinate_confirmation_available=sweep_index>0;
         double stationarity_width_gradient=sweep.projected_width_gradient_inf_norm;
@@ -1231,18 +1216,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         out.final_sweep=sweep;
         if(retain_diagnostics) out.sweeps.back()=sweep;
         if(policy.production_progress) policy.production_progress(sweep);
-        if(assess_parameter_stability)
-        {
-            recent_sweep_changes[next_recent_sweep_change]={sweep.eta_change_inf,sweep.beta_scaled_change};
-            next_recent_sweep_change=(next_recent_sweep_change+1)%recent_sweep_changes.size();
-            out.recent_sweep_count=std::min(out.recent_sweep_count+1,recent_sweep_changes.size());
-            out.maximum_eta_change=0; out.maximum_scaled_ac_change=0;
-            for(std::size_t k=0;k<out.recent_sweep_count;++k)
-            {
-                out.maximum_eta_change=std::max(out.maximum_eta_change,recent_sweep_changes[k].first);
-                out.maximum_scaled_ac_change=std::max(out.maximum_scaled_ac_change,recent_sweep_changes[k].second);
-            }
-        }
         const auto stationarity=sweep_had_block_failure ? FixedNeighborStationarityState::NotStationary :
             ClassifyFixedNeighborStationarity(sweep.global_ac_kkt,stationarity_width_gradient,
                 sweep.coordinate_confirmation_available,policy.convergence_criteria);
@@ -1333,10 +1306,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         out.certification->qualified())
     {
         const auto started=Clock::now(); JointParameterStability stability;
-        stability.recent_sweep_count=out.recent_sweep_count;
-        stability.maximum_eta_change=out.maximum_eta_change;
-        stability.maximum_scaled_ac_change=out.maximum_scaled_ac_change;
-        stability.trajectory_stability_status=stability.recent_sweep_count>=3 ? "observed" : "insufficient-history";
         std::vector<JointBlockParameterStability> block_evidence(prepared_blocks.size());
         for(std::size_t index=0;index<prepared_blocks.size();++index)
         {
@@ -1585,8 +1554,6 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
             progress.objective=sweep.objective_after;
             progress.global_ac_kkt=sweep.global_ac_kkt;
             progress.width_gradient_inf_norm=sweep.global_width_gradient_inf_norm;
-            progress.eta_change_inf=sweep.eta_change_inf;
-            progress.maximum_accepted_log_width_step=sweep.maximum_accepted_log_width_step;
             progress.maximum_target_width=sweep.maximum_target_width;
             last_fixed_neighbor_progress=progress;
             event.fixed_neighbor=std::move(progress);

@@ -422,15 +422,15 @@ TEST(JointFixedNeighborBlockCoordinateTest, SignedCancellationQualifiesWhenOnlyK
     EXPECT_EQ(result.reason,"block-stationary")<<" sweeps="<<result.sweep_count
         <<" first_kkt="<<result.first_order_stationarity_sweep
         <<" confirmed="<<result.confirmed_stationarity_sweep
-        <<" eta_change="<<(result.final_sweep ? result.final_sweep->eta_change_inf : -1.0)
-        <<" stability="<<(result.parameter_stability ? result.parameter_stability->trajectory_stability_status : "missing")
         <<" perturbation="<<(result.parameter_stability ? result.parameter_stability->perturbation_status : "missing");
     EXPECT_TRUE(result.search_converged);
     EXPECT_TRUE(result.endpoint_certified);
     EXPECT_TRUE(result.assessment.independent_replay.passed);
     EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(result.final_sweep);
-    EXPECT_GT(result.final_sweep->eta_change_inf,1e-6);
+    EXPECT_LE(result.final_sweep->global_ac_kkt,n::PracticalJointConvergenceCriteria.global_ac_kkt);
+    EXPECT_LE(result.final_sweep->stationarity_width_gradient_inf_norm,
+        n::PracticalJointConvergenceCriteria.global_width_gradient);
     EXPECT_EQ(result.confirmed_stationarity_sweep,result.sweep_count);
 }
 
@@ -576,17 +576,17 @@ TEST(JointFixedNeighborBlockCoordinateTest, HardCaseIncrementalObjectiveAndRepla
                 <<" sweeps="<<result.sweep_count
                 <<" first_kkt="<<result.first_order_stationarity_sweep
                 <<" confirmed="<<result.confirmed_stationarity_sweep
-                <<" eta_change="<<(result.final_sweep ? result.final_sweep->eta_change_inf : -1.0)
                 <<" objective="<<result.state.objective
-                <<" stability="<<(result.parameter_stability ? result.parameter_stability->trajectory_stability_status : "missing")
                 <<" perturbation="<<(result.parameter_stability ? result.parameter_stability->perturbation_status : "missing");
             EXPECT_TRUE(result.search_converged)<<fixture.name;
             EXPECT_TRUE(result.endpoint_certified)<<fixture.name<<':'<<result.endpoint_trust.reason;
             EXPECT_TRUE(result.assessment.independent_replay.passed)<<fixture.name;
             ASSERT_TRUE(result.final_sweep)<<fixture.name;
-            EXPECT_GT(result.final_sweep->eta_change_inf,1e-6)<<fixture.name;
+            EXPECT_LE(result.final_sweep->global_ac_kkt,
+                n::PracticalJointConvergenceCriteria.global_ac_kkt)<<fixture.name;
+            EXPECT_LE(result.final_sweep->stationarity_width_gradient_inf_norm,
+                n::PracticalJointConvergenceCriteria.global_width_gradient)<<fixture.name;
             ASSERT_TRUE(result.parameter_stability)<<fixture.name;
-            EXPECT_EQ(result.parameter_stability->trajectory_stability_status,"insufficient-history")<<fixture.name;
             EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed)<<fixture.name;
         }
         else
@@ -995,35 +995,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, EndpointCertificationRetryScheduleIs
     EXPECT_EQ(next_retry_sweep,22u);
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, StabilityHistoryKeepsOnlyTheLastThreeCompletedSweeps)
-{
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
-    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
-    const n::Vector eta=n::Vector::Constant(8,std::log(.55));
-    for(std::size_t sweep_budget=0;sweep_budget<=5;++sweep_budget)
-    {
-        n::FixedNeighborPolicy policy;
-        policy.maximum_sweeps=sweep_budget;
-        policy.eta_upper_bound=std::log(2.2);
-        policy.stop_after_stationarity=false;
-        policy.collect_diagnostics=true;
-        policy.assess_parameter_stability=true;
-        const auto result=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,data.context,policy);
-        ASSERT_EQ(result.sweep_count,sweep_budget);
-        ASSERT_EQ(result.sweeps.size(),sweep_budget);
-        const auto recent_count=std::min<std::size_t>(sweep_budget,3);
-        EXPECT_EQ(result.recent_sweep_count,recent_count);
-        double maximum_eta_change{},maximum_scaled_ac_change{};
-        for(std::size_t k=sweep_budget-recent_count;k<sweep_budget;++k)
-        {
-            maximum_eta_change=std::max(maximum_eta_change,result.sweeps[k].eta_change_inf);
-            maximum_scaled_ac_change=std::max(maximum_scaled_ac_change,result.sweeps[k].beta_scaled_change);
-        }
-        EXPECT_DOUBLE_EQ(result.maximum_eta_change,maximum_eta_change);
-        EXPECT_DOUBLE_EQ(result.maximum_scaled_ac_change,maximum_scaled_ac_change);
-    }
-}
-
 TEST(JointFixedNeighborBlockCoordinateTest, FailedBlockRetriesAfterLaterBlocksUpdateTheNeighborState)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
@@ -1324,7 +1295,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchDefaultsToValidatedP
     EXPECT_DOUBLE_EQ(local.global_width_gradient,n::StrictJointConvergenceCriteria.global_width_gradient);
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, KktOnlyCanCertifyWithLargeLogWidthChange)
+TEST(JointFixedNeighborBlockCoordinateTest, KktOnlyConvergenceConfirmsAcrossCompleteSweepsAndCertifies)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -1341,7 +1312,13 @@ TEST(JointFixedNeighborBlockCoordinateTest, KktOnlyCanCertifyWithLargeLogWidthCh
     EXPECT_EQ(result.confirmed_stationarity_sweep,3u);
     EXPECT_EQ(result.certification_sweep,3u);
     EXPECT_EQ(result.sweep_count,3u);
-    EXPECT_GT(result.final_sweep->eta_change_inf,1e-6);
+    EXPECT_GE(result.first_order_stationarity_sweep,2u);
+    EXPECT_GE(result.confirmed_stationarity_sweep,2u);
+    EXPECT_LE(result.final_sweep->global_ac_kkt,policy.convergence_criteria.global_ac_kkt);
+    EXPECT_LE(result.final_sweep->stationarity_width_gradient_inf_norm,
+        policy.convergence_criteria.global_width_gradient);
+    EXPECT_EQ(result.final_sweep->block_solves-result.final_sweep->accepted_blocks-
+        result.final_sweep->unchanged_blocks,0u);
     ASSERT_TRUE(result.certification);
     EXPECT_TRUE(result.certification->qualified());
     EXPECT_TRUE(result.certification->assessment.independent_replay.passed);

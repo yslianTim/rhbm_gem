@@ -58,7 +58,7 @@ int main()
     WriteJointAnalysisResult(result, "consumer-joint.json", "consumer-joint.csv");
     std::ifstream json("consumer-joint.json");
     const std::string payload((std::istreambuf_iterator<char>(json)), {});
-    if (payload.find("\"schema_version\":20") == std::string::npos ||
+    if (payload.find("\"schema_version\":21") == std::string::npos ||
         payload.find("target-only-pure-halo-support-exclusion-v1") == std::string::npos)
         return 3;
 

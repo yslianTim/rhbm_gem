@@ -330,7 +330,7 @@ set_tests_properties(rhbm_tests_joint_component_numerical PROPERTIES
     ENVIRONMENT "OMP_NUM_THREADS=1")
 
 set(joint_persistence_test_patterns
-    DataObjectPersistenceTest.JointCurrentSchemaV20*
+    DataObjectPersistenceTest.JointCurrentSchemaV21*
     DataObjectPersistenceTest.JointResultsRoundTripCopyClearAndReplaceAtomically
     DataObjectPersistenceTest.JointSolverProvenanceRoundTripsAndMissingFieldRemainsReadable
     DataObjectPersistenceTest.FixedNeighborFailureEvidenceAndSweepCountsRoundTrip

@@ -52,8 +52,6 @@ TEST(JointParameterStabilityTest, ExactLocalFitIsStableAndDeterministic)
     rhbm_gem::JointBlockParameterStability no_history;
     EXPECT_EQ(no_history.status,"NotAssessed");
     EXPECT_EQ(no_history.prediction_status,"NotAssessed");
-    rhbm_gem::JointParameterStability empty_trajectory;
-    EXPECT_EQ(empty_trajectory.trajectory_stability_status,"insufficient-history");
     const auto first=n::AssessLocalParameterStability(fixture.domain,fixture.y,fixture.eta,fixture.beta,
         fixture.context,"test/block-1");
     const auto second=n::AssessLocalParameterStability(fixture.domain,fixture.y,fixture.eta,fixture.beta,
@@ -269,8 +267,5 @@ TEST(JointParameterStabilityTest, ComponentFitHonorsPerturbationClaimBudgetAndPr
     EXPECT_EQ(stability.blocks.size(),2u);
     EXPECT_LE(stability.perturbation_solves,2u);
     EXPECT_LE(claims,2u);
-    EXPECT_LE(stability.recent_sweep_count,3u);
-    if(stability.recent_sweep_count<3)
-        EXPECT_NE(stability.trajectory_stability_status,"Stable");
 }
 }

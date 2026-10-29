@@ -170,7 +170,6 @@ struct JointCandidateDiagnostic
     std::optional<double> global_ac_kkt_threshold,global_width_gradient_threshold;
     // Historical practical-v1/strict-v1 provenance only; never a current stop gate.
     std::optional<double> legacy_log_width_change_threshold;
-    std::optional<double> candidate_log_width_change_inf_norm;
     std::optional<bool> candidate_feasible;
     JointCheckStatus certification_status{JointCheckStatus::NotRun};
     JointCheckStatus endpoint_verification_status{JointCheckStatus::NotRun};
@@ -237,9 +236,7 @@ struct JointBlockParameterStability
 };
 struct JointParameterStability
 {
-    std::size_t recent_sweep_count{};
-    std::optional<double> maximum_eta_change,maximum_scaled_ac_change;
-    std::string trajectory_stability_status{"insufficient-history"},perturbation_status{"NotAssessed"};
+    std::string perturbation_status{"NotAssessed"};
     std::vector<JointBlockParameterStability> blocks;
     double seconds{},cpu_seconds{};
     std::size_t perturbation_directions{},perturbation_seeds{},perturbation_solves{},perturbation_evaluations{};

@@ -84,7 +84,7 @@ def main() -> int:
                     assert atom["post_joint_local"] is None
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
-        assert saved["schema_version"] == 20
+        assert saved["schema_version"] == 21
         assert saved["parameterization_contract"] == "target-only-pure-halo-support-exclusion-v1"
         assert saved["metadata"]["solver"]["search_method"] == "fixed-neighbor"
         default_solver = saved["metadata"]["solver"]
@@ -157,7 +157,7 @@ def main() -> int:
             assert diagnostic["global_ac_kkt_threshold"] == 1e-7
             assert diagnostic["global_width_gradient_threshold"] == 1e-9
             assert "confirmed_log_width_change_threshold" not in diagnostic
-            assert diagnostic["candidate_log_width_change_inf_norm"] >= 0
+            assert "candidate_log_width_change_inf_norm" not in diagnostic
             point = component["target_evidence"]
             assert point["contract"] == "target-point-validation-v1"
             assert all(key not in point for key in ("ranks", "atoms", "column_scales"))

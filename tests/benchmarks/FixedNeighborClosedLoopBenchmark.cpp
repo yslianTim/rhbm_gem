@@ -18,8 +18,6 @@
 namespace {
 namespace joint=rhbm_gem::core::joint_component;
 using Clock=std::chrono::steady_clock;
-constexpr double PracticalV1LogWidthChangeThreshold=1e-6;
-
 struct Sample
 {
     std::string stop_reason;
@@ -30,13 +28,13 @@ struct Sample
         profile_derivative_reduce_seconds{};
     std::size_t affected_candidates{},full_replay_fallbacks{},sweep_replays{},
         objective_reconciliations{},sweeps{},accepted_blocks{},unchanged_blocks{},failed_blocks{},
-        first_kkt_sweep{},first_kkt_eligible_sweep{},first_confirmed_sweep{},eta_blocked_sweeps{},
+        first_kkt_sweep{},first_kkt_eligible_sweep{},first_confirmed_sweep{},
         certification_attempts{},block_solves{},
         preflight_bytes{},peak_rss_bytes{},profile_evaluations{},profile_derivatives{},
         bounded_subproblems{},damping_solves{},damping_bracket_solves{},damping_bisection_solves{},
         damping_qr_factorizations{},damping_active_set_iterations{},damping_releases{};
     double objective{},global_ac_kkt{},projected_width_kkt{},maximum_cache_replay_error{},
-        first_kkt_eta_change{},mean_amplitude{},mean_charge{},mean_width{},
+        mean_amplitude{},mean_charge{},mean_width{},
         max_amplitude_truth_error{},max_charge_truth_error{},max_width_truth_error{},
         rms_amplitude_truth_error{},rms_charge_truth_error{},rms_width_truth_error{},
         max_relative_width_truth_error{},rms_relative_width_truth_error{},
@@ -100,8 +98,7 @@ Sample Run(std::size_t targets)
     policy.convergence_criteria=joint::PracticalJointConvergenceCriteria;
     policy.eta_upper_bound=std::log(2.2);
     std::size_t accepted_blocks{},unchanged_blocks{},failed_blocks{};
-    std::size_t first_kkt_sweep{},first_kkt_eligible_sweep{},eta_blocked_sweeps{};
-    double first_kkt_eta_change=std::numeric_limits<double>::quiet_NaN();
+    std::size_t first_kkt_sweep{},first_kkt_eligible_sweep{};
     const auto & criteria=policy.convergence_criteria;
     policy.production_progress=[&](const joint::FixedNeighborBlockSweep & sweep) {
         accepted_blocks+=sweep.accepted_blocks;
@@ -115,11 +112,7 @@ Sample Run(std::size_t targets)
         if(kkt_passed)
         {
             if(first_kkt_sweep==0)
-            {
                 first_kkt_sweep=sweep.sweep;
-                first_kkt_eta_change=sweep.eta_change_inf;
-            }
-            if(sweep.eta_change_inf>PracticalV1LogWidthChangeThreshold) ++eta_blocked_sweeps;
             const auto failed_in_sweep=sweep.block_solves-sweep.accepted_blocks-sweep.unchanged_blocks;
             if(first_kkt_eligible_sweep==0 && sweep.coordinate_confirmation_available && failed_in_sweep==0)
                 first_kkt_eligible_sweep=sweep.sweep;
@@ -181,8 +174,6 @@ Sample Run(std::size_t targets)
     sample.first_kkt_sweep=first_kkt_sweep;
     sample.first_kkt_eligible_sweep=first_kkt_eligible_sweep;
     sample.first_confirmed_sweep=result.confirmed_stationarity_sweep;
-    sample.eta_blocked_sweeps=eta_blocked_sweeps;
-    sample.first_kkt_eta_change=first_kkt_eta_change;
     sample.certification_attempts=result.certification_attempts;
     sample.block_solves=result.total_block_solves;
     const auto atom_count=result.state.eta.size();
@@ -303,8 +294,6 @@ void PrintSummary(std::size_t targets,const std::vector<Sample> & samples)
         <<" first_kkt_sweep="<<representative.first_kkt_sweep
         <<" first_kkt_eligible_sweep="<<representative.first_kkt_eligible_sweep
         <<" first_confirmed_sweep="<<representative.first_confirmed_sweep
-        <<" eta_blocked_sweeps="<<representative.eta_blocked_sweeps
-        <<" first_kkt_eta_change="<<representative.first_kkt_eta_change
         <<" certification_attempts="<<representative.certification_attempts
         <<" block_solves="<<representative.block_solves
         <<" stop_reason="<<representative.stop_reason

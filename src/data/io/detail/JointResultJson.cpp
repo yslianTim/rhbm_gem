@@ -200,7 +200,6 @@ Object CandidateDiagnostic(const JointCandidateDiagnostic & x)
         {"convergence_criteria_id",x.convergence_criteria_id.empty() ? "strict-v2" : x.convergence_criteria_id},
         {"global_ac_kkt_threshold",x.global_ac_kkt_threshold.value_or(strict.global_ac_kkt)},
         {"global_width_gradient_threshold",x.global_width_gradient_threshold.value_or(strict.global_width_gradient)},
-        {"candidate_log_width_change_inf_norm",Number(x.candidate_log_width_change_inf_norm)},
         {"candidate_feasible",x.candidate_feasible ? j::value(*x.candidate_feasible) : j::value(nullptr)},
         {"certification_status",StatusText(x.certification_status)},
         {"endpoint_verification_status",StatusText(x.endpoint_verification_status)},
@@ -226,7 +225,6 @@ std::optional<JointCandidateDiagnostic> ReadCandidateDiagnostic(const j::value &
     x.global_width_gradient_threshold=Read<double>(o,"global_width_gradient_threshold");
     if(o.contains("confirmed_log_width_change_threshold"))
         x.legacy_log_width_change_threshold=Read<double>(o,"confirmed_log_width_change_threshold");
-    x.candidate_log_width_change_inf_norm=OptionalNumber(o.at("candidate_log_width_change_inf_norm"));
     x.candidate_feasible=o.at("candidate_feasible").is_null() ? std::nullopt :
         std::optional<bool>(Read<bool>(o,"candidate_feasible"));
     x.certification_status=Status(o.at("certification_status"));
@@ -526,9 +524,7 @@ j::value ParameterStability(const std::optional<JointParameterStability> & value
     if(!value) return nullptr;
     const auto & x=*value; j::array blocks;
     for(const auto & block:x.blocks) blocks.emplace_back(StabilityBlock(block));
-    return Object{{"recent_sweep_count",x.recent_sweep_count},{"maximum_eta_change",Number(x.maximum_eta_change)},
-        {"maximum_scaled_ac_change",Number(x.maximum_scaled_ac_change)},
-        {"trajectory_stability_status",x.trajectory_stability_status},{"perturbation_status",x.perturbation_status},
+    return Object{{"perturbation_status",x.perturbation_status},
         {"blocks",std::move(blocks)},{"seconds",x.seconds},{"cpu_seconds",x.cpu_seconds},
         {"perturbation_directions",x.perturbation_directions},{"perturbation_seeds",x.perturbation_seeds},
         {"perturbation_solves",x.perturbation_solves},{"perturbation_evaluations",x.perturbation_evaluations},
@@ -538,10 +534,9 @@ std::optional<JointParameterStability> ReadParameterStability(const j::value & v
 {
     if(value.is_null()) return std::nullopt;
     const auto & o=value.as_object(); JointParameterStability x;
-    x.recent_sweep_count=Read<std::size_t>(o,"recent_sweep_count");
-    x.maximum_eta_change=OptionalNumber(o.at("maximum_eta_change"));
-    x.maximum_scaled_ac_change=OptionalNumber(o.at("maximum_scaled_ac_change"));
-    x.trajectory_stability_status=Read<std::string>(o,"trajectory_stability_status");
+    RequireOnlyKeys(o,{"perturbation_status","blocks","seconds","cpu_seconds","perturbation_directions",
+        "perturbation_seeds","perturbation_solves","perturbation_evaluations",
+        "workspace_peak_memory_estimate_bytes"},"unknown current parameter stability field");
     x.perturbation_status=Read<std::string>(o,"perturbation_status");
     for(const auto & block:o.at("blocks").as_array()) x.blocks.push_back(ReadStabilityBlock(block));
     x.seconds=Read<double>(o,"seconds"); x.cpu_seconds=Read<double>(o,"cpu_seconds");
@@ -763,9 +758,6 @@ void ValidateCandidateDiagnostic(const JointCandidateDiagnostic & x,std::size_t 
     if(criteria_id=="practical-v2")
         Require(ac_threshold==practical.global_ac_kkt && width_threshold==practical.global_width_gradient,
             "practical convergence criteria do not match their identifier");
-    Require(!x.candidate_log_width_change_inf_norm ||
-        (std::isfinite(*x.candidate_log_width_change_inf_norm) && *x.candidate_log_width_change_inf_norm>=0),
-        "invalid candidate log-width change");
     Require(atoms<=std::numeric_limits<std::size_t>::max()/2,"candidate dimensions");
     if(x.candidate_available)
     {
@@ -853,11 +845,9 @@ void ValidateStabilityBlock(const JointBlockParameterStability & x)
 }
 void ValidateParameterStability(const JointParameterStability & x)
 {
-    Require(!x.trajectory_stability_status.empty() && !x.perturbation_status.empty(),"parameter stability status");
+    Require(!x.perturbation_status.empty(),"parameter stability status");
     Require(std::isfinite(x.seconds) && x.seconds>=0 && std::isfinite(x.cpu_seconds) && x.cpu_seconds>=0,
         "parameter stability time");
-    for(const auto * value:{&x.maximum_eta_change,&x.maximum_scaled_ac_change})
-        Require(!*value || (std::isfinite(**value) && **value>=0),"parameter stability trajectory value");
     for(const auto & block:x.blocks) ValidateStabilityBlock(block);
 }
 j::value SelectionDomain(const std::optional<JointSelectionDomain> & domain)
@@ -1256,7 +1246,7 @@ JointAnalysisResult DecodeCurrent(const Object & o)
             RequireOnlyKeys(c.at("candidate_diagnostic").as_object(),{"candidate_status","candidate_available",
                 "candidate_eta","candidate_ac","candidate_objective","candidate_ac_kkt",
                 "candidate_width_gradient_inf_norm","convergence_criteria_id","global_ac_kkt_threshold",
-                "global_width_gradient_threshold","candidate_log_width_change_inf_norm",
+                "global_width_gradient_threshold",
                 "candidate_feasible","certification_status",
                 "endpoint_verification_status","numerical_qualification_status","verification_reason",
                 "resource_limit_reason"},"unknown current candidate diagnostic field",

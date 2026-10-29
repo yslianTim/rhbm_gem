@@ -87,9 +87,7 @@ void JointCliProgressReporter::ShowProgress(const JointProgressEvent & event, bo
             << " | local_accepted_updates=" << progress.local_accepted_updates
             << " | profile_evaluations=" << progress.profile_evaluations
             << " | recovery=" << progress.recovery_attempts << '/' << progress.recovery_successes
-            << " | max_log_width_step=" << Scientific(progress.maximum_accepted_log_width_step)
-            << " | max_B=" << Scientific(progress.maximum_target_width)
-            << " | eta_change=" << Scientific(progress.eta_change_inf);
+            << " | max_B=" << Scientific(progress.maximum_target_width);
     }
     else
     {

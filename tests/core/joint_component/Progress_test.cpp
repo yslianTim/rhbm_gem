@@ -181,7 +181,6 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
                     progress.fixed_neighbor->failed_blocks, progress.fixed_neighbor->block_solves);
                 EXPECT_LE(progress.fixed_neighbor->recovery_successes,
                     progress.fixed_neighbor->recovery_attempts);
-                EXPECT_GE(progress.fixed_neighbor->maximum_accepted_log_width_step, 0.0);
                 EXPECT_GT(progress.fixed_neighbor->maximum_target_width, 0.0);
             }
             else
@@ -294,8 +293,6 @@ joint::JointProgressEvent MakeFixedNeighborEvent(joint::JointProgressPhase phase
         .objective = 1.25,
         .global_ac_kkt = .003,
         .width_gradient_inf_norm = .004,
-        .eta_change_inf = .005,
-        .maximum_accepted_log_width_step = .006,
         .maximum_target_width = .7};
     return event;
 }
@@ -512,9 +509,9 @@ TEST(JointProgressTest, DebugProgressRetainsDetailedDiagnostics)
     EXPECT_NE(stdout_text.find("local_accepted_updates=5"), std::string::npos);
     EXPECT_NE(stdout_text.find("profile_evaluations=22"), std::string::npos);
     EXPECT_NE(stdout_text.find("recovery=1/0"), std::string::npos);
-    EXPECT_NE(stdout_text.find("max_log_width_step=6.000e-03"), std::string::npos);
     EXPECT_NE(stdout_text.find("max_B=7.000e-01"), std::string::npos);
-    EXPECT_NE(stdout_text.find("eta_change=5.000e-03"), std::string::npos);
+    EXPECT_EQ(stdout_text.find("max_log_width_step="), std::string::npos);
+    EXPECT_EQ(stdout_text.find("eta_change="), std::string::npos);
     EXPECT_NE(stdout_text.find("Component detail"), std::string::npos);
     EXPECT_NE(stdout_text.find("evaluations=220 | accepted_updates=50 | stop=converged"), std::string::npos);
     EXPECT_EQ(CountOccurrences(stdout_text, "obj="), 3u);

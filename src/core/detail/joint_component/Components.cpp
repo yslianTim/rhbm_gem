@@ -142,7 +142,6 @@ JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & s
         if(std::isfinite(sweep.global_ac_kkt)) out.candidate_ac_kkt=sweep.global_ac_kkt;
         if(std::isfinite(sweep.global_width_gradient_inf_norm))
             out.candidate_width_gradient_inf_norm=sweep.global_width_gradient_inf_norm;
-        if(std::isfinite(sweep.eta_change_inf)) out.candidate_log_width_change_inf_norm=sweep.eta_change_inf;
         if(std::isfinite(sweep.global_a_feasibility)) out.candidate_feasible=sweep.global_a_feasibility==0;
     }
     if(search.certification)

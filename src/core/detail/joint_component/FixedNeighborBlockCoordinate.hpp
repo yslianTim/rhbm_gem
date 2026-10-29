@@ -66,7 +66,7 @@ struct FixedNeighborBlockSweep
     std::size_t sweep{};
     double objective_before{},objective_after{},global_a_feasibility{},global_ac_kkt{};
     double global_width_gradient_inf_norm{},cache_replay_error{},objective_replay_error{},wall_seconds{};
-    double eta_change_inf{},beta_scaled_change{},maximum_accepted_log_width_step{},maximum_target_width{};
+    double maximum_target_width{};
     bool objective_cache_refreshed{};
     bool width_bound_applied{};
     double projected_width_gradient_inf_norm{unavailable},maximum_width_bound_violation{},
@@ -159,8 +159,6 @@ struct FixedNeighborSearchResult
     std::optional<FixedNeighborEndpointCertification> certification;
     std::vector<JointBlockConditioning> local_conditioning;
     std::optional<JointParameterStability> parameter_stability;
-    std::size_t recent_sweep_count{};
-    double maximum_eta_change{},maximum_scaled_ac_change{};
     std::vector<FixedNeighborBlockRecord> blocks;
     std::vector<FixedNeighborBlockSweep> sweeps;
     bool search_converged{};

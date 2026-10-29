@@ -31,8 +31,6 @@ struct JointFixedNeighborProgress
     double objective{std::numeric_limits<double>::quiet_NaN()};
     double global_ac_kkt{std::numeric_limits<double>::quiet_NaN()};
     double width_gradient_inf_norm{std::numeric_limits<double>::quiet_NaN()};
-    double eta_change_inf{std::numeric_limits<double>::quiet_NaN()};
-    double maximum_accepted_log_width_step{std::numeric_limits<double>::quiet_NaN()};
     double maximum_target_width{std::numeric_limits<double>::quiet_NaN()};
 };
 
