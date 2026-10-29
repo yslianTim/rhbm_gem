@@ -9,11 +9,11 @@
 | 階段 | 結果 | 說明 |
 |---|---|---|
 | P0 原始證據 | 完成 | 25 個 selected block 快照、138 個完成的擾動 seed，含逐端點 KKT 與 Replay 欄位 |
-| P1 Null／Reference | 完成（有明示限制） | N0、N1、baseline-η-seeded N2 與 30/300/1,000 target reference；SearchProfile 會重新 profile β，沒有宣稱直接 full-state β seed |
+| P1 Null／Reference | 部分完成 | N0、N1、baseline-η-seeded N2 與 30/300/1,000 target reference；SearchProfile 會重新 profile β，未直接注入完整 `(η₀, β₀)` 狀態 |
 | P2 Solver Precision | 部分完成 | 實際改變 Local profile LM `gtol`；A/C constrained linear solve 沒有可安全注入的 KKT stopping tolerance |
 | P3 Qualification | 完成 | 對 25 個 baseline、25 個 conditional reprofile 與 138 個成功 perturbation endpoint 以同一端點重算 Q0–Q3 |
 | P4 困難案例 | 部分完成 | 合成 exact/noise/scale/amplitude/width、cube 與 3–1,000 target；尚無 real map、rank-deficient/near-singular workload |
-| P5 Promotion／Cleanup | 待完成 |  |
+| P5 Promotion／Cleanup | 完成（決策 Partial Qualification） | 不升格候選門檻；研究 hooks／runner 已清除，保留兩個 null／replay regression tests；Release build 與 19/19 CTest 通過 |
 
 ## P0 — Per-seed 原始數值證據
 
@@ -129,9 +129,45 @@ Local perturbation diagnostic 的 measured CPU 約為 T0 30 targets `0.266 s`、
 
 | Targets | Median search | Median wall | Peak RSS | Memory preflight estimate | Sweeps | Endpoint / Replay |
 |---:|---:|---:|---:|---:|---:|---|
-| 3 | `2.84 ms` | `3.72 ms` | `24.1 MB` | `0.45 MB` | 3 | 通過 / 通過 |
-| 30 | `87.2 ms` | `105.9 ms` | `35.4 MB` | `3.93 MB` | 5 | 通過 / 通過 |
-| 300 | `0.750 s` | `0.948 s` | `88.1 MB` | `36.7 MB` | 4 | 通過 / 通過 |
-| 1,000 | `2.509 s` | `3.182 s` | `237.6 MB` | `121.6 MB` | 4 | 通過 / 通過 |
+| 3 | `2.83 ms` | `3.69 ms` | `24.1 MB` | `0.45 MB` | 3 | 通過 / 通過 |
+| 30 | `89.5 ms` | `108.6 ms` | `35.5 MB` | `3.93 MB` | 5 | 通過 / 通過 |
+| 300 | `0.753 s` | `0.953 s` | `89.7 MB` | `36.7 MB` | 4 | 通過 / 通過 |
+| 1,000 | `2.569 s` | `3.255 s` | `242.7 MB` | `121.6 MB` | 4 | 通過 / 通過 |
 
 Production Release benchmark 的 accepted objective/KKT、sweep count、candidate counts 均符合 T0 synthetic baseline，cache replay error 為 0。Production `.git` artifact 中沒有 cryo-EM `.mrc/.map/.ccp4` fixture；real-map validation 未執行。獨立 Rank-deficient、near-singular 與 high-overlap hard workload 也未完成；cube fixture condition 約 1.07，不能充當這些案例。
+
+## P5 — Promotion、Cleanup 與最終驗收
+
+### C. 30-target 核心異常
+
+T4 solver-only block 1/2 baseline Width KKT 為 `1.1122e-9`／`1.0308e-9`，略高於 Local baseline eligibility `1e-9`，因此是 `Unavailable`；這不是 perturbation endpoint 的 replay disagreement。T4 full-policy 讓這兩個 block 可被量測，但其 N2/reference 相對 accepted baseline 的 prediction change 是 `1.9376e-7`／`1.8011e-7`。N0 identity 的 prediction/objective change 精確為 0；N1 fixed-width reprofile 是 `1.7577e-7`／`1.6337e-7`；N1 到 N2 的額外 change 是 `8.1542e-8`／`7.5840e-8`。T0 相應 N2 change 約 `3.05e-9–3.28e-9`。
+
+T4 block 1 的 N2/reference 相對 accepted baseline `η` 最大 change 約 `5.2135e-7`、objective change `7.4871e-15`，A/C KKT 約 `1.39e-16`，Width KKT 為 0；block 2 同樣收斂到該條件 local profile reference。N2 與 Strict Reference 的已測 endpoint 相同，且未耗盡 solver budget。正負 pair 在三個 δ 上的 `D_common` 約 `1.9376e-7`，`D_odd` 最大約 `6.01e-14`；這表示所測回應主要是共同 baseline reoptimization drift，但不能視為唯一的模型敏感度分解。六個 `±0.25` log-width multi-start endpoint 通過 Strict Replay，且彼此相符；沒有在這些起點觀察到另一個局部極小值。這些測試未顯示 T4 perturbation 的 active-set 跳變。
+
+### D. Local KKT Qualification
+
+同端點 Q0–Q3 重評維持 replay consistency 獨立檢查：25 個 baseline 中 6/14/16/21 個在 Q0/Q1/Q2/Q3 通過；25 個 conditional reprofile 中為 6/21/21/21；138 個成功 perturbation seed 在全部 Q0–Q3 都通過。四個 T4 block 1/2 baseline/reprofile 仍被 Q3 的 Width `1e-9` 拒絕，其 N1 Width KKT 約 `4.66e-9–5.01e-9`。已完成 perturbation endpoints 的 Primary／Independent KKT 與 Replay consistency 都通過；沒有因真正 replay disagreement、rank invalid 或 budget exhaustion 而失敗的 seed。Q3 只新增 15 個 baseline 與 15 個 reprofile classification，沒有新增 perturbation endpoint qualification。
+
+### E. Solver Precision
+
+已完成的隔離 precision 對照只控制 Width profile LM `gtol`；沒有把 AC certificate threshold 誤稱為 A/C linear-solver precision。S0/S1/S2 與 Strict Reference 完全相同；S3 (`gtol=1e-7`) 相對 reference 的 `D_B=3.12e-12`、`D_AC=6.54e-13`、`D_pred=4.88e-13`，CPU `11.69 ms`，仍通過 Independent Replay。這比原始 `1e-8` prediction warning 小約五個數量級。S0 CPU `16.19 ms`，S1 `16.40 ms`，S2 `16.27 ms`。Precision 各設定沒有獨立 memory recorder，故不報每設定記憶體；T4 整體 process peak RSS `41.2 MB`、workspace estimate `23.7 MB`。
+
+### F–G. Null Perturbation 與 Stability 分布
+
+N0、N1、N2、正負 perturbation 與 Strict Reference 的定義、逐端點 KKT、objective、solver work 及 replay 狀態詳見 P0–P3；N2 是 baseline-η-seeded variable-projection continuation，每次 profile evaluation 都重求 β。因 API 不接受 `(η₀,β₀)` 完整 optimizer seed，本報告不把它稱為直接 full-state 初始化。N1 隔離量出先重新 profile A/C 的 prediction contribution；對稱正負 seeds 的 common/odd 分解再量出所測 δ 下的共同 solver reoptimization 位移與 odd response。
+
+25 個 selected-block assessment 為 15 Stable、8 Unstable、2 Unavailable；沒有 Sensitive 或 NotAssessed。兩個 Unavailable 是 T4 solver-only block 1/2。Noise-only fixture 有弱 Width 識別、active A/C/Width bounds 與 Unstable 分類，表明 warning 要搭配 point-quality、active face 與 conditioning 解讀。S3 precision 沒有接近 `1e-8` warning；Q3 沒有新增任何 perturbation endpoint；因此本輪不調整 warning 門檻，也不把 solver drift 宣稱為真實模型敏感度。
+
+### H. Promotion 決策
+
+| Gate | 結果 | 依據 |
+|---|---|---|
+| G1 Numerical Validity | 在已測合成 endpoint 通過 | KKT、feasibility、replay consistency、Independent Replay 與 failure reason 都有保存；錯誤的 Width optimality endpoint 被明確標為 failed，未當成 qualified perturbation |
+| G2 Sensitivity Reliability | 未通過 | 直接完整 `(η₀,β₀)` optimizer initialization 未建立；A/C solver precision 無獨立 stopping-tolerance seam；尚缺 real map、high-overlap、rank-deficient 與 near-singular 驗證 |
+| G3 Engineering Safety | 通過 | Global accepted state 在 15/15 對照逐值相同；Global sweep count、正式 KKT、acceptance、certification 與 replay contract 未變；清理後 Release build 與全套 CTest 通過 |
+
+整體結論為 **Partial Qualification**。維持 Global A/C KKT `1e-7`、Global Width KKT `1e-9`、`practical-v2`、Local strict endpoint qualification 與原 Warning `1e-8 / 1e-8`。本研究不能回答所有資料情境下的 drift/sensitivity 比例，也不支持升格新的 Local KKT 或 Warning policy。
+
+### I. Cleanup 與 Verification
+
+Temporary research hooks、precision injection seam、observer、one-off runner 與 CMake target 均已移除；Production 沒有研究 runtime switch。保留兩個長期 regression tests：N0/N1/profiled-reference exact-fit identity，以及「Conditional reprofile AC strict status 不蓋過 Width replay failure」。Release 全量建置成功，CTest 19/19 通過；本次只在既有 `develop` 建立本地 commits，沒有 push、建立 branch/worktree 或操作 Notion。Production benchmark 四個規模均完成 endpoint certification 與 Independent Replay；1,000-target 最終量測 peak RSS `242.7 MB`、memory preflight estimate `121.6 MB`。尚未解決的項目是完整 β-seeded local optimizer 接口、A/C precision 控制，以及 real-map／病態與高重疊資料驗證。

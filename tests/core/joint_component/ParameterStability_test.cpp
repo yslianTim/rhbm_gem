@@ -104,6 +104,39 @@ TEST(JointParameterStabilityTest, ExactLocalFitIsStableAndDeterministic)
     EXPECT_LE(*first.evidence.local_prediction_change_relative,n::LocalPredictionChangeWarning);
 }
 
+TEST(JointParameterStabilityTest, NullIdentityAndProfiledReferencePreserveAnExactLocalFit)
+{
+    StabilityFixture fixture;
+    const auto input_eta=fixture.eta,input_beta=fixture.beta;
+    const auto n0=n::EvaluateState(fixture.domain,fixture.y,input_eta,input_beta,fixture.context,
+        n::ProfileEvaluationRole::AcceptedEndpoint);
+    const auto identity=n::EvaluateState(fixture.domain,fixture.y,input_eta,input_beta,fixture.context,
+        n::ProfileEvaluationRole::AcceptedEndpoint);
+    const auto n1=n::EvaluateProfile(fixture.domain,fixture.y,input_eta,&fixture.context,
+        n::ProfileEvaluationRole::AcceptedEndpoint);
+    auto strict_context=fixture.context;
+    strict_context.profile_budget=200; strict_context.update_budget=100;
+    const auto search=n::SearchProfile(fixture.domain,fixture.y,input_eta.array().exp(),strict_context);
+    const auto reference=n::EvaluateProfile(fixture.domain,fixture.y,search.eta,&strict_context,
+        n::ProfileEvaluationRole::AcceptedEndpoint);
+
+    ASSERT_TRUE(n0.valid); ASSERT_TRUE(identity.valid); ASSERT_TRUE(n1.valid); ASSERT_TRUE(reference.valid);
+    EXPECT_EQ(identity.eta,n0.eta);
+    EXPECT_EQ(identity.beta,n0.beta);
+    const auto prediction=[](const n::Evaluation & state) {return (state.x*state.beta).eval();};
+    EXPECT_DOUBLE_EQ((prediction(identity)-prediction(n0)).norm(),0.);
+    EXPECT_DOUBLE_EQ(identity.certificate.objective,n0.certificate.objective);
+    EXPECT_LE((prediction(n1)-prediction(n0)).norm(),1e-14);
+    EXPECT_LE((prediction(reference)-prediction(n1)).norm(),1e-14);
+    EXPECT_LE((reference.eta-input_eta).lpNorm<Eigen::Infinity>(),1e-12);
+    EXPECT_TRUE(search.initial.beta.isApprox(n1.beta,1e-14));
+    EXPECT_TRUE(n::CheckIndependentReplay(fixture.domain,fixture.y,n0,fixture.context).passed);
+    EXPECT_TRUE(n::CheckIndependentReplay(fixture.domain,fixture.y,n1,fixture.context).passed);
+    EXPECT_TRUE(n::CheckIndependentReplay(fixture.domain,fixture.y,reference,strict_context).passed);
+    EXPECT_EQ(fixture.eta,input_eta);
+    EXPECT_EQ(fixture.beta,input_beta);
+}
+
 TEST(JointParameterStabilityTest, PureClassifierRespectsIndependentThresholdBoundaries)
 {
     const double parameter_threshold=n::LocalParameterChangeWarning;
@@ -297,6 +330,41 @@ TEST(JointParameterStabilityTest, LocalAcSolveFailureCannotProduceFalseStableRes
         return probe.minus_seed_status=="LocalAcKktFailed" || probe.plus_seed_status=="LocalAcKktFailed" ||
             probe.minus_seed_status=="SolverFailed" || probe.plus_seed_status=="SolverFailed";
     }));
+}
+
+TEST(JointParameterStabilityTest, ConditionalReprofileStatusDoesNotOverrideWidthReplayFailure)
+{
+    const rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",30));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    n::FixedNeighborPolicy policy;
+    policy.core_atoms=12;
+    policy.maximum_sweeps=n::ProductionFixedNeighborMaximumSweeps;
+    policy.convergence_criteria={1e-7,1e-5};
+    policy.eta_upper_bound=std::log(2.2);
+    policy.assess_local_conditioning=true;
+    policy.assess_parameter_stability=true;
+    policy.claim_parameter_stability_block=[](int) {return true;};
+    const n::Vector eta=n::Vector::Constant(30,std::log(.55));
+
+    const auto result=n::SearchFixedNeighborComponent(
+        data.domain,data.layout,data.y,eta,data.context,policy);
+    ASSERT_TRUE(result.search_converged)<<result.reason;
+    ASSERT_TRUE(result.parameter_stability);
+    const auto found=std::find_if(result.parameter_stability->blocks.begin(),
+        result.parameter_stability->blocks.end(),[](const auto & block) {
+            return block.block_id=="component/block-1";
+        });
+    ASSERT_NE(found,result.parameter_stability->blocks.end());
+    EXPECT_EQ(found->baseline_eligibility_status,"Unavailable");
+    EXPECT_EQ(found->baseline_eligibility_reason,"baseline-width-practical-stationarity-failed");
+    EXPECT_EQ(found->conditional_reprofile_status,"StrictlyQualified");
+    ASSERT_TRUE(found->conditional_reprofile_local_ac_kkt);
+    ASSERT_TRUE(found->conditional_reprofile_projected_width_kkt);
+    EXPECT_LE(*found->conditional_reprofile_local_ac_kkt,1e-10);
+    EXPECT_GT(*found->conditional_reprofile_projected_width_kkt,1e-9);
+    EXPECT_EQ(found->conditional_reprofile_independent_replay_status,"Failed");
+    EXPECT_EQ(found->conditional_reprofile_independent_replay_reason,
+        "primary-bounded-width-kkt-failed");
 }
 
 TEST(JointParameterStabilityTest, ComponentFitHonorsPerturbationClaimBudgetAndPreservesPoint)

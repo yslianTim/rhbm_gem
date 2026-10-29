@@ -301,16 +301,6 @@ target_include_directories(rhbm_fixed_neighbor_closed_loop_benchmark PRIVATE
     "${PROJECT_SOURCE_DIR}/tests"
 )
 target_link_libraries(rhbm_fixed_neighbor_closed_loop_benchmark PRIVATE rhbm_gem CompilerFlags)
-add_executable(rhbm_local_stability_research
-    benchmarks/JointLocalStabilityResearch.cpp
-    support/JointSyntheticWorkload.cpp
-)
-target_include_directories(rhbm_local_stability_research PRIVATE
-    "${PROJECT_SOURCE_DIR}/src"
-    "${PROJECT_SOURCE_DIR}/src/core"
-    "${PROJECT_SOURCE_DIR}/tests"
-)
-target_link_libraries(rhbm_local_stability_research PRIVATE rhbm_gem_test CompilerFlags)
 add_dependencies(tests_all rhbm_tests)
 
 # Shared test-only helpers compile into the test executable.

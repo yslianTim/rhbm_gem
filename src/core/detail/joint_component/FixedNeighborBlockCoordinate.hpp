@@ -3,9 +3,6 @@
 #include "FixedNeighborPolicy.hpp"
 #include "JointProgress.hpp"
 #include "ResourceWork.hpp"
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include "ParameterStability.hpp"
-#endif
 #include <functional>
 #include <utility>
 
@@ -140,10 +137,6 @@ struct FixedNeighborPolicy
     bool assess_parameter_stability{};
     bool collect_telemetry{};
     bool collect_diagnostics{};
-    JointConvergenceCriteria local_stability_eligibility_for_testing{PracticalJointConvergenceCriteria};
-    std::function<void(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &,
-        const std::string &,const Indices &)> local_stability_baseline_observer;
-    std::function<void(const LocalStabilityTraceForTesting &)> local_stability_trace_observer;
     std::optional<std::size_t> global_state_memory_budget_for_testing;
     std::function<void(const FixedNeighborCandidateEvent &)> candidate_observer;
     bool perturb_sweep_replay_objective_for_testing{};
