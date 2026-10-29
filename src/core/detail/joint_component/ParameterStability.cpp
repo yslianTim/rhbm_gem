@@ -132,7 +132,11 @@ LocalParameterStabilityClassification ClassifyLocalParameterStability(
 
 LocalParameterStabilityAssessment AssessLocalParameterStability(
     const Domain & domain,VectorRef y,const Vector & eta,const Vector & beta,const EvaluationContext & context,
-    std::string block_id,std::size_t resident_bytes)
+    std::string block_id,std::size_t resident_bytes
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    ,const LocalParameterStabilityResearchHooks * research
+#endif
+    )
 {
     const auto started=Clock::now(); const auto cpu_started=std::clock();
     LocalParameterStabilityAssessment out;
@@ -167,9 +171,18 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
     if(!eta.allFinite() || !beta.allFinite() || !y.allFinite() || !(context.scale>0) || !std::isfinite(context.scale))
     {Unavailable(evidence,"nonfinite-local-input"); return finish();}
 
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    const auto & eligibility=research ? research->eligibility_criteria : PracticalJointConvergenceCriteria;
+    const auto observe=[&](const LocalStabilityTraceForTesting & trace) {
+        if(research && research->trace_observer) research->trace_observer(trace);
+    };
+#else
+    const auto & eligibility=PracticalJointConvergenceCriteria;
+#endif
     const auto baseline=EvaluateState(domain,y,eta,beta,context,ProfileEvaluationRole::AcceptedEndpoint);
     std::optional<double> baseline_width_gradient;
     bool baseline_replay_passed{};
+    std::optional<IndependentReplayEvidence> baseline_replay_evidence;
     if(baseline.certificate.available)
     {
         evidence.baseline_local_ac_kkt=baseline.certificate.projected_kkt;
@@ -185,10 +198,23 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
     if(baseline.valid && baseline.certificate.available)
     {
         const auto replay=CheckIndependentReplay(domain,y,baseline,context,nullptr,nullptr,
-            PracticalJointConvergenceCriteria);
+            eligibility);
         evidence.baseline_independent_replay_status=replay.passed ? "Passed" : "Failed";
         evidence.baseline_independent_replay_reason=replay.reason;
         baseline_replay_passed=replay.passed;
+        baseline_replay_evidence=replay;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        LocalStabilityTraceForTesting baseline_trace;
+        baseline_trace.stage="baseline"; baseline_trace.block_id=evidence.block_id;
+        baseline_trace.core_atom_ids=context.atom_ids; baseline_trace.baseline_eta=eta;
+        baseline_trace.baseline_beta=beta; baseline_trace.endpoint_eta=baseline.eta;
+        baseline_trace.endpoint_beta=baseline.beta; baseline_trace.baseline_certificate=baseline.certificate;
+        baseline_trace.certificate=baseline.certificate; baseline_trace.replay=replay;
+        baseline_trace.width_kkt=baseline_width_gradient; baseline_trace.feasible=baseline.certificate.feasible;
+        baseline_trace.width_bound_feasible=baseline.certificate.width_bound_feasible;
+        baseline_trace.qualification_status=replay.passed ? "Qualified" : "ReplayFailed";
+        observe(baseline_trace);
+#endif
 
         const auto reprofiled_profile=EvaluateProfile(domain,y,eta,&context,
             ProfileEvaluationRole::AcceptedEndpoint);
@@ -221,9 +247,26 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
                 evidence.conditional_reprofile_prediction_change_relative=
                     (reprofiled_prediction-baseline_prediction).norm()/std::max(1.0,baseline_prediction.norm());
                 const auto reprofile_replay=CheckIndependentReplay(domain,y,reprofiled,context,nullptr,nullptr,
-                    PracticalJointConvergenceCriteria);
+                    eligibility);
                 evidence.conditional_reprofile_independent_replay_status=reprofile_replay.passed ? "Passed" : "Failed";
                 evidence.conditional_reprofile_independent_replay_reason=reprofile_replay.reason;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                LocalStabilityTraceForTesting trace;
+                trace.stage="conditional-reprofile"; trace.block_id=evidence.block_id;
+                trace.core_atom_ids=context.atom_ids; trace.baseline_eta=eta; trace.baseline_beta=beta;
+                trace.endpoint_eta=reprofiled.eta; trace.endpoint_beta=reprofiled.beta;
+                trace.baseline_certificate=baseline.certificate; trace.certificate=reprofiled.certificate;
+                trace.baseline_replay=baseline_replay_evidence; trace.replay=reprofile_replay;
+                trace.baseline_width_kkt=baseline_width_gradient;
+                trace.width_kkt=reprofiled_width_gradient;
+                trace.objective_difference=evidence.conditional_reprofile_objective_difference;
+                trace.prediction_change=evidence.conditional_reprofile_prediction_change_relative;
+                trace.parameter_change=evidence.conditional_reprofile_scaled_ac_parameter_difference;
+                trace.feasible=reprofiled.certificate.feasible;
+                trace.width_bound_feasible=reprofiled.certificate.width_bound_feasible;
+                trace.qualification_status=evidence.conditional_reprofile_status;
+                observe(trace);
+#endif
             }
         }
         else
@@ -243,9 +286,8 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
         const bool strict_local_optimum=baseline.certificate.projected_kkt<=
             StrictJointConvergenceCriteria.global_ac_kkt &&
             *baseline_width_gradient<=StrictJointConvergenceCriteria.global_width_gradient;
-        const bool practical_local_optimum=baseline.certificate.projected_kkt<=
-            PracticalJointConvergenceCriteria.global_ac_kkt &&
-            *baseline_width_gradient<=PracticalJointConvergenceCriteria.global_width_gradient;
+        const bool practical_local_optimum=baseline.certificate.projected_kkt<=eligibility.global_ac_kkt &&
+            *baseline_width_gradient<=eligibility.global_width_gradient;
         evidence.baseline_conditional_optimality_status=strict_local_optimum ? "StrictlyQualified" :
             practical_local_optimum ? "PracticalOnly" : "Failed";
     }
@@ -257,9 +299,9 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
             "baseline-numerical-validity-failed";
     else if(!baseline_width_gradient)
         evidence.baseline_eligibility_reason="baseline-projected-width-kkt-unavailable";
-    else if(baseline.certificate.projected_kkt>PracticalJointConvergenceCriteria.global_ac_kkt)
+    else if(baseline.certificate.projected_kkt>eligibility.global_ac_kkt)
         evidence.baseline_eligibility_reason="baseline-local-ac-practical-kkt-failed";
-    else if(*baseline_width_gradient>PracticalJointConvergenceCriteria.global_width_gradient)
+    else if(*baseline_width_gradient>eligibility.global_width_gradient)
         evidence.baseline_eligibility_reason="baseline-width-practical-stationarity-failed";
     else if(!baseline_replay_passed)
         evidence.baseline_eligibility_reason="baseline-independent-replay-failed";
@@ -316,6 +358,59 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
                 seed=seed.cwiseMin(Vector::Constant(seed.size(),*context.eta_upper_bound));
             }
             effective_displacement=(seed-eta).lpNorm<Eigen::Infinity>();
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            const auto seed_started=Clock::now(); const auto seed_cpu_started=std::clock();
+            auto emit_seed_trace=[&](const SearchResult * search,const Evaluation * endpoint,
+                const TrustEvidence * trust) {
+                LocalStabilityTraceForTesting trace;
+                trace.stage="perturbation-seed"; trace.block_id=evidence.block_id;
+                trace.direction=direction.direction; trace.sign=negative ? "minus" : "plus";
+                trace.core_atom_ids=context.atom_ids;
+                trace.direction_vector.assign(direction.unit.data(),direction.unit.data()+direction.unit.size());
+                trace.baseline_eta=eta; trace.baseline_beta=beta; trace.seed_eta=seed;
+                trace.requested_displacement=requested; trace.effective_displacement=seed-eta;
+                trace.baseline_certificate=baseline.certificate;
+                trace.baseline_replay=baseline_replay_evidence; trace.baseline_width_kkt=baseline_width_gradient;
+                trace.qualification_status=seed_status; trace.stop_reason=seed_reason;
+                if(search)
+                {
+                    trace.seed_beta=search->initial.beta; trace.endpoint_eta=search->eta;
+                    trace.evaluations=search->evaluations; trace.accepted_updates=search->accepted;
+                    trace.stop_reason=search->stop_reason;
+                    trace.budget_exhausted=search->stop_reason=="cpu-time-budget" ||
+                        search->stop_reason=="profile-budget" || search->stop_reason=="accepted-update-budget";
+                    for(const auto & trial:search->trials)
+                        if(trial.endpoint.certificate.available &&
+                            std::isfinite(trial.endpoint.certificate.objective))
+                            trace.objective_trajectory.push_back(
+                                trial.endpoint.certificate.objective/(context.scale*context.scale));
+                }
+                if(endpoint)
+                {
+                    trace.endpoint_eta=endpoint->eta; trace.endpoint_beta=endpoint->beta;
+                    trace.certificate=endpoint->certificate; trace.feasible=endpoint->certificate.feasible;
+                    trace.width_bound_feasible=endpoint->certificate.width_bound_feasible;
+                    trace.width_kkt=ProfileGradientInfinityNorm(*endpoint,context);
+                    trace.objective_change=std::abs(endpoint->certificate.objective-
+                        baseline.certificate.objective)/(context.scale*context.scale);
+                    if(endpoint->valid && endpoint->certificate.available && endpoint->x.cols()==beta.size())
+                    {
+                        const double width_change=(endpoint->eta-eta).lpNorm<Eigen::Infinity>();
+                        const double ac_change=(((endpoint->beta-beta).array()*column_norms.array()).abs()/
+                            context.scale).maxCoeff();
+                        const Vector prediction=(endpoint->x*endpoint->beta).eval();
+                        trace.width_parameter_change=width_change;
+                        trace.scaled_ac_parameter_change=ac_change;
+                        trace.parameter_change=std::max(width_change,ac_change);
+                        trace.prediction_change=(prediction-baseline_prediction).norm()/
+                            std::max(1.0,baseline_prediction.norm());
+                    }
+                }
+                if(trust) trace.replay=trust->independent;
+                trace.seconds=Seconds(seed_started); trace.cpu_seconds=CpuSeconds(seed_cpu_started);
+                observe(trace);
+            };
+#endif
             if(crosses_width_bound)
             {
                 boundary_limited=true;
@@ -329,31 +424,49 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
                     seed_status="BoundInfeasibleDirection";
                     seed_reason="requested-step-crosses-width-upper-bound";
                 }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                emit_seed_trace(nullptr,nullptr,nullptr);
+#endif
                 continue;
             }
             if(*effective_displacement<=MinimumEffectiveLocalWidthPerturbation)
             {
                 boundary_limited=true; seed_status="ZeroDisplacement";
                 seed_reason="effective-perturbation-below-numerical-resolution";
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                emit_seed_trace(nullptr,nullptr,nullptr);
+#endif
                 continue;
             }
             seed_status="Pending";
             if(CpuSeconds(cpu_started)>=MaximumLocalPerturbationCpuSeconds)
             {
                 direction_failed=true; failure_reason="cpu-time-budget-exhausted";
-                seed_status="BudgetExhausted"; seed_reason=failure_reason; break;
+                seed_status="BudgetExhausted"; seed_reason=failure_reason;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                emit_seed_trace(nullptr,nullptr,nullptr);
+#endif
+                break;
             }
             const Vector widths=seed.array().exp();
             if(!seed.allFinite() || !widths.allFinite() || (widths.array()<=0).any())
             {
                 direction_failed=true; failure_reason="unrepresentable-perturbation-width";
-                seed_status="SolverFailed"; seed_reason=failure_reason; break;
+                seed_status="SolverFailed"; seed_reason=failure_reason;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                emit_seed_trace(nullptr,nullptr,nullptr);
+#endif
+                break;
             }
             const double remaining_cpu=MaximumLocalPerturbationCpuSeconds-CpuSeconds(cpu_started);
             if(!(remaining_cpu>0))
             {
                 direction_failed=true; failure_reason="cpu-time-budget-exhausted";
-                seed_status="BudgetExhausted"; seed_reason=failure_reason; break;
+                seed_status="BudgetExhausted"; seed_reason=failure_reason;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                emit_seed_trace(nullptr,nullptr,nullptr);
+#endif
+                break;
             }
             auto bounded_context=context;
             bounded_context.profile_budget=static_cast<int>(MaximumLocalPerturbationProfileEvaluations-1);
@@ -368,12 +481,20 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
                 CpuSeconds(cpu_started)>=MaximumLocalPerturbationCpuSeconds)
             {
                 direction_failed=true; failure_reason="cpu-time-budget-exhausted";
-                seed_status="BudgetExhausted"; seed_reason=failure_reason; break;
+                seed_status="BudgetExhausted"; seed_reason=failure_reason;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                emit_seed_trace(&search,nullptr,nullptr);
+#endif
+                break;
             }
             if(search.eta.size()!=eta.size() || !search.eta.allFinite())
             {
                 direction_failed=true; failure_reason="perturbation-search-invalid";
-                seed_status="SolverFailed"; seed_reason=failure_reason; break;
+                seed_status="SolverFailed"; seed_reason=failure_reason;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                emit_seed_trace(&search,nullptr,nullptr);
+#endif
+                break;
             }
             const auto candidate=EvaluateProfile(domain,y,search.eta,&bounded_context,
                 ProfileEvaluationRole::AcceptedEndpoint);
@@ -381,13 +502,21 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
             if(CpuSeconds(cpu_started)>=MaximumLocalPerturbationCpuSeconds)
             {
                 direction_failed=true; failure_reason="cpu-time-budget-exhausted";
-                seed_status="BudgetExhausted"; seed_reason=failure_reason; break;
+                seed_status="BudgetExhausted"; seed_reason=failure_reason;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                emit_seed_trace(&search,&candidate,nullptr);
+#endif
+                break;
             }
             if(!candidate.valid || !candidate.certificate.available || !candidate.certificate.feasible ||
                 !candidate.certificate.kkt_passed)
             {
                 direction_failed=true; failure_reason="perturbation-local-kkt-failed";
-                seed_status="LocalAcKktFailed"; seed_reason=failure_reason; break;
+                seed_status="LocalAcKktFailed"; seed_reason=failure_reason;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                emit_seed_trace(&search,&candidate,nullptr);
+#endif
+                break;
             }
             // Keep the strict independent solver/replay gate for every perturbation endpoint.
             const auto trust=CheckTrust(domain,y,candidate,bounded_context);
@@ -397,18 +526,29 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
                 seed_status="IndependentReplayFailed";
                 seed_reason=trust.independent ? trust.independent->reason : trust.reason;
                 evidence.objective_consistency_status="Failed";
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                emit_seed_trace(&search,&candidate,&trust);
+#endif
                 break;
             }
             const auto gradient=ProfileGradientInfinityNorm(candidate,bounded_context);
             if(!gradient || !(*gradient<=PracticalJointConvergenceCriteria.global_width_gradient))
             {
                 direction_failed=true; failure_reason="perturbation-width-practical-stationarity-failed";
-                seed_status="WidthStationarityFailed"; seed_reason=failure_reason; break;
+                seed_status="WidthStationarityFailed"; seed_reason=failure_reason;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                emit_seed_trace(&search,&candidate,&trust);
+#endif
+                break;
             }
             if(CpuSeconds(cpu_started)>=MaximumLocalPerturbationCpuSeconds)
             {
                 direction_failed=true; failure_reason="cpu-time-budget-exhausted";
-                seed_status="BudgetExhausted"; seed_reason=failure_reason; break;
+                seed_status="BudgetExhausted"; seed_reason=failure_reason;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+                emit_seed_trace(&search,&candidate,&trust);
+#endif
+                break;
             }
             const double width_change=(candidate.eta-eta).lpNorm<Eigen::Infinity>();
             const double ac_change=(((candidate.beta-beta).array()*column_norms.array()).abs()/context.scale).maxCoeff();
@@ -425,6 +565,9 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
             maximum_objective_difference=std::max(maximum_objective_difference,std::abs(objective-baseline_objective));
             ++assessed_seed_count; any_qualified_perturbation=true;
             seed_status="Assessed"; seed_reason="bounded-perturbation-solved-and-replayed";
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            emit_seed_trace(&search,&candidate,&trust);
+#endif
         }
         const bool direction_assessed=assessed_seed_count>0 && !direction_failed;
         if(direction_assessed)

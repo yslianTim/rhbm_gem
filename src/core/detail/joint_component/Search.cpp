@@ -227,8 +227,12 @@ struct Profile
 };
 }
 namespace {
+struct SearchTolerances
+{
+    double ftol{1e-14},xtol{1e-12},gtol{1e-12};
+};
 SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & initial_b,
-    const EvaluationContext & context,ProfileSearchWork * telemetry)
+    const EvaluationContext & context,ProfileSearchWork * telemetry,const SearchTolerances & tolerances)
 {
     const auto start=std::chrono::steady_clock::now();
     ProfileSearchWork local_work;
@@ -239,8 +243,8 @@ SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & 
     };
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
-        lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;
-        lm.parameters.gtol=1e-12; lm.parameters.maxfev=search_context.profile_budget;
+        lm.parameters.factor=.1; lm.parameters.ftol=tolerances.ftol; lm.parameters.xtol=tolerances.xtol;
+        lm.parameters.gtol=tolerances.gtol; lm.parameters.maxfev=search_context.profile_budget;
         auto status=lm.minimizeInit(eta);
         if(profile.cached.valid)
         {
@@ -305,6 +309,15 @@ SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & 
 SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
     const EvaluationContext & context,ProfileSearchWork * telemetry)
 {
-    return SearchProfileImpl(domain,y,initial_b,context,telemetry);
+    return SearchProfileImpl(domain,y,initial_b,context,telemetry,{});
 }
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+SearchResult SearchProfileForTesting(const Domain & domain,VectorRef y,const Vector & initial_b,
+    const EvaluationContext & context,const ProfileSearchTolerancesForTesting & tolerances,
+    ProfileSearchWork * telemetry)
+{
+    return SearchProfileImpl(domain,y,initial_b,context,telemetry,
+        {tolerances.ftol,tolerances.xtol,tolerances.gtol});
+}
+#endif
 }

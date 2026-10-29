@@ -257,6 +257,14 @@ struct SearchResult
 };
 SearchResult SearchProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,
     ProfileSearchWork * = nullptr);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+struct ProfileSearchTolerancesForTesting
+{
+    double ftol{1e-14},xtol{1e-12},gtol{1e-12};
+};
+SearchResult SearchProfileForTesting(const Domain &,VectorRef,const Vector &,const EvaluationContext &,
+    const ProfileSearchTolerancesForTesting &,ProfileSearchWork * = nullptr);
+#endif
 struct Assessment
 {
     Endpoint primary;
