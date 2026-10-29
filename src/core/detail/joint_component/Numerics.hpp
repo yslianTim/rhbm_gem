@@ -33,27 +33,6 @@ struct LinearPolicy
     double release_factor{128}, release_response_norm{-1};
 };
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-enum class TiledQrStage : std::uint8_t { SparseRows, DerivativePrepare, DerivativeReduce, ProjectedWidth };
-struct TiledQrTileCensus
-{
-    TiledQrStage stage{};
-    std::size_t tile_count{1};
-    std::size_t input_rows{},factor_rows{},columns{},rhs_columns{},retained_rows{},structural_columns{},exact_nonzero_columns{};
-    std::size_t structural_nonzeros{},exact_nonzeros{},structural_rows{},nonzero_design_rows{},exact_zero_rows{},
-        zero_design_nonzero_rhs_rows{};
-    std::size_t design_structural_nonzeros{},design_exact_nonzeros{},derivative_structural_nonzeros{},
-        derivative_exact_nonzeros{},design_nonzero_rows{},derivative_nonzero_rows{},both_zero_rows{};
-    std::size_t corrected_jacobian_nonzeros{},corrected_jacobian_nonzero_rows{},projection_nonzeros{},projection_nonzero_rows{},
-        rhs_nonzero_rows{},estimated_peak_temporary_bytes{};
-    std::array<std::size_t,5> structural_row_ratio_bins{},exact_row_ratio_bins{},dense_occupancy_bins{};
-    bool histograms_recorded{};
-    double row_census_seconds{},dense_tile_materialization_seconds{},dense_assembly_seconds{},householder_factorization_seconds{},
-        qtrhs_transform_seconds{},r_extraction_seconds{},corrected_jacobian_seconds{};
-};
-void AddTiledQrTileCensus(std::vector<TiledQrTileCensus> &,const TiledQrTileCensus &);
-void ResetProjectedWidthTileCensus();
-void RecordProjectedWidthTileCensus(const TiledQrTileCensus &);
-const std::vector<TiledQrTileCensus> & ProjectedWidthTileCensus();
 struct LinearSolveBreakdown
 {
     std::size_t sparse_qr_factorizations{},selected_matrix_builds{},
@@ -66,7 +45,6 @@ struct LinearSolveBreakdown
         selected_pattern_repeats{},selected_pattern_changes{},reduced_pattern_repeats{},
         reduced_pattern_changes{},reduced_numeric_repeats_on_same_pattern{},
         reduced_numeric_changes_on_same_pattern{};
-    std::vector<TiledQrTileCensus> tiled_qr_tiles;
     double column_normalization_seconds{},row_reduction_seconds{},sparse_qr_analysis_seconds{},
         sparse_qr_factorization_seconds{},sparse_qr_solve_seconds{},refinement_matrix_seconds{},
         refinement_qr_factorization_seconds{},refinement_correction_solve_seconds{},
@@ -76,9 +54,8 @@ struct DerivativeBreakdown
 {
     std::size_t tiled_qr_calls{},rank_svd_calls{},triangular_solve_calls{},
         cancellation_fallbacks{},workspace_resize_events{};
-    std::vector<TiledQrTileCensus> tiled_qr_tiles;
     double raw_construction_seconds{},tiled_qr_seconds{},rank_svd_seconds{},triangular_solve_seconds{},
-        correction_matrix_seconds{},cancellation_fallback_seconds{},corrected_jacobian_seconds{};
+        correction_matrix_seconds{},cancellation_fallback_seconds{};
 };
 struct BoundedLmBreakdown
 {

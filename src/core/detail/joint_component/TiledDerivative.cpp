@@ -125,7 +125,6 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         const auto tiled_qr_started=collect_breakdown ? std::chrono::steady_clock::now() :
             std::chrono::steady_clock::time_point{};
-        double row_census_seconds{};
         if(collect_breakdown) ++out.breakdown.tiled_qr_calls;
 #endif
         TiledQR qr(p,m);
@@ -133,95 +132,13 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
             for(Eigen::Index first=0;first<n;first+=tile)
             {
                 const auto count=std::min(tile,n-first);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                TiledQrTileCensus census;
-                census.stage=TiledQrStage::DerivativePrepare;
-                census.input_rows=static_cast<std::size_t>(count);
-                census.factor_rows=static_cast<std::size_t>(qr.r.rows()+count);
-                census.columns=static_cast<std::size_t>(p);
-                census.rhs_columns=static_cast<std::size_t>(m);
-                census.retained_rows=static_cast<std::size_t>(std::min<Eigen::Index>(
-                    qr.r.rows()+count,p));
-                if(collect_breakdown)
-                {
-                    const auto census_started=std::chrono::steady_clock::now();
-                    for(Eigen::Index row=first;row<first+count;++row)
-                    {
-                        bool design_structural{},derivative_structural{},design_nonzero{},derivative_nonzero{};
-                        for(Eigen::SparseMatrix<double,Eigen::RowMajor>::InnerIterator entry(out.free_design,row);entry;++entry)
-                        {
-                            ++census.design_structural_nonzeros;
-                            ++census.structural_nonzeros;
-                            design_structural=true;
-                            if(entry.value()!=0.0)
-                            {
-                                ++census.design_exact_nonzeros;
-                                ++census.exact_nonzeros;
-                                design_nonzero=true;
-                            }
-                        }
-                        for(Eigen::SparseMatrix<double,Eigen::RowMajor>::InnerIterator entry(out.raw,row);entry;++entry)
-                        {
-                            ++census.derivative_structural_nonzeros;
-                            ++census.structural_nonzeros;
-                            derivative_structural=true;
-                            if(entry.value()!=0.0)
-                            {
-                                ++census.derivative_exact_nonzeros;
-                                ++census.exact_nonzeros;
-                                derivative_nonzero=true;
-                            }
-                        }
-                        census.structural_rows+=design_structural || derivative_structural;
-                        census.design_nonzero_rows+=design_nonzero;
-                        census.derivative_nonzero_rows+=derivative_nonzero;
-                        census.both_zero_rows+=!design_nonzero && !derivative_nonzero;
-                        const bool active=design_nonzero || derivative_nonzero;
-                        census.nonzero_design_rows+=active;
-                        census.exact_zero_rows+=!active;
-                        if(!active && e.residual(row)!=0.0) ++census.zero_design_nonzero_rhs_rows;
-                    }
-                    census.row_census_seconds=std::chrono::duration<double>(
-                        std::chrono::steady_clock::now()-census_started).count();
-                    row_census_seconds+=census.row_census_seconds;
-                }
-#endif
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                const auto materialization_started=collect_breakdown ? std::chrono::steady_clock::now() :
-                    std::chrono::steady_clock::time_point{};
-#endif
                 const Matrix design(out.free_design.middleRows(first,count));
                 const Matrix raw_tile(out.raw.middleRows(first,count));
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                if(collect_breakdown)
-                {
-                    census.dense_tile_materialization_seconds=std::chrono::duration<double>(
-                        std::chrono::steady_clock::now()-materialization_started).count();
-                    const auto element_count=static_cast<std::size_t>(count)*static_cast<std::size_t>(p+m)+
-                        census.factor_rows*static_cast<std::size_t>(p+m)+census.retained_rows+
-                        (out.reference_order ? census.factor_rows*static_cast<std::size_t>(p+m) : 0);
-                    census.estimated_peak_temporary_bytes=element_count*sizeof(double);
-                }
-                TiledQRAppendTiming append_timing;
-                qr.Append(design,raw_tile,out.reference_order,collect_breakdown ? &append_timing : nullptr);
-                if(collect_breakdown)
-                {
-                    census.dense_assembly_seconds=append_timing.dense_assembly_seconds;
-                    census.householder_factorization_seconds=append_timing.householder_factorization_seconds;
-                    census.qtrhs_transform_seconds=append_timing.qtrhs_transform_seconds;
-                    census.r_extraction_seconds=append_timing.r_extraction_seconds;
-                    AddTiledQrTileCensus(out.breakdown.tiled_qr_tiles,census);
-                }
-#else
                 qr.Append(design,raw_tile,out.reference_order);
-#endif
             }
         }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(collect_breakdown)
-        {
-            out.breakdown.tiled_qr_seconds+=Seconds(tiled_qr_started)-row_census_seconds;
-        }
+        if(collect_breakdown) out.breakdown.tiled_qr_seconds+=Seconds(tiled_qr_started);
         const auto svd_started=collect_breakdown ? std::chrono::steady_clock::now() :
             std::chrono::steady_clock::time_point{};
         if(collect_breakdown) ++out.breakdown.rank_svd_calls;
@@ -362,45 +279,7 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
     for(Eigen::Index first=0;first<n;first+=tile)
     {
         const auto count=std::min(tile,n-first);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        const auto corrected_started=collect_breakdown ? std::chrono::steady_clock::now() :
-            std::chrono::steady_clock::time_point{};
-#endif
         d.Rows(first,count,raw_tile,projected,j);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        TiledQrTileCensus census;
-        census.stage=TiledQrStage::DerivativeReduce;
-        census.input_rows=static_cast<std::size_t>(count);
-        census.factor_rows=static_cast<std::size_t>(jacobian.r.rows()+count);
-        census.columns=static_cast<std::size_t>(m);
-        census.rhs_columns=1;
-        census.retained_rows=static_cast<std::size_t>(std::min<Eigen::Index>(jacobian.r.rows()+count,m));
-        if(collect_breakdown)
-        {
-            census.corrected_jacobian_seconds=std::chrono::duration<double>(
-                std::chrono::steady_clock::now()-corrected_started).count();
-            out.breakdown.corrected_jacobian_seconds+=census.corrected_jacobian_seconds;
-            for(Eigen::Index row=0;row<count;++row)
-            {
-                ++census.structural_rows;
-                bool corrected_nonzero{},projection_nonzero{};
-                for(Eigen::Index col=0;col<m;++col)
-                {
-                    ++census.structural_nonzeros;
-                    corrected_nonzero|=j(row,col)!=0.0;
-                    projection_nonzero|=projected(row,col)!=0.0;
-                    census.corrected_jacobian_nonzeros+=j(row,col)!=0.0;
-                    census.exact_nonzeros+=j(row,col)!=0.0;
-                }
-                census.corrected_jacobian_nonzero_rows+=corrected_nonzero;
-                census.nonzero_design_rows+=corrected_nonzero;
-                census.exact_zero_rows+=!corrected_nonzero;
-                if(!corrected_nonzero && residual(first+row)!=0.0) ++census.zero_design_nonzero_rhs_rows;
-                census.projection_nonzero_rows+=projection_nonzero;
-                census.rhs_nonzero_rows+=residual(first+row)!=0.0;
-            }
-        }
-#endif
         if(residual_tile.rows()!=count || residual_tile.cols()!=1)
         {
             residual_tile.resize(count,1);
@@ -414,23 +293,7 @@ ReducedDifferential ReduceDerivativeImpl(const TiledDifferential & d,VectorRef r
         const auto append_started=collect_breakdown ? std::chrono::steady_clock::now() :
             std::chrono::steady_clock::time_point{};
 #endif
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        TiledQRAppendTiming append_timing;
-        jacobian.Append(j,residual_tile,false,collect_breakdown ? &append_timing : nullptr);
-        if(collect_breakdown)
-        {
-            census.dense_assembly_seconds=append_timing.dense_assembly_seconds;
-            census.householder_factorization_seconds=append_timing.householder_factorization_seconds;
-            census.qtrhs_transform_seconds=append_timing.qtrhs_transform_seconds;
-            census.r_extraction_seconds=append_timing.r_extraction_seconds;
-            census.estimated_peak_temporary_bytes=(static_cast<std::size_t>(count)*
-                static_cast<std::size_t>(m+1)+census.factor_rows*static_cast<std::size_t>(m+1)+
-                census.retained_rows)*sizeof(double);
-            AddTiledQrTileCensus(out.breakdown.tiled_qr_tiles,census);
-        }
-#else
         jacobian.Append(j,residual_tile);
-#endif
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(collect_breakdown) out.breakdown.tiled_qr_seconds+=Seconds(append_started);
 #endif
@@ -447,9 +310,6 @@ ReducedProjectedWidthDifferential ReduceProjectedWidthDerivative(const TiledDiff
 {
     ReducedProjectedWidthDifferential out; out.reason=d.reason; if(!d.valid || !d.projected_only) return out;
     if(tile<=0) throw std::invalid_argument("Invalid derivative tile size.");
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    const bool collect_breakdown=HotspotAttributionEnabled();
-#endif
     const auto n=d.raw.rows(),m=d.raw.cols();
     TiledQR projected(m,0);
     out.projected_norms=Vector::Zero(m); Matrix raw_tile,p,j;
@@ -458,50 +318,7 @@ ReducedProjectedWidthDifferential ReduceProjectedWidthDerivative(const TiledDiff
         const auto count=std::min(tile,n-first);
         d.Rows(first,count,raw_tile,p,j);
         if(!p.allFinite()) {out.reason="nonfinite-projected-width-derivative"; return out;}
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        TiledQrTileCensus census;
-        census.stage=TiledQrStage::ProjectedWidth;
-        census.input_rows=static_cast<std::size_t>(count);
-        census.factor_rows=static_cast<std::size_t>(projected.r.rows()+count);
-        census.columns=static_cast<std::size_t>(m);
-        census.retained_rows=static_cast<std::size_t>(std::min<Eigen::Index>(
-            projected.r.rows()+count,m));
-        if(collect_breakdown)
-        {
-            census.structural_rows=static_cast<std::size_t>(count);
-            for(Eigen::Index row=0;row<count;++row)
-            {
-                bool active{};
-                for(Eigen::Index col=0;col<m;++col)
-                {
-                    const bool nonzero=p(row,col)!=0.0;
-                    ++census.structural_nonzeros;
-                    active|=nonzero;
-                    census.projection_nonzeros+=nonzero;
-                    census.exact_nonzeros+=nonzero;
-                }
-                census.nonzero_design_rows+=active;
-                census.exact_zero_rows+=!active;
-                census.projection_nonzero_rows+=active;
-            }
-        }
-        TiledQRAppendTiming append_timing;
-        projected.Append(p,Matrix(count,0),false,collect_breakdown ? &append_timing : nullptr);
-        if(collect_breakdown)
-        {
-            census.dense_assembly_seconds=append_timing.dense_assembly_seconds;
-            census.householder_factorization_seconds=append_timing.householder_factorization_seconds;
-            census.qtrhs_transform_seconds=append_timing.qtrhs_transform_seconds;
-            census.r_extraction_seconds=append_timing.r_extraction_seconds;
-            census.estimated_peak_temporary_bytes=(static_cast<std::size_t>(count)*
-                static_cast<std::size_t>(m)+census.factor_rows*static_cast<std::size_t>(m)+
-                census.retained_rows)*sizeof(double);
-            AddTiledQrTileCensus(out.breakdown.tiled_qr_tiles,census);
-            RecordProjectedWidthTileCensus(census);
-        }
-#else
         projected.Append(p,Matrix(count,0));
-#endif
         for(Eigen::Index k=0;k<m;++k)
             out.projected_norms(k)=std::hypot(out.projected_norms(k),p.col(k).norm());
     }

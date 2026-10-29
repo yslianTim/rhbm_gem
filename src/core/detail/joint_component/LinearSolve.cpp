@@ -53,133 +53,40 @@ void ReduceSparseRows(const Eigen::SparseMatrix<double> & a,const Eigen::VectorX
         std::chrono::steady_clock::now()-conversion_started).count();
     workspace.entries.clear(); workspace.response.clear();
     constexpr Eigen::Index tile_size{1024};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    const bool collect_breakdown=HotspotAttributionEnabled();
-#endif
     for(Eigen::Index first=0;first<a.rows();first+=tile_size)
     {
         const Eigen::Index count{std::min(tile_size,a.rows()-first)};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        TiledQrTileCensus tile_census;
-        tile_census.stage=TiledQrStage::SparseRows;
-        tile_census.input_rows=static_cast<std::size_t>(count);
-        tile_census.factor_rows=static_cast<std::size_t>(count);
-        tile_census.rhs_columns=1;
-#endif
         const auto mapping_started=std::chrono::steady_clock::now();
         workspace.local_column.resize(static_cast<std::size_t>(a.cols()));
         std::fill(workspace.local_column.begin(),workspace.local_column.end(),-1);
         workspace.tile_columns.clear();
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        const auto census_started=collect_breakdown ? std::chrono::steady_clock::now() :
-            std::chrono::steady_clock::time_point{};
-        if(collect_breakdown)
-        {
-            for(Eigen::Index row=first;row<first+count;++row)
-            {
-                bool structural{},nonzero{};
-                for(LinearSolveWorkspace::RowMajorSparse::InnerIterator e(workspace.rows,row);e;++e)
-                {
-                    structural=true;
-                    ++tile_census.structural_nonzeros;
-                    auto & state=workspace.local_column[static_cast<std::size_t>(e.col())];
-                    if(e.value()!=0.0)
-                    {
-                        ++tile_census.exact_nonzeros;
-                        nonzero=true;
-                        state=1;
-                    }
-                    else if(state<0) state=0;
-                }
-                if(structural) ++tile_census.structural_rows;
-                if(nonzero) ++tile_census.nonzero_design_rows;
-                else
-                {
-                    ++tile_census.exact_zero_rows;
-                    if(rhs(row)!=0.0) ++tile_census.zero_design_nonzero_rhs_rows;
-                }
-            }
-            tile_census.row_census_seconds=std::chrono::duration<double>(
-                std::chrono::steady_clock::now()-census_started).count();
-        }
-        else
-#endif
         for(Eigen::Index row=first;row<first+count;++row)
             for(LinearSolveWorkspace::RowMajorSparse::InnerIterator e(workspace.rows,row);e;++e)
                 workspace.local_column[static_cast<std::size_t>(e.col())]=0;
         for(Eigen::Index k=0;k<a.cols();++k) if(workspace.local_column[static_cast<std::size_t>(k)]>=0)
         {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(collect_breakdown && workspace.local_column[static_cast<std::size_t>(k)]==1)
-                ++tile_census.exact_nonzero_columns;
-#endif
             workspace.local_column[static_cast<std::size_t>(k)]=static_cast<int>(workspace.tile_columns.size());
             workspace.tile_columns.push_back(static_cast<int>(k));
         }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(collect_breakdown)
-        {
-            tile_census.structural_columns=workspace.tile_columns.size();
-            tile_census.columns=tile_census.structural_columns;
-        }
-#endif
         ++work.tile_mapping_build_count;
         const auto mapping_elapsed=std::chrono::duration<double>(
             std::chrono::steady_clock::now()-mapping_started).count();
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        work.tile_mapping_build_seconds+=mapping_elapsed-(collect_breakdown ? tile_census.row_census_seconds : 0.0);
-#else
         work.tile_mapping_build_seconds+=mapping_elapsed;
-#endif
-        if(workspace.tile_columns.empty())
-        {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(collect_breakdown) AddTiledQrTileCensus(work.breakdown.tiled_qr_tiles,tile_census);
-#endif
-            continue;
-        }
-        const auto dense_assembly_started=std::chrono::steady_clock::now();
+        if(workspace.tile_columns.empty()) continue;
         workspace.local.resize(count,static_cast<Eigen::Index>(workspace.tile_columns.size()));
         workspace.local.setZero();
         for(Eigen::Index row=first;row<first+count;++row)
             for(LinearSolveWorkspace::RowMajorSparse::InnerIterator e(workspace.rows,row);e;++e)
                 workspace.local(row-first,workspace.local_column[static_cast<std::size_t>(e.col())])=e.value();
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(collect_breakdown) tile_census.dense_tile_materialization_seconds+=std::chrono::duration<double>(
-            std::chrono::steady_clock::now()-dense_assembly_started).count();
-#else
-        (void)dense_assembly_started;
-#endif
         const auto qr_started=std::chrono::steady_clock::now();
         const Eigen::HouseholderQR<Eigen::MatrixXd> qr(workspace.local);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        const auto transform_started=collect_breakdown ? std::chrono::steady_clock::now() :
-            std::chrono::steady_clock::time_point{};
-#endif
         workspace.transformed.resize(count);
         workspace.transformed=qr.householderQ().adjoint()*rhs.segment(first,count);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(collect_breakdown)
-        {
-            tile_census.householder_factorization_seconds=std::chrono::duration<double>(
-                transform_started-qr_started).count();
-            tile_census.qtrhs_transform_seconds=std::chrono::duration<double>(
-                std::chrono::steady_clock::now()-transform_started).count();
-        }
-#endif
         work.tiled_qr_seconds+=std::chrono::duration<double>(
             std::chrono::steady_clock::now()-qr_started).count();
         const auto assembly_started=std::chrono::steady_clock::now();
         const Eigen::Index retained{std::min(count,workspace.local.cols())},
             offset{static_cast<Eigen::Index>(workspace.response.size())};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(collect_breakdown)
-        {
-            tile_census.retained_rows=static_cast<std::size_t>(retained);
-            tile_census.estimated_peak_temporary_bytes=(2*static_cast<std::size_t>(workspace.local.size())+
-                static_cast<std::size_t>(workspace.transformed.size())+static_cast<std::size_t>(retained))*sizeof(double);
-        }
-#endif
         for(Eigen::Index row=0;row<retained;++row)
         {
             workspace.response.push_back(workspace.transformed(row));
@@ -188,14 +95,6 @@ void ReduceSparseRows(const Eigen::SparseMatrix<double> & a,const Eigen::VectorX
                     workspace.entries.emplace_back(offset+row,workspace.tile_columns[static_cast<std::size_t>(col)],
                         qr.matrixQR()(row,col));
         }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(collect_breakdown)
-        {
-            tile_census.r_extraction_seconds=std::chrono::duration<double>(
-                std::chrono::steady_clock::now()-assembly_started).count();
-            AddTiledQrTileCensus(work.breakdown.tiled_qr_tiles,tile_census);
-        }
-#endif
         work.reduced_sparse_assembly_seconds+=std::chrono::duration<double>(
             std::chrono::steady_clock::now()-assembly_started).count();
     }
