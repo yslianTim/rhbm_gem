@@ -270,3 +270,26 @@ TEST(JointComponentRuntimeTest, PositiveMapScalingPreservesKernelCoefficientUnit
         EXPECT_NEAR((*original.prediction)[i],divisor*(*normalized.prediction)[i],
             1e-10*(1+std::abs((*original.prediction)[i])));
 }
+
+TEST(JointComponentRuntimeTest, HistoricalLmFailureVetoesAnOtherwiseVerifiedEndpoint)
+{
+    using Status=core::JointCheckStatus;
+    const auto fit=p::FitBoundedJointComponentsForTesting(core::JointProblem(Snapshot()),{.55,.55},2.2);
+    ASSERT_EQ(fit.RuntimeConvergence(),Status::Passed);
+    auto component=fit.components.front();
+    const auto lm=std::find_if(component.evidence.begin(),component.evidence.end(),[](const auto & check) {
+        return check.name=="active-set-lm-subproblems";
+    });
+    ASSERT_NE(lm,component.evidence.end());
+    lm->status=Status::Failed; lm->reason="solves=3; failed=1; safely-rolled-back";
+    EXPECT_EQ(component.RuntimeConvergence(),Status::Failed);
+    // Endpoint failures and incomplete recovery must continue to reject output.
+    for(const char * name:{"width-stationarity","endpoint-verification","independent-replay","complete-sweep-stationarity"})
+    {
+        auto bad=component;
+        for(auto & check:bad.evidence) if(check.name==name) check.status=Status::Failed;
+        EXPECT_NE(bad.RuntimeConvergence(),Status::Passed)<<name;
+    }
+    component.state->b[0]=std::numeric_limits<double>::quiet_NaN();
+    EXPECT_NE(component.RuntimeConvergence(),Status::Passed);
+}

@@ -231,3 +231,41 @@ TEST(JointComponentSearchTest, ProfileSearchRequiresFiniteWidthUpperBound)
     EXPECT_TRUE(search.trials.empty());
     EXPECT_EQ(search.stop_reason,"invalid-width-upper-bound");
 }
+
+namespace {
+// The same physical log-width t=x+reference is expressed about different origins.
+struct ShiftedWidthResidual
+{
+    double reference{},target{.01},sensitivity{2.199712482e-4};
+    int evaluations{};
+    double initial_radius{};
+    std::string failure;
+    int values() const {return 2;}
+    bool retry() const {return false;}
+    int operator()(const Vector & x,Vector & residual)
+    {++evaluations; residual.resize(2); residual<<sensitivity*(x(0)+reference-target),1e-3; return 0;}
+    int linearize(const Vector &,const Vector & residual,Eigen::MatrixXd & j,Vector & response,Vector & norms)
+    {j=Eigen::MatrixXd::Zero(2,1); j(0,0)=sensitivity; response=residual; norms=Vector::Constant(1,sensitivity); return 0;}
+    joint::ActiveSetStep solve_bounded_step(const Eigen::MatrixXd & j,const Vector & r,
+        const Vector & x,const Vector & diagonal,double radius,double damping)
+    {initial_radius=radius; return joint::SolveBoundedTrustRegionStep(j,r,diagonal,
+        Vector::Constant(1,std::log(3.0660309206)-reference)-x,radius,damping);}
+    bool Trial(const Vector &,const Vector &,const Vector &,double,double,double,double,double,bool) {return true;}
+};
+}
+TEST(JointComponentSearchTest, NearUnitWidthReproducesOriginDependentTinyStep)
+{
+    for(const double physical_eta:{0.0,std::log(1.000000000626)})
+    {
+        ShiftedWidthResidual f; p::InstrumentedLM<ShiftedWidthResidual> lm(f);
+        Vector x=Vector::Constant(1,physical_eta); lm.parameters.factor=.1;
+        lm.minimizeInit(x); lm.minimizeOneStep(x);
+        if(physical_eta==0.0) {EXPECT_GT(f.evaluations,1); EXPECT_GT(x(0),physical_eta);}
+        else {EXPECT_EQ(f.evaluations,1); EXPECT_EQ(f.failure,"bounded-tiny-step"); EXPECT_LT(f.initial_radius,2e-14);}
+    }
+    ShiftedWidthResidual shifted; shifted.reference=1.0;
+    p::InstrumentedLM<ShiftedWidthResidual> lm(shifted);
+    Vector x=Vector::Constant(1,std::log(1.000000000626)-shifted.reference);
+    lm.parameters.factor=.1; lm.minimizeInit(x); lm.minimizeOneStep(x);
+    EXPECT_GT(shifted.evaluations,1);
+}

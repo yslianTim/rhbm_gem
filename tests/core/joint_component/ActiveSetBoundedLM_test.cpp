@@ -274,4 +274,19 @@ TEST(ActiveSetBoundedLMTest, RejectsNonfiniteSubproblemCoefficients)
     EXPECT_EQ(result.status,"invalid-subproblem-input");
 }
 
+// Characterizes the production failure before scale-aware free-column solving.
+TEST(ActiveSetBoundedLMTest, DegenerateFifthWidthReproducesDampingBracketFailure)
+{
+    Eigen::MatrixXd j=Eigen::MatrixXd::Zero(5,5);
+    j.diagonal()<<.02,.007,.006,.004,1.56536679e-161;
+    Eigen::VectorXd r(5); r<<-.004,.002,-.001,.003,0.0;
+    const Eigen::VectorXd d=j.colwise().blueNorm();
+    const Eigen::VectorXd upper=Eigen::VectorXd::Constant(5,.5);
+    ASSERT_GT((j.transpose()*r).head(4).cwiseAbs().maxCoeff(),1e-9);
+    const auto result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,.1,0.0);
+    EXPECT_FALSE(result.valid);
+    EXPECT_EQ(result.status,"trust-region-damping-bracket-failed");
+    EXPECT_EQ(result.bracket_solves,80u);
+}
+
 } // namespace
