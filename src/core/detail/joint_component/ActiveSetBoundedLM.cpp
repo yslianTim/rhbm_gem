@@ -15,6 +15,9 @@ struct BoundedSubproblemContext
     std::size_t maximum_active_iterations{};
     double jacobian_norm{},diagonal_squared_norm{};
     bool kkt_norms_ready{};
+    Eigen::VectorXd increment_scale;
+    std::vector<bool> stationary_null;
+    double null_gradient_tolerance{};
 };
 
 struct BoundedLmWorkspace
@@ -65,13 +68,27 @@ bool ValidSubproblemInput(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,
 }
 
 BoundedSubproblemContext MakeBoundedSubproblemContext(const Eigen::MatrixXd & j,
-    const Eigen::VectorXd & upper)
+    const Eigen::VectorXd & r,const Eigen::VectorXd & d,const Eigen::VectorXd & upper)
 {
     BoundedSubproblemContext context;
     context.bound_tolerance=64.0*std::numeric_limits<double>::epsilon()*
         std::max(1.0,upper.cwiseAbs().maxCoeff());
     context.maximum_active_iterations=std::max<std::size_t>(40,
         20*static_cast<std::size_t>(j.cols()));
+    const Eigen::VectorXd norms=j.colwise().blueNorm();
+    const double resolution=64.0*std::numeric_limits<double>::epsilon();
+    const double largest=norms.maxCoeff();
+    context.null_gradient_tolerance=resolution;
+    context.increment_scale.resize(j.cols());
+    context.stationary_null.resize(static_cast<std::size_t>(j.cols()));
+    for(Eigen::Index i=0;i<j.cols();++i)
+    {
+        // Freeze only unresolved sensitivity AND roundoff-level original gradient.
+        // This is local to this linearization, not a Width identifiability claim.
+        context.stationary_null[static_cast<std::size_t>(i)]=norms(i)<=resolution*largest &&
+            std::abs(j.col(i).dot(r))<=context.null_gradient_tolerance;
+        context.increment_scale(i)=std::max({d(i),norms(i),std::sqrt(std::numeric_limits<double>::min())});
+    }
     return context;
 }
 
@@ -117,7 +134,8 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
     workspace.step.setZero();
     for(Eigen::Index i=0;i<n;++i)
     {
-        workspace.active[static_cast<std::size_t>(i)]=upper(i)<=bound_tolerance;
+        workspace.active[static_cast<std::size_t>(i)]=!context.stationary_null[static_cast<std::size_t>(i)] &&
+            upper(i)<=bound_tolerance;
         if(workspace.active[static_cast<std::size_t>(i)]) workspace.step(i)=upper(i);
     }
 
@@ -135,7 +153,8 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
 #endif
         workspace.free_indices.clear();
         for(Eigen::Index i=0;i<n;++i)
-            if(!workspace.active[static_cast<std::size_t>(i)])
+            if(!workspace.active[static_cast<std::size_t>(i)] &&
+                !context.stationary_null[static_cast<std::size_t>(i)])
                 workspace.free_indices.push_back(i);
         workspace.candidate=workspace.step;
         if(!workspace.free_indices.empty())
@@ -154,14 +173,15 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
             workspace.rhs.head(j.rows())=-workspace.adjusted;
             for(Eigen::Index k=0;k<free_count;++k)
                 workspace.augmented.col(k).head(j.rows())=
-                    j.col(workspace.free_indices[static_cast<std::size_t>(k)]);
+                    j.col(workspace.free_indices[static_cast<std::size_t>(k)])/
+                        context.increment_scale(workspace.free_indices[static_cast<std::size_t>(k)]);
             if(lambda>0.0)
             {
                 const double root=std::sqrt(lambda);
                 for(Eigen::Index k=0;k<free_count;++k)
                 {
                     const auto index=workspace.free_indices[static_cast<std::size_t>(k)];
-                    workspace.augmented(j.rows()+k,k)=root*d(index);
+                    workspace.augmented(j.rows()+k,k)=root*(d(index)/context.increment_scale(index));
                 }
             }
             ++result.damping_qr_factorizations;
@@ -177,7 +197,7 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
             if(!workspace.solution.allFinite()) {fail("non-finite-free-solution"); return;}
             for(Eigen::Index k=0;k<free_count;++k)
                 workspace.candidate(workspace.free_indices[static_cast<std::size_t>(k)])=
-                    workspace.solution(k);
+                    workspace.solution(k)/context.increment_scale(workspace.free_indices[static_cast<std::size_t>(k)]);
         }
 
         if(!workspace.candidate.allFinite()) {fail("non-finite-candidate-step"); return;}
@@ -213,6 +233,10 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
             lambda*d.cwiseProduct(d).cwiseProduct(workspace.step);
         if(!workspace.gradient.allFinite()) {fail("non-finite-subproblem-gradient"); return;}
         const double kkt_tolerance=2e-11*KktScale(j,r,d,workspace.step,lambda,context);
+        for(Eigen::Index i=0;i<n;++i)
+            if(context.stationary_null[static_cast<std::size_t>(i)] &&
+                std::abs(workspace.gradient(i))>context.null_gradient_tolerance)
+            {fail("unresolved-null-direction-gradient"); return;}
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(trace)
         {
@@ -257,7 +281,7 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
         result.valid=true; result.status="solved"; result.step=workspace.step;
         result.gradient=workspace.gradient; result.multipliers=workspace.multipliers;
         result.active=workspace.active; result.damping=lambda;
-        result.scaled_step_norm=d.cwiseProduct(result.step).norm();
+        result.scaled_step_norm=d.cwiseProduct(result.step).stableNorm();
         result.kkt_inf_norm=kkt_inf; result.iterations=iteration+1; result.releases=releases;
         return;
     }
@@ -329,7 +353,7 @@ ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Ei
     if(!std::isfinite(trust_radius) || !(trust_radius>0.0) || !std::isfinite(damping_seed) || damping_seed<0.0)
         return Failure("invalid-trust-region-input");
     if(!ValidSubproblemInput(j,r,d,upper,0.0)) return Failure("invalid-subproblem-input");
-    context=MakeBoundedSubproblemContext(j,upper);
+    context=MakeBoundedSubproblemContext(j,r,d,upper);
     solve_candidate(0.0,0,candidate);
     const double trust_tolerance=64.0*std::numeric_limits<double>::epsilon()*std::max(1.0,trust_radius);
     constexpr double boundary_relative_tolerance=1e-13;

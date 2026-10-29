@@ -274,8 +274,8 @@ TEST(ActiveSetBoundedLMTest, RejectsNonfiniteSubproblemCoefficients)
     EXPECT_EQ(result.status,"invalid-subproblem-input");
 }
 
-// Characterizes the production failure before scale-aware free-column solving.
-TEST(ActiveSetBoundedLMTest, DegenerateFifthWidthReproducesDampingBracketFailure)
+// Four informative Widths must remain movable beside an unidentifiable Width.
+TEST(ActiveSetBoundedLMTest, DegenerateFifthWidthDoesNotBlockInformativeUpdates)
 {
     Eigen::MatrixXd j=Eigen::MatrixXd::Zero(5,5);
     j.diagonal()<<.02,.007,.006,.004,1.56536679e-161;
@@ -284,9 +284,34 @@ TEST(ActiveSetBoundedLMTest, DegenerateFifthWidthReproducesDampingBracketFailure
     const Eigen::VectorXd upper=Eigen::VectorXd::Constant(5,.5);
     ASSERT_GT((j.transpose()*r).head(4).cwiseAbs().maxCoeff(),1e-9);
     const auto result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,.1,0.0);
-    EXPECT_FALSE(result.valid);
-    EXPECT_EQ(result.status,"trust-region-damping-bracket-failed");
-    EXPECT_EQ(result.bracket_solves,80u);
+    ASSERT_TRUE(result.valid)<<result.status;
+    EXPECT_TRUE(result.step.allFinite());
+    EXPECT_TRUE((result.step.array()<=upper.array()).all());
+    EXPECT_EQ(result.step(4),0.0);
+    EXPECT_GT(result.step.head(4).norm(),.1);
+    const Eigen::VectorXd gradient=j.transpose()*(j*result.step+r);
+    EXPECT_LE(gradient.cwiseAbs().maxCoeff(),1e-9);
+    EXPECT_LT((j*result.step+r).squaredNorm(),r.squaredNorm());
+    EXPECT_LT(result.bracket_solves,80u);
+    EXPECT_LE((gradient-result.gradient).norm(),1e-15);
+    // A later profile can make the formerly null direction informative again.
+    j(4,4)=.01; r(4)=-.002;
+    const Eigen::VectorXd updated_d=j.colwise().blueNorm();
+    const auto updated=joint::SolveBoundedTrustRegionStep(j,r,updated_d,upper,.1,0.0);
+    ASSERT_TRUE(updated.valid)<<updated.status;
+    EXPECT_GT(updated.step(4),.1);
 }
 
 } // namespace
+
+TEST(ActiveSetBoundedLMTest, SmallJacobianWithNonstationaryGradientIsNotFrozen)
+{
+    Eigen::Matrix2d j=Eigen::Vector2d(1.0,1e-16).asDiagonal();
+    const Eigen::Vector2d r(0.0,-1e10),d(1.0,1e-16),upper(1.0,.2);
+    const auto result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,1.0,0.0);
+    ASSERT_TRUE(result.valid)<<result.status;
+    EXPECT_DOUBLE_EQ(result.step(1),upper(1));
+    EXPECT_TRUE(result.active[1]);
+    EXPECT_LT(result.gradient(1),-1e-9);
+    EXPECT_GT(result.multipliers(1),0.0);
+}

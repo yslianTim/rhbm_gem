@@ -30,3 +30,25 @@ rollback, nonfinite, endpoint and replay tests remain mandatory.
 
 All build/test commands use at most four threads. Real-data runs use new temporary
 SQLite files; diagnostic programs, databases and large output remain untracked.
+
+## S1: increment coordinates and null sensitivity
+
+The existing augmented QR solves in `z_i=S_i p_i`, with
+`S_i=max(D_i, ||J_i||_2, sqrt(min_normal))`. The damping block is
+`sqrt(lambda) D_i/S_i`; conversion back divides the solution by `S_i`.
+Bounds, bound hits/releases, multipliers and KKT are checked directly in `p`.
+No transformed bound tolerance is used. Scaling fills the existing augmented
+workspace and adds only O(number of Widths) storage, with no dense fallback.
+
+A direction is held at zero for this linearization only when its column norm is
+below `64 epsilon` times the largest column norm AND its original gradient is at
+most `64 epsilon` (normalized objective units). The full candidate gradient is
+checked again, including held directions. This does not certify identifiability;
+a later A/C or neighbor change recomputes the criterion. Small sensitivity with
+nonstationary gradient is explicitly tested and remains movable.
+
+The controlled five-Width case now takes one QR and zero damping brackets rather
+than 81 failed QRs. Genuine rank deficiency still uses the existing bounded
+positive-damping QR search. No SVD or additional production solver is needed.
+S1 validation: Release build; 69 tests across ActiveSetBoundedLM, Search, Runtime,
+and FixedNeighbor (including rollback/recovery) passed.
