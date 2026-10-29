@@ -106,10 +106,10 @@ void PrintTime(const char * name,const std::vector<Sample> & samples,Getter gett
         <<' '<<name<<"_range_s=["<<*minimum<<','<<*maximum<<']';
 }
 
-Sample Run(std::size_t targets,joint::SplitDiagnosticsMode split_mode)
+Sample Run(std::size_t targets,joint::SplitDiagnosticsMode split_mode,const std::string & topology)
 {
     rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload(
-        "chain",static_cast<int>(targets)));
+        topology,static_cast<int>(targets)));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const joint::Vector initial_eta=joint::Vector::Constant(
         static_cast<Eigen::Index>(targets),std::log(.55));
@@ -267,9 +267,10 @@ Sample Run(std::size_t targets,joint::SplitDiagnosticsMode split_mode)
     return sample;
 }
 
-void PrintSummary(std::size_t targets,const std::string & mode,const std::vector<Sample> & samples)
+void PrintSummary(std::size_t targets,const std::string & topology,const std::string & mode,
+    const std::vector<Sample> & samples)
 {
-    std::cout<<std::setprecision(9)<<"targets="<<targets<<" mode="<<mode
+    std::cout<<std::setprecision(9)<<"targets="<<targets<<" topology="<<topology<<" mode="<<mode
         <<" warmups=1 measured_runs="<<samples.size();
     PrintTime("search",samples,[](const auto & x){return x.search_seconds;});
     PrintTime("wall",samples,[](const auto & x){return x.wall_seconds;});
@@ -372,9 +373,9 @@ void PrintSummary(std::size_t targets,const std::string & mode,const std::vector
 
 int main(int argc,char ** argv)
 {
-    if(argc!=3)
+    if(argc!=3 && argc!=4)
     {
-        std::cerr<<"usage: rhbm_fixed_neighbor_closed_loop_benchmark <target-count> <B0|B1|B2>\n";
+        std::cerr<<"usage: rhbm_fixed_neighbor_closed_loop_benchmark <target-count> <B0|B1|B2> [chain|noise-only]\n";
         return 2;
     }
     try
@@ -382,15 +383,16 @@ int main(int argc,char ** argv)
         const auto targets=static_cast<std::size_t>(std::stoul(argv[1]));
         if(targets==0 || targets>1000000) throw std::invalid_argument("target count is out of range");
         const std::string mode=argv[2];
+        const std::string topology=argc==4 ? argv[3] : "chain";
         const auto split_mode=mode=="B0" ? joint::SplitDiagnosticsMode::Disabled :
             mode=="B1" ? joint::SplitDiagnosticsMode::Minimal :
             mode=="B2" ? joint::SplitDiagnosticsMode::ReuseWorkspace :
             throw std::invalid_argument("mode must be B0, B1, or B2");
-        (void)Run(targets,split_mode);
+        (void)Run(targets,split_mode,topology);
         std::vector<Sample> samples;
         samples.reserve(5);
-        for(std::size_t repetition=0;repetition<5;++repetition) samples.push_back(Run(targets,split_mode));
-        PrintSummary(targets,mode,samples);
+        for(std::size_t repetition=0;repetition<5;++repetition) samples.push_back(Run(targets,split_mode,topology));
+        PrintSummary(targets,topology,mode,samples);
         return 0;
     }
     catch(const std::exception & error)

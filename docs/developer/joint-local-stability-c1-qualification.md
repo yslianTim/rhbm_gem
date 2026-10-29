@@ -56,7 +56,7 @@ The wall differences change sign and remain below 0.5%; B2 does not reduce stabi
 
 ## S3 — Controlled B0/B1/B2 benchmark
 
-**Status: Complete for the required 3/30/300/1,000-target matrix.** Every route used the same frozen chain fixture, initialization (`B=0.55`), global search, KKT/bounds, selected-block policy (cap 8, reserve active-bound claim), Release build, single-thread environment, and 1 warmup + 5 measured runs. The benchmark linked the same Release source with test instrumentation enabled only to select B0/B1/B2. Numeric threads were `OMP_NUM_THREADS=1`, `OPENBLAS_NUM_THREADS=1`, `MKL_NUM_THREADS=1`, and `VECLIB_MAXIMUM_THREADS=1`.
+**Status: Partial.** The required 3/30/300/1,000-target chain matrix and a separate 3-target noise-only matrix ran with identical B0/B1/B2 fixture, policy, Release build, single-thread environment, and 1 warmup + 5 measured runs. High-overlap, weak-width and active-width did not receive the same full B0/B1/B2 performance matrix. The benchmark linked the same Release source with test instrumentation enabled only to select B0/B1/B2. Numeric threads were `OMP_NUM_THREADS=1`, `OPENBLAS_NUM_THREADS=1`, `MKL_NUM_THREADS=1`, and `VECLIB_MAXIMUM_THREADS=1`.
 
 | Targets | B0 wall | B1 wall | B2 wall | B1 cost vs B0 | B0/B1/B2 stability CPU | B1 Null CPU | B1 N2 eval/update/replay | Perturbation replay checks | B0/B1/B2 Peak RSS |
 |---:|---:|---:|---:|---:|---|---:|---|---|---|
@@ -77,3 +77,39 @@ At each scale the B1 and B2 maxima were identical: reoptimization prediction dri
 B1 is within the exploratory wall gate at 30 targets and above the 15% reference by 0.23 percentage points at 3 targets in this final counter-instrumented run; the earlier 3-target run measured +14.3%. Peak RSS changes remained under 1% in the final matrix. The added workspace estimate was 8.4 KB at 3 targets and 33.6 KB at 30+ targets. Existing memory preflight, global KKT, width KKT, sweep counts, endpoint certification, and independent replay were unchanged. At 3 and 30 targets, Null Search is a visible fixed share of the short end-to-end fit; at 300 and 1,000 targets, global search dominates total wall time.
 
 This matrix covers the four required scale workloads. High-overlap, weak-width, active-bound, and noise-only workload measurements are part of S4 and must not be inferred from the chain fixture.
+
+The additional 3-target noise-only paired benchmark used the same 1 warmup + 5 measured runs. B0/B1/B2 accepted-state fingerprint was `60c62facd75f39d2` in all modes; direct B0/B1/B2 arrays, objective, legacy statuses, and Target point-quality were also equal in the regression test.
+
+| Noise-only, 3 targets | B0 | B1 | B2 |
+|---|---:|---:|---:|
+| Wall median | 29.470 ms | 38.472 ms (+30.5%) | 38.467 ms (+30.5%) |
+| Stability CPU | 20.159 ms | 29.187 ms | 29.183 ms |
+| Added Null Search CPU | — | 9.016 ms | 8.997 ms |
+| Perturbation Replay checks | 6 | 6 | 6 |
+| Null eval / accepted updates / replay | — | 22 / 18 / 2 | 22 / 18 / 2 |
+| Process peak RSS | 23.806 MB | 24.297 MB | 24.183 MB |
+| Qualified / incomplete Split blocks | — | 0 / 1 | 0 / 1 |
+
+The 3-target chain run was +15.23% in the final counter-instrumented repeat (an earlier repeat was +14.3%); noise-only was +30.5%. Both exceed the exploratory 10–15% wall target. RSS stayed below the 10% research gate, but the small-workload wall gate fails. B2 again produced no meaningful improvement over B1. The B0/B1/B2 matrix therefore does not qualify C1 engineering cost for small or noise-only workloads.
+
+## S4 — Difficult-case scientific validation
+
+**Status: Partial qualification; the required synthetic defenses ran, while there is no real-map or complete difficult-case performance matrix.** Added deterministic tests exercised the B1 path directly; legacy status, accepted state, endpoint certification, replay, and Target point-quality were compared against B0 where the case had a qualified fit.
+
+| Case | Actual result |
+|---|---|
+| Exact / low-noise synthetic | B0/B1 accepted arrays and objective were exactly equal. At the default noise amplitude, maximum absolute A/C/B errors were approximately `6.5e-5 / 1.5e-5 / 3e-6`; prediction RMSE was about `5e-6`. |
+| 10× higher noise | B0/B1 arrays remained exactly equal. Maximum absolute A/C/B errors were approximately `6.54e-4 / 1.48e-4 / 3.3e-5`; prediction RMSE was about `5.1e-5`. Both cases met the `1e-2` absolute parameter-accuracy target. |
+| Width and A/C scale | Nine exact fixtures with true width `.4/.8/1.0` and A/C amplitude multiplier `.01/1/10` all had qualified baseline, Null reference and Split metrics. This checks finite normalized metrics across the exercised ranges, not all possible scales. |
+| Noise-only / weak width | The B0/B1/B2 3-target run converged and certified the global endpoint, but B1 N2 exhausted its 6-update budget (18 accepted updates reported across standard and high-budget searches); split status was `Unavailable`, with no Drift or Seed metric. The old raw evidence independently records a high-budget width difference of `2.398e-5`; its perturbation seeds are excluded. A two-target weak-direction regression qualified its local candidate but was WellConditioned under the conditioning classifier, so it is not counted as a weak-identification result. |
+| High-overlap / near-singular | A deliberately near-duplicate support fixture, unlike the earlier cube fixture, measured free A/C condition `5.4683e9`. B1 Null and Split qualification passed; the prediction Drift/Seed values were each below `1e-8`. The legacy classification was unchanged and both atoms retained `Warning` point-quality from IllConditioned conditioning. Small prediction Seed therefore did not remove the warning. |
+| Rank-deficient | Two identical support columns classified `Singular`; the B1 Null reference was `Unavailable` with `null-reference-numerical-validity-failed`, no Seed metric, and both point qualities remained `Warning`. Separate low/high width profile attempts failed inner KKT and were not treated as qualified multi-start endpoints. |
+| Active width / near boundary | B1 Null reference qualified. It recorded one replay-qualified inward endpoint; the outward endpoint projected to zero displacement and was excluded. Legacy status remained unchanged. |
+| Multi-start | On the exact one-target fixture, starts at widths `.4` and `1.1` both passed Strict Independent Replay and converged to width endpoints within `1e-8` in log width and prediction difference within `1e-12`. This is one smooth fixture, not proof of a unique physical solution. Prior raw evidence had 50 replay-qualified starts, maximum prediction difference `3.92e-12`, scaled A/C difference `5.70e-12`, and log-width difference `4.47e-8`. |
+| Real cryo-EM map | Not run. No `.mrc`, `.map`, `.ccp4`, or equivalent real-map fixture exists in this checkout. |
+
+The S4 focused Release run passed 31 Split-metric and Local Parameter Stability tests. An exploratory multi-start attempt on the near-singular fixture failed inner KKT from both starts; those endpoints were excluded. It does not overturn the qualified exact-fixture result or the prior replay-qualified raw starts.
+
+## Preliminary promotion decision
+
+**Do not promote C1. Keep C0 Production.** The synthetic numerical guards support the distinction between common baseline reoptimization drift and seed-to-seed variation, and failed references correctly suppress Seed metrics. Promotion gates remain open because the added Null Search exceeds the small-workload wall target, the full difficult-case performance matrix and real-map evidence are absent, and formal persistence/consumer round-trip work is intentionally not performed before a promotion decision. No warning threshold, point-quality, Local/Global KKT, solver, acceptance, endpoint certification, or Independent Replay policy changed.
