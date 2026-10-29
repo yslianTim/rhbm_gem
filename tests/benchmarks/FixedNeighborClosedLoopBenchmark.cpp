@@ -19,9 +19,10 @@ namespace joint=rhbm_gem::core::joint_component;
 using Clock=std::chrono::steady_clock;
 struct Sample
 {
-    std::string stop_reason;
+    std::string stop_reason,mode,split_status,split_reason,null_reference_status;
     double search_seconds{},wall_seconds{},cpu_seconds{},parameter_stability_seconds{},
-        parameter_stability_cpu_seconds{},candidate_seconds{},sweep_replay_seconds{},
+        parameter_stability_cpu_seconds{},null_search_seconds{},null_search_cpu_seconds{},
+        candidate_seconds{},sweep_replay_seconds{},
         replay_audit_seconds{},reconciliation_seconds{},global_state_seconds{},
         endpoint_certification_seconds{},independent_replay_seconds{},local_profile_seconds{},
         profile_basis_seconds{},profile_linear_solve_seconds{},profile_derivative_prepare_seconds{},
@@ -33,6 +34,8 @@ struct Sample
         preflight_bytes{},peak_rss_bytes{},profile_evaluations{},profile_derivatives{},
         parameter_stability_solves{},parameter_stability_evaluations{},
         parameter_stability_blocks_selected{},parameter_stability_peak_bytes{},
+        null_profile_evaluations{},null_accepted_updates{},null_replay_checks{},
+        split_qualified_blocks{},split_incomplete_blocks{},split_workspace_peak_bytes{},
         bounded_subproblems{},damping_solves{},damping_bracket_solves{},damping_bisection_solves{},
         damping_qr_factorizations{},damping_active_set_iterations{},damping_releases{};
     std::uint64_t accepted_state_fingerprint{};
@@ -91,7 +94,7 @@ void PrintTime(const char * name,const std::vector<Sample> & samples,Getter gett
         <<' '<<name<<"_range_s=["<<*minimum<<','<<*maximum<<']';
 }
 
-Sample Run(std::size_t targets)
+Sample Run(std::size_t targets,joint::SplitDiagnosticsMode split_mode)
 {
     rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload(
         "chain",static_cast<int>(targets)));
@@ -119,6 +122,9 @@ Sample Run(std::size_t targets)
         --remaining_perturbation_blocks;
         return true;
     };
+    policy.assess_local_conditioning=true;
+    policy.assess_parameter_stability=true;
+    policy.split_diagnostics_mode=split_mode;
     std::size_t accepted_blocks{},unchanged_blocks{},failed_blocks{};
     std::size_t first_kkt_sweep{},first_kkt_eligible_sweep{};
     const auto & criteria=policy.convergence_criteria;
@@ -154,6 +160,8 @@ Sample Run(std::size_t targets)
         throw std::runtime_error("Production search qualification failed: "+result.reason);
 
     Sample sample;
+    sample.mode=split_mode==joint::SplitDiagnosticsMode::Disabled ? "B0" :
+        split_mode==joint::SplitDiagnosticsMode::Minimal ? "B1" : "B2";
     sample.stop_reason=result.reason;
     sample.search_seconds=result.search_seconds;
     sample.wall_seconds=wall_seconds;
@@ -168,6 +176,25 @@ Sample Run(std::size_t targets)
         sample.parameter_stability_cpu_seconds=result.parameter_stability->cpu_seconds;
         for(const auto & block:result.parameter_stability->blocks)
             sample.parameter_stability_blocks_selected+=block.probe_selected ? 1u : 0u;
+    }
+    for(const auto & block:result.split_diagnostics)
+    {
+        const auto & split=block.diagnostics;
+        sample.null_search_seconds+=split.null_search_seconds;
+        sample.null_search_cpu_seconds+=split.null_search_cpu_seconds;
+        sample.null_profile_evaluations+=split.null_profile_evaluations;
+        sample.null_accepted_updates+=split.null_accepted_updates;
+        sample.null_replay_checks+=split.null_replay_checks;
+        sample.split_workspace_peak_bytes=std::max(sample.split_workspace_peak_bytes,
+            split.workspace_estimate_bytes);
+        sample.split_qualified_blocks+=split.status=="Qualified" ? 1u : 0u;
+        sample.split_incomplete_blocks+=split.status=="Incomplete" || split.status=="Unavailable" ? 1u : 0u;
+        if(sample.split_status.empty())
+        {
+            sample.split_status=split.status;
+            sample.split_reason=split.reason;
+            sample.null_reference_status=split.null_reference_status;
+        }
     }
     const auto & profile_work=result.work.local_profile_work;
     sample.local_profile_seconds=profile_work.total_seconds;
@@ -218,15 +245,17 @@ Sample Run(std::size_t targets)
     return sample;
 }
 
-void PrintSummary(std::size_t targets,const std::vector<Sample> & samples)
+void PrintSummary(std::size_t targets,const std::string & mode,const std::vector<Sample> & samples)
 {
-    std::cout<<std::setprecision(9)<<"targets="<<targets<<" mode=production"
+    std::cout<<std::setprecision(9)<<"targets="<<targets<<" mode="<<mode
         <<" warmups=1 measured_runs="<<samples.size();
     PrintTime("search",samples,[](const auto & x){return x.search_seconds;});
     PrintTime("wall",samples,[](const auto & x){return x.wall_seconds;});
     PrintTime("cpu",samples,[](const auto & x){return x.cpu_seconds;});
     PrintTime("parameter_stability_wall",samples,[](const auto & x){return x.parameter_stability_seconds;});
     PrintTime("parameter_stability_cpu",samples,[](const auto & x){return x.parameter_stability_cpu_seconds;});
+    PrintTime("null_search_wall",samples,[](const auto & x){return x.null_search_seconds;});
+    PrintTime("null_search_cpu",samples,[](const auto & x){return x.null_search_cpu_seconds;});
     PrintTime("local_profile_total",samples,[](const auto & x){return x.local_profile_seconds;});
     PrintTime("local_profile_basis",samples,[](const auto & x){return x.profile_basis_seconds;});
     PrintTime("local_profile_linear_solve",samples,[](const auto & x){return x.profile_linear_solve_seconds;});
@@ -261,6 +290,15 @@ void PrintSummary(std::size_t targets,const std::vector<Sample> & samples)
         <<" parameter_stability_evaluations="<<representative.parameter_stability_evaluations
         <<" parameter_stability_blocks_selected="<<representative.parameter_stability_blocks_selected
         <<" parameter_stability_peak_bytes="<<representative.parameter_stability_peak_bytes
+        <<" null_profile_evaluations="<<representative.null_profile_evaluations
+        <<" null_accepted_updates="<<representative.null_accepted_updates
+        <<" null_replay_checks="<<representative.null_replay_checks
+        <<" split_qualified_blocks="<<representative.split_qualified_blocks
+        <<" split_incomplete_blocks="<<representative.split_incomplete_blocks
+        <<" split_workspace_peak_bytes="<<representative.split_workspace_peak_bytes
+        <<" split_status="<<representative.split_status
+        <<" split_reason="<<representative.split_reason
+        <<" null_reference_status="<<representative.null_reference_status
         <<" accepted_state_fnv1a64="<<std::hex<<std::setw(16)<<std::setfill('0')
         <<representative.accepted_state_fingerprint<<std::dec<<std::setfill(' ')
         <<" accepted_state_fingerprint_equal="<<state_fingerprint_equal
@@ -293,20 +331,25 @@ void PrintSummary(std::size_t targets,const std::vector<Sample> & samples)
 
 int main(int argc,char ** argv)
 {
-    if(argc!=2)
+    if(argc!=3)
     {
-        std::cerr<<"usage: rhbm_fixed_neighbor_closed_loop_benchmark <target-count>\n";
+        std::cerr<<"usage: rhbm_fixed_neighbor_closed_loop_benchmark <target-count> <B0|B1|B2>\n";
         return 2;
     }
     try
     {
         const auto targets=static_cast<std::size_t>(std::stoul(argv[1]));
         if(targets==0 || targets>1000000) throw std::invalid_argument("target count is out of range");
-        (void)Run(targets);
+        const std::string mode=argv[2];
+        const auto split_mode=mode=="B0" ? joint::SplitDiagnosticsMode::Disabled :
+            mode=="B1" ? joint::SplitDiagnosticsMode::Minimal :
+            mode=="B2" ? joint::SplitDiagnosticsMode::ReuseWorkspace :
+            throw std::invalid_argument("mode must be B0, B1, or B2");
+        (void)Run(targets,split_mode);
         std::vector<Sample> samples;
         samples.reserve(5);
-        for(std::size_t repetition=0;repetition<5;++repetition) samples.push_back(Run(targets));
-        PrintSummary(targets,samples);
+        for(std::size_t repetition=0;repetition<5;++repetition) samples.push_back(Run(targets,split_mode));
+        PrintSummary(targets,mode,samples);
         return 0;
     }
     catch(const std::exception & error)

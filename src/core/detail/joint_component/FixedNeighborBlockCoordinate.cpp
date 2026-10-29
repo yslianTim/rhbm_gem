@@ -1377,9 +1377,18 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             const auto & prepared=prepared_blocks[index];
             const auto block_id=evidence.block_id;
             auto workspace=PrepareLocalEndpointWorkspace(prepared,out.state,policy.eta_upper_bound);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            const auto split_mode=policy.split_diagnostics_mode;
+#else
+            constexpr auto split_mode=SplitDiagnosticsMode::Disabled;
+#endif
             auto assessment=AssessLocalParameterStability(prepared.domain,workspace.effective_response,
                 workspace.eta,workspace.beta,workspace.context,block_id,
-                out.global_state_memory_estimate.shape.resident_bytes);
+                out.global_state_memory_estimate.shape.resident_bytes,split_mode);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            if(assessment.split_diagnostics)
+                out.split_diagnostics.push_back({block_id,*assessment.split_diagnostics});
+#endif
             evidence=std::move(assessment.evidence);
             evidence.probe_selected=true;
             evidence.core_atoms.assign(prepared.core_atoms.begin(),prepared.core_atoms.end());

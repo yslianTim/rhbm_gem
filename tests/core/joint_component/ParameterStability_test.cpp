@@ -338,6 +338,58 @@ TEST(JointParameterStabilityTest, NullIdentityAndProfiledReferencePreserveAnExac
     EXPECT_EQ(fixture.beta,input_beta);
 }
 
+TEST(JointParameterStabilityTest, MinimalAndWorkspaceReuseCandidatesQualifyTheSameNullAndSeedEndpoints)
+{
+    StabilityFixture fixture;
+    const auto legacy=n::AssessLocalParameterStability(fixture.domain,fixture.y,fixture.eta,fixture.beta,
+        fixture.context,"split-candidate/block-1");
+    const auto minimal=n::AssessLocalParameterStability(fixture.domain,fixture.y,fixture.eta,fixture.beta,
+        fixture.context,"split-candidate/block-1",0,n::SplitDiagnosticsMode::Minimal);
+    const auto reused=n::AssessLocalParameterStability(fixture.domain,fixture.y,fixture.eta,fixture.beta,
+        fixture.context,"split-candidate/block-1",0,n::SplitDiagnosticsMode::ReuseWorkspace);
+    ASSERT_TRUE(minimal.split_diagnostics);
+    ASSERT_TRUE(reused.split_diagnostics);
+    EXPECT_EQ(minimal.split_diagnostics->null_reference_status,"Qualified")
+        << minimal.split_diagnostics->null_reference_failure_reason;
+    EXPECT_EQ(reused.split_diagnostics->null_reference_status,"Qualified")
+        << reused.split_diagnostics->null_reference_failure_reason;
+    EXPECT_EQ(minimal.split_diagnostics->status,"Qualified");
+    EXPECT_EQ(reused.split_diagnostics->status,"Qualified");
+    EXPECT_EQ(minimal.split_diagnostics->qualified_seed_count,2u);
+    EXPECT_EQ(minimal.split_diagnostics->null_replay_checks,2u);
+    EXPECT_LE(*minimal.split_diagnostics->high_budget_width_difference_inf,1e-12);
+    EXPECT_LE(*minimal.split_diagnostics->high_budget_scaled_ac_difference,1e-10);
+    EXPECT_LE(*minimal.split_diagnostics->high_budget_prediction_difference_relative,1e-10);
+    EXPECT_EQ(minimal.evidence.status,legacy.evidence.status);
+    EXPECT_EQ(reused.evidence.status,legacy.evidence.status);
+    EXPECT_EQ(minimal.evidence.prediction_status,legacy.evidence.prediction_status);
+    EXPECT_EQ(reused.evidence.prediction_status,legacy.evidence.prediction_status);
+    EXPECT_EQ(minimal.evidence.probes.size(),legacy.evidence.probes.size());
+    EXPECT_EQ(reused.evidence.probes.size(),legacy.evidence.probes.size());
+    EXPECT_NEAR(*minimal.split_diagnostics->reoptimization_prediction_drift,
+        *reused.split_diagnostics->reoptimization_prediction_drift,1e-15);
+    EXPECT_NEAR(*minimal.split_diagnostics->seed_prediction_robustness,
+        *reused.split_diagnostics->seed_prediction_robustness,1e-15);
+    EXPECT_LE(*minimal.split_diagnostics->vector_decomposition_max_error,1e-14);
+}
+
+TEST(JointParameterStabilityTest, SplitCandidateBaselineFailureIsUnavailableAndDoesNotChangeLegacyStatus)
+{
+    StabilityFixture fixture;
+    auto context=fixture.context;
+    context.eta_upper_bound=fixture.eta(0)-.1;
+    const auto legacy=n::AssessLocalParameterStability(fixture.domain,fixture.y,fixture.eta,fixture.beta,
+        context,"split-baseline/block-1");
+    const auto candidate=n::AssessLocalParameterStability(fixture.domain,fixture.y,fixture.eta,fixture.beta,
+        context,"split-baseline/block-1",0,n::SplitDiagnosticsMode::Minimal);
+    ASSERT_TRUE(candidate.split_diagnostics);
+    EXPECT_EQ(candidate.split_diagnostics->null_reference_status,"Unavailable");
+    EXPECT_EQ(candidate.split_diagnostics->status,"Unavailable");
+    EXPECT_EQ(candidate.split_diagnostics->null_reference_failure_reason,"baseline-width-bound-infeasible");
+    EXPECT_FALSE(candidate.split_diagnostics->seed_prediction_robustness);
+    EXPECT_EQ(candidate.evidence.status,legacy.evidence.status);
+}
+
 TEST(JointParameterStabilityTest, PureClassifierRespectsIndependentThresholdBoundaries)
 {
     const double parameter_threshold=n::LocalParameterChangeWarning;
@@ -597,5 +649,71 @@ TEST(JointParameterStabilityTest, ComponentFitHonorsPerturbationClaimBudgetAndPr
     EXPECT_EQ(stability.blocks.size(),2u);
     EXPECT_LE(stability.perturbation_solves,2u);
     EXPECT_LE(claims,2u);
+}
+
+TEST(JointParameterStabilityTest, SplitCandidatesPreserveTheCompleteAcceptedFitAndLegacyEvidence)
+{
+    const rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const auto run=[&](n::SplitDiagnosticsMode mode) {
+        n::FixedNeighborPolicy policy;
+        policy.core_atoms=1;
+        policy.maximum_sweeps=n::ProductionFixedNeighborMaximumSweeps;
+        policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
+        policy.eta_upper_bound=std::log(2.2);
+        policy.assess_local_conditioning=true;
+        policy.assess_parameter_stability=true;
+        policy.claim_parameter_stability_block=[](int) {return true;};
+        policy.split_diagnostics_mode=mode;
+        const auto eta=n::Vector::Constant(2,std::log(.55));
+        return n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,data.context,policy);
+    };
+    const auto legacy=run(n::SplitDiagnosticsMode::Disabled);
+    const auto minimal=run(n::SplitDiagnosticsMode::Minimal);
+    const auto reused=run(n::SplitDiagnosticsMode::ReuseWorkspace);
+    ASSERT_TRUE(legacy.certification && minimal.certification && reused.certification);
+    EXPECT_EQ(legacy.state.eta,minimal.state.eta);
+    EXPECT_EQ(legacy.state.eta,reused.state.eta);
+    EXPECT_EQ(legacy.state.beta,minimal.state.beta);
+    EXPECT_EQ(legacy.state.beta,reused.state.beta);
+    EXPECT_EQ(legacy.state.prediction,minimal.state.prediction);
+    EXPECT_EQ(legacy.state.prediction,reused.state.prediction);
+    EXPECT_EQ(legacy.state.residual,minimal.state.residual);
+    EXPECT_EQ(legacy.state.residual,reused.state.residual);
+    EXPECT_DOUBLE_EQ(legacy.state.objective,minimal.state.objective);
+    EXPECT_DOUBLE_EQ(legacy.state.objective,reused.state.objective);
+    EXPECT_EQ(legacy.search_converged,minimal.search_converged);
+    EXPECT_EQ(legacy.search_converged,reused.search_converged);
+    EXPECT_EQ(legacy.sweep_count,minimal.sweep_count);
+    EXPECT_EQ(legacy.sweep_count,reused.sweep_count);
+    ASSERT_TRUE(legacy.parameter_stability && minimal.parameter_stability && reused.parameter_stability);
+    ASSERT_EQ(legacy.parameter_stability->blocks.size(),minimal.parameter_stability->blocks.size());
+    ASSERT_EQ(legacy.parameter_stability->blocks.size(),reused.parameter_stability->blocks.size());
+    ASSERT_EQ(minimal.split_diagnostics.size(),reused.split_diagnostics.size());
+    for(std::size_t index=0;index<legacy.parameter_stability->blocks.size();++index)
+    {
+        const auto & baseline=legacy.parameter_stability->blocks[index];
+        const auto & b1=minimal.parameter_stability->blocks[index];
+        const auto & b2=reused.parameter_stability->blocks[index];
+        EXPECT_EQ(baseline.status,b1.status);
+        EXPECT_EQ(baseline.status,b2.status);
+        EXPECT_EQ(baseline.prediction_status,b1.prediction_status);
+        EXPECT_EQ(baseline.prediction_status,b2.prediction_status);
+        EXPECT_EQ(baseline.reason,b1.reason);
+        EXPECT_EQ(baseline.reason,b2.reason);
+    }
+    for(std::size_t index=0;index<minimal.split_diagnostics.size();++index)
+    {
+        const auto & b1=minimal.split_diagnostics[index];
+        const auto & b2=reused.split_diagnostics[index];
+        EXPECT_EQ(b1.block_id,b2.block_id);
+        EXPECT_EQ(b1.diagnostics.status,b2.diagnostics.status);
+        EXPECT_EQ(b1.diagnostics.null_reference_status,b2.diagnostics.null_reference_status);
+        EXPECT_EQ(b1.diagnostics.null_reference_failure_reason,b2.diagnostics.null_reference_failure_reason);
+        EXPECT_EQ(b1.diagnostics.qualified_seed_count,b2.diagnostics.qualified_seed_count);
+        EXPECT_EQ(b1.diagnostics.seed_prediction_endpoint,b2.diagnostics.seed_prediction_endpoint);
+        EXPECT_EQ(b1.diagnostics.seed_log_width_endpoint,b2.diagnostics.seed_log_width_endpoint);
+        EXPECT_EQ(b1.diagnostics.seed_scaled_ac_endpoint,b2.diagnostics.seed_scaled_ac_endpoint);
+    }
 }
 }

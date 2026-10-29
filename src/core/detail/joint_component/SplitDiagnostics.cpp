@@ -13,9 +13,10 @@ double PredictionDenominator(const Vector & prediction) {return std::max(1.0,pre
 SplitDiagnosticsAccumulator::SplitDiagnosticsAccumulator(const Vector & eta0,const Vector & beta0,
     const Vector & prediction0,const Vector & eta_null,const Vector & beta_null,const Vector & prediction_null,
     const Vector & reference_column_norms,double scale,bool null_qualified,std::string null_failure_reason,
-    std::size_t expected_directions):eta0_(eta0),beta0_(beta0),prediction0_(prediction0),eta_null_(eta_null),
+    std::size_t expected_directions,bool reuse_workspace):eta0_(eta0),beta0_(beta0),prediction0_(prediction0),eta_null_(eta_null),
     beta_null_(beta_null),prediction_null_(prediction_null),reference_column_norms_(reference_column_norms),
-    scale_(scale),null_qualified_(null_qualified),expected_directions_(expected_directions)
+    scale_(scale),null_qualified_(null_qualified),reuse_workspace_(reuse_workspace),
+    expected_directions_(expected_directions)
 {
     result_.reason=std::move(null_failure_reason);
     if(!null_qualified_) return;
@@ -28,6 +29,14 @@ SplitDiagnosticsAccumulator::SplitDiagnosticsAccumulator(const Vector & eta0,con
     {
         result_.reason="invalid-or-nonfinite-split-input";
         return;
+    }
+    if(reuse_workspace_)
+    {
+        prediction_delta_workspace_.resize(prediction0_.size());
+        width_delta_workspace_.resize(eta0_.size());
+        beta_delta_workspace_.resize(beta0_.size());
+        decomposition_left_workspace_.resize(prediction0_.size());
+        decomposition_right_workspace_.resize(prediction0_.size());
     }
     const double denominator=PredictionDenominator(prediction0_);
     result_.reoptimization_prediction_drift=(prediction_null_-prediction0_).norm()/denominator;
@@ -72,14 +81,32 @@ void SplitDiagnosticsAccumulator::AddEndpoint(const std::string & direction,cons
         if(found->reason.empty()) found->reason="invalid-or-nonfinite-seed-endpoint";
         return;
     }
-    const double denominator=PredictionDenominator(prediction0_);
-    const double prediction_difference=(prediction-prediction_null_).norm()/denominator;
-    const double width_difference=(eta-eta_null_).lpNorm<Eigen::Infinity>();
-    const double ac_difference=(((beta-beta_null_).array()*reference_column_norms_.array()).abs()/scale_).maxCoeff();
-    const Vector lhs=prediction-prediction0_;
-    const Vector rhs=(prediction_null_-prediction0_)+(prediction-prediction_null_);
-    const double decomposition_error=(lhs-rhs).norm();
-    const double decomposition_scale=std::max({1.0,lhs.norm(),rhs.norm()});
+    double prediction_difference{},width_difference{},ac_difference{},decomposition_error{},decomposition_scale{};
+    if(reuse_workspace_)
+    {
+        prediction_delta_workspace_.noalias()=prediction-prediction_null_;
+        width_delta_workspace_.noalias()=eta-eta_null_;
+        beta_delta_workspace_.noalias()=beta-beta_null_;
+        decomposition_left_workspace_.noalias()=prediction-prediction0_;
+        decomposition_right_workspace_.noalias()=prediction_null_-prediction0_;
+        decomposition_right_workspace_+=prediction_delta_workspace_;
+        prediction_difference=prediction_delta_workspace_.norm()/PredictionDenominator(prediction0_);
+        width_difference=width_delta_workspace_.lpNorm<Eigen::Infinity>();
+        ac_difference=((beta_delta_workspace_.array()*reference_column_norms_.array()).abs()/scale_).maxCoeff();
+        decomposition_error=(decomposition_left_workspace_-decomposition_right_workspace_).norm();
+        decomposition_scale=std::max({1.0,decomposition_left_workspace_.norm(),decomposition_right_workspace_.norm()});
+    }
+    else
+    {
+        const double denominator=PredictionDenominator(prediction0_);
+        prediction_difference=(prediction-prediction_null_).norm()/denominator;
+        width_difference=(eta-eta_null_).lpNorm<Eigen::Infinity>();
+        ac_difference=(((beta-beta_null_).array()*reference_column_norms_.array()).abs()/scale_).maxCoeff();
+        const Vector lhs=prediction-prediction0_;
+        const Vector rhs=(prediction_null_-prediction0_)+(prediction-prediction_null_);
+        decomposition_error=(lhs-rhs).norm();
+        decomposition_scale=std::max({1.0,lhs.norm(),rhs.norm()});
+    }
     const double decomposition_tolerance=64.*std::numeric_limits<double>::epsilon()*decomposition_scale;
     if(!std::isfinite(prediction_difference) || !std::isfinite(width_difference) ||
         !std::isfinite(ac_difference) || !std::isfinite(decomposition_error) ||

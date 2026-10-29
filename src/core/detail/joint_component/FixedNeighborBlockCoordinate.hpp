@@ -1,5 +1,6 @@
 #pragma once
 #include "Numerics.hpp"
+#include "SplitDiagnostics.hpp"
 #include "FixedNeighborPolicy.hpp"
 #include "JointProgress.hpp"
 #include "ResourceWork.hpp"
@@ -135,6 +136,7 @@ struct FixedNeighborPolicy
     bool certify_endpoint{true}; // Diagnostic facade only; production components always certify.
     bool assess_local_conditioning{};
     bool assess_parameter_stability{};
+    SplitDiagnosticsMode split_diagnostics_mode{SplitDiagnosticsMode::Disabled};
     bool collect_telemetry{};
     bool collect_diagnostics{};
     std::optional<std::size_t> global_state_memory_budget_for_testing;
@@ -159,6 +161,9 @@ struct FixedNeighborSearchResult
     std::optional<FixedNeighborEndpointCertification> certification;
     std::vector<JointBlockConditioning> local_conditioning;
     std::optional<JointParameterStability> parameter_stability;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    std::vector<SplitDiagnosticBlock> split_diagnostics;
+#endif
     std::vector<FixedNeighborBlockRecord> blocks;
     std::vector<FixedNeighborBlockSweep> sweeps;
     bool search_converged{};
