@@ -25,6 +25,7 @@ struct LocalParameterStabilityAssessment
     JointBlockParameterStability evidence;
     MemoryEstimate memory_estimate;
     std::optional<LocalSplitDiagnostics> split_diagnostics;
+    std::size_t perturbation_replay_checks{};
     double seconds{},cpu_seconds{};
 };
 LocalParameterStabilityAssessment AssessLocalParameterStability(

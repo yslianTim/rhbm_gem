@@ -619,6 +619,7 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
             }
             // Keep the strict independent solver/replay gate for every perturbation endpoint.
             const auto trust=CheckTrust(domain,y,candidate,bounded_context);
+            ++out.perturbation_replay_checks;
             if(!trust.passed || !trust.independent || !trust.independent->objective_passed)
             {
                 direction_failed=true; failure_reason="perturbation-independent-replay-failed";

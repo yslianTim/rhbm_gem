@@ -93,6 +93,7 @@ struct FixedNeighborWork
     std::size_t local_problem_count{},minimum_local_atoms{},maximum_local_atoms{};
     std::size_t local_conditioning_peak_memory_estimate_bytes{};
     std::size_t parameter_stability_peak_memory_estimate_bytes{},perturbation_solves{},perturbation_evaluations{};
+    std::size_t perturbation_replay_checks{};
     double total_local_atoms{};
     ProfileSearchWork local_profile_work;
 };

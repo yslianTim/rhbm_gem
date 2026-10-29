@@ -41,6 +41,7 @@ struct Sample
         parameter_stability_solves{},parameter_stability_evaluations{},
         parameter_stability_blocks_selected{},parameter_stability_peak_bytes{},
         null_profile_evaluations{},null_accepted_updates{},null_replay_checks{},
+        perturbation_replay_checks{},
         split_qualified_blocks{},split_incomplete_blocks{},split_workspace_peak_bytes{},
         bounded_subproblems{},damping_solves{},damping_bracket_solves{},damping_bisection_solves{},
         damping_qr_factorizations{},damping_active_set_iterations{},damping_releases{};
@@ -181,6 +182,7 @@ Sample Run(std::size_t targets,joint::SplitDiagnosticsMode split_mode)
     sample.parameter_stability_seconds=result.work.parameter_stability_seconds;
     sample.parameter_stability_solves=result.work.perturbation_solves;
     sample.parameter_stability_evaluations=result.work.perturbation_evaluations;
+    sample.perturbation_replay_checks=result.work.perturbation_replay_checks;
     sample.parameter_stability_peak_bytes=result.work.parameter_stability_peak_memory_estimate_bytes;
     if(result.parameter_stability)
     {
@@ -308,6 +310,7 @@ void PrintSummary(std::size_t targets,const std::string & mode,const std::vector
         <<" damping_releases="<<representative.damping_releases
         <<" parameter_stability_solves="<<representative.parameter_stability_solves
         <<" parameter_stability_evaluations="<<representative.parameter_stability_evaluations
+        <<" perturbation_replay_checks="<<representative.perturbation_replay_checks
         <<" parameter_stability_blocks_selected="<<representative.parameter_stability_blocks_selected
         <<" parameter_stability_peak_bytes="<<representative.parameter_stability_peak_bytes
         <<" null_profile_evaluations="<<representative.null_profile_evaluations

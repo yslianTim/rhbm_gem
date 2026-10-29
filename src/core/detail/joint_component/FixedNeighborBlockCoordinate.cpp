@@ -1403,6 +1403,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
                     assessment.memory_estimate.estimated_peak_bytes);
             out.work.perturbation_solves+=evidence.perturbation_solves;
             out.work.perturbation_evaluations+=evidence.perturbation_evaluations;
+            out.work.perturbation_replay_checks+=assessment.perturbation_replay_checks;
             if(assessment.memory_estimate.status!=MemoryStatus::Overflow)
                 out.work.parameter_stability_peak_memory_estimate_bytes=std::max(
                     out.work.parameter_stability_peak_memory_estimate_bytes,
