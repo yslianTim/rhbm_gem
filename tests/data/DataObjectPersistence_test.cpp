@@ -988,29 +988,47 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
         "endpoint-verified-but-unqualified");
     EXPECT_FALSE(decoded.components.front().target_evidence);
 
+    auto strict_json=json.as_object();
+    auto & strict_candidate=strict_json.at("components").as_array()[0]
+        .as_object().at("candidate_diagnostic").as_object();
+    strict_candidate["convergence_criteria_id"]="strict-v2";
+    strict_candidate["global_ac_kkt_threshold"]=1e-10;
+    strict_candidate["global_width_gradient_threshold"]=1e-12;
+    const auto strict_decoded=io::Decode(boost::json::serialize(strict_json));
+    const auto strict_resaved=boost::json::parse(io::Encode(strict_decoded));
+    const auto & strict_saved=strict_resaved.at("components").as_array()[0].at("candidate_diagnostic");
+    EXPECT_EQ(strict_saved.at("convergence_criteria_id").as_string(),"strict-v2");
+    EXPECT_DOUBLE_EQ(strict_saved.at("global_ac_kkt_threshold").as_double(),1e-10);
+    EXPECT_DOUBLE_EQ(strict_saved.at("global_width_gradient_threshold").as_double(),1e-12);
+
     auto removed_metric=json.as_object();
     removed_metric.at("components").as_array()[0].as_object().at("candidate_diagnostic").as_object()
         ["candidate_log_width_change_inf_norm"]=5e-7;
     EXPECT_THROW(io::Decode(boost::json::serialize(removed_metric)),std::invalid_argument);
 
-    auto legacy_json=json.as_object();
-    auto & legacy_candidate=legacy_json.at("components").as_array()[0]
-        .as_object().at("candidate_diagnostic").as_object();
-    legacy_candidate["convergence_criteria_id"]="practical-v1";
-    legacy_candidate["confirmed_log_width_change_threshold"]=1e-6;
-    const auto legacy_decoded=io::Decode(boost::json::serialize(legacy_json));
-    ASSERT_TRUE(legacy_decoded.components.front().candidate_diagnostic);
-    EXPECT_EQ(legacy_decoded.components.front().candidate_diagnostic->convergence_criteria_id,"practical-v1");
-    ASSERT_TRUE(legacy_decoded.components.front().candidate_diagnostic->legacy_log_width_change_threshold);
-    EXPECT_DOUBLE_EQ(*legacy_decoded.components.front().candidate_diagnostic->legacy_log_width_change_threshold,1e-6);
-    const auto legacy_resaved=boost::json::parse(io::Encode(legacy_decoded));
-    EXPECT_DOUBLE_EQ(legacy_resaved.at("components").as_array()[0].at("candidate_diagnostic")
-        .at("confirmed_log_width_change_threshold").as_double(),1e-6);
+    for(const auto policy_id:{"strict-v1","practical-v1","custom-v1"})
+    {
+        auto old_policy=json.as_object();
+        old_policy.at("components").as_array()[0].as_object().at("candidate_diagnostic").as_object()
+            ["convergence_criteria_id"]=policy_id;
+        EXPECT_THROW(io::Decode(boost::json::serialize(old_policy)),std::invalid_argument);
+    }
+    auto old_threshold=json.as_object();
+    old_threshold.at("components").as_array()[0].as_object().at("candidate_diagnostic").as_object()
+        ["confirmed_log_width_change_threshold"]=1e-6;
+    EXPECT_THROW(io::Decode(boost::json::serialize(old_threshold)),std::invalid_argument);
 
     auto missing_current_criteria=json.as_object();
     missing_current_criteria.at("components").as_array()[0].as_object()
         .at("candidate_diagnostic").as_object().erase("convergence_criteria_id");
     EXPECT_ANY_THROW(io::Decode(boost::json::serialize(missing_current_criteria)));
+    for(const auto key:{"global_ac_kkt_threshold","global_width_gradient_threshold"})
+    {
+        auto missing_threshold=json.as_object();
+        missing_threshold.at("components").as_array()[0].as_object().at("candidate_diagnostic").as_object()
+            .erase(key);
+        EXPECT_ANY_THROW(io::Decode(boost::json::serialize(missing_threshold)));
+    }
 
     rg::WriteJointAnalysisResult(decoded,dir.path()/"result.json",dir.path()/"atoms.csv");
     std::ifstream csv(dir.path()/"atoms.csv"); std::string line;
@@ -1027,6 +1045,9 @@ TEST(DataObjectPersistenceTest, CandidateDiagnosticsRejectInvalidOrUntrustedChec
     component.candidate_diagnostic->candidate_eta={-.7};
     component.candidate_diagnostic->candidate_ac={1,2};
     component.candidate_diagnostic->candidate_objective=.1;
+    component.candidate_diagnostic->convergence_criteria_id="practical-v2";
+    component.candidate_diagnostic->global_ac_kkt_threshold=1e-7;
+    component.candidate_diagnostic->global_width_gradient_threshold=1e-9;
     EXPECT_THROW(io::Encode(record),std::invalid_argument);
 
     component.state.reset(); record.assembled_state.reset(); record.objective.reset();
@@ -1039,6 +1060,11 @@ TEST(DataObjectPersistenceTest, CandidateDiagnosticsRejectInvalidOrUntrustedChec
     component.candidate_diagnostic->candidate_ac.clear();
     component.candidate_diagnostic->candidate_objective.reset();
     EXPECT_NO_THROW(io::Encode(record));
+
+    component.candidate_diagnostic->convergence_criteria_id="practical-v2";
+    component.candidate_diagnostic->global_ac_kkt_threshold=std::numeric_limits<double>::infinity();
+    component.candidate_diagnostic->global_width_gradient_threshold=1e-9;
+    EXPECT_THROW(io::Encode(record),std::invalid_argument);
 }
 
 TEST(DataObjectPersistenceTest, JointMetadataRejectsInvalidValuesAndOldDocumentsWithoutWrites)

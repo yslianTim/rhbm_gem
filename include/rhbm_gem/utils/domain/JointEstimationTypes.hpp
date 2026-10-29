@@ -168,8 +168,6 @@ struct JointCandidateDiagnostic
     std::optional<double> candidate_objective,candidate_ac_kkt,candidate_width_gradient_inf_norm;
     std::string convergence_criteria_id;
     std::optional<double> global_ac_kkt_threshold,global_width_gradient_threshold;
-    // Historical practical-v1/strict-v1 provenance only; never a current stop gate.
-    std::optional<double> legacy_log_width_change_threshold;
     std::optional<bool> candidate_feasible;
     JointCheckStatus certification_status{JointCheckStatus::NotRun};
     JointCheckStatus endpoint_verification_status{JointCheckStatus::NotRun};

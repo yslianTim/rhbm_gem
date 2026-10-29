@@ -206,8 +206,6 @@ Object CandidateDiagnostic(const JointCandidateDiagnostic & x)
         {"numerical_qualification_status",StatusText(x.numerical_qualification_status)},
         {"verification_reason",x.verification_reason},
         {"resource_limit_reason",x.resource_limit_reason}};
-    if(x.legacy_log_width_change_threshold)
-        out["confirmed_log_width_change_threshold"]=*x.legacy_log_width_change_threshold;
     return out;
 }
 std::optional<JointCandidateDiagnostic> ReadCandidateDiagnostic(const j::value & value)
@@ -223,8 +221,6 @@ std::optional<JointCandidateDiagnostic> ReadCandidateDiagnostic(const j::value &
     x.convergence_criteria_id=Read<std::string>(o,"convergence_criteria_id");
     x.global_ac_kkt_threshold=Read<double>(o,"global_ac_kkt_threshold");
     x.global_width_gradient_threshold=Read<double>(o,"global_width_gradient_threshold");
-    if(o.contains("confirmed_log_width_change_threshold"))
-        x.legacy_log_width_change_threshold=Read<double>(o,"confirmed_log_width_change_threshold");
     x.candidate_feasible=o.at("candidate_feasible").is_null() ? std::nullopt :
         std::optional<bool>(Read<bool>(o,"candidate_feasible"));
     x.certification_status=Status(o.at("certification_status"));
@@ -725,7 +721,7 @@ void ValidateCandidateDiagnostic(const JointCandidateDiagnostic & x,std::size_t 
     const auto & strict=core::joint_component::StrictJointConvergenceCriteria;
     const auto & practical=core::joint_component::PracticalJointConvergenceCriteria;
     const bool default_criteria=x.convergence_criteria_id.empty() && !x.global_ac_kkt_threshold &&
-        !x.global_width_gradient_threshold && !x.legacy_log_width_change_threshold;
+        !x.global_width_gradient_threshold;
     const bool complete_criteria=!x.convergence_criteria_id.empty() && x.global_ac_kkt_threshold &&
         x.global_width_gradient_threshold;
     Require(default_criteria || complete_criteria,"incomplete convergence criteria provenance");
@@ -733,25 +729,11 @@ void ValidateCandidateDiagnostic(const JointCandidateDiagnostic & x,std::size_t 
         std::string_view{x.convergence_criteria_id};
     const auto ac_threshold=default_criteria ? strict.global_ac_kkt : *x.global_ac_kkt_threshold;
     const auto width_threshold=default_criteria ? strict.global_width_gradient : *x.global_width_gradient_threshold;
-    const bool legacy_criteria=criteria_id=="strict-v1" || criteria_id=="practical-v1" || criteria_id=="custom-v1";
     const bool current_criteria=criteria_id=="strict-v2" || criteria_id=="practical-v2";
-    Require(legacy_criteria || current_criteria,
+    Require(current_criteria,
         "invalid convergence criteria identifier");
     Require(std::isfinite(ac_threshold) && ac_threshold>0 && std::isfinite(width_threshold) && width_threshold>0,
         "invalid convergence criteria thresholds");
-    Require(legacy_criteria==x.legacy_log_width_change_threshold.has_value(),
-        "legacy convergence criteria width-change provenance mismatch");
-    if(legacy_criteria)
-        Require(std::isfinite(*x.legacy_log_width_change_threshold) && *x.legacy_log_width_change_threshold>0,
-            "invalid legacy convergence criteria threshold");
-    if(criteria_id=="strict-v1")
-        Require(ac_threshold==strict.global_ac_kkt && width_threshold==strict.global_width_gradient &&
-            *x.legacy_log_width_change_threshold==1e-10,
-            "strict convergence criteria do not match their identifier");
-    if(criteria_id=="practical-v1")
-        Require(ac_threshold==practical.global_ac_kkt && width_threshold==practical.global_width_gradient &&
-            *x.legacy_log_width_change_threshold==1e-6,
-            "practical convergence criteria do not match their identifier");
     if(criteria_id=="strict-v2")
         Require(ac_threshold==strict.global_ac_kkt && width_threshold==strict.global_width_gradient,
             "strict convergence criteria do not match their identifier");
@@ -1249,8 +1231,7 @@ JointAnalysisResult DecodeCurrent(const Object & o)
                 "global_width_gradient_threshold",
                 "candidate_feasible","certification_status",
                 "endpoint_verification_status","numerical_qualification_status","verification_reason",
-                "resource_limit_reason"},"unknown current candidate diagnostic field",
-                {"confirmed_log_width_change_threshold"});
+                "resource_limit_reason"},"unknown current candidate diagnostic field");
             component.candidate_diagnostic=ReadCandidateDiagnostic(c.at("candidate_diagnostic"));
         }
         component.evidence=ReadChecks(c.at("evidence"));
