@@ -8,7 +8,7 @@ Date: 2026-10-29. This report records the staged C1 split-only diagnostics quali
 - Initial HEAD and local `origin/develop`: `fddd672f667d680cd88ab05704f7e3786910da76`.
 - Working tree: clean; `git diff --check` passed.
 - Existing detached worktree: `/Users/yslian/.codex/worktrees/d178/em_map_analysis`; left untouched.
-- The local tracking ref is not evidence of the live GitHub branch. The remote will be checked read-only; no push is authorized.
+- The local tracking ref is not evidence of the live GitHub branch. A final read-only `git ls-remote origin refs/heads/develop` failed because DNS could not resolve `github.com`; the live remote state is unverified and no synchronization is claimed.
 - No Notion documents were accessed or changed.
 
 ## S0 — Split diagnostic regression contract
@@ -145,3 +145,5 @@ Final post-cleanup verification:
 | 1,000 | 3.42900 s | 289.526 ms | 236.405 MB | `7483b6f0d4edefa8` | Qualified / Passed |
 
 The B0/B1/B2 measurements in S3 and the noise-only matrix above were completed before cleanup. B1/B2 were then removed, so the final post-cleanup run is B0-only; no post-cleanup B1/B2 runner remains.
+
+At the S5 code-cleanup verification, branch `develop` was at `f152e38231d3eb9fd758eb4e7e8449f5558e3a4e` with a clean working tree; local `origin/develop` remained at `fddd672f667d680cd88ab05704f7e3786910da76`. The six stage commits created directly on `develop` were `a1b7fef0`, `a0f0c973`, `f6eb28eb`, `a937e00b`, `5c8fc89a`, and `f152e382`. This report was committed afterward without source changes. No push, new branch, or new worktree was created; the pre-existing detached worktree was left untouched. No Notion document was accessed or changed.
