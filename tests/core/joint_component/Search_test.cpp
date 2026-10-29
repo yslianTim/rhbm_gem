@@ -236,14 +236,14 @@ namespace {
 // The same physical log-width t=x+reference is expressed about different origins.
 struct ShiftedWidthResidual
 {
-    double reference{},target{2.1},sensitivity{2.199712482e-4};
+    double reference{},target{2.1},sensitivity{2.199712482e-4},background{1e-3};
     int evaluations{};
     double initial_radius{};
     std::string failure;
     int values() const {return 2;}
     bool retry() const {return false;}
     int operator()(const Vector & x,Vector & residual)
-    {++evaluations; residual.resize(2); residual<<sensitivity*(x(0)+reference-target),1e-3; return 0;}
+    {++evaluations; residual.resize(2); residual<<sensitivity*(x(0)+reference-target),background; return 0;}
     int linearize(const Vector &,const Vector & residual,Eigen::MatrixXd & j,Vector & response,Vector & norms)
     {j=Eigen::MatrixXd::Zero(2,1); j(0,0)=sensitivity; response=residual; norms=Vector::Constant(1,sensitivity); return 0;}
     joint::ActiveSetStep solve_bounded_step(const Eigen::MatrixXd & j,const Vector & r,
@@ -294,4 +294,16 @@ TEST(JointComponentSearchTest, InitialAcAcceptanceDoesNotHideAWidthSubproblemFai
     EXPECT_EQ(search.profile_work.bounded_lm.failed_subproblems,1u);
     EXPECT_EQ(search.stop_reason,"bounded-subproblem:injected-width-subproblem-failure");
     EXPECT_TRUE(search.eta.allFinite());
+}
+
+TEST(JointComponentSearchTest, SmallWeightedNormStillEvaluatesAMeaningfulPhysicalStep)
+{
+    ShiftedWidthResidual f; f.sensitivity=1e-16; f.background=1e-20;
+    p::InstrumentedLM<ShiftedWidthResidual> lm(f); lm.parameters.factor=.1;
+    Vector x=Vector::Zero(1); lm.minimizeInit(x); lm.minimizeOneStep(x);
+    EXPECT_GT(f.evaluations,1)<<f.failure;
+    EXPECT_TRUE(x.allFinite());
+    EXPECT_GT(x(0),.09);
+    EXPECT_LE(x(0),.1+1e-14);
+    EXPECT_LT(f.sensitivity*std::abs(x(0)),64*std::numeric_limits<double>::epsilon());
 }

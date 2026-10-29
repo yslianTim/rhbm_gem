@@ -315,3 +315,18 @@ TEST(ActiveSetBoundedLMTest, SmallJacobianWithNonstationaryGradientIsNotFrozen)
     EXPECT_LT(result.gradient(1),-1e-9);
     EXPECT_GT(result.multipliers(1),0.0);
 }
+
+TEST(ActiveSetBoundedLMTest, SmallDiagonalDoesNotPermitAnAbsoluteToleranceRadiusOvershoot)
+{
+    Eigen::MatrixXd j=Eigen::MatrixXd::Constant(1,1,1e-16);
+    const Eigen::VectorXd r=Eigen::VectorXd::Constant(1,-1e-16);
+    const Eigen::VectorXd d=Eigen::VectorXd::Constant(1,1e-16);
+    const double radius=1e-17;
+    const auto step=joint::SolveBoundedTrustRegionStep(j,r,d,Eigen::VectorXd::Constant(1,10.0),radius,0.0);
+    ASSERT_TRUE(step.valid)<<step.status;
+    EXPECT_TRUE(step.step.allFinite());
+    EXPECT_GT(step.step(0),.09);
+    EXPECT_LE(step.step(0),.1+1e-14);
+    EXPECT_LE(step.scaled_step_norm,radius*(1+64*std::numeric_limits<double>::epsilon()));
+    EXPECT_LT((j*step.step+r).norm(),r.norm());
+}

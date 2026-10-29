@@ -100,3 +100,123 @@ regression now prescribes a nonstationary Width directly; it no longer relies on
 the old solver stopping at a particular block under loose search criteria.
 Production diagnostics also retain damping solve, bracket and QR totals in the
 existing LM evidence reason.
+
+## S4: final integration and regression evidence
+
+Final Release build, four-thread ceiling throughout. Full CTest: **19/19 passed**
+(1,062 GoogleTest executions plus the CLI/script checks). Final command:
+
+```sh
+OMP_NUM_THREADS=4 OMP_THREAD_LIMIT=4 VECLIB_MAXIMUM_THREADS=4 \
+  build/release/bin/RHBM-GEM potential_analysis --estimator joint-components \
+  -a /Users/yslian/data/7a6a.cif -m /Users/yslian/data/emd_11668_unsharpened.map \
+  --select-chain A -j 4 -d /tmp/rhbmgem-jce-fix/final.sqlite -k 7a6a-final
+```
+
+The final audit also found that absolute trust feasibility slack could permit an
+oversized physical step when D and the radius are tiny. Feasibility slack is now
+relative to the radius. Two regressions require a small weighted norm to retain a
+meaningful physical step AND enforce the actual radius. The complete suite and
+real case were rerun after this change.
+
+| Metric | Baseline 32609b23 | Final |
+| --- | ---: | ---: |
+| FirstStage qualified donors | 1410/1418 | 1410/1418 |
+| Initial Width coverage | passed | passed |
+| FixedNeighbor blocks | 136 | 136 |
+| Search sweeps | 200, budget exhausted | 111, block-stationary |
+| A/C KKT | 5.73634534e-10 | 6.86763424e-8 |
+| Independent projected Width KKT | 6.46334942e-6 | 9.57221247e-10 |
+| Width upper bound (angstrom) | 3.0660309206224183 | unchanged |
+| LM solves / failed subproblems | 27157 / 195 | 15104 / 0 |
+| Recovery attempts / successes / unresolved | historical events obscured | 0 / 0 / 0 |
+| Endpoint / Independent Replay | failed / failed | passed / passed |
+| Available components | 0/1 | 1/1 |
+| CLI result | 3 (application log) | 0 (captured subprocess return code) |
+| Full-process wall seconds | 131.46 | 89.68 |
+| CPU seconds (user + system) | 134.88 | 93.50 |
+| Search seconds | 121.08 | 69.07 |
+| Peak RSS bytes | unavailable | 1867923456 |
+
+Baseline timing used macOS `/usr/bin/time -lp`: its final RSS query was denied by
+the sandbox (`sysctl kern.clockrate`), so the wrapper returned 1 despite the
+application's recorded CLI failure 3. Final timing used Python subprocess wait
+and `getrusage(RUSAGE_CHILDREN)` (macOS byte units). Baseline timing overlapped
+some initial test compilation; wall/CPU results are single-run comparisons, not
+a controlled speedup claim. The earlier final-algorithm run also qualified in
+111 sweeps (89.70 seconds, 1748434944-byte RSS). A baseline full-process RSS delta
+cannot be established from these measurements; this comparison remains partial.
+
+Same-compiler isolated solver benchmark (five samples, ten calls each):
+
+| Subproblem | Baseline | Final |
+| --- | ---: | ---: |
+| Normal 4096x8 median microseconds | 12761.0 | 12838.6 |
+| Normal QR / damping / bracket counts | 112 / 47 / 4 | 112 / 47 / 4 |
+| Degenerate 5x5 median microseconds | 47.71 (failure) | 1.18 (valid) |
+| Degenerate QR / damping / bracket counts | 81 / 81 / 80 | 1 / 1 / 0 |
+
+The normal-case difference is about +0.6%; no meaningful normal-case slowdown was
+observed. Final full-case diagnostics retain 31,859 damping solves, 6,507 bracket
+solves and 31,921 QR factorizations. Baseline global QR/damping totals were not
+serialized, so only the controlled subproblem counts are directly comparable.
+No extra solver family or dense fallback was added; additional solver storage is
+O(block Width count), not O(observations x Width count).
+
+Original-endpoint local replay with the fixed production solver: LYS50 block 96
+accepts a Width update (two profiles, zero failed subproblems, one QR); GLU163
+block 55 now evaluates and accepts an update for both near-unit and exact-unit
+initial widths. These are local regression evidence, not substitutes for the
+full final run. Final original-coordinate gradients:
+
+| Atom | Final Width | Absolute gradient |
+| --- | ---: | ---: |
+| LYS50 CB | 0.65880626 | 2.47e-13 |
+| LYS50 CG | 0.51545363 | 1.09e-14 |
+| LYS50 CD | 0.65307241 | 5.54e-15 |
+| LYS50 CE | 0.65814955 | 9.34e-15 |
+| LYS50 NZ (A=0) | 0.01396310 | 1.11e-75 |
+| GLU163 OE2 (A=0) | 0.03382466 | 4.68e-24 |
+
+The largest final projected Width KKT belongs to ASN12 CG. The raw gradient
+infinity norm is 4.55916209e-8 because one Width is bound-active; it is not the
+projected KKT used for qualification. All 1418 A/C/Width parameter states are
+finite, A is nonnegative and Widths are positive and below the original bound.
+Primary and independent projected KKT agree. Model/map hashes, normalization,
+179949 fitting rows and 60636 excluded pure-Halo rows match the baseline. All
+fitting rows have available predictions; excluded original rows remain excluded.
+
+### Downstream output
+
+All 1418 formal Joint target estimates passed. Halo reconstruction used 1400
+eligible target donors and reconstructed all 734 halos. Peeling covered every
+target (141800/141800 samples). The persisted run IDs link the Joint estimates,
+peeling, Local results and Group summaries to the same run.
+
+Local fitting completed: 1413 available, 5 unavailable (4 invalid-local-parameters,
+1 local-mdpde-unqualified). Group fitting completed: 147 available inferences,
+26 unavailable summaries (21 single-member, 5 singular-group-covariance). These
+are downstream qualification limits, not missing execution; no claim is made
+that every downstream fit succeeded. NZ/OE2 A=0 Widths remain unidentifiable;
+passing optimization KKT does not confer statistical confidence.
+
+### Coverage and remaining limits
+
+Existing tests exercised constrained A/C, upper-active Width, weak Width,
+rank deficiency, near singularity, high overlap, signed cancellation, noise-only,
+objective acceptance/rejection, recovery/rollback, nonfinite objective, memory
+fallback, endpoint verification and independent replay. Three seed widths are
+covered by the existing initialization regression; one full real dataset was run.
+Different maps and broad multistart behavior remain untested.
+
+The first full-suite attempt imposed OMP_THREAD_LIMIT=1 and therefore failed
+existing tests that explicitly require 2/4 threads. Rerunning all CTests serially
+with a four-thread OpenMP ceiling passed every test, without changing those tests.
+
+Selective block refinement was evaluated as unnecessary: the generic fixes
+reached the original thresholds in 111/200 sweeps with zero unresolved failures.
+It was not added. No diagnostic prototype, SQLite database or large output is
+tracked. Raw evidence and compact validation are retained under
+`/tmp/rhbmgem-jce-fix/`; the original ignored diagnostics and source datasets were
+preserved. Baseline RSS and global factorization-count comparisons remain the
+explicit performance evidence limits.

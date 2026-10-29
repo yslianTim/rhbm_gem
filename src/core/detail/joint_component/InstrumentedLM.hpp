@@ -16,8 +16,8 @@
 #include <cmath>
 
 // Adapted from Eigen 5.0.1 NonLinearOptimization/LevenbergMarquardt.h.
-// Trial instrumentation/rejection and compact QR input are added; trust-region
-// control arithmetic and full residual norms are retained.
+// Bounded increments, replay rejection and origin-independent initialization
+// are added; actual reduction still uses full residual norms.
 namespace rhbm_gem::core::joint_component {
 using namespace Eigen;
 template <typename FunctorType, typename Scalar = double>

@@ -355,7 +355,7 @@ ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Ei
     if(!ValidSubproblemInput(j,r,d,upper,0.0)) return Failure("invalid-subproblem-input");
     context=MakeBoundedSubproblemContext(j,r,d,upper);
     solve_candidate(0.0,0,candidate);
-    const double trust_tolerance=64.0*std::numeric_limits<double>::epsilon()*std::max(1.0,trust_radius);
+    const double trust_tolerance=64.0*std::numeric_limits<double>::epsilon()*trust_radius;
     constexpr double boundary_relative_tolerance=1e-13;
     if(candidate.valid && candidate.scaled_step_norm<=trust_radius+trust_tolerance)
     {
