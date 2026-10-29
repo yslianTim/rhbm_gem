@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
@@ -35,7 +36,12 @@ struct Sample
         bounded_subproblems{},damping_solves{},damping_bracket_solves{},damping_bisection_solves{},
         damping_qr_factorizations{},damping_active_set_iterations{},damping_releases{};
     double objective{},global_ac_kkt{},projected_width_kkt{},maximum_cache_replay_error{},
-        first_kkt_eta_change{},mean_amplitude{},mean_charge{},mean_width{};
+        first_kkt_eta_change{},mean_amplitude{},mean_charge{},mean_width{},
+        max_amplitude_truth_error{},max_charge_truth_error{},max_width_truth_error{},
+        rms_amplitude_truth_error{},rms_charge_truth_error{},rms_width_truth_error{},
+        max_relative_width_truth_error{},rms_relative_width_truth_error{},
+        replay_prediction_difference{},replay_residual_difference{},replay_objective_difference{};
+    std::vector<double> amplitudes,charges,widths;
     std::string eta_sha256,beta_sha256;
     bool qualified{},independent_replay_passed{},memory_preflight_passed{},full_replay_memory_fallback{};
 };
@@ -180,16 +186,46 @@ Sample Run(std::size_t targets)
     sample.certification_attempts=result.certification_attempts;
     sample.block_solves=result.total_block_solves;
     const auto atom_count=result.state.eta.size();
+    const auto target_count=static_cast<std::size_t>(atom_count);
+    sample.amplitudes.reserve(target_count);
+    sample.charges.reserve(target_count);
+    sample.widths.reserve(target_count);
+    double amplitude_squared_error{},charge_squared_error{},width_squared_error{},relative_width_squared_error{};
     for(Eigen::Index atom=0;atom<atom_count;++atom)
     {
-        sample.mean_amplitude+=result.state.beta(2*atom);
-        sample.mean_charge+=result.state.beta(2*atom+1);
-        sample.mean_width+=std::exp(result.state.eta(atom));
+        const double amplitude=result.state.beta(2*atom);
+        const double charge=result.state.beta(2*atom+1);
+        const double width=std::exp(result.state.eta(atom));
+        const double amplitude_error=amplitude-2.0;
+        const double charge_error=charge-.2;
+        const double width_error=width-.5;
+        const double relative_width_error=width_error/.5;
+        sample.amplitudes.push_back(amplitude);
+        sample.charges.push_back(charge);
+        sample.widths.push_back(width);
+        sample.mean_amplitude+=amplitude;
+        sample.mean_charge+=charge;
+        sample.mean_width+=width;
+        sample.max_amplitude_truth_error=std::max(sample.max_amplitude_truth_error,std::abs(amplitude_error));
+        sample.max_charge_truth_error=std::max(sample.max_charge_truth_error,std::abs(charge_error));
+        sample.max_width_truth_error=std::max(sample.max_width_truth_error,std::abs(width_error));
+        sample.max_relative_width_truth_error=std::max(sample.max_relative_width_truth_error,std::abs(relative_width_error));
+        amplitude_squared_error+=amplitude_error*amplitude_error;
+        charge_squared_error+=charge_error*charge_error;
+        width_squared_error+=width_error*width_error;
+        relative_width_squared_error+=relative_width_error*relative_width_error;
     }
     const double inverse_atom_count=1.0/static_cast<double>(atom_count);
     sample.mean_amplitude*=inverse_atom_count;
     sample.mean_charge*=inverse_atom_count;
     sample.mean_width*=inverse_atom_count;
+    sample.rms_amplitude_truth_error=std::sqrt(amplitude_squared_error*inverse_atom_count);
+    sample.rms_charge_truth_error=std::sqrt(charge_squared_error*inverse_atom_count);
+    sample.rms_width_truth_error=std::sqrt(width_squared_error*inverse_atom_count);
+    sample.rms_relative_width_truth_error=std::sqrt(relative_width_squared_error*inverse_atom_count);
+    sample.replay_prediction_difference=independent.prediction_difference;
+    sample.replay_residual_difference=independent.residual_difference;
+    sample.replay_objective_difference=independent.objective_difference;
     sample.qualified=certification.qualified();
     sample.independent_replay_passed=independent.passed;
     sample.memory_preflight_passed=result.global_state_memory_estimate.status==joint::MemoryStatus::Pass;
@@ -251,6 +287,17 @@ void PrintSummary(std::size_t targets,const std::vector<Sample> & samples)
         <<" mean_amplitude="<<representative.mean_amplitude
         <<" mean_charge="<<representative.mean_charge
         <<" mean_width="<<representative.mean_width
+        <<" max_abs_amplitude_truth_error="<<representative.max_amplitude_truth_error
+        <<" rms_amplitude_truth_error="<<representative.rms_amplitude_truth_error
+        <<" max_abs_charge_truth_error="<<representative.max_charge_truth_error
+        <<" rms_charge_truth_error="<<representative.rms_charge_truth_error
+        <<" max_abs_width_truth_error="<<representative.max_width_truth_error
+        <<" rms_width_truth_error="<<representative.rms_width_truth_error
+        <<" max_relative_width_truth_error="<<representative.max_relative_width_truth_error
+        <<" rms_relative_width_truth_error="<<representative.rms_relative_width_truth_error
+        <<" replay_prediction_difference="<<representative.replay_prediction_difference
+        <<" replay_residual_difference="<<representative.replay_residual_difference
+        <<" replay_objective_difference="<<representative.replay_objective_difference
         <<" eta_sha256="<<representative.eta_sha256
         <<" beta_sha256="<<representative.beta_sha256
         <<" first_kkt_sweep="<<representative.first_kkt_sweep
@@ -268,9 +315,9 @@ void PrintSummary(std::size_t targets,const std::vector<Sample> & samples)
 
 int main(int argc,char ** argv)
 {
-    if(argc!=2)
+    if(argc!=2 && argc!=3)
     {
-        std::cerr<<"usage: rhbm_fixed_neighbor_closed_loop_benchmark <target-count>\n";
+        std::cerr<<"usage: rhbm_fixed_neighbor_closed_loop_benchmark <target-count> [parameter-csv]\n";
         return 2;
     }
     try
@@ -282,6 +329,16 @@ int main(int argc,char ** argv)
         samples.reserve(5);
         for(std::size_t repetition=0;repetition<5;++repetition) samples.push_back(Run(targets));
         PrintSummary(targets,samples);
+        if(argc==3)
+        {
+            std::ofstream parameters(argv[2]);
+            if(!parameters) throw std::runtime_error("cannot write parameter CSV");
+            parameters<<"target,amplitude,charge,width\n"<<std::setprecision(17);
+            const auto & representative=samples[samples.size()/2];
+            for(std::size_t target=0;target<representative.widths.size();++target)
+                parameters<<target+1<<','<<representative.amplitudes[target]<<','
+                    <<representative.charges[target]<<','<<representative.widths[target]<<'\n';
+        }
         return 0;
     }
     catch(const std::exception & error)
