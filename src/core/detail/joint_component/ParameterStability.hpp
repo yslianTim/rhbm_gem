@@ -11,6 +11,13 @@ inline constexpr double LocalWidthPerturbation=1e-3;
 inline constexpr double LocalParameterChangeWarning=1e-8;
 inline constexpr double LocalPredictionChangeWarning=1e-8;
 inline constexpr double MaximumLocalPerturbationCpuSeconds=2.0;
+struct LocalParameterStabilityClassification
+{
+    std::string status,prediction_status;
+};
+LocalParameterStabilityClassification ClassifyLocalParameterStability(
+    double,double,double,bool,bool,double=LocalParameterChangeWarning,
+    double=LocalPredictionChangeWarning);
 struct LocalParameterStabilityAssessment
 {
     JointBlockParameterStability evidence;

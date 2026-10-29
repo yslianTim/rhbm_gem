@@ -113,6 +113,23 @@ DirectionSet BuildDirections(const Evaluation & baseline,const Vector & eta,cons
 }
 }
 
+LocalParameterStabilityClassification ClassifyLocalParameterStability(
+    double width_change,double ac_change,double prediction_change,bool has_qualified_perturbation,
+    bool all_directions_assessed,double parameter_warning,double prediction_warning)
+{
+    if(!has_qualified_perturbation || !std::isfinite(width_change) || width_change<0 ||
+        !std::isfinite(ac_change) || ac_change<0 || !std::isfinite(prediction_change) || prediction_change<0 ||
+        !(parameter_warning>0) || !std::isfinite(parameter_warning) ||
+        !(prediction_warning>0) || !std::isfinite(prediction_warning))
+        return {"Unavailable","Unavailable"};
+
+    const auto prediction_status=prediction_change<=prediction_warning ? "Stable" : "Changed";
+    if(prediction_change>prediction_warning) return {"Unstable",prediction_status};
+    if(!all_directions_assessed) return {"Unavailable",prediction_status};
+    return {width_change<=parameter_warning && ac_change<=parameter_warning ? "Stable" : "Sensitive",
+        prediction_status};
+}
+
 LocalParameterStabilityAssessment AssessLocalParameterStability(
     const Domain & domain,VectorRef y,const Vector & eta,const Vector & beta,const EvaluationContext & context,
     std::string block_id,std::size_t resident_bytes)
@@ -269,7 +286,7 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
     }
     double maximum_width_change{},maximum_ac_change{},maximum_prediction_change{},maximum_objective_difference{};
     bool all_directions_assessed=directions.weak_direction_available || eta.size()==1;
-    bool any_search_failure{};
+    bool any_search_failure{},any_qualified_perturbation{};
     for(const auto & direction:directions.available)
     {
         JointStabilityProbe probe;
@@ -406,7 +423,8 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
             maximum_ac_change=std::max(maximum_ac_change,ac_change);
             maximum_prediction_change=std::max(maximum_prediction_change,prediction_change);
             maximum_objective_difference=std::max(maximum_objective_difference,std::abs(objective-baseline_objective));
-            ++assessed_seed_count; seed_status="Assessed"; seed_reason="bounded-perturbation-solved-and-replayed";
+            ++assessed_seed_count; any_qualified_perturbation=true;
+            seed_status="Assessed"; seed_reason="bounded-perturbation-solved-and-replayed";
         }
         const bool direction_assessed=assessed_seed_count>0 && !direction_failed;
         if(direction_assessed)
@@ -440,14 +458,10 @@ LocalParameterStabilityAssessment AssessLocalParameterStability(
     evidence.scaled_ac_parameter_change_inf=maximum_ac_change;
     evidence.local_prediction_change_relative=maximum_prediction_change;
     evidence.objective_difference=maximum_objective_difference;
-    evidence.prediction_status=maximum_prediction_change<=LocalPredictionChangeWarning ? "Stable" : "Changed";
-    if(maximum_prediction_change>LocalPredictionChangeWarning)
-        evidence.status="Unstable";
-    else if(any_search_failure || !all_directions_assessed)
-        evidence.status="Unavailable";
-    else if(maximum_width_change<=LocalParameterChangeWarning && maximum_ac_change<=LocalParameterChangeWarning)
-        evidence.status="Stable";
-    else evidence.status="Sensitive";
+    const auto classification=ClassifyLocalParameterStability(maximum_width_change,maximum_ac_change,
+        maximum_prediction_change,any_qualified_perturbation,!any_search_failure && all_directions_assessed);
+    evidence.status=classification.status;
+    evidence.prediction_status=classification.prediction_status;
     if(evidence.reason.empty()) evidence.reason="bounded-local-directional-perturbation-assessed";
     return finish();
 }

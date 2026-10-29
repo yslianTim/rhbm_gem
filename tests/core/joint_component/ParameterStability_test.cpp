@@ -6,6 +6,7 @@
 #include "support/JointTestContext.hpp"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <numbers>
 #include <string>
 #include <utility>
@@ -100,6 +101,38 @@ TEST(JointParameterStabilityTest, ExactLocalFitIsStableAndDeterministic)
     EXPECT_LE(*first.evidence.log_width_parameter_change_inf,n::LocalParameterChangeWarning);
     EXPECT_LE(*first.evidence.scaled_ac_parameter_change_inf,n::LocalParameterChangeWarning);
     EXPECT_LE(*first.evidence.local_prediction_change_relative,n::LocalPredictionChangeWarning);
+}
+
+TEST(JointParameterStabilityTest, PureClassifierRespectsIndependentThresholdBoundaries)
+{
+    const double parameter_threshold=n::LocalParameterChangeWarning;
+    const auto stable=n::ClassifyLocalParameterStability(parameter_threshold,parameter_threshold,
+        n::LocalPredictionChangeWarning,true,true);
+    EXPECT_EQ(stable.status,"Stable");
+    EXPECT_EQ(stable.prediction_status,"Stable");
+
+    const auto sensitive=n::ClassifyLocalParameterStability(std::nextafter(parameter_threshold,INFINITY),
+        parameter_threshold,parameter_threshold,true,true);
+    EXPECT_EQ(sensitive.status,"Sensitive");
+    EXPECT_EQ(sensitive.prediction_status,"Stable");
+
+    const auto unstable=n::ClassifyLocalParameterStability(parameter_threshold,parameter_threshold,
+        std::nextafter(n::LocalPredictionChangeWarning,INFINITY),true,true);
+    EXPECT_EQ(unstable.status,"Unstable");
+    EXPECT_EQ(unstable.prediction_status,"Changed");
+
+    const auto incomplete=n::ClassifyLocalParameterStability(parameter_threshold,parameter_threshold,
+        parameter_threshold,true,false,1e-6,1e-6);
+    EXPECT_EQ(incomplete.status,"Unavailable");
+    EXPECT_EQ(incomplete.prediction_status,"Stable");
+
+    const auto unavailable=n::ClassifyLocalParameterStability(0.,0.,0.,false,false,1e-6,1e-6);
+    EXPECT_EQ(unavailable.status,"Unavailable");
+    EXPECT_EQ(unavailable.prediction_status,"Unavailable");
+
+    const auto nonfinite=n::ClassifyLocalParameterStability(
+        std::numeric_limits<double>::quiet_NaN(),0.,0.,true,true,1e-6,1e-6);
+    EXPECT_EQ(nonfinite.status,"Unavailable");
 }
 
 TEST(JointParameterStabilityTest, UsesWeakLocalWidthDirectionsWithinTheBoundedBudget)
