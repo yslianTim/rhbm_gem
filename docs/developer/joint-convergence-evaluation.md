@@ -310,3 +310,69 @@ experiments were executed.
 
 Evidence: [full candidate trajectory](evidence/joint-hotspot-candidate.csv),
 [candidate metrics and parameter comparison](evidence/joint-hotspot-candidate.json).
+
+## R6 cleanup and final audit
+
+- Removed the temporary mutable-state hotspot study hook from both declaration and call site.
+  No patch solver/detector/trigger, numerical experiment switch, trace option or extra CMake target
+  remains in production. Offline study programs were never installed or tracked.
+- Retained the budget state machine, projected-KKT progress display, provenance and required tests.
+  The sole formal numerical path is original forward FixedNeighbor + progress-qualified 200→300
+  budget → unchanged certification/replay → qualified assembly → existing downstream workflow.
+- `git diff` against the initial revision is empty for ConvergenceCriteria, Constrained A/C
+  (`LinearSolve.cpp`), bounded LM, local Search, Numerics/independent replay, Components/assembly
+  and PotentialFittingWorkflow. No tolerance/constraint/acceptance/replay/halo-domain change.
+- Existing A=0, width donors, failure rollback, recovery, memory fallback, accepted/candidate integrity,
+  endpoint, assembly and downstream tests all run in the complete CTest suite.
+- Full Release build (all default targets) passes. Final CTest **19/19 groups pass**, 0 failed,
+  37.13 s. Build parallelism=4; CTest parallelism=1, internal OpenMP limited to 4 (joint groups 1).
+  No new dependency, branch, worktree or Notion write. `git diff --check` passes.
+- Retained repository evidence is bounded (approximately 108 KiB before the final CLI summary),
+  rather than committing large SQLite/log/state files. Detailed scratch artifacts are separate.
+
+For performance interpretation, a conservative component-solver time-to-qualified is the measured
+whole `SearchFixedNeighborComponent` call including preparation, certification and final conditioning:
+R1=489.667256 s, C=401.124044 s (18.08% observed reduction). Neither includes input loading,
+FirstStage, global assembly or downstream. The sweep-only times in the tables use their own explicitly
+labeled narrower scope. No predicted qualification times are substituted for actual runs.
+
+### Final cleaned production acceptance — Qualified
+
+The final all-target Release build is followed by a fresh real 6CVM CLI run after hook removal.
+CLI exit=**0**, sweep/certification=**250**, component/target/global qualification all pass, SQLite
+`quick_check=ok`, SQLite schema 20 / Joint schema 22. Input SHA-256 and every fitting row identity
+match the verified inputs. Final eta/A/C arrays exactly match both R1 and R2. Search=502.349581 s;
+workflow time through qualified global assembly incl. construction/FirstStage/assessment=518.188925 s;
+whole CLI incl. loading/Q-score/downstream/SQLite=578.104026 s; whole-process peak RSS=2,850,586,624 bytes.
+Final objective=0.019770945620759765, A/C KKT=4.269076906392166e-8,
+projected width KKT=9.699454295297727e-10. Endpoint preflight stays 271,418,201 bytes.
+[Final machine-readable acceptance](evidence/joint-convergence-final-cli.json).
+
+Final downstream persistence includes 1,645 reconstructed halos, 8,193 peeling entries, 8,193
+post-joint local entries and 167 group summaries. Local statuses are 8,013 Available / 180 Unavailable:
+176 `invalid-local-parameters`, 3 `local-mdpde-unqualified`, 1 `insufficient-positive-responses`.
+These existing downstream eligibility outcomes are separate from the now-qualified Joint component;
+this work does not claim universal statistical identifiability or successful inference for every group.
+The 427 point-quality Warnings likewise remain visible rather than being promoted to Available.
+
+Cleanup removed 27 owned temporary programs/source/object/duplicate-data files, including the unused
+patch harness and intermediate R2 SQLite/JSON duplicates. The final SQLite and bounded raw audit
+logs/states/trajectories remain under `/tmp/rhbm-convergence`; the pre-existing diagnosis directory
+and the user's original inputs/databases were not modified. No temporary numerical interface remains.
+
+Final recommendation: retain adaptive budget and the honest projected-KKT display. The original
+6CVM path needs 250 sweeps under these conditions; other difficult real datasets are not guaranteed
+to qualify by 300 and were not evaluated here. Nonconvex stationary solutions, statistical precision
+and the downstream unavailable fits remain relevant limits. Hotspot's observed speed/solution tradeoff
+is documented without replacing the lower-objective validated original path.
+
+Git phase commits before final handoff:
+
+- `562a05ac38ec4b8e631c2701c144873ff15657c2` — R0 baseline and projected-width progress.
+- `37eced56c6ca1a85418e53088d1763030e56fc9c` — R1 extended-search evidence.
+- `43f01b8c848ceb199bea33ff510aad77d129bed3` — R2 production adaptive budget and regressions.
+- `3602a9b4a246e7dc58bdf7e842a1ce1da3bbd039` — R4 evidence and rejection of production promotion.
+
+The final closeout SHA, clean-tree status and verified remote push are recorded in the handoff report
+after committing this evidence. An existing detached worktree was observed and left untouched; this
+work created no branch/worktree and remained on `develop` throughout.

@@ -91,5 +91,48 @@
       "memory_fallbacks": 0,
       "workspace_estimate_bytes": 0
     }
-  ]
+  ],
+  "harness_cleanup": "Temporary source/executables removed after the promotion rejection; no patch solver remains in the repository.",
+  "input_recipe": {
+    "geometry": "Frozen 0.5 Angstrom lattice, spherical support radius 2.5 Angstrom; exact kernel-generated observations",
+    "single_truth_ABC": [
+      2,
+      0.5,
+      0.2
+    ],
+    "single_start_ABC": [
+      2,
+      0.8,
+      0.2
+    ],
+    "width_upper_bound": 2.2,
+    "local_accepted_update_budget": 20,
+    "overlap_pair_center_separation_angstrom": 1.0,
+    "active_upper_truth_ABC": [
+      2,
+      1.3,
+      0.2
+    ],
+    "active_upper_start_ABC": [
+      2,
+      0.8,
+      0.2
+    ],
+    "active_upper_bound": 0.8,
+    "zero_A_truth_ABC": [
+      0,
+      0.7,
+      1
+    ],
+    "zero_A_start_ABC": [
+      0,
+      0.65,
+      1
+    ],
+    "near_singular_second_support": "First support squared distances multiplied by (1-1e-12)",
+    "rejection_fault": "Increase local candidate objective by 1 before acceptance",
+    "recovery_fault": "Existing injected width-subproblem failure",
+    "memory_budget_for_fallback_bytes": 1,
+    "no_hotspot_start": "Exact truth state"
+  }
 }
