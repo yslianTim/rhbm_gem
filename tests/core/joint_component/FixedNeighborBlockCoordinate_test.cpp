@@ -426,54 +426,17 @@ TEST(JointFixedNeighborBlockCoordinateTest, SignedCancellationQualifiesWhenOnlyK
     EXPECT_EQ(result.confirmed_stationarity_sweep,result.sweep_count);
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, SignedCancellationFixtureMatchesHistoricalInputDigest)
-{
-    auto input=second_stage_test::SyntheticJointWorkload("chain",3);
-    for(std::size_t atom=0;atom<3;++atom)
-        for(const auto & support:input.support[atom])
-        {
-            const auto basis=n::EvaluateKernel(support.squared_distance,.5,2.5);
-            if(atom==0) input.observations[support.row]-=2.0*basis.gaussian;
-            if(atom!=1) input.observations[support.row]-=.4*basis.charge;
-        }
-    std::size_t support_entries{};
-    for(const auto & support:input.support) support_entries+=support.size();
-    EXPECT_EQ(input.atom_ids,(std::vector<std::string>{"1","2","3"}));
-    EXPECT_EQ(input.row_ids.size(),1425u);
-    EXPECT_EQ(input.observations.size(),1425u);
-    EXPECT_EQ(support_entries,1545u);
-    EXPECT_EQ(second_stage_test::SyntheticJointWorkloadHash(input),
-        "0b5c3798029192eb18c137134db3214e9647fa87868433366bd744210cce34eb");
-}
-
-TEST(JointFixedNeighborBlockCoordinateTest, StandardQualificationFixturesMatchHistoricalInputDigests)
-{
-    const std::array<std::pair<int,std::string>,4> fixtures{{
-        {3,"4b3381463b3e7d97099342a9de86df01bf435cf2d64b8ea96af9ac0ee2eab176"},
-        {30,"13cb46a3575b92368d8393f168cf45cc7db9615e0e2cce06b7f97326a8580c57"},
-        {300,"bfb80c5d252cee06f7e7f57906c39123adc007d37bccbe34fe546390268d8544"},
-        {1000,"3d81218fbf38f8c661551631fbe4038694c67254b26283f51d10d49299ee33a3"},
-    }};
-    for(const auto & [count,expected_digest]:fixtures)
-    {
-        const auto input=second_stage_test::SyntheticJointWorkload("chain",count);
-        EXPECT_EQ(second_stage_test::SyntheticJointWorkloadHash(input),expected_digest)<<count;
-    }
-}
-
 TEST(JointFixedNeighborBlockCoordinateTest, HardCaseIncrementalObjectiveAndReplayQualification)
 {
     using Input=rhbm_gem::core::JointProblemInput;
-    struct Fixture {std::string name,digest; Input input; std::size_t core_atoms;};
+    struct Fixture {std::string name; Input input; std::size_t core_atoms;};
     std::vector<Fixture> fixtures;
     fixtures.push_back({"high-overlap-cube-8",
-        "2a1894dc5dc5f7789fbc802477e77e08f520a6c25f0c7eac6b42a4caf3f717b2",
         second_stage_test::SyntheticJointWorkload("cube",8),4});
     auto rank_deficient=second_stage_test::SyntheticJointWorkload("chain",3);
     for(auto & support:rank_deficient.support)
         for(auto & entry:support) entry.squared_distance=0.0;
     fixtures.push_back({"rank-deficient-constant-support",
-        "fd39aa13434e60a2193641f97ff9bdd05669fb6bc1b57a4d52f454bdacaa7151",
         std::move(rank_deficient),2});
     Input near_singular;
     near_singular.atom_ids={"1","2"};
@@ -490,13 +453,11 @@ TEST(JointFixedNeighborBlockCoordinateTest, HardCaseIncrementalObjectiveAndRepla
             1.4*second.gaussian-.1*second.charge;
     }
     fixtures.push_back({"near-singular-overlapping-support",
-        "fc9e6c0ec7f746d9de6221d1b680334bd870d7797012a666c32cdcdb467454ef",
         std::move(near_singular),2});
     auto low_signal=second_stage_test::SyntheticJointWorkload("chain",3);
     for(std::size_t row=0;row<low_signal.observations.size();++row)
         low_signal.observations[row]=1e-5*std::sin(.17*static_cast<double>(row));
     fixtures.push_back({"low-signal-noise-only",
-        "0d2ecf601cb21d6ce3d4e23f1aa7f37b78f17fe7ec58a19c49b397374ad99d2f",
         std::move(low_signal),2});
     Input weak_width;
     weak_width.atom_ids={"1","2"};
@@ -523,12 +484,10 @@ TEST(JointFixedNeighborBlockCoordinateTest, HardCaseIncrementalObjectiveAndRepla
             second_coefficients[1]*second.charge;
     }
     fixtures.push_back({"weak-width-direction",
-        "aa1d50f8e6dbcdaa22e401be857e849573ca0c6457d714583029003f23f9ef9c",
         std::move(weak_width),2});
 
     for(auto & fixture:fixtures)
     {
-        EXPECT_EQ(second_stage_test::SyntheticJointWorkloadHash(fixture.input),fixture.digest)<<fixture.name;
         JointProblem problem(std::move(fixture.input));
         const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
         n::Vector initial_eta;

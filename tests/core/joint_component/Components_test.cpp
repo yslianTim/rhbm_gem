@@ -32,21 +32,6 @@ struct TwoBlocks
     }
 };
 }
-namespace {
-boost::json::value Science(boost::json::value value)
-{
-    if(value.is_array()) for(auto & entry:value.as_array()) entry=Science(entry);
-    if(value.is_object())
-    {
-        std::vector<std::string> erase;
-        for(auto & entry:value.as_object())
-            if(entry.key().ends_with("seconds") || entry.key()=="process_peak_rss_bytes") erase.emplace_back(entry.key());
-            else entry.value()=Science(entry.value());
-        for(const auto & key:erase) value.as_object().erase(key);
-    }
-    return value;
-}
-}
 TEST(JointComponentChecksTest, StructuralGraphPreservesBridgeChainConstantAndUnobserved)
 {
     const p::Domain domain(6,{{{0,0},{1,6.25}},{{1,1},{2,1}},{{2,1}},{{3,1}}, {}});
@@ -202,7 +187,6 @@ TEST(JointComponentChecksTest, SameStateIncludesResidualTermAndConstantRows)
     EXPECT_TRUE(parity.at("passed").as_bool())<<parity;
     EXPECT_TRUE(parity.at("full_equivalence").as_bool());
     EXPECT_EQ(parity.at("raw").at("constant_objective"),4.5);
-    RecordProperty("scientific_record",boost::json::serialize(parity));
     const auto e=p::EvaluatePartitioned(f.domain,f.y,f.eta,part,c);
     const auto d=p::DifferentiatePartitioned(e,part,c);
     ASSERT_TRUE(e.valid && d.valid); EXPECT_GT((d.projected-d.jacobian).norm(),1e-5);
@@ -228,8 +212,8 @@ TEST(JointComponentChecksTest, FailureIsolationDoesNotFillMissingRowsWithZero)
     for(std::size_t r=0;r<81;++r) EXPECT_EQ(result.at("available_row_mask").at(r).as_bool(),r<40 || r==80);
     const auto failed_first=p::FitComponent(part.components[1],initial,c);
     const auto healthy_second=p::FitComponent(part.components[0],initial,c);
-    EXPECT_EQ(Science(failed_first),Science(result.at("components").at(1)));
-    EXPECT_EQ(Science(healthy_second),Science(result.at("components").at(0)));
+    EXPECT_EQ(failed_first,result.at("components").at(1));
+    EXPECT_EQ(healthy_second,result.at("components").at(0));
 }
 
 TEST(JointComponentChecksTest, UnobservedAtomsKeepRawPredictionButDisableProfileClaims)
@@ -246,5 +230,4 @@ TEST(JointComponentChecksTest, UnobservedAtomsKeepRawPredictionButDisableProfile
     EXPECT_TRUE(fit.at("components").at(0).at("search_success").as_bool());
     EXPECT_FALSE(fit.at("components").at(1).at("usable_state").as_bool());
     EXPECT_FALSE(fit.at("prediction_available").as_bool());
-    RecordProperty("fit_availability",boost::json::serialize(fit));
 }

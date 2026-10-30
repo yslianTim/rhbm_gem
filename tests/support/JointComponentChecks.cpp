@@ -8,7 +8,6 @@
 #include <set>
 #include <stdexcept>
 #include <cmath>
-#include <chrono>
 #include <stdexcept>
 
 namespace second_stage_test::matched::joint_abc {
@@ -346,7 +345,6 @@ j::object FitComponent(const ComponentView & view,const Vector & initial_b,const
 j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartition & partition,
     const EvaluationContext & context,const j::array & fits)
 {
-    const auto start=std::chrono::steady_clock::now();
     std::vector<rhbm_gem::core::JointComponentResult> children; int evaluations{},updates{}; j::array failed;
     for(const auto & view:partition.components)
     {
@@ -409,7 +407,7 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
     auto convergence=runtime::ConvergenceStatus(evidence,rhbm_gem::core::JointEvidenceScope::AssembledGlobal,true);
     for(const auto & fit:fits) convergence=runtime::MergeConvergenceStatus(convergence,runtime_json::ParseStatus(fit.at("runtime_convergence")));
     out["runtime_convergence"]=runtime_json::Status(convergence);
-    out["assembly_seconds"]=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count(); return out;
+    return out;
 }
 j::object FitComponents(std::shared_ptr<const rhbm_gem::core::JointProblemInput> input,
     const Vector & initial_b,const ComponentPartition & partition,const EvaluationContext & context)

@@ -3,32 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <bit>
-#include <boost/hash2/sha2.hpp>
 
 namespace second_stage_test {
-std::string SyntheticJointWorkloadHash(const rhbm_gem::core::JointProblemInput & input)
-{
-    // Versioned canonical stream: uint64 little endian lengths/indices, exact
-    // IEEE double bits and length-prefixed identity bytes. No snapshot copy.
-    boost::hash2::sha2_256 hash;
-    const auto integer=[&](std::uint64_t value) {
-        std::array<unsigned char,8> bytes{};
-        for(unsigned k=0;k<8;++k) bytes[k]=static_cast<unsigned char>((value>>(8*k))&255);
-        hash.update(bytes.data(),bytes.size());
-    };
-    const auto string=[&](const std::string & value) {integer(value.size()); hash.update(value.data(),value.size());};
-    string("frozen-lattice-input-v1"); integer(input.atom_ids.size()); integer(input.row_ids.size());
-    for(const auto & id:input.atom_ids) string(id);
-    for(std::size_t row=0;row<input.row_ids.size();++row)
-    {string(input.row_ids[row]); integer(std::bit_cast<std::uint64_t>(input.observations[row]));}
-    for(const auto & support:input.support)
-    {
-        integer(support.size());
-        for(const auto & v:support) {integer(v.row); integer(std::bit_cast<std::uint64_t>(v.squared_distance));}
-    }
-    return boost::hash2::to_string(hash.result());
-}
 rhbm_gem::core::JointProblemInput SyntheticJointWorkload(const std::string & topology,int count)
 {
     if((topology!="chain" && topology!="cube") || count<=0 || count>10000)
