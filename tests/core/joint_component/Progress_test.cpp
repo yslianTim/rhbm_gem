@@ -293,6 +293,7 @@ joint::JointProgressEvent MakeFixedNeighborEvent(joint::JointProgressPhase phase
         .objective = 1.25,
         .global_ac_kkt = .003,
         .width_gradient_inf_norm = .004,
+        .projected_width_kkt = 4e-7,
         .maximum_target_width = .7};
     return event;
 }
@@ -465,6 +466,7 @@ TEST(JointProgressTest, InfoProgressIsCompactAndThrottlesAcceptedUpdateRefreshes
     EXPECT_EQ(CountOccurrences(stdout_text, "obj="), 5u); // Four progress rows and the summary.
     EXPECT_EQ(CountOccurrences(stdout_text, "KKT="), 4u);
     EXPECT_EQ(CountOccurrences(stdout_text, "width-grad="), 4u);
+    EXPECT_EQ(CountOccurrences(stdout_text, "width-kkt=4.000e-07"), 4u);
     EXPECT_EQ(CountOccurrences(stdout_text, "accepted="), 4u);
     EXPECT_EQ(CountOccurrences(stdout_text, "failed="), 4u);
     EXPECT_NE(stdout_text.find("Component 1/1 completed | state_trusted=yes | stop=converged"),

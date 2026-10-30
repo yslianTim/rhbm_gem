@@ -1363,6 +1363,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
             progress.objective=sweep.objective_after;
             progress.global_ac_kkt=sweep.global_ac_kkt;
             progress.width_gradient_inf_norm=sweep.global_width_gradient_inf_norm;
+            progress.projected_width_kkt=sweep.projected_width_gradient_inf_norm;
             progress.maximum_target_width=sweep.maximum_target_width;
             last_fixed_neighbor_progress=progress;
             event.fixed_neighbor=std::move(progress);
