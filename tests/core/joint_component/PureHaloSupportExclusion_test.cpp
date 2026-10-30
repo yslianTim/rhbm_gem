@@ -9,6 +9,7 @@
 #include "support/JointPostprocessingTestHelpers.hpp"
 #include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/WidthCalibration.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/JointStageAdapter.hpp"
@@ -174,7 +175,7 @@ MapFixture MultipleHaloBoundaryFixture()
     return {std::move(model),std::move(map)};
 }
 
-MapFixture WorkflowFixture(bool qualified_donors=false)
+MapFixture WorkflowFixture(bool qualified_donors=false,bool coupled_targets=false)
 {
     std::vector<std::unique_ptr<AtomObject>> atoms;
     const auto add_atom=[&](int serial,const std::array<double,3> & position,int component,int atom_key,
@@ -197,6 +198,7 @@ MapFixture WorkflowFixture(bool qualified_donors=false)
     };
     std::vector<Profile> profiles{
         {{0,0,0},2.0,.65,-.2},{{4.5,0,0},.4,.8,.1},{{4.8,0,0},.3,.9,-.1}};
+    if(coupled_targets) profiles[0]={{0,0,0},2.0,.5,.2};
     add_atom(1,profiles[0].position,1,7,"CA");
     add_atom(2,profiles[1].position,1,7,"CB");
     add_atom(3,profiles[2].position,3,8,"CG");
@@ -215,6 +217,11 @@ MapFixture WorkflowFixture(bool qualified_donors=false)
             add_atom(static_cast<int>(4+donor),candidates[donor],10+static_cast<int>(donor),
                 100+static_cast<int>(donor),"CA");
         }
+    }
+    if(coupled_targets)
+    {
+        profiles.push_back({{1,0,0},2.0,.5,.2});
+        add_atom(23,profiles.back().position,23,123,"CA");
     }
     ModelObject model(std::move(atoms));
     model.SelectAtoms([qualified_donors](const auto & atom) {
@@ -770,7 +777,7 @@ TEST(PureHaloSupportExclusionTest, PersistsVersionedDualDomainAndMedianProvenanc
     solver.sparse_backend="EIGEN";
     solver.fixed_neighbor_core_atoms=12;
     solver.fixed_neighbor_policy_version=std::string(FixedNeighborPolicyContractVersion);
-    solver.fixed_neighbor_maximum_sweeps=200;
+    solver.fixed_neighbor_maximum_sweeps=300;
     solver.fixed_neighbor_order="forward";
     solver.fixed_neighbor_local_search=std::string(FixedNeighborBoundedLocalSearchName);
     snapshot.evidence.push_back({"global-width-calibration",JointCheckStatus::Passed,
@@ -881,6 +888,62 @@ TEST(PureHaloSupportExclusionTest, RunsPureWorkflowWithoutHalos)
     EXPECT_EQ(result->selection_domain->target_indices.size(),result->atom_ids.size());
     EXPECT_FALSE(result->halo_median_reconstruction);
     EXPECT_EQ(metrics.halo_median_geometry_local_halos,0u);
+}
+
+TEST(PureHaloSupportExclusionTest, ExtendedSearchQualifiesAssemblyAndFeedsEveryDownstreamStage)
+{
+    auto fixture=WorkflowFixture(true,true);
+    static std::size_t maximum_sweeps;
+    maximum_sweeps=0;
+    struct ResetHook
+    {
+        ~ResetHook() {core::detail::JointWorkflowFitHookForTesting()=nullptr;}
+    } reset_hook;
+    core::detail::JointWorkflowFitHookForTesting()=[](core::JointFitResult & fit) {
+        namespace n=core::joint_component;
+        ASSERT_TRUE(fit.problem);
+        auto initialization=fit.initialization;
+        std::fill(initialization.b.begin(),initialization.b.end(),1.5);
+        const auto calibration=n::CalibrateGlobalWidth(initialization,"extension-workflow-test");
+        const auto bounded=n::MakeBoundedInitialization(initialization,calibration);
+        ASSERT_TRUE(bounded.available)<<bounded.reason;
+        n::FixedNeighborSearchPolicy policy; policy.eta_upper_bound=calibration.eta_max4;
+        policy.configure_for_testing=[](auto & local) {
+            local.core_atoms=1; local.nominal_sweeps=35; local.maximum_sweeps=100;
+        };
+        policy.observe_search_for_testing=[](const auto & search) {
+            maximum_sweeps=std::max(maximum_sweeps,search.sweep_count);
+        };
+        auto extended=n::FitFixedNeighborComponents(*fit.problem,bounded.widths,policy);
+        extended.initialization=std::move(initialization);
+        for(const auto & check:fit.evidence)
+            if(check.name=="global-width-calibration" || check.name=="qualified-first-stage-donor-coverage")
+                extended.evidence.push_back(check);
+        extended.evidence.push_back({"bounded-initialization-projection",JointCheckStatus::Passed,
+            JointEvidenceScope::AssembledGlobal,static_cast<double>(bounded.projection_count),{},"test-start-projection"});
+        fit=std::move(extended);
+    };
+    FitOptions options; options.estimator=PotentialEstimator::JOINT_COMPONENTS;
+    options.quiet_mode=true; options.thread_size=1;
+    core::detail::JointPostprocessingMetrics metrics;
+    ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(fixture.map,fixture.model,options,&metrics));
+    ASSERT_GT(maximum_sweeps,35u);
+    ASSERT_LE(maximum_sweeps,100u);
+    const auto result=fixture.model.GetAnalysisView().GetJointResult();
+    ASSERT_TRUE(result);
+    ASSERT_TRUE(IsQualifiedJointAnalysisResult(*result));
+    ASSERT_TRUE(result->assembled_state);
+    ASSERT_TRUE(result->halo_median_reconstruction);
+    EXPECT_EQ(metrics.halo_median_geometry_local_halos,2u);
+    for(int serial:{1,23})
+    {
+        const auto target=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(serial));
+        EXPECT_TRUE(target.GetStageEstimate(FittingStage::Second).point);
+        EXPECT_TRUE(target.GetPostFitPeeling());
+        EXPECT_TRUE(target.GetPostJointLocalResult());
+    }
+    EXPECT_GT(metrics.local_mdpde_fitting_seconds,0.0);
+    EXPECT_GT(metrics.group_alpha_training_seconds,0.0);
 }
 
 TEST(PureHaloSupportExclusionTest, SkipsDownstreamWhenJointQualificationFails)

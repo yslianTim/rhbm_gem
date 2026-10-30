@@ -553,12 +553,18 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
     if(m.solver)
     {
         const auto & p=*m.solver;
+        // Existing saved fits (including the 6CVM baseline) retain their actual policy.
+        const bool historical_fixed_budget=p.fixed_neighbor_policy_version==
+            std::optional<std::string>{"fixed-neighbor-production-v4"} &&
+            p.fixed_neighbor_maximum_sweeps==std::optional<std::size_t>{200};
+        const bool current_budget=p.fixed_neighbor_policy_version==
+            std::optional<std::string>{std::string(FixedNeighborPolicyContractVersion)} &&
+            p.fixed_neighbor_maximum_sweeps==std::optional<std::size_t>{300};
         Require(p.search_method=="fixed-neighbor" &&
             p.contract_version==std::optional<std::string>{std::string(JointSolverProvenanceContractVersion)} &&
             p.sparse_backend==std::optional<std::string>{"EIGEN"} &&
             p.fixed_neighbor_core_atoms==std::optional<std::size_t>{12} &&
-            p.fixed_neighbor_policy_version==std::optional<std::string>{std::string(FixedNeighborPolicyContractVersion)} &&
-            p.fixed_neighbor_maximum_sweeps==std::optional<std::size_t>{200} &&
+            (historical_fixed_budget || current_budget) &&
             p.fixed_neighbor_order==std::optional<std::string>{"forward"} &&
             p.fixed_neighbor_local_search==std::optional<std::string>{std::string(FixedNeighborBoundedLocalSearchName)},
             "invalid current FixedNeighbor provenance");

@@ -173,3 +173,61 @@ local failure. It does not establish statistical identifiability or global optim
 Decision: **Outcome A**, original search qualifies within 300. R2 will evaluate a 200 nominal / 300
 hard budget, using recent normalized projected-KKT progress. Running to 400/600 after qualification
 would have no scientific value and was intentionally avoided.
+
+## R2 adaptive budget
+
+Production policy: nominal 200, hard 300. No public tuning option. A constant-size 20-sweep ring stores
+q=max(A/C KKT / 1e-7, **projected** width KKT / 1e-9). At the nominal boundary, all window metrics
+must be finite and nonnegative, no recovery may remain pending, the best q in the most recent
+10 sweeps must be ≤10, and it must improve at least 5% over the preceding 10-sweep best (which
+must exceed 1). A granted extension runs the same search up to the hard cap; transient rebounds
+inside that extension do not revoke the allocation. Qualification still stops search immediately.
+No extra KKT evaluation, accepted-state copy, local solve or replay is introduced by this decision.
+
+For 6CVM the boundary compares q=5.587652802821822 against 3.75786133806756 (32.75% improvement),
+so it extends. A denied nominal extension keeps `block-sweep-budget`; an exhausted granted
+extension uses `block-hard-sweep-budget`. Pending recovery keeps `block-recovery-sweep-budget`.
+All three paths retain the original endpoint-certification and unqualified-state safeguards.
+
+The policy is versioned `fixed-neighbor-production-v5`; the existing maximum-sweeps provenance
+field now records hard cap 300. No JSON schema or diagnostic tuning field is added. The reader
+also accepts the exact existing v4/200 historical pair so the actual baseline database remains
+readable; mismatched v4/300 is rejected. No numerical compatibility branch is added.
+
+Budget regression coverage includes easy early qualification with identical state/work, progress,
+rebound, odd/even oscillation, separately normalized width, distant/stalled endpoints, nonfinite/
+negative metrics, unresolved/recovered failures, independent component history, fixed/zero budgets,
+and exact hard-cap behavior. A coupled Gaussian pair requires an actual extension (nominal 30),
+qualifies with the same parameters as the original fixed larger budget, and passes production
+component assembly and replay. A 31-sweep hard cap remains unqualified and publishes no state;
+a one-byte memory budget fails before search/state creation. Existing recovery/candidate rollback
+and preflight tests remain unchanged.
+
+### Verified production CLI result
+
+The complete real CLI, original files/selection and `-j 4`, exits **0** with policy v5/300,
+qualifies at **250**, and saves a qualified component and assembled global state. The final eta/A/C
+arrays are exactly equal to R1. Search=500.783628 s; construction=0.693987 s;
+FirstStage initialization=10.846225 s; assessment=2.867448 s; assembly=0.276636 s.
+Whole command incl. loading/Q-score/sampling/downstream/SQLite=575.361841 s; peak process
+RSS=2,811,363,328 bytes. These whole-workflow timing/RSS values must not be directly compared
+with the offline solver-only process. The budget's storage is fixed-size and independent of atoms,
+rows and extension length; endpoint preflight stays 271,418,201 bytes, exactly the original CLI value.
+
+SQLite verification: runtime and target convergence both passed; endpoint certification sweep 250;
+1,645 halos reconstructed, none unavailable; 8,193 peeling entries and 8,193 post-joint local entries;
+819,300/819,300 peeling samples valid; 167 group summaries. This demonstrates execution and
+persistence of downstream stages, not that every separate statistical fit is scientifically identified.
+Machine-readable evidence: [R2 CLI summary](evidence/joint-convergence-r2-cli.json).
+
+Final R2 Release build and **19/19 CTest groups pass** (35.44 s), including 13 budget regressions,
+actual independent multi-component extension, historical-provenance validation, and a full map/model
+workflow regression whose coupled component extends past nominal 35 and qualifies at 40 before
+halo reconstruction, peeling, local MDPDE and group-stage processing. Failure workflows still skip
+these stages. The full-workflow test uses the existing scoped test facade, not a production switch.
+
+An interleaved 20-pair easy-case measurement (8 atoms, identical 3-sweep qualified results) gives
+median solver wall 0.0144783 s fixed versus 0.0144969 s adaptive (about 0.13% difference).
+The budget object is 208 bytes, with no heap allocation. No material easy-case overhead was observed.
+Decision: **promote adaptive budget**. It repairs the actual 6CVM qualification failure without
+changing its accepted numerical trajectory or weakening any qualification check.

@@ -23,7 +23,7 @@ struct JointSolverProvenance
     std::optional<std::size_t> fixed_neighbor_maximum_sweeps;
 };
 inline constexpr std::string_view JointSolverProvenanceContractVersion="joint-solver-provenance-v5";
-inline constexpr std::string_view FixedNeighborPolicyContractVersion="fixed-neighbor-production-v4";
+inline constexpr std::string_view FixedNeighborPolicyContractVersion="fixed-neighbor-production-v5";
 inline constexpr std::string_view FixedNeighborBoundedLocalSearchName="active-set-lm";
 struct JointAnalysisMetadata
 {

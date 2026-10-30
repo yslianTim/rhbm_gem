@@ -95,8 +95,8 @@ def main() -> int:
         )} == {
             "search_method": "fixed-neighbor",
             "fixed_neighbor_core_atoms": 12,
-            "fixed_neighbor_policy_version": "fixed-neighbor-production-v4",
-            "fixed_neighbor_maximum_sweeps": 200,
+            "fixed_neighbor_policy_version": "fixed-neighbor-production-v5",
+            "fixed_neighbor_maximum_sweeps": 300,
             "fixed_neighbor_order": "forward",
             "fixed_neighbor_local_search": "active-set-lm",
         }
@@ -108,8 +108,8 @@ def main() -> int:
         )} == {
             "search_method": "fixed-neighbor",
             "fixed_neighbor_core_atoms": 12,
-            "fixed_neighbor_policy_version": "fixed-neighbor-production-v4",
-            "fixed_neighbor_maximum_sweeps": 200,
+            "fixed_neighbor_policy_version": "fixed-neighbor-production-v5",
+            "fixed_neighbor_maximum_sweeps": 300,
             "fixed_neighbor_order": "forward",
             "fixed_neighbor_local_search": "active-set-lm",
         }
@@ -151,7 +151,7 @@ def main() -> int:
             assert component["search_completed"]
             assert component["state"] is not None
             assert component["stop_reason"] == "block-stationary"
-            assert 0 < component["search_sweeps"] <= 200
+            assert 0 < component["search_sweeps"] <= 300
             diagnostic = component["candidate_diagnostic"]
             assert diagnostic["convergence_criteria_id"] == "practical-v2"
             assert diagnostic["global_ac_kkt_threshold"] == 1e-7

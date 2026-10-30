@@ -16,7 +16,8 @@ struct FixedNeighborSearchResult;
 #endif
 
 inline constexpr std::size_t ProductionFixedNeighborCoreAtoms=12;
-inline constexpr std::size_t ProductionFixedNeighborMaximumSweeps=200;
+inline constexpr std::size_t ProductionFixedNeighborNominalSweeps=200;
+inline constexpr std::size_t ProductionFixedNeighborMaximumSweeps=300;
 
 // The production search accepts its calibrated width bound.
 // Component identity is supplied internally for failure-only logs.

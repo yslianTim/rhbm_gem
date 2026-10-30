@@ -458,7 +458,7 @@ rg::JointAnalysisResult CurrentJointExample(bool with_halo=true)
     solver.contract_version=std::string(rg::JointSolverProvenanceContractVersion);
     solver.sparse_backend="EIGEN";
     solver.fixed_neighbor_policy_version=std::string(rg::FixedNeighborPolicyContractVersion);
-    solver.fixed_neighbor_maximum_sweeps=200;
+    solver.fixed_neighbor_maximum_sweeps=300;
     solver.fixed_neighbor_order="forward";
     solver.fixed_neighbor_local_search=std::string(rg::FixedNeighborBoundedLocalSearchName);
     result.atom_ids=with_halo ? std::vector<std::string>{"1","2"} : std::vector<std::string>{"1"};
@@ -785,7 +785,7 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
     fixed_provenance.contract_version=rg::JointSolverProvenanceContractVersion;
     fixed_provenance.sparse_backend="EIGEN";
     fixed_provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
-    fixed_provenance.fixed_neighbor_maximum_sweeps=200;
+    fixed_provenance.fixed_neighbor_maximum_sweeps=300;
     fixed_provenance.fixed_neighbor_order="forward";
     fixed_provenance.fixed_neighbor_local_search="active-set-lm";
     fixed.metadata.solver=fixed_provenance;
@@ -800,7 +800,7 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
     ASSERT_TRUE(fixed_decoded.metadata.solver);
     EXPECT_EQ(fixed_decoded.metadata.solver->contract_version,rg::JointSolverProvenanceContractVersion);
     EXPECT_EQ(fixed_decoded.metadata.solver->sparse_backend,"EIGEN");
-    EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_maximum_sweeps,200u);
+    EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_maximum_sweeps,300u);
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_order,"forward");
     EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_local_search,"active-set-lm");
 
@@ -824,10 +824,18 @@ TEST(DataObjectPersistenceTest, MalformedCurrentSolverProvenanceIsRejected)
     provenance.contract_version=rg::JointSolverProvenanceContractVersion;
     provenance.sparse_backend="EIGEN";
     provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
-    provenance.fixed_neighbor_maximum_sweeps=200;
+    provenance.fixed_neighbor_maximum_sweeps=300;
     provenance.fixed_neighbor_order="forward";
     provenance.fixed_neighbor_local_search="active-set-lm";
     fixed.metadata.solver=provenance;
+
+    auto historical=boost::json::parse(io::Encode(fixed)).as_object();
+    auto & old_policy=historical.at("metadata").as_object().at("solver").as_object();
+    old_policy["fixed_neighbor_policy_version"]="fixed-neighbor-production-v4";
+    old_policy["fixed_neighbor_maximum_sweeps"]=200;
+    EXPECT_NO_THROW(io::Decode(boost::json::serialize(historical)));
+    old_policy["fixed_neighbor_maximum_sweeps"]=300;
+    EXPECT_THROW(io::Decode(boost::json::serialize(historical)),std::invalid_argument);
 
     auto malformed=boost::json::parse(io::Encode(fixed)).as_object();
     malformed.at("metadata").as_object().at("solver").as_object().erase("sparse_backend");

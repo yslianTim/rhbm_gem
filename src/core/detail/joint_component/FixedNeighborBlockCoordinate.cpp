@@ -1,4 +1,5 @@
 #include "FixedNeighborBlockCoordinate.hpp"
+#include "FixedNeighborBudget.hpp"
 #include "LocalConditioning.hpp"
 #include "Problem.hpp"
 #include "ResourceWork.hpp"
@@ -707,7 +708,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     bool stop=false;
     std::size_t next_certification_retry_sweep{};
     std::vector<std::size_t> block_failure_visits(partition.cores.size());
-    for(std::size_t sweep_index=0;sweep_index<policy.maximum_sweeps && !stop;++sweep_index)
+    FixedNeighborBudget budget(policy.nominal_sweeps,policy.maximum_sweeps,policy.convergence_criteria);
+    for(std::size_t sweep_index=0;!stop && budget.AllowsNextSweep();++sweep_index)
     {
         const auto sweep_started=Clock::now(); FixedNeighborBlockSweep sweep; sweep.sweep=sweep_index+1;
         sweep.objective_before=out.state.objective;
@@ -1133,6 +1135,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             out.work.objective_reconciliation_seconds+=Seconds(objective_reconciliation_started);
         out.final_sweep=sweep;
         if(retain_diagnostics) out.sweeps.back()=sweep;
+        budget.Observe(sweep.global_ac_kkt,stationarity_width_gradient,sweep_had_block_failure);
         if(policy.production_progress) policy.production_progress(sweep);
         const auto stationarity=sweep_had_block_failure ? FixedNeighborStationarityState::NotStationary :
             ClassifyFixedNeighborStationarity(sweep.global_ac_kkt,stationarity_width_gradient,
@@ -1177,7 +1180,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     {
         const bool recovery_pending=std::any_of(block_failure_visits.begin(),block_failure_visits.end(),
             [](std::size_t visits){return visits>0;});
-        out.reason=recovery_pending ? "block-recovery-sweep-budget" : "block-sweep-budget";
+        out.reason=recovery_pending ? "block-recovery-sweep-budget" :
+            budget.HardLimitReached() ? "block-hard-sweep-budget" : "block-sweep-budget";
         if(!recovery_pending && stop_after_stationarity && endpoint_certification_enabled && out.sweep_count &&
             out.certification_sweep!=out.sweep_count)
         {
@@ -1327,6 +1331,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     FixedNeighborPolicy policy;
     policy.core_atoms=ProductionFixedNeighborCoreAtoms;
     policy.maximum_sweeps=ProductionFixedNeighborMaximumSweeps;
+    policy.nominal_sweeps=ProductionFixedNeighborNominalSweeps;
     policy.convergence_criteria=PracticalJointConvergenceCriteria;
     policy.component_index=production_policy.component_index;
     policy.component_id=production_policy.component_id;

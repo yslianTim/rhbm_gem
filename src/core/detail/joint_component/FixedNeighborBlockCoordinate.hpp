@@ -128,6 +128,7 @@ struct PreparedFixedNeighborBlock
 struct FixedNeighborPolicy
 {
     std::size_t core_atoms{12},maximum_sweeps{30};
+    std::size_t nominal_sweeps{}; // Zero uses the fixed maximum (internal numerical fixtures).
     JointConvergenceCriteria convergence_criteria{StrictJointConvergenceCriteria};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     bool stop_after_stationarity{true};
