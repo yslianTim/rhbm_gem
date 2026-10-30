@@ -2,6 +2,9 @@
 
 #include "core/detail/joint_component/HaloMedianReconstruction.hpp"
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/LocalConditioning.hpp"
+#include "core/detail/joint_component/TargetEvidence.hpp"
+#include "support/JointTestContext.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
@@ -207,4 +210,83 @@ TEST(HaloMedianReconstructionTest, ChemicalLabelsDoNotChangeGeometryLocalHaloEst
     ASSERT_TRUE(original.snapshot);
     ASSERT_TRUE(changed.snapshot);
     EXPECT_EQ(*original.snapshot,*changed.snapshot);
+}
+
+TEST(HaloMedianReconstructionTest, FullModelConditioningGuardsZeroContributionWidthMedians)
+{
+    namespace n=rhbm_gem::core::joint_component;
+    namespace tc=second_stage_test::matched::joint_abc;
+    for(double charge:{0.0,.2})
+    {
+        JointProblemInput input; input.atom_ids={"1"}; input.support.resize(1);
+        for(double square:{0.0,.25,1.0,2.25,4.0,6.25})
+        {
+            input.support[0].push_back({input.observations.size(),square});
+            input.row_ids.push_back(std::to_string(input.observations.size()));
+            input.observations.push_back(charge*n::EvaluateKernel(square,.7,2.5).charge);
+        }
+        input.selection_domain.emplace(); input.selection_domain->target_indices={0};
+        JointProblem target(std::move(input));
+        const auto & data=JointProblemAccess::Get(target);
+        n::Vector eta=n::Vector::Constant(1,std::log(.7)),beta(2); beta<<0.,charge;
+        auto block=n::AssessFixedNeighborLocalConditioning(data.domain,data.y,eta,beta,
+            data.context,"test/block-1").evidence;
+        block.core_atoms={0};
+        if(charge==0) EXPECT_EQ(block.conditioning_classification,"Singular");
+        else
+        {
+            EXPECT_EQ(block.projected_width_rank,1u);
+            EXPECT_GT(block.projected_width_column_norms.front(),0.0);
+            EXPECT_EQ(block.conditioning_classification,"ActiveFace");
+        }
+        JointState state{{0.,charge},{.7},{std::log(.7)},{0.},0.};
+        const auto evidence=n::AssessTargetPointState(target,target.ParameterLayout(),state,
+            JointCheckStatus::Passed,{block},JointEvidenceScope::AssembledGlobal,6);
+        ASSERT_EQ(evidence.point_atoms.size(),1u);
+        EXPECT_EQ(evidence.point_atoms.front().local_conditioning,"Warning");
+
+        auto f=MakeFixture();
+        auto & point=*f.result.components.front().state;
+        point.ac[0]=0.; point.ac[1]=charge; point.b[0]=.7;
+        f.result.target_evidence->point_atoms[0].local_conditioning=
+            evidence.point_atoms.front().local_conditioning;
+        const auto guarded=BuildHaloMedianReconstruction(f.model,f.problem,f.result,"guarded");
+        ASSERT_TRUE(guarded.snapshot);
+        EXPECT_EQ(guarded.snapshot->valid_target_count,2u);
+        EXPECT_EQ(guarded.snapshot->halos.front().donor_atom_ids,(std::vector<std::string>{"3","2"}));
+        EXPECT_DOUBLE_EQ(guarded.snapshot->global_median[1],2.5);
+        EXPECT_DOUBLE_EQ(guarded.snapshot->halos.front().width,2.5);
+
+        // Counterfactual gate bypass: a zero-contribution target's B can change
+        // another atom's median, even though its own model remains zero.
+        f.result.target_evidence->point_atoms[0].local_conditioning="Adequate";
+        const auto admitted=QualifiedJointTargetDonors(f.model,f.problem,f.result);
+        EXPECT_EQ(admitted.size(),3u); // No amplitude-only exclusion in donor policy.
+        if(charge==0)
+        {
+            point.b[0]=4.;
+            const auto bypassed=BuildHaloMedianReconstruction(f.model,f.problem,f.result,"counterfactual");
+            EXPECT_DOUBLE_EQ(bypassed.snapshot->halos.front().width,3.0);
+        }
+    }
+}
+
+TEST(HaloMedianReconstructionTest, ConditioningExclusionPreservesSmallPoolProvenanceAndRejectsEmptyPool)
+{
+    auto f=MakeFixture();
+    f.result.target_evidence->point_atoms[0].local_conditioning="Warning";
+    f.result.target_evidence->point_atoms[1].local_conditioning="Warning";
+    const auto single=BuildHaloMedianReconstruction(f.model,f.problem,f.result,"one-donor");
+    ASSERT_TRUE(single.snapshot);
+    EXPECT_EQ(single.snapshot->valid_target_count,1u);
+    EXPECT_EQ(single.snapshot->global_median,(std::array<double,3>{5.,3.,8.}));
+    for(const auto & halo:single.snapshot->halos)
+    {
+        EXPECT_EQ(halo.donor_count,1u); EXPECT_EQ(halo.donor_atom_ids,(std::vector<std::string>{"3"}));
+        EXPECT_EQ(halo.joint_run_id,"one-donor");
+        EXPECT_EQ(halo.source,HaloMedianSource::GeometryLocalTargetMedian);
+        EXPECT_DOUBLE_EQ(halo.width,3.0);
+    }
+    f.result.target_evidence->point_atoms[2].local_conditioning="Unavailable";
+    EXPECT_THROW(BuildHaloMedianReconstruction(f.model,f.problem,f.result,"empty"),std::invalid_argument);
 }

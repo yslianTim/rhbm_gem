@@ -171,3 +171,80 @@ but this is not evidence that their fitted Widths are unreliable.
 The audit executable/source, full per-atom TSV, logs, SQLite and timing data are
 temporary under `/tmp/rhbmgem-jce-closeout/`; no binaries or large data are tracked.
 R2-A does not change production numerical or downstream eligibility policies.
+
+## Downstream regression contracts (R2-B)
+
+The two added Halo tests derive Singular/ActiveFace evidence from the actual
+full-model conditioning and target-evidence functions, then exercise the donor
+gate, local nearest-neighbor median, global median, exact donor IDs and run ID.
+Two donors and one donor remain legal; an empty pool explicitly rejects
+reconstruction. There is no silent default Width or separate global-median
+fallback: the global median is retained as provenance, while halos use the
+available nearest donors. The charge-informative A=0 case retains a rank-one
+projected Width direction. An explicitly Adequate endpoint record is accepted
+regardless of A; the real ActiveFace warning still excludes it conservatively.
+The counterfactual Adequate override for A=C=0 demonstrates the hazard the real
+gate prevents: changing a zero-contribution donor's B changes a halo median.
+This override is not asserted to be valid conditioning evidence.
+
+`CompleteModelWidthSensitivityPropagatesThroughPeelingAndLocalCharge` uses
+controlled downstream endpoint records and fixed sample observations. It does
+not claim the changed endpoints remain optimization-qualified. It exercises
+the production contributor universe, postprocessing context, peeling, charge
+correction, actual Local MDPDE/measurement-information builder and validator:
+
+* A=C=0, B=.3/.7: zero correction, identical neighbor peeling and Local fit.
+* A=0,C=.2, B=.3/.7: correction changes >.01, neighbor peeling >.001,
+  Local Gaussian point >1e-4, and measurement precision changes. Both Local
+  results remain Available; A=0 alone is not a Local exclusion.
+* A=0,C=.2, off-grid B=.015/.02: peeling/correction/Gaussian response differences
+  <1e-13; both targets' Local status, sample count, Gaussian A/B, precision and
+  moment agree to 1e-10. Different recorded B does not imply estimability.
+* Nonfinite corrected responses and rank-deficient Local designs reject without
+  information. Extended validator tests reject unqualified MDPDE, nonpositive
+  A/B, nonfinite peeling and invalid covariance/information.
+
+The Local test adapter is a macro-guarded forwarding call to the existing
+`FitPostJointLocalTarget`; it duplicates no fitting algorithm and has no Release
+interface or behavior. The Group policy-comparison test keeps qualified Local
+measurements fixed while changing a zero-charge Joint Width: posterior,
+covariance, outlier flags and member IDs remain identical. A candidate-only
+exclusion changes four members to three, changes estimates/covariance, and
+removes the excluded posterior. Two-member singular covariance, single-member
+and empty-member cases remain Unavailable. Source IDs and stage JSON round-trip
+are checked. These small groups do not enter randomized alpha training.
+
+All 43 tests in HaloMedianReconstruction, LocalConditioning and PartialSelection
+passed twice with shuffled order (seeds 42/43), 86 executions total.
+
+### Real downstream comparison
+
+An in-memory experiment reused the production Local fitter and Group orchestration;
+it did not save changed endpoints or measurements. Endpoint changes deliberately
+invalidate a whole Joint run's derived records. The experiment therefore rebuilt
+all 1418 peelings and restored/recomputed paired Local records before comparing
+groups, preserving current source identity. Recompute Local whenever peeling
+changes, plus the perturbed target itself; retain exactly unchanged measurements.
+
+Group alpha training uses randomized splits (`RHBMTrainer.cpp`). The new run used
+alpha_g=.4, whereas the older successful run used .6. Joint and Local results are
+identical; cross-run Group estimates/outlier flags must not be attributed to a
+Width policy without controlling alpha. For the controlled comparison only, a
+temporary copy of Group orchestration held alpha at the **new run's persisted
+.4**; all grouping, eligibility, covariance and posterior code remained the same.
+This control is not a production change or a retained diagnostic framework.
+
+| Conditional experiment | Local effects | Group effects (alpha_g=.4 fixed) |
+| --- | --- | --- |
+| NZ393 B*.8,*1.25,*2 | same 30 effective samples; invalid-local-parameters unchanged | no member, estimate, covariance, status or outlier changes |
+| OE2(1421) B*.8 | same 11 effective samples, alpha_r=0; point/information unchanged | unchanged |
+| OE2(1421) B*1.25 | 3 Local records recomputed; max point change 1.57e-12; relative precision change 8.75e-12 | max group point change 2.06e-13; member covariance norm change 3.02e-12 |
+| OE2(1421) B*2 | 4 Local records recomputed; max point change 3.17e-6; relative precision change 1.78e-5 | max group point change 4.41e-7; member covariance norm change 6.15e-6 |
+| Candidate exclusion of NZ393/OE2 Local evidence | NZ was already unavailable; available Local set 1413 -> 1412 | only GLU OE2 group: 15 -> 14 eligible members; group A 22.67447174 -> 22.61562099, B .68919141 -> .68886537; max member covariance norm change .10555 |
+
+Every experiment retained all Group availability statuses and outlier flags.
+The candidate exclusion leaves Halo donor/member sets unchanged (both targets
+were already excluded from the Halo pool). Removing a stable Local measurement
+changes a group estimate; without independent statistical truth, that change is
+**not evidence of improvement**. No Local or Group availability failure was
+causally reproduced by the nearly flat Width perturbations tested here.

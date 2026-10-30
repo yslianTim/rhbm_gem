@@ -1178,6 +1178,15 @@ TEST(JointComponentPartialSelectionTest, PostJointEvidenceAssessmentEnforcesAvai
     EXPECT_FALSE(assessCurrent(bad).valid);
     bad = result; bad.fit.diagnostics.reset();
     EXPECT_FALSE(assessCurrent(bad).valid);
+    bad = result; bad.fit.diagnostics->status = RHBMEstimationStatus::MAX_ITERATIONS_REACHED;
+    EXPECT_FALSE(assessCurrent(bad).group_eligible);
+    bad = result; bad.fit.mdpde = {GaussianModel3D{0.0, 0.48, 0.0}, {}};
+    EXPECT_FALSE(assessCurrent(bad).group_eligible);
+    bad = result; bad.fit.ols = {GaussianModel3D{2.1, 0.0, 0.0}, {}};
+    EXPECT_FALSE(assessCurrent(bad).group_eligible);
+    auto nonfinite_peeling = peeling;
+    nonfinite_peeling.samples[0].response = std::numeric_limits<double>::infinity();
+    EXPECT_FALSE(assess(result, joint, &nonfinite_peeling).group_eligible);
     bad = result; bad.information->precision = Eigen::Matrix2d::Zero();
     EXPECT_FALSE(assessCurrent(bad).valid);
     bad = result; bad.information->moment(0) = std::numeric_limits<double>::infinity();
@@ -1589,4 +1598,237 @@ TEST(JointComponentPartialSelectionTest, JointFirstStageParallelWorkersPreserveS
             }
         }
     }
+}
+
+TEST(JointComponentPartialSelectionTest, CompleteModelWidthSensitivityPropagatesThroughPeelingAndLocalCharge)
+{
+    using namespace rhbm_gem;
+    // Controlled downstream endpoint records isolate the equations below. Joint
+    // optimization/qualification is exercised separately by the recovery tests.
+    auto f=joint_partial_test::Make("all");
+    f.model->FindAtomPtr(1)->SetPosition(.13,.14,.12);
+    SetExactMapForFixture(f);
+    const auto problem=core::BuildPureHaloSupportExclusionProblem(*f.map,*f.model);
+    const auto fitted=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,f.b,2.0);
+    ASSERT_EQ(fitted.RuntimeConvergence(),JointCheckStatus::Passed);
+    const auto baseline=core::CaptureJointAnalysisResult(fitted);
+    struct Output
+    {
+        std::map<int,PostFitPeelingResult> peeling;
+        core::detail::PostJointLocalSamples samples;
+        PostJointLocalResult local,neighbor;
+    };
+    const auto run=[&](double charge,double width) {
+        auto snapshot=baseline;
+        auto & state=*snapshot.components.front().state;
+        state.ac[0]=0.; state.ac[1]=charge; state.b[0]=width; state.log_b[0]=std::log(width);
+        snapshot.assembled_state=state;
+        f.model->EditAnalysis().ApplyJointResult(snapshot,"controlled-width");
+        for(int id:{1,2})
+        {
+            const auto * atom=f.model->FindAtomPtr(id);
+            LocalPotentialSampleList raw;
+            for(int k=0;k<24;++k)
+            {
+                const double distance=.08+.04*k;
+                auto position=atom->GetPosition(); position[0]+=distance;
+                const auto stencil=core::detail::MakeTricubicStencil(*f.map,position);
+                const double response=core::detail::InterpolateTricubic(stencil,[&](const auto & node) {
+                    return f.map->GetMapValue(stencil.Index(node));
+                })+.001*std::sin(1.3*k);
+                raw.push_back({response,{distance,position,true}});
+            }
+            f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*atom,std::move(raw));
+        }
+        const auto context=postprocessing_test::MakeJointPostprocessingContext(*f.map,*f.model,problem,snapshot);
+        Output out;
+        out.peeling=postprocessing_test::BuildPostFitPeelingSamples(context,problem.Input().selection_domain->target_indices);
+        out.samples=context.BuildPostJointLocalSamples(1,out.peeling.at(1));
+        core::FitOptions options; options.quiet_mode=true;
+        core::detail::JointPostprocessingMetrics metrics;
+        out.local=core::detail::FitPostJointLocalTargetForTesting(context,*f.model,1,out.peeling.at(1),options,metrics);
+        out.neighbor=core::detail::FitPostJointLocalTargetForTesting(context,*f.model,2,out.peeling.at(2),options,metrics);
+        auto nonfinite=out.peeling.at(1);
+        for(auto & sample:nonfinite.samples) sample.response=std::numeric_limits<double>::infinity();
+        const auto invalid=core::detail::FitPostJointLocalTargetForTesting(context,*f.model,1,nonfinite,options,metrics);
+        EXPECT_EQ(invalid.status,EvidenceStatus::Unavailable);
+        EXPECT_EQ(invalid.reason,"insufficient-positive-responses");
+        EXPECT_FALSE(invalid.information);
+        auto repeated=AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).GetRawSamplingEntriesView();
+        for(auto & sample:repeated) sample.point.distance=.2;
+        f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*f.model->FindAtomPtr(1),std::move(repeated));
+        const auto rank_deficient=core::detail::FitPostJointLocalTargetForTesting(
+            context,*f.model,1,out.peeling.at(1),options,metrics);
+        EXPECT_EQ(rank_deficient.status,EvidenceStatus::Unavailable);
+        EXPECT_EQ(rank_deficient.reason,"rank-deficient-local-design");
+        EXPECT_FALSE(rank_deficient.information);
+        return out;
+    };
+    const auto difference=[](const Output & left,const Output & right,bool correction) {
+        double maximum{};
+        for(std::size_t i=0;i<left.samples.samples.size();++i)
+        {
+            const auto & a=left.samples.samples[i]; const auto & b=right.samples.samples[i];
+            if(correction)
+                maximum=std::max(maximum,std::abs(a.fixed_charge_response.value()-b.fixed_charge_response.value()));
+            else
+                maximum=std::max(maximum,std::abs(left.peeling.at(2).samples[i].response.value()-
+                    right.peeling.at(2).samples[i].response.value()));
+        }
+        return maximum;
+    };
+    const auto zero_narrow=run(0.,.3),zero_broad=run(0.,.7);
+    EXPECT_EQ(difference(zero_narrow,zero_broad,true),0.0);
+    EXPECT_EQ(difference(zero_narrow,zero_broad,false),0.0);
+    EXPECT_EQ(zero_narrow.local.fit.mdpde.GetModel().ToVector(),zero_broad.local.fit.mdpde.GetModel().ToVector());
+    for(const auto & sample:zero_narrow.samples.samples)
+    {
+        ASSERT_TRUE(sample.fixed_charge_response); ASSERT_TRUE(sample.gaussian_response);
+        EXPECT_EQ(*sample.fixed_charge_response,0.0);
+        EXPECT_DOUBLE_EQ(*sample.gaussian_response,*sample.peeled_response);
+    }
+    const auto informative_narrow=run(.2,.3),informative_broad=run(.2,.7);
+    EXPECT_GT(difference(informative_narrow,informative_broad,true),.01);
+    EXPECT_GT(difference(informative_narrow,informative_broad,false),.001);
+    ASSERT_EQ(informative_narrow.local.status,EvidenceStatus::Available)<<informative_narrow.local.reason;
+    ASSERT_EQ(informative_broad.local.status,EvidenceStatus::Available)<<informative_broad.local.reason;
+    EXPECT_GT((informative_narrow.local.fit.mdpde.GetModel().ToVector()-
+        informative_broad.local.fit.mdpde.GetModel().ToVector()).norm(),1e-4);
+    ASSERT_TRUE(informative_narrow.local.information); ASSERT_TRUE(informative_broad.local.information);
+    EXPECT_FALSE(informative_narrow.local.information->precision.isApprox(
+        informative_broad.local.information->precision,1e-6));
+    for(const auto & sample:informative_broad.samples.samples)
+        EXPECT_DOUBLE_EQ(*sample.gaussian_response,*sample.peeled_response-*sample.fixed_charge_response);
+
+    const auto weak_narrow=run(.2,.015),weak_broad=run(.2,.02);
+    EXPECT_LT(difference(weak_narrow,weak_broad,true),1e-13);
+    EXPECT_LT(difference(weak_narrow,weak_broad,false),1e-13);
+    EXPECT_NE(weak_narrow.samples.fixed_charge.width,weak_broad.samples.fixed_charge.width);
+    for(std::size_t i=0;i<weak_narrow.samples.samples.size();++i)
+        EXPECT_NEAR(*weak_narrow.samples.samples[i].gaussian_response,
+            *weak_broad.samples.samples[i].gaussian_response,1e-13);
+    for(const auto & pair:{std::pair{&weak_narrow.local,&weak_broad.local},
+            std::pair{&weak_narrow.neighbor,&weak_broad.neighbor}})
+    {
+        const auto & left=*pair.first; const auto & right=*pair.second;
+        EXPECT_EQ(left.status,right.status); EXPECT_EQ(left.reason,right.reason);
+        EXPECT_EQ(left.source.run_id,"controlled-width");
+        EXPECT_EQ(left.sample_count,24u); EXPECT_EQ(left.effective_sample_count,right.effective_sample_count);
+        ASSERT_EQ(left.status,EvidenceStatus::Available)<<left.reason;
+        EXPECT_TRUE(left.fit.mdpde.GetModel().ToVector().isApprox(right.fit.mdpde.GetModel().ToVector(),1e-10));
+        ASSERT_TRUE(left.information); ASSERT_TRUE(right.information);
+        EXPECT_TRUE(left.information->precision.isApprox(right.information->precision,1e-10));
+        EXPECT_TRUE(left.information->moment.isApprox(right.information->moment,1e-10));
+    }
+}
+
+TEST(JointComponentPartialSelectionTest, WeakJointWidthPolicyComparisonUsesOnlyQualifiedLocalGroupMeasurements)
+{
+    using namespace rhbm_gem;
+    std::vector<std::unique_ptr<AtomObject>> atoms;
+    for(int id=1;id<=5;++id)
+    {
+        auto atom=std::make_unique<AtomObject>(); atom->SetSerialID(id);
+        atom->SetElement(Element::CARBON); atom->SetChainID("A");
+        atom->SetComponentID("ALA"); atom->SetAtomID("CA"); atoms.push_back(std::move(atom));
+    }
+    ModelObject model(std::move(atoms)); model.SelectAllAtoms();
+    auto editor=model.EditAnalysis(); editor.InitializeFromSelection();
+    std::map<int,LocalStageEstimate> stages;
+    for(int id=1;id<=5;++id)
+    {
+        LocalStageEstimate stage;
+        stage.source={EstimateMethod::JointComponents,std::to_string(id),"component","width-group",FittingRole::Target};
+        stage.point=GaussianModel3D{id==1 ? 0. : 2.,id==1 ? .015 : .5,0.};
+        stage.convergence=JointCheckStatus::Passed; stages[id]=stage;
+    }
+    editor.ApplySecondStageEstimates(stages);
+    std::vector<std::pair<int,PostFitPeelingResult>> peelings;
+    std::vector<std::pair<int,PostJointLocalResult>> locals;
+    const std::array<double,5> widths{.4,.5,.7,.6,.8};
+    for(int id=1;id<=5;++id)
+    {
+        LocalPotentialSampleList raw(6); PostFitPeelingResult peeling;
+        peeling.source=stages[id].source;
+        for(std::size_t i=0;i<raw.size();++i)
+        {
+            const auto index=static_cast<double>(i);
+            raw[i].point.distance=.1+.15*index; raw[i].response=2.+.01*index;
+            peeling.samples.push_back({raw[i].response,{}});
+        }
+        editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(id),std::move(raw));
+        peelings.emplace_back(id,std::move(peeling));
+        PostJointLocalResult local;
+        local.source=stages[id].source; local.fixed_charge={0.,stages[id].point->GetWidth()};
+        local.sample_count=6; local.effective_sample_count=6; local.fit.alpha_r=.2;
+        local.fit.ols=local.fit.mdpde={GaussianModel3D{2.+.3*id,widths[static_cast<std::size_t>(id-1)],0.},{}};
+        local.fit.diagnostics=LocalFitDiagnostics{RHBMEstimationStatus::SUCCESS,.1,{8,1e-8,1e-8},{},std::nullopt};
+        local.status=id==5 ? EvidenceStatus::Unavailable : EvidenceStatus::Available;
+        local.reason=id==5 ? "local-mdpde-unqualified" : "";
+        if(id!=5)
+        {
+            RHBMInformation information; information.precision=20.*Eigen::Matrix2d::Identity();
+            information.moment=information.precision*linearization_service::EncodeGaussianToParameterVector(local.fit.mdpde.GetModel());
+            local.information=std::move(information);
+        }
+        locals.emplace_back(id,std::move(local));
+    }
+    core::FitOptions options; options.quiet_mode=true;
+    const auto publish=[&] {
+        editor.ApplyPostFitPeelingsBatch(peelings); editor.ApplyPostJointLocalResultsBatch(locals);
+        core::RunGroupPotentialFitting(model,options);
+        const auto keys=model.GetAnalysisView().CollectAtomGroupKeys();
+        return *model.GetAnalysisView().GetGroupParameterSummary(keys.front());
+    };
+    const auto original=publish();
+    ASSERT_EQ(original.status,EvidenceStatus::Available)<<original.reason;
+    EXPECT_EQ(original.member_ids,(std::vector<int>{1,2,3,4}));
+    EXPECT_EQ(original.source_id,"width-group"); EXPECT_EQ(original.excluded_count,1u);
+    ASSERT_TRUE(original.inference);
+    // The Joint Width can change on a zero-charge profile without changing the
+    // supplied qualified Local Gaussian measurement, covariance or outlier flags.
+    stages[1].point=GaussianModel3D{0.,1.2,0.};
+    locals[0].second.fixed_charge.width=1.2;
+    editor.ApplySecondStageEstimates(stages);
+    const auto changed_joint=publish();
+    ASSERT_TRUE(changed_joint.inference);
+    EXPECT_EQ(changed_joint.member_ids,original.member_ids);
+    EXPECT_EQ(changed_joint.inference->mdpde.ToVector(),original.inference->mdpde.ToVector());
+    for(std::size_t i=0;i<original.inference->member_results.size();++i)
+    {
+        const auto & a=original.inference->member_results[i]; const auto & b=changed_joint.inference->member_results[i];
+        EXPECT_EQ(a.is_outlier,b.is_outlier); EXPECT_DOUBLE_EQ(a.statistical_distance,b.statistical_distance);
+        EXPECT_EQ(a.posterior.GetModel().ToVector(),b.posterior.GetModel().ToVector());
+        ASSERT_TRUE(a.parameter_covariance); ASSERT_TRUE(b.parameter_covariance);
+        EXPECT_TRUE(a.parameter_covariance->isApprox(*b.parameter_covariance,0.));
+    }
+    ModelObject restored{model};
+    stage_result_io::Decode(restored,stage_result_io::Encode(model));
+    EXPECT_DOUBLE_EQ(AtomLocalPotentialView::For(*restored.FindAtomPtr(1)).GetPostJointLocalResult()->fixed_charge.width,1.2);
+    const auto exclude=[&](int id) {
+        auto & local=locals[static_cast<std::size_t>(id-1)].second;
+        local.status=EvidenceStatus::Ineligible; local.reason="candidate-width-information-exclusion";
+        local.information.reset();
+    };
+    exclude(1); // Analysis-only candidate policy, never a production gate.
+    const auto candidate=publish();
+    EXPECT_EQ(candidate.member_ids,(std::vector<int>{2,3,4}));
+    EXPECT_EQ(candidate.eligible_count,3u); EXPECT_EQ(candidate.excluded_count,2u);
+    ASSERT_TRUE(candidate.inference)<<candidate.reason;
+    EXPECT_NE(candidate.inference->mean.ToVector(),original.inference->mean.ToVector());
+    ASSERT_TRUE(candidate.inference->member_results.front().parameter_covariance);
+    EXPECT_FALSE(candidate.inference->member_results.front().parameter_covariance->isApprox(
+        *original.inference->member_results[1].parameter_covariance,1e-8));
+    EXPECT_FALSE(AtomLocalPotentialView::For(*model.FindAtomPtr(1)).GetGroupMemberResult());
+    exclude(4);
+    const auto singular=publish();
+    EXPECT_EQ(singular.status,EvidenceStatus::Unavailable);
+    EXPECT_EQ(singular.reason,"singular-group-covariance"); EXPECT_FALSE(singular.inference);
+    exclude(3);
+    const auto single=publish();
+    EXPECT_EQ(single.member_ids,(std::vector<int>{2}));
+    EXPECT_EQ(single.status,EvidenceStatus::Unavailable); EXPECT_EQ(single.reason,"single-member");
+    exclude(2);
+    const auto empty=publish();
+    EXPECT_EQ(empty.reason,"no-eligible-post-joint-local-results"); EXPECT_FALSE(empty.inference);
 }

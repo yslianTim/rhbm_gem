@@ -174,6 +174,13 @@ void LogJointWarning(const std::string & message)
 }
 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
+PostJointLocalResult FitPostJointLocalTargetForTesting(
+    const JointPostprocessingContext & context, const ModelObject & model, int atom,
+    const PostFitPeelingResult & peeling, const FitOptions & options, JointPostprocessingMetrics & metrics)
+{
+    return FitPostJointLocalTarget(context, model, atom, peeling, options, metrics);
+}
+
 JointWorkflowFitHook & JointWorkflowFitHookForTesting()
 {
     static thread_local JointWorkflowFitHook hook{};

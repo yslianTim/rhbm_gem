@@ -12,6 +12,9 @@ namespace rhbm_gem::core::detail {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 using JointWorkflowFitHook = void (*)(JointFitResult &);
 JointWorkflowFitHook & JointWorkflowFitHookForTesting();
+PostJointLocalResult FitPostJointLocalTargetForTesting(
+    const JointPostprocessingContext &, const ModelObject &, int, const PostFitPeelingResult &,
+    const FitOptions &, JointPostprocessingMetrics &);
 #endif
 
 void RunTwoStageFromPreparedSamples(
