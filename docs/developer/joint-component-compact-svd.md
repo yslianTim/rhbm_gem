@@ -17,9 +17,6 @@ existing tiled QR, cancellation handling, and compact least-squares solve.
 Local conditioning analyzes one FixedNeighbor block at a time and reports its
 conditional free A/C, projected-width, and profile derivative evidence.
 
-Production does not request or retain global weak directions. Historical
-right-vector and global projected-width studies are archived in the
-[Joint evidence record](joint-component-evidence.md); their memory
-estimates do not describe current runtime. The local SVD controls remain owned
-by `Numerics_test.cpp`, `LocalConditioning_test.cpp`, and the Profile LM
-derivative tests.
+Production does not request or retain global weak directions. The local SVD
+controls remain covered by `Numerics_test.cpp`, `LocalConditioning_test.cpp`,
+and the Profile LM derivative tests.

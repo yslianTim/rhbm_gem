@@ -43,5 +43,4 @@ the versioned Joint JSON payload and performs no migration. The C++ public
 struct layout also changes; downstream C++ consumers must rebuild.
 
 See the [runtime guide](joint-component-runtime.md),
-[data I/O architecture](architecture/dataobject-io-architecture.md) and
-[cleanup acceptance record](joint-diagnostics-cleanup.md).
+[data I/O architecture](architecture/dataobject-io-architecture.md).

@@ -91,44 +91,11 @@ Run the Joint groups:
 ctest --test-dir build -L 'joint:(contract|workflow|numerical)' --parallel 4 --output-on-failure
 ```
 
-Run the bounded LM and tiled derivative microbenchmarks in a Release build:
-
-```bash
-cmake --build build --target rhbm_joint_optimization_benchmark --parallel 4
-env OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=1 OPENBLAS_NUM_THREADS=1 \
-    MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 CMAKE_BUILD_PARALLEL_LEVEL=4 \
-    build/bin/rhbm_joint_optimization_benchmark
-```
-
-It prints five timing samples for bounded LM, derivative preparation, and
-derivative reduction, plus the derivative input dimensions. It links the
-uninstrumented production library and is not registered as a CTest test.
-
-Research conclusions and measurement limits are summarized in the
-[Joint evidence record](../docs/developer/joint-component-evidence.md); the
-[runtime guide](../docs/developer/joint-component-runtime.md) describes the
-current production contract.
-
-The production closed-loop benchmark uses one warmup and five measured runs:
-
-```bash
-cmake --build build/release --target rhbm_fixed_neighbor_closed_loop_benchmark --parallel 4
-env OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=1 OPENBLAS_NUM_THREADS=1 \
-    MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 \
-    build/release/bin/rhbm_fixed_neighbor_closed_loop_benchmark 1000
-```
-
-For cleanup verification, `rhbm_joint_cleanup_snapshot` writes complete
-round-trip-safe numeric arrays for the four chain sizes and difficult fixtures.
-It links the production library. Run it in the same single-thread environment
-with an output JSONL path. Compare the saved C0 and final output using
-`tests/benchmarks/compare_joint_cleanup_snapshots.py <before.jsonl> <after.jsonl>`.
-The comparison uses exact double bits, checks quality against v2, and explicitly
-accounts for the removed CPU-budget member in workspace estimates. It is not
-an optional production diagnostic. Full CTest includes conditioning, strict
-local certificates, projected width KKT, endpoint/replay, rank/near-singular,
-recovery, persistence, Halo/peeling and workflow coverage. The Eigen scope
-test group explicitly sets its two-thread environment.
+The [runtime guide](../docs/developer/joint-component-runtime.md) describes the
+current production contract. Full CTest covers adaptive sweep budgets,
+conditioning, strict local certificates, projected width KKT, endpoint/replay,
+rank/near-singular recovery, persistence, Halo/peeling and workflow behavior.
+The Eigen scope test group sets its required two-thread environment.
 
 ## Adding New Tests
 

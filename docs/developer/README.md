@@ -36,16 +36,10 @@ with project internals.
   the fitting workflow.
 - [Capabilities and limitations](joint-capabilities-limitations.md) identifies
   supported behavior and current evidence limits.
-- [Width recovery closeout](joint-width-closeout.md) records recovery integration,
-  full-model Width sensitivity, and downstream eligibility evidence.
 - [Target point validation](joint-target-estimability.md) defines v2 quality and
-  schema 22 persistence; the [cleanup record](joint-diagnostics-cleanup.md)
-  records numerical equivalence and the deliberate quality migration.
+  schema 22 persistence.
 - [Memory planning](joint-component-memory-census.md) documents production
   preflight estimates and their limits.
-- [Historical evidence](joint-component-evidence.md) summarizes retired
-  decisions and scientific limits. Closed implementations and machine-readable
-  results are recoverable from Git history and are not retained in the tree.
 - [Certification contract](joint_abc_certification_contract.md),
   [component contract](joint_abc_components_contract.md), and the
   [compact-SVD implementation contract](joint-component-compact-svd.md) own
@@ -54,6 +48,6 @@ with project internals.
 ## Testing and release
 
 - [Test organization](../../tests/README.md) describes default correctness
-  tests, Joint validation and production benchmarks.
+  tests and Joint validation.
 - Read [release compliance](release-compliance.md) before preparing a source
   or binary release.

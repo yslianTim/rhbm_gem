@@ -15,9 +15,3 @@ Production evaluates the accepted state and endpoint through streaming support
 traversal. It does not allocate a global free-design factor, projection
 coefficient matrix, or projected-width factor. Local conditioning
 workspaces are bounded by block dimensions.
-
-The large synthetic measurements did not complete a full search, local
-conditioning over all blocks, or downstream workflow. The full
-physical-data resource gate remains open. The
-[Joint evidence record](joint-component-evidence.md) retains the measured
-figures and their scope.

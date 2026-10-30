@@ -25,7 +25,7 @@ workspace after the accepted endpoint. It reports conditional block evidence;
 it does not certify global rank. The complete derivative retains its
 nonzero-residual coefficient correction.
 
-## Memory and historical backend results
+## Memory
 
 Global search and endpoint verification traverse support entries and do not
 form a global dense design. The former global rank factors and projection
@@ -33,15 +33,5 @@ coefficients have been removed. Current stage-specific memory protections cover
 construction, FixedNeighbor preparation, streaming evaluation, endpoint
 verification and local conditioning.
 
-The historical EIGEN/SPQR comparison found bounded parity on completed
-128/256-atom probes, faster SPQR timings in those cases, and lower EIGEN peak
-RSS. Both 512-atom probes timed out. The later production decision selected
-EIGEN for memory footprint, dependency simplicity, and maintenance. These are
-historical measurements, not current backend options or full-scale guarantees.
-Historical operator, preconditioner, and global rank results are summarized in
-[Joint component evidence](joint-component-evidence.md).
-
 The production local solver and endpoint qualification checks are covered by
-the focused `rhbm_tests_joint_component_numerical` group. Historical backend
-comparison results and their limits are summarized in the
-[Joint evidence record](joint-component-evidence.md).
+the focused `rhbm_tests_joint_component_numerical` group.

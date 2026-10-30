@@ -23,7 +23,8 @@ support radius of 2.5 Å. The model is
 a constant background offset.
 
 Production uses FixedNeighbor blocks with core size 12, forward serial
-Gauss-Seidel order, and at most 200 sweeps. A block visit may accept at most
+Gauss-Seidel order, with a nominal budget of 200 sweeps and a hard cap of
+300. A block visit may accept at most
 one trusted update. At fixed widths, the local A/C problem uses column
 normalization, Eigen SparseQR, a nonnegative-amplitude active set, strict
 `1e-10` local KKT certification, and the existing local QR iterative
@@ -32,6 +33,16 @@ Active-set LM with a bounded trust-region subproblem, damping adjustment, and
 the weak-width safeguard. The full profile derivative includes its
 nonzero-residual correction and cancellation protection. Compact SVD supports
 rank and weak-direction checks; it is not an alternate A/C solver.
+
+The adaptive budget keeps the last 20 normalized projected-KKT values:
+`q = max(A/C KKT / 1e-7, projected log-width KKT / 1e-9)`. At the nominal
+boundary, all values must be finite and nonnegative, with no pending block
+recovery. The best q in the recent ten sweeps must be at most 10 and improve
+at least 5% over the previous ten-sweep best, which must exceed 1. An extension
+continues the same accepted state up to 300 sweeps. A qualified endpoint stops
+earlier. Denied extensions report `block-sweep-budget`; an exhausted extension
+reports `block-hard-sweep-budget`. Pending recovery retains its distinct
+`block-recovery-sweep-budget` reason. There is no public budget selector.
 
 ## Qualification
 
@@ -62,8 +73,7 @@ Point quality does not establish global identifiability or precision. Removing
 a diagnostic can change quality without changing an estimate. Target runtime
 qualification still requires numerical convergence, valid selected parameters,
 complete row availability and assembly mapping/consistency. See the
-[current point contract](joint-target-estimability.md) and
-[cleanup acceptance record](joint-diagnostics-cleanup.md).
+[current point contract](joint-target-estimability.md).
 
 ## Halo reconstruction and downstream work
 

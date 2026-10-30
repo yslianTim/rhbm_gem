@@ -17,7 +17,6 @@ publishes formal Target estimates and starts downstream fitting.
 | Historical results | Only current SQLite/JSON schemas are accepted | Historical payloads require the corresponding Git version |
 
 The default CTest groups cover the current contract, workflow, numerics,
-persistence, and CLI smoke behavior. Research conclusions and measurement
-limits are collected in the [Joint evidence record](joint-component-evidence.md);
-the [runtime guide](joint-component-runtime.md) owns the detailed production
+persistence, and CLI smoke behavior. The
+[runtime guide](joint-component-runtime.md) owns the detailed production
 contract.
