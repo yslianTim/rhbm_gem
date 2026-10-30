@@ -37,7 +37,9 @@ rank and weak-direction checks; it is not an alternate A/C solver.
 
 The global search preserves objective monotonicity and practical-v2
 convergence: projected A/C KKT ≤ `1e-7` and bound-aware projected Width KKT ≤
-`1e-9`. Confirmation requires at least two completed sweeps and no block
+`1e-9`. Width stationarity uses the projected gradient on the feasible
+upper-bound face, with feasibility and complementarity checks; an ordinary
+gradient cannot veto a valid active-bound solution. Confirmation requires at least two completed sweeps and no block
 failure on the confirming sweep. Global feasibility, the full sweep replay
 audit, recovery, and candidate rollback remain part of search. Endpoint
 Certification and Independent Replay verify the accepted state. Component

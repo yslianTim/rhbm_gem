@@ -82,7 +82,7 @@ The Joint component sources under `tests/core/joint_component/` are split into
 `RHBM-GEM-TEST` executable. They retain deterministic checks for observation
 and support domains, component construction, width calibration, bounded A/C
 and Active-set LM solves, FixedNeighbor acceptance and convergence, local
-conditioning and stability, geometry-local Halo medians, Original-domain
+conditioning and parameter diagnostics, geometry-local Halo medians, Original-domain
 Peeling, persistence, and workflow behavior.
 
 Run the Joint groups:

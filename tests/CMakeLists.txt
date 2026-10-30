@@ -242,7 +242,6 @@ endforeach()
 add_library(rhbm_gem_test STATIC
     ${_rhbm_gem_test_sources}
     support/JointFixedNeighborDiagnostic.cpp
-    support/SplitDiagnostics.cpp
 )
 foreach(_property IN ITEMS
     COMPILE_FEATURES INTERFACE_COMPILE_FEATURES

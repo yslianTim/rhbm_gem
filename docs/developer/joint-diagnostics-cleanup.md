@@ -65,3 +65,12 @@ The active-width fixture starts below a 0.45 upper bound and subsequently
 fails recovery with bounded-initial-width-infeasible. This existing failure
 is recorded rather than changing the solver during cleanup. Dedicated width
 bound, active LM and endpoint/replay tests remain the safety authority.
+
+## C1 research closure
+
+Removed SplitDiagnostics and its ten research regressions, seven local
+stability/calibration/split studies, the width-promotion study and all three
+tracked research data files. The current runtime guide retains the production
+projected-width KKT/feasibility/complementarity contract. Strict KKT, replay,
+rank, bound and recovery tests remain in the production solver test files.
+No untracked data or physical input was removed.
