@@ -49,6 +49,33 @@ Build output note:
 - `ctest` exposes grouped entries such as `rhbm_tests_core_command` and `rhbm_tests_data_schema`
 - Those grouped CTest entries run filtered subsets from the same `RHBM-GEM-TEST` binary
 
+`rhbm_gem_collect_gtest_patterns()` extracts suite names from each group's source
+list, and `add_rhbm_gtest_group()` registers the resulting filter. `TEST`, `TEST_F`,
+and value-parameterized `TEST_P` use `*SuiteName.*` (including instantiation
+prefixes). `TYPED_TEST` uses `*SuiteName/*.*` to include the type instance suffix.
+Existing group labels and OpenMP environments apply to these subsets.
+
+With `BUILD_TESTING=ON`, a Python interpreter is required for the standard-library
+registration guard. `gtest_registration_coverage` reads the current build's CTest
+JSON commands, including manually registered GoogleTest groups such as
+`joint_persistence_contract_test`. It asks GoogleTest to list the full registry
+and each group's filtered registry, then fails if any enabled test is uncovered.
+GoogleTest handles positive and negative filter patterns; no test bodies run.
+Missing executables, unavailable registrations, empty listings, and malformed
+listings also fail. Type/value parameter comments are excluded from test names.
+
+Disabled GoogleTests are listed and counted separately because they do not run
+by default; disabled CTest groups cannot supply coverage. Duplicate coverage is
+reported without failing: the Data Schema / Joint persistence contract overlap
+is intentional, while other overlaps are marked unexpected for review.
+
+Run the coverage guard and its deterministic positive/negative fixtures:
+
+```bash
+ctest --test-dir build/release -R '^gtest_registration_coverage$' --output-on-failure -V
+ctest --test-dir build/release -R '^gtest_registration_coverage_self_test$' --output-on-failure
+```
+
 Run all tests:
 
 ```bash
@@ -153,6 +180,8 @@ regression tests and use generated endpoints.
 - Place new fixture files under `tests/fixtures/`.
 - Use `tests/support/` for shared test-only seams and reusable helpers/assertions.
 - Add the source to the correct grouped target in `tests/CMakeLists.txt`.
+- Rebuild `tests_all` and run `gtest_registration_coverage` after adding tests;
+  verify zero missing tests and review any unexpected duplicate coverage.
 - Ensure the target has the correct `domain:*` and `intent:*` labels.
 - Prefer searchable suite names (for example `DataObjectSchemaMigrationTest`) over generic names.
 

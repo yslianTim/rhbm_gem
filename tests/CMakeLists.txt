@@ -413,8 +413,19 @@ add_rhbm_gtest_group(rhbm_tests_integration_command
 )
 
 if(NOT DEFINED Python_EXECUTABLE OR Python_EXECUTABLE STREQUAL "")
-    find_package(Python QUIET COMPONENTS Interpreter)
+    find_package(Python REQUIRED COMPONENTS Interpreter)
 endif()
+
+add_test(NAME gtest_registration_coverage
+    COMMAND ${Python_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/cmake/check_gtest_coverage.py
+        --binary $<TARGET_FILE:rhbm_tests>
+        --build-dir ${PROJECT_BINARY_DIR}
+        --ctest ${CMAKE_CTEST_COMMAND}
+        --config=$<CONFIG>)
+add_test(NAME gtest_registration_coverage_self_test
+    COMMAND ${Python_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/cmake/check_gtest_coverage_test.py)
+set_tests_properties(gtest_registration_coverage gtest_registration_coverage_self_test
+    PROPERTIES LABELS "core;domain:integration;intent:contract" TIMEOUT 120)
 
 if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     add_test(NAME joint_workflow_cli_smoke_test
