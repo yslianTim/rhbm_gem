@@ -24,10 +24,10 @@ KKT, endpoint verification, and Independent Replay determine whether a
 component is qualified. Unqualified estimates are not published downstream.
 
 After qualification, Halo A/B/C values are reconstructed from the nearest
-four qualified Target estimates for Original-domain Peeling. Conditioning and
-stability are read-only local diagnostics; they do not change the accepted
+four qualified Target estimates for Original-domain Peeling. Local Conditioning
+is a read-only local diagnostic; it does not change the accepted
 Target estimates or independently deny a qualified endpoint. Current Joint
-results use JSON schema v21, target-only Pure Exclusion, geometry-local kNN-4
+results use JSON schema v22, target-only Pure Exclusion, geometry-local kNN-4
 Halo reconstruction, and no legacy decoding.
 
 ## Search policy and block solver
@@ -124,24 +124,22 @@ It uses only qualified Target estimates and has deterministic Atom-ID tie
 breaking. FullABC failures, Recovery outputs, and the reports' small-sample
 signal gains do not change this contract.
 
-## Local conditioning, stability, and large-component limits
+## Local conditioning and large-component limits
 
 Local Conditioning assesses the free A/C face, conditional projected-width
 directions, and the full profile derivative within each FixedNeighbor block.
-Parameter Stability probes at most eight representative blocks, with bounded
-local solves and `±1e-3` log-width seeds. A full-rank matrix can still be
-ill-conditioned; the current roundoff-amplification warning is
-`κ × ε_double >= 1e-8`. These diagnostics are conditional local evidence, not
-covariance, global identifiability, or endpoint qualification. They do not
-modify accepted estimates or turn an unrun probe into `Stable`. Sources:
-[commit `32cb6362`](https://github.com/yslianTim/rhbm_gem/commit/32cb6362a3d988d7fa77f715515351a9071d58dd), [commit `ddfabe47`](https://github.com/yslianTim/rhbm_gem/commit/ddfabe470f37886086c800c4e657b4b6395aea6a), and [commit `08151497`](https://github.com/yslianTim/rhbm_gem/commit/08151497f68f6c49b250c97f94f4dbe562dc092f).
+A full-rank matrix can still be ill-conditioned; the current
+roundoff-amplification warning is `κ × ε_double >= 1e-8`.
+This conditional local evidence does not assert covariance, global
+identifiability or endpoint qualification and does not modify accepted estimates.
+Current point-quality rules are in [target point validation](joint-target-estimability.md).
 
 The deterministic large-shape checks use 5,938,087 rows, 37,406 contributors,
 74,811 support memberships, and 3,118 blocks. One preparation/zero-state
 verification run measured 622,460,928 bytes peak process RSS, with preparation
 and endpoint estimated peaks of 972,989,100 and 625,051,683 bytes. A separate
 preflight measured 1,721,008,128 bytes peak RSS. These runs did not execute a
-complete search, local conditioning and stability over all blocks, or
+complete search, local conditioning over all blocks, or
 downstream work. The planner's 3.2 GB estimate budget and 4.0 GB hard limit
 are not measured RSS guarantees. The full physical-data resource gate remains
 open. Sources: [commit `d9fcbd9e`](https://github.com/yslianTim/rhbm_gem/commit/d9fcbd9ec219ddab04d383cf24ce72b0950a49a7) and [commit `de211df5`](https://github.com/yslianTim/rhbm_gem/commit/de211df5a57647fccc0c8abee2262f82ccdb0c53).

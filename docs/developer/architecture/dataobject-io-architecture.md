@@ -43,7 +43,7 @@ codecs decode float32 mode-2 voxels into the runtime's contiguous double map.
 | --- | --- |
 | SQLite | Schema v20 only |
 | Stage Result JSON | Version 4 only |
-| Joint Result JSON | Schema v21 only |
+| Joint Result JSON | Schema v22 only |
 
 No layer migrates historical data. A genuinely empty SQLite database is
 initialized as v20. An existing database opens only when its `user_version`
@@ -52,7 +52,7 @@ structures are rejected before schema or row mutation; the repository does
 not repair, upgrade, delete, or replace them.
 
 Stage JSON readers require `{"version":4}`. Joint JSON writers always emit
-schema 21, and Joint readers require schema 21 with the
+schema 22, and Joint readers require schema 22 with the
 `target-only-pure-halo-support-exclusion-v1` parameterization. Version
 selection does not depend on convergence, Halo count, or reconstruction
 availability. Current documents may represent failed initialization,
@@ -92,7 +92,7 @@ transaction. A failed write rolls back all rows for that save. A key saved
 without a Joint result has no Joint result row.
 
 Load validates the database, loads the current model structure, decodes a
-Joint result only as schema 21, and decodes a Stage result only as version 4.
+Joint result only as schema 22, and decodes a Stage result only as version 4.
 Any malformed JSON or unsupported payload fails the load; it is not rewritten
 in place.
 
@@ -103,7 +103,7 @@ in place.
 - `src/data/io/detail/PersistenceSchema.hpp`: SQLite, Stage, and Joint
   version constants.
 - `src/data/io/detail/StageResultJson.cpp`: Stage JSON version 4.
-- `src/data/io/detail/JointResultJson.cpp`: Joint JSON schema 21.
+- `src/data/io/detail/JointResultJson.cpp`: Joint JSON schema 22.
 - `tests/data/DataObjectSchemaLifecycle_test.cpp` and
   `DataObjectSchemaValidation_test.cpp`: database bootstrap and rejection.
 - `tests/data/DataObjectPersistence_test.cpp`: current JSON and model

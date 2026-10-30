@@ -43,20 +43,27 @@ gradient cannot veto a valid active-bound solution. Confirmation requires at lea
 failure on the confirming sweep. Global feasibility, the full sweep replay
 audit, recovery, and candidate rollback remain part of search. Endpoint
 Certification and Independent Replay verify the accepted state. Component
-assembly consistency, Local Conditioning, Parameter Stability, target point
+assembly consistency, Local Conditioning, target point
 quality, and resource preflight remain explicit evidence; local LM termination
 alone does not qualify a component. Failed initialization, unavailable width
 calibration, incomplete search, unqualified endpoint, missing component state,
 and nullable diagnostics remain representable saved outcomes.
 
-Local Conditioning assesses each block's numerical conditioning. Perturbation-
-based Parameter Stability deliberately perturbs local parameters, re-estimates
-the block, and records parameter, prediction, and objective sensitivity.
-These point-quality assessments do not use sweep-to-sweep parameter movement
-and do not replace global convergence evidence. Target point validation
-records component convergence, parameter validity, conditioning, stability,
-point quality, and reasons. `Unavailable` and `NotAssessed` remain valid states
-when an assessment cannot be completed.
+Local Conditioning assesses each block's rank, spectra and active-face
+behavior without changing its numerical classification or the accepted state.
+Target point validation uses `target-point-validation-v2`: failed/unavailable
+component convergence or parameters produce Unavailable; invalid conditioning
+mapping, IllConditioned, Singular, ActiveFace or Unavailable conditioning
+produce Warning; NotAssessed conditioning produces NotAssessed. Passed
+numerical checks, valid parameters and WellConditioned evidence produce
+Available. ActiveFace remains conditional evidence, not IllConditioned.
+
+Point quality does not establish global identifiability or precision. Removing
+a diagnostic can change quality without changing an estimate. Target runtime
+qualification still requires numerical convergence, valid selected parameters,
+complete row availability and assembly mapping/consistency. See the
+[current point contract](joint-target-estimability.md) and
+[cleanup acceptance record](joint-diagnostics-cleanup.md).
 
 ## Halo reconstruction and downstream work
 
@@ -73,7 +80,7 @@ own availability and qualification evidence.
 
 Memory preflight and memory-bounded evaluation remain part of problem
 construction, FixedNeighbor search, endpoint verification, local conditioning,
-parameter stability, Halo reconstruction, and peeling.
+Halo reconstruction, and peeling.
 
 ## Persistence contract
 
@@ -81,11 +88,11 @@ parameter stability, Halo reconstruction, and peeling.
 | --- | --- |
 | SQLite database | Schema v20 |
 | Stage Result JSON | Version 4 |
-| Joint Result JSON | Schema v21 |
+| Joint Result JSON | Schema v22 |
 
 SQLite opens a new empty database by initializing schema v20 and opens an
 existing database only when its exact schema is v20. Stage JSON accepts only
-version 4. Joint JSON accepts only schema 21 and the `strict-v2` or
+version 4. Joint JSON accepts only schema 22 and the `strict-v2` or
 `practical-v2` convergence identifiers. It stores target-only Pure Exclusion
 results. No format performs migrations or compatibility decoding. Unsupported
 inputs are rejected without repair or overwrite.

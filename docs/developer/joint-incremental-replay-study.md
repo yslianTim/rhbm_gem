@@ -775,8 +775,7 @@ The D1 qualification run used the deterministic synthetic `chain` workload,
 initial log-width `log(0.55)` for every atom, zero initial A/C coefficients,
 width upper bound 2.2, 12-atom cores, the existing `PracticalJointConvergenceCriteria`,
 and a 30-sweep maximum. Every component stopped at `block-stationary` before
-the budget. Endpoint Certification, Independent Replay, runtime convergence,
-and parameter-stability assessment passed. These are one-run qualification
+the budget. Endpoint Certification, Independent Replay and runtime convergence passed. These are one-run qualification
 records; they are not repeated performance measurements. The known synthetic
 truth is A=2, C=0.2, Width=0.5 for each target.
 
@@ -841,8 +840,7 @@ Production build still selects D1 and has no E1 runtime selector.
 
 Each qualified method below stopped at `block-stationary`, before its sweep
 budget, with unchanged convergence criteria. Both E1 methods passed Endpoint
-Certification, Independent Replay, parameter-stability assessment, and runtime
-convergence. E1-Direct's cached final objective is shown separately from the
+Certification, Independent Replay and runtime convergence. E1-Direct's cached final objective is shown separately from the
 independently recomputed objective.
 
 | Targets | Candidate accept / reject (D1, Direct, Guarded) | Sweeps | Final cached objective D1 / Direct / Guarded | Independently recomputed objective | Global A/C KKT | Projected Width KKT | Endpoint / Independent Replay | Max |ΔA| / |ΔC| / |ΔWidth| vs D1 |
@@ -968,8 +966,7 @@ fixtures pass.
 Performance Mode used five measured runs per method and one warm-up, with the
 same synthetic input, initial parameters, and 4-thread cap. It attached no
 per-candidate diagnostic Full Scan. It ran through Endpoint Certification,
-Independent Replay, local-conditioning assessment, and parameter-stability
-assessment. Search medians exclude the final checks; wall medians include
+Independent Replay and the then-current local diagnostics. Search medians exclude the final checks; wall medians include
 them. The range is the five search measurements.
 
 | Targets | Candidates | D1 search median (range) | E1-Direct search median (range) | E1-Guarded search median (range) | Search improvement Direct / Guarded | Wall median D1 / Direct / Guarded | Guard fallbacks | Peak RSS D1 / Direct / Guarded |

@@ -95,9 +95,8 @@ terminal evidence, endpoint/replay/KKT rejection, nonfinite state, successful an
 exhausted recovery, and trusted initial A/C followed by an injected Width failure.
 
 S3 validation: 77 focused tests and all four Joint CTest groups (contract,
-workflow, numerical, persistence) passed. The ParameterStability replay-failure
-regression now prescribes a nonstationary Width directly; it no longer relies on
-the old solver stopping at a particular block under loose search criteria.
+workflow, numerical, persistence) passed. Current endpoint and replay veto
+coverage is maintained in the FixedNeighbor and Numerics regression tests.
 Production diagnostics also retain damping solve, bracket and QR totals in the
 existing LM evidence reason.
 

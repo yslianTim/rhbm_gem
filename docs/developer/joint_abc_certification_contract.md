@@ -31,12 +31,11 @@ candidate rollback remain part of search. Endpoint Certification and
 Independent Replay check the accepted state. Sweep-budget exhaustion is not
 convergence; an unqualified candidate is not published as a Target estimate.
 
-Local conditioning and parameter stability are read-only point-quality
-assessments. They do not alter accepted parameters or revoke a qualified global
-endpoint. Perturbation-based Parameter Stability applies deliberate local
-parameter perturbations and records the resulting parameter, prediction, and
-objective sensitivity. Current Joint Result JSON uses schema v21 and accepts
-only `strict-v2` and `practical-v2` convergence identifiers.
+Local Conditioning is a read-only point-quality assessment. It does not alter
+accepted parameters or revoke a qualified global endpoint. Target validation
+v2 retains conditioning warnings independently of the strict local A/C
+certificate and global qualification. Current Joint Result JSON uses schema 22
+and accepts only `strict-v2` and `practical-v2` convergence identifiers.
 
 ## Focused regression coverage
 

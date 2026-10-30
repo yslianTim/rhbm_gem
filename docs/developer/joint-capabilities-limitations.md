@@ -10,11 +10,11 @@ publishes formal Target estimates and starts downstream fitting.
 | --- | --- | --- |
 | Joint fit | Target-only Pure Halo-Support Exclusion with FixedNeighbor and bounded Active-set LM | Halo parameters are not optimized by Joint fitting |
 | Qualification | Complete-sweep stationarity, endpoint verification, Independent Replay, and component/assembly checks | A matching replay alone does not establish convergence |
-| Point quality | Local conditioning and bounded parameter stability are read-only diagnostics | They do not establish global identifiability or reject a qualified endpoint |
+| Point quality | v2 combines numerical convergence, valid parameters and Local Conditioning | Conditioning warnings do not establish global identifiability or reject a qualified endpoint |
 | Halo values | Geometry-local median from the nearest four qualified Target estimates | Reconstruction is unavailable when there are no qualified donors |
 | Peeling | Uses the Original observation domain and qualified Halo reconstruction | Retained Halo rows are excluded from Joint fitting |
 | Local and Group fitting | Operate on selected Targets with their own qualification rules | Joint does not provide global parameter covariance or certify FirstStage Halo accuracy |
-| Historical results | Required JSON/SQLite compatibility decodes retired parameterizations with their saved meaning | Decoding does not enable a retired estimator for new fits |
+| Historical results | Only current SQLite/JSON schemas are accepted | Historical payloads require the corresponding Git version |
 
 The default CTest groups cover the current contract, workflow, numerics,
 persistence, and CLI smoke behavior. Research conclusions and measurement

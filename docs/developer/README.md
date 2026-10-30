@@ -36,6 +36,9 @@ with project internals.
   the fitting workflow.
 - [Capabilities and limitations](joint-capabilities-limitations.md) identifies
   supported behavior and current evidence limits.
+- [Target point validation](joint-target-estimability.md) defines v2 quality and
+  schema 22 persistence; the [cleanup record](joint-diagnostics-cleanup.md)
+  records numerical equivalence and the deliberate quality migration.
 - [Memory planning](joint-component-memory-census.md) documents production
   preflight estimates and their limits.
 - [Historical evidence](joint-component-evidence.md) summarizes retired
@@ -49,6 +52,6 @@ with project internals.
 ## Testing and release
 
 - [Test organization](../../tests/README.md) describes default correctness
-  tests, optional Joint validation, benchmarks, and research tools.
+  tests, Joint validation and production benchmarks.
 - Read [release compliance](release-compliance.md) before preparing a source
   or binary release.

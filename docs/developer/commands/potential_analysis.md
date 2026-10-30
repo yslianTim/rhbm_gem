@@ -263,8 +263,8 @@ Production uses FixedNeighbor core size 12, forward serial Gauss-Seidel, at
 most 200 sweeps, and no more than one trusted accepted update per block visit.
 Bounded Active-set LM updates widths. Constrained A/C subproblems use Eigen
 SparseQR; A is nonnegative and C is signed. Global convergence, complete-sweep
-stationarity, endpoint verification, Independent Replay, Local Conditioning,
-and Parameter Stability remain explicit evidence. See the
+stationarity, endpoint verification, Independent Replay, Local Conditioning
+and target point validation remain explicit evidence. See the
 [Joint runtime guide](../joint-component-runtime.md).
 
 Qualified target A/B/C points provide geometry-local kNN-4 Halo Median
@@ -304,11 +304,11 @@ convergence and point-quality columns.
 | --- | --- |
 | SQLite database | Schema v20 only |
 | Stage Result JSON | Version 4 only |
-| Joint Result JSON | Schema v21 only |
+| Joint Result JSON | Schema v22 only |
 
 An empty database is initialized as v20. An existing database must have the
 exact v20 schema. Stage JSON accepts only version 4; Joint JSON always writes
-schema 21 and reads only schema 21. No migrations, upgrades, historical
+schema 22 and reads only schema 22. No migrations, upgrades, historical
 fallbacks, or automatic repairs are performed. Unsupported inputs are rejected
 without modifying the database. See the
 [data I/O architecture](../architecture/dataobject-io-architecture.md).

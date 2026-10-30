@@ -14,7 +14,7 @@ Joint problem construction or its Pure Halo-Support Exclusion model.
 
 The Joint result stores the target-only Pure Exclusion state, component
 identities, target point validation, convergence evidence, candidate
-diagnostics, local conditioning, parameter stability, and optional
+diagnostics, local conditioning, and optional
 Halo-reconstruction evidence.
 
 The estimator-neutral Second-stage records expose available Joint Target
@@ -38,8 +38,7 @@ peeling; they do not receive target-local or group results.
    diagnostics and does not proceed as a successful Joint endpoint.
 3. FixedNeighbor and its bounded Active-set LM / constrained A/C SparseQR
    solve produce the target-only state. Global convergence, endpoint
-   verification, Independent Replay, target qualification, Local Conditioning,
-   and Parameter Stability are recorded.
+   verification, Independent Replay, target qualification and Local Conditioning are recorded.
 4. Qualified Target A/B/C points provide geometry-local kNN-4 Halo medians.
    Each reconstructed Halo records its qualified donor Target IDs. An
    unavailable reconstruction remains a separate status from Joint numerical

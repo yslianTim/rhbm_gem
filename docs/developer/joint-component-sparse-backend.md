@@ -31,7 +31,7 @@ Global search and endpoint verification traverse support entries and do not
 form a global dense design. The former global rank factors and projection
 coefficients have been removed. Current stage-specific memory protections cover
 construction, FixedNeighbor preparation, streaming evaluation, endpoint
-verification, local conditioning, and parameter stability.
+verification and local conditioning.
 
 The historical EIGEN/SPQR comparison found bounded parity on completed
 128/256-atom probes, faster SPQR timings in those cases, and lower EIGEN peak

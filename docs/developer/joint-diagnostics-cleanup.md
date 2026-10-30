@@ -136,3 +136,118 @@ all quality transitions. Run `python3 tests/benchmarks/compare_joint_cleanup_sna
 build/cleanup-baseline/states.jsonl build/cleanup-final/states.jsonl`. Retired
 field names in persistence rejection tests are intentional negative coverage,
 not runtime fields or compatibility support.
+
+## Removed surface
+
+- Files: ParameterStability.cpp/.hpp, SplitDiagnostics.cpp/.hpp and
+  ParameterStability_test.cpp; eight retired study documents and three tracked
+  data files (see C1 commit for the exact paths).
+- Types: JointStabilityProbe, JointBlockParameterStability,
+  JointParameterStability, LocalParameterStabilityClassification,
+  LocalParameterStabilityAssessment, and private direction containers.
+- Functions: AssessLocalParameterStability, ClassifyLocalParameterStability,
+  StabilityProbePriority, StabilitySensitivityScore, StabilityBlockCenter,
+  RepresentativeStabilityProbeSelection, StabilityProbeOrder, BuildDirections,
+  AddDirection, Canonicalize, StabilityBlock/ReadStabilityBlock,
+  ParameterStability/ReadParameterStability,
+  ValidateStabilityBlock/ValidateParameterStability and retired CPU helpers.
+- Constants: MaximumLocalPerturbationDirectionsPerBlock,
+  LocalPerturbationSeedsPerDirection, MaximumLocalPerturbationProfileEvaluations,
+  MaximumPerturbedBlocksPerFit,
+  MaximumRepresentativeLocalStabilityProbesPerComponent, LocalWidthPerturbation,
+  LocalParameterChangeWarning, LocalPredictionChangeWarning,
+  MaximumLocalPerturbationCpuSeconds and MinimumEffectiveLocalWidthPerturbation.
+- Policies/context: assess_parameter_stability, claim_parameter_stability_block,
+  profile_cpu_budget_seconds, cross-component claim count and reserved probe.
+- Work/results: parameter_stability_seconds,
+  parameter_stability_peak_memory_estimate_bytes, perturbation_solves,
+  perturbation_evaluations and parameter_stability optionals in search,
+  component and diagnostic test results. The threshold histogram and unused
+  refinement measurement fields are also removed.
+- Memory: MemoryStage::ParameterStability and component_stability_evaluations;
+  LocalConditioning, certificate and replay planning remain.
+- JSON: component parameter_stability, point parameter_stability and
+  parameter_stability_blocks, including every nested probe, seed, conditional
+  reprofile, CPU, memory and perturbation metric. The writer emits no null
+  placeholder. Required/allowed key lists match schema 22.
+- Benchmark output: parameter_stability_wall/cpu, solves/evaluations,
+  selected-block count and peak workspace, plus the claim setup.
+- Tests: eleven JointSplitDiagnosticsTest cases, ten JointParameterStabilityTest
+  cases and LocalStabilityBoundedProbeDiagnosticsRoundTrip. Retained numerical
+  responsibilities already have independent solver coverage. New target matrix
+  and persistence rejection tests cover the current contract.
+
+## C6 final verification
+
+The C0 source archive was rebuilt with the same Release compiler/dependencies
+and existing cached UMAP sources, with downloads disabled. All saved numerical
+states, conditioning, qualification and old quality classifications reproduced
+exactly. This archive contains no .git directory, is not a Git worktree and
+never changed the active develop checkout or its detached worktree.
+
+Final Release build and full CTest passed 19/19, with <=4 build/test workers.
+This covers FixedNeighbor, numerical certificates, Active-set LM, width bounds,
+rank/near-singular, recovery/rollback, conditioning, endpoint certification,
+independent replay, target evidence, persistence, synthetic accuracy, Halo,
+Original-domain peeling and Group fitting. No new library was introduced.
+All local links in developer Markdown and tests/README resolve. Runtime/public
+headers contain no retired assessment references. The only retired field names
+in tests are assertions that schema 22 rejects them. No orphan CMake source,
+header, memory stage, JSON helper or retired runtime branch remains.
+
+The complete reference-by-reference inventory (530 entries) is preserved in
+`build/cleanup-baseline/dependency-inventory.tsv`. Full arrays, qualification
+and quality comparisons remain under `build/cleanup-baseline/` and
+`build/cleanup-final/`; these are verification artifacts, not a production
+research interface. Peak RSS is a process high-water mark, not an allocation
+sum or a guarantee for real maps.
+
+## Isolated production performance
+
+Both binaries use Release, the same compiler, dependencies and numerical-thread
+settings recorded in C0. Each size runs in a fresh process with one warmup and
+five measured runs; no build/CTest runs concurrently. Initial C0 timings are
+retained separately; this comparison uses the rebuilt C0 source archive.
+Times below are medians in seconds, RSS is decimal MB.
+
+| Targets | Baseline wall | Final wall | Change | Baseline RSS MB | Final RSS MB |
+|---:|---:|---:|---:|---:|---:|
+| 3 | 0.014113041 | 0.003626125 | -74.31% | 24.363 | 24.019 |
+| 30 | 0.328046292 | 0.090234417 | -72.49% | 35.766 | 35.357 |
+| 300 | 1.149303540 | 0.971845209 | -15.44% | 88.441 | 87.998 |
+| 1,000 | 3.432374460 | 3.348218330 | -2.45% | 237.650 | 240.779 |
+
+| Targets | Search baseline/final s | CPU baseline/final s | Preflight baseline/final bytes | Fingerprint (both) | Sweeps / accepted |
+|---:|---:|---:|---:|---|---:|
+| 3 | 0.002768083 / 0.002762708 | 0.014113 / 0.003626 | 447445 / 447437 | `f604e25ca012ccb6` | 3 / 3 |
+| 30 | 0.067933874 / 0.070465292 | 0.328046 / 0.090234 | 3930461 / 3930437 | `379f05e2bbd5f1cf` | 4 / 12 |
+| 300 | 0.729026833 / 0.757865125 | 1.149173 / 0.971782 | 36716466 / 36716258 | `ea6973c01ca67598` | 4 / 104 |
+| 1,000 | 2.43959142 / 2.59155604 | 3.432361 / 3.344606 | 121648896 / 121648224 | `c4ed497197dd5df0` | 4 / 336 |
+
+All measured runs qualified the endpoint and passed Independent Replay, with
+one certification attempt and no failed blocks. All repeated fingerprints were
+identical. Peak RSS increased 1.32% at 1,000 targets and fell slightly at the
+other sizes; no substantial memory growth was observed. Search time increased
+slightly for larger sizes, and the 1,000-target final wall range overlaps the
+baseline range (see full logs). The 2.45% wall-median reduction there is not
+claimed as a robust speedup. Source and work-counter audits confirm no retired
+perturbation computation remains. These measurements establish neither
+real-map performance nor improved scientific accuracy.
+
+Full timing ranges and work counters are in each version's
+`build/cleanup-{baseline,final}/performance-isolated.txt`.
+
+| Stage | Result | Commit |
+|---|---|---|
+| C0 audit and saved arrays | Complete | 426e9a60 |
+| C1 retired research artifacts | Complete | 10d6f118 |
+| C2 production assessment retirement | Complete | 91e03305 |
+| C3 runtime/resource removal | Complete | 91e03305 |
+| C4 v2 quality/schema 22 | Complete | 91e03305 |
+| C5 retained numerical coverage and counter cleanup | Complete | 4a9e640a |
+| C6 current docs and complete verification | Complete | this documentation commit |
+
+No push, new branch, new Git worktree, detached-worktree modification or Notion
+operation was performed. Develop remains the only checkout modified. The local
+origin/develop reference remains the initial HEAD; live remote confirmation was
+unavailable because github.com DNS resolution failed.
