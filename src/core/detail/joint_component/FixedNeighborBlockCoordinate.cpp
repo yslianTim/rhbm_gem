@@ -1333,6 +1333,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     policy.eta_upper_bound=production_policy.eta_upper_bound;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     policy.assess_local_conditioning=true;
+    if(production_policy.configure_for_testing) production_policy.configure_for_testing(policy);
 #endif
     std::optional<JointFixedNeighborProgress> last_fixed_neighbor_progress;
     if(progress_component && observer)
@@ -1369,6 +1370,9 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
         };
     }
     out.search=SearchFixedNeighborComponent(prepared.domain,local_layout,local_y,initial_eta,context,policy);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(production_policy.observe_search_for_testing) production_policy.observe_search_for_testing(out.search);
+#endif
     const bool qualified=out.search.accepted_state_integrity && out.search.certification &&
         out.search.certification->qualified();
     out.succeeded=out.search.search_converged && qualified;

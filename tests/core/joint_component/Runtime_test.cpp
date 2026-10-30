@@ -12,6 +12,7 @@
 #include "support/JointComponentChecks.hpp"
 #include "support/JointRuntimeJson.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
+#include "support/JointSyntheticWorkload.hpp"
 #include <cmath>
 #include "data/io/detail/JointResultJson.hpp"
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
@@ -301,4 +302,140 @@ TEST(JointComponentRuntimeTest, HistoricalLmFailureDoesNotVetoAVerifiedRecovered
     EXPECT_EQ(missing.RuntimeConvergence(),Status::Unavailable);
     component.state->b[0]=std::numeric_limits<double>::quiet_NaN();
     EXPECT_NE(component.RuntimeConvergence(),Status::Passed);
+}
+
+namespace {
+struct RecoveryAssemblyRun
+{
+    core::JointFitResult fit;
+    n::FixedNeighborSearchResult search;
+    std::size_t injected{};
+};
+RecoveryAssemblyRun RunRecoveryAssembly(bool inject,bool persistent=false,std::size_t sweeps=200,
+    bool corrupt_candidate=false)
+{
+    RecoveryAssemblyRun out;
+    const core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    n::FixedNeighborSearchPolicy policy; policy.eta_upper_bound=std::log(2.2);
+    policy.configure_for_testing=[&](n::FixedNeighborPolicy & local) {
+        local.core_atoms=1; local.maximum_sweeps=sweeps; local.collect_diagnostics=true;
+        local.force_width_failure_for_testing=[&](std::size_t block,std::size_t sweep) {
+            if(inject && block==0 && (persistent || sweep==0)) {++out.injected; return true;}
+            return false;
+        };
+        if(corrupt_candidate) local.candidate_fault_for_testing=[](std::size_t sweep,std::size_t block,
+            const n::BlockCoordinateState &) {
+            return sweep==3 && block==1 ? n::FixedNeighborCandidateFaultForTesting::NaNParameter :
+                n::FixedNeighborCandidateFaultForTesting::None;
+        };
+    };
+    policy.observe_search_for_testing=[&](const auto & search) {out.search=search;};
+    out.fit=n::FitFixedNeighborComponents(problem,{.55,.55},policy);
+    return out;
+}
+}
+
+TEST(JointComponentRuntimeTest, TransientWidthFailureRecoversAndAssemblesQualifiedComponent)
+{
+    using Status=core::JointCheckStatus;
+    const auto baseline=RunRecoveryAssembly(false);
+    ASSERT_EQ(baseline.fit.RuntimeConvergence(),Status::Passed);
+    const auto recovered=RunRecoveryAssembly(true);
+    const auto & search=recovered.search;
+    EXPECT_EQ(recovered.injected,1u);
+    ASSERT_FALSE(search.blocks.empty());
+    const auto & first=search.blocks.front();
+    EXPECT_EQ(first.status,"retry-pending"); EXPECT_FALSE(first.accepted);
+    ASSERT_TRUE(first.failure_diagnostics);
+    EXPECT_TRUE(first.failure_diagnostics->initial_profile_trusted);
+    EXPECT_EQ(first.failure_diagnostics->local_search_stop_reason,
+        "bounded-subproblem:injected-width-subproblem-failure");
+    ASSERT_GT(search.blocks.size(),2u);
+    const auto & retry=search.blocks[2];
+    EXPECT_EQ(retry.block,1u); EXPECT_EQ(retry.sweep,2u);
+    EXPECT_TRUE(retry.recovery_retry); EXPECT_TRUE(retry.recovery_success);
+    EXPECT_TRUE(retry.accepted); EXPECT_GT(retry.accepted_updates,0);
+    EXPECT_EQ(search.recovery_attempts,1u); EXPECT_EQ(search.recovery_successes,1u);
+    EXPECT_EQ(search.unresolved_failures,0u); EXPECT_TRUE(search.accepted_state_integrity);
+    EXPECT_EQ(search.work.local_profile_work.bounded_lm.failed_subproblems,1u);
+    ASSERT_TRUE(search.final_sweep);
+    EXPECT_LE(search.final_sweep->global_ac_kkt,1e-7);
+    EXPECT_LE(search.final_sweep->projected_width_gradient_inf_norm,1e-9);
+    EXPECT_EQ(search.final_sweep->maximum_width_bound_violation,0.0);
+    EXPECT_GT(search.confirmed_stationarity_sweep,0u);
+    ASSERT_TRUE(search.certification);
+    EXPECT_TRUE(search.certification->qualified());
+    EXPECT_TRUE(search.certification->assessment.endpoint_verified);
+    EXPECT_TRUE(search.certification->assessment.independent_replay.passed);
+    ASSERT_EQ(recovered.fit.components.size(),1u);
+    const auto & component=recovered.fit.components.front();
+    EXPECT_TRUE(component.state); EXPECT_EQ(component.RuntimeConvergence(),Status::Passed);
+    const auto lm=std::find_if(component.evidence.begin(),component.evidence.end(),[](const auto & check) {
+        return check.name=="active-set-lm-subproblems";
+    });
+    ASSERT_NE(lm,component.evidence.end());
+    EXPECT_EQ(lm->status,Status::Failed);
+    EXPECT_NE(lm->reason.find("; failed=1;"),std::string::npos);
+    ASSERT_TRUE(recovered.fit.assembled_state); ASSERT_TRUE(recovered.fit.prediction);
+    EXPECT_EQ(recovered.fit.RuntimeConvergence(),Status::Passed);
+    for(const char * name:{"assembly-mapping","assembled-consistency","endpoint-verification","independent-replay"})
+    {
+        const auto check=std::find_if(recovered.fit.evidence.begin(),recovered.fit.evidence.end(),
+            [&](const auto & item){return item.name==name;});
+        ASSERT_NE(check,recovered.fit.evidence.end())<<name;
+        EXPECT_EQ(check->status,Status::Passed)<<name;
+    }
+    ASSERT_TRUE(baseline.fit.assembled_state); ASSERT_TRUE(baseline.fit.prediction);
+    EXPECT_NEAR(*recovered.fit.objective,*baseline.fit.objective,1e-12);
+    for(std::size_t i=0;i<recovered.fit.prediction->size();++i)
+        EXPECT_NEAR((*recovered.fit.prediction)[i],(*baseline.fit.prediction)[i],1e-6);
+    for(std::size_t i=0;i<component.state->b.size();++i)
+        EXPECT_NEAR(component.state->b[i],baseline.fit.assembled_state->b[i],1e-6);
+}
+
+TEST(JointComponentRuntimeTest, WidthRecoveryExhaustionAndUnqualifiedTerminalStatesRejectAssembly)
+{
+    using Status=core::JointCheckStatus;
+    const auto exhausted=RunRecoveryAssembly(true,true);
+    EXPECT_EQ(exhausted.injected,2u);
+    EXPECT_EQ(exhausted.search.reason,"block-recovery-exhausted");
+    EXPECT_EQ(exhausted.search.recovery_attempts,1u);
+    EXPECT_EQ(exhausted.search.recovery_successes,0u);
+    EXPECT_EQ(exhausted.search.unresolved_failures,1u);
+    EXPECT_FALSE(exhausted.fit.components.front().state);
+    EXPECT_FALSE(exhausted.fit.assembled_state);
+    EXPECT_NE(exhausted.fit.RuntimeConvergence(),Status::Passed);
+
+    const auto early=RunRecoveryAssembly(true,false,2);
+    EXPECT_EQ(early.search.recovery_successes,1u);
+    ASSERT_TRUE(early.search.final_sweep);
+    EXPECT_GT(early.search.final_sweep->projected_width_gradient_inf_norm,1e-9);
+    EXPECT_FALSE(early.fit.components.front().state); EXPECT_FALSE(early.fit.assembled_state);
+
+    const auto corrupt=RunRecoveryAssembly(true,false,200,true);
+    EXPECT_EQ(corrupt.search.recovery_successes,1u);
+    EXPECT_FALSE(corrupt.search.accepted_state_integrity);
+    EXPECT_FALSE(corrupt.fit.components.front().state); EXPECT_FALSE(corrupt.fit.assembled_state);
+
+    // Start from genuinely recovered/certified evidence; only invalidate or remove it.
+    const auto recovered=RunRecoveryAssembly(true);
+    ASSERT_EQ(recovered.fit.RuntimeConvergence(),Status::Passed);
+    const auto & data=core::JointProblemAccess::Get(*recovered.fit.problem);
+    auto context=data.context; context.eta_upper_bound=std::log(2.2);
+    for(const char * name:{"conditional-ac-optimality","width-stationarity","endpoint-verification",
+        "independent-replay","accepted-state-integrity","complete-sweep-stationarity"})
+    {
+        for(bool missing:{false,true})
+        {
+            auto components=recovered.fit.components;
+            auto & evidence=components.front().evidence;
+            const auto check=std::find_if(evidence.begin(),evidence.end(),
+                [&](const auto & item){return item.name==name;});
+            ASSERT_NE(check,evidence.end());
+            if(missing) evidence.erase(check); else check->status=Status::Failed;
+            EXPECT_NE(components.front().RuntimeConvergence(),Status::Passed)<<name<<missing;
+            EXPECT_FALSE(n::AssembleComponents(data.domain,data.y,data.partition,context,components,
+                n::PracticalJointConvergenceCriteria).available)<<name<<missing;
+        }
+    }
 }
