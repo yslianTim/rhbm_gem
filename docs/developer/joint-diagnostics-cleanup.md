@@ -68,7 +68,7 @@ bound, active LM and endpoint/replay tests remain the safety authority.
 
 ## C1 research closure
 
-Removed SplitDiagnostics and its ten research regressions, seven local
+Removed SplitDiagnostics and its eleven research regressions, seven local
 stability/calibration/split studies, the width-promotion study and all three
 tracked research data files. The current runtime guide retains the production
 projected-width KKT/feasibility/complementarity contract. Strict KKT, replay,
@@ -113,3 +113,26 @@ Warning -> Warning 3, Unavailable -> Unavailable 8. Warning -> NotAssessed
 and Unavailable -> Available are both zero. Every final point was checked
 against the v2 rules; no unexpected transition occurred. These changes remove
 a diagnostic responsibility and do not indicate improved estimation accuracy.
+
+## C5 coverage and orphan audit
+
+Removed unused local-KKT threshold histograms and before/after refinement
+measurement fields from LinearSolveWork/LinearResult. No consumer or test read
+these calibration counters. The strict certificate, iterative refinement
+algorithm and its success/failure regression baselines are preserved.
+InstrumentedLM remains the production bounded width solver; TiledQR remains
+used by A/C, derivatives and Local Conditioning. JointFixedNeighborDiagnostic
+and JointComponentChecks remain shared numerical test support.
+
+The retained production benchmark reports search/total wall and CPU, KKT,
+objective, accepted-state fingerprint, sweeps, accepted blocks, LM/QR work,
+candidate/sweep replay, endpoint certification, independent replay and RSS.
+All retired diagnostic counters and budget setup are absent.
+The Eigen scope test group explicitly sets OMP_NUM_THREADS=2 and
+OMP_THREAD_LIMIT=2; Joint tests retain OMP_NUM_THREADS=1.
+
+The snapshot comparator checks every double without a tolerance and verifies
+all quality transitions. Run `python3 tests/benchmarks/compare_joint_cleanup_snapshots.py
+build/cleanup-baseline/states.jsonl build/cleanup-final/states.jsonl`. Retired
+field names in persistence rejection tests are intentional negative coverage,
+not runtime fields or compatibility support.

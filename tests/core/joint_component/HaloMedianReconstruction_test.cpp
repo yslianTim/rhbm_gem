@@ -108,7 +108,7 @@ TEST(HaloMedianReconstructionTest, ComputesSeparateComponentAndWidthAndChargeMed
     EXPECT_DOUBLE_EQ(snapshot.halos[1].charge,5.0);
 }
 
-TEST(HaloMedianReconstructionTest, AcceptsNotAssessedStabilityButRejectsUnqualifiedDonor)
+TEST(HaloMedianReconstructionTest, AcceptsNotAssessedQualityButRejectsUnqualifiedDonor)
 {
     auto fixture=MakeFixture();
     fixture.result.target_evidence->point_atoms[0].parameter_validity=JointCheckStatus::Failed;

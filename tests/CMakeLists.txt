@@ -411,6 +411,10 @@ add_rhbm_gtest_group(rhbm_tests_utils_math
     SOURCES ${UTILS_MATH_TEST_SOURCES}
 )
 
+# Eigen scope tests intentionally exercise a two-thread setting.
+set_tests_properties(rhbm_tests_utils_math PROPERTIES
+    ENVIRONMENT "OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2")
+
 add_rhbm_gtest_group(rhbm_tests_utils_domain
     DOMAIN utils
     INTENTS validation

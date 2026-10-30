@@ -32,16 +32,10 @@ void AddLinearSolveWork(LinearSolveWork & destination,const LinearSolveWork & so
     ADD_COUNT(other_invalid_solves); ADD_COUNT(factorization_solves); ADD_COUNT(active_set_iterations);
     ADD_COUNT(active_set_releases); ADD_COUNT(free_face_changes); ADD_COUNT(free_face_unchanged);
     ADD_COUNT(sparse_structure_build_count); ADD_COUNT(tile_mapping_build_count);
-    ADD_COUNT(selected_nonzeros); ADD_COUNT(reduced_nonzeros); ADD_COUNT(initial_kkt_count); ADD_COUNT(initial_kkt_le_1e10);
-    ADD_COUNT(initial_kkt_le_1e8); ADD_COUNT(initial_kkt_le_1e7); ADD_COUNT(final_kkt_count);
-    ADD_COUNT(final_kkt_le_1e10); ADD_COUNT(final_kkt_le_1e8); ADD_COUNT(final_kkt_le_1e7);
+    ADD_COUNT(selected_nonzeros); ADD_COUNT(reduced_nonzeros);
     ADD_COUNT(refinement_eligibility_count); ADD_COUNT(refinement_trigger_count); ADD_COUNT(refinement_iterations);
     ADD_COUNT(refinement_success_count); ADD_COUNT(refinement_failure_count); ADD_COUNT(refinement_factorizations);
 #undef ADD_COUNT
-    destination.initial_kkt_sum+=source.initial_kkt_sum;
-    destination.initial_kkt_max=std::max(destination.initial_kkt_max,source.initial_kkt_max);
-    destination.final_kkt_sum+=source.final_kkt_sum;
-    destination.final_kkt_max=std::max(destination.final_kkt_max,source.final_kkt_max);
     destination.refinement_seconds+=source.refinement_seconds;
     destination.sparse_structure_build_seconds+=source.sparse_structure_build_seconds;
     destination.row_major_conversion_seconds+=source.row_major_conversion_seconds;
@@ -50,21 +44,6 @@ void AddLinearSolveWork(LinearSolveWork & destination,const LinearSolveWork & so
     destination.reduced_sparse_assembly_seconds+=source.reduced_sparse_assembly_seconds;
     destination.sparse_qr_seconds+=source.sparse_qr_seconds;
     destination.solver_total_seconds+=source.solver_total_seconds;
-    destination.refinement_before_kkt_sum+=source.refinement_before_kkt_sum;
-    destination.refinement_before_kkt_max=std::max(destination.refinement_before_kkt_max,source.refinement_before_kkt_max);
-    destination.refinement_after_kkt_sum+=source.refinement_after_kkt_sum;
-    destination.refinement_after_kkt_max=std::max(destination.refinement_after_kkt_max,source.refinement_after_kkt_max);
-    destination.refinement_before_objective_sum+=source.refinement_before_objective_sum;
-    destination.refinement_after_objective_sum+=source.refinement_after_objective_sum;
-}
-void AddKktSample(double value,std::size_t & count,std::size_t & le_1e10,std::size_t & le_1e8,
-    std::size_t & le_1e7,double & sum,double & maximum)
-{
-    if(!std::isfinite(value) || value<0) return;
-    ++count; sum+=value; maximum=std::max(maximum,value);
-    if(value<=1e-10) ++le_1e10;
-    if(value<=1e-8) ++le_1e8;
-    if(value<=1e-7) ++le_1e7;
 }
 void AddRoleWork(ProfileRoleWork & destination,const ProfileRoleWork & source)
 {
@@ -488,15 +467,6 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
         stats.reduced_sparse_assembly_seconds+=solved.reduced_sparse_assembly_seconds;
         stats.sparse_qr_seconds+=solved.sparse_qr_seconds;
         stats.solver_total_seconds+=solved.solver_total_seconds;
-        AddKktSample(solved.initial_projected_kkt,stats.initial_kkt_count,stats.initial_kkt_le_1e10,
-            stats.initial_kkt_le_1e8,stats.initial_kkt_le_1e7,stats.initial_kkt_sum,stats.initial_kkt_max);
-        if(solved.refinement_trigger_count)
-        {
-            stats.refinement_before_kkt_sum+=solved.initial_projected_kkt;
-            stats.refinement_before_kkt_max=std::max(stats.refinement_before_kkt_max,solved.initial_projected_kkt);
-            stats.refinement_before_objective_sum+=solved.refinement_before_objective;
-            stats.refinement_after_objective_sum+=solved.refinement_after_objective;
-        }
         if(solved.valid) ++stats.valid_solves;
         else
         {
@@ -521,17 +491,6 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     out.certificate.linear_solver_valid=solved.valid; out.certificate.linear_solver_reason=solved.reason;
     out.certificate.linear_solves=solved.solves; out.certificate.linear_releases=solved.releases;
     out.certificate.free_rank=solved.rank;
-    if(profile_work && out.certificate.available)
-    {
-        auto & stats=telemetry.work.linear_solve;
-        AddKktSample(out.certificate.projected_kkt,stats.final_kkt_count,stats.final_kkt_le_1e10,
-            stats.final_kkt_le_1e8,stats.final_kkt_le_1e7,stats.final_kkt_sum,stats.final_kkt_max);
-        if(solved.refinement_trigger_count)
-        {
-            stats.refinement_after_kkt_sum+=out.certificate.projected_kkt;
-            stats.refinement_after_kkt_max=std::max(stats.refinement_after_kkt_max,out.certificate.projected_kkt);
-        }
-    }
     if (!solved.valid) {out.reason=solved.reason; return out;}
     if (!out.certificate.kkt_passed)
     {if(profile_work) ++telemetry.work.local_kkt_rejections; out.reason="kkt-failed"; return out;}

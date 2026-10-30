@@ -58,14 +58,9 @@ struct LinearSolveWork
     std::size_t factorization_solves{},active_set_iterations{},active_set_releases{};
     std::size_t free_face_changes{},free_face_unchanged{},sparse_structure_build_count{},tile_mapping_build_count{},
         selected_nonzeros{},reduced_nonzeros{};
-    std::size_t initial_kkt_count{},initial_kkt_le_1e10{},initial_kkt_le_1e8{},initial_kkt_le_1e7{};
-    std::size_t final_kkt_count{},final_kkt_le_1e10{},final_kkt_le_1e8{},final_kkt_le_1e7{};
     std::size_t refinement_eligibility_count{},refinement_trigger_count{},refinement_iterations{},
         refinement_success_count{},refinement_failure_count{},refinement_factorizations{};
-    double initial_kkt_sum{},initial_kkt_max{},final_kkt_sum{},final_kkt_max{};
-    double refinement_seconds{},refinement_before_kkt_sum{},refinement_before_kkt_max{},
-        refinement_after_kkt_sum{},refinement_after_kkt_max{},refinement_before_objective_sum{},
-        refinement_after_objective_sum{},sparse_structure_build_seconds{},row_major_conversion_seconds{},
+    double refinement_seconds{},sparse_structure_build_seconds{},row_major_conversion_seconds{},
         tile_mapping_build_seconds{},tiled_qr_seconds{},reduced_sparse_assembly_seconds{},sparse_qr_seconds{},
         solver_total_seconds{};
 };
@@ -105,10 +100,9 @@ struct LinearResult
         refinement_iterations{},refinement_success_count{},refinement_failure_count{},refinement_factorizations{},
         free_face_changes{},free_face_unchanged{},sparse_structure_build_count{},tile_mapping_build_count{},
         selected_nonzeros{},reduced_nonzeros{};
-    double initial_projected_kkt{unavailable},final_projected_kkt{unavailable},refinement_seconds{},
+    double refinement_seconds{},
         sparse_structure_build_seconds{},row_major_conversion_seconds{},tile_mapping_build_seconds{},
-        tiled_qr_seconds{},reduced_sparse_assembly_seconds{},sparse_qr_seconds{},solver_total_seconds{},
-        refinement_before_objective{unavailable},refinement_after_objective{unavailable};
+        tiled_qr_seconds{},reduced_sparse_assembly_seconds{},sparse_qr_seconds{},solver_total_seconds{};
 };
 struct LinearSolveWorkspace;
 LinearResult SolveLinear(const Sparse &,VectorRef,const LinearPolicy * = nullptr,double=0,

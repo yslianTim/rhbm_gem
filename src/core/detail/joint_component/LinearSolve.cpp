@@ -212,14 +212,10 @@ LinearResult UnweightedSolveImpl(const Sparse & x,VectorRef y,
             if(initial.available)
             {
                 ++out.refinement_eligibility_count;
-                out.initial_projected_kkt=initial.projected_kkt;
-                out.final_projected_kkt=initial.projected_kkt;
             }
             if(initial.available && !initial.kkt_passed)
             {
                 ++out.refinement_trigger_count;
-                out.refinement_before_objective=initial.objective;
-                out.refinement_after_objective=initial.objective;
                 const auto refinement_started=std::chrono::steady_clock::now();
                 bool refinement_succeeded{};
                 Eigen::MatrixXd face(x.rows(),static_cast<Eigen::Index>(columns.size()));
@@ -268,8 +264,6 @@ LinearResult UnweightedSolveImpl(const Sparse & x,VectorRef y,
                         if(refined.available && refined.kkt_passed && refined.objective<=initial.objective)
                         {
                             out.beta=std::move(refined_beta);
-                            out.final_projected_kkt=refined.projected_kkt;
-                            out.refinement_after_objective=refined.objective;
                             ++out.refinement_success_count;
                             refinement_succeeded=true;
                             break;
