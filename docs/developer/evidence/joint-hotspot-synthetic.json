@@ -1,0 +1,95 @@
+{
+  "scope": "Standalone patch contract checks; no formal component is published by this harness",
+  "cases": [
+    {
+      "case": "single-hotspot",
+      "status": "Verified",
+      "endpoint_qualified": true,
+      "accepted": 1,
+      "rejected": 0,
+      "memory_fallbacks": 0,
+      "workspace_estimate_bytes": 99008
+    },
+    {
+      "case": "separated-hotspots",
+      "status": "Verified",
+      "endpoint_qualified": true,
+      "accepted": 2,
+      "rejected": 0,
+      "memory_fallbacks": 0,
+      "workspace_estimate_bytes": 99008
+    },
+    {
+      "case": "overlapping-contributors",
+      "status": "Verified",
+      "endpoint_qualified": true,
+      "accepted": 1,
+      "rejected": 0,
+      "memory_fallbacks": 0,
+      "workspace_estimate_bytes": 170752
+    },
+    {
+      "case": "active-upper-bound",
+      "status": "Verified",
+      "endpoint_qualified": true,
+      "accepted": 1,
+      "rejected": 0,
+      "memory_fallbacks": 0,
+      "workspace_estimate_bytes": 99008
+    },
+    {
+      "case": "zero-A-charge-width",
+      "status": "Verified",
+      "endpoint_qualified": true,
+      "accepted": 1,
+      "rejected": 0,
+      "memory_fallbacks": 0,
+      "workspace_estimate_bytes": 99008
+    },
+    {
+      "case": "near-singular",
+      "status": "Verified",
+      "endpoint_qualified": false,
+      "accepted": 0,
+      "rejected": 1,
+      "memory_fallbacks": 0,
+      "workspace_estimate_bytes": 132352
+    },
+    {
+      "case": "candidate-rejection",
+      "status": "Verified",
+      "endpoint_qualified": false,
+      "accepted": 0,
+      "rejected": 1,
+      "memory_fallbacks": 0,
+      "workspace_estimate_bytes": 99008
+    },
+    {
+      "case": "recovery-rollback",
+      "status": "Verified",
+      "endpoint_qualified": false,
+      "accepted": 0,
+      "rejected": 1,
+      "memory_fallbacks": 0,
+      "workspace_estimate_bytes": 99008
+    },
+    {
+      "case": "memory-fallback",
+      "status": "Verified",
+      "endpoint_qualified": false,
+      "accepted": 0,
+      "rejected": 0,
+      "memory_fallbacks": 1,
+      "workspace_estimate_bytes": 0
+    },
+    {
+      "case": "no-hotspot",
+      "status": "Verified",
+      "endpoint_qualified": true,
+      "accepted": 0,
+      "rejected": 0,
+      "memory_fallbacks": 0,
+      "workspace_estimate_bytes": 0
+    }
+  ]
+}

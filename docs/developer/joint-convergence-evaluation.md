@@ -231,3 +231,82 @@ median solver wall 0.0144783 s fixed versus 0.0144969 s adaptive (about 0.13% di
 The budget object is 208 bytes, with no heap allocation. No material easy-case overhead was observed.
 Decision: **promote adaptive budget**. It repairs the actual 6CVM qualification failure without
 changing its accepted numerical trajectory or weakening any qualification check.
+
+## R4 hotspot correction study
+
+The controlled study used a test-build-only callback after all ordinary blocks and before the normal
+full sweep replay. No production CLI option, block reordering/repartition, active-block scheduling or
+new numerical solver is used. The callback was removed after the promotion decision; solver-study code never entered the repository.
+
+Detection recomputes the actual accepted endpoint and uses the same column-scaled A/C projected
+residual and bound-aware projected width residual as production. No A-based width exclusion is
+applied. Violating seeds sharing fitting rows form separate connected regions. Each region adds
+neighbors ranked by shared seed-row incidence (stable identity tie-break), up to 24 atoms; regions
+with overlapping selected patches safely skip the overlap. More than 12 seeds, >6,000 patch rows,
+>16 MiB local-buffer screening estimate or failed existing memory preflight falls back.
+The first real-data trigger is one correction round at sweep 200, after unchanged ordinary work.
+
+A patch fixes every external contributor and constructs effective observations from accepted residual
+plus old core prediction. It reuses `SearchProfile`, constrained A/C, bounded active-set LM and the
+calibrated width bound, allowing at most 20 trusted local width updates for the joint correction.
+Candidates must pass local trust/feasibility, finite checks, the existing local objective rule, full
+global objective evaluation and the same local/global objective enclosure. State mutation occurs
+only after acceptance. The ordinary full sweep replay, global KKT and endpoint certification then
+run normally; a local improvement alone never publishes a component.
+
+All ten controlled synthetic contracts are **Verified**:
+[synthesized results](evidence/joint-hotspot-synthetic.json). Single hotspot, separated regions,
+overlapping contributors, active upper bound and A=0/nonzero-charge width cases pass endpoint
+certification. Near-singular local geometry safely rejects the correction (unqualified endpoint).
+Injected objective rejection and width failure preserve all accepted arrays/objective; memory
+fallback performs no patch solve; no-hotspot performs no correction. Independent numerical replay
+consistency is checked in every case. These are patch/endpoint unit experiments, not claims that
+an isolated harness published fully assembled components.
+
+### Real-data candidate — numerically Qualified, promotion Rejected
+
+Before correction, all 8,193 eta and 16,386 A/C values exactly match the R0 sweep-200 state.
+Detection reproduces exactly the seven known serials. LEU/PRO form a 24-atom patch; the separate
+ALA region forms a 20-atom patch. Largest patch=2,426 rows. Both corrections accept; none rejects,
+fails recovery or falls back. Total correction round incl. detection/assembly/solving=0.628395 s.
+Normal full replay and the following ordinary sweep qualify the endpoint at **201**.
+
+| Run | Sweeps | Search seconds | Objective | A/C KKT | Projected width KKT | Endpoint / replay |
+|---|---:|---:|---:|---:|---:|---|
+| A: original continuous path (offline) | 250 | 487.347409 | 0.019770945620759782 | 4.26908e-8 | 9.69945e-10 | Passed |
+| B: adaptive (complete production CLI) | 250 | 500.783628 | 0.019770945620759765 | 4.26908e-8 | 9.69945e-10 | Passed |
+| C: same budget + correction (offline) | 201 | 398.824218 | 0.019771423894066865 | 8.07636e-8 | 4.26290e-10 | Passed |
+
+The matched offline A/C comparison observes **18.16%** less search time in this one candidate run.
+B confirms the adaptive allocation preserves A's path and parameters; its CLI timing is reported
+separately because process/orchestration instrumentation differs. No matched offline B timing
+repeat or production Hotspot CLI run is claimed. C wall incl. preparation/certification/conditioning
+=401.124044 s, peak RSS=982,286,336 bytes versus A's 986,546,176 bytes. The local patch-buffer
+formula estimates 4,110,592 bytes; it excludes global streaming evaluation and retained profile-trial
+objects and therefore is **not** a proven bound on the complete correction workspace. The 16 MiB
+research screen and injected fallback test must not be presented as a complete production preflight.
+
+C passes complete endpoint certification, independent replay, accepted-state integrity and separate
+production assembly replay. Recomputed existing local-conditioning/point validation gives the same
+aggregate 7,766 Available / 427 Warning as B; serials 4523/4524 remain Adequate. This is a valid
+stationary endpoint, not a numerical failure or a tolerance relaxation.
+
+However C's objective is 4.78273307e-7 higher (0.002419% relative) and some point estimates differ
+materially, even away from the detected hotspot. For serial 4524, original-path A/B are
+12.52779165 / 0.169727533 Å versus correction A/B≈2.215e-9 / 0.659342950 Å; serial 4523 changes
+from A=1.59566024, B=0.382712383 Å to A≈2.213e-9, B=0.544678905 Å. Different trajectories and
+parameters are allowed; these differences do **not** invalidate the endpoint's qualification.
+But the same coarse conditioning classification is not evidence that these point estimates have
+equivalent statistical accuracy. No ground-truth/equivalence evidence establishes that tradeoff here.
+
+Decision: retain the original-path adaptive solver. In the requested correctness-first scope,
+one observed speed gain with a higher-objective different solution, inconclusive parameter-equivalence
+and incomplete correction-workspace accounting does not justify a second production mechanism.
+The study does **not** prove hotspot correction generally ineffective. Its numerical contracts are
+Verified/Qualified, its production promotion is Rejected, and its broader precision/performance
+reproducibility remains Inconclusive. Alternative late/persistence triggers and production downstream
+Hotspot validation are Not executed after that gate decision. No update-order/partition/scheduling
+experiments were executed.
+
+Evidence: [full candidate trajectory](evidence/joint-hotspot-candidate.csv),
+[candidate metrics and parameter comparison](evidence/joint-hotspot-candidate.json).
