@@ -36,6 +36,8 @@ with project internals.
   the fitting workflow.
 - [Capabilities and limitations](joint-capabilities-limitations.md) identifies
   supported behavior and current evidence limits.
+- [Width recovery closeout](joint-width-closeout.md) records recovery integration,
+  full-model Width sensitivity, and downstream eligibility evidence.
 - [Target point validation](joint-target-estimability.md) defines v2 quality and
   schema 22 persistence; the [cleanup record](joint-diagnostics-cleanup.md)
   records numerical equivalence and the deliberate quality migration.

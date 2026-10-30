@@ -143,6 +143,72 @@ TEST(JointLocalConditioningTest, ActiveAmplitudeBoundaryIsKeptAsConditionalEvide
     EXPECT_EQ(result.evidence.conditioning_classification,"ActiveFace");
 }
 
+TEST(JointLocalConditioningTest, ZeroAmplitudeWidthInformationDependsOnCharge)
+{
+    n::Domain domain(6,{{{0,0.0},{1,.25},{2,1.0},{3,2.25},{4,4.0},{5,6.25}}});
+    const n::Vector eta=n::Vector::Constant(1,std::log(.7));
+    for(double charge:{0.0,.2})
+    {
+        n::Vector beta(2); beta<<0.0,charge;
+        n::Vector y(6);
+        for(const auto & support:domain.atoms[0])
+            y(support.row)=charge*n::EvaluateKernel(support.square,.7,2.5).charge;
+        auto context=tc::MakeContext(y,1); context.eta_upper_bound=std::log(2.2);
+        const auto state=n::EvaluateState(domain,y,eta,beta,context);
+        ASSERT_TRUE(state.valid); EXPECT_TRUE(state.certificate.kkt_passed);
+        EXPECT_LE(*n::ProfileGradientInfinityNorm(state,context),1e-9);
+        const auto prepared=n::PrepareProjectedWidthDerivative(state,context.scale,&context);
+        const auto projected=n::ReduceProjectedWidthDerivative(prepared);
+        ASSERT_TRUE(prepared.valid); ASSERT_TRUE(projected.valid);
+        const auto conditioning=Assess(domain,y,eta,beta,context).evidence;
+        EXPECT_EQ(conditioning.active_amplitude_count,1u);
+        EXPECT_EQ(conditioning.profile_status,"active-set-boundary");
+        if(charge==0)
+        {
+            EXPECT_EQ(prepared.raw.norm(),0.0);
+            EXPECT_EQ(projected.projected_norms(0),0.0);
+            EXPECT_EQ(conditioning.conditioning_classification,"Singular");
+        }
+        else
+        {
+            EXPECT_GT(prepared.raw.norm(),.01);
+            EXPECT_GT(projected.projected_norms(0),.001);
+            EXPECT_EQ(conditioning.projected_width_rank,1u);
+            EXPECT_EQ(conditioning.conditioning_classification,"ActiveFace");
+        }
+        auto varied=eta; varied(0)+=std::log(1.25);
+        const auto profiled=n::EvaluateProfile(domain,y,varied,&context);
+        ASSERT_TRUE(profiled.valid); EXPECT_TRUE(profiled.certificate.feasible);
+        const n::Vector prediction=profiled.x*profiled.beta;
+        if(charge==0) EXPECT_EQ(prediction.norm(),0.0);
+        else EXPECT_GT((prediction-y).norm(),1e-4);
+    }
+}
+
+TEST(JointLocalConditioningTest, NormalizedConditioningDoesNotMeasureAbsoluteWidthInformation)
+{
+    n::Domain domain(6,{{{0,0.0},{1,.25},{2,1.0},{3,2.25},{4,4.0},{5,6.25}}});
+    const n::Vector eta=n::Vector::Constant(1,std::log(.8));
+    double reference{};
+    for(double scale:{1.0,1e-12})
+    {
+        n::Vector beta(2); beta<<1.2*scale,.3*scale;
+        n::Vector y(6);
+        for(const auto & s:domain.atoms[0])
+        {
+            const auto kernel=n::EvaluateKernel(s.square,.8,2.5);
+            y(s.row)=beta(0)*kernel.gaussian+beta(1)*kernel.charge;
+        }
+        auto context=tc::MakeContext(y,1);
+        const auto conditioning=Assess(domain,y,eta,beta,context).evidence;
+        EXPECT_EQ(conditioning.conditioning_classification,"WellConditioned");
+        ASSERT_EQ(conditioning.projected_width_column_norms.size(),1u);
+        const auto norm=conditioning.projected_width_column_norms.front();
+        if(scale==1) reference=norm;
+        else EXPECT_LT(norm,reference*1e-10);
+    }
+}
+
 TEST(JointLocalConditioningTest, ZeroSupportAndNonfiniteInputAreUnavailable)
 {
     n::Vector empty_y(0); auto empty_context=tc::MakeContext(empty_y,1);
