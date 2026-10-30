@@ -315,7 +315,12 @@ RecoveryAssemblyRun RunRecoveryAssembly(bool inject,bool persistent=false,std::s
     bool corrupt_candidate=false)
 {
     RecoveryAssemblyRun out;
-    const core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    auto input=second_stage_test::SyntheticJointWorkload("chain",2);
+    input.selection_domain.emplace(); input.selection_domain->target_indices={0,1};
+    input.selection_domain->contributor_policy=std::string(rhbm_gem::PureHaloSupportExclusionContributorPolicy);
+    input.selection_domain->pure_halo_support_exclusion=rhbm_gem::JointPureHaloSupportExclusionProvenance{
+        input.observations.size(),input.observations.size(),0,0,0,0};
+    const core::JointProblem problem(std::move(input));
     n::FixedNeighborSearchPolicy policy; policy.eta_upper_bound=std::log(2.2);
     policy.configure_for_testing=[&](n::FixedNeighborPolicy & local) {
         local.core_atoms=1; local.maximum_sweeps=sweeps; local.collect_diagnostics=true;
@@ -378,6 +383,7 @@ TEST(JointComponentRuntimeTest, TransientWidthFailureRecoversAndAssemblesQualifi
     EXPECT_NE(lm->reason.find("; failed=1;"),std::string::npos);
     ASSERT_TRUE(recovered.fit.assembled_state); ASSERT_TRUE(recovered.fit.prediction);
     EXPECT_EQ(recovered.fit.RuntimeConvergence(),Status::Passed);
+    EXPECT_EQ(recovered.fit.TargetRuntimeConvergence(),Status::Passed);
     for(const char * name:{"assembly-mapping","assembled-consistency","endpoint-verification","independent-replay"})
     {
         const auto check=std::find_if(recovered.fit.evidence.begin(),recovered.fit.evidence.end(),
@@ -391,6 +397,18 @@ TEST(JointComponentRuntimeTest, TransientWidthFailureRecoversAndAssemblesQualifi
         EXPECT_NEAR((*recovered.fit.prediction)[i],(*baseline.fit.prediction)[i],1e-6);
     for(std::size_t i=0;i<component.state->b.size();++i)
         EXPECT_NEAR(component.state->b[i],baseline.fit.assembled_state->b[i],1e-6);
+    for(std::size_t i=0;i<component.state->ac.size();++i)
+        EXPECT_NEAR(component.state->ac[i],baseline.fit.assembled_state->ac[i],1e-5);
+    const auto saved=core::CaptureJointAnalysisResult(recovered.fit);
+    ASSERT_TRUE(saved.assembled_state); ASSERT_TRUE(saved.components.front().state);
+    EXPECT_EQ(saved.runtime_convergence,Status::Passed);
+    EXPECT_EQ(saved.target_runtime_convergence,Status::Passed);
+    EXPECT_EQ(saved.components.front().runtime_convergence,Status::Passed);
+    const auto historical=std::find_if(saved.components.front().evidence.begin(),saved.components.front().evidence.end(),
+        [](const auto & check){return check.name=="active-set-lm-subproblems";});
+    ASSERT_NE(historical,saved.components.front().evidence.end());
+    EXPECT_EQ(historical->status,Status::Failed);
+    EXPECT_EQ(historical->reason,lm->reason);
 }
 
 TEST(JointComponentRuntimeTest, WidthRecoveryExhaustionAndUnqualifiedTerminalStatesRejectAssembly)
@@ -422,6 +440,17 @@ TEST(JointComponentRuntimeTest, WidthRecoveryExhaustionAndUnqualifiedTerminalSta
     ASSERT_EQ(recovered.fit.RuntimeConvergence(),Status::Passed);
     const auto & data=core::JointProblemAccess::Get(*recovered.fit.problem);
     auto context=data.context; context.eta_upper_bound=std::log(2.2);
+    auto altered=recovered.search.state;
+    altered.beta(0)+=.1;
+    const auto recertified=n::CertifyFixedNeighborEndpoint(data.domain,data.y,altered,context,
+        nullptr,0,n::PracticalJointConvergenceCriteria);
+    EXPECT_FALSE(recertified.qualified());
+    EXPECT_FALSE(recertified.assessment.endpoint_verified);
+    EXPECT_FALSE(recertified.assessment.independent_replay.passed);
+    auto rejected=recovered.fit.components;
+    rejected.front().evidence=n::AssessmentEvidence(recertified.assessment,rhbm_gem::JointEvidenceScope::ComponentLocal);
+    EXPECT_FALSE(n::AssembleComponents(data.domain,data.y,data.partition,context,rejected,
+        n::PracticalJointConvergenceCriteria).available);
     for(const char * name:{"conditional-ac-optimality","width-stationarity","endpoint-verification",
         "independent-replay","accepted-state-integrity","complete-sweep-stationarity"})
     {

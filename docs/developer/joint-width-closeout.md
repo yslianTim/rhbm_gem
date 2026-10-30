@@ -98,7 +98,7 @@ outside neighbors, rather than a Gaussian-only derivative.
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
 | 393 LYS50 NZ (N) | 0 | .01396310 | -.14040946 | 1.20e-71 | 1.15e-71 | 1.11e-75 | ActiveFace / excluded | invalid-local-parameters / excluded |
 | 1421 GLU163 OE2 (O) | 0 | .03382466 | -.17016283 | 3.95e-19 | 3.85e-19 | 4.68e-24 | ActiveFace / excluded | Available / included |
-| 1415 GLU163 CG (C) | 0 | 3.06603092 | 1.31542754 | 2.87e-3 | 1.74e-4 | 0 (upper-bound projected) | ActiveFace / excluded | invalid-local-parameters / excluded |
+| 1415 GLU163 CG (C) | 0 | 3.06603092 | 1.31542754 | 2.87e-3 | 1.74e-4 | <=5e-16 (upper-bound projected) | ActiveFace / excluded | invalid-local-parameters / excluded |
 | 544 GLU65 CD (C) | .10713355 | .17397750 | -.23234023 | 5.31e-4 | 2.80e-4 | 2.30e-16 | Adequate / eligible | Available / included |
 | 435 LYS54 NZ (N) | 3.61328020 | .74776986 | .16548032 | 2.53e-3 | 8.56e-4 | 6.68e-15 | Adequate / eligible | invalid-local-parameters / excluded |
 | 590 LYS69 NZ (N) | 1.22395538 | .57385054 | .07863686 | 1.25e-3 | 5.70e-4 | 8.64e-16 | Adequate / eligible | invalid-local-parameters / excluded |
@@ -110,7 +110,7 @@ the smallest raw Width norm among A>0 targets; it remains measurably informative
 so neither small A nor small B alone justifies exclusion. The next-smallest raw
 norm is ID 590 at 1.25e-3. NZ393 and OE2(1421) are many orders below that gap.
 Their complete profile norms are 1.16e-71 and 3.85e-19 respectively; CG1415's
-is 1.74e-4. Its raw gradient is -4.55916209e-8, correctly projected to zero at
+is 1.74e-4. Its raw gradient is -4.55916209e-8, correctly projected to roundoff at
 the original upper bound. It has informative charge and is not a flat direction.
 
 The 18 Warning atoms are block 51 IDs
@@ -141,7 +141,7 @@ original upper bound; keep other Widths and outside-block contributions fixed,
 and re-solve constrained A/C for the block. Compare with the same block's
 re-profiled baseline. No priors or lower bounds were added. Objective differences
 are normalized by S^2; prediction norms by S. Charge differences below use the
-actual 100 stored Local sample geometries and production tricubic interpolation.
+actual 200 stored Local sample geometries and production tricubic interpolation.
 
 | Case | Profile objective difference | Prediction difference | Maximum fixed-C Local correction difference |
 | --- | --- | --- | --- |
@@ -168,7 +168,7 @@ or confidence interval; no calibrated map noise model is available here.
 Informative CG1415 and CD544 can change Local responses if their Widths change,
 but this is not evidence that their fitted Widths are unreliable.
 
-The audit executable/source, full per-atom TSV, logs, SQLite and timing data are
+The audit source, full per-atom TSV, logs, SQLite and timing data are
 temporary under `/tmp/rhbmgem-jce-closeout/`; no binaries or large data are tracked.
 R2-A does not change production numerical or downstream eligibility policies.
 
@@ -248,3 +248,107 @@ were already excluded from the Halo pool). Removing a stable Local measurement
 changes a group estimate; without independent statistical truth, that change is
 **not evidence of improvement**. No Local or Group availability failure was
 causally reproduced by the nearly flat Width perturbations tested here.
+
+## Eligibility decision (R2-C)
+
+**Not needed — existing downstream qualification sufficient** for the
+reproducible failure modes audited here. This is not a universal statistical
+safety theorem: normalized Adequate evidence can coexist with low absolute
+information, and Local/Group covariance conditions on the fixed Joint charge
+profile rather than propagating its uncertainty.
+
+No Halo, Local or Group production gate changes are justified by the evidence:
+the clearly weak real Widths do not enter Halo medians, controlled Local/Group
+perturbations do not reproduce a meaningful bad result, and excluding the one
+available Local point has no demonstrated benefit against independent truth.
+The five-part Go criterion is therefore not met. Keep the objective, KKT,
+original Width bound, endpoint/replay, assembly and eligibility policies intact.
+
+Rejected proposals:
+
+* Exclude all A=0: loses informative charge-only Width (e.g. CG1415).
+* Require Adequate for Local: discards 16 currently qualified Local results in
+  the three warning blocks, including informative neighbors and stable OE2.
+* Add a small-B or arbitrary absolute-sensitivity cutoff: neither is calibrated
+  to map noise or the intended downstream use; normalized conditioning alone
+  cannot supply such calibration.
+* Restore ParameterStability or add persistent Width-identifiability machinery:
+  unnecessary without a validated statistical decision rule. Existing local
+  conditioning plus these bounded read-only experiments record the limitations.
+
+No schema/version migration is needed because production eligibility and
+provenance semantics are unchanged. JSON remains schema 22, target point
+validation v2; no retired compatibility path was restored.
+
+## Final validation and cleanup (R3)
+
+Release build: `cmake --build build/release --parallel 4` passed without new
+compiler warnings. Focused ActiveSetBoundedLM/Search/FixedNeighbor/Runtime/
+LocalConditioning/Halo/PartialSelection tests: **119/119 passed**. Full
+`ctest --test-dir build/release -j 4 --output-on-failure`: **19/19 passed**,
+including JSON/SQLite and CLI checks (1053 GoogleTest executions in 16 groups,
+plus three script/CLI tests). Nine GoogleTest cases were added within existing
+CTest groups; the CTest group count remains 19. Runtime closeout also covers
+pure-exclusion target qualification, captured historical failure evidence,
+baseline A/C agreement, and actual failed endpoint/replay recertification after
+altering coefficients. Missing/Failed terminal evidence remains a separate veto.
+
+The final CLI used OMP_NUM_THREADS=4, OMP_THREAD_LIMIT=4 and
+VECLIB_MAXIMUM_THREADS=4:
+
+```sh
+build/release/bin/RHBM-GEM potential_analysis --estimator joint-components \
+  -a /Users/yslian/data/7a6a.cif \
+  -m /Users/yslian/data/emd_11668_unsharpened.map --select-chain A -j 4 \
+  -d /tmp/rhbmgem-jce-closeout/final-regression.sqlite -k 7a6a-closeout-final
+```
+
+This is a second new database, not an overwrite of the R2 audit or prior success.
+Final run ID: `1741082f-2511-4e32-a253-7704910859c9`.
+CLI exit 0; 111 sweeps; A/C KKT 6.867634239e-8; projected Width KKT
+9.572212467e-10. Endpoint, independent replay, accepted-state integrity,
+component/global assembly and target qualification pass. All 1418 formal Joint
+targets, all parameter/gradient values, input hashes, normalization and 179949
+fitting row IDs exactly match the old successful baseline. Original Width bound
+remains 3.0660309206224183; LM solves/failed = 15104/0; unresolved = 0.
+
+| Final downstream metric | Result |
+| --- | ---: |
+| Halo eligible pool / distinct used IDs | 1400 / 713 |
+| Reconstructed halos | 734 / 734 |
+| Persisted full peeling samples | 283600 / 283600 available |
+| CLI tail peeling (distance 1 to 2 angstrom) | 141800 / 141800 available |
+| Local | 1413 Available; 4 invalid-local-parameters; 1 local-mdpde-unqualified |
+| Group | 147 Available; 21 single-member; 5 singular-group-covariance |
+
+The old database also has 200 raw/peeling samples per target (283600 total);
+the historical 141800 figure and CLI message refer to the tail interval only,
+not the full persisted sample list. Every donor ID belongs to the eligible
+pool; every Group member has qualified Local evidence; Joint, peeling, Local,
+Group and halo records share the final run ID. Fixed charge coefficients/Widths
+match each target endpoint. Validation opened both comparison databases in
+SQLite read-only mode. Machine-readable results are in the temporary
+`final-validation.json`, with build/test/CLI logs alongside it.
+
+Final alpha_g=.5, R2 alpha_g=.4 and old baseline alpha_g=.6 reflect existing
+randomized Group training. Counts/member eligibility remain unchanged; Group
+estimates/covariance/outlier differences across these full runs are not claimed
+to be floating-point drift or policy effects. The controlled R2 comparison above
+holds alpha fixed to isolate Width effects.
+
+Final wall time 96.79 s, user+system CPU 100.67 s, peak RSS 1,584,431,104 bytes.
+The earlier R2 run measured 93.10 s and 1,404,157,952 bytes. These are single-run
+measurements, with some test compilation overlapping the final run, not a
+controlled performance comparison. No production numerical hot path, storage,
+solver family or gate changed, so another microbenchmark study was unnecessary.
+
+All new callbacks and the Local forwarding adapter are protected by
+RHBM_GEM_TEST_INSTRUMENTATION. The Release library does not export the adapter;
+there is no new production branch, CLI flag, global fault state, schema field,
+legacy compatibility path or production memory cost. Every new hook is exercised
+by retained regressions. Temporary audit executables were removed; sources,
+bounded evidence and databases remain outside Git for inspection. No large file,
+new dependency, untracked source or unrelated edit was added. `git diff --check`
+passed. Statistical confidence intervals, global uniqueness and a universal
+absolute-information eligibility rule remain unestablished scientific questions,
+not relaxed optimization requirements.
