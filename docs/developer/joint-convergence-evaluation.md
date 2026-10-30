@@ -134,3 +134,42 @@ Final-minus-initial eta changes for 5495/5496/5497/5498/5508/5509/5654 are respe
 0.02216217 / -0.71758790 / 0.57404160 / -0.38523613 / -0.30884112 / 0.06191469 / -0.10479786.
 All seven are interior to the calibrated width upper bound at this endpoint. In particular, serial
 5497 has A=0 but nonzero C, so its width still affects the charge contribution.
+
+## R1 continuous original search — Qualified
+
+A single run with a 600-sweep cap, identical scalar-log initialization and unchanged local solvers,
+cores/order/acceptance/thresholds, stopped at **sweep 250**. Its first 200 sweeps match R0 exactly
+in objective, both KKT metrics, raw gradient and block counts; the 200-sweep eta/A/C arrays again
+match the historical CLI candidate exactly. No width-only restart or reconstructed continuation.
+
+| Checkpoint budget | Actual sweeps | A/C KKT | Projected width KKT | Qualified | Search seconds | Peak RSS bytes |
+|---:|---:|---:|---:|---|---:|---:|
+| 200 (R0 independent run) | 200 | 3.7578613380675596e-7 | 1.6868359486998941e-9 | Failed | 392.970465 | 873742336 |
+| 300 | Not reached: qualified at 250 | — | — | Not executed | — | — |
+| 400 | Not reached: qualified at 250 | — | — | Not executed | — | — |
+| 600 (configured cap) | 250, early stop | 4.2690769063921663e-8 | 9.699454295297727e-10 | Qualified | 487.347409 | 986546176 |
+
+The first actual A/C pass is sweep **241**, first width pass **250**, first simultaneous pass and
+complete endpoint certification **250**. Independent A/C KKT=4.2690769069993195e-8;
+KKT discrepancy=6.0715321659188248e-18; gradient discrepancy=2.5283204579171602e-18.
+All feasibility, replay and endpoint checks pass; integrity=true, unresolved recovery=0.
+The separately recomputed endpoint also passes the existing production `AssembleComponents`
+checks (mapping, numerical qualification and independent replay).
+
+Full trajectory: [R1 CSV](evidence/joint-convergence-r1.csv). Final objective=0.019770945620759782.
+Accepted=144,252; rejected=41,039; genuinely unchanged=209; failed=0. Solver wall=489.667256 s,
+certification=0.252499 s, independent replay=0.128226 s. Time-to-qualified excludes model/map loading,
+FirstStage initialization, assembly and downstream processing, and includes complete sweep work;
+the reported solver wall additionally includes preparation and final conditioning diagnostics.
+The higher research-process RSS includes retained test-only records for 50 more sweeps. Global
+preflight remains exactly 219,762,986 bytes and candidate scratch remains 198,232 bytes; no new
+production workspace was introduced in this experiment.
+
+The tail is not purely geometric: after sweep 200, objective descends into a lower region while
+KKT rebounds (sweep 225 A/C≈1.81e-6, width≈5.52e-9), then both settle by 250. There are short-term
+and odd/even variations. This run provides no evidence of a machine-precision barrier or persistent
+local failure. It does not establish statistical identifiability or global optimality.
+
+Decision: **Outcome A**, original search qualifies within 300. R2 will evaluate a 200 nominal / 300
+hard budget, using recent normalized projected-KKT progress. Running to 400/600 after qualification
+would have no scientific value and was intentionally avoided.
