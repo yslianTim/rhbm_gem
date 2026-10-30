@@ -728,7 +728,15 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         {
             const auto & prepared=prepared_blocks.at(block_index);
             const auto & core_atoms=prepared.core_atoms; const auto & affected_rows=prepared.affected_rows;
-            const auto & local_domain=prepared.domain; const auto & local_context=prepared.context;
+            const auto & local_domain=prepared.domain;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            auto local_context=prepared.context;
+            if(policy.force_width_failure_for_testing)
+                local_context.force_width_subproblem_failure_for_testing=
+                    policy.force_width_failure_for_testing(block_index,sweep_index);
+#else
+            const auto & local_context=prepared.context;
+#endif
             const auto local_atoms=prepared.local_atoms;
             const auto block_started=collect_telemetry ? Clock::now() : Clock::time_point{};
             FixedNeighborBlockRecord record;

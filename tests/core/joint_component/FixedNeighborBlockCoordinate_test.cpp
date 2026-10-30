@@ -1373,3 +1373,49 @@ TEST(JointFixedNeighborBlockCoordinateTest, TrustedInitialProfileCannotCompleteF
     EXPECT_TRUE(result.blocks.front().failure_diagnostics->initial_profile_trusted);
     EXPECT_EQ(result.blocks.front().accepted_updates,0);
 }
+
+TEST(JointFixedNeighborBlockCoordinateTest, WidthFailureIsScopedToOneBlockVisit)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
+    n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=2;
+    policy.eta_upper_bound=std::log(2.2); policy.collect_diagnostics=true;
+    std::size_t injected{},normal_retry{},rollback_checked{};
+    policy.force_width_failure_for_testing=[&](std::size_t block,std::size_t sweep) {
+        if(block==0 && sweep==0) {++injected; return true;}
+        if(block==0 && sweep==1) ++normal_retry;
+        return false;
+    };
+    policy.candidate_observer=[&](const n::FixedNeighborCandidateEvent & event) {
+        if(event.sweep!=1 || event.block!=2) return;
+        ++rollback_checked;
+        EXPECT_TRUE(BitwiseEqual(event.accepted_before.eta,initial_eta));
+        EXPECT_TRUE(event.accepted_before.beta.isZero(0));
+        EXPECT_TRUE(event.accepted_before.prediction.isZero(0));
+        EXPECT_TRUE((event.accepted_before.residual.array()==(-data.y).array()).all());
+        EXPECT_DOUBLE_EQ(event.accepted_before.objective,.5*data.y.squaredNorm()/
+            (data.context.scale*data.context.scale));
+    };
+    const auto result=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,
+        initial_eta,data.context,policy);
+    EXPECT_EQ(injected,1u); EXPECT_EQ(normal_retry,1u); EXPECT_EQ(rollback_checked,1u);
+    ASSERT_GE(result.blocks.size(),3u);
+    const auto & failed=result.blocks.front();
+    EXPECT_EQ(failed.status,"retry-pending");
+    EXPECT_FALSE(failed.accepted);
+    ASSERT_TRUE(failed.failure_diagnostics);
+    EXPECT_TRUE(failed.failure_diagnostics->initial_profile_valid);
+    EXPECT_TRUE(failed.failure_diagnostics->initial_profile_trusted);
+    EXPECT_EQ(failed.failure_diagnostics->local_search_stop_reason,
+        "bounded-subproblem:injected-width-subproblem-failure");
+    const auto & retry=result.blocks[2];
+    EXPECT_EQ(retry.sweep,2u); EXPECT_EQ(retry.block,1u);
+    EXPECT_TRUE(retry.recovery_retry); EXPECT_TRUE(retry.recovery_success);
+    EXPECT_EQ(retry.recovery_attempt,1u);
+    EXPECT_TRUE(retry.accepted); EXPECT_GT(retry.accepted_updates,0);
+    EXPECT_EQ(result.recovery_attempts,1u); EXPECT_EQ(result.recovery_successes,1u);
+    EXPECT_EQ(result.unresolved_failures,0u); EXPECT_TRUE(result.accepted_state_integrity);
+    EXPECT_EQ(result.work.local_profile_work.bounded_lm.failed_subproblems,1u);
+    EXPECT_GT(result.work.local_profile_work.bounded_lm.subproblem_solves,1u);
+}
