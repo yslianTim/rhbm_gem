@@ -337,13 +337,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, EverySweepReconcilesObjectiveAfterRe
     EXPECT_EQ(result.sweeps.size(),result.sweep_count);
     EXPECT_TRUE(std::all_of(result.sweeps.begin(),result.sweeps.end(),
         [](const auto & sweep){return sweep.objective_cache_refreshed;}));
-    EXPECT_GT(result.work.sweep_replay_seconds,0.0);
-    EXPECT_GT(result.work.sweep_replay_audit_seconds,0.0);
-    EXPECT_GT(result.work.sweep_global_state_seconds,0.0);
-    EXPECT_GE(result.work.objective_reconciliation_seconds,0.0);
-    EXPECT_LE(result.work.sweep_replay_seconds+result.work.sweep_replay_audit_seconds+
-        result.work.sweep_global_state_seconds+result.work.objective_reconciliation_seconds,
-        result.search_seconds);
     const auto replay=b::Replay(*data.input,data.layout,data.y,
         result.state.eta,result.state.beta,data.context.scale);
     EXPECT_LE(std::abs(result.state.objective-replay.objective),
@@ -863,7 +856,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionBoundedSearchReleasesTheSt
     policy.eta_upper_bound=eta_max;
     const auto result=n::RunFixedNeighborDiagnostic(problem,initial,policy);
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
-    const auto & bounded_lm=result.work.local_profile_work.bounded_lm;
+    const auto & bounded_lm=result.work.bounded_lm;
     EXPECT_GT(bounded_lm.subproblem_solves,0u);
     EXPECT_EQ(bounded_lm.failed_subproblems,0u);
     EXPECT_GT(bounded_lm.active_set_iterations,0u);
@@ -1106,7 +1099,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, SearchResultAndIndependentCertificat
     const auto quiet_state=quiet.state;
     const auto quiet_certification=n::CertifyFixedNeighborEndpoint(domain,data.y,quiet.state,context);
     const auto diagnostic_certification=n::CertifyFixedNeighborEndpoint(domain,data.y,diagnostic.state,context);
-    const auto resource_limited=n::CertifyFixedNeighborEndpoint(domain,data.y,quiet.state,context,nullptr,
+    const auto resource_limited=n::CertifyFixedNeighborEndpoint(domain,data.y,quiet.state,context,
         n::JointMemoryPlanningBudgetBytes+1);
 
     EXPECT_TRUE(quiet.blocks.empty());
@@ -1120,9 +1113,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, SearchResultAndIndependentCertificat
     EXPECT_EQ(quiet.domain_preparations,quiet.block_preparations);
     EXPECT_EQ(quiet.mapping_preparations,quiet.block_preparations);
     EXPECT_EQ(diagnostic.block_preparations,quiet.block_preparations);
-    EXPECT_GT(quiet.work.local_profile_work.total.evaluations,0u);
-    EXPECT_EQ(quiet.work.local_profile_work.total.evaluations,
-        diagnostic.work.local_profile_work.total.evaluations);
     EXPECT_EQ(quiet.reason,diagnostic.reason);
     EXPECT_EQ(quiet.search_converged,diagnostic.search_converged);
     EXPECT_EQ(quiet_certification.verified(),diagnostic_certification.verified());
@@ -1367,7 +1357,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, TrustedInitialProfileCannotCompleteF
     EXPECT_GT(result.unresolved_failures,0u);
     EXPECT_GT(result.recovery_attempts,0u);
     EXPECT_EQ(result.recovery_successes,0u);
-    EXPECT_GT(result.work.local_profile_work.bounded_lm.failed_subproblems,0u);
+    EXPECT_GT(result.work.bounded_lm.failed_subproblems,0u);
     ASSERT_FALSE(result.blocks.empty());
     ASSERT_TRUE(result.blocks.front().failure_diagnostics);
     EXPECT_TRUE(result.blocks.front().failure_diagnostics->initial_profile_trusted);
@@ -1416,6 +1406,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, WidthFailureIsScopedToOneBlockVisit)
     EXPECT_TRUE(retry.accepted); EXPECT_GT(retry.accepted_updates,0);
     EXPECT_EQ(result.recovery_attempts,1u); EXPECT_EQ(result.recovery_successes,1u);
     EXPECT_EQ(result.unresolved_failures,0u); EXPECT_TRUE(result.accepted_state_integrity);
-    EXPECT_EQ(result.work.local_profile_work.bounded_lm.failed_subproblems,1u);
-    EXPECT_GT(result.work.local_profile_work.bounded_lm.subproblem_solves,1u);
+    EXPECT_EQ(result.work.bounded_lm.failed_subproblems,1u);
+    EXPECT_GT(result.work.bounded_lm.subproblem_solves,1u);
 }

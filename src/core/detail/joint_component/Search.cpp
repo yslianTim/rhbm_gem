@@ -5,7 +5,6 @@
 #include "TiledDerivative.hpp"
 #include "ActiveSetBoundedLM.hpp"
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 
 namespace rhbm_gem::core::joint_component {
@@ -36,8 +35,6 @@ bool RejectWeakWidthTrial(double step_inf,double weak_step_fraction,double objec
     return improvement>=0 && improvement<=replay_enclosure;
 }
 namespace {
-double Seconds(std::chrono::steady_clock::time_point start)
-{return std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();}
 struct Profile
 {
     const Domain & domain;
@@ -48,8 +45,6 @@ struct Profile
     std::vector<joint_component::Trial> trace;
     int evaluations{},derivatives{};
     std::string failure;
-    ProfileSearchWork * telemetry{};
-    ProfileEvaluationRole last_role{ProfileEvaluationRole::Unspecified};
     std::optional<double> accepted_objective;
     std::optional<ActiveSetStep> last_bounded_subproblem;
     BoundedLmWork bounded_lm_work;
@@ -59,10 +54,7 @@ struct Profile
         ++bounded_lm_work.subproblem_solves;
         bounded_lm_work.damping_solves+=step.damping_solves;
         bounded_lm_work.bracket_solves+=step.bracket_solves;
-        bounded_lm_work.bisection_solves+=step.bisection_solves;
         bounded_lm_work.damping_qr_factorizations+=step.damping_qr_factorizations;
-        bounded_lm_work.damping_active_set_iterations+=step.damping_active_set_iterations;
-        bounded_lm_work.damping_releases+=step.damping_releases;
         if(!step.valid) {++bounded_lm_work.failed_subproblems; return;}
         bounded_lm_work.active_set_iterations+=step.iterations;
         bounded_lm_work.releases+=step.releases;
@@ -135,18 +127,7 @@ struct Profile
         bool trusted=cached.valid;
         if(proposed)
         {
-            const auto replay_started=std::chrono::steady_clock::now();
             auto evidence=CheckReplay(domain,y,cached,context);
-            if(telemetry)
-            {
-                ProfileRoleWork work; work.replay_checks=1;
-                work.replay_trust_seconds=Seconds(replay_started);
-                telemetry->Add(last_role,work);
-            }
-            if(telemetry && evidence.reason=="independent-kkt-failed")
-                ++telemetry->local_replay_kkt_rejections;
-            else if(telemetry && !evidence.passed)
-                ++telemetry->local_replay_disagreements;
             trusted=evidence.passed; row.trust=std::move(evidence);
         }
         if(proposed && trusted && step.lpNorm<Eigen::Infinity>()>2.302585092994046)
@@ -164,7 +145,6 @@ struct Profile
                     if(RejectWeakWidthTrial(step.lpNorm<Eigen::Infinity>(),assessment.weak_step_fraction,
                         old_objective,candidate_objective))
                     {
-                        if(telemetry) ++telemetry->width_safeguard_rejections;
                         row.rejection_reason="weak-width-identifiability-limited";
                         trusted=false;
                     }
@@ -182,8 +162,7 @@ struct Profile
         if(cached.valid && cached.eta.size()==eta.size() && (cached.eta.array()==eta.array()).all()) return true;
         if(evaluations>=context.profile_budget) {failure="profile-budget"; return false;}
         failure.clear();
-        last_role=evaluations==0 ? ProfileEvaluationRole::InitialProfile : ProfileEvaluationRole::TrialProfile;
-        cached=EvaluateProfile(domain,y,eta,&context,last_role,telemetry,&linear_workspace); ++evaluations;
+        cached=EvaluateProfile(domain,y,eta,&context,&linear_workspace); ++evaluations;
         joint_component::Trial row; row.endpoint=cached; row.evaluation=evaluations;
         trace.push_back(std::move(row));
         if(!cached.valid) failure="inner-"+cached.reason;
@@ -201,21 +180,10 @@ struct Profile
     int linearize(const Vector & eta,const Vector &,Matrix & factor,Vector & response,Vector & norms)
     {
         if(!Get(eta)) return -1;
-        const auto prepare_started=std::chrono::steady_clock::now();
         const auto prepared=PrepareDerivative(cached,scale,&context);
-        const auto prepare_seconds=Seconds(prepare_started);
-        const auto reduce_started=std::chrono::steady_clock::now();
         auto differential=ReduceDerivative(prepared,cached.residual); ++derivatives;
-        const auto reduce_seconds=Seconds(reduce_started);
-        if(telemetry)
-        {
-            ProfileRoleWork work; work.derivative_preparations=1; work.derivative_prepare_seconds=prepare_seconds;
-            telemetry->Add(last_role,work);
-            work={}; work.derivative_reductions=1; work.derivative_reduce_seconds=reduce_seconds;
-            telemetry->Add(last_role,work);
-        }
         if(!differential.valid)
-        {if(telemetry) ++telemetry->invalid_gradient_stops; failure=differential.reason; return -1;}
+        {failure=differential.reason; return -1;}
         factor=std::move(differential.jacobian); response=std::move(differential.response);
         norms=std::move(differential.jacobian_norms); return 0;
     }
@@ -228,17 +196,12 @@ struct Profile
     }
 };
 }
-namespace {
-SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & initial_b,
-    const EvaluationContext & context,ProfileSearchWork * telemetry)
+SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
+    const EvaluationContext & context)
 {
-    const auto start=std::chrono::steady_clock::now();
-    ProfileSearchWork local_work;
     EvaluationContext search_context=context;
     const auto active_eta_max=search_context.eta_upper_bound;
-    Profile profile{domain,y,search_context.scale,search_context,{}, {},0,0,{},telemetry ? &local_work : nullptr,
-        ProfileEvaluationRole::Unspecified,{}, {},{},{}
-    };
+    Profile profile{domain,y,search_context.scale,search_context,{}, {},0,0,{}, {},{},{},{}};
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
         lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;
@@ -283,32 +246,7 @@ SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & 
         (out.stop_reason=="unrepresentable-step" && !profile.WidthStationary());
     out.evaluations=profile.evaluations; out.derivatives=profile.derivatives; out.accepted=accepted;
     out.stopped=status==Eigen::LevenbergMarquardtSpace::UserAsked || status==Eigen::LevenbergMarquardtSpace::TooManyFunctionEvaluation || !profile.failure.empty();
-    out.seconds=Seconds(start);
-    if(telemetry)
-    {
-        if(out.lm_status>=0 && static_cast<std::size_t>(out.lm_status)<local_work.lm_status_counts.size())
-            ++local_work.lm_status_counts[static_cast<std::size_t>(out.lm_status)];
-        for(const auto & trial:out.trials)
-        {
-            if(trial.accepted) ++local_work.accepted_profile_trials;
-            else ++local_work.rejected_profile_trials;
-        }
-        if(out.stop_reason=="accepted-update-budget") ++local_work.accepted_update_budget_stops;
-        else if(out.stop_reason=="profile-budget") ++local_work.profile_budget_stops;
-        else if(out.stop_reason=="native-lm-stop") ++local_work.native_lm_stops;
-        local_work.bounded_lm=profile.bounded_lm_work;
-        local_work.total_seconds=out.seconds;
-        local_work.lm_overhead_seconds=std::max(0.0,out.seconds-local_work.AttributedSeconds());
-        out.profile_work=std::move(local_work);
-    }
-    else out.profile_work.bounded_lm=profile.bounded_lm_work;
+    out.bounded_lm_work=profile.bounded_lm_work;
     return out;
-}
-}
-
-SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
-    const EvaluationContext & context,ProfileSearchWork * telemetry)
-{
-    return SearchProfileImpl(domain,y,initial_b,context,telemetry);
 }
 }

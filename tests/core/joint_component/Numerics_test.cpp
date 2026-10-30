@@ -502,7 +502,6 @@ TEST(JointComponentNumericsTest, UnweightedLinearSolvePreservesRecordedNumerical
     EXPECT_EQ(full_rank.active_set_iterations,1u); EXPECT_EQ(full_rank.releases,0);
     EXPECT_EQ(full_rank.sparse_structure_build_count,1u); EXPECT_EQ(full_rank.tile_mapping_build_count,1u);
     EXPECT_EQ(full_rank.free_face_changes,0u); EXPECT_EQ(full_rank.free_face_unchanged,0u);
-    EXPECT_GT(full_rank.solver_total_seconds,0.0); EXPECT_GT(full_rank.sparse_qr_seconds,0.0);
     EXPECT_LE((full_rank.beta-positive_truth).norm(),1e-14);
     EXPECT_DOUBLE_EQ(full_rank_certificate.objective,0.0);
     EXPECT_EQ(full_rank.refinement_eligibility_count,1u); EXPECT_EQ(full_rank.refinement_trigger_count,0u);

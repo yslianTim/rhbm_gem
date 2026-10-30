@@ -4,7 +4,6 @@
 #include "CompactSvd.hpp"
 #include "LinearSolve.hpp"
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <exception>
 #include <numbers>
@@ -23,44 +22,6 @@ void AddCompensatedProduct(double left,double right,double & sum,double & compen
     const double product=left*right;
     AddCompensated(product,sum,compensation);
     AddCompensated(std::fma(left,right,-product),sum,compensation);
-}
-void AddLinearSolveWork(LinearSolveWork & destination,const LinearSolveWork & source)
-{
-#define ADD_COUNT(name) destination.name+=source.name
-    ADD_COUNT(solve_calls); ADD_COUNT(valid_solves); ADD_COUNT(invalid_solves); ADD_COUNT(invalid_input_solves);
-    ADD_COUNT(rank_deficient_solves); ADD_COUNT(nonfinite_solves); ADD_COUNT(active_set_budget_exhausted_solves);
-    ADD_COUNT(other_invalid_solves); ADD_COUNT(factorization_solves); ADD_COUNT(active_set_iterations);
-    ADD_COUNT(active_set_releases); ADD_COUNT(free_face_changes); ADD_COUNT(free_face_unchanged);
-    ADD_COUNT(sparse_structure_build_count); ADD_COUNT(tile_mapping_build_count);
-    ADD_COUNT(selected_nonzeros); ADD_COUNT(reduced_nonzeros);
-    ADD_COUNT(refinement_eligibility_count); ADD_COUNT(refinement_trigger_count); ADD_COUNT(refinement_iterations);
-    ADD_COUNT(refinement_success_count); ADD_COUNT(refinement_failure_count); ADD_COUNT(refinement_factorizations);
-#undef ADD_COUNT
-    destination.refinement_seconds+=source.refinement_seconds;
-    destination.sparse_structure_build_seconds+=source.sparse_structure_build_seconds;
-    destination.row_major_conversion_seconds+=source.row_major_conversion_seconds;
-    destination.tile_mapping_build_seconds+=source.tile_mapping_build_seconds;
-    destination.tiled_qr_seconds+=source.tiled_qr_seconds;
-    destination.reduced_sparse_assembly_seconds+=source.reduced_sparse_assembly_seconds;
-    destination.sparse_qr_seconds+=source.sparse_qr_seconds;
-    destination.solver_total_seconds+=source.solver_total_seconds;
-}
-void AddRoleWork(ProfileRoleWork & destination,const ProfileRoleWork & source)
-{
-    destination.evaluations+=source.evaluations;
-    destination.derivative_preparations+=source.derivative_preparations;
-    destination.derivative_reductions+=source.derivative_reductions;
-    destination.replay_checks+=source.replay_checks;
-    destination.local_kkt_rejections+=source.local_kkt_rejections;
-    AddLinearSolveWork(destination.linear_solve,source.linear_solve);
-    destination.evaluation_seconds+=source.evaluation_seconds;
-    destination.basis_seconds+=source.basis_seconds;
-    destination.linear_matrix_preparation_seconds+=source.linear_matrix_preparation_seconds;
-    destination.linear_rhs_solve_seconds+=source.linear_rhs_solve_seconds;
-    destination.linear_certificate_seconds+=source.linear_certificate_seconds;
-    destination.derivative_prepare_seconds+=source.derivative_prepare_seconds;
-    destination.derivative_reduce_seconds+=source.derivative_reduce_seconds;
-    destination.replay_trust_seconds+=source.replay_trust_seconds;
 }
 }
 WidthBoundKkt CalculateWidthBoundKkt(const Vector & eta,const Vector & gradient,double upper)
@@ -114,22 +75,6 @@ namespace {
 bool MeetsJointThreshold(double value,double threshold)
 {return std::isfinite(value) && value>=0.0 && value<=threshold;}
 }
-ProfileRoleWork & ProfileSearchWork::Role(ProfileEvaluationRole role)
-{
-    switch(role)
-    {
-    case ProfileEvaluationRole::InitialProfile: return initial_profile;
-    case ProfileEvaluationRole::TrialProfile: return trial_profile;
-    case ProfileEvaluationRole::AcceptedEndpoint: return accepted_endpoint;
-    case ProfileEvaluationRole::Unspecified: return total;
-    }
-    return total;
-}
-void ProfileSearchWork::Add(ProfileEvaluationRole role,const ProfileRoleWork & work)
-{
-    if(role!=ProfileEvaluationRole::Unspecified) AddRoleWork(Role(role),work);
-    AddRoleWork(total,work);
-}
 void BoundedLmWork::Merge(const BoundedLmWork & other)
 {
     subproblem_solves+=other.subproblem_solves;
@@ -139,36 +84,10 @@ void BoundedLmWork::Merge(const BoundedLmWork & other)
     active_bound_occurrences+=other.active_bound_occurrences;
     damping_solves+=other.damping_solves;
     bracket_solves+=other.bracket_solves;
-    bisection_solves+=other.bisection_solves;
     damping_qr_factorizations+=other.damping_qr_factorizations;
-    damping_active_set_iterations+=other.damping_active_set_iterations;
-    damping_releases+=other.damping_releases;
     if(std::isfinite(other.maximum_subproblem_kkt))
         maximum_subproblem_kkt=std::isfinite(maximum_subproblem_kkt) ?
             std::max(maximum_subproblem_kkt,other.maximum_subproblem_kkt) : other.maximum_subproblem_kkt;
-}
-void ProfileSearchWork::Merge(const ProfileSearchWork & other)
-{
-    AddRoleWork(total,other.total); AddRoleWork(initial_profile,other.initial_profile);
-    AddRoleWork(trial_profile,other.trial_profile); AddRoleWork(accepted_endpoint,other.accepted_endpoint);
-    bounded_lm.Merge(other.bounded_lm);
-    accepted_profile_trials+=other.accepted_profile_trials;
-    rejected_profile_trials+=other.rejected_profile_trials;
-    local_replay_kkt_rejections+=other.local_replay_kkt_rejections;
-    local_replay_disagreements+=other.local_replay_disagreements;
-    invalid_gradient_stops+=other.invalid_gradient_stops;
-    width_safeguard_rejections+=other.width_safeguard_rejections;
-    accepted_update_budget_stops+=other.accepted_update_budget_stops;
-    profile_budget_stops+=other.profile_budget_stops;
-    native_lm_stops+=other.native_lm_stops;
-    for(std::size_t i=0;i<lm_status_counts.size();++i) lm_status_counts[i]+=other.lm_status_counts[i];
-    total_seconds+=other.total_seconds; lm_overhead_seconds+=other.lm_overhead_seconds;
-}
-double ProfileSearchWork::AttributedSeconds() const
-{
-    return total.basis_seconds+total.linear_matrix_preparation_seconds+total.linear_rhs_solve_seconds+
-        total.linear_certificate_seconds+
-        total.derivative_prepare_seconds+total.derivative_reduce_seconds+total.replay_trust_seconds;
 }
 namespace {
 Vector StablePrediction(const Sparse & x,const Vector & beta)
@@ -311,23 +230,6 @@ void UpdateAcceptedProfileObjective(std::optional<double> & accepted_objective,
 }
 
 namespace {
-struct EvaluationTelemetry
-{
-    ProfileSearchWork * target{};
-    ProfileEvaluationRole role{ProfileEvaluationRole::Unspecified};
-    ProfileRoleWork work;
-    std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
-    EvaluationTelemetry(ProfileSearchWork * target,ProfileEvaluationRole role):target(target),role(role)
-    {if(target) ++work.evaluations;}
-    ~EvaluationTelemetry()
-    {
-        if(target)
-        {
-            work.evaluation_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
-            target->Add(role,work);
-        }
-    }
-};
 Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
 {
     Evaluation out; out.eta=eta;
@@ -428,72 +330,21 @@ MemoryEstimate EndpointVerificationMemoryEstimate(const Domain & domain,VectorRe
     return PlanMemory(shape,MemoryStage::EndpointVerification);
 }
 Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,const EvaluationContext * context,
-    ProfileEvaluationRole role,ProfileSearchWork * profile_work,LinearSolveWorkspace * workspace)
+    LinearSolveWorkspace * workspace)
 {
-    EvaluationTelemetry telemetry(profile_work,role);
-    const auto basis_started=std::chrono::steady_clock::now();
     auto out=Basis(domain,y,eta);
-    if(profile_work) telemetry.work.basis_seconds+=
-        std::chrono::duration<double>(std::chrono::steady_clock::now()-basis_started).count();
     if(!out.valid) return out; out.valid=false;
     const Eigen::Index m=eta.size();
-    const auto solve_started=std::chrono::steady_clock::now();
     const auto solved=SolveLinear(out.x,y,
         context ? &context->linear : nullptr,context ? context->scale : 0,workspace);
-    if(profile_work)
-    {
-        auto & stats=telemetry.work.linear_solve;
-        ++stats.solve_calls;
-        stats.factorization_solves+=static_cast<std::size_t>(std::max(0,solved.solves));
-        stats.active_set_iterations+=solved.active_set_iterations;
-        stats.active_set_releases+=static_cast<std::size_t>(std::max(0,solved.releases));
-        stats.refinement_eligibility_count+=solved.refinement_eligibility_count;
-        stats.refinement_trigger_count+=solved.refinement_trigger_count;
-        stats.refinement_iterations+=solved.refinement_iterations;
-        stats.refinement_success_count+=solved.refinement_success_count;
-        stats.refinement_failure_count+=solved.refinement_failure_count;
-        stats.refinement_factorizations+=solved.refinement_factorizations;
-        stats.refinement_seconds+=solved.refinement_seconds;
-        stats.free_face_changes+=solved.free_face_changes;
-        stats.free_face_unchanged+=solved.free_face_unchanged;
-        stats.sparse_structure_build_count+=solved.sparse_structure_build_count;
-        stats.tile_mapping_build_count+=solved.tile_mapping_build_count;
-        stats.selected_nonzeros+=solved.selected_nonzeros;
-        stats.reduced_nonzeros+=solved.reduced_nonzeros;
-        stats.sparse_structure_build_seconds+=solved.sparse_structure_build_seconds;
-        stats.row_major_conversion_seconds+=solved.row_major_conversion_seconds;
-        stats.tile_mapping_build_seconds+=solved.tile_mapping_build_seconds;
-        stats.tiled_qr_seconds+=solved.tiled_qr_seconds;
-        stats.reduced_sparse_assembly_seconds+=solved.reduced_sparse_assembly_seconds;
-        stats.sparse_qr_seconds+=solved.sparse_qr_seconds;
-        stats.solver_total_seconds+=solved.solver_total_seconds;
-        if(solved.valid) ++stats.valid_solves;
-        else
-        {
-            ++stats.invalid_solves;
-            if(solved.reason=="invalid-input") ++stats.invalid_input_solves;
-            else if(solved.reason.starts_with("rank-deficient")) ++stats.rank_deficient_solves;
-            else if(solved.reason=="nonfinite") ++stats.nonfinite_solves;
-            else if(solved.reason=="active-set-budget-exhausted") ++stats.active_set_budget_exhausted_solves;
-            else ++stats.other_invalid_solves;
-        }
-    }
-    if(profile_work)
-    {
-        telemetry.work.linear_rhs_solve_seconds+=
-            std::chrono::duration<double>(std::chrono::steady_clock::now()-solve_started).count();
-    }
     out.beta=solved.beta;
-    const auto certificate_started=std::chrono::steady_clock::now();
     out.certificate=CertifyLinear(out.x,y,out.beta,context ? context->scale : 0);
-    if(profile_work) telemetry.work.linear_certificate_seconds+=
-        std::chrono::duration<double>(std::chrono::steady_clock::now()-certificate_started).count();
     out.certificate.linear_solver_valid=solved.valid; out.certificate.linear_solver_reason=solved.reason;
     out.certificate.linear_solves=solved.solves; out.certificate.linear_releases=solved.releases;
     out.certificate.free_rank=solved.rank;
     if (!solved.valid) {out.reason=solved.reason; return out;}
     if (!out.certificate.kkt_passed)
-    {if(profile_work) ++telemetry.work.local_kkt_rejections; out.reason="kkt-failed"; return out;}
+    {out.reason="kkt-failed"; return out;}
     out.residual=StableResidual(out.x,y,out.beta); out.gradient=Vector::Zero(m);
     const double scale=context ? context->scale : std::max(1.0,y.norm());
     for (Eigen::Index k=0;k<2*m;++k)
@@ -503,21 +354,13 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     out.reason=out.valid ? "qualified-inner" : "nonfinite-residual"; return out;
 }
 
-Evaluation EvaluateState(const Domain & domain,VectorRef y,const Vector & eta,const Vector & beta,const EvaluationContext & context,
-    ProfileEvaluationRole role,ProfileSearchWork * profile_work)
+Evaluation EvaluateState(const Domain & domain,VectorRef y,const Vector & eta,const Vector & beta,const EvaluationContext & context)
 {
-    EvaluationTelemetry telemetry(profile_work,role);
-    const auto basis_started=std::chrono::steady_clock::now();
     auto out=Basis(domain,y,eta);
-    if(profile_work) telemetry.work.basis_seconds+=
-        std::chrono::duration<double>(std::chrono::steady_clock::now()-basis_started).count();
     if(!out.valid) return out; out.valid=false;
     if(beta.size()!=out.x.cols() || !beta.allFinite()) {out.reason="invalid-coefficients"; return out;}
     out.beta=beta; out.residual=StableResidual(out.x,y,beta); out.gradient=Vector::Zero(eta.size());
-    const auto certificate_started=std::chrono::steady_clock::now();
     out.certificate=CertifyLinear(out.x,y,beta,context.scale);
-    if(profile_work) telemetry.work.linear_certificate_seconds+=
-        std::chrono::duration<double>(std::chrono::steady_clock::now()-certificate_started).count();
     for(Eigen::Index k=0;k<beta.size();++k)
         out.gradient(k/2)+=beta(k)*StableColumnDot(out.derivative,k,out.residual)/context.scale/context.scale;
     CaptureWidthBoundKkt(out.certificate,out.eta,out.gradient,context);
@@ -525,9 +368,8 @@ Evaluation EvaluateState(const Domain & domain,VectorRef y,const Vector & eta,co
     return out;
 }
 Evaluation EvaluateStateStreaming(const Domain & domain,VectorRef y,const Vector & eta,const Vector & beta,
-    const EvaluationContext & context,ProfileEvaluationRole role,ProfileSearchWork * profile_work)
+    const EvaluationContext & context)
 {
-    EvaluationTelemetry telemetry(profile_work,role);
     Evaluation out; out.eta=eta;
     if(domain.rows!=y.size() || domain.rows==0 || eta.size()!=static_cast<Eigen::Index>(domain.atoms.size()) ||
         eta.size()==0 || !eta.allFinite() || !y.allFinite())
@@ -616,8 +458,7 @@ TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation & e,const Eva
     out.width_bound_feasible=replay.width_bound_feasible;
     return out;
 }
-TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy,
-    ReplayDetailsForDiagnostics * diagnostic)
+TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy)
 {
     const auto * context=&policy;
     TrustEvidence out; out.primary_valid=e.valid;
@@ -684,14 +525,6 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
         2e-12+2e-13*original_prediction.array().abs()).all();
     const bool gradient_ok=((width_gradient-e.gradient).array().abs()<=1e-13+2e-9*e.gradient.array().abs()).all();
     const double kkt_difference=std::abs(kkt-e.certificate.projected_kkt);
-    if(diagnostic)
-    {
-        diagnostic->prediction=prediction;
-        diagnostic->residual=replay_residual;
-        diagnostic->width_gradient=width_gradient;
-        diagnostic->objective=.5*replay_residual.squaredNorm();
-        diagnostic->scaled_kkt=kkt;
-    }
     out.prediction_passed=prediction_ok;
     out.gradient_passed=gradient_ok;
     out.kkt_difference=kkt_difference;

@@ -269,7 +269,7 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             "recovery-attempts="+std::to_string(fit.search.recovery_attempts)+
                 "; recovery-successes="+std::to_string(fit.search.recovery_successes)+
                 "; unresolved="+std::to_string(fit.search.unresolved_failures)});
-        const auto & work=fit.search.work.local_profile_work.bounded_lm;
+        const auto & work=fit.search.work.bounded_lm;
         const bool certified_without_steps=work.subproblem_solves==0 && fit.search.certification &&
             fit.search.certification->qualified();
         const auto status=work.subproblem_solves==0 ?

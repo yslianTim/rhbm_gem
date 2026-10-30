@@ -2,7 +2,6 @@
 #include "support/JointRuntimeJson.hpp"
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
 #include "core/detail/joint_component/Problem.hpp"
-#include <sys/resource.h>
 #include <algorithm>
 #include <map>
 #include <numeric>
@@ -297,7 +296,6 @@ FixedNeighborFitDiagnostic SolveFixedNeighborComponentForDiagnostics(const Compo
     out.search.stopped=!result.search_converged || !endpoint_qualified;
     out.search.stop_reason=fixed.stop_reason;
     out.search.evaluations=static_cast<int>(result.total_profile_evaluations);
-    out.search.seconds=result.search_seconds;
     out.search.accepted=static_cast<int>(result.total_accepted_local_updates);
     if(result.certification) out.assessment=result.certification->assessment;
     if(endpoint_qualified)
@@ -316,15 +314,6 @@ j::object FitComponent(const ComponentView & view,const Vector & initial_b,const
     auto fit=runtime_json::Search(result.search,context,view.domain.rows);
     auto assessment=runtime_json::Assessment(result.trusted_assessment ? *result.trusted_assessment : result.assessment);
     for(auto & field:assessment) fit[field.key()]=std::move(field.value());
-    struct rusage usage{}; getrusage(RUSAGE_SELF,&usage);
-#ifdef __APPLE__
-    const auto bytes=usage.ru_maxrss;
-#else
-    const auto bytes=usage.ru_maxrss*1024;
-#endif
-    fit["resources"]=j::object{{"search",j::object{{"seconds",result.search.seconds},{"process_peak_rss_bytes",bytes}}},
-        {"endpoint_audit",j::object{{"seconds",result.assessment_seconds},{"process_peak_rss_bytes",bytes}}}};
-    fit["seconds"]=result.search.seconds+result.assessment_seconds;
     fit["component_id"]=view.id; fit["parent_atoms"]=Indices(view.atoms); fit["parent_rows"]=Indices(view.rows);
     fit["context"]=ContextEvidence(context); fit["initial_b"]=Values(start);
     fit["usable_state"]=result.trusted_state.has_value(); fit["last_trusted_state"]=nullptr;

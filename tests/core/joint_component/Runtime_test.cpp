@@ -362,7 +362,7 @@ TEST(JointComponentRuntimeTest, TransientWidthFailureRecoversAndAssemblesQualifi
     EXPECT_TRUE(retry.accepted); EXPECT_GT(retry.accepted_updates,0);
     EXPECT_EQ(search.recovery_attempts,1u); EXPECT_EQ(search.recovery_successes,1u);
     EXPECT_EQ(search.unresolved_failures,0u); EXPECT_TRUE(search.accepted_state_integrity);
-    EXPECT_EQ(search.work.local_profile_work.bounded_lm.failed_subproblems,1u);
+    EXPECT_EQ(search.work.bounded_lm.failed_subproblems,1u);
     ASSERT_TRUE(search.final_sweep);
     EXPECT_LE(search.final_sweep->global_ac_kkt,1e-7);
     EXPECT_LE(search.final_sweep->projected_width_gradient_inf_norm,1e-9);
@@ -443,7 +443,7 @@ TEST(JointComponentRuntimeTest, WidthRecoveryExhaustionAndUnqualifiedTerminalSta
     auto altered=recovered.search.state;
     altered.beta(0)+=.1;
     const auto recertified=n::CertifyFixedNeighborEndpoint(data.domain,data.y,altered,context,
-        nullptr,0,n::PracticalJointConvergenceCriteria);
+        0,n::PracticalJointConvergenceCriteria);
     EXPECT_FALSE(recertified.qualified());
     EXPECT_FALSE(recertified.assessment.endpoint_verified);
     EXPECT_FALSE(recertified.assessment.independent_replay.passed);

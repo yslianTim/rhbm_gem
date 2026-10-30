@@ -79,20 +79,13 @@ struct FixedNeighborBlockSweep
 };
 struct FixedNeighborWork
 {
-    double structural_preparation_seconds{},endpoint_verification_seconds{},local_conditioning_seconds{},primary_endpoint_seconds{},
-        independent_replay_seconds{},old_core_seconds{},
-        effective_response_seconds{},local_search_seconds{},local_state_seconds{},
-        candidate_copy_seconds{},candidate_replay_seconds{},cache_update_seconds{},sweep_replay_seconds{},
-        sweep_replay_audit_seconds{},sweep_global_state_seconds{},maximum_block_seconds{},maximum_cache_replay_error{};
-    double objective_reconciliation_seconds{},maximum_objective_reconciliation_error{};
+    double local_conditioning_seconds{};
     std::size_t full_candidate_replays{},affected_candidate_replays{},candidate_replay_skipped_unchanged{},
-        sweep_replays{},affected_row_updates{},affected_replay_peak_scratch_bytes{},objective_reconciliations{},
+        sweep_replays{},affected_replay_peak_scratch_bytes{},objective_reconciliations{},
         incremental_objective_evaluations{};
     bool full_replay_memory_fallback{};
-    std::size_t local_problem_count{},minimum_local_atoms{},maximum_local_atoms{};
     std::size_t local_conditioning_peak_memory_estimate_bytes{};
-    double total_local_atoms{};
-    ProfileSearchWork local_profile_work;
+    BoundedLmWork bounded_lm;
 };
 struct FixedNeighborEndpointCertification
 {
@@ -191,7 +184,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     const FixedNeighborPolicy & = {});
 FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
     const Domain &,VectorRef y,const BlockCoordinateState &,const EvaluationContext &,
-    ProfileSearchWork * = nullptr,std::size_t resident_override=0,
+    std::size_t resident_override=0,
     const JointConvergenceCriteria & = StrictJointConvergenceCriteria);
 FixedNeighborComponentResult SolveFixedNeighborComponent(
     const ComponentProblemView &,VectorRef initial_b,const EvaluationContext &,const FixedNeighborSearchPolicy &,

@@ -3,19 +3,11 @@
 #include <Eigen/SparseQR>
 #include <Eigen/QR>
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 
 namespace rhbm_gem::core::joint_component {
 namespace {
 constexpr double eps=std::numeric_limits<double>::epsilon();
-struct ScopeSeconds
-{
-    double & result;
-    std::chrono::steady_clock::time_point started{std::chrono::steady_clock::now()};
-    ~ScopeSeconds()
-    {result+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();}
-};
 bool Finite(const Sparse & x)
 {
     for (int k=0;k<x.outerSize();++k) for (Sparse::InnerIterator e(x,k);e;++e)
@@ -35,16 +27,12 @@ void ReduceSparseRows(const Eigen::SparseMatrix<double> & a,const Eigen::VectorX
 {
     // Orthogonal elimination within contiguous row tiles. Only structurally
     // present columns need local QR; all original rows and RHS entries participate.
-    const auto conversion_started=std::chrono::steady_clock::now();
     workspace.rows=a;
-    work.row_major_conversion_seconds+=std::chrono::duration<double>(
-        std::chrono::steady_clock::now()-conversion_started).count();
     workspace.entries.clear(); workspace.response.clear();
     constexpr Eigen::Index tile_size{1024};
     for(Eigen::Index first=0;first<a.rows();first+=tile_size)
     {
         const Eigen::Index count{std::min(tile_size,a.rows()-first)};
-        const auto mapping_started=std::chrono::steady_clock::now();
         workspace.local_column.resize(static_cast<std::size_t>(a.cols()));
         std::fill(workspace.local_column.begin(),workspace.local_column.end(),-1);
         workspace.tile_columns.clear();
@@ -57,22 +45,15 @@ void ReduceSparseRows(const Eigen::SparseMatrix<double> & a,const Eigen::VectorX
             workspace.tile_columns.push_back(static_cast<int>(k));
         }
         ++work.tile_mapping_build_count;
-        const auto mapping_elapsed=std::chrono::duration<double>(
-            std::chrono::steady_clock::now()-mapping_started).count();
-        work.tile_mapping_build_seconds+=mapping_elapsed;
         if(workspace.tile_columns.empty()) continue;
         workspace.local.resize(count,static_cast<Eigen::Index>(workspace.tile_columns.size()));
         workspace.local.setZero();
         for(Eigen::Index row=first;row<first+count;++row)
             for(LinearSolveWorkspace::RowMajorSparse::InnerIterator e(workspace.rows,row);e;++e)
                 workspace.local(row-first,workspace.local_column[static_cast<std::size_t>(e.col())])=e.value();
-        const auto qr_started=std::chrono::steady_clock::now();
         const Eigen::HouseholderQR<Eigen::MatrixXd> qr(workspace.local);
         workspace.transformed.resize(count);
         workspace.transformed=qr.householderQ().adjoint()*rhs.segment(first,count);
-        work.tiled_qr_seconds+=std::chrono::duration<double>(
-            std::chrono::steady_clock::now()-qr_started).count();
-        const auto assembly_started=std::chrono::steady_clock::now();
         const Eigen::Index retained{std::min(count,workspace.local.cols())},
             offset{static_cast<Eigen::Index>(workspace.response.size())};
         for(Eigen::Index row=0;row<retained;++row)
@@ -83,24 +64,17 @@ void ReduceSparseRows(const Eigen::SparseMatrix<double> & a,const Eigen::VectorX
                     workspace.entries.emplace_back(offset+row,workspace.tile_columns[static_cast<std::size_t>(col)],
                         qr.matrixQR()(row,col));
         }
-        work.reduced_sparse_assembly_seconds+=std::chrono::duration<double>(
-            std::chrono::steady_clock::now()-assembly_started).count();
     }
-    const auto assembly_started=std::chrono::steady_clock::now();
     workspace.reduced.resize(static_cast<Eigen::Index>(workspace.response.size()),a.cols());
     workspace.reduced.setFromTriplets(workspace.entries.begin(),workspace.entries.end());
-    work.reduced_nonzeros+=static_cast<std::size_t>(workspace.reduced.nonZeros());
     workspace.reduced_rhs.resize(static_cast<Eigen::Index>(workspace.response.size()));
     for(std::size_t row=0;row<workspace.response.size();++row)
         workspace.reduced_rhs(static_cast<Eigen::Index>(row))=workspace.response[row];
-    work.reduced_sparse_assembly_seconds+=std::chrono::duration<double>(
-        std::chrono::steady_clock::now()-assembly_started).count();
 }
 LinearResult UnweightedSolveImpl(const Sparse & x,VectorRef y,
     const LinearPolicy * policy,double observation_scale_override,LinearSolveWorkspace * workspace_ptr)
 {
     LinearResult out; out.reason="invalid-input"; out.beta=Eigen::VectorXd::Zero(x.cols());
-    ScopeSeconds total_timer{out.solver_total_seconds};
     if (x.cols()==0 || x.cols()%2!=0 || x.rows()<=x.cols() || y.size()!=x.rows() ||
         !Finite(x) || !y.allFinite()) return out;
     LinearSolveWorkspace local_workspace;
@@ -140,7 +114,6 @@ LinearResult UnweightedSolveImpl(const Sparse & x,VectorRef y,
             else ++out.free_face_changes;
         }
         previous_columns=columns; has_previous_face=true;
-        const auto structure_started=std::chrono::steady_clock::now();
         auto & selected=workspace.selected;
         selected.resize(x.rows(),static_cast<Eigen::Index>(columns.size()));
         selected.setZero();
@@ -157,28 +130,20 @@ LinearResult UnweightedSolveImpl(const Sparse & x,VectorRef y,
         }
         selected.finalize();
         ++out.sparse_structure_build_count;
-        out.selected_nonzeros+=static_cast<std::size_t>(selected.nonZeros());
-        out.sparse_structure_build_seconds+=std::chrono::duration<double>(
-            std::chrono::steady_clock::now()-structure_started).count();
         if (maximum_norm==0) {out.reason="rank-deficient"; return out;}
         // SparseQR uses an absolute pivot threshold. The scale is the
         // largest norm of the column-normalized design.
         ReduceSparseRows(selected,rhs,workspace,out);
-        const auto sparse_qr_started=std::chrono::steady_clock::now();
         qr.setPivotThreshold(rank_threshold*maximum_norm);
         qr.compute(workspace.reduced);
         if(qr.info()!=Eigen::Success)
         {
-            out.sparse_qr_seconds+=std::chrono::duration<double>(
-                std::chrono::steady_clock::now()-sparse_qr_started).count();
             out.reason="nonfinite"; return out;
         }
         out.rank=static_cast<int>(qr.rank());
         solution.resize(static_cast<Eigen::Index>(columns.size()));
         solution=qr.solve(workspace.reduced_rhs);
         ++out.solves;
-        out.sparse_qr_seconds+=std::chrono::duration<double>(
-            std::chrono::steady_clock::now()-sparse_qr_started).count();
         if (out.rank!=static_cast<int>(columns.size())) {out.reason="rank-deficient"; return out;}
         candidate.setZero();
         for (std::size_t k=0;k<columns.size();++k) candidate(columns[k])=solution(static_cast<Eigen::Index>(k));
@@ -216,7 +181,6 @@ LinearResult UnweightedSolveImpl(const Sparse & x,VectorRef y,
             if(initial.available && !initial.kkt_passed)
             {
                 ++out.refinement_trigger_count;
-                const auto refinement_started=std::chrono::steady_clock::now();
                 bool refinement_succeeded{};
                 Eigen::MatrixXd face(x.rows(),static_cast<Eigen::Index>(columns.size()));
                 Eigen::VectorXd theta(static_cast<Eigen::Index>(columns.size()));
@@ -271,8 +235,6 @@ LinearResult UnweightedSolveImpl(const Sparse & x,VectorRef y,
                     }
                 }
                 if(!refinement_succeeded) ++out.refinement_failure_count;
-                out.refinement_seconds=std::chrono::duration<double>(
-                    std::chrono::steady_clock::now()-refinement_started).count();
             }
         }
         out.valid=true; out.reason="solved"; return out;

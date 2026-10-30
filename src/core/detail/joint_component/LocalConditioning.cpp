@@ -148,7 +148,7 @@ LocalConditioningAssessment AssessFixedNeighborLocalConditioning(
         free_columns.push_back(2*atom+1);
     }
     evidence.free_ac_columns=free_columns.size();
-    const auto state=EvaluateState(domain,y,eta,beta,context,ProfileEvaluationRole::AcceptedEndpoint);
+    const auto state=EvaluateState(domain,y,eta,beta,context);
     if(!state.valid)
     {MarkUnavailable(evidence,state.reason.empty() ? "local-state-evaluation-failed" : state.reason);
         out.seconds=Seconds(started); return out;}

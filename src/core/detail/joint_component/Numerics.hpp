@@ -5,7 +5,6 @@
 #include "ConvergenceCriteria.hpp"
 #include "core/detail/joint_component/JointComponentEstimator.hpp"
 #include <Eigen/SparseCore>
-#include <array>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -42,50 +41,12 @@ struct EvaluationContext
     bool force_width_subproblem_failure_for_testing{};
 #endif
 };
-enum class ProfileEvaluationRole {Unspecified,InitialProfile,TrialProfile,AcceptedEndpoint};
 struct BoundedLmWork
 {
     std::size_t subproblem_solves{},failed_subproblems{},active_set_iterations{},releases{},active_bound_occurrences{};
-    std::size_t damping_solves{},bracket_solves{},bisection_solves{},damping_qr_factorizations{},
-        damping_active_set_iterations{},damping_releases{};
+    std::size_t damping_solves{},bracket_solves{},damping_qr_factorizations{};
     double maximum_subproblem_kkt{unavailable};
     void Merge(const BoundedLmWork &);
-};
-struct LinearSolveWork
-{
-    std::size_t solve_calls{},valid_solves{},invalid_solves{},invalid_input_solves{},rank_deficient_solves{},
-        nonfinite_solves{},active_set_budget_exhausted_solves{},other_invalid_solves{};
-    std::size_t factorization_solves{},active_set_iterations{},active_set_releases{};
-    std::size_t free_face_changes{},free_face_unchanged{},sparse_structure_build_count{},tile_mapping_build_count{},
-        selected_nonzeros{},reduced_nonzeros{};
-    std::size_t refinement_eligibility_count{},refinement_trigger_count{},refinement_iterations{},
-        refinement_success_count{},refinement_failure_count{},refinement_factorizations{};
-    double refinement_seconds{},sparse_structure_build_seconds{},row_major_conversion_seconds{},
-        tile_mapping_build_seconds{},tiled_qr_seconds{},reduced_sparse_assembly_seconds{},sparse_qr_seconds{},
-        solver_total_seconds{};
-};
-struct ProfileRoleWork
-{
-    std::size_t evaluations{},derivative_preparations{},derivative_reductions{},replay_checks{};
-    std::size_t local_kkt_rejections{};
-    LinearSolveWork linear_solve;
-    double evaluation_seconds{},basis_seconds{},linear_matrix_preparation_seconds{},linear_rhs_solve_seconds{},
-        linear_certificate_seconds{},derivative_prepare_seconds{},
-        derivative_reduce_seconds{},replay_trust_seconds{};
-};
-struct ProfileSearchWork
-{
-    ProfileRoleWork total,initial_profile,trial_profile,accepted_endpoint;
-    BoundedLmWork bounded_lm;
-    std::size_t accepted_profile_trials{},rejected_profile_trials{},local_replay_kkt_rejections{},
-        local_replay_disagreements{},invalid_gradient_stops{},width_safeguard_rejections{};
-    std::size_t accepted_update_budget_stops{},profile_budget_stops{},native_lm_stops{};
-    std::array<std::size_t,16> lm_status_counts{};
-    double total_seconds{},lm_overhead_seconds{};
-    ProfileRoleWork & Role(ProfileEvaluationRole);
-    void Add(ProfileEvaluationRole,const ProfileRoleWork &);
-    void Merge(const ProfileSearchWork &);
-    double AttributedSeconds() const;
 };
 EvaluationContext CreateContext(std::shared_ptr<const JointProblemInput>,const std::string & = "");
 struct BasisValues {double gaussian{},charge{},gaussian_log_width{},charge_log_width{};};
@@ -98,11 +59,7 @@ struct LinearResult
     int rank{},solves{},releases{};
     std::size_t active_set_iterations{},refinement_eligibility_count{},refinement_trigger_count{},
         refinement_iterations{},refinement_success_count{},refinement_failure_count{},refinement_factorizations{},
-        free_face_changes{},free_face_unchanged{},sparse_structure_build_count{},tile_mapping_build_count{},
-        selected_nonzeros{},reduced_nonzeros{};
-    double refinement_seconds{},
-        sparse_structure_build_seconds{},row_major_conversion_seconds{},tile_mapping_build_seconds{},
-        tiled_qr_seconds{},reduced_sparse_assembly_seconds{},sparse_qr_seconds{},solver_total_seconds{};
+        free_face_changes{},free_face_unchanged{},sparse_structure_build_count{},tile_mapping_build_count{};
 };
 struct LinearSolveWorkspace;
 LinearResult SolveLinear(const Sparse &,VectorRef,const LinearPolicy * = nullptr,double=0,
@@ -153,13 +110,10 @@ struct WidthBoundKkt
 WidthBoundKkt CalculateWidthBoundKkt(const Vector &,const Vector &,double);
 Spectrum ComputeSpectrum(const Sparse &,const RankPolicy &,Eigen::Index,bool);
 Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext *,
-    ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr,
     LinearSolveWorkspace * = nullptr);
-Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &,
-    ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);
+Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &);
 // Scalar/vector reductions for accepted global sweep states. Leaves x and derivative empty.
-Evaluation EvaluateStateStreaming(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &,
-    ProfileEvaluationRole = ProfileEvaluationRole::Unspecified,ProfileSearchWork * = nullptr);
+Evaluation EvaluateStateStreaming(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &);
 MemoryEstimate EndpointVerificationMemoryEstimate(const Domain &,VectorRef,const EvaluationContext &,std::size_t resident_override=0);
 struct IndependentReplayEvidence
 {
@@ -200,13 +154,7 @@ struct TrustEvidence
         gradient_difference{unavailable},cancellation_ratio{unavailable};
     bool width_bound_feasible{true};
 };
-struct ReplayDetailsForDiagnostics
-{
-    Vector prediction,residual,width_gradient;
-    double objective{unavailable},scaled_kkt{unavailable};
-};
-TrustEvidence CheckReplay(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &,
-    ReplayDetailsForDiagnostics * = nullptr);
+TrustEvidence CheckReplay(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &);
 TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &);
 TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &,const IndependentReplayEvidence &);
 struct LmTrial
@@ -248,11 +196,9 @@ struct SearchResult
     int lm_status{},evaluations{},derivatives{},accepted{};
     bool stopped{},initial_accepted{},width_failed{};
     std::string stop_reason;
-    double seconds{};
-    ProfileSearchWork profile_work;
+    BoundedLmWork bounded_lm_work;
 };
-SearchResult SearchProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &,
-    ProfileSearchWork * = nullptr);
+SearchResult SearchProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext &);
 struct Assessment
 {
     Endpoint primary;

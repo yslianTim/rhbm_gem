@@ -173,7 +173,7 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
             search.state.eta.size()==static_cast<Eigen::Index>(domain.atoms.size()))
         {
             const auto certification=CertifyFixedNeighborEndpoint(domain,y,search.state,context,
-                policy.collect_telemetry ? &search.work.local_profile_work : nullptr,0,
+                0,
                 policy.convergence_criteria);
             out.work=search.work;
             AssembleResult(problem,data,layout,domain,y,context,certification,

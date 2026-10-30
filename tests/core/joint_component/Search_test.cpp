@@ -291,7 +291,7 @@ TEST(JointComponentSearchTest, InitialAcAcceptanceDoesNotHideAWidthSubproblemFai
     EXPECT_TRUE(search.initial_accepted);
     EXPECT_TRUE(search.width_failed);
     EXPECT_EQ(search.accepted,0);
-    EXPECT_EQ(search.profile_work.bounded_lm.failed_subproblems,1u);
+    EXPECT_EQ(search.bounded_lm_work.failed_subproblems,1u);
     EXPECT_EQ(search.stop_reason,"bounded-subproblem:injected-width-subproblem-failure");
     EXPECT_TRUE(search.eta.allFinite());
 }
