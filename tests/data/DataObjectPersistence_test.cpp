@@ -520,13 +520,13 @@ rg::JointAnalysisResult CurrentJointExample(bool with_halo=true)
 rg::JointAnalysisResult SavedJointExample() { return CurrentJointExample(); }
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV21RoundTripsUnqualifiedResult)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV22RoundTripsUnqualifiedResult)
 {
     namespace io=rg::joint_result_io;
     const auto result=CurrentJointExample();
     const auto encoded=io::Encode(result);
     const auto object=boost::json::parse(encoded).as_object();
-    EXPECT_EQ(boost::json::value_to<int>(object.at("schema_version")),21);
+    EXPECT_EQ(boost::json::value_to<int>(object.at("schema_version")),22);
     for(const auto key:{"fixed_halos","layout","legacy_global_rank_evidence","ranks"})
         EXPECT_FALSE(object.contains(key));
     EXPECT_FALSE(object.at("costs").as_object().contains("search_reference_seconds"));
@@ -550,12 +550,12 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV21RoundTripsUnqualifiedResult
     EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_local_search,rg::FixedNeighborBoundedLocalSearchName);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV21RejectsOtherVersionsAndRetiredFields)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV22RejectsOtherVersionsAndRetiredFields)
 {
     namespace io=rg::joint_result_io;
     const auto encoded=io::Encode(CurrentJointExample());
     const auto current=boost::json::parse(encoded).as_object();
-    for(const int version:{3,18,19,20,99})
+    for(const int version:{3,18,19,20,21,99})
     {
         auto unsupported=current;
         unsupported["schema_version"]=version;
@@ -578,7 +578,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV21RejectsOtherVersionsAndReti
     EXPECT_THROW(io::Decode(boost::json::serialize(retired)),std::invalid_argument);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV21RoundTripsQualifiedTargetWithoutHalo)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV22RoundTripsQualifiedTargetWithoutHalo)
 {
     namespace io=rg::joint_result_io;
     auto result=CurrentJointExample(false);
@@ -593,7 +593,6 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV21RoundTripsQualifiedTargetWi
     auto & component_point=result.components.front().target_evidence->point_atoms.front();
     component_point.component_convergence=rg::JointCheckStatus::Passed;
     component_point.local_conditioning="Adequate";
-    component_point.parameter_stability="Stable";
     component_point.point_quality="Available";
     component_point.reason="numerically-converged-point";
     result.target_evidence=result.components.front().target_evidence;
@@ -605,7 +604,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV21RoundTripsQualifiedTargetWi
     EXPECT_FALSE(decoded.halo_median_reconstruction);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV21RoundTripsGeometryLocalHaloMedian)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV22RoundTripsGeometryLocalHaloMedian)
 {
     namespace io=rg::joint_result_io;
     auto result=CurrentJointExample();
@@ -620,7 +619,6 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV21RoundTripsGeometryLocalHalo
     auto & component_point=result.components.front().target_evidence->point_atoms.front();
     component_point.component_convergence=rg::JointCheckStatus::Passed;
     component_point.local_conditioning="Adequate";
-    component_point.parameter_stability="Stable";
     component_point.point_quality="Available";
     component_point.reason="numerically-converged-point";
     result.target_evidence=result.components.front().target_evidence;
@@ -651,7 +649,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV21RoundTripsGeometryLocalHalo
         std::vector<std::string>{"1"});
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV21PreservesUnavailableAndNullableDiagnostics)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV22PreservesUnavailableAndNullableDiagnostics)
 {
     namespace io=rg::joint_result_io;
     auto unavailable=CurrentJointExample();
@@ -692,51 +690,26 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV21PreservesUnavailableAndNull
     EXPECT_FALSE(round_trip.components.front().candidate_diagnostic->candidate_objective);
 }
 
-TEST(DataObjectPersistenceTest, LocalStabilityBoundedProbeDiagnosticsRoundTrip)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV22RejectsRetiredDiagnosticsAndOldTargetContract)
 {
     namespace io=rg::joint_result_io;
-    auto record=SavedJointExample();
-    rg::JointParameterStability stability;
-    rg::JointBlockParameterStability block; block.block_id="component-0/block-1";
-    block.status="Sensitive"; block.reason="bounded-local-directional-perturbation-assessed";
-    block.baseline_numerical_validity_status="Valid";
-    block.baseline_conditional_optimality_status="PracticalOnly";
-    block.baseline_eligibility_status="Eligible";
-    block.probe_selected=true;
-    rg::JointStabilityProbe probe; probe.direction="common-mode";
-    probe.source="normalized-all-width-direction"; probe.status="OneSidedAssessed";
-    probe.unit_direction={1.}; probe.minus_seed_status="Assessed";
-    probe.minus_requested_displacement_inf=.001; probe.minus_effective_displacement_inf=.001;
-    probe.plus_seed_status="ZeroDisplacement";
-    probe.plus_seed_reason="upper-bound-projection-produced-zero-displacement";
-    probe.plus_requested_displacement_inf=.001; probe.plus_effective_displacement_inf=0.;
-    block.probes.push_back(probe); stability.blocks.push_back(block);
-    record.components.front().parameter_stability=stability;
-    const auto encoded=io::Encode(record);
-    const auto json=boost::json::parse(encoded);
-    const auto & saved_stability=json.at("components").as_array()[0].at("parameter_stability");
-    EXPECT_FALSE(saved_stability.as_object().contains("recent_sweep_count"));
-    EXPECT_FALSE(saved_stability.as_object().contains("maximum_eta_change"));
-    EXPECT_FALSE(saved_stability.as_object().contains("maximum_scaled_ac_change"));
-    EXPECT_FALSE(saved_stability.as_object().contains("trajectory_stability_status"));
-    for(const auto key:{"recent_sweep_count","maximum_eta_change","maximum_scaled_ac_change",
-        "trajectory_stability_status"})
+    const auto current=boost::json::parse(io::Encode(CurrentJointExample())).as_object();
+    EXPECT_FALSE(current.at("components").as_array().front().as_object().contains("parameter_stability"));
+    const auto & point=current.at("target_evidence").at("point_atoms").as_array().front().as_object();
+    EXPECT_FALSE(point.contains("parameter_stability"));
+    EXPECT_FALSE(point.contains("parameter_stability_blocks"));
+    auto retired=current;
+    retired.at("components").as_array().front().as_object()["parameter_stability"]=nullptr;
+    EXPECT_THROW(io::Decode(boost::json::serialize(retired)),std::invalid_argument);
+    for(const auto key:{"parameter_stability","parameter_stability_blocks"})
     {
-        auto removed_history=json.as_object();
-        removed_history.at("components").as_array()[0].as_object().at("parameter_stability").as_object()
-            [key]=0;
-        EXPECT_THROW(io::Decode(boost::json::serialize(removed_history)),std::invalid_argument);
+        retired=current;
+        retired.at("target_evidence").at("point_atoms").as_array().front().as_object()[key]=nullptr;
+        EXPECT_THROW(io::Decode(boost::json::serialize(retired)),std::invalid_argument);
     }
-    const auto decoded=io::Decode(encoded);
-    ASSERT_TRUE(decoded.components.front().parameter_stability);
-    const auto & saved=decoded.components.front().parameter_stability->blocks.front();
-    EXPECT_EQ(saved.baseline_conditional_optimality_status,"PracticalOnly");
-    EXPECT_EQ(saved.baseline_eligibility_status,"Eligible");
-    EXPECT_TRUE(saved.probe_selected);
-    ASSERT_EQ(saved.probes.size(),1u);
-    EXPECT_EQ(saved.probes.front().status,"OneSidedAssessed");
-    EXPECT_EQ(saved.probes.front().plus_seed_status,"ZeroDisplacement");
-    EXPECT_DOUBLE_EQ(*saved.probes.front().plus_effective_displacement_inf,0.);
+    retired=current;
+    retired.at("target_evidence").as_object()["contract"]="target-point-validation-v1";
+    EXPECT_THROW(io::Decode(boost::json::serialize(retired)),std::invalid_argument);
 }
 
 TEST(DataObjectPersistenceTest, JointResultsRoundTripCopyClearAndReplaceAtomically)
@@ -959,7 +932,7 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     component.candidate_diagnostic=candidate;
 
     const auto json=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(json.at("schema_version").as_int64(),21);
+    EXPECT_EQ(json.at("schema_version").as_int64(),22);
     const auto & saved_candidate=json.at("components").as_array()[0].at("candidate_diagnostic");
     EXPECT_EQ(saved_candidate.at("candidate_status").as_string(),"uncertified");
     EXPECT_EQ(saved_candidate.at("convergence_criteria_id").as_string(),"practical-v2");

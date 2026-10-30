@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <ctime>
 
 namespace rhbm_gem::core::joint_component {
 WeakWidthStepAssessment AssessWeakWidthStep(const Matrix & jacobian,VectorRef step,const RankPolicy & policy)
@@ -39,8 +38,6 @@ bool RejectWeakWidthTrial(double step_inf,double weak_step_fraction,double objec
 namespace {
 double Seconds(std::chrono::steady_clock::time_point start)
 {return std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();}
-double CpuSeconds(std::clock_t start)
-{return static_cast<double>(std::clock()-start)/static_cast<double>(CLOCKS_PER_SEC);}
 struct Profile
 {
     const Domain & domain;
@@ -53,7 +50,6 @@ struct Profile
     std::string failure;
     ProfileSearchWork * telemetry{};
     ProfileEvaluationRole last_role{ProfileEvaluationRole::Unspecified};
-    std::clock_t cpu_start{};
     std::optional<double> accepted_objective;
     std::optional<ActiveSetStep> last_bounded_subproblem;
     BoundedLmWork bounded_lm_work;
@@ -183,9 +179,6 @@ struct Profile
     int values() const {return static_cast<int>(domain.rows);}
     bool Get(const Vector & eta)
     {
-        if(context.profile_cpu_budget_seconds>0 &&
-            CpuSeconds(cpu_start)>=context.profile_cpu_budget_seconds)
-        {failure="cpu-time-budget"; return false;}
         if(cached.valid && cached.eta.size()==eta.size() && (cached.eta.array()==eta.array()).all()) return true;
         if(evaluations>=context.profile_budget) {failure="profile-budget"; return false;}
         failure.clear();
@@ -207,9 +200,6 @@ struct Profile
     }
     int linearize(const Vector & eta,const Vector &,Matrix & factor,Vector & response,Vector & norms)
     {
-        if(context.profile_cpu_budget_seconds>0 &&
-            CpuSeconds(cpu_start)>=context.profile_cpu_budget_seconds)
-        {failure="cpu-time-budget"; return -1;}
         if(!Get(eta)) return -1;
         const auto prepare_started=std::chrono::steady_clock::now();
         const auto prepared=PrepareDerivative(cached,scale,&context);
@@ -247,7 +237,7 @@ SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & 
     EvaluationContext search_context=context;
     const auto active_eta_max=search_context.eta_upper_bound;
     Profile profile{domain,y,search_context.scale,search_context,{}, {},0,0,{},telemetry ? &local_work : nullptr,
-        ProfileEvaluationRole::Unspecified,std::clock(),{}, {},{},{}
+        ProfileEvaluationRole::Unspecified,{}, {},{},{}
     };
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
@@ -305,7 +295,6 @@ SearchResult SearchProfileImpl(const Domain & domain,VectorRef y,const Vector & 
         }
         if(out.stop_reason=="accepted-update-budget") ++local_work.accepted_update_budget_stops;
         else if(out.stop_reason=="profile-budget") ++local_work.profile_budget_stops;
-        else if(out.stop_reason=="cpu-time-budget") ++local_work.cpu_budget_stops;
         else if(out.stop_reason=="native-lm-stop") ++local_work.native_lm_stops;
         local_work.bounded_lm=profile.bounded_lm_work;
         local_work.total_seconds=out.seconds;

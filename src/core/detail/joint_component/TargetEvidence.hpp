@@ -3,7 +3,7 @@
 namespace rhbm_gem::core::joint_component {
 JointTargetEvidence AssessTargetPointState(const JointProblem &,const JointParameterLayout &,
     const std::optional<JointState> &,JointCheckStatus,const std::vector<JointBlockConditioning> &,
-    const std::vector<JointBlockParameterStability> &,JointEvidenceScope,std::size_t);
+    JointEvidenceScope,std::size_t);
 JointCheckStatus TargetConvergence(const std::optional<JointTargetEvidence> &,bool);
 void AddTargetEvidence(JointFitResult &);
 }

@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
 #include "core/detail/joint_component/LocalConditioning.hpp"
-#include "core/detail/joint_component/ParameterStability.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/TargetEvidence.hpp"
 #include "core/detail/joint_component/TiledDerivative.hpp"
@@ -121,7 +120,7 @@ TEST(JointLocalConditioningTest, IllConditioningWarnsOnPointQualityWithoutChangi
     conditioning.status="assessed"; conditioning.core_atoms={0,1};
     conditioning.conditioning_classification="IllConditioned";
     const auto evidence=n::AssessTargetPointState(problem,problem.ParameterLayout(),state,
-        rhbm_gem::JointCheckStatus::Passed,{conditioning},{},rhbm_gem::JointEvidenceScope::AssembledGlobal,5);
+        rhbm_gem::JointCheckStatus::Passed,{conditioning},rhbm_gem::JointEvidenceScope::AssembledGlobal,5);
     ASSERT_EQ(evidence.point_atoms.size(),2u);
     EXPECT_EQ(evidence.point_atoms[0].local_conditioning,"Warning");
     EXPECT_EQ(evidence.point_atoms[0].point_quality,"Warning");
@@ -176,7 +175,6 @@ TEST(JointLocalConditioningTest, MultiBlockDiagnosticsLeaveTheAcceptedFitUnchang
     const auto run=[&](bool diagnostics) {
         n::FixedNeighborPolicy policy; policy.core_atoms=1;
         policy.assess_local_conditioning=diagnostics;
-        policy.assess_parameter_stability=false;
         policy.eta_upper_bound=std::log(2.2);
         const n::Vector eta=n::Vector::Constant(2,std::log(.55));
         return n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,data.context,policy);

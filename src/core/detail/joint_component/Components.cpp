@@ -238,8 +238,6 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
             if(fit.search.work.local_conditioning_peak_memory_estimate_bytes)
                 component.local_conditioning_peak_memory_estimate_bytes=
                     fit.search.work.local_conditioning_peak_memory_estimate_bytes;
-            component.parameter_stability=std::move(fit.search.parameter_stability);
-            if(component.parameter_stability) remap_core_atoms(component.parameter_stability->blocks);
             if(fit.search.certification)
             {
                 const auto & certification=*fit.search.certification;

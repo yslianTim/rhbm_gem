@@ -79,7 +79,7 @@ struct FixedNeighborBlockSweep
 };
 struct FixedNeighborWork
 {
-    double structural_preparation_seconds{},endpoint_verification_seconds{},local_conditioning_seconds{},parameter_stability_seconds{},primary_endpoint_seconds{},
+    double structural_preparation_seconds{},endpoint_verification_seconds{},local_conditioning_seconds{},primary_endpoint_seconds{},
         independent_replay_seconds{},old_core_seconds{},
         effective_response_seconds{},local_search_seconds{},local_state_seconds{},
         candidate_copy_seconds{},candidate_replay_seconds{},cache_update_seconds{},sweep_replay_seconds{},
@@ -91,7 +91,6 @@ struct FixedNeighborWork
     bool full_replay_memory_fallback{};
     std::size_t local_problem_count{},minimum_local_atoms{},maximum_local_atoms{};
     std::size_t local_conditioning_peak_memory_estimate_bytes{};
-    std::size_t parameter_stability_peak_memory_estimate_bytes{},perturbation_solves{},perturbation_evaluations{};
     double total_local_atoms{};
     ProfileSearchWork local_profile_work;
 };
@@ -134,7 +133,6 @@ struct FixedNeighborPolicy
     bool stop_after_stationarity{true};
     bool certify_endpoint{true}; // Diagnostic facade only; production components always certify.
     bool assess_local_conditioning{};
-    bool assess_parameter_stability{};
     bool collect_telemetry{};
     bool collect_diagnostics{};
     std::optional<std::size_t> global_state_memory_budget_for_testing;
@@ -145,7 +143,6 @@ struct FixedNeighborPolicy
 #endif
     std::size_t component_index{};
     std::string component_id;
-    std::function<bool(int)> claim_parameter_stability_block;
     std::function<void(const FixedNeighborBlockSweep &)> production_progress;
     std::optional<double> eta_upper_bound;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -158,7 +155,6 @@ struct FixedNeighborSearchResult
     BlockCoordinateState state;
     std::optional<FixedNeighborEndpointCertification> certification;
     std::vector<JointBlockConditioning> local_conditioning;
-    std::optional<JointParameterStability> parameter_stability;
     std::vector<FixedNeighborBlockRecord> blocks;
     std::vector<FixedNeighborBlockSweep> sweeps;
     bool search_converged{},accepted_state_integrity{};

@@ -1,27 +1,47 @@
 # Joint target point validation
 
-The current target evidence contract is `target-point-validation-v1`. It
-describes selected Target points from the production target-only Pure
-Halo-Support Exclusion fit.
+The current contract is `target-point-validation-v2`. Each selected Target
+point records component convergence, parameter validity, Local Conditioning,
+its block identities, point quality and a reason.
 
-Each point records component convergence, parameter validity, Local
-Conditioning, Parameter Stability, point quality, and a reason. Conditioning
-and stability also retain the associated FixedNeighbor block identities.
-Unavailable checks and `NotAssessed` statuses are valid diagnostic results.
+Rules are evaluated in this order:
 
-Target point validation does not assert global identifiability, estimate
-marginal parameter uncertainty, or change the global solver's convergence
-criteria. Global convergence, endpoint verification, and Independent Replay
-remain separate evidence. A Halo has no free Joint point; geometry-local
-kNN-4 Halo Median Reconstruction is a separate downstream result.
+| Condition | Point quality |
+|---|---|
+| Component convergence failed, unavailable or not run | Unavailable |
+| Parameters invalid or unavailable | Unavailable |
+| Invalid target/conditioning block mapping | Warning |
+| Conditioning Singular, IllConditioned, ActiveFace or Unavailable | Warning |
+| Conditioning NotAssessed, including no blocks | NotAssessed |
+| Passed numerical checks, valid parameters, WellConditioned | Available |
 
-The Joint Result writer emits schema v21 and the reader accepts only schema
-v21. The payload retains target point evidence, convergence, component and
-row mappings, candidate diagnostics, Local Conditioning, Parameter Stability,
-and optional reconstruction evidence. It permits unqualified results,
-missing states, nullable diagnostics, and unavailable reconstruction.
+ActiveFace retains the existing conservative warning for possible active-set
+switching. It is not reclassified as IllConditioned. Local Conditioning's
+numerical calculations are unchanged. A missing membership in a nonempty block
+collection, duplicate identity/membership or out-of-range atom mapping remains
+explicitly invalid. Empty diagnostics represent NotAssessed.
 
-SQLite schema v20 stores Joint schema v21 and Stage Result JSON version 4.
-Persistence performs no migrations or historical decoding. See the
-[Joint runtime guide](joint-component-runtime.md) and
-[data I/O architecture](architecture/dataobject-io-architecture.md).
+This contract deliberately removes parameter perturbation sensitivity from
+point quality. Warning or NotAssessed may become Available when the remaining
+checks pass. This change does not imply improved estimation accuracy or global
+identifiability. IllConditioned and Singular still warn. Numerical convergence
+and target parameter validity remain mandatory, independently of quality.
+
+TargetRuntimeConvergence still merges component convergence, parameter validity,
+selected target checks, assembly mapping/consistency and available rows.
+IsQualifiedJointAnalysisResult still requires valid initialization, completed
+search and Passed runtime/target convergence. Conditioning remains diagnostic;
+it does not revoke or replace endpoint qualification. Halo reconstruction,
+Original-domain peeling and Group Fitting keep their separate contracts.
+
+Joint JSON schema 22 writes this contract and omits the retired diagnostic
+members completely. The reader accepts only schema 22 and rejects unknown
+component/point fields and noncurrent target contracts. Schema 21 documents
+must be read with their original Git version. No legacy reader is retained.
+SQLite schema 20 and Stage Result JSON version 4 are unchanged: SQLite stores
+the versioned Joint JSON payload and performs no migration. The C++ public
+struct layout also changes; downstream C++ consumers must rebuild.
+
+See the [runtime guide](joint-component-runtime.md),
+[data I/O architecture](architecture/dataobject-io-architecture.md) and
+[cleanup acceptance record](joint-diagnostics-cleanup.md).

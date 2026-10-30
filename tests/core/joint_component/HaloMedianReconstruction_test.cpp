@@ -76,7 +76,6 @@ Fixture MakeFixture()
         point.component_convergence=JointCheckStatus::Passed;
         point.parameter_validity=JointCheckStatus::Passed;
         point.local_conditioning="Adequate";
-        point.parameter_stability="NotAssessed";
         point.point_quality="NotAssessed";
         point.reason="test";
         result.target_evidence->point_atoms.push_back(std::move(point));

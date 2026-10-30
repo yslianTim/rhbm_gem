@@ -150,8 +150,6 @@ int main(int argc,char ** argv)
         policy.core_atoms=fixture.core_atoms; policy.maximum_sweeps=100;
         policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
         policy.eta_upper_bound=std::log(fixture.name=="active-width" ? .45 : 2.2);
-        std::size_t claims{};
-        policy.claim_parameter_stability_block=[&](int) {return claims++<8;};
         std::size_t accepted{},unchanged{},recovery_attempts{},recovery_successes{};
         policy.production_progress=[&](const auto & sweep) {
             accepted+=sweep.accepted_blocks; unchanged+=sweep.unchanged_blocks;
@@ -175,15 +173,13 @@ int main(int argc,char ** argv)
         if(qualified) point=JointState{{state.beta.data(),state.beta.data()+state.beta.size()},
             {},{state.eta.data(),state.eta.data()+state.eta.size()},{},state.objective};
         if(point) for(Eigen::Index k=0;k<state.eta.size();++k) point->b.push_back(std::exp(state.eta(k)));
-        const auto stability=result.parameter_stability ? result.parameter_stability->blocks :
-            std::vector<JointBlockParameterStability>{};
         const auto evidence=n::AssessTargetPointState(problem,data.layout,point,
             qualified ? JointCheckStatus::Passed : JointCheckStatus::Unavailable,
-            result.local_conditioning,stability,JointEvidenceScope::AssembledGlobal,data.input->observations.size());
+            result.local_conditioning,JointEvidenceScope::AssembledGlobal,data.input->observations.size());
         j::array points;
         for(const auto & value:evidence.point_atoms)
             points.emplace_back(Object{{"atom",value.atom},{"quality",value.point_quality},
-                {"conditioning",value.local_conditioning},{"stability",value.parameter_stability},
+                {"conditioning",value.local_conditioning},
                 {"convergence",static_cast<int>(value.component_convergence)},
                 {"validity",static_cast<int>(value.parameter_validity)}});
         j::array widths;

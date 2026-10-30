@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <numeric>
 
 namespace {
@@ -43,19 +44,13 @@ rhbm_gem::JointBlockConditioning ConditioningBlock(std::string id,std::vector<st
     return block;
 }
 
-rhbm_gem::JointBlockParameterStability StabilityBlock(std::string id,std::vector<std::size_t> atoms)
-{
-    rhbm_gem::JointBlockParameterStability block; block.block_id=std::move(id); block.status="Stable";
-    block.core_atoms=std::move(atoms); return block;
-}
-
 TEST(JointTargetEvidenceTest, DuplicateMembershipAndBlockIdentityAreExplicitWarnings)
 {
     const auto problem=MakeProblem(3); const auto state=MakeState(3);
     const std::vector<rhbm_gem::JointBlockConditioning> conditioning{
         ConditioningBlock("block-a",{0,1}),ConditioningBlock("block-b",{0,2})};
     const auto evidence=n::AssessTargetPointState(problem,problem.ParameterLayout(),state,Status::Passed,
-        conditioning,{},rhbm_gem::JointEvidenceScope::AssembledGlobal,1);
+        conditioning,rhbm_gem::JointEvidenceScope::AssembledGlobal,1);
     ASSERT_EQ(evidence.point_atoms.size(),3u);
     EXPECT_EQ(evidence.point_atoms[0].point_quality,"Warning");
     EXPECT_EQ(evidence.point_atoms[0].reason,"invalid-diagnostic-block-mapping");
@@ -70,7 +65,7 @@ TEST(JointTargetEvidenceTest, DuplicateMembershipAndBlockIdentityAreExplicitWarn
     const std::vector<rhbm_gem::JointBlockConditioning> duplicate_identity{
         ConditioningBlock("block-a",{0}),ConditioningBlock("block-a",{1,2})};
     const auto invalid_id=n::AssessTargetPointState(problem,problem.ParameterLayout(),state,Status::Passed,
-        duplicate_identity,{},rhbm_gem::JointEvidenceScope::AssembledGlobal,1);
+        duplicate_identity,rhbm_gem::JointEvidenceScope::AssembledGlobal,1);
     EXPECT_EQ(invalid_id.point_atoms[0].local_conditioning,"Unavailable");
     const auto identity_check=std::find_if(invalid_id.checks.begin(),invalid_id.checks.end(),[](const auto & check) {
         return check.name=="diagnostic-block-mapping";
@@ -84,7 +79,7 @@ TEST(JointTargetEvidenceTest, MissingMembershipIsNotSilentlyIgnored)
     const auto problem=MakeProblem(3); const auto state=MakeState(3);
     const std::vector<rhbm_gem::JointBlockConditioning> conditioning{ConditioningBlock("block-a",{0,1})};
     const auto evidence=n::AssessTargetPointState(problem,problem.ParameterLayout(),state,Status::Passed,
-        conditioning,{},rhbm_gem::JointEvidenceScope::AssembledGlobal,1);
+        conditioning,rhbm_gem::JointEvidenceScope::AssembledGlobal,1);
     EXPECT_EQ(evidence.point_atoms[2].local_conditioning,"Unavailable");
     EXPECT_EQ(evidence.point_atoms[2].reason,"invalid-diagnostic-block-mapping");
     const auto mapping=std::find_if(evidence.checks.begin(),evidence.checks.end(),[](const auto & check) {
@@ -117,21 +112,17 @@ TEST(JointTargetEvidenceTest, ComponentLocalAndAssembledEvidenceAgreeForNonconti
     const auto local_state=MakeState(local_layout.full_atoms.size());
     const std::vector<rhbm_gem::JointBlockConditioning> local_conditioning{
         ConditioningBlock("component/block-1",{1,3})};
-    const std::vector<rhbm_gem::JointBlockParameterStability> local_stability{
-        StabilityBlock("component/block-1",{1,3})};
     const auto local=n::AssessTargetPointState(problem,local_layout,local_state,Status::Passed,local_conditioning,
-        local_stability,rhbm_gem::JointEvidenceScope::ComponentLocal,view->rows.size());
+        rhbm_gem::JointEvidenceScope::ComponentLocal,view->rows.size());
 
     const auto & global_layout=problem.ParameterLayout(); const auto global_state=MakeState(global_layout.full_atoms.size());
     std::vector<rhbm_gem::JointBlockConditioning> global_conditioning;
-    std::vector<rhbm_gem::JointBlockParameterStability> global_stability;
     for(const auto atom:global_layout.full_atoms)
     {
         global_conditioning.push_back(ConditioningBlock("global/"+std::to_string(atom),{atom}));
-        global_stability.push_back(StabilityBlock("global/"+std::to_string(atom),{atom}));
     }
     const auto global=n::AssessTargetPointState(problem,global_layout,global_state,Status::Passed,global_conditioning,
-        global_stability,rhbm_gem::JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
+        rhbm_gem::JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
     ASSERT_EQ(local.point_atoms.size(),2u);
     for(std::size_t index=0;index<local.point_atoms.size();++index)
     {
@@ -140,7 +131,6 @@ TEST(JointTargetEvidenceTest, ComponentLocalAndAssembledEvidenceAgreeForNonconti
         });
         ASSERT_NE(found,global.point_atoms.end());
         EXPECT_EQ(local.point_atoms[index].local_conditioning,found->local_conditioning);
-        EXPECT_EQ(local.point_atoms[index].parameter_stability,found->parameter_stability);
         EXPECT_EQ(local.point_atoms[index].point_quality,found->point_quality);
     }
     EXPECT_EQ(n::TargetConvergence(local,true),Status::Passed);
@@ -151,9 +141,8 @@ TEST(JointTargetEvidenceTest, OnlyCurrentValidationContractCanQualify)
 {
     const auto problem=MakeProblem(1); const auto state=MakeState(1);
     const std::vector<rhbm_gem::JointBlockConditioning> conditioning{ConditioningBlock("block-a",{0})};
-    const std::vector<rhbm_gem::JointBlockParameterStability> stability{StabilityBlock("block-a",{0})};
     auto evidence=n::AssessTargetPointState(problem,problem.ParameterLayout(),state,Status::Passed,
-        conditioning,stability,rhbm_gem::JointEvidenceScope::AssembledGlobal,1);
+        conditioning,rhbm_gem::JointEvidenceScope::AssembledGlobal,1);
     EXPECT_EQ(evidence.contract,rhbm_gem::JointTargetPointValidationContractVersion);
     EXPECT_EQ(n::TargetConvergence(evidence,true),Status::Passed);
 
@@ -171,6 +160,60 @@ TEST(JointTargetEvidenceTest, OnlyCurrentValidationContractCanQualify)
 
     evidence.contract="target-estimability-v4";
     EXPECT_EQ(n::TargetConvergence(evidence,true),Status::Unavailable);
+}
+
+TEST(JointTargetEvidenceTest, V2QualityDependsOnConditioningAfterNumericalQualification)
+{
+    const auto problem=MakeProblem(1);
+    const auto state=MakeState(1);
+    struct Case {const char * classification; const char * status; const char * local; const char * quality;};
+    for(const auto & item:{
+        Case{"WellConditioned","assessed","Adequate","Available"},
+        Case{"IllConditioned","assessed","Warning","Warning"},
+        Case{"Singular","assessed","Warning","Warning"},
+        Case{"ActiveFace","assessed","Warning","Warning"},
+        Case{"Unavailable","unavailable","Unavailable","Warning"},
+        Case{"NotAssessed","not-assessed","NotAssessed","NotAssessed"}})
+    {
+        auto block=ConditioningBlock("block-a",{0});
+        block.conditioning_classification=item.classification; block.status=item.status;
+        const auto evidence=n::AssessTargetPointState(problem,problem.ParameterLayout(),state,Status::Passed,
+            {block},rhbm_gem::JointEvidenceScope::AssembledGlobal,1);
+        ASSERT_EQ(evidence.point_atoms.size(),1u);
+        EXPECT_EQ(evidence.point_atoms.front().local_conditioning,item.local)<<item.classification;
+        EXPECT_EQ(evidence.point_atoms.front().point_quality,item.quality)<<item.classification;
+        EXPECT_EQ(n::TargetConvergence(evidence,true),Status::Passed)<<item.classification;
+    }
+    const auto absent=n::AssessTargetPointState(problem,problem.ParameterLayout(),state,Status::Passed,
+        {},rhbm_gem::JointEvidenceScope::AssembledGlobal,1);
+    EXPECT_EQ(absent.point_atoms.front().point_quality,"NotAssessed");
+}
+
+TEST(JointTargetEvidenceTest, V2QualityCannotPromoteFailedOrUnavailableNumericalEvidence)
+{
+    const auto problem=MakeProblem(1);
+    const auto state=MakeState(1);
+    const std::vector<rhbm_gem::JointBlockConditioning> blocks{ConditioningBlock("block-a",{0})};
+    for(const auto convergence:{Status::Failed,Status::Unavailable,Status::NotRun})
+    {
+        const auto evidence=n::AssessTargetPointState(problem,problem.ParameterLayout(),state,convergence,
+            blocks,rhbm_gem::JointEvidenceScope::AssembledGlobal,1);
+        EXPECT_EQ(evidence.point_atoms.front().point_quality,"Unavailable");
+        EXPECT_NE(n::TargetConvergence(evidence,true),Status::Passed);
+    }
+    for(const auto invalid:{-1.,std::numeric_limits<double>::infinity(),
+        std::numeric_limits<double>::quiet_NaN()})
+    {
+        auto bad=state; bad.ac[0]=invalid;
+        const auto evidence=n::AssessTargetPointState(problem,problem.ParameterLayout(),bad,Status::Passed,
+            blocks,rhbm_gem::JointEvidenceScope::AssembledGlobal,1);
+        EXPECT_EQ(evidence.point_atoms.front().point_quality,"Unavailable");
+        EXPECT_NE(n::TargetConvergence(evidence,true),Status::Passed);
+    }
+    const auto missing=n::AssessTargetPointState(problem,problem.ParameterLayout(),{},Status::Passed,
+        blocks,rhbm_gem::JointEvidenceScope::AssembledGlobal,1);
+    EXPECT_EQ(missing.point_atoms.front().point_quality,"Unavailable");
+    EXPECT_EQ(n::TargetConvergence(missing,false),Status::Unavailable);
 }
 
 }

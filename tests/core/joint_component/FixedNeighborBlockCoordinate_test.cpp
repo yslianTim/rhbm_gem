@@ -319,7 +319,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, EverySweepReconcilesObjectiveAfterRe
     n::FixedNeighborPolicy policy; policy.core_atoms=12; policy.maximum_sweeps=30;
     policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
     policy.stop_after_stationarity=true; policy.certify_endpoint=true;
-    policy.assess_local_conditioning=true; policy.assess_parameter_stability=true;
+    policy.assess_local_conditioning=true;
     policy.eta_upper_bound=std::log(2.2); policy.collect_telemetry=true;
     IncrementalObjectiveAudit audit;
     policy.candidate_observer=[&](const n::FixedNeighborCandidateEvent & event) {
@@ -409,7 +409,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, SignedCancellationQualifiesWhenOnlyK
     n::FixedNeighborPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=500;
     policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
     policy.eta_upper_bound=std::log(2.2); policy.collect_telemetry=true;
-    policy.assess_local_conditioning=true; policy.assess_parameter_stability=true;
+    policy.assess_local_conditioning=true;
     IncrementalObjectiveAudit audit;
     policy.candidate_observer=[&](const n::FixedNeighborCandidateEvent & event) {
         AuditIncrementalCandidate(*data.input,data.layout,data.y,data.context.scale,event,audit);
@@ -421,8 +421,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, SignedCancellationQualifiesWhenOnlyK
     EXPECT_EQ(result.work.incremental_objective_evaluations,audit.candidates);
     EXPECT_EQ(result.reason,"block-stationary")<<" sweeps="<<result.sweep_count
         <<" first_kkt="<<result.first_order_stationarity_sweep
-        <<" confirmed="<<result.confirmed_stationarity_sweep
-        <<" perturbation="<<(result.parameter_stability ? result.parameter_stability->perturbation_status : "missing");
+        <<" confirmed="<<result.confirmed_stationarity_sweep;
     EXPECT_TRUE(result.search_converged);
     EXPECT_TRUE(result.endpoint_certified);
     EXPECT_TRUE(result.assessment.independent_replay.passed);
@@ -546,7 +545,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, HardCaseIncrementalObjectiveAndRepla
         n::FixedNeighborPolicy policy; policy.core_atoms=fixture.core_atoms; policy.maximum_sweeps=100;
         policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
         policy.eta_upper_bound=std::log(2.2); policy.collect_telemetry=true;
-        policy.assess_local_conditioning=true; policy.assess_parameter_stability=true;
+        policy.assess_local_conditioning=true;
         IncrementalObjectiveAudit audit;
         policy.candidate_observer=[&](const n::FixedNeighborCandidateEvent & event) {
             AuditIncrementalCandidate(*data.input,data.layout,data.y,data.context.scale,event,audit);
@@ -576,8 +575,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, HardCaseIncrementalObjectiveAndRepla
                 <<" sweeps="<<result.sweep_count
                 <<" first_kkt="<<result.first_order_stationarity_sweep
                 <<" confirmed="<<result.confirmed_stationarity_sweep
-                <<" objective="<<result.state.objective
-                <<" perturbation="<<(result.parameter_stability ? result.parameter_stability->perturbation_status : "missing");
+                <<" objective="<<result.state.objective;
             EXPECT_TRUE(result.search_converged)<<fixture.name;
             EXPECT_TRUE(result.endpoint_certified)<<fixture.name<<':'<<result.endpoint_trust.reason;
             EXPECT_TRUE(result.assessment.independent_replay.passed)<<fixture.name;
@@ -586,7 +584,6 @@ TEST(JointFixedNeighborBlockCoordinateTest, HardCaseIncrementalObjectiveAndRepla
                 n::PracticalJointConvergenceCriteria.global_ac_kkt)<<fixture.name;
             EXPECT_LE(result.final_sweep->stationarity_width_gradient_inf_norm,
                 n::PracticalJointConvergenceCriteria.global_width_gradient)<<fixture.name;
-            ASSERT_TRUE(result.parameter_stability)<<fixture.name;
             EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed)<<fixture.name;
         }
         else

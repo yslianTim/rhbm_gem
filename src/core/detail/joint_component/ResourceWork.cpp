@@ -105,7 +105,6 @@ const char * MemoryStageName(MemoryStage stage)
     case MemoryStage::GlobalStateEvaluation: return "global-state-evaluation";
     case MemoryStage::EndpointVerification: return "endpoint-verification";
     case MemoryStage::LocalConditioning: return "local-conditioning";
-    case MemoryStage::ParameterStability: return "parameter-stability";
     }
     return "unknown";
 }
@@ -219,20 +218,6 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
                 CheckedMultiplyBytes(tile_bytes,6*sizeof(double),out.factor_workspace_bytes) &&
                 CheckedMultiplyBytes(local_entries,sizeof(double)+sizeof(Eigen::Index),out.sparse_design_bytes);
         }
-        break;
-    }
-    case MemoryStage::ParameterStability:
-    {
-        const auto local=PlanMemory(shape,MemoryStage::LocalConditioning,budget);
-        if(local.status==MemoryStatus::Overflow) {ok=false; break;}
-        temporary=local.temporary_bytes;
-        out.sparse_design_bytes=local.sparse_design_bytes;
-        out.dense_factor_bytes=local.dense_factor_bytes;
-        out.factor_workspace_bytes=local.factor_workspace_bytes;
-        out.factor_rows=local.factor_rows; out.factor_columns=local.factor_columns;
-        const auto local_atoms=shape.maximum_neighbor_atoms ? shape.maximum_neighbor_atoms : atoms;
-        ok=AddProduct2D(temporary,shape.component_stability_evaluations,local_atoms,
-            8*sizeof(double)+2*sizeof(Eigen::Index));
         break;
     }
     }

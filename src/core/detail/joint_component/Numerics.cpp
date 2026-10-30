@@ -181,7 +181,6 @@ void ProfileSearchWork::Merge(const ProfileSearchWork & other)
     width_safeguard_rejections+=other.width_safeguard_rejections;
     accepted_update_budget_stops+=other.accepted_update_budget_stops;
     profile_budget_stops+=other.profile_budget_stops;
-    cpu_budget_stops+=other.cpu_budget_stops;
     native_lm_stops+=other.native_lm_stops;
     for(std::size_t i=0;i<lm_status_counts.size();++i) lm_status_counts[i]+=other.lm_status_counts[i];
     total_seconds+=other.total_seconds; lm_overhead_seconds+=other.lm_overhead_seconds;

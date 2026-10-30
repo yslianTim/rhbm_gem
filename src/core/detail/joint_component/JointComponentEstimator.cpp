@@ -2,7 +2,6 @@
 #include "core/detail/joint_component/JointComponentEstimator.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/WidthCalibration.hpp"
-#include "core/detail/joint_component/ParameterStability.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/FittingWorkset.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
@@ -89,9 +88,6 @@ void RemapComponentForOriginalDomain(JointAnalysisComponent & component,
     }
     for(auto & block:component.local_conditioning)
         for(auto & atom:block.core_atoms) RemapAtomIndex(atom,atom_mapping);
-    if(component.parameter_stability)
-        for(auto & block:component.parameter_stability->blocks)
-            for(auto & atom:block.core_atoms) RemapAtomIndex(atom,atom_mapping);
     RemapTargetEvidence(component.target_evidence,atom_mapping,component.rows.size());
 }
 std::vector<const AtomObject *> EligibleAtoms(const ModelObject & model)
@@ -759,28 +755,6 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
     auto bounded_policy=production_policy;
     auto assembly_context=data.context;
     assembly_context.eta_upper_bound=bounded_policy.eta_upper_bound;
-    std::size_t remaining_perturbation_blocks=n::MaximumPerturbedBlocksPerFit;
-    std::size_t remaining_general_perturbation_blocks=
-        n::MaximumPerturbedBlocksPerFit>1 ? n::MaximumPerturbedBlocksPerFit-1 : 0;
-    bool reserved_bound_active_probe=n::MaximumPerturbedBlocksPerFit>0;
-    const auto request_perturbation_block=production_policy.claim_parameter_stability_block;
-    bounded_policy.claim_parameter_stability_block=[&remaining_perturbation_blocks,
-        &remaining_general_perturbation_blocks,&reserved_bound_active_probe,
-        request_perturbation_block](int priority) {
-        if(!remaining_perturbation_blocks) return false;
-        if(priority==0 && reserved_bound_active_probe)
-        {
-            if(request_perturbation_block && !request_perturbation_block(priority)) return false;
-            reserved_bound_active_probe=false;
-            --remaining_perturbation_blocks;
-            return true;
-        }
-        if(!remaining_general_perturbation_blocks ||
-            (request_perturbation_block && !request_perturbation_block(priority))) return false;
-        --remaining_general_perturbation_blocks;
-        --remaining_perturbation_blocks;
-        return true;
-    };
     auto component_batch=n::OrchestrateFixedNeighborComponents(problem,initial_b,bounded_policy,observer);
     out.components=std::move(component_batch.components);
     out.costs.search_seconds+=component_batch.costs.search_seconds;

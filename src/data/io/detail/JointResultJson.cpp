@@ -408,143 +408,6 @@ std::vector<JointBlockConditioning> ReadBlockConditioning(const j::value & value
     }
     return out;
 }
-j::object StabilityBlock(const JointBlockParameterStability & x)
-{
-    j::array probes;
-    for(const auto & probe:x.probes)
-        probes.emplace_back(Object{{"direction",probe.direction},{"source",probe.source},{"status",probe.status},
-            {"minus_seed_status",probe.minus_seed_status},{"plus_seed_status",probe.plus_seed_status},
-            {"minus_seed_reason",probe.minus_seed_reason},{"plus_seed_reason",probe.plus_seed_reason},
-            {"unit_direction",j::value_from(probe.unit_direction)},{"evaluations",probe.evaluations},
-            {"parameter_change",Number(probe.parameter_change)},{"prediction_change",Number(probe.prediction_change)},
-            {"objective_change",Number(probe.objective_change)},
-            {"minus_requested_displacement_inf",Number(probe.minus_requested_displacement_inf)},
-            {"minus_effective_displacement_inf",Number(probe.minus_effective_displacement_inf)},
-            {"plus_requested_displacement_inf",Number(probe.plus_requested_displacement_inf)},
-            {"plus_effective_displacement_inf",Number(probe.plus_effective_displacement_inf)}});
-    return {{"block_id",x.block_id},{"status",x.status},{"reason",x.reason},{"probe_selected",x.probe_selected},
-        {"core_atoms",j::value_from(x.core_atoms)},{"prediction_status",x.prediction_status},
-        {"objective_consistency_status",x.objective_consistency_status},
-        {"log_width_parameter_change_inf",Number(x.log_width_parameter_change_inf)},
-        {"scaled_ac_parameter_change_inf",Number(x.scaled_ac_parameter_change_inf)},
-        {"local_prediction_change_relative",Number(x.local_prediction_change_relative)},
-        {"objective_difference",Number(x.objective_difference)},{"cpu_seconds",x.cpu_seconds},
-        {"baseline_local_ac_kkt",Number(x.baseline_local_ac_kkt)},
-        {"baseline_projected_width_kkt",Number(x.baseline_projected_width_kkt)},
-        {"baseline_width_bound_slack",Number(x.baseline_width_bound_slack)},
-        {"baseline_local_objective",Number(x.baseline_local_objective)},
-        {"baseline_local_residual_rmse_normalized",Number(x.baseline_local_residual_rmse_normalized)},
-        {"baseline_active_ac_constraints",OptionalSize(x.baseline_active_ac_constraints)},
-        {"baseline_active_width_bound_targets",OptionalSize(x.baseline_active_width_bound_targets)},
-        {"baseline_numerical_validity_status",x.baseline_numerical_validity_status},
-        {"baseline_conditional_optimality_status",x.baseline_conditional_optimality_status},
-        {"baseline_eligibility_status",x.baseline_eligibility_status},
-        {"baseline_eligibility_reason",x.baseline_eligibility_reason},
-        {"baseline_independent_replay_status",x.baseline_independent_replay_status},
-        {"baseline_independent_replay_reason",x.baseline_independent_replay_reason},
-        {"conditional_reprofile_status",x.conditional_reprofile_status},
-        {"conditional_reprofile_local_ac_kkt",Number(x.conditional_reprofile_local_ac_kkt)},
-        {"conditional_reprofile_projected_width_kkt",Number(x.conditional_reprofile_projected_width_kkt)},
-        {"conditional_reprofile_objective_difference",Number(x.conditional_reprofile_objective_difference)},
-        {"conditional_reprofile_scaled_ac_parameter_difference",
-            Number(x.conditional_reprofile_scaled_ac_parameter_difference)},
-        {"conditional_reprofile_prediction_change_relative",
-            Number(x.conditional_reprofile_prediction_change_relative)},
-        {"conditional_reprofile_independent_replay_status",x.conditional_reprofile_independent_replay_status},
-        {"conditional_reprofile_independent_replay_reason",x.conditional_reprofile_independent_replay_reason},
-        {"probes",std::move(probes)},
-        {"perturbation_directions",x.perturbation_directions},{"perturbation_seeds",x.perturbation_seeds},
-        {"perturbation_solves",x.perturbation_solves},{"perturbation_evaluations",x.perturbation_evaluations}};
-}
-JointBlockParameterStability ReadStabilityBlock(const j::value & value)
-{
-    const auto & o=value.as_object(); JointBlockParameterStability x;
-    x.block_id=Read<std::string>(o,"block_id"); x.status=Read<std::string>(o,"status");
-    x.reason=Read<std::string>(o,"reason"); x.core_atoms=Read<std::vector<std::size_t>>(o,"core_atoms");
-    x.probe_selected=Read<bool>(o,"probe_selected");
-    x.prediction_status=Read<std::string>(o,"prediction_status");
-    x.objective_consistency_status=Read<std::string>(o,"objective_consistency_status");
-    x.log_width_parameter_change_inf=OptionalNumber(o.at("log_width_parameter_change_inf"));
-    x.scaled_ac_parameter_change_inf=OptionalNumber(o.at("scaled_ac_parameter_change_inf"));
-    x.local_prediction_change_relative=OptionalNumber(o.at("local_prediction_change_relative"));
-    x.objective_difference=OptionalNumber(o.at("objective_difference")); x.cpu_seconds=Read<double>(o,"cpu_seconds");
-    x.baseline_local_ac_kkt=OptionalNumber(o.at("baseline_local_ac_kkt"));
-    x.baseline_projected_width_kkt=OptionalNumber(o.at("baseline_projected_width_kkt"));
-    x.baseline_width_bound_slack=OptionalNumber(o.at("baseline_width_bound_slack"));
-    x.baseline_local_objective=OptionalNumber(o.at("baseline_local_objective"));
-    x.baseline_local_residual_rmse_normalized=OptionalNumber(o.at("baseline_local_residual_rmse_normalized"));
-    x.baseline_active_ac_constraints=ReadOptionalSize(o.at("baseline_active_ac_constraints"));
-    x.baseline_active_width_bound_targets=ReadOptionalSize(o.at("baseline_active_width_bound_targets"));
-    x.baseline_numerical_validity_status=Read<std::string>(o,"baseline_numerical_validity_status");
-    x.baseline_conditional_optimality_status=Read<std::string>(o,"baseline_conditional_optimality_status");
-    x.baseline_eligibility_status=Read<std::string>(o,"baseline_eligibility_status");
-    x.baseline_eligibility_reason=Read<std::string>(o,"baseline_eligibility_reason");
-    x.baseline_independent_replay_status=Read<std::string>(o,"baseline_independent_replay_status");
-    x.baseline_independent_replay_reason=Read<std::string>(o,"baseline_independent_replay_reason");
-    x.conditional_reprofile_status=Read<std::string>(o,"conditional_reprofile_status");
-    x.conditional_reprofile_local_ac_kkt=OptionalNumber(o.at("conditional_reprofile_local_ac_kkt"));
-    x.conditional_reprofile_projected_width_kkt=OptionalNumber(o.at("conditional_reprofile_projected_width_kkt"));
-    x.conditional_reprofile_objective_difference=OptionalNumber(o.at("conditional_reprofile_objective_difference"));
-    x.conditional_reprofile_scaled_ac_parameter_difference=OptionalNumber(o.at("conditional_reprofile_scaled_ac_parameter_difference"));
-    x.conditional_reprofile_prediction_change_relative=OptionalNumber(o.at("conditional_reprofile_prediction_change_relative"));
-    x.conditional_reprofile_independent_replay_status=Read<std::string>(o,"conditional_reprofile_independent_replay_status");
-    x.conditional_reprofile_independent_replay_reason=Read<std::string>(o,"conditional_reprofile_independent_replay_reason");
-    for(const auto & probe_value:o.at("probes").as_array())
-    {
-        const auto & p=probe_value.as_object(); JointStabilityProbe probe;
-        probe.direction=Read<std::string>(p,"direction"); probe.source=Read<std::string>(p,"source");
-        probe.status=Read<std::string>(p,"status");
-        probe.minus_seed_status=Read<std::string>(p,"minus_seed_status");
-        probe.plus_seed_status=Read<std::string>(p,"plus_seed_status");
-        probe.minus_seed_reason=Read<std::string>(p,"minus_seed_reason");
-        probe.plus_seed_reason=Read<std::string>(p,"plus_seed_reason");
-        probe.unit_direction=Read<std::vector<double>>(p,"unit_direction");
-        probe.evaluations=Read<std::size_t>(p,"evaluations");
-        probe.parameter_change=OptionalNumber(p.at("parameter_change"));
-        probe.prediction_change=OptionalNumber(p.at("prediction_change"));
-        probe.objective_change=OptionalNumber(p.at("objective_change"));
-        probe.minus_requested_displacement_inf=OptionalNumber(p.at("minus_requested_displacement_inf"));
-        probe.minus_effective_displacement_inf=OptionalNumber(p.at("minus_effective_displacement_inf"));
-        probe.plus_requested_displacement_inf=OptionalNumber(p.at("plus_requested_displacement_inf"));
-        probe.plus_effective_displacement_inf=OptionalNumber(p.at("plus_effective_displacement_inf"));
-        x.probes.push_back(std::move(probe));
-    }
-    x.perturbation_directions=Read<std::size_t>(o,"perturbation_directions");
-    x.perturbation_seeds=Read<std::size_t>(o,"perturbation_seeds");
-    x.perturbation_solves=Read<std::size_t>(o,"perturbation_solves");
-    x.perturbation_evaluations=Read<std::size_t>(o,"perturbation_evaluations");
-    return x;
-}
-j::value ParameterStability(const std::optional<JointParameterStability> & value)
-{
-    if(!value) return nullptr;
-    const auto & x=*value; j::array blocks;
-    for(const auto & block:x.blocks) blocks.emplace_back(StabilityBlock(block));
-    return Object{{"perturbation_status",x.perturbation_status},
-        {"blocks",std::move(blocks)},{"seconds",x.seconds},{"cpu_seconds",x.cpu_seconds},
-        {"perturbation_directions",x.perturbation_directions},{"perturbation_seeds",x.perturbation_seeds},
-        {"perturbation_solves",x.perturbation_solves},{"perturbation_evaluations",x.perturbation_evaluations},
-        {"workspace_peak_memory_estimate_bytes",OptionalSize(x.workspace_peak_memory_estimate_bytes)}};
-}
-std::optional<JointParameterStability> ReadParameterStability(const j::value & value)
-{
-    if(value.is_null()) return std::nullopt;
-    const auto & o=value.as_object(); JointParameterStability x;
-    RequireOnlyKeys(o,{"perturbation_status","blocks","seconds","cpu_seconds","perturbation_directions",
-        "perturbation_seeds","perturbation_solves","perturbation_evaluations",
-        "workspace_peak_memory_estimate_bytes"},"unknown current parameter stability field");
-    x.perturbation_status=Read<std::string>(o,"perturbation_status");
-    for(const auto & block:o.at("blocks").as_array()) x.blocks.push_back(ReadStabilityBlock(block));
-    x.seconds=Read<double>(o,"seconds"); x.cpu_seconds=Read<double>(o,"cpu_seconds");
-    x.perturbation_directions=Read<std::size_t>(o,"perturbation_directions");
-    x.perturbation_seeds=Read<std::size_t>(o,"perturbation_seeds");
-    x.perturbation_solves=Read<std::size_t>(o,"perturbation_solves");
-    x.perturbation_evaluations=Read<std::size_t>(o,"perturbation_evaluations");
-    x.workspace_peak_memory_estimate_bytes=ReadOptionalSize(o.at("workspace_peak_memory_estimate_bytes"));
-    return x;
-}
-
-
 j::value HaloMedianSnapshot(const std::optional<JointHaloMedianSnapshot> & value)
 {
     if(!value) return nullptr;
@@ -793,45 +656,6 @@ void ValidateBlockConditioning(const JointBlockConditioning & x)
         &x.profile_rank_threshold,&x.profile_rank_threshold_margin_relative})
         Require(!*value || (std::isfinite(**value) && **value>=0),"local conditioning value");
 }
-void ValidateStabilityBlock(const JointBlockParameterStability & x)
-{
-    Require(!x.block_id.empty() && !x.status.empty() && !x.prediction_status.empty() &&
-        !x.objective_consistency_status.empty(),"local stability identity/status");
-    Require(std::isfinite(x.cpu_seconds) && x.cpu_seconds>=0,"local stability CPU time");
-    for(const auto * value:{&x.log_width_parameter_change_inf,&x.scaled_ac_parameter_change_inf,
-        &x.local_prediction_change_relative,&x.objective_difference,&x.baseline_local_ac_kkt,
-        &x.baseline_projected_width_kkt,&x.baseline_local_objective,&x.baseline_local_residual_rmse_normalized,
-        &x.conditional_reprofile_local_ac_kkt,&x.conditional_reprofile_projected_width_kkt,
-        &x.conditional_reprofile_objective_difference,&x.conditional_reprofile_scaled_ac_parameter_difference,
-        &x.conditional_reprofile_prediction_change_relative})
-        Require(!*value || (std::isfinite(**value) && **value>=0),"local stability value");
-    Require(!x.baseline_width_bound_slack || std::isfinite(*x.baseline_width_bound_slack),
-        "local stability bound slack");
-    for(const auto & probe:x.probes)
-    {
-        Require(!probe.direction.empty() && !probe.source.empty() &&
-            (probe.status=="Assessed" || probe.status=="OneSidedAssessed" || probe.status=="SolverFailed" ||
-                probe.status=="BudgetExhausted" || probe.status=="Unavailable"),"local stability probe status");
-        double norm{};
-        for(const double value:probe.unit_direction)
-        {Require(std::isfinite(value),"local stability probe direction"); norm=std::hypot(norm,value);}
-        Require(probe.unit_direction.empty() || std::abs(norm-1.)<=1e-10,"local stability probe unit direction");
-        for(const auto * value:{&probe.parameter_change,&probe.prediction_change,&probe.objective_change})
-            Require(!*value || (std::isfinite(**value) && **value>=0),"local stability probe value");
-        for(const auto * value:{&probe.minus_requested_displacement_inf,&probe.minus_effective_displacement_inf,
-            &probe.plus_requested_displacement_inf,&probe.plus_effective_displacement_inf})
-            Require(!*value || (std::isfinite(**value) && **value>=0),"local stability probe displacement");
-        Require(!probe.minus_seed_status.empty() && !probe.plus_seed_status.empty(),
-            "local stability probe seed status");
-    }
-}
-void ValidateParameterStability(const JointParameterStability & x)
-{
-    Require(!x.perturbation_status.empty(),"parameter stability status");
-    Require(std::isfinite(x.seconds) && x.seconds>=0 && std::isfinite(x.cpu_seconds) && x.cpu_seconds>=0,
-        "parameter stability time");
-    for(const auto & block:x.blocks) ValidateStabilityBlock(block);
-}
 j::value SelectionDomain(const std::optional<JointSelectionDomain> & domain)
 {
     if(!domain) return nullptr;
@@ -877,9 +701,9 @@ j::value Target(const std::optional<JointTargetEvidence> & value)
     for(const auto & a:t.point_atoms)
         point_atoms.emplace_back(Object{{"atom",a.atom},{"component_convergence",StatusText(a.component_convergence)},
             {"parameter_validity",StatusText(a.parameter_validity)},{"local_conditioning",a.local_conditioning},
-            {"parameter_stability",a.parameter_stability},{"point_quality",a.point_quality},
+            {"point_quality",a.point_quality},
             {"local_conditioning_blocks",j::value_from(a.local_conditioning_blocks)},
-            {"parameter_stability_blocks",j::value_from(a.parameter_stability_blocks)},{"reason",a.reason}});
+            {"reason",a.reason}});
     return Object{{"contract",t.contract},{"checks",Checks(t.checks)},
         {"point_atoms",std::move(point_atoms)},{"original_rows",t.original_rows}};
 }
@@ -895,16 +719,14 @@ std::optional<JointTargetEvidence> ReadTarget(const j::value & value)
     {
         const auto & a=item.as_object(); JointAtomPointValidation point;
         RequireOnlyKeys(a,{"atom","component_convergence","parameter_validity","local_conditioning",
-            "parameter_stability","point_quality","local_conditioning_blocks","parameter_stability_blocks","reason"},
+            "point_quality","local_conditioning_blocks","reason"},
             "unknown current target point field");
         point.atom=Read<std::size_t>(a,"atom");
         point.component_convergence=Status(a.at("component_convergence"));
         point.parameter_validity=Status(a.at("parameter_validity"));
         point.local_conditioning=Read<std::string>(a,"local_conditioning");
-        point.parameter_stability=Read<std::string>(a,"parameter_stability");
         point.point_quality=Read<std::string>(a,"point_quality");
         point.local_conditioning_blocks=Read<std::vector<std::string>>(a,"local_conditioning_blocks");
-        point.parameter_stability_blocks=Read<std::vector<std::string>>(a,"parameter_stability_blocks");
         point.reason=Read<std::string>(a,"reason"); t.point_atoms.push_back(std::move(point));
     }
     return t;
@@ -922,9 +744,6 @@ void ValidateTarget(const std::optional<JointTargetEvidence> & value,const std::
         Require(expected.contains(point.atom) && seen.insert(point.atom).second,"point atom mapping");
         Require(point.local_conditioning=="Adequate" || point.local_conditioning=="Warning" ||
             point.local_conditioning=="Unavailable" || point.local_conditioning=="NotAssessed","point local conditioning status");
-        Require(point.parameter_stability=="Stable" || point.parameter_stability=="Sensitive" ||
-            point.parameter_stability=="Unstable" || point.parameter_stability=="Unavailable" ||
-            point.parameter_stability=="NotAssessed","point parameter stability status");
         Require(point.point_quality=="Available" || point.point_quality=="Warning" ||
             point.point_quality=="Unavailable" || point.point_quality=="NotAssessed","point quality status");
         Require(!point.reason.empty(),"point quality reason");
@@ -1084,7 +903,6 @@ void Validate(const JointAnalysisResult & x)
             for(const auto atom:block.core_atoms)
                 Require(std::binary_search(c.atoms.begin(),c.atoms.end(),atom),"local conditioning atom mapping");
         }
-        if(c.parameter_stability) ValidateParameterStability(*c.parameter_stability);
         ValidateTarget(c.target_evidence,c.atoms,c.rows.size());
         if(c.state)
         {
@@ -1122,7 +940,6 @@ std::string Encode(const JointAnalysisResult & x)
         {"local_conditioning",BlockConditioning(c.local_conditioning)},
         {"local_conditioning_seconds",Number(c.local_conditioning_seconds)},
         {"local_conditioning_peak_memory_estimate_bytes",OptionalSize(c.local_conditioning_peak_memory_estimate_bytes)},
-        {"parameter_stability",ParameterStability(c.parameter_stability)},
         {"runtime_convergence",StatusText(c.runtime_convergence)},
         {"target_evidence",Target(c.target_evidence)},
         {"target_runtime_convergence",StatusText(c.target_runtime_convergence)}};
@@ -1202,7 +1019,7 @@ JointAnalysisResult DecodeCurrent(const Object & o)
             "first_order_stationarity_sweep","confirmed_stationarity_sweep","endpoint_certification_sweep",
             "profile_evaluations","accepted_updates","native_status","state","candidate_diagnostic","evidence",
             "local_conditioning","local_conditioning_seconds","local_conditioning_peak_memory_estimate_bytes",
-            "parameter_stability","runtime_convergence","target_evidence",
+            "runtime_convergence","target_evidence",
             "target_runtime_convergence"},"unknown current Joint component field");
         JointAnalysisComponent component;
         component.id=Read<std::string>(c,"id");
@@ -1239,7 +1056,6 @@ JointAnalysisResult DecodeCurrent(const Object & o)
         component.local_conditioning_seconds=Read<double>(c,"local_conditioning_seconds");
         component.local_conditioning_peak_memory_estimate_bytes=
             ReadOptionalSize(c.at("local_conditioning_peak_memory_estimate_bytes"));
-        component.parameter_stability=ReadParameterStability(c.at("parameter_stability"));
         component.runtime_convergence=Status(c.at("runtime_convergence"));
         component.target_evidence=ReadTarget(c.at("target_evidence"));
         component.target_runtime_convergence=Status(c.at("target_runtime_convergence"));

@@ -102,7 +102,7 @@ DiagnosticAtomIndex<Blocks> BuildDiagnosticAtomIndex(std::size_t atom_count,cons
 JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const JointParameterLayout & layout,
     const std::optional<JointState> & state,JointCheckStatus convergence,
     const std::vector<JointBlockConditioning> & conditioning,
-    const std::vector<JointBlockParameterStability> & stability,JointEvidenceScope scope,std::size_t original_rows)
+    JointEvidenceScope scope,std::size_t original_rows)
 {
     JointTargetEvidence out;
     out.contract=std::string(JointTargetPointValidationContractVersion);
@@ -113,7 +113,6 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
         state->ac.size()==2*layout.full_atoms.size() && state->b.size()==layout.full_atoms.size() &&
         state->log_b.size()==layout.full_atoms.size();
     auto conditioning_index=BuildDiagnosticAtomIndex(input.atom_ids.size(),conditioning);
-    auto stability_index=BuildDiagnosticAtomIndex(input.atom_ids.size(),stability);
     const auto mark_missing_membership=[&](auto & index,const auto & blocks) {
         if(blocks.empty()) return;
         for(const auto atom:layout.full_atoms)
@@ -126,7 +125,6 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
             }
     };
     mark_missing_membership(conditioning_index,conditioning);
-    mark_missing_membership(stability_index,stability);
     const auto parameter_validity=[&](std::size_t index) {
         if(!dimensions) return JointCheckStatus::Unavailable;
         const double amplitude=state->ac[2*index],width=state->b[index],log_width=state->log_b[index];
@@ -139,45 +137,25 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
                 JointCheckStatus::Passed : JointCheckStatus::Failed;
     };
     const auto local_status=[&](std::size_t atom,std::vector<std::string> & block_ids,bool & mapping_invalid) {
-        bool matched=false,unavailable=false,adequate=true;
+        bool matched=false,unavailable=false,not_assessed=false,adequate=true;
         const auto [first,last]=conditioning_index.Range(atom);
         mapping_invalid=conditioning_index.Invalid(atom) || (!conditioning.empty() && first==last);
         for(std::size_t position=first;position<last;++position)
         {
             const auto & block=conditioning[conditioning_index.block_indices[position]];
             matched=true; block_ids.push_back(block.block_id);
-            if(block.status=="unavailable" || block.status=="not-assessed" ||
-                block.conditioning_classification=="Unavailable" ||
-                block.conditioning_classification=="NotAssessed") unavailable=true;
+            if(block.status=="not-assessed" || block.conditioning_classification=="NotAssessed")
+                not_assessed=true;
+            else if(block.status=="unavailable" || block.conditioning_classification=="Unavailable")
+                unavailable=true;
             adequate &= block.status=="assessed" &&
                 block.conditioning_classification=="WellConditioned";
         }
         if(mapping_invalid) return std::string("Unavailable");
         if(!matched) return std::string("NotAssessed");
         if(unavailable) return std::string("Unavailable");
+        if(not_assessed) return std::string("NotAssessed");
         return adequate ? std::string("Adequate") : std::string("Warning");
-    };
-    const auto stability_status=[&](std::size_t atom,std::vector<std::string> & block_ids,bool & mapping_invalid) {
-        bool matched=false,not_assessed=false;
-        int worst{};
-        std::string status="NotAssessed";
-        const auto [first,last]=stability_index.Range(atom);
-        mapping_invalid=stability_index.Invalid(atom) || (!stability.empty() && first==last);
-        for(std::size_t position=first;position<last;++position)
-        {
-            const auto & block=stability[stability_index.block_indices[position]];
-            matched=true; block_ids.push_back(block.block_id);
-            const int severity=block.status=="Unstable" ? 4 : block.status=="Sensitive" ? 3 :
-                block.status=="Unavailable" ? 2 : block.status=="Stable" ? 1 : 0;
-            if(!severity) not_assessed=true;
-            if(severity>worst)
-            {
-                worst=severity; status=block.status;
-            }
-        }
-        if(mapping_invalid) return std::string("Unavailable");
-        if(!matched || (not_assessed && worst<=1)) return std::string("NotAssessed");
-        return status;
     };
     const auto targets=input.selection_domain ? &input.selection_domain->target_indices : nullptr;
     bool selection_targets_valid=targets!=nullptr;
@@ -189,22 +167,19 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
         JointAtomPointValidation point; point.atom=layout.full_atoms[index];
         point.component_convergence=convergence;
         point.parameter_validity=parameter_validity(index);
-        bool invalid_conditioning_mapping{},invalid_stability_mapping{};
+        bool invalid_conditioning_mapping{};
         point.local_conditioning=local_status(point.atom,point.local_conditioning_blocks,invalid_conditioning_mapping);
-        point.parameter_stability=stability_status(point.atom,point.parameter_stability_blocks,invalid_stability_mapping);
-        point_mapping_invalid|=invalid_conditioning_mapping || invalid_stability_mapping;
+        point_mapping_invalid|=invalid_conditioning_mapping;
         all_parameter_status=MergeConvergenceStatus(all_parameter_status,point.parameter_validity);
         if(point.component_convergence!=JointCheckStatus::Passed)
         {point.point_quality="Unavailable"; point.reason="component-not-converged";}
         else if(point.parameter_validity!=JointCheckStatus::Passed)
         {point.point_quality="Unavailable"; point.reason="invalid-or-unavailable-parameters";}
-        else if(invalid_conditioning_mapping || invalid_stability_mapping)
+        else if(invalid_conditioning_mapping)
         {point.point_quality="Warning"; point.reason="invalid-diagnostic-block-mapping";}
-        else if(point.local_conditioning=="Warning" || point.local_conditioning=="Unavailable" ||
-            point.parameter_stability=="Unstable" || point.parameter_stability=="Sensitive" ||
-            point.parameter_stability=="Unavailable")
-        {point.point_quality="Warning"; point.reason="conditioning-or-stability-warning";}
-        else if(point.local_conditioning=="NotAssessed" || point.parameter_stability=="NotAssessed")
+        else if(point.local_conditioning=="Warning" || point.local_conditioning=="Unavailable")
+        {point.point_quality="Warning"; point.reason="conditioning-warning";}
+        else if(point.local_conditioning=="NotAssessed")
         {point.point_quality="NotAssessed"; point.reason="quality-diagnostics-not-assessed";}
         else
         {point.point_quality="Available"; point.reason="numerically-converged-point";}
@@ -244,9 +219,9 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
         all_parameter_status==JointCheckStatus::Passed ? "all-optimized-parameters-valid" : "invalid-or-unavailable-parameters"});
     out.checks.push_back({"target-point-validation",target_status,scope,{},{},
         target_status==JointCheckStatus::Passed ? "selected-target-points-valid" : "selected-target-point-unavailable"});
-    const bool diagnostic_mapping_valid=!conditioning_index.invalid && !stability_index.invalid && !point_mapping_invalid;
+    const bool diagnostic_mapping_valid=!conditioning_index.invalid && !point_mapping_invalid;
     const auto mapping_reason=!conditioning_index.reason.empty() ? conditioning_index.reason :
-        !stability_index.reason.empty() ? stability_index.reason : "invalid-diagnostic-atom-mapping";
+        "invalid-diagnostic-atom-mapping";
     out.checks.push_back({"diagnostic-block-mapping",diagnostic_mapping_valid ? JointCheckStatus::Passed :
         JointCheckStatus::Unavailable,scope,{},{},diagnostic_mapping_valid ? "unique-atom-to-block-mapping" : mapping_reason});
     return out;
@@ -274,22 +249,17 @@ void AddTargetEvidence(JointFitResult & fit)
     for(auto & c:fit.components)
     {
         const JointParameterLayout layout=c.layout.value_or(JointParameterLayout{c.atoms,c.rows});
-        static const std::vector<JointBlockParameterStability> no_stability;
-        const auto & stability=c.parameter_stability ? c.parameter_stability->blocks : no_stability;
         c.target_evidence=AssessTargetPointState(problem,layout,c.state,c.RuntimeConvergence(),
-            c.local_conditioning,stability,JointEvidenceScope::ComponentLocal,c.rows.size());
+            c.local_conditioning,JointEvidenceScope::ComponentLocal,c.rows.size());
     }
     auto global_layout=problem.ParameterLayout();
     std::vector<JointBlockConditioning> conditioning;
-    std::vector<JointBlockParameterStability> stability;
     for(const auto & component:fit.components)
     {
         conditioning.insert(conditioning.end(),component.local_conditioning.begin(),component.local_conditioning.end());
-        if(component.parameter_stability)
-            stability.insert(stability.end(),component.parameter_stability->blocks.begin(),component.parameter_stability->blocks.end());
     }
     fit.target_evidence=AssessTargetPointState(problem,global_layout,fit.assembled_state,fit.RuntimeConvergence(),
-        conditioning,stability,JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
+        conditioning,JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
     fit.costs.assessment_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
 }
 JointFitResult FitFixedNeighborComponents(const JointProblem & problem,const std::vector<double> & b,

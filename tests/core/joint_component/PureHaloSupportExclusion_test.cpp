@@ -390,7 +390,6 @@ JointAnalysisResult QualifiedReconstructionSnapshot(const JointProblem & problem
         point.component_convergence=JointCheckStatus::Passed;
         point.parameter_validity=JointCheckStatus::Passed;
         point.local_conditioning="Adequate";
-        point.parameter_stability="NotAssessed";
         point.point_quality="NotAssessed";
         point.reason="test-qualified-point";
         result.target_evidence->point_atoms.push_back(std::move(point));
@@ -779,7 +778,7 @@ TEST(PureHaloSupportExclusionTest, PersistsVersionedDualDomainAndMedianProvenanc
     snapshot.evidence.push_back({"qualified-first-stage-donor-coverage",JointCheckStatus::Passed,
         JointEvidenceScope::AssembledGlobal,1.0,.95,"target-only-qualified-first-stage-widths"});
     const auto encoded=joint_result_io::Encode(snapshot);
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),21);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),22);
     const auto encoded_root=boost::json::parse(encoded).as_object();
     const auto & median_json=encoded_root.at("halo_median_reconstruction").as_object();
     EXPECT_EQ(median_json.at("neighbor_count").as_int64(),4);

@@ -1,5 +1,4 @@
 #include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/joint_component/ParameterStability.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include <algorithm>
 #include <bit>
@@ -20,8 +19,7 @@ using Clock=std::chrono::steady_clock;
 struct Sample
 {
     std::string stop_reason;
-    double search_seconds{},wall_seconds{},cpu_seconds{},parameter_stability_seconds{},
-        parameter_stability_cpu_seconds{},candidate_seconds{},sweep_replay_seconds{},
+    double search_seconds{},wall_seconds{},cpu_seconds{},candidate_seconds{},sweep_replay_seconds{},
         replay_audit_seconds{},reconciliation_seconds{},global_state_seconds{},
         endpoint_certification_seconds{},independent_replay_seconds{},local_profile_seconds{},
         profile_basis_seconds{},profile_linear_solve_seconds{},profile_derivative_prepare_seconds{},
@@ -31,8 +29,6 @@ struct Sample
         first_kkt_sweep{},first_kkt_eligible_sweep{},first_confirmed_sweep{},
         certification_attempts{},block_solves{},
         preflight_bytes{},peak_rss_bytes{},profile_evaluations{},profile_derivatives{},
-        parameter_stability_solves{},parameter_stability_evaluations{},
-        parameter_stability_blocks_selected{},parameter_stability_peak_bytes{},
         bounded_subproblems{},damping_solves{},damping_bracket_solves{},damping_bisection_solves{},
         damping_qr_factorizations{},damping_active_set_iterations{},damping_releases{};
     std::uint64_t accepted_state_fingerprint{};
@@ -102,23 +98,6 @@ Sample Run(std::size_t targets)
     policy.core_atoms=12;
     policy.convergence_criteria=joint::PracticalJointConvergenceCriteria;
     policy.eta_upper_bound=std::log(2.2);
-    std::size_t remaining_perturbation_blocks=joint::MaximumPerturbedBlocksPerFit;
-    std::size_t remaining_general_perturbation_blocks=
-        joint::MaximumPerturbedBlocksPerFit>1 ? joint::MaximumPerturbedBlocksPerFit-1 : 0;
-    bool reserved_bound_active_probe=joint::MaximumPerturbedBlocksPerFit>0;
-    policy.claim_parameter_stability_block=[&](int priority) {
-        if(!remaining_perturbation_blocks) return false;
-        if(priority==0 && reserved_bound_active_probe)
-        {
-            reserved_bound_active_probe=false;
-            --remaining_perturbation_blocks;
-            return true;
-        }
-        if(!remaining_general_perturbation_blocks) return false;
-        --remaining_general_perturbation_blocks;
-        --remaining_perturbation_blocks;
-        return true;
-    };
     std::size_t accepted_blocks{},unchanged_blocks{},failed_blocks{};
     std::size_t first_kkt_sweep{},first_kkt_eligible_sweep{};
     const auto & criteria=policy.convergence_criteria;
@@ -159,16 +138,6 @@ Sample Run(std::size_t targets)
     sample.wall_seconds=wall_seconds;
     sample.cpu_seconds=static_cast<double>(std::clock()-cpu_started)/static_cast<double>(CLOCKS_PER_SEC);
     sample.accepted_state_fingerprint=AcceptedStateFingerprint(result.state);
-    sample.parameter_stability_seconds=result.work.parameter_stability_seconds;
-    sample.parameter_stability_solves=result.work.perturbation_solves;
-    sample.parameter_stability_evaluations=result.work.perturbation_evaluations;
-    sample.parameter_stability_peak_bytes=result.work.parameter_stability_peak_memory_estimate_bytes;
-    if(result.parameter_stability)
-    {
-        sample.parameter_stability_cpu_seconds=result.parameter_stability->cpu_seconds;
-        for(const auto & block:result.parameter_stability->blocks)
-            sample.parameter_stability_blocks_selected+=block.probe_selected ? 1u : 0u;
-    }
     const auto & profile_work=result.work.local_profile_work;
     sample.local_profile_seconds=profile_work.total_seconds;
     sample.profile_basis_seconds=profile_work.total.basis_seconds;
@@ -225,8 +194,6 @@ void PrintSummary(std::size_t targets,const std::vector<Sample> & samples)
     PrintTime("search",samples,[](const auto & x){return x.search_seconds;});
     PrintTime("wall",samples,[](const auto & x){return x.wall_seconds;});
     PrintTime("cpu",samples,[](const auto & x){return x.cpu_seconds;});
-    PrintTime("parameter_stability_wall",samples,[](const auto & x){return x.parameter_stability_seconds;});
-    PrintTime("parameter_stability_cpu",samples,[](const auto & x){return x.parameter_stability_cpu_seconds;});
     PrintTime("local_profile_total",samples,[](const auto & x){return x.local_profile_seconds;});
     PrintTime("local_profile_basis",samples,[](const auto & x){return x.profile_basis_seconds;});
     PrintTime("local_profile_linear_solve",samples,[](const auto & x){return x.profile_linear_solve_seconds;});
@@ -257,10 +224,6 @@ void PrintSummary(std::size_t targets,const std::vector<Sample> & samples)
         <<" damping_qr_factorizations="<<representative.damping_qr_factorizations
         <<" damping_active_set_iterations="<<representative.damping_active_set_iterations
         <<" damping_releases="<<representative.damping_releases
-        <<" parameter_stability_solves="<<representative.parameter_stability_solves
-        <<" parameter_stability_evaluations="<<representative.parameter_stability_evaluations
-        <<" parameter_stability_blocks_selected="<<representative.parameter_stability_blocks_selected
-        <<" parameter_stability_peak_bytes="<<representative.parameter_stability_peak_bytes
         <<" accepted_state_fnv1a64="<<std::hex<<std::setw(16)<<std::setfill('0')
         <<representative.accepted_state_fingerprint<<std::dec<<std::setfill(' ')
         <<" accepted_state_fingerprint_equal="<<state_fingerprint_equal

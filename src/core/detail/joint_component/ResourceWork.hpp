@@ -8,7 +8,7 @@ namespace rhbm_gem::core::joint_component {
 inline constexpr std::size_t JointMemoryHardLimitBytes=4'000'000'000;
 inline constexpr std::size_t JointMemoryPlanningBudgetBytes=3'200'000'000;
 enum class MemoryStage {ProblemConstruction,StructuralConstruction,FixedNeighborPreparation,GlobalStateEvaluation,
-    EndpointVerification,LocalConditioning,ParameterStability};
+    EndpointVerification,LocalConditioning};
 enum class MemoryStatus {Pass,Reject,Overflow};
 struct MemoryShape
 {
@@ -17,8 +17,7 @@ struct MemoryShape
         total_block_support_entries{},maximum_neighbor_atoms{},maximum_block_replay_entries{},maximum_block_atoms{},
         component_free_columns{},component_width_columns{},
         identity_validation_bytes{},resident_bytes{},
-        maximum_tile_rows{8192},
-        component_stability_evaluations{};
+        maximum_tile_rows{8192};
     bool problem_scope{},affected_replay_scratch{};
 };
 struct MemoryEstimate

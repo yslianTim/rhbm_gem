@@ -160,7 +160,6 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
     out.search_seconds=search.search_seconds;
     out.final_sweep=search.final_sweep;
     out.local_conditioning=std::move(search.local_conditioning);
-    out.parameter_stability=std::move(search.parameter_stability);
     out.certification_attempted=search.certification.has_value();
     if(policy.certify_endpoint)
     {

@@ -286,7 +286,7 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
         EXPECT_EQ(*fit.prediction,*prediction_before);
     EXPECT_EQ(saved.fitting_to_original_contributors,fit.problem->FittingToOriginalContributors());
     EXPECT_EQ(saved.fitting_to_original_rows,fit.problem->FittingToOriginalRows());
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),21);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),22);
     const auto decoded=rhbm_gem::joint_result_io::Decode(encoded);
     ASSERT_TRUE(decoded.selection_domain); EXPECT_EQ(decoded.selection_domain->target_indices,(std::vector<std::size_t>{0}));
     ASSERT_TRUE(decoded.selection_domain->pure_halo_support_exclusion);
@@ -402,10 +402,9 @@ TEST(JointComponentPartialSelectionTest, CopyAndMoveCapturePreserveComponentPers
 
     auto nullable_fit=fit;
     for(auto & component:nullable_fit.components)
-    {component.local_conditioning.clear(); component.parameter_stability.reset();}
+    {component.local_conditioning.clear();}
     const auto nullable=compare_copy_move(nullable_fit);
     EXPECT_TRUE(nullable.components.front().local_conditioning.empty());
-    EXPECT_FALSE(nullable.components.front().parameter_stability);
 
     auto unqualified_fit=fit;
     unqualified_fit.search_completed=false;

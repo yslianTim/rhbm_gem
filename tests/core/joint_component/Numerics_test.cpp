@@ -841,16 +841,12 @@ TEST(JointComponentNumericsTest, MemoryPlannerRetainsNonRankStagesAndLocalBudget
     const auto endpoint=n::PlanMemory(large,n::MemoryStage::EndpointVerification);
     auto local=large; local.component_free_columns=24;
     const auto conditioning=n::PlanMemory(local,n::MemoryStage::LocalConditioning);
-    local.component_stability_evaluations=2;
-    const auto stability=n::PlanMemory(local,n::MemoryStage::ParameterStability);
     EXPECT_EQ(construction.status,n::MemoryStatus::Pass);
     EXPECT_EQ(structural.status,n::MemoryStatus::Pass);
     EXPECT_EQ(preparation.status,n::MemoryStatus::Pass);
     EXPECT_EQ(state.status,n::MemoryStatus::Pass);
     EXPECT_EQ(endpoint.status,n::MemoryStatus::Pass);
     EXPECT_EQ(conditioning.status,n::MemoryStatus::Pass);
-    EXPECT_EQ(stability.status,n::MemoryStatus::Pass);
-    EXPECT_GT(stability.estimated_peak_bytes,conditioning.estimated_peak_bytes);
     EXPECT_EQ(conditioning.factor_rows,24);
     EXPECT_EQ(conditioning.factor_columns,24);
     EXPECT_EQ(conditioning.budget_bytes,n::JointMemoryPlanningBudgetBytes);

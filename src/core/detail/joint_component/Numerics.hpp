@@ -37,7 +37,6 @@ struct EvaluationContext
     RankPolicy rank;
     LinearPolicy linear;
     int profile_budget{200},update_budget{100};
-    double profile_cpu_budget_seconds{};
     std::optional<double> eta_upper_bound;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     bool force_width_subproblem_failure_for_testing{};
@@ -85,7 +84,7 @@ struct ProfileSearchWork
     BoundedLmWork bounded_lm;
     std::size_t accepted_profile_trials{},rejected_profile_trials{},local_replay_kkt_rejections{},
         local_replay_disagreements{},invalid_gradient_stops{},width_safeguard_rejections{};
-    std::size_t accepted_update_budget_stops{},profile_budget_stops{},cpu_budget_stops{},native_lm_stops{};
+    std::size_t accepted_update_budget_stops{},profile_budget_stops{},native_lm_stops{};
     std::array<std::size_t,16> lm_status_counts{};
     double total_seconds{},lm_overhead_seconds{};
     ProfileRoleWork & Role(ProfileEvaluationRole);

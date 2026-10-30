@@ -1,6 +1,5 @@
 #include "FixedNeighborBlockCoordinate.hpp"
 #include "LocalConditioning.hpp"
-#include "ParameterStability.hpp"
 #include "Problem.hpp"
 #include "ResourceWork.hpp"
 #include "StructuralPartition.hpp"
@@ -401,93 +400,6 @@ std::string FormatFailureDiagnostics(const FixedNeighborBlockFailureDiagnostics 
            <<" replay_kkt_discrepancy="<<*d.replay_kkt_discrepancy;
     return out.str();
 }
-int StabilityProbePriority(const JointBlockConditioning & evidence)
-{
-    if(evidence.active_width_bound_targets.value_or(0)>0) return 0;
-    const bool free_ac_singular=evidence.free_ac_rank && *evidence.free_ac_rank<evidence.free_ac_columns;
-    if(free_ac_singular) return -1;
-    double practical_kkt_ratio{};
-    if(evidence.local_ac_projected_kkt && std::isfinite(*evidence.local_ac_projected_kkt))
-        practical_kkt_ratio=std::max(practical_kkt_ratio,
-            *evidence.local_ac_projected_kkt/PracticalJointConvergenceCriteria.global_ac_kkt);
-    if(evidence.local_projected_width_kkt && std::isfinite(*evidence.local_projected_width_kkt))
-        practical_kkt_ratio=std::max(practical_kkt_ratio,
-            *evidence.local_projected_width_kkt/PracticalJointConvergenceCriteria.global_width_gradient);
-    if(practical_kkt_ratio>=.5) return 1;
-    if(evidence.conditioning_classification=="Singular") return 2;
-    if(evidence.conditioning_classification=="IllConditioned") return 3;
-    if(evidence.conditioning_classification=="ActiveFace" || evidence.active_amplitude_count>0) return 4;
-    if(evidence.conditioning_classification=="WellConditioned") return 5;
-    return -1;
-}
-double StabilitySensitivityScore(const JointBlockConditioning & evidence)
-{
-    double score{};
-    double conditioning_score{};
-    if(evidence.local_ac_projected_kkt && std::isfinite(*evidence.local_ac_projected_kkt))
-        score=std::max(score,*evidence.local_ac_projected_kkt/
-            PracticalJointConvergenceCriteria.global_ac_kkt);
-    if(evidence.local_projected_width_kkt && std::isfinite(*evidence.local_projected_width_kkt))
-        score=std::max(score,*evidence.local_projected_width_kkt/
-            PracticalJointConvergenceCriteria.global_width_gradient);
-    for(const auto * condition:{&evidence.free_ac_condition,&evidence.projected_width_condition,
-        &evidence.profile_condition})
-        if(*condition && std::isfinite(**condition) && **condition>=1.0)
-            conditioning_score=std::max(conditioning_score,std::log10(**condition));
-    return score+conditioning_score;
-}
-double StabilityBlockCenter(const JointBlockConditioning & evidence)
-{
-    if(evidence.core_atoms.empty()) return std::numeric_limits<double>::infinity();
-    const auto [minimum,maximum]=std::minmax_element(evidence.core_atoms.begin(),evidence.core_atoms.end());
-    return .5*(static_cast<double>(*minimum)+static_cast<double>(*maximum));
-}
-std::vector<std::size_t> RepresentativeStabilityProbeSelection(
-    const std::vector<JointBlockConditioning> & conditioning,std::vector<std::size_t> candidates,std::size_t limit)
-{
-    std::sort(candidates.begin(),candidates.end(),[&](std::size_t left,std::size_t right) {
-        const auto & a=conditioning.at(left); const auto & b=conditioning.at(right);
-        const double center_a=StabilityBlockCenter(a),center_b=StabilityBlockCenter(b);
-        if(center_a!=center_b) return center_a<center_b;
-        const double support_a=static_cast<double>(a.affected_row_count)/
-            static_cast<double>(std::max<std::size_t>(a.core_atom_count,1));
-        const double support_b=static_cast<double>(b.affected_row_count)/
-            static_cast<double>(std::max<std::size_t>(b.core_atom_count,1));
-        if(support_a!=support_b) return support_a>support_b;
-        return a.block_id<b.block_id;
-    });
-    if(limit==0 || candidates.empty()) return {};
-    if(candidates.size()<=limit) return candidates;
-    if(limit==1) return {candidates[candidates.size()/2]};
-    std::vector<std::size_t> selected; selected.reserve(limit);
-    for(std::size_t slot=0;slot<limit;++slot)
-        selected.push_back(candidates[slot*(candidates.size()-1)/(limit-1)]);
-    return selected;
-}
-std::vector<std::size_t> StabilityProbeOrder(const std::vector<JointBlockConditioning> & conditioning)
-{
-    struct Candidate {std::size_t index{}; int priority{}; double score{}; std::string block_id;};
-    std::vector<Candidate> candidates;
-    candidates.reserve(conditioning.size());
-    for(std::size_t index=0;index<conditioning.size();++index)
-    {
-        const auto & block=conditioning[index];
-        const int priority=StabilityProbePriority(block);
-        if(priority<0) continue;
-        candidates.push_back({index,priority,StabilitySensitivityScore(block),block.block_id});
-    }
-    std::sort(candidates.begin(),candidates.end(),[&conditioning](const auto & left,const auto & right) {
-        if(left.priority!=right.priority) return left.priority<right.priority;
-        if(left.score!=right.score) return left.score>right.score;
-        const auto center_left=StabilityBlockCenter(conditioning[left.index]);
-        const auto center_right=StabilityBlockCenter(conditioning[right.index]);
-        if(center_left!=center_right) return center_left<center_right;
-        return left.block_id<right.block_id;
-    });
-    std::vector<std::size_t> order; order.reserve(candidates.size());
-    for(const auto & candidate:candidates) order.push_back(candidate.index);
-    return order;
-}
 }
 FixedNeighborStationarityState ClassifyFixedNeighborStationarity(
     double ac_kkt,double width_gradient_inf,bool has_previous_complete_sweep,
@@ -517,13 +429,11 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     const bool stop_after_stationarity=policy.stop_after_stationarity;
     const bool assess_local_conditioning=policy.assess_local_conditioning;
-    const bool assess_parameter_stability=policy.assess_parameter_stability;
     const bool collect_telemetry=policy.collect_telemetry;
     const bool collect_diagnostics=policy.collect_diagnostics;
 #else
     constexpr bool stop_after_stationarity=true;
     constexpr bool assess_local_conditioning=true;
-    constexpr bool assess_parameter_stability=true;
     constexpr bool collect_telemetry=true;
     constexpr bool collect_diagnostics=false;
 #endif
@@ -1302,119 +1212,6 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             out.local_conditioning.push_back(std::move(conditioning.evidence));
         }
     }
-    if(assess_parameter_stability && out.search_converged && out.certification &&
-        out.certification->qualified())
-    {
-        const auto started=Clock::now(); JointParameterStability stability;
-        std::vector<JointBlockParameterStability> block_evidence(prepared_blocks.size());
-        for(std::size_t index=0;index<prepared_blocks.size();++index)
-        {
-            const auto & prepared=prepared_blocks[index];
-            auto & evidence=block_evidence[index];
-            evidence.block_id=(policy.component_id.empty() ? std::string("component") : policy.component_id)+
-                "/block-"+std::to_string(prepared.block+1);
-            evidence.core_atoms.assign(prepared.core_atoms.begin(),prepared.core_atoms.end());
-            if(index>=out.local_conditioning.size())
-                evidence.reason="condition-data-unavailable";
-            else
-            {
-                const auto & condition=out.local_conditioning[index];
-                const bool free_ac_singular=condition.free_ac_rank && *condition.free_ac_rank<condition.free_ac_columns;
-                if(condition.conditioning_classification=="Singular" && free_ac_singular)
-                    evidence.reason="free-ac-rank-deficient-no-width-probe";
-                else if(StabilityProbePriority(condition)<0)
-                    evidence.reason="condition-data-unavailable";
-                else evidence.reason="not-selected-lower-sensitivity";
-            }
-        }
-        std::vector<std::size_t> selected;
-        const auto probe_order=StabilityProbeOrder(out.local_conditioning);
-        std::vector<std::size_t> representative_candidates;
-        for(const auto index:probe_order)
-        {
-            const auto & condition=out.local_conditioning[index];
-            const auto priority=StabilityProbePriority(condition);
-            if(priority==5)
-            {
-                representative_candidates.push_back(index);
-                continue;
-            }
-            if(selected.size()>=MaximumPerturbedBlocksPerFit)
-            {
-                block_evidence[index].reason="probe-block-budget-exhausted";
-                continue;
-            }
-            selected.push_back(index);
-        }
-        const auto representatives=RepresentativeStabilityProbeSelection(out.local_conditioning,
-            representative_candidates,MaximumRepresentativeLocalStabilityProbesPerComponent);
-        for(const auto index:representative_candidates)
-        {
-            if(std::find(representatives.begin(),representatives.end(),index)==representatives.end())
-            {
-                block_evidence[index].reason="representative-probe-limit";
-                continue;
-            }
-            if(selected.size()>=MaximumPerturbedBlocksPerFit)
-            {
-                block_evidence[index].reason="probe-block-budget-exhausted";
-                continue;
-            }
-            selected.push_back(index);
-        }
-        bool budget_exhausted=false;
-        for(const auto index:selected)
-        {
-            auto & evidence=block_evidence[index];
-            const int priority=StabilityProbePriority(out.local_conditioning[index]);
-            if(budget_exhausted || !policy.claim_parameter_stability_block ||
-                !policy.claim_parameter_stability_block(priority))
-            {
-                evidence.reason="perturbation-budget-exhausted";
-                budget_exhausted=true;
-                continue;
-            }
-            const auto & prepared=prepared_blocks[index];
-            const auto block_id=evidence.block_id;
-            auto workspace=PrepareLocalEndpointWorkspace(prepared,out.state,policy.eta_upper_bound);
-            auto assessment=AssessLocalParameterStability(prepared.domain,workspace.effective_response,
-                workspace.eta,workspace.beta,workspace.context,block_id,
-                out.global_state_memory_estimate.shape.resident_bytes);
-            evidence=std::move(assessment.evidence);
-            evidence.probe_selected=true;
-            evidence.core_atoms.assign(prepared.core_atoms.begin(),prepared.core_atoms.end());
-            stability.perturbation_directions+=evidence.perturbation_directions;
-            stability.perturbation_seeds+=evidence.perturbation_seeds;
-            stability.perturbation_solves+=evidence.perturbation_solves;
-            stability.perturbation_evaluations+=evidence.perturbation_evaluations;
-            stability.cpu_seconds+=evidence.cpu_seconds;
-            if(assessment.memory_estimate.status!=MemoryStatus::Overflow)
-                stability.workspace_peak_memory_estimate_bytes=std::max(
-                    stability.workspace_peak_memory_estimate_bytes.value_or(0),
-                    assessment.memory_estimate.estimated_peak_bytes);
-            out.work.perturbation_solves+=evidence.perturbation_solves;
-            out.work.perturbation_evaluations+=evidence.perturbation_evaluations;
-            if(assessment.memory_estimate.status!=MemoryStatus::Overflow)
-                out.work.parameter_stability_peak_memory_estimate_bytes=std::max(
-                    out.work.parameter_stability_peak_memory_estimate_bytes,
-                    assessment.memory_estimate.estimated_peak_bytes);
-            evidence.block_id=block_id;
-        }
-        stability.blocks=std::move(block_evidence);
-        int worst{}; bool all_assessed=true;
-        for(const auto & block:stability.blocks)
-        {
-            all_assessed&=block.status!="NotAssessed";
-            const int severity=block.status=="Unstable" ? 4 : block.status=="Sensitive" ? 3 :
-                block.status=="Unavailable" ? 2 : block.status=="Stable" ? 1 : 0;
-            worst=std::max(worst,severity);
-        }
-        stability.perturbation_status=worst==4 ? "Unstable" : worst==3 ? "Sensitive" :
-            worst==2 ? "Unavailable" : worst==1 && all_assessed ? "Stable" : "NotAssessed";
-        stability.seconds=Seconds(started);
-        out.work.parameter_stability_seconds+=stability.seconds;
-        out.parameter_stability=std::move(stability);
-    }
     out.unresolved_failures=static_cast<std::size_t>(std::count_if(
         block_failure_visits.begin(),block_failure_visits.end(),[](auto visits){return visits>0;}));
     // All accepted-state mutations and the final sweep replay must be intact.
@@ -1528,9 +1325,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     policy.eta_upper_bound=production_policy.eta_upper_bound;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     policy.assess_local_conditioning=true;
-    policy.assess_parameter_stability=true;
 #endif
-    policy.claim_parameter_stability_block=production_policy.claim_parameter_stability_block;
     std::optional<JointFixedNeighborProgress> last_fixed_neighbor_progress;
     if(progress_component && observer)
     {

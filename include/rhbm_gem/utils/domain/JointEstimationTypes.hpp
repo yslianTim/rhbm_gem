@@ -66,13 +66,13 @@ struct JointCheck
     std::optional<double> value,threshold;
     std::string reason;
 };
-inline constexpr std::string_view JointTargetPointValidationContractVersion="target-point-validation-v1";
+inline constexpr std::string_view JointTargetPointValidationContractVersion="target-point-validation-v2";
 struct JointAtomPointValidation
 {
     std::size_t atom{};
     JointCheckStatus component_convergence{JointCheckStatus::Unavailable},parameter_validity{JointCheckStatus::Unavailable};
-    std::string local_conditioning{"NotAssessed"},parameter_stability{"NotAssessed"},point_quality{"Unavailable"};
-    std::vector<std::string> local_conditioning_blocks,parameter_stability_blocks;
+    std::string local_conditioning{"NotAssessed"},point_quality{"Unavailable"};
+    std::vector<std::string> local_conditioning_blocks;
     std::string reason;
 };
 struct JointTargetEvidence
@@ -198,48 +198,6 @@ struct JointBlockConditioning
     std::string free_ac_conditioning{"NotAssessed"},projected_width_conditioning{"NotAssessed"},
         profile_conditioning{"NotAssessed"};
 };
-struct JointStabilityProbe
-{
-    std::string direction,source,status;
-    std::string minus_seed_status{"NotAssessed"},plus_seed_status{"NotAssessed"},
-        minus_seed_reason,plus_seed_reason;
-    std::vector<double> unit_direction;
-    std::size_t evaluations{};
-    std::optional<double> parameter_change,prediction_change,objective_change;
-    std::optional<double> minus_requested_displacement_inf,minus_effective_displacement_inf,
-        plus_requested_displacement_inf,plus_effective_displacement_inf;
-};
-struct JointBlockParameterStability
-{
-    std::string block_id,status{"NotAssessed"},reason;
-    bool probe_selected{};
-    std::vector<std::size_t> core_atoms;
-    std::vector<JointStabilityProbe> probes;
-    std::string prediction_status{"NotAssessed"},objective_consistency_status{"NotAssessed"};
-    std::optional<double> log_width_parameter_change_inf,scaled_ac_parameter_change_inf,
-        local_prediction_change_relative,objective_difference;
-    std::optional<double> baseline_local_ac_kkt,baseline_projected_width_kkt,baseline_width_bound_slack,
-        baseline_local_objective,baseline_local_residual_rmse_normalized,conditional_reprofile_local_ac_kkt,
-        conditional_reprofile_projected_width_kkt,conditional_reprofile_objective_difference,
-        conditional_reprofile_scaled_ac_parameter_difference,conditional_reprofile_prediction_change_relative;
-    std::optional<std::size_t> baseline_active_ac_constraints,baseline_active_width_bound_targets;
-    std::string baseline_numerical_validity_status{"NotAssessed"},
-        baseline_conditional_optimality_status{"NotAssessed"},baseline_eligibility_status{"NotAssessed"},
-        baseline_eligibility_reason;
-    std::string baseline_independent_replay_status{"NotRun"},baseline_independent_replay_reason,
-        conditional_reprofile_status{"NotRun"},conditional_reprofile_independent_replay_status{"NotRun"},
-        conditional_reprofile_independent_replay_reason;
-    double cpu_seconds{};
-    std::size_t perturbation_directions{},perturbation_seeds{},perturbation_solves{},perturbation_evaluations{};
-};
-struct JointParameterStability
-{
-    std::string perturbation_status{"NotAssessed"};
-    std::vector<JointBlockParameterStability> blocks;
-    double seconds{},cpu_seconds{};
-    std::size_t perturbation_directions{},perturbation_seeds{},perturbation_solves{},perturbation_evaluations{};
-    std::optional<std::size_t> workspace_peak_memory_estimate_bytes;
-};
 struct JointComponentData
 {
     std::string id,stop_reason;
@@ -254,7 +212,6 @@ struct JointComponentData
     std::vector<JointBlockConditioning> local_conditioning;
     double local_conditioning_seconds{};
     std::optional<std::size_t> local_conditioning_peak_memory_estimate_bytes;
-    std::optional<JointParameterStability> parameter_stability;
     // Absent means component atom indices map directly to the state.
     std::optional<JointParameterLayout> layout;
     std::optional<JointTargetEvidence> target_evidence;
