@@ -549,8 +549,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     global_shape.affected_replay_scratch=true;
     auto global_resident=resident;
     if(!AddMemoryBytes(global_resident,memory_shape.component_support_entries,sizeof(LocalSupportIndex)) ||
-        !AddMemoryBytes(global_resident,memory_shape.affected_row_entries,5*sizeof(Eigen::Index)) ||
-        !AddMemoryBytes(global_resident,memory_shape.component_atoms,4*sizeof(Eigen::Index)+3*sizeof(double)+
+        !AddMemoryBytes(global_resident,memory_shape.affected_row_entries,4*sizeof(Eigen::Index)) ||
+        !AddMemoryBytes(global_resident,memory_shape.component_atoms,3*sizeof(Eigen::Index)+3*sizeof(double)+
             sizeof(std::vector<LocalSupportIndex>)) ||
         !AddMemoryBytes(global_resident,memory_shape.component_blocks,
             sizeof(PreparedFixedNeighborBlock)+sizeof(CompactRowMapping)+sizeof(std::size_t)) ||
@@ -628,36 +628,37 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     {
         const auto & core=partition.cores[block_index]; PreparedFixedNeighborBlock prepared;
         prepared.block=block_index; prepared.core_atoms=core.atoms; prepared.affected_rows=core.affected_rows;
-        prepared.profile_atoms.reserve(core.atoms.size()); prepared.profile_rows.reserve(core.affected_rows.size());
+        Indices profile_atoms,profile_rows;
+        profile_atoms.reserve(core.atoms.size()); profile_rows.reserve(core.affected_rows.size());
         for(auto atom:core.atoms)
         {
             const auto position=atom_position.at(static_cast<std::size_t>(atom));
             if(position<0) {out.reason="block-invalid-partition"; return out;}
-            prepared.profile_atoms.push_back(position);
+            profile_atoms.push_back(position);
         }
         for(auto row:core.affected_rows)
         {
             const auto position=row_position.at(static_cast<std::size_t>(row));
             if(position<0) {out.reason="block-invalid-partition"; return out;}
-            prepared.profile_rows.push_back(position);
+            profile_rows.push_back(position);
         }
-        prepared.row_mapping=CompactRowMapping::FromParentRows(prepared.profile_rows);
-        prepared.domain=domain.Select(prepared.profile_atoms,
-            static_cast<Eigen::Index>(prepared.profile_rows.size()),prepared.row_mapping);
+        const auto row_mapping=CompactRowMapping::FromParentRows(profile_rows);
+        prepared.domain=domain.Select(profile_atoms,
+            static_cast<Eigen::Index>(profile_rows.size()),row_mapping);
         std::size_t mapping_entries{},mapping_bytes{};
         const auto support_entries=prepared.domain.atoms.LocalSupportIndexEntries();
         const auto support_bytes=prepared.domain.atoms.LocalSupportIndexBytes();
-        if(!CheckedAddBytes(prepared.row_mapping->parent_rows.size(),prepared.row_mapping->local_rows.size(),mapping_entries) ||
+        if(!CheckedAddBytes(row_mapping->parent_rows.size(),row_mapping->local_rows.size(),mapping_entries) ||
             !CheckedAddBytes(mapping_entries,support_entries,mapping_entries) ||
-            !CheckedAddBytes(prepared.row_mapping->StorageBytes(),support_bytes,mapping_bytes) ||
+            !CheckedAddBytes(row_mapping->StorageBytes(),support_bytes,mapping_bytes) ||
             !CheckedAddBytes(out.prepared_mapping_entries,mapping_entries,out.prepared_mapping_entries) ||
             !CheckedAddBytes(out.prepared_mapping_bytes,mapping_bytes,out.prepared_mapping_bytes))
         {out.memory_estimate.status=MemoryStatus::Overflow; out.memory_estimate.reason="size-overflow";
             out.reason="resource-limit:fixed-neighbor-mapping:size-overflow"; return out;}
         prepared.context=context;
-        prepared.context.atom_ids=context.atom_ids.Select(prepared.profile_atoms);
-        prepared.context.row_ids=context.row_ids.Select(prepared.profile_rows);
-        prepared.local_atoms=static_cast<Eigen::Index>(prepared.profile_atoms.size());
+        prepared.context.atom_ids=context.atom_ids.Select(profile_atoms);
+        prepared.context.row_ids=context.row_ids.Select(profile_rows);
+        prepared.local_atoms=static_cast<Eigen::Index>(profile_atoms.size());
         prepared.context.rank={prepared.domain.rows,2*prepared.local_atoms,prepared.local_atoms};
         prepared.context.linear.rank_relative=prepared.context.rank.Relative(2*prepared.local_atoms);
         // FixedNeighbor performs at most one trusted accepted local update per block visit.

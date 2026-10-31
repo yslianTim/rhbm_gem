@@ -138,6 +138,37 @@ TEST(JointComponentChecksTest, ImmutableComponentViewsMapDomainsWithoutCopyingPr
     check(JointProblem(std::move(observable)));
 }
 
+TEST(JointComponentChecksTest, NestedDomainsOwnMappingsAfterPreparationHandlesExpire)
+{
+    namespace n=rhbm_gem::core::joint_component;
+    std::weak_ptr<const rhbm_gem::core::JointProblemInput> snapshot;
+    std::weak_ptr<const n::CompactRowMapping> component_mapping,block_mapping;
+    const auto local=[&] {
+        auto input=std::make_shared<rhbm_gem::core::JointProblemInput>();
+        input->observations={1,0,2,0,3}; input->atom_ids={"a","b"};
+        input->row_ids={"r0","r1","r2","r3","r4"};
+        input->support={{{0,0},{4,1}},{{2,2},{4,3}}};
+        snapshot=input;
+        const n::Domain root(input);
+        const auto rows=n::CompactRowMapping::FromParentRows({4,2,0});
+        component_mapping=rows;
+        const auto component=root.Select({1,0},3,rows);
+        const auto block_rows=n::CompactRowMapping::FromParentRows({2,0});
+        block_mapping=block_rows;
+        return component.Select({1},2,block_rows);
+    }();
+    EXPECT_FALSE(snapshot.expired());
+    EXPECT_EQ(component_mapping.use_count(),1);
+    EXPECT_EQ(block_mapping.use_count(),1);
+    ASSERT_EQ(local.atoms.size(),1u);
+    EXPECT_EQ(local.atoms.ParentAtom(0),0u);
+    ASSERT_EQ(local.atoms[0].size(),2u);
+    EXPECT_EQ(local.atoms[0][0].row,0);
+    EXPECT_EQ(local.atoms[0][1].row,1);
+    EXPECT_DOUBLE_EQ(local.atoms[0][0].square,0);
+    EXPECT_DOUBLE_EQ(local.atoms[0][1].square,1);
+}
+
 TEST(JointComponentChecksTest, NestedCompactRowsPreserveNoncontiguousAndZeroValuedMemberships)
 {
     using rhbm_gem::core::JointProblem;

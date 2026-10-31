@@ -112,8 +112,7 @@ enum class FixedNeighborStationarityState {NotStationary,CandidateStationary,Con
 struct PreparedFixedNeighborBlock
 {
     std::size_t block{};
-    Indices core_atoms,affected_rows,profile_atoms,profile_rows;
-    std::shared_ptr<const CompactRowMapping> row_mapping;
+    Indices core_atoms,affected_rows;
     Domain domain{0,{}};
     EvaluationContext context;
     Eigen::Index local_atoms{};

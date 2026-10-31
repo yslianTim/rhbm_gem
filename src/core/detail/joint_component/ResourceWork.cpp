@@ -151,18 +151,26 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
         break;
     }
     case MemoryStage::FixedNeighborPreparation:
+    {
         // Each mapping stores sorted parent/local row pairs. The view can also retain
         // one support index per original membership; neither term scales as rows*blocks.
-        ok=AddProduct(temporary,affected,6*sizeof(Eigen::Index)) &&
+        // Profile selectors are scratch for only the current block, not retained by every block.
+        const auto block_rows=shape.maximum_block_rows ? shape.maximum_block_rows : rows;
+        const auto block_atoms=shape.maximum_block_atoms ? shape.maximum_block_atoms : atoms;
+        ok=AddProduct(temporary,affected,5*sizeof(Eigen::Index)) &&
+            AddProduct(temporary,block_rows,sizeof(Eigen::Index)) &&
             AddProduct(temporary,entries,2*sizeof(Eigen::Index)) &&
-            AddProduct(temporary,atoms,2*sizeof(Eigen::Index)) &&
+            AddProduct(temporary,atoms,sizeof(Eigen::Index)) &&
+            AddProduct(temporary,block_atoms,sizeof(Eigen::Index)) &&
             AddProduct(temporary,atoms,sizeof(std::vector<LocalSupportIndex>)) &&
-            AddProduct(temporary,blocks,6*sizeof(std::vector<Eigen::Index>)) &&
+            AddProduct(temporary,blocks,4*sizeof(std::vector<Eigen::Index>)) &&
+            AddProduct(temporary,1,2*sizeof(std::vector<Eigen::Index>)) &&
             AddProduct(temporary,rows,6*sizeof(double)) &&
             AddProduct(temporary,atoms,3*sizeof(double)) &&
             AddProduct(temporary,shape.maximum_block_rows,4*sizeof(double)) &&
             AddProduct(temporary,shape.maximum_block_support_entries,4*(sizeof(double)+sizeof(Eigen::Index)));
         break;
+    }
     case MemoryStage::GlobalStateEvaluation:
     {
         ok=AddProduct(temporary,rows,3*sizeof(double)+sizeof(std::uint8_t)) &&

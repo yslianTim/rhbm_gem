@@ -850,6 +850,19 @@ TEST(JointComponentNumericsTest, MemoryPlannerRetainsNonRankStagesAndLocalBudget
     EXPECT_EQ(conditioning.factor_columns,24);
     EXPECT_EQ(conditioning.budget_bytes,n::JointMemoryPlanningBudgetBytes);
 
+    // Many prepared blocks retain their mappings, but only one profile selector pair is live.
+    n::MemoryShape selectors;
+    selectors.component_atoms=100; selectors.component_observations=100;
+    selectors.component_blocks=100; selectors.component_support_entries=20'000;
+    selectors.affected_row_entries=10'000; selectors.maximum_block_rows=100;
+    selectors.maximum_block_atoms=1; selectors.maximum_block_support_entries=200;
+    const auto compact_preparation=n::PlanMemory(selectors,n::MemoryStage::FixedNeighborPreparation,800'000);
+    EXPECT_EQ(compact_preparation.status,n::MemoryStatus::Pass);
+    auto selector_overflow=selectors;
+    selector_overflow.maximum_block_atoms=std::numeric_limits<std::size_t>::max();
+    EXPECT_EQ(n::PlanMemory(selector_overflow,n::MemoryStage::FixedNeighborPreparation).status,
+        n::MemoryStatus::Overflow);
+
     auto bounded_affected_replay=large;
     bounded_affected_replay.affected_replay_scratch=true;
     bounded_affected_replay.maximum_block_replay_entries=200'000;
