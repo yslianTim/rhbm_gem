@@ -255,10 +255,9 @@ Sparse Design(const Domain & domain,VectorRef eta)
 struct LocalEndpointWorkspace
 {
     Vector eta,beta,effective_response;
-    EvaluationContext context;
 };
 LocalEndpointWorkspace PrepareLocalEndpointWorkspace(const PreparedFixedNeighborBlock & prepared,
-    const BlockCoordinateState & state,const std::optional<double> & eta_upper_bound)
+    const BlockCoordinateState & state)
 {
     LocalEndpointWorkspace out;
     out.eta.resize(prepared.local_atoms); out.beta.resize(2*prepared.local_atoms);
@@ -277,8 +276,6 @@ LocalEndpointWorkspace PrepareLocalEndpointWorkspace(const PreparedFixedNeighbor
         out.effective_response(static_cast<Eigen::Index>(k))=local_core(static_cast<Eigen::Index>(k))-
             state.residual(row);
     }
-    out.context=prepared.context;
-    if(eta_upper_bound) out.context.eta_upper_bound=eta_upper_bound;
     return out;
 }
 double PredictionDifference(VectorRef a,VectorRef b)
@@ -1131,11 +1128,11 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         out.local_conditioning.reserve(prepared_blocks.size());
         for(const auto & prepared:prepared_blocks)
         {
-            auto workspace=PrepareLocalEndpointWorkspace(prepared,out.state,policy.eta_upper_bound);
+            auto workspace=PrepareLocalEndpointWorkspace(prepared,out.state);
             const auto block_id=(policy.component_id.empty() ? std::string("component") : policy.component_id)+
                 "/block-"+std::to_string(prepared.block+1);
             auto conditioning=AssessFixedNeighborLocalConditioning(prepared.domain,workspace.effective_response,
-                workspace.eta,workspace.beta,workspace.context,block_id,
+                workspace.eta,workspace.beta,prepared.context,block_id,
                 out.global_state_memory_estimate.shape.resident_bytes);
             conditioning.evidence.core_atoms.assign(prepared.core_atoms.begin(),prepared.core_atoms.end());
             out.work.local_conditioning_seconds+=conditioning.seconds;
@@ -1265,11 +1262,12 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     if(progress_component && observer)
     {
         const auto maximum_sweeps=policy.maximum_sweeps;
-        policy.production_progress=[&observer,&last_fixed_neighbor_progress,progress_component,maximum_sweeps,context](
+        policy.production_progress=[&observer,&last_fixed_neighbor_progress,progress_component,maximum_sweeps,
+            profile_budget=context.profile_budget](
             const FixedNeighborBlockSweep & sweep) {
             auto event=MakeJointProgressEvent(JointProgressPhase::SearchProgress,*progress_component);
             event.profile_evaluations=static_cast<int>(sweep.profile_evaluations);
-            event.profile_budget=context.profile_budget;
+            event.profile_budget=profile_budget;
             event.accepted_updates=static_cast<int>(sweep.accepted_blocks);
             event.update_budget=static_cast<int>(sweep.block_solves);
             event.elapsed_seconds=sweep.wall_seconds;

@@ -81,12 +81,6 @@ inline JointProgressEvent MakeJointProgressEvent(
 }
 
 inline void NotifyJointProgress(
-    const JointProgressObserver & observer, const JointProgressEvent & event)
-{
-    if (observer) observer(event);
-}
-
-inline void NotifyJointProgress(
     const JointProgressObserver & observer,
     JointProgressPhase phase,
     const JointProgressComponent & component,

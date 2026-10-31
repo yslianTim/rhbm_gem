@@ -802,6 +802,46 @@ TEST(JointFixedNeighborBlockCoordinateTest, UnchangedCandidateSkipsOnlyCandidate
 }
 
 
+TEST(JointFixedNeighborBlockCoordinateTest, PreparedConditioningUsesValidatedContextWidthBound)
+{
+    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    auto context=data.context; context.eta_upper_bound=std::log(.5);
+    n::FixedNeighborPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=40;
+    policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
+    policy.assess_local_conditioning=true; policy.collect_diagnostics=true;
+    const n::Vector eta=n::Vector::Constant(3,std::log(.49));
+    const auto inherited=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,context,policy);
+    policy.eta_upper_bound=context.eta_upper_bound;
+    const auto explicit_bound=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,context,policy);
+    EXPECT_TRUE(BitwiseEqual(inherited.state,explicit_bound.state));
+    EXPECT_EQ(inherited.reason,explicit_bound.reason);
+    EXPECT_EQ(inherited.sweep_count,explicit_bound.sweep_count);
+    ASSERT_EQ(inherited.local_conditioning.size(),3u);
+    ASSERT_EQ(inherited.local_conditioning.size(),explicit_bound.local_conditioning.size());
+    for(std::size_t block=0;block<inherited.local_conditioning.size();++block)
+    {
+        const auto & left=inherited.local_conditioning[block];
+        const auto & right=explicit_bound.local_conditioning[block];
+        EXPECT_EQ(left.active_width_bound_targets,right.active_width_bound_targets);
+        EXPECT_EQ(left.local_projected_width_kkt,right.local_projected_width_kkt);
+        EXPECT_EQ(left.local_widths,right.local_widths);
+    }
+    const auto rejected=[&](std::optional<double> context_bound,std::optional<double> policy_bound,
+        const std::string & reason) {
+        context.eta_upper_bound=context_bound; policy.eta_upper_bound=policy_bound;
+        const auto result=n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,context,policy);
+        EXPECT_EQ(result.reason,reason);
+        EXPECT_EQ(result.block_preparations,0u);
+        EXPECT_EQ(result.state.eta.size(),0);
+    };
+    rejected(std::log(.5),std::log(.6),"invalid-global-width-bound");
+    rejected(std::log(.5),std::numeric_limits<double>::infinity(),"invalid-global-width-bound");
+    rejected(std::numeric_limits<double>::quiet_NaN(),std::log(.5),"invalid-global-width-bound");
+    rejected(std::nullopt,std::nullopt,"invalid-width-upper-bound");
+    rejected(std::numeric_limits<double>::infinity(),std::nullopt,"invalid-width-upper-bound");
+}
+
 TEST(JointFixedNeighborBlockCoordinateTest, ProductionBoundedSearchReleasesTheStartingUpperFace)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));

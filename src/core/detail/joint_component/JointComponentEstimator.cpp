@@ -752,10 +752,9 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         return out;
     }
     const auto component_count=data.partition.components.size();
-    auto bounded_policy=production_policy;
     auto assembly_context=data.context;
-    assembly_context.eta_upper_bound=bounded_policy.eta_upper_bound;
-    auto component_batch=n::OrchestrateFixedNeighborComponents(problem,initial_b,bounded_policy,observer);
+    assembly_context.eta_upper_bound=production_policy.eta_upper_bound;
+    auto component_batch=n::OrchestrateFixedNeighborComponents(problem,initial_b,production_policy,observer);
     out.components=std::move(component_batch.components);
     out.costs.search_seconds+=component_batch.costs.search_seconds;
     out.costs.assessment_seconds+=component_batch.costs.assessment_seconds;
