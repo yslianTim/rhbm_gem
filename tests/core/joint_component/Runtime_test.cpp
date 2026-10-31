@@ -129,12 +129,12 @@ TEST(JointComponentRuntimeTest, ReplayTrustRejectsIndependentDisagreements)
     EXPECT_FALSE(n::CheckReplay(view.domain,y,bad,context).passed);
     const auto independent=n::CheckIndependentReplay(view.domain,y,e,context);
     ASSERT_TRUE(independent.passed);
-    EXPECT_TRUE(n::CheckTrust(view.domain,y,e,context,independent).passed);
+    EXPECT_TRUE(n::CheckTrust(e,independent).passed);
     auto bad_independent=independent;
     bad_independent.passed=false;
     bad_independent.prediction_passed=false;
     bad_independent.reason="independent-replay-disagreement";
-    EXPECT_FALSE(n::CheckTrust(view.domain,y,e,context,bad_independent).passed);
+    EXPECT_FALSE(n::CheckTrust(e,bad_independent).passed);
 }
 
 TEST(JointComponentRuntimeTest, RuntimeConvergenceIsDerivedFromActualEvidenceNotTermination)

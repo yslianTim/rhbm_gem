@@ -39,7 +39,6 @@ struct Profile
 {
     const Domain & domain;
     VectorRef y;
-    double scale;
     const EvaluationContext & context;
     Evaluation cached;
     std::vector<joint_component::Trial> trace;
@@ -132,7 +131,7 @@ struct Profile
         }
         if(proposed && trusted && step.lpNorm<Eigen::Infinity>()>2.302585092994046)
         {
-            const auto prepared=PrepareDerivative(cached,scale,&context);
+            const auto prepared=PrepareDerivative(cached,context.scale,&context);
             const auto differential=ReduceDerivative(prepared,cached.residual);
             if(differential.valid)
             {
@@ -140,7 +139,7 @@ struct Profile
                 if(assessment.available)
                 {
                     row.weak_width_step_fraction=assessment.weak_step_fraction;
-                    const double candidate_objective=cached.certificate.objective/(scale*scale);
+                    const double candidate_objective=cached.certificate.objective/(context.scale*context.scale);
                     const double old_objective=accepted_objective.value_or(candidate_objective);
                     if(RejectWeakWidthTrial(step.lpNorm<Eigen::Infinity>(),assessment.weak_step_fraction,
                         old_objective,candidate_objective))
@@ -175,12 +174,12 @@ struct Profile
         if((eta.array()>*context.eta_upper_bound).any())
         {failure="bounded-step-infeasible"; return -1;}
         if(!Get(eta)) return -1;
-        residual=cached.residual/scale; return 0;
+        residual=cached.residual/context.scale; return 0;
     }
     int linearize(const Vector & eta,const Vector &,Matrix & factor,Vector & response,Vector & norms)
     {
         if(!Get(eta)) return -1;
-        const auto prepared=PrepareDerivative(cached,scale,&context);
+        const auto prepared=PrepareDerivative(cached,context.scale,&context);
         auto differential=ReduceDerivative(prepared,cached.residual); ++derivatives;
         if(!differential.valid)
         {failure=differential.reason; return -1;}
@@ -199,13 +198,12 @@ struct Profile
 SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
     const EvaluationContext & context)
 {
-    EvaluationContext search_context=context;
-    const auto active_eta_max=search_context.eta_upper_bound;
-    Profile profile{domain,y,search_context.scale,search_context,{}, {},0,0,{}, {},{},{},{}};
+    const auto active_eta_max=context.eta_upper_bound;
+    Profile profile{domain,y,context,{}, {},0,0,{}, {},{},{},{}};
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
         lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;
-        lm.parameters.gtol=1e-12; lm.parameters.maxfev=search_context.profile_budget;
+        lm.parameters.gtol=1e-12; lm.parameters.maxfev=context.profile_budget;
         auto status=lm.minimizeInit(eta);
         if(profile.cached.valid)
         {
@@ -215,7 +213,7 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
         if(profile.cached.valid) profile.Accept(eta,0);
         while(status==Eigen::LevenbergMarquardtSpace::NotStarted || status==Eigen::LevenbergMarquardtSpace::Running)
         {
-            if(accepted>=search_context.update_budget) {profile.failure="accepted-update-budget"; break;}
+            if(accepted>=context.update_budget) {profile.failure="accepted-update-budget"; break;}
             const auto before=lm.iterations(); status=lm.minimizeOneStep(eta);
             if(lm.iterations()>before) {++accepted; profile.Accept(eta,accepted);}
         }

@@ -441,10 +441,9 @@ Evaluation EvaluateStateStreaming(const Domain & domain,VectorRef y,const Vector
 }
 TrustEvidence CheckTrust(const Domain & domain,VectorRef y,const Evaluation & e,const EvaluationContext & policy)
 {
-    return CheckTrust(domain,y,e,policy,CheckIndependentReplay(domain,y,e,policy));
+    return CheckTrust(e,CheckIndependentReplay(domain,y,e,policy));
 }
-TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation & e,const EvaluationContext &,
-    const IndependentReplayEvidence & replay)
+TrustEvidence CheckTrust(const Evaluation & e,const IndependentReplayEvidence & replay)
 {
     TrustEvidence out; out.primary_valid=e.valid; out.independent=replay;
     out.prediction_passed=replay.prediction_passed && replay.residual_passed && replay.objective_passed;

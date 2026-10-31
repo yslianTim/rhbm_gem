@@ -156,7 +156,7 @@ struct TrustEvidence
 };
 TrustEvidence CheckReplay(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &);
 TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &);
-TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const EvaluationContext &,const IndependentReplayEvidence &);
+TrustEvidence CheckTrust(const Evaluation &,const IndependentReplayEvidence &);
 struct LmTrial
 {
     Vector accepted_eta,step,diagonal;

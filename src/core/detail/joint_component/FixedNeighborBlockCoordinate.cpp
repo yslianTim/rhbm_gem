@@ -1200,7 +1200,7 @@ FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
     out.assessment.verification_memory_estimate=out.verification_memory_estimate;
     out.assessment.primary_endpoint_seconds=primary_seconds;
     out.assessment.independent_replay_seconds=replay_seconds;
-    out.trust=CheckTrust(domain,y,endpoint,context,replay);
+    out.trust=CheckTrust(endpoint,replay);
     return out;
 }
 
