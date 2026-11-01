@@ -468,3 +468,188 @@ TEST(JointComponentRuntimeTest, WidthRecoveryExhaustionAndUnqualifiedTerminalSta
         }
     }
 }
+
+TEST(JointComponentRuntimeTest, ComponentValidationProvidesReasonWithoutEnteringSearch)
+{
+    const core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=core::JointProblemAccess::Get(problem);
+    EXPECT_TRUE(n::FixedNeighborComponentResult{}.search.reason.empty());
+    for(int variant=0;variant<8;++variant)
+    {
+        SCOPED_TRACE(variant);
+        auto prepared=n::MakeComponentProblemView(data.layout,data.partition.components.front());
+        n::Vector widths=n::Vector::Constant(3,.55);
+        if(variant==0) prepared.local_layout.full_atoms.clear();
+        if(variant==1) prepared.local_layout.informative_rows.clear();
+        if(variant==2) widths(0)=0;
+        if(variant==3) widths(0)=-1;
+        if(variant==4) widths(0)=std::numeric_limits<double>::quiet_NaN();
+        if(variant==5) widths(0)=std::numeric_limits<double>::infinity();
+        if(variant==6) prepared.local_to_parent_atoms[0]=-1;
+        if(variant==7) prepared.local_to_parent_atoms[0]=widths.size();
+        // Empty layouts retain precedence over invalid widths.
+        if(variant<2) widths(0)=0;
+        bool configured{},invoked{};
+        n::FixedNeighborSearchPolicy policy;
+        policy.configure_for_testing=[&](auto &) {configured=true;};
+        policy.observe_search_for_testing=[&](const auto &) {invoked=true;};
+        std::vector<n::JointProgressEvent> events;
+        const n::JointProgressComponent component{1,1,"component",3,prepared.local_to_parent_rows.size()};
+        const auto result=n::SolveFixedNeighborComponent(prepared,widths,data.context,policy,
+            [&](const auto & event) {events.push_back(event);},&component);
+        EXPECT_EQ(result.search.reason,variant<2 ? "unobserved-full-parameters" : "invalid-initial-widths");
+        EXPECT_FALSE(configured); EXPECT_FALSE(invoked); EXPECT_TRUE(events.empty());
+        EXPECT_FALSE(result.succeeded); EXPECT_FALSE(result.search.search_converged);
+        EXPECT_FALSE(result.search.accepted_state_integrity); EXPECT_FALSE(result.search.certification);
+        EXPECT_EQ(result.search.sweep_count,0u); EXPECT_EQ(result.search.state.eta.size(),0);
+        EXPECT_EQ(result.search.memory_estimate.status,n::MemoryStatus::Pass);
+    }
+}
+
+TEST(JointComponentRuntimeTest, ComponentViewPreflightPreservesReasonAndMemoryDiagnostics)
+{
+    const core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=core::JointProblemAccess::Get(problem);
+    for(int variant=0;variant<3;++variant)
+    {
+        SCOPED_TRACE(variant);
+        auto view=data.partition.components.front(); auto layout=data.layout;
+        auto mappings=std::make_shared<n::PartitionMappings>(*view.mappings); view.mappings=mappings;
+        if(variant==0) mappings->row_to_local[0]=-1;
+        if(variant==1) mappings->atom_to_local[0]=-1;
+        // Repeated valid selectors exercise the estimate without allocating the rejected domain.
+        if(variant==2) layout.full_atoms.assign(100000,0);
+        bool configured{},invoked{};
+        n::FixedNeighborSearchPolicy policy;
+        policy.configure_for_testing=[&](auto &) {configured=true;};
+        policy.observe_search_for_testing=[&](const auto &) {invoked=true;};
+        std::vector<n::JointProgressEvent> events;
+        const n::JointProgressComponent component{1,1,view.id,view.atoms.size(),view.rows.size()};
+        const auto result=n::SolveFixedNeighborComponentView(view,layout,n::Vector::Constant(3,.55),
+            data.context,policy,[&](const auto & event) {events.push_back(event);},&component);
+        EXPECT_EQ(result.search.reason,variant==0 ? "block-invalid-partition" : variant==1 ?
+            "resource-limit:fixed-neighbor-preparation:size-overflow" :
+            "resource-limit:fixed-neighbor-preparation:estimated-peak-exceeds-budget");
+        EXPECT_FALSE(configured); EXPECT_FALSE(invoked); EXPECT_TRUE(events.empty());
+        EXPECT_FALSE(result.succeeded); EXPECT_FALSE(result.search.search_converged);
+        EXPECT_FALSE(result.search.accepted_state_integrity); EXPECT_FALSE(result.search.certification);
+        EXPECT_EQ(result.search.sweep_count,0u); EXPECT_EQ(result.search.state.eta.size(),0);
+        const auto & memory=result.search.memory_estimate;
+        EXPECT_EQ(memory.status,variant==0 ? n::MemoryStatus::Pass : variant==1 ?
+            n::MemoryStatus::Overflow : n::MemoryStatus::Reject);
+        if(variant!=0)
+        {
+            EXPECT_EQ(memory.stage,n::MemoryStage::FixedNeighborPreparation);
+            EXPECT_EQ(memory.reason,variant==1 ? "size-overflow" : "estimated-peak-exceeds-budget");
+        }
+        if(variant==2) EXPECT_GT(memory.estimated_peak_bytes,memory.budget_bytes);
+    }
+}
+
+TEST(JointComponentRuntimeTest, ComponentSearchPreflightKeepsValidationOrderAndCertificationEvent)
+{
+    const core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=core::JointProblemAccess::Get(problem);
+    for(int variant=0;variant<5;++variant)
+    {
+        SCOPED_TRACE(variant);
+        auto prepared=n::MakeComponentProblemView(data.layout,data.partition.components.front());
+        n::Vector widths=n::Vector::Constant(3,.55);
+        n::FixedNeighborSearchPolicy policy; policy.eta_upper_bound=std::log(2.2);
+        if(variant==0) policy.eta_upper_bound.reset();
+        if(variant==1) policy.eta_upper_bound=std::numeric_limits<double>::quiet_NaN();
+        if(variant==2) policy.eta_upper_bound=std::numeric_limits<double>::infinity();
+        if(variant==3) widths.setConstant(3);
+        if(variant==4) prepared.row_ids=n::Identities{};
+        int invocations{}; std::string observed_reason;
+        policy.observe_search_for_testing=[&](const auto & search) {++invocations; observed_reason=search.reason;};
+        std::vector<n::JointProgressEvent> events;
+        const n::JointProgressComponent component{1,1,"component",3,prepared.local_to_parent_rows.size()};
+        const auto result=n::SolveFixedNeighborComponent(prepared,widths,data.context,policy,
+            [&](const auto & event) {events.push_back(event);},&component);
+        EXPECT_EQ(result.search.reason,variant==0 ? "invalid-width-upper-bound" : variant<3 ?
+            "invalid-global-width-bound" : variant==3 ? "bounded-initial-width-infeasible" : "block-invalid-partition");
+        EXPECT_EQ(invocations,1); EXPECT_EQ(result.search.reason,observed_reason);
+        EXPECT_FALSE(result.succeeded); EXPECT_FALSE(result.search.search_converged);
+        EXPECT_FALSE(result.search.accepted_state_integrity); EXPECT_FALSE(result.search.certification);
+        EXPECT_EQ(result.search.sweep_count,0u); EXPECT_EQ(result.search.state.eta.size(),0);
+        EXPECT_EQ(result.search.memory_estimate.status,n::MemoryStatus::Pass);
+        ASSERT_EQ(events.size(),1u);
+        EXPECT_EQ(events[0].phase,n::JointProgressPhase::CertificationStarted);
+        EXPECT_EQ(events[0].stop_reason,result.search.reason); EXPECT_FALSE(events[0].trusted_state);
+        EXPECT_FALSE(events[0].fixed_neighbor); EXPECT_FALSE(events[0].accepted_objective);
+    }
+}
+
+TEST(JointComponentRuntimeTest, CanonicalReasonReachesComponentProgressAndCapturedResult)
+{
+    const core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=core::JointProblemAccess::Get(problem);
+    const auto prepared=n::MakeComponentProblemView(data.layout,data.partition.components.front());
+    const std::vector<std::string> reasons{"block-stationary","block-sweep-budget",
+        "block-recovery-sweep-budget","block-recovery-exhausted","block-cache-replay-failed",
+        "block-objective-replay-failed","resource-limit:global-state-evaluation:estimated-peak-exceeds-budget",
+        "block-stationary"};
+    for(std::size_t variant=0;variant<reasons.size();++variant)
+    {
+        SCOPED_TRACE(variant);
+        n::FixedNeighborSearchPolicy policy; policy.eta_upper_bound=std::log(2.2);
+        policy.configure_for_testing=[&](auto & local) {
+            if(variant==1 || variant==2) {local.maximum_sweeps=1; local.nominal_sweeps=0;}
+            if(variant==2 || variant==3)
+            {
+                local.core_atoms=1;
+                local.force_no_trusted_profile_for_testing=[](auto,auto) {return true;};
+            }
+            if(variant==4) local.perturb_sweep_replay_objective_for_testing=true;
+            if(variant==5) local.candidate_fault_for_testing=[](auto,auto,const auto &) {
+                return n::FixedNeighborCandidateFaultForTesting::NaNParameter;
+            };
+            if(variant==6) local.global_state_memory_budget_for_testing=1;
+            if(variant==7) local.certify_endpoint=false;
+        };
+        std::string observed_reason; int invocations{};
+        policy.observe_search_for_testing=[&](const auto & search) {++invocations; observed_reason=search.reason;};
+        std::vector<n::JointProgressEvent> events;
+        const n::JointProgressComponent component{1,1,data.partition.components.front().id,3,
+            prepared.local_to_parent_rows.size()};
+        const auto result=n::SolveFixedNeighborComponent(prepared,n::Vector::Constant(3,.55),data.context,policy,
+            [&](const auto & event) {events.push_back(event);},&component);
+        EXPECT_EQ(invocations,1); EXPECT_EQ(result.search.reason,reasons[variant]);
+        EXPECT_EQ(result.search.reason,observed_reason);
+        const bool qualified=result.search.accepted_state_integrity && result.search.certification &&
+            result.search.certification->qualified();
+        EXPECT_EQ(result.succeeded,result.search.search_converged && qualified);
+        EXPECT_EQ(result.succeeded,variant==0);
+        if(variant==7) {EXPECT_TRUE(result.search.search_converged); EXPECT_FALSE(result.search.certification);}
+        ASSERT_FALSE(events.empty());
+        const auto & certification=events.back();
+        EXPECT_EQ(certification.phase,n::JointProgressPhase::CertificationStarted);
+        EXPECT_EQ(certification.stop_reason,result.search.reason); EXPECT_EQ(certification.trusted_state,qualified);
+        EXPECT_EQ(certification.component_id,component.id); EXPECT_EQ(certification.component_index,component.index);
+        EXPECT_EQ(certification.profile_evaluations,static_cast<int>(result.search.total_profile_evaluations));
+        EXPECT_EQ(certification.accepted_updates,static_cast<int>(result.search.total_accepted_local_updates));
+        EXPECT_EQ(certification.accepted_objective,n::LastFixedNeighborObjective(result.search));
+        EXPECT_EQ(certification.accepted_gradient_inf_norm,n::LastFixedNeighborGradient(result.search));
+        events.clear();
+        const auto fit=n::FitFixedNeighborComponents(problem,{.55,.55,.55},policy,
+            [&](const auto & event) {events.push_back(event);});
+        EXPECT_EQ(invocations,2);
+        ASSERT_EQ(fit.components.size(),1u);
+        EXPECT_EQ(fit.components[0].stop_reason,result.search.reason);
+        EXPECT_EQ(fit.components[0].search_completed,result.succeeded);
+        EXPECT_EQ(core::CaptureJointAnalysisResult(fit).components[0].stop_reason,result.search.reason);
+        std::vector<n::JointProgressPhase> lifecycle;
+        for(const auto & event:events)
+        {
+            if(event.phase==n::JointProgressPhase::SearchProgress) {EXPECT_TRUE(event.stop_reason.empty()); continue;}
+            lifecycle.push_back(event.phase);
+            if(event.phase==n::JointProgressPhase::CertificationStarted || event.phase==n::JointProgressPhase::ComponentCompleted)
+                EXPECT_EQ(event.stop_reason,result.search.reason);
+            else EXPECT_TRUE(event.stop_reason.empty());
+        }
+        EXPECT_EQ(lifecycle,(std::vector<n::JointProgressPhase>{n::JointProgressPhase::SolverConfigured,
+            n::JointProgressPhase::ComponentStarted,n::JointProgressPhase::CertificationStarted,
+            n::JointProgressPhase::ComponentCompleted,n::JointProgressPhase::AssemblyStarted,n::JointProgressPhase::AssemblyCompleted}));
+    }
+}

@@ -770,6 +770,28 @@ TEST(DataObjectPersistenceTest, FixedNeighborFailureEvidenceAndSweepCountsRoundT
     ASSERT_FALSE(component.evidence.empty());
     EXPECT_EQ(component.evidence.back().reason,"reference-disagreement");
 
+    const command_test::ScopedTempDir dir{"joint_terminal_reasons"};
+    rg::DataRepository repository{dir.path()/"reasons.sqlite"};
+    auto model=data_test::MakeModelWithBond();
+    for(const auto * reason:{"unobserved-full-parameters","invalid-initial-widths","block-invalid-partition",
+        "resource-limit:fixed-neighbor-preparation:size-overflow",
+        "resource-limit:fixed-neighbor-preparation:estimated-peak-exceeds-budget",
+        "invalid-width-upper-bound","invalid-global-width-bound","bounded-initial-width-infeasible",
+        "block-stationary","block-sweep-budget","block-hard-sweep-budget","block-recovery-sweep-budget",
+        "block-recovery-exhausted","block-inner-invalid","block-cache-replay-failed",
+        "block-objective-replay-failed","invalid-primary",
+        "resource-limit:endpoint-verification:estimated-peak-exceeds-budget"})
+    {
+        SCOPED_TRACE(reason);
+        auto terminal=result; terminal.components.front().stop_reason=reason;
+        EXPECT_EQ(io::Decode(io::Encode(terminal)).components.front().stop_reason,reason);
+        model->EditAnalysis().SetJointResult(terminal);
+        repository.SaveModel(*model,"reason");
+        const auto loaded=repository.LoadModel("reason");
+        ASSERT_TRUE(loaded->GetAnalysisView().GetJointResult());
+        EXPECT_EQ(loaded->GetAnalysisView().GetJointResult()->components.front().stop_reason,reason);
+    }
+
     auto missing_sweeps=boost::json::parse(io::Encode(result)).as_object();
     auto & saved_component=missing_sweeps.at("components").as_array().front().as_object();
     for(const auto key:{"search_sweeps","first_order_stationarity_sweep",
