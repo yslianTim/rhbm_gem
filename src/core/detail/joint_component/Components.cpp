@@ -209,7 +209,7 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
                 progress_component ? &*progress_component : nullptr);
             accepted_objective=LastFixedNeighborObjective(fit.search);
             accepted_gradient_inf_norm=LastFixedNeighborGradient(fit.search);
-            component.search_completed=fit.succeeded; component.stop_reason=fit.stop_reason;
+            component.search_completed=fit.succeeded; component.stop_reason=fit.search.reason;
             component.search_sweeps=fit.search.sweep_count;
             component.first_order_stationarity_sweep=fit.search.first_order_stationarity_sweep;
             component.confirmed_stationarity_sweep=fit.search.confirmed_stationarity_sweep;
@@ -324,11 +324,11 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
         {out.search.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
             out.search.memory_estimate.status=MemoryStatus::Overflow; out.search.memory_estimate.reason="size-overflow";
             out.search.reason="resource-limit:fixed-neighbor-preparation:size-overflow";
-            out.stop_reason=out.search.reason; return out;}
+            return out;}
     }
     for(const auto row:component_layout.informative_rows)
         if(view.LocalRow(static_cast<Eigen::Index>(row))<0)
-        {out.stop_reason="block-invalid-partition"; out.search.reason=out.stop_reason; return out;}
+        {out.search.reason="block-invalid-partition"; return out;}
     shape.component_support_entries=support_entries; shape.affected_row_entries=support_entries;
     shape.maximum_block_rows=shape.component_observations;
     shape.maximum_block_support_entries=support_entries;
@@ -336,7 +336,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
     {out.search.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
         out.search.memory_estimate.status=MemoryStatus::Overflow; out.search.memory_estimate.reason="size-overflow";
         out.search.reason="resource-limit:fixed-neighbor-preparation:size-overflow";
-        out.stop_reason=out.search.reason; return out;}
+        return out;}
     const auto * input=view.domain.atoms.Storage();
     const auto snapshot=input ? EstimateSnapshotBytes(*input) : std::optional<std::size_t>{0};
     std::size_t resident=snapshot.value_or(0),root_entries{},root_mappings{},view_entries{};
@@ -352,13 +352,13 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
     {out.search.memory_estimate.shape=shape; out.search.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
         out.search.memory_estimate.status=MemoryStatus::Overflow; out.search.memory_estimate.reason="size-overflow";
         out.search.reason="resource-limit:fixed-neighbor-preparation:size-overflow";
-        out.stop_reason=out.search.reason; return out;}
+        return out;}
     shape.resident_bytes=resident;
     out.search.memory_estimate=PlanMemory(shape,MemoryStage::FixedNeighborPreparation);
     if(out.search.memory_estimate.status!=MemoryStatus::Pass)
     {
         out.search.reason="resource-limit:fixed-neighbor-preparation:"+out.search.memory_estimate.reason;
-        out.stop_reason=out.search.reason; return out;
+        return out;
     }
     const auto prepared=MakeComponentProblemView(component_layout,view);
     auto diagnostic_policy=production_policy;

@@ -293,7 +293,7 @@ FixedNeighborFitDiagnostic SolveFixedNeighborComponentForDiagnostics(const Compo
         out.candidate_beta.size()==2*static_cast<Eigen::Index>(view.atoms.size()) &&
         out.candidate_eta.allFinite() && out.candidate_beta.allFinite() && std::isfinite(out.candidate_objective);
     out.search.stopped=!result.search_converged || !endpoint_qualified;
-    out.search.stop_reason=fixed.stop_reason;
+    out.search.stop_reason=result.reason;
     out.search.evaluations=static_cast<int>(result.total_profile_evaluations);
     out.search.accepted=static_cast<int>(result.total_accepted_local_updates);
     if(result.certification) out.assessment=result.certification->assessment;

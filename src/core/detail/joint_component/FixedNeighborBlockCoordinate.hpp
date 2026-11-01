@@ -168,9 +168,9 @@ struct FixedNeighborSearchResult
 
 struct FixedNeighborComponentResult
 {
+    // search.reason is the terminal reason, including failures before Search is entered.
     FixedNeighborSearchResult search;
     bool succeeded{};
-    std::string stop_reason;
 };
 
 FixedNeighborStationarityState ClassifyFixedNeighborStationarity(

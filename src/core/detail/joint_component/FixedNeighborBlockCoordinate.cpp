@@ -1223,13 +1223,13 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     const auto & local_layout=prepared.local_layout;
     if(local_layout.full_atoms.empty() || local_layout.informative_rows.empty())
     {
-        out.stop_reason="unobserved-full-parameters";
+        out.search.reason="unobserved-full-parameters";
         return out;
     }
     for(const auto atom:prepared.local_to_parent_atoms)
         if(atom<0 || atom>=initial_b.size() || !std::isfinite(initial_b(atom)) || !(initial_b(atom)>0))
         {
-            out.stop_reason="invalid-initial-widths"; return out;
+            out.search.reason="invalid-initial-widths"; return out;
         }
 
     Vector local_y(static_cast<Eigen::Index>(prepared.local_to_parent_rows.size()));
@@ -1301,12 +1301,11 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     const bool qualified=out.search.accepted_state_integrity && out.search.certification &&
         out.search.certification->qualified();
     out.succeeded=out.search.search_converged && qualified;
-    out.stop_reason=out.search.reason;
     if(progress_component)
         NotifyJointProgress(observer,JointProgressPhase::CertificationStarted,*progress_component,
             static_cast<int>(out.search.total_profile_evaluations),parent_context.profile_budget,
             static_cast<int>(out.search.total_accepted_local_updates),parent_context.update_budget,
-            out.search.search_seconds,out.stop_reason,qualified,
+            out.search.search_seconds,out.search.reason,qualified,
             LastFixedNeighborObjective(out.search),LastFixedNeighborGradient(out.search),last_fixed_neighbor_progress);
     return out;
 }
