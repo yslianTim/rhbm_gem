@@ -67,3 +67,22 @@ debug detail. Preparation uses `MemoryStage::BcdPreparation` and
 are unchanged. Release build and all three Joint regression groups pass; new
 logger/stage-label assertions pass. The complete capture remains identical to
 P0, including progress values, LM/QR/replay counts and memory estimates.
+
+## P3 persisted contract
+
+Joint Result JSON is schema 23. Solver provenance requires
+`search_method=gauss-seidel-bcd`, `contract_version=joint-solver-provenance-v6`,
+`sparse_backend=EIGEN`, `bcd_core_atoms=12`,
+`bcd_policy_version=gauss-seidel-bcd-production-v1`,
+`bcd_maximum_sweeps=300`, `bcd_order=forward`, and
+`bcd_local_search=active-set-lm`. The historical policy acceptance and nullable
+solver reader paths are removed. Initialization/calibration failures now carry
+the same versioned solver identity and retain their original unstarted-search
+restrictions. SQLite and Stage versions are unchanged. Preparation/mapping
+resource-limit reasons use the BCD prefix.
+
+Release build, 21/21 full CTest tests, provenance round-trip, CLI output, legacy
+method/policy/key and mixed-key rejection, unknown/missing/null field rejection
+and invalid core/sweep/order tests pass. Pre-search failure round-trip retains
+BCD provenance. The eight-case numerical/work/progress capture remains exactly
+identical to P0. No migration, reader fallback or old-policy alias exists.

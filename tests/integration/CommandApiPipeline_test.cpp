@@ -800,8 +800,8 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     EXPECT_LT(std::hypot(target_one[0]-halo_position[0],target_one[1]-halo_position[1],
         target_one[2]-halo_position[2]),2.5);
     ASSERT_TRUE(stored.metadata.solver);
-    EXPECT_EQ(stored.metadata.solver->search_method,"fixed-neighbor");
-    EXPECT_EQ(stored.metadata.solver->fixed_neighbor_local_search,"active-set-lm");
+    EXPECT_EQ(stored.metadata.solver->search_method,"gauss-seidel-bcd");
+    EXPECT_EQ(stored.metadata.solver->bcd_local_search,"active-set-lm");
     const auto calibration=std::find_if(stored.evidence.begin(),stored.evidence.end(),[](const auto & item) {
         return item.name=="global-width-calibration";
     });

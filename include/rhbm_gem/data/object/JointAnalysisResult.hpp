@@ -16,15 +16,15 @@ struct JointSoftwareProvenance
 struct JointSolverProvenance
 {
     std::string search_method;
-    std::optional<std::size_t> fixed_neighbor_core_atoms;
+    std::optional<std::size_t> bcd_core_atoms;
     std::optional<std::string> contract_version;
     std::optional<std::string> sparse_backend;
-    std::optional<std::string> fixed_neighbor_policy_version,fixed_neighbor_order,fixed_neighbor_local_search;
-    std::optional<std::size_t> fixed_neighbor_maximum_sweeps;
+    std::optional<std::string> bcd_policy_version,bcd_order,bcd_local_search;
+    std::optional<std::size_t> bcd_maximum_sweeps;
 };
-inline constexpr std::string_view JointSolverProvenanceContractVersion="joint-solver-provenance-v5";
-inline constexpr std::string_view FixedNeighborPolicyContractVersion="fixed-neighbor-production-v5";
-inline constexpr std::string_view FixedNeighborBoundedLocalSearchName="active-set-lm";
+inline constexpr std::string_view JointSolverProvenanceContractVersion="joint-solver-provenance-v6";
+inline constexpr std::string_view BcdPolicyContractVersion="gauss-seidel-bcd-production-v1";
+inline constexpr std::string_view BcdBoundedLocalSearchName="active-set-lm";
 struct JointAnalysisMetadata
 {
     std::string model_path, map_path;

@@ -323,7 +323,7 @@ BcdComponentResult SolveBcdComponentView(
         if(local<0 || !CheckedAddBytes(support_entries,view.domain.atoms[static_cast<std::size_t>(local)].size(),support_entries))
         {out.search.memory_estimate.stage=MemoryStage::BcdPreparation;
             out.search.memory_estimate.status=MemoryStatus::Overflow; out.search.memory_estimate.reason="size-overflow";
-            out.search.reason="resource-limit:fixed-neighbor-preparation:size-overflow";
+            out.search.reason="resource-limit:bcd-preparation:size-overflow";
             return out;}
     }
     for(const auto row:component_layout.informative_rows)
@@ -335,7 +335,7 @@ BcdComponentResult SolveBcdComponentView(
     if(!CheckedMultiplyBytes(shape.component_atoms,2,shape.component_free_columns))
     {out.search.memory_estimate.stage=MemoryStage::BcdPreparation;
         out.search.memory_estimate.status=MemoryStatus::Overflow; out.search.memory_estimate.reason="size-overflow";
-        out.search.reason="resource-limit:fixed-neighbor-preparation:size-overflow";
+        out.search.reason="resource-limit:bcd-preparation:size-overflow";
         return out;}
     const auto * input=view.domain.atoms.Storage();
     const auto snapshot=input ? EstimateSnapshotBytes(*input) : std::optional<std::size_t>{0};
@@ -351,13 +351,13 @@ BcdComponentResult SolveBcdComponentView(
         !CheckedAddBytes(resident,root_mappings,resident))
     {out.search.memory_estimate.shape=shape; out.search.memory_estimate.stage=MemoryStage::BcdPreparation;
         out.search.memory_estimate.status=MemoryStatus::Overflow; out.search.memory_estimate.reason="size-overflow";
-        out.search.reason="resource-limit:fixed-neighbor-preparation:size-overflow";
+        out.search.reason="resource-limit:bcd-preparation:size-overflow";
         return out;}
     shape.resident_bytes=resident;
     out.search.memory_estimate=PlanMemory(shape,MemoryStage::BcdPreparation);
     if(out.search.memory_estimate.status!=MemoryStatus::Pass)
     {
-        out.search.reason="resource-limit:fixed-neighbor-preparation:"+out.search.memory_estimate.reason;
+        out.search.reason="resource-limit:bcd-preparation:"+out.search.memory_estimate.reason;
         return out;
     }
     const auto prepared=MakeComponentProblemView(component_layout,view);

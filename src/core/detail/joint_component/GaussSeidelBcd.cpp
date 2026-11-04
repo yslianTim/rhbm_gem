@@ -514,34 +514,34 @@ BcdSearchResult SearchBcdComponent(
             !CheckedAddBytes(memory_shape.resident_bytes,planned_metadata,memory_shape.resident_bytes))
         {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::BcdPreparation;
             out.memory_estimate.status=MemoryStatus::Overflow; out.memory_estimate.reason="size-overflow";
-            out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
+            out.reason="resource-limit:bcd-preparation:size-overflow"; return out;}
         const auto structural_estimate=PlanMemory(memory_shape,MemoryStage::BcdPreparation);
         if(structural_estimate.status!=MemoryStatus::Pass)
         {out.memory_estimate=structural_estimate; LogMemoryEstimate(out.memory_estimate);
-            out.reason="resource-limit:fixed-neighbor-preparation:"+out.memory_estimate.reason; return out;}
+            out.reason="resource-limit:bcd-preparation:"+out.memory_estimate.reason; return out;}
         topology.PopulateMetadata(partition);
         if(!PartitionStorageBytes(partition,true,partition_bytes))
         {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::BcdPreparation;
             out.memory_estimate.status=MemoryStatus::Overflow; out.memory_estimate.reason="size-overflow";
-            out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
+            out.reason="resource-limit:bcd-preparation:size-overflow"; return out;}
     }
     catch(const std::overflow_error &)
     {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::BcdPreparation;
         out.memory_estimate.status=MemoryStatus::Overflow; out.memory_estimate.reason="size-overflow";
-        out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
+        out.reason="resource-limit:bcd-preparation:size-overflow"; return out;}
     catch(const std::exception &) {out.reason="block-invalid-partition"; return out;}
     std::size_t resident{};
     if(!CheckedAddBytes(base_resident,partition_bytes,resident))
     {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::BcdPreparation;
         out.memory_estimate.status=MemoryStatus::Overflow; out.memory_estimate.reason="size-overflow";
-        out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
+        out.reason="resource-limit:bcd-preparation:size-overflow"; return out;}
     memory_shape.resident_bytes=resident;
     out.memory_estimate=PlanMemory(memory_shape,MemoryStage::BcdPreparation);
     if(out.memory_estimate.status!=MemoryStatus::Pass ||
         out.memory_estimate.estimated_peak_bytes>out.memory_estimate.budget_bytes/2)
         LogMemoryEstimate(out.memory_estimate);
     if(out.memory_estimate.status!=MemoryStatus::Pass)
-    {out.reason="resource-limit:fixed-neighbor-preparation:"+out.memory_estimate.reason; return out;}
+    {out.reason="resource-limit:bcd-preparation:"+out.memory_estimate.reason; return out;}
     auto global_shape=memory_shape;
     global_shape.affected_replay_scratch=true;
     auto global_resident=resident;
@@ -651,7 +651,7 @@ BcdSearchResult SearchBcdComponent(
             !CheckedAddBytes(out.prepared_mapping_entries,mapping_entries,out.prepared_mapping_entries) ||
             !CheckedAddBytes(out.prepared_mapping_bytes,mapping_bytes,out.prepared_mapping_bytes))
         {out.memory_estimate.status=MemoryStatus::Overflow; out.memory_estimate.reason="size-overflow";
-            out.reason="resource-limit:fixed-neighbor-mapping:size-overflow"; return out;}
+            out.reason="resource-limit:bcd-mapping:size-overflow"; return out;}
         prepared.context=context;
         prepared.context.atom_ids=context.atom_ids.Select(profile_atoms);
         prepared.context.row_ids=context.row_ids.Select(profile_rows);

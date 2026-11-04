@@ -528,8 +528,8 @@ TEST(JointComponentRuntimeTest, ComponentViewPreflightPreservesReasonAndMemoryDi
         const auto result=n::SolveBcdComponentView(view,layout,n::Vector::Constant(3,.55),
             data.context,policy,[&](const auto & event) {events.push_back(event);},&component);
         EXPECT_EQ(result.search.reason,variant==0 ? "block-invalid-partition" : variant==1 ?
-            "resource-limit:fixed-neighbor-preparation:size-overflow" :
-            "resource-limit:fixed-neighbor-preparation:estimated-peak-exceeds-budget");
+            "resource-limit:bcd-preparation:size-overflow" :
+            "resource-limit:bcd-preparation:estimated-peak-exceeds-budget");
         EXPECT_FALSE(configured); EXPECT_FALSE(invoked); EXPECT_TRUE(events.empty());
         EXPECT_FALSE(result.succeeded); EXPECT_FALSE(result.search.search_converged);
         EXPECT_FALSE(result.search.accepted_state_integrity); EXPECT_FALSE(result.search.certification);

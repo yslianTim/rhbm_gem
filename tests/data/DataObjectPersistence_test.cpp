@@ -453,14 +453,14 @@ rg::JointAnalysisResult CurrentJointExample(bool with_halo=true)
     result.metadata.map_normalization=rg::JointMapNormalization{true,true,2.5};
     result.metadata.solver=rg::JointSolverProvenance{};
     auto & solver=*result.metadata.solver;
-    solver.search_method="fixed-neighbor";
-    solver.fixed_neighbor_core_atoms=12;
+    solver.search_method="gauss-seidel-bcd";
+    solver.bcd_core_atoms=12;
     solver.contract_version=std::string(rg::JointSolverProvenanceContractVersion);
     solver.sparse_backend="EIGEN";
-    solver.fixed_neighbor_policy_version=std::string(rg::FixedNeighborPolicyContractVersion);
-    solver.fixed_neighbor_maximum_sweeps=300;
-    solver.fixed_neighbor_order="forward";
-    solver.fixed_neighbor_local_search=std::string(rg::FixedNeighborBoundedLocalSearchName);
+    solver.bcd_policy_version=std::string(rg::BcdPolicyContractVersion);
+    solver.bcd_maximum_sweeps=300;
+    solver.bcd_order="forward";
+    solver.bcd_local_search=std::string(rg::BcdBoundedLocalSearchName);
     result.atom_ids=with_halo ? std::vector<std::string>{"1","2"} : std::vector<std::string>{"1"};
     result.row_ids={"voxel-1","constant"};
     result.fitting_row_ids={"voxel-1"};
@@ -520,13 +520,13 @@ rg::JointAnalysisResult CurrentJointExample(bool with_halo=true)
 rg::JointAnalysisResult SavedJointExample() { return CurrentJointExample(); }
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV22RoundTripsUnqualifiedResult)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV23RoundTripsUnqualifiedResult)
 {
     namespace io=rg::joint_result_io;
     const auto result=CurrentJointExample();
     const auto encoded=io::Encode(result);
     const auto object=boost::json::parse(encoded).as_object();
-    EXPECT_EQ(boost::json::value_to<int>(object.at("schema_version")),22);
+    EXPECT_EQ(boost::json::value_to<int>(object.at("schema_version")),23);
     for(const auto key:{"fixed_halos","layout","legacy_global_rank_evidence","ranks"})
         EXPECT_FALSE(object.contains(key));
     EXPECT_FALSE(object.at("costs").as_object().contains("search_reference_seconds"));
@@ -547,15 +547,15 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV22RoundTripsUnqualifiedResult
     const auto & target=component.at("target_evidence").as_object();
     for(const auto key:{"ranks","atoms","column_scales"}) EXPECT_FALSE(target.contains(key));
     ASSERT_TRUE(decoded.metadata.solver);
-    EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_local_search,rg::FixedNeighborBoundedLocalSearchName);
+    EXPECT_EQ(decoded.metadata.solver->bcd_local_search,rg::BcdBoundedLocalSearchName);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV22RejectsOtherVersionsAndRetiredFields)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV23RejectsOtherVersionsAndRetiredFields)
 {
     namespace io=rg::joint_result_io;
     const auto encoded=io::Encode(CurrentJointExample());
     const auto current=boost::json::parse(encoded).as_object();
-    for(const int version:{3,18,19,20,21,99})
+    for(const int version:{3,18,19,20,21,22,99})
     {
         auto unsupported=current;
         unsupported["schema_version"]=version;
@@ -578,7 +578,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV22RejectsOtherVersionsAndReti
     EXPECT_THROW(io::Decode(boost::json::serialize(retired)),std::invalid_argument);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV22RoundTripsQualifiedTargetWithoutHalo)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV23RoundTripsQualifiedTargetWithoutHalo)
 {
     namespace io=rg::joint_result_io;
     auto result=CurrentJointExample(false);
@@ -604,7 +604,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV22RoundTripsQualifiedTargetWi
     EXPECT_FALSE(decoded.halo_median_reconstruction);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV22RoundTripsGeometryLocalHaloMedian)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV23RoundTripsGeometryLocalHaloMedian)
 {
     namespace io=rg::joint_result_io;
     auto result=CurrentJointExample();
@@ -649,7 +649,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV22RoundTripsGeometryLocalHalo
         std::vector<std::string>{"1"});
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV22PreservesUnavailableAndNullableDiagnostics)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV23PreservesUnavailableAndNullableDiagnostics)
 {
     namespace io=rg::joint_result_io;
     auto unavailable=CurrentJointExample();
@@ -690,7 +690,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV22PreservesUnavailableAndNull
     EXPECT_FALSE(round_trip.components.front().candidate_diagnostic->candidate_objective);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV22RejectsRetiredDiagnosticsAndOldTargetContract)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV23RejectsRetiredDiagnosticsAndOldTargetContract)
 {
     namespace io=rg::joint_result_io;
     const auto current=boost::json::parse(io::Encode(CurrentJointExample())).as_object();
@@ -739,19 +739,28 @@ TEST(DataObjectPersistenceTest, JointResultsRoundTripCopyClearAndReplaceAtomical
     EXPECT_EQ(data_test::CountRows(path,"model_joint_result"),0);
 }
 
-TEST(DataObjectPersistenceTest, JointSolverProvenanceRoundTripsAndMissingFieldRemainsReadable)
+TEST(DataObjectPersistenceTest, JointSolverProvenanceRoundTripsAndMissingFieldIsRejected)
 {
     namespace io=rg::joint_result_io;
     const auto fixed=SavedJointExample();
     const auto decoded=io::Decode(io::Encode(fixed));
     ASSERT_TRUE(decoded.metadata.solver);
-    EXPECT_EQ(decoded.metadata.solver->search_method,"fixed-neighbor");
-    EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_core_atoms,12u);
-    EXPECT_EQ(decoded.metadata.solver->fixed_neighbor_local_search,"active-set-lm");
+    EXPECT_EQ(decoded.metadata.solver->search_method,"gauss-seidel-bcd");
+    EXPECT_EQ(decoded.metadata.solver->bcd_core_atoms,12u);
+    EXPECT_EQ(decoded.metadata.solver->bcd_local_search,"active-set-lm");
+    EXPECT_EQ(decoded.metadata.solver->contract_version,"joint-solver-provenance-v6");
+    EXPECT_EQ(decoded.metadata.solver->bcd_policy_version,"gauss-seidel-bcd-production-v1");
 
     auto old=boost::json::parse(io::Encode(fixed)).as_object();
     old.at("metadata").as_object().erase("solver");
     EXPECT_ANY_THROW(io::Decode(boost::json::serialize(old)));
+
+    old=boost::json::parse(io::Encode(fixed)).as_object();
+    old.at("metadata").as_object()["solver"]=nullptr;
+    EXPECT_ANY_THROW(io::Decode(boost::json::serialize(old)));
+    auto missing=fixed;
+    missing.metadata.solver.reset();
+    EXPECT_THROW(io::Encode(missing),std::invalid_argument);
 }
 
 TEST(DataObjectPersistenceTest, FixedNeighborFailureEvidenceAndSweepCountsRoundTrip)
@@ -774,8 +783,8 @@ TEST(DataObjectPersistenceTest, FixedNeighborFailureEvidenceAndSweepCountsRoundT
     rg::DataRepository repository{dir.path()/"reasons.sqlite"};
     auto model=data_test::MakeModelWithBond();
     for(const auto * reason:{"unobserved-full-parameters","invalid-initial-widths","block-invalid-partition",
-        "resource-limit:fixed-neighbor-preparation:size-overflow",
-        "resource-limit:fixed-neighbor-preparation:estimated-peak-exceeds-budget",
+        "resource-limit:bcd-preparation:size-overflow",
+        "resource-limit:bcd-preparation:estimated-peak-exceeds-budget",
         "invalid-width-upper-bound","invalid-global-width-bound","bounded-initial-width-infeasible",
         "block-stationary","block-sweep-budget","block-hard-sweep-budget","block-recovery-sweep-budget",
         "block-recovery-exhausted","block-inner-invalid","block-cache-replay-failed",
@@ -803,13 +812,13 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
 {
     namespace io=rg::joint_result_io;
     auto fixed=SavedJointExample();
-    rg::JointSolverProvenance fixed_provenance{"fixed-neighbor",12u,std::nullopt};
+    rg::JointSolverProvenance fixed_provenance{"gauss-seidel-bcd",12u,std::nullopt};
     fixed_provenance.contract_version=rg::JointSolverProvenanceContractVersion;
     fixed_provenance.sparse_backend="EIGEN";
-    fixed_provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
-    fixed_provenance.fixed_neighbor_maximum_sweeps=300;
-    fixed_provenance.fixed_neighbor_order="forward";
-    fixed_provenance.fixed_neighbor_local_search="active-set-lm";
+    fixed_provenance.bcd_policy_version=rg::BcdPolicyContractVersion;
+    fixed_provenance.bcd_maximum_sweeps=300;
+    fixed_provenance.bcd_order="forward";
+    fixed_provenance.bcd_local_search="active-set-lm";
     fixed.metadata.solver=fixed_provenance;
     const auto fixed_json=io::Encode(fixed);
     const auto fixed_object=boost::json::parse(fixed_json).as_object();
@@ -817,23 +826,23 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
     downgraded_schema["schema_version"]=7;
     EXPECT_ANY_THROW(io::Decode(boost::json::serialize(downgraded_schema)));
     EXPECT_EQ(fixed_object.at("metadata").as_object().at("solver").as_object()
-        .at("fixed_neighbor_local_search").as_string(),"active-set-lm");
+        .at("bcd_local_search").as_string(),"active-set-lm");
     const auto fixed_decoded=io::Decode(fixed_json);
     ASSERT_TRUE(fixed_decoded.metadata.solver);
     EXPECT_EQ(fixed_decoded.metadata.solver->contract_version,rg::JointSolverProvenanceContractVersion);
     EXPECT_EQ(fixed_decoded.metadata.solver->sparse_backend,"EIGEN");
-    EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_maximum_sweeps,300u);
-    EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_order,"forward");
-    EXPECT_EQ(fixed_decoded.metadata.solver->fixed_neighbor_local_search,"active-set-lm");
+    EXPECT_EQ(fixed_decoded.metadata.solver->bcd_maximum_sweeps,300u);
+    EXPECT_EQ(fixed_decoded.metadata.solver->bcd_order,"forward");
+    EXPECT_EQ(fixed_decoded.metadata.solver->bcd_local_search,"active-set-lm");
 
     auto bounded=fixed;
-    bounded.metadata.solver->fixed_neighbor_local_search="active-set-lm";
+    bounded.metadata.solver->bcd_local_search="active-set-lm";
     const auto bounded_decoded=io::Decode(io::Encode(bounded));
     ASSERT_TRUE(bounded_decoded.metadata.solver);
-    EXPECT_EQ(bounded_decoded.metadata.solver->fixed_neighbor_local_search,"active-set-lm");
+    EXPECT_EQ(bounded_decoded.metadata.solver->bcd_local_search,"active-set-lm");
 
     auto retired_search=boost::json::parse(fixed_json).as_object();
-    retired_search.at("metadata").as_object().at("solver").as_object()["fixed_neighbor_local_search"]=
+    retired_search.at("metadata").as_object().at("solver").as_object()["bcd_local_search"]=
         "legacy-compact";
     EXPECT_THROW(io::Decode(boost::json::serialize(retired_search)),std::invalid_argument);
 }
@@ -842,21 +851,21 @@ TEST(DataObjectPersistenceTest, MalformedCurrentSolverProvenanceIsRejected)
 {
     namespace io=rg::joint_result_io;
     auto fixed=SavedJointExample();
-    rg::JointSolverProvenance provenance{"fixed-neighbor",12u,std::nullopt};
+    rg::JointSolverProvenance provenance{"gauss-seidel-bcd",12u,std::nullopt};
     provenance.contract_version=rg::JointSolverProvenanceContractVersion;
     provenance.sparse_backend="EIGEN";
-    provenance.fixed_neighbor_policy_version=rg::FixedNeighborPolicyContractVersion;
-    provenance.fixed_neighbor_maximum_sweeps=300;
-    provenance.fixed_neighbor_order="forward";
-    provenance.fixed_neighbor_local_search="active-set-lm";
+    provenance.bcd_policy_version=rg::BcdPolicyContractVersion;
+    provenance.bcd_maximum_sweeps=300;
+    provenance.bcd_order="forward";
+    provenance.bcd_local_search="active-set-lm";
     fixed.metadata.solver=provenance;
 
     auto historical=boost::json::parse(io::Encode(fixed)).as_object();
     auto & old_policy=historical.at("metadata").as_object().at("solver").as_object();
-    old_policy["fixed_neighbor_policy_version"]="fixed-neighbor-production-v4";
-    old_policy["fixed_neighbor_maximum_sweeps"]=200;
-    EXPECT_NO_THROW(io::Decode(boost::json::serialize(historical)));
-    old_policy["fixed_neighbor_maximum_sweeps"]=300;
+    old_policy["bcd_policy_version"]="fixed-neighbor-production-v4";
+    old_policy["bcd_maximum_sweeps"]=200;
+    EXPECT_THROW(io::Decode(boost::json::serialize(historical)),std::invalid_argument);
+    old_policy["bcd_maximum_sweeps"]=300;
     EXPECT_THROW(io::Decode(boost::json::serialize(historical)),std::invalid_argument);
 
     auto malformed=boost::json::parse(io::Encode(fixed)).as_object();
@@ -876,8 +885,61 @@ TEST(DataObjectPersistenceTest, MalformedCurrentSolverProvenanceIsRejected)
     EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::invalid_argument);
 
     malformed=boost::json::parse(io::Encode(fixed)).as_object();
-    malformed.at("metadata").as_object().at("solver").as_object()["fixed_neighbor_order"]="sideways";
+    malformed.at("metadata").as_object().at("solver").as_object()["bcd_order"]="sideways";
     EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::invalid_argument);
+}
+
+TEST(DataObjectPersistenceTest, BcdSolverProvenanceRejectsLegacyMixedAndIncompleteContracts)
+{
+    namespace io=rg::joint_result_io;
+    const auto current=boost::json::parse(io::Encode(SavedJointExample())).as_object();
+    const auto reject=[&](const auto & mutate) {
+        auto document=current;
+        mutate(document.at("metadata").as_object().at("solver").as_object());
+        EXPECT_ANY_THROW(io::Decode(boost::json::serialize(document)));
+    };
+    for(const auto * method:{"fixed-neighbor","unknown"})
+        reject([&](auto & solver) {solver["search_method"]=method;});
+    for(const auto * version:{"joint-solver-provenance-v4","joint-solver-provenance-v5","unknown"})
+        reject([&](auto & solver) {solver["contract_version"]=version;});
+    for(const auto * policy:{"fixed-neighbor-production-v4","fixed-neighbor-production-v5","unknown"})
+        reject([&](auto & solver) {solver["bcd_policy_version"]=policy;});
+    for(const auto * key:{"fixed_neighbor_core_atoms","fixed_neighbor_policy_version",
+        "fixed_neighbor_maximum_sweeps","fixed_neighbor_order","fixed_neighbor_local_search"})
+    {
+        SCOPED_TRACE(key);
+        reject([&](auto & solver) {solver[key]=nullptr;}); // Mixed old/new keys.
+    }
+    reject([](auto & solver) {
+        solver["search_method"]="fixed-neighbor";
+        for(const auto * field:{"core_atoms","policy_version","maximum_sweeps","order","local_search"})
+        {
+            const auto value=solver.at(std::string("bcd_")+field);
+            solver.erase(std::string("bcd_")+field);
+            solver[std::string("fixed_neighbor_")+field]=value;
+        }
+    });
+    for(const auto * key:{"search_method","contract_version","sparse_backend","bcd_core_atoms",
+        "bcd_policy_version","bcd_maximum_sweeps","bcd_order","bcd_local_search"})
+    {
+        SCOPED_TRACE(key);
+        reject([&](auto & solver) {solver.erase(key);});
+        reject([&](auto & solver) {solver[key]=nullptr;});
+    }
+    for(const auto * key:{"bcd_core_atoms","bcd_maximum_sweeps"})
+        for(const int value:{-1,0,1,200,301})
+            reject([&](auto & solver) {solver[key]=value;});
+
+    auto unsolved=SavedJointExample();
+    unsolved.components.clear(); unsolved.search_completed=false;
+    unsolved.assembled_state.reset(); unsolved.objective.reset();
+    unsolved.runtime_convergence=rg::JointCheckStatus::Unavailable;
+    unsolved.target_runtime_convergence=rg::JointCheckStatus::NotRun;
+    unsolved.evidence.clear();
+    EXPECT_NO_THROW(io::Decode(io::Encode(unsolved)));
+    auto missing=boost::json::parse(io::Encode(unsolved)).as_object();
+    missing.at("metadata").as_object()["solver"]=nullptr;
+    EXPECT_ANY_THROW(io::Decode(boost::json::serialize(missing)));
 }
 
 TEST(DataObjectPersistenceTest, JointContributorSubsetRoundTripsAndRejectsForeignOrHydrogenIds)
@@ -962,7 +1024,7 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     component.candidate_diagnostic=candidate;
 
     const auto json=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(json.at("schema_version").as_int64(),22);
+    EXPECT_EQ(json.at("schema_version").as_int64(),23);
     const auto & saved_candidate=json.at("components").as_array()[0].at("candidate_diagnostic");
     EXPECT_EQ(saved_candidate.at("candidate_status").as_string(),"uncertified");
     EXPECT_EQ(saved_candidate.at("convergence_criteria_id").as_string(),"practical-v2");

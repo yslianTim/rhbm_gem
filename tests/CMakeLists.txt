@@ -314,12 +314,13 @@ set_tests_properties(rhbm_tests_joint_component_numerical PROPERTIES
     ENVIRONMENT "OMP_NUM_THREADS=1")
 
 set(joint_persistence_test_patterns
-    DataObjectPersistenceTest.JointCurrentSchemaV22*
+    DataObjectPersistenceTest.JointCurrentSchemaV23*
     DataObjectPersistenceTest.JointResultsRoundTripCopyClearAndReplaceAtomically
-    DataObjectPersistenceTest.JointSolverProvenanceRoundTripsAndMissingFieldRemainsReadable
+    DataObjectPersistenceTest.JointSolverProvenanceRoundTripsAndMissingFieldIsRejected
     DataObjectPersistenceTest.FixedNeighborFailureEvidenceAndSweepCountsRoundTrip
     DataObjectPersistenceTest.CurrentFixedNeighborSolverProvenanceRoundTrips
     DataObjectPersistenceTest.MalformedCurrentSolverProvenanceIsRejected
+    DataObjectPersistenceTest.BcdSolverProvenanceRejectsLegacyMixedAndIncompleteContracts
     DataObjectPersistenceTest.JointContributorSubsetRoundTripsAndRejectsForeignOrHydrogenIds
     DataObjectPersistenceTest.JointCodecRejectsMalformedMappingsAndPreservesMissingValues
     DataObjectPersistenceTest.JointMetadataRejectsInvalidValuesAndOldDocumentsWithoutWrites

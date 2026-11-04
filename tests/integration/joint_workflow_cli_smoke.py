@@ -84,34 +84,38 @@ def main() -> int:
                     assert atom["post_joint_local"] is None
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
-        assert saved["schema_version"] == 22
+        assert saved["schema_version"] == 23
         assert saved["parameterization_contract"] == "target-only-pure-halo-support-exclusion-v1"
-        assert saved["metadata"]["solver"]["search_method"] == "fixed-neighbor"
+        assert saved["metadata"]["solver"]["search_method"] == "gauss-seidel-bcd"
         default_solver = saved["metadata"]["solver"]
         assert {key: default_solver[key] for key in (
-            "search_method", "fixed_neighbor_core_atoms",
-            "fixed_neighbor_policy_version", "fixed_neighbor_maximum_sweeps",
-            "fixed_neighbor_order", "fixed_neighbor_local_search",
+            "search_method", "contract_version", "sparse_backend", "bcd_core_atoms",
+            "bcd_policy_version", "bcd_maximum_sweeps",
+            "bcd_order", "bcd_local_search",
         )} == {
-            "search_method": "fixed-neighbor",
-            "fixed_neighbor_core_atoms": 12,
-            "fixed_neighbor_policy_version": "fixed-neighbor-production-v5",
-            "fixed_neighbor_maximum_sweeps": 300,
-            "fixed_neighbor_order": "forward",
-            "fixed_neighbor_local_search": "active-set-lm",
+            "search_method": "gauss-seidel-bcd",
+            "contract_version": "joint-solver-provenance-v6",
+            "sparse_backend": "EIGEN",
+            "bcd_core_atoms": 12,
+            "bcd_policy_version": "gauss-seidel-bcd-production-v1",
+            "bcd_maximum_sweeps": 300,
+            "bcd_order": "forward",
+            "bcd_local_search": "active-set-lm",
         }
         fixed_solver = fixed["metadata"]["solver"]
         assert {key: fixed_solver[key] for key in (
-            "search_method", "fixed_neighbor_core_atoms",
-            "fixed_neighbor_policy_version",
-            "fixed_neighbor_maximum_sweeps", "fixed_neighbor_order", "fixed_neighbor_local_search",
+            "search_method", "contract_version", "sparse_backend", "bcd_core_atoms",
+            "bcd_policy_version",
+            "bcd_maximum_sweeps", "bcd_order", "bcd_local_search",
         )} == {
-            "search_method": "fixed-neighbor",
-            "fixed_neighbor_core_atoms": 12,
-            "fixed_neighbor_policy_version": "fixed-neighbor-production-v5",
-            "fixed_neighbor_maximum_sweeps": 300,
-            "fixed_neighbor_order": "forward",
-            "fixed_neighbor_local_search": "active-set-lm",
+            "search_method": "gauss-seidel-bcd",
+            "contract_version": "joint-solver-provenance-v6",
+            "sparse_backend": "EIGEN",
+            "bcd_core_atoms": 12,
+            "bcd_policy_version": "gauss-seidel-bcd-production-v1",
+            "bcd_maximum_sweeps": 300,
+            "bcd_order": "forward",
+            "bcd_local_search": "active-set-lm",
         }
         assert saved["selection_domain"]["target_indices"] == list(range(25))
         assert saved["selection_domain"]["contributor_policy"] == "pure-halo-support-exclusion-v1"

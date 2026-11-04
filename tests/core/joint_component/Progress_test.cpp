@@ -326,13 +326,13 @@ TEST(JointProgressTest, BoundedSyntheticFitUsesFixedNeighborContract)
     policy.eta_upper_bound=std::log(2.2);
     const auto expected=joint::FitBcdComponents(problem,initial,policy);
 
-    EXPECT_EQ(actual.solver_provenance.search_method, "fixed-neighbor");
-    EXPECT_EQ(actual.solver_provenance.fixed_neighbor_core_atoms, 12u);
-    EXPECT_EQ(actual.solver_provenance.fixed_neighbor_policy_version,
-        rhbm_gem::FixedNeighborPolicyContractVersion);
-    EXPECT_EQ(actual.solver_provenance.fixed_neighbor_maximum_sweeps, 300u);
-    EXPECT_EQ(actual.solver_provenance.fixed_neighbor_order, "forward");
-    EXPECT_EQ(actual.solver_provenance.fixed_neighbor_local_search, "active-set-lm");
+    EXPECT_EQ(actual.solver_provenance.search_method, "gauss-seidel-bcd");
+    EXPECT_EQ(actual.solver_provenance.bcd_core_atoms, 12u);
+    EXPECT_EQ(actual.solver_provenance.bcd_policy_version,
+        rhbm_gem::BcdPolicyContractVersion);
+    EXPECT_EQ(actual.solver_provenance.bcd_maximum_sweeps, 300u);
+    EXPECT_EQ(actual.solver_provenance.bcd_order, "forward");
+    EXPECT_EQ(actual.solver_provenance.bcd_local_search, "active-set-lm");
     EXPECT_EQ(actual.RuntimeConvergence(), expected.RuntimeConvergence());
     ASSERT_TRUE(actual.assembled_state);
     ASSERT_TRUE(expected.assembled_state);
@@ -350,13 +350,13 @@ TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
         [&](const auto & event) { events.push_back(event); });
 
     ASSERT_EQ(fit.components.size(),2u);
-    EXPECT_EQ(fit.solver_provenance.search_method,"fixed-neighbor");
-    EXPECT_EQ(fit.solver_provenance.fixed_neighbor_core_atoms,12u);
-    EXPECT_EQ(fit.solver_provenance.fixed_neighbor_policy_version,
-        rhbm_gem::FixedNeighborPolicyContractVersion);
-    EXPECT_EQ(fit.solver_provenance.fixed_neighbor_maximum_sweeps,300u);
-    EXPECT_EQ(fit.solver_provenance.fixed_neighbor_order,"forward");
-    EXPECT_EQ(fit.solver_provenance.fixed_neighbor_local_search,"active-set-lm");
+    EXPECT_EQ(fit.solver_provenance.search_method,"gauss-seidel-bcd");
+    EXPECT_EQ(fit.solver_provenance.bcd_core_atoms,12u);
+    EXPECT_EQ(fit.solver_provenance.bcd_policy_version,
+        rhbm_gem::BcdPolicyContractVersion);
+    EXPECT_EQ(fit.solver_provenance.bcd_maximum_sweeps,300u);
+    EXPECT_EQ(fit.solver_provenance.bcd_order,"forward");
+    EXPECT_EQ(fit.solver_provenance.bcd_local_search,"active-set-lm");
     ASSERT_TRUE(fit.assembled_state);
     EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(events.front().solver_configuration);

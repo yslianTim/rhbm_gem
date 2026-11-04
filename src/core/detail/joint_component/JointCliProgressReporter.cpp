@@ -129,7 +129,7 @@ void JointCliProgressReporter::OnProgress(const JointProgressEvent & event)
         LogJointInfo("[Joint] Solver | Gauss-Seidel BCD / Variable Projection / Bounded Active-set LM");
         std::ostringstream detail;
         detail << "[Joint] Solver detail | method=gauss-seidel-bcd | sparse=EIGEN | core=" << configuration.bcd_core_atoms
-            << " | local-search=" << FixedNeighborBoundedLocalSearchName;
+            << " | local-search=" << BcdBoundedLocalSearchName;
         Logger::Log(LogLevel::Debug, detail.str());
         return;
     }

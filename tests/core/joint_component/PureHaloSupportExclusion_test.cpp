@@ -563,6 +563,10 @@ TEST(PureHaloSupportExclusionTest, ProductionInitializedEntryRejectsUnavailableC
     }));
     const auto saved=core::CaptureJointAnalysisResult(fit);
     const auto decoded=joint_result_io::Decode(joint_result_io::Encode(saved));
+    ASSERT_TRUE(decoded.metadata.solver);
+    EXPECT_EQ(decoded.metadata.solver->search_method,"gauss-seidel-bcd");
+    EXPECT_EQ(decoded.metadata.solver->contract_version,"joint-solver-provenance-v6");
+    EXPECT_EQ(decoded.metadata.solver->bcd_policy_version,"gauss-seidel-bcd-production-v1");
     EXPECT_FALSE(IsQualifiedJointAnalysisResult(decoded));
     const auto saved_calibration=std::find_if(decoded.evidence.begin(),decoded.evidence.end(),[](const auto & check) {
         return check.name=="global-width-calibration";
@@ -772,20 +776,20 @@ TEST(PureHaloSupportExclusionTest, PersistsVersionedDualDomainAndMedianProvenanc
     snapshot.components.front().search_completed=true;
     snapshot.metadata.solver=JointSolverProvenance{};
     auto & solver=*snapshot.metadata.solver;
-    solver.search_method="fixed-neighbor";
+    solver.search_method="gauss-seidel-bcd";
     solver.contract_version=std::string(JointSolverProvenanceContractVersion);
     solver.sparse_backend="EIGEN";
-    solver.fixed_neighbor_core_atoms=12;
-    solver.fixed_neighbor_policy_version=std::string(FixedNeighborPolicyContractVersion);
-    solver.fixed_neighbor_maximum_sweeps=300;
-    solver.fixed_neighbor_order="forward";
-    solver.fixed_neighbor_local_search=std::string(FixedNeighborBoundedLocalSearchName);
+    solver.bcd_core_atoms=12;
+    solver.bcd_policy_version=std::string(BcdPolicyContractVersion);
+    solver.bcd_maximum_sweeps=300;
+    solver.bcd_order="forward";
+    solver.bcd_local_search=std::string(BcdBoundedLocalSearchName);
     snapshot.evidence.push_back({"global-width-calibration",JointCheckStatus::Passed,
         JointEvidenceScope::AssembledGlobal,.65,2.6,"global-first-stage-p95-k4; qualified-donors=1/1"});
     snapshot.evidence.push_back({"qualified-first-stage-donor-coverage",JointCheckStatus::Passed,
         JointEvidenceScope::AssembledGlobal,1.0,.95,"target-only-qualified-first-stage-widths"});
     const auto encoded=joint_result_io::Encode(snapshot);
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),22);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),23);
     const auto encoded_root=boost::json::parse(encoded).as_object();
     const auto & median_json=encoded_root.at("halo_median_reconstruction").as_object();
     EXPECT_EQ(median_json.at("neighbor_count").as_int64(),4);

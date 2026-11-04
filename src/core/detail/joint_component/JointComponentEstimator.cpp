@@ -37,6 +37,19 @@ std::size_t JointProblemMemoryBudget()
 #endif
     return n::JointMemoryPlanningBudgetBytes;
 }
+JointSolverProvenance BcdSolverProvenance()
+{
+    JointSolverProvenance out;
+    out.search_method="gauss-seidel-bcd";
+    out.contract_version=std::string(JointSolverProvenanceContractVersion);
+    out.sparse_backend="EIGEN";
+    out.bcd_core_atoms=n::ProductionBcdCoreAtoms;
+    out.bcd_policy_version=std::string(BcdPolicyContractVersion);
+    out.bcd_maximum_sweeps=n::ProductionBcdMaximumSweeps;
+    out.bcd_order="forward";
+    out.bcd_local_search=std::string(BcdBoundedLocalSearchName);
+    return out;
+}
 double Seconds(Clock::time_point start) {return std::chrono::duration<double>(Clock::now()-start).count();}
 std::vector<double> Values(const n::Vector & v) {return {v.data(),v.data()+v.size()};}
 bool ValidJointState(const JointState & state,std::size_t atoms)
@@ -642,6 +655,7 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
     const auto & input=problem.Input();
     const auto invalid=[&](std::string reason) {
         JointFitResult out; out.problem=problem; out.initialization=initialization;
+        out.solver_provenance=BcdSolverProvenance();
         out.initialization.valid=false; out.initialization.reason=std::move(reason);
         out.observation_scale=problem.ObservationScale();
         out.available_row_mask.assign(input.observations.size(),false);
@@ -664,6 +678,7 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
     if(!bounded.available)
     {
         JointFitResult out; out.problem=problem; out.initialization=initialization;
+        out.solver_provenance=BcdSolverProvenance();
         out.observation_scale=problem.ObservationScale();
         out.available_row_mask.assign(input.observations.size(),false);
         out.evidence.push_back({"global-width-calibration",JointCheckStatus::Unavailable,
@@ -693,7 +708,6 @@ JointFitResult n::FitBcdComponentsImpl(const JointProblem & problem,const std::v
 {
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
     constexpr auto bcd_core_atoms=n::ProductionBcdCoreAtoms;
-    constexpr auto bcd_maximum_sweeps=n::ProductionBcdMaximumSweeps;
     constexpr auto convergence_criteria=n::PracticalJointConvergenceCriteria;
     if(observer)
     {
@@ -703,22 +717,10 @@ JointFitResult n::FitBcdComponentsImpl(const JointProblem & problem,const std::v
             bcd_core_atoms};
         observer(event);
     }
-    auto provenance=[&] {
-        JointSolverProvenance out;
-        out.search_method="fixed-neighbor";
-        out.contract_version=std::string(JointSolverProvenanceContractVersion);
-        out.sparse_backend="EIGEN";
-        out.fixed_neighbor_core_atoms=bcd_core_atoms;
-        out.fixed_neighbor_policy_version=std::string(FixedNeighborPolicyContractVersion);
-        out.fixed_neighbor_maximum_sweeps=bcd_maximum_sweeps;
-        out.fixed_neighbor_order="forward";
-        out.fixed_neighbor_local_search=std::string(FixedNeighborBoundedLocalSearchName);
-        return out;
-    };
     const auto & data=JointProblemAccess::Get(problem);
     if(data.construction_memory.status!=n::MemoryStatus::Pass)
     {
-        JointFitResult out; out.problem=problem; out.solver_provenance=provenance();
+        JointFitResult out; out.problem=problem; out.solver_provenance=BcdSolverProvenance();
         out.observation_scale=data.context.scale; out.initialization.b=initial_b;
         out.initialization.valid=initial_b.size()==data.domain.atoms.size() &&
             std::all_of(initial_b.begin(),initial_b.end(),[](double b){return std::isfinite(b) && b>0;});
@@ -732,7 +734,7 @@ JointFitResult n::FitBcdComponentsImpl(const JointProblem & problem,const std::v
         return out;
     }
     JointFitResult out; out.problem=problem;
-    out.solver_provenance=provenance();
+    out.solver_provenance=BcdSolverProvenance();
     out.observation_scale=data.context.scale; out.initialization.b=initial_b;
     out.initialization.valid=initial_b.size()==data.domain.atoms.size() &&
         std::all_of(initial_b.begin(),initial_b.end(),[](double b){return std::isfinite(b) && b>0;});

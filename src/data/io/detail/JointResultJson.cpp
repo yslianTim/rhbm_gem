@@ -479,17 +479,16 @@ Object Metadata(const JointAnalysisMetadata & m)
         software=Object{{"version",p.version},{"source_sha256",p.source_sha256},
             {"configuration_sha256",p.configuration_sha256},{"build_sha256",p.build_sha256}};
     }
-    if(m.solver)
     {
         const auto & p=*m.solver;
         solver=Object{{"search_method",p.search_method},
             {"contract_version",OptionalText(p.contract_version)},
             {"sparse_backend",OptionalText(p.sparse_backend)},
-            {"fixed_neighbor_core_atoms",OptionalSize(p.fixed_neighbor_core_atoms)},
-            {"fixed_neighbor_policy_version",OptionalText(p.fixed_neighbor_policy_version)},
-            {"fixed_neighbor_maximum_sweeps",OptionalSize(p.fixed_neighbor_maximum_sweeps)},
-            {"fixed_neighbor_order",OptionalText(p.fixed_neighbor_order)},
-            {"fixed_neighbor_local_search",OptionalText(p.fixed_neighbor_local_search)}};
+            {"bcd_core_atoms",OptionalSize(p.bcd_core_atoms)},
+            {"bcd_policy_version",OptionalText(p.bcd_policy_version)},
+            {"bcd_maximum_sweeps",OptionalSize(p.bcd_maximum_sweeps)},
+            {"bcd_order",OptionalText(p.bcd_order)},
+            {"bcd_local_search",OptionalText(p.bcd_local_search)}};
     }
     return {{"model_path",m.model_path},{"map_path",m.map_path},
         {"grid_size",j::value_from(m.grid_size)},{"grid_spacing",j::value_from(m.grid_spacing)},
@@ -521,21 +520,20 @@ JointAnalysisMetadata ReadMetadata(const Object & m)
         out.software=JointSoftwareProvenance{Read<std::string>(p,"version"),Read<std::string>(p,"source_sha256"),
             Read<std::string>(p,"configuration_sha256"),Read<std::string>(p,"build_sha256")};
     }
-    if(!m.at("solver").is_null())
     {
         const auto & p=m.at("solver").as_object();
-        RequireOnlyKeys(p,{"search_method","contract_version","sparse_backend","fixed_neighbor_core_atoms",
-            "fixed_neighbor_policy_version","fixed_neighbor_maximum_sweeps","fixed_neighbor_order",
-            "fixed_neighbor_local_search"},"unknown current solver provenance field");
+        RequireOnlyKeys(p,{"search_method","contract_version","sparse_backend","bcd_core_atoms",
+            "bcd_policy_version","bcd_maximum_sweeps","bcd_order",
+            "bcd_local_search"},"unknown current solver provenance field");
         JointSolverProvenance solver;
         solver.search_method=Read<std::string>(p,"search_method");
         solver.contract_version=ReadOptionalText(p.at("contract_version"));
         solver.sparse_backend=ReadOptionalText(p.at("sparse_backend"));
-        solver.fixed_neighbor_core_atoms=ReadOptionalSize(p.at("fixed_neighbor_core_atoms"));
-        solver.fixed_neighbor_policy_version=ReadOptionalText(p.at("fixed_neighbor_policy_version"));
-        solver.fixed_neighbor_maximum_sweeps=ReadOptionalSize(p.at("fixed_neighbor_maximum_sweeps"));
-        solver.fixed_neighbor_order=ReadOptionalText(p.at("fixed_neighbor_order"));
-        solver.fixed_neighbor_local_search=ReadOptionalText(p.at("fixed_neighbor_local_search"));
+        solver.bcd_core_atoms=ReadOptionalSize(p.at("bcd_core_atoms"));
+        solver.bcd_policy_version=ReadOptionalText(p.at("bcd_policy_version"));
+        solver.bcd_maximum_sweeps=ReadOptionalSize(p.at("bcd_maximum_sweeps"));
+        solver.bcd_order=ReadOptionalText(p.at("bcd_order"));
+        solver.bcd_local_search=ReadOptionalText(p.at("bcd_local_search"));
         out.solver=std::move(solver);
     }
     return out;
@@ -550,24 +548,18 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
         Require(!p.version.empty() && IsSha256(p.source_sha256) && IsSha256(p.configuration_sha256) &&
             IsSha256(p.build_sha256),"invalid software provenance");
     }
-    if(m.solver)
+    Require(m.solver.has_value(),"missing current BCD solver provenance");
     {
         const auto & p=*m.solver;
-        // Existing saved fits (including the 6CVM baseline) retain their actual policy.
-        const bool historical_fixed_budget=p.fixed_neighbor_policy_version==
-            std::optional<std::string>{"fixed-neighbor-production-v4"} &&
-            p.fixed_neighbor_maximum_sweeps==std::optional<std::size_t>{200};
-        const bool current_budget=p.fixed_neighbor_policy_version==
-            std::optional<std::string>{std::string(FixedNeighborPolicyContractVersion)} &&
-            p.fixed_neighbor_maximum_sweeps==std::optional<std::size_t>{300};
-        Require(p.search_method=="fixed-neighbor" &&
+        Require(p.search_method=="gauss-seidel-bcd" &&
             p.contract_version==std::optional<std::string>{std::string(JointSolverProvenanceContractVersion)} &&
             p.sparse_backend==std::optional<std::string>{"EIGEN"} &&
-            p.fixed_neighbor_core_atoms==std::optional<std::size_t>{12} &&
-            (historical_fixed_budget || current_budget) &&
-            p.fixed_neighbor_order==std::optional<std::string>{"forward"} &&
-            p.fixed_neighbor_local_search==std::optional<std::string>{std::string(FixedNeighborBoundedLocalSearchName)},
-            "invalid current FixedNeighbor provenance");
+            p.bcd_core_atoms==std::optional<std::size_t>{12} &&
+            p.bcd_policy_version==std::optional<std::string>{std::string(BcdPolicyContractVersion)} &&
+            p.bcd_maximum_sweeps==std::optional<std::size_t>{300} &&
+            p.bcd_order==std::optional<std::string>{"forward"} &&
+            p.bcd_local_search==std::optional<std::string>{std::string(BcdBoundedLocalSearchName)},
+            "invalid current BCD provenance");
     }
     if(m.map_normalization)
     {
@@ -817,9 +809,9 @@ void Validate(const JointAnalysisResult & x)
         return found==checks.end() ? nullptr : &*found;
     };
     std::optional<double> width_bound;
-    if(x.metadata.solver)
+    const auto * calibration=evidence(x.evidence,"global-width-calibration");
+    if(calibration && calibration->status==JointCheckStatus::Passed)
     {
-        const auto * calibration=evidence(x.evidence,"global-width-calibration");
         const auto * coverage=evidence(x.evidence,"qualified-first-stage-donor-coverage");
         Require(calibration && calibration->status==JointCheckStatus::Passed && calibration->value &&
             calibration->threshold && *calibration->value>0 &&
@@ -834,7 +826,7 @@ void Validate(const JointAnalysisResult & x)
     }
     else
         Require(!x.search_completed && x.components.empty() && !x.assembled_state && !x.objective,
-            "solver result is missing current provenance");
+            "solver result is missing global width bound provenance");
     const auto validate_bound=[&](const JointState & state) {
         if(width_bound)
             for(double width:state.b)
@@ -983,12 +975,6 @@ JointAnalysisResult DecodeCurrent(const Object & o)
         "runtime_convergence","target_evidence","target_runtime_convergence",
         "halo_median_reconstruction"},"unknown current Joint result field");
     const auto & metadata=o.at("metadata").as_object();
-    if(!metadata.at("solver").is_null())
-    {
-        RequireOnlyKeys(metadata.at("solver").as_object(),{"search_method","contract_version","sparse_backend",
-            "fixed_neighbor_core_atoms","fixed_neighbor_policy_version","fixed_neighbor_maximum_sweeps",
-            "fixed_neighbor_order","fixed_neighbor_local_search"},"unknown current solver provenance field");
-    }
     RequireOnlyKeys(metadata,{"model_path","map_path","grid_size","grid_spacing","origin","simulation",
         "map_normalization","model_sha256","map_sha256","software","solver","units"},
         "unknown current Joint metadata field");
