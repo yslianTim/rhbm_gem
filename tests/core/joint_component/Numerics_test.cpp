@@ -835,7 +835,8 @@ TEST(JointComponentNumericsTest, MemoryPlannerRetainsNonRankStagesAndLocalBudget
     large.maximum_tile_rows=8192; large.resident_bytes=256'000'000;
     const auto construction=n::PlanMemory(large,n::MemoryStage::ProblemConstruction);
     const auto structural=n::PlanMemory(large,n::MemoryStage::StructuralConstruction);
-    const auto preparation=n::PlanMemory(large,n::MemoryStage::FixedNeighborPreparation);
+    const auto preparation=n::PlanMemory(large,n::MemoryStage::BcdPreparation);
+    EXPECT_STREQ(n::MemoryStageName(n::MemoryStage::BcdPreparation),"bcd-preparation");
     const auto state=n::PlanMemory(large,n::MemoryStage::GlobalStateEvaluation);
     const auto endpoint=n::PlanMemory(large,n::MemoryStage::EndpointVerification);
     auto local=large; local.component_free_columns=24;
@@ -856,11 +857,11 @@ TEST(JointComponentNumericsTest, MemoryPlannerRetainsNonRankStagesAndLocalBudget
     selectors.component_blocks=100; selectors.component_support_entries=20'000;
     selectors.affected_row_entries=10'000; selectors.maximum_block_rows=100;
     selectors.maximum_block_atoms=1; selectors.maximum_block_support_entries=200;
-    const auto compact_preparation=n::PlanMemory(selectors,n::MemoryStage::FixedNeighborPreparation,800'000);
+    const auto compact_preparation=n::PlanMemory(selectors,n::MemoryStage::BcdPreparation,800'000);
     EXPECT_EQ(compact_preparation.status,n::MemoryStatus::Pass);
     auto selector_overflow=selectors;
     selector_overflow.maximum_block_atoms=std::numeric_limits<std::size_t>::max();
-    EXPECT_EQ(n::PlanMemory(selector_overflow,n::MemoryStage::FixedNeighborPreparation).status,
+    EXPECT_EQ(n::PlanMemory(selector_overflow,n::MemoryStage::BcdPreparation).status,
         n::MemoryStatus::Overflow);
 
     auto bounded_affected_replay=large;

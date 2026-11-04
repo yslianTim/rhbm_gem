@@ -21,10 +21,10 @@ enum class JointProgressPhase
 
 struct JointSolverConfiguration
 {
-    std::size_t fixed_neighbor_core_atoms{};
+    std::size_t bcd_core_atoms{};
 };
 
-struct JointFixedNeighborProgress
+struct JointBcdProgress
 {
     std::size_t sweep{},maximum_sweeps{},block_solves{},accepted_blocks{},local_accepted_updates{};
     std::size_t profile_evaluations{},unchanged_blocks{},failed_blocks{},recovery_attempts{},recovery_successes{};
@@ -53,7 +53,7 @@ struct JointProgressEvent
     double elapsed_seconds{};
     std::string stop_reason;
     bool trusted_state{};
-    std::optional<JointFixedNeighborProgress> fixed_neighbor;
+    std::optional<JointBcdProgress> bcd;
 };
 
 using JointProgressObserver = std::function<void(const JointProgressEvent &)>;
@@ -93,7 +93,7 @@ inline void NotifyJointProgress(
     bool trusted_state = false,
     std::optional<double> accepted_objective = std::nullopt,
     std::optional<double> accepted_gradient_inf_norm = std::nullopt,
-    std::optional<JointFixedNeighborProgress> fixed_neighbor = std::nullopt)
+    std::optional<JointBcdProgress> bcd = std::nullopt)
 {
     if (!observer) return;
     auto event = MakeJointProgressEvent(phase, component);
@@ -106,7 +106,7 @@ inline void NotifyJointProgress(
     event.trusted_state = trusted_state;
     event.accepted_objective = accepted_objective;
     event.accepted_gradient_inf_norm = accepted_gradient_inf_norm;
-    event.fixed_neighbor = fixed_neighbor;
+    event.bcd = bcd;
     observer(event);
 }
 

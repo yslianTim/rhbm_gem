@@ -512,31 +512,31 @@ BcdSearchResult SearchBcdComponent(
             !CheckedAddBytes(base_resident,topology_bytes,memory_shape.resident_bytes) ||
             !CheckedAddBytes(memory_shape.resident_bytes,core_bytes,memory_shape.resident_bytes) ||
             !CheckedAddBytes(memory_shape.resident_bytes,planned_metadata,memory_shape.resident_bytes))
-        {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
+        {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::BcdPreparation;
             out.memory_estimate.status=MemoryStatus::Overflow; out.memory_estimate.reason="size-overflow";
             out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
-        const auto structural_estimate=PlanMemory(memory_shape,MemoryStage::FixedNeighborPreparation);
+        const auto structural_estimate=PlanMemory(memory_shape,MemoryStage::BcdPreparation);
         if(structural_estimate.status!=MemoryStatus::Pass)
         {out.memory_estimate=structural_estimate; LogMemoryEstimate(out.memory_estimate);
             out.reason="resource-limit:fixed-neighbor-preparation:"+out.memory_estimate.reason; return out;}
         topology.PopulateMetadata(partition);
         if(!PartitionStorageBytes(partition,true,partition_bytes))
-        {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
+        {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::BcdPreparation;
             out.memory_estimate.status=MemoryStatus::Overflow; out.memory_estimate.reason="size-overflow";
             out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
     }
     catch(const std::overflow_error &)
-    {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
+    {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::BcdPreparation;
         out.memory_estimate.status=MemoryStatus::Overflow; out.memory_estimate.reason="size-overflow";
         out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
     catch(const std::exception &) {out.reason="block-invalid-partition"; return out;}
     std::size_t resident{};
     if(!CheckedAddBytes(base_resident,partition_bytes,resident))
-    {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
+    {out.memory_estimate.shape=memory_shape; out.memory_estimate.stage=MemoryStage::BcdPreparation;
         out.memory_estimate.status=MemoryStatus::Overflow; out.memory_estimate.reason="size-overflow";
         out.reason="resource-limit:fixed-neighbor-preparation:size-overflow"; return out;}
     memory_shape.resident_bytes=resident;
-    out.memory_estimate=PlanMemory(memory_shape,MemoryStage::FixedNeighborPreparation);
+    out.memory_estimate=PlanMemory(memory_shape,MemoryStage::BcdPreparation);
     if(out.memory_estimate.status!=MemoryStatus::Pass ||
         out.memory_estimate.estimated_peak_bytes>out.memory_estimate.budget_bytes/2)
         LogMemoryEstimate(out.memory_estimate);
@@ -1258,11 +1258,11 @@ BcdComponentResult SolveBcdComponent(
     policy.assess_local_conditioning=true;
     if(production_policy.configure_for_testing) production_policy.configure_for_testing(policy);
 #endif
-    std::optional<JointFixedNeighborProgress> last_fixed_neighbor_progress;
+    std::optional<JointBcdProgress> last_bcd_progress;
     if(progress_component && observer)
     {
         const auto maximum_sweeps=policy.maximum_sweeps;
-        policy.production_progress=[&observer,&last_fixed_neighbor_progress,progress_component,maximum_sweeps,
+        policy.production_progress=[&observer,&last_bcd_progress,progress_component,maximum_sweeps,
             profile_budget=context.profile_budget](
             const BcdSweepRecord & sweep) {
             auto event=MakeJointProgressEvent(JointProgressPhase::SearchProgress,*progress_component);
@@ -1273,7 +1273,7 @@ BcdComponentResult SolveBcdComponent(
             event.elapsed_seconds=sweep.wall_seconds;
             event.accepted_objective=sweep.objective_after;
             event.accepted_gradient_inf_norm=sweep.global_width_gradient_inf_norm;
-            JointFixedNeighborProgress progress;
+            JointBcdProgress progress;
             progress.sweep=sweep.sweep;
             progress.maximum_sweeps=maximum_sweeps;
             progress.block_solves=sweep.block_solves;
@@ -1289,8 +1289,8 @@ BcdComponentResult SolveBcdComponent(
             progress.width_gradient_inf_norm=sweep.global_width_gradient_inf_norm;
             progress.projected_width_kkt=sweep.projected_width_gradient_inf_norm;
             progress.maximum_target_width=sweep.maximum_target_width;
-            last_fixed_neighbor_progress=progress;
-            event.fixed_neighbor=std::move(progress);
+            last_bcd_progress=progress;
+            event.bcd=std::move(progress);
             observer(event);
         };
     }
@@ -1306,7 +1306,7 @@ BcdComponentResult SolveBcdComponent(
             static_cast<int>(out.search.total_profile_evaluations),parent_context.profile_budget,
             static_cast<int>(out.search.total_accepted_local_updates),parent_context.update_budget,
             out.search.search_seconds,out.search.reason,qualified,
-            LastBcdObjective(out.search),LastBcdGradient(out.search),last_fixed_neighbor_progress);
+            LastBcdObjective(out.search),LastBcdGradient(out.search),last_bcd_progress);
     return out;
 }
 

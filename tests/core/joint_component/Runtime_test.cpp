@@ -539,7 +539,7 @@ TEST(JointComponentRuntimeTest, ComponentViewPreflightPreservesReasonAndMemoryDi
             n::MemoryStatus::Overflow : n::MemoryStatus::Reject);
         if(variant!=0)
         {
-            EXPECT_EQ(memory.stage,n::MemoryStage::FixedNeighborPreparation);
+            EXPECT_EQ(memory.stage,n::MemoryStage::BcdPreparation);
             EXPECT_EQ(memory.reason,variant==1 ? "size-overflow" : "estimated-peak-exceeds-budget");
         }
         if(variant==2) EXPECT_GT(memory.estimated_peak_bytes,memory.budget_bytes);
@@ -577,7 +577,7 @@ TEST(JointComponentRuntimeTest, ComponentSearchPreflightKeepsValidationOrderAndC
         ASSERT_EQ(events.size(),1u);
         EXPECT_EQ(events[0].phase,n::JointProgressPhase::CertificationStarted);
         EXPECT_EQ(events[0].stop_reason,result.search.reason); EXPECT_FALSE(events[0].trusted_state);
-        EXPECT_FALSE(events[0].fixed_neighbor); EXPECT_FALSE(events[0].accepted_objective);
+        EXPECT_FALSE(events[0].bcd); EXPECT_FALSE(events[0].accepted_objective);
     }
 }
 

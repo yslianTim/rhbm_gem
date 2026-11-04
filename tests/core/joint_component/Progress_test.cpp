@@ -136,7 +136,7 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
     ASSERT_FALSE(events.empty());
     EXPECT_EQ(events.front().phase, joint::JointProgressPhase::SolverConfigured);
     ASSERT_TRUE(events.front().solver_configuration);
-    EXPECT_EQ(events.front().solver_configuration->fixed_neighbor_core_atoms,
+    EXPECT_EQ(events.front().solver_configuration->bcd_core_atoms,
         joint::ProductionBcdCoreAtoms);
     EXPECT_EQ(std::count_if(events.begin(), events.end(), [](const auto & event) {
         return event.phase == joint::JointProgressPhase::SolverConfigured;
@@ -159,7 +159,7 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
         int last_accepted = 0;
         std::optional<double> last_search_objective;
         std::optional<double> last_search_gradient;
-        std::optional<joint::JointFixedNeighborProgress> last_fixed_neighbor;
+        std::optional<joint::JointBcdProgress> last_bcd;
         std::size_t total_evaluations{}, total_local_accepted_updates{};
         while (cursor < events.size() && events[cursor].phase == joint::JointProgressPhase::SearchProgress)
         {
@@ -169,19 +169,19 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
             EXPECT_EQ(progress.atom_count, view.atoms.size());
             EXPECT_EQ(progress.row_count, view.rows.size());
             EXPECT_EQ(progress.profile_budget, data.context.profile_budget);
-            if (progress.fixed_neighbor)
+            if (progress.bcd)
             {
-                last_fixed_neighbor = progress.fixed_neighbor;
-                total_evaluations += progress.fixed_neighbor->profile_evaluations;
-                total_local_accepted_updates += progress.fixed_neighbor->local_accepted_updates;
-                EXPECT_EQ(progress.update_budget, static_cast<int>(progress.fixed_neighbor->block_solves));
+                last_bcd = progress.bcd;
+                total_evaluations += progress.bcd->profile_evaluations;
+                total_local_accepted_updates += progress.bcd->local_accepted_updates;
+                EXPECT_EQ(progress.update_budget, static_cast<int>(progress.bcd->block_solves));
                 EXPECT_EQ(progress.profile_evaluations,
-                    static_cast<int>(progress.fixed_neighbor->profile_evaluations));
-                EXPECT_EQ(progress.fixed_neighbor->accepted_blocks + progress.fixed_neighbor->unchanged_blocks +
-                    progress.fixed_neighbor->failed_blocks, progress.fixed_neighbor->block_solves);
-                EXPECT_LE(progress.fixed_neighbor->recovery_successes,
-                    progress.fixed_neighbor->recovery_attempts);
-                EXPECT_GT(progress.fixed_neighbor->maximum_target_width, 0.0);
+                    static_cast<int>(progress.bcd->profile_evaluations));
+                EXPECT_EQ(progress.bcd->accepted_blocks + progress.bcd->unchanged_blocks +
+                    progress.bcd->failed_blocks, progress.bcd->block_solves);
+                EXPECT_LE(progress.bcd->recovery_successes,
+                    progress.bcd->recovery_attempts);
+                EXPECT_GT(progress.bcd->maximum_target_width, 0.0);
             }
             else
             {
@@ -196,7 +196,7 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
             if (progress.accepted_gradient_inf_norm) last_search_gradient = progress.accepted_gradient_inf_norm;
         }
         EXPECT_GT(last_evaluation, 0);
-        if (last_fixed_neighbor)
+        if (last_bcd)
         {
             EXPECT_EQ(total_evaluations, component.profile_evaluations);
             EXPECT_EQ(total_local_accepted_updates, component.accepted_updates);
@@ -217,16 +217,16 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
         EXPECT_EQ(certifying.update_budget, data.context.update_budget);
         EXPECT_EQ(certifying.accepted_objective, last_search_objective);
         EXPECT_EQ(certifying.accepted_gradient_inf_norm, last_search_gradient);
-        if (last_fixed_neighbor)
+        if (last_bcd)
         {
-            ASSERT_TRUE(certifying.fixed_neighbor);
-            EXPECT_EQ(certifying.fixed_neighbor->sweep, last_fixed_neighbor->sweep);
-            EXPECT_EQ(certifying.fixed_neighbor->maximum_sweeps, last_fixed_neighbor->maximum_sweeps);
-            EXPECT_EQ(certifying.fixed_neighbor->profile_evaluations, last_fixed_neighbor->profile_evaluations);
-            EXPECT_EQ(certifying.fixed_neighbor->accepted_blocks, last_fixed_neighbor->accepted_blocks);
-            EXPECT_EQ(certifying.fixed_neighbor->local_accepted_updates, last_fixed_neighbor->local_accepted_updates);
-            EXPECT_EQ(certifying.fixed_neighbor->failed_blocks, last_fixed_neighbor->failed_blocks);
-            EXPECT_DOUBLE_EQ(certifying.fixed_neighbor->objective, last_fixed_neighbor->objective);
+            ASSERT_TRUE(certifying.bcd);
+            EXPECT_EQ(certifying.bcd->sweep, last_bcd->sweep);
+            EXPECT_EQ(certifying.bcd->maximum_sweeps, last_bcd->maximum_sweeps);
+            EXPECT_EQ(certifying.bcd->profile_evaluations, last_bcd->profile_evaluations);
+            EXPECT_EQ(certifying.bcd->accepted_blocks, last_bcd->accepted_blocks);
+            EXPECT_EQ(certifying.bcd->local_accepted_updates, last_bcd->local_accepted_updates);
+            EXPECT_EQ(certifying.bcd->failed_blocks, last_bcd->failed_blocks);
+            EXPECT_DOUBLE_EQ(certifying.bcd->objective, last_bcd->objective);
         }
 
         ASSERT_LT(cursor, events.size());
@@ -269,7 +269,7 @@ std::size_t CountOccurrences(std::string_view text, std::string_view value)
     return count;
 }
 
-joint::JointProgressEvent MakeFixedNeighborEvent(joint::JointProgressPhase phase)
+joint::JointProgressEvent MakeBcdEvent(joint::JointProgressPhase phase)
 {
     joint::JointProgressEvent event;
     event.phase = phase;
@@ -279,7 +279,7 @@ joint::JointProgressEvent MakeFixedNeighborEvent(joint::JointProgressPhase phase
     event.atom_count = 12;
     event.row_count = 80;
     event.elapsed_seconds = 12.5;
-    event.fixed_neighbor = joint::JointFixedNeighborProgress{
+    event.bcd = joint::JointBcdProgress{
         .sweep = 18,
         .maximum_sweeps = 200,
         .block_solves = 8,
@@ -360,9 +360,9 @@ TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
     ASSERT_TRUE(fit.assembled_state);
     EXPECT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(events.front().solver_configuration);
-    EXPECT_EQ(events.front().solver_configuration->fixed_neighbor_core_atoms,12u);
+    EXPECT_EQ(events.front().solver_configuration->bcd_core_atoms,12u);
     ASSERT_TRUE(std::any_of(events.begin(),events.end(),[](const auto & event) {
-        return event.fixed_neighbor && event.fixed_neighbor->sweep>0;
+        return event.bcd && event.bcd->sweep>0;
     }));
     ExpectLifecycle(problem,fit,events);
 }
@@ -433,28 +433,28 @@ TEST(JointProgressTest, InfoProgressIsCompactAndThrottlesAcceptedUpdateRefreshes
     testing::internal::CaptureStderr();
 
     core::detail::JointCliProgressReporter reporter;
-    auto started = MakeFixedNeighborEvent(joint::JointProgressPhase::ComponentStarted);
+    auto started = MakeBcdEvent(joint::JointProgressPhase::ComponentStarted);
     reporter.OnProgress(started);
 
-    auto search = MakeFixedNeighborEvent(joint::JointProgressPhase::SearchProgress);
-    search.fixed_neighbor->accepted_blocks = 4;
+    auto search = MakeBcdEvent(joint::JointProgressPhase::SearchProgress);
+    search.bcd->accepted_blocks = 4;
     reporter.OnProgress(search); // The search phase transition is immediate.
-    search.fixed_neighbor->accepted_blocks = 5;
+    search.bcd->accepted_blocks = 5;
     reporter.OnProgress(search); // A changed accepted count alone is throttled.
     std::this_thread::sleep_for(std::chrono::milliseconds(520));
-    search.fixed_neighbor->accepted_blocks = 6;
+    search.bcd->accepted_blocks = 6;
     reporter.OnProgress(search); // Long-running search refreshes after the interval.
 
-    auto certifying = MakeFixedNeighborEvent(joint::JointProgressPhase::CertificationStarted);
+    auto certifying = MakeBcdEvent(joint::JointProgressPhase::CertificationStarted);
     reporter.OnProgress(certifying); // Phase transitions are immediate.
 
-    auto completed = MakeFixedNeighborEvent(joint::JointProgressPhase::ComponentCompleted);
+    auto completed = MakeBcdEvent(joint::JointProgressPhase::ComponentCompleted);
     completed.stop_reason = "converged";
     completed.trusted_state = true;
     completed.accepted_objective = 1.25;
     reporter.OnProgress(completed);
 
-    auto failed_assembly = MakeFixedNeighborEvent(joint::JointProgressPhase::AssemblyCompleted);
+    auto failed_assembly = MakeBcdEvent(joint::JointProgressPhase::AssemblyCompleted);
     failed_assembly.trusted_state = false;
     reporter.OnProgress(failed_assembly);
 
@@ -489,9 +489,9 @@ TEST(JointProgressTest, DebugProgressRetainsDetailedDiagnostics)
     testing::internal::CaptureStderr();
 
     core::detail::JointCliProgressReporter reporter;
-    reporter.OnProgress(MakeFixedNeighborEvent(joint::JointProgressPhase::ComponentStarted));
-    reporter.OnProgress(MakeFixedNeighborEvent(joint::JointProgressPhase::SearchProgress));
-    auto completed = MakeFixedNeighborEvent(joint::JointProgressPhase::ComponentCompleted);
+    reporter.OnProgress(MakeBcdEvent(joint::JointProgressPhase::ComponentStarted));
+    reporter.OnProgress(MakeBcdEvent(joint::JointProgressPhase::SearchProgress));
+    auto completed = MakeBcdEvent(joint::JointProgressPhase::ComponentCompleted);
     completed.stop_reason = "converged";
     completed.trusted_state = true;
     completed.accepted_objective = 1.25;
@@ -610,6 +610,10 @@ TEST(JointProgressTest, ReportingDoesNotChangeNumericsOrObserverCadence)
     ExpectSameFitNumerics(baseline, debug_fit);
     EXPECT_TRUE(info_stderr.empty());
     EXPECT_TRUE(debug_stderr.empty());
+    EXPECT_NE(info_stdout.find("[Joint] Solver | Gauss-Seidel BCD / Variable Projection / Bounded Active-set LM"),
+        std::string::npos);
+    EXPECT_NE(debug_stdout.find("[Joint] Solver detail | method=gauss-seidel-bcd | sparse=EIGEN | core=12 | local-search=active-set-lm"),
+        std::string::npos);
     EXPECT_EQ(CountOccurrences(info_stdout, " | certifying | sweep="), info_fit.components.size());
     EXPECT_EQ(CountOccurrences(debug_stdout, " | certifying | sweep="), debug_fit.components.size());
     EXPECT_EQ(info_stdout.find(" | certifying | eval="), std::string::npos);
@@ -630,14 +634,14 @@ TEST(JointProgressTest, ReportingDoesNotChangeNumericsOrObserverCadence)
         EXPECT_EQ(baseline_event.profile_evaluations, debug_event.profile_evaluations);
         EXPECT_EQ(baseline_event.accepted_updates, info_event.accepted_updates);
         EXPECT_EQ(baseline_event.accepted_updates, debug_event.accepted_updates);
-        ASSERT_EQ(baseline_event.fixed_neighbor.has_value(), info_event.fixed_neighbor.has_value());
-        ASSERT_EQ(baseline_event.fixed_neighbor.has_value(), debug_event.fixed_neighbor.has_value());
-        if (baseline_event.fixed_neighbor)
+        ASSERT_EQ(baseline_event.bcd.has_value(), info_event.bcd.has_value());
+        ASSERT_EQ(baseline_event.bcd.has_value(), debug_event.bcd.has_value());
+        if (baseline_event.bcd)
         {
-            EXPECT_EQ(baseline_event.fixed_neighbor->sweep, info_event.fixed_neighbor->sweep);
-            EXPECT_EQ(baseline_event.fixed_neighbor->sweep, debug_event.fixed_neighbor->sweep);
-            EXPECT_DOUBLE_EQ(baseline_event.fixed_neighbor->objective, info_event.fixed_neighbor->objective);
-            EXPECT_DOUBLE_EQ(baseline_event.fixed_neighbor->objective, debug_event.fixed_neighbor->objective);
+            EXPECT_EQ(baseline_event.bcd->sweep, info_event.bcd->sweep);
+            EXPECT_EQ(baseline_event.bcd->sweep, debug_event.bcd->sweep);
+            EXPECT_DOUBLE_EQ(baseline_event.bcd->objective, info_event.bcd->objective);
+            EXPECT_DOUBLE_EQ(baseline_event.bcd->objective, debug_event.bcd->objective);
         }
     }
 }

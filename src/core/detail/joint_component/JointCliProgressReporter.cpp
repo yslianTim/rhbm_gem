@@ -69,9 +69,9 @@ void JointCliProgressReporter::ShowProgress(const JointProgressEvent & event, bo
     detail << "[Joint] Progress detail | component=" << event.component_index << '/' << event.component_count
         << " | phase=" << (certifying ? "certification" : "search")
         << " | atoms=" << event.atom_count << " | rows=" << event.row_count;
-    if (event.fixed_neighbor)
+    if (event.bcd)
     {
-        const auto & progress=*event.fixed_neighbor;
+        const auto & progress=*event.bcd;
         output << (certifying ? "certifying" : "searching")
             << " | sweep=" << progress.sweep << '/' << progress.maximum_sweeps
             << " | obj=" << Scientific(progress.objective)
@@ -126,9 +126,9 @@ void JointCliProgressReporter::OnProgress(const JointProgressEvent & event)
     {
         if (!event.solver_configuration) return;
         const auto & configuration = *event.solver_configuration;
-        LogJointInfo("[Joint] Solver | FixedNeighbor / Active-set LM");
+        LogJointInfo("[Joint] Solver | Gauss-Seidel BCD / Variable Projection / Bounded Active-set LM");
         std::ostringstream detail;
-        detail << "[Joint] Solver detail | sparse=EIGEN | core=" << configuration.fixed_neighbor_core_atoms
+        detail << "[Joint] Solver detail | method=gauss-seidel-bcd | sparse=EIGEN | core=" << configuration.bcd_core_atoms
             << " | local-search=" << FixedNeighborBoundedLocalSearchName;
         Logger::Log(LogLevel::Debug, detail.str());
         return;

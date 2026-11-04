@@ -321,7 +321,7 @@ BcdComponentResult SolveBcdComponentView(
     {
         const auto local=view.LocalAtom(static_cast<Eigen::Index>(atom));
         if(local<0 || !CheckedAddBytes(support_entries,view.domain.atoms[static_cast<std::size_t>(local)].size(),support_entries))
-        {out.search.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
+        {out.search.memory_estimate.stage=MemoryStage::BcdPreparation;
             out.search.memory_estimate.status=MemoryStatus::Overflow; out.search.memory_estimate.reason="size-overflow";
             out.search.reason="resource-limit:fixed-neighbor-preparation:size-overflow";
             return out;}
@@ -333,7 +333,7 @@ BcdComponentResult SolveBcdComponentView(
     shape.maximum_block_rows=shape.component_observations;
     shape.maximum_block_support_entries=support_entries;
     if(!CheckedMultiplyBytes(shape.component_atoms,2,shape.component_free_columns))
-    {out.search.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
+    {out.search.memory_estimate.stage=MemoryStage::BcdPreparation;
         out.search.memory_estimate.status=MemoryStatus::Overflow; out.search.memory_estimate.reason="size-overflow";
         out.search.reason="resource-limit:fixed-neighbor-preparation:size-overflow";
         return out;}
@@ -349,12 +349,12 @@ BcdComponentResult SolveBcdComponentView(
         !CheckedAddBytes(view.atoms.capacity(),view.rows.capacity(),view_entries) ||
         !CheckedMultiplyBytes(view_entries,sizeof(Eigen::Index),root_mappings) ||
         !CheckedAddBytes(resident,root_mappings,resident))
-    {out.search.memory_estimate.shape=shape; out.search.memory_estimate.stage=MemoryStage::FixedNeighborPreparation;
+    {out.search.memory_estimate.shape=shape; out.search.memory_estimate.stage=MemoryStage::BcdPreparation;
         out.search.memory_estimate.status=MemoryStatus::Overflow; out.search.memory_estimate.reason="size-overflow";
         out.search.reason="resource-limit:fixed-neighbor-preparation:size-overflow";
         return out;}
     shape.resident_bytes=resident;
-    out.search.memory_estimate=PlanMemory(shape,MemoryStage::FixedNeighborPreparation);
+    out.search.memory_estimate=PlanMemory(shape,MemoryStage::BcdPreparation);
     if(out.search.memory_estimate.status!=MemoryStatus::Pass)
     {
         out.search.reason="resource-limit:fixed-neighbor-preparation:"+out.search.memory_estimate.reason;

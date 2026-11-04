@@ -56,3 +56,14 @@ and test targets build successfully; the eight-case capture is byte-for-byte
 identical to P0. Joint contract, workflow and numerical regression groups pass.
 No compatibility wrappers/aliases were added, and no numerical expressions,
 constants, thresholds or traversal logic changed. `git diff --check` passes.
+
+## P2 progress, logger and memory
+
+Progress uses `JointBcdProgress`, `JointProgressEvent.bcd` and
+`JointSolverConfiguration.bcd_core_atoms`. The logger identifies Gauss-Seidel
+BCD / Variable Projection / Bounded Active-set LM, with a method identifier in
+debug detail. Preparation uses `MemoryStage::BcdPreparation` and
+`bcd-preparation`. Memory formulas and checks, observer cadence and event order
+are unchanged. Release build and all three Joint regression groups pass; new
+logger/stage-label assertions pass. The complete capture remains identical to
+P0, including progress values, LM/QR/replay counts and memory estimates.

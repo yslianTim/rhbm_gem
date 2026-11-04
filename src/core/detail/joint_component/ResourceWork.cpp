@@ -101,7 +101,7 @@ const char * MemoryStageName(MemoryStage stage)
     {
     case MemoryStage::ProblemConstruction: return "problem-construction";
     case MemoryStage::StructuralConstruction: return "structural-construction";
-    case MemoryStage::FixedNeighborPreparation: return "fixed-neighbor-preparation";
+    case MemoryStage::BcdPreparation: return "bcd-preparation";
     case MemoryStage::GlobalStateEvaluation: return "global-state-evaluation";
     case MemoryStage::EndpointVerification: return "endpoint-verification";
     case MemoryStage::LocalConditioning: return "local-conditioning";
@@ -150,7 +150,7 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
             AddProduct(temporary,atoms,sizeof(Eigen::Index));
         break;
     }
-    case MemoryStage::FixedNeighborPreparation:
+    case MemoryStage::BcdPreparation:
     {
         // Each mapping stores sorted parent/local row pairs. The view can also retain
         // one support index per original membership; neither term scales as rows*blocks.
