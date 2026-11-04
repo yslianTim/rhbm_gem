@@ -101,9 +101,72 @@ Variable Projection, Constrained A/C Active-set QR, Bounded Active-set LM and
 schema 23. Source links point to the renamed files. The only remaining old
 method/key strings are seven lines of explicit rejection data in the persistence
 test. Production code and developer documentation contain no old algorithm
-names. Legitimate neighbor/support/peeling concepts retain their names.
+names. Legitimate neighbor/support/peeling concepts retain their names. A
+case-insensitive scan also finds the second-stage offset-fit diagnostic at
+`src/core/detail/second_stage/JointFitting.cpp:316`; it describes subtracting an
+actual fixed neighbor's response and is intentionally unchanged.
 
 An audit of all 256 production C++ files found that, after exact declared
 identifier/string substitutions and comment removal, every file except the
 provenance assembly, Joint JSON validator and schema constants is unchanged.
 Those three differences implement only the new persisted contract.
+
+## Numerical baseline comparison
+
+The final Release capture with Python bindings enabled is byte-for-byte equal
+to P0 (same SHA-256, length and line count). Both direct search and component
+assembly/progress were captured. The following values are identical before
+and after; KKT columns are the final sweep's A/C and projected Width values.
+
+| Case | Objective | A/C KKT | Width KKT | Sweeps | Accepted updates | Profiles | Recovery success/attempt |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Single block | 2.0199078132865863e-10 | 3.8857805861880479e-16 | 4.0945025148175773e-13 | 3 | 3 | 6 | 0/0 |
+| Three forward blocks | 2.0199079006559097e-10 | 3.1542578549093037e-09 | 1.1782208542143735e-10 | 6 | 18 | 36 | 0/0 |
+| Active width upper bound | 2.0254002647560009e-10 | 3.3306690738754696e-16 | 1.1102230246251565e-16 | 2 | 2 | 4 | 0/0 |
+| Nominal sweep limit | 2.0958526701391608e-10 | 2.9403302566066714e-06 | 1.0939575745272379e-07 | 4 | 12 | 24 | 0/0 |
+| Failed-block recovery | 1.7934999880322473e-10 | 1.7828503395822537e-08 | 8.1889350855846033e-10 | 5 | 9 | 20 | 1/1 |
+| Adaptive extension | 8.9386328233049828e-11 | 7.2592128419479707e-09 | 6.9365724275627372e-10 | 34 | 68 | 136 | 0/0 |
+| Memory rejection | unavailable | unavailable | unavailable | 0 | 0 | 0 | 0/0 |
+| Hard sweep cap | 8.938746938111263e-11 | 3.0175387077946425e-08 | 2.883422611787978e-09 | 31 | 62 | 124 | 0/0 |
+
+All A/B/C, prediction/residual and objective bit patterns are unchanged, as are
+block acceptance decisions, termination reasons, qualification, independent
+replay, runtime convergence, width bounds, observer events and deterministic
+workspace estimates. The active-bound case retains one active width bound.
+Subproblem/profile/damping-QR/replay counts are unchanged; no extra block
+solve, replay or dense workspace was introduced. No numerical tolerance or
+convergence threshold changed. Timing was not used as an equivalence criterion.
+
+## P5 final verification
+
+| Check | Result |
+| --- | --- |
+| Release build, existing preset, Python bindings enabled | Passed |
+| Release full CTest | 23/23 passed, 0 failed (36.10 s) |
+| Debug build, existing preset | Passed |
+| Debug full CTest with local runner time allowance | 21/21 passed, 0 failed (392.83 s) |
+| GoogleTest registration coverage, both configurations | 1061 enabled / 1061 uniquely covered, 0 missing |
+| Repository lint | Passed |
+| Installed C++ consumer build, public API, JSON/SQLite round-trip | Passed |
+| Eight-case numerical/work/progress capture | Exact P0 byte equality |
+| Renamed includes / GitHub source links | No unresolved dependencies |
+| Diff whitespace check | Passed |
+
+The first Debug CTest run passed 20/21 groups and hit the existing 180-second
+runner timeout in the numerical group, without an assertion failure. For the
+complete rerun, only that group's generated `build/debug/tests/CTestTestfile.cmake`
+TIMEOUT was temporarily raised from 180 to 1800 seconds. All 107 numerical
+GoogleTests passed in 233.47 seconds; the 300-atom full Replay audit alone took
+199.258 seconds. The generated file was restored afterward. No repository
+timeout, compiler flag, test data, numerical expectation or tolerance changed.
+
+The installed consumer fixture also required complete BCD provenance and had
+a stale schema-21 assertion. It now uses schema 23, verifies method/contract
+identity, and round-trips the current policy through the installed public API
+and SQLite. The strict reader was retained.
+
+All checks ran on macOS with AppleClang 21.0.0.21000334. No Linux/Windows or
+external real-map data run is claimed. Builds were limited to four jobs; tests
+were sequential with at most four runtime threads. No new dependency, branch
+or worktree was introduced, and Notion was not accessed. External Notion links
+to renamed source files may need a separate update by their owners.

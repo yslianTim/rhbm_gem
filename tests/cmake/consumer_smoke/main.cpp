@@ -54,11 +54,23 @@ int main()
         JointPureHaloSupportExclusionProvenance{1, 1, 0, 0, 0, 0};
     result.metadata.software = JointSoftwareProvenance{
         "consumer-smoke", std::string(64, '0'), std::string(64, '0'), std::string(64, '0')};
+    result.metadata.solver = JointSolverProvenance{};
+    auto & solver = *result.metadata.solver;
+    solver.search_method = "gauss-seidel-bcd";
+    solver.contract_version = std::string(JointSolverProvenanceContractVersion);
+    solver.sparse_backend = "EIGEN";
+    solver.bcd_core_atoms = 12;
+    solver.bcd_policy_version = std::string(BcdPolicyContractVersion);
+    solver.bcd_maximum_sweeps = 300;
+    solver.bcd_order = "forward";
+    solver.bcd_local_search = std::string(BcdBoundedLocalSearchName);
 
     WriteJointAnalysisResult(result, "consumer-joint.json", "consumer-joint.csv");
     std::ifstream json("consumer-joint.json");
     const std::string payload((std::istreambuf_iterator<char>(json)), {});
-    if (payload.find("\"schema_version\":21") == std::string::npos ||
+    if (payload.find("\"schema_version\":23") == std::string::npos ||
+        payload.find("\"search_method\":\"gauss-seidel-bcd\"") == std::string::npos ||
+        payload.find("joint-solver-provenance-v6") == std::string::npos ||
         payload.find("target-only-pure-halo-support-exclusion-v1") == std::string::npos)
         return 3;
 
@@ -75,6 +87,8 @@ int main()
     const auto loaded = repository.LoadModel("consumer");
     const auto & loaded_result = loaded->GetAnalysisView().GetJointResult();
     if (!loaded_result || loaded_result->atom_ids != result.atom_ids ||
+        !loaded_result->metadata.solver ||
+        loaded_result->metadata.solver->bcd_policy_version != BcdPolicyContractVersion ||
         IsQualifiedJointAnalysisResult(*loaded_result))
         return 4;
 
