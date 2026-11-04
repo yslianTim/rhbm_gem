@@ -262,11 +262,11 @@ void AddTargetEvidence(JointFitResult & fit)
         conditioning,JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
     fit.costs.assessment_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
 }
-JointFitResult FitFixedNeighborComponents(const JointProblem & problem,const std::vector<double> & b,
-    const FixedNeighborSearchPolicy & policy,
+JointFitResult FitBcdComponents(const JointProblem & problem,const std::vector<double> & b,
+    const BcdExecutionPolicy & policy,
     const JointProgressObserver & observer)
 {
-    auto out=FitFixedNeighborComponentsImpl(problem,b,policy,observer);
+    auto out=FitBcdComponentsImpl(problem,b,policy,observer);
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
     const auto & input=problem.Input();
     if(input.selection_domain) AddTargetEvidence(out);

@@ -30,7 +30,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/joint_component/WidthCalibration.cpp
     core/detail/joint_component/ResourceWork.cpp
     core/detail/joint_component/StructuralPartition.cpp
-    core/detail/joint_component/FixedNeighborBlockCoordinate.cpp
+    core/detail/joint_component/GaussSeidelBcd.cpp
     core/detail/joint_component/Search.cpp
     core/detail/joint_component/Components.cpp
     core/detail/joint_component/TargetEvidence.cpp

@@ -229,7 +229,7 @@ TEST(HaloMedianReconstructionTest, FullModelConditioningGuardsZeroContributionWi
         JointProblem target(std::move(input));
         const auto & data=JointProblemAccess::Get(target);
         n::Vector eta=n::Vector::Constant(1,std::log(.7)),beta(2); beta<<0.,charge;
-        auto block=n::AssessFixedNeighborLocalConditioning(data.domain,data.y,eta,beta,
+        auto block=n::AssessBcdLocalConditioning(data.domain,data.y,eta,beta,
             data.context,"test/block-1").evidence;
         block.core_atoms={0};
         if(charge==0) EXPECT_EQ(block.conditioning_classification,"Singular");

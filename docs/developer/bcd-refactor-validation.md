@@ -46,3 +46,13 @@ Timing and measured RSS were excluded. No probe is compiled into production.
 
 Baseline capture: 764 lines, 858826 bytes, SHA-256
 `aa45a5e4256345c1410b087fd44a9844140e0629497ac5c4a4e103e498c973dc`.
+
+## P1 core naming
+
+Renamed the core source/header, budget, policy, search/component/sweep records,
+endpoint certification, conditioning entrypoint and test instrumentation.
+Search and execution policy responsibilities are unchanged. Release production
+and test targets build successfully; the eight-case capture is byte-for-byte
+identical to P0. Joint contract, workflow and numerical regression groups pass.
+No compatibility wrappers/aliases were added, and no numerical expressions,
+constants, thresholds or traversal logic changed. `git diff --check` passes.

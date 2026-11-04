@@ -137,7 +137,7 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
     EXPECT_EQ(events.front().phase, joint::JointProgressPhase::SolverConfigured);
     ASSERT_TRUE(events.front().solver_configuration);
     EXPECT_EQ(events.front().solver_configuration->fixed_neighbor_core_atoms,
-        joint::ProductionFixedNeighborCoreAtoms);
+        joint::ProductionBcdCoreAtoms);
     EXPECT_EQ(std::count_if(events.begin(), events.end(), [](const auto & event) {
         return event.phase == joint::JointProgressPhase::SolverConfigured;
     }), 1);
@@ -322,9 +322,9 @@ TEST(JointProgressTest, BoundedSyntheticFitUsesFixedNeighborContract)
     const std::vector<double> initial{.55, .55};
     const auto actual=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(
         problem,initial,2.2);
-    auto policy=joint::FixedNeighborSearchPolicy{};
+    auto policy=joint::BcdExecutionPolicy{};
     policy.eta_upper_bound=std::log(2.2);
-    const auto expected=joint::FitFixedNeighborComponents(problem,initial,policy);
+    const auto expected=joint::FitBcdComponents(problem,initial,policy);
 
     EXPECT_EQ(actual.solver_provenance.search_method, "fixed-neighbor");
     EXPECT_EQ(actual.solver_provenance.fixed_neighbor_core_atoms, 12u);
@@ -343,10 +343,10 @@ TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
 {
     const core::JointProblem problem(MakeInput());
     const std::vector<double> initial{.55, .55};
-    auto policy=joint::FixedNeighborSearchPolicy{};
+    auto policy=joint::BcdExecutionPolicy{};
     policy.eta_upper_bound=std::log(2.2);
     std::vector<joint::JointProgressEvent> events;
-    const auto fit=joint::FitFixedNeighborComponents(problem,initial,policy,
+    const auto fit=joint::FitBcdComponents(problem,initial,policy,
         [&](const auto & event) { events.push_back(event); });
 
     ASSERT_EQ(fit.components.size(),2u);
@@ -373,9 +373,9 @@ TEST(JointProgressTest, ObservableComponentsUseTheSameLifecycle)
     const std::vector<double> initial{.55};
     std::vector<joint::JointProgressEvent> events;
     const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
-    auto policy=joint::FixedNeighborSearchPolicy{};
+    auto policy=joint::BcdExecutionPolicy{};
     policy.eta_upper_bound=std::log(2.2);
-    const auto fit=joint::FitFixedNeighborComponents(problem,initial,policy,observer);
+    const auto fit=joint::FitBcdComponents(problem,initial,policy,observer);
     ASSERT_TRUE(fit.assembled_state);
     ExpectLifecycle(problem,fit,events);
 }
@@ -576,7 +576,7 @@ TEST(JointProgressTest, ReportingDoesNotChangeNumericsOrObserverCadence)
     const core::JointProblem problem(MakeInput());
     const std::vector<double> initial{.55, .55};
     const auto previous_level = Logger::GetLogLevel();
-    auto policy=joint::FixedNeighborSearchPolicy{};
+    auto policy=joint::BcdExecutionPolicy{};
     policy.eta_upper_bound=std::log(2.2);
     const auto run = [&](LogLevel level, bool report) {
         Logger::SetLogLevel(level);
@@ -590,7 +590,7 @@ TEST(JointProgressTest, ReportingDoesNotChangeNumericsOrObserverCadence)
             events.push_back(event);
             if (report) reporter.OnProgress(event);
         };
-        const auto fit=joint::FitFixedNeighborComponents(problem,initial,policy,observer);
+        const auto fit=joint::FitBcdComponents(problem,initial,policy,observer);
         const auto stdout_text = testing::internal::GetCapturedStdout();
         const auto stderr_text = testing::internal::GetCapturedStderr();
         return std::tuple{fit, std::move(events), stdout_text, stderr_text};

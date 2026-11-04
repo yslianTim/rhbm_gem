@@ -907,14 +907,14 @@ TEST(PureHaloSupportExclusionTest, ExtendedSearchQualifiesAssemblyAndFeedsEveryD
         const auto calibration=n::CalibrateGlobalWidth(initialization,"extension-workflow-test");
         const auto bounded=n::MakeBoundedInitialization(initialization,calibration);
         ASSERT_TRUE(bounded.available)<<bounded.reason;
-        n::FixedNeighborSearchPolicy policy; policy.eta_upper_bound=calibration.eta_max4;
+        n::BcdExecutionPolicy policy; policy.eta_upper_bound=calibration.eta_max4;
         policy.configure_for_testing=[](auto & local) {
             local.core_atoms=1; local.nominal_sweeps=35; local.maximum_sweeps=100;
         };
         policy.observe_search_for_testing=[](const auto & search) {
             maximum_sweeps=std::max(maximum_sweeps,search.sweep_count);
         };
-        auto extended=n::FitFixedNeighborComponents(*fit.problem,bounded.widths,policy);
+        auto extended=n::FitBcdComponents(*fit.problem,bounded.widths,policy);
         extended.initialization=std::move(initialization);
         for(const auto & check:fit.evidence)
             if(check.name=="global-width-calibration" || check.name=="qualified-first-stage-donor-coverage")

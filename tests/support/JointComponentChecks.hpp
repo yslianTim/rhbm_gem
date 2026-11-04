@@ -9,7 +9,7 @@ namespace rhbm_gem::core {class JointProblem; struct JointFitResult;}
 namespace second_stage_test::matched::joint_abc {
 rhbm_gem::core::JointFitResult FitBoundedJointComponentsForTesting(
     const rhbm_gem::core::JointProblem &,const std::vector<double> & initial_widths,double maximum_width);
-struct FixedNeighborFitDiagnostic
+struct BcdFitDiagnostic
 {
     runtime::SearchResult search;
     runtime::Vector candidate_eta,candidate_beta;
@@ -33,9 +33,9 @@ Evaluation ComponentEvaluation(const Evaluation &, const ComponentView &);
 Differential DifferentiatePartitioned(const Evaluation &, const ComponentPartition &, const EvaluationContext &);
 boost::json::object SameState(const Domain &, const Eigen::VectorXd &, const Eigen::VectorXd & eta,
     const Eigen::VectorXd & beta, const ComponentPartition &, const EvaluationContext &);
-runtime::FixedNeighborComponentResult SolveFixedNeighborComponentForTesting(const ComponentView &,
+runtime::BcdComponentResult SolveBcdComponentForTesting(const ComponentView &,
     const Eigen::VectorXd & parent_initial_b, const EvaluationContext &);
-FixedNeighborFitDiagnostic SolveFixedNeighborComponentForDiagnostics(const ComponentView &,
+BcdFitDiagnostic SolveBcdComponentForDiagnostics(const ComponentView &,
     const Eigen::VectorXd & parent_initial_b, const EvaluationContext &);
 boost::json::object FitComponent(const ComponentView &, const Eigen::VectorXd & parent_initial_b,
     const EvaluationContext &);

@@ -1,6 +1,6 @@
 #include "support/JointComponentChecks.hpp"
 #include "support/JointRuntimeJson.hpp"
-#include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
+#include "core/detail/joint_component/GaussSeidelBcd.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include <algorithm>
 #include <map>
@@ -22,9 +22,9 @@ rhbm_gem::core::JointFitResult FitBoundedJointComponentsForTesting(
 {
     if(!(std::isfinite(maximum_width) && maximum_width>0.0))
         throw std::invalid_argument("Bounded Joint test fit requires a finite positive Width upper bound.");
-    runtime::FixedNeighborSearchPolicy policy;
+    runtime::BcdExecutionPolicy policy;
     policy.eta_upper_bound=std::log(maximum_width);
-    return runtime::FitFixedNeighborComponents(problem,initial_widths,policy);
+    return runtime::FitBcdComponents(problem,initial_widths,policy);
 }
 ComponentPartition BuildPartition(const Domain & d,const std::vector<std::string> & ids) {return runtime::Partition(d,ids);}
 Eigen::VectorXd Select(const Eigen::VectorXd & v,const std::vector<Eigen::Index> & indices)
@@ -253,7 +253,7 @@ j::object SameState(const Domain & domain,const Vector & y,const Vector & eta,co
     out["profile_solves"]=solves; out["passed"]=passed;
     out["full_equivalence"]=passed && out.at("full_equivalence").as_bool(); return out;
 }
-runtime::FixedNeighborComponentResult SolveFixedNeighborComponentForTesting(const ComponentView & view,
+runtime::BcdComponentResult SolveBcdComponentForTesting(const ComponentView & view,
     const Vector & initial_b,const EvaluationContext & parent)
 {
     rhbm_gem::JointParameterLayout layout;
@@ -269,15 +269,15 @@ runtime::FixedNeighborComponentResult SolveFixedNeighborComponentForTesting(cons
         if(!(maximum_initial_width>0.0)) maximum_initial_width=1.0;
         bounded_parent.eta_upper_bound=std::log(4.0*maximum_initial_width);
     }
-    runtime::FixedNeighborSearchPolicy policy;
+    runtime::BcdExecutionPolicy policy;
     policy.eta_upper_bound=bounded_parent.eta_upper_bound;
-    return runtime::SolveFixedNeighborComponent(prepared,initial_b,bounded_parent,policy);
+    return runtime::SolveBcdComponent(prepared,initial_b,bounded_parent,policy);
 }
-FixedNeighborFitDiagnostic SolveFixedNeighborComponentForDiagnostics(const ComponentView & view,
+BcdFitDiagnostic SolveBcdComponentForDiagnostics(const ComponentView & view,
     const Vector & initial_b,const EvaluationContext & parent)
 {
-    const auto fixed=SolveFixedNeighborComponentForTesting(view,initial_b,parent);
-    FixedNeighborFitDiagnostic out;
+    const auto fixed=SolveBcdComponentForTesting(view,initial_b,parent);
+    BcdFitDiagnostic out;
     const auto & result=fixed.search;
     const bool endpoint_qualified=result.certification && result.certification->qualified();
     out.search.initial.eta.resize(static_cast<Eigen::Index>(view.atoms.size()));
@@ -309,7 +309,7 @@ FixedNeighborFitDiagnostic SolveFixedNeighborComponentForDiagnostics(const Compo
 j::object FitComponent(const ComponentView & view,const Vector & initial_b,const EvaluationContext & parent)
 {
     const auto context=ComponentContext(parent,view,true); const Vector start=Select(initial_b,view.atoms);
-    const auto result=SolveFixedNeighborComponentForDiagnostics(view,initial_b,parent);
+    const auto result=SolveBcdComponentForDiagnostics(view,initial_b,parent);
     auto fit=runtime_json::Search(result.search,context,view.domain.rows);
     auto assessment=runtime_json::Assessment(result.trusted_assessment ? *result.trusted_assessment : result.assessment);
     for(auto & field:assessment) fit[field.key()]=std::move(field.value());

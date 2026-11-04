@@ -29,8 +29,8 @@ JointState State(const Endpoint & endpoint,double scale)
 }
 void AssembleResult(const JointProblem & problem,const ProblemData & data,const JointParameterLayout & layout,
     const Domain & domain,VectorRef y,const EvaluationContext & context,
-    const FixedNeighborEndpointCertification & certification,const JointConvergenceCriteria & convergence_criteria,
-    FixedNeighborDiagnosticResult & out,bool accepted_state_integrity)
+    const BcdEndpointCertification & certification,const JointConvergenceCriteria & convergence_criteria,
+    BcdDiagnosticResult & out,bool accepted_state_integrity)
 {
     out.assessment=certification.assessment;
     out.endpoint_trust=certification.trust;
@@ -118,10 +118,10 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
 }
 }
 
-FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & problem,VectorRef initial_eta,
-    const FixedNeighborPolicy & policy)
+BcdDiagnosticResult RunBcdDiagnostic(const JointProblem & problem,VectorRef initial_eta,
+    const BcdSearchPolicy & policy)
 {
-    FixedNeighborDiagnosticResult out;
+    BcdDiagnosticResult out;
     const auto & data=JointProblemAccess::Get(problem); const auto & input=*data.input; const auto & layout=data.layout;
     if(initial_eta.size()!=static_cast<Eigen::Index>(input.atom_ids.size()) || !initial_eta.allFinite() ||
         !(data.context.scale>0) || !std::isfinite(data.context.scale) || policy.core_atoms==0 ||
@@ -140,7 +140,7 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
     const Vector y=Select(data.y,IndicesOf(layout.informative_rows));
     auto run_policy=policy;
     run_policy.collect_diagnostics=true;
-    auto search=SearchFixedNeighborComponent(domain,layout,y,initial_eta,context,run_policy);
+    auto search=SearchBcdComponent(domain,layout,y,initial_eta,context,run_policy);
     out.state=std::move(search.state); out.blocks=std::move(search.blocks); out.sweeps=std::move(search.sweeps);
     out.search_converged=search.search_converged; out.reason=search.reason;
     out.first_order_stationarity_sweep=search.first_order_stationarity_sweep;
@@ -172,7 +172,7 @@ FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem & pr
         else if(!policy.stop_after_stationarity && search.search_converged &&
             search.state.eta.size()==static_cast<Eigen::Index>(domain.atoms.size()))
         {
-            const auto certification=CertifyFixedNeighborEndpoint(domain,y,search.state,context,
+            const auto certification=CertifyBcdEndpoint(domain,y,search.state,context,
                 0,
                 policy.convergence_criteria);
             out.work=search.work;

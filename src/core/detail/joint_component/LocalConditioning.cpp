@@ -99,7 +99,7 @@ void SetSpectrum(std::string & status,std::string & reason,std::optional<std::si
 }
 }
 
-LocalConditioningAssessment AssessFixedNeighborLocalConditioning(
+LocalConditioningAssessment AssessBcdLocalConditioning(
     const Domain & domain,VectorRef y,const Vector & eta,const Vector & beta,const EvaluationContext & context,
     std::string block_id,std::size_t resident_bytes)
 {

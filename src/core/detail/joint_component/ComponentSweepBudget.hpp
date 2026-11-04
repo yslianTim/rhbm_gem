@@ -8,7 +8,7 @@
 
 namespace rhbm_gem::core::joint_component {
 // Budget decisions never change the accepted state or qualify an endpoint.
-class FixedNeighborBudget
+class ComponentSweepBudget
 {
     static constexpr std::size_t Window=20;
     std::array<double,Window> quality_{};
@@ -16,7 +16,7 @@ class FixedNeighborBudget
     JointConvergenceCriteria criteria_;
     bool recovery_pending_{},extended_{};
 public:
-    FixedNeighborBudget(std::size_t nominal,std::size_t maximum,JointConvergenceCriteria criteria)
+    ComponentSweepBudget(std::size_t nominal,std::size_t maximum,JointConvergenceCriteria criteria)
         :limit_(nominal ? std::min(nominal,maximum) : maximum),maximum_(maximum),criteria_(criteria) {}
 
     void Observe(double ac_kkt,double projected_width_kkt,bool recovery_pending)

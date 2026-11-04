@@ -6,7 +6,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
+#include "core/detail/joint_component/GaussSeidelBcd.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "core/command/detail/MapSimulation.hpp"
 #include "support/JointComponentChecks.hpp"
@@ -308,7 +308,7 @@ namespace {
 struct RecoveryAssemblyRun
 {
     core::JointFitResult fit;
-    n::FixedNeighborSearchResult search;
+    n::BcdSearchResult search;
     std::size_t injected{};
 };
 RecoveryAssemblyRun RunRecoveryAssembly(bool inject,bool persistent=false,std::size_t sweeps=200,
@@ -321,8 +321,8 @@ RecoveryAssemblyRun RunRecoveryAssembly(bool inject,bool persistent=false,std::s
     input.selection_domain->pure_halo_support_exclusion=rhbm_gem::JointPureHaloSupportExclusionProvenance{
         input.observations.size(),input.observations.size(),0,0,0,0};
     const core::JointProblem problem(std::move(input));
-    n::FixedNeighborSearchPolicy policy; policy.eta_upper_bound=std::log(2.2);
-    policy.configure_for_testing=[&](n::FixedNeighborPolicy & local) {
+    n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
+    policy.configure_for_testing=[&](n::BcdSearchPolicy & local) {
         local.core_atoms=1; local.maximum_sweeps=sweeps; local.collect_diagnostics=true;
         local.force_width_failure_for_testing=[&](std::size_t block,std::size_t sweep) {
             if(inject && block==0 && (persistent || sweep==0)) {++out.injected; return true;}
@@ -330,12 +330,12 @@ RecoveryAssemblyRun RunRecoveryAssembly(bool inject,bool persistent=false,std::s
         };
         if(corrupt_candidate) local.candidate_fault_for_testing=[](std::size_t sweep,std::size_t block,
             const n::BlockCoordinateState &) {
-            return sweep==3 && block==1 ? n::FixedNeighborCandidateFaultForTesting::NaNParameter :
-                n::FixedNeighborCandidateFaultForTesting::None;
+            return sweep==3 && block==1 ? n::BcdCandidateFaultForTesting::NaNParameter :
+                n::BcdCandidateFaultForTesting::None;
         };
     };
     policy.observe_search_for_testing=[&](const auto & search) {out.search=search;};
-    out.fit=n::FitFixedNeighborComponents(problem,{.55,.55},policy);
+    out.fit=n::FitBcdComponents(problem,{.55,.55},policy);
     return out;
 }
 }
@@ -442,7 +442,7 @@ TEST(JointComponentRuntimeTest, WidthRecoveryExhaustionAndUnqualifiedTerminalSta
     auto context=data.context; context.eta_upper_bound=std::log(2.2);
     auto altered=recovered.search.state;
     altered.beta(0)+=.1;
-    const auto recertified=n::CertifyFixedNeighborEndpoint(data.domain,data.y,altered,context,
+    const auto recertified=n::CertifyBcdEndpoint(data.domain,data.y,altered,context,
         0,n::PracticalJointConvergenceCriteria);
     EXPECT_FALSE(recertified.qualified());
     EXPECT_FALSE(recertified.assessment.endpoint_verified);
@@ -473,7 +473,7 @@ TEST(JointComponentRuntimeTest, ComponentValidationProvidesReasonWithoutEntering
 {
     const core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const auto & data=core::JointProblemAccess::Get(problem);
-    EXPECT_TRUE(n::FixedNeighborComponentResult{}.search.reason.empty());
+    EXPECT_TRUE(n::BcdComponentResult{}.search.reason.empty());
     for(int variant=0;variant<8;++variant)
     {
         SCOPED_TRACE(variant);
@@ -490,12 +490,12 @@ TEST(JointComponentRuntimeTest, ComponentValidationProvidesReasonWithoutEntering
         // Empty layouts retain precedence over invalid widths.
         if(variant<2) widths(0)=0;
         bool configured{},invoked{};
-        n::FixedNeighborSearchPolicy policy;
+        n::BcdExecutionPolicy policy;
         policy.configure_for_testing=[&](auto &) {configured=true;};
         policy.observe_search_for_testing=[&](const auto &) {invoked=true;};
         std::vector<n::JointProgressEvent> events;
         const n::JointProgressComponent component{1,1,"component",3,prepared.local_to_parent_rows.size()};
-        const auto result=n::SolveFixedNeighborComponent(prepared,widths,data.context,policy,
+        const auto result=n::SolveBcdComponent(prepared,widths,data.context,policy,
             [&](const auto & event) {events.push_back(event);},&component);
         EXPECT_EQ(result.search.reason,variant<2 ? "unobserved-full-parameters" : "invalid-initial-widths");
         EXPECT_FALSE(configured); EXPECT_FALSE(invoked); EXPECT_TRUE(events.empty());
@@ -520,12 +520,12 @@ TEST(JointComponentRuntimeTest, ComponentViewPreflightPreservesReasonAndMemoryDi
         // Repeated valid selectors exercise the estimate without allocating the rejected domain.
         if(variant==2) layout.full_atoms.assign(100000,0);
         bool configured{},invoked{};
-        n::FixedNeighborSearchPolicy policy;
+        n::BcdExecutionPolicy policy;
         policy.configure_for_testing=[&](auto &) {configured=true;};
         policy.observe_search_for_testing=[&](const auto &) {invoked=true;};
         std::vector<n::JointProgressEvent> events;
         const n::JointProgressComponent component{1,1,view.id,view.atoms.size(),view.rows.size()};
-        const auto result=n::SolveFixedNeighborComponentView(view,layout,n::Vector::Constant(3,.55),
+        const auto result=n::SolveBcdComponentView(view,layout,n::Vector::Constant(3,.55),
             data.context,policy,[&](const auto & event) {events.push_back(event);},&component);
         EXPECT_EQ(result.search.reason,variant==0 ? "block-invalid-partition" : variant==1 ?
             "resource-limit:fixed-neighbor-preparation:size-overflow" :
@@ -555,7 +555,7 @@ TEST(JointComponentRuntimeTest, ComponentSearchPreflightKeepsValidationOrderAndC
         SCOPED_TRACE(variant);
         auto prepared=n::MakeComponentProblemView(data.layout,data.partition.components.front());
         n::Vector widths=n::Vector::Constant(3,.55);
-        n::FixedNeighborSearchPolicy policy; policy.eta_upper_bound=std::log(2.2);
+        n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
         if(variant==0) policy.eta_upper_bound.reset();
         if(variant==1) policy.eta_upper_bound=std::numeric_limits<double>::quiet_NaN();
         if(variant==2) policy.eta_upper_bound=std::numeric_limits<double>::infinity();
@@ -565,7 +565,7 @@ TEST(JointComponentRuntimeTest, ComponentSearchPreflightKeepsValidationOrderAndC
         policy.observe_search_for_testing=[&](const auto & search) {++invocations; observed_reason=search.reason;};
         std::vector<n::JointProgressEvent> events;
         const n::JointProgressComponent component{1,1,"component",3,prepared.local_to_parent_rows.size()};
-        const auto result=n::SolveFixedNeighborComponent(prepared,widths,data.context,policy,
+        const auto result=n::SolveBcdComponent(prepared,widths,data.context,policy,
             [&](const auto & event) {events.push_back(event);},&component);
         EXPECT_EQ(result.search.reason,variant==0 ? "invalid-width-upper-bound" : variant<3 ?
             "invalid-global-width-bound" : variant==3 ? "bounded-initial-width-infeasible" : "block-invalid-partition");
@@ -593,7 +593,7 @@ TEST(JointComponentRuntimeTest, CanonicalReasonReachesComponentProgressAndCaptur
     for(std::size_t variant=0;variant<reasons.size();++variant)
     {
         SCOPED_TRACE(variant);
-        n::FixedNeighborSearchPolicy policy; policy.eta_upper_bound=std::log(2.2);
+        n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
         policy.configure_for_testing=[&](auto & local) {
             if(variant==1 || variant==2) {local.maximum_sweeps=1; local.nominal_sweeps=0;}
             if(variant==2 || variant==3)
@@ -603,7 +603,7 @@ TEST(JointComponentRuntimeTest, CanonicalReasonReachesComponentProgressAndCaptur
             }
             if(variant==4) local.perturb_sweep_replay_objective_for_testing=true;
             if(variant==5) local.candidate_fault_for_testing=[](auto,auto,const auto &) {
-                return n::FixedNeighborCandidateFaultForTesting::NaNParameter;
+                return n::BcdCandidateFaultForTesting::NaNParameter;
             };
             if(variant==6) local.global_state_memory_budget_for_testing=1;
             if(variant==7) local.certify_endpoint=false;
@@ -613,7 +613,7 @@ TEST(JointComponentRuntimeTest, CanonicalReasonReachesComponentProgressAndCaptur
         std::vector<n::JointProgressEvent> events;
         const n::JointProgressComponent component{1,1,data.partition.components.front().id,3,
             prepared.local_to_parent_rows.size()};
-        const auto result=n::SolveFixedNeighborComponent(prepared,n::Vector::Constant(3,.55),data.context,policy,
+        const auto result=n::SolveBcdComponent(prepared,n::Vector::Constant(3,.55),data.context,policy,
             [&](const auto & event) {events.push_back(event);},&component);
         EXPECT_EQ(invocations,1); EXPECT_EQ(result.search.reason,reasons[variant]);
         EXPECT_EQ(result.search.reason,observed_reason);
@@ -629,10 +629,10 @@ TEST(JointComponentRuntimeTest, CanonicalReasonReachesComponentProgressAndCaptur
         EXPECT_EQ(certification.component_id,component.id); EXPECT_EQ(certification.component_index,component.index);
         EXPECT_EQ(certification.profile_evaluations,static_cast<int>(result.search.total_profile_evaluations));
         EXPECT_EQ(certification.accepted_updates,static_cast<int>(result.search.total_accepted_local_updates));
-        EXPECT_EQ(certification.accepted_objective,n::LastFixedNeighborObjective(result.search));
-        EXPECT_EQ(certification.accepted_gradient_inf_norm,n::LastFixedNeighborGradient(result.search));
+        EXPECT_EQ(certification.accepted_objective,n::LastBcdObjective(result.search));
+        EXPECT_EQ(certification.accepted_gradient_inf_norm,n::LastBcdGradient(result.search));
         events.clear();
-        const auto fit=n::FitFixedNeighborComponents(problem,{.55,.55,.55},policy,
+        const auto fit=n::FitBcdComponents(problem,{.55,.55,.55},policy,
             [&](const auto & event) {events.push_back(event);});
         EXPECT_EQ(invocations,2);
         ASSERT_EQ(fit.components.size(),1u);

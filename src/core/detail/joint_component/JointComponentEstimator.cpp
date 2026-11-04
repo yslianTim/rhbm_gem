@@ -671,9 +671,9 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
             static_cast<double>(calibration.target_count),"calibration-unavailable:"+bounded.reason});
         return out;
     }
-    joint_component::FixedNeighborSearchPolicy solver_policy;
+    joint_component::BcdExecutionPolicy solver_policy;
     solver_policy.eta_upper_bound=calibration.eta_max4;
-    auto out=n::FitFixedNeighborComponents(problem,bounded.widths,solver_policy,observer);
+    auto out=n::FitBcdComponents(problem,bounded.widths,solver_policy,observer);
     out.initialization=initialization;
     out.evidence.push_back({"global-width-calibration",JointCheckStatus::Passed,
         JointEvidenceScope::AssembledGlobal,calibration.p95,bounded.bmax,
@@ -688,19 +688,19 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
             "; maximum-projection-angstroms="+std::to_string(bounded.maximum_projection_magnitude)});
     return out;
 }
-JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,const std::vector<double> & initial_b,
-    const n::FixedNeighborSearchPolicy & production_policy,const n::JointProgressObserver & observer)
+JointFitResult n::FitBcdComponentsImpl(const JointProblem & problem,const std::vector<double> & initial_b,
+    const n::BcdExecutionPolicy & production_policy,const n::JointProgressObserver & observer)
 {
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
-    constexpr auto fixed_neighbor_core_atoms=n::ProductionFixedNeighborCoreAtoms;
-    constexpr auto fixed_neighbor_maximum_sweeps=n::ProductionFixedNeighborMaximumSweeps;
+    constexpr auto bcd_core_atoms=n::ProductionBcdCoreAtoms;
+    constexpr auto bcd_maximum_sweeps=n::ProductionBcdMaximumSweeps;
     constexpr auto convergence_criteria=n::PracticalJointConvergenceCriteria;
     if(observer)
     {
         n::JointProgressEvent event;
         event.phase=n::JointProgressPhase::SolverConfigured;
         event.solver_configuration=n::JointSolverConfiguration{
-            fixed_neighbor_core_atoms};
+            bcd_core_atoms};
         observer(event);
     }
     auto provenance=[&] {
@@ -708,9 +708,9 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
         out.search_method="fixed-neighbor";
         out.contract_version=std::string(JointSolverProvenanceContractVersion);
         out.sparse_backend="EIGEN";
-        out.fixed_neighbor_core_atoms=fixed_neighbor_core_atoms;
+        out.fixed_neighbor_core_atoms=bcd_core_atoms;
         out.fixed_neighbor_policy_version=std::string(FixedNeighborPolicyContractVersion);
-        out.fixed_neighbor_maximum_sweeps=fixed_neighbor_maximum_sweeps;
+        out.fixed_neighbor_maximum_sweeps=bcd_maximum_sweeps;
         out.fixed_neighbor_order="forward";
         out.fixed_neighbor_local_search=std::string(FixedNeighborBoundedLocalSearchName);
         return out;
@@ -754,7 +754,7 @@ JointFitResult n::FitFixedNeighborComponentsImpl(const JointProblem & problem,co
     const auto component_count=data.partition.components.size();
     auto assembly_context=data.context;
     assembly_context.eta_upper_bound=production_policy.eta_upper_bound;
-    auto component_batch=n::OrchestrateFixedNeighborComponents(problem,initial_b,production_policy,observer);
+    auto component_batch=n::OrchestrateBcdComponents(problem,initial_b,production_policy,observer);
     out.components=std::move(component_batch.components);
     out.costs.search_seconds+=component_batch.costs.search_seconds;
     out.costs.assessment_seconds+=component_batch.costs.assessment_seconds;

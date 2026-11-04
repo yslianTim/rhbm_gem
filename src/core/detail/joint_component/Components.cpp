@@ -1,5 +1,5 @@
 #include "Numerics.hpp"
-#include "FixedNeighborBlockCoordinate.hpp"
+#include "GaussSeidelBcd.hpp"
 #include "Problem.hpp"
 #include "ResourceWork.hpp"
 #include <algorithm>
@@ -114,7 +114,7 @@ JointParameterLayout ComponentLayout(const JointParameterLayout & layout,const C
     for(auto r:layout.informative_rows) if(view.LocalRow(static_cast<Eigen::Index>(r))>=0) out.informative_rows.push_back(r);
     return out;
 }
-JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & search, std::size_t atoms)
+JointCandidateDiagnostic CandidateDiagnostic(const BcdSearchResult & search, std::size_t atoms)
 {
     JointCandidateDiagnostic out;
     out.convergence_criteria_id="practical-v2";
@@ -173,12 +173,12 @@ JointCandidateDiagnostic CandidateDiagnostic(const FixedNeighborSearchResult & s
     return out;
 }
 }
-FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
+BcdComponentBatch OrchestrateBcdComponents(
     const JointProblem & problem,const std::vector<double> & initial_b,
-    const FixedNeighborSearchPolicy & production_policy,const JointProgressObserver & observer)
+    const BcdExecutionPolicy & production_policy,const JointProgressObserver & observer)
 {
     const auto & data=JointProblemAccess::Get(problem);
-    FixedNeighborComponentBatch out;
+    BcdComponentBatch out;
     const auto component_count=data.partition.components.size();
     out.components.reserve(component_count);
     const VectorMap widths(initial_b.data(),static_cast<Eigen::Index>(initial_b.size()));
@@ -198,17 +198,17 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
         JointComponentResult component; component.id=view.id;
         component.atoms.assign(view.atoms.begin(),view.atoms.end());
         component.rows.assign(view.rows.begin(),view.rows.end());
-        FixedNeighborComponentResult fit;
+        BcdComponentResult fit;
         std::optional<double> accepted_objective,accepted_gradient_inf_norm;
         const bool valid=std::all_of(layout.full_atoms.begin(),layout.full_atoms.end(),[&](auto a) {
             return a<initial_b.size() && std::isfinite(initial_b[a]) && initial_b[a]>0;
         });
         if(valid && !layout.informative_rows.empty())
         {
-            fit=SolveFixedNeighborComponentView(view,layout,widths,data.context,production_policy,observer,
+            fit=SolveBcdComponentView(view,layout,widths,data.context,production_policy,observer,
                 progress_component ? &*progress_component : nullptr);
-            accepted_objective=LastFixedNeighborObjective(fit.search);
-            accepted_gradient_inf_norm=LastFixedNeighborGradient(fit.search);
+            accepted_objective=LastBcdObjective(fit.search);
+            accepted_gradient_inf_norm=LastBcdGradient(fit.search);
             component.search_completed=fit.succeeded; component.stop_reason=fit.search.reason;
             component.search_sweeps=fit.search.sweep_count;
             component.first_order_stationarity_sweep=fit.search.first_order_stationarity_sweep;
@@ -307,12 +307,12 @@ FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
     }
     return out;
 }
-FixedNeighborComponentResult SolveFixedNeighborComponentView(
+BcdComponentResult SolveBcdComponentView(
     const ComponentView & view,const JointParameterLayout & component_layout,const Vector & initial_b,
-    const EvaluationContext & parent_context,const FixedNeighborSearchPolicy & production_policy,
+    const EvaluationContext & parent_context,const BcdExecutionPolicy & production_policy,
     const JointProgressObserver & observer,const JointProgressComponent * progress_component)
 {
-    FixedNeighborComponentResult out;
+    BcdComponentResult out;
     MemoryShape shape; shape.component_atoms=component_layout.full_atoms.size();
     shape.component_observations=component_layout.informative_rows.size();
     shape.component_blocks=shape.component_atoms;
@@ -364,7 +364,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponentView(
     auto diagnostic_policy=production_policy;
     diagnostic_policy.component_index=static_cast<std::size_t>(view.component_index);
     diagnostic_policy.component_id=view.id;
-    out=SolveFixedNeighborComponent(prepared,initial_b,parent_context,
+    out=SolveBcdComponent(prepared,initial_b,parent_context,
         diagnostic_policy,observer,progress_component);
     return out;
 }

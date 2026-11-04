@@ -1,7 +1,7 @@
 #pragma once
 #include "Numerics.hpp"
 #include "JointProgress.hpp"
-#include "FixedNeighborBlockCoordinate.hpp"
+#include "GaussSeidelBcd.hpp"
 #include "ResourceWork.hpp"
 #include "core/detail/joint_component/JointComponentEstimator.hpp"
 namespace rhbm_gem::core::joint_component {
@@ -38,21 +38,21 @@ struct ComponentProblemView
     Identities atom_ids,row_ids;
 };
 ComponentProblemView MakeComponentProblemView(const JointParameterLayout &,const ComponentView &);
-FixedNeighborComponentResult SolveFixedNeighborComponentView(
+BcdComponentResult SolveBcdComponentView(
     const ComponentView &,const JointParameterLayout &,const Vector &,const EvaluationContext &,
-    const FixedNeighborSearchPolicy &,const JointProgressObserver & = {},
+    const BcdExecutionPolicy &,const JointProgressObserver & = {},
     const JointProgressComponent * = nullptr);
-struct FixedNeighborComponentBatch
+struct BcdComponentBatch
 {
     std::vector<JointComponentResult> components;
     JointFitCosts costs;
 };
-FixedNeighborComponentBatch OrchestrateFixedNeighborComponents(
-    const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy &,
+BcdComponentBatch OrchestrateBcdComponents(
+    const JointProblem &,const std::vector<double> &,const BcdExecutionPolicy &,
     const JointProgressObserver &);
-JointFitResult FitFixedNeighborComponents(const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy &,
+JointFitResult FitBcdComponents(const JointProblem &,const std::vector<double> &,const BcdExecutionPolicy &,
     const JointProgressObserver & = {});
-JointFitResult FitFixedNeighborComponentsImpl(const JointProblem &,const std::vector<double> &,const FixedNeighborSearchPolicy &,
+JointFitResult FitBcdComponentsImpl(const JointProblem &,const std::vector<double> &,const BcdExecutionPolicy &,
     const JointProgressObserver & = {});
 }
 namespace rhbm_gem::core {

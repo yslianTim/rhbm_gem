@@ -1,6 +1,6 @@
 #pragma once
 #include "Numerics.hpp"
-#include "FixedNeighborPolicy.hpp"
+#include "BcdPolicy.hpp"
 #include "JointProgress.hpp"
 #include "ResourceWork.hpp"
 #include <functional>
@@ -15,7 +15,7 @@ struct BlockCoordinateState
 };
 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-struct FixedNeighborCandidateEvent
+struct BcdCandidateEvent
 {
     std::size_t sweep{},block{};
     const BlockCoordinateState & accepted_before;
@@ -26,7 +26,7 @@ struct FixedNeighborCandidateEvent
         local_global_delta_error{},objective_replay_enclosure{},incremental_objective{};
     bool accepted{},unchanged{},candidate_replay_ran{};
 };
-enum class FixedNeighborCandidateFaultForTesting
+enum class BcdCandidateFaultForTesting
 {
     None,LocalObjectiveIncrease,ObjectiveConsistencyFailure,NaNObjective,InfiniteObjective,
     NaNParameter,InfiniteParameter,InfinitePrediction,InfiniteResidual
@@ -36,7 +36,7 @@ enum class FixedNeighborCandidateFaultForTesting
 double BlockObjectiveReplayEnclosure(double reference);
 bool WithinBlockObjectiveReplay(double error,double reference);
 
-struct FixedNeighborBlockFailureDiagnostics
+struct BcdBlockFailureDiagnostics
 {
     std::size_t component_index{},sweep_index{},block_index{},core_atom_count{},affected_row_count{};
     std::vector<std::string> core_atom_ids;
@@ -50,18 +50,18 @@ struct FixedNeighborBlockFailureDiagnostics
         primal_feasibility,scaled_projected_kkt,replay_prediction_discrepancy,
         replay_gradient_discrepancy,replay_kkt_discrepancy;
 };
-struct FixedNeighborBlockRecord
+struct BcdBlockRecord
 {
     std::size_t sweep{},block{},affected_rows{};
     std::size_t recovery_attempt{};
     double objective_before{},objective_after{},local_objective_before{},local_objective_after{};
     double global_replay_delta{},local_global_delta_error{},objective_replay_enclosure{};
     int accepted_updates{};
-    std::optional<FixedNeighborBlockFailureDiagnostics> failure_diagnostics;
+    std::optional<BcdBlockFailureDiagnostics> failure_diagnostics;
     bool accepted{},recovery_retry{},recovery_success{};
     std::string status,reason;
 };
-struct FixedNeighborBlockSweep
+struct BcdSweepRecord
 {
     std::size_t sweep{};
     double objective_before{},objective_after{},global_a_feasibility{},global_ac_kkt{};
@@ -77,7 +77,7 @@ struct FixedNeighborBlockSweep
     std::size_t block_solves{},profile_evaluations{},maximum_block_rows{},maximum_block_columns{},
         accepted_blocks{},unchanged_blocks{},accepted_local_updates{},recovery_attempts{},recovery_successes{};
 };
-struct FixedNeighborWork
+struct BcdWork
 {
     double local_conditioning_seconds{};
     std::size_t full_candidate_replays{},affected_candidate_replays{},candidate_replay_skipped_unchanged{},
@@ -87,7 +87,7 @@ struct FixedNeighborWork
     std::size_t local_conditioning_peak_memory_estimate_bytes{};
     BoundedLmWork bounded_lm;
 };
-struct FixedNeighborEndpointCertification
+struct BcdEndpointCertification
 {
     Assessment assessment;
     TrustEvidence trust;
@@ -108,8 +108,8 @@ struct FixedNeighborEndpointCertification
         return {};
     }
 };
-enum class FixedNeighborStationarityState {NotStationary,CandidateStationary,ConfirmedStationary};
-struct PreparedFixedNeighborBlock
+enum class BcdStationarityState {NotStationary,CandidateStationary,ConfirmedStationary};
+struct PreparedBcdBlock
 {
     std::size_t block{};
     Indices core_atoms,affected_rows;
@@ -117,7 +117,7 @@ struct PreparedFixedNeighborBlock
     EvaluationContext context;
     Eigen::Index local_atoms{};
 };
-struct FixedNeighborPolicy
+struct BcdSearchPolicy
 {
     std::size_t core_atoms{12},maximum_sweeps{30};
     std::size_t nominal_sweeps{}; // Zero uses the fixed maximum (internal numerical fixtures).
@@ -129,14 +129,14 @@ struct FixedNeighborPolicy
     bool collect_telemetry{};
     bool collect_diagnostics{};
     std::optional<std::size_t> global_state_memory_budget_for_testing;
-    std::function<void(const FixedNeighborCandidateEvent &)> candidate_observer;
+    std::function<void(const BcdCandidateEvent &)> candidate_observer;
     bool perturb_sweep_replay_objective_for_testing{};
-    std::function<FixedNeighborCandidateFaultForTesting(std::size_t,std::size_t,
+    std::function<BcdCandidateFaultForTesting(std::size_t,std::size_t,
         const BlockCoordinateState &)> candidate_fault_for_testing;
 #endif
     std::size_t component_index{};
     std::string component_id;
-    std::function<void(const FixedNeighborBlockSweep &)> production_progress;
+    std::function<void(const BcdSweepRecord &)> production_progress;
     std::optional<double> eta_upper_bound;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     std::function<bool(std::size_t,std::size_t)> force_no_trusted_profile_for_testing;
@@ -145,13 +145,13 @@ struct FixedNeighborPolicy
 #endif
 };
 // Search output contains only the candidate state and search diagnostics.
-struct FixedNeighborSearchResult
+struct BcdSearchResult
 {
     BlockCoordinateState state;
-    std::optional<FixedNeighborEndpointCertification> certification;
+    std::optional<BcdEndpointCertification> certification;
     std::vector<JointBlockConditioning> local_conditioning;
-    std::vector<FixedNeighborBlockRecord> blocks;
-    std::vector<FixedNeighborBlockSweep> sweeps;
+    std::vector<BcdBlockRecord> blocks;
+    std::vector<BcdSweepRecord> sweeps;
     bool search_converged{},accepted_state_integrity{};
     std::size_t unresolved_failures{};
     std::string reason;
@@ -162,32 +162,32 @@ struct FixedNeighborSearchResult
     std::size_t prepared_mapping_entries{},prepared_mapping_bytes{};
     MemoryEstimate memory_estimate,global_state_memory_estimate;
     double search_seconds{};
-    FixedNeighborWork work;
-    std::optional<FixedNeighborBlockSweep> final_sweep;
+    BcdWork work;
+    std::optional<BcdSweepRecord> final_sweep;
 };
 
-struct FixedNeighborComponentResult
+struct BcdComponentResult
 {
     // search.reason is the terminal reason, including failures before Search is entered.
-    FixedNeighborSearchResult search;
+    BcdSearchResult search;
     bool succeeded{};
 };
 
-FixedNeighborStationarityState ClassifyFixedNeighborStationarity(
+BcdStationarityState ClassifyBcdStationarity(
     double ac_kkt,double width_gradient_inf,bool has_previous_complete_sweep,
     const JointConvergenceCriteria & = StrictJointConvergenceCriteria);
-bool ShouldAttemptFixedNeighborCertification(FixedNeighborStationarityState,std::size_t sweep,
+bool ShouldAttemptBcdCertification(BcdStationarityState,std::size_t sweep,
     std::size_t & next_retry_sweep);
-FixedNeighborSearchResult SearchFixedNeighborComponent(
+BcdSearchResult SearchBcdComponent(
     const Domain &,const JointParameterLayout &,VectorRef y,VectorRef initial_eta,const EvaluationContext &,
-    const FixedNeighborPolicy & = {});
-FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
+    const BcdSearchPolicy & = {});
+BcdEndpointCertification CertifyBcdEndpoint(
     const Domain &,VectorRef y,const BlockCoordinateState &,const EvaluationContext &,
     std::size_t resident_override=0,
     const JointConvergenceCriteria & = StrictJointConvergenceCriteria);
-FixedNeighborComponentResult SolveFixedNeighborComponent(
-    const ComponentProblemView &,VectorRef initial_b,const EvaluationContext &,const FixedNeighborSearchPolicy &,
+BcdComponentResult SolveBcdComponent(
+    const ComponentProblemView &,VectorRef initial_b,const EvaluationContext &,const BcdExecutionPolicy &,
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
-std::optional<double> LastFixedNeighborObjective(const FixedNeighborSearchResult &);
-std::optional<double> LastFixedNeighborGradient(const FixedNeighborSearchResult &);
+std::optional<double> LastBcdObjective(const BcdSearchResult &);
+std::optional<double> LastBcdGradient(const BcdSearchResult &);
 }

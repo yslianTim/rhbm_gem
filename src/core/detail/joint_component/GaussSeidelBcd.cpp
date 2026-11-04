@@ -1,5 +1,5 @@
-#include "FixedNeighborBlockCoordinate.hpp"
-#include "FixedNeighborBudget.hpp"
+#include "GaussSeidelBcd.hpp"
+#include "ComponentSweepBudget.hpp"
 #include "LocalConditioning.hpp"
 #include "Problem.hpp"
 #include "ResourceWork.hpp"
@@ -256,7 +256,7 @@ struct LocalEndpointWorkspace
 {
     Vector eta,beta,effective_response;
 };
-LocalEndpointWorkspace PrepareLocalEndpointWorkspace(const PreparedFixedNeighborBlock & prepared,
+LocalEndpointWorkspace PrepareLocalEndpointWorkspace(const PreparedBcdBlock & prepared,
     const BlockCoordinateState & state)
 {
     LocalEndpointWorkspace out;
@@ -280,11 +280,11 @@ LocalEndpointWorkspace PrepareLocalEndpointWorkspace(const PreparedFixedNeighbor
 }
 double PredictionDifference(VectorRef a,VectorRef b)
 {return (a-b).lpNorm<Eigen::Infinity>();}
-FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolicy & policy,
-    const FixedNeighborBlockRecord & block,std::size_t sweep_index,const Indices & core_atoms,
+BcdBlockFailureDiagnostics FailureDiagnostics(const BcdSearchPolicy & policy,
+    const BcdBlockRecord & block,std::size_t sweep_index,const Indices & core_atoms,
     const EvaluationContext & context,const SearchResult & profile)
 {
-    FixedNeighborBlockFailureDiagnostics out;
+    BcdBlockFailureDiagnostics out;
     out.component_index=policy.component_index; out.component_id=policy.component_id;
     out.sweep_index=sweep_index+1; out.block_index=block.block;
     out.core_atom_count=core_atoms.size(); out.affected_row_count=block.affected_rows;
@@ -350,7 +350,7 @@ FixedNeighborBlockFailureDiagnostics FailureDiagnostics(const FixedNeighborPolic
         }
     return out;
 }
-std::string FormatFailureDiagnostics(const FixedNeighborBlockFailureDiagnostics & d)
+std::string FormatFailureDiagnostics(const BcdBlockFailureDiagnostics & d)
 {
     std::ostringstream out;
     out<<std::setprecision(std::numeric_limits<double>::max_digits10);
@@ -390,31 +390,31 @@ std::string FormatFailureDiagnostics(const FixedNeighborBlockFailureDiagnostics 
     return out.str();
 }
 }
-FixedNeighborStationarityState ClassifyFixedNeighborStationarity(
+BcdStationarityState ClassifyBcdStationarity(
     double ac_kkt,double width_gradient_inf,bool has_previous_complete_sweep,
     const JointConvergenceCriteria & criteria)
 {
     if(!IsValidJointConvergenceCriteria(criteria) || !std::isfinite(ac_kkt) || ac_kkt<0.0 ||
         ac_kkt>criteria.global_ac_kkt || !std::isfinite(width_gradient_inf) || width_gradient_inf<0.0 ||
         width_gradient_inf>criteria.global_width_gradient)
-        return FixedNeighborStationarityState::NotStationary;
-    return has_previous_complete_sweep ? FixedNeighborStationarityState::ConfirmedStationary :
-        FixedNeighborStationarityState::CandidateStationary;
+        return BcdStationarityState::NotStationary;
+    return has_previous_complete_sweep ? BcdStationarityState::ConfirmedStationary :
+        BcdStationarityState::CandidateStationary;
 }
-bool ShouldAttemptFixedNeighborCertification(FixedNeighborStationarityState stationarity,std::size_t sweep,
+bool ShouldAttemptBcdCertification(BcdStationarityState stationarity,std::size_t sweep,
     std::size_t & next_retry_sweep)
 {
-    if(stationarity!=FixedNeighborStationarityState::ConfirmedStationary)
+    if(stationarity!=BcdStationarityState::ConfirmedStationary)
     {next_retry_sweep=0; return false;}
     if(next_retry_sweep!=0 && sweep<next_retry_sweep) return false;
     next_retry_sweep=sweep+EndpointCertificationRetryInterval;
     return true;
 }
-FixedNeighborSearchResult SearchFixedNeighborComponent(
+BcdSearchResult SearchBcdComponent(
     const Domain & domain,const JointParameterLayout & layout,VectorRef y,VectorRef initial_eta,const EvaluationContext & parent_context,
-    const FixedNeighborPolicy & policy)
+    const BcdSearchPolicy & policy)
 {
-    FixedNeighborSearchResult out;
+    BcdSearchResult out;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     const bool stop_after_stationarity=policy.stop_after_stationarity;
     const bool assess_local_conditioning=policy.assess_local_conditioning;
@@ -550,7 +550,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         !AddMemoryBytes(global_resident,memory_shape.component_atoms,3*sizeof(Eigen::Index)+3*sizeof(double)+
             sizeof(std::vector<LocalSupportIndex>)) ||
         !AddMemoryBytes(global_resident,memory_shape.component_blocks,
-            sizeof(PreparedFixedNeighborBlock)+sizeof(CompactRowMapping)+sizeof(std::size_t)) ||
+            sizeof(PreparedBcdBlock)+sizeof(CompactRowMapping)+sizeof(std::size_t)) ||
         // The reusable replay vectors remain allocated between block visits.
         !AddMemoryBytes(global_resident,memory_shape.component_observations,5*sizeof(double)+sizeof(Eigen::Index)))
     {
@@ -603,7 +603,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         if(!AddMemoryBytes(certification_resident,memory_shape.component_observations,3*sizeof(double)) ||
             !AddMemoryBytes(certification_resident,memory_shape.component_atoms,8*sizeof(double)))
             certification_resident=std::numeric_limits<std::size_t>::max();
-        return CertifyFixedNeighborEndpoint(domain,y,out.state,context,
+        return CertifyBcdEndpoint(domain,y,out.state,context,
             certification_resident,policy.convergence_criteria);
     };
 
@@ -619,11 +619,11 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     Indices atom_position(domain.atoms.size(),-1),row_position(static_cast<std::size_t>(domain.rows),-1);
     for(std::size_t k=0;k<layout.full_atoms.size();++k) atom_position.at(layout.full_atoms[k])=static_cast<Eigen::Index>(k);
     for(std::size_t k=0;k<layout.informative_rows.size();++k) row_position.at(layout.informative_rows[k])=static_cast<Eigen::Index>(k);
-    std::vector<PreparedFixedNeighborBlock> prepared_blocks;
+    std::vector<PreparedBcdBlock> prepared_blocks;
     prepared_blocks.reserve(partition.cores.size());
     for(std::size_t block_index=0;block_index<partition.cores.size();++block_index)
     {
-        const auto & core=partition.cores[block_index]; PreparedFixedNeighborBlock prepared;
+        const auto & core=partition.cores[block_index]; PreparedBcdBlock prepared;
         prepared.block=block_index; prepared.core_atoms=core.atoms; prepared.affected_rows=core.affected_rows;
         Indices profile_atoms,profile_rows;
         profile_atoms.reserve(core.atoms.size()); profile_rows.reserve(core.affected_rows.size());
@@ -672,13 +672,13 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     bool stop=false;
     std::size_t next_certification_retry_sweep{};
     std::vector<std::size_t> block_failure_visits(partition.cores.size());
-    FixedNeighborBudget budget(policy.nominal_sweeps,policy.maximum_sweeps,policy.convergence_criteria);
+    ComponentSweepBudget budget(policy.nominal_sweeps,policy.maximum_sweeps,policy.convergence_criteria);
     for(std::size_t sweep_index=0;!stop && budget.AllowsNextSweep();++sweep_index)
     {
-        const auto sweep_started=Clock::now(); FixedNeighborBlockSweep sweep; sweep.sweep=sweep_index+1;
+        const auto sweep_started=Clock::now(); BcdSweepRecord sweep; sweep.sweep=sweep_index+1;
         sweep.objective_before=out.state.objective;
         bool sweep_had_block_failure=false;
-        auto finish_record=[&](FixedNeighborBlockRecord record) {
+        auto finish_record=[&](BcdBlockRecord record) {
             if(record.accepted)
             {
                 ++sweep.accepted_blocks;
@@ -702,7 +702,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             const auto & local_context=prepared.context;
 #endif
             const auto local_atoms=prepared.local_atoms;
-            FixedNeighborBlockRecord record;
+            BcdBlockRecord record;
             record.sweep=sweep_index+1; record.block=block_index+1;
             record.affected_rows=affected_rows.size(); record.objective_before=out.state.objective;
             record.recovery_retry=block_failure_visits[block_index]>0;
@@ -788,8 +788,8 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             const auto candidate_fault=policy.candidate_fault_for_testing ?
                 policy.candidate_fault_for_testing(sweep_index+1,block_index+1,out.state) :
-                    FixedNeighborCandidateFaultForTesting::None;
-            if(candidate_fault==FixedNeighborCandidateFaultForTesting::LocalObjectiveIncrease)
+                    BcdCandidateFaultForTesting::None;
+            if(candidate_fault==BcdCandidateFaultForTesting::LocalObjectiveIncrease)
                 record.local_objective_after+=std::max(1.0,std::abs(record.local_objective_before));
 #endif
             if(record.local_objective_after>record.local_objective_before)
@@ -813,7 +813,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             const bool candidate_fast_unchanged=state_cache_valid && std::isfinite(out.state.objective) &&
                 IsBitwiseIdenticalCoreCandidate(out.state,core_atoms,accepted->endpoint)
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                && candidate_fault==FixedNeighborCandidateFaultForTesting::None
+                && candidate_fault==BcdCandidateFaultForTesting::None
 #endif
                 ;
             Vector candidate_eta,candidate_beta;
@@ -870,30 +870,30 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             switch(candidate_fault)
             {
-            case FixedNeighborCandidateFaultForTesting::ObjectiveConsistencyFailure:
+            case BcdCandidateFaultForTesting::ObjectiveConsistencyFailure:
                 candidate_objective+=std::max(1.0,std::abs(candidate_objective));
                 replay_workspace.objective=candidate_objective;
                 break;
-            case FixedNeighborCandidateFaultForTesting::NaNObjective:
+            case BcdCandidateFaultForTesting::NaNObjective:
                 candidate_objective=std::numeric_limits<double>::quiet_NaN();
                 replay_workspace.objective=candidate_objective;
                 break;
-            case FixedNeighborCandidateFaultForTesting::InfiniteObjective:
+            case BcdCandidateFaultForTesting::InfiniteObjective:
                 candidate_objective=std::numeric_limits<double>::infinity();
                 replay_workspace.objective=candidate_objective;
                 break;
-            case FixedNeighborCandidateFaultForTesting::NaNParameter:
+            case BcdCandidateFaultForTesting::NaNParameter:
                 candidate_eta(core_atoms.front())=std::numeric_limits<double>::quiet_NaN();
                 break;
-            case FixedNeighborCandidateFaultForTesting::InfiniteParameter:
+            case BcdCandidateFaultForTesting::InfiniteParameter:
                 candidate_eta(core_atoms.front())=std::numeric_limits<double>::infinity();
                 break;
-            case FixedNeighborCandidateFaultForTesting::InfinitePrediction:
+            case BcdCandidateFaultForTesting::InfinitePrediction:
                 if(candidate_result_affected_rows_only)
                     candidate_affected_prediction(0)=std::numeric_limits<double>::infinity();
                 else replay_workspace.prediction(affected_rows.front())=std::numeric_limits<double>::infinity();
                 break;
-            case FixedNeighborCandidateFaultForTesting::InfiniteResidual:
+            case BcdCandidateFaultForTesting::InfiniteResidual:
                 if(candidate_result_affected_rows_only)
                     candidate_affected_residual(0)=std::numeric_limits<double>::infinity();
                 else replay_workspace.residual(affected_rows.front())=std::numeric_limits<double>::infinity();
@@ -1056,14 +1056,14 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
         if(retain_diagnostics) out.sweeps.back()=sweep;
         budget.Observe(sweep.global_ac_kkt,stationarity_width_gradient,sweep_had_block_failure);
         if(policy.production_progress) policy.production_progress(sweep);
-        const auto stationarity=sweep_had_block_failure ? FixedNeighborStationarityState::NotStationary :
-            ClassifyFixedNeighborStationarity(sweep.global_ac_kkt,stationarity_width_gradient,
+        const auto stationarity=sweep_had_block_failure ? BcdStationarityState::NotStationary :
+            ClassifyBcdStationarity(sweep.global_ac_kkt,stationarity_width_gradient,
                 sweep.coordinate_confirmation_available,policy.convergence_criteria);
-        if(stationarity!=FixedNeighborStationarityState::NotStationary && out.first_order_stationarity_sweep==0)
+        if(stationarity!=BcdStationarityState::NotStationary && out.first_order_stationarity_sweep==0)
             out.first_order_stationarity_sweep=sweep_index+1;
-        const bool certification_retry_due=ShouldAttemptFixedNeighborCertification(
+        const bool certification_retry_due=ShouldAttemptBcdCertification(
             stationarity,sweep_index+1,next_certification_retry_sweep);
-        if(stationarity==FixedNeighborStationarityState::ConfirmedStationary)
+        if(stationarity==BcdStationarityState::ConfirmedStationary)
         {
             if(out.confirmed_stationarity_sweep==0) out.confirmed_stationarity_sweep=sweep_index+1;
             if(!stop_after_stationarity || !endpoint_certification_enabled)
@@ -1107,10 +1107,10 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             out.certification=certify_endpoint();
             out.certification_sweep=out.sweep_count;
             if(out.certification->qualified() && out.final_sweep &&
-                ClassifyFixedNeighborStationarity(out.final_sweep->global_ac_kkt,
+                ClassifyBcdStationarity(out.final_sweep->global_ac_kkt,
                     out.final_sweep->stationarity_width_gradient_inf_norm,
                     out.final_sweep->coordinate_confirmation_available,policy.convergence_criteria)==
-                        FixedNeighborStationarityState::ConfirmedStationary)
+                        BcdStationarityState::ConfirmedStationary)
             {
                 out.search_converged=true; out.reason="block-stationary";
             }
@@ -1131,7 +1131,7 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
             auto workspace=PrepareLocalEndpointWorkspace(prepared,out.state);
             const auto block_id=(policy.component_id.empty() ? std::string("component") : policy.component_id)+
                 "/block-"+std::to_string(prepared.block+1);
-            auto conditioning=AssessFixedNeighborLocalConditioning(prepared.domain,workspace.effective_response,
+            auto conditioning=AssessBcdLocalConditioning(prepared.domain,workspace.effective_response,
                 workspace.eta,workspace.beta,prepared.context,block_id,
                 out.global_state_memory_estimate.shape.resident_bytes);
             conditioning.evidence.core_atoms.assign(prepared.core_atoms.begin(),prepared.core_atoms.end());
@@ -1151,12 +1151,12 @@ FixedNeighborSearchResult SearchFixedNeighborComponent(
     return out;
 }
 
-FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
+BcdEndpointCertification CertifyBcdEndpoint(
     const Domain & domain,VectorRef y,const BlockCoordinateState & state,const EvaluationContext & context,
     std::size_t resident_override,
     const JointConvergenceCriteria & convergence_criteria)
 {
-    FixedNeighborEndpointCertification out;
+    BcdEndpointCertification out;
     const auto atom_count=static_cast<Eigen::Index>(domain.atoms.size());
     if(state.eta.size()!=atom_count || state.beta.size()!=2*atom_count || y.size()!=domain.rows ||
         !state.eta.allFinite() || !state.beta.allFinite())
@@ -1202,24 +1202,24 @@ FixedNeighborEndpointCertification CertifyFixedNeighborEndpoint(
     return out;
 }
 
-std::optional<double> LastFixedNeighborObjective(const FixedNeighborSearchResult & result)
+std::optional<double> LastBcdObjective(const BcdSearchResult & result)
 {
     if(result.final_sweep) return result.final_sweep->objective_after;
     return std::nullopt;
 }
 
-std::optional<double> LastFixedNeighborGradient(const FixedNeighborSearchResult & result)
+std::optional<double> LastBcdGradient(const BcdSearchResult & result)
 {
     if(result.final_sweep) return result.final_sweep->global_width_gradient_inf_norm;
     return std::nullopt;
 }
 
-FixedNeighborComponentResult SolveFixedNeighborComponent(
+BcdComponentResult SolveBcdComponent(
     const ComponentProblemView & prepared,VectorRef initial_b,const EvaluationContext & parent_context,
-    const FixedNeighborSearchPolicy & production_policy,const JointProgressObserver & observer,
+    const BcdExecutionPolicy & production_policy,const JointProgressObserver & observer,
     const JointProgressComponent * progress_component)
 {
-    FixedNeighborComponentResult out;
+    BcdComponentResult out;
     const auto & local_layout=prepared.local_layout;
     if(local_layout.full_atoms.empty() || local_layout.informative_rows.empty())
     {
@@ -1246,10 +1246,10 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
     for(std::size_t k=0;k<prepared.local_to_parent_atoms.size();++k)
         initial_eta(static_cast<Eigen::Index>(k))=std::log(initial_b(prepared.local_to_parent_atoms[k]));
 
-    FixedNeighborPolicy policy;
-    policy.core_atoms=ProductionFixedNeighborCoreAtoms;
-    policy.maximum_sweeps=ProductionFixedNeighborMaximumSweeps;
-    policy.nominal_sweeps=ProductionFixedNeighborNominalSweeps;
+    BcdSearchPolicy policy;
+    policy.core_atoms=ProductionBcdCoreAtoms;
+    policy.maximum_sweeps=ProductionBcdMaximumSweeps;
+    policy.nominal_sweeps=ProductionBcdNominalSweeps;
     policy.convergence_criteria=PracticalJointConvergenceCriteria;
     policy.component_index=production_policy.component_index;
     policy.component_id=production_policy.component_id;
@@ -1264,7 +1264,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
         const auto maximum_sweeps=policy.maximum_sweeps;
         policy.production_progress=[&observer,&last_fixed_neighbor_progress,progress_component,maximum_sweeps,
             profile_budget=context.profile_budget](
-            const FixedNeighborBlockSweep & sweep) {
+            const BcdSweepRecord & sweep) {
             auto event=MakeJointProgressEvent(JointProgressPhase::SearchProgress,*progress_component);
             event.profile_evaluations=static_cast<int>(sweep.profile_evaluations);
             event.profile_budget=profile_budget;
@@ -1294,7 +1294,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
             observer(event);
         };
     }
-    out.search=SearchFixedNeighborComponent(prepared.domain,local_layout,local_y,initial_eta,context,policy);
+    out.search=SearchBcdComponent(prepared.domain,local_layout,local_y,initial_eta,context,policy);
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(production_policy.observe_search_for_testing) production_policy.observe_search_for_testing(out.search);
 #endif
@@ -1306,7 +1306,7 @@ FixedNeighborComponentResult SolveFixedNeighborComponent(
             static_cast<int>(out.search.total_profile_evaluations),parent_context.profile_budget,
             static_cast<int>(out.search.total_accepted_local_updates),parent_context.update_budget,
             out.search.search_seconds,out.search.reason,qualified,
-            LastFixedNeighborObjective(out.search),LastFixedNeighborGradient(out.search),last_fixed_neighbor_progress);
+            LastBcdObjective(out.search),LastBcdGradient(out.search),last_fixed_neighbor_progress);
     return out;
 }
 

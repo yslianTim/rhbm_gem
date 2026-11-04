@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
+#include "core/detail/joint_component/GaussSeidelBcd.hpp"
 #include "core/detail/joint_component/LocalConditioning.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/TargetEvidence.hpp"
@@ -17,7 +17,7 @@ namespace tc=second_stage_test::matched::joint_abc;
 n::LocalConditioningAssessment Assess(const n::Domain & domain,n::VectorRef y,const n::Vector & eta,
     const n::Vector & beta,const n::EvaluationContext & context)
 {
-    return n::AssessFixedNeighborLocalConditioning(domain,y,eta,beta,context,"test/block-1");
+    return n::AssessBcdLocalConditioning(domain,y,eta,beta,context,"test/block-1");
 }
 
 TEST(JointLocalConditioningTest, FullRankBlockUsesCompleteProfileDerivative)
@@ -239,11 +239,11 @@ TEST(JointLocalConditioningTest, MultiBlockDiagnosticsLeaveTheAcceptedFitUnchang
     const c::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
     const auto & data=c::JointProblemAccess::Get(problem);
     const auto run=[&](bool diagnostics) {
-        n::FixedNeighborPolicy policy; policy.core_atoms=1;
+        n::BcdSearchPolicy policy; policy.core_atoms=1;
         policy.assess_local_conditioning=diagnostics;
         policy.eta_upper_bound=std::log(2.2);
         const n::Vector eta=n::Vector::Constant(2,std::log(.55));
-        return n::SearchFixedNeighborComponent(data.domain,data.layout,data.y,eta,data.context,policy);
+        return n::SearchBcdComponent(data.domain,data.layout,data.y,eta,data.context,policy);
     };
     const auto with_diagnostics=run(true),without_diagnostics=run(false);
     ASSERT_EQ(with_diagnostics.local_conditioning.size(),2u);

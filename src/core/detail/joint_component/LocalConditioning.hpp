@@ -10,7 +10,7 @@ struct LocalConditioningAssessment
     MemoryEstimate memory_estimate;
     double seconds{};
 };
-LocalConditioningAssessment AssessFixedNeighborLocalConditioning(
+LocalConditioningAssessment AssessBcdLocalConditioning(
     const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &,
     std::string,std::size_t=0);
 }

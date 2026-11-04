@@ -1,12 +1,12 @@
 #pragma once
-#include "core/detail/joint_component/FixedNeighborBlockCoordinate.hpp"
+#include "core/detail/joint_component/GaussSeidelBcd.hpp"
 
 namespace rhbm_gem::core::joint_component {
-struct FixedNeighborDiagnosticResult
+struct BcdDiagnosticResult
 {
     BlockCoordinateState state;
-    std::vector<FixedNeighborBlockRecord> blocks;
-    std::vector<FixedNeighborBlockSweep> sweeps;
+    std::vector<BcdBlockRecord> blocks;
+    std::vector<BcdSweepRecord> sweeps;
     bool search_converged{},endpoint_certified{};
     std::string reason;
     std::size_t first_order_stationarity_sweep{},confirmed_stationarity_sweep{};
@@ -14,9 +14,9 @@ struct FixedNeighborDiagnosticResult
     std::size_t block_preparations{},domain_preparations{},mapping_preparations{};
     std::size_t prepared_mapping_entries{},prepared_mapping_bytes{};
     MemoryEstimate memory_estimate,global_state_memory_estimate;
-    FixedNeighborWork work;
+    BcdWork work;
     double search_seconds{};
-    std::optional<FixedNeighborBlockSweep> final_sweep;
+    std::optional<BcdSweepRecord> final_sweep;
     std::vector<JointBlockConditioning> local_conditioning;
     bool certification_attempted{};
     Assessment assessment;
@@ -24,6 +24,6 @@ struct FixedNeighborDiagnosticResult
     JointFitResult fit;
 };
 
-FixedNeighborDiagnosticResult RunFixedNeighborDiagnostic(const JointProblem &,VectorRef initial_eta,
-    const FixedNeighborPolicy & = {});
+BcdDiagnosticResult RunBcdDiagnostic(const JointProblem &,VectorRef initial_eta,
+    const BcdSearchPolicy & = {});
 }
