@@ -8,7 +8,7 @@ publishes formal Target estimates and starts downstream fitting.
 
 | Area | Current behavior | Limit |
 | --- | --- | --- |
-| Joint fit | Target-only Pure Halo-Support Exclusion with FixedNeighbor and bounded Active-set LM | Halo parameters are not optimized by Joint fitting |
+| Joint fit | Target-only Pure Halo-Support Exclusion with Gauss–Seidel BCD and bounded Active-set LM | Halo parameters are not optimized by Joint fitting |
 | Qualification | Complete-sweep stationarity, endpoint verification, Independent Replay, and component/assembly checks | A matching replay alone does not establish convergence |
 | Point quality | v2 combines numerical convergence, valid parameters and Local Conditioning | Conditioning warnings do not establish global identifiability or reject a qualified endpoint |
 | Halo values | Geometry-local median from the nearest four qualified Target estimates | Reconstruction is unavailable when there are no qualified donors |

@@ -22,7 +22,25 @@ support radius of 2.5 Å. The model is
 `0 < B_i ≤ Bmax`, and signed `C_i`. C multiplies the charge kernel; it is not
 a constant background offset.
 
-Production uses FixedNeighbor blocks with core size 12, forward serial
+The Joint Component Estimator uses Gauss–Seidel Block Coordinate Descent
+(BCD) to visit component blocks in forward order. Each visit forms the
+Effective Response using the latest accepted state of the other Targets and
+holds those Targets fixed throughout the local optimization. Only an accepted
+candidate updates the shared state before the next block visit.
+
+```text
+Joint Component Estimator
+  Gauss–Seidel BCD
+    Variable Projection
+      Constrained A/C Active-set QR
+      Bounded Active-set LM
+```
+
+Variable Projection re-solves the constrained A/C problem at every Width
+trial. Bounded Active-set LM solves the resulting profile log-width problem;
+the Profile Jacobian retains its nonzero-residual derivative correction.
+
+Production uses Gauss–Seidel BCD blocks with core size 12, forward serial
 Gauss-Seidel order, with a nominal budget of 200 sweeps and a hard cap of
 300. A block visit may accept at most
 one trusted update. At fixed widths, the local A/C problem uses column
@@ -89,7 +107,7 @@ Group Fitting from those local results. These downstream stages retain their
 own availability and qualification evidence.
 
 Memory preflight and memory-bounded evaluation remain part of problem
-construction, FixedNeighbor search, endpoint verification, local conditioning,
+construction, Gauss–Seidel BCD search, endpoint verification, local conditioning,
 Halo reconstruction, and peeling.
 
 ## Persistence contract
@@ -98,11 +116,11 @@ Halo reconstruction, and peeling.
 | --- | --- |
 | SQLite database | Schema v20 |
 | Stage Result JSON | Version 4 |
-| Joint Result JSON | Schema v22 |
+| Joint Result JSON | Schema v23 |
 
 SQLite opens a new empty database by initializing schema v20 and opens an
 existing database only when its exact schema is v20. Stage JSON accepts only
-version 4. Joint JSON accepts only schema 22 and the `strict-v2` or
+version 4. Joint JSON accepts only schema 23 and the `strict-v2` or
 `practical-v2` convergence identifiers. It stores target-only Pure Exclusion
 results. No format performs migrations or compatibility decoding. Unsupported
 inputs are rejected without repair or overwrite.
@@ -111,6 +129,40 @@ Current documents can store qualified and unqualified results, nullable
 diagnostics, missing component states, unavailable width calibration, and
 unavailable Halo reconstruction. The writer does not select a schema from
 result contents.
+
+Every saved result, including an initialization or calibration failure before
+search begins, requires the complete solver provenance object:
+
+```json
+{
+  "search_method": "gauss-seidel-bcd",
+  "contract_version": "joint-solver-provenance-v6",
+  "sparse_backend": "EIGEN",
+  "bcd_core_atoms": 12,
+  "bcd_policy_version": "gauss-seidel-bcd-production-v1",
+  "bcd_maximum_sweeps": 300,
+  "bcd_order": "forward",
+  "bcd_local_search": "active-set-lm"
+}
+```
+
+Missing/null solver provenance, unknown fields, prior method/policy versions,
+and mixed contracts are rejected. The provenance revision changes the naming
+and persisted structure; numerical policy remains practical-v2 with the same
+adaptive 200/300 sweep budget. Pre-search failures carry the configured solver
+identity without claiming that search ran or that a width bound was available.
+
+## Source index
+
+- [GaussSeidelBcd.cpp](https://github.com/yslianTim/rhbm_gem/blob/develop/src/core/detail/joint_component/GaussSeidelBcd.cpp)
+  implements block search, acceptance and endpoint certification.
+- [BcdPolicy.hpp](https://github.com/yslianTim/rhbm_gem/blob/develop/src/core/detail/joint_component/BcdPolicy.hpp)
+  defines `BcdExecutionPolicy` for component orchestration; `BcdSearchPolicy`
+  in `GaussSeidelBcd.hpp` owns the internal search settings.
+- [ComponentSweepBudget.hpp](https://github.com/yslianTim/rhbm_gem/blob/develop/src/core/detail/joint_component/ComponentSweepBudget.hpp)
+  owns the unchanged adaptive sweep decisions.
+- [Refactor validation](bcd-refactor-validation.md) records the baseline and
+  numerical/contract checks.
 
 The [data I/O architecture](architecture/dataobject-io-architecture.md)
 documents the database and JSON boundaries. The

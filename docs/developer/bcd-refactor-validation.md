@@ -86,3 +86,24 @@ method/policy/key and mixed-key rejection, unknown/missing/null field rejection
 and invalid core/sweep/order tests pass. Pre-search failure round-trip retains
 BCD provenance. The eight-case numerical/work/progress capture remains exactly
 identical to P0. No migration, reader fallback or old-policy alias exists.
+
+## P4 tests and documentation
+
+Tests now use `GaussSeidelBcd_test.cpp`, `ComponentSweepBudget_test.cpp`,
+`JointBcdDiagnostic`, `JointBcdSearchTest` and
+`JointComponentSweepBudgetTest`. CMake source lists and persistence filters
+match. A source-level declaration audit preserved all 950 original tests under
+the naming map and added one provenance rejection test (951 total). Full
+Release CTest passes 21/21, including the registration coverage audit.
+
+Developer guides explain sequential accepted-state updates, Effective Response,
+Variable Projection, Constrained A/C Active-set QR, Bounded Active-set LM and
+schema 23. Source links point to the renamed files. The only remaining old
+method/key strings are seven lines of explicit rejection data in the persistence
+test. Production code and developer documentation contain no old algorithm
+names. Legitimate neighbor/support/peeling concepts retain their names.
+
+An audit of all 256 production C++ files found that, after exact declared
+identifier/string substitutions and comment removal, every file except the
+provenance assembly, Joint JSON validator and schema constants is unchanged.
+Those three differences implement only the new persisted contract.

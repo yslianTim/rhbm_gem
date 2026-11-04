@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/ComponentSweepBudget.hpp"
 #include "core/detail/joint_component/Problem.hpp"
-#include "support/JointFixedNeighborDiagnostic.hpp"
+#include "support/JointBcdDiagnostic.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include <limits>
 
@@ -41,7 +41,7 @@ rhbm_gem::core::JointProblem CoupledPair()
 }
 }
 
-TEST(JointFixedNeighborBudgetTest, NominalSweepsAreAvailableWithoutSpeculativeExtension)
+TEST(JointComponentSweepBudgetTest, NominalSweepsAreAvailableWithoutSpeculativeExtension)
 {
     n::ComponentSweepBudget budget(200,300,n::PracticalJointConvergenceCriteria);
     for(int i=0;i<200;++i)
@@ -50,7 +50,7 @@ TEST(JointFixedNeighborBudgetTest, NominalSweepsAreAvailableWithoutSpeculativeEx
     EXPECT_FALSE(budget.HardLimitReached());
 }
 
-TEST(JointFixedNeighborBudgetTest, NearbyImprovementExtendsOnlyToTheHardLimit)
+TEST(JointComponentSweepBudgetTest, NearbyImprovementExtendsOnlyToTheHardLimit)
 {
     n::ComponentSweepBudget budget(20,30,n::PracticalJointConvergenceCriteria);
     ImprovingWindow(budget);
@@ -60,7 +60,7 @@ TEST(JointFixedNeighborBudgetTest, NearbyImprovementExtendsOnlyToTheHardLimit)
     EXPECT_TRUE(budget.HardLimitReached());
 }
 
-TEST(JointFixedNeighborBudgetTest, ReboundsAndOddEvenOscillationDoNotEraseObservedProgress)
+TEST(JointComponentSweepBudgetTest, ReboundsAndOddEvenOscillationDoNotEraseObservedProgress)
 {
     for(bool oscillation:{false,true})
     {
@@ -75,7 +75,7 @@ TEST(JointFixedNeighborBudgetTest, ReboundsAndOddEvenOscillationDoNotEraseObserv
     }
 }
 
-TEST(JointFixedNeighborBudgetTest, WidthProgressUsesItsOwnNormalizedThreshold)
+TEST(JointComponentSweepBudgetTest, WidthProgressUsesItsOwnNormalizedThreshold)
 {
     n::ComponentSweepBudget budget(20,30,n::PracticalJointConvergenceCriteria);
     for(int i=0;i<20;++i) Observe(budget,.5,i<10 ? 6.0 : 3.0);
@@ -85,14 +85,14 @@ TEST(JointFixedNeighborBudgetTest, WidthProgressUsesItsOwnNormalizedThreshold)
     EXPECT_FALSE(stalled_width.AllowsNextSweep());
 }
 
-TEST(JointFixedNeighborBudgetTest, DistantEndpointsDoNotConsumeAnExtension)
+TEST(JointComponentSweepBudgetTest, DistantEndpointsDoNotConsumeAnExtension)
 {
     n::ComponentSweepBudget budget(20,30,n::PracticalJointConvergenceCriteria);
     for(int i=0;i<20;++i) Observe(budget,i<10 ? 60.0 : 30.0,2.0);
     EXPECT_FALSE(budget.AllowsNextSweep());
 }
 
-TEST(JointFixedNeighborBudgetTest, NonfiniteAndNegativeMetricsCannotAuthorizeExtension)
+TEST(JointComponentSweepBudgetTest, NonfiniteAndNegativeMetricsCannotAuthorizeExtension)
 {
     for(double bad:{std::numeric_limits<double>::quiet_NaN(),
         std::numeric_limits<double>::infinity(),-1.0})
@@ -106,7 +106,7 @@ TEST(JointFixedNeighborBudgetTest, NonfiniteAndNegativeMetricsCannotAuthorizeExt
         }
 }
 
-TEST(JointFixedNeighborBudgetTest, UnresolvedRecoveryBlocksExtensionButRecoveredHistoryDoesNot)
+TEST(JointComponentSweepBudgetTest, UnresolvedRecoveryBlocksExtensionButRecoveredHistoryDoesNot)
 {
     for(bool pending:{false,true})
     {
@@ -116,7 +116,7 @@ TEST(JointFixedNeighborBudgetTest, UnresolvedRecoveryBlocksExtensionButRecovered
     }
 }
 
-TEST(JointFixedNeighborBudgetTest, IndependentComponentsCannotShareBudgetHistory)
+TEST(JointComponentSweepBudgetTest, IndependentComponentsCannotShareBudgetHistory)
 {
     n::ComponentSweepBudget improving(20,30,n::PracticalJointConvergenceCriteria);
     n::ComponentSweepBudget stalled(20,30,n::PracticalJointConvergenceCriteria);
@@ -126,7 +126,7 @@ TEST(JointFixedNeighborBudgetTest, IndependentComponentsCannotShareBudgetHistory
     EXPECT_FALSE(stalled.AllowsNextSweep());
 }
 
-TEST(JointFixedNeighborBudgetTest, FixedAndZeroBudgetsDoNotExtend)
+TEST(JointComponentSweepBudgetTest, FixedAndZeroBudgetsDoNotExtend)
 {
     n::ComponentSweepBudget fixed(0,20,n::PracticalJointConvergenceCriteria);
     ImprovingWindow(fixed);
@@ -136,7 +136,7 @@ TEST(JointFixedNeighborBudgetTest, FixedAndZeroBudgetsDoNotExtend)
     EXPECT_FALSE(empty.AllowsNextSweep());
 }
 
-TEST(JointFixedNeighborBudgetTest, EasyQualifiedSearchStopsWithoutExtraWorkOrParameterChanges)
+TEST(JointComponentSweepBudgetTest, EasyQualifiedSearchStopsWithoutExtraWorkOrParameterChanges)
 {
     const rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
     const n::Vector eta=n::Vector::Constant(2,std::log(.55));
@@ -157,7 +157,7 @@ TEST(JointFixedNeighborBudgetTest, EasyQualifiedSearchStopsWithoutExtraWorkOrPar
     EXPECT_EQ(adaptive.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
 }
 
-TEST(JointFixedNeighborBudgetTest, ExtensionPreservesTheOriginalPathAndQualifiesProductionAssembly)
+TEST(JointComponentSweepBudgetTest, ExtensionPreservesTheOriginalPathAndQualifiesProductionAssembly)
 {
     const auto problem=CoupledPair();
     std::vector<n::BcdSearchResult> searches;
@@ -188,7 +188,7 @@ TEST(JointFixedNeighborBudgetTest, ExtensionPreservesTheOriginalPathAndQualifies
     EXPECT_EQ(adaptive.assembled_state->b,fixed.assembled_state->b);
 }
 
-TEST(JointFixedNeighborBudgetTest, UnqualifiedHardLimitAndMemoryRejectionCannotPublishComponentState)
+TEST(JointComponentSweepBudgetTest, UnqualifiedHardLimitAndMemoryRejectionCannotPublishComponentState)
 {
     const auto problem=CoupledPair();
     n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
@@ -211,7 +211,7 @@ TEST(JointFixedNeighborBudgetTest, UnqualifiedHardLimitAndMemoryRejectionCannotP
     EXPECT_FALSE(memory.components[0].state); EXPECT_FALSE(memory.assembled_state);
 }
 
-TEST(JointFixedNeighborBudgetTest, MultipleComponentsExtendAndStopIndependently)
+TEST(JointComponentSweepBudgetTest, MultipleComponentsExtendAndStopIndependently)
 {
     auto input=CoupledPair().Input();
     const auto single=second_stage_test::SyntheticJointWorkload("chain",1);

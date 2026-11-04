@@ -276,9 +276,9 @@ runtime::BcdComponentResult SolveBcdComponentForTesting(const ComponentView & vi
 BcdFitDiagnostic SolveBcdComponentForDiagnostics(const ComponentView & view,
     const Vector & initial_b,const EvaluationContext & parent)
 {
-    const auto fixed=SolveBcdComponentForTesting(view,initial_b,parent);
+    const auto bcd=SolveBcdComponentForTesting(view,initial_b,parent);
     BcdFitDiagnostic out;
-    const auto & result=fixed.search;
+    const auto & result=bcd.search;
     const bool endpoint_qualified=result.certification && result.certification->qualified();
     out.search.initial.eta.resize(static_cast<Eigen::Index>(view.atoms.size()));
     out.search.initial.beta=Vector::Zero(2*static_cast<Eigen::Index>(view.atoms.size()));
@@ -303,7 +303,7 @@ BcdFitDiagnostic SolveBcdComponentForDiagnostics(const ComponentView & view,
         out.trusted_state=result.certification->assessment.primary;
         out.trusted_assessment=result.certification->assessment;
     }
-    out.search_success=fixed.succeeded;
+    out.search_success=bcd.succeeded;
     return out;
 }
 j::object FitComponent(const ComponentView & view,const Vector & initial_b,const EvaluationContext & parent)

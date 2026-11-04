@@ -43,7 +43,7 @@ def main() -> int:
         run("potential_analysis", "--select-chain", "A", "-a", model,
             "-m", map_path, "-d", database, "-k", "example", "-v", "0", expected_exit=0)
         run("potential_analysis", "--estimator", "joint-components",
-            "--select-chain", "A", "-a", model, "-m", map_path, "-d", database, "-k", "fixed", "-v", "0",
+            "--select-chain", "A", "-a", model, "-m", map_path, "-d", database, "-k", "bcd", "-v", "0",
             expected_exit=0)
         model_hash = hashlib.sha256(model.read_bytes()).hexdigest()
         map_hash = hashlib.sha256(map_path.read_bytes()).hexdigest()
@@ -66,7 +66,7 @@ def main() -> int:
         with sqlite3.connect(database) as connection:
             assert connection.execute("PRAGMA user_version").fetchone()[0] == 20
             payload = connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='example'").fetchone()[0]
-            fixed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='fixed'").fetchone()[0])
+            bcd = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='bcd'").fetchone()[0])
             changed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='changed'").fetchone()[0])
             stages = json.loads(connection.execute("SELECT result_json FROM model_stage_result WHERE key_tag='example'").fetchone()[0])
             assert stages["version"] == 4
@@ -102,8 +102,8 @@ def main() -> int:
             "bcd_order": "forward",
             "bcd_local_search": "active-set-lm",
         }
-        fixed_solver = fixed["metadata"]["solver"]
-        assert {key: fixed_solver[key] for key in (
+        bcd_solver = bcd["metadata"]["solver"]
+        assert {key: bcd_solver[key] for key in (
             "search_method", "contract_version", "sparse_backend", "bcd_core_atoms",
             "bcd_policy_version",
             "bcd_maximum_sweeps", "bcd_order", "bcd_local_search",

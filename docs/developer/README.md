@@ -37,7 +37,7 @@ with project internals.
 - [Capabilities and limitations](joint-capabilities-limitations.md) identifies
   supported behavior and current evidence limits.
 - [Target point validation](joint-target-estimability.md) defines v2 quality and
-  schema 22 persistence.
+  schema 23 persistence.
 - [Memory planning](joint-component-memory-census.md) documents production
   preflight estimates and their limits.
 - [Certification contract](joint_abc_certification_contract.md),

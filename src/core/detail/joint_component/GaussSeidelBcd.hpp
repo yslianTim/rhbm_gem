@@ -117,6 +117,7 @@ struct PreparedBcdBlock
     EvaluationContext context;
     Eigen::Index local_atoms{};
 };
+// Search settings for sequential Gauss-Seidel BCD sweeps within one component.
 struct BcdSearchPolicy
 {
     std::size_t core_atoms{12},maximum_sweeps{30};

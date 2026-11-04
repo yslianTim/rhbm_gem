@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "support/JointFixedNeighborDiagnostic.hpp"
+#include "support/JointBcdDiagnostic.hpp"
 #include "support/JointBlockCoordinate.hpp"
 #include "support/JointComponentChecks.hpp"
 #include "core/detail/joint_component/Problem.hpp"
@@ -149,7 +149,7 @@ void AuditIncrementalCandidate(const rhbm_gem::core::JointProblemInput & input,
     audit.decision_disagreements+=estimated_decision!=reference_decision || event.accepted!=reference_decision;
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, ProfileEndpointMatchesFixedStateEvaluation)
+TEST(JointBcdSearchTest, ProfileEndpointMatchesFixedStateEvaluation)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -174,7 +174,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProfileEndpointMatchesFixedStateEval
         state.certificate.width_bound_projected_kkt));
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, ReplayWorkspacePreservesExactSearchResultsAcrossRuns)
+TEST(JointBcdSearchTest, ReplayWorkspacePreservesExactSearchResultsAcrossRuns)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
@@ -216,7 +216,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReplayWorkspacePreservesExactSearchR
     }
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, CandidateObserverDoesNotChangeSearch)
+TEST(JointBcdSearchTest, CandidateObserverDoesNotChangeSearch)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -255,7 +255,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, CandidateObserverDoesNotChangeSearch
     EXPECT_TRUE(BitwiseEqual(baseline.state.objective,observed.state.objective));
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveMatchesIndependentFullReplay)
+TEST(JointBcdSearchTest, IncrementalObjectiveMatchesIndependentFullReplay)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -288,7 +288,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveMatchesIndepende
         [](const auto & sweep){return sweep.objective_cache_refreshed;}));
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveQualifiesAtActiveWidthUpperBound)
+TEST(JointBcdSearchTest, IncrementalObjectiveQualifiesAtActiveWidthUpperBound)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const n::Vector initial_eta=n::Vector::Constant(3,std::log(.5));
@@ -311,7 +311,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveQualifiesAtActiv
         [](const auto & sweep){return sweep.objective_cache_refreshed;}));
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, EverySweepReconcilesObjectiveAfterReplayAudit)
+TEST(JointBcdSearchTest, EverySweepReconcilesObjectiveAfterReplayAudit)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",300));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -343,7 +343,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, EverySweepReconcilesObjectiveAfterRe
         n::BlockObjectiveReplayEnclosure(replay.objective));
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, SweepReplayMismatchFailsBeforeObjectiveReconciliation)
+TEST(JointBcdSearchTest, SweepReplayMismatchFailsBeforeObjectiveReconciliation)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -365,7 +365,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, SweepReplayMismatchFailsBeforeObject
     EXPECT_NE(result.state.objective,replay.objective);
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveRemainsQualifiedAcrossInitialWidths)
+TEST(JointBcdSearchTest, IncrementalObjectiveRemainsQualifiedAcrossInitialWidths)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     for(const double width:std::array<double,3>{.35,.55,.9})
@@ -386,7 +386,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, IncrementalObjectiveRemainsQualified
     }
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, SignedCancellationQualifiesWhenOnlyKktGateIsSatisfied)
+TEST(JointBcdSearchTest, SignedCancellationQualifiesWhenOnlyKktGateIsSatisfied)
 {
     auto input=second_stage_test::SyntheticJointWorkload("chain",3);
     for(std::size_t atom=0;atom<3;++atom)
@@ -426,7 +426,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, SignedCancellationQualifiesWhenOnlyK
     EXPECT_EQ(result.confirmed_stationarity_sweep,result.sweep_count);
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, HardCaseIncrementalObjectiveAndReplayQualification)
+TEST(JointBcdSearchTest, HardCaseIncrementalObjectiveAndReplayQualification)
 {
     using Input=rhbm_gem::core::JointProblemInput;
     struct Fixture {std::string name; Input input; std::size_t core_atoms;};
@@ -547,7 +547,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, HardCaseIncrementalObjectiveAndRepla
     }
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, AffectedReplayFallsBackBeforeScratchExceedsMemoryBudget)
+TEST(JointBcdSearchTest, AffectedReplayFallsBackBeforeScratchExceedsMemoryBudget)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -598,7 +598,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, AffectedReplayFallsBackBeforeScratch
     EXPECT_TRUE(BitwiseEqual(affected.state.objective,fallback.state.objective));
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, E1MemoryPreflightRejectsBeforeCreatingAcceptedState)
+TEST(JointBcdSearchTest, E1MemoryPreflightRejectsBeforeCreatingAcceptedState)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -618,7 +618,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, E1MemoryPreflightRejectsBeforeCreati
     EXPECT_EQ(candidates,0u);
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, E1NonfiniteObservationsFailBeforeAcceptedStateCreation)
+TEST(JointBcdSearchTest, E1NonfiniteObservationsFailBeforeAcceptedStateCreation)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -638,7 +638,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, E1NonfiniteObservationsFailBeforeAcc
     EXPECT_EQ(candidates,0u);
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, E1NonfiniteObjectiveDoesNotAcceptOrPartiallyCommitCandidate)
+TEST(JointBcdSearchTest, E1NonfiniteObjectiveDoesNotAcceptOrPartiallyCommitCandidate)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -671,7 +671,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, E1NonfiniteObjectiveDoesNotAcceptOrP
     EXPECT_TRUE(BitwiseEqual(result.result.state.beta,n::Vector::Zero(6)));
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, CandidateLocalObjectiveIncreasePreservesAcceptedBeforeState)
+TEST(JointBcdSearchTest, CandidateLocalObjectiveIncreasePreservesAcceptedBeforeState)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -706,7 +706,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, CandidateLocalObjectiveIncreasePrese
         n::BlockObjectiveReplayEnclosure(replay.objective));
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, CandidateConsistencyAndNonfiniteFaultsPreserveAcceptedBeforeState)
+TEST(JointBcdSearchTest, CandidateConsistencyAndNonfiniteFaultsPreserveAcceptedBeforeState)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -760,7 +760,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, CandidateConsistencyAndNonfiniteFaul
     }
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, PositiveObjectiveDeltaConsistencyConditionBoundsTheAcceptanceCase)
+TEST(JointBcdSearchTest, PositiveObjectiveDeltaConsistencyConditionBoundsTheAcceptanceCase)
 {
     const double boundary_delta=n::BlockObjectiveReplayEnclosure(0.0);
     const double boundary_reference=boundary_delta;
@@ -775,7 +775,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, PositiveObjectiveDeltaConsistencyCon
     EXPECT_GT(outside_delta,n::BlockObjectiveReplayEnclosure(outside_reference));
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, UnchangedCandidateSkipsOnlyCandidateReplay)
+TEST(JointBcdSearchTest, UnchangedCandidateSkipsOnlyCandidateReplay)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
@@ -802,7 +802,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, UnchangedCandidateSkipsOnlyCandidate
 }
 
 
-TEST(JointFixedNeighborBlockCoordinateTest, PreparedConditioningUsesValidatedContextWidthBound)
+TEST(JointBcdSearchTest, PreparedConditioningUsesValidatedContextWidthBound)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -842,7 +842,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, PreparedConditioningUsesValidatedCon
     rejected(std::numeric_limits<double>::infinity(),std::nullopt,"invalid-width-upper-bound");
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, ProductionBoundedSearchReleasesTheStartingUpperFace)
+TEST(JointBcdSearchTest, ProductionBoundedSearchReleasesTheStartingUpperFace)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const double eta_max=std::log(.55);
@@ -882,7 +882,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionBoundedSearchReleasesTheSt
     EXPECT_EQ(result.final_sweep->active_width_bound_count,replay.active_width_bounds);
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, AssembledBoundedWidthStationarityUsesIndependentProjectedKkt)
+TEST(JointBcdSearchTest, AssembledBoundedWidthStationarityUsesIndependentProjectedKkt)
 {
     auto problem=PureExclusionChain(3);
     const double eta_max=std::log(.4);
@@ -939,16 +939,16 @@ void CheckMultiBlockBudgetFailure(const std::string & topology)
     EXPECT_TRUE(result.fit.components.empty());
 }
 }
-TEST(JointFixedNeighborBlockCoordinateTest, SmallSingleBlockFixturesUseExistingEndpointCertification)
+TEST(JointBcdSearchTest, SmallSingleBlockFixturesUseExistingEndpointCertification)
 {
     CheckSingleBlock("chain",8); CheckSingleBlock("cube",8);
     CheckSingleBlock("chain",32); CheckSingleBlock("cube",32);
 }
-TEST(JointFixedNeighborBlockCoordinateTest, MultiBlockBudgetFailureRemainsDistinctFromRuntimeConvergence)
+TEST(JointBcdSearchTest, MultiBlockBudgetFailureRemainsDistinctFromRuntimeConvergence)
 {
     CheckMultiBlockBudgetFailure("chain"); CheckMultiBlockBudgetFailure("cube");
 }
-TEST(JointFixedNeighborBlockCoordinateTest, CheapStationarityNeedsCompleteSweepConfirmation)
+TEST(JointBcdSearchTest, CheapStationarityNeedsCompleteSweepConfirmation)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
     const n::Vector eta=n::Vector::Constant(8,std::log(.55));
@@ -969,7 +969,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, CheapStationarityNeedsCompleteSweepC
     EXPECT_EQ(confirmed.confirmed_stationarity_sweep,confirmed.sweeps.size());
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, EndpointCertificationRetryScheduleIsPreserved)
+TEST(JointBcdSearchTest, EndpointCertificationRetryScheduleIsPreserved)
 {
     std::size_t next_retry_sweep{};
     EXPECT_FALSE(n::ShouldAttemptBcdCertification(
@@ -984,7 +984,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, EndpointCertificationRetryScheduleIs
     EXPECT_EQ(next_retry_sweep,22u);
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, FailedBlockRetriesAfterLaterBlocksUpdateTheNeighborState)
+TEST(JointBcdSearchTest, FailedBlockRetriesAfterLaterBlocksUpdateTheNeighborState)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -1046,7 +1046,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, FailedBlockRetriesAfterLaterBlocksUp
     EXPECT_GT(current.result.work.incremental_objective_evaluations,0u);
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, ExhaustedBlockRecoveryLeavesTheLastAcceptedComponentStateUntouched)
+TEST(JointBcdSearchTest, ExhaustedBlockRecoveryLeavesTheLastAcceptedComponentStateUntouched)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -1083,7 +1083,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ExhaustedBlockRecoveryLeavesTheLastA
     EXPECT_FALSE(result.certification.has_value());
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, SearchResultAndIndependentCertificationStaySeparate)
+TEST(JointBcdSearchTest, SearchResultAndIndependentCertificationStaySeparate)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",32));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -1133,7 +1133,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, SearchResultAndIndependentCertificat
     EXPECT_TRUE((quiet_certification.assessment.primary.beta.array()==quiet.state.beta.array()).all());
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, ReplayStructureFollowsComponentLocalRows)
+TEST(JointBcdSearchTest, ReplayStructureFollowsComponentLocalRows)
 {
     rhbm_gem::core::JointProblemInput input;
     input.atom_ids={"a","b"};
@@ -1171,7 +1171,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ReplayStructureFollowsComponentLocal
     }
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, EmptyOrInvalidReplayRowMappingCannotAcceptState)
+TEST(JointBcdSearchTest, EmptyOrInvalidReplayRowMappingCannotAcceptState)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -1191,7 +1191,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, EmptyOrInvalidReplayRowMappingCannot
     check_invalid(invalid_layout);
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, FixedNeighborAcceptsAtMostOneTrustedLocalUpdatePerBlockVisit)
+TEST(JointBcdSearchTest, BcdAcceptsAtMostOneTrustedLocalUpdatePerBlockVisit)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",32));
     const n::Vector eta=n::Vector::Constant(32,std::log(.55));
@@ -1206,7 +1206,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, FixedNeighborAcceptsAtMostOneTrusted
     }
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, KktStationarityCriteriaHaveInclusiveFiniteBoundaries)
+TEST(JointBcdSearchTest, KktStationarityCriteriaHaveInclusiveFiniteBoundaries)
 {
     const auto & strict=n::StrictJointConvergenceCriteria;
     const auto & practical=n::PracticalJointConvergenceCriteria;
@@ -1258,7 +1258,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, KktStationarityCriteriaHaveInclusive
     invalid=practical; invalid.global_width_gradient=infinity;
     EXPECT_FALSE(n::IsValidJointConvergenceCriteria(invalid));
 }
-TEST(JointFixedNeighborBlockCoordinateTest, PracticalCriteriaDoNotQualifySweepsWithFailedBlocks)
+TEST(JointBcdSearchTest, PracticalCriteriaDoNotQualifySweepsWithFailedBlocks)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -1275,7 +1275,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, PracticalCriteriaDoNotQualifySweepsW
     EXPECT_EQ(result.confirmed_stationarity_sweep,0u);
     EXPECT_FALSE(result.certification.has_value());
 }
-TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchDefaultsToValidatedPracticalCriteria)
+TEST(JointBcdSearchTest, ProductionSearchDefaultsToValidatedPracticalCriteria)
 {
     const auto production=n::PracticalJointConvergenceCriteria;
     EXPECT_DOUBLE_EQ(production.global_ac_kkt,n::PracticalJointConvergenceCriteria.global_ac_kkt);
@@ -1285,7 +1285,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, ProductionSearchDefaultsToValidatedP
     EXPECT_DOUBLE_EQ(local.global_width_gradient,n::StrictJointConvergenceCriteria.global_width_gradient);
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, KktOnlyConvergenceConfirmsAcrossCompleteSweepsAndCertifies)
+TEST(JointBcdSearchTest, KktOnlyConvergenceConfirmsAcrossCompleteSweepsAndCertifies)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -1315,7 +1315,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, KktOnlyConvergenceConfirmsAcrossComp
     EXPECT_EQ(result.certification_attempts,1u);
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, BudgetExhaustionPreservesCandidateWithoutInventingTrustedState)
+TEST(JointBcdSearchTest, BudgetExhaustionPreservesCandidateWithoutInventingTrustedState)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -1342,7 +1342,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, BudgetExhaustionPreservesCandidateWi
         n::BlockObjectiveReplayEnclosure(replay.objective));
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, TrustedInitialProfileCannotCompleteFailedWidthRecovery)
+TEST(JointBcdSearchTest, TrustedInitialProfileCannotCompleteFailedWidthRecovery)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -1363,7 +1363,7 @@ TEST(JointFixedNeighborBlockCoordinateTest, TrustedInitialProfileCannotCompleteF
     EXPECT_EQ(result.blocks.front().accepted_updates,0);
 }
 
-TEST(JointFixedNeighborBlockCoordinateTest, WidthFailureIsScopedToOneBlockVisit)
+TEST(JointBcdSearchTest, WidthFailureIsScopedToOneBlockVisit)
 {
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);

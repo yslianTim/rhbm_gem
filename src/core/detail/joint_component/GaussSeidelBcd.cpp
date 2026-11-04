@@ -658,7 +658,7 @@ BcdSearchResult SearchBcdComponent(
         prepared.local_atoms=static_cast<Eigen::Index>(profile_atoms.size());
         prepared.context.rank={prepared.domain.rows,2*prepared.local_atoms,prepared.local_atoms};
         prepared.context.linear.rank_relative=prepared.context.rank.Relative(2*prepared.local_atoms);
-        // FixedNeighbor performs at most one trusted accepted local update per block visit.
+        // Gauss-Seidel BCD performs at most one trusted accepted local update per block visit.
         prepared.context.update_budget=1;
         prepared_blocks.push_back(std::move(prepared));
     }

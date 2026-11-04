@@ -1,6 +1,6 @@
 # Joint local sparse solver backend
 
-The production FixedNeighbor local A/C solve uses Eigen `SparseQR` with
+The production Gauss–Seidel BCD local A/C solve uses Eigen `SparseQR` with
 `COLAMDOrdering`. EIGEN is the sole backend; there is no sparse-backend
 selector, runtime fallback, or automatic routing. The build does not search for
 or link SuiteSparseQR, SPQR, or CHOLMOD.
@@ -20,7 +20,7 @@ remain separate streaming checks and do not invoke a second global A/C solver.
 
 `LinearSolve`, `StructuralPartition`, `CompactSvd`, and `TiledDerivative`
 provide the local sparse solve, block structure, rank checks, and profile
-derivative calculations. Local conditioning uses bounded FixedNeighbor block
+derivative calculations. Local conditioning uses bounded Gauss–Seidel BCD block
 workspace after the accepted endpoint. It reports conditional block evidence;
 it does not certify global rank. The complete derivative retains its
 nonzero-residual coefficient correction.
@@ -30,7 +30,7 @@ nonzero-residual coefficient correction.
 Global search and endpoint verification traverse support entries and do not
 form a global dense design. The former global rank factors and projection
 coefficients have been removed. Current stage-specific memory protections cover
-construction, FixedNeighbor preparation, streaming evaluation, endpoint
+construction, Gauss–Seidel BCD preparation, streaming evaluation, endpoint
 verification and local conditioning.
 
 The production local solver and endpoint qualification checks are covered by

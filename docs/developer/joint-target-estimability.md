@@ -34,8 +34,8 @@ search and Passed runtime/target convergence. Conditioning remains diagnostic;
 it does not revoke or replace endpoint qualification. Halo reconstruction,
 Original-domain peeling and Group Fitting keep their separate contracts.
 
-Joint JSON schema 22 writes this contract and omits the retired diagnostic
-members completely. The reader accepts only schema 22 and rejects unknown
+Joint JSON schema 23 writes this contract and omits the retired diagnostic
+members completely. The reader accepts only schema 23 and rejects unknown
 component/point fields and noncurrent target contracts. Schema 21 documents
 must be read with their original Git version. No legacy reader is retained.
 SQLite schema 20 and Stage Result JSON version 4 are unchanged: SQLite stores

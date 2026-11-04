@@ -36,9 +36,11 @@ peeling; they do not receive target-local or group results.
 2. Qualified FirstStage Target widths initialize the Joint fit and provide the
    global width calibration. A result with unavailable calibration keeps its
    diagnostics and does not proceed as a successful Joint endpoint.
-3. FixedNeighbor and its bounded Active-set LM / constrained A/C SparseQR
-   solve produce the target-only state. Global convergence, endpoint
-   verification, Independent Replay, target qualification and Local Conditioning are recorded.
+3. Gauss–Seidel BCD updates component blocks sequentially. Each block uses
+   Variable Projection with Constrained A/C Active-set QR and Bounded Active-set
+   LM to produce the target-only state. Global convergence, Endpoint
+   Certification, Independent Replay, target qualification and Local
+   Conditioning are recorded.
 4. Qualified Target A/B/C points provide geometry-local kNN-4 Halo medians.
    Each reconstructed Halo records its qualified donor Target IDs. An
    unavailable reconstruction remains a separate status from Joint numerical
@@ -73,7 +75,9 @@ data as zero.
 ## Persistence
 
 SQLite schema v20 stores the current model structure, Joint Result JSON schema
-21, and Stage Result JSON version 4. Joint JSON is target-only Pure Exclusion.
+23, and Stage Result JSON version 4. Joint JSON is target-only Pure Exclusion.
+Joint results require the complete BCD solver provenance v6 described in the
+[Joint runtime guide](joint-component-runtime.md), including pre-search failures.
 Stage JSON retains current FirstStage and SecondStage estimates, raw and
 peeling samples, Post-Joint Local results, group posterior, fixed-charge
 profiles, summaries, and source provenance.

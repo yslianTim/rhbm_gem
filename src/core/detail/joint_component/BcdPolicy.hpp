@@ -19,8 +19,8 @@ inline constexpr std::size_t ProductionBcdCoreAtoms=12;
 inline constexpr std::size_t ProductionBcdNominalSweeps=200;
 inline constexpr std::size_t ProductionBcdMaximumSweeps=300;
 
-// The production search accepts its calibrated width bound.
-// Component identity is supplied internally for failure-only logs.
+// Component execution supplies the calibrated width bound and failure-log identity.
+// Block search settings remain in BcdSearchPolicy.
 struct BcdExecutionPolicy
 {
     std::size_t component_index{};

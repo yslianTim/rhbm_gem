@@ -742,8 +742,8 @@ TEST(DataObjectPersistenceTest, JointResultsRoundTripCopyClearAndReplaceAtomical
 TEST(DataObjectPersistenceTest, JointSolverProvenanceRoundTripsAndMissingFieldIsRejected)
 {
     namespace io=rg::joint_result_io;
-    const auto fixed=SavedJointExample();
-    const auto decoded=io::Decode(io::Encode(fixed));
+    const auto bcd=SavedJointExample();
+    const auto decoded=io::Decode(io::Encode(bcd));
     ASSERT_TRUE(decoded.metadata.solver);
     EXPECT_EQ(decoded.metadata.solver->search_method,"gauss-seidel-bcd");
     EXPECT_EQ(decoded.metadata.solver->bcd_core_atoms,12u);
@@ -751,19 +751,19 @@ TEST(DataObjectPersistenceTest, JointSolverProvenanceRoundTripsAndMissingFieldIs
     EXPECT_EQ(decoded.metadata.solver->contract_version,"joint-solver-provenance-v6");
     EXPECT_EQ(decoded.metadata.solver->bcd_policy_version,"gauss-seidel-bcd-production-v1");
 
-    auto old=boost::json::parse(io::Encode(fixed)).as_object();
+    auto old=boost::json::parse(io::Encode(bcd)).as_object();
     old.at("metadata").as_object().erase("solver");
     EXPECT_ANY_THROW(io::Decode(boost::json::serialize(old)));
 
-    old=boost::json::parse(io::Encode(fixed)).as_object();
+    old=boost::json::parse(io::Encode(bcd)).as_object();
     old.at("metadata").as_object()["solver"]=nullptr;
     EXPECT_ANY_THROW(io::Decode(boost::json::serialize(old)));
-    auto missing=fixed;
+    auto missing=bcd;
     missing.metadata.solver.reset();
     EXPECT_THROW(io::Encode(missing),std::invalid_argument);
 }
 
-TEST(DataObjectPersistenceTest, FixedNeighborFailureEvidenceAndSweepCountsRoundTrip)
+TEST(DataObjectPersistenceTest, BcdFailureEvidenceAndSweepCountsRoundTrip)
 {
     namespace io=rg::joint_result_io;
     auto result=SavedJointExample();
@@ -808,40 +808,40 @@ TEST(DataObjectPersistenceTest, FixedNeighborFailureEvidenceAndSweepCountsRoundT
     EXPECT_ANY_THROW(io::Decode(boost::json::serialize(missing_sweeps)));
 }
 
-TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
+TEST(DataObjectPersistenceTest, CurrentBcdSolverProvenanceRoundTrips)
 {
     namespace io=rg::joint_result_io;
-    auto fixed=SavedJointExample();
-    rg::JointSolverProvenance fixed_provenance{"gauss-seidel-bcd",12u,std::nullopt};
-    fixed_provenance.contract_version=rg::JointSolverProvenanceContractVersion;
-    fixed_provenance.sparse_backend="EIGEN";
-    fixed_provenance.bcd_policy_version=rg::BcdPolicyContractVersion;
-    fixed_provenance.bcd_maximum_sweeps=300;
-    fixed_provenance.bcd_order="forward";
-    fixed_provenance.bcd_local_search="active-set-lm";
-    fixed.metadata.solver=fixed_provenance;
-    const auto fixed_json=io::Encode(fixed);
-    const auto fixed_object=boost::json::parse(fixed_json).as_object();
-    auto downgraded_schema=fixed_object;
+    auto bcd=SavedJointExample();
+    rg::JointSolverProvenance bcd_provenance{"gauss-seidel-bcd",12u,std::nullopt};
+    bcd_provenance.contract_version=rg::JointSolverProvenanceContractVersion;
+    bcd_provenance.sparse_backend="EIGEN";
+    bcd_provenance.bcd_policy_version=rg::BcdPolicyContractVersion;
+    bcd_provenance.bcd_maximum_sweeps=300;
+    bcd_provenance.bcd_order="forward";
+    bcd_provenance.bcd_local_search="active-set-lm";
+    bcd.metadata.solver=bcd_provenance;
+    const auto bcd_json=io::Encode(bcd);
+    const auto bcd_object=boost::json::parse(bcd_json).as_object();
+    auto downgraded_schema=bcd_object;
     downgraded_schema["schema_version"]=7;
     EXPECT_ANY_THROW(io::Decode(boost::json::serialize(downgraded_schema)));
-    EXPECT_EQ(fixed_object.at("metadata").as_object().at("solver").as_object()
+    EXPECT_EQ(bcd_object.at("metadata").as_object().at("solver").as_object()
         .at("bcd_local_search").as_string(),"active-set-lm");
-    const auto fixed_decoded=io::Decode(fixed_json);
-    ASSERT_TRUE(fixed_decoded.metadata.solver);
-    EXPECT_EQ(fixed_decoded.metadata.solver->contract_version,rg::JointSolverProvenanceContractVersion);
-    EXPECT_EQ(fixed_decoded.metadata.solver->sparse_backend,"EIGEN");
-    EXPECT_EQ(fixed_decoded.metadata.solver->bcd_maximum_sweeps,300u);
-    EXPECT_EQ(fixed_decoded.metadata.solver->bcd_order,"forward");
-    EXPECT_EQ(fixed_decoded.metadata.solver->bcd_local_search,"active-set-lm");
+    const auto bcd_decoded=io::Decode(bcd_json);
+    ASSERT_TRUE(bcd_decoded.metadata.solver);
+    EXPECT_EQ(bcd_decoded.metadata.solver->contract_version,rg::JointSolverProvenanceContractVersion);
+    EXPECT_EQ(bcd_decoded.metadata.solver->sparse_backend,"EIGEN");
+    EXPECT_EQ(bcd_decoded.metadata.solver->bcd_maximum_sweeps,300u);
+    EXPECT_EQ(bcd_decoded.metadata.solver->bcd_order,"forward");
+    EXPECT_EQ(bcd_decoded.metadata.solver->bcd_local_search,"active-set-lm");
 
-    auto bounded=fixed;
+    auto bounded=bcd;
     bounded.metadata.solver->bcd_local_search="active-set-lm";
     const auto bounded_decoded=io::Decode(io::Encode(bounded));
     ASSERT_TRUE(bounded_decoded.metadata.solver);
     EXPECT_EQ(bounded_decoded.metadata.solver->bcd_local_search,"active-set-lm");
 
-    auto retired_search=boost::json::parse(fixed_json).as_object();
+    auto retired_search=boost::json::parse(bcd_json).as_object();
     retired_search.at("metadata").as_object().at("solver").as_object()["bcd_local_search"]=
         "legacy-compact";
     EXPECT_THROW(io::Decode(boost::json::serialize(retired_search)),std::invalid_argument);
@@ -850,7 +850,7 @@ TEST(DataObjectPersistenceTest, CurrentFixedNeighborSolverProvenanceRoundTrips)
 TEST(DataObjectPersistenceTest, MalformedCurrentSolverProvenanceIsRejected)
 {
     namespace io=rg::joint_result_io;
-    auto fixed=SavedJointExample();
+    auto bcd=SavedJointExample();
     rg::JointSolverProvenance provenance{"gauss-seidel-bcd",12u,std::nullopt};
     provenance.contract_version=rg::JointSolverProvenanceContractVersion;
     provenance.sparse_backend="EIGEN";
@@ -858,9 +858,9 @@ TEST(DataObjectPersistenceTest, MalformedCurrentSolverProvenanceIsRejected)
     provenance.bcd_maximum_sweeps=300;
     provenance.bcd_order="forward";
     provenance.bcd_local_search="active-set-lm";
-    fixed.metadata.solver=provenance;
+    bcd.metadata.solver=provenance;
 
-    auto historical=boost::json::parse(io::Encode(fixed)).as_object();
+    auto historical=boost::json::parse(io::Encode(bcd)).as_object();
     auto & old_policy=historical.at("metadata").as_object().at("solver").as_object();
     old_policy["bcd_policy_version"]="fixed-neighbor-production-v4";
     old_policy["bcd_maximum_sweeps"]=200;
@@ -868,23 +868,23 @@ TEST(DataObjectPersistenceTest, MalformedCurrentSolverProvenanceIsRejected)
     old_policy["bcd_maximum_sweeps"]=300;
     EXPECT_THROW(io::Decode(boost::json::serialize(historical)),std::invalid_argument);
 
-    auto malformed=boost::json::parse(io::Encode(fixed)).as_object();
+    auto malformed=boost::json::parse(io::Encode(bcd)).as_object();
     malformed.at("metadata").as_object().at("solver").as_object().erase("sparse_backend");
     EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::invalid_argument);
 
-    malformed=boost::json::parse(io::Encode(fixed)).as_object();
+    malformed=boost::json::parse(io::Encode(bcd)).as_object();
     malformed.at("metadata").as_object().at("solver").as_object()["sparse_backend"]="unsupported";
     EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::invalid_argument);
 
-    malformed=boost::json::parse(io::Encode(fixed)).as_object();
+    malformed=boost::json::parse(io::Encode(bcd)).as_object();
     malformed.at("metadata").as_object().at("solver").as_object()["search_method"]="unsupported";
     EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::invalid_argument);
 
-    malformed=boost::json::parse(io::Encode(fixed)).as_object();
+    malformed=boost::json::parse(io::Encode(bcd)).as_object();
     malformed.at("metadata").as_object().at("solver").as_object()["preconditioner"]="Identity";
     EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::invalid_argument);
 
-    malformed=boost::json::parse(io::Encode(fixed)).as_object();
+    malformed=boost::json::parse(io::Encode(bcd)).as_object();
     malformed.at("metadata").as_object().at("solver").as_object()["bcd_order"]="sideways";
     EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::invalid_argument);
 }

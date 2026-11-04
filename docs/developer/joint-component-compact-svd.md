@@ -14,7 +14,7 @@ a singular matrix is not made full rank with an arbitrary epsilon.
 The local Profile LM keeps the complete profiled derivative, including the
 nonzero-residual coefficient correction. The local derivative path retains its
 existing tiled QR, cancellation handling, and compact least-squares solve.
-Local conditioning analyzes one FixedNeighbor block at a time and reports its
+Local conditioning analyzes one Gauss–Seidel BCD block at a time and reports its
 conditional free A/C, projected-width, and profile derivative evidence.
 
 Production does not request or retain global weak directions. The local SVD

@@ -26,15 +26,15 @@ The N0 audit confirmed the current convention: the residual step solves `J·δ �
 | N0 | Complete | Existing contract, workflow, and numerical CTest groups passed before the experiment. QR timings and numerical baselines were collected. |
 | N1 | Complete for evaluation | A test-only normal-equation route formed `JᵀJ` and `Jᵀr`, used a scaled free-face LLT solve, and kept the QR implementation available as fallback. It was not retained. |
 | N2 | Pass | Analytic damped KKT, active-bound activation/release, all-active and tiny-residual cases, rank-deficient damping fallback, ill-conditioning guard, scaled variables, invalid scaling, and tiny trust radius passed. The full three-group CTest invocation passed (3/3). |
-| N3 | Fail for promotion | Three five-run synthetic comparisons and five independent QR/hybrid runs on the requested real input showed slower FixedNeighbor and LM timings; complete Joint time had no measurable improvement. Correctness checks passed. |
+| N3 | Fail for promotion | Three five-run synthetic comparisons and five independent QR/hybrid runs on the requested real input showed slower Gauss–Seidel BCD and LM timings; complete Joint time had no measurable improvement. Correctness checks passed. |
 | N4 | Complete for evaluation | The conditioning-gated LLT route passed all 53,584 real-data attempts with no QR fallbacks. Singular and ill-conditioned unit cases fell back to QR. A microbenchmark still incurred one guard fallback per solve. |
 | N5 | Keep QR | Performance target was not met. All experimental solver, test selector, instrumentation, and benchmark code was removed; this report is retained. |
 
 ## N0 QR baseline
 
-The baseline benchmark used the existing FixedNeighbor workload with a warmup and five measured runs. Values below are the same test-instrumented build used for the A/B comparison.
+The baseline benchmark used the existing Gauss–Seidel BCD workload with a warmup and five measured runs. Values below are the same test-instrumented build used for the A/B comparison.
 
-| Targets | Search median | FixedNeighbor wall median | LM subproblem median | Sweep / replay |
+| Targets | Search median | Gauss–Seidel BCD wall median | LM subproblem median | Sweep / replay |
 |---:|---:|---:|---:|---|
 | 12 | 32.211 ms | 33.743 ms | 0.195 ms | 4 sweeps; qualified; independent replay passed |
 | 48 | 161.723 ms | 167.829 ms | 0.783 ms | 5 sweeps; qualified; independent replay passed |
@@ -55,11 +55,11 @@ Each solver/magnitude entry below is a median over five measured runs after one 
 | Targets | Metric | QR | Normal-equation hybrid | Change |
 |---:|---|---:|---:|---:|
 | 12 | LM subproblem | 0.195 ms | 1.696 ms | 8.69× slower |
-|  | FixedNeighbor wall | 33.743 ms | 35.478 ms | +5.14% |
+|  | Gauss–Seidel BCD wall | 33.743 ms | 35.478 ms | +5.14% |
 | 48 | LM subproblem | 0.783 ms | 7.028 ms | 8.98× slower |
-|  | FixedNeighbor wall | 167.829 ms | 174.765 ms | +4.13% |
+|  | Gauss–Seidel BCD wall | 167.829 ms | 174.765 ms | +4.13% |
 | 240 | LM subproblem | 3.890 ms | 33.956 ms | 8.73× slower |
-|  | FixedNeighbor wall | 829.159 ms | 869.115 ms | +4.82% |
+|  | Gauss–Seidel BCD wall | 829.159 ms | 869.115 ms | +4.82% |
 
 All six synthetic endpoints were qualified and passed independent replay. Per-size objective, global A/C KKT, projected-width KKT, and sweep counts matched to the reported precision:
 
@@ -104,6 +104,6 @@ The temporary guard rejected rank-deficient/ill-conditioned scaled systems and n
 
 ## N5 decision and cleanup
 
-The solver did not satisfy the N5 speed objective. The full real-data Joint workflow did not improve by 5%; it was 0.57% slower at the median, within run-to-run variation. The LM subproblem was substantially slower on the real input and all three representative FixedNeighbor sizes. A tall microbenchmark speedup does not offset those production-shape results.
+The solver did not satisfy the N5 speed objective. The full real-data Joint workflow did not improve by 5%; it was 0.57% slower at the median, within run-to-run variation. The LM subproblem was substantially slower on the real input and all three representative Gauss–Seidel BCD sizes. A tall microbenchmark speedup does not offset those production-shape results.
 
 Therefore, the production solver remains augmented QR. The experimental C++ branch, selector, test-only instrumentation, experimental tests, and benchmark modifications were removed. Only this research report is retained. No solver dependency or runtime flag was added.

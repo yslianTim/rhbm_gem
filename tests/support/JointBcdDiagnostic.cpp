@@ -1,4 +1,4 @@
-#include "support/JointFixedNeighborDiagnostic.hpp"
+#include "support/JointBcdDiagnostic.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include <algorithm>
 #include <cmath>

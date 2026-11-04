@@ -316,7 +316,7 @@ TEST(JointProgressTest, BoundedSyntheticFitWithoutObserverIsSilent)
     EXPECT_TRUE(stderr_text.empty());
 }
 
-TEST(JointProgressTest, BoundedSyntheticFitUsesFixedNeighborContract)
+TEST(JointProgressTest, BoundedSyntheticFitUsesBcdContract)
 {
     const core::JointProblem problem(MakeInput());
     const std::vector<double> initial{.55, .55};
@@ -339,7 +339,7 @@ TEST(JointProgressTest, BoundedSyntheticFitUsesFixedNeighborContract)
     ExpectSameFitNumerics(actual, expected);
 }
 
-TEST(JointProgressTest, FixedNeighborUsesConfiguredQualifiedDefaults)
+TEST(JointProgressTest, BcdUsesConfiguredQualifiedDefaults)
 {
     const core::JointProblem problem(MakeInput());
     const std::vector<double> initial{.55, .55};

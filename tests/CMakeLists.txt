@@ -199,8 +199,8 @@ set(JOINT_COMPONENT_WORKFLOW_TEST_SOURCES
 )
 
 set(JOINT_COMPONENT_NUMERICAL_TEST_SOURCES
-    core/joint_component/FixedNeighborBlockCoordinate_test.cpp
-    core/joint_component/FixedNeighborBudget_test.cpp
+    core/joint_component/GaussSeidelBcd_test.cpp
+    core/joint_component/ComponentSweepBudget_test.cpp
     core/joint_component/LocalConditioning_test.cpp
     core/joint_component/Numerics_test.cpp
     core/joint_component/WidthCalibration_test.cpp
@@ -245,7 +245,7 @@ endforeach()
 
 add_library(rhbm_gem_test STATIC
     ${_rhbm_gem_test_sources}
-    support/JointFixedNeighborDiagnostic.cpp
+    support/JointBcdDiagnostic.cpp
 )
 foreach(_property IN ITEMS
     COMPILE_FEATURES INTERFACE_COMPILE_FEATURES
@@ -317,8 +317,8 @@ set(joint_persistence_test_patterns
     DataObjectPersistenceTest.JointCurrentSchemaV23*
     DataObjectPersistenceTest.JointResultsRoundTripCopyClearAndReplaceAtomically
     DataObjectPersistenceTest.JointSolverProvenanceRoundTripsAndMissingFieldIsRejected
-    DataObjectPersistenceTest.FixedNeighborFailureEvidenceAndSweepCountsRoundTrip
-    DataObjectPersistenceTest.CurrentFixedNeighborSolverProvenanceRoundTrips
+    DataObjectPersistenceTest.BcdFailureEvidenceAndSweepCountsRoundTrip
+    DataObjectPersistenceTest.CurrentBcdSolverProvenanceRoundTrips
     DataObjectPersistenceTest.MalformedCurrentSolverProvenanceIsRejected
     DataObjectPersistenceTest.BcdSolverProvenanceRejectsLegacyMixedAndIncompleteContracts
     DataObjectPersistenceTest.JointContributorSubsetRoundTripsAndRejectsForeignOrHydrogenIds

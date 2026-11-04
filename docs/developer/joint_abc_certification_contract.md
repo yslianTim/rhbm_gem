@@ -34,7 +34,7 @@ convergence; an unqualified candidate is not published as a Target estimate.
 Local Conditioning is a read-only point-quality assessment. It does not alter
 accepted parameters or revoke a qualified global endpoint. Target validation
 v2 retains conditioning warnings independently of the strict local A/C
-certificate and global qualification. Current Joint Result JSON uses schema 22
+certificate and global qualification. Current Joint Result JSON uses schema 23
 and accepts only `strict-v2` and `practical-v2` convergence identifiers.
 
 ## Focused regression coverage
@@ -44,5 +44,5 @@ covers interior and upper-bound solutions, multiplier signs, release,
 trust-region damping recovery from rank deficiency, and invalid problems.
 `Numerics_test` checks derivatives,
 active-face rebuilding, feasible width replay, and projected KKT behavior.
-`FixedNeighborBlockCoordinate_test` covers retries, accepted-state safety,
+`GaussSeidelBcd_test` covers retries, accepted-state safety,
 complete-sweep confirmation, endpoint qualification, and budget exhaustion.

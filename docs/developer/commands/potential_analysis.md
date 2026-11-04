@@ -259,7 +259,7 @@ width bound `Bmax = 4 × P95`. Calibration needs at least 20 qualified Target
 donors and 95% Target coverage. If calibration is unavailable, the saved
 result retains that status and does not retry with an unbounded search.
 
-Production uses FixedNeighbor core size 12, forward serial Gauss-Seidel,
+Production uses Gauss–Seidel BCD core size 12, forward serial Gauss-Seidel,
 a nominal budget of 200 sweeps, a progress-qualified extension up to 300, and
 no more than one trusted accepted update per block visit.
 Bounded Active-set LM updates widths. Constrained A/C subproblems use Eigen
@@ -305,11 +305,11 @@ convergence and point-quality columns.
 | --- | --- |
 | SQLite database | Schema v20 only |
 | Stage Result JSON | Version 4 only |
-| Joint Result JSON | Schema v22 only |
+| Joint Result JSON | Schema v23 only |
 
 An empty database is initialized as v20. An existing database must have the
 exact v20 schema. Stage JSON accepts only version 4; Joint JSON always writes
-schema 22 and reads only schema 22. No migrations, upgrades, historical
+schema 23 and reads only schema 23. No migrations, upgrades, historical
 fallbacks, or automatic repairs are performed. Unsupported inputs are rejected
 without modifying the database. See the
 [data I/O architecture](../architecture/dataobject-io-architecture.md).
