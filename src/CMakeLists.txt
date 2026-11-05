@@ -32,7 +32,9 @@ target_sources(rhbm_gem PRIVATE
     core/detail/joint_component/StructuralPartition.cpp
     core/detail/joint_component/GaussSeidelBcd.cpp
     core/detail/joint_component/Search.cpp
-    core/detail/joint_component/Components.cpp
+    core/detail/joint_component/ComponentPartition.cpp
+    core/detail/joint_component/ComponentOrchestration.cpp
+    core/detail/joint_component/ComponentAssembly.cpp
     core/detail/joint_component/TargetEvidence.cpp
     core/detail/joint_component/JointComponentEstimator.cpp
     core/GaussianEstimator.cpp
