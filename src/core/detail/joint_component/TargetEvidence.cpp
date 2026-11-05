@@ -127,13 +127,13 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
     mark_missing_membership(conditioning_index,conditioning);
     const auto parameter_validity=[&](std::size_t index) {
         if(!dimensions) return JointCheckStatus::Unavailable;
-        const double amplitude=state->ac[2*index],width=state->tau[index],log_width=state->log_tau[index];
+        const double amplitude=state->ac[2*index],tau=state->tau[index],log_tau=state->log_tau[index];
         if(!std::isfinite(amplitude) || amplitude<0 || !std::isfinite(state->ac[2*index+1]) ||
-            !std::isfinite(width) || !(width>0) || !std::isfinite(log_width))
+            !std::isfinite(tau) || !(tau>0) || !std::isfinite(log_tau))
             return JointCheckStatus::Failed;
-        const double exp_width=std::exp(log_width);
-        return std::isfinite(exp_width) && exp_width>0 &&
-            std::abs(exp_width-width)<=8*std::numeric_limits<double>::epsilon()*width ?
+        const double exp_tau=std::exp(log_tau);
+        return std::isfinite(exp_tau) && exp_tau>0 &&
+            std::abs(exp_tau-tau)<=8*std::numeric_limits<double>::epsilon()*tau ?
                 JointCheckStatus::Passed : JointCheckStatus::Failed;
     };
     const auto local_status=[&](std::size_t atom,std::vector<std::string> & block_ids,bool & mapping_invalid) {
@@ -262,11 +262,11 @@ void AddTargetEvidence(JointFitResult & fit)
         conditioning,JointEvidenceScope::AssembledGlobal,problem.Input().observations.size());
     fit.costs.assessment_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
 }
-JointFitResult FitBcdComponents(const JointProblem & problem,const std::vector<double> & b,
+JointFitResult FitBcdComponents(const JointProblem & problem,const std::vector<double> & tau,
     const BcdExecutionPolicy & policy,
     const JointProgressObserver & observer)
 {
-    auto out=FitBcdComponentsImpl(problem,b,policy,observer);
+    auto out=FitBcdComponentsImpl(problem,tau,policy,observer);
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
     const auto & input=problem.Input();
     if(input.selection_domain) AddTargetEvidence(out);

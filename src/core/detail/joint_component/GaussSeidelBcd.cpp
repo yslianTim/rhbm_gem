@@ -34,9 +34,9 @@ Vector Select(VectorRef values,const Indices & indices)
 }
 Indices IndicesOf(const std::vector<std::size_t> & values)
 {return {values.begin(),values.end()};}
-bool AddMemoryBytes(std::size_t & total,std::size_t count,std::size_t width)
+bool AddMemoryBytes(std::size_t & total,std::size_t count,std::size_t tau)
 {
-    std::size_t bytes{}; return CheckedMultiplyBytes(count,width,bytes) && CheckedAddBytes(total,bytes,total);
+    std::size_t bytes{}; return CheckedMultiplyBytes(count,tau,bytes) && CheckedAddBytes(total,bytes,total);
 }
 bool PartitionStorageBytes(const StructuralBlockPartition & partition,bool include_metadata,std::size_t & bytes)
 {
@@ -78,10 +78,10 @@ void ReplayInto(const Domain & domain,const JointParameterLayout & layout,Vector
     out.prediction.setZero(); out.residual.setZero();
     for(auto atom:layout.full_atoms)
     {
-        const auto a=static_cast<Eigen::Index>(atom); const double width=std::exp(eta(a));
+        const auto a=static_cast<Eigen::Index>(atom); const double tau=std::exp(eta(a));
         for(const auto & support:domain.atoms[atom]) if(structure.informative_rows.at(static_cast<std::size_t>(support.row)))
         {
-            const auto basis=EvaluateKernel(support.square,width,2.5);
+            const auto basis=EvaluateKernel(support.square,tau,2.5);
             out.prediction(support.row)+=beta(2*a)*basis.gaussian+beta(2*a+1)*basis.charge;
         }
     }
@@ -174,9 +174,9 @@ AffectedReplayResult ReplayAffectedRows(const Domain & domain,VectorRef observat
 {
     const auto incidence=PrepareAffectedReplayIncidence(domain,core_atoms,neighbor_atoms,affected_rows,
         atom_position,row_positions);
-    Vector widths(static_cast<Eigen::Index>(incidence.atoms.size()));
+    Vector tau_values(static_cast<Eigen::Index>(incidence.atoms.size()));
     for(std::size_t k=0;k<incidence.atoms.size();++k)
-        widths(static_cast<Eigen::Index>(k))=std::exp(candidate_eta(incidence.atoms[k]));
+        tau_values(static_cast<Eigen::Index>(k))=std::exp(candidate_eta(incidence.atoms[k]));
     AffectedReplayResult out;
     out.prediction.resize(static_cast<Eigen::Index>(affected_rows.size()));
     out.residual.resize(static_cast<Eigen::Index>(affected_rows.size()));
@@ -187,7 +187,7 @@ AffectedReplayResult ReplayAffectedRows(const Domain & domain,VectorRef observat
         {
             const auto & contributor=incidence.contributors[entry];
             const auto atom=incidence.atoms[static_cast<std::size_t>(contributor.atom_position)];
-            const auto basis=EvaluateKernel(contributor.square,widths(contributor.atom_position),2.5);
+            const auto basis=EvaluateKernel(contributor.square,tau_values(contributor.atom_position),2.5);
             prediction+=candidate_beta(2*atom)*basis.gaussian+candidate_beta(2*atom+1)*basis.charge;
         }
         out.prediction(static_cast<Eigen::Index>(row))=prediction;
@@ -207,7 +207,7 @@ AffectedReplayResult ReplayAffectedRows(const Domain & domain,VectorRef observat
     if(!AddMemoryBytes(evaluation_bytes,incidence.atoms.capacity(),sizeof(Eigen::Index)) ||
         !AddMemoryBytes(evaluation_bytes,incidence.offsets.capacity(),sizeof(std::size_t)) ||
         !AddMemoryBytes(evaluation_bytes,incidence.contributors.capacity(),sizeof(AffectedReplayContributor)) ||
-        !AddMemoryBytes(evaluation_bytes,static_cast<std::size_t>(widths.size()),sizeof(double)) ||
+        !AddMemoryBytes(evaluation_bytes,static_cast<std::size_t>(tau_values.size()),sizeof(double)) ||
         !AddMemoryBytes(evaluation_bytes,static_cast<std::size_t>(out.prediction.size()),sizeof(double)) ||
         !AddMemoryBytes(evaluation_bytes,static_cast<std::size_t>(out.residual.size()),sizeof(double)))
         throw std::overflow_error("Affected-row replay memory estimate overflow.");
@@ -242,10 +242,10 @@ Sparse Design(const Domain & domain,VectorRef eta)
     Sparse out(domain.rows,2*eta.size()); std::vector<Eigen::Triplet<double>> entries;
     for(Eigen::Index a=0;a<eta.size();++a)
     {
-        const double width=std::exp(eta(a));
+        const double tau=std::exp(eta(a));
         for(const auto & support:domain.atoms[static_cast<std::size_t>(a)])
         {
-            const auto basis=EvaluateKernel(support.square,width,2.5);
+            const auto basis=EvaluateKernel(support.square,tau,2.5);
             if(basis.gaussian!=0) entries.emplace_back(support.row,2*a,basis.gaussian);
             if(basis.charge!=0) entries.emplace_back(support.row,2*a+1,basis.charge);
         }
@@ -1166,8 +1166,8 @@ BcdEndpointCertification CertifyBcdEndpoint(
     }
     for(Eigen::Index atom=0;atom<atom_count;++atom)
     {
-        const double width=std::exp(state.eta(atom));
-        if(state.beta(2*atom)<0 || !std::isfinite(width) || !(width>0))
+        const double tau=std::exp(state.eta(atom));
+        if(state.beta(2*atom)<0 || !std::isfinite(tau) || !(tau>0))
         {
             out.trust.reason="invalid-primary";
             out.assessment.failure="invalid-accepted-parameter-state";
@@ -1215,7 +1215,7 @@ std::optional<double> LastBcdGradient(const BcdSearchResult & result)
 }
 
 BcdComponentResult SolveBcdComponent(
-    const ComponentProblemView & prepared,VectorRef initial_b,const EvaluationContext & parent_context,
+    const ComponentProblemView & prepared,VectorRef initial_tau,const EvaluationContext & parent_context,
     const BcdExecutionPolicy & production_policy,const JointProgressObserver & observer,
     const JointProgressComponent * progress_component)
 {
@@ -1227,7 +1227,7 @@ BcdComponentResult SolveBcdComponent(
         return out;
     }
     for(const auto atom:prepared.local_to_parent_atoms)
-        if(atom<0 || atom>=initial_b.size() || !std::isfinite(initial_b(atom)) || !(initial_b(atom)>0))
+        if(atom<0 || atom>=initial_tau.size() || !std::isfinite(initial_tau(atom)) || !(initial_tau(atom)>0))
         {
             out.search.reason="invalid-initial-widths"; return out;
         }
@@ -1244,7 +1244,7 @@ BcdComponentResult SolveBcdComponent(
 
     Vector initial_eta(atom_count);
     for(std::size_t k=0;k<prepared.local_to_parent_atoms.size();++k)
-        initial_eta(static_cast<Eigen::Index>(k))=std::log(initial_b(prepared.local_to_parent_atoms[k]));
+        initial_eta(static_cast<Eigen::Index>(k))=std::log(initial_tau(prepared.local_to_parent_atoms[k]));
 
     BcdSearchPolicy policy;
     policy.core_atoms=ProductionBcdCoreAtoms;

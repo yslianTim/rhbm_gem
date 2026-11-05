@@ -124,8 +124,8 @@ JointCandidateDiagnostic CandidateDiagnostic(const BcdSearchResult & search, std
     bool finite_widths=state.eta.size()==static_cast<Eigen::Index>(atoms) && state.eta.allFinite();
     if(finite_widths) for(Eigen::Index atom=0;atom<state.eta.size();++atom)
     {
-        const double width=std::exp(state.eta(atom));
-        finite_widths &= std::isfinite(width) && width>0;
+        const double tau=std::exp(state.eta(atom));
+        finite_widths &= std::isfinite(tau) && tau>0;
     }
     const bool finite_ac=atoms<=std::numeric_limits<std::size_t>::max()/2 &&
         state.beta.size()==static_cast<Eigen::Index>(2*atoms) && state.beta.allFinite();
@@ -174,14 +174,14 @@ JointCandidateDiagnostic CandidateDiagnostic(const BcdSearchResult & search, std
 }
 }
 BcdComponentBatch OrchestrateBcdComponents(
-    const JointProblem & problem,const std::vector<double> & initial_b,
+    const JointProblem & problem,const std::vector<double> & initial_tau,
     const BcdExecutionPolicy & production_policy,const JointProgressObserver & observer)
 {
     const auto & data=JointProblemAccess::Get(problem);
     BcdComponentBatch out;
     const auto component_count=data.partition.components.size();
     out.components.reserve(component_count);
-    const VectorMap widths(initial_b.data(),static_cast<Eigen::Index>(initial_b.size()));
+    const VectorMap tau_values(initial_tau.data(),static_cast<Eigen::Index>(initial_tau.size()));
     for(std::size_t component_index=0;component_index<component_count;++component_index)
     {
         const auto & view=data.partition.components[component_index];
@@ -201,11 +201,11 @@ BcdComponentBatch OrchestrateBcdComponents(
         BcdComponentResult fit;
         std::optional<double> accepted_objective,accepted_gradient_inf_norm;
         const bool valid=std::all_of(layout.full_atoms.begin(),layout.full_atoms.end(),[&](auto a) {
-            return a<initial_b.size() && std::isfinite(initial_b[a]) && initial_b[a]>0;
+            return a<initial_tau.size() && std::isfinite(initial_tau[a]) && initial_tau[a]>0;
         });
         if(valid && !layout.informative_rows.empty())
         {
-            fit=SolveBcdComponentView(view,layout,widths,data.context,production_policy,observer,
+            fit=SolveBcdComponentView(view,layout,tau_values,data.context,production_policy,observer,
                 progress_component ? &*progress_component : nullptr);
             accepted_objective=LastBcdObjective(fit.search);
             accepted_gradient_inf_norm=LastBcdGradient(fit.search);
@@ -308,7 +308,7 @@ BcdComponentBatch OrchestrateBcdComponents(
     return out;
 }
 BcdComponentResult SolveBcdComponentView(
-    const ComponentView & view,const JointParameterLayout & component_layout,const Vector & initial_b,
+    const ComponentView & view,const JointParameterLayout & component_layout,const Vector & initial_tau,
     const EvaluationContext & parent_context,const BcdExecutionPolicy & production_policy,
     const JointProgressObserver & observer,const JointProgressComponent * progress_component)
 {
@@ -364,7 +364,7 @@ BcdComponentResult SolveBcdComponentView(
     auto diagnostic_policy=production_policy;
     diagnostic_policy.component_index=static_cast<std::size_t>(view.component_index);
     diagnostic_policy.component_id=view.id;
-    out=SolveBcdComponent(prepared,initial_b,parent_context,
+    out=SolveBcdComponent(prepared,initial_tau,parent_context,
         diagnostic_policy,observer,progress_component);
     return out;
 }

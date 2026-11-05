@@ -152,17 +152,17 @@ EvaluationContext CreateContext(std::shared_ptr<const JointProblemInput> input,c
     c.atom_ids=Identities(std::shared_ptr<const std::vector<std::string>>(input,&input->atom_ids));
     c.row_ids=Identities(std::shared_ptr<const std::vector<std::string>>(input,&input->row_ids)); return c;
 }
-BasisValues EvaluateKernel(double square, double width, double cutoff)
+BasisValues EvaluateKernel(double square, double tau, double cutoff)
 {
-    if (!(width>0.0) || !std::isfinite(width)) throw std::invalid_argument("Invalid matched width.");
+    if (!(tau>0.0) || !std::isfinite(tau)) throw std::invalid_argument("Invalid matched width.");
     if (square > cutoff*cutoff) return {};
-    const double r{std::sqrt(square)}, r2{square}, exponent{std::exp(-r2/(2.0*width*width))};
+    const double r{std::sqrt(square)}, r2{square}, exponent{std::exp(-r2/(2.0*tau*tau))};
     BasisValues out;
-    out.gaussian = std::pow(2.0*std::numbers::pi*width*width,-1.5)*exponent;
-    out.gaussian_log_width = out.gaussian*(r2/(width*width)-3.0);
-    const double center{std::sqrt(2.0/std::numbers::pi)/width};
-    if (r < 1e-5) {out.charge=center; out.charge_log_width=-center;}
-    else if (r <= 2.5) {out.charge=std::erf(r/width/std::sqrt(2.0))/r; out.charge_log_width=-center*exponent;}
+    out.gaussian = std::pow(2.0*std::numbers::pi*tau*tau,-1.5)*exponent;
+    out.d_gaussian_d_log_tau = out.gaussian*(r2/(tau*tau)-3.0);
+    const double center{std::sqrt(2.0/std::numbers::pi)/tau};
+    if (r < 1e-5) {out.charge=center; out.d_charge_d_log_tau=-center;}
+    else if (r <= 2.5) {out.charge=std::erf(r/tau/std::sqrt(2.0))/r; out.d_charge_d_log_tau=-center*exponent;}
     return out;
 }
 Certificate CertifyConstrainedAcSolution(const Sparse & x,VectorRef y,const Eigen::VectorXd & beta,double observation_scale)
@@ -235,8 +235,8 @@ Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
     Evaluation out; out.eta=eta;
     if (domain.rows!=y.size() || domain.rows==0 || eta.size()!=static_cast<Eigen::Index>(domain.atoms.size()) ||
         eta.size()==0 || !eta.allFinite() || !y.allFinite()) {out.reason="invalid-input"; return out;}
-    const Vector widths=eta.array().exp();
-    if (!widths.allFinite() || (widths.array()<=0).any()) {out.reason="invalid-b"; return out;}
+    const Vector tau_values=eta.array().exp();
+    if (!tau_values.allFinite() || (tau_values.array()<=0).any()) {out.reason="invalid-tau"; return out;}
     const Eigen::Index m=eta.size(); out.x.resize(y.size(),2*m); out.derivative.resize(y.size(),2*m);
     std::size_t memberships{},maximum_support{};
     bool ordered_unique=true;
@@ -261,8 +261,8 @@ Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
             entries.clear();
             for(const auto & p:domain.atoms[static_cast<std::size_t>(a)])
             {
-                const auto b=EvaluateKernel(p.square,widths(a),2.5);
-                const std::array<double,4> v{b.gaussian,b.charge,b.gaussian_log_width,b.charge_log_width};
+                const auto b=EvaluateKernel(p.square,tau_values(a),2.5);
+                const std::array<double,4> v{b.gaussian,b.charge,b.d_gaussian_d_log_tau,b.d_charge_d_log_tau};
                 if(!std::all_of(v.begin(),v.end(),[](double n){return std::isfinite(n);}))
                 {out.reason="nonfinite-basis"; return out;}
                 entries.push_back({p.row,v});
@@ -288,8 +288,8 @@ Evaluation Basis(const Domain & domain,VectorRef y,const Vector & eta)
         x.reserve(2*memberships); dx.reserve(2*memberships);
         for(Eigen::Index a=0;a<m;++a) for(const auto & p:domain.atoms[static_cast<std::size_t>(a)])
         {
-            const auto b=EvaluateKernel(p.square,widths(a),2.5);
-            const std::array<double,4> v{b.gaussian,b.charge,b.gaussian_log_width,b.charge_log_width};
+            const auto b=EvaluateKernel(p.square,tau_values(a),2.5);
+            const std::array<double,4> v{b.gaussian,b.charge,b.d_gaussian_d_log_tau,b.d_charge_d_log_tau};
             if(!std::all_of(v.begin(),v.end(),[](double n){return std::isfinite(n);}))
             {out.reason="nonfinite-basis"; return out;}
             for(Eigen::Index k=0;k<2;++k)
@@ -375,16 +375,16 @@ Evaluation EvaluateStateStreaming(const Domain & domain,VectorRef y,const Vector
         eta.size()==0 || !eta.allFinite() || !y.allFinite())
     {out.reason="invalid-input"; return out;}
     if(beta.size()!=2*eta.size() || !beta.allFinite()) {out.reason="invalid-coefficients"; return out;}
-    const Vector widths=eta.array().exp();
-    if(!widths.allFinite() || (widths.array()<=0).any()) {out.reason="invalid-b"; return out;}
+    const Vector tau_values=eta.array().exp();
+    if(!tau_values.allFinite() || (tau_values.array()<=0).any()) {out.reason="invalid-tau"; return out;}
 
     Vector prediction=Vector::Zero(y.size()),norms_squared=Vector::Zero(beta.size());
     for(Eigen::Index atom=0;atom<eta.size();++atom)
         for(const auto & support:domain.atoms[static_cast<std::size_t>(atom)])
         {
-            const auto basis=EvaluateKernel(support.square,widths(atom),2.5);
+            const auto basis=EvaluateKernel(support.square,tau_values(atom),2.5);
             if(!std::isfinite(basis.gaussian) || !std::isfinite(basis.charge) ||
-                !std::isfinite(basis.gaussian_log_width) || !std::isfinite(basis.charge_log_width))
+                !std::isfinite(basis.d_gaussian_d_log_tau) || !std::isfinite(basis.d_charge_d_log_tau))
             {out.reason="nonfinite-basis"; return out;}
             prediction(support.row)+=beta(2*atom)*basis.gaussian+beta(2*atom+1)*basis.charge;
             norms_squared(2*atom)+=basis.gaussian*basis.gaussian;
@@ -392,22 +392,22 @@ Evaluation EvaluateStateStreaming(const Domain & domain,VectorRef y,const Vector
         }
     out.beta=beta; out.residual=std::move(prediction); out.residual-=y;
     Vector ac_gradient=Vector::Zero(beta.size());
-    Vector gaussian_width_dot=Vector::Zero(eta.size()),charge_width_dot=Vector::Zero(eta.size());
+    Vector gaussian_eta_dot=Vector::Zero(eta.size()),charge_eta_dot=Vector::Zero(eta.size());
     for(Eigen::Index atom=0;atom<eta.size();++atom)
         for(const auto & support:domain.atoms[static_cast<std::size_t>(atom)])
         {
-            const auto basis=EvaluateKernel(support.square,widths(atom),2.5);
+            const auto basis=EvaluateKernel(support.square,tau_values(atom),2.5);
             const double residual=out.residual(support.row);
             ac_gradient(2*atom)+=basis.gaussian*residual;
             ac_gradient(2*atom+1)+=basis.charge*residual;
-            gaussian_width_dot(atom)+=basis.gaussian_log_width*residual;
-            charge_width_dot(atom)+=basis.charge_log_width*residual;
+            gaussian_eta_dot(atom)+=basis.d_gaussian_d_log_tau*residual;
+            charge_eta_dot(atom)+=basis.d_charge_d_log_tau*residual;
         }
     out.gradient.resize(eta.size());
     for(Eigen::Index atom=0;atom<eta.size();++atom)
     {
-        out.gradient(atom)=beta(2*atom)*gaussian_width_dot(atom)/context.scale/context.scale;
-        out.gradient(atom)+=beta(2*atom+1)*charge_width_dot(atom)/context.scale/context.scale;
+        out.gradient(atom)=beta(2*atom)*gaussian_eta_dot(atom)/context.scale/context.scale;
+        out.gradient(atom)+=beta(2*atom+1)*charge_eta_dot(atom)/context.scale/context.scale;
     }
     if(!norms_squared.allFinite() || (norms_squared.array()<=0).any())
     {out.reason="rank-deficient"; return out;}
@@ -469,7 +469,7 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
     if(!e.certificate.available || !e.certificate.feasible || !e.certificate.kkt_passed)
     {out.reason="kkt-failed"; return out;}
     const double scale=context->scale;
-    const Vector widths=e.eta.array().exp();
+    const Vector tau_values=e.eta.array().exp();
     Vector prediction=Vector::Zero(y.size()),compensation=prediction,absolute=prediction;
     // Independent scalar forward and compensated summation, using frozen support.
     auto add=[&](Eigen::Index row,double value) {
@@ -485,12 +485,12 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
     };
     for (Eigen::Index a=0;a<e.eta.size();++a)
     {
-        const double b=widths(a);
+        const double tau=tau_values(a);
         for (const auto & p:domain.atoms[static_cast<std::size_t>(a)])
         {
             if(p.square>2.5*2.5) continue;
-            const double r=std::sqrt(p.square),g=std::pow(2*M_PI*b*b,-1.5)*std::exp(-p.square/(2*b*b));
-            const double k=r<1e-5 ? std::sqrt(2/M_PI)/b : std::erf(r/b/std::sqrt(2.0))/r;
+            const double r=std::sqrt(p.square),g=std::pow(2*M_PI*tau*tau,-1.5)*std::exp(-p.square/(2*tau*tau));
+            const double k=r<1e-5 ? std::sqrt(2/M_PI)/tau : std::erf(r/tau/std::sqrt(2.0))/r;
             add_product(p.row,e.beta(2*a),g); add_product(p.row,e.beta(2*a+1),k);
         }
     }
@@ -506,13 +506,13 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
     Vector eta_gradient=Vector::Zero(e.eta.size());
     for (Eigen::Index a=0;a<e.eta.size();++a)
     {
-        const double b=widths(a);
+        const double tau=tau_values(a);
         for (const auto & p:domain.atoms[static_cast<std::size_t>(a)])
         {
             if(p.square>2.5*2.5) continue;
-            const double g=std::pow(2*M_PI*b*b,-1.5)*std::exp(-p.square/(2*b*b));
-            const double dk=-std::sqrt(2/M_PI)/b*(p.square<1e-10 ? 1 : std::exp(-p.square/(2*b*b)));
-            eta_gradient(a)+=(e.beta(2*a)*g*(p.square/(b*b)-3)+e.beta(2*a+1)*dk)*replay_residual(p.row)/scale/scale;
+            const double g=std::pow(2*M_PI*tau*tau,-1.5)*std::exp(-p.square/(2*tau*tau));
+            const double dk=-std::sqrt(2/M_PI)/tau*(p.square<1e-10 ? 1 : std::exp(-p.square/(2*tau*tau)));
+            eta_gradient(a)+=(e.beta(2*a)*g*(p.square/(tau*tau)-3)+e.beta(2*a+1)*dk)*replay_residual(p.row)/scale/scale;
         }
     }
     if(context->eta_upper_bound)
@@ -562,8 +562,8 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
 
     const auto atoms=e.eta.size();
     const double scale=policy.scale>0 ? policy.scale : std::max(1.0,y.norm());
-    const Vector widths=e.eta.array().exp();
-    if(!widths.allFinite() || (widths.array()<=0).any())
+    const Vector tau_values=e.eta.array().exp();
+    if(!tau_values.allFinite() || (tau_values.array()<=0).any())
     {out.reason="invalid-widths"; return out;}
     Vector prediction=Vector::Zero(y.size()),prediction_error=prediction,absolute_sum=prediction;
     Vector column_norms_squared=Vector::Zero(e.beta.size());
@@ -577,25 +577,25 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
         const double product_error=std::fma(coefficient,kernel_value,-product);
         add(row,product); add(row,product_error); absolute_sum(row)-=std::abs(product_error);
     };
-    const auto kernel=[&](double square,double width) {
-        struct Values {double gaussian{},charge{},gaussian_log_width{},charge_log_width{};};
+    const auto kernel=[&](double square,double tau) {
+        struct Values {double gaussian{},charge{},d_gaussian_d_log_tau{},d_charge_d_log_tau{};};
         Values value;
         if(square>2.5*2.5) return value;
-        const double radius=std::sqrt(square),width_squared=width*width;
-        const double exponential=std::exp(-square/(2*width_squared));
-        value.gaussian=exponential/std::pow(2*pi*width_squared,1.5);
-        value.gaussian_log_width=value.gaussian*(square/width_squared-3.0);
-        const double center=std::sqrt(2/(pi*width_squared));
+        const double radius=std::sqrt(square),tau_squared=tau*tau;
+        const double exponential=std::exp(-square/(2*tau_squared));
+        value.gaussian=exponential/std::pow(2*pi*tau_squared,1.5);
+        value.d_gaussian_d_log_tau=value.gaussian*(square/tau_squared-3.0);
+        const double center=std::sqrt(2/(pi*tau_squared));
         if(radius<1e-5)
-        {value.charge=center; value.charge_log_width=-center;}
+        {value.charge=center; value.d_charge_d_log_tau=-center;}
         else
-        {value.charge=std::erf(radius/width/std::sqrt(2.0))/radius; value.charge_log_width=-center*exponential;}
+        {value.charge=std::erf(radius/tau/std::sqrt(2.0))/radius; value.d_charge_d_log_tau=-center*exponential;}
         return value;
     };
     for(Eigen::Index atom=0;atom<atoms;++atom)
         for(const auto & support:domain.atoms[static_cast<std::size_t>(atom)])
         {
-            const auto basis=kernel(support.square,widths(atom));
+            const auto basis=kernel(support.square,tau_values(atom));
             add_product(support.row,e.beta(2*atom),basis.gaussian);
             add_product(support.row,e.beta(2*atom+1),basis.charge);
             column_norms_squared(2*atom)+=basis.gaussian*basis.gaussian;
@@ -641,7 +641,7 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
     }
 
     Vector ac_gradient=Vector::Zero(e.beta.size()),ac_compensation=ac_gradient;
-    Vector eta_gradient=Vector::Zero(atoms),width_compensation=eta_gradient;
+    Vector eta_gradient=Vector::Zero(atoms),eta_compensation=eta_gradient;
     const auto add_compensated=[](Vector & sum,Vector & compensation,Eigen::Index index,double value) {
         const double adjusted=value-compensation(index),next=sum(index)+adjusted;
         compensation(index)=(next-sum(index))-adjusted; sum(index)=next;
@@ -649,12 +649,12 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
     for(Eigen::Index atom=0;atom<atoms;++atom)
         for(const auto & support:domain.atoms[static_cast<std::size_t>(atom)])
         {
-            const auto basis=kernel(support.square,widths(atom));
+            const auto basis=kernel(support.square,tau_values(atom));
             const double residual=prediction(support.row)-y(support.row);
             add_compensated(ac_gradient,ac_compensation,2*atom,basis.gaussian*residual);
             add_compensated(ac_gradient,ac_compensation,2*atom+1,basis.charge*residual);
-            add_compensated(eta_gradient,width_compensation,atom,
-                (e.beta(2*atom)*basis.gaussian_log_width+e.beta(2*atom+1)*basis.charge_log_width)*
+            add_compensated(eta_gradient,eta_compensation,atom,
+                (e.beta(2*atom)*basis.d_gaussian_d_log_tau+e.beta(2*atom+1)*basis.d_charge_d_log_tau)*
                     residual/scale/scale);
         }
     const Vector column_norms=column_norms_squared.array().sqrt();
@@ -806,8 +806,8 @@ Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluatio
     if(valid)
         for(Eigen::Index atom=0;atom<atom_count;++atom)
         {
-            const double width=std::exp(endpoint.eta(atom));
-            valid &= endpoint.beta(2*atom)>=0 && std::isfinite(width) && width>0;
+            const double tau=std::exp(endpoint.eta(atom));
+            valid &= endpoint.beta(2*atom)>=0 && std::isfinite(tau) && tau>0;
         }
     if(!valid)
     {

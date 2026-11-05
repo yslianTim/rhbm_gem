@@ -220,7 +220,7 @@ j::object SameState(const Domain & domain,const Vector & y,const Vector & eta,co
             pair["passed"]=coefficients<=1e-10 && objective<=1e-12 && gradient; passed &= pair.at("passed").as_bool();
             if(face)
             {
-                // Isolate differentiation at exactly the same profiled A/C/B.
+                // Isolate differentiation at exactly the same profiled A/C/tau.
                 // Independently solved coefficients are compared above, never
                 // substituted silently into this fixed-state comparison.
                 const auto da=Differentiate(a,context.scale,&context),db=identity ? da : DifferentiatePartitioned(a,partition,context);
@@ -254,7 +254,7 @@ j::object SameState(const Domain & domain,const Vector & y,const Vector & eta,co
     out["full_equivalence"]=passed && out.at("full_equivalence").as_bool(); return out;
 }
 runtime::BcdComponentResult SolveBcdComponentForTesting(const ComponentView & view,
-    const Vector & initial_b,const EvaluationContext & parent)
+    const Vector & initial_tau,const EvaluationContext & parent)
 {
     rhbm_gem::JointParameterLayout layout;
     layout.full_atoms.assign(view.atoms.begin(),view.atoms.end());
@@ -264,26 +264,26 @@ runtime::BcdComponentResult SolveBcdComponentForTesting(const ComponentView & vi
     if(!bounded_parent.eta_upper_bound)
     {
         double maximum_initial_width{};
-        for(const double width:initial_b)
+        for(const double width:initial_tau)
             if(std::isfinite(width) && width>maximum_initial_width) maximum_initial_width=width;
         if(!(maximum_initial_width>0.0)) maximum_initial_width=1.0;
         bounded_parent.eta_upper_bound=std::log(4.0*maximum_initial_width);
     }
     runtime::BcdExecutionPolicy policy;
     policy.eta_upper_bound=bounded_parent.eta_upper_bound;
-    return runtime::SolveBcdComponent(prepared,initial_b,bounded_parent,policy);
+    return runtime::SolveBcdComponent(prepared,initial_tau,bounded_parent,policy);
 }
 BcdFitDiagnostic SolveBcdComponentForDiagnostics(const ComponentView & view,
-    const Vector & initial_b,const EvaluationContext & parent)
+    const Vector & initial_tau,const EvaluationContext & parent)
 {
-    const auto bcd=SolveBcdComponentForTesting(view,initial_b,parent);
+    const auto bcd=SolveBcdComponentForTesting(view,initial_tau,parent);
     BcdFitDiagnostic out;
     const auto & result=bcd.search;
     const bool endpoint_qualified=result.certification && result.certification->qualified();
     out.search.initial.eta.resize(static_cast<Eigen::Index>(view.atoms.size()));
     out.search.initial.beta=Vector::Zero(2*static_cast<Eigen::Index>(view.atoms.size()));
     for(std::size_t k=0;k<view.atoms.size();++k)
-        out.search.initial.eta(static_cast<Eigen::Index>(k))=std::log(initial_b(view.atoms[k]));
+        out.search.initial.eta(static_cast<Eigen::Index>(k))=std::log(initial_tau(view.atoms[k]));
     out.search.initial.valid=true;
     out.search.eta=result.state.eta;
     out.candidate_eta=result.state.eta;
@@ -306,10 +306,10 @@ BcdFitDiagnostic SolveBcdComponentForDiagnostics(const ComponentView & view,
     out.search_success=bcd.succeeded;
     return out;
 }
-j::object FitComponent(const ComponentView & view,const Vector & initial_b,const EvaluationContext & parent)
+j::object FitComponent(const ComponentView & view,const Vector & initial_tau,const EvaluationContext & parent)
 {
-    const auto context=ComponentContext(parent,view,true); const Vector start=Select(initial_b,view.atoms);
-    const auto result=SolveBcdComponentForDiagnostics(view,initial_b,parent);
+    const auto context=ComponentContext(parent,view,true); const Vector start=Select(initial_tau,view.atoms);
+    const auto result=SolveBcdComponentForDiagnostics(view,initial_tau,parent);
     auto fit=runtime_json::Search(result.search,context,view.domain.rows);
     auto assessment=runtime_json::Assessment(result.trusted_assessment ? *result.trusted_assessment : result.assessment);
     for(auto & field:assessment) fit[field.key()]=std::move(field.value());
@@ -363,10 +363,10 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
         if(fit.at("usable_state").as_bool())
         {
             const auto & endpoint=fit.at("last_trusted_state");
-            const auto beta=Parse(endpoint.at("beta")),b=Parse(endpoint.at("b")),eta=Parse(endpoint.at("eta"));
+            const auto beta=Parse(endpoint.at("beta")),tau=Parse(endpoint.at("b")),eta=Parse(endpoint.at("eta"));
             rhbm_gem::JointState state;
             state.ac.assign(beta.data(),beta.data()+beta.size());
-            state.tau.assign(b.data(),b.data()+b.size());
+            state.tau.assign(tau.data(),tau.data()+tau.size());
             state.log_tau.assign(eta.data(),eta.data()+eta.size());
             const auto gradient=Parse(endpoint.at("b_gradient"));
             state.eta_gradient.assign(gradient.data(),gradient.data()+gradient.size());
@@ -410,11 +410,11 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
     return out;
 }
 j::object FitComponents(std::shared_ptr<const rhbm_gem::core::JointProblemInput> input,
-    const Vector & initial_b,const ComponentPartition & partition,const EvaluationContext & context)
+    const Vector & initial_tau,const ComponentPartition & partition,const EvaluationContext & context)
 {
     const Domain domain(input);
     const runtime::VectorMap y(input->observations.data(),static_cast<Eigen::Index>(input->observations.size()));
-    j::array fits; for(const auto & view:partition.components) fits.push_back(FitComponent(view,initial_b,context));
+    j::array fits; for(const auto & view:partition.components) fits.push_back(FitComponent(view,initial_tau,context));
     auto result=Assemble(domain,y,partition,context,fits); result["components"]=std::move(fits); return result;
 }
 } // namespace second_stage_test::matched::joint_abc

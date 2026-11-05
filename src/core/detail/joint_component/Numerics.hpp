@@ -49,7 +49,8 @@ struct BoundedLmWork
     void Merge(const BoundedLmWork &);
 };
 EvaluationContext CreateContext(std::shared_ptr<const JointProblemInput>,const std::string & = "");
-struct BasisValues {double gaussian{},charge{},gaussian_log_width{},charge_log_width{};};
+// Derivatives are with respect to eta = log(tau), not physical tau.
+struct BasisValues {double gaussian{},charge{},d_gaussian_d_log_tau{},d_charge_d_log_tau{};};
 BasisValues EvaluateKernel(double,double,double);
 struct LinearResult
 {
@@ -82,7 +83,7 @@ struct Certificate
 Certificate CertifyConstrainedAcSolution(const Sparse &,VectorRef,const Vector &,double=0);
 struct Endpoint
 {
-    Vector eta,beta,gradient;
+    Vector eta,beta,gradient; // gradient = dF/deta.
     Certificate certificate;
     bool valid{};
     std::string reason;
@@ -160,7 +161,7 @@ TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const Evalu
 TrustEvidence CheckTrust(const Evaluation &,const IndependentReplayEvidence &);
 struct LmTrial
 {
-    Vector accepted_eta,step,diagonal;
+    Vector accepted_eta,step,diagonal; // LM step is in eta coordinates.
     double radius{},damping{},actual_decrease{unavailable},predicted_decrease{},ratio{unavailable};
     bool proposed_acceptance{};
     bool bounded_subproblem{};

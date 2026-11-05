@@ -68,19 +68,19 @@ j::object Trust(const Domain & d,const Vector & y,const Evaluation & e,const Eva
     const auto fallback=c ? EvaluationContext{} : MakeContext(y,static_cast<Eigen::Index>(d.atoms.size()));
     return runtime_json::Trust(runtime::CheckTrust(d,y,e,c ? *c : fallback));
 }
-j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_b,const EvaluationContext * provided)
+j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_tau,const EvaluationContext * provided)
 {
     auto context=provided ? *provided : MakeContext(y,static_cast<Eigen::Index>(domain.atoms.size()));
     if(!context.eta_upper_bound)
     {
         double maximum_initial_width{};
-        for(const double width:initial_b)
+        for(const double width:initial_tau)
             if(std::isfinite(width) && width>maximum_initial_width) maximum_initial_width=width;
         if(!(maximum_initial_width>0.0)) maximum_initial_width=1.0;
         context.eta_upper_bound=std::log(4.0*maximum_initial_width);
     }
     const auto start=std::chrono::steady_clock::now();
-    const auto search=runtime::SearchProfile(domain,y,initial_b,context);
+    const auto search=runtime::SearchProfile(domain,y,initial_tau,context);
     auto out=runtime_json::Search(search,context,y.size());
     auto assessment=runtime_json::Assessment(AssessProfile(domain,y,search.eta,context));
     for(auto & field:assessment) out[field.key()]=std::move(field.value());

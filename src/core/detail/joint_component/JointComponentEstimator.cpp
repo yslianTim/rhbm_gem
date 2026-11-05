@@ -64,11 +64,11 @@ bool ValidJointState(const JointState & state,std::size_t atoms)
         return false;
     for(std::size_t atom=0;atom<atoms;++atom)
     {
-        const double amplitude=state.ac[2*atom],width=state.tau[atom];
+        const double amplitude=state.ac[2*atom],tau=state.tau[atom];
         if(amplitude<0) return false;
-        const double saved_width=std::exp(state.log_tau[atom]);
-        if(!std::isfinite(saved_width) || !(saved_width>0) ||
-            std::abs(saved_width-width)>8*std::numeric_limits<double>::epsilon()*width) return false;
+        const double saved_tau=std::exp(state.log_tau[atom]);
+        if(!std::isfinite(saved_tau) || !(saved_tau>0) ||
+            std::abs(saved_tau-tau)>8*std::numeric_limits<double>::epsilon()*tau) return false;
     }
     return true;
 }
@@ -164,9 +164,9 @@ bool MayOverlapTargetRows(const AtomObject & atom,const TargetSpatialBounds & bo
         nearest[axis]=std::clamp(position[axis],bounds.minimum[axis],bounds.maximum[axis]);
     return simulation::SupportSquare(nearest,position)<=6.25;
 }
-bool AddEstimatedBytes(std::size_t & total,std::size_t count,std::size_t width)
+bool AddEstimatedBytes(std::size_t & total,std::size_t count,std::size_t tau)
 {
-    std::size_t bytes{}; return n::CheckedMultiplyBytes(count,width,bytes) && n::CheckedAddBytes(total,bytes,total);
+    std::size_t bytes{}; return n::CheckedMultiplyBytes(count,tau,bytes) && n::CheckedAddBytes(total,bytes,total);
 }
 [[noreturn]] void RejectBuildPreflight(const n::MemoryShape & shape,const char * reason)
 {
@@ -703,7 +703,7 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
             "; maximum-projection-angstroms="+std::to_string(bounded.maximum_projection_magnitude)});
     return out;
 }
-JointFitResult n::FitBcdComponentsImpl(const JointProblem & problem,const std::vector<double> & initial_b,
+JointFitResult n::FitBcdComponentsImpl(const JointProblem & problem,const std::vector<double> & initial_tau,
     const n::BcdExecutionPolicy & production_policy,const n::JointProgressObserver & observer)
 {
     eigen_helper::ScopedEigenThreadCount eigen_thread_guard{1};
@@ -721,9 +721,9 @@ JointFitResult n::FitBcdComponentsImpl(const JointProblem & problem,const std::v
     if(data.construction_memory.status!=n::MemoryStatus::Pass)
     {
         JointFitResult out; out.problem=problem; out.solver_provenance=BcdSolverProvenance();
-        out.observation_scale=data.context.scale; out.initialization.tau=initial_b;
-        out.initialization.valid=initial_b.size()==data.domain.atoms.size() &&
-            std::all_of(initial_b.begin(),initial_b.end(),[](double b){return std::isfinite(b) && b>0;});
+        out.observation_scale=data.context.scale; out.initialization.tau=initial_tau;
+        out.initialization.valid=initial_tau.size()==data.domain.atoms.size() &&
+            std::all_of(initial_tau.begin(),initial_tau.end(),[](double tau){return std::isfinite(tau) && tau>0;});
         out.initialization.reason=out.initialization.valid ? "valid-widths" : "invalid-widths";
         out.available_row_mask.assign(data.input->observations.size(),false);
         out.evidence.push_back({"memory-preflight",JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,
@@ -735,11 +735,11 @@ JointFitResult n::FitBcdComponentsImpl(const JointProblem & problem,const std::v
     }
     JointFitResult out; out.problem=problem;
     out.solver_provenance=BcdSolverProvenance();
-    out.observation_scale=data.context.scale; out.initialization.tau=initial_b;
-    out.initialization.valid=initial_b.size()==data.domain.atoms.size() &&
-        std::all_of(initial_b.begin(),initial_b.end(),[](double b){return std::isfinite(b) && b>0;});
+    out.observation_scale=data.context.scale; out.initialization.tau=initial_tau;
+    out.initialization.valid=initial_tau.size()==data.domain.atoms.size() &&
+        std::all_of(initial_tau.begin(),initial_tau.end(),[](double tau){return std::isfinite(tau) && tau>0;});
     out.initialization.reason=out.initialization.valid ? "valid-widths" : "invalid-widths";
-    if(initial_b.size()!=data.domain.atoms.size())
+    if(initial_tau.size()!=data.domain.atoms.size())
     {
         out.available_row_mask.assign(data.input->observations.size(),false);
         for(auto row:data.partition.constant_rows) out.available_row_mask[static_cast<std::size_t>(row)]=true;
@@ -756,7 +756,7 @@ JointFitResult n::FitBcdComponentsImpl(const JointProblem & problem,const std::v
     const auto component_count=data.partition.components.size();
     auto assembly_context=data.context;
     assembly_context.eta_upper_bound=production_policy.eta_upper_bound;
-    auto component_batch=n::OrchestrateBcdComponents(problem,initial_b,production_policy,observer);
+    auto component_batch=n::OrchestrateBcdComponents(problem,initial_tau,production_policy,observer);
     out.components=std::move(component_batch.components);
     out.costs.search_seconds+=component_batch.costs.search_seconds;
     out.costs.assessment_seconds+=component_batch.costs.assessment_seconds;

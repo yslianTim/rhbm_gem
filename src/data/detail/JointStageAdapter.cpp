@@ -71,10 +71,10 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
             if (!component.state) { estimate.reason = component.stop_reason; continue; }
             const auto & state = *component.state;
             const auto index=static_cast<std::size_t>(found-full.begin());
-            const double a = state.ac[2 * index], c = state.ac[2 * index + 1], b = state.tau[index];
-            if (!std::isfinite(a) || a < 0 || !std::isfinite(c) || !std::isfinite(b) || b <= 0)
+            const double a = state.ac[2 * index], c = state.ac[2 * index + 1], tau = state.tau[index];
+            if (!std::isfinite(a) || a < 0 || !std::isfinite(c) || !std::isfinite(tau) || tau <= 0)
                 throw std::invalid_argument("Invalid joint point estimate.");
-            estimate.point = GaussianModel3D{a, b, c};
+            estimate.point = GaussianModel3D{a, tau, c};
             estimate.reason.clear();
         }
     }

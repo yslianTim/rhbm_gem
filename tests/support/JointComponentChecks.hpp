@@ -34,13 +34,13 @@ Differential DifferentiatePartitioned(const Evaluation &, const ComponentPartiti
 boost::json::object SameState(const Domain &, const Eigen::VectorXd &, const Eigen::VectorXd & eta,
     const Eigen::VectorXd & beta, const ComponentPartition &, const EvaluationContext &);
 runtime::BcdComponentResult SolveBcdComponentForTesting(const ComponentView &,
-    const Eigen::VectorXd & parent_initial_b, const EvaluationContext &);
+    const Eigen::VectorXd & parent_initial_tau, const EvaluationContext &);
 BcdFitDiagnostic SolveBcdComponentForDiagnostics(const ComponentView &,
-    const Eigen::VectorXd & parent_initial_b, const EvaluationContext &);
-boost::json::object FitComponent(const ComponentView &, const Eigen::VectorXd & parent_initial_b,
+    const Eigen::VectorXd & parent_initial_tau, const EvaluationContext &);
+boost::json::object FitComponent(const ComponentView &, const Eigen::VectorXd & parent_initial_tau,
     const EvaluationContext &);
 boost::json::object Assemble(const Domain &, const Eigen::VectorXd &, const ComponentPartition &,
     const EvaluationContext &, const boost::json::array & component_fits);
 boost::json::object FitComponents(std::shared_ptr<const rhbm_gem::core::JointProblemInput>,
-    const Eigen::VectorXd & initial_b, const ComponentPartition &, const EvaluationContext &);
+    const Eigen::VectorXd & initial_tau, const ComponentPartition &, const EvaluationContext &);
 } // namespace second_stage_test::matched::joint_abc

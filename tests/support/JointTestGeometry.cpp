@@ -47,7 +47,7 @@ Stencil MakeStencil(const rhbm_gem::MapObject & generation,
 Basis EvaluateBasis(double square,double width,double cutoff)
 {
     const auto b=rhbm_gem::core::joint_component::EvaluateKernel(square,width,cutoff);
-    return {b.gaussian,b.charge,b.gaussian_log_width,b.charge_log_width};
+    return {b.gaussian,b.charge,b.d_gaussian_d_log_tau,b.d_charge_d_log_tau};
 }
 Design MakeDesign(const std::vector<Stencil> & stencils, const Position & center)
 {
@@ -66,7 +66,7 @@ Eigen::MatrixXd EvaluateDesign(const Design & design, double width, double cutof
     {
         const auto b{EvaluateBasis(term.square,width,cutoff)};
         out.row(static_cast<Eigen::Index>(i)) += term.coefficient*Eigen::RowVector4d{
-            b.gaussian,b.charge,b.gaussian_log_width,b.charge_log_width};
+            b.gaussian,b.charge,b.d_gaussian_d_log_tau,b.d_charge_d_log_tau};
     }
     return out;
 }
@@ -100,11 +100,11 @@ double Direct(const Position & p,const std::vector<Atom> & atoms,double cutoff)
     double value{};
     for(const auto & atom:atoms)
     {
-        const double square=SquareDistance(p,atom.position),b=atom.width;
+        const double square=SquareDistance(p,atom.position),tau=atom.width;
         if(square>cutoff*cutoff) continue;
-        const double gaussian=std::exp(-square/(2*b*b))/std::pow(2*std::numbers::pi*b*b,1.5);
-        const double charge=square<1e-10 ? std::sqrt(2/std::numbers::pi)/b :
-            std::sqrt(square)<=2.5 ? std::erf(std::sqrt(square)/(std::sqrt(2.)*b))/std::sqrt(square) : 0.;
+        const double gaussian=std::exp(-square/(2*tau*tau))/std::pow(2*std::numbers::pi*tau*tau,1.5);
+        const double charge=square<1e-10 ? std::sqrt(2/std::numbers::pi)/tau :
+            std::sqrt(square)<=2.5 ? std::erf(std::sqrt(square)/(std::sqrt(2.)*tau))/std::sqrt(square) : 0.;
         value+=atom.amplitude*gaussian+atom.charge*charge;
     }
     return value;

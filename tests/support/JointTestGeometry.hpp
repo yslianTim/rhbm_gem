@@ -15,7 +15,7 @@ struct Slot { std::size_t index; Position position; double coefficient; };
 struct Stencil { std::array<Slot, 64> slots; bool boundary{}; };
 struct DistanceWeight { double square, coefficient; };
 using Design = std::vector<std::vector<DistanceWeight>>;
-struct Basis { double gaussian{}, charge{}, gaussian_log_width{}, charge_log_width{}; };
+struct Basis { double gaussian{}, charge{}, d_gaussian_d_log_tau{}, d_charge_d_log_tau{}; };
 
 double SquareDistance(const Position &, const Position &);
 Stencil MakeStencil(const rhbm_gem::MapObject & generation,

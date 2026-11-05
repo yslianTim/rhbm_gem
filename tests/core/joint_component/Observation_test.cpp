@@ -70,7 +70,7 @@ TEST(JointComponentObservationTest, WidthDerivativesIncludeChargeCoupling)
         const auto b{m::EvaluateBasis(square,0.5,3.0)};
         const auto plus{m::EvaluateBasis(square,0.5*std::exp(1e-5),3.0)};
         const auto minus{m::EvaluateBasis(square,0.5*std::exp(-1e-5),3.0)};
-        EXPECT_NEAR((plus.gaussian-minus.gaussian)/2e-5,b.gaussian_log_width,1e-8);
-        EXPECT_NEAR((plus.charge-minus.charge)/2e-5,b.charge_log_width,1e-8);
+        EXPECT_NEAR((plus.gaussian-minus.gaussian)/2e-5,b.d_gaussian_d_log_tau,1e-8);
+        EXPECT_NEAR((plus.charge-minus.charge)/2e-5,b.d_charge_d_log_tau,1e-8);
     }
 }

@@ -38,7 +38,7 @@ struct Sample
         for (Eigen::Index k=0;k<y.size();++k) y(k)=m::unique_grid::Direct(grid.voxels[static_cast<std::size_t>(k)].position,atoms,2.5);
     }
 };
-// Independent small direct joint solve, with numerical derivatives of A/C/log-B.
+// Independent small direct joint solve, with numerical derivatives of A/C/log-tau.
 // This comparison uses an interior solution; boundary behavior is tested separately.
 struct Direct
 {
@@ -125,7 +125,7 @@ TEST(JointComponentNumericsTest, BasisAssemblyMatchesTripletsForOrderedAndDuplic
         {
             const auto basis=n::EvaluateKernel(support.square,std::exp(eta(a)),2.5);
             const std::array<double,4> values{basis.gaussian,basis.charge,
-                basis.gaussian_log_width,basis.charge_log_width};
+                basis.d_gaussian_d_log_tau,basis.d_charge_d_log_tau};
             for(Eigen::Index k=0;k<2;++k)
             {
                 if(values[static_cast<std::size_t>(k)]!=0.0)
@@ -312,9 +312,9 @@ TEST(JointTestNumericsTest, LogWidthBasisIncludesCenterNearZeroAndFixedCutoff)
     {
         const double b=.53,h=1e-5;
         const auto value=m::EvaluateBasis(r*r,b,2.5),plus=m::EvaluateBasis(r*r,b*std::exp(h),2.5),minus=m::EvaluateBasis(r*r,b*std::exp(-h),2.5);
-        EXPECT_NEAR(value.gaussian_log_width,(plus.gaussian-minus.gaussian)/(2*h),1e-8);
-        EXPECT_NEAR(value.charge_log_width,(plus.charge-minus.charge)/(2*h),1e-8);
-        if (r>2.5) EXPECT_EQ(value.gaussian+value.charge+value.gaussian_log_width+value.charge_log_width,0);
+        EXPECT_NEAR(value.d_gaussian_d_log_tau,(plus.gaussian-minus.gaussian)/(2*h),1e-8);
+        EXPECT_NEAR(value.d_charge_d_log_tau,(plus.charge-minus.charge)/(2*h),1e-8);
+        if (r>2.5) EXPECT_EQ(value.gaussian+value.charge+value.d_gaussian_d_log_tau+value.d_charge_d_log_tau,0);
     }
 }
 

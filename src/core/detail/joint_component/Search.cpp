@@ -25,9 +25,9 @@ WeakWidthStepAssessment AssessWeakWidthStep(const Matrix & jacobian,VectorRef st
 }
 bool RejectWeakWidthTrial(double step_inf,double weak_step_fraction,double objective_before,double objective_after)
 {
-    constexpr double large_log_width_step=2.302585092994046; // one decade in width
+    constexpr double large_log_tau_step=2.302585092994046; // one decade in width
     constexpr double weak_direction_fraction=.95;
-    if(!std::isfinite(step_inf) || step_inf<=large_log_width_step ||
+    if(!std::isfinite(step_inf) || step_inf<=large_log_tau_step ||
         !std::isfinite(weak_step_fraction) || weak_step_fraction<weak_direction_fraction ||
         !std::isfinite(objective_before) || !std::isfinite(objective_after)) return false;
     const double improvement=objective_before-objective_after;
@@ -195,12 +195,12 @@ struct Profile
     }
 };
 }
-SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
+SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_tau,
     const EvaluationContext & context)
 {
     const auto eta_upper_bound=context.eta_upper_bound;
     Profile profile{domain,y,context,{}, {},0,0,{}, {},{},{},{}};
-    Vector eta=initial_b.array().log(); int accepted{};
+    Vector eta=initial_tau.array().log(); int accepted{};
     auto search=[&](auto & lm) {
         lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;
         lm.parameters.gtol=1e-12; lm.parameters.maxfev=context.profile_budget;

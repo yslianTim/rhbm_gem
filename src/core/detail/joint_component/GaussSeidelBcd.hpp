@@ -187,7 +187,7 @@ BcdEndpointCertification CertifyBcdEndpoint(
     std::size_t resident_override=0,
     const JointConvergenceCriteria & = StrictJointConvergenceCriteria);
 BcdComponentResult SolveBcdComponent(
-    const ComponentProblemView &,VectorRef initial_b,const EvaluationContext &,const BcdExecutionPolicy &,
+    const ComponentProblemView &,VectorRef initial_tau,const EvaluationContext &,const BcdExecutionPolicy &,
     const JointProgressObserver & = {},const JointProgressComponent * = nullptr);
 std::optional<double> LastBcdObjective(const BcdSearchResult &);
 std::optional<double> LastBcdGradient(const BcdSearchResult &);
