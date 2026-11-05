@@ -918,7 +918,7 @@ TEST(PureHaloSupportExclusionTest, ExtendedSearchQualifiesAssemblyAndFeedsEveryD
         policy.observe_search_for_testing=[](const auto & search) {
             maximum_sweeps=std::max(maximum_sweeps,search.sweep_count);
         };
-        auto extended=n::FitBcdComponents(*fit.problem,bounded.widths,policy);
+        auto extended=n::FitBcdComponents(*fit.problem,bounded.tau_values,policy);
         extended.initialization=std::move(initialization);
         for(const auto & check:fit.evidence)
             if(check.name=="global-width-calibration" || check.name=="qualified-first-stage-donor-coverage")

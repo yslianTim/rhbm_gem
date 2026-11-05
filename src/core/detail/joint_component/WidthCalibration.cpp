@@ -67,8 +67,8 @@ WidthBoundCalibration CalibrateGlobalWidth(
         else if(qualified && qualification==RHBMSolveQualification::RefinedSuccess) ++result.refined_success_count;
         else ++result.unqualified_count;
 
-        const double width=atom.mdpde[1];
-        const bool valid_width=std::isfinite(width) && width>0.0;
+        const double tau=atom.mdpde[1];
+        const bool valid_width=std::isfinite(tau) && tau>0.0;
         if(!valid_width) ++result.invalid_width_count;
         const bool fallback=atom.seed_source=="median-fallback";
         if(fallback) ++result.fallback_count;
@@ -78,9 +78,9 @@ WidthBoundCalibration CalibrateGlobalWidth(
         if(fallback) exclusion="median-fallback";
         else if(initialization_failure) exclusion="initialization-failure";
         else if(!qualified) exclusion="unqualified-first-stage";
-        else if(!std::isfinite(width)) exclusion="non-finite-width";
-        else if(!(width>0.0)) exclusion="non-positive-width";
-        if(exclusion.empty()) donors.push_back(width);
+        else if(!std::isfinite(tau)) exclusion="non-finite-width";
+        else if(!(tau>0.0)) exclusion="non-positive-width";
+        if(exclusion.empty()) donors.push_back(tau);
         else ++result.excluded_donor_reasons[exclusion];
     }
 
@@ -110,8 +110,8 @@ WidthBoundCalibration CalibrateGlobalWidth(
     result.p90=QuantileType7(donors,0.90);
     result.p95=QuantileType7(donors,0.95);
     result.p99=QuantileType7(donors,0.99);
-    result.bmax4=BoundFrom(*result.p95,4.0);
-    if(!result.bmax4)
+    result.tau_max4=BoundFrom(*result.p95,4.0);
+    if(!result.tau_max4)
     {
         result.unavailable_reason="global-width-bound-overflow-or-invalid-log-bound";
         result.p95.reset();
@@ -122,12 +122,12 @@ WidthBoundCalibration CalibrateGlobalWidth(
         result.maximum_width.reset();
         return result;
     }
-    result.eta_max4=std::log(*result.bmax4);
+    result.eta_max4=std::log(*result.tau_max4);
     for(std::size_t i=0;i<initialization.atoms.size();++i)
     {
         const auto & atom=initialization.atoms[i];
         if(!atom.target || !std::isfinite(initialization.tau[i]) || !(initialization.tau[i]>0.0)) continue;
-        if(initialization.tau[i]>*result.bmax4) ++result.initial_violations4;
+        if(initialization.tau[i]>*result.tau_max4) ++result.initial_violations4;
     }
     result.status="Available";
     return result;
@@ -142,13 +142,13 @@ BoundedInitialization MakeBoundedInitialization(
         result.reason="initialization-record-size-mismatch";
         return result;
     }
-    if(calibration.status!="Available" || !calibration.bmax4)
+    if(calibration.status!="Available" || !calibration.tau_max4)
     {
         result.reason=calibration.unavailable_reason.empty() ? "calibration-unavailable" : calibration.unavailable_reason;
         return result;
     }
-    result.bmax=*calibration.bmax4;
-    result.widths=initialization.tau;
+    result.tau_max=*calibration.tau_max4;
+    result.tau_values=initialization.tau;
     result.projections.reserve(calibration.target_count);
     for(std::size_t i=0;i<initialization.atoms.size();++i)
     {
@@ -156,13 +156,13 @@ BoundedInitialization MakeBoundedInitialization(
         if(!atom.target) continue;
         const double initial=initialization.tau[i];
         double bounded=initial;
-        if(std::isfinite(initial) && initial>result.bmax) bounded=result.bmax;
+        if(std::isfinite(initial) && initial>result.tau_max) bounded=result.tau_max;
         const bool projected=bounded!=initial;
         if(projected)
         {
             ++result.projection_count;
             result.maximum_projection_magnitude=std::max(result.maximum_projection_magnitude,initial-bounded);
-            result.widths[i]=bounded;
+            result.tau_values[i]=bounded;
         }
         result.projections.push_back({i,atom.id,atom.original_tau,initial,bounded,projected});
     }

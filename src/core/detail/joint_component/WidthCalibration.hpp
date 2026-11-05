@@ -19,16 +19,16 @@ struct WidthBoundCalibration
     std::size_t invalid_width_count{}, fallback_count{}, initialization_failure_count{};
     std::map<std::string,std::size_t> excluded_donor_reasons;
     std::optional<double> minimum_width, median_width, p90, p95, p99, maximum_width;
-    std::optional<double> bmax4, eta_max4;
+    std::optional<double> tau_max4, eta_max4;
     std::size_t initial_violations4{};
 };
 
-struct InitialWidthProjection
+struct InitialTauProjection
 {
     std::size_t joint_index{};
     std::string atom_id;
-    std::optional<double> original_first_stage_width;
-    double original_initial_width{}, bounded_initial_width{};
+    std::optional<double> original_first_stage_tau;
+    double original_initial_tau{}, bounded_initial_tau{};
     bool projection_applied{};
 };
 
@@ -36,9 +36,9 @@ struct BoundedInitialization
 {
     bool available{};
     std::string reason;
-    double bmax{};
-    std::vector<double> widths;
-    std::vector<InitialWidthProjection> projections;
+    double tau_max{};
+    std::vector<double> tau_values;
+    std::vector<InitialTauProjection> projections;
     std::size_t projection_count{};
     double maximum_projection_magnitude{};
 };

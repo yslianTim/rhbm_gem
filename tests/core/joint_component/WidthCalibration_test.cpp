@@ -119,7 +119,7 @@ TEST(WidthCalibrationTest, ReportsEmptyAndOverflowAsCalibrationUnavailable)
     const auto overflow=joint::CalibrateGlobalWidth(input,"overflow");
     EXPECT_EQ(overflow.status,"CalibrationUnavailable");
     EXPECT_EQ(overflow.unavailable_reason,"global-width-bound-overflow-or-invalid-log-bound");
-    EXPECT_FALSE(overflow.bmax4);
+    EXPECT_FALSE(overflow.tau_max4);
 }
 
 TEST(WidthCalibrationTest, ProducesOneGlobalBoundAndProjectsWithoutChangingStoredInitialization)
@@ -129,20 +129,20 @@ TEST(WidthCalibrationTest, ProducesOneGlobalBoundAndProjectsWithoutChangingStore
     const auto original=input;
     const auto calibration=joint::CalibrateGlobalWidth(input,"global");
     ASSERT_EQ(calibration.status,"Available");
-    EXPECT_DOUBLE_EQ(*calibration.bmax4,4.0*(*calibration.p95));
+    EXPECT_DOUBLE_EQ(*calibration.tau_max4,4.0*(*calibration.p95));
     EXPECT_EQ(calibration.initial_violations4,1u);
 
     const auto projected=joint::MakeBoundedInitialization(input,calibration);
     ASSERT_TRUE(projected.available);
-    EXPECT_DOUBLE_EQ(projected.bmax,4.0*(*calibration.p95));
+    EXPECT_DOUBLE_EQ(projected.tau_max,4.0*(*calibration.p95));
     EXPECT_EQ(projected.projection_count,1u);
-    EXPECT_DOUBLE_EQ(projected.maximum_projection_magnitude,1000.0-*calibration.bmax4);
-    EXPECT_DOUBLE_EQ(projected.widths[5],*calibration.bmax4);
+    EXPECT_DOUBLE_EQ(projected.maximum_projection_magnitude,1000.0-*calibration.tau_max4);
+    EXPECT_DOUBLE_EQ(projected.tau_values[5],*calibration.tau_max4);
     EXPECT_DOUBLE_EQ(input.tau[5],original.tau[5]);
     EXPECT_DOUBLE_EQ(input.atoms[5].mdpde[1],original.atoms[5].mdpde[1]);
-    EXPECT_DOUBLE_EQ(projected.widths[6],input.tau[6]);
+    EXPECT_DOUBLE_EQ(projected.tau_values[6],input.tau[6]);
     ASSERT_EQ(projected.projections.size(),100u);
-    EXPECT_DOUBLE_EQ(projected.projections[5].original_first_stage_width.value(),6.0);
+    EXPECT_DOUBLE_EQ(projected.projections[5].original_first_stage_tau.value(),6.0);
 }
 
 TEST(WidthCalibrationTest, RejectsMalformedInitializationAndUnavailableCalibration)

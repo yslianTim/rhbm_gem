@@ -688,10 +688,10 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
     }
     joint_component::BcdExecutionPolicy solver_policy;
     solver_policy.eta_upper_bound=calibration.eta_max4;
-    auto out=n::FitBcdComponents(problem,bounded.widths,solver_policy,observer);
+    auto out=n::FitBcdComponents(problem,bounded.tau_values,solver_policy,observer);
     out.initialization=initialization;
     out.evidence.push_back({"global-width-calibration",JointCheckStatus::Passed,
-        JointEvidenceScope::AssembledGlobal,calibration.p95,bounded.bmax,
+        JointEvidenceScope::AssembledGlobal,calibration.p95,bounded.tau_max,
         "global-first-stage-p95-k4; qualified-donors="+
             std::to_string(calibration.qualified_donor_count)+"/"+std::to_string(calibration.target_count)});
     out.evidence.push_back({"qualified-first-stage-donor-coverage",JointCheckStatus::Passed,

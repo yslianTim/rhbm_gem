@@ -142,7 +142,7 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
             auto * atom = workset.contributors[index];
             auto & record = initialization.atoms[index];
             record.sample_count = sample_counts[slot];
-            double width = nan;
+            double tau = nan;
             try
             {
                 if (alpha_ready[slot])
@@ -175,7 +175,7 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
                     record.first_stage_fit_qualified = record.first_stage_qualification !=
                         RHBMSolveQualification::Unqualified;
                 }
-                width = local.mdpde.GetModel().GetWidth();
+                tau = local.mdpde.GetModel().GetWidth();
                 if (!record.target && record.first_stage_qualification == RHBMSolveQualification::Unqualified)
                 {
                     if (record.first_stage_recovery)
@@ -185,7 +185,7 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
                     else
                         record.reason = "first-stage-result-unavailable";
                 }
-                else record.reason = std::isfinite(width) && width > 0 ? "valid-width" : "invalid-width";
+                else record.reason = std::isfinite(tau) && tau > 0 ? "valid-width" : "invalid-width";
             }
             catch (const std::exception & error)
             {
@@ -194,9 +194,9 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
                 editor.SetAtomStageEstimate(FittingStage::First, *atom, missing);
                 record.reason = missing.reason;
             }
-            if (std::isfinite(width)) record.original_tau = width;
-            record.seed_source = std::isfinite(width) && width > 0 ? "fitted" : "unavailable";
-            initialization.tau[index] = width;
+            if (std::isfinite(tau)) record.original_tau = tau;
+            record.seed_source = std::isfinite(tau) && tau > 0 ? "fitted" : "unavailable";
+            initialization.tau[index] = tau;
             ++completed_count;
             if (!options.quiet_mode)
             {
