@@ -56,14 +56,14 @@ struct LinearResult
     Vector beta;
     bool valid{};
     std::string reason;
-    int rank{},solves{},releases{};
+    int rank{},solves{},working_set_releases{};
     std::size_t active_set_iterations{},refinement_eligibility_count{},refinement_trigger_count{},
         refinement_iterations{},refinement_success_count{},refinement_failure_count{},refinement_factorizations{},
-        free_face_changes{},free_face_unchanged{},sparse_structure_build_count{},tile_mapping_build_count{};
+        free_variable_face_changes{},free_variable_face_unchanged{},sparse_structure_build_count{},tile_mapping_build_count{};
 };
-struct LinearSolveWorkspace;
-LinearResult SolveLinear(const Sparse &,VectorRef,const LinearPolicy * = nullptr,double=0,
-    LinearSolveWorkspace * = nullptr);
+struct ConstrainedAcWorkspace;
+LinearResult SolveConstrainedAcLeastSquares(const Sparse &,VectorRef,const LinearPolicy * = nullptr,double=0,
+    ConstrainedAcWorkspace * = nullptr);
 struct Certificate
 {
     bool evaluated{},available{},feasible{},kkt_passed{};
@@ -71,14 +71,15 @@ struct Certificate
     std::string linear_solver_reason;
     double projected_kkt{unavailable},rss{unavailable},objective{unavailable},residual_scale{unavailable},
         residual_rmse{unavailable},residual_max{unavailable},relative_residual{unavailable};
-    std::vector<Eigen::Index> active_atoms;
-    std::optional<int> linear_solves,linear_releases,free_rank;
+    // Geometric constraint status (A == 0), not the solver's working set.
+    std::vector<Eigen::Index> active_amplitude_atom_indices;
+    std::optional<int> linear_solves,linear_releases,ac_free_design_rank;
     bool width_bound_applied{},width_bound_feasible{true};
     double width_bound_projected_kkt{unavailable},maximum_width_bound_violation{},
         boundary_gradient_max{},boundary_multiplier_max{},width_bound_complementarity{unavailable};
     std::size_t active_width_bound_count{};
 };
-Certificate CertifyLinear(const Sparse &,VectorRef,const Vector &,double=0);
+Certificate CertifyConstrainedAcSolution(const Sparse &,VectorRef,const Vector &,double=0);
 struct Endpoint
 {
     Vector eta,beta,gradient;
@@ -110,7 +111,7 @@ struct WidthBoundKkt
 WidthBoundKkt CalculateWidthBoundKkt(const Vector &,const Vector &,double);
 Spectrum ComputeSpectrum(const Sparse &,const RankPolicy &,Eigen::Index,bool);
 Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext *,
-    LinearSolveWorkspace * = nullptr);
+    ConstrainedAcWorkspace * = nullptr);
 Evaluation EvaluateState(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &);
 // Scalar/vector reductions for accepted global sweep states. Leaves x and derivative empty.
 Evaluation EvaluateStateStreaming(const Domain &,VectorRef,const Vector &,const Vector &,const EvaluationContext &);

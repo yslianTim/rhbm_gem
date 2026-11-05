@@ -206,8 +206,8 @@ TEST(JointComponentNumericsTest, SparseSolveCountsZeroDesignRowsWithNonzeroRhsIn
     rhs(7)=.75;
 
     ASSERT_LT(sparse.nonZeros(),dense.size());
-    n::LinearSolveWorkspace workspace;
-    const auto solved=n::SolveLinear(sparse,rhs,nullptr,0,&workspace);
+    n::ConstrainedAcWorkspace workspace;
+    const auto solved=n::SolveConstrainedAcLeastSquares(sparse,rhs,nullptr,0,&workspace);
     ASSERT_TRUE(solved.valid)<<solved.reason;
     EXPECT_EQ(solved.rank,4);
     EXPECT_GE(solved.beta(0),0.0);
@@ -218,7 +218,7 @@ TEST(JointComponentNumericsTest, SparseSolveCountsZeroDesignRowsWithNonzeroRhsIn
     const Vector reference_beta=reference.solve(rhs);
     EXPECT_LE((solved.beta-reference_beta).norm()/(1+reference_beta.norm()),2e-8);
 
-    const auto certificate=n::CertifyLinear(sparse,rhs,solved.beta);
+    const auto certificate=n::CertifyConstrainedAcSolution(sparse,rhs,solved.beta);
     ASSERT_TRUE(certificate.available);
     EXPECT_TRUE(certificate.feasible);
     EXPECT_TRUE(certificate.kkt_passed);
@@ -255,7 +255,7 @@ TEST(JointComponentNumericsTest, ControlledQrMatchesDenseReferenceAcrossPartialF
         Vector rhs=dense*truth;
         for(Eigen::Index row=0;row<rows;++row) rhs(row)+=.001*std::sin(.13*static_cast<double>(row));
         const n::Sparse sparse=dense.sparseView(0.0,0.0);
-        const auto solved=n::SolveLinear(sparse,rhs);
+        const auto solved=n::SolveConstrainedAcLeastSquares(sparse,rhs);
         ASSERT_TRUE(solved.valid)<<"columns="<<columns<<" reason="<<solved.reason;
         EXPECT_EQ(solved.rank,columns);
         EXPECT_EQ(rows%1024,5);
@@ -265,7 +265,7 @@ TEST(JointComponentNumericsTest, ControlledQrMatchesDenseReferenceAcrossPartialF
         const Vector reference_beta=reference.solve(rhs);
         EXPECT_LE((solved.beta-reference_beta).norm()/(1+reference_beta.norm()),2e-8);
 
-        const auto certificate=n::CertifyLinear(sparse,rhs,solved.beta);
+        const auto certificate=n::CertifyConstrainedAcSolution(sparse,rhs,solved.beta);
         ASSERT_TRUE(certificate.available);
         EXPECT_TRUE(certificate.feasible);
         EXPECT_TRUE(certificate.kkt_passed);
@@ -295,7 +295,7 @@ TEST(JointComponentNumericsTest, NearRankDeficientTwentyFourColumnDesignIsClassi
 
     n::LinearPolicy policy;
     policy.rank_relative=rank_threshold;
-    const auto solved=n::SolveLinear(sparse,rhs,&policy);
+    const auto solved=n::SolveConstrainedAcLeastSquares(sparse,rhs,&policy);
     EXPECT_FALSE(solved.valid);
     EXPECT_EQ(solved.reason,"rank-deficient");
     EXPECT_EQ(solved.rank,23);
@@ -453,13 +453,13 @@ TEST(JointComponentNumericsTest, SparseConstrainedSolvePreservesInteriorBoundary
     const n::Sparse sparse=x.sparseView();
     for(const Eigen::Vector4d truth:{Eigen::Vector4d(2,-.3,1.5,.4),Eigen::Vector4d(-.5,-.3,1.5,.4)})
     {
-        const Vector y=x*truth; const auto solved=n::SolveLinear(sparse,y);
+        const Vector y=x*truth; const auto solved=n::SolveConstrainedAcLeastSquares(sparse,y);
         ASSERT_TRUE(solved.valid);
-        const auto certificate=n::CertifyLinear(sparse,y,solved.beta,std::max(1.0,y.norm()));
+        const auto certificate=n::CertifyConstrainedAcSolution(sparse,y,solved.beta,std::max(1.0,y.norm()));
         ASSERT_TRUE(certificate.available); EXPECT_TRUE(certificate.feasible); EXPECT_TRUE(certificate.kkt_passed);
-        EXPECT_EQ(solved.releases,0);
-        if(truth(0)>0) {EXPECT_TRUE(certificate.active_atoms.empty()); EXPECT_NEAR(solved.beta(0),truth(0),1e-12);}
-        else {ASSERT_EQ(certificate.active_atoms,std::vector<Eigen::Index>{0}); EXPECT_EQ(solved.beta(0),0);}
+        EXPECT_EQ(solved.working_set_releases,0);
+        if(truth(0)>0) {EXPECT_TRUE(certificate.active_amplitude_atom_indices.empty()); EXPECT_NEAR(solved.beta(0),truth(0),1e-12);}
+        else {ASSERT_EQ(certificate.active_amplitude_atom_indices,std::vector<Eigen::Index>{0}); EXPECT_EQ(solved.beta(0),0);}
     }
 
     Matrix release_design(7,4);
@@ -467,17 +467,17 @@ TEST(JointComponentNumericsTest, SparseConstrainedSolvePreservesInteriorBoundary
         0,0,2,2, 0,2,-1,0, -1,1,2,-1;
     const Vector release_y=(Vector(7)<<0,1,2,1,1,2,0).finished();
     const auto release_sparse=n::Sparse(release_design.sparseView());
-    const auto released=n::SolveLinear(release_sparse,release_y);
-    ASSERT_TRUE(released.valid); EXPECT_EQ(released.releases,1); EXPECT_GT(released.beta(0),0);
+    const auto released=n::SolveConstrainedAcLeastSquares(release_sparse,release_y);
+    ASSERT_TRUE(released.valid); EXPECT_EQ(released.working_set_releases,1); EXPECT_GT(released.beta(0),0);
     EXPECT_EQ(released.beta(2),0);
-    const auto released_certificate=n::CertifyLinear(release_sparse,release_y,released.beta,
+    const auto released_certificate=n::CertifyConstrainedAcSolution(release_sparse,release_y,released.beta,
         std::max(1.0,release_y.norm()));
     ASSERT_TRUE(released_certificate.available); EXPECT_TRUE(released_certificate.feasible);
     EXPECT_TRUE(released_certificate.kkt_passed);
 
     Matrix deficient=Matrix::Zero(7,4);
     deficient(0,0)=1; deficient(1,1)=1; deficient(0,2)=1; deficient(2,3)=1;
-    const auto rejected=n::SolveLinear(n::Sparse(deficient.sparseView()),Vector::Ones(7));
+    const auto rejected=n::SolveConstrainedAcLeastSquares(n::Sparse(deficient.sparseView()),Vector::Ones(7));
     EXPECT_FALSE(rejected.valid); EXPECT_EQ(rejected.reason,"rank-deficient"); EXPECT_EQ(rejected.rank,3);
 }
 
@@ -486,8 +486,8 @@ TEST(JointComponentNumericsTest, UnweightedLinearSolvePreservesRecordedNumerical
     namespace n=p::runtime;
     const auto solve=[](const Matrix & x,const Vector & y) {
         const n::Sparse sparse=x.sparseView();
-        auto result=n::SolveLinear(sparse,y);
-        auto certificate=result.valid ? n::CertifyLinear(sparse,y,result.beta) : n::Certificate{};
+        auto result=n::SolveConstrainedAcLeastSquares(sparse,y);
+        auto certificate=result.valid ? n::CertifyConstrainedAcSolution(sparse,y,result.beta) : n::Certificate{};
         return std::pair{std::move(result),std::move(certificate)};
     };
     const auto relative_match=[](double actual,double expected,double tolerance) {
@@ -499,9 +499,9 @@ TEST(JointComponentNumericsTest, UnweightedLinearSolvePreservesRecordedNumerical
     Vector positive_truth(4); positive_truth<<2,-.3,1.5,.4;
     const auto [full_rank,full_rank_certificate]=solve(identity,identity*positive_truth);
     ASSERT_TRUE(full_rank.valid); EXPECT_EQ(full_rank.reason,"solved"); EXPECT_EQ(full_rank.rank,4);
-    EXPECT_EQ(full_rank.active_set_iterations,1u); EXPECT_EQ(full_rank.releases,0);
+    EXPECT_EQ(full_rank.active_set_iterations,1u); EXPECT_EQ(full_rank.working_set_releases,0);
     EXPECT_EQ(full_rank.sparse_structure_build_count,1u); EXPECT_EQ(full_rank.tile_mapping_build_count,1u);
-    EXPECT_EQ(full_rank.free_face_changes,0u); EXPECT_EQ(full_rank.free_face_unchanged,0u);
+    EXPECT_EQ(full_rank.free_variable_face_changes,0u); EXPECT_EQ(full_rank.free_variable_face_unchanged,0u);
     EXPECT_LE((full_rank.beta-positive_truth).norm(),1e-14);
     EXPECT_DOUBLE_EQ(full_rank_certificate.objective,0.0);
     EXPECT_EQ(full_rank.refinement_eligibility_count,1u); EXPECT_EQ(full_rank.refinement_trigger_count,0u);
@@ -509,9 +509,9 @@ TEST(JointComponentNumericsTest, UnweightedLinearSolvePreservesRecordedNumerical
     Vector boundary_truth(4); boundary_truth<<-.5,-.3,1.5,.4;
     const auto [boundary,boundary_certificate]=solve(identity,identity*boundary_truth);
     ASSERT_TRUE(boundary.valid); EXPECT_EQ(boundary.reason,"solved"); EXPECT_EQ(boundary.rank,3);
-    EXPECT_EQ(boundary.active_set_iterations,2u); EXPECT_EQ(boundary.releases,0);
+    EXPECT_EQ(boundary.active_set_iterations,2u); EXPECT_EQ(boundary.working_set_releases,0);
     EXPECT_EQ(boundary.sparse_structure_build_count,2u); EXPECT_EQ(boundary.tile_mapping_build_count,2u);
-    EXPECT_EQ(boundary.free_face_changes,1u); EXPECT_EQ(boundary.free_face_unchanged,0u);
+    EXPECT_EQ(boundary.free_variable_face_changes,1u); EXPECT_EQ(boundary.free_variable_face_unchanged,0u);
     EXPECT_DOUBLE_EQ(boundary.beta(0),0.0); EXPECT_NEAR(boundary.beta(1),-.3,1e-14);
     EXPECT_NEAR(boundary.beta(2),1.5,1e-14); EXPECT_NEAR(boundary.beta(3),.4,1e-14);
     EXPECT_NEAR(boundary_certificate.objective,.125,1e-14);
@@ -522,9 +522,9 @@ TEST(JointComponentNumericsTest, UnweightedLinearSolvePreservesRecordedNumerical
         0,0,2,2, 0,2,-1,0, -1,1,2,-1;
     const auto [released,release_certificate]=solve(release_design,(Vector(7)<<0,1,2,1,1,2,0).finished());
     ASSERT_TRUE(released.valid); EXPECT_EQ(released.reason,"solved"); EXPECT_EQ(released.rank,3);
-    EXPECT_EQ(released.active_set_iterations,4u); EXPECT_EQ(released.releases,1);
+    EXPECT_EQ(released.active_set_iterations,4u); EXPECT_EQ(released.working_set_releases,1);
     EXPECT_EQ(released.sparse_structure_build_count,4u); EXPECT_EQ(released.tile_mapping_build_count,4u);
-    EXPECT_EQ(released.free_face_changes,3u); EXPECT_EQ(released.free_face_unchanged,0u);
+    EXPECT_EQ(released.free_variable_face_changes,3u); EXPECT_EQ(released.free_variable_face_unchanged,0u);
     const Vector expected_release=(Vector(4)<<.038674033149171297,.28176795580110497,0.,-.18784530386740331).finished();
     EXPECT_LE((released.beta-expected_release).norm(),1e-14);
     EXPECT_NEAR(release_certificate.objective,4.834254143646409,1e-13);
@@ -558,7 +558,7 @@ TEST(JointComponentNumericsTest, UnweightedLinearSolvePreservesRecordedNumerical
     }
     const auto [large_result,large_certificate]=solve(large,large*large_truth);
     ASSERT_TRUE(large_result.valid); EXPECT_EQ(large_result.rank,48);
-    EXPECT_EQ(large_result.active_set_iterations,1u); EXPECT_EQ(large_result.releases,0);
+    EXPECT_EQ(large_result.active_set_iterations,1u); EXPECT_EQ(large_result.working_set_releases,0);
     EXPECT_EQ(large_result.sparse_structure_build_count,1u); EXPECT_EQ(large_result.tile_mapping_build_count,1u);
     EXPECT_LE((large_result.beta-large_truth).norm(),1e-12);
     EXPECT_LT(large_certificate.objective,1e-27);
@@ -590,7 +590,7 @@ TEST(JointComponentNumericsTest, UnweightedLinearSolvePreservesRecordedNumerical
         Vector truth(4); truth<<1e6,-1e6,.4,-.2;
         const auto [solved,certificate]=solve(x,x*truth);
         ASSERT_TRUE(solved.valid); EXPECT_EQ(solved.reason,"solved"); EXPECT_EQ(solved.rank,4);
-        EXPECT_EQ(solved.active_set_iterations,1u); EXPECT_EQ(solved.releases,0);
+        EXPECT_EQ(solved.active_set_iterations,1u); EXPECT_EQ(solved.working_set_releases,0);
         EXPECT_EQ(solved.refinement_eligibility_count,1u); EXPECT_EQ(solved.refinement_trigger_count,1u);
         EXPECT_EQ(solved.refinement_success_count,baseline.successes);
         EXPECT_EQ(solved.refinement_failure_count,baseline.failures);
@@ -608,7 +608,7 @@ TEST(JointComponentNumericsTest, UnweightedLinearSolvePreservesRecordedNumerical
 TEST(JointComponentNumericsTest, ActiveSetWorkspaceResetsAcrossFacesShapesAndFailures)
 {
     namespace n=p::runtime;
-    n::LinearSolveWorkspace workspace;
+    n::ConstrainedAcWorkspace workspace;
     Matrix small=Matrix::Zero(7,4);
     small(0,0)=1; small(1,1)=1; small(2,2)=1; small(3,3)=1;
     Vector truth(4); truth<<2,-.3,1.5,.4;
@@ -619,22 +619,22 @@ TEST(JointComponentNumericsTest, ActiveSetWorkspaceResetsAcrossFacesShapesAndFai
         EXPECT_EQ(std::memcmp(left.data(),right.data(),static_cast<std::size_t>(left.size())*sizeof(double)),0);
     };
 
-    const auto fresh=n::SolveLinear(small_sparse,small_y);
-    const auto reused=n::SolveLinear(small_sparse,small_y,nullptr,0,&workspace);
+    const auto fresh=n::SolveConstrainedAcLeastSquares(small_sparse,small_y);
+    const auto reused=n::SolveConstrainedAcLeastSquares(small_sparse,small_y,nullptr,0,&workspace);
     ASSERT_TRUE(fresh.valid && reused.valid);
     compare_bitwise(fresh.beta,reused.beta);
 
     Vector boundary_truth(4); boundary_truth<<-.5,-.3,1.5,.4;
     const Vector boundary_y=small*boundary_truth;
-    const auto fresh_boundary=n::SolveLinear(small_sparse,boundary_y);
-    const auto reused_boundary=n::SolveLinear(small_sparse,boundary_y,nullptr,0,&workspace);
+    const auto fresh_boundary=n::SolveConstrainedAcLeastSquares(small_sparse,boundary_y);
+    const auto reused_boundary=n::SolveConstrainedAcLeastSquares(small_sparse,boundary_y,nullptr,0,&workspace);
     ASSERT_TRUE(fresh_boundary.valid && reused_boundary.valid);
     compare_bitwise(fresh_boundary.beta,reused_boundary.beta);
     EXPECT_EQ(reused_boundary.beta(0),0.0);
 
     Matrix deficient=Matrix::Zero(7,4);
     deficient(0,0)=1; deficient(1,1)=1; deficient(0,2)=1; deficient(2,3)=1;
-    const auto failed=n::SolveLinear(n::Sparse(deficient.sparseView()),Vector::Ones(7),nullptr,0,&workspace);
+    const auto failed=n::SolveConstrainedAcLeastSquares(n::Sparse(deficient.sparseView()),Vector::Ones(7),nullptr,0,&workspace);
     EXPECT_FALSE(failed.valid); EXPECT_EQ(failed.reason,"rank-deficient");
 
     Matrix wider=Matrix::Zero(64,8); Vector wider_truth(8);
@@ -644,20 +644,20 @@ TEST(JointComponentNumericsTest, ActiveSetWorkspaceResetsAcrossFacesShapesAndFai
         wider_truth(column)=column%2 ? -.1*static_cast<double>(column) : .2+.1*static_cast<double>(column);
     }
     const auto wider_sparse=n::Sparse(wider.sparseView()); const Vector wider_y=wider*wider_truth;
-    const auto fresh_wider=n::SolveLinear(wider_sparse,wider_y);
-    const auto reused_wider=n::SolveLinear(wider_sparse,wider_y,nullptr,0,&workspace);
+    const auto fresh_wider=n::SolveConstrainedAcLeastSquares(wider_sparse,wider_y);
+    const auto reused_wider=n::SolveConstrainedAcLeastSquares(wider_sparse,wider_y,nullptr,0,&workspace);
     ASSERT_TRUE(fresh_wider.valid && reused_wider.valid);
     compare_bitwise(fresh_wider.beta,reused_wider.beta);
 
-    const auto retry=n::SolveLinear(small_sparse,small_y,nullptr,0,&workspace);
+    const auto retry=n::SolveConstrainedAcLeastSquares(small_sparse,small_y,nullptr,0,&workspace);
     ASSERT_TRUE(retry.valid);
     compare_bitwise(fresh.beta,retry.beta);
-    const auto columns_capacity=workspace.columns.capacity(),entries_capacity=workspace.entries.capacity(),
+    const auto columns_capacity=workspace.free_column_indices.capacity(),entries_capacity=workspace.entries.capacity(),
         response_capacity=workspace.response.capacity(),local_column_capacity=workspace.local_column.capacity(),
         tile_columns_capacity=workspace.tile_columns.capacity();
-    const auto repeated=n::SolveLinear(small_sparse,small_y,nullptr,0,&workspace);
+    const auto repeated=n::SolveConstrainedAcLeastSquares(small_sparse,small_y,nullptr,0,&workspace);
     ASSERT_TRUE(repeated.valid);
-    EXPECT_EQ(workspace.columns.capacity(),columns_capacity);
+    EXPECT_EQ(workspace.free_column_indices.capacity(),columns_capacity);
     EXPECT_EQ(workspace.entries.capacity(),entries_capacity);
     EXPECT_EQ(workspace.response.capacity(),response_capacity);
     EXPECT_EQ(workspace.local_column.capacity(),local_column_capacity);
@@ -669,7 +669,7 @@ TEST(JointComponentNumericsTest, UnweightedLinearSolveRejectsInvalidDimensionsAn
 {
     namespace n=p::runtime;
     const auto expect_invalid=[](const n::Sparse & design,const Vector & observations) {
-        const auto result=n::SolveLinear(design,observations);
+        const auto result=n::SolveConstrainedAcLeastSquares(design,observations);
         EXPECT_FALSE(result.valid);
         EXPECT_EQ(result.reason,"invalid-input");
     };
@@ -700,7 +700,7 @@ TEST(JointComponentNumericsTest, LocalLinearCertificateKeepsItsStrictKktLimit)
     design.insert(0,0)=1.0; design.insert(1,1)=1.0; design.makeCompressed();
     Vector beta=Vector::Ones(2),observations(2);
     observations<<1.0-2e-7,1.0;
-    const auto certificate=n::CertifyLinear(design,observations,beta,observations.norm());
+    const auto certificate=n::CertifyConstrainedAcSolution(design,observations,beta,observations.norm());
     ASSERT_TRUE(certificate.available);
     EXPECT_GT(certificate.projected_kkt,n::PracticalJointConvergenceCriteria.global_ac_kkt);
     EXPECT_FALSE(certificate.kkt_passed);
@@ -913,7 +913,7 @@ TEST(JointComponentNumericsTest, StreamingStateMatchesSparseGlobalEvaluation)
     EXPECT_LE((streaming.residual-sparse.residual).lpNorm<Eigen::Infinity>(),2e-13*prediction_scale);
     EXPECT_NEAR(streaming.certificate.objective,sparse.certificate.objective,2e-13*std::max(1.0,sparse.certificate.objective));
     EXPECT_NEAR(streaming.certificate.projected_kkt,sparse.certificate.projected_kkt,2e-12);
-    EXPECT_EQ(streaming.certificate.active_atoms,sparse.certificate.active_atoms);
+    EXPECT_EQ(streaming.certificate.active_amplitude_atom_indices,sparse.certificate.active_amplitude_atom_indices);
     EXPECT_EQ(streaming.certificate.feasible,sparse.certificate.feasible);
     EXPECT_LE((streaming.gradient-sparse.gradient).lpNorm<Eigen::Infinity>(),
         2e-12*std::max(1.0,sparse.gradient.lpNorm<Eigen::Infinity>()));

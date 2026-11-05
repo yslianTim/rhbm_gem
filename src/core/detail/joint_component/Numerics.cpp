@@ -165,7 +165,7 @@ BasisValues EvaluateKernel(double square, double width, double cutoff)
     else if (r <= 2.5) {out.charge=std::erf(r/width/std::sqrt(2.0))/r; out.charge_log_width=-center*exponent;}
     return out;
 }
-Certificate CertifyLinear(const Sparse & x,VectorRef y,const Eigen::VectorXd & beta,double observation_scale)
+Certificate CertifyConstrainedAcSolution(const Sparse & x,VectorRef y,const Eigen::VectorXd & beta,double observation_scale)
 {
     Certificate out; out.evaluated=true;
     if (x.rows()!=y.size() || x.cols()!=beta.size() || !beta.allFinite() || !y.allFinite()) return out;
@@ -177,11 +177,11 @@ Certificate CertifyLinear(const Sparse & x,VectorRef y,const Eigen::VectorXd & b
     const double s=observation_scale>0 ? observation_scale : std::max(1.0,y.norm());
     const Eigen::VectorXd u=norms.array()*beta.array()/s;
     const Eigen::VectorXd gradient=StableTransposeProduct(x,residual).array()/norms.array()/s;
-    Eigen::VectorXd projected=u-gradient; std::vector<Eigen::Index> active; bool feasible=true;
+    Eigen::VectorXd projected=u-gradient; std::vector<Eigen::Index> active_amplitude_atom_indices; bool feasible=true;
     for (Eigen::Index k=0;k<beta.size();k+=2)
     {
         feasible &= beta(k)>=0; projected(k)=std::max(0.0,projected(k));
-        if (beta(k)==0) active.push_back(k/2);
+        if (beta(k)==0) active_amplitude_atom_indices.push_back(k/2);
     }
     const double kkt=(u-projected).lpNorm<Eigen::Infinity>();
     out.available=true; out.feasible=feasible; out.projected_kkt=kkt; out.kkt_passed=feasible && kkt<=1e-10;
@@ -189,7 +189,7 @@ Certificate CertifyLinear(const Sparse & x,VectorRef y,const Eigen::VectorXd & b
     out.residual_scale=residual.squaredNorm()/static_cast<double>(y.size());
     out.residual_rmse=residual.norm()/std::sqrt(static_cast<double>(y.size()));
     out.residual_max=residual.cwiseAbs().maxCoeff(); out.relative_residual=residual.norm()/s;
-    out.active_atoms=active; return out;
+    out.active_amplitude_atom_indices=active_amplitude_atom_indices; return out;
 }
 
 std::optional<double> NormalizedProfileObjective(const Evaluation & evaluation,double scale)
@@ -330,18 +330,18 @@ MemoryEstimate EndpointVerificationMemoryEstimate(const Domain & domain,VectorRe
     return PlanMemory(shape,MemoryStage::EndpointVerification);
 }
 Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,const EvaluationContext * context,
-    LinearSolveWorkspace * workspace)
+    ConstrainedAcWorkspace * workspace)
 {
     auto out=Basis(domain,y,eta);
     if(!out.valid) return out; out.valid=false;
     const Eigen::Index m=eta.size();
-    const auto solved=SolveLinear(out.x,y,
+    const auto solved=SolveConstrainedAcLeastSquares(out.x,y,
         context ? &context->linear : nullptr,context ? context->scale : 0,workspace);
     out.beta=solved.beta;
-    out.certificate=CertifyLinear(out.x,y,out.beta,context ? context->scale : 0);
+    out.certificate=CertifyConstrainedAcSolution(out.x,y,out.beta,context ? context->scale : 0);
     out.certificate.linear_solver_valid=solved.valid; out.certificate.linear_solver_reason=solved.reason;
-    out.certificate.linear_solves=solved.solves; out.certificate.linear_releases=solved.releases;
-    out.certificate.free_rank=solved.rank;
+    out.certificate.linear_solves=solved.solves; out.certificate.linear_releases=solved.working_set_releases;
+    out.certificate.ac_free_design_rank=solved.rank;
     if (!solved.valid) {out.reason=solved.reason; return out;}
     if (!out.certificate.kkt_passed)
     {out.reason="kkt-failed"; return out;}
@@ -360,7 +360,7 @@ Evaluation EvaluateState(const Domain & domain,VectorRef y,const Vector & eta,co
     if(!out.valid) return out; out.valid=false;
     if(beta.size()!=out.x.cols() || !beta.allFinite()) {out.reason="invalid-coefficients"; return out;}
     out.beta=beta; out.residual=StableResidual(out.x,y,beta); out.gradient=Vector::Zero(eta.size());
-    out.certificate=CertifyLinear(out.x,y,beta,context.scale);
+    out.certificate=CertifyConstrainedAcSolution(out.x,y,beta,context.scale);
     for(Eigen::Index k=0;k<beta.size();++k)
         out.gradient(k/2)+=beta(k)*StableColumnDot(out.derivative,k,out.residual)/context.scale/context.scale;
     CaptureWidthBoundKkt(out.certificate,out.eta,out.gradient,context);
@@ -423,7 +423,7 @@ Evaluation EvaluateStateStreaming(const Domain & domain,VectorRef y,const Vector
         const Eigen::Index amplitude=2*atom;
         feasible &= beta(amplitude)>=0;
         projected(amplitude)=std::max(0.0,projected(amplitude));
-        if(beta(amplitude)==0) certificate.active_atoms.push_back(atom);
+        if(beta(amplitude)==0) certificate.active_amplitude_atom_indices.push_back(atom);
     }
     certificate.projected_kkt=(scaled_beta-projected).lpNorm<Eigen::Infinity>();
     certificate.available=true; certificate.feasible=feasible;

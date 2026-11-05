@@ -47,7 +47,7 @@ struct Profile
     std::optional<double> accepted_objective;
     std::optional<ActiveSetStep> last_bounded_subproblem;
     BoundedLmWork bounded_lm_work;
-    LinearSolveWorkspace linear_workspace;
+    ConstrainedAcWorkspace ac_workspace;
     void RecordBoundedSubproblem(const ActiveSetStep & step)
     {
         ++bounded_lm_work.subproblem_solves;
@@ -161,7 +161,7 @@ struct Profile
         if(cached.valid && cached.eta.size()==eta.size() && (cached.eta.array()==eta.array()).all()) return true;
         if(evaluations>=context.profile_budget) {failure="profile-budget"; return false;}
         failure.clear();
-        cached=EvaluateProfile(domain,y,eta,&context,&linear_workspace); ++evaluations;
+        cached=EvaluateProfile(domain,y,eta,&context,&ac_workspace); ++evaluations;
         joint_component::Trial row; row.endpoint=cached; row.evaluation=evaluations;
         trace.push_back(std::move(row));
         if(!cached.valid) failure="inner-"+cached.reason;

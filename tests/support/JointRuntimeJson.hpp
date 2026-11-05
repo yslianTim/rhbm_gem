@@ -17,10 +17,10 @@ inline j::object Certificate(const r::Certificate & c)
     {
         out["rss"]=Number(c.rss); out["objective"]=Number(c.objective); out["residual_scale"]=Number(c.residual_scale);
         out["residual_rmse"]=Number(c.residual_rmse); out["residual_max"]=Number(c.residual_max);
-        out["relative_residual"]=Number(c.relative_residual); out["active_atoms"]=Indices(c.active_atoms);
+        out["relative_residual"]=Number(c.relative_residual); out["active_atoms"]=Indices(c.active_amplitude_atom_indices);
     }
     if(c.linear_solves) out["linear_solves"]=*c.linear_solves;
-    if(c.free_rank) out["free_rank"]=*c.free_rank;
+    if(c.ac_free_design_rank) out["free_rank"]=*c.ac_free_design_rank;
     return out;
 }
 inline j::object Endpoint(const r::Endpoint & e)

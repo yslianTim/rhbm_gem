@@ -296,7 +296,7 @@ BcdBlockFailureDiagnostics FailureDiagnostics(const BcdSearchPolicy & policy,
     const auto & certificate=profile.initial.certificate;
     out.solver_valid=certificate.linear_solver_valid;
     out.solver_reason=certificate.linear_solver_reason;
-    out.linear_rank=certificate.free_rank;
+    out.linear_rank=certificate.ac_free_design_rank;
     out.linear_solve_count=certificate.linear_solves;
     out.active_set_releases=certificate.linear_releases;
     if(profile.initial.beta.size())
