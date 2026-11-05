@@ -3,7 +3,7 @@
 #include "support/JointTestContext.hpp"
 #include "support/JointDenseReference.hpp"
 
-namespace second_stage_test::matched::joint_abc {
+namespace second_stage_test::matched::joint_component {
 using Sparse=Eigen::SparseMatrix<double>;
 using Support=runtime::Support;
 struct Domain : runtime::Domain
@@ -33,4 +33,4 @@ boost::json::object Trust(const Domain &, const Eigen::VectorXd &, const Evaluat
     const EvaluationContext * = nullptr);
 boost::json::object Fit(const Domain &, const Eigen::VectorXd & y, const Eigen::VectorXd & initial_tau,
     const EvaluationContext * = nullptr);
-} // namespace second_stage_test::matched::joint_abc
+} // namespace second_stage_test::matched::joint_component

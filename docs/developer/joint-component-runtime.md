@@ -9,7 +9,7 @@ estimator. The persisted parameterization is
 `RunJointComponentWorkflow` builds the Pure Exclusion problem and obtains
 qualified FirstStage target widths. A width calibration is available only with
 at least 20 qualified target donors and 95% target coverage. The sole global
-width bound is `Bmax = 4 × Q0.95(qualified FirstStage target widths)`.
+width bound is `tau_max = 4 × Q0.95(qualified FirstStage target widths)`.
 Nonfinite or nonpositive donor widths, median-fallback donors, initialization
 failures, and overflowed bounds do not produce a usable calibration. Initial
 widths are projected into this finite bound; unavailable calibration prevents
@@ -18,9 +18,28 @@ Joint search from starting.
 Targets are the only free Joint components. Non-target Halo support is used
 only for the Pure Halo-Support Exclusion row selection, with the production
 support radius of 2.5 Å. The model is
-`f_i(r) = A_i G(r; B_i) + C_i K(r; B_i)`, with `A_i ≥ 0`,
-`0 < B_i ≤ Bmax`, and signed `C_i`. C multiplies the charge kernel; it is not
+`f_i(r) = A_i G(r; tau_i) + C_i K(r; tau_i)`, with `A_i ≥ 0`,
+`0 < tau_i ≤ tau_max`, and signed `C_i`. C multiplies the charge kernel; it is not
 a constant background offset.
+
+The atomic parameter vector is `theta_i = (A_i, tau_i, C_i)`. Tau is the
+physical width in angstrom; the optimization coordinate is
+`eta_i = log(tau_i)`, with `eta_max = log(tau_max)`. The kernels are
+
+```text
+G(r; tau) = (2*pi*tau^2)^(-3/2) * exp(-r^2/(2*tau^2))
+K(r; tau) = erf(r/(sqrt(2)*tau))/r
+K(0; tau) = sqrt(2/pi)/tau
+dG/deta = G(r; tau) * (r^2/tau^2 - 3)
+dK/deta = -sqrt(2/pi)/tau * exp(-r^2/(2*tau^2))
+```
+
+The runtime retains its production support cutoff and near-origin handling.
+`BasisValues::d_gaussian_d_log_tau` and `d_charge_d_log_tau` store these
+log-coordinate derivatives. `JointState::tau` stores physical values,
+`log_tau` stores eta, and `eta_gradient` stores `dF/deta`, where
+`dF/deta_i = tau_i * dF/dtau_i`. The LM step is an eta step. Calibration uses
+Hyndman–Fan Type 7 quantiles of qualified FirstStage Target tau values.
 
 The Joint Component Estimator uses Gauss–Seidel Block Coordinate Descent
 (BCD) to visit component blocks in forward order. Each visit forms the
@@ -64,9 +83,12 @@ reports `block-hard-sweep-budget`. Pending recovery retains its distinct
 
 ## Constraint status, working sets and free variables
 
-For fixed widths `B_i = exp(eta_i)`, the A/C model is exactly linear:
+For fixed widths `tau_i = exp(eta_i)`, the A/C model is exactly linear:
 `min_beta 1/2 ||X(eta) beta - y_eff||^2`, subject to `A_i >= 0` and signed,
 unconstrained `C_i`. This A/C problem is not a Taylor linearization.
+Its constrained minimizer is `beta_star(eta)`, and the normalized profile
+objective is `phi(eta) = ||X(eta) beta_star(eta) - y_eff||^2 / (2*s^2)`,
+where `s` is the parent observation scale.
 
 | Term | Meaning in the runtime |
 | --- | --- |
@@ -103,6 +125,10 @@ KKT. Block failure diagnostics report the initial local A/C profile through
 `ac_free_design_rank`, `ac_linear_solve_count`, `ac_working_set_releases` and
 `ac_scaled_projected_kkt`. Width LM status and Width KKT remain separate fields.
 Logger levels, throttling and event frequency are unchanged.
+
+Progress reports `max_tau` for the maximum Target tau, `eta-grad` for the
+raw eta gradient norm, and `eta-projected-kkt` for the bound-projected eta
+KKT. Block failure diagnostics use `tau_upper_bound` and `eta_step_inf`.
 
 ## Qualification
 
@@ -148,6 +174,13 @@ workflow then runs Post-Joint Local MDPDE for qualified selected targets and
 Group Fitting from those local results. These downstream stages retain their
 own availability and qualification evidence.
 
+Halo medians retain the `(A, tau, C)` order:
+`theta_h = (median A_i, median tau_i, median C_i)` over each Halo's qualified
+geometry-local donors. Charge correction remains
+`y_i_Gaussian(r) = y_i_peel(r) - C_hat_i * K(r; tau_hat_i)`.
+The generic `GaussianModel3D::GetWidth()` API and the Halo reconstruction
+`width` field describe physical Width and retain their names.
+
 Memory preflight and memory-bounded evaluation remain part of problem
 construction, Gauss–Seidel BCD search, endpoint verification, local conditioning,
 Halo reconstruction, and peeling.
@@ -158,14 +191,25 @@ Halo reconstruction, and peeling.
 | --- | --- |
 | SQLite database | Schema v20 |
 | Stage Result JSON | Version 4 |
-| Joint Result JSON | Schema v23 |
+| Joint Result JSON | Schema v24 |
 
 SQLite opens a new empty database by initializing schema v20 and opens an
 existing database only when its exact schema is v20. Stage JSON accepts only
-version 4. Joint JSON accepts only schema 23 and the `strict-v2` or
+version 4. Joint JSON accepts only schema 24 and the `strict-v2` or
 `practical-v2` convergence identifiers. It stores target-only Pure Exclusion
 results. No format performs migrations or compatibility decoding. Unsupported
 inputs are rejected without repair or overwrite.
+
+Joint state objects contain exactly `ac`, `tau`, `log_tau`, `eta_gradient`
+and `objective`. Initialization uses `tau`, with `original_tau` and
+`used_tau` in each captured atom record. Candidate diagnostics use
+`candidate_eta_gradient_inf_norm` and `global_eta_gradient_threshold`;
+the latter is the bound-projected eta stationarity threshold.
+Units metadata uses `joint-kernel-map-units-v2` and `tau: angstrom`.
+Joint CSV parameter columns are `A,tau,C`, in that order. Schema 24 accepts
+only these current keys, including when the Joint payload is stored in a
+SQLite v20 database. Stage JSON v4 and native Gaussian Width fields keep
+their independent contracts.
 
 Current documents can store qualified and unqualified results, nullable
 diagnostics, missing component states, unavailable width calibration, and
@@ -209,8 +253,8 @@ identity without claiming that search ran or that a width bound was available.
   owns the unchanged adaptive sweep decisions.
 - [Refactor validation](bcd-refactor-validation.md) records the baseline and
   numerical/contract checks.
-- [Active-set terminology validation](jce-terminology-validation.md) records
-  the terminology audit, numerical equivalence and logger/contract checks.
+- [Tau naming validation](tau-naming-validation.md) records the symbol inventory,
+  numerical equivalence and logger/persistence checks.
 
 The [data I/O architecture](architecture/dataobject-io-architecture.md)
 documents the database and JSON boundaries. The

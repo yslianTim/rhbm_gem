@@ -18,7 +18,7 @@ diagnostics, local conditioning, and optional
 Halo-reconstruction evidence.
 
 The estimator-neutral Second-stage records expose available Joint Target
-A/B/C values, target/Halo roles, component and run identity, and convergence
+A/tau/C values, target/Halo roles, component and run identity, and convergence
 status to existing model consumers. A missing or unqualified target remains
 unavailable with its reason.
 
@@ -41,7 +41,7 @@ peeling; they do not receive target-local or group results.
    LM to produce the target-only state. Global convergence, Endpoint
    Certification, Independent Replay, target qualification and Local
    Conditioning are recorded.
-4. Qualified Target A/B/C points provide geometry-local kNN-4 Halo medians.
+4. Qualified Target A/tau/C points provide geometry-local kNN-4 Halo medians.
    Each reconstructed Halo records its qualified donor Target IDs. An
    unavailable reconstruction remains a separate status from Joint numerical
    convergence.
@@ -75,7 +75,7 @@ data as zero.
 ## Persistence
 
 SQLite schema v20 stores the current model structure, Joint Result JSON schema
-23, and Stage Result JSON version 4. Joint JSON is target-only Pure Exclusion.
+24, and Stage Result JSON version 4. Joint JSON is target-only Pure Exclusion.
 Joint results require the complete BCD solver provenance v6 described in the
 [Joint runtime guide](joint-component-runtime.md), including pre-search failures.
 Stage JSON retains current FirstStage and SecondStage estimates, raw and

@@ -122,7 +122,7 @@ inline j::object Assessment(const r::Assessment & a)
 }
 inline j::object Search(const r::SearchResult & s,const r::EvaluationContext & c,Eigen::Index rows)
 {
-    j::object out{{"schema_version",2},{"experiment","joint-abc-profile"},{"alpha",0},{"execution_complete",true},{"runtime_convergence","unavailable"},
+    j::object out{{"schema_version",2},{"experiment","joint-tau-profile"},{"alpha",0},{"execution_complete",true},{"runtime_convergence","unavailable"},
         {"initial",Endpoint(s.initial)},{"lm_status",s.lm_status},{"stop_reason",s.stop_reason},{"profile_evaluations",s.evaluations},
         {"jacobian_evaluations",s.derivatives},{"accepted_updates",s.accepted},{"row_count",rows},
         {"settings",j::object{{"factor",.1},{"ftol",1e-14},{"xtol",1e-12},{"gtol",1e-12},{"profile_budget",c.profile_budget},{"accepted_update_budget",c.update_budget}}},

@@ -78,7 +78,7 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
             LocalFittingFeatureRow row; row.serial_id=atom->GetSerialID(); row.residue=ChemicalDataHelper::GetLabel(atom->GetResidue()); row.spot=atom->GetAtomID();
             row.features.fill(std::numeric_limits<double>::quiet_NaN()); rows.push_back(std::move(row)); continue;
         }
-        // JointComponents stores its fitted A/tau/C here (B is tau).
+        // JointComponents stores its fitted A/tau/C here.
         // Post-Joint Local and group estimates are stored separately.
         const auto & second = local_view.GetStageEstimate(FittingStage::Second).point;
         const double missing=std::numeric_limits<double>::quiet_NaN();

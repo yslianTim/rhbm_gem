@@ -628,7 +628,7 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     auto f = joint_partial_test::Make("all");
     const auto problem=core::BuildPureHaloSupportExclusionProblem(*f.map,*f.model);
     auto result=core::CaptureJointAnalysisResult(
-        second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,f.tau,2.0));
+        second_stage_test::matched::joint_component::FitBoundedJointComponentsForTesting(problem,f.tau,2.0));
     ASSERT_EQ(result.atom_ids.size(), 2);
     std::swap(result.atom_ids[0], result.atom_ids[1]);
     auto & component = result.components.front();
@@ -737,7 +737,7 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingReconstructsGridNodesOuts
     auto f = joint_partial_test::Make("partial");
     SetExactMapForFixture(f);
     const auto problem = core::BuildPureHaloSupportExclusionProblem(*f.map, *f.model);
-    const auto fit=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,{f.tau[0]},2.0);
+    const auto fit=second_stage_test::matched::joint_component::FitBoundedJointComponentsForTesting(problem,{f.tau[0]},2.0);
     ASSERT_TRUE(fit.assembled_state) << fit.initialization.reason << " search=" << fit.search_completed
         << " components=" << fit.components.size()
         << (fit.components.empty() ? std::string{} : ", stop="+fit.components.front().stop_reason);
@@ -805,7 +805,7 @@ TEST(JointComponentPartialSelectionTest, ExcludedFitRowsRemainInOriginalPeelingD
     SetExactMapForFixture(f);
     const auto problem=core::BuildPureHaloSupportExclusionProblem(*f.map,*f.model);
     ASSERT_LT(problem.Input().row_ids.size(),problem.OriginalInput().row_ids.size());
-    const auto fit=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,{f.tau[0]},2.0);
+    const auto fit=second_stage_test::matched::joint_component::FitBoundedJointComponentsForTesting(problem,{f.tau[0]},2.0);
     ASSERT_TRUE(fit.assembled_state) << fit.initialization.reason;
     ASSERT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     auto snapshot=core::CaptureJointAnalysisResult(fit);
@@ -831,7 +831,7 @@ TEST(JointComponentPartialSelectionTest, PeelingIncludesDistantHaloThroughInterp
         std::make_unique<double[]>(111 * 61 * 61));
     SetExactMapForFixture(f);
     const auto problem = core::BuildPureHaloSupportExclusionProblem(*f.map, *f.model);
-    const auto fit=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,{f.tau[0]},2.0);
+    const auto fit=second_stage_test::matched::joint_component::FitBoundedJointComponentsForTesting(problem,{f.tau[0]},2.0);
     ASSERT_TRUE(fit.assembled_state) << fit.initialization.reason;
     ASSERT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     auto snapshot=core::CaptureJointAnalysisResult(fit);
@@ -886,7 +886,7 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
     SetExactMapForFixture(f);
     const auto problem = core::BuildPureHaloSupportExclusionProblem(*f.map, *f.model);
     const auto snapshot = core::CaptureJointAnalysisResult(
-        second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,f.tau,2.0));
+        second_stage_test::matched::joint_component::FitBoundedJointComponentsForTesting(problem,f.tau,2.0));
     f.model->EditAnalysis().ApplyJointResult(snapshot, "shared-context-test");
     for (std::size_t i=0;i<atom_ids.size();++i)
     {
@@ -1429,7 +1429,7 @@ TEST(JointComponentPartialSelectionTest, TargetOnlyPostprocessingRetainsFullCont
     auto f = joint_partial_test::Make("partial");
     SetExactMapForFixture(f);
     const auto problem = core::BuildPureHaloSupportExclusionProblem(*f.map, *f.model);
-    const auto fit=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,{f.tau[0]},2.0);
+    const auto fit=second_stage_test::matched::joint_component::FitBoundedJointComponentsForTesting(problem,{f.tau[0]},2.0);
     ASSERT_TRUE(fit.assembled_state) << fit.initialization.reason << " search=" << fit.search_completed
         << " components=" << fit.components.size()
         << (fit.components.empty() ? std::string{} : ", stop="+fit.components.front().stop_reason);
@@ -1609,7 +1609,7 @@ TEST(JointComponentPartialSelectionTest, CompleteModelWidthSensitivityPropagates
     f.model->FindAtomPtr(1)->SetPosition(.13,.14,.12);
     SetExactMapForFixture(f);
     const auto problem=core::BuildPureHaloSupportExclusionProblem(*f.map,*f.model);
-    const auto fitted=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,f.tau,2.0);
+    const auto fitted=second_stage_test::matched::joint_component::FitBoundedJointComponentsForTesting(problem,f.tau,2.0);
     ASSERT_EQ(fitted.RuntimeConvergence(),JointCheckStatus::Passed);
     const auto baseline=core::CaptureJointAnalysisResult(fitted);
     struct Output

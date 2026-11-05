@@ -2,7 +2,7 @@
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include <Eigen/SVD>
 
-namespace second_stage_test::matched::joint_abc {
+namespace second_stage_test::matched::joint_component {
 using namespace runtime;
 namespace {
 constexpr double eps=std::numeric_limits<double>::epsilon();

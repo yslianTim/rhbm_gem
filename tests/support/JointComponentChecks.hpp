@@ -6,7 +6,7 @@
 
 namespace rhbm_gem::core {class JointProblem; struct JointFitResult;}
 
-namespace second_stage_test::matched::joint_abc {
+namespace second_stage_test::matched::joint_component {
 rhbm_gem::core::JointFitResult FitBoundedJointComponentsForTesting(
     const rhbm_gem::core::JointProblem &,const std::vector<double> & initial_widths,double maximum_width);
 struct BcdFitDiagnostic
@@ -43,4 +43,4 @@ boost::json::object Assemble(const Domain &, const Eigen::VectorXd &, const Comp
     const EvaluationContext &, const boost::json::array & component_fits);
 boost::json::object FitComponents(std::shared_ptr<const rhbm_gem::core::JointProblemInput>,
     const Eigen::VectorXd & initial_tau, const ComponentPartition &, const EvaluationContext &);
-} // namespace second_stage_test::matched::joint_abc
+} // namespace second_stage_test::matched::joint_component

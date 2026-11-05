@@ -10,7 +10,7 @@
 #include <cmath>
 #include <stdexcept>
 
-namespace second_stage_test::matched::joint_abc {
+namespace second_stage_test::matched::joint_component {
 namespace {
 namespace j=boost::json;
 std::size_t Index(Eigen::Index i) {return static_cast<std::size_t>(i);}
@@ -417,4 +417,4 @@ j::object FitComponents(std::shared_ptr<const rhbm_gem::core::JointProblemInput>
     j::array fits; for(const auto & view:partition.components) fits.push_back(FitComponent(view,initial_tau,context));
     auto result=Assemble(domain,y,partition,context,fits); result["components"]=std::move(fits); return result;
 }
-} // namespace second_stage_test::matched::joint_abc
+} // namespace second_stage_test::matched::joint_component

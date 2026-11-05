@@ -81,8 +81,8 @@ selected by geometry; residue, element, atom name, and group labels do not
 enter that ratio. Those labels remain available for CSV and plot annotations.
 
 `amplitude 2nd`, `width 2nd`, and `offset 2nd` read the saved `Second.point`.
-For Joint analysis, these are the Joint estimation A/tau/C values; the solver's
-B parameter is tau and needs no conversion. Post-Joint Local and Group Fitting
+For Joint analysis, these are the Joint estimation A/tau/C values; tau is the
+physical width in angstrom and needs no conversion. Post-Joint Local and Group Fitting
 results are stored separately and do not replace these values. Two Stage
 analysis continues to use its second-stage estimates.
 

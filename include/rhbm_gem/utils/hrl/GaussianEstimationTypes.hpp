@@ -33,7 +33,7 @@ struct StageUncertainty
 {
     EvidenceStatus status{ EvidenceStatus::NotRun };
     std::string method, reason;
-    // Coordinates are (A, C, log B); includes nuisance-parameter coupling.
+    // Coordinates are (A, C, log tau); includes nuisance-parameter coupling.
     std::optional<Eigen::Matrix3d> covariance;
     std::optional<double> residual_variance;
     std::size_t rank{}, degrees_of_freedom{};

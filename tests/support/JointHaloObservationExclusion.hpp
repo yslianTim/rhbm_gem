@@ -53,7 +53,7 @@ struct DesignSpectrum
 
 struct LocalDesignMetrics
 {
-    DesignSpectrum ac, abc, projected_width;
+    DesignSpectrum ac, full_design, projected_width;
     double minimum_projected_width_fraction{};
 };
 
@@ -82,6 +82,6 @@ MaskedInput BuildMaskedInput(const rhbm_gem::core::JointProblemInput &,
 CoverageSummary AnalyzeCoverage(const rhbm_gem::core::JointProblemInput &,
     std::span<const std::uint8_t> retained_rows, std::span<const double> target_halo_distances,
     std::span<const double> observation_halo_distances);
-LocalDesignMetrics AnalyzeLocalDesign(const Eigen::MatrixXd & ac, const Eigen::MatrixXd & log_width);
+LocalDesignMetrics AnalyzeLocalDesign(const Eigen::MatrixXd & ac, const Eigen::MatrixXd & eta_derivative);
 
 }

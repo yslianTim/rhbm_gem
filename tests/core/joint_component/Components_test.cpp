@@ -7,7 +7,7 @@
 #include <fstream>
 
 namespace {
-namespace p=second_stage_test::matched::joint_abc;
+namespace p=second_stage_test::matched::joint_component;
 namespace jd=second_stage_test::joint_domain;
 using Vector=Eigen::VectorXd;
 }

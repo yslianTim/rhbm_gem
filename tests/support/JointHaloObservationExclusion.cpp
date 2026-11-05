@@ -307,18 +307,18 @@ CoverageSummary AnalyzeCoverage(const rhbm_gem::core::JointProblemInput & input,
     return result;
 }
 
-LocalDesignMetrics AnalyzeLocalDesign(const Eigen::MatrixXd & ac, const Eigen::MatrixXd & log_width)
+LocalDesignMetrics AnalyzeLocalDesign(const Eigen::MatrixXd & ac, const Eigen::MatrixXd & eta_derivative)
 {
-    if (ac.rows() != log_width.rows() || ac.cols() != 2 * log_width.cols())
+    if (ac.rows() != eta_derivative.rows() || ac.cols() != 2 * eta_derivative.cols())
         throw std::invalid_argument("Invalid local A/C and width design dimensions.");
     LocalDesignMetrics result;
     result.ac = Spectrum(ac);
     const Eigen::MatrixXd normalized_ac = NormalizeColumns(ac);
-    const Eigen::MatrixXd normalized_width = NormalizeColumns(log_width);
-    Eigen::MatrixXd full(ac.rows(), ac.cols() + log_width.cols());
-    full << normalized_ac, normalized_width;
-    result.abc = Spectrum(full);
-    if (ac.rows() == 0 || log_width.cols() == 0 || !normalized_ac.allFinite() || !normalized_width.allFinite())
+    const Eigen::MatrixXd normalized_eta_derivative = NormalizeColumns(eta_derivative);
+    Eigen::MatrixXd full(ac.rows(), ac.cols() + eta_derivative.cols());
+    full << normalized_ac, normalized_eta_derivative;
+    result.full_design = Spectrum(full);
+    if (ac.rows() == 0 || eta_derivative.cols() == 0 || !normalized_ac.allFinite() || !normalized_eta_derivative.allFinite())
         return result;
     Eigen::JacobiSVD<Eigen::MatrixXd> ac_svd(normalized_ac, Eigen::ComputeThinU);
     if (ac_svd.info() != Eigen::Success || !ac_svd.singularValues().allFinite()) return result;
@@ -326,11 +326,11 @@ LocalDesignMetrics AnalyzeLocalDesign(const Eigen::MatrixXd & ac, const Eigen::M
     const double threshold = std::numeric_limits<double>::epsilon() *
         static_cast<double>(std::max(normalized_ac.rows(), normalized_ac.cols())) * maximum;
     const auto ac_rank = static_cast<Eigen::Index>((ac_svd.singularValues().array() > threshold).count());
-    Eigen::MatrixXd projected = normalized_width;
+    Eigen::MatrixXd projected = normalized_eta_derivative;
     if (ac_rank > 0)
     {
         const Eigen::MatrixXd q = ac_svd.matrixU().leftCols(ac_rank);
-        projected.noalias() -= q * (q.transpose() * normalized_width);
+        projected.noalias() -= q * (q.transpose() * normalized_eta_derivative);
     }
     result.minimum_projected_width_fraction = std::numeric_limits<double>::infinity();
     for (Eigen::Index column = 0; column < projected.cols(); ++column)

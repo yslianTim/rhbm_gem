@@ -255,7 +255,7 @@ workflow. Selected non-hydrogen atoms are Targets. Halo support is used only to
 exclude fitting rows within 2.5 Å; Halos are not free Joint parameters.
 
 Qualified FirstStage Target widths initialize the fit and determine the global
-width bound `Bmax = 4 × P95`. Calibration needs at least 20 qualified Target
+width bound `tau_max = 4 × P95`. Calibration needs at least 20 qualified Target
 donors and 95% Target coverage. If calibration is unavailable, the saved
 result retains that status and does not retry with an unbounded search.
 
@@ -268,7 +268,7 @@ stationarity, endpoint verification, Independent Replay, Local Conditioning
 and target point validation remain explicit evidence. See the
 [Joint runtime guide](../joint-component-runtime.md).
 
-Qualified target A/B/C points provide geometry-local kNN-4 Halo Median
+Qualified target A/tau/C points provide geometry-local kNN-4 Halo Median
 Reconstruction. Original-domain PostFitPeeling uses available Target and
 reconstructed Halo points, followed by Post-Joint Local MDPDE and Group
 Fitting for qualified Targets. These downstream results retain their own
@@ -293,7 +293,7 @@ auto completed = rhbm_gem::core::RunCommand(request);
 ```
 
 `result_dump --printer joint` writes one Joint JSON and one atom CSV. The CSV
-columns are `AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality`.
+columns are `AtomID,ComponentID,A,tau,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality`.
 `ContributionGroupID` remains an empty compatibility column in the current
 CSV layout. No singleton contribution file is written. Available unqualified
 Target states remain distinguishable from unavailable point estimates through
@@ -305,11 +305,11 @@ convergence and point-quality columns.
 | --- | --- |
 | SQLite database | Schema v20 only |
 | Stage Result JSON | Version 4 only |
-| Joint Result JSON | Schema v23 only |
+| Joint Result JSON | Schema v24 only |
 
 An empty database is initialized as v20. An existing database must have the
 exact v20 schema. Stage JSON accepts only version 4; Joint JSON always writes
-schema 23 and reads only schema 23. No migrations, upgrades, historical
+schema 24 and reads only schema 24. No migrations, upgrades, historical
 fallbacks, or automatic repairs are performed. Unsupported inputs are rejected
 without modifying the database. See the
 [data I/O architecture](../architecture/dataobject-io-architecture.md).

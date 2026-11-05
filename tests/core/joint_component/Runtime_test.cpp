@@ -20,7 +20,7 @@
 namespace {
 namespace core=rhbm_gem::core;
 namespace n=core::joint_component;
-namespace p=second_stage_test::matched::joint_abc;
+namespace p=second_stage_test::matched::joint_component;
 core::JointProblemInput Snapshot()
 {
     core::JointProblemInput input; input.atom_ids={"a","b"}; input.support.resize(2);

@@ -4,7 +4,7 @@
 #include <set>
 #include <stdexcept>
 
-namespace second_stage_test::matched::joint_abc {
+namespace second_stage_test::matched::joint_component {
 EvaluationContext MakeContext(const Eigen::VectorXd & y,Eigen::Index atoms,const std::string & hash)
 {
     auto input=std::make_shared<rhbm_gem::core::JointProblemInput>();
@@ -64,4 +64,4 @@ boost::json::object ContextEvidence(const EvaluationContext & c)
         {"active_set_release_rule","factor * epsilon * max(1, norm(Z) * (parent_response_norm + norm(Z) * norm(scaled_beta)))"},
         {"profile_budget",c.profile_budget},{"accepted_update_budget",c.update_budget}};
 }
-} // namespace second_stage_test::matched::joint_abc
+} // namespace second_stage_test::matched::joint_component

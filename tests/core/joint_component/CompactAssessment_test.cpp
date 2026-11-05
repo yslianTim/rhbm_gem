@@ -11,7 +11,7 @@
 namespace {
 namespace c=rhbm_gem::core;
 namespace n=c::joint_component;
-namespace tc=second_stage_test::matched::joint_abc;
+namespace tc=second_stage_test::matched::joint_component;
 
 n::IndependentReplayEvidence PassingReplay()
 {
@@ -133,7 +133,7 @@ TEST(JointCompactAssessmentTest, ProjectedWidthRouteMatchesFullProfileDerivative
         const auto full=n::PrepareDerivative(endpoint,data.context.scale,&data.context);
         const auto projected=n::PrepareProjectedWidthDerivative(endpoint,data.context.scale,&data.context);
         ASSERT_TRUE(full.valid); ASSERT_TRUE(projected.valid);
-        const auto dense=second_stage_test::matched::joint_abc::DenseDifferentiate(
+        const auto dense=second_stage_test::matched::joint_component::DenseDifferentiate(
             endpoint,data.context.scale,&data.context);
         ASSERT_TRUE(dense.valid);
         const auto a=n::ReduceDerivative(full,endpoint.residual);

@@ -18,7 +18,7 @@
 
 namespace {
 namespace m=second_stage_test::matched;
-namespace p=m::joint_abc;
+namespace p=m::joint_component;
 namespace n=p::runtime;
 using Vector=Eigen::VectorXd;
 using Matrix=Eigen::MatrixXd;
@@ -114,6 +114,22 @@ TEST(JointComponentNumericsTest, TiledDerivativePreservesCancellationReferenceFa
     EXPECT_LT((projected_only_tile-dense.projected).norm()/dense.projected.norm(),1e-8);
     const auto projected_reduced=n::ReduceProjectedWidthDerivative(projected,3);
     ASSERT_TRUE(projected_reduced.valid)<<projected_reduced.reason;
+}
+
+TEST(JointComponentNumericsTest, LogTauDerivativesApplyPhysicalTauChainRule)
+{
+    for(double tau:{.42,.7,1.3}) for(double square:{0.,.25,2.})
+    {
+        const double h=1e-6*tau;
+        const auto basis=n::EvaluateKernel(square,tau,2.5);
+        const auto plus=n::EvaluateKernel(square,tau+h,2.5);
+        const auto minus=n::EvaluateKernel(square,tau-h,2.5);
+        // Physical-tau finite differences require the chain-rule factor tau.
+        EXPECT_NEAR(basis.d_gaussian_d_log_tau,
+            tau*(plus.gaussian-minus.gaussian)/(2*h),1e-8);
+        EXPECT_NEAR(basis.d_charge_d_log_tau,
+            tau*(plus.charge-minus.charge)/(2*h),1e-8);
+    }
 }
 
 TEST(JointComponentNumericsTest, BasisAssemblyMatchesTripletsForOrderedAndDuplicateSupports)
@@ -306,12 +322,12 @@ TEST(JointComponentNumericsTest, NearRankDeficientTwentyFourColumnDesignIsClassi
 ;
 }
 
-TEST(JointTestNumericsTest, LogWidthBasisIncludesCenterNearZeroAndFixedCutoff)
+TEST(JointTestNumericsTest, LogTauBasisIncludesCenterNearZeroAndFixedCutoff)
 {
     for (double r:{0.,.5e-5,1e-5,1.1e-5,.4,2.5,2.50000001})
     {
-        const double b=.53,h=1e-5;
-        const auto value=m::EvaluateBasis(r*r,b,2.5),plus=m::EvaluateBasis(r*r,b*std::exp(h),2.5),minus=m::EvaluateBasis(r*r,b*std::exp(-h),2.5);
+        const double tau=.53,h=1e-5;
+        const auto value=m::EvaluateBasis(r*r,tau,2.5),plus=m::EvaluateBasis(r*r,tau*std::exp(h),2.5),minus=m::EvaluateBasis(r*r,tau*std::exp(-h),2.5);
         EXPECT_NEAR(value.d_gaussian_d_log_tau,(plus.gaussian-minus.gaussian)/(2*h),1e-8);
         EXPECT_NEAR(value.d_charge_d_log_tau,(plus.charge-minus.charge)/(2*h),1e-8);
         if (r>2.5) EXPECT_EQ(value.gaussian+value.charge+value.d_gaussian_d_log_tau+value.d_charge_d_log_tau,0);

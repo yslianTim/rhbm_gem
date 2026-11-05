@@ -51,7 +51,7 @@ void CheckSingleBlock(const std::string & topology,int atoms)
     EXPECT_TRUE(result.assessment.independent_replay.passed);
     EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     EXPECT_TRUE(result.fit.search_completed);
-    const auto bounded=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(
+    const auto bounded=second_stage_test::matched::joint_component::FitBoundedJointComponentsForTesting(
         problem,std::vector<double>(static_cast<std::size_t>(atoms),.55),2.2);
     ASSERT_EQ(bounded.components.size(),1u);
     ASSERT_TRUE(bounded.components.front().candidate_diagnostic);
@@ -1171,7 +1171,7 @@ TEST(JointBcdSearchTest, ReplayStructureFollowsComponentLocalRows)
     EXPECT_EQ(data.partition.components[1].rows,(n::Indices{1,3,5,7,9}));
     EXPECT_EQ(data.partition.constant_rows,(n::Indices{10}));
 
-    const auto fit=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(
+    const auto fit=second_stage_test::matched::joint_component::FitBoundedJointComponentsForTesting(
         problem,{.55,.55},2.2);
     ASSERT_EQ(fit.components.size(),2u);
     for(const auto & component:fit.components)

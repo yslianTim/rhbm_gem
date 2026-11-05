@@ -38,7 +38,7 @@ block, multiple blocks, active width upper bound, nominal budget exhaustion,
 failed-block recovery, adaptive extension, memory rejection, and hard cap.
 Both direct search and production component orchestration/assembly were run.
 Floating-point values were captured as their `uint64_t` bit patterns, including
-eta/B, beta/A/C, prediction, residual, objective, sweep KKT, replay discrepancies
+eta/tau, beta/A/C, prediction, residual, objective, sweep KKT, replay discrepancies
 and width bounds. The probe also captured block acceptance, recovery,
 certification/qualification, runtime convergence, progress order/counts,
 profile/LM/damping-QR/replay counts and deterministic memory estimates.
@@ -129,7 +129,7 @@ and after; KKT columns are the final sweep's A/C and projected Width values.
 | Memory rejection | unavailable | unavailable | unavailable | 0 | 0 | 0 | 0/0 |
 | Hard sweep cap | 8.938746938111263e-11 | 3.0175387077946425e-08 | 2.883422611787978e-09 | 31 | 62 | 124 | 0/0 |
 
-All A/B/C, prediction/residual and objective bit patterns are unchanged, as are
+All A/tau/C, prediction/residual and objective bit patterns are unchanged, as are
 block acceptance decisions, termination reasons, qualification, independent
 replay, runtime convergence, width bounds, observer events and deterministic
 workspace estimates. The active-bound case retains one active width bound.

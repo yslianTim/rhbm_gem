@@ -90,7 +90,7 @@ The real-data endpoint was consistent across modes:
 - 1,557 targets, 2,166 contributors, 243,294 observations, one component, 117 sweeps, and 35,525 profile evaluations.
 - Both modes were qualified; A/C and target runtime KKT statuses passed; independent KKT consistency and independent replay passed.
 - Objective was `0.0219534820633` in both; absolute difference was `2.78e-17`.
-- Maximum absolute difference across A/C, B, and log-B parameters was `7.60e-6`; width-gradient maximum absolute difference was `1.45e-11`.
+- Maximum absolute difference across A/C, tau, and log-tau parameters was `7.60e-6`; eta-gradient maximum absolute difference was `1.45e-11`.
 - QR accepted 14,557 updates; hybrid accepted 14,613. Both stopped qualified after the same 117 sweeps.
 - 151 local-conditioning blocks were assessed in each run. Trajectory stability was observed; perturbation stability was unavailable.
 - The saved Joint result does not retain prediction vectors, so prediction RMS difference was unavailable. Independent replay passed for both modes.

@@ -8,7 +8,7 @@
 
 namespace {
 namespace m=second_stage_test::matched;
-namespace p=m::joint_abc;
+namespace p=m::joint_component;
 namespace joint=rhbm_gem::core::joint_component;
 using Vector=Eigen::VectorXd;
 struct Sample
@@ -43,11 +43,11 @@ struct RejectOnce
 
 TEST(JointComponentSearchTest, GuardedSearchOnlyAcceptsReplayedStates)
 {
-    Sample s; const p::Domain domain(s.grid,s.atoms); const Vector b=Eigen::Vector2d(.48,.59);
-    const auto fit=p::Fit(domain,s.y,b); ASSERT_EQ(fit.at("runtime_convergence"),"passed");
+    Sample s; const p::Domain domain(s.grid,s.atoms); const Vector tau=Eigen::Vector2d(.48,.59);
+    const auto fit=p::Fit(domain,s.y,tau); ASSERT_EQ(fit.at("runtime_convergence"),"passed");
     auto context=p::MakeContext(s.y,static_cast<Eigen::Index>(s.atoms.size()));
-    context.eta_upper_bound=std::log(4.0*b.maxCoeff());
-    const auto search=joint::SearchProfile(domain,s.y,b,context);
+    context.eta_upper_bound=std::log(4.0*tau.maxCoeff());
+    const auto search=joint::SearchProfile(domain,s.y,tau,context);
     ASSERT_FALSE(search.trials.empty());
     for(const auto & trial:search.trials) if(trial.accepted)
     {

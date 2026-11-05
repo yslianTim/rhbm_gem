@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace second_stage_test::matched::joint_abc {
+namespace second_stage_test::matched::joint_component {
 namespace runtime=rhbm_gem::core::joint_component;
 using runtime::RankPolicy;
 using runtime::LinearPolicy;
@@ -19,4 +19,4 @@ std::shared_ptr<rhbm_gem::core::JointProblemInput> MakeSyntheticJointProblemInpu
 EvaluationContext MakeContext(std::shared_ptr<const rhbm_gem::core::JointProblemInput>,
     const std::string & snapshot_hash = "");
 boost::json::object ContextEvidence(const EvaluationContext &);
-} // namespace second_stage_test::matched::joint_abc
+} // namespace second_stage_test::matched::joint_component

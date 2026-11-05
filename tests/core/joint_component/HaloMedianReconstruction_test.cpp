@@ -215,7 +215,7 @@ TEST(HaloMedianReconstructionTest, ChemicalLabelsDoNotChangeGeometryLocalHaloEst
 TEST(HaloMedianReconstructionTest, FullModelConditioningGuardsZeroContributionWidthMedians)
 {
     namespace n=rhbm_gem::core::joint_component;
-    namespace tc=second_stage_test::matched::joint_abc;
+    namespace tc=second_stage_test::matched::joint_component;
     for(double charge:{0.0,.2})
     {
         JointProblemInput input; input.atom_ids={"1"}; input.support.resize(1);
@@ -257,7 +257,7 @@ TEST(HaloMedianReconstructionTest, FullModelConditioningGuardsZeroContributionWi
         EXPECT_DOUBLE_EQ(guarded.snapshot->global_median[1],2.5);
         EXPECT_DOUBLE_EQ(guarded.snapshot->halos.front().width,2.5);
 
-        // Counterfactual gate bypass: a zero-contribution target's B can change
+        // Counterfactual gate bypass: a zero-contribution target's tau can change
         // another atom's median, even though its own model remains zero.
         f.result.target_evidence->point_atoms[0].local_conditioning="Adequate";
         const auto admitted=QualifiedJointTargetDonors(f.model,f.problem,f.result);

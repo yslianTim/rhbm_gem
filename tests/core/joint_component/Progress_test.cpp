@@ -306,7 +306,7 @@ TEST(JointProgressTest, BoundedSyntheticFitWithoutObserverIsSilent)
     Logger::FinishProgressLine();
     testing::internal::CaptureStdout();
     testing::internal::CaptureStderr();
-    const auto fit=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(
+    const auto fit=second_stage_test::matched::joint_component::FitBoundedJointComponentsForTesting(
         core::JointProblem(MakeInput()),{.55,.55},2.2);
     const auto stdout_text = testing::internal::GetCapturedStdout();
     const auto stderr_text = testing::internal::GetCapturedStderr();
@@ -320,7 +320,7 @@ TEST(JointProgressTest, BoundedSyntheticFitUsesBcdContract)
 {
     const core::JointProblem problem(MakeInput());
     const std::vector<double> initial{.55, .55};
-    const auto actual=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(
+    const auto actual=second_stage_test::matched::joint_component::FitBoundedJointComponentsForTesting(
         problem,initial,2.2);
     auto policy=joint::BcdExecutionPolicy{};
     policy.eta_upper_bound=std::log(2.2);

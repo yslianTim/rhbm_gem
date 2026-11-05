@@ -12,7 +12,7 @@
 namespace {
 namespace c=rhbm_gem::core;
 namespace n=c::joint_component;
-namespace tc=second_stage_test::matched::joint_abc;
+namespace tc=second_stage_test::matched::joint_component;
 
 n::LocalConditioningAssessment Assess(const n::Domain & domain,n::VectorRef y,const n::Vector & eta,
     const n::Vector & beta,const n::EvaluationContext & context)
