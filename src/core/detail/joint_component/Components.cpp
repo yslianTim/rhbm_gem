@@ -2,6 +2,7 @@
 #include "GaussSeidelBcd.hpp"
 #include "Problem.hpp"
 #include "ResourceWork.hpp"
+
 #include <algorithm>
 #include <map>
 #include <numeric>

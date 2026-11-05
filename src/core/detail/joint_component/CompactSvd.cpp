@@ -1,4 +1,5 @@
 #include "CompactSvd.hpp"
+
 #include <algorithm>
 #include <cmath>
 

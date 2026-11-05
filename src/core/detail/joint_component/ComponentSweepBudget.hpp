@@ -10,7 +10,7 @@ namespace rhbm_gem::core::joint_component {
 // Budget decisions never change the accepted state or qualify an endpoint.
 class ComponentSweepBudget
 {
-    static constexpr std::size_t Window=20;
+    static constexpr std::size_t Window{ 20 };
     std::array<double,Window> quality_{};
     std::size_t completed_{},limit_{},maximum_{};
     JointConvergenceCriteria criteria_;

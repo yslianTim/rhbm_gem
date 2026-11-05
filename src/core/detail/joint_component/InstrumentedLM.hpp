@@ -12,7 +12,6 @@
 
 #pragma once
 #include <unsupported/Eigen/NonLinearOptimization>
-#include "ActiveSetBoundedLM.hpp"
 #include <cmath>
 
 // Adapted from Eigen 5.0.1 NonLinearOptimization/LevenbergMarquardt.h.

@@ -6,7 +6,6 @@
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 #include <functional>
 #endif
-#include "ConvergenceCriteria.hpp"
 
 namespace rhbm_gem::core::joint_component {
 
@@ -15,9 +14,9 @@ struct BcdSearchPolicy;
 struct BcdSearchResult;
 #endif
 
-inline constexpr std::size_t ProductionBcdCoreAtoms=12;
-inline constexpr std::size_t ProductionBcdNominalSweeps=200;
-inline constexpr std::size_t ProductionBcdMaximumSweeps=300;
+inline constexpr std::size_t ProductionBcdCoreAtoms{ 12 };
+inline constexpr std::size_t ProductionBcdNominalSweeps{ 200 };
+inline constexpr std::size_t ProductionBcdMaximumSweeps{ 300 };
 
 // Component execution supplies the calibrated width bound and failure-log identity.
 // Block search settings remain in BcdSearchPolicy.

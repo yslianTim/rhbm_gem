@@ -1,6 +1,7 @@
 #pragma once
+
 #include "SnapshotViews.hpp"
-#include "core/detail/joint_component/JointComponentEstimator.hpp"
+
 #include <string>
 #include <vector>
 

@@ -11,7 +11,6 @@
 #include <cmath>
 #include <map>
 #include <stdexcept>
-#include <unordered_map>
 
 namespace rhbm_gem::core::detail {
 namespace {

@@ -4,10 +4,10 @@
 #include "Problem.hpp"
 #include "ResourceWork.hpp"
 #include "StructuralPartition.hpp"
-#include "TiledDerivative.hpp"
+
 #include <rhbm_gem/utils/domain/Logger.hpp>
+
 #include <algorithm>
-#include <array>
 #include <bit>
 #include <chrono>
 #include <cmath>

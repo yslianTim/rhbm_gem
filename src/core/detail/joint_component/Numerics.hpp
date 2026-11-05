@@ -1,11 +1,12 @@
 #pragma once
-#include <Eigen/Dense>
+
 #include "SnapshotViews.hpp"
 #include "ResourceWork.hpp"
 #include "ConvergenceCriteria.hpp"
 #include "core/detail/joint_component/JointComponentEstimator.hpp"
+
+#include <Eigen/Dense>
 #include <Eigen/SparseCore>
-#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>

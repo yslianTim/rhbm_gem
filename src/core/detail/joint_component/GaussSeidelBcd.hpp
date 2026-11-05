@@ -1,10 +1,11 @@
 #pragma once
+
 #include "Numerics.hpp"
 #include "BcdPolicy.hpp"
 #include "JointProgress.hpp"
 #include "ResourceWork.hpp"
+
 #include <functional>
-#include <utility>
 
 namespace rhbm_gem::core::joint_component {
 struct ComponentProblemView;

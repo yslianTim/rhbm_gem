@@ -1,5 +1,4 @@
 #include "ActiveSetBoundedLM.hpp"
-#include "Numerics.hpp"
 
 #include <algorithm>
 #include <cmath>
