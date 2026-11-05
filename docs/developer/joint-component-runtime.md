@@ -62,6 +62,48 @@ earlier. Denied extensions report `block-sweep-budget`; an exhausted extension
 reports `block-hard-sweep-budget`. Pending recovery retains its distinct
 `block-recovery-sweep-budget` reason. There is no public budget selector.
 
+## Constraint status, working sets and free variables
+
+For fixed widths `B_i = exp(eta_i)`, the A/C model is exactly linear:
+`min_beta 1/2 ||X(eta) beta - y_eff||^2`, subject to `A_i >= 0` and signed,
+unconstrained `C_i`. This A/C problem is not a Taylor linearization.
+
+| Term | Meaning in the runtime |
+| --- | --- |
+| Active constraint | An inequality attains equality: `A_i = 0` or `eta_i = eta_max`. Bound diagnostics retain their existing floating-point tolerance. |
+| Inactive constraint | An inequality has strict slack: `A_i > 0` or `eta_i < eta_max`. |
+| Working set | Constraints temporarily held as equalities in an active-set subproblem; solver iteration state, not a geometric constraint census. |
+| Free variables | Variables allowed in the current QR solve. A/C includes every C and every A outside the amplitude working set. |
+| Frozen direction | A stationary-null Width direction excluded as a numerical safeguard, independently of the inequality working set. |
+
+`SolveConstrainedAcLeastSquares` uses `ConstrainedAcWorkspace::is_free_variable`,
+ordered `free_column_indices` and the normalized `free_design`. Blocking fixes
+only an amplitude at zero. Releasing it immediately restores free-variable
+eligibility even while its value is still zero. A zero amplitude can therefore
+be an active constraint outside the working set. The solution certificate's
+`active_amplitude_atom_indices` records geometric zero amplitudes, while
+`ac_free_design_rank` records the QR solve's free-design rank.
+
+Bounded Active-set LM uses `working_bound_mask`, `free_step_indices` and
+`newly_blocked_indices`. `stationary_null_direction_mask` remains separate:
+neither working-bound coordinates nor frozen directions enter the free step
+QR. A frozen direction can itself lie at the upper bound without entering the
+working set. Returned `active_bound_indices` and `active_bound_multipliers`
+describe the attained working bounds of a valid step; they need not enumerate
+every geometric active constraint. `working_set_releases` counts releases,
+and `active_set_iterations` retains its algorithmic meaning.
+
+Local Conditioning and the Profile Jacobian derive their free A/C design from
+the endpoint's constraint face. Those columns are not a saved copy of the
+iterative solver's working set. Their `free_ac_columns`, `free_ac_conditioning`
+and `free_design` names retain that meaning.
+
+The progress label `ac-kkt=` reports the accepted sweep's global A/C projected
+KKT. Block failure diagnostics report the initial local A/C profile through
+`ac_free_design_rank`, `ac_linear_solve_count`, `ac_working_set_releases` and
+`ac_scaled_projected_kkt`. Width LM status and Width KKT remain separate fields.
+Logger levels, throttling and event frequency are unchanged.
+
 ## Qualification
 
 The global search preserves objective monotonicity and practical-v2
@@ -154,6 +196,10 @@ identity without claiming that search ran or that a width bound was available.
 
 ## Source index
 
+- [LinearSolve.cpp](https://github.com/yslianTim/rhbm_gem/blob/develop/src/core/detail/joint_component/LinearSolve.cpp)
+  implements Constrained A/C Active-set QR and its working-set transitions.
+- [ActiveSetBoundedLM.cpp](https://github.com/yslianTim/rhbm_gem/blob/develop/src/core/detail/joint_component/ActiveSetBoundedLM.cpp)
+  implements the bounded LM trust-region subproblem and damping search.
 - [GaussSeidelBcd.cpp](https://github.com/yslianTim/rhbm_gem/blob/develop/src/core/detail/joint_component/GaussSeidelBcd.cpp)
   implements block search, acceptance and endpoint certification.
 - [BcdPolicy.hpp](https://github.com/yslianTim/rhbm_gem/blob/develop/src/core/detail/joint_component/BcdPolicy.hpp)
@@ -163,6 +209,8 @@ identity without claiming that search ran or that a width bound was available.
   owns the unchanged adaptive sweep decisions.
 - [Refactor validation](bcd-refactor-validation.md) records the baseline and
   numerical/contract checks.
+- [Active-set terminology validation](jce-terminology-validation.md) records
+  the terminology audit, numerical equivalence and logger/contract checks.
 
 The [data I/O architecture](architecture/dataobject-io-architecture.md)
 documents the database and JSON boundaries. The

@@ -139,6 +139,7 @@ LocalConditioningAssessment AssessBcdLocalConditioning(
     evidence.local_widths.resize(static_cast<std::size_t>(eta.size()));
     for(Eigen::Index k=0;k<eta.size();++k) evidence.local_widths[static_cast<std::size_t>(k)]=std::exp(eta(k));
 
+    // Endpoint-face columns from constraint status, not the iterative solver's working set.
     std::vector<Eigen::Index> free_columns;
     free_columns.reserve(static_cast<std::size_t>(beta.size()));
     for(Eigen::Index atom=0;atom<eta.size();++atom)

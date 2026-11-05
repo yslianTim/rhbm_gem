@@ -26,6 +26,7 @@ TiledDifferential PrepareDerivativeImpl(const Evaluation & e,double scale,const 
     out.projected_only=projected_only;
     if(!e.valid || !(scale>0) || !std::isfinite(scale)) {out.reason="invalid-inner"; return out;}
     if(tile<=0) throw std::invalid_argument("Invalid derivative tile size.");
+    // Endpoint-face variables (all C and positive A), not mutable solver working-set state.
     std::vector<Eigen::Index> free;
     std::size_t free_design_nonzeros{};
     const auto * x_outer=e.x.outerIndexPtr();

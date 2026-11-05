@@ -451,13 +451,19 @@ TEST(JointComponentNumericsTest, SparseConstrainedSolvePreservesInteriorBoundary
     Matrix x=Matrix::Zero(7,4);
     x(0,0)=1; x(1,1)=1; x(2,2)=1; x(3,3)=1;
     const n::Sparse sparse=x.sparseView();
-    for(const Eigen::Vector4d truth:{Eigen::Vector4d(2,-.3,1.5,.4),Eigen::Vector4d(-.5,-.3,1.5,.4)})
+    n::ConstrainedAcWorkspace workspace;
+    for(const Eigen::Vector4d truth:{Eigen::Vector4d(2,-.3,1.5,.4),Eigen::Vector4d(0,-.3,1.5,.4),
+        Eigen::Vector4d(-.5,-.3,1.5,.4)})
     {
-        const Vector y=x*truth; const auto solved=n::SolveConstrainedAcLeastSquares(sparse,y);
+        const Vector y=x*truth; const auto solved=n::SolveConstrainedAcLeastSquares(sparse,y,nullptr,0,&workspace);
         ASSERT_TRUE(solved.valid);
         const auto certificate=n::CertifyConstrainedAcSolution(sparse,y,solved.beta,std::max(1.0,y.norm()));
         ASSERT_TRUE(certificate.available); EXPECT_TRUE(certificate.feasible); EXPECT_TRUE(certificate.kkt_passed);
         EXPECT_EQ(solved.working_set_releases,0);
+        // A == 0 is an active constraint even when the solver leaves A free.
+        EXPECT_EQ(workspace.is_free_variable[0],truth(0)>=0);
+        EXPECT_TRUE(workspace.is_free_variable[1]); EXPECT_TRUE(workspace.is_free_variable[3]);
+        EXPECT_NEAR(solved.beta(1),truth(1),1e-14); EXPECT_NEAR(solved.beta(3),truth(3),1e-14);
         if(truth(0)>0) {EXPECT_TRUE(certificate.active_amplitude_atom_indices.empty()); EXPECT_NEAR(solved.beta(0),truth(0),1e-12);}
         else {ASSERT_EQ(certificate.active_amplitude_atom_indices,std::vector<Eigen::Index>{0}); EXPECT_EQ(solved.beta(0),0);}
     }
@@ -467,9 +473,12 @@ TEST(JointComponentNumericsTest, SparseConstrainedSolvePreservesInteriorBoundary
         0,0,2,2, 0,2,-1,0, -1,1,2,-1;
     const Vector release_y=(Vector(7)<<0,1,2,1,1,2,0).finished();
     const auto release_sparse=n::Sparse(release_design.sparseView());
-    const auto released=n::SolveConstrainedAcLeastSquares(release_sparse,release_y);
+    const auto released=n::SolveConstrainedAcLeastSquares(release_sparse,release_y,nullptr,0,&workspace);
     ASSERT_TRUE(released.valid); EXPECT_EQ(released.working_set_releases,1); EXPECT_GT(released.beta(0),0);
     EXPECT_EQ(released.beta(2),0);
+    EXPECT_TRUE(workspace.is_free_variable[0]); EXPECT_FALSE(workspace.is_free_variable[2]);
+    EXPECT_TRUE(workspace.is_free_variable[1]); EXPECT_TRUE(workspace.is_free_variable[3]);
+    EXPECT_EQ(workspace.free_column_indices,(std::vector<Eigen::Index>{0,1,3}));
     const auto released_certificate=n::CertifyConstrainedAcSolution(release_sparse,release_y,released.beta,
         std::max(1.0,release_y.norm()));
     ASSERT_TRUE(released_certificate.available); EXPECT_TRUE(released_certificate.feasible);
@@ -481,7 +490,7 @@ TEST(JointComponentNumericsTest, SparseConstrainedSolvePreservesInteriorBoundary
     EXPECT_FALSE(rejected.valid); EXPECT_EQ(rejected.reason,"rank-deficient"); EXPECT_EQ(rejected.rank,3);
 }
 
-TEST(JointComponentNumericsTest, UnweightedLinearSolvePreservesRecordedNumericalBaseline)
+TEST(JointComponentNumericsTest, ConstrainedAcLeastSquaresPreservesRecordedNumericalBaseline)
 {
     namespace n=p::runtime;
     const auto solve=[](const Matrix & x,const Vector & y) {
@@ -605,7 +614,7 @@ TEST(JointComponentNumericsTest, UnweightedLinearSolvePreservesRecordedNumerical
     }
 }
 
-TEST(JointComponentNumericsTest, ActiveSetWorkspaceResetsAcrossFacesShapesAndFailures)
+TEST(JointComponentNumericsTest, ConstrainedAcWorkspaceResetsAcrossFacesShapesAndFailures)
 {
     namespace n=p::runtime;
     n::ConstrainedAcWorkspace workspace;
@@ -665,7 +674,7 @@ TEST(JointComponentNumericsTest, ActiveSetWorkspaceResetsAcrossFacesShapesAndFai
     compare_bitwise(fresh.beta,repeated.beta);
 }
 
-TEST(JointComponentNumericsTest, UnweightedLinearSolveRejectsInvalidDimensionsAndNonfiniteInputs)
+TEST(JointComponentNumericsTest, ConstrainedAcLeastSquaresRejectsInvalidDimensionsAndNonfiniteInputs)
 {
     namespace n=p::runtime;
     const auto expect_invalid=[](const n::Sparse & design,const Vector & observations) {

@@ -41,7 +41,7 @@ TEST(ActiveSetBoundedLMTest, UpperBoundarySolutionHasCorrectMultiplierSign)
     EXPECT_NEAR(result.multipliers(0),1.5,1e-14);
 }
 
-TEST(ActiveSetBoundedLMTest, ReleasesAnUpperActiveSetCoordinateWhenKktRequiresAnInwardStep)
+TEST(ActiveSetBoundedLMTest, ReleasesAnUpperWorkingSetCoordinateWhenKktRequiresAnInwardStep)
 {
     joint::BoundedLmWorkForTesting()={};
     joint::BoundedLmWorkForTesting().capture_trace=true;
@@ -272,6 +272,26 @@ TEST(ActiveSetBoundedLMTest, RejectsNonfiniteSubproblemCoefficients)
     const auto result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,1.0,0.5);
     EXPECT_FALSE(result.valid);
     EXPECT_EQ(result.status,"invalid-subproblem-input");
+}
+
+TEST(ActiveSetBoundedLMTest, StationaryNullAtUpperBoundRemainsOutsideTheWorkingSet)
+{
+    joint::BoundedLmWorkForTesting()={};
+    joint::BoundedLmWorkForTesting().capture_trace=true;
+    const Eigen::Matrix2d j=Eigen::Vector2d(1.0,1e-161).asDiagonal();
+    const Eigen::Vector2d r(-2.0,0.0),d(1.0,1e-161),upper(.5,0.0);
+    const auto result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,1.0,0.0);
+    ASSERT_TRUE(result.valid)<<result.status;
+    ASSERT_EQ(result.working_bound_mask.size(),2u);
+    EXPECT_DOUBLE_EQ(result.step(0),upper(0)); EXPECT_TRUE(result.working_bound_mask[0]);
+    EXPECT_DOUBLE_EQ(result.step(1),upper(1)); EXPECT_FALSE(result.working_bound_mask[1]);
+    EXPECT_DOUBLE_EQ(result.multipliers(1),0.0);
+    const auto & trace=joint::BoundedLmWorkForTesting().damping_trace;
+    ASSERT_EQ(trace.size(),1u);
+    ASSERT_EQ(trace[0].working_set_sequence.size(),2u);
+    EXPECT_EQ(trace[0].working_set_sequence[0],(std::vector<bool>{false,false}));
+    EXPECT_EQ(trace[0].working_set_sequence[1],(std::vector<bool>{true,false}));
+    EXPECT_EQ(trace[0].free_subproblem_ranks,(std::vector<Eigen::Index>{1}));
 }
 
 // Four informative Widths must remain movable beside an unidentifiable Width.
