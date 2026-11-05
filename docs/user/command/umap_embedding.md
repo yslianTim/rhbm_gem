@@ -40,16 +40,17 @@ interpolation coverage makes a peeling ratio unavailable, not zero.
 
 The adjacent `.csv.metadata.json` records estimator, feature names, peeling mode,
 map normalization (null when unknown), standardization, included/excluded row
-counts and exclusions by reason. Its `column_semantics` field identifies
-`offset 2nd` as the Joint charge-kernel coefficient C for Joint estimates and
-the Gaussian constant offset for Two Stage estimates. The existing
+counts and exclusions by reason. For Joint estimates, its `column_semantics`
+field identifies `amplitude 2nd` as Gaussian amplitude A, `width 2nd` as the
+shared Gaussian/charge-kernel width tau, and `offset 2nd` as the charge-kernel
+coefficient C. For Two Stage estimates, these retain their existing Gaussian
+amplitude, width, and constant-offset semantics. The existing
 standardization uses only retained rows; constant columns remain zero.
 
-For each selected atom, the command reconstructs the same 10 features used by
-the local-fitting CSV:
+For each selected atom, the command reconstructs these 7 local-fitting features:
 
 ```text
-neighbor distance sum in 2A,distance to closest neighbor,signal peeling ratio,tail peeling ratio,amplitude 2nd,width 2nd,offset 2nd,amplitude rank 2nd,width rank 2nd,offset rank 2nd
+neighbor distance sum in 2A,distance to closest neighbor,signal peeling ratio,tail peeling ratio,amplitude 2nd,width 2nd,offset 2nd
 ```
 
 `neighbor distance sum in 2A` sums the Euclidean distances to non-hydrogen
@@ -78,14 +79,12 @@ For Joint rows, the saved Tail Peeling Ratio is derived from paired raw and
 label-free peeled samples. Halo reconstruction uses qualified Target points
 selected by geometry; residue, element, atom name, and group labels do not
 enter that ratio. Those labels remain available for CSV and plot annotations.
-Each rank compares
-the current atom with all other selected atoms within an inclusive 2 Å radius,
-using second-stage amplitude, width, or offset. The largest value has rank 1;
-each rank is one plus the number of neighbors with a strictly larger value.
-Equal values share a rank, and no neighbors means rank 1. The current atom is
-excluded by identity; distinct atoms at the same position are included.
-Unlike the 2 Å distance sum, ranks use only selected atoms and do not
-exclude selected hydrogen atoms.
+
+`amplitude 2nd`, `width 2nd`, and `offset 2nd` read the saved `Second.point`.
+For Joint analysis, these are the Joint estimation A/tau/C values; the solver's
+B parameter is tau and needs no conversion. Post-Joint Local and Group Fitting
+results are stored separately and do not replace these values. Two Stage
+analysis continues to use its second-stage estimates.
 
 Rows are ordered by atom serial ID. The current build passes these three features
 to UMAP:
@@ -94,7 +93,7 @@ to UMAP:
 - distance to closest neighbor;
 - tail peeling ratio.
 
-The remaining features stay in the CSV and are validated, but are not passed to UMAP.
+The remaining features stay in the CSV but are not passed to UMAP.
 With the default internal setting
 `kFilterUmapInputBySpot = false`,
 all selected atoms are retained. Developers can enable the filter and rebuild to
@@ -141,8 +140,9 @@ full `double` values and are not quantized to two decimal places. The output
 uses round-trip-safe floating-point precision for continuous features and UMAP
 coordinates.
 
-The CSV contains the identifiers `serial id,residue,spot`, all 10 reconstructed
-features, and `umap x,umap y`: 15 columns in total. Its name is
+The CSV contains the identifiers `serial id,residue,spot`, all 7 reconstructed
+features, and `umap x,umap y`: 12 columns in total. The three rank columns are no
+longer emitted; consumers must account for their removal. Its name is
 `<folder>/umap_embedding_<sanitized-model-key>.csv`. ASCII letters, digits,
 `.`, `_`, and `-` are retained in the key; other bytes become `_`.
 

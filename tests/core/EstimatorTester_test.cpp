@@ -9,7 +9,6 @@
 #include <utility>
 #include <vector>
 
-#include "core/command/detail/LocalFittingFeatures.hpp"
 #include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/second_stage/IterationProcess.hpp"
 #include "core/detail/gaussian_fit/FittingRanges.hpp"
@@ -29,30 +28,6 @@ namespace rt_detail = rhbm_gem::core::detail;
 namespace tdf = rhbm_gem::core;
 namespace rg = rhbm_gem;
 using rg::FittingStage;
-
-using GaussianParameterGetter = double (rg::GaussianModel3D::*)() const;
-
-int ComputeExpectedParameterRank(
-    const rg::AtomObject & atom,
-    const std::vector<rg::AtomObject *> & comparison_atoms,
-    FittingStage stage,
-    GaussianParameterGetter parameter_getter)
-{
-    const auto & current_model{
-        rg::AtomLocalPotentialView::For(atom).GetEstimateMDPDE(stage)
-    };
-    const auto current_value{ (current_model.*parameter_getter)() };
-    return 1 + static_cast<int>(std::count_if(
-        comparison_atoms.begin(),
-        comparison_atoms.end(),
-        [stage, parameter_getter, current_value](const rg::AtomObject * comparison_atom)
-        {
-            const auto & comparison_model{
-                rg::AtomLocalPotentialView::For(*comparison_atom).GetEstimateMDPDE(stage)
-            };
-            return (comparison_model.*parameter_getter)() > current_value;
-        }));
-}
 
 tdf::GaussianParameterDistribution MakeDistribution(
     const rg::GaussianModel3D & mean,
@@ -664,85 +639,6 @@ TEST(
         analysis_view.GetAtomAlphaG(group_key)));
     EXPECT_TRUE(
         fitted_view.GetGroupMemberResult().has_value());
-}
-
-TEST(EstimatorTesterTest, LocalFittingResultRanksUseSelectedAtomsWithin2AInSecondStage)
-{
-    ElectricPotential potential_model;
-    potential_model.SetModelChoice(0);
-    potential_model.SetBlurringWidth(0.5);
-    auto input{
-        tdf::BuildPotentialModelTestData(tdf::PotentialModelScenario{
-            Spot::CA,
-            Element::CARBON,
-            -0.1,
-            rg::GaussianModel3D{ 8.0, 0.5, -0.1 },
-            potential_model,
-            0.0,
-            1,
-            42
-        })
-    };
-    auto model{ std::move(input.replica_model_objects.front()) };
-    const auto & selected_atoms{ model->GetSelectedAtoms() };
-    ASSERT_EQ(selected_atoms.size(), 5u);
-
-    auto options{ MakeSecondStageOptions() };
-    rt_detail::RunTwoStageFromPreparedSamples(*model, options);
-
-    const auto rows{ rt_detail::BuildLocalFittingFeatureRows(*model) };
-    constexpr std::array<GaussianParameterGetter, 3> parameter_getters{
-        &rg::GaussianModel3D::GetAmplitude,
-        &rg::GaussianModel3D::GetWidth,
-        &rg::GaussianModel3D::GetOffset
-    };
-    constexpr std::array<std::size_t, 3> rank_feature_indices{ 7, 8, 9 };
-
-    std::size_t row_count{ 0 };
-    for (const auto & row : rows)
-    {
-        const auto serial_id{ row.serial_id };
-        const auto atom_iter{ std::find_if(
-            selected_atoms.begin(),
-            selected_atoms.end(),
-            [serial_id](const rg::AtomObject * atom)
-            {
-                return atom->GetSerialID() == serial_id;
-            })
-        };
-        ASSERT_NE(atom_iter, selected_atoms.end());
-        EXPECT_FALSE(row.residue.empty());
-        EXPECT_EQ(row.spot, (*atom_iter)->GetAtomID());
-        std::vector<rg::AtomObject *> comparison_atoms;
-        for (auto * comparison_atom : selected_atoms)
-        {
-            if (comparison_atom != *atom_iter &&
-                Distance((*atom_iter)->GetPosition(), comparison_atom->GetPosition()) <= 2.0)
-            {
-                comparison_atoms.emplace_back(comparison_atom);
-            }
-        }
-        for (const auto feature : rank_feature_indices)
-        {
-            const auto rank{ row.features[feature] };
-            EXPECT_GE(rank, 1);
-            EXPECT_LE(rank, comparison_atoms.size() + 1);
-        }
-
-        for (std::size_t parameter = 0; parameter < parameter_getters.size(); ++parameter)
-        {
-            const auto expected_rank{ ComputeExpectedParameterRank(
-                **atom_iter,
-                comparison_atoms,
-                FittingStage::Second,
-                parameter_getters[parameter])
-            };
-            const auto actual_rank{ row.features[rank_feature_indices[parameter]] };
-            EXPECT_EQ(actual_rank, expected_rank);
-        }
-        ++row_count;
-    }
-    EXPECT_EQ(row_count, selected_atoms.size());
 }
 
 TEST(EstimatorTesterTest, RunLocalEstimationTestRejectsNonFiniteTruth)

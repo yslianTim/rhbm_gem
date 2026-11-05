@@ -340,9 +340,8 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         "serial id,residue,spot,"
         "neighbor distance sum in 2A,distance to closest neighbor,"
         "signal peeling ratio,tail peeling ratio,"
-        "amplitude 2nd,width 2nd,offset 2nd,"
-        "amplitude rank 2nd,width rank 2nd,offset rank 2nd,umap x,umap y");
-    EXPECT_EQ(kOutputColumnCount, 15u);
+        "amplitude 2nd,width 2nd,offset 2nd,umap x,umap y");
+    EXPECT_EQ(kOutputColumnCount, 12u);
     const auto metadata_lines{ ReadLines(output_path.string() + ".metadata.json") };
     const auto metadata{ boost::json::parse(metadata_lines.at(0)) };
     EXPECT_EQ(metadata.at("column_semantics").at("offset 2nd").as_string(),

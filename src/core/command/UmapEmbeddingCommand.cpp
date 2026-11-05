@@ -64,9 +64,6 @@ constexpr std::array<UmapFeatureDefinition, detail::kLocalFittingFeatureCount>
         UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[4], false },
         UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[5], false },
         UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[6], false },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[7], false },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[8], false },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[9], false },
     };
 constexpr std::size_t kInputFeatureCount{ kFeatureDefinitions.size() };
 constexpr std::size_t kSelectedFeatureCount{ static_cast<std::size_t>(std::count_if(
@@ -437,14 +434,7 @@ bool WriteEmbedding(
         {
             output << ',';
             if (!std::isfinite(row.features[feature])) continue;
-            if (detail::kLocalFittingFeatureIsIntegral[feature])
-            {
-                output << static_cast<long long>(row.features[feature]);
-            }
-            else
-            {
-                output << row.features[feature];
-            }
+            output << row.features[feature];
         }
         output << ',' << embedding[observation * kOutputDimensionCount]
             << ',' << embedding[observation * kOutputDimensionCount + 1]
@@ -459,7 +449,9 @@ bool WriteEmbedding(
     const bool joint_estimator{ prepared.estimator == "joint-components" };
     metadata << boost::json::serialize(boost::json::object{{"estimator",prepared.estimator},{"features",features},
         {"peeling_mode",prepared.peeling_mode},{"map_normalization",prepared.map_normalization=="unavailable" ? boost::json::value{}:boost::json::parse(prepared.map_normalization)},
-        {"column_semantics",boost::json::object{{"amplitude 2nd","Gaussian amplitude"},{"width 2nd","Gaussian width"},
+        {"column_semantics",boost::json::object{
+            {"amplitude 2nd",joint_estimator ? "Joint Gaussian amplitude A" : "Gaussian amplitude"},
+            {"width 2nd",joint_estimator ? "Joint shared Gaussian/charge-kernel width tau (stored as B)" : "Gaussian width"},
             {"offset 2nd",joint_estimator ? "Joint charge-kernel coefficient C (not a Gaussian constant offset)" : "Gaussian constant offset"}}},
         {"standardization","sample-z-score; constant columns zero"},{"included_rows",prepared.feature_rows.size()},{"excluded_rows",prepared.excluded_rows},{"exclusions",exclusions}});
     metadata.close();

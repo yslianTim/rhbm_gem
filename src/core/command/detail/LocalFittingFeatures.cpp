@@ -59,7 +59,6 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
         KDTreeAlgorithm<AtomObject>::BuildKDTree(non_hydrogen_atoms)
     };
 
-    auto kd_tree_root{ KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_list) };
     std::sort(
         atom_list.begin(),
         atom_list.end(),
@@ -79,26 +78,10 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
             LocalFittingFeatureRow row; row.serial_id=atom->GetSerialID(); row.residue=ChemicalDataHelper::GetLabel(atom->GetResidue()); row.spot=atom->GetAtomID();
             row.features.fill(std::numeric_limits<double>::quiet_NaN()); rows.push_back(std::move(row)); continue;
         }
+        // JointComponents stores its fitted A/tau/C here (B is tau).
+        // Post-Joint Local and group estimates are stored separately.
         const auto & second = local_view.GetStageEstimate(FittingStage::Second).point;
         const double missing=std::numeric_limits<double>::quiet_NaN();
-
-        const auto comparison_atoms{ KDTreeAlgorithm<AtomObject>::RangeSearch(
-            kd_tree_root.get(), atom, 2.0)
-        };
-        int amplitude_rank{ 1 };
-        int width_rank{ 1 };
-        int offset_rank{ 1 };
-        for (const auto * comparison_atom : comparison_atoms)
-        {
-            if (comparison_atom == atom) continue;
-            const auto comparison=AtomLocalPotentialView::For(*comparison_atom);
-            if (!second || !comparison.IsAvailable() || !comparison.HasFinalModel(FittingStage::Second) ||
-                comparison.GetStageEstimate(FittingStage::Second).source.role == FittingRole::Halo) continue;
-            const auto & comparison_model=comparison.GetFinalModel(FittingStage::Second);
-            if (comparison_model.GetAmplitude() > second->GetAmplitude()) amplitude_rank++;
-            if (comparison_model.GetWidth() > second->GetWidth()) width_rank++;
-            if (comparison_model.GetOffset() > second->GetOffset()) offset_rank++;
-        }
 
         const auto signal_peeling_ratio{
             local_view.GetLocalFittingPeelingRatio(0.0, 1.0)
@@ -152,9 +135,6 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
             second ? second->GetAmplitude() : missing,
             second ? second->GetWidth() : missing,
             second ? second->GetOffset() : missing,
-            second ? static_cast<double>(amplitude_rank) : missing,
-            second ? static_cast<double>(width_rank) : missing,
-            second ? static_cast<double>(offset_rank) : missing,
         };
         row.tail_peeling_ratio_assessment = std::move(tail_assessment);
         rows.emplace_back(std::move(row));
