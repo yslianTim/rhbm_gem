@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/TiledDerivative.hpp"
+#include "core/detail/joint_component/TiledQR.hpp"
 #include "core/detail/joint_component/ResourceWork.hpp"
 #include "core/detail/joint_component/ConstrainedAcLeastSquares.hpp"
 #include "core/detail/joint_component/CompactSvd.hpp"

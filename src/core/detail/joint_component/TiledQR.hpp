@@ -1,9 +1,8 @@
 #pragma once
-#include <Eigen/Dense>
+#include <Eigen/QR>
 #include <algorithm>
 
 namespace rhbm_gem::core::joint_component {
-inline constexpr Eigen::Index derivative_tile_rows=8192;
 // Consume original rows once. The discarded orthogonal RHS tail is never used
 // as an objective: callers retain and evaluate the full residual separately.
 struct TiledQR

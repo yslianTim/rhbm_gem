@@ -16,6 +16,8 @@
 namespace rhbm_gem::core::joint_component {
 using Matrix=Eigen::MatrixXd;
 using Sparse=Eigen::SparseMatrix<double>;
+// Shared row tile size for numerical reductions and derivative workspaces.
+inline constexpr Eigen::Index derivative_tile_rows=8192;
 inline constexpr double unavailable=std::numeric_limits<double>::quiet_NaN();
 struct RankPolicy
 {

@@ -66,11 +66,6 @@ void CaptureWidthBoundKkt(Certificate & certificate,const Vector & eta,const Vec
     certificate.active_width_bound_count=kkt.active;
 }
 }
-bool IsValidJointConvergenceCriteria(const JointConvergenceCriteria & criteria)
-{
-    return std::isfinite(criteria.global_ac_kkt) && criteria.global_ac_kkt>=0.0 &&
-        std::isfinite(criteria.global_eta_gradient) && criteria.global_eta_gradient>=0.0;
-}
 namespace {
 bool MeetsJointThreshold(double value,double threshold)
 {return std::isfinite(value) && value>=0.0 && value<=threshold;}

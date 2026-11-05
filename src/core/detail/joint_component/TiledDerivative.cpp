@@ -1,4 +1,5 @@
 #include "TiledDerivative.hpp"
+#include "TiledQR.hpp"
 #include "CompactSvd.hpp"
 #include <cmath>
 #include <optional>
