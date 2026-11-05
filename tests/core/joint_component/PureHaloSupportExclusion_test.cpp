@@ -9,6 +9,7 @@
 #include "support/JointPostprocessingTestHelpers.hpp"
 #include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/joint_component/Problem.hpp"
+#include "core/detail/joint_component/GaussSeidelBcd.hpp"
 #include "core/detail/joint_component/WidthCalibration.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "data/detail/AtomClassifier.hpp"

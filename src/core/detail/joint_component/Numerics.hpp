@@ -240,7 +240,6 @@ struct ComponentPartition
     std::vector<Eigen::Index> constant_rows,unobserved_atoms;
 };
 ComponentPartition Partition(const Domain &,const Identities &);
-struct BcdComponentResult;
 struct AssemblyResult
 {
     bool available{},completed{true},mapping_valid{},consistency_passed{};

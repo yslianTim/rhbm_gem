@@ -2,9 +2,10 @@
 
 #include "Numerics.hpp"
 #include "JointProgress.hpp"
-#include "GaussSeidelBcd.hpp"
+#include "BcdPolicy.hpp"
 #include "ResourceWork.hpp"
 #include "core/detail/joint_component/JointComponentEstimator.hpp"
+#include <numeric>
 namespace rhbm_gem::core::joint_component {
 JointInitialization InitializeContributors(MapObject &,ModelObject &,const JointProblem &);
 struct ProblemData
@@ -39,6 +40,7 @@ struct ComponentProblemView
     Identities atom_ids,row_ids;
 };
 ComponentProblemView MakeComponentProblemView(const JointParameterLayout &,const ComponentView &);
+struct BcdComponentResult;
 BcdComponentResult SolveBcdComponentView(
     const ComponentView &,const JointParameterLayout &,const Vector &,const EvaluationContext &,
     const BcdExecutionPolicy &,const JointProgressObserver & = {},
