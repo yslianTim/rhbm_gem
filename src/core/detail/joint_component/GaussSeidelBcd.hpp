@@ -44,10 +44,10 @@ struct BcdBlockFailureDiagnostics
     std::string component_id,initial_profile_reason,local_search_stop_reason,solver_reason,lm_subproblem_status,
         first_invalid_atom_id,first_invalid_parameter;
     std::optional<Eigen::Index> first_invalid_coefficient;
-    std::optional<int> linear_rank,linear_solve_count,active_set_releases;
+    std::optional<int> ac_free_design_rank,ac_linear_solve_count,ac_working_set_releases;
     std::optional<double> first_invalid_coefficient_value,width_upper_bound,width_step_inf,
         lm_actual_decrease,lm_predicted_decrease,lm_ratio,weak_width_step_fraction,
-        primal_feasibility,scaled_projected_kkt,replay_prediction_discrepancy,
+        primal_feasibility,ac_scaled_projected_kkt,replay_prediction_discrepancy,
         replay_gradient_discrepancy,replay_kkt_discrepancy;
 };
 struct BcdBlockRecord

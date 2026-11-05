@@ -464,7 +464,7 @@ TEST(JointProgressTest, InfoProgressIsCompactAndThrottlesAcceptedUpdateRefreshes
 
     EXPECT_EQ(CountOccurrences(stdout_text, "\r"), 4u);
     EXPECT_EQ(CountOccurrences(stdout_text, "obj="), 5u); // Four progress rows and the summary.
-    EXPECT_EQ(CountOccurrences(stdout_text, "KKT="), 4u);
+    EXPECT_EQ(CountOccurrences(stdout_text, "ac-kkt="), 4u);
     EXPECT_EQ(CountOccurrences(stdout_text, "width-grad="), 4u);
     EXPECT_EQ(CountOccurrences(stdout_text, "width-kkt=4.000e-07"), 4u);
     EXPECT_EQ(CountOccurrences(stdout_text, "accepted="), 4u);
@@ -517,7 +517,7 @@ TEST(JointProgressTest, DebugProgressRetainsDetailedDiagnostics)
     EXPECT_NE(stdout_text.find("Component detail"), std::string::npos);
     EXPECT_NE(stdout_text.find("evaluations=220 | accepted_updates=50 | stop=converged"), std::string::npos);
     EXPECT_EQ(CountOccurrences(stdout_text, "obj="), 3u);
-    EXPECT_EQ(CountOccurrences(stdout_text, "KKT="), 2u);
+    EXPECT_EQ(CountOccurrences(stdout_text, "ac-kkt="), 2u);
     EXPECT_EQ(CountOccurrences(stdout_text, "width-grad="), 2u);
     EXPECT_EQ(stdout_text.find("width_grad="), std::string::npos);
 }

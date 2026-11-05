@@ -340,7 +340,7 @@ Evaluation EvaluateProfile(const Domain & domain,VectorRef y,const Vector & eta,
     out.beta=solved.beta;
     out.certificate=CertifyConstrainedAcSolution(out.x,y,out.beta,context ? context->scale : 0);
     out.certificate.linear_solver_valid=solved.valid; out.certificate.linear_solver_reason=solved.reason;
-    out.certificate.linear_solves=solved.solves; out.certificate.linear_releases=solved.working_set_releases;
+    out.certificate.ac_linear_solve_count=solved.solves; out.certificate.ac_working_set_releases=solved.working_set_releases;
     out.certificate.ac_free_design_rank=solved.rank;
     if (!solved.valid) {out.reason=solved.reason; return out;}
     if (!out.certificate.kkt_passed)

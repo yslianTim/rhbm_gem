@@ -73,7 +73,7 @@ struct Certificate
         residual_rmse{unavailable},residual_max{unavailable},relative_residual{unavailable};
     // Geometric constraint status (A == 0), not the solver's working set.
     std::vector<Eigen::Index> active_amplitude_atom_indices;
-    std::optional<int> linear_solves,linear_releases,ac_free_design_rank;
+    std::optional<int> ac_linear_solve_count,ac_working_set_releases,ac_free_design_rank;
     bool width_bound_applied{},width_bound_feasible{true};
     double width_bound_projected_kkt{unavailable},maximum_width_bound_violation{},
         boundary_gradient_max{},boundary_multiplier_max{},width_bound_complementarity{unavailable};

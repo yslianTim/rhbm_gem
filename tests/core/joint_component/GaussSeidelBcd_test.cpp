@@ -7,6 +7,7 @@
 #include "core/detail/joint_component/StructuralPartition.hpp"
 #include "core/detail/joint_component/TargetEvidence.hpp"
 #include "core/detail/joint_component/JointComponentEstimator.hpp"
+#include <rhbm_gem/utils/domain/Logger.hpp>
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -1062,8 +1063,19 @@ TEST(JointBcdSearchTest, ExhaustedBlockRecoveryLeavesTheLastAcceptedComponentSta
             accepted_beta=event.candidate_beta;
         }
     };
+    const auto previous_level=Logger::GetLogLevel();
+    Logger::SetLogLevel(LogLevel::Warning);
+    testing::internal::CaptureStderr();
     const auto result=n::SearchBcdComponent(data.domain,data.layout,data.y,
         initial_eta,data.context,policy);
+    const auto warnings=testing::internal::GetCapturedStderr();
+    Logger::SetLogLevel(previous_level);
+    for(const auto * key:{" ac_free_design_rank="," ac_linear_solve_count=",
+        " ac_working_set_releases="," ac_scaled_projected_kkt="})
+        EXPECT_NE(warnings.find(key),std::string::npos)<<key;
+    for(const auto * key:{" linear_rank="," linear_solve_count=",
+        " active_set_releases="," scaled_projected_kkt="})
+        EXPECT_EQ(warnings.find(key),std::string::npos)<<key;
     EXPECT_FALSE(result.search_converged);
     EXPECT_EQ(result.reason,"block-recovery-exhausted");
     EXPECT_EQ(result.recovery_attempts,1u);

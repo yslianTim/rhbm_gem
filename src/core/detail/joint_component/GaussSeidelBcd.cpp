@@ -296,9 +296,9 @@ BcdBlockFailureDiagnostics FailureDiagnostics(const BcdSearchPolicy & policy,
     const auto & certificate=profile.initial.certificate;
     out.solver_valid=certificate.linear_solver_valid;
     out.solver_reason=certificate.linear_solver_reason;
-    out.linear_rank=certificate.ac_free_design_rank;
-    out.linear_solve_count=certificate.linear_solves;
-    out.active_set_releases=certificate.linear_releases;
+    out.ac_free_design_rank=certificate.ac_free_design_rank;
+    out.ac_linear_solve_count=certificate.ac_linear_solve_count;
+    out.ac_working_set_releases=certificate.ac_working_set_releases;
     if(profile.initial.beta.size())
     {
         out.primal_feasibility=0.0;
@@ -306,7 +306,7 @@ BcdBlockFailureDiagnostics FailureDiagnostics(const BcdSearchPolicy & policy,
             *out.primal_feasibility=std::max(*out.primal_feasibility,
                 std::max(0.0,-profile.initial.beta(column)));
     }
-    if(certificate.available) out.scaled_projected_kkt=certificate.projected_kkt;
+    if(certificate.available) out.ac_scaled_projected_kkt=certificate.projected_kkt;
     for(Eigen::Index column=0;column<profile.initial.beta.size();++column)
         if(!std::isfinite(profile.initial.beta(column)) ||
             (column%2==0 && profile.initial.beta(column)<0))
@@ -364,11 +364,11 @@ std::string FormatFailureDiagnostics(const BcdBlockFailureDiagnostics & d)
        <<" initial_profile_reason="<<d.initial_profile_reason
        <<" initial_profile_trusted="<<(d.initial_profile_trusted ? "true" : "false")
        <<" solver_valid="<<(d.solver_valid ? "true" : "false")<<" solver_reason="<<d.solver_reason;
-    out<<" linear_rank="; if(d.linear_rank) out<<*d.linear_rank; else out<<"unavailable";
-    out<<" linear_solve_count="; if(d.linear_solve_count) out<<*d.linear_solve_count; else out<<"unavailable";
-    out<<" active_set_releases="; if(d.active_set_releases) out<<*d.active_set_releases; else out<<"unavailable";
+    out<<" ac_free_design_rank="; if(d.ac_free_design_rank) out<<*d.ac_free_design_rank; else out<<"unavailable";
+    out<<" ac_linear_solve_count="; if(d.ac_linear_solve_count) out<<*d.ac_linear_solve_count; else out<<"unavailable";
+    out<<" ac_working_set_releases="; if(d.ac_working_set_releases) out<<*d.ac_working_set_releases; else out<<"unavailable";
     out<<" primal_feasibility="; if(d.primal_feasibility) out<<*d.primal_feasibility; else out<<"unavailable";
-    out<<" scaled_projected_kkt="; if(d.scaled_projected_kkt) out<<*d.scaled_projected_kkt; else out<<"unavailable";
+    out<<" ac_scaled_projected_kkt="; if(d.ac_scaled_projected_kkt) out<<*d.ac_scaled_projected_kkt; else out<<"unavailable";
     out<<" width_upper_bound="; if(d.width_upper_bound) out<<*d.width_upper_bound; else out<<"unavailable";
     out<<" width_bound_active="<<(d.width_bound_active ? "true" : "false")
        <<" width_step_inf="; if(d.width_step_inf) out<<*d.width_step_inf; else out<<"unavailable";

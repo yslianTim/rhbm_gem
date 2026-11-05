@@ -75,7 +75,7 @@ void JointCliProgressReporter::ShowProgress(const JointProgressEvent & event, bo
         output << (certifying ? "certifying" : "searching")
             << " | sweep=" << progress.sweep << '/' << progress.maximum_sweeps
             << " | obj=" << Scientific(progress.objective)
-            << " | KKT=" << Scientific(progress.global_ac_kkt)
+            << " | ac-kkt=" << Scientific(progress.global_ac_kkt)
             << " | width-grad=" << Scientific(progress.width_gradient_inf_norm)
             << " | width-kkt=" << Scientific(progress.projected_width_kkt)
             << " | accepted=" << progress.accepted_blocks
